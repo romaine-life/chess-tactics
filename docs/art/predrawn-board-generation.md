@@ -5,7 +5,7 @@ full-scene painting without giving the image generator permission to redesign
 the level. It implements
 [ADR-0109](../adr/0109-predrawn-generation-packets-preserve-authored-level-semantics.md)
 and the owner-operated immutable installation boundary in
-[ADR-0147](../adr/0147-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md).
+[ADR-0158](../adr/0158-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md).
 
 Amend this file whenever a reviewed pass teaches us a better instruction. Keep
 the authority order intact unless a later ADR changes it. Preserve exact prompts
@@ -46,7 +46,7 @@ sections are not executable provenance.
 ### Named comparative refinement
 
 After owner review identifies one localized miss in an otherwise useful
-candidate, [ADR-0145](../adr/0145-named-predrawn-candidate-refinements-are-separate-non-isolated-branches.md)
+candidate, [ADR-0156](../adr/0156-named-predrawn-candidate-refinements-are-separate-non-isolated-branches.md)
 permits a separately named comparative refinement branch.
 It does not count as evidence that the isolated pipeline works. Build it through
 the same preflight rather than assembling an edit prompt only in chat:
@@ -77,14 +77,14 @@ The first worked example is
 
 Every new generated, warped, or occlusion-ready artifact records the
 cover-independent `predrawn-environment-geometry-v2` digest. Per
-[ADR-0152](../adr/0152-legacy-predrawn-geometry-fingerprints-bind-to-cover-independent-v2.md),
+[ADR-0163](../adr/0163-legacy-predrawn-geometry-fingerprints-bind-to-cover-independent-v2.md),
 an existing immutable v1 artifact is not regenerated or rewritten merely
 because its historical digest included cover. The backend may bind that exact
 v1 claim to v2 only after reproducing it from a server-held Level at a fenced
 autosave, direct derivative creation, or Save/Publish boundary. A GET or preview
 never performs migration. Once bound, changing live cover leaves the artifact
 valid. Per
-[ADR-0153](../adr/0153-predrawn-geometry-staleness-does-not-block-draft-persistence.md),
+[ADR-0164](../adr/0164-predrawn-geometry-staleness-does-not-block-draft-persistence.md),
 changing baked terrain or environment geometry may remain safely autosaved or
 recovered as an owner draft, but the earlier artifact is marked stale and its
 Set and derivation actions are disabled. Save and Publish remain blocked until
@@ -142,18 +142,19 @@ Before generation:
    outer envelope and every gameplay-authoritative reference draw represented by
    the semantic packet. Export the exact saved crop without units or additive
    ground cover. Inside it, preserve authored terrain tops, linear features,
-   barriers, props, and explicitly persisted Subterrain on canonically exposed
+   barriers, props, floating visual-only source artwork, and explicitly persisted Subterrain on canonically exposed
    active visual-terrain faces. Suppress grass tufts and other additive ground
    cover because those pixels create avoidable occlusion in the generation
    reference. Per
-   [ADR-0151](../adr/0151-predrawn-backgrounds-retain-live-ground-cover.md), the
+   [ADR-0162](../adr/0162-predrawn-backgrounds-retain-live-ground-cover.md), the
    owner may add or change live ground cover after selecting the generated
    raster; it is not part of this generation input. Do not let pieces,
    selection overlays, UI,
    un-authored board skirts, or invented cliff faces enter the geometry input.
    Explicit Subterrain is authoritative appearance without gameplay height;
    every other vertical side can be mistaken for an extra row or column even
-   when it is only presentation art. Scenic-only terrain, props, and Subterrain
+   when it is only presentation art. Scenic-only terrain, props, floating source
+   artwork, and Subterrain
    may be clipped or excluded by the saved frame without being deleted from the
    level. Decorative pixels may touch the crop edge; do not restore the retired
    global all-alpha clearance rule. The crop edge is presentation only and never
@@ -176,9 +177,13 @@ Before generation:
    edges owned by non-playable addresses. Record intentional feature crossings as
    openings. Record passable-to-non-playable internal transitions separately;
    holes and gaps do not redefine the outer envelope.
-8. State which artistic decisions are free. Boundary material may be free;
+8. Enumerate direct source-art placements separately as visual-only landmarks:
+   preserve their visible contact position, rendered direction, and relative
+   scale from Image 1, but never infer a footprint, blocker, elevation, or other
+   gameplay authority from them.
+9. State which artistic decisions are free. Boundary material may be free;
    boundary location is not.
-9. Repeat the global invariants: one flat gameplay plane unless the level says
+10. Repeat the global invariants: one flat gameplay plane unless the level says
    otherwise, exact footprints, no units, no extra roads or blockers, one
    continuous painting, and a full environment outside the board.
 
@@ -433,7 +438,7 @@ alignment instructions.
 
 ## Amendment log
 
-- **2026-07-20 — immutable owner-operated installation:** ADR-0147 replaces the
+- **2026-07-20 — immutable owner-operated installation:** ADR-0158 replaces the
   runtime warp, runtime sprite-derived occlusion, and mandatory Codex handoff.
   Upload creates a settable immutable raw root; grid adjustment emits a raster
   child; occlusion emits a persisted depth-aware mask child; `Set` affects only
@@ -472,7 +477,7 @@ alignment instructions.
   Chrome capture, and a fail-closed request manifest. No grid dimensions or
   capture coordinates are supplied on the command line or hard-coded per level.
 - **2026-07-14 — actual image size and saved production alignment (production
-  path superseded by ADR-0147):** ADR-0123 removed the fixed 3840x2160 acceptance
+  path superseded by ADR-0158):** ADR-0123 removed the fixed 3840x2160 acceptance
   gate but kept runtime alignment in the Level. The current path preserves exact
   uploaded bytes as the immutable raw parent, materializes alignment into a new
   registered-raster child, and stores the exact raster-plus-mask version
@@ -483,9 +488,9 @@ alignment instructions.
   text direction must be sufficient.
 - **2026-07-14 — ground-cover-free art authority:** generation-reference exports
   suppress grass and other additive cover while preserving terrain, roads,
-  barriers, and props. ADR-0151 keeps that input clean while restoring
-  explicitly authored ground cover as an independent live layer over the
-  selected raster.
+  barriers, props, and floating visual-only source artwork. ADR-0162 keeps that
+  input clean while restoring explicitly authored ground cover as an independent
+  live layer over the selected raster.
 - **2026-07-14 — measured export bounds (superseded by ADR-0142):** the initial
   export framed the complete rendered paint bounds with padding and failed when
   artwork touched a capture edge. The current path instead uses the saved
@@ -495,11 +500,11 @@ alignment instructions.
   acceptance gates; the current recipe retains a centered safe area as prompt
   guidance and judges camera room by four-direction panning in the real viewer.
 - **2026-07-14 — locked editor review before acceptance (temporary-source clause
-  superseded by ADR-0147):** the current editor activates the complete baked-art
+  superseded by ADR-0158):** the current editor activates the complete baked-art
   lock from an immutable raw or registered background version; temporary source
   metadata is not installation authority.
 - **2026-07-14 — compact registration handoff (installation role superseded by
-  ADR-0147):** the saved-value-only copy remains optional diagnostic/provenance
+  ADR-0158):** the saved-value-only copy remains optional diagnostic/provenance
   export. The owner derives, sets, saves, and publishes exact versions directly
   in the application without an agent, editor URL, or shared browser-local state.
 - **2026-07-13 — independent pinned boundary:** added a persistent four-line

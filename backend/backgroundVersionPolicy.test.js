@@ -210,7 +210,7 @@ test('requires raw inputs to declare an untouched board-world viewing pane', () 
     viewingPane: { ...BOUNDS, right: BOUNDS.minX + BOUNDS.width },
   })).error, /viewingPane is invalid/);
 
-  // ADR-0147 requires migration rather than a legacy compatibility read at
+  // ADR-0158 requires migration rather than a legacy compatibility read at
   // the canonical boundary, so persisted rows receive the same strict check.
   assert.match(rawBackgroundVersionContractIssue({
     kind: 'raw',

@@ -1,4 +1,6 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const test = require('node:test');
 
 const {
@@ -91,4 +93,14 @@ test('mismatched policy rows cannot weaken a different catalog revision', () => 
     thumbnailSourceAvailability('/assets/tiles/surface/water-0-side.png', availability),
     'critical',
   );
+});
+
+test('canonical summary reads repair missing derivatives without level-id shape gates', () => {
+  const server = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
+  const start = server.indexOf('async function storedLevelThumbnailUrls(');
+  const end = server.indexOf('\nasync function currentThumbnailRevisions(', start);
+  assert.ok(start >= 0 && end > start, 'thumbnail summary projection must remain inspectable');
+  const projection = server.slice(start, end);
+  assert.match(projection, /ensureLevelThumbnailDerivative\(authorityKey, level\)/);
+  assert.doesNotMatch(server, /function resolveListThumbnailTarget\(/);
 });

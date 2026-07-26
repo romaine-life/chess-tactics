@@ -8,18 +8,18 @@ const panel = readFileSync(new URL('./PredrawnBackgroundVersionsPanel.tsx', impo
 describe('pre-drawn artwork workspace', () => {
   it('uses a dedicated shell workspace while preserving the mounted board', () => {
     expect(editor).toContain("{ id: 'artwork', label: 'AI Artwork' }");
-    expect(editor).toContain("className={`skirmish-board-frame${eventsOpen || layer === 'artwork' ? ' is-workspace-covered' : ''}`}");
-    expect(editor).toContain("inert={eventsOpen || layer === 'artwork' ? true : undefined}");
-    expect(editor).toContain("{layer === 'artwork' && !eventsOpen ? (");
+    expect(editor).toContain("className={`skirmish-board-frame${eventsOpen || predrawnArtworkWorkspaceOpen ? ' is-workspace-covered' : ''}`}");
+    expect(editor).toContain("inert={eventsOpen || predrawnArtworkWorkspaceOpen ? true : undefined}");
+    expect(editor).toContain("{predrawnArtworkWorkspaceOpen && !eventsOpen ? (");
     expect(editor).toContain('<LevelEditorShellWorkspace');
     expect(editor).toContain('data-testid="level-artwork-workspace"');
     expect(editor).toContain('<PredrawnBackgroundVersionsPanel');
-    expect(editor).toContain(") : layer === 'artwork' ? (");
+    expect(editor).toContain(") : predrawnArtworkWorkspaceOpen ? (");
     expect(editor).toContain('className="skirmish-card le-artwork-rail-summary"');
   });
 
   it('keeps generation-frame input and immutable versions together, not in Board controls', () => {
-    const workspaceStart = editor.indexOf("{layer === 'artwork' && !eventsOpen ? (");
+    const workspaceStart = editor.indexOf("{predrawnArtworkWorkspaceOpen && !eventsOpen ? (");
     const eventsStart = editor.indexOf('{eventsOpen ? (', workspaceStart);
     const workspace = editor.slice(workspaceStart, eventsStart);
     const boardControlsStart = editor.indexOf("{layer === 'board' ? (");

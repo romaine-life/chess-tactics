@@ -2,7 +2,7 @@
 status: "accepted"
 date: 2026-07-20
 deciders: Nelson, Codex
-partially_superseded_by: "[ADR-0151](0151-predrawn-backgrounds-retain-live-ground-cover.md)"
+partially_superseded_by: "[ADR-0162](0162-predrawn-backgrounds-retain-live-ground-cover.md)"
 supersedes:
   - "[ADR-0122](0122-predrawn-occlusion-derives-from-canonical-raised-geometry.md)"
   - "[ADR-0123](0123-accepted-predrawn-scenes-keep-their-pixels-and-saved-alignment.md)"
@@ -18,7 +18,7 @@ partially_supersedes:
   - "[ADR-0135](0135-predrawn-registration-is-owner-picked-source-geometry.md)'s non-persisted production-alignment clause"
 ---
 
-# ADR-0147: Immutable pre-drawn background versions own derived raster and occlusion
+# ADR-0158: Immutable pre-drawn background versions own derived raster and occlusion
 
 ## Context
 

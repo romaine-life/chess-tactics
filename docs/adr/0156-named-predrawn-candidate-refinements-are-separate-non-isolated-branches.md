@@ -5,7 +5,7 @@ deciders: Nelson, Codex
 refines: "[ADR-0109](0109-predrawn-generation-packets-preserve-authored-level-semantics.md), [ADR-0120](0120-canonical-top-only-image-owns-predrawn-appearance.md), and [ADR-0125](0125-predrawn-preparation-self-validates-before-generation.md)"
 ---
 
-# ADR-0145: Named pre-drawn candidate refinements are separate non-isolated branches
+# ADR-0156: Named pre-drawn candidate refinements are separate non-isolated branches
 
 ## Context
 

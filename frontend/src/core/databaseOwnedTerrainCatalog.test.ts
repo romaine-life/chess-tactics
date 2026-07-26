@@ -1,6 +1,18 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { applyDrawableCatalog, applyGroundCoverCatalog, defaultSubterrainMaterial, structureArtAsset } from '@chess-tactics/board-render';
+import {
+  applyDrawableCatalog,
+  applyGroundCoverCatalog,
+  defaultSubterrainMaterial,
+  structureArtAsset,
+  structureArtDirectionHalfSrc,
+  structureArtDirections,
+  structureArtHasCompleteTurntable,
+  structureArtDirectionSplitMode,
+  structureArtDirectionSprite,
+} from '@chess-tactics/board-render';
 import { testDrawableCatalog } from '../test/drawableCatalog';
+import { assertPropSeatMap } from './props';
+import { TEST_PROP_SEATS } from '../test/livePropSeats';
 import { defaultTerrainFamily, familyForGameplayTerrain, gameplayTerrainForFamily, terrainFamiliesForRole, transitionPairs } from './tileSockets';
 
 describe('database-owned terrain identities', () => {
@@ -51,6 +63,68 @@ describe('database-owned terrain identities', () => {
     expect(structureArtAsset('opaque-structure-value-7f2')).toMatchObject({
       id: 'opaque-structure-value-7f2', label: 'Opaque structure', blocking: true, splitMode: 'authored',
     });
+  });
+
+  it('offers only complete rendered direction pairs and consumes per-view contact calibration', () => {
+    const catalog = testDrawableCatalog();
+    const source = catalog.assets.find((asset) => asset.id === 'structure-oak')!;
+    const directionalRole = (half: 'back' | 'front', fill: string) => {
+      const role = structuredClone(source.media[half]);
+      role.slot = `props/oak/east-${half}.png`;
+      role.media.sha256 = fill.repeat(64);
+      role.media.immutableUrl = `/api/media/${role.media.sha256}`;
+      role.media.url = `/assets/props/oak/east-${half}.png`;
+      role.media.width = 210;
+      role.media.height = 280;
+      return role;
+    };
+    source.media['east-back'] = directionalRole('back', 'a');
+    source.media['east-front'] = directionalRole('front', 'b');
+    source.media['north-back'] = directionalRole('back', 'c');
+    source.behavior.directions = {
+      east: { anchorX: 88, anchorY: 244, scale: 0.75, splitMode: 'flat-contact' },
+    };
+    applyDrawableCatalog({ ...catalog, revision: catalog.revision + 1 });
+
+    expect(structureArtDirections('oak')).toEqual(['east', 'south']);
+    expect(structureArtHasCompleteTurntable('oak')).toBe(false);
+    expect(structureArtDirectionSprite('oak', 'east')).toEqual({
+      w: 210,
+      h: 280,
+      anchorX: 88,
+      anchorY: 244,
+      scale: 0.75,
+    });
+    expect(structureArtDirectionHalfSrc('oak', 'east', 'front')).toBe(`/api/media/${'b'.repeat(64)}`);
+    expect(structureArtDirectionSplitMode('oak', 'east')).toBe('flat-contact');
+    expect(structureArtDirectionSplitMode('oak', 'south')).toBe('authored');
+    expect(structureArtDirectionSprite('oak', 'north')).toBeUndefined();
+  });
+
+  it('admits source-only landmarks without inventing prop seats, terrain rules, or blockers', () => {
+    const catalog = testDrawableCatalog();
+    const source = structuredClone(catalog.assets.find((asset) => asset.id === 'structure-oak')!);
+    source.id = 'structure-castle-ruin';
+    source.label = 'Castle ruin';
+    source.behavior = {
+      value: 'castle-ruin',
+      structureKind: 'landmark',
+      sourceOnly: true,
+      anchorX: 256,
+      anchorY: 467,
+      scale: 1,
+      splitMode: 'flat-contact',
+    };
+    catalog.assets.push(source);
+    applyDrawableCatalog({ ...catalog, revision: catalog.revision + 1 });
+
+    expect(structureArtAsset('castle-ruin')).toMatchObject({
+      kind: 'landmark',
+      sourceOnly: true,
+      terrains: [],
+      blocking: false,
+    });
+    expect(() => assertPropSeatMap(TEST_PROP_SEATS)).not.toThrow();
   });
 
   it('fails closed for missing structure and ground-cover behavior instead of filling code defaults', () => {

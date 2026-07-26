@@ -36,4 +36,20 @@ describe('levelBoard — props dual-write + round-trip', () => {
     const level = editorBoardToLevel(board(), { id: 'l3', name: 'Empty' });
     expect(level.layers.props).toEqual([]);
   });
+
+  it('round-trips visual-only floating artwork without projecting it into gameplay prop layers', () => {
+    const floatingArtwork = [{
+      id: 'art-oak',
+      sourceArtId: 'oak',
+      pixelX: 144,
+      pixelY: 96,
+      direction: 'north-east' as const,
+      scale: 1.4,
+    }];
+    const level = editorBoardToLevel(board({ floatingArtwork }), { id: 'l4', name: 'Floating art' });
+
+    expect(level.layers.props).toEqual([]);
+    expect(decodeBoard(level.boardCode!)?.floatingArtwork).toEqual(floatingArtwork);
+    expect(levelToEditorBoard(level).floatingArtwork).toEqual(floatingArtwork);
+  });
 });

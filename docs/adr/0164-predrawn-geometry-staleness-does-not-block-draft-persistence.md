@@ -2,14 +2,14 @@
 status: accepted
 date: 2026-07-20
 deciders: Nelson, Codex
-partially_supersedes: "[ADR-0152](0152-legacy-predrawn-geometry-fingerprints-bind-to-cover-independent-v2.md)'s incoming-autosave validation and first baked-geometry edit rejection clauses"
+partially_supersedes: "[ADR-0163](0163-legacy-predrawn-geometry-fingerprints-bind-to-cover-independent-v2.md)'s incoming-autosave validation and first baked-geometry edit rejection clauses"
 ---
 
-# ADR-0153: Pre-drawn geometry staleness does not block draft persistence
+# ADR-0164: Pre-drawn geometry staleness does not block draft persistence
 
 ## Context
 
-ADR-0152 correctly binds an immutable legacy v1 background fingerprint to its
+ADR-0163 correctly binds an immutable legacy v1 background fingerprint to its
 cover-independent v2 equivalent from the server-held pre-mutation Level. It
 incorrectly required the incoming first autosave body to match that v2 digest
 and therefore rejected a first baked-environment edit.
@@ -66,8 +66,8 @@ artifact for the current geometry can satisfy that canonical gate.
   return to the artwork workflow without losing work.
 - Stale art is visible and inoperable for Set/derivation, so preserving the
   draft does not imply that its old background is valid for the new geometry.
-- Save and Publish retain the strict geometry guarantee required by ADR-0147.
-- ADR-0152's external binding, immutable metadata, v2-only new-operation rule,
+- Save and Publish retain the strict geometry guarantee required by ADR-0158.
+- ADR-0163's external binding, immutable metadata, v2-only new-operation rule,
   exact server proof, and no-GET-mutation clauses remain unchanged.
 
 ## Verification

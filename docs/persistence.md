@@ -44,7 +44,7 @@ keeps the startup revision and advances it only from a successful save response,
 so sequential edits cannot silently overwrite a newer document.
 
 Per
-[ADR-0147](adr/0147-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md),
+[ADR-0158](adr/0158-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md),
 the pre-drawn background declaration persists one exact immutable raster-version
 identity and either one exact matching depth-aware occlusion-mask version or an
 explicit no-mask state. These are durable Postgres-owned domain identities, not
@@ -74,11 +74,11 @@ lineage references pin version metadata and Blob objects against deletion.
 At Set, derivative, Save, and Publish boundaries, missing or mismatched version
 lineage is a validation failure, not permission to fall back to a runtime warp,
 derived sprite mask, mutable slot, or ordinary composed environment. A stale
-selection may remain in an owner working draft under ADR-0153, but it gains no
+selection may remain in an owner working draft under ADR-0164, but it gains no
 canonical or derivation authority.
 
 Per
-[ADR-0152](adr/0152-legacy-predrawn-geometry-fingerprints-bind-to-cover-independent-v2.md),
+[ADR-0163](adr/0163-legacy-predrawn-geometry-fingerprints-bind-to-cover-independent-v2.md),
 new background-version operations record only
 `predrawn-environment-geometry-v2`, whose canonical input excludes live ground
 cover. Migration 30 does not rewrite immutable v1 operation or provenance data.
@@ -96,7 +96,7 @@ fetch, document load, and observer paths never insert bindings. V1 exists only
 to validate stored legacy rows; all new operation input must be v2.
 
 Per
-[ADR-0153](adr/0153-predrawn-geometry-staleness-does-not-block-draft-persistence.md),
+[ADR-0164](adr/0164-predrawn-geometry-staleness-does-not-block-draft-persistence.md),
 the pre-mutation proof establishes only the old v1-to-v2 normalization; it does
 not validate the incoming autosave body. Subject to ordinary document, fence,
 and compare-and-swap checks, autosave preserves that body even when changed
@@ -143,8 +143,10 @@ displayed summaries through the existing owner-scoped full-document GET and rend
 the working Level as a private resume preview. The summary index remains body-free.
 This preview does not make autosaved work canonical, playable, shared, or public.
 
-Per [ADR-0143](adr/0143-level-editor-sessions-are-attributable-single-writer-and-owner-takeoverable.md),
-every owner-opened editor page registers an attributable session. Its identity comes from the
+Per [ADR-0143](adr/0143-level-editor-sessions-are-attributable-single-writer-and-owner-takeoverable.md)
+and [ADR-0154](adr/0154-level-editor-viewing-does-not-acquire-the-writer-lease.md), every
+owner-opened editor page registers an attributable viewer session. Registration holds no writer
+lease, advances no fencing generation or document revision, and creates no recovery. Its identity comes from the
 authenticated display name and email, not client-supplied text. The server also records an opaque
 page-session id, a one-way browser-profile/device relationship, best-effort presentation metadata,
 `opened_at`, and server-observed `last_seen_at`. The presentation label includes the editor surface,
@@ -158,21 +160,32 @@ high-entropy session credential, sends it only in request bodies, and the server
 cryptographic hash. Opening/retrying, heartbeat, presence binding, close, takeover, displaced
 recovery upload, and every mutation fence must prove that credential; knowing a displayed session
 id or device relation cannot close or impersonate its editor.
-The editor's persistent session status presents that attribution and those times whenever another
-session holds or most recently held authority. A browser draft or a revision number alone never
+The editor presents that attribution and those times in Status whenever another session holds or
+most recently held authority. Per
+[ADR-0152](adr/0152-level-editor-session-attention-lives-in-title-bar-and-status.md), session and
+recovery details do not occupy every authoring layer: one conditional title-bar attention control
+opens Status and focuses the relevant information. A browser draft or a revision number alone never
 creates a person or live-presence claim. Relative opened/last-seen labels are calculated from the
 presence response's server clock rather than trusting a potentially skewed browser clock. When no
 lease is live, `last_editor` carries the most recent real authority holder separately from
 `active_editor`, with `live: false` and its terminal state; the UI must say "most recently" and
 "no live heartbeat" rather than implying that historical attribution still has the level open.
 
-Exactly one session may hold a document's writer lease. The lease and monotonically increasing
-fencing epoch are PostgreSQL-authoritative, so heartbeats and takeovers remain coherent across
-different backend pods and local development servers. SSE, polling, process memory,
-`BroadcastChannel`, and browser storage may notify or refresh the UI but cannot grant or extend
-authority. A non-holder follows the acknowledged working copy read-only.
+Exactly one session may hold a document's writer lease. A viewer acquires the free lease only when
+the owner makes the first persisted Level or staged campaign-assignment change, or explicitly
+chooses **Start editing here**. The first changed candidate is written synchronously to its
+session-scoped browser recovery before the generation-fenced acquisition request, and no cloud
+mutation is sent until acquisition is acknowledged. Two racing viewers therefore produce one
+writer; the loser cannot turn the stale acquisition into an implicit takeover and keeps its
+candidate separate. Non-persisted inspection, selection, layer/tool choice, pan, and zoom remain
+lease-free.
 
-Per [ADR-0149](adr/0149-automated-editor-verification-is-observation-only.md), authenticated
+The lease and monotonically increasing fencing epoch are PostgreSQL-authoritative, so heartbeats
+and takeovers remain coherent across different backend pods and local development servers. SSE,
+polling, process memory, `BroadcastChannel`, and browser storage may notify or refresh the UI but
+cannot grant or extend authority. A non-holder follows the acknowledged working copy read-only.
+
+Per [ADR-0160](adr/0160-automated-editor-verification-is-observation-only.md), authenticated
 automated visual verification opens an attributable `observing` session. Observation never acquires
 or extends the lease, advances `edit_generation`, resolves another session's expiry, or creates
 recovery content. It may read the document, presence, and recovery index and close itself, but it
@@ -208,10 +221,13 @@ time, observed revision, and fencing epoch. Restoring requires the current lease
 the current working branch, then writes the chosen body as a new fenced working-copy revision.
 Deleting a recovery is irreversible and therefore also rechecks the current lease and fencing epoch
 after confirmation; a tab displaced while its confirmation is open cannot remove the snapshot.
+Bulk cleanup submits only the recovery ids listed when confirmation opened and deletes that exact
+set atomically; a missing or foreign id deletes none, while any recovery created afterward survives
+([ADR-0153](adr/0153-bulk-recovery-cleanup-is-snapshot-exact-and-atomic.md)).
 Recovery never creates a second working document or canonical Level and never rewrites historical
 snapshots.
 
-Per [ADR-0146](adr/0146-recovery-snapshots-browse-one-at-a-time-and-clear-atomically.md), Status
+Per [ADR-0157](adr/0157-recovery-snapshots-browse-one-at-a-time-and-clear-atomically.md), Status
 presents server recoveries one at a time in newest-first order, with an explicit position and
 bounded Previous/Next navigation rather than stacking every Restore/Delete pair. **Delete all
 recovery copies** confirms the exact number of currently listed snapshots with Cancel as the safe
@@ -408,12 +424,12 @@ projection supplies an immutable derivative URL; a missing derivative has no
 constructed stable-path or read-through fallback.
 
 For a legacy v1 parent, that allocation transaction first establishes the exact
-ADR-0152 external v2 binding from the current server-held Level and binds every
+ADR-0163 external v2 binding from the current server-held Level and binds every
 relevant legacy ancestor atomically. The newly allocated child records v2 in
 its own immutable operation and provenance; allocation never copies v1 forward
 or rewrites its ancestors.
 
-[ADR-0148](adr/0148-predrawn-background-authoring-storage-is-bounded.md)
+[ADR-0159](adr/0159-predrawn-background-authoring-storage-is-bounded.md)
 bounds that permanent allocation to 256 version rows per editor document and
 1 GiB of distinct retained background-version Blob bytes per owner. The byte
 check is serialized under owner-scoped database authority in the same

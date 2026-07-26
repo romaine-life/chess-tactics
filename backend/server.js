@@ -12,6 +12,10 @@ const { createDevGrantSessionReader } = require(path.join(bakedBackendDir, 'devA
 const { createByteReadBudget } = require(path.join(bakedBackendDir, 'liveMediaReadBudget'));
 const { createRenderCriticalSection } = require(path.join(bakedBackendDir, 'renderCriticalSection'));
 const {
+  resolveDefaultOgImage,
+  resolveLevelCardPresentation,
+} = require(path.join(bakedBackendDir, 'thumbnailPresentation'));
+const {
   liveCatalogReadinessIssue,
   nativeMediaEvidenceIssue,
   predrawnBoardMediaIssue,
@@ -1420,6 +1424,18 @@ const MIGRATIONS = [
       );
       CREATE INDEX IF NOT EXISTS predrawn_background_geometry_bindings_document_idx
         ON predrawn_background_geometry_bindings (document_id, version_id);
+    `,
+  },
+  {
+    version: 36,
+    name: 'allow one drawable media slot to satisfy multiple roles',
+    // A single flat-contact source-art raster intentionally supplies both the
+    // back and front render roles for one facing. Role identity remains unique
+    // per drawable; the same immutable semantic slot may therefore be bound to
+    // more than one role without duplicating media bytes or inventing aliases.
+    sql: `
+      ALTER TABLE drawable_asset_media
+        DROP CONSTRAINT IF EXISTS drawable_asset_media_asset_id_slot_key;
     `,
   },
 ];
@@ -4151,6 +4167,14 @@ function editorEditSessionId(raw) {
   return EDITOR_EDIT_SESSION_ID_PATTERN.test(id) ? id.toLowerCase() : '';
 }
 
+function editorRecoveryIds(raw) {
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const recoveryIds = raw.map((value) => editorEditSessionId(value));
+  if (recoveryIds.some((recoveryId) => !recoveryId)) return null;
+  if (new Set(recoveryIds).size !== recoveryIds.length) return null;
+  return recoveryIds;
+}
+
 function editorDeviceId(raw) {
   const id = String(raw || '').trim();
   return EDITOR_DEVICE_ID_PATTERN.test(id) ? id : '';
@@ -4871,23 +4895,18 @@ async function dbOpenEditorEditSession(owner, documentId, input) {
         recovery,
       });
     }
-    const priorSessionState = session?.state || null;
-    const priorSessionGeneration = session ? Number(session.edit_generation) : null;
-    const canClaim = !observeOnly && (!active || active.session_id === input.sessionId);
     let opened = false;
 
     if (!session) {
       opened = true;
-      if (canClaim) documentRow = await dbAdvanceEditorGeneration(client, documentRow);
-      const state = canClaim ? 'active' : observeOnly ? 'observing' : 'waiting';
+      const state = observeOnly ? 'observing' : 'waiting';
       const { rows } = await client.query(
         `INSERT INTO editor_document_edit_sessions
            (session_id, document_id, owner_email, actor_name, device_hash, session_key_hash,
             client_label, state, edit_generation, draft_body, document_revision,
             opened_at, last_seen_at, body_checkpoint_at, lease_expires_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11,
-                 clock_timestamp(), clock_timestamp(), clock_timestamp(),
-                 CASE WHEN $8 = 'active' THEN clock_timestamp() + ($12::text || ' seconds')::interval ELSE NULL END)
+                 clock_timestamp(), clock_timestamp(), clock_timestamp(), NULL)
          RETURNING ${EDITOR_EDIT_SESSION_COLUMNS}`,
         [
           input.sessionId,
@@ -4901,41 +4920,37 @@ async function dbOpenEditorEditSession(owner, documentId, input) {
           Number(documentRow.edit_generation),
           JSON.stringify(documentRow.body),
           Number(documentRow.revision),
-          EDITOR_SESSION_LEASE_SECONDS,
         ],
       );
       session = rows[0];
-    } else if (canClaim && session.state !== 'active') {
-      documentRow = await dbAdvanceEditorGeneration(client, documentRow);
+    } else if (observeOnly) {
       const { rows } = await client.query(
         `UPDATE editor_document_edit_sessions
             SET actor_name = $2,
                 client_label = $3,
-                state = 'active',
-                edit_generation = $4,
-                draft_body = $5::jsonb,
-                document_revision = $6,
-                last_seen_at = clock_timestamp(),
-                body_checkpoint_at = clock_timestamp(),
-                lease_expires_at = clock_timestamp() + ($7::text || ' seconds')::interval,
-                displaced_at = NULL,
-                displaced_by_session_id = NULL
+                last_seen_at = clock_timestamp()
           WHERE session_id = $1
           RETURNING ${EDITOR_EDIT_SESSION_COLUMNS}`,
-        [session.session_id, owner.name || owner.email, input.clientLabel, Number(documentRow.edit_generation), JSON.stringify(documentRow.body), Number(documentRow.revision), EDITOR_SESSION_LEASE_SECONDS],
+        [session.session_id, owner.name || owner.email, input.clientLabel],
       );
       session = rows[0];
-    } else if (!observeOnly && session.state === 'observing') {
+    } else if (session.state !== 'active') {
       const { rows } = await client.query(
         `UPDATE editor_document_edit_sessions
             SET actor_name = $2,
                 client_label = $3,
                 state = 'waiting',
+                edit_generation = $4,
+                draft_body = $5::jsonb,
+                document_revision = $6,
                 last_seen_at = clock_timestamp(),
-                lease_expires_at = NULL
+                body_checkpoint_at = clock_timestamp(),
+                lease_expires_at = NULL,
+                displaced_at = NULL,
+                displaced_by_session_id = NULL
           WHERE session_id = $1
           RETURNING ${EDITOR_EDIT_SESSION_COLUMNS}`,
-        [session.session_id, owner.name || owner.email, input.clientLabel],
+        [session.session_id, owner.name || owner.email, input.clientLabel, Number(documentRow.edit_generation), JSON.stringify(documentRow.body), Number(documentRow.revision)],
       );
       session = rows[0];
     } else {
@@ -4962,33 +4977,19 @@ async function dbOpenEditorEditSession(owner, documentId, input) {
         edit_generation: Number(session.edit_generation),
         client_label: session.client_label,
       });
-    } else if (session.state === 'active' && (!active || active.session_id !== session.session_id)) {
-      await dbRecordEditorEditEvent(client, session, 'session_acquired', {
-        edit_generation: Number(session.edit_generation),
-      });
     }
     active = await dbGetActiveEditorSession(client, documentId);
+    const lastEditorSession = active
+      ? null
+      : expiredAuthority?.session || await dbGetLastAuthoritativeEditorSession(client, documentId);
     let recovery = expiredAuthority?.recovery || null;
-    if (!recovery && session.state === 'active') {
-      const lastEditorSession = await dbGetLastAuthoritativeEditorSession(client, documentId);
-      if (
-        lastEditorSession?.state === 'expired'
-        && Number(lastEditorSession.edit_generation) === Number(session.edit_generation) - 1
-      ) {
-        recovery = await dbGetLatestEditorRecovery(client, documentId, lastEditorSession.session_id);
-      }
-      if (
-        !recovery
-        && priorSessionState === 'expired'
-        && priorSessionGeneration === Number(session.edit_generation) - 1
-      ) {
-        recovery = await dbGetLatestEditorRecovery(client, documentId, session.session_id);
-      }
-    }
     recovery ||= await dbGetLatestEditorRecovery(client, documentId, session.session_id);
+    if (!recovery && lastEditorSession && lastEditorSession.session_id !== session.session_id) {
+      recovery = await dbGetLatestEditorRecovery(client, documentId, lastEditorSession.session_id);
+    }
     return {
       session,
-      presence: publicEditorPresence(documentRow, active, session, input.deviceHash),
+      presence: publicEditorPresence(documentRow, active, session, input.deviceHash, lastEditorSession),
       recovery,
     };
   });
@@ -5228,7 +5229,7 @@ async function dbTakeOverEditorSession(owner, documentId, sessionId, expectedGen
       [requester.session_id, owner.name || owner.email, Number(documentRow.edit_generation), JSON.stringify(documentRow.body), Number(documentRow.revision), EDITOR_SESSION_LEASE_SECONDS],
     );
     requester = activated.rows[0];
-    await dbRecordEditorEditEvent(client, requester, 'session_takeover', {
+    await dbRecordEditorEditEvent(client, requester, active ? 'session_takeover' : 'session_acquired', {
       prior_session_id: active?.session_id || null,
       prior_edit_generation: expectedGeneration,
       edit_generation: Number(documentRow.edit_generation),
@@ -10319,8 +10320,12 @@ function reviewedMediaEvidenceIssue(row) {
   if (evidence.approved !== true || !evidence.approvedBy || !evidence.approvedAt) return 'owner review approval is required';
   if (evidence.contentSha256 !== row.blob_sha256) return 'owner review does not cover the current media bytes';
   const proof = isObjectRecord(evidence.evidence) ? evidence.evidence : {};
+  const sourceArt = sourceArtTurntableProjection(row);
   if (predrawnBoardSlotSlug(row.slot)) {
     const issue = predrawnBoardOwnerProofIssue(row, proof, evidence.surfaceUrl);
+    if (issue) return issue;
+  } else if (sourceArt.claimed && !sourceArt.issue) {
+    const issue = sourceArtTurntableOwnerProofIssue(sourceArt.value, proof, evidence.surfaceUrl);
     if (issue) return issue;
   } else if (row.domain === 'terrain') {
     if (proof.schema !== 'terrain-surface-canonical-board-proof-v1') return 'terrain review requires the canonical board proof schema';
@@ -10361,6 +10366,10 @@ const VISUAL_MEDIA_DOMAINS = new Set([
   'background', 'portrait', 'prop', 'review-media', 'social-card', 'sprite-atlas',
   'terrain', 'ui-kit', 'unit-art', 'wall-decor',
 ]);
+const SOURCE_ART_TURNTABLE_SCHEMA = 'structure-source-art-turntable-v1';
+const SOURCE_ART_TURNTABLE_DIRECTIONS = Object.freeze([
+  'south', 'south-west', 'west', 'north-west', 'north', 'north-east', 'east', 'south-east',
+]);
 const GROUND_COVER_RUNTIME_KEYS = Object.freeze([
   'terrain', 'id', 'frameWidth', 'frameHeight', 'frameCount', 'baseX', 'baseY', 'contentWidth',
 ]);
@@ -10373,6 +10382,112 @@ function runtimeSemanticText(value, max = 160) {
   if (typeof value !== 'string') return null;
   const normalized = value.trim();
   return normalized && normalized.length <= max ? normalized : null;
+}
+
+function sourceArtTurntableProjection(row) {
+  const metadata = isObjectRecord(row.version_metadata) ? row.version_metadata
+    : isObjectRecord(row.metadata) ? row.metadata : {};
+  const sourceArt = isObjectRecord(metadata.sourceArt) ? metadata.sourceArt : null;
+  const slotSourceArt = isObjectRecord(row.slot_metadata?.sourceArt) ? row.slot_metadata.sourceArt : null;
+  const claimed = row.role === 'source-art'
+    || (typeof row.slot === 'string' && row.slot.startsWith('source-art/'))
+    || sourceArt?.schema === SOURCE_ART_TURNTABLE_SCHEMA
+    || slotSourceArt?.schema === SOURCE_ART_TURNTABLE_SCHEMA;
+  if (!claimed) return { claimed: false, issue: null, value: null };
+  if (row.domain !== 'prop') return { claimed: true, issue: 'structure source art requires the prop media domain', value: null };
+  if (row.role !== 'source-art') return { claimed: true, issue: 'structure source art requires the source-art role', value: null };
+  if (row.media_type !== 'image/png') return { claimed: true, issue: 'structure source-art views require image/png', value: null };
+  if (Number(row.width) !== 512 || Number(row.height) !== 512) {
+    return { claimed: true, issue: 'structure source-art views must be native 512x512 rasters', value: null };
+  }
+  if (!sourceArt || sourceArt.schema !== SOURCE_ART_TURNTABLE_SCHEMA) {
+    return { claimed: true, issue: 'structure source-art version metadata is missing or unsupported', value: null };
+  }
+  if (!slotSourceArt || slotSourceArt.schema !== SOURCE_ART_TURNTABLE_SCHEMA) {
+    return { claimed: true, issue: 'structure source-art slot metadata is missing or unsupported', value: null };
+  }
+  const assetId = mediaName(sourceArt.assetId);
+  const structureId = mediaName(sourceArt.structureId);
+  const direction = SOURCE_ART_TURNTABLE_DIRECTIONS.includes(sourceArt.direction) ? sourceArt.direction : null;
+  const label = runtimeSemanticText(sourceArt.label, 160);
+  const sortOrder = Number.isSafeInteger(sourceArt.sortOrder) && sourceArt.sortOrder >= 0 ? sourceArt.sortOrder : null;
+  const placementScale = typeof sourceArt.placementScale === 'number'
+    && Number.isFinite(sourceArt.placementScale) && sourceArt.placementScale > 0 && sourceArt.placementScale <= 16
+    ? sourceArt.placementScale : null;
+  const license = runtimeSemanticText(sourceArt.license, 160);
+  const structureKind = sourceArt.structureKind === null
+    ? null : mediaName(sourceArt.structureKind);
+  if (
+    !assetId || sourceArt.assetId !== assetId || !structureId || sourceArt.structureId !== structureId
+    || !direction || !label || sortOrder === null || placementScale === null || !license
+    || typeof sourceArt.existing !== 'boolean' || typeof sourceArt.sourceOnly !== 'boolean'
+    || sourceArt.sourceOnly === sourceArt.existing || sourceArt.referenceOnly !== true
+    || (sourceArt.structureKind !== null && !structureKind)
+    || (!sourceArt.existing && !structureKind)
+  ) return { claimed: true, issue: 'structure source-art version metadata is incomplete or inconsistent', value: null };
+  if (
+    slotSourceArt.assetId !== assetId || slotSourceArt.direction !== direction
+    || row.slot !== `source-art/${assetId}/${direction}.png`
+  ) return { claimed: true, issue: 'structure source-art slot identity does not match its typed version metadata', value: null };
+  const requiredSlots = SOURCE_ART_TURNTABLE_DIRECTIONS
+    .map((item) => `source-art/${assetId}/${item}.png`)
+    .sort();
+  const contract = mediaAcceptanceContract(row);
+  if (
+    contract.mode !== 'group' || contract.groupId !== `source-art-eight-way:${assetId}`
+    || canonicalJson(contract.requiredSlots) !== canonicalJson(requiredSlots)
+  ) return { claimed: true, issue: 'structure source art requires its exact atomic eight-view acceptance group', value: null };
+  return {
+    claimed: true,
+    issue: null,
+    value: {
+      assetId,
+      structureId,
+      direction,
+      label,
+      sortOrder,
+      existing: sourceArt.existing,
+      sourceOnly: sourceArt.sourceOnly,
+      structureKind,
+      placementScale,
+      license,
+      requiredSlots,
+    },
+  };
+}
+
+function sourceArtTurntableOwnerProofIssue(sourceArt, proof, surfaceUrl) {
+  if (
+    proof.schema !== 'live-media-owner-group-proof-v1' || proof.canonicalScale !== 1
+    || proof.surfaceKind !== 'Studio Source Art interactive board placement'
+    || proof.renderer !== 'BoardLabBoard/SourceArtCandidateOverlay'
+  ) return 'structure source-art review requires the interactive board-placement owner proof';
+  if (
+    !isObjectRecord(proof.decodedNativeRaster)
+    || proof.decodedNativeRaster.width !== 512 || proof.decodedNativeRaster.height !== 512
+    || proof.decodedNativeRaster.scale !== 1
+  ) return 'structure source-art review must prove decoded native 512x512 rasters';
+  if (
+    !Array.isArray(proof.mountedDirections)
+    || canonicalJson(proof.mountedDirections) !== canonicalJson(SOURCE_ART_TURNTABLE_DIRECTIONS)
+  ) return 'structure source-art review must mount every canonical direction exactly once';
+  if (!isObjectRecord(proof.placement)) return 'structure source-art review placement is missing';
+  const placement = proof.placement;
+  if (
+    !Number.isFinite(placement.pixelX) || !Number.isFinite(placement.pixelY)
+    || !Number.isFinite(placement.scale) || placement.scale <= 0 || placement.scale > 16
+    || !SOURCE_ART_TURNTABLE_DIRECTIONS.includes(placement.direction)
+    || placement.installedSourceScale !== sourceArt.placementScale
+  ) return 'structure source-art review placement is invalid';
+  try {
+    const url = new URL(surfaceUrl);
+    if (url.pathname !== '/studio' || url.searchParams.get('sourceArt') !== sourceArt.assetId) {
+      return 'structure source-art review URL does not identify this source-art group';
+    }
+  } catch {
+    return 'structure source-art review URL is invalid';
+  }
+  return null;
 }
 
 function runtimeMetadataProjection(row) {
@@ -10529,6 +10644,8 @@ function mediaDomainProjectionIssue(row) {
     }
     return predrawnBoardMediaIssue(row, runtime.value);
   }
+  const sourceArt = sourceArtTurntableProjection(row);
+  if (sourceArt.claimed) return sourceArt.issue;
   const knownDomain = VISUAL_MEDIA_DOMAINS.has(row.domain) || row.domain === 'font' || row.domain === 'sfx';
   if (!knownDomain) return `runtime acceptance requires a registered domain projection, not ${row.domain}`;
   if (row.domain !== 'terrain') {
@@ -11317,6 +11434,16 @@ async function validateMediaReviewProofSnapshot(client, current, evidence, surfa
     throw mediaMutationError('invalid_media_review_proof', 409, 'this media domain requires its Studio proof surface');
   }
   if (current.domain !== 'terrain') {
+    const sourceArt = sourceArtTurntableProjection(current);
+    if (sourceArt.claimed) {
+      if (sourceArt.issue) {
+        throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: sourceArt.issue });
+      }
+      const proofIssue = sourceArtTurntableOwnerProofIssue(sourceArt.value, evidence, surfaceUrl);
+      if (proofIssue) {
+        throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: proofIssue });
+      }
+    }
     const contract = mediaAcceptanceContract(current);
     if (contract.mode === 'group') {
       if (
@@ -11665,6 +11792,41 @@ function assertGroupedOwnerAcceptanceProof(rows, slotById, contract) {
   }
 }
 
+function assertSourceArtTurntableAcceptanceGroup(rows, contract) {
+  const projections = rows.map(sourceArtTurntableProjection);
+  if (!projections.some((projection) => projection.claimed)) return;
+  if (
+    rows.length !== SOURCE_ART_TURNTABLE_DIRECTIONS.length
+    || projections.some((projection) => !projection.claimed || projection.issue || !projection.value)
+  ) throw mediaMutationError('media_source_art_group_invalid', 409, { groupId: contract.groupId });
+  const values = projections.map((projection) => projection.value);
+  const first = values[0];
+  if (
+    contract.groupId !== `source-art-eight-way:${first.assetId}`
+    || canonicalJson(contract.requiredSlots) !== canonicalJson(first.requiredSlots)
+    || new Set(values.map((value) => value.direction)).size !== SOURCE_ART_TURNTABLE_DIRECTIONS.length
+    || SOURCE_ART_TURNTABLE_DIRECTIONS.some((direction) => !values.some((value) => value.direction === direction))
+  ) throw mediaMutationError('media_source_art_group_invalid', 409, { groupId: contract.groupId });
+  const shared = (value) => canonicalJson({
+    assetId: value.assetId,
+    structureId: value.structureId,
+    label: value.label,
+    sortOrder: value.sortOrder,
+    existing: value.existing,
+    sourceOnly: value.sourceOnly,
+    structureKind: value.structureKind,
+    placementScale: value.placementScale,
+    license: value.license,
+  });
+  const expected = shared(first);
+  if (values.some((value) => shared(value) !== expected)) {
+    throw mediaMutationError('media_source_art_group_invalid', 409, {
+      groupId: contract.groupId,
+      reason: 'turntable metadata differs between directions',
+    });
+  }
+}
+
 async function acceptMediaVersionBatch(items, actorEmail) {
   const batchId = crypto.randomUUID();
   const normalized = items.map((item) => ({
@@ -11795,6 +11957,9 @@ async function acceptMediaVersionBatch(items, actorEmail) {
         ) throw mediaMutationError('media_group_projection_mismatch', 409, { groupId, slot: row.slot });
       }
       assertTerrainAcceptanceProof(group.rows, slotById, {
+        mode: 'group', groupId, requiredSlots: group.required,
+      });
+      assertSourceArtTurntableAcceptanceGroup(group.rows, {
         mode: 'group', groupId, requiredSlots: group.required,
       });
       assertGroupedOwnerAcceptanceProof(group.rows, slotById, {
@@ -13367,7 +13532,7 @@ async function storedLevelThumbnail(authorityKey) {
   return rows[0] || null;
 }
 
-async function storedLevelThumbnailUrls(authorityEntries) {
+async function currentStoredLevelThumbnailUrls(authorityEntries) {
   if (!authorityEntries.length) return {};
   await ensureDbReady();
   const keys = authorityEntries.map(([authorityKey]) => authorityKey);
@@ -13389,6 +13554,22 @@ async function storedLevelThumbnailUrls(authorityEntries) {
       : `/api/media/${row.blob_sha256}`;
     return [[entry.levelId, url]];
   }));
+}
+
+async function storedLevelThumbnailUrls(authorityEntries) {
+  const current = await currentStoredLevelThumbnailUrls(authorityEntries);
+  const missing = authorityEntries.filter(([_authorityKey, levelId]) => !Object.hasOwn(current, levelId));
+  if (!missing.length) return current;
+
+  const retries = await Promise.allSettled(missing.map(([authorityKey, _levelId, level]) => (
+    ensureLevelThumbnailDerivative(authorityKey, level)
+  )));
+  for (const retry of retries) {
+    if (retry.status === 'rejected') {
+      console.error('canonical level thumbnail read repair failed:', retry.reason && retry.reason.message);
+    }
+  }
+  return currentStoredLevelThumbnailUrls(authorityEntries);
 }
 
 async function currentThumbnailRevisions() {
@@ -13506,20 +13687,6 @@ async function ensureLevelThumbnailDerivative(authorityKey, level) {
   }
 }
 
-async function resolveListThumbnailTarget(req, res, id) {
-  if (OFFICIAL_WORKSPACE_ID_PATTERN.test(id)) {
-    const target = await resolveShareTarget({ levelId: id });
-    return target ? { authorityKey: `official:default:${id}`, level: target.level } : null;
-  }
-  if (!/^l\d+$/.test(id)) return null;
-  const user = await requireUser(req, res);
-  if (!user) return false;
-  const row = await dbGetWorkspace(user.email);
-  const level = row?.body?.levels?.[id];
-  return level && typeof level === 'object'
-    ? { authorityKey: `user:${user.email}:${id}`, level }
-    : null;
-}
 function playScreenName(input) {
   if (serverRender && typeof serverRender.playRouteScreenName === 'function') {
     try { return serverRender.playRouteScreenName({ path: '/play', ...input }); } catch { /* fall back below */ }
@@ -13584,15 +13751,7 @@ app.get(/^\/assets\/level-thumb\/(.+)\.png$/, async (req, res) => {
       return _thumbCache.getOrCreate(cacheKey, async () => {
         const { renderLevelCard } = require(path.join(bakedBackendDir, 'boardThumbnail'));
         const backgroundSrc = typeof serverRender.worldBackgroundSrc === 'function' ? serverRender.worldBackgroundSrc() : undefined;
-        const appUi = renderInputs.drawableCatalog.assets.find((asset) => asset.kind === 'app-ui' && asset.behavior?.roles?.includes('application-ui'));
-        const thumbnailFont = renderInputs.drawableCatalog.assets.find((asset) => asset.kind === 'app-font' && asset.behavior?.thumbnail === true);
-        const requiredUiMedia = (role) => {
-          const src = appUi?.media?.[role]?.media?.immutableUrl;
-          if (!src) throw new Error(`thumbnail UI media role is unavailable: ${role}`);
-          return src;
-        };
-        const fontSrc = thumbnailFont?.media?.font?.media?.immutableUrl;
-        if (!fontSrc) throw new Error('thumbnail font record is unavailable');
+        const presentation = resolveLevelCardPresentation(renderInputs.drawableCatalog);
         return renderLevelCard({
           plan,
           title: target.title,
@@ -13602,13 +13761,8 @@ app.get(/^\/assets\/level-thumb\/(.+)\.png$/, async (req, res) => {
           loadDynamicSprite: (src) => thumbnailDynamicSprite(src, renderInputs.mediaCatalog),
           mediaCatalogRevision: renderInputs.mediaCatalogRevision,
           sourceAvailability: (src) => thumbnailSourceAvailability(src, renderInputs.mediaAvailability),
-          fontSrc,
-          uiMedia: {
-            wood: requiredUiMedia('ui-surfaces-hybrid-wood-oak-png'),
-            band: requiredUiMedia('ui-titlebar-band-forged-png'),
-            diamond: requiredUiMedia('ui-titlebar-joint-diamond-forged-png'),
-            shield: requiredUiMedia('ui-kit-icons-brand-shield-png'),
-          },
+          fontSrc: presentation.fontSrc,
+          uiMedia: presentation.uiMedia,
         });
       });
     });
@@ -13652,9 +13806,7 @@ async function ogTagsFor(req) {
   let title = OG_SITE_NAME;
   let description = OG_DEFAULT_DESC;
   const drawableCatalog = await dbReadDrawableCatalog();
-  const appUi = drawableCatalog.assets.find((asset) => asset.kind === 'app-ui' && asset.behavior?.roles?.includes('application-ui'));
-  const defaultOgPath = appUi?.media?.['og-default']?.media?.immutableUrl;
-  if (!defaultOgPath) throw new Error('application UI role og-default is unavailable');
+  const defaultOgPath = resolveDefaultOgImage(drawableCatalog);
   let image = `${origin}${defaultOgPath}`;
   if (target) {
     title = target.title || OG_SITE_NAME;

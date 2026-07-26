@@ -29,8 +29,17 @@ uses stable semantic slots such as a terrain layer role or UI-kit part. Neither
 ordinary nor pre-drawn content persists a candidate UUID, blob hash, generated
 filename, repository path, temporary URL, browser-local key, or picker state.
 
+Floating artwork placements persist the installed structure drawable's
+stable logical id, never media bytes, a blob hash, repository filename, or
+candidate URL. Directional structure views are media roles on that DB-owned
+drawable (`back`/`front` for south/default and paired
+`<direction>-back`/`<direction>-front` roles for additional views). The
+placement's canonical projected-scene pixel center, rendered direction, and
+source-composition scale are level data; the selected media still resolves
+through the catalog.
+
 Per
-[ADR-0147](adr/0147-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md),
+[ADR-0158](adr/0158-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md),
 a pre-drawn board is the narrow domain-version case. Its background declaration
 names an exact immutable background selection: one raw or registered raster
 version plus either one matching depth-aware occlusion-mask child or an explicit
@@ -69,7 +78,7 @@ chooser views or archived. The owner-facing instrument exposes raw, derived,
 mask, lineage, working-copy, and canonical state without requiring an agent or
 copied handoff packet.
 
-Per [ADR-0148](adr/0148-predrawn-background-authoring-storage-is-bounded.md),
+Per [ADR-0159](adr/0159-predrawn-background-authoring-storage-is-bounded.md),
 this retained lineage is bounded by the backend: 256 permanent version rows per
 editor document, 1 GiB of distinct referenced background-version Blob bytes per
 owner, and one in-flight raw upload body per document. Every status counts;
@@ -132,6 +141,10 @@ an incomplete row is an availability failure.
 - UI kit: state/slice geometry and native roles.
 - Props, walls, backgrounds, portraits, fonts, and OG media: their declared
   component and availability contracts.
+- Structure source artwork: one drawable record owns installed membership and
+  exactly eight paired direction roles. Each direction may reuse one full
+  `flat-contact` raster for both named roles. `sourceOnly` records deliberately
+  omit prop/doodad gameplay policy.
 - SFX: recording bytes resolve from live media slots. The complete revisioned
   `sfx_profiles/default` document owns sound-set metadata/gains, all landable-
   terrain assignments, and arrival sample/gain/firing. Missing profile state is
@@ -150,7 +163,8 @@ failure. There is no committed or generic-art fallback.
 3. The candidate records source dimensions, required runtime dimensions,
    provenance, allowed transforms, and review evidence.
 4. A game-owned instrument renders those exact candidate bytes at the declared
-   role and canonical 1×.
+   role. Native-pixel contracts also prove canonical 1× decode; placement assets
+   additionally prove their real board-context transform and controls.
 5. Admin acceptance validates the domain contract and atomically swaps the
    accepted pointer, archives the prior version, bumps the catalog revision, and
    writes an audit event.
@@ -170,6 +184,7 @@ exact-byte review instrument exist:
 | --- | --- | --- | --- |
 | Board Unit Art | Unit Art Postgres catalog + private Blob | Unit Art APIs | Complete; atomic family acceptance after palette, direction, geometry, and native-pixel checks |
 | Terrain surface tops | Shared live-media catalog + private Blob | Shared single/batch APIs | Complete; database-declared groups are reviewed on the canonical board and accepted atomically |
+| Structure source-art turntables | Structure drawable catalog + shared live-media catalog/private Blob | Outside-repository batch manifest + canonical source archive client; one archived pack may supply multiple exact object-allowlisted Artwork groups | Complete; Studio validates all eight native 512×512 rasters, requires each exact direction to mount in the interactive board placement proof, records the typed owner group proof, accepts atomically, then installs the drawable record |
 | Other terrain and generic media domains | Shared live-media catalog + private Blob | Shared single/batch APIs | Deliberately blocked until that projection has a typed completeness validator, domain-owned exact-byte review instrument, backend proof validation, and atomic acceptance/rollback tests |
 | BGM | Backend-listed private Blob container | Blob administration | Existing range-streaming projection; intentionally not the generic candidate lifecycle |
 
@@ -199,6 +214,12 @@ idempotent candidates whose provenance binds those archived version ids and
 hashes. These commands deliberately cannot review, accept, or activate media.
 Those judgment operations remain reachable only through the game-owned backend
 review instrument.
+
+An exact source larger than the request-body limit is archived as independently
+verified opaque chunks and a canonical manifest at the requested source path.
+`fetch-source` reconstructs the original bytes and verifies their full hash and
+length before a render consumes them. The chunk layout is storage
+implementation, not a second source identity.
 
 `frontend/scripts/build-groundcover.mjs` accepts only outside-repository source,
 tile, and output workspaces. It emits one outside-repository

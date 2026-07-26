@@ -429,6 +429,35 @@ function normalizeFootprints(definition, columns, rows) {
   });
 }
 
+function normalizeVisualArtwork(definition) {
+  const source = definition.visualArtwork ?? [];
+  if (!Array.isArray(source)) fail('visualArtwork must be an array');
+  const ids = new Set();
+  const directions = new Set(['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west']);
+  return source.map((raw, index) => {
+    if (!isRecord(raw)) fail(`visualArtwork[${index}] must be an object`);
+    const id = nonEmptyText(raw.id, `visualArtwork[${index}].id`);
+    if (ids.has(id)) fail(`visual artwork id ${id} occurs more than once`);
+    ids.add(id);
+    const sourceId = nonEmptyText(raw.sourceId, `visualArtwork[${index}].sourceId`);
+    if (!Array.isArray(raw.positionPx) || raw.positionPx.length !== 2) {
+      fail(`visualArtwork[${index}].positionPx must be [pixelX,pixelY]`);
+    }
+    const positionPx = raw.positionPx.map(Number);
+    if (positionPx.some((value) => !Number.isSafeInteger(value))) {
+      fail(`visualArtwork[${index}].positionPx must contain safe integer scene pixels`);
+    }
+    const direction = nonEmptyText(raw.direction, `visualArtwork[${index}].direction`);
+    if (!directions.has(direction)) fail(`visualArtwork[${index}].direction is invalid`);
+    const scale = Number(raw.scale);
+    if (!Number.isFinite(scale) || scale < 0.1 || scale > 8) {
+      fail(`visualArtwork[${index}].scale must be from 0.1 through 8`);
+    }
+    if (raw.gameplay !== 'none') fail(`visualArtwork[${index}].gameplay must be none`);
+    return { id, sourceId, positionPx, direction, scale, gameplay: 'none' };
+  });
+}
+
 export function normalizePredrawnGenerationDefinition(definition) {
   if (!isRecord(definition)) fail('definition must be a JSON object');
   if (definition.schemaVersion !== PREDRAWN_GENERATION_SCHEMA_VERSION) {
@@ -493,6 +522,7 @@ export function normalizePredrawnGenerationDefinition(definition) {
   const linearFeatures = normalizeLinearFeatures(definition, columns, rows);
   const barriers = normalizeBarriers(definition, columns, rows);
   const footprints = normalizeFootprints(definition, columns, rows);
+  const visualArtwork = normalizeVisualArtwork(definition);
   const normalized = {
     schemaVersion: PREDRAWN_GENERATION_SCHEMA_VERSION,
     runId,
@@ -509,6 +539,7 @@ export function normalizePredrawnGenerationDefinition(definition) {
     linearFeatures,
     barriers,
     footprints,
+    visualArtwork,
     outerPerimeter,
     impassableTransitions,
   };
@@ -568,6 +599,13 @@ function formatFootprints(footprints) {
   }
   return footprints.map((footprint) => (
     `${footprint.kind} footprint ${footprint.id} occupies exactly ${footprint.cells.length} cell(s): ${formatCoordinates(footprint.cells)}. Traversal: ${footprint.traversal}.`
+  )).join('\n');
+}
+
+function formatVisualArtwork(artwork) {
+  if (artwork.length === 0) return 'None.';
+  return artwork.map((placement) => (
+    `${placement.id}: visible landmark centered at scene pixel (${placement.positionPx[0]},${placement.positionPx[1]}), rendered view ${placement.direction}, source scale ${placement.scale}; gameplay: none.`
   )).join('\n');
 }
 
@@ -739,6 +777,10 @@ ${formatFootprints(definition.footprints)}
 Do not add, move, enlarge, shrink, or reinterpret a footprint.
 This gameplay-footprint list does not enumerate scenic-only appearance. Preserve every scenic building, structure, and prop visibly authored in Image 1 without promoting it to a gameplay footprint.
 
+VISUAL-ONLY SOURCE ARTWORK (${definition.visualArtwork.length})
+${formatVisualArtwork(definition.visualArtwork)}
+These landmarks are already visible in Image 1. Preserve their visible position, rendered orientation, and relative size as appearance evidence, but do not turn them into blockers, traversable footprints, cells, elevations, or other gameplay semantics.
+
 EXACT OUTER GRID ENVELOPE (${definition.outerPerimeter.edges.length} edges)
 This is the full rectangular envelope of the exact ${board.columns}x${board.rows} coordinate grid, including edges owned by boundary cells marked non-playable. It is not inferred from linear features, non-playable regions, footprints, barriers, vegetation, or texture bands.
 ${formatOuterPerimeter(definition.outerPerimeter)}
@@ -794,6 +836,7 @@ export function buildPredrawnGenerationArtifacts(inputDefinition, referenceBytes
     linearFeatures: definition.linearFeatures,
     barriers: definition.barriers,
     footprints: definition.footprints,
+    visualArtwork: definition.visualArtwork,
     outerPerimeter: definition.outerPerimeter,
     impassableTransitions: definition.impassableTransitions,
   };

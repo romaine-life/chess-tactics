@@ -135,6 +135,9 @@ function generationRequiredBoard(board: EditorBoard): EditorBoard {
     units: {},
     doodads: filterPlayableCells(board.doodads, board),
     props: filterPlayableCells(board.props, board),
+    // Direct source artwork is visual-only composition input. It remains visible in Image 1 but
+    // may cross or sit outside the owner's deliberate crop, so it never expands required bounds.
+    floatingArtwork: [],
     cover: {},
     coverTypes: {},
     features: filterPlayableCells(board.features, board),

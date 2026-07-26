@@ -1,8 +1,8 @@
 ---
-status: "accepted; mandatory test-slot cutover gate superseded by ADR-0086; pre-drawn identity/access clauses partially superseded by ADR-0147"
+status: "accepted; mandatory test-slot cutover gate superseded by ADR-0086; pre-drawn identity/access clauses partially superseded by ADR-0158"
 date: 2026-07-11
 deciders: Nelson, Codex
-partially_superseded_by: "[ADR-0086](0086-runtime-asset-cutover-uses-one-live-data-plane.md) and [ADR-0147](0147-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md)"
+partially_superseded_by: "[ADR-0086](0086-runtime-asset-cutover-uses-one-live-data-plane.md) and [ADR-0158](0158-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md)"
 partially_supersedes:
   - ADR-0005
   - ADR-0007

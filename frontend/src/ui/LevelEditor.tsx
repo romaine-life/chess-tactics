@@ -4,11 +4,19 @@
 // imported here. Shared board core (tile families, the animation clock, the facing
 // compass, the per-frame src) comes from ./studioBoard.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react';
-import { defaultSubterrainMaterial, isVersionedPredrawnBoardSurface, resolveTerrainSideExposure, resolveTerrainSideFaces, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, type PredrawnGenerationFrame, type SubterrainMaterial, type SubterrainPlacementMap, type TerrainSideMaterials, type VersionedPredrawnBoardSurface } from '@chess-tactics/board-render';
-import { boardLabCellPosition, immutableBoardLabTerrainSrc } from '../render/BoardLabBoard';
+import { boardBounds, defaultSubterrainMaterial, isVersionedPredrawnBoardSurface, MAX_FLOATING_ARTWORK_PIXEL, resolveTerrainSideExposure, resolveTerrainSideFaces, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, withPredrawnBoardSurface, type PredrawnGenerationFrame, type SubterrainMaterial, type SubterrainPlacementMap, type TerrainSideMaterials, type VersionedPredrawnBoardSurface } from '@chess-tactics/board-render';
+import { boardLabCellPosition, boardLabMetrics, immutableBoardLabTerrainSrc } from '../render/BoardLabBoard';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
-import { PropSprite, propHalfSrc } from '../render/BoardStructure';
+import { FloatingArtworkSprite, PropSprite, propHalfSrc } from '../render/BoardStructure';
 import { PROP_DEFS, defaultPropDef, propCells, propDef, type PropDef, type PropKind } from '../core/props';
+import {
+  STRUCTURE_ART_ASSETS,
+  structureArtAsset,
+  structureArtDirectionHalfSrc,
+  structureArtDirectionSprite,
+  structureArtDirections,
+  structureArtHasCompleteTurntable,
+} from '../core/structureArt';
 import { BoardSceneLayer } from '../render/BoardSceneLayer';
 import { PredrawnOcclusionSeedLayer } from '../render/PredrawnOcclusion';
 import {
@@ -61,7 +69,7 @@ import { levelEditorExitAction } from './levelEditorExit';
 import { currentDoodadAssets, defaultDoodadAsset, doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import { defaultGroundCoverAsset, GROUND_COVER_ASSETS, GroundCoverPreview, groundCoverAsset, type GroundCoverId } from './groundCoverCatalog';
 import { WallArtPreview } from './WallArtLab';
-import { readBoardParam, encodeBoard, zoneCellMapFromEntries, zoneEntriesFromCellMap, type BoardFactionDirections, type BoardGeneratedRegion, type BoardGeneratedRegionSection, type EditorBoard, type EditorZoneEntry, type FeatureCell, type PredrawnBoardSurface } from './boardCode';
+import { readBoardParam, encodeBoard, zoneCellMapFromEntries, zoneEntriesFromCellMap, type BoardFactionDirections, type BoardGeneratedRegion, type BoardGeneratedRegionSection, type EditorBoard, type EditorZoneEntry, type FeatureCell, type FloatingArtworkPlacement, type PredrawnBoardSurface } from './boardCode';
 import { paintTerrainArea } from './levelEditorTerrainEditing';
 import {
   fillScenicTerrainViewportTargets,
@@ -142,6 +150,7 @@ import {
   LevelEditorControlsPanel,
   LevelEditorEventsWorkspace,
   LevelEditorShellWorkspace,
+  type LevelEditorToolKey,
 } from './LevelEditorChromeConsumers';
 import { OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
@@ -373,6 +382,7 @@ function StudioEditableBoard({
   units: placedUnits,
   doodads: placedDoodads,
   props: placedProps = {},
+  floatingArtwork: placedFloatingArtwork = [],
   macroTiles: placedMacroTiles = [],
   features: placedFeatures = {},
   fences: placedFences = {},
@@ -407,6 +417,7 @@ function StudioEditableBoard({
   resolveProp,
   tool,
   selectedCell,
+  selectedArtworkId,
   boardZoom,
   boardPan,
   gridScope = 'off',
@@ -418,9 +429,13 @@ function StudioEditableBoard({
   onPaint,
   onErase,
   onSelect,
+  onSelectArtwork,
+  onMoveArtwork,
   onMove,
   canMoveTo,
   propBrush,
+  artworkEditing = false,
+  artworkSelectionActive = false,
   macroTileBrush,
   hidden,
   regionCells,
@@ -438,6 +453,7 @@ function StudioEditableBoard({
   doodads: Record<string, { doodadId: string }>;
   /** Multi-cell props keyed by ANCHOR cell "x,y" -> {propId}. */
   props?: Record<string, { propId: string }>;
+  floatingArtwork?: readonly FloatingArtworkPlacement[];
   /** Opaque multi-cell terrain tops that replace the covered 1x1 top sprites. */
   macroTiles?: readonly MacroTilePlacement[];
   /** Linear-feature overlays (roads + rivers) keyed by "x,y" -> {kind, material, mask}. */
@@ -496,6 +512,7 @@ function StudioEditableBoard({
   resolveProp: (id: string) => PropDef | undefined;
   tool: 'select' | 'brush' | 'erase' | 'move' | 'region';
   selectedCell: { x: number; y: number } | null;
+  selectedArtworkId?: string | null;
   boardZoom: number;
   boardPan: { x: number; y: number };
   gridScope?: 'off' | 'playable' | 'whole';
@@ -510,12 +527,18 @@ function StudioEditableBoard({
   onPaint: (x: number, y: number) => void;
   onErase: (x: number, y: number) => void;
   onSelect: (x: number, y: number) => void;
+  onSelectArtwork?: (id: string) => void;
+  onMoveArtwork?: (id: string, to: { pixelX: number; pixelY: number }) => void;
   /** Move tool: drag a placed unit or prop to another cell (drop cancelled if omitted). */
   onMove?: (subject: MoveSubject, to: { x: number; y: number }) => void;
   /** Move tool: whether a held object may drop on (x,y) — drives the destination ring's colour. */
   canMoveTo?: (subject: MoveSubject, to: { x: number; y: number }) => boolean;
   /** When the prop brush is armed: its def + a placeability test, used for the footprint hover. */
   propBrush?: { def: PropDef; canPlaceAt: (ax: number, ay: number) => boolean } | null;
+  /** Artwork-layer interaction is object-only; tile, prop, and doodad targets stand down. */
+  artworkEditing?: boolean;
+  /** Select is an explicit discovery toggle: every eligible artwork advertises its image bounds. */
+  artworkSelectionActive?: boolean;
   /** When a composite terrain brush is armed, preview its full footprint at the hovered anchor. */
   macroTileBrush?: MacroTileAsset | null;
   /** Per-layer visibility — a true value hides that layer's elements on the board. */
@@ -542,6 +565,14 @@ function StudioEditableBoard({
   // (post). A shared corner canonicalizes to one vertex key from every adjoining tile.
   const [hoverEdge, setHoverEdge] = useState<{ x: number; y: number; edge: FeatureEdge } | null>(null);
   const [hoverPost, setHoverPost] = useState<{ x: number; y: number; corner: FenceVertexCorner } | null>(null);
+  const [artworkDrag, setArtworkDrag] = useState<{
+    id: string;
+    pointerId: number;
+    startClientX: number;
+    startClientY: number;
+    origin: { pixelX: number; pixelY: number };
+    point: { pixelX: number; pixelY: number };
+  } | null>(null);
   const fencePostTool = fenceTool && fencePaintTarget === 'post';
   const placementTargetTool = fenceTool || wallTool || wallArtTool || subterrainTool;
   useEffect(() => {
@@ -734,7 +765,7 @@ function StudioEditableBoard({
         sideExposure,
         sideMaterials,
       }));
-      const isSelected = selectedCell?.x === x && selectedCell?.y === y;
+      const isSelected = !artworkEditing && selectedCell?.x === x && selectedCell?.y === y;
       // Move-tool feedback reuses the built-in diamond tile-ring (not an axis-aligned box): the
       // picked-up object's footprint, plus the cell under the cursor tinted by whether a drop is legal.
       const movingCells = movingFootprintCells(movingFrom);
@@ -745,7 +776,7 @@ function StudioEditableBoard({
       const postHere = fencePostTool && hoverPost?.x === x && hoverPost?.y === y
         ? FENCE_VERTEX_CORNERS.find((corner) => corner.id === hoverPost.corner) ?? null
         : null;
-      const tacticalState = tacticalPreview ? [
+      const tacticalState = !artworkEditing && tacticalPreview ? [
         tacticalPreview.promotionZoneSet.has(key) ? 'is-promotion-zone' : '',
         tacticalPreview.moveSet.has(key) ? 'is-move' : '',
         tacticalPreview.threatSet.has(key) ? 'is-threat' : '',
@@ -762,7 +793,7 @@ function StudioEditableBoard({
             {/* Zone tint: a translucent diamond seated on the tile EQUATOR — it reuses the exact
                 seating of the selection ring (top: --iso-tile-surface-top + the diamond clip-path),
                 which is the fix for the recurring "overlay sits at iso-tile-height/2, not y69" bug. */}
-            {placedZones[key] ? <span className={`le-zone-cell le-zone-${placedZones[key]}`} aria-hidden="true" /> : null}
+            {!artworkEditing && placedZones[key] ? <span className={`le-zone-cell le-zone-${placedZones[key]}`} aria-hidden="true" /> : null}
             {/* Fence edge hint: highlight the diamond side under the cursor so you see where the rail
                 lands before clicking. The SVG is seated exactly like the hit diamond (surface-top). */}
             {fenceHere ? (
@@ -783,6 +814,7 @@ function StudioEditableBoard({
             {isMoveTo ? <span className={`tileset-cell-ring ${moveDroppable ? 'is-move-ok' : 'is-move-blocked'}`} aria-hidden="true" /> : null}
             <span
               className="tileset-cell-hit"
+              style={artworkEditing ? { pointerEvents: 'none' } : undefined}
               onPointerDown={(event) => {
                 if (event.button !== 0) return; // non-primary input belongs to ViewPane panning
                 event.stopPropagation(); // don't let the ViewPane start a pan while editing
@@ -888,6 +920,7 @@ function StudioEditableBoard({
           {tool === 'region' || allowDecorativeEditing ? (
             <span
               className="tileset-cell-hit"
+              style={artworkEditing ? { pointerEvents: 'none' } : undefined}
               onPointerDown={(event) => {
                 if (event.button !== 0) return;
                 event.stopPropagation();
@@ -897,7 +930,10 @@ function StudioEditableBoard({
                   const edge = edgeAtPointer(event);
                   if (wallTool && edge !== 'N' && edge !== 'W') return;
                   applyBarrierAt(coordinate.x, coordinate.y, edge, tool === 'erase');
-                } else if (tool === 'brush') { paintingRef.current = true; onPaint(coordinate.x, coordinate.y); }
+                } else if (tool === 'brush') {
+                  paintingRef.current = true;
+                  onPaint(coordinate.x, coordinate.y);
+                }
                 else if (tool === 'erase') { paintingRef.current = true; onErase(coordinate.x, coordinate.y); }
               }}
               onPointerEnter={() => {
@@ -999,7 +1035,7 @@ function StudioEditableBoard({
         <span
           key={`dd-hit-${cx},${cy}`}
           className="tileset-doodad-hit"
-          style={{ position: 'absolute', left, top, zIndex: objectBaseZIndex({ x: cx, y: cy }) + 2, width: 54, height: 88, transform: 'translate(-50%, -75%)', pointerEvents: tool === 'brush' || tool === 'move' || movingFrom ? 'none' : 'auto' }}
+          style={{ position: 'absolute', left, top, zIndex: objectBaseZIndex({ x: cx, y: cy }) + 2, width: 54, height: 88, transform: 'translate(-50%, -75%)', pointerEvents: artworkEditing || tool === 'brush' || tool === 'move' || movingFrom ? 'none' : 'auto' }}
           onPointerDown={(event) => {
             if (event.button !== 0) return;
             event.stopPropagation();
@@ -1039,7 +1075,7 @@ function StudioEditableBoard({
           width: (maxLeft - minLeft) + 96,
           height: (maxTop - minTop) + 96,
           transform: 'translate(-50%, -75%)',
-          pointerEvents: tool === 'brush' || movingFrom ? 'none' : 'auto',
+          pointerEvents: artworkEditing || tool === 'brush' || movingFrom ? 'none' : 'auto',
         }}
         onPointerDown={(event) => {
           if (event.button !== 0) return;
@@ -1054,6 +1090,103 @@ function StudioEditableBoard({
         }}
       />,
     );
+  }
+
+  if (artworkEditing) {
+    for (const [index, placement] of placedFloatingArtwork.entries()) {
+      const selected = placement.id === selectedArtworkId;
+      const canSelect = artworkSelectionActive && tool === 'select';
+      const canMove = tool === 'move' && selected;
+      const interactive = canSelect || canMove;
+      const sourceSprite = structureArtDirectionSprite(placement.sourceArtId, placement.direction);
+      const sourceScale = sourceSprite ? sourceSprite.scale * placement.scale : 1;
+      const hitWidth = sourceSprite ? Math.max(54, sourceSprite.w * sourceScale) : 54;
+      const hitHeight = sourceSprite ? Math.max(88, sourceSprite.h * sourceScale) : 88;
+      overlaySprites.push(
+        <span
+          key={`artwork-hit-${placement.id}`}
+          role={interactive ? 'button' : undefined}
+          tabIndex={interactive ? 0 : undefined}
+          className={`tileset-doodad-hit le-floating-artwork-hit${canSelect ? ' is-selectable' : ''}${selected ? ' is-selected' : ''}`}
+          aria-pressed={selected}
+          aria-label={interactive
+            ? `${canMove ? 'Move' : 'Select'} ${structureArtAsset(placement.sourceArtId)?.label ?? placement.sourceArtId}`
+            : undefined}
+          // The object-sized target draws only the selected-instance outline. It carries no tile,
+          // footprint, contact marker, or board-depth meaning.
+          style={{
+            position: 'absolute',
+            left: placement.pixelX,
+            top: placement.pixelY,
+            width: hitWidth,
+            height: hitHeight,
+            padding: 0,
+            border: 0,
+            background: 'transparent',
+            transform: 'translate(-50%, -50%)',
+            pointerEvents: interactive ? 'auto' : 'none',
+            cursor: canMove ? 'grab' : canSelect ? 'pointer' : 'default',
+            touchAction: 'none',
+            zIndex: 1_100_000 + index,
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            event.stopPropagation();
+            if (canSelect) onSelectArtwork?.(placement.id);
+          }}
+          onPointerDown={(event) => {
+            if (event.button !== 0 || !interactive) return;
+            event.preventDefault();
+            event.stopPropagation();
+            if (canSelect) {
+              onSelectArtwork?.(placement.id);
+              return;
+            }
+            event.currentTarget.setPointerCapture(event.pointerId);
+            setArtworkDrag({
+              id: placement.id,
+              pointerId: event.pointerId,
+              startClientX: event.clientX,
+              startClientY: event.clientY,
+              origin: { pixelX: placement.pixelX, pixelY: placement.pixelY },
+              point: { pixelX: placement.pixelX, pixelY: placement.pixelY },
+            });
+          }}
+          onPointerMove={(event) => {
+            if (!artworkDrag || artworkDrag.id !== placement.id || artworkDrag.pointerId !== event.pointerId) return;
+            event.stopPropagation();
+            setArtworkDrag({
+              ...artworkDrag,
+              point: {
+                pixelX: Math.round(artworkDrag.origin.pixelX + (event.clientX - artworkDrag.startClientX) / boardZoom),
+                pixelY: Math.round(artworkDrag.origin.pixelY + (event.clientY - artworkDrag.startClientY) / boardZoom),
+              },
+            });
+          }}
+          onPointerUp={(event) => {
+            if (!artworkDrag || artworkDrag.id !== placement.id || artworkDrag.pointerId !== event.pointerId) return;
+            event.preventDefault();
+            event.stopPropagation();
+            event.currentTarget.releasePointerCapture(event.pointerId);
+            onMoveArtwork?.(placement.id, artworkDrag.point);
+            setArtworkDrag(null);
+          }}
+          onPointerCancel={() => setArtworkDrag(null)}
+        />
+      );
+    }
+    if (artworkDrag) {
+      const source = placedFloatingArtwork.find((placement) => placement.id === artworkDrag.id);
+      if (source) {
+        const ghost = { ...source, ...artworkDrag.point };
+        overlaySprites.push(
+          <span key="artwork-drag-ghost" className="le-floating-artwork-ghost" aria-hidden="true">
+            <FloatingArtworkSprite placement={ghost} ghost />
+          </span>,
+        );
+      }
+    }
   }
 
   // Footprint hover preview for the prop brush: outline every cell the prop would occupy under the
@@ -1176,6 +1309,7 @@ function StudioEditableBoard({
     units: placedUnits,
     doodads: placedDoodads,
     props: placedProps,
+    floatingArtwork: placedFloatingArtwork.slice(),
     cover: placedCover,
     coverTypes: placedCoverTypes,
     features: placedFeatures as EditorBoard['features'],
@@ -2335,10 +2469,16 @@ function perimeterWallArt(placements: Record<string, WallArtId> | undefined, col
   return next;
 }
 // Workspace/rules/status pages and Generate are non-painting layers → select tool.
-const toolForLayer = (layer: LayerKey): 'select' | 'brush' => (layer === 'board' || layer === 'artwork' || layer === 'status' || layer === 'rules' || layer === 'generate') ? 'select' : 'brush';
+const toolForLayer = (layer: LayerKey): 'select' | 'brush' => (
+  layer === 'board'
+  || layer === 'status'
+  || layer === 'rules'
+  || layer === 'generate'
+  || layer === 'artwork'
+) ? 'select' : 'brush';
 const brushKindForInitialLayer = (layer: LayerKey): BrushKind => {
   if (layer === 'paths') return 'road';
-  if (layer === 'board' || layer === 'artwork' || layer === 'status' || layer === 'rules' || layer === 'generate') return 'tile';
+  if (layer === 'board' || layer === 'status' || layer === 'rules' || layer === 'generate') return 'tile';
   return layer;
 };
 const brushKindForRouteState = (layer: LayerKey, kind: BrushKind | undefined): BrushKind => {
@@ -2516,6 +2656,7 @@ export function LevelEditor(): ReactElement {
   const [selectedServerRecoveryId, setSelectedServerRecoveryId] = useState<string | null>(null);
   const [serverRecoveryBusyId, setServerRecoveryBusyId] = useState<string | null>(null);
   const [serverRecoveryCleanupCount, setServerRecoveryCleanupCount] = useState<number | null>(null);
+  const [editorStatusFocusRequest, setEditorStatusFocusRequest] = useState(0);
   const displacedRecoveryUploadRef = useRef(new Set<string>());
   const frozenAuthorityLossRef = useRef(new Set<string>());
   const frozenAuthorityLossCandidatesRef = useRef(new Map<string, {
@@ -2635,6 +2776,8 @@ export function LevelEditor(): ReactElement {
   const [macroTileBrushId, setMacroTileBrushId] = useState<string | null>(null);
   const [macroTileFootprint, setMacroTileFootprint] = useState(leMacroTileFootprints()[0] ?? '2x2');
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
+  const [selectedArtworkId, setSelectedArtworkId] = useState<string | null>(null);
+  const [artworkSelectionActive, setArtworkSelectionActive] = useState(false);
   // Connected terrain-area selection shared by Generate and raw Tile Fill. "x,y" cell keys.
   const [regionSelection, setRegionSelection] = useState<Set<string>>(() => new Set());
   // Saved generated-region units: rerunnable selections plus the Generate panel settings they used.
@@ -2656,6 +2799,10 @@ export function LevelEditor(): ReactElement {
     () => Array.from({ length: boardRows }, (_, y) =>
       Array.from({ length: boardCols }, (__, x) => ({ x, y }))).flat(),
     [boardCols, boardRows],
+  );
+  const artworkBoardOrigin = useMemo(
+    () => boardLabMetrics(predrawnCoverCells),
+    [predrawnCoverCells],
   );
   const predrawnCoverPolygon = useMemo(
     () => editorPredrawnPlate
@@ -2724,12 +2871,21 @@ export function LevelEditor(): ReactElement {
   const [showPromotionZones, setShowPromotionZones] = useState(false);
   const [brushKind, setBrushKind] = useState<BrushKind>(initialBrushKind);
   const [layer, setLayer] = useState<LayerKey>(initialLayer);
+  const [predrawnArtworkWorkspaceOpen, setPredrawnArtworkWorkspaceOpen] = useState(
+    initialLayer === 'artwork' && urlParams.get('artworkEditor') === 'pipeline',
+  );
   const layerSelectOptions = useMemo(() => LEVEL_EDITOR_LAYER_SELECT_OPTIONS.map((option) => ({
     ...option,
-    disabled: option.disabled || (isPredrawnBoard && isPredrawnLockedLayer(option.id)),
+    // A pre-drawn plate locks floating source-art placement, but the same Artwork
+    // destination must remain available as the entry point to its board-art pipeline.
+    disabled: option.disabled || (isPredrawnBoard && option.id !== 'artwork' && isPredrawnLockedLayer(option.id)),
   })), [isPredrawnBoard]);
   useEffect(() => {
     if (!isPredrawnBoard || !isPredrawnLockedLayer(layer)) return;
+    if (layer === 'artwork') {
+      setPredrawnArtworkWorkspaceOpen(true);
+      return;
+    }
     setLayer('board');
     setTool('select');
   }, [isPredrawnBoard, layer]);
@@ -2738,6 +2894,16 @@ export function LevelEditor(): ReactElement {
   // Multi-cell props (trees/houses), keyed by ANCHOR cell. Seeded from a loaded board, else empty.
   const [boardProps, setBoardProps] = useState<Record<string, { propId: string }>>(initialBoard?.props ?? {});
   const [propBrushId, setPropBrushId] = useState<string>(() => defaultPropDef().id);
+  const [boardFloatingArtwork, setBoardFloatingArtwork] = useState<FloatingArtworkPlacement[]>(initialBoard?.floatingArtwork ?? []);
+  const artworkAssets = STRUCTURE_ART_ASSETS.filter((asset) => structureArtHasCompleteTurntable(asset.id));
+  const [artworkBrushId, setArtworkBrushId] = useState<string>(() => (
+    studioArm.kind === 'artwork'
+      && studioArm.brush
+      && artworkAssets.some((asset) => asset.id === studioArm.brush)
+      ? studioArm.brush
+      : artworkAssets[0]?.id ?? ''
+  ));
+  const [artworkBrushDirection, setArtworkBrushDirection] = useState<Direction>('south');
   // Ground cover is a per-tile FEATURE (density), not a doodad: which tiles grow vegetation
   // and how thick. Tufts are rolled deterministically from this density (see core/groundCover).
   const [boardCover, setBoardCover] = useState<Record<string, GroundCoverDensity>>(initialBoard?.cover ?? {});
@@ -2938,6 +3104,8 @@ export function LevelEditor(): ReactElement {
   const eventsOpenRef = useRef(eventsOpen);
   eventsOpenRef.current = eventsOpen;
   const eventsOpenButtonRef = useRef<HTMLButtonElement>(null);
+  const editorSessionStatusRef = useRef<HTMLElement>(null);
+  const editorRecoveriesStatusRef = useRef<HTMLDivElement>(null);
   const pendingRulesExitActionRef = useRef<(() => void) | null>(null);
   const departureFlushSigRef = useRef<string | null>(null);
   const signInHandoffPendingRef = useRef(false);
@@ -2958,8 +3126,14 @@ export function LevelEditor(): ReactElement {
       // Grand Gallery handoff silently reopen with the first catalog item (Tattered Banner).
       brush: brushKind === 'wallart' ? wallArtBrushId : null,
     });
-    navigateApp(nextHref, { replace: true, scroll: false });
-  }, [brushKind, layer, wallArtBrushId]);
+    const nextUrl = new URL(nextHref, window.location.origin);
+    if (layer === 'artwork' && predrawnArtworkWorkspaceOpen) {
+      nextUrl.searchParams.set('artworkEditor', 'pipeline');
+    } else {
+      nextUrl.searchParams.delete('artworkEditor');
+    }
+    navigateApp(`${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`, { replace: true, scroll: false });
+  }, [brushKind, layer, predrawnArtworkWorkspaceOpen, wallArtBrushId]);
 
   useEffect(() => {
     const syncFromRoute = (): void => {
@@ -2969,10 +3143,18 @@ export function LevelEditor(): ReactElement {
         ? { ...rawRouteState, layer: 'wallart' as const, brushKind: 'wallart' as const }
         : rawRouteState;
       const nextLayer = routeState.layer ?? defaultLevelEditorLayer();
-      if (isLayerOptionDisabled(nextLayer) || (isPredrawnBoard && isPredrawnLockedLayer(nextLayer))) return;
+      const routeParams = new URLSearchParams(window.location.search);
+      const nextPredrawnArtworkWorkspaceOpen = nextLayer === 'artwork'
+        && (routeParams.get('artworkEditor') === 'pipeline' || isPredrawnBoard);
+      if (
+        isLayerOptionDisabled(nextLayer)
+        || (isPredrawnBoard && isPredrawnLockedLayer(nextLayer) && !nextPredrawnArtworkWorkspaceOpen)
+      ) return;
       setLayer(nextLayer);
       setTool(toolForLayer(nextLayer));
+      setArtworkSelectionActive(false);
       setBrushKind(brushKindForRouteState(nextLayer, routeState.brushKind));
+      setPredrawnArtworkWorkspaceOpen(nextPredrawnArtworkWorkspaceOpen);
       if (routeState.brushKind === 'wallart') {
         setWallArtBrushId(wallArtIdOrDefault(routeState.brush));
       }
@@ -2989,9 +3171,8 @@ export function LevelEditor(): ReactElement {
       } else if (wasEventsOpen && !nextEventsOpen) {
         window.requestAnimationFrame(() => eventsOpenButtonRef.current?.focus());
       }
-      const params = new URLSearchParams(window.location.search);
-      if (params.get('artReview') === FENCE_ART_REVIEW_ID) {
-        const nextArtwork = fenceArtKit(fenceArtCatalog, params.get('fenceArt'));
+      if (routeParams.get('artReview') === FENCE_ART_REVIEW_ID) {
+        const nextArtwork = fenceArtKit(fenceArtCatalog, routeParams.get('fenceArt'));
         if (nextArtwork) {
           setSelectedFenceArtworkId(nextArtwork.id);
           setFenceBrushMaterial(nextArtwork.material);
@@ -3070,6 +3251,7 @@ export function LevelEditor(): ReactElement {
     setBoardUnits(board.units as Record<string, BoardUnitPlacement>);
     setBoardDoodads(board.doodads);
     setBoardProps(board.props);
+    setBoardFloatingArtwork(board.floatingArtwork ?? []);
     setBoardCover(board.cover);
     setBoardCoverTypes(board.coverTypes ?? {});
     setBoardFeatures(board.features);
@@ -3104,8 +3286,8 @@ export function LevelEditor(): ReactElement {
   // The current painted board as a single EditorBoard — the one shape both the transient
   // play-test URL and the level save serialize from, so they can never describe different boards.
   const currentEditorBoard = useMemo<EditorBoard>(
-    () => ({ cols: boardCols, rows: boardRows, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, surface: boardSurface, predrawnGenerationFrame: boardPredrawnGenerationFrame, macroTiles: boardMacroTiles, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, coverTypes: boardCoverTypes, features: boardFeatures, fences: boardFences, fencePosts: boardFencePosts, walls: boardWalls, wallArt: boardWallArt, subterrain: boardSubterrain, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions }),
-    [boardCols, boardRows, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, boardFactionDirections, boardCells, boardSurface, boardPredrawnGenerationFrame, boardMacroTiles, boardUnits, boardDoodads, boardProps, boardCover, boardCoverTypes, boardFeatures, boardFences, boardFencePosts, boardWalls, boardWallArt, boardSubterrain, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions],
+    () => ({ cols: boardCols, rows: boardRows, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, surface: boardSurface, predrawnGenerationFrame: boardPredrawnGenerationFrame, macroTiles: boardMacroTiles, units: boardUnits, doodads: boardDoodads, props: boardProps, floatingArtwork: boardFloatingArtwork, cover: boardCover, coverTypes: boardCoverTypes, features: boardFeatures, fences: boardFences, fencePosts: boardFencePosts, walls: boardWalls, wallArt: boardWallArt, subterrain: boardSubterrain, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions }),
+    [boardCols, boardRows, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, boardFactionDirections, boardCells, boardSurface, boardPredrawnGenerationFrame, boardMacroTiles, boardUnits, boardDoodads, boardProps, boardFloatingArtwork, boardCover, boardCoverTypes, boardFeatures, boardFences, boardFencePosts, boardWalls, boardWallArt, boardSubterrain, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions],
   );
   const predrawnVersionCells = useMemo(
     () => Array.from({ length: boardRows }, (_, y) => (
@@ -3303,6 +3485,7 @@ export function LevelEditor(): ReactElement {
     currentEditorBoardRef.current = restored;
     applyEditorBoardWithSelectionSafety(restored);
     setSelectedCell(null);
+    setSelectedArtworkId(null);
   };
   const redoBoard = (): void => {
     const next = redoStack[0];
@@ -3315,6 +3498,7 @@ export function LevelEditor(): ReactElement {
     currentEditorBoardRef.current = restored;
     applyEditorBoardWithSelectionSafety(restored);
     setSelectedCell(null);
+    setSelectedArtworkId(null);
   };
   const setPlayerFactionWithHistory = (faction: UnitPalette | null): void => {
     if (playerFaction === faction) return;
@@ -3374,6 +3558,8 @@ export function LevelEditor(): ReactElement {
   const resolvePropDef = (id: string): PropDef | undefined => propDef(id);
   const propBrushDef = resolvePropDef(propBrushId);
   if (!propBrushDef) throw new Error(`Selected prop "${propBrushId}" is unavailable`);
+  const artworkBrushAsset = artworkBrushId ? structureArtAsset(artworkBrushId) : undefined;
+  const artworkBrushDirections = artworkBrushId ? structureArtDirections(artworkBrushId) : [];
   const authoredCellTileId = (x: number, y: number): string | undefined => {
     const key = `${x},${y}`;
     if (!cellWithinScenicSurface(key)) return undefined;
@@ -3475,7 +3661,42 @@ export function LevelEditor(): ReactElement {
     commitEditorBoard(next);
   };
 
+  const normalizeFloatingArtworkPoint = (
+    point: { pixelX: number; pixelY: number },
+    fallback: { pixelX: number; pixelY: number } = { pixelX: 0, pixelY: 0 },
+  ): { pixelX: number; pixelY: number } => {
+    const pixelX = Number.isFinite(point.pixelX) ? point.pixelX : fallback.pixelX;
+    const pixelY = Number.isFinite(point.pixelY) ? point.pixelY : fallback.pixelY;
+    return {
+      pixelX: Math.max(-MAX_FLOATING_ARTWORK_PIXEL, Math.min(MAX_FLOATING_ARTWORK_PIXEL, Math.round(pixelX))),
+      pixelY: Math.max(-MAX_FLOATING_ARTWORK_PIXEL, Math.min(MAX_FLOATING_ARTWORK_PIXEL, Math.round(pixelY))),
+    };
+  };
+
+  const placeFloatingArtwork = (point: { pixelX: number; pixelY: number }): void => {
+    const directions = structureArtDirections(artworkBrushId);
+    const direction = directions.includes(artworkBrushDirection)
+      ? artworkBrushDirection
+      : directions.includes('south')
+        ? 'south'
+        : directions[0];
+    if (!artworkBrushId || !direction) return;
+    const placement: FloatingArtworkPlacement = {
+      id: `art-${crypto.randomUUID()}`,
+      sourceArtId: artworkBrushId,
+      ...normalizeFloatingArtworkPoint(point),
+      direction,
+      scale: 1,
+    };
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    next.floatingArtwork = [...(next.floatingArtwork ?? []), placement];
+    if (commitEditorBoard(next, null)) setSelectedArtworkId(placement.id);
+  };
+
   const paintCell = (x: number, y: number): void => {
+    // Floating artwork has its own viewport-level placement surface. It must never fall through
+    // into this tile/cell painter, even if a stale pointer event arrives during a tool change.
+    if (brushKind === 'artwork') return;
     const key = `${x},${y}`;
     const next = cloneEditorBoard(currentEditorBoardRef.current);
     if (featureKind) {
@@ -3589,6 +3810,7 @@ export function LevelEditor(): ReactElement {
       }
       return;
     }
+    if (brushKind === 'artwork') return;
     if (brushKind === 'cover') { delete next.cover[key]; if (next.coverTypes) delete next.coverTypes[key]; commitEditorBoard(next); return; }
     if (brushKind === 'zone') {
       const entries = zoneEntriesForBoard(next);
@@ -3769,7 +3991,8 @@ export function LevelEditor(): ReactElement {
     setWallArtPlacementFeedback({ tone: 'ready', message: `Removed ${wallArtLabel(hit.artId)}.` });
   };
   const clearBoard = (): void => {
-    commitEditorBoard({ ...cloneEditorBoard(currentEditorBoardRef.current), cells: {}, decorativeCells: {}, decorativeFootprint: [], decorativeFeatures: {}, decorativeFences: {}, decorativeFencePosts: {}, decorativeWalls: {}, macroTiles: [], units: {}, doodads: {}, props: {}, cover: {}, coverTypes: {}, features: {}, fences: {}, fencePosts: {}, walls: {}, wallArt: {}, subterrain: {}, featureCuts: {}, featureExits: {}, zoneEntries: [], zones: {}, generatedRegions: [] }, null);
+    commitEditorBoard({ ...cloneEditorBoard(currentEditorBoardRef.current), cells: {}, decorativeCells: {}, decorativeFootprint: [], decorativeFeatures: {}, decorativeFences: {}, decorativeFencePosts: {}, decorativeWalls: {}, macroTiles: [], units: {}, doodads: {}, props: {}, floatingArtwork: [], cover: {}, coverTypes: {}, features: {}, fences: {}, fencePosts: {}, walls: {}, wallArt: {}, subterrain: {}, featureCuts: {}, featureExits: {}, zoneEntries: [], zones: {}, generatedRegions: [] }, null);
+    setSelectedArtworkId(null);
     setActiveGeneratedRegionId(null);
     setRegionSelection(new Set());
   };
@@ -3779,6 +4002,7 @@ export function LevelEditor(): ReactElement {
     else if (brushKind === 'unit') next.units = {};
     else if (brushKind === 'doodad') next.doodads = {};
     else if (brushKind === 'prop') next.props = {};
+    else if (brushKind === 'artwork') next.floatingArtwork = [];
     else if (brushKind === 'cover') { next.cover = {}; next.coverTypes = {}; }
     else if (brushKind === 'zone') {
       const entries = zoneEntriesForBoard(next);
@@ -3802,6 +4026,7 @@ export function LevelEditor(): ReactElement {
       for (const edge of Object.keys(next.featureExits)) if (edge.split('|').some((key) => cleared.has(key))) delete next.featureExits[edge];
     }
     commitEditorBoard(next, null);
+    if (brushKind === 'artwork') setSelectedArtworkId(null);
   };
   const fillBoard = (mode: 'empty' | 'all'): void => {
     const next = cloneEditorBoard(currentEditorBoardRef.current);
@@ -4315,6 +4540,27 @@ export function LevelEditor(): ReactElement {
     : currentSig !== (standaloneBaselineSigRef.current ?? currentSig);
   const campaignAssignmentDirty = campaignAssignmentHydrated && campaignAssignmentId !== savedCampaignAssignmentId;
   const dirty = levelDirty || campaignAssignmentDirty;
+  const editorSessionCanBegin = Boolean(
+    me?.signed_in
+    && editorDocument
+    && editAuthorityState === 'follower'
+    && editSession?.state === 'waiting'
+    && editPresence
+    && !editPresence.active_editor
+    && editPresence.can_take_over
+    && !browserRecoveryConflict
+    && !editorDocument.baseline_conflict
+  );
+  const firstAuthoringMutationPending = Boolean(
+    editorSessionCanBegin
+    && (
+      campaignAssignmentDirty
+      || (
+        lastCloudSyncedSigRef.current !== null
+        && currentSig !== lastCloudSyncedSigRef.current
+      )
+    ),
+  );
   const currentSigRef = useRef(currentSig);
   currentSigRef.current = currentSig;
   const initialCandidateRef = useRef(candidateLevel);
@@ -4375,7 +4621,12 @@ export function LevelEditor(): ReactElement {
     const candidateSignature = currentSigRef.current;
     const authorityCandidateKey = `${authoritySession.session_id}:${authoritySession.edit_generation}`;
     const freezeKey = `${authoritySession.session_id}:${authoritySession.edit_generation}:${observedRevision}:${candidateSignature}`;
-    if (editAuthorityStateRef.current === 'writer' && !frozenAuthorityLossRef.current.has(freezeKey)) {
+    const shouldFreezeCandidate = editAuthorityStateRef.current === 'writer'
+      || (
+        editAuthorityStateRef.current === 'takeover-pending'
+        && lastCloudSyncedSigRef.current !== candidateSignature
+      );
+    if (shouldFreezeCandidate && !frozenAuthorityLossRef.current.has(freezeKey)) {
       frozenAuthorityLossRef.current.add(freezeKey);
       frozenAuthorityLossCandidatesRef.current.set(authorityCandidateKey, {
         level: frozenLevel,
@@ -4517,7 +4768,7 @@ export function LevelEditor(): ReactElement {
     // localStorage is a crash/offline fallback only. The status UI never calls this a cloud save;
     // durable progress is acknowledged solely by the revisioned editor-document endpoint below.
     if (!editorReady || editorLoadError) return;
-    if (editorDocument && editAuthorityState !== 'writer') return;
+    if (editorDocument && editAuthorityState !== 'writer' && !firstAuthoringMutationPending) return;
     // A stale browser candidate is a separately reviewable branch, not the mounted editor and
     // not evidence of a live competing writer. Do not overwrite that only copy merely because
     // the current server document is now visible; the explicit recovery actions below resolve it.
@@ -4590,7 +4841,7 @@ export function LevelEditor(): ReactElement {
         } satisfies EditorSignInRecoveryIntent));
       } catch { /* The browser copy still exists even if sessionStorage is unavailable. */ }
     }
-  }, [campaignAssignmentId, clockEnabled, clockIncrementSeconds, clockInitialSeconds, currentEditorBoard, draftKey, editAuthorityState, editorClientIdentity, editorDocument, editorLoadError, editorReady, eventsForSave, levelNameForSave, me?.email, objective, savedSig, surviveTurns, targetLevelId, victoryForSave]);
+  }, [campaignAssignmentId, clockEnabled, clockIncrementSeconds, clockInitialSeconds, currentEditorBoard, draftKey, editAuthorityState, editorClientIdentity, editorDocument, editorLoadError, editorReady, eventsForSave, firstAuthoringMutationPending, levelNameForSave, me?.email, objective, savedSig, surviveTurns, targetLevelId, victoryForSave]);
 
   const eventsEditorHref = (open: boolean, tab: LevelEditorEventsTab = eventsTab): string => (
     levelEditorHrefWithRouteState(window.location.href, {
@@ -4954,7 +5205,7 @@ export function LevelEditor(): ReactElement {
             session_id: documentClientIdentity.sessionId,
             session_key: documentClientIdentity.sessionKey,
             device_id: documentClientIdentity.deviceId,
-            client_label: `${editorClientLabel} · tab ${documentClientIdentity.sessionId.slice(0, 8)} · browser profile ${documentClientIdentity.deviceId.slice(0, 8)}`,
+            client_label: editorClientLabel,
           });
           editSessionOpenPromiseRef.current = openingSession;
           let opened;
@@ -5638,6 +5889,18 @@ export function LevelEditor(): ReactElement {
   }, [editAuthorityState, editSession, editorDocument, layer, me?.signed_in]);
 
   useEffect(() => {
+    if (layer !== 'status' || editorStatusFocusRequest === 0) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      const target = editAuthorityState === 'writer' && serverRecoveries.length
+        ? editorRecoveriesStatusRef.current
+        : editorSessionStatusRef.current;
+      target?.scrollIntoView({ block: 'start' });
+      target?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [editAuthorityState, editorStatusFocusRequest, layer, serverRecoveries.length]);
+
+  useEffect(() => {
     if (serverRecoveries.length) setServerRecoveryPanelSeen(true);
   }, [serverRecoveries.length]);
 
@@ -5648,6 +5911,7 @@ export function LevelEditor(): ReactElement {
   const selectedServerRecovery = selectedServerRecoveryIndex >= 0
     ? serverRecoveries[selectedServerRecoveryIndex]
     : null;
+  const editorSessionCanAuthor = editorSessionCanWrite || editorSessionCanBegin;
   const serverRecoveryActionBusy = serverRecoveryBusyId !== null || serverRecoveryCleanupCount !== null;
 
   const revalidateRecoveryDialogWriter = async (
@@ -6054,18 +6318,22 @@ export function LevelEditor(): ReactElement {
     }
   };
 
-  const takeOverEditing = async (): Promise<void> => {
+  const takeOverEditing = async (
+    options: { firstAuthoringMutation?: boolean } = {},
+  ): Promise<void> => {
+    const firstAuthoringMutation = options.firstAuthoringMutation === true;
     const doc = editorDocumentRef.current;
     const session = editSessionRef.current;
     const presence = editPresenceRef.current;
-    if (!doc || !session || !presence || !editorClientIdentity || editAuthorityState === 'takeover-pending') return;
+    if (!doc || !session || !presence || !editorClientIdentity || editAuthorityStateRef.current === 'takeover-pending') return;
     const activeEditor = presence.active_editor;
+    if (firstAuthoringMutation && activeEditor) return;
     const attributedEditor = activeEditor ?? presence.last_editor;
     const actor = attributedEditor
       ? levelEditorSessionActorLabel(attributedEditor)
       : 'the previous editor session';
     const takeoverActionLabel = activeEditor ? 'Take over editing' : 'Start editing here';
-    if (!(await ask({
+    if (!firstAuthoringMutation && !(await ask({
       title: activeEditor ? `Take over from ${actor}?` : 'Start editing in this tab?',
       message: (
         <>
@@ -6074,12 +6342,15 @@ export function LevelEditor(): ReactElement {
             : presence.last_editor
               ? `No live heartbeat. Most recent authority: ${levelEditorSessionPresenceDetail({ ...presence.last_editor, relationship: presence.last_editor.relationship as 'this_tab' | 'same_device' | 'other_device' }, levelEditorSessionServerNow(presence.server_time))} · session ${presence.last_editor.state}.`
               : 'No live heartbeat or attributed prior authority is currently available.'}</p>
-          <p>The latest server-known copy from that session will be preserved before this tab gets autosave and Save control. That editor becomes read-only. Any browser recovery in this tab stays separate and is not applied automatically.</p>
+          <p>{activeEditor
+            ? 'The latest server-known copy from that session will be preserved before this tab gets autosave and Save control. That editor becomes read-only. Any browser recovery in this tab stays separate and is not applied automatically.'
+            : 'Viewing alone holds no writer lease. Starting now reserves autosave and Save control for this tab before the first level change. Any browser recovery stays separate and is not applied automatically.'}</p>
         </>
       ),
       confirmLabel: takeoverActionLabel,
       cancelLabel: 'Keep following',
     }))) return;
+    editAuthorityStateRef.current = 'takeover-pending';
     setEditAuthorityState('takeover-pending');
     try {
       const taken = await takeOverEditorDocumentEditSession(
@@ -6119,32 +6390,58 @@ export function LevelEditor(): ReactElement {
       documentConflictRef.current = latest.baseline_conflict;
       documentConflictKindRef.current = latest.baseline_conflict ? 'baseline' : null;
       setEditorDocument(latest);
-      applyLevelDocument(latest.level, { editingId: latest.level_id, clean: false });
       if (!stillWriter) {
+        if (firstAuthoringMutation) preserveAuthorityLoss(verifiedSession ?? taken.session, taken.recovery);
+        applyLevelDocument(latest.level, { editingId: latest.level_id, clean: false });
         setEditAuthorityState(verifiedSession?.state === 'displaced' ? 'displaced' : 'follower');
         setCloudSaveState(latest.baseline_conflict ? 'conflict' : 'saved');
         setCloudSaveDetail('Editing control moved again before this tab finished re-checking it. The current editor is identified above; this tab remained read-only.');
-        reportStatus('Takeover did not remain active.', 'warning', 'The active editor changed during the handoff. Review the updated name, tab/device, and last-seen time before trying again.');
+        reportStatus(
+          firstAuthoringMutation ? 'Your first change was preserved separately.' : 'Takeover did not remain active.',
+          'warning',
+          firstAuthoringMutation
+            ? 'Another tab began editing first. This tab returned to the acknowledged cloud board without overwriting either version.'
+            : 'The active editor changed during the handoff. Review the updated name, tab/device, and last-seen time before trying again.',
+        );
         return;
       }
+      if (!firstAuthoringMutation) {
+        applyLevelDocument(latest.level, { editingId: latest.level_id, clean: false });
+      }
       setEditAuthorityState('writer');
-      setCloudSaveState(latest.baseline_conflict ? 'conflict' : 'saved');
+      setCloudSaveState(latest.baseline_conflict ? 'conflict' : firstAuthoringMutation ? 'pending' : 'saved');
       setCloudSaveDetail(latest.baseline_conflict
         ? 'Editing control moved here. The separate saved-position conflict still needs review.'
-        : 'Editing control moved to this tab. Autosave and Save now belong here.');
+        : firstAuthoringMutation
+          ? 'Editing started with your first change. Autosave is writing it now.'
+          : 'Editing control moved to this tab. Autosave and Save now belong here.');
       reportStatus(
-        'Editing control moved to this tab.',
+        firstAuthoringMutation ? 'Editing started here.' : 'Editing control moved to this tab.',
         'success',
-        taken.recovery
+        firstAuthoringMutation
+          ? 'The viewer session became the writer before any cloud mutation was sent.'
+          : taken.recovery
           ? `The displaced server-known branch is preserved as recovery ${taken.recovery.recovery_id}.`
           : 'The displaced server-known branch was preserved before control moved.',
       );
     } catch (error) {
       if (isEditorDocumentEditSessionError(error)) {
+        if (firstAuthoringMutation) preserveAuthorityLoss(error.session ?? session, error.recovery);
         if (error.session) { editSessionRef.current = error.session; setEditSession(error.session); }
         if (error.presence) { editPresenceRef.current = error.presence; setEditPresence(error.presence); }
-        setEditAuthorityState('follower');
-        reportStatus(`${takeoverActionLabel} did not happen.`, 'warning', 'The editing-session state changed while you were confirming. Review the updated identity and try again.');
+        setEditAuthorityState(error.code === 'editor_document_session_displaced' ? 'displaced' : 'follower');
+        if (firstAuthoringMutation) {
+          try {
+            mountAcknowledgedWorkingCopy(error.document ?? await loadEditorDocument(doc.document_id));
+          } catch { /* The synchronous browser recovery remains available while cloud reload retries. */ }
+        }
+        reportStatus(
+          firstAuthoringMutation ? 'Your first change was preserved separately.' : `${takeoverActionLabel} did not happen.`,
+          'warning',
+          firstAuthoringMutation
+            ? 'Another tab began editing first. Nothing was overwritten; review the active editor in Status.'
+            : 'The editing-session state changed while you were confirming. Review the updated identity and try again.',
+        );
         return;
       }
       try {
@@ -6163,6 +6460,11 @@ export function LevelEditor(): ReactElement {
       reportStatus(`${takeoverActionLabel} failed.`, 'error', error instanceof Error ? error.message : String(error));
     }
   };
+
+  useEffect(() => {
+    if (!firstAuthoringMutationPending) return;
+    void takeOverEditing({ firstAuthoringMutation: true });
+  }, [firstAuthoringMutationPending]);
 
   const restoreServerRecovery = async (recovery: EditorDocumentRecovery): Promise<void> => {
     const doc = editorDocumentRef.current;
@@ -6965,15 +7267,20 @@ export function LevelEditor(): ReactElement {
   const applyLayerSelection = (nextLayer: LayerKey): void => {
     setLayer(nextLayer);
     setTool(toolForLayer(nextLayer));
+    setArtworkSelectionActive(false);
+    setPredrawnArtworkWorkspaceOpen(nextLayer === 'artwork' && isPredrawnBoard);
     if (nextLayer === 'paths') {
       // Keep whichever path kind is already armed (road/river); default to road.
       setBrushKind((kind) => (kind === 'road' || kind === 'river' ? kind : 'road'));
       return;
     }
-    if (nextLayer !== 'board' && nextLayer !== 'artwork' && nextLayer !== 'status' && nextLayer !== 'rules' && nextLayer !== 'generate') setBrushKind(nextLayer);
+    if (nextLayer !== 'board' && nextLayer !== 'status' && nextLayer !== 'rules' && nextLayer !== 'generate') setBrushKind(nextLayer);
   };
   const selectLayer = (nextLayer: LayerKey): void => {
-    if (isLayerOptionDisabled(nextLayer) || (isPredrawnBoard && isPredrawnLockedLayer(nextLayer))) return;
+    if (
+      isLayerOptionDisabled(nextLayer)
+      || (isPredrawnBoard && nextLayer !== 'artwork' && isPredrawnLockedLayer(nextLayer))
+    ) return;
     if (eventsOpenRef.current) {
       pendingRulesExitActionRef.current = () => applyLayerSelection(nextLayer);
       closeEventsEditor(false);
@@ -6981,7 +7288,89 @@ export function LevelEditor(): ReactElement {
     }
     applyLayerSelection(nextLayer);
   };
-  const selectCell = (x: number, y: number): void => setSelectedCell({ x, y });
+  const openPredrawnArtworkWorkspace = (): void => {
+    setLayer('artwork');
+    setTool('select');
+    setArtworkSelectionActive(false);
+    setPredrawnArtworkWorkspaceOpen(true);
+  };
+  const closePredrawnArtworkWorkspace = (): void => {
+    if (isPredrawnBoard) {
+      applyLayerSelection('board');
+      return;
+    }
+    setBrushKind('artwork');
+    setTool('select');
+    setArtworkSelectionActive(false);
+    setPredrawnArtworkWorkspaceOpen(false);
+  };
+  const selectCell = (x: number, y: number): void => {
+    // Artwork selection is deliberately object-only. A blank-board click must not silently clear
+    // the locked instance; authors use the explicit None option when they want no artwork selected.
+    if (brushKind === 'artwork') return;
+    setSelectedArtworkId(null);
+    setSelectedCell({ x, y });
+  };
+  const selectArtwork = (id: string): void => {
+    const placement = boardFloatingArtwork.find((candidate) => candidate.id === id);
+    if (!placement) return;
+    setSelectedCell(null);
+    setSelectedArtworkId(id);
+    setArtworkBrushDirection(placement.direction);
+  };
+  const updateArtwork = (
+    id: string,
+    update: (placement: FloatingArtworkPlacement) => FloatingArtworkPlacement,
+  ): void => {
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    const index = (next.floatingArtwork ?? []).findIndex((placement) => placement.id === id);
+    if (index < 0) return;
+    const placements = [...(next.floatingArtwork ?? [])];
+    placements[index] = update(placements[index]);
+    next.floatingArtwork = placements;
+    commitEditorBoard(next, null);
+    setSelectedArtworkId(id);
+  };
+  const moveArtwork = (id: string, point: { pixelX: number; pixelY: number }): void => {
+    const source = (currentEditorBoardRef.current.floatingArtwork ?? []).find((placement) => placement.id === id);
+    if (!source) return;
+    const normalized = normalizeFloatingArtworkPoint(point, source);
+    updateArtwork(id, (placement) => ({ ...placement, ...normalized }));
+  };
+  const deleteArtwork = (id: string): void => {
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    const placements = (next.floatingArtwork ?? []).filter((placement) => placement.id !== id);
+    if (placements.length === (next.floatingArtwork ?? []).length) return;
+    next.floatingArtwork = placements;
+    if (commitEditorBoard(next, null)) setSelectedArtworkId((selected) => selected === id ? null : selected);
+  };
+  const changeEditorTool = (nextTool: LevelEditorToolKey): void => {
+    if (brushKind === 'artwork' && nextTool === 'erase') {
+      if (selectedArtworkId) deleteArtwork(selectedArtworkId);
+      return;
+    }
+    if (brushKind === 'artwork' && nextTool === 'select') {
+      if (artworkSelectionActive) {
+        setArtworkSelectionActive(false);
+        setSelectedArtworkId(null);
+      } else {
+        setArtworkSelectionActive(true);
+        setTool('select');
+      }
+      return;
+    }
+    if (brushKind === 'artwork') setArtworkSelectionActive(false);
+    setTool(nextTool);
+  };
+  const duplicateArtwork = (id: string): void => {
+    const source = (currentEditorBoardRef.current.floatingArtwork ?? []).find((placement) => placement.id === id);
+    if (!source) return;
+    const offset = normalizeFloatingArtworkPoint({ pixelX: source.pixelX + 24, pixelY: source.pixelY + 24 });
+    const duplicate = { ...source, ...offset, id: `art-${crypto.randomUUID()}` };
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    next.floatingArtwork = [...(next.floatingArtwork ?? []), duplicate];
+    if (commitEditorBoard(next, null)) setSelectedArtworkId(duplicate.id);
+  };
   const eventZoneOptions = useMemo<EventZoneOption[]>(
     () => boardZoneEntries.map((entry, index) => ({ id: entry.id, label: zoneDisplayName(entry, index) })),
     [boardZoneEntries],
@@ -7283,6 +7672,9 @@ export function LevelEditor(): ReactElement {
     nextBoard.rows = nextRows;
     const shiftedSelection = selectedCell ? { x: selectedCell.x + dx, y: selectedCell.y + dy } : null;
     commitEditorBoard(nextBoard, shiftedSelection && (shiftedSelection.x < 0 || shiftedSelection.y < 0 || shiftedSelection.x >= nextCols || shiftedSelection.y >= nextRows) ? null : shiftedSelection);
+    if (selectedArtworkId && !(nextBoard.floatingArtwork ?? []).some((placement) => placement.id === selectedArtworkId)) {
+      setSelectedArtworkId(null);
+    }
     if (activeGeneratedRegionId) {
       const activeAfterResize = prunedGeneratedRegions.find((region) => region.id === activeGeneratedRegionId);
       if (activeAfterResize) setRegionSelection(new Set(activeAfterResize.cells));
@@ -7299,6 +7691,7 @@ export function LevelEditor(): ReactElement {
   const unitCount = Object.keys(boardUnits).length;
   const doodadCount = Object.keys(boardDoodads).length;
   const propCount = Object.keys(boardProps).length;
+  const artworkCount = boardFloatingArtwork.length;
   const zoneCount = boardZoneEntries.length;
   const zonedTileCount = boardZoneEntries.reduce((sum, zone) => sum + zone.tiles.length, 0);
   const selectedTileId = selectedCell ? boardCells[`${selectedCell.x},${selectedCell.y}`] : undefined;
@@ -7322,6 +7715,62 @@ export function LevelEditor(): ReactElement {
     return undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCell, boardProps]);
+  const selectedArtwork = selectedArtworkId
+    ? boardFloatingArtwork.find((placement) => placement.id === selectedArtworkId)
+    : undefined;
+  const artworkSelectionOptions = useMemo<HouseSelectOption<string>[]>(() => {
+    const sourceCounts = new Map<string, number>();
+    return [
+      { value: '', label: 'None' },
+      ...boardFloatingArtwork.map((placement) => {
+        const instance = (sourceCounts.get(placement.sourceArtId) ?? 0) + 1;
+        sourceCounts.set(placement.sourceArtId, instance);
+        const label = structureArtAsset(placement.sourceArtId)?.label ?? placement.sourceArtId;
+        return {
+          value: placement.id,
+          label: `${label} · ${instance}`,
+          title: `${label} at X ${placement.pixelX}, Y ${placement.pixelY}`,
+        };
+      }),
+    ];
+  }, [boardFloatingArtwork]);
+  const selectedArtworkAsset = selectedArtwork ? structureArtAsset(selectedArtwork.sourceArtId) : undefined;
+  const selectedArtworkDirections = selectedArtwork ? structureArtDirections(selectedArtwork.sourceArtId) : [];
+  const artworkFacingDirections = selectedArtwork ? selectedArtworkDirections : artworkBrushDirections;
+  const artworkFacingDirection = selectedArtwork?.direction ?? artworkBrushDirection;
+  const artworkSceneBounds = boardBounds({ ...currentEditorBoard, floatingArtwork: [] });
+  const artworkXRange = {
+    min: Math.max(
+      -MAX_FLOATING_ARTWORK_PIXEL,
+      Math.floor(Math.min(artworkSceneBounds.minX - 512, selectedArtwork?.pixelX ?? artworkSceneBounds.minX)),
+    ),
+    max: Math.min(
+      MAX_FLOATING_ARTWORK_PIXEL,
+      Math.ceil(Math.max(artworkSceneBounds.minX + artworkSceneBounds.width + 512, selectedArtwork?.pixelX ?? artworkSceneBounds.minX)),
+    ),
+  };
+  const artworkYRange = {
+    min: Math.max(
+      -MAX_FLOATING_ARTWORK_PIXEL,
+      Math.floor(Math.min(artworkSceneBounds.minY - 512, selectedArtwork?.pixelY ?? artworkSceneBounds.minY)),
+    ),
+    max: Math.min(
+      MAX_FLOATING_ARTWORK_PIXEL,
+      Math.ceil(Math.max(artworkSceneBounds.minY + artworkSceneBounds.height + 512, selectedArtwork?.pixelY ?? artworkSceneBounds.minY)),
+    ),
+  };
+  const setArtworkFacing = (direction: Direction): void => {
+    if (!artworkFacingDirections.includes(direction)) return;
+    setArtworkBrushDirection(direction);
+    if (selectedArtwork) {
+      updateArtwork(selectedArtwork.id, (placement) => ({ ...placement, direction }));
+    }
+  };
+  const rotateArtworkFacing = (): void => {
+    if (!artworkFacingDirections.length) return;
+    const index = artworkFacingDirections.indexOf(artworkFacingDirection);
+    setArtworkFacing(artworkFacingDirections[(Math.max(index, 0) + 1) % artworkFacingDirections.length]);
+  };
   const coverCount = Object.keys(boardCover).length;
   const selectedFeature = selectedCell ? boardFeatures[`${selectedCell.x},${selectedCell.y}`] : undefined;
   const selectedZones = selectedCell
@@ -7411,6 +7860,8 @@ export function LevelEditor(): ReactElement {
     : me?.signed_in && editorDocument && !editorSessionCanWrite
     ? editAuthorityState === 'reviewer'
       ? 'This document is open for administrator review only.'
+      : editorSessionCanBegin
+        ? 'This page is viewing the level; editing starts with the first level change.'
       : 'This tab is read-only while the editor session identified above has control.'
     : !me?.signed_in && authReachable === false
     ? 'Reconnect to save this level.'
@@ -7438,6 +7889,8 @@ export function LevelEditor(): ReactElement {
     : me?.signed_in && editorDocument && !editorSessionCanWrite
     ? editAuthorityState === 'reviewer'
       ? 'Cross-owner review does not create presence or grant mutation authority.'
+      : editorSessionCanBegin
+        ? 'Make a level change to acquire the currently free writer lease. Merely opening this page does not hold it.'
       : 'Use Take over editing if you intend to move autosave and Save control to this tab.'
     : !me?.signed_in && authReachable === false
     ? browserRecoverySafetyDetail
@@ -7547,6 +8000,17 @@ export function LevelEditor(): ReactElement {
   const canRedoBoard = redoStack.length > 0 && (
     !isPredrawnBoard || preservesPredrawnBakedArt(currentEditorBoard, redoStack[0])
   );
+  const editorSessionAttentionLabel = me?.signed_in && editorDocument
+    ? editAuthorityState !== 'writer' && editPresence?.active_editor
+      ? 'Editor status'
+      : serverRecoveries.length
+        ? `${serverRecoveries.length} recover${serverRecoveries.length === 1 ? 'y' : 'ies'}`
+        : null
+    : null;
+  const openEditorSessionStatus = (): void => {
+    selectLayer('status');
+    setEditorStatusFocusRequest((request) => request + 1);
+  };
 
   return (
     // The level editor is a homepage-family surface: it shows the ONE shared HomepageBackdrop
@@ -7583,10 +8047,8 @@ export function LevelEditor(): ReactElement {
             reviewSaveLabel={isOfficialTarget ? 'Review & publish' : 'Review & save'}
           />
         ) : null}
-        {/* The title bar carries NO editor status (no level name, no save-state chip) — the
-            owner removed the center cluster: that's ambient chrome noise while editing, and
-            everything it said lives in the Status layer for whoever goes looking. Only the
-            return nav rides the bar (below). */}
+        {/* Ordinary editor status stays in Status. The title bar contributes one control only
+            when session authority or preserved recovery needs the author's attention. */}
         {editorReady ? <TitleBarControlContribution
           ariaLabel="Editor navigation"
           controls={[
@@ -7605,10 +8067,19 @@ export function LevelEditor(): ReactElement {
               destination: routeParams.returnTo,
               title: 'Return to the campaign editor',
             }] : []),
+            ...(editorSessionAttentionLabel ? [{
+              id: 'level-editor-session-status',
+              kind: 'action' as const,
+              label: editorSessionAttentionLabel,
+              title: 'Open the relevant editing-session information in Status',
+              active: true,
+              testId: 'le-editor-session-attention',
+              onActivate: openEditorSessionStatus,
+            }] : []),
           ] satisfies TitleBarControlSpec[]}
         /> : null}
 
-        <div className="skirmish-field" inert={!editorReady || saving || !editorSessionCanWrite ? true : undefined} aria-busy={!editorReady || saving || undefined}>
+        <div className="skirmish-field" inert={!editorReady || saving || !editorSessionCanAuthor ? true : undefined} aria-busy={!editorReady || saving || undefined}>
           {persistenceEmergencyVisible ? (
             <section className="le-persistence-emergency" data-testid="le-persistence-emergency" role="alert">
               <div>
@@ -7658,9 +8129,9 @@ export function LevelEditor(): ReactElement {
             </section>
           ) : null}
           <div
-            className={`skirmish-board-frame${eventsOpen || layer === 'artwork' ? ' is-workspace-covered' : ''}`}
-            inert={eventsOpen || layer === 'artwork' ? true : undefined}
-            aria-hidden={eventsOpen || layer === 'artwork' ? true : undefined}
+            className={`skirmish-board-frame${eventsOpen || predrawnArtworkWorkspaceOpen ? ' is-workspace-covered' : ''}`}
+            inert={eventsOpen || predrawnArtworkWorkspaceOpen ? true : undefined}
+            aria-hidden={eventsOpen || predrawnArtworkWorkspaceOpen ? true : undefined}
           >
             {activeFenceArtwork ? (
               <div className="le-fence-review-banner" data-testid="fence-candidate-editor-review">
@@ -7712,6 +8183,7 @@ export function LevelEditor(): ReactElement {
                     units={boardUnits}
                     doodads={boardDoodads}
                     props={boardProps}
+                    floatingArtwork={boardFloatingArtwork}
                     features={featureOverlays}
                     zones={visibleZones}
                     resolveAsset={resolveAsset}
@@ -7720,6 +8192,8 @@ export function LevelEditor(): ReactElement {
                     resolveProp={resolvePropDef}
                     tool={tool}
                     selectedCell={selectedCell}
+                    selectedArtworkId={selectedArtworkId}
+                    artworkSelectionActive={artworkSelectionActive}
                     boardZoom={viewZoom}
                     boardPan={viewPan}
                     gridScope={gridScope}
@@ -7731,6 +8205,8 @@ export function LevelEditor(): ReactElement {
                     onPaint={paintCell}
                     onErase={eraseCell}
                     onSelect={selectCell}
+                    onSelectArtwork={selectArtwork}
+                    onMoveArtwork={moveArtwork}
                     onMove={moveObject}
                     canMoveTo={canMoveObjectTo}
                     fences={boardFences}
@@ -7759,6 +8235,7 @@ export function LevelEditor(): ReactElement {
                     onPaintWallArtEdge={paintWallArtEdge}
                     onEraseWallArtEdge={eraseWallArtEdge}
                     propBrush={brushKind === 'prop' ? { def: propBrushDef, canPlaceAt: (ax, ay) => canPlaceProp(propBrushDef, ax, ay) } : null}
+                    artworkEditing={brushKind === 'artwork'}
                     macroTileBrush={brushKind === 'tile' ? macroTileBrushAsset : null}
                     regionCells={regionSelection}
                     onRegionStart={selectTerrainArea}
@@ -7768,13 +8245,34 @@ export function LevelEditor(): ReactElement {
                     decorativeFences={decorativeFences}
                     decorativeFencePosts={decorativeFencePosts}
                     decorativeWalls={decorativeWalls}
-                    allowDecorativeEditing={['tile', 'doodad', 'prop', 'cover', 'road', 'river', 'fence', 'wall', 'subterrain'].includes(brushKind)}
+                    allowDecorativeEditing={['tile', 'doodad', 'prop', 'artwork', 'cover', 'road', 'river', 'fence', 'wall', 'subterrain'].includes(brushKind)}
                   />
                 )}
+                {editorReady && !saving && !editorLoadError && brushKind === 'artwork' && tool === 'brush' ? (
+                  <div
+                    className="le-artwork-free-placement-surface"
+                    data-testid="artwork-free-placement-surface"
+                    aria-label={`Place ${artworkBrushAsset?.label ?? 'source artwork'} freely`}
+                    onPointerDown={(event) => {
+                      if (event.button !== 0) return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      placeFloatingArtwork({
+                        pixelX: (
+                          event.clientX - (rect.left + rect.width / 2) - viewPan.x
+                        ) / viewZoom - artworkBoardOrigin.originLeft,
+                        pixelY: (
+                          event.clientY - (rect.top + rect.height / 2) - viewPan.y
+                        ) / viewZoom - artworkBoardOrigin.originTop,
+                      });
+                    }}
+                  />
+                ) : null}
               </div>
             </ViewPane>
           </div>
-          {layer === 'artwork' && !eventsOpen ? (
+          {predrawnArtworkWorkspaceOpen && !eventsOpen ? (
             <LevelEditorShellWorkspace
               className="le-artwork-workspace"
               contentClassName="le-artwork-workspace-content"
@@ -7791,7 +8289,7 @@ export function LevelEditor(): ReactElement {
                   type="button"
                   data-chrome-unit="inner-text-button"
                   className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                  onClick={() => selectLayer('board')}
+                  onClick={closePredrawnArtworkWorkspace}
                 >Done</button>
               </header>
               {targetLevelId && editorDocument ? (
@@ -7961,8 +8459,10 @@ export function LevelEditor(): ReactElement {
         layer={layer}
         layerOptions={layerSelectOptions}
         onLayerChange={selectLayer}
-        tool={tool === 'region' || layer === 'artwork' || eventsOpen ? null : tool}
-        onToolChange={setTool}
+        tool={tool === 'region' || predrawnArtworkWorkspaceOpen || eventsOpen || (brushKind === 'artwork' && tool === 'select' && !artworkSelectionActive) ? null : tool}
+        onToolChange={changeEditorTool}
+        eraseLabel={brushKind === 'artwork' ? 'Delete selected artwork' : 'Erase'}
+        eraseDisabled={brushKind === 'artwork' && !selectedArtwork}
         canUndo={editorSessionCanWrite && canUndoBoard}
         canRedo={editorSessionCanWrite && canRedoBoard}
         onUndo={() => { if (editorSessionCanWrite) undoBoard(); }}
@@ -7971,10 +8471,17 @@ export function LevelEditor(): ReactElement {
         inert={!editorReady || saving}
         ariaBusy={!editorReady || saving}
       >
-        {me?.signed_in && editorDocument ? (
-          <section className="skirmish-card le-status-card le-session-rail" aria-live="polite" data-testid="le-editor-session-rail" data-state={editAuthorityState}>
+        {layer === 'status' && me?.signed_in && editorDocument ? (
+          <section
+            ref={editorSessionStatusRef}
+            tabIndex={-1}
+            className="skirmish-card le-status-card le-session-status"
+            aria-live="polite"
+            data-testid="le-editor-session-status"
+            data-state={editAuthorityState}
+          >
             <h2>Editing session</h2>
-            <div className={`le-status-current ${editAuthorityState === 'writer' ? 'is-ready' : 'is-blocked'}`}>
+            <div className={`le-status-current ${editAuthorityState === 'writer' || editorSessionCanBegin ? 'is-ready' : 'is-blocked'}`}>
               <strong>
                 {editAuthorityState === 'writer' && editSession
                   ? `Editing as ${levelEditorSessionActorLabel(editSession)}`
@@ -7984,6 +8491,8 @@ export function LevelEditor(): ReactElement {
                       ? 'Checking editing session…'
                       : editPresence?.active_editor
                         ? `${levelEditorSessionActorLabel(editPresence.active_editor)} has editing control`
+                        : editorSessionCanBegin
+                          ? 'Viewing — editing has not started'
                         : editPresence?.last_editor
                           ? `${levelEditorSessionActorLabel(editPresence.last_editor)} most recently had editing control`
                         : editAuthorityState === 'error'
@@ -8000,6 +8509,8 @@ export function LevelEditor(): ReactElement {
                           ...editPresence.active_editor,
                           relationship: editPresence.active_editor.relationship as 'this_tab' | 'same_device' | 'other_device',
                         }, levelEditorSessionServerNow(editPresence.server_time))
+                      : editorSessionCanBegin
+                        ? 'This page holds no writer lease. Your first level change will acquire editing control before autosave begins.'
                       : editPresence?.last_editor
                         ? `No live heartbeat · ${levelEditorSessionPresenceDetail({
                             ...editPresence.last_editor,
@@ -8011,17 +8522,19 @@ export function LevelEditor(): ReactElement {
               </span>
               {!editorSessionCanWrite && editAuthorityState !== 'reviewer' && editAuthorityState !== 'checking' ? (
                 <div className="le-board-actions le-session-actions">
-                  <button
-                    type="button"
-                    data-chrome-unit="inner-text-button"
-                    className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                    onClick={() => { void followLatestWorkingCopy(); }}
-                  >Follow latest</button>
+                  {editPresence?.active_editor ? (
+                    <button
+                      type="button"
+                      data-chrome-unit="inner-text-button"
+                      className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                      onClick={() => { void followLatestWorkingCopy(); }}
+                    >Follow latest</button>
+                  ) : null}
                   <button
                     type="button"
                     data-chrome-unit="inner-text-button"
                     className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'active')}
-                    data-testid="le-take-over-editing-rail"
+                    data-testid="le-take-over-editing-status"
                     disabled={editAuthorityState === 'takeover-pending' || saving || editPresence?.can_take_over === false}
                     title={editPresence?.active_editor
                       ? `Take control after preserving ${levelEditorSessionActorLabel(editPresence.active_editor)}'s server-known branch.`
@@ -8034,16 +8547,6 @@ export function LevelEditor(): ReactElement {
                     : editPresence?.active_editor ? 'Take over editing' : 'Start editing here'}</button>
                 </div>
               ) : null}
-              {serverRecoveries.length ? (
-                <button
-                  type="button"
-                  data-chrome-unit="inner-text-button"
-                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                  data-testid="le-review-session-recoveries"
-                  title="Open Status to inspect recovery source, checkpoint time, and restore/delete actions."
-                  onClick={() => { setLayer('status'); setTool('select'); }}
-                >Review {serverRecoveries.length} recover{serverRecoveries.length === 1 ? 'y' : 'ies'}</button>
-              ) : null}
             </div>
           </section>
         ) : null}
@@ -8051,6 +8554,8 @@ export function LevelEditor(): ReactElement {
           <section className="skirmish-card le-status-card le-server-recovery-card" aria-labelledby="le-server-recoveries-title">
             <h2 id="le-server-recoveries-title">Recovery copies</h2>
             <div
+              ref={editorRecoveriesStatusRef}
+              tabIndex={-1}
               className="le-status-current le-server-recoveries"
               data-testid="le-server-recoveries"
               aria-busy={serverRecoveryActionBusy || undefined}
@@ -8155,7 +8660,7 @@ export function LevelEditor(): ReactElement {
             </div>
           </section>
         ) : null}
-        <div className="le-editor-authoring-controls" inert={!editorSessionCanWrite ? true : undefined}>
+        <div className="le-editor-authoring-controls" inert={!editorSessionCanAuthor ? true : undefined}>
         {layer === 'status' ? (
           <>
           {/* Playability list (ADR-0050): while any violation exists Save is disabled and the
@@ -8422,10 +8927,16 @@ export function LevelEditor(): ReactElement {
             </div>
           </section>
           </>
-        ) : layer === 'artwork' ? (
+        ) : predrawnArtworkWorkspaceOpen ? (
           <section className="skirmish-card le-artwork-rail-summary">
             <h2>AI Artwork</h2>
             <p className="le-board-note">The full workflow is open in the center workspace. Generated, warped, and occlusion-ready boards stay separate so you can select the exact version you want.</p>
+            <button
+              type="button"
+              data-chrome-unit="inner-text-button"
+              className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+              onClick={closePredrawnArtworkWorkspace}
+            >Back to board editing</button>
           </section>
         ) : layer === 'board' ? (
           <>
@@ -8726,6 +9237,10 @@ export function LevelEditor(): ReactElement {
                   ? <img src={doodadBrushAsset.front} alt="" draggable={false} />
                   : brushKind === 'prop'
                   ? <img src={propHalfSrc(propBrushDef.spriteId, 'front')} alt="" draggable={false} />
+                  : brushKind === 'artwork'
+                  ? artworkBrushDirection
+                    ? <img src={structureArtDirectionHalfSrc(artworkBrushId, artworkBrushDirection, 'front')} alt="" draggable={false} />
+                    : null
                   : brushKind === 'cover'
                   ? <GroundCoverPreview asset={coverBrushAsset} />
                   : brushKind === 'zone'
@@ -8746,8 +9261,8 @@ export function LevelEditor(): ReactElement {
               </span>
             </span>
             <span className="le-brush-meta">
-              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'prop' ? propBrushDef.label : brushKind === 'cover' ? `${coverBrushDensity} ${coverBrushAsset.label}` : brushKind === 'zone' ? (activeZone ? activeZoneName : 'No zones') : subterrainTool ? (subterrainBrushAsset?.label ?? 'No Subterrain assets') : wallTool ? `${wallMaterialLabel(wallBrushMaterial)} Wall` : wallArtTool ? wallArtLabel(wallArtBrushId) : fenceTool ? `${activeFenceArtwork?.label ?? fenceMaterialLabel(fenceBrushMaterial)} · ${fencePaintTarget}` : featureKind ? `${featureMaterialLabel(featureBrushMaterial[featureKind], featureKind)} ${featureKind}` : macroTileBrushAsset?.label ?? brushAsset.label}</strong>
-              <span>Active brush · {brushKind === 'unit' ? `unit · ${LE_FACTION_LABELS[unitFaction]}` : brushKind === 'doodad' ? 'doodad' : brushKind === 'prop' ? `prop · ${propBrushDef.w}×${propBrushDef.h}` : brushKind === 'cover' ? 'ground cover' : brushKind === 'zone' ? 'zone' : subterrainTool ? 'subterrain · exposed face' : wallTool ? 'wall · edge · material' : wallArtTool ? `wall art · edge · ${wallArtBadge(wallArtBrushId)}` : fenceTool ? `fence · ${fencePaintTarget === 'post' ? 'vertex' : 'edge'}` : featureKind ? `feature · ${featureKind}` : macroTileBrushAsset ? `composite tile · ${macroTileBrushAsset.columns}×${macroTileBrushAsset.rows}` : 'tile'}</span>
+              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'prop' ? propBrushDef.label : brushKind === 'artwork' ? (artworkBrushAsset?.label ?? 'No source artwork') : brushKind === 'cover' ? `${coverBrushDensity} ${coverBrushAsset.label}` : brushKind === 'zone' ? (activeZone ? activeZoneName : 'No zones') : subterrainTool ? (subterrainBrushAsset?.label ?? 'No Subterrain assets') : wallTool ? `${wallMaterialLabel(wallBrushMaterial)} Wall` : wallArtTool ? wallArtLabel(wallArtBrushId) : fenceTool ? `${activeFenceArtwork?.label ?? fenceMaterialLabel(fenceBrushMaterial)} · ${fencePaintTarget}` : featureKind ? `${featureMaterialLabel(featureBrushMaterial[featureKind], featureKind)} ${featureKind}` : macroTileBrushAsset?.label ?? brushAsset.label}</strong>
+              <span>Active brush · {brushKind === 'unit' ? `unit · ${LE_FACTION_LABELS[unitFaction]}` : brushKind === 'doodad' ? 'doodad' : brushKind === 'prop' ? `prop · ${propBrushDef.w}×${propBrushDef.h}` : brushKind === 'artwork' ? 'source artwork' : brushKind === 'cover' ? 'ground cover' : brushKind === 'zone' ? 'zone' : subterrainTool ? 'subterrain · exposed face' : wallTool ? 'wall · edge · material' : wallArtTool ? `wall art · edge · ${wallArtBadge(wallArtBrushId)}` : fenceTool ? `fence · ${fencePaintTarget === 'post' ? 'vertex' : 'edge'}` : featureKind ? `feature · ${featureKind}` : macroTileBrushAsset ? `composite tile · ${macroTileBrushAsset.columns}×${macroTileBrushAsset.rows}` : 'tile'}</span>
             </span>
           </div>
         </section>
@@ -8941,6 +9456,97 @@ export function LevelEditor(): ReactElement {
               );
             })}
             <p className="le-board-note">This prop spans {propBrushDef.w}×{propBrushDef.h} tile{propBrushDef.w * propBrushDef.h > 1 ? 's' : ''}, anchored at the clicked cell. Props only land where every footprint tile is one of their terrains and no unit or other prop is in the way. Blocking props (trees, houses, rocks) become impassable in play.</p>
+          </section>
+        ) : brushKind === 'artwork' ? (
+          <section className="skirmish-card le-brush-panel">
+            <h2>Source Artwork</h2>
+            <button
+              type="button"
+              data-chrome-unit="inner-text-button"
+              className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+              data-testid="open-predrawn-artwork-pipeline"
+              onClick={openPredrawnArtworkWorkspace}
+            >Open AI generation pipeline</button>
+            <p className="le-board-note">The generation pipeline opens as a dedicated center workspace and keeps this level’s board-art versions separate from placed source artwork.</p>
+            <div className="le-ctrlrow le-artwork-selection-row">
+              <span className="le-ctrllabel">Selected</span>
+              <HouseSelect<string>
+                ariaLabel="Selected artwork"
+                value={selectedArtworkId ?? ''}
+                options={artworkSelectionOptions}
+                onChange={(id) => {
+                  if (id) selectArtwork(id);
+                  else {
+                    setSelectedCell(null);
+                    setSelectedArtworkId(null);
+                  }
+                }}
+              />
+            </div>
+            <h2 className="le-card-subhead">Facing</h2>
+            <FacingCompass
+              direction={artworkFacingDirection}
+              onSelect={setArtworkFacing}
+              onRotate={rotateArtworkFacing}
+              available={(direction) => artworkFacingDirections.includes(direction)}
+              ariaLabel="Artwork facing"
+            />
+            {(['tree', 'house', 'rock', 'doodad', 'landmark'] as const).map((kind) => {
+              const group = artworkAssets.filter((asset) => asset.kind === kind);
+              if (!group.length) return null;
+              return (
+                <div className="le-pal-group" key={`artwork-${kind}`}>
+                  <span className="le-pal-grouplabel">{kind === 'tree'
+                    ? 'Trees'
+                    : kind === 'house'
+                      ? 'Buildings'
+                      : kind === 'rock'
+                        ? 'Rocks'
+                        : kind === 'landmark'
+                          ? 'Landmarks'
+                          : 'Details'}</span>
+                  <div className="le-swatches">
+                    {group.map((asset) => {
+                      const directions = structureArtDirections(asset.id);
+                      const previewDirection = directions.includes(artworkBrushDirection)
+                        ? artworkBrushDirection
+                        : directions.includes('south')
+                          ? 'south'
+                          : directions[0];
+                      if (!previewDirection) return null;
+                      return (
+                        <button
+                          type="button"
+                          key={`artwork-${asset.id}`}
+                          data-chrome-unit="inner-asset-swatch"
+                          className={chromeUnitClassNames('inner-asset-swatch', 'le-swatch', artworkBrushId === asset.id && tool === 'brush' && 'active')}
+                          title={`${asset.label} · visual only`}
+                          onClick={() => {
+                            const disarming = artworkBrushId === asset.id && tool === 'brush';
+                            setArtworkBrushId(asset.id);
+                            setArtworkBrushDirection((current) => (
+                              directions.includes(current)
+                                ? current
+                                : directions.includes('south')
+                                  ? 'south'
+                                  : directions[0]
+                            ));
+                            setBrushKind('artwork');
+                            setLayer('artwork');
+                            setArtworkSelectionActive(false);
+                            setTool(disarming ? 'select' : 'brush');
+                          }}
+                        >
+                          <img src={structureArtDirectionHalfSrc(asset.id, previewDirection, 'front')} alt="" draggable={false} />
+                          <small>{asset.label}</small>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+            <p className="le-board-note">Click a source once to arm its free-placement brush; click it again to disarm. Facing controls the next placement and rotates the currently selected artwork. Place it anywhere in the scene with no tile, contact point, footprint, terrain rule, or collision. Select toggles image-bounds highlights for every selectable artwork and changes the current artwork; click Select again to clear selection mode and its outlines. Move drags only the current artwork, and Details keeps its exact pixel X/Y and scale controls.</p>
           </section>
         ) : subterrainTool ? (
           <section className="skirmish-card le-brush-panel">
@@ -9354,10 +9960,99 @@ export function LevelEditor(): ReactElement {
         </section>
         ) : null}
 
-        {layer !== 'status' && (selectedUnitAsset || selectedDoodadAsset || selectedProp || selectedAsset || selectedCell) ? (
+        {layer !== 'status' && (selectedArtwork || selectedUnitAsset || selectedDoodadAsset || selectedProp || selectedAsset || selectedCell) ? (
         <section className="skirmish-card le-details">
-          <h2>Details · {selectedUnitAsset ? 'Unit' : selectedDoodadAsset ? 'Doodad' : selectedProp ? 'Prop' : selectedAsset ? 'Tile' : 'Cell'}</h2>
-          {selectedUnitAsset && selectedUnit ? (
+          <h2>Details · {selectedArtwork ? 'Artwork' : selectedUnitAsset ? 'Unit' : selectedDoodadAsset ? 'Doodad' : selectedProp ? 'Prop' : selectedAsset ? 'Tile' : 'Cell'}</h2>
+          {selectedArtwork ? (
+            <>
+              <dl>
+                <div><dt>Source</dt><dd>{selectedArtworkAsset?.label ?? selectedArtwork.sourceArtId}</dd></div>
+                <div><dt>Role</dt><dd>Floating overlay · no tile or gameplay object</dd></div>
+              </dl>
+              <div className="le-artwork-transform-grid">
+                <label className="le-artwork-transform-row">
+                  <span>X px</span>
+                  <input
+                    type="range"
+                    aria-label="Artwork X pixel position"
+                    min={artworkXRange.min}
+                    max={artworkXRange.max}
+                    step="1"
+                    value={selectedArtwork.pixelX}
+                    onChange={(event) => moveArtwork(selectedArtwork.id, { pixelX: Number(event.target.value), pixelY: selectedArtwork.pixelY })}
+                  />
+                  <input
+                    className="le-text-input"
+                    type="number"
+                    aria-label="Artwork X pixel position value"
+                    min={-MAX_FLOATING_ARTWORK_PIXEL}
+                    max={MAX_FLOATING_ARTWORK_PIXEL}
+                    step="1"
+                    value={selectedArtwork.pixelX}
+                    onChange={(event) => moveArtwork(selectedArtwork.id, { pixelX: Number(event.target.value), pixelY: selectedArtwork.pixelY })}
+                  />
+                </label>
+                <label className="le-artwork-transform-row">
+                  <span>Y px</span>
+                  <input
+                    type="range"
+                    aria-label="Artwork Y pixel position"
+                    min={artworkYRange.min}
+                    max={artworkYRange.max}
+                    step="1"
+                    value={selectedArtwork.pixelY}
+                    onChange={(event) => moveArtwork(selectedArtwork.id, { pixelX: selectedArtwork.pixelX, pixelY: Number(event.target.value) })}
+                  />
+                  <input
+                    className="le-text-input"
+                    type="number"
+                    aria-label="Artwork Y pixel position value"
+                    min={-MAX_FLOATING_ARTWORK_PIXEL}
+                    max={MAX_FLOATING_ARTWORK_PIXEL}
+                    step="1"
+                    value={selectedArtwork.pixelY}
+                    onChange={(event) => moveArtwork(selectedArtwork.id, { pixelX: selectedArtwork.pixelX, pixelY: Number(event.target.value) })}
+                  />
+                </label>
+                <label className="le-artwork-transform-row">
+                  <span>Scale</span>
+                  <input
+                    type="range"
+                    aria-label="Artwork scale"
+                    min="0.1"
+                    max="8"
+                    step="0.05"
+                    value={selectedArtwork.scale}
+                    onChange={(event) => updateArtwork(selectedArtwork.id, (placement) => ({
+                      ...placement,
+                      scale: Number.isFinite(Number(event.target.value))
+                        ? Math.max(0.1, Math.min(8, Number(event.target.value)))
+                        : placement.scale,
+                    }))}
+                  />
+                  <input
+                    className="le-text-input"
+                    type="number"
+                    aria-label="Artwork scale value"
+                    min="0.1"
+                    max="8"
+                    step="0.05"
+                    value={selectedArtwork.scale}
+                    onChange={(event) => updateArtwork(selectedArtwork.id, (placement) => ({
+                      ...placement,
+                      scale: Number.isFinite(Number(event.target.value))
+                        ? Math.max(0.1, Math.min(8, Number(event.target.value)))
+                        : placement.scale,
+                    }))}
+                  />
+                </label>
+              </div>
+              <div className="le-seg le-artwork-actions">
+                <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={() => duplicateArtwork(selectedArtwork.id)}>Duplicate</button>
+                <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')} onClick={() => deleteArtwork(selectedArtwork.id)}>Delete</button>
+              </div>
+            </>
+          ) : selectedUnitAsset && selectedUnit ? (
             <dl>
               <div><dt>Piece</dt><dd>{selectedUnitAsset.label}</dd></div>
               <div><dt>Faction</dt><dd>{LE_FACTION_LABELS[selectedUnit.faction as UnitPalette] ?? selectedUnit.faction}</dd></div>
@@ -9389,6 +10084,7 @@ export function LevelEditor(): ReactElement {
               <div><dt>Units</dt><dd>{unitCount}</dd></div>
               <div><dt>Doodads</dt><dd>{doodadCount}</dd></div>
               <div><dt>Props</dt><dd>{propCount}</dd></div>
+              <div><dt>Artwork</dt><dd>{artworkCount}</dd></div>
               <div><dt>Zones</dt><dd>{zoneCount}</dd></div>
             </dl>
           )}
@@ -9399,7 +10095,7 @@ export function LevelEditor(): ReactElement {
             per-layer control). The Details card above still surfaces the same counts contextually. */}
         {layer === 'board' ? (
         <div className="le-statusline">
-          {selectedCell ? <>Cell <b>{selectedCell.x},{selectedCell.y}</b> · </> : null}<b>{paintedCount}</b> tiles · <b>{unitCount}</b> units · <b>{doodadCount}</b> doodads · <b>{propCount}</b> props · <b>{zoneCount}</b> zones · <b>{zonedTileCount}</b> zoned tiles · {boardCols}×{boardRows}
+          {selectedCell ? <>Cell <b>{selectedCell.x},{selectedCell.y}</b> · </> : null}<b>{paintedCount}</b> tiles · <b>{unitCount}</b> units · <b>{doodadCount}</b> doodads · <b>{propCount}</b> props · <b>{artworkCount}</b> artwork · <b>{zoneCount}</b> zones · <b>{zonedTileCount}</b> zoned tiles · {boardCols}×{boardRows}
         </div>
         ) : null}
         </div>

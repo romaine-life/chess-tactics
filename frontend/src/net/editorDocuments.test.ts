@@ -170,15 +170,21 @@ describe('editor document edit sessions', () => {
     expect(editorDocumentEditFence(editSession, editFence.edit_session_key)).toEqual(editFence);
   });
 
-  it('opens an idempotent client-named session with device attribution', async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse(201, { session: editSession, presence: editPresence }));
+  it('registers an idempotent client-named viewer without acquiring authority', async () => {
+    const viewerSession = { ...editSession, state: 'waiting' as const, lease_expires_at: null };
+    const viewerPresence = {
+      ...editPresence,
+      active_editor: null,
+      can_take_over: true,
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { session: viewerSession, presence: viewerPresence }));
 
     await expect(openEditorDocumentEditSession('doc/a b', {
       session_id: 'session-tab-a',
       session_key: editFence.edit_session_key,
       device_id: 'device-browser-a',
       client_label: 'Chrome · bridge worktree',
-    })).resolves.toEqual({ session: editSession, presence: editPresence });
+    })).resolves.toEqual({ session: viewerSession, presence: viewerPresence });
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('/api/editor-documents/doc%2Fa%20b/edit-sessions');

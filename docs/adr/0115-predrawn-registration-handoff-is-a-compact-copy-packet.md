@@ -2,7 +2,7 @@
 status: "accepted"
 date: 2026-07-14
 deciders: Nelson, Codex
-partially_superseded_by: "[ADR-0147](0147-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md)"
+partially_superseded_by: "[ADR-0158](0158-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md)"
 ---
 
 # ADR-0115: Pre-drawn registration handoff is a compact copy packet

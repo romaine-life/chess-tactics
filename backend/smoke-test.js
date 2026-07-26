@@ -333,10 +333,11 @@ async function openEditorEditSession(documentId, {
   deviceId = `smoke-device-${crypto.randomUUID()}`,
   clientLabel = 'Smoke browser',
   intent,
+  activate = true,
   remember = true,
   targetPort = port,
 } = {}) {
-  const response = await requestOnPort(
+  let response = await requestOnPort(
     targetPort,
     'POST',
     `/api/editor-documents/${documentId}/edit-sessions`,
@@ -349,8 +350,32 @@ async function openEditorEditSession(documentId, {
       ...(intent ? { intent } : {}),
     }),
   );
-  const body = response.body ? JSON.parse(response.body) : {};
-  if (response.statusCode === 200 && remember) {
+  let body = response.body ? JSON.parse(response.body) : {};
+  if (
+    response.statusCode === 200
+    && activate
+    && intent !== 'observe'
+    && body.session?.state !== 'active'
+    && !body.presence?.active_editor
+  ) {
+    response = await requestOnPort(
+      targetPort,
+      'POST',
+      `/api/editor-documents/${documentId}/edit-sessions/${sessionId}/takeover`,
+      { cookie, 'content-type': 'application/json' },
+      JSON.stringify({
+        session_key: sessionKey,
+        expected_generation: body.presence.edit_generation,
+      }),
+    );
+    body = response.body ? JSON.parse(response.body) : {};
+  }
+  if (
+    response.statusCode === 200
+    && remember
+    && body.session?.state === 'active'
+    && body.presence?.active_editor?.session_id === body.session.session_id
+  ) {
     editorAuthorities.set(editorAuthorityKey(documentId, cookie), {
       session_id: body.session.session_id,
       edit_session_key: sessionKey,
@@ -1528,6 +1553,161 @@ async function main() {
     || !groupedAdminCatalog.events.some((event) => event.action === 'accepted-batch' && event.versionId === nativeVersion.id)
   ) throw new Error(`Media replacement/audit is incomplete: ${JSON.stringify(groupedAdminCatalog)}`);
 
+  // Structure source artwork is the typed non-terrain exception to the
+  // bridge-only media rule: all eight native views, the exact interactive
+  // board-placement proof, and the slot pointers publish atomically.
+  const sourceArtDirections = [
+    'south', 'south-west', 'west', 'north-west', 'north', 'north-east', 'east', 'south-east',
+  ];
+  const sourceArtAssetId = 'smoke-tree';
+  const sourceArtSlots = sourceArtDirections
+    .map((direction) => `source-art/${sourceArtAssetId}/${direction}.png`)
+    .sort();
+  const sourceArtVersions = [];
+  for (const [index, direction] of sourceArtDirections.entries()) {
+    const bytes = syntheticPng(
+      512, 512, `#${(0x304050 + index * 0x020406).toString(16).padStart(6, '0')}`, '#8fd18a',
+    );
+    const sha256 = crypto.createHash('sha256').update(bytes).digest('hex');
+    const sourceArtMetadata = {
+      schema: 'structure-source-art-turntable-v1',
+      assetId: sourceArtAssetId,
+      structureId: 'structure-smoke-tree',
+      label: 'Smoke tree art',
+      sortOrder: 900,
+      existing: false,
+      sourceOnly: true,
+      structureKind: 'landmark',
+      direction,
+      placementScale: 0.4,
+      license: 'CC0',
+      referenceOnly: true,
+    };
+    const create = await request('POST', '/api/admin/media-versions', adminJson, JSON.stringify({
+      slot: `source-art/${sourceArtAssetId}/${direction}.png`,
+      sourcePath: `smoke/source-art/${sourceArtAssetId}/${direction}.png`,
+      domain: 'prop',
+      role: 'source-art',
+      label: `Smoke tree art · ${direction}`,
+      availabilityPolicy: 'decorative',
+      metadata: { sourceArt: sourceArtMetadata },
+      slotMetadata: {
+        acceptance: {
+          mode: 'group',
+          groupId: `source-art-eight-way:${sourceArtAssetId}`,
+          requiredSlots: sourceArtSlots,
+        },
+        sourceArt: {
+          schema: 'structure-source-art-turntable-v1',
+          assetId: sourceArtAssetId,
+          direction,
+        },
+      },
+      nativeEvidence: {
+        native1x: true,
+        spatialResampling: false,
+        sourceWidth: 512,
+        sourceHeight: 512,
+        sourceSha256: sha256,
+      },
+      provenance: { generator: 'synthetic-source-art-smoke', direction },
+    }), 5000);
+    if (create.statusCode !== 201) {
+      throw new Error(`Source-art candidate create failed: ${create.statusCode} ${create.body}`);
+    }
+    const version = JSON.parse(create.body).version;
+    const upload = await request(
+      'PUT', `/api/admin/media-versions/${version.id}/content`,
+      { 'content-type': 'image/png', 'if-match': '"0"', cookie: 'better-auth.session=abc' }, bytes, 5000,
+    );
+    if (upload.statusCode !== 200 || JSON.parse(upload.body).version.media.sha256 !== sha256) {
+      throw new Error(`Source-art candidate upload failed: ${upload.statusCode} ${upload.body}`);
+    }
+    sourceArtVersions.push({
+      id: version.id,
+      slot: `source-art/${sourceArtAssetId}/${direction}.png`,
+      sha256,
+      rowRevision: 1,
+    });
+  }
+  const sourceArtAdminBeforeReview = JSON.parse((await get(
+    '/api/admin/media-assets', { cookie: 'better-auth.session=abc' }, 5000,
+  )).body);
+  const sourceArtSlotSnapshots = sourceArtSlots.map((slot) => {
+    const row = sourceArtAdminBeforeReview.slots.find((item) => item.slot === slot);
+    if (!row) throw new Error(`Source-art slot missing before review: ${slot}`);
+    return row;
+  });
+  const sourceArtSurfaceUrl = `http://127.0.0.1:${port}/studio?mode=viewer&cat=sourceart&sourceArt=${sourceArtAssetId}`;
+  const sourceArtProof = {
+    schema: 'live-media-owner-group-proof-v1',
+    canonicalScale: 1,
+    surfaceKind: 'Studio Source Art interactive board placement',
+    renderer: 'BoardLabBoard/SourceArtCandidateOverlay',
+    decodedNativeRaster: { width: 512, height: 512, scale: 1 },
+    mountedDirections: sourceArtDirections,
+    placement: {
+      pixelX: 400,
+      pixelY: 300,
+      scale: 1,
+      direction: 'south',
+      installedSourceScale: 0.4,
+    },
+    selectedCandidates: sourceArtVersions.map((version) => ({
+      slot: version.slot,
+      versionId: version.id,
+      sha256: version.sha256,
+      rowRevision: version.rowRevision,
+    })),
+    slotSnapshots: sourceArtSlotSnapshots.map((slot) => ({
+      slot: slot.slot,
+      rowRevision: slot.rowRevision,
+      activeVersionId: slot.activeVersionId,
+      lifecycleState: slot.lifecycleState,
+    })),
+    acceptanceGroup: {
+      groupId: `source-art-eight-way:${sourceArtAssetId}`,
+      requiredSlots: sourceArtSlots,
+    },
+  };
+  const sourceArtReview = await request(
+    'POST', '/api/admin/media-versions/review-batch', adminJson,
+    JSON.stringify({
+      items: sourceArtVersions.map((version) => ({ id: version.id, expectedRevision: version.rowRevision })),
+      approved: true,
+      notes: 'All eight source-art views mounted and rotated on the interactive Studio board',
+      surfaceUrl: sourceArtSurfaceUrl,
+      evidence: sourceArtProof,
+    }), 5000,
+  );
+  if (
+    sourceArtReview.statusCode !== 200
+    || JSON.parse(sourceArtReview.body).versions.some((version) => version.rowRevision !== 2)
+  ) throw new Error(`Source-art review failed atomically: ${sourceArtReview.statusCode} ${sourceArtReview.body}`);
+  const sourceArtAccept = await request(
+    'POST', '/api/admin/media-versions/accept-batch', adminJson,
+    JSON.stringify({
+      items: sourceArtVersions.map((version) => {
+        const slot = sourceArtSlotSnapshots.find((item) => item.slot === version.slot);
+        return {
+          id: version.id,
+          expectedRevision: 2,
+          expectedSlotRevision: slot.rowRevision,
+          expectedActiveVersionId: slot.activeVersionId,
+        };
+      }),
+    }), 5000,
+  );
+  const sourceArtAcceptBody = JSON.parse(sourceArtAccept.body);
+  if (
+    sourceArtAccept.statusCode !== 200 || sourceArtAcceptBody.versions.length !== 8
+    || sourceArtAcceptBody.versions.some((version) => version.status !== 'accepted')
+  ) throw new Error(`Source-art acceptance failed atomically: ${sourceArtAccept.statusCode} ${sourceArtAccept.body}`);
+  const sourceArtPublicCatalog = JSON.parse((await get('/api/asset-catalog')).body);
+  if (sourceArtSlots.some((slot) => (
+    sourceArtPublicCatalog.slots.find((item) => item.slot === slot)?.versionStatus !== 'accepted'
+  ))) throw new Error('Source-art slots did not publish atomically');
+
   // One complete pre-drawn board plate: candidate-declared native dimensions,
   // exact owner v4 alignment proof, slot/version/hash snapshots, transactional
   // CAS rollback, and stable runtime publication all use the shared lifecycle.
@@ -2316,10 +2496,6 @@ async function main() {
     'ui-kit-icons-brand-shield-png',
     'ui-surfaces-baseline-stone-blue-avif',
     'ui-surfaces-hybrid-wood-oak-png',
-    'ui-main-menu-icons-carved-settings-png',
-    'ui-main-menu-icons-carved-solo-skirmish-png',
-    'ui-main-menu-icons-carved-campaign-editor-png',
-    'ui-main-menu-icons-carved-lobbies-png',
     'ui-kit-icons-gear-png',
     'ui-kit-icons-speaker-png',
     'ui-kit-icons-knight-png',
@@ -3260,6 +3436,47 @@ async function main() {
     resolvedEditorBody.document.dirty !== false
   ) {
     throw new Error(`Unexpected editor resolve: ${resolvedEditor.statusCode} ${resolvedEditor.body}`);
+  }
+
+  const passiveViewer = await openEditorEditSession(smokeDocumentId, {
+    deviceId: 'smoke-passive-viewer-device',
+    clientLabel: 'Untouched Level Editor viewer',
+    activate: false,
+    remember: false,
+  });
+  const passiveViewerAuthority = await queryDb(
+    `SELECT
+       (SELECT count(*)::integer FROM editor_document_edit_sessions WHERE document_id = $1 AND state = 'active') AS active_count,
+       (SELECT count(*)::integer FROM editor_document_recoveries WHERE document_id = $1) AS recovery_count,
+       edit_generation,
+       revision
+     FROM level_working_copies
+     WHERE document_id = $1`,
+    [smokeDocumentId],
+  );
+  if (
+    passiveViewer.response.statusCode !== 200
+    || passiveViewer.body.session?.state !== 'waiting'
+    || passiveViewer.body.session?.lease_expires_at !== null
+    || passiveViewer.body.presence?.active_editor !== null
+    || passiveViewer.body.presence?.can_take_over !== true
+    || passiveViewerAuthority.rows[0]?.active_count !== 0
+    || passiveViewerAuthority.rows[0]?.recovery_count !== 0
+    || Number(passiveViewerAuthority.rows[0]?.edit_generation) !== resolvedEditorBody.document.edit_generation
+    || Number(passiveViewerAuthority.rows[0]?.revision) !== resolvedEditorBody.document.revision
+  ) {
+    throw new Error(`Untouched Level Editor viewer acquired or mutated authority: ${passiveViewer.response.statusCode} ${passiveViewer.response.body} / ${JSON.stringify(passiveViewerAuthority.rows[0])}`);
+  }
+  const closedPassiveViewer = await closeEditorEditSessionRequest(
+    smokeDocumentId,
+    passiveViewer.sessionId,
+    passiveViewer.sessionKey,
+  );
+  if (
+    closedPassiveViewer.statusCode !== 200
+    || JSON.parse(closedPassiveViewer.body).session?.state !== 'closed'
+  ) {
+    throw new Error(`Passive viewer session did not close cleanly: ${closedPassiveViewer.statusCode} ${closedPassiveViewer.body}`);
   }
 
   const primaryOpen = await openEditorEditSession(smokeDocumentId, {

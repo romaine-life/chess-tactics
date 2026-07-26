@@ -35,14 +35,15 @@ export function useAnimationClock(isPlaying = true, frameCount = 9, frameMs = 15
   return animationFrame;
 }
 
-export function FacingCompass({ direction, onSelect, onRotate, available }: {
+export function FacingCompass({ direction, onSelect, onRotate, available, ariaLabel = 'Unit facing (8-way)' }: {
   direction: Direction;
   onSelect: (dir: Direction) => void;
   onRotate: () => void;
   available?: (dir: Direction) => boolean;
+  ariaLabel?: string;
 }): ReactElement {
   return (
-    <div className="unit-facing-compass" aria-label="Unit facing (8-way)">
+    <div className="unit-facing-compass" aria-label={ariaLabel}>
       {directionCompassCells.map((cell) =>
         cell === 'center' ? (
           <button
@@ -69,6 +70,7 @@ export function FacingCompass({ direction, onSelect, onRotate, available }: {
             onClick={() => onSelect(cell)}
             title={`Face ${cell}`}
             aria-label={`Face ${cell}`}
+            aria-pressed={direction === cell}
           >
             {rookDirectionLabel[cell]}
           </button>

@@ -4,11 +4,11 @@ date: 2026-07-20
 deciders: Nelson, Codex
 ---
 
-# ADR-0148: Pre-drawn background authoring storage is bounded
+# ADR-0159: Pre-drawn background authoring storage is bounded
 
 ## Context
 
-ADR-0147 makes raw scene uploads and deterministic raster and mask children durable, immutable,
+ADR-0158 makes raw scene uploads and deterministic raster and mask children durable, immutable,
 owner-authored media. Each request already has a 32 MiB and eight-megapixel ceiling, but those
 per-request limits do not bound the number of permanent rows, the total retained Blob content, or
 the number of request bodies buffered concurrently. Archive intentionally retains immutable bytes

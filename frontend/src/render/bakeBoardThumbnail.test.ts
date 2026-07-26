@@ -19,6 +19,7 @@ import type { EditorBoard } from '../ui/boardCode';
 import { applyLiveUnitCatalog, resetLiveUnitCatalog } from '../ui/unitCatalog';
 import { testLiveUnitCatalog } from '../test/liveUnitCatalog';
 import {
+  applyDrawableCatalog,
   applyLiveMediaCatalog,
   groundCoverSet,
   resetDrawableCatalog,
@@ -30,7 +31,7 @@ import {
 } from '@chess-tactics/board-render';
 import { testGroundCoverCatalog, testStructureMediaSlots, testWallDecorMediaSlots } from '../test/liveMediaCatalog';
 import { applyTestPropSeats } from '../test/livePropSeats';
-import { applyTestDrawableCatalog } from '../test/drawableCatalog';
+import { applyTestDrawableCatalog, testDrawableCatalog } from '../test/drawableCatalog';
 import { featureFrameSrc, fenceFrameSrc, fencePostSrc, wallFrameSrc } from '../art/tileset';
 import { tileFamilies } from '../art/tileset';
 import { subterrainMaterialSrc } from '@chess-tactics/board-render';
@@ -432,6 +433,17 @@ describe('boardContentHash — stability + sensitivity', () => {
     expect(boardContentHash(placed)).not.toBe(boardContentHash(moved));
   });
 
+  it('changes for every floating artwork transform field', () => {
+    const placement = { id: 'art-1', sourceArtId: 'oak', pixelX: 120, pixelY: 80, direction: 'south' as const, scale: 1.5 };
+    const before = blank(8, 6);
+    const placed: EditorBoard = { ...blank(8, 6), floatingArtwork: [placement] };
+    const moved: EditorBoard = { ...blank(8, 6), floatingArtwork: [{ ...placement, pixelX: 121 }] };
+    const rotated: EditorBoard = { ...blank(8, 6), floatingArtwork: [{ ...placement, direction: 'north' }] };
+    expect(boardContentHash(before)).not.toBe(boardContentHash(placed));
+    expect(boardContentHash(placed)).not.toBe(boardContentHash(moved));
+    expect(boardContentHash(placed)).not.toBe(boardContentHash(rotated));
+  });
+
   it('changes when a feature (road) is added', () => {
     const before = blank();
     const after: EditorBoard = { ...blank(), features: { '1,1': { kind: 'road', material: 'cobble' } } };
@@ -560,6 +572,65 @@ describe('uniqueDrawSrcs — dedup so each image decodes once', () => {
     expect(uniqueDrawSrcs(unknown)).toEqual([]);
   });
 
+  it('direct floating artwork contributes source halves without becoming a prop', () => {
+    const board: EditorBoard = {
+      ...blank(8, 6),
+      floatingArtwork: [{ id: 'art-1', sourceArtId: 'oak', pixelX: 120, pixelY: 80, direction: 'south', scale: 1.5 }],
+    };
+    expect(uniqueDrawSrcs(board)).toEqual([
+      structureArtHalfSrc('oak', 'back'),
+      structureArtHalfSrc('oak', 'front'),
+    ]);
+    expect(board.props).toEqual({});
+  });
+
+  it('uses the selected artwork direction raster without changing its free transform', () => {
+    const catalog = testDrawableCatalog();
+    const oak = catalog.assets.find((asset) => asset.id === 'structure-oak')!;
+    const directionalRole = (half: 'back' | 'front', fill: string) => {
+      const role = structuredClone(oak.media[half]);
+      role.slot = `source-art/oak/east-${half}.png`;
+      role.media.sha256 = fill.repeat(64);
+      role.media.immutableUrl = `/api/media/${role.media.sha256}`;
+      role.media.url = `/assets/source-art/oak/east-${half}.png`;
+      return role;
+    };
+    oak.media['east-back'] = directionalRole('back', 'd');
+    oak.media['east-front'] = directionalRole('front', 'e');
+    oak.behavior.directions = {
+      east: { anchorX: 96, anchorY: 255, scale: 1, splitMode: 'authored' },
+    };
+    applyDrawableCatalog({ ...catalog, revision: catalog.revision + 1 });
+
+    try {
+      const placement = {
+        id: 'art-1',
+        sourceArtId: 'oak',
+        pixelX: 321,
+        pixelY: 187,
+        direction: 'east' as const,
+        scale: 1.75,
+      };
+      const board: EditorBoard = { ...blank(8, 6), floatingArtwork: [placement] };
+      const ops = boardDrawOps(board);
+      const expectedBack = `/api/media/${'d'.repeat(64)}`;
+      const expectedFront = `/api/media/${'e'.repeat(64)}`;
+
+      expect(ops.map((op) => op.src)).toEqual([expectedBack, expectedFront]);
+      expect(ops[0]).toMatchObject({
+        dx: 153,
+        dy: -75.5,
+        dw: 336,
+        dh: 525,
+        z: 1_000_000,
+      });
+      expect(ops[1]).toMatchObject({ ...ops[0], src: expectedFront, z: 1_000_001 });
+      expect(board.floatingArtwork?.[0]).toEqual(placement);
+    } finally {
+      applyTestDrawableCatalog();
+    }
+  });
+
   it('a macrotile contributes its board-space source and replaces covered top sources', () => {
     const cells = Object.fromEntries(
       Array.from({ length: 9 }, (_, index) => [`${index % 3},${Math.floor(index / 3)}`, TILE]),
@@ -671,6 +742,24 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     expect(front!.sx).toBeUndefined();
     expect(back!.dw).toBe(192);
     expect(back!.dh).toBe(300);
+  });
+
+  it('centers and scales floating artwork at an exact scene pixel, then bakes it into a plate', () => {
+    const floatingArtwork = [{ id: 'art-1', sourceArtId: 'oak', pixelX: 120, pixelY: 80, direction: 'south' as const, scale: 1.5 }];
+    const board: EditorBoard = { ...blank(8, 6), floatingArtwork };
+    const ops = boardDrawOps(board);
+    const back = ops.find((op) => op.src === structureArtHalfSrc('oak', 'back'));
+    const front = ops.find((op) => op.src === structureArtHalfSrc('oak', 'front'));
+    expect(back).toMatchObject({ dx: -24, dy: -145, dw: 288, dh: 450, z: 1_000_000 });
+    expect(front?.z).toBe(1_000_001);
+
+    const baked: EditorBoard = {
+      ...board,
+      surface: { kind: 'predrawn', slot: 'predrawn/test-board', frameWidth: 1600, frameHeight: 900 },
+    };
+    const bakedOps = boardDrawOps(baked);
+    expect(bakedOps).toHaveLength(1);
+    expect(bakedOps[0].src).toBe('/assets/predrawn/test-board');
   });
 
   it('replaces every covered 1x1 top with one macrotile below feature overlays', () => {

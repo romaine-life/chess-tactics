@@ -294,6 +294,61 @@ The Level Editor anchors its `TileGrid` origin to the playable cells. Adding or 
 or sparse scenic terrain therefore does not recenter the projected board or move the camera; the
 canonical board-space projection itself remains unchanged.
 
+### Floating source artwork
+
+Per
+[ADR-0147](adr/0147-floating-artwork-uses-projected-scene-pixels.md) and
+[ADR-0148](adr/0148-floating-artwork-uses-dedicated-placement-and-explicit-selection.md),
+the authored visual board may also contain direct placements of installed
+structure source art. This channel is not the prop or doodad channel: a
+placement has a stable instance id, source-art id, integer center in canonical
+unzoomed projected-scene pixels, canonical eight-way direction, and
+per-instance source scale. It has no board coordinate, tile, footprint, contact
+point, terrain eligibility, blocking, depth seat, or gameplay projection.
+
+The shared renderer centers the selected source frame on `pixelX`/`pixelY` and
+draws floating artwork above the authored board scene in collection order.
+Authors never store or edit `z`. A change of direction selects a complete
+installed `<direction>-back`/`<direction>-front` media pair. South may use the
+legacy `back`/`front` pair. Missing pairs are unavailable rather than flattened,
+planar-rotated, or silently substituted. Per-direction source calibration may
+override the drawable's default scale and split geometry.
+
+Per [ADR-0150](adr/0150-structure-source-art-turntables-are-complete-source-only-live-groups.md)
+and [ADR-0151](adr/0151-source-art-review-requires-interactive-board-placement.md),
+new or upgraded Artwork sources install as complete atomic eight-direction
+groups. A direction may point both named halves at one full `flat-contact`
+turntable raster without changing the legacy prop/doodad `back`/`front` split.
+`sourceOnly` structure rows, including landmarks, participate in this Artwork
+channel but never synthesize gameplay props, doodads, seats, footprints,
+terrain rules, or blocking. Before installation, the exact private candidates
+are reviewable through a transient `BoardLabBoard` placement proof with the
+same free pixel center, scale, drag, and shared eight-way direction controls;
+candidate media identities never enter persisted board content.
+
+The Level Editor Artwork layer lists the installed raw structure catalog.
+Clicking a source swatch toggles a viewport-sized free-placement brush that
+converts the primary pointer directly to projected-scene pixels; tile,
+prop/doodad, and barrier hit targets do not participate. A dynamically growing
+Selected dropdown lists stable placed instances and includes None. Select may
+change that current instance but never move it. Per
+[ADR-0149](adr/0149-artwork-select-toggles-candidate-discovery.md), Select is
+a toggleable discovery mode: its first click draws image-bounds candidate
+outlines around every selectable artwork, and its second click exits that mode,
+clears the current artwork, and removes candidate plus current outlines. Move
+drags only the current instance and suppresses candidate outlines; the
+Artwork-layer Delete toolbar action immediately deletes the current instance.
+The current instance has a distinct dotted image-bounds outline, and blank-board
+clicks do not clear it. Details remains locked to that instance and provides
+full-width slider-plus-number rows for X px, Y px, and Scale, installed-direction
+selection, duplicate, and delete. The layer introduces no visible placement
+marker or alternate grid geometry. Board resizing neither shifts nor prunes it.
+These controls do not create or mutate a prop/doodad definition.
+The layer renders into the canonical pre-drawn generation reference and is
+visual-only in its semantic packet. It is locked and suppressed after a
+pre-drawn plate is installed because those pixels are already baked into the
+plate.
+
 ### Pre-drawn generation frame
 
 Per
@@ -310,7 +365,7 @@ The generation-reference compositor renders the canonical unit-free,
 ground-cover-free authored visual surface through exactly that saved frame. The
 complete playable outer envelope and every draw whose position or footprint is
 gameplay-authoritative in the semantic packet must lie fully inside. Scenic-only
-terrain, props, and Subterrain may cross the frame edge or remain wholly outside
+terrain, props, direct source artwork, and Subterrain may cross the frame edge or remain wholly outside
 it; clipping changes neither their board data nor active
 visual-surface membership. A decorative alpha pixel touching a source edge is
 valid and must not trigger a full-paint-bounds refit. The frame rectangle never
@@ -333,12 +388,14 @@ The runtime board is one composed terrain canvas, but its source data remains la
 2. Exactly one terrain top for every playable cell: either its 1x1 top sprite or the clipped
    portion of a macrotile from `EditorBoard.macroTiles` that owns the cell.
 3. Road and river feature overlays.
-4. Optional grid, cover, doodads, props, units, and tactical overlays.
+4. Optional grid, cover, doodads, props, floating source artwork, units,
+   and tactical overlays. Floating source artwork is omitted here once the
+   pre-drawn plate has baked it in.
 
 ### Pre-drawn board surfaces
 
 Per
-[ADR-0147](adr/0147-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md),
+[ADR-0158](adr/0158-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md),
 a board may select one exact immutable pre-drawn raster version plus either one
 matching depth-aware occlusion-mask child or an explicit no-mask state. Ordinary
 cell and object data remain present and gameplay-authoritative; this is a render
@@ -349,7 +406,7 @@ suppresses terrain tops, Subterrain, roads, rivers and other linear features,
 macrotiles and generated regions, props and scenery, fences and posts, walls and
 wall art, doodads, environmental shadows, lighting effects, non-cover
 environment animation, and particles. Per
-[ADR-0151](adr/0151-predrawn-backgrounds-retain-live-ground-cover.md), explicitly
+[ADR-0162](adr/0162-predrawn-backgrounds-retain-live-ground-cover.md), explicitly
 authored ground cover remains a live additive layer with its canonical
 back/front unit depth and animation on both playable and scenic visual terrain.
 Exact Levels never synthesize ambient cover. Live units/pieces and their
@@ -385,7 +442,7 @@ choose a mutable slot's newest image, or derive a replacement mask from
 canonical sprites.
 
 Per
-[ADR-0152](adr/0152-legacy-predrawn-geometry-fingerprints-bind-to-cover-independent-v2.md),
+[ADR-0163](adr/0163-legacy-predrawn-geometry-fingerprints-bind-to-cover-independent-v2.md),
 new artifacts use only the cover-independent
 `predrawn-environment-geometry-v2` fingerprint. The exact v1 algorithm,
 including its historical cover maps, is retained solely to prove an existing
@@ -394,7 +451,7 @@ an external immutable v1-to-v2 binding; it never changes the artifact's
 operation or provenance. The binding may occur only at the first fenced
 pre-mutation autosave, direct derivative creation, or Save/Publish fallback.
 Reads never bind. Once proven, cover-only edits continue to match v2. Per
-[ADR-0153](adr/0153-predrawn-geometry-staleness-does-not-block-draft-persistence.md),
+[ADR-0164](adr/0164-predrawn-geometry-staleness-does-not-block-draft-persistence.md),
 a baked terrain or environment edit may still autosave or be recovered as an
 owner draft, but it makes the selected art explicitly stale. The artwork UI
 disables Set and derivation for that stale version. Save and Publish reject it
@@ -436,7 +493,7 @@ reference is display-only and never participates in the emitted pixels, review
 grid, hit targets, gameplay, or runtime background declaration.
 
 Per
-[ADR-0150](adr/0150-predrawn-artwork-is-a-linear-shell-workspace.md), the
+[ADR-0161](adr/0161-predrawn-artwork-is-a-linear-shell-workspace.md), the
 owner-facing lineage instrument occupies the Level Editor's shell-owned center
 workspace instead of the Board control rail. It presents each operation as a
 distinct selectable board artifact: Codex-generated board, warped board, then
@@ -453,7 +510,7 @@ canonical transaction. Private Save keeps its pinned ready versions owner-
 scoped; only official publication or the separately labeled owner user-map
 Publish action makes its exact selected versions public.
 
-ADR-0147 partially supersedes ADR-0115's mandatory installation handoff. A
+ADR-0158 partially supersedes ADR-0115's mandatory installation handoff. A
 compact source/registration copy may remain as optional diagnostic or provenance
 export, but deriving, setting, saving, and publishing cannot require Codex,
 clipboard transfer, an editor URL, shared browser state, or a filesystem step.
@@ -470,7 +527,7 @@ an existing pan back inside. Wheel, stepper, shortcut, and reset paths must not
 cross the floor. If it exceeds the ordinary gameplay cap, the cap rises to the
 floor; ordinary tiled boards retain their existing zoom range.
 
-Per ADR-0147,
+Per ADR-0158,
 the cover floor is a safety limit rather than a substitute for camera room. The
 raw and derived versions keep their recorded actual dimensions; no fixed pixel
 dimensions or exact board-to-frame percentage are an acceptance gate.

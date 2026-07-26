@@ -25,6 +25,7 @@ import { CatalogGrid, CatalogControls, CatalogFilters, type CatalogType, type Ca
 import { AssetLibraryStudio, AssetLab, ASSET_TYPE_FACETS, type AssetFilters } from './design/AssetLibraryStudio';
 import { DividerLab, DEFAULT_DIVIDER_ASSET } from './DividerViewer';
 import { ArtworkLibraryStudio, ArtworkLab } from './design/ArtworkLibraryStudio';
+import { SourceArtTurntableCatalog, SourceArtTurntableLab } from './SourceArtTurntableStudio';
 import { buildStudioArtworkLibrary, buildStudioAssetLibrary } from './design/studioLiveMediaLibrary';
 import { CroppedView, type Piece as PortraitPiece } from './PortraitEditor';
 import { installedPortraitCrops } from './portraitCrops';
@@ -113,7 +114,7 @@ type StudioMode = 'catalog' | 'viewer';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
-type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'groundcover' | 'walldecor' | 'wallart' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'walls' | 'scrollbars' | 'sliders' | 'pages' | 'chromelab' | 'sfx' | 'gamelab' | 'gym' | 'solver';
+type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'sourceart' | 'groundcover' | 'walldecor' | 'wallart' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'walls' | 'scrollbars' | 'sliders' | 'pages' | 'chromelab' | 'sfx' | 'gamelab' | 'gym' | 'solver';
 
 // Every prop KIND present in the catalog, in definition order — DERIVED from PROP_DEFS so a new
 // kind (e.g. 'rock') is a filter facet automatically. Hardcoding ['tree','house'] here silently
@@ -168,6 +169,7 @@ interface TilesetStudioRouteState {
   category?: StudioCategory;
   selectedAssetName?: string;
   selectedArtworkName?: string;
+  selectedSourceArtId?: string;
   selectedGlossaryName?: string;
   selectedPageName?: string;
   selectedChromeLabTargetId?: string;
@@ -245,7 +247,7 @@ const studioFamilyById = (familyId: StudioFamilyId): StudioFamily =>
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => Boolean(value && studioFamilies.some((family) => family.id === value));
 
 const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'viewer';
-const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'groundcover' || value === 'walldecor' || value === 'wallart' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'walls' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'chromelab' || value === 'sfx' || value === 'gamelab' || value === 'gym' || value === 'solver';
+const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'sourceart' || value === 'groundcover' || value === 'walldecor' || value === 'wallart' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'walls' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'chromelab' || value === 'sfx' || value === 'gamelab' || value === 'gym' || value === 'solver';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
@@ -264,6 +266,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const normalizedCat = cat === 'wallassets' ? 'wallart' : cat;
   const kit = params.get('kit');
   const art = params.get('art');
+  const sourceArt = params.get('sourceArt');
   const gloss = params.get('gloss');
   const page = params.get('page');
   const chrome = params.get('chrome');
@@ -339,6 +342,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     category: routeCategory,
     selectedAssetName: kit || undefined,
     selectedArtworkName: art || undefined,
+    selectedSourceArtId: sourceArt || undefined,
     selectedGlossaryName: gloss || undefined,
     selectedPageName: page || undefined,
     selectedChromeLabTargetId: chrome || undefined,
@@ -408,6 +412,7 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
     // Keep the catalog URL clean: persist only the active category's own selection.
     if (route.category === 'assets' && route.selectedAssetName) catalogParams.set('kit', route.selectedAssetName);
     if (route.category === 'artwork' && route.selectedArtworkName) catalogParams.set('art', route.selectedArtworkName);
+    if (route.category === 'sourceart' && route.selectedSourceArtId) catalogParams.set('sourceArt', route.selectedSourceArtId);
     if (route.category === 'glossary' && route.selectedGlossaryName) catalogParams.set('gloss', route.selectedGlossaryName);
     if (route.category === 'chromelab' && route.selectedChromeLabTargetId) catalogParams.set('chrome', route.selectedChromeLabTargetId);
     if (route.category === 'tilesides' && route.selectedTileSideId) catalogParams.set('side', route.selectedTileSideId);
@@ -437,6 +442,7 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
     params.set('vk', route.viewerKind ?? 'artwork');
     if (route.viewerKind === 'asset' && route.selectedAssetName) params.set('kit', route.selectedAssetName);
     else if (route.viewerKind === 'artwork' && route.selectedArtworkName) params.set('art', route.selectedArtworkName);
+    else if (route.viewerKind === 'sourceart' && route.selectedSourceArtId) params.set('sourceArt', route.selectedSourceArtId);
     else if (route.viewerKind === 'glossary' && route.selectedGlossaryName) params.set('gloss', route.selectedGlossaryName);
     else if (route.viewerKind === 'page' && route.selectedPageName) params.set('page', route.selectedPageName);
     else if (route.viewerKind === 'chromelab' && route.selectedChromeLabTargetId) params.set('chrome', route.selectedChromeLabTargetId);
@@ -520,6 +526,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [assetFilters, setAssetFilters] = useState<AssetFilters>({ type: 'all', status: 'all' });
   const [assetSearch, setAssetSearch] = useState('');
   const [artworkSearch, setArtworkSearch] = useState('');
+  const [sourceArtSearch, setSourceArtSearch] = useState('');
   const [wallDecorSearch, setWallDecorSearch] = useState('');
   const [wallArtSearch, setWallArtSearch] = useState('');
   const [selectedArtworkGroups, setSelectedArtworkGroups] = useState<string[]>(studioMedia.artwork.groups.map((group) => group.id));
@@ -569,6 +576,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [selectedArtworkName, setSelectedArtworkName] = useState(
     initialRoute.selectedArtworkName ?? studioMedia.artwork.items[0]?.id ?? '',
   );
+  const [selectedSourceArtId, setSelectedSourceArtId] = useState(initialRoute.selectedSourceArtId ?? '');
   const [selectedGlossaryName, setSelectedGlossaryName] = useState(initialRoute.selectedGlossaryName ?? '9-slice');
   // Which kit frame the embedded 9-slice editor (Viewer 'nineslice' kind) is aligning.
   const [selectedFrameName, setSelectedFrameName] = useState(initialRoute.selectedFrameName ?? DEFAULT_NINE_SLICE_ASSET);
@@ -738,6 +746,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       if (route.category) setCategory(route.category);
       if (route.selectedAssetName) setSelectedAssetName(route.selectedAssetName);
       if (route.selectedArtworkName) setSelectedArtworkName(route.selectedArtworkName);
+      if (route.selectedSourceArtId) setSelectedSourceArtId(route.selectedSourceArtId);
       if (route.selectedGlossaryName) setSelectedGlossaryName(route.selectedGlossaryName);
       if (route.selectedTileSideId) setSelectedTileSideId(route.selectedTileSideId);
       if (route.selectedGroundCoverId) setSelectedGroundCoverId(groundCoverAsset(route.selectedGroundCoverId).id);
@@ -818,6 +827,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       category,
       selectedAssetName,
       selectedArtworkName,
+      selectedSourceArtId,
       selectedGlossaryName,
       selectedPageName,
       selectedChromeLabTargetId,
@@ -850,7 +860,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       brushKind,
       selectedUnitId: unitBrushId,
     });
-  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedArtworkName, selectedChromeLabTargetId, selectedFenceArtworkId, selectedGlossaryName, selectedPageName, selectedGameLabLevelId, selectedGymLevelId, selectedSolverLevelId, solverTab, selectedTileSideId, selectedFrameName, selectedDividerName, selectedRailFamilyId, selectedPropName, selectedTileCompareId, selectedGroundCoverId, selectedWallDecorId, selectedWallArtId, selectedSurfaceFamily, selectedRegionId, viewerKind, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
+  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedArtworkName, selectedSourceArtId, selectedChromeLabTargetId, selectedFenceArtworkId, selectedGlossaryName, selectedPageName, selectedGameLabLevelId, selectedGymLevelId, selectedSolverLevelId, solverTab, selectedTileSideId, selectedFrameName, selectedDividerName, selectedRailFamilyId, selectedPropName, selectedTileCompareId, selectedGroundCoverId, selectedWallDecorId, selectedWallArtId, selectedSurfaceFamily, selectedRegionId, viewerKind, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
 
   // Returning to the Catalog (from the Viewer/Lab, or a deep-link) must land you on
   // the card you came from — not the top of the grid. The selection is already kept
@@ -1539,6 +1549,31 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       controls: <CatalogControls type={propsCatalogType} />,
     },
     {
+      id: 'sourceart', label: 'Source Art', hint: 'Review and install complete eight-way Blender source-art turntables.',
+      main: (
+        <SourceArtTurntableCatalog
+          search={sourceArtSearch}
+          zoom={zoom}
+          selected={selectedSourceArtId}
+          onSelect={setSelectedSourceArtId}
+          onView={(id) => { setSelectedSourceArtId(id); openViewer('sourceart'); }}
+        />
+      ),
+      controls: (
+        <>
+          <label className="tileset-catalog-search">
+            <span>Search</span>
+            <input type="search" value={sourceArtSearch} onChange={(event) => setSourceArtSearch(event.target.value)} placeholder="castle, rock, mill…" />
+          </label>
+          <label className="tileset-catalog-zoom">
+            <span>Zoom</span>
+            <input type="range" min="0.75" max="2" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
+          </label>
+          <button type="button" className="tileset-view-action" onClick={() => openViewer('sourceart')}>View Selected</button>
+        </>
+      ),
+    },
+    {
       id: 'groundcover', label: 'Ground Cover', hint: 'Browse ambient cover sets — grass tufts, shoreline reeds, and sand cover. Paint them in the Level Editor cover layer.',
       main: <CatalogGrid type={groundCoverCatalogType} />,
       controls: <CatalogControls type={groundCoverCatalogType} />,
@@ -1974,6 +2009,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             ? <SceneAnimLab regionId={selectedRegionId} onRegionId={setSelectedRegionId} header={studioViewerHeader} />
             : viewerKind === 'artworkcompare'
             ? <ArtworkCompareLab header={studioViewerHeader} />
+            : viewerKind === 'sourceart'
+            ? <SourceArtTurntableLab assetId={selectedSourceArtId} onAssetId={setSelectedSourceArtId} header={viewerKindSelect} />
             : viewerKind === 'artwork'
               ? <ArtworkLab library={studioMedia.artwork} name={selectedArtworkName} header={studioViewerHeader} />
               : viewerKind === 'glossary'

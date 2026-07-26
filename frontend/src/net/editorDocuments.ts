@@ -532,10 +532,12 @@ async function editSessionResultFromResponse(
 }
 
 /**
- * Open this page/tab's durable edit session. `session_id` is client-generated
- * so a lost response can be retried idempotently; `device_id` groups tabs only
- * for attribution. `session_key` is separate bearer authority and is never
- * returned by the server or shown in presence.
+ * Register this page/tab's durable viewer session without acquiring a free
+ * writer lease. `session_id` is client-generated so a lost response can be
+ * retried idempotently; `device_id` groups tabs only for attribution.
+ * `session_key` is separate bearer authority and is never returned by the
+ * server or shown in presence. A real authoring action explicitly activates
+ * the session through the generation-fenced acquisition/takeover endpoint.
  */
 export async function openEditorDocumentEditSession(
   documentId: string,

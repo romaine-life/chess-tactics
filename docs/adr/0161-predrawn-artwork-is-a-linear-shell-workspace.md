@@ -4,10 +4,10 @@ date: 2026-07-20
 deciders: Nelson, Codex
 refines:
   - "[ADR-0144](0144-level-editor-events-use-the-shell-workspace.md)"
-  - "[ADR-0147](0147-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md)"
+  - "[ADR-0158](0158-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md)"
 ---
 
-# ADR-0150: Pre-drawn artwork is a linear shell workspace
+# ADR-0161: Pre-drawn artwork is a linear shell workspace
 
 ## Context
 
@@ -42,7 +42,7 @@ is represented as one board artifact:
    data.
 
 The third artifact remains backed by the raster-plus-mask selection required by
-ADR-0147, but that pairing is an implementation detail. Selecting or setting an
+ADR-0158, but that pairing is an implementation detail. Selecting or setting an
 occlusion-ready artifact deterministically resolves both identifiers from that
 single artifact. The owner never coordinates a background dropdown with a mask
 dropdown. A missing, archived, cross-document, or otherwise invalid source
@@ -99,5 +99,5 @@ rail.
 ## More Information
 
 - [ADR-0144](0144-level-editor-events-use-the-shell-workspace.md)
-- [ADR-0147](0147-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md)
+- [ADR-0158](0158-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md)
 - [ADR-0071](0071-the-deliverable-is-the-instrument.md)

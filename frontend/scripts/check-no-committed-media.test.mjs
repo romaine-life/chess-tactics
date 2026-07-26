@@ -769,6 +769,28 @@ describe('no-committed-media guard', () => {
     }
   });
 
+  it.each([
+    "const icon = installedUiMedia('ui-main-menu-icons-carved-settings-png');",
+    "const joint = requiredUiMedia('ui-titlebar-joint-diamond-forged-png');",
+    'paintTitleBar(uiMedia.diamond);',
+  ])('rejects retired aggregate UI lookups after the drawable migration: %s', (source) => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-ui-lookup-test-'));
+    const relativePath = 'frontend/src/ui/renamedLegacyUiConsumer.ts';
+    const target = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, `${source}\n`, 'utf8');
+    try {
+      expect(collectNoCommittedMediaViolations({ repoRoot, trackedFiles: [relativePath] })).toEqual([
+        expect.objectContaining({
+          kind: 'temporary-cutover-scaffold',
+          detail: 'runtime still consumes a retired aggregate menu icon role or the unowned share-card diamond',
+        }),
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it('rejects filename-derived review membership', () => {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'filename-review-membership-test-'));
     const relativePath = 'frontend/src/ui/renamedReviewCatalog.ts';

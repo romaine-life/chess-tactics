@@ -1,0 +1,814 @@
+{
+  "schema": "structure-source-art-turntable-spec-v1",
+  "batchId": "structure-source-art-turntables-2026-07-25-v1",
+  "directions": [
+    "south",
+    "south-west",
+    "west",
+    "north-west",
+    "north",
+    "north-east",
+    "east",
+    "south-east"
+  ],
+  "render": {
+    "width": 512,
+    "height": 512,
+    "engine": "eevee",
+    "framing": "source",
+    "footprint": 1.3,
+    "translationZ": 0.5,
+    "half": "full"
+  },
+  "assets": [
+    {
+      "id": "oak",
+      "structureId": "structure-oak",
+      "label": "Oak tree art",
+      "sortOrder": 0,
+      "existing": true,
+      "placementScale": 0.4,
+      "source": {
+        "kind": "polyhaven",
+        "providerAsset": "island_tree_01",
+        "resolution": "1k",
+        "modelFile": "island_tree_01_1k.gltf",
+        "rotation": "none",
+        "license": "CC0"
+      }
+    },
+    {
+      "id": "cottage",
+      "structureId": "structure-cottage",
+      "label": "Cottage art",
+      "sortOrder": 1,
+      "existing": true,
+      "placementScale": 0.4,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "houses/low-poly-stylized-home.zip",
+        "sourcePath": "owner/source-art/low-poly-stylized-home.zip",
+        "modelSuffix": "lowvpoly stylized home.obj",
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "cabin",
+      "structureId": "structure-cabin",
+      "label": "Log cabin art",
+      "sortOrder": 2,
+      "existing": true,
+      "placementScale": 0.4,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "houses/forest-loner-house-model.zip",
+        "sourcePath": "owner/source-art/forest-loner-house-model.zip",
+        "modelSuffix": "house_final.fbx",
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "lodge",
+      "structureId": "structure-lodge",
+      "label": "Green-roof house art",
+      "sortOrder": 3,
+      "existing": true,
+      "placementScale": 0.4,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "houses/forest-house.zip",
+        "sourcePath": "owner/source-art/forest-house.zip",
+        "modelSuffix": "nice_house.blend",
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "rock",
+      "structureId": "structure-rock",
+      "label": "Rock art",
+      "sortOrder": 4,
+      "existing": true,
+      "placementScale": 0.12,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "rocks/boulder-rock-3d-model-free.zip",
+        "sourcePath": "owner/source-art/boulder-rock-3d-model-free.zip",
+        "modelSuffix": "Meshy_AI_Layered_Mossy_Boulder_0616172204_texture.glb",
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "fieldstone",
+      "structureId": "structure-fieldstone",
+      "label": "Fieldstone art",
+      "sortOrder": 5,
+      "existing": true,
+      "placementScale": 0.12,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "rocks/lone-granite-boulder-stone.zip",
+        "sourcePath": "owner/source-art/lone-granite-boulder-stone.zip",
+        "modelSuffix": "round-boulder.fbx",
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "boulder",
+      "structureId": "structure-boulder",
+      "label": "Boulder",
+      "sortOrder": 6,
+      "existing": true,
+      "placementScale": 0.12,
+      "source": {
+        "kind": "polyhaven",
+        "providerAsset": "boulder_01",
+        "resolution": "1k",
+        "modelFile": "boulder_01_1k.gltf",
+        "rotation": "none",
+        "license": "CC0"
+      }
+    },
+    {
+      "id": "fern",
+      "structureId": "structure-fern",
+      "label": "Fern",
+      "sortOrder": 8,
+      "existing": true,
+      "placementScale": 0.12,
+      "source": {
+        "kind": "polyhaven",
+        "providerAsset": "fern_02",
+        "resolution": "1k",
+        "modelFile": "fern_02_1k.gltf",
+        "rotation": "none",
+        "license": "CC0"
+      }
+    },
+    {
+      "id": "flower",
+      "structureId": "structure-flower",
+      "label": "Flower",
+      "sortOrder": 9,
+      "existing": true,
+      "placementScale": 0.12,
+      "source": {
+        "kind": "polyhaven",
+        "providerAsset": "flower_gazania",
+        "resolution": "1k",
+        "modelFile": "flower_gazania_1k.gltf",
+        "rotation": "none",
+        "license": "CC0"
+      }
+    },
+    {
+      "id": "castle-ii",
+      "structureId": "structure-castle-ii",
+      "label": "Castle II",
+      "sortOrder": 10,
+      "existing": false,
+      "placementScale": 0.45,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/castle-ii.zip",
+      "sourcePath": "owner/source-art/castle-ii.zip",
+      "modelSuffix": "Castle II.obj",
+      "rotation": "none",
+      "excludeMaterials": [
+        "acmat_57"
+      ],
+      "license": "unspecified"
+      }
+    },
+    {
+      "id": "castle-chinchilla",
+      "structureId": "structure-castle-chinchilla",
+      "label": "Castle of Chinchilla",
+      "sortOrder": 11,
+      "existing": false,
+      "placementScale": 0.45,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/castle-of-chinchilla-spain.zip",
+        "sourcePath": "owner/source-art/castle-of-chinchilla-spain.zip",
+        "modelSuffix": "Castle of Chinchilla.fbx",
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "castle-consuegra",
+      "structureId": "structure-castle-consuegra",
+      "label": "Castle of Consuegra",
+      "sortOrder": 12,
+      "existing": false,
+      "placementScale": 0.45,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/castle-of-consuegra-toledo-spain.zip",
+        "sourcePath": "owner/source-art/castle-of-consuegra-toledo-spain.zip",
+        "modelSuffix": "Consuegra_Photogrammetry_w_scans_Model_5.obj",
+        "rotation": "x-90",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "hrusov-castle",
+      "structureId": "structure-hrusov-castle",
+      "label": "Hrušov Castle",
+      "sortOrder": 13,
+      "existing": false,
+      "placementScale": 0.45,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/hrusov-castle.zip",
+        "sourcePath": "owner/source-art/hrusov-castle.zip",
+        "modelSuffix": "e128b37520c64223b3cc32ab727ba0f4.obj",
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "paletas-windmill",
+      "structureId": "structure-paletas-windmill",
+      "label": "Paletas Windmill",
+      "sortOrder": 14,
+      "existing": false,
+      "placementScale": 0.45,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/paletas-windmill-1.zip",
+        "sourcePath": "owner/source-art/paletas-windmill-1.zip",
+        "modelSuffix": "03_PALETAS_WINDMILL_MODEL1_Model_13.obj",
+        "rotation": "x-90",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "river-mill",
+      "structureId": "structure-river-mill",
+      "label": "River Mill",
+      "sortOrder": 15,
+      "existing": false,
+      "placementScale": 0.45,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/river-mill.zip",
+        "sourcePath": "owner/source-art/river-mill.zip",
+        "modelSuffix": "poly.glb",
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "waterfall-mountain-river",
+      "structureId": "structure-waterfall-mountain-river",
+      "label": "Waterfall Mountain River",
+      "sortOrder": 16,
+      "existing": false,
+      "placementScale": 0.6,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/waterfall-mountain-river.zip",
+        "sourcePath": "owner/source-art/waterfall-mountain-river.zip",
+        "modelSuffix": "LANDSCAPE MOUNTAIN river.3ds",
+        "rotation": "principal-plane",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "windmill-game-ready",
+      "structureId": "structure-windmill-game-ready",
+      "label": "Game-ready Windmill",
+      "sortOrder": 17,
+      "existing": false,
+      "placementScale": 0.45,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/windmill-game-ready.zip",
+      "sourcePath": "owner/source-art/windmill-game-ready.zip",
+      "modelSuffix": "FBX.fbx",
+      "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "saguaro-cactus",
+      "structureId": "structure-saguaro-cactus",
+      "label": "Saguaro Cactus",
+      "sortOrder": 18,
+      "existing": false,
+      "placementScale": 0.18,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/7-25/low-poly-saguaro-cactus-desert-plant.zip",
+        "sourcePath": "owner/source-art/7-25/low-poly-saguaro-cactus-desert-plant.zip",
+        "modelSuffix": "Low Poly Saguaro Cactus - Desert Plant.glb",
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "broadleaf-tree",
+      "structureId": "structure-broadleaf-tree",
+      "label": "Broadleaf Tree",
+      "sortOrder": 20,
+      "existing": false,
+      "placementScale": 0.4,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/7-25/tree-3d-model-free.zip",
+        "sourcePath": "owner/source-art/7-25/tree-3d-model-free.zip",
+        "modelSuffix": "tree.glb",
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "rootbound-majesty-tree",
+      "structureId": "structure-rootbound-majesty-tree",
+      "label": "Rootbound Majesty Tree",
+      "sortOrder": 21,
+      "existing": false,
+      "placementScale": 0.48,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/7-25/rootbound-majesty-tree-free.zip",
+        "sourcePath": "owner/source-art/7-25/rootbound-majesty-tree-free.zip",
+        "modelSuffix": "model.glb",
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "mushroom-cluster-2",
+      "structureId": "structure-mushroom-cluster-2",
+      "label": "Mushroom Cluster 2",
+      "sortOrder": 23,
+      "existing": false,
+      "placementScale": 0.15,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/7-25/mushrooms.zip",
+        "sourceArchiveId": "mushrooms-pack",
+        "sourceLabel": "Mushrooms source pack",
+        "sourcePath": "owner/source-art/7-25/mushrooms.zip",
+        "modelSuffix": "mushrooms.obj",
+        "includeObjects": ["2.001_Plane.001"],
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "mushroom-cluster-3",
+      "structureId": "structure-mushroom-cluster-3",
+      "label": "Mushroom Cluster 3",
+      "sortOrder": 24,
+      "existing": false,
+      "placementScale": 0.15,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/7-25/mushrooms.zip",
+        "sourceArchiveId": "mushrooms-pack",
+        "sourceLabel": "Mushrooms source pack",
+        "sourcePath": "owner/source-art/7-25/mushrooms.zip",
+        "modelSuffix": "mushrooms.obj",
+        "includeObjects": ["3.001_Cube.003"],
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "mushroom-cluster-4",
+      "structureId": "structure-mushroom-cluster-4",
+      "label": "Mushroom Cluster 4",
+      "sortOrder": 25,
+      "existing": false,
+      "placementScale": 0.15,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/7-25/mushrooms.zip",
+        "sourceArchiveId": "mushrooms-pack",
+        "sourceLabel": "Mushrooms source pack",
+        "sourcePath": "owner/source-art/7-25/mushrooms.zip",
+        "modelSuffix": "mushrooms.obj",
+        "includeObjects": ["4.001_Cube.002"],
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "mushroom-cluster-5",
+      "structureId": "structure-mushroom-cluster-5",
+      "label": "Mushroom Cluster 5",
+      "sortOrder": 26,
+      "existing": false,
+      "placementScale": 0.15,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/7-25/mushrooms.zip",
+        "sourceArchiveId": "mushrooms-pack",
+        "sourceLabel": "Mushrooms source pack",
+        "sourcePath": "owner/source-art/7-25/mushrooms.zip",
+        "modelSuffix": "mushrooms.obj",
+        "includeObjects": ["5.001_Cube.001"],
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "mushroom-cluster-6",
+      "structureId": "structure-mushroom-cluster-6",
+      "label": "Mushroom Cluster 6",
+      "sortOrder": 27,
+      "existing": false,
+      "placementScale": 0.15,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/7-25/mushrooms.zip",
+        "sourceArchiveId": "mushrooms-pack",
+        "sourceLabel": "Mushrooms source pack",
+        "sourcePath": "owner/source-art/7-25/mushrooms.zip",
+        "modelSuffix": "mushrooms.obj",
+        "includeObjects": ["6.001_Cube.004"],
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "mushroom-cluster-7",
+      "structureId": "structure-mushroom-cluster-7",
+      "label": "Mushroom Cluster 7",
+      "sortOrder": 28,
+      "existing": false,
+      "placementScale": 0.15,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/7-25/mushrooms.zip",
+        "sourceArchiveId": "mushrooms-pack",
+        "sourceLabel": "Mushrooms source pack",
+        "sourcePath": "owner/source-art/7-25/mushrooms.zip",
+        "modelSuffix": "mushrooms.obj",
+        "includeObjects": ["7.001_Cube.005"],
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "forest-tree-1",
+      "structureId": "structure-forest-tree-1",
+      "label": "Forest Tree 1",
+      "sortOrder": 29,
+      "existing": false,
+      "placementScale": 0.38,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/7-25/low-poly-forest-tree-pack.zip",
+        "sourceArchiveId": "forest-tree-pack",
+        "sourceLabel": "Low-poly forest tree source pack",
+        "sourcePath": "owner/source-art/7-25/low-poly-forest-tree-pack.zip",
+        "modelSuffix": "Tree_Pack.obj",
+        "includeObjects": ["Tree_Trunk_01", "Tree_Branches_01.001"],
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "forest-tree-2",
+      "structureId": "structure-forest-tree-2",
+      "label": "Forest Tree 2",
+      "sortOrder": 30,
+      "existing": false,
+      "placementScale": 0.38,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/7-25/low-poly-forest-tree-pack.zip",
+        "sourceArchiveId": "forest-tree-pack",
+        "sourceLabel": "Low-poly forest tree source pack",
+        "sourcePath": "owner/source-art/7-25/low-poly-forest-tree-pack.zip",
+        "modelSuffix": "Tree_Pack.obj",
+        "includeObjects": ["Tree_Trunk_01.002", "Tree_Branches_01.002"],
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "forest-tree-3",
+      "structureId": "structure-forest-tree-3",
+      "label": "Forest Tree 3",
+      "sortOrder": 31,
+      "existing": false,
+      "placementScale": 0.38,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/7-25/low-poly-forest-tree-pack.zip",
+        "sourceArchiveId": "forest-tree-pack",
+        "sourceLabel": "Low-poly forest tree source pack",
+        "sourcePath": "owner/source-art/7-25/low-poly-forest-tree-pack.zip",
+        "modelSuffix": "Tree_Pack.obj",
+        "includeObjects": ["Tree_Trunk_01.001", "Tree_Branches_01"],
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "forest-tree-4",
+      "structureId": "structure-forest-tree-4",
+      "label": "Forest Tree 4",
+      "sortOrder": 32,
+      "existing": false,
+      "placementScale": 0.38,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/7-25/low-poly-forest-tree-pack.zip",
+        "sourceArchiveId": "forest-tree-pack",
+        "sourceLabel": "Low-poly forest tree source pack",
+        "sourcePath": "owner/source-art/7-25/low-poly-forest-tree-pack.zip",
+        "modelSuffix": "Tree_Pack.obj",
+        "includeObjects": ["Tree_Trunk_02", "Tree_Branches_02"],
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "low-poly-forest-tree-1",
+      "structureId": "structure-low-poly-forest-tree-1",
+      "label": "Low-poly Forest Tree 1",
+      "sortOrder": 33,
+      "existing": false,
+      "placementScale": 0.32,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/7-25/low-poly-forest-tree-pack.zip",
+        "sourceArchiveId": "forest-tree-pack",
+        "sourceLabel": "Low-poly forest tree source pack",
+        "sourcePath": "owner/source-art/7-25/low-poly-forest-tree-pack.zip",
+        "modelSuffix": "Tree_Pack.obj",
+        "includeObjects": ["Background_Tree_Atlas"],
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "low-poly-forest-tree-2",
+      "structureId": "structure-low-poly-forest-tree-2",
+      "label": "Low-poly Forest Tree 2",
+      "sortOrder": 34,
+      "existing": false,
+      "placementScale": 0.32,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/7-25/low-poly-forest-tree-pack.zip",
+        "sourceArchiveId": "forest-tree-pack",
+        "sourceLabel": "Low-poly forest tree source pack",
+        "sourcePath": "owner/source-art/7-25/low-poly-forest-tree-pack.zip",
+        "modelSuffix": "Tree_Pack.obj",
+        "includeObjects": ["Background_Tree_Atlas.001"],
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "low-poly-forest-tree-3",
+      "structureId": "structure-low-poly-forest-tree-3",
+      "label": "Low-poly Forest Tree 3",
+      "sortOrder": 35,
+      "existing": false,
+      "placementScale": 0.32,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/7-25/low-poly-forest-tree-pack.zip",
+        "sourceArchiveId": "forest-tree-pack",
+        "sourceLabel": "Low-poly forest tree source pack",
+        "sourcePath": "owner/source-art/7-25/low-poly-forest-tree-pack.zip",
+        "modelSuffix": "Tree_Pack.obj",
+        "includeObjects": ["Background_Tree_Atlas.002"],
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "low-poly-forest-tree-4",
+      "structureId": "structure-low-poly-forest-tree-4",
+      "label": "Low-poly Forest Tree 4",
+      "sortOrder": 36,
+      "existing": false,
+      "placementScale": 0.32,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/7-25/low-poly-forest-tree-pack.zip",
+        "sourceArchiveId": "forest-tree-pack",
+        "sourceLabel": "Low-poly forest tree source pack",
+        "sourcePath": "owner/source-art/7-25/low-poly-forest-tree-pack.zip",
+        "modelSuffix": "Tree_Pack.obj",
+        "includeObjects": ["Background_Tree_Atlas.003"],
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "low-poly-forest-tree-5",
+      "structureId": "structure-low-poly-forest-tree-5",
+      "label": "Low-poly Forest Tree 5",
+      "sortOrder": 37,
+      "existing": false,
+      "placementScale": 0.32,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/7-25/low-poly-forest-tree-pack.zip",
+        "sourceArchiveId": "forest-tree-pack",
+        "sourceLabel": "Low-poly forest tree source pack",
+        "sourcePath": "owner/source-art/7-25/low-poly-forest-tree-pack.zip",
+        "modelSuffix": "Tree_Pack.obj",
+        "includeObjects": ["Background_Tree_Atlas.004"],
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "low-poly-forest-tree-6",
+      "structureId": "structure-low-poly-forest-tree-6",
+      "label": "Low-poly Forest Tree 6",
+      "sortOrder": 38,
+      "existing": false,
+      "placementScale": 0.32,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/7-25/low-poly-forest-tree-pack.zip",
+        "sourceArchiveId": "forest-tree-pack",
+        "sourceLabel": "Low-poly forest tree source pack",
+        "sourcePath": "owner/source-art/7-25/low-poly-forest-tree-pack.zip",
+        "modelSuffix": "Tree_Pack.obj",
+        "includeObjects": ["Background_Tree_Atlas.005"],
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "low-poly-forest-tree-7",
+      "structureId": "structure-low-poly-forest-tree-7",
+      "label": "Low-poly Forest Tree 7",
+      "sortOrder": 39,
+      "existing": false,
+      "placementScale": 0.32,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/7-25/low-poly-forest-tree-pack.zip",
+        "sourceArchiveId": "forest-tree-pack",
+        "sourceLabel": "Low-poly forest tree source pack",
+        "sourcePath": "owner/source-art/7-25/low-poly-forest-tree-pack.zip",
+        "modelSuffix": "Tree_Pack.obj",
+        "includeObjects": ["Background_Tree_Atlas.006"],
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "low-poly-forest-tree-8",
+      "structureId": "structure-low-poly-forest-tree-8",
+      "label": "Low-poly Forest Tree 8",
+      "sortOrder": 40,
+      "existing": false,
+      "placementScale": 0.32,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/7-25/low-poly-forest-tree-pack.zip",
+        "sourceArchiveId": "forest-tree-pack",
+        "sourceLabel": "Low-poly forest tree source pack",
+        "sourcePath": "owner/source-art/7-25/low-poly-forest-tree-pack.zip",
+        "modelSuffix": "Tree_Pack.obj",
+        "includeObjects": ["Background_Tree_Atlas.007"],
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "low-poly-forest-tree-9",
+      "structureId": "structure-low-poly-forest-tree-9",
+      "label": "Low-poly Forest Tree 9",
+      "sortOrder": 41,
+      "existing": false,
+      "placementScale": 0.2,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/7-25/low-poly-forest-tree-pack.zip",
+        "sourceArchiveId": "forest-tree-pack",
+        "sourceLabel": "Low-poly forest tree source pack",
+        "sourcePath": "owner/source-art/7-25/low-poly-forest-tree-pack.zip",
+        "modelSuffix": "Tree_Pack.obj",
+        "includeObjects": ["Background_Tree_Atlas.008"],
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "low-poly-forest-tree-10",
+      "structureId": "structure-low-poly-forest-tree-10",
+      "label": "Low-poly Forest Tree 10",
+      "sortOrder": 42,
+      "existing": false,
+      "placementScale": 0.2,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/7-25/low-poly-forest-tree-pack.zip",
+        "sourceArchiveId": "forest-tree-pack",
+        "sourceLabel": "Low-poly forest tree source pack",
+        "sourcePath": "owner/source-art/7-25/low-poly-forest-tree-pack.zip",
+        "modelSuffix": "Tree_Pack.obj",
+        "includeObjects": ["Background_Tree_Atlas.009"],
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "low-poly-forest-tree-11",
+      "structureId": "structure-low-poly-forest-tree-11",
+      "label": "Low-poly Forest Tree 11",
+      "sortOrder": 43,
+      "existing": false,
+      "placementScale": 0.2,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/7-25/low-poly-forest-tree-pack.zip",
+        "sourceArchiveId": "forest-tree-pack",
+        "sourceLabel": "Low-poly forest tree source pack",
+        "sourcePath": "owner/source-art/7-25/low-poly-forest-tree-pack.zip",
+        "modelSuffix": "Tree_Pack.obj",
+        "includeObjects": ["Background_Tree_Atlas.010"],
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "low-poly-forest-tree-12",
+      "structureId": "structure-low-poly-forest-tree-12",
+      "label": "Low-poly Forest Tree 12",
+      "sortOrder": 44,
+      "existing": false,
+      "placementScale": 0.2,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/7-25/low-poly-forest-tree-pack.zip",
+        "sourceArchiveId": "forest-tree-pack",
+        "sourceLabel": "Low-poly forest tree source pack",
+        "sourcePath": "owner/source-art/7-25/low-poly-forest-tree-pack.zip",
+        "modelSuffix": "Tree_Pack.obj",
+        "includeObjects": ["Background_Tree_Atlas.011"],
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "low-poly-forest-tree-13",
+      "structureId": "structure-low-poly-forest-tree-13",
+      "label": "Low-poly Forest Tree 13",
+      "sortOrder": 45,
+      "existing": false,
+      "placementScale": 0.2,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/7-25/low-poly-forest-tree-pack.zip",
+        "sourceArchiveId": "forest-tree-pack",
+        "sourceLabel": "Low-poly forest tree source pack",
+        "sourcePath": "owner/source-art/7-25/low-poly-forest-tree-pack.zip",
+        "modelSuffix": "Tree_Pack.obj",
+        "includeObjects": ["Background_Tree_Atlas.012"],
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    },
+    {
+      "id": "forest-rock-cluster",
+      "structureId": "structure-forest-rock-cluster",
+      "label": "Forest Rock Cluster",
+      "sortOrder": 46,
+      "existing": false,
+      "placementScale": 0.16,
+      "source": {
+        "kind": "owner-archive",
+        "archive": "terrain features/7-25/low-poly-forest-tree-pack.zip",
+        "sourceArchiveId": "forest-tree-pack",
+        "sourceLabel": "Low-poly forest tree source pack",
+        "sourcePath": "owner/source-art/7-25/low-poly-forest-tree-pack.zip",
+        "modelSuffix": "Tree_Pack.obj",
+        "includeObjects": [
+          "Rocks",
+          "Rocks.001",
+          "Rocks.002",
+          "Rocks.003",
+          "Rocks.004",
+          "Rocks.005",
+          "Rocks.006",
+          "Rocks.007",
+          "Rocks.008"
+        ],
+        "rotation": "none",
+        "license": "unspecified"
+      }
+    }
+  ]
+}

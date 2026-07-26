@@ -88,11 +88,12 @@ rule.
 mode  (Catalog · Lab · Viewer)                 ← topbar · tier-1 · 3 persistent tabs
 │                                                 (always present, decoupled from category)
 ├─ Catalog
-│   └─ category (Tiles | Units | Assets | Artwork)  ← tier-2 · top of Controls
+│   └─ category (Tiles | Units | Assets | Artwork | Source Art)  ← tier-2 · top of Controls
 │       ├─ Tiles   → search · family/collection filters · zoom
 │       ├─ Units   → search
 │       ├─ Assets  → search · process filter (All/Forged/Unverified) · zoom
 │       └─ Artwork → search · zoom
+│       └─ Source Art → search · zoom · View Selected
 │
 ├─ Lab   (the board workbench — holds its last board)
 │   └─ surface (Board)                         ← the only workbench
@@ -102,9 +103,10 @@ mode  (Catalog · Lab · Viewer)                 ← topbar · tier-1 · 3 persi
 │           └─ Unit focus  → unit controls (brush, facing, …)
 │
 └─ Viewer  (single-item stage — holds the last item it opened)
-    └─ kind (Asset | Artwork | Unit Art | Portrait | 9-Slice | …)  ← tier-2 · top of Controls
+    └─ kind (Asset | Artwork | Source Art | Unit Art | Portrait | 9-Slice | …)  ← tier-2 · top of Controls
         ├─ Asset    → preview-in-context stage + gate/provenance details (read-only)
         ├─ Artwork  → full-art preview stage + group/size/path details (read-only)
+        ├─ Source Art → interactive board placement/scale/eight-way candidate review + atomic install
         ├─ Unit Art → board-context unit art/size editor (live publish + candidates)
         ├─ Portrait → embedded unit-portrait crop editor (pan/zoom, per-piece)
         └─ 9-Slice  → embedded kit 9-slice frame editor (nudge/align, dev-save)
@@ -159,7 +161,7 @@ playable and scenic content follow the same pan behavior.
 
 Events and AI board-artwork authoring are process instruments rather than board
 brushes. Per [ADR-0144](adr/0144-level-editor-events-use-the-shell-workspace.md)
-and [ADR-0150](adr/0150-predrawn-artwork-is-a-linear-shell-workspace.md), each
+and [ADR-0161](adr/0161-predrawn-artwork-is-a-linear-shell-workspace.md), each
 replaces the visible board inside the shell-owned center workspace while the
 title and one right-side Controls rail remain stable. The covered board stays
 mounted, inert, and inaccessible so its camera and authoring state return

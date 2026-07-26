@@ -97,8 +97,7 @@ export function LevelThumbnail({
     return bounds.width > 0 && bounds.height > 0 ? bounds.width / bounds.height : 1;
   }, [board]);
 
-  const canonicalLevel = /^(?:off-[a-z]+(?:-[a-z]+)*|l\d+)$/.test(level.id);
-  const canonicalDerivative = !authoringPreview && canonicalLevel
+  const canonicalDerivative = !authoringPreview
     ? levelThumbnailUrl(level.id)
     : null;
   const containerRef = useRef<HTMLDivElement | null>(null);

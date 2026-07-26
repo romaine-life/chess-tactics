@@ -5,7 +5,7 @@ deciders: Nelson, Codex
 refines: "[ADR-0143](0143-level-editor-sessions-are-attributable-single-writer-and-owner-takeoverable.md)"
 ---
 
-# ADR-0146: Recovery snapshots browse one at a time and clear atomically
+# ADR-0157: Recovery snapshots browse one at a time and clear atomically
 
 ## Context
 

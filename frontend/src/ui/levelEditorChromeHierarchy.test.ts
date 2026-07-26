@@ -70,7 +70,7 @@ describe('Level Editor chrome hierarchy', () => {
     expect(chromeBox).toContain('export function ChromeSurfaceFill');
     expect(chromeBox).toContain('data-chrome-fill-role={role}');
     expect(chromeBox).toContain('<ChromeSurfaceFill role="outer" className="le-outer-panel-fill" />');
-    expect(levelEditor).toMatch(/className=\{`skirmish-board-frame\$\{eventsOpen \|\| layer === 'artwork' \? ' is-workspace-covered' : ''\}`\}[\s\S]*?inert=\{eventsOpen \|\| layer === 'artwork' \? true : undefined\}[\s\S]*?aria-hidden=\{eventsOpen \|\| layer === 'artwork' \? true : undefined\}/);
+    expect(levelEditor).toMatch(/className=\{`skirmish-board-frame\$\{eventsOpen \|\| predrawnArtworkWorkspaceOpen \? ' is-workspace-covered' : ''\}`\}[\s\S]*?inert=\{eventsOpen \|\| predrawnArtworkWorkspaceOpen \? true : undefined\}[\s\S]*?aria-hidden=\{eventsOpen \|\| predrawnArtworkWorkspaceOpen \? true : undefined\}/);
     expect(levelEditor).toMatch(/\{eventsOpen \? \(\s*<LevelEditorEventsWorkspace/);
     expect(levelEditor).toContain('const [eventsOpen, setEventsOpen] = useState(initialEventsOpen);');
     expect(levelEditor).toContain('eventsEditor: routeState.eventsEditor');
@@ -215,6 +215,19 @@ describe('Level Editor chrome hierarchy', () => {
   it('registers both facing-cell implementations as tool squares', () => {
     expectRegisteredFamily(levelEditor, 'unit-facing-cell', 'inner-tool-square');
     expectRegisteredFamily(studioBoard, 'unit-facing-cell', 'inner-tool-square');
+  });
+
+  it('offers only complete eight-way artwork and keeps its facing control in the source brush panel', () => {
+    expect(levelEditor).toContain('STRUCTURE_ART_ASSETS.filter((asset) => structureArtHasCompleteTurntable(asset.id))');
+    expect(levelEditor).toContain("const [artworkBrushDirection, setArtworkBrushDirection] = useState<Direction>('south');");
+    expect(levelEditor).toContain('const direction = directions.includes(artworkBrushDirection)');
+    expect(levelEditor).toContain('setArtworkBrushDirection(placement.direction);');
+    expect(levelEditor).toContain('ariaLabel="Artwork facing"');
+    expect(levelEditor).toContain('onSelect={setArtworkFacing}');
+    expect(levelEditor).toContain('onRotate={rotateArtworkFacing}');
+    expect(levelEditor).not.toContain('ariaLabel="Artwork direction (8-way)"');
+    expect(levelEditor).not.toContain('<small>{asset.label} · {directions.length}-way</small>');
+    expect(levelEditor).not.toContain('source artwork · ${artworkBrushDirections.length}-way');
   });
 
   it('registers dropdown triggers and frames each popup as one divided inner box', () => {

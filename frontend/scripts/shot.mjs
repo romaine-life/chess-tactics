@@ -10,8 +10,8 @@
 // Usage:
 //   node scripts/shot.mjs <url> [--select <css>] [--out <path>] [--size <WxH>] [--ready <jsExpr>]
 //     [--timeout <ms>] [--throttle slow-4g|slow-3g] [--cold] [--assert-menu-atomic]
-//     [--assert-board-atomic]
-//     [--full] [--show-scrollbars]
+//     [--assert-board-atomic] [--assert-editor-viewer]
+//     [--full] [--show-scrollbars] [--allow-motion]
 //
 // Examples:
 //   node scripts/shot.mjs http://127.0.0.1:5199/play/select/skirmish --select '.menu-dest'
@@ -38,8 +38,10 @@ const throttle = flag('throttle');
 const cold = has('cold');
 const assertMenuAtomic = has('assert-menu-atomic');
 const assertBoardAtomic = has('assert-board-atomic');
+const assertEditorViewer = has('assert-editor-viewer');
 const fullPage = has('full');
 const showScrollbars = has('show-scrollbars');
+const allowMotion = has('allow-motion');
 
 const CHROMES = [
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
@@ -48,7 +50,7 @@ const CHROMES = [
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
 ];
 const executablePath = CHROMES.find(existsSync);
-if (!url || url.startsWith('--')) { console.error('usage: shot <url> [--select css] [--out path] [--size WxH] [--scale n] [--ready jsExpr] [--timeout ms] [--throttle slow-4g|slow-3g] [--cold] [--full]'); process.exit(2); }
+if (!url || url.startsWith('--')) { console.error('usage: shot <url> [--select css] [--out path] [--size WxH] [--scale n] [--ready jsExpr] [--timeout ms] [--throttle slow-4g|slow-3g] [--cold] [--full] [--allow-motion] [--assert-editor-viewer]'); process.exit(2); }
 if (!executablePath) { console.error('No Chrome/Edge found. Checked:\n' + CHROMES.join('\n')); process.exit(1); }
 mkdirSync(dirname(out), { recursive: true });
 
@@ -60,6 +62,48 @@ const browser = await puppeteer.launch({
 });
 try {
   const page = await browser.newPage();
+  let resolveEditorViewer;
+  const editorViewerRegistration = assertEditorViewer
+    ? new Promise((resolveViewer) => { resolveEditorViewer = resolveViewer; })
+    : null;
+  const editorViewerForbiddenRequests = [];
+  if (assertEditorViewer) {
+    page.on('request', (request) => {
+      const requestUrl = new URL(request.url());
+      const isEditorDocument = /\/api\/editor-documents\/[^/]+/.test(requestUrl.pathname);
+      const isSessionOpen = request.method() === 'POST'
+        && /\/api\/editor-documents\/[^/]+\/edit-sessions$/.test(requestUrl.pathname);
+      const isTakeover = request.method() === 'POST' && requestUrl.pathname.endsWith('/takeover');
+      const isWorkingMutation = request.method() === 'PUT'
+        && /\/api\/editor-documents\/[^/]+$/.test(requestUrl.pathname);
+      if (isEditorDocument && !isSessionOpen && (isTakeover || isWorkingMutation)) {
+        editorViewerForbiddenRequests.push(`${request.method()} ${requestUrl.pathname}`);
+      }
+    });
+    page.on('response', async (response) => {
+      const request = response.request();
+      const requestUrl = new URL(request.url());
+      if (
+        request.method() !== 'POST'
+        || !/\/api\/editor-documents\/[^/]+\/edit-sessions$/.test(requestUrl.pathname)
+      ) return;
+      try {
+        const requestBody = JSON.parse(request.postData() || '{}');
+        const responseBody = await response.json();
+        resolveEditorViewer({
+          ok: response.ok(),
+          status: response.status(),
+          sessionState: responseBody.session?.state,
+          activeSessionId: responseBody.presence?.active_editor?.session_id ?? null,
+          sessionId: requestBody.session_id,
+          sessionKey: requestBody.session_key,
+          closePath: `${requestUrl.pathname}/${encodeURIComponent(requestBody.session_id)}`,
+        });
+      } catch {
+        resolveEditorViewer({ ok: false, status: response.status() });
+      }
+    });
+  }
   await page.setViewport({ width: w, height: h, deviceScaleFactor: scale });
   if (assertMenuAtomic) {
     await page.evaluateOnNewDocument(() => {
@@ -162,6 +206,13 @@ try {
   // One target navigation only: retrying a timed-out navigation silently doubles cold-load work.
   // Persistent ambience connections also make network-idle an invalid readiness signal.
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout });
+
+  // Determinism: normally kill animations/transitions so a live screen captures identically.
+  // Screens whose chrome mounts after DOMContentLoaded may own a reveal animation; callers can
+  // preserve that production behavior instead of freezing the late-mounted children invisible.
+  if (!allowMotion) {
+    await page.addStyleTag({ content: `*,*::before,*::after{animation:none!important;transition:none!important;animation-duration:0s!important;caret-color:transparent!important;scroll-behavior:auto!important}` });
+  }
 
   // Readiness: an explicit gate is a fail-closed capture contract. The implicit fixture gate stays
   // best-effort so this generic tool can still capture ordinary live routes without `window.__ready`.
@@ -269,6 +320,43 @@ try {
   }
   const { size } = statSync(out);
   console.log(`wrote ${out} (${(size / 1024).toFixed(1)} KB)`);
+  if (assertEditorViewer) {
+    const viewerTimeout = new Promise((resolveViewer) => {
+      setTimeout(() => resolveViewer(null), Math.min(timeout, 10_000));
+    });
+    const viewer = await Promise.race([editorViewerRegistration, viewerTimeout]);
+    if (
+      !viewer?.ok
+      || viewer.sessionState !== 'waiting'
+      || !viewer.sessionId
+      || !viewer.sessionKey
+      || editorViewerForbiddenRequests.length
+    ) {
+      console.error(
+        `editor viewer assertion failed: ${JSON.stringify({
+          viewer,
+          forbiddenRequests: editorViewerForbiddenRequests,
+        })}`,
+      );
+      process.exitCode = 6;
+      throw new Error('editor viewer assertion failed');
+    }
+    const closeResult = await page.evaluate(async ({ closePath, sessionKey }) => {
+      const response = await fetch(closePath, {
+        method: 'DELETE',
+        headers: { 'content-type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ session_key: sessionKey }),
+      });
+      return { ok: response.ok, status: response.status };
+    }, viewer);
+    if (!closeResult.ok) {
+      console.error(`editor viewer cleanup returned HTTP ${closeResult.status}`);
+      process.exitCode = 6;
+      throw new Error('editor viewer cleanup failed');
+    }
+    console.log(`editor viewer stayed lease-free and closed cleanly${viewer.activeSessionId ? ' while another writer remained active' : ''}`);
+  }
 } finally {
   await browser.close();
 }

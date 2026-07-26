@@ -5,7 +5,7 @@ deciders: Nelson, Codex
 refines: "[ADR-0143](0143-level-editor-sessions-are-attributable-single-writer-and-owner-takeoverable.md)"
 ---
 
-# ADR-0149: Automated editor verification is observation-only
+# ADR-0160: Automated editor verification is observation-only
 
 ## Context
 

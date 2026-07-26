@@ -2,17 +2,17 @@
 status: accepted
 date: 2026-07-20
 deciders: Nelson, Codex
-partially_superseded_by: "[ADR-0153](0153-predrawn-geometry-staleness-does-not-block-draft-persistence.md)"
+partially_superseded_by: "[ADR-0164](0164-predrawn-geometry-staleness-does-not-block-draft-persistence.md)"
 refines:
-  - "[ADR-0147](0147-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md)"
-  - "[ADR-0151](0151-predrawn-backgrounds-retain-live-ground-cover.md)"
+  - "[ADR-0158](0158-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md)"
+  - "[ADR-0162](0162-predrawn-backgrounds-retain-live-ground-cover.md)"
 ---
 
-# ADR-0152: Legacy pre-drawn geometry fingerprints bind to cover-independent v2
+# ADR-0163: Legacy pre-drawn geometry fingerprints bind to cover-independent v2
 
 ## Context
 
-ADR-0151 excludes live ground cover from a pre-drawn background's environment-
+ADR-0162 excludes live ground cover from a pre-drawn background's environment-
 geometry fingerprint so an owner can edit cover without invalidating an
 otherwise unchanged raster and occlusion artifact. Existing immutable
 background versions predate that decision: their
@@ -33,7 +33,7 @@ authoritative Level.
 
 `predrawn-environment-geometry-v2` is the only schema accepted for every new raw,
 warped, or occlusion-ready background operation. Its canonical input includes
-the baked terrain and environment geometry governed by ADR-0147 and deliberately
+the baked terrain and environment geometry governed by ADR-0158 and deliberately
 omits live `cover` and `coverTypes` data. A cover-only Level edit therefore keeps
 the same v2 digest, while a change to terrain, Subterrain, props, doodads,
 barriers, or any other baked environment input changes it.

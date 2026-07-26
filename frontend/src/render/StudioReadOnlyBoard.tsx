@@ -23,8 +23,8 @@ import {
 import { PredrawnBoardLayer, runtimePredrawnBoardPlate } from './PredrawnBoardLayer';
 
 // THE shared, non-interactive board renderer — one source of truth for how an EditorBoard
-// draws (terrain through one composed canvas layer; units, doodads, props, fences, walls, wall art,
-// and ground cover through the shared scene-depth canvas). Both surfaces consume it:
+// draws (terrain through one composed canvas layer; units, doodads, props, floating artwork,
+// fences, walls, wall art, and ground cover through the shared scene-depth canvas). Both surfaces consume it:
 //   - the Level Editor layers paint/erase/select interaction on top of these same cells, and
 //   - the Campaign Editor's selected-level viewer renders it read-only inside a ViewPane.
 // It owns NO state and NO animation clock: pass `animationFrame` (default 0 = a static frame).
@@ -44,10 +44,10 @@ export type FeatureOverlayMap = Record<string, ResolvedFeatureOverlay>;
 /**
  * Derive the one canonical image-generation reference from saved board data.
  *
- * The reference keeps authored terrain, roads, doodads, props, fences, and walls, but removes
- * every visual channel that would either hide that geometry or feed a previous accepted scene
- * back into a fresh generation run. Explicitly authored Subterrain remains part of the reference;
- * absence never synthesizes a default skirt.
+ * The reference keeps authored terrain, roads, doodads, props, floating artwork, fences, and
+ * walls, but removes every visual channel that would either hide that geometry or feed a previous
+ * accepted scene back into a fresh generation run. Explicitly authored Subterrain remains part of
+ * the reference; absence never synthesizes a default skirt.
  */
 export function boardForTopSurfaceArtExport(board: EditorBoard): EditorBoard {
   return {

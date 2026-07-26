@@ -1,9 +1,9 @@
 ---
-status: "accepted; separate Apply transaction superseded by ADR-0107; corner-only instrument superseded by ADR-0110; production registration materializes a raster child under ADR-0147"
+status: "accepted; separate Apply transaction superseded by ADR-0107; corner-only instrument superseded by ADR-0110; production registration materializes a raster child under ADR-0158"
 date: 2026-07-13
 deciders: Nelson, Codex
 partially_supersedes: "[ADR-0134](0134-predrawn-candidate-review-uses-exact-board-plane-registration.md)"
-partially_superseded_by: "[ADR-0107](0107-predrawn-registration-has-no-unsaved-dialog-state.md), [ADR-0110](0110-owner-fitted-grid-defines-predrawn-review-rectification.md), and [ADR-0147](0147-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md)"
+partially_superseded_by: "[ADR-0107](0107-predrawn-registration-has-no-unsaved-dialog-state.md), [ADR-0110](0110-owner-fitted-grid-defines-predrawn-review-rectification.md), and [ADR-0158](0158-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md)"
 ---
 
 # ADR-0135: Pre-drawn registration is owner-picked source geometry

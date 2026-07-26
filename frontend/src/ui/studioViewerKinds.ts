@@ -1,6 +1,7 @@
 export const STUDIO_VIEWER_KIND_LABELS = {
   asset: 'Asset',
   artwork: 'Artwork',
+  sourceart: 'Source Art',
   unitart: 'Unit Art',
   portrait: 'Portrait',
   nineslice: '9-Slice',

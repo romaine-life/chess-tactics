@@ -16,7 +16,7 @@ Production raster sizing is governed by
 [ADR-0076](adr/0076-scaling-is-calibration-production-art-is-native-1x.md):
 scaling may calibrate a candidate, but acceptance requires regenerated native
 pixels and a 1:1 canonical runtime path. The narrow whole-board exception is
-[ADR-0147](adr/0147-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md):
+[ADR-0158](adr/0158-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md):
 the uploaded pre-drawn scene keeps its exact bytes as an immutable raw root,
 while an approved grid adjustment creates a new deterministic raster child that
 runtime consumes directly rather than warping the raw image again.
@@ -143,7 +143,7 @@ being produced.
 
 The pre-drawn board path is the deliberate complete-plate exception to the
 ordinary composited-tile direction above. Its current authorities are ADR-0108,
-ADR-0109, ADR-0110, ADR-0134, ADR-0135, ADR-0147, and ADR-0151. One continuous
+ADR-0109, ADR-0110, ADR-0134, ADR-0135, ADR-0158, and ADR-0162. One continuous
 generated painting is the sole source of baked environment pixels for a
 specific authored level while the canonical level remains the sole authority
 for gameplay geometry. Runtime retains live units/pieces, explicitly authored
@@ -176,7 +176,7 @@ beauty render alone. Every request uses an authored-level packet containing:
 The generation-reference art authority also suppresses additive ground cover,
 including grass, because cover creates avoidable occlusion around geometry in
 the reference. Per
-[ADR-0151](adr/0151-predrawn-backgrounds-retain-live-ground-cover.md), this clean
+[ADR-0162](adr/0162-predrawn-backgrounds-retain-live-ground-cover.md), this clean
 generation input is independent of final composition: explicitly authored
 ground cover remains a live, animated runtime layer and need not be baked into
 the selected raster. Required gameplay-authoritative terrain, roads, barriers,
@@ -209,13 +209,13 @@ becomes gameplay perimeter evidence or permission for a hard-cropped generated
 result. Missing, malformed, or under-inclusive frame data fails preparation.
 
 Per
-[ADR-0147](adr/0147-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md),
+[ADR-0158](adr/0158-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md),
 occlusion is a persisted immutable depth-aware mask child, not runtime inference
 from the plate or runtime reconstruction from ordinary raised sprites. The mask
 is bound to the exact raster parent, dimensions, coordinate basis, canonical
 environment-geometry revision or hash, depth convention, generator version,
 and content hash. The owner inspects the exact mask and real clipping result in
-the application. Per ADR-0151, it clips both live units and live ground cover by
+the application. Per ADR-0162, it clips both live units and live ground cover by
 depth, while cover itself is excluded from the immutable environment-geometry
 fingerprint. A missing or mismatched selected mask fails closed; an explicit
 no-mask selection performs no environmental occlusion.
@@ -232,7 +232,7 @@ prompts remain text provenance while candidate media follows the live-storage
 contract.
 
 An explicitly named comparative refinement follows
-[ADR-0145](adr/0145-named-predrawn-candidate-refinements-are-separate-non-isolated-branches.md)
+[ADR-0156](adr/0156-named-predrawn-candidate-refinements-are-separate-non-isolated-branches.md)
 after owner review identifies a localized miss. It must use the same
 preflight and a separate review branch: canonical Image 1 and the byte-identical
 semantic packet retain authority, while Image 2 is only the subordinate edit
@@ -274,7 +274,7 @@ a runtime warp instruction. Canonical level dimensions, interactive cells, and
 gameplay remain unchanged, leaving generated excess visible as evidence for the
 next generation pass.
 
-Per ADR-0147, uploading creates a directly settable immutable raw-raster root.
+Per ADR-0158, uploading creates a directly settable immutable raw-raster root.
 A grid adjustment creates a separate immutable registered-raster child, and an
 occlusion build creates a separate matching depth-aware mask child. No operation
 mutates its parent. The Level Editor shows their lineage and exact state; it does

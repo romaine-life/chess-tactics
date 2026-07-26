@@ -31,7 +31,12 @@ An agent must not silently take over the owner's editor session merely to contin
 verification. Only the
 owner's explicit **Take over editing** action may transfer a live or stale lease, and the displaced
 branch must be durably preserved and reachable before the new writer is reported. Authenticated
-edits autosave to a durable server-side working copy. **Save** promotes
+owner-page review is lease-free until persisted authoring intent under
+[ADR-0154](docs/adr/0154-level-editor-viewing-does-not-acquire-the-writer-lease.md). Verification
+must not manufacture that intent by changing Level content, staged campaign assignment, or invoking
+**Start editing here**. Writer-only verification uses Nelson's existing Chrome session or requires
+explicit coordination; an isolated verification browser must remain a viewer. Authenticated edits
+autosave to a durable server-side working copy. **Save** promotes
 that copy to the canonical level, and **Discard changes** restores the working copy
 from canonical. Copying the browser URL must remain side-effect free: it does not
 save, publish, create another document, change permissions, rewrite the URL, or

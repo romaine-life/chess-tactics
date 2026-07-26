@@ -2,14 +2,14 @@
 status: "accepted"
 date: 2026-07-20
 deciders: Nelson, Codex
-partially_supersedes: "[ADR-0147](0147-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md)'s ground-cover suppression, authoring lock, and geometry-lineage clauses"
+partially_supersedes: "[ADR-0158](0158-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md)'s ground-cover suppression, authoring lock, and geometry-lineage clauses"
 ---
 
-# ADR-0151: Pre-drawn backgrounds retain live ground cover
+# ADR-0162: Pre-drawn backgrounds retain live ground cover
 
 ## Context
 
-ADR-0147 correctly made an immutable pre-drawn raster the authority for baked
+ADR-0158 correctly made an immutable pre-drawn raster the authority for baked
 environment pixels, but it also classified ground cover as part of that baked
 environment. That disabled the existing Cover tool, hid already-authored cover,
 and made a cover-only edit invalidate an otherwise unchanged background and
@@ -31,7 +31,7 @@ active. Cover keeps its canonical back/front depth lanes around live units and
 its own animation. When a matching persisted occlusion depth map is selected,
 painted foreground geometry clips both live unit pixels and live cover pixels
 using the same strict depth comparison. All other environment suppression in
-ADR-0147 remains unchanged.
+ADR-0158 remains unchanged.
 
 Generation-reference exports remain ground-cover-free so tuft silhouettes do
 not obscure the authored terrain and raised geometry supplied to image

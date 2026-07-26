@@ -1,9 +1,9 @@
 ---
-status: "accepted; post-picker review-grid clause superseded by ADR-0112; production emits an immutable raster child under ADR-0147"
+status: "accepted; post-picker review-grid clause superseded by ADR-0112; production emits an immutable raster child under ADR-0158"
 date: 2026-07-13
 deciders: Nelson, Codex
 partially_supersedes: "[ADR-0110](0110-owner-fitted-grid-defines-predrawn-review-rectification.md)"
-partially_superseded_by: "[ADR-0112](0112-predrawn-review-overlay-uses-the-saved-refit-grid.md) and [ADR-0147](0147-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md)"
+partially_superseded_by: "[ADR-0112](0112-predrawn-review-overlay-uses-the-saved-refit-grid.md) and [ADR-0158](0158-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md)"
 ---
 
 # ADR-0111: Pre-drawn refit target dimensions are owner-configurable

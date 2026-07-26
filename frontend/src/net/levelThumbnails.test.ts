@@ -6,10 +6,12 @@ describe('level thumbnail delivery projection', () => {
     const sha = 'b'.repeat(64);
     installLevelThumbnailUrls({
       l901: `/api/media/${sha}`,
+      'skirmish-profile-default': `/api/media/${sha}`,
       l902: '/assets/level-list-thumb/l902.png',
       l903: 'https://example.invalid/thumb.png',
     });
     expect(levelThumbnailUrl('l901')).toBe(`/api/media/${sha}`);
+    expect(levelThumbnailUrl('skirmish-profile-default')).toBe(`/api/media/${sha}`);
     expect(levelThumbnailUrl('l902')).toBeNull();
     expect(levelThumbnailUrl('l903')).toBeNull();
   });

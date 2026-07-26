@@ -32,6 +32,8 @@ export function LevelEditorControlsPanel({
   onLayerChange,
   tool,
   onToolChange,
+  eraseLabel = 'Erase',
+  eraseDisabled: eraseActionDisabled = false,
   canUndo,
   canRedo,
   onUndo,
@@ -51,6 +53,9 @@ export function LevelEditorControlsPanel({
   onLayerChange: (layer: LevelEditorLayerKey) => void;
   tool: LevelEditorToolKey | null;
   onToolChange: (tool: LevelEditorToolKey) => void;
+  /** Artwork uses this registered slot as an immediate delete-selected action, not an erase mode. */
+  eraseLabel?: string;
+  eraseDisabled?: boolean;
   canUndo: boolean;
   canRedo: boolean;
   onUndo: () => void;
@@ -66,6 +71,7 @@ export function LevelEditorControlsPanel({
   children: ReactNode;
 }): ReactElement {
   const scrollClass = `le-hud-scroll ${scrollClassName}`.trim();
+  const eraseDisabled = tool === null || eraseActionDisabled;
   const playTitle = playBoardEnabled
     ? "Play this exact board against the AI now - no save (a Test Board; set a CPU-delay floor in the game's Controls tab). Back returns you here."
     : 'Add a player and an enemy piece (clear the playability issues in the Status layer) to live-test this board.';
@@ -133,7 +139,7 @@ export function LevelEditorControlsPanel({
           <div className="le-seg le-seg-icons le-action-toolbar" role="toolbar" aria-label="Editor tools and history">
             <button type="button" data-chrome-unit="inner-select-tool" className={chromeUnitClassNames('inner-select-tool', 'le-seg-btn', tool === 'select' && 'active')} disabled={tool === null} onClick={() => onToolChange('select')} title={tool === null ? 'Board tools are unavailable in this workspace.' : 'Select'} aria-label="Select"><span className="le-ico ic-eyedropper" aria-hidden="true" /></button>
             <button type="button" data-chrome-unit="inner-brush-tool" className={chromeUnitClassNames('inner-brush-tool', 'le-seg-btn', tool === 'brush' && 'active')} disabled={tool === null} onClick={() => onToolChange('brush')} title={tool === null ? 'Board tools are unavailable in this workspace.' : 'Brush'} aria-label="Brush"><span className="le-ico ic-brush" aria-hidden="true" /></button>
-            <button type="button" data-chrome-unit="inner-erase-tool" className={chromeUnitClassNames('inner-erase-tool', 'le-seg-btn', tool === 'erase' && 'active')} disabled={tool === null} onClick={() => onToolChange('erase')} title={tool === null ? 'Board tools are unavailable in this workspace.' : 'Erase'} aria-label="Erase"><span className="le-ico ic-eraser" aria-hidden="true" /></button>
+            <button type="button" data-chrome-unit="inner-erase-tool" className={chromeUnitClassNames('inner-erase-tool', 'le-seg-btn', tool === 'erase' && 'active')} disabled={eraseDisabled} onClick={() => onToolChange('erase')} title={tool === null ? 'Board tools are unavailable in this workspace.' : eraseLabel} aria-label={eraseLabel}><span className="le-ico ic-eraser" aria-hidden="true" /></button>
             <button type="button" data-chrome-unit="inner-move-tool" className={chromeUnitClassNames('inner-move-tool', 'le-seg-btn', tool === 'move' && 'active')} disabled={tool === null} onClick={() => onToolChange('move')} title={tool === null ? 'Board tools are unavailable in this workspace.' : 'Move - drag a placed unit or prop to a new cell.'} aria-label="Move"><span className="le-ico ic-move" aria-hidden="true" /></button>
             <span className="le-action-toolbar-divider" aria-hidden="true" />
             <button

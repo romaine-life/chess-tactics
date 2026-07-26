@@ -13,6 +13,7 @@ const PREDRAWN_LOCKED_LAYERS = new Set<LevelEditorLayerKey>([
   'prop',
   'doodad',
   'subterrain',
+  'artwork',
 ]);
 
 export function isPredrawnLockedLayer(layer: LevelEditorLayerKey): boolean {
@@ -34,6 +35,7 @@ export function predrawnBakedArtSignature(board: EditorBoard): string {
     macroTiles: board.macroTiles ?? [],
     doodads: board.doodads,
     props: board.props,
+    floatingArtwork: board.floatingArtwork ?? [],
     features: board.features,
     fences: board.fences ?? {},
     fencePosts: board.fencePosts ?? {},
