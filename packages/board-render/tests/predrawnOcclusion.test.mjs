@@ -74,6 +74,7 @@ test('predrawnOcclusionSeedBoard keeps raised authored geometry and removes unre
   const source = board();
   const seed = predrawnOcclusionSeedBoard(source);
 
+  assert.equal(seed.backgroundMode, 'legacy');
   assert.equal(seed.surface, undefined);
   assert.deepEqual(seed.macroTiles, []);
   assert.deepEqual(seed.units, {});

@@ -310,7 +310,8 @@ describe('boardCode round-trip', () => {
       frameHeight: 700,
       worldBounds: { minX: -620, minY: -350, width: 1240, height: 700 },
     };
-    const code = encodeBoard(emptyBoard({ surface }));
+    const code = encodeBoard(emptyBoard({ backgroundMode: 'ai', surface }));
+    expect(decodeWire(code).bm).toBe('ai');
     expect(decodeWire(code).pd).toEqual([
       2,
       '11111111-1111-4111-8111-111111111111',
@@ -322,7 +323,94 @@ describe('boardCode round-trip', () => {
       1240,
       700,
     ]);
-    expect(decodeBoard(code)?.surface).toEqual(surface);
+    expect(decodeBoard(code)).toMatchObject({ backgroundMode: 'ai', surface });
+  });
+
+  it('round-trips an exact schema-v3 background with its sparse cyan move-highlight profile', () => {
+    const surface: NonNullable<EditorBoard['surface']> = {
+      kind: 'predrawn',
+      schemaVersion: 3,
+      backgroundVersionId: '11111111-1111-4111-8111-111111111111',
+      occlusionVersionId: '22222222-2222-4222-8222-222222222222',
+      frameWidth: 1240,
+      frameHeight: 700,
+      worldBounds: { minX: -620, minY: -350, width: 1240, height: 700 },
+      moveHighlightProfile: {
+        schema: 'predrawn-move-highlight-profile-v1',
+        backgroundVersionId: '11111111-1111-4111-8111-111111111111',
+        coordinateBasis: 'cell-diamond-10000-v1',
+        environmentGeometrySha256: 'a'.repeat(64),
+        profileSha256: 'b'.repeat(64),
+        cells: {
+          '3,2': [5000, 500, 9500, 5000, 5000, 9500, 500, 5000],
+          '1,2': [5000, 1000, 9000, 5000, 5000, 9000, 1000, 5000],
+        },
+      },
+    };
+    const code = encodeBoard(emptyBoard({ backgroundMode: 'ai', surface }));
+
+    expect(decodeWire(code).pd).toEqual([
+      3,
+      '11111111-1111-4111-8111-111111111111',
+      '22222222-2222-4222-8222-222222222222',
+      1240,
+      700,
+      -620,
+      -350,
+      1240,
+      700,
+      [
+        'a'.repeat(64),
+        'b'.repeat(64),
+        [
+          ['1,2', 5000, 1000, 9000, 5000, 5000, 9000, 1000, 5000],
+          ['3,2', 5000, 500, 9500, 5000, 5000, 9500, 500, 5000],
+        ],
+      ],
+    ]);
+    expect(decodeBoard(code)).toMatchObject({ backgroundMode: 'ai', surface });
+  });
+
+  it('fails a schema-v3 surface closed when its move-highlight profile targets another raster', () => {
+    const code = encodeBoard(emptyBoard({
+      backgroundMode: 'ai',
+      surface: {
+        kind: 'predrawn',
+        schemaVersion: 3,
+        backgroundVersionId: '11111111-1111-4111-8111-111111111111',
+        frameWidth: 1240,
+        frameHeight: 700,
+        worldBounds: { minX: -620, minY: -350, width: 1240, height: 700 },
+        moveHighlightProfile: {
+          schema: 'predrawn-move-highlight-profile-v1',
+          backgroundVersionId: '22222222-2222-4222-8222-222222222222',
+          coordinateBasis: 'cell-diamond-10000-v1',
+          environmentGeometrySha256: 'a'.repeat(64),
+          profileSha256: 'b'.repeat(64),
+          cells: {
+            '1,2': [5000, 1000, 9000, 5000, 5000, 9000, 1000, 5000],
+          },
+        },
+      },
+    }));
+
+    expect(decodeBoard(code)).toMatchObject({ backgroundMode: 'ai', surface: undefined });
+  });
+
+  it('retains a remembered immutable AI selection while legacy tiles remain active', () => {
+    const surface: NonNullable<EditorBoard['surface']> = {
+      kind: 'predrawn',
+      schemaVersion: 2,
+      backgroundVersionId: '11111111-1111-4111-8111-111111111111',
+      occlusionVersionId: '22222222-2222-4222-8222-222222222222',
+      frameWidth: 1240,
+      frameHeight: 700,
+      worldBounds: { minX: -620, minY: -350, width: 1240, height: 700 },
+    };
+    const code = encodeBoard(emptyBoard({ backgroundMode: 'legacy', surface }));
+
+    expect(decodeWire(code).bm).toBe('legacy');
+    expect(decodeBoard(code)).toMatchObject({ backgroundMode: 'legacy', surface });
   });
 
   it('round-trips the persisted Fortress Gate v4 whole-plate registration', () => {
@@ -361,7 +449,7 @@ describe('boardCode round-trip', () => {
     expect(decodeBoard(code)?.surface).toEqual(surface);
   });
 
-  it('keeps legacy three-field pre-drawn records byte-identical and unregistered', () => {
+  it('migrates a mode-less pre-drawn record to explicit AI mode without changing its surface', () => {
     const legacyCode = encodeWire({
       c: 6,
       r: 5,
@@ -375,7 +463,39 @@ describe('boardCode round-trip', () => {
       frameWidth: 950,
       frameHeight: 565,
     });
-    expect(encodeBoard(decoded)).toBe(legacyCode);
+    expect(decoded.backgroundMode).toBe('ai');
+    expect(decodeWire(encodeBoard(decoded))).toMatchObject({
+      bm: 'ai',
+      pd: ['boards/fortress-gate/plate.png', 950, 565],
+    });
+  });
+
+  it('persists explicit legacy mode for an ordinary board without a remembered surface', () => {
+    const code = encodeBoard(emptyBoard());
+
+    expect(decodeWire(code).bm).toBe('legacy');
+    expect(decodeBoard(code)?.backgroundMode).toBe('legacy');
+  });
+
+  it('preserves an explicit unavailable AI mode instead of falling back to legacy pixels', () => {
+    const missingSurfaceCode = encodeBoard(emptyBoard({ backgroundMode: 'ai' }));
+    expect(decodeWire(missingSurfaceCode).bm).toBe('ai');
+    expect(decodeBoard(missingSurfaceCode)).toMatchObject({
+      backgroundMode: 'ai',
+      surface: undefined,
+    });
+
+    const malformedSurfaceCode = encodeWire({
+      c: 6,
+      r: 5,
+      bm: 'ai',
+      pd: [2, 'not-a-version-id', null, 1240, 700, -620, -350, 1240, 700],
+    });
+    expect(decodeBoard(malformedSurfaceCode)).toMatchObject({
+      backgroundMode: 'ai',
+      surface: undefined,
+    });
+    expect(decodeWire(encodeBoard(decodeBoard(malformedSurfaceCode)!)).bm).toBe('ai');
   });
 
   it('drops malformed persisted alignment while retaining a valid plate surface', () => {

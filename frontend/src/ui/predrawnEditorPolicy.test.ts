@@ -29,11 +29,11 @@ const board = (): EditorBoard => ({
 });
 
 describe('pre-drawn editor policy', () => {
-  it('locks baked-art layers while retaining live cover authoring', () => {
-    expect(['tile', 'generate', 'paths', 'fence', 'wall', 'wallart', 'prop', 'doodad', 'subterrain'].every((layer) => (
+  it('locks Placed Art with the baked-art layers while retaining Level Artwork and live cover authoring', () => {
+    expect(['tile', 'generate', 'paths', 'fence', 'wall', 'wallart', 'placed-art', 'subterrain'].every((layer) => (
       isPredrawnLockedLayer(layer as Parameters<typeof isPredrawnLockedLayer>[0])
     ))).toBe(true);
-    expect(['board', 'unit', 'cover', 'zone', 'rules', 'status'].every((layer) => (
+    expect(['board', 'level-artwork', 'unit', 'cover', 'zone', 'rules', 'status', 'recovery'].every((layer) => (
       !isPredrawnLockedLayer(layer as Parameters<typeof isPredrawnLockedLayer>[0])
     ))).toBe(true);
   });

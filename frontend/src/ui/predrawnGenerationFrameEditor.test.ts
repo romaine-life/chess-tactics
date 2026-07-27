@@ -23,9 +23,11 @@ describe('Level Editor pre-drawn generation frame handoff', () => {
     expect(levelEditor).toContain("searchParams.get('generationFrame') === '1'");
     expect(opening).toContain("url.searchParams.set('generationFrame', '1')");
     expect(opening).toContain('setPredrawnGenerationFrameOpen(true)');
+    expect(opening).toContain('if (!editorSessionCanWrite)');
     expect(closing).toContain("url.searchParams.delete('generationFrame')");
     expect(closing).toContain('setPredrawnGenerationFrameOpen(false)');
     expect(control).toContain('onClick={openPredrawnGenerationFrame}');
+    expect(control).toContain('disabled={!editorSessionCanWrite}');
     expect(control).toContain("currentEditorBoard.predrawnGenerationFrame ? 'Edit viewing pane' : 'Choose viewing pane'");
   });
 
@@ -39,6 +41,7 @@ describe('Level Editor pre-drawn generation frame handoff', () => {
       /const currentEditorBoard = useMemo<EditorBoard>[\s\S]*?predrawnGenerationFrame: boardPredrawnGenerationFrame/,
     );
     expect(apply).toContain('commitEditorBoard({');
+    expect(apply).toContain('if (!editorSessionCanWrite)');
     expect(apply).toContain('...cloneEditorBoard(currentEditorBoardRef.current)');
     expect(apply).toContain('predrawnGenerationFrame: frame');
     expect(apply).toContain('It is being autosaved to the working copy.');
@@ -62,7 +65,7 @@ describe('Level Editor pre-drawn generation frame handoff', () => {
     expect(review).toContain("setTool('select')");
     expect(review).not.toContain('saveLevel');
     expect(levelEditor).toContain('data-testid="predrawn-generation-frame-status"');
-    expect(levelEditor).toContain('>Preview pipeline input</NavButton>');
+    expect(levelEditor).toContain('>Preview current input</NavButton>');
   });
 
   it('waits for both canonical canvas layers to paint before enabling either handoff path', () => {

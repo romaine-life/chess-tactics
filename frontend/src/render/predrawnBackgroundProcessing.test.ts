@@ -12,6 +12,7 @@ import {
   integerPredrawnRasterViewport,
   predrawnOcclusionDepthHeatmapPixels,
   predrawnOcclusionRasterRegion,
+  predrawnWarpAlgorithmForRegistration,
   PREDRAWN_MAX_PNG_BYTES,
   PREDRAWN_PNG_ENCODER,
 } from './predrawnBackgroundProcessing';
@@ -29,6 +30,39 @@ afterEach(() => {
 });
 
 describe('predrawn background processing', () => {
+  it('pairs legacy and mesh registrations with their exact raster algorithm identities', () => {
+    const registration = {
+      sourceWidth: 100,
+      sourceHeight: 80,
+      north: [50, 0],
+      east: [100, 40],
+      south: [50, 80],
+      west: [0, 40],
+      gridColumns: 2,
+      gridRows: 2,
+      columnGuides: [0, 0.5, 1],
+      rowGuides: [0, 0.5, 1],
+    } as const;
+    expect(predrawnWarpAlgorithmForRegistration(registration)).toEqual({
+      operationKind: 'grid-warp-v1',
+      processor: 'shared-predrawn-rasterizer-v1',
+    });
+    expect(predrawnWarpAlgorithmForRegistration({
+      ...registration,
+      meshOverrides: [{ column: 1, row: 1, point: [51, 40] }],
+    })).toEqual({
+      operationKind: 'grid-warp-v2',
+      processor: 'shared-predrawn-rasterizer-v2',
+    });
+    expect(predrawnWarpAlgorithmForRegistration({
+      ...registration,
+      meshOverrides: [{ column: 1, row: 1, point: [50, 40] }],
+    })).toEqual({
+      operationKind: 'grid-warp-v1',
+      processor: 'shared-predrawn-rasterizer-v1',
+    });
+  });
+
   it('decodes RGB24 depth before nearest-neighbor preview sampling and preserves sampled alpha', () => {
     const pixels = new Uint8ClampedArray([
       ...encodePredrawnOcclusionDepth(-2), 10,

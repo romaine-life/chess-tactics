@@ -14,6 +14,8 @@ export interface TileGridCell {
   y: number;
   /** Extra classes on the tile element (e.g. is-missing / is-empty / is-selected). */
   className?: string;
+  /** Visual-only per-cell CSS variables inherited by non-interactive overlay paint. */
+  style?: CSSProperties;
   /** data-* attributes for tooling/tests. */
   data?: Record<string, string | number | undefined>;
   /**
@@ -89,7 +91,12 @@ export function TileGrid({
           <div
             key={cell.key}
             className={`tileset-generated-board-tile ${cell.className ?? ''}`.trim()}
-            style={{ left, top, zIndex: zIndex + (cell.zBump ?? 0) }}
+            style={{
+              left,
+              top,
+              zIndex: zIndex + (cell.zBump ?? 0),
+              ...cell.style,
+            }}
             {...dataAttributes(cell.data)}
           >
             {cell.children}
@@ -103,7 +110,12 @@ export function TileGrid({
               <div
                 key={`overlay-${cell.key}`}
                 className="tileset-generated-board-overlay-cell"
-                style={{ left, top, zIndex: zIndex + 10000 }}
+                style={{
+                  left,
+                  top,
+                  zIndex: zIndex + 10000,
+                  ...cell.style,
+                }}
               >
                 {renderCellOverlay(cell, { left, top })}
               </div>

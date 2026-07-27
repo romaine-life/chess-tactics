@@ -17,8 +17,22 @@ describe('Level Editor document hydration', () => {
     )?.[0] ?? '';
 
     expect(sharedHydration).toContain('setBoardSubterrain(board.subterrain ?? {});');
-    expect(hydration).toContain('applyEditorBoard(levelToEditorBoard(level));');
+    expect(hydration).toContain('const board = levelToEditorBoard(level);');
+    expect(hydration).toContain('applyEditorBoard(board);');
     expect(historyHydration).toContain('applyEditorBoard(board);');
+  });
+
+  it('does not hide a validated AI plate when takeover rehydrates the same Level body', () => {
+    const hydration = levelEditor.match(
+      /const applyLevelDocument = \(level: Level,[\s\S]*?\n  \};/,
+    )?.[0] ?? '';
+
+    expect(hydration).toContain(
+      'if (predrawnSelectionNeedsRevalidation(currentEditorBoardRef.current, board)) {',
+    );
+    expect(hydration.indexOf('setPredrawnSelectionValidation('))
+      .toBeGreaterThan(hydration.indexOf('if (predrawnSelectionNeedsRevalidation('));
+    expect(hydration).toContain('applyEditorBoard(board);');
   });
 
   it('synchronously hands a reconnect-only RAM candidate across document canonicalization', () => {

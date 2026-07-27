@@ -5,6 +5,7 @@ import {
   predrawnBoardArtifactStoredChildren,
   predrawnBoardArtifactWorkflow,
   predrawnBoardSurfaceForArtifact,
+  predrawnBoardSurfacesEqual,
 } from './predrawnBoardArtifacts';
 
 const RAW_A = '11111111-1111-4111-8111-111111111111';
@@ -32,6 +33,8 @@ function version(
     operation: {},
     provenance: {},
     environment_geometry_sha256_v2: null,
+    pipeline_source_eligible: kind === 'raw',
+    pipeline_source_issue: kind === 'raw' ? null : 'Only raw artwork can seed a processing attempt.',
     content_sha256: id.replaceAll('-', '').padEnd(64, 'a').slice(0, 64),
     content_url: `/api/background-versions/${id}/content`,
     created_at: '2026-07-20T00:00:00.000Z',
@@ -82,9 +85,9 @@ describe('pre-drawn board artifact workflow', () => {
       title: artifact.title,
       parent: artifact.parentArtifactId,
     }))).toEqual([
-      { id: RAW_A, stage: 'generated', title: 'Codex-generated board', parent: null },
+      { id: RAW_A, stage: 'generated', title: 'Raw pipeline source', parent: null },
       { id: WARP_A, stage: 'warped', title: 'Warped board', parent: RAW_A },
-      { id: MASK_A, stage: 'occlusion-ready', title: 'Occlusion-ready board', parent: WARP_A },
+      { id: MASK_A, stage: 'occlusion-ready', title: 'Board with occlusion mask', parent: WARP_A },
     ]);
 
     expect(model.artifacts[0].surface.backgroundVersionId).toBe(RAW_A);
@@ -186,6 +189,43 @@ describe('pre-drawn board artifact workflow', () => {
       ...surface,
       occlusionVersionId: undefined,
     })?.id).toBe(WARP_A);
+  });
+
+  it('treats the embedded cyan-footprint snapshot as part of exact artifact identity', () => {
+    const model = predrawnBoardArtifactWorkflow([raw(), warped()]);
+    const warpedArtifact = model.artifacts.find((artifact) => artifact.id === WARP_A)!;
+    const fittedArtifact = {
+      ...warpedArtifact,
+      surface: {
+        ...warpedArtifact.surface,
+        schemaVersion: 3 as const,
+        moveHighlightProfile: {
+          schema: 'predrawn-move-highlight-profile-v1' as const,
+          backgroundVersionId: WARP_A,
+          coordinateBasis: 'cell-diamond-10000-v1' as const,
+          environmentGeometrySha256: 'a'.repeat(64),
+          cells: {
+            '1,1': [5000, 500, 9500, 5000, 5000, 9500, 500, 5000] as const,
+          },
+          profileSha256: 'b'.repeat(64),
+        },
+      },
+    };
+    const surface = predrawnBoardSurfaceForArtifact(fittedArtifact);
+    if (surface.schemaVersion !== 3) throw new Error('expected fitted schema-v3 surface');
+
+    expect(predrawnBoardSurfacesEqual(surface, fittedArtifact.surface)).toBe(true);
+    expect(predrawnBoardArtifactForSurface([fittedArtifact], surface)).toBe(fittedArtifact);
+    expect(predrawnBoardSurfacesEqual(surface, {
+      ...surface,
+      moveHighlightProfile: {
+        ...surface.moveHighlightProfile,
+        profileSha256: 'c'.repeat(64),
+      },
+    })).toBe(false);
+    expect(surface.moveHighlightProfile.cells).not.toBe(
+      fittedArtifact.surface.moveHighlightProfile.cells,
+    );
   });
 
   it('rejects duplicate ids rather than choosing an input-order winner', () => {

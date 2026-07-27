@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  isLevelEditorLayerKey,
   levelEditorHrefWithRouteState,
   levelEditorRouteBrushKind,
   isLevelEditorRoutePath,
@@ -13,14 +14,87 @@ describe('level editor route helpers', () => {
     });
   });
 
-  it('round-trips the dedicated AI artwork workspace without a brush kind', () => {
+  it('round-trips the dedicated Level Artwork workspace without a brush kind', () => {
     const href = levelEditorHrefWithRouteState('/editor/level?levelId=l1&document=doc-1&kind=cover', {
-      layer: 'artwork',
-      brushKind: levelEditorRouteBrushKind('artwork', 'cover'),
+      layer: 'level-artwork',
+      brushKind: levelEditorRouteBrushKind('level-artwork', 'cover'),
       brush: null,
+      levelArtworkWorkspace: 'pipeline',
     });
-    expect(href).toBe('/editor/level?levelId=l1&document=doc-1&layer=artwork');
-    expect(readLevelEditorRouteState(new URL(href, 'https://example.test').search).layer).toBe('artwork');
+    expect(href).toBe('/editor/level?levelId=l1&document=doc-1&layer=level-artwork&levelArtworkEditor=pipeline');
+    expect(readLevelEditorRouteState(new URL(href, 'https://example.test').search)).toMatchObject({
+      layer: 'level-artwork',
+      levelArtworkWorkspace: 'pipeline',
+    });
+  });
+
+  it('keeps Level Artwork separate from Placed Art and validates its two center workspaces', () => {
+    expect(readLevelEditorRouteState('?layer=level-artwork').levelArtworkWorkspace).toBeUndefined();
+    expect(readLevelEditorRouteState('?layer=level-artwork&levelArtworkEditor=source').levelArtworkWorkspace).toBe('source');
+    expect(readLevelEditorRouteState('?layer=level-artwork&levelArtworkEditor=pipeline').levelArtworkWorkspace).toBe('pipeline');
+    expect(readLevelEditorRouteState('?layer=level-artwork&levelArtworkEditor=unknown').levelArtworkWorkspace).toBeUndefined();
+    expect(readLevelEditorRouteState('?layer=placed-art&levelArtworkEditor=source').levelArtworkWorkspace).toBeUndefined();
+    expect(levelEditorHrefWithRouteState('/editor/level?layer=level-artwork&levelArtworkEditor=source', {
+      layer: 'level-artwork',
+      levelArtworkWorkspace: null,
+    })).toBe('/editor/level?layer=level-artwork');
+    expect(levelEditorHrefWithRouteState('/editor/level?layer=level-artwork&levelArtworkEditor=source', {
+      layer: 'board',
+    })).toBe('/editor/level?layer=board');
+  });
+
+  it('reads old artwork URLs without preserving their collided route vocabulary', () => {
+    expect(readLevelEditorRouteState('?layer=artwork&artworkEditor=source&kind=artwork&brush=oak')).toMatchObject({
+      layer: 'level-artwork',
+      brushKind: undefined,
+      brush: undefined,
+      levelArtworkWorkspace: 'source',
+    });
+    expect(readLevelEditorRouteState('?layer=artwork&artworkEditor=pipeline')).toMatchObject({
+      layer: 'level-artwork',
+      brushKind: undefined,
+      levelArtworkWorkspace: 'pipeline',
+    });
+    expect(readLevelEditorRouteState('?layer=artwork')).toMatchObject({
+      layer: 'placed-art',
+      brushKind: 'artwork',
+      levelArtworkWorkspace: undefined,
+    });
+    expect(readLevelEditorRouteState('?layer=artwork&artworkEditor=unknown&kind=prop')).toMatchObject({
+      layer: 'placed-art',
+      brushKind: 'artwork',
+      levelArtworkWorkspace: undefined,
+    });
+  });
+
+  it('reads old Doodad and Prop layer URLs as their matching Placed Art modes', () => {
+    expect(readLevelEditorRouteState('?layer=doodad&kind=prop')).toMatchObject({
+      layer: 'placed-art',
+      brushKind: 'doodad',
+    });
+    expect(readLevelEditorRouteState('?layer=prop&kind=doodad')).toMatchObject({
+      layer: 'placed-art',
+      brushKind: 'prop',
+    });
+  });
+
+  it('keeps legacy layer names out of the canonical layer vocabulary', () => {
+    expect(isLevelEditorLayerKey('level-artwork')).toBe(true);
+    expect(isLevelEditorLayerKey('placed-art')).toBe(true);
+    expect(isLevelEditorLayerKey('artwork')).toBe(false);
+    expect(isLevelEditorLayerKey('doodad')).toBe(false);
+    expect(isLevelEditorLayerKey('prop')).toBe(false);
+  });
+
+  it('routes Scene Art, Doodads, and Props through one Placed Art layer', () => {
+    for (const kind of ['artwork', 'doodad', 'prop'] as const) {
+      expect(readLevelEditorRouteState(`?kind=${kind}`)).toMatchObject({
+        layer: 'placed-art',
+        brushKind: kind,
+      });
+      expect(levelEditorRouteBrushKind('placed-art', kind)).toBe(kind);
+    }
+    expect(levelEditorRouteBrushKind('placed-art', 'tile')).toBe('artwork');
   });
 
   it('infers the editor layer from a brush kind when layer is absent', () => {
@@ -30,6 +104,7 @@ describe('level editor route helpers', () => {
       brush: 'rook',
       eventsEditor: false,
       eventsTab: undefined,
+      levelArtworkWorkspace: undefined,
     });
     expect(readLevelEditorRouteState('?kind=river')).toMatchObject({
       layer: 'paths',
@@ -51,6 +126,27 @@ describe('level editor route helpers', () => {
       brushKind: null,
       brush: null,
     })).toBe('/editor/level?board=abc&layer=rules#cell');
+  });
+
+  it('writes only the canonical Level Artwork route vocabulary', () => {
+    expect(levelEditorHrefWithRouteState(
+      '/editor/level?document=doc-1&layer=artwork&artworkEditor=source&kind=artwork&brush=oak',
+      {
+        layer: 'level-artwork',
+        levelArtworkWorkspace: 'pipeline',
+      },
+    )).toBe('/editor/level?document=doc-1&layer=level-artwork&levelArtworkEditor=pipeline');
+  });
+
+  it('writes only the canonical Placed Art route vocabulary', () => {
+    expect(levelEditorHrefWithRouteState(
+      '/editor/level?document=doc-1&layer=doodad&artworkEditor=pipeline&levelArtworkEditor=source',
+      {
+        layer: 'placed-art',
+        brushKind: 'doodad',
+        brush: 'grass-tuft',
+      },
+    )).toBe('/editor/level?document=doc-1&layer=placed-art&kind=doodad&brush=grass-tuft');
   });
 
   it('serializes the paths submode as a brush kind', () => {
@@ -94,6 +190,7 @@ describe('level editor route helpers', () => {
       brush: 'test-art-mirror-grand-gallery',
       eventsEditor: false,
       eventsTab: undefined,
+      levelArtworkWorkspace: undefined,
     });
   });
 
@@ -137,6 +234,18 @@ describe('level editor route helpers', () => {
     expect(levelEditorHrefWithRouteState('/editor/level?layer=rules&eventsEditor=1&eventsTab=other', {
       layer: 'status',
     })).toBe('/editor/level?layer=status');
+  });
+
+  it('round-trips the dedicated Recovery layer without authoring state', () => {
+    expect(readLevelEditorRouteState('?layer=recovery&kind=wall&brush=stone')).toMatchObject({
+      layer: 'recovery',
+      eventsEditor: false,
+    });
+    expect(levelEditorHrefWithRouteState('/editor/level?layer=status&kind=wall&brush=stone', {
+      layer: 'recovery',
+      brushKind: null,
+      brush: null,
+    })).toBe('/editor/level?layer=recovery');
   });
 
   it('does not confuse the Events workspace flag with serialized gameplay events', () => {

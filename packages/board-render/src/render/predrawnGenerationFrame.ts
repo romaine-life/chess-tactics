@@ -117,6 +117,7 @@ function filterPlayableSubterrain(
 function generationRequiredBoard(board: EditorBoard): EditorBoard {
   return {
     ...board,
+    backgroundMode: 'legacy',
     surface: undefined,
     decorativeApron: EMPTY_APRON,
     decorativeFootprint: [],

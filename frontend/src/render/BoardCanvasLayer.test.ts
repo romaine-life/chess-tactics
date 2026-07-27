@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { encodePredrawnOcclusionDepth, type BoardDrawOp } from '@chess-tactics/board-render';
 import {
+  boardCanvasFramePlan,
+  boardCanvasSources,
   boardCanvasScratchRegion,
   drawBoardOps,
   isAnimatedGroundCoverOp,
@@ -25,6 +27,33 @@ function drawOp(overrides: Partial<BoardDrawOp> = {}): BoardDrawOp {
 }
 
 describe('BoardCanvasLayer live ground-cover animation', () => {
+  it('validates empty-scene depth resources without requiring a canvas paint', () => {
+    expect(boardCanvasSources([])).toEqual([]);
+    expect(boardCanvasFramePlan(
+      [],
+      [drawOp({ src: 'unused-mask' })],
+      {
+        src: 'unused-depth',
+        frameWidth: 100,
+        frameHeight: 80,
+        worldBounds: { minX: 0, minY: 0, width: 100, height: 80 },
+      },
+    )).toEqual({
+      sources: ['unused-mask', 'unused-depth'],
+      paint: false,
+    });
+    expect(boardCanvasSources(
+      [drawOp({ src: 'shared' })],
+      [drawOp({ src: 'shared' }), drawOp({ src: 'mask' })],
+      {
+        src: 'depth',
+        frameWidth: 100,
+        frameHeight: 80,
+        worldBounds: { minX: 0, minY: 0, width: 100, height: 80 },
+      },
+    )).toEqual(['shared', 'mask', 'depth']);
+  });
+
   it('uses typed draw metadata instead of inferring ownership from an asset URL', () => {
     expect(isAnimatedGroundCoverOp(drawOp({
       animation: { kind: 'ground-cover-sway', frameCount: 6, durationMs: 1140, phase: 2 },

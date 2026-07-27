@@ -191,6 +191,7 @@ export type EditorDocumentRevisionReason =
   | 'save'
   | 'discard'
   | 'restore'
+  | 'generation-attempt-archive'
   | 'canonical-refresh';
 
 export interface EditorDocumentRevisionSummary {

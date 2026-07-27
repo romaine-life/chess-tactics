@@ -120,6 +120,7 @@ export function predrawnEnvironmentGeometryFingerprintInput(board: EditorBoard):
 export function predrawnOcclusionSeedBoard(board: EditorBoard): EditorBoard {
   return {
     ...board,
+    backgroundMode: 'legacy',
     surface: undefined,
     macroTiles: [],
     units: {},

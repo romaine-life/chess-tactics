@@ -7,6 +7,7 @@ import {
   boardDrawOps,
   boardSocialFramingBounds,
   filterPredrawnOcclusionDepthPixels,
+  isPredrawnBackgroundActive,
   isVersionedPredrawnBoardSurface,
   predrawnOcclusionDepthMapForSurface,
   predrawnOcclusionMaskOps,
@@ -142,14 +143,18 @@ export async function loadBoardThumbnailImages(
   sources: readonly string[],
   imageLoader: BoardThumbnailImageLoader = loadDecodedImage,
 ): Promise<Map<string, HTMLImageElement>> {
-  const versionedSurface = board.surface?.kind === 'predrawn'
+  const predrawnBackgroundActive = isPredrawnBackgroundActive(board);
+  const versionedSurface = predrawnBackgroundActive
+    && board.surface?.kind === 'predrawn'
     && isVersionedPredrawnBoardSurface(board.surface)
     ? board.surface
     : undefined;
   const backgroundSrc = versionedSurface
     ? `/api/background-versions/${encodeURIComponent(versionedSurface.backgroundVersionId)}/content`
     : undefined;
-  const occlusionDepthMap = predrawnOcclusionDepthMapForSurface(board.surface);
+  const occlusionDepthMap = predrawnBackgroundActive
+    ? predrawnOcclusionDepthMapForSurface(board.surface)
+    : undefined;
   const required = new Map<string, 'background' | 'occlusion-depth'>([
     ...(backgroundSrc ? [[backgroundSrc, 'background'] as const] : []),
     ...(occlusionDepthMap ? [[occlusionDepthMap.src, 'occlusion-depth'] as const] : []),
@@ -189,8 +194,12 @@ export async function loadBoardThumbnailImages(
 async function renderBoardCanvas(board: EditorBoard, scale: number): Promise<{ canvas: Canvas2D; bounds: BakeBounds } | null> {
   const bounds = boardBounds(board);
   const ops = boardDrawOps(board);
-  const occlusionDepthMap = predrawnOcclusionDepthMapForSurface(board.surface);
-  const occlusionMasks = board.surface?.kind === 'predrawn'
+  const predrawnBackgroundActive = isPredrawnBackgroundActive(board);
+  const occlusionDepthMap = predrawnBackgroundActive
+    ? predrawnOcclusionDepthMapForSurface(board.surface)
+    : undefined;
+  const occlusionMasks = predrawnBackgroundActive
+    && board.surface?.kind === 'predrawn'
     && !isVersionedPredrawnBoardSurface(board.surface)
     ? predrawnOcclusionMaskOps(board)
     : [];

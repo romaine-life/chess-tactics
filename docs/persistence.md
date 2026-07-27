@@ -13,15 +13,19 @@ Durable document and live-content tables are created by the inline migrations in
 
 | Table | Scope | Endpoint | Auth |
 | --- | --- | --- | --- |
+| `schema_migrations` | append-only version, name, checksum, and application time for database schema history | internal migration authority | backend migration/check processes only |
 | `levels` | per signed-in owner (`PK (owner_email, id)`) | `/api/levels`, `/api/levels/:id` | sign-in required |
 | `campaign_workspaces` | one row per signed-in owner | `/api/campaign-workspace` | sign-in required |
 | `level_working_copies` | one durable working copy per signed-in owner + workspace + level | `/api/editor-documents` | sign-in required; official workspaces also require admin |
 | `level_working_copy_revisions` | retained checkpoints for each durable working copy | `/api/editor-documents/:id/revisions` | owner only; restore requires current CAS revision |
+| `level_working_copy_revision_reasons` | closed canonical registry for retained working-copy revision reasons | internal schema contract | backend-owned; referenced by one validated foreign key from revision history |
 | `editor_document_edit_sessions` | attributable owner page sessions plus the document's current lease and fencing epoch | `/api/editor-documents/:documentId/...` | document owner only; cross-owner admin review is excluded |
 | `editor_document_recoveries` | immutable, owner-reachable displaced and recovery snapshots | `/api/editor-documents/:documentId/...` | document owner only |
-| `predrawn_background_versions` | immutable raw-raster, registered-raster, and depth-mask lineage per editor document + level | `/api/editor-documents/:documentId/background-versions`, its `/:versionId/content` child, and `/api/background-versions/:versionId/content` | owner/current-writer mutations; owner/admin-scoped private reads; exact explicitly published content public |
+| `predrawn_generation_attempts` | server-owned Board Art creation-slot identity, one exact reusable Raw Pipeline Source input, compatible canonical processing context, at-most-one committed warped/occlusion stage, and one latest warp-bound cell-visual-footprint draft under the compatibility cyan move-highlight field names | `/api/editor-documents/:documentId/generation-attempts` and its attempt actions | owner/current-writer mutations; owner/admin-scoped reads |
+| `predrawn_background_versions` | immutable Generation References (`kind='source'`) plus raw-raster, registered-raster, and depth-mask lineage per editor document + level | `/api/editor-documents/:documentId/background-versions`, its `/:versionId/content` child, and `/api/background-versions/:versionId/content` | owner/current-writer mutations; owner/admin-scoped private reads; exact explicitly published content public |
 | `predrawn_background_version_events` | actor-attributed created, content-uploaded, archived, and published lifecycle events | internal | written atomically by authorized lineage mutations; idempotent retries do not duplicate events |
 | `predrawn_background_geometry_bindings` | immutable one-row-per-version normalization of an exact legacy v1 environment-geometry digest to cover-independent v2 | internal; effective v2 digest is projected with background-version reads | written only inside an authorized fenced autosave, derivative-create, Save, or Publish transaction after server-held Level proof; GET never writes |
+| `predrawn_background_raw_contract_bindings` | immutable one-row-per-version proof of historically absent Raw Pipeline Source coordinate-basis/viewing-pane metadata, pinned to exact saved-Level frame/bounds, bytes, provenance, and geometry | internal; effective raw-source contract is projected with background-version reads | written only inside fenced processing-attempt creation after exact server-held saved-Level proof; GET/list/picker never writes |
 | `public_maps` | owner-free snapshot of an explicitly published user Level | `POST /api/maps/publish`, `GET /api/maps/:publicId` | publish requires the signed-in owner; snapshot reads are public |
 | `campaigns` | per signed-in owner (`PK (owner_email, id)`) | `/api/campaigns`, `/api/campaigns/:id`, `/api/campaigns/:id/levels` | sign-in required |
 | `design_portfolios` | global, by id | `/api/design-portfolios/:id` | GET public, PUT requires sign-in (designer) |
@@ -45,37 +49,188 @@ so sequential edits cannot silently overwrite a newer document.
 
 Per
 [ADR-0158](adr/0158-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md),
-the pre-drawn background declaration persists one exact immutable raster-version
+the remembered pre-drawn selection persists one exact immutable raster-version
 identity and either one exact matching depth-aware occlusion-mask version or an
-explicit no-mask state. These are durable Postgres-owned domain identities, not
-candidate ids, blob hashes, mutable media-slot pointers, preview URLs,
-browser-local keys, generated filenames, or picker state. Registration,
-rasterizer parameters, parent hashes, geometry revision/hash, depth convention,
-and generator versions belong to the immutable artifact lineage; runtime does
-not replay them from Level data. The raster version also owns frame dimensions
-and world bounds. A Level projection may duplicate those values for self-contained
-rendering only when the backend validates that they exactly match the selected
-version; they are not independent authoring knobs.
+explicit no-mask state. Per
+[ADR-0165](adr/0165-ai-artwork-separates-sources-attempts-and-background-mode.md),
+the Level separately persists `legacy` or `ai` background mode. These are
+durable Postgres-owned domain identities and content fields, not candidate ids,
+blob hashes, mutable media-slot pointers, preview URLs, browser-local keys,
+generated filenames, or picker state. Registration, rasterizer parameters,
+parent hashes, geometry revision/hash, depth convention, and generator versions
+belong to immutable artifact lineage; runtime does not replay them from Level
+data. The raster version also owns frame dimensions and world bounds. A Level
+projection may duplicate those values for self-contained rendering only when
+the backend validates an exact match; they are not independent authoring knobs.
+Per
+[ADR-0179](adr/0179-predrawn-cyan-move-highlights-use-per-cell-visual-footprints.md),
+a newly fitted selection is a schema-version-3 surface that also embeds the
+exact canonical compatibility-named cyan move-highlight profile and digest
+bound to its warped background and cover-independent geometry. Per
+[ADR-0185](adr/0185-predrawn-fitted-cell-footprints-shape-every-square-local-visual-highlight.md),
+that snapshot is the cell-visual footprint for every square-local highlight,
+not only cyan move paint. It never supplies logical hit, selection, movement,
+pathfinding, occupancy, zone, placement, grid, fence, or solver geometry. The
+Level content is a snapshot, not a pointer to mutable attempt state. Historical
+schema-version-2 surfaces remain readable and mean the full canonical diamond
+on every cell.
 
-`Set` writes that exact selection only to the current fenced Level working copy
-through its ordinary compare-and-swap/autosave mutation. Private Save or official
-Review and publish/Publish is the separate canonical transaction. Deriving,
-previewing, or setting a version cannot mutate canonical content or a global
-accepted pointer. Canonical Save/Publish validates ready or published exact
-versions and verifies their already-immutable Blob objects and hashes. Private
-Save atomically pins the exact selection with the private canonical Level while
-keeping ready versions owner/admin-scoped. Official Review and publish/Publish
-atomically marks the exact selected rows published with the official Level
-change. Explicit user-map Publish performs the same exact-version publication in
-the transaction that writes the owner-free `public_maps` snapshot. Only those
-explicitly published selections become public. Failure changes neither database
-state, and no transaction moves or rewrites Blob bytes. Working, canonical, and
-lineage references pin version metadata and Blob objects against deletion.
-At Set, derivative, Save, and Publish boundaries, missing or mismatched version
-lineage is a validation failure, not permission to fall back to a runtime warp,
-derived sprite mask, mutable slot, or ordinary composed environment. A stale
-selection may remain in an owner working draft under ADR-0164, but it gains no
-canonical or derivation authority.
+Per
+[ADR-0166](adr/0166-manual-ai-handoff-separates-generation-references-from-raw-pipeline-sources.md),
+a Generation Reference is separate from the remembered runtime selection.
+Creating it captures the canonical saved Level through its saved frame and
+active mode, stores immutable PNG bytes, and records the mode, exact selected
+AI raster when applicable, canonical revision, geometry and semantic
+identities, dimensions, bounds, hashes, and attribution. It is the non-settable
+full-resolution image given to the model.
+
+Per
+[ADR-0168](adr/0168-creation-slots-begin-with-reusable-raw-pipeline-sources.md),
+the manual Generation Reference handoff and the deterministic Board Art slot
+are separate persistence transitions. **Copy generation reference** reads the
+exact `kind='source'` bytes without writing. **Paste AI-painted board**, direct
+`Ctrl+V`, and **Choose PNG file instead** stage one exact PNG as a browser-local
+preview. The explicit raw-source commit stores those unchanged bytes and hash as
+an immutable `kind='raw'` Raw Pipeline Source with its Generation Reference,
+canonical semantic request, request hash, and actor/time provenance. An
+explicit editor-mounted preexisting Codex result may enter through the same
+named raw-source import. Neither path makes the application claim the external
+conversation's model, prompt, or parameters.
+
+Each writable `predrawn_generation_attempts` row then references one exact
+content-complete Raw Pipeline Source version and hash as its pre-modification
+input. It records the compatible canonical geometry and processing context but
+has no waiting-for-generated-artwork state and no second raw output slot. Its
+nullable warped and internal `occlusion-ready` stage references may each hold
+one current immutable result and are filled only in order through compare-and-swap
+stage transactions. Per
+[ADR-0175](adr/0175-rejected-warp-retries-stay-in-the-same-pipeline-slot.md),
+an unpublished, unselected warp with no attached occlusion may be explicitly
+discarded from that same slot: one fenced transaction archives the immutable
+version, clears the exact warp pointer, advances the slot's processing
+revision, and leaves the Raw Pipeline Source attached. Interrupted-create
+retries still return the same in-flight result, while the next post-discard
+generation receives a new stable stage identity. Clipboard contents, selected file
+handles, uncommitted local previews, browser paste state, and temporary object
+URLs are never durable authority.
+
+Per
+[ADR-0181](adr/0181-occlusion-mask-retries-stay-in-the-same-pipeline-slot.md),
+the owner-facing **Board with occlusion mask** may also be detached from its
+slot under the exact attempt, working-document, version, and writer fences.
+This preserves the current warp and cyan profile and advances the processing
+revision. A matching working surface falls back to that warp without
+`occlusionVersionId`; canonical content is never rewritten by the retry action.
+The immutable mask row is archived only when canonical content does not still
+reference it, otherwise it remains retained history while no longer occupying
+the slot's current stage.
+
+A post-warp attempt may also own one mutable latest
+`predrawn-move-highlight-profile-v1` draft. Its JSON profile, canonical SHA-256,
+and exact `move_highlight_profile_warped_version_id` are nullable only as one
+all-or-none bundle, and the composite warped-version/document foreign key is
+restrictive. The sparse map contains only exact playable-cell deviations from
+the full diamond, using four contained, convex, non-degenerate integer points
+in `cell-diamond-10000-v1`. The profile's historical name remains the
+compatibility contract even though ADR-0185 makes its rendering role the shared
+cell-visual footprint.
+
+The profile endpoint,
+`PUT /api/editor-documents/:documentId/generation-attempts/:attemptId/move-highlight-profile`,
+requires the current writer credential and fencing generation, expected
+attempt row revision, and expected current warped-version id. The transaction
+locks the document and attempt, validates the retained semantic board, playable
+cells, warp lineage, v2 environment-geometry digest, canonical profile and
+hash, then advances `row_revision` and records the attributed
+`move-highlight-profile-updated` event. An exact replay is idempotent; stale
+revision or warp identity conflicts. Discarding the warp clears all three
+profile fields in the same transaction. The browser's working handles and
+Undo/Redo history are never durable authority.
+
+Creating a new occlusion stage requires that exact attempt and warp to carry a
+valid saved profile; an explicitly saved empty sparse map represents approval of
+full diamonds everywhere. The profile does not become a background version or
+Blob and is not copied into mask bytes or mask lineage. ADR-0185 changes no
+Level field, endpoint, event action, profile schema, digest, database column, or
+constraint, so it requires no content or database migration.
+
+A warped child's immutable operation metadata owns the canonical serialized
+registration and the matching deterministic algorithm identity. A version-5
+registration may contain at most 1,024 sparse row-major interior
+shared-grid-node overrides and must pair with `grid-warp-v2` /
+`shared-predrawn-rasterizer-v2`; version-1 through version-4 registrations pair
+with the historical v1 identifiers. The normal 64 KiB operation limit applies.
+Canonicalization, bounds, and non-fold validation occur before allocation, and
+the exact operation participates in idempotency and lineage hashing.
+
+A background-version row with `kind='raw'` is a Raw Pipeline Source.
+Generation References, Raw Pipeline Sources, and deterministic outputs share
+`predrawn_background_versions`, but no row is reclassified or aliased to
+another kind. Zero, one, or many creation slots may reference one exact Raw
+Pipeline Source in place. That relationship allocates no background-version or
+Blob, does not mutate an existing slot, and is deterministic pipeline input
+rather than model-input provenance. Warped and `kind='occlusion'` rows cannot be
+creation-slot inputs.
+
+Per
+[ADR-0169](adr/0169-historical-raw-contracts-bind-only-from-saved-level-proof.md),
+a historical raw missing only the later `coordinateBasis` and `viewingPane`
+operation fields remains immutable. Fenced processing-attempt creation may
+insert one external `predrawn_background_raw_contract_bindings` row only after
+the backend locks the exact saved canonical Level and proves matching
+frame/world bounds, Blob/content hash, dimensions, original
+operation/provenance hashes, historical lineage, and v1 environment geometry.
+The same transaction establishes ADR-0163's matching v1-to-v2 geometry binding
+when required and creates the slot only if both bindings succeed.
+
+The external row supplies the effective historical coordinate contract without
+rewriting `predrawn_background_versions`. A repeated identical mapping is
+idempotent; a contradictory stored field or mapping is a conflict. New raws
+must carry the complete contract directly. Reads, picker opens, observers,
+autosave, Save, Publish, and unrelated derivatives never insert a raw-contract
+binding.
+
+`Set` writes an exact AI selection only to the current fenced Level working copy
+through its ordinary compare-and-swap/autosave mutation. For a newly fitted
+warp, the schema-version-3 surface contains a canonical deep snapshot of the
+attempt's exact current profile and digest; later profile saves cannot mutate
+that Level. The separate Legacy/AI control writes the background mode through
+the same boundary. Private Save or official Review and publish/Publish is the
+separate canonical transaction. Deriving, previewing, setting a version, or
+changing working mode cannot mutate canonical content or a global accepted
+pointer. Canonical Save/Publish validates ready or published exact versions and
+their immutable Blob objects when mode is AI, plus any schema-version-3 profile
+against the selected warp, playable cells, v2 geometry, and stored digest.
+Private Save atomically pins the remembered selection with the private
+canonical Level while keeping ready versions owner/admin-scoped. Official Review
+and publish/Publish atomically marks the exact active AI rows published with the
+official Level change. Explicit user-map Publish performs the same exact-version
+publication in the transaction that writes the owner-free `public_maps`
+snapshot.
+
+Only explicitly published selections become public. Generation References, Raw
+Pipeline Sources, and unused creation-slot inputs do not become public merely
+because a Level is published.
+Failure changes neither database state, and no transaction moves or rewrites
+Blob bytes. Working, canonical, creation-slot, and lineage references pin
+Generation Reference, version, and Blob objects against deletion. In AI mode,
+missing or mismatched lineage is a validation failure, not permission to fall
+back to Legacy, a runtime warp, derived sprite mask, mutable slot or attempt
+profile, or ordinary composed environment. A stale selection may remain in an
+owner working draft under ADR-0164, but it gains no canonical or derivation
+authority.
+
+Per
+[ADR-0172](adr/0172-archiving-a-board-art-slot-forgets-only-dormant-legacy-selection.md),
+**Archive slot** may remove a matching dormant selection from both the working
+and canonical Levels when each match is in Legacy mode. The writer fence,
+expected working-document revision, slot revision, both current Level records,
+and affected lineage are locked and revalidated with the archive. A matching
+AI-mode use or published output rejects the entire transaction. Successful
+working and canonical changes advance their respective revisions and the
+response carries the authoritative document, canonical Level, and workspace
+revision for immediate client adoption. Archive retains the immutable versions,
+Blob bytes, lineage, and quota accounting.
 
 Per
 [ADR-0163](adr/0163-legacy-predrawn-geometry-fingerprints-bind-to-cover-independent-v2.md),
@@ -101,10 +256,12 @@ the pre-mutation proof establishes only the old v1-to-v2 normalization; it does
 not validate the incoming autosave body. Subject to ordinary document, fence,
 and compare-and-swap checks, autosave preserves that body even when changed
 baked geometry makes its selected art stale. Recovery upload and restore retain
-the same owner draft rather than discarding it for an art mismatch. The artwork
-workspace exposes the stale selection and disables Set and derivative actions.
-Save and Publish still compare the current Level with the selected lineage and
-fail closed without changing canonical content.
+the same owner draft rather than discarding it for an art mismatch. The AI
+Artwork controls expose the stale remembered selection and disable AI
+activation, Set, and derivative actions. Per ADR-0165, dormant stale art does
+not block canonical Save or Generation Reference capture while background mode
+is Legacy. Save and Publish in AI mode still compare the current Level with the
+selected lineage and fail closed without changing canonical content.
 
 ## Level editor working copies and sessions
 
@@ -162,9 +319,10 @@ recovery upload, and every mutation fence must prove that credential; knowing a 
 id or device relation cannot close or impersonate its editor.
 The editor presents that attribution and those times in Status whenever another session holds or
 most recently held authority. Per
-[ADR-0152](adr/0152-level-editor-session-attention-lives-in-title-bar-and-status.md), session and
+[ADR-0177](adr/0177-level-editor-recovery-is-a-separate-side-control-destination.md), session and
 recovery details do not occupy every authoring layer: one conditional title-bar attention control
-opens Status and focuses the relevant information. A browser draft or a revision number alone never
+opens Status for session authority and Recovery for preserved-copy attention, then focuses the
+relevant information. A browser draft or a revision number alone never
 creates a person or live-presence claim. Relative opened/last-seen labels are calculated from the
 presence response's server clock rather than trusting a potentially skewed browser clock. When no
 lease is live, `last_editor` carries the most recent real authority holder separately from
@@ -215,7 +373,7 @@ new immutable snapshot in its recovery branch; that upload cannot alter the work
 canonical Level, lease, or epoch. Claiming an expired lease similarly preserves the preceding
 server-known branch before granting new authority.
 
-Recovery snapshots remain owner-scoped and reachable from the document's Status/recovery UI until
+Recovery snapshots remain owner-scoped and reachable from the document's Recovery side controls until
 the owner explicitly removes them. Each records the source session, source kind, body checkpoint
 time, observed revision, and fencing epoch. Restoring requires the current lease, first snapshots
 the current working branch, then writes the chosen body as a new fenced working-copy revision.
@@ -227,7 +385,7 @@ set atomically; a missing or foreign id deletes none, while any recovery created
 Recovery never creates a second working document or canonical Level and never rewrites historical
 snapshots.
 
-Per [ADR-0157](adr/0157-recovery-snapshots-browse-one-at-a-time-and-clear-atomically.md), Status
+Per [ADR-0157](adr/0157-recovery-snapshots-browse-one-at-a-time-and-clear-atomically.md), Recovery
 presents server recoveries one at a time in newest-first order, with an explicit position and
 bounded Previous/Next navigation rather than stacking every Restore/Delete pair. **Delete all
 recovery copies** confirms the exact number of currently listed snapshots with Cancel as the safe
@@ -415,28 +573,53 @@ explicit media roles; semantic-slot filenames are opaque join keys and are not
 parsed into a roster. Configuration-only `chrome-fill-tint` rows likewise own
 the installed Chrome tint names and RGB values.
 
-New pre-drawn raw-raster roots and every registered-raster or occlusion-mask
-child are allocated by authenticated backend transactions. Clients never form
-a version identity from a level id, hash, filename, or storage path. The backend
-records typed parentage and immutable provenance before returning the new
-version. Canonical level-list thumbnails are used only when the backend's level
+New `kind='source'` Generation References, Raw Pipeline Sources, creation slots,
+and every registered-raster or occlusion-mask child are
+allocated by authenticated backend transactions. Clients never form an
+identity from a Level id, hash, filename, storage path, label, or array
+position. The backend records immutable generation provenance, exact raw-source
+input, slot scope, typed deterministic parentage, and one-time output-stage
+ownership before returning the new identity.
+For a registered-raster child this includes the exact canonical registration,
+its matched rasterizer version, and the output digest; the backend never
+normalizes a v5 mesh into a v1 operation or substitutes a neighboring
+registration.
+Canonical level-list thumbnails are used only when the backend's Level
 projection supplies an immutable derivative URL; a missing derivative has no
 constructed stable-path or read-through fallback.
 
-For a legacy v1 parent, that allocation transaction first establishes the exact
-ADR-0163 external v2 binding from the current server-held Level and binds every
-relevant legacy ancestor atomically. The newly allocated child records v2 in
-its own immutable operation and provenance; allocation never copies v1 forward
-or rewrites its ancestors.
+Migration groups each existing complete or partial raw-to-warp-to-occlusion
+path into a first-class historical creation slot. Branches become separate
+slots and may reference the same immutable historical stage rows without
+copying bytes. Existing `kind=raw` rows project as Raw Pipeline Sources, not
+Generation References. Because the original model input was not retained, the
+source keeps `missing-historical-source` rather than inventing a Generation
+Reference. Historical slots retain their exact artifact bytes, settable state,
+hashes, and audit history. An exact content-complete, geometry-compatible
+historical Raw Pipeline Source may be selected as a separate writable slot's
+input by stored version/Blob reference. That slot begins at grid fitting and
+does not repair, reclassify, copy, mutate, or claim new model-generation
+provenance for the historical lineage. Every new writable slot requires one
+real Raw Pipeline Source input.
 
-[ADR-0159](adr/0159-predrawn-background-authoring-storage-is-bounded.md)
-bounds that permanent allocation to 256 version rows per editor document and
-1 GiB of distinct retained background-version Blob bytes per owner. The byte
-check is serialized under owner-scoped database authority in the same
-transaction that binds a new distinct hash. Before raw parsing can allocate its
-bounded body, the server also admits only one in-flight upload per document.
-Archived and published history remains in both counts because those identities
-and bytes remain resolvable; client UI cannot bypass or reinterpret the limits.
+For a historical raw lacking the later coordinate contract, selection means
+eligible for the fenced ADR-0169 proof, not already repaired. Attempt creation
+establishes the external raw-contract binding and, for a legacy v1 parent, the
+exact ADR-0163 v2 binding from the same server-held saved Level proof. The
+newly allocated deterministic child records the current contract in its own
+immutable operation and provenance; allocation never copies missing fields
+backward or rewrites its ancestors.
+
+[ADR-0159](adr/0159-predrawn-background-authoring-storage-is-bounded.md) and
+ADR-0165 bound permanent allocation to 256 background-version rows of every
+kind, including Generation References, and 128 generation-attempt rows per
+editor document, plus 1 GiB of distinct retained background-version Blob bytes
+per owner. The byte check is serialized under owner-scoped database authority
+in the same transaction that binds a new distinct hash. Before media parsing
+can allocate its bounded body, the server also admits only the contracted
+in-flight upload per document. Archived and published history remains in every
+applicable count because those identities and bytes remain resolvable; client
+UI cannot bypass or reinterpret the limits.
 
 The SFX runtime profile is a separate typed document projection over live-media
 recording slots. It owns labels/descriptions, sound-set gains, terrain
@@ -484,18 +667,109 @@ Two connection modes, chosen by environment in `backend/server.js`:
 
 ## Schema migration mode
 
-The backend always connects to the configured database, but schema mutation is
-controlled separately by `SCHEMA_MIGRATIONS`:
+Per
+[ADR-0174](adr/0174-database-migrations-are-append-only-checksummed-and-explicit.md)
+and
+[ADR-0186](adr/0186-legacy-migration-36-is-an-explicit-sparse-history-bridge.md),
+the inline migration registry is a contiguous append-only history. An applied
+migration's version, name, and SQL are immutable. CI compares the current
+registry with the branch base and rejects an edited, renamed, removed,
+reordered, duplicated, or gapped historical entry.
+
+`schema_migrations` stores the version, name, and normalized
+version/name/SQL SHA-256 for every newly applied migration. Migration 37 adds
+that identity contract. The former deployed ledger contains numeric-only rows
+1–27 and 36; the pre-sealing planner recognizes only numeric-only migration 36
+as that exact historical sparse row, applies 28–35, and then seals the complete
+1–36 history against the pinned canonical registry. Migration 38 makes the
+identity columns non-null, closing the one-time bridge at the database
+boundary. Runtime planning rejects a checksum/name mismatch, partial identity,
+an unexpected version, every other non-prefix history, and any identified
+version 36 after a gap; it never treats altered contents under a recorded
+number as pending work.
+
+The backend always connects to the configured database, but ordinary startup
+and explicit schema mutation are separate:
 
 | Value | Behavior | Intended use |
 | --- | --- | --- |
-| `check` | Default. Read-only verification that `schema_migrations` contains every migration version and that required runtime relations actually exist; missing schema returns `503 schema_migration_required` on persistence endpoints. | Local backend runs against an already-prepared DB without applying DDL by surprise. |
-| `auto` | Applies missing inline migrations under the Postgres advisory lock, idempotently repairs required runtime relations from their governing migration when numeric history and actual schema disagree, then verifies them before serving persistence endpoints. | Kubernetes prod/test-slot backends and smoke tests, where the environment intentionally owns schema rollout. |
+| `check` | Default. Read-only verification of complete checksummed history, required runtime relations, and required schema topology. Missing migrations or topology return `503 schema_migration_required`; changed or malformed recorded migration identity returns `503 schema_migration_history_invalid`. | Every normal local backend start and any process which must not apply DDL. |
+| `auto` | Plans from immutable history, applies only missing migrations transactionally under the Postgres advisory lock, repairs allowed idempotent schema contracts, seals eligible legacy history, and verifies postconditions before serving persistence endpoints. | Kubernetes deployment and disposable smoke/test-slot backends which explicitly own schema rollout. |
 | `off` | Skips schema readiness entirely; queries run against whatever schema exists and fail naturally if it is incompatible. | Debugging unusual DB states. |
 
-The Helm deployment sets `SCHEMA_MIGRATIONS=auto` explicitly. Local backend
-startup defaults to `check`; set `SCHEMA_MIGRATIONS=auto` only when you
-intentionally want that run to advance the local database schema.
+Normal local backend startup always defaults to `check`. To advance the shared
+development database, run the dedicated one-shot command:
+
+```sh
+cd backend
+npm run schema:migrate
+```
+
+It resolves the same shared development Postgres identity as the Vite-launched
+backend when `DATABASE_URL` is absent, applies and verifies schema only, prints
+the sanitized target mode/host/database/user before any DDL, and exits without
+opening an HTTP listener or seeding content. Its result names the exact
+applied/skipped/pending migration versions, each completed relation/contract
+repair step, and legacy identity rows sealed. If a later migration, repair, or postcondition
+fails after earlier commits, the failure names those completed mutations and
+the exact failing migration or verification phase. Passwords are never printed.
+The Helm deployment sets
+`SCHEMA_MIGRATIONS=auto` explicitly; disposable smoke and test-slot processes do
+the same.
+
+Readiness treats the migration ledger as history, not proof of operational
+schema. It also inspects required relations and semantic postconditions. For
+the ledger itself, migration 38's required boundary is two `text NOT NULL`
+identity columns and exactly one local, validated
+`schema_migrations_identity_check` with the canonical name-length and SHA-256
+definition; nullable columns, a dropped/weakened/unvalidated check, or competing
+identity checks keep the database unready. For
+working-copy revisions, the required state is the complete
+`level_working_copy_revision_reasons` catalog, no stale reason `CHECK`, and
+exactly one validated `level_working_copy_revisions.reason` foreign key to that
+catalog with restricted update/delete behavior. `auto` may replay the
+append-only idempotent repair under the lock; `check` only reports the mismatch.
+
+For attempt-owned cyan profiles, migrations 40 and 41 together own the required
+state. Migration 40 adds the exact three nullable typed profile columns, the
+all-null-or-all-populated check, the validated restrictive composite foreign
+key from the profile's warped-version/document identity to
+`predrawn_background_versions`, and the exact generation-attempt event action
+set including `move-highlight-profile-updated`. Its intended check-constraint
+name exceeded PostgreSQL's 63-byte identifier limit, so PostgreSQL stored a
+truncated catalog name.
+
+The already-applied migration 40 remains immutable. Append-only migration 41
+drops that truncated check and installs the same definition under the stable
+bounded identifier
+`predrawn_generation_attempts_move_highlight_bundle_check`. The populated
+branch explicitly requires all three fields non-null so PostgreSQL's nullable
+`CHECK` semantics cannot admit a partial bundle. Readiness requires that exact
+post-41 name and definition and rejects missing, weakened, renamed, duplicated,
+or competing profile topology.
+
+Append-only migration 42 registers
+`generation-attempt-occlusion-discard` as the distinct retained working-copy
+revision reason used when a mask retry falls the working Level back to its
+warped parent. It also extends the closed background-version event action
+contract with `attempt-detached`, so a canonical-retained immutable mask has an
+attributable audit event even though its media row is not archived. Migration
+42 is a new identity; migrations 37, 40, and 41 remain byte-for-byte immutable.
+
+Per
+[ADR-0187](adr/0187-required-schema-repair-installs-final-state.md),
+append-only migration 43 is the complete current-state repair for
+`predrawn_generation_attempts` and
+`predrawn_generation_attempt_events`. Missing generation-attempt relations and
+drifted retry or move-highlight contracts repair through migration 43's final
+topology. Readiness does not replay transitional migrations 31–41, whose
+superseded intermediate constraints can reject valid retained
+`pipeline-source` attempts or `move-highlight-profile-updated` events. Normal
+upgrade execution still applies every historical migration in order.
+
+Startup output is derived from the completed plan. It names each migration that
+actually committed, each already-applied migration skipped, and anything still
+pending. Merely entering `auto` mode is never reported as “migrations applied.”
 
 ## Failure behavior
 
@@ -506,11 +780,19 @@ document, the live asset catalog, stable
 `/assets/<slot>` routes, and catalog-backed thumbnails fail closed when Postgres,
 the required critical catalog, or Blob Storage is unavailable. Persistence
 endpoints likewise return **503** with a logged error when the database is
-unavailable or behind the required schema. In `check` mode, a behind/missing
-schema is reported as `schema_migration_required`; in `auto` mode,
+unavailable or behind the required schema. A missing migration, relation, or
+required topology is reported as `schema_migration_required`; changed,
+unexpected, partial, or otherwise malformed recorded migration identity is
+reported as `schema_migration_history_invalid`. In `auto` mode,
 `ensureDbReady()` retries migrations on the next request (self-healing after a
-transient outage). Startup never blocks on the DB, but Kubernetes readiness keeps
-an unready process out of service.
+transient outage). Startup never blocks on the DB, but Kubernetes readiness
+keeps an unready process out of service.
+
+A PostgreSQL constraint failure during a Board Art storage mutation is not a
+storage outage. The backend reports
+`background_version_schema_contract_violation` with the operation, PostgreSQL
+error code, table, and constraint identity, while reserving
+`background_version_store_unavailable` for actual unclassified store failures.
 
 ## Backups & break-glass
 
@@ -561,14 +843,32 @@ second owner-facing content environment or a release authority.
 
 ## CI
 
+`npm run schema:check-history` extracts the migration registry and compares it
+with the pull request base. CI fails closed if the base cannot be inspected or
+if an existing migration changed or disappeared; new migrations may only append
+to the contiguous sequence.
+
 The backend smoke-test (`backend/smoke-test.js`, run by `npm test`) exercises the
 Postgres-backed endpoints. It uses `DATABASE_URL` if provided, otherwise
 self-provisions a throwaway local Postgres from system binaries (present on the
 GitHub-hosted runners), so CI needs no database service container or workflow
 change. Hosts without Postgres binaries (e.g. the musl session pod) must supply
-`DATABASE_URL` or rely on the test slot. The smoke-test sets
-`SCHEMA_MIGRATIONS=auto` and resets the document tables at the start of each run,
-so it is idempotent against the intended throwaway database.
+`DATABASE_URL` or rely on the test slot.
+
+The smoke database begins with the exact former ledger: immutable migrations
+1–27 and 36 have executed and only those versions are recorded in the old
+numeric-only format. The production auto-mode runner must skip 1–27 and 36,
+apply 28–35 and 37–43, seal the completed historical rows 1–36, enforce
+non-null identity, report that exact plan, and pass its live relation and
+constraint-topology postconditions. The same upgraded database then receives
+the real authenticated generation-attempt archive request; the test verifies
+the archived slot and its retained `generation-attempt-archive` working-copy
+revision. Separate retained-data scenarios prove migration 43 can repair around
+an existing reusable pipeline-source attempt and an existing
+`move-highlight-profile-updated` event. A second backend starts in check mode
+against the upgraded database and must report no applied or pending migration.
+The database is throwaway/reset, so this remains isolated from production
+content.
 
 ## Boundaries
 

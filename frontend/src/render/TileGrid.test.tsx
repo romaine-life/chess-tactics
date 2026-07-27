@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import type { CSSProperties } from 'react';
 import { TileGrid } from './TileGrid';
 
 describe('TileGrid', () => {
@@ -29,5 +30,26 @@ describe('TileGrid', () => {
     expect(markup).toContain('class="tileset-generated-board-overlay-cell"');
     expect(markup).toContain('z-index:9995');
     expect(markup).toContain('class="selection-proof"');
+  });
+
+  it('propagates visual-only cell variables to both paint layers', () => {
+    const markup = renderToStaticMarkup(
+      <TileGrid
+        cells={[{
+          key: 'fitted-cell',
+          x: 0,
+          y: 0,
+          style: {
+            '--predrawn-visual-footprint-clip':
+              'polygon(50% 10%, 90% 50%, 50% 90%, 10% 50%)',
+          } as CSSProperties,
+        }]}
+        renderCellOverlay={() => <span className="selection-proof" />}
+      />,
+    );
+
+    expect(markup.match(/--predrawn-visual-footprint-clip/g)).toHaveLength(2);
+    expect(markup).toContain('class="tileset-generated-board-tile"');
+    expect(markup).toContain('class="tileset-generated-board-overlay-cell"');
   });
 });

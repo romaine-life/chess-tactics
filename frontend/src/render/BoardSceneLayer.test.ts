@@ -64,4 +64,24 @@ describe('BoardSceneLayer pre-drawn mode', () => {
 
     expect(boardSceneOcclusionMasks(board)).toEqual([]);
   });
+
+  it('does not apply persisted occlusion while a remembered AI surface is dormant', () => {
+    const board: EditorBoard = {
+      ...sourceLessBoard(),
+      backgroundMode: 'legacy',
+      surface: {
+        kind: 'predrawn',
+        schemaVersion: 2,
+        backgroundVersionId: '11111111-1111-4111-8111-111111111111',
+        occlusionVersionId: '22222222-2222-4222-8222-222222222222',
+        frameWidth: 1200,
+        frameHeight: 800,
+        worldBounds: { minX: -20, minY: -30, width: 600, height: 400 },
+      },
+    };
+
+    expect(boardSceneOcclusionMasks(board)).toEqual([]);
+    expect(boardSceneOcclusionMasks(board, { predrawnBackgroundActive: true }))
+      .toEqual([expect.objectContaining({ layer: 'scene' })]);
+  });
 });

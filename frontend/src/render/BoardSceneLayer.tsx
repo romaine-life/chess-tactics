@@ -27,11 +27,16 @@ export function boardSceneOcclusionMasks(
     tileHidden?: boolean;
   } = {},
 ): BoardDrawOp[] {
+  const persistedPredrawnBackgroundActive = isPredrawnBackgroundActive(board);
   if (
     !predrawnOcclusion
     || tileHidden
     || !isPredrawnBackgroundActive(board, { predrawnBackgroundActive })
-    || (board.surface && isVersionedPredrawnBoardSurface(board.surface))
+    || (
+      persistedPredrawnBackgroundActive
+      && board.surface
+      && isVersionedPredrawnBoardSurface(board.surface)
+    )
   ) return [];
   return predrawnOcclusionMaskOps(board);
 }
@@ -105,10 +110,12 @@ export function BoardSceneLayer({
     [board, hidden?.tile, predrawnBackgroundActive, predrawnOcclusion],
   );
   const occlusionDepthMap = useMemo(
-    () => predrawnOcclusion && !hidden?.tile
+    () => predrawnOcclusion
+      && !hidden?.tile
+      && isPredrawnBackgroundActive(board)
       ? predrawnOcclusionDepthMapForSurface(board.surface)
       : undefined,
-    [board.surface, hidden?.tile, predrawnOcclusion],
+    [board, hidden?.tile, predrawnOcclusion],
   );
 
   return (

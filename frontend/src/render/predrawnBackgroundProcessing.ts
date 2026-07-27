@@ -7,6 +7,7 @@ import {
   predrawnOcclusionMaskOps,
   decodePredrawnOcclusionDepth,
   encodePredrawnOcclusionDepth,
+  normalizePredrawnBoardRegistration,
   rasterizePredrawnBoardPixels,
   serializePredrawnBoardPreviewRegistration,
   type PredrawnBoardCornerRegistration,
@@ -23,6 +24,10 @@ export interface GeneratedPredrawnRaster {
   frameHeight: number;
   worldBounds: PredrawnBoardWorldBounds;
   operation: Record<string, unknown>;
+}
+
+export interface GeneratedWarpedPredrawnRaster extends GeneratedPredrawnRaster {
+  processor: 'shared-predrawn-rasterizer-v1' | 'shared-predrawn-rasterizer-v2';
 }
 
 export interface PredrawnOcclusionDepthHeatmap {
@@ -49,6 +54,27 @@ export const PREDRAWN_PNG_ENCODER = 'png-rgba8-filter0-stored-deflate-v1';
 export const PREDRAWN_MAX_FRAME_DIMENSION = 8192;
 export const PREDRAWN_MAX_RASTER_PIXELS = 8 * 1024 * 1024;
 export const PREDRAWN_MAX_PNG_BYTES = 32 * 1024 * 1024;
+
+export function predrawnWarpAlgorithmForRegistration(
+  registration: PredrawnBoardCornerRegistration,
+): {
+  operationKind: 'grid-warp-v1' | 'grid-warp-v2';
+  processor: 'shared-predrawn-rasterizer-v1' | 'shared-predrawn-rasterizer-v2';
+} {
+  const canonicalRegistration = normalizePredrawnBoardRegistration(registration);
+  if (!canonicalRegistration) {
+    throw new Error('The saved grid is not a canonical background registration.');
+  }
+  return canonicalRegistration.meshOverrides?.length
+    ? {
+        operationKind: 'grid-warp-v2',
+        processor: 'shared-predrawn-rasterizer-v2',
+      }
+    : {
+        operationKind: 'grid-warp-v1',
+        processor: 'shared-predrawn-rasterizer-v1',
+      };
+}
 
 const PNG_SIGNATURE = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
 const PNG_CRC_TABLE = (() => {
@@ -370,15 +396,19 @@ export async function generateWarpedPredrawnRaster(input: {
   registration: PredrawnBoardCornerRegistration;
   cells: readonly { x: number; y: number }[];
   environmentGeometrySha256: string;
-}): Promise<GeneratedPredrawnRaster> {
+}): Promise<GeneratedWarpedPredrawnRaster> {
   const image = await loadDecodedImage(input.src);
   if (image.naturalWidth < 1 || image.naturalHeight < 1) {
     throw new Error('The source background has no decodable pixels.');
   }
+  const registration = normalizePredrawnBoardRegistration(input.registration);
+  if (!registration) {
+    throw new Error('The saved grid is not a canonical background registration.');
+  }
   const transform = predrawnBoardRasterTransform({
     frameWidth: image.naturalWidth,
     frameHeight: image.naturalHeight,
-  }, input.cells, input.registration);
+  }, input.cells, registration);
   if (!transform) throw new Error('The saved grid does not define a valid background transform.');
   const bounds = predrawnBoardRasterBounds(transform);
   if (!bounds) throw new Error('The transformed background has no valid output bounds.');
@@ -390,10 +420,12 @@ export async function generateWarpedPredrawnRaster(input: {
     height: source.height,
     data: source.data,
   }, transform, viewport);
+  const { operationKind, processor } = predrawnWarpAlgorithmForRegistration(registration);
   return {
     blob: deterministicPngBlob(viewport.pixelWidth, viewport.pixelHeight, output),
     frameWidth: viewport.pixelWidth,
     frameHeight: viewport.pixelHeight,
+    processor,
     worldBounds: {
       minX: viewport.minX,
       minY: viewport.minY,
@@ -401,8 +433,8 @@ export async function generateWarpedPredrawnRaster(input: {
       height: viewport.height,
     },
     operation: {
-      kind: 'grid-warp-v1',
-      registration: serializePredrawnBoardPreviewRegistration(input.registration),
+      kind: operationKind,
+      registration: serializePredrawnBoardPreviewRegistration(registration),
       sourceWidth: source.width,
       sourceHeight: source.height,
       rasterScale: 1,

@@ -36,6 +36,16 @@ function registrationFromVersion(
   return typeof serialized === 'string' ? parsePredrawnBoardRegistration(serialized) : undefined;
 }
 
+/**
+ * Read only the registration committed by this exact version. Revision workflows must use this
+ * instead of searching a raw source's children because one raw source may seed several attempts.
+ */
+export function predrawnDirectRegistrationForBackground(
+  version: PredrawnBackgroundVersion | undefined,
+): PredrawnBoardCornerRegistration | undefined {
+  return registrationFromVersion(version);
+}
+
 export function predrawnRegistrationForBackground(
   version: PredrawnBackgroundVersion,
   versionsNewestFirst: readonly PredrawnBackgroundVersion[],

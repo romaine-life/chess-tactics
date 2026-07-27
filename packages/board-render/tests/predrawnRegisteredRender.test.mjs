@@ -6,6 +6,7 @@ const {
   boardBounds,
   boardDrawOps,
   boardSocialFramingBounds,
+  isPredrawnBackgroundActive,
   predrawnBoardFramePolygon,
   predrawnBoardHomography,
   predrawnBoardPlacement,
@@ -197,4 +198,32 @@ test('versioned background pixels use their immutable content route and baked wo
     dh: 700,
     z: -100000,
   }]);
+});
+
+test('explicit legacy mode keeps an immutable AI selection dormant', () => {
+  const surface = {
+    kind: 'predrawn',
+    schemaVersion: 2,
+    backgroundVersionId: '11111111-1111-4111-8111-111111111111',
+    occlusionVersionId: '22222222-2222-4222-8222-222222222222',
+    frameWidth: 1240,
+    frameHeight: 700,
+    worldBounds: { minX: -620, minY: -350, width: 1240, height: 700 },
+  };
+  const board = { ...blankBoard(surface), backgroundMode: 'legacy' };
+
+  assert.equal(isPredrawnBackgroundActive(board), false);
+  assert.equal(isPredrawnBackgroundActive(board, { predrawnBackgroundActive: true }), true);
+  assert.deepEqual(boardDrawOps(board), []);
+  assert.equal(boardDrawOps(board, { predrawnBackgroundActive: true }).some(
+    (op) => op.src.includes(surface.backgroundVersionId),
+  ), false);
+});
+
+test('explicit AI mode without a usable surface remains AI and renders no legacy fallback', () => {
+  const board = { ...blankBoard(undefined), backgroundMode: 'ai' };
+
+  assert.equal(boardRender.boardBackgroundMode(board), 'ai');
+  assert.equal(isPredrawnBackgroundActive(board), true);
+  assert.deepEqual(boardDrawOps(board), []);
 });

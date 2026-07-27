@@ -1,4 +1,10 @@
-export type PredrawnPoint = readonly [x: number, y: number];
+import {
+  homographyForPredrawnPoints,
+  projectPredrawnPoint,
+  type PredrawnPoint,
+} from './predrawnProjective';
+
+export type { PredrawnPoint } from './predrawnProjective';
 
 export interface PredrawnBoundaryReference {
   north: PredrawnPoint;
@@ -7,10 +13,20 @@ export interface PredrawnBoundaryReference {
   west: PredrawnPoint;
 }
 
+export interface PredrawnMeshNodeOverride {
+  /** Zero-based interior shared grid-intersection column. */
+  column: number;
+  /** Zero-based interior shared grid-intersection row. */
+  row: number;
+  /** Exact point selected in intrinsic source-image pixels. */
+  point: PredrawnPoint;
+}
+
 /**
  * One whole-plate registration. Corners are source-image pixels in north/east/south/west
- * order. Optional monotonic guides describe the continuous row/column refit, and the boundary
- * reference remains review metadata rather than a second rendering transform.
+ * order. Optional monotonic guides describe the continuous row/column refit. Sparse mesh
+ * overrides refine shared intersections without creating independent cell corners, and the
+ * boundary reference remains review metadata rather than a second rendering transform.
  */
 export interface PredrawnBoardCornerRegistration {
   sourceWidth: number;
@@ -24,11 +40,15 @@ export interface PredrawnBoardCornerRegistration {
   columnGuides?: readonly number[];
   rowGuides?: readonly number[];
   boundaryReference?: PredrawnBoundaryReference;
+  meshOverrides?: readonly PredrawnMeshNodeOverride[];
 }
 
 const MAX_GUIDES_PER_AXIS = 65;
 export const PREDRAWN_GUIDE_EPSILON = 1e-6;
+export const PREDRAWN_MESH_JACOBIAN_EPSILON = 1e-12;
+export const MAX_PREDRAWN_MESH_OVERRIDES = 1024;
 const MAX_SOURCE_DIMENSION = 16384;
+const UNIT_CORNERS: readonly PredrawnPoint[] = [[0, 0], [1, 0], [1, 1], [0, 1]];
 
 function validPredrawnGridCount(value: number | undefined): value is number {
   return Number.isSafeInteger(value) && value! >= 1 && value! < MAX_GUIDES_PER_AXIS;
@@ -46,6 +66,251 @@ function formatRegistrationNumber(value: number): string {
 
 function formatGuideNumber(value: number): string {
   return String(Number(value.toFixed(6)));
+}
+
+function canonicalRegistrationNumber(value: number): number {
+  return Number(formatRegistrationNumber(value));
+}
+
+function canonicalGuideNumber(value: number): number {
+  return Number(formatGuideNumber(value));
+}
+
+function meshNodeKey(column: number, row: number): string {
+  return `${column},${row}`;
+}
+
+function sortedMeshOverrides(
+  overrides: readonly PredrawnMeshNodeOverride[],
+): PredrawnMeshNodeOverride[] {
+  return [...overrides]
+    .map(({ column, row, point }) => ({
+      column,
+      row,
+      point: [
+        canonicalRegistrationNumber(point[0]),
+        canonicalRegistrationNumber(point[1]),
+      ] as const,
+    }))
+    .sort((left, right) => left.row - right.row || left.column - right.column);
+}
+
+function coarseSourceMeshNode(
+  registration: PredrawnBoardCornerRegistration,
+  column: number,
+  row: number,
+): PredrawnPoint | undefined {
+  const columns = registration.gridColumns;
+  const rows = registration.gridRows;
+  if (
+    !validPredrawnGridCount(columns)
+    || !validPredrawnGridCount(rows)
+    || !validPredrawnGuides(registration.columnGuides)
+    || !validPredrawnGuides(registration.rowGuides)
+    || registration.columnGuides.length !== columns + 1
+    || registration.rowGuides.length !== rows + 1
+    || !Number.isSafeInteger(column)
+    || !Number.isSafeInteger(row)
+    || column < 0
+    || column > columns
+    || row < 0
+    || row > rows
+  ) return undefined;
+  const unitToSource = homographyForPredrawnPoints(
+    UNIT_CORNERS,
+    [registration.north, registration.east, registration.south, registration.west],
+  );
+  return unitToSource
+    ? projectPredrawnPoint(unitToSource, [
+        registration.columnGuides[column],
+        registration.rowGuides[row],
+      ])
+    : undefined;
+}
+
+function withoutCanonicalCoarseNodeNoops(
+  registration: PredrawnBoardCornerRegistration,
+): PredrawnMeshNodeOverride[] {
+  return (registration.meshOverrides ?? []).filter((override) => {
+    const coarsePoint = coarseSourceMeshNode(registration, override.column, override.row);
+    return !coarsePoint
+      || canonicalRegistrationNumber(coarsePoint[0]) !== override.point[0]
+      || canonicalRegistrationNumber(coarsePoint[1]) !== override.point[1];
+  });
+}
+
+function isBoundaryMeshNode(
+  column: number,
+  row: number,
+  columns: number,
+  rows: number,
+): boolean {
+  return column === 0 || column === columns || row === 0 || row === rows;
+}
+
+function subtractPoints(left: PredrawnPoint, right: PredrawnPoint): PredrawnPoint {
+  return [left[0] - right[0], left[1] - right[1]];
+}
+
+function crossPoints(left: PredrawnPoint, right: PredrawnPoint): number {
+  return left[0] * right[1] - left[1] * right[0];
+}
+
+function cellMeshJacobians(
+  northWest: PredrawnPoint,
+  northEast: PredrawnPoint,
+  southEast: PredrawnPoint,
+  southWest: PredrawnPoint,
+): readonly number[] {
+  const north = subtractPoints(northEast, northWest);
+  const south = subtractPoints(southEast, southWest);
+  const west = subtractPoints(southWest, northWest);
+  const east = subtractPoints(southEast, northEast);
+  return [
+    crossPoints(north, west),
+    crossPoints(north, east),
+    crossPoints(south, west),
+    crossPoints(south, east),
+  ];
+}
+
+function meshUnitNodes(
+  registration: PredrawnBoardCornerRegistration,
+): readonly PredrawnPoint[] | undefined {
+  const columns = registration.gridColumns;
+  const rows = registration.gridRows;
+  if (
+    !validPredrawnGridCount(columns)
+    || !validPredrawnGridCount(rows)
+    || !validPredrawnGuides(registration.columnGuides)
+    || !validPredrawnGuides(registration.rowGuides)
+    || registration.columnGuides.length !== columns + 1
+    || registration.rowGuides.length !== rows + 1
+  ) return undefined;
+  const sourceToUnit = homographyForPredrawnPoints(
+    [registration.north, registration.east, registration.south, registration.west],
+    UNIT_CORNERS,
+  );
+  if (!sourceToUnit) return undefined;
+  const nodes = Array.from(
+    { length: (columns + 1) * (rows + 1) },
+    (_, index): PredrawnPoint => [
+      registration.columnGuides![index % (columns + 1)],
+      registration.rowGuides![Math.floor(index / (columns + 1))],
+    ],
+  );
+  for (const override of registration.meshOverrides ?? []) {
+    const projected = projectPredrawnPoint(sourceToUnit, override.point);
+    if (!projected) return undefined;
+    nodes[override.row * (columns + 1) + override.column] = projected;
+  }
+  return nodes;
+}
+
+/**
+ * Explain why a sparse shared-vertex mesh cannot be applied.
+ *
+ * Validation covers the complete mesh, not only the edited node, so a coarse corner/guide
+ * adjustment cannot silently fold a cell that happens not to be selected in the UI.
+ */
+export function predrawnMeshValidationIssue(
+  registration: PredrawnBoardCornerRegistration,
+): string | undefined {
+  const overrides = registration.meshOverrides;
+  if (overrides === undefined) return undefined;
+  if (!Array.isArray(overrides)) return 'mesh overrides must be an array';
+  if (overrides.length === 0) return undefined;
+  const columns = registration.gridColumns;
+  const rows = registration.gridRows;
+  if (
+    !Number.isSafeInteger(registration.sourceWidth)
+    || !Number.isSafeInteger(registration.sourceHeight)
+    || registration.sourceWidth < 1
+    || registration.sourceHeight < 1
+    || registration.sourceWidth > MAX_SOURCE_DIMENSION
+    || registration.sourceHeight > MAX_SOURCE_DIMENSION
+  ) return 'mesh registration source dimensions are invalid';
+  if (
+    [registration.north, registration.east, registration.south, registration.west].some(
+      (point) => (
+        !Array.isArray(point)
+        || point.length !== 2
+        || !Number.isFinite(point[0])
+        || !Number.isFinite(point[1])
+        || point[0] < 0
+        || point[0] > registration.sourceWidth
+        || point[1] < 0
+        || point[1] > registration.sourceHeight
+      ),
+    )
+  ) return 'mesh registration corners lie outside the source image';
+  if (
+    !validPredrawnGridCount(columns)
+    || !validPredrawnGridCount(rows)
+    || !validPredrawnGuides(registration.columnGuides)
+    || !validPredrawnGuides(registration.rowGuides)
+    || registration.columnGuides.length !== columns + 1
+    || registration.rowGuides.length !== rows + 1
+  ) return 'mesh overrides require exact grid dimensions and matching valid guides';
+  if (
+    overrides.length > MAX_PREDRAWN_MESH_OVERRIDES
+    || overrides.length > Math.max(0, (columns - 1) * (rows - 1))
+  ) {
+    return `mesh override count exceeds the ${MAX_PREDRAWN_MESH_OVERRIDES}-node interior limit`;
+  }
+
+  const keys = new Set<string>();
+  for (const override of overrides) {
+    if (!override || typeof override !== 'object') return 'mesh override must be an object';
+    if (
+      !Number.isSafeInteger(override.column)
+      || !Number.isSafeInteger(override.row)
+      || override.column < 0
+      || override.column > columns
+      || override.row < 0
+      || override.row > rows
+    ) return 'mesh override address lies outside the registration grid';
+    if (isBoundaryMeshNode(override.column, override.row, columns, rows)) {
+      return 'mesh overrides must address interior intersections';
+    }
+    if (
+      !Array.isArray(override.point)
+      || override.point.length !== 2
+      || !Number.isFinite(override.point[0])
+      || !Number.isFinite(override.point[1])
+      || override.point[0] < 0
+      || override.point[0] > registration.sourceWidth
+      || override.point[1] < 0
+      || override.point[1] > registration.sourceHeight
+    ) return 'mesh override point lies outside the source image';
+    const key = meshNodeKey(override.column, override.row);
+    if (keys.has(key)) return 'mesh override addresses must be unique';
+    keys.add(key);
+  }
+
+  const nodes = meshUnitNodes(registration);
+  if (!nodes) return 'mesh overrides cannot be projected into the registered board plane';
+  const stride = columns + 1;
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      const northWest = nodes[row * stride + column];
+      const northEast = nodes[row * stride + column + 1];
+      const southWest = nodes[(row + 1) * stride + column];
+      const southEast = nodes[(row + 1) * stride + column + 1];
+      if (cellMeshJacobians(northWest, northEast, southEast, southWest).some(
+        (jacobian) => !Number.isFinite(jacobian) || jacobian <= PREDRAWN_MESH_JACOBIAN_EPSILON,
+      )) {
+        return `mesh override folds or degenerates cell ${column},${row}`;
+      }
+    }
+  }
+  return undefined;
+}
+
+export function validPredrawnMeshOverrides(
+  registration: PredrawnBoardCornerRegistration,
+): boolean {
+  return predrawnMeshValidationIssue(registration) === undefined;
 }
 
 export function uniformPredrawnGuides(cellCount: number): number[] {
@@ -142,6 +407,81 @@ export function serializePredrawnBoardPreviewRegistration(
   registration: PredrawnBoardCornerRegistration,
 ): string {
   const base = serializeCornerBase(registration);
+  if (registration.meshOverrides?.length) {
+    if (
+      !validPredrawnGridCount(registration.gridColumns)
+      || !validPredrawnGridCount(registration.gridRows)
+      || !validPredrawnGuides(registration.columnGuides)
+      || !validPredrawnGuides(registration.rowGuides)
+      || registration.columnGuides.length !== registration.gridColumns + 1
+      || registration.rowGuides.length !== registration.gridRows + 1
+    ) throw new Error('mesh overrides require exact grid dimensions and matching valid guides');
+    const canonicalCorners = parseCornerBase(base);
+    if (!canonicalCorners) {
+      throw new Error('mesh registration corners cannot be canonically serialized');
+    }
+    const columnGuides = registration.columnGuides.map(canonicalGuideNumber);
+    const rowGuides = registration.rowGuides.map(canonicalGuideNumber);
+    if (
+      !validPredrawnGuides(columnGuides)
+      || !validPredrawnGuides(rowGuides)
+      || columnGuides.length !== registration.gridColumns + 1
+      || rowGuides.length !== registration.gridRows + 1
+    ) {
+      throw new Error('mesh overrides require canonically distinct valid guides');
+    }
+    let boundaryReference: PredrawnBoundaryReference | undefined;
+    if (registration.boundaryReference) {
+      const canonicalBoundary = parseCornerBase(
+        `${canonicalCorners.sourceWidth},${canonicalCorners.sourceHeight},${serializeBoundaryReference(registration.boundaryReference)}`,
+      );
+      if (!canonicalBoundary) {
+        throw new Error('mesh registration boundary cannot be canonically serialized');
+      }
+      boundaryReference = {
+        north: canonicalBoundary.north,
+        east: canonicalBoundary.east,
+        south: canonicalBoundary.south,
+        west: canonicalBoundary.west,
+      };
+    }
+    const canonicalRegistration: PredrawnBoardCornerRegistration = {
+      ...canonicalCorners,
+      gridColumns: registration.gridColumns,
+      gridRows: registration.gridRows,
+      columnGuides,
+      rowGuides,
+      ...(boundaryReference ? { boundaryReference } : {}),
+      meshOverrides: sortedMeshOverrides(registration.meshOverrides),
+    };
+    const issue = predrawnMeshValidationIssue(canonicalRegistration);
+    if (issue) throw new Error(issue);
+    const meshOverrides = withoutCanonicalCoarseNodeNoops(canonicalRegistration);
+    if (!meshOverrides.length) {
+      const { meshOverrides: _removed, ...coarseRegistration } = canonicalRegistration;
+      return serializePredrawnBoardPreviewRegistration(coarseRegistration);
+    }
+    const boundary = boundaryReference
+      ? serializeBoundaryReference(boundaryReference)
+      : '';
+    const mesh = meshOverrides
+      .map(({ column, row, point }) => [
+        column,
+        row,
+        formatRegistrationNumber(point[0]),
+        formatRegistrationNumber(point[1]),
+      ].join(','))
+      .join('|');
+    return [
+      'v5',
+      serializeCornerBase(canonicalRegistration),
+      `${canonicalRegistration.gridColumns},${canonicalRegistration.gridRows}`,
+      columnGuides.map(formatGuideNumber).join(','),
+      rowGuides.map(formatGuideNumber).join(','),
+      boundary,
+      mesh,
+    ].join(';');
+  }
   if (!validPredrawnGuides(registration.columnGuides) || !validPredrawnGuides(registration.rowGuides)) {
     return base;
   }
@@ -204,8 +544,46 @@ function parseCornerBase(raw: string): PredrawnBoardCornerRegistration | undefin
   return { sourceWidth, sourceHeight, north, east, south, west };
 }
 
-/** Parse any supported legacy/v2/v3/v4 registration; malformed values fail closed. */
+/** Parse any supported legacy/v2/v3/v4/v5 registration; malformed values fail closed. */
 export function parsePredrawnBoardRegistration(raw: string): PredrawnBoardCornerRegistration | undefined {
+  if (raw.startsWith('v5;')) {
+    const parts = raw.split(';');
+    if (parts.length !== 7 || !parts[6]) return undefined;
+    const registration = parsePredrawnBoardRegistration(['v3', ...parts.slice(1, 5)].join(';'));
+    if (!registration) return undefined;
+    let boundaryReference: PredrawnBoundaryReference | undefined;
+    if (parts[5]) {
+      const referenceRegistration = parseCornerBase(
+        `${registration.sourceWidth},${registration.sourceHeight},${parts[5]}`,
+      );
+      if (!referenceRegistration) return undefined;
+      boundaryReference = {
+        north: referenceRegistration.north,
+        east: referenceRegistration.east,
+        south: referenceRegistration.south,
+        west: referenceRegistration.west,
+      };
+    }
+    const meshOverrides: PredrawnMeshNodeOverride[] = [];
+    for (const rawOverride of parts[6].split('|')) {
+      const values = rawOverride.split(',').map(Number);
+      if (values.length !== 4 || values.some((value) => !Number.isFinite(value))) return undefined;
+      const [column, row, x, y] = values;
+      meshOverrides.push({ column, row, point: [x, y] });
+    }
+    const candidate: PredrawnBoardCornerRegistration = {
+      ...registration,
+      ...(boundaryReference ? { boundaryReference } : {}),
+      meshOverrides: sortedMeshOverrides(meshOverrides),
+    };
+    if (!validPredrawnMeshOverrides(candidate)) return undefined;
+    const canonicalOverrides = withoutCanonicalCoarseNodeNoops(candidate);
+    if (!canonicalOverrides.length) {
+      const { meshOverrides: _removed, ...coarseRegistration } = candidate;
+      return coarseRegistration;
+    }
+    return { ...candidate, meshOverrides: canonicalOverrides };
+  }
   if (raw.startsWith('v4;')) {
     const parts = raw.split(';');
     if (parts.length !== 6) return undefined;

@@ -1,0 +1,276 @@
+.predrawn-occlusion-editor-toolbar {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.predrawn-occlusion-editor-tools,
+.predrawn-occlusion-editor-history,
+.predrawn-occlusion-editor-zoom,
+.predrawn-occlusion-editor-candidates,
+.predrawn-occlusion-editor-candidate-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.predrawn-occlusion-editor-tools {
+  flex: 1 1 620px;
+}
+
+.predrawn-occlusion-editor-history,
+.predrawn-occlusion-editor-zoom {
+  flex: 0 0 auto;
+}
+
+.predrawn-occlusion-editor-brush-size {
+  align-items: center;
+  color: var(--skirmish-muted);
+  display: grid;
+  font-size: var(--ds-text-2xs);
+  gap: 5px;
+  grid-template-columns: auto minmax(88px, 150px) 42px;
+  margin-inline-start: 4px;
+}
+
+.predrawn-occlusion-editor-brush-size input {
+  cursor: pointer;
+  margin: 0;
+  min-width: 0;
+}
+
+.predrawn-occlusion-editor-brush-size output,
+.predrawn-occlusion-editor-zoom output,
+.predrawn-occlusion-editor-candidates output {
+  color: #d9edf7;
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: var(--ds-text-xs);
+  text-align: center;
+}
+
+.predrawn-occlusion-editor-brush-size output {
+  min-width: 42px;
+  text-align: end;
+}
+
+.predrawn-occlusion-editor-viewport {
+  cursor: crosshair;
+  touch-action: none;
+  user-select: none;
+}
+
+.predrawn-occlusion-editor-viewport.is-panning {
+  cursor: grabbing;
+}
+
+.predrawn-occlusion-editor-stage {
+  position: absolute;
+  transform-origin: center;
+  user-select: none;
+  will-change: left, top, transform;
+}
+
+.predrawn-occlusion-editor-stage > img,
+.predrawn-occlusion-editor-mask,
+.predrawn-occlusion-editor-points {
+  display: block;
+  height: 100%;
+  inset: 0;
+  position: absolute;
+  width: 100%;
+}
+
+.predrawn-occlusion-editor-stage > img {
+  pointer-events: none;
+}
+
+.predrawn-occlusion-editor-mask,
+.predrawn-occlusion-editor-points {
+  pointer-events: none;
+}
+
+.predrawn-occlusion-editor-mask.is-accepted {
+  z-index: 1;
+}
+
+.predrawn-occlusion-editor-mask.is-candidate {
+  z-index: 2;
+}
+
+.predrawn-occlusion-editor-points {
+  overflow: visible;
+  z-index: 3;
+}
+
+.predrawn-occlusion-editor-point {
+  align-items: center;
+  background: #06121a;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px rgba(2, 7, 12, .86);
+  color: #5ff1ff;
+  display: flex;
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: 15px;
+  font-weight: 900;
+  height: 18px;
+  justify-content: center;
+  line-height: 1;
+  position: absolute;
+  transform-origin: center;
+  width: 18px;
+}
+
+.predrawn-occlusion-editor-point.is-negative {
+  color: #ff927d;
+}
+
+.predrawn-occlusion-editor-point.is-pending {
+  animation: predrawn-occlusion-point-pulse .8s ease-in-out infinite alternate;
+}
+
+@keyframes predrawn-occlusion-point-pulse {
+  from { opacity: .45; }
+  to { opacity: 1; }
+}
+
+.predrawn-occlusion-editor-viewport-status {
+  background: rgba(2, 8, 13, .92);
+  color: #d8eaff;
+  font-size: var(--ds-text-xs);
+  left: 50%;
+  max-width: calc(100% - 24px);
+  padding: 5px 8px;
+  position: absolute;
+  text-align: center;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 4;
+}
+
+.predrawn-occlusion-editor-viewport-status.is-error,
+.predrawn-occlusion-editor-error,
+.predrawn-occlusion-editor-model-status.is-error strong {
+  color: #ffaaa0;
+}
+
+.predrawn-occlusion-editor-footer {
+  align-items: end;
+}
+
+.predrawn-occlusion-editor-status {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.predrawn-occlusion-editor-status p,
+.predrawn-occlusion-editor-status small {
+  color: var(--skirmish-muted);
+  font-size: var(--ds-text-2xs);
+  line-height: 1.35;
+  margin: 0;
+}
+
+.predrawn-occlusion-editor-model-status {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-width: 0;
+}
+
+.predrawn-occlusion-editor-model-status strong {
+  color: #eafaff;
+  font-size: var(--ds-text-sm);
+}
+
+.predrawn-occlusion-editor-model-status small {
+  white-space: nowrap;
+}
+
+.predrawn-occlusion-editor-model-status progress {
+  accent-color: #26d2ec;
+  flex: 1 1 140px;
+  max-width: 280px;
+}
+
+.predrawn-occlusion-editor-model-status .le-seg-btn {
+  min-height: 30px;
+}
+
+.predrawn-occlusion-editor-actions {
+  align-items: end;
+  display: grid;
+  gap: 5px;
+  justify-items: end;
+  min-width: min(100%, 520px);
+}
+
+.predrawn-occlusion-editor-candidates output {
+  min-width: 190px;
+}
+
+.predrawn-occlusion-editor-candidate-actions {
+  justify-content: end;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .predrawn-occlusion-editor-point.is-pending {
+    animation: none;
+    opacity: .75;
+  }
+}
+
+@media (max-width: 1040px) {
+  .predrawn-occlusion-editor-toolbar {
+    align-items: stretch;
+  }
+
+  .predrawn-occlusion-editor-tools,
+  .predrawn-occlusion-editor-history,
+  .predrawn-occlusion-editor-zoom {
+    flex: 1 1 auto;
+    justify-content: start;
+  }
+
+  .predrawn-occlusion-editor-footer {
+    align-items: stretch;
+  }
+
+  .predrawn-occlusion-editor-actions {
+    justify-items: start;
+  }
+
+  .predrawn-occlusion-editor-candidate-actions {
+    justify-content: start;
+  }
+}
+
+@media (max-width: 620px) {
+  .predrawn-occlusion-editor-tools .le-seg-btn {
+    flex: 1 1 calc(50% - 5px);
+  }
+
+  .predrawn-occlusion-editor-brush-size {
+    grid-template-columns: auto minmax(80px, 1fr) 42px;
+    margin-inline-start: 0;
+    width: 100%;
+  }
+
+  .predrawn-occlusion-editor-candidates {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    width: 100%;
+  }
+
+  .predrawn-occlusion-editor-candidates output {
+    min-width: 0;
+  }
+
+  .predrawn-occlusion-editor-candidate-actions,
+  .predrawn-occlusion-editor-candidate-actions .le-seg-btn,
+  .predrawn-occlusion-editor-actions > .le-seg-btn {
+    width: 100%;
+  }
+}

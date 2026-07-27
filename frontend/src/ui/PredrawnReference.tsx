@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from 'react';
 import {
+  boardBackgroundMode,
   predrawnGenerationFrameBoardPan,
   uniqueDrawSrcs,
   validatePredrawnGenerationFrame,
@@ -7,7 +8,7 @@ import {
 } from '@chess-tactics/board-render';
 import { levelToEditorBoard } from '../core/levelBoard';
 import {
-  boardForTopSurfaceArtExport,
+  boardForPredrawnSourceArtwork,
   StudioReadOnlyBoard,
 } from '../render/StudioReadOnlyBoard';
 import {
@@ -102,9 +103,19 @@ export function predrawnReferenceFilename(levelId: string): string {
 
 /** Composite the exact saved frame's canonical canvas layers into one downloadable PNG. */
 export async function predrawnReferencePngBlob(frame: HTMLElement): Promise<Blob> {
-  const width = Math.round(frame.getBoundingClientRect().width);
-  const height = Math.round(frame.getBoundingClientRect().height);
+  const frameRect = frame.getBoundingClientRect();
+  const declaredWidth = Number(frame.dataset.captureWidth);
+  const declaredHeight = Number(frame.dataset.captureHeight);
+  const width = Number.isSafeInteger(declaredWidth) && declaredWidth > 0
+    ? declaredWidth
+    : Math.round(frameRect.width);
+  const height = Number.isSafeInteger(declaredHeight) && declaredHeight > 0
+    ? declaredHeight
+    : Math.round(frameRect.height);
   if (width < 1 || height < 1) throw new Error('Reference frame has no measurable size.');
+  const scaleX = frameRect.width / width;
+  const scaleY = frameRect.height / height;
+  if (!(scaleX > 0) || !(scaleY > 0)) throw new Error('Reference frame has no measurable display scale.');
   const output = document.createElement('canvas');
   output.width = width;
   output.height = height;
@@ -114,21 +125,24 @@ export async function predrawnReferencePngBlob(frame: HTMLElement): Promise<Blob
   context.fillStyle = getComputedStyle(frame).backgroundColor || '#0c0d11';
   context.fillRect(0, 0, width, height);
 
-  const frameRect = frame.getBoundingClientRect();
-  const layers = [...frame.querySelectorAll('canvas')].sort((left, right) => {
+  const layers = [...frame.querySelectorAll<HTMLCanvasElement | HTMLImageElement>('canvas, img')].sort((left, right) => {
     const leftZ = Number.parseInt(getComputedStyle(left).zIndex, 10) || 0;
     const rightZ = Number.parseInt(getComputedStyle(right).zIndex, 10) || 0;
     return leftZ - rightZ;
   });
-  if (layers.length === 0) throw new Error('Reference renderer produced no canvas layers.');
+  if (layers.length === 0) throw new Error('Reference renderer produced no paintable layers.');
   for (const layer of layers) {
+    if (layer instanceof HTMLImageElement && (!layer.complete || layer.naturalWidth < 1 || layer.naturalHeight < 1)) {
+      throw new Error('Reference renderer contains an image that has not finished loading.');
+    }
     const rect = layer.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0 || getComputedStyle(layer).visibility === 'hidden') continue;
     context.drawImage(
       layer,
-      Math.round(rect.left - frameRect.left),
-      Math.round(rect.top - frameRect.top),
-      Math.round(rect.width),
-      Math.round(rect.height),
+      Math.round((rect.left - frameRect.left) / scaleX),
+      Math.round((rect.top - frameRect.top) / scaleY),
+      Math.round(rect.width / scaleX),
+      Math.round(rect.height / scaleY),
     );
   }
 
@@ -192,8 +206,9 @@ export function PredrawnReference(): ReactElement {
   }, [levelId]);
 
   const board = useMemo(() => state.kind === 'ready'
-    ? boardForTopSurfaceArtExport(levelToEditorBoard(state.level))
+    ? boardForPredrawnSourceArtwork(levelToEditorBoard(state.level))
     : undefined, [state]);
+  const backgroundMode = board ? boardBackgroundMode(board) : undefined;
   const frameValidation = useMemo(
     () => board ? validatePredrawnGenerationFrame(board, board.predrawnGenerationFrame) : undefined,
     [board],
@@ -211,7 +226,10 @@ export function PredrawnReference(): ReactElement {
     setLocalCaptureReady(false);
     setTerrainPainted(false);
     setScenePainted(false);
-    const sources = uniqueDrawSrcs(board, { ambientCover: false, topSurfacesOnly: true });
+    const sources = uniqueDrawSrcs(board, {
+      ambientCover: false,
+      topSurfacesOnly: backgroundMode === 'legacy',
+    });
     if (sources.length === 0) {
       setState({ kind: 'error', message: 'This saved level has no renderable reference art.' });
       return undefined;
@@ -224,7 +242,7 @@ export function PredrawnReference(): ReactElement {
       setState({ kind: 'error', message: error instanceof Error ? error.message : String(error) });
     });
     return () => { cancelled = true; };
-  }, [board, frame]);
+  }, [backgroundMode, board, frame]);
 
   useEffect(() => {
     if (!sourcesReady || !terrainPainted || !scenePainted || !frame || !frameRef.current) return undefined;
@@ -307,7 +325,7 @@ export function PredrawnReference(): ReactElement {
         <section className="predrawn-reference-toolbar" aria-label="Pre-drawn reference controls">
           <div>
             <h1>Canonical generation reference</h1>
-            <p>Loads the exact saved 16:9 scene frame at the canonical renderer’s native 1× scale. The capture removes units, ground cover, and previously installed full-scene art while preserving visible terrain, authored scenery, and exposed Subterrain inside your crop.</p>
+            <p>Loads the exact saved 16:9 scene frame at the canonical renderer’s native 1× scale. The capture uses the saved Legacy tileset or exact AI artwork background while removing units, ground cover, grids, tactical overlays, and editor UI.</p>
           </div>
           <form action={PREDRAWN_REFERENCE_ROUTE} method="get">
             <label htmlFor="predrawn-reference-level-id">Level ID</label>
@@ -357,6 +375,7 @@ export function PredrawnReference(): ReactElement {
               data-frame-y={frame.y}
               data-frame-width={frame.width}
               data-frame-height={frame.height}
+              data-background-mode={backgroundMode}
             >
               <StudioReadOnlyBoard
                 board={board}
@@ -364,7 +383,7 @@ export function PredrawnReference(): ReactElement {
                 boardPan={boardPan}
                 ariaLabel={`${state.level.name} canonical generation-reference art export`}
                 hidden={{ tile: false, unit: true, doodad: false }}
-                topSurfacesOnly
+                topSurfacesOnly={backgroundMode === 'legacy'}
                 onTerrainFirstFrame={acknowledgeTerrain}
                 onSceneFirstFrame={acknowledgeScene}
                 onFrameError={failReferencePaint}

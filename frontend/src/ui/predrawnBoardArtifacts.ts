@@ -4,9 +4,9 @@ import type { PredrawnBackgroundVersion } from '../net/predrawnBackgroundVersion
 export type PredrawnBoardArtifactStage = 'generated' | 'warped' | 'occlusion-ready';
 
 export const PREDRAWN_BOARD_ARTIFACT_STAGE_TITLE: Readonly<Record<PredrawnBoardArtifactStage, string>> = {
-  generated: 'Codex-generated board',
+  generated: 'Raw pipeline source',
   warped: 'Warped board',
-  'occlusion-ready': 'Occlusion-ready board',
+  'occlusion-ready': 'Board with occlusion mask',
 };
 
 /**
@@ -244,15 +244,15 @@ export function predrawnBoardArtifactWorkflow(
       const sourceId = version.source_background_version_id;
       const source = sourceId ? byId.get(sourceId) : undefined;
       if (!sourceId || !source) {
-        artifact = reject(version, 'missing-parent', 'The occlusion-ready board source raster is unavailable.');
+        artifact = reject(version, 'missing-parent', 'The source raster for this board with an occlusion mask is unavailable.');
       } else if (source.status === 'archived') {
-        artifact = reject(version, 'parent-archived', 'The occlusion-ready board source raster is archived.');
+        artifact = reject(version, 'parent-archived', 'The source raster for this board with an occlusion mask is archived.');
       } else if (source.kind !== 'warped' || !sameScope(version, source)) {
-        artifact = reject(version, 'invalid-lineage', 'An occlusion-ready board must descend from a warped board in this lineage.');
+        artifact = reject(version, 'invalid-lineage', 'A board with an occlusion mask must descend from a warped board in this lineage.');
       } else {
         const sourceArtifact = resolve(source);
         if (!sourceArtifact) {
-          artifact = reject(version, 'missing-parent', 'The occlusion-ready board source is not a usable artifact.');
+          artifact = reject(version, 'missing-parent', 'The source for this board with an occlusion mask is not usable.');
         } else if (
           version.frame_width !== source.frame_width
           || version.frame_height !== source.frame_height
@@ -264,9 +264,9 @@ export function predrawnBoardArtifactWorkflow(
           if (version.parent_version_id) {
             const parent = byId.get(version.parent_version_id);
             if (!parent) {
-              artifact = reject(version, 'missing-parent', 'The prior occlusion-ready board is unavailable.');
+              artifact = reject(version, 'missing-parent', 'The prior board with an occlusion mask is unavailable.');
             } else if (parent.status === 'archived') {
-              artifact = reject(version, 'parent-archived', 'The prior occlusion-ready board is archived.');
+              artifact = reject(version, 'parent-archived', 'The prior board with an occlusion mask is archived.');
             } else if (
               parent.kind !== 'occlusion'
               || parent.source_background_version_id !== sourceId
@@ -276,7 +276,7 @@ export function predrawnBoardArtifactWorkflow(
             } else {
               const parentArtifact = resolve(parent);
               if (!parentArtifact) {
-                artifact = reject(version, 'missing-parent', 'The prior occlusion-ready board is not usable.');
+                artifact = reject(version, 'missing-parent', 'The prior board with an occlusion mask is not usable.');
               } else {
                 parentArtifactId = parentArtifact.id;
               }
@@ -340,10 +340,48 @@ export function predrawnBoardArtifactWorkflow(
 export function predrawnBoardSurfaceForArtifact(
   artifact: PredrawnBoardArtifact,
 ): VersionedPredrawnBoardSurface {
-  return {
+  const surface = {
     ...artifact.surface,
     worldBounds: { ...artifact.surface.worldBounds },
   };
+  return surface.schemaVersion === 3
+    ? {
+        ...surface,
+        moveHighlightProfile: {
+          ...surface.moveHighlightProfile,
+          cells: Object.fromEntries(
+            Object.entries(surface.moveHighlightProfile.cells).map(([key, footprint]) => [
+              key,
+              [...footprint],
+            ]),
+          ),
+        },
+      }
+    : surface;
+}
+
+export function predrawnBoardSurfacesEqual(
+  left: VersionedPredrawnBoardSurface | undefined,
+  right: VersionedPredrawnBoardSurface | undefined,
+): boolean {
+  if (!left || !right) return left === right;
+  return left.backgroundVersionId === right.backgroundVersionId
+    && left.occlusionVersionId === right.occlusionVersionId
+    && left.frameWidth === right.frameWidth
+    && left.frameHeight === right.frameHeight
+    && left.worldBounds.minX === right.worldBounds.minX
+    && left.worldBounds.minY === right.worldBounds.minY
+    && left.worldBounds.width === right.worldBounds.width
+    && left.worldBounds.height === right.worldBounds.height
+    && left.schemaVersion === right.schemaVersion
+    && (
+      left.schemaVersion === 2
+      || (
+        right.schemaVersion === 3
+        && left.moveHighlightProfile.profileSha256
+          === right.moveHighlightProfile.profileSha256
+      )
+    );
 }
 
 /** Resolve a working/canonical Level selection back to its single UI artifact. */
@@ -356,15 +394,6 @@ export function predrawnBoardArtifactForSurface(
   const artifact = artifacts.find((candidate) => candidate.id === artifactId);
   if (!artifact) return undefined;
   const expected = artifact.surface;
-  if (
-    expected.backgroundVersionId !== surface.backgroundVersionId
-    || expected.occlusionVersionId !== surface.occlusionVersionId
-    || expected.frameWidth !== surface.frameWidth
-    || expected.frameHeight !== surface.frameHeight
-    || expected.worldBounds.minX !== surface.worldBounds.minX
-    || expected.worldBounds.minY !== surface.worldBounds.minY
-    || expected.worldBounds.width !== surface.worldBounds.width
-    || expected.worldBounds.height !== surface.worldBounds.height
-  ) return undefined;
+  if (!predrawnBoardSurfacesEqual(expected, surface)) return undefined;
   return artifact;
 }

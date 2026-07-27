@@ -154,6 +154,21 @@ describe('loadBoardThumbnailImages — immutable pre-drawn availability', () => 
     });
     expect(images.size).toBe(0);
   });
+
+  it('does not require a dormant AI raster or persisted occlusion mask in legacy mode', async () => {
+    const requested: string[] = [];
+    const images = await loadBoardThumbnailImages(
+      { ...versionedThumbnailBoard(), backgroundMode: 'legacy' },
+      [],
+      async (src) => {
+        requested.push(src);
+        return decodedImage();
+      },
+    );
+
+    expect(requested).toEqual([]);
+    expect(images.size).toBe(0);
+  });
 });
 
 describe('paintBoardThumbnailOp — draw-op composition parity', () => {
@@ -874,6 +889,24 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     expect(temporaryUnit).toMatchObject({ layer: 'scene', contain: true });
     expect(temporaryCover.length).toBeGreaterThan(0);
     expect(temporaryOps.every((op) => op === temporaryUnit || coverSources.has(op.src))).toBe(true);
+  });
+
+  it('renders ordinary legacy environment while retaining an immutable AI selection', () => {
+    const board: EditorBoard = {
+      ...versionedThumbnailBoard(),
+      backgroundMode: 'legacy',
+      cells: { '0,0': TILE },
+      props: { '1,1': { propId: 'cottage' } },
+    };
+    const ops = boardDrawOps(board);
+    const legacyOps = boardDrawOps({
+      ...board,
+      surface: undefined,
+    });
+
+    expect(ops.some((op) => op.src === VERSIONED_BACKGROUND_SRC)).toBe(false);
+    expect(ops).toEqual(legacyOps);
+    expect(ops.length).toBeGreaterThan(0);
   });
 
   it('renders explicit scenic cover over a generated background', () => {

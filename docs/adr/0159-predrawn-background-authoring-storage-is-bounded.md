@@ -1,7 +1,8 @@
 ---
-status: "accepted"
+status: accepted
 date: 2026-07-20
 deciders: Nelson, Codex
+partially_superseded_by: "[ADR-0165](0165-ai-artwork-separates-sources-attempts-and-background-mode.md)"
 ---
 
 # ADR-0159: Pre-drawn background authoring storage is bounded

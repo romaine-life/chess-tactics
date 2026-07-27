@@ -164,6 +164,14 @@ test('required bounds retain the complete outer envelope around sparse playable 
   assert.ok(bounds.minY + bounds.height >= (source.cols + source.rows - 1) * TILE_STEP_Y);
 });
 
+test('required geometry measurement composes legacy guides even when the saved background mode is AI', () => {
+  const source = board();
+  assert.deepEqual(
+    predrawnGenerationRequiredBounds({ ...source, backgroundMode: 'ai' }),
+    predrawnGenerationRequiredBounds({ ...source, backgroundMode: 'legacy' }),
+  );
+});
+
 test('initial frame is explicit 16:9, validates required clearance, and detects a clipped side', () => {
   const source = board({
     decorativeApron: { top: 2, right: 3, bottom: 2, left: 3 },

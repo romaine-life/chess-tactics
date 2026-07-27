@@ -3,7 +3,7 @@ status: "accepted; seated-target and board-bounded-axis clauses superseded by AD
 date: 2026-07-23
 deciders: Nelson, Codex
 supersedes: ADR-0145 Level Editor nudge-control clause
-partially_superseded_by: "[ADR-0147](0147-floating-artwork-uses-projected-scene-pixels.md)"
+partially_superseded_by: "[ADR-0147](0147-floating-artwork-uses-projected-scene-pixels.md), [ADR-0176](0176-placed-art-and-level-artwork-are-separate-editor-destinations.md)"
 ---
 
 # ADR-0146: Scenic artwork reuses object selection and axis sliders

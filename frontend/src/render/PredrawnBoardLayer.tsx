@@ -92,7 +92,7 @@ export function storePredrawnBoardRegistration(
   if (!storage) return false;
   try {
     storage.setItem(predrawnBoardRegistrationStorageKey(src), JSON.stringify({
-      version: 4,
+      version: 5,
       registration: serializePredrawnBoardPreviewRegistration(registration),
     }));
     return true;
@@ -116,6 +116,7 @@ export function storedPredrawnBoardRegistration(
       && record.version !== 2
       && record.version !== 3
       && record.version !== 4
+      && record.version !== 5
     ) return undefined;
     if (typeof record.registration !== 'string') return undefined;
     return parsePredrawnBoardRegistration(record.registration);
@@ -284,7 +285,8 @@ export function predrawnBoardCoverPolygon(
 function isVersionedPlateSurface(
   surface: PredrawnBoardPlate['surface'],
 ): surface is VersionedPredrawnBoardSurface {
-  return 'schemaVersion' in surface && surface.schemaVersion === 2;
+  return 'schemaVersion' in surface
+    && (surface.schemaVersion === 2 || surface.schemaVersion === 3);
 }
 
 export function versionedPredrawnImageDimensionIssue(

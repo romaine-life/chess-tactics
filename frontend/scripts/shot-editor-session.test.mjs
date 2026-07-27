@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
-import { isLevelEditorUrl, observationOpenPostData } from './shot-editor-session.mjs';
+import {
+  isLevelEditorUrl,
+  isObservationSessionState,
+  observationOpenPostData,
+} from './shot-editor-session.mjs';
 
 test('recognizes only Level Editor routes', () => {
   assert.equal(isLevelEditorUrl('http://127.0.0.1:5178/editor/level?document=legacy-j5kip7ztaipw'), true);
@@ -31,4 +35,10 @@ test('adds observe intent only to the Level Editor session-open request', () => 
     requestUrl: 'http://127.0.0.1:5178/api/editor-documents/doc/edit-sessions/session/takeover',
     postData,
   }), null);
+});
+
+test('accepts only the server observation state as proof of a lease-free viewer', () => {
+  assert.equal(isObservationSessionState('observing'), true);
+  assert.equal(isObservationSessionState('waiting'), false);
+  assert.equal(isObservationSessionState('active'), false);
 });

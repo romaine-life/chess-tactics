@@ -152,6 +152,64 @@ export function installTestDrawableCatalogWithStructures() {
   });
 }
 
+export function installTestDrawableCatalogWithSourceOnlyStructure() {
+  installTestDrawableCatalogWithStructures();
+  const current = currentDrawableCatalog();
+  const directions = [
+    'south', 'south-west', 'west', 'north-west',
+    'north', 'north-east', 'east', 'south-east',
+  ];
+  const turntableMedia = Object.fromEntries(directions.flatMap((direction) => {
+    const role = mediaRole(`source-art/castle-ruin/${direction}.png`, 512, 512);
+    return [[`${direction}-back`, role], [`${direction}-front`, structuredClone(role)]];
+  }));
+  applyDrawableCatalog({
+    ...current,
+    revision: current.revision + 1,
+    assets: [
+      ...current.assets,
+      {
+        id: 'structure-castle-ruin',
+        kind: 'structure',
+        label: 'Castle ruin source artwork',
+        sortOrder: 200,
+        lifecycleState: 'active',
+        behavior: {
+          value: 'castle-ruin',
+          structureKind: 'landmark',
+          sourceOnly: true,
+          anchorX: 256,
+          anchorY: 256,
+          scale: 0.4,
+          splitMode: 'flat-contact',
+        },
+        metadata: {},
+        rowRevision: 1,
+        media: turntableMedia,
+      },
+      {
+        id: 'structure-source-doodad',
+        kind: 'structure',
+        label: 'Source-only doodad artwork',
+        sortOrder: 201,
+        lifecycleState: 'active',
+        behavior: {
+          value: 'source-doodad',
+          structureKind: 'doodad',
+          sourceOnly: true,
+          anchorX: 256,
+          anchorY: 256,
+          scale: 0.4,
+          splitMode: 'flat-contact',
+        },
+        metadata: {},
+        rowRevision: 1,
+        media: structuredClone(turntableMedia),
+      },
+    ],
+  });
+}
+
 export function installTestPropSeats() {
   hydratePropSeats({
     oak: { anchorX: 96, anchorY: 255, scale: 1, w: 2, h: 2, default: true },

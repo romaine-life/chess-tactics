@@ -3,6 +3,7 @@ status: accepted
 date: 2026-07-15
 deciders: Nelson, Codex
 supersedes: ADR-0096 placement restrictions; ADR-0097
+partially_superseded_by: "[ADR-0176](0176-placed-art-and-level-artwork-are-separate-editor-destinations.md)"
 ---
 
 # ADR-0098: The authored board extends beyond the playable grid

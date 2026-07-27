@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -10,6 +11,19 @@ import {
   type ReactElement,
 } from 'react';
 import { createPortal } from 'react-dom';
+import {
+  clearAllPredrawnMeshOverrides,
+  clearPredrawnMeshCellOverrides,
+  clearPredrawnMeshNodeOverride,
+  movePredrawnMeshNode,
+  normalizePredrawnBoardRegistration,
+  predrawnMeshCellsForNode,
+  predrawnMeshNodeIsOverridden,
+  predrawnMeshValidationIssue,
+  predrawnSourceMeshNode,
+  type PredrawnMeshCellAddress,
+  type PredrawnMeshNodeOverride,
+} from '@chess-tactics/board-render';
 import { TILE_STEP_X, TILE_STEP_Y } from '../art/projectionContract';
 import {
   clampPredrawnGuide,
@@ -33,31 +47,290 @@ export type PredrawnCornerPoints = Record<PredrawnCornerName, PredrawnPoint | un
 type CornerPoints = PredrawnCornerPoints;
 type RegistrationSaveState = 'idle' | 'pending' | 'saved' | 'error';
 type HandoffCopyState = 'idle' | 'copied' | 'error';
+type GridEditMode = 'coarse' | 'local';
+type LocalConstraintState = 'idle' | 'constrained' | 'reset';
 type ActiveControl =
   | { kind: 'corner'; corner: PredrawnCornerName }
   | { kind: 'reference-corner'; corner: PredrawnCornerName }
   | { kind: 'column'; index: number }
   | { kind: 'row'; index: number }
+  | { kind: 'local-cell'; column: number; row: number }
+  | {
+      kind: 'local-node';
+      column: number;
+      row: number;
+      cellColumn: number;
+      cellRow: number;
+      corner: PredrawnCornerName;
+    }
   | { kind: 'move' };
 type DragState = ActiveControl & {
   pointerId: number;
   startPoint?: PredrawnPoint;
   startCorners?: CornerPoints;
+  startMeshOverrides?: readonly PredrawnMeshNodeOverride[];
+  startGridSnapshot: PredrawnGridCalibrationSnapshot;
 };
+type ViewportPanState = {
+  pointerId: number;
+  startClientX: number;
+  startClientY: number;
+  startScrollLeft: number;
+  startScrollTop: number;
+};
+type PredrawnSourceZoom = 'fit' | 0.5 | 0.75 | 1 | 1.5 | 2 | 3 | 4;
+type PredrawnViewportZoomAnchor = {
+  sourceX: number;
+  sourceY: number;
+  viewportX: number;
+  viewportY: number;
+};
+export interface PredrawnGridCalibrationSnapshot {
+  points: PredrawnCornerPoints;
+  boundaryPoints: PredrawnCornerPoints;
+  gridColumns: number;
+  gridRows: number;
+  columnGuides: number[];
+  rowGuides: number[];
+  meshOverrides: PredrawnMeshNodeOverride[];
+}
+
+export interface PredrawnGridHistory {
+  undo: PredrawnGridCalibrationSnapshot[];
+  redo: PredrawnGridCalibrationSnapshot[];
+}
+
+const GRID_HISTORY_LIMIT = 100;
+const PREDRAWN_SOURCE_ZOOM_LEVELS = [0.5, 0.75, 1, 1.5, 2, 3, 4] as const;
 
 const CORNERS: readonly PredrawnCornerName[] = ['north', 'east', 'south', 'west'];
-const CORNER_LABEL: Record<PredrawnCornerName, string> = {
-  north: 'North',
-  east: 'East',
-  south: 'South',
-  west: 'West',
+const CORNER_POINT_NUMBER: Record<PredrawnCornerName, number> = {
+  north: 1,
+  east: 2,
+  south: 3,
+  west: 4,
 };
-const CORNER_SHORT: Record<PredrawnCornerName, string> = {
-  north: 'N',
-  east: 'E',
-  south: 'S',
-  west: 'W',
-};
+
+function clonePredrawnMeshOverrides(
+  snapshot: readonly PredrawnMeshNodeOverride[],
+): PredrawnMeshNodeOverride[] {
+  return snapshot.map((override) => ({
+    ...override,
+    point: [...override.point] as PredrawnPoint,
+  }));
+}
+
+function predrawnMeshOverridesMatch(
+  left: readonly PredrawnMeshNodeOverride[],
+  right: readonly PredrawnMeshNodeOverride[],
+): boolean {
+  return left.length === right.length && left.every((entry, index) => {
+    const other = right[index];
+    return Boolean(
+      other
+      && entry.column === other.column
+      && entry.row === other.row
+      && entry.point[0] === other.point[0]
+      && entry.point[1] === other.point[1],
+    );
+  });
+}
+
+function clonePredrawnCornerPoints(points: PredrawnCornerPoints): PredrawnCornerPoints {
+  return Object.fromEntries(CORNERS.map((corner) => [
+    corner,
+    points[corner] ? [...points[corner]!] as PredrawnPoint : undefined,
+  ])) as PredrawnCornerPoints;
+}
+
+function predrawnCornerPointsMatch(
+  left: PredrawnCornerPoints,
+  right: PredrawnCornerPoints,
+): boolean {
+  return CORNERS.every((corner) => {
+    const leftPoint = left[corner];
+    const rightPoint = right[corner];
+    return leftPoint === undefined
+      ? rightPoint === undefined
+      : rightPoint !== undefined
+        && leftPoint[0] === rightPoint[0]
+        && leftPoint[1] === rightPoint[1];
+  });
+}
+
+function predrawnNumberArraysMatch(left: readonly number[], right: readonly number[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+export function clonePredrawnGridCalibrationSnapshot(
+  snapshot: PredrawnGridCalibrationSnapshot,
+): PredrawnGridCalibrationSnapshot {
+  return {
+    points: clonePredrawnCornerPoints(snapshot.points),
+    boundaryPoints: clonePredrawnCornerPoints(snapshot.boundaryPoints),
+    gridColumns: snapshot.gridColumns,
+    gridRows: snapshot.gridRows,
+    columnGuides: [...snapshot.columnGuides],
+    rowGuides: [...snapshot.rowGuides],
+    meshOverrides: clonePredrawnMeshOverrides(snapshot.meshOverrides),
+  };
+}
+
+export function predrawnGridCalibrationSnapshotsMatch(
+  left: PredrawnGridCalibrationSnapshot,
+  right: PredrawnGridCalibrationSnapshot,
+): boolean {
+  return left.gridColumns === right.gridColumns
+    && left.gridRows === right.gridRows
+    && predrawnCornerPointsMatch(left.points, right.points)
+    && predrawnCornerPointsMatch(left.boundaryPoints, right.boundaryPoints)
+    && predrawnNumberArraysMatch(left.columnGuides, right.columnGuides)
+    && predrawnNumberArraysMatch(left.rowGuides, right.rowGuides)
+    && predrawnMeshOverridesMatch(left.meshOverrides, right.meshOverrides);
+}
+
+export function emptyPredrawnGridHistory(): PredrawnGridHistory {
+  return { undo: [], redo: [] };
+}
+
+export function recordPredrawnGridHistory(
+  history: PredrawnGridHistory,
+  before: PredrawnGridCalibrationSnapshot,
+  after: PredrawnGridCalibrationSnapshot,
+): PredrawnGridHistory {
+  if (predrawnGridCalibrationSnapshotsMatch(before, after)) return history;
+  return {
+    undo: [...history.undo, clonePredrawnGridCalibrationSnapshot(before)].slice(-GRID_HISTORY_LIMIT),
+    redo: [],
+  };
+}
+
+export function stepPredrawnGridHistory(
+  history: PredrawnGridHistory,
+  current: PredrawnGridCalibrationSnapshot,
+  direction: 'undo' | 'redo',
+): { history: PredrawnGridHistory; target: PredrawnGridCalibrationSnapshot } | undefined {
+  const source = history[direction];
+  if (!source.length) return undefined;
+  const target = clonePredrawnGridCalibrationSnapshot(source[source.length - 1]);
+  const currentSnapshot = clonePredrawnGridCalibrationSnapshot(current);
+  if (direction === 'undo') {
+    return {
+      history: {
+        undo: history.undo.slice(0, -1),
+        redo: [...history.redo, currentSnapshot].slice(-GRID_HISTORY_LIMIT),
+      },
+      target,
+    };
+  }
+  return {
+    history: {
+      undo: [...history.undo, currentSnapshot].slice(-GRID_HISTORY_LIMIT),
+      redo: history.redo.slice(0, -1),
+    },
+    target,
+  };
+}
+
+function boundaryPointLabel(corner: PredrawnCornerName): string {
+  return `Boundary point ${CORNER_POINT_NUMBER[corner]}`;
+}
+
+export interface PredrawnLocalCellNode {
+  corner: PredrawnCornerName;
+  column: number;
+  row: number;
+}
+
+export function predrawnLocalCellNodes(column: number, row: number): PredrawnLocalCellNode[] {
+  return [
+    { corner: 'north', column, row },
+    { corner: 'east', column: column + 1, row },
+    { corner: 'south', column: column + 1, row: row + 1 },
+    { corner: 'west', column, row: row + 1 },
+  ];
+}
+
+export function predrawnLocalNodeIsBoundary(
+  column: number,
+  row: number,
+  columns: number,
+  rows: number,
+): boolean {
+  return column === 0 || column === columns || row === 0 || row === rows;
+}
+
+export function predrawnZoomAfterWheel(
+  current: PredrawnSourceZoom,
+  fitScale: number,
+  deltaY: number,
+): PredrawnSourceZoom {
+  if (!Number.isFinite(fitScale) || fitScale <= 0 || !Number.isFinite(deltaY) || deltaY === 0) {
+    return current;
+  }
+  const currentScale = current === 'fit' ? fitScale : current;
+  const options: Array<{ value: PredrawnSourceZoom; scale: number }> = [
+    { value: 'fit', scale: fitScale },
+    ...PREDRAWN_SOURCE_ZOOM_LEVELS.map((value) => ({ value, scale: value })),
+  ];
+  const epsilon = 1e-6;
+  const candidates = options
+    .filter(({ scale }) => deltaY < 0
+      ? scale > currentScale + epsilon
+      : scale < currentScale - epsilon)
+    .sort((left, right) => deltaY < 0
+      ? left.scale - right.scale
+      : right.scale - left.scale);
+  return candidates[0]?.value ?? current;
+}
+
+export function predrawnZoomAnchorForViewport({
+  scrollLeft,
+  scrollTop,
+  viewportX,
+  viewportY,
+  stageLeft,
+  stageTop,
+  stageWidth,
+  stageHeight,
+}: {
+  scrollLeft: number;
+  scrollTop: number;
+  viewportX: number;
+  viewportY: number;
+  stageLeft: number;
+  stageTop: number;
+  stageWidth: number;
+  stageHeight: number;
+}): PredrawnViewportZoomAnchor {
+  const clampRatio = (value: number): number => Math.min(1, Math.max(0, value));
+  return {
+    sourceX: clampRatio((scrollLeft + viewportX - stageLeft) / Math.max(1, stageWidth)),
+    sourceY: clampRatio((scrollTop + viewportY - stageTop) / Math.max(1, stageHeight)),
+    viewportX,
+    viewportY,
+  };
+}
+
+export function predrawnViewportScrollForZoomAnchor(
+  anchor: PredrawnViewportZoomAnchor,
+  {
+    stageLeft,
+    stageTop,
+    stageWidth,
+    stageHeight,
+  }: {
+    stageLeft: number;
+    stageTop: number;
+    stageWidth: number;
+    stageHeight: number;
+  },
+): { left: number; top: number } {
+  return {
+    left: stageLeft + anchor.sourceX * stageWidth - anchor.viewportX,
+    top: stageTop + anchor.sourceY * stageHeight - anchor.viewportY,
+  };
+}
 
 interface SourceRect {
   left: number;
@@ -196,6 +469,24 @@ function boundaryReferenceFromPoints(points: CornerPoints): PredrawnBoundaryRefe
   };
 }
 
+function meshOverridesFromRegistration(
+  registration: PredrawnBoardCornerRegistration | undefined,
+  sourceWidth = registration?.sourceWidth ?? 0,
+  sourceHeight = registration?.sourceHeight ?? 0,
+): PredrawnMeshNodeOverride[] {
+  if (!registration?.meshOverrides?.length) return [];
+  const scaleX = sourceWidth > 0 ? sourceWidth / registration.sourceWidth : 1;
+  const scaleY = sourceHeight > 0 ? sourceHeight / registration.sourceHeight : 1;
+  return registration.meshOverrides.map(({ column, row, point }) => ({
+    column,
+    row,
+    point: [
+      roundedSourceCoordinate(point[0] * scaleX),
+      roundedSourceCoordinate(point[1] * scaleY),
+    ] as PredrawnPoint,
+  }));
+}
+
 function pointLabel(point: PredrawnPoint | undefined): string {
   return point ? `${point[0]}, ${point[1]}` : 'Not set';
 }
@@ -208,6 +499,7 @@ function registrationFromCalibration(
   columnGuides: readonly number[],
   rowGuides: readonly number[],
   boundaryPoints: CornerPoints,
+  meshOverrides: readonly PredrawnMeshNodeOverride[],
 ): PredrawnBoardCornerRegistration | undefined {
   if (
     !sourceSize.width
@@ -224,7 +516,7 @@ function registrationFromCalibration(
   ) {
     return undefined;
   }
-  return {
+  const registration: PredrawnBoardCornerRegistration = {
     sourceWidth: sourceSize.width,
     sourceHeight: sourceSize.height,
     north: points.north!,
@@ -236,7 +528,9 @@ function registrationFromCalibration(
     columnGuides: [...columnGuides],
     rowGuides: [...rowGuides],
     boundaryReference: boundaryReferenceFromPoints(boundaryPoints),
+    ...(meshOverrides.length ? { meshOverrides: [...meshOverrides] } : {}),
   };
+  return predrawnMeshValidationIssue(registration) ? undefined : registration;
 }
 
 export interface PredrawnGridStretchSummary {
@@ -272,10 +566,14 @@ function formatScale(value: number): string {
 }
 
 function activeControlLabel(control: ActiveControl): string {
-  if (control.kind === 'corner') return `${CORNER_LABEL[control.corner]} corner`;
-  if (control.kind === 'reference-corner') return `${CORNER_LABEL[control.corner]} boundary reference`;
+  if (control.kind === 'corner') return boundaryPointLabel(control.corner);
+  if (control.kind === 'reference-corner') return `Pinned ${boundaryPointLabel(control.corner).toLowerCase()}`;
   if (control.kind === 'column') return `column guide ${control.index}`;
   if (control.kind === 'row') return `row guide ${control.index}`;
+  if (control.kind === 'local-cell') return `tile ${control.column + 1}, ${control.row + 1}`;
+  if (control.kind === 'local-node') {
+    return `Shared corner of tile ${control.cellColumn + 1}, ${control.cellRow + 1}`;
+  }
   return 'whole grid';
 }
 
@@ -302,6 +600,7 @@ export function PredrawnCornerPicker({
   showCodexHandoff?: boolean;
 }): ReactElement {
   const panelRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const normalizedForImage = useRef(false);
@@ -310,7 +609,12 @@ export function PredrawnCornerPicker({
   const openingGrid = useRef(predrawnRegistrationGridSize(openingRegistration.current, columns, rows));
   const openingGuides = useRef(predrawnGuidesForBoard(openingRegistration.current, columns, rows));
   const openingBoundaryPoints = useRef(boundaryPointsFromRegistration(openingRegistration.current));
+  const openingMeshOverrides = useRef(meshOverridesFromRegistration(openingRegistration.current));
+  const [editMode, setEditMode] = useState<GridEditMode>(
+    openingMeshOverrides.current.length ? 'local' : 'coarse',
+  );
   const [activeControl, setActiveControl] = useState<ActiveControl>({ kind: 'corner', corner: 'south' });
+  const [selectedCell, setSelectedCell] = useState<PredrawnMeshCellAddress | null>(null);
   const [placingCorner, setPlacingCorner] = useState<PredrawnCornerName | null>(
     openingRegistration.current ? null : 'south',
   );
@@ -320,21 +624,36 @@ export function PredrawnCornerPicker({
   const [gridRows, setGridRows] = useState(openingGrid.current.rows);
   const [columnGuides, setColumnGuides] = useState<number[]>(openingGuides.current.columnGuides);
   const [rowGuides, setRowGuides] = useState<number[]>(openingGuides.current.rowGuides);
+  const [meshOverrides, setMeshOverrides] = useState<PredrawnMeshNodeOverride[]>(
+    openingMeshOverrides.current,
+  );
   const [sourceSize, setSourceSize] = useState({
     width: openingRegistration.current?.sourceWidth ?? 0,
     height: openingRegistration.current?.sourceHeight ?? 0,
   });
-  const [zoom, setZoom] = useState<'fit' | 0.5 | 0.75 | 1 | 1.5 | 2>('fit');
+  const [zoom, setZoom] = useState<PredrawnSourceZoom>('fit');
   const [loadError, setLoadError] = useState(false);
   const [saveState, setSaveState] = useState<RegistrationSaveState>(
     storedOpeningRegistration.current ? 'saved' : 'idle',
   );
   const [handoffCopyState, setHandoffCopyState] = useState<HandoffCopyState>('idle');
+  const [localConstraintState, setLocalConstraintState] = useState<LocalConstraintState>('idle');
+  const [localFeedback, setLocalFeedback] = useState<string | null>(null);
+  const [gridHistory, setGridHistory] = useState<PredrawnGridHistory>(
+    emptyPredrawnGridHistory,
+  );
+  const [viewportPanning, setViewportPanning] = useState(false);
   const pointsRef = useRef(points);
   const boundaryPointsRef = useRef(boundaryPoints);
+  const gridColumnsRef = useRef(gridColumns);
+  const gridRowsRef = useRef(gridRows);
   const columnGuidesRef = useRef(columnGuides);
   const rowGuidesRef = useRef(rowGuides);
+  const meshOverridesRef = useRef(meshOverrides);
+  const gridHistoryRef = useRef(gridHistory);
   const dragRef = useRef<DragState | null>(null);
+  const viewportPanRef = useRef<ViewportPanState | null>(null);
+  const viewportZoomAnchorRef = useRef<PredrawnViewportZoomAnchor | null>(null);
 
   useEffect(() => {
     const previousFocus = document.activeElement as HTMLElement | null;
@@ -351,6 +670,22 @@ export function PredrawnCornerPicker({
     };
   }, [onClose]);
 
+  useLayoutEffect(() => {
+    const anchor = viewportZoomAnchorRef.current;
+    const viewport = viewportRef.current;
+    const stage = stageRef.current;
+    if (!anchor || !viewport || !stage) return;
+    viewportZoomAnchorRef.current = null;
+    const nextScroll = predrawnViewportScrollForZoomAnchor(anchor, {
+      stageLeft: stage.offsetLeft,
+      stageTop: stage.offsetTop,
+      stageWidth: stage.offsetWidth,
+      stageHeight: stage.offsetHeight,
+    });
+    viewport.scrollLeft = nextScroll.left;
+    viewport.scrollTop = nextScroll.top;
+  }, [zoom]);
+
   const registration = useMemo(() => registrationFromCalibration(
     points,
     sourceSize,
@@ -359,7 +694,8 @@ export function PredrawnCornerPicker({
     columnGuides,
     rowGuides,
     boundaryPoints,
-  ), [boundaryPoints, columnGuides, gridColumns, gridRows, points, rowGuides, sourceSize]);
+    meshOverrides,
+  ), [boundaryPoints, columnGuides, gridColumns, gridRows, meshOverrides, points, rowGuides, sourceSize]);
   const complete = Boolean(registration);
   const boundaryReference = boundaryReferenceFromPoints(boundaryPoints);
   const stretch = useMemo(
@@ -367,11 +703,43 @@ export function PredrawnCornerPicker({
     [columnGuides, rowGuides],
   );
 
+  const currentGridSnapshot = (): PredrawnGridCalibrationSnapshot => (
+    clonePredrawnGridCalibrationSnapshot({
+      points: pointsRef.current,
+      boundaryPoints: boundaryPointsRef.current,
+      gridColumns: gridColumnsRef.current,
+      gridRows: gridRowsRef.current,
+      columnGuides: columnGuidesRef.current,
+      rowGuides: rowGuidesRef.current,
+      meshOverrides: meshOverridesRef.current,
+    })
+  );
+
+  const replaceGridHistory = (next: PredrawnGridHistory): void => {
+    gridHistoryRef.current = next;
+    setGridHistory(next);
+  };
+
+  const clearGridHistory = (): void => {
+    if (!gridHistoryRef.current.undo.length && !gridHistoryRef.current.redo.length) return;
+    replaceGridHistory(emptyPredrawnGridHistory());
+  };
+
+  const recordGridEdit = (
+    before: PredrawnGridCalibrationSnapshot,
+    after = currentGridSnapshot(),
+  ): void => {
+    const next = recordPredrawnGridHistory(gridHistoryRef.current, before, after);
+    if (next !== gridHistoryRef.current) replaceGridHistory(next);
+  };
+
   const commitPoints = (nextPoints: CornerPoints): void => {
     pointsRef.current = nextPoints;
     setPoints(nextPoints);
     setSaveState('pending');
     setHandoffCopyState('idle');
+    setLocalConstraintState('idle');
+    setLocalFeedback(null);
   };
 
   const commitBoundaryPoints = (nextPoints: CornerPoints): void => {
@@ -395,7 +763,136 @@ export function PredrawnCornerPicker({
     setHandoffCopyState('idle');
   };
 
+  const currentRegistration = (): PredrawnBoardCornerRegistration | undefined => (
+    registrationFromCalibration(
+      pointsRef.current,
+      sourceSize,
+      gridColumnsRef.current,
+      gridRowsRef.current,
+      columnGuidesRef.current,
+      rowGuidesRef.current,
+      boundaryPointsRef.current,
+      meshOverridesRef.current,
+    )
+  );
+
+  const commitMeshRegistration = (
+    nextRegistration: PredrawnBoardCornerRegistration,
+    feedback?: { state: LocalConstraintState; message: string },
+  ): void => {
+    const nextPoints: CornerPoints = {
+      north: nextRegistration.north,
+      east: nextRegistration.east,
+      south: nextRegistration.south,
+      west: nextRegistration.west,
+    };
+    const nextMeshOverrides = [...(nextRegistration.meshOverrides ?? [])];
+    pointsRef.current = nextPoints;
+    meshOverridesRef.current = nextMeshOverrides;
+    setPoints(nextPoints);
+    setMeshOverrides(nextMeshOverrides);
+    setSaveState('pending');
+    setHandoffCopyState('idle');
+    setLocalConstraintState(feedback?.state ?? 'idle');
+    setLocalFeedback(feedback?.message ?? null);
+  };
+
+  const applyGridSnapshot = (
+    snapshot: PredrawnGridCalibrationSnapshot,
+    feedback: { state: LocalConstraintState; message: string },
+  ): void => {
+    const next = clonePredrawnGridCalibrationSnapshot(snapshot);
+    pointsRef.current = next.points;
+    boundaryPointsRef.current = next.boundaryPoints;
+    gridColumnsRef.current = next.gridColumns;
+    gridRowsRef.current = next.gridRows;
+    columnGuidesRef.current = next.columnGuides;
+    rowGuidesRef.current = next.rowGuides;
+    meshOverridesRef.current = next.meshOverrides;
+    setPoints(next.points);
+    setBoundaryPoints(next.boundaryPoints);
+    setGridColumns(next.gridColumns);
+    setGridRows(next.gridRows);
+    setColumnGuides(next.columnGuides);
+    setRowGuides(next.rowGuides);
+    setMeshOverrides(next.meshOverrides);
+
+    const missingCorner = CORNERS.find((corner) => !next.points[corner]);
+    if (missingCorner) {
+      setEditMode('coarse');
+      setSelectedCell(null);
+      setActiveControl({ kind: 'corner', corner: missingCorner });
+      setPlacingCorner(missingCorner);
+    } else {
+      const selectedCellIsValid = Boolean(
+        selectedCell
+        && selectedCell.column >= 0
+        && selectedCell.column < next.gridColumns
+        && selectedCell.row >= 0
+        && selectedCell.row < next.gridRows,
+      );
+      if (!selectedCellIsValid) setSelectedCell(null);
+      const activeControlIsValid = activeControl.kind === 'move'
+        || (activeControl.kind === 'corner' && Boolean(next.points[activeControl.corner]))
+        || (
+          activeControl.kind === 'reference-corner'
+          && Boolean(next.boundaryPoints[activeControl.corner])
+        )
+        || (
+          activeControl.kind === 'column'
+          && activeControl.index >= 0
+          && activeControl.index < next.columnGuides.length
+        )
+        || (
+          activeControl.kind === 'row'
+          && activeControl.index >= 0
+          && activeControl.index < next.rowGuides.length
+        )
+        || (
+          activeControl.kind === 'local-cell'
+          && activeControl.column >= 0
+          && activeControl.column < next.gridColumns
+          && activeControl.row >= 0
+          && activeControl.row < next.gridRows
+        )
+        || (
+          activeControl.kind === 'local-node'
+          && activeControl.column >= 0
+          && activeControl.column <= next.gridColumns
+          && activeControl.row >= 0
+          && activeControl.row <= next.gridRows
+          && activeControl.cellColumn >= 0
+          && activeControl.cellColumn < next.gridColumns
+          && activeControl.cellRow >= 0
+          && activeControl.cellRow < next.gridRows
+        );
+      if (!activeControlIsValid) setActiveControl({ kind: 'move' });
+      setPlacingCorner(null);
+    }
+    setSaveState('pending');
+    setHandoffCopyState('idle');
+    setLocalConstraintState(feedback.state);
+    setLocalFeedback(feedback.message);
+  };
+
+  const applyGridHistory = (direction: 'undo' | 'redo'): void => {
+    const stepped = stepPredrawnGridHistory(
+      gridHistoryRef.current,
+      currentGridSnapshot(),
+      direction,
+    );
+    if (!stepped) return;
+    replaceGridHistory(stepped.history);
+    applyGridSnapshot(stepped.target, {
+      state: 'reset',
+      message: direction === 'undo'
+        ? 'Undid the last grid change.'
+        : 'Redid the last grid change.',
+    });
+  };
+
   const chooseCorner = (corner: PredrawnCornerName): void => {
+    setEditMode('coarse');
     setActiveControl({ kind: 'corner', corner });
     setPlacingCorner(corner);
     overlayRef.current?.focus();
@@ -410,19 +907,25 @@ export function PredrawnCornerPicker({
       columnGuidesRef.current,
       rowGuidesRef.current,
       boundaryPointsRef.current,
+      meshOverridesRef.current,
     );
     if (!pending) {
       setSaveState('error');
       return;
     }
+    const canonical = normalizePredrawnBoardRegistration(pending);
+    if (!canonical) {
+      setSaveState('error');
+      return;
+    }
     if (onSaveRegistration) {
-      onSaveRegistration(pending);
-      onChange(pending);
+      onSaveRegistration(canonical);
+      onChange(canonical);
       setSaveState('saved');
       setHandoffCopyState('idle');
       return;
     }
-    const readBack = savePredrawnBoardRegistrationLocally(src, pending);
+    const readBack = savePredrawnBoardRegistrationLocally(src, canonical);
     if (!readBack) {
       setSaveState('error');
       return;
@@ -467,20 +970,89 @@ export function PredrawnCornerPicker({
     );
   };
 
+  const moveMeshNodeToPoint = (
+    column: number,
+    row: number,
+    point: PredrawnPoint,
+  ): boolean => {
+    if (predrawnLocalNodeIsBoundary(column, row, gridColumns, gridRows)) {
+      setLocalConstraintState('constrained');
+      setLocalFeedback('Boundary corners stay locked during Local cells editing. Use Coarse grid to move the outside edge.');
+      return false;
+    }
+    const current = currentRegistration();
+    if (!current) return false;
+    const moved = movePredrawnMeshNode(current, column, row, point);
+    if (!moved) {
+      setLocalConstraintState('constrained');
+      setLocalFeedback('That shared corner could not be moved from the current valid grid.');
+      return false;
+    }
+    const affectedCount = predrawnMeshCellsForNode(moved.registration, column, row).length;
+    commitMeshRegistration(
+      moved.registration,
+      moved.constrained
+        ? {
+            state: 'constrained',
+            message: `Stopped at the last safe position before ${affectedCount === 1 ? 'this tile folded' : 'an affected tile folded'}.`,
+          }
+        : undefined,
+    );
+    return true;
+  };
+
+  const commitCoarseCornerPoint = (
+    corner: PredrawnCornerName,
+    point: PredrawnPoint,
+  ): boolean => {
+    const nextPoints = { ...pointsRef.current, [corner]: point };
+    if (!CORNERS.every((name) => nextPoints[name])) {
+      commitPoints(nextPoints);
+      return true;
+    }
+    const candidate = registrationFromCalibration(
+      nextPoints,
+      sourceSize,
+      gridColumnsRef.current,
+      gridRowsRef.current,
+      columnGuidesRef.current,
+      rowGuidesRef.current,
+      boundaryPointsRef.current,
+      meshOverridesRef.current,
+    );
+    if (!candidate) {
+      setLocalConstraintState('constrained');
+      setLocalFeedback(
+        meshOverridesRef.current.length
+          ? 'The coarse corner stayed at its previous position because that move would fold a locally adjusted tile.'
+          : 'The coarse corner stayed at its previous valid position.',
+      );
+      return false;
+    }
+    commitMeshRegistration(candidate);
+    return true;
+  };
+
   const moveCornerToClient = (corner: PredrawnCornerName, clientX: number, clientY: number): void => {
     const point = pointForClient(clientX, clientY);
     if (!point) return;
-    commitPoints({ ...pointsRef.current, [corner]: point });
+    commitCoarseCornerPoint(corner, point);
   };
 
   const placeActiveCorner = (event: ReactMouseEvent<HTMLDivElement>): void => {
     if (!placingCorner || dragRef.current) return;
+    const before = currentGridSnapshot();
     moveCornerToClient(placingCorner, event.clientX, event.clientY);
+    recordGridEdit(before);
     setPlacingCorner(null);
     overlayRef.current?.focus();
   };
 
-  const beginDrag = (event: ReactPointerEvent<SVGElement | HTMLSpanElement>, control: ActiveControl): void => {
+  const beginDrag = (
+    event: ReactPointerEvent<SVGElement | HTMLSpanElement | HTMLButtonElement>,
+    control: ActiveControl,
+  ): void => {
+    if (event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
     setPlacingCorner(null);
@@ -491,28 +1063,96 @@ export function PredrawnCornerPicker({
       pointerId: event.pointerId,
       startPoint,
       startCorners: control.kind === 'move' ? { ...pointsRef.current } : undefined,
+      startMeshOverrides: control.kind === 'move' || control.kind === 'local-node'
+        ? clonePredrawnMeshOverrides(meshOverridesRef.current)
+        : undefined,
+      startGridSnapshot: currentGridSnapshot(),
     };
     overlayRef.current?.setPointerCapture(event.pointerId);
     overlayRef.current?.focus();
   };
 
+  const beginViewportPan = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    if (event.button !== 2 || dragRef.current) return;
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    event.preventDefault();
+    event.stopPropagation();
+    viewportPanRef.current = {
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startScrollLeft: viewport.scrollLeft,
+      startScrollTop: viewport.scrollTop,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setViewportPanning(true);
+  };
+
+  const zoomViewport = (event: globalThis.WheelEvent): void => {
+    const viewport = viewportRef.current;
+    const stage = stageRef.current;
+    if (!viewport || !stage || !sourceSize.width || !sourceSize.height) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const fitScale = viewport.clientWidth / sourceSize.width;
+    const nextZoom = predrawnZoomAfterWheel(zoom, fitScale, event.deltaY);
+    if (nextZoom === zoom) return;
+    const viewportBounds = viewport.getBoundingClientRect();
+    viewportZoomAnchorRef.current = predrawnZoomAnchorForViewport({
+      scrollLeft: viewport.scrollLeft,
+      scrollTop: viewport.scrollTop,
+      viewportX: event.clientX - viewportBounds.left,
+      viewportY: event.clientY - viewportBounds.top,
+      stageLeft: stage.offsetLeft,
+      stageTop: stage.offsetTop,
+      stageWidth: stage.offsetWidth,
+      stageHeight: stage.offsetHeight,
+    });
+    setZoom(nextZoom);
+  };
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return undefined;
+    viewport.addEventListener('wheel', zoomViewport, { passive: false });
+    return () => viewport.removeEventListener('wheel', zoomViewport);
+  }, [sourceSize.height, sourceSize.width, zoom]);
+
   const moveDrag = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    const pan = viewportPanRef.current;
+    if (pan?.pointerId === event.pointerId) {
+      const viewport = viewportRef.current;
+      if (!viewport) return;
+      event.preventDefault();
+      viewport.scrollLeft = pan.startScrollLeft - (event.clientX - pan.startClientX);
+      viewport.scrollTop = pan.startScrollTop - (event.clientY - pan.startClientY);
+      return;
+    }
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     event.preventDefault();
     const point = pointForClient(event.clientX, event.clientY);
     if (!point) return;
     if (drag.kind === 'corner') {
-      commitPoints({ ...pointsRef.current, [drag.corner]: point });
+      commitCoarseCornerPoint(drag.corner, point);
       return;
     }
     if (drag.kind === 'reference-corner') {
       commitBoundaryPoints({ ...boundaryPointsRef.current, [drag.corner]: point });
       return;
     }
+    if (drag.kind === 'local-node') {
+      moveMeshNodeToPoint(drag.column, drag.row, point);
+      return;
+    }
     if (drag.kind === 'move' && drag.startPoint && drag.startCorners) {
-      const opening = CORNERS.map((corner) => drag.startCorners![corner]).filter(Boolean) as PredrawnPoint[];
-      if (opening.length !== CORNERS.length) return;
+      const openingCorners = CORNERS.map((corner) => drag.startCorners![corner]).filter(Boolean) as PredrawnPoint[];
+      const opening = [
+        ...openingCorners,
+        ...(drag.startMeshOverrides ?? []).map((override) => override.point),
+      ];
+      if (openingCorners.length !== CORNERS.length) return;
       const requestedX = point[0] - drag.startPoint[0];
       const requestedY = point[1] - drag.startPoint[1];
       const deltaX = clamp(
@@ -532,7 +1172,29 @@ export function PredrawnCornerPicker({
           roundedSourceCoordinate(openingPoint[1] + deltaY),
         ] as const];
       })) as CornerPoints;
-      commitPoints(translated);
+      const translatedMesh = (drag.startMeshOverrides ?? []).map((override) => ({
+        ...override,
+        point: [
+          roundedSourceCoordinate(override.point[0] + deltaX),
+          roundedSourceCoordinate(override.point[1] + deltaY),
+        ] as PredrawnPoint,
+      }));
+      const next = registrationFromCalibration(
+        translated,
+        sourceSize,
+        gridColumns,
+        gridRows,
+        columnGuidesRef.current,
+        rowGuidesRef.current,
+        boundaryPointsRef.current,
+        translatedMesh,
+      );
+      if (next) {
+        commitMeshRegistration(next);
+      } else {
+        setLocalConstraintState('constrained');
+        setLocalFeedback('The whole grid stayed at its previous position because the requested move was not valid.');
+      }
       return;
     }
     const pending = registrationFromCalibration(
@@ -543,43 +1205,156 @@ export function PredrawnCornerPicker({
       columnGuidesRef.current,
       rowGuidesRef.current,
       boundaryPointsRef.current,
+      meshOverridesRef.current,
     );
-    if (!pending) return;
+    if (!pending) {
+      setLocalConstraintState('constrained');
+      setLocalFeedback('The coarse grid is not currently valid, so its guides were not changed.');
+      return;
+    }
     const coordinate = predrawnSourceGridCoordinate(pending, point);
     if (!coordinate) return;
     if (drag.kind === 'column') {
       const next = [...columnGuidesRef.current];
       next[drag.index] = clampPredrawnGuide(next, drag.index, coordinate[0]);
+      const candidate = registrationFromCalibration(
+        pointsRef.current,
+        sourceSize,
+        gridColumns,
+        gridRows,
+        next,
+        rowGuidesRef.current,
+        boundaryPointsRef.current,
+        meshOverridesRef.current,
+      );
+      if (!candidate) {
+        setLocalConstraintState('constrained');
+        setLocalFeedback('The column stopped before it would fold a locally adjusted tile.');
+        return;
+      }
       commitColumnGuides(next);
     } else if (drag.kind === 'row') {
       const next = [...rowGuidesRef.current];
       next[drag.index] = clampPredrawnGuide(next, drag.index, coordinate[1]);
+      const candidate = registrationFromCalibration(
+        pointsRef.current,
+        sourceSize,
+        gridColumns,
+        gridRows,
+        columnGuidesRef.current,
+        next,
+        boundaryPointsRef.current,
+        meshOverridesRef.current,
+      );
+      if (!candidate) {
+        setLocalConstraintState('constrained');
+        setLocalFeedback('The row stopped before it would fold a locally adjusted tile.');
+        return;
+      }
       commitRowGuides(next);
     }
   };
 
   const endDrag = (event: ReactPointerEvent<HTMLDivElement>): void => {
-    if (dragRef.current?.pointerId !== event.pointerId) return;
+    const pan = viewportPanRef.current;
+    if (pan?.pointerId === event.pointerId) {
+      event.preventDefault();
+      viewportPanRef.current = null;
+      setViewportPanning(false);
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      return;
+    }
+    const drag = dragRef.current;
+    if (drag?.pointerId !== event.pointerId) return;
     dragRef.current = null;
     if (overlayRef.current?.hasPointerCapture(event.pointerId)) overlayRef.current.releasePointerCapture(event.pointerId);
+    recordGridEdit(drag.startGridSnapshot);
   };
 
   const translateAllCorners = (deltaX: number, deltaY: number): void => {
     if (!CORNERS.every((corner) => pointsRef.current[corner])) return;
+    const opening = [
+      ...CORNERS.map((corner) => pointsRef.current[corner]!).filter(Boolean),
+      ...meshOverridesRef.current.map((override) => override.point),
+    ];
+    const exactDeltaX = clamp(
+      deltaX,
+      -Math.min(...opening.map(([x]) => x)),
+      sourceSize.width - Math.max(...opening.map(([x]) => x)),
+    );
+    const exactDeltaY = clamp(
+      deltaY,
+      -Math.min(...opening.map(([, y]) => y)),
+      sourceSize.height - Math.max(...opening.map(([, y]) => y)),
+    );
     const next = Object.fromEntries(CORNERS.map((corner) => {
       const point = pointsRef.current[corner]!;
       return [corner, [
-        clamp(point[0] + deltaX, 0, sourceSize.width),
-        clamp(point[1] + deltaY, 0, sourceSize.height),
+        roundedSourceCoordinate(point[0] + exactDeltaX),
+        roundedSourceCoordinate(point[1] + exactDeltaY),
       ] as const];
     })) as CornerPoints;
-    commitPoints(next);
+    const nextMesh = meshOverridesRef.current.map((override) => ({
+      ...override,
+      point: [
+        roundedSourceCoordinate(override.point[0] + exactDeltaX),
+        roundedSourceCoordinate(override.point[1] + exactDeltaY),
+      ] as PredrawnPoint,
+    }));
+    const translated = registrationFromCalibration(
+      next,
+      sourceSize,
+      gridColumnsRef.current,
+      gridRowsRef.current,
+      columnGuidesRef.current,
+      rowGuidesRef.current,
+      boundaryPointsRef.current,
+      nextMesh,
+    );
+    if (translated) {
+      commitMeshRegistration(translated);
+    } else {
+      setLocalConstraintState('constrained');
+      setLocalFeedback('The whole grid stayed at its previous position because the requested move was not valid.');
+    }
   };
 
   const nudgeActiveControl = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
     const step = event.shiftKey ? 10 : 1;
     const direction = event.key;
     if (!direction.startsWith('Arrow')) return;
+    const before = currentGridSnapshot();
+    if (activeControl.kind === 'local-node') {
+      const boundary = predrawnLocalNodeIsBoundary(
+        activeControl.column,
+        activeControl.row,
+        gridColumnsRef.current,
+        gridRowsRef.current,
+      );
+      event.preventDefault();
+      if (boundary) {
+        setLocalConstraintState('constrained');
+        setLocalFeedback('Boundary corners stay locked during Local cells editing. Use Coarse grid to move the outside edge.');
+        return;
+      }
+      const current = currentRegistration();
+      const point = current
+        ? predrawnSourceMeshNode(current, activeControl.column, activeControl.row)
+        : undefined;
+      if (!point) return;
+      const deltas: Record<string, PredrawnPoint> = {
+        ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step],
+      };
+      const move = deltas[direction];
+      const moved = moveMeshNodeToPoint(activeControl.column, activeControl.row, [
+        point[0] + move[0],
+        point[1] + move[1],
+      ]);
+      if (moved) recordGridEdit(before);
+      return;
+    }
     if (activeControl.kind === 'corner') {
       const point = pointsRef.current[activeControl.corner];
       if (!point || !sourceSize.width || !sourceSize.height) return;
@@ -588,13 +1363,11 @@ export function PredrawnCornerPicker({
       };
       const move = deltas[direction];
       event.preventDefault();
-      commitPoints({
-        ...pointsRef.current,
-        [activeControl.corner]: [
-          clamp(point[0] + move[0], 0, sourceSize.width),
-          clamp(point[1] + move[1], 0, sourceSize.height),
-        ],
-      });
+      commitCoarseCornerPoint(activeControl.corner, [
+        clamp(point[0] + move[0], 0, sourceSize.width),
+        clamp(point[1] + move[1], 0, sourceSize.height),
+      ]);
+      recordGridEdit(before);
       return;
     }
     if (activeControl.kind === 'reference-corner') {
@@ -612,6 +1385,7 @@ export function PredrawnCornerPicker({
           clamp(point[1] + move[1], 0, sourceSize.height),
         ],
       });
+      recordGridEdit(before);
       return;
     }
     if (activeControl.kind === 'move') {
@@ -620,6 +1394,7 @@ export function PredrawnCornerPicker({
       };
       event.preventDefault();
       translateAllCorners(...deltas[direction]);
+      recordGridEdit(before);
       return;
     }
     const normalizedStep = step / Math.max(sourceSize.width, sourceSize.height, 1);
@@ -631,7 +1406,22 @@ export function PredrawnCornerPicker({
         activeControl.index,
         next[activeControl.index] + (direction === 'ArrowLeft' ? -normalizedStep : normalizedStep),
       );
+      if (!registrationFromCalibration(
+        pointsRef.current,
+        sourceSize,
+        gridColumnsRef.current,
+        gridRowsRef.current,
+        next,
+        rowGuidesRef.current,
+        boundaryPointsRef.current,
+        meshOverridesRef.current,
+      )) {
+        setLocalConstraintState('constrained');
+        setLocalFeedback('The column stopped before it would fold a locally adjusted tile.');
+        return;
+      }
       commitColumnGuides(next);
+      recordGridEdit(before);
     } else if (activeControl.kind === 'row' && (direction === 'ArrowUp' || direction === 'ArrowDown')) {
       event.preventDefault();
       const next = [...rowGuidesRef.current];
@@ -640,11 +1430,27 @@ export function PredrawnCornerPicker({
         activeControl.index,
         next[activeControl.index] + (direction === 'ArrowUp' ? -normalizedStep : normalizedStep),
       );
+      if (!registrationFromCalibration(
+        pointsRef.current,
+        sourceSize,
+        gridColumnsRef.current,
+        gridRowsRef.current,
+        columnGuidesRef.current,
+        next,
+        boundaryPointsRef.current,
+        meshOverridesRef.current,
+      )) {
+        setLocalConstraintState('constrained');
+        setLocalFeedback('The row stopped before it would fold a locally adjusted tile.');
+        return;
+      }
       commitRowGuides(next);
+      recordGridEdit(before);
     }
   };
 
   const reset = (): void => {
+    const before = currentGridSnapshot();
     const nextPoints = pointsFromRegistration(openingRegistration.current, sourceSize.width, sourceSize.height);
     pointsRef.current = nextPoints;
     const nextBoundaryPoints = boundaryPointsFromRegistration(
@@ -655,57 +1461,225 @@ export function PredrawnCornerPicker({
     boundaryPointsRef.current = nextBoundaryPoints;
     columnGuidesRef.current = [...openingGuides.current.columnGuides];
     rowGuidesRef.current = [...openingGuides.current.rowGuides];
+    const nextMeshOverrides = meshOverridesFromRegistration(
+      openingRegistration.current,
+      sourceSize.width,
+      sourceSize.height,
+    );
+    meshOverridesRef.current = nextMeshOverrides;
+    gridColumnsRef.current = openingGrid.current.columns;
+    gridRowsRef.current = openingGrid.current.rows;
     setPoints(nextPoints);
     setBoundaryPoints(nextBoundaryPoints);
     setGridColumns(openingGrid.current.columns);
     setGridRows(openingGrid.current.rows);
     setColumnGuides([...openingGuides.current.columnGuides]);
     setRowGuides([...openingGuides.current.rowGuides]);
+    setMeshOverrides(nextMeshOverrides);
+    setEditMode(nextMeshOverrides.length ? 'local' : 'coarse');
+    setSelectedCell(null);
     setActiveControl({ kind: 'corner', corner: 'south' });
     setPlacingCorner(null);
     setSaveState('pending');
     setHandoffCopyState('idle');
+    setLocalConstraintState('reset');
+    setLocalFeedback('Restored every coarse and local control to the opening calibration.');
+    recordGridEdit(before);
   };
 
   const resetSpacing = (): void => {
-    commitColumnGuides(uniformPredrawnGuides(gridColumns));
-    commitRowGuides(uniformPredrawnGuides(gridRows));
+    if (meshOverridesRef.current.length) {
+      const count = meshOverridesRef.current.length;
+      setLocalConstraintState('constrained');
+      setLocalFeedback(`Clear all ${count} local adjustment${count === 1 ? '' : 's'} before resetting coarse spacing.`);
+      return;
+    }
+    const nextColumns = uniformPredrawnGuides(gridColumns);
+    const nextRows = uniformPredrawnGuides(gridRows);
+    if (!registrationFromCalibration(
+      pointsRef.current,
+      sourceSize,
+      gridColumns,
+      gridRows,
+      nextColumns,
+      nextRows,
+      boundaryPointsRef.current,
+      meshOverridesRef.current,
+    )) {
+      setLocalConstraintState('constrained');
+      setLocalFeedback('Resetting the coarse spacing would fold a locally adjusted tile. Reset local cells first.');
+      return;
+    }
+    const before = currentGridSnapshot();
+    commitColumnGuides(nextColumns);
+    commitRowGuides(nextRows);
+    recordGridEdit(before);
   };
 
   const snapToIdealGrid = (): void => {
+    if (meshOverridesRef.current.length) {
+      const count = meshOverridesRef.current.length;
+      setLocalConstraintState('constrained');
+      setLocalFeedback(`Clear all ${count} local adjustment${count === 1 ? '' : 's'} before snapping the coarse grid.`);
+      return;
+    }
     const nextPoints = predrawnIdealGridSnap(pointsRef.current, sourceSize, gridColumns, gridRows);
     if (!nextPoints) return;
-    commitPoints(nextPoints);
-    commitColumnGuides(uniformPredrawnGuides(gridColumns));
-    commitRowGuides(uniformPredrawnGuides(gridRows));
+    const nextColumns = uniformPredrawnGuides(gridColumns);
+    const nextRows = uniformPredrawnGuides(gridRows);
+    const snapped = registrationFromCalibration(
+      nextPoints,
+      sourceSize,
+      gridColumns,
+      gridRows,
+      nextColumns,
+      nextRows,
+      boundaryPointsRef.current,
+      meshOverridesRef.current,
+    );
+    if (!snapped) {
+      setLocalConstraintState('constrained');
+      setLocalFeedback('Snapping the coarse grid would fold a locally adjusted tile. Reset local cells first.');
+      return;
+    }
+    const before = currentGridSnapshot();
+    columnGuidesRef.current = nextColumns;
+    rowGuidesRef.current = nextRows;
+    setColumnGuides(nextColumns);
+    setRowGuides(nextRows);
+    commitMeshRegistration(snapped);
     setActiveControl({ kind: 'move' });
     setPlacingCorner(null);
+    recordGridEdit(before);
   };
 
   const pinBoundaryReference = (): void => {
     if (!CORNERS.every((corner) => pointsRef.current[corner])) return;
+    const before = currentGridSnapshot();
     commitBoundaryPoints({ ...pointsRef.current });
+    recordGridEdit(before);
   };
 
   const clearBoundaryReference = (): void => {
+    const before = currentGridSnapshot();
     commitBoundaryPoints({ north: undefined, east: undefined, south: undefined, west: undefined });
     if (activeControl.kind === 'reference-corner') setActiveControl({ kind: 'move' });
+    recordGridEdit(before);
   };
 
   const changeGridColumns = (value: number): void => {
     const next = normalizePredrawnGridCount(value, gridColumns);
     if (next === gridColumns) return;
+    if (meshOverridesRef.current.length) {
+      const count = meshOverridesRef.current.length;
+      setLocalConstraintState('constrained');
+      setLocalFeedback(`Clear all ${count} local adjustment${count === 1 ? '' : 's'} before changing grid dimensions.`);
+      return;
+    }
+    const before = currentGridSnapshot();
+    gridColumnsRef.current = next;
     setGridColumns(next);
+    setSelectedCell(null);
     commitColumnGuides(uniformPredrawnGuides(next));
-    if (activeControl.kind === 'column') setActiveControl({ kind: 'move' });
+    if (
+      activeControl.kind === 'column'
+      || activeControl.kind === 'local-cell'
+      || activeControl.kind === 'local-node'
+    ) {
+      setActiveControl({ kind: 'move' });
+    }
+    recordGridEdit(before);
   };
 
   const changeGridRows = (value: number): void => {
     const next = normalizePredrawnGridCount(value, gridRows);
     if (next === gridRows) return;
+    if (meshOverridesRef.current.length) {
+      const count = meshOverridesRef.current.length;
+      setLocalConstraintState('constrained');
+      setLocalFeedback(`Clear all ${count} local adjustment${count === 1 ? '' : 's'} before changing grid dimensions.`);
+      return;
+    }
+    const before = currentGridSnapshot();
+    gridRowsRef.current = next;
     setGridRows(next);
+    setSelectedCell(null);
     commitRowGuides(uniformPredrawnGuides(next));
-    if (activeControl.kind === 'row') setActiveControl({ kind: 'move' });
+    if (
+      activeControl.kind === 'row'
+      || activeControl.kind === 'local-cell'
+      || activeControl.kind === 'local-node'
+    ) {
+      setActiveControl({ kind: 'move' });
+    }
+    recordGridEdit(before);
+  };
+
+  const chooseEditMode = (mode: GridEditMode): void => {
+    setEditMode(mode);
+    setPlacingCorner(null);
+    setLocalConstraintState('idle');
+    setLocalFeedback(null);
+    if (mode === 'coarse') {
+      if (activeControl.kind === 'local-cell' || activeControl.kind === 'local-node') {
+        setActiveControl({ kind: 'move' });
+      }
+    } else if (selectedCell) {
+      setActiveControl({ kind: 'local-cell', ...selectedCell });
+    }
+    overlayRef.current?.focus();
+  };
+
+  const chooseLocalCell = (column: number, row: number): void => {
+    const next = { column, row };
+    setSelectedCell(next);
+    setActiveControl({ kind: 'local-cell', ...next });
+    setLocalConstraintState('idle');
+    setLocalFeedback(null);
+    overlayRef.current?.focus();
+  };
+
+  const resetActiveLocalNode = (): void => {
+    if (activeControl.kind !== 'local-node') return;
+    const current = currentRegistration();
+    if (!current || !predrawnMeshNodeIsOverridden(current, activeControl.column, activeControl.row)) return;
+    const before = currentGridSnapshot();
+    const next = clearPredrawnMeshNodeOverride(current, activeControl.column, activeControl.row);
+    commitMeshRegistration(
+      next,
+      { state: 'reset', message: 'Reset this shared corner to the coarse row-and-column fit.' },
+    );
+    recordGridEdit(before);
+  };
+
+  const resetSelectedLocalCell = (): void => {
+    if (!selectedCell) return;
+    const current = currentRegistration();
+    if (!current) return;
+    const before = currentGridSnapshot();
+    const next = clearPredrawnMeshCellOverrides(current, selectedCell.column, selectedCell.row);
+    commitMeshRegistration(
+      next,
+      {
+        state: 'reset',
+        message: 'Reset this tile’s local corners. Shared neighboring corners returned to their coarse fit too.',
+      },
+    );
+    recordGridEdit(before);
+    setActiveControl({ kind: 'local-cell', ...selectedCell });
+  };
+
+  const resetAllLocalCells = (): void => {
+    const current = currentRegistration();
+    if (!current?.meshOverrides?.length) return;
+    const before = currentGridSnapshot();
+    const next = clearAllPredrawnMeshOverrides(current);
+    commitMeshRegistration(
+      next,
+      { state: 'reset', message: 'Cleared every local cell refinement. The coarse grid is unchanged.' },
+    );
+    recordGridEdit(before);
+    if (selectedCell) setActiveControl({ kind: 'local-cell', ...selectedCell });
   };
 
   const stageStyle = sourceSize.width && sourceSize.height
@@ -720,15 +1694,31 @@ export function PredrawnCornerPicker({
     const makeLine = (start: PredrawnPoint | undefined, end: PredrawnPoint | undefined) => (
       start && end ? { start, end } : null
     );
+    const meshLine = (points: (PredrawnPoint | undefined)[]): PredrawnPoint[] | null => (
+      points.every((point): point is PredrawnPoint => Boolean(point))
+        ? points as PredrawnPoint[]
+        : null
+    );
+    const cells = Array.from({ length: gridRows }, (_, row) => (
+      Array.from({ length: gridColumns }, (__, column) => {
+        const points = predrawnLocalCellNodes(column, row)
+          .map((node) => predrawnSourceMeshNode(registration, node.column, node.row));
+        return points.every((point): point is PredrawnPoint => Boolean(point))
+          ? { column, row, points: points as PredrawnPoint[] }
+          : null;
+      })
+    )).flat().filter(Boolean) as { column: number; row: number; points: PredrawnPoint[] }[];
     return {
-      fittedColumns: columnGuides.map((guide) => makeLine(
-        predrawnSourceGridPoint(registration, guide, 0),
-        predrawnSourceGridPoint(registration, guide, 1),
-      )).filter(Boolean) as { start: PredrawnPoint; end: PredrawnPoint }[],
-      fittedRows: rowGuides.map((guide) => makeLine(
-        predrawnSourceGridPoint(registration, 0, guide),
-        predrawnSourceGridPoint(registration, 1, guide),
-      )).filter(Boolean) as { start: PredrawnPoint; end: PredrawnPoint }[],
+      fittedColumns: Array.from({ length: gridColumns + 1 }, (_, column) => meshLine(
+        Array.from({ length: gridRows + 1 }, (__, row) => (
+          predrawnSourceMeshNode(registration, column, row)
+        )),
+      )).filter(Boolean) as PredrawnPoint[][],
+      fittedRows: Array.from({ length: gridRows + 1 }, (_, row) => meshLine(
+        Array.from({ length: gridColumns + 1 }, (__, column) => (
+          predrawnSourceMeshNode(registration, column, row)
+        )),
+      )).filter(Boolean) as PredrawnPoint[][],
       canonicalColumns: uniformPredrawnGuides(gridColumns).map((guide) => makeLine(
         predrawnSourceGridPoint(registration, guide, 0),
         predrawnSourceGridPoint(registration, guide, 1),
@@ -737,17 +1727,53 @@ export function PredrawnCornerPicker({
         predrawnSourceGridPoint(registration, 0, guide),
         predrawnSourceGridPoint(registration, 1, guide),
       )).filter(Boolean) as { start: PredrawnPoint; end: PredrawnPoint }[],
-      columnHandles: columnGuides.slice(1, -1).map((guide, index) => ({
+      columnHandles: columnGuides.slice(1, -1).map((_guide, index) => ({
         index: index + 1,
-        point: predrawnSourceGridPoint(registration, guide, 0.18),
+        point: predrawnSourceGridPoint(registration, columnGuides[index + 1], 0.18),
       })),
-      rowHandles: rowGuides.slice(1, -1).map((guide, index) => ({
+      rowHandles: rowGuides.slice(1, -1).map((_guide, index) => ({
         index: index + 1,
-        point: predrawnSourceGridPoint(registration, 0.82, guide),
+        point: predrawnSourceGridPoint(registration, 0.82, rowGuides[index + 1]),
       })),
       center: predrawnSourceGridPoint(registration, 0.5, 0.5),
+      cells,
+      localHandles: selectedCell
+        ? predrawnLocalCellNodes(selectedCell.column, selectedCell.row).map((node) => ({
+            ...node,
+            point: predrawnSourceMeshNode(registration, node.column, node.row),
+            locked: predrawnLocalNodeIsBoundary(
+              node.column,
+              node.row,
+              gridColumns,
+              gridRows,
+            ),
+            overridden: predrawnMeshNodeIsOverridden(registration, node.column, node.row),
+            affectedCellCount: predrawnMeshCellsForNode(registration, node.column, node.row).length,
+          }))
+        : [],
+      affectedCellKeys: activeControl.kind === 'local-node'
+        ? new Set(predrawnMeshCellsForNode(
+            registration,
+            activeControl.column,
+            activeControl.row,
+          ).map((cell) => `${cell.column},${cell.row}`))
+        : new Set<string>(),
     };
-  }, [columnGuides, gridColumns, gridRows, registration, rowGuides]);
+  }, [activeControl, columnGuides, gridColumns, gridRows, registration, rowGuides, selectedCell]);
+  const selectedCellOverrideCount = registration && selectedCell
+    ? predrawnLocalCellNodes(selectedCell.column, selectedCell.row).filter((node) => (
+        predrawnMeshNodeIsOverridden(registration, node.column, node.row)
+      )).length
+    : 0;
+  const activeLocalNodeOverridden = Boolean(
+    registration
+    && activeControl.kind === 'local-node'
+    && predrawnMeshNodeIsOverridden(registration, activeControl.column, activeControl.row),
+  );
+  const coarseRebaseLocked = meshOverrides.length > 0;
+  const coarseRebaseTitle = coarseRebaseLocked
+    ? `Clear all ${meshOverrides.length} local adjustment${meshOverrides.length === 1 ? '' : 's'} before changing grid dimensions, snapping, or resetting spacing.`
+    : undefined;
 
   return createPortal(
     <div
@@ -767,7 +1793,7 @@ export function PredrawnCornerPicker({
         <header className="predrawn-corner-picker-header">
           <div>
             <h2 id="predrawn-corner-picker-title">Calibrate the artwork refit grid</h2>
-            <p>Set how many rows and columns the artwork contains, place its four boundary corners, then fit the cyan grid to its painted cells.</p>
+            <p>Fit the whole grid first, then correct individual painted tiles with shared local corners where the artwork drifts.</p>
           </div>
           <button
             type="button"
@@ -778,115 +1804,263 @@ export function PredrawnCornerPicker({
         </header>
 
         <div className="predrawn-corner-picker-toolbar">
-          <div className="predrawn-corner-picker-corners" role="group" aria-label="Corner to place">
-            {CORNERS.map((corner) => (
+          <div className="predrawn-corner-picker-toolbar-main">
+            <div className="predrawn-corner-picker-mode" role="group" aria-label="Grid editing scale">
               <button
-                key={corner}
                 type="button"
+                data-testid="predrawn-grid-edit-coarse"
                 data-chrome-unit="inner-text-button"
                 className={chromeUnitClassNames(
                   'inner-text-button',
                   'le-seg-btn',
-                  activeControl.kind === 'corner' && activeControl.corner === corner && 'active',
+                  editMode === 'coarse' && 'active',
                 )}
-                aria-pressed={activeControl.kind === 'corner' && activeControl.corner === corner}
-                onClick={() => chooseCorner(corner)}
-              >
-                <strong>{CORNER_LABEL[corner]}</strong>
-                <span>{pointLabel(points[corner])}</span>
-              </button>
-            ))}
+                aria-pressed={editMode === 'coarse'}
+                onClick={() => chooseEditMode('coarse')}
+              >Coarse grid</button>
+              <button
+                type="button"
+                data-testid="predrawn-grid-edit-local"
+                data-chrome-unit="inner-text-button"
+                className={chromeUnitClassNames(
+                  'inner-text-button',
+                  'le-seg-btn',
+                  editMode === 'local' && 'active',
+                )}
+                aria-pressed={editMode === 'local'}
+                disabled={!complete}
+                title={complete
+                  ? 'Select one painted tile and adjust its shared interior corners.'
+                  : 'Place a complete coarse grid before refining individual tiles.'}
+                onClick={() => chooseEditMode('local')}
+              >Local cells</button>
+            </div>
+            <div className="predrawn-grid-history" role="group" aria-label="Grid edit history">
+              <button
+                type="button"
+                data-testid="predrawn-grid-undo"
+                data-chrome-unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                disabled={!gridHistory.undo.length}
+                title={gridHistory.undo.length
+                  ? 'Undo the last grid adjustment.'
+                  : 'Nothing to undo.'}
+                onClick={() => applyGridHistory('undo')}
+              >Undo</button>
+              <button
+                type="button"
+                data-testid="predrawn-grid-redo"
+                data-chrome-unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                disabled={!gridHistory.redo.length}
+                title={gridHistory.redo.length
+                  ? 'Redo the last undone grid adjustment.'
+                  : 'Nothing to redo.'}
+                onClick={() => applyGridHistory('redo')}
+              >Redo</button>
+            </div>
+            {editMode === 'coarse' ? (
+              <div className="predrawn-corner-picker-corners" role="group" aria-label="Corner to place">
+                {CORNERS.map((corner) => (
+                  <button
+                    key={corner}
+                    type="button"
+                    data-chrome-unit="inner-text-button"
+                    className={chromeUnitClassNames(
+                      'inner-text-button',
+                      'le-seg-btn',
+                      activeControl.kind === 'corner' && activeControl.corner === corner && 'active',
+                    )}
+                    aria-pressed={activeControl.kind === 'corner' && activeControl.corner === corner}
+                    onClick={() => chooseCorner(corner)}
+                  >
+                    <strong>{`Point ${CORNER_POINT_NUMBER[corner]}`}</strong>
+                    <span>{pointLabel(points[corner])}</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="predrawn-grid-local-instruction">
+                {selectedCell
+                  ? `Tile ${selectedCell.column + 1}, ${selectedCell.row + 1} selected · choose one of its four shared corners.`
+                  : 'Click a tile to expose its four shared corner handles.'}
+              </p>
+            )}
           </div>
           <div className="predrawn-corner-picker-zoom" role="group" aria-label="Source image zoom">
-            {(['fit', 0.5, 0.75, 1, 1.5, 2] as const).map((value) => (
+            {(['fit', ...PREDRAWN_SOURCE_ZOOM_LEVELS] as const).map((value) => (
               <button
                 key={value}
                 type="button"
                 data-chrome-unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', zoom === value && 'active')}
                 aria-pressed={zoom === value}
-                onClick={() => setZoom(value)}
+                onClick={() => {
+                  viewportZoomAnchorRef.current = null;
+                  setZoom(value);
+                }}
               >{value === 'fit' ? 'Fit' : `${value * 100}%`}</button>
             ))}
           </div>
         </div>
 
-        <div className="predrawn-grid-calibration-bar">
+        <div className={`predrawn-grid-calibration-bar is-${editMode}`}>
           <div className="predrawn-grid-legend" aria-label="Grid legend">
             <span data-kind="fitted">Fitted grid</span>
-            <span data-kind="canonical">Equal-spacing reference</span>
-            <span data-kind="boundary">Pinned boundary</span>
+            {editMode === 'coarse' ? (
+              <>
+                <span data-kind="canonical">Equal-spacing reference</span>
+                <span data-kind="boundary">Pinned boundary</span>
+              </>
+            ) : (
+              <>
+                <span data-kind="selected">Selected tile</span>
+                <span data-kind="affected">Shared neighbors</span>
+                <span data-kind="locked">Locked outside edge</span>
+              </>
+            )}
           </div>
-          <div className="predrawn-grid-size-controls" role="group" aria-label="Artwork refit target dimensions">
-            <label>
-              <span>Refit columns</span>
-              <input
-                data-testid="predrawn-grid-columns"
-                type="number"
-                min={1}
-                max={64}
-                step={1}
-                value={gridColumns}
-                onChange={(event) => {
-                  if (event.currentTarget.value) changeGridColumns(Number(event.currentTarget.value));
-                }}
-              />
-            </label>
-            <span aria-hidden="true">×</span>
-            <label>
-              <span>Refit rows</span>
-              <input
-                data-testid="predrawn-grid-rows"
-                type="number"
-                min={1}
-                max={64}
-                step={1}
-                value={gridRows}
-                onChange={(event) => {
-                  if (event.currentTarget.value) changeGridRows(Number(event.currentTarget.value));
-                }}
-              />
-            </label>
-            <small>Level remains {columns} × {rows}</small>
-          </div>
-          <output data-testid="predrawn-grid-stretch-summary">
-            Refit {gridColumns} × {gridRows} · Columns {formatScale(stretch.columnMinScale)}–{formatScale(stretch.columnMaxScale)} · Rows {formatScale(stretch.rowMinScale)}–{formatScale(stretch.rowMaxScale)} · Max correction {stretch.maximumDeviationPercent.toFixed(1)}%
-          </output>
+          {editMode === 'coarse' ? (
+            <>
+              <div
+                className={`predrawn-grid-size-controls${coarseRebaseLocked ? ' is-locked' : ''}`}
+                role="group"
+                aria-label="Artwork refit target dimensions"
+                title={coarseRebaseTitle}
+              >
+                <label title={coarseRebaseTitle}>
+                  <span>Refit columns</span>
+                  <input
+                    data-testid="predrawn-grid-columns"
+                    type="number"
+                    min={1}
+                    max={64}
+                    step={1}
+                    value={gridColumns}
+                    disabled={coarseRebaseLocked}
+                    title={coarseRebaseTitle}
+                    onChange={(event) => {
+                      if (event.currentTarget.value) changeGridColumns(Number(event.currentTarget.value));
+                    }}
+                  />
+                </label>
+                <span aria-hidden="true">×</span>
+                <label title={coarseRebaseTitle}>
+                  <span>Refit rows</span>
+                  <input
+                    data-testid="predrawn-grid-rows"
+                    type="number"
+                    min={1}
+                    max={64}
+                    step={1}
+                    value={gridRows}
+                    disabled={coarseRebaseLocked}
+                    title={coarseRebaseTitle}
+                    onChange={(event) => {
+                      if (event.currentTarget.value) changeGridRows(Number(event.currentTarget.value));
+                    }}
+                  />
+                </label>
+                <small>Level remains {columns} × {rows}</small>
+              </div>
+              <output data-testid="predrawn-grid-stretch-summary">
+                Refit {gridColumns} × {gridRows} · Columns {formatScale(stretch.columnMinScale)}–{formatScale(stretch.columnMaxScale)} · Rows {formatScale(stretch.rowMinScale)}–{formatScale(stretch.rowMaxScale)} · Max correction {stretch.maximumDeviationPercent.toFixed(1)}%
+              </output>
+            </>
+          ) : (
+            <output data-testid="predrawn-grid-local-summary">
+              {selectedCell
+                ? `Tile ${selectedCell.column + 1}, ${selectedCell.row + 1} · ${selectedCellOverrideCount} adjusted corner${selectedCellOverrideCount === 1 ? '' : 's'}`
+                : 'No tile selected'}
+              {' · '}{meshOverrides.length} local adjustment{meshOverrides.length === 1 ? '' : 's'} total
+            </output>
+          )}
           <div className="predrawn-grid-calibration-actions">
-            <button
-              type="button"
-              data-testid="predrawn-boundary-pin"
-              data-chrome-unit="inner-text-button"
-              className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-              disabled={!complete}
-              onClick={pinBoundaryReference}
-            >{boundaryReference ? 'Update boundary' : 'Pin boundary'}</button>
-            <button
-              type="button"
-              data-testid="predrawn-boundary-clear"
-              data-chrome-unit="inner-text-button"
-              className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-              disabled={!boundaryReference}
-              onClick={clearBoundaryReference}
-            >Clear boundary</button>
-            <button
-              type="button"
-              data-testid="predrawn-grid-snap-ideal"
-              data-chrome-unit="inner-text-button"
-              className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-              disabled={!complete}
-              onClick={snapToIdealGrid}
-            >Snap ideal grid</button>
-            <button
-              type="button"
-              data-chrome-unit="inner-text-button"
-              className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-              onClick={resetSpacing}
-            >Reset spacing</button>
+            {editMode === 'coarse' ? (
+              <>
+                <button
+                  type="button"
+                  data-testid="predrawn-boundary-pin"
+                  data-chrome-unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                  disabled={!complete}
+                  onClick={pinBoundaryReference}
+                >{boundaryReference ? 'Update boundary' : 'Pin boundary'}</button>
+                <button
+                  type="button"
+                  data-testid="predrawn-boundary-clear"
+                  data-chrome-unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                  disabled={!boundaryReference}
+                  onClick={clearBoundaryReference}
+                >Clear boundary</button>
+                <button
+                  type="button"
+                  data-testid="predrawn-grid-snap-ideal"
+                  data-chrome-unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                  disabled={!complete || coarseRebaseLocked}
+                  title={coarseRebaseTitle ?? 'Snap the coarse grid to ideal board projection spacing.'}
+                  onClick={snapToIdealGrid}
+                >Snap ideal grid</button>
+                <button
+                  type="button"
+                  data-testid="predrawn-grid-reset-spacing"
+                  data-chrome-unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                  disabled={coarseRebaseLocked}
+                  title={coarseRebaseTitle ?? 'Reset row and column spacing to equal intervals.'}
+                  onClick={resetSpacing}
+                >Reset spacing</button>
+                {coarseRebaseLocked ? (
+                  <button
+                    type="button"
+                    data-testid="predrawn-grid-clear-local-from-coarse"
+                    data-chrome-unit="inner-text-button"
+                    className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')}
+                    title="Explicitly clear local cell refinements so coarse dimensions and spacing can be rebased."
+                    onClick={resetAllLocalCells}
+                  >Clear {meshOverrides.length} local</button>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  data-testid="predrawn-grid-reset-node"
+                  data-chrome-unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                  disabled={!activeLocalNodeOverridden}
+                  title="Reset the active shared corner to the coarse grid."
+                  onClick={resetActiveLocalNode}
+                >Reset corner</button>
+                <button
+                  type="button"
+                  data-testid="predrawn-grid-reset-cell"
+                  data-chrome-unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                  disabled={!selectedCell || selectedCellOverrideCount === 0}
+                  title="Reset all adjusted corners of this tile, including corners shared with neighbors."
+                  onClick={resetSelectedLocalCell}
+                >Reset tile</button>
+                <button
+                  type="button"
+                  data-testid="predrawn-grid-reset-local"
+                  data-chrome-unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                  disabled={!meshOverrides.length}
+                  title={`Clear all ${meshOverrides.length} local adjustment${meshOverrides.length === 1 ? '' : 's'} without changing the coarse grid.`}
+                  onClick={resetAllLocalCells}
+                >Clear all local</button>
+              </>
+            )}
           </div>
         </div>
 
-        <div className="predrawn-corner-picker-viewport">
+        <div
+          ref={viewportRef}
+          className="predrawn-corner-picker-viewport"
+        >
           <div
             ref={stageRef}
             className="predrawn-corner-picker-stage"
@@ -909,10 +2083,18 @@ export function PredrawnCornerPicker({
                     width,
                     height,
                   );
+                  const normalizedMeshOverrides = meshOverridesFromRegistration(
+                    openingRegistration.current,
+                    width,
+                    height,
+                  );
                   pointsRef.current = normalizedPoints;
                   boundaryPointsRef.current = normalizedBoundaryPoints;
+                  meshOverridesRef.current = normalizedMeshOverrides;
+                  clearGridHistory();
                   setPoints(normalizedPoints);
                   setBoundaryPoints(normalizedBoundaryPoints);
+                  setMeshOverrides(normalizedMeshOverrides);
                   normalizedForImage.current = true;
                 }
               }}
@@ -922,18 +2104,53 @@ export function PredrawnCornerPicker({
               <div
                 ref={overlayRef}
                 data-testid="predrawn-corner-picker-stage"
-                className="predrawn-corner-picker-overlay"
+                className={`predrawn-corner-picker-overlay${viewportPanning ? ' is-panning' : ''}`}
                 tabIndex={0}
                 role="application"
-                aria-label={`Adjust ${activeControlLabel(activeControl)}. Drag handles or use arrow keys; hold Shift for ten-pixel corner movement.`}
+                aria-label={editMode === 'local'
+                  ? selectedCell
+                    ? `Local tile refinement for tile ${selectedCell.column + 1}, ${selectedCell.row + 1}. Choose a shared interior corner, then drag it or use arrow keys.`
+                    : 'Local tile refinement. Click a painted tile to expose its four shared corners.'
+                  : `Adjust ${activeControlLabel(activeControl)}. Drag handles or use arrow keys; hold Shift for ten-pixel corner movement.`}
                 onKeyDown={nudgeActiveControl}
+                onPointerDownCapture={beginViewportPan}
                 onPointerMove={moveDrag}
                 onPointerUp={endDrag}
                 onPointerCancel={endDrag}
+                onContextMenu={(event) => event.preventDefault()}
               >
                 {gridLines && !placingCorner ? (
                   <svg viewBox={`0 0 ${sourceSize.width} ${sourceSize.height}`} preserveAspectRatio="none" aria-hidden="true">
-                    {boundaryReference ? (
+                    {editMode === 'local' ? (
+                      <g className="predrawn-grid-cell-hits">
+                        {gridLines.cells.map((cell) => {
+                          const key = `${cell.column},${cell.row}`;
+                          const selected = selectedCell?.column === cell.column
+                            && selectedCell.row === cell.row;
+                          const affected = gridLines.affectedCellKeys.has(key);
+                          return (
+                            <polygon
+                              key={key}
+                              data-testid={`predrawn-local-cell-${cell.column}-${cell.row}`}
+                              className={[
+                                'predrawn-grid-cell-hit',
+                                selected ? 'is-selected' : '',
+                                affected ? 'is-affected' : '',
+                              ].filter(Boolean).join(' ')}
+                              points={cell.points.map((point) => point.join(',')).join(' ')}
+                              vectorEffect="non-scaling-stroke"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                chooseLocalCell(cell.column, cell.row);
+                              }}
+                            >
+                              <title>{`Select tile ${cell.column + 1}, ${cell.row + 1} for local corner refinement`}</title>
+                            </polygon>
+                          );
+                        })}
+                      </g>
+                    ) : null}
+                    {editMode === 'coarse' && boundaryReference ? (
                       <g className="predrawn-boundary-reference">
                         <polygon
                           points={CORNERS.map((corner) => boundaryReference[corner].join(',')).join(' ')}
@@ -949,49 +2166,59 @@ export function PredrawnCornerPicker({
                             r={7}
                             vectorEffect="non-scaling-stroke"
                             onPointerDown={(event) => beginDrag(event, { kind: 'reference-corner', corner })}
-                          ><title>{`Adjust ${CORNER_LABEL[corner]} pinned boundary corner`}</title></circle>
+                          ><title>{`Adjust pinned ${boundaryPointLabel(corner).toLowerCase()}`}</title></circle>
                         ))}
                       </g>
                     ) : null}
-                    <g className="predrawn-grid-reference-lines">
-                      {[...gridLines.canonicalColumns, ...gridLines.canonicalRows].map((line, index) => (
-                        <line key={index} x1={line.start[0]} y1={line.start[1]} x2={line.end[0]} y2={line.end[1]} vectorEffect="non-scaling-stroke" />
-                      ))}
-                    </g>
+                    {editMode === 'coarse' ? (
+                      <g className="predrawn-grid-reference-lines">
+                        {[...gridLines.canonicalColumns, ...gridLines.canonicalRows].map((line, index) => (
+                          <line key={index} x1={line.start[0]} y1={line.start[1]} x2={line.end[0]} y2={line.end[1]} vectorEffect="non-scaling-stroke" />
+                        ))}
+                      </g>
+                    ) : null}
                     <g className="predrawn-grid-fitted-lines">
                       {[...gridLines.fittedColumns, ...gridLines.fittedRows].map((line, index) => (
-                        <line key={index} x1={line.start[0]} y1={line.start[1]} x2={line.end[0]} y2={line.end[1]} vectorEffect="non-scaling-stroke" />
+                        <polyline
+                          key={index}
+                          points={line.map((point) => point.join(',')).join(' ')}
+                          vectorEffect="non-scaling-stroke"
+                        />
                       ))}
                     </g>
-                    <g className="predrawn-grid-guide-handles predrawn-grid-column-handles">
-                      {gridLines.columnHandles.map(({ index, point }) => point ? (
-                        <circle
-                          key={index}
-                          data-testid={`predrawn-column-guide-${index}`}
-                          cx={point[0]}
-                          cy={point[1]}
-                          r={8}
-                          vectorEffect="non-scaling-stroke"
-                          onPointerDown={(event) => beginDrag(event, { kind: 'column', index })}
-                        ><title>{`Stretch column guide ${index}`}</title></circle>
-                      ) : null)}
-                    </g>
-                    <g className="predrawn-grid-guide-handles predrawn-grid-row-handles">
-                      {gridLines.rowHandles.map(({ index, point }) => point ? (
-                        <rect
-                          key={index}
-                          data-testid={`predrawn-row-guide-${index}`}
-                          x={point[0] - 7}
-                          y={point[1] - 7}
-                          width={14}
-                          height={14}
-                          rx={2}
-                          vectorEffect="non-scaling-stroke"
-                          onPointerDown={(event) => beginDrag(event, { kind: 'row', index })}
-                        ><title>{`Stretch row guide ${index}`}</title></rect>
-                      ) : null)}
-                    </g>
-                    {gridLines.center ? (
+                    {editMode === 'coarse' ? (
+                      <>
+                        <g className="predrawn-grid-guide-handles predrawn-grid-column-handles">
+                          {gridLines.columnHandles.map(({ index, point }) => point ? (
+                            <circle
+                              key={index}
+                              data-testid={`predrawn-column-guide-${index}`}
+                              cx={point[0]}
+                              cy={point[1]}
+                              r={8}
+                              vectorEffect="non-scaling-stroke"
+                              onPointerDown={(event) => beginDrag(event, { kind: 'column', index })}
+                            ><title>{`Stretch column guide ${index}`}</title></circle>
+                          ) : null)}
+                        </g>
+                        <g className="predrawn-grid-guide-handles predrawn-grid-row-handles">
+                          {gridLines.rowHandles.map(({ index, point }) => point ? (
+                            <rect
+                              key={index}
+                              data-testid={`predrawn-row-guide-${index}`}
+                              x={point[0] - 7}
+                              y={point[1] - 7}
+                              width={14}
+                              height={14}
+                              rx={2}
+                              vectorEffect="non-scaling-stroke"
+                              onPointerDown={(event) => beginDrag(event, { kind: 'row', index })}
+                            ><title>{`Stretch row guide ${index}`}</title></rect>
+                          ) : null)}
+                        </g>
+                      </>
+                    ) : null}
+                    {editMode === 'coarse' && gridLines.center ? (
                       <g
                         className="predrawn-grid-move-handle"
                         data-testid="predrawn-grid-move-handle"
@@ -1005,7 +2232,60 @@ export function PredrawnCornerPicker({
                     ) : null}
                   </svg>
                 ) : null}
-                {CORNERS.map((corner) => {
+                {editMode === 'local' && gridLines && selectedCell ? gridLines.localHandles.map((handle) => {
+                  if (!handle.point) return null;
+                  const active = activeControl.kind === 'local-node'
+                    && activeControl.column === handle.column
+                    && activeControl.row === handle.row;
+                  const title = handle.locked
+                    ? 'This shared corner is on the outside edge and stays locked in Local cells. Use Coarse grid to move the boundary.'
+                    : `Drag this shared corner. It adjusts ${handle.affectedCellCount} highlighted tile${handle.affectedCellCount === 1 ? '' : 's'}. Arrow keys move 1 source pixel; Shift moves 10.`;
+                  const control: ActiveControl = {
+                    kind: 'local-node',
+                    column: handle.column,
+                    row: handle.row,
+                    cellColumn: selectedCell.column,
+                    cellRow: selectedCell.row,
+                    corner: handle.corner,
+                  };
+                  return (
+                    <button
+                      key={handle.corner}
+                      type="button"
+                      data-testid={`predrawn-local-node-${handle.corner}`}
+                      data-corner={handle.corner}
+                      className={[
+                        'predrawn-grid-local-node',
+                        active ? 'is-active' : '',
+                        handle.locked ? 'is-locked' : '',
+                        handle.overridden ? 'is-overridden' : '',
+                      ].filter(Boolean).join(' ')}
+                      style={{
+                        left: `${(handle.point[0] / sourceSize.width) * 100}%`,
+                        top: `${(handle.point[1] / sourceSize.height) * 100}%`,
+                      }}
+                      aria-label={title}
+                      aria-disabled={handle.locked}
+                      title={title}
+                      onFocus={() => setActiveControl(control)}
+                      onPointerDown={(event) => {
+                        if (event.button !== 0) return;
+                        if (handle.locked) {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setActiveControl(control);
+                          setLocalConstraintState('constrained');
+                          setLocalFeedback('This shared corner is on the locked outside edge. Switch to Coarse grid to move the boundary.');
+                          overlayRef.current?.focus();
+                          return;
+                        }
+                        beginDrag(event, control);
+                      }}
+                      onClick={(event) => event.stopPropagation()}
+                    />
+                  );
+                }) : null}
+                {editMode === 'coarse' ? CORNERS.map((corner) => {
                   const point = points[corner];
                   if (!point || placingCorner === corner) return null;
                   return (
@@ -1017,10 +2297,10 @@ export function PredrawnCornerPicker({
                       style={{ left: `${(point[0] / sourceSize.width) * 100}%`, top: `${(point[1] / sourceSize.height) * 100}%` }}
                       onPointerDown={(event) => beginDrag(event, { kind: 'corner', corner })}
                     >
-                      <span className="predrawn-corner-picker-marker-label">{CORNER_SHORT[corner]}</span>
+                      <span className="predrawn-corner-picker-marker-label">{CORNER_POINT_NUMBER[corner]}</span>
                     </span>
                   );
-                })}
+                }) : null}
               </div>
             ) : null}
           </div>
@@ -1031,24 +2311,33 @@ export function PredrawnCornerPicker({
           <p
             className="predrawn-corner-picker-save-status"
             data-state={saveState}
+            data-local-state={localConstraintState}
             role={saveState === 'error' ? 'alert' : 'status'}
             aria-live="polite"
           >
             <strong>{activeControlLabel(activeControl)}</strong>.{' '}
             {placingCorner
-              ? `${CORNER_LABEL[placingCorner]} placement armed — click its destination on the image.`
-              : saveState === 'pending'
-                ? onSaveRegistration
-                  ? `CALIBRATION CHANGED — click ${saveLabel} to stage it for a new warped version.`
-                  : 'CALIBRATION CHANGED — click SAVE REGISTRATION to apply the inverse warp.'
-                : saveState === 'saved'
-                  ? onSaveRegistration
-                    ? 'GRID STAGED — generate a warped version to create new art.'
-                    : 'SAVED LOCALLY — the exact grid registration was read back and applied.'
-                  : saveState === 'error'
-                    ? 'LOCAL SAVE FAILED — registration was not saved.'
-                    : 'Drag a handle to begin.'}
-            {' '}Cyan circles stretch columns, squares stretch rows, the center cross moves the grid, and magenta handles edit the pinned boundary.
+              ? `${boundaryPointLabel(placingCorner)} placement armed — click its destination on the image.`
+              : localFeedback
+                ?? (editMode === 'local'
+                  ? selectedCell
+                    ? 'Choose one of the tile’s four corner handles.'
+                    : 'Click a painted tile to begin local refinement.'
+                  : saveState === 'pending'
+                    ? onSaveRegistration
+                      ? `CALIBRATION CHANGED — click ${saveLabel} to stage it for a new warped version.`
+                      : 'CALIBRATION CHANGED — click SAVE REGISTRATION to apply the inverse warp.'
+                    : saveState === 'saved'
+                      ? onSaveRegistration
+                        ? 'GRID STAGED — generate a warped version to create new art.'
+                        : 'SAVED LOCALLY — the exact grid registration was read back and applied.'
+                      : saveState === 'error'
+                        ? 'LOCAL SAVE FAILED — registration was not saved.'
+                        : 'Drag a handle to begin.')}
+            {' '}{editMode === 'local'
+              ? 'A shared corner changes every highlighted neighboring tile. Outside-edge handles are locked; switch to Coarse grid to move the boundary. Arrow keys move 1 source pixel; Shift moves 10.'
+              : 'Cyan circles stretch columns, squares stretch rows, the center cross moves the whole grid and its local adjustments, and magenta handles edit the pinned boundary.'}
+            {' '}Mouse wheel zooms at the cursor. Right-drag anywhere on the artwork to pan.
           </p>
           <div className="confirm-actions">
             <button

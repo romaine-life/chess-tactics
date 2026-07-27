@@ -22,3 +22,7 @@ export function observationOpenPostData({ targetIsLevelEditor, method, requestUr
     return null;
   }
 }
+
+export function isObservationSessionState(value) {
+  return value === 'observing';
+}

@@ -15,6 +15,10 @@ describe('level editor responsive layout', () => {
     expect(breakpointEnd).toBeGreaterThan(breakpointStart);
     expect(tabletCss).toMatch(/\.level-editor-screen\s*\{[\s\S]*?grid-template-areas:\s*"titlebar"\s*"board"\s*"rail";/);
     expect(tabletCss).toContain('grid-template-rows: var(--app-header-h) minmax(520px, 62vh) auto;');
+    expect(tabletCss).toMatch(/\.level-editor-screen \.le-outer-panel > \.le-outer-panel-content\s*\{[\s\S]*?height:\s*auto;/);
+    expect(tabletCss).toMatch(/\.level-editor-screen \.le-hud-scroll\s*\{[\s\S]*?flex:\s*none;/);
+    expect(tabletCss).toMatch(/\.level-editor-screen \.le-hud-scroll > \.kit-scroll-content\s*\{[\s\S]*?height:\s*auto;[\s\S]*?overflow:\s*visible;/);
+    expect(tabletCss).toMatch(/\.level-editor-screen \.le-hud-scroll > \.kit-scroll-rail\s*\{[\s\S]*?display:\s*none;/);
   });
 
   it('keeps the editor stacked when the later short-landscape rule restores gameplay columns', () => {
@@ -24,6 +28,7 @@ describe('level editor responsive layout', () => {
     expect(landscapeStart).toBeGreaterThanOrEqual(0);
     expect(landscapeCss).toMatch(/\.skirmish-screen\.level-editor-screen\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\);[\s\S]*?grid-template-areas:\s*"titlebar"\s*"board"\s*"rail";/);
     expect(landscapeCss).toMatch(/\.level-editor-screen \.skirmish-hud\s*\{[\s\S]*?grid-column:\s*1;\s*grid-row:\s*3;/);
+    expect(landscapeCss).toMatch(/\.level-editor-screen \.le-hud-scroll > \.kit-scroll-content\s*\{[\s\S]*?height:\s*auto;[\s\S]*?overflow:\s*visible;/);
   });
 
   it('leaves wall-face dimensions to the canonical runtime geometry', () => {

@@ -70,7 +70,7 @@ describe('Level Editor chrome hierarchy', () => {
     expect(chromeBox).toContain('export function ChromeSurfaceFill');
     expect(chromeBox).toContain('data-chrome-fill-role={role}');
     expect(chromeBox).toContain('<ChromeSurfaceFill role="outer" className="le-outer-panel-fill" />');
-    expect(levelEditor).toMatch(/className=\{`skirmish-board-frame\$\{eventsOpen \|\| predrawnArtworkWorkspaceOpen \? ' is-workspace-covered' : ''\}`\}[\s\S]*?inert=\{eventsOpen \|\| predrawnArtworkWorkspaceOpen \? true : undefined\}[\s\S]*?aria-hidden=\{eventsOpen \|\| predrawnArtworkWorkspaceOpen \? true : undefined\}/);
+    expect(levelEditor).toMatch(/className=\{`skirmish-board-frame\$\{eventsOpen \|\| levelArtworkWorkspace \? ' is-workspace-covered' : ''\}`\}[\s\S]*?inert=\{eventsOpen \|\| levelArtworkWorkspace \? true : undefined\}[\s\S]*?aria-hidden=\{eventsOpen \|\| levelArtworkWorkspace \? true : undefined\}/);
     expect(levelEditor).toMatch(/\{eventsOpen \? \(\s*<LevelEditorEventsWorkspace/);
     expect(levelEditor).toContain('const [eventsOpen, setEventsOpen] = useState(initialEventsOpen);');
     expect(levelEditor).toContain('eventsEditor: routeState.eventsEditor');
@@ -134,8 +134,10 @@ describe('Level Editor chrome hierarchy', () => {
     expect(levelEditor).toContain('onClick={fillSelectedTileArea}');
     expect(levelEditor).toContain('>Fill selected area</button>');
     expect(levelEditor).toContain('renderCellOverlay={regionCells && regionCells.size > 0');
-    expect(levelEditor).toContain("? (cell) => regionCells.has(`${cell.x},${cell.y}`)");
-    expect(levelEditor.match(/<span className="le-region-cell"/g)).toHaveLength(1);
+    expect(levelEditor).toContain('? (cell) => {');
+    expect(levelEditor).toContain('const key = `${cell.x},${cell.y}`;');
+    expect(levelEditor).toContain('return regionCells.has(key)');
+    expect(levelEditor.match(/<span\s+className="le-region-cell"/g)).toHaveLength(1);
     expect(styleCss).toMatch(/\.le-region-cell\s*\{[\s\S]*?top:\s*0;/);
   });
 

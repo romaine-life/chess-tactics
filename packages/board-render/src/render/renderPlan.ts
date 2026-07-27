@@ -39,7 +39,11 @@ import {
 import { densityFieldAt, groundCoverSet, resolveGroundCover, type GroundCover } from '../core/groundCover';
 import { familyOfTile } from '../core/levelBoard';
 import type { TileFamilyId } from '../core/tileSockets';
-import { isVersionedPredrawnBoardSurface, type EditorBoard } from '../ui/boardCode';
+import {
+  boardBackgroundMode,
+  isVersionedPredrawnBoardSurface,
+  type EditorBoard,
+} from '../ui/boardCode';
 import { macroTileAsset, macroTileBreakIndices, macroTileFrame, macroTileOwnedCellIndices, resolveMacroTilePlacements } from '../core/macroTiles';
 import { liveMediaSlotUrl } from '../art/liveMediaCatalog';
 import {
@@ -153,10 +157,12 @@ export interface BoardDrawOptions {
 
 /** A generated plate owns baked environment pixels; canonical units and authored cover stay live. */
 export function isPredrawnBackgroundActive(
-  board: Pick<RenderBoard, 'surface'>,
+  board: Pick<RenderBoard, 'backgroundMode' | 'surface'>,
   options: Pick<BoardDrawOptions, 'predrawnBackgroundActive'> = {},
 ): boolean {
-  return board.surface?.kind === 'predrawn' || options.predrawnBackgroundActive === true;
+  // AI is the saved rendering mode even when its remembered selection is unavailable. In that
+  // fail-closed state the legacy environment must stay suppressed rather than becoming a fallback.
+  return boardBackgroundMode(board) === 'ai' || options.predrawnBackgroundActive === true;
 }
 
 export interface BoardVisualTerrainCell {
@@ -427,7 +433,9 @@ function pushFencePostDrawOp(ops: BoardDrawOp[], post: ResolvedFencePost): void 
 export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {}): BoardDrawOp[] {
   const ops: BoardDrawOp[] = [];
   const visualTerrainCells = boardVisualTerrainCells(board);
-  const predrawn = board.surface?.kind === 'predrawn' ? board.surface : undefined;
+  const predrawn = isPredrawnBackgroundActive(board) && board.surface?.kind === 'predrawn'
+    ? board.surface
+    : undefined;
   const predrawnBackgroundActive = isPredrawnBackgroundActive(board, options);
   if (predrawn) {
     if (isVersionedPredrawnBoardSurface(predrawn)) {
@@ -786,6 +794,7 @@ export function boardContentHash(board: RenderBoard): string {
   const parts = [
     `c${board.cols}`,
     `r${board.rows}`,
+    `bm:${boardBackgroundMode(board)}`,
     `pd:${JSON.stringify(board.surface ?? null)}`,
     `da:${JSON.stringify(board.decorativeApron ?? null)}`,
     `df:${JSON.stringify([...(board.decorativeFootprint ?? [])].sort())}`,
@@ -845,7 +854,7 @@ export function boardSocialFramingBounds(board: RenderBoard): BakeBounds {
   const drawBounds = boardBounds(board);
   // A registered complete scene owns meaningful pixels beyond the logical board boundary. Server
   // cards must fit that transformed full frame rather than applying the ordinary tile-relief crop.
-  if (board.surface?.kind === 'predrawn') return drawBounds;
+  if (isPredrawnBackgroundActive(board)) return drawBounds;
   let surfaceMaxY = -Infinity;
   for (const { x, y, tileId } of boardVisualTerrainCells(board)) {
     if (!tileId) continue;

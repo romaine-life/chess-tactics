@@ -8,6 +8,7 @@ import {
   predrawnReferenceLevelFromWorkspaces,
   predrawnReferenceLevelId,
 } from './PredrawnReference';
+import { boardForPredrawnSourceArtwork } from '../render/StudioReadOnlyBoard';
 
 const workspace = (...levels: ReturnType<typeof createBlankLevel>[]): RevisionedWorkspace => ({
   campaigns: [],
@@ -73,5 +74,40 @@ describe('pre-drawn generation reference route', () => {
       '/api/media/missing',
       () => image as unknown as HTMLImageElement,
     )).rejects.toThrow('Reference source failed to load: /api/media/missing');
+  });
+
+  it('prepares the same unit-free and cover-free saved background used by Source Artwork', () => {
+    const level = createBlankLevel('usr-l-source', 'Source', 5, 5);
+    const board = {
+      ...level.board,
+    };
+    const prepared = boardForPredrawnSourceArtwork({
+      cols: board.cols,
+      rows: board.rows,
+      cells: {},
+      backgroundMode: 'ai',
+      surface: {
+        kind: 'predrawn',
+        schemaVersion: 2,
+        backgroundVersionId: '11111111-1111-4111-8111-111111111111',
+        frameWidth: 1600,
+        frameHeight: 900,
+        worldBounds: { minX: 0, minY: 0, width: 1600, height: 900 },
+      },
+      units: { '0,0': { unitId: 'rook', direction: 'north', faction: 'navy-blue' } },
+      doodads: {},
+      props: {},
+      cover: { '0,0': 'filled' },
+      coverTypes: { '0,0': 'grass' },
+      features: {},
+      featureCuts: {},
+      featureExits: {},
+    });
+
+    expect(prepared.backgroundMode).toBe('ai');
+    expect(prepared.surface).toBeDefined();
+    expect(prepared.units).toEqual({});
+    expect(prepared.cover).toEqual({});
+    expect(prepared.coverTypes).toEqual({});
   });
 });

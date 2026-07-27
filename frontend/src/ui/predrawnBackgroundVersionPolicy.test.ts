@@ -4,6 +4,7 @@ import {
   newestPredrawnBackground,
   predrawnBackgroundCanArchive,
   predrawnBackgroundVersionIdempotencyKey,
+  predrawnDirectRegistrationForBackground,
   predrawnMaskHasUsableContent,
   predrawnPreferredMaskId,
   predrawnRegistrationForBackground,
@@ -29,6 +30,8 @@ function version(overrides: Partial<PredrawnBackgroundVersion> = {}): PredrawnBa
     operation: {},
     provenance: {},
     environment_geometry_sha256_v2: null,
+    pipeline_source_eligible: true,
+    pipeline_source_issue: null,
     content_sha256: 'a'.repeat(64),
     content_url: '/api/background-versions/1/content',
     created_at: '2026-07-20T00:00:00Z',
@@ -121,6 +124,35 @@ describe('pre-drawn background version UI policy', () => {
       operation: { registration },
     });
     expect(predrawnRegistrationForBackground(raw, [child, raw])).toMatchObject({
+      sourceWidth: 10,
+      sourceHeight: 10,
+      gridColumns: 1,
+      gridRows: 1,
+    });
+  });
+
+  it('reads a revision seed only from the exact inspected warp, never a newer sibling', () => {
+    const raw = version({ id: '44444444-4444-4444-8444-444444444444' });
+    const inspectedRegistration = 'v4;10,10,0,0,10,0,10,10,0,10;1,1;0,1;0,1;0,0,10,0,10,10,0,10';
+    const siblingRegistration = 'v4;20,20,1,1,19,1,19,19,1,19;2,2;0,0.5,1;0,0.5,1;1,1,19,1,19,19,1,19';
+    const inspected = version({
+      id: '55555555-5555-4555-8555-555555555555',
+      kind: 'warped',
+      parent_version_id: raw.id,
+      operation: { registration: inspectedRegistration },
+    });
+    const newerSibling = version({
+      id: '66666666-6666-4666-8666-666666666666',
+      kind: 'warped',
+      parent_version_id: raw.id,
+      operation: { registration: siblingRegistration },
+    });
+
+    expect(predrawnRegistrationForBackground(raw, [newerSibling, inspected, raw])).toMatchObject({
+      sourceWidth: 20,
+      sourceHeight: 20,
+    });
+    expect(predrawnDirectRegistrationForBackground(inspected)).toMatchObject({
       sourceWidth: 10,
       sourceHeight: 10,
       gridColumns: 1,

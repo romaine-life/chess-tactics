@@ -255,7 +255,7 @@ describe('pre-drawn board surface', () => {
 
     expect(storePredrawnBoardRegistration('/tmp-shots/plate.png', registration, storage)).toBe(true);
     expect(items.get(predrawnBoardRegistrationStorageKey('/tmp-shots/plate.png'))).toBe(JSON.stringify({
-      version: 4,
+      version: 5,
       registration: '1628,966,1092.596,7.979,1553,243.564,621.456,741.124,82,534.984',
     }));
     expect(storedPredrawnBoardRegistration('/tmp-shots/plate.png', storage)).toEqual(registration);

@@ -7,13 +7,25 @@ const capture = vi.hoisted(() => ({
     onFirstFrame?: () => void;
     onFrameError?: (error: unknown) => void;
   },
+  gridCells: null as null | { x: number; y: number }[],
 }));
 
-vi.mock('./PredrawnBoardLayer', () => ({
-  runtimePredrawnBoardPlate: (surface: unknown) => ({ surface, src: '/exact-version.png' }),
-  PredrawnBoardLayer: (props: typeof capture.props) => {
-    capture.props = props;
-    return <div data-testid="mock-predrawn-plate" />;
+vi.mock('./PredrawnBoardLayer', async () => {
+  const actual = await vi.importActual<typeof import('./PredrawnBoardLayer')>('./PredrawnBoardLayer');
+  return {
+    ...actual,
+    runtimePredrawnBoardPlate: (surface: unknown) => ({ surface, src: '/exact-version.png' }),
+    PredrawnBoardLayer: (props: typeof capture.props) => {
+      capture.props = props;
+      return <div data-testid="mock-predrawn-plate" />;
+    },
+  };
+});
+
+vi.mock('./BoardGridLayer', () => ({
+  BoardGridLayer: ({ cells }: { cells: readonly { x: number; y: number }[] }) => {
+    capture.gridCells = [...cells];
+    return <div data-testid="mock-board-grid" />;
   },
 }));
 
@@ -44,6 +56,7 @@ function board(): EditorBoard {
 
 beforeEach(() => {
   capture.props = null;
+  capture.gridCells = null;
 });
 
 describe('StudioReadOnlyBoard immutable plate readiness', () => {
@@ -68,5 +81,63 @@ describe('StudioReadOnlyBoard immutable plate readiness', () => {
 
     expect(html).not.toContain('data-testid="mock-predrawn-plate"');
     expect(capture.props).toBeNull();
+  });
+
+  it('renders the legacy board while retaining a dormant immutable AI selection', () => {
+    const html = renderToStaticMarkup(
+      <StudioReadOnlyBoard board={{ ...board(), backgroundMode: 'legacy' }} />,
+    );
+
+    expect(html).not.toContain('data-testid="mock-predrawn-plate"');
+    expect(capture.props).toBeNull();
+  });
+
+  it('draws the canonical review grid at the saved refit dimensions', () => {
+    const html = renderToStaticMarkup(
+      <StudioReadOnlyBoard
+        board={board()}
+        showGrid
+        reviewGridRegistration={{
+          sourceWidth: 100,
+          sourceHeight: 100,
+          north: [50, 0],
+          east: [100, 50],
+          south: [50, 100],
+          west: [0, 50],
+          gridColumns: 2,
+          gridRows: 3,
+        }}
+      />,
+    );
+
+    expect(html).toContain('data-testid="mock-board-grid"');
+    expect(capture.gridCells).toEqual([
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+      { x: 0, y: 1 },
+      { x: 1, y: 1 },
+      { x: 0, y: 2 },
+      { x: 1, y: 2 },
+    ]);
+  });
+
+  it('renders owner-inspection overlays for authored playable cells but not scenery', () => {
+    const overlayKeys: string[] = [];
+    const html = renderToStaticMarkup(
+      <StudioReadOnlyBoard
+        board={{
+          ...board(),
+          decorativeApron: { top: 1, right: 0, bottom: 0, left: 0 },
+        }}
+        renderCellOverlay={(cell) => {
+          overlayKeys.push(cell.key);
+          return <span data-overlay-cell={cell.key} />;
+        }}
+      />,
+    );
+
+    expect(overlayKeys).toEqual(['0,0']);
+    expect(html).toContain('data-overlay-cell="0,0"');
+    expect(html).not.toContain('data-overlay-cell="decorative:0,-1"');
   });
 });

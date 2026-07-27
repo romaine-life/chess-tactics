@@ -1,9 +1,9 @@
 ---
-status: "accepted"
+status: "accepted; Artwork-layer naming superseded by ADR-0176"
 date: 2026-07-23
 deciders: Nelson, Codex
 supersedes: ADR-0147 Level Editor placement and interaction clauses
-partially_superseded_by: "[ADR-0149](0149-artwork-select-toggles-candidate-discovery.md)"
+partially_superseded_by: "[ADR-0149](0149-artwork-select-toggles-candidate-discovery.md), [ADR-0176](0176-placed-art-and-level-artwork-are-separate-editor-destinations.md)"
 ---
 
 # ADR-0148: Floating artwork uses dedicated placement and explicit selection

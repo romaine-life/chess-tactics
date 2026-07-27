@@ -2,6 +2,7 @@
 status: accepted
 date: 2026-07-20
 deciders: Nelson, Codex
+partially_superseded_by: "[ADR-0165](0165-ai-artwork-separates-sources-attempts-and-background-mode.md)"
 partially_supersedes: "[ADR-0163](0163-legacy-predrawn-geometry-fingerprints-bind-to-cover-independent-v2.md)'s incoming-autosave validation and first baked-geometry edit rejection clauses"
 ---
 

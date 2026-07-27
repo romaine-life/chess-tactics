@@ -1,7 +1,8 @@
 ---
-status: accepted
+status: "superseded by ADR-0154"
 date: 2026-07-20
 deciders: Nelson, Codex
+superseded_by: "[ADR-0165](0165-ai-artwork-separates-sources-attempts-and-background-mode.md)"
 refines:
   - "[ADR-0144](0144-level-editor-events-use-the-shell-workspace.md)"
   - "[ADR-0158](0158-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md)"

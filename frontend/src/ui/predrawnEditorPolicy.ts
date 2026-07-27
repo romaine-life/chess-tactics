@@ -10,10 +10,8 @@ const PREDRAWN_LOCKED_LAYERS = new Set<LevelEditorLayerKey>([
   'fence',
   'wall',
   'wallart',
-  'prop',
-  'doodad',
+  'placed-art',
   'subterrain',
-  'artwork',
 ]);
 
 export function isPredrawnLockedLayer(layer: LevelEditorLayerKey): boolean {

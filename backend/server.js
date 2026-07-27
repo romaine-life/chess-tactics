@@ -11,6 +11,41 @@ const bakedBackendDir = process.env.BAKED_BACKEND_DIR || __dirname;
 const { createDevGrantSessionReader } = require(path.join(bakedBackendDir, 'devAuthGrant'));
 const { createByteReadBudget } = require(path.join(bakedBackendDir, 'liveMediaReadBudget'));
 const { createRenderCriticalSection } = require(path.join(bakedBackendDir, 'renderCriticalSection'));
+const { backgroundStoreSchemaViolation } = require(path.join(bakedBackendDir, 'backgroundStoreError'));
+const {
+  prepareGenerationAttemptArchiveThumbnail,
+} = require(path.join(bakedBackendDir, 'generationAttemptArchiveThumbnail'));
+const {
+  loadRendererSnapshotSources,
+} = require(path.join(bakedBackendDir, 'rendererSnapshotLoader'));
+const {
+  formatMigrationRunFailure,
+  formatMigrationRunResult,
+  MigrationExecutionError,
+  MigrationIntegrityError,
+  migrationChecksum,
+  migrationExecutionFailure,
+  migrationManifest,
+  migrationRunResult,
+  planMigrationExecution,
+} = require(path.join(bakedBackendDir, 'schemaMigrationIntegrity'));
+const {
+  schemaMigrationIdentityBoundaryIssues,
+  schemaMigrationIdentityBoundaryIssuesPresent,
+  schemaMigrationIdentityRepair,
+} = require(path.join(bakedBackendDir, 'schemaMigrationBoundary'));
+const {
+  generationAttemptRetryContractIssues,
+  generationAttemptRetryContractIssuesPresent,
+} = require(path.join(bakedBackendDir, 'generationAttemptRetryContract'));
+const {
+  generationAttemptMoveHighlightContractIssues,
+  generationAttemptMoveHighlightContractIssuesPresent,
+} = require(path.join(bakedBackendDir, 'generationAttemptMoveHighlightContract'));
+const {
+  formatSchemaMigrationTarget,
+  schemaMigrationTarget,
+} = require(path.join(bakedBackendDir, 'schemaMigrationTarget'));
 const {
   resolveDefaultOgImage,
   resolveLevelCardPresentation,
@@ -24,19 +59,30 @@ const {
   preservesNativeEvidenceForUpload,
 } = require(path.join(bakedBackendDir, 'liveMediaPolicy'));
 const {
+  ATTEMPT_PIPELINE_SOURCE_REQUEST_SCHEMA,
+  ATTEMPT_SOURCE_REQUEST_SCHEMA,
   ENVIRONMENT_GEOMETRY_SCHEMA,
   LEGACY_ENVIRONMENT_GEOMETRY_SCHEMA,
+  MOVE_HIGHLIGHT_COORDINATE_BASIS,
+  MOVE_HIGHLIGHT_PROFILE_SCHEMA,
+  PREDRAWN_COORDINATE_BASIS,
+  SOURCE_SEMANTIC_REQUEST_SCHEMA,
+  backgroundVersionAttemptStageIssue,
   backgroundVersionEnvironmentGeometry,
   backgroundVersionLineageIssue,
   backgroundVersionStoredContractIssue,
   backgroundVersionStoredOcclusionChain,
   backgroundVersionV2GeometrySha256,
+  generationAttemptSelectionDisposition,
+  generationAttemptSourceRequestIssue,
   normalizeBackgroundVersionCreate,
   normalizeBackgroundVersionIdempotencyKey,
+  normalizeMoveHighlightProfile,
   normalizePredrawnVersionSurface,
   normalizedUuid: backgroundVersionId,
   parseBackgroundVersionUploadPath,
   sameWorldBounds: sameBackgroundWorldBounds,
+  sourceArtworkVersionContractIssue,
 } = require(path.join(bakedBackendDir, 'backgroundVersionPolicy'));
 let serverRender = null;
 try {
@@ -374,6 +420,7 @@ function schemaMigrationModeFromEnv(raw) {
 }
 
 const schemaMigrationMode = schemaMigrationModeFromEnv(process.env.SCHEMA_MIGRATIONS);
+const schemaMigrationCommand = process.env.SCHEMA_MIGRATION_COMMAND === '1';
 
 const MIGRATIONS = [
   {
@@ -1427,6 +1474,346 @@ const MIGRATIONS = [
     `,
   },
   {
+    version: 31,
+    name: 'source artwork and bounded generation attempts',
+    // Source inputs share the immutable, quota-accounted artwork store. A
+    // generation attempt owns at most one result for each committed stage.
+    // Existing version graphs predate saved source inputs, so the migration
+    // records them honestly as read-only history instead of inventing lineage.
+    sql: `
+      ALTER TABLE predrawn_background_versions
+        DROP CONSTRAINT IF EXISTS predrawn_background_versions_kind_check;
+      ALTER TABLE predrawn_background_versions
+        ADD CONSTRAINT predrawn_background_versions_kind_check
+        CHECK (kind IN ('source', 'raw', 'warped', 'occlusion'));
+      ALTER TABLE predrawn_background_versions
+        DROP CONSTRAINT IF EXISTS predrawn_background_versions_check2;
+      ALTER TABLE predrawn_background_versions
+        DROP CONSTRAINT IF EXISTS predrawn_background_versions_lineage_check;
+      ALTER TABLE predrawn_background_versions
+        ADD CONSTRAINT predrawn_background_versions_lineage_check
+        CHECK (
+          (kind IN ('source', 'raw') AND parent_version_id IS NULL AND source_background_version_id IS NULL) OR
+          (kind = 'warped' AND parent_version_id IS NOT NULL) OR
+          (kind = 'occlusion' AND source_background_version_id IS NOT NULL)
+        );
+
+      CREATE TABLE IF NOT EXISTS predrawn_generation_attempts (
+        id                      uuid        PRIMARY KEY,
+        document_id             text        NOT NULL,
+        owner_email             text        NOT NULL,
+        level_id                text        NOT NULL,
+        label                   text        NOT NULL CHECK (char_length(label) BETWEEN 1 AND 160),
+        origin                  text        NOT NULL CHECK (origin IN ('source', 'migrated-history')),
+        source_version_id       uuid,
+        generated_version_id    uuid,
+        warped_version_id       uuid,
+        occlusion_version_id    uuid,
+        status                  text        NOT NULL DEFAULT 'active'
+          CHECK (status IN ('active', 'archived')),
+        idempotency_actor       text,
+        idempotency_key         text,
+        request_fingerprint     text,
+        row_revision            bigint      NOT NULL DEFAULT 0 CHECK (row_revision >= 0),
+        created_by_email        text        NOT NULL,
+        created_by_name         text        NOT NULL,
+        created_at              timestamptz NOT NULL DEFAULT now(),
+        updated_at              timestamptz NOT NULL DEFAULT now(),
+        updated_by              text        NOT NULL,
+        archived_at             timestamptz,
+        archived_by             text,
+        UNIQUE (id, document_id),
+        FOREIGN KEY (document_id, owner_email, level_id)
+          REFERENCES level_working_copies(document_id, owner_email, level_id) ON DELETE CASCADE,
+        FOREIGN KEY (source_version_id, document_id)
+          REFERENCES predrawn_background_versions(id, document_id) ON DELETE RESTRICT,
+        FOREIGN KEY (generated_version_id, document_id)
+          REFERENCES predrawn_background_versions(id, document_id) ON DELETE RESTRICT,
+        FOREIGN KEY (warped_version_id, document_id)
+          REFERENCES predrawn_background_versions(id, document_id) ON DELETE RESTRICT,
+        FOREIGN KEY (occlusion_version_id, document_id)
+          REFERENCES predrawn_background_versions(id, document_id) ON DELETE RESTRICT,
+        CHECK (
+          (origin = 'source' AND source_version_id IS NOT NULL) OR
+          (origin = 'migrated-history' AND source_version_id IS NULL)
+        ),
+        CHECK (warped_version_id IS NULL OR generated_version_id IS NOT NULL),
+        CHECK (occlusion_version_id IS NULL OR warped_version_id IS NOT NULL),
+        CHECK (
+          (idempotency_actor IS NULL AND idempotency_key IS NULL AND request_fingerprint IS NULL) OR
+          (char_length(idempotency_actor) BETWEEN 1 AND 320
+            AND char_length(idempotency_key) BETWEEN 1 AND 200
+            AND request_fingerprint ~ '^[0-9a-f]{64}$')
+        ),
+        CHECK (
+          (status = 'active' AND archived_at IS NULL AND archived_by IS NULL) OR
+          (status = 'archived' AND archived_at IS NOT NULL AND archived_by IS NOT NULL)
+        )
+      );
+      CREATE INDEX IF NOT EXISTS predrawn_generation_attempts_document_created_idx
+        ON predrawn_generation_attempts (document_id, created_at DESC, id DESC);
+      CREATE INDEX IF NOT EXISTS predrawn_generation_attempts_source_idx
+        ON predrawn_generation_attempts (source_version_id)
+        WHERE source_version_id IS NOT NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS predrawn_generation_attempts_idempotency_idx
+        ON predrawn_generation_attempts (idempotency_actor, idempotency_key)
+        WHERE idempotency_key IS NOT NULL;
+
+      CREATE TABLE IF NOT EXISTS predrawn_generation_attempt_events (
+        id                  bigserial   PRIMARY KEY,
+        document_id         text        NOT NULL,
+        attempt_id          uuid        NOT NULL,
+        action              text        NOT NULL
+          CHECK (action IN ('created', 'stage-attached', 'archived')),
+        actor_email         text        NOT NULL,
+        actor_name          text        NOT NULL,
+        details             jsonb       NOT NULL DEFAULT '{}'::jsonb,
+        created_at          timestamptz NOT NULL DEFAULT now(),
+        FOREIGN KEY (attempt_id, document_id)
+          REFERENCES predrawn_generation_attempts(id, document_id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS predrawn_generation_attempt_events_attempt_idx
+        ON predrawn_generation_attempt_events (attempt_id, created_at DESC, id DESC);
+
+      WITH terminal_versions AS (
+        SELECT terminal.*
+          FROM predrawn_background_versions terminal
+         WHERE terminal.kind IN ('raw', 'warped', 'occlusion')
+           AND NOT EXISTS (
+             SELECT 1
+               FROM predrawn_background_versions child
+              WHERE child.document_id = terminal.document_id
+                AND (
+                  (terminal.kind = 'raw'
+                    AND child.kind = 'warped'
+                    AND child.parent_version_id = terminal.id)
+                  OR
+                  (terminal.kind = 'warped'
+                    AND child.kind = 'occlusion'
+                    AND child.source_background_version_id = terminal.id)
+                  OR
+                  (terminal.kind = 'occlusion'
+                    AND child.kind = 'occlusion'
+                    AND child.parent_version_id = terminal.id)
+                )
+           )
+      ),
+      migrated_attempts AS (
+        SELECT
+          overlay(overlay(md5('predrawn-migrated-attempt:' || terminal.id::text)
+            placing '4' from 13) placing '8' from 17)::uuid AS id,
+          terminal.document_id,
+          terminal.owner_email,
+          terminal.level_id,
+          ('Historical artwork ' || left(terminal.id::text, 8))::text AS label,
+          CASE
+            WHEN terminal.kind = 'raw' THEN terminal.id
+            WHEN terminal.kind = 'warped' THEN terminal.parent_version_id
+            ELSE warped.parent_version_id
+          END AS generated_version_id,
+          CASE
+            WHEN terminal.kind = 'warped' THEN terminal.id
+            WHEN terminal.kind = 'occlusion' THEN terminal.source_background_version_id
+            ELSE NULL
+          END AS warped_version_id,
+          CASE WHEN terminal.kind = 'occlusion' THEN terminal.id ELSE NULL END
+            AS occlusion_version_id,
+          CASE WHEN terminal.status = 'archived' THEN 'archived' ELSE 'active' END AS status,
+          terminal.created_by_email,
+          terminal.created_by_name,
+          terminal.created_at,
+          terminal.updated_at,
+          terminal.updated_by,
+          CASE WHEN terminal.status = 'archived'
+            THEN COALESCE(terminal.archived_at, terminal.updated_at) ELSE NULL END AS archived_at,
+          CASE WHEN terminal.status = 'archived'
+            THEN COALESCE(terminal.archived_by, terminal.updated_by) ELSE NULL END AS archived_by
+        FROM terminal_versions terminal
+        LEFT JOIN predrawn_background_versions warped
+          ON terminal.kind = 'occlusion'
+         AND warped.document_id = terminal.document_id
+         AND warped.id = terminal.source_background_version_id
+         AND warped.kind = 'warped'
+      )
+      INSERT INTO predrawn_generation_attempts (
+        id, document_id, owner_email, level_id, label, origin,
+        source_version_id, generated_version_id, warped_version_id, occlusion_version_id,
+        status, created_by_email, created_by_name, created_at,
+        updated_at, updated_by, archived_at, archived_by
+      )
+      SELECT
+        id, document_id, owner_email, level_id, label, 'migrated-history',
+        NULL, generated_version_id, warped_version_id, occlusion_version_id,
+        status, created_by_email, created_by_name, created_at,
+        updated_at, updated_by, archived_at, archived_by
+      FROM migrated_attempts
+      WHERE generated_version_id IS NOT NULL
+      ON CONFLICT (id) DO NOTHING;
+
+      INSERT INTO predrawn_generation_attempt_events (
+        document_id, attempt_id, action, actor_email, actor_name, details, created_at
+      )
+      SELECT
+        attempt.document_id,
+        attempt.id,
+        'created',
+        attempt.created_by_email,
+        attempt.created_by_name,
+        jsonb_build_object('origin', 'migrated-history', 'source_available', false),
+        attempt.created_at
+      FROM predrawn_generation_attempts attempt
+      WHERE attempt.origin = 'migrated-history'
+        AND NOT EXISTS (
+          SELECT 1 FROM predrawn_generation_attempt_events event
+           WHERE event.attempt_id = attempt.id AND event.action = 'created'
+        );
+    `,
+  },
+  {
+    version: 32,
+    name: 'generation attempts bind immutable source requests',
+    // Existing source attempts predate reconstructable semantic snapshots. Keep
+    // them visible but unbound so the application can fail closed honestly;
+    // every newly created attempt stores the exact validated Source Artwork
+    // request that all later deterministic processing must use.
+    sql: `
+      ALTER TABLE predrawn_generation_attempts
+        ADD COLUMN IF NOT EXISTS source_request jsonb;
+      ALTER TABLE predrawn_generation_attempts
+        DROP CONSTRAINT IF EXISTS predrawn_generation_attempts_source_request_check;
+      ALTER TABLE predrawn_generation_attempts
+        ADD CONSTRAINT predrawn_generation_attempts_source_request_check
+        CHECK (source_request IS NULL OR jsonb_typeof(source_request) = 'object');
+    `,
+  },
+  {
+    version: 33,
+    name: 'generation attempts may reuse an exact raw pipeline source',
+    // Reuse is a new attempt input role, not another stage on the source
+    // attempt. The exact retained raw version remains immutable and the
+    // document-scoped self-reference records which slot supplied it.
+    sql: `
+      ALTER TABLE predrawn_generation_attempts
+        ADD COLUMN IF NOT EXISTS source_attempt_id uuid;
+
+      DO $$
+      DECLARE constraint_name text;
+      BEGIN
+        FOR constraint_name IN
+          SELECT conname
+            FROM pg_constraint
+           WHERE conrelid = 'predrawn_generation_attempts'::regclass
+             AND contype = 'c'
+             AND pg_get_constraintdef(oid) LIKE '%origin%'
+        LOOP
+          EXECUTE format(
+            'ALTER TABLE predrawn_generation_attempts DROP CONSTRAINT %I',
+            constraint_name
+          );
+        END LOOP;
+      END $$;
+
+      ALTER TABLE predrawn_generation_attempts
+        ADD CONSTRAINT predrawn_generation_attempts_origin_check
+        CHECK (origin IN ('source', 'pipeline-source', 'migrated-history'));
+      ALTER TABLE predrawn_generation_attempts
+        ADD CONSTRAINT predrawn_generation_attempts_input_check
+        CHECK (
+          (origin = 'source'
+            AND source_version_id IS NOT NULL
+            AND source_attempt_id IS NULL)
+          OR
+          (origin = 'pipeline-source'
+            AND source_version_id IS NOT NULL
+            AND source_attempt_id IS NOT NULL)
+          OR
+          (origin = 'migrated-history'
+            AND source_version_id IS NULL
+            AND source_attempt_id IS NULL)
+        );
+      ALTER TABLE predrawn_generation_attempts
+        DROP CONSTRAINT IF EXISTS predrawn_generation_attempts_source_attempt_fk;
+      ALTER TABLE predrawn_generation_attempts
+        ADD CONSTRAINT predrawn_generation_attempts_source_attempt_fk
+        FOREIGN KEY (source_attempt_id, document_id)
+        REFERENCES predrawn_generation_attempts(id, document_id) ON DELETE RESTRICT;
+
+      CREATE INDEX IF NOT EXISTS predrawn_generation_attempts_source_attempt_idx
+        ON predrawn_generation_attempts (source_attempt_id)
+        WHERE source_attempt_id IS NOT NULL;
+    `,
+  },
+  {
+    version: 34,
+    name: 'reused raw pipeline sources immediately seed processing attempts',
+    // Migrations 33 and 34 ship together before this attempt origin is exposed.
+    // Refuse to reinterpret any row written by the superseded development
+    // contract: its request digest described another model run and cannot be
+    // honestly rewritten as deterministic processing in SQL.
+    sql: `
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1
+            FROM predrawn_generation_attempts
+           WHERE origin = 'pipeline-source'
+        ) THEN
+          RAISE EXCEPTION
+            'superseded pipeline-source attempts require explicit repair before migration 34';
+        END IF;
+      END $$;
+
+      ALTER TABLE predrawn_generation_attempts
+        DROP CONSTRAINT IF EXISTS predrawn_generation_attempts_input_check;
+      ALTER TABLE predrawn_generation_attempts
+        ADD CONSTRAINT predrawn_generation_attempts_input_check
+        CHECK (
+          (origin = 'source'
+            AND source_version_id IS NOT NULL
+            AND source_attempt_id IS NULL)
+          OR
+          (origin = 'pipeline-source'
+            AND source_version_id IS NOT NULL
+            AND source_attempt_id IS NOT NULL
+            AND generated_version_id = source_version_id)
+          OR
+          (origin = 'migrated-history'
+            AND source_version_id IS NULL
+            AND source_attempt_id IS NULL)
+        );
+    `,
+  },
+  {
+    version: 35,
+    name: 'bind incomplete historical raw coordinate contracts externally',
+    // Some retained untouched raws were written before raw-generated-v2
+    // persisted the otherwise implicit board-world basis and viewing pane.
+    // Their operation and provenance remain immutable. A fenced processing
+    // attempt may create this sidecar only after reproducing the exact legacy
+    // geometry digest and canonical frame from the server-held saved Level.
+    sql: `
+      CREATE TABLE IF NOT EXISTS predrawn_background_raw_contract_bindings (
+        version_id                uuid        PRIMARY KEY,
+        document_id               text        NOT NULL,
+        legacy_operation_kind     text        NOT NULL
+          CHECK (legacy_operation_kind = 'raw-generated-v2'),
+        legacy_operation_sha256   text        NOT NULL
+          CHECK (legacy_operation_sha256 ~ '^[0-9a-f]{64}$'),
+        coordinate_basis          text        NOT NULL
+          CHECK (coordinate_basis = 'board-world-pixels-v1'),
+        viewing_pane              jsonb       NOT NULL
+          CHECK (jsonb_typeof(viewing_pane) = 'object'),
+        bound_by_email            text        NOT NULL,
+        bound_by_name             text        NOT NULL,
+        bound_at                  timestamptz NOT NULL DEFAULT now(),
+        FOREIGN KEY (version_id, document_id)
+          REFERENCES predrawn_background_versions(id, document_id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS predrawn_background_raw_contract_bindings_document_idx
+        ON predrawn_background_raw_contract_bindings (document_id, version_id);
+    `,
+  },
+  {
     version: 36,
     name: 'allow one drawable media slot to satisfy multiple roles',
     // A single flat-contact source-art raster intentionally supplies both the
@@ -1438,31 +1825,696 @@ const MIGRATIONS = [
         DROP CONSTRAINT IF EXISTS drawable_asset_media_asset_id_slot_key;
     `,
   },
+  {
+    version: 37,
+    name: 'checksummed schema history and registered working copy revision reasons',
+    // Numeric-only history cannot distinguish an already-applied migration from
+    // later source code that reuses its number. New history rows therefore carry
+    // their immutable identity. Working-copy revision reasons move to a queryable
+    // catalog so readiness can prove every server-owned reason before serving.
+    sql: `
+      ALTER TABLE schema_migrations
+        ADD COLUMN IF NOT EXISTS name text,
+        ADD COLUMN IF NOT EXISTS checksum text;
+      ALTER TABLE schema_migrations
+        DROP CONSTRAINT IF EXISTS schema_migrations_identity_check;
+      ALTER TABLE schema_migrations
+        ADD CONSTRAINT schema_migrations_identity_check CHECK (
+          (name IS NULL AND checksum IS NULL)
+          OR (
+            char_length(name) BETWEEN 1 AND 200
+            AND checksum ~ '^[0-9a-f]{64}$'
+          )
+        );
+
+      CREATE TABLE IF NOT EXISTS level_working_copy_revision_reasons (
+        reason text PRIMARY KEY
+      );
+      INSERT INTO level_working_copy_revision_reasons (reason)
+      SELECT reason
+        FROM unnest(ARRAY[
+          'migration', 'resolve', 'create', 'autosave', 'save', 'discard',
+          'restore', 'canonical-refresh', 'generation-attempt-archive'
+        ]::text[]) AS allowed(reason)
+      ON CONFLICT (reason) DO NOTHING;
+
+      ALTER TABLE level_working_copy_revisions
+        DROP CONSTRAINT IF EXISTS level_working_copy_revisions_reason_check;
+      ALTER TABLE level_working_copy_revisions
+        DROP CONSTRAINT IF EXISTS level_working_copy_revisions_reason_fk;
+      ALTER TABLE level_working_copy_revisions
+        ADD CONSTRAINT level_working_copy_revisions_reason_fk
+        FOREIGN KEY (reason)
+        REFERENCES level_working_copy_revision_reasons(reason)
+        ON UPDATE RESTRICT
+        ON DELETE RESTRICT;
+    `,
+  },
+  {
+    version: 38,
+    name: 'require identified schema migration history',
+    // Migration 37 must temporarily admit null identity metadata while the
+    // runner seals numeric-only rows 1-36. Once that one-time bridge has run,
+    // every history row is identified and future numeric-only inserts must
+    // fail at the database boundary rather than become silently sealable.
+    sql: `
+      ALTER TABLE schema_migrations
+        DROP CONSTRAINT IF EXISTS schema_migrations_identity_check;
+      ALTER TABLE schema_migrations
+        ALTER COLUMN name SET NOT NULL,
+        ALTER COLUMN checksum SET NOT NULL;
+      ALTER TABLE schema_migrations
+        ADD CONSTRAINT schema_migrations_identity_check CHECK (
+          char_length(name) BETWEEN 1 AND 200
+          AND checksum ~ '^[0-9a-f]{64}$'
+        );
+    `,
+  },
+  {
+    version: 39,
+    name: 'same-slot warped retries advance a processing revision',
+    // A rejected unpublished warp may be detached without replacing its Raw
+    // Pipeline Source or creation-slot identity. The processing revision is
+    // stable while a stage is attached/uploaded and advances only when that
+    // stage is discarded, giving identical deterministic retries a fresh
+    // idempotency scope without breaking a pending upload resume.
+    sql: `
+      ALTER TABLE predrawn_generation_attempts
+        ADD COLUMN IF NOT EXISTS processing_revision bigint;
+      UPDATE predrawn_generation_attempts
+         SET processing_revision = 0
+       WHERE processing_revision IS NULL;
+      ALTER TABLE predrawn_generation_attempts
+        ALTER COLUMN processing_revision TYPE bigint
+          USING processing_revision::bigint,
+        ALTER COLUMN processing_revision SET DEFAULT 0,
+        ALTER COLUMN processing_revision SET NOT NULL;
+
+      DO $$
+      DECLARE constraint_name text;
+      BEGIN
+        FOR constraint_name IN
+          SELECT conname
+            FROM pg_constraint
+           WHERE conrelid = 'predrawn_generation_attempts'::regclass
+             AND contype = 'c'
+             AND pg_get_constraintdef(oid) ~ '\\mprocessing_revision\\M'
+        LOOP
+          EXECUTE format(
+            'ALTER TABLE predrawn_generation_attempts DROP CONSTRAINT %I',
+            constraint_name
+          );
+        END LOOP;
+      END $$;
+      ALTER TABLE predrawn_generation_attempts
+        ADD CONSTRAINT predrawn_generation_attempts_processing_revision_check
+        CHECK (processing_revision >= 0);
+
+      DO $$
+      DECLARE constraint_name text;
+      BEGIN
+        FOR constraint_name IN
+          SELECT conname
+            FROM pg_constraint
+           WHERE conrelid = 'predrawn_generation_attempt_events'::regclass
+             AND contype = 'c'
+             AND pg_get_constraintdef(oid) ~ '\\maction\\M'
+        LOOP
+          EXECUTE format(
+            'ALTER TABLE predrawn_generation_attempt_events DROP CONSTRAINT %I',
+            constraint_name
+          );
+        END LOOP;
+      END $$;
+      ALTER TABLE predrawn_generation_attempt_events
+        ADD CONSTRAINT predrawn_generation_attempt_events_action_check
+        CHECK (action IN ('created', 'stage-attached', 'stage-discarded', 'archived'));
+    `,
+  },
+  {
+    version: 40,
+    name: 'attempt-owned cyan move-highlight calibration',
+    // Cyan footprint fitting is mutable attempt authoring state, not another
+    // raster or media version. Exact Level selections embed a canonical
+    // snapshot, while these columns retain the latest fenced draft bound to
+    // the slot's exact current warp.
+    sql: `
+      ALTER TABLE predrawn_generation_attempts
+        ADD COLUMN IF NOT EXISTS move_highlight_profile jsonb,
+        ADD COLUMN IF NOT EXISTS move_highlight_profile_sha256 text,
+        ADD COLUMN IF NOT EXISTS move_highlight_profile_warped_version_id uuid;
+
+      ALTER TABLE predrawn_generation_attempts
+        DROP CONSTRAINT IF EXISTS predrawn_generation_attempts_move_highlight_profile_bundle_check,
+        DROP CONSTRAINT IF EXISTS predrawn_generation_attempts_move_highlight_profile_warp_fk;
+      ALTER TABLE predrawn_generation_attempts
+        ADD CONSTRAINT predrawn_generation_attempts_move_highlight_profile_bundle_check
+        CHECK (
+          (
+            move_highlight_profile IS NULL
+            AND move_highlight_profile_sha256 IS NULL
+            AND move_highlight_profile_warped_version_id IS NULL
+          )
+          OR
+          (
+            move_highlight_profile IS NOT NULL
+            AND move_highlight_profile_sha256 IS NOT NULL
+            AND move_highlight_profile_warped_version_id IS NOT NULL
+            AND jsonb_typeof(move_highlight_profile) = 'object'
+            AND move_highlight_profile_sha256 ~ '^[0-9a-f]{64}$'
+            AND move_highlight_profile_warped_version_id = warped_version_id
+          )
+        ),
+        ADD CONSTRAINT predrawn_generation_attempts_move_highlight_profile_warp_fk
+        FOREIGN KEY (move_highlight_profile_warped_version_id, document_id)
+        REFERENCES predrawn_background_versions(id, document_id)
+        ON UPDATE RESTRICT
+        ON DELETE RESTRICT;
+
+      DO $$
+      DECLARE constraint_name text;
+      BEGIN
+        FOR constraint_name IN
+          SELECT conname
+            FROM pg_constraint
+           WHERE conrelid = 'predrawn_generation_attempt_events'::regclass
+             AND contype = 'c'
+             AND pg_get_constraintdef(oid) ~ '\\maction\\M'
+        LOOP
+          EXECUTE format(
+            'ALTER TABLE predrawn_generation_attempt_events DROP CONSTRAINT %I',
+            constraint_name
+          );
+        END LOOP;
+      END $$;
+      ALTER TABLE predrawn_generation_attempt_events
+        ADD CONSTRAINT predrawn_generation_attempt_events_action_check
+        CHECK (action IN (
+          'created',
+          'stage-attached',
+          'stage-discarded',
+          'move-highlight-profile-updated',
+          'archived'
+        ));
+    `,
+  },
+  {
+    version: 41,
+    name: 'use a stable move-highlight constraint identifier',
+    // PostgreSQL truncates identifiers after 63 bytes. Migration 40's source
+    // name crossed that boundary, so the resulting catalog identifier could
+    // not satisfy the exact readiness contract. Preserve the applied migration
+    // and append the correction under an intentionally bounded name.
+    sql: `
+      ALTER TABLE predrawn_generation_attempts
+        DROP CONSTRAINT IF EXISTS predrawn_generation_attempts_move_highlight_profile_bundle_chec,
+        DROP CONSTRAINT IF EXISTS predrawn_generation_attempts_move_highlight_bundle_check;
+      ALTER TABLE predrawn_generation_attempts
+        ADD CONSTRAINT predrawn_generation_attempts_move_highlight_bundle_check
+        CHECK (
+          (
+            move_highlight_profile IS NULL
+            AND move_highlight_profile_sha256 IS NULL
+            AND move_highlight_profile_warped_version_id IS NULL
+          )
+          OR
+          (
+            move_highlight_profile IS NOT NULL
+            AND move_highlight_profile_sha256 IS NOT NULL
+            AND move_highlight_profile_warped_version_id IS NOT NULL
+            AND jsonb_typeof(move_highlight_profile) = 'object'
+            AND move_highlight_profile_sha256 ~ '^[0-9a-f]{64}$'
+            AND move_highlight_profile_warped_version_id = warped_version_id
+          )
+        );
+    `,
+  },
+  {
+    version: 42,
+    name: 'record occlusion-stage discard audit',
+    // Discarding a mask may also move the private working Level back to its
+    // exact warped parent. Give that server-owned revision a distinct durable
+    // reason instead of misreporting it as a generic autosave or slot archive.
+    sql: `
+      INSERT INTO level_working_copy_revision_reasons (reason)
+      VALUES ('generation-attempt-occlusion-discard')
+      ON CONFLICT (reason) DO NOTHING;
+
+      DO $$
+      DECLARE constraint_name text;
+      BEGIN
+        FOR constraint_name IN
+          SELECT conname
+            FROM pg_constraint
+           WHERE conrelid = 'predrawn_background_version_events'::regclass
+             AND contype = 'c'
+             AND pg_get_constraintdef(oid) ~ '\\maction\\M'
+        LOOP
+          EXECUTE format(
+            'ALTER TABLE predrawn_background_version_events DROP CONSTRAINT %I',
+            constraint_name
+          );
+        END LOOP;
+      END $$;
+      ALTER TABLE predrawn_background_version_events
+        ADD CONSTRAINT predrawn_background_version_events_action_check
+        CHECK (action IN (
+          'created',
+          'content-uploaded',
+          'archived',
+          'published',
+          'attempt-detached'
+        ));
+    `,
+  },
+  {
+    version: 43,
+    name: 'repair generation attempt schema from final state',
+    // Required-schema repair may run long after pipeline-source attempts and
+    // move-highlight audit events exist. Replaying transitional migrations
+    // would temporarily reinstall superseded constraints that reject those
+    // valid rows. This migration therefore owns one forward-compatible,
+    // idempotent definition of the complete current attempt schema.
+    sql: `
+      CREATE TABLE IF NOT EXISTS predrawn_generation_attempts (
+        id                      uuid        PRIMARY KEY,
+        document_id             text        NOT NULL,
+        owner_email             text        NOT NULL,
+        level_id                text        NOT NULL,
+        label                   text        NOT NULL CHECK (char_length(label) BETWEEN 1 AND 160),
+        origin                  text        NOT NULL,
+        source_version_id       uuid,
+        source_attempt_id       uuid,
+        source_request          jsonb,
+        generated_version_id    uuid,
+        warped_version_id       uuid,
+        occlusion_version_id    uuid,
+        move_highlight_profile  jsonb,
+        move_highlight_profile_sha256 text,
+        move_highlight_profile_warped_version_id uuid,
+        status                  text        NOT NULL DEFAULT 'active'
+          CHECK (status IN ('active', 'archived')),
+        idempotency_actor       text,
+        idempotency_key         text,
+        request_fingerprint     text,
+        row_revision            bigint      NOT NULL DEFAULT 0 CHECK (row_revision >= 0),
+        processing_revision     bigint      NOT NULL DEFAULT 0,
+        created_by_email        text        NOT NULL,
+        created_by_name         text        NOT NULL,
+        created_at              timestamptz NOT NULL DEFAULT now(),
+        updated_at              timestamptz NOT NULL DEFAULT now(),
+        updated_by              text        NOT NULL,
+        archived_at             timestamptz,
+        archived_by             text,
+        UNIQUE (id, document_id),
+        FOREIGN KEY (document_id, owner_email, level_id)
+          REFERENCES level_working_copies(document_id, owner_email, level_id) ON DELETE CASCADE,
+        FOREIGN KEY (source_version_id, document_id)
+          REFERENCES predrawn_background_versions(id, document_id) ON DELETE RESTRICT,
+        FOREIGN KEY (generated_version_id, document_id)
+          REFERENCES predrawn_background_versions(id, document_id) ON DELETE RESTRICT,
+        FOREIGN KEY (warped_version_id, document_id)
+          REFERENCES predrawn_background_versions(id, document_id) ON DELETE RESTRICT,
+        FOREIGN KEY (occlusion_version_id, document_id)
+          REFERENCES predrawn_background_versions(id, document_id) ON DELETE RESTRICT,
+        CONSTRAINT predrawn_generation_attempts_origin_check
+          CHECK (origin IN ('source', 'pipeline-source', 'migrated-history')),
+        CONSTRAINT predrawn_generation_attempts_input_check
+          CHECK (
+            (origin = 'source'
+              AND source_version_id IS NOT NULL
+              AND source_attempt_id IS NULL)
+            OR
+            (origin = 'pipeline-source'
+              AND source_version_id IS NOT NULL
+              AND source_attempt_id IS NOT NULL
+              AND generated_version_id = source_version_id)
+            OR
+            (origin = 'migrated-history'
+              AND source_version_id IS NULL
+              AND source_attempt_id IS NULL)
+          ),
+        CHECK (warped_version_id IS NULL OR generated_version_id IS NOT NULL),
+        CHECK (occlusion_version_id IS NULL OR warped_version_id IS NOT NULL),
+        CONSTRAINT predrawn_generation_attempts_source_request_check
+          CHECK (source_request IS NULL OR jsonb_typeof(source_request) = 'object'),
+        CONSTRAINT predrawn_generation_attempts_processing_revision_check
+          CHECK (processing_revision >= 0),
+        CONSTRAINT predrawn_generation_attempts_move_highlight_bundle_check
+          CHECK (
+            (
+              move_highlight_profile IS NULL
+              AND move_highlight_profile_sha256 IS NULL
+              AND move_highlight_profile_warped_version_id IS NULL
+            )
+            OR
+            (
+              move_highlight_profile IS NOT NULL
+              AND move_highlight_profile_sha256 IS NOT NULL
+              AND move_highlight_profile_warped_version_id IS NOT NULL
+              AND jsonb_typeof(move_highlight_profile) = 'object'
+              AND move_highlight_profile_sha256 ~ '^[0-9a-f]{64}$'
+              AND move_highlight_profile_warped_version_id = warped_version_id
+            )
+          ),
+        CONSTRAINT predrawn_generation_attempts_source_attempt_fk
+          FOREIGN KEY (source_attempt_id, document_id)
+          REFERENCES predrawn_generation_attempts(id, document_id) ON DELETE RESTRICT,
+        CONSTRAINT predrawn_generation_attempts_move_highlight_profile_warp_fk
+          FOREIGN KEY (move_highlight_profile_warped_version_id, document_id)
+          REFERENCES predrawn_background_versions(id, document_id)
+          ON UPDATE RESTRICT
+          ON DELETE RESTRICT,
+        CHECK (
+          (idempotency_actor IS NULL AND idempotency_key IS NULL AND request_fingerprint IS NULL)
+          OR
+          (char_length(idempotency_actor) BETWEEN 1 AND 320
+            AND char_length(idempotency_key) BETWEEN 1 AND 200
+            AND request_fingerprint ~ '^[0-9a-f]{64}$')
+        ),
+        CHECK (
+          (status = 'active' AND archived_at IS NULL AND archived_by IS NULL)
+          OR
+          (status = 'archived' AND archived_at IS NOT NULL AND archived_by IS NOT NULL)
+        )
+      );
+
+      ALTER TABLE predrawn_generation_attempts
+        ADD COLUMN IF NOT EXISTS source_attempt_id uuid,
+        ADD COLUMN IF NOT EXISTS source_request jsonb,
+        ADD COLUMN IF NOT EXISTS processing_revision bigint,
+        ADD COLUMN IF NOT EXISTS move_highlight_profile jsonb,
+        ADD COLUMN IF NOT EXISTS move_highlight_profile_sha256 text,
+        ADD COLUMN IF NOT EXISTS move_highlight_profile_warped_version_id uuid;
+      UPDATE predrawn_generation_attempts
+         SET processing_revision = 0
+       WHERE processing_revision IS NULL;
+      ALTER TABLE predrawn_generation_attempts
+        ALTER COLUMN processing_revision TYPE bigint
+          USING processing_revision::bigint,
+        ALTER COLUMN processing_revision SET DEFAULT 0,
+        ALTER COLUMN processing_revision SET NOT NULL;
+
+      DO $$
+      DECLARE constraint_name text;
+      BEGIN
+        FOR constraint_name IN
+          SELECT conname
+            FROM pg_constraint
+           WHERE conrelid = 'predrawn_generation_attempts'::regclass
+             AND contype = 'c'
+             AND (
+               pg_get_constraintdef(oid) ~ '\\morigin\\M'
+               OR pg_get_constraintdef(oid) ~ '\\msource_request\\M'
+               OR pg_get_constraintdef(oid) ~ '\\mprocessing_revision\\M'
+               OR pg_get_constraintdef(oid) ~ '\\mmove_highlight_profile\\M'
+             )
+        LOOP
+          EXECUTE format(
+            'ALTER TABLE predrawn_generation_attempts DROP CONSTRAINT %I',
+            constraint_name
+          );
+        END LOOP;
+        FOR constraint_name IN
+          SELECT conname
+            FROM pg_constraint
+           WHERE conrelid = 'predrawn_generation_attempts'::regclass
+             AND contype = 'f'
+             AND (
+               pg_get_constraintdef(oid) ~ '\\msource_attempt_id\\M'
+               OR pg_get_constraintdef(oid) ~ '\\mmove_highlight_profile_warped_version_id\\M'
+             )
+        LOOP
+          EXECUTE format(
+            'ALTER TABLE predrawn_generation_attempts DROP CONSTRAINT %I',
+            constraint_name
+          );
+        END LOOP;
+      END $$;
+
+      ALTER TABLE predrawn_generation_attempts
+        ALTER COLUMN move_highlight_profile TYPE jsonb
+          USING move_highlight_profile::jsonb,
+        ALTER COLUMN move_highlight_profile DROP NOT NULL,
+        ALTER COLUMN move_highlight_profile_sha256 TYPE text
+          USING move_highlight_profile_sha256::text,
+        ALTER COLUMN move_highlight_profile_sha256 DROP NOT NULL,
+        ALTER COLUMN move_highlight_profile_warped_version_id TYPE uuid
+          USING move_highlight_profile_warped_version_id::uuid,
+        ALTER COLUMN move_highlight_profile_warped_version_id DROP NOT NULL;
+
+      ALTER TABLE predrawn_generation_attempts
+        ADD CONSTRAINT predrawn_generation_attempts_origin_check
+          CHECK (origin IN ('source', 'pipeline-source', 'migrated-history')),
+        ADD CONSTRAINT predrawn_generation_attempts_input_check
+          CHECK (
+            (origin = 'source'
+              AND source_version_id IS NOT NULL
+              AND source_attempt_id IS NULL)
+            OR
+            (origin = 'pipeline-source'
+              AND source_version_id IS NOT NULL
+              AND source_attempt_id IS NOT NULL
+              AND generated_version_id = source_version_id)
+            OR
+            (origin = 'migrated-history'
+              AND source_version_id IS NULL
+              AND source_attempt_id IS NULL)
+          ),
+        ADD CONSTRAINT predrawn_generation_attempts_source_request_check
+          CHECK (source_request IS NULL OR jsonb_typeof(source_request) = 'object'),
+        ADD CONSTRAINT predrawn_generation_attempts_processing_revision_check
+          CHECK (processing_revision >= 0),
+        ADD CONSTRAINT predrawn_generation_attempts_move_highlight_bundle_check
+          CHECK (
+            (
+              move_highlight_profile IS NULL
+              AND move_highlight_profile_sha256 IS NULL
+              AND move_highlight_profile_warped_version_id IS NULL
+            )
+            OR
+            (
+              move_highlight_profile IS NOT NULL
+              AND move_highlight_profile_sha256 IS NOT NULL
+              AND move_highlight_profile_warped_version_id IS NOT NULL
+              AND jsonb_typeof(move_highlight_profile) = 'object'
+              AND move_highlight_profile_sha256 ~ '^[0-9a-f]{64}$'
+              AND move_highlight_profile_warped_version_id = warped_version_id
+            )
+          ),
+        ADD CONSTRAINT predrawn_generation_attempts_source_attempt_fk
+          FOREIGN KEY (source_attempt_id, document_id)
+          REFERENCES predrawn_generation_attempts(id, document_id) ON DELETE RESTRICT,
+        ADD CONSTRAINT predrawn_generation_attempts_move_highlight_profile_warp_fk
+          FOREIGN KEY (move_highlight_profile_warped_version_id, document_id)
+          REFERENCES predrawn_background_versions(id, document_id)
+          ON UPDATE RESTRICT
+          ON DELETE RESTRICT;
+
+      CREATE INDEX IF NOT EXISTS predrawn_generation_attempts_document_created_idx
+        ON predrawn_generation_attempts (document_id, created_at DESC, id DESC);
+      CREATE INDEX IF NOT EXISTS predrawn_generation_attempts_source_idx
+        ON predrawn_generation_attempts (source_version_id)
+        WHERE source_version_id IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS predrawn_generation_attempts_source_attempt_idx
+        ON predrawn_generation_attempts (source_attempt_id)
+        WHERE source_attempt_id IS NOT NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS predrawn_generation_attempts_idempotency_idx
+        ON predrawn_generation_attempts (idempotency_actor, idempotency_key)
+        WHERE idempotency_key IS NOT NULL;
+
+      WITH terminal_versions AS (
+        SELECT terminal.*
+          FROM predrawn_background_versions terminal
+         WHERE terminal.kind IN ('raw', 'warped', 'occlusion')
+           AND NOT EXISTS (
+             SELECT 1
+               FROM predrawn_background_versions child
+              WHERE child.document_id = terminal.document_id
+                AND (
+                  (terminal.kind = 'raw'
+                    AND child.kind = 'warped'
+                    AND child.parent_version_id = terminal.id)
+                  OR
+                  (terminal.kind = 'warped'
+                    AND child.kind = 'occlusion'
+                    AND child.source_background_version_id = terminal.id)
+                  OR
+                  (terminal.kind = 'occlusion'
+                    AND child.kind = 'occlusion'
+                    AND child.parent_version_id = terminal.id)
+                )
+           )
+      ),
+      migrated_attempts AS (
+        SELECT
+          overlay(overlay(md5('predrawn-migrated-attempt:' || terminal.id::text)
+            placing '4' from 13) placing '8' from 17)::uuid AS id,
+          terminal.document_id,
+          terminal.owner_email,
+          terminal.level_id,
+          ('Historical artwork ' || left(terminal.id::text, 8))::text AS label,
+          CASE
+            WHEN terminal.kind = 'raw' THEN terminal.id
+            WHEN terminal.kind = 'warped' THEN terminal.parent_version_id
+            ELSE warped.parent_version_id
+          END AS generated_version_id,
+          CASE
+            WHEN terminal.kind = 'warped' THEN terminal.id
+            WHEN terminal.kind = 'occlusion' THEN terminal.source_background_version_id
+            ELSE NULL
+          END AS warped_version_id,
+          CASE WHEN terminal.kind = 'occlusion' THEN terminal.id ELSE NULL END
+            AS occlusion_version_id,
+          CASE WHEN terminal.status = 'archived' THEN 'archived' ELSE 'active' END AS status,
+          terminal.created_by_email,
+          terminal.created_by_name,
+          terminal.created_at,
+          terminal.updated_at,
+          terminal.updated_by,
+          CASE WHEN terminal.status = 'archived'
+            THEN COALESCE(terminal.archived_at, terminal.updated_at) ELSE NULL END AS archived_at,
+          CASE WHEN terminal.status = 'archived'
+            THEN COALESCE(terminal.archived_by, terminal.updated_by) ELSE NULL END AS archived_by
+        FROM terminal_versions terminal
+        LEFT JOIN predrawn_background_versions warped
+          ON terminal.kind = 'occlusion'
+         AND warped.document_id = terminal.document_id
+         AND warped.id = terminal.source_background_version_id
+         AND warped.kind = 'warped'
+      )
+      INSERT INTO predrawn_generation_attempts (
+        id, document_id, owner_email, level_id, label, origin,
+        source_version_id, generated_version_id, warped_version_id, occlusion_version_id,
+        status, created_by_email, created_by_name, created_at,
+        updated_at, updated_by, archived_at, archived_by
+      )
+      SELECT
+        id, document_id, owner_email, level_id, label, 'migrated-history',
+        NULL, generated_version_id, warped_version_id, occlusion_version_id,
+        status, created_by_email, created_by_name, created_at,
+        updated_at, updated_by, archived_at, archived_by
+      FROM migrated_attempts
+      WHERE generated_version_id IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM predrawn_generation_attempts)
+      ON CONFLICT (id) DO NOTHING;
+
+      CREATE TABLE IF NOT EXISTS predrawn_generation_attempt_events (
+        id                  bigserial   PRIMARY KEY,
+        document_id         text        NOT NULL,
+        attempt_id          uuid        NOT NULL,
+        action              text        NOT NULL,
+        actor_email         text        NOT NULL,
+        actor_name          text        NOT NULL,
+        details             jsonb       NOT NULL DEFAULT '{}'::jsonb,
+        created_at          timestamptz NOT NULL DEFAULT now(),
+        CONSTRAINT predrawn_generation_attempt_events_action_check
+          CHECK (action IN (
+            'created',
+            'stage-attached',
+            'stage-discarded',
+            'move-highlight-profile-updated',
+            'archived'
+          )),
+        FOREIGN KEY (attempt_id, document_id)
+          REFERENCES predrawn_generation_attempts(id, document_id) ON DELETE CASCADE
+      );
+
+      DO $$
+      DECLARE constraint_name text;
+      BEGIN
+        FOR constraint_name IN
+          SELECT conname
+            FROM pg_constraint
+           WHERE conrelid = 'predrawn_generation_attempt_events'::regclass
+             AND contype = 'c'
+             AND pg_get_constraintdef(oid) ~ '\\maction\\M'
+        LOOP
+          EXECUTE format(
+            'ALTER TABLE predrawn_generation_attempt_events DROP CONSTRAINT %I',
+            constraint_name
+          );
+        END LOOP;
+      END $$;
+      ALTER TABLE predrawn_generation_attempt_events
+        ADD CONSTRAINT predrawn_generation_attempt_events_action_check
+        CHECK (action IN (
+          'created',
+          'stage-attached',
+          'stage-discarded',
+          'move-highlight-profile-updated',
+          'archived'
+        ));
+      CREATE INDEX IF NOT EXISTS predrawn_generation_attempt_events_attempt_idx
+        ON predrawn_generation_attempt_events (attempt_id, created_at DESC, id DESC);
+
+      INSERT INTO predrawn_generation_attempt_events (
+        document_id, attempt_id, action, actor_email, actor_name, details, created_at
+      )
+      SELECT
+        attempt.document_id,
+        attempt.id,
+        'created',
+        attempt.created_by_email,
+        attempt.created_by_name,
+        jsonb_build_object('origin', 'migrated-history', 'source_available', false),
+        attempt.created_at
+      FROM predrawn_generation_attempts attempt
+      WHERE attempt.origin = 'migrated-history'
+        AND NOT EXISTS (
+          SELECT 1 FROM predrawn_generation_attempt_events event
+           WHERE event.attempt_id = attempt.id AND event.action = 'created'
+        );
+    `,
+  },
 ];
 
 let pool = null;
 let dbReady = false;
 let schemaReadinessPromise = null;
 const REQUIRED_SCHEMA_MIGRATION_VERSIONS = MIGRATIONS.map((migration) => migration.version);
+const REQUIRED_EDITOR_DOCUMENT_REVISION_REASONS = Object.freeze([
+  'migration',
+  'resolve',
+  'create',
+  'autosave',
+  'save',
+  'discard',
+  'restore',
+  'canonical-refresh',
+  'generation-attempt-archive',
+  'generation-attempt-occlusion-discard',
+]);
+const CHECKSUMMED_SCHEMA_HISTORY_MIGRATION_VERSION = 37;
+const LEGACY_SCHEMA_HISTORY_MAX_VERSION = 36;
+const LEGACY_SPARSE_SCHEMA_HISTORY_VERSIONS = Object.freeze([36]);
 const REQUIRED_SCHEMA_RELATIONS = [
   'level_thumbnail_derivatives',
   'level_working_copy_revisions',
+  'level_working_copy_revision_reasons',
   'editor_document_edit_sessions',
   'editor_document_recoveries',
   'editor_document_edit_events',
   'predrawn_background_versions',
   'predrawn_background_version_events',
   'predrawn_background_geometry_bindings',
+  'predrawn_background_raw_contract_bindings',
+  'predrawn_generation_attempts',
+  'predrawn_generation_attempt_events',
 ];
 const REQUIRED_SCHEMA_REPAIR_MIGRATIONS = new Map([
   ['level_thumbnail_derivatives', 22],
-  ['level_working_copy_revisions', 24],
+  ['level_working_copy_revisions', [24, 37]],
+  ['level_working_copy_revision_reasons', 37],
   ['editor_document_edit_sessions', 25],
   ['editor_document_recoveries', 25],
   ['editor_document_edit_events', 25],
   ['predrawn_background_versions', 28],
   ['predrawn_background_version_events', 28],
   ['predrawn_background_geometry_bindings', 30],
+  ['predrawn_background_raw_contract_bindings', 35],
+  ['predrawn_generation_attempts', 43],
+  ['predrawn_generation_attempt_events', 43],
 ]);
 
 function buildPool() {
@@ -1510,28 +2562,216 @@ function buildPool() {
   return null;
 }
 
+async function schemaMigrationIdentityColumnsAvailable(client) {
+  const { rows } = await client.query(
+    `SELECT count(*)::integer AS count
+       FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'schema_migrations'
+        AND column_name IN ('name', 'checksum')`,
+  );
+  return Number(rows[0]?.count) === 2;
+}
+
+async function schemaMigrationHistoryRows(client) {
+  const hasIdentity = await schemaMigrationIdentityColumnsAvailable(client);
+  const { rows } = await client.query(hasIdentity
+    ? 'SELECT version, name, checksum FROM schema_migrations ORDER BY version'
+    : 'SELECT version, NULL::text AS name, NULL::text AS checksum FROM schema_migrations ORDER BY version');
+  if (
+    !hasIdentity
+    && rows.some((row) => Number(row.version) >= CHECKSUMMED_SCHEMA_HISTORY_MIGRATION_VERSION)
+  ) {
+    throw new MigrationIntegrityError(
+      `schema migration ${CHECKSUMMED_SCHEMA_HISTORY_MIGRATION_VERSION} is recorded but its identity columns are absent`,
+      {
+        recorded_identity_migration: CHECKSUMMED_SCHEMA_HISTORY_MIGRATION_VERSION,
+        missing_identity_columns: ['name', 'checksum'],
+      },
+    );
+  }
+  return { rows, hasIdentity };
+}
+
+async function insertSchemaMigrationHistory(client, migration) {
+  if (await schemaMigrationIdentityColumnsAvailable(client)) {
+    await client.query(
+      `INSERT INTO schema_migrations (version, name, checksum)
+       VALUES ($1, $2, $3)`,
+      [migration.version, migration.name, migrationChecksum(migration)],
+    );
+    return;
+  }
+  await client.query('INSERT INTO schema_migrations (version) VALUES ($1)', [migration.version]);
+}
+
+async function sealLegacySchemaMigrationHistory(client) {
+  if (!(await schemaMigrationIdentityColumnsAvailable(client))) return [];
+  const sealedVersions = [];
+  for (const migration of migrationManifest(MIGRATIONS)) {
+    if (migration.version > LEGACY_SCHEMA_HISTORY_MAX_VERSION) continue;
+    const result = await client.query(
+      `UPDATE schema_migrations
+          SET name = $2,
+              checksum = $3
+        WHERE version = $1
+          AND name IS NULL
+          AND checksum IS NULL
+        RETURNING version`,
+      [migration.version, migration.name, migration.checksum],
+    );
+    if (result.rowCount > 0) sealedVersions.push(migration.version);
+  }
+  return sealedVersions;
+}
+
+function schemaMigrationHistoryCanSealLegacy(history) {
+  if (!history.hasIdentity) return true;
+  const unsealed = history.rows.filter(
+    (row) => row.name === null || row.checksum === null,
+  );
+  if (!unsealed.length) return false;
+  const identityMigration = migrationManifest(MIGRATIONS).find(
+    (migration) => migration.version === CHECKSUMMED_SCHEMA_HISTORY_MIGRATION_VERSION,
+  );
+  const recordedIdentityMigration = history.rows.find(
+    (row) => Number(row.version) === CHECKSUMMED_SCHEMA_HISTORY_MIGRATION_VERSION,
+  );
+  return Boolean(
+    identityMigration
+    && recordedIdentityMigration
+    && recordedIdentityMigration.name === identityMigration.name
+    && recordedIdentityMigration.checksum === identityMigration.checksum
+    && unsealed.every((row) => (
+      Number(row.version) <= LEGACY_SCHEMA_HISTORY_MAX_VERSION
+      && row.name === null
+      && row.checksum === null
+    )),
+  );
+}
+
 async function runMigrations() {
   const client = await pool.connect();
   try {
     await client.query('SELECT pg_advisory_lock($1)', [MIGRATION_ADVISORY_LOCK_KEY]);
     try {
-      await client.query('CREATE TABLE IF NOT EXISTS schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
-      const { rows } = await client.query('SELECT version FROM schema_migrations');
-      const applied = new Set(rows.map((row) => row.version));
-      for (const migration of MIGRATIONS) {
-        if (applied.has(migration.version)) continue;
-        await client.query('BEGIN');
-        try {
-          await client.query(migration.sql);
-          await client.query('INSERT INTO schema_migrations (version) VALUES ($1)', [migration.version]);
-          await client.query('COMMIT');
-        } catch (error) {
-          await client.query('ROLLBACK');
-          throw error;
+      let plan = null;
+      const appliedVersions = [];
+      const completedRelationRepairSteps = [];
+      const completedContractRepairSteps = [];
+      const sealedLegacyVersions = new Set();
+      let failingMigration = null;
+      let failurePhase = '';
+      const activity = () => ({
+        completedRelationRepairSteps,
+        completedContractRepairSteps,
+        sealedLegacyVersions: [...sealedLegacyVersions],
+      });
+      const executeRepairMigration = async (migration, phase) => {
+        failingMigration = migration;
+        failurePhase = phase;
+        await client.query(migration.sql);
+      };
+      const markInspectionPhase = (phase) => {
+        failingMigration = null;
+        failurePhase = phase;
+      };
+      const sealLegacyHistory = async (migration, phase) => {
+        failingMigration = migration;
+        failurePhase = phase;
+        const sealed = await sealLegacySchemaMigrationHistory(client);
+        sealed.forEach((version) => sealedLegacyVersions.add(version));
+      };
+      try {
+        await client.query('CREATE TABLE IF NOT EXISTS schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
+        let history = await schemaMigrationHistoryRows(client);
+        const canSealLegacyHistory = schemaMigrationHistoryCanSealLegacy(history);
+        plan = planMigrationExecution(MIGRATIONS, history.rows, {
+          allowUnsealed: canSealLegacyHistory,
+          allowLegacySparseVersions: canSealLegacyHistory
+            ? LEGACY_SPARSE_SCHEMA_HISTORY_VERSIONS
+            : [],
+        });
+        if (history.hasIdentity && canSealLegacyHistory) {
+          const identityMigration = MIGRATIONS.find(
+            (migration) => migration.version === CHECKSUMMED_SCHEMA_HISTORY_MIGRATION_VERSION,
+          );
+          await sealLegacyHistory(identityMigration, 'seal legacy migration identities');
+          markInspectionPhase('verify sealed legacy migration history');
+          history = await schemaMigrationHistoryRows(client);
+          plan = planMigrationExecution(MIGRATIONS, history.rows);
         }
+        const migrationByVersion = new Map(MIGRATIONS.map((migration) => [migration.version, migration]));
+        for (const pending of plan.pending) {
+          const migration = migrationByVersion.get(pending.version);
+          failingMigration = migration;
+          failurePhase = 'apply';
+          await client.query('BEGIN');
+          try {
+            await client.query(migration.sql);
+            await insertSchemaMigrationHistory(client, migration);
+            await client.query('COMMIT');
+            appliedVersions.push(migration.version);
+            if (migration.version === CHECKSUMMED_SCHEMA_HISTORY_MIGRATION_VERSION) {
+              await sealLegacyHistory(
+                migration,
+                `seal legacy migration identities after migration ${migration.version}`,
+              );
+              markInspectionPhase(
+                `verify legacy migration identities sealed after migration ${migration.version}`,
+              );
+              const sealedIdentityHistory = await schemaMigrationHistoryRows(client);
+              planMigrationExecution(MIGRATIONS, sealedIdentityHistory.rows);
+            }
+            failingMigration = null;
+            failurePhase = '';
+          } catch (error) {
+            await client.query('ROLLBACK').catch(() => {});
+            throw error;
+          }
+        }
+        await repairRequiredSchemaRelations(
+          client,
+          executeRepairMigration,
+          markInspectionPhase,
+          completedRelationRepairSteps,
+        );
+        await repairRequiredSchemaContracts(
+          client,
+          executeRepairMigration,
+          markInspectionPhase,
+          completedContractRepairSteps,
+        );
+        failingMigration = null;
+        failurePhase = 'verify required schema postconditions';
+        await checkRequiredSchemaRelations(client);
+        await checkRequiredSchemaContracts(client);
+        const identityMigration = MIGRATIONS.find(
+          (migration) => migration.version === CHECKSUMMED_SCHEMA_HISTORY_MIGRATION_VERSION,
+        );
+        await sealLegacyHistory(identityMigration, 'seal legacy migration identities');
+        failingMigration = null;
+        failurePhase = 'verify sealed migration history';
+        const sealedHistory = await schemaMigrationHistoryRows(client);
+        const sealedPlan = planMigrationExecution(MIGRATIONS, sealedHistory.rows);
+        if (sealedPlan.pending.length) {
+          throw new SchemaMigrationRequiredError(
+            `schema migrations remain pending after apply: ${sealedPlan.pending.map((entry) => entry.version).join(', ')}`,
+            { missing_versions: sealedPlan.pending.map((entry) => entry.version) },
+          );
+        }
+        return migrationRunResult(plan, appliedVersions, activity());
+      } catch (error) {
+        if (error instanceof MigrationExecutionError || !plan) throw error;
+        throw migrationExecutionFailure(
+          plan,
+          appliedVersions,
+          failingMigration,
+          failurePhase,
+          error,
+          activity(),
+        );
       }
-      await repairRequiredSchemaRelations(client);
-      await checkRequiredSchemaRelations(client);
     } finally {
       await client.query('SELECT pg_advisory_unlock($1)', [MIGRATION_ADVISORY_LOCK_KEY]).catch(() => {});
     }
@@ -1559,17 +2799,34 @@ async function missingRequiredSchemaRelations(client) {
   return rows.map((row) => row.relation);
 }
 
-async function repairRequiredSchemaRelations(client) {
+async function repairRequiredSchemaRelations(
+  client,
+  executeMigration = (migration) => client.query(migration.sql),
+  markInspection = () => {},
+  completedSteps = [],
+) {
+  markInspection('inspect required relation repairs');
   const missing = await missingRequiredSchemaRelations(client);
   for (const relation of missing) {
-    const migrationVersion = REQUIRED_SCHEMA_REPAIR_MIGRATIONS.get(relation);
-    const migration = MIGRATIONS.find((candidate) => candidate.version === migrationVersion);
-    if (!migration) throw new Error(`required schema repair migration is unavailable for ${relation}`);
-    // Numeric migration history can outlive an earlier definition of the same
-    // version. Required runtime state is therefore repaired from its immutable,
-    // idempotent DDL while the migration advisory lock is held.
-    await client.query(migration.sql);
+    const configuredVersions = REQUIRED_SCHEMA_REPAIR_MIGRATIONS.get(relation);
+    const migrationVersions = Array.isArray(configuredVersions)
+      ? configuredVersions
+      : [configuredVersions];
+    for (const migrationVersion of migrationVersions) {
+      const migration = MIGRATIONS.find((candidate) => candidate.version === migrationVersion);
+      if (!migration) throw new Error(`required schema repair migration is unavailable for ${relation}`);
+      // Numeric migration history can outlive an earlier definition of the same
+      // version. Required runtime state is therefore repaired from its immutable,
+      // idempotent DDL while the migration advisory lock is held.
+      await executeMigration(migration, `repair relation ${relation}`);
+      completedSteps.push(Object.freeze({
+        relation,
+        migration_version: migration.version,
+      }));
+      markInspection(`inspect remaining required relation repairs after migration ${migration.version}`);
+    }
   }
+  return Object.freeze(completedSteps);
 }
 
 async function checkRequiredSchemaRelations(client) {
@@ -1578,6 +2835,367 @@ async function checkRequiredSchemaRelations(client) {
     throw new SchemaMigrationRequiredError(`required schema relations missing: ${missing.join(', ')}`, {
       missing_relations: missing,
     });
+  }
+}
+
+async function missingRequiredSchemaRevisionReasons(client) {
+  const { rows } = await client.query(
+    `SELECT required.reason
+       FROM unnest($1::text[]) AS required(reason)
+       LEFT JOIN level_working_copy_revision_reasons stored
+         ON stored.reason = required.reason
+      WHERE stored.reason IS NULL
+      ORDER BY required.reason`,
+    [REQUIRED_EDITOR_DOCUMENT_REVISION_REASONS],
+  );
+  return rows.map((row) => row.reason);
+}
+
+async function workingCopyRevisionReasonConstraintRows(client) {
+  const { rows } = await client.query(
+    `SELECT
+       constraint_entry.conname AS constraint_name,
+       constraint_entry.contype AS constraint_type,
+       constraint_entry.convalidated AS validated,
+       constraint_entry.confupdtype AS update_action,
+       constraint_entry.confdeltype AS delete_action,
+       referenced_namespace.nspname AS referenced_schema,
+       referenced_table.relname AS referenced_table,
+       ARRAY(
+         SELECT local_attribute.attname::text
+           FROM unnest(constraint_entry.conkey) WITH ORDINALITY
+             AS local_key(attnum, position)
+           JOIN pg_attribute local_attribute
+             ON local_attribute.attrelid = constraint_entry.conrelid
+            AND local_attribute.attnum = local_key.attnum
+          ORDER BY local_key.position
+       ) AS local_columns,
+       ARRAY(
+         SELECT referenced_attribute.attname::text
+           FROM unnest(constraint_entry.confkey) WITH ORDINALITY
+             AS referenced_key(attnum, position)
+           JOIN pg_attribute referenced_attribute
+             ON referenced_attribute.attrelid = constraint_entry.confrelid
+            AND referenced_attribute.attnum = referenced_key.attnum
+          ORDER BY referenced_key.position
+       ) AS referenced_columns,
+       pg_get_constraintdef(constraint_entry.oid) AS definition
+     FROM pg_constraint constraint_entry
+     JOIN pg_class local_table
+       ON local_table.oid = constraint_entry.conrelid
+     JOIN pg_namespace local_namespace
+       ON local_namespace.oid = local_table.relnamespace
+     LEFT JOIN pg_class referenced_table
+       ON referenced_table.oid = constraint_entry.confrelid
+     LEFT JOIN pg_namespace referenced_namespace
+       ON referenced_namespace.oid = referenced_table.relnamespace
+    WHERE local_namespace.nspname = 'public'
+      AND local_table.relname = 'level_working_copy_revisions'
+      AND constraint_entry.contype IN ('c', 'f')`,
+  );
+  return rows;
+}
+
+async function generationAttemptRetryContractRows(client) {
+  const columns = await client.query(
+    `SELECT column_name, is_nullable, data_type, column_default
+       FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'predrawn_generation_attempts'
+        AND column_name = 'processing_revision'`,
+  );
+  const constraints = await client.query(
+    `SELECT
+       local_table.relname AS table_name,
+       constraint_entry.conname AS constraint_name,
+       constraint_entry.convalidated AS validated,
+       pg_get_constraintdef(constraint_entry.oid) AS definition
+     FROM pg_constraint constraint_entry
+     JOIN pg_class local_table
+       ON local_table.oid = constraint_entry.conrelid
+     JOIN pg_namespace local_namespace
+       ON local_namespace.oid = local_table.relnamespace
+    WHERE local_namespace.nspname = 'public'
+      AND local_table.relname IN (
+        'predrawn_generation_attempts',
+        'predrawn_generation_attempt_events'
+      )
+      AND constraint_entry.contype = 'c'`,
+  );
+  return Object.freeze({
+    columns: columns.rows,
+    constraints: constraints.rows,
+  });
+}
+
+async function generationAttemptMoveHighlightContractRows(client) {
+  const columns = await client.query(
+    `SELECT column_name, is_nullable, data_type, column_default
+       FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'predrawn_generation_attempts'
+        AND column_name IN (
+          'move_highlight_profile',
+          'move_highlight_profile_sha256',
+          'move_highlight_profile_warped_version_id'
+        )
+      ORDER BY ordinal_position`,
+  );
+  const constraints = await client.query(
+    `SELECT
+       local_table.relname AS table_name,
+       constraint_entry.conname AS constraint_name,
+       constraint_entry.contype AS constraint_type,
+       constraint_entry.convalidated AS validated,
+       constraint_entry.confupdtype AS update_action,
+       constraint_entry.confdeltype AS delete_action,
+       referenced_namespace.nspname AS referenced_schema,
+       referenced_table.relname AS referenced_table,
+       ARRAY(
+         SELECT local_attribute.attname::text
+           FROM unnest(constraint_entry.conkey) WITH ORDINALITY
+             AS local_key(attnum, position)
+           JOIN pg_attribute local_attribute
+             ON local_attribute.attrelid = constraint_entry.conrelid
+            AND local_attribute.attnum = local_key.attnum
+          ORDER BY local_key.position
+       ) AS local_columns,
+       ARRAY(
+         SELECT referenced_attribute.attname::text
+           FROM unnest(constraint_entry.confkey) WITH ORDINALITY
+             AS referenced_key(attnum, position)
+           JOIN pg_attribute referenced_attribute
+             ON referenced_attribute.attrelid = constraint_entry.confrelid
+            AND referenced_attribute.attnum = referenced_key.attnum
+          ORDER BY referenced_key.position
+       ) AS referenced_columns,
+       pg_get_constraintdef(constraint_entry.oid) AS definition
+     FROM pg_constraint constraint_entry
+     JOIN pg_class local_table
+       ON local_table.oid = constraint_entry.conrelid
+     JOIN pg_namespace local_namespace
+       ON local_namespace.oid = local_table.relnamespace
+     LEFT JOIN pg_class referenced_table
+       ON referenced_table.oid = constraint_entry.confrelid
+     LEFT JOIN pg_namespace referenced_namespace
+       ON referenced_namespace.oid = referenced_table.relnamespace
+    WHERE local_namespace.nspname = 'public'
+      AND local_table.relname IN (
+        'predrawn_generation_attempts',
+        'predrawn_generation_attempt_events'
+      )
+      AND constraint_entry.contype IN ('c', 'f')`,
+  );
+  return Object.freeze({
+    columns: columns.rows,
+    constraints: constraints.rows,
+  });
+}
+
+async function schemaMigrationIdentityBoundaryRows(client) {
+  const columns = await client.query(
+    `SELECT column_name, is_nullable, data_type
+       FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'schema_migrations'
+        AND column_name IN ('name', 'checksum')
+      ORDER BY ordinal_position`,
+  );
+  const constraints = await client.query(
+    `SELECT
+       constraint_entry.conname AS constraint_name,
+       constraint_entry.contype AS constraint_type,
+       constraint_entry.convalidated AS validated,
+       constraint_entry.conislocal AS is_local,
+       constraint_entry.coninhcount AS inheritance_count,
+       constraint_entry.connoinherit AS no_inherit,
+       ARRAY(
+         SELECT local_attribute.attname::text
+           FROM unnest(constraint_entry.conkey) WITH ORDINALITY
+             AS local_key(attnum, position)
+           JOIN pg_attribute local_attribute
+             ON local_attribute.attrelid = constraint_entry.conrelid
+            AND local_attribute.attnum = local_key.attnum
+          ORDER BY local_key.position
+       ) AS local_columns,
+       pg_get_constraintdef(constraint_entry.oid) AS definition
+     FROM pg_constraint constraint_entry
+     JOIN pg_class local_table
+       ON local_table.oid = constraint_entry.conrelid
+     JOIN pg_namespace local_namespace
+       ON local_namespace.oid = local_table.relnamespace
+    WHERE local_namespace.nspname = 'public'
+      AND local_table.relname = 'schema_migrations'
+      AND constraint_entry.contype = 'c'`,
+  );
+  return Object.freeze({
+    columns: columns.rows,
+    constraints: constraints.rows,
+  });
+}
+
+async function requiredSchemaContractIssues(client) {
+  const missingReasons = await missingRequiredSchemaRevisionReasons(client);
+  const constraints = await workingCopyRevisionReasonConstraintRows(client);
+  const retryContractRows = await generationAttemptRetryContractRows(client);
+  const moveHighlightContractRows = await generationAttemptMoveHighlightContractRows(client);
+  const migrationIdentityRows = await schemaMigrationIdentityBoundaryRows(client);
+  const migrationIdentityIssues = schemaMigrationIdentityBoundaryIssues(
+    migrationIdentityRows.columns,
+    migrationIdentityRows.constraints,
+  );
+  const reasonChecks = constraints.filter(
+    (constraint) => (
+      constraint.constraint_type === 'c'
+      && /\breason\b/i.test(String(constraint.definition || ''))
+    ),
+  );
+  const reasonForeignKeys = constraints.filter(
+    (constraint) => (
+      constraint.constraint_type === 'f'
+      && Array.isArray(constraint.local_columns)
+      && constraint.local_columns.includes('reason')
+    ),
+  );
+  const canonicalForeignKeys = reasonForeignKeys.filter(
+    (constraint) => (
+      constraint.constraint_name === 'level_working_copy_revisions_reason_fk'
+      && constraint.validated === true
+      && constraint.referenced_schema === 'public'
+      && constraint.referenced_table === 'level_working_copy_revision_reasons'
+      && JSON.stringify(constraint.local_columns) === '["reason"]'
+      && JSON.stringify(constraint.referenced_columns) === '["reason"]'
+      && constraint.update_action === 'r'
+      && constraint.delete_action === 'r'
+    ),
+  );
+  const unexpectedReasonForeignKeys = reasonForeignKeys.filter(
+    (constraint) => !canonicalForeignKeys.includes(constraint),
+  );
+  return Object.freeze({
+    missing_revision_reasons: Object.freeze(missingReasons),
+    reason_check_constraints: Object.freeze(
+      reasonChecks.map((constraint) => constraint.constraint_name),
+    ),
+    canonical_reason_foreign_key_count: canonicalForeignKeys.length,
+    unexpected_reason_foreign_keys: Object.freeze(
+      unexpectedReasonForeignKeys.map((constraint) => constraint.constraint_name),
+    ),
+    ...generationAttemptRetryContractIssues(
+      retryContractRows.columns,
+      retryContractRows.constraints,
+    ),
+    ...generationAttemptMoveHighlightContractIssues(
+      moveHighlightContractRows.columns,
+      moveHighlightContractRows.constraints,
+    ),
+    ...migrationIdentityIssues,
+  });
+}
+
+function workingCopyReasonContractIssuesPresent(issues) {
+  return (
+    issues.missing_revision_reasons.length > 0
+    || issues.reason_check_constraints.length > 0
+    || issues.canonical_reason_foreign_key_count !== 1
+    || issues.unexpected_reason_foreign_keys.length > 0
+  );
+}
+
+function schemaContractIssuesPresent(issues) {
+  return (
+    workingCopyReasonContractIssuesPresent(issues)
+    || generationAttemptRetryContractIssuesPresent(issues)
+    || generationAttemptMoveHighlightContractIssuesPresent(issues)
+    || schemaMigrationIdentityBoundaryIssuesPresent(issues)
+  );
+}
+
+async function repairRequiredSchemaContracts(
+  client,
+  executeMigration = (migration) => client.query(migration.sql),
+  markInspection = () => {},
+  completedSteps = [],
+) {
+  markInspection('inspect required contract repairs');
+  let issues = await requiredSchemaContractIssues(client);
+  if (workingCopyReasonContractIssuesPresent(issues)) {
+    const occlusionDiscardReason = 'generation-attempt-occlusion-discard';
+    const baseReasonContractDrift = (
+      issues.reason_check_constraints.length > 0
+      || issues.canonical_reason_foreign_key_count !== 1
+      || issues.unexpected_reason_foreign_keys.length > 0
+      || issues.missing_revision_reasons.some((reason) => reason !== occlusionDiscardReason)
+    );
+    if (baseReasonContractDrift) {
+      const migration = MIGRATIONS.find((candidate) => candidate.version === 37);
+      if (!migration) throw new Error('working-copy revision reason repair migration is unavailable');
+      await executeMigration(migration, 'repair working-copy revision reason contract');
+      completedSteps.push(Object.freeze({
+        contract: 'working-copy revision reasons',
+        migration_version: migration.version,
+      }));
+      // Migration 37 deliberately reopens the one-time nullable bridge. Re-read
+      // the database before deciding whether migration 38 must close it again.
+      markInspection(`inspect required contract repairs after migration ${migration.version}`);
+      issues = await requiredSchemaContractIssues(client);
+    }
+    if (issues.missing_revision_reasons.includes(occlusionDiscardReason)) {
+      const migration = MIGRATIONS.find((candidate) => candidate.version === 42);
+      if (!migration) throw new Error('occlusion-discard revision reason repair migration is unavailable');
+      await executeMigration(migration, 'repair occlusion-discard revision reason contract');
+      completedSteps.push(Object.freeze({
+        contract: 'occlusion-discard working-copy revision reason',
+        migration_version: migration.version,
+      }));
+      markInspection(`inspect required contract repairs after migration ${migration.version}`);
+      issues = await requiredSchemaContractIssues(client);
+    }
+  }
+  const identityRepair = schemaMigrationIdentityRepair(issues);
+  if (identityRepair) {
+    const migration = MIGRATIONS.find(
+      (candidate) => candidate.version === identityRepair.migration_version,
+    );
+    if (!migration) throw new Error('schema migration identity repair migration is unavailable');
+    await executeMigration(migration, 'repair schema migration identity contract');
+    completedSteps.push(identityRepair);
+    markInspection(`inspect remaining required contract repairs after migration ${migration.version}`);
+    issues = await requiredSchemaContractIssues(client);
+  }
+  if (generationAttemptRetryContractIssuesPresent(issues)) {
+    const migration = MIGRATIONS.find((candidate) => candidate.version === 43);
+    if (!migration) throw new Error('generation-attempt retry repair migration is unavailable');
+    await executeMigration(migration, 'repair generation-attempt retry contract');
+    completedSteps.push(Object.freeze({
+      contract: 'generation-attempt same-slot retry',
+      migration_version: migration.version,
+    }));
+    markInspection(`inspect remaining required contract repairs after migration ${migration.version}`);
+    issues = await requiredSchemaContractIssues(client);
+  }
+  if (generationAttemptMoveHighlightContractIssuesPresent(issues)) {
+    const migration = MIGRATIONS.find((candidate) => candidate.version === 43);
+    if (!migration) {
+      throw new Error('generation-attempt move-highlight repair migrations are unavailable');
+    }
+    await executeMigration(migration, 'repair generation-attempt move-highlight contract');
+    completedSteps.push(Object.freeze({
+      contract: 'generation-attempt cyan move-highlight contract',
+      migration_version: migration.version,
+    }));
+    markInspection(`inspect remaining required contract repairs after migration ${migration.version}`);
+  }
+  return Object.freeze(completedSteps);
+}
+
+async function checkRequiredSchemaContracts(client) {
+  const issues = await requiredSchemaContractIssues(client);
+  if (schemaContractIssuesPresent(issues)) {
+    throw new SchemaMigrationRequiredError(
+      'required database schema contract is incomplete',
+      issues,
+    );
   }
 }
 
@@ -1590,27 +3208,37 @@ async function checkMigrations() {
         missing_versions: REQUIRED_SCHEMA_MIGRATION_VERSIONS,
       });
     }
-    const { rows } = await client.query('SELECT version FROM schema_migrations');
-    const applied = new Set(rows.map((row) => row.version));
-    const missing = REQUIRED_SCHEMA_MIGRATION_VERSIONS.filter((version) => !applied.has(version));
-    if (missing.length) {
+    const history = await schemaMigrationHistoryRows(client);
+    const plan = planMigrationExecution(MIGRATIONS, history.rows, {
+      allowUnsealed: !history.hasIdentity,
+      allowLegacySparseVersions: !history.hasIdentity
+        ? LEGACY_SPARSE_SCHEMA_HISTORY_VERSIONS
+        : [],
+    });
+    if (plan.pending.length) {
+      const missing = plan.pending.map((entry) => entry.version);
       throw new SchemaMigrationRequiredError(`schema migrations missing versions: ${missing.join(', ')}`, {
         missing_versions: missing,
       });
     }
     await checkRequiredSchemaRelations(client);
+    await checkRequiredSchemaContracts(client);
+    return migrationRunResult(plan, []);
   } finally {
     client.release();
   }
 }
 
+let schemaMigrationRunReport = null;
+
 async function prepareDbSchema() {
   if (schemaMigrationMode === 'off') {
     // The caller explicitly owns schema readiness.
+    schemaMigrationRunReport = null;
   } else if (schemaMigrationMode === 'auto') {
-    await runMigrations();
+    schemaMigrationRunReport = await runMigrations();
   } else {
-    await checkMigrations();
+    schemaMigrationRunReport = await checkMigrations();
   }
   if (unitAssetSeedCatalogUrl) await seedUnitCatalogFromLiveSource();
   if (liveMediaSeedCatalogUrl) await seedLiveMediaCatalogFromLiveSource();
@@ -1625,9 +3253,8 @@ async function prepareDbSchema() {
 }
 
 function schemaReadyMessage() {
-  if (schemaMigrationMode === 'auto') return 'schema migrations applied';
   if (schemaMigrationMode === 'off') return 'schema migrations skipped';
-  return 'schema migrations verified';
+  return formatMigrationRunResult(schemaMigrationRunReport);
 }
 
 // Idempotent, self-healing readiness: schema readiness runs once; a failed
@@ -1645,8 +3272,13 @@ async function ensureDbReady() {
 
 function dbUnavailable(res, message, error, code) {
   console.error(`${message}:`, error);
-  const responseCode = error && error.code === 'schema_migration_required' ? error.code : code;
-  const details = responseCode === 'schema_migration_required' && error.details ? { details: error.details } : {};
+  const schemaError = error && (
+    error.code === 'schema_migration_required'
+    || error.code === 'schema_migration_history_invalid'
+    || error.code === 'schema_migration_execution_failed'
+  );
+  const responseCode = schemaError ? error.code : code;
+  const details = schemaError && error.details ? { details: error.details } : {};
   res.status(503).json({ error: responseCode, ...details });
 }
 
@@ -4135,9 +5767,38 @@ const BACKGROUND_VERSION_COLUMNS = `v.id, v.document_id, v.owner_email, v.level_
       'bound_at', binding.bound_at
     )
      FROM predrawn_background_geometry_bindings binding
-    WHERE binding.version_id = v.id) AS environment_geometry_binding`;
+    WHERE binding.version_id = v.id) AS environment_geometry_binding,
+  (SELECT jsonb_build_object(
+      'legacy_operation_kind', binding.legacy_operation_kind,
+      'legacy_operation_sha256', binding.legacy_operation_sha256,
+      'coordinate_basis', binding.coordinate_basis,
+      'viewing_pane', binding.viewing_pane,
+      'bound_at', binding.bound_at
+    )
+     FROM predrawn_background_raw_contract_bindings binding
+    WHERE binding.version_id = v.id) AS raw_contract_binding,
+  EXISTS (
+    SELECT 1
+      FROM predrawn_generation_attempts source_attempt
+     WHERE source_attempt.document_id = v.document_id
+       AND source_attempt.owner_email = v.owner_email
+       AND source_attempt.level_id = v.level_id
+       AND source_attempt.generated_version_id = v.id
+  ) AS pipeline_source_retained`;
+const GENERATION_ATTEMPT_COLUMNS = `attempt.id, attempt.document_id, attempt.owner_email,
+  attempt.level_id, attempt.label, attempt.origin, attempt.source_version_id,
+  attempt.source_attempt_id,
+  attempt.source_request,
+  attempt.generated_version_id, attempt.warped_version_id, attempt.occlusion_version_id,
+  attempt.move_highlight_profile, attempt.move_highlight_profile_sha256,
+  attempt.move_highlight_profile_warped_version_id,
+  attempt.status, attempt.row_revision, attempt.processing_revision,
+  attempt.created_by_email, attempt.created_by_name,
+  attempt.created_at, attempt.updated_at, attempt.updated_by,
+  attempt.archived_at, attempt.archived_by`;
 const BACKGROUND_VERSION_DOCUMENT_ROW_LIMIT = 256;
 const BACKGROUND_VERSION_OWNER_BLOB_BYTE_LIMIT = 1024n * 1024n * 1024n;
+const GENERATION_ATTEMPT_DOCUMENT_ROW_LIMIT = 128;
 
 function editorDocumentId(raw) {
   const id = String(raw || '').trim();
@@ -4446,7 +6107,8 @@ async function dbRecordEditorDocumentRevision(
         AND ranked.recent_rank > $2
         AND ranked.daily_rank > 1
         AND ranked.reason NOT IN (
-          'migration', 'resolve', 'create', 'save', 'discard', 'restore', 'canonical-refresh'
+          'migration', 'resolve', 'create', 'save', 'discard', 'restore',
+          'canonical-refresh', 'generation-attempt-archive'
         )`,
     [row.document_id, EDITOR_DOCUMENT_HISTORY_RECENT_LIMIT],
   );
@@ -5539,7 +7201,7 @@ async function dbRestoreEditorRecovery(ownerEmail, documentId, recoveryId, expec
 async function dbCanonicalLevel(client, ownerEmail, workspace, levelId, { lock = false } = {}) {
   if (workspace.kind === 'user') {
     const { rows } = await client.query(
-      `SELECT body, updated_at, md5(((body->'levels')->$2)::text) AS level_hash
+      `SELECT body, revision, updated_at, md5(((body->'levels')->$2)::text) AS level_hash
          FROM campaign_workspaces WHERE owner_email = $1${lock ? ' FOR UPDATE' : ''}`,
       [ownerEmail, levelId],
     );
@@ -5704,13 +7366,13 @@ async function dbAutosaveEditorDocument(ownerEmail, documentId, expectedRevision
     // Bind a legacy selected lineage before replacing the server-held body. V1
     // included cover, so this is the last trustworthy moment to prove an exact
     // old digest when the incoming first edit changes only live cover.
-    await dbTryBindStoredLevelLegacyBackgroundGeometry(
+    await withThumbnailRenderInputs(() => dbTryBindStoredLevelLegacyBackgroundGeometry(
       client,
       current,
       current.body,
       ownerEmail,
       session.actor_name,
-    );
+    ), client);
     const canonical = await dbCanonicalLevel(
       client,
       ownerEmail,
@@ -5861,6 +7523,9 @@ async function dbRecordBackgroundVersionEvent(
 
 function publicBackgroundVersion(row) {
   const hasContent = Boolean(row.blob_sha256 && row.width && row.height);
+  const pipelineSourceIssue = row.kind === 'raw'
+    ? backgroundVersionPipelineSourceIssue(row)
+    : null;
   const documentContentUrl = `/api/editor-documents/${encodeURIComponent(row.document_id)}`
     + `/background-versions/${encodeURIComponent(String(row.id))}/content`;
   return {
@@ -5884,6 +7549,8 @@ function publicBackgroundVersion(row) {
     // exposes the separately persisted v2 binding without rewriting its bytes,
     // operation, or provenance.
     environment_geometry_sha256_v2: backgroundVersionV2GeometrySha256(row),
+    pipeline_source_eligible: row.kind === 'raw' && pipelineSourceIssue === null,
+    pipeline_source_issue: pipelineSourceIssue,
     // Metadata creation and byte upload are separate HTTP operations. Keep the
     // durable status vocabulary small, but identify that bounded transient to
     // the UI instead of calling a row with no PNG "ready".
@@ -5903,6 +7570,307 @@ function publicBackgroundVersion(row) {
     archived_by: row.archived_by || null,
     published_at: nullableTimestampString(row.published_at),
     published_by: row.published_by || null,
+  };
+}
+
+function publicGenerationAttempt(row) {
+  return {
+    id: String(row.id),
+    document_id: row.document_id,
+    level_id: row.level_id,
+    label: row.label,
+    origin: row.origin,
+    source_version_id: row.source_version_id ? String(row.source_version_id) : null,
+    source_attempt_id: row.source_attempt_id ? String(row.source_attempt_id) : null,
+    source_request: isObjectRecord(row.source_request) ? row.source_request : null,
+    generated_version_id: row.generated_version_id ? String(row.generated_version_id) : null,
+    warped_version_id: row.warped_version_id ? String(row.warped_version_id) : null,
+    occlusion_version_id: row.occlusion_version_id ? String(row.occlusion_version_id) : null,
+    move_highlight_profile: isObjectRecord(row.move_highlight_profile)
+      ? row.move_highlight_profile
+      : null,
+    move_highlight_profile_sha256: row.move_highlight_profile_sha256 || null,
+    move_highlight_profile_warped_version_id: row.move_highlight_profile_warped_version_id
+      ? String(row.move_highlight_profile_warped_version_id)
+      : null,
+    status: row.status,
+    row_revision: Number(row.row_revision),
+    processing_revision: Number(row.processing_revision),
+    created_by: row.created_by_name,
+    created_by_email: row.created_by_email,
+    created_at: nullableTimestampString(row.created_at),
+    updated_at: nullableTimestampString(row.updated_at),
+    archived_at: nullableTimestampString(row.archived_at),
+    archived_by: row.archived_by || null,
+  };
+}
+
+async function dbGenerationAttemptRow(documentId, attemptId, queryable = pool, { lock = false } = {}) {
+  const { rows } = await queryable.query(
+    `SELECT ${GENERATION_ATTEMPT_COLUMNS}
+       FROM predrawn_generation_attempts attempt
+      WHERE attempt.document_id = $1 AND attempt.id = $2${lock ? ' FOR UPDATE OF attempt' : ''}`,
+    [documentId, attemptId],
+  );
+  return rows[0] || null;
+}
+
+async function dbRecordGenerationAttemptEvent(
+  client,
+  row,
+  action,
+  actorEmail,
+  actorName,
+  details = {},
+) {
+  await client.query(
+    `INSERT INTO predrawn_generation_attempt_events
+       (document_id, attempt_id, action, actor_email, actor_name, details)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb)`,
+    [row.document_id, row.id, action, actorEmail, actorName || actorEmail, JSON.stringify(details)],
+  );
+}
+
+function canonicalLevelSha256(level) {
+  return crypto.createHash('sha256').update(canonicalJson(level)).digest('hex');
+}
+
+function predrawnSourceCanonicalFields(level, { levelId, documentRevision }) {
+  if (!level?.boardCode || typeof level.boardCode !== 'string' || !serverRender?.decodeBoard) {
+    throw editorDocumentError(503, 'board_renderer_unavailable');
+  }
+  const board = serverRender.decodeBoard(level.boardCode);
+  if (!board) {
+    throw backgroundVersionError(
+      409,
+      'background_source_board_invalid',
+      'The saved Level board could not be decoded with the current live artwork catalog.',
+    );
+  }
+  const frameValidation = typeof serverRender.validatePredrawnGenerationFrame === 'function'
+    ? serverRender.validatePredrawnGenerationFrame(board, board?.predrawnGenerationFrame)
+    : null;
+  const frame = frameValidation?.ok ? frameValidation.frame : null;
+  if (!frame) {
+    throw backgroundVersionError(
+      409,
+      'background_source_generation_frame_required',
+      frameValidation?.errors || 'Save a valid generation frame before creating a Generation Reference.',
+    );
+  }
+  const backgroundMode = typeof serverRender.boardBackgroundMode === 'function'
+    ? serverRender.boardBackgroundMode(board)
+    : board?.backgroundMode === 'legacy'
+      ? 'legacy'
+      : board?.surface?.kind === 'predrawn'
+        ? 'ai'
+        : 'legacy';
+  const surface = board?.surface ? normalizePredrawnVersionSurface(board.surface) : null;
+  if (backgroundMode === 'ai' && (!surface || surface.error)) {
+    throw backgroundVersionError(
+      409,
+      'background_source_ai_selection_required',
+      'The saved AI background mode has no complete immutable artwork selection.',
+    );
+  }
+  const sourceBackgroundVersionId = backgroundMode === 'ai'
+    ? surface.value.background_version_id
+    : null;
+  const sourceOcclusionVersionId = backgroundMode === 'ai'
+    ? surface.value.occlusion_version_id
+    : null;
+  if (typeof serverRender.encodeBoard !== 'function') {
+    throw editorDocumentError(503, 'board_renderer_unavailable');
+  }
+  const semanticSurface = board.surface?.schemaVersion === 3
+    ? {
+        kind: 'predrawn',
+        schemaVersion: 2,
+        backgroundVersionId: board.surface.backgroundVersionId,
+        ...(board.surface.occlusionVersionId
+          ? { occlusionVersionId: board.surface.occlusionVersionId }
+          : {}),
+        frameWidth: board.surface.frameWidth,
+        frameHeight: board.surface.frameHeight,
+        worldBounds: { ...board.surface.worldBounds },
+      }
+    : board.surface;
+  const semanticBoardCode = serverRender.encodeBoard({
+    ...board,
+    surface: semanticSurface,
+    units: {},
+    cover: {},
+    coverTypes: {},
+  });
+  const semanticBoardSha256 = crypto.createHash('sha256').update(semanticBoardCode, 'utf8').digest('hex');
+  const canonicalLevelDigest = canonicalLevelSha256(level);
+  const environmentGeometryDigests = predrawnEnvironmentGeometryDigests(level);
+  const semanticRequest = {
+    schema: SOURCE_SEMANTIC_REQUEST_SCHEMA,
+    levelId,
+    canonicalDocumentRevision: Number(documentRevision),
+    canonicalLevelSha256: canonicalLevelDigest,
+    boardCode: semanticBoardCode,
+    boardSha256: semanticBoardSha256,
+    generationFrame: {
+      version: frame.version,
+      x: frame.x,
+      y: frame.y,
+      width: frame.width,
+      height: frame.height,
+    },
+    worldBounds: {
+      minX: frame.x,
+      minY: frame.y,
+      width: frame.width,
+      height: frame.height,
+    },
+    backgroundMode,
+    sourceBackgroundVersionId,
+    sourceOcclusionVersionId,
+    environmentGeometrySchema: ENVIRONMENT_GEOMETRY_SCHEMA,
+    environmentGeometrySha256: environmentGeometryDigests.v2,
+  };
+  return {
+    backgroundMode,
+    frame: {
+      version: frame.version,
+      x: frame.x,
+      y: frame.y,
+      width: frame.width,
+      height: frame.height,
+    },
+    worldBounds: {
+      minX: frame.x,
+      minY: frame.y,
+      width: frame.width,
+      height: frame.height,
+    },
+    sourceBackgroundVersionId,
+    sourceOcclusionVersionId,
+    canonicalDocumentRevision: Number(documentRevision),
+    canonicalLevelSha256: canonicalLevelDigest,
+    environmentGeometrySha256: semanticRequest.environmentGeometrySha256,
+    environmentGeometryDigests,
+    semanticBoardSha256,
+    semanticRequest,
+    semanticRequestSha256: crypto.createHash('sha256')
+      .update(canonicalJson(semanticRequest))
+      .digest('hex'),
+  };
+}
+
+async function dbCanonicalPredrawnAttemptFields(client, documentRow) {
+  if (
+    Number(documentRow.revision) !== Number(documentRow.saved_revision)
+    || !documentRow.baseline_hash
+  ) {
+    throw backgroundVersionError(
+      409,
+      'background_source_level_unsaved',
+      'Save the current Level before creating a Generation Reference.',
+    );
+  }
+  const canonical = await dbCanonicalLevel(
+    client,
+    documentRow.owner_email,
+    { kind: documentRow.workspace_kind, id: documentRow.workspace_id },
+    documentRow.level_id,
+    { lock: true },
+  );
+  if (!canonical.level || editorDocumentBaselineChanged(documentRow, canonical)) {
+    throw backgroundVersionError(
+      409,
+      'background_source_level_changed',
+      'The saved Level changed before the Generation Reference could be created.',
+    );
+  }
+  // Board-code normalization consults the live drawable catalog (macro tiles
+  // are one example). Perform every decode, validation, re-encode, and geometry
+  // digest under one bounded server-render snapshot so a cold backend cannot
+  // misreport a valid saved frame as missing.
+  return withThumbnailRenderInputs(() => predrawnSourceCanonicalFields(canonical.level, {
+    levelId: documentRow.level_id,
+    documentRevision: documentRow.saved_revision,
+  }), client);
+}
+
+async function dbCanonicalizePredrawnSourceVersion(client, documentRow, value) {
+  const fields = await dbCanonicalPredrawnAttemptFields(client, documentRow);
+  const operation = {
+    ...value.operation,
+    kind: 'generation-source-v1',
+    coordinateBasis: 'board-world-pixels-v1',
+    viewingPane: fields.worldBounds,
+    generationFrame: fields.frame,
+    backgroundMode: fields.backgroundMode,
+    sourceBackgroundVersionId: fields.sourceBackgroundVersionId,
+    sourceOcclusionVersionId: fields.sourceOcclusionVersionId,
+    canonicalDocumentRevision: fields.canonicalDocumentRevision,
+    canonicalLevelSha256: fields.canonicalLevelSha256,
+    environmentGeometrySchema: ENVIRONMENT_GEOMETRY_SCHEMA,
+    environmentGeometrySha256: fields.environmentGeometrySha256,
+    semanticBoardSha256: fields.semanticBoardSha256,
+    semanticRequest: fields.semanticRequest,
+    semanticRequestSha256: fields.semanticRequestSha256,
+  };
+  const provenance = {
+    ...value.provenance,
+    canonicalDocumentRevision: fields.canonicalDocumentRevision,
+    canonicalLevelSha256: fields.canonicalLevelSha256,
+    backgroundMode: fields.backgroundMode,
+    sourceBackgroundVersionId: fields.sourceBackgroundVersionId,
+    sourceOcclusionVersionId: fields.sourceOcclusionVersionId,
+    generationFrame: fields.frame,
+    environmentGeometrySha256: fields.environmentGeometrySha256,
+    semanticBoardSha256: fields.semanticBoardSha256,
+    semanticRequestSha256: fields.semanticRequestSha256,
+  };
+  const canonicalValue = {
+    ...value,
+    world_bounds: fields.worldBounds,
+    operation,
+    provenance,
+  };
+  const issue = sourceArtworkVersionContractIssue(canonicalValue);
+  if (issue) throw backgroundVersionError(409, 'invalid_background_source', issue);
+  return canonicalValue;
+}
+
+function sourceVersionCanonicalMetadataMatches(current, canonicalValue) {
+  return current.kind === 'source'
+    && sameBackgroundWorldBounds(current.world_bounds, canonicalValue.world_bounds)
+    && canonicalJson(current.operation) === canonicalJson(canonicalValue.operation)
+    && canonicalJson(current.provenance) === canonicalJson(canonicalValue.provenance);
+}
+
+function generationAttemptSourceRequest(sourceArtwork) {
+  const request = {
+    schema: ATTEMPT_SOURCE_REQUEST_SCHEMA,
+    sourceArtworkVersionId: String(sourceArtwork.id),
+    sourceArtworkSha256: sourceArtwork.blob_sha256,
+    semanticRequestSha256: sourceArtwork.operation.semanticRequestSha256,
+    semanticRequest: sourceArtwork.operation.semanticRequest,
+  };
+  return {
+    ...request,
+    requestSha256: crypto.createHash('sha256').update(canonicalJson(request)).digest('hex'),
+  };
+}
+
+function generationAttemptPipelineSourceRequest(sourceVersion, sourceAttempt, fields) {
+  const request = {
+    schema: ATTEMPT_PIPELINE_SOURCE_REQUEST_SCHEMA,
+    inputRole: 'raw-pipeline-source',
+    inputVersionId: String(sourceVersion.id),
+    inputSha256: sourceVersion.blob_sha256,
+    sourceAttemptId: String(sourceAttempt.id),
+    semanticRequestSha256: fields.semanticRequestSha256,
+    semanticRequest: fields.semanticRequest,
+  };
+  return {
+    ...request,
+    requestSha256: crypto.createHash('sha256').update(canonicalJson(request)).digest('hex'),
   };
 }
 
@@ -5926,20 +7894,119 @@ function respondBackgroundVersionError(res, error, operation) {
     });
     return;
   }
+  const schemaViolation = backgroundStoreSchemaViolation(error);
+  if (schemaViolation) {
+    console.error(`background version ${operation} violated a database schema contract:`, error);
+    res.status(500).json({
+      error: 'background_version_schema_contract_violation',
+      details: {
+        operation,
+        ...schemaViolation,
+      },
+    });
+    return;
+  }
   dbUnavailable(res, `background version ${operation} failed`, error, 'background_version_store_unavailable');
 }
 
-function decodedVersionedPredrawnSurface(level) {
+function decodedBoardBackgroundMode(board) {
+  if (typeof serverRender?.boardBackgroundMode === 'function') {
+    return serverRender.boardBackgroundMode(board);
+  }
+  if (board?.backgroundMode === 'legacy') return 'legacy';
+  return board?.surface?.kind === 'predrawn' ? 'ai' : 'legacy';
+}
+
+function decodedVersionedPredrawnSurface(level, { activeOnly = false } = {}) {
   if (!level?.boardCode || typeof level.boardCode !== 'string') return null;
   if (!serverRender?.decodeBoard) {
     throw editorDocumentError(503, 'board_renderer_unavailable');
   }
   const board = serverRender.decodeBoard(level.boardCode);
-  if (!board?.surface) return null;
+  if (!board) {
+    throw backgroundVersionError(
+      409,
+      'background_version_reference_check_failed',
+      'the Level boardCode could not be decoded against the authoritative render catalog',
+    );
+  }
+  if (!board.surface) return null;
+  if (activeOnly && decodedBoardBackgroundMode(board) !== 'ai') return null;
   const normalized = normalizePredrawnVersionSurface(board.surface);
   if (!normalized) return null;
   if (normalized.error) throw editorDocumentError(409, 'predrawn_background_surface_invalid', null, normalized.error);
   return normalized.value;
+}
+
+function generationAttemptArchiveLevelPlan(level, ownedVersionIds) {
+  const selected = decodedVersionedPredrawnSurface(level);
+  if (!selected) {
+    return {
+      level,
+      kind: 'unrelated',
+      matchedVersionIds: [],
+    };
+  }
+  if (!serverRender?.decodeBoard) {
+    throw editorDocumentError(503, 'board_renderer_unavailable');
+  }
+  const board = serverRender.decodeBoard(level.boardCode);
+  if (!board) {
+    throw backgroundVersionError(
+      409,
+      'background_version_reference_check_failed',
+      'the Level boardCode is invalid',
+    );
+  }
+  const disposition = generationAttemptSelectionDisposition(
+    decodedBoardBackgroundMode(board),
+    selected,
+    ownedVersionIds,
+  );
+  if (disposition.kind !== 'dormant') {
+    return {
+      level,
+      kind: disposition.kind,
+      matchedVersionIds: disposition.matched_version_ids,
+    };
+  }
+  if (typeof serverRender.withoutPredrawnBoardSurface !== 'function') {
+    throw editorDocumentError(503, 'board_renderer_unavailable');
+  }
+  return {
+    level: serverRender.withoutPredrawnBoardSurface(level),
+    kind: 'dormant',
+    matchedVersionIds: disposition.matched_version_ids,
+  };
+}
+
+function generationAttemptOcclusionDiscardLevelPlan(
+  level,
+  expectedWarpedVersionId,
+  expectedOcclusionVersionId,
+) {
+  const selected = decodedVersionedPredrawnSurface(level);
+  if (!selected || selected.occlusion_version_id !== expectedOcclusionVersionId) {
+    return { level, referencesOcclusion: false };
+  }
+  if (selected.background_version_id !== expectedWarpedVersionId) {
+    throw backgroundVersionError(
+      409,
+      'generation_attempt_occlusion_reference_invalid',
+      'The Level references this mask with a different warped background.',
+    );
+  }
+  if (typeof serverRender?.withoutPredrawnBoardOcclusionMask !== 'function') {
+    throw editorDocumentError(503, 'board_renderer_unavailable');
+  }
+  return {
+    level: serverRender.withoutPredrawnBoardOcclusionMask(
+      level,
+      expectedWarpedVersionId,
+      expectedOcclusionVersionId,
+    ),
+    referencesOcclusion: true,
+  };
 }
 
 function predrawnEnvironmentGeometryDigests(level) {
@@ -6049,12 +8116,137 @@ async function dbBindLegacyBackgroundVersionGeometry(
 }
 
 function backgroundVersionContentDigestMatches(row) {
-  const declared = row?.kind === 'raw'
+  const declared = row?.kind === 'raw' || row?.kind === 'source'
     ? row?.provenance?.sourceSha256
     : row?.operation?.outputSha256;
   return /^[0-9a-f]{64}$/.test(declared || '')
     && declared === row?.blob_sha256
-    && (row?.kind === 'raw' || row?.provenance?.outputSha256 === declared);
+    && (
+      row?.kind === 'raw'
+      || row?.kind === 'source'
+      || row?.provenance?.outputSha256 === declared
+  );
+}
+
+function legacyRawContractBindingCandidate(row) {
+  const operation = row?.operation;
+  const geometry = backgroundVersionEnvironmentGeometry(row);
+  if (
+    row?.kind !== 'raw'
+    || row.raw_contract_binding
+    || !isObjectRecord(operation)
+    || operation.kind !== 'raw-generated-v2'
+    || Object.hasOwn(operation, 'coordinateBasis')
+    || Object.hasOwn(operation, 'viewingPane')
+    || geometry?.schema !== LEGACY_ENVIRONMENT_GEOMETRY_SCHEMA
+    || !isObjectRecord(row.world_bounds)
+  ) return null;
+  return {
+    legacy_operation_kind: operation.kind,
+    legacy_operation_sha256: crypto.createHash('sha256')
+      .update(canonicalJson(operation))
+      .digest('hex'),
+    coordinate_basis: PREDRAWN_COORDINATE_BASIS,
+    viewing_pane: row.world_bounds,
+  };
+}
+
+function backgroundVersionPipelineSourceIssue(row) {
+  if (row?.kind !== 'raw') return 'Only Raw Pipeline Sources can start a processing attempt.';
+  if (!row.blob_sha256 || !row.width || !row.height) {
+    return 'This Raw Pipeline Source has no complete PNG content.';
+  }
+  if (!['ready', 'published'].includes(row.status)) {
+    return `This Raw Pipeline Source is ${row.status || 'not ready'}.`;
+  }
+  if (!row.pipeline_source_retained) {
+    return 'This Raw Pipeline Source is not attached to retained processing history for this Level.';
+  }
+  if (!backgroundVersionContentDigestMatches(row)) {
+    return 'This Raw Pipeline Source content digest does not match its immutable provenance.';
+  }
+  const storedIssue = backgroundVersionStoredContractIssue(row);
+  if (!storedIssue) return null;
+  const candidate = legacyRawContractBindingCandidate(row);
+  if (candidate) {
+    const repairedIssue = backgroundVersionStoredContractIssue({
+      ...row,
+      raw_contract_binding: candidate,
+    });
+    if (!repairedIssue) return null;
+    return `This historical Raw Pipeline Source cannot be bound: ${repairedIssue}`;
+  }
+  return `This Raw Pipeline Source is invalid: ${storedIssue}`;
+}
+
+async function dbBindLegacyRawContract(
+  client,
+  row,
+  expectedWorldBounds,
+  geometryDigests,
+  actorEmail,
+  actorName,
+) {
+  const candidate = legacyRawContractBindingCandidate(row);
+  const geometry = backgroundVersionEnvironmentGeometry(row);
+  const geometryBinding = row?.environment_geometry_binding;
+  if (
+    !candidate
+    || !sameBackgroundWorldBounds(row.world_bounds, expectedWorldBounds)
+    || geometry?.schema !== LEGACY_ENVIRONMENT_GEOMETRY_SCHEMA
+    || geometry.sha256 !== geometryDigests.v1
+    || geometryBinding?.legacy_environment_geometry_schema !== LEGACY_ENVIRONMENT_GEOMETRY_SCHEMA
+    || geometryBinding?.legacy_environment_geometry_sha256 !== geometryDigests.v1
+    || geometryBinding?.environment_geometry_schema !== ENVIRONMENT_GEOMETRY_SCHEMA
+    || geometryBinding?.environment_geometry_sha256 !== geometryDigests.v2
+  ) {
+    return {
+      bound: false,
+      issue: backgroundVersionStoredContractIssue(row)
+        || 'the legacy raw coordinate contract could not be proven against the saved Level',
+    };
+  }
+  const candidateIssue = backgroundVersionStoredContractIssue({
+    ...row,
+    raw_contract_binding: candidate,
+  });
+  if (candidateIssue) return { bound: false, issue: candidateIssue };
+
+  await client.query(
+    `INSERT INTO predrawn_background_raw_contract_bindings (
+       version_id, document_id, legacy_operation_kind, legacy_operation_sha256,
+       coordinate_basis, viewing_pane, bound_by_email, bound_by_name
+     ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)
+     ON CONFLICT (version_id) DO NOTHING`,
+    [
+      row.id,
+      row.document_id,
+      candidate.legacy_operation_kind,
+      candidate.legacy_operation_sha256,
+      candidate.coordinate_basis,
+      JSON.stringify(candidate.viewing_pane),
+      actorEmail,
+      actorName || actorEmail,
+    ],
+  );
+  const bound = await client.query(
+    `SELECT legacy_operation_kind, legacy_operation_sha256,
+            coordinate_basis, viewing_pane, bound_at
+       FROM predrawn_background_raw_contract_bindings
+      WHERE version_id = $1 AND document_id = $2`,
+    [row.id, row.document_id],
+  );
+  row.raw_contract_binding = bound.rows[0] || null;
+  const storedIssue = backgroundVersionStoredContractIssue(row);
+  if (storedIssue) {
+    throw editorDocumentError(
+      409,
+      'predrawn_background_raw_contract_binding_conflict',
+      null,
+      storedIssue,
+    );
+  }
+  return { bound: true, issue: null };
 }
 
 async function dbBackgroundVersionLineageRows(client, requestedIds) {
@@ -6092,7 +8284,7 @@ async function dbTryBindStoredLevelLegacyBackgroundGeometry(
   actorEmail,
   actorName,
 ) {
-  const surface = decodedVersionedPredrawnSurface(level);
+  const surface = decodedVersionedPredrawnSurface(level, { activeOnly: true });
   if (!surface) return false;
   const requestedIds = [surface.background_version_id, surface.occlusion_version_id].filter(Boolean);
   const rows = await dbBackgroundVersionLineageRows(client, requestedIds);
@@ -6152,7 +8344,7 @@ async function dbPublishLevelBackgroundVersions(
   actorName,
   { makePublic = documentRow.workspace_kind === 'official' } = {},
 ) {
-  const surface = decodedVersionedPredrawnSurface(level);
+  const surface = decodedVersionedPredrawnSurface(level, { activeOnly: true });
   if (!surface) return [];
   const requestedIds = [surface.background_version_id, surface.occlusion_version_id].filter(Boolean);
   const rows = await dbBackgroundVersionLineageRows(client, requestedIds);
@@ -6187,9 +8379,12 @@ async function dbPublishLevelBackgroundVersions(
       && row.source_workspace_id === documentRow.workspace_id
       && row.source_level_id === documentRow.level_id;
   };
+  const supportedBackgroundOperation = background?.kind === 'raw'
+    ? background.operation?.kind === 'raw-generated-v2'
+    : ['grid-warp-v1', 'grid-warp-v2'].includes(background?.operation?.kind);
   if (
     !selectable(background) || !['raw', 'warped'].includes(background.kind)
-    || background.operation?.kind !== (background.kind === 'raw' ? 'raw-generated-v2' : 'grid-warp-v1')
+    || !supportedBackgroundOperation
     || !backgroundVersionContentDigestMatches(background)
     || !scopedToDocument(background)
   ) {
@@ -6299,6 +8494,32 @@ async function dbPublishLevelBackgroundVersions(
       'the selected occlusion output was generated for different terrain or scenery geometry',
     );
   }
+  if (surface.move_highlight_profile) {
+    const board = serverRender?.decodeBoard?.(level.boardCode);
+    const moveHighlightProfile = board
+      ? normalizeMoveHighlightProfile(surface.move_highlight_profile, {
+          backgroundVersionId: String(background.id),
+          boardColumns: board.cols,
+          boardRows: board.rows,
+          environmentGeometrySha256: environmentGeometryDigests.v2,
+          playableCellKeys: new Set(Object.keys(board.cells)),
+        })
+      : { error: 'the Level board could not be decoded' };
+    if (
+      background.kind !== 'warped'
+      || moveHighlightProfile.error
+      || moveHighlightProfile.value?.profileSha256
+        !== surface.move_highlight_profile.profileSha256
+    ) {
+      throw editorDocumentError(
+        409,
+        'predrawn_move_highlight_profile_mismatch',
+        documentRow,
+        moveHighlightProfile.error
+          || 'the cyan move-highlight profile is not bound to this exact warped board',
+      );
+    }
+  }
 
   // A private account Save has a canonical Level but is not a public
   // publication. Its exact references are validated and committed while the
@@ -6344,7 +8565,7 @@ async function dbApplyWorkspaceBackgroundVersionBoundary(
   },
 ) {
   for (const [levelId, level] of Object.entries(levels)) {
-    const surface = decodedVersionedPredrawnSurface(level);
+    const surface = decodedVersionedPredrawnSurface(level, { activeOnly: true });
     if (!surface) continue;
     const sourceDocumentResult = await client.query(
       `SELECT source_document.document_id, source_document.owner_email,
@@ -6444,7 +8665,13 @@ async function dbSaveEditorDocument(ownerEmail, documentId, expectedRevision, re
         'canonical Level changed after this working copy was based on it',
       );
     }
-    await dbPublishLevelBackgroundVersions(client, current, level, ownerEmail, session.actor_name);
+    await withThumbnailRenderInputs(() => dbPublishLevelBackgroundVersions(
+      client,
+      current,
+      level,
+      ownerEmail,
+      session.actor_name,
+    ), client);
     const workspaceRevision = await dbPromoteCanonicalLevel(client, ownerEmail, workspace, levelId, level, campaignId);
     const baselineHash = await dbJsonbHash(client, level);
     const { rows } = await client.query(
@@ -7253,6 +9480,410 @@ function assertBackgroundVersionRevision(row, expected) {
   }
 }
 
+function normalizeGenerationAttemptCreate(raw) {
+  if (!isObjectRecord(raw)) return { error: 'body must be an object' };
+  const allowed = new Set([
+    'label',
+    'source_version_id', 'sourceVersionId',
+    'pipeline_source_version_id', 'pipelineSourceVersionId',
+    'idempotency_key', 'idempotencyKey',
+    'edit_session_id', 'edit_session_key', 'edit_generation',
+  ]);
+  const unsupported = Object.keys(raw).filter((key) => !allowed.has(key));
+  if (unsupported.length) return { error: `unsupported fields: ${unsupported.sort().join(', ')}` };
+  if (Object.hasOwn(raw, 'source_version_id') && Object.hasOwn(raw, 'sourceVersionId')) {
+    return { error: 'source_version_id must not be supplied twice' };
+  }
+  if (
+    Object.hasOwn(raw, 'pipeline_source_version_id')
+    && Object.hasOwn(raw, 'pipelineSourceVersionId')
+  ) {
+    return { error: 'pipeline_source_version_id must not be supplied twice' };
+  }
+  const sourceVersionRaw = raw.source_version_id ?? raw.sourceVersionId;
+  const pipelineSourceVersionRaw = raw.pipeline_source_version_id ?? raw.pipelineSourceVersionId;
+  const hasGenerationReference = sourceVersionRaw !== undefined;
+  const hasPipelineSource = pipelineSourceVersionRaw !== undefined;
+  if (hasGenerationReference === hasPipelineSource) {
+    return {
+      error: 'supply either source_version_id or pipeline_source_version_id, not both',
+    };
+  }
+  let sourceVersionId;
+  let origin;
+  if (hasGenerationReference) {
+    sourceVersionId = backgroundVersionId(sourceVersionRaw);
+    if (!sourceVersionId) return { error: 'source_version_id must be a UUID' };
+    origin = 'source';
+  } else {
+    sourceVersionId = backgroundVersionId(pipelineSourceVersionRaw);
+    if (!sourceVersionId) return { error: 'pipeline_source_version_id must be a UUID' };
+    origin = 'pipeline-source';
+  }
+  const label = raw.label === undefined ? 'AI artwork attempt' : String(raw.label).trim();
+  if (!label || label.length > 160) return { error: 'label must contain 1 to 160 characters' };
+  return {
+    value: {
+      label,
+      origin,
+      source_version_id: sourceVersionId,
+    },
+  };
+}
+
+function generationAttemptIdempotencyKey(req, raw) {
+  const header = req.get('idempotency-key');
+  const body = isObjectRecord(raw) ? raw.idempotency_key ?? raw.idempotencyKey : undefined;
+  if (header !== undefined && body !== undefined && String(header).trim() !== String(body).trim()) {
+    throw backgroundVersionError(400, 'invalid_generation_attempt_idempotency_key', 'header and body keys differ');
+  }
+  if (header === undefined && body === undefined) return null;
+  const value = normalizeBackgroundVersionIdempotencyKey(header ?? body);
+  if (!value) throw backgroundVersionError(400, 'invalid_generation_attempt_idempotency_key');
+  return value;
+}
+
+async function dbListGenerationAttempts(documentRow, status = 'all') {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    `SELECT ${GENERATION_ATTEMPT_COLUMNS}
+       FROM predrawn_generation_attempts attempt
+      WHERE attempt.document_id = $1
+        AND ($2::text = 'all' OR attempt.status = $2)
+      ORDER BY attempt.created_at DESC, attempt.id DESC`,
+    [documentRow.document_id, status],
+  );
+  return rows;
+}
+
+async function dbValidatedPipelineSourceAttemptInput(
+  client,
+  currentDocument,
+  documentRow,
+  user,
+  writerSession,
+  source,
+  preferredSourceAttempt = null,
+) {
+  if (!source) {
+    throw backgroundVersionError(
+      404,
+      'generation_attempt_pipeline_source_not_found',
+      'The selected Raw Pipeline Source was not found in this Level document.',
+    );
+  }
+  if (
+    source.owner_email !== documentRow.owner_email
+    || source.level_id !== documentRow.level_id
+  ) {
+    throw backgroundVersionError(
+      409,
+      'generation_attempt_pipeline_source_wrong_level',
+      'The selected Raw Pipeline Source does not belong to this Level.',
+    );
+  }
+  const pipelineSourceIssue = backgroundVersionPipelineSourceIssue(source);
+  if (pipelineSourceIssue) {
+    throw backgroundVersionError(
+      409,
+      'generation_attempt_pipeline_source_not_ready',
+      pipelineSourceIssue,
+    );
+  }
+
+  let sourceAttempt = preferredSourceAttempt;
+  if (!sourceAttempt) {
+    const sourceAttemptResult = await client.query(
+      `SELECT id
+         FROM predrawn_generation_attempts
+        WHERE document_id = $1
+          AND owner_email = $2
+          AND level_id = $3
+          AND generated_version_id = $4
+        ORDER BY
+          CASE WHEN origin = 'pipeline-source' THEN 1 ELSE 0 END,
+          created_at ASC,
+          id ASC
+        LIMIT 1
+        FOR UPDATE`,
+      [
+        documentRow.document_id,
+        documentRow.owner_email,
+        documentRow.level_id,
+        source.id,
+      ],
+    );
+    sourceAttempt = sourceAttemptResult.rows[0]
+      ? await dbGenerationAttemptRow(
+          documentRow.document_id,
+          sourceAttemptResult.rows[0].id,
+          client,
+          { lock: true },
+        )
+      : null;
+  }
+  if (
+    !sourceAttempt
+    || sourceAttempt.document_id !== documentRow.document_id
+    || sourceAttempt.owner_email !== documentRow.owner_email
+    || sourceAttempt.level_id !== documentRow.level_id
+    || String(sourceAttempt.generated_version_id || '') !== String(source.id)
+  ) {
+    throw backgroundVersionError(
+      409,
+      'generation_attempt_pipeline_source_not_owned',
+      'Choose a retained Raw Pipeline Source from this Level.',
+    );
+  }
+
+  const fields = await dbCanonicalPredrawnAttemptFields(client, currentDocument);
+  if (!sameBackgroundWorldBounds(source.world_bounds, fields.worldBounds)) {
+    throw backgroundVersionError(
+      409,
+      'generation_attempt_pipeline_source_stale',
+      'This Raw Pipeline Source uses a different viewing pane than the saved Level.',
+    );
+  }
+  const geometryDigests = fields.environmentGeometryDigests;
+  if (legacyBackgroundVersionNeedsGeometryBinding(source)) {
+    const bound = await dbBindLegacyBackgroundVersionGeometry(
+      client,
+      [source],
+      geometryDigests,
+      user.email,
+      writerSession.actor_name,
+    );
+    if (!bound) {
+      throw backgroundVersionError(
+        409,
+        'generation_attempt_pipeline_source_stale',
+        'This Raw Pipeline Source belongs to a different board layout.',
+      );
+    }
+  }
+  if (!backgroundVersionHasEnvironmentGeometry(source, fields.environmentGeometrySha256)) {
+    throw backgroundVersionError(
+      409,
+      'generation_attempt_pipeline_source_stale',
+      'This Raw Pipeline Source uses a different board layout than the saved Level.',
+    );
+  }
+  const sourceContractIssue = backgroundVersionStoredContractIssue(source);
+  if (sourceContractIssue) {
+    const binding = await dbBindLegacyRawContract(
+      client,
+      source,
+      fields.worldBounds,
+      geometryDigests,
+      user.email,
+      writerSession.actor_name,
+    );
+    if (!binding.bound) {
+      throw backgroundVersionError(
+        409,
+        'generation_attempt_pipeline_source_contract_invalid',
+        `This Raw Pipeline Source cannot be reused: ${binding.issue || sourceContractIssue}`,
+      );
+    }
+  }
+  const boundContractIssue = backgroundVersionStoredContractIssue(source);
+  if (boundContractIssue) {
+    throw backgroundVersionError(
+      409,
+      'generation_attempt_pipeline_source_contract_invalid',
+      `This Raw Pipeline Source cannot be reused: ${boundContractIssue}`,
+    );
+  }
+  const sourceRequest = generationAttemptPipelineSourceRequest(source, sourceAttempt, fields);
+  const sourceRequestIssue = generationAttemptSourceRequestIssue(
+    {
+      document_id: documentRow.document_id,
+      level_id: documentRow.level_id,
+      origin: 'pipeline-source',
+      source_version_id: source.id,
+      source_attempt_id: sourceAttempt.id,
+      source_request: sourceRequest,
+    },
+    source,
+  );
+  if (sourceRequestIssue) {
+    throw backgroundVersionError(
+      409,
+      'generation_attempt_source_request_invalid',
+      sourceRequestIssue,
+    );
+  }
+  return { sourceAttempt, sourceRequest };
+}
+
+async function dbCreateGenerationAttempt(documentRow, user, authority, value, idempotencyKey) {
+  const actor = String(user.email).trim().toLowerCase();
+  const fingerprint = crypto.createHash('sha256').update(canonicalJson({
+    document_id: documentRow.document_id,
+    ...value,
+  })).digest('hex');
+  return withEditorDocumentTransaction(async (client) => {
+    const currentDocument = await dbLockEditorDocument(
+      client,
+      documentRow.owner_email,
+      documentRow.document_id,
+    );
+    if (!currentDocument) throw editorDocumentError(404, 'editor_document_not_found');
+    const writerSession = await assertActiveEditorEditSession(
+      client,
+      currentDocument,
+      authority.sessionId,
+      authority.editGeneration,
+      authority.sessionKeyHash,
+    );
+    if (idempotencyKey) {
+      const replay = await client.query(
+        `SELECT document_id, id, request_fingerprint
+           FROM predrawn_generation_attempts
+          WHERE idempotency_actor = $1 AND idempotency_key = $2`,
+        [actor, idempotencyKey],
+      );
+      if (replay.rows[0]) {
+        if (
+          replay.rows[0].document_id !== documentRow.document_id
+          || replay.rows[0].request_fingerprint !== fingerprint
+        ) throw backgroundVersionError(409, 'generation_attempt_idempotency_conflict');
+        return {
+          created: false,
+          row: await dbGenerationAttemptRow(documentRow.document_id, replay.rows[0].id, client),
+        };
+      }
+    }
+    const count = await client.query(
+      'SELECT count(*)::integer AS count FROM predrawn_generation_attempts WHERE document_id = $1',
+      [documentRow.document_id],
+    );
+    if (Number(count.rows[0]?.count || 0) >= GENERATION_ATTEMPT_DOCUMENT_ROW_LIMIT) {
+      throw backgroundVersionError(409, 'generation_attempt_document_quota_exceeded', {
+        limit: GENERATION_ATTEMPT_DOCUMENT_ROW_LIMIT,
+      });
+    }
+    let source = await dbBackgroundVersionRow(
+      documentRow.document_id,
+      value.source_version_id,
+      client,
+      { lock: true },
+    );
+    let sourceAttempt = null;
+    let sourceRequest;
+    if (value.origin === 'pipeline-source') {
+      ({ sourceAttempt, sourceRequest } = await dbValidatedPipelineSourceAttemptInput(
+        client,
+        currentDocument,
+        documentRow,
+        user,
+        writerSession,
+        source,
+      ));
+    } else {
+      if (
+        !source
+        || source.kind !== 'source'
+        || !source.blob_sha256
+        || !['ready', 'published'].includes(source.status)
+        || source.owner_email !== documentRow.owner_email
+        || source.level_id !== documentRow.level_id
+        || sourceArtworkVersionContractIssue(source)
+        || !backgroundVersionContentDigestMatches(source)
+      ) {
+        throw backgroundVersionError(
+          409,
+          'generation_attempt_source_not_ready',
+          'Choose a ready Generation Reference from this Level.',
+        );
+      }
+      sourceRequest = generationAttemptSourceRequest(source);
+    }
+    if (value.origin !== 'pipeline-source') {
+      const sourceRequestIssue = generationAttemptSourceRequestIssue(
+        {
+          document_id: documentRow.document_id,
+          level_id: documentRow.level_id,
+          origin: value.origin,
+          source_version_id: value.source_version_id,
+          source_attempt_id: sourceAttempt?.id ?? null,
+          source_request: sourceRequest,
+        },
+        source,
+      );
+      if (sourceRequestIssue) {
+        throw backgroundVersionError(
+          409,
+          'generation_attempt_source_request_invalid',
+          sourceRequestIssue,
+        );
+      }
+    }
+    const requestedId = crypto.randomUUID();
+    const inserted = await client.query(
+      `INSERT INTO predrawn_generation_attempts (
+         id, document_id, owner_email, level_id, label, origin, source_version_id,
+         source_attempt_id, source_request, generated_version_id,
+         idempotency_actor, idempotency_key, request_fingerprint,
+         created_by_email, created_by_name, updated_by
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $13, $14, $15, $14)
+       ON CONFLICT DO NOTHING
+       RETURNING id`,
+      [
+        requestedId,
+        documentRow.document_id,
+        documentRow.owner_email,
+        documentRow.level_id,
+        value.label,
+        value.origin,
+        value.source_version_id,
+        sourceAttempt?.id ?? null,
+        JSON.stringify(sourceRequest),
+        value.origin === 'pipeline-source' ? value.source_version_id : null,
+        idempotencyKey ? actor : null,
+        idempotencyKey,
+        idempotencyKey ? fingerprint : null,
+        user.email,
+        user.name || user.email,
+      ],
+    );
+    if (!inserted.rows[0]) {
+      if (!idempotencyKey) throw new Error('generation attempt insert unexpectedly conflicted');
+      const replay = await client.query(
+        `SELECT document_id, id, request_fingerprint
+           FROM predrawn_generation_attempts
+          WHERE idempotency_actor = $1 AND idempotency_key = $2`,
+        [actor, idempotencyKey],
+      );
+      if (
+        !replay.rows[0]
+        || replay.rows[0].document_id !== documentRow.document_id
+        || replay.rows[0].request_fingerprint !== fingerprint
+      ) throw backgroundVersionError(409, 'generation_attempt_idempotency_conflict');
+      return {
+        created: false,
+        row: await dbGenerationAttemptRow(documentRow.document_id, replay.rows[0].id, client),
+      };
+    }
+    const row = await dbGenerationAttemptRow(documentRow.document_id, requestedId, client);
+    await dbRecordGenerationAttemptEvent(client, row, 'created', user.email, user.name, {
+      input_role: value.origin === 'pipeline-source'
+        ? 'raw-pipeline-source'
+        : 'generation-reference',
+      source_version_id: value.source_version_id,
+      source_attempt_id: sourceAttempt?.id ?? null,
+      raw_pipeline_source_version_id: value.origin === 'pipeline-source'
+        ? value.source_version_id
+        : null,
+      waiting_for_ai_result: value.origin !== 'pipeline-source',
+      source_request_sha256: sourceRequest.requestSha256,
+      edit_session_id: writerSession.session_id,
+      edit_generation: Number(writerSession.edit_generation),
+    });
+    return { created: true, row };
+  });
+}
+
 async function authorizedBackgroundVersionDocument(req, res, { mutate = false, authenticatedUser = null } = {}) {
   const documentId = editorDocumentId(req.params.documentId);
   if (!documentId) {
@@ -7294,7 +9925,7 @@ async function dbAssertBackgroundVersionWriter(documentRow, authority) {
   });
 }
 
-async function dbListBackgroundVersions(documentRow, status = 'all') {
+async function dbListBackgroundVersions(documentRow, status = 'all', kind = 'all') {
   await ensureDbReady();
   const { rows } = await pool.query(
     `SELECT ${BACKGROUND_VERSION_COLUMNS}
@@ -7318,6 +9949,7 @@ async function dbListBackgroundVersions(documentRow, status = 'all') {
           OR ($5::text = 'ready' AND v.status = 'ready' AND v.blob_sha256 IS NOT NULL)
           OR ($5::text IN ('archived', 'published') AND v.status = $5)
         )
+        AND ($6::text = 'all' OR v.kind = $6)
       ORDER BY v.created_at DESC, v.id DESC`,
     [
       documentRow.document_id,
@@ -7325,6 +9957,7 @@ async function dbListBackgroundVersions(documentRow, status = 'all') {
       documentRow.workspace_id,
       documentRow.level_id,
       status,
+      kind,
     ],
   );
   return rows;
@@ -7350,6 +9983,16 @@ async function dbCreateBackgroundVersion(documentRow, user, authority, value, id
       authority.editGeneration,
       authority.sessionKeyHash,
     );
+    const attemptId = value.attempt_id || null;
+    if (value.kind === 'source' ? Boolean(attemptId) : !attemptId) {
+      throw backgroundVersionError(
+        400,
+        'background_version_attempt_required',
+        value.kind === 'source'
+          ? 'a Generation Reference is saved independently and cannot belong to a pipeline slot'
+          : 'generated, warped, and occlusion artwork require a generation attempt',
+      );
+    }
     if (idempotencyKey) {
       const replay = await client.query(
         `SELECT document_id, id, request_fingerprint
@@ -7362,9 +10005,101 @@ async function dbCreateBackgroundVersion(documentRow, user, authority, value, id
           replay.rows[0].document_id !== documentRow.document_id
           || replay.rows[0].request_fingerprint !== fingerprint
         ) throw backgroundVersionError(409, 'background_version_idempotency_conflict');
+        let replayAttempt = null;
+        if (attemptId) {
+          replayAttempt = await dbGenerationAttemptRow(documentRow.document_id, attemptId, client);
+          const stageColumn = {
+            raw: 'generated_version_id',
+            warped: 'warped_version_id',
+            occlusion: 'occlusion_version_id',
+          }[value.kind];
+          if (!replayAttempt || String(replayAttempt[stageColumn] || '') !== String(replay.rows[0].id)) {
+            throw backgroundVersionError(409, 'background_version_attempt_conflict');
+          }
+        }
         return {
           created: false,
           row: await dbBackgroundVersionRow(documentRow.document_id, replay.rows[0].id, client),
+          attempt: replayAttempt,
+        };
+      }
+    }
+
+    let storedValue = value.kind === 'source'
+      ? await dbCanonicalizePredrawnSourceVersion(client, currentDocument, value)
+      : { ...value };
+    let attempt = null;
+    let attemptSource = null;
+    let attemptGenerated = null;
+    let attemptWarped = null;
+    if (attemptId) {
+      attempt = await dbGenerationAttemptRow(documentRow.document_id, attemptId, client, { lock: true });
+      if (
+        !attempt
+        || attempt.owner_email !== documentRow.owner_email
+        || attempt.level_id !== documentRow.level_id
+      ) {
+        throw backgroundVersionError(404, 'generation_attempt_not_found');
+      }
+      if (attempt.status !== 'active') {
+        throw backgroundVersionError(409, 'generation_attempt_archived');
+      }
+      if (!['source', 'pipeline-source'].includes(attempt.origin) || !attempt.source_version_id) {
+        throw backgroundVersionError(
+          409,
+          'generation_attempt_historical_locked',
+          'Historical attempts do not have a proven source and cannot accept new stages.',
+        );
+      }
+      attemptSource = await dbBackgroundVersionRow(
+        documentRow.document_id,
+        attempt.source_version_id,
+        client,
+      );
+      attemptGenerated = attempt.generated_version_id
+        ? await dbBackgroundVersionRow(documentRow.document_id, attempt.generated_version_id, client)
+        : null;
+      attemptWarped = attempt.warped_version_id
+        ? await dbBackgroundVersionRow(documentRow.document_id, attempt.warped_version_id, client)
+        : null;
+      if (storedValue.kind === 'raw' && attemptSource && attempt.origin === 'source') {
+        const inputMetadata = {
+          sourceArtworkVersionId: String(attemptSource.id),
+          sourceArtworkSha256: attemptSource.blob_sha256,
+        };
+        storedValue = {
+          ...storedValue,
+          operation: {
+            ...storedValue.operation,
+            ...inputMetadata,
+          },
+          provenance: {
+            ...storedValue.provenance,
+            ...inputMetadata,
+          },
+        };
+      }
+      if (storedValue.kind === 'warped') {
+        const attemptProcessingRevision = Number(attempt.processing_revision);
+        if (
+          !Number.isSafeInteger(attemptProcessingRevision)
+          || attemptProcessingRevision < 0
+        ) {
+          throw backgroundVersionError(
+            409,
+            'generation_attempt_processing_revision_invalid',
+          );
+        }
+        storedValue = {
+          ...storedValue,
+          operation: {
+            ...storedValue.operation,
+            attemptProcessingRevision,
+          },
+          provenance: {
+            ...storedValue.provenance,
+            attemptProcessingRevision,
+          },
         };
       }
     }
@@ -7379,7 +10114,10 @@ async function dbCreateBackgroundVersion(documentRow, user, authority, value, id
       });
     }
 
-    const lineageIds = [value.parent_version_id, value.source_background_version_id].filter(Boolean);
+    const lineageIds = [
+      storedValue.parent_version_id,
+      storedValue.source_background_version_id,
+    ].filter(Boolean);
     const lineage = lineageIds.length
       ? await client.query(
         `WITH RECURSIVE lineage_ids(id) AS (
@@ -7401,7 +10139,16 @@ async function dbCreateBackgroundVersion(documentRow, user, authority, value, id
                     'bound_at', binding.bound_at
                   )
                    FROM predrawn_background_geometry_bindings binding
-                  WHERE binding.version_id = v.id) AS environment_geometry_binding
+                  WHERE binding.version_id = v.id) AS environment_geometry_binding,
+                (SELECT jsonb_build_object(
+                    'legacy_operation_kind', binding.legacy_operation_kind,
+                    'legacy_operation_sha256', binding.legacy_operation_sha256,
+                    'coordinate_basis', binding.coordinate_basis,
+                    'viewing_pane', binding.viewing_pane,
+                    'bound_at', binding.bound_at
+                  )
+                   FROM predrawn_background_raw_contract_bindings binding
+                  WHERE binding.version_id = v.id) AS raw_contract_binding
            FROM predrawn_background_versions v
           WHERE v.document_id = $1 AND v.id IN (SELECT id FROM lineage_ids)
           FOR SHARE`,
@@ -7409,9 +10156,9 @@ async function dbCreateBackgroundVersion(documentRow, user, authority, value, id
       )
       : { rows: [] };
     const byId = new Map(lineage.rows.map((row) => [String(row.id), row]));
-    const parent = value.parent_version_id ? byId.get(value.parent_version_id) || null : null;
-    const source = value.source_background_version_id
-      ? byId.get(value.source_background_version_id) || null
+    const parent = storedValue.parent_version_id ? byId.get(storedValue.parent_version_id) || null : null;
+    const source = storedValue.source_background_version_id
+      ? byId.get(storedValue.source_background_version_id) || null
       : null;
     const legacyLineage = [...new Map(
       lineage.rows
@@ -7419,16 +10166,39 @@ async function dbCreateBackgroundVersion(documentRow, user, authority, value, id
         .map((row) => [String(row.id), row]),
     ).values()];
     if (legacyLineage.length) {
-      await dbBindLegacyBackgroundVersionGeometry(
+      await withThumbnailRenderInputs(() => dbBindLegacyBackgroundVersionGeometry(
         client,
         legacyLineage,
         predrawnEnvironmentGeometryDigests(currentDocument.body),
         user.email,
         writerSession.actor_name,
-      );
+      ), client);
+      // Attempt-stage rows were loaded before the lineage walk. Reuse the
+      // just-bound lineage objects so the attempt validator observes the exact
+      // v2 binding created in this transaction.
+      if (attemptGenerated) {
+        attemptGenerated = byId.get(String(attemptGenerated.id)) || attemptGenerated;
+      }
+      if (attemptWarped) {
+        attemptWarped = byId.get(String(attemptWarped.id)) || attemptWarped;
+      }
     }
-    const lineageIssue = backgroundVersionLineageIssue(value, parent, source);
+    const lineageIssue = backgroundVersionLineageIssue(storedValue, parent, source);
     if (lineageIssue) throw backgroundVersionError(409, 'invalid_background_version_lineage', lineageIssue);
+    if (attempt) {
+      const attemptIssue = backgroundVersionAttemptStageIssue(
+        { ...storedValue, document_id: documentRow.document_id },
+        attempt,
+        {
+          sourceArtwork: attemptSource,
+          generated: attemptGenerated,
+          warped: attemptWarped,
+        },
+      );
+      if (attemptIssue) {
+        throw backgroundVersionError(409, 'invalid_generation_attempt_stage', attemptIssue);
+      }
+    }
 
     const requestedId = crypto.randomUUID();
     const inserted = await client.query(
@@ -7443,18 +10213,57 @@ async function dbCreateBackgroundVersion(documentRow, user, authority, value, id
        RETURNING id`,
       [
         requestedId, documentRow.document_id, documentRow.owner_email, documentRow.level_id,
-        value.kind, value.label, value.parent_version_id, value.source_background_version_id,
-        JSON.stringify(value.world_bounds), JSON.stringify(value.operation), JSON.stringify(value.provenance),
+        storedValue.kind, storedValue.label,
+        storedValue.parent_version_id, storedValue.source_background_version_id,
+        JSON.stringify(storedValue.world_bounds),
+        JSON.stringify(storedValue.operation),
+        JSON.stringify(storedValue.provenance),
         idempotencyKey ? actor : null, idempotencyKey, idempotencyKey ? fingerprint : null,
         user.email, user.name || user.email,
       ],
     );
     if (inserted.rows[0]) {
+      if (attempt) {
+        const stageColumn = {
+          raw: 'generated_version_id',
+          warped: 'warped_version_id',
+          occlusion: 'occlusion_version_id',
+        }[storedValue.kind];
+        const attached = await client.query(
+          `UPDATE predrawn_generation_attempts attempt
+              SET ${stageColumn} = $3,
+                  row_revision = row_revision + 1,
+                  updated_at = now(),
+                  updated_by = $4
+            WHERE document_id = $1 AND id = $2
+              AND status = 'active' AND ${stageColumn} IS NULL
+            RETURNING ${GENERATION_ATTEMPT_COLUMNS}`,
+          [documentRow.document_id, attempt.id, requestedId, user.email],
+        );
+        if (!attached.rows[0]) {
+          throw backgroundVersionError(409, 'generation_attempt_stage_conflict');
+        }
+        attempt = attached.rows[0];
+        await dbRecordGenerationAttemptEvent(
+          client,
+          attempt,
+          'stage-attached',
+          user.email,
+          user.name,
+          {
+            kind: storedValue.kind,
+            version_id: requestedId,
+            edit_session_id: writerSession.session_id,
+            edit_generation: Number(writerSession.edit_generation),
+          },
+        );
+      }
       const row = await dbBackgroundVersionRow(documentRow.document_id, requestedId, client);
       await dbRecordBackgroundVersionEvent(client, row, 'created', user.email, user.name, {
-        kind: value.kind,
-        parent_version_id: value.parent_version_id,
-        source_background_version_id: value.source_background_version_id,
+        kind: storedValue.kind,
+        parent_version_id: storedValue.parent_version_id,
+        source_background_version_id: storedValue.source_background_version_id,
+        attempt_id: attempt?.id || null,
         idempotency_key: idempotencyKey,
         edit_session_id: writerSession.session_id,
         edit_generation: Number(writerSession.edit_generation),
@@ -7462,6 +10271,7 @@ async function dbCreateBackgroundVersion(documentRow, user, authority, value, id
       return {
         created: true,
         row,
+        attempt,
       };
     }
     if (!idempotencyKey) throw new Error('background version insert unexpectedly conflicted');
@@ -7475,9 +10285,22 @@ async function dbCreateBackgroundVersion(documentRow, user, authority, value, id
       !replay.rows[0] || replay.rows[0].document_id !== documentRow.document_id
       || replay.rows[0].request_fingerprint !== fingerprint
     ) throw backgroundVersionError(409, 'background_version_idempotency_conflict');
+    let replayAttempt = null;
+    if (attemptId) {
+      replayAttempt = await dbGenerationAttemptRow(documentRow.document_id, attemptId, client);
+      const stageColumn = {
+        raw: 'generated_version_id',
+        warped: 'warped_version_id',
+        occlusion: 'occlusion_version_id',
+      }[storedValue.kind];
+      if (!replayAttempt || String(replayAttempt[stageColumn] || '') !== String(replay.rows[0].id)) {
+        throw backgroundVersionError(409, 'background_version_attempt_conflict');
+      }
+    }
     return {
       created: false,
       row: await dbBackgroundVersionRow(documentRow.document_id, replay.rows[0].id, client),
+      attempt: replayAttempt,
     };
   });
 }
@@ -7525,7 +10348,7 @@ async function dbUploadBackgroundVersionContent(
       ) return { row: current, idempotentReplay: true };
       throw backgroundVersionError(409, 'background_version_content_immutable');
     }
-    const expectedContentSha256 = current.kind === 'raw'
+    const expectedContentSha256 = current.kind === 'raw' || current.kind === 'source'
       ? current.provenance?.sourceSha256
       : current.operation?.outputSha256;
     if (expectedContentSha256 !== sha256) {
@@ -7538,6 +10361,34 @@ async function dbUploadBackgroundVersionContent(
     assertBackgroundVersionRevision(current, expectedRevision);
     if (current.status !== 'ready') {
       throw backgroundVersionError(409, 'background_version_locked', { status: current.status });
+    }
+    if (current.kind === 'source') {
+      const canonicalValue = await dbCanonicalizePredrawnSourceVersion(client, currentDocument, {
+        kind: current.kind,
+        label: current.label,
+        parent_version_id: null,
+        source_background_version_id: null,
+        world_bounds: current.world_bounds,
+        operation: current.operation,
+        provenance: current.provenance,
+      });
+      if (!sourceVersionCanonicalMetadataMatches(current, canonicalValue)) {
+        throw backgroundVersionError(
+          409,
+          'background_source_level_changed',
+          'The saved Level changed after this Generation Reference record was created.',
+        );
+      }
+      if (
+        Number(current.world_bounds?.width) !== inspected.width
+        || Number(current.world_bounds?.height) !== inspected.height
+      ) {
+        throw backgroundVersionError(
+          409,
+          'background_source_content_dimensions_mismatch',
+          'Generation Reference pixels must exactly match the saved generation frame.',
+        );
+      }
     }
     const usageResult = await client.query(
       `SELECT COALESCE(sum(usage.byte_length), 0)::text AS used_bytes,
@@ -7552,7 +10403,10 @@ async function dbUploadBackgroundVersionContent(
     );
     const usedBytes = BigInt(usageResult.rows[0]?.used_bytes || '0');
     const additionalBytes = usageResult.rows[0]?.already_referenced ? 0n : BigInt(body.length);
-    if (usedBytes + additionalBytes > BACKGROUND_VERSION_OWNER_BLOB_BYTE_LIMIT) {
+    if (
+      additionalBytes > 0n
+      && usedBytes + additionalBytes > BACKGROUND_VERSION_OWNER_BLOB_BYTE_LIMIT
+    ) {
       throw backgroundVersionError(413, 'background_version_owner_blob_quota_exceeded', {
         limit_bytes: String(BACKGROUND_VERSION_OWNER_BLOB_BYTE_LIMIT),
         used_bytes: String(usedBytes),
@@ -7634,22 +10488,26 @@ async function dbArchiveBackgroundVersion(documentRow, versionId, expectedRevisi
       freshDocument.level_id,
       { lock: true },
     );
-    for (const level of [freshDocument.body, canonical.level].filter(Boolean)) {
-      let selected;
-      try { selected = decodedVersionedPredrawnSurface(level); } catch (error) {
+    await withThumbnailRenderInputs(() => {
+      try {
+        for (const level of [freshDocument.body, canonical.level].filter(Boolean)) {
+          const selected = decodedVersionedPredrawnSurface(level);
+          if (
+            selected
+            && (selected.background_version_id === versionId || selected.occlusion_version_id === versionId)
+          ) {
+            throw backgroundVersionError(
+              409,
+              'background_version_in_use',
+              'a working or canonical Level currently selects this version',
+            );
+          }
+        }
+      } catch (error) {
+        if (error?.backgroundVersionCode || (error?.statusCode && error?.responseCode)) throw error;
         throw backgroundVersionError(409, 'background_version_reference_check_failed', error.message);
       }
-      if (
-        selected
-        && (selected.background_version_id === versionId || selected.occlusion_version_id === versionId)
-      ) {
-        throw backgroundVersionError(
-          409,
-          'background_version_in_use',
-          'a working or canonical Level currently selects this version',
-        );
-      }
-    }
+    }, client);
     const current = await dbBackgroundVersionRow(documentRow.document_id, versionId, client, { lock: true });
     if (!current || current.owner_email !== documentRow.owner_email || current.level_id !== documentRow.level_id) {
       throw backgroundVersionError(404, 'background_version_not_found');
@@ -7658,6 +10516,29 @@ async function dbArchiveBackgroundVersion(documentRow, versionId, expectedRevisi
     assertBackgroundVersionRevision(current, expectedRevision);
     if (current.status === 'published') {
       throw backgroundVersionError(409, 'background_version_published', 'published history cannot be archived');
+    }
+    const activeAttemptUse = await client.query(
+      `SELECT id, source_version_id, generated_version_id, warped_version_id, occlusion_version_id
+         FROM predrawn_generation_attempts
+        WHERE document_id = $1 AND status = 'active'
+          AND $2::uuid IN (
+            source_version_id,
+            generated_version_id,
+            warped_version_id,
+            occlusion_version_id
+          )
+        LIMIT 1
+        FOR UPDATE`,
+      [documentRow.document_id, versionId],
+    );
+    if (activeAttemptUse.rows[0]) {
+      throw backgroundVersionError(
+        409,
+        current.kind === 'source'
+          ? 'background_source_attempt_in_use'
+          : 'background_version_attempt_in_use',
+        'Archive every active attempt that references this artwork before archiving it.',
+      );
     }
     await client.query(
       `UPDATE predrawn_background_versions
@@ -7674,6 +10555,1116 @@ async function dbArchiveBackgroundVersion(documentRow, versionId, expectedRevisi
     return {
       row,
       idempotentReplay: false,
+    };
+  });
+}
+
+async function dbDiscardGenerationAttemptWarp(
+  documentRow,
+  attemptId,
+  expectedWarpedVersionId,
+  expectedRevision,
+  user,
+  authority,
+) {
+  return withEditorDocumentTransaction(async (client) => {
+    const currentDocument = await dbLockEditorDocument(
+      client,
+      documentRow.owner_email,
+      documentRow.document_id,
+    );
+    if (!currentDocument) throw editorDocumentError(404, 'editor_document_not_found');
+    const writerSession = await assertActiveEditorEditSession(
+      client,
+      currentDocument,
+      authority.sessionId,
+      authority.editGeneration,
+      authority.sessionKeyHash,
+    );
+    let attempt = await dbGenerationAttemptRow(
+      documentRow.document_id,
+      attemptId,
+      client,
+      { lock: true },
+    );
+    if (
+      !attempt
+      || attempt.owner_email !== documentRow.owner_email
+      || attempt.level_id !== documentRow.level_id
+    ) {
+      throw backgroundVersionError(404, 'generation_attempt_not_found');
+    }
+    if (attempt.status !== 'active') {
+      throw backgroundVersionError(409, 'generation_attempt_archived');
+    }
+    if (!['source', 'pipeline-source'].includes(attempt.origin) || !attempt.generated_version_id) {
+      throw backgroundVersionError(
+        409,
+        'generation_attempt_historical_locked',
+        'Historical attempts do not have a proven Raw Pipeline Source and cannot retry processing.',
+      );
+    }
+
+    if (!attempt.warped_version_id) {
+      const [discardedVersion, discardedEvent] = await Promise.all([
+        dbBackgroundVersionRow(
+          documentRow.document_id,
+          expectedWarpedVersionId,
+          client,
+          { lock: true },
+        ),
+        client.query(
+          `SELECT id
+             FROM predrawn_generation_attempt_events
+            WHERE document_id = $1
+              AND attempt_id = $2
+              AND action = 'stage-discarded'
+              AND details->>'kind' = 'warped'
+              AND details->>'version_id' = $3
+            ORDER BY id DESC
+            LIMIT 1`,
+          [documentRow.document_id, attempt.id, expectedWarpedVersionId],
+        ),
+      ]);
+      if (
+        discardedVersion?.status === 'archived'
+        && discardedVersion.kind === 'warped'
+        && discardedEvent.rows[0]
+      ) {
+        return {
+          attempt,
+          discardedVersion,
+          idempotentReplay: true,
+        };
+      }
+      throw backgroundVersionError(409, 'generation_attempt_warp_conflict', {
+        current_revision: Number(attempt.row_revision),
+        current_warped_version_id: null,
+      });
+    }
+    if (Number(attempt.row_revision) !== expectedRevision) {
+      throw backgroundVersionError(409, 'generation_attempt_conflict', {
+        current_revision: Number(attempt.row_revision),
+      });
+    }
+    if (String(attempt.warped_version_id) !== String(expectedWarpedVersionId)) {
+      throw backgroundVersionError(409, 'generation_attempt_warp_conflict', {
+        current_revision: Number(attempt.row_revision),
+        current_warped_version_id: String(attempt.warped_version_id),
+      });
+    }
+    if (attempt.occlusion_version_id) {
+      throw backgroundVersionError(
+        409,
+        'generation_attempt_occlusion_exists',
+        'Discard the board with an occlusion mask before retrying its warped board.',
+      );
+    }
+
+    const warped = await dbBackgroundVersionRow(
+      documentRow.document_id,
+      expectedWarpedVersionId,
+      client,
+      { lock: true },
+    );
+    if (
+      !warped
+      || warped.owner_email !== documentRow.owner_email
+      || warped.level_id !== documentRow.level_id
+      || warped.kind !== 'warped'
+      || String(warped.parent_version_id || '') !== String(attempt.generated_version_id)
+      || String(warped.source_background_version_id || '') !== String(attempt.generated_version_id)
+    ) {
+      throw backgroundVersionError(409, 'generation_attempt_warp_not_found');
+    }
+    if (warped.status === 'published') {
+      throw backgroundVersionError(
+        409,
+        'generation_attempt_warp_published',
+        'Published warped artwork cannot be discarded from its pipeline slot.',
+      );
+    }
+    if (warped.status === 'archived') {
+      throw backgroundVersionError(409, 'generation_attempt_warp_conflict', {
+        current_revision: Number(attempt.row_revision),
+        current_warped_version_id: String(attempt.warped_version_id),
+      });
+    }
+
+    const canonical = await dbCanonicalLevel(
+      client,
+      currentDocument.owner_email,
+      { kind: currentDocument.workspace_kind, id: currentDocument.workspace_id },
+      currentDocument.level_id,
+      { lock: true },
+    );
+    await withThumbnailRenderInputs(() => {
+      try {
+        for (const level of [currentDocument.body, canonical.level].filter(Boolean)) {
+          const selected = decodedVersionedPredrawnSurface(level);
+          if (
+            selected
+            && (
+              selected.background_version_id === expectedWarpedVersionId
+              || selected.occlusion_version_id === expectedWarpedVersionId
+            )
+          ) {
+            throw backgroundVersionError(
+              409,
+              'generation_attempt_warp_in_use',
+              'A working or canonical Level currently selects this warped board.',
+            );
+          }
+        }
+      } catch (error) {
+        if (error?.backgroundVersionCode || (error?.statusCode && error?.responseCode)) throw error;
+        throw backgroundVersionError(409, 'background_version_reference_check_failed', error.message);
+      }
+    }, client);
+
+    const discardedProcessingRevision = Number(attempt.processing_revision);
+    if (
+      !Number.isSafeInteger(discardedProcessingRevision)
+      || discardedProcessingRevision < 0
+    ) {
+      throw backgroundVersionError(
+        409,
+        'generation_attempt_processing_revision_invalid',
+      );
+    }
+    const archived = await client.query(
+      `UPDATE predrawn_background_versions
+          SET status = 'archived',
+              archived_at = now(),
+              archived_by = $3,
+              row_revision = row_revision + 1,
+              updated_at = now(),
+              updated_by = $3
+        WHERE document_id = $1
+          AND id = $2
+          AND status NOT IN ('archived', 'published')
+        RETURNING id`,
+      [documentRow.document_id, expectedWarpedVersionId, user.email],
+    );
+    if (!archived.rows[0]) {
+      throw backgroundVersionError(409, 'generation_attempt_warp_conflict', {
+        current_revision: Number(attempt.row_revision),
+        current_warped_version_id: String(attempt.warped_version_id),
+      });
+    }
+    const detached = await client.query(
+      `UPDATE predrawn_generation_attempts attempt
+          SET warped_version_id = NULL,
+              move_highlight_profile = NULL,
+              move_highlight_profile_sha256 = NULL,
+              move_highlight_profile_warped_version_id = NULL,
+              processing_revision = processing_revision + 1,
+              row_revision = row_revision + 1,
+              updated_at = now(),
+              updated_by = $5
+        WHERE document_id = $1
+          AND id = $2
+          AND status = 'active'
+          AND warped_version_id = $3
+          AND occlusion_version_id IS NULL
+          AND row_revision = $4
+        RETURNING ${GENERATION_ATTEMPT_COLUMNS}`,
+      [
+        documentRow.document_id,
+        attempt.id,
+        expectedWarpedVersionId,
+        expectedRevision,
+        user.email,
+      ],
+    );
+    if (!detached.rows[0]) {
+      throw backgroundVersionError(409, 'generation_attempt_warp_conflict', {
+        current_revision: Number(attempt.row_revision),
+        current_warped_version_id: String(attempt.warped_version_id),
+      });
+    }
+    attempt = detached.rows[0];
+    const discardedVersion = await dbBackgroundVersionRow(
+      documentRow.document_id,
+      expectedWarpedVersionId,
+      client,
+    );
+    await dbRecordBackgroundVersionEvent(
+      client,
+      discardedVersion,
+      'archived',
+      user.email,
+      user.name,
+      {
+        reason: 'generation-attempt-warp-discard',
+        attempt_id: String(attempt.id),
+        edit_session_id: writerSession.session_id,
+        edit_generation: Number(writerSession.edit_generation),
+      },
+    );
+    await dbRecordGenerationAttemptEvent(
+      client,
+      attempt,
+      'stage-discarded',
+      user.email,
+      user.name,
+      {
+        kind: 'warped',
+        version_id: String(expectedWarpedVersionId),
+        discarded_processing_revision: discardedProcessingRevision,
+        processing_revision: Number(attempt.processing_revision),
+        edit_session_id: writerSession.session_id,
+        edit_generation: Number(writerSession.edit_generation),
+      },
+    );
+    return {
+      attempt,
+      discardedVersion,
+      idempotentReplay: false,
+    };
+  });
+}
+
+async function dbDiscardGenerationAttemptOcclusion(
+  documentRow,
+  attemptId,
+  expectedOcclusionVersionId,
+  expectedRevision,
+  expectedDocumentRevision,
+  user,
+  authority,
+) {
+  return withEditorDocumentTransaction(async (client) => {
+    const currentDocument = await dbLockEditorDocument(
+      client,
+      documentRow.owner_email,
+      documentRow.document_id,
+    );
+    if (!currentDocument) throw editorDocumentError(404, 'editor_document_not_found');
+    const writerSession = await assertActiveEditorEditSession(
+      client,
+      currentDocument,
+      authority.sessionId,
+      authority.editGeneration,
+      authority.sessionKeyHash,
+    );
+    let attempt = await dbGenerationAttemptRow(
+      documentRow.document_id,
+      attemptId,
+      client,
+      { lock: true },
+    );
+    if (
+      !attempt
+      || attempt.owner_email !== documentRow.owner_email
+      || attempt.level_id !== documentRow.level_id
+    ) {
+      throw backgroundVersionError(404, 'generation_attempt_not_found');
+    }
+    if (attempt.status !== 'active') {
+      throw backgroundVersionError(409, 'generation_attempt_archived');
+    }
+    if (!attempt.warped_version_id) {
+      throw backgroundVersionError(
+        409,
+        'generation_attempt_occlusion_parent_missing',
+        'This slot no longer has the warped board required by its mask.',
+      );
+    }
+    const expectedWarpedVersionId = String(attempt.warped_version_id);
+
+    if (!attempt.occlusion_version_id) {
+      const [detachedVersion, discardedEvent] = await Promise.all([
+        dbBackgroundVersionRow(
+          documentRow.document_id,
+          expectedOcclusionVersionId,
+          client,
+          { lock: true },
+        ),
+        client.query(
+          `SELECT details
+             FROM predrawn_generation_attempt_events
+            WHERE document_id = $1
+              AND attempt_id = $2
+              AND action = 'stage-discarded'
+              AND details->>'kind' = 'occlusion'
+              AND details->>'version_id' = $3
+            ORDER BY id DESC
+            LIMIT 1`,
+          [documentRow.document_id, attempt.id, expectedOcclusionVersionId],
+        ),
+      ]);
+      const replayDetails = discardedEvent.rows[0]?.details;
+      if (
+        detachedVersion
+        && detachedVersion.kind === 'occlusion'
+        && isObjectRecord(replayDetails)
+      ) {
+        const canonical = await dbCanonicalLevel(
+          client,
+          currentDocument.owner_email,
+          { kind: currentDocument.workspace_kind, id: currentDocument.workspace_id },
+          currentDocument.level_id,
+        );
+        return {
+          attempt,
+          detachedVersion,
+          document: {
+            ...currentDocument,
+            baseline_conflict: editorDocumentBaselineChanged(currentDocument, canonical),
+          },
+          canonicalLevel: canonical.level,
+          workspaceRevision: Number.isSafeInteger(Number(canonical.row?.revision))
+            ? Number(canonical.row.revision)
+            : null,
+          workingCopyFellBack: replayDetails.working_copy_fell_back === true,
+          canonicalReferenceRetained: replayDetails.canonical_reference_retained === true,
+          versionArchived: detachedVersion.status === 'archived',
+          retainedReason: typeof replayDetails.retained_reason === 'string'
+            ? replayDetails.retained_reason
+            : null,
+          idempotentReplay: true,
+        };
+      }
+      throw backgroundVersionError(409, 'generation_attempt_occlusion_conflict', {
+        current_revision: Number(attempt.row_revision),
+        current_occlusion_version_id: null,
+      });
+    }
+    if (Number(attempt.row_revision) !== expectedRevision) {
+      throw backgroundVersionError(409, 'generation_attempt_conflict', {
+        current_revision: Number(attempt.row_revision),
+      });
+    }
+    if (String(attempt.occlusion_version_id) !== String(expectedOcclusionVersionId)) {
+      throw backgroundVersionError(409, 'generation_attempt_occlusion_conflict', {
+        current_revision: Number(attempt.row_revision),
+        current_occlusion_version_id: String(attempt.occlusion_version_id),
+      });
+    }
+    assertEditorDocumentRevision(
+      currentDocument,
+      expectedDocumentRevision,
+      currentEditorSessionContext(currentDocument, writerSession),
+    );
+
+    const occlusion = await dbBackgroundVersionRow(
+      documentRow.document_id,
+      expectedOcclusionVersionId,
+      client,
+      { lock: true },
+    );
+    if (
+      !occlusion
+      || occlusion.owner_email !== documentRow.owner_email
+      || occlusion.level_id !== documentRow.level_id
+      || occlusion.kind !== 'occlusion'
+      || String(occlusion.source_background_version_id || '') !== expectedWarpedVersionId
+    ) {
+      throw backgroundVersionError(409, 'generation_attempt_occlusion_not_found');
+    }
+    if (occlusion.status === 'archived') {
+      throw backgroundVersionError(409, 'generation_attempt_occlusion_conflict', {
+        current_revision: Number(attempt.row_revision),
+        current_occlusion_version_id: String(attempt.occlusion_version_id),
+      });
+    }
+
+    const canonical = await dbCanonicalLevel(
+      client,
+      currentDocument.owner_email,
+      { kind: currentDocument.workspace_kind, id: currentDocument.workspace_id },
+      currentDocument.level_id,
+      { lock: true },
+    );
+    let workingPlan;
+    let canonicalPlan;
+    [workingPlan, canonicalPlan] = await withThumbnailRenderInputs(() => {
+      try {
+        return [
+          generationAttemptOcclusionDiscardLevelPlan(
+            currentDocument.body,
+            expectedWarpedVersionId,
+            expectedOcclusionVersionId,
+          ),
+          canonical.level
+            ? generationAttemptOcclusionDiscardLevelPlan(
+              canonical.level,
+              expectedWarpedVersionId,
+              expectedOcclusionVersionId,
+            )
+            : { level: null, referencesOcclusion: false },
+        ];
+      } catch (error) {
+        if (error?.backgroundVersionCode || (error?.statusCode && error?.responseCode)) throw error;
+        throw backgroundVersionError(409, 'background_version_reference_check_failed', error.message);
+      }
+    }, client);
+
+    const canonicalReferenceRetained = canonicalPlan.referencesOcclusion;
+    const versionArchived = occlusion.status !== 'published' && !canonicalReferenceRetained;
+    const retainedReason = canonicalReferenceRetained
+      ? 'canonical-reference'
+      : occlusion.status === 'published'
+        ? 'published-history'
+        : null;
+    if (versionArchived) {
+      const archived = await client.query(
+        `UPDATE predrawn_background_versions
+            SET status = 'archived',
+                archived_at = now(),
+                archived_by = $3,
+                row_revision = row_revision + 1,
+                updated_at = now(),
+                updated_by = $3
+          WHERE document_id = $1
+            AND id = $2
+            AND status NOT IN ('archived', 'published')
+          RETURNING id`,
+        [documentRow.document_id, expectedOcclusionVersionId, user.email],
+      );
+      if (!archived.rows[0]) {
+        throw backgroundVersionError(409, 'generation_attempt_occlusion_conflict', {
+          current_revision: Number(attempt.row_revision),
+          current_occlusion_version_id: String(attempt.occlusion_version_id),
+        });
+      }
+    }
+
+    let updatedDocument = currentDocument;
+    if (workingPlan.referencesOcclusion) {
+      const nextRevision = Number(currentDocument.revision) + 1;
+      const nextBodyHash = await dbJsonbHash(client, workingPlan.level);
+      const canonicalStillTracked = Boolean(
+        currentDocument.baseline_hash
+        && canonical.hash
+        && currentDocument.baseline_hash === canonical.hash,
+      );
+      const nextSavedRevision = canonicalStillTracked
+        && nextBodyHash === currentDocument.baseline_hash
+        ? nextRevision
+        : Number(currentDocument.saved_revision);
+      const updatedWorking = await client.query(
+        `UPDATE level_working_copies
+            SET body = $3::jsonb,
+                revision = $4,
+                saved_revision = $5,
+                updated_at = clock_timestamp()
+          WHERE owner_email = $1
+            AND document_id = $2
+            AND revision = $6
+          RETURNING ${EDITOR_DOCUMENT_COLUMNS}`,
+        [
+          currentDocument.owner_email,
+          currentDocument.document_id,
+          JSON.stringify(workingPlan.level),
+          nextRevision,
+          nextSavedRevision,
+          expectedDocumentRevision,
+        ],
+      );
+      if (!updatedWorking.rows[0]) {
+        throw editorDocumentError(
+          409,
+          'editor_document_revision_conflict',
+          currentDocument,
+        );
+      }
+      updatedDocument = updatedWorking.rows[0];
+      await dbRecordEditorDocumentRevision(
+        client,
+        updatedDocument,
+        'generation-attempt-occlusion-discard',
+      );
+      await dbTouchEditorSessionAfterWrite(
+        client,
+        writerSession,
+        updatedDocument,
+        'generation_attempt_occlusion_selection_fell_back',
+        currentDocument.revision,
+        {
+          generation_attempt_id: attemptId,
+          detached_occlusion_version_id: expectedOcclusionVersionId,
+          fallback_warped_version_id: expectedWarpedVersionId,
+        },
+      );
+    }
+
+    const discardedProcessingRevision = Number(attempt.processing_revision);
+    if (
+      !Number.isSafeInteger(discardedProcessingRevision)
+      || discardedProcessingRevision < 0
+    ) {
+      throw backgroundVersionError(
+        409,
+        'generation_attempt_processing_revision_invalid',
+      );
+    }
+    const detached = await client.query(
+      `UPDATE predrawn_generation_attempts attempt
+          SET occlusion_version_id = NULL,
+              processing_revision = processing_revision + 1,
+              row_revision = row_revision + 1,
+              updated_at = now(),
+              updated_by = $5
+        WHERE document_id = $1
+          AND id = $2
+          AND status = 'active'
+          AND occlusion_version_id = $3
+          AND row_revision = $4
+        RETURNING ${GENERATION_ATTEMPT_COLUMNS}`,
+      [
+        documentRow.document_id,
+        attempt.id,
+        expectedOcclusionVersionId,
+        expectedRevision,
+        user.email,
+      ],
+    );
+    if (!detached.rows[0]) {
+      throw backgroundVersionError(409, 'generation_attempt_occlusion_conflict', {
+        current_revision: Number(attempt.row_revision),
+        current_occlusion_version_id: String(attempt.occlusion_version_id),
+      });
+    }
+    attempt = detached.rows[0];
+    const detachedVersion = await dbBackgroundVersionRow(
+      documentRow.document_id,
+      expectedOcclusionVersionId,
+      client,
+    );
+    await dbRecordBackgroundVersionEvent(
+      client,
+      detachedVersion,
+      versionArchived ? 'archived' : 'attempt-detached',
+      user.email,
+      user.name,
+      {
+        reason: 'generation-attempt-occlusion-discard',
+        attempt_id: String(attempt.id),
+        retained_reason: retainedReason,
+        edit_session_id: writerSession.session_id,
+        edit_generation: Number(writerSession.edit_generation),
+      },
+    );
+    await dbRecordGenerationAttemptEvent(
+      client,
+      attempt,
+      'stage-discarded',
+      user.email,
+      user.name,
+      {
+        kind: 'occlusion',
+        version_id: String(expectedOcclusionVersionId),
+        warped_version_id: expectedWarpedVersionId,
+        discarded_processing_revision: discardedProcessingRevision,
+        processing_revision: Number(attempt.processing_revision),
+        working_copy_fell_back: workingPlan.referencesOcclusion,
+        canonical_reference_retained: canonicalReferenceRetained,
+        version_archived: versionArchived,
+        retained_reason: retainedReason,
+        edit_session_id: writerSession.session_id,
+        edit_generation: Number(writerSession.edit_generation),
+      },
+    );
+    return {
+      attempt,
+      detachedVersion,
+      document: {
+        ...updatedDocument,
+        baseline_conflict: editorDocumentBaselineChanged(updatedDocument, canonical),
+      },
+      canonicalLevel: canonical.level,
+      workspaceRevision: Number.isSafeInteger(Number(canonical.row?.revision))
+        ? Number(canonical.row.revision)
+        : null,
+      workingCopyFellBack: workingPlan.referencesOcclusion,
+      canonicalReferenceRetained,
+      versionArchived,
+      retainedReason,
+      idempotentReplay: false,
+    };
+  });
+}
+
+async function dbUpdateGenerationAttemptMoveHighlightProfile(
+  documentRow,
+  attemptId,
+  expectedWarpedVersionId,
+  expectedRevision,
+  rawCells,
+  user,
+  authority,
+) {
+  return withEditorDocumentTransaction(async (client) => {
+    const currentDocument = await dbLockEditorDocument(
+      client,
+      documentRow.owner_email,
+      documentRow.document_id,
+    );
+    if (!currentDocument) throw editorDocumentError(404, 'editor_document_not_found');
+    const writerSession = await assertActiveEditorEditSession(
+      client,
+      currentDocument,
+      authority.sessionId,
+      authority.editGeneration,
+      authority.sessionKeyHash,
+    );
+    const attempt = await dbGenerationAttemptRow(
+      documentRow.document_id,
+      attemptId,
+      client,
+      { lock: true },
+    );
+    if (
+      !attempt
+      || attempt.owner_email !== documentRow.owner_email
+      || attempt.level_id !== documentRow.level_id
+    ) {
+      throw backgroundVersionError(404, 'generation_attempt_not_found');
+    }
+    if (attempt.status !== 'active') {
+      throw backgroundVersionError(409, 'generation_attempt_archived');
+    }
+    if (
+      !['source', 'pipeline-source'].includes(attempt.origin)
+      || !attempt.source_request?.semanticRequest?.boardCode
+    ) {
+      throw backgroundVersionError(
+        409,
+        'generation_attempt_move_highlight_profile_unavailable',
+        'This historical slot has no exact semantic board proof for cyan cell fitting.',
+      );
+    }
+    if (
+      !attempt.warped_version_id
+      || String(attempt.warped_version_id) !== String(expectedWarpedVersionId)
+    ) {
+      throw backgroundVersionError(409, 'generation_attempt_warp_conflict', {
+        current_revision: Number(attempt.row_revision),
+        current_warped_version_id: attempt.warped_version_id
+          ? String(attempt.warped_version_id)
+          : null,
+      });
+    }
+    const warped = await dbBackgroundVersionRow(
+      documentRow.document_id,
+      expectedWarpedVersionId,
+      client,
+      { lock: true },
+    );
+    if (
+      !warped
+      || warped.kind !== 'warped'
+      || warped.owner_email !== documentRow.owner_email
+      || warped.level_id !== documentRow.level_id
+      || !warped.blob_sha256
+      || !['ready', 'published'].includes(warped.status)
+    ) {
+      throw backgroundVersionError(409, 'generation_attempt_warp_not_found');
+    }
+    const environmentGeometrySha256 = backgroundVersionV2GeometrySha256(warped);
+    if (!environmentGeometrySha256) {
+      throw backgroundVersionError(
+        409,
+        'generation_attempt_move_highlight_profile_geometry_unavailable',
+        'The warped board has no proven current geometry binding.',
+      );
+    }
+    const board = await withThumbnailRenderInputs(
+      () => serverRender.decodeBoard(attempt.source_request.semanticRequest.boardCode),
+      client,
+    );
+    if (!board) {
+      throw backgroundVersionError(
+        409,
+        'generation_attempt_move_highlight_profile_board_invalid',
+        'The exact semantic board for this warped result cannot be decoded.',
+      );
+    }
+    const profile = normalizeMoveHighlightProfile({
+      schema: MOVE_HIGHLIGHT_PROFILE_SCHEMA,
+      backgroundVersionId: String(warped.id),
+      coordinateBasis: MOVE_HIGHLIGHT_COORDINATE_BASIS,
+      environmentGeometrySha256,
+      cells: rawCells,
+    }, {
+      backgroundVersionId: String(warped.id),
+      boardColumns: board.cols,
+      boardRows: board.rows,
+      environmentGeometrySha256,
+      playableCellKeys: new Set(Object.keys(board.cells)),
+    });
+    if (profile.error) {
+      throw backgroundVersionError(
+        400,
+        'invalid_generation_attempt_move_highlight_profile',
+        profile.error,
+      );
+    }
+    const currentProfile = normalizeMoveHighlightProfile(
+      attempt.move_highlight_profile,
+      {
+        backgroundVersionId: String(warped.id),
+        boardColumns: board.cols,
+        boardRows: board.rows,
+        environmentGeometrySha256,
+        playableCellKeys: new Set(Object.keys(board.cells)),
+      },
+    );
+    if (
+      !currentProfile.error
+      && currentProfile.value.profileSha256 === profile.value.profileSha256
+      && attempt.move_highlight_profile_sha256 === profile.value.profileSha256
+      && String(attempt.move_highlight_profile_warped_version_id || '') === String(warped.id)
+    ) {
+      return { attempt, idempotentReplay: true };
+    }
+    if (Number(attempt.row_revision) !== expectedRevision) {
+      throw backgroundVersionError(409, 'generation_attempt_conflict', {
+        current_revision: Number(attempt.row_revision),
+      });
+    }
+    const updated = await client.query(
+      `UPDATE predrawn_generation_attempts attempt
+          SET move_highlight_profile = $3::jsonb,
+              move_highlight_profile_sha256 = $4,
+              move_highlight_profile_warped_version_id = $5,
+              row_revision = row_revision + 1,
+              updated_at = now(),
+              updated_by = $6
+        WHERE document_id = $1
+          AND id = $2
+          AND status = 'active'
+          AND warped_version_id = $5
+          AND row_revision = $7
+        RETURNING ${GENERATION_ATTEMPT_COLUMNS}`,
+      [
+        documentRow.document_id,
+        attempt.id,
+        JSON.stringify(profile.value),
+        profile.value.profileSha256,
+        warped.id,
+        user.email,
+        expectedRevision,
+      ],
+    );
+    if (!updated.rows[0]) {
+      throw backgroundVersionError(409, 'generation_attempt_conflict', {
+        current_revision: Number(attempt.row_revision),
+      });
+    }
+    await dbRecordGenerationAttemptEvent(
+      client,
+      updated.rows[0],
+      'move-highlight-profile-updated',
+      user.email,
+      user.name,
+      {
+        warped_version_id: String(warped.id),
+        previous_profile_sha256: attempt.move_highlight_profile_sha256 || null,
+        profile_sha256: profile.value.profileSha256,
+        overridden_cell_count: Object.keys(profile.value.cells).length,
+        edit_session_id: writerSession.session_id,
+        edit_generation: Number(writerSession.edit_generation),
+      },
+    );
+    return { attempt: updated.rows[0], idempotentReplay: false };
+  });
+}
+
+async function dbArchiveGenerationAttempt(
+  documentRow,
+  attemptId,
+  expectedRevision,
+  expectedDocumentRevision,
+  user,
+  authority,
+) {
+  return withEditorDocumentTransaction(async (client) => {
+    const currentDocument = await dbLockEditorDocument(
+      client,
+      documentRow.owner_email,
+      documentRow.document_id,
+    );
+    if (!currentDocument) throw editorDocumentError(404, 'editor_document_not_found');
+    const writerSession = await assertActiveEditorEditSession(
+      client,
+      currentDocument,
+      authority.sessionId,
+      authority.editGeneration,
+      authority.sessionKeyHash,
+    );
+    const attempt = await dbGenerationAttemptRow(
+      documentRow.document_id,
+      attemptId,
+      client,
+      { lock: true },
+    );
+    if (
+      !attempt
+      || attempt.owner_email !== documentRow.owner_email
+      || attempt.level_id !== documentRow.level_id
+    ) {
+      throw backgroundVersionError(404, 'generation_attempt_not_found');
+    }
+    const archivedReplay = attempt.status === 'archived';
+    if (!archivedReplay) {
+      assertEditorDocumentRevision(
+        currentDocument,
+        expectedDocumentRevision,
+        currentEditorSessionContext(currentDocument, writerSession),
+      );
+      if (Number(attempt.row_revision) !== expectedRevision) {
+        throw backgroundVersionError(409, 'generation_attempt_conflict', {
+          current_revision: Number(attempt.row_revision),
+        });
+      }
+    }
+
+    const canonical = await dbCanonicalLevel(
+      client,
+      currentDocument.owner_email,
+      { kind: currentDocument.workspace_kind, id: currentDocument.workspace_id },
+      currentDocument.level_id,
+      { lock: true },
+    );
+    const ownedVersionIds = new Set([
+      attempt.warped_version_id,
+      attempt.occlusion_version_id,
+    ].filter(Boolean).map(String));
+    let ownsPublishedVersion = false;
+    if (ownedVersionIds.size) {
+      const ownedVersions = await client.query(
+        `SELECT id, status
+           FROM predrawn_background_versions
+          WHERE document_id = $1 AND id = ANY($2::uuid[])
+          FOR UPDATE`,
+        [documentRow.document_id, [...ownedVersionIds]],
+      );
+      ownsPublishedVersion = ownedVersions.rows.some((row) => row.status === 'published');
+      if (!archivedReplay && ownsPublishedVersion) {
+        throw backgroundVersionError(
+          409,
+          'generation_attempt_published',
+          'Published artwork history cannot be archived with its pipeline slot.',
+        );
+      }
+    }
+
+    let workingPlan;
+    let canonicalPlan;
+    [workingPlan, canonicalPlan] = await withThumbnailRenderInputs(() => {
+      try {
+        return [
+          generationAttemptArchiveLevelPlan(currentDocument.body, ownedVersionIds),
+          canonical.level
+            ? generationAttemptArchiveLevelPlan(canonical.level, ownedVersionIds)
+            : { level: null, kind: 'unrelated', matchedVersionIds: [] },
+        ];
+      } catch (error) {
+        if (error?.backgroundVersionCode || (error?.statusCode && error?.responseCode)) throw error;
+        throw backgroundVersionError(409, 'background_version_reference_check_failed', error.message);
+      }
+    }, client);
+    if (workingPlan.kind === 'invalid' || canonicalPlan.kind === 'invalid') {
+      throw backgroundVersionError(
+        409,
+        'background_version_reference_check_failed',
+        'the Level background mode is invalid',
+      );
+    }
+    if (workingPlan.kind === 'active' || canonicalPlan.kind === 'active') {
+      throw backgroundVersionError(
+        409,
+        'generation_attempt_in_use',
+        'A working or canonical Level actively uses artwork from this attempt.',
+      );
+    }
+
+    const workingChanged = workingPlan.kind === 'dormant';
+    const canonicalChanged = canonicalPlan.kind === 'dormant';
+    if (archivedReplay && !workingChanged && !canonicalChanged) {
+      return {
+        row: attempt,
+        document: {
+          ...currentDocument,
+          baseline_conflict: editorDocumentBaselineChanged(currentDocument, canonical),
+        },
+        canonicalLevel: canonical.level,
+        // A lost first response may have carried the revision advanced by the canonical detach.
+        // Return the current CAS token on replay so the client cannot adopt the canonical Level
+        // while retaining its older whole-workspace revision.
+        workspaceRevision: Number.isSafeInteger(Number(canonical.row?.revision))
+          ? Number(canonical.row.revision)
+          : null,
+        canonicalChanged: false,
+        forgottenSelection: {
+          working_copy: false,
+          canonical: false,
+          version_ids: [],
+        },
+        idempotentReplay: true,
+        canonicalThumbnailRequiresEnsure: Boolean(canonical.level),
+      };
+    }
+    if (archivedReplay) {
+      // An older server could archive the slot while silently missing a dormant
+      // database-catalog-dependent selection. Retrying the same explicit archive
+      // intent heals that incomplete transaction without revising the slot twice.
+      assertEditorDocumentRevision(
+        currentDocument,
+        expectedDocumentRevision,
+        currentEditorSessionContext(currentDocument, writerSession),
+      );
+      const currentAttemptRevision = Number(attempt.row_revision);
+      if (
+        expectedRevision !== currentAttemptRevision
+        && expectedRevision !== currentAttemptRevision - 1
+      ) {
+        throw backgroundVersionError(409, 'generation_attempt_conflict', {
+          current_revision: currentAttemptRevision,
+        });
+      }
+      if (ownsPublishedVersion) {
+        throw backgroundVersionError(
+          409,
+          'generation_attempt_published',
+          'Published artwork history cannot be detached by replaying its pipeline-slot archive.',
+        );
+      }
+    }
+
+    const canonicalWasTracked = !editorDocumentBaselineChanged(currentDocument, canonical);
+    let canonicalAfter = canonical;
+    let workspaceRevision = Number.isSafeInteger(Number(canonical.row?.revision))
+      ? Number(canonical.row.revision)
+      : null;
+    if (canonicalChanged) {
+      workspaceRevision = await dbPromoteCanonicalLevel(
+        client,
+        currentDocument.owner_email,
+        { kind: currentDocument.workspace_kind, id: currentDocument.workspace_id },
+        currentDocument.level_id,
+        canonicalPlan.level,
+        undefined,
+      );
+      canonicalAfter = await dbCanonicalLevel(
+        client,
+        currentDocument.owner_email,
+        { kind: currentDocument.workspace_kind, id: currentDocument.workspace_id },
+        currentDocument.level_id,
+        { lock: true },
+      );
+    }
+
+    const nextBaselineHash = canonicalWasTracked
+      ? canonicalAfter.hash
+      : currentDocument.baseline_hash;
+    const baselineChanged = nextBaselineHash !== currentDocument.baseline_hash;
+    let updatedDocument = currentDocument;
+    if (workingChanged || baselineChanged) {
+      const nextRevision = Number(currentDocument.revision) + (workingChanged ? 1 : 0);
+      const nextBodyHash = await dbJsonbHash(client, workingPlan.level);
+      const nextSavedRevision = nextBaselineHash && nextBodyHash === nextBaselineHash
+        ? nextRevision
+        : Number(currentDocument.saved_revision);
+      const updatedWorking = await client.query(
+        `UPDATE level_working_copies
+            SET body = $3::jsonb,
+                revision = $4,
+                saved_revision = $5,
+                baseline_hash = $6,
+                updated_at = CASE WHEN $7::boolean THEN clock_timestamp() ELSE updated_at END
+          WHERE owner_email = $1 AND document_id = $2
+          RETURNING ${EDITOR_DOCUMENT_COLUMNS}`,
+        [
+          currentDocument.owner_email,
+          currentDocument.document_id,
+          JSON.stringify(workingPlan.level),
+          nextRevision,
+          nextSavedRevision,
+          nextBaselineHash,
+          workingChanged,
+        ],
+      );
+      updatedDocument = updatedWorking.rows[0];
+      if (workingChanged) {
+        await dbRecordEditorDocumentRevision(
+          client,
+          updatedDocument,
+          'generation-attempt-archive',
+        );
+        await dbTouchEditorSessionAfterWrite(
+          client,
+          writerSession,
+          updatedDocument,
+          'generation_attempt_selection_forgotten',
+          currentDocument.revision,
+          {
+            generation_attempt_id: attemptId,
+            forgotten_background_version_ids: [
+              ...new Set([
+                ...workingPlan.matchedVersionIds,
+                ...canonicalPlan.matchedVersionIds,
+              ]),
+            ].sort(),
+          },
+        );
+      }
+    }
+    updatedDocument = {
+      ...updatedDocument,
+      baseline_conflict: editorDocumentBaselineChanged(updatedDocument, canonicalAfter),
+    };
+
+    let row = attempt;
+    if (!archivedReplay) {
+      const updated = await client.query(
+        `UPDATE predrawn_generation_attempts attempt
+            SET status = 'archived',
+                archived_at = now(),
+                archived_by = $3,
+                row_revision = row_revision + 1,
+                updated_at = now(),
+                updated_by = $3
+          WHERE document_id = $1 AND id = $2
+          RETURNING ${GENERATION_ATTEMPT_COLUMNS}`,
+        [documentRow.document_id, attemptId, user.email],
+      );
+      row = updated.rows[0];
+    }
+    await dbRecordGenerationAttemptEvent(client, row, 'archived', user.email, user.name, {
+      edit_session_id: writerSession.session_id,
+      edit_generation: Number(writerSession.edit_generation),
+      repaired_incomplete_selection_detach: archivedReplay,
+      forgotten_working_copy_selection: workingChanged,
+      forgotten_canonical_selection: canonicalChanged,
+      forgotten_background_version_ids: [
+        ...new Set([
+          ...workingPlan.matchedVersionIds,
+          ...canonicalPlan.matchedVersionIds,
+        ]),
+      ].sort(),
+    });
+    return {
+      row,
+      document: updatedDocument,
+      canonicalLevel: canonicalAfter.level,
+      workspaceRevision,
+      canonicalChanged,
+      forgottenSelection: {
+        working_copy: workingChanged,
+        canonical: canonicalChanged,
+        version_ids: [
+          ...new Set([
+            ...workingPlan.matchedVersionIds,
+            ...canonicalPlan.matchedVersionIds,
+          ]),
+        ].sort(),
+      },
+      idempotentReplay: archivedReplay,
+      canonicalThumbnailRequiresEnsure: canonicalChanged || archivedReplay,
     };
   });
 }
@@ -7697,6 +11688,247 @@ async function sendBackgroundVersionContent(res, row, { published = false } = {}
   res.status(200).send(bytes);
 }
 
+app.get('/api/editor-documents/:documentId/generation-attempts', async (req, res) => {
+  try {
+    const access = await authorizedBackgroundVersionDocument(req, res);
+    if (!access) return;
+    const status = String(req.query.status || 'all').trim().toLowerCase();
+    if (!['all', 'active', 'archived'].includes(status)) {
+      res.status(400).json({ error: 'invalid_generation_attempt_status' });
+      return;
+    }
+    const rows = await dbListGenerationAttempts(access.row, status);
+    res.status(200).json({ attempts: rows.map(publicGenerationAttempt) });
+  } catch (error) {
+    respondBackgroundVersionError(res, error, 'generation attempt list');
+  }
+});
+
+app.post('/api/editor-documents/:documentId/generation-attempts', async (req, res) => {
+  try {
+    const access = await authorizedBackgroundVersionDocument(req, res, { mutate: true });
+    if (!access) return;
+    const normalized = normalizeGenerationAttemptCreate(req.body);
+    if (normalized.error) {
+      res.status(400).json({ error: 'invalid_generation_attempt', details: normalized.error });
+      return;
+    }
+    const idempotencyKey = generationAttemptIdempotencyKey(req, req.body);
+    const result = await dbCreateGenerationAttempt(
+      access.row,
+      access.user,
+      access.authority,
+      normalized.value,
+      idempotencyKey,
+    );
+    res.setHeader(
+      'Location',
+      `/api/editor-documents/${encodeURIComponent(access.documentId)}/generation-attempts`,
+    );
+    res.status(result.created ? 201 : 200).json({
+      attempt: publicGenerationAttempt(result.row),
+      idempotent_replay: !result.created,
+    });
+  } catch (error) {
+    respondBackgroundVersionError(res, error, 'generation attempt create');
+  }
+});
+
+app.post('/api/editor-documents/:documentId/generation-attempts/:attemptId/discard-warp', async (req, res) => {
+  try {
+    const access = await authorizedBackgroundVersionDocument(req, res, { mutate: true });
+    if (!access) return;
+    const attemptId = backgroundVersionId(req.params.attemptId);
+    if (!attemptId) {
+      res.status(400).json({ error: 'invalid_generation_attempt_id' });
+      return;
+    }
+    const expectedWarpedVersionId = backgroundVersionId(
+      isObjectRecord(req.body)
+        ? req.body.expected_warped_version_id ?? req.body.expectedWarpedVersionId
+        : null,
+    );
+    if (!expectedWarpedVersionId) {
+      res.status(400).json({ error: 'invalid_background_version_id' });
+      return;
+    }
+    const expected = requireBackgroundVersionExpectedRevision(req);
+    const result = await dbDiscardGenerationAttemptWarp(
+      access.row,
+      attemptId,
+      expectedWarpedVersionId,
+      expected,
+      access.user,
+      access.authority,
+    );
+    res.status(200).json({
+      attempt: publicGenerationAttempt(result.attempt),
+      discarded_version: publicBackgroundVersion(result.discardedVersion),
+      idempotent_replay: result.idempotentReplay,
+    });
+  } catch (error) {
+    respondBackgroundVersionError(res, error, 'generation attempt warp discard');
+  }
+});
+
+app.post('/api/editor-documents/:documentId/generation-attempts/:attemptId/discard-occlusion', async (req, res) => {
+  try {
+    const access = await authorizedBackgroundVersionDocument(req, res, { mutate: true });
+    if (!access) return;
+    const attemptId = backgroundVersionId(req.params.attemptId);
+    if (!attemptId) {
+      res.status(400).json({ error: 'invalid_generation_attempt_id' });
+      return;
+    }
+    const expectedOcclusionVersionId = backgroundVersionId(
+      isObjectRecord(req.body)
+        ? req.body.expected_occlusion_version_id ?? req.body.expectedOcclusionVersionId
+        : null,
+    );
+    if (!expectedOcclusionVersionId) {
+      res.status(400).json({ error: 'invalid_background_version_id' });
+      return;
+    }
+    const expected = requireBackgroundVersionExpectedRevision(req);
+    const documentRevision = editorDocumentRevision(
+      isObjectRecord(req.body) ? req.body.document_revision : undefined,
+    );
+    if (documentRevision === null) {
+      res.status(428).json({ error: 'editor_document_revision_required' });
+      return;
+    }
+    const result = await dbDiscardGenerationAttemptOcclusion(
+      access.row,
+      attemptId,
+      expectedOcclusionVersionId,
+      expected,
+      documentRevision,
+      access.user,
+      access.authority,
+    );
+    res.status(200).json({
+      attempt: publicGenerationAttempt(result.attempt),
+      detached_version: publicBackgroundVersion(result.detachedVersion),
+      document: publicEditorDocument(result.document),
+      forgotten_selection: {
+        working_copy: result.workingCopyFellBack,
+        canonical: false,
+        version_ids: result.workingCopyFellBack
+          ? [String(result.detachedVersion.id)]
+          : [],
+      },
+      canonical_level: result.canonicalLevel,
+      workspace_revision: result.workspaceRevision,
+      thumbnail_ready: true,
+      selection: {
+        working_copy_fell_back: result.workingCopyFellBack,
+        canonical_reference_retained: result.canonicalReferenceRetained,
+      },
+      detached_version_archived: result.versionArchived,
+      retained_reason: result.retainedReason,
+      idempotent_replay: result.idempotentReplay,
+    });
+  } catch (error) {
+    respondBackgroundVersionError(res, error, 'generation attempt occlusion discard');
+  }
+});
+
+app.put('/api/editor-documents/:documentId/generation-attempts/:attemptId/move-highlight-profile', async (req, res) => {
+  try {
+    const access = await authorizedBackgroundVersionDocument(req, res, { mutate: true });
+    if (!access) return;
+    const attemptId = backgroundVersionId(req.params.attemptId);
+    if (!attemptId) {
+      res.status(400).json({ error: 'invalid_generation_attempt_id' });
+      return;
+    }
+    const raw = isObjectRecord(req.body) ? req.body : null;
+    const expectedWarpedVersionId = backgroundVersionId(
+      raw?.expected_warped_version_id ?? raw?.expectedWarpedVersionId,
+    );
+    if (!expectedWarpedVersionId) {
+      res.status(400).json({ error: 'invalid_background_version_id' });
+      return;
+    }
+    if (!isObjectRecord(raw?.cells)) {
+      res.status(400).json({
+        error: 'invalid_generation_attempt_move_highlight_profile',
+        details: 'cells must be an object keyed by playable x,y cell',
+      });
+      return;
+    }
+    const expected = requireBackgroundVersionExpectedRevision(req);
+    const result = await dbUpdateGenerationAttemptMoveHighlightProfile(
+      access.row,
+      attemptId,
+      expectedWarpedVersionId,
+      expected,
+      raw.cells,
+      access.user,
+      access.authority,
+    );
+    res.status(200).json({
+      attempt: publicGenerationAttempt(result.attempt),
+      idempotent_replay: result.idempotentReplay,
+    });
+  } catch (error) {
+    respondBackgroundVersionError(res, error, 'generation attempt move-highlight profile update');
+  }
+});
+
+app.post('/api/editor-documents/:documentId/generation-attempts/:attemptId/archive', async (req, res) => {
+  try {
+    const access = await authorizedBackgroundVersionDocument(req, res, { mutate: true });
+    if (!access) return;
+    const attemptId = backgroundVersionId(req.params.attemptId);
+    if (!attemptId) {
+      res.status(400).json({ error: 'invalid_generation_attempt_id' });
+      return;
+    }
+    const expected = requireBackgroundVersionExpectedRevision(req);
+    const documentRevision = editorDocumentRevision(
+      isObjectRecord(req.body) ? req.body.document_revision : undefined,
+    );
+    if (documentRevision === null) {
+      res.status(428).json({ error: 'editor_document_revision_required' });
+      return;
+    }
+    const result = await dbArchiveGenerationAttempt(
+      access.row,
+      attemptId,
+      expected,
+      documentRevision,
+      access.user,
+      access.authority,
+    );
+    const thumbnailAuthority = result.document.workspace_kind === 'official'
+      ? `official:${result.document.workspace_id}:${result.document.level_id}`
+      : `user:${result.document.owner_email}:${result.document.level_id}`;
+    const thumbnail = await prepareGenerationAttemptArchiveThumbnail(
+      result,
+      thumbnailAuthority,
+      ensureLevelThumbnailDerivative,
+    );
+    if (thumbnail.error) {
+      console.error(
+        'archived generation attempt thumbnail preparation failed:',
+        thumbnail.error && thumbnail.error.message,
+      );
+    }
+    res.status(200).json({
+      attempt: publicGenerationAttempt(result.row),
+      document: publicEditorDocument(result.document),
+      forgotten_selection: result.forgottenSelection,
+      canonical_level: result.canonicalLevel,
+      workspace_revision: result.workspaceRevision,
+      thumbnail_ready: thumbnail.ready,
+      idempotent_replay: result.idempotentReplay,
+    });
+  } catch (error) {
+    respondBackgroundVersionError(res, error, 'generation attempt archive');
+  }
+});
+
 app.get('/api/editor-documents/:documentId/background-versions', async (req, res) => {
   try {
     const access = await authorizedBackgroundVersionDocument(req, res);
@@ -7706,7 +11938,12 @@ app.get('/api/editor-documents/:documentId/background-versions', async (req, res
       res.status(400).json({ error: 'invalid_background_version_status' });
       return;
     }
-    const rows = await dbListBackgroundVersions(access.row, status);
+    const kind = String(req.query.kind || 'all').trim().toLowerCase();
+    if (!['all', 'source', 'raw', 'warped', 'occlusion'].includes(kind)) {
+      res.status(400).json({ error: 'invalid_background_version_kind' });
+      return;
+    }
+    const rows = await dbListBackgroundVersions(access.row, status, kind);
     res.status(200).json({ versions: rows.map(publicBackgroundVersion) });
   } catch (error) {
     respondBackgroundVersionError(res, error, 'list');
@@ -7733,6 +11970,7 @@ app.post('/api/editor-documents/:documentId/background-versions', async (req, re
     res.setHeader('Location', `/api/editor-documents/${encodeURIComponent(access.documentId)}/background-versions`);
     res.status(result.created ? 201 : 200).json({
       version: publicBackgroundVersion(result.row),
+      ...(result.attempt ? { attempt: publicGenerationAttempt(result.attempt) } : {}),
       idempotent_replay: !result.created,
     });
   } catch (error) {
@@ -7916,7 +12154,7 @@ async function dbPutWorkspace(ownerEmail, actorName, body, expectedRevision) {
       if (reserved.rows.length) return { conflict: 'reserved', row: current, reserved: reserved.rows };
     }
 
-    await dbApplyWorkspaceBackgroundVersionBoundary(client, {
+    await withThumbnailRenderInputs(() => dbApplyWorkspaceBackgroundVersionBoundary(client, {
       workspaceKind: 'user',
       workspaceId: USER_EDITOR_WORKSPACE_ID,
       ownerEmail,
@@ -7924,7 +12162,7 @@ async function dbPutWorkspace(ownerEmail, actorName, body, expectedRevision) {
       actorEmail: ownerEmail,
       actorName,
       makePublic: false,
-    });
+    }), client);
 
     if (!current) {
       const { rows } = await client.query(
@@ -8507,7 +12745,7 @@ async function dbUpsertOfficialCampaigns(id, input, expectedRevision) {
     if ((Number(current && current.revision) || 0) !== expectedRevision) {
       return { conflict: 'revision', row: current };
     }
-    await dbApplyWorkspaceBackgroundVersionBoundary(client, {
+    await withThumbnailRenderInputs(() => dbApplyWorkspaceBackgroundVersionBoundary(client, {
       workspaceKind: 'official',
       workspaceId: id,
       ownerEmail: null,
@@ -8515,7 +12753,7 @@ async function dbUpsertOfficialCampaigns(id, input, expectedRevision) {
       actorEmail: input.updated_by,
       actorName: input.updated_by_name,
       makePublic: true,
-    });
+    }), client);
     if (!current) {
       const { rows } = await client.query(
         `INSERT INTO official_campaigns (id, data, client_schema_version, revision, updated_by)
@@ -8714,9 +12952,9 @@ function validatePropSeatsData(data, { requireComplete = false } = {}) {
   return null;
 }
 
-async function dbGetPropSeats(id) {
-  await ensureDbReady();
-  const { rows } = await pool.query(
+async function dbGetPropSeats(id, queryable = null) {
+  if (!queryable) await ensureDbReady();
+  const { rows } = await (queryable || pool).query(
     'SELECT data, client_schema_version, revision, created_at, updated_at, updated_by FROM prop_seats WHERE id = $1',
     [id],
   );
@@ -9114,20 +13352,25 @@ function normalizeDrawableInput(raw) {
   return { value: { id, kind, label, sortOrder, lifecycleState, behavior, metadata, roles } };
 }
 
-async function dbReadDrawableCatalog({ includeRetired = false } = {}) {
-  await ensureDbReady();
-  const client = await pool.connect();
+async function dbReadDrawableCatalog({ includeRetired = false, queryable = null } = {}) {
+  let client = null;
+  let db = queryable;
+  if (!db) {
+    await ensureDbReady();
+    client = await pool.connect();
+    db = client;
+  }
   try {
-    await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
-    const state = await client.query('SELECT revision, updated_at FROM drawable_catalog_state WHERE singleton = true');
-    const assets = await client.query(
+    if (client) await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    const state = await db.query('SELECT revision, updated_at FROM drawable_catalog_state WHERE singleton = true');
+    const assets = await db.query(
       `SELECT id, kind, label, sort_order, lifecycle_state, behavior, metadata, row_revision
          FROM drawable_assets
         WHERE ($1::boolean OR lifecycle_state = 'active')
         ORDER BY kind, sort_order, label, id`,
       [includeRetired],
     );
-    const media = await client.query(
+    const media = await db.query(
       `SELECT dam.asset_id, dam.role, dam.slot,
               s.lifecycle_state AS slot_lifecycle_state,
               v.status AS version_status, b.sha256, b.media_type, b.byte_length, b.width, b.height
@@ -9140,7 +13383,7 @@ async function dbReadDrawableCatalog({ includeRetired = false } = {}) {
         ORDER BY dam.asset_id, dam.role`,
       [includeRetired],
     );
-    await client.query('COMMIT');
+    if (client) await client.query('COMMIT');
     const rolesByAsset = new Map();
     for (const row of media.rows) {
       const usable = row.slot_lifecycle_state === 'active'
@@ -9180,10 +13423,12 @@ async function dbReadDrawableCatalog({ includeRetired = false } = {}) {
       })),
     };
   } catch (error) {
-    try { await client.query('ROLLBACK'); } catch { /* preserve original failure */ }
+    if (client) {
+      try { await client.query('ROLLBACK'); } catch { /* preserve original failure */ }
+    }
     throw error;
   } finally {
-    client.release();
+    if (client) client.release();
   }
 }
 
@@ -9867,15 +14112,21 @@ async function dbReadMediaCatalog({
   includeEvents = false,
   eventBeforeId = null,
   eventLimit = 200,
+  queryable = null,
 } = {}) {
-  await ensureDbReady();
-  const client = await pool.connect();
+  let client = null;
+  let db = queryable;
+  if (!db) {
+    await ensureDbReady();
+    client = await pool.connect();
+    db = client;
+  }
   try {
-    await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
-    const stateResult = await client.query(
+    if (client) await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    const stateResult = await db.query(
       'SELECT revision, updated_at FROM media_catalog_state WHERE singleton = true',
     );
-    const slotResult = await client.query(
+    const slotResult = await db.query(
       `SELECT s.slot, s.domain, s.role, s.availability_policy, s.lifecycle_state,
               s.active_version_id, s.activated_at, s.retired_at, s.retirement_evidence,
               s.metadata AS slot_metadata, s.row_revision AS slot_revision,
@@ -9943,7 +14194,7 @@ async function dbReadMediaCatalog({
       }),
     };
     if (includeVersions) {
-      const { rows } = await client.query(
+      const { rows } = await db.query(
       `SELECT v.id, v.slot, v.source_path, v.domain, v.role, v.label, v.status,
               v.blob_sha256, v.metadata, v.provenance, v.native_evidence,
               v.review_evidence, v.row_revision, v.created_at, v.updated_at, v.updated_by,
@@ -9981,7 +14232,7 @@ async function dbReadMediaCatalog({
       }));
     }
     if (includeEvents) {
-      const { rows } = await client.query(
+      const { rows } = await db.query(
         `SELECT id, slot, source_path, version_id, action, actor_email, details, created_at
           FROM media_asset_events
          WHERE ($1::bigint IS NULL OR id < $1::bigint)
@@ -9999,13 +14250,15 @@ async function dbReadMediaCatalog({
         nextBeforeId: rows.length === eventLimit ? Number(rows[rows.length - 1].id) : null,
       };
     }
-    await client.query('COMMIT');
+    if (client) await client.query('COMMIT');
     return body;
   } catch (error) {
-    try { await client.query('ROLLBACK'); } catch { /* preserve catalog read error */ }
+    if (client) {
+      try { await client.query('ROLLBACK'); } catch { /* preserve catalog read error */ }
+    }
     throw error;
   } finally {
-    client.release();
+    if (client) client.release();
   }
 }
 
@@ -13211,30 +17464,32 @@ async function dbPublishPublicMap(owner, levelId) {
     const storedLevel = levels && isObjectRecord(levels[levelId]) ? levels[levelId] : null;
     if (!storedLevel) throw editorDocumentError(404, 'level_not_found');
     const level = { ...storedLevel, id: levelId };
-    const surface = decodedVersionedPredrawnSurface(level);
-    if (surface) {
-      if (!document) {
-        throw editorDocumentError(
-          409,
-          'predrawn_background_document_not_found',
-          null,
-          'the public map selection is not backed by an editor document',
+    await withThumbnailRenderInputs(async () => {
+      const surface = decodedVersionedPredrawnSurface(level, { activeOnly: true });
+      if (surface) {
+        if (!document) {
+          throw editorDocumentError(
+            409,
+            'predrawn_background_document_not_found',
+            null,
+            'the public map selection is not backed by an editor document',
+          );
+        }
+        await dbPublishLevelBackgroundVersions(
+          client,
+          document,
+          level,
+          owner.email,
+          owner.name,
+          { makePublic: true },
         );
       }
-      await dbPublishLevelBackgroundVersions(
-        client,
-        document,
-        level,
-        owner.email,
-        owner.name,
-        { makePublic: true },
-      );
-    }
+    }, client);
     let contentHash = null;
     try {
       contentHash = serverRender && await withThumbnailRenderInputs((renderInputs) => (
         thumbnailVersion(serverRender.boardHashForLevel(level), renderInputs)
-      ));
+      ), client);
     } catch { contentHash = null; }
     const publicId = await dbEnsurePublicId(
       owner.email,
@@ -13441,22 +17696,23 @@ const {
   thumbnailSourceAvailability,
 } = require(path.join(bakedBackendDir, 'thumbnailAvailability'));
 let _thumbnailMediaAvailabilityCache = { revision: null, catalog: null };
-async function thumbnailPropSeats() {
-  return requirePropSeatsDocument('default', await dbGetPropSeats('default'));
+async function thumbnailPropSeats(queryable = null) {
+  return requirePropSeatsDocument('default', await dbGetPropSeats('default', queryable));
 }
-async function thumbnailMediaAvailabilityCatalog(mediaCatalog) {
+async function thumbnailMediaAvailabilityCatalog(mediaCatalog, queryable = null) {
   if (!mediaCatalog) return null;
   const expectedRevision = Number(mediaCatalog.revision || 0);
   if (
-    _thumbnailMediaAvailabilityCache.catalog
+    !queryable
+    && _thumbnailMediaAvailabilityCache.catalog
     && _thumbnailMediaAvailabilityCache.revision === expectedRevision
   ) return _thumbnailMediaAvailabilityCache.catalog;
   try {
-    await ensureDbReady();
+    if (!queryable) await ensureDbReady();
     // One statement gives policy rows and their catalog revision from the same
     // PostgreSQL snapshot. Public catalogs omit unavailable decorative slots;
     // thumbnails still need those slots' DB-owned fail-soft policy.
-    const { rows } = await pool.query(
+    const { rows } = await (queryable || pool).query(
       `SELECT state.revision AS catalog_revision, s.slot, s.availability_policy
          FROM media_catalog_state state
          LEFT JOIN media_slots s ON true
@@ -13465,27 +17721,40 @@ async function thumbnailMediaAvailabilityCatalog(mediaCatalog) {
     );
     const catalog = thumbnailAvailabilityCatalogFromRows(mediaCatalog, rows);
     if (catalog === mediaCatalog) return mediaCatalog;
-    _thumbnailMediaAvailabilityCache = { revision: expectedRevision, catalog };
+    if (!queryable) {
+      _thumbnailMediaAvailabilityCache = { revision: expectedRevision, catalog };
+    }
     return catalog;
-  } catch {
+  } catch (error) {
+    if (queryable) throw error;
     // The deliverable catalog still classifies every active version. Unknown
     // sources fail closed as critical in the renderer adapter.
     return mediaCatalog;
   }
 }
-async function loadThumbnailRenderInputs() {
-  const [mediaCatalog, drawableCatalog, seats, unitCatalog] = await Promise.all([
-    // A derivative is stamped with the authority revisions it actually rendered.
-    // The public projection's short TTL is appropriate for request fan-out, but
-    // reusing it here can mint a brand-new derivative from an old media snapshot.
-    dbReadMediaCatalog(),
-    dbReadDrawableCatalog(),
-    thumbnailPropSeats(),
-    publicUnitCatalog(),
-  ]);
+async function loadThumbnailRenderInputs(queryable = null) {
+  // A derivative is stamped with the authority revisions it actually rendered.
+  // The public projection's short TTL is appropriate for request fan-out, but
+  // reusing it here can mint a brand-new derivative from an old media snapshot.
+  // Mutation callers pass their transaction client through every reader. This
+  // is both the authoritative transaction view and a hard no-extra-checkout
+  // boundary when the pool's remaining connections are occupied.
+  const {
+    mediaCatalog,
+    drawableCatalog,
+    seats,
+    unitCatalog,
+    mediaAvailability,
+  } = await loadRendererSnapshotSources({
+    queryable,
+    readMediaCatalog: (db) => dbReadMediaCatalog({ queryable: db }),
+    readDrawableCatalog: (db) => dbReadDrawableCatalog({ queryable: db }),
+    readPropSeats: (db) => thumbnailPropSeats(db),
+    readUnitCatalog: (db) => (db ? dbReadUnitCatalog({ queryable: db }) : publicUnitCatalog()),
+    readMediaAvailability: (catalog, db) => thumbnailMediaAvailabilityCatalog(catalog, db),
+  });
   const unitCatalogRevision = unitCatalog.revision || 0;
   const mediaCatalogRevision = mediaCatalog.revision || 0;
-  const mediaAvailability = await thumbnailMediaAvailabilityCatalog(mediaCatalog);
   return {
     propSeatsRevision: seats.revision || 0,
     unitCatalogRevision,
@@ -13498,11 +17767,11 @@ async function loadThumbnailRenderInputs() {
     unitCatalog,
   };
 }
-async function withThumbnailRenderInputs(task) {
+async function withThumbnailRenderInputs(task, queryable = null) {
   if (!serverRender || typeof serverRender.applyServerThumbnailSnapshot !== 'function') {
     throw new Error('bounded thumbnail renderer snapshot validator is unavailable');
   }
-  const renderInputs = await loadThumbnailRenderInputs();
+  const renderInputs = await loadThumbnailRenderInputs(queryable);
   return withServerRenderCriticalSection(async () => {
     serverRender.applyServerThumbnailSnapshot(renderInputs);
     return task(renderInputs);
@@ -13605,7 +17874,9 @@ async function createLevelThumbnailDerivative(authorityKey, level) {
     const plan = serverRender.levelRenderPlan(level);
     const contentVersion = thumbnailVersion(levelThumbnailSourceHash(level), renderInputs);
     const privateAuthority = /^user:(.+):([^:]+)$/.exec(authorityKey);
-    const selectedSurface = privateAuthority ? decodedVersionedPredrawnSurface(level) : null;
+    const selectedSurface = privateAuthority
+      ? decodedVersionedPredrawnSurface(level, { activeOnly: true })
+      : null;
     const privateBackgroundScope = privateAuthority
       ? {
           ownerEmail: privateAuthority[1],
@@ -13901,11 +18172,51 @@ function startServer() {
 // ensureDbReady() retries. `/ready` stays 503, however, so Kubernetes never sends
 // game traffic to a process that cannot resolve its live assets.
 pool = buildPool();
-if (pool) {
+if (schemaMigrationCommand) {
+  if (!pool) {
+    console.error('schema migration command requires DATABASE_URL or POSTGRES_HOST/POSTGRES_DATABASE/POSTGRES_USER');
+    process.exitCode = 1;
+  } else if (schemaMigrationMode !== 'auto') {
+    console.error('schema migration command requires SCHEMA_MIGRATIONS=auto');
+    process.exitCode = 1;
+    pool.end().catch(() => {});
+  } else {
+    console.log(
+      `postgres schema migration target: ${formatSchemaMigrationTarget(schemaMigrationTarget(process.env))}`,
+    );
+    pool.on('error', (error) => console.error('postgres pool error:', error));
+    runMigrations()
+      .then((report) => {
+        console.log(`postgres schema migration complete; ${formatMigrationRunResult(report)}`);
+      })
+      .catch((error) => {
+        if (error instanceof MigrationExecutionError) {
+          console.error(`postgres schema migration failed; ${formatMigrationRunFailure(error)}`);
+        } else {
+          console.error('postgres schema migration failed:', error);
+        }
+        process.exitCode = 1;
+      })
+      .finally(() => pool.end());
+  }
+} else if (pool) {
+  if (schemaMigrationMode === 'auto') {
+    console.log(
+      `postgres schema migration target: ${formatSchemaMigrationTarget(schemaMigrationTarget(process.env))}`,
+    );
+  }
   pool.on('error', (error) => console.error('postgres pool error:', error));
   ensureDbReady()
     .then(() => console.log(`postgres ready (mode=${databaseUrl ? 'connection-string' : 'workload-identity'}, schema=${schemaMigrationMode}); ${schemaReadyMessage()}`))
-    .catch((error) => console.error('postgres init failed; application readiness will remain 503 until it recovers or schema is prepared:', error))
+    .catch((error) => {
+      if (error instanceof MigrationExecutionError) {
+        console.error(
+          `postgres init failed; application readiness will remain 503 until it recovers or schema is prepared; ${formatMigrationRunFailure(error)}`,
+        );
+      } else {
+        console.error('postgres init failed; application readiness will remain 503 until it recovers or schema is prepared:', error);
+      }
+    })
     .finally(startServer);
 } else {
   console.warn('no database configured (set DATABASE_URL, or POSTGRES_HOST/POSTGRES_DATABASE/POSTGRES_USER); application readiness will remain 503');

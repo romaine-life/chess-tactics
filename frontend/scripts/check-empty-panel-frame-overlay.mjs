@@ -838,8 +838,11 @@ const rawLevelEditorControlAside = [...levelEditor.matchAll(/<aside\b[^>]*>/g)]
 if (rawLevelEditorControlAside) {
   failures.push('live Level Editor must not restore a raw parallel skirmish-hud controls aside; render LevelEditorControlsPanel');
 }
-if (!/className=\{`skirmish-board-frame\$\{eventsOpen \|\| layer === 'artwork' \? ' is-workspace-covered' : ''\}`\}[\s\S]*?inert=\{eventsOpen \|\| layer === 'artwork' \? true : undefined\}[\s\S]*?aria-hidden=\{eventsOpen \|\| layer === 'artwork' \? true : undefined\}/.test(levelEditor)) {
+if (!/className=\{`skirmish-board-frame\$\{eventsOpen \|\| levelArtworkWorkspace \? ' is-workspace-covered' : ''\}`\}[\s\S]*?inert=\{eventsOpen \|\| levelArtworkWorkspace \? true : undefined\}[\s\S]*?aria-hidden=\{eventsOpen \|\| levelArtworkWorkspace \? true : undefined\}/.test(levelEditor)) {
   failures.push('open shell workspace must keep the board mounted but visually and interactively covered');
+}
+if (/eventsOpen \|\| layer === 'level-artwork' \? ' is-workspace-covered'/.test(levelEditor)) {
+  failures.push('the base Level Artwork controls page must leave the board visible; only an explicit artwork workspace covers it');
 }
 if (!/eventsEditor:\s*routeState\.eventsEditor/.test(levelEditor)
   || !/levelEditorEventsEntry:\s*true/.test(levelEditor)

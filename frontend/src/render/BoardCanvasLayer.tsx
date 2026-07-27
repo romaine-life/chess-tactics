@@ -368,6 +368,29 @@ function opSignature(op: BoardDrawOp): string {
   ].join(':');
 }
 
+export function boardCanvasSources(
+  ops: readonly BoardDrawOp[],
+  occlusionMasks: readonly BoardDrawOp[] = EMPTY_OCCLUSION_MASKS,
+  occlusionDepthMap?: PredrawnOcclusionDepthMap,
+): string[] {
+  return [...new Set([
+    ...ops.map((op) => op.src),
+    ...occlusionMasks.map((op) => op.src),
+    ...(occlusionDepthMap ? [occlusionDepthMap.src] : []),
+  ])];
+}
+
+export function boardCanvasFramePlan(
+  ops: readonly BoardDrawOp[],
+  occlusionMasks: readonly BoardDrawOp[] = EMPTY_OCCLUSION_MASKS,
+  occlusionDepthMap?: PredrawnOcclusionDepthMap,
+): { sources: string[]; paint: boolean } {
+  return {
+    sources: boardCanvasSources(ops, occlusionMasks, occlusionDepthMap),
+    paint: ops.length > 0,
+  };
+}
+
 export function BoardCanvasLayer({
   ops,
   bounds,
@@ -406,19 +429,41 @@ export function BoardCanvasLayer({
     : '';
 
   useEffect(() => {
+    const framePlan = boardCanvasFramePlan(
+      orderedOps,
+      orderedOcclusionMasks,
+      occlusionDepthMap,
+    );
+
+    if (framePlan.sources.length === 0) {
+      // An empty compositor has no pixels to await; acknowledge during its effect so a
+      // missing canvas cannot prevent the parent board from becoming ready.
+      onFirstFrame?.();
+      return undefined;
+    }
+
+    const generation = createRenderEffectGeneration();
+    if (!framePlan.paint) {
+      // A depth-bearing board can intentionally have no visible scene sprites in
+      // this preview. Decode and validate its immutable mask before acknowledging
+      // readiness, but do not wait for a canvas that an empty compositor does not mount.
+      settleRenderEffectGeneration(generation, loadDecodedImageMap(framePlan.sources), (images) => {
+        const dimensionIssue = predrawnOcclusionDepthImageDimensionIssue(
+          occlusionDepthMap,
+          occlusionDepthMap ? images.get(occlusionDepthMap.src) : undefined,
+        );
+        if (dimensionIssue) throw new Error(dimensionIssue);
+        generation.requestFrame(() => onFirstFrame?.());
+      }, (error) => onFrameError?.(error));
+      return generation.cancel;
+    }
+
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return undefined;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    const generation = createRenderEffectGeneration();
-    const sources = [...new Set([
-      ...orderedOps.map((op) => op.src),
-      ...orderedOcclusionMasks.map((op) => op.src),
-      ...(occlusionDepthMap ? [occlusionDepthMap.src] : []),
-    ])];
     const animated = orderedOps.some(isAnimatedGroundCoverOp);
-
     const paint = (images: ReadonlyMap<string, CanvasImage>, timeMs = performance.now()): void => {
       generation.runIfCurrent(() => drawBoardOps(
         ctx,
@@ -433,14 +478,7 @@ export function BoardCanvasLayer({
       ));
     };
 
-    if (sources.length === 0) {
-      // An empty compositor has no pixels to await; acknowledge during its effect so a
-      // sibling's state update cannot repeatedly cancel a scheduled empty-frame callback.
-      onFirstFrame?.();
-      return undefined;
-    }
-
-    settleRenderEffectGeneration(generation, loadDecodedImageMap(sources), (images) => {
+    settleRenderEffectGeneration(generation, loadDecodedImageMap(framePlan.sources), (images) => {
       const dimensionIssue = predrawnOcclusionDepthImageDimensionIssue(
         occlusionDepthMap,
         occlusionDepthMap ? images.get(occlusionDepthMap.src) : undefined,
