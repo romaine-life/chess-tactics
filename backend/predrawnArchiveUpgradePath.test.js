@@ -6,6 +6,7 @@ const {
   migrationChecksum,
   planMigrationExecution,
 } = require('./schemaMigrationIntegrity');
+const { extractInlineMigrations } = require('./schemaMigrationSource');
 
 const serverSource = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
 const smokeSource = fs.readFileSync(path.join(__dirname, 'smoke-test.js'), 'utf8');
@@ -14,6 +15,7 @@ const migrationCommandSource = fs.readFileSync(
   path.join(__dirname, 'scripts', 'run-schema-migrations.mjs'),
   'utf8',
 );
+const inlineMigrations = extractInlineMigrations(serverSource);
 
 function sourceSection(source, startMarker, endMarker) {
   const start = source.indexOf(startMarker);
@@ -24,23 +26,9 @@ function sourceSection(source, startMarker, endMarker) {
 }
 
 function inlineMigration(version) {
-  const startMarker = `version: ${version},`;
-  const migrationStart = serverSource.indexOf(startMarker);
-  assert.ok(migrationStart >= 0, `inline migration ${version} must exist`);
-
-  const nextMigration = serverSource.indexOf('\n  {\n    version:', migrationStart + startMarker.length);
-  const registryEnd = serverSource.indexOf('\n];', migrationStart + startMarker.length);
-  const migrationEnd = nextMigration >= 0 && nextMigration < registryEnd
-    ? nextMigration
-    : registryEnd;
-  assert.ok(migrationEnd > migrationStart, `inline migration ${version} must be bounded`);
-
-  const source = serverSource.slice(migrationStart, migrationEnd);
-  const name = source.match(/name:\s*'([^']+)'/)?.[1];
-  const sql = source.match(/sql:\s*`([\s\S]*?)`,/)?.[1];
-  assert.ok(name, `inline migration ${version} must have a name`);
-  assert.ok(sql, `inline migration ${version} must have inspectable SQL`);
-  return { version, name, sql };
+  const migration = inlineMigrations.find((candidate) => candidate.version === version);
+  assert.ok(migration, `inline migration ${version} must exist`);
+  return migration;
 }
 
 function normalizedSql(sql) {
@@ -48,8 +36,7 @@ function normalizedSql(sql) {
 }
 
 function migrationVersions() {
-  return [...serverSource.matchAll(/\n\s+version:\s*(\d+),/g)]
-    .map((match) => Number(match[1]));
+  return inlineMigrations.map((migration) => migration.version);
 }
 
 test('already-applied migration 36 remains the immutable drawable-media migration', () => {
