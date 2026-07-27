@@ -119,7 +119,7 @@ export function PredrawnSourceArtworkPanel({
     () => versions.filter(isUsableSourceArtwork),
     [versions],
   );
-  const selected = sources.find((source) => source.id === selectedId) ?? sources[0];
+  const selected = sources.find((source) => source.id === selectedId);
   const previewReady = Boolean(frame && terrainReady && sceneReady);
 
   const refresh = useCallback(async (): Promise<void> => {
