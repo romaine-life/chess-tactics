@@ -7170,7 +7170,7 @@ async function main() {
   };
   await queryDb(
     `UPDATE predrawn_background_versions
-        SET operation = operation - 'coordinateBasis'
+        SET operation = operation - 'untouched'
       WHERE id = $1`,
     [rawBackground.id],
   );
@@ -7186,7 +7186,7 @@ async function main() {
   );
   await queryDb(
     `UPDATE predrawn_background_versions
-        SET operation = operation || '{"coordinateBasis":"board-world-pixels-v1"}'::jsonb
+        SET operation = operation || '{"untouched":true}'::jsonb
       WHERE id = $1`,
     [rawBackground.id],
   );

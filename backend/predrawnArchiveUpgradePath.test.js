@@ -973,4 +973,15 @@ test('full smoke repairs final attempt topology around retained later-feature ro
     /move-highlight-profile-updated,stage-attached,archived/,
     'the final archive proof must verify the audit events retained after the deliberate relation rebuild',
   );
+
+  const invalidAncestorSave = sourceSection(
+    smokeSource,
+    'const selectedLevel = {',
+    '\n  const invalidOcclusionContractSave = await request(',
+  );
+  assert.match(
+    invalidAncestorSave,
+    /operation = operation - 'untouched'[\s\S]*invalidWarpedParentSave[\s\S]*predrawn_background_contract_mismatch/,
+    'the raw-ancestor proof must corrupt a required field that its verified legacy sidecar cannot supply',
+  );
 });
