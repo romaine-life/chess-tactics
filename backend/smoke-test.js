@@ -14,6 +14,7 @@ const {
   sourceArtworkVersionContractIssue,
 } = require('./backgroundVersionPolicy');
 const { migrationChecksum } = require('./schemaMigrationIntegrity');
+const { extractInlineMigrations } = require('./schemaMigrationSource');
 
 const port = 31337;
 const authPort = 31338;
@@ -906,31 +907,16 @@ async function queryDb(sql, params = []) {
   }
 }
 
+let cachedInlineMigrations = null;
 function inlineMigrationDefinition(version) {
-  const source = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
-  const marker = `version: ${version},`;
-  const markerOffset = source.indexOf(marker);
-  if (markerOffset === -1) throw new Error(`Could not find inline migration ${version}`);
-  const nextMarkerOffset = source.indexOf('\n  {\n    version:', markerOffset + marker.length);
-  const migrationsEndOffset = source.indexOf('\n];', markerOffset + marker.length);
-  const migrationEndOffset = (
-    nextMarkerOffset !== -1 && nextMarkerOffset < migrationsEndOffset
-  ) ? nextMarkerOffset : migrationsEndOffset;
-  if (migrationEndOffset === -1) throw new Error(`Could not find end of inline migration ${version}`);
-  const migrationSource = source.slice(markerOffset, migrationEndOffset);
-  const name = migrationSource.match(/name:\s*'([^']+)'/)?.[1];
-  if (!name) throw new Error(`Could not find name for inline migration ${version}`);
-  const sqlMarker = 'sql: `';
-  const sqlOffset = migrationSource.indexOf(sqlMarker);
-  if (sqlOffset === -1) throw new Error(`Could not find SQL for inline migration ${version}`);
-  const sqlStart = sqlOffset + sqlMarker.length;
-  const sqlEnd = migrationSource.indexOf('`,', sqlStart);
-  if (sqlEnd === -1) throw new Error(`Could not find end of inline migration ${version}`);
-  return {
-    version,
-    name,
-    sql: migrationSource.slice(sqlStart, sqlEnd),
-  };
+  if (!cachedInlineMigrations) {
+    cachedInlineMigrations = extractInlineMigrations(
+      fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8'),
+    );
+  }
+  const migration = cachedInlineMigrations.find((candidate) => candidate.version === version);
+  if (!migration) throw new Error(`Could not find inline migration ${version}`);
+  return migration;
 }
 
 function inlineMigrationSql(version) {

@@ -718,6 +718,16 @@ test('transaction renderer snapshots thread one queryable through every catalog 
 });
 
 test('full smoke proves the sparse recorded-36 upgrade and the real authenticated archive transaction', () => {
+  assert.match(
+    smokeSource,
+    /extractInlineMigrations\([\s\S]*server\.js/,
+    'the DB-backed fixture must use the canonical cross-platform migration parser',
+  );
+  assert.doesNotMatch(
+    smokeSource,
+    /const sqlMarker = 'sql: `'/,
+    'the DB-backed fixture must not hand-parse only template-literal migrations',
+  );
   const upgradeSeed = sourceSection(
     smokeSource,
     'function seedSparseNumericMigrationHistoryThrough36()',
