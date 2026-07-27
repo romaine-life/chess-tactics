@@ -172,6 +172,8 @@ if (!process.env.DATABASE_URL) {
 }
 assertSafeSmokeTarget();
 
+let cachedInlineMigrations = null;
+
 function seedSparseNumericMigrationHistoryThrough36() {
   const legacyVersions = [
     ...Array.from({ length: 27 }, (_, index) => index + 1),
@@ -907,7 +909,6 @@ async function queryDb(sql, params = []) {
   }
 }
 
-let cachedInlineMigrations = null;
 function inlineMigrationDefinition(version) {
   if (!cachedInlineMigrations) {
     cachedInlineMigrations = extractInlineMigrations(

@@ -728,6 +728,11 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
     /const sqlMarker = 'sql: `'/,
     'the DB-backed fixture must not hand-parse only template-literal migrations',
   );
+  assert.ok(
+    smokeSource.indexOf('let cachedInlineMigrations = null;')
+      < smokeSource.indexOf('seedSparseNumericMigrationHistoryThrough36();'),
+    'the migration parser cache must be initialized before the top-level sparse-history seed invokes it',
+  );
   const upgradeSeed = sourceSection(
     smokeSource,
     'function seedSparseNumericMigrationHistoryThrough36()',
