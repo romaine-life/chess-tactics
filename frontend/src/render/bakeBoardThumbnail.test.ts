@@ -1203,7 +1203,7 @@ describe('largestSolidRect — the solid crop that fills a box without sky', () 
     const rect = largestSolidRect(withHeadroom, W, H)!;
     expect(rect).not.toBeNull();
     // Every pixel opaque — the guarantee that lets object-fit:cover fill a box with board and never
-    // expose a transparent corner (cov defaults to 1). A partial crop is what left the empty wedges.
+    // expose a transparent corner. A partial crop is what left the empty wedges.
     expect(coverage(withHeadroom, rect)).toBe(1);
   });
 

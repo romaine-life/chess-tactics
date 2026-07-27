@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { isPredrawnBackgroundActive } from '@chess-tactics/board-render';
 import type { Level } from '../core/level';
 import { levelToEditorBoard } from '../core/levelBoard';
 import { bakeBoardThumbnail, boardContentHash, boardBounds } from './bakeBoardThumbnail';
@@ -88,6 +89,13 @@ export function LevelThumbnail({
   authoringPreview?: boolean;
 }): ReactElement {
   const board = useMemo(() => authoringPreview ? levelToEditorBoard(level) : null, [authoringPreview, level]);
+  const canonicalDerivative = !authoringPreview
+    ? levelThumbnailUrl(level.id)
+    : null;
+  // Canonical derivatives already own a fixed 3:2 delivery crop and must fill whatever
+  // compact list seat consumes them. Predrawn authoring previews use the same cover rule
+  // after their largest fully opaque interior has been selected.
+  const coverThumbnail = canonicalDerivative !== null || (board ? isPredrawnBackgroundActive(board) : false);
   const contentHash = useMemo(() => board ? boardContentHash(board) : `canonical:${level.id}`, [board, level.id]);
   // Runtime derivatives have one fixed 3:2 delivery box. Authoring previews retain the
   // unsaved board's native aspect ratio.
@@ -97,9 +105,6 @@ export function LevelThumbnail({
     return bounds.width > 0 && bounds.height > 0 ? bounds.width / bounds.height : 1;
   }, [board]);
 
-  const canonicalDerivative = !authoringPreview
-    ? levelThumbnailUrl(level.id)
-    : null;
   const containerRef = useRef<HTMLDivElement | null>(null);
   // Canonical derivatives are already compact delivery rasters: request them with the
   // list data so a complete list can reveal together. Authoring-only client bakes stay
@@ -186,7 +191,8 @@ export function LevelThumbnail({
   }, [near, authoringPreview, board, canonicalDerivative, contentHash, level.id, onError]);
 
   // Integer display dimensions; the box keeps the row's footprint stable whether or not the bake
-  // has resolved. The image is letterboxed to the board's native aspect via object-fit:contain.
+  // has resolved. Canonical and pre-drawn pixels cover the seat; ordinary unsaved boards retain
+  // their native aspect with contain.
   const boxStyle = { width: `${Math.round(width)}px`, height: `${Math.round(height)}px` } as const;
 
   return (
@@ -205,7 +211,7 @@ export function LevelThumbnail({
           loading="eager"
           decoding="async"
           alt={alt ?? `${level.name} board`}
-          style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated', display: 'block', opacity: painted ? 1 : 0 }}
+          style={{ width: '100%', height: '100%', objectFit: coverThumbnail ? 'cover' : 'contain', imageRendering: 'pixelated', display: 'block', opacity: painted ? 1 : 0 }}
           draggable={false}
           onLoad={() => {
             requestAnimationFrame(() => {

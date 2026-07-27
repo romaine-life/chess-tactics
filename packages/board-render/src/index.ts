@@ -169,6 +169,7 @@ export * from './render/predrawnMoveHighlight';
 export * from './render/predrawnRegistration';
 export * from './render/renderPlan';
 export * from './render/sceneDepth';
+export * from './render/solidCrop';
 export * from './render/structureGeometry';
 export * from './render/terrainSides';
 export * from './ui/boardCode';

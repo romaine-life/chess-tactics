@@ -17777,12 +17777,14 @@ async function withThumbnailRenderInputs(task, queryable = null) {
     return task(renderInputs);
   });
 }
+const BOARD_THUMBNAIL_RENDER_REVISION = 4;
 function thumbnailVersion(sourceHash, renderInputs) {
+  const rendererRevision = `br${BOARD_THUMBNAIL_RENDER_REVISION}`;
   const propSeatsRevision = renderInputs && renderInputs.propSeatsRevision ? `ps${renderInputs.propSeatsRevision}` : '';
   const unitCatalogRevision = renderInputs && renderInputs.unitCatalogRevision ? `uc${renderInputs.unitCatalogRevision}` : '';
   const mediaCatalogRevision = renderInputs && renderInputs.mediaCatalogRevision ? `mc${renderInputs.mediaCatalogRevision}` : '';
   const drawableCatalogRevision = renderInputs && renderInputs.drawableCatalogRevision ? `dc${renderInputs.drawableCatalogRevision}` : '';
-  return [sourceHash, propSeatsRevision, unitCatalogRevision, mediaCatalogRevision, drawableCatalogRevision].filter(Boolean).join('-');
+  return [sourceHash, rendererRevision, propSeatsRevision, unitCatalogRevision, mediaCatalogRevision, drawableCatalogRevision].filter(Boolean).join('-');
 }
 
 function levelThumbnailSourceHash(level) {
