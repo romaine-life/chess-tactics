@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { createCanvas } = require('@napi-rs/canvas');
+const { createCanvas, loadImage } = require('@napi-rs/canvas');
 const {
   predrawnBoardRasterBounds,
   predrawnBoardRasterTransform,
@@ -62,6 +62,49 @@ test('runtime list derivative is a compact fixed-size PNG and needs no shell art
   });
   assert.deepEqual(pngHeaderDimensions(png), { width: BOARD_THUMB_W, height: BOARD_THUMB_H });
   assert.equal(unexpectedLoad, false);
+});
+
+test('AI list derivative cover-crops the largest fully opaque interior without showing a warp edge', async () => {
+  const backgroundSrc = '/api/background-versions/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/content';
+  const source = createCanvas(12, 12);
+  const sourceContext = source.getContext('2d');
+  sourceContext.fillStyle = '#ef3b24';
+  sourceContext.beginPath();
+  sourceContext.moveTo(3, 1);
+  sourceContext.lineTo(9, 1);
+  sourceContext.lineTo(11, 11);
+  sourceContext.lineTo(1, 11);
+  sourceContext.closePath();
+  sourceContext.fill();
+  const sourceBytes = source.toBuffer('image/png');
+
+  const png = await renderBoardThumbnail({
+    plan: {
+      ops: [{
+        layer: 'terrain',
+        src: backgroundSrc,
+        dx: 0,
+        dy: 0,
+        dw: 12,
+        dh: 12,
+        z: -100000,
+      }],
+      predrawnBackgroundRaster: { src: backgroundSrc, frameWidth: 12, frameHeight: 12 },
+      bounds: { minX: 0, minY: 0, width: 12, height: 12 },
+      framingBounds: { minX: 0, minY: 0, width: 12, height: 12 },
+    },
+    loadDynamicSprite: async (src) => src === backgroundSrc ? sourceBytes : null,
+    mediaCatalogRevision: 'solid-crop-test',
+  });
+
+  const decoded = await loadImage(png);
+  const inspection = createCanvas(BOARD_THUMB_W, BOARD_THUMB_H);
+  const inspectionContext = inspection.getContext('2d');
+  inspectionContext.drawImage(decoded, 0, 0);
+  const pixels = inspectionContext.getImageData(0, 0, BOARD_THUMB_W, BOARD_THUMB_H).data;
+  for (let offset = 3; offset < pixels.length; offset += 4) {
+    assert.equal(pixels[offset], 255);
+  }
 });
 
 test('share-card rendering consumes the complete database-resolved presentation', async () => {

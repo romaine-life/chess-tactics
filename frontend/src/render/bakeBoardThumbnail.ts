@@ -9,6 +9,7 @@ import {
   filterPredrawnOcclusionDepthPixels,
   isPredrawnBackgroundActive,
   isVersionedPredrawnBoardSurface,
+  largestSolidRect,
   predrawnOcclusionDepthMapForSurface,
   predrawnOcclusionMaskOps,
   predrawnOcclusionMasksInFront,
@@ -32,6 +33,7 @@ export {
   boardContentHash,
   boardDrawOps,
   boardSocialFramingBounds,
+  largestSolidRect,
   uniqueDrawSrcs,
 };
 
@@ -431,68 +433,38 @@ export function paintBoardThumbnailOp(
   });
 }
 
+function largestOpaqueCanvasRect(canvas: Canvas2D): { x: number; y: number; w: number; h: number } | null {
+  const context = canvas.getContext('2d') as ThumbnailContext | null;
+  if (!context || canvas.width <= 0 || canvas.height <= 0) return null;
+  const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+  return largestSolidRect(
+    (x, y) => pixels[(y * canvas.width + x) * 4 + 3] === 255,
+    canvas.width,
+    canvas.height,
+  );
+}
+
+function cropCanvas(canvas: Canvas2D, rect: { x: number; y: number; w: number; h: number }): Canvas2D | null {
+  const crop = createCanvas(rect.w, rect.h);
+  const context = crop.getContext('2d') as ThumbnailContext | null;
+  if (!context) return null;
+  context.imageSmoothingEnabled = false;
+  context.drawImage(canvas, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h);
+  return crop;
+}
+
 export async function bakeBoardThumbnail(board: EditorBoard, opts?: { scale?: number }): Promise<Blob> {
   const scale = Math.max(1, opts?.scale ?? 1);
   const rendered = await renderBoardCanvas(board, scale);
   if (!rendered) throw new Error('bakeBoardThumbnail: 2D context unavailable');
+  if (isPredrawnBackgroundActive(board)) {
+    const rect = largestOpaqueCanvasRect(rendered.canvas);
+    if (!rect) throw new Error('bakeBoardThumbnail: selected AI background has no fully opaque crop');
+    const crop = cropCanvas(rendered.canvas, rect);
+    if (!crop) throw new Error('bakeBoardThumbnail: crop context unavailable');
+    return canvasToBlob(crop);
+  }
   return canvasToBlob(rendered.canvas);
-}
-
-export function largestSolidRect(
-  isOpaque: (x: number, y: number) => boolean,
-  W: number,
-  H: number,
-  cov = 1,
-): { x: number; y: number; w: number; h: number } | null {
-  if (W <= 0 || H <= 0) return null;
-  const stride = W + 1;
-  const sat = new Uint32Array(stride * (H + 1));
-  let minX = W;
-  let minY = H;
-  let maxX = -1;
-  let maxY = -1;
-  let sumX = 0;
-  let sumY = 0;
-  let count = 0;
-  for (let y = 0; y < H; y += 1) {
-    let run = 0;
-    const row = (y + 1) * stride;
-    const prev = y * stride;
-    for (let x = 0; x < W; x += 1) {
-      if (isOpaque(x, y)) {
-        run += 1;
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
-        sumX += x;
-        sumY += y;
-        count += 1;
-      }
-      sat[row + x + 1] = sat[prev + x + 1] + run;
-    }
-  }
-  if (count === 0) return null;
-  const rectSum = (x0: number, y0: number, x1: number, y1: number): number =>
-    sat[(y1 + 1) * stride + (x1 + 1)] - sat[y0 * stride + (x1 + 1)] - sat[(y1 + 1) * stride + x0] + sat[y0 * stride + x0];
-  let x0 = Math.max(minX, Math.min(maxX, Math.round(sumX / count)));
-  let x1 = x0;
-  let y0 = Math.max(minY, Math.min(maxY, Math.round(sumY / count)));
-  let y1 = y0;
-  let grew = true;
-  while (grew) {
-    grew = false;
-    if (y0 > minY && rectSum(x0, y0 - 1, x1, y0 - 1) >= cov * (x1 - x0 + 1)) { y0 -= 1; grew = true; }
-    if (y1 < maxY && rectSum(x0, y1 + 1, x1, y1 + 1) >= cov * (x1 - x0 + 1)) { y1 += 1; grew = true; }
-    if (x0 > minX && rectSum(x0 - 1, y0, x0 - 1, y1) >= cov * (y1 - y0 + 1)) { x0 -= 1; grew = true; }
-    if (x1 < maxX && rectSum(x1 + 1, y0, x1 + 1, y1) >= cov * (y1 - y0 + 1)) { x1 += 1; grew = true; }
-  }
-  const w = x1 - x0 + 1;
-  const h = y1 - y0 + 1;
-  const bboxW = maxX - minX + 1;
-  const bboxH = maxY - minY + 1;
-  if (w * h < 0.1 * bboxW * bboxH) return { x: minX, y: minY, w: bboxW, h: bboxH };
-  return { x: x0, y: y0, w, h };
 }
 
 export async function bakeBoardPaintedImage(
@@ -503,19 +475,13 @@ export async function bakeBoardPaintedImage(
   const rendered = await renderBoardCanvas(board, scale);
   if (!rendered) return null;
   const { canvas } = rendered;
-  const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
-  if (!ctx) return null;
   const W = canvas.width;
   const H = canvas.height;
   if (!W || !H) return null;
-  const data = ctx.getImageData(0, 0, W, H).data;
-  const rect = largestSolidRect((x, y) => data[(y * W + x) * 4 + 3] > 8, W, H);
+  const rect = largestOpaqueCanvasRect(canvas);
   if (!rect) return null;
-  const crop = createCanvas(rect.w, rect.h);
-  const cctx = crop.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
-  if (!cctx) return null;
-  cctx.imageSmoothingEnabled = false;
-  cctx.drawImage(canvas, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h);
+  const crop = cropCanvas(canvas, rect);
+  if (!crop) return null;
   const blob = await canvasToBlob(crop);
   return { url: URL.createObjectURL(blob), width: rect.w, height: rect.h };
 }

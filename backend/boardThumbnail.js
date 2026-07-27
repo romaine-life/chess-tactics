@@ -6,6 +6,7 @@ const { createHash } = require('node:crypto');
 const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 const {
   filterPredrawnOcclusionDepthPixels,
+  largestSolidRect,
   predrawnOcclusionMasksInFront,
   rasterizePredrawnBoardPixels,
 } = require('@chess-tactics/board-render');
@@ -82,6 +83,37 @@ function assertPredrawnThumbnailMedia(plan, images) {
       );
     }
   }
+}
+
+function largestOpaqueCanvasRect(canvas) {
+  if (!canvas || canvas.width <= 0 || canvas.height <= 0) return null;
+  const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+  return largestSolidRect(
+    (x, y) => pixels[(y * canvas.width + x) * 4 + 3] === 255,
+    canvas.width,
+    canvas.height,
+  );
+}
+
+function coverSolidCanvasCrop(canvas, rect) {
+  const output = createCanvas(BOARD_THUMB_W, BOARD_THUMB_H);
+  const target = output.getContext('2d');
+  target.imageSmoothingEnabled = false;
+  const scale = Math.max(BOARD_THUMB_W / rect.w, BOARD_THUMB_H / rect.h);
+  const width = rect.w * scale;
+  const height = rect.h * scale;
+  target.drawImage(
+    canvas,
+    rect.x,
+    rect.y,
+    rect.w,
+    rect.h,
+    (BOARD_THUMB_W - width) / 2,
+    (BOARD_THUMB_H - height) / 2,
+    width,
+    height,
+  );
+  return output;
 }
 
 function sha256(bytes) {
@@ -935,6 +967,11 @@ async function renderBoardThumbnail({ plan, loadDynamicSprite, mediaCatalogRevis
       clipRect,
     });
   }
+  if (plan.predrawnBackgroundRaster || ops.some((op) => op.predrawnTransform)) {
+    const rect = largestOpaqueCanvasRect(canvas);
+    if (!rect) throw new Error('Selected AI background has no fully opaque thumbnail crop.');
+    return coverSolidCanvasCrop(canvas, rect).toBuffer('image/png');
+  }
   return canvas.toBuffer('image/png');
 }
 
@@ -955,6 +992,8 @@ module.exports = {
     ThumbnailMediaUnavailableError,
     immutableSourceSha,
     assertPredrawnThumbnailMedia,
+    coverSolidCanvasCrop,
+    largestOpaqueCanvasRect,
     loadSpriteWithAvailability,
     mapWithConcurrency,
     paintOccludedThumbnailOp,
