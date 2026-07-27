@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  DOODAD_ASSETS,
+  PROP_DEFS,
   applyDrawableCatalog,
   applyGroundCoverCatalog,
+  applyPropSeats,
   defaultSubterrainMaterial,
   structureArtAsset,
   structureArtDirectionHalfSrc,
@@ -9,10 +12,11 @@ import {
   structureArtHasCompleteTurntable,
   structureArtDirectionSplitMode,
   structureArtDirectionSprite,
+  structureArtHalfSrc,
 } from '@chess-tactics/board-render';
 import { testDrawableCatalog } from '../test/drawableCatalog';
-import { assertPropSeatMap } from './props';
 import { TEST_PROP_SEATS } from '../test/livePropSeats';
+import { assertPropSeatMap } from './props';
 import { defaultTerrainFamily, familyForGameplayTerrain, gameplayTerrainForFamily, terrainFamiliesForRole, transitionPairs } from './tileSockets';
 
 describe('database-owned terrain identities', () => {
@@ -101,21 +105,53 @@ describe('database-owned terrain identities', () => {
     expect(structureArtDirectionSprite('oak', 'north')).toBeUndefined();
   });
 
-  it('admits source-only landmarks without inventing prop seats, terrain rules, or blockers', () => {
+  it('reads source-only landmark turntables without synthesizing gameplay props or doodads', () => {
     const catalog = testDrawableCatalog();
     const source = structuredClone(catalog.assets.find((asset) => asset.id === 'structure-oak')!);
-    source.id = 'structure-castle-ruin';
-    source.label = 'Castle ruin';
-    source.behavior = {
-      value: 'castle-ruin',
-      structureKind: 'landmark',
-      sourceOnly: true,
-      anchorX: 256,
-      anchorY: 467,
-      scale: 1,
-      splitMode: 'flat-contact',
-    };
-    catalog.assets.push(source);
+    const directions = [
+      'south', 'south-west', 'west', 'north-west',
+      'north', 'north-east', 'east', 'south-east',
+    ];
+    const media = Object.fromEntries(directions.flatMap((direction, index) => {
+      const role = structuredClone(source.media.back);
+      const hashDigit = (index + 1).toString(16);
+      role.slot = `source-art/castle-ruin/${direction}.png`;
+      role.media.sha256 = hashDigit.repeat(64);
+      role.media.immutableUrl = `/api/media/${role.media.sha256}`;
+      role.media.url = `/assets/${role.slot}`;
+      role.media.width = 512;
+      role.media.height = 512;
+      return [[`${direction}-back`, structuredClone(role)], [`${direction}-front`, structuredClone(role)]];
+    }));
+    catalog.assets.push({
+      ...source,
+      id: 'structure-castle-ruin',
+      label: 'Castle ruin',
+      behavior: {
+        value: 'castle-ruin',
+        structureKind: 'landmark',
+        sourceOnly: true,
+        anchorX: 256,
+        anchorY: 256,
+        scale: 0.4,
+        splitMode: 'flat-contact',
+      },
+      media,
+    }, {
+      ...source,
+      id: 'structure-source-doodad',
+      label: 'Source-only doodad',
+      behavior: {
+        value: 'source-doodad',
+        structureKind: 'doodad',
+        sourceOnly: true,
+        anchorX: 256,
+        anchorY: 256,
+        scale: 0.4,
+        splitMode: 'flat-contact',
+      },
+      media: structuredClone(media),
+    });
     applyDrawableCatalog({ ...catalog, revision: catalog.revision + 1 });
 
     expect(structureArtAsset('castle-ruin')).toMatchObject({
@@ -123,8 +159,14 @@ describe('database-owned terrain identities', () => {
       sourceOnly: true,
       terrains: [],
       blocking: false,
+      sprite: { w: 512, h: 512 },
     });
+    expect(structureArtHalfSrc('castle-ruin', 'back')).toBe(media['south-back'].media.immutableUrl);
+    expect(structureArtHasCompleteTurntable('castle-ruin')).toBe(true);
     expect(() => assertPropSeatMap(TEST_PROP_SEATS)).not.toThrow();
+    expect(() => applyPropSeats(structuredClone(TEST_PROP_SEATS))).not.toThrow();
+    expect(PROP_DEFS.some((definition) => definition.id === 'castle-ruin')).toBe(false);
+    expect(DOODAD_ASSETS.some((asset) => asset.id === 'source-doodad')).toBe(false);
   });
 
   it('fails closed for missing structure and ground-cover behavior instead of filling code defaults', () => {

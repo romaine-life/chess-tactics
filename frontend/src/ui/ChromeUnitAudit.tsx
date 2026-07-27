@@ -47,19 +47,21 @@ const PLACEHOLDER_TEXT = 'placeholder';
 const chromeAuditNoop = (): void => undefined;
 const CHROME_AUDIT_LAYER_OPTIONS: readonly LevelEditorLayerOption[] = [
   { id: 'board', label: 'Board' },
+  { id: 'level-artwork', label: 'Level Artwork' },
   { id: 'tile', label: 'Tile' },
   { id: 'generate', label: 'Generate' },
   { id: 'paths', label: 'Paths' },
   { id: 'fence', label: 'Fence' },
   { id: 'wall', label: 'Wall' },
+  { id: 'subterrain', label: 'Subterrain' },
   { id: 'wallart', label: 'Wall Art' },
   { id: 'unit', label: 'Unit' },
-  { id: 'doodad', label: 'Doodad' },
-  { id: 'prop', label: 'Prop' },
+  { id: 'placed-art', label: 'Placed Art' },
   { id: 'cover', label: 'Cover' },
   { id: 'zone', label: 'Zone' },
   { id: 'rules', label: 'Rules' },
   { id: 'status', label: 'Status' },
+  { id: 'recovery', label: 'Recovery' },
 ];
 type OuterPanelConsumerKind = 'level-editor-controls' | 'skirmish-hud';
 type OuterPanelPreviewOption = {

@@ -39,7 +39,7 @@ describe('Level Editor board pointer contract', () => {
     }
   });
 
-  it('keeps the registered erase slot configurable as the artwork delete-selected action', () => {
+  it('keeps the registered erase slot configurable as the Scene Art delete-selected action', () => {
     const eraseButton = levelEditorControls.match(
       /<button\b[^>]*data-chrome-unit="inner-erase-tool"[\s\S]*?<\/button>/,
     )?.[0];
@@ -49,7 +49,7 @@ describe('Level Editor board pointer contract', () => {
     expect(eraseButton).toContain("onClick={() => onToolChange('erase')}");
     expect(eraseButton).toContain('disabled={eraseDisabled}');
     expect(eraseButton).toContain('aria-label={eraseLabel}');
-    expect(levelEditor).toContain("eraseLabel={brushKind === 'artwork' ? 'Delete selected artwork' : 'Erase'}");
+    expect(levelEditor).toContain("eraseLabel={layer === 'placed-art' && brushKind === 'artwork' ? 'Delete selected scene art' : 'Erase'}");
     expect(levelEditor).toContain("if (brushKind === 'artwork' && nextTool === 'erase')");
     expect(levelEditor).toContain('if (selectedArtworkId) deleteArtwork(selectedArtworkId);');
   });
@@ -107,7 +107,8 @@ describe('Level Editor board pointer contract', () => {
   });
 
   it('locks controls to an explicit artwork selection and separates Select from Move', () => {
-    expect(levelEditor).toMatch(/const toolForLayer[\s\S]*?\|\| layer === 'artwork'[\s\S]*?\? 'select' : 'brush';/);
+    expect(levelEditor).toContain("initialLayer === 'placed-art' && initialBrushKind === 'artwork'");
+    expect(levelEditor).toContain("setTool(placedArtKind === 'artwork' ? 'select' : 'brush');");
     expect(levelEditor).toContain("const disarming = artworkBrushId === asset.id && tool === 'brush';");
     expect(levelEditor).toContain("setTool(disarming ? 'select' : 'brush');");
     expect(levelEditor).toContain("{ value: '', label: 'None' }");
@@ -125,6 +126,14 @@ describe('Level Editor board pointer contract', () => {
     expect(styles).toContain('outline: 2px dashed');
     expect(styles).toContain('.le-floating-artwork-hit.is-selected');
     expect(styles).toContain('outline: 2px dotted');
+  });
+
+  it('keeps cell-based Placed Art inside the playable board while Scene Art remains free', () => {
+    expect(levelEditor).toContain("canTargetPlacedArtCell('doodad', x, y, boardCols, boardRows)");
+    expect(levelEditor).toContain('isPropFootprintWithinPlayableBoard(footprint, boardCols, boardRows)');
+    expect(levelEditor).toContain("|| (tool === 'erase' && (brushKind === 'doodad' || brushKind === 'prop'))");
+    expect(levelEditor).not.toContain("allowDecorativeEditing={['tile', 'doodad', 'prop'");
+    expect(levelEditor).toContain("layer === 'placed-art' && brushKind === 'artwork' && tool === 'brush'");
   });
 
   it('gives both floating artwork pixel axes a slider and exact numeric value control', () => {

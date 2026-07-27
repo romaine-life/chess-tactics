@@ -12,8 +12,15 @@ import { SliderRow } from './dressing/SliderRow';
 import { saveLiveSeats } from '../net/propSeats';
 import { mapSaveError } from '../campaign/save';
 import { currentDoodadAssets, type DoodadAsset } from './doodadCatalog';
-import { STRUCTURE_ART_ASSETS, structureArtAsset, type StructureArtAsset } from '../core/structureArt';
+import { structureArtAsset, type StructureArtAsset } from '../core/structureArt';
 import { requiredTerrainFamilyForRole, terrainFamiliesForRole } from '../core/tileSockets';
+import {
+  propSeatDraftSourceIssue,
+  propSeatSourceIsGameplayEligible,
+  propSeatSourceKey,
+  propSeatStructureArtOptions,
+} from './propSeatSourcePolicy';
+import { DirectionArrowIcon } from './shared/DirectionArrowIcon';
 
 // The prop-seat editor as an embedded Studio Viewer kind (docs/studio-control-architecture.md,
 // ADR-0058): it renders into the shared studio shell — the board in `.al-lab-main`, EVERY
@@ -45,7 +52,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 const slugify = (value: string): string => value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 80);
 const draftIdInput = (value: string): string => value.trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/-{2,}/g, '-').slice(0, 80);
 const parseTerrains = (value: string): string[] => value.split(',').map((part) => part.trim()).filter(Boolean);
-const sourceKey = (source: StructureSourceRef): string => `${source.kind}:${source.id}`;
+const sourceKey = propSeatSourceKey;
 
 // The 8-direction nudge pad, row-major (null = the inert centre dot). vx/vy are SCREEN deltas
 // (vx>0 = right, vy>0 = down); `nudge` maps them to anchor deltas. `deg` rotates one up-arrow.
@@ -60,15 +67,6 @@ const NUDGE_PAD: Array<{ key: string; name: string; vx: number; vy: number; deg:
   { key: 's', name: 'down', vx: 0, vy: 1, deg: 180 },
   { key: 'se', name: 'down-right', vx: 1, vy: 1, deg: 135 },
 ];
-
-// One up-pointing arrow, drawn (not a font glyph) so every rotation is pixel-identical.
-function DirArrow({ deg }: { deg: number }): ReactElement {
-  return (
-    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" style={{ display: 'block', transform: `rotate(${deg}deg)` }}>
-      <path d="M12 4 L19 13 L14.5 13 L14.5 20 L9.5 20 L9.5 13 L5 13 Z" fill="currentColor" />
-    </svg>
-  );
-}
 
 export function PropSeatLab({ propId, onPropId, header, draft, onDraftChange }: {
   propId: string; onPropId: (id: string) => void; header?: ReactNode; draft?: StructureEditorDraft | null; onDraftChange?: (draft: StructureEditorDraft | null) => void;
@@ -368,6 +366,11 @@ export function PropSeatLab({ propId, onPropId, header, draft, onDraftChange }: 
     if (!draftMode) return;
     const id = normalizedDraftId;
     if (!id) return;
+    const sourceIssue = propSeatDraftSourceIssue(draftSlots);
+    if (sourceIssue) {
+      setStatus(`error: ${sourceIssue}`);
+      return;
+    }
     const primarySlot = draftSlots[0] ?? activeDraftSlot;
     const entry: PropSeatEntry = {
       placement: draftTarget,
@@ -484,12 +487,14 @@ export function PropSeatLab({ propId, onPropId, header, draft, onDraftChange }: 
   const toggle = (on: boolean, set: (v: boolean) => void, label: string, title?: string) => (
     <button type="button" className={`ps-toggle ${on ? 'is-on' : ''}`} title={title} onClick={() => set(!on)}>{label}</button>
   );
-  const sourceOptions: { key: string; source: StructureSourceRef; label: string }[] = [
-    ...STRUCTURE_ART_ASSETS.map((asset) => ({ key: sourceKey({ kind: 'asset', id: asset.id }), source: { kind: 'asset' as const, id: asset.id }, label: `Structure art: ${asset.label}` })),
-  ];
-  if (!sourceOptions.some((item) => item.key === sourceKey(draftSource))) {
+  const sourceOptions = propSeatStructureArtOptions();
+  if (
+    propSeatSourceIsGameplayEligible(draftSource)
+    && !sourceOptions.some((item) => item.key === sourceKey(draftSource))
+  ) {
     sourceOptions.unshift({ key: sourceKey(draftSource), source: draftSource, label: `Legacy source: ${draftInfo.label}` });
   }
+  const draftSourceIssue = propSeatDraftSourceIssue(draftSlots);
   const slotLabel = (part: StructurePart, index: number): string => `Slot ${index + 1} · ${sourceInfo(part.source).label}`;
   const addDraftSlot = () => {
     setStatus('');
@@ -636,7 +641,7 @@ export function PropSeatLab({ propId, onPropId, header, draft, onDraftChange }: 
               <div className="ps-pad">
                 {NUDGE_PAD.map((d, i) => d
                   ? <button key={d.key} type="button" className="ps-pad-btn" title={`Nudge ${d.name} (Shift = ×10)`} aria-label={`nudge ${d.name}`}
-                      onClick={(ev) => nudge(d.vx, d.vy, ev.shiftKey ? 10 : 1)}><DirArrow deg={d.deg} /></button>
+                      onClick={(ev) => nudge(d.vx, d.vy, ev.shiftKey ? 10 : 1)}><DirectionArrowIcon degrees={d.deg} /></button>
                   : <span key={`c${i}`} className="ps-pad-center" aria-hidden="true" />)}
               </div>
             </div>
@@ -666,7 +671,8 @@ export function PropSeatLab({ propId, onPropId, header, draft, onDraftChange }: 
             <div className="ps-actions">
               {draftMode ? (
                 <>
-                  <button type="button" className="tileset-view-action ps-primary" onClick={saveDraft} disabled={!normalizedDraftId} title={editMode ? 'Save changes to this existing object' : 'Create this object from the selected source artwork'}>{editMode ? 'Save changes' : 'Save new'}</button>
+                  <button type="button" className="tileset-view-action ps-primary" onClick={saveDraft} disabled={!normalizedDraftId || Boolean(draftSourceIssue)}
+                    title={draftSourceIssue ?? (editMode ? 'Save changes to this existing object' : 'Create this object from the selected source artwork')}>{editMode ? 'Save changes' : 'Save new'}</button>
                   <button type="button" className="tileset-view-action" onClick={() => onDraftChange?.(null)}>Cancel</button>
                   <button type="button" className="tileset-view-action" onClick={() => setSeat({ ...committed })} title="Reset the draft seat to the source art">Reset</button>
                 </>

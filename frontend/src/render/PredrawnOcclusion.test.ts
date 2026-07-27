@@ -28,7 +28,7 @@ describe('predrawn occlusion seed board', () => {
     const seed = predrawnOcclusionSeedBoard(board);
     expect(seed.surface).toBeUndefined();
     expect(seed.units).toEqual({});
-    expect(seed.doodads).toEqual({});
+    expect(seed.doodads).toEqual(board.doodads);
     expect(seed.cover).toEqual({});
     expect(seed.features).toEqual({});
     expect(seed.props).toEqual(board.props);

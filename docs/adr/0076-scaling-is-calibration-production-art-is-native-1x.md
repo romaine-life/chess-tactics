@@ -1,8 +1,8 @@
 ---
-status: "accepted; whole-board scene-alignment exception added by ADR-0118"
+status: "accepted; whole-board derived-raster exception governed by ADR-0158"
 date: 2026-07-10
 deciders: Nelson
-partially_superseded_by: "[ADR-0118](0118-accepted-predrawn-scenes-keep-their-pixels-and-saved-alignment.md)"
+partially_superseded_by: "[ADR-0158](0158-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md)"
 ---
 
 # ADR-0076: Scaling is calibration — accepted production art is regenerated at native 1×

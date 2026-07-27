@@ -1,7 +1,8 @@
 ---
-status: "accepted"
+status: accepted
 date: 2026-07-14
 deciders: Nelson, Codex
+partially_superseded_by: "[ADR-0165](0165-ai-artwork-separates-sources-attempts-and-background-mode.md)"
 refines: "[ADR-0071](0071-the-deliverable-is-the-instrument.md), [ADR-0109](0109-predrawn-generation-packets-preserve-authored-level-semantics.md), and [ADR-0120](0120-canonical-top-only-image-owns-predrawn-appearance.md)"
 ---
 

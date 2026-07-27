@@ -68,7 +68,9 @@ describe('Level Editor attributed session integration', () => {
     expect(editor).toContain("setEditAuthorityState('checking')");
     expect(editor).toContain('data-testid="le-editor-session-status"');
     expect(editor).toContain("testId: 'le-editor-session-attention'");
-    expect(editor).toContain("selectLayer('status')");
+    expect(editor).toContain("selectLayer(editorAttentionTarget ?? 'status')");
+    expect(editor).toContain("? 'status'");
+    expect(editor).toContain("? 'recovery'");
     expect(editor).toContain("target?.scrollIntoView({ block: 'start' })");
     expect(editor).not.toContain('data-testid="le-editor-session-rail"');
     expect(editor).not.toContain('data-testid="le-review-session-recoveries"');
@@ -86,7 +88,7 @@ describe('Level Editor attributed session integration', () => {
     expect(editor).not.toContain('browser profile ${documentClientIdentity.deviceId.slice(0, 8)}');
     expect(editor).toContain("activeEditor ? 'Take over editing' : 'Start editing here'");
     expect(editor).toContain("editPresence?.active_editor ? 'Take over editing' : 'Start editing here'");
-    expect(editor).toContain('Uploaded by displaced tab · non-live checkpoint');
+    expect(editor).toContain('serverRecoveryReasonLabel(selectedServerRecovery)');
     expect(editor).not.toContain('Live displaced-tab upload');
     expect(editor).toContain('levelEditorSessionServerNow(editPresence.server_time)');
   });
@@ -178,7 +180,7 @@ describe('Level Editor attributed session integration', () => {
     expect(editor).toMatch(/autosaveEditorDocument\([\s\S]*?revision,[\s\S]*?fence,/);
     expect(editor).toMatch(/saveEditorDocument\([\s\S]*?campaignAssignmentId \|\| null,[\s\S]*?fence,/);
     expect(editor).toMatch(/discardEditorDocumentChanges\([\s\S]*?revision,[\s\S]*?fence,/);
-    expect(editor).toContain('inert={!editorReady || saving || !editorSessionCanAuthor ? true : undefined}');
+    expect(editor).toContain('|| (!editorSessionCanAuthor && !levelArtworkWorkspace)');
     expect(editor).toContain('className="le-editor-authoring-controls" inert={!editorSessionCanAuthor ? true : undefined}');
     expect(editor).toContain('const scopedDraftMatchesGeneration = Boolean(');
     expect(editor).toContain('const restoreRouteSnapshot = openedAsWriter && routeSnapshotDiverged && routeSnapshotSafe;');
@@ -195,16 +197,45 @@ describe('Level Editor attributed session integration', () => {
 
   it('does not invent a person from a stale browser draft or content revision', () => {
     expect(editor).toContain('Browser recovery preserved — this is not another editor');
-    expect(editor).toContain('The cloud working copy is open. An older browser recovery is preserved separately below; it was not applied to this board.');
+    expect(editor).toContain('The cloud working copy is open. An older browser recovery is preserved in Recovery; it was not applied to this board.');
     expect(editor).toContain("const recoveredLevel = restoreRouteSnapshot");
     expect(editor).toContain(': restoreLocal && localLevel');
     expect(editor).toContain("browserRecoveryConflictRef.current?.source === 'route' && !browserRecoveryConflictRef.current.recoveryId");
-    expect(editor).toContain("layer === 'status'");
+    expect(editor).toContain("const timer = layer === 'recovery'");
     expect(editor).toContain('listEditorDocumentRecoveries(editorDocument.document_id)');
     expect(editor).toContain('const revalidateRecoveryDialogWriter = async (');
     expect(editor).toContain('browserRecoveryConflictRef.current !== expectedRecovery');
     expect(editor).toContain('if (!(await revalidateRecoveryDialogWriter(recovery))) return;');
     expect(editor).not.toContain('Another tab or device saved a newer revision.');
     expect(editor).not.toContain('Save is paused because another tab or device has a newer revision.');
+  });
+
+  it('browses one attributed recovery at a time and deletes an exact confirmed set', () => {
+    const recoveryPanel = editor.indexOf('className="skirmish-card le-status-card le-server-recovery-card"');
+    const recoveryGate = editor.lastIndexOf("{layer === 'recovery'", recoveryPanel);
+    const authoringControls = editor.indexOf('className="le-editor-authoring-controls"');
+    const panelEnd = editor.indexOf('className="le-editor-authoring-controls"', recoveryPanel);
+    const panel = editor.slice(recoveryPanel, panelEnd);
+    const bulkDelete = editor.slice(
+      editor.indexOf('const removeAllServerRecoveries = async'),
+      editor.indexOf('// Debounced, serialized compare-and-swap autosave'),
+    );
+
+    expect(recoveryPanel).toBeGreaterThan(-1);
+    expect(recoveryGate).toBeGreaterThan(-1);
+    expect(recoveryPanel).toBeLessThan(authoringControls);
+    expect(panel).toContain('Recovery {selectedServerRecoveryIndex + 1} of {serverRecoveries.length}');
+    expect(panel).toContain('aria-label="Newer recovery copy"');
+    expect(panel).toContain('aria-label="Older recovery copy"');
+    expect(panel.match(/data-testid="le-server-recovery-entry"/g)).toHaveLength(1);
+    expect(panel).not.toContain('serverRecoveries.map');
+    expect(panel).toContain("'Restore this copy'");
+    expect(panel).toContain('>Delete this copy</button>');
+    expect(panel).toContain('data-testid="le-delete-all-server-recoveries"');
+    expect(editor).toContain('setSelectedServerRecoveryId(recovery.recovery_id);');
+    expect(bulkDelete).toContain('const recoveryIds = serverRecoveries.map((recovery) => recovery.recovery_id);');
+    expect(bulkDelete).toContain('deleteEditorDocumentRecoveries(doc.document_id, recoveryIds, fence)');
+    expect(bulkDelete).toContain('working-copy history, and browser backup will not change');
+    expect(bulkDelete).toContain("tone: 'danger'");
   });
 });

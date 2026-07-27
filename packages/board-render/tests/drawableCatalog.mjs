@@ -1,7 +1,13 @@
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { applyDrawableCatalog, resetDrawableCatalog } = require('../dist/index.cjs');
+const {
+  applyDrawableCatalog,
+  currentDrawableCatalog,
+  hydratePropSeats,
+  resetDrawableCatalog,
+  resetPropSeats,
+} = require('../dist/index.cjs');
 
 function mediaRole(slot, width = 96, height = 180) {
   let hash = 2166136261;
@@ -73,6 +79,34 @@ function subterrain(id, sortOrder) {
   };
 }
 
+function structure(value, structureKind, sortOrder, footprint) {
+  return {
+    id: `structure-${value}`,
+    kind: 'structure',
+    label: `${value} test structure`,
+    sortOrder,
+    lifecycleState: 'active',
+    behavior: {
+      value,
+      structureKind,
+      terrains: ['grass', 'dirt', 'stone'],
+      anchorX: 48,
+      anchorY: 69,
+      scale: 1,
+      blocking: structureKind !== 'doodad',
+      splitMode: 'authored',
+      ...(footprint ? { footprint } : {}),
+      ...(structureKind === 'doodad' ? { default: true, propKind: 'rock' } : {}),
+    },
+    metadata: {},
+    rowRevision: 1,
+    media: {
+      back: mediaRole(`test/structure/${value}-back.png`, 96, 180),
+      front: mediaRole(`test/structure/${value}-front.png`, 96, 180),
+    },
+  };
+}
+
 export function installTestDrawableCatalog() {
   applyDrawableCatalog({
     schemaVersion: 1,
@@ -100,6 +134,97 @@ export function installTestDrawableCatalog() {
   });
 }
 
+export function installTestDrawableCatalogWithStructures() {
+  installTestDrawableCatalog();
+  const current = currentDrawableCatalog();
+  applyDrawableCatalog({
+    ...current,
+    assets: [
+      ...current.assets,
+      structure('oak', 'tree', 100, { w: 2, h: 2 }),
+      structure('cottage', 'house', 101, { w: 2, h: 2 }),
+      structure('cabin', 'house', 102, { w: 1, h: 1 }),
+      structure('lodge', 'house', 103, { w: 2, h: 2 }),
+      structure('rock', 'rock', 104, { w: 1, h: 1 }),
+      structure('fieldstone', 'rock', 105, { w: 1, h: 1 }),
+      structure('unused-test-doodad', 'doodad', 106),
+    ],
+  });
+}
+
+export function installTestDrawableCatalogWithSourceOnlyStructure() {
+  installTestDrawableCatalogWithStructures();
+  const current = currentDrawableCatalog();
+  const directions = [
+    'south', 'south-west', 'west', 'north-west',
+    'north', 'north-east', 'east', 'south-east',
+  ];
+  const turntableMedia = Object.fromEntries(directions.flatMap((direction) => {
+    const role = mediaRole(`source-art/castle-ruin/${direction}.png`, 512, 512);
+    return [[`${direction}-back`, role], [`${direction}-front`, structuredClone(role)]];
+  }));
+  applyDrawableCatalog({
+    ...current,
+    revision: current.revision + 1,
+    assets: [
+      ...current.assets,
+      {
+        id: 'structure-castle-ruin',
+        kind: 'structure',
+        label: 'Castle ruin source artwork',
+        sortOrder: 200,
+        lifecycleState: 'active',
+        behavior: {
+          value: 'castle-ruin',
+          structureKind: 'landmark',
+          sourceOnly: true,
+          anchorX: 256,
+          anchorY: 256,
+          scale: 0.4,
+          splitMode: 'flat-contact',
+        },
+        metadata: {},
+        rowRevision: 1,
+        media: turntableMedia,
+      },
+      {
+        id: 'structure-source-doodad',
+        kind: 'structure',
+        label: 'Source-only doodad artwork',
+        sortOrder: 201,
+        lifecycleState: 'active',
+        behavior: {
+          value: 'source-doodad',
+          structureKind: 'doodad',
+          sourceOnly: true,
+          anchorX: 256,
+          anchorY: 256,
+          scale: 0.4,
+          splitMode: 'flat-contact',
+        },
+        metadata: {},
+        rowRevision: 1,
+        media: structuredClone(turntableMedia),
+      },
+    ],
+  });
+}
+
+export function installTestPropSeats() {
+  hydratePropSeats({
+    oak: { anchorX: 96, anchorY: 255, scale: 1, w: 2, h: 2, default: true },
+    cottage: { anchorX: 91, anchorY: 110, scale: 0.62, w: 2, h: 2 },
+    cabin: { anchorX: 118, anchorY: 107, scale: 0.35, w: 1, h: 1 },
+    lodge: { anchorX: 103, anchorY: 126, scale: 1, w: 2, h: 2 },
+    rock: { anchorX: 20, anchorY: 44, scale: 1, w: 1, h: 1 },
+    fieldstone: { anchorX: 25, anchorY: 46, scale: 1, w: 1, h: 1 },
+  });
+}
+
 export function resetTestDrawableCatalog() {
   resetDrawableCatalog();
+}
+
+export function resetTestPropSeats() {
+  resetPropSeats();
 }

@@ -6,6 +6,12 @@ import { pathToFileURL } from 'node:url';
 import { PNG } from 'pngjs';
 
 export const PREDRAWN_GENERATION_SCHEMA_VERSION = 3;
+export const PREDRAWN_REFINEMENT_KIND = 'coplanar-de-tiling';
+export const PREDRAWN_SCENERY_REFINEMENT_KIND = 'restore-source-scenery';
+const PREDRAWN_REFINEMENT_KINDS = new Set([
+  PREDRAWN_REFINEMENT_KIND,
+  PREDRAWN_SCENERY_REFINEMENT_KIND,
+]);
 const NORMALIZED_DEFINITION = Symbol('normalized-predrawn-generation-definition');
 
 function fail(message) {
@@ -31,6 +37,19 @@ export function parsePredrawnGenerationArgs(argv) {
   }
   for (const required of ['definition', 'reference', 'out']) {
     if (!args[required]) fail(`missing --${required}`);
+  }
+  if (Boolean(args.candidate) !== Boolean(args.refinement)) {
+    fail('--candidate and --refinement must be supplied together');
+  }
+  if (args.refinement && !PREDRAWN_REFINEMENT_KINDS.has(args.refinement)) {
+    fail(`unsupported --refinement ${args.refinement}`);
+  }
+  if (args.refinement) {
+    for (const required of ['parent', 'branch']) {
+      if (!args[required]) fail(`refinement requests require --${required}`);
+    }
+  } else if (args.parent || args.branch) {
+    fail('--parent and --branch are valid only with --candidate and --refinement');
   }
   return args;
 }
@@ -87,6 +106,13 @@ function aspectRatio(request) {
   ratio = `${width / divisor}:${height / divisor}`;
   if (ratio !== '16:9') fail('pre-drawn full-scene requests use the canonical 16:9 frame');
   return ratio;
+}
+
+function canvasMatchesAspectRatio(dimensions, ratio) {
+  const [ratioWidth, ratioHeight] = ratio.split(':').map(Number);
+  const left = dimensions.width * ratioHeight;
+  const right = dimensions.height * ratioWidth;
+  return Math.abs(left - right) / Math.max(left, right) <= 0.001;
 }
 
 function normalizedReferenceViewport(value) {
@@ -568,7 +594,9 @@ function formatBarriers(barriers) {
 }
 
 function formatFootprints(footprints) {
-  if (footprints.length === 0) return 'None. Do not add any fixed prop or structure footprint.';
+  if (footprints.length === 0) {
+    return 'No gameplay-authoritative fixed footprint is declared. Do not invent one. Scenic-only objects visibly authored in Image 1 are appearance, not gameplay footprints; preserve them rather than removing them.';
+  }
   return footprints.map((footprint) => (
     `${footprint.kind} footprint ${footprint.id} occupies exactly ${footprint.cells.length} cell(s): ${formatCoordinates(footprint.cells)}. Traversal: ${footprint.traversal}.`
   )).join('\n');
@@ -610,29 +638,105 @@ function formatStepLengthRule(rule) {
     : rule;
 }
 
-export function buildPredrawnGenerationPrompt(inputDefinition) {
+export function buildPredrawnGenerationPrompt(inputDefinition, options = {}) {
   const definition = inputDefinition?.[NORMALIZED_DEFINITION]
     ? inputDefinition
     : normalizePredrawnGenerationDefinition(inputDefinition);
   const { board, request } = definition;
+  const promptMode = options.mode ?? 'isolated';
+  if (promptMode !== 'isolated' && !PREDRAWN_REFINEMENT_KINDS.has(promptMode)) {
+    fail(`unsupported prompt mode ${promptMode}`);
+  }
+  const isRefinement = PREDRAWN_REFINEMENT_KINDS.has(promptMode);
+  const isDetilingRefinement = promptMode === PREDRAWN_REFINEMENT_KIND;
+  const isSceneryRefinement = promptMode === PREDRAWN_SCENERY_REFINEMENT_KIND;
   const totalCells = board.columns * board.rows;
   const playableCells = board.cells.flat().filter((cell) => cell.playable).length;
   const nonPlayableCells = totalCells - playableCells;
   const openings = definition.outerPerimeter.openings.length === 0
     ? 'No separate outer-envelope opening is declared. Preserve any authored crossing only where the exact feature graph and Image 1 show it.'
     : `Outer-envelope openings are exactly:\n${formatEdges(definition.outerPerimeter.openings, 'cell', 'neighbor')}`;
-  return `Use case: stylized-concept
+  const opening = isDetilingRefinement
+    ? `Use case: precise-object-edit
+Asset type: surgical refinement of a full-screen ${request.aspectRatio} tactical-game battlefield candidate
+
+NAMED COMPARATIVE REFINEMENT BRANCH
+This is a coplanar-de-tiling refinement of an owner-reviewed candidate. It is not an isolated-pipeline result. Change only the rejected flat-terrain tile boundaries; do not regenerate or recompose the scene.
+
+PRIMARY EDIT
+Paint through the cell-shaped boundaries on coplanar terrain so every flat material reads as part of one continuous landscape. Restrict changes to those hard polygonal transitions and the narrow blend zones around them. Keep local texture crisp; do not blur the whole image.
+
+FRAME AND COMPOSITION
+Preserve Image 2's exact canvas, framing, camera, projection, board scale, outer boundary, and camera room. Do not crop, resize, zoom, pan, rotate, or move any scene element.`
+    : isSceneryRefinement
+      ? `Use case: precise-object-edit
+Asset type: surgical restoration of source-authored scenery in a full-screen ${request.aspectRatio} tactical-game battlefield candidate
+
+NAMED COMPARATIVE REFINEMENT BRANCH
+This is a restore-source-scenery refinement of an owner-reviewed candidate. It is not an isolated-pipeline result. Restore only scenic buildings, structures, and props that are visibly authored in Image 1 but missing from Image 2. Do not regenerate or recompose the scene.
+
+PRIMARY EDIT
+At the corresponding source-authored positions and scales, restore the missing houses, buildings, and other discrete scenic props from Image 1, rendered coherently in Image 2's existing finish. Add only objects actually visible in Image 1. Preserve all of Image 2's terrain painting, roads, waterways, vegetation, cliffs, lighting, palette, and composition.
+
+FRAME AND COMPOSITION
+Preserve Image 2's exact canvas, framing, camera, projection, board scale, outer boundary, and camera room. Do not crop, resize, zoom, pan, rotate, or move any existing scene element.`
+    : `Use case: stylized-concept
 Asset type: full-screen ${request.aspectRatio} tactical-game battlefield art at the model's native output size
 
 PRIMARY REQUEST
-Paint one continuous, polished environment containing the exact authored ${board.columns}-column by ${board.rows}-row battlefield described below. Make the outer grid envelope unmistakable through a coherent in-world environmental boundary, while the surrounding environment continues naturally to every edge of the frame. Derive environment, materials, palette, lighting, texture language, and finish only from Image 1; do not assign a named biome or independent style in text.
+Paint one continuous, polished environment containing the exact authored ${board.columns}-column by ${board.rows}-row battlefield described below. Make the complete outer grid envelope—but not its internal cell tessellation—unmistakable through a coherent in-world environmental boundary, while the surrounding environment continues naturally to every edge of the frame. Derive environment, materials, palette, lighting, texture language, and finish only from Image 1; do not assign a named biome or independent style in text.
 
 CAMERA-ROOM FRAME
-Use the model's native ${request.aspectRatio} output dimensions. Do not resize or upscale solely to reach a fixed pixel count. Keep the complete grid envelope and immediate boundary near the center with generous continuous, meaningful scenery on every edge for camera roaming. This is composition guidance, not permission to change the grid and not a numeric acceptance threshold. The surrounding scene is not padding or crop allowance. Do not enlarge, compact, distort, or redesign the grid to fill the frame.
+Use the model's native ${request.aspectRatio} output dimensions. Do not resize or upscale solely to reach a fixed pixel count. Keep the complete grid envelope and immediate boundary near the center with generous continuous, meaningful scenery on every edge for camera roaming. This is composition guidance, not permission to change the grid and not a numeric acceptance threshold. The surrounding scene is not padding or crop allowance. Do not enlarge, compact, distort, or redesign the grid to fill the frame.`;
 
-REFERENCE ROLES — STRICT AUTHORITY ORDER
-Image 1 is the only image input. It is the canonical unit-free, ground-cover-free authored-surface render of this exact level, clipped to the owner's saved 16:9 generation frame: terrain tops plus only the explicitly authored Subterrain faces visible on exposed edges inside that frame. Its complete ${board.columns}x${board.rows} grid, projection, cell count, required linear features, barriers, footprints, materials, elevations, authored Subterrain, and landmark positions are authoritative. Scenic-only art outside this deliberate source crop is not an input. The rectangular Image 1 edge is not the gameplay perimeter and must not become a frame, cliff, void, or boundary in the output. Do not zoom outward merely to reconstruct omitted scenic margins. Remove visible address seams from continuous regions in the final painting. Preserve the local authored Subterrain faces exactly where Image 1 shows them, but do not extrapolate them into a vertical board skirt, attached side strip, extra row, or extra column.
-No prior generated candidate, accepted whole-level plate, beauty render, or unrelated board image is supplied. The semantic packet below resolves exact gameplay meaning; Image 1 supplies appearance and finish.
+  const referenceRoles = isRefinement
+    ? `REFERENCE ROLES — STRICT AUTHORITY ORDER
+Image 1 is the canonical unit-free, ground-cover-free authored-surface render of this exact level inside the owner's saved generation frame. It owns board geometry, projection, cell count, topology, material identity, elevations, explicit Subterrain, and landmark placement. It is a guardrail, not the edit target.
+Image 2 is the owner-reviewed generated candidate and the only edit target. Preserve all of its accepted appearance and composition. It may not override Image 1 or the semantic packet on geometry.
+The semantic packet below resolves exact gameplay meaning. Image 2 supplies the existing full-scene pixels to preserve; Image 1 guards canonical geometry and source material identity.`
+    : `REFERENCE ROLES — STRICT AUTHORITY ORDER
+Image 1 is the only image input. It is the canonical unit-free, ground-cover-free authored-surface render of this exact level, clipped to the owner's saved 16:9 generation frame: terrain tops plus only the explicitly authored Subterrain faces visible on exposed edges inside that frame. Its complete ${board.columns}x${board.rows} grid, projection, cell count, required linear features, barriers, gameplay footprints, materials, elevations, authored Subterrain, landmark positions, and all scenic-only objects visible inside the crop are authoritative. A scenic building or prop can be visually authoritative without being a gameplay footprint; preserve it exactly where Image 1 shows it. Scenic-only art outside this deliberate source crop is not an input. The rectangular Image 1 edge is not the gameplay perimeter and must not become a frame, cliff, void, or boundary in the output. Do not zoom outward merely to reconstruct omitted scenic margins. Remove visible address seams from continuous regions in the final painting. Preserve the local authored Subterrain faces exactly where Image 1 shows them, but do not extrapolate them into a vertical board skirt, attached side strip, extra row, or extra column.
+No prior generated candidate, accepted whole-level plate, beauty render, or unrelated board image is supplied. The semantic packet below resolves exact gameplay meaning; Image 1 supplies appearance and finish.`;
+
+  const boundaryAppearance = isRefinement
+    ? `Outer-envelope LOCATION is fixed by Image 1 and the packet. Preserve Image 2's complete existing outer-envelope appearance, openings, feature crossings, and continuous outside world exactly. The boundary is not a new vertical side wall, second strip of cells, extra row, or extra column; any local exposed face visible in Image 1 is explicitly authored Subterrain and must remain local to that exact edge. Internal playable/non-playable transitions remain distinct semantic features and do not replace the outer envelope.`
+    : `Outer-envelope LOCATION is fixed; its APPEARANCE is creative and must be derived from Image 1. Carry one coherent in-world treatment around the exact envelope while preserving declared openings and feature crossings. The outside world remains continuous yet clearly outside the grid. Do not infer, move, or reshape the outer envelope from the rectangular source-crop edge. The boundary is not a new vertical side wall, second strip of cells, extra row, or extra column; any local exposed face visible in Image 1 is explicitly authored Subterrain and must remain local to that exact edge. Internal playable/non-playable transitions remain distinct semantic features and do not replace the outer envelope.`;
+
+  const sceneAndStyle = isDetilingRefinement
+    ? `Preserve Image 2's palette, lighting, texture language, finish, and every non-target scene element exactly. Keep all existing exterior scenery, waterways, continuous roads and paths, buildings, trees, vegetation, northern stone field, props, bridges, fences, and actual vertical cliff/Subterrain geometry wherever present. Do not add, remove, move, resize, redesign, or restyle anything. Only de-tile coplanar terrain transitions.`
+    : isSceneryRefinement
+      ? `Preserve Image 2's palette, lighting, texture language, finish, terrain painting, and every existing scene element exactly. Restore only the discrete scenic buildings, structures, and props visible in Image 1 but omitted from Image 2, at their corresponding positions and scale. Match Image 2's established rendering. Do not alter the terrain underneath except for the minimal contact shadow and grounding needed by each restored object.`
+    : `Extend only the visual language already present in Image 1 into a seamless full-screen scene. Do not substitute a separately named biome, palette, lighting scheme, material vocabulary, or style. Preserve every declared cell elevation. Seam surfaces, linear features, footprints, edge objects, the envelope, and surrounding environment into one professional continuous painting.`;
+
+  const extraConstraints = isDetilingRefinement
+    ? '\nDo not alter Image 2 outside the narrow coplanar blend zones. Do not remove or soften actual vertical cliff/Subterrain silhouettes.'
+    : isSceneryRefinement
+      ? '\nDo not alter Image 2 outside the localized restored-object regions. Do not repaint its coplanar terrain or change any actual vertical cliff/Subterrain silhouette.'
+    : '';
+
+  const surfaceContinuity = isSceneryRefinement
+    ? `COPLANAR TERRAIN LOCK — DO NOT CHANGE
+Image 2's existing flat-terrain painting is an invariant for this edit. Do not repaint, re-tile, blur, recolor, or recompose it. Restored scenic objects may add only their localized footprint contact and natural shadow. Hard grid-aligned terrain edges remain permitted only at actual, explicitly authored vertical Subterrain/cliff drop-offs visible in Image 1.`
+    : `NON-NEGOTIABLE OUTPUT TEST — DETILE ALL COPLANAR GROUND
+The output is unusable if any horizontal terrain contains a cell-sized square, isometric diamond, rhombus, repeated grid module, or four-sided material island—even when no outline stroke is present. An abrupt cell-shaped change in color, value, texture, density, wear, vegetation, or material counts as a visible tile boundary and must be dissolved. Image 1 necessarily exposes flat tile-shaped authoring patches${isRefinement ? ', and Image 2 may reproduce some of them' : ''}; preserve their material identity and approximate placement, but erase their polygonal contours rather than polishing or reproducing them.
+Fuse adjacent coplanar terrain into continuous material fields across the entire frame, inside and outside the playable area, including surrounding scenery. This applies both within one surface id and between different surface ids or playable states at the same elevation. Replace cell-stepped interfaces with broad, blended, irregular, non-grid-aligned transitions. Preserve topology without preserving the square contour. Render every connected linear feature as one continuous feature with no per-cell segmentation. Broad variation and surface detail should cross many hidden cell edges.
+The only terrain edges allowed to retain a hard grid-aligned contour are the lips of actual, explicitly authored vertical Subterrain/cliff drop-offs visible in Image 1. That narrow exception applies only to real vertical drop geometry; it never permits a square patch, slab, panel, or border on an adjacent horizontal top. Declared barriers and the complete outer envelope keep their geometry, but they do not divide neighboring flat terrain into tiles.`;
+
+  const continuityReminder = isSceneryRefinement
+    ? `COPLANAR TERRAIN LOCK REMINDER
+The matrix below is geometry evidence only. Do not use it to repaint Image 2's approved terrain during this source-scenery restoration.`
+    : `COPLANAR DE-TILING REMINDER
+The matrix above is not a visible mosaic. Before finalizing, mentally ignore roads, barriers, objects, the outer envelope, and actual vertical cliff faces. If the remaining flat-ground color or texture changes let a viewer reconstruct any individual cell, repeated cell size, or the x+/y+ grid axes, repaint those changes as continuous terrain.`;
+
+  const projectionPlacement = isRefinement
+    ? `Preserve Image 2's exact grid scale and placement. Do not scale or translate the grid.`
+    : `The grid may be uniformly scaled and translated to fit the composition, but its latent placement structure must not change or become visible terrain edging.`;
+
+  return `${opening}
+
+${referenceRoles}
+
+${surfaceContinuity}
 
 PROJECTION CONTRACT
 Use ${formatProjectionKind(board.projection.kind)}, not perspective convergence.
@@ -640,7 +744,7 @@ Grid x+: ${formatProjectionAxis(board.projection.axisX)}.
 Grid y+: ${formatProjectionAxis(board.projection.axisY)}.
 Projected-step rule: ${formatStepLengthRule(board.projection.stepLengthRule)}.
 There are exactly ${board.columns} columns (${Math.max(0, board.columns - 1)} center-to-center x+ steps) and exactly ${board.rows} rows (${Math.max(0, board.rows - 1)} center-to-center y+ steps). The outer envelope spans ${board.columns} complete cell widths along x+ and ${board.rows} complete cell widths along y+.
-Preserve the exact projected outline, angles, cell aspect, and proportions in Image 1. Do not turn it into a square, symmetric diamond, trapezoid, perspective wedge, or another projection. The grid may be uniformly scaled and translated to fit the composition, but its cell structure must not change.
+Preserve the exact projected outline, angles, cell aspect, and proportions in Image 1. Do not turn it into a square, symmetric diamond, trapezoid, perspective wedge, or another projection. ${projectionPlacement}
 
 COORDINATE CONVENTION
 Coordinates are (x,y), x=0..${board.columns - 1}, y=0..${board.rows - 1}.
@@ -654,10 +758,10 @@ ${formatSurfaceDefinitions(board)}
 
 EXACT ${totalCells}-CELL CONTENT (${playableCells} playable, ${nonPlayableCells} non-playable)
 Cell format is surface@zElevation; [NON-PLAYABLE] is explicit gameplay status.
+This matrix fixes semantic occupancy and topology only. It is not a pixel-exact mask for flat terrain edges.
 ${formatCells(board)}
 
-SURFACE CONTINUITY CONTRACT
-Coordinates are semantic addresses, not visible square texture swatches. Do not preserve, redraw, or imply address boundaries inside continuous regions of the same authored surface. Natural variation may cross many hidden cell edges and must not reveal the grid. Preserve real authored transitions between unlike surfaces, elevations, playable and non-playable cells, linear features, footprints, barriers, and the outer envelope. Do not convert the matrix into a checkerboard or patchwork quilt.
+${continuityReminder}
 
 EXACT LINEAR-FEATURE GRAPH
 Each coordinate list is an unordered set, never a path. Only the explicit shared-edge connections establish topology; branches and disconnected components are intentional. An exit/stub crosses exactly its declared edge and does not create another cell.
@@ -671,6 +775,7 @@ Each barrier is centered on its declared shared edge. Its appearance comes from 
 EXACT FIXED FOOTPRINTS (${definition.footprints.length})
 ${formatFootprints(definition.footprints)}
 Do not add, move, enlarge, shrink, or reinterpret a footprint.
+This gameplay-footprint list does not enumerate scenic-only appearance. Preserve every scenic building, structure, and prop visibly authored in Image 1 without promoting it to a gameplay footprint.
 
 VISUAL-ONLY SOURCE ARTWORK (${definition.visualArtwork.length})
 ${formatVisualArtwork(definition.visualArtwork)}
@@ -686,18 +791,19 @@ These internal edges are separate from the outer grid envelope. They preserve no
 ${formatEdges(definition.impassableTransitions)}
 
 BOUNDARY APPEARANCE
-Outer-envelope LOCATION is fixed; its APPEARANCE is creative and must be derived from Image 1. Carry one coherent in-world treatment around the exact envelope while preserving declared openings and feature crossings. The outside world remains continuous yet clearly outside the grid. Do not infer, move, or reshape the outer envelope from the rectangular source-crop edge. The boundary is not a new vertical side wall, second strip of cells, extra row, or extra column; any local exposed face visible in Image 1 is explicitly authored Subterrain and must remain local to that exact edge. Internal playable/non-playable transitions remain distinct semantic features and do not replace the outer envelope.
+${boundaryAppearance}
 
 SCENE AND STYLE
-Extend only the visual language already present in Image 1 into a seamless full-screen scene. Do not substitute a separately named biome, palette, lighting scheme, material vocabulary, or style. Preserve every declared cell elevation. Seam surfaces, linear features, footprints, edge objects, the envelope, and surrounding environment into one professional continuous painting.
+${sceneAndStyle}
 
 CONSTRAINTS
 No units, chess pieces, people, creatures, UI, coordinate labels, text, watermark, or baked grid lines.
 No black box, black void around the scene, floating board, vignette frame, or hard crop.
 Do not reproduce the rectangular Image 1 crop edge as an environmental boundary or output frame.
-No unstated ramps, cliffs, elevation tiers, pits, buildings, blockers, barriers, or feature branches.
+No unstated gameplay ramps, cliffs, elevation tiers, pits, footprint buildings, blockers, barriers, or feature branches. Preserve scenic-only buildings, structures, and props visibly authored in Image 1.
 No synthesized or extended vertical board skirt, attached side strip, extra row, extra column, or grid continuation in surrounding scenery. Preserve only the explicit local Subterrain faces visible in Image 1.
-No checkerboard, patchwork quilt, square terrain swatches, cell-by-cell tinting, or terrain seams that reveal hidden address boundaries.
+No checkerboard, patchwork quilt, square terrain swatches, isolated slabs, rectangular beds, inset panels, cell-by-cell tinting, or flat-terrain seams that reveal hidden address boundaries. Hard cell-aligned terrain edges are permitted only at actual authored vertical Subterrain/cliff drop-offs.
+${extraConstraints}
 Geometry and semantics above override all artistic discretion.
 `;
 }
@@ -767,6 +873,176 @@ export function buildPredrawnGenerationArtifacts(inputDefinition, referenceBytes
   return { definition, prompt, packet, references, manifest };
 }
 
+function parsedJsonBytes(bytes, label) {
+  if (!Buffer.isBuffer(bytes)) fail(`${label} must be bytes`);
+  try {
+    return JSON.parse(bytes.toString('utf8'));
+  } catch (error) {
+    fail(`${label} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+function requireHash(bytes, expected, label) {
+  const actual = sha256(bytes);
+  if (actual !== expected) fail(`${label} sha256 mismatch: expected ${expected}, received ${actual}`);
+}
+
+function stableValuesMatch(left, right) {
+  return JSON.stringify(stable(left)) === JSON.stringify(stable(right));
+}
+
+export function buildPredrawnComparativeRefinementArtifacts({
+  inputDefinition,
+  referenceBytes,
+  candidateBytes,
+  parentPromptBytes,
+  parentPacketBytes,
+  parentReferencesBytes,
+  parentManifestBytes,
+  branch,
+  operation,
+}) {
+  const branchName = nonEmptyText(branch, 'refinement branch');
+  if (!/^[a-z0-9][a-z0-9-]{2,127}$/.test(branchName)) {
+    fail('refinement branch must be 3-128 lowercase letters, digits, or hyphens');
+  }
+  if (!PREDRAWN_REFINEMENT_KINDS.has(operation)) fail(`unsupported refinement operation ${operation}`);
+
+  const base = buildPredrawnGenerationArtifacts(inputDefinition, referenceBytes);
+  const parentManifest = parsedJsonBytes(parentManifestBytes, 'parent request manifest');
+  const parentPacket = parsedJsonBytes(parentPacketBytes, 'parent packet');
+  const parentReferences = parsedJsonBytes(parentReferencesBytes, 'parent references');
+  if (!isRecord(parentManifest)) fail('parent request manifest must be an object');
+  if (parentManifest.schemaVersion !== PREDRAWN_GENERATION_SCHEMA_VERSION) {
+    fail(`parent request schemaVersion must be ${PREDRAWN_GENERATION_SCHEMA_VERSION}`);
+  }
+  if (parentManifest.status !== 'ready-for-generation') fail('parent request must be ready-for-generation');
+  if (parentManifest.mode !== 'isolated-top-only') fail('parent request must be an isolated-top-only run');
+  if (parentManifest.levelId !== base.definition.levelId) fail('parent request levelId does not match the definition');
+  if (parentManifest.runId !== base.definition.runId) fail('parent request runId does not match the definition');
+  if (branchName === parentManifest.runId) fail('refinement branch must differ from the parent runId');
+  if (!isRecord(parentManifest.output)) fail('parent request output must be an object');
+  if (parentManifest.output.aspectRatio !== base.definition.request.aspectRatio) {
+    fail('parent request output aspect ratio does not match the definition');
+  }
+  requireHash(parentPromptBytes, parentManifest.promptSha256, 'parent prompt');
+  requireHash(parentPacketBytes, parentManifest.packetSha256, 'parent packet');
+  requireHash(parentReferencesBytes, parentManifest.referencesSha256, 'parent references');
+  if (sha256(Buffer.from(JSON.stringify(stable(base.definition.reference.viewport)))) !== parentManifest.referenceViewportSha256) {
+    fail('parent reference viewport hash does not match the definition');
+  }
+  if (sha256(Buffer.from(json(base.packet))) !== parentManifest.packetSha256) {
+    fail('parent packet does not match the current canonical semantic packet');
+  }
+  if (!isRecord(parentReferences)) fail('parent references must be an object');
+  if (parentReferences.schemaVersion !== PREDRAWN_GENERATION_SCHEMA_VERSION) {
+    fail(`parent references schemaVersion must be ${PREDRAWN_GENERATION_SCHEMA_VERSION}`);
+  }
+  if (parentReferences.runId !== parentManifest.runId) {
+    fail('parent references runId does not match the parent request');
+  }
+  if (!Array.isArray(parentReferences.references) || parentReferences.references.length !== 1) {
+    fail('isolated parent must contain exactly one reference');
+  }
+  const parentCanonicalReference = parentReferences.references[0];
+  const expectedCanonicalReference = base.references.references[0];
+  if (!isRecord(parentCanonicalReference)) fail('parent Image 1 reference must be an object');
+  if (parentCanonicalReference.index !== 1) fail('parent Image 1 index must be 1');
+  if (parentCanonicalReference.role !== expectedCanonicalReference.role) {
+    fail('parent Image 1 role is not the canonical isolated-source role');
+  }
+  if (parentCanonicalReference.sourceSlot !== expectedCanonicalReference.sourceSlot) {
+    fail('parent Image 1 sourceSlot does not match the definition');
+  }
+  if (parentCanonicalReference.sha256 !== expectedCanonicalReference.sha256) {
+    fail('parent Image 1 does not match the supplied canonical reference bytes');
+  }
+  if (!stableValuesMatch(parentCanonicalReference.viewport, expectedCanonicalReference.viewport)) {
+    fail('parent Image 1 viewport does not match the definition');
+  }
+  if (
+    parentCanonicalReference.width !== expectedCanonicalReference.width
+    || parentCanonicalReference.height !== expectedCanonicalReference.height
+  ) {
+    fail('parent Image 1 dimensions do not match the canonical reference');
+  }
+  if (!stableValuesMatch(parentReferences, base.references)) {
+    fail('parent references contain unexpected or mismatched fields');
+  }
+
+  const candidateDimensions = pngSize(candidateBytes);
+  if (!canvasMatchesAspectRatio(candidateDimensions, parentManifest.output.aspectRatio)) {
+    fail(
+      `candidate PNG is ${candidateDimensions.width}x${candidateDimensions.height}, which is not compatible with parent output aspect ratio ${parentManifest.output.aspectRatio}`,
+    );
+  }
+  const candidateSha256 = sha256(candidateBytes);
+  const prompt = buildPredrawnGenerationPrompt(base.definition, { mode: operation });
+  if (prompt.includes('Image 1 is the only image input') || !prompt.includes('Image 2 is the owner-reviewed generated candidate')) {
+    fail('comparative refinement prompt has invalid reference roles');
+  }
+  const references = {
+    kind: 'predrawn-comparative-refinement-references',
+    schemaVersion: 1,
+    runId: branchName,
+    references: [
+      {
+        index: 1,
+        role: 'canonical-authored-surface-geometry-and-appearance-authority',
+        sourceSlot: base.definition.reference.sourceSlot,
+        sha256: sha256(referenceBytes),
+        viewport: base.definition.reference.viewport,
+        width: base.definition.reference.viewport.width,
+        height: base.definition.reference.viewport.height,
+      },
+      {
+        index: 2,
+        role: 'owner-reviewed-prior-candidate-subordinate-appearance-edit-target',
+        sourceSlot: `review-candidate/sha256-${candidateSha256}`,
+        sha256: candidateSha256,
+        ...candidateDimensions,
+      },
+    ],
+  };
+  const manifest = {
+    kind: 'predrawn-comparative-refinement-request',
+    schemaVersion: 1,
+    runId: branchName,
+    levelId: base.definition.levelId,
+    status: 'ready-for-generation',
+    provider: base.definition.request.provider,
+    model: base.definition.request.model,
+    mode: 'comparative-refinement',
+    isolatedPipelineEvidence: false,
+    reviewBranch: {
+      name: branchName,
+      parentRunId: parentManifest.runId,
+      parentRequestManifestSha256: sha256(parentManifestBytes),
+      parentCandidateSha256: candidateSha256,
+      operation,
+    },
+    output: {
+      sizing: 'preserve-edit-target-native',
+      aspectRatio: base.definition.request.aspectRatio,
+      mimeType: 'image/png',
+      sourceWidth: candidateDimensions.width,
+      sourceHeight: candidateDimensions.height,
+    },
+    promptSha256: sha256(Buffer.from(prompt)),
+    packetSha256: sha256(parentPacketBytes),
+    referencesSha256: sha256(Buffer.from(json(references))),
+    referenceViewportSha256: parentManifest.referenceViewportSha256,
+  };
+  return {
+    definition: base.definition,
+    prompt,
+    packet: parentPacket,
+    packetBytes: parentPacketBytes,
+    references,
+    manifest,
+  };
+}
+
 export async function writePredrawnGenerationRun({ definition, referenceBytes, outputPath }) {
   const artifacts = buildPredrawnGenerationArtifacts(definition, referenceBytes);
   await mkdir(outputPath, { recursive: true });
@@ -779,6 +1055,24 @@ export async function writePredrawnGenerationRun({ definition, referenceBytes, o
   return artifacts;
 }
 
+export async function writePredrawnComparativeRefinementRun(options) {
+  const artifacts = buildPredrawnComparativeRefinementArtifacts(options);
+  await mkdir(path.dirname(options.outputPath), { recursive: true });
+  try {
+    await mkdir(options.outputPath);
+  } catch (error) {
+    if (error?.code === 'EEXIST') fail(`refinement output already exists: ${options.outputPath}`);
+    throw error;
+  }
+  await Promise.all([
+    writeFile(path.join(options.outputPath, 'prompt.txt'), artifacts.prompt),
+    writeFile(path.join(options.outputPath, 'packet.json'), artifacts.packetBytes),
+    writeFile(path.join(options.outputPath, 'references.json'), json(artifacts.references)),
+    writeFile(path.join(options.outputPath, 'request-manifest.json'), json(artifacts.manifest)),
+  ]);
+  return artifacts;
+}
+
 export async function runPredrawnGenerationCli(argv = process.argv.slice(2)) {
   const args = parsePredrawnGenerationArgs(argv);
   const definitionPath = path.resolve(args.definition);
@@ -786,7 +1080,38 @@ export async function runPredrawnGenerationCli(argv = process.argv.slice(2)) {
   const outputPath = path.resolve(args.out);
   const definition = JSON.parse(await readFile(definitionPath, 'utf8'));
   const referenceBytes = await readFile(referencePath);
-  const artifacts = await writePredrawnGenerationRun({ definition, referenceBytes, outputPath });
+  let artifacts;
+  if (args.refinement) {
+    const parentPath = path.resolve(args.parent);
+    if (parentPath === outputPath) fail('refinement output must differ from the parent request directory');
+    const [
+      candidateBytes,
+      parentPromptBytes,
+      parentPacketBytes,
+      parentReferencesBytes,
+      parentManifestBytes,
+    ] = await Promise.all([
+      readFile(path.resolve(args.candidate)),
+      readFile(path.join(parentPath, 'prompt.txt')),
+      readFile(path.join(parentPath, 'packet.json')),
+      readFile(path.join(parentPath, 'references.json')),
+      readFile(path.join(parentPath, 'request-manifest.json')),
+    ]);
+    artifacts = await writePredrawnComparativeRefinementRun({
+      inputDefinition: definition,
+      referenceBytes,
+      candidateBytes,
+      parentPromptBytes,
+      parentPacketBytes,
+      parentReferencesBytes,
+      parentManifestBytes,
+      branch: args.branch,
+      operation: args.refinement,
+      outputPath,
+    });
+  } else {
+    artifacts = await writePredrawnGenerationRun({ definition, referenceBytes, outputPath });
+  }
   process.stdout.write(`${outputPath}\n${artifacts.manifest.promptSha256}\n`);
 }
 

@@ -6,15 +6,25 @@ import {
   boardContentHash,
   boardDrawOps,
   boardSocialFramingBounds,
+  filterPredrawnOcclusionDepthPixels,
+  isPredrawnBackgroundActive,
+  isVersionedPredrawnBoardSurface,
+  predrawnOcclusionDepthMapForSurface,
   predrawnOcclusionMaskOps,
   predrawnOcclusionMasksInFront,
   rasterizePredrawnBoardPixels,
   uniqueDrawSrcs,
   type BakeBounds,
   type BoardDrawOp,
+  type PredrawnOcclusionDepthMap,
 } from '@chess-tactics/board-render';
 import type { EditorBoard } from '../ui/boardCode';
-import { boardCanvasScratchRegion } from './BoardCanvasLayer';
+import {
+  boardCanvasScratchRegion,
+  predrawnOcclusionDepthImageDimensionIssue,
+} from './BoardCanvasLayer';
+import { loadDecodedImage } from './imageResources';
+import { versionedPredrawnImageDimensionIssue } from './PredrawnBoardLayer';
 
 export {
   BAKE_GEOMETRY,
@@ -38,24 +48,7 @@ export type BoardThumbnailScratchFactory = (
   height: number,
 ) => BoardThumbnailScratchSurface | undefined;
 
-const imageCache = new Map<string, Promise<HTMLImageElement>>();
-
-function loadImage(src: string): Promise<HTMLImageElement> {
-  const cached = imageCache.get(src);
-  if (cached) return cached;
-  const promise = new Promise<HTMLImageElement>((resolve, reject) => {
-    const img = new Image();
-    img.decoding = 'async';
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      img.decode().then(() => resolve(img)).catch(() => resolve(img));
-    };
-    img.onerror = () => reject(new Error(`bakeBoardThumbnail: failed to load ${src}`));
-    img.src = src;
-  });
-  imageCache.set(src, promise);
-  return promise;
-}
+export type BoardThumbnailImageLoader = (src: string) => Promise<HTMLImageElement>;
 
 function createCanvas(width: number, height: number): Canvas2D {
   if (typeof OffscreenCanvas !== 'undefined') return new OffscreenCanvas(width, height);
@@ -140,28 +133,88 @@ function canvasToBlob(canvas: Canvas2D): Promise<Blob> {
   });
 }
 
+/**
+ * Resolve thumbnail rasters while preserving optional-sprite omission and making the exact
+ * immutable pre-drawn selection availability-critical. Validation happens before any canvas
+ * paint so a bad plate or depth map cannot produce a unit-only or partially unoccluded bake.
+ */
+export async function loadBoardThumbnailImages(
+  board: EditorBoard,
+  sources: readonly string[],
+  imageLoader: BoardThumbnailImageLoader = loadDecodedImage,
+): Promise<Map<string, HTMLImageElement>> {
+  const predrawnBackgroundActive = isPredrawnBackgroundActive(board);
+  const versionedSurface = predrawnBackgroundActive
+    && board.surface?.kind === 'predrawn'
+    && isVersionedPredrawnBoardSurface(board.surface)
+    ? board.surface
+    : undefined;
+  const backgroundSrc = versionedSurface
+    ? `/api/background-versions/${encodeURIComponent(versionedSurface.backgroundVersionId)}/content`
+    : undefined;
+  const occlusionDepthMap = predrawnBackgroundActive
+    ? predrawnOcclusionDepthMapForSurface(board.surface)
+    : undefined;
+  const required = new Map<string, 'background' | 'occlusion-depth'>([
+    ...(backgroundSrc ? [[backgroundSrc, 'background'] as const] : []),
+    ...(occlusionDepthMap ? [[occlusionDepthMap.src, 'occlusion-depth'] as const] : []),
+  ]);
+  const allSources = [...new Set([...sources, ...required.keys()])];
+  const images = new Map<string, HTMLImageElement>();
+
+  await Promise.all(allSources.map(async (src) => {
+    let image: HTMLImageElement;
+    try {
+      image = await imageLoader(src);
+    } catch (cause) {
+      const kind = required.get(src);
+      if (!kind) return;
+      const label = kind === 'background' ? 'background raster' : 'occlusion depth mask';
+      throw new Error(`bakeBoardThumbnail: selected immutable ${label} is unavailable: ${src}`, { cause });
+    }
+
+    if (src === backgroundSrc && versionedSurface) {
+      const issue = versionedPredrawnImageDimensionIssue(
+        versionedSurface,
+        image.naturalWidth,
+        image.naturalHeight,
+      );
+      if (issue) throw new Error(`bakeBoardThumbnail: ${issue}`);
+    }
+    if (src === occlusionDepthMap?.src) {
+      const issue = predrawnOcclusionDepthImageDimensionIssue(occlusionDepthMap, image);
+      if (issue) throw new Error(`bakeBoardThumbnail: ${issue}`);
+    }
+    images.set(src, image);
+  }));
+
+  return images;
+}
+
 async function renderBoardCanvas(board: EditorBoard, scale: number): Promise<{ canvas: Canvas2D; bounds: BakeBounds } | null> {
   const bounds = boardBounds(board);
   const ops = boardDrawOps(board);
-  const occlusionMasks = board.surface?.kind === 'predrawn' ? predrawnOcclusionMaskOps(board) : [];
+  const predrawnBackgroundActive = isPredrawnBackgroundActive(board);
+  const occlusionDepthMap = predrawnBackgroundActive
+    ? predrawnOcclusionDepthMapForSurface(board.surface)
+    : undefined;
+  const occlusionMasks = predrawnBackgroundActive
+    && board.surface?.kind === 'predrawn'
+    && !isVersionedPredrawnBoardSurface(board.surface)
+    ? predrawnOcclusionMaskOps(board)
+    : [];
   const canvas = createCanvas(Math.max(1, Math.round(bounds.width * scale)), Math.max(1, Math.round(bounds.height * scale)));
   const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
   if (!ctx) return null;
   ctx.imageSmoothingEnabled = false;
 
-  const srcs = [...new Set([...ops, ...occlusionMasks].map((op) => op.src))];
-  const images = new Map<string, HTMLImageElement>();
-  await Promise.all(
-    srcs.map(async (src) => {
-      try {
-        images.set(src, await loadImage(src));
-      } catch {
-        // A missing sprite must not abort the whole render; skip it.
-      }
-    }),
-  );
+  const srcs = [...new Set([
+    ...[...ops, ...occlusionMasks].map((op) => op.src),
+    ...(occlusionDepthMap ? [occlusionDepthMap.src] : []),
+  ])];
+  const images = await loadBoardThumbnailImages(board, srcs);
 
-  drawBoardThumbnailOps(ctx, ops, bounds, scale, images, occlusionMasks);
+  drawBoardThumbnailOps(ctx, ops, bounds, scale, images, occlusionMasks, undefined, occlusionDepthMap);
   return { canvas, bounds };
 }
 
@@ -173,15 +226,20 @@ export function drawBoardThumbnailOps(
   images: ReadonlyMap<string, HTMLImageElement>,
   occlusionMasks: readonly BoardDrawOp[] = [],
   scratchFactory: BoardThumbnailScratchFactory = createBoardThumbnailScratchSurface,
+  occlusionDepthMap?: PredrawnOcclusionDepthMap,
 ): void {
   let scratch: BoardThumbnailScratchSurface | undefined;
+  let depthScratch: BoardThumbnailScratchSurface | undefined;
   for (const op of ops) {
     const img = images.get(op.src);
     if (!img) continue;
     const masksInFront = op.layer === 'scene'
       ? predrawnOcclusionMasksInFront(op, occlusionMasks)
       : [];
-    if (masksInFront.length === 0) {
+    const depthImage = op.layer === 'scene' && occlusionDepthMap
+      ? images.get(occlusionDepthMap.src)
+      : undefined;
+    if (masksInFront.length === 0 && !depthImage) {
       paintBoardThumbnailOp(ctx, img, op, bounds, scale);
       continue;
     }
@@ -197,11 +255,51 @@ export function drawBoardThumbnailOps(
     scratchContext.globalCompositeOperation = 'source-over';
     scratchContext.globalAlpha = 1;
     paintBoardThumbnailOp(scratchContext, img, op, region.bounds, scale);
+    if (depthImage && occlusionDepthMap) {
+      depthScratch ??= scratchFactory(region.width, region.height);
+      if (depthScratch) {
+        if (depthScratch.canvas.width < region.width) depthScratch.canvas.width = region.width;
+        if (depthScratch.canvas.height < region.height) depthScratch.canvas.height = region.height;
+        const depthContext = depthScratch.context;
+        depthContext.clearRect(0, 0, region.width, region.height);
+        depthContext.imageSmoothingEnabled = false;
+        depthContext.globalCompositeOperation = 'source-over';
+        depthContext.globalAlpha = 1;
+        const mapBounds = occlusionDepthMap.worldBounds;
+        depthContext.drawImage(
+          depthImage,
+          0,
+          0,
+          occlusionDepthMap.frameWidth,
+          occlusionDepthMap.frameHeight,
+          (mapBounds.minX - region.bounds.minX) * scale,
+          (mapBounds.minY - region.bounds.minY) * scale,
+          mapBounds.width * scale,
+          mapBounds.height * scale,
+        );
+        const depthPixels = depthContext.getImageData(0, 0, region.width, region.height);
+        depthPixels.data.set(filterPredrawnOcclusionDepthPixels(depthPixels.data, op.z));
+        depthContext.putImageData(depthPixels, 0, 0);
+      }
+    }
     scratchContext.save();
     scratchContext.globalCompositeOperation = 'destination-out';
     for (const mask of masksInFront) {
       const maskImage = images.get(mask.src);
       if (maskImage) paintBoardThumbnailOp(scratchContext, maskImage, mask, region.bounds, scale);
+    }
+    if (depthImage && depthScratch) {
+      scratchContext.drawImage(
+        depthScratch.canvas,
+        0,
+        0,
+        region.width,
+        region.height,
+        0,
+        0,
+        region.width,
+        region.height,
+      );
     }
     scratchContext.restore();
     ctx.drawImage(

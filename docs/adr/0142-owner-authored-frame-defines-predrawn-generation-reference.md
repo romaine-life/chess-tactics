@@ -2,6 +2,7 @@
 status: accepted
 date: 2026-07-19
 deciders: Nelson, Codex
+partially_superseded_by: "[ADR-0165](0165-ai-artwork-separates-sources-attempts-and-background-mode.md)"
 refines: "[ADR-0071](0071-the-deliverable-is-the-instrument.md), [ADR-0120](0120-canonical-top-only-image-owns-predrawn-appearance.md), [ADR-0123](0123-accepted-predrawn-scenes-keep-their-pixels-and-saved-alignment.md), and [ADR-0125](0125-predrawn-preparation-self-validates-before-generation.md)"
 partially_supersedes: "[ADR-0141](0141-predrawn-generation-references-preserve-explicit-subterrain.md) unqualified all-active-surface inclusion and capture-edge clause"
 ---

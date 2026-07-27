@@ -26,4 +26,12 @@ describe('pre-drawn reference navigation', () => {
     expect(control).toContain('levelEditorHrefForDocument(window.location.href');
     expect(control).not.toContain('target="_blank"');
   });
+
+  it('previews the saved background mode instead of forcing the legacy export', () => {
+    expect(reference).toContain('boardForPredrawnSourceArtwork(levelToEditorBoard(state.level))');
+    expect(reference).toContain('const backgroundMode = board ? boardBackgroundMode(board) : undefined');
+    expect(reference).toContain("topSurfacesOnly={backgroundMode === 'legacy'}");
+    expect(reference).toContain("topSurfacesOnly: backgroundMode === 'legacy'");
+    expect(reference).not.toContain('boardForTopSurfaceArtExport(levelToEditorBoard(state.level))');
+  });
 });

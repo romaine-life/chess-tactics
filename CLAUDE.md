@@ -105,6 +105,9 @@ and don't tell the user screenshots are impossible. Use the helper below.
    # whole viewport / a small fixture page:
    npm run shot -- <vite-url>/unit-studio --size 1200x800
    ```
+   Level Editor captures automatically use an authenticated observation-only session: the real
+   private document renders without acquiring/extending its writer lease, advancing its fence, or
+   creating a recovery. Do not replace this with a normal headless editor visit.
    Output defaults to `frontend/tmp-shots/shot.png` (gitignored). **Default to showing the
    small PNG inline — never substitute a link + description for the pixels.**
 

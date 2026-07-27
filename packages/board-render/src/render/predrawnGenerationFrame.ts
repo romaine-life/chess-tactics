@@ -5,7 +5,7 @@ import {
   normalizePredrawnGenerationFrame,
   type PredrawnGenerationFrame,
 } from '../core/predrawnGenerationFrame';
-import type { EditorBoard } from '../ui/boardCode';
+import type { EditorBoard, PredrawnBoardWorldBounds } from '../ui/boardCode';
 import { boardLabMetrics } from './boardProjection';
 import { boardBounds, type BakeBounds } from './renderPlan';
 
@@ -117,6 +117,7 @@ function filterPlayableSubterrain(
 function generationRequiredBoard(board: EditorBoard): EditorBoard {
   return {
     ...board,
+    backgroundMode: 'legacy',
     surface: undefined,
     decorativeApron: EMPTY_APRON,
     decorativeFootprint: [],
@@ -271,19 +272,40 @@ export function initialPredrawnGenerationFrame(board: EditorBoard): PredrawnGene
   );
 }
 
-/** Map a canonical native-1x frame into TileGrid's viewport-centred boardPan coordinates. */
+/** Map any finite positive board-world rectangle into TileGrid's viewport-centred boardPan. */
+export function predrawnWorldBoundsBoardPan(
+  board: Pick<EditorBoard, 'cols' | 'rows'>,
+  bounds: PredrawnBoardWorldBounds,
+): { x: number; y: number } {
+  if (
+    !Number.isFinite(bounds.minX)
+    || !Number.isFinite(bounds.minY)
+    || !Number.isFinite(bounds.width)
+    || !Number.isFinite(bounds.height)
+    || bounds.width <= 0
+    || bounds.height <= 0
+  ) throw new Error('cannot map invalid predrawn world bounds');
+  const cells = Array.from({ length: board.rows }, (_, y) => (
+    Array.from({ length: board.cols }, (__, x) => ({ x, y }))
+  )).flat();
+  const metrics = boardLabMetrics(cells);
+  return {
+    x: -bounds.minX - metrics.originLeft - bounds.width / 2,
+    y: -bounds.minY - metrics.originTop - bounds.height / 2,
+  };
+}
+
+/** Map a canonical native-1x generation frame into TileGrid's viewport-centred boardPan. */
 export function predrawnGenerationFrameBoardPan(
   board: Pick<EditorBoard, 'cols' | 'rows'>,
   value: unknown,
 ): { x: number; y: number } {
   const frame = normalizePredrawnGenerationFrame(value);
   if (!frame) throw new Error('cannot map an invalid predrawnGenerationFrame');
-  const cells = Array.from({ length: board.rows }, (_, y) => (
-    Array.from({ length: board.cols }, (__, x) => ({ x, y }))
-  )).flat();
-  const metrics = boardLabMetrics(cells);
-  return {
-    x: -frame.x - metrics.originLeft - frame.width / 2,
-    y: -frame.y - metrics.originTop - frame.height / 2,
-  };
+  return predrawnWorldBoundsBoardPan(board, {
+    minX: frame.x,
+    minY: frame.y,
+    width: frame.width,
+    height: frame.height,
+  });
 }

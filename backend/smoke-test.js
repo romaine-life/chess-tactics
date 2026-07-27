@@ -5,6 +5,16 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { createCanvas } = require('@napi-rs/canvas');
+const boardRender = require('@chess-tactics/board-render');
+const {
+  ATTEMPT_SOURCE_REQUEST_SCHEMA,
+  ENVIRONMENT_GEOMETRY_SCHEMA,
+  SOURCE_SEMANTIC_REQUEST_SCHEMA,
+  generationAttemptSourceRequestIssue,
+  sourceArtworkVersionContractIssue,
+} = require('./backgroundVersionPolicy');
+const { migrationChecksum } = require('./schemaMigrationIntegrity');
+const { extractInlineMigrations } = require('./schemaMigrationSource');
 
 const port = 31337;
 const authPort = 31338;
@@ -27,6 +37,17 @@ const mockAuth = http.createServer((req, res) => {
         user: {
           email: 'rival@example.com',
           name: 'Lobby Rival',
+          role: 'pending',
+        },
+      }));
+      return;
+    }
+    if (req.headers.cookie.includes('better-auth.session=second-admin')) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({
+        user: {
+          email: 'second-admin@example.com',
+          name: 'Second Tactics Admin',
           role: 'pending',
         },
       }));
@@ -151,37 +172,80 @@ if (!process.env.DATABASE_URL) {
 }
 assertSafeSmokeTarget();
 
-function seedRecordedMissingThumbnailSchema() {
+let cachedInlineMigrations = null;
+
+function seedSparseNumericMigrationHistoryThrough36() {
+  const legacyVersions = [
+    ...Array.from({ length: 27 }, (_, index) => index + 1),
+    36,
+  ];
+  const seedPath = path.join(hotRoot, 'numeric-migrations-1-27-and-36.json');
+  fs.writeFileSync(
+    seedPath,
+    JSON.stringify(legacyVersions.map((version) => ({
+      version,
+      sql: inlineMigrationSql(version),
+    }))),
+  );
   const script = `
+    const fs = require('fs');
     const { Client } = require('pg');
+    const migrations = JSON.parse(
+      fs.readFileSync(process.env.SMOKE_MIGRATION_SEED_PATH, 'utf8')
+    );
     const client = new Client({ connectionString: process.env.DATABASE_URL });
-    client.connect()
-      .then(() => client.query(` + "`" + `
+    (async () => {
+      await client.connect();
+      await client.query('DROP SCHEMA IF EXISTS public CASCADE');
+      await client.query('CREATE SCHEMA public');
+      await client.query(` + "`" + `
         CREATE TABLE IF NOT EXISTS schema_migrations (
           version integer PRIMARY KEY,
           applied_at timestamptz NOT NULL DEFAULT now()
         );
-        INSERT INTO schema_migrations (version) VALUES (21), (22)
-          ON CONFLICT (version) DO NOTHING;
-        DROP TABLE IF EXISTS level_thumbnail_derivatives;
-      ` + "`" + `))
-      .then(() => client.end())
-      .catch((error) => { console.error(error); process.exit(1); });
+      ` + "`" + `);
+      for (const migration of migrations) {
+        await client.query('BEGIN');
+        try {
+          await client.query(migration.sql);
+          await client.query(
+            'INSERT INTO schema_migrations (version) VALUES ($1)',
+            [migration.version],
+          );
+          await client.query('COMMIT');
+        } catch (error) {
+          await client.query('ROLLBACK');
+          throw error;
+        }
+      }
+      // Preserve the existing relation-repair smoke case while the primary
+      // server fills the sparse numeric-only history through version 36.
+      await client.query('DROP TABLE level_thumbnail_derivatives');
+      await client.end();
+    })().catch(async (error) => {
+      try { await client.end(); } catch {}
+      console.error(error);
+      process.exit(1);
+    });
   `;
   const seeded = spawnSync(process.execPath, ['-e', script], {
     cwd: __dirname,
-    env: process.env,
+    env: {
+      ...process.env,
+      SMOKE_MIGRATION_SEED_PATH: seedPath,
+    },
     encoding: 'utf8',
   });
   if (seeded.status !== 0) {
-    throw new Error(`Could not seed the recorded-migration/missing-relation smoke state: ${seeded.stderr || seeded.stdout}`);
+    throw new Error(`Could not seed sparse numeric migration history 1-27 and 36: ${seeded.stderr || seeded.stdout}`);
   }
 }
 
-// Reproduce the production failure before the application starts: numeric
-// migrations 21 and 22 are recorded, but their required runtime relation is
-// absent. Auto mode must repair actual schema state rather than trust the rows.
-seedRecordedMissingThumbnailSchema();
+// Reproduce the exact former registry before the application starts:
+// migrations 1-27 and 36 are recorded under the numeric-only contract. Auto
+// mode must fill 28-35, apply 37 onward, seal the completed historical
+// identities, and repair actual schema state rather than trust version rows.
+seedSparseNumericMigrationHistoryThrough36();
 
 const sharedBackendEnv = {
   ...process.env,
@@ -198,7 +262,7 @@ const sharedBackendEnv = {
   }),
   // The mock auth returns player@example.com for any non-rival session; make that
   // the official-campaigns admin so the requireAdmin path is exercised (ADR-0038).
-  ADMIN_EMAILS: 'player@example.com',
+  ADMIN_EMAILS: 'player@example.com,second-admin@example.com',
   UNIT_ASSET_STORAGE_DIR: path.join(hotRoot, 'unit-assets'),
   LIVE_MEDIA_STORAGE_DIR: liveMediaStorageDir,
 };
@@ -320,6 +384,7 @@ async function openEditorEditSession(documentId, {
   sessionKey = crypto.randomBytes(32).toString('hex'),
   deviceId = `smoke-device-${crypto.randomUUID()}`,
   clientLabel = 'Smoke browser',
+  intent,
   activate = true,
   remember = true,
   targetPort = port,
@@ -329,12 +394,19 @@ async function openEditorEditSession(documentId, {
     'POST',
     `/api/editor-documents/${documentId}/edit-sessions`,
     { cookie, 'content-type': 'application/json' },
-    JSON.stringify({ session_id: sessionId, session_key: sessionKey, device_id: deviceId, client_label: clientLabel }),
+    JSON.stringify({
+      session_id: sessionId,
+      session_key: sessionKey,
+      device_id: deviceId,
+      client_label: clientLabel,
+      ...(intent ? { intent } : {}),
+    }),
   );
   let body = response.body ? JSON.parse(response.body) : {};
   if (
     response.statusCode === 200
     && activate
+    && intent !== 'observe'
     && body.session?.state !== 'active'
     && !body.presence?.active_editor
   ) {
@@ -438,6 +510,217 @@ function deleteEditorDocumentRequest(documentId, revision, cookie = null) {
   );
 }
 
+function createBackgroundVersionRequest(documentId, body, {
+  cookie = 'better-auth.session=abc',
+  idempotencyKey = body.idempotency_key,
+  authority = null,
+} = {}) {
+  const payload = editorMutationBody(documentId, cookie, body, authority);
+  return request(
+    'POST',
+    `/api/editor-documents/${documentId}/background-versions`,
+    {
+      cookie,
+      'content-type': 'application/json',
+      ...(idempotencyKey ? { 'idempotency-key': idempotencyKey } : {}),
+    },
+    JSON.stringify(payload),
+    5000,
+  );
+}
+
+function createGenerationAttemptRequest(documentId, body, {
+  cookie = 'better-auth.session=abc',
+  idempotencyKey = body.idempotency_key,
+  authority = null,
+} = {}) {
+  const payload = editorMutationBody(documentId, cookie, body, authority);
+  return request(
+    'POST',
+    `/api/editor-documents/${documentId}/generation-attempts`,
+    {
+      cookie,
+      'content-type': 'application/json',
+      ...(idempotencyKey ? { 'idempotency-key': idempotencyKey } : {}),
+    },
+    JSON.stringify(payload),
+    5000,
+  );
+}
+
+async function archiveGenerationAttemptRequest(
+  documentId,
+  attemptId,
+  revision,
+  cookie = 'better-auth.session=abc',
+  authority = null,
+  documentRevision = null,
+) {
+  let currentDocumentRevision = documentRevision;
+  if (currentDocumentRevision === null) {
+    const currentDocument = await queryDb(
+      'SELECT revision FROM level_working_copies WHERE document_id = $1',
+      [documentId],
+    );
+    currentDocumentRevision = Number(currentDocument.rows[0]?.revision);
+  }
+  const payload = editorMutationBody(
+    documentId,
+    cookie,
+    {
+      expected_revision: revision,
+      document_revision: currentDocumentRevision,
+    },
+    authority,
+  );
+  return request(
+    'POST',
+    `/api/editor-documents/${documentId}/generation-attempts/${attemptId}/archive`,
+    { cookie, 'content-type': 'application/json' },
+    JSON.stringify(payload),
+    5000,
+  );
+}
+
+function discardGenerationAttemptWarpRequest(
+  documentId,
+  attemptId,
+  warpedVersionId,
+  revision,
+  cookie = 'better-auth.session=abc',
+  authority = null,
+) {
+  const payload = editorMutationBody(
+    documentId,
+    cookie,
+    {
+      expected_revision: revision,
+      expected_warped_version_id: warpedVersionId,
+    },
+    authority,
+  );
+  return request(
+    'POST',
+    `/api/editor-documents/${documentId}/generation-attempts/${attemptId}/discard-warp`,
+    { cookie, 'content-type': 'application/json' },
+    JSON.stringify(payload),
+    5000,
+  );
+}
+
+async function discardGenerationAttemptOcclusionRequest(
+  documentId,
+  attemptId,
+  occlusionVersionId,
+  revision,
+  cookie = 'better-auth.session=abc',
+  authority = null,
+  documentRevision = null,
+) {
+  let currentDocumentRevision = documentRevision;
+  if (currentDocumentRevision === null) {
+    const currentDocument = await queryDb(
+      'SELECT revision FROM level_working_copies WHERE document_id = $1',
+      [documentId],
+    );
+    currentDocumentRevision = Number(currentDocument.rows[0]?.revision);
+  }
+  const payload = editorMutationBody(
+    documentId,
+    cookie,
+    {
+      expected_revision: revision,
+      expected_occlusion_version_id: occlusionVersionId,
+      document_revision: currentDocumentRevision,
+    },
+    authority,
+  );
+  return request(
+    'POST',
+    `/api/editor-documents/${documentId}/generation-attempts/${attemptId}/discard-occlusion`,
+    { cookie, 'content-type': 'application/json' },
+    JSON.stringify(payload),
+    5000,
+  );
+}
+
+function uploadBackgroundVersionRequest(
+  documentId,
+  versionId,
+  revision,
+  bytes,
+  cookie = 'better-auth.session=abc',
+  authority = null,
+) {
+  const current = authority || editorAuthorities.get(editorAuthorityKey(documentId, cookie));
+  return request(
+    'PUT',
+    `/api/editor-documents/${documentId}/background-versions/${versionId}/content`,
+    {
+      cookie,
+      'content-type': 'image/png',
+      'content-length': bytes.length,
+      'if-match': `"${revision}"`,
+      ...(current ? {
+        'x-editor-edit-session-id': current.session_id,
+        'x-editor-edit-session-key': current.edit_session_key,
+        'x-editor-edit-generation': String(current.edit_generation),
+      } : {}),
+    },
+    bytes,
+    5000,
+  );
+}
+
+function beginHeldBackgroundVersionUpload(
+  documentId,
+  versionId,
+  revision,
+  bytes,
+  cookie = 'better-auth.session=abc',
+) {
+  const current = editorAuthorities.get(editorAuthorityKey(documentId, cookie));
+  let resolveResponse;
+  let rejectResponse;
+  const response = new Promise((resolve, reject) => {
+    resolveResponse = resolve;
+    rejectResponse = reject;
+  });
+  const req = http.request({
+    hostname: '127.0.0.1',
+    port,
+    method: 'PUT',
+    path: `/api/editor-documents/${documentId}/background-versions/${versionId}/content`,
+    headers: {
+      cookie,
+      'content-type': 'image/png',
+      'content-length': bytes.length,
+      'if-match': `"${revision}"`,
+      ...(current ? {
+        'x-editor-edit-session-id': current.session_id,
+        'x-editor-edit-session-key': current.edit_session_key,
+        'x-editor-edit-generation': String(current.edit_generation),
+      } : {}),
+    },
+  }, (res) => {
+    const chunks = [];
+    res.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+    res.on('end', () => resolveResponse({
+      statusCode: res.statusCode,
+      headers: res.headers,
+      body: Buffer.concat(chunks).toString('utf8'),
+    }));
+  });
+  req.on('error', rejectResponse);
+  req.setTimeout(10000, () => req.destroy(new Error('held background upload timed out')));
+  const split = Math.min(8, bytes.length - 1);
+  req.write(bytes.subarray(0, split));
+  return {
+    response,
+    finish: () => req.end(bytes.subarray(split)),
+  };
+}
+
 // Open a long-lived SSE stream and expose its parsed `data:` frames. Unlike request()
 // (which reads to end with a 1s socket timeout), this keeps the connection open and lets
 // a test await stream conditions. Heartbeat comments (`:keepalive`) carry no `data:` line
@@ -504,7 +787,7 @@ function openSse(path, headers = {}) {
 // process liveness; `/ready` is asserted after this reset establishes a known
 // complete catalog state.
 async function resetDb() {
-  await queryDb('TRUNCATE levels, campaign_workspaces, editor_document_edit_events, editor_document_recoveries, editor_document_edit_sessions, level_working_copies, level_thumbnail_derivatives, design_portfolios, campaigns, official_campaigns, lab_runs, prop_seats, sfx_profiles, drawable_asset_events, drawable_asset_media, drawable_assets, drawable_catalog_state, media_asset_events, media_versions, media_blobs, media_slots, media_catalog_state, unit_asset_events, unit_sprites, unit_families, unit_assets, unit_catalog_state CASCADE');
+  await queryDb('TRUNCATE levels, campaign_workspaces, public_maps, editor_document_edit_events, editor_document_recoveries, editor_document_edit_sessions, predrawn_background_geometry_bindings, predrawn_background_version_events, predrawn_background_versions, level_working_copies, level_thumbnail_derivatives, design_portfolios, campaigns, official_campaigns, lab_runs, prop_seats, sfx_profiles, drawable_asset_events, drawable_asset_media, drawable_assets, drawable_catalog_state, media_asset_events, media_versions, media_blobs, media_slots, media_catalog_state, unit_asset_events, unit_sprites, unit_families, unit_assets, unit_catalog_state CASCADE');
   await queryDb("INSERT INTO media_catalog_state (singleton) VALUES (true); INSERT INTO drawable_catalog_state (singleton) VALUES (true); INSERT INTO unit_catalog_state (singleton) VALUES (true); INSERT INTO unit_families (family) VALUES ('pawn'), ('rook'), ('knight'), ('bishop'), ('queen'), ('king');");
 }
 
@@ -626,18 +909,157 @@ async function queryDb(sql, params = []) {
   }
 }
 
+function inlineMigrationDefinition(version) {
+  if (!cachedInlineMigrations) {
+    cachedInlineMigrations = extractInlineMigrations(
+      fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8'),
+    );
+  }
+  const migration = cachedInlineMigrations.find((candidate) => candidate.version === version);
+  if (!migration) throw new Error(`Could not find inline migration ${version}`);
+  return migration;
+}
+
 function inlineMigrationSql(version) {
-  const source = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
-  const marker = `version: ${version},`;
-  const markerOffset = source.indexOf(marker);
-  if (markerOffset === -1) throw new Error(`Could not find inline migration ${version}`);
-  const sqlMarker = 'sql: `';
-  const sqlOffset = source.indexOf(sqlMarker, markerOffset);
-  if (sqlOffset === -1) throw new Error(`Could not find SQL for inline migration ${version}`);
-  const sqlStart = sqlOffset + sqlMarker.length;
-  const sqlEnd = source.indexOf('`,', sqlStart);
-  if (sqlEnd === -1) throw new Error(`Could not find end of inline migration ${version}`);
-  return source.slice(sqlStart, sqlEnd);
+  return inlineMigrationDefinition(version).sql;
+}
+
+async function validatePrimarySparseNumericMigrationUpgrade43() {
+  const history = await queryDb(
+    `SELECT version, name, checksum
+       FROM schema_migrations
+      ORDER BY version`,
+  );
+  const identityColumns = await queryDb(
+    `SELECT column_name, is_nullable
+       FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'schema_migrations'
+        AND column_name IN ('name', 'checksum')
+      ORDER BY column_name`,
+  );
+  const versions = history.rows.map((row) => Number(row.version));
+  const expectedVersions = Array.from({ length: 43 }, (_, index) => index + 1);
+  const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
+  const expectedByVersion = new Map(
+    expectedMigrations.map((migration) => [migration.version, migration]),
+  );
+  const identityMismatch = history.rows.find((row) => {
+    const migration = expectedByVersion.get(Number(row.version));
+    return (
+      !migration
+      || row.name !== migration.name
+      || row.checksum !== migrationChecksum(migration)
+    );
+  });
+  const appliedMigrationVersions = [
+    ...Array.from({ length: 8 }, (_, index) => index + 28),
+    ...Array.from({ length: 7 }, (_, index) => index + 37),
+  ];
+  const skippedMigrationVersions = [
+    ...Array.from({ length: 27 }, (_, index) => index + 1),
+    36,
+  ];
+  const appliedSummary = appliedMigrationVersions
+    .map((version) => {
+      const migration = expectedByVersion.get(version);
+      return `${version} (${migration.name})`;
+    })
+    .join(', ');
+  const skippedSummary = skippedMigrationVersions
+    .map((version) => {
+      const migration = expectedByVersion.get(version);
+      return `${version} (${migration.name})`;
+    })
+    .join(', ');
+  const readyLine = output
+    .split(/\r?\n/)
+    .find((line) => line.includes('postgres ready') && line.includes('schema=auto'));
+  const revisionReasonRows = await queryDb(
+    `SELECT reason
+       FROM level_working_copy_revision_reasons
+      ORDER BY reason`,
+  );
+  const revisionReasonConstraints = await queryDb(
+    `SELECT
+       constraint_entry.conname AS constraint_name,
+       constraint_entry.contype AS constraint_type,
+       constraint_entry.convalidated AS validated,
+       constraint_entry.confupdtype AS update_action,
+       constraint_entry.confdeltype AS delete_action,
+       referenced_namespace.nspname AS referenced_schema,
+       referenced_table.relname AS referenced_table,
+       pg_get_constraintdef(constraint_entry.oid) AS definition
+     FROM pg_constraint constraint_entry
+     JOIN pg_class local_table
+       ON local_table.oid = constraint_entry.conrelid
+     JOIN pg_namespace local_namespace
+       ON local_namespace.oid = local_table.relnamespace
+     LEFT JOIN pg_class referenced_table
+       ON referenced_table.oid = constraint_entry.confrelid
+     LEFT JOIN pg_namespace referenced_namespace
+       ON referenced_namespace.oid = referenced_table.relnamespace
+    WHERE local_namespace.nspname = 'public'
+      AND local_table.relname = 'level_working_copy_revisions'
+      AND (
+        constraint_entry.conname = 'level_working_copy_revisions_reason_fk'
+        OR (
+          constraint_entry.contype = 'c'
+          AND position('reason' in lower(pg_get_constraintdef(constraint_entry.oid))) > 0
+        )
+      )
+    ORDER BY constraint_entry.conname`,
+  );
+  const expectedReasons = [
+    'autosave',
+    'canonical-refresh',
+    'create',
+    'discard',
+    'generation-attempt-archive',
+    'generation-attempt-occlusion-discard',
+    'migration',
+    'resolve',
+    'restore',
+    'save',
+  ];
+  const canonicalReasonForeignKey = revisionReasonConstraints.rows.find(
+    (row) => row.constraint_name === 'level_working_copy_revisions_reason_fk',
+  );
+  const staleReasonChecks = revisionReasonConstraints.rows.filter(
+    (row) => row.constraint_type === 'c',
+  );
+  if (
+    versions.join(',') !== expectedVersions.join(',')
+    || identityColumns.rows.length !== 2
+    || identityColumns.rows.some((row) => row.is_nullable !== 'NO')
+    || identityMismatch
+    || !readyLine
+    || !readyLine.includes(`schema migrations applied: ${appliedSummary};`)
+    || !readyLine.includes(`skipped (already applied): ${skippedSummary};`)
+    || !readyLine.includes('pending: none')
+    || revisionReasonRows.rows.map((row) => row.reason).join(',') !== expectedReasons.join(',')
+    || staleReasonChecks.length !== 0
+    || !canonicalReasonForeignKey
+    || canonicalReasonForeignKey.constraint_type !== 'f'
+    || canonicalReasonForeignKey.validated !== true
+    || canonicalReasonForeignKey.update_action !== 'r'
+    || canonicalReasonForeignKey.delete_action !== 'r'
+    || canonicalReasonForeignKey.referenced_schema !== 'public'
+    || canonicalReasonForeignKey.referenced_table !== 'level_working_copy_revision_reasons'
+    || !/^FOREIGN KEY \(reason\) REFERENCES level_working_copy_revision_reasons\(reason\)/.test(
+      canonicalReasonForeignKey.definition,
+    )
+  ) {
+    throw new Error(
+      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 43: `
+      + `${JSON.stringify({
+        history: history.rows,
+        identity_columns: identityColumns.rows,
+        reasons: revisionReasonRows.rows,
+        constraints: revisionReasonConstraints.rows,
+      })}\noutput:\n${output}`,
+    );
+  }
 }
 
 async function validateEditorMigration16Preservation() {
@@ -777,6 +1199,79 @@ async function validateThumbnailRepairMigration22() {
   }
 }
 
+async function validateEditorRevisionReasonMigration37() {
+  const { Client } = require('pg');
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('CREATE SCHEMA smoke_editor_revision_reason_migration_37');
+    await client.query('SET LOCAL search_path TO smoke_editor_revision_reason_migration_37');
+    await client.query(`
+      CREATE TABLE schema_migrations (
+        version integer PRIMARY KEY,
+        applied_at timestamptz NOT NULL DEFAULT now()
+      );
+      INSERT INTO schema_migrations (version) VALUES (36);
+      CREATE TABLE level_working_copies (
+        document_id text PRIMARY KEY,
+        body jsonb NOT NULL,
+        revision bigint NOT NULL,
+        saved_revision bigint NOT NULL,
+        baseline_hash text,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      INSERT INTO level_working_copies
+        (document_id, body, revision, saved_revision, baseline_hash)
+      VALUES ('document-1', '{"id":"level-1"}'::jsonb, 1, 1, 'baseline');
+    `);
+    await client.query(inlineMigrationSql(24));
+    await client.query(inlineMigrationSql(37));
+    await client.query(inlineMigrationSql(37));
+    await client.query(`
+      INSERT INTO level_working_copy_revisions
+        (document_id, revision, body, saved_revision, baseline_hash, reason)
+      VALUES (
+        'document-1', 2, '{"id":"level-1","archived":true}'::jsonb,
+        1, 'baseline', 'generation-attempt-archive'
+      )
+    `);
+
+    const recorded = await client.query(
+      `SELECT reason
+         FROM level_working_copy_revisions
+        WHERE document_id = 'document-1'
+        ORDER BY revision`,
+    );
+    if (recorded.rows.map((row) => row.reason).join(',') !== 'migration,generation-attempt-archive') {
+      throw new Error(`Migration 37 did not preserve old reasons and admit the archive reason: ${JSON.stringify(recorded.rows)}`);
+    }
+
+    await client.query('SAVEPOINT invalid_revision_reason');
+    let invalidReasonCode = null;
+    try {
+      await client.query(`
+        INSERT INTO level_working_copy_revisions
+          (document_id, revision, body, saved_revision, baseline_hash, reason)
+        VALUES ('document-1', 3, '{}'::jsonb, 1, 'baseline', 'unsupported-reason')
+      `);
+    } catch (error) {
+      invalidReasonCode = error.code;
+    }
+    await client.query('ROLLBACK TO SAVEPOINT invalid_revision_reason');
+    await client.query('RELEASE SAVEPOINT invalid_revision_reason');
+    if (invalidReasonCode !== '23503') {
+      throw new Error(`Migration 37 did not keep revision reasons fail-closed: ${invalidReasonCode ?? 'insert succeeded'}`);
+    }
+    await client.query('ROLLBACK');
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve validation error */ }
+    throw error;
+  } finally {
+    await client.end();
+  }
+}
+
 async function waitForServer() {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     if (child.exitCode !== null) {
@@ -809,11 +1304,13 @@ async function main() {
   await new Promise((resolve) => mockAuth.listen(authPort, '127.0.0.1', resolve));
   await new Promise((resolve) => mockBgm.listen(bgmPort, '127.0.0.1', resolve));
   await waitForServer();
+  await validatePrimarySparseNumericMigrationUpgrade43();
   if (!fs.existsSync(path.join(hotBackendDir, 'server.js'))) {
     throw new Error('Supervisor did not initialize the hot backend entrypoint');
   }
   await validateEditorMigration16Preservation();
   await validateThumbnailRepairMigration22();
+  await validateEditorRevisionReasonMigration37();
   await resetDb();
 
   const missingPropSeats = await get('/api/prop-seats/default');
@@ -3397,6 +3894,152 @@ async function main() {
   ) {
     throw new Error(`Edit-session attribution/device privacy was not durable: ${JSON.stringify(storedPrimaryIdentity.rows[0])}`);
   }
+
+  // Make the established writer eligible for normal expiry maintenance. Every
+  // observer operation must leave that authority untouched, even when a write-
+  // intent request would expire it and preserve a recovery.
+  await queryDb(
+    `UPDATE editor_document_edit_sessions
+        SET lease_expires_at = clock_timestamp() - interval '1 second'
+      WHERE session_id = $1 AND state = 'active'`,
+    [primaryAuthority.session_id],
+  );
+  const observerBefore = await queryDb(
+    `SELECT working.edit_generation,
+            working.revision,
+            working.body::text AS body_json,
+            writer.state AS writer_state,
+            writer.edit_generation AS writer_edit_generation,
+            writer.document_revision AS writer_document_revision,
+            writer.draft_body::text AS writer_draft_body_json,
+            writer.lease_expires_at::text AS writer_lease_expires_at,
+            writer.displaced_at,
+            (SELECT count(*)::integer
+               FROM editor_document_edit_sessions
+              WHERE document_id = $1 AND state = 'active') AS active_count,
+            (SELECT count(*)::integer
+               FROM editor_document_recoveries
+              WHERE document_id = $1) AS recovery_count
+       FROM level_working_copies AS working
+       JOIN editor_document_edit_sessions AS writer
+         ON writer.session_id = $2 AND writer.document_id = working.document_id
+      WHERE working.document_id = $1`,
+    [smokeDocumentId, primaryAuthority.session_id],
+  );
+  const observer = await openEditorEditSession(smokeDocumentId, {
+    deviceId: 'smoke-observer-device',
+    clientLabel: 'Automated visual verification',
+    intent: 'observe',
+    remember: false,
+  });
+  const observerPresence = await request(
+    'POST', `/api/editor-documents/${smokeDocumentId}/edit-presence`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ session_id: observer.sessionId, session_key: observer.sessionKey, device_id: observer.deviceId }),
+  );
+  const observerHeartbeat = await request(
+    'POST', `/api/editor-documents/${smokeDocumentId}/edit-sessions/${observer.sessionId}/heartbeat`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ session_key: observer.sessionKey }),
+  );
+  const observerTakeover = await request(
+    'POST', `/api/editor-documents/${smokeDocumentId}/edit-sessions/${observer.sessionId}/takeover`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ session_key: observer.sessionKey, expected_generation: Number(observerBefore.rows[0].edit_generation) }),
+  );
+  const observerWrite = await request(
+    'PUT', `/api/editor-documents/${smokeDocumentId}`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      revision: Number(observerBefore.rows[0].revision),
+      level: { ...workspaceLevel, name: 'Observer must not write' },
+      edit_session_id: observer.sessionId,
+      edit_session_key: observer.sessionKey,
+      edit_generation: Number(observerBefore.rows[0].edit_generation),
+    }),
+  );
+  const observerRecoveryUpload = await request(
+    'POST',
+    `/api/editor-documents/${smokeDocumentId}/edit-sessions/${observer.sessionId}/recoveries`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      revision: Number(observerBefore.rows[0].revision),
+      edit_generation: Number(observerBefore.rows[0].edit_generation),
+      session_key: observer.sessionKey,
+      level: { ...workspaceLevel, name: 'Observer recovery must not write' },
+    }),
+  );
+  const observerClose = await closeEditorEditSessionRequest(smokeDocumentId, observer.sessionId, observer.sessionKey);
+  const observerAfter = await queryDb(
+    `SELECT working.edit_generation,
+            working.revision,
+            working.body::text AS body_json,
+            writer.state AS writer_state,
+            writer.edit_generation AS writer_edit_generation,
+            writer.document_revision AS writer_document_revision,
+            writer.draft_body::text AS writer_draft_body_json,
+            writer.lease_expires_at::text AS writer_lease_expires_at,
+            writer.displaced_at,
+            (SELECT count(*)::integer
+               FROM editor_document_edit_sessions
+              WHERE document_id = $1 AND state = 'active') AS active_count,
+            (SELECT count(*)::integer
+               FROM editor_document_recoveries
+              WHERE document_id = $1) AS recovery_count
+       FROM level_working_copies AS working
+       JOIN editor_document_edit_sessions AS writer
+         ON writer.session_id = $2 AND writer.document_id = working.document_id
+      WHERE working.document_id = $1`,
+    [smokeDocumentId, primaryAuthority.session_id],
+  );
+  const observerPresenceBody = JSON.parse(observerPresence.body);
+  const observerHeartbeatBody = JSON.parse(observerHeartbeat.body);
+  const observerTakeoverBody = JSON.parse(observerTakeover.body);
+  const observerWriteBody = JSON.parse(observerWrite.body);
+  const observerRecoveryUploadBody = JSON.parse(observerRecoveryUpload.body);
+  const observerCloseBody = JSON.parse(observerClose.body);
+  const observerBeforeRow = observerBefore.rows[0];
+  const observerAfterRow = observerAfter.rows[0];
+  if (
+    observer.response.statusCode !== 200 || observer.body.session?.state !== 'observing' ||
+    observer.body.presence?.active_editor?.session_id !== primaryAuthority.session_id ||
+    observer.body.presence?.can_take_over !== false ||
+    observerPresence.statusCode !== 200 || observerPresenceBody.session?.state !== 'observing' ||
+    observerPresenceBody.presence?.active_editor?.session_id !== primaryAuthority.session_id ||
+    observerPresenceBody.presence?.can_take_over !== false ||
+    observerHeartbeat.statusCode !== 409 || observerHeartbeatBody.error !== 'editor_document_session_observe_only' ||
+    observerTakeover.statusCode !== 409 || observerTakeoverBody.error !== 'editor_document_session_observe_only' ||
+    observerWrite.statusCode !== 409 || observerWriteBody.error !== 'editor_document_session_observe_only' ||
+    observerRecoveryUpload.statusCode !== 409 || observerRecoveryUploadBody.error !== 'editor_document_session_observe_only' ||
+    observerClose.statusCode !== 200 || observerCloseBody.session?.state !== 'closed' ||
+    observerCloseBody.presence?.active_editor?.session_id !== primaryAuthority.session_id ||
+    observerBeforeRow?.writer_state !== 'active' || observerAfterRow?.writer_state !== 'active' ||
+    Number(observerBeforeRow?.active_count) !== 1 || Number(observerAfterRow?.active_count) !== 1 ||
+    observerBeforeRow?.displaced_at !== null || observerAfterRow?.displaced_at !== null ||
+    Number(observerBeforeRow?.edit_generation) !== Number(primaryAuthority.edit_generation) ||
+    Number(observerBeforeRow?.writer_edit_generation) !== Number(primaryAuthority.edit_generation) ||
+    Number(observerBeforeRow?.writer_document_revision) !== Number(observerBeforeRow?.revision) ||
+    Number(observerAfterRow?.edit_generation) !== Number(observerBeforeRow?.edit_generation) ||
+    Number(observerAfterRow?.revision) !== Number(observerBeforeRow?.revision) ||
+    observerAfterRow?.body_json !== observerBeforeRow?.body_json ||
+    Number(observerAfterRow?.writer_edit_generation) !== Number(observerBeforeRow?.writer_edit_generation) ||
+    Number(observerAfterRow?.writer_document_revision) !== Number(observerBeforeRow?.writer_document_revision) ||
+    observerAfterRow?.writer_draft_body_json !== observerBeforeRow?.writer_draft_body_json ||
+    observerAfterRow?.writer_lease_expires_at !== observerBeforeRow?.writer_lease_expires_at ||
+    Number(observerAfterRow?.recovery_count) !== Number(observerBeforeRow?.recovery_count)
+  ) {
+    throw new Error(`Observation-only editor session changed the established writer, working copy, or recovery set: ${JSON.stringify({ observer: observer.body, observerPresence: observerPresenceBody, observerHeartbeat: observerHeartbeatBody, observerTakeover: observerTakeoverBody, observerWrite: observerWriteBody, observerRecoveryUpload: observerRecoveryUploadBody, observerClose: observerCloseBody, before: observerBeforeRow, after: observerAfterRow })}`);
+  }
+  const restoredPrimaryLease = await queryDb(
+    `UPDATE editor_document_edit_sessions
+        SET lease_expires_at = clock_timestamp() + interval '5 minutes'
+      WHERE session_id = $1 AND state = 'active'
+      RETURNING state`,
+    [primaryAuthority.session_id],
+  );
+  if (restoredPrimaryLease.rows[0]?.state !== 'active') {
+    throw new Error(`Observation-only regression could not restore its primary writer fixture: ${JSON.stringify(restoredPrimaryLease.rows)}`);
+  }
   const primaryHeartbeat = await request(
     'POST',
     `/api/editor-documents/${smokeDocumentId}/edit-sessions/${primaryAuthority.session_id}/heartbeat`,
@@ -3873,6 +4516,12 @@ async function main() {
       { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
       JSON.stringify({ revision: 1, target_revision: 1 }),
     ),
+    await deleteEditorRecoveriesRequest(
+      rivalDocumentId,
+      [crypto.randomUUID()],
+      {},
+      'better-auth.session=abc',
+    ),
     await deleteEditorDocumentRequest(rivalDocumentId, 1, 'better-auth.session=abc'),
   ];
   if (adminMutationRequests.some((response) => response.statusCode !== 404)) {
@@ -3965,6 +4614,18 @@ async function main() {
   } else {
     startSecondaryBackend();
     await waitForSecondaryBackend();
+    const secondaryReadyLine = secondaryOutput
+      .split(/\r?\n/)
+      .find((line) => line.includes('postgres ready') && line.includes('schema=check'));
+    if (
+      !secondaryReadyLine
+      || !secondaryReadyLine.includes('schema migrations applied: none')
+      || !secondaryReadyLine.includes('pending: none')
+    ) {
+      throw new Error(
+        `Check-mode backend did not verify the sealed upgraded migration history:\n${secondaryOutput}`,
+      );
+    }
     processClaims = await Promise.all([
       openEditorEditSession(rivalDocumentId, {
         cookie: 'better-auth.session=rival',
@@ -5131,7 +5792,34 @@ async function main() {
   if (discardNeverSaved.statusCode !== 409 || JSON.parse(discardNeverSaved.body).error !== 'no_saved_level') {
     throw new Error(`Never-saved document should have no discard target: ${discardNeverSaved.statusCode} ${discardNeverSaved.body}`);
   }
-  const newEditorAutosaveLevel = { ...workspaceLevel, id: 'l2', name: 'New Working Level Autosaved' };
+  const sourceCaptureBoard = {
+    cols: 8,
+    rows: 12,
+    cells: {},
+    units: {},
+    doodads: {},
+    props: {},
+    cover: {},
+    features: {},
+    fences: {},
+    fencePosts: {},
+    walls: {},
+    wallArt: {},
+    featureCuts: {},
+    featureExits: {},
+  };
+  const sourceCaptureFrame = boardRender.initialPredrawnGenerationFrame(sourceCaptureBoard);
+  const sourceCaptureBoardCode = boardRender.encodeBoard({
+    ...sourceCaptureBoard,
+    backgroundMode: 'legacy',
+    predrawnGenerationFrame: sourceCaptureFrame,
+  });
+  const newEditorAutosaveLevel = {
+    ...workspaceLevel,
+    id: 'l2',
+    name: 'New Working Level Autosaved',
+    boardCode: sourceCaptureBoardCode,
+  };
   const newEditorAutosave = await request(
     'PUT', `/api/editor-documents/${newDocumentId}`,
     { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
@@ -5160,13 +5848,36 @@ async function main() {
   const workspaceWithNewLevelBody = JSON.parse(workspaceWithNewLevel.body);
   if (
     workspaceWithNewLevelBody.levels.l2.name !== 'New Working Level Autosaved' ||
-    !/^\/api\/media\/[0-9a-f]{64}$/.test(workspaceWithNewLevelBody.thumbnail_urls.l2 || '')
+    !/^\/api\/campaign-workspace\/level-thumbnails\/l2\/[0-9a-f]{64}\.png$/.test(
+      workspaceWithNewLevelBody.thumbnail_urls.l2 || '',
+    )
   ) {
     throw new Error(`First Save did not create the canonical Level: ${workspaceWithNewLevel.body}\nbackend output:\n${output}`);
   }
-  const storedListThumbnail = await get(workspaceWithNewLevelBody.thumbnail_urls.l2);
-  if (storedListThumbnail.statusCode !== 200 || storedListThumbnail.headers['content-type'] !== 'image/png') {
-    throw new Error(`Canonical level summary did not project a readable immutable thumbnail: ${storedListThumbnail.statusCode}`);
+  const anonymousStoredListThumbnail = await get(workspaceWithNewLevelBody.thumbnail_urls.l2);
+  const storedListThumbnail = await get(
+    workspaceWithNewLevelBody.thumbnail_urls.l2,
+    { cookie: 'better-auth.session=abc' },
+  );
+  const privateThumbnailBlob = await queryDb(
+    `SELECT derivative.blob_sha256, blob.published_at
+       FROM level_thumbnail_derivatives derivative
+       JOIN media_blobs blob ON blob.sha256 = derivative.blob_sha256
+      WHERE derivative.authority_key = $1`,
+    ['user:player@example.com:l2'],
+  );
+  const anonymousPrivateThumbnailBlob = privateThumbnailBlob.rows[0]
+    ? await get(`/api/media/${privateThumbnailBlob.rows[0].blob_sha256}`)
+    : { statusCode: 0 };
+  if (
+    anonymousStoredListThumbnail.statusCode !== 401
+    || storedListThumbnail.statusCode !== 200
+    || storedListThumbnail.headers['content-type'] !== 'image/png'
+    || privateThumbnailBlob.rows.length !== 1
+    || privateThumbnailBlob.rows[0].published_at !== null
+    || anonymousPrivateThumbnailBlob.statusCode !== 404
+  ) {
+    throw new Error(`Private canonical thumbnail escaped owner delivery: ${anonymousStoredListThumbnail.statusCode} / ${storedListThumbnail.statusCode} / ${JSON.stringify(privateThumbnailBlob.rows)} / ${anonymousPrivateThumbnailBlob.statusCode}`);
   }
   const deleteSavedBaseline = await deleteEditorDocumentRequest(newDocumentId, 3, 'better-auth.session=abc');
   const deleteSavedBaselineBody = JSON.parse(deleteSavedBaseline.body);
@@ -5205,6 +5916,2730 @@ async function main() {
     throw new Error(`Discard should restore the newly saved canonical Level: ${discardNewEditorDraft.statusCode} ${discardNewEditorDraft.body}`);
   }
 
+  // Immutable pre-drawn background lineage is document-owned while in review.
+  // Private Save pins exact selected ids without making bytes public. A later
+  // explicit public-map publication crosses that boundary atomically.
+  const backgroundWorldBounds = {
+    minX: sourceCaptureFrame.x,
+    minY: sourceCaptureFrame.y,
+    width: sourceCaptureFrame.width,
+    height: sourceCaptureFrame.height,
+  };
+  const versionedBoardCode = (backgroundId, occlusionId, {
+    rows = 12,
+  } = {}) => Buffer.from(JSON.stringify({
+    c: 8,
+    r: rows,
+    pd: [
+      2,
+      backgroundId,
+      occlusionId,
+      64,
+      64,
+      backgroundWorldBounds.minX,
+      backgroundWorldBounds.minY,
+      backgroundWorldBounds.width,
+      backgroundWorldBounds.height,
+    ],
+  }), 'utf8').toString('base64url');
+  const environmentGeometrySha256 = (boardCode) => crypto.createHash('sha256').update(
+    boardRender.predrawnEnvironmentGeometryFingerprintInput(boardRender.decodeBoard(boardCode)),
+    'utf8',
+  ).digest('hex');
+  const legacyEnvironmentGeometrySha256 = (boardCode) => crypto.createHash('sha256').update(
+    boardRender.predrawnEnvironmentGeometryFingerprintInputV1(boardRender.decodeBoard(boardCode)),
+    'utf8',
+  ).digest('hex');
+  const boardCodeWith = (boardCode, changes) => boardRender.encodeBoard({
+    ...boardRender.decodeBoard(boardCode),
+    ...changes,
+  });
+  const privateEnvironmentGeometrySha256 = environmentGeometrySha256(
+    versionedBoardCode(crypto.randomUUID(), null),
+  );
+  const sourcePng = syntheticPng(
+    sourceCaptureFrame.width,
+    sourceCaptureFrame.height,
+    '#102030',
+    '#6090a0',
+  );
+  const sourcePngSha256 = crypto.createHash('sha256').update(sourcePng).digest('hex');
+  const sourceArtworkPayload = {
+    kind: 'source',
+    label: 'Saved generation source',
+    operation: {
+      kind: 'generation-source-v1',
+      capture: 'canonical-generation-frame',
+    },
+    provenance: {
+      pipeline: 'smoke-source-capture',
+      sourceSha256: sourcePngSha256,
+    },
+    idempotency_key: `background-source:${newDocumentId}`,
+  };
+  const sourceArtworkCreate = await createBackgroundVersionRequest(
+    newDocumentId,
+    sourceArtworkPayload,
+  );
+  const sourceArtworkCreateBody = JSON.parse(sourceArtworkCreate.body);
+  const sourceArtworkDraft = sourceArtworkCreateBody.version;
+  const prematureAttempt = await createGenerationAttemptRequest(newDocumentId, {
+    label: 'Source must be uploaded first',
+    source_version_id: sourceArtworkDraft?.id,
+    idempotency_key: `generation-attempt-premature:${newDocumentId}`,
+  });
+  const sourceArtworkUpload = await uploadBackgroundVersionRequest(
+    newDocumentId,
+    sourceArtworkDraft.id,
+    sourceArtworkDraft.row_revision,
+    sourcePng,
+  );
+  const sourceArtworkReady = JSON.parse(sourceArtworkUpload.body).version;
+  const sourceArtworkReplay = await createBackgroundVersionRequest(
+    newDocumentId,
+    sourceArtworkPayload,
+  );
+  const sourceArtworkList = await get(
+    `/api/editor-documents/${newDocumentId}/background-versions?kind=source&status=ready`,
+    { cookie: 'better-auth.session=abc' },
+  );
+  const generationAttemptPayload = {
+    label: 'Primary AI artwork attempt',
+    source_version_id: sourceArtworkReady.id,
+    idempotency_key: `generation-attempt:${newDocumentId}:primary`,
+  };
+  const generationAttemptCreate = await createGenerationAttemptRequest(
+    newDocumentId,
+    generationAttemptPayload,
+  );
+  const generationAttempt = JSON.parse(generationAttemptCreate.body).attempt;
+  const generationAttemptReplay = await createGenerationAttemptRequest(
+    newDocumentId,
+    generationAttemptPayload,
+  );
+  const generationAttemptList = await get(
+    `/api/editor-documents/${newDocumentId}/generation-attempts?status=active`,
+    { cookie: 'better-auth.session=abc' },
+  );
+  if (
+    sourceArtworkCreate.statusCode !== 201
+    || sourceArtworkDraft?.kind !== 'source'
+    || sourceArtworkDraft?.status !== 'draft'
+    || sourceArtworkDraft?.operation?.backgroundMode !== 'legacy'
+    || sourceArtworkDraft?.operation?.coordinateBasis !== 'board-world-pixels-v1'
+    || sourceArtworkDraft?.operation?.environmentGeometrySha256
+      !== privateEnvironmentGeometrySha256
+    || sourceArtworkDraft?.provenance?.environmentGeometrySha256
+      !== privateEnvironmentGeometrySha256
+    || sourceArtworkDraft?.operation?.generationFrame?.width !== sourceCaptureFrame.width
+    || sourceArtworkDraft?.operation?.generationFrame?.height !== sourceCaptureFrame.height
+    || sourceArtworkDraft?.operation?.viewingPane?.minX !== backgroundWorldBounds.minX
+    || sourceArtworkDraft?.operation?.viewingPane?.minY !== backgroundWorldBounds.minY
+    || prematureAttempt.statusCode !== 409
+    || JSON.parse(prematureAttempt.body).error !== 'generation_attempt_source_not_ready'
+    || sourceArtworkUpload.statusCode !== 200
+    || sourceArtworkReady?.content_sha256 !== sourcePngSha256
+    || sourceArtworkReady?.frame_width !== sourceCaptureFrame.width
+    || sourceArtworkReady?.frame_height !== sourceCaptureFrame.height
+    || sourceArtworkReplay.statusCode !== 200
+    || JSON.parse(sourceArtworkReplay.body).idempotent_replay !== true
+    || sourceArtworkList.statusCode !== 200
+    || JSON.parse(sourceArtworkList.body).versions?.length !== 1
+    || JSON.parse(sourceArtworkList.body).versions[0]?.id !== sourceArtworkReady.id
+    || generationAttemptCreate.statusCode !== 201
+    || generationAttempt?.origin !== 'source'
+    || generationAttempt?.source_version_id !== sourceArtworkReady.id
+    || generationAttempt?.generated_version_id !== null
+    || generationAttemptReplay.statusCode !== 200
+    || JSON.parse(generationAttemptReplay.body).attempt?.id !== generationAttempt.id
+    || JSON.parse(generationAttemptReplay.body).idempotent_replay !== true
+    || generationAttemptList.statusCode !== 200
+    || !JSON.parse(generationAttemptList.body).attempts?.some(
+      (attempt) => attempt.id === generationAttempt.id,
+    )
+  ) {
+    throw new Error(`Source artwork / generation-attempt lifecycle failed: ${sourceArtworkCreate.statusCode} ${sourceArtworkCreate.body} / ${prematureAttempt.statusCode} ${prematureAttempt.body} / ${sourceArtworkUpload.statusCode} ${sourceArtworkUpload.body} / ${sourceArtworkReplay.statusCode} ${sourceArtworkReplay.body} / ${sourceArtworkList.statusCode} ${sourceArtworkList.body} / ${generationAttemptCreate.statusCode} ${generationAttemptCreate.body} / ${generationAttemptReplay.statusCode} ${generationAttemptReplay.body} / ${generationAttemptList.statusCode} ${generationAttemptList.body}`);
+  }
+  const canonicalFixtureJson = (value) => {
+    if (Array.isArray(value)) return `[${value.map(canonicalFixtureJson).join(',')}]`;
+    if (value && typeof value === 'object') {
+      return `{${Object.keys(value).sort().map((key) => (
+        `${JSON.stringify(key)}:${canonicalFixtureJson(value[key])}`
+      )).join(',')}}`;
+    }
+    return JSON.stringify(value);
+  };
+  const sha256FixtureJson = (value) => crypto.createHash('sha256')
+    .update(canonicalFixtureJson(value), 'utf8')
+    .digest('hex');
+  // These rows deliberately bypass the Source Artwork endpoint so later smoke
+  // cases can seed legacy and cross-admin histories. Keep the direct fixture as
+  // strict as the endpoint: rebuild the complete semantic packet and immutable
+  // attempt request whenever its document or board snapshot changes.
+  const seedGenerationAttemptFixture = async (
+    documentId,
+    expectedEnvironmentGeometrySha256,
+    fixtureBoardCode,
+    label,
+  ) => {
+    const sourceVersionId = crypto.randomUUID();
+    const attemptId = crypto.randomUUID();
+    const documentResult = await queryDb(
+      `SELECT level_id, revision, body
+         FROM level_working_copies
+        WHERE document_id = $1`,
+      [documentId],
+    );
+    const document = documentResult.rows[0];
+    const documentRevision = Number(document?.revision);
+    if (!document || !Number.isSafeInteger(documentRevision) || documentRevision < 1) {
+      throw new Error(`Generation-attempt fixture requires a valid document: ${documentId}`);
+    }
+    const fixtureBoard = boardRender.decodeBoard(fixtureBoardCode);
+    const canonicalBoardCode = boardRender.encodeBoard({
+      ...fixtureBoard,
+      backgroundMode: 'legacy',
+      predrawnGenerationFrame: sourceCaptureFrame,
+    });
+    const actualGeometrySha256 = environmentGeometrySha256(canonicalBoardCode);
+    if (actualGeometrySha256 !== expectedEnvironmentGeometrySha256) {
+      throw new Error(
+        `Generation-attempt fixture geometry mismatch: ${actualGeometrySha256} !== ${expectedEnvironmentGeometrySha256}`,
+      );
+    }
+    const fixtureLevel = {
+      ...document.body,
+      id: document.level_id,
+      boardCode: canonicalBoardCode,
+    };
+    const semanticBoardCode = boardRender.encodeBoard({
+      ...boardRender.decodeBoard(canonicalBoardCode),
+      units: {},
+      cover: {},
+      coverTypes: {},
+    });
+    const semanticBoardSha256 = crypto.createHash('sha256')
+      .update(semanticBoardCode, 'utf8')
+      .digest('hex');
+    const canonicalLevelSha256 = sha256FixtureJson(fixtureLevel);
+    const generationFrame = {
+      version: sourceCaptureFrame.version,
+      x: sourceCaptureFrame.x,
+      y: sourceCaptureFrame.y,
+      width: sourceCaptureFrame.width,
+      height: sourceCaptureFrame.height,
+    };
+    const semanticRequest = {
+      schema: SOURCE_SEMANTIC_REQUEST_SCHEMA,
+      levelId: document.level_id,
+      canonicalDocumentRevision: documentRevision,
+      canonicalLevelSha256,
+      boardCode: semanticBoardCode,
+      boardSha256: semanticBoardSha256,
+      generationFrame,
+      worldBounds: backgroundWorldBounds,
+      backgroundMode: 'legacy',
+      sourceBackgroundVersionId: null,
+      sourceOcclusionVersionId: null,
+      environmentGeometrySchema: ENVIRONMENT_GEOMETRY_SCHEMA,
+      environmentGeometrySha256: expectedEnvironmentGeometrySha256,
+    };
+    const semanticRequestSha256 = sha256FixtureJson(semanticRequest);
+    const sourceOperation = {
+      kind: 'generation-source-v1',
+      coordinateBasis: 'board-world-pixels-v1',
+      viewingPane: backgroundWorldBounds,
+      generationFrame,
+      backgroundMode: 'legacy',
+      sourceBackgroundVersionId: null,
+      sourceOcclusionVersionId: null,
+      canonicalDocumentRevision: documentRevision,
+      canonicalLevelSha256,
+      environmentGeometrySchema: ENVIRONMENT_GEOMETRY_SCHEMA,
+      environmentGeometrySha256: expectedEnvironmentGeometrySha256,
+      semanticBoardSha256,
+      semanticRequest,
+      semanticRequestSha256,
+    };
+    const sourceProvenance = {
+      pipeline: 'smoke-seeded-source',
+      sourceSha256: sourcePngSha256,
+      canonicalDocumentRevision: documentRevision,
+      canonicalLevelSha256,
+      backgroundMode: 'legacy',
+      sourceBackgroundVersionId: null,
+      sourceOcclusionVersionId: null,
+      generationFrame,
+      environmentGeometrySha256: expectedEnvironmentGeometrySha256,
+      semanticBoardSha256,
+      semanticRequestSha256,
+    };
+    const sourceRequestCore = {
+      schema: ATTEMPT_SOURCE_REQUEST_SCHEMA,
+      sourceArtworkVersionId: sourceVersionId,
+      sourceArtworkSha256: sourcePngSha256,
+      semanticRequestSha256,
+      semanticRequest,
+    };
+    const sourceRequest = {
+      ...sourceRequestCore,
+      requestSha256: sha256FixtureJson(sourceRequestCore),
+    };
+    const sourceFixture = {
+      id: sourceVersionId,
+      document_id: documentId,
+      level_id: document.level_id,
+      kind: 'source',
+      blob_sha256: sourcePngSha256,
+      world_bounds: backgroundWorldBounds,
+      operation: sourceOperation,
+      provenance: sourceProvenance,
+      status: 'ready',
+    };
+    const sourceIssue = sourceArtworkVersionContractIssue(sourceFixture);
+    const sourceRequestIssue = generationAttemptSourceRequestIssue(
+      { source_request: sourceRequest },
+      sourceFixture,
+    );
+    if (sourceIssue || sourceRequestIssue) {
+      throw new Error(
+        `Invalid generation-attempt fixture: ${sourceIssue || sourceRequestIssue}`,
+      );
+    }
+    await queryDb(
+      `WITH source AS (
+         INSERT INTO predrawn_background_versions (
+           id, document_id, owner_email, level_id, kind, label,
+           parent_version_id, source_background_version_id,
+           blob_sha256, width, height, world_bounds, operation, provenance,
+           status, row_revision, created_by_email, created_by_name,
+           created_at, updated_at, updated_by
+         )
+         SELECT
+           $1, document.document_id, document.owner_email, document.level_id,
+           'source', $4, NULL, NULL,
+           template.blob_sha256, template.width, template.height, template.world_bounds,
+           $5::jsonb, $6::jsonb,
+           'ready', 1, document.owner_email, 'Smoke fixture',
+           now(), now(), document.owner_email
+         FROM predrawn_background_versions template
+         JOIN level_working_copies document ON document.document_id = $3
+         WHERE template.id = $2
+         RETURNING *
+       ), attempt AS (
+         INSERT INTO predrawn_generation_attempts (
+           id, document_id, owner_email, level_id, label, origin,
+           source_version_id, source_request,
+           created_by_email, created_by_name, updated_by
+         )
+         SELECT
+           $7, source.document_id, source.owner_email, source.level_id,
+           $4, 'source', source.id, $8::jsonb,
+           source.created_by_email, source.created_by_name, source.updated_by
+         FROM source
+         RETURNING *
+       )
+       INSERT INTO predrawn_generation_attempt_events (
+         document_id, attempt_id, action, actor_email, actor_name, details
+       )
+       SELECT
+         attempt.document_id, attempt.id, 'created',
+         attempt.created_by_email, attempt.created_by_name,
+         '{"fixture":"smoke-seeded-source"}'::jsonb
+       FROM attempt`,
+      [
+        sourceVersionId,
+        sourceArtworkReady.id,
+        documentId,
+        label,
+        JSON.stringify(sourceOperation),
+        JSON.stringify(sourceProvenance),
+        attemptId,
+        JSON.stringify(sourceRequest),
+      ],
+    );
+    return { sourceVersionId, attemptId };
+  };
+  const rawPng = syntheticPng(64, 64, '#102030', '#60a080');
+  const rawPngSha256 = crypto.createHash('sha256').update(rawPng).digest('hex');
+  const rawBackgroundPayload = {
+    kind: 'raw',
+    attempt_id: generationAttempt.id,
+    label: 'Untouched smoke generation',
+    world_bounds: backgroundWorldBounds,
+    operation: {
+      kind: 'raw-generated-v2',
+      untouched: true,
+      coordinateBasis: 'board-world-pixels-v1',
+      viewingPane: backgroundWorldBounds,
+      environmentGeometrySchema: 'predrawn-environment-geometry-v2',
+      environmentGeometrySha256: privateEnvironmentGeometrySha256,
+    },
+    provenance: {
+      pipeline: 'smoke-imagegen',
+      run: 'raw-1',
+      sourceSha256: rawPngSha256,
+      environmentGeometrySha256: privateEnvironmentGeometrySha256,
+    },
+    idempotency_key: `background-raw:${newDocumentId}`,
+  };
+  const rawContractCreateCases = [
+    {
+      suffix: 'coordinate-basis',
+      operation: { ...rawBackgroundPayload.operation, coordinateBasis: 'frame-pixels' },
+      detail: 'coordinateBasis',
+    },
+    {
+      suffix: 'untouched',
+      operation: { ...rawBackgroundPayload.operation, untouched: false },
+      detail: 'untouched',
+    },
+    {
+      suffix: 'viewing-pane',
+      operation: {
+        ...rawBackgroundPayload.operation,
+        viewingPane: { ...backgroundWorldBounds, minX: backgroundWorldBounds.minX + 1 },
+      },
+      detail: 'viewingPane',
+    },
+  ];
+  for (const invalid of rawContractCreateCases) {
+    const idempotencyKey = `background-invalid-raw-${invalid.suffix}:${newDocumentId}`;
+    const response = await createBackgroundVersionRequest(newDocumentId, {
+      ...rawBackgroundPayload,
+      operation: invalid.operation,
+      idempotency_key: idempotencyKey,
+    });
+    const body = JSON.parse(response.body);
+    if (
+      response.statusCode !== 400
+      || body.error !== 'invalid_background_version'
+      || !String(body.details || '').includes(invalid.detail)
+    ) {
+      throw new Error(`Invalid raw ${invalid.suffix} contract was accepted: ${response.statusCode} ${response.body}`);
+    }
+  }
+  const unfencedBackgroundCreate = await request(
+    'POST',
+    `/api/editor-documents/${newDocumentId}/background-versions`,
+    {
+      cookie: 'better-auth.session=abc',
+      'content-type': 'application/json',
+      'idempotency-key': `background-unfenced:${newDocumentId}`,
+    },
+    JSON.stringify({
+      ...rawBackgroundPayload,
+      idempotency_key: `background-unfenced:${newDocumentId}`,
+    }),
+    5000,
+  );
+  const currentBackgroundAuthority = editorAuthorities.get(
+    editorAuthorityKey(newDocumentId, 'better-auth.session=abc'),
+  );
+  const invalidFenceBackgroundCreate = await createBackgroundVersionRequest(
+    newDocumentId,
+    {
+      ...rawBackgroundPayload,
+      idempotency_key: `background-invalid-fence:${newDocumentId}`,
+    },
+    {
+      authority: { ...currentBackgroundAuthority, edit_session_key: 'b'.repeat(64) },
+    },
+  );
+  if (
+    unfencedBackgroundCreate.statusCode !== 400
+    || JSON.parse(unfencedBackgroundCreate.body).error !== 'editor_document_edit_session_required'
+    || invalidFenceBackgroundCreate.statusCode !== 403
+    || JSON.parse(invalidFenceBackgroundCreate.body).error !== 'editor_document_edit_session_key_invalid'
+  ) {
+    throw new Error(`Background version writer fence was bypassed: ${unfencedBackgroundCreate.statusCode} ${unfencedBackgroundCreate.body} / ${invalidFenceBackgroundCreate.statusCode} ${invalidFenceBackgroundCreate.body}`);
+  }
+  const rawBackgroundCreate = await createBackgroundVersionRequest(newDocumentId, rawBackgroundPayload);
+  const rawBackgroundCreateBody = JSON.parse(rawBackgroundCreate.body);
+  const rawBackground = rawBackgroundCreateBody.version;
+  const rawBackgroundReplay = await createBackgroundVersionRequest(newDocumentId, rawBackgroundPayload);
+  const conflictingRawReplay = await createBackgroundVersionRequest(newDocumentId, {
+    ...rawBackgroundPayload,
+    label: 'Conflicting retry',
+  });
+  const readyBeforeRawUpload = await get(
+    `/api/editor-documents/${newDocumentId}/background-versions?status=ready`,
+    { cookie: 'better-auth.session=abc' },
+  );
+  const draftsBeforeRawUpload = await get(
+    `/api/editor-documents/${newDocumentId}/background-versions?status=draft`,
+    { cookie: 'better-auth.session=abc' },
+  );
+  if (
+    rawBackgroundCreate.statusCode !== 201 || !rawBackground?.id || rawBackground.status !== 'draft'
+    || rawBackground.content_sha256 !== null || rawBackground.row_revision !== 0
+    || rawBackground.operation?.sourceArtworkVersionId !== sourceArtworkReady.id
+    || rawBackground.operation?.sourceArtworkSha256 !== sourcePngSha256
+    || rawBackgroundCreateBody.attempt?.generated_version_id !== rawBackground.id
+    || rawBackgroundReplay.statusCode !== 200
+    || JSON.parse(rawBackgroundReplay.body).version.id !== rawBackground.id
+    || JSON.parse(rawBackgroundReplay.body).idempotent_replay !== true
+    || conflictingRawReplay.statusCode !== 409
+    || JSON.parse(conflictingRawReplay.body).error !== 'background_version_idempotency_conflict'
+    || readyBeforeRawUpload.statusCode !== 200
+    || draftsBeforeRawUpload.statusCode !== 200
+    || JSON.parse(readyBeforeRawUpload.body).versions.some((version) => version.id === rawBackground.id)
+    || !JSON.parse(draftsBeforeRawUpload.body).versions.some((version) => (
+      version.id === rawBackground.id && version.status === 'draft'
+    ))
+  ) {
+    throw new Error(`Background metadata create/idempotency failed: ${rawBackgroundCreate.statusCode} ${rawBackgroundCreate.body} / ${rawBackgroundReplay.body} / ${conflictingRawReplay.body}`);
+  }
+  const rawHashMismatchUpload = await uploadBackgroundVersionRequest(
+    newDocumentId,
+    rawBackground.id,
+    0,
+    syntheticPng(64, 64, '#303030', '#909090'),
+  );
+  const heldRawUpload = beginHeldBackgroundVersionUpload(
+    newDocumentId,
+    rawBackground.id,
+    0,
+    rawPng,
+  );
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  const concurrentRawUpload = await uploadBackgroundVersionRequest(
+    newDocumentId,
+    rawBackground.id,
+    0,
+    rawPng,
+  );
+  heldRawUpload.finish();
+  const rawUpload = await heldRawUpload.response;
+  const rawUploadBody = JSON.parse(rawUpload.body);
+  const rawReplacement = await uploadBackgroundVersionRequest(
+    newDocumentId,
+    rawBackground.id,
+    0,
+    syntheticPng(64, 64, '#301020', '#a06080'),
+  );
+  if (
+    rawHashMismatchUpload.statusCode !== 409
+    || JSON.parse(rawHashMismatchUpload.body).error !== 'background_version_content_hash_mismatch'
+    || concurrentRawUpload.statusCode !== 409
+    || JSON.parse(concurrentRawUpload.body).error !== 'background_version_upload_busy'
+    || rawUpload.statusCode !== 200 || !rawUploadBody.version.content_sha256
+    || rawUploadBody.version.frame_width !== 64 || rawUploadBody.version.frame_height !== 64
+    || rawUploadBody.version.row_revision !== 1 || !rawUploadBody.version.content_url
+    || rawReplacement.statusCode !== 409
+    || JSON.parse(rawReplacement.body).error !== 'background_version_content_immutable'
+  ) {
+    throw new Error(`Background immutable upload failed: ${rawHashMismatchUpload.statusCode} ${rawHashMismatchUpload.body} / ${concurrentRawUpload.statusCode} ${concurrentRawUpload.body} / ${rawUpload.statusCode} ${rawUpload.body} / ${rawReplacement.body}`);
+  }
+
+  // Reproduce an immutable raw written during the short-lived contract gap:
+  // the pixels, bounds, and v1 environment digest are exact, but the otherwise
+  // implicit board-world basis and viewing pane were not persisted. Reuse must
+  // preserve that metadata and add only an externally proven sidecar binding.
+  const pipelineReuseLegacyGeometrySha256 = legacyEnvironmentGeometrySha256(sourceCaptureBoardCode);
+  await queryDb(
+    `UPDATE predrawn_background_versions
+        SET operation = jsonb_set(
+              jsonb_set(
+                operation - 'coordinateBasis' - 'viewingPane',
+                '{environmentGeometrySchema}',
+                '"predrawn-environment-geometry-v1"'::jsonb
+              ),
+              '{environmentGeometrySha256}',
+              to_jsonb($2::text)
+            ),
+            provenance = jsonb_set(
+              provenance,
+              '{environmentGeometrySha256}',
+              to_jsonb($2::text)
+            )
+      WHERE document_id = $1 AND id = $3`,
+    [newDocumentId, pipelineReuseLegacyGeometrySha256, rawBackground.id],
+  );
+  const legacyPipelineSourceList = await get(
+    `/api/editor-documents/${newDocumentId}/background-versions?status=ready&kind=raw`,
+    { cookie: 'better-auth.session=abc' },
+  );
+  const listedLegacyPipelineSource = JSON.parse(legacyPipelineSourceList.body).versions
+    .find((version) => version.id === rawBackground.id);
+  const rawBindingsBeforePipelineReuse = await queryDb(
+    'SELECT version_id FROM predrawn_background_raw_contract_bindings WHERE version_id = $1',
+    [rawBackground.id],
+  );
+  if (
+    legacyPipelineSourceList.statusCode !== 200
+    || listedLegacyPipelineSource?.pipeline_source_eligible !== true
+    || listedLegacyPipelineSource?.pipeline_source_issue !== null
+    || Object.hasOwn(listedLegacyPipelineSource?.operation || {}, 'coordinateBasis')
+    || Object.hasOwn(listedLegacyPipelineSource?.operation || {}, 'viewingPane')
+    || rawBindingsBeforePipelineReuse.rows.length !== 0
+  ) {
+    throw new Error(`Legacy Raw Pipeline Source eligibility was not exposed honestly: ${legacyPipelineSourceList.statusCode} ${legacyPipelineSourceList.body}`);
+  }
+
+  const historicalSourceAttemptId = crypto.randomUUID();
+  await queryDb(
+    `INSERT INTO predrawn_generation_attempts (
+       id, document_id, owner_email, level_id, label, origin,
+       source_version_id, generated_version_id,
+       created_by_email, created_by_name, updated_by
+     )
+     SELECT
+       $3, document_id, owner_email, level_id, 'Historical source slot', 'migrated-history',
+       NULL, $2, created_by_email, created_by_name, updated_by
+       FROM predrawn_generation_attempts
+      WHERE document_id = $1 AND id = $4`,
+    [newDocumentId, rawBackground.id, historicalSourceAttemptId, generationAttempt.id],
+  );
+  // Make the retained raw historical-only for this reuse case. The ordinary
+  // source-bound attempt is restored after the new processing child is archived
+  // so the later full-lineage smoke remains unchanged.
+  await queryDb(
+    `UPDATE predrawn_generation_attempts
+        SET generated_version_id = NULL
+      WHERE document_id = $1 AND id = $2`,
+    [newDocumentId, generationAttempt.id],
+  );
+  const versionCountBeforePipelineReuse = await queryDb(
+    'SELECT count(*)::integer AS count FROM predrawn_background_versions WHERE document_id = $1',
+    [newDocumentId],
+  );
+  const pipelineReuseKey = `generation-attempt:${newDocumentId}:historical-create`;
+  const pipelineReuseCreate = await createGenerationAttemptRequest(newDocumentId, {
+    label: 'Historical source slot',
+    pipeline_source_version_id: rawBackground.id,
+    idempotency_key: pipelineReuseKey,
+  });
+  const pipelineReuseBody = JSON.parse(pipelineReuseCreate.body);
+  const pipelineReuseAttempt = pipelineReuseBody.attempt;
+  const pipelineReuseReplay = await createGenerationAttemptRequest(newDocumentId, {
+    label: 'Historical source slot',
+    pipeline_source_version_id: rawBackground.id,
+    idempotency_key: pipelineReuseKey,
+  });
+  const versionCountAfterPipelineReuse = await queryDb(
+    'SELECT count(*)::integer AS count FROM predrawn_background_versions WHERE document_id = $1',
+    [newDocumentId],
+  );
+  const sourceAttemptAfterReuse = await queryDb(
+    `SELECT status, row_revision, generated_version_id, warped_version_id, occlusion_version_id
+       FROM predrawn_generation_attempts
+      WHERE document_id = $1 AND id = $2`,
+    [newDocumentId, historicalSourceAttemptId],
+  );
+  const rawBindingAfterPipelineReuse = await queryDb(
+    `SELECT binding.legacy_operation_kind, binding.legacy_operation_sha256,
+            binding.coordinate_basis, binding.viewing_pane,
+            version.operation
+       FROM predrawn_background_raw_contract_bindings binding
+       JOIN predrawn_background_versions version ON version.id = binding.version_id
+      WHERE binding.version_id = $1 AND binding.document_id = $2`,
+    [rawBackground.id, newDocumentId],
+  );
+  const persistedRawBinding = rawBindingAfterPipelineReuse.rows[0];
+  if (
+    pipelineReuseCreate.statusCode !== 201
+    || pipelineReuseAttempt?.origin !== 'pipeline-source'
+    || pipelineReuseAttempt?.label !== 'Historical source slot'
+    || pipelineReuseAttempt?.source_version_id !== rawBackground.id
+    || pipelineReuseAttempt?.source_attempt_id !== historicalSourceAttemptId
+    || pipelineReuseAttempt?.generated_version_id !== rawBackground.id
+    || pipelineReuseAttempt?.source_request?.schema !== 'predrawn-processing-attempt-input-v1'
+    || pipelineReuseAttempt?.source_request?.inputRole !== 'raw-pipeline-source'
+    || pipelineReuseAttempt?.source_request?.inputVersionId !== rawBackground.id
+    || pipelineReuseAttempt?.source_request?.inputSha256 !== rawPngSha256
+    || pipelineReuseAttempt?.source_request?.sourceAttemptId !== historicalSourceAttemptId
+    || pipelineReuseReplay.statusCode !== 200
+    || JSON.parse(pipelineReuseReplay.body).attempt?.id !== pipelineReuseAttempt.id
+    || JSON.parse(pipelineReuseReplay.body).idempotent_replay !== true
+    || Number(versionCountBeforePipelineReuse.rows[0]?.count)
+      !== Number(versionCountAfterPipelineReuse.rows[0]?.count)
+    || sourceAttemptAfterReuse.rows[0]?.status !== 'active'
+    || String(sourceAttemptAfterReuse.rows[0]?.generated_version_id) !== rawBackground.id
+    || sourceAttemptAfterReuse.rows[0]?.warped_version_id !== null
+    || sourceAttemptAfterReuse.rows[0]?.occlusion_version_id !== null
+    || rawBindingAfterPipelineReuse.rows.length !== 1
+    || persistedRawBinding?.legacy_operation_kind !== 'raw-generated-v2'
+    || persistedRawBinding?.coordinate_basis !== 'board-world-pixels-v1'
+    || persistedRawBinding?.viewing_pane?.minX !== backgroundWorldBounds.minX
+    || persistedRawBinding?.viewing_pane?.minY !== backgroundWorldBounds.minY
+    || persistedRawBinding?.viewing_pane?.width !== backgroundWorldBounds.width
+    || persistedRawBinding?.viewing_pane?.height !== backgroundWorldBounds.height
+    || Object.hasOwn(persistedRawBinding?.operation || {}, 'coordinateBasis')
+    || Object.hasOwn(persistedRawBinding?.operation || {}, 'viewingPane')
+  ) {
+    throw new Error(`Historical Raw Pipeline Source create failed: ${pipelineReuseCreate.statusCode} ${pipelineReuseCreate.body} / ${pipelineReuseReplay.statusCode} ${pipelineReuseReplay.body}`);
+  }
+  const archivedPipelineReuse = await archiveGenerationAttemptRequest(
+    newDocumentId,
+    pipelineReuseAttempt.id,
+    pipelineReuseAttempt.row_revision,
+  );
+  if (
+    archivedPipelineReuse.statusCode !== 200
+    || JSON.parse(archivedPipelineReuse.body).attempt?.status !== 'archived'
+  ) {
+    throw new Error(`Pipeline-source child attempt archive failed: ${archivedPipelineReuse.statusCode} ${archivedPipelineReuse.body}`);
+  }
+  const archiveRawWhileHistoricalSourceActive = await request(
+    'POST',
+    `/api/editor-documents/${newDocumentId}/background-versions/${rawBackground.id}/archive`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', { expected_revision: 1 })),
+  );
+  if (
+    archiveRawWhileHistoricalSourceActive.statusCode !== 409
+    || JSON.parse(archiveRawWhileHistoricalSourceActive.body).error
+      !== 'background_version_attempt_in_use'
+  ) {
+    throw new Error(`Historical source attempt did not retain its raw-artwork guard: ${archiveRawWhileHistoricalSourceActive.statusCode} ${archiveRawWhileHistoricalSourceActive.body}`);
+  }
+  const archivedHistoricalSource = await archiveGenerationAttemptRequest(
+    newDocumentId,
+    historicalSourceAttemptId,
+    Number(sourceAttemptAfterReuse.rows[0]?.row_revision),
+  );
+  if (
+    archivedHistoricalSource.statusCode !== 200
+    || JSON.parse(archivedHistoricalSource.body).attempt?.status !== 'archived'
+  ) {
+    throw new Error(`Historical source attempt archive failed: ${archivedHistoricalSource.statusCode} ${archivedHistoricalSource.body}`);
+  }
+  await queryDb(
+    `UPDATE predrawn_generation_attempts
+        SET generated_version_id = $3
+      WHERE document_id = $1 AND id = $2`,
+    [newDocumentId, generationAttempt.id, rawBackground.id],
+  );
+
+  const anonymousDraftBackground = await get(`/api/background-versions/${rawBackground.id}/content`);
+  const rivalDraftBackground = await get(
+    `/api/background-versions/${rawBackground.id}/content`,
+    { cookie: 'better-auth.session=rival' },
+  );
+  const ownerDraftBackground = await get(
+    `/api/background-versions/${rawBackground.id}/content`,
+    { cookie: 'better-auth.session=abc' },
+    5000,
+  );
+  const rivalBackgroundList = await get(
+    `/api/editor-documents/${newDocumentId}/background-versions`,
+    { cookie: 'better-auth.session=rival' },
+  );
+  if (
+    anonymousDraftBackground.statusCode !== 401 || rivalDraftBackground.statusCode !== 404
+    || ownerDraftBackground.statusCode !== 200 || ownerDraftBackground.headers['content-type'] !== 'image/png'
+    || rivalBackgroundList.statusCode !== 404
+  ) {
+    throw new Error(`Draft background access escaped its editor document: ${anonymousDraftBackground.statusCode} / ${rivalDraftBackground.statusCode} / ${ownerDraftBackground.statusCode} / ${rivalBackgroundList.statusCode}`);
+  }
+
+  const warpedPng = syntheticPng(64, 64, '#123420', '#7fc070');
+  const warpedPngSha256 = crypto.createHash('sha256').update(warpedPng).digest('hex');
+  const warpedPayload = {
+    kind: 'warped',
+    attempt_id: generationAttempt.id,
+    label: 'Deterministic grid warp',
+    parent_version_id: rawBackground.id,
+    source_background_version_id: rawBackground.id,
+    world_bounds: backgroundWorldBounds,
+    operation: {
+      kind: 'grid-warp-v2',
+      registration: 'v5;64,64,32,0,64,32,32,64,0,32;2,2;0,0.5,1;0,0.5,1;;1,1,33,32',
+      sourceWidth: 64,
+      sourceHeight: 64,
+      rasterScale: 1,
+      encoder: 'png-rgba8-filter0-stored-deflate-v1',
+      coordinateBasis: 'board-world-pixels-v1',
+      environmentGeometrySchema: 'predrawn-environment-geometry-v2',
+      environmentGeometrySha256: privateEnvironmentGeometrySha256,
+      outputSha256: warpedPngSha256,
+      attemptProcessingRevision: 0,
+    },
+    provenance: {
+      processor: 'shared-predrawn-rasterizer-v2',
+      parentVersionId: rawBackground.id,
+      environmentGeometrySha256: privateEnvironmentGeometrySha256,
+      outputSha256: warpedPngSha256,
+      attemptProcessingRevision: 0,
+    },
+    idempotency_key: `background-warp:${newDocumentId}`,
+  };
+  const warpedCreate = await createBackgroundVersionRequest(newDocumentId, warpedPayload);
+  const warpedCreateBody = JSON.parse(warpedCreate.body);
+  const warpedVersion = warpedCreateBody.version;
+  const pendingWarpReplay = await createBackgroundVersionRequest(newDocumentId, warpedPayload);
+  const warpedHashMismatchUpload = await uploadBackgroundVersionRequest(
+    newDocumentId,
+    warpedVersion.id,
+    warpedVersion.row_revision,
+    syntheticPng(64, 64, '#202020', '#808080'),
+  );
+  const warpedUpload = await uploadBackgroundVersionRequest(
+    newDocumentId,
+    warpedVersion.id,
+    warpedVersion.row_revision,
+    warpedPng,
+  );
+  let warpedReady = JSON.parse(warpedUpload.body).version;
+  if (
+    warpedCreate.statusCode !== 201 || warpedUpload.statusCode !== 200
+    || pendingWarpReplay.statusCode !== 200
+    || JSON.parse(pendingWarpReplay.body).version?.id !== warpedVersion.id
+    || JSON.parse(pendingWarpReplay.body).idempotent_replay !== true
+    || warpedCreateBody.attempt?.processing_revision !== 0
+    || warpedVersion.operation?.attemptProcessingRevision !== 0
+    || warpedVersion.provenance?.attemptProcessingRevision !== 0
+    || warpedHashMismatchUpload.statusCode !== 409
+    || JSON.parse(warpedHashMismatchUpload.body).error !== 'background_version_content_hash_mismatch'
+    || warpedReady.parent_version_id !== rawBackground.id
+    || warpedReady.source_background_version_id !== rawBackground.id
+  ) {
+    throw new Error(`Warped background lineage/upload failed: ${warpedCreate.body} / ${pendingWarpReplay.body} / ${warpedHashMismatchUpload.body} / ${warpedUpload.body}`);
+  }
+
+  const discardedWarp = await discardGenerationAttemptWarpRequest(
+    newDocumentId,
+    generationAttempt.id,
+    warpedReady.id,
+    warpedCreateBody.attempt.row_revision,
+  );
+  const discardedWarpBody = JSON.parse(discardedWarp.body);
+  const discardedWarpReplay = await discardGenerationAttemptWarpRequest(
+    newDocumentId,
+    generationAttempt.id,
+    warpedReady.id,
+    warpedCreateBody.attempt.row_revision,
+  );
+  const discardedWarpRow = await queryDb(
+    `SELECT status, blob_sha256
+       FROM predrawn_background_versions
+      WHERE document_id = $1 AND id = $2`,
+    [newDocumentId, warpedReady.id],
+  );
+  const retryWarpPayload = {
+    ...warpedPayload,
+    operation: {
+      ...warpedPayload.operation,
+      attemptProcessingRevision: 1,
+    },
+    provenance: {
+      ...warpedPayload.provenance,
+      attemptProcessingRevision: 1,
+    },
+    idempotency_key: `background-warp:${newDocumentId}:processing-1`,
+  };
+  const retriedWarpCreate = await createBackgroundVersionRequest(
+    newDocumentId,
+    retryWarpPayload,
+  );
+  const retriedWarpCreateBody = JSON.parse(retriedWarpCreate.body);
+  const retriedWarpUpload = retriedWarpCreateBody.version
+    ? await uploadBackgroundVersionRequest(
+      newDocumentId,
+      retriedWarpCreateBody.version.id,
+      retriedWarpCreateBody.version.row_revision,
+      warpedPng,
+    )
+    : null;
+  if (retriedWarpUpload) warpedReady = JSON.parse(retriedWarpUpload.body).version;
+  if (
+    discardedWarp.statusCode !== 200
+    || discardedWarpBody.attempt?.id !== generationAttempt.id
+    || discardedWarpBody.attempt?.generated_version_id !== rawBackground.id
+    || discardedWarpBody.attempt?.warped_version_id !== null
+    || discardedWarpBody.attempt?.processing_revision !== 1
+    || discardedWarpBody.discarded_version?.id !== warpedVersion.id
+    || discardedWarpBody.discarded_version?.status !== 'archived'
+    || discardedWarpBody.idempotent_replay !== false
+    || discardedWarpReplay.statusCode !== 200
+    || JSON.parse(discardedWarpReplay.body).idempotent_replay !== true
+    || JSON.parse(discardedWarpReplay.body).attempt?.processing_revision !== 1
+    || discardedWarpRow.rows[0]?.status !== 'archived'
+    || discardedWarpRow.rows[0]?.blob_sha256 !== warpedPngSha256
+    || retriedWarpCreate.statusCode !== 201
+    || retriedWarpCreateBody.version?.id === warpedVersion.id
+    || retriedWarpCreateBody.version?.operation?.attemptProcessingRevision !== 1
+    || retriedWarpCreateBody.version?.provenance?.attemptProcessingRevision !== 1
+    || retriedWarpCreateBody.attempt?.processing_revision !== 1
+    || retriedWarpUpload?.statusCode !== 200
+    || warpedReady.content_sha256 !== warpedPngSha256
+  ) {
+    throw new Error(`Same-slot warped retry failed: ${discardedWarp.statusCode} ${discardedWarp.body} / ${discardedWarpReplay.statusCode} ${discardedWarpReplay.body} / ${retriedWarpCreate.statusCode} ${retriedWarpCreate.body} / ${retriedWarpUpload?.statusCode} ${retriedWarpUpload?.body}`);
+  }
+
+  const fittedMoveHighlights = await request(
+    'PUT',
+    `/api/editor-documents/${newDocumentId}/generation-attempts/${generationAttempt.id}/move-highlight-profile`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', {
+      expected_revision: retriedWarpCreateBody.attempt.row_revision,
+      expected_warped_version_id: warpedReady.id,
+      cells: {},
+    })),
+    5000,
+  );
+  if (
+    fittedMoveHighlights.statusCode !== 200
+    || JSON.parse(fittedMoveHighlights.body).attempt?.move_highlight_profile_warped_version_id
+      !== warpedReady.id
+  ) {
+    throw new Error(`Warped board cyan move-highlight fit failed: ${fittedMoveHighlights.statusCode} ${fittedMoveHighlights.body}`);
+  }
+
+  // Required-schema repair runs against retained current data, not an empty
+  // approximation. A missing event relation must be rebuilt while an exact
+  // pipeline-source attempt already exists; transitional migration 34 would
+  // reject that valid row.
+  await queryDb('DROP TABLE predrawn_generation_attempt_events');
+  await queryDb(inlineMigrationSql(43));
+  const repairedPipelineSourceAttempt = await queryDb(
+    `SELECT origin, source_version_id, source_attempt_id, generated_version_id
+       FROM predrawn_generation_attempts
+      WHERE document_id = $1 AND id = $2`,
+    [newDocumentId, pipelineReuseAttempt.id],
+  );
+  const repairedAttemptEventRelation = await queryDb(
+    "SELECT to_regclass('public.predrawn_generation_attempt_events')::text AS relation",
+  );
+  if (
+    repairedPipelineSourceAttempt.rows[0]?.origin !== 'pipeline-source'
+    || String(repairedPipelineSourceAttempt.rows[0]?.source_version_id) !== rawBackground.id
+    || String(repairedPipelineSourceAttempt.rows[0]?.source_attempt_id) !== historicalSourceAttemptId
+    || String(repairedPipelineSourceAttempt.rows[0]?.generated_version_id) !== rawBackground.id
+    || repairedAttemptEventRelation.rows[0]?.relation !== 'predrawn_generation_attempt_events'
+  ) {
+    throw new Error('Migration 43 did not repair a missing attempt-event relation around retained pipeline-source data');
+  }
+
+  // A retry-contract repair must also accept audit rows admitted by the later
+  // cyan-profile feature. Replaying migration 39 would try to install its old
+  // narrower action check and fail before the repair could converge.
+  await queryDb(
+    `INSERT INTO predrawn_generation_attempt_events
+       (document_id, attempt_id, action, actor_email, actor_name, details)
+     VALUES ($1, $2, 'move-highlight-profile-updated', $3, $4, '{}'::jsonb)`,
+    [newDocumentId, generationAttempt.id, 'player@example.com', 'Tactics Player'],
+  );
+  await queryDb(
+    `ALTER TABLE predrawn_generation_attempts
+       DROP CONSTRAINT predrawn_generation_attempts_processing_revision_check,
+       ADD CONSTRAINT predrawn_generation_attempts_processing_revision_check
+         CHECK (processing_revision >= -1)`,
+  );
+  await queryDb(inlineMigrationSql(43));
+  const repairedRetryContract = await queryDb(
+    `SELECT pg_get_constraintdef(oid) AS definition
+       FROM pg_constraint
+      WHERE conrelid = 'predrawn_generation_attempts'::regclass
+        AND conname = 'predrawn_generation_attempts_processing_revision_check'`,
+  );
+  const retainedMoveHighlightEvent = await queryDb(
+    `SELECT count(*)::integer AS count
+       FROM predrawn_generation_attempt_events
+      WHERE document_id = $1
+        AND attempt_id = $2
+        AND action = 'move-highlight-profile-updated'`,
+    [newDocumentId, generationAttempt.id],
+  );
+  if (
+    repairedRetryContract.rows.length !== 1
+    || !/\bprocessing_revision\b\s*>=\s*0\b/i.test(
+      String(repairedRetryContract.rows[0]?.definition || ''),
+    )
+    || Number(retainedMoveHighlightEvent.rows[0]?.count) !== 1
+  ) {
+    throw new Error('Migration 43 did not repair retry topology while retaining move-highlight audit data');
+  }
+
+  const createMask = async (
+    sourceId,
+    suffix,
+    geometrySha256 = privateEnvironmentGeometrySha256,
+    parentVersionId = null,
+    attemptId = generationAttempt.id,
+  ) => {
+    const png = syntheticPng(64, 64, '#000000', suffix === 'raw' ? '#440000' : '#004400');
+    const outputSha256 = crypto.createHash('sha256').update(png).digest('hex');
+    const response = await createBackgroundVersionRequest(newDocumentId, {
+      kind: 'occlusion',
+      attempt_id: attemptId,
+      label: `Depth mask ${suffix}`,
+      ...(parentVersionId ? { parent_version_id: parentVersionId } : {}),
+      source_background_version_id: sourceId,
+      world_bounds: backgroundWorldBounds,
+      operation: {
+        kind: 'occlusion-depth-v1',
+        encoding: 'rgb24-signed-half-depth-alpha',
+        sourceBackgroundVersionId: sourceId,
+        maskCount: 0,
+        encoder: 'png-rgba8-filter0-stored-deflate-v1',
+        coordinateBasis: 'board-world-pixels-v1',
+        environmentGeometrySchema: 'predrawn-environment-geometry-v2',
+        environmentGeometrySha256: geometrySha256,
+        outputSha256,
+      },
+      provenance: {
+        processor: 'canonical-depth-mask-v1',
+        sourceBackgroundVersionId: sourceId,
+        environmentGeometrySha256: geometrySha256,
+        outputSha256,
+      },
+      idempotency_key: `background-mask:${newDocumentId}:${suffix}`,
+    });
+    const responseBody = JSON.parse(response.body);
+    const version = responseBody.version || null;
+    if (!version) return { create: response, upload: null, version: null, png };
+    if (version.content_ready) {
+      return {
+        create: response,
+        upload: null,
+        version,
+        attempt: responseBody.attempt,
+        png,
+      };
+    }
+    const upload = await uploadBackgroundVersionRequest(
+      newDocumentId,
+      version.id,
+      version.row_revision,
+      png,
+    );
+    return {
+      create: response,
+      upload,
+      version: JSON.parse(upload.body).version,
+      attempt: responseBody.attempt,
+      png,
+    };
+  };
+  const staleEnvironmentGeometrySha256 = environmentGeometrySha256(
+    versionedBoardCode(crypto.randomUUID(), null, { rows: 13, worldHeight: 12 }),
+  );
+  const rejectedMismatchedMask = await createMask(rawBackground.id, 'raw');
+  const rejectedStaleGeometryMask = await createMask(
+    warpedReady.id,
+    'stale-geometry',
+    staleEnvironmentGeometrySha256,
+  );
+  const selectedMask = await createMask(warpedReady.id, 'warped');
+  const rejectedRefinementMask = await createMask(
+    warpedReady.id,
+    'refinement',
+    privateEnvironmentGeometrySha256,
+    selectedMask.version.id,
+  );
+  if (
+    rejectedMismatchedMask.create.statusCode !== 409
+    || JSON.parse(rejectedMismatchedMask.create.body).error !== 'invalid_background_version_lineage'
+    || rejectedStaleGeometryMask.create.statusCode !== 409
+    || JSON.parse(rejectedStaleGeometryMask.create.body).error !== 'invalid_background_version_lineage'
+    || selectedMask.create.statusCode !== 201
+    || selectedMask.upload.statusCode !== 200
+    || selectedMask.attempt?.occlusion_version_id !== selectedMask.version.id
+    || rejectedRefinementMask.create.statusCode !== 409
+    || JSON.parse(rejectedRefinementMask.create.body).error !== 'invalid_generation_attempt_stage'
+  ) {
+    throw new Error(`Generation attempt did not enforce one valid occlusion stage: ${rejectedMismatchedMask.create.statusCode} ${rejectedMismatchedMask.create.body} / ${rejectedStaleGeometryMask.create.statusCode} ${rejectedStaleGeometryMask.create.body} / ${selectedMask.create.statusCode} ${selectedMask.create.body} / ${selectedMask.upload.statusCode} ${selectedMask.upload.body} / ${rejectedRefinementMask.create.statusCode} ${rejectedRefinementMask.create.body}`);
+  }
+
+  // The attempt API blocks invalid stages before they can become candidates.
+  // These direct rows model immutable historical mistakes so the canonical Save
+  // boundary continues proving that it rejects bad selections independently.
+  const mismatchedMaskId = crypto.randomUUID();
+  const staleGeometryMaskId = crypto.randomUUID();
+  await queryDb(
+    `INSERT INTO predrawn_background_versions (
+       id, document_id, owner_email, level_id, kind, label,
+       parent_version_id, source_background_version_id,
+       blob_sha256, width, height, world_bounds, operation, provenance,
+       status, row_revision, created_by_email, created_by_name,
+       created_at, updated_at, updated_by
+     )
+     SELECT
+       fixture.id, selected.document_id, selected.owner_email, selected.level_id,
+       'occlusion', fixture.label, NULL, fixture.source_id,
+       selected.blob_sha256, selected.width, selected.height, selected.world_bounds,
+       jsonb_set(
+         jsonb_set(
+           selected.operation,
+           '{sourceBackgroundVersionId}',
+           to_jsonb(fixture.source_id::text)
+         ),
+         '{environmentGeometrySha256}',
+         to_jsonb(fixture.geometry_sha256)
+       ),
+       jsonb_set(
+         jsonb_set(
+           selected.provenance,
+           '{sourceBackgroundVersionId}',
+           to_jsonb(fixture.source_id::text)
+         ),
+         '{environmentGeometrySha256}',
+         to_jsonb(fixture.geometry_sha256)
+       ),
+       'ready', 1, selected.created_by_email, selected.created_by_name,
+       now(), now(), selected.updated_by
+     FROM predrawn_background_versions selected
+     CROSS JOIN (
+       VALUES
+         ($2::uuid, $3::uuid, $4::text, 'Historical mismatched mask'::text),
+         ($5::uuid, $1::uuid, $6::text, 'Historical stale-geometry mask'::text)
+     ) AS fixture(id, source_id, geometry_sha256, label)
+     WHERE selected.id = $1`,
+    [
+      selectedMask.version.id,
+      mismatchedMaskId,
+      rawBackground.id,
+      privateEnvironmentGeometrySha256,
+      staleGeometryMaskId,
+      staleEnvironmentGeometrySha256,
+    ],
+  );
+  const mismatchedMask = { version: { id: mismatchedMaskId } };
+  const staleGeometryMask = { version: { id: staleGeometryMaskId } };
+
+  const archiveSourceWhileActive = await request(
+    'POST',
+    `/api/editor-documents/${newDocumentId}/background-versions/${sourceArtworkReady.id}/archive`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', { expected_revision: 1 })),
+  );
+  const archiveRawWhileActive = await request(
+    'POST',
+    `/api/editor-documents/${newDocumentId}/background-versions/${rawBackground.id}/archive`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', { expected_revision: 1 })),
+  );
+  const archiveAttemptWithoutDocumentRevision = await request(
+    'POST',
+    `/api/editor-documents/${newDocumentId}/generation-attempts/${generationAttempt.id}/archive`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(
+      newDocumentId,
+      'better-auth.session=abc',
+      { expected_revision: selectedMask.attempt.row_revision },
+    )),
+  );
+  const staleDocumentArchiveAttempt = await archiveGenerationAttemptRequest(
+    newDocumentId,
+    generationAttempt.id,
+    selectedMask.attempt.row_revision,
+    'better-auth.session=abc',
+    null,
+    4,
+  );
+  const attemptAfterStaleDocumentArchive = await queryDb(
+    `SELECT status, row_revision
+       FROM predrawn_generation_attempts
+      WHERE document_id = $1 AND id = $2`,
+    [newDocumentId, generationAttempt.id],
+  );
+  const archivedAttempt = await archiveGenerationAttemptRequest(
+    newDocumentId,
+    generationAttempt.id,
+    selectedMask.attempt.row_revision,
+  );
+  const archivedAttemptReplay = await archiveGenerationAttemptRequest(
+    newDocumentId,
+    generationAttempt.id,
+    selectedMask.attempt.row_revision,
+  );
+  const activeAttemptsAfterArchive = await get(
+    `/api/editor-documents/${newDocumentId}/generation-attempts?status=active`,
+    { cookie: 'better-auth.session=abc' },
+  );
+  const archivedAttemptsAfterArchive = await get(
+    `/api/editor-documents/${newDocumentId}/generation-attempts?status=archived`,
+    { cookie: 'better-auth.session=abc' },
+  );
+  const generationAttemptEvents = await queryDb(
+    `SELECT action, actor_email, actor_name
+       FROM predrawn_generation_attempt_events
+      WHERE attempt_id = $1
+      ORDER BY id`,
+    [generationAttempt.id],
+  );
+  const archiveRaw = await request(
+    'POST',
+    `/api/editor-documents/${newDocumentId}/background-versions/${rawBackground.id}/archive`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', { expected_revision: 1 })),
+  );
+  if (
+    archiveSourceWhileActive.statusCode !== 409
+    || JSON.parse(archiveSourceWhileActive.body).error !== 'background_source_attempt_in_use'
+    || archiveRawWhileActive.statusCode !== 409
+    || JSON.parse(archiveRawWhileActive.body).error !== 'background_version_attempt_in_use'
+    || archiveAttemptWithoutDocumentRevision.statusCode !== 428
+    || JSON.parse(archiveAttemptWithoutDocumentRevision.body).error
+      !== 'editor_document_revision_required'
+    || staleDocumentArchiveAttempt.statusCode !== 409
+    || JSON.parse(staleDocumentArchiveAttempt.body).error
+      !== 'editor_document_revision_conflict'
+    || attemptAfterStaleDocumentArchive.rows[0]?.status !== 'active'
+    || Number(attemptAfterStaleDocumentArchive.rows[0]?.row_revision)
+      !== selectedMask.attempt.row_revision
+    || archivedAttempt.statusCode !== 200
+    || JSON.parse(archivedAttempt.body).attempt?.status !== 'archived'
+    || JSON.parse(archivedAttempt.body).document?.revision !== 5
+    || JSON.parse(archivedAttempt.body).forgotten_selection?.working_copy !== false
+    || JSON.parse(archivedAttempt.body).forgotten_selection?.canonical !== false
+    || JSON.parse(archivedAttempt.body).canonical_level?.id !== 'l2'
+    || JSON.parse(archivedAttempt.body).attempt?.row_revision
+      !== selectedMask.attempt.row_revision + 1
+    || archivedAttemptReplay.statusCode !== 200
+    || JSON.parse(archivedAttemptReplay.body).idempotent_replay !== true
+    || JSON.parse(activeAttemptsAfterArchive.body).attempts?.length !== 0
+    || !JSON.parse(archivedAttemptsAfterArchive.body).attempts?.some(
+      (attempt) => attempt.id === generationAttempt.id,
+    )
+    || generationAttemptEvents.rows.map((event) => event.action).join(',')
+      !== 'move-highlight-profile-updated,stage-attached,archived'
+    || generationAttemptEvents.rows.some((event) => (
+      event.actor_email !== 'player@example.com' || event.actor_name !== 'Tactics Player'
+    ))
+    || archiveRaw.statusCode !== 200 || JSON.parse(archiveRaw.body).version.status !== 'archived'
+    || JSON.parse(archiveRaw.body).version.row_revision !== 2
+  ) {
+    throw new Error(`Generation attempt archive guards failed: ${archiveSourceWhileActive.statusCode} ${archiveSourceWhileActive.body} / ${archiveRawWhileActive.statusCode} ${archiveRawWhileActive.body} / ${archiveAttemptWithoutDocumentRevision.statusCode} ${archiveAttemptWithoutDocumentRevision.body} / ${staleDocumentArchiveAttempt.statusCode} ${staleDocumentArchiveAttempt.body} / ${JSON.stringify(attemptAfterStaleDocumentArchive.rows)} / ${archivedAttempt.statusCode} ${archivedAttempt.body} / ${archivedAttemptReplay.statusCode} ${archivedAttemptReplay.body} / ${activeAttemptsAfterArchive.statusCode} ${activeAttemptsAfterArchive.body} / ${archivedAttemptsAfterArchive.statusCode} ${archivedAttemptsAfterArchive.body} / ${JSON.stringify(generationAttemptEvents.rows)} / ${archiveRaw.statusCode} ${archiveRaw.body}`);
+  }
+
+  const mismatchedSelectionLevel = {
+    ...newEditorAutosaveLevel,
+    boardCode: versionedBoardCode(warpedReady.id, mismatchedMask.version.id),
+  };
+  const staleBackgroundGeometrySave = await request(
+    'POST',
+    `/api/editor-documents/${newDocumentId}/save`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', {
+      revision: 5,
+      level: {
+        ...newEditorAutosaveLevel,
+        boardCode: versionedBoardCode(warpedReady.id, selectedMask.version.id, {
+          rows: 13,
+          worldHeight: 12,
+        }),
+      },
+    })),
+    5000,
+  );
+  const staleMaskGeometrySave = await request(
+    'POST',
+    `/api/editor-documents/${newDocumentId}/save`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', {
+      revision: 5,
+      level: {
+        ...newEditorAutosaveLevel,
+        boardCode: versionedBoardCode(warpedReady.id, staleGeometryMask.version.id),
+      },
+    })),
+    5000,
+  );
+  const mismatchedSelectionSave = await request(
+    'POST',
+    `/api/editor-documents/${newDocumentId}/save`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', {
+      revision: 5,
+      level: mismatchedSelectionLevel,
+    })),
+    5000,
+  );
+  const statusesAfterRejectedSave = await queryDb(
+    `SELECT id, status FROM predrawn_background_versions WHERE id = ANY($1::uuid[]) ORDER BY id`,
+    [[warpedReady.id, mismatchedMask.version.id]],
+  );
+  if (
+    staleBackgroundGeometrySave.statusCode !== 409
+    || JSON.parse(staleBackgroundGeometrySave.body).error !== 'predrawn_background_geometry_mismatch'
+    || staleMaskGeometrySave.statusCode !== 409
+    || JSON.parse(staleMaskGeometrySave.body).error !== 'predrawn_occlusion_contract_mismatch'
+    || mismatchedSelectionSave.statusCode !== 409
+    || JSON.parse(mismatchedSelectionSave.body).error !== 'predrawn_occlusion_contract_mismatch'
+    || statusesAfterRejectedSave.rows.some((row) => row.status !== 'ready')
+  ) {
+    throw new Error(`Stale or mismatched pre-drawn Save was not rejected atomically: ${staleBackgroundGeometrySave.statusCode} ${staleBackgroundGeometrySave.body} / ${staleMaskGeometrySave.statusCode} ${staleMaskGeometrySave.body} / ${mismatchedSelectionSave.statusCode} ${mismatchedSelectionSave.body} / ${JSON.stringify(statusesAfterRejectedSave.rows)}`);
+  }
+
+  const selectedLevel = {
+    ...newEditorAutosaveLevel,
+    boardCode: versionedBoardCode(warpedReady.id, selectedMask.version.id),
+  };
+  await queryDb(
+    `UPDATE predrawn_background_versions
+        SET operation = operation - 'untouched'
+      WHERE id = $1`,
+    [rawBackground.id],
+  );
+  const invalidWarpedParentSave = await request(
+    'POST',
+    `/api/editor-documents/${newDocumentId}/save`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', {
+      revision: 5,
+      level: selectedLevel,
+    })),
+    5000,
+  );
+  await queryDb(
+    `UPDATE predrawn_background_versions
+        SET operation = operation || '{"untouched":true}'::jsonb
+      WHERE id = $1`,
+    [rawBackground.id],
+  );
+  if (
+    invalidWarpedParentSave.statusCode !== 409
+    || JSON.parse(invalidWarpedParentSave.body).error !== 'predrawn_background_contract_mismatch'
+  ) {
+    throw new Error(`Canonical Save trusted an invalid raw ancestor for a warped selection: ${invalidWarpedParentSave.statusCode} ${invalidWarpedParentSave.body}`);
+  }
+  await queryDb(
+    `UPDATE predrawn_background_versions
+        SET operation = operation - 'encoding'
+      WHERE id = $1`,
+    [selectedMask.version.id],
+  );
+  const invalidOcclusionContractSave = await request(
+    'POST',
+    `/api/editor-documents/${newDocumentId}/save`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', {
+      revision: 5,
+      level: selectedLevel,
+    })),
+    5000,
+  );
+  await queryDb(
+    `UPDATE predrawn_background_versions
+        SET operation = operation || '{"encoding":"rgb24-signed-half-depth-alpha"}'::jsonb
+      WHERE id = $1`,
+    [selectedMask.version.id],
+  );
+  if (
+    invalidOcclusionContractSave.statusCode !== 409
+    || JSON.parse(invalidOcclusionContractSave.body).error !== 'predrawn_occlusion_contract_mismatch'
+  ) {
+    throw new Error(`Canonical Save trusted invalid grandparent occlusion metadata: ${invalidOcclusionContractSave.statusCode} ${invalidOcclusionContractSave.body}`);
+  }
+  const versionedSave = await request(
+    'POST',
+    `/api/editor-documents/${newDocumentId}/save`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', {
+      revision: 5,
+      level: selectedLevel,
+    })),
+    5000,
+  );
+  const publishedVersionRows = await queryDb(
+    `SELECT v.id, v.status, v.published_by, b.published_at AS blob_published_at
+       FROM predrawn_background_versions v
+       LEFT JOIN media_blobs b ON b.sha256 = v.blob_sha256
+      WHERE v.id = ANY($1::uuid[]) ORDER BY v.id`,
+    [[warpedReady.id, selectedMask.version.id]],
+  );
+  const backgroundVersionEvents = await queryDb(
+    `SELECT version_id, action, actor_email, actor_name
+       FROM predrawn_background_version_events
+      WHERE version_id = ANY($1::uuid[])
+      ORDER BY version_id, id`,
+    [[rawBackground.id, warpedReady.id, selectedMask.version.id]],
+  );
+  const actionsByVersion = new Map();
+  for (const event of backgroundVersionEvents.rows) {
+    const key = String(event.version_id);
+    actionsByVersion.set(key, [...(actionsByVersion.get(key) || []), event.action]);
+  }
+  const anonymousSavedBackground = await get(`/api/background-versions/${warpedReady.id}/content`, {}, 5000);
+  const ownerSavedBackground = await get(
+    `/api/background-versions/${warpedReady.id}/content`,
+    { cookie: 'better-auth.session=abc' },
+    5000,
+  );
+  const workspaceWithPrivateScene = await get(
+    '/api/campaign-workspace',
+    { cookie: 'better-auth.session=abc' },
+  );
+  const workspaceWithPrivateSceneBody = JSON.parse(workspaceWithPrivateScene.body);
+  const privateSceneThumbnailUrl = workspaceWithPrivateSceneBody.thumbnail_urls?.l2 || '';
+  const privateSceneThumbnailSha = /\/([0-9a-f]{64})\.png$/.exec(privateSceneThumbnailUrl)?.[1] || '';
+  const anonymousPrivateSceneThumbnail = privateSceneThumbnailUrl
+    ? await get(privateSceneThumbnailUrl)
+    : { statusCode: 0 };
+  const ownerPrivateSceneThumbnail = privateSceneThumbnailUrl
+    ? await get(privateSceneThumbnailUrl, { cookie: 'better-auth.session=abc' })
+    : { statusCode: 0 };
+  const anonymousPrivateSceneBlob = privateSceneThumbnailSha
+    ? await get(`/api/media/${privateSceneThumbnailSha}`)
+    : { statusCode: 0 };
+  const privateSceneThumbnailRecord = await queryDb(
+    `SELECT blob.published_at
+       FROM level_thumbnail_derivatives derivative
+       JOIN media_blobs blob ON blob.sha256 = derivative.blob_sha256
+      WHERE derivative.authority_key = $1 AND derivative.blob_sha256 = $2`,
+    ['user:player@example.com:l2', privateSceneThumbnailSha || null],
+  );
+  if (
+    versionedSave.statusCode !== 200
+    || JSON.parse(versionedSave.body).document.revision !== 6
+    || publishedVersionRows.rows.length !== 2
+    || publishedVersionRows.rows.some((row) => (
+      row.status !== 'ready' || row.published_by !== null || row.blob_published_at !== null
+    ))
+    || actionsByVersion.get(String(rawBackground.id))?.join(',') !== 'created,content-uploaded,archived'
+    || actionsByVersion.get(String(warpedReady.id))?.join(',') !== 'created,content-uploaded'
+    || actionsByVersion.get(String(selectedMask.version.id))?.join(',') !== 'created,content-uploaded'
+    || backgroundVersionEvents.rows.some((event) => (
+      event.actor_email !== 'player@example.com' || event.actor_name !== 'Tactics Player'
+    ))
+    || anonymousSavedBackground.statusCode !== 401 || ownerSavedBackground.statusCode !== 200
+    || ownerSavedBackground.headers['cache-control'] !== 'private, max-age=31536000, immutable'
+    || !/^\/api\/campaign-workspace\/level-thumbnails\/l2\/[0-9a-f]{64}\.png$/.test(privateSceneThumbnailUrl)
+    || anonymousPrivateSceneThumbnail.statusCode !== 401
+    || ownerPrivateSceneThumbnail.statusCode !== 200
+    || ownerPrivateSceneThumbnail.headers['content-type'] !== 'image/png'
+    || anonymousPrivateSceneBlob.statusCode !== 404
+    || privateSceneThumbnailRecord.rows.length !== 1
+    || privateSceneThumbnailRecord.rows[0].published_at !== null
+  ) {
+    throw new Error(`Private canonical Save did not keep selected background bytes and its thumbnail private: ${versionedSave.statusCode} ${versionedSave.body} / ${JSON.stringify(publishedVersionRows.rows)} / ${JSON.stringify(backgroundVersionEvents.rows)} / ${anonymousSavedBackground.statusCode} / ${ownerSavedBackground.statusCode} / ${privateSceneThumbnailUrl} / ${anonymousPrivateSceneThumbnail.statusCode}/${ownerPrivateSceneThumbnail.statusCode}/${anonymousPrivateSceneBlob.statusCode} / ${JSON.stringify(privateSceneThumbnailRecord.rows)}`);
+  }
+  const userWorkspaceAtVersionBoundary = await get(
+    '/api/campaign-workspace',
+    { cookie: 'better-auth.session=abc' },
+  );
+  const userWorkspaceAtVersionBoundaryBody = JSON.parse(userWorkspaceAtVersionBoundary.body);
+  const missingUserBackgroundPut = await request(
+    'PUT',
+    '/api/campaign-workspace',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      campaigns: userWorkspaceAtVersionBoundaryBody.campaigns,
+      levels: {
+        ...userWorkspaceAtVersionBoundaryBody.levels,
+        l2: {
+          ...userWorkspaceAtVersionBoundaryBody.levels.l2,
+          boardCode: versionedBoardCode(crypto.randomUUID(), null),
+        },
+      },
+      revision: userWorkspaceAtVersionBoundaryBody.revision,
+    }),
+    5000,
+  );
+  const userWorkspaceAfterRejectedVersionPut = await get(
+    '/api/campaign-workspace',
+    { cookie: 'better-auth.session=abc' },
+  );
+  const legacyRememberedMissingPut = await request(
+    'PUT',
+    '/api/campaign-workspace',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      campaigns: userWorkspaceAtVersionBoundaryBody.campaigns,
+      levels: {
+        ...userWorkspaceAtVersionBoundaryBody.levels,
+        l2: {
+          ...userWorkspaceAtVersionBoundaryBody.levels.l2,
+          boardCode: boardCodeWith(
+            versionedBoardCode(crypto.randomUUID(), null),
+            { backgroundMode: 'legacy' },
+          ),
+        },
+      },
+      revision: userWorkspaceAtVersionBoundaryBody.revision,
+    }),
+    5000,
+  );
+  const legacyRememberedMissingPutBody = JSON.parse(legacyRememberedMissingPut.body);
+  const exactReadyUserPut = await request(
+    'PUT',
+    '/api/campaign-workspace',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      campaigns: userWorkspaceAtVersionBoundaryBody.campaigns,
+      levels: userWorkspaceAtVersionBoundaryBody.levels,
+      revision: legacyRememberedMissingPutBody.revision,
+    }),
+    5000,
+  );
+  const exactReadyUserPutBody = JSON.parse(exactReadyUserPut.body);
+  const readyAfterWholeUserPut = await queryDb(
+    `SELECT v.status, b.published_at AS blob_published_at
+       FROM predrawn_background_versions v
+       JOIN media_blobs b ON b.sha256 = v.blob_sha256
+      WHERE v.id = ANY($1::uuid[])
+      ORDER BY v.id`,
+    [[warpedReady.id, selectedMask.version.id]],
+  );
+  const anonymousAfterWholeUserPut = await get(
+    `/api/background-versions/${warpedReady.id}/content`,
+  );
+  if (
+    userWorkspaceAtVersionBoundary.statusCode !== 200
+    || missingUserBackgroundPut.statusCode !== 409
+    || JSON.parse(missingUserBackgroundPut.body).error !== 'predrawn_background_version_not_found'
+    || JSON.parse(userWorkspaceAfterRejectedVersionPut.body).revision !== userWorkspaceAtVersionBoundaryBody.revision
+    || legacyRememberedMissingPut.statusCode !== 200
+    || legacyRememberedMissingPutBody.revision !== userWorkspaceAtVersionBoundaryBody.revision + 1
+    || exactReadyUserPut.statusCode !== 200
+    || exactReadyUserPutBody.revision !== userWorkspaceAtVersionBoundaryBody.revision + 2
+    || readyAfterWholeUserPut.rows.length !== 2
+    || readyAfterWholeUserPut.rows.some((row) => row.status !== 'ready' || row.blob_published_at !== null)
+    || anonymousAfterWholeUserPut.statusCode !== 401
+  ) {
+    throw new Error(`Whole user workspace write bypassed active-AI background validation: ${userWorkspaceAtVersionBoundary.statusCode} ${userWorkspaceAtVersionBoundary.body} / ${missingUserBackgroundPut.statusCode} ${missingUserBackgroundPut.body} / ${userWorkspaceAfterRejectedVersionPut.body} / ${legacyRememberedMissingPut.statusCode} ${legacyRememberedMissingPut.body} / ${exactReadyUserPut.statusCode} ${exactReadyUserPut.body} / ${JSON.stringify(readyAfterWholeUserPut.rows)} / ${anonymousAfterWholeUserPut.statusCode}`);
+  }
+  await queryDb(
+    `UPDATE predrawn_background_versions
+        SET operation = operation - 'untouched'
+      WHERE id = $1`,
+    [rawBackground.id],
+  );
+  const invalidWarpedParentPublish = await request(
+    'POST',
+    '/api/maps/publish',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ levelId: 'l2' }),
+    5000,
+  );
+  await queryDb(
+    `UPDATE predrawn_background_versions
+        SET operation = operation || '{"untouched":true}'::jsonb
+      WHERE id = $1`,
+    [rawBackground.id],
+  );
+  if (
+    invalidWarpedParentPublish.statusCode !== 409
+    || JSON.parse(invalidWarpedParentPublish.body).error !== 'predrawn_background_contract_mismatch'
+  ) {
+    throw new Error(`Public-map Publish trusted an invalid raw ancestor for a warped selection: ${invalidWarpedParentPublish.statusCode} ${invalidWarpedParentPublish.body}`);
+  }
+  const publishedUserMap = await request(
+    'POST',
+    '/api/maps/publish',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ levelId: 'l2' }),
+    5000,
+  );
+  const publishedUserMapBody = JSON.parse(publishedUserMap.body);
+  const publicUserMap = publishedUserMapBody.public_id
+    ? await get(`/api/maps/${publishedUserMapBody.public_id}`)
+    : { statusCode: 0, body: '' };
+  const userMapPublishedVersions = await queryDb(
+    `SELECT v.id, v.status, v.row_revision, v.published_by, b.published_at AS blob_published_at
+       FROM predrawn_background_versions v
+       LEFT JOIN media_blobs b ON b.sha256 = v.blob_sha256
+      WHERE v.id = ANY($1::uuid[]) ORDER BY v.id`,
+    [[
+      rawBackground.id,
+      warpedReady.id,
+      mismatchedMask.version.id,
+      selectedMask.version.id,
+    ]],
+  );
+  const publicSelectedBackground = await get(
+    `/api/background-versions/${warpedReady.id}/content`,
+    {},
+    5000,
+  );
+  const publicSelectedMask = await get(
+    `/api/background-versions/${selectedMask.version.id}/content`,
+    {},
+    5000,
+  );
+  const privateUnselectedMask = await get(
+    `/api/background-versions/${mismatchedMask.version.id}/content`,
+  );
+  const privateArchivedRaw = await get(`/api/background-versions/${rawBackground.id}/content`);
+  const selectedPublishedEvents = await queryDb(
+    `SELECT version_id, action FROM predrawn_background_version_events
+      WHERE version_id = ANY($1::uuid[]) ORDER BY version_id, id`,
+    [[warpedReady.id, selectedMask.version.id]],
+  );
+  const publishedStatusById = new Map(
+    userMapPublishedVersions.rows.map((row) => [String(row.id), row]),
+  );
+  if (
+    publishedUserMap.statusCode !== 200 || !publishedUserMapBody.public_id
+    || publicUserMap.statusCode !== 200
+    || JSON.parse(publicUserMap.body).level.boardCode !== selectedLevel.boardCode
+    || publishedStatusById.get(String(warpedReady.id))?.status !== 'published'
+    || publishedStatusById.get(String(selectedMask.version.id))?.status !== 'published'
+    || Number(publishedStatusById.get(String(warpedReady.id))?.row_revision) !== 2
+    || Number(publishedStatusById.get(String(selectedMask.version.id))?.row_revision) !== 2
+    || publishedStatusById.get(String(rawBackground.id))?.status !== 'archived'
+    || publishedStatusById.get(String(mismatchedMask.version.id))?.status !== 'ready'
+    || userMapPublishedVersions.rows.filter((row) => ['published'].includes(row.status)).some((row) => (
+      row.published_by !== 'player@example.com' || row.blob_published_at === null
+    ))
+    || publicSelectedBackground.statusCode !== 200 || publicSelectedMask.statusCode !== 200
+    || publicSelectedBackground.headers['cache-control'] !== 'public, max-age=31536000, immutable'
+    || publicSelectedMask.headers['cache-control'] !== 'public, max-age=31536000, immutable'
+    || privateUnselectedMask.statusCode !== 401 || privateArchivedRaw.statusCode !== 401
+    || selectedPublishedEvents.rows.filter((row) => row.action === 'published').length !== 2
+  ) {
+    throw new Error(`Public-map publish did not atomically expose only selected background versions: ${publishedUserMap.statusCode} ${publishedUserMap.body} / ${publicUserMap.statusCode} ${publicUserMap.body} / ${JSON.stringify(userMapPublishedVersions.rows)} / ${JSON.stringify(selectedPublishedEvents.rows)} / ${publicSelectedBackground.statusCode}/${publicSelectedMask.statusCode}/${privateUnselectedMask.statusCode}/${privateArchivedRaw.statusCode}`);
+  }
+  const archiveSelectedPrivate = await request(
+    'POST',
+    `/api/editor-documents/${newDocumentId}/background-versions/${warpedReady.id}/archive`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', { expected_revision: 1 })),
+  );
+  if (
+    archiveSelectedPrivate.statusCode !== 409
+    || JSON.parse(archiveSelectedPrivate.body).error !== 'background_version_in_use'
+  ) {
+    throw new Error(`Private canonical background selection was archivable: ${archiveSelectedPrivate.statusCode} ${archiveSelectedPrivate.body}`);
+  }
+
+  const dormantArchiveWarpId = crypto.randomUUID();
+  const dormantArchiveAttemptId = crypto.randomUUID();
+  await queryDb(
+    `WITH cloned_warp AS (
+       INSERT INTO predrawn_background_versions (
+         id, document_id, owner_email, level_id, kind, label,
+         parent_version_id, source_background_version_id,
+         blob_sha256, width, height, world_bounds, operation, provenance,
+         status, row_revision, created_by_email, created_by_name,
+         created_at, updated_at, updated_by
+       )
+       SELECT
+         $1, document_id, owner_email, level_id, kind, 'Dormant archive warp',
+         parent_version_id, source_background_version_id,
+         blob_sha256, width, height, world_bounds, operation, provenance,
+         'ready', 1, created_by_email, created_by_name,
+         now(), now(), updated_by
+       FROM predrawn_background_versions
+       WHERE document_id = $2 AND id = $3
+       RETURNING *
+     )
+     INSERT INTO predrawn_generation_attempts (
+       id, document_id, owner_email, level_id, label, origin,
+       source_version_id, source_attempt_id, source_request,
+       generated_version_id, warped_version_id,
+       created_by_email, created_by_name, updated_by
+     )
+     SELECT
+       $4, source_attempt.document_id, source_attempt.owner_email, source_attempt.level_id,
+       'Dormant Legacy archive slot', source_attempt.origin,
+       source_attempt.source_version_id, source_attempt.source_attempt_id,
+       source_attempt.source_request, source_attempt.generated_version_id, cloned_warp.id,
+       source_attempt.created_by_email, source_attempt.created_by_name, source_attempt.updated_by
+     FROM predrawn_generation_attempts source_attempt
+     CROSS JOIN cloned_warp
+     WHERE source_attempt.document_id = $2 AND source_attempt.id = $5`,
+    [
+      dormantArchiveWarpId,
+      newDocumentId,
+      warpedReady.id,
+      dormantArchiveAttemptId,
+      pipelineReuseAttempt.id,
+    ],
+  );
+  const activeArchiveLevel = {
+    ...selectedLevel,
+    boardCode: versionedBoardCode(dormantArchiveWarpId, null),
+  };
+  const activeArchiveAutosave = await request(
+    'PUT',
+    `/api/editor-documents/${newDocumentId}`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', {
+      revision: 6,
+      level: activeArchiveLevel,
+    })),
+  );
+  const activeAttemptArchive = await archiveGenerationAttemptRequest(
+    newDocumentId,
+    dormantArchiveAttemptId,
+    0,
+  );
+  const stateAfterActiveAttemptArchive = await queryDb(
+    `SELECT document.revision, document.body, attempt.status, attempt.row_revision
+       FROM level_working_copies document
+       JOIN predrawn_generation_attempts attempt
+         ON attempt.document_id = document.document_id
+      WHERE document.document_id = $1 AND attempt.id = $2`,
+    [newDocumentId, dormantArchiveAttemptId],
+  );
+  const boardAfterActiveAttemptArchive = boardRender.decodeBoard(
+    stateAfterActiveAttemptArchive.rows[0]?.body?.boardCode || '',
+  );
+  if (
+    activeArchiveAutosave.statusCode !== 200
+    || JSON.parse(activeArchiveAutosave.body).document?.revision !== 7
+    || activeAttemptArchive.statusCode !== 409
+    || JSON.parse(activeAttemptArchive.body).error !== 'generation_attempt_in_use'
+    || Number(stateAfterActiveAttemptArchive.rows[0]?.revision) !== 7
+    || stateAfterActiveAttemptArchive.rows[0]?.status !== 'active'
+    || Number(stateAfterActiveAttemptArchive.rows[0]?.row_revision) !== 0
+    || boardAfterActiveAttemptArchive?.backgroundMode !== 'ai'
+    || boardAfterActiveAttemptArchive?.surface?.backgroundVersionId
+      !== dormantArchiveWarpId
+  ) {
+    throw new Error(`Active AI slot archive was not rejected atomically: ${activeArchiveAutosave.statusCode} ${activeArchiveAutosave.body} / ${activeAttemptArchive.statusCode} ${activeAttemptArchive.body} / ${JSON.stringify(stateAfterActiveAttemptArchive.rows)}`);
+  }
+  const dormantArchiveLevel = {
+    ...selectedLevel,
+    boardCode: boardCodeWith(
+      versionedBoardCode(dormantArchiveWarpId, null),
+      { backgroundMode: 'legacy' },
+    ),
+  };
+  const dormantArchiveAutosave = await request(
+    'PUT',
+    `/api/editor-documents/${newDocumentId}`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', {
+      revision: 7,
+      level: dormantArchiveLevel,
+    })),
+  );
+  const dormantArchiveSave = await request(
+    'POST',
+    `/api/editor-documents/${newDocumentId}/save`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', {
+      revision: 8,
+    })),
+    5000,
+  );
+  const archivedDormantAttempt = await archiveGenerationAttemptRequest(
+    newDocumentId,
+    dormantArchiveAttemptId,
+    0,
+  );
+  const archivedDormantAttemptBody = JSON.parse(archivedDormantAttempt.body);
+  const archivedDormantAttemptReplay = await archiveGenerationAttemptRequest(
+    newDocumentId,
+    dormantArchiveAttemptId,
+    0,
+    'better-auth.session=abc',
+    null,
+    9,
+  );
+  const archivedDormantAttemptReplayBody = JSON.parse(archivedDormantAttemptReplay.body);
+  const archivedDormantWorkingBoard = boardRender.decodeBoard(
+    archivedDormantAttemptBody.document?.level?.boardCode || '',
+  );
+  const archivedDormantCanonicalBoard = boardRender.decodeBoard(
+    archivedDormantAttemptBody.canonical_level?.boardCode || '',
+  );
+  const archivedDormantRows = await queryDb(
+    `SELECT attempt.status, attempt.row_revision, version.status AS version_status
+       FROM predrawn_generation_attempts attempt
+       JOIN predrawn_background_versions version ON version.id = attempt.warped_version_id
+      WHERE attempt.document_id = $1 AND attempt.id = $2`,
+    [newDocumentId, dormantArchiveAttemptId],
+  );
+  const archivedDormantRevision = await queryDb(
+    `SELECT reason, saved_revision
+       FROM level_working_copy_revisions
+      WHERE document_id = $1 AND revision = $2`,
+    [newDocumentId, 10],
+  );
+  if (
+    dormantArchiveAutosave.statusCode !== 200
+    || JSON.parse(dormantArchiveAutosave.body).document?.revision !== 8
+    || dormantArchiveSave.statusCode !== 200
+    || JSON.parse(dormantArchiveSave.body).document?.revision !== 9
+    || archivedDormantAttempt.statusCode !== 200
+    || archivedDormantAttemptBody.attempt?.status !== 'archived'
+    || archivedDormantAttemptBody.document?.revision !== 10
+    || archivedDormantAttemptBody.document?.saved_revision !== 10
+    || archivedDormantAttemptBody.document?.dirty !== false
+    || archivedDormantAttemptBody.thumbnail_ready !== true
+    || archivedDormantAttemptReplay.statusCode !== 200
+    || archivedDormantAttemptReplayBody.idempotent_replay !== true
+    || archivedDormantAttemptReplayBody.document?.revision !== 10
+    || archivedDormantAttemptReplayBody.workspace_revision
+      !== archivedDormantAttemptBody.workspace_revision
+    || archivedDormantAttemptReplayBody.canonical_level?.boardCode
+      !== archivedDormantAttemptBody.canonical_level?.boardCode
+    || archivedDormantAttemptBody.forgotten_selection?.working_copy !== true
+    || archivedDormantAttemptBody.forgotten_selection?.canonical !== true
+    || archivedDormantAttemptBody.forgotten_selection?.version_ids?.join(',')
+      !== dormantArchiveWarpId
+    || !Number.isSafeInteger(archivedDormantAttemptBody.workspace_revision)
+    || archivedDormantWorkingBoard?.backgroundMode !== 'legacy'
+    || archivedDormantWorkingBoard?.surface !== undefined
+    || archivedDormantCanonicalBoard?.backgroundMode !== 'legacy'
+    || archivedDormantCanonicalBoard?.surface !== undefined
+    || archivedDormantRows.rows[0]?.status !== 'archived'
+    || Number(archivedDormantRows.rows[0]?.row_revision) !== 1
+    || archivedDormantRows.rows[0]?.version_status !== 'ready'
+    || archivedDormantRevision.rows[0]?.reason !== 'generation-attempt-archive'
+    || Number(archivedDormantRevision.rows[0]?.saved_revision) !== 10
+  ) {
+    throw new Error(`Dormant Legacy slot archive did not atomically forget both selections: ${dormantArchiveAutosave.statusCode} ${dormantArchiveAutosave.body} / ${dormantArchiveSave.statusCode} ${dormantArchiveSave.body} / ${archivedDormantAttempt.statusCode} ${archivedDormantAttempt.body} / ${archivedDormantAttemptReplay.statusCode} ${archivedDormantAttemptReplay.body} / ${JSON.stringify(archivedDormantRows.rows)} / ${JSON.stringify(archivedDormantRevision.rows)}`);
+  }
+
+  // Reproduce the historical partial-archive state: the attempt is already
+  // archived, but a restored Legacy Level remembers one of its versions. A
+  // replay of the same explicit archive action must heal both persisted Levels
+  // without revising the attempt a second time.
+  const partialArchiveLevel = {
+    ...archivedDormantAttemptBody.document.level,
+    boardCode: boardCodeWith(
+      versionedBoardCode(dormantArchiveWarpId, null),
+      { backgroundMode: 'legacy' },
+    ),
+  };
+  const partialArchiveAutosave = await request(
+    'PUT',
+    `/api/editor-documents/${newDocumentId}`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', {
+      revision: 10,
+      level: partialArchiveLevel,
+    })),
+  );
+  const partialArchiveSave = await request(
+    'POST',
+    `/api/editor-documents/${newDocumentId}/save`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', {
+      revision: 11,
+    })),
+    5000,
+  );
+  const stalePartialArchiveRepair = await archiveGenerationAttemptRequest(
+    newDocumentId,
+    dormantArchiveAttemptId,
+    0,
+    'better-auth.session=abc',
+    null,
+    11,
+  );
+  const stateAfterStalePartialArchiveRepair = await queryDb(
+    `SELECT document.revision, document.body, attempt.status, attempt.row_revision
+       FROM level_working_copies document
+       JOIN predrawn_generation_attempts attempt
+         ON attempt.document_id = document.document_id
+      WHERE document.document_id = $1 AND attempt.id = $2`,
+    [newDocumentId, dormantArchiveAttemptId],
+  );
+  const boardAfterStalePartialArchiveRepair = boardRender.decodeBoard(
+    stateAfterStalePartialArchiveRepair.rows[0]?.body?.boardCode || '',
+  );
+  const repairedArchivedAttempt = await archiveGenerationAttemptRequest(
+    newDocumentId,
+    dormantArchiveAttemptId,
+    0,
+  );
+  const repairedArchivedAttemptBody = JSON.parse(repairedArchivedAttempt.body);
+  const repairedArchivedWorkingBoard = boardRender.decodeBoard(
+    repairedArchivedAttemptBody.document?.level?.boardCode || '',
+  );
+  const repairedArchivedCanonicalBoard = boardRender.decodeBoard(
+    repairedArchivedAttemptBody.canonical_level?.boardCode || '',
+  );
+  const repairedArchivedRows = await queryDb(
+    `SELECT status, row_revision
+       FROM predrawn_generation_attempts
+      WHERE document_id = $1 AND id = $2`,
+    [newDocumentId, dormantArchiveAttemptId],
+  );
+  const repairedArchivedRevision = await queryDb(
+    `SELECT reason, saved_revision
+       FROM level_working_copy_revisions
+      WHERE document_id = $1 AND revision = $2`,
+    [newDocumentId, 13],
+  );
+  const repairedArchivedEvent = await queryDb(
+    `SELECT details
+       FROM predrawn_generation_attempt_events
+      WHERE document_id = $1 AND attempt_id = $2 AND action = 'archived'
+      ORDER BY id DESC
+      LIMIT 1`,
+    [newDocumentId, dormantArchiveAttemptId],
+  );
+  if (
+    partialArchiveAutosave.statusCode !== 200
+    || JSON.parse(partialArchiveAutosave.body).document?.revision !== 11
+    || partialArchiveSave.statusCode !== 200
+    || JSON.parse(partialArchiveSave.body).document?.revision !== 12
+    || stalePartialArchiveRepair.statusCode !== 409
+    || JSON.parse(stalePartialArchiveRepair.body).error !== 'editor_document_revision_conflict'
+    || Number(stateAfterStalePartialArchiveRepair.rows[0]?.revision) !== 12
+    || stateAfterStalePartialArchiveRepair.rows[0]?.status !== 'archived'
+    || Number(stateAfterStalePartialArchiveRepair.rows[0]?.row_revision) !== 1
+    || boardAfterStalePartialArchiveRepair?.backgroundMode !== 'legacy'
+    || boardAfterStalePartialArchiveRepair?.surface?.backgroundVersionId
+      !== dormantArchiveWarpId
+    || repairedArchivedAttempt.statusCode !== 200
+    || repairedArchivedAttemptBody.idempotent_replay !== true
+    || repairedArchivedAttemptBody.document?.revision !== 13
+    || repairedArchivedAttemptBody.document?.saved_revision !== 13
+    || repairedArchivedAttemptBody.forgotten_selection?.working_copy !== true
+    || repairedArchivedAttemptBody.forgotten_selection?.canonical !== true
+    || repairedArchivedAttemptBody.forgotten_selection?.version_ids?.join(',')
+      !== dormantArchiveWarpId
+    || repairedArchivedWorkingBoard?.backgroundMode !== 'legacy'
+    || repairedArchivedWorkingBoard?.surface !== undefined
+    || repairedArchivedCanonicalBoard?.backgroundMode !== 'legacy'
+    || repairedArchivedCanonicalBoard?.surface !== undefined
+    || repairedArchivedRows.rows[0]?.status !== 'archived'
+    || Number(repairedArchivedRows.rows[0]?.row_revision) !== 1
+    || repairedArchivedRevision.rows[0]?.reason !== 'generation-attempt-archive'
+    || Number(repairedArchivedRevision.rows[0]?.saved_revision) !== 13
+    || repairedArchivedEvent.rows[0]?.details?.repaired_incomplete_selection_detach !== true
+  ) {
+    throw new Error(`Archived-slot replay did not heal a dormant selection without a second slot revision: ${partialArchiveAutosave.statusCode} ${partialArchiveAutosave.body} / ${partialArchiveSave.statusCode} ${partialArchiveSave.body} / stale ${stalePartialArchiveRepair.statusCode} ${stalePartialArchiveRepair.body} ${JSON.stringify(stateAfterStalePartialArchiveRepair.rows)} / ${repairedArchivedAttempt.statusCode} ${repairedArchivedAttempt.body} / ${JSON.stringify(repairedArchivedRows.rows)} / ${JSON.stringify(repairedArchivedRevision.rows)} / ${JSON.stringify(repairedArchivedEvent.rows)}`);
+  }
+
+  const workingOnlyArchiveLevel = {
+    ...repairedArchivedAttemptBody.document.level,
+    boardCode: boardCodeWith(
+      versionedBoardCode(dormantArchiveWarpId, null),
+      { backgroundMode: 'legacy' },
+    ),
+  };
+  const workingOnlyArchiveAutosave = await request(
+    'PUT',
+    `/api/editor-documents/${newDocumentId}`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', {
+      revision: 13,
+      level: workingOnlyArchiveLevel,
+    })),
+  );
+  const workingOnlyArchivedRepair = await archiveGenerationAttemptRequest(
+    newDocumentId,
+    dormantArchiveAttemptId,
+    0,
+  );
+  const workingOnlyArchivedRepairBody = JSON.parse(workingOnlyArchivedRepair.body);
+  const workingOnlyArchivedReplay = await archiveGenerationAttemptRequest(
+    newDocumentId,
+    dormantArchiveAttemptId,
+    0,
+    'better-auth.session=abc',
+    null,
+    15,
+  );
+  const workingOnlyArchivedReplayBody = JSON.parse(workingOnlyArchivedReplay.body);
+  if (
+    workingOnlyArchiveAutosave.statusCode !== 200
+    || JSON.parse(workingOnlyArchiveAutosave.body).document?.revision !== 14
+    || workingOnlyArchivedRepair.statusCode !== 200
+    || workingOnlyArchivedRepairBody.document?.revision !== 15
+    || workingOnlyArchivedRepairBody.document?.saved_revision !== 15
+    || workingOnlyArchivedRepairBody.forgotten_selection?.working_copy !== true
+    || workingOnlyArchivedRepairBody.forgotten_selection?.canonical !== false
+    || workingOnlyArchivedRepairBody.workspace_revision
+      !== repairedArchivedAttemptBody.workspace_revision
+    || workingOnlyArchivedRepairBody.canonical_level?.boardCode
+      !== repairedArchivedAttemptBody.canonical_level?.boardCode
+    || workingOnlyArchivedReplay.statusCode !== 200
+    || workingOnlyArchivedReplayBody.idempotent_replay !== true
+    || workingOnlyArchivedReplayBody.workspace_revision
+      !== workingOnlyArchivedRepairBody.workspace_revision
+    || workingOnlyArchivedReplayBody.canonical_level?.boardCode
+      !== workingOnlyArchivedRepairBody.canonical_level?.boardCode
+    || workingOnlyArchivedReplayBody.thumbnail_ready !== true
+  ) {
+    throw new Error(`Working-only archived-slot repair did not return the current canonical workspace authority: ${workingOnlyArchiveAutosave.statusCode} ${workingOnlyArchiveAutosave.body} / ${workingOnlyArchivedRepair.statusCode} ${workingOnlyArchivedRepair.body} / ${workingOnlyArchivedReplay.statusCode} ${workingOnlyArchivedReplay.body}`);
+  }
+
+  const publishedArchiveAttemptId = crypto.randomUUID();
+  await queryDb(
+    `INSERT INTO predrawn_generation_attempts (
+       id, document_id, owner_email, level_id, label, origin,
+       source_version_id, source_attempt_id, source_request,
+       generated_version_id, warped_version_id, occlusion_version_id,
+       move_highlight_profile, move_highlight_profile_sha256,
+       move_highlight_profile_warped_version_id, processing_revision,
+       created_by_email, created_by_name, updated_by
+     )
+     SELECT
+       $1, document_id, owner_email, level_id, 'Published mask discard retry', origin,
+       source_version_id, source_attempt_id, source_request,
+       generated_version_id, warped_version_id, $2,
+       move_highlight_profile, move_highlight_profile_sha256,
+       move_highlight_profile_warped_version_id, processing_revision,
+       created_by_email, created_by_name, updated_by
+     FROM predrawn_generation_attempts
+     WHERE document_id = $3 AND id = $4`,
+    [publishedArchiveAttemptId, selectedMask.version.id, newDocumentId, generationAttempt.id],
+  );
+  const canonicalBeforePublishedMaskDiscard = await get(
+    '/api/campaign-workspace',
+    { cookie: 'better-auth.session=abc' },
+  );
+  const publishedMaskSelectionAutosave = await request(
+    'PUT',
+    `/api/editor-documents/${newDocumentId}`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', {
+      revision: 15,
+      level: selectedLevel,
+    })),
+  );
+  const invalidDiscardAuthority = {
+    ...editorAuthorities.get(editorAuthorityKey(newDocumentId, 'better-auth.session=abc')),
+    edit_session_key: 'b'.repeat(64),
+  };
+  const staleOcclusionAttemptDiscard = await discardGenerationAttemptOcclusionRequest(
+    newDocumentId,
+    publishedArchiveAttemptId,
+    selectedMask.version.id,
+    99,
+    'better-auth.session=abc',
+    null,
+    16,
+  );
+  const staleOcclusionDocumentDiscard = await discardGenerationAttemptOcclusionRequest(
+    newDocumentId,
+    publishedArchiveAttemptId,
+    selectedMask.version.id,
+    0,
+    'better-auth.session=abc',
+    null,
+    15,
+  );
+  const invalidFenceOcclusionDiscard = await discardGenerationAttemptOcclusionRequest(
+    newDocumentId,
+    publishedArchiveAttemptId,
+    selectedMask.version.id,
+    0,
+    'better-auth.session=abc',
+    invalidDiscardAuthority,
+    16,
+  );
+  const publishedMaskDiscard = await discardGenerationAttemptOcclusionRequest(
+    newDocumentId,
+    publishedArchiveAttemptId,
+    selectedMask.version.id,
+    0,
+    'better-auth.session=abc',
+    null,
+    16,
+  );
+  const publishedMaskDiscardBody = JSON.parse(publishedMaskDiscard.body);
+  const publishedMaskDiscardReplay = await discardGenerationAttemptOcclusionRequest(
+    newDocumentId,
+    publishedArchiveAttemptId,
+    selectedMask.version.id,
+    0,
+    'better-auth.session=abc',
+    null,
+    16,
+  );
+  const publishedMaskDiscardReplayBody = JSON.parse(publishedMaskDiscardReplay.body);
+  const canonicalAfterPublishedMaskDiscard = await get(
+    '/api/campaign-workspace',
+    { cookie: 'better-auth.session=abc' },
+  );
+  const publishedMaskDiscardRevision = await queryDb(
+    `SELECT reason
+       FROM level_working_copy_revisions
+      WHERE document_id = $1 AND revision = 17`,
+    [newDocumentId],
+  );
+  const publishedMaskDetachEvent = await queryDb(
+    `SELECT action, details
+       FROM predrawn_background_version_events
+      WHERE document_id = $1 AND version_id = $2
+      ORDER BY id DESC
+      LIMIT 1`,
+    [newDocumentId, selectedMask.version.id],
+  );
+  const publishedMaskAfterDiscard = await queryDb(
+    `SELECT status, row_revision
+       FROM predrawn_background_versions
+      WHERE document_id = $1 AND id = $2`,
+    [newDocumentId, selectedMask.version.id],
+  );
+  const workingAfterPublishedMaskDiscard = boardRender.decodeBoard(
+    publishedMaskDiscardBody.document?.level?.boardCode || '',
+  );
+  // The primary slot was archived earlier in this smoke, which archived its raw
+  // input. Reopen only that fixture status while proving a same-slot terminal
+  // retry, then restore the retained-history status below.
+  await queryDb(
+    `UPDATE predrawn_background_versions
+        SET status = 'ready', archived_at = NULL, archived_by = NULL
+      WHERE document_id = $1 AND id = $2`,
+    [newDocumentId, rawBackground.id],
+  );
+  const retriedPublishedMask = await createMask(
+    warpedReady.id,
+    'published-discard-retry-processing-2',
+    privateEnvironmentGeometrySha256,
+    null,
+    publishedArchiveAttemptId,
+  );
+  const retriedPublishedMaskReplay = await createMask(
+    warpedReady.id,
+    'published-discard-retry-processing-2',
+    privateEnvironmentGeometrySha256,
+    null,
+    publishedArchiveAttemptId,
+  );
+  if (
+    publishedMaskSelectionAutosave.statusCode !== 200
+    || JSON.parse(publishedMaskSelectionAutosave.body).document?.revision !== 16
+    || staleOcclusionAttemptDiscard.statusCode !== 409
+    || JSON.parse(staleOcclusionAttemptDiscard.body).error !== 'generation_attempt_conflict'
+    || staleOcclusionDocumentDiscard.statusCode !== 409
+    || JSON.parse(staleOcclusionDocumentDiscard.body).error !== 'editor_document_revision_conflict'
+    || invalidFenceOcclusionDiscard.statusCode !== 403
+    || JSON.parse(invalidFenceOcclusionDiscard.body).error
+      !== 'editor_document_edit_session_key_invalid'
+    || publishedMaskDiscard.statusCode !== 200
+    || publishedMaskDiscardBody.attempt?.id !== publishedArchiveAttemptId
+    || publishedMaskDiscardBody.attempt?.warped_version_id !== warpedReady.id
+    || publishedMaskDiscardBody.attempt?.occlusion_version_id !== null
+    || publishedMaskDiscardBody.attempt?.processing_revision !== 2
+    || publishedMaskDiscardBody.attempt?.move_highlight_profile_warped_version_id
+      !== warpedReady.id
+    || publishedMaskDiscardBody.document?.revision !== 17
+    || publishedMaskDiscardBody.forgotten_selection?.working_copy !== true
+    || publishedMaskDiscardBody.forgotten_selection?.canonical !== false
+    || publishedMaskDiscardBody.forgotten_selection?.version_ids?.join(',')
+      !== selectedMask.version.id
+    || publishedMaskDiscardBody.selection?.working_copy_fell_back !== true
+    || publishedMaskDiscardBody.selection?.canonical_reference_retained !== false
+    || publishedMaskDiscardBody.detached_version_archived !== false
+    || publishedMaskDiscardBody.retained_reason !== 'published-history'
+    || publishedMaskDiscardBody.idempotent_replay !== false
+    || workingAfterPublishedMaskDiscard?.backgroundMode !== 'ai'
+    || workingAfterPublishedMaskDiscard?.surface?.backgroundVersionId !== warpedReady.id
+    || workingAfterPublishedMaskDiscard?.surface?.occlusionVersionId !== undefined
+    || publishedMaskDiscardReplay.statusCode !== 200
+    || publishedMaskDiscardReplayBody.idempotent_replay !== true
+    || publishedMaskDiscardReplayBody.document?.revision !== 17
+    || JSON.parse(canonicalAfterPublishedMaskDiscard.body).revision
+      !== JSON.parse(canonicalBeforePublishedMaskDiscard.body).revision
+    || JSON.parse(canonicalAfterPublishedMaskDiscard.body).levels.l2.boardCode
+      !== JSON.parse(canonicalBeforePublishedMaskDiscard.body).levels.l2.boardCode
+    || publishedMaskDiscardRevision.rows[0]?.reason
+      !== 'generation-attempt-occlusion-discard'
+    || publishedMaskDetachEvent.rows[0]?.action !== 'attempt-detached'
+    || publishedMaskDetachEvent.rows[0]?.details?.attempt_id !== publishedArchiveAttemptId
+    || publishedMaskAfterDiscard.rows[0]?.status !== 'published'
+    || retriedPublishedMask.create.statusCode !== 201
+    || retriedPublishedMask.upload?.statusCode !== 200
+    || retriedPublishedMask.version?.id === selectedMask.version.id
+    || retriedPublishedMask.attempt?.occlusion_version_id !== retriedPublishedMask.version?.id
+    || retriedPublishedMask.attempt?.processing_revision !== 2
+    || retriedPublishedMaskReplay.create.statusCode !== 200
+    || retriedPublishedMaskReplay.version?.id !== retriedPublishedMask.version?.id
+  ) {
+    throw new Error(`Published occlusion discard/retry failed: ${publishedMaskSelectionAutosave.statusCode} ${publishedMaskSelectionAutosave.body} / stale-attempt ${staleOcclusionAttemptDiscard.statusCode} ${staleOcclusionAttemptDiscard.body} / stale-document ${staleOcclusionDocumentDiscard.statusCode} ${staleOcclusionDocumentDiscard.body} / stale-fence ${invalidFenceOcclusionDiscard.statusCode} ${invalidFenceOcclusionDiscard.body} / discard ${publishedMaskDiscard.statusCode} ${publishedMaskDiscard.body} / replay ${publishedMaskDiscardReplay.statusCode} ${publishedMaskDiscardReplay.body} / retry ${retriedPublishedMask.create.statusCode} ${retriedPublishedMask.create.body} ${retriedPublishedMask.upload?.statusCode} ${retriedPublishedMask.upload?.body} / retry-replay ${retriedPublishedMaskReplay.create.statusCode} ${retriedPublishedMaskReplay.create.body}`);
+  }
+  const discardedReplacementMask = await discardGenerationAttemptOcclusionRequest(
+    newDocumentId,
+    publishedArchiveAttemptId,
+    retriedPublishedMask.version.id,
+    retriedPublishedMask.attempt.row_revision,
+    'better-auth.session=abc',
+    null,
+    17,
+  );
+  const discardedReplacementMaskBody = JSON.parse(discardedReplacementMask.body);
+  const discardedReplacementMaskReplay = await discardGenerationAttemptOcclusionRequest(
+    newDocumentId,
+    publishedArchiveAttemptId,
+    retriedPublishedMask.version.id,
+    retriedPublishedMask.attempt.row_revision,
+    'better-auth.session=abc',
+    null,
+    17,
+  );
+  const replacementMaskEvent = await queryDb(
+    `SELECT action, details
+       FROM predrawn_background_version_events
+      WHERE document_id = $1 AND version_id = $2
+      ORDER BY id DESC
+      LIMIT 1`,
+    [newDocumentId, retriedPublishedMask.version.id],
+  );
+  if (
+    discardedReplacementMask.statusCode !== 200
+    || discardedReplacementMaskBody.attempt?.occlusion_version_id !== null
+    || discardedReplacementMaskBody.attempt?.processing_revision !== 3
+    || discardedReplacementMaskBody.attempt?.move_highlight_profile_warped_version_id
+      !== warpedReady.id
+    || discardedReplacementMaskBody.document?.revision !== 17
+    || discardedReplacementMaskBody.forgotten_selection?.working_copy !== false
+    || discardedReplacementMaskBody.detached_version?.status !== 'archived'
+    || discardedReplacementMaskBody.detached_version_archived !== true
+    || discardedReplacementMaskBody.retained_reason !== null
+    || discardedReplacementMaskReplay.statusCode !== 200
+    || JSON.parse(discardedReplacementMaskReplay.body).idempotent_replay !== true
+    || replacementMaskEvent.rows[0]?.action !== 'archived'
+    || replacementMaskEvent.rows[0]?.details?.attempt_id !== publishedArchiveAttemptId
+  ) {
+    throw new Error(`Unpublished replacement mask was not archived on discard: ${discardedReplacementMask.statusCode} ${discardedReplacementMask.body} / replay ${discardedReplacementMaskReplay.statusCode} ${discardedReplacementMaskReplay.body} / ${JSON.stringify(replacementMaskEvent.rows)}`);
+  }
+  await queryDb(
+    `UPDATE predrawn_background_versions
+        SET status = 'archived', archived_at = now(), archived_by = owner_email
+      WHERE document_id = $1 AND id = $2`,
+    [newDocumentId, rawBackground.id],
+  );
+  const publishedAttemptArchive = await archiveGenerationAttemptRequest(
+    newDocumentId,
+    publishedArchiveAttemptId,
+    discardedReplacementMaskBody.attempt.row_revision,
+  );
+  const publishedAttemptAfterArchive = await queryDb(
+    `SELECT status, row_revision
+       FROM predrawn_generation_attempts
+      WHERE document_id = $1 AND id = $2`,
+    [newDocumentId, publishedArchiveAttemptId],
+  );
+  if (
+    publishedAttemptArchive.statusCode !== 409
+    || JSON.parse(publishedAttemptArchive.body).error !== 'generation_attempt_published'
+    || publishedAttemptAfterArchive.rows[0]?.status !== 'active'
+    || Number(publishedAttemptAfterArchive.rows[0]?.row_revision)
+      !== discardedReplacementMaskBody.attempt.row_revision
+  ) {
+    throw new Error(`Published pipeline history became archivable: ${publishedAttemptArchive.statusCode} ${publishedAttemptArchive.body} / ${JSON.stringify(publishedAttemptAfterArchive.rows)}`);
+  }
+
+  // A v1 immutable artifact included live cover in its geometry digest. The
+  // first fenced mutation must bind it from the server-held pre-mutation body,
+  // before a cover-only change makes that legacy digest unreproducible.
+  const legacyEditor = await request(
+    'POST',
+    '/api/editor-documents/resolve',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ level: { ...workspaceLevel, id: 'legacy-geometry-placeholder', name: 'Legacy geometry migration' } }),
+  );
+  const legacyEditorBody = JSON.parse(legacyEditor.body);
+  const legacyDocumentId = legacyEditorBody.document?.document_id;
+  const legacyLevelId = legacyEditorBody.document?.level_id;
+  if (legacyEditor.statusCode !== 201 || !legacyDocumentId || !legacyLevelId) {
+    throw new Error(`Could not create legacy-geometry migration fixture: ${legacyEditor.statusCode} ${legacyEditor.body}`);
+  }
+  const legacyGeometryEditSession = await openEditorEditSession(legacyDocumentId, {
+    deviceId: 'smoke-legacy-geometry-device',
+    clientLabel: 'Legacy geometry migration smoke editor',
+  });
+  if (legacyGeometryEditSession.response.statusCode !== 200 || legacyGeometryEditSession.body.session.state !== 'active') {
+    throw new Error(`Could not acquire legacy-geometry edit authority: ${legacyGeometryEditSession.response.statusCode} ${legacyGeometryEditSession.response.body}`);
+  }
+  const initialLegacyCover = { '0,0': 'filled' };
+  const initialLegacyCoverTypes = { '0,0': 'grass' };
+  const legacyGeometryTemplateCode = boardCodeWith(
+    versionedBoardCode(crypto.randomUUID(), null),
+    { cover: initialLegacyCover, coverTypes: initialLegacyCoverTypes },
+  );
+  const legacyGeometryV2 = environmentGeometrySha256(legacyGeometryTemplateCode);
+  const legacyRawAttemptFixture = await seedGenerationAttemptFixture(
+    legacyDocumentId,
+    legacyGeometryV2,
+    legacyGeometryTemplateCode,
+    'Legacy raw migration attempt',
+  );
+  const legacyRawCreate = await createBackgroundVersionRequest(legacyDocumentId, {
+    kind: 'raw',
+    attempt_id: legacyRawAttemptFixture.attemptId,
+    label: 'Legacy v1 generated scene',
+    world_bounds: backgroundWorldBounds,
+    operation: {
+      kind: 'raw-generated-v2',
+      untouched: true,
+      coordinateBasis: 'board-world-pixels-v1',
+      viewingPane: backgroundWorldBounds,
+      environmentGeometrySchema: 'predrawn-environment-geometry-v2',
+      environmentGeometrySha256: legacyGeometryV2,
+    },
+    provenance: {
+      pipeline: 'smoke-legacy-v1-migration',
+      run: 'legacy-v1-root',
+      sourceSha256: rawPngSha256,
+      environmentGeometrySha256: legacyGeometryV2,
+    },
+    idempotency_key: `background-legacy-v1:${legacyDocumentId}`,
+  });
+  const legacyRawDraft = JSON.parse(legacyRawCreate.body).version;
+  const legacyRawUpload = await uploadBackgroundVersionRequest(
+    legacyDocumentId,
+    legacyRawDraft.id,
+    legacyRawDraft.row_revision,
+    rawPng,
+  );
+  const legacyRawReady = JSON.parse(legacyRawUpload.body).version;
+  if (legacyRawCreate.statusCode !== 201 || legacyRawUpload.statusCode !== 200 || !legacyRawReady?.id) {
+    throw new Error(`Could not stage legacy v1 background fixture: ${legacyRawCreate.statusCode} ${legacyRawCreate.body} / ${legacyRawUpload.statusCode} ${legacyRawUpload.body}`);
+  }
+  const legacySelectedBoardCode = boardCodeWith(
+    versionedBoardCode(legacyRawReady.id, null),
+    { cover: initialLegacyCover, coverTypes: initialLegacyCoverTypes },
+  );
+  const legacyGeometryV1 = legacyEnvironmentGeometrySha256(legacySelectedBoardCode);
+  await queryDb(
+    `UPDATE predrawn_background_versions
+        SET operation = jsonb_set(
+              jsonb_set(operation, '{environmentGeometrySchema}', '"predrawn-environment-geometry-v1"'::jsonb),
+              '{environmentGeometrySha256}', to_jsonb($2::text)
+            ),
+            provenance = jsonb_set(provenance, '{environmentGeometrySha256}', to_jsonb($2::text))
+      WHERE id = $1`,
+    [legacyRawReady.id, legacyGeometryV1],
+  );
+  const legacySelectedLevel = {
+    ...legacyEditorBody.document.level,
+    id: legacyLevelId,
+    boardCode: legacySelectedBoardCode,
+  };
+  const selectLegacyAutosave = await request(
+    'PUT',
+    `/api/editor-documents/${legacyDocumentId}`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(legacyDocumentId, 'better-auth.session=abc', {
+      revision: 1,
+      level: legacySelectedLevel,
+    })),
+  );
+  const bindingsBeforeCoverEdit = await queryDb(
+    'SELECT version_id FROM predrawn_background_geometry_bindings WHERE version_id = $1',
+    [legacyRawReady.id],
+  );
+  const directLegacyAttemptFixture = await seedGenerationAttemptFixture(
+    legacyDocumentId,
+    legacyGeometryV2,
+    legacyGeometryTemplateCode,
+    'Direct legacy chain attempt',
+  );
+  const directLegacyRawCreate = await createBackgroundVersionRequest(legacyDocumentId, {
+    kind: 'raw',
+    attempt_id: directLegacyAttemptFixture.attemptId,
+    label: 'Legacy v1 direct-operation source',
+    world_bounds: backgroundWorldBounds,
+    operation: {
+      kind: 'raw-generated-v2',
+      untouched: true,
+      coordinateBasis: 'board-world-pixels-v1',
+      viewingPane: backgroundWorldBounds,
+      environmentGeometrySchema: 'predrawn-environment-geometry-v2',
+      environmentGeometrySha256: legacyGeometryV2,
+    },
+    provenance: {
+      pipeline: 'smoke-legacy-v1-migration',
+      run: 'legacy-v1-direct-source',
+      sourceSha256: rawPngSha256,
+      environmentGeometrySha256: legacyGeometryV2,
+    },
+    idempotency_key: `background-legacy-v1-direct:${legacyDocumentId}`,
+  });
+  const directLegacyRawDraft = JSON.parse(directLegacyRawCreate.body).version;
+  const directLegacyRawUpload = await uploadBackgroundVersionRequest(
+    legacyDocumentId,
+    directLegacyRawDraft.id,
+    directLegacyRawDraft.row_revision,
+    rawPng,
+  );
+  const directLegacyRawReady = JSON.parse(directLegacyRawUpload.body).version;
+  await queryDb(
+    `UPDATE predrawn_background_versions
+        SET operation = jsonb_set(
+              jsonb_set(operation, '{environmentGeometrySchema}', '"predrawn-environment-geometry-v1"'::jsonb),
+              '{environmentGeometrySha256}', to_jsonb($2::text)
+            ),
+            provenance = jsonb_set(provenance, '{environmentGeometrySha256}', to_jsonb($2::text))
+      WHERE id = $1`,
+    [directLegacyRawReady.id, legacyGeometryV1],
+  );
+  const directBindingBeforeCreate = await queryDb(
+    'SELECT version_id FROM predrawn_background_geometry_bindings WHERE version_id = $1',
+    [directLegacyRawReady.id],
+  );
+  const directV2WarpCreate = await createBackgroundVersionRequest(legacyDocumentId, {
+    kind: 'warped',
+    attempt_id: directLegacyAttemptFixture.attemptId,
+    label: 'Direct v2 child from legacy source',
+    parent_version_id: directLegacyRawReady.id,
+    source_background_version_id: directLegacyRawReady.id,
+    world_bounds: backgroundWorldBounds,
+    operation: {
+      kind: 'grid-warp-v1',
+      registration: '64,64,32,0,64,32,32,64,0,32',
+      sourceWidth: 64,
+      sourceHeight: 64,
+      rasterScale: 1,
+      encoder: 'png-rgba8-filter0-stored-deflate-v1',
+      coordinateBasis: 'board-world-pixels-v1',
+      environmentGeometrySchema: 'predrawn-environment-geometry-v2',
+      environmentGeometrySha256: legacyGeometryV2,
+      outputSha256: warpedPngSha256,
+    },
+    provenance: {
+      processor: 'shared-predrawn-rasterizer-v1',
+      parentVersionId: directLegacyRawReady.id,
+      environmentGeometrySha256: legacyGeometryV2,
+      outputSha256: warpedPngSha256,
+    },
+    idempotency_key: `background-legacy-v1-direct-warp:${legacyDocumentId}`,
+  });
+  const directV2WarpCreateBody = JSON.parse(directV2WarpCreate.body);
+  const directV2WarpDraft = directV2WarpCreateBody.version;
+  const directV2WarpUpload = await uploadBackgroundVersionRequest(
+    legacyDocumentId,
+    directV2WarpDraft.id,
+    directV2WarpDraft.row_revision,
+    warpedPng,
+  );
+  const directLegacyWarpReady = JSON.parse(directV2WarpUpload.body).version;
+  const directMoveHighlightFit = await request(
+    'PUT',
+    `/api/editor-documents/${legacyDocumentId}/generation-attempts/${directLegacyAttemptFixture.attemptId}/move-highlight-profile`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(legacyDocumentId, 'better-auth.session=abc', {
+      expected_revision: directV2WarpCreateBody.attempt.row_revision,
+      expected_warped_version_id: directLegacyWarpReady.id,
+      cells: {},
+    })),
+    5000,
+  );
+  const directBindingAfterCreate = await queryDb(
+    `SELECT legacy_environment_geometry_sha256, environment_geometry_sha256
+       FROM predrawn_background_geometry_bindings
+      WHERE version_id = $1`,
+    [directLegacyRawReady.id],
+  );
+  await queryDb(
+    `UPDATE predrawn_background_versions
+        SET operation = jsonb_set(
+              jsonb_set(operation, '{environmentGeometrySchema}', '"predrawn-environment-geometry-v1"'::jsonb),
+              '{environmentGeometrySha256}', to_jsonb($2::text)
+            ),
+            provenance = jsonb_set(provenance, '{environmentGeometrySha256}', to_jsonb($2::text))
+      WHERE id = $1`,
+    [directLegacyWarpReady.id, legacyGeometryV1],
+  );
+  const directWarpBindingBeforeOcclusion = await queryDb(
+    'SELECT version_id FROM predrawn_background_geometry_bindings WHERE version_id = $1',
+    [directLegacyWarpReady.id],
+  );
+  const directOcclusionPng = syntheticPng(64, 64, '#000000', '#202020');
+  const directOcclusionSha256 = crypto.createHash('sha256').update(directOcclusionPng).digest('hex');
+  const directV2OcclusionCreate = await createBackgroundVersionRequest(legacyDocumentId, {
+    kind: 'occlusion',
+    attempt_id: directLegacyAttemptFixture.attemptId,
+    label: 'Direct v2 occlusion from legacy source',
+    source_background_version_id: directLegacyWarpReady.id,
+    world_bounds: backgroundWorldBounds,
+    operation: {
+      kind: 'occlusion-depth-v1',
+      encoding: 'rgb24-signed-half-depth-alpha',
+      sourceBackgroundVersionId: directLegacyWarpReady.id,
+      maskCount: 0,
+      encoder: 'png-rgba8-filter0-stored-deflate-v1',
+      coordinateBasis: 'board-world-pixels-v1',
+      environmentGeometrySchema: 'predrawn-environment-geometry-v2',
+      environmentGeometrySha256: legacyGeometryV2,
+      outputSha256: directOcclusionSha256,
+    },
+    provenance: {
+      processor: 'canonical-depth-mask-v1',
+      sourceBackgroundVersionId: directLegacyWarpReady.id,
+      environmentGeometrySha256: legacyGeometryV2,
+      outputSha256: directOcclusionSha256,
+    },
+    idempotency_key: `background-legacy-v1-direct-occlusion:${legacyDocumentId}`,
+  });
+  const directWarpBindingAfterOcclusion = await queryDb(
+    `SELECT legacy_environment_geometry_sha256, environment_geometry_sha256
+       FROM predrawn_background_geometry_bindings
+      WHERE version_id = $1`,
+    [directLegacyWarpReady.id],
+  );
+  if (
+    directLegacyRawCreate.statusCode !== 201
+    || directLegacyRawUpload.statusCode !== 200
+    || directBindingBeforeCreate.rows.length !== 0
+    || directV2WarpCreate.statusCode !== 201
+    || directV2WarpUpload.statusCode !== 200
+    || directBindingAfterCreate.rows[0]?.legacy_environment_geometry_sha256 !== legacyGeometryV1
+    || directBindingAfterCreate.rows[0]?.environment_geometry_sha256 !== legacyGeometryV2
+    || directMoveHighlightFit.statusCode !== 200
+    || JSON.parse(directMoveHighlightFit.body).attempt?.move_highlight_profile_warped_version_id
+      !== directLegacyWarpReady.id
+    || directWarpBindingBeforeOcclusion.rows.length !== 0
+    || directV2OcclusionCreate.statusCode !== 201
+    || directWarpBindingAfterOcclusion.rows[0]?.legacy_environment_geometry_sha256 !== legacyGeometryV1
+    || directWarpBindingAfterOcclusion.rows[0]?.environment_geometry_sha256 !== legacyGeometryV2
+  ) {
+    throw new Error(`Direct v2 operation could not bind its immutable v1 source: ${directLegacyRawCreate.statusCode} ${directLegacyRawCreate.body} / ${directLegacyRawUpload.statusCode} ${directLegacyRawUpload.body} / ${JSON.stringify(directBindingBeforeCreate.rows)} / ${directV2WarpCreate.statusCode} ${directV2WarpCreate.body} / ${directV2WarpUpload.statusCode} ${directV2WarpUpload.body} / ${directMoveHighlightFit.statusCode} ${directMoveHighlightFit.body} / ${JSON.stringify(directBindingAfterCreate.rows)} / ${JSON.stringify(directWarpBindingBeforeOcclusion.rows)} / ${directV2OcclusionCreate.statusCode} ${directV2OcclusionCreate.body} / ${JSON.stringify(directWarpBindingAfterOcclusion.rows)}`);
+  }
+  const coverChangedBoardCode = boardCodeWith(legacySelectedBoardCode, {
+    cover: { ...initialLegacyCover, '1,1': 'sparse' },
+    coverTypes: { ...initialLegacyCoverTypes, '1,1': 'water' },
+  });
+  const coverChangedLevel = { ...legacySelectedLevel, boardCode: coverChangedBoardCode };
+  const coverFirstAutosave = await request(
+    'PUT',
+    `/api/editor-documents/${legacyDocumentId}`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(legacyDocumentId, 'better-auth.session=abc', {
+      revision: 2,
+      level: coverChangedLevel,
+    })),
+  );
+  const durableLegacyBinding = await queryDb(
+    `SELECT legacy_environment_geometry_schema, legacy_environment_geometry_sha256,
+            environment_geometry_schema, environment_geometry_sha256
+       FROM predrawn_background_geometry_bindings
+      WHERE version_id = $1`,
+    [legacyRawReady.id],
+  );
+  const listedLegacyVersions = await get(
+    `/api/editor-documents/${legacyDocumentId}/background-versions`,
+    { cookie: 'better-auth.session=abc' },
+  );
+  const listedLegacyVersion = JSON.parse(listedLegacyVersions.body).versions?.find(
+    (version) => version.id === legacyRawReady.id,
+  );
+  const coverChangedSave = await request(
+    'POST',
+    `/api/editor-documents/${legacyDocumentId}/save`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(legacyDocumentId, 'better-auth.session=abc', { revision: 3 })),
+    5000,
+  );
+  const coverChangedBoard = boardRender.decodeBoard(coverChangedBoardCode);
+  const staleBakedBoardCode = boardRender.encodeBoard({
+    ...coverChangedBoard,
+    cells: { ...coverChangedBoard.cells, '0,0': 'stone' },
+  });
+  const staleBakedAutosave = await request(
+    'PUT',
+    `/api/editor-documents/${legacyDocumentId}`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(legacyDocumentId, 'better-auth.session=abc', {
+      revision: 4,
+      level: { ...coverChangedLevel, boardCode: staleBakedBoardCode },
+    })),
+  );
+  const staleBakedSave = await request(
+    'POST',
+    `/api/editor-documents/${legacyDocumentId}/save`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(legacyDocumentId, 'better-auth.session=abc', { revision: 5 })),
+    5000,
+  );
+  const binding = durableLegacyBinding.rows[0];
+  if (
+    selectLegacyAutosave.statusCode !== 200
+    || JSON.parse(selectLegacyAutosave.body).document.revision !== 2
+    || bindingsBeforeCoverEdit.rows.length !== 0
+    || coverFirstAutosave.statusCode !== 200
+    || JSON.parse(coverFirstAutosave.body).document.revision !== 3
+    || binding?.legacy_environment_geometry_schema !== 'predrawn-environment-geometry-v1'
+    || binding?.legacy_environment_geometry_sha256 !== legacyGeometryV1
+    || binding?.environment_geometry_schema !== 'predrawn-environment-geometry-v2'
+    || binding?.environment_geometry_sha256 !== legacyGeometryV2
+    || listedLegacyVersions.statusCode !== 200
+    || listedLegacyVersion?.environment_geometry_sha256_v2 !== legacyGeometryV2
+    || coverChangedSave.statusCode !== 200
+    || JSON.parse(coverChangedSave.body).document.revision !== 4
+    || staleBakedAutosave.statusCode !== 200
+    || JSON.parse(staleBakedAutosave.body).document.revision !== 5
+    || staleBakedSave.statusCode !== 409
+    || JSON.parse(staleBakedSave.body).error !== 'predrawn_background_geometry_mismatch'
+  ) {
+    throw new Error(`Legacy geometry binding failed its first-cover-edit migration boundary: ${selectLegacyAutosave.statusCode} ${selectLegacyAutosave.body} / ${JSON.stringify(bindingsBeforeCoverEdit.rows)} / ${coverFirstAutosave.statusCode} ${coverFirstAutosave.body} / ${JSON.stringify(binding)} / ${listedLegacyVersions.statusCode} ${listedLegacyVersions.body} / ${coverChangedSave.statusCode} ${coverChangedSave.body} / ${staleBakedAutosave.statusCode} ${staleBakedAutosave.body} / ${staleBakedSave.statusCode} ${staleBakedSave.body}`);
+  }
+
+  // Operational bounds are part of the permanent version-store contract. Fill
+  // this one disposable document through direct fixture rows so the smoke can
+  // exercise the exact HTTP boundaries without uploading a real GiB.
+  const distinctQuotaPng = syntheticPng(64, 64, '#241830', '#9070a0');
+  const distinctQuotaSha256 = crypto.createHash('sha256').update(distinctQuotaPng).digest('hex');
+  const quotaAttemptIds = [];
+  for (const suffix of ['distinct', 'reuse', 'over-limit']) {
+    const response = await createGenerationAttemptRequest(newDocumentId, {
+      label: `Quota ${suffix} attempt`,
+      source_version_id: sourceArtworkReady.id,
+      idempotency_key: `generation-attempt:${newDocumentId}:quota:${suffix}`,
+    });
+    const body = JSON.parse(response.body);
+    if (response.statusCode !== 201 || !body.attempt?.id) {
+      throw new Error(`Could not create quota attempt ${suffix}: ${response.statusCode} ${response.body}`);
+    }
+    quotaAttemptIds.push(body.attempt.id);
+  }
+  const quotaPayload = (label, key, sourceSha256, attemptId) => ({
+    kind: 'raw',
+    attempt_id: attemptId,
+    label,
+    world_bounds: backgroundWorldBounds,
+    operation: {
+      kind: 'raw-generated-v2',
+      untouched: true,
+      coordinateBasis: 'board-world-pixels-v1',
+      viewingPane: backgroundWorldBounds,
+      outputSha256: sourceSha256,
+      environmentGeometrySchema: 'predrawn-environment-geometry-v2',
+      environmentGeometrySha256: privateEnvironmentGeometrySha256,
+    },
+    provenance: {
+      sourceSha256,
+      outputSha256: sourceSha256,
+      pipeline: 'smoke-quota-fixture',
+      environmentGeometrySha256: privateEnvironmentGeometrySha256,
+    },
+    idempotency_key: key,
+  });
+  const distinctQuotaCreate = await createBackgroundVersionRequest(
+    newDocumentId,
+    quotaPayload(
+      'Distinct owner-quota upload',
+      `background-quota-distinct:${newDocumentId}`,
+      distinctQuotaSha256,
+      quotaAttemptIds[0],
+    ),
+  );
+  const reuseQuotaCreate = await createBackgroundVersionRequest(
+    newDocumentId,
+    quotaPayload(
+      'Existing-byte owner-quota upload',
+      `background-quota-reuse:${newDocumentId}`,
+      rawPngSha256,
+      quotaAttemptIds[1],
+    ),
+  );
+  const distinctQuotaVersion = JSON.parse(distinctQuotaCreate.body).version;
+  const reuseQuotaVersion = JSON.parse(reuseQuotaCreate.body).version;
+  if (
+    distinctQuotaCreate.statusCode !== 201 || !distinctQuotaVersion?.id
+    || reuseQuotaCreate.statusCode !== 201 || !reuseQuotaVersion?.id
+  ) {
+    throw new Error(`Could not create background quota fixtures: ${distinctQuotaCreate.statusCode} ${distinctQuotaCreate.body} / ${reuseQuotaCreate.statusCode} ${reuseQuotaCreate.body}`);
+  }
+  await queryDb(
+    `WITH existing AS (
+       SELECT count(*)::integer AS count
+         FROM predrawn_background_versions
+        WHERE document_id = $1
+     )
+     INSERT INTO predrawn_background_versions (
+       id, document_id, owner_email, level_id, kind, label, world_bounds,
+       operation, provenance, created_by_email, created_by_name, updated_by
+     )
+     SELECT md5($1 || ':quota-row:' || series.value::text)::uuid,
+            $1, 'player@example.com', 'l2', 'raw',
+            'Quota seed ' || series.value::text,
+            '{"minX":0,"minY":0,"width":8,"height":12}'::jsonb,
+            '{"fixture":"row-quota"}'::jsonb,
+            '{"fixture":"row-quota"}'::jsonb,
+            'player@example.com', 'Tactics Player', 'player@example.com'
+       FROM existing
+       CROSS JOIN LATERAL generate_series(1, GREATEST(0, 256 - existing.count)) AS series(value)`,
+    [newDocumentId],
+  );
+  const filledVersionCount = await queryDb(
+    'SELECT count(*)::integer AS count FROM predrawn_background_versions WHERE document_id = $1',
+    [newDocumentId],
+  );
+  await queryDb(
+    `WITH candidate_rows AS (
+       SELECT id, row_number() OVER (ORDER BY id) AS ordinal
+         FROM predrawn_background_versions
+        WHERE document_id = $1 AND label LIKE 'Quota seed %'
+        ORDER BY id
+        LIMIT 32
+     ), fixture_blobs AS (
+       SELECT ordinal,
+              md5($1 || ':quota-blob:' || ordinal::text)
+                || md5($1 || ':quota-blob:' || ordinal::text) AS sha256
+         FROM candidate_rows
+     )
+     INSERT INTO media_blobs (sha256, blob_key, media_type, byte_length, width, height)
+     SELECT sha256, 'objects/' || left(sha256, 2) || '/' || sha256,
+            'image/png', 33554432, 1, 1
+       FROM fixture_blobs
+     ON CONFLICT (sha256) DO NOTHING`,
+    [newDocumentId],
+  );
+  await queryDb(
+    `WITH candidate_rows AS (
+       SELECT id, row_number() OVER (ORDER BY id) AS ordinal
+         FROM predrawn_background_versions
+        WHERE document_id = $1 AND label LIKE 'Quota seed %'
+        ORDER BY id
+        LIMIT 32
+     ), fixture_blobs AS (
+       SELECT ordinal,
+              md5($1 || ':quota-blob:' || ordinal::text)
+                || md5($1 || ':quota-blob:' || ordinal::text) AS sha256
+         FROM candidate_rows
+     )
+     UPDATE predrawn_background_versions version
+        SET blob_sha256 = fixture_blobs.sha256, width = 1, height = 1
+       FROM candidate_rows
+       JOIN fixture_blobs ON fixture_blobs.ordinal = candidate_rows.ordinal
+      WHERE version.id = candidate_rows.id`,
+    [newDocumentId],
+  );
+  const overDocumentQuota = await createBackgroundVersionRequest(
+    newDocumentId,
+    quotaPayload(
+      'Over document quota',
+      `background-quota-row-over:${newDocumentId}`,
+      distinctQuotaSha256,
+      quotaAttemptIds[2],
+    ),
+  );
+  const replayAtDocumentQuota = await createBackgroundVersionRequest(newDocumentId, rawBackgroundPayload);
+  const reusedBlobAtOwnerQuota = await uploadBackgroundVersionRequest(
+    newDocumentId,
+    reuseQuotaVersion.id,
+    reuseQuotaVersion.row_revision,
+    rawPng,
+  );
+  const distinctBlobOverOwnerQuota = await uploadBackgroundVersionRequest(
+    newDocumentId,
+    distinctQuotaVersion.id,
+    distinctQuotaVersion.row_revision,
+    distinctQuotaPng,
+  );
+  if (
+    Number(filledVersionCount.rows[0]?.count) !== 256
+    || overDocumentQuota.statusCode !== 409
+    || JSON.parse(overDocumentQuota.body).error !== 'background_version_document_quota_exceeded'
+    || replayAtDocumentQuota.statusCode !== 200
+    || JSON.parse(replayAtDocumentQuota.body).idempotent_replay !== true
+    || reusedBlobAtOwnerQuota.statusCode !== 200
+    || JSON.parse(reusedBlobAtOwnerQuota.body).version.content_sha256 !== rawPngSha256
+    || distinctBlobOverOwnerQuota.statusCode !== 413
+    || JSON.parse(distinctBlobOverOwnerQuota.body).error !== 'background_version_owner_blob_quota_exceeded'
+  ) {
+    throw new Error(`Background operational quotas failed: ${JSON.stringify(filledVersionCount.rows)} / ${overDocumentQuota.statusCode} ${overDocumentQuota.body} / ${replayAtDocumentQuota.statusCode} ${replayAtDocumentQuota.body} / ${reusedBlobAtOwnerQuota.statusCode} ${reusedBlobAtOwnerQuota.body} / ${distinctBlobOverOwnerQuota.statusCode} ${distinctBlobOverOwnerQuota.body}`);
+  }
+  const deletedQuotaSeedVersions = await queryDb(
+    `DELETE FROM predrawn_background_versions
+      WHERE document_id = $1 AND label LIKE 'Quota seed %'
+      RETURNING blob_sha256`,
+    [newDocumentId],
+  );
+  const quotaSeedBlobSha256s = deletedQuotaSeedVersions.rows
+    .map((row) => row.blob_sha256)
+    .filter(Boolean);
+  if (quotaSeedBlobSha256s.length !== 32) {
+    throw new Error(`Quota fixture cleanup did not recover its 32 synthetic Blob references: ${JSON.stringify(deletedQuotaSeedVersions.rows)}`);
+  }
+  await queryDb(
+    `DELETE FROM media_blobs blob
+      WHERE blob.sha256 = ANY($1::text[])
+        AND NOT EXISTS (
+          SELECT 1
+            FROM predrawn_background_versions retained
+           WHERE retained.blob_sha256 = blob.sha256
+        )`,
+    [quotaSeedBlobSha256s],
+  );
+
   // Official working copies use the same CAS contract, but only admins may
   // resolve or mutate them; the promoted workspace remains globally readable.
   const nonAdminOfficialEditor = await request(
@@ -5232,19 +8667,99 @@ async function main() {
   if (officialEditSession.response.statusCode !== 200 || officialEditSession.body.session.state !== 'active') {
     throw new Error(`Could not acquire official edit authority: ${officialEditSession.response.statusCode} ${officialEditSession.response.body}`);
   }
+  const officialWorldBounds = backgroundWorldBounds;
+  const officialGeometryBoardCode = versionedBoardCode(
+    crypto.randomUUID(),
+    null,
+    { rows: 8 },
+  );
+  const officialEnvironmentGeometrySha256 = environmentGeometrySha256(
+    officialGeometryBoardCode,
+  );
+  const officialAttemptFixture = await seedGenerationAttemptFixture(
+    officialDocumentId,
+    officialEnvironmentGeometrySha256,
+    officialGeometryBoardCode,
+    'Official generated scene attempt',
+  );
+  const officialRawPng = syntheticPng(64, 64, '#182040', '#8090c0');
+  const officialRawPngSha256 = crypto.createHash('sha256').update(officialRawPng).digest('hex');
+  const officialRawCreate = await createBackgroundVersionRequest(officialDocumentId, {
+    kind: 'raw',
+    attempt_id: officialAttemptFixture.attemptId,
+    label: 'Official generated scene',
+    world_bounds: officialWorldBounds,
+    operation: {
+      kind: 'raw-generated-v2',
+      untouched: true,
+      coordinateBasis: 'board-world-pixels-v1',
+      viewingPane: officialWorldBounds,
+      environmentGeometrySchema: 'predrawn-environment-geometry-v2',
+      environmentGeometrySha256: officialEnvironmentGeometrySha256,
+    },
+    provenance: {
+      pipeline: 'smoke-imagegen',
+      run: 'official-raw-1',
+      sourceSha256: officialRawPngSha256,
+      environmentGeometrySha256: officialEnvironmentGeometrySha256,
+    },
+    idempotency_key: `background-official-raw:${officialDocumentId}`,
+  });
+  const officialRawDraft = JSON.parse(officialRawCreate.body).version;
+  const officialRawUpload = await uploadBackgroundVersionRequest(
+    officialDocumentId,
+    officialRawDraft.id,
+    officialRawDraft.row_revision,
+    officialRawPng,
+  );
+  const officialRawReady = JSON.parse(officialRawUpload.body).version;
+  if (
+    officialRawCreate.statusCode !== 201 || officialRawUpload.statusCode !== 200
+    || officialRawReady.status !== 'ready' || officialRawReady.row_revision !== 1
+  ) {
+    throw new Error(`Official background staging failed: ${officialRawCreate.statusCode} ${officialRawCreate.body} / ${officialRawUpload.statusCode} ${officialRawUpload.body}`);
+  }
+  const officialExactSaveLevel = {
+    ...officialWorkspace.levels['off-l-test'],
+    name: 'Official Exact Save',
+    layers: {
+      ...officialWorkspace.levels['off-l-test'].layers,
+      terrain: [{ x: 0, y: 0, terrain: 'grass', elevation: 0 }],
+    },
+    boardCode: versionedBoardCode(officialRawReady.id, null, { rows: 8 }),
+  };
+  await queryDb(
+    `UPDATE predrawn_background_versions
+        SET operation = operation - 'coordinateBasis'
+      WHERE id = $1`,
+    [officialRawReady.id],
+  );
+  const invalidRawContractOfficialSave = await request(
+    'POST', `/api/editor-documents/${officialDocumentId}/save`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(officialDocumentId, 'better-auth.session=abc', {
+      revision: 1,
+      level: officialExactSaveLevel,
+    })),
+  );
+  await queryDb(
+    `UPDATE predrawn_background_versions
+        SET operation = operation || '{"coordinateBasis":"board-world-pixels-v1"}'::jsonb
+      WHERE id = $1`,
+    [officialRawReady.id],
+  );
+  if (
+    invalidRawContractOfficialSave.statusCode !== 409
+    || JSON.parse(invalidRawContractOfficialSave.body).error !== 'predrawn_background_contract_mismatch'
+  ) {
+    throw new Error(`Canonical Save accepted legacy raw operation metadata: ${invalidRawContractOfficialSave.statusCode} ${invalidRawContractOfficialSave.body}`);
+  }
   const officialEditorSave = await request(
     'POST', `/api/editor-documents/${officialDocumentId}/save`,
     { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
     JSON.stringify(editorMutationBody(officialDocumentId, 'better-auth.session=abc', {
       revision: 1,
-      level: {
-        ...officialWorkspace.levels['off-l-test'],
-        name: 'Official Exact Save',
-        layers: {
-          ...officialWorkspace.levels['off-l-test'].layers,
-          terrain: [{ x: 0, y: 0, terrain: 'grass', elevation: 0 }],
-        },
-      },
+      level: officialExactSaveLevel,
     })),
   );
   const officialEditorSaveBody = JSON.parse(officialEditorSave.body);
@@ -5255,6 +8770,39 @@ async function main() {
     officialEditorSaveBody.workspace_revision !== 2
   ) {
     throw new Error(`Official editor Save failed: ${officialEditorSave.statusCode} ${officialEditorSave.body}`);
+  }
+  const officialPublishedVersion = await queryDb(
+    `SELECT v.status, v.row_revision, v.published_by, b.published_at AS blob_published_at
+       FROM predrawn_background_versions v
+       JOIN media_blobs b ON b.sha256 = v.blob_sha256
+      WHERE v.id = $1`,
+    [officialRawReady.id],
+  );
+  const officialPublishedEvents = await queryDb(
+    `SELECT action, actor_email, actor_name
+       FROM predrawn_background_version_events
+      WHERE version_id = $1 ORDER BY id`,
+    [officialRawReady.id],
+  );
+  const anonymousOfficialBackground = await get(
+    `/api/background-versions/${officialRawReady.id}/content`,
+    {},
+    5000,
+  );
+  if (
+    officialPublishedVersion.rowCount !== 1
+    || officialPublishedVersion.rows[0].status !== 'published'
+    || Number(officialPublishedVersion.rows[0].row_revision) !== 2
+    || officialPublishedVersion.rows[0].published_by !== 'player@example.com'
+    || officialPublishedVersion.rows[0].blob_published_at === null
+    || officialPublishedEvents.rows.map((row) => row.action).join(',') !== 'created,content-uploaded,published'
+    || officialPublishedEvents.rows.some((row) => (
+      row.actor_email !== 'player@example.com' || row.actor_name !== 'Tactics Player'
+    ))
+    || anonymousOfficialBackground.statusCode !== 200
+    || anonymousOfficialBackground.headers['cache-control'] !== 'public, max-age=31536000, immutable'
+  ) {
+    throw new Error(`Official Save did not atomically publish its exact background: ${JSON.stringify(officialPublishedVersion.rows)} / ${JSON.stringify(officialPublishedEvents.rows)} / ${anonymousOfficialBackground.statusCode}`);
   }
   const officialAfterEditorSave = await get('/api/official-campaigns/default');
   const officialAfterEditorSaveBody = JSON.parse(officialAfterEditorSave.body);
@@ -5278,6 +8826,227 @@ async function main() {
     staleOfficialWorkspaceSaveBody.portfolio.data.levels['off-l-test'].name !== 'Official Exact Save'
   ) {
     throw new Error(`Stale official workspace Save could revert the canonical Level: ${staleOfficialWorkspaceSave.statusCode} ${staleOfficialWorkspaceSave.body}`);
+  }
+
+  // Official publication is collaborative across admins, but private staged
+  // artifacts are not. A second admin must be able to retain an already-
+  // published exact selection without seeing the first admin's new ready work.
+  const firstAdminPrivateOfficialPng = syntheticPng(64, 64, '#401820', '#c08090');
+  const firstAdminPrivateOfficialPngSha256 = crypto.createHash('sha256')
+    .update(firstAdminPrivateOfficialPng)
+    .digest('hex');
+  const firstAdminPrivateOfficialAttemptFixture = await seedGenerationAttemptFixture(
+    officialDocumentId,
+    officialEnvironmentGeometrySha256,
+    officialGeometryBoardCode,
+    'First admin private follow-up attempt',
+  );
+  const firstAdminPrivateOfficialCreate = await createBackgroundVersionRequest(officialDocumentId, {
+    kind: 'raw',
+    attempt_id: firstAdminPrivateOfficialAttemptFixture.attemptId,
+    label: 'First admin private follow-up',
+    world_bounds: officialWorldBounds,
+    operation: {
+      kind: 'raw-generated-v2',
+      untouched: true,
+      coordinateBasis: 'board-world-pixels-v1',
+      viewingPane: officialWorldBounds,
+      environmentGeometrySchema: 'predrawn-environment-geometry-v2',
+      environmentGeometrySha256: officialEnvironmentGeometrySha256,
+    },
+    provenance: {
+      pipeline: 'smoke-imagegen',
+      run: 'official-private-follow-up',
+      sourceSha256: firstAdminPrivateOfficialPngSha256,
+      environmentGeometrySha256: officialEnvironmentGeometrySha256,
+    },
+    idempotency_key: `background-official-private:${officialDocumentId}`,
+  });
+  const firstAdminPrivateOfficialDraft = JSON.parse(firstAdminPrivateOfficialCreate.body).version;
+  const firstAdminPrivateOfficialUpload = await uploadBackgroundVersionRequest(
+    officialDocumentId,
+    firstAdminPrivateOfficialDraft.id,
+    firstAdminPrivateOfficialDraft.row_revision,
+    firstAdminPrivateOfficialPng,
+  );
+  const firstAdminPrivateOfficialReady = JSON.parse(firstAdminPrivateOfficialUpload.body).version;
+  if (
+    firstAdminPrivateOfficialCreate.statusCode !== 201
+    || firstAdminPrivateOfficialUpload.statusCode !== 200
+    || firstAdminPrivateOfficialReady.status !== 'ready'
+  ) {
+    throw new Error(`Could not stage cross-admin privacy fixture: ${firstAdminPrivateOfficialCreate.statusCode} ${firstAdminPrivateOfficialCreate.body} / ${firstAdminPrivateOfficialUpload.statusCode} ${firstAdminPrivateOfficialUpload.body}`);
+  }
+  const secondAdminOfficialEditor = await request(
+    'POST',
+    '/api/editor-documents/resolve',
+    { cookie: 'better-auth.session=second-admin', 'content-type': 'application/json' },
+    JSON.stringify({ level_id: 'off-l-test', workspace_kind: 'official', workspace_id: 'default' }),
+  );
+  const secondAdminOfficialBody = JSON.parse(secondAdminOfficialEditor.body);
+  const secondAdminDocumentId = secondAdminOfficialBody.document?.document_id;
+  if (
+    secondAdminOfficialEditor.statusCode !== 201 || !secondAdminDocumentId
+    || secondAdminDocumentId === officialDocumentId
+    || secondAdminOfficialBody.document.level.boardCode !== versionedBoardCode(officialRawReady.id, null, { rows: 8 })
+  ) {
+    throw new Error(`Second admin could not resolve the published official selection: ${secondAdminOfficialEditor.statusCode} ${secondAdminOfficialEditor.body}`);
+  }
+  const secondAdminSession = await openEditorEditSession(secondAdminDocumentId, {
+    cookie: 'better-auth.session=second-admin',
+    deviceId: 'smoke-second-admin-device',
+    clientLabel: 'Second official admin',
+  });
+  if (secondAdminSession.response.statusCode !== 200 || secondAdminSession.body.session.state !== 'active') {
+    throw new Error(`Second admin could not acquire official edit authority: ${secondAdminSession.response.statusCode} ${secondAdminSession.response.body}`);
+  }
+  const secondAdminVersions = await get(
+    `/api/editor-documents/${secondAdminDocumentId}/background-versions`,
+    { cookie: 'better-auth.session=second-admin' },
+  );
+  const secondAdminVersionsBody = JSON.parse(secondAdminVersions.body);
+  if (
+    secondAdminVersions.statusCode !== 200
+    || !secondAdminVersionsBody.versions.some((version) => (
+      version.id === officialRawReady.id && version.status === 'published'
+    ))
+    || secondAdminVersionsBody.versions.some((version) => version.id === firstAdminPrivateOfficialReady.id)
+  ) {
+    throw new Error(`Official version list crossed the wrong admin boundary: ${secondAdminVersions.statusCode} ${secondAdminVersions.body}`);
+  }
+  const secondAdminUnchangedSave = await request(
+    'POST',
+    `/api/editor-documents/${secondAdminDocumentId}/save`,
+    { cookie: 'better-auth.session=second-admin', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(secondAdminDocumentId, 'better-auth.session=second-admin', {
+      revision: 1,
+      level: officialAfterEditorSaveBody.portfolio.data.levels['off-l-test'],
+    })),
+    5000,
+  );
+  const secondAdminUnchangedSaveBody = JSON.parse(secondAdminUnchangedSave.body);
+  const officialPublishEventCount = await queryDb(
+    `SELECT count(*)::integer AS count
+       FROM predrawn_background_version_events
+      WHERE version_id = $1 AND action = 'published'`,
+    [officialRawReady.id],
+  );
+  if (
+    secondAdminUnchangedSave.statusCode !== 200
+    || secondAdminUnchangedSaveBody.document.saved_revision !== 2
+    || secondAdminUnchangedSaveBody.workspace_revision !== 3
+    || Number(officialPublishEventCount.rows[0].count) !== 1
+  ) {
+    throw new Error(`Second admin could not retain the published official background: ${secondAdminUnchangedSave.statusCode} ${secondAdminUnchangedSave.body} / ${JSON.stringify(officialPublishEventCount.rows)}`);
+  }
+  const officialWorkspaceAtVersionBoundary = {
+    campaigns: officialAfterEditorSaveBody.portfolio.data.campaigns,
+    levels: {
+      ...officialAfterEditorSaveBody.portfolio.data.levels,
+      'off-l-test': {
+        ...officialAfterEditorSaveBody.portfolio.data.levels['off-l-test'],
+        boardCode: versionedBoardCode(crypto.randomUUID(), null, { rows: 8 }),
+      },
+    },
+  };
+  const missingOfficialBackgroundPut = await request(
+    'PUT',
+    '/api/official-campaigns/default',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ data: officialWorkspaceAtVersionBoundary, revision: 3 }),
+    5000,
+  );
+  const privateCrossWorkspaceOfficialPut = await request(
+    'PUT',
+    '/api/official-campaigns/default',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      data: {
+        ...officialWorkspaceAtVersionBoundary,
+        levels: {
+          ...officialWorkspaceAtVersionBoundary.levels,
+          'off-l-test': {
+            ...officialWorkspaceAtVersionBoundary.levels['off-l-test'],
+            boardCode: versionedBoardCode(mismatchedMask.version.id, null, { rows: 8 }),
+          },
+        },
+      },
+      revision: 3,
+    }),
+    5000,
+  );
+  const foreignReadyOfficialPut = await request(
+    'PUT',
+    '/api/official-campaigns/default',
+    { cookie: 'better-auth.session=second-admin', 'content-type': 'application/json' },
+    JSON.stringify({
+      data: {
+        ...officialWorkspaceAtVersionBoundary,
+        levels: {
+          ...officialWorkspaceAtVersionBoundary.levels,
+          'off-l-test': {
+            ...officialWorkspaceAtVersionBoundary.levels['off-l-test'],
+            boardCode: versionedBoardCode(firstAdminPrivateOfficialReady.id, null, { rows: 8 }),
+          },
+        },
+      },
+      revision: 3,
+    }),
+    5000,
+  );
+  const foreignReadyOfficialPutBody = JSON.parse(foreignReadyOfficialPut.body);
+  const officialAfterRejectedVersionPuts = await get('/api/official-campaigns/default');
+  const exactReadyOfficialWorkspace = {
+    ...officialWorkspaceAtVersionBoundary,
+    levels: {
+      ...officialWorkspaceAtVersionBoundary.levels,
+      'off-l-test': {
+        ...officialWorkspaceAtVersionBoundary.levels['off-l-test'],
+        boardCode: versionedBoardCode(firstAdminPrivateOfficialReady.id, null, { rows: 8 }),
+      },
+    },
+  };
+  const exactReadyOfficialPut = await request(
+    'PUT',
+    '/api/official-campaigns/default',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ data: exactReadyOfficialWorkspace, revision: 3 }),
+    5000,
+  );
+  const exactReadyOfficialPutBody = JSON.parse(exactReadyOfficialPut.body);
+  const readyPublishedByWholePut = await queryDb(
+    `SELECT v.status, v.published_by, b.published_at AS blob_published_at,
+            count(e.id) FILTER (WHERE e.action = 'published')::integer AS publish_events
+       FROM predrawn_background_versions v
+       JOIN media_blobs b ON b.sha256 = v.blob_sha256
+       LEFT JOIN predrawn_background_version_events e ON e.version_id = v.id
+      WHERE v.id = $1
+      GROUP BY v.id, v.status, v.published_by, b.published_at`,
+    [firstAdminPrivateOfficialReady.id],
+  );
+  const anonymousWholePutBackground = await get(
+    `/api/background-versions/${firstAdminPrivateOfficialReady.id}/content`,
+    {},
+    5000,
+  );
+  if (
+    missingOfficialBackgroundPut.statusCode !== 409
+    || JSON.parse(missingOfficialBackgroundPut.body).error !== 'predrawn_background_version_not_found'
+    || privateCrossWorkspaceOfficialPut.statusCode !== 409
+    || JSON.parse(privateCrossWorkspaceOfficialPut.body).error !== 'predrawn_background_version_not_found'
+    || foreignReadyOfficialPut.statusCode !== 409
+    || foreignReadyOfficialPutBody.error !== 'predrawn_background_version_not_found'
+    || Object.hasOwn(foreignReadyOfficialPutBody, 'document')
+    || JSON.parse(officialAfterRejectedVersionPuts.body).portfolio.revision !== 3
+    || exactReadyOfficialPut.statusCode !== 200
+    || exactReadyOfficialPutBody.portfolio.revision !== 4
+    || readyPublishedByWholePut.rows[0]?.status !== 'published'
+    || readyPublishedByWholePut.rows[0]?.published_by !== 'player@example.com'
+    || readyPublishedByWholePut.rows[0]?.blob_published_at === null
+    || Number(readyPublishedByWholePut.rows[0]?.publish_events) !== 1
+    || anonymousWholePutBackground.statusCode !== 200
+  ) {
+    throw new Error(`Whole official publication bypassed exact background validation: ${missingOfficialBackgroundPut.statusCode} ${missingOfficialBackgroundPut.body} / ${privateCrossWorkspaceOfficialPut.statusCode} ${privateCrossWorkspaceOfficialPut.body} / ${foreignReadyOfficialPut.statusCode} ${foreignReadyOfficialPut.body} / ${officialAfterRejectedVersionPuts.body} / ${exactReadyOfficialPut.statusCode} ${exactReadyOfficialPut.body} / ${JSON.stringify(readyPublishedByWholePut.rows)} / ${anonymousWholePutBackground.statusCode}`);
   }
 
   // --- Game Lab runs (/api/lab-runs): per-user, DB-backed --------------------

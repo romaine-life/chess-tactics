@@ -21,6 +21,7 @@ const {
   ThumbnailFontRegistry,
   ThumbnailMediaUnavailableError,
   Semaphore,
+  assertPredrawnThumbnailMedia,
   constants,
   loadSpriteWithAvailability,
   mapWithConcurrency,
@@ -240,6 +241,72 @@ test('missing critical terrain remains fatal', async () => {
     ),
     (error) => error instanceof ThumbnailMediaUnavailableError,
   );
+});
+
+test('selected immutable thumbnail plate and mask remain fatal even under a decorative source policy', async () => {
+  const backgroundSrc = '/api/background-versions/11111111-1111-4111-8111-111111111111/content';
+  const maskSrc = '/api/background-versions/22222222-2222-4222-8222-222222222222/content';
+  const raster = createCanvas(1, 1).toBuffer('image/png');
+  const basePlan = {
+    ops: [{
+      layer: 'terrain',
+      src: backgroundSrc,
+      dx: 0,
+      dy: 0,
+      dw: 1,
+      dh: 1,
+      z: -100000,
+    }],
+    predrawnBackgroundRaster: { src: backgroundSrc, frameWidth: 1, frameHeight: 1 },
+    bounds: { minX: 0, minY: 0, width: 1, height: 1 },
+    framingBounds: { minX: 0, minY: 0, width: 1, height: 1 },
+  };
+
+  await assert.rejects(renderBoardThumbnail({
+    plan: basePlan,
+    loadDynamicSprite: async () => null,
+    mediaCatalogRevision: 'missing-selected-plate',
+    sourceAvailability: () => constants.AVAILABILITY_DECORATIVE,
+  }), (error) => error instanceof ThumbnailMediaUnavailableError && error.message.includes(backgroundSrc));
+
+  await assert.rejects(renderBoardThumbnail({
+    plan: {
+      ...basePlan,
+      occlusionDepthMap: {
+        src: maskSrc,
+        frameWidth: 1,
+        frameHeight: 1,
+        worldBounds: { minX: 0, minY: 0, width: 1, height: 1 },
+      },
+    },
+    loadDynamicSprite: async (src) => src === backgroundSrc ? raster : null,
+    mediaCatalogRevision: 'missing-selected-mask',
+    sourceAvailability: () => constants.AVAILABILITY_DECORATIVE,
+  }), (error) => error instanceof ThumbnailMediaUnavailableError && error.message.includes(maskSrc));
+});
+
+test('server thumbnail rejects decoded plate and mask dimensions that differ from the render plan', () => {
+  const backgroundSrc = '/api/background-versions/33333333-3333-4333-8333-333333333333/content';
+  const maskSrc = '/api/background-versions/44444444-4444-4444-8444-444444444444/content';
+  const plan = {
+    predrawnBackgroundRaster: { src: backgroundSrc, frameWidth: 100, frameHeight: 80 },
+    occlusionDepthMap: {
+      src: maskSrc,
+      frameWidth: 100,
+      frameHeight: 80,
+      worldBounds: { minX: 0, minY: 0, width: 100, height: 80 },
+    },
+  };
+
+  assert.throws(() => assertPredrawnThumbnailMedia(plan, new Map([
+    [backgroundSrc, { width: 99, height: 80 }],
+    [maskSrc, { width: 100, height: 80 }],
+  ])), /background dimensions do not match: expected 100×80, decoded 99×80/);
+
+  assert.throws(() => assertPredrawnThumbnailMedia(plan, new Map([
+    [backgroundSrc, { width: 100, height: 80 }],
+    [maskSrc, { width: 100, height: 79 }],
+  ])), /occlusion depth dimensions do not match: expected 100×80, decoded 100×79/);
 });
 
 test('availability resolver failures and unknown policies fail closed', () => {

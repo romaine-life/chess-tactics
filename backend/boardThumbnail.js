@@ -5,6 +5,7 @@
 const { createHash } = require('node:crypto');
 const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 const {
+  filterPredrawnOcclusionDepthPixels,
   predrawnOcclusionMasksInFront,
   rasterizePredrawnBoardPixels,
 } = require('@chess-tactics/board-render');
@@ -57,6 +58,29 @@ function sourceAvailabilityPolicy(sourceAvailability, src) {
       : AVAILABILITY_CRITICAL;
   } catch {
     return AVAILABILITY_CRITICAL;
+  }
+}
+
+function assertPredrawnThumbnailMedia(plan, images) {
+  const requirements = [
+    ...(plan.predrawnBackgroundRaster
+      ? [{ label: 'background', ...plan.predrawnBackgroundRaster }]
+      : []),
+    ...(plan.occlusionDepthMap
+      ? [{ label: 'occlusion depth', ...plan.occlusionDepthMap }]
+      : []),
+  ];
+  for (const requirement of requirements) {
+    const image = images.get(requirement.src);
+    if (!image) throw new ThumbnailMediaUnavailableError(requirement.src);
+    const width = Number(image.width) || 0;
+    const height = Number(image.height) || 0;
+    if (width !== requirement.frameWidth || height !== requirement.frameHeight) {
+      throw new Error(
+        `Immutable pre-drawn ${requirement.label} dimensions do not match: `
+        + `expected ${requirement.frameWidth}×${requirement.frameHeight}, decoded ${width}×${height}.`,
+      );
+    }
   }
 }
 
@@ -668,6 +692,8 @@ function paintOccludedThumbnailOp({
   op,
   image,
   masks,
+  depthMap,
+  depthImage,
   images,
   projection,
   clipRect,
@@ -688,6 +714,27 @@ function paintOccludedThumbnailOp({
     if (maskImage) {
       paintThumbnailOp(scratchCtx, mask, maskImage, projection, scratchRect.x, scratchRect.y);
     }
+  }
+  if (depthMap && depthImage) {
+    const depthCanvas = createScratchCanvas(scratchRect.width, scratchRect.height);
+    const depthContext = depthCanvas.getContext('2d');
+    depthContext.imageSmoothingEnabled = false;
+    const mapBounds = depthMap.worldBounds;
+    depthContext.drawImage(
+      depthImage,
+      0,
+      0,
+      depthMap.frameWidth,
+      depthMap.frameHeight,
+      projection.originX + (mapBounds.minX - projection.minX) * projection.scale - scratchRect.x,
+      projection.originY + (mapBounds.minY - projection.minY) * projection.scale - scratchRect.y,
+      mapBounds.width * projection.scale,
+      mapBounds.height * projection.scale,
+    );
+    const depthPixels = depthContext.getImageData(0, 0, scratchRect.width, scratchRect.height);
+    depthPixels.data.set(filterPredrawnOcclusionDepthPixels(depthPixels.data, op.z));
+    depthContext.putImageData(depthPixels, 0, 0);
+    scratchCtx.drawImage(depthCanvas, 0, 0);
   }
   scratchCtx.restore();
   target.drawImage(scratch, scratchRect.x, scratchRect.y);
@@ -728,6 +775,7 @@ async function renderLevelCard({
 
   const { ops, bounds } = plan;
   const occlusionMasks = Array.isArray(plan.occlusionMasks) ? plan.occlusionMasks : [];
+  const occlusionDepthMap = plan.occlusionDepthMap || null;
   const fitBounds = plan.framingBounds || bounds;
   const heroW = CARD_W - PAD * 2;
   const heroH = HERO_BOTTOM - HERO_TOP;
@@ -739,7 +787,11 @@ async function renderLevelCard({
   ctx.imageSmoothingEnabled = false;
 
   const images = new Map();
-  const uniqueSources = [...new Set([...ops, ...occlusionMasks].map((op) => op.src))];
+  const uniqueSources = [...new Set([
+    ...[...ops, ...occlusionMasks].map((op) => op.src),
+    ...(plan.predrawnBackgroundRaster ? [plan.predrawnBackgroundRaster.src] : []),
+    ...(occlusionDepthMap ? [occlusionDepthMap.src] : []),
+  ])];
   const loadedImages = await mapWithConcurrency(uniqueSources, SPRITE_LOAD_CONCURRENCY, (src) => (
     loadSprite(
       src,
@@ -749,6 +801,7 @@ async function renderLevelCard({
     )
   ));
   uniqueSources.forEach((src, index) => images.set(src, loadedImages[index]));
+  assertPredrawnThumbnailMedia(plan, images);
 
   ctx.save();
   ctx.beginPath();
@@ -768,7 +821,10 @@ async function renderLevelCard({
     const masksInFront = op.layer === 'scene'
       ? predrawnOcclusionMasksInFront(op, occlusionMasks)
       : [];
-    if (!masksInFront.length) {
+    const depthImage = op.layer === 'scene' && occlusionDepthMap
+      ? images.get(occlusionDepthMap.src)
+      : null;
+    if (!masksInFront.length && !depthImage) {
       paintThumbnailOp(ctx, op, img, projection);
       continue;
     }
@@ -777,6 +833,8 @@ async function renderLevelCard({
       op,
       image: img,
       masks: masksInFront,
+      depthMap: occlusionDepthMap,
+      depthImage,
       images,
       projection,
       clipRect: heroClipRect,
@@ -823,6 +881,8 @@ async function renderBoardThumbnail({ plan, loadDynamicSprite, mediaCatalogRevis
   const canvas = createCanvas(BOARD_THUMB_W, BOARD_THUMB_H);
   const ctx = canvas.getContext('2d');
   const { ops, bounds } = plan;
+  const occlusionMasks = Array.isArray(plan.occlusionMasks) ? plan.occlusionMasks : [];
+  const occlusionDepthMap = plan.occlusionDepthMap || null;
   const fitBounds = plan.framingBounds || bounds;
   const pad = 8;
   const scale = Math.min(
@@ -831,33 +891,49 @@ async function renderBoardThumbnail({ plan, loadDynamicSprite, mediaCatalogRevis
   );
   const originX = (BOARD_THUMB_W - fitBounds.width * scale) / 2;
   const originY = (BOARD_THUMB_H - fitBounds.height * scale) / 2;
-  const uniqueSources = [...new Set(ops.map((op) => op.src))];
+  const uniqueSources = [...new Set([
+    ...[...ops, ...occlusionMasks].map((op) => op.src),
+    ...(plan.predrawnBackgroundRaster ? [plan.predrawnBackgroundRaster.src] : []),
+    ...(occlusionDepthMap ? [occlusionDepthMap.src] : []),
+  ])];
   const loaded = await mapWithConcurrency(uniqueSources, SPRITE_LOAD_CONCURRENCY, (src) => (
     loadSprite(src, loadDynamicSprite, renderRevision, sourceAvailabilityPolicy(sourceAvailability, src))
   ));
   const images = new Map(uniqueSources.map((src, index) => [src, loaded[index]]));
+  assertPredrawnThumbnailMedia(plan, images);
   ctx.imageSmoothingEnabled = false;
+  const projection = {
+    originX,
+    originY,
+    minX: fitBounds.minX,
+    minY: fitBounds.minY,
+    scale,
+  };
+  const clipRect = { x: 0, y: 0, width: BOARD_THUMB_W, height: BOARD_THUMB_H };
   for (const op of ops) {
     const image = images.get(op.src);
     if (!image) continue;
-    const dx = originX + (op.dx - fitBounds.minX) * scale;
-    const dy = originY + (op.dy - fitBounds.minY) * scale;
-    if (op.contain) {
-      const fit = Math.min(op.dw / Math.max(1, image.width), op.dh / Math.max(1, image.height));
-      const width = image.width * fit;
-      const height = image.height * fit;
-      ctx.drawImage(
-        image,
-        originX + (op.dx + (op.dw - width) / 2 - fitBounds.minX) * scale,
-        originY + (op.dy + (op.dh - height) / 2 - fitBounds.minY) * scale,
-        width * scale,
-        height * scale,
-      );
-    } else if (op.sw != null) {
-      ctx.drawImage(image, op.sx || 0, op.sy || 0, op.sw, op.sh || op.dh, dx, dy, op.dw * scale, op.dh * scale);
-    } else {
-      ctx.drawImage(image, dx, dy, op.dw * scale, op.dh * scale);
+    const masksInFront = op.layer === 'scene'
+      ? predrawnOcclusionMasksInFront(op, occlusionMasks)
+      : [];
+    const depthImage = op.layer === 'scene' && occlusionDepthMap
+      ? images.get(occlusionDepthMap.src)
+      : null;
+    if (!masksInFront.length && !depthImage) {
+      paintThumbnailOp(ctx, op, image, projection);
+      continue;
     }
+    paintOccludedThumbnailOp({
+      target: ctx,
+      op,
+      image,
+      masks: masksInFront,
+      depthMap: occlusionDepthMap,
+      depthImage,
+      images,
+      projection,
+      clipRect,
+    });
   }
   return canvas.toBuffer('image/png');
 }
@@ -878,6 +954,7 @@ module.exports = {
     ThumbnailFontRegistry,
     ThumbnailMediaUnavailableError,
     immutableSourceSha,
+    assertPredrawnThumbnailMedia,
     loadSpriteWithAvailability,
     mapWithConcurrency,
     paintOccludedThumbnailOp,

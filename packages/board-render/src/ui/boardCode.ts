@@ -17,7 +17,7 @@
 //   fa?:[[instanceId,sourceArtId,pixelX,pixelY,direction,scale]],
 //   da?:[top,right,bottom,left], df?:[cell], dt?:{cell:tileId}, dr?:{cell:feature},
 //   dfe?:{edgeKey:fenceMaterial}, dfp?:{vertexKey:fenceMaterial}, dwl?:{edgeKey:wallMaterial} }.
-// `pd[3]` is the stable compact legacy/v2/v3/v4 registration string. Three-field `pd` records
+// `pd[3]` is the stable compact legacy/v2/v3/v4/v5 registration string. Three-field `pd` records
 // remain the byte-identical unregistered form.
 // `f` fills every cell, then `t` overrides — so a "mostly one tile"
 // board stays tiny; `h` punches intentional holes back out of that fill. The autotiling ribbon
@@ -54,6 +54,13 @@ import {
   serializePredrawnBoardPreviewRegistration,
   type PredrawnBoardCornerRegistration,
 } from '../render/predrawnRegistration';
+import {
+  PREDRAWN_MOVE_HIGHLIGHT_COORDINATE_BASIS,
+  PREDRAWN_MOVE_HIGHLIGHT_PROFILE_SCHEMA,
+  comparePredrawnMoveHighlightCellKeys,
+  normalizePredrawnMoveHighlightProfile,
+  type PredrawnMoveHighlightProfile,
+} from '../render/predrawnMoveHighlight';
 
 /**
  * One painted autotiling feature cell (road or river): which linear feature it carries and its
@@ -74,19 +81,79 @@ export interface EditorZoneEntry {
 
 export type BoardFactionDirections = Partial<Record<UnitPalette, UnitFacing>>;
 
-/**
- * One continuous board illustration registered against the canonical centred board viewport.
- * The media id is a stable live-media slot, never a candidate URL or repository filename.
- * `frameWidth`/`frameHeight` are the canonical 1x review-frame dimensions the generated image
- * is scaled into; they do not claim that imagegen preserved the grid proportions internally.
- */
-export interface PredrawnBoardSurface {
+/** Retired runtime-registration declaration retained only until installed plates are migrated. */
+export interface LegacyPredrawnBoardSurface {
   kind: 'predrawn';
   slot: string;
   frameWidth: number;
   frameHeight: number;
   /** Optional whole-plate alignment consumed by saved editor, viewer, and gameplay surfaces. */
   registration?: PredrawnBoardCornerRegistration;
+}
+
+export interface PredrawnBoardWorldBounds {
+  minX: number;
+  minY: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * One exact immutable background-version selection in canonical projected board space.
+ * Pixels have already passed through any approved raster transform; renderers place them at
+ * `worldBounds` without another hidden warp. An optional occlusion version is derived from and
+ * validated against this exact background version.
+ */
+interface VersionedPredrawnBoardSurfaceBase {
+  kind: 'predrawn';
+  backgroundVersionId: string;
+  occlusionVersionId?: string;
+  frameWidth: number;
+  frameHeight: number;
+  worldBounds: PredrawnBoardWorldBounds;
+}
+
+export interface VersionedPredrawnBoardSurfaceV2 extends VersionedPredrawnBoardSurfaceBase {
+  schemaVersion: 2;
+}
+
+export interface VersionedPredrawnBoardSurfaceV3 extends VersionedPredrawnBoardSurfaceBase {
+  schemaVersion: 3;
+  /** Exact visual-only cyan move-highlight calibration bound to this background version. */
+  moveHighlightProfile: PredrawnMoveHighlightProfile;
+}
+
+export type VersionedPredrawnBoardSurface =
+  | VersionedPredrawnBoardSurfaceV2
+  | VersionedPredrawnBoardSurfaceV3;
+
+export type PredrawnBoardSurface = LegacyPredrawnBoardSurface | VersionedPredrawnBoardSurface;
+
+export function isVersionedPredrawnBoardSurface(
+  surface: PredrawnBoardSurface,
+): surface is VersionedPredrawnBoardSurface {
+  return 'schemaVersion' in surface
+    && (surface.schemaVersion === 2 || surface.schemaVersion === 3);
+}
+
+export type BoardBackgroundMode = 'legacy' | 'ai';
+
+/**
+ * Resolve the level's persisted background choice independently from its remembered AI surface.
+ *
+ * Older board codes did not carry an explicit mode, so a retained surface means AI for that
+ * migration case. New callers may keep the same surface while selecting legacy rendering.
+ */
+export function boardBackgroundMode(board: {
+  backgroundMode?: BoardBackgroundMode;
+  surface?: PredrawnBoardSurface;
+}): BoardBackgroundMode {
+  if (board.backgroundMode === 'legacy') return 'legacy';
+  // An explicit AI choice remains AI even when its remembered surface is missing or failed
+  // normalization. Renderers must expose that as an unavailable AI state; silently falling back
+  // to legacy pixels would change the saved Level's meaning and hide the broken selection.
+  if (board.backgroundMode === 'ai') return 'ai';
+  return board.surface?.kind === 'predrawn' ? 'ai' : 'legacy';
 }
 
 export type BoardGeneratedRegionCover = {
@@ -153,7 +220,12 @@ export interface EditorBoard {
   /** Per-faction default facing used when the level editor places new units. */
   factionDirections?: BoardFactionDirections;
   cells: Record<string, string>;
-  /** Absent means ordinary composed terrain tiles; present replaces baked board art with one plate. */
+  /**
+   * The saved background choice. Missing is accepted only for legacy in-memory callers and is
+   * normalized from the remembered surface; every newly encoded board persists the resolved mode.
+   */
+  backgroundMode?: BoardBackgroundMode;
+  /** Remembered AI artwork selection. It remains present while `backgroundMode` is `legacy`. */
   surface?: PredrawnBoardSurface;
   /** Owner-authored native-1x 16:9 crop for the canonical pre-drawn generation reference. */
   predrawnGenerationFrame?: PredrawnGenerationFrame;
@@ -217,22 +289,37 @@ const validArtworkDirections = new Set<string>(rookDirections);
 const floatingArtworkIdPattern = /^[A-Za-z0-9][A-Za-z0-9._:@+-]{0,127}$/;
 export const MAX_FLOATING_ARTWORK_PIXEL = 8192;
 const mediaSlotSegmentPattern = /^[A-Za-z0-9_][A-Za-z0-9._@+-]*$/;
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_PREDRAWN_FRAME_DIMENSION = 8192;
+const MAX_PREDRAWN_WORLD_COORDINATE = 1_000_000;
+
+function normalizePredrawnWorldBounds(value: unknown): PredrawnBoardWorldBounds | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  const minX = Number(record.minX);
+  const minY = Number(record.minY);
+  const width = Number(record.width);
+  const height = Number(record.height);
+  if (
+    !Number.isFinite(minX)
+    || !Number.isFinite(minY)
+    || !Number.isFinite(width)
+    || !Number.isFinite(height)
+    || Math.abs(minX) > MAX_PREDRAWN_WORLD_COORDINATE
+    || Math.abs(minY) > MAX_PREDRAWN_WORLD_COORDINATE
+    || width <= 0
+    || height <= 0
+    || width > MAX_PREDRAWN_WORLD_COORDINATE
+    || height > MAX_PREDRAWN_WORLD_COORDINATE
+  ) return undefined;
+  return { minX, minY, width, height };
+}
 
 /** Validate the persisted half of a pre-drawn surface without resolving its live media. */
 export function normalizePredrawnBoardSurface(value: unknown): PredrawnBoardSurface | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
   const record = value as Record<string, unknown>;
-  if (record.kind !== 'predrawn' || typeof record.slot !== 'string') return undefined;
-  const slot = record.slot.trim();
-  const segments = slot.split('/');
-  if (
-    !slot
-    || slot.length > 512
-    || slot.includes('//')
-    || slot.endsWith('/')
-    || segments.some((segment) => segment === '.' || segment === '..' || !mediaSlotSegmentPattern.test(segment))
-  ) return undefined;
+  if (record.kind !== 'predrawn') return undefined;
   const frameWidth = Number(record.frameWidth);
   const frameHeight = Number(record.frameHeight);
   if (
@@ -242,6 +329,58 @@ export function normalizePredrawnBoardSurface(value: unknown): PredrawnBoardSurf
     || frameHeight < 1
     || frameWidth > MAX_PREDRAWN_FRAME_DIMENSION
     || frameHeight > MAX_PREDRAWN_FRAME_DIMENSION
+  ) return undefined;
+  if (record.schemaVersion === 2 || record.schemaVersion === 3) {
+    const backgroundVersionId = typeof record.backgroundVersionId === 'string'
+      ? record.backgroundVersionId.trim().toLowerCase()
+      : '';
+    const occlusionVersionId = typeof record.occlusionVersionId === 'string'
+      ? record.occlusionVersionId.trim().toLowerCase()
+      : undefined;
+    const worldBounds = normalizePredrawnWorldBounds(record.worldBounds);
+    if (
+      !uuidPattern.test(backgroundVersionId)
+      || (occlusionVersionId !== undefined && !uuidPattern.test(occlusionVersionId))
+      || !worldBounds
+    ) return undefined;
+    if (record.schemaVersion === 3) {
+      const moveHighlightProfile = normalizePredrawnMoveHighlightProfile(
+        record.moveHighlightProfile,
+      );
+      if (
+        !moveHighlightProfile
+        || moveHighlightProfile.backgroundVersionId !== backgroundVersionId
+      ) return undefined;
+      return {
+        kind: 'predrawn',
+        schemaVersion: 3,
+        backgroundVersionId,
+        ...(occlusionVersionId ? { occlusionVersionId } : {}),
+        frameWidth,
+        frameHeight,
+        worldBounds,
+        moveHighlightProfile,
+      };
+    }
+    return {
+      kind: 'predrawn',
+      schemaVersion: 2,
+      backgroundVersionId,
+      ...(occlusionVersionId ? { occlusionVersionId } : {}),
+      frameWidth,
+      frameHeight,
+      worldBounds,
+    };
+  }
+  if (typeof record.slot !== 'string') return undefined;
+  const slot = record.slot.trim();
+  const segments = slot.split('/');
+  if (
+    !slot
+    || slot.length > 512
+    || slot.includes('//')
+    || slot.endsWith('/')
+    || segments.some((segment) => segment === '.' || segment === '..' || !mediaSlotSegmentPattern.test(segment))
   ) return undefined;
   const registration = normalizePredrawnBoardRegistration(record.registration);
   return {
@@ -605,16 +744,43 @@ export function encodeBoard(b: EditorBoard): string {
     const key = `${x},${y}`;
     if (!(key in b.cells)) h.push(key);
   }
-  const wire: Record<string, unknown> = { c: b.cols, r: b.rows };
+  const wire: Record<string, unknown> = {
+    c: b.cols,
+    r: b.rows,
+    bm: boardBackgroundMode(b),
+  };
   const surface = normalizePredrawnBoardSurface(b.surface);
-  if (surface) wire.pd = [
-    surface.slot,
-    surface.frameWidth,
-    surface.frameHeight,
-    ...(surface.registration
-      ? [serializePredrawnBoardPreviewRegistration(surface.registration)]
-      : []),
-  ];
+  if (surface) {
+    wire.pd = isVersionedPredrawnBoardSurface(surface)
+      ? [
+          surface.schemaVersion,
+          surface.backgroundVersionId,
+          surface.occlusionVersionId ?? null,
+          surface.frameWidth,
+          surface.frameHeight,
+          surface.worldBounds.minX,
+          surface.worldBounds.minY,
+          surface.worldBounds.width,
+          surface.worldBounds.height,
+          ...(surface.schemaVersion === 3
+            ? [[
+                surface.moveHighlightProfile.environmentGeometrySha256,
+                surface.moveHighlightProfile.profileSha256,
+                Object.entries(surface.moveHighlightProfile.cells)
+                  .sort(([a], [b]) => comparePredrawnMoveHighlightCellKeys(a, b))
+                  .map(([key, footprint]) => [key, ...footprint]),
+              ]]
+            : []),
+        ]
+      : [
+          surface.slot,
+          surface.frameWidth,
+          surface.frameHeight,
+          ...(surface.registration
+            ? [serializePredrawnBoardPreviewRegistration(surface.registration)]
+            : []),
+        ];
+  }
   const predrawnGenerationFrame = normalizePredrawnGenerationFrame(b.predrawnGenerationFrame);
   if (predrawnGenerationFrame) wire.pgf = [
     predrawnGenerationFrame.version,
@@ -704,6 +870,80 @@ export function encodeBoard(b: EditorBoard): string {
   return enc(JSON.stringify(wire));
 }
 
+function decodeMoveHighlightProfileWire(
+  value: unknown,
+  backgroundVersionId: unknown,
+): PredrawnMoveHighlightProfile | undefined {
+  if (!Array.isArray(value) || value.length !== 3 || !Array.isArray(value[2])) return undefined;
+  const cells: Record<string, unknown> = {};
+  for (const row of value[2]) {
+    if (!Array.isArray(row) || row.length !== 9 || typeof row[0] !== 'string') return undefined;
+    if (Object.prototype.hasOwnProperty.call(cells, row[0])) return undefined;
+    cells[row[0]] = row.slice(1);
+  }
+  return normalizePredrawnMoveHighlightProfile({
+    schema: PREDRAWN_MOVE_HIGHLIGHT_PROFILE_SCHEMA,
+    backgroundVersionId,
+    coordinateBasis: PREDRAWN_MOVE_HIGHLIGHT_COORDINATE_BASIS,
+    environmentGeometrySha256: value[0],
+    profileSha256: value[1],
+    cells,
+  });
+}
+
+/**
+ * Remove only the remembered pre-drawn surface from an encoded board.
+ *
+ * This intentionally edits the compact wire object instead of decode/encode round-tripping it.
+ * Decoding resolves database-owned catalogs and may omit an unavailable retired material; archive
+ * detach must preserve every unrelated authored wire field even when that catalog entry is absent.
+ */
+export function withoutPredrawnBoardSurfaceCode(code: string): string | null {
+  try {
+    const value = JSON.parse(dec(code)) as unknown;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const wire = value as Record<string, unknown>;
+    if (!Object.prototype.hasOwnProperty.call(wire, 'pd')) return code;
+    delete wire.pd;
+    return enc(JSON.stringify(wire));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Remove only one exact occlusion-mask reference from an encoded versioned surface.
+ *
+ * Like `withoutPredrawnBoardSurfaceCode`, this edits the compact wire object directly so
+ * unrelated authored values survive even when their database-owned catalog entries are not
+ * currently installed. Background mode, base artwork, dimensions, bounds, and schema-v3 move
+ * highlight calibration remain byte-for-byte represented by their original wire values.
+ */
+export function withoutPredrawnBoardOcclusionMaskCode(
+  code: string,
+  expectedBackgroundVersionId: string,
+  expectedOcclusionVersionId: string,
+): string | null {
+  try {
+    const value = JSON.parse(dec(code)) as unknown;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const wire = value as Record<string, unknown>;
+    const surface = wire.pd;
+    if (
+      !Array.isArray(surface)
+      || (surface[0] !== 2 && surface[0] !== 3)
+      || String(surface[1] || '').trim().toLowerCase()
+        !== expectedBackgroundVersionId.trim().toLowerCase()
+      || String(surface[2] || '').trim().toLowerCase()
+        !== expectedOcclusionVersionId.trim().toLowerCase()
+    ) return null;
+    wire.pd = surface.map((entry, index) => (index === 2 ? null : entry));
+    return enc(JSON.stringify(wire));
+  } catch {
+    return null;
+  }
+}
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export function decodeBoard(code: string): EditorBoard | null {
   try {
@@ -788,16 +1028,43 @@ export function decodeBoard(code: string): EditorBoard | null {
     const floatingArtwork = cleanFloatingArtwork(w.fa);
     const generatedRegions = decodeGeneratedRegions(w.gr, cols, rows, decorativeApron);
     const surface = Array.isArray(w.pd)
-      ? normalizePredrawnBoardSurface({
-        kind: 'predrawn',
-        slot: w.pd[0],
-        frameWidth: w.pd[1],
-        frameHeight: w.pd[2],
-        registration: typeof w.pd[3] === 'string'
-          ? parsePredrawnBoardRegistration(w.pd[3])
-          : undefined,
-      })
+      ? w.pd[0] === 2 || w.pd[0] === 3
+        ? normalizePredrawnBoardSurface({
+            kind: 'predrawn',
+            schemaVersion: w.pd[0],
+            backgroundVersionId: w.pd[1],
+            occlusionVersionId: w.pd[2],
+            frameWidth: w.pd[3],
+            frameHeight: w.pd[4],
+            worldBounds: {
+              minX: w.pd[5],
+              minY: w.pd[6],
+              width: w.pd[7],
+              height: w.pd[8],
+            },
+            ...(w.pd[0] === 3
+              ? { moveHighlightProfile: decodeMoveHighlightProfileWire(w.pd[9], w.pd[1]) }
+              : {}),
+          })
+        : normalizePredrawnBoardSurface({
+            kind: 'predrawn',
+            slot: w.pd[0],
+            frameWidth: w.pd[1],
+            frameHeight: w.pd[2],
+            registration: typeof w.pd[3] === 'string'
+              ? parsePredrawnBoardRegistration(w.pd[3])
+              : undefined,
+          })
       : undefined;
+    const explicitBackgroundMode: BoardBackgroundMode | undefined = w.bm === 'ai' || w.bm === 'legacy'
+      ? w.bm
+      : w.bm === undefined
+        ? undefined
+        : 'legacy';
+    const backgroundMode = boardBackgroundMode({
+      backgroundMode: explicitBackgroundMode,
+      surface,
+    });
     const predrawnGenerationFrame = Array.isArray(w.pgf) && w.pgf.length === 5
       ? normalizePredrawnGenerationFrame({
         version: w.pgf[0],
@@ -813,7 +1080,7 @@ export function decodeBoard(code: string): EditorBoard | null {
       visualTerrainSurfaceKeys(cells, cols, rows, decorativeApron, decodedDecorativeFootprint),
     );
     return {
-      cols, rows, decorativeApron, surface, predrawnGenerationFrame,
+      cols, rows, decorativeApron, backgroundMode, surface, predrawnGenerationFrame,
       decorativeFootprint: decodedDecorativeFootprint,
       decorativeCells: (w.dt && typeof w.dt === 'object' && !Array.isArray(w.dt) ? w.dt : {}) as Record<string, string>,
       decorativeFeatures: (w.dr && typeof w.dr === 'object' && !Array.isArray(w.dr) ? w.dr : {}) as Record<string, FeatureCell>,

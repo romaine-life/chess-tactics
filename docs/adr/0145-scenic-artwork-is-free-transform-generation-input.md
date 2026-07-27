@@ -1,8 +1,8 @@
 ---
-status: "accepted; editor nudge clause superseded by ADR-0146; board-coordinate/contact-depth clauses superseded by ADR-0147"
+status: "accepted; editor nudge clause superseded by ADR-0146; board-coordinate/contact-depth clauses superseded by ADR-0147; Level Editor destination and shelf naming superseded by ADR-0176"
 date: 2026-07-22
 deciders: Nelson, Codex
-partially_superseded_by: "[ADR-0146](0146-scenic-artwork-reuses-object-selection-and-axis-sliders.md), [ADR-0147](0147-floating-artwork-uses-projected-scene-pixels.md)"
+partially_superseded_by: "[ADR-0146](0146-scenic-artwork-reuses-object-selection-and-axis-sliders.md), [ADR-0147](0147-floating-artwork-uses-projected-scene-pixels.md), [ADR-0176](0176-placed-art-and-level-artwork-are-separate-editor-destinations.md)"
 ---
 
 # ADR-0145: Scenic artwork is free-transform generation input

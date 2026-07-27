@@ -39,7 +39,11 @@ import {
 import { densityFieldAt, groundCoverSet, resolveGroundCover, type GroundCover } from '../core/groundCover';
 import { familyOfTile } from '../core/levelBoard';
 import type { TileFamilyId } from '../core/tileSockets';
-import type { EditorBoard } from '../ui/boardCode';
+import {
+  boardBackgroundMode,
+  isVersionedPredrawnBoardSurface,
+  type EditorBoard,
+} from '../ui/boardCode';
 import { macroTileAsset, macroTileBreakIndices, macroTileFrame, macroTileOwnedCellIndices, resolveMacroTilePlacements } from '../core/macroTiles';
 import { liveMediaSlotUrl } from '../art/liveMediaCatalog';
 import {
@@ -144,6 +148,21 @@ export interface BoardDrawOptions {
   ambientCover?: boolean;
   /** Generation-reference mode: retain tops, features, and only explicitly authored Subterrain. */
   topSurfacesOnly?: boolean;
+  /**
+   * A complete generated background is mounted by the caller. This is additive with a persisted
+   * pre-drawn surface so temporary candidates receive the same environment suppression.
+   */
+  predrawnBackgroundActive?: boolean;
+}
+
+/** A generated plate owns baked environment pixels; canonical units and authored cover stay live. */
+export function isPredrawnBackgroundActive(
+  board: Pick<RenderBoard, 'backgroundMode' | 'surface'>,
+  options: Pick<BoardDrawOptions, 'predrawnBackgroundActive'> = {},
+): boolean {
+  // AI is the saved rendering mode even when its remembered selection is unavailable. In that
+  // fail-closed state the legacy environment must stay suppressed rather than becoming a fallback.
+  return boardBackgroundMode(board) === 'ai' || options.predrawnBackgroundActive === true;
 }
 
 export interface BoardVisualTerrainCell {
@@ -414,36 +433,51 @@ function pushFencePostDrawOp(ops: BoardDrawOp[], post: ResolvedFencePost): void 
 export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {}): BoardDrawOp[] {
   const ops: BoardDrawOp[] = [];
   const visualTerrainCells = boardVisualTerrainCells(board);
-  const predrawn = board.surface?.kind === 'predrawn' ? board.surface : undefined;
+  const predrawn = isPredrawnBackgroundActive(board) && board.surface?.kind === 'predrawn'
+    ? board.surface
+    : undefined;
+  const predrawnBackgroundActive = isPredrawnBackgroundActive(board, options);
   if (predrawn) {
-    const gridCells = Array.from({ length: board.rows }, (_, y) =>
-      Array.from({ length: board.cols }, (__, x) => ({ x, y }))).flat();
-    const registeredTransform = predrawn.registration
-      ? predrawnBoardRasterTransform(predrawn, gridCells, predrawn.registration)
-      : undefined;
-    const registeredBounds = registeredTransform
-      ? predrawnBoardRasterBounds(registeredTransform)
-      : undefined;
-    const placement = registeredBounds
-      ? {
-          left: registeredBounds.minX,
-          top: registeredBounds.minY,
-          width: registeredBounds.width,
-          height: registeredBounds.height,
-        }
-      : predrawnBoardPlacement(predrawn, gridCells);
-    ops.push({
-      layer: 'terrain',
-      src: liveMediaSlotUrl(predrawn.slot),
-      dx: placement.left,
-      dy: placement.top,
-      dw: placement.width,
-      dh: placement.height,
-      z: -100000,
-      ...(registeredTransform && registeredBounds
-        ? { predrawnTransform: registeredTransform }
-        : {}),
-    });
+    if (isVersionedPredrawnBoardSurface(predrawn)) {
+      ops.push({
+        layer: 'terrain',
+        src: `/api/background-versions/${encodeURIComponent(predrawn.backgroundVersionId)}/content`,
+        dx: predrawn.worldBounds.minX,
+        dy: predrawn.worldBounds.minY,
+        dw: predrawn.worldBounds.width,
+        dh: predrawn.worldBounds.height,
+        z: -100000,
+      });
+    } else {
+      const gridCells = Array.from({ length: board.rows }, (_, y) =>
+        Array.from({ length: board.cols }, (__, x) => ({ x, y }))).flat();
+      const registeredTransform = predrawn.registration
+        ? predrawnBoardRasterTransform(predrawn, gridCells, predrawn.registration)
+        : undefined;
+      const registeredBounds = registeredTransform
+        ? predrawnBoardRasterBounds(registeredTransform)
+        : undefined;
+      const placement = registeredBounds
+        ? {
+            left: registeredBounds.minX,
+            top: registeredBounds.minY,
+            width: registeredBounds.width,
+            height: registeredBounds.height,
+          }
+        : predrawnBoardPlacement(predrawn, gridCells);
+      ops.push({
+        layer: 'terrain',
+        src: liveMediaSlotUrl(predrawn.slot),
+        dx: placement.left,
+        dy: placement.top,
+        dw: placement.width,
+        dh: placement.height,
+        z: -100000,
+        ...(registeredTransform && registeredBounds
+          ? { predrawnTransform: registeredTransform }
+          : {}),
+      });
+    }
   }
 
   const isSevered = (edge: string): boolean => board.featureCuts[edge] === true;
@@ -451,11 +485,11 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
   const overlays = resolveFeatureOverlays(boardVisualFeatures(board, visualTerrainCells), isSevered, isExit);
   const visualFences = { ...(board.decorativeFences ?? {}), ...(board.fences ?? {}) };
   const visualFencePosts = { ...(board.decorativeFencePosts ?? {}), ...(board.fencePosts ?? {}) };
-  const fenceOverlays = predrawn ? new Map() : resolveFenceOverlays(visualFences);
-  const fencePosts = predrawn ? new Map() : resolveFencePosts(visualFences, visualFencePosts);
+  const fenceOverlays = predrawnBackgroundActive ? new Map() : resolveFenceOverlays(visualFences);
+  const fencePosts = predrawnBackgroundActive ? new Map() : resolveFencePosts(visualFences, visualFencePosts);
   const wallBounds = { cols: board.cols, rows: board.rows };
-  const wallOverlays = predrawn ? new Map() : resolveWallOverlays(board.walls ?? {}, wallBounds);
-  if (!predrawn) {
+  const wallOverlays = predrawnBackgroundActive ? new Map() : resolveWallOverlays(board.walls ?? {}, wallBounds);
+  if (!predrawnBackgroundActive) {
     const exteriorWalls = {
       ...(board.decorativeWalls ?? {}),
       ...Object.fromEntries(Object.entries(board.walls ?? {}).filter(([edge]) => wallLeavesPlayableBoard(edge, board))),
@@ -468,9 +502,9 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
       });
     }
   }
-  const wallFaceStyles = predrawn ? new Map() : resolveWallArtFaces(board.wallArt, wallBounds);
+  const wallFaceStyles = predrawnBackgroundActive ? new Map() : resolveWallArtFaces(board.wallArt, wallBounds);
   const hasWall = (edge: string): boolean => Boolean(board.walls?.[edge]);
-  const mirrorSurfaces = (predrawn ? [] : mirrorSurfacesForPlacements(board.wallArt, wallBounds))
+  const mirrorSurfaces = (predrawnBackgroundActive ? [] : mirrorSurfacesForPlacements(board.wallArt, wallBounds))
     .filter((surface) => surface.segments.every((segment) => !segment.edge || hasWall(segment.edge)));
   const staticUnitSubjects = new Map<string, MirrorReflectionSubject>();
   for (const [key, placement] of Object.entries(board.units)) {
@@ -479,7 +513,9 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
   }
   ops.push(...mirrorGlassOpsForSurfaces(mirrorSurfaces));
   ops.push(...reflectedOpsForSubjects(mirrorSurfaces, [...staticUnitSubjects.values()]));
-  ops.push(...wallArtFrameOpsForPlacements(board.wallArt, wallBounds, { hasWall }));
+  if (!predrawnBackgroundActive) {
+    ops.push(...wallArtFrameOpsForPlacements(board.wallArt, wallBounds, { hasWall }));
+  }
   const occupiedTerrain = new Set(visualTerrainCells.filter((cell) => cell.tileId).map((cell) => cell.key));
   const acceptedMacroTiles = resolveMacroTilePlacements({
     placements: board.macroTiles,
@@ -501,7 +537,7 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
     const frameY = top - TILE_EQUATOR;
 
     const tile = visualCell.tileId ? resolveTile(visualCell.tileId) : undefined;
-    if (tile && !predrawn) {
+    if (tile && !predrawnBackgroundActive) {
       const sideFaces = resolveTerrainSideFaces(
         resolveTerrainSideExposure({ x, y }, (nextX, nextY) => occupiedTerrain.has(`${nextX},${nextY}`)),
         Object.fromEntries(TERRAIN_SIDE_FACES.flatMap((face) => {
@@ -534,7 +570,7 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
     }
 
     const feature = overlays[key];
-    if (feature && !predrawn) {
+    if (feature && !predrawnBackgroundActive) {
       ops.push({
         layer: 'linear-feature',
         src: featureFrameSrc(feature.kind, feature.material, feature.mask),
@@ -593,7 +629,7 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
     pushFenceDrawOps(ops, { x, y }, fence);
   }
 
-  for (const placement of predrawn ? [] : acceptedMacroTiles) {
+  for (const placement of predrawnBackgroundActive ? [] : acceptedMacroTiles) {
     const asset = macroTileAsset(placement.assetId);
     if (!asset) continue;
     const { left, top } = boardLabCellPosition(placement);
@@ -614,12 +650,15 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
     });
   }
 
-  for (const key of new Set([...Object.keys(board.units), ...Object.keys(board.doodads)])) {
+  for (const key of new Set([
+    ...Object.keys(board.units),
+    ...(predrawnBackgroundActive ? [] : Object.keys(board.doodads)),
+  ])) {
     const [x, y] = key.split(',').map(Number);
     const { left, top } = boardLabCellPosition({ x, y });
     const base = objectBaseZIndex({ x, y });
 
-    const doodadPlacement = board.doodads[key];
+    const doodadPlacement = predrawnBackgroundActive ? undefined : board.doodads[key];
     const doodad = doodadPlacement ? resolveDoodad(doodadPlacement.doodadId) : undefined;
     if (doodad) {
       const sprite = doodad.sprite ?? { w: DOODAD_FRAME_W, h: DOODAD_FRAME_H, anchorX: TILE_STEP_X, anchorY: DOODAD_ANCHOR_Y };
@@ -650,7 +689,7 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
     if (unitSubject) ops.push(unitSubject.op);
   }
 
-  for (const [key, placement] of Object.entries(predrawn ? {} : (board.props ?? {}))) {
+  for (const [key, placement] of Object.entries(predrawnBackgroundActive ? {} : (board.props ?? {}))) {
     const def = propDef(placement.propId);
     if (!def) continue;
     const [ax, ay] = key.split(',').map(Number);
@@ -693,14 +732,10 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
 
   const COVER_SEED = options.coverSeed ?? 1234;
   const coverCells: Array<{ x: number; y: number; terrain: TileFamilyId; groundCover?: GroundCover }> = [];
-  for (let y = 0; y < board.rows; y += 1) {
-    for (let x = 0; x < board.cols; x += 1) {
-      const key = `${x},${y}`;
-      const tileId = board.cells[key];
-      const tileTerrain = tileId ? familyOfTile(tileId) : undefined;
-      const terrain = board.coverTypes?.[key] ?? tileTerrain;
-      if (terrain && groundCoverSet(terrain)) coverCells.push({ x, y, terrain });
-    }
+  for (const visualCell of visualTerrainCells) {
+    const tileTerrain = visualCell.tileId ? familyOfTile(visualCell.tileId) : undefined;
+    const terrain = board.coverTypes?.[visualCell.key] ?? tileTerrain;
+    if (terrain && groundCoverSet(terrain)) coverCells.push({ x: visualCell.x, y: visualCell.y, terrain });
   }
   // An EditorBoard is exact authoring data: an empty cover map means bare terrain, just as it
   // does in the live editor and exact-board play path. Legacy generated game states can opt
@@ -759,6 +794,7 @@ export function boardContentHash(board: RenderBoard): string {
   const parts = [
     `c${board.cols}`,
     `r${board.rows}`,
+    `bm:${boardBackgroundMode(board)}`,
     `pd:${JSON.stringify(board.surface ?? null)}`,
     `da:${JSON.stringify(board.decorativeApron ?? null)}`,
     `df:${JSON.stringify([...(board.decorativeFootprint ?? [])].sort())}`,
@@ -818,7 +854,7 @@ export function boardSocialFramingBounds(board: RenderBoard): BakeBounds {
   const drawBounds = boardBounds(board);
   // A registered complete scene owns meaningful pixels beyond the logical board boundary. Server
   // cards must fit that transformed full frame rather than applying the ordinary tile-relief crop.
-  if (board.surface?.kind === 'predrawn') return drawBounds;
+  if (isPredrawnBackgroundActive(board)) return drawBounds;
   let surfaceMaxY = -Infinity;
   for (const { x, y, tileId } of boardVisualTerrainCells(board)) {
     if (!tileId) continue;

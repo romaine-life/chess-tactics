@@ -83,9 +83,12 @@ PostgreSQL**, reached passwordlessly through Entra workload identity. Runtime,
 review, candidate, and source-media bytes are content-addressed in private Blob
 Storage; the backend resolves their database-owned semantic slots. No runtime
 media is shipped from `frontend/public`. The database and storage are
-self-provisioned by this repo's `tofu/`. Local backend startup defaults to read-only schema checks;
-set `SCHEMA_MIGRATIONS=auto` when you intentionally want to apply missing
-migrations to a local database. See
+self-provisioned by this repo's `tofu/`. Local backend startup defaults to
+read-only schema checks. Run `cd backend && npm run schema:migrate` when you
+intentionally want to apply missing migrations; the dedicated command verifies
+the resulting schema and exits instead of starting an application server. It
+prints the sanitized target mode, host, database, and user before any DDL; it
+never prints the password. See
 [docs/persistence.md](docs/persistence.md) and
 [docs/runtime-asset-contract.md](docs/runtime-asset-contract.md) for the schema, auth model, backups,
 failure behavior, and the one post-`tofu apply` value to pin.

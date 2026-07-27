@@ -1,6 +1,7 @@
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { BoardSceneLayer } from './BoardSceneLayer';
 import { TileGrid, type TileGridCell } from './TileGrid';
+import { BoardGridLayer } from './BoardGridLayer';
 import { BoardTerrainLayer, terrainCanvasMacroTiles, terrainTopSrc, type TerrainCanvasCell } from './BoardTerrainLayer';
 import { immutableBoardLabTerrainSrc } from './BoardLabBoard';
 import { assetFrameSrc, studioFamilies, type StudioAsset } from '../ui/studioBoard';
@@ -13,14 +14,20 @@ import { resolveMacroTilePlacements } from '../core/macroTiles';
 import {
   boardVisualFeatures,
   boardVisualTerrainCells,
+  isPredrawnBackgroundActive,
   resolveTerrainSideExposure,
   resolveTerrainSideFaces,
   subterrainFaceKey,
   subterrainMaterialSrc,
+  type PredrawnBoardCornerRegistration,
   type TerrainSideMaterials,
   type TerrainSideExposure,
 } from '@chess-tactics/board-render';
-import { PredrawnBoardLayer, runtimePredrawnBoardPlate } from './PredrawnBoardLayer';
+import {
+  PredrawnBoardLayer,
+  predrawnReviewGridCells,
+  runtimePredrawnBoardPlate,
+} from './PredrawnBoardLayer';
 
 // THE shared, non-interactive board renderer — one source of truth for how an EditorBoard
 // draws (terrain through one composed canvas layer; units, doodads, props, floating artwork,
@@ -41,21 +48,28 @@ export interface BoardLayerVisibility {
 // Reuses the canonical ResolvedFeatureOverlay shape.
 export type FeatureOverlayMap = Record<string, ResolvedFeatureOverlay>;
 
-/**
- * Derive the one canonical image-generation reference from saved board data.
- *
- * The reference keeps authored terrain, roads, doodads, props, floating artwork, fences, and
- * walls, but removes every visual channel that would either hide that geometry or feed a previous
- * accepted scene back into a fresh generation run. Explicitly authored Subterrain remains part of
- * the reference; absence never synthesizes a default skirt.
- */
-export function boardForTopSurfaceArtExport(board: EditorBoard): EditorBoard {
+/** Remove every live channel excluded from an immutable Source Artwork capture. */
+export function boardForPredrawnSourceArtwork(board: EditorBoard): EditorBoard {
   return {
     ...board,
-    surface: undefined,
     units: {},
     cover: {},
     coverTypes: {},
+  };
+}
+
+/**
+ * Derive the legacy composed-environment form of Source Artwork.
+ *
+ * Explicitly authored Subterrain remains part of the reference; absence never synthesizes a
+ * default skirt. AI-mode source capture does not use this helper because it retains the exact
+ * selected immutable plate.
+ */
+export function boardForTopSurfaceArtExport(board: EditorBoard): EditorBoard {
+  return {
+    ...boardForPredrawnSourceArtwork(board),
+    backgroundMode: 'legacy',
+    surface: undefined,
   };
 }
 
@@ -225,6 +239,9 @@ export function StudioReadOnlyBoard({
   ariaLabel = 'Level board',
   hidden,
   topSurfacesOnly = false,
+  showGrid = false,
+  reviewGridRegistration,
+  renderCellOverlay,
   onTerrainFirstFrame,
   onSceneFirstFrame,
   onFrameError,
@@ -239,6 +256,18 @@ export function StudioReadOnlyBoard({
   hidden?: BoardLayerVisibility;
   /** Generation-reference view: preserve authored art, including explicit Subterrain, without defaults. */
   topSurfacesOnly?: boolean;
+  /** Owner-inspection grid drawn through the canonical board grid layer. */
+  showGrid?: boolean;
+  /**
+   * Saved refit dimensions used only by the visible review grid. Tactical cells and overlay hit
+   * targets remain the authored playable cells.
+   */
+  reviewGridRegistration?: PredrawnBoardCornerRegistration;
+  /** Owner-inspection overlay rendered only for authored playable cells, never scenic cells. */
+  renderCellOverlay?: (
+    cell: TileGridCell,
+    position: { left: number; top: number },
+  ) => ReactNode;
   onTerrainFirstFrame?: () => void;
   onSceneFirstFrame?: () => void;
   onFrameError?: (error: unknown) => void;
@@ -255,8 +284,19 @@ export function StudioReadOnlyBoard({
     rows: board.rows,
     familyAt: (x, y) => familyOfTile(board.cells[`${x},${y}`] ?? ''),
   });
-  const predrawnPlate = board.surface ? runtimePredrawnBoardPlate(board.surface) : undefined;
+  // A generation reference always comes from the authored guide geometry, never from a prior
+  // generated plate. Normal read-only views still render the exact installed immutable version.
+  const predrawnBackgroundActive = !topSurfacesOnly && isPredrawnBackgroundActive(board);
+  const predrawnPlate = predrawnBackgroundActive && board.surface
+    ? runtimePredrawnBoardPlate(board.surface)
+    : undefined;
   const sceneBoard = topSurfacesOnly ? boardForTopSurfaceArtExport(board) : board;
+  const reviewGridCells = showGrid
+    ? predrawnReviewGridCells(playableGridCells, reviewGridRegistration)
+    : playableGridCells;
+  const playableCellKeys = renderCellOverlay
+    ? new Set(playableGridCells.map((cell) => cell.key))
+    : undefined;
 
   return (
     <TileGrid
@@ -269,13 +309,20 @@ export function StudioReadOnlyBoard({
       backgroundLayer={(
         <>
           {predrawnPlate
-            ? <PredrawnBoardLayer plate={predrawnPlate} cells={playableGridCells} />
-            : <BoardTerrainLayer
+            ? <PredrawnBoardLayer
+                plate={predrawnPlate}
+                cells={playableGridCells}
+                onFirstFrame={onTerrainFirstFrame}
+                onFrameError={onFrameError}
+              />
+            : !predrawnBackgroundActive
+              ? <BoardTerrainLayer
                 cells={terrainCells}
                 macroTiles={terrainCanvasMacroTiles(macroTiles)}
                 onFirstFrame={onTerrainFirstFrame}
                 onFrameError={onFrameError}
-              />}
+                />
+              : null}
           <BoardSceneLayer
             board={sceneBoard}
             hidden={hidden}
@@ -287,6 +334,13 @@ export function StudioReadOnlyBoard({
           />
         </>
       )}
-    />
+      renderCellOverlay={renderCellOverlay
+        ? (cell, position) => playableCellKeys?.has(cell.key)
+          ? renderCellOverlay(cell, position)
+          : null
+        : undefined}
+    >
+      {showGrid ? <BoardGridLayer cells={reviewGridCells} /> : null}
+    </TileGrid>
   );
 }

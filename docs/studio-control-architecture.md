@@ -66,11 +66,13 @@ modes, it is wrong**, no matter how correct the contents are.
 - **One right-hand panel** (fixed width), headed **Controls** in every mode. It
   is the cascading control unit: in Catalog its tier selector is the category;
   in Lab, the Board/Tile/Unit focus; in the Viewer, the **kind** selector
-  (Asset, Artwork, Portrait, 9-Slice, …). Asset/Artwork are read-only (a Details
-  readout); **Unit Art**, **Portrait**, and **9-Slice** are embedded editing kinds —
-  the board-unit art/size editor, unit-portrait crop editor, and kit 9-slice frame
-  editor — reached from their catalog's Inspect/Edit affordance, never hosted in
-  Catalog and never given a separate layout. The heading and panel never move.
+  (Asset, Artwork, Source Art, Portrait, 9-Slice, …). Asset/Artwork are read-only
+  (a Details readout); **Source Art**, **Unit Art**, **Portrait**, and
+  **9-Slice** are embedded editing kinds — structure-source group review,
+  board-unit art/size editing, unit-portrait crop editing, and kit 9-slice frame
+  editing — reached from their catalog's Inspect/Edit affordance, never hosted
+  in Catalog and never given a separate layout. The heading and panel never
+  move.
 - **Main pane:** content only. The catalog grid, the lab surface, or the Viewer
   stage.
 - **No sub-headers, no per-pane titles, no "Back" button.** The breadcrumb
@@ -92,7 +94,7 @@ mode  (Catalog · Lab · Viewer)                 ← topbar · tier-1 · 3 persi
 │       ├─ Tiles   → search · family/collection filters · zoom
 │       ├─ Units   → search
 │       ├─ Assets  → search · process filter (All/Forged/Unverified) · zoom
-│       └─ Artwork → search · zoom
+│       ├─ Artwork → search · zoom
 │       └─ Source Art → search · zoom · View Selected
 │
 ├─ Lab   (the board workbench — holds its last board)
@@ -124,10 +126,10 @@ they are standing destinations.
   workspaces, decoupled from the category — each remembers its last state, so any
   tab is always a valid place to land.
 - **Category** — the *kind of thing* you're browsing in Catalog (Tiles, Units,
-  Assets, Artwork). It governs **only the Catalog grid**. It does *not* gate the
-  tabs. What it does decide is where **"View Selected" sends a chosen item**: a
-  tile/unit lands in the Lab (you place it), an asset/artwork lands in the Viewer
-  (you look at it).
+  Assets, Artwork, Source Art). It governs **only the Catalog grid**. It does
+  *not* gate the tabs. What it does decide is where **"View Selected" sends a
+  chosen item**: a tile/unit lands in the Lab (you place it), while an asset,
+  artwork, or source-art group lands in the Viewer.
 - **Surface** — the *workbench* in the Lab. There is one: the **Board** (tiles and
   units are placed on it). Surfaces group by workbench, **not by category** — and
   read-only categories have no workbench, so they have no surface.
@@ -137,14 +139,20 @@ they are standing destinations.
   are control sets that share the surface.
 - **Viewer** — the single-item destination for finished things with no board
   workbench. Its panel carries one tier selector — the **kind** (Asset, Artwork,
-  Portrait, 9-Slice, …). Asset and Artwork are read-only (a Details readout);
-  **Unit Art**, **Portrait**, and **9-Slice** are embedded editing kinds — unit art
-  and size, unit-portrait crops, and kit frame calibration. This is light,
-  single-item definition work rather than board authoring, so it lives here instead
-  of in the Lab. A placeable item's **Use** action still opens the Lab/Level Editor;
-  its **Inspect/Edit** action may open its embedded Viewer editor. The Catalog itself
-  remains browse-only. These editors switch the Viewer kind in place and are
-  **never** separate routes or pages; legacy deep links only enter this Viewer state.
+  Source Art, Portrait, 9-Slice, …). Asset and Artwork are read-only (a Details
+  readout); **Source Art**, **Unit Art**, **Portrait**, and **9-Slice** are
+  embedded editing kinds — structure-source group review and installation, unit
+  art and size, unit-portrait crops, and kit frame calibration. This is light,
+  single-item definition work rather than board authoring, so it lives here
+  instead of in the Lab. Source Art still uses the shared game board inside the
+  Viewer to prove each candidate's real placement, scale, and eight-way
+  direction before atomic acceptance under
+  [ADR-0173](adr/0173-structure-source-art-turntables-are-complete-source-only-live-groups.md).
+  A placeable item's **Use** action still opens the Lab/Level Editor; its
+  **Inspect/Edit** action may open its embedded Viewer editor. The Catalog
+  itself remains browse-only. These editors switch the Viewer kind in place and
+  are **never** separate routes or pages; legacy deep links only enter this
+  Viewer state.
 
 ## Editable board input
 
@@ -156,6 +164,247 @@ Erase tool; board targets never erase from a right-click or context-menu event,
 and no movement threshold decides whether a navigation gesture becomes
 destructive. Secondary gestures delegate to the canonical shared `ViewPane` so
 playable and scenic content follow the same pan behavior.
+
+The full Board Art grid-fitting viewport follows the same input policy:
+primary-button gestures edit grid controls, while a secondary-button drag
+scroll-pans the source artwork even when it begins over a cell or handle. The
+browser context menu is suppressed and the pan never changes calibration.
+Per
+[ADR-0178](adr/0178-predrawn-grid-fitting-uses-one-reversible-edit-history.md),
+plainly labeled Undo and Redo controls remain visible in both grid modes and
+span every pending calibration mutation. Their bounded history treats a
+completed drag or compound button action as one step; pan, zoom, mode, and
+selection changes never enter it.
+
+## Level Editor Placed Art
+
+Per
+[ADR-0176](adr/0176-placed-art-and-level-artwork-are-separate-editor-destinations.md),
+the Level Editor has one **Placed Art** destination instead of separate
+Artwork, Doodad, and Prop destinations. Its first control is a visible subtype
+selector:
+
+- **Scene Art** owns the free projected-pixel `floatingArtwork` channel. It is
+  gameplay-inert and is the only Placed Art type that accepts positions outside
+  the playable board.
+- **Doodads** are tile-addressed, nonblocking, and board-only.
+- **Props** are tile-addressed and blocking; their complete footprint must
+  remain inside the playable board.
+
+The selector changes the active controls and brush in place rather than
+navigating between top-level destinations. Existing off-board doodads and props
+remain loaded, rendered, serialized, and removable, but neither placement nor
+movement may create a new off-board position. Other scenic-terrain and
+visual-feature tools retain their separately governed outer-scene behavior.
+
+## Level Editor process workspaces
+
+Events and Level Artwork authoring are process instruments rather than board
+brushes. Events directly opens the shell-owned center workspace under
+[ADR-0144](adr/0144-level-editor-events-use-the-shell-workspace.md). Per
+[ADR-0165](adr/0165-ai-artwork-separates-sources-attempts-and-background-mode.md)
+as renamed and separated by
+[ADR-0176](adr/0176-placed-art-and-level-artwork-are-separate-editor-destinations.md),
+**Level Artwork** instead begins as a normal right-rail control page with the
+board still visible and operable. It shows the Level's persistent Legacy/AI
+background mode, its remembered exact AI selection and validity, and explicit
+buttons for the larger **Generation References** and **Board Art Pipeline**
+instruments.
+Those larger instruments replace the visible board inside the shell-owned
+center workspace while the title and one right-side Controls rail remain
+stable. The covered board stays mounted, inert, and inaccessible so its camera
+and authoring state return unchanged. They share the shell fill primitive and
+never create a second outer panel, dialog, or viewport-offset layout.
+
+Those two button destinations are independently URL-addressable. Only while one
+is open does it replace the visible board inside the shell-owned center
+workspace. The covered board stays mounted, inert, and inaccessible so its
+camera and authoring state return unchanged. These instruments share the shell
+fill primitive and never create a second outer panel, dialog, viewport-offset
+layout, or narrow duplicate of the full workflow in the rail.
+The canonical route layers are `level-artwork` and `placed-art`; Level Artwork
+workspace state uses `levelArtworkEditor` and never shares Placed Art brush
+state or the retired `artworkEditor` namespace.
+
+Per
+[ADR-0166](adr/0166-manual-ai-handoff-separates-generation-references-from-raw-pipeline-sources.md),
+the Generation References instrument owns saved-frame authoring and the
+immutable, unit-free, cover-free images supplied to AI generation. It also owns
+the explicit manual handoff that copies an exact full-resolution Generation
+Reference and stages the returned AI-painted PNG through paste, direct `Ctrl+V`,
+or **Choose PNG file instead**. The named commit stores those unchanged bytes
+as an immutable Raw Pipeline Source. **Use existing Codex-painted board** may
+explicitly import an editor-mounted result through that same raw-source ingress.
+Neither path promotes or reclassifies the result as a Generation Reference.
+
+Per
+[ADR-0168](adr/0168-creation-slots-begin-with-reusable-raw-pipeline-sources.md),
+the Pipeline owns server-backed deterministic creation slots. Its persistent
+workspace-level **New attempt** action is available with zero, one, or many
+slots and opens a chooser of eligible retained Raw Pipeline Sources. Selecting
+one creates a slot that already references those exact bytes and begins at grid
+fitting. The owner never has to enter the slot where the source first appeared,
+and the new slot does not repeat the Copy/Paste/**Use this board** model
+handoff. If no raw source exists, the chooser directs the owner to generation
+handoff or the named exact-PNG raw-source import.
+
+Per
+[ADR-0170](adr/0170-derived-board-inspection-is-a-full-workspace-revision-gate.md)
+as refined by
+[ADR-0175](adr/0175-rejected-warp-retries-stay-in-the-same-pipeline-slot.md),
+selecting full-size inspection for a warped result or a **Board with occlusion
+mask** temporarily
+replaces the Pipeline's scrolling slot manager inside that same shell workspace.
+The diagnostic grid/cyan proof uses nearly the entire center work area; it is
+not a dialog or an expanded card. For a warped result with no downstream
+occlusion, its **Discard warped board and adjust grid** action archives that
+rejected immutable artifact, keeps the same slot and exact Raw Pipeline Source,
+preloads the rejected warp's direct registration, and returns to the full grid
+fitter.
+
+Per
+[ADR-0179](adr/0179-predrawn-cyan-move-highlights-use-per-cell-visual-footprints.md),
+an accepted warp next exposes cyan move-footprint fitting as another focused
+precision instrument, not a small slot card or right-rail form. Per
+[ADR-0183](adr/0183-cyan-footprint-fitting-is-viewport-level-and-edits-points-or-edges.md),
+it uses the same viewport-level workspace treatment as the grid fitter and
+covers the Level Editor shell while leaving the mounted Pipeline and its exact
+slot state underneath. It renders the exact warped artwork with units hidden,
+the registered grid visible, and live cyan move paint. Per
+[ADR-0185](adr/0185-predrawn-fitted-cell-footprints-shape-every-square-local-visual-highlight.md),
+cyan is the representative fitting preview for one shared cell-visual
+footprint. The saved shape also governs runtime square-local move, attack,
+threat, blocked, premove, selection, focus, hover, drop, and promotion visuals,
+and Level Editor zone, tactical, ring, region, hover, and placement-preview
+paint. Closing returns to the same slot without changing route identity or
+taking an editor lease.
+
+Per
+[ADR-0184](adr/0184-cyan-footprint-fitting-supports-additive-tile-selections-and-outer-border-bars.md),
+a plain playable-tile click selects it alone and Shift+click adds or removes
+tiles without permitting an empty selection. The last-added selected tile is
+primary and alone exposes the small top/right/bottom/left point handles. Shared
+edges between selected tiles are hidden. An exposed edge selects the maximal
+contiguous same-edge boundary bar containing it, stopping at gaps, notches,
+disconnected components, and separate hole contours. A point drag adjusts one
+primary-tile corner. A boundary nudge shifts each segment's supporting line
+along artwork X or Y, intersects it with both unchanged neighboring lines, and
+jointly validates both new endpoints; it never clamps endpoints independently
+or partially accepts the group. Reset selected and Reset all restore full
+diamonds. Right-drag pan and wheel zoom remain view-only.
+
+Per
+[ADR-0182](adr/0182-cyan-footprint-editing-has-image-axis-locks-and-native-pixel-nudges.md),
+a separate precision toolbar exposes Free, X-only, and Y-only movement in the
+artwork's horizontal and vertical image axes. A constrained drag preserves the
+other point coordinate exactly. After selecting a point or boundary bar, four
+visible direction buttons and the keyboard arrows request one native artwork
+pixel; Shift+Arrow requests ten. Point movement rounds the normalized delta once.
+Boundary-bar movement retains the exact pixel delta through each segment's
+supporting-line intersection and then jointly rounds that segment's two
+endpoints once. These actions use the exact raster/world transform, not the
+current view zoom. Tile membership, primary tile, active point-or-boundary
+selection, and axis mode remain session-local tool state.
+
+The workspace keeps plainly labeled Undo and Redo controls visible. One
+completed point drag, successful point-or-boundary keyboard or button nudge, or
+discrete reset is one entry in its bounded 100-step session-local history. A
+boundary bar and Reset selected are each all-or-nothing group entries; tile,
+primary, and active-target selection, axis mode, pan, zoom, Save, and closing
+never enter history. Explicit Save writes the exact displayed sparse profile as
+the attempt's revision-CAS latest draft bound to the current warp. The schema
+and backend contract remain unchanged: `predrawn-move-highlight-profile-v1`,
+the existing API/event names, and database fields remain compatibility names
+for the broader cell-visual-footprint role, with no migration. That profile is
+not another artifact card or media version. New occlusion remains unavailable
+with a concrete reason until the exact warp has a saved valid profile, including
+an explicitly saved empty map when full diamonds are approved everywhere.
+
+The workspace edits paint shape only. Canonical hit targets, cell and move
+selection, movement, pathfinding, occupancy, placement validity, zone
+membership, grid and fence hints, and solver state never consult the fitted
+shape. Object presentation and other non-cell-local visuals keep their own
+geometry.
+
+Per
+[ADR-0180](adr/0180-predrawn-occlusion-selects-final-raster-pixels.md),
+**Edit occlusion mask** replaces the scrolling slot manager with another focused
+full-workspace instrument over the exact immutable warped raster. It never
+loads or projects Legacy tile, terrain, prop, doodad, or Scene Art pixels.
+Units stay hidden. The workspace preserves ordinary right-drag pan and
+wheel-zoom navigation while making accepted cyan alpha and the current advisory
+candidate visually distinct.
+
+A revision-pinned SlimSAM runs in a browser worker off the UI thread and uses
+owner-placed positive and negative points to return three selectable
+candidates. None changes accepted alpha until explicit Accept. Brush, eraser,
+Reset, Undo, and Redo remain a complete manual authoring path when inference is
+unavailable or inaccurate. The workspace identifies progress and failures
+beside the affected controls instead of leaving an inert action.
+
+Only explicit **Create board with occlusion mask** crosses the immutable media
+boundary. It hashes the owner-accepted alpha, deterministically assigns depth
+per 8-connected component from each source-image column's bottom-most selected
+pixel and the exact parent world bounds, and records the exact
+model/revision/backend, edit counts, and depth algorithm. The result returns to
+full-size clipping inspection before Set. No segmentation model runs at
+runtime, and the saved cyan-profile gate remains unchanged.
+
+Per
+[ADR-0181](adr/0181-occlusion-mask-retries-stay-in-the-same-pipeline-slot.md),
+the completed artifact exposes **Discard mask & edit again**. The fenced action
+detaches only the slot's exact current mask, preserves its Raw Pipeline Source,
+warp, fitted registration, and cyan profile, and reopens the full mask editor.
+A matching cloud working selection falls back to that same warp without a mask;
+the action never rewrites canonical content. Unreferenced rejected mask media is
+archived, while media still referenced by the canonical Level is retained as
+immutable history without remaining the slot's current result.
+
+Per
+[ADR-0169](adr/0169-historical-raw-contracts-bind-only-from-saved-level-proof.md),
+source eligibility in that chooser is a backend projection for the exact saved
+Level. The UI consumes the server's eligibility and concrete issue fields and
+never infers `coordinateBasis` or `viewingPane` defaults from browser data. An
+eligible historical source is still rechecked and bound only during fenced
+creation.
+
+Every ineligible source remains visible with its concrete server reason beside
+the source row or selected-source detail. A disabled action without a reason, a
+global banner or toast detached from the source, and silently filtering the
+source out are insufficient. If fenced creation rejects a source that appeared
+eligible, the chooser stays open and replaces that source's colocated status
+with the returned reason.
+
+Each slot presents **Raw Pipeline Source → Warped board → Board with occlusion
+mask**. Preview
+tuning occurs before a deterministic stage is committed. Cyan fitting remains
+attempt authoring between the two artifact stages rather than adding a fourth
+artifact stage. A rejected warp may be archived and retried in that same slot
+under ADR-0175, and a rejected mask may be detached and retried there under
+ADR-0181. The same immutable raw may be selected by several slots without media
+duplication or mutation. Attached occlusion depth is internal diagnostic data
+on the final artifact rather than a second dropdown. Existing `kind=raw`
+artwork uses the Raw Pipeline Source label. Warped outputs and Boards with
+occlusion masks never appear in the source chooser. A migrated
+source with missing historical generation provenance remains honestly labeled
+but may start a new deterministic slot when its exact content and geometry
+binding are valid.
+
+Setting a fitted artifact embeds the exact canonical compatibility-named profile
+and digest in the fenced working Level's schema-version-3 surface. It does not
+leave a live link to the attempt draft. Historical schema-version-2 selections
+remain readable and render full diamonds for every square-local visual
+highlight.
+
+Per
+[ADR-0172](adr/0172-archiving-a-board-art-slot-forgets-only-dormant-legacy-selection.md),
+the existing **Archive slot** action also owns removal of that slot's dormant
+remembered selection while the working and saved Levels are in Legacy mode.
+One fenced server transaction forgets those matching Legacy selections and
+archives the slot, then the editor mounts the returned working and canonical
+state. The visible Legacy board does not change. A matching AI-mode Level or
+published output remains protected. The control explains this distinction and
+never presents an unexplained disabled button or a second detach action.
 
 ## Terrain area authoring
 

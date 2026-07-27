@@ -16,10 +16,13 @@ const chromeBox = readFileSync(new URL('./shared/ChromeBox.tsx', import.meta.url
 const confirmDialog = readFileSync(new URL('./shared/ConfirmDialog.tsx', import.meta.url), 'utf8');
 const titleBarControls = readFileSync(new URL('./shell/TitleBarControls.tsx', import.meta.url), 'utf8');
 const styleCss = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+const shellWorkspaceStart = levelEditorChromeConsumers.indexOf('export function LevelEditorShellWorkspace');
 const eventsWorkspaceStart = levelEditorChromeConsumers.indexOf('export function LevelEditorEventsWorkspace');
-const nextEventsWorkspaceExport = levelEditorChromeConsumers.indexOf('\nexport function ', eventsWorkspaceStart + 1);
+const shellWorkspace = shellWorkspaceStart >= 0 && eventsWorkspaceStart > shellWorkspaceStart
+  ? levelEditorChromeConsumers.slice(shellWorkspaceStart, eventsWorkspaceStart)
+  : '';
 const eventsWorkspace = eventsWorkspaceStart >= 0
-  ? levelEditorChromeConsumers.slice(eventsWorkspaceStart, nextEventsWorkspaceExport >= 0 ? nextEventsWorkspaceExport : undefined)
+  ? levelEditorChromeConsumers.slice(eventsWorkspaceStart)
   : '';
 
 const buttonBlocks = (source: string): string[] => source.match(/<button\b[\s\S]*?<\/button>/g) ?? [];
@@ -47,8 +50,27 @@ function expectRegisteredFamily(source: string, legacyClass: string, unit: strin
 }
 
 describe('Level Editor chrome hierarchy', () => {
-  it('uses the shell-owned board workspace for Events instead of a second outer panel', () => {
-    expect(levelEditor).toMatch(/className=\{`skirmish-board-frame\$\{eventsOpen \? ' is-events-covered' : ''\}`\}[\s\S]*?inert=\{eventsOpen \? true : undefined\}[\s\S]*?aria-hidden=\{eventsOpen \|\| undefined\}/);
+  it('shares one shell-owned center-workspace primitive without a parallel outer panel', () => {
+    expect(shellWorkspace).toContain('<section {...props} className={`le-shell-workspace ${className}`.trim()}>');
+    expect(shellWorkspace).toContain('<ChromeSurfaceFill role="outer" className="le-shell-workspace-fill" />');
+    expect(shellWorkspace).toContain('<div className={`le-shell-workspace-content ${contentClassName}`.trim()}>');
+    expect(shellWorkspace).not.toContain('<OuterChromeBox');
+
+    expect(eventsWorkspace).toContain('<LevelEditorShellWorkspace');
+    expect(eventsWorkspace).toContain('className="le-events-workspace"');
+    expect(eventsWorkspace).toContain('data-testid="level-events-workspace"');
+    expect(eventsWorkspace).toContain('aria-labelledby="level-events-workspace-title"');
+    expect(eventsWorkspace).toContain('initialFocusRef.current?.focus()');
+    expect(eventsWorkspace).toContain("ref={tab === 'victory' ? initialFocusRef : undefined}");
+    expect(eventsWorkspace).toContain("ref={tab === 'other' ? initialFocusRef : undefined}");
+    expect(eventsWorkspace).not.toContain('<OuterChromeBox');
+    expect(eventsWorkspace).not.toContain('role="dialog"');
+    expect(eventsWorkspace).not.toContain('events-overlay');
+
+    expect(chromeBox).toContain('export function ChromeSurfaceFill');
+    expect(chromeBox).toContain('data-chrome-fill-role={role}');
+    expect(chromeBox).toContain('<ChromeSurfaceFill role="outer" className="le-outer-panel-fill" />');
+    expect(levelEditor).toMatch(/className=\{`skirmish-board-frame\$\{eventsOpen \|\| levelArtworkWorkspace \? ' is-workspace-covered' : ''\}`\}[\s\S]*?inert=\{eventsOpen \|\| levelArtworkWorkspace \? true : undefined\}[\s\S]*?aria-hidden=\{eventsOpen \|\| levelArtworkWorkspace \? true : undefined\}/);
     expect(levelEditor).toMatch(/\{eventsOpen \? \(\s*<LevelEditorEventsWorkspace/);
     expect(levelEditor).toContain('const [eventsOpen, setEventsOpen] = useState(initialEventsOpen);');
     expect(levelEditor).toContain('eventsEditor: routeState.eventsEditor');
@@ -57,20 +79,11 @@ describe('Level Editor chrome hierarchy', () => {
     expect(levelEditor).toMatch(/if \(eventsOpenRef\.current\) \{\s*selectEventsTab\(tab\);\s*return;\s*\}/);
     expect(levelEditor).toMatch(/disabled=\{eventsOpen\}[\s\S]{0,120}?onClick=\{\(\) => openEventsEditor\('victory'\)\}/);
     expect(levelEditor).not.toContain('window.history.state?.levelEditorRules');
-    expect(eventsWorkspace).toContain('<section className="le-events-workspace" data-testid="level-events-workspace" aria-labelledby="level-events-workspace-title">');
-    expect(eventsWorkspace).toContain('<ChromeSurfaceFill role="outer" className="le-events-workspace-fill" />');
-    expect(eventsWorkspace).toContain('<div className="le-events-workspace-content">');
-    expect(eventsWorkspace).toContain('initialFocusRef.current?.focus()');
-    expect(eventsWorkspace).toContain("ref={tab === 'victory' ? initialFocusRef : undefined}");
-    expect(eventsWorkspace).toContain("ref={tab === 'other' ? initialFocusRef : undefined}");
-    expect(eventsWorkspace).not.toContain('<OuterChromeBox');
-    expect(eventsWorkspace).not.toContain('role="dialog"');
-    expect(eventsWorkspace).not.toContain('events-overlay');
-    expect(chromeBox).toContain('data-chrome-fill-role={role}');
-    expect(styleCss).toMatch(/\.le-events-workspace\s*\{[\s\S]*?inset:\s*0;[\s\S]*?position:\s*absolute;/);
-    expect(styleCss).toMatch(/\.level-editor-screen \.skirmish-board-frame\.is-events-covered\s*\{[\s\S]*?visibility:\s*hidden;/);
+    expect(styleCss).toMatch(/\.le-shell-workspace\s*\{[\s\S]*?inset:\s*0;[\s\S]*?position:\s*absolute;/);
+    expect(styleCss).toMatch(/\.level-editor-screen \.skirmish-board-frame\.is-workspace-covered\s*\{[\s\S]*?visibility:\s*hidden;/);
+    expect(styleCss).toMatch(/\.le-shell-workspace-content\s*\{[\s\S]*?min-height:\s*0;[\s\S]*?overflow:\s*hidden;/);
     expect(styleCss).toMatch(/\.skirmish-screen\.level-editor-screen\s*\{[\s\S]*?column-gap:\s*0;[\s\S]*?row-gap:\s*0;/);
-    expect(styleCss).toMatch(/@media \(max-width: 560px\)\s*\{[\s\S]*?\.le-events-workspace-content\s*\{[\s\S]*?overflow-y:\s*auto;[\s\S]*?\.le-md\s*\{[\s\S]*?flex-direction:\s*column;/);
+    expect(styleCss).toMatch(/@media \(max-width: 560px\)\s*\{[\s\S]*?\.le-shell-workspace-content\s*\{[\s\S]*?overflow-y:\s*auto;/);
     expect(styleCss).not.toContain('.le-events-overlay');
   });
 
@@ -121,8 +134,10 @@ describe('Level Editor chrome hierarchy', () => {
     expect(levelEditor).toContain('onClick={fillSelectedTileArea}');
     expect(levelEditor).toContain('>Fill selected area</button>');
     expect(levelEditor).toContain('renderCellOverlay={regionCells && regionCells.size > 0');
-    expect(levelEditor).toContain("? (cell) => regionCells.has(`${cell.x},${cell.y}`)");
-    expect(levelEditor.match(/<span className="le-region-cell"/g)).toHaveLength(1);
+    expect(levelEditor).toContain('? (cell) => {');
+    expect(levelEditor).toContain('const key = `${cell.x},${cell.y}`;');
+    expect(levelEditor).toContain('return regionCells.has(key)');
+    expect(levelEditor.match(/<span\s+className="le-region-cell"/g)).toHaveLength(1);
     expect(styleCss).toMatch(/\.le-region-cell\s*\{[\s\S]*?top:\s*0;/);
   });
 
@@ -153,10 +168,10 @@ describe('Level Editor chrome hierarchy', () => {
       ...buttonBlocks(levelEditor),
     ].filter((block) => block.includes('stepper-chevron'));
 
-    expect(chevronButtons).toHaveLength(6);
+    expect(chevronButtons).toHaveLength(8);
     for (const block of chevronButtons) expectChromeUnit(block, 'inner-chevron-key');
-    expect(chevronButtons.filter((block) => block.includes('stepper-chevron-left'))).toHaveLength(3);
-    expect(chevronButtons.filter((block) => block.includes('stepper-chevron-right'))).toHaveLength(3);
+    expect(chevronButtons.filter((block) => block.includes('stepper-chevron-left'))).toHaveLength(4);
+    expect(chevronButtons.filter((block) => block.includes('stepper-chevron-right'))).toHaveLength(4);
     expect(styleCss).toMatch(/\.stepper-chevron::before\s*\{[\s\S]*?inset-inline-start:\s*4px;[\s\S]*?transform:\s*rotate\(45deg\);/);
     expect(styleCss).toMatch(/\.stepper-chevron-right\s*\{[\s\S]*?transform:\s*scaleX\(-1\);/);
     expect(styleCss).not.toMatch(/\.stepper-chevron-right::before\s*\{/);

@@ -16,6 +16,7 @@ import {
   projectPredrawnPoint,
   rectifyPredrawnFramePixels,
   resolvedLiveMediaUrl,
+  isVersionedPredrawnBoardSurface,
   serializePredrawnBoardPreviewRegistration,
   serializePredrawnRegistrationHandoff,
   uniformPredrawnGuides,
@@ -23,6 +24,7 @@ import {
   type PredrawnBoardHomography,
   type PredrawnBoardCornerRegistration,
   type PredrawnBoardSurface,
+  type VersionedPredrawnBoardSurface,
   type PredrawnBoundaryReference,
   type PredrawnPoint,
 } from '@chess-tactics/board-render';
@@ -50,8 +52,14 @@ export type {
   PredrawnPoint,
 };
 
+interface PredrawnBoardReviewSurface {
+  kind: 'predrawn';
+  frameWidth: number;
+  frameHeight: number;
+}
+
 export interface PredrawnBoardPlate {
-  surface: Omit<PredrawnBoardSurface, 'slot'>;
+  surface: PredrawnBoardSurface | PredrawnBoardReviewSurface;
   src: string;
   registration?: PredrawnBoardCornerRegistration;
 }
@@ -84,7 +92,7 @@ export function storePredrawnBoardRegistration(
   if (!storage) return false;
   try {
     storage.setItem(predrawnBoardRegistrationStorageKey(src), JSON.stringify({
-      version: 4,
+      version: 5,
       registration: serializePredrawnBoardPreviewRegistration(registration),
     }));
     return true;
@@ -108,6 +116,7 @@ export function storedPredrawnBoardRegistration(
       && record.version !== 2
       && record.version !== 3
       && record.version !== 4
+      && record.version !== 5
     ) return undefined;
     if (typeof record.registration !== 'string') return undefined;
     return parsePredrawnBoardRegistration(record.registration);
@@ -136,8 +145,12 @@ export function savePredrawnBoardRegistrationLocally(
 export function runtimePredrawnBoardPlate(surface: PredrawnBoardSurface): PredrawnBoardPlate {
   return {
     surface,
-    src: resolvedLiveMediaUrl(surface.slot),
-    ...(surface.registration ? { registration: surface.registration } : {}),
+    src: isVersionedPredrawnBoardSurface(surface)
+      ? `/api/background-versions/${encodeURIComponent(surface.backgroundVersionId)}/content`
+      : resolvedLiveMediaUrl(surface.slot),
+    ...(!isVersionedPredrawnBoardSurface(surface) && surface.registration
+      ? { registration: surface.registration }
+      : {}),
   };
 }
 
@@ -232,6 +245,17 @@ export function predrawnBoardCoverPolygon(
   cells: readonly { x: number; y: number }[],
 ): { x: number; y: number }[] {
   const metrics = boardLabMetrics(cells);
+  if (isVersionedPlateSurface(plate.surface)) {
+    const { minX, minY, width, height } = plate.surface.worldBounds;
+    const left = minX + metrics.originLeft;
+    const top = minY + metrics.originTop;
+    return [
+      { x: left, y: top },
+      { x: left + width, y: top },
+      { x: left + width, y: top + height },
+      { x: left, y: top + height },
+    ];
+  }
   const homography = plate.registration
     ? predrawnBoardHomography(plate.surface, cells, plate.registration)
     : undefined;
@@ -256,6 +280,23 @@ export function predrawnBoardCoverPolygon(
     { x: left + placement.width, y: top + placement.height },
     { x: left, y: top + placement.height },
   ];
+}
+
+function isVersionedPlateSurface(
+  surface: PredrawnBoardPlate['surface'],
+): surface is VersionedPredrawnBoardSurface {
+  return 'schemaVersion' in surface
+    && (surface.schemaVersion === 2 || surface.schemaVersion === 3);
+}
+
+export function versionedPredrawnImageDimensionIssue(
+  surface: PredrawnBoardPlate['surface'],
+  naturalWidth: number,
+  naturalHeight: number,
+): string | null {
+  if (!isVersionedPlateSurface(surface)) return null;
+  if (naturalWidth === surface.frameWidth && naturalHeight === surface.frameHeight) return null;
+  return `Immutable pre-drawn background dimensions do not match: expected ${surface.frameWidth}×${surface.frameHeight}, decoded ${naturalWidth}×${naturalHeight}.`;
 }
 
 function drawRectifiedPlate(
@@ -348,10 +389,25 @@ export function PredrawnBoardLayer({
   onFirstFrame?: () => void;
   onFrameError?: (error: unknown) => void;
 }): ReactElement {
-  const homography = plate.registration
+  const versionedSurface = isVersionedPlateSurface(plate.surface) ? plate.surface : undefined;
+  const versionedImageKey = versionedSurface
+    ? `${plate.src}:${versionedSurface.frameWidth}:${versionedSurface.frameHeight}`
+    : null;
+  const [validatedVersionedImageKey, setValidatedVersionedImageKey] = useState<string | null>(null);
+  const versionedImageReady = !versionedImageKey || validatedVersionedImageKey === versionedImageKey;
+  const homography = !versionedSurface && plate.registration
     ? predrawnBoardHomography(plate.surface, cells, plate.registration)
     : undefined;
-  const placement = homography ? undefined : predrawnBoardPlacement(plate.surface, cells);
+  const placement = versionedSurface
+    ? {
+        left: versionedSurface.worldBounds.minX,
+        top: versionedSurface.worldBounds.minY,
+        width: versionedSurface.worldBounds.width,
+        height: versionedSurface.worldBounds.height,
+      }
+    : homography
+      ? undefined
+      : predrawnBoardPlacement(plate.surface, cells);
   const style = (homography ? {
     left: '0px',
     top: '0px',
@@ -391,9 +447,28 @@ export function PredrawnBoardLayer({
         aria-hidden="true"
         decoding="async"
         draggable={false}
-        style={style}
-        onLoad={() => { if (!rectified) requestAnimationFrame(() => onFirstFrame?.()); }}
-        onError={() => onFrameError?.(new Error(`Pre-drawn board image failed: ${plate.src}`))}
+        style={{
+          ...style,
+          ...(versionedSurface && !versionedImageReady ? { visibility: 'hidden' } : {}),
+        }}
+        onLoad={(event) => {
+          const issue = versionedPredrawnImageDimensionIssue(
+            plate.surface,
+            event.currentTarget.naturalWidth,
+            event.currentTarget.naturalHeight,
+          );
+          if (issue) {
+            setValidatedVersionedImageKey(null);
+            onFrameError?.(new Error(issue));
+            return;
+          }
+          setValidatedVersionedImageKey(versionedImageKey);
+          if (!rectified) requestAnimationFrame(() => onFirstFrame?.());
+        }}
+        onError={() => {
+          setValidatedVersionedImageKey(null);
+          onFrameError?.(new Error(`Pre-drawn board image failed: ${plate.src}`));
+        }}
       />
       {rectified ? (
         <PredrawnRectifiedCanvas

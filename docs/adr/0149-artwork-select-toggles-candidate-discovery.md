@@ -1,8 +1,9 @@
 ---
-status: "accepted"
+status: "accepted; Artwork-layer naming superseded by ADR-0176"
 date: 2026-07-24
 deciders: Nelson, Codex
 supersedes: ADR-0148 Select activation and current-outline visibility clauses
+partially_superseded_by: "[ADR-0176](0176-placed-art-and-level-artwork-are-separate-editor-destinations.md)"
 ---
 
 # ADR-0149: Artwork Select toggles candidate discovery

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { drawableAssets } from '@chess-tactics/board-render';
 import { tileFrameSrc, tileAssets, tileFamilies, type TileAsset } from '../art/tileset';
@@ -13,8 +13,16 @@ import { useSkirmishView } from '../game/skirmishView';
 import { provisionalBoard, premoveArrows, premoveGhosts, premoveTargets, type PremoveArrow } from '../game/premoves';
 import { clientSide, opponentSide } from '../game/clientPerspective';
 import { BoardLabBoard, boardLabCellPosition, immutableBoardLabTerrainSrc } from './BoardLabBoard';
+import { PredrawnMoveHighlightPaint } from './PredrawnMoveHighlightPaint';
 import { terrainTopSrc } from './BoardTerrainLayer';
-import { boundsForOps, drawBoardOps, isAnimatedGroundCoverOp, loadCanvasImage } from './BoardCanvasLayer';
+import {
+  boundsForOps,
+  drawBoardOps,
+  isAnimatedGroundCoverOp,
+  loadCanvasImage,
+  predrawnOcclusionDepthImageDimensionIssue,
+} from './BoardCanvasLayer';
+import { createRenderEffectGeneration, settleRenderEffectGeneration } from './renderEffectGeneration';
 import { objectBaseZIndex } from './sceneDepth';
 import { ViewPane } from '../ui/shared/ViewPane';
 import { useBoardFrameReveal } from './boardArtReady';
@@ -36,14 +44,19 @@ import {
   UNIT_IMG_MAX_W,
   boardBounds,
   boardDrawOps,
+  isPredrawnBackgroundActive,
   mirrorFacingPlan,
   mirrorSurfacesForPlacements,
+  isVersionedPredrawnBoardSurface,
+  predrawnOcclusionDepthMapForSurface,
   predrawnOcclusionMaskOps,
+  predrawnVisualFootprintClipStyleForCell,
   reflectedOpsForSubjects,
   unprojectBoardPoint,
   type BakeBounds,
   type BoardDrawOp,
   type MirrorReflectionSubject,
+  type PredrawnOcclusionDepthMap,
   withoutBoardDrawLayers,
 } from '@chess-tactics/board-render';
 
@@ -243,8 +256,8 @@ function sceneBoardForSkirmish(
   game: GameState,
   board: SocketBoardResult<TileAsset>,
   exactBoard: EditorBoard | null,
+  predrawnBackgroundActive: boolean,
 ): EditorBoard {
-  const predrawn = exactBoard?.surface?.kind === 'predrawn';
   const cells: Record<string, string> = {};
   const coverTypes: Record<string, TileFamilyId> = {};
   for (const cell of board.cells) {
@@ -259,6 +272,7 @@ function sceneBoardForSkirmish(
     playerFaction: exactBoard?.playerFaction,
     factionDirections: exactBoard?.factionDirections ?? {},
     cells,
+    backgroundMode: exactBoard?.backgroundMode,
     surface: exactBoard?.surface,
     macroTiles: exactBoard?.macroTiles,
     subterrain: exactBoard?.subterrain,
@@ -268,10 +282,10 @@ function sceneBoardForSkirmish(
     cover: coverMapRecordForGame(game, exactBoard),
     coverTypes: exactBoard?.coverTypes ?? coverTypes,
     features: exactBoard?.features ?? {},
-    fences: predrawn ? {} : exactBoard?.fences ?? {},
-    fencePosts: predrawn ? {} : exactBoard?.fencePosts ?? {},
-    walls: predrawn ? {} : exactBoard?.walls ?? {},
-    wallArt: predrawn ? {} : exactBoard?.wallArt ?? {},
+    fences: predrawnBackgroundActive ? {} : exactBoard?.fences ?? {},
+    fencePosts: predrawnBackgroundActive ? {} : exactBoard?.fencePosts ?? {},
+    walls: predrawnBackgroundActive ? {} : exactBoard?.walls ?? {},
+    wallArt: predrawnBackgroundActive ? {} : exactBoard?.wallArt ?? {},
     featureCuts: exactBoard?.featureCuts ?? {},
     featureExits: exactBoard?.featureExits ?? {},
     zoneEntries: exactBoard?.zoneEntries ?? [],
@@ -280,13 +294,27 @@ function sceneBoardForSkirmish(
   };
 }
 
-function sceneArtUrls(sceneBoard: EditorBoard, seed: number, ambientCover: boolean): string[] {
-  return [...new Set(boardDrawOps(sceneBoard, { coverSeed: seed, ambientCover }).map((op) => op.src))];
+function sceneArtUrls(
+  sceneBoard: EditorBoard,
+  seed: number,
+  ambientCover: boolean,
+  predrawnBackgroundActive: boolean,
+): string[] {
+  return [...new Set(boardDrawOps(sceneBoard, {
+    coverSeed: seed,
+    ambientCover,
+    predrawnBackgroundActive,
+  }).map((op) => op.src))];
 }
 
-function skirmishStaticSceneOps(sceneBoard: EditorBoard, seed: number, ambientCover: boolean): BoardDrawOp[] {
+function skirmishStaticSceneOps(
+  sceneBoard: EditorBoard,
+  seed: number,
+  ambientCover: boolean,
+  predrawnBackgroundActive: boolean,
+): BoardDrawOp[] {
   return withoutBoardDrawLayers(
-    boardDrawOps(sceneBoard, { coverSeed: seed, ambientCover }),
+    boardDrawOps(sceneBoard, { coverSeed: seed, ambientCover, predrawnBackgroundActive }),
     'terrain',
     'linear-feature',
   );
@@ -647,6 +675,26 @@ function targetPieceOps(livePieces: readonly Piece[], afterGhosts: ReturnType<ty
   return ops;
 }
 
+/**
+ * Keep Skirmish's animated scene compositor behind the same immutable-depth validation as the
+ * shared canvas layer. The callbacks make the ordering explicit: invalid persisted bytes can
+ * neither reach the compositor nor acknowledge the scene as ready.
+ */
+export function commitSkirmishSceneFirstFrame(
+  occlusionDepthMap: PredrawnOcclusionDepthMap | undefined,
+  images: ReadonlyMap<string, Pick<HTMLImageElement, 'naturalWidth' | 'naturalHeight'>>,
+  composite: () => void,
+  acknowledge: () => void,
+): void {
+  const dimensionIssue = predrawnOcclusionDepthImageDimensionIssue(
+    occlusionDepthMap,
+    occlusionDepthMap ? images.get(occlusionDepthMap.src) : undefined,
+  );
+  if (dimensionIssue) throw new Error(dimensionIssue);
+  composite();
+  acknowledge();
+}
+
 function SkirmishSceneLayer({
   sceneBoard,
   seed,
@@ -659,6 +707,8 @@ function SkirmishSceneLayer({
   premovedIds,
   afterGhosts,
   occlusionMasks,
+  occlusionDepthMap,
+  predrawnBackgroundActive,
   onFirstFrame,
   onFrameError,
 }: {
@@ -673,22 +723,31 @@ function SkirmishSceneLayer({
   premovedIds: ReadonlySet<string>;
   afterGhosts: ReturnType<typeof premoveGhosts>;
   occlusionMasks: readonly BoardDrawOp[];
+  occlusionDepthMap?: PredrawnOcclusionDepthMap;
+  predrawnBackgroundActive: boolean;
   onFirstFrame: () => void;
   onFrameError: (error: unknown) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const motionRef = useRef<Map<string, PieceMotion>>(new Map());
   const arrivalStartRef = useRef<number | null>(null);
-  const staticOps = useMemo(() => skirmishStaticSceneOps(sceneBoard, seed, ambientCover), [ambientCover, sceneBoard, seed]);
+  const staticOps = useMemo(
+    () => skirmishStaticSceneOps(sceneBoard, seed, ambientCover, predrawnBackgroundActive),
+    [ambientCover, predrawnBackgroundActive, sceneBoard, seed],
+  );
   const mirrorSurfaces = useMemo(
     () => mirrorSurfacesForPlacements(sceneBoard.wallArt, { cols: sceneBoard.cols, rows: sceneBoard.rows })
       .filter((surface) => surface.segments.every((segment) => !segment.edge || Boolean(sceneBoard.walls?.[segment.edge]))),
     [sceneBoard],
   );
   const bounds = useMemo(() => {
-    const fallback = boardBounds(sceneBoard, { coverSeed: seed, ambientCover });
+    const fallback = boardBounds(sceneBoard, {
+      coverSeed: seed,
+      ambientCover,
+      predrawnBackgroundActive,
+    });
     return padBounds(boundsForOps([...staticOps, ...targetPieceOps(livePieces, afterGhosts)], fallback));
-  }, [afterGhosts, ambientCover, livePieces, sceneBoard, seed, staticOps]);
+  }, [afterGhosts, ambientCover, livePieces, predrawnBackgroundActive, sceneBoard, seed, staticOps]);
 
   useEffect(() => {
     arrivalStartRef.current = arriving ? performance.now() : null;
@@ -736,9 +795,9 @@ function SkirmishSceneLayer({
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return undefined;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    let cancelled = false;
-    let raf = 0;
+    const generation = createRenderEffectGeneration();
     const unitSources = [
       ...livePieces.map(pieceImageSrc),
       ...afterGhosts.flatMap((group) => group.pieces.map(pieceImageSrc)),
@@ -748,6 +807,7 @@ function SkirmishSceneLayer({
     const sources = [...new Set([
       ...staticOps.map((op) => op.src),
       ...occlusionMasks.map((op) => op.src),
+      ...(occlusionDepthMap ? [occlusionDepthMap.src] : []),
       ...unitSources,
       ...reflectedUnitSources,
     ])];
@@ -805,24 +865,29 @@ function SkirmishSceneLayer({
       return false;
     };
 
-    void Promise.all(sources.map(async (src): Promise<[string, HTMLImageElement]> => [src, await loadCanvasImage(src)])).then((entries) => {
-      const images = new Map(entries);
-      const tick = (timeMs: number): void => {
-        if (cancelled) return;
-        drawBoardOps(ctx, frameOps(timeMs), bounds, images, timeMs, undefined, occlusionMasks);
-        if (hasAnimatedGroundCover || arriving || hasActiveMotion(timeMs)) {
-          raf = window.requestAnimationFrame(tick);
-        }
-      };
-      tick(performance.now());
-      requestAnimationFrame(onFirstFrame);
-    }).catch(onFrameError);
+    settleRenderEffectGeneration(
+      generation,
+      Promise.all(sources.map(async (src): Promise<[string, HTMLImageElement]> => [src, await loadCanvasImage(src)])),
+      (entries) => {
+        const images = new Map(entries);
+        const tick = (timeMs: number): void => {
+          drawBoardOps(ctx, frameOps(timeMs), bounds, images, timeMs, undefined, occlusionMasks, undefined, occlusionDepthMap);
+          if (hasAnimatedGroundCover || arriving || hasActiveMotion(timeMs)) {
+            generation.requestFrame(tick);
+          }
+        };
+        commitSkirmishSceneFirstFrame(
+          occlusionDepthMap,
+          images,
+          () => tick(performance.now()),
+          () => generation.requestFrame(() => onFirstFrame()),
+        );
+      },
+      onFrameError,
+    );
 
-    return () => {
-      cancelled = true;
-      if (raf) window.cancelAnimationFrame(raf);
-    };
-  }, [afterGhosts, arrivalDelays, arriving, bounds, draggingId, livePieces, mirrorSurfaces, occlusionMasks, onFirstFrame, onFrameError, premovedIds, staticOps]);
+    return generation.cancel;
+  }, [afterGhosts, arrivalDelays, arriving, bounds, draggingId, livePieces, mirrorSurfaces, occlusionDepthMap, occlusionMasks, onFirstFrame, onFrameError, premovedIds, staticOps]);
 
   return (
     <canvas
@@ -951,25 +1016,45 @@ export function SkirmishBoard({
   }, [env, game.pieces, game.size, game.turn, game.winner, netMovePending, pendingPromotion, premoveMode, selectedId, localSide]);
   const board = useMemo(() => buildSkirmishBoard(game, seed), [game, seed]);
   const exactBoard = useMemo(() => resolveBoardCode(game), [game.boardCode, game.size.cols, game.size.rows]);
+  const persistedPredrawnBackgroundActive = Boolean(
+    exactBoard && isPredrawnBackgroundActive(exactBoard),
+  );
+  const temporaryPredrawnReviewActive = Boolean(predrawnReview && exactBoard?.surface);
+  const predrawnBackgroundActive = persistedPredrawnBackgroundActive || temporaryPredrawnReviewActive;
   const predrawnOcclusionMasks = useMemo(
-    () => exactBoard?.surface?.kind === 'predrawn'
+    () => predrawnBackgroundActive
+      && exactBoard
+      && (
+        !persistedPredrawnBackgroundActive
+        || !exactBoard.surface
+        || !isVersionedPredrawnBoardSurface(exactBoard.surface)
+      )
       ? predrawnOcclusionMaskOps(exactBoard)
       : [],
-    [exactBoard],
+    [exactBoard, persistedPredrawnBackgroundActive, predrawnBackgroundActive],
+  );
+  const predrawnOcclusionDepthMap = useMemo(
+    () => persistedPredrawnBackgroundActive
+      ? predrawnOcclusionDepthMapForSurface(exactBoard?.surface)
+      : undefined,
+    [exactBoard?.surface, persistedPredrawnBackgroundActive],
   );
   const predrawnPlate = useMemo<PredrawnBoardPlate | undefined>(() => {
     const surface = exactBoard?.surface;
-    if (!surface) return undefined;
+    if (!surface || !predrawnBackgroundActive) return undefined;
     return predrawnReview
       ? { surface, src: predrawnReview.src, registration: predrawnReview.registration }
       : runtimePredrawnBoardPlate(surface);
-  }, [exactBoard, predrawnReview]);
+  }, [exactBoard, predrawnBackgroundActive, predrawnReview]);
   const predrawnCoverPolygon = useMemo(
     () => predrawnPlate ? predrawnBoardCoverPolygon(predrawnPlate, board.cells) : undefined,
     [board.cells, predrawnPlate],
   );
   const ambientSceneCover = !exactBoard;
-  const sceneBoard = useMemo(() => sceneBoardForSkirmish(game, board, exactBoard), [board, exactBoard, game.props, game.size.cols, game.size.rows, game.terrain]);
+  const sceneBoard = useMemo(
+    () => sceneBoardForSkirmish(game, board, exactBoard, predrawnBackgroundActive),
+    [board, exactBoard, game.props, game.size.cols, game.size.rows, game.terrain, predrawnBackgroundActive],
+  );
   // Edge fences resolve from the authored board code (each shared edge → its upper-left cell's
   // E/S rail). Keyed "x,y" to match resolveFenceOverlays; empty for a generated/fence-free board.
   const fenceOverlays = useMemo<ReadonlyMap<string, ResolvedFenceOverlay>>(() => {
@@ -991,7 +1076,10 @@ export function SkirmishBoard({
     () => game.pieces.filter((piece) => piece.alive && !isPropCollider(piece)).sort((a, b) => a.x + a.y - (b.x + b.y)),
     [game.pieces],
   );
-  const sceneUrls = useMemo(() => sceneArtUrls(sceneBoard, seed, ambientSceneCover), [ambientSceneCover, sceneBoard, seed]);
+  const sceneUrls = useMemo(
+    () => sceneArtUrls(sceneBoard, seed, ambientSceneCover, predrawnBackgroundActive),
+    [ambientSceneCover, predrawnBackgroundActive, sceneBoard, seed],
+  );
   // Hold the board hidden until its whole art set has decoded, then fade it in as one
   // unit — no per-tile popcorn (see render/boardArtReady). The signature is the tile set
   // (stable across moves), so this arms once per board/seed, not on every move.
@@ -1004,10 +1092,13 @@ export function SkirmishBoard({
       wallOverlays,
       wallArtUrls,
       sceneUrls,
-      predrawnOcclusionMasks.map((op) => op.src),
+      [
+        ...predrawnOcclusionMasks.map((op) => op.src),
+        ...(predrawnOcclusionDepthMap ? [predrawnOcclusionDepthMap.src] : []),
+      ],
       predrawnPlate?.src,
     ),
-    [board, fenceOverlays, fencePosts, livePieces, predrawnOcclusionMasks, predrawnPlate?.src, sceneUrls, wallArtUrls, wallOverlays],
+    [board, fenceOverlays, fencePosts, livePieces, predrawnOcclusionDepthMap?.src, predrawnOcclusionMasks, predrawnPlate?.src, sceneUrls, wallArtUrls, wallOverlays],
   );
   const boardFrame = useBoardFrameReveal(boardArt.signature);
   const boardReady = boardFrame.ready;
@@ -1429,6 +1520,8 @@ export function SkirmishBoard({
               premovedIds={premovedIds}
               afterGhosts={afterGhosts}
               occlusionMasks={predrawnOcclusionMasks}
+              occlusionDepthMap={predrawnOcclusionDepthMap}
+              predrawnBackgroundActive={predrawnBackgroundActive}
               onFirstFrame={acknowledgeScene}
               onFrameError={boardFrame.fail}
             />
@@ -1436,6 +1529,9 @@ export function SkirmishBoard({
           renderCellOverlay={({ cell }) => {
             if (!cell.asset && !cell.missing) return null;
             const key = `${cell.x},${cell.y}`;
+            const visualFootprintStyle = predrawnBackgroundActive
+              ? predrawnVisualFootprintClipStyleForCell(exactBoard?.surface, key)
+              : undefined;
             const state = [
               localMoveSet.has(key) ? 'is-player-move' : '',
               promotionZoneSet.has(key) ? 'is-promotion-zone' : '',
@@ -1459,6 +1555,7 @@ export function SkirmishBoard({
                 aria-label={`Tile ${cell.x},${cell.y}`}
                 data-cx={cell.x}
                 data-cy={cell.y}
+                style={visualFootprintStyle as CSSProperties | undefined}
                 onPointerDown={(event) => onCellPointerDown(cell.x, cell.y, event)}
                 onPointerMove={onCellPointerMove}
                 onPointerUp={onCellPointerUp}
@@ -1470,7 +1567,9 @@ export function SkirmishBoard({
                   if (suppressClickRef.current || dragRef.current) return;
                   handleTile(cell.x, cell.y);
                 }}
-              />
+              >
+                <PredrawnMoveHighlightPaint />
+              </button>
             );
           }}
         >
