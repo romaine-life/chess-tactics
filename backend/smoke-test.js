@@ -7394,7 +7394,7 @@ async function main() {
   }
   await queryDb(
     `UPDATE predrawn_background_versions
-        SET operation = jsonb_set(operation, '{viewingPane,minX}', '1'::jsonb)
+        SET operation = operation - 'untouched'
       WHERE id = $1`,
     [rawBackground.id],
   );
@@ -7407,7 +7407,7 @@ async function main() {
   );
   await queryDb(
     `UPDATE predrawn_background_versions
-        SET operation = jsonb_set(operation, '{viewingPane,minX}', '0'::jsonb)
+        SET operation = operation || '{"untouched":true}'::jsonb
       WHERE id = $1`,
     [rawBackground.id],
   );
@@ -8602,6 +8602,28 @@ async function main() {
   ) {
     throw new Error(`Background operational quotas failed: ${JSON.stringify(filledVersionCount.rows)} / ${overDocumentQuota.statusCode} ${overDocumentQuota.body} / ${replayAtDocumentQuota.statusCode} ${replayAtDocumentQuota.body} / ${reusedBlobAtOwnerQuota.statusCode} ${reusedBlobAtOwnerQuota.body} / ${distinctBlobOverOwnerQuota.statusCode} ${distinctBlobOverOwnerQuota.body}`);
   }
+  const deletedQuotaSeedVersions = await queryDb(
+    `DELETE FROM predrawn_background_versions
+      WHERE document_id = $1 AND label LIKE 'Quota seed %'
+      RETURNING blob_sha256`,
+    [newDocumentId],
+  );
+  const quotaSeedBlobSha256s = deletedQuotaSeedVersions.rows
+    .map((row) => row.blob_sha256)
+    .filter(Boolean);
+  if (quotaSeedBlobSha256s.length !== 32) {
+    throw new Error(`Quota fixture cleanup did not recover its 32 synthetic Blob references: ${JSON.stringify(deletedQuotaSeedVersions.rows)}`);
+  }
+  await queryDb(
+    `DELETE FROM media_blobs blob
+      WHERE blob.sha256 = ANY($1::text[])
+        AND NOT EXISTS (
+          SELECT 1
+            FROM predrawn_background_versions retained
+           WHERE retained.blob_sha256 = blob.sha256
+        )`,
+    [quotaSeedBlobSha256s],
+  );
 
   // Official working copies use the same CAS contract, but only admins may
   // resolve or mutate them; the promoted workspace remains globally readable.

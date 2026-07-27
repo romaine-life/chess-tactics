@@ -984,4 +984,26 @@ test('full smoke repairs final attempt topology around retained later-feature ro
     /operation = operation - 'untouched'[\s\S]*invalidWarpedParentSave[\s\S]*predrawn_background_contract_mismatch/,
     'the raw-ancestor proof must corrupt a required field that its verified legacy sidecar cannot supply',
   );
+
+  const invalidAncestorPublish = sourceSection(
+    smokeSource,
+    'const anonymousAfterWholeUserPut = await get(',
+    '\n  const publishedUserMap = await request(',
+  );
+  assert.match(
+    invalidAncestorPublish,
+    /operation = operation - 'untouched'[\s\S]*invalidWarpedParentPublish[\s\S]*operation = operation \|\| '\{"untouched":true\}'::jsonb[\s\S]*predrawn_background_contract_mismatch/,
+    'the Publish proof must reject and restore a genuinely corrupted raw ancestor',
+  );
+
+  const ownerQuotaFixture = sourceSection(
+    smokeSource,
+    '// Operational bounds are part of the permanent version-store contract.',
+    '\n  // Official working copies use the same CAS contract',
+  );
+  assert.match(
+    ownerQuotaFixture,
+    /background_version_owner_blob_quota_exceeded[\s\S]*DELETE FROM predrawn_background_versions[\s\S]*label LIKE 'Quota seed %'[\s\S]*DELETE FROM media_blobs/,
+    'the synthetic owner-quota rows and Blob metadata must be removed before unrelated owner uploads',
+  );
 });
