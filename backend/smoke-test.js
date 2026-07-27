@@ -6522,7 +6522,7 @@ async function main() {
     [newDocumentId],
   );
   const sourceAttemptAfterReuse = await queryDb(
-    `SELECT status, generated_version_id, warped_version_id, occlusion_version_id
+    `SELECT status, row_revision, generated_version_id, warped_version_id, occlusion_version_id
        FROM predrawn_generation_attempts
       WHERE document_id = $1 AND id = $2`,
     [newDocumentId, historicalSourceAttemptId],
@@ -6580,6 +6580,30 @@ async function main() {
     || JSON.parse(archivedPipelineReuse.body).attempt?.status !== 'archived'
   ) {
     throw new Error(`Pipeline-source child attempt archive failed: ${archivedPipelineReuse.statusCode} ${archivedPipelineReuse.body}`);
+  }
+  const archiveRawWhileHistoricalSourceActive = await request(
+    'POST',
+    `/api/editor-documents/${newDocumentId}/background-versions/${rawBackground.id}/archive`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', { expected_revision: 1 })),
+  );
+  if (
+    archiveRawWhileHistoricalSourceActive.statusCode !== 409
+    || JSON.parse(archiveRawWhileHistoricalSourceActive.body).error
+      !== 'background_version_attempt_in_use'
+  ) {
+    throw new Error(`Historical source attempt did not retain its raw-artwork guard: ${archiveRawWhileHistoricalSourceActive.statusCode} ${archiveRawWhileHistoricalSourceActive.body}`);
+  }
+  const archivedHistoricalSource = await archiveGenerationAttemptRequest(
+    newDocumentId,
+    historicalSourceAttemptId,
+    Number(sourceAttemptAfterReuse.rows[0]?.row_revision),
+  );
+  if (
+    archivedHistoricalSource.statusCode !== 200
+    || JSON.parse(archivedHistoricalSource.body).attempt?.status !== 'archived'
+  ) {
+    throw new Error(`Historical source attempt archive failed: ${archivedHistoricalSource.statusCode} ${archivedHistoricalSource.body}`);
   }
   await queryDb(
     `UPDATE predrawn_generation_attempts
@@ -7066,14 +7090,12 @@ async function main() {
       !== selectedMask.attempt.row_revision + 1
     || archivedAttemptReplay.statusCode !== 200
     || JSON.parse(archivedAttemptReplay.body).idempotent_replay !== true
-    || JSON.parse(activeAttemptsAfterArchive.body).attempts?.some(
-      (attempt) => attempt.id === generationAttempt.id,
-    )
+    || JSON.parse(activeAttemptsAfterArchive.body).attempts?.length !== 0
     || !JSON.parse(archivedAttemptsAfterArchive.body).attempts?.some(
       (attempt) => attempt.id === generationAttempt.id,
     )
     || generationAttemptEvents.rows.map((event) => event.action).join(',')
-      !== 'created,stage-attached,stage-attached,stage-discarded,stage-attached,stage-attached,archived'
+      !== 'move-highlight-profile-updated,stage-attached,archived'
     || generationAttemptEvents.rows.some((event) => (
       event.actor_email !== 'player@example.com' || event.actor_name !== 'Tactics Player'
     ))

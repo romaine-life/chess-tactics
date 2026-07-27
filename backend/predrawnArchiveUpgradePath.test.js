@@ -916,6 +916,22 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
 });
 
 test('full smoke repairs final attempt topology around retained later-feature rows', () => {
+  const historicalReuseLifecycle = sourceSection(
+    smokeSource,
+    'const historicalSourceAttemptId = crypto.randomUUID();',
+    '\n  // Required-schema repair runs against retained current data',
+  );
+  assert.match(
+    historicalReuseLifecycle,
+    /archiveRawWhileHistoricalSourceActive[\s\S]*background_version_attempt_in_use/,
+    'archiving the processing child must leave its independent historical source guard active',
+  );
+  assert.match(
+    historicalReuseLifecycle,
+    /archiveGenerationAttemptRequest\(\s*newDocumentId,\s*historicalSourceAttemptId[\s\S]*archivedHistoricalSource\.statusCode\s*!==\s*200/,
+    'the fixture must explicitly archive the independent historical source through the production endpoint',
+  );
+
   const retainedDataRepair = sourceSection(
     smokeSource,
     '// Required-schema repair runs against retained current data',
@@ -945,5 +961,16 @@ test('full smoke repairs final attempt topology around retained later-feature ro
     retainedDataRepair,
     /retainedMoveHighlightEvent[\s\S]*count\)\s*!==\s*1/,
     'the repaired schema must retain the move-highlight audit event',
+  );
+
+  const postRepairArchive = sourceSection(
+    smokeSource,
+    'const archiveSourceWhileActive = await request(',
+    '\n  const mismatchedSelectionLevel = {',
+  );
+  assert.match(
+    postRepairArchive,
+    /move-highlight-profile-updated,stage-attached,archived/,
+    'the final archive proof must verify the audit events retained after the deliberate relation rebuild',
   );
 });
