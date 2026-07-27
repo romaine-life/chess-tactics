@@ -1006,4 +1006,15 @@ test('full smoke repairs final attempt topology around retained later-feature ro
     /background_version_owner_blob_quota_exceeded[\s\S]*DELETE FROM predrawn_background_versions[\s\S]*label LIKE 'Quota seed %'[\s\S]*DELETE FROM media_blobs/,
     'the synthetic owner-quota rows and Blob metadata must be removed before unrelated owner uploads',
   );
+
+  const directLegacyChain = sourceSection(
+    smokeSource,
+    'const directV2WarpCreate = await createBackgroundVersionRequest(',
+    '\n  const coverChangedBoardCode = boardCodeWith(',
+  );
+  assert.match(
+    directLegacyChain,
+    /move-highlight-profile[\s\S]*expected_warped_version_id:\s*directLegacyWarpReady\.id[\s\S]*directV2OcclusionCreate/,
+    'the direct legacy-chain smoke must fit its warped cyan profile before creating occlusion',
+  );
 });

@@ -8281,12 +8281,25 @@ async function main() {
     },
     idempotency_key: `background-legacy-v1-direct-warp:${legacyDocumentId}`,
   });
-  const directV2WarpDraft = JSON.parse(directV2WarpCreate.body).version;
+  const directV2WarpCreateBody = JSON.parse(directV2WarpCreate.body);
+  const directV2WarpDraft = directV2WarpCreateBody.version;
   const directV2WarpUpload = await uploadBackgroundVersionRequest(
     legacyDocumentId,
     directV2WarpDraft.id,
     directV2WarpDraft.row_revision,
     warpedPng,
+  );
+  const directLegacyWarpReady = JSON.parse(directV2WarpUpload.body).version;
+  const directMoveHighlightFit = await request(
+    'PUT',
+    `/api/editor-documents/${legacyDocumentId}/generation-attempts/${directLegacyAttemptFixture.attemptId}/move-highlight-profile`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(legacyDocumentId, 'better-auth.session=abc', {
+      expected_revision: directV2WarpCreateBody.attempt.row_revision,
+      expected_warped_version_id: directLegacyWarpReady.id,
+      cells: {},
+    })),
+    5000,
   );
   const directBindingAfterCreate = await queryDb(
     `SELECT legacy_environment_geometry_sha256, environment_geometry_sha256
@@ -8294,7 +8307,6 @@ async function main() {
       WHERE version_id = $1`,
     [directLegacyRawReady.id],
   );
-  const directLegacyWarpReady = JSON.parse(directV2WarpUpload.body).version;
   await queryDb(
     `UPDATE predrawn_background_versions
         SET operation = jsonb_set(
@@ -8350,12 +8362,15 @@ async function main() {
     || directV2WarpUpload.statusCode !== 200
     || directBindingAfterCreate.rows[0]?.legacy_environment_geometry_sha256 !== legacyGeometryV1
     || directBindingAfterCreate.rows[0]?.environment_geometry_sha256 !== legacyGeometryV2
+    || directMoveHighlightFit.statusCode !== 200
+    || JSON.parse(directMoveHighlightFit.body).attempt?.move_highlight_profile_warped_version_id
+      !== directLegacyWarpReady.id
     || directWarpBindingBeforeOcclusion.rows.length !== 0
     || directV2OcclusionCreate.statusCode !== 201
     || directWarpBindingAfterOcclusion.rows[0]?.legacy_environment_geometry_sha256 !== legacyGeometryV1
     || directWarpBindingAfterOcclusion.rows[0]?.environment_geometry_sha256 !== legacyGeometryV2
   ) {
-    throw new Error(`Direct v2 operation could not bind its immutable v1 source: ${directLegacyRawCreate.statusCode} ${directLegacyRawCreate.body} / ${directLegacyRawUpload.statusCode} ${directLegacyRawUpload.body} / ${JSON.stringify(directBindingBeforeCreate.rows)} / ${directV2WarpCreate.statusCode} ${directV2WarpCreate.body} / ${directV2WarpUpload.statusCode} ${directV2WarpUpload.body} / ${JSON.stringify(directBindingAfterCreate.rows)} / ${JSON.stringify(directWarpBindingBeforeOcclusion.rows)} / ${directV2OcclusionCreate.statusCode} ${directV2OcclusionCreate.body} / ${JSON.stringify(directWarpBindingAfterOcclusion.rows)}`);
+    throw new Error(`Direct v2 operation could not bind its immutable v1 source: ${directLegacyRawCreate.statusCode} ${directLegacyRawCreate.body} / ${directLegacyRawUpload.statusCode} ${directLegacyRawUpload.body} / ${JSON.stringify(directBindingBeforeCreate.rows)} / ${directV2WarpCreate.statusCode} ${directV2WarpCreate.body} / ${directV2WarpUpload.statusCode} ${directV2WarpUpload.body} / ${directMoveHighlightFit.statusCode} ${directMoveHighlightFit.body} / ${JSON.stringify(directBindingAfterCreate.rows)} / ${JSON.stringify(directWarpBindingBeforeOcclusion.rows)} / ${directV2OcclusionCreate.statusCode} ${directV2OcclusionCreate.body} / ${JSON.stringify(directWarpBindingAfterOcclusion.rows)}`);
   }
   const coverChangedBoardCode = boardCodeWith(legacySelectedBoardCode, {
     cover: { ...initialLegacyCover, '1,1': 'sparse' },
