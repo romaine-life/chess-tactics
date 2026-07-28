@@ -16,6 +16,8 @@ describe('professional loading architecture guards', () => {
     expect(director).toContain("ScenePhase = 'current' | 'exiting' | 'loading' | 'entering' | 'error'");
     expect(boundary).toContain("manifest.paintOwner === 'dom'");
     expect(boundary).toContain('participantsRef.current.get(manifest.paintOwner)');
+    expect(app).toContain("manifest.background === 'homepage'");
+    expect(read('./style.css')).toContain('.scene-director.is-entering .scene-homepage-background.is-destination');
   });
 
   it('enrolls standalone Studio routes in the Studio scene owner', () => {
@@ -25,12 +27,30 @@ describe('professional loading architecture guards', () => {
     expect(read('./ui/DrawableCatalogLab.tsx')).toContain("useSceneParticipant(\n    'studio'");
   });
 
+  it('keeps asynchronous deep-linked Studio viewers inside the scene gate', () => {
+    const gameLab = read('./ui/GameLab.tsx');
+    const gym = read('./ui/Gym.tsx');
+    const solver = read('./ui/SolveRuns.tsx');
+    expect(gameLab).toContain("'studio:gamelab-viewer'");
+    expect(gameLab).toContain('campaignsSettled && savedRuns !== null && signedIn !== null');
+    expect(gameLab).toContain('savedRuns !== null && signedIn !== null');
+    expect(gym).toContain("'studio:gym-viewer'");
+    expect(gym).toContain('campaignsSettled && (!level ||');
+    expect(gym).toContain('booksSettledFor === level.id && ready');
+    expect(gym).toContain('worker.onerror');
+    expect(solver).toContain("'studio:solver-runs'");
+    expect(solver).toContain("'studio:solver-viewer'");
+    expect(solver).toContain('initialSettled ?');
+  });
+
   it('gives every retry and retarget a fresh cancellable scene generation', () => {
     const app = read('./ui/App.tsx');
     const director = read('./ui/shell/sceneDirector.ts');
     expect(app).toContain('key={scene.generation}');
     expect(director).toContain('generation: state.generation + 1');
     expect(director).toContain('if (action.generation !== state.generation) return state');
+    expect(app).toContain("'scene-cancelled'");
+    expect(app).toContain("'scene-retry'");
   });
 
   it('does not let menu, screen, or board readiness expire into success', () => {
@@ -110,7 +130,17 @@ describe('professional loading architecture guards', () => {
     expect(boundary).toContain("inert={phase !== 'painted' ? true : undefined}");
     expect(read('../scripts/shot.mjs')).toContain('surface exposed a partial or interactive frame');
     expect(read('../scripts/shot.mjs')).toContain("request.url().includes(String(abortRequest))");
+    expect(read('../scripts/shot.mjs')).toContain('isManagedApp || readyExpr');
     expect(read('./net/campaignWorkspace.ts')).not.toContain('AbortSignal.timeout');
+  });
+
+  it('attributes every same-origin API and runtime resource to the active scene', () => {
+    const timeline = read('./diagnostics/loadingTimeline.ts');
+    const lab = read('./ui/LoadingLab.tsx');
+    expect(timeline).toContain("url.pathname.startsWith('/api/')");
+    expect(timeline).toContain('surface: `network:${owningScene}`');
+    expect(lab).toContain('<span>cancellations</span>');
+    expect(lab).toContain('<span>retries</span>');
   });
 
   it('does not expose gameplay HUD chrome before the board surface is ready', () => {

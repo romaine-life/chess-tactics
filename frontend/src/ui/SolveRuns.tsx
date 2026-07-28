@@ -22,6 +22,7 @@ import {
   type SolveRunSummary, type SolveRunDoc,
 } from '../net/solveRuns';
 import { SolverStepper, type SolverTab } from './solver/SolverStepper';
+import { useSceneParticipant } from './shell/SceneBoundary';
 
 const shortId = (id: string): string => id.slice(0, 8);
 const fmtTime = (iso: string): string => { try { return new Date(iso).toLocaleTimeString(); } catch { return iso; } };
@@ -103,6 +104,13 @@ export function SolveRuns({ level }: { level?: Level }): ReactElement {
   const [detail, setDetail] = useState<SolveRunDoc | null>(null);
   const [launching, setLaunching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [initialSettled, setInitialSettled] = useState(false);
+  const initialError = initialSettled && error ? new Error(error) : null;
+  useSceneParticipant(
+    'studio:solver-runs',
+    initialError ? 'error' : initialSettled ? 'painted' : 'loading',
+    initialError,
+  );
 
   // The instant feasibility read for the selected level (pure, cheap — recomputed on level
   // change), shown before launch and used to prefill the run's mode.
@@ -118,7 +126,7 @@ export function SolveRuns({ level }: { level?: Level }): ReactElement {
 
   // Poll the run list every 8s (statuses advance as Jobs run on the cluster).
   useEffect(() => {
-    void refresh();
+    void refresh().finally(() => setInitialSettled(true));
     const t = window.setInterval(() => void refresh(), 8000);
     return () => window.clearInterval(t);
   }, [refresh]);
@@ -317,8 +325,28 @@ export function SolveViewer({ levelId, header, tab, onTabChange }: {
   onTabChange?: (tab: SolverTab) => void;
 }): ReactElement {
   const workspaceLevels = useCampaigns((s) => s.levels);
-  useEffect(() => { void ensureCampaignsHydrated(); }, []);
+  const [campaignsSettled, setCampaignsSettled] = useState(false);
+  const [campaignLoadError, setCampaignLoadError] = useState<Error | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void ensureCampaignsHydrated()
+      .then(() => { if (!cancelled) setCampaignsSettled(true); })
+      .catch((value: unknown) => {
+        if (!cancelled) setCampaignLoadError(value instanceof Error ? value : new Error(String(value)));
+      });
+    return () => { cancelled = true; };
+  }, []);
   const level = levelId ? workspaceLevels[levelId] : undefined;
+  const routeError = useMemo(
+    () => campaignLoadError
+      ?? (campaignsSettled && levelId && !level ? new Error(`Selected Solver level ${levelId} is unavailable`) : null),
+    [campaignLoadError, campaignsSettled, level, levelId],
+  );
+  useSceneParticipant(
+    'studio:solver-viewer',
+    routeError ? 'error' : campaignsSettled ? 'painted' : 'loading',
+    routeError,
+  );
   const [localTab, setLocalTab] = useState<SolverTab>('step');
   return (
     <SolverStepper

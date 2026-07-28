@@ -363,8 +363,11 @@ try {
   // is exiting/loading/entering would strand a partial composition, so explicit captures
   // fail closed until the director reports a terminal complete scene or an
   // explicitly requested coherent error scene.
+  const isManagedApp = await page.evaluate(() => Array.from(
+    document.querySelectorAll('script[type="module"][src]'),
+  ).some((script) => (script.getAttribute('src') || '').includes('/src/main.tsx')));
   const requiresTerminalScene = Boolean(
-    readyExpr || assertMenuAtomic || assertBoardAtomic || assertShellFontAtomic
+    isManagedApp || readyExpr || assertMenuAtomic || assertBoardAtomic || assertShellFontAtomic
     || assertSurfaceAtomic || assertBackdropContinuity,
   );
   const waitForSettledScene = page.waitForFunction(

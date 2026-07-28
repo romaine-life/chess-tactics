@@ -29,6 +29,8 @@ export function LoadingLab({ header }: { header?: ReactNode }): ReactElement {
   const transferBytes = resourceEvents.reduce((sum, event) => sum + Number(event.detail?.transferBytes ?? 0), 0);
   const cacheHits = resourceEvents.filter((event) => event.detail?.cacheHit).length;
   const errors = events.filter((event) => event.kind === 'error').length;
+  const cancellations = events.filter((event) => event.phase === 'scene-cancelled').length;
+  const retries = events.filter((event) => event.phase === 'scene-retry').length;
   const activeSceneEvent = [...events].reverse().find((event) => event.phase.startsWith('scene-'));
   const activeScene = activeSceneEvent?.surface ?? 'none';
   const declaredCritical = [...new Set(events
@@ -53,11 +55,13 @@ export function LoadingLab({ header }: { header?: ReactNode }): ReactElement {
           <div><strong>{resourceEvents.length}</strong><span>requests</span></div>
           <div><strong>{fmtBytes(transferBytes)}</strong><span>transferred</span></div>
           <div><strong>{cacheHits}</strong><span>cache hits</span></div>
+          <div><strong>{cancellations}</strong><span>cancellations</span></div>
+          <div><strong>{retries}</strong><span>retries</span></div>
           <div className={errors ? 'is-error' : ''}><strong>{errors}</strong><span>errors</span></div>
         </div>
         <div className="loading-lab-scene-contract">
           <div><span>Active scene</span><strong>{activeScene}</strong></div>
-          <div><span>Lifecycle</span><strong>{activeSceneEvent?.phase.replace('scene-', '') ?? 'unobserved'}</strong></div>
+          <div><span>Lifecycle</span><strong>{activeSceneEvent?.phase.replace('scene-', '') ?? 'unobserved'}</strong><small>generation {String(activeSceneEvent?.detail?.generation ?? activeSceneEvent?.detail?.retryGeneration ?? '—')}</small></div>
           <div><span>Critical manifest</span><strong>{declaredCritical.length}</strong><small>{declaredCritical.join(' · ') || 'cold/current scene'}</small></div>
           <div className={unresolved.length ? 'is-pending' : ''}><span>Unresolved participants</span><strong>{unresolved.length}</strong><small>{unresolved.map(([id, phase]) => `${id}: ${phase}`).join(' · ') || 'none'}</small></div>
         </div>

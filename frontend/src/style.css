@@ -9420,6 +9420,17 @@ body { font-size: 17px; }
   transition: opacity var(--ds-duration-fade) var(--ds-ease-standard);
 }
 .scene-homepage-background.is-startup-pending { opacity: 0; }
+.scene-homepage-background.is-destination {
+  z-index: 2;
+}
+.scene-director.is-exiting .scene-homepage-background.is-destination,
+.scene-director.is-loading .scene-homepage-background.is-destination,
+.scene-director.is-error .scene-homepage-background.is-destination {
+  opacity: 0;
+}
+.scene-director.is-entering .scene-homepage-background.is-destination {
+  opacity: 1;
+}
 .scene-director.is-exiting .scene-boundary,
 .scene-director.is-exiting .app-shell-titlebar {
   opacity: 0;

@@ -107,6 +107,13 @@ export function App(): ReactElement {
         setSearch(nextSearch);
         return;
       }
+      const superseded = sceneRef.current.destination;
+      if (superseded && sceneRef.current.phase !== 'current') {
+        loadingMark(superseded.id, 'scene-cancelled', {
+          generation: sceneRef.current.generation,
+          replacement: destination.id,
+        });
+      }
       loadingMark(destination.id, 'scene-navigation-accepted', {
         background: destination.background,
         criticalCount: destination.critical.length,
@@ -190,6 +197,15 @@ export function App(): ReactElement {
   const destinationFailed = useCallback((generation: number, error: Error): void => {
     dispatchScene({ type: 'failed', generation, error });
   }, []);
+  const retryScene = useCallback((): void => {
+    const failed = sceneRef.current;
+    const destination = failed.destination ?? failed.current;
+    loadingMark(destination.id, 'scene-retry', {
+      failedGeneration: failed.generation,
+      retryGeneration: failed.generation + 1,
+    });
+    dispatchScene({ type: 'retry' });
+  }, []);
   useEffect(() => {
     if (scene.phase !== 'entering') return undefined;
     const generation = scene.generation;
@@ -205,6 +221,9 @@ export function App(): ReactElement {
   const manifest = scene.destination ?? scene.current;
   const transitioning = scene.phase !== 'current';
   const retainedBackground = scene.current.background;
+  const homepageIsDestination = transitioning
+    && retainedBackground !== 'homepage'
+    && manifest.background === 'homepage';
 
   return (
     <>
@@ -221,7 +240,10 @@ export function App(): ReactElement {
             aria-hidden="true"
           />
         ) : null}
-        <div className={`scene-homepage-background${reveal.has('bg') ? '' : ' is-startup-pending'}`} aria-hidden="true">
+        <div
+          className={`scene-homepage-background${reveal.has('bg') ? '' : ' is-startup-pending'}${homepageIsDestination ? ' is-destination' : ''}`}
+          aria-hidden="true"
+        >
           <HomepageBackdrop directorHostOnly />
         </div>
         <SceneBoundary
@@ -247,7 +269,7 @@ export function App(): ReactElement {
               <>
                 <strong>This scene could not be loaded.</strong>
                 <small>{sceneFailureCopy(scene.error)}</small>
-                <button type="button" onClick={() => dispatchScene({ type: 'retry' })}>Retry</button>
+                <button type="button" onClick={retryScene}>Retry</button>
               </>
             ) : <span>Loading…</span>}
           </div>

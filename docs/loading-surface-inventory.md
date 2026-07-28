@@ -12,12 +12,12 @@ interactive or partial first-frame content.
 | --- | --- | --- |
 | Startup | Database media/drawable/unit/seat authorities, installed chrome, and the final layout font settle before App mounts. Startup alone reveals background, beat, title, beat, controls. | Enrolled |
 | Navigation | One reducer owns generation, cancellation, exit, load, paint, entrance, retry, and current state. Duplicate destination intents are idempotent. | Enrolled |
-| Background | The outgoing background remains painted until the complete incoming scene enters over it. | Enrolled |
+| Background | The outgoing background remains painted until the complete incoming scene enters over it. Homepage destinations are raised above retained battlefield/tool backgrounds so both transition directions use destination-over-source layering. | Enrolled |
 | Title bar | One structural title bar belongs to the scene. Typed contributions portal into scene-local targets without mutating the director during ref commits. | Enrolled |
 | DOM scenes | `SceneBoundary` inventories first-viewport `<img>` and CSS image consumers, decodes them through the shared cache, and waits two paint opportunities. | Enrolled |
 | Canvas scenes | Terrain, barriers, scene art, gameplay HUD, and Level Editor canvases publish actual compositor acknowledgement. | Enrolled |
 | Failure | Critical failure becomes one coherent director retry surface. An unexpected React failure becomes one root retry surface, never an empty root. | Enrolled |
-| Diagnostics | Loading Lab records scene phases, manifest tiers, participants, resource sizes/cache provenance, acknowledgement, cancellation, and errors. | Enrolled |
+| Diagnostics | Loading Lab records scene phases/generations, manifest tiers, participants, all same-origin API/runtime resources with owning-scene attribution, sizes/cache provenance, acknowledgement, cancellation, retry, and errors. | Enrolled |
 | Global catalog payload | Startup still hydrates complete database-owned media and drawable projections because render modules derive installed inventories at import time. | Correct but over-broad; performance reduction remains |
 
 ## Route-family inventory
@@ -30,7 +30,7 @@ interactive or partial first-frame content.
 | `/editor`, campaign aliases | `campaign-editor`: official/private campaign authority and visible draft cards | Enrolled |
 | `/editor/level` and aliases | `level-editor`: durable document, terrain/scene compositor frames, visible editor chrome and palette viewport | Enrolled |
 | `/lobbies/*` | `lobbies`, plus nested visible picker: identity, first lobby list, visible controls and thumbnails | Enrolled |
-| `/studio*` and tool aliases | `studio`: tool chrome, selected viewer, visible catalog slice; below-fold catalog is opportunistic | Enrolled |
+| `/studio*` and tool aliases | `studio`: tool chrome, selected viewer, visible catalog slice; data-backed deep links additionally wait for campaign/account/run authorities and worker readiness; below-fold catalog is opportunistic | Enrolled |
 | `/predrawn-reference` | `predrawn-reference`: selected artwork/capture frame and tool chrome | Enrolled |
 | `/portrait-editor` | `portrait-editor`: selected artwork/canvas and tool chrome | Enrolled |
 | `/settings/*`, `/party` | Explicit DOM manifest with stable local controls; user-requested secondary fetches remain progressive inside the complete scene | Enrolled |

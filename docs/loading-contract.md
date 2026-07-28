@@ -26,8 +26,12 @@ Only `painted` can satisfy surface readiness. A timeout is `degraded`, not `pain
 
 All loading phases use the shared `loadingTimeline` primitive and the browser's monotonic
 performance clock. Network observations include transfer and decoded sizes, cache-hit
-evidence, initiator, protocol, and duration. Manual lifecycle marks name a stable surface
-and phase. The Loading Lab in Studio is the canonical inspection and JSON-export surface.
+evidence, initiator, protocol, duration, and the scene that owned the request at its
+start time. Every same-origin API request and runtime asset/font/code resource is
+eligible evidence; the Lab never labels a request count that silently excludes data
+authorities. Manual lifecycle marks name a stable surface and phase, including
+superseded-generation cancellation and retry generation. The Loading Lab in Studio is
+the canonical inspection and JSON-export surface.
 
 The required representative traces are cold and warm versions of:
 
@@ -91,6 +95,10 @@ route lifecycle during the same React commit.
   critical resource is an error, never synthetic readiness.
 - Every route family resolves through `sceneManifest`; unmatched routes explicitly
   inherit the main-menu scene rather than escaping enrollment.
+- Data-backed Studio viewers enroll their own initial authorities. Game Lab waits for
+  campaign hydration plus account/run metadata; Gym waits for campaign hydration,
+  opening-book authority, and worker readiness; the Solver waits for campaign hydration
+  and, on its Run tab, the initial server run list.
 - Campaign Editor waits for official/private hydration and visible recent drafts.
   Level Editor waits for its durable document, both board compositors, scene canvas,
   visible chrome, and the first palette viewport. Lobbies wait for identity, the
@@ -103,7 +111,11 @@ route lifecycle during the same React commit.
   proximity, and only the first viewport participates in the selector frame; below-fold
   cards retain fixed geometry and remain opportunistic.
 - Loading Lab shows the active scene lifecycle, manifest tiers, participants, resource
-  timings, cache evidence, failures, and painted acknowledgement.
+  timings, cache evidence, cancellations, retries, failures, generation identity, and
+  painted acknowledgement.
+- Canonical application captures fail closed until the director reaches `current` or a
+  deliberately allowed coherent `error` state. A plain screenshot can no longer turn a
+  still-loading frame into completion evidence.
 
 The next architectural reduction is a bounded shell/level manifest so complete global
 catalog projections no longer block every route. That optimization may reduce latency but
