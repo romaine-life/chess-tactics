@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:19107a5f96b45faacbc4abe6f90e1f0fb98263106e99aa5c1573f7a453053f52"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:f68d372c1b2ff88f1a46e9c5c1337d8f5a7151b9d4e9ac3dd731e88e503a83d9"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Add promotion zone control to play HUD"
-  prNumber: "523"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/523"
-  commit: "1acb1f17"
+  prTitle: "Unify board framing across previews and play"
+  prNumber: "524"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/524"
+  commit: "7ec0a0a7"
 
 name: chess-tactics
 namespace: chess-tactics
