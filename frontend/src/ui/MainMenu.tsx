@@ -1,4 +1,4 @@
-import { lazy, useEffect, useSyncExternalStore, type ReactElement } from 'react';
+import { lazy, useEffect, type ReactElement } from 'react';
 import { HomepageBackdrop } from './HomepageBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { loadingMark, loadingMeasure } from '../diagnostics/loadingTimeline';
@@ -15,7 +15,7 @@ import { loadDecodedImage } from '../render/imageResources';
 // keeps the destination unrevealed while its shared Suspense boundary resolves.
 const CampaignEditor = lazy(() => import('./CampaignEditor').then((m) => ({ default: m.CampaignEditor })));
 import { drawableAssets, requiredDrawableRole } from '@chess-tactics/board-render';
-import { getSnapshot, markFailed, markReady, subscribe } from './shell/startupScene';
+import { useStartupScene } from './shell/startupScene';
 import { installedUiMedia } from './installedUiMedia';
 
 const BRAND_SHIELD = () => installedUiMedia('ui-kit-icons-brand-shield-png');
@@ -104,8 +104,9 @@ export function MainMenu({ path = '/' }: { path?: string } = {}): ReactElement {
   // (see shell/startupScene). Here MainMenu just reports readiness for the title's brand
   // mark and the buttons' art (icons + stone surface) and gates the background + button
   // layers off the director's stage; the director owns the sequence and the background
-  // probe. On any non-cold load the store is already fully revealed, so this is inert.
-  const reveal = useSyncExternalStore(subscribe, getSnapshot);
+  // probe. On later/home-family navigation the director supplies an already-complete
+  // controller, so this transport does not introduce another reveal lifecycle.
+  const startup = useStartupScene();
   useEffect(() => {
     const shell = document.querySelector('.shell');
     shell?.classList.add('main-menu-active');
@@ -117,31 +118,25 @@ export function MainMenu({ path = '/' }: { path?: string } = {}): ReactElement {
     loadingMark('menu', 'critical-art-decode-start');
     // Title: the brand shield + the wooden bar surface, so the bar reveals whole.
     void Promise.all([BRAND_SHIELD(), TITLE_SURFACE()].map(loadDecodedImage)).then(() => {
-      markReady('title');
+      startup.reportReady('title');
       loadingMeasure('menu', 'title-art-decoded', startedAt);
-    }).catch(markFailed);
+    }).catch(startup.reportFailed);
     // Buttons: the carved icons + the heaviest stone rail surface.
     const buttonArt = [SETTINGS_ICON(), STONE_SURFACE(), ...MENU_TABS.map((tab) => tab.icon)];
     void Promise.all(buttonArt.map(loadDecodedImage)).then(() => {
-      markReady('buttons');
+      startup.reportReady('controls');
       requestAnimationFrame(() => loadingMeasure('menu', 'button-art-first-painted-frame', startedAt, { assetCount: buttonArt.length }));
-    }).catch(markFailed);
-  }, []);
+    }).catch(startup.reportFailed);
+  }, [startup.generation, startup.reportFailed, startup.reportReady]);
 
   return (
     <div
       className="menu-layer main-menu-layer"
       data-testid="main-menu-next"
-      data-reveal-bg={reveal.has('bg') ? '' : undefined}
-      data-reveal-buttons={reveal.has('buttons') ? '' : undefined}
+      data-reveal-bg={startup.revealed('background') ? '' : undefined}
+      data-reveal-buttons={startup.revealed('controls') ? '' : undefined}
     >
       <HomepageBackdrop />
-      {reveal.error ? (
-        <div className="menu-load-error" role="alert">
-          <strong>Menu artwork could not be loaded.</strong>
-          <button type="button" onClick={() => window.location.reload()}>Retry</button>
-        </div>
-      ) : null}
       {/* Settings-twin layout (ADR-0003 superseded): shared app title bar + a rail of
           mode tabs + a framed feature panel — the same baked-skin chrome as /settings.
           The rail is placed by the shared .settings-shell rule alone (ADR-0062) — no

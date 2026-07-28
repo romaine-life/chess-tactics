@@ -13,7 +13,9 @@ describe('professional loading architecture guards', () => {
     expect(app).toContain('sceneManifest(initialPath)');
     expect(app).toContain('<Suspense fallback={null}>');
     expect(app).not.toMatch(/route-veil|screen-exit|screen-enter|useScreenEntrance|screenExit/);
-    expect(director).toContain("ScenePhase = 'current' | 'exiting' | 'loading' | 'entering' | 'error'");
+    expect(director).toContain("ScenePhase = 'startup' | 'current' | 'exiting' | 'loading' | 'entering' | 'error'");
+    expect(director).toContain("type: 'startup-reveal'");
+    expect(app).toContain('<StartupSceneContext.Provider');
     expect(boundary).toContain("manifest.paintOwner === 'dom'");
     expect(boundary).toContain('participantsRef.current.get(manifest.paintOwner)');
     expect(app).toContain("manifest.background === 'homepage'");
@@ -54,9 +56,11 @@ describe('professional loading architecture guards', () => {
   });
 
   it('does not let menu, screen, or board readiness expire into success', () => {
+    const app = read('./ui/App.tsx');
     const coldReveal = read('./ui/shell/startupScene.ts');
     expect(coldReveal).not.toContain('FAILSAFE_MS');
-    expect(coldReveal).toContain('This timer sequences already-ready painted stages');
+    expect(app).toContain('if (!scene.startupReady.includes(nextLayer)) return undefined');
+    expect(app).toContain('SCENE_FADE_MS + STARTUP_STAGE_BEAT_MS');
     expect(read('./render/boardArtReady.ts')).not.toMatch(/FAILSAFE_MS|setTimeout/);
   });
 
@@ -103,18 +107,21 @@ describe('professional loading architecture guards', () => {
 
   it('gates and prioritizes the exact homepage scene consumed by the DOM', () => {
     const entry = read('./main.tsx');
-    const reveal = read('./ui/shell/startupScene.ts');
+    const reveal = read('./ui/App.tsx');
     const scene = read('./ui/SceneBackdrop.tsx');
     const sceneMedia = read('./ui/homepageSceneMedia.ts');
     const style = read('./style.css');
     expect(entry).toContain('homepageSceneMedia()');
     expect(reveal).toContain('homepageSceneMedia().immutableUrl');
     expect(scene).toContain('canvas.style.backgroundImage = `url("${homepageSceneMedia().immutableUrl}")`');
+    expect(scene).toContain('export async function repaintHomepageScene');
+    expect(reveal).toContain('.then(() => repaintHomepageScene(backgroundUrl))');
     expect(sceneMedia).toContain("requiredDrawableRole('animated-scene', 'homepage-scene')");
     expect(entry).toContain("from './ui/homepageSceneMedia'");
     expect(entry).not.toContain("from './ui/SceneBackdrop'");
     expect(reveal).not.toContain('ui-main-menu-background-scene-v1-avif');
     expect(read('../scripts/shot.mjs')).toContain('criticalImages.every((img) => img.complete && img.naturalWidth > 0)');
+    expect(read('../scripts/shot.mjs')).toContain('directorCurrent && count !== 3');
     expect(read('../scripts/shot.mjs')).toContain('homepage backdrop continuity failed');
     expect(style).toMatch(/\.settings-art-route\s*\{[^}]*background:\s*transparent/);
   });

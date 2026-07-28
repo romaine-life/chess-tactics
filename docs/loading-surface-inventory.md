@@ -10,7 +10,7 @@ interactive or partial first-frame content.
 
 | Surface | Authority and first-frame rule | Status |
 | --- | --- | --- |
-| Startup | Database media/drawable/unit/seat authorities, installed chrome, and the final layout font settle before App mounts. Startup alone reveals background, beat, title, beat, controls. | Enrolled |
+| Startup | Database media/drawable/unit/seat authorities, installed chrome, and the final layout font settle before App mounts. The SceneDirector then owns one explicit `startup` phase and reveals painted background, beat, title, beat, controls before it may report `current`; failure/retry uses the same generation authority. | Enrolled |
 | Navigation | One reducer owns generation, cancellation, exit, load, paint, entrance, retry, and current state. Duplicate destination intents are idempotent. | Enrolled |
 | Background | The outgoing background remains painted until the complete incoming scene enters over it. Homepage destinations are raised above retained battlefield/tool backgrounds so both transition directions use destination-over-source layering. | Enrolled |
 | Title bar | One structural title bar belongs to the scene. Typed contributions portal into scene-local targets without mutating the director during ref commits. | Enrolled |

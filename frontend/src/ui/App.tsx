@@ -8,11 +8,15 @@ import {
   useReducer,
   useRef,
   useState,
-  useSyncExternalStore,
   type ReactElement,
 } from 'react';
 import { MainMenu } from './MainMenu';
-import { getSnapshot as getRevealSnapshot, isMainMenuPath, subscribe as subscribeReveal } from './shell/startupScene';
+import {
+  StartupSceneContext,
+  isMainMenuPath,
+  type StartupLayer,
+  type StartupSceneController,
+} from './shell/startupScene';
 import { Party } from './Party';
 import { UpdateBanner } from './UpdateBanner';
 import { AppTitleBar } from './shell/AppTitleBar';
@@ -39,6 +43,9 @@ import { initialSceneState, reduceScene } from './shell/sceneDirector';
 import { sceneManifest } from './shell/sceneManifest';
 import { HomepageBackdrop } from './HomepageBackdrop';
 import { loadingMark } from '../diagnostics/loadingTimeline';
+import { homepageSceneMedia } from './homepageSceneMedia';
+import { loadDecodedImage } from '../render/imageResources';
+import { repaintHomepageScene } from './SceneBackdrop';
 
 const Skirmish = lazy(() => importSkirmish().then((module) => ({ default: module.Skirmish })));
 const TilesetStudio = lazy(() => importTilePreview().then((module) => ({ default: module.TilesetStudio })));
@@ -50,6 +57,8 @@ const DrawableCatalogLab = lazy(() => import('./DrawableCatalogLab').then((modul
 
 const SCENE_FADE_MS = 350;
 const SCENE_LOADING_MIN_MS = 350;
+const STARTUP_STAGE_BEAT_MS = 140;
+const STARTUP_LADDER: readonly StartupLayer[] = ['background', 'title', 'controls'];
 const sceneFailureCopy = (error: Error | null): string => (
   error?.message.includes('Canonical Play content')
     ? 'Play content could not be reached. Check your connection and try again.'
@@ -66,6 +75,7 @@ export function App(): ReactElement {
   const installedChromeCss = useInstalledChromeCss();
   const initialPath = normalizeRoutePath(window.location.pathname);
   const prepareInitialScene = !isMainMenuPath(initialPath);
+  const prepareStartup = isMainMenuPath(initialPath);
   const [path, setPath] = useState(initialPath);
   const [search, setSearch] = useState(window.location.search);
   const [scene, dispatchScene] = useReducer(
@@ -75,15 +85,91 @@ export function App(): ReactElement {
       manifest,
       prepareInitialScene,
       `${window.location.pathname}${window.location.search}`,
+      prepareStartup,
     ),
   );
   const sceneRef = useRef(scene);
   const loadingStartedAt = useRef(prepareInitialScene ? performance.now() : 0);
   const timers = useRef<number[]>([]);
-  const reveal = useSyncExternalStore(subscribeReveal, getRevealSnapshot);
+  const startupStageStartedAt = useRef(performance.now());
+  const previousStartupStage = useRef(scene.startupStage);
 
   useLayoutEffect(() => { sceneRef.current = scene; }, [scene]);
+  useLayoutEffect(() => {
+    if (previousStartupStage.current === scene.startupStage) return;
+    previousStartupStage.current = scene.startupStage;
+    startupStageStartedAt.current = performance.now();
+  }, [scene.startupStage]);
   useEffect(() => () => timers.current.forEach((timer) => window.clearTimeout(timer)), []);
+
+  const startupController = useMemo<StartupSceneController>(() => ({
+    active: scene.startupActive,
+    generation: scene.generation,
+    revealed: (layer) => !scene.startupActive || scene.startupStage >= STARTUP_LADDER.indexOf(layer),
+    reportReady: (layer) => dispatchScene({
+      type: 'startup-ready',
+      generation: scene.generation,
+      layer,
+    }),
+    reportFailed: (error) => dispatchScene({
+      type: 'startup-failed',
+      generation: scene.generation,
+      error: error instanceof Error ? error : new Error(String(error)),
+    }),
+  }), [
+    scene.generation,
+    scene.startupActive,
+    scene.startupStage,
+  ]);
+
+  useEffect(() => {
+    if (!scene.startupActive || scene.phase !== 'startup') return undefined;
+    const generation = scene.generation;
+    let cancelled = false;
+    const backgroundUrl = homepageSceneMedia().immutableUrl;
+    void loadDecodedImage(backgroundUrl)
+      .then(() => repaintHomepageScene(backgroundUrl))
+      .then(() => {
+        if (!cancelled) dispatchScene({ type: 'startup-ready', generation, layer: 'background' });
+      })
+      .catch((error) => {
+        if (!cancelled) dispatchScene({
+          type: 'startup-failed',
+          generation,
+          error: error instanceof Error ? error : new Error(String(error)),
+        });
+      });
+    return () => { cancelled = true; };
+  }, [scene.generation, scene.phase, scene.startupActive]);
+
+  useEffect(() => {
+    if (!scene.startupActive || scene.phase !== 'startup') return undefined;
+    const generation = scene.generation;
+    if (scene.startupStage >= STARTUP_LADDER.length - 1) {
+      const timer = window.setTimeout(
+        () => dispatchScene({ type: 'startup-finished', generation }),
+        SCENE_FADE_MS,
+      );
+      timers.current.push(timer);
+      return () => window.clearTimeout(timer);
+    }
+    const nextLayer = STARTUP_LADDER[scene.startupStage + 1];
+    if (!scene.startupReady.includes(nextLayer)) return undefined;
+    const minimumDelay = scene.startupStage < 0 ? 0 : SCENE_FADE_MS + STARTUP_STAGE_BEAT_MS;
+    const elapsed = performance.now() - startupStageStartedAt.current;
+    const timer = window.setTimeout(
+      () => dispatchScene({ type: 'startup-reveal', generation, layer: nextLayer }),
+      Math.max(0, minimumDelay - elapsed),
+    );
+    timers.current.push(timer);
+    return () => window.clearTimeout(timer);
+  }, [
+    scene.generation,
+    scene.phase,
+    scene.startupActive,
+    scene.startupReady,
+    scene.startupStage,
+  ]);
 
   useEffect(() => {
     const onNav = (event: Event): void => {
@@ -219,7 +305,7 @@ export function App(): ReactElement {
 
   const preparing = scene.phase === 'loading' || scene.phase === 'entering' || scene.phase === 'error';
   const manifest = scene.destination ?? scene.current;
-  const transitioning = scene.phase !== 'current';
+  const transitioning = scene.phase !== 'current' && scene.phase !== 'startup';
   const retainedBackground = scene.current.background;
   const homepageIsDestination = transitioning
     && retainedBackground !== 'homepage'
@@ -241,29 +327,31 @@ export function App(): ReactElement {
           />
         ) : null}
         <div
-          className={`scene-homepage-background${reveal.has('bg') ? '' : ' is-startup-pending'}${homepageIsDestination ? ' is-destination' : ''}`}
+          className={`scene-homepage-background${startupController.revealed('background') ? '' : ' is-startup-pending'}${homepageIsDestination ? ' is-destination' : ''}`}
           aria-hidden="true"
         >
           <HomepageBackdrop directorHostOnly />
         </div>
-        <SceneBoundary
-          key={scene.generation}
-          manifest={manifest}
-          generation={scene.generation}
-          preparing={preparing}
-          onPainted={destinationPainted}
-          onFailed={destinationFailed}
-        >
-          <AppTitleBar
-            path={path}
-            search={search}
-            revealTitle={reveal.has('title')}
-          />
-          <RouteLoadBoundary resetKey={`${path}${search}`}>
-            <Suspense fallback={null}>{renderRoute(path, search)}</Suspense>
-          </RouteLoadBoundary>
-        </SceneBoundary>
-        {transitioning ? (
+        <StartupSceneContext.Provider value={startupController}>
+          <SceneBoundary
+            key={scene.generation}
+            manifest={manifest}
+            generation={scene.generation}
+            preparing={preparing}
+            onPainted={destinationPainted}
+            onFailed={destinationFailed}
+          >
+            <AppTitleBar
+              path={path}
+              search={search}
+              revealTitle={startupController.revealed('title')}
+            />
+            <RouteLoadBoundary resetKey={`${path}${search}`}>
+              <Suspense fallback={null}>{renderRoute(path, search)}</Suspense>
+            </RouteLoadBoundary>
+          </SceneBoundary>
+        </StartupSceneContext.Provider>
+        {transitioning || (scene.phase === 'startup' && scene.startupStage < 0) ? (
           <div className="scene-loading-presentation" role={scene.phase === 'error' ? 'alert' : 'status'}>
             {scene.phase === 'error' ? (
               <>

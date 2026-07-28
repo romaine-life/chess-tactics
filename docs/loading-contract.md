@@ -40,6 +40,11 @@ The required representative traces are cold and warm versions of:
 3. A canonical `/play` level through the board's first complete frame.
 4. A canonical Level Editor document through its first complete frame.
 
+The canonical capture tool distinguishes these modes explicitly: `--cold` disables
+the browser cache, while `--warm` first completes the same route in the same browser
+and then reloads it with that populated HTTP cache. A fresh default browser process
+is not accepted as evidence of a warm journey.
+
 ## Scene lifecycle
 
 `SceneDirector` is the only route-level transition authority. A destination declares
@@ -73,6 +78,14 @@ route lifecycle during the same React commit.
   startup copy remains hidden until that final face is verified, so fallback-font text
   is never an intermediate loading frame. Critical failure stays on one explicit retry
   surface.
+- The SceneDirector reducer also owns the cold-home startup ladder. Its `startup` phase
+  accepts background, title, and controls readiness acknowledgements in any arrival
+  order but reveals them only in that order with the required fade and beat. It cannot
+  report `current` until the controls fade finishes. Startup failure and retry advance
+  the same generation authority; there is no independent cold-reveal store.
+- The homepage background acknowledges its real CSS consumer after two browser paint
+  opportunities. Retry explicitly re-arms that consumer, because a recovered image
+  decode does not by itself repaint a background declaration whose first request failed.
 - Canonical level summaries project immutable Blob-backed list-thumbnail URLs. Missing or
   stale derivatives are generated server-side and published content-addressably; ordinary
   player lists never reconstruct boards in the browser. Derivative freshness is a pure

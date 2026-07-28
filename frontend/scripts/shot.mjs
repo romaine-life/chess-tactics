@@ -9,10 +9,11 @@
 //
 // Usage:
 //   node scripts/shot.mjs <url> [--select <css>] [--out <path>] [--size <WxH>] [--ready <jsExpr>]
-//     [--timeout <ms>] [--throttle slow-4g|slow-3g] [--cold] [--assert-menu-atomic]
+//     [--timeout <ms>] [--throttle slow-4g|slow-3g] [--cold|--warm] [--assert-menu-atomic]
 //     [--assert-board-atomic] [--assert-shell-font-atomic] [--assert-surface-atomic <name>]
 //     [--assert-editor-viewer]
-//     [--abort-request <url-substring>] [--abort-request-once <url-substring>] [--retry-scene-error]
+//     [--abort-request <url-substring>] [--abort-request-once <url-substring>]
+//     [--abort-request-until-retry <url-substring>] [--retry-scene-error]
 //     [--click <selector>] [--click-ready <jsExpr>] [--assert-backdrop-continuity]
 //     [--back-after-click-ms <ms>]
 //     [--full] [--show-scrollbars] [--allow-motion]
@@ -44,12 +45,14 @@ const readyExpr = flag('ready');
 const timeout = Math.max(1_000, Number(flag('timeout', 30_000)) || 30_000);
 const throttle = flag('throttle');
 const cold = has('cold');
+const warm = has('warm');
 const assertMenuAtomic = has('assert-menu-atomic');
 const assertBoardAtomic = has('assert-board-atomic');
 const assertShellFontAtomic = has('assert-shell-font-atomic');
 const assertSurfaceAtomic = flag('assert-surface-atomic');
 const abortRequest = flag('abort-request');
 const abortRequestOnce = flag('abort-request-once');
+const abortRequestUntilRetry = flag('abort-request-until-retry');
 const retrySceneError = has('retry-scene-error');
 const allowSceneError = has('allow-scene-error');
 const click = flag('click');
@@ -68,7 +71,8 @@ const CHROMES = [
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
 ];
 const executablePath = CHROMES.find(existsSync);
-if (!url || url.startsWith('--')) { console.error('usage: shot <url> [--select css] [--out path] [--size WxH] [--scale n] [--ready jsExpr] [--timeout ms] [--throttle slow-4g|slow-3g] [--cold] [--full] [--allow-motion] [--assert-editor-viewer]'); process.exit(2); }
+if (!url || url.startsWith('--')) { console.error('usage: shot <url> [--select css] [--out path] [--size WxH] [--scale n] [--ready jsExpr] [--timeout ms] [--throttle slow-4g|slow-3g] [--cold|--warm] [--full] [--allow-motion] [--assert-editor-viewer]'); process.exit(2); }
+if (cold && warm) { console.error('--cold and --warm are mutually exclusive'); process.exit(2); }
 if (!executablePath) { console.error('No Chrome/Edge found. Checked:\n' + CHROMES.join('\n')); process.exit(1); }
 mkdirSync(dirname(out), { recursive: true });
 
@@ -136,6 +140,10 @@ try {
             title: Boolean(title && !title.classList.contains('reveal-pending')),
           };
           const count = Number(state.bg) + Number(state.buttons) + Number(state.title);
+          const directorCurrent = document.querySelector('[data-scene-phase="current"]');
+          if (directorCurrent && count !== 3) {
+            window.__ctMenuAtomicViolations.push({ ...state, directorCurrent: true });
+          }
           if ((state.title && !state.bg) || (state.buttons && (!state.bg || !state.title))) {
             window.__ctMenuAtomicViolations.push(state);
           }
@@ -146,7 +154,12 @@ try {
             ];
             const imagesComplete = criticalImages.length > 0
               && criticalImages.every((img) => img.complete && img.naturalWidth > 0);
-            if (!imagesComplete) window.__ctMenuAtomicViolations.push({ ...state, imagesComplete });
+            const backgroundPainted = Boolean(document.querySelector(
+              '.scene-backdrop-canvas[data-homepage-scene-painted]',
+            ));
+            if (!imagesComplete || !backgroundPainted) {
+              window.__ctMenuAtomicViolations.push({ ...state, imagesComplete, backgroundPainted });
+            }
           }
         }
         requestAnimationFrame(sample);
@@ -286,7 +299,8 @@ try {
   // Level Editor's session-open request. The optional failure injection shares this one
   // interception handler so a Level Editor capture never tries to continue the same request twice.
   const targetIsLevelEditor = isLevelEditorUrl(url);
-  if (targetIsLevelEditor || abortRequest || abortRequestOnce) {
+  let retryFailureReleased = false;
+  if (targetIsLevelEditor || abortRequest || abortRequestOnce || abortRequestUntilRetry) {
     let abortedOnce = false;
     await page.setRequestInterception(true);
     page.on('request', (request) => {
@@ -294,7 +308,10 @@ try {
       const abortFirst = !abortedOnce
         && abortRequestOnce
         && request.url().includes(String(abortRequestOnce));
-      if (abortAlways || abortFirst) {
+      const abortUntilRetry = !retryFailureReleased
+        && abortRequestUntilRetry
+        && request.url().includes(String(abortRequestUntilRetry));
+      if (abortAlways || abortFirst || abortUntilRetry) {
         if (abortFirst) abortedOnce = true;
         void request.abort('failed');
         return;
@@ -312,13 +329,40 @@ try {
     });
   }
 
-  // One target navigation only: retrying a timed-out navigation silently doubles cold-load work.
-  // Persistent ambience connections also make network-idle an invalid readiness signal.
-  await page.goto(url, { waitUntil: 'domcontentloaded', timeout });
+  // A warm assertion deliberately completes the same route once in this browser, then
+  // reloads with its populated HTTP cache. Ordinary and cold assertions still perform
+  // exactly one target navigation; a timed-out navigation is never silently retried.
+  // Persistent ambience connections make network-idle an invalid readiness signal.
+  if (warm) {
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout });
+    await page.waitForFunction(
+      "Boolean(document.querySelector('[data-scene-phase=\"current\"]'))",
+      { timeout },
+    );
+    await page.reload({ waitUntil: 'domcontentloaded', timeout });
+  } else {
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout });
+  }
 
   if (click) {
     if (clickReady) await page.waitForFunction(clickReady, { timeout });
     await page.waitForSelector(String(click), { visible: true, timeout });
+    if (assertBackdropContinuity) {
+      const outgoingBackdropVisible = await page.evaluate(() => {
+        const host = document.querySelector('.scene-homepage-background');
+        const scene = host?.querySelector('.scene-backdrop');
+        const canvas = scene?.querySelector('.scene-backdrop-canvas');
+        const visible = Boolean(scene && canvas
+          && Number.parseFloat(getComputedStyle(host).opacity) > 0.001
+          && Number.parseFloat(getComputedStyle(scene).opacity) > 0.001
+          && getComputedStyle(canvas).backgroundImage !== 'none');
+        if (visible) window.__ctBackdropVisibleSeen = true;
+        return visible;
+      });
+      if (!outgoingBackdropVisible) {
+        throw new Error('outgoing homepage backdrop was not painted before navigation');
+      }
+    }
     await page.click(String(click));
     if (backAfterClickMs !== undefined) {
       const clickedHref = page.url();
@@ -341,6 +385,7 @@ try {
       '[data-scene-generation]',
       (node) => Number(node.getAttribute('data-scene-generation')),
     );
+    retryFailureReleased = true;
     await page.click('[data-scene-phase="error"] .scene-loading-presentation button');
     await page.waitForFunction(
       (generation) => {

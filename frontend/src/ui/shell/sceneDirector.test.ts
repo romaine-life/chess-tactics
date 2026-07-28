@@ -61,4 +61,49 @@ describe('scene director', () => {
       generation: 0,
     });
   });
+
+  it('owns ordered cold-home startup and becomes current only after every stage finishes', () => {
+    let state = initialSceneState(sceneManifest('/'), false, '/', true);
+    expect(state).toMatchObject({ phase: 'startup', startupActive: true, startupStage: -1 });
+    expect(reduceScene(state, {
+      type: 'navigate',
+      destination: sceneManifest('/play'),
+      href: '/play',
+    })).toBe(state);
+
+    state = reduceScene(state, { type: 'startup-ready', generation: 0, layer: 'controls' });
+    expect(reduceScene(state, { type: 'startup-reveal', generation: 0, layer: 'controls' })).toBe(state);
+    state = reduceScene(state, { type: 'startup-ready', generation: 0, layer: 'background' });
+    state = reduceScene(state, { type: 'startup-reveal', generation: 0, layer: 'background' });
+    expect(state.startupStage).toBe(0);
+    state = reduceScene(state, { type: 'startup-ready', generation: 0, layer: 'title' });
+    state = reduceScene(state, { type: 'startup-reveal', generation: 0, layer: 'title' });
+    state = reduceScene(state, { type: 'startup-reveal', generation: 0, layer: 'controls' });
+    expect(state).toMatchObject({ phase: 'startup', startupStage: 2 });
+    state = reduceScene(state, { type: 'startup-finished', generation: 0 });
+    expect(state).toMatchObject({ phase: 'current', startupActive: false });
+  });
+
+  it('retries failed startup as a fresh generation with every stage closed', () => {
+    let state = initialSceneState(sceneManifest('/'), false, '/', true);
+    state = reduceScene(state, {
+      type: 'startup-failed',
+      generation: 0,
+      error: new Error('background failed'),
+    });
+    expect(state.phase).toBe('error');
+    state = reduceScene(state, { type: 'retry' });
+    expect(state).toMatchObject({
+      phase: 'startup',
+      generation: 1,
+      startupStage: -1,
+      startupReady: [],
+      error: null,
+    });
+    expect(reduceScene(state, {
+      type: 'startup-ready',
+      generation: 0,
+      layer: 'background',
+    })).toBe(state);
+  });
 });

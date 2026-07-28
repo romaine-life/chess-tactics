@@ -5,7 +5,7 @@
 import './style.css';
 import { createRoot } from 'react-dom/client';
 import { Component, type ErrorInfo, type ReactNode } from 'react';
-import { armForColdHome, isMainMenuPath } from './ui/shell/startupScene';
+import { isMainMenuPath } from './ui/shell/startupScene';
 // @ts-ignore — bgm.js is untyped legacy JS, imported for its side-effecting init.
 import { initBgm } from './bgm.js';
 import { primeSfx } from './sfx';
@@ -92,13 +92,9 @@ window.addEventListener('vite:preloadError', (event) => {
 const shell = document.querySelector('.shell');
 if (shell instanceof HTMLElement) shell.style.visibility = 'visible';
 
-// Ordered initial-scene reveal (see ui/shell/startupScene). On a fresh main-menu load, sequence the
-// menu's background, title, and buttons as one complete visual unit, then let rain drift
-// independently. Arm BEFORE React renders so the first paint is already in the hidden/pending
-// state; it no-ops (everything stays revealed) on every other route and on later
-// soft navigations. The route-scoped background preload moves the scene — first in the
-// order — to the front of the network queue without taxing other routes (the global
-// preload was deliberately removed; see index.html).
+// App's SceneDirector owns the ordered cold-home reveal. This bootstrap only gives
+// the first background request priority before App imports; it does not own a second
+// reveal clock or declare readiness.
 // Arm authored terrain SFX on the first user gesture (mirrors initBgm). Only
 // attaches listeners — no AudioContext until a gesture, so it's cheap + autoplay-safe.
 try { primeSfx(); } catch { /* sound effects are decorative */ }
@@ -150,9 +146,6 @@ if (root) {
       await criticalFonts;
       await retryStartup('installed-chrome', composeInstalledChromeCss);
       loadingMeasure('app', 'critical-chrome-ready', startupAt);
-      // The real menu has not mounted yet, so arming here still precedes its first
-      // paint while allowing the director to pin the hydrated immutable background.
-      armForColdHome();
       // SFX are decorative: hydrate their DB-owned profile before importing the
       // Studio/runtime consumers, but keep honest silence when the row is missing
       // or temporarily unavailable. There is no committed profile fallback.
