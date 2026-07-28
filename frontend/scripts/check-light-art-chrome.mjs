@@ -60,7 +60,7 @@ function checkFile(path) {
   }
 
   // Route consumers report chrome readiness through ArtRouteChrome/LightArtRouteShell.
-  // App is the one scene director and owns the persistent singleton host itself (ADR-0189).
+  // App is the one scene director and owns the persistent singleton host itself (ADR-0193).
   const importsBackdrop = /import\s+\{\s*HomepageBackdrop\s*\}\s+from\s+['"][^'"]*HomepageBackdrop['"]/.test(source);
   const importsArtChrome = /from\s+['"][^'"]*ArtRouteChrome['"]/.test(source);
   const importsLightArtShell = /from\s+['"][^'"]*LightArtRouteShell['"]/.test(source);

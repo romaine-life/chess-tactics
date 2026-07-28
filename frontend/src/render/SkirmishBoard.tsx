@@ -23,7 +23,8 @@ import {
   sizeCanvasForBounds,
 } from './BoardCanvasLayer';
 import { objectBaseZIndex } from './sceneDepth';
-import { ViewPane } from '../ui/shared/ViewPane';
+import { ViewPane, type ViewPaneViewportSize } from '../ui/shared/ViewPane';
+import { useBoardCameraFraming } from '../ui/shared/BoardViewFraming';
 import { useBoardFrameReveal } from './boardArtReady';
 import { loadingMark } from '../diagnostics/loadingTimeline';
 import { groundCoverSet } from '../core/groundCover';
@@ -1063,12 +1064,18 @@ export function SkirmishBoard({
   const showPromotionZones = useSkirmishView((s) => s.showPromotionZones);
   const showGrid = useSkirmishView((s) => s.showGrid);
   const boardZoom = useSkirmishView((s) => s.zoom);
+  const boardMinZoom = useSkirmishView((s) => s.minZoom);
   const boardMaxZoom = useSkirmishView((s) => s.maxZoom);
   const boardPan = useSkirmishView((s) => s.pan);
+  const cameraResetRevision = useSkirmishView((s) => s.cameraResetRevision);
   const setZoom = useSkirmishView((s) => s.setZoom);
   const setMinZoom = useSkirmishView((s) => s.setMinZoom);
   const setBoardPan = useSkirmishView((s) => s.setPan);
+  const setOpeningView = useSkirmishView((s) => s.setOpeningView);
+  const [viewViewportSize, setViewViewportSize] = useState<ViewPaneViewportSize | null>(null);
   const game = useSkirmish((s) => s.game);
+  const levelId = useSkirmish((s) => s.levelId);
+  const sessionEpoch = useSkirmish((s) => s.sessionEpoch);
   const env = useSkirmish((s) => s.env);
   const selectedId = useSkirmish((s) => s.selectedId);
   const focusedId = useSkirmish((s) => s.focusedId);
@@ -1196,6 +1203,18 @@ export function SkirmishBoard({
     () => predrawnPlate ? predrawnBoardCoverPolygon(predrawnPlate, board.cells) : undefined,
     [board.cells, predrawnPlate],
   );
+  const { markViewInteraction } = useBoardCameraFraming({
+    board: { cols: game.size.cols, rows: game.size.rows },
+    viewKey: `${levelId ?? 'free'}:${sessionEpoch}`,
+    viewport: viewViewportSize,
+    minimumZoom: boardMinZoom,
+    maximumZoom: boardMaxZoom,
+    zoom: boardZoom,
+    setZoom,
+    setPan: setBoardPan,
+    onOpeningCameraChange: setOpeningView,
+    resetRevision: cameraResetRevision,
+  });
   const ambientSceneCover = !exactBoard;
   const sceneBoard = useMemo(
     () => sceneBoardForSkirmish(game, board, exactBoard, predrawnBackgroundActive),
@@ -1647,6 +1666,8 @@ export function SkirmishBoard({
         onPanChange={setBoardPan}
         coverPolygon={predrawnCoverPolygon}
         onMinimumZoomChange={setMinZoom}
+        onViewportSizeChange={setViewViewportSize}
+        onViewInteraction={markViewInteraction}
       >
         <BoardLabBoard
           board={board}

@@ -1,7 +1,7 @@
 # Loading contract
 
 Derived from [ADR-0136](adr/0136-loading-is-manifest-driven-and-frame-acknowledged.md)
-and [ADR-0189](adr/0189-navigation-loads-atomic-scenes-through-one-director.md).
+and [ADR-0193](adr/0193-navigation-loads-atomic-scenes-through-one-director.md).
 
 ## Readiness vocabulary
 
@@ -95,6 +95,10 @@ route lifecycle during the same React commit.
   player lists never reconstruct boards in the browser. Derivative freshness is a pure
   version of the canonical level document plus its live prop-seat, unit, media, and drawable
   authority revisions; it never depends on mutable renderer-process state.
+- Per ADR-0193, list derivatives are fixed 3:2 renders of the shared playable-board opening
+  frame rather than opaque-pixel or full-generated-scene crops. A framing-policy change bumps
+  the renderer revision: reads repair stale derivatives and save/publish prepares the current
+  version without regenerating accepted board artwork.
 - Initially presented level cards are one surface: the list remains hidden and inert until
   every expected thumbnail has painted, or it presents one retryable error.
 - Persisted Campaign Editor rows consume the same immutable database-backed derivatives

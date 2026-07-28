@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
-import { isPredrawnBackgroundActive } from '@chess-tactics/board-render';
 import type { Level } from '../core/level';
 import { levelToEditorBoard } from '../core/levelBoard';
-import { bakeBoardThumbnail, boardContentHash, boardBounds } from './bakeBoardThumbnail';
+import {
+  BOARD_THUMBNAIL_FRAMING_REVISION,
+  bakeBoardThumbnail,
+  boardContentHash,
+} from './bakeBoardThumbnail';
 import { loadingError, loadingMark, loadingMeasure } from '../diagnostics/loadingTimeline';
 import { levelThumbnailUrl } from '../net/levelThumbnails';
 
@@ -22,7 +25,7 @@ const inflight = new Map<string, Promise<string>>();
 // The bake key folds in the device pixel ratio bucket: a 1× and a 2× screen want different
 // raster scales, but both should still dedupe per (board, scale).
 function cacheKey(contentHash: string, scale: number): string {
-  return `${contentHash}@${scale}x`;
+  return `${contentHash}@frame-${BOARD_THUMBNAIL_FRAMING_REVISION}@${scale}x`;
 }
 
 async function getThumbnailUrl(board: ReturnType<typeof levelToEditorBoard>, contentHash: string, scale: number): Promise<string> {
@@ -92,18 +95,11 @@ export function LevelThumbnail({
   const canonicalDerivative = !authoringPreview
     ? levelThumbnailUrl(level.id)
     : null;
-  // Canonical derivatives already own a fixed 3:2 delivery crop and must fill whatever
-  // compact list seat consumes them. Predrawn authoring previews use the same cover rule
-  // after their largest fully opaque interior has been selected.
-  const coverThumbnail = canonicalDerivative !== null || (board ? isPredrawnBackgroundActive(board) : false);
+  // Canonical and authoring derivatives own the same fixed 3:2 board-relative composition.
+  const coverThumbnail = true;
   const contentHash = useMemo(() => board ? boardContentHash(board) : `canonical:${level.id}`, [board, level.id]);
-  // Runtime derivatives have one fixed 3:2 delivery box. Authoring previews retain the
-  // unsaved board's native aspect ratio.
-  const aspect = useMemo(() => {
-    if (!board) return 1.5;
-    const bounds = boardBounds(board);
-    return bounds.width > 0 && bounds.height > 0 ? bounds.width / bounds.height : 1;
-  }, [board]);
+  // Runtime and authoring derivatives share one fixed 3:2 delivery composition.
+  const aspect = 1.5;
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   // Canonical derivatives are already compact delivery rasters: request them with the
@@ -191,8 +187,7 @@ export function LevelThumbnail({
   }, [near, authoringPreview, board, canonicalDerivative, contentHash, level.id, onError]);
 
   // Integer display dimensions; the box keeps the row's footprint stable whether or not the bake
-  // has resolved. Canonical and pre-drawn pixels cover the seat; ordinary unsaved boards retain
-  // their native aspect with contain.
+  // has resolved. Every derivative already owns the canonical 3:2 board-relative composition.
   const boxStyle = { width: `${Math.round(width)}px`, height: `${Math.round(height)}px` } as const;
 
   return (

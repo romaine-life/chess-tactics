@@ -46,6 +46,7 @@ import {
 } from '../render/decorativeTerrainApron';
 import { studioTerrainCanvasCell } from '../render/StudioReadOnlyBoard';
 import { ViewPane, type ViewPaneViewportSize } from './shared/ViewPane';
+import { useBoardCameraFraming } from './shared/BoardViewFraming';
 import { NavButton } from './shared/NavButton';
 import { useConfirm } from './shared/ConfirmDialog';
 import { TitleBarControlContribution, type TitleBarControlSpec } from './shell/TitleBarControls';
@@ -2941,6 +2942,19 @@ export function LevelEditor(): ReactElement {
       : undefined,
     [editorPredrawnPlate, predrawnCoverCells],
   );
+  const {
+    markViewInteraction: markBoardViewInteraction,
+    resetView: resetFramedBoardView,
+  } = useBoardCameraFraming({
+    board: { cols: boardCols, rows: boardRows },
+    viewKey: provisionalClientScope,
+    viewport: viewViewportSize,
+    minimumZoom: viewMinZoom,
+    maximumZoom: viewMaxZoom,
+    zoom: viewZoom,
+    setZoom: setViewZoom,
+    setPan: setViewPan,
+  });
   const [gridScope, setGridScope] = useState<'off' | 'playable' | 'whole'>('off');
   const toggleRegisteredGrid = (): void => setGridScope((value) => value === 'off' ? 'whole' : 'off');
   const [predrawnOcclusionEnabled, setPredrawnOcclusionEnabled] = useState(
@@ -7891,10 +7905,12 @@ export function LevelEditor(): ReactElement {
     }
     commitEditorBoard(next, to);
   };
-  const adjustZoom = (delta: number): void => setViewZoom((z) => Math.min(viewMaxZoom, Math.max(viewMinZoom, Number((z + delta).toFixed(2)))));
+  const adjustZoom = (delta: number): void => {
+    markBoardViewInteraction();
+    setViewZoom((z) => Math.min(viewMaxZoom, Math.max(viewMinZoom, Number((z + delta).toFixed(2)))));
+  };
   const resetBoardView = (): void => {
-    setViewZoom(Math.max(1, viewMinZoom));
-    setViewPan({ x: 0, y: 0 });
+    resetFramedBoardView();
   };
   // Resize the board. Growing exposes new empty (paintable) cells; shrinking prunes any
   // tiles/units — and a now-offboard selection — whose coordinates fall outside the new
@@ -8559,6 +8575,7 @@ export function LevelEditor(): ReactElement {
               coverPolygon={predrawnCoverPolygon}
               onMinimumZoomChange={setViewMinZoom}
               onViewportSizeChange={setViewViewportSize}
+              onViewInteraction={markBoardViewInteraction}
             >
               <div className="tileset-view-board-content is-board" data-art-review={activeFenceArtwork ? FENCE_ART_REVIEW_ID : undefined} data-fence-art={activeFenceArtwork?.id}>
                 {editorLoadError ? (

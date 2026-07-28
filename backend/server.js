@@ -17839,7 +17839,7 @@ async function withThumbnailRenderInputs(task, queryable = null) {
     return task(renderInputs);
   });
 }
-const BOARD_THUMBNAIL_RENDER_REVISION = 4;
+const BOARD_THUMBNAIL_RENDER_REVISION = 6;
 function thumbnailVersion(sourceHash, renderInputs) {
   const rendererRevision = `br${BOARD_THUMBNAIL_RENDER_REVISION}`;
   const propSeatsRevision = renderInputs && renderInputs.propSeatsRevision ? `ps${renderInputs.propSeatsRevision}` : '';

@@ -120,7 +120,7 @@ function LevelPicker({ current, selectedId, onPick }: { current: Lobby; selected
                 <LevelThumbnail
                   level={level}
                   width={180}
-                  height={100}
+                  height={120}
                   onReady={(levelId) => setPainted((currentSet) => (
                     currentSet.has(levelId) ? currentSet : new Set([...currentSet, levelId])
                   ))}

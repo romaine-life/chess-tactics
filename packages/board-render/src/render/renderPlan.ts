@@ -61,6 +61,7 @@ import {
 } from './terrainSides';
 import { subterrainFaceKey, subterrainMaterialSrc } from '../core/subterrain';
 import { decorativeTerrainApronCoordinates, scenicTerrainValueAt } from '../core/scenicTerrain';
+import { playableBoardFramingBounds } from './boardFraming';
 import {
   mirrorGlassOpsForSurfaces,
   mirrorSurfacesForPlacements,
@@ -850,25 +851,9 @@ export function boardBounds(board: RenderBoard, options: BoardDrawOptions = {}):
   return { minX, minY, width: Math.ceil(maxX - minX), height: Math.ceil(maxY - minY) };
 }
 
-export function boardSocialFramingBounds(board: RenderBoard): BakeBounds {
-  const drawBounds = boardBounds(board);
-  // A registered complete scene owns meaningful pixels beyond the logical board boundary. Server
-  // cards must fit that transformed full frame rather than applying the ordinary tile-relief crop.
-  if (isPredrawnBackgroundActive(board)) return drawBounds;
-  let surfaceMaxY = -Infinity;
-  for (const { x, y, tileId } of boardVisualTerrainCells(board)) {
-    if (!tileId) continue;
-    const { top } = boardLabCellPosition({ x, y });
-    surfaceMaxY = Math.max(surfaceMaxY, top + TILE_STEP_Y);
-  }
-  if (!Number.isFinite(surfaceMaxY)) return drawBounds;
-
-  return {
-    minX: drawBounds.minX,
-    minY: drawBounds.minY,
-    width: drawBounds.width,
-    height: Math.max(1, Math.ceil(surfaceMaxY - drawBounds.minY)),
-  };
+/** Board-owned preview framing; generated art and scene content never move the opening shot. */
+export function boardPreviewFramingBounds(board: RenderBoard): BakeBounds {
+  return playableBoardFramingBounds(board);
 }
 
 export const BAKE_GEOMETRY = { TILE_FRAME_W, TILE_FRAME_H, TILE_STEP_X, TILE_STEP_Y, TILE_EQUATOR } as const;

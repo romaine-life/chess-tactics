@@ -71,7 +71,8 @@ describe('professional loading architecture guards', () => {
     expect(source).not.toContain('const canonicalLevel =');
     expect(source).not.toContain('/assets/level-list-thumb/');
     expect(source).toContain('canonicalDerivative');
-    expect(source).toContain('canonicalDerivative !== null ||');
+    expect(source).toContain('BOARD_THUMBNAIL_FRAMING_REVISION');
+    expect(source).toContain('const coverThumbnail = true');
     expect(source).toContain("objectFit: coverThumbnail ? 'cover' : 'contain'");
     expect(source).toContain('client-bake-start'); // retained only for unsaved authoring previews
     expect(source).toContain('data-level-thumbnail-id={level.id}');

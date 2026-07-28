@@ -10,7 +10,7 @@ refines:
   - ADR-0136
 ---
 
-# ADR-0189: Navigation loads atomic scenes through one director
+# ADR-0193: Navigation loads atomic scenes through one director
 
 ## Context
 
@@ -91,4 +91,3 @@ fallback, and optional local readiness Booleans are migration sources, not paral
 systems to retain. Background continuity comes from retaining the old scene, not a
 homepage-only exception. Migration is complete only when every route family declares
 a manifest and the retired mechanisms are deleted.
-

@@ -527,7 +527,7 @@ h1 {
    thumbnail loads / if it's missing. */
 .tileset-studio-card-image.pages-card-image {
   min-height: 96px;
-  aspect-ratio: 16 / 10;
+  aspect-ratio: 3 / 2;
   background: linear-gradient(180deg, #16243a, #0b1422);
 }
 /* Beats the base .tileset-studio-card-image img (iso-tile-sized, pixelated, contain). */
@@ -4095,6 +4095,9 @@ h1 {
 
 :root {
   --skirmish-rail-w: clamp(300px, 24vw, 360px);
+  --board-view-aspect-width: 4;
+  --board-view-aspect-height: 3;
+  --board-view-aspect: var(--board-view-aspect-width) / var(--board-view-aspect-height);
 }
 
 .skirmish-screen {
@@ -4452,6 +4455,8 @@ h1 {
 }
 
 .skirmish-field {
+  container-name: board-view-seat;
+  container-type: size;
   display: grid;
   min-height: 0;
   overflow: hidden;
@@ -4474,6 +4479,29 @@ h1 {
   position: relative;
   width: 100%;
   z-index: 1;
+}
+
+/* Gameplay and the selected-level live preview share one literal 4:3 drawable viewport.
+   The playfield remains responsive; this frame takes the largest 4:3 rectangle that fits. */
+.skirmish-screen:not(.level-editor-screen) .skirmish-board-frame {
+  aspect-ratio: var(--board-view-aspect);
+  height: auto;
+  max-height: 100%;
+  max-width: 100%;
+  width: 100%;
+}
+
+@supports (width: 1cqw) {
+  .skirmish-screen:not(.level-editor-screen) .skirmish-board-frame {
+    block-size: min(
+      100cqh,
+      calc(100cqw * var(--board-view-aspect-height) / var(--board-view-aspect-width))
+    );
+    inline-size: min(
+      100cqw,
+      calc(100cqh * var(--board-view-aspect-width) / var(--board-view-aspect-height))
+    );
+  }
 }
 
 .skirmish-board-frame [data-testid="skirmish-board"] {
@@ -9399,7 +9427,7 @@ body { font-size: 17px; }
   to { opacity: 1; }
 }
 
-/* ADR-0189: one application-owned scene transition. */
+/* ADR-0193: one application-owned scene transition. */
 .scene-director { min-height: 100%; }
 .scene-boundary {
   position: fixed;
@@ -9775,19 +9803,39 @@ body { font-size: 17px; }
 .terrain-void { background: #1f2430; }
 /* ===== end Compact Level Info ===== */
 
-/* The SELECTED-level map preview is a registered inner-box consumer (ADR-0082). The board is the
-   LIVE pan/zoom viewer (StudioReadOnlyBoard in a ViewPane at 0.5x — the pre-#409 framing; the
-   baked cover-crop zoomed into the board's center and was reverted by owner call). The canonical
-   inner role owns the frame and rail geometry; this class owns only the preview footprint. */
+/* The SELECTED-level live preview and gameplay share one canonical 4:3 drawable viewport.
+   The fixed preview-column width therefore owns height; compact raster derivatives remain 3:2.
+   The registered inner-box role (ADR-0082) exclusively owns the surrounding chrome. The live
+   viewer uses the shared playable-board opening composition, while generated overscan controls
+   only the independent accepted-art zoom/pan range. */
+.ce-preview-col {
+  container-name: selected-board-preview;
+  container-type: inline-size;
+}
+
 .ce-preview-frame {
+  --ce-preview-rail: var(--le-chrome-inner-rail-w, 7px);
   position: relative;
   flex: none;
-  block-size: clamp(190px, 26vh, 300px);
+  aspect-ratio: var(--board-view-aspect);
+  block-size: auto;
+  inline-size: 100%;
   min-height: 0;
 }
-/* Position the world viewport in the inner role's content box. The frame border remains visible
-   around it while the board covers the full content area; transparent board corners reveal the
-   level world, never a transparency checkerboard (ADR-0067). */
+@supports (width: 1cqi) {
+  .ce-preview-frame {
+    /* Account for the canonical equal-width rails so the drawable content box is exactly 4:3. */
+    aspect-ratio: auto;
+    block-size: calc(
+      (100cqi - 2 * var(--ce-preview-rail))
+      * var(--board-view-aspect-height) / var(--board-view-aspect-width)
+      + 2 * var(--ce-preview-rail)
+    );
+  }
+}
+/* Position the world viewport in the canonical inner role's content box. The registered rail
+   remains visible around it while the board covers the complete interior; transparent board
+   corners reveal the level world, never a transparency checkerboard (ADR-0067). */
 .ce-level-viewer {
   position: absolute;
   inset: 0;
@@ -17263,9 +17311,8 @@ button.tileset-relationship-cell {
   min-height: 80px;
 }
 
-/* Leading board preview in a campaign level-select row. Same framed-thumb treatment as
-   the Campaign Editor's list (.ce-level-thumb), scaled up for the hero browse surface:
-   a panel.png frame around one flat baked <img>, letterboxed to the board's native aspect. */
+/* Leading board preview in a campaign level-select row. The inner derivative owns a canonical
+   3:2 board-relative composition; the surrounding kit frame may remain slightly taller. */
 .settings-row-thumb {
   flex: none;
   box-sizing: border-box;
@@ -17633,7 +17680,7 @@ button.tileset-relationship-cell {
 
 .ce-editor-level-row.is-read-only {
   grid-template-areas: "thumb copy";
-  grid-template-columns: 78px minmax(0, 1fr);
+  grid-template-columns: 76px minmax(0, 1fr);
 }
 
 .ce-editor-level-row .settings-row-thumb {
@@ -17641,7 +17688,7 @@ button.tileset-relationship-cell {
   border-width: 5px;
   border-image-width: 5px;
   grid-area: thumb;
-  inline-size: 78px;
+  inline-size: 76px;
 }
 
 .ce-editor-level-copy {
@@ -17735,7 +17782,7 @@ button.tileset-relationship-cell {
   display: grid;
   gap: 10px;
   grid-template-areas: "thumb copy control";
-  grid-template-columns: 78px minmax(0, 1fr) auto;
+  grid-template-columns: 76px minmax(0, 1fr) auto;
   min-block-size: 86px;
   overflow: hidden;
   padding: 10px 18px;
@@ -17750,7 +17797,7 @@ button.tileset-relationship-cell {
   border-width: 5px;
   border-image-width: 5px;
   grid-area: thumb;
-  inline-size: 78px;
+  inline-size: 76px;
 }
 .campaign-level-row .settings-row-copy {
   align-content: center;

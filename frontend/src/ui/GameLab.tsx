@@ -30,9 +30,8 @@ import {
   type LabRunSummary,
 } from '../net/labRuns';
 import { levelToEditorBoard, unitsForGamePieces } from '../core/levelBoard';
-import { StudioReadOnlyBoard } from '../render/StudioReadOnlyBoard';
 import { LevelThumbnail } from '../render/LevelThumbnail';
-import { ViewPane } from './shared/ViewPane';
+import { FramedReadOnlyBoardView } from './shared/BoardViewFraming';
 import { fetchMe } from '../net/auth';
 import type { PieceType } from '../core/types';
 import { useSceneParticipant } from './shell/SceneBoundary';
@@ -227,8 +226,6 @@ export function GameLabViewer({ levelId, header }: { levelId?: string; header?: 
 
   const [config, setConfig] = useState<RunConfig>(DEFAULT_CONFIG);
   const [variant, setVariant] = useState<VariantConfig>({ unitIndex: 'none', action: 'remove' });
-  const [viewZoom, setViewZoom] = useState(0.8);
-  const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
 
   // The run currently on screen. runLevel is the SNAPSHOT the games were played
   // on (variant applied) — never the live workspace level, which may drift.
@@ -521,11 +518,11 @@ export function GameLabViewer({ levelId, header }: { levelId?: string; header?: 
               {clampedPly === 0 ? 'Starting position' : describeMove(selectedRecord, clampedPly - 1)}
             </p>
             <div className="game-lab-board">
-              <ViewPane kind="board" ariaLabel="Replay board" zoom={viewZoom} pan={viewPan} minZoom={0.3} maxZoom={2} onZoomChange={setViewZoom} onPanChange={setViewPan}>
-                <div className="tileset-view-board-content is-board">
-                  <StudioReadOnlyBoard board={stepBoard} boardZoom={viewZoom} boardPan={viewPan} ariaLabel="Replay board" />
-                </div>
-              </ViewPane>
+              <FramedReadOnlyBoardView
+                board={stepBoard}
+                viewKey={`${levelId ?? 'none'}:${selectedRecord.seed}`}
+                ariaLabel="Replay board"
+              />
             </div>
           </div>
         ) : null}

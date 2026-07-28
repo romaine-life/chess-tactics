@@ -11,8 +11,7 @@ import { MODE_NAME } from '../core/objectives';
 import type { Level } from '../core/level';
 import { LevelThumbnail } from '../render/LevelThumbnail';
 import { levelToEditorBoard, unitsForGamePieces } from '../core/levelBoard';
-import { StudioReadOnlyBoard } from '../render/StudioReadOnlyBoard';
-import { ViewPane } from './shared/ViewPane';
+import { FramedReadOnlyBoardView } from './shared/BoardViewFraming';
 import { InfoTip } from './shared/InfoTip';
 import { SliderRow, ctlReset } from './dressing/SliderRow';
 import { createFromLevel } from '../game/setup';
@@ -519,8 +518,6 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   // Depth 4 by default — depth 2 is a toy (the owner knows it). Honestly slower, but
   // the games are real enough to actually separate two weight sets.
   const [depth, setDepth] = useState(4);
-  const [viewZoom, setViewZoom] = useState(0.72);
-  const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
 
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -1288,9 +1285,8 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
     return { ...levelToEditorBoard(level), units: unitsForGamePieces(state.pieces) };
   }, [level, latestReplayStates, clampedLatestReplayPly]);
   const toggleReplayFocus = useCallback(() => {
-    if (!replayFocus) setViewZoom((zoom) => Math.max(zoom, 1));
     setReplayFocus((focus) => !focus);
-  }, [replayFocus]);
+  }, []);
   const tdLastGame = tdSess.lastGame ?? null;
   const tdLedger = tdSess.ledger ?? [];
   useEffect(() => {
@@ -1337,11 +1333,12 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
         </button>
       </div>
       <div className="gym-replay-board">
-        <ViewPane kind="board" ariaLabel="Latest step game replay board" zoom={viewZoom} pan={viewPan} minZoom={0.3} maxZoom={2} onZoomChange={setViewZoom} onPanChange={setViewPan}>
-          <div className="tileset-view-board-content is-board">
-            <StudioReadOnlyBoard board={latestReplayBoard} boardZoom={viewZoom} boardPan={viewPan} ariaLabel="Latest step game replay board" />
-          </div>
-        </ViewPane>
+        <FramedReadOnlyBoardView
+          board={latestReplayBoard}
+          viewKey={`${levelId ?? 'none'}:latest:${selectedLatestGame.seed}`}
+          ariaLabel="Latest step game replay board"
+          emphasisZoom={replayFocus ? 1 : undefined}
+        />
       </div>
     </div>
   ) : null;
@@ -1670,13 +1667,6 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
     );
   })() : null;
 
-  // The board renders pixel art 1:1 whenever the stage has content — the shared
-  // read-only renderer is the Level Editor's render core, and its art is authored for
-  // integer scale (0.72 nearest-neighbour was the "extra pixelated" look).
-  const tdHasInspect = tdInspect !== null;
-  useEffect(() => {
-    if (mode === 'values' && tdHasInspect) setViewZoom((zoom) => Math.max(zoom, 1));
-  }, [mode, tdHasInspect]);
   const tdReplayPanel: ReactElement | null = tdInspect && tdReplayStates && tdReplayBoard ? (
     <div className={`gym-replay-stage ${replayFocus ? 'is-focused' : ''}`} aria-label="Stepped training game replay">
       <div className="gym-replay-head">
@@ -1731,11 +1721,12 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
         </button>
       </div>
       <div className="gym-replay-board">
-        <ViewPane kind="board" ariaLabel="Stepped training game replay board" zoom={viewZoom} pan={viewPan} minZoom={0.3} maxZoom={2} onZoomChange={setViewZoom} onPanChange={setViewPan}>
-          <div className="tileset-view-board-content is-board">
-            <StudioReadOnlyBoard board={tdReplayBoard} boardZoom={viewZoom} boardPan={viewPan} ariaLabel="Stepped training game replay board" />
-          </div>
-        </ViewPane>
+        <FramedReadOnlyBoardView
+          board={tdReplayBoard}
+          viewKey={`${levelId ?? 'none'}:training`}
+          ariaLabel="Stepped training game replay board"
+          emphasisZoom={replayFocus ? 1 : undefined}
+        />
       </div>
     </div>
   ) : null;
@@ -1955,9 +1946,11 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
                 ) : null}
                 <div className="gym-board">
                   {board ? (
-                    <ViewPane kind="board" ariaLabel="Board" zoom={viewZoom} pan={viewPan} minZoom={0.3} maxZoom={2} onZoomChange={setViewZoom} onPanChange={setViewPan}>
-                      <div className="tileset-view-board-content is-board"><StudioReadOnlyBoard board={board} boardZoom={viewZoom} boardPan={viewPan} ariaLabel="Board" /></div>
-                    </ViewPane>
+                    <FramedReadOnlyBoardView
+                      board={board}
+                      viewKey={`${levelId ?? 'none'}:book:${activeId ?? 'none'}`}
+                      ariaLabel="Board"
+                    />
                   ) : (
                     <div className="gym-empty-book">Generate a book to inspect its positions here.</div>
                   )}

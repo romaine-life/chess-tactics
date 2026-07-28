@@ -64,7 +64,7 @@ test('runtime list derivative is a compact fixed-size PNG and needs no shell art
   assert.equal(unexpectedLoad, false);
 });
 
-test('AI list derivative cover-crops the largest fully opaque interior without showing a warp edge', async () => {
+test('AI list derivative preserves the board-owned camera instead of recropping opaque pixels', async () => {
   const backgroundSrc = '/api/background-versions/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/content';
   const source = createCanvas(12, 12);
   const sourceContext = source.getContext('2d');
@@ -94,7 +94,7 @@ test('AI list derivative cover-crops the largest fully opaque interior without s
       framingBounds: { minX: 0, minY: 0, width: 12, height: 12 },
     },
     loadDynamicSprite: async (src) => src === backgroundSrc ? sourceBytes : null,
-    mediaCatalogRevision: 'solid-crop-test',
+    mediaCatalogRevision: 'board-camera-test',
   });
 
   const decoded = await loadImage(png);
@@ -102,9 +102,9 @@ test('AI list derivative cover-crops the largest fully opaque interior without s
   const inspectionContext = inspection.getContext('2d');
   inspectionContext.drawImage(decoded, 0, 0);
   const pixels = inspectionContext.getImageData(0, 0, BOARD_THUMB_W, BOARD_THUMB_H).data;
-  for (let offset = 3; offset < pixels.length; offset += 4) {
-    assert.equal(pixels[offset], 255);
-  }
+  const alphaAt = (x, y) => pixels[(y * BOARD_THUMB_W + x) * 4 + 3];
+  assert.equal(alphaAt(0, 0), 0);
+  assert.equal(alphaAt(Math.floor(BOARD_THUMB_W / 2), Math.floor(BOARD_THUMB_H / 2)), 255);
 });
 
 test('share-card rendering consumes the complete database-resolved presentation', async () => {

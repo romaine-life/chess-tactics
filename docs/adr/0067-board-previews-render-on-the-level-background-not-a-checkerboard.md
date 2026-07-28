@@ -2,6 +2,7 @@
 status: "accepted"
 date: 2026-07-04
 deciders: Nelson
+partially_superseded_by: "[ADR-0189](0189-board-facing-views-open-on-playable-geometry.md)"
 ---
 
 # ADR-0067: Board previews render on the level's world background, never a transparency checkerboard

@@ -16,7 +16,7 @@ import {
   boardBounds,
   boardContentHash,
   boardDrawOps,
-  boardSocialFramingBounds,
+  boardPreviewFramingBounds,
   isPredrawnBackgroundActive,
   type BakeBounds,
   type BoardDrawOp,
@@ -70,7 +70,7 @@ export function levelRenderPlan(level: Level): ServerRenderPlan {
       ? predrawnOcclusionDepthMapForSurface(board.surface)
       : undefined,
     bounds: boardBounds(board),
-    framingBounds: boardSocialFramingBounds(board),
+    framingBounds: boardPreviewFramingBounds(board),
     contentHash: boardContentHash(board),
   };
 }
@@ -159,6 +159,7 @@ export * from './core/wallArt';
 export * from './core/subterrain';
 export * from './core/wallDecor';
 export * from './render/boardProjection';
+export * from './render/boardFraming';
 export * from './render/fenceOverlayDepth';
 export * from './render/mirrorReflection';
 export * from './render/predrawnBoard';
@@ -169,7 +170,6 @@ export * from './render/predrawnMoveHighlight';
 export * from './render/predrawnRegistration';
 export * from './render/renderPlan';
 export * from './render/sceneDepth';
-export * from './render/solidCrop';
 export * from './render/structureGeometry';
 export * from './render/terrainSides';
 export * from './ui/boardCode';
