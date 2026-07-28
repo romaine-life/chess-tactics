@@ -1105,8 +1105,11 @@ ${familySurface} .le-outer-panel {
   background-color: transparent !important;
   background-image: none !important;
 }
-${familySurface} .le-outer-panel > .le-outer-panel-fill {
+${familySurface} [data-chrome-fill-role="outer"] {
 ${chromeFillCss(outer)}
+}
+${familySurface} [data-chrome-fill-role="inner"] {
+${chromeFillCss(inner)}
 }
 ${familySurface} .le-outer-panel:is([data-chrome-consumer="level-editor-controls"], [data-chrome-consumer="skirmish-hud"])::before {
   border-width: 0 ${outerRailWidth}px ${outerRailWidth}px ${outerRailWidth}px !important;

@@ -16,9 +16,10 @@ Production raster sizing is governed by
 [ADR-0076](adr/0076-scaling-is-calibration-production-art-is-native-1x.md):
 scaling may calibrate a candidate, but acceptance requires regenerated native
 pixels and a 1:1 canonical runtime path. The narrow whole-board exception is
-[ADR-0123](adr/0123-accepted-predrawn-scenes-keep-their-pixels-and-saved-alignment.md):
-an accepted pre-drawn scene keeps its exact bytes and the renderer applies its
-saved continuous whole-image alignment.
+[ADR-0158](adr/0158-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md):
+the uploaded pre-drawn scene keeps its exact bytes as an immutable raw root,
+while an approved grid adjustment creates a new deterministic raster child that
+runtime consumes directly rather than warping the raw image again.
 
 Storage and promotion are governed by
 [ADR-0085](adr/0085-runtime-assets-are-live-storage-backed.md): generated media
@@ -141,95 +142,308 @@ being produced.
 ### Pre-drawn Whole-Level Plates
 
 The pre-drawn board path is the deliberate complete-plate exception to the
-ordinary composited-tile direction above. Under ADR-0107 through ADR-0110 and ADR-0133 through ADR-0135, one
-continuous generated painting may replace the ordinary terrain, road, prop, and
-barrier pixels for a specific authored level while the canonical level remains
-the sole authority for gameplay geometry and live units, grid, selection, and
-tactical overlays.
+ordinary composited-tile direction above. Its current authorities are ADR-0108,
+ADR-0109, ADR-0110, ADR-0134, ADR-0135, ADR-0158, ADR-0162, ADR-0165,
+ADR-0166, ADR-0168, ADR-0169, and ADR-0176.
+A Level persists an explicit Legacy/AI background mode separately from its
+remembered exact AI selection. Legacy mode renders the ordinary composed
+environment. In AI mode, one continuous generated painting is the sole source
+of baked environment pixels while the canonical Level remains the sole
+authority for gameplay geometry. AI mode retains live units/pieces, explicitly
+authored ground cover, tactical overlays such as the optional grid, selection,
+movement, threat, zones, and objectives, and application/editor UI. It
+suppresses every ordinary terrain, Subterrain, feature, generated region,
+prop/scenery, fence/post, wall/wall-art, doodad, environmental shadow,
+lighting, non-cover animation, and particle draw.
 
-Per [ADR-0109](adr/0109-predrawn-generation-packets-preserve-authored-level-semantics.md),
-whole-level generation must not ask a model to infer the playable board from a
-beauty render alone. Every request uses an authored-level packet containing:
+Per [ADR-0109](adr/0109-predrawn-generation-packets-preserve-authored-level-semantics.md)
+and
+[ADR-0165](adr/0165-ai-artwork-separates-sources-attempts-and-background-mode.md),
+whole-level generation must not ask a model to infer the playable board from an
+image alone. Per
+[ADR-0166](adr/0166-manual-ai-handoff-separates-generation-references-from-raw-pipeline-sources.md),
+and
+[ADR-0168](adr/0168-creation-slots-begin-with-reusable-raw-pipeline-sources.md),
+every model-generation handoff binds one immutable Generation Reference and
+uses an authored-level packet containing:
 
 - a unit-free exact projected grid and perimeter guide;
 - board dimensions and projected axis directions;
 - a canonical coordinate-by-coordinate terrain and footprint dump;
 - exact road connectivity, blocking shared edges, exits, and outer boundary
   edges;
-- the canonical top-only image as the authority for environment, materials,
-  palette, lighting, texture language, and finish, with no named biome supplied
-  by text and no prior whole-level image reference in the default isolated test;
-  and
+- a saved owner-authored 16:9 generation frame in canonical projected-board
+  coordinates that fully contains the required gameplay-authoritative reference
+  geometry;
+- one immutable Generation Reference. It is unit-free and
+  cover-free and is captured from the saved frame and saved background mode. A
+  Legacy reference contains the ordinary composed environment, including only
+  explicitly persisted and exposed Subterrain. An AI reference contains the
+  exact selected raster pixels and is explicitly non-isolated. The reference
+  owns environment, materials, palette, lighting, texture language, and finish,
+  with no named biome supplied independently by text; and
 - explicit prohibitions against baked units, invented gameplay height, expanded
   footprints, extra roads, and a model-invented perimeter.
 
-The top-only art authority also suppresses additive ground cover, including
-grass. Cover creates avoidable occlusion around geometry and may be composed from
-its accepted generated runtime layer later; terrain, roads, barriers, and props
-remain visible in the export.
+The Generation Reference remains the default isolated model input. The returned
+AI-painted PNG is committed separately as a content-complete `kind='raw'` Raw
+Pipeline Source. That exact raw is the pre-modification input of the
+deterministic Board Art creation slot; it is not another model input merely
+because several slots may reuse it.
+
+Every Generation Reference suppresses units, additive ground cover, grid and
+tactical overlays, labels, and UI. Cover creates avoidable occlusion around
+geometry in the input. Per
+[ADR-0162](adr/0162-predrawn-backgrounds-retain-live-ground-cover.md), this clean
+generation input is independent of final composition: explicitly authored
+ground cover remains a live, animated runtime layer and need not be baked into
+the selected raster. In a Legacy reference, required gameplay-authoritative
+terrain, roads, barriers, and props remain fully visible; ADR-0142 separately
+permits scenic-only art to meet or cross the saved crop edge. In an AI reference,
+the exact selected raster is captured without compositing the dormant legacy
+environment beneath it.
 
 Per
-[ADR-0122](adr/0122-predrawn-occlusion-derives-from-canonical-raised-geometry.md),
-candidate review does not ask a visual model to segment those barriers or props.
-The runtime derives a per-depth alpha seed from the canonical raised sprites and
-shows that exact seed in magenta over the registered plate. The owner compares
-the real `Occlusion` before/after pass and the `Seed mask`; a plate whose painted
-silhouettes do not agree closely enough with that deterministic proof is not
-made acceptable by an unreviewed inferred mask.
+[ADR-0176](adr/0176-placed-art-and-level-artwork-are-separate-editor-destinations.md),
+the owner-facing **Placed Art** destination distinguishes free, gameplay-inert
+**Scene Art** from board-only nonblocking Doodads and board-only blocking Props.
+Scene Art may appear anywhere in the authored visual scene and remains part of
+a Legacy Generation Reference. Newly authored doodads and complete prop
+footprints must remain playable. Preexisting off-board doodads and props are
+not migrated away: they remain visible in Legacy capture and removable in the
+editor even though they cannot seed a new off-board placement or move.
 
-Per [ADR-0120](adr/0120-canonical-top-only-image-owns-predrawn-appearance.md),
-the guide owns spatial geometry and appearance, while the semantic dump owns
-gameplay meaning. The default test passes no
-prior candidate, accepted plate, beauty render, or unrelated board image.
-Boundary appearance may be generated creatively, but its location is the
-canonical outer edge of the board. The
+Per
+[ADR-0141](adr/0141-predrawn-generation-references-preserve-explicit-subterrain.md),
+a Legacy Generation Reference preserves every explicitly persisted Subterrain
+placement visible inside the saved generation frame that the canonical shared
+topology resolves onto an exposed face of the active visual terrain surface.
+Absence remains empty: tiles, families, adjacency, exposure, generation, and
+scenic fallback never synthesize a vertical material. These authored pixels
+carry appearance only and do not declare gameplay height, additional board
+addresses, or a larger envelope. An AI Generation Reference preserves its selected
+raster pixels exactly and does not reconstruct Subterrain from dormant board
+sprites. In either case, the generation prompt prohibits every additional
+skirt, cliff, attached side strip, row, column, or implied elevation.
+
+Per
+[ADR-0142](adr/0142-owner-authored-frame-defines-predrawn-generation-reference.md),
+the saved generation frame is a presentation crop rather than a second visual
+surface. The Level Editor exposes a 16:9 owner framing instrument and persists
+its result in canonical projected-board coordinates, independent of browser
+dimensions, device-pixel ratio, and transient ViewPane state. The complete
+playable envelope and every gameplay-authoritative reference draw represented in
+the semantic packet must fit fully inside. Scenic-only terrain, Scene Art,
+retained legacy off-board props and doodads, and Subterrain may clip or be
+excluded without being deleted from board data. Decorative pixels may touch a
+reference edge; that rectangle never
+becomes gameplay perimeter evidence or permission for a hard-cropped generated
+result. Missing, malformed, or under-inclusive frame data fails Generation
+Reference capture. A successful capture persists immutable bytes plus its saved
+mode, frame, Level revision, geometry and semantic identities, dimensions, and
+hashes. Later mode or Level changes create another reference instead of
+changing that record.
+
+Per
+[ADR-0158](adr/0158-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md),
+occlusion is a persisted immutable depth-aware mask child, not runtime inference
+from the plate or runtime reconstruction from ordinary raised sprites. The mask
+is bound to the exact raster parent, dimensions, coordinate basis, canonical
+environment-geometry revision or hash, depth convention, generator version,
+and content hash. The owner inspects the exact mask and real clipping result in
+the application. Per ADR-0162, it clips both live units and live ground cover by
+depth, while cover itself is excluded from the immutable environment-geometry
+fingerprint. A missing or mismatched selected mask fails closed; an explicit
+no-mask selection performs no environmental occlusion.
+
+Per
+[ADR-0180](adr/0180-predrawn-occlusion-selects-final-raster-pixels.md),
+the alpha plane is owner-authored directly over the exact immutable warped
+raster that becomes the mask's parent. Legacy tile, terrain, prop, doodad, and
+Scene Art pixels or silhouettes are never sampled or imported into that
+selection. A revision-pinned SlimSAM running off the UI thread in a browser
+worker may propose three candidates from owner-placed positive and negative
+points, but only explicit candidate acceptance changes the selected alpha.
+Brush, eraser, Reset, Undo, and Redo provide a complete manual path when the
+model is wrong or unavailable. The canonical alpha digest is authoritative;
+model, revision, backend, prompt/manual counts, and the depth-assignment version
+are provenance rather than runtime dependencies.
+
+Depth is derived deterministically after acceptance. Each 8-connected alpha
+component is handled independently. In every source-image column occupied by
+that component, the bottom-most selected pixel maps through the exact parent
+dimensions and world bounds to its canonical scene depth, and all selected
+pixels above it in that component and column share that contact depth. Authoring
+state creates no media. Only explicit **Create board with occlusion mask** emits the
+immutable alpha/depth child, and the owner inspects that persisted clipping
+result before Set. Runtime performs no segmentation inference.
+
+Per [ADR-0120](adr/0120-canonical-top-only-image-owns-predrawn-appearance.md) as
+partially superseded by ADR-0165, ADR-0166, and ADR-0168, the selected immutable
+Generation Reference owns visible appearance while the semantic dump owns
+gameplay meaning. A Legacy Generation Reference may serve the default isolated
+test with no prior candidate, accepted plate, beauty render, or unrelated board
+image. An AI Generation Reference is an intentional iterative input and records
+non-isolated generation provenance. Reusing the returned Raw Pipeline Source
+for another deterministic slot preserves that existing provenance; it is not
+itself another model run. Boundary appearance may be generated creatively, but
+its location remains the canonical outer edge of the board. The
 mutable process and prompt wording live in
 [`art/predrawn-board-generation.md`](art/predrawn-board-generation.md); exact run
 prompts remain text provenance while candidate media follows the live-storage
 contract.
 
-No pre-drawn generation call may be assembled only in chat or reconstructed
-from documentation amendments. Before generation, the shared preflight builder
-must materialize and validate one complete `prompt.txt`, semantic packet,
-ordered reference manifest with content hashes, and request manifest. Per
+An explicitly named comparative refinement follows
+[ADR-0156](adr/0156-named-predrawn-candidate-refinements-are-separate-non-isolated-branches.md)
+after owner review identifies a localized miss. It must use the same
+preflight and a new generation handoff. Its exact saved Generation Reference and
+byte-identical semantic packet retain authority, while a prior candidate may be
+only the subordinate edit target. The request manifest records reference and
+parent lineage, all reference hashes, the fixed operation, and
+`isolatedPipelineEvidence: false`. It may not overwrite its parent, add another
+raw result to the prior handoff, masquerade as an isolated result, or skip a
+fresh game-surface review.
+
+The generation handoff records the exact Generation Reference identity and
+hash, canonical semantic request and hashes, request hash, returned Raw Pipeline
+Source, and actor/time. Manual Codex generation occurs outside the application,
+so the application does not know or claim that conversation's model, prompt, or
+generation parameters. Changing the canonical semantic request or Generation
+Reference requires another generation handoff. A Generation Reference's saved
+frame and hash remain part of its provenance; changing the current Level frame
+does not mutate it.
+
+The owner-facing Board Art Pipeline separately records each creation slot's
+exact Raw Pipeline Source identity and hash plus compatible canonical geometry
+and deterministic processing context. It may record where the raw first entered
+storage as descriptive provenance, but that slot does not own the raw and
+another slot may reference the same immutable input.
+
+A lower-level preflight builder may separately resolve the same typed image
+input and semantic-request identity and materialize a complete
+`prompt.txt`, semantic packet, ordered content-hashed reference manifest, and
+request manifest. Per
 [ADR-0125](adr/0125-predrawn-preparation-self-validates-before-generation.md),
-successful deterministic preflight reports `ready-for-generation` without an
-owner checkpoint. Any subsequent prompt, model, parameter, semantic, or
-reference change creates a new preflighted run. Mandatory owner judgment begins
-with the generated candidate mounted on the game-owned review surface.
+that deterministic tool reports `ready-for-generation` without an owner
+checkpoint. Its files are separate text/tool provenance and do not cause the
+application attempt to claim an external conversation's model, prompt, or
+parameters. Mandatory owner judgment begins with the generated candidate
+mounted on the game-owned review surface.
 
 Per [ADR-0110](adr/0110-owner-fitted-grid-defines-predrawn-review-rectification.md),
-candidate review exposes the complete authored grid over the untouched source.
+candidate review exposes the complete authored grid over the untouched Raw
+Pipeline Source.
 The owner may fit monotonic row and column guides and inspect their correction
 range. Large, non-separable, or semantic drift still rejects the generation;
-the whole-image alignment cannot hide an incorrect level.
+the whole-image alignment cannot hide an incorrect level. Applying an accepted
+fit creates a new immutable full-scene raster child through the versioned
+deterministic rasterizer. The fit is retained as lineage and audit data, not as
+a Level field that every renderer replays.
 
 Per [ADR-0111](adr/0111-predrawn-refit-target-dimensions-are-owner-configurable.md),
 the review instrument's target row and column counts are owner-configurable. If
 the candidate visibly contains an extra row or column, the owner sets the target
 to the painted count before fitting guides. That target controls the refit
-topology and the temporary post-picker review overlay. Per
+topology and the pending pre-derivation proof overlay. Per
 [ADR-0112](adr/0112-predrawn-review-overlay-uses-the-saved-refit-grid.md), this
-overlay retains the chosen count after `DONE`; canonical level dimensions,
-interactive cells, and gameplay remain unchanged, leaving the generated excess
-visible as evidence for the next generation pass.
+optional authoring overlay retains the chosen count after calibration closes.
+Once a raster child is created, that same count belongs to its immutable
+derivation provenance and may drive the derived-raster proof overlay; it is not
+a runtime warp instruction. Canonical level dimensions, interactive cells, and
+gameplay remain unchanged, leaving generated excess visible as evidence for the
+next generation pass.
+
+Per ADR-0158, ADR-0165, ADR-0166, and ADR-0168, the backend separately owns the
+manual Generation Reference handoff and each deterministic creation slot.
+**Copy generation reference** reads the exact stored full-resolution reference
+for the manual Codex boundary. **Paste AI-painted board**, direct `Ctrl+V`, and
+**Choose PNG file instead** stage one exact PNG as a local preview; the named
+raw-source commit stores those unchanged bytes as an immutable, settable Raw
+Pipeline Source without browser cropping, resampling, compositing, or warping.
+An explicit **Use existing Codex-painted board** action may instead import an
+editor-mounted preexisting result through the same raw-source ingress.
+
+The Board Art Pipeline's workspace-level **New attempt** action remains
+available with zero, one, or many slots and opens the eligible Raw Pipeline
+Source chooser. Selecting a retained raw creates a slot that immediately
+references that exact version and Blob and begins at grid fitting. It allocates
+no duplicate media, does not mutate another slot, and does not repeat the model
+handoff or fill another raw output.
 
 Per
-[ADR-0123](adr/0123-accepted-predrawn-scenes-keep-their-pixels-and-saved-alignment.md),
-an accepted whole-level plate keeps the exact approved bytes at their actual
-pixel dimensions. Promotion saves the stable media slot plus the
-exact approved versioned alignment payload in the Level. Its four corners,
-refit counts, and monotonic guides drive the renderer; its pinned boundary
-round-trips as display-only evidence. Promotion does not bake the transform,
-resize the image, or persist a preview URL or candidate id. One continuous
-whole-image transform is allowed, but independent object and layer warps remain
-forbidden.
+[ADR-0169](adr/0169-historical-raw-contracts-bind-only-from-saved-level-proof.md),
+a historical raw missing later coordinate-basis/viewing-pane metadata may enter
+that chooser only under the backend's exact saved-Level eligibility projection.
+Fenced slot creation rechecks its frame/world bounds, Blob/content hash,
+dimensions, original provenance, and v1 geometry, then atomically establishes
+the immutable external raw-contract binding and any required ADR-0163 geometry
+binding. The historical row is never rewritten. A read cannot establish either
+repair, and a failed proof creates no slot.
+
+The backend permits at most one current immutable registered-raster child and
+one matching **Board with occlusion mask** child in that slot. No operation
+mutates its parent or fills an occupied stage. Per ADR-0175, before occlusion exists the
+owner may explicitly discard a rejected current warp: the exact artifact is
+archived and retained, the slot's warp pointer is cleared under CAS, its direct
+registration becomes the next grid-edit seed, and the same raw input may emit a
+replacement current warp.
+Per
+[ADR-0181](adr/0181-occlusion-mask-retries-stay-in-the-same-pipeline-slot.md),
+the owner may likewise discard the exact current mask without losing that
+warp, its registration, or its saved cyan profile. The mask child remains
+immutable: an unreferenced draft is archived, canonical-referenced history is
+retained, and only the slot pointer is detached before replacement authoring.
+For grid fitting, that preview tuning includes ADR-0171's coarse controls and
+sparse shared-node local refinement. These remain pending instrument state
+until the derive action commits one immutable child; retrying a rejected
+committed mesh archives rather than mutates the prior raster.
+Per ADR-0178, one bounded session-local Undo/Redo history snapshots the complete
+pending calibration across both modes. Each completed drag or successful
+discrete action is one atomic step, while rejected/no-op and view-only actions
+create none. Derivation consumes the currently displayed restored snapshot and
+does not persist the history itself.
+
+The Level Editor's **Level Artwork** side controls leave the board visible and
+navigate to separate URL-addressable **Generation References** and **Board Art
+Pipeline** workspaces. This process destination uses the `level-artwork` route
+layer and `levelArtworkEditor` workspace namespace; it never shares the
+`placed-art` brush destination or subtype state. Generation References owns the
+waiting/manual-handoff state that creates Raw Pipeline Sources. The Pipeline
+shows the owner-facing sequence **Raw Pipeline Source → Warped board → Board
+with occlusion mask** for every slot and keeps **New attempt** outside any existing
+slot. Neither raw reuse nor either deterministic transform requires an agent,
+copied registration packet, or filesystem operation. Warped and
+mask-bearing board artifacts never appear in the slot-input chooser.
+
+`Set` records one remembered exact raster plus matching mask or explicit no-mask
+state in the fenced working copy only. The separate Legacy/AI mode control
+determines which background the working and saved Level renders. Private Save
+pins mode and selection in private canonical content without making ready media
+public. Official Review and publish/Publish is the official public transaction;
+a separately labeled user-map Publish action may publish the private canonical
+snapshot and exactly its active selected versions. Preview, Set, mode change,
+Save, link copy, and either Publish action must not be conflated in labels or
+success messages.
+
+Migration groups every old complete or partial raw-to-warp-to-occlusion path as
+an explicit historical slot. Branches become separate slots and may share
+the same immutable old stage bytes. An existing `kind=raw` row is displayed as
+a Raw Pipeline Source, never as a Generation Reference. Because the original
+model input was not stored, migration records `missing-historical-source`; it
+never fabricates a Generation Reference. Those artifacts retain their exact
+bytes, settable state, hashes, and audit history. Its exact content-complete,
+geometry-compatible Raw Pipeline Source may be selected as a separate writable
+slot's input without fabricating the missing reference or generation
+provenance. Missing historical coordinate metadata is supplied only by the
+external ADR-0169 binding after exact fenced proof, never by mutation or a
+client default. Every new writable slot requires one real Raw Pipeline Source
+input.
 
 Generation should reserve meaningful continuous scenery outside every playable
 edge for camera travel. A centered safe area is useful prompt guidance, not an
 exact acceptance measurement, and there is no mandatory 3840x2160 output.
 Review tests four-direction panning at the centered viewport-cover zoom floor in
-the real shared viewer. More source pixels at the same grid-to-frame ratio do
+the real shared viewer. More reference pixels at the same grid-to-frame ratio do
 not create more camera room.
 
 ### Full-Height Wall Assets

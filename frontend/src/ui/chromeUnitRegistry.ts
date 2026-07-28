@@ -117,12 +117,10 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
       '[data-chrome-unit="outer-panel"]',
       '.level-editor-screen .le-outer-panel',
       '[data-chrome-consumer="level-editor-controls"]',
-      '[data-chrome-consumer="events-overlay"]',
       '[data-chrome-consumer="skirmish-hud"]',
     ],
     usage: [
       'Level Editor control rail',
-      'Rules/events overlay shell',
       'Skirmish command HUD',
       'Section dividers inherited from the outer rail',
     ],
@@ -214,7 +212,6 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     selectors: [
       '[data-chrome-unit="inner-locked-rectangle"]',
       '.le-seg-btn',
-      '.le-faction-select',
       '.le-board-link-input',
       '.settings-chrome-button',
     ],
@@ -223,7 +220,6 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
       'Square controls inherit this height and then lock width to the same surface',
       'Text buttons',
       'Segmented choices',
-      'Faction select',
       'Board-link input chrome',
     ],
   },
@@ -367,6 +363,7 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
       '.le-icon-btn',
       '.le-action-toolbar .le-seg-btn',
       '.le-gen-cover-caret-btn',
+      '.le-direction-trigger',
       '[data-chrome-unit="inner-tool-square"]',
     ],
     usage: [
@@ -375,6 +372,7 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
       'Undo/redo history controls',
       'Small icon-only action controls',
       'Generator cover disclosure control',
+      'Facing direction trigger',
     ],
   },
   {
@@ -626,8 +624,6 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     maxWidth: 620,
     selectors: [
       '.le-select-wrap',
-      '.le-layer-select-wrap',
-      '.le-event-select-wrap',
       '[data-chrome-unit="inner-dropdown"]',
     ],
     usage: [

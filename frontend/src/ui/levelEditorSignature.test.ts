@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { editorBoardToLevel } from '../core/levelBoard';
+import { editorBoardToLevel, levelToEditorBoard } from '../core/levelBoard';
 import type { EditorBoard } from './boardCode';
 import {
   draftBaselineMatchesLevel,
@@ -7,7 +7,7 @@ import {
   normalizedLevelEditorSignature,
 } from './levelEditorSignature';
 
-const emptyBoard = (): EditorBoard => ({
+const emptyBoard = (overrides: Partial<EditorBoard> = {}): EditorBoard => ({
   cols: 4,
   rows: 4,
   playerFaction: null,
@@ -20,6 +20,7 @@ const emptyBoard = (): EditorBoard => ({
   featureCuts: {},
   featureExits: {},
   zones: {},
+  ...overrides,
 });
 
 describe('level editor persisted signatures', () => {
@@ -35,6 +36,34 @@ describe('level editor persisted signatures', () => {
     const normalized = normalizedLevelEditorSignature(legacy);
     expect(normalized).not.toBe(levelEditorLevelSignature(legacy));
     expect(draftBaselineMatchesLevel(normalized, legacy)).toBe(true);
+  });
+
+  it('matches the untouched editor projection even when the stored signature differs', () => {
+    const encoded = editorBoardToLevel(emptyBoard(), { id: 'l-projected', name: 'Projected board' });
+    const stored = { ...encoded, boardCode: undefined };
+    const projected = editorBoardToLevel(levelToEditorBoard(stored), {
+      id: stored.id,
+      name: stored.name,
+      objective: stored.objective,
+    });
+
+    expect(levelEditorLevelSignature(stored)).not.toBe(levelEditorLevelSignature(projected));
+    expect(normalizedLevelEditorSignature(stored)).toBe(levelEditorLevelSignature(projected));
+  });
+
+  it('keeps authored subterrain in the cloud-comparison projection', () => {
+    const level = editorBoardToLevel(emptyBoard({
+      cols: 2,
+      rows: 1,
+      cells: { '0,0': 'grass-surf-0', '1,0': 'grass-surf-0' },
+      subterrain: { '0,0:south': 'roots', '1,0:east': 'bedrock' },
+    }), { id: 'l-subterrain', name: 'Subterrain board' });
+
+    expect(levelToEditorBoard(level).subterrain).toEqual({
+      '0,0:south': 'roots',
+      '1,0:east': 'bedrock',
+    });
+    expect(normalizedLevelEditorSignature(level)).toBe(levelEditorLevelSignature(level));
   });
 
   it('rejects a draft baseline after the persisted level changes', () => {

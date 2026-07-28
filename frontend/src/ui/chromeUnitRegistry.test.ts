@@ -66,7 +66,7 @@ describe('chrome unit DOM hierarchy', () => {
     ]));
   });
 
-  it('frames the dropdown wrapper without framing its native select child', () => {
+  it('registers only the shared dropdown wrapper after native selects retire', () => {
     const dropdown = chromeUnitById('inner-dropdown');
 
     expect(dropdown.selectors).toEqual(expect.arrayContaining([
@@ -74,6 +74,8 @@ describe('chrome unit DOM hierarchy', () => {
       '[data-chrome-unit="inner-dropdown"]',
     ]));
     expect(dropdown.selectors).not.toContain('.le-layer-select');
+    expect(dropdown.selectors).not.toContain('.le-layer-select-wrap');
+    expect(dropdown.selectors).not.toContain('.le-event-select-wrap');
   });
 
   it('makes the real role-root class primary and unions registered legacy selectors', () => {

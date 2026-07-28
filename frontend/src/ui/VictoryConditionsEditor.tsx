@@ -7,10 +7,10 @@ import { DEFAULT_SURVIVE_TURNS } from '../core/objectives';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 
 // The Level Editor's "Victory events" editor (ADR-0064) — a MASTER-DETAIL surface inside the
-// events overlay: a scrollable list of NAMED rules on the left, the selected rule's `IF <conditions>
+// Events workspace: a scrollable list of NAMED rules on the left, the selected rule's `IF <conditions>
 // THEN <faction> wins|loses` on the right. Templates (passed in via `templates`) sit atop the list
 // and append rules to it. Chrome is the editor's kit idiom only — le-seg-btn buttons, the shared Toggle /
-// Stepper, the styled le-layer-select dropdown.
+// Stepper, and the shared HouseSelect dropdown.
 
 /** The board's factions offered in the "IF <faction>" / "THEN <faction>" dropdowns — one per side,
  * label from the board's assigned palette (see LevelEditor). Values map to the engine's side. */

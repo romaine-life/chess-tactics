@@ -1,6 +1,7 @@
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { BoardSceneLayer } from './BoardSceneLayer';
 import { TileGrid, type TileGridCell } from './TileGrid';
+import { BoardGridLayer } from './BoardGridLayer';
 import { BoardTerrainLayer, terrainCanvasMacroTiles, terrainTopSrc, type TerrainCanvasCell } from './BoardTerrainLayer';
 import { immutableBoardLabTerrainSrc } from './BoardLabBoard';
 import { assetFrameSrc, studioFamilies, type StudioAsset } from '../ui/studioBoard';
@@ -11,21 +12,26 @@ import type { TileFamilyId } from '../core/tileSockets';
 import type { EditorBoard } from '../ui/boardCode';
 import { resolveMacroTilePlacements } from '../core/macroTiles';
 import {
-  boardBounds,
-  boardLabMetrics,
+  boardVisualFeatures,
+  boardVisualTerrainCells,
+  isPredrawnBackgroundActive,
   resolveTerrainSideExposure,
   resolveTerrainSideFaces,
-  type BakeBounds,
   subterrainFaceKey,
   subterrainMaterialSrc,
+  type PredrawnBoardCornerRegistration,
   type TerrainSideMaterials,
   type TerrainSideExposure,
 } from '@chess-tactics/board-render';
-import { PredrawnBoardLayer, runtimePredrawnBoardPlate } from './PredrawnBoardLayer';
+import {
+  PredrawnBoardLayer,
+  predrawnReviewGridCells,
+  runtimePredrawnBoardPlate,
+} from './PredrawnBoardLayer';
 
 // THE shared, non-interactive board renderer — one source of truth for how an EditorBoard
-// draws (terrain through one composed canvas layer; units, doodads, props, fences, walls, wall art,
-// and ground cover through the shared scene-depth canvas). Both surfaces consume it:
+// draws (terrain through one composed canvas layer; units, doodads, props, floating artwork,
+// fences, walls, wall art, and ground cover through the shared scene-depth canvas). Both surfaces consume it:
 //   - the Level Editor layers paint/erase/select interaction on top of these same cells, and
 //   - the Campaign Editor's selected-level viewer renders it read-only inside a ViewPane.
 // It owns NO state and NO animation clock: pass `animationFrame` (default 0 = a static frame).
@@ -42,66 +48,28 @@ export interface BoardLayerVisibility {
 // Reuses the canonical ResolvedFeatureOverlay shape.
 export type FeatureOverlayMap = Record<string, ResolvedFeatureOverlay>;
 
-/**
- * Derive the one canonical image-generation reference from saved board data.
- *
- * The reference keeps authored terrain, roads, doodads, props, fences, and walls, but removes
- * every visual channel that would either hide that geometry or feed a previous accepted scene
- * back into a fresh generation run. Terrain side faces are suppressed by `topSurfacesOnly` at
- * render time because they are a presentation choice rather than another saved board channel.
- */
-export function boardForTopSurfaceArtExport(board: EditorBoard): EditorBoard {
+/** Remove every live channel excluded from an immutable Source Artwork capture. */
+export function boardForPredrawnSourceArtwork(board: EditorBoard): EditorBoard {
   return {
     ...board,
-    surface: undefined,
     units: {},
     cover: {},
     coverTypes: {},
   };
 }
 
-export interface TopSurfaceArtExportFrame {
-  width: number;
-  height: number;
-  padding: number;
-  paintBounds: BakeBounds;
-  boardPan: { x: number; y: number };
-}
-
-/** Default clear border around the complete measured paint bounds in the exported PNG. */
-export const TOP_SURFACE_ART_EXPORT_PADDING = 96;
-
 /**
- * Size and position a top-only reference from the renderer's complete draw bounds.
+ * Derive the legacy composed-environment form of Source Artwork.
  *
- * This replaces the old per-level fixed viewport and guessed CSS scale. The returned frame is
- * exactly the measured non-background draw rectangle plus `padding` on all four sides, while the
- * pan compensates for TileGrid's canonical centering transform. A caller can therefore capture
- * the frame element directly without knowing the level's row/column count or projected aspect.
+ * Explicitly authored Subterrain remains part of the reference; absence never synthesizes a
+ * default skirt. AI-mode source capture does not use this helper because it retains the exact
+ * selected immutable plate.
  */
-export function topSurfaceArtExportFrame(
-  board: EditorBoard,
-  padding = TOP_SURFACE_ART_EXPORT_PADDING,
-): TopSurfaceArtExportFrame {
-  const sourceBoard = boardForTopSurfaceArtExport(board);
-  const safePadding = Number.isFinite(padding) ? Math.max(1, Math.ceil(padding)) : TOP_SURFACE_ART_EXPORT_PADDING;
-  const paintBounds = boardBounds(sourceBoard, { ambientCover: false, topSurfacesOnly: true });
-  const cells = Array.from({ length: sourceBoard.rows }, (_, y) => (
-    Array.from({ length: sourceBoard.cols }, (__, x) => ({ x, y }))
-  )).flat();
-  const metrics = boardLabMetrics(cells);
-  const width = Math.ceil(paintBounds.width + safePadding * 2);
-  const height = Math.ceil(paintBounds.height + safePadding * 2);
-
+export function boardForTopSurfaceArtExport(board: EditorBoard): EditorBoard {
   return {
-    width,
-    height,
-    padding: safePadding,
-    paintBounds,
-    boardPan: {
-      x: safePadding - paintBounds.minX - metrics.originLeft - width / 2,
-      y: safePadding - paintBounds.minY - metrics.originTop - height / 2,
-    },
+    ...boardForPredrawnSourceArtwork(board),
+    backgroundMode: 'legacy',
+    surface: undefined,
   };
 }
 
@@ -180,6 +148,80 @@ export function studioCoverCells(
   return list;
 }
 
+export interface StudioVisualTerrainPlan {
+  gridCells: TileGridCell[];
+  playableGridCells: TileGridCell[];
+  terrainCells: TerrainCanvasCell[];
+}
+
+/**
+ * Resolve the same complete visual terrain field used by the shared canvas renderer. Scenic
+ * coordinates remain visual-only, while `playableGridCells` preserves the tactical-grid origin
+ * for centering and pre-drawn registration.
+ */
+export function studioVisualTerrainPlan({
+  board,
+  animationFrame = 0,
+  hidden,
+  topSurfacesOnly = false,
+}: {
+  board: EditorBoard;
+  animationFrame?: number;
+  hidden?: BoardLayerVisibility;
+  topSurfacesOnly?: boolean;
+}): StudioVisualTerrainPlan {
+  const visualCells = boardVisualTerrainCells(board);
+  const featureOverlays = deriveFeatureOverlays(
+    boardVisualFeatures(board, visualCells),
+    board.featureCuts,
+    board.featureExits,
+  );
+  const occupied = new Set(visualCells.filter((cell) => cell.tileId).map((cell) => cell.key));
+  const gridCells: TileGridCell[] = [];
+  const playableGridCells: TileGridCell[] = [];
+  const terrainCells: TerrainCanvasCell[] = [];
+
+  for (const visualCell of visualCells) {
+    const { key, x, y, decorative } = visualCell;
+    const tileAsset = visualCell.tileId ? resolveTileAsset(visualCell.tileId) : undefined;
+    const sideExposure = resolveTerrainSideExposure(
+      { x, y },
+      (nextX, nextY) => occupied.has(`${nextX},${nextY}`),
+    );
+    const sideMaterials = Object.fromEntries(['south', 'east'].flatMap((face) => {
+      const material = board.subterrain?.[subterrainFaceKey(x, y, face as 'south' | 'east')];
+      return material ? [[face, subterrainMaterialSrc(material)]] : [];
+    }));
+    terrainCells.push(studioTerrainCanvasCell({
+      key: decorative ? `decorative:${key}` : key,
+      x,
+      y,
+      tileAsset,
+      feature: featureOverlays[key],
+      animationFrame,
+      hidden,
+      sideExposure,
+      sideMaterials,
+    }));
+    const gridCell: TileGridCell = {
+      key: decorative ? `decorative:${key}` : key,
+      x,
+      y,
+      className: `tileset-placement-cell${decorative ? ' is-decorative' : ''} ${tileAsset ? '' : 'is-empty'}`.trim(),
+    };
+    gridCells.push(gridCell);
+    if (!decorative) playableGridCells.push(gridCell);
+  }
+
+  return {
+    gridCells,
+    playableGridCells,
+    terrainCells: visualCells.some((cell) => cell.decorative)
+      ? terrainCells.map((cell) => ({ ...cell, animate: false }))
+      : terrainCells,
+  };
+}
+
 /**
  * A static, read-only board rendered straight from an EditorBoard — tiles, feature ribbons,
  * units, doodads, multi-cell props and ground cover, all through the SAME render core the
@@ -197,6 +239,12 @@ export function StudioReadOnlyBoard({
   ariaLabel = 'Level board',
   hidden,
   topSurfacesOnly = false,
+  showGrid = false,
+  reviewGridRegistration,
+  renderCellOverlay,
+  onTerrainFirstFrame,
+  onSceneFirstFrame,
+  onFrameError,
 }: {
   board: EditorBoard;
   animationFrame?: number;
@@ -206,59 +254,54 @@ export function StudioReadOnlyBoard({
   className?: string;
   ariaLabel?: string;
   hidden?: BoardLayerVisibility;
-  /** Generation-reference view: preserve authored art/objects while suppressing terrain skirts. */
+  /** Generation-reference view: preserve authored art, including explicit Subterrain, without defaults. */
   topSurfacesOnly?: boolean;
+  /** Owner-inspection grid drawn through the canonical board grid layer. */
+  showGrid?: boolean;
+  /**
+   * Saved refit dimensions used only by the visible review grid. Tactical cells and overlay hit
+   * targets remain the authored playable cells.
+   */
+  reviewGridRegistration?: PredrawnBoardCornerRegistration;
+  /** Owner-inspection overlay rendered only for authored playable cells, never scenic cells. */
+  renderCellOverlay?: (
+    cell: TileGridCell,
+    position: { left: number; top: number },
+  ) => ReactNode;
+  onTerrainFirstFrame?: () => void;
+  onSceneFirstFrame?: () => void;
+  onFrameError?: (error: unknown) => void;
 }): ReactElement {
-  const featureOverlays = deriveFeatureOverlays(board.features, board.featureCuts, board.featureExits);
-  const gridCells: TileGridCell[] = [];
-  const terrainCells: TerrainCanvasCell[] = [];
-  const occupied = new Set(
-    Object.entries(board.cells)
-      .filter(([, id]) => !!resolveTileAsset(id))
-      .map(([key]) => key),
-  );
-  for (let y = 0; y < board.rows; y += 1) {
-    for (let x = 0; x < board.cols; x += 1) {
-      const key = `${x},${y}`;
-      const tileAsset = board.cells[key] ? resolveTileAsset(board.cells[key]) : undefined;
-      const sideExposure = topSurfacesOnly
-        ? { south: false, east: false }
-        : resolveTerrainSideExposure({ x, y }, (nextX, nextY) => occupied.has(`${nextX},${nextY}`));
-      const sideMaterials = Object.fromEntries(['south', 'east'].flatMap((face) => {
-        const material = board.subterrain?.[subterrainFaceKey(x, y, face as 'south' | 'east')];
-        return material ? [[face, subterrainMaterialSrc(material)]] : [];
-      }));
-      terrainCells.push(studioTerrainCanvasCell({
-        key,
-        x,
-        y,
-        tileAsset,
-        feature: featureOverlays[key],
-        animationFrame,
-        hidden,
-        sideExposure,
-        sideMaterials,
-      }));
-      gridCells.push({
-        key,
-        x,
-        y,
-        className: `tileset-placement-cell ${tileAsset ? '' : 'is-empty'}`.trim(),
-      });
-    }
-  }
+  const { gridCells, playableGridCells, terrainCells } = studioVisualTerrainPlan({
+    board,
+    animationFrame,
+    hidden,
+    topSurfacesOnly,
+  });
   const macroTiles = resolveMacroTilePlacements({
     placements: board.macroTiles,
     columns: board.cols,
     rows: board.rows,
     familyAt: (x, y) => familyOfTile(board.cells[`${x},${y}`] ?? ''),
   });
-  const predrawnPlate = board.surface ? runtimePredrawnBoardPlate(board.surface) : undefined;
+  // A generation reference always comes from the authored guide geometry, never from a prior
+  // generated plate. Normal read-only views still render the exact installed immutable version.
+  const predrawnBackgroundActive = !topSurfacesOnly && isPredrawnBackgroundActive(board);
+  const predrawnPlate = predrawnBackgroundActive && board.surface
+    ? runtimePredrawnBoardPlate(board.surface)
+    : undefined;
   const sceneBoard = topSurfacesOnly ? boardForTopSurfaceArtExport(board) : board;
+  const reviewGridCells = showGrid
+    ? predrawnReviewGridCells(playableGridCells, reviewGridRegistration)
+    : playableGridCells;
+  const playableCellKeys = renderCellOverlay
+    ? new Set(playableGridCells.map((cell) => cell.key))
+    : undefined;
 
   return (
     <TileGrid
       cells={gridCells}
+      originCells={playableGridCells}
       className={`tileset-placement-board is-readonly${topSurfacesOnly ? ' is-top-surface-art-export' : ''} ${className}`.trim()}
       ariaLabel={ariaLabel}
       boardZoom={boardZoom}
@@ -266,11 +309,38 @@ export function StudioReadOnlyBoard({
       backgroundLayer={(
         <>
           {predrawnPlate
-            ? <PredrawnBoardLayer plate={predrawnPlate} cells={gridCells} />
-            : <BoardTerrainLayer cells={terrainCells} macroTiles={terrainCanvasMacroTiles(macroTiles)} />}
-          <BoardSceneLayer board={sceneBoard} hidden={hidden} coverSeed={coverSeed} ambientCover={false} omitTerrain />
+            ? <PredrawnBoardLayer
+                plate={predrawnPlate}
+                cells={playableGridCells}
+                onFirstFrame={onTerrainFirstFrame}
+                onFrameError={onFrameError}
+              />
+            : !predrawnBackgroundActive
+              ? <BoardTerrainLayer
+                cells={terrainCells}
+                macroTiles={terrainCanvasMacroTiles(macroTiles)}
+                onFirstFrame={onTerrainFirstFrame}
+                onFrameError={onFrameError}
+                />
+              : null}
+          <BoardSceneLayer
+            board={sceneBoard}
+            hidden={hidden}
+            coverSeed={coverSeed}
+            ambientCover={false}
+            omitTerrain
+            onFirstFrame={onSceneFirstFrame}
+            onFrameError={onFrameError}
+          />
         </>
       )}
-    />
+      renderCellOverlay={renderCellOverlay
+        ? (cell, position) => playableCellKeys?.has(cell.key)
+          ? renderCellOverlay(cell, position)
+          : null
+        : undefined}
+    >
+      {showGrid ? <BoardGridLayer cells={reviewGridCells} /> : null}
+    </TileGrid>
   );
 }

@@ -6,15 +6,26 @@ import {
   boardContentHash,
   boardDrawOps,
   boardSocialFramingBounds,
+  filterPredrawnOcclusionDepthPixels,
+  isPredrawnBackgroundActive,
+  isVersionedPredrawnBoardSurface,
+  largestSolidRect,
+  predrawnOcclusionDepthMapForSurface,
   predrawnOcclusionMaskOps,
   predrawnOcclusionMasksInFront,
   rasterizePredrawnBoardPixels,
   uniqueDrawSrcs,
   type BakeBounds,
   type BoardDrawOp,
+  type PredrawnOcclusionDepthMap,
 } from '@chess-tactics/board-render';
 import type { EditorBoard } from '../ui/boardCode';
-import { boardCanvasScratchRegion } from './BoardCanvasLayer';
+import {
+  boardCanvasScratchRegion,
+  predrawnOcclusionDepthImageDimensionIssue,
+} from './BoardCanvasLayer';
+import { loadDecodedImage } from './imageResources';
+import { versionedPredrawnImageDimensionIssue } from './PredrawnBoardLayer';
 
 export {
   BAKE_GEOMETRY,
@@ -22,6 +33,7 @@ export {
   boardContentHash,
   boardDrawOps,
   boardSocialFramingBounds,
+  largestSolidRect,
   uniqueDrawSrcs,
 };
 
@@ -38,24 +50,7 @@ export type BoardThumbnailScratchFactory = (
   height: number,
 ) => BoardThumbnailScratchSurface | undefined;
 
-const imageCache = new Map<string, Promise<HTMLImageElement>>();
-
-function loadImage(src: string): Promise<HTMLImageElement> {
-  const cached = imageCache.get(src);
-  if (cached) return cached;
-  const promise = new Promise<HTMLImageElement>((resolve, reject) => {
-    const img = new Image();
-    img.decoding = 'async';
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      img.decode().then(() => resolve(img)).catch(() => resolve(img));
-    };
-    img.onerror = () => reject(new Error(`bakeBoardThumbnail: failed to load ${src}`));
-    img.src = src;
-  });
-  imageCache.set(src, promise);
-  return promise;
-}
+export type BoardThumbnailImageLoader = (src: string) => Promise<HTMLImageElement>;
 
 function createCanvas(width: number, height: number): Canvas2D {
   if (typeof OffscreenCanvas !== 'undefined') return new OffscreenCanvas(width, height);
@@ -140,28 +135,88 @@ function canvasToBlob(canvas: Canvas2D): Promise<Blob> {
   });
 }
 
+/**
+ * Resolve thumbnail rasters while preserving optional-sprite omission and making the exact
+ * immutable pre-drawn selection availability-critical. Validation happens before any canvas
+ * paint so a bad plate or depth map cannot produce a unit-only or partially unoccluded bake.
+ */
+export async function loadBoardThumbnailImages(
+  board: EditorBoard,
+  sources: readonly string[],
+  imageLoader: BoardThumbnailImageLoader = loadDecodedImage,
+): Promise<Map<string, HTMLImageElement>> {
+  const predrawnBackgroundActive = isPredrawnBackgroundActive(board);
+  const versionedSurface = predrawnBackgroundActive
+    && board.surface?.kind === 'predrawn'
+    && isVersionedPredrawnBoardSurface(board.surface)
+    ? board.surface
+    : undefined;
+  const backgroundSrc = versionedSurface
+    ? `/api/background-versions/${encodeURIComponent(versionedSurface.backgroundVersionId)}/content`
+    : undefined;
+  const occlusionDepthMap = predrawnBackgroundActive
+    ? predrawnOcclusionDepthMapForSurface(board.surface)
+    : undefined;
+  const required = new Map<string, 'background' | 'occlusion-depth'>([
+    ...(backgroundSrc ? [[backgroundSrc, 'background'] as const] : []),
+    ...(occlusionDepthMap ? [[occlusionDepthMap.src, 'occlusion-depth'] as const] : []),
+  ]);
+  const allSources = [...new Set([...sources, ...required.keys()])];
+  const images = new Map<string, HTMLImageElement>();
+
+  await Promise.all(allSources.map(async (src) => {
+    let image: HTMLImageElement;
+    try {
+      image = await imageLoader(src);
+    } catch (cause) {
+      const kind = required.get(src);
+      if (!kind) return;
+      const label = kind === 'background' ? 'background raster' : 'occlusion depth mask';
+      throw new Error(`bakeBoardThumbnail: selected immutable ${label} is unavailable: ${src}`, { cause });
+    }
+
+    if (src === backgroundSrc && versionedSurface) {
+      const issue = versionedPredrawnImageDimensionIssue(
+        versionedSurface,
+        image.naturalWidth,
+        image.naturalHeight,
+      );
+      if (issue) throw new Error(`bakeBoardThumbnail: ${issue}`);
+    }
+    if (src === occlusionDepthMap?.src) {
+      const issue = predrawnOcclusionDepthImageDimensionIssue(occlusionDepthMap, image);
+      if (issue) throw new Error(`bakeBoardThumbnail: ${issue}`);
+    }
+    images.set(src, image);
+  }));
+
+  return images;
+}
+
 async function renderBoardCanvas(board: EditorBoard, scale: number): Promise<{ canvas: Canvas2D; bounds: BakeBounds } | null> {
   const bounds = boardBounds(board);
   const ops = boardDrawOps(board);
-  const occlusionMasks = board.surface?.kind === 'predrawn' ? predrawnOcclusionMaskOps(board) : [];
+  const predrawnBackgroundActive = isPredrawnBackgroundActive(board);
+  const occlusionDepthMap = predrawnBackgroundActive
+    ? predrawnOcclusionDepthMapForSurface(board.surface)
+    : undefined;
+  const occlusionMasks = predrawnBackgroundActive
+    && board.surface?.kind === 'predrawn'
+    && !isVersionedPredrawnBoardSurface(board.surface)
+    ? predrawnOcclusionMaskOps(board)
+    : [];
   const canvas = createCanvas(Math.max(1, Math.round(bounds.width * scale)), Math.max(1, Math.round(bounds.height * scale)));
   const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
   if (!ctx) return null;
   ctx.imageSmoothingEnabled = false;
 
-  const srcs = [...new Set([...ops, ...occlusionMasks].map((op) => op.src))];
-  const images = new Map<string, HTMLImageElement>();
-  await Promise.all(
-    srcs.map(async (src) => {
-      try {
-        images.set(src, await loadImage(src));
-      } catch {
-        // A missing sprite must not abort the whole render; skip it.
-      }
-    }),
-  );
+  const srcs = [...new Set([
+    ...[...ops, ...occlusionMasks].map((op) => op.src),
+    ...(occlusionDepthMap ? [occlusionDepthMap.src] : []),
+  ])];
+  const images = await loadBoardThumbnailImages(board, srcs);
 
-  drawBoardThumbnailOps(ctx, ops, bounds, scale, images, occlusionMasks);
+  drawBoardThumbnailOps(ctx, ops, bounds, scale, images, occlusionMasks, undefined, occlusionDepthMap);
   return { canvas, bounds };
 }
 
@@ -173,15 +228,20 @@ export function drawBoardThumbnailOps(
   images: ReadonlyMap<string, HTMLImageElement>,
   occlusionMasks: readonly BoardDrawOp[] = [],
   scratchFactory: BoardThumbnailScratchFactory = createBoardThumbnailScratchSurface,
+  occlusionDepthMap?: PredrawnOcclusionDepthMap,
 ): void {
   let scratch: BoardThumbnailScratchSurface | undefined;
+  let depthScratch: BoardThumbnailScratchSurface | undefined;
   for (const op of ops) {
     const img = images.get(op.src);
     if (!img) continue;
     const masksInFront = op.layer === 'scene'
       ? predrawnOcclusionMasksInFront(op, occlusionMasks)
       : [];
-    if (masksInFront.length === 0) {
+    const depthImage = op.layer === 'scene' && occlusionDepthMap
+      ? images.get(occlusionDepthMap.src)
+      : undefined;
+    if (masksInFront.length === 0 && !depthImage) {
       paintBoardThumbnailOp(ctx, img, op, bounds, scale);
       continue;
     }
@@ -197,11 +257,51 @@ export function drawBoardThumbnailOps(
     scratchContext.globalCompositeOperation = 'source-over';
     scratchContext.globalAlpha = 1;
     paintBoardThumbnailOp(scratchContext, img, op, region.bounds, scale);
+    if (depthImage && occlusionDepthMap) {
+      depthScratch ??= scratchFactory(region.width, region.height);
+      if (depthScratch) {
+        if (depthScratch.canvas.width < region.width) depthScratch.canvas.width = region.width;
+        if (depthScratch.canvas.height < region.height) depthScratch.canvas.height = region.height;
+        const depthContext = depthScratch.context;
+        depthContext.clearRect(0, 0, region.width, region.height);
+        depthContext.imageSmoothingEnabled = false;
+        depthContext.globalCompositeOperation = 'source-over';
+        depthContext.globalAlpha = 1;
+        const mapBounds = occlusionDepthMap.worldBounds;
+        depthContext.drawImage(
+          depthImage,
+          0,
+          0,
+          occlusionDepthMap.frameWidth,
+          occlusionDepthMap.frameHeight,
+          (mapBounds.minX - region.bounds.minX) * scale,
+          (mapBounds.minY - region.bounds.minY) * scale,
+          mapBounds.width * scale,
+          mapBounds.height * scale,
+        );
+        const depthPixels = depthContext.getImageData(0, 0, region.width, region.height);
+        depthPixels.data.set(filterPredrawnOcclusionDepthPixels(depthPixels.data, op.z));
+        depthContext.putImageData(depthPixels, 0, 0);
+      }
+    }
     scratchContext.save();
     scratchContext.globalCompositeOperation = 'destination-out';
     for (const mask of masksInFront) {
       const maskImage = images.get(mask.src);
       if (maskImage) paintBoardThumbnailOp(scratchContext, maskImage, mask, region.bounds, scale);
+    }
+    if (depthImage && depthScratch) {
+      scratchContext.drawImage(
+        depthScratch.canvas,
+        0,
+        0,
+        region.width,
+        region.height,
+        0,
+        0,
+        region.width,
+        region.height,
+      );
     }
     scratchContext.restore();
     ctx.drawImage(
@@ -333,68 +433,38 @@ export function paintBoardThumbnailOp(
   });
 }
 
+function largestOpaqueCanvasRect(canvas: Canvas2D): { x: number; y: number; w: number; h: number } | null {
+  const context = canvas.getContext('2d') as ThumbnailContext | null;
+  if (!context || canvas.width <= 0 || canvas.height <= 0) return null;
+  const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+  return largestSolidRect(
+    (x, y) => pixels[(y * canvas.width + x) * 4 + 3] === 255,
+    canvas.width,
+    canvas.height,
+  );
+}
+
+function cropCanvas(canvas: Canvas2D, rect: { x: number; y: number; w: number; h: number }): Canvas2D | null {
+  const crop = createCanvas(rect.w, rect.h);
+  const context = crop.getContext('2d') as ThumbnailContext | null;
+  if (!context) return null;
+  context.imageSmoothingEnabled = false;
+  context.drawImage(canvas, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h);
+  return crop;
+}
+
 export async function bakeBoardThumbnail(board: EditorBoard, opts?: { scale?: number }): Promise<Blob> {
   const scale = Math.max(1, opts?.scale ?? 1);
   const rendered = await renderBoardCanvas(board, scale);
   if (!rendered) throw new Error('bakeBoardThumbnail: 2D context unavailable');
+  if (isPredrawnBackgroundActive(board)) {
+    const rect = largestOpaqueCanvasRect(rendered.canvas);
+    if (!rect) throw new Error('bakeBoardThumbnail: selected AI background has no fully opaque crop');
+    const crop = cropCanvas(rendered.canvas, rect);
+    if (!crop) throw new Error('bakeBoardThumbnail: crop context unavailable');
+    return canvasToBlob(crop);
+  }
   return canvasToBlob(rendered.canvas);
-}
-
-export function largestSolidRect(
-  isOpaque: (x: number, y: number) => boolean,
-  W: number,
-  H: number,
-  cov = 1,
-): { x: number; y: number; w: number; h: number } | null {
-  if (W <= 0 || H <= 0) return null;
-  const stride = W + 1;
-  const sat = new Uint32Array(stride * (H + 1));
-  let minX = W;
-  let minY = H;
-  let maxX = -1;
-  let maxY = -1;
-  let sumX = 0;
-  let sumY = 0;
-  let count = 0;
-  for (let y = 0; y < H; y += 1) {
-    let run = 0;
-    const row = (y + 1) * stride;
-    const prev = y * stride;
-    for (let x = 0; x < W; x += 1) {
-      if (isOpaque(x, y)) {
-        run += 1;
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
-        sumX += x;
-        sumY += y;
-        count += 1;
-      }
-      sat[row + x + 1] = sat[prev + x + 1] + run;
-    }
-  }
-  if (count === 0) return null;
-  const rectSum = (x0: number, y0: number, x1: number, y1: number): number =>
-    sat[(y1 + 1) * stride + (x1 + 1)] - sat[y0 * stride + (x1 + 1)] - sat[(y1 + 1) * stride + x0] + sat[y0 * stride + x0];
-  let x0 = Math.max(minX, Math.min(maxX, Math.round(sumX / count)));
-  let x1 = x0;
-  let y0 = Math.max(minY, Math.min(maxY, Math.round(sumY / count)));
-  let y1 = y0;
-  let grew = true;
-  while (grew) {
-    grew = false;
-    if (y0 > minY && rectSum(x0, y0 - 1, x1, y0 - 1) >= cov * (x1 - x0 + 1)) { y0 -= 1; grew = true; }
-    if (y1 < maxY && rectSum(x0, y1 + 1, x1, y1 + 1) >= cov * (x1 - x0 + 1)) { y1 += 1; grew = true; }
-    if (x0 > minX && rectSum(x0 - 1, y0, x0 - 1, y1) >= cov * (y1 - y0 + 1)) { x0 -= 1; grew = true; }
-    if (x1 < maxX && rectSum(x1 + 1, y0, x1 + 1, y1) >= cov * (y1 - y0 + 1)) { x1 += 1; grew = true; }
-  }
-  const w = x1 - x0 + 1;
-  const h = y1 - y0 + 1;
-  const bboxW = maxX - minX + 1;
-  const bboxH = maxY - minY + 1;
-  if (w * h < 0.1 * bboxW * bboxH) return { x: minX, y: minY, w: bboxW, h: bboxH };
-  return { x: x0, y: y0, w, h };
 }
 
 export async function bakeBoardPaintedImage(
@@ -405,19 +475,13 @@ export async function bakeBoardPaintedImage(
   const rendered = await renderBoardCanvas(board, scale);
   if (!rendered) return null;
   const { canvas } = rendered;
-  const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
-  if (!ctx) return null;
   const W = canvas.width;
   const H = canvas.height;
   if (!W || !H) return null;
-  const data = ctx.getImageData(0, 0, W, H).data;
-  const rect = largestSolidRect((x, y) => data[(y * W + x) * 4 + 3] > 8, W, H);
+  const rect = largestOpaqueCanvasRect(canvas);
   if (!rect) return null;
-  const crop = createCanvas(rect.w, rect.h);
-  const cctx = crop.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
-  if (!cctx) return null;
-  cctx.imageSmoothingEnabled = false;
-  cctx.drawImage(canvas, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h);
+  const crop = cropCanvas(canvas, rect);
+  if (!crop) return null;
   const blob = await canvasToBlob(crop);
   return { url: URL.createObjectURL(blob), width: rect.w, height: rect.h };
 }

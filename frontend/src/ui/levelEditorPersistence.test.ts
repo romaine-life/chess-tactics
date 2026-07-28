@@ -29,6 +29,7 @@ describe('local editor recovery freshness', () => {
       documentSignature: 'same-board',
       localSavedAt: documentUpdatedAtMs + 60_000,
       documentUpdatedAt,
+      localRecoveryConflict: true,
     })).toBe(false);
   });
 
@@ -105,6 +106,19 @@ describe('local editor recovery freshness', () => {
       localCloudSignature: 'unpaired-cloud-signature',
       documentRevision: 9,
     })).toBe(false);
+  });
+
+  it('accepts the pre-normalization cloud signature written by an older editor build', () => {
+    expect(shouldRestoreLocalEditorRecovery({
+      localSignature: 'local-edit',
+      documentSignature: 'projected-cloud-board',
+      documentSourceSignature: 'stored-cloud-board',
+      localSavedAt: documentUpdatedAtMs + 1,
+      documentUpdatedAt,
+      localDocumentRevision: 12,
+      documentRevision: 12,
+      localCloudSignature: 'stored-cloud-board',
+    })).toBe(true);
   });
 
   it('does not prefer browser recovery when either timestamp is invalid', () => {

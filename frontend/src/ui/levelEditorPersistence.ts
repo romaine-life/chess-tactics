@@ -25,6 +25,8 @@ export function shouldRestoreLocalEditorRecovery(input: {
   localDocumentRevision?: number;
   documentRevision?: number;
   localCloudSignature?: string;
+  /** Pre-normalization signature written by browser recoveries from older editor builds. */
+  documentSourceSignature?: string;
   localRecoveryConflict?: boolean;
 }): boolean {
   const {
@@ -35,6 +37,7 @@ export function shouldRestoreLocalEditorRecovery(input: {
     localDocumentRevision,
     documentRevision,
     localCloudSignature,
+    documentSourceSignature,
     localRecoveryConflict,
   } = input;
 
@@ -51,7 +54,11 @@ export function shouldRestoreLocalEditorRecovery(input: {
     return Number.isSafeInteger(localDocumentRevision)
       && Number.isSafeInteger(documentRevision)
       && localDocumentRevision === documentRevision
-      && (localCloudSignature === undefined || localCloudSignature === documentSignature);
+      && (
+        localCloudSignature === undefined
+        || localCloudSignature === documentSignature
+        || localCloudSignature === documentSourceSignature
+      );
   }
 
   // One-sided metadata is expected while upgrading an older browser entry. A cloud signature

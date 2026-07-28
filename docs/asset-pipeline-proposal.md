@@ -81,7 +81,7 @@ Start with a deliberately small moonlit grassland set:
 
 - grass base, grass alternate A/B, darker grass, stone path, shallow water
 - cliff left, cliff right, cliff corner, cliff bottom lip
-- small rock, large rock, tree stump or low shrub if it does not hide pieces
+- small rock, large rock, or low shrub if it does not hide pieces
 - optional bridge only when water is implemented in level data
 
 The sheet should include two to four variants for noisy materials like grass,

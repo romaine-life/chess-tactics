@@ -16,6 +16,14 @@ const chromeBox = readFileSync(new URL('./shared/ChromeBox.tsx', import.meta.url
 const confirmDialog = readFileSync(new URL('./shared/ConfirmDialog.tsx', import.meta.url), 'utf8');
 const titleBarControls = readFileSync(new URL('./shell/TitleBarControls.tsx', import.meta.url), 'utf8');
 const styleCss = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+const shellWorkspaceStart = levelEditorChromeConsumers.indexOf('export function LevelEditorShellWorkspace');
+const eventsWorkspaceStart = levelEditorChromeConsumers.indexOf('export function LevelEditorEventsWorkspace');
+const shellWorkspace = shellWorkspaceStart >= 0 && eventsWorkspaceStart > shellWorkspaceStart
+  ? levelEditorChromeConsumers.slice(shellWorkspaceStart, eventsWorkspaceStart)
+  : '';
+const eventsWorkspace = eventsWorkspaceStart >= 0
+  ? levelEditorChromeConsumers.slice(eventsWorkspaceStart)
+  : '';
 
 const buttonBlocks = (source: string): string[] => source.match(/<button\b[\s\S]*?<\/button>/g) ?? [];
 
@@ -42,6 +50,43 @@ function expectRegisteredFamily(source: string, legacyClass: string, unit: strin
 }
 
 describe('Level Editor chrome hierarchy', () => {
+  it('shares one shell-owned center-workspace primitive without a parallel outer panel', () => {
+    expect(shellWorkspace).toContain('<section {...props} className={`le-shell-workspace ${className}`.trim()}>');
+    expect(shellWorkspace).toContain('<ChromeSurfaceFill role="outer" className="le-shell-workspace-fill" />');
+    expect(shellWorkspace).toContain('<div className={`le-shell-workspace-content ${contentClassName}`.trim()}>');
+    expect(shellWorkspace).not.toContain('<OuterChromeBox');
+
+    expect(eventsWorkspace).toContain('<LevelEditorShellWorkspace');
+    expect(eventsWorkspace).toContain('className="le-events-workspace"');
+    expect(eventsWorkspace).toContain('data-testid="level-events-workspace"');
+    expect(eventsWorkspace).toContain('aria-labelledby="level-events-workspace-title"');
+    expect(eventsWorkspace).toContain('initialFocusRef.current?.focus()');
+    expect(eventsWorkspace).toContain("ref={tab === 'victory' ? initialFocusRef : undefined}");
+    expect(eventsWorkspace).toContain("ref={tab === 'other' ? initialFocusRef : undefined}");
+    expect(eventsWorkspace).not.toContain('<OuterChromeBox');
+    expect(eventsWorkspace).not.toContain('role="dialog"');
+    expect(eventsWorkspace).not.toContain('events-overlay');
+
+    expect(chromeBox).toContain('export function ChromeSurfaceFill');
+    expect(chromeBox).toContain('data-chrome-fill-role={role}');
+    expect(chromeBox).toContain('<ChromeSurfaceFill role="outer" className="le-outer-panel-fill" />');
+    expect(levelEditor).toMatch(/className=\{`skirmish-board-frame\$\{eventsOpen \|\| levelArtworkWorkspace \? ' is-workspace-covered' : ''\}`\}[\s\S]*?inert=\{eventsOpen \|\| levelArtworkWorkspace \? true : undefined\}[\s\S]*?aria-hidden=\{eventsOpen \|\| levelArtworkWorkspace \? true : undefined\}/);
+    expect(levelEditor).toMatch(/\{eventsOpen \? \(\s*<LevelEditorEventsWorkspace/);
+    expect(levelEditor).toContain('const [eventsOpen, setEventsOpen] = useState(initialEventsOpen);');
+    expect(levelEditor).toContain('eventsEditor: routeState.eventsEditor');
+    expect(levelEditor).toContain("levelEditorEventsEntry: true");
+    expect(levelEditor).toContain("levelEditorEventsBaseHref: baseHref");
+    expect(levelEditor).toMatch(/if \(eventsOpenRef\.current\) \{\s*selectEventsTab\(tab\);\s*return;\s*\}/);
+    expect(levelEditor).toMatch(/disabled=\{eventsOpen\}[\s\S]{0,120}?onClick=\{\(\) => openEventsEditor\('victory'\)\}/);
+    expect(levelEditor).not.toContain('window.history.state?.levelEditorRules');
+    expect(styleCss).toMatch(/\.le-shell-workspace\s*\{[\s\S]*?inset:\s*0;[\s\S]*?position:\s*absolute;/);
+    expect(styleCss).toMatch(/\.level-editor-screen \.skirmish-board-frame\.is-workspace-covered\s*\{[\s\S]*?visibility:\s*hidden;/);
+    expect(styleCss).toMatch(/\.le-shell-workspace-content\s*\{[\s\S]*?min-height:\s*0;[\s\S]*?overflow:\s*hidden;/);
+    expect(styleCss).toMatch(/\.skirmish-screen\.level-editor-screen\s*\{[\s\S]*?column-gap:\s*0;[\s\S]*?row-gap:\s*0;/);
+    expect(styleCss).toMatch(/@media \(max-width: 560px\)\s*\{[\s\S]*?\.le-shell-workspace-content\s*\{[\s\S]*?overflow-y:\s*auto;/);
+    expect(styleCss).not.toContain('.le-events-overlay');
+  });
+
   it('labels scenic terrain extents with the board cardinal edges', () => {
     expect(levelEditor).toMatch(/import \{[^}]*\bsocketEdges\b[^}]*\btype EdgeName\b[^}]*\btype TileFamilyId\b[^}]*\} from '\.\.\/core\/tileSockets';/s);
     expect(levelEditor).toMatch(/SCENIC_TERRAIN_EXTENT_BY_BOARD_EDGE[\s\S]*?north: 'top',[\s\S]*?east: 'right',[\s\S]*?south: 'bottom',[\s\S]*?west: 'left'/);
@@ -89,8 +134,10 @@ describe('Level Editor chrome hierarchy', () => {
     expect(levelEditor).toContain('onClick={fillSelectedTileArea}');
     expect(levelEditor).toContain('>Fill selected area</button>');
     expect(levelEditor).toContain('renderCellOverlay={regionCells && regionCells.size > 0');
-    expect(levelEditor).toContain("? (cell) => regionCells.has(`${cell.x},${cell.y}`)");
-    expect(levelEditor.match(/<span className="le-region-cell"/g)).toHaveLength(1);
+    expect(levelEditor).toContain('? (cell) => {');
+    expect(levelEditor).toContain('const key = `${cell.x},${cell.y}`;');
+    expect(levelEditor).toContain('return regionCells.has(key)');
+    expect(levelEditor.match(/<span\s+className="le-region-cell"/g)).toHaveLength(1);
     expect(styleCss).toMatch(/\.le-region-cell\s*\{[\s\S]*?top:\s*0;/);
   });
 
@@ -121,10 +168,10 @@ describe('Level Editor chrome hierarchy', () => {
       ...buttonBlocks(levelEditor),
     ].filter((block) => block.includes('stepper-chevron'));
 
-    expect(chevronButtons).toHaveLength(6);
+    expect(chevronButtons).toHaveLength(8);
     for (const block of chevronButtons) expectChromeUnit(block, 'inner-chevron-key');
-    expect(chevronButtons.filter((block) => block.includes('stepper-chevron-left'))).toHaveLength(3);
-    expect(chevronButtons.filter((block) => block.includes('stepper-chevron-right'))).toHaveLength(3);
+    expect(chevronButtons.filter((block) => block.includes('stepper-chevron-left'))).toHaveLength(4);
+    expect(chevronButtons.filter((block) => block.includes('stepper-chevron-right'))).toHaveLength(4);
     expect(styleCss).toMatch(/\.stepper-chevron::before\s*\{[\s\S]*?inset-inline-start:\s*4px;[\s\S]*?transform:\s*rotate\(45deg\);/);
     expect(styleCss).toMatch(/\.stepper-chevron-right\s*\{[\s\S]*?transform:\s*scaleX\(-1\);/);
     expect(styleCss).not.toMatch(/\.stepper-chevron-right::before\s*\{/);
@@ -172,6 +219,19 @@ describe('Level Editor chrome hierarchy', () => {
     expectRegisteredFamily(studioBoard, 'unit-facing-cell', 'inner-tool-square');
   });
 
+  it('offers only complete eight-way artwork and keeps its facing control in the source brush panel', () => {
+    expect(levelEditor).toContain('STRUCTURE_ART_ASSETS.filter((asset) => structureArtHasCompleteTurntable(asset.id))');
+    expect(levelEditor).toContain("const [artworkBrushDirection, setArtworkBrushDirection] = useState<Direction>('south');");
+    expect(levelEditor).toContain('const direction = directions.includes(artworkBrushDirection)');
+    expect(levelEditor).toContain('setArtworkBrushDirection(placement.direction);');
+    expect(levelEditor).toContain('ariaLabel="Artwork facing"');
+    expect(levelEditor).toContain('onSelect={setArtworkFacing}');
+    expect(levelEditor).toContain('onRotate={rotateArtworkFacing}');
+    expect(levelEditor).not.toContain('ariaLabel="Artwork direction (8-way)"');
+    expect(levelEditor).not.toContain('<small>{asset.label} · {directions.length}-way</small>');
+    expect(levelEditor).not.toContain('source artwork · ${artworkBrushDirections.length}-way');
+  });
+
   it('registers dropdown triggers and frames each popup as one divided inner box', () => {
     expectRegisteredFamily(paletteSelect, 'palette-select-trigger', 'inner-dropdown');
     expect(houseSelect).toContain("chromeUnitClassNames('inner-dropdown', 'house-select', 'le-select-wrap', className)");
@@ -184,7 +244,9 @@ describe('Level Editor chrome hierarchy', () => {
     expect(houseSelect).toContain('className="house-select-menu chrome-family-surface"');
     expect(houseSelect).toContain('<InnerChromeBox');
     expect(houseSelect).toContain('className="house-select-menu-box"');
-    expect(houseSelect).toContain('{index > 0 ? <ChromeDivider role="inner" /> : null}');
+    expect(houseSelect).toContain('className="house-select-option-group" role="group"');
+    expect(houseSelect).toContain('className="house-select-option-group-label"');
+    expect(houseSelect).toContain('{optionIndex > 0 ? <ChromeDivider role="inner" /> : null}');
     expect(houseSelect).toContain('className={`house-select-option ${index === activeIndex ? \'is-active\' : \'\'}`.trim()}');
     expect(houseSelect).not.toContain("chromeUnitClassNames('inner-list-row', 'house-select-option'");
     expect(houseSelect).not.toContain('data-chrome-unit="inner-list-row"');
@@ -192,10 +254,13 @@ describe('Level Editor chrome hierarchy', () => {
     expect(houseSelect).toContain("paintOverhang('--le-inner-atom-right-overhang')");
     expect(houseSelect).toContain("paintOverhang('--le-inner-atom-top-overhang')");
     expect(houseSelect).toContain("paintOverhang('--le-inner-atom-bottom-overhang')");
+    expect(houseSelect).not.toContain('data-disabled=');
+    expect(styleCss).not.toMatch(/\.house-select[^\n{]*(?:disabled|data-disabled)[^\n{]*::after/);
   });
 
   it('uses HouseSelect for every Level Editor dropdown registered as inner-dropdown', () => {
     const nativeSelectOpenings = levelEditor.match(/<select\b[^>]*>/g) ?? [];
+    expect(nativeSelectOpenings).toEqual([]);
     expect(nativeSelectOpenings.some((opening) => opening.includes('data-chrome-unit="inner-dropdown"'))).toBe(false);
     expect(nativeSelectOpenings.some((opening) => opening.includes("chromeUnitClassNames('inner-dropdown'"))).toBe(false);
     expect(levelEditor).toMatch(/<HouseSelect<FactionControl>[\s\S]*?ariaLabel=\{`\$\{LE_FACTION_LABELS\[faction\]\} control`\}/);
@@ -203,6 +268,29 @@ describe('Level Editor chrome hierarchy', () => {
     expect(levelEditor).toMatch(/<HouseSelect<ScenicTerrainGenerationMode>[\s\S]*?ariaLabel="Scenic terrain generation mode"/);
     expect(levelEditor).toMatch(/<HouseSelect<TileFamilyId>[\s\S]*?className="le-gen-region-select"[\s\S]*?ariaLabel=\{`Region \$\{sectionIndex \+ 1\} terrain`\}/);
     expect(levelEditor).toMatch(/<HouseSelect<GroundCoverId>[\s\S]*?className="le-gen-cover-select"[\s\S]*?ariaLabel=\{`Region \$\{sectionIndex \+ 1\} cover \$\{coverIndex \+ 1\} set`\}/);
+    expect(levelEditor).toMatch(/<HouseSelect<string>[\s\S]*?options=\{campaignSelectOptions\}[\s\S]*?ariaLabel="Campaign"[\s\S]*?testId="le-campaign-select"/);
+    expect(levelEditor).not.toMatch(/<select[\s\S]{0,240}?aria-label="Campaign"/);
+    for (const label of [
+      'Victory template',
+      'Other event template',
+      'Spawn faction',
+      'Spawn zone',
+      'Promotion faction',
+      'Promotion zone',
+      'Selected zone',
+      'Fence artwork',
+      'Composite terrain footprint',
+    ]) {
+      expect(levelEditor).toContain(`ariaLabel="${label}"`);
+      expect(nativeSelectOpenings.some((opening) => opening.includes(`aria-label="${label}"`))).toBe(false);
+    }
+    expect(levelEditor).toMatch(/<HouseSelect<string>\s+value=\{activeZone\?\.id \?\? ''\}[\s\S]*?disabled=\{!activeZone\}[\s\S]*?ariaLabel="Selected zone"[\s\S]*?onChange=\{selectZoneEntry\}/);
+    expect(levelEditor).toContain("...(activeZone ? [] : [{ value: '', label: 'None' }]),");
+    expect(levelEditor).toContain('...boardZoneEntries.map((zone, index) => ({ value: zone.id, label: zoneDisplayName(zone, index) }))');
+    expect(levelEditor).toMatch(/<HouseSelect<string>\s+value=\{activeFenceArtwork\.id\}[\s\S]*?options=\{fenceArtCatalog\.map\(\(artwork\) => \(\{ value: artwork\.id, label: artwork\.label \}\)\)\}[\s\S]*?ariaLabel="Fence artwork"[\s\S]*?onChange=\{selectFenceArtwork\}/);
+    expect(levelEditor).toMatch(/<HouseSelect<string>\s+ariaLabel="Composite terrain footprint"[\s\S]*?value=\{macroTileFootprint\}[\s\S]*?options=\{leMacroTileFootprints\(\)\.map\(\(footprint\) => \(\{ value: footprint, label: footprint \}\)\)\}[\s\S]*?setMacroTileFootprint\(footprint\);[\s\S]*?setMacroTileBrushId\(null\);/);
+    expect(levelEditor).not.toContain('function SelectFrame');
+    expect(styleCss).not.toContain('.le-layer-select');
     expect(levelEditor).toContain('<div className="le-faction-fields">');
   });
 
@@ -228,9 +316,24 @@ describe('Level Editor chrome hierarchy', () => {
     expect(levelEditor).not.toContain('le-zone-color-swatches');
   });
 
+  it('gives the narrow Zone selector a full row above its four action buttons', () => {
+    expect(levelEditor).toContain('<div className="le-ctrlrow le-zone-selection-row">');
+    expect(styleCss).toMatch(/\.le-zone-panel \.le-zone-select-controls\s*\{[\s\S]*?grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\);[\s\S]*?grid-template-rows:\s*var\(--le-zone-row-h\) var\(--le-zone-row-h\);[\s\S]*?height:\s*auto;/);
+    expect(styleCss).toMatch(/\.le-zone-panel \.le-zone-select-controls > \.le-select-wrap\s*\{[\s\S]*?grid-column:\s*1 \/ -1;[\s\S]*?grid-row:\s*1;/);
+    expect(styleCss).toMatch(/\.le-zone-panel \.le-zone-select-controls > \.le-zone-stepper-button\.settings-chrome-button\s*\{[\s\S]*?grid-row:\s*2;[\s\S]*?width:\s*100%;/);
+    expect(styleCss).toMatch(/\.le-zone-panel \.le-zone-selection-row > \.le-ctrllabel\s*\{[\s\S]*?align-items:\s*center;[\s\S]*?height:\s*var\(--le-zone-row-h\);[\s\S]*?justify-content:\s*center;[\s\S]*?text-align:\s*center;/);
+  });
+
   it('keeps portaled confirmation actions inside an explicit chrome-family surface', () => {
     expect(confirmDialog).toContain('className="confirm-scrim chrome-family-surface"');
     expectRegisteredFamily(confirmDialog, 'le-seg-btn', 'inner-text-button');
+  });
+
+  it('defaults destructive confirmations to cancel instead of treating Enter as approval', () => {
+    expect(confirmDialog).toContain("if (tone === 'danger') cancelButtonRef.current?.focus();");
+    expect(confirmDialog).toContain("event.key === 'Enter' && tone !== 'danger'");
+    expect(confirmDialog).toContain('data-testid="confirm-cancel"');
+    expect(confirmDialog).toContain("event.key === 'Tab'");
   });
 
   it('registers the canonical title-bar control as an inner box', () => {

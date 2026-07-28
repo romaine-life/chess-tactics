@@ -103,6 +103,31 @@ export async function createLiveMediaVersion(
   return body.version;
 }
 
+/** Repair or complete typed metadata on a still-private candidate using its observed revision. */
+export async function updateLiveMediaVersion(input: {
+  id: string;
+  expectedRevision: number;
+  label?: string;
+  metadata?: Record<string, unknown>;
+  provenance?: Record<string, unknown>;
+  nativeEvidence?: Record<string, unknown>;
+}): Promise<AdminLiveMediaVersion> {
+  const response = await fetch(`/api/admin/media-versions/${encodeURIComponent(input.id)}`, {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      expectedRevision: input.expectedRevision,
+      ...(input.label !== undefined ? { label: input.label } : {}),
+      ...(input.metadata !== undefined ? { metadata: input.metadata } : {}),
+      ...(input.provenance !== undefined ? { provenance: input.provenance } : {}),
+      ...(input.nativeEvidence !== undefined ? { nativeEvidence: input.nativeEvidence } : {}),
+    }),
+  });
+  const body = await jsonResponse<{ version: AdminLiveMediaVersion }>('update-live-media-version', response);
+  return body.version;
+}
+
 /** Attach exact immutable bytes to a still-private candidate using its observed revision. */
 export async function uploadLiveMediaVersionContent(input: {
   id: string;

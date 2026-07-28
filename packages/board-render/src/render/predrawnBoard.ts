@@ -2,17 +2,29 @@ import {
   TILE_STEP_X,
   TILE_STEP_Y,
 } from '../art/projectionContract';
-import type { PredrawnBoardSurface } from '../ui/boardCode';
-
-type PredrawnBoardProjection = Omit<PredrawnBoardSurface, 'slot'>;
+type PredrawnBoardProjection = { frameWidth: number; frameHeight: number };
 import { boardLabCellPosition, boardLabMetrics } from './boardProjection';
 import {
   PREDRAWN_GUIDE_EPSILON,
+  normalizePredrawnBoardRegistration,
+  predrawnGuidesForBoard,
   predrawnRegistrationGridSize,
+  validPredrawnMeshOverrides,
   validPredrawnGuides,
   type PredrawnBoardCornerRegistration,
+  type PredrawnMeshNodeOverride,
   type PredrawnPoint,
 } from './predrawnRegistration';
+import {
+  homographyForPredrawnPoints,
+  projectPredrawnPoint,
+  type PredrawnBoardHomography,
+} from './predrawnProjective';
+
+export {
+  projectPredrawnPoint,
+  type PredrawnBoardHomography,
+} from './predrawnProjective';
 
 export interface PredrawnBoardPlacement {
   left: number;
@@ -21,22 +33,17 @@ export interface PredrawnBoardPlacement {
   height: number;
 }
 
-export interface PredrawnBoardHomography {
-  h11: number;
-  h12: number;
-  h13: number;
-  h21: number;
-  h22: number;
-  h23: number;
-  h31: number;
-  h32: number;
-}
-
 export interface PredrawnBoardRectification {
   frameToUnit: PredrawnBoardHomography;
   unitToFrame: PredrawnBoardHomography;
   columnGuides: readonly number[];
   rowGuides: readonly number[];
+  mesh?: {
+    columns: number;
+    rows: number;
+    /** Dense row-major shared nodes in the projective board plane. */
+    unitNodes: readonly PredrawnPoint[];
+  };
 }
 
 /**
@@ -125,69 +132,6 @@ function boardOuterCorners(
   ];
 }
 
-function solveLinearSystem(rows: number[][], values: number[]): number[] | undefined {
-  const size = values.length;
-  const augmented = rows.map((row, index) => [...row, values[index]]);
-  for (let column = 0; column < size; column += 1) {
-    let pivot = column;
-    for (let row = column + 1; row < size; row += 1) {
-      if (Math.abs(augmented[row][column]) > Math.abs(augmented[pivot][column])) pivot = row;
-    }
-    if (Math.abs(augmented[pivot][column]) < 1e-10) return undefined;
-    [augmented[column], augmented[pivot]] = [augmented[pivot], augmented[column]];
-    const divisor = augmented[column][column];
-    for (let index = column; index <= size; index += 1) augmented[column][index] /= divisor;
-    for (let row = 0; row < size; row += 1) {
-      if (row === column) continue;
-      const factor = augmented[row][column];
-      for (let index = column; index <= size; index += 1) {
-        augmented[row][index] -= factor * augmented[column][index];
-      }
-    }
-  }
-  return augmented.map((row) => row[size]);
-}
-
-function homographyForFourPoints(
-  sources: readonly PredrawnPoint[],
-  targets: readonly PredrawnPoint[],
-): PredrawnBoardHomography | undefined {
-  const rows: number[][] = [];
-  const values: number[] = [];
-  sources.forEach(([x, y], index) => {
-    const [targetX, targetY] = targets[index];
-    rows.push([x, y, 1, 0, 0, 0, -targetX * x, -targetX * y]);
-    values.push(targetX);
-    rows.push([0, 0, 0, x, y, 1, -targetY * x, -targetY * y]);
-    values.push(targetY);
-  });
-  const solved = solveLinearSystem(rows, values);
-  if (!solved) return undefined;
-  const [h11, h12, h13, h21, h22, h23, h31, h32] = solved;
-  const homography = { h11, h12, h13, h21, h22, h23, h31, h32 };
-  const residual = sources.reduce((max, point, index) => {
-    const projected = projectPredrawnPoint(homography, point);
-    if (!projected) return Infinity;
-    return Math.max(max, Math.hypot(
-      projected[0] - targets[index][0],
-      projected[1] - targets[index][1],
-    ));
-  }, 0);
-  return residual <= 1e-5 ? homography : undefined;
-}
-
-export function projectPredrawnPoint(
-  homography: PredrawnBoardHomography,
-  [x, y]: PredrawnPoint,
-): PredrawnPoint | undefined {
-  const denominator = homography.h31 * x + homography.h32 * y + 1;
-  if (Math.abs(denominator) < 1e-10) return undefined;
-  return [
-    (homography.h11 * x + homography.h12 * y + homography.h13) / denominator,
-    (homography.h21 * x + homography.h22 * y + homography.h23) / denominator,
-  ];
-}
-
 function scaledRegistrationCorners(
   registration: PredrawnBoardCornerRegistration,
   width: number,
@@ -209,7 +153,7 @@ export function predrawnSourceGridPoint(
   u: number,
   v: number,
 ): PredrawnPoint | undefined {
-  const homography = homographyForFourPoints(
+  const homography = homographyForPredrawnPoints(
     UNIT_CORNERS,
     [registration.north, registration.east, registration.south, registration.west],
   );
@@ -220,7 +164,7 @@ export function predrawnSourceGridCoordinate(
   registration: PredrawnBoardCornerRegistration,
   point: PredrawnPoint,
 ): PredrawnPoint | undefined {
-  const homography = homographyForFourPoints(
+  const homography = homographyForPredrawnPoints(
     [registration.north, registration.east, registration.south, registration.west],
     UNIT_CORNERS,
   );
@@ -258,7 +202,7 @@ export function predrawnBoardHomography(
   registration: PredrawnBoardCornerRegistration,
 ): PredrawnBoardHomography | undefined {
   const geometry = registrationGeometry(surface, cells, registration);
-  return geometry ? homographyForFourPoints(geometry.sources, geometry.targets) : undefined;
+  return geometry ? homographyForPredrawnPoints(geometry.sources, geometry.targets) : undefined;
 }
 
 function guideValueAtCanonicalCoordinate(guides: readonly number[], coordinate: number): number {
@@ -291,7 +235,55 @@ export function predrawnBoardHasApplicableRectification(
     && validPredrawnGuides(registration.rowGuides)
     && registration.columnGuides.length === refitDimensions.columns + 1
     && registration.rowGuides.length === refitDimensions.rows + 1
-    && (!isUniformGuideSet(registration.columnGuides) || !isUniformGuideSet(registration.rowGuides));
+    && (
+      !isUniformGuideSet(registration.columnGuides)
+      || !isUniformGuideSet(registration.rowGuides)
+      || Boolean(registration.meshOverrides?.length && validPredrawnMeshOverrides(registration))
+    );
+}
+
+function scaledMeshOverridePoint(
+  override: PredrawnMeshNodeOverride,
+  registration: PredrawnBoardCornerRegistration,
+  width: number,
+  height: number,
+): PredrawnPoint {
+  return [
+    override.point[0] * width / registration.sourceWidth,
+    override.point[1] * height / registration.sourceHeight,
+  ];
+}
+
+function meshUnitNodesForFrame(
+  registration: PredrawnBoardCornerRegistration,
+  frameToUnit: PredrawnBoardHomography,
+  width: number,
+  height: number,
+): PredrawnBoardRectification['mesh'] | undefined {
+  if (!registration.meshOverrides?.length || !validPredrawnMeshOverrides(registration)) return undefined;
+  const dimensions = predrawnRegistrationGridSize(registration, 1, 1);
+  const guides = predrawnGuidesForBoard(registration, dimensions.columns, dimensions.rows);
+  const stride = dimensions.columns + 1;
+  const unitNodes = Array.from(
+    { length: stride * (dimensions.rows + 1) },
+    (_, index): PredrawnPoint => [
+      guides.columnGuides[index % stride],
+      guides.rowGuides[Math.floor(index / stride)],
+    ],
+  );
+  for (const override of registration.meshOverrides) {
+    const unitPoint = projectPredrawnPoint(
+      frameToUnit,
+      scaledMeshOverridePoint(override, registration, width, height),
+    );
+    if (!unitPoint) return undefined;
+    unitNodes[override.row * stride + override.column] = unitPoint;
+  }
+  return {
+    columns: dimensions.columns,
+    rows: dimensions.rows,
+    unitNodes,
+  };
 }
 
 function rectificationForFrame(
@@ -303,15 +295,67 @@ function rectificationForFrame(
     return undefined;
   }
   const corners = scaledRegistrationCorners(registration, width, height);
-  const frameToUnit = homographyForFourPoints(corners, UNIT_CORNERS);
-  const unitToFrame = homographyForFourPoints(UNIT_CORNERS, corners);
+  const frameToUnit = homographyForPredrawnPoints(corners, UNIT_CORNERS);
+  const unitToFrame = homographyForPredrawnPoints(UNIT_CORNERS, corners);
   if (!frameToUnit || !unitToFrame) return undefined;
+  const mesh = meshUnitNodesForFrame(registration, frameToUnit, width, height);
+  if (registration.meshOverrides?.length && !mesh) return undefined;
   return {
     frameToUnit,
     unitToFrame,
     columnGuides: [...registration.columnGuides],
     rowGuides: [...registration.rowGuides],
+    ...(mesh ? { mesh } : {}),
   };
+}
+
+function axisMeshCell(coordinate: number, cellCount: number): { index: number; fraction: number } {
+  const scaled = coordinate * cellCount;
+  if (scaled <= 0) return { index: 0, fraction: scaled };
+  if (scaled >= cellCount) return { index: cellCount - 1, fraction: scaled - cellCount + 1 };
+  const index = Math.min(cellCount - 1, Math.floor(scaled));
+  return { index, fraction: scaled - index };
+}
+
+function interpolatePoint(left: PredrawnPoint, right: PredrawnPoint, fraction: number): PredrawnPoint {
+  return [
+    left[0] + (right[0] - left[0]) * fraction,
+    left[1] + (right[1] - left[1]) * fraction,
+  ];
+}
+
+function meshUnitPoint(
+  mesh: NonNullable<PredrawnBoardRectification['mesh']>,
+  canonical: PredrawnPoint,
+): PredrawnPoint {
+  const horizontal = axisMeshCell(canonical[0], mesh.columns);
+  const vertical = axisMeshCell(canonical[1], mesh.rows);
+  const stride = mesh.columns + 1;
+  const northWest = mesh.unitNodes[vertical.index * stride + horizontal.index];
+  const northEast = mesh.unitNodes[vertical.index * stride + horizontal.index + 1];
+  const southWest = mesh.unitNodes[(vertical.index + 1) * stride + horizontal.index];
+  const southEast = mesh.unitNodes[(vertical.index + 1) * stride + horizontal.index + 1];
+  return interpolatePoint(
+    interpolatePoint(northWest, northEast, horizontal.fraction),
+    interpolatePoint(southWest, southEast, horizontal.fraction),
+    vertical.fraction,
+  );
+}
+
+function rectifiedUnitPoint(
+  rectification: PredrawnBoardRectification,
+  canonical: PredrawnPoint,
+): PredrawnPoint {
+  return rectification.mesh
+    && canonical[0] >= 0
+    && canonical[0] <= 1
+    && canonical[1] >= 0
+    && canonical[1] <= 1
+    ? meshUnitPoint(rectification.mesh, canonical)
+    : [
+        guideValueAtCanonicalCoordinate(rectification.columnGuides, canonical[0]),
+        guideValueAtCanonicalCoordinate(rectification.rowGuides, canonical[1]),
+      ];
 }
 
 function rectifiedSourcePoint(
@@ -320,10 +364,7 @@ function rectifiedSourcePoint(
 ): PredrawnPoint | undefined {
   const canonical = projectPredrawnPoint(rectification.frameToUnit, destination);
   if (!canonical) return undefined;
-  return projectPredrawnPoint(rectification.unitToFrame, [
-    guideValueAtCanonicalCoordinate(rectification.columnGuides, canonical[0]),
-    guideValueAtCanonicalCoordinate(rectification.rowGuides, canonical[1]),
-  ]);
+  return projectPredrawnPoint(rectification.unitToFrame, rectifiedUnitPoint(rectification, canonical));
 }
 
 export function predrawnRectifiedSourcePoint(
@@ -335,6 +376,287 @@ export function predrawnRectifiedSourcePoint(
   return rectification ? rectifiedSourcePoint(rectification, destination) : destination;
 }
 
+/**
+ * Resolve one canonical normalized grid coordinate to intrinsic source-image pixels.
+ *
+ * The coarse guides remain the base map. A v5 registration additionally evaluates the one
+ * continuous shared-vertex mesh in projective board-plane coordinates.
+ */
+export function predrawnSourceMeshPoint(
+  registration: PredrawnBoardCornerRegistration,
+  u: number,
+  v: number,
+): PredrawnPoint | undefined {
+  if (!Number.isFinite(u) || !Number.isFinite(v)) return undefined;
+  if (registration.meshOverrides?.length && !validPredrawnMeshOverrides(registration)) return undefined;
+  const dimensions = predrawnRegistrationGridSize(registration, 1, 1);
+  const guides = predrawnGuidesForBoard(registration, dimensions.columns, dimensions.rows);
+  const effectiveRegistration: PredrawnBoardCornerRegistration = {
+    ...registration,
+    gridColumns: dimensions.columns,
+    gridRows: dimensions.rows,
+    columnGuides: guides.columnGuides,
+    rowGuides: guides.rowGuides,
+  };
+  const rectification = rectificationForFrame(
+    effectiveRegistration,
+    registration.sourceWidth,
+    registration.sourceHeight,
+  );
+  if (!rectification) return undefined;
+  return projectPredrawnPoint(
+    rectification.unitToFrame,
+    rectifiedUnitPoint(rectification, [u, v]),
+  );
+}
+
+/** Resolve one shared integer grid intersection to intrinsic source-image pixels. */
+export function predrawnSourceMeshNode(
+  registration: PredrawnBoardCornerRegistration,
+  column: number,
+  row: number,
+): PredrawnPoint | undefined {
+  const dimensions = predrawnRegistrationGridSize(registration, 1, 1);
+  if (
+    !Number.isSafeInteger(column)
+    || !Number.isSafeInteger(row)
+    || column < 0
+    || column > dimensions.columns
+    || row < 0
+    || row > dimensions.rows
+  ) return undefined;
+  return predrawnSourceMeshPoint(
+    registration,
+    column / dimensions.columns,
+    row / dimensions.rows,
+  );
+}
+
+export interface PredrawnMeshCellAddress {
+  column: number;
+  row: number;
+}
+
+/** Row-major logical cells that share one grid intersection. */
+export function predrawnMeshCellsForNode(
+  registration: PredrawnBoardCornerRegistration,
+  column: number,
+  row: number,
+): PredrawnMeshCellAddress[] {
+  const dimensions = predrawnRegistrationGridSize(registration, 1, 1);
+  if (
+    !Number.isSafeInteger(column)
+    || !Number.isSafeInteger(row)
+    || column < 0
+    || column > dimensions.columns
+    || row < 0
+    || row > dimensions.rows
+  ) return [];
+  const cells: PredrawnMeshCellAddress[] = [];
+  for (const cellRow of [row - 1, row]) {
+    for (const cellColumn of [column - 1, column]) {
+      if (
+        cellColumn >= 0
+        && cellColumn < dimensions.columns
+        && cellRow >= 0
+        && cellRow < dimensions.rows
+      ) cells.push({ column: cellColumn, row: cellRow });
+    }
+  }
+  return cells.sort((left, right) => left.row - right.row || left.column - right.column);
+}
+
+export function predrawnMeshNodeIsOverridden(
+  registration: PredrawnBoardCornerRegistration,
+  column: number,
+  row: number,
+): boolean {
+  return Boolean(registration.meshOverrides?.some(
+    (override) => override.column === column && override.row === row,
+  ));
+}
+
+function registrationWithoutMeshKeys(
+  registration: PredrawnBoardCornerRegistration,
+  keys: ReadonlySet<string>,
+): PredrawnBoardCornerRegistration {
+  const remaining = registration.meshOverrides?.filter(
+    (override) => !keys.has(`${override.column},${override.row}`),
+  ) ?? [];
+  if (!remaining.length) {
+    const { meshOverrides: _removed, ...withoutMesh } = registration;
+    return withoutMesh;
+  }
+  return { ...registration, meshOverrides: remaining };
+}
+
+export function clearPredrawnMeshNodeOverride(
+  registration: PredrawnBoardCornerRegistration,
+  column: number,
+  row: number,
+): PredrawnBoardCornerRegistration {
+  return registrationWithoutMeshKeys(registration, new Set([`${column},${row}`]));
+}
+
+export function clearPredrawnMeshCellOverrides(
+  registration: PredrawnBoardCornerRegistration,
+  column: number,
+  row: number,
+): PredrawnBoardCornerRegistration {
+  return registrationWithoutMeshKeys(registration, new Set([
+    `${column},${row}`,
+    `${column + 1},${row}`,
+    `${column},${row + 1}`,
+    `${column + 1},${row + 1}`,
+  ]));
+}
+
+export function clearAllPredrawnMeshOverrides(
+  registration: PredrawnBoardCornerRegistration,
+): PredrawnBoardCornerRegistration {
+  const { meshOverrides: _removed, ...withoutMesh } = registration;
+  return withoutMesh;
+}
+
+function isBoundaryMeshNode(
+  column: number,
+  row: number,
+  columns: number,
+  rows: number,
+): boolean {
+  return column === 0 || column === columns || row === 0 || row === rows;
+}
+
+function canonicalSourcePoint(
+  registration: PredrawnBoardCornerRegistration,
+  point: PredrawnPoint,
+): PredrawnPoint | undefined {
+  if (
+    !Array.isArray(point)
+    || point.length !== 2
+    || !Number.isFinite(point[0])
+    || !Number.isFinite(point[1])
+    || point[0] < 0
+    || point[0] > registration.sourceWidth
+    || point[1] < 0
+    || point[1] > registration.sourceHeight
+  ) return undefined;
+  return [Number(point[0].toFixed(3)), Number(point[1].toFixed(3))];
+}
+
+/**
+ * Set one exact shared source-pixel node. Invalid or folded whole-mesh geometry is rejected.
+ *
+ * Boundary intersections remain under the existing coarse corners/guides so local displacement
+ * reaches zero at the board edge and cannot distort extrapolated surrounding scenery.
+ */
+export function setPredrawnMeshNodeOverride(
+  registration: PredrawnBoardCornerRegistration,
+  column: number,
+  row: number,
+  point: PredrawnPoint,
+): PredrawnBoardCornerRegistration | undefined {
+  const dimensions = predrawnRegistrationGridSize(registration, 1, 1);
+  const canonicalPoint = canonicalSourcePoint(registration, point);
+  if (
+    !canonicalPoint
+    || !Number.isSafeInteger(column)
+    || !Number.isSafeInteger(row)
+    || column < 0
+    || column > dimensions.columns
+    || row < 0
+    || row > dimensions.rows
+    || isBoundaryMeshNode(column, row, dimensions.columns, dimensions.rows)
+  ) return undefined;
+  const meshOverrides = [
+    ...(registration.meshOverrides ?? []).filter(
+      (override) => override.column !== column || override.row !== row,
+    ),
+    { column, row, point: canonicalPoint },
+  ].sort((left, right) => left.row - right.row || left.column - right.column);
+  return normalizePredrawnBoardRegistration({ ...registration, meshOverrides });
+}
+
+export interface PredrawnMeshNodeMove {
+  registration: PredrawnBoardCornerRegistration;
+  point: PredrawnPoint;
+  constrained: boolean;
+}
+
+/**
+ * Move a shared node toward a requested source pixel, clamping to the furthest valid point along
+ * that path when the exact request would fold an adjacent cell or leave the source frame.
+ */
+export function movePredrawnMeshNode(
+  registration: PredrawnBoardCornerRegistration,
+  column: number,
+  row: number,
+  requestedPoint: PredrawnPoint,
+): PredrawnMeshNodeMove | undefined {
+  const dimensions = predrawnRegistrationGridSize(registration, 1, 1);
+  if (
+    !Array.isArray(requestedPoint)
+    || requestedPoint.length !== 2
+    || !Number.isFinite(requestedPoint[0])
+    || !Number.isFinite(requestedPoint[1])
+    || !Number.isSafeInteger(column)
+    || !Number.isSafeInteger(row)
+    || column < 0
+    || column > dimensions.columns
+    || row < 0
+    || row > dimensions.rows
+    || isBoundaryMeshNode(column, row, dimensions.columns, dimensions.rows)
+  ) return undefined;
+  const inFrameRequest: PredrawnPoint = [
+    Math.min(registration.sourceWidth, Math.max(0, requestedPoint[0])),
+    Math.min(registration.sourceHeight, Math.max(0, requestedPoint[1])),
+  ];
+  const exact = setPredrawnMeshNodeOverride(registration, column, row, inFrameRequest);
+  if (exact) {
+    return {
+      registration: exact,
+      point: predrawnSourceMeshNode(exact, column, row)!,
+      constrained: (
+        inFrameRequest[0] !== requestedPoint[0]
+        || inFrameRequest[1] !== requestedPoint[1]
+      ),
+    };
+  }
+
+  const openingPoint = predrawnSourceMeshNode(registration, column, row);
+  if (!openingPoint) return undefined;
+  let minimum = 0;
+  let maximum = 1;
+  let bestRegistration = normalizePredrawnBoardRegistration(registration);
+  if (!bestRegistration) return undefined;
+  let bestPoint = predrawnSourceMeshNode(bestRegistration, column, row) ?? openingPoint;
+  for (let iteration = 0; iteration < 32; iteration += 1) {
+    const fraction = (minimum + maximum) / 2;
+    const candidatePoint: PredrawnPoint = [
+      openingPoint[0] + (inFrameRequest[0] - openingPoint[0]) * fraction,
+      openingPoint[1] + (inFrameRequest[1] - openingPoint[1]) * fraction,
+    ];
+    const candidate = setPredrawnMeshNodeOverride(
+      registration,
+      column,
+      row,
+      candidatePoint,
+    );
+    if (candidate) {
+      minimum = fraction;
+      bestRegistration = candidate;
+      bestPoint = predrawnSourceMeshNode(candidate, column, row) ?? bestPoint;
+    } else {
+      maximum = fraction;
+    }
+  }
+  return {
+    registration: bestRegistration,
+    point: bestPoint,
+    constrained: true,
+  };
+}
+
 export function predrawnBoardRasterTransform(
   surface: PredrawnBoardProjection,
   cells: readonly { x: number; y: number }[],
@@ -342,8 +664,9 @@ export function predrawnBoardRasterTransform(
 ): PredrawnBoardRasterTransform | undefined {
   const geometry = registrationGeometry(surface, cells, registration);
   if (!geometry) return undefined;
-  const frameToBoard = homographyForFourPoints(geometry.sources, geometry.targets);
-  const boardToFrame = homographyForFourPoints(geometry.targets, geometry.sources);
+  if (registration.meshOverrides?.length && !validPredrawnMeshOverrides(registration)) return undefined;
+  const frameToBoard = homographyForPredrawnPoints(geometry.sources, geometry.targets);
+  const boardToFrame = homographyForPredrawnPoints(geometry.targets, geometry.sources);
   if (!frameToBoard || !boardToFrame) return undefined;
   const levelDimensions = predrawnBoardCellDimensions(cells);
   const rectification = predrawnBoardHasApplicableRectification(

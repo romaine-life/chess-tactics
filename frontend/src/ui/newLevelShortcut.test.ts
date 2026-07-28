@@ -26,11 +26,11 @@ describe('new-level shortcut and campaign assignment controls', () => {
 
   it('renders the campaign selector only inside the admin gate', () => {
     expect(editorSource).toMatch(
-      /\{isAdmin \? \(\s*<div className="le-status-name-field le-status-campaign-field">[\s\S]*?data-testid="le-campaign-select"/,
+      /\{isAdmin \? \(\s*<div className="le-status-name-field le-status-campaign-field">[\s\S]*?<HouseSelect<string>[\s\S]*?testId="le-campaign-select"/,
     );
     expect(editorSource).toContain('const dirty = levelDirty || campaignAssignmentDirty;');
     expect(editorSource).toContain("const [savedCampaignAssignmentId, setSavedCampaignAssignmentId] = useState('');");
-    expect(editorSource).toContain('const canSave = saveContextReady &&');
+    expect(editorSource).toContain('const canSave = editorSessionCanWrite && saveContextReady &&');
     expect(editorSource).toContain('const saved = await saveEditorDocument(');
     expect(editorSource).toContain('campaignAssignmentId || null,');
     expect(editorSource).toContain('useCampaigns.getState().assignLevelToCampaign(doc.level_id, campaignAssignmentId || null);');

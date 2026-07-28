@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import {
   archiveSourceBytes,
+  downloadArchivedSourceBytes,
   LiveMediaAdminClient,
   latestArchivedSourceVersion,
   mediaTypeFromBytes,
@@ -183,6 +184,110 @@ describe('live media admin tooling client', () => {
     expect(client.archiveVersion).not.toHaveBeenCalled();
   });
 
+  it('archives oversized sources as verified chunks and reconstructs the exact original bytes', async () => {
+    const bytes = Buffer.from('oversized-source-bytes');
+    const client = new LiveMediaAdminClient({ apiBase: 'http://localhost:9999', fetchImpl: vi.fn() });
+    const created = [];
+    const stored = new Map();
+    client.createVersion = vi.fn(async (payload) => {
+      const id = `source-${created.length}`;
+      created.push({ id, payload });
+      return { id, revision: 0, row: { id, status: 'candidate', rowRevision: 0, media: null }, body: {} };
+    });
+    client.uploadContent = vi.fn(async ({ id, bytes: uploadedBytes, mediaType }) => {
+      const url = `/api/admin/media/${id}`;
+      const media = {
+        url,
+        sha256: sha256Bytes(uploadedBytes),
+        byteLength: uploadedBytes.length,
+        mediaType,
+      };
+      stored.set(url, { bytes: Buffer.from(uploadedBytes), media });
+      return { revision: 1, row: { id, status: 'candidate', rowRevision: 1, media } };
+    });
+    client.verifyMedia = vi.fn(async (request) => request);
+    client.archiveVersion = vi.fn(async ({ id }) => ({
+      revision: 2,
+      row: { id, status: 'archived', rowRevision: 2 },
+    }));
+
+    const result = await archiveSourceBytes({
+      client,
+      payload: {
+        sourcePath: 'sources/large-model.glb',
+        domain: 'prop',
+        role: 'source',
+        label: 'Large model',
+        provenance: { provider: 'Owner' },
+      },
+      bytes,
+      mediaType: 'model/gltf-binary',
+      idempotencyKey: 'large-model',
+      reason: 'Exact large source archive.',
+      evidence: { schema: 'source-proof-v1' },
+      chunkBytes: 7,
+    });
+
+    expect(result).toMatchObject({
+      chunked: true,
+      verification: {
+        sha256: sha256Bytes(bytes),
+        byteLength: bytes.length,
+        mediaType: 'model/gltf-binary',
+      },
+    });
+    expect(created).toHaveLength(5);
+    expect(created.slice(0, 4).map(({ payload }) => payload.sourcePath)).toEqual([
+      'sources/large-model.glb.chunks/0000.part',
+      'sources/large-model.glb.chunks/0001.part',
+      'sources/large-model.glb.chunks/0002.part',
+      'sources/large-model.glb.chunks/0003.part',
+    ]);
+    expect(created[4].payload.sourcePath).toBe('sources/large-model.glb');
+    expect(client.uploadContent.mock.calls.slice(0, 4).every(([request]) => request.mediaType === 'application/octet-stream')).toBe(true);
+    expect(client.uploadContent.mock.calls[4][0].mediaType).toBe('application/json');
+
+    const versions = created.map(({ id, payload }, index) => {
+      const media = stored.get(`/api/admin/media/${id}`).media;
+      return {
+        id,
+        sourcePath: payload.sourcePath,
+        domain: payload.domain,
+        role: 'source',
+        status: 'archived',
+        metadata: payload.metadata ?? {},
+        updatedAt: `2026-07-24T00:00:0${index}.000Z`,
+        media,
+      };
+    });
+    client.downloadVerifiedMedia = vi.fn(async (expected) => {
+      const row = stored.get(expected.url);
+      expect(row.media).toMatchObject(expected);
+      return { bytes: Buffer.from(row.bytes), verification: expected };
+    });
+    const firstChunk = versions.find((version) => version.sourcePath.endsWith('/0000.part'));
+    const storedChunk = await downloadArchivedSourceBytes({
+      client,
+      catalog: { versions },
+      version: firstChunk,
+      domain: 'prop',
+    });
+    expect(storedChunk.bytes.subarray(0, 'CHESS_TACTICS_SOURCE_CHUNK_V1\n'.length).toString())
+      .toBe('CHESS_TACTICS_SOURCE_CHUNK_V1\n');
+    const reconstructed = await downloadArchivedSourceBytes({
+      client,
+      catalog: { versions },
+      version: latestArchivedSourceVersion({ versions }, 'sources/large-model.glb', 'prop'),
+      domain: 'prop',
+    });
+    expect(reconstructed.bytes.equals(bytes)).toBe(true);
+    expect(reconstructed.verification).toMatchObject({
+      sha256: sha256Bytes(bytes),
+      byteLength: bytes.length,
+      chunked: true,
+    });
+  });
+
   it('archives manifest sources before idempotent candidate uploads and reports exact revisions and hashes', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'live-media-batch-test-'));
     try {
@@ -275,6 +380,11 @@ describe('live media admin tooling client', () => {
       });
       expect(client.createVersion.mock.calls.map(([, request]) => request.idempotencyKey))
         .toEqual([expect.stringMatching(/^livebatch-source-/), expect.stringMatching(/^livebatch-candidate-/)]);
+      const firstCandidateKey = client.createVersion.mock.calls[1][1].idempotencyKey;
+      fs.writeFileSync(path.join(root, 'candidate.png'), Buffer.concat([candidateBytes, Buffer.from([0])]));
+      await uploadCandidateBatch({ client, manifest: readCandidateBatchManifest(manifestPath) });
+      const changedCandidateKey = client.createVersion.mock.calls.at(-1)[1].idempotencyKey;
+      expect(changedCandidateKey).not.toBe(firstCandidateKey);
       expect(operations.some((operation) => /review|accept|bridge/.test(operation))).toBe(false);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });

@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, type CSSProperties, type ReactElement } from 'react';
 import {
+  filterPredrawnOcclusionDepthPixels,
   predrawnOcclusionMasksInFront,
   type BakeBounds,
   type BoardDrawOp,
+  type PredrawnOcclusionDepthMap,
 } from '@chess-tactics/board-render';
 import { loadDecodedImage, loadDecodedImageMap } from './imageResources';
+import { createRenderEffectGeneration, settleRenderEffectGeneration } from './renderEffectGeneration';
 
 type CanvasImage = HTMLImageElement;
 
@@ -34,8 +37,30 @@ export function loadCanvasImage(src: string): Promise<CanvasImage> {
   return loadDecodedImage(src);
 }
 
+/** Resize the backing store only when a complete replacement frame is ready to paint.
+ * Setting width/height during React render clears the visible bitmap immediately, exposing a
+ * blank compositor while asynchronous resources for the next frame are still settling. */
+export function sizeCanvasForBounds(
+  canvas: Pick<HTMLCanvasElement, 'width' | 'height'>,
+  bounds: BakeBounds,
+): void {
+  const width = Math.max(1, Math.ceil(bounds.width));
+  const height = Math.max(1, Math.ceil(bounds.height));
+  if (canvas.width !== width) canvas.width = width;
+  if (canvas.height !== height) canvas.height = height;
+}
+
 function imageReady(image: CanvasImage | undefined): image is CanvasImage {
   return !!image?.complete && image.naturalWidth > 0;
+}
+
+export function predrawnOcclusionDepthImageDimensionIssue(
+  map: PredrawnOcclusionDepthMap | undefined,
+  image: Pick<HTMLImageElement, 'naturalWidth' | 'naturalHeight'> | undefined,
+): string | null {
+  if (!map) return null;
+  if (image?.naturalWidth === map.frameWidth && image.naturalHeight === map.frameHeight) return null;
+  return `Immutable occlusion depth dimensions do not match: expected ${map.frameWidth}×${map.frameHeight}, decoded ${image?.naturalWidth ?? 0}×${image?.naturalHeight ?? 0}.`;
 }
 
 function createBoardCanvasScratchSurface(
@@ -216,17 +241,23 @@ export function drawBoardOps(
   maskTint?: string,
   occlusionMasks: readonly BoardDrawOp[] = [],
   scratchFactory: BoardCanvasScratchFactory = createBoardCanvasScratchSurface,
+  occlusionDepthMap?: PredrawnOcclusionDepthMap,
 ): void {
   ctx.clearRect(0, 0, bounds.width, bounds.height);
   ctx.imageSmoothingEnabled = false;
   let scratch: BoardCanvasScratchSurface | undefined;
+  let depthScratch: BoardCanvasScratchSurface | undefined;
   for (const op of ops) {
     const img = images.get(op.src);
     if (!imageReady(img)) continue;
     const masksInFront = op.layer === 'scene'
       ? predrawnOcclusionMasksInFront(op, occlusionMasks)
       : [];
-    if (masksInFront.length === 0) {
+    const depthImage = op.layer === 'scene' && occlusionDepthMap
+      ? images.get(occlusionDepthMap.src)
+      : undefined;
+    const hasDepthOcclusion = imageReady(depthImage);
+    if (masksInFront.length === 0 && !hasDepthOcclusion) {
       paintOp(ctx, img, op, bounds, timeMs);
       continue;
     }
@@ -242,11 +273,51 @@ export function drawBoardOps(
     scratchCtx.globalCompositeOperation = 'source-over';
     scratchCtx.globalAlpha = 1;
     paintOp(scratchCtx, img, op, region.bounds, timeMs);
+    if (hasDepthOcclusion && occlusionDepthMap) {
+      depthScratch ??= scratchFactory(region.width, region.height);
+      if (depthScratch) {
+        if (depthScratch.canvas.width < region.width) depthScratch.canvas.width = region.width;
+        if (depthScratch.canvas.height < region.height) depthScratch.canvas.height = region.height;
+        const depthContext = depthScratch.context;
+        depthContext.clearRect(0, 0, region.width, region.height);
+        depthContext.imageSmoothingEnabled = false;
+        depthContext.globalCompositeOperation = 'source-over';
+        depthContext.globalAlpha = 1;
+        const mapBounds = occlusionDepthMap.worldBounds;
+        depthContext.drawImage(
+          depthImage,
+          0,
+          0,
+          occlusionDepthMap.frameWidth,
+          occlusionDepthMap.frameHeight,
+          mapBounds.minX - region.bounds.minX,
+          mapBounds.minY - region.bounds.minY,
+          mapBounds.width,
+          mapBounds.height,
+        );
+        const depthPixels = depthContext.getImageData(0, 0, region.width, region.height);
+        depthPixels.data.set(filterPredrawnOcclusionDepthPixels(depthPixels.data, op.z));
+        depthContext.putImageData(depthPixels, 0, 0);
+      }
+    }
     scratchCtx.save();
     scratchCtx.globalCompositeOperation = 'destination-out';
     for (const mask of masksInFront) {
       const maskImage = images.get(mask.src);
       if (imageReady(maskImage)) paintOp(scratchCtx, maskImage, mask, region.bounds, timeMs);
+    }
+    if (hasDepthOcclusion && depthScratch) {
+      scratchCtx.drawImage(
+        depthScratch.canvas,
+        0,
+        0,
+        region.width,
+        region.height,
+        0,
+        0,
+        region.width,
+        region.height,
+      );
     }
     scratchCtx.restore();
     ctx.drawImage(
@@ -310,12 +381,36 @@ function opSignature(op: BoardDrawOp): string {
   ].join(':');
 }
 
+export function boardCanvasSources(
+  ops: readonly BoardDrawOp[],
+  occlusionMasks: readonly BoardDrawOp[] = EMPTY_OCCLUSION_MASKS,
+  occlusionDepthMap?: PredrawnOcclusionDepthMap,
+): string[] {
+  return [...new Set([
+    ...ops.map((op) => op.src),
+    ...occlusionMasks.map((op) => op.src),
+    ...(occlusionDepthMap ? [occlusionDepthMap.src] : []),
+  ])];
+}
+
+export function boardCanvasFramePlan(
+  ops: readonly BoardDrawOp[],
+  occlusionMasks: readonly BoardDrawOp[] = EMPTY_OCCLUSION_MASKS,
+  occlusionDepthMap?: PredrawnOcclusionDepthMap,
+): { sources: string[]; paint: boolean } {
+  return {
+    sources: boardCanvasSources(ops, occlusionMasks, occlusionDepthMap),
+    paint: ops.length > 0,
+  };
+}
+
 export function BoardCanvasLayer({
   ops,
   bounds,
   className = 'tileset-scene-layer',
   maskTint,
   occlusionMasks = EMPTY_OCCLUSION_MASKS,
+  occlusionDepthMap,
   onFirstFrame,
   onFrameError,
 }: {
@@ -326,6 +421,8 @@ export function BoardCanvasLayer({
   maskTint?: string;
   /** Canonical raised silhouettes that erase lower-depth additive art to reveal a pre-drawn plate. */
   occlusionMasks?: readonly BoardDrawOp[];
+  /** Persisted source-aligned scene depth; selected with an immutable background version. */
+  occlusionDepthMap?: PredrawnOcclusionDepthMap;
   onFirstFrame?: () => void;
   onFrameError?: (error: unknown) => void;
 }): ReactElement | null {
@@ -340,52 +437,80 @@ export function BoardCanvasLayer({
     () => orderedOcclusionMasks.map(opSignature).join('|'),
     [orderedOcclusionMasks],
   );
+  const depthSignature = occlusionDepthMap
+    ? `${occlusionDepthMap.src}:${occlusionDepthMap.frameWidth}:${occlusionDepthMap.frameHeight}:${JSON.stringify(occlusionDepthMap.worldBounds)}`
+    : '';
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d');
-    if (!canvas || !ctx) return undefined;
+    const framePlan = boardCanvasFramePlan(
+      orderedOps,
+      orderedOcclusionMasks,
+      occlusionDepthMap,
+    );
 
-    let cancelled = false;
-    let raf = 0;
-    const sources = [...new Set([...orderedOps, ...orderedOcclusionMasks].map((op) => op.src))];
-    const animated = orderedOps.some(isAnimatedGroundCoverOp);
-
-    const paint = (images: ReadonlyMap<string, CanvasImage>, timeMs = performance.now()): void => {
-      if (!cancelled) drawBoardOps(
-        ctx,
-        orderedOps,
-        bounds,
-        images,
-        timeMs,
-        maskTint,
-        orderedOcclusionMasks,
-      );
-    };
-
-    if (sources.length === 0) {
+    if (framePlan.sources.length === 0) {
       // An empty compositor has no pixels to await; acknowledge during its effect so a
-      // sibling's state update cannot repeatedly cancel a scheduled empty-frame callback.
+      // missing canvas cannot prevent the parent board from becoming ready.
       onFirstFrame?.();
       return undefined;
     }
 
-    void loadDecodedImageMap(sources).then((images) => {
+    const generation = createRenderEffectGeneration();
+    if (!framePlan.paint) {
+      // A depth-bearing board can intentionally have no visible scene sprites in
+      // this preview. Decode and validate its immutable mask before acknowledging
+      // readiness, but do not wait for a canvas that an empty compositor does not mount.
+      settleRenderEffectGeneration(generation, loadDecodedImageMap(framePlan.sources), (images) => {
+        const dimensionIssue = predrawnOcclusionDepthImageDimensionIssue(
+          occlusionDepthMap,
+          occlusionDepthMap ? images.get(occlusionDepthMap.src) : undefined,
+        );
+        if (dimensionIssue) throw new Error(dimensionIssue);
+        generation.requestFrame(() => onFirstFrame?.());
+      }, (error) => onFrameError?.(error));
+      return generation.cancel;
+    }
+
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return undefined;
+
+    const animated = orderedOps.some(isAnimatedGroundCoverOp);
+    const paint = (images: ReadonlyMap<string, CanvasImage>, timeMs = performance.now()): void => {
+      generation.runIfCurrent(() => {
+        sizeCanvasForBounds(canvas, bounds);
+        drawBoardOps(
+          ctx,
+          orderedOps,
+          bounds,
+          images,
+          timeMs,
+          maskTint,
+          orderedOcclusionMasks,
+          undefined,
+          occlusionDepthMap,
+        );
+      });
+    };
+
+    settleRenderEffectGeneration(generation, loadDecodedImageMap(framePlan.sources), (images) => {
+      const dimensionIssue = predrawnOcclusionDepthImageDimensionIssue(
+        occlusionDepthMap,
+        occlusionDepthMap ? images.get(occlusionDepthMap.src) : undefined,
+      );
+      if (dimensionIssue) throw new Error(dimensionIssue);
       paint(images);
-      requestAnimationFrame(() => onFirstFrame?.());
+      generation.requestFrame(() => onFirstFrame?.());
       if (!animated) return;
       const tick = (timeMs: number): void => {
         paint(images, timeMs);
-        raf = window.requestAnimationFrame(tick);
+        generation.requestFrame(tick);
       };
-      raf = window.requestAnimationFrame(tick);
-    }).catch((error) => onFrameError?.(error));
+      generation.requestFrame(tick);
+    }, (error) => onFrameError?.(error));
 
-    return () => {
-      cancelled = true;
-      if (raf) window.cancelAnimationFrame(raf);
-    };
-  }, [bounds, maskTint, occlusionSignature, onFirstFrame, onFrameError, orderedOcclusionMasks, orderedOps, signature]);
+    return generation.cancel;
+  }, [bounds, depthSignature, maskTint, occlusionDepthMap, occlusionSignature, onFirstFrame, onFrameError, orderedOcclusionMasks, orderedOps, signature]);
 
   if (orderedOps.length === 0) return null;
 
@@ -400,8 +525,6 @@ export function BoardCanvasLayer({
     <canvas
       ref={canvasRef}
       className={className}
-      width={bounds.width}
-      height={bounds.height}
       style={style}
       aria-hidden="true"
     />

@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState, type ComponentProps, type ReactElement, type ReactNode } from 'react';
+import { drawableAssets } from '@chess-tactics/board-render';
 import { useCampaigns } from '../campaign/store';
 import { saveUserWorkspace, publishOfficialWorkspace, userWorkspaceForSave, officialWorkspaceForSave, mapSaveError, tierOf } from '../campaign/save';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
@@ -23,11 +24,16 @@ import { LEVEL_NAME_MAX, normalizeLevelName } from './shared/levelNamePolicy';
 import { editSkirmishProfileHref, isSkirmishProfileLevel, skirmishProfileLevels } from './skirmishProfiles';
 import {
   autosaveEditorDocument,
+  closeEditorDocumentEditSession,
   deleteNeverSavedEditorDocument,
   discardEditorDocumentChanges,
+  editorDocumentEditFence,
   isEditorDocumentConflict,
+  isEditorDocumentEditSessionError,
   listEditorDocuments,
   loadEditorDocument,
+  openEditorDocumentEditSession,
+  takeOverEditorDocumentEditSession,
   type EditorDocument,
   type EditorDocumentSummary,
 } from '../net/editorDocuments';
@@ -37,8 +43,9 @@ import {
   editorDocumentDisplayName,
   resumableUserEditorDocuments,
 } from './campaignEditorRecentDrafts';
-import { clearScopedLevelEditorDraft, rebaseScopedLevelEditorDraft } from './levelEditorDraft';
+import { clearScopedLevelEditorDraft, newLevelEditorClientIdentity, rebaseScopedLevelEditorDraft } from './levelEditorDraft';
 import { levelEditorLevelSignature } from './levelEditorSignature';
+import { levelEditorClientLabel, levelEditorSessionActorLabel, levelEditorSessionPresenceDetail, levelEditorSessionServerNow } from './levelEditorSessionPresentation';
 import { installedUiMedia } from './installedUiMedia';
 
 const CE_ICONS = {
@@ -53,7 +60,62 @@ const CE_ICONS = {
 
 // The carved rail-tab icon, shared with the play-side Campaign section (PlayMenu.tsx) so a
 // campaign looks identical whether you're picking one to play or one to edit.
-const CAMPAIGN_TAB_ICON = installedUiMedia('ui-main-menu-icons-carved-campaign-editor-png');
+const campaignMenuModes = drawableAssets('menu-mode')
+  .filter((asset) => asset.behavior.value === 'campaign-editor');
+if (campaignMenuModes.length !== 1) {
+  throw new Error(`campaign editor requires one installed campaign menu mode; found ${campaignMenuModes.length}`);
+}
+const CAMPAIGN_TAB_ICON = campaignMenuModes[0].media.icon?.media.immutableUrl;
+if (!CAMPAIGN_TAB_ICON) throw new Error('installed campaign menu mode has no icon');
+
+class RecentDraftEditingAuthorityError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RecentDraftEditingAuthorityError';
+  }
+}
+
+async function withRecentDraftEditingAuthority<T>(
+  document: EditorDocument,
+  action: (fence: ReturnType<typeof editorDocumentEditFence>) => Promise<T>,
+): Promise<T> {
+  const identity = newLevelEditorClientIdentity();
+  if (!identity) throw new Error('This browser could not create the page identity required for safe editing.');
+  const opened = await openEditorDocumentEditSession(document.document_id, {
+    session_id: identity.sessionId,
+    session_key: identity.sessionKey,
+    device_id: identity.deviceId,
+    client_label: `Campaign Editor · ${window.location.host} · ${levelEditorClientLabel(window.navigator.userAgent)}`,
+  });
+  let authority = opened;
+  if (opened.session.state !== 'active' && !opened.presence.active_editor) {
+    try {
+      authority = await takeOverEditorDocumentEditSession(
+        document.document_id,
+        opened.session.session_id,
+        identity.sessionKey,
+        opened.presence.edit_generation,
+      );
+    } catch (error) {
+      await closeEditorDocumentEditSession(document.document_id, opened.session.session_id, identity.sessionKey).catch(() => undefined);
+      throw error;
+    }
+  }
+  const activeHere = authority.session.state === 'active'
+    && authority.presence.active_editor?.session_id === authority.session.session_id;
+  if (!activeHere) {
+    await closeEditorDocumentEditSession(document.document_id, opened.session.session_id, identity.sessionKey).catch(() => undefined);
+    const active = authority.presence.active_editor;
+    throw new RecentDraftEditingAuthorityError(active
+      ? `${levelEditorSessionActorLabel(active)} currently has editing control. ${levelEditorSessionPresenceDetail(active, levelEditorSessionServerNow(authority.presence.server_time))}. Open the level and use Take over editing if you intend to move control.`
+      : 'This working copy has no attributable active writer. Open the level to re-check authority before changing it.');
+  }
+  try {
+    return await action(editorDocumentEditFence(authority.session, identity.sessionKey));
+  } finally {
+    await closeEditorDocumentEditSession(document.document_id, opened.session.session_id, identity.sessionKey).catch(() => undefined);
+  }
+}
 
 export type CampaignCollection = 'campaign' | 'unassigned' | 'skirmish-profiles';
 
@@ -496,8 +558,15 @@ export function UnassignedLevelRow({
 }
 
 function recentDraftActionError(error: unknown, action: 'rename' | 'remove'): string {
+  if (error instanceof RecentDraftEditingAuthorityError) return error.message;
+  if (isEditorDocumentEditSessionError(error)) {
+    const active = error.presence?.active_editor;
+    return active
+      ? `${levelEditorSessionActorLabel(active)} currently has editing control. ${levelEditorSessionPresenceDetail(active, levelEditorSessionServerNow(error.presence?.server_time))}. Open the level and use Take over editing if you intend to move control.`
+      : 'Editing control changed before this action completed. Open the level to see the current editor and take over if needed.';
+  }
   if (isEditorDocumentConflict(error)) {
-    return 'Changed in another tab. The newer draft is shown; review it and try again.';
+    return 'The working copy has a newer server revision. The newer draft is shown; review it and try again.';
   }
   return action === 'rename'
     ? 'Rename failed. Your typed name is still here — try again.'
@@ -575,10 +644,14 @@ export function RecentDraftLevelRow({
     setBusy(true);
     setActionError('');
     try {
-      const updated = await autosaveEditorDocument(
-        document.document_id,
-        { ...document.level, name: nextName },
-        document.revision,
+      const updated = await withRecentDraftEditingAuthority(
+        document,
+        (fence) => autosaveEditorDocument(
+          document.document_id,
+          { ...document.level, name: nextName },
+          document.revision,
+          fence,
+        ),
       );
       rebaseScopedLevelEditorDraft(
         { documentId: document.document_id, ownerEmail },
@@ -1018,11 +1091,13 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
     if (!confirmed) return;
 
     try {
-      if (deleteForever) {
-        await deleteNeverSavedEditorDocument(document.document_id, document.revision);
-      } else {
-        await discardEditorDocumentChanges(document.document_id, document.revision);
-      }
+      await withRecentDraftEditingAuthority(document, async (fence) => {
+        if (deleteForever) {
+          await deleteNeverSavedEditorDocument(document.document_id, document.revision, fence);
+        } else {
+          await discardEditorDocumentChanges(document.document_id, document.revision, fence);
+        }
+      });
       clearScopedLevelEditorDraft({ documentId: document.document_id, ownerEmail: me?.email });
       setRecentDrafts((documents) => documents.filter((candidate) => candidate.document_id !== document.document_id));
       setStatus(deleteForever ? `Deleted unsaved level “${name}”.` : `Discarded unsaved changes to “${name}”.`);

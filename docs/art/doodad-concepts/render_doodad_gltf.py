@@ -43,7 +43,7 @@ bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 g.data.transform(mathutils.Matrix.Rotation(math.radians(90), 4, "X"))
 g.data.update()
 # Fit-normalise: scale so the prop's LARGEST dimension = SCALE. Orientation-invariant and
-# bounds the footprint in BOTH axes, so a wide prop (stump, fern) can't overflow the 96px-wide
+# bounds the footprint in BOTH axes, so a wide prop (fallen log, fern) can't overflow the 96px-wide
 # frame the way height-only scaling did. Then centre in XY and ground the foot (min z) to z=0
 # so the contact point lands on the same screen pixel (48,69) for every prop.
 c = np.array([v.co for v in g.data.vertices])

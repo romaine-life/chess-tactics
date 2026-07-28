@@ -100,30 +100,22 @@ describe('skirmish store', () => {
     expect(['player', 'done']).toContain(after.turn);
   });
 
-  it('keeps the piece you moved selected through the enemy turn and into your next turn', () => {
+  it('clears the moved piece through the enemy turn and into the next player turn', () => {
     useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null }); // untimed: runAllTimers below must not flag-fall the clock
-    const movedId = useSkirmish.getState().selectedId!;
     const moves = useSkirmish.getState().movesForSelected();
     expect(moves.length).toBeGreaterThan(0);
     useSkirmish.getState().tryMoveTo(moves[0].x, moves[0].y);
 
-    // Through the enemy turn: the mover always survives its own move, so the piece the
-    // player just commanded stays selected rather than being cleared. Input is gated by
-    // turn, so it shows no move-dots — it just keeps the player's context on the board.
-    expect(useSkirmish.getState().selectedId).toBe(movedId);
+    // The committed mover no longer owns selection/focus, so its legal moves cannot
+    // reappear when control returns without another explicit unit selection.
+    expect(useSkirmish.getState().selectedId).toBeNull();
+    expect(useSkirmish.getState().focusedId).toBeNull();
 
-    // Into the next player turn: the selection follows that same piece, only falling
-    // back to a living player piece if the enemy captured it.
     vi.runAllTimers();
     const after = useSkirmish.getState();
-    const movedStillAlive = after.game.pieces.some((p) => p.id === movedId && p.alive && p.side === 'player');
-    if (movedStillAlive) {
-      expect(after.selectedId).toBe(movedId);
-    } else {
-      const sel = after.game.pieces.find((p) => p.id === after.selectedId);
-      expect(sel?.side).toBe('player');
-      expect(sel?.alive).toBe(true);
-    }
+    expect(after.selectedId).toBeNull();
+    expect(after.focusedId).toBeNull();
+    expect(after.movesForSelected()).toEqual([]);
   });
 
   it('ignores an illegal destination', () => {
@@ -735,7 +727,7 @@ describe('skirmish store: premoves', () => {
   it('preserves a different unit selected during the opponent reply', () => {
     loadBoard([piece('pr', 'player', 'rook', 0, 0), piece('pk', 'player', 'king', 0, 7), piece('ek', 'enemy', 'king', 7, 7)], 'pk');
     useSkirmish.getState().tryMoveTo(1, 7); // selected mover is pk; reply is now staged
-    expect(useSkirmish.getState().selectedId).toBe('pk');
+    expect(useSkirmish.getState().selectedId).toBeNull();
 
     useSkirmish.getState().select('pr'); // mirrors clicking a different unit in premove mode
     expect(useSkirmish.getState().selectedId).toBe('pr');
@@ -791,6 +783,8 @@ describe('skirmish store: premoves', () => {
     const afterFire = useSkirmish.getState();
     expect(afterFire.game.pieces.find((p) => p.id === 'pr')).toMatchObject({ x: 0, y: 5 });
     expect(afterFire.premoveInputOpen).toBe(false);
+    expect(afterFire.selectedId).toBeNull();
+    expect(afterFire.focusedId).toBeNull();
   });
 
   it('closes the post-reply premove input beat when no premove is queued', () => {
@@ -837,6 +831,7 @@ describe('skirmish store: premoves', () => {
       piece('ek', 'enemy', 'king', 7, 0),
     ], 'pk');
     useSkirmish.getState().tryMoveTo(1, 7); // safe king step → opponent's turn
+    useSkirmish.getState().select('pp');
     useSkirmish.getState().queueMove('pp', 4, 3);
     expect(useSkirmish.getState().premoves).toHaveLength(1);
 
@@ -845,6 +840,8 @@ describe('skirmish store: premoves', () => {
     expect(s.game.pieces.find((p) => p.id === 'pp')?.alive).toBe(false); // captured by the reply
     expect(s.premoves).toEqual([]); // chain dropped — the premove never fired
     expect(s.game.turn).toBe('player');
+    expect(s.selectedId).toBeNull(); // no arbitrary fallback when the explicit selection dies
+    expect(s.focusedId).toBeNull();
   });
 
   it('fires a queued recapture after the enemy captures a friendly-occupied square', () => {
@@ -996,7 +993,8 @@ describe('skirmish store: multiplayer session parity', () => {
     expect(sent[1].intentId).not.toBe(sent[0].intentId);
     useSkirmish.getState().applyRemoteMove(sent[1].pieceId, sent[1].move, sent[1].intentId);
     expect(useSkirmish.getState().net).toMatchObject({ moveCount: 1, pendingMove: null });
-    expect(useSkirmish.getState().selectedId).toBe(selected);
+    expect(useSkirmish.getState().selectedId).toBeNull();
+    expect(useSkirmish.getState().focusedId).toBeNull();
 
     // Choosing another owned piece during the opponent turn survives their relay too.
     const localRook = useSkirmish.getState().game.pieces.find((candidate) => candidate.side === 'player' && candidate.type === 'rook')!;
@@ -1110,6 +1108,8 @@ describe('skirmish store: multiplayer session parity', () => {
     useSkirmish.getState().applyRemoteMove('ep', sent[0].move);
     expect(useSkirmish.getState().game.pieces.find((candidate) => candidate.id === 'ep')).toMatchObject({ type: 'knight', x: 4, y: 7 });
     expect(useSkirmish.getState().net).toMatchObject({ moveCount: 2, pendingMove: null });
+    expect(useSkirmish.getState().selectedId).toBeNull();
+    expect(useSkirmish.getState().focusedId).toBeNull();
   });
 
   it('retains a move-derived terminal result at its exact authoritative relay count', () => {

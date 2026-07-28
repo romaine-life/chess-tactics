@@ -25,6 +25,7 @@ import {
   runtimePredrawnBoardPlate,
   storedPredrawnBoardRegistration,
   storePredrawnBoardRegistration,
+  versionedPredrawnImageDimensionIssue,
 } from './PredrawnBoardLayer';
 
 const surface = {
@@ -52,6 +53,20 @@ const board = (): EditorBoard => ({
 afterEach(() => resetLiveMediaCatalog());
 
 describe('pre-drawn board surface', () => {
+  it('fails closed when immutable plate bytes do not match persisted frame dimensions', () => {
+    const versioned = {
+      kind: 'predrawn' as const,
+      schemaVersion: 2 as const,
+      backgroundVersionId: '11111111-1111-4111-8111-111111111111',
+      frameWidth: 100,
+      frameHeight: 80,
+      worldBounds: { minX: 0, minY: 0, width: 100, height: 80 },
+    };
+    expect(versionedPredrawnImageDimensionIssue(versioned, 100, 80)).toBeNull();
+    expect(versionedPredrawnImageDimensionIssue(versioned, 99, 80)).toMatch(/expected 100×80, decoded 99×80/);
+    expect(versionedPredrawnImageDimensionIssue(surface, 1, 1)).toBeNull();
+  });
+
   it('registers the complete review frame against canonical board centering', () => {
     const cells = Array.from({ length: 11 }, (_, y) =>
       Array.from({ length: 5 }, (__, x) => ({ x, y }))).flat();
@@ -240,7 +255,7 @@ describe('pre-drawn board surface', () => {
 
     expect(storePredrawnBoardRegistration('/tmp-shots/plate.png', registration, storage)).toBe(true);
     expect(items.get(predrawnBoardRegistrationStorageKey('/tmp-shots/plate.png'))).toBe(JSON.stringify({
-      version: 4,
+      version: 5,
       registration: '1628,966,1092.596,7.979,1553,243.564,621.456,741.124,82,534.984',
     }));
     expect(storedPredrawnBoardRegistration('/tmp-shots/plate.png', storage)).toEqual(registration);

@@ -21,3 +21,10 @@ test('accepts canonical controls', () => {
 test('rejects bespoke framed control CSS', () => {
   assert.match(checkCss('.le-illegal-dropdown { background: #123; border: 1px solid red; }').join('\n'), /bespoke/);
 });
+
+test('rejects every retired native-select debt label without an allowlist', () => {
+  for (const label of ['Selected zone', 'Fence artwork', 'Composite terrain footprint']) {
+    const failures = checkTsx('src/ui/LevelEditor.tsx', `<select aria-label="${label}" />`);
+    assert.match(failures.join('\n'), /use HouseSelect/);
+  }
+});

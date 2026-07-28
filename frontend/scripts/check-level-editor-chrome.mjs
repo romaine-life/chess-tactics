@@ -9,14 +9,6 @@ const CONSUMERS = [
   'src/ui/shared/BoardSizePanel.tsx',
 ];
 
-// Named migration debt that predates this gate. Keeping this list semantic makes any
-// newly invented native dropdown fail while the remaining controls migrate to HouseSelect.
-const LEGACY_NATIVE_SELECTS = new Set([
-  'Spawn faction', 'Spawn zone', 'Promotion faction', 'Promotion zone',
-  'Victory template', 'Other event template', 'Campaign', 'Paint faction',
-  'Selected zone', 'Fence artwork', 'Composite terrain footprint',
-]);
-
 function attr(opening, name) {
   const prop = opening.attributes.properties.find((candidate) =>
     ts.isJsxAttribute(candidate) && candidate.name.text === name);
@@ -32,9 +24,7 @@ export function checkTsx(relativePath, source) {
       const tag = node.tagName.getText(file);
       const line = file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1;
       if (tag === 'select') {
-        const label = attr(node, 'aria-label');
-        const isNamedDebt = relativePath === 'src/ui/LevelEditor.tsx' && LEGACY_NATIVE_SELECTS.has(label);
-        if (!isNamedDebt) failures.push(`${relativePath}:${line}: native <select> is forbidden; use HouseSelect (inner-dropdown).`);
+        failures.push(`${relativePath}:${line}: native <select> is forbidden; use HouseSelect (inner-dropdown).`);
       }
       if (tag === 'button' && !attr(node, 'data-chrome-unit')) {
         failures.push(`${relativePath}:${line}: Level Editor button must inherit a registered chrome unit.`);
@@ -59,7 +49,6 @@ export function checkCss(source) {
   for (const match of withoutComments.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
     const selector = match[1].trim();
     const body = match[2];
-    if (/\.le-(?:layer|faction)-select/.test(selector)) continue; // named native-select migration debt above
     const inventedControl = /\.board-size[^,{]*(?:select|button)|\.le-[\w-]*(?:dropdown|select|button|box)(?![\w-])/.test(selector);
     if (inventedControl && /\b(?:background(?:-image)?|border(?:-image(?:-(?:source|slice|width|repeat))?)?)\s*:\s*(?!var\(--(?:le|skirmish)-chrome)/.test(body)) {
       failures.push(`src/style.css: bespoke Level Editor control chrome in selector ${selector}`);

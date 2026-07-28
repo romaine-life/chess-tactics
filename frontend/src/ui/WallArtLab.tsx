@@ -47,6 +47,7 @@ import {
 import { saveLiveWallArt } from '../net/wallArt';
 import { mapSaveError } from '../campaign/save';
 import { SliderRow } from './dressing/SliderRow';
+import { DirectionArrowIcon } from './shared/DirectionArrowIcon';
 import { ViewPane } from './shared/ViewPane';
 import { requiredTerrainFamilyForRole, terrainFamiliesForRole } from '../core/tileSockets';
 
@@ -181,14 +182,6 @@ function slotPreviewStyle(slot: WallArtSlot, wallLeft: number, wallTop: number, 
     width: face.width * slotScale,
     height: face.height * slotScale,
   };
-}
-
-function DirArrow({ deg }: { deg: number }): ReactElement {
-  return (
-    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" style={{ display: 'block', transform: `rotate(${deg}deg)` }}>
-      <path d="M12 4 L19 13 L14.5 13 L14.5 20 L9.5 20 L9.5 13 L5 13 Z" fill="currentColor" />
-    </svg>
-  );
 }
 
 function labAnchorCell(face: WallDecorFaceId): { x: number; y: number } {
@@ -981,7 +974,7 @@ export function WallArtLab({ artId, onArtId, header, draftSourceId, onDraftSourc
                             aria-label={`nudge ${direction.name}`}
                             onClick={(event) => nudgeSlot(direction.vx, direction.vy, event.shiftKey ? 10 : 1)}
                           >
-                            <DirArrow deg={direction.deg} />
+                            <DirectionArrowIcon degrees={direction.deg} />
                           </button>
                         )
                         : <span key={`c${index}`} className="ps-pad-center" aria-hidden="true" />)}

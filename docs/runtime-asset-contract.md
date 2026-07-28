@@ -11,9 +11,13 @@ atlases, animation sheets, and other media consumed or judged by the application
   pointers, accepted status, provenance, revisions, native-size evidence, and
   audit events.
 - Private Blob Storage owns immutable content-addressed media bytes.
-- The backend owns public reads and admin-gated writes.
-- Git owns code, deterministic geometry/masks, schemas, prompts, and text
-  provenance. Git does not own media bytes or accepted pointers.
+- The backend owns access-controlled reads and domain-authorized writes.
+  Ordinary shared-catalog mutation remains admin-gated; Generation Reference,
+  Raw Pipeline Source, creation-slot, and pre-drawn lineage authoring are
+  owner-scoped under the current fenced Level Editor session.
+- Git owns code, deterministic geometry and mask-generation logic, schemas,
+  prompts, and text provenance. Git does not own media bytes, persisted raster
+  masks, or accepted pointers.
 
 The term **DB-backed asset** means the accepted pointer and lifecycle are
 database-authoritative while the bytes are in backend-owned object storage. It
@@ -21,37 +25,260 @@ does not mean storing large media values in Postgres `bytea`.
 
 ## Stable identity
 
-Game data and code refer to stable semantic slots such as a terrain layer role or
-UI-kit part. They never persist a candidate UUID, blob hash, generated filename,
-repository path, or currently accepted URL.
+Game data and code refer to durable domain identities. Ordinary catalog media
+uses stable semantic slots such as a terrain layer role or UI-kit part. Neither
+ordinary nor pre-drawn content persists a candidate UUID, blob hash, generated
+filename, repository path, temporary URL, browser-local key, or picker state.
 
-A pre-drawn board persists its background's semantic slot, the accepted image's
-actual pixel width and height, and the versioned whole-image alignment geometry
-defined by
-[ADR-0123](adr/0123-accepted-predrawn-scenes-keep-their-pixels-and-saved-alignment.md).
-That payload contains the four owner-approved source-pixel board corners, refit
-row and column counts, monotonic normalized guides that the renderer uses, and
-the version-4 pinned boundary. It is canonical Level data because it preserves
-the exact approved registration; the pinned boundary remains display-only and
-does not affect rendering or gameplay. The accepted image has no required
-3840x2160 size and is not resized or regenerated solely to reach one.
-
-A same-origin temporary preview URL and a source-scoped browser-local record may
-substitute candidate bytes and hold pending alignment during development review.
-Promotion copies the exact approved versioned alignment into the pre-drawn
-background declaration. The preview URL, candidate id, blob hash, browser-local
-key, and picker state are never serialized into the Level. Accepted bytes still
-resolve through the live-media catalog's stable semantic slot.
+Floating artwork placements persist the installed structure drawable's
+stable logical id, never media bytes, a blob hash, repository filename, or
+candidate URL. Directional structure views are media roles on that DB-owned
+drawable (`back`/`front` for south/default and paired
+`<direction>-back`/`<direction>-front` roles for additional views). The
+placement's canonical projected-scene pixel center, rendered direction, and
+source-composition scale are level data; the selected media still resolves
+through the catalog.
 
 Per
-[ADR-0122](adr/0122-predrawn-occlusion-derives-from-canonical-raised-geometry.md),
-the current automatic occlusion seed is not another runtime asset. Its alpha and
-depth are derived deterministically from the board's canonical raised geometry
-through the shared render planner. No mask bytes, candidate id, URL, occlusion
-slot, or depth value is added to level data or the live-media catalog.
-Any future owner-painted correction and accepted mask artifact requires a
-separate authoring and storage decision rather than a local or repository
-fallback.
+[ADR-0158](adr/0158-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md),
+a pre-drawn board is the narrow domain-version case. Per
+[ADR-0165](adr/0165-ai-artwork-separates-sources-attempts-and-background-mode.md),
+its Level declaration persists an explicit Legacy/AI background mode separately
+from a remembered exact AI selection. That selection names one generated or
+warped raster version plus either one matching depth-aware occlusion-mask child
+or an explicit no-mask state and, for schema-version-3 fitted surfaces, embeds
+one exact cell-visual-footprint snapshot under the compatibility cyan
+move-highlight profile name. The Postgres-owned raster and mask identities
+resolve immutable Blob bytes, while the profile remains exact Level content;
+neither mode nor selection is a transient candidate id, mutable semantic-slot
+pointer, browser preference, or picker state. The raster version owns its frame
+dimensions and world bounds; the Level projection may duplicate those immutable
+values only when the backend validates an exact match, never as independently
+mutable rendering state.
+
+A Generation Reference is a separate immutable, non-settable media identity
+captured from the canonical saved Level's active Legacy or AI background
+through its saved generation frame. Its record binds exact bytes, hash,
+dimensions, bounds, mode, selected AI raster when applicable, canonical Level
+revision, geometry digest, semantic-packet identity, and provenance. A later
+capture creates another reference; it never rewrites the first.
+
+Per
+[ADR-0166](adr/0166-manual-ai-handoff-separates-generation-references-from-raw-pipeline-sources.md),
+and
+[ADR-0168](adr/0168-creation-slots-begin-with-reusable-raw-pipeline-sources.md),
+Postgres separately owns Generation Reference handoff provenance, immutable Raw
+Pipeline Source identities, and Board Art creation-slot identities. Copying a
+Generation Reference to the clipboard is a side-effect-free read of its exact
+full-resolution PNG. Clipboard paste, direct `Ctrl+V`, or exact-PNG file
+selection stages the returned AI-painted PNG as a local preview; the explicit
+commit stores those exact unchanged bytes and their content hash as a Raw
+Pipeline Source. An explicitly editor-mounted preexisting Codex result may be
+imported through the same named raw-source ingress. The application records the
+reference, canonical semantic request and hashes, returned bytes, request hash,
+and actor/time without claiming the external conversation's model, prompt, or
+generation parameters.
+
+A Board Art creation slot then references exactly one content-complete
+`kind='raw'` Raw Pipeline Source as its pre-modification input. It is immediately
+ready for grid fitting and owns no second raw output stage. Applying an
+owner-approved grid registration runs the versioned deterministic rasterizer
+once and fills that slot's warped stage, preserving the selected raw parent and
+recording exact registration, dimensions, world bounds, coordinate basis,
+generator version, hashes, and lineage. The
+rasterizer owns both pixel sampling and a versioned, byte-stable PNG encoding;
+it does not delegate filtering or compression choices to the browser's canvas
+encoder. Runtime does not store or interpret registration as a drawing
+instruction. Occlusion is likewise a persisted immutable mask child whose
+metadata binds its alpha/depth
+planes to the exact raster parent, dimensions, coordinate basis, canonical
+environment-geometry revision or hash, depth convention, generator version,
+and content hash. Per
+[ADR-0179](adr/0179-predrawn-cyan-move-highlights-use-per-cell-visual-footprints.md),
+creating a new mask child also requires a valid saved cyan profile bound to the
+attempt's exact current warp. That profile is a review gate rather than mask
+input; it does not change the mask bytes or immutable mask lineage. A mismatched
+mask is unavailable, never approximately reused.
+
+Per
+[ADR-0180](adr/0180-predrawn-occlusion-selects-final-raster-pixels.md),
+mask alpha is the owner's accepted selection over that exact warped parent.
+Legacy tile, terrain, prop, doodad, and Scene Art pixels or silhouettes never
+seed it. A revision-pinned browser-local SlimSAM worker may advise with three
+positive/negative-point candidates, while explicit acceptance and the complete
+brush/eraser/Reset/Undo/Redo path keep the owner authoritative even when the
+model fails. The accepted alpha digest, exact model/revision/backend,
+prompt/manual counts, and depth-assignment version are recorded provenance.
+
+The deterministic depth encoder partitions accepted alpha into 8-connected
+components. For each component and occupied source-image column, its bottom-most
+selected pixel maps through the exact parent dimensions and world bounds to the
+contact depth shared by that component's selected pixels above it in the same
+column. Only explicit **Create board with occlusion mask** persists this immutable
+child. Runtime consumes its exact alpha/depth bytes and never loads the model or
+runs segmentation.
+
+Before occlusion exists, a rejected current warp may be archived and detached
+from its slot under the exact CAS workflow in ADR-0175; the replacement remains
+another immutable version over the same raw input. Preview tuning and clipboard
+contents are not runtime identity. Raw Pipeline Sources remain
+distinct from `kind='source'` Generation References, while warped and
+mask-bearing board versions remain deterministic outputs.
+
+Per
+[ADR-0181](adr/0181-occlusion-mask-retries-stay-in-the-same-pipeline-slot.md),
+discarding a rejected current mask detaches the slot pointer rather than
+mutating the immutable child. The same warp and cyan profile may produce a
+replacement at a later processing revision. Canonical-referenced mask media
+remains retained history; an unreferenced draft may be archived.
+
+The compatibility-named cyan profile itself is not a runtime media asset. One
+active attempt owns one fenced, revision-CAS mutable latest draft containing a
+canonical sparse playable-cell map, its SHA-256, the exact warped-version id,
+and the cover-independent environment-geometry digest. Saving a new draft
+allocates no background-version row and no Blob. Discarding the bound warp
+clears that draft.
+
+`Set` copies the exact canonical profile into the Level's schema-version-3
+pre-drawn surface alongside the exact warped background selection. The Level
+snapshot does not follow later attempt edits. Runtime validates and renders only
+that embedded snapshot. Per
+[ADR-0185](adr/0185-predrawn-fitted-cell-footprints-shape-every-square-local-visual-highlight.md),
+its fitted quadrilateral shapes every square-local visual highlight, including
+runtime move, attack, threat, blocked, premove, selection, focus, hover,
+drag/drop, and promotion paint and Level Editor zone, tactical, ring, region,
+hover, and placement-preview paint.
+
+The profile never owns logical geometry. Hit targets, cell and move selection,
+movement, pathfinding, occupancy, placement validity, zone membership, grid and
+fence hints, and solver state continue to use canonical cells. Non-cell-local
+unit, object, arrow, and label presentation keeps its own geometry.
+
+Historical schema-version-2 surfaces remain readable and use the complete
+canonical diamond for every square-local highlight; a malformed
+schema-version-3 profile fails closed rather than falling back to either the
+attempt or schema-version-2 behavior. The established
+`predrawn-move-highlight-profile-v1`, API/event, Level-field, and
+`move_highlight_profile_*` database names remain compatibility vocabulary for
+this broader visual role. No media, content, or database migration is required.
+
+Per
+[ADR-0171](adr/0171-local-predrawn-grid-correction-uses-a-shared-vertex-mesh.md),
+the registration may be a canonical version-5 payload containing at most 1,024
+sparse, row-major source-pixel overrides at interior shared logical grid
+intersections. Boundary intersections and all outside-board scenery retain the
+coarse map.
+Its deterministic transform is identified by `grid-warp-v2` /
+`shared-predrawn-rasterizer-v2`; the backend validates the canonical payload,
+grid bounds, and non-folded shared mesh before accepting any bytes. Historical
+v1-v4 registrations retain `grid-warp-v1` /
+`shared-predrawn-rasterizer-v1` and their exact old evaluation. Registration
+text, operation/processor version, output bytes, and hash together make the
+derived asset reproducible and crossed version pairs are invalid.
+
+Every existing background-version row with `kind=raw` projects as a Raw
+Pipeline Source, not as a Generation Reference. Zero, one, or many creation
+slots may reference the same exact raw version and Blob. The workspace-level
+**New attempt** source chooser creates a slot that already references the
+selected raw and allocates no media, upload, second raw output, or mutation of
+any existing slot. Warped and mask-bearing board versions are ineligible inputs.
+The exact reference pins the raw version and Blob through archive.
+
+A migrated historical slot keeps its exact raw/derived bytes and lifecycle
+state. Its missing Generation Reference or external-generation provenance is
+never fabricated, but a content-complete, geometry-compatible retained Raw
+Pipeline Source may be selected for a separate deterministic slot. That reuse
+does not repair the historical record or create new model-generation evidence.
+
+Per
+[ADR-0169](adr/0169-historical-raw-contracts-bind-only-from-saved-level-proof.md),
+a historical raw that predates required `coordinateBasis` and `viewingPane`
+metadata remains byte-for-byte and metadata-for-metadata immutable. Its
+effective raw contract may include one external immutable binding only when
+fenced processing-attempt creation proves the exact saved Level's frame/world
+bounds, legacy geometry, retained bytes, dimensions, and original provenance.
+The binding cannot override contradictory metadata or make a different Level
+eligible. New Raw Pipeline Sources always carry the complete contract directly.
+
+List, picker, content, and observer reads never establish that binding. The
+backend may project a historical source as provably bindable for the exact saved
+Level, but the later fenced create transaction must repeat the proof and commit
+the binding atomically with the slot. Failure creates neither. This repair does
+not move, duplicate, or rewrite Blob bytes.
+
+Creating or previewing a derivative does not move any canonical pointer. `Set`
+records the exact selection, including its exact canonical cell-visual-footprint
+snapshot under the compatibility profile name when present, only in the current
+fenced editor working copy.
+Private Save or official Review and publish/Publish is the separate transaction
+that verifies the selected immutable Blob objects and hashes. Private Save
+atomically pins the exact selection in the private canonical Level while its
+ready versions remain owner/admin-readable, not public. Official Review and
+publish/Publish atomically marks those exact version rows published with the
+official Level reference. Explicit user-map Publish performs the same exact-
+selection publication with the owner-free public-map snapshot. Only those
+explicitly published selections become publicly readable. Blob bytes are never
+moved or rewritten by any of these transactions.
+Retained Generation References, Raw Pipeline Sources, creation slots, versions,
+and objects remain resolvable even when hidden from ordinary chooser views or
+archived. The
+owner-facing Generation Reference instrument exposes the non-deterministic
+typed-reference-to-raw handoff with clipboard, exact-PNG file fallback, and
+explicitly mounted-result ingress. The **Board Art Pipeline** exposes the
+workspace-level raw-source chooser, each slot's raw input and deterministic
+outputs, working-copy mode and selection, and canonical state. Raw reuse, warp,
+occlusion, installation, Save, and Publish require no agent or copied
+registration packet.
+
+Per [ADR-0159](adr/0159-predrawn-background-authoring-storage-is-bounded.md),
+this retained lineage is bounded by the backend: 256 permanent version rows per
+editor document, 1 GiB of distinct referenced background-version Blob bytes per
+owner, and one in-flight raw upload body per document. Every status counts;
+Archive organizes retained history and neither reclaims nor evades quota.
+Aggregate byte validation is serialized with the content-binding transaction.
+The browser is not quota authority.
+
+Per
+[ADR-0172](adr/0172-archiving-a-board-art-slot-forgets-only-dormant-legacy-selection.md),
+archiving a slot may atomically forget its dormant remembered selection from
+Legacy working and canonical Levels. It does not delete the slot's immutable
+versions or Blob objects, reclaim quota, or affect the rendered Legacy
+environment. Any matching AI-mode use or published output blocks archive.
+
+Per [ADR-0159](adr/0159-predrawn-background-authoring-storage-is-bounded.md) and
+ADR-0165, this retained lineage is bounded by the backend: one document may own
+at most 256 background-version rows of every kind, including Generation
+References, and 128 generation-attempt rows; one owner may retain at most 1 GiB
+of distinct Blob bytes across those background versions; and one document
+admits only the bounded in-flight media upload allowed by the contract. Every
+status counts. Archive organizes retained history and neither reclaims nor
+evades quota. Aggregate byte validation is serialized with the content-binding
+transaction. The browser is not quota authority.
+
+All consumers resolve the exact saved background mode. Legacy intentionally
+uses the ordinary composed environment. AI resolves the remembered exact raster,
+mask state, and schema-version-3 cell-visual-footprint snapshot when present;
+missing or mismatched bytes, metadata, format, dimensions, profile digest,
+geometry binding, or lineage fail closed. AI never falls back to Legacy,
+another slot version, a mutable attempt profile, a runtime warp, browser-local
+media, or a mask regenerated from canonical sprites.
+
+An exact pre-drawn version resolves through
+`/api/background-versions/<version-id>/content`, never through a mutable slot.
+Ready/private content requires authorized owner or admin access and carries
+private immutable caching. Only a version selected by an official publication
+or explicit owner user-map publication transaction is anonymously readable with
+public immutable caching. The response ETag/content hash is bound to that exact
+version's immutable Blob object; the route never redirects through or consults
+a mutable active pointer. The document-scoped content route exposes the same
+bytes under editor authorization.
+
+An exact Generation Reference is a `kind='source'` version and likewise
+resolves through
+`/api/editor-documents/<document-id>/background-versions/<version-id>/content`,
+never through the currently rendered Level, a browser screenshot path, or a
+mutable media pointer. Publishing a Level does not implicitly make unused
+Generation References, Raw Pipeline Sources, or creation-slot inputs public.
 
 The stable route `/assets/<slot>` is a backend route, not a filesystem path. The
 backend resolves it through the current active pointer and redirects or serves
@@ -92,6 +319,10 @@ an incomplete row is an availability failure.
 - UI kit: state/slice geometry and native roles.
 - Props, walls, backgrounds, portraits, fonts, and OG media: their declared
   component and availability contracts.
+- Structure source artwork: one drawable record owns installed membership and
+  exactly eight paired directional roles. Each direction may reuse one full
+  `flat-contact` raster for both named roles. `sourceOnly` records deliberately
+  omit prop/doodad gameplay policy and remain excluded from those projections.
 - SFX: recording bytes resolve from live media slots. The complete revisioned
   `sfx_profiles/default` document owns sound-set metadata/gains, all landable-
   terrain assignments, and arrival sample/gain/firing. Missing profile state is
@@ -110,7 +341,8 @@ failure. There is no committed or generic-art fallback.
 3. The candidate records source dimensions, required runtime dimensions,
    provenance, allowed transforms, and review evidence.
 4. A game-owned instrument renders those exact candidate bytes at the declared
-   role and canonical 1×.
+   role. Native-pixel contracts also prove canonical 1× decode; placement assets
+   additionally prove their real board-context transform and controls.
 5. Admin acceptance validates the domain contract and atomically swaps the
    accepted pointer, archives the prior version, bumps the catalog revision, and
    writes an audit event.
@@ -130,6 +362,7 @@ exact-byte review instrument exist:
 | --- | --- | --- | --- |
 | Board Unit Art | Unit Art Postgres catalog + private Blob | Unit Art APIs | Complete; atomic family acceptance after palette, direction, geometry, and native-pixel checks |
 | Terrain surface tops | Shared live-media catalog + private Blob | Shared single/batch APIs | Complete; database-declared groups are reviewed on the canonical board and accepted atomically |
+| Structure source-art turntables | Structure drawable catalog + shared live-media catalog/private Blob | Outside-repository batch manifest + canonical source archive client; one archived pack may supply multiple exact object-allowlisted Artwork groups | Complete; Studio validates all eight native 512×512 rasters, requires each exact direction to mount in the interactive board placement proof, records the typed owner group proof, accepts atomically, then installs the drawable record |
 | Other terrain and generic media domains | Shared live-media catalog + private Blob | Shared single/batch APIs | Deliberately blocked until that projection has a typed completeness validator, domain-owned exact-byte review instrument, backend proof validation, and atomic acceptance/rollback tests |
 | BGM | Backend-listed private Blob container | Blob administration | Existing range-streaming projection; intentionally not the generic candidate lifecycle |
 
@@ -159,6 +392,12 @@ idempotent candidates whose provenance binds those archived version ids and
 hashes. These commands deliberately cannot review, accept, or activate media.
 Those judgment operations remain reachable only through the game-owned backend
 review instrument.
+
+An exact source larger than the request-body limit is archived as independently
+verified opaque chunks and a canonical manifest at the requested source path.
+`fetch-source` reconstructs the original bytes and verifies their full hash and
+length before a render consumes them. The chunk layout is a storage
+implementation detail, not a second source identity.
 
 `frontend/scripts/build-groundcover.mjs` accepts only outside-repository source,
 tile, and output workspaces. It emits one outside-repository

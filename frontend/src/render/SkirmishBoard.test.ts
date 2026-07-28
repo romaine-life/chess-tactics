@@ -6,7 +6,15 @@ import { tileFamilies } from '../art/tileset';
 import { createSkirmish } from '../game/setup';
 import { testLiveUnitCatalog } from '../test/liveUnitCatalog';
 import { applyLiveUnitCatalog, resetLiveUnitCatalog } from '../ui/unitCatalog';
-import { buildSkirmishBoard, pieceOp, skirmishArmyOverlaySet, skirmishTileClickIntent } from './SkirmishBoard';
+import type { PredrawnOcclusionDepthMap } from '@chess-tactics/board-render';
+import {
+  buildSkirmishBoard,
+  commitSkirmishSceneFirstFrame,
+  pieceRuntimeSpriteSources,
+  pieceOp,
+  skirmishArmyOverlaySet,
+  skirmishTileClickIntent,
+} from './SkirmishBoard';
 
 afterEach(() => resetLiveUnitCatalog());
 
@@ -79,7 +87,68 @@ describe('buildSkirmishBoard', () => {
   });
 });
 
+describe('Skirmish scene immutable depth guard', () => {
+  const depthMap: PredrawnOcclusionDepthMap = {
+    src: '/api/background-versions/depth-v1/content',
+    frameWidth: 320,
+    frameHeight: 180,
+    worldBounds: { minX: -40, minY: -20, width: 320, height: 180 },
+  };
+
+  it('rejects a mismatched persisted mask before compositing or acknowledging the scene', () => {
+    let composites = 0;
+    let acknowledgements = 0;
+    const images = new Map([
+      [depthMap.src, { naturalWidth: 320, naturalHeight: 179 }],
+    ]);
+
+    expect(() => commitSkirmishSceneFirstFrame(
+      depthMap,
+      images,
+      () => { composites += 1; },
+      () => { acknowledgements += 1; },
+    )).toThrow(/expected 320×180, decoded 320×179/);
+    expect(composites).toBe(0);
+    expect(acknowledgements).toBe(0);
+  });
+
+  it('composites and acknowledges a persisted mask with the exact selected surface dimensions', () => {
+    let composites = 0;
+    let acknowledgements = 0;
+    const images = new Map([
+      [depthMap.src, { naturalWidth: 320, naturalHeight: 180 }],
+    ]);
+
+    expect(() => commitSkirmishSceneFirstFrame(
+      depthMap,
+      images,
+      () => { composites += 1; },
+      () => { acknowledgements += 1; },
+    )).not.toThrow();
+    expect(composites).toBe(1);
+    expect(acknowledgements).toBe(1);
+  });
+});
+
 describe('pieceOp', () => {
+  it('warms one persistent eight-direction resource set regardless of a unit move or facing', () => {
+    applyLiveUnitCatalog(testLiveUnitCatalog());
+    const before: Piece = {
+      id: 'pawn-1',
+      side: 'player',
+      type: 'pawn',
+      x: 0,
+      y: 1,
+      startY: 1,
+      facing: 'north',
+      alive: true,
+    };
+    const after: Piece = { ...before, x: 1, y: 0, facing: 'north-east' };
+
+    expect(pieceRuntimeSpriteSources(before)).toHaveLength(8);
+    expect(pieceRuntimeSpriteSources(after)).toEqual(pieceRuntimeSpriteSources(before));
+  });
+
   it.each(['rock', 'random-rock'] as const)('renders %s obstacle art without live unit metadata', (type) => {
     const rock: Piece = { id: `${type}-1`, side: 'neutral', type, x: 0, y: 0, startY: 0, alive: true };
     const op = pieceOp(rock, { left: 36, top: 86 * 0.78 });

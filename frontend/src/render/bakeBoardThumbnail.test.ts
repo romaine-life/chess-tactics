@@ -8,6 +8,7 @@ import {
   boardSocialFramingBounds,
   drawBoardThumbnailOps,
   largestSolidRect,
+  loadBoardThumbnailImages,
   paintBoardThumbnailOp,
 } from './bakeBoardThumbnail';
 import { roadEdgeKey } from '../core/featureAutotile';
@@ -18,6 +19,7 @@ import type { EditorBoard } from '../ui/boardCode';
 import { applyLiveUnitCatalog, resetLiveUnitCatalog } from '../ui/unitCatalog';
 import { testLiveUnitCatalog } from '../test/liveUnitCatalog';
 import {
+  applyDrawableCatalog,
   applyLiveMediaCatalog,
   groundCoverSet,
   resetDrawableCatalog,
@@ -29,7 +31,7 @@ import {
 } from '@chess-tactics/board-render';
 import { testGroundCoverCatalog, testStructureMediaSlots, testWallDecorMediaSlots } from '../test/liveMediaCatalog';
 import { applyTestPropSeats } from '../test/livePropSeats';
-import { applyTestDrawableCatalog } from '../test/drawableCatalog';
+import { applyTestDrawableCatalog, testDrawableCatalog } from '../test/drawableCatalog';
 import { featureFrameSrc, fenceFrameSrc, fencePostSrc, wallFrameSrc } from '../art/tileset';
 import { tileFamilies } from '../art/tileset';
 import { subterrainMaterialSrc } from '@chess-tactics/board-render';
@@ -71,6 +73,30 @@ const TILE = 'grass-surf-0';
 const UNIT = { unitId: 'rook', direction: 'south', faction: 'navy-blue' };
 const grassCoverSources = (): Set<string> => new Set(groundCoverSet('grass')!.variants.map((variant) => variant.src));
 
+const VERSIONED_BACKGROUND_ID = '11111111-1111-4111-8111-111111111111';
+const VERSIONED_MASK_ID = '22222222-2222-4222-8222-222222222222';
+const VERSIONED_BACKGROUND_SRC = `/api/background-versions/${VERSIONED_BACKGROUND_ID}/content`;
+const VERSIONED_MASK_SRC = `/api/background-versions/${VERSIONED_MASK_ID}/content`;
+
+function versionedThumbnailBoard(): EditorBoard {
+  return {
+    ...blank(2, 2),
+    surface: {
+      kind: 'predrawn',
+      schemaVersion: 2,
+      backgroundVersionId: VERSIONED_BACKGROUND_ID,
+      occlusionVersionId: VERSIONED_MASK_ID,
+      frameWidth: 100,
+      frameHeight: 80,
+      worldBounds: { minX: -10, minY: -5, width: 100, height: 80 },
+    },
+  };
+}
+
+function decodedImage(width = 100, height = 80): HTMLImageElement {
+  return { naturalWidth: width, naturalHeight: height } as HTMLImageElement;
+}
+
 type CanvasCall = { name: string; args: unknown[]; alpha: number };
 
 function recordingContext(initialAlpha = 1): { ctx: CanvasRenderingContext2D; calls: CanvasCall[] } {
@@ -96,6 +122,54 @@ function recordingContext(initialAlpha = 1): { ctx: CanvasRenderingContext2D; ca
   } as unknown as CanvasRenderingContext2D;
   return { ctx, calls };
 }
+
+describe('loadBoardThumbnailImages — immutable pre-drawn availability', () => {
+  it('rejects a missing selected background raster before a thumbnail can paint', async () => {
+    await expect(loadBoardThumbnailImages(versionedThumbnailBoard(), [], async (src) => {
+      if (src === VERSIONED_BACKGROUND_SRC) throw new Error('404');
+      return decodedImage();
+    })).rejects.toThrow(/selected immutable background raster is unavailable/);
+  });
+
+  it('rejects a missing selected occlusion mask before a partially unoccluded thumbnail can paint', async () => {
+    await expect(loadBoardThumbnailImages(versionedThumbnailBoard(), [], async (src) => {
+      if (src === VERSIONED_MASK_SRC) throw new Error('404');
+      return decodedImage();
+    })).rejects.toThrow(/selected immutable occlusion depth mask is unavailable/);
+  });
+
+  it('rejects decoded plate or mask dimensions that differ from the selected surface', async () => {
+    await expect(loadBoardThumbnailImages(versionedThumbnailBoard(), [], async (src) => (
+      src === VERSIONED_BACKGROUND_SRC ? decodedImage(99, 80) : decodedImage()
+    ))).rejects.toThrow(/background dimensions do not match: expected 100×80, decoded 99×80/);
+
+    await expect(loadBoardThumbnailImages(versionedThumbnailBoard(), [], async (src) => (
+      src === VERSIONED_MASK_SRC ? decodedImage(100, 79) : decodedImage()
+    ))).rejects.toThrow(/occlusion depth dimensions do not match: expected 100×80, decoded 100×79/);
+  });
+
+  it('continues omitting a genuinely optional unrelated sprite when it is unavailable', async () => {
+    const images = await loadBoardThumbnailImages(blank(), ['/optional-decoration.png'], async () => {
+      throw new Error('404');
+    });
+    expect(images.size).toBe(0);
+  });
+
+  it('does not require a dormant AI raster or persisted occlusion mask in legacy mode', async () => {
+    const requested: string[] = [];
+    const images = await loadBoardThumbnailImages(
+      { ...versionedThumbnailBoard(), backgroundMode: 'legacy' },
+      [],
+      async (src) => {
+        requested.push(src);
+        return decodedImage();
+      },
+    );
+
+    expect(requested).toEqual([]);
+    expect(images.size).toBe(0);
+  });
+});
 
 describe('paintBoardThumbnailOp — draw-op composition parity', () => {
   it('dispatches a saved registered plate through the projective raster painter', () => {
@@ -264,6 +338,70 @@ describe('paintBoardThumbnailOp — draw-op composition parity', () => {
       10,
     ]);
   });
+
+  it('source-crops a grow-only thumbnail depth scratch when the next op is smaller', () => {
+    const depthCompositeDraws: unknown[][] = [];
+    const depthCanvas = { width: 10, height: 10 } as HTMLCanvasElement;
+    const scratchCanvas = { width: 10, height: 10 } as HTMLCanvasElement;
+    const main = recordingContext().ctx;
+    const scratchContext = {
+      globalAlpha: 1,
+      globalCompositeOperation: 'source-over',
+      imageSmoothingEnabled: true,
+      clearRect: () => {},
+      save: () => {},
+      restore: () => {},
+      drawImage: (...args: unknown[]) => {
+        if (args[0] === depthCanvas) depthCompositeDraws.push(args);
+      },
+    } as unknown as CanvasRenderingContext2D;
+    const depthContext = {
+      globalAlpha: 1,
+      globalCompositeOperation: 'source-over',
+      imageSmoothingEnabled: true,
+      clearRect: () => {},
+      drawImage: () => {},
+      getImageData: (_x: number, _y: number, width: number, height: number) => ({
+        data: new Uint8ClampedArray(width * height * 4),
+      }),
+      putImageData: () => {},
+    } as unknown as CanvasRenderingContext2D;
+    const image = { naturalWidth: 10, naturalHeight: 10 } as HTMLImageElement;
+    const surfaces = [
+      { canvas: scratchCanvas, context: scratchContext },
+      { canvas: depthCanvas, context: depthContext },
+    ];
+    const op = (dx: number, dy: number, dw: number, dh: number): BoardDrawOp => ({
+      layer: 'scene',
+      src: '/unit.png',
+      dx,
+      dy,
+      dw,
+      dh,
+      z: 1,
+    });
+
+    drawBoardThumbnailOps(
+      main,
+      [op(0, 0, 10, 10), op(12, 12, 4, 3)],
+      { minX: 0, minY: 0, width: 20, height: 20 },
+      1,
+      new Map([['/unit.png', image], ['/depth.png', image]]),
+      [],
+      () => surfaces.shift(),
+      {
+        src: '/depth.png',
+        frameWidth: 20,
+        frameHeight: 20,
+        worldBounds: { minX: 0, minY: 0, width: 20, height: 20 },
+      },
+    );
+
+    expect(depthCompositeDraws).toEqual([
+      [depthCanvas, 0, 0, 10, 10, 0, 0, 10, 10],
+      [depthCanvas, 0, 0, 4, 3, 0, 0, 4, 3],
+    ]);
+  });
 });
 
 describe('boardContentHash — stability + sensitivity', () => {
@@ -308,6 +446,17 @@ describe('boardContentHash — stability + sensitivity', () => {
     const moved: EditorBoard = { ...blank(8, 6), props: { '4,2': { propId: 'cottage' } } };
     expect(boardContentHash(before)).not.toBe(boardContentHash(placed));
     expect(boardContentHash(placed)).not.toBe(boardContentHash(moved));
+  });
+
+  it('changes for every floating artwork transform field', () => {
+    const placement = { id: 'art-1', sourceArtId: 'oak', pixelX: 120, pixelY: 80, direction: 'south' as const, scale: 1.5 };
+    const before = blank(8, 6);
+    const placed: EditorBoard = { ...blank(8, 6), floatingArtwork: [placement] };
+    const moved: EditorBoard = { ...blank(8, 6), floatingArtwork: [{ ...placement, pixelX: 121 }] };
+    const rotated: EditorBoard = { ...blank(8, 6), floatingArtwork: [{ ...placement, direction: 'north' }] };
+    expect(boardContentHash(before)).not.toBe(boardContentHash(placed));
+    expect(boardContentHash(placed)).not.toBe(boardContentHash(moved));
+    expect(boardContentHash(placed)).not.toBe(boardContentHash(rotated));
   });
 
   it('changes when a feature (road) is added', () => {
@@ -438,6 +587,65 @@ describe('uniqueDrawSrcs — dedup so each image decodes once', () => {
     expect(uniqueDrawSrcs(unknown)).toEqual([]);
   });
 
+  it('direct floating artwork contributes source halves without becoming a prop', () => {
+    const board: EditorBoard = {
+      ...blank(8, 6),
+      floatingArtwork: [{ id: 'art-1', sourceArtId: 'oak', pixelX: 120, pixelY: 80, direction: 'south', scale: 1.5 }],
+    };
+    expect(uniqueDrawSrcs(board)).toEqual([
+      structureArtHalfSrc('oak', 'back'),
+      structureArtHalfSrc('oak', 'front'),
+    ]);
+    expect(board.props).toEqual({});
+  });
+
+  it('uses the selected artwork direction raster without changing its free transform', () => {
+    const catalog = testDrawableCatalog();
+    const oak = catalog.assets.find((asset) => asset.id === 'structure-oak')!;
+    const directionalRole = (half: 'back' | 'front', fill: string) => {
+      const role = structuredClone(oak.media[half]);
+      role.slot = `source-art/oak/east-${half}.png`;
+      role.media.sha256 = fill.repeat(64);
+      role.media.immutableUrl = `/api/media/${role.media.sha256}`;
+      role.media.url = `/assets/source-art/oak/east-${half}.png`;
+      return role;
+    };
+    oak.media['east-back'] = directionalRole('back', 'd');
+    oak.media['east-front'] = directionalRole('front', 'e');
+    oak.behavior.directions = {
+      east: { anchorX: 96, anchorY: 255, scale: 1, splitMode: 'authored' },
+    };
+    applyDrawableCatalog({ ...catalog, revision: catalog.revision + 1 });
+
+    try {
+      const placement = {
+        id: 'art-1',
+        sourceArtId: 'oak',
+        pixelX: 321,
+        pixelY: 187,
+        direction: 'east' as const,
+        scale: 1.75,
+      };
+      const board: EditorBoard = { ...blank(8, 6), floatingArtwork: [placement] };
+      const ops = boardDrawOps(board);
+      const expectedBack = `/api/media/${'d'.repeat(64)}`;
+      const expectedFront = `/api/media/${'e'.repeat(64)}`;
+
+      expect(ops.map((op) => op.src)).toEqual([expectedBack, expectedFront]);
+      expect(ops[0]).toMatchObject({
+        dx: 153,
+        dy: -75.5,
+        dw: 336,
+        dh: 525,
+        z: 1_000_000,
+      });
+      expect(ops[1]).toMatchObject({ ...ops[0], src: expectedFront, z: 1_000_001 });
+      expect(board.floatingArtwork?.[0]).toEqual(placement);
+    } finally {
+      applyTestDrawableCatalog();
+    }
+  });
+
   it('a macrotile contributes its board-space source and replaces covered top sources', () => {
     const cells = Object.fromEntries(
       Array.from({ length: 9 }, (_, index) => [`${index % 3},${Math.floor(index / 3)}`, TILE]),
@@ -551,6 +759,24 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     expect(back!.dh).toBe(300);
   });
 
+  it('centers and scales floating artwork at an exact scene pixel, then bakes it into a plate', () => {
+    const floatingArtwork = [{ id: 'art-1', sourceArtId: 'oak', pixelX: 120, pixelY: 80, direction: 'south' as const, scale: 1.5 }];
+    const board: EditorBoard = { ...blank(8, 6), floatingArtwork };
+    const ops = boardDrawOps(board);
+    const back = ops.find((op) => op.src === structureArtHalfSrc('oak', 'back'));
+    const front = ops.find((op) => op.src === structureArtHalfSrc('oak', 'front'));
+    expect(back).toMatchObject({ dx: -24, dy: -145, dw: 288, dh: 450, z: 1_000_000 });
+    expect(front?.z).toBe(1_000_001);
+
+    const baked: EditorBoard = {
+      ...board,
+      surface: { kind: 'predrawn', slot: 'predrawn/test-board', frameWidth: 1600, frameHeight: 900 },
+    };
+    const bakedOps = boardDrawOps(baked);
+    expect(bakedOps).toHaveLength(1);
+    expect(bakedOps[0].src).toBe('/assets/predrawn/test-board');
+  });
+
   it('replaces every covered 1x1 top with one macrotile below feature overlays', () => {
     const cells = Object.fromEntries(
       Array.from({ length: 9 }, (_, index) => [`${index % 3},${Math.floor(index / 3)}`, TILE]),
@@ -594,34 +820,114 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     expect(macroTileOp?.clipPolygons?.every((polygon) => polygon.length === 8)).toBe(true);
   });
 
-  it('keeps rear and foreground grass on opposite sides of a seated unit', () => {
-    const surfaces: Array<EditorBoard['surface']> = [
-      undefined,
-      {
+  it('keeps rear and foreground grass on opposite sides of a seated unit on composed terrain', () => {
+    const board: EditorBoard = {
+      ...blank(3, 3),
+      cells: { '1,1': TILE },
+      cover: { '1,1': 'filled' },
+      units: { '1,1': UNIT },
+    };
+    const ops = boardDrawOps(board);
+    const unit = ops.find((op) => op.contain);
+    const coverSources = grassCoverSources();
+    const coverOps = ops.filter((op) => coverSources.has(op.src));
+
+    expect(unit).toBeDefined();
+    expect(coverOps.some((op) => op.z < unit!.z)).toBe(true);
+    expect(coverOps.some((op) => op.z > unit!.z)).toBe(true);
+  });
+
+  it('keeps authored cover live while generated backgrounds suppress every baked environment family', () => {
+    const cells = Object.fromEntries(
+      Array.from({ length: 16 }, (_, index) => [`${index % 4},${Math.floor(index / 4)}`, TILE]),
+    );
+    const westEdge = roadEdgeKey(0, 0, -1, 0);
+    const environmentBoard: EditorBoard = {
+      ...blank(4, 4),
+      cells,
+      macroTiles: [{ assetId: 'grass-soft-bands-3x3', x: 0, y: 0 }],
+      subterrain: { '3,3:south': 'earth' },
+      features: { '1,1': { kind: 'road', material: 'cobble' } },
+      fences: { [roadEdgeKey(1, 1, 2, 1)]: 'wood' },
+      fencePosts: { '1,1': 'stone' },
+      walls: { [westEdge]: 'stone' },
+      wallArt: { [westEdge]: 'test-art-mirror-keep' },
+      doodads: { '2,2': { doodadId: 'boulder' } },
+      props: { '0,0': { propId: 'cottage' } },
+      cover: { '1,1': 'filled' },
+      units: { '1,1': UNIT },
+    };
+
+    const installedOps = boardDrawOps({
+      ...environmentBoard,
+      surface: {
         kind: 'predrawn',
-        slot: 'boards/test/grass-bracket.png',
+        slot: 'boards/test/environment-authority.png',
         frameWidth: 640,
         frameHeight: 360,
       },
-    ];
+    });
+    const coverSources = grassCoverSources();
+    const installedPlate = installedOps.find((op) => op.src === '/assets/boards/test/environment-authority.png');
+    const installedUnit = installedOps.find((op) => op.contain);
+    const installedCover = installedOps.filter((op) => coverSources.has(op.src));
+    expect(installedPlate).toMatchObject({
+      layer: 'terrain',
+      src: '/assets/boards/test/environment-authority.png',
+    });
+    expect(installedUnit).toMatchObject({ layer: 'scene', contain: true });
+    expect(installedCover.length).toBeGreaterThan(0);
+    expect(installedCover.some((op) => op.z < installedUnit!.z)).toBe(true);
+    expect(installedCover.some((op) => op.z > installedUnit!.z)).toBe(true);
+    expect(installedOps.every((op) => (
+      op === installedPlate || op === installedUnit || coverSources.has(op.src)
+    ))).toBe(true);
 
-    for (const surface of surfaces) {
-      const board: EditorBoard = {
-        ...blank(3, 3),
-        surface,
-        cells: { '1,1': TILE },
-        cover: { '1,1': 'filled' },
-        units: { '1,1': UNIT },
-      };
-      const ops = boardDrawOps(board);
-      const unit = ops.find((op) => op.contain);
-      const coverSources = grassCoverSources();
-      const coverOps = ops.filter((op) => coverSources.has(op.src));
+    const temporaryOps = boardDrawOps(environmentBoard, { predrawnBackgroundActive: true });
+    const temporaryUnit = temporaryOps.find((op) => op.contain);
+    const temporaryCover = temporaryOps.filter((op) => coverSources.has(op.src));
+    expect(temporaryUnit).toMatchObject({ layer: 'scene', contain: true });
+    expect(temporaryCover.length).toBeGreaterThan(0);
+    expect(temporaryOps.every((op) => op === temporaryUnit || coverSources.has(op.src))).toBe(true);
+  });
 
-      expect(unit).toBeDefined();
-      expect(coverOps.some((op) => op.z < unit!.z)).toBe(true);
-      expect(coverOps.some((op) => op.z > unit!.z)).toBe(true);
-    }
+  it('renders ordinary legacy environment while retaining an immutable AI selection', () => {
+    const board: EditorBoard = {
+      ...versionedThumbnailBoard(),
+      backgroundMode: 'legacy',
+      cells: { '0,0': TILE },
+      props: { '1,1': { propId: 'cottage' } },
+    };
+    const ops = boardDrawOps(board);
+    const legacyOps = boardDrawOps({
+      ...board,
+      surface: undefined,
+    });
+
+    expect(ops.some((op) => op.src === VERSIONED_BACKGROUND_SRC)).toBe(false);
+    expect(ops).toEqual(legacyOps);
+    expect(ops.length).toBeGreaterThan(0);
+  });
+
+  it('renders explicit scenic cover over a generated background', () => {
+    const board: EditorBoard = {
+      ...blank(2, 1),
+      cells: { '0,0': TILE, '1,0': TILE },
+      decorativeApron: { top: 0, right: 1, bottom: 0, left: 0 },
+      cover: { '2,0': 'filled' },
+      coverTypes: { '2,0': 'grass' },
+      surface: {
+        kind: 'predrawn',
+        slot: 'boards/test/scenic-cover.png',
+        frameWidth: 640,
+        frameHeight: 360,
+      },
+    };
+    const coverSources = grassCoverSources();
+    const coverOps = boardDrawOps(board).filter((op) => coverSources.has(op.src));
+
+    expect(coverOps.length).toBeGreaterThan(0);
+    expect(coverOps.every((op) => op.animation?.kind === 'ground-cover-sway')).toBe(true);
   });
 
   it('draws edge fences in the barrier lane below object/unit draw order', () => {
@@ -897,7 +1203,7 @@ describe('largestSolidRect — the solid crop that fills a box without sky', () 
     const rect = largestSolidRect(withHeadroom, W, H)!;
     expect(rect).not.toBeNull();
     // Every pixel opaque — the guarantee that lets object-fit:cover fill a box with board and never
-    // expose a transparent corner (cov defaults to 1). A partial crop is what left the empty wedges.
+    // expose a transparent corner. A partial crop is what left the empty wedges.
     expect(coverage(withHeadroom, rect)).toBe(1);
   });
 

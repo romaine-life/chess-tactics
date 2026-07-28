@@ -14,8 +14,12 @@ describe('professional loading architecture guards', () => {
   it('uses persistent derivatives for canonical list thumbnails', () => {
     const source = read('./render/LevelThumbnail.tsx');
     expect(source).toContain('levelThumbnailUrl(level.id)');
+    expect(source).toContain('const canonicalDerivative = !authoringPreview');
+    expect(source).not.toContain('const canonicalLevel =');
     expect(source).not.toContain('/assets/level-list-thumb/');
     expect(source).toContain('canonicalDerivative');
+    expect(source).toContain('canonicalDerivative !== null ||');
+    expect(source).toContain("objectFit: coverThumbnail ? 'cover' : 'contain'");
     expect(source).toContain('client-bake-start'); // retained only for unsaved authoring previews
   });
 

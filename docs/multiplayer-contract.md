@@ -49,8 +49,10 @@ survive settlement; only the relative Victory/Defeat wording changes by client.
 - Exactly one same-origin tab holds the interactive `(lobby, seat)` Web Lock. Other tabs
   remain read-only. The journal is cross-tab durable (not session-only), so tab close and
   replacement cannot hide an in-flight identity.
-- Relays preserve valid client-local selection/focus and never arbitrarily select the first
-  array element.
+- A committed local mover releases its client-local selection/focus; a pending intent keeps
+  that recoverable context until the authoritative relay commits it. Relays preserve a
+  different explicitly chosen valid selection/focus and never arbitrarily select the first
+  array element. See ADR-0188.
 
 ## Session boundary
 

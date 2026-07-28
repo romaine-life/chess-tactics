@@ -81,7 +81,6 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
     ['rock', 'Rock art', 'rock', ['grass', 'dirt', 'stone', 'pebble', 'sand'], 20, 44, 1, 40, 45, 'props/rock'],
     ['fieldstone', 'Fieldstone art', 'rock', ['grass', 'dirt', 'stone', 'pebble', 'sand'], 25, 46, 1, 51, 47, 'props/fieldstone'],
     ['boulder', 'Boulder', 'doodad', ['stone'], 48, 69, 1, 96, 180, 'doodads/boulder'],
-    ['stump', 'Tree stump', 'doodad', ['dirt'], 48, 69, 1, 96, 180, 'doodads/stump'],
     ['fern', 'Fern', 'doodad', ['water'], 48, 69, 1, 96, 180, 'doodads/fern'],
     ['flower', 'Flower', 'doodad', ['grass'], 48, 69, 1, 96, 180, 'doodads/flower'],
   ].map(([value, label, structureKind, terrains, anchorX, anchorY, scale, width, height, prefix], sortOrder) => ({
@@ -89,7 +88,7 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
     behavior: { value, structureKind, terrains, anchorX, anchorY, scale, default: value === 'boulder',
       blocking: structureKind !== 'doodad', splitMode: ['cottage', 'cabin', 'lodge', 'rock', 'fieldstone'].includes(value as string) ? 'flat-contact' : 'authored',
       ...(['oak', 'cottage', 'lodge'].includes(value as string) ? { footprint: { w: 2, h: 2 } } : ['cabin', 'rock', 'fieldstone'].includes(value as string) ? { footprint: { w: 1, h: 1 } } : {}),
-      ...(['boulder'].includes(value as string) ? { propKind: 'rock' } : ['stump', 'fern', 'flower'].includes(value as string) ? { propKind: 'tree' } : {}) }, metadata: {}, rowRevision: 1,
+      ...(['boulder'].includes(value as string) ? { propKind: 'rock' } : ['fern', 'flower'].includes(value as string) ? { propKind: 'tree' } : {}) }, metadata: {}, rowRevision: 1,
     media: { back: descriptor(`${prefix}/back.png`, width as number, height as number), front: descriptor(`${prefix}/front.png`, width as number, height as number) },
   }));
   const coverWidths: Record<string, number[]> = {
@@ -199,10 +198,6 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
     'ui-kit-icons-brand-shield-png',
     'ui-surfaces-baseline-stone-blue-avif',
     'ui-surfaces-hybrid-wood-oak-png',
-    'ui-main-menu-icons-carved-settings-png',
-    'ui-main-menu-icons-carved-solo-skirmish-png',
-    'ui-main-menu-icons-carved-campaign-editor-png',
-    'ui-main-menu-icons-carved-lobbies-png',
     'ui-kit-icons-gear-png',
     'ui-kit-icons-speaker-png',
     'ui-kit-icons-knight-png',
@@ -310,10 +305,10 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
     behavior: { value, route, viewerStatus, default: value === 'main-menu', ...(value === 'level-editor' ? { roles: ['chrome-lab-page'], chromeLabRoute: '/editor/level?chromeLab=1' } : {}) },
     metadata: { blurb: `Test ${label}`, ...(value === 'level-editor' ? { chromeLabBadge: 'outer + inner chrome' } : {}) }, rowRevision: 1, media: { thumbnail: descriptor(`test/pages/${value}.webp`, 640, 400) } }));
   const menuModeSpecs: DrawableCatalog['assets'] = [
-    ['play', 'Play', '/play/select/skirmish', 'ui-main-menu-icons-carved-solo-skirmish-png'], ['campaign-editor', 'Editor', '/editor', 'ui-main-menu-icons-carved-campaign-editor-png'],
-    ['lobbies', 'Lobbies', '/lobbies', 'ui-main-menu-icons-carved-lobbies-png'], ['settings', 'Settings', '/settings', 'ui-main-menu-icons-carved-settings-png'],
-  ].map(([value, label, route, iconRole], sortOrder) => ({ id: `menu-mode-${value}`, kind: 'menu-mode', label, sortOrder, lifecycleState: 'active',
-    behavior: { value, route, ...(value === 'settings' ? { roles: ['settings'] } : {}) }, metadata: {}, rowRevision: 1, media: { icon: descriptor(`test/menu/${iconRole}.png`, 64, 64) } }));
+    ['play', 'Play', '/play/select/skirmish'], ['campaign-editor', 'Editor', '/editor'],
+    ['lobbies', 'Lobbies', '/lobbies'], ['settings', 'Settings', '/settings'],
+  ].map(([value, label, route], sortOrder) => ({ id: `menu-mode-${value}`, kind: 'menu-mode', label, sortOrder, lifecycleState: 'active',
+    behavior: { value, route, ...(value === 'settings' ? { roles: ['settings'] } : {}) }, metadata: {}, rowRevision: 1, media: { icon: descriptor(`test/menu/${value}.png`, 64, 64) } }));
   return {
     schemaVersion: 1,
     revision: 1,

@@ -1,18 +1,27 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { createCanvas } = require('@napi-rs/canvas');
+const { createCanvas, loadImage } = require('@napi-rs/canvas');
 const {
   predrawnBoardRasterBounds,
   predrawnBoardRasterTransform,
 } = require('@chess-tactics/board-render');
 
-const { __testing, renderBoardThumbnail, BOARD_THUMB_W, BOARD_THUMB_H } = require('./boardThumbnail');
+const {
+  __testing,
+  renderBoardThumbnail,
+  renderLevelCard,
+  BOARD_THUMB_W,
+  BOARD_THUMB_H,
+  CARD_W,
+  CARD_H,
+} = require('./boardThumbnail');
 
 const {
   ThumbnailAssetStore,
   ThumbnailFontRegistry,
   ThumbnailMediaUnavailableError,
   Semaphore,
+  assertPredrawnThumbnailMedia,
   constants,
   loadSpriteWithAvailability,
   mapWithConcurrency,
@@ -53,6 +62,81 @@ test('runtime list derivative is a compact fixed-size PNG and needs no shell art
   });
   assert.deepEqual(pngHeaderDimensions(png), { width: BOARD_THUMB_W, height: BOARD_THUMB_H });
   assert.equal(unexpectedLoad, false);
+});
+
+test('AI list derivative cover-crops the largest fully opaque interior without showing a warp edge', async () => {
+  const backgroundSrc = '/api/background-versions/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/content';
+  const source = createCanvas(12, 12);
+  const sourceContext = source.getContext('2d');
+  sourceContext.fillStyle = '#ef3b24';
+  sourceContext.beginPath();
+  sourceContext.moveTo(3, 1);
+  sourceContext.lineTo(9, 1);
+  sourceContext.lineTo(11, 11);
+  sourceContext.lineTo(1, 11);
+  sourceContext.closePath();
+  sourceContext.fill();
+  const sourceBytes = source.toBuffer('image/png');
+
+  const png = await renderBoardThumbnail({
+    plan: {
+      ops: [{
+        layer: 'terrain',
+        src: backgroundSrc,
+        dx: 0,
+        dy: 0,
+        dw: 12,
+        dh: 12,
+        z: -100000,
+      }],
+      predrawnBackgroundRaster: { src: backgroundSrc, frameWidth: 12, frameHeight: 12 },
+      bounds: { minX: 0, minY: 0, width: 12, height: 12 },
+      framingBounds: { minX: 0, minY: 0, width: 12, height: 12 },
+    },
+    loadDynamicSprite: async (src) => src === backgroundSrc ? sourceBytes : null,
+    mediaCatalogRevision: 'solid-crop-test',
+  });
+
+  const decoded = await loadImage(png);
+  const inspection = createCanvas(BOARD_THUMB_W, BOARD_THUMB_H);
+  const inspectionContext = inspection.getContext('2d');
+  inspectionContext.drawImage(decoded, 0, 0);
+  const pixels = inspectionContext.getImageData(0, 0, BOARD_THUMB_W, BOARD_THUMB_H).data;
+  for (let offset = 3; offset < pixels.length; offset += 4) {
+    assert.equal(pixels[offset], 255);
+  }
+});
+
+test('share-card rendering consumes the complete database-resolved presentation', async () => {
+  const sprite = createCanvas(32, 32);
+  const spriteContext = sprite.getContext('2d');
+  spriteContext.fillStyle = '#56789a';
+  spriteContext.fillRect(0, 0, sprite.width, sprite.height);
+  const spriteBytes = sprite.toBuffer('image/png');
+  const fontSrc = '/assets/test/decorative-font.otf';
+  const png = await renderLevelCard({
+    plan: {
+      ops: [],
+      bounds: { minX: 0, minY: 0, width: 1, height: 1 },
+      framingBounds: { minX: 0, minY: 0, width: 1, height: 1 },
+    },
+    title: 'Database-owned presentation',
+    subtitle: 'Synthetic contract',
+    screenName: 'Play',
+    backgroundSrc: '/assets/test/background.png',
+    loadDynamicSprite: async (src) => (src === fontSrc ? null : spriteBytes),
+    mediaCatalogRevision: 1,
+    sourceAvailability: (src) => (src === fontSrc ? 'decorative' : 'critical'),
+    fontSrc,
+    uiMedia: {
+      wood: '/assets/test/wood.png',
+      band: '/assets/test/band.png',
+      joint: '/assets/test/joint.png',
+      shield: '/assets/test/shield.png',
+    },
+  });
+
+  assert.deepEqual(pngHeaderDimensions(png), { width: CARD_W, height: CARD_H });
 });
 
 test('production source loading and decoding serialize maximum-size assets', () => {
@@ -200,6 +284,72 @@ test('missing critical terrain remains fatal', async () => {
     ),
     (error) => error instanceof ThumbnailMediaUnavailableError,
   );
+});
+
+test('selected immutable thumbnail plate and mask remain fatal even under a decorative source policy', async () => {
+  const backgroundSrc = '/api/background-versions/11111111-1111-4111-8111-111111111111/content';
+  const maskSrc = '/api/background-versions/22222222-2222-4222-8222-222222222222/content';
+  const raster = createCanvas(1, 1).toBuffer('image/png');
+  const basePlan = {
+    ops: [{
+      layer: 'terrain',
+      src: backgroundSrc,
+      dx: 0,
+      dy: 0,
+      dw: 1,
+      dh: 1,
+      z: -100000,
+    }],
+    predrawnBackgroundRaster: { src: backgroundSrc, frameWidth: 1, frameHeight: 1 },
+    bounds: { minX: 0, minY: 0, width: 1, height: 1 },
+    framingBounds: { minX: 0, minY: 0, width: 1, height: 1 },
+  };
+
+  await assert.rejects(renderBoardThumbnail({
+    plan: basePlan,
+    loadDynamicSprite: async () => null,
+    mediaCatalogRevision: 'missing-selected-plate',
+    sourceAvailability: () => constants.AVAILABILITY_DECORATIVE,
+  }), (error) => error instanceof ThumbnailMediaUnavailableError && error.message.includes(backgroundSrc));
+
+  await assert.rejects(renderBoardThumbnail({
+    plan: {
+      ...basePlan,
+      occlusionDepthMap: {
+        src: maskSrc,
+        frameWidth: 1,
+        frameHeight: 1,
+        worldBounds: { minX: 0, minY: 0, width: 1, height: 1 },
+      },
+    },
+    loadDynamicSprite: async (src) => src === backgroundSrc ? raster : null,
+    mediaCatalogRevision: 'missing-selected-mask',
+    sourceAvailability: () => constants.AVAILABILITY_DECORATIVE,
+  }), (error) => error instanceof ThumbnailMediaUnavailableError && error.message.includes(maskSrc));
+});
+
+test('server thumbnail rejects decoded plate and mask dimensions that differ from the render plan', () => {
+  const backgroundSrc = '/api/background-versions/33333333-3333-4333-8333-333333333333/content';
+  const maskSrc = '/api/background-versions/44444444-4444-4444-8444-444444444444/content';
+  const plan = {
+    predrawnBackgroundRaster: { src: backgroundSrc, frameWidth: 100, frameHeight: 80 },
+    occlusionDepthMap: {
+      src: maskSrc,
+      frameWidth: 100,
+      frameHeight: 80,
+      worldBounds: { minX: 0, minY: 0, width: 100, height: 80 },
+    },
+  };
+
+  assert.throws(() => assertPredrawnThumbnailMedia(plan, new Map([
+    [backgroundSrc, { width: 99, height: 80 }],
+    [maskSrc, { width: 100, height: 80 }],
+  ])), /background dimensions do not match: expected 100×80, decoded 99×80/);
+
+  assert.throws(() => assertPredrawnThumbnailMedia(plan, new Map([
+    [backgroundSrc, { width: 100, height: 80 }],
+    [maskSrc, { width: 100, height: 79 }],
+  ])), /occlusion depth dimensions do not match: expected 100×80, decoded 100×79/);
 });
 
 test('availability resolver failures and unknown policies fail closed', () => {

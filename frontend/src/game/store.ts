@@ -196,12 +196,34 @@ function firstOwnId(game: GameState, side: Side): string | null {
 
 /**
  * The current selection if that piece is still a living piece of `side`, else null.
- * Lets the selection FOLLOW the piece the player is working with across a turn instead
- * of resetting — an enemy capture of that piece drops it, so callers fall back to a
- * default (the first own piece).
+ * Selection is client-local context: callers may preserve an explicitly chosen unit,
+ * but a committed mover is cleared separately and a captured unit never invents a
+ * fallback selection.
  */
 function livingSelected(game: GameState, selectedId: string | null, side: Side): string | null {
   return game.pieces.some((p) => p.id === selectedId && p.alive && p.side === side) ? selectedId : null;
+}
+
+/**
+ * A committed mover stops being the active interaction target. Preserve only a different
+ * selection/focus the player explicitly established while an asynchronous move was pending.
+ */
+function interactionAfterCommittedMove(
+  game: GameState,
+  selectedId: string | null,
+  focusedId: string | null,
+  movedPieceId: string,
+  localSide: Side,
+): Pick<SkirmishState, 'selectedId' | 'focusedId'> {
+  const nextSelectedId = selectedId === movedPieceId
+    ? null
+    : livingSelected(game, selectedId, localSide);
+  const nextFocusedId = focusedId === movedPieceId
+    ? nextSelectedId
+    : game.pieces.some((piece) => piece.id === focusedId && piece.alive)
+      ? focusedId
+      : nextSelectedId;
+  return { selectedId: nextSelectedId, focusedId: nextFocusedId };
 }
 
 /** Result copy from THIS client's seat: in netplay 'you' is the local side, not 'player'. */
@@ -578,15 +600,10 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
           if (settled.adjudication) {
             msgs.push(adjudicationCopy(settled.adjudication, 'player', !!cur.victoryOverride));
           } else if (sideInCheck(game, 'player', afterEnv)) msgs.push('Your King is in check!');
-          // Turn returns to the player: keep the piece they were working with selected so the
-          // board reads continuously. That can change while the enemy reply is in flight when the
-          // player picks a premove unit, so use the latest store selection rather than `cur`.
-          // A null latest selection is deliberate (the player clicked away while the reply
-          // was in flight), so preserve it. Only fall back when a selected unit existed but
-          // the reply captured it.
-          const keep = live.selectedId === null
-            ? null
-            : livingSelected(game, live.selectedId, 'player') ?? firstPlayerId(game);
+          // Turn returns to the player with no implicit selection. A unit explicitly selected
+          // while the enemy reply was in flight is preserved if it survived; a capture clears it
+          // instead of arbitrarily selecting the first remaining unit.
+          const keep = livingSelected(game, live.selectedId, 'player');
           const openPremoveInput = !game.winner && game.turn === 'player';
           set({
             game,
@@ -720,17 +737,20 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     } else if (game.turn === 'enemy' && sideInCheck(game, 'enemy', enemyEnv)) {
       msgs.push('Check!');
     }
-    // Keep the moved piece selected (the mover always survives its own move) so its
-    // highlight carries through the enemy turn — input is gated by turn, so it shows no
-    // move-dots and isn't actionable, it just keeps the player's context visible.
+    const interaction = interactionAfterCommittedMove(
+      game,
+      s.selectedId,
+      s.focusedId,
+      piece.id,
+      'player',
+    );
     set({
       game,
       env: enemyEnv,
       resultDetail,
       pendingPromotion: null,
       premoveInputOpen: false,
-      selectedId: piece.id,
-      focusedId: piece.id,
+      ...interaction,
       log: [...msgs.reverse(), ...s.log].slice(0, 12),
     });
     if (game.turn === 'enemy' && !game.winner) scheduleEnemyReply();
@@ -810,10 +830,13 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       if (sideInCheck(game, game.turn, postEnv)) msgs.push(game.turn === localSide ? 'Your King is in check!' : 'Check delivered.');
     }
 
-    const selectedId = s.selectedId === null ? null : livingSelected(game, s.selectedId, localSide);
-    const focusedId = game.pieces.some((candidate) => candidate.id === s.focusedId && candidate.alive)
-      ? s.focusedId
-      : selectedId;
+    const interaction = interactionAfterCommittedMove(
+      game,
+      s.selectedId,
+      s.focusedId,
+      piece.id,
+      localSide,
+    );
     const pending = s.net.pendingMove;
     const clearsPending = pending?.expectedMoveCount === s.net.moveCount;
     if (clearsPending && (
@@ -831,8 +854,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       env: postEnv,
       resultDetail,
       turnsElapsed,
-      selectedId,
-      focusedId,
+      ...interaction,
       sessionEpoch: nextEpoch,
       pendingPromotion: null,
       premoves: game.winner ? [] : s.premoves,
@@ -1258,8 +1280,8 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     }
     // Netplay is server-sequenced: DON'T apply locally — relay the target cell and let
     // the server's echo apply it in order on both boards (no optimistic apply, so a
-    // dropped POST is a no-op the seat can retry, never a permanent desync). Clear the
-    // selection for immediate "click registered" feedback; the echo sets the next one.
+    // dropped POST is a no-op the seat can retry, never a permanent desync). The mover
+    // remains selected until that authoritative commit, then commitNet clears it.
     if (s.net) { submitNetMove(p.id, { x: mv.x, y: mv.y }); return; }
     // A deliberate manual move overrides any premove queued during the fire-beat — the
     // player took the wheel, so drop the chain rather than firing it a beat later.

@@ -161,3 +161,31 @@ test('pre-drawn board owner proof pins the editor level, dimensions, slot, versi
     surfaceUrl: 'http://127.0.0.1:5173/studio?levelId=off-l-fortress-gate',
   }, 'http://127.0.0.1:5173/studio?levelId=off-l-fortress-gate'), /Level Editor/);
 });
+
+test('backend-allocated pre-drawn slot identity is independent of the logical level id', () => {
+  const boardSlug = 'ecc0a3cc-a98b-45d4-a8a1-d7388cf36a40';
+  const row = predrawn({
+    slot: `boards/${boardSlug}/plate.png`,
+    metadata: {
+      runtime: {
+        ...predrawn().metadata.runtime,
+        variant: boardSlug,
+      },
+    },
+  });
+  const surfaceUrl = 'http://127.0.0.1:5173/editor/level?levelId=off-l-hold-bridge&document=proof-doc';
+  const proof = {
+    ...predrawnProof(row),
+    surfaceUrl,
+    boardSlug,
+    levelId: 'off-l-hold-bridge',
+  };
+
+  assert.equal(predrawnBoardMediaIssue(row), null);
+  assert.equal(predrawnBoardOwnerProofIssue(row, proof, surfaceUrl), null);
+  assert.match(predrawnBoardMediaIssue({
+    ...row,
+    metadata: { runtime: { ...row.metadata.runtime, variant: 'hold-bridge' } },
+  }), /variant/);
+  assert.match(predrawnBoardOwnerProofIssue(row, { ...proof, boardSlug: 'hold-bridge' }, surfaceUrl), /slot slug/);
+});
