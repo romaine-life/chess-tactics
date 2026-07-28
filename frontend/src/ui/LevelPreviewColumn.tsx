@@ -10,6 +10,7 @@ import { levelToEditorBoard } from '../core/levelBoard';
 import { LevelInfoCompact } from './LevelInfoCompact';
 import type { Level } from '../core/level';
 import { installedUiMedia } from './installedUiMedia';
+import { InnerChromeBox } from './shared/ChromeBox';
 
 export function LevelPreviewColumn({
   level,
@@ -46,11 +47,10 @@ export function LevelPreviewColumn({
           <span className="ce-force ce-force-enemy"><img src={installedUiMedia('ui-main-menu-profile-rook-red-png')} alt="" />Enemies <strong>{enemyCount}</strong></span>
         </div>
       </div>
-      {/* Map preview: the live board in a kit box, floating on the level's world (night-sky)
-          background — no checkerboard, no letterbox padding (ADR-0067). The viewport stops at the
-          panel's hand-tuned Fill box; the line frame overlays it (see .ce-level-viewer CSS). */}
+      {/* Map preview: the live board in the registered inner box, floating on the level's world
+          (night-sky) background — no checkerboard or letterbox padding (ADR-0067/0082). */}
       {board ? (
-        <div className="ce-preview-frame">
+        <InnerChromeBox className="ce-preview-frame">
           <div className="ce-level-viewer">
             <ViewPane
               kind="board"
@@ -67,7 +67,7 @@ export function LevelPreviewColumn({
               </div>
             </ViewPane>
           </div>
-        </div>
+        </InnerChromeBox>
       ) : null}
       {/* Level info stacked UNDER the map: the derived facts — grid size, time, forces, terrain,
           zones, win rule — filling the column's lower half. */}

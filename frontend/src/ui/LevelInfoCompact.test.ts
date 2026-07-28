@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { kingSideForLevel, levelObjectiveLine } from './LevelInfoCompact';
+import { kingSideForLevel, levelObjectiveLine, levelShowsTerrainTypeCounts } from './LevelInfoCompact';
 import { createBlankLevel, type Level } from '../core/level';
 import { MODE_NAME } from '../core/objectives';
 import type { PieceType, Side } from '../core/types';
+import { encodeBoard } from './boardCode';
+import { levelToEditorBoard } from '../core/levelBoard';
 
 // These are the shared, no-React helpers the level-select surfaces (Campaign / CampaignEditor)
 // import so the mode label + direction-aware goal copy has ONE implementation (ADR-0050).
@@ -98,5 +100,21 @@ describe('levelObjectiveLine — mode name + seat-relative rule briefing', () =>
       l.objective = 'capture-all';
     });
     expect(levelObjectiveLine(level)).toBe('Last Man Standing — Eliminate the opposing force; protect your force');
+  });
+});
+
+describe('levelShowsTerrainTypeCounts', () => {
+  it('keeps type counts for levels rendered from individual tiles', () => {
+    expect(levelShowsTerrainTypeCounts(fixedLevel([]))).toBe(true);
+  });
+
+  it('hides logical terrain types when AI artwork owns the whole environment', () => {
+    const level = fixedLevel([]);
+    level.boardCode = encodeBoard({
+      ...levelToEditorBoard(level),
+      backgroundMode: 'ai',
+    });
+
+    expect(levelShowsTerrainTypeCounts(level)).toBe(false);
   });
 });
