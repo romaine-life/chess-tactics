@@ -73,11 +73,15 @@ route lifecycle during the same React commit.
 
 ## Implemented system
 
-- Shell startup begins its layout-font request from the initial HTML and hydrates its
-  required live authorities and installed chrome before App's first commit. Visible
-  startup copy remains hidden until that final face is verified, so fallback-font text
-  is never an intermediate loading frame. Critical failure stays on one explicit retry
-  surface.
+- Cold startup owns a static loading presentation in the initial HTML, before the
+  application module graph. That document requests and verifies the final layout font
+  before exposing `Loading...`; React adopts and removes the same node instead of
+  replacing it, so neither a blank interval nor fallback-font flash can occur.
+- The initial document also requests one bounded database projection for the homepage
+  scene. That projection identifies the live immutable background without hydrating the
+  global catalogs, and starts its high-priority fetch and decode before the application
+  module. App reuses that acquisition while it hydrates the remaining live authorities
+  and installed chrome. Critical failure stays on one explicit retry surface.
 - The SceneDirector reducer also owns the cold-home startup ladder. Its `startup` phase
   accepts background, title, and controls readiness acknowledgements in any arrival
   order but reveals them only in that order with the required fade and beat. It cannot
@@ -136,9 +140,11 @@ route lifecycle during the same React commit.
   deliberately allowed coherent `error` state. A plain screenshot can no longer turn a
   still-loading frame into completion evidence.
 
-The next architectural reduction is a bounded shell/level manifest so complete global
-catalog projections no longer block every route. That optimization may reduce latency but
-must not weaken the atomic frame rules above.
+The homepage now has a bounded bootstrap projection, but render-module installation still
+requires complete global catalogs. The next architectural reduction is to extend bounded
+shell/level manifests beyond that first background so complete projections no longer block
+every route. That optimization may reduce latency but must not weaken the atomic frame
+rules above.
 
 Surface manifests are delivery projections only. Postgres remains the installed-content
 authority and Blob storage remains the media-byte authority under ADR-0106 and ADR-0085.

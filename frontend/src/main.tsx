@@ -5,7 +5,6 @@
 import './style.css';
 import { createRoot } from 'react-dom/client';
 import { Component, type ErrorInfo, type ReactNode } from 'react';
-import { isMainMenuPath } from './ui/shell/startupScene';
 // @ts-ignore — bgm.js is untyped legacy JS, imported for its side-effecting init.
 import { initBgm } from './bgm.js';
 import { primeSfx } from './sfx';
@@ -18,7 +17,6 @@ import { loadLiveSfxProfile } from './net/sfxProfile';
 import { initUnitSizeTuning } from './ui/unitSizeTuning';
 import { assertInstalledChromeSlots } from './ui/chromeCandidateSources';
 import { installNineSliceCssVariables, installUiFonts, installUiMediaCssVariables, installedUiMedia } from './ui/installedUiMedia';
-import { homepageSceneMedia } from './ui/homepageSceneMedia';
 import { applyGroundCoverCatalog, applyWallArtCatalog, applyWallDecorCatalog, assertInstalledPresentationCatalog } from '@chess-tactics/board-render';
 import { installLoadingResourceObserver, loadingError, loadingMark, loadingMeasure } from './diagnostics/loadingTimeline';
 import { composeInstalledChromeCss } from './ui/useInstalledChromeCss';
@@ -34,6 +32,7 @@ class AppCrashBoundary extends Component<{ children: ReactNode }, { error: Error
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
+    document.getElementById('app-bootstrap-status')?.remove();
     loadingError('app', 'react-tree-failed', error);
     console.error('application render failed:', error, info.componentStack);
   }
@@ -88,10 +87,6 @@ window.addEventListener('vite:preloadError', (event) => {
   window.location.reload();
 });
 
-// The shell ships hidden (avoids an unstyled flash); reveal it once JS runs.
-const shell = document.querySelector('.shell');
-if (shell instanceof HTMLElement) shell.style.visibility = 'visible';
-
 // App's SceneDirector owns the ordered cold-home reveal. This bootstrap only gives
 // the first background request priority before App imports; it does not own a second
 // reveal clock or declare readiness.
@@ -103,19 +98,27 @@ const root = document.getElementById('root');
 if (root) {
   const startupAt = performance.now();
   const reactRoot = createRoot(root);
-  reactRoot.render(<main className="app-startup-status is-font-pending" role="status">Loading live assets...</main>);
 
-  // Start the shell font at entry, in parallel with the live authorities. The
-  // status remains unpainted until this resolves: rendering it first in a
-  // fallback face and swapping later is itself a broken loading frame.
+  // index.html starts this face before the module graph and owns the visible
+  // bootstrap copy. Re-prove it here before App can replace that static surface.
   const criticalFonts = retryStartup('critical-fonts', loadCriticalFonts).then(() => {
     document.body.classList.remove('loading-bootstrap');
-    document.querySelector('.app-startup-status.is-font-pending')?.classList.remove('is-font-pending');
+    const bootstrapStatus = document.getElementById('app-bootstrap-status');
+    bootstrapStatus?.classList.remove('is-font-pending');
+    bootstrapStatus?.classList.add('is-font-ready');
     loadingMeasure('app', 'critical-fonts-ready', startupAt);
-    requestAnimationFrame(() => loadingMark('app', 'startup-placeholder-painted'));
+    requestAnimationFrame(() => loadingMark('app', 'static-bootstrap-painted'));
   });
 
-  void retryStartup('critical-catalogs', () => Promise.all([loadLiveMediaCatalog(), loadDrawableCatalog(), loadLiveUnitCatalog()]))
+  const bootstrapPriority = (
+    window as typeof window & { __ctBootstrapScene?: Promise<unknown> }
+  ).__ctBootstrapScene ?? Promise.resolve(null);
+
+  // The initial document creates the background request while resolving this
+  // bounded projection. Do not let broad catalogs compete until that request
+  // has actually entered the browser's scheduler.
+  void bootstrapPriority
+    .then(() => retryStartup('critical-catalogs', () => Promise.all([loadLiveMediaCatalog(), loadDrawableCatalog(), loadLiveUnitCatalog()])))
     .then(async () => {
       applyGroundCoverCatalog();
       applyWallDecorCatalog();
@@ -126,16 +129,6 @@ if (root) {
       installNineSliceCssVariables();
       try { initBgm(installedUiMedia('ui-kit-icons-music-png')); } catch { /* background music is decorative */ }
       loadingMeasure('app', 'critical-catalogs-ready', startupAt);
-      if (isMainMenuPath(window.location.pathname)) {
-        const bgPreload = document.createElement('link');
-        bgPreload.rel = 'preload';
-        bgPreload.as = 'image';
-        const background = homepageSceneMedia();
-        bgPreload.type = background.mediaType;
-        bgPreload.href = background.immutableUrl;
-        bgPreload.setAttribute('fetchpriority', 'high');
-        document.head.appendChild(bgPreload);
-      }
       // Prop/doodad definitions derive active raster dimensions from the media
       // snapshot, so media must be installed before the complete seat document.
       // App is intentionally imported only after both authorities are hydrated:
@@ -157,6 +150,7 @@ if (root) {
       requestAnimationFrame(() => loadingMeasure('app', 'first-app-frame', startupAt));
     })
     .catch((error) => {
+      document.getElementById('app-bootstrap-status')?.remove();
       loadingError('app', 'critical-startup-failed', error);
       console.error('live asset catalog startup failed:', error);
       if (window.location.pathname === '/studio/drawables') {

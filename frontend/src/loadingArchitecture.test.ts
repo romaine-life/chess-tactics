@@ -94,31 +94,35 @@ describe('professional loading architecture guards', () => {
   });
 
   it('never paints startup copy in a fallback font before the shell font is ready', () => {
-    const entry = read('./main.tsx');
-    const style = read('./style.css');
     const html = read('../index.html');
     expect(html).toContain('rel="preload"');
     expect(html).toContain('/assets/fonts/advance-wars-2-gba/advance-wars-2-gba.otf');
-    expect(entry).toContain('app-startup-status is-font-pending');
-    expect(entry).toContain("querySelector('.app-startup-status.is-font-pending')?.classList.remove('is-font-pending')");
-    expect(style).toMatch(/\.app-startup-status\.is-font-pending\s*\{[^}]*visibility:\s*hidden/);
+    expect(html).toContain('id="app-bootstrap-status"');
+    expect(html).toMatch(/\.app-bootstrap-status\.is-font-ready\s*\{[^}]*visibility:\s*visible/);
+    expect(html.indexOf('id="app-bootstrap-status"')).toBeLessThan(html.indexOf('src="/src/main.tsx"'));
+    expect(html).toContain("document.fonts.check('19px \"Advance Wars 2 GBA\"', 'Loading...')");
+    expect(read('./ui/installedUiMedia.ts')).toContain('bootstrapFaceAlreadyInstalled');
     expect(read('../scripts/shot.mjs')).toContain('startup status exposed a fallback-font frame');
   });
 
   it('gates and prioritizes the exact homepage scene consumed by the DOM', () => {
-    const entry = read('./main.tsx');
     const reveal = read('./ui/App.tsx');
     const scene = read('./ui/SceneBackdrop.tsx');
     const sceneMedia = read('./ui/homepageSceneMedia.ts');
     const style = read('./style.css');
-    expect(entry).toContain('homepageSceneMedia()');
+    const html = read('../index.html');
+    const backend = read('../../backend/server.js');
+    expect(html).toContain('/api/app-bootstrap-scene');
+    expect(html).toContain("preload.setAttribute('fetchpriority', 'high')");
+    expect(html.indexOf('/api/app-bootstrap-scene')).toBeLessThan(html.indexOf('src="/src/main.tsx"'));
+    expect(backend).toContain("app.get('/api/app-bootstrap-scene'");
+    expect(backend).toContain("da.behavior->'roles' ? 'homepage-scene'");
     expect(reveal).toContain('homepageSceneMedia().immutableUrl');
     expect(scene).toContain('canvas.style.backgroundImage = `url("${homepageSceneMedia().immutableUrl}")`');
     expect(scene).toContain('export async function repaintHomepageScene');
     expect(reveal).toContain('.then(() => repaintHomepageScene(backgroundUrl))');
     expect(sceneMedia).toContain("requiredDrawableRole('animated-scene', 'homepage-scene')");
-    expect(entry).toContain("from './ui/homepageSceneMedia'");
-    expect(entry).not.toContain("from './ui/SceneBackdrop'");
+    expect(read('./main.tsx')).not.toContain('homepageSceneMedia');
     expect(reveal).not.toContain('ui-main-menu-background-scene-v1-avif');
     expect(read('../scripts/shot.mjs')).toContain('criticalImages.every((img) => img.complete && img.naturalWidth > 0)');
     expect(read('../scripts/shot.mjs')).toContain('directorCurrent && count !== 3');

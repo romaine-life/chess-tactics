@@ -13323,6 +13323,48 @@ const DRAWABLE_ID_PATTERN = /^[a-z][a-z0-9._-]{0,127}$/;
 const DRAWABLE_KIND_PATTERN = /^[a-z][a-z0-9._-]{0,63}$/;
 const DRAWABLE_ROLE_PATTERN = /^[a-z][a-z0-9._-]{0,63}$/;
 
+async function dbReadHomepageBootstrapScene() {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    `SELECT da.id, state.revision,
+            b.sha256, b.media_type, b.byte_length, b.width, b.height
+       FROM drawable_assets da
+       JOIN drawable_asset_media dam
+         ON dam.asset_id = da.id AND dam.role = 'background'
+       JOIN media_slots slot
+         ON slot.slot = dam.slot AND slot.lifecycle_state = 'active'
+       JOIN media_versions version
+         ON version.id = slot.active_version_id
+        AND version.slot = slot.slot
+        AND version.status IN ('accepted', 'legacy-bridge')
+       JOIN media_blobs b ON b.sha256 = version.blob_sha256
+       CROSS JOIN drawable_catalog_state state
+      WHERE da.kind = 'animated-scene'
+        AND da.lifecycle_state = 'active'
+        AND da.behavior->'roles' ? 'homepage-scene'
+      ORDER BY da.sort_order, da.id
+      LIMIT 2`,
+  );
+  if (rows.length !== 1) {
+    throw mediaMutationError('homepage_bootstrap_scene_invalid', 503, { count: rows.length });
+  }
+  const row = rows[0];
+  return {
+    revision: Number(row.revision || 0),
+    scene: {
+      id: row.id,
+      background: {
+        immutableUrl: immutableMediaUrl(row.sha256),
+        sha256: row.sha256,
+        mediaType: row.media_type,
+        byteLength: Number(row.byte_length),
+        width: row.width === null ? null : Number(row.width),
+        height: row.height === null ? null : Number(row.height),
+      },
+    },
+  };
+}
+
 function normalizeDrawableInput(raw) {
   if (!isObjectRecord(raw)) return { error: 'drawable must be an object' };
   const id = typeof raw.id === 'string' ? raw.id.trim() : '';
@@ -15089,6 +15131,26 @@ function mediaVersionPatch(raw, current) {
   if (!Object.keys(patch).length) return { error: 'no editable media version fields supplied' };
   return { value: patch };
 }
+
+app.get('/api/app-bootstrap-scene', async (req, res) => {
+  const path = String(req.query.path || '/').replace(/\/+$/, '') || '/';
+  if (!['/', '/main-menu', '/menu-next'].includes(path)) {
+    res.setHeader('Cache-Control', 'no-cache');
+    res.status(200).json({ schemaVersion: 1, scene: null });
+    return;
+  }
+  try {
+    const projection = await dbReadHomepageBootstrapScene();
+    const etag = `"app-bootstrap-${projection.revision}-${projection.scene.background.sha256}"`;
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('ETag', etag);
+    if (req.headers['if-none-match'] === etag) { res.status(304).end(); return; }
+    res.status(200).json({ schemaVersion: 1, ...projection });
+  } catch (error) {
+    if (error && error.mediaCode) { sendMediaMutationError(res, error, 'app_bootstrap_unavailable'); return; }
+    dbUnavailable(res, 'app bootstrap scene read failed', error, 'app_bootstrap_unavailable');
+  }
+});
 
 app.get('/api/drawable-catalog', async (req, res) => {
   try {

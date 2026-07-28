@@ -4518,15 +4518,12 @@ h1 {
   opacity: 0;
 }
 
-/* Before the shell font is ready, the startup copy remains part of the accessible
-   status surface but contributes no fallback-font frame. main.tsx reveals it only
-   after the layout face is verified, and App still cannot mount before that gate. */
+/* Error surfaces inherit a safe fallback during pre-App bootstrap. The visible
+   loading presentation and its final-font gate live in index.html so they paint
+   before the application module graph. */
 body.loading-bootstrap,
 body.loading-bootstrap .app-startup-status {
   font-family: ui-sans-serif, system-ui, sans-serif;
-}
-.app-startup-status.is-font-pending {
-  visibility: hidden;
 }
 .menu-load-error {
   position: fixed;

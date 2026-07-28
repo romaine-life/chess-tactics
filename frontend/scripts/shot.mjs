@@ -11,6 +11,8 @@
 //   node scripts/shot.mjs <url> [--select <css>] [--out <path>] [--size <WxH>] [--ready <jsExpr>]
 //     [--timeout <ms>] [--throttle slow-4g|slow-3g] [--cold|--warm] [--assert-menu-atomic]
 //     [--assert-board-atomic] [--assert-shell-font-atomic] [--assert-surface-atomic <name>]
+//     [--assert-bootstrap-priority]
+//     [--bootstrap-out <path>]
 //     [--assert-editor-viewer]
 //     [--abort-request <url-substring>] [--abort-request-once <url-substring>]
 //     [--abort-request-until-retry <url-substring>] [--retry-scene-error]
@@ -39,6 +41,7 @@ const has = (name) => argv.includes(`--${name}`);
 
 const select = flag('select');
 const out = resolve(process.cwd(), flag('out', 'tmp-shots/shot.png'));
+const bootstrapOut = flag('bootstrap-out');
 const [w, h] = String(flag('size', '1280x800')).split('x').map(Number);
 const scale = Math.max(1, Number(flag('scale', 1)) || 1); // deviceScaleFactor — bump for small elements
 const readyExpr = flag('ready');
@@ -49,6 +52,7 @@ const warm = has('warm');
 const assertMenuAtomic = has('assert-menu-atomic');
 const assertBoardAtomic = has('assert-board-atomic');
 const assertShellFontAtomic = has('assert-shell-font-atomic');
+const assertBootstrapPriority = has('assert-bootstrap-priority');
 const assertSurfaceAtomic = flag('assert-surface-atomic');
 const abortRequest = flag('abort-request');
 const abortRequestOnce = flag('abort-request-once');
@@ -216,7 +220,7 @@ try {
       window.__ctShellFontSamples = 0;
       window.__ctShellFontViolations = [];
       const sample = () => {
-        const status = document.querySelector('.app-startup-status');
+        const status = document.querySelector('.app-bootstrap-status, .app-startup-status');
         if (status) {
           window.__ctShellFontSamples += 1;
           const style = getComputedStyle(status);
@@ -225,6 +229,29 @@ try {
             && document.fonts.check('19px "Advance Wars 2 GBA"', status.textContent || 'Loading live assets');
           if (visible && !finalFace) {
             window.__ctShellFontViolations.push({ fontFamily: style.fontFamily, visibility: style.visibility });
+          }
+        }
+        requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    });
+  }
+  if (assertBootstrapPriority) {
+    await page.evaluateOnNewDocument(() => {
+      window.__ctBootstrapPriority = { visibleAt: null, exitingAt: null };
+      const sample = () => {
+        const status = document.querySelector('#app-bootstrap-status');
+        if (status) {
+          const visible = getComputedStyle(status).visibility !== 'hidden'
+            && Number.parseFloat(getComputedStyle(status).opacity) > 0.001;
+          if (visible && window.__ctBootstrapPriority.visibleAt === null) {
+            window.__ctBootstrapPriority.visibleAt = performance.now();
+          }
+          if (
+            status.classList.contains('is-exiting')
+            && window.__ctBootstrapPriority.exitingAt === null
+          ) {
+            window.__ctBootstrapPriority.exitingAt = performance.now();
           }
         }
         requestAnimationFrame(sample);
@@ -343,7 +370,21 @@ try {
   } else {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout });
   }
-
+  if (bootstrapOut) {
+    await page.waitForFunction(
+      `(() => {
+        const status = document.querySelector('#app-bootstrap-status.is-font-ready');
+        return Boolean(status)
+          && Number.parseFloat(getComputedStyle(status).opacity) > 0.99
+          && document.fonts.check('19px "Advance Wars 2 GBA"', status.textContent || 'Loading...');
+      })()`,
+      { timeout },
+    );
+    const bootstrapPath = resolve(process.cwd(), String(bootstrapOut));
+    mkdirSync(dirname(bootstrapPath), { recursive: true });
+    await page.screenshot({ path: bootstrapPath, fullPage: false });
+    console.log(`wrote early bootstrap ${bootstrapPath}`);
+  }
   if (click) {
     if (clickReady) await page.waitForFunction(clickReady, { timeout });
     await page.waitForSelector(String(click), { visible: true, timeout });
@@ -413,7 +454,7 @@ try {
   ).some((script) => (script.getAttribute('src') || '').includes('/src/main.tsx')));
   const requiresTerminalScene = Boolean(
     isManagedApp || readyExpr || assertMenuAtomic || assertBoardAtomic || assertShellFontAtomic
-    || assertSurfaceAtomic || assertBackdropContinuity,
+    || assertSurfaceAtomic || assertBackdropContinuity || assertBootstrapPriority,
   );
   const waitForSettledScene = page.waitForFunction(
     "Boolean(document.querySelector('[data-scene-phase]')) && !document.querySelector('[data-scene-phase]:not([data-scene-phase=\"current\"]):not([data-scene-phase=\"error\"])')",
@@ -551,6 +592,42 @@ try {
       process.exitCode = 6;
       throw new Error('atomic shell-font assertion failed');
     }
+  }
+  if (assertBootstrapPriority) {
+    const result = await page.evaluate(async () => {
+      const projection = await window.__ctBootstrapScene;
+      const backgroundUrl = projection?.scene?.background?.immutableUrl || '';
+      const entries = performance.getEntriesByType('resource');
+      const start = (part) => entries.find((entry) => entry.name.includes(part))?.startTime ?? null;
+      return {
+        ...window.__ctBootstrapPriority,
+        bootstrapStart: start('/api/app-bootstrap-scene'),
+        mainStart: start('/src/main.tsx'),
+        backgroundStart: backgroundUrl ? start(backgroundUrl) : null,
+        catalogStarts: [
+          start('/api/asset-catalog'),
+          start('/api/drawable-catalog'),
+          start('/api/unit-catalog'),
+        ],
+        backgroundUrl,
+      };
+    });
+    const catalogStarts = result.catalogStarts.filter((value) => value !== null);
+    const visibleDuration = result.visibleAt !== null && result.exitingAt !== null
+      ? result.exitingAt - result.visibleAt
+      : null;
+    const ordered = result.bootstrapStart !== null
+      && result.mainStart !== null
+      && result.backgroundStart !== null
+      && catalogStarts.length === 3
+      && catalogStarts.every((start) => result.bootstrapStart < start)
+      && catalogStarts.every((start) => result.backgroundStart < start);
+    if (!ordered || visibleDuration === null || visibleDuration < 350) {
+      console.error(`bootstrap priority failed: ${JSON.stringify({ ...result, visibleDuration })}`);
+      process.exitCode = 14;
+      throw new Error('bootstrap priority assertion failed');
+    }
+    console.log(`bootstrap priority OK: ${JSON.stringify({ ...result, visibleDuration })}`);
   }
   if (assertSurfaceAtomic) {
     const result = await page.evaluate(() => ({

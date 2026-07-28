@@ -8,6 +8,7 @@ describe('critical live-content startup ordering', () => {
   it('hydrates media, drawable, and unit catalogs then complete prop seats before importing or rendering App', () => {
     expect(source).not.toMatch(/import\s+\{\s*App\s*\}\s+from\s+['"]\.\/ui\/App['"]/);
     const media = source.indexOf("retryStartup('critical-catalogs', () => Promise.all([loadLiveMediaCatalog(), loadDrawableCatalog(), loadLiveUnitCatalog()]))");
+    const bootstrapPriority = source.indexOf('void bootstrapPriority');
     const seats = source.indexOf("await retryStartup('prop-seats', loadLiveSeats)");
     const fontsStarted = source.indexOf("const criticalFonts = retryStartup('critical-fonts', loadCriticalFonts)");
     const fontsReady = source.indexOf('await criticalFonts;');
@@ -16,6 +17,8 @@ describe('critical live-content startup ordering', () => {
     const appRender = source.indexOf('reactRoot.render(<AppCrashBoundary><App /></AppCrashBoundary>)');
 
     expect(media).toBeGreaterThan(-1);
+    expect(bootstrapPriority).toBeGreaterThan(-1);
+    expect(bootstrapPriority).toBeLessThan(media);
     expect(fontsStarted).toBeGreaterThan(-1);
     expect(fontsStarted).toBeLessThan(media);
     expect(seats).toBeGreaterThan(media);

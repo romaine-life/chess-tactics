@@ -93,6 +93,9 @@ export function App(): ReactElement {
   const timers = useRef<number[]>([]);
   const startupStageStartedAt = useRef(performance.now());
   const previousStartupStage = useRef(scene.startupStage);
+  const [bootstrapPresentationPresent, setBootstrapPresentationPresent] = useState(
+    () => Boolean(document.getElementById('app-bootstrap-status')),
+  );
 
   useLayoutEffect(() => { sceneRef.current = scene; }, [scene]);
   useLayoutEffect(() => {
@@ -101,6 +104,35 @@ export function App(): ReactElement {
     startupStageStartedAt.current = performance.now();
   }, [scene.startupStage]);
   useEffect(() => () => timers.current.forEach((timer) => window.clearTimeout(timer)), []);
+  useEffect(() => {
+    if (!bootstrapPresentationPresent) return undefined;
+    const status = document.getElementById('app-bootstrap-status');
+    if (!status) {
+      setBootstrapPresentationPresent(false);
+      return undefined;
+    }
+    const release = scene.phase === 'error'
+      || (scene.phase === 'startup' && scene.startupStage >= 0)
+      || (!scene.startupActive && scene.phase === 'entering');
+    if (!release) return undefined;
+    if (scene.phase === 'error') {
+      status.remove();
+      setBootstrapPresentationPresent(false);
+      return undefined;
+    }
+    status.classList.add('is-exiting');
+    const timer = window.setTimeout(() => {
+      status.remove();
+      setBootstrapPresentationPresent(false);
+    }, SCENE_FADE_MS);
+    timers.current.push(timer);
+    return () => window.clearTimeout(timer);
+  }, [
+    bootstrapPresentationPresent,
+    scene.phase,
+    scene.startupActive,
+    scene.startupStage,
+  ]);
 
   const startupController = useMemo<StartupSceneController>(() => ({
     active: scene.startupActive,
@@ -127,7 +159,19 @@ export function App(): ReactElement {
     const generation = scene.generation;
     let cancelled = false;
     const backgroundUrl = homepageSceneMedia().immutableUrl;
-    void loadDecodedImage(backgroundUrl)
+    const bootstrap = window as Window & {
+      __ctBootstrapScene?: Promise<{ scene?: { background?: { immutableUrl?: string } } } | null>;
+      __ctBootstrapBackground?: Promise<unknown>;
+    };
+    const prioritizedBackground = bootstrap.__ctBootstrapScene
+      ?.then((projection) => (
+        projection?.scene?.background?.immutableUrl === backgroundUrl
+          ? bootstrap.__ctBootstrapBackground?.catch(() => null)
+          : null
+      ))
+      .catch(() => null);
+    void Promise.resolve(prioritizedBackground)
+      .then(() => loadDecodedImage(backgroundUrl))
       .then(() => repaintHomepageScene(backgroundUrl))
       .then(() => {
         if (!cancelled) dispatchScene({ type: 'startup-ready', generation, layer: 'background' });
@@ -351,7 +395,7 @@ export function App(): ReactElement {
             </RouteLoadBoundary>
           </SceneBoundary>
         </StartupSceneContext.Provider>
-        {transitioning || (scene.phase === 'startup' && scene.startupStage < 0) ? (
+        {!bootstrapPresentationPresent && (transitioning || (scene.phase === 'startup' && scene.startupStage < 0)) ? (
           <div className="scene-loading-presentation" role={scene.phase === 'error' ? 'alert' : 'status'}>
             {scene.phase === 'error' ? (
               <>

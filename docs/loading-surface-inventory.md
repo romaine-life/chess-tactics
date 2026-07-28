@@ -10,7 +10,7 @@ interactive or partial first-frame content.
 
 | Surface | Authority and first-frame rule | Status |
 | --- | --- | --- |
-| Startup | Database media/drawable/unit/seat authorities, installed chrome, and the final layout font settle before App mounts. The SceneDirector then owns one explicit `startup` phase and reveals painted background, beat, title, beat, controls before it may report `current`; failure/retry uses the same generation authority. | Enrolled |
+| Startup | Initial HTML owns a final-font static loading presentation and requests a bounded database projection of the live homepage background before the application module and global catalogs. React adopts that presentation while remaining authorities and installed chrome settle. The SceneDirector then owns one explicit `startup` phase and reveals painted background, beat, title, beat, controls before it may report `current`; failure/retry uses the same generation authority. | Enrolled |
 | Navigation | One reducer owns generation, cancellation, exit, load, paint, entrance, retry, and current state. Duplicate destination intents are idempotent. | Enrolled |
 | Background | The outgoing background remains painted until the complete incoming scene enters over it. Homepage destinations are raised above retained battlefield/tool backgrounds so both transition directions use destination-over-source layering. | Enrolled |
 | Title bar | One structural title bar belongs to the scene. Typed contributions portal into scene-local targets without mutating the director during ref commits. | Enrolled |
@@ -53,12 +53,14 @@ interactive or partial first-frame content.
 
 ## Remaining performance work
 
-Correctness no longer depends on this reduction, but initial startup still transfers
-complete media and drawable catalogs (roughly 1.3 MB and 0.9 MB uncompressed in the
-current development dataset) before importing render modules. The next design step is
-a bounded shell/route projection with stable revision keys, followed by deferred
-catalog expansion. It must preserve Postgres/Blob authority and the exact atomic-scene
-rules; it is not permission to reveal partial UI sooner.
+Correctness no longer depends on this reduction. The bounded homepage bootstrap projection
+now starts the live 2.58 MB background before the application module and roughly 20 seconds
+before complete catalogs in the throttled regression trace. Initial startup still transfers
+complete media and drawable catalogs (roughly 1.3 MB and 0.9 MB uncompressed in the current
+development dataset) before importing render modules. The next design step is to extend
+bounded shell/route projections with stable revision keys, followed by deferred catalog
+expansion and evidence-led media compression. It must preserve Postgres/Blob authority and
+the exact atomic-scene rules; it is not permission to reveal partial UI sooner.
 
 ## Regression matrix
 
