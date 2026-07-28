@@ -4,7 +4,8 @@
 // app-shell title bar now — src/ui/shared/HeaderAccountCluster.)
 import './style.css';
 import { createRoot } from 'react-dom/client';
-import { armForColdHome, isMainMenuPath } from './ui/shell/coldReveal';
+import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { armForColdHome, isMainMenuPath } from './ui/shell/startupScene';
 // @ts-ignore — bgm.js is untyped legacy JS, imported for its side-effecting init.
 import { initBgm } from './bgm.js';
 import { primeSfx } from './sfx';
@@ -24,6 +25,29 @@ import { composeInstalledChromeCss } from './ui/useInstalledChromeCss';
 
 installLoadingResourceObserver();
 loadingMark('app', 'entry-module');
+
+class AppCrashBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+
+  static getDerivedStateFromError(error: Error): { error: Error } {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo): void {
+    loadingError('app', 'react-tree-failed', error);
+    console.error('application render failed:', error, info.componentStack);
+  }
+
+  render(): ReactNode {
+    if (!this.state.error) return this.props.children;
+    return (
+      <main className="app-startup-status is-error" role="alert">
+        <h1>This scene could not be loaded.</h1>
+        <button type="button" onClick={() => window.location.reload()}>Retry</button>
+      </main>
+    );
+  }
+}
 
 async function retryStartup<T>(label: string, task: () => Promise<T>, attempts = 4): Promise<T> {
   let lastError: unknown;
@@ -68,7 +92,7 @@ window.addEventListener('vite:preloadError', (event) => {
 const shell = document.querySelector('.shell');
 if (shell instanceof HTMLElement) shell.style.visibility = 'visible';
 
-// Cold-load reveal (see ui/shell/coldReveal). On a fresh main-menu load, sequence the
+// Ordered initial-scene reveal (see ui/shell/startupScene). On a fresh main-menu load, sequence the
 // menu's background, title, and buttons as one complete visual unit, then let rain drift
 // independently. Arm BEFORE React renders so the first paint is already in the hidden/pending
 // state; it no-ops (everything stays revealed) on every other route and on later
@@ -136,7 +160,7 @@ if (root) {
       assertInstalledChromeSlots();
       initUnitSizeTuning();
       const { App } = await import('./ui/App');
-      reactRoot.render(<App />);
+      reactRoot.render(<AppCrashBoundary><App /></AppCrashBoundary>);
       requestAnimationFrame(() => loadingMeasure('app', 'first-app-frame', startupAt));
     })
     .catch((error) => {

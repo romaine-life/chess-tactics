@@ -13,7 +13,7 @@ describe('critical live-content startup ordering', () => {
     const fontsReady = source.indexOf('await criticalFonts;');
     const chrome = source.indexOf("await retryStartup('installed-chrome', composeInstalledChromeCss)");
     const appImport = source.indexOf("await import('./ui/App')");
-    const appRender = source.indexOf('reactRoot.render(<App />)');
+    const appRender = source.indexOf('reactRoot.render(<AppCrashBoundary><App /></AppCrashBoundary>)');
 
     expect(media).toBeGreaterThan(-1);
     expect(fontsStarted).toBeGreaterThan(-1);

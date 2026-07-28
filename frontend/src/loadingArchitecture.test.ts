@@ -5,9 +5,31 @@ import { describe, expect, it } from 'vitest';
 const read = (relative: string) => readFileSync(new URL(relative, import.meta.url), 'utf8');
 
 describe('professional loading architecture guards', () => {
+  it('has exactly one route lifecycle owner and no generic route fallback', () => {
+    const app = read('./ui/App.tsx');
+    const director = read('./ui/shell/sceneDirector.ts');
+    const boundary = read('./ui/shell/SceneBoundary.tsx');
+    expect(app).toContain('<SceneBoundary');
+    expect(app).toContain('sceneManifest(initialPath)');
+    expect(app).toContain('<Suspense fallback={null}>');
+    expect(app).not.toMatch(/route-veil|screen-exit|screen-enter|useScreenEntrance|screenExit/);
+    expect(director).toContain("ScenePhase = 'current' | 'exiting' | 'loading' | 'entering' | 'error'");
+    expect(boundary).toContain("manifest.paintOwner === 'dom'");
+    expect(boundary).toContain('participantsRef.current.get(manifest.paintOwner)');
+  });
+
+  it('gives every retry and retarget a fresh cancellable scene generation', () => {
+    const app = read('./ui/App.tsx');
+    const director = read('./ui/shell/sceneDirector.ts');
+    expect(app).toContain('key={scene.generation}');
+    expect(director).toContain('generation: state.generation + 1');
+    expect(director).toContain('if (action.generation !== state.generation) return state');
+  });
+
   it('does not let menu, screen, or board readiness expire into success', () => {
-    expect(read('./ui/shell/coldReveal.ts')).not.toMatch(/FAILSAFE_MS|setTimeout/);
-    expect(read('./ui/shell/useScreenEntrance.ts')).not.toMatch(/FAILSAFE_MS|setTimeout\(\(\) => setPhase\('fade'/);
+    const coldReveal = read('./ui/shell/startupScene.ts');
+    expect(coldReveal).not.toContain('FAILSAFE_MS');
+    expect(coldReveal).toContain('This timer sequences already-ready painted stages');
     expect(read('./render/boardArtReady.ts')).not.toMatch(/FAILSAFE_MS|setTimeout/);
   });
 
@@ -21,6 +43,8 @@ describe('professional loading architecture guards', () => {
     expect(source).toContain('canonicalDerivative !== null ||');
     expect(source).toContain("objectFit: coverThumbnail ? 'cover' : 'contain'");
     expect(source).toContain('client-bake-start'); // retained only for unsaved authoring previews
+    expect(source).toContain('data-level-thumbnail-id={level.id}');
+    expect(source).toContain('const [near, setNear] = useState(false)');
   });
 
   it('makes both runtime canvas renderers share the decoded image resource manager', () => {
@@ -52,7 +76,7 @@ describe('professional loading architecture guards', () => {
 
   it('gates and prioritizes the exact homepage scene consumed by the DOM', () => {
     const entry = read('./main.tsx');
-    const reveal = read('./ui/shell/coldReveal.ts');
+    const reveal = read('./ui/shell/startupScene.ts');
     const scene = read('./ui/SceneBackdrop.tsx');
     const sceneMedia = read('./ui/homepageSceneMedia.ts');
     expect(entry).toContain('homepageSceneMedia()');

@@ -29,6 +29,18 @@ export function LoadingLab({ header }: { header?: ReactNode }): ReactElement {
   const transferBytes = resourceEvents.reduce((sum, event) => sum + Number(event.detail?.transferBytes ?? 0), 0);
   const cacheHits = resourceEvents.filter((event) => event.detail?.cacheHit).length;
   const errors = events.filter((event) => event.kind === 'error').length;
+  const activeSceneEvent = [...events].reverse().find((event) => event.phase.startsWith('scene-'));
+  const activeScene = activeSceneEvent?.surface ?? 'none';
+  const declaredCritical = [...new Set(events
+    .filter((event) => event.surface === activeScene && event.phase === 'manifest-critical')
+    .map((event) => String(event.detail?.resource ?? 'unknown')))];
+  const participantStates = new Map<string, string>();
+  for (const event of events) {
+    if (event.surface !== activeScene || !event.phase.startsWith('participant-')) continue;
+    const participant = String(event.detail?.participant ?? 'unknown');
+    participantStates.set(participant, event.phase.slice('participant-'.length));
+  }
+  const unresolved = [...participantStates].filter(([, phase]) => phase !== 'painted' && phase !== 'released');
   const copy = async (): Promise<void> => {
     await navigator.clipboard.writeText(JSON.stringify({ capturedAt: new Date().toISOString(), href: window.location.href, events }, null, 2));
   };
@@ -42,6 +54,12 @@ export function LoadingLab({ header }: { header?: ReactNode }): ReactElement {
           <div><strong>{fmtBytes(transferBytes)}</strong><span>transferred</span></div>
           <div><strong>{cacheHits}</strong><span>cache hits</span></div>
           <div className={errors ? 'is-error' : ''}><strong>{errors}</strong><span>errors</span></div>
+        </div>
+        <div className="loading-lab-scene-contract">
+          <div><span>Active scene</span><strong>{activeScene}</strong></div>
+          <div><span>Lifecycle</span><strong>{activeSceneEvent?.phase.replace('scene-', '') ?? 'unobserved'}</strong></div>
+          <div><span>Critical manifest</span><strong>{declaredCritical.length}</strong><small>{declaredCritical.join(' · ') || 'cold/current scene'}</small></div>
+          <div className={unresolved.length ? 'is-pending' : ''}><span>Unresolved participants</span><strong>{unresolved.length}</strong><small>{unresolved.map(([id, phase]) => `${id}: ${phase}`).join(' · ') || 'none'}</small></div>
         </div>
         <div className="loading-lab-table-wrap">
           <table className="loading-lab-table">

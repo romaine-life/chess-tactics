@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState, useSyncExternalStore, type ReactElement } from 'react';
+import { lazy, useEffect, useSyncExternalStore, type ReactElement } from 'react';
 import { HomepageBackdrop } from './HomepageBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { loadingMark, loadingMeasure } from '../diagnostics/loadingTimeline';
@@ -11,12 +11,11 @@ import { isPlaySelectorPath, PLAY_SKIRMISH_SELECTOR_HREF } from './playHubRoute'
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { loadDecodedImage } from '../render/imageResources';
 
-// The Editor is heavier / code-split out of the menu bundle — lazy-loaded only when its
-// destination opens, inside a LOCAL Suspense so the fallback shows in the destination column
-// (not the whole menu). Settings, Play, and Lobbies are light enough to import directly.
+// The Editor is heavier / code-split out of the menu bundle. App's SceneBoundary
+// keeps the destination unrevealed while its shared Suspense boundary resolves.
 const CampaignEditor = lazy(() => import('./CampaignEditor').then((m) => ({ default: m.CampaignEditor })));
 import { drawableAssets, requiredDrawableRole } from '@chess-tactics/board-render';
-import { getSnapshot, markFailed, markReady, subscribe } from './shell/coldReveal';
+import { getSnapshot, markFailed, markReady, subscribe } from './shell/startupScene';
 import { installedUiMedia } from './installedUiMedia';
 
 const BRAND_SHIELD = () => installedUiMedia('ui-kit-icons-brand-shield-png');
@@ -82,9 +81,6 @@ function ModeTab({ tab, index, active }: { tab: MenuTab; index: number; active?:
 type ShellDest = 'settings' | 'play' | 'editor' | 'lobbies';
 const DEST_HREF: Record<ShellDest, string> = { settings: '/settings', play: PLAY_SKIRMISH_SELECTOR_HREF, editor: '/editor', lobbies: '/lobbies' };
 const DEST_LABEL: Record<ShellDest, string> = { settings: 'Settings', play: 'Play', editor: 'Editor', lobbies: 'Lobbies' };
-// How long the destination panel fades in/out. Matches --ds-duration-fade (the ONE shared fade
-// speed, ADR-0046) — same as the Settings panel crossfade + the screen entrance.
-const DEST_FADE_MS = 350;
 function shellDest(path: string): ShellDest | null {
   if (path === '/settings' || path.startsWith('/settings/')) return 'settings';
   if (isPlaySelectorPath(path)) return 'play';
@@ -97,51 +93,23 @@ function shellDest(path: string): ShellDest | null {
 }
 
 export function MainMenu({ path = '/' }: { path?: string } = {}): ReactElement {
-  // The persistent menu shell. The button column (left) stays mounted across the home↔destination
-  // hop (routeScreenKey keeps '/' and '/settings' one 'menu' screen, so React never remounts this).
+  // The persistent menu shell. The button column and selected destination are one
+  // scene composition; App owns their navigation fade and paint gate.
   // A menu-config destination fills the shell's SECOND column with its own fixed-width columns; the
   // home route leaves it empty. The rail's zoom-safe placement (ADR-0062) is untouched — the
   // destination just occupies the previously-empty grid track to its right.
   const dest = shellDest(path);
-  // Destination fade (ADR-0046 one-fade-speed): the button column stays put, but the destination
-  // panel fades IN when opened and fades OUT before it unmounts — the hop no longer swaps whole
-  // screens, so this keeps the dissolve. `renderedDest` lags `dest` through the exit fade; the
-  // panel's key = renderedDest so opening/switching remounts it and replays the entrance.
-  const [renderedDest, setRenderedDest] = useState<ShellDest | null>(dest);
-  const [leaving, setLeaving] = useState(false);
-  useEffect(() => {
-    if (dest === renderedDest) { setLeaving(false); return; }
-    if (dest) { setRenderedDest(dest); setLeaving(false); return; } // open / switch: show + fade in
-    setLeaving(true); // close: hold the panel, fade out, then drop it
-    const t = window.setTimeout(() => { setRenderedDest(null); setLeaving(false); }, DEST_FADE_MS);
-    return () => window.clearTimeout(t);
-  }, [dest, renderedDest]);
-  // Cold-load reveal: background, title, and buttons are withheld as one complete unit
-  // (rain remains decorative) by the shared reveal director
-  // (see shell/coldReveal). Here MainMenu just REPORTS readiness for the title's brand
+  // Ordered startup scene: background, title, and buttons report real readiness and
+  // reveal in that fixed sequence (rain remains decorative)
+  // (see shell/startupScene). Here MainMenu just reports readiness for the title's brand
   // mark and the buttons' art (icons + stone surface) and gates the background + button
-  // layers off the director's stage; the director owns the atomic gate and the background
+  // layers off the director's stage; the director owns the sequence and the background
   // probe. On any non-cold load the store is already fully revealed, so this is inert.
   const reveal = useSyncExternalStore(subscribe, getSnapshot);
   useEffect(() => {
     const shell = document.querySelector('.shell');
     shell?.classList.add('main-menu-active');
     return () => shell?.classList.remove('main-menu-active');
-  }, []);
-
-  // Soft-nav arrival fade: on a later navigation INTO the menu (e.g. campaign editor ->
-  // menu) the reveal store is already fully revealed, so the buttons would otherwise snap
-  // in. Withhold data-reveal-buttons for one frame after mount (then flip `entered`) so the
-  // existing .main-menu-twin-screen opacity transition runs as an arrival fade — matching
-  // the editor's entrance so the hop dissolves the chrome both ways over the steady
-  // backdrop. On a COLD load this is harmless: the director hasn't opened `buttons` yet, so
-  // the gate already holds them hidden and `entered` flips long before that stage opens. The
-  // timeout backstops a throttled rAF (backgrounded tab) so the menu can never strand blank.
-  const [entered, setEntered] = useState(false);
-  useEffect(() => {
-    const raf = requestAnimationFrame(() => setEntered(true));
-    const t = window.setTimeout(() => setEntered(true), 120);
-    return () => { cancelAnimationFrame(raf); window.clearTimeout(t); };
   }, []);
 
   useEffect(() => {
@@ -165,7 +133,7 @@ export function MainMenu({ path = '/' }: { path?: string } = {}): ReactElement {
       className="menu-layer main-menu-layer"
       data-testid="main-menu-next"
       data-reveal-bg={reveal.has('bg') ? '' : undefined}
-      data-reveal-buttons={reveal.has('buttons') && entered ? '' : undefined}
+      data-reveal-buttons={reveal.has('buttons') ? '' : undefined}
     >
       <HomepageBackdrop />
       {reveal.error ? (
@@ -179,17 +147,17 @@ export function MainMenu({ path = '/' }: { path?: string } = {}): ReactElement {
           The rail is placed by the shared .settings-shell rule alone (ADR-0062) — no
           home-only position class — so its buttons line up pixel-for-pixel with the
           Settings/Play rails at every width. */}
-      <div className={`settings-screen main-menu-twin-screen app-shell-bar-pad ${renderedDest ? 'has-dest' : ''}`.trim()} data-dest={renderedDest ?? undefined}>
+      <div className={`settings-screen main-menu-twin-screen app-shell-bar-pad ${dest ? 'has-dest' : ''}`.trim()} data-dest={dest ?? undefined}>
         <ArtRouteChrome className="settings-shell">
           <aside className="settings-frame settings-rail-frame" aria-label="Game modes">
             {MENU_TABS.map((tab, index) => <ModeTab key={tab.slug} tab={tab} index={index} active={dest !== null && tab.href === DEST_HREF[dest]} />)}
           </aside>
-          {renderedDest ? (
-            <div className={`menu-dest ${leaving ? 'is-leaving' : ''}`.trim()} key={renderedDest} aria-label={DEST_LABEL[renderedDest]}>
-              {renderedDest === 'settings' ? <Settings embedded />
-                : renderedDest === 'play' ? <PlayMenu />
-                : renderedDest === 'lobbies' ? <Lobbies embedded />
-                : <Suspense fallback={<div className="menu-dest-col menu-dest-action" aria-hidden="true" />}><CampaignEditor embedded /></Suspense>}
+          {dest ? (
+            <div className="menu-dest" key={dest} aria-label={DEST_LABEL[dest]}>
+              {dest === 'settings' ? <Settings embedded />
+                : dest === 'play' ? <PlayMenu />
+                : dest === 'lobbies' ? <Lobbies embedded />
+                : <CampaignEditor embedded />}
             </div>
           ) : null}
         </ArtRouteChrome>

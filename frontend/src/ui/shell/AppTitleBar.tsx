@@ -3,10 +3,9 @@ import { BrandLockup } from '../shared/BrandLockup';
 import { HeaderAccountCluster } from '../shared/HeaderAccountCluster';
 import { titleBarConfig } from './titleBarConfig';
 
-// The ONE persistent title bar. Rendered once in App, OUTSIDE the routed screen, so
-// it stays mounted across navigation — the brand never blinks, only its contents
-// update. Fixed-position with a z-index above the route-veil so it stays lit while
-// the body dissolves through a heavy-route transition.
+// The ONE persistent title bar. Rendered once in App inside the owning
+// SceneBoundary, so its resources and opacity participate in the same atomic scene
+// contract as the route controls.
 //
 // The bar is an INVARIANT (ADR-0042): it ALWAYS renders the BrandLockup (leading) and
 // the HeaderAccountCluster (trailing). No config can suppress either — a screen may
@@ -20,14 +19,11 @@ import { titleBarConfig } from './titleBarConfig';
 // per ADR-0036), NOT before the brand. The brand lockup is a fixed leading anchor and
 // never moves. Settings and the Level Editor declare intent; this component owns their
 // identical placement.
-export function AppTitleBar({ path, search, onCenterNode, onBeforeDividerNode, onStudNode, revealTitle }: {
+export function AppTitleBar({ path, search, revealTitle }: {
   path: string;
   search?: string;
-  onCenterNode: (el: HTMLElement | null) => void;
-  onBeforeDividerNode: (el: HTMLElement | null) => void;
-  onStudNode: (el: HTMLElement | null) => void;
-  // Cold-load reveal only: false while the bar is waiting its turn on a fresh menu load
-  // (see ui/shell/coldReveal). Undefined/true everywhere else — the bar renders opaque,
+  // Initial-scene choreography only: false while the bar waits its turn on a fresh menu load
+  // (see ui/shell/startupScene). Undefined/true everywhere else — the bar renders opaque,
   // so this can never blink the persistent bar on a normal route or a later navigation.
   revealTitle?: boolean;
 }): ReactElement | null {
@@ -49,14 +45,14 @@ export function AppTitleBar({ path, search, onCenterNode, onBeforeDividerNode, o
       <span className="app-shell-rail-junction app-shell-rail-junction--control-branch" aria-hidden="true" />
       <span className="app-shell-rail-junction app-shell-rail-junction--right-continuation" aria-hidden="true" />
       <BrandLockup screenName={config.screenName} />
-      {config.centerSlot ? <div className="app-shell-titlebar-center" ref={onCenterNode} /> : null}
+      {config.centerSlot ? <div className="app-shell-titlebar-center" data-titlebar-portal="center" /> : null}
       {/* Bottom-centre stud target: absolutely positioned over the ornament diamond (out of
           the grid), so it never shifts the brand/center/cluster tracks. Empty unless a
           single-player Skirmish portals its Retry control in. */}
-      {config.studSlot ? <div className="app-shell-titlebar-stud" ref={onStudNode} /> : null}
+      {config.studSlot ? <div className="app-shell-titlebar-stud" data-titlebar-portal="stud" /> : null}
       <span className="app-shell-rail-junction app-shell-rail-junction--persistent-divider" aria-hidden="true" />
       <div className="app-titlebar-control-lane">
-        <span className="app-titlebar-contribution-target" ref={onBeforeDividerNode} />
+        <span className="app-titlebar-contribution-target" data-titlebar-portal="before-divider" />
         <span className="app-titlebar-persistent-divider" aria-hidden="true" />
         <HeaderAccountCluster signInReturnTo={config.signInReturnTo} showSettingsGear={config.showSettingsGear} />
       </div>

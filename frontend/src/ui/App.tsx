@@ -1,13 +1,22 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition, type ReactElement } from 'react';
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactElement,
+} from 'react';
 import { MainMenu } from './MainMenu';
-import { getSnapshot as getRevealSnapshot, subscribe as subscribeReveal } from './shell/coldReveal';
-import { armBoardArtForNav, isBoardArtPending, subscribeBoardArt } from '../render/boardArtReady';
+import { getSnapshot as getRevealSnapshot, isMainMenuPath, subscribe as subscribeReveal } from './shell/startupScene';
 import { Party } from './Party';
 import { UpdateBanner } from './UpdateBanner';
 import { AppTitleBar } from './shell/AppTitleBar';
 import { useInstalledChromeCss } from './useInstalledChromeCss';
-import { TitleBarPortalContext } from './shell/TitleBarPortalContext';
-import { markScreenNavigation } from './shell/useScreenEntrance';
 import {
   APP_NAVIGATION_EVENT,
   getAppNavigationUrl,
@@ -16,232 +25,104 @@ import {
   runAppNavigationBlockers,
   shouldInterceptAppLinkClick,
 } from './navigation';
-import { isBoardArtRoute, isHeavyRoute, isLightArtRoute, routeScreenKey } from './routeSurfaces';
-import { SCREEN_EXIT_MS, setScreenExiting } from './shell/screenExit';
 import { RouteLoadBoundary } from './shell/RouteLoadBoundary';
 import { levelEditorRouteIdentity } from './levelEditorRouteIdentity';
 import {
-  importCampaignEditor,
   importLevelEditor,
   importPortraitEditor,
   importSkirmish,
   importTilePreview,
   prefetchRoute,
 } from './routePrefetch';
+import { SceneBoundary } from './shell/SceneBoundary';
+import { initialSceneState, reduceScene } from './shell/sceneDirector';
+import { sceneManifest } from './shell/sceneManifest';
+import { HomepageBackdrop } from './HomepageBackdrop';
+import { loadingMark } from '../diagnostics/loadingTimeline';
 
-// The Pixi-heavy / larger surfaces are code-split so the menu, lobbies, etc.
-// don't pull the renderer bundle (preserving app.js's lazy-mount behaviour).
-// The raw import() thunks live in routePrefetch.ts (shared with NavButton's
-// hover/focus warm-up) and are consumed by lazy() at click time — the module
-// registry dedupes, so warming === the click-time download.
-const Skirmish = lazy(() => importSkirmish().then((m) => ({ default: m.Skirmish })));
-const CampaignEditor = lazy(() => importCampaignEditor().then((m) => ({ default: m.CampaignEditor })));
-const TilesetStudio = lazy(() => importTilePreview().then((m) => ({ default: m.TilesetStudio })));
-const LevelEditor = lazy(() => importLevelEditor().then((m) => ({ default: m.LevelEditor })));
-const PortraitEditor = lazy(() => importPortraitEditor().then((m) => ({ default: m.PortraitEditor })));
-const WallCandidateReview = lazy(() => import('./WallCandidateReview').then((m) => ({ default: m.WallCandidateReview })));
-const PredrawnReference = lazy(() => import('./PredrawnReference').then((m) => ({ default: m.PredrawnReference })));
-const DrawableCatalogLab = lazy(() => import('./DrawableCatalogLab').then((m) => ({ default: m.DrawableCatalogLab })));
+const Skirmish = lazy(() => importSkirmish().then((module) => ({ default: module.Skirmish })));
+const TilesetStudio = lazy(() => importTilePreview().then((module) => ({ default: module.TilesetStudio })));
+const LevelEditor = lazy(() => importLevelEditor().then((module) => ({ default: module.LevelEditor })));
+const PortraitEditor = lazy(() => importPortraitEditor().then((module) => ({ default: module.PortraitEditor })));
+const WallCandidateReview = lazy(() => import('./WallCandidateReview').then((module) => ({ default: module.WallCandidateReview })));
+const PredrawnReference = lazy(() => import('./PredrawnReference').then((module) => ({ default: module.PredrawnReference })));
+const DrawableCatalogLab = lazy(() => import('./DrawableCatalogLab').then((module) => ({ default: module.DrawableCatalogLab })));
 
-const fallback = <div style={{ padding: 40, color: 'var(--ds-ink-3)', fontFamily: 'var(--ds-font-sans)' }}>Loading…</div>;
+const SCENE_FADE_MS = 350;
+const SCENE_LOADING_MIN_MS = 350;
+const sceneFailureCopy = (error: Error | null): string => (
+  error?.message.includes('Canonical Play content')
+    ? 'Play content could not be reached. Check your connection and try again.'
+    : 'Required scene data or artwork could not be reached. Check your connection and try again.'
+);
 
-// Route transition behavior is declared in routeSurfaces.ts (ADR-0049). Heavy routes get
-// the veil; light-art routes keep the shared menu backdrop/rain continuous and fade their
-// own chrome through ArtRouteChrome/LightArtRouteShell.
-
-// Veil timings — keep in lockstep with --route-veil-cover-ms / --route-veil-reveal-ms
-// in style.css (JS drives the route swap; CSS drives the opacity fade).
-const VEIL_COVER_MS = 260;
-const VEIL_REVEAL_MS = 340;
-
-// React router replacing app.js's string-HTML router. Same-origin app links are
-// intercepted below so route changes keep the document, React tree, and BGM
-// audio element alive. The selector lives at /play/select/* while exact /play stays
-// the live board; legacy editor/menu paths still resolve to their React surfaces.
+/**
+ * ADR-0189 application spine. History accepts navigation immediately while the
+ * rendered route remains the outgoing scene until its controls have faded. The
+ * destination then mounts inert and unrevealed, reports a painted frame through
+ * SceneBoundary, and enters as one background-and-controls composition.
+ */
 export function App(): ReactElement {
   const installedChromeCss = useInstalledChromeCss();
-  const [path, setPath] = useState<string>(() => normalizeRoutePath(window.location.pathname));
-  const [search, setSearch] = useState<string>(() => window.location.search);
-  // Cross-route veil: an atmospheric field that fades OVER the current screen, lets
-  // a heavy destination load + compose underneath while opaque, then fades UP into
-  // it — one calm dissolve, never a "Loading…" snap. The reveal is gated on
-  // useTransition's isPending, so we never fade up into a half-loaded screen. Light
-  // hops skip the veil and swap instantly. Timings mirror VEIL_*_MS / style.css.
-  const [veil, setVeil] = useState<'idle' | 'cover' | 'reveal'>('idle');
-  const [isPending, startRouteTransition] = useTransition();
-  // The persistent bar's portal targets, owned here so the routed screen (a sibling
-  // of AppTitleBar) can contribute dynamic state. Ordinary controls reach only the
-  // typed before-divider target; arbitrary JSX remains limited to center/stud roles.
-  const [centerNode, setCenterNode] = useState<HTMLElement | null>(null);
-  const [beforeDividerNode, setBeforeDividerNode] = useState<HTMLElement | null>(null);
-  const [studNode, setStudNode] = useState<HTMLElement | null>(null);
-  const titleBarPortals = useMemo(() => ({ centerNode, beforeDividerNode, studNode }), [centerNode, beforeDividerNode, studNode]);
-  // Cold-load reveal: on a fresh main-menu load the title bar is the 2nd layer to appear
-  // (after the background). It reads the shared director's stage so it can hold hidden
-  // until its turn. On every other route / later navigation the store is fully revealed,
-  // so revealTitle is permanently true and the persistent bar never blinks.
+  const initialPath = normalizeRoutePath(window.location.pathname);
+  const prepareInitialScene = !isMainMenuPath(initialPath);
+  const [path, setPath] = useState(initialPath);
+  const [search, setSearch] = useState(window.location.search);
+  const [scene, dispatchScene] = useReducer(
+    reduceScene,
+    sceneManifest(initialPath),
+    (manifest) => initialSceneState(
+      manifest,
+      prepareInitialScene,
+      `${window.location.pathname}${window.location.search}`,
+    ),
+  );
+  const sceneRef = useRef(scene);
+  const loadingStartedAt = useRef(prepareInitialScene ? performance.now() : 0);
+  const timers = useRef<number[]>([]);
   const reveal = useSyncExternalStore(subscribeReveal, getRevealSnapshot);
-  // Board-art readiness for the veil: true while a board route's tiles are still decoding,
-  // so the dissolve reveals a complete board instead of an empty frame (render/boardArtReady).
-  const boardArtPending = useSyncExternalStore(subscribeBoardArt, isBoardArtPending);
-  const pendingTarget = useRef<string | null>(null);
-  // Set true once the cover phase has actually swapped the route. The reveal gate keys
-  // off THIS, not an exact path match — a destination that redirects to a sub-route on
-  // mount (e.g. /settings -> /settings/general) would otherwise never satisfy a path
-  // equality check and the veil would stay stuck covering.
-  const coverCommitted = useRef(false);
-  // Light-hop exit dissolve (ADR-0051): the timer holding the swap while the outgoing
-  // chrome fades, and the post-swap flag that keeps the exit state up until the
-  // incoming screen has committed (so a slow lazy chunk can't flash the faded-out
-  // screen back). Mirrors the veil's pendingTarget/coverCommitted shape. The incoming
-  // screen owns an explicit error state; elapsed time cannot reveal an incomplete route.
-  const exitTimer = useRef(0);
-  const exitSwapCommitted = useRef(false);
-  // The nav handler below is mounted once ([] deps) and must read the CURRENT veil
-  // phase — the exit dissolve may only arm while the veil is idle, and a nav landing
-  // mid-cover must retarget the veil's held swap instead of racing it for
-  // pendingTarget (the race left the veil covering forever).
-  const veilRef = useRef(veil);
-  useLayoutEffect(() => { veilRef.current = veil; }, [veil]);
-  const pathRef = useRef(path);
-  const searchRef = useRef(search);
-  const pendingSearch = useRef<string | null>(null);
-  const commitRoute = (nextPath: string, nextSearch: string): void => {
-    pathRef.current = nextPath;
-    searchRef.current = nextSearch;
-    startRouteTransition(() => {
-      setPath(nextPath);
-      setSearch(nextSearch);
-    });
-  };
-  // Layout effect (not passive): a destination's on-mount redirect runs as a passive
-  // effect and dispatches a nav BEFORE a passive pathRef update would run, which made
-  // onNav read a stale (heavy) source and wrongly re-trigger the veil mid-transition.
-  // A layout effect lands the current path before any child's passive effect fires.
-  useLayoutEffect(() => { pathRef.current = path; }, [path]);
-  useLayoutEffect(() => { searchRef.current = search; }, [search]);
 
-  // Navigation + prefetch wiring (delegated at the document, like the click router).
+  useLayoutEffect(() => { sceneRef.current = scene; }, [scene]);
+  useEffect(() => () => timers.current.forEach((timer) => window.clearTimeout(timer)), []);
+
   useEffect(() => {
-    const onNav = (event: Event) => {
-      const next = normalizeRoutePath(window.location.pathname);
+    const onNav = (event: Event): void => {
+      const nextPath = normalizeRoutePath(window.location.pathname);
       const nextSearch = window.location.search;
-      const current = pendingTarget.current ?? pathRef.current;
-      // popstate has already moved the browser's history pointer by the time it fires. Let a
-      // nested authoring surface consume this attempt, then restore the editor URL without
-      // remounting. The next Back proceeds normally after that nested surface has closed.
-      if (event.type === 'popstate') {
-        const nextHref = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-        const currentHref = `${pathRef.current}${searchRef.current}`;
-        if (nextHref !== currentHref && runAppNavigationBlockers({
-          href: nextHref,
-          path: next,
-          replace: false,
-          source: 'history',
-          retry: () => {
-            window.history.back();
-            return true;
-          },
-        })) {
-          window.history.pushState({}, '', currentHref);
-          return;
-        }
-      }
-      if (next === current) {
-        if (nextSearch !== searchRef.current) {
-          searchRef.current = nextSearch;
-          setSearch(nextSearch);
-        }
+      const nextHref = `${window.location.pathname}${nextSearch}${window.location.hash}`;
+      const currentHref = `${path}${search}`;
+      if (event.type === 'popstate' && nextHref !== currentHref && runAppNavigationBlockers({
+        href: nextHref,
+        path: nextPath,
+        replace: false,
+        source: 'history',
+        retry: () => { window.history.back(); return true; },
+      })) {
+        window.history.pushState({}, '', currentHref);
         return;
       }
-      // Mark that we've navigated, so the destination screen plays its entrance fade
-      // (ADR-0046). The very first cold page load never sets this, so the cold-load reveal
-      // owns the initial paint without a competing fade.
-      markScreenNavigation();
-      // A nav while the veil is COVERING: the field owns the transition — no dissolve
-      // choreography applies, and racing the cover timer for pendingTarget must not
-      // happen (an exit timer stealing the target left the veil covering forever).
-      // Before the cover has swapped, just retarget the held swap; after, swap directly
-      // under the (opaque) field — the reveal gate settles on whatever lands last.
-      if (veilRef.current === 'cover') {
-        if (isBoardArtRoute(next)) armBoardArtForNav();
-        if (!coverCommitted.current) {
-          pendingTarget.current = next;
-          pendingSearch.current = nextSearch;
-        } else {
-          commitRoute(next, nextSearch);
-        }
+      const destination = sceneManifest(nextPath);
+      if (destination.id === sceneRef.current.current.id && sceneRef.current.phase === 'current') {
+        setPath(nextPath);
+        setSearch(nextSearch);
         return;
       }
-      // A non-heavy nav landing mid-DISSOLVE just retargets the pending swap (queued as
-      // the LAST target, ADR-0046 D — input never drops, and the armed timer can never
-      // fire a stale target over a later navigation). A heavy newcomer instead falls
-      // through: it cancels the dissolve and hands off to the veil.
-      if (exitTimer.current && !isHeavyRoute(next)) {
-        pendingTarget.current = next;
-        pendingSearch.current = nextSearch;
-        return;
-      }
-      // Dissolve if EITHER end is heavy — entering one, or leaving one for a light screen.
-      if (isHeavyRoute(next) || isHeavyRoute(current)) {
-        // A heavy nav mid-exit-dissolve hands off to the veil: stop the pending light
-        // swap so it can't fire under the cover. The exit CLASS stays on (the chrome is
-        // mid-fade — snapping it back to 1 under a still-transparent veil is a visible
-        // pop); the veil's reveal gate clears it once the field is opaque.
-        if (exitTimer.current) {
-          window.clearTimeout(exitTimer.current);
-          exitTimer.current = 0;
-        }
-        exitSwapCommitted.current = false;
-        pendingTarget.current = next; // hold the swap until the field is fully opaque
-        pendingSearch.current = nextSearch;
-        coverCommitted.current = false;
-        // Entering the board: mark its art pending NOW (before the board mounts) so the
-        // veil's reveal gate below waits for the real tiles, not just the JS commit.
-        if (isBoardArtRoute(next)) armBoardArtForNav();
-        setVeil('cover');
-      } else if (isLightArtRoute(current) && routeScreenKey(next) !== routeScreenKey(current)) {
-        // Leaving a light-art SCREEN (ADR-0051): dissolve the outgoing chrome, then swap.
-        // Same-screen hops (settings tabs, campaign rail) skip this — the component
-        // instance is preserved and handles its own sub-navigation, so a dissolve would
-        // blink chrome that never remounts.
-        pendingTarget.current = next;
-        pendingSearch.current = nextSearch;
-        // A fresh episode owns the bookkeeping: a still-pending previous swap must not
-        // let the reset effect below clear the exit state mid-dissolve.
-        exitSwapCommitted.current = false;
-        setScreenExiting(true);
-        exitTimer.current = window.setTimeout(() => {
-          exitTimer.current = 0;
-          const target = pendingTarget.current;
-          const targetSearch = pendingSearch.current ?? window.location.search;
-          pendingTarget.current = null;
-          pendingSearch.current = null;
-          if (target != null) {
-            exitSwapCommitted.current = true;
-            commitRoute(target, targetSearch);
-          }
-        }, SCREEN_EXIT_MS);
-      } else {
-        // Light hop: keep the current screen painted (no fallback flash), swap when ready.
-        commitRoute(next, nextSearch);
-      }
+      loadingMark(destination.id, 'scene-navigation-accepted', {
+        background: destination.background,
+        criticalCount: destination.critical.length,
+        opportunisticCount: destination.opportunistic.length,
+      });
+      dispatchScene({ type: 'navigate', destination, href: `${nextPath}${nextSearch}` });
     };
-    const onClick = (event: MouseEvent) => {
+    const onClick = (event: MouseEvent): void => {
       const target = event.target;
       if (!(target instanceof Element)) return;
       const anchor = target.closest('a[href]');
-      if (!(anchor instanceof HTMLAnchorElement)) return;
-      if (!shouldInterceptAppLinkClick(event, anchor)) return;
-
+      if (!(anchor instanceof HTMLAnchorElement) || !shouldInterceptAppLinkClick(event, anchor)) return;
       event.preventDefault();
       navigateApp(anchor.href);
     };
-    // Prefetch-on-intent: warm the destination chunk when the pointer hovers (or
-    // keyboard focus lands on) any in-app link, so by click time the code is
-    // already cached. Delegated at the document like onClick, so every app link
-    // benefits — no per-button wiring. pointerover/focusin both bubble.
-    const onIntent = (event: Event) => {
+    const onIntent = (event: Event): void => {
       const target = event.target;
       if (!(target instanceof Element)) return;
       const anchor = target.closest('a[href]');
@@ -249,7 +130,6 @@ export function App(): ReactElement {
       const url = getAppNavigationUrl(anchor.href);
       if (url) prefetchRoute(normalizeRoutePath(url.pathname));
     };
-
     window.addEventListener('popstate', onNav);
     window.addEventListener(APP_NAVIGATION_EVENT, onNav);
     document.addEventListener('click', onClick);
@@ -262,100 +142,122 @@ export function App(): ReactElement {
       document.removeEventListener('pointerover', onIntent);
       document.removeEventListener('focusin', onIntent);
     };
-  }, []);
+  }, [path, search]);
 
-  // Once the field is fully opaque, swap the route underneath it.
   useEffect(() => {
-    if (veil !== 'cover') return undefined;
+    const active = scene.destination ?? scene.current;
+    loadingMark(active.id, `scene-${scene.phase}`, {
+      generation: scene.generation,
+      background: active.background,
+      paintOwner: active.paintOwner,
+    });
+  }, [scene.current, scene.destination, scene.generation, scene.phase]);
+  useEffect(() => {
+    const active = scene.destination ?? scene.current;
+    for (const resource of active.critical) {
+      loadingMark(active.id, 'manifest-critical', { resource, generation: scene.generation });
+    }
+    for (const resource of active.opportunistic) {
+      loadingMark(active.id, 'manifest-opportunistic', { resource, generation: scene.generation });
+    }
+  }, [scene.current, scene.destination, scene.generation]);
+
+  useEffect(() => {
+    if (scene.phase !== 'exiting') return undefined;
+    const generation = scene.generation;
     const timer = window.setTimeout(() => {
-      const target = pendingTarget.current;
-      const targetSearch = pendingSearch.current ?? window.location.search;
-      if (target != null) {
-        coverCommitted.current = true;
-        commitRoute(target, targetSearch);
-      }
-    }, VEIL_COVER_MS);
+      const latest = sceneRef.current;
+      if (latest.generation !== generation || !latest.destinationHref) return;
+      const url = new URL(latest.destinationHref, window.location.origin);
+      setPath(normalizeRoutePath(url.pathname));
+      setSearch(url.search);
+      loadingStartedAt.current = performance.now();
+      dispatchScene({ type: 'exit-finished', generation });
+    }, SCENE_FADE_MS);
+    timers.current.push(timer);
     return () => window.clearTimeout(timer);
-  }, [veil]);
+  }, [scene.generation, scene.phase]);
 
-  // Fade up only once the cover phase has swapped the route AND nothing's still pending
-  // (the chunk's loaded / the screen settled, including any on-mount sub-route redirect)
-  // — so the player never sees a half-composed surface, and the veil never sticks.
+  const destinationPainted = useCallback((generation: number): void => {
+    const elapsed = performance.now() - loadingStartedAt.current;
+    const remaining = Math.max(0, SCENE_LOADING_MIN_MS - elapsed);
+    const timer = window.setTimeout(
+      () => dispatchScene({ type: 'destination-painted', generation }),
+      remaining,
+    );
+    timers.current.push(timer);
+  }, []);
+  const destinationFailed = useCallback((generation: number, error: Error): void => {
+    dispatchScene({ type: 'failed', generation, error });
+  }, []);
   useEffect(() => {
-    if (veil === 'cover' && coverCommitted.current && !isPending && !boardArtPending) {
-      pendingTarget.current = null;
-      pendingSearch.current = null;
-      // A dissolve the veil took over mid-fade (heavy nav during a light exit) is
-      // released here, under the fully opaque field — never in the transparent
-      // cover ramp, where dropping the class would visibly snap the chrome back.
-      setScreenExiting(false);
-      setVeil('reveal');
-    }
-  }, [veil, path, isPending, boardArtPending]);
-
-  // Reveal finished → idle.
-  useEffect(() => {
-    if (veil !== 'reveal') return undefined;
-    const timer = window.setTimeout(() => setVeil('idle'), VEIL_REVEAL_MS);
+    if (scene.phase !== 'entering') return undefined;
+    const generation = scene.generation;
+    const timer = window.setTimeout(
+      () => dispatchScene({ type: 'entrance-finished', generation }),
+      SCENE_FADE_MS,
+    );
+    timers.current.push(timer);
     return () => window.clearTimeout(timer);
-  }, [veil]);
+  }, [scene.generation, scene.phase]);
 
-  // Exit dissolve: once the swap has committed AND nothing is still pending (the lazy
-  // chunk loaded, any on-mount sub-route redirect settled), drop the exit state. Held
-  // PAST the swap so a slow chunk can't flash the dissolved screen back to full
-  // opacity while it loads; gated on the committed flag (not a path match) for the
-  // same redirect reason as the veil's coverCommitted.
-  useEffect(() => {
-    if (exitSwapCommitted.current && !isPending) {
-      exitSwapCommitted.current = false;
-      setScreenExiting(false);
-    }
-  }, [path, isPending]);
+  const preparing = scene.phase === 'loading' || scene.phase === 'entering' || scene.phase === 'error';
+  const manifest = scene.destination ?? scene.current;
+  const transitioning = scene.phase !== 'current';
+  const retainedBackground = scene.current.background;
 
   return (
     <>
       {installedChromeCss ? <style data-app-chrome-family dangerouslySetInnerHTML={{ __html: installedChromeCss }} /> : null}
-      <div className="app-chrome-family-root chrome-family-surface">
-      <UpdateBanner />
-      {/* The single persistent title bar, rendered OUTSIDE the routed screen so it
-          survives navigation (only its contents change). It always draws the brand +
-          account/settings cluster; screens may fill the center/stud roles and contribute
-          typed controls to its one control lane (ADR-0042/0104). */}
-      <AppTitleBar path={path} search={search} onCenterNode={setCenterNode} onBeforeDividerNode={setBeforeDividerNode} onStudNode={setStudNode} revealTitle={reveal.has('title')} />
-      {/* ONE stable Suspense boundary above the router. Because the boundary
-          persists across every route swap (rather than each route mounting its
-          own), a transition navigation keeps the already-revealed screen painted
-          while the next route's lazy chunk loads — so moving between surfaces no
-          longer blanks to "Loading…". The fallback only shows on a genuine cold
-          load straight onto a lazy route, when this boundary has revealed nothing
-          yet. Heavy entrances additionally ride the veil below. */}
-      <TitleBarPortalContext.Provider value={titleBarPortals}>
-        <RouteLoadBoundary resetKey={`${path}${search}`}>
-          <Suspense fallback={fallback}>{renderRoute(path, search)}</Suspense>
-        </RouteLoadBoundary>
-      </TitleBarPortalContext.Provider>
       <div
-        className={`route-veil${veil === 'cover' ? ' is-cover' : ''}${veil === 'reveal' ? ' is-reveal' : ''}`}
-        aria-hidden="true"
-      />
-      {/* Rotate-to-landscape gate. The app is played in landscape on phones; a true
-          orientation lock is impossible in a mobile browser (screen.orientation.lock is
-          unsupported on iOS Safari), so this overlay is shown — via a CSS media query,
-          not JS — only on a touch device held in portrait, and covers everything (it sits
-          above the fixed title bar). See the "MOBILE SUPPORT" block in style.css. */}
-      <div className="rotate-gate" role="alertdialog" aria-label="Rotate your device to landscape">
-        <div className="rotate-gate-inner">
-          <svg className="rotate-gate-icon" viewBox="0 0 48 48" fill="none" stroke="currentColor"
-               strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <rect x="19" y="4" width="17" height="30" rx="3" />
-            <line x1="27.5" y1="8.5" x2="27.5" y2="8.5" />
-            <path d="M13 20 A16 16 0 0 0 23 42" />
-            <polyline points="7.5 18.5 13 20 15 14.5" />
-          </svg>
-          <p className="rotate-gate-title">Rotate your device</p>
-          <p className="rotate-gate-copy">Chess Tactics plays in landscape.</p>
+        className={`app-chrome-family-root chrome-family-surface scene-director is-${scene.phase}`}
+        data-scene-phase={scene.phase}
+        data-scene-error={scene.error?.message}
+      >
+        <UpdateBanner />
+        {transitioning && retainedBackground !== 'homepage' ? (
+          <div
+            className={`scene-retained-background is-${retainedBackground}`}
+            aria-hidden="true"
+          />
+        ) : null}
+        <div className={`scene-homepage-background${reveal.has('bg') ? '' : ' is-startup-pending'}`} aria-hidden="true">
+          <HomepageBackdrop directorHostOnly />
         </div>
-      </div>
+        <SceneBoundary
+          key={scene.generation}
+          manifest={manifest}
+          generation={scene.generation}
+          preparing={preparing}
+          onPainted={destinationPainted}
+          onFailed={destinationFailed}
+        >
+          <AppTitleBar
+            path={path}
+            search={search}
+            revealTitle={reveal.has('title')}
+          />
+          <RouteLoadBoundary resetKey={`${path}${search}`}>
+            <Suspense fallback={null}>{renderRoute(path, search)}</Suspense>
+          </RouteLoadBoundary>
+        </SceneBoundary>
+        {transitioning ? (
+          <div className="scene-loading-presentation" role={scene.phase === 'error' ? 'alert' : 'status'}>
+            {scene.phase === 'error' ? (
+              <>
+                <strong>This scene could not be loaded.</strong>
+                <small>{sceneFailureCopy(scene.error)}</small>
+                <button type="button" onClick={() => dispatchScene({ type: 'retry' })}>Retry</button>
+              </>
+            ) : <span>Loading…</span>}
+          </div>
+        ) : null}
+        <div className="rotate-gate" role="alertdialog" aria-label="Rotate your device to landscape">
+          <div className="rotate-gate-inner">
+            <p className="rotate-gate-title">Rotate your device</p>
+            <p className="rotate-gate-copy">Chess Tactics plays in landscape.</p>
+          </div>
+        </div>
       </div>
     </>
   );
@@ -367,46 +269,18 @@ function renderRoute(path: string, search: string): ReactElement {
   if (path === '/studio' || path === '/tileset-studio') return <TilesetStudio />;
   if (path === '/studio/wall-candidates') return <WallCandidateReview />;
   if (path === '/studio/drawables') return <DrawableCatalogLab />;
-  // /unit-studio is a deep-link alias into the Studio's embedded Unit Art
-  // Viewer editor. The Studio canonicalises it to /studio after mount.
   if (path === '/unit-studio') return <TilesetStudio initialCategory="units" />;
   if (path === '/portrait-editor') return <PortraitEditor />;
-  // /doodad-editor: legacy alias into the Studio's Doodads category, opening the
-  // shared structure editor. Not its own route or 3-panel shell (ADR-0058).
   if (path === '/doodad-editor') return <TilesetStudio initialCategory="doodads" />;
-  // /nine-slice-editor is a deep-link alias into the one Studio (like /unit-studio):
-  // the 9-slice editor is an embedded Viewer surface, not its own route. The studio
-  // reads ?asset=<frame> off this path and canonicalises the URL to /studio.
   if (path === '/nine-slice-editor') return <TilesetStudio />;
-  // /prop-lab is the same shape: a deep-link alias that opens the Studio's embedded
-  // prop-seat Viewer (Props category). Not its own route or toolbar (ADR-0058).
   if (path === '/prop-lab') return <TilesetStudio initialCategory="props" />;
-  // /tile-compare: alias into the Studio's Tile Pipeline category (ADR-0058 debt migration).
   if (path === '/tile-compare') return <TilesetStudio initialCategory="tilecompare" />;
-  // /surface-lab: alias into the Studio's Tileset Surfaces category (ADR-0058 debt migration).
   if (path === '/surface-lab') return <TilesetStudio initialCategory="surfacetiles" />;
-  // /scene-anim-lab: alias into the Studio's Scene Animations category (ADR-0058 debt migration).
   if (path === '/scene-anim-lab') return <TilesetStudio initialCategory="sceneanim" />;
-  // The level editor is now the studio's socket-legal board in the original
-  // asset-backed chrome; the old Pixi LevelEditor/EditorBoard is retired.
-  // The board editor keeps its own heavy full screen (canonical /editor/level; legacy /edit,
-  // /level-editor). Existing levels drill in from the Editor; its pinned New Level action opens
-  // a blank standalone board directly.
   if (path === '/editor/level' || path === '/edit' || path === '/level-editor') {
     return <LevelEditor key={levelEditorRouteIdentity(search)} />;
   }
-  // /play/select/*, /settings, AND the Editor (canonical /editor; legacy /campaigns-next,
-  // /campaigns) all render INSIDE the persistent menu shell — they fall through to the MainMenu
-  // default below, sharing the 'menu' screen key so the button column stays mounted. MainMenu fills
-  // its second column with each destination's own columns (Play / Settings / Editor).
-  // /lobbies now renders INSIDE the persistent menu shell (MainMenu fills its second column with the
-  // lobbies action column). Falls through to the MainMenu default below, sharing the 'menu' key.
   if (path === '/party') return <Party />;
-  // /settings now renders inside the persistent menu shell (MainMenu fills its second column with
-  // the Settings sections + content). It falls through to the MainMenu default below, which reads
-  // the path — keeping the button column mounted across the home↔settings hop (routeScreenKey 'menu').
-  // /artwork-compare: alias into the Studio's Art Compare viewer (ADR-0058 supersedes
-  // ADR-0005's standalone-route choice). It reads its own ?opts/l/r/lcss/rcss on mount.
   if (path === '/artwork-compare') return <TilesetStudio initialCategory="pages" />;
   return <MainMenu path={path} />;
 }

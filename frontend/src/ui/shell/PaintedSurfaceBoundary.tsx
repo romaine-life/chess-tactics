@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { loadingError, loadingMark, loadingMeasure } from '../../diagnostics/loadingTimeline';
 import { loadDecodedImage } from '../../render/imageResources';
+import { useSceneParticipant } from './SceneBoundary';
 
 type SurfacePhase = 'loading' | 'painted' | 'error';
 
@@ -85,6 +86,7 @@ export function PaintedSurfaceBoundary({
   const [attempt, setAttempt] = useState(0);
   const [phase, setPhase] = useState<SurfacePhase>('loading');
   const [paintError, setPaintError] = useState<Error | null>(null);
+  useSceneParticipant(surface, phase, paintError);
 
   useEffect(() => {
     setPhase(error ? 'error' : 'loading');

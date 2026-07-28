@@ -80,6 +80,7 @@ let parked: HTMLDivElement | null = null;
 // The host div currently showing the backdrop — so an outgoing screen doesn't park
 // nodes a newly-mounted screen has already claimed (mount/unmount can interleave).
 let currentHost: HTMLDivElement | null = null;
+let directorHost: HTMLDivElement | null = null;
 
 function ensureScene(): void {
   if (fieldCanvas) return;
@@ -186,7 +187,7 @@ function useAmbienceEffectName(): string | null {
 // First-EVER appearance fade: render one frame at opacity 0 (.ambience-credit-start),
 // then drop the class so the opacity transition plays. After that the module flag keeps
 // every later mount steady; route-level chrome entrance is owned separately by
-// ArtRouteChrome/useScreenEntrance.
+// the application scene director.
 function useCreditEntrance(effectName: string | null): boolean {
   const [entered, setEntered] = useState(() => creditHasAppeared);
   useEffect(() => {
@@ -207,7 +208,7 @@ function useCreditEntrance(effectName: string | null): boolean {
 // link naming the scene the world is running right now, opening ambience's
 // read-only monitor for the same broadcast. It lives here (not per screen) so
 // every surface that shows the shared backdrop carries the credit automatically.
-export function HomepageBackdrop(): ReactElement {
+export function HomepageBackdrop({ directorHostOnly = false }: { directorHostOnly?: boolean } = {}): ReactElement {
   const hostRef = useRef<HTMLDivElement>(null);
   const effectName = useAmbienceEffectName();
   const creditEntered = useCreditEntrance(effectName);
@@ -219,9 +220,11 @@ export function HomepageBackdrop(): ReactElement {
   useLayoutEffect(() => {
     ensureScene();
     const host = hostRef.current;
+    if (!directorHostOnly && directorHost) return undefined;
     if (host && sceneNode && fieldCanvas && overlayCanvas) {
       host.append(sceneNode, fieldCanvas, overlayCanvas);
       currentHost = host;
+      if (directorHostOnly) directorHost = host;
     }
     return () => {
       // Park the singletons so they persist (and keep running) across the route
@@ -231,13 +234,14 @@ export function HomepageBackdrop(): ReactElement {
         parked.append(sceneNode, fieldCanvas, overlayCanvas);
         currentHost = null;
       }
+      if (directorHost === host) directorHost = null;
     };
-  }, []);
+  }, [directorHostOnly]);
 
   return (
     <>
       <div ref={hostRef} style={{ display: 'contents' }} aria-hidden="true" />
-      {effectName ? (
+      {!directorHostOnly && effectName ? (
         // A button, not an anchor (ADR-0052): still opens the ambience world view in a
         // new tab, but the game shell shows no URL on hover.
         <button

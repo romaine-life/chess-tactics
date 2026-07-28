@@ -131,7 +131,9 @@ try {
             title: Boolean(title && !title.classList.contains('reveal-pending')),
           };
           const count = Number(state.bg) + Number(state.buttons) + Number(state.title);
-          if (count > 0 && count < 3) window.__ctMenuAtomicViolations.push(state);
+          if ((state.title && !state.bg) || (state.buttons && (!state.bg || !state.title))) {
+            window.__ctMenuAtomicViolations.push(state);
+          }
           if (count === 3) {
             const criticalImages = [
               ...menu.querySelectorAll('.settings-rail-frame img'),
@@ -152,15 +154,17 @@ try {
       window.__ctBackdropVisibleSeen = false;
       window.__ctBackdropViolations = [];
       const sample = () => {
+        const host = document.querySelector('.scene-homepage-background');
         const menu = document.querySelector('.main-menu-layer');
-        const scene = menu?.querySelector('.scene-backdrop');
+        const scene = host?.querySelector('.scene-backdrop');
         const canvas = scene?.querySelector('.scene-backdrop-canvas');
         const visible = Boolean(scene && canvas
+          && Number.parseFloat(getComputedStyle(host).opacity) > 0.001
           && Number.parseFloat(getComputedStyle(scene).opacity) > 0.001
           && getComputedStyle(canvas).backgroundImage !== 'none');
         if (visible) window.__ctBackdropVisibleSeen = true;
         else if (window.__ctBackdropVisibleSeen) {
-          window.__ctBackdropViolations.push({ menu: Boolean(menu), scene: Boolean(scene), canvas: Boolean(canvas) });
+          window.__ctBackdropViolations.push({ host: Boolean(host), menu: Boolean(menu), scene: Boolean(scene), canvas: Boolean(canvas) });
         }
         requestAnimationFrame(sample);
       };
@@ -312,17 +316,42 @@ try {
   if (readyExpr) await page.waitForFunction(readyExpr, { timeout });
   else await page.waitForFunction('window.__ready===true', { timeout: 1200 }).catch(() => {});
 
-  // Route chrome can remain deliberately invisible while content hydrates, then spend one fade
-  // settling after the content readiness gate opens. Freezing animation before that lifecycle
-  // completes strands ArtRouteChrome at its opacity-zero entrance state. An explicit capture gate
-  // therefore also makes entrance settlement fail closed; generic captures keep the bounded,
-  // best-effort behavior used by their implicit fixture gate.
-  const waitForSettledScreenEntrance = page.waitForFunction(
-    "!document.querySelector('.screen-enter-hold,.screen-enter-lock')",
-    { timeout: readyExpr ? timeout : 1200 },
+  // The scene director is the one route-level lifecycle owner. Freezing animation while it
+  // is exiting/loading/entering would strand a partial composition, so explicit captures
+  // fail closed until the director reports a terminal complete scene or an
+  // explicitly requested coherent error scene.
+  const requiresTerminalScene = Boolean(
+    readyExpr || assertMenuAtomic || assertBoardAtomic || assertShellFontAtomic
+    || assertSurfaceAtomic || assertBackdropContinuity,
   );
-  if (readyExpr) await waitForSettledScreenEntrance;
-  else await waitForSettledScreenEntrance.catch(() => {});
+  const waitForSettledScene = page.waitForFunction(
+    "Boolean(document.querySelector('[data-scene-phase]')) && !document.querySelector('[data-scene-phase]:not([data-scene-phase=\"current\"]):not([data-scene-phase=\"error\"])')",
+    { timeout: requiresTerminalScene ? timeout : 1200 },
+  );
+  if (requiresTerminalScene) await waitForSettledScene;
+  else await waitForSettledScene.catch(() => {});
+  if (assertMenuAtomic) {
+    await page.waitForFunction(
+      `(() => {
+        const menu = document.querySelector('.main-menu-layer[data-reveal-bg][data-reveal-buttons]');
+        const controls = document.querySelector('.main-menu-twin-screen');
+        const title = document.querySelector('.app-titlebar:not(.reveal-pending)');
+        const background = document.querySelector('.scene-homepage-background');
+        return Boolean(menu && controls && title && background)
+          && Number.parseFloat(getComputedStyle(controls).opacity) > 0.99
+          && Number.parseFloat(getComputedStyle(title).opacity) > 0.99
+          && Number.parseFloat(getComputedStyle(background).opacity) > 0.99;
+      })()`,
+      { timeout },
+    );
+  }
+  const terminalScene = await page.$eval('[data-scene-phase]', (node) => ({
+    phase: node.getAttribute('data-scene-phase'),
+    error: node.getAttribute('data-scene-error'),
+  })).catch(() => null);
+  if (terminalScene?.phase === 'error') {
+    console.error(`scene terminal error: ${terminalScene.error || 'unknown'}`);
+  }
 
   await page.evaluate(() => document.fonts && document.fonts.ready).catch(() => {});
 

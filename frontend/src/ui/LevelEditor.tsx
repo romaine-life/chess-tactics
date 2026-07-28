@@ -172,6 +172,7 @@ import {
   shouldRestoreLocalEditorRecovery,
 } from './levelEditorPersistence';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
+import { useSceneParticipant } from './shell/SceneBoundary';
 import { loadingMark } from '../diagnostics/loadingTimeline';
 import { HomepageBackdrop } from './HomepageBackdrop';
 import { useInstalledChromeCss } from './useInstalledChromeCss';
@@ -475,6 +476,9 @@ function StudioEditableBoard({
   decorativeFootprint = [],
   decorativeFences = {}, decorativeFencePosts = {}, decorativeWalls = {},
   allowDecorativeEditing = false,
+  onTerrainFirstFrame,
+  onSceneFirstFrame,
+  onFrameError,
 }: {
   cols: number;
   rows: number;
@@ -587,6 +591,9 @@ function StudioEditableBoard({
   decorativeFencePosts?: Record<string, FenceMaterial>;
   decorativeWalls?: Record<string, WallMaterial>;
   allowDecorativeEditing?: boolean;
+  onTerrainFirstFrame?: () => void;
+  onSceneFirstFrame?: () => void;
+  onFrameError?: (error: unknown) => void;
 }): ReactElement {
   const paintingRef = useRef(false);
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
@@ -1405,6 +1412,8 @@ function StudioEditableBoard({
               ? <BoardTerrainLayer
                   cells={scenicTerrainCells}
                   macroTiles={hidden?.tile ? [] : terrainCanvasMacroTiles(placedMacroTiles)}
+                  onFirstFrame={onTerrainFirstFrame}
+                  onFrameError={onFrameError}
                 />
               : null}
           <BoardSceneLayer
@@ -1416,6 +1425,8 @@ function StudioEditableBoard({
             predrawnBackgroundActive={predrawnBackgroundActive}
             predrawnOcclusion={predrawnOcclusionEnabled}
             transformOps={fenceArtwork ? ((ops, board) => transformFenceArtReviewOps(ops, board, fenceArtwork)) : undefined}
+            onFirstFrame={onSceneFirstFrame}
+            onFrameError={onFrameError}
           />
           {predrawnPlate && showPredrawnOcclusionSeed
             ? <PredrawnOcclusionSeedLayer board={sceneBoard} />
@@ -2713,6 +2724,18 @@ export function LevelEditor(): ReactElement {
   // Do not expose an editable board until the durable document has had a chance to resolve. On a
   // signed-out/offline visit we deliberately fall back to the browser recovery copy instead.
   const [editorReady, setEditorReady] = useState(false);
+  const [editorTerrainPainted, setEditorTerrainPainted] = useState(false);
+  const [editorScenePainted, setEditorScenePainted] = useState(false);
+  const [editorFrameError, setEditorFrameError] = useState<Error | null>(null);
+  const acknowledgeEditorTerrain = useCallback(() => {
+    if (editorReady) setEditorTerrainPainted(true);
+  }, [editorReady]);
+  const acknowledgeEditorScene = useCallback(() => {
+    if (editorReady) setEditorScenePainted(true);
+  }, [editorReady]);
+  const failEditorFrame = useCallback((error: unknown) => {
+    if (editorReady) setEditorFrameError(error instanceof Error ? error : new Error(String(error)));
+  }, [editorReady]);
   useEffect(() => {
     if (!editorReady) return undefined;
     const frame = requestAnimationFrame(() => loadingMark('editor', 'chrome-first-ready-frame'));
@@ -2825,6 +2848,21 @@ export function LevelEditor(): ReactElement {
     return predrawnBoardPlateForEditorReview(activeSurface, predrawnPreview, predrawnRegistration);
   }, [boardBackgroundModeState, boardSurface, predrawnPreview, predrawnRegistration, predrawnSelectionValidation.kind]);
   const isPredrawnBoard = boardBackgroundModeState === 'ai' || editorPredrawnPlate !== undefined;
+  const editorRouteError = useMemo(
+    () => editorFrameError ?? (editorLoadError
+      ? new Error(`${editorLoadError.title}: ${editorLoadError.detail}`)
+      : null),
+    [editorFrameError, editorLoadError],
+  );
+  useSceneParticipant(
+    'level-editor',
+    editorRouteError
+      ? 'error'
+      : editorReady && (isPredrawnBoard || editorTerrainPainted) && editorScenePainted
+        ? 'painted'
+        : 'loading',
+    editorRouteError,
+  );
   const isPredrawnReviewOnly = editorPredrawnPlate !== undefined && Boolean(predrawnPreview);
   const [boardMacroTiles, setBoardMacroTiles] = useState<MacroTilePlacement[]>(() => initialBoard ? validMacroTilesForBoard(initialBoard) : []);
   const [boardCols, setBoardCols] = useState(initialBoard?.cols ?? LE_COLS);
@@ -8600,6 +8638,9 @@ export function LevelEditor(): ReactElement {
                     decorativeWalls={decorativeWalls}
                     allowDecorativeEditing={['tile', 'cover', 'road', 'river', 'fence', 'wall', 'subterrain'].includes(brushKind)
                       || (tool === 'erase' && (brushKind === 'doodad' || brushKind === 'prop'))}
+                    onTerrainFirstFrame={acknowledgeEditorTerrain}
+                    onSceneFirstFrame={acknowledgeEditorScene}
+                    onFrameError={failEditorFrame}
                   />
                 )}
                 {editorReady && !saving && !editorLoadError && layer === 'placed-art' && brushKind === 'artwork' && tool === 'brush' ? (

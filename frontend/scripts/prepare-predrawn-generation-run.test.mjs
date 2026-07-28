@@ -193,20 +193,20 @@ describe('single-command pre-drawn preparation', () => {
     const implicitReadiness = shotSource.indexOf(
       "else await page.waitForFunction('window.__ready===true', { timeout: 1200 }).catch(() => {});",
     );
-    const entranceSettlement = shotSource.indexOf(
-      'const waitForSettledScreenEntrance = page.waitForFunction(',
+    const sceneSettlement = shotSource.indexOf(
+      'const waitForSettledScene = page.waitForFunction(',
     );
-    const entranceSettlementAwait = shotSource.indexOf(
-      'else await waitForSettledScreenEntrance.catch(() => {});',
+    const sceneSettlementAwait = shotSource.indexOf(
+      'else await waitForSettledScene.catch(() => {});',
     );
     const animationFreeze = shotSource.indexOf('await page.addStyleTag({ content:');
 
     expect(explicitReadiness).toBeGreaterThan(-1);
     expect(implicitReadiness).toBeGreaterThan(explicitReadiness);
-    expect(entranceSettlement).toBeGreaterThan(implicitReadiness);
-    expect(shotSource).toContain("!document.querySelector('.screen-enter-hold,.screen-enter-lock')");
-    expect(entranceSettlementAwait).toBeGreaterThan(entranceSettlement);
-    expect(animationFreeze).toBeGreaterThan(entranceSettlementAwait);
+    expect(sceneSettlement).toBeGreaterThan(implicitReadiness);
+    expect(shotSource).toContain("data-scene-phase");
+    expect(sceneSettlementAwait).toBeGreaterThan(sceneSettlement);
+    expect(animationFreeze).toBeGreaterThan(sceneSettlementAwait);
   });
 
   it('releases the observation-only Level Editor session after a headless capture', () => {

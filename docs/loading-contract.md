@@ -1,6 +1,7 @@
 # Loading contract
 
-Derived from [ADR-0136](adr/0136-loading-is-manifest-driven-and-frame-acknowledged.md).
+Derived from [ADR-0136](adr/0136-loading-is-manifest-driven-and-frame-acknowledged.md)
+and [ADR-0189](adr/0189-navigation-loads-atomic-scenes-through-one-director.md).
 
 ## Readiness vocabulary
 
@@ -35,6 +36,23 @@ The required representative traces are cold and warm versions of:
 3. A canonical `/play` level through the board's first complete frame.
 4. A canonical Level Editor document through its first complete frame.
 
+## Scene lifecycle
+
+`SceneDirector` is the only route-level transition authority. A destination declares
+one `SceneManifest`; `SceneBoundary` keeps the complete destination hidden and inert
+until its required paint owner and every registered participant report a drawable
+frame. Navigation retains the outgoing background and follows:
+
+`current → exiting → loading → destination-painted → entering → current`
+
+Repeated navigation to the active destination is idempotent. A later destination
+cancels the old generation. Failure terminates at one director-owned retry surface;
+a React-tree failure terminates at one root retry surface rather than a blank page.
+
+Title-bar contributions discover targets inside their own committed scene. DOM-node
+refs are never lifted into the director, because portal attachment must not mutate the
+route lifecycle during the same React commit.
+
 ## Migration order
 
 1. Instrument without changing reveal behavior.
@@ -44,7 +62,7 @@ The required representative traces are cold and warm versions of:
 5. Move board/editor reveals to actual compositor acknowledgement.
 6. Optimize redirects, backend/Blob delivery, compression, and cache budgets from traces.
 
-## Implemented baseline
+## Implemented system
 
 - Shell startup begins its layout-font request from the initial HTML and hydrates its
   required live authorities and installed chrome before App's first commit. Visible
@@ -71,6 +89,21 @@ The required representative traces are cold and warm versions of:
   revealed; network or asset latency is never charged as player thinking time.
 - Readiness timeouts were removed from menu, route, screen, and board boundaries. A failed
   critical resource is an error, never synthetic readiness.
+- Every route family resolves through `sceneManifest`; unmatched routes explicitly
+  inherit the main-menu scene rather than escaping enrollment.
+- Campaign Editor waits for official/private hydration and visible recent drafts.
+  Level Editor waits for its durable document, both board compositors, scene canvas,
+  visible chrome, and the first palette viewport. Lobbies wait for identity, the
+  initial list, and the visible level-thumbnail group. Studio, portrait, and
+  pre-drawn reference routes publish named paint owners.
+- Private account thumbnails retain owner-only delivery while accepting the same
+  account-local level-ID grammar as the workspace. The client accepts only strict
+  same-origin public-media or owner-scoped immutable derivative identities.
+- The initial viewport is critical. Canonical thumbnails begin unloaded, acquire on
+  proximity, and only the first viewport participates in the selector frame; below-fold
+  cards retain fixed geometry and remain opportunistic.
+- Loading Lab shows the active scene lifecycle, manifest tiers, participants, resource
+  timings, cache evidence, failures, and painted acknowledgement.
 
 The next architectural reduction is a bounded shell/level manifest so complete global
 catalog projections no longer block every route. That optimization may reduce latency but

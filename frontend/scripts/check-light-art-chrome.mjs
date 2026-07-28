@@ -25,6 +25,7 @@ function rel(path) {
 // The sole owner of the homepage backdrop (menu scene + synced rain). Every other screen
 // renders <HomepageBackdrop/>; only this file wires the scene node + rain canvases.
 const BACKDROP_OWNER = 'src/ui/HomepageBackdrop.tsx';
+const SCENE_DIRECTOR = 'src/ui/App.tsx';
 
 function checkFile(path) {
   const file = rel(path);
@@ -34,7 +35,7 @@ function checkFile(path) {
     file !== 'src/ui/shell/ArtRouteChrome.tsx' &&
     /import\s+\{[^}]*\buseScreenEntrance\b[^}]*\}\s+from\s+['"][^'"]*useScreenEntrance['"]/.test(source)
   ) {
-    errors.push(`${file}: import ArtRouteChrome/LightArtRouteShell instead of useScreenEntrance directly.`);
+    errors.push(`${file}: the retired useScreenEntrance path is forbidden; enroll through SceneBoundary participants.`);
   }
 
   // Single-owner rule (ADR-0064): the homepage backdrop is ONE continuous instance shared by
@@ -58,15 +59,15 @@ function checkFile(path) {
     errors.push(`${file}: render <HomepageBackdrop/> — the SceneBackdrop component is for the studio inspector only (single-owner backdrop, ADR-0064).`);
   }
 
-  // A homepage-backdrop route enrolls its chrome through ArtRouteChrome/LightArtRouteShell, so the
-  // entrance fade touches the CHROME ROOT only and the continuous backdrop never re-fades
-  // (ADR-0046 §B/G, ADR-0049).
+  // Route consumers report chrome readiness through ArtRouteChrome/LightArtRouteShell.
+  // App is the one scene director and owns the persistent singleton host itself (ADR-0189).
   const importsBackdrop = /import\s+\{\s*HomepageBackdrop\s*\}\s+from\s+['"][^'"]*HomepageBackdrop['"]/.test(source);
   const importsArtChrome = /from\s+['"][^'"]*ArtRouteChrome['"]/.test(source);
   const importsLightArtShell = /from\s+['"][^'"]*LightArtRouteShell['"]/.test(source);
   if (
     importsBackdrop &&
     file !== BACKDROP_OWNER &&
+    file !== SCENE_DIRECTOR &&
     file !== 'src/ui/shell/LightArtRouteShell.tsx' &&
     !importsArtChrome &&
     !importsLightArtShell

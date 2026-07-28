@@ -1,5 +1,5 @@
 ---
-status: "accepted"
+status: "superseded by ADR-0189"
 date: 2026-06-29
 deciders: Nelson, Claude
 ---

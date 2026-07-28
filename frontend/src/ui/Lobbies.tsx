@@ -24,6 +24,7 @@ import { clearPersistedNetIntent } from '../game/netIntentPersistence';
 import { OBJECTIVE_LABEL } from '../core/objectives';
 import { withNetSeatLease } from '../game/netSeatLease';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
+import { useSceneParticipant } from './shell/SceneBoundary';
 
 const utilityButtonClassNames = (tone: 'primary' | 'neutral' | 'danger'): string =>
   chromeUnitClassNames('inner-text-button', `utility-button utility-button-${tone}`, tone === 'danger' && 'danger');
@@ -81,6 +82,22 @@ function useOfficialLevels(): { levels: Level[]; loading: boolean } {
 
 function LevelPicker({ current, selectedId, onPick }: { current: Lobby; selectedId: string | null; onPick: (levelId: string) => void }) {
   const { levels, loading } = useOfficialLevels();
+  const [painted, setPainted] = useState<ReadonlySet<string>>(() => new Set());
+  const [thumbnailError, setThumbnailError] = useState<Error | null>(null);
+  const signature = levels.map((level) => level.id).join('|');
+  useEffect(() => {
+    setPainted(new Set());
+    setThumbnailError(null);
+  }, [signature]);
+  // The picker scrolls; its first six cards are the bounded initial viewport.
+  // Remaining fixed-size cards are opportunistic and load as they approach.
+  const criticalLevels = levels.slice(0, 6);
+  const thumbnailsPainted = !loading && criticalLevels.every((level) => painted.has(level.id));
+  useSceneParticipant(
+    'lobby-level-picker',
+    thumbnailError ? 'error' : thumbnailsPainted ? 'painted' : 'loading',
+    thumbnailError,
+  );
   return (
     <section className="utility-level-picker" aria-label="Choose a level">
       <span className="utility-level-picker-head">{current.level_id ? 'Change level' : 'Choose a level'}</span>
@@ -100,7 +117,15 @@ function LevelPicker({ current, selectedId, onPick }: { current: Lobby; selected
               onClick={() => onPick(level.id)}
             >
               <span className="utility-level-thumb" aria-hidden="true">
-                <LevelThumbnail level={level} width={180} height={100} />
+                <LevelThumbnail
+                  level={level}
+                  width={180}
+                  height={100}
+                  onReady={(levelId) => setPainted((currentSet) => (
+                    currentSet.has(levelId) ? currentSet : new Set([...currentSet, levelId])
+                  ))}
+                  onError={(_levelId, error) => setThumbnailError(error)}
+                />
               </span>
               <strong>{level.name}</strong>
               <small>{levelObjectiveLine(level)}</small>
@@ -123,6 +148,17 @@ export function Lobbies({ embedded = false }: { embedded?: boolean } = {}) {
   const [me, setMe] = useState<AuthUser | null>(null);
   const [data, setData] = useState<LobbyList | null>(null);
   const [status, setStatus] = useState('');
+  const [identityError, setIdentityError] = useState<Error | null>(null);
+  const lobbyLoadError = useMemo(
+    () => identityError ?? (status.startsWith('Error:') ? new Error(status) : null),
+    [identityError, status],
+  );
+  const initialLobbyReady = Boolean(me && (!me.signed_in || data));
+  useSceneParticipant(
+    'lobbies',
+    lobbyLoadError ? 'error' : initialLobbyReady ? 'painted' : 'loading',
+    lobbyLoadError,
+  );
 
   // Latest lobby data, read inside stable callbacks (SSE handler) without re-subscribing.
   const dataRef = useRef<LobbyList | null>(null);
@@ -169,6 +205,8 @@ export function Lobbies({ embedded = false }: { embedded?: boolean } = {}) {
         // otherwise the cleanup closed over a still-null ref and the stream would leak.
         if (!active) { unsubscribe(); unsubscribe = null; }
       }
+    }).catch((error: unknown) => {
+      if (active) setIdentityError(error instanceof Error ? error : new Error(String(error)));
     });
     return () => { active = false; unsubscribe?.(); };
   }, []);

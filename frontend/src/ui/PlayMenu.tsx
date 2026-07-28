@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState, type ComponentProps, type ReactElement, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps, type ReactElement, type ReactNode } from 'react';
 import { ensureCampaignsHydrated, isUserWorkspaceAvailable } from '../campaign/hydrate';
 import {
   CAMPAIGN_PROGRESS_EVENT,
@@ -125,6 +125,8 @@ interface ThumbnailGateValue {
 }
 
 const ThumbnailGateContext = createContext<ThumbnailGateValue | null>(null);
+type ThumbnailSurfaceState = { complete: boolean; error: Error | null };
+const ThumbnailSurfaceReportContext = createContext<((state: ThumbnailSurfaceState) => void) | null>(null);
 
 function GatedLevelThumbnail(props: ComponentProps<typeof LevelThumbnail>): ReactElement {
   const gate = useContext(ThumbnailGateContext);
@@ -132,26 +134,51 @@ function GatedLevelThumbnail(props: ComponentProps<typeof LevelThumbnail>): Reac
 }
 
 function ThumbnailSurface({ levels, children }: { levels: readonly Level[]; children: ReactNode }): ReactElement {
-  const levelIds = levels.map((level) => level.id);
+  const reportSurface = useContext(ThumbnailSurfaceReportContext);
   const signature = levels.map((level) => `${level.id}:${levelThumbnailUrl(level.id) ?? 'missing'}`).join('|');
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const [painted, setPainted] = useState<ReadonlySet<string>>(() => new Set());
+  const [criticalIds, setCriticalIds] = useState<ReadonlySet<string> | null>(null);
   const [failure, setFailure] = useState<Error | null>(null);
   const [attempt, setAttempt] = useState(0);
 
   useLayoutEffect(() => {
     setPainted(new Set());
+    setCriticalIds(null);
     setFailure(null);
   }, [attempt, signature]);
+
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const viewport = root.closest('.play-action-scroll') ?? root;
+    const bounds = viewport.getBoundingClientRect();
+    const margin = 200;
+    const visible = [...root.querySelectorAll<HTMLElement>('[data-level-thumbnail-id]')]
+      .filter((node) => {
+        const rect = node.getBoundingClientRect();
+        return rect.bottom >= bounds.top - margin && rect.top <= bounds.bottom + margin;
+      })
+      .map((node) => node.dataset.levelThumbnailId)
+      .filter((id): id is string => Boolean(id));
+    // A zero-row surface is complete. If layout is temporarily unmeasurable,
+    // require the first row instead of incorrectly declaring a populated list done.
+    setCriticalIds(new Set(visible.length || levels.length === 0 ? visible : [levels[0].id]));
+  }, [signature]);
 
   const ready = useCallback((levelId: string) => {
     setPainted((current) => current.has(levelId) ? current : new Set([...current, levelId]));
   }, []);
   const failed = useCallback((_levelId: string, error: Error) => setFailure(error), []);
-  const complete = levelIds.every((levelId) => painted.has(levelId));
+  const complete = criticalIds !== null && [...criticalIds].every((levelId) => painted.has(levelId));
+  useEffect(() => {
+    reportSurface?.({ complete: complete && !failure, error: failure });
+    return () => reportSurface?.({ complete: false, error: null });
+  }, [complete, failure, reportSurface]);
 
   return (
     <ThumbnailGateContext.Provider value={{ ready, failed }}>
-      <div className={`thumbnail-surface ${complete && !failure ? 'is-ready' : 'is-loading'} ${failure ? 'is-error' : ''}`.trim()}>
+      <div ref={rootRef} className={`thumbnail-surface ${complete && !failure ? 'is-ready' : 'is-loading'} ${failure ? 'is-error' : ''}`.trim()}>
         <div
           className="thumbnail-surface-content"
           key={`${signature}:${attempt}`}
@@ -432,6 +459,15 @@ export function PlayMenu(): ReactElement {
   const [officialAvailable, setOfficialAvailable] = useState(false);
   const [userWorkspaceAvailable, setUserWorkspaceAvailable] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
+  const [thumbnailSurface, setThumbnailSurface] = useState<ThumbnailSurfaceState>({
+    complete: false,
+    error: null,
+  });
+  const reportThumbnailSurface = useCallback((next: ThumbnailSurfaceState) => {
+    setThumbnailSurface((current) => (
+      current.complete === next.complete && current.error === next.error ? current : next
+    ));
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -536,17 +572,28 @@ export function PlayMenu(): ReactElement {
   const loadError = !loading && (!officialAvailable || !userWorkspaceAvailable)
     ? new Error('Canonical Play content is unavailable.')
     : null;
+  const surfaceError = loadError ?? thumbnailSurface.error;
 
   return (
-    <PaintedSurfaceBoundary
-      surface="play-selector"
-      signature={surfaceSignature}
-      readyToCompose={!loading && !loadError}
-      error={loadError}
-      loadingLabel="Preparing Play…"
-      onRetry={() => setLoadAttempt((value) => value + 1)}
-      className="play-surface"
-    >
+    <ThumbnailSurfaceReportContext.Provider value={reportThumbnailSurface}>
+      <div
+        className="play-scene-authority"
+        data-official-authority={loading ? 'loading' : officialAvailable ? 'ready' : 'error'}
+        data-user-authority={loading ? 'loading' : userWorkspaceAvailable ? 'ready' : 'error'}
+        data-thumbnail-authority={thumbnailSurface.error ? 'error' : thumbnailSurface.complete ? 'ready' : 'loading'}
+      >
+      <PaintedSurfaceBoundary
+        surface="play-selector"
+        signature={surfaceSignature}
+        readyToCompose={!loading && !surfaceError && thumbnailSurface.complete}
+        error={surfaceError}
+        loadingLabel="Preparing Play…"
+        onRetry={() => {
+          setThumbnailSurface({ complete: false, error: null });
+          setLoadAttempt((value) => value + 1);
+        }}
+        className="play-surface"
+      >
       <aside className="menu-dest-col menu-dest-tabs play-source-rail" aria-label="Play">
         <div className="play-source-fixed">
           <PlayRailTab
@@ -642,6 +689,8 @@ export function PlayMenu(): ReactElement {
           }
         />
       ) : null}
-    </PaintedSurfaceBoundary>
+      </PaintedSurfaceBoundary>
+      </div>
+    </ThumbnailSurfaceReportContext.Provider>
   );
 }

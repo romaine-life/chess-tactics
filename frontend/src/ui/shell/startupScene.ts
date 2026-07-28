@@ -1,4 +1,4 @@
-// Cold-load reveal director.
+// Ordered initial-scene choreography (ADR-0189).
 //
 // On a FRESH load of the main menu (route "/"), background, title bar, and buttons
 // are one visual unit. None is exposed until all critical art is drawable. Rain is
@@ -21,8 +21,10 @@
 export type RevealLayer = 'bg' | 'title' | 'buttons' | 'rain';
 import { homepageSceneMedia } from '../homepageSceneMedia';
 
-const LADDER: RevealLayer[] = ['bg', 'title', 'buttons', 'rain'];
+const LADDER: RevealLayer[] = ['bg', 'title', 'buttons'];
 const LAST = LADDER.length - 1;
+const STAGE_FADE_MS = 350;
+const STAGE_BEAT_MS = 140;
 
 // stageIndex = the highest ladder layer currently allowed to be visible. Default is
 // LAST (everything revealed) so any route that never arms shows instantly.
@@ -31,6 +33,7 @@ let didArm = false;
 let failure: Error | null = null;
 const ready = new Set<RevealLayer>();
 const listeners = new Set<() => void>();
+let stageTimer = 0;
 
 interface RevealSnapshot {
   stageIndex: number;
@@ -52,14 +55,20 @@ function emit(): void {
   for (const cb of listeners) cb();
 }
 
-// The shell is an atomic surface: readiness from one layer is recorded but cannot
-// reveal that layer independently. One store emission exposes the entire visual unit
-// only after every critical participant has acknowledged drawable pixels.
 function advance(): void {
-  if (stageIndex === LAST) return;
-  if (!ready.has('bg') || !ready.has('title') || !ready.has('buttons')) return;
-  stageIndex = LAST;
+  if (stageIndex === LAST || stageTimer) return;
+  const next = stageIndex + 1;
+  if (!ready.has(LADDER[next])) return;
+  stageIndex = next;
   emit();
+  if (stageIndex < LAST) {
+    // This timer sequences already-ready painted stages; it can never manufacture
+    // readiness. A slow resource simply leaves the next stage closed until markReady.
+    stageTimer = window.setTimeout(() => {
+      stageTimer = 0;
+      advance();
+    }, STAGE_FADE_MS + STAGE_BEAT_MS);
+  }
 }
 
 export function markReady(layer: RevealLayer): void {
@@ -105,6 +114,8 @@ export function armForColdHome(): void {
   stageIndex = -1;
   failure = null;
   ready.clear();
+  if (stageTimer) window.clearTimeout(stageTimer);
+  stageTimer = 0;
   // Rain is decorative. Its canvas reveals on its own fade and is never a critical gate.
   ready.add('rain');
   emit();

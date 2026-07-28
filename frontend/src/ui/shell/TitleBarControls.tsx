@@ -1,8 +1,8 @@
-import { useContext, type ButtonHTMLAttributes, type HTMLAttributes, type ReactElement, type ReactNode } from 'react';
+import { type ButtonHTMLAttributes, type HTMLAttributes, type ReactElement, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { chromeUnitClassNames } from '../chromeUnitRegistry';
 import { NavButton } from '../shared/NavButton';
-import { TitleBarPortalContext } from './TitleBarPortalContext';
+import { useTitleBarPortalTarget } from './TitleBarPortalContext';
 
 type TitleBarControlVariant = 'label' | 'return' | 'icon';
 
@@ -191,7 +191,7 @@ export function TitleBarControlContribution({
   ariaLabel: string;
   controls: readonly TitleBarControlSpec[];
 }): ReactElement | null {
-  const { beforeDividerNode } = useContext(TitleBarPortalContext);
+  const beforeDividerNode = useTitleBarPortalTarget('before-divider');
   if (!beforeDividerNode || controls.length === 0) return null;
   return createPortal(
     <div className="app-titlebar-contributed-controls" role="group" aria-label={ariaLabel}>
