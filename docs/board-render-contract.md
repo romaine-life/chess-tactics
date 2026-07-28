@@ -752,13 +752,46 @@ the selected raster version's persisted frame dimensions and world bounds—not
 the playable grid diamond or a runtime-transformed source polygon—define a
 viewport-cover zoom floor while AI background mode is active. A remembered
 selection in Legacy mode does not affect the camera. The shared
-`ViewPane` recomputes one centered floor from its live
-dimensions, rounds upward to the control precision, and reports it to editor and
-gameplay zoom controls. Pan never changes that floor: it proceeds until the
+`ViewPane` recomputes one floor from its live dimensions, rounds upward only at
+fine numerical safety precision, and reports it to editor and gameplay zoom
+controls. The floor must not be rounded to the coarser human-facing wheel or
+stepper increment, because doing so can erase valid zoom-out room in a small
+preview. Pan never changes that floor: it proceeds until the
 viewport reaches the raster art edge and then stops. Zoom and resize clamp
 an existing pan back inside. Wheel, stepper, shortcut, and reset paths must not
 cross the floor. If it exceeds the ordinary gameplay cap, the cap rises to the
 floor; ordinary tiled boards retain their existing zoom range.
+
+Per [ADR-0189](adr/0189-board-facing-views-open-on-playable-geometry.md),
+that art-derived floor is a safety boundary, not the opening composition.
+Board-facing live and static views derive their opening frame from the stable
+projected playable-board presentation. Per
+[ADR-0191](adr/0191-board-opening-frame-uses-the-playable-contact-surface.md),
+that presentation is the union of playable cell contact diamonds and excludes
+fixed tile sprite relief/headroom, units, props, doodads, scenic terrain, and
+generated art. The frame expands by five percent of its own width and height on
+every side, is contained and centered in the measured viewport, and is then
+raised only when the accepted-art cover floor requires it. Gameplay, Reset, the Level Editor,
+selected-level preview, replay/solver views, browser authoring bakes, server
+list derivatives, and social cards consume the same primitive. Compact
+derivatives, list thumbnails, and social cards are 3:2. Per
+[ADR-0192](adr/0192-interactive-board-viewports-share-a-four-by-three-shape.md),
+gameplay and the Campaign/Campaign Editor selected-level live preview instead
+share one literal 4:3 drawable viewport. Gameplay fits the largest centred 4:3
+rectangle inside its responsive board seat; the fixed-width selected preview
+derives its height from that width. User camera input releases automatic framing
+until a level change or Reset. Exact-art generation, warp, occlusion,
+version-comparison, move-highlight, and source/reference instruments continue
+fitting the complete artifact.
+
+Per [ADR-0190](adr/0190-accepted-art-zoom-floor-uses-the-full-feasible-pan-region.md),
+the safety floor is the smallest zoom at which the viewport can fit anywhere
+inside the accepted transformed-art polygon. It is not restricted to
+board-centred pan and there is no separate standard zoom-out size. The opening
+camera remains board-centred; when a lower safe zoom makes that pan invalid,
+the camera reclamps to the nearest feasible pan. Current pan never raises the
+stable floor, and every feasible pan still keeps every viewport corner inside
+accepted pixels.
 
 Per ADR-0158,
 the cover floor is a safety limit rather than a substitute for camera room. The
