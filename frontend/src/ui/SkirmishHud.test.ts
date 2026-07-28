@@ -95,6 +95,22 @@ describe('Skirmish HUD shortcuts', () => {
     expect(SHORTCUT_BINDINGS.w).toMatchObject({ label: 'Opp. moves', hint: expect.stringMatching(/opponent legal-move/i) });
     expect(SHORTCUT_BINDINGS.a).toMatchObject({ label: 'Your attacks', hint: expect.stringMatching(/friendly attack/i) });
     expect(SHORTCUT_BINDINGS.s).toMatchObject({ label: 'Your moves', hint: expect.stringMatching(/friendly legal-move/i) });
+    expect(SHORTCUT_BINDINGS.d).toEqual({
+      kind: 'toggle',
+      flag: 'showPromotionZones',
+      label: 'Promotion zones',
+      hint: 'View pawn promotion zones',
+    });
+  });
+
+  it('toggles pawn promotion zones from the Controls command card', () => {
+    expect(useSkirmishView.getState().showPromotionZones).toBe(false);
+
+    expect(runSkirmishShortcut('D')).toBe(true);
+    expect(useSkirmishView.getState().showPromotionZones).toBe(true);
+
+    expect(runSkirmishShortcut('d')).toBe(true);
+    expect(useSkirmishView.getState().showPromotionZones).toBe(false);
   });
 });
 
