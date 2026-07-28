@@ -37,6 +37,19 @@ export function loadCanvasImage(src: string): Promise<CanvasImage> {
   return loadDecodedImage(src);
 }
 
+/** Resize the backing store only when a complete replacement frame is ready to paint.
+ * Setting width/height during React render clears the visible bitmap immediately, exposing a
+ * blank compositor while asynchronous resources for the next frame are still settling. */
+export function sizeCanvasForBounds(
+  canvas: Pick<HTMLCanvasElement, 'width' | 'height'>,
+  bounds: BakeBounds,
+): void {
+  const width = Math.max(1, Math.ceil(bounds.width));
+  const height = Math.max(1, Math.ceil(bounds.height));
+  if (canvas.width !== width) canvas.width = width;
+  if (canvas.height !== height) canvas.height = height;
+}
+
 function imageReady(image: CanvasImage | undefined): image is CanvasImage {
   return !!image?.complete && image.naturalWidth > 0;
 }
@@ -461,21 +474,23 @@ export function BoardCanvasLayer({
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return undefined;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     const animated = orderedOps.some(isAnimatedGroundCoverOp);
     const paint = (images: ReadonlyMap<string, CanvasImage>, timeMs = performance.now()): void => {
-      generation.runIfCurrent(() => drawBoardOps(
-        ctx,
-        orderedOps,
-        bounds,
-        images,
-        timeMs,
-        maskTint,
-        orderedOcclusionMasks,
-        undefined,
-        occlusionDepthMap,
-      ));
+      generation.runIfCurrent(() => {
+        sizeCanvasForBounds(canvas, bounds);
+        drawBoardOps(
+          ctx,
+          orderedOps,
+          bounds,
+          images,
+          timeMs,
+          maskTint,
+          orderedOcclusionMasks,
+          undefined,
+          occlusionDepthMap,
+        );
+      });
     };
 
     settleRenderEffectGeneration(generation, loadDecodedImageMap(framePlan.sources), (images) => {
@@ -510,8 +525,6 @@ export function BoardCanvasLayer({
     <canvas
       ref={canvasRef}
       className={className}
-      width={bounds.width}
-      height={bounds.height}
       style={style}
       aria-hidden="true"
     />

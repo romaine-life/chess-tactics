@@ -6,7 +6,7 @@ import { countIllegalEdges, solveSocketBoard, type SocketBoardCell, type SocketB
 import { densityFieldAt, resolveGroundCover } from '../core/groundCover';
 import type { GameState, Move, Piece, Side, TerrainType, UnitFacing, Vec } from '../core/types';
 import { attackedSquares, blockedCandidateSquares, enemyThreats, legalMoves, livingPieces } from '../core/rules';
-import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, defaultFacingForSide, paletteForSide, pieceSpritePath, type PlayablePieceType } from '../core/pieces';
+import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, UNIT_FACINGS, defaultFacingForSide, paletteForSide, pieceSpritePath, type PlayablePieceType } from '../core/pieces';
 import { defaultTerrainFamily, familyForGameplayTerrain, familyIdForAsset, tileSocketsForAsset, type TileFamilyId } from '../core/tileSockets';
 import { useSkirmish } from '../game/store';
 import { useSkirmishView } from '../game/skirmishView';
@@ -16,13 +16,12 @@ import { BoardLabBoard, boardLabCellPosition, immutableBoardLabTerrainSrc } from
 import { PredrawnMoveHighlightPaint } from './PredrawnMoveHighlightPaint';
 import { terrainTopSrc } from './BoardTerrainLayer';
 import {
-  boundsForOps,
   drawBoardOps,
   isAnimatedGroundCoverOp,
   loadCanvasImage,
   predrawnOcclusionDepthImageDimensionIssue,
+  sizeCanvasForBounds,
 } from './BoardCanvasLayer';
-import { createRenderEffectGeneration, settleRenderEffectGeneration } from './renderEffectGeneration';
 import { objectBaseZIndex } from './sceneDepth';
 import { ViewPane } from '../ui/shared/ViewPane';
 import { useBoardFrameReveal } from './boardArtReady';
@@ -43,6 +42,7 @@ import {
   UNIT_IMG_MAX_H,
   UNIT_IMG_MAX_W,
   boardBounds,
+  boardContentHash,
   boardDrawOps,
   isPredrawnBackgroundActive,
   mirrorFacingPlan,
@@ -134,6 +134,18 @@ function pieceImageSrc(piece: Piece): string | null {
   if (piece.type === 'rock' || piece.type === 'random-rock') return rockSpritePath(piece);
   const appearance = directionalPieceAppearance(piece);
   return appearance?.spriteForFacing(appearance.facing) ?? null;
+}
+
+/** Directional frames a living piece can request after its next move. They warm in the shared
+ * decoded-image cache after the current complete frame, so changing facing never rebuilds the
+ * scene renderer or starts a second image lifecycle. */
+export function pieceRuntimeSpriteSources(piece: Piece): string[] {
+  const appearance = directionalPieceAppearance(piece);
+  if (!appearance) {
+    const src = pieceImageSrc(piece);
+    return src ? [src] : [];
+  }
+  return UNIT_FACINGS.map((facing) => appearance.spriteForFacing(facing));
 }
 
 export type SkirmishTileClickIntent =
@@ -658,23 +670,6 @@ function padBounds(bounds: BakeBounds): BakeBounds {
   };
 }
 
-function targetPieceOps(livePieces: readonly Piece[], afterGhosts: ReturnType<typeof premoveGhosts>): BoardDrawOp[] {
-  const ops: BoardDrawOp[] = [];
-  for (const piece of livePieces) {
-    const op = pieceOp(piece, boardLabCellPosition(piece));
-    if (op) ops.push(op);
-  }
-  for (const group of afterGhosts) {
-    group.pieces.forEach((piece, i) => {
-      const off = (GHOST_SLOTS[group.pieces.length] ?? GHOST_SLOTS[1])[i] ?? { dx: 0, dy: 0 };
-      const { left, top } = boardLabCellPosition(piece);
-      const op = pieceOp(piece, { left: left + off.dx, top: top + off.dy }, { scale: ghostScaleFor(group.pieces.length) });
-      if (op) ops.push(op);
-    });
-  }
-  return ops;
-}
-
 /**
  * Keep Skirmish's animated scene compositor behind the same immutable-depth validation as the
  * shared canvas layer. The callbacks make the ordering explicit: invalid persisted bytes can
@@ -731,6 +726,13 @@ function SkirmishSceneLayer({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const motionRef = useRef<Map<string, PieceMotion>>(new Map());
   const arrivalStartRef = useRef<number | null>(null);
+  const arrivalWasActiveRef = useRef(false);
+  const imagesRef = useRef<Map<string, HTMLImageElement>>(new Map());
+  const animationFrameRef = useRef<number | null>(null);
+  const acknowledgementFrameRef = useRef<number | null>(null);
+  const acknowledgedFrameKeyRef = useRef<string | null>(null);
+  const mountedRef = useRef(false);
+  const paintFrameRef = useRef<(timeMs: number) => void>(() => {});
   const staticOps = useMemo(
     () => skirmishStaticSceneOps(sceneBoard, seed, ambientCover, predrawnBackgroundActive),
     [ambientCover, predrawnBackgroundActive, sceneBoard, seed],
@@ -740,20 +742,99 @@ function SkirmishSceneLayer({
       .filter((surface) => surface.segments.every((segment) => !segment.edge || Boolean(sceneBoard.walls?.[segment.edge]))),
     [sceneBoard],
   );
-  const bounds = useMemo(() => {
-    const fallback = boardBounds(sceneBoard, {
+  // The bitmap geometry belongs to the static board, not to whichever unit currently reaches
+  // furthest. React changing a canvas width/height attribute clears its backing store; deriving
+  // those attributes from live piece positions was the intermittent whole-scene blank on moves.
+  // Use the complete logical terrain footprint even when a pre-drawn plate suppresses those
+  // terrain pixels, because live pieces still need seats at every playable edge of that plate.
+  const bounds = useMemo(
+    () => padBounds(boardBounds({
+      ...sceneBoard,
+      backgroundMode: 'legacy',
+      surface: undefined,
+    }, {
       coverSeed: seed,
       ambientCover,
-      predrawnBackgroundActive,
+      predrawnBackgroundActive: false,
+    })),
+    [ambientCover, sceneBoard, seed],
+  );
+  const mirrorFaces = useMemo(
+    () => [...new Set(mirrorSurfaces.map((surface) => surface.face))],
+    [mirrorSurfaces],
+  );
+  const requiredSources = useMemo(() => [...new Set([
+    ...staticOps.map((op) => op.src),
+    ...occlusionMasks.map((op) => op.src),
+    ...(occlusionDepthMap ? [occlusionDepthMap.src] : []),
+    ...livePieces.map(pieceImageSrc).filter((src): src is string => !!src),
+    ...afterGhosts.flatMap((group) => group.pieces.map(pieceImageSrc)).filter((src): src is string => !!src),
+    ...livePieces.flatMap((piece) => mirrorSpriteSourcesForPiece(piece, mirrorFaces)),
+  ])].sort(), [afterGhosts, livePieces, mirrorFaces, occlusionDepthMap, occlusionMasks, staticOps]);
+  const requiredSourceKey = requiredSources.join('|');
+  const warmSources = useMemo(
+    () => [...new Set(livePieces.flatMap(pieceRuntimeSpriteSources))].sort(),
+    [livePieces],
+  );
+  const warmSourceKey = warmSources.join('|');
+  const frameKey = useMemo(
+    () => `${seed}:${boardContentHash(sceneBoard)}:${predrawnBackgroundActive ? 1 : 0}:${occlusionDepthMap?.src ?? ''}`,
+    [occlusionDepthMap?.src, predrawnBackgroundActive, sceneBoard, seed],
+  );
+  const frameStateRef = useRef({
+    staticOps,
+    mirrorSurfaces,
+    bounds,
+    livePieces,
+    arriving,
+    arrivalDelays,
+    draggingId,
+    premovedIds,
+    afterGhosts,
+    occlusionMasks,
+    occlusionDepthMap,
+    requiredSources,
+    hasAnimatedGroundCover: staticOps.some(isAnimatedGroundCoverOp),
+    frameKey,
+    onFirstFrame,
+    onFrameError,
+  });
+
+  const requestSceneFrame = useCallback(() => {
+    if (!mountedRef.current || animationFrameRef.current !== null) return;
+    animationFrameRef.current = window.requestAnimationFrame((timeMs) => {
+      animationFrameRef.current = null;
+      paintFrameRef.current(timeMs);
     });
-    return padBounds(boundsForOps([...staticOps, ...targetPieceOps(livePieces, afterGhosts)], fallback));
-  }, [afterGhosts, ambientCover, livePieces, predrawnBackgroundActive, sceneBoard, seed, staticOps]);
+  }, []);
 
-  useEffect(() => {
-    arrivalStartRef.current = arriving ? performance.now() : null;
-  }, [arriving]);
+  useLayoutEffect(() => {
+    frameStateRef.current = {
+      staticOps,
+      mirrorSurfaces,
+      bounds,
+      livePieces,
+      arriving,
+      arrivalDelays,
+      draggingId,
+      premovedIds,
+      afterGhosts,
+      occlusionMasks,
+      occlusionDepthMap,
+      requiredSources,
+      hasAnimatedGroundCover: staticOps.some(isAnimatedGroundCoverOp),
+      frameKey,
+      onFirstFrame,
+      onFrameError,
+    };
+    if (acknowledgedFrameKeyRef.current !== frameKey && acknowledgementFrameRef.current !== null) {
+      window.cancelAnimationFrame(acknowledgementFrameRef.current);
+      acknowledgementFrameRef.current = null;
+    }
+    if (arriving && !arrivalWasActiveRef.current) arrivalStartRef.current = performance.now();
+    if (!arriving) arrivalStartRef.current = null;
+    arrivalWasActiveRef.current = arriving;
 
-  useEffect(() => {
     const now = performance.now();
     const nextIds = new Set(livePieces.map((piece) => piece.id));
     for (const piece of livePieces) {
@@ -789,112 +870,166 @@ function SkirmishSceneLayer({
     for (const id of motionRef.current.keys()) {
       if (!nextIds.has(id)) motionRef.current.delete(id);
     }
-  }, [livePieces, noHopId]);
+    if (requiredSources.every((src) => imagesRef.current.has(src))) requestSceneFrame();
+  }, [
+    afterGhosts,
+    arrivalDelays,
+    arriving,
+    bounds,
+    draggingId,
+    frameKey,
+    livePieces,
+    mirrorSurfaces,
+    noHopId,
+    occlusionDepthMap,
+    occlusionMasks,
+    onFirstFrame,
+    onFrameError,
+    premovedIds,
+    requestSceneFrame,
+    requiredSourceKey,
+    staticOps,
+  ]);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d');
-    if (!canvas || !ctx) return undefined;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  useLayoutEffect(() => {
+    paintFrameRef.current = (timeMs: number): void => {
+      const state = frameStateRef.current;
+      const canvas = canvasRef.current;
+      const ctx = canvas?.getContext('2d');
+      if (!canvas || !ctx || state.requiredSources.some((src) => !imagesRef.current.has(src))) return;
 
-    const generation = createRenderEffectGeneration();
-    const unitSources = [
-      ...livePieces.map(pieceImageSrc),
-      ...afterGhosts.flatMap((group) => group.pieces.map(pieceImageSrc)),
-    ].filter((src): src is string => !!src);
-    const mirrorFaces = [...new Set(mirrorSurfaces.map((surface) => surface.face))];
-    const reflectedUnitSources = livePieces.flatMap((piece) => mirrorSpriteSourcesForPiece(piece, mirrorFaces));
-    const sources = [...new Set([
-      ...staticOps.map((op) => op.src),
-      ...occlusionMasks.map((op) => op.src),
-      ...(occlusionDepthMap ? [occlusionDepthMap.src] : []),
-      ...unitSources,
-      ...reflectedUnitSources,
-    ])];
-    const hasAnimatedGroundCover = staticOps.some(isAnimatedGroundCoverOp);
+      try {
+        const ops: BoardDrawOp[] = [...state.staticOps];
+        const physicalPieceOps: BoardDrawOp[] = [];
+        const reflectionSubjects: MirrorReflectionSubject[] = [];
+        for (const piece of state.livePieces) {
+          const target = boardLabCellPosition(piece);
+          const motion = motionRef.current.get(piece.id) ?? {
+            gridX: piece.x,
+            gridY: piece.y,
+            startLeft: target.left,
+            startTop: target.top,
+            targetLeft: target.left,
+            targetTop: target.top,
+            startTime: timeMs,
+            duration: 0,
+          };
+          const seat = motionSeat(motion, timeMs);
+          const arrival = arrivalOffset(timeMs, arrivalStartRef.current, state.arrivalDelays.get(piece.id));
+          const baseOpacity = state.draggingId === piece.id ? 0.3 : state.premovedIds.has(piece.id) ? 0.4 : 1;
+          const op = pieceOp(piece, seat, {
+            dy: moveHopOffset(seat.progress, piece.side) + arrival.dy,
+            opacity: baseOpacity * arrival.opacity,
+          });
+          if (op) {
+            physicalPieceOps.push(op);
+            const reflectionSubject = mirrorSubjectForSeat(op, seat, piece);
+            if (reflectionSubject) reflectionSubjects.push(reflectionSubject);
+          }
+        }
+        ops.push(...reflectedOpsForSubjects(state.mirrorSurfaces, reflectionSubjects));
+        ops.push(...physicalPieceOps);
+        for (const group of state.afterGhosts) {
+          group.pieces.forEach((piece, i) => {
+            const off = (GHOST_SLOTS[group.pieces.length] ?? GHOST_SLOTS[1])[i] ?? { dx: 0, dy: 0 };
+            const { left, top } = boardLabCellPosition(piece);
+            const op = pieceOp(piece, { left: left + off.dx, top: top + off.dy }, {
+              opacity: 0.55,
+              scale: ghostScaleFor(group.pieces.length),
+            });
+            if (op) ops.push(op);
+          });
+        }
+        ops.sort((a, b) => a.z - b.z);
+        commitSkirmishSceneFirstFrame(
+          state.occlusionDepthMap,
+          imagesRef.current,
+          () => {
+            sizeCanvasForBounds(canvas, state.bounds);
+            drawBoardOps(
+              ctx,
+              ops,
+              state.bounds,
+              imagesRef.current,
+              timeMs,
+              undefined,
+              state.occlusionMasks,
+              undefined,
+              state.occlusionDepthMap,
+            );
+          },
+          () => {
+            if (acknowledgedFrameKeyRef.current === state.frameKey) return;
+            acknowledgedFrameKeyRef.current = state.frameKey;
+            acknowledgementFrameRef.current = window.requestAnimationFrame(() => {
+              acknowledgementFrameRef.current = null;
+              if (mountedRef.current && frameStateRef.current.frameKey === state.frameKey) {
+                frameStateRef.current.onFirstFrame();
+              }
+            });
+          },
+        );
+      } catch (error) {
+        state.onFrameError(error);
+        return;
+      }
 
-    const frameOps = (timeMs: number): BoardDrawOp[] => {
-      const ops: BoardDrawOp[] = [...staticOps];
-      const physicalPieceOps: BoardDrawOp[] = [];
-      const reflectionSubjects: MirrorReflectionSubject[] = [];
-      for (const piece of livePieces) {
-        const target = boardLabCellPosition(piece);
-        const motion = motionRef.current.get(piece.id) ?? {
-          gridX: piece.x,
-          gridY: piece.y,
-          startLeft: target.left,
-          startTop: target.top,
-          targetLeft: target.left,
-          targetTop: target.top,
-          startTime: timeMs,
-          duration: 0,
-        };
-        const seat = motionSeat(motion, timeMs);
-        const arrival = arrivalOffset(timeMs, arrivalStartRef.current, arrivalDelays.get(piece.id));
-        const baseOpacity = draggingId === piece.id ? 0.3 : premovedIds.has(piece.id) ? 0.4 : 1;
-        const op = pieceOp(piece, seat, {
-          dy: moveHopOffset(seat.progress, piece.side) + arrival.dy,
-          opacity: baseOpacity * arrival.opacity,
-        });
-        if (op) {
-          physicalPieceOps.push(op);
-          const reflectionSubject = mirrorSubjectForSeat(op, seat, piece);
-          if (reflectionSubject) reflectionSubjects.push(reflectionSubject);
+      let hasActiveMotion = false;
+      for (const motion of motionRef.current.values()) {
+        if (motionSeat(motion, timeMs).active) {
+          hasActiveMotion = true;
+          break;
         }
       }
-      ops.push(...reflectedOpsForSubjects(mirrorSurfaces, reflectionSubjects));
-      ops.push(...physicalPieceOps);
-      for (const group of afterGhosts) {
-        group.pieces.forEach((piece, i) => {
-          const off = (GHOST_SLOTS[group.pieces.length] ?? GHOST_SLOTS[1])[i] ?? { dx: 0, dy: 0 };
-          const { left, top } = boardLabCellPosition(piece);
-          const op = pieceOp(piece, { left: left + off.dx, top: top + off.dy }, {
-            opacity: 0.55,
-            scale: ghostScaleFor(group.pieces.length),
-          });
-          if (op) ops.push(op);
-        });
-      }
-      return ops.sort((a, b) => a.z - b.z);
+      if (state.hasAnimatedGroundCover || state.arriving || hasActiveMotion) requestSceneFrame();
     };
+  }, [requestSceneFrame]);
 
-    const hasActiveMotion = (timeMs: number): boolean => {
-      for (const motion of motionRef.current.values()) {
-        if (motionSeat(motion, timeMs).active) return true;
-      }
-      return false;
+  useEffect(() => {
+    mountedRef.current = true;
+    if (requiredSources.every((src) => imagesRef.current.has(src))) requestSceneFrame();
+    return () => {
+      mountedRef.current = false;
+      if (animationFrameRef.current !== null) window.cancelAnimationFrame(animationFrameRef.current);
+      if (acknowledgementFrameRef.current !== null) window.cancelAnimationFrame(acknowledgementFrameRef.current);
+      animationFrameRef.current = null;
+      acknowledgementFrameRef.current = null;
     };
+  }, [requestSceneFrame]);
 
-    settleRenderEffectGeneration(
-      generation,
-      Promise.all(sources.map(async (src): Promise<[string, HTMLImageElement]> => [src, await loadCanvasImage(src)])),
-      (entries) => {
-        const images = new Map(entries);
-        const tick = (timeMs: number): void => {
-          drawBoardOps(ctx, frameOps(timeMs), bounds, images, timeMs, undefined, occlusionMasks, undefined, occlusionDepthMap);
-          if (hasAnimatedGroundCover || arriving || hasActiveMotion(timeMs)) {
-            generation.requestFrame(tick);
-          }
-        };
-        commitSkirmishSceneFirstFrame(
-          occlusionDepthMap,
-          images,
-          () => tick(performance.now()),
-          () => generation.requestFrame(() => onFirstFrame()),
-        );
-      },
-      onFrameError,
-    );
+  useEffect(() => {
+    let active = true;
+    void Promise.all(requiredSources.map(async (src): Promise<[string, HTMLImageElement]> => [src, await loadCanvasImage(src)]))
+      .then((entries) => {
+        if (!active) return;
+        for (const [src, image] of entries) imagesRef.current.set(src, image);
+        requestSceneFrame();
+      })
+      .catch((error: unknown) => {
+        if (active) frameStateRef.current.onFrameError(error);
+      });
+    return () => { active = false; };
+  }, [requestSceneFrame, requiredSourceKey]);
 
-    return generation.cancel;
-  }, [afterGhosts, arrivalDelays, arriving, bounds, draggingId, livePieces, mirrorSurfaces, occlusionDepthMap, occlusionMasks, onFirstFrame, onFrameError, premovedIds, staticOps]);
+  useEffect(() => {
+    let active = true;
+    void Promise.all(warmSources.map(async (src): Promise<[string, HTMLImageElement]> => [src, await loadCanvasImage(src)]))
+      .then((entries) => {
+        if (!active) return;
+        for (const [src, image] of entries) imagesRef.current.set(src, image);
+      })
+      .catch(() => {
+        // Directional warm-up is opportunistic. If a future frame actually needs a failed
+        // source, the required-resource path above owns the visible retry/error semantics.
+      });
+    return () => { active = false; };
+  }, [warmSourceKey]);
 
   return (
     <canvas
       ref={canvasRef}
+      data-testid="skirmish-scene-canvas"
       className="tileset-scene-layer"
-      width={bounds.width}
-      height={bounds.height}
       style={{ left: `${bounds.minX}px`, top: `${bounds.minY}px`, width: `${bounds.width}px`, height: `${bounds.height}px` }}
       aria-hidden="true"
     />
@@ -1014,7 +1149,12 @@ export function SkirmishBoard({
     const piece = game.pieces.find((candidate) => candidate.id === selectedId && candidate.alive && candidate.side === localSide);
     return piece ? legalMoves(piece, game.pieces, game.size, env) : [];
   }, [env, game.pieces, game.size, game.turn, game.winner, netMovePending, pendingPromotion, premoveMode, selectedId, localSide]);
-  const board = useMemo(() => buildSkirmishBoard(game, seed), [game, seed]);
+  // Piece moves replace `game`, but terrain/cover/socket solving is session-static. Keep that
+  // board and its static scene ops alive while the animator consumes only the changed pieces.
+  const board = useMemo(
+    () => buildSkirmishBoard(game, seed),
+    [game.boardCode, game.size.cols, game.size.rows, game.terrain, seed],
+  );
   const exactBoard = useMemo(() => resolveBoardCode(game), [game.boardCode, game.size.cols, game.size.rows]);
   const persistedPredrawnBackgroundActive = Boolean(
     exactBoard && isPredrawnBackgroundActive(exactBoard),
