@@ -44,6 +44,8 @@ interactive or partial first-frame content.
   identities and re-prove current ownership, content version, and Blob hash.
 - Runtime list thumbnails never fall back to a client board bake. Missing canonical
   derivatives fail the owning surface.
+- Persisted Campaign Editor rows also use canonical derivatives. Its local bake path is
+  limited to new/unsaved levels for which no derivative exists.
 - First-viewport thumbnails are critical. Below-fold derivatives acquire on proximity
   and keep reserved geometry.
 - Authoring-only unsaved previews may still bake locally; their owning authoring

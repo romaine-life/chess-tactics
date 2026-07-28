@@ -80,6 +80,10 @@ route lifecycle during the same React commit.
   authority revisions; it never depends on mutable renderer-process state.
 - Initially presented level cards are one surface: the list remains hidden and inert until
   every expected thumbnail has painted, or it presents one retryable error.
+- Persisted Campaign Editor rows consume the same immutable database-backed derivatives
+  as player lists. Only a genuinely unsaved/new level without a canonical derivative may
+  use the authoring-only client bake. The selected live-board preview separately waits for
+  both terrain and scene compositor acknowledgements.
 - The complete Play selector is one DOM surface: canonical hydration, rendered image
   consumers, and computed CSS image consumers settle before its columns reveal together.
 - The top-level installed Play destination is `/play/select/skirmish`. Opening it from
@@ -108,7 +112,9 @@ route lifecycle during the same React commit.
   account-local level-ID grammar as the workspace. The client accepts only strict
   same-origin public-media or owner-scoped immutable derivative identities.
 - The initial viewport is critical. Canonical thumbnails begin unloaded, acquire on
-  proximity, and only the first viewport participates in the selector frame; below-fold
+  proximity, and only rows actually intersecting the clipped scroll viewport participate
+  in the selector frame. The 200px proximity window remains opportunistic prefetch; it is
+  never promoted into a critical requirement that a clipped row cannot satisfy. Below-fold
   cards retain fixed geometry and remain opportunistic.
 - Loading Lab shows the active scene lifecycle, manifest tiers, participants, resource
   timings, cache evidence, cancellations, retries, failures, generation identity, and

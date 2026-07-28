@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps, type ReactElement, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import { ensureCampaignsHydrated, isUserWorkspaceAvailable } from '../campaign/hydrate';
 import {
   CAMPAIGN_PROGRESS_EVENT,
@@ -11,8 +11,6 @@ import { useCampaigns } from '../campaign/store';
 import type { Campaign as CampaignDoc, Level } from '../core/level';
 import { spawnEventsForLevel } from '../core/levelEvents';
 import { MODE_NAME } from '../core/objectives';
-import { LevelThumbnail } from '../render/LevelThumbnail';
-import { levelThumbnailUrl } from '../net/levelThumbnails';
 import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath } from './navigation';
 import { FittedTabLabel } from './shared/FittedTabLabel';
 import { KitScroll } from './KitScroll';
@@ -32,6 +30,11 @@ import { skirmishProfileLevels } from './skirmishProfiles';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { installedUiMedia } from './installedUiMedia';
 import { PaintedSurfaceBoundary } from './shell/PaintedSurfaceBoundary';
+import {
+  GatedLevelThumbnail,
+  ThumbnailSurface as AtomicThumbnailSurface,
+  type ThumbnailSurfaceState,
+} from './shell/ThumbnailSurface';
 import { drawableAssets } from '@chess-tactics/board-render';
 
 type PlayIcon = 'solo-skirmish' | 'campaign-editor' | 'level-editor' | 'lobbies';
@@ -119,83 +122,20 @@ function ActionColumn({ children }: { children: ReactElement }): ReactElement {
   );
 }
 
-interface ThumbnailGateValue {
-  ready: (levelId: string) => void;
-  failed: (levelId: string, error: Error) => void;
-}
-
-const ThumbnailGateContext = createContext<ThumbnailGateValue | null>(null);
-type ThumbnailSurfaceState = { complete: boolean; error: Error | null };
 const ThumbnailSurfaceReportContext = createContext<((state: ThumbnailSurfaceState) => void) | null>(null);
-
-function GatedLevelThumbnail(props: ComponentProps<typeof LevelThumbnail>): ReactElement {
-  const gate = useContext(ThumbnailGateContext);
-  return <LevelThumbnail {...props} onReady={gate?.ready} onError={gate?.failed} />;
-}
 
 function ThumbnailSurface({ levels, children }: { levels: readonly Level[]; children: ReactNode }): ReactElement {
   const reportSurface = useContext(ThumbnailSurfaceReportContext);
-  const signature = levels.map((level) => `${level.id}:${levelThumbnailUrl(level.id) ?? 'missing'}`).join('|');
-  const rootRef = useRef<HTMLDivElement | null>(null);
-  const [painted, setPainted] = useState<ReadonlySet<string>>(() => new Set());
-  const [criticalIds, setCriticalIds] = useState<ReadonlySet<string> | null>(null);
-  const [failure, setFailure] = useState<Error | null>(null);
-  const [attempt, setAttempt] = useState(0);
-
-  useLayoutEffect(() => {
-    setPainted(new Set());
-    setCriticalIds(null);
-    setFailure(null);
-  }, [attempt, signature]);
-
-  useLayoutEffect(() => {
-    const root = rootRef.current;
-    if (!root) return;
-    const viewport = root.closest('.play-action-scroll') ?? root;
-    const bounds = viewport.getBoundingClientRect();
-    const margin = 200;
-    const visible = [...root.querySelectorAll<HTMLElement>('[data-level-thumbnail-id]')]
-      .filter((node) => {
-        const rect = node.getBoundingClientRect();
-        return rect.bottom >= bounds.top - margin && rect.top <= bounds.bottom + margin;
-      })
-      .map((node) => node.dataset.levelThumbnailId)
-      .filter((id): id is string => Boolean(id));
-    // A zero-row surface is complete. If layout is temporarily unmeasurable,
-    // require the first row instead of incorrectly declaring a populated list done.
-    setCriticalIds(new Set(visible.length || levels.length === 0 ? visible : [levels[0].id]));
-  }, [signature]);
-
-  const ready = useCallback((levelId: string) => {
-    setPainted((current) => current.has(levelId) ? current : new Set([...current, levelId]));
-  }, []);
-  const failed = useCallback((_levelId: string, error: Error) => setFailure(error), []);
-  const complete = criticalIds !== null && [...criticalIds].every((levelId) => painted.has(levelId));
-  useEffect(() => {
-    reportSurface?.({ complete: complete && !failure, error: failure });
-    return () => reportSurface?.({ complete: false, error: null });
-  }, [complete, failure, reportSurface]);
-
   return (
-    <ThumbnailGateContext.Provider value={{ ready, failed }}>
-      <div ref={rootRef} className={`thumbnail-surface ${complete && !failure ? 'is-ready' : 'is-loading'} ${failure ? 'is-error' : ''}`.trim()}>
-        <div
-          className="thumbnail-surface-content"
-          key={`${signature}:${attempt}`}
-          aria-hidden={complete && !failure ? undefined : true}
-          inert={!complete || failure ? true : undefined}
-        >
-          {children}
-        </div>
-        {!complete && !failure ? <div className="thumbnail-surface-status" role="status">Preparing levels…</div> : null}
-        {failure ? (
-          <div className="thumbnail-surface-status" role="alert">
-            <strong>Level previews could not be loaded.</strong>
-            <button type="button" onClick={() => setAttempt((value) => value + 1)}>Retry</button>
-          </div>
-        ) : null}
-      </div>
-    </ThumbnailGateContext.Provider>
+    <AtomicThumbnailSurface
+      levels={levels}
+      participantId="play-list-thumbnails"
+      viewportSelector=".play-action-scroll"
+      loadingLabel="Preparing levels…"
+      onStateChange={reportSurface ?? undefined}
+    >
+      {children}
+    </AtomicThumbnailSurface>
   );
 }
 
@@ -561,10 +501,13 @@ export function PlayMenu(): ReactElement {
   const selectedPlayHref = activeCampaign && selectedLevelId
     ? `/play?campaignId=${encodeURIComponent(activeCampaign.id)}&levelId=${encodeURIComponent(selectedLevelId)}`
     : '/play';
+  const [levelPreviewPainted, setLevelPreviewPainted] = useState(false);
+  useEffect(() => setLevelPreviewPainted(false), [selectedLevelId]);
 
   const surfaceSignature = [
     selection.mode,
     selection.mode === 'campaign' ? selection.campaignId : '',
+    selectedLevelId ?? '',
     ...profileLevels.map((level) => level.id),
     ...standaloneLevels.map((level) => level.id),
     ...activeRefs.map((ref) => ref.levelId),
@@ -585,7 +528,12 @@ export function PlayMenu(): ReactElement {
       <PaintedSurfaceBoundary
         surface="play-selector"
         signature={surfaceSignature}
-        readyToCompose={!loading && !surfaceError && thumbnailSurface.complete}
+        readyToCompose={
+          !loading
+          && !surfaceError
+          && thumbnailSurface.complete
+          && (!selectedLevel || levelPreviewPainted)
+        }
         error={surfaceError}
         loadingLabel="Preparing Play…"
         onRetry={() => {
@@ -680,6 +628,7 @@ export function PlayMenu(): ReactElement {
           level={selectedLevel}
           title={selectedTitle}
           embedded
+          onPaintedChange={setLevelPreviewPainted}
           actions={
             <div className="ce-preview-actions is-single">
               {selectedUnlocked

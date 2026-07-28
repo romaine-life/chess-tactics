@@ -85,7 +85,7 @@ describe('professional loading architecture guards', () => {
 
   it('makes incomplete player surfaces inert as well as visually hidden', () => {
     expect(read('./render/SkirmishBoard.tsx')).toContain('inert={!boardVisible && !boardFrame.error ? true : undefined}');
-    expect(read('./ui/PlayMenu.tsx')).toContain('inert={!complete || failure ? true : undefined}');
+    expect(read('./ui/shell/ThumbnailSurface.tsx')).toContain('inert={!complete || failure ? true : undefined}');
     expect(read('./style.css')).not.toContain('A failsafe in the hook');
   });
 
@@ -134,6 +134,23 @@ describe('professional loading architecture guards', () => {
     expect(read('../scripts/shot.mjs')).toContain("request.url().includes(String(abortRequest))");
     expect(read('../scripts/shot.mjs')).toContain('isManagedApp || readyExpr');
     expect(read('./net/campaignWorkspace.ts')).not.toContain('AbortSignal.timeout');
+  });
+
+  it('keeps campaign row thumbnails and the selected board preview inside the scene gate', () => {
+    const campaign = read('./ui/CampaignEditor.tsx');
+    const preview = read('./ui/LevelPreviewColumn.tsx');
+    const thumbnails = read('./ui/shell/ThumbnailSurface.tsx');
+    expect(campaign).toContain('participantId="campaign-list-thumbnails"');
+    expect(campaign).toContain('<GatedLevelThumbnail');
+    expect(read('./ui/PlayMenu.tsx')).toContain("from './shell/ThumbnailSurface'");
+    expect(thumbnails).toContain('root.closest(viewportSelector)');
+    expect(thumbnails).toContain('rect.bottom >= bounds.top && rect.top <= bounds.bottom');
+    expect(thumbnails).toContain('useSceneParticipant(participantId');
+    expect(preview).toContain('<PaintedSurfaceBoundary');
+    expect(preview).toContain('onTerrainFirstFrame');
+    expect(preview).toContain('onSceneFirstFrame');
+    expect(preview).toContain('onPaintedChange={onPaintedChange}');
+    expect(read('./ui/PlayMenu.tsx')).toContain('&& (!selectedLevel || levelPreviewPainted)');
   });
 
   it('attributes every same-origin API and runtime resource to the active scene', () => {

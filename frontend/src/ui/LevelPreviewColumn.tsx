@@ -3,7 +3,7 @@
 // two-line head (name + ally/enemy forces), the board in a kit box floating on the world
 // background (ADR-0067), the compact level info stacked beneath, and a caller-supplied actions
 // block (Edit/Test in the editor, Play on the play screen).
-import { useMemo, useState, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import { StudioReadOnlyBoard } from '../render/StudioReadOnlyBoard';
 import { ViewPane } from './shared/ViewPane';
 import { levelToEditorBoard } from '../core/levelBoard';
@@ -11,12 +11,14 @@ import { LevelInfoCompact } from './LevelInfoCompact';
 import type { Level } from '../core/level';
 import { installedUiMedia } from './installedUiMedia';
 import { InnerChromeBox } from './shared/ChromeBox';
+import { PaintedSurfaceBoundary } from './shell/PaintedSurfaceBoundary';
 
 export function LevelPreviewColumn({
   level,
   title,
   embedded = false,
   actions,
+  onPaintedChange,
 }: {
   level: Level;
   /** Heading over the preview — e.g. "Level 3: River Crossing". */
@@ -25,6 +27,8 @@ export function LevelPreviewColumn({
   embedded?: boolean;
   /** The verbs under the info (Edit/Test in the editor, Play on the play screen). Rendered as-is. */
   actions?: ReactNode;
+  /** Lets an owning composite (Play) keep the whole scene atomic while selection changes. */
+  onPaintedChange?: (painted: boolean) => void;
 }): ReactElement {
   // The board is derived the SAME way the list thumbnails and the editor derive theirs (prefers
   // boardCode, falls back to layers), so the preview, a row's thumbnail, and the editor all agree.
@@ -35,10 +39,34 @@ export function LevelPreviewColumn({
   // frame (no animation clock): a preview shouldn't run a per-frame loop while the screen is open.
   const [viewZoom, setViewZoom] = useState(0.5);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
+  const [terrainPainted, setTerrainPainted] = useState(false);
+  const [scenePainted, setScenePainted] = useState(false);
+  const [frameError, setFrameError] = useState<Error | null>(null);
+  const signature = useMemo(() => JSON.stringify(level), [level]);
+  useEffect(() => {
+    setTerrainPainted(false);
+    setScenePainted(false);
+    setFrameError(null);
+  }, [signature]);
   const allyCount = level.layers.units.filter((u) => u.side === 'player').length;
   const enemyCount = level.layers.units.filter((u) => u.side === 'enemy').length;
 
+  const resetFrame = (): void => {
+    setTerrainPainted(false);
+    setScenePainted(false);
+    setFrameError(null);
+  };
+
   return (
+    <PaintedSurfaceBoundary
+      surface={`level-preview:${level.id}`}
+      signature={signature}
+      readyToCompose={terrainPainted && scenePainted}
+      error={frameError}
+      loadingLabel="Preparing level preview…"
+      onRetry={resetFrame}
+      onPaintedChange={onPaintedChange}
+    >
     <aside className={embedded ? 'menu-dest-col menu-dest-preview ce-preview-col' : 'ce-editor-preview-col ce-preview-col'} aria-label="Selected level">
       <div className="ce-selected-head">
         <h2>{title}</h2>
@@ -63,7 +91,17 @@ export function LevelPreviewColumn({
               onPanChange={setViewPan}
             >
               <div className="tileset-view-board-content is-board">
-                <StudioReadOnlyBoard board={board} boardZoom={viewZoom} boardPan={viewPan} ariaLabel={`${level.name} board`} />
+                <StudioReadOnlyBoard
+                  board={board}
+                  boardZoom={viewZoom}
+                  boardPan={viewPan}
+                  ariaLabel={`${level.name} board`}
+                  onTerrainFirstFrame={() => setTerrainPainted(true)}
+                  onSceneFirstFrame={() => setScenePainted(true)}
+                  onFrameError={(value) => setFrameError(
+                    value instanceof Error ? value : new Error(String(value)),
+                  )}
+                />
               </div>
             </ViewPane>
           </div>
@@ -74,5 +112,6 @@ export function LevelPreviewColumn({
       <LevelInfoCompact level={level} />
       {actions}
     </aside>
+    </PaintedSurfaceBoundary>
   );
 }
