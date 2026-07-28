@@ -60,6 +60,7 @@ describe('Skirmish chrome hierarchy', () => {
     expect(styleCss).toMatch(/\.settings-header-frame\s*\{[\s\S]*?--titlebar-control-gap:\s*var\(--ds-space-2\);[\s\S]*?column-gap:\s*var\(--titlebar-control-gap\)/);
     expect(styleCss).toMatch(/\.app-titlebar-control-lane\s*\{[\s\S]*?justify-self:\s*end;[\s\S]*?margin-inline-end:\s*calc\(var\(--titlebar-control-gap\) - var\(--titlebar-pad-inline\)\)/);
     expect(styleCss).toMatch(/\.app-titlebar-contributed-controls\s*\{[\s\S]*?gap:\s*var\(--titlebar-control-gap\)/);
+    expect(styleCss).toMatch(/\.app-titlebar > \.app-titlebar-fill\s*\{[\s\S]*?calc\(var\(--le-outer-fill-box-bottom, 0px\) \+ 1px\)/);
   });
 
   it('registers every level-specific title-bar status box as inner chrome', () => {

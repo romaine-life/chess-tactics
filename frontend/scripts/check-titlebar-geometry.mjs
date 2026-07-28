@@ -56,6 +56,7 @@ try {
       };
     };
     const bar = document.querySelector('.app-shell-titlebar');
+    const fill = document.querySelector('.app-titlebar-fill');
     const lane = document.querySelector('.app-titlebar-control-lane');
     const divider = document.querySelector('.app-titlebar-persistent-divider');
     const outerDivider = document.querySelector('.app-shell-outer-divider');
@@ -64,13 +65,16 @@ try {
     const outerDividerRect = rect(outerDivider);
     const outerDividerStyle = getComputedStyle(outerDivider, '::before');
     const horizontalDividerTop = outerDividerRect.top + Number.parseFloat(outerDividerStyle.top);
+    const horizontalDividerBottom = horizontalDividerTop + Number.parseFloat(outerDividerStyle.height);
     const barStyle = getComputedStyle(bar);
     return {
       expectedGap: Number.parseFloat(barStyle.getPropertyValue('--titlebar-control-gap')),
       bar: rect(bar),
+      fill: rect(fill),
       lane: rect(lane),
       divider: rect(divider),
       horizontalDividerTop,
+      horizontalDividerBottom,
       contributed: contributed.map((element) => ({ id: element.dataset.titlebarControlId, ...rect(element) })),
       persistent: persistent.map((element) => ({ label: element.getAttribute('aria-label') ?? element.title, ...rect(element) })),
     };
@@ -94,6 +98,9 @@ try {
   if (geometry.horizontalDividerTop - baseline < -tolerance) {
     failures.push(`controls overlap the horizontal divider by ${baseline - geometry.horizontalDividerTop}px`);
   }
+  if (geometry.fill.bottom > geometry.horizontalDividerBottom - 1 + tolerance) {
+    failures.push(`title fill reaches below the divider's opaque boundary: expected at most ${geometry.horizontalDividerBottom - 1}px, received ${geometry.fill.bottom}px`);
+  }
   near(geometry.divider.left - geometry.contributed.at(-1).right, geometry.expectedGap, 'contributed control to divider');
   near(geometry.persistent[0].left - geometry.divider.right, geometry.expectedGap, 'divider to persistent control');
   near(geometry.bar.right - geometry.persistent.at(-1).right, geometry.expectedGap, 'last control to viewport edge');
@@ -104,6 +111,8 @@ try {
     buttonTop: top,
     buttonBottom: baseline,
     horizontalDividerTop: geometry.horizontalDividerTop,
+    horizontalDividerBottom: geometry.horizontalDividerBottom,
+    titleFillBottom: geometry.fill.bottom,
     bottomClearance: geometry.horizontalDividerTop - baseline,
     contributedToDivider: geometry.divider.left - geometry.contributed.at(-1).right,
     dividerToPersistent: geometry.persistent[0].left - geometry.divider.right,

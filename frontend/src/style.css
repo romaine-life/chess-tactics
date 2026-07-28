@@ -9778,46 +9778,22 @@ body { font-size: 17px; }
 .terrain-void { background: #1f2430; }
 /* ===== end Compact Level Info ===== */
 
-/* The SELECTED-level map preview lives in a kit BOX (the panel-line 9-slice frame). The frame is
-   drawn as an OVERLAY (::after) at the footprint, ON TOP of the board viewport. The board is the
+/* The SELECTED-level map preview is a registered inner-box consumer (ADR-0082). The board is the
    LIVE pan/zoom viewer (StudioReadOnlyBoard in a ViewPane at 0.5x — the pre-#409 framing; the
-   baked cover-crop zoomed into the board's center and was reverted by owner call). The viewport
-   IS this frame's backing surface, so it stops at the asset's hand-tuned Fill box (--ns-fill-panel,
-   tuned in the nine-slice editor's Boxes mode and baked to src/generated/nine-slice.css) — the
-   frame ornament bleeds outside that line. */
+   baked cover-crop zoomed into the board's center and was reverted by owner call). The canonical
+   inner role owns the frame and rail geometry; this class owns only the preview footprint. */
 .ce-preview-frame {
   position: relative;
   flex: none;
   block-size: clamp(190px, 26vh, 300px);
   min-height: 0;
 }
-.ce-preview-frame::after {
-  /* MUST be the LINE frame (transparent-interior twin, ADR-0034), not panel.png: the filled
-     panel's border cells are ~1px gold line + ~11px OPAQUE navy fill, so as an overlay it paints
-     a dark band over the board's outer 12px — the frame reads as inset "padding" no matter how
-     the board fills the box. panel-line's border cells are ornament-only (inner half fully
-     transparent), so board pixels run up to the gold line. 72×72, 3×3 of 24px cells → slice 24,
-     `round` edges (integer repeats, crisp pixel art). pointer-events:none keeps the board pannable. */
-  content: "";
-  position: absolute;
-  inset: 0;
-  border: 12px solid transparent;
-  border-image: var(--media-ui-explore-frames-panel-line-png) 24 / 12px round;
-  image-rendering: pixelated;
-  pointer-events: none;
-}
-/* The board viewport stops at the panel's hand-tuned FILL box (--ns-fill-panel, generated from
-   the installed panel drawable's eye-tuned "where a backing surface stops" line, not the raw
-   footprint: the frame ornament may bleed outside it. The var is in the SPRITE'S native px (the
-   nine-slice editor's Boxes canvas tunes against the 72×72 asset, 24px border cells); this frame
-   draws those cells at a 12px border, so consumption scales by 12/24 — an eye-tuned line lands on
-   screen exactly where it was drawn in the editor. The board is a baked image dropped in with
-   object-fit:cover (below) so it covers this box and clips the overflow; the frame ::after (above)
-   overlays the board's outer band. The box carries the level's world (night-sky) backdrop so the
-   diamond's cropped corners read as sky, never a transparency checkerboard (ADR-0067 / ADR-0032). */
+/* Position the world viewport in the inner role's content box. The frame border remains visible
+   around it while the board covers the full content area; transparent board corners reveal the
+   level world, never a transparency checkerboard (ADR-0067). */
 .ce-level-viewer {
   position: absolute;
-  inset: calc(var(--ns-fill-panel, 0px) * 12 / 24);
+  inset: 0;
   overflow: hidden;
   display: grid;
   grid-template-rows: minmax(0, 1fr);
@@ -9843,7 +9819,7 @@ body { font-size: 17px; }
   display: grid;
   gap: 8px;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  padding: 0 4px 8px;
+  padding: 0 0 8px;
 }
 /* Single full-width verb (the play screen's preview has just Play, not Edit + Test). */
 .ce-preview-actions.is-single { grid-template-columns: minmax(0, 1fr); }
@@ -16138,7 +16114,9 @@ button.tileset-relationship-cell {
    stylesheet owns ::before (rail), the fill span, and the trailing divider rail. */
 .app-titlebar > .app-titlebar-fill {
   inset: var(--le-outer-fill-box-top, 0) var(--le-outer-fill-box-right, 0)
-    var(--le-outer-fill-box-bottom, 0) var(--le-outer-fill-box-left, 0);
+    calc(var(--le-outer-fill-box-bottom, 0px) + 1px) var(--le-outer-fill-box-left, 0);
+  /* The structural divider's final source row is transparent. Stop the title
+     texture one pixel inside it so that row cannot reveal fill below the rail. */
   pointer-events: none;
   position: absolute;
   z-index: 0;
@@ -17604,16 +17582,12 @@ button.tileset-relationship-cell {
   white-space: normal;
 }
 .ce-preview-col .ce-force-readout { justify-content: flex-start; }
-/* Level info fills the column's otherwise-empty lower half. One column (this column is narrow),
-   on a kit panel surface so the text stays readable over the night-sky backdrop the board floats
-   on — a bare tinted rect here would be the exact "bland CSS surface" ADR-0032 forbids. */
+/* Level info fills the column's otherwise-empty lower half. One column (this column is narrow);
+   LevelInfoCompact declares the registered inner-box role, which owns its frame and fill. */
 .ce-preview-col .ce-level-info {
-  border: 12px solid transparent;
-  border-image: var(--media-ui-kit-panel-png) 24 fill / 12px round;
   flex: 1 1 auto;
   grid-template-columns: 1fr;
   height: auto;
-  image-rendering: pixelated;
   min-height: 0;
 }
 
