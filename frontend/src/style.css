@@ -15951,7 +15951,9 @@ button.tileset-relationship-cell {
    stylesheet owns ::before (rail), the fill span, and the trailing divider rail. */
 .app-titlebar > .app-titlebar-fill {
   inset: var(--le-outer-fill-box-top, 0) var(--le-outer-fill-box-right, 0)
-    var(--le-outer-fill-box-bottom, 0) var(--le-outer-fill-box-left, 0);
+    calc(var(--le-outer-fill-box-bottom, 0px) + 1px) var(--le-outer-fill-box-left, 0);
+  /* The structural divider's final source row is transparent. Stop the title
+     texture one pixel inside it so that row cannot reveal fill below the rail. */
   pointer-events: none;
   position: absolute;
   z-index: 0;
