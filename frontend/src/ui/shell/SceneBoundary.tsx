@@ -103,6 +103,12 @@ export function SceneBoundary({
     setRevision((value) => value + 1);
   }, [generation, manifest.id]);
   const registration = useMemo(() => ({ report }), [report]);
+  const participantSnapshot = [...participantsRef.current.entries()]
+    .map(([id, participant]) => `${id}:${participant.phase}`)
+    .sort();
+  const unresolvedParticipants = participantSnapshot
+    .filter((entry) => !entry.endsWith(':painted'))
+    .map((entry) => entry.slice(0, entry.lastIndexOf(':')));
 
   useEffect(() => {
     if (!preparing || !rootRef.current) return undefined;
@@ -154,6 +160,8 @@ export function SceneBoundary({
         className={`scene-boundary${preparing ? ' is-preparing' : ' is-current'}`}
         data-scene={manifest.id}
         data-scene-generation={generation}
+        data-scene-participants={participantSnapshot.join(',')}
+        data-scene-unresolved={unresolvedParticipants.join(',')}
         inert={preparing ? true : undefined}
         aria-hidden={preparing || undefined}
       >

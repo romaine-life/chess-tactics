@@ -18,6 +18,13 @@ describe('professional loading architecture guards', () => {
     expect(boundary).toContain('participantsRef.current.get(manifest.paintOwner)');
   });
 
+  it('enrolls standalone Studio routes in the Studio scene owner', () => {
+    expect(read('./ui/WallCandidateReview.tsx')).toContain("useSceneParticipant(\n    'studio'");
+    expect(read('./ui/WallCandidateReview.tsx')).toContain('onFirstFrame');
+    expect(read('./ui/WallCandidateReview.tsx')).toContain('onFrameError');
+    expect(read('./ui/DrawableCatalogLab.tsx')).toContain("useSceneParticipant(\n    'studio'");
+  });
+
   it('gives every retry and retarget a fresh cancellable scene generation', () => {
     const app = read('./ui/App.tsx');
     const director = read('./ui/shell/sceneDirector.ts');
@@ -103,6 +110,7 @@ describe('professional loading architecture guards', () => {
     expect(boundary).toContain("inert={phase !== 'painted' ? true : undefined}");
     expect(read('../scripts/shot.mjs')).toContain('surface exposed a partial or interactive frame');
     expect(read('../scripts/shot.mjs')).toContain("request.url().includes(String(abortRequest))");
+    expect(read('./net/campaignWorkspace.ts')).not.toContain('AbortSignal.timeout');
   });
 
   it('does not expose gameplay HUD chrome before the board surface is ready', () => {

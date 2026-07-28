@@ -1,5 +1,6 @@
-import { useEffect, useState, type ReactElement } from 'react';
+import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { fetchAdminDrawableCatalog, saveDrawableAsset, saveDrawableAssetBatch, type AdminDrawableAsset } from '../net/drawableCatalogAdmin';
+import { useSceneParticipant } from './shell/SceneBoundary';
 
 const emptyDraft = { id: '', kind: 'subterrain', label: '', role: 'surface', slot: '', sortOrder: 0 };
 
@@ -9,6 +10,15 @@ export function DrawableCatalogLab(): ReactElement {
   const [state, setState] = useState<'loading' | 'ready' | 'saving' | 'error'>('loading');
   const [message, setMessage] = useState('');
   const [batch, setBatch] = useState('');
+  const routeError = useMemo(
+    () => state === 'error' ? new Error(message || 'Drawable catalog failed') : null,
+    [message, state],
+  );
+  useSceneParticipant(
+    'studio',
+    routeError ? 'error' : state === 'ready' ? 'painted' : 'loading',
+    routeError,
+  );
 
   const refresh = async (): Promise<void> => {
     try {

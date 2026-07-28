@@ -74,7 +74,6 @@ function asRevisionedWorkspace(value: unknown): RevisionedWorkspace {
 export async function loadWorkspace(): Promise<RevisionedWorkspace> {
   const res = await fetch('/api/campaign-workspace', {
     credentials: 'include',
-    signal: AbortSignal.timeout(15_000),
   });
   if (!res.ok) throw await HttpError.fromResponse('load', res);
   return asRevisionedWorkspace(await res.json());
@@ -136,7 +135,6 @@ export async function loadOfficialCampaignsResult(): Promise<OfficialCampaignLoa
   try {
     const res = await fetch(`/api/official-campaigns/${OFFICIAL_ID}`, {
       cache: 'no-cache',
-      signal: AbortSignal.timeout(15_000),
     });
     if (!res.ok) return { workspace: empty, available: false };
     const body = (await res.json()) as {

@@ -12,8 +12,9 @@
 //     [--timeout <ms>] [--throttle slow-4g|slow-3g] [--cold] [--assert-menu-atomic]
 //     [--assert-board-atomic] [--assert-shell-font-atomic] [--assert-surface-atomic <name>]
 //     [--assert-editor-viewer]
-//     [--abort-request <url-substring>]
+//     [--abort-request <url-substring>] [--abort-request-once <url-substring>] [--retry-scene-error]
 //     [--click <selector>] [--click-ready <jsExpr>] [--assert-backdrop-continuity]
+//     [--back-after-click-ms <ms>]
 //     [--full] [--show-scrollbars] [--allow-motion]
 //
 // Examples:
@@ -48,8 +49,12 @@ const assertBoardAtomic = has('assert-board-atomic');
 const assertShellFontAtomic = has('assert-shell-font-atomic');
 const assertSurfaceAtomic = flag('assert-surface-atomic');
 const abortRequest = flag('abort-request');
+const abortRequestOnce = flag('abort-request-once');
+const retrySceneError = has('retry-scene-error');
+const allowSceneError = has('allow-scene-error');
 const click = flag('click');
 const clickReady = flag('click-ready');
+const backAfterClickMs = flag('back-after-click-ms');
 const assertBackdropContinuity = has('assert-backdrop-continuity');
 const assertEditorViewer = has('assert-editor-viewer');
 const fullPage = has('full');
@@ -281,10 +286,16 @@ try {
   // Level Editor's session-open request. The optional failure injection shares this one
   // interception handler so a Level Editor capture never tries to continue the same request twice.
   const targetIsLevelEditor = isLevelEditorUrl(url);
-  if (targetIsLevelEditor || abortRequest) {
+  if (targetIsLevelEditor || abortRequest || abortRequestOnce) {
+    let abortedOnce = false;
     await page.setRequestInterception(true);
     page.on('request', (request) => {
-      if (abortRequest && request.url().includes(String(abortRequest))) {
+      const abortAlways = abortRequest && request.url().includes(String(abortRequest));
+      const abortFirst = !abortedOnce
+        && abortRequestOnce
+        && request.url().includes(String(abortRequestOnce));
+      if (abortAlways || abortFirst) {
+        if (abortFirst) abortedOnce = true;
         void request.abort('failed');
         return;
       }
@@ -309,6 +320,38 @@ try {
     if (clickReady) await page.waitForFunction(clickReady, { timeout });
     await page.waitForSelector(String(click), { visible: true, timeout });
     await page.click(String(click));
+    if (backAfterClickMs !== undefined) {
+      const clickedHref = page.url();
+      const delay = Math.max(0, Number(backAfterClickMs) || 0);
+      if (delay) await new Promise((resolveDelay) => setTimeout(resolveDelay, delay));
+      await page.evaluate(() => window.history.back());
+      await page.waitForFunction(
+        (departedUrl) => window.location.href !== departedUrl,
+        { timeout },
+        clickedHref,
+      ).catch(() => {});
+    }
+  }
+  if (retrySceneError) {
+    await page.waitForSelector('[data-scene-phase="error"] .scene-loading-presentation button', {
+      visible: true,
+      timeout,
+    });
+    const failedGeneration = await page.$eval(
+      '[data-scene-generation]',
+      (node) => Number(node.getAttribute('data-scene-generation')),
+    );
+    await page.click('[data-scene-phase="error"] .scene-loading-presentation button');
+    await page.waitForFunction(
+      (generation) => {
+        const scene = document.querySelector('[data-scene-phase="current"]');
+        const boundary = document.querySelector('[data-scene-generation]');
+        return Boolean(scene && boundary)
+          && Number(boundary.getAttribute('data-scene-generation')) > generation;
+      },
+      { timeout },
+      failedGeneration,
+    );
   }
 
   // An explicit readiness contract is an assertion: the explicit gate fails closed. The implicit fixture gate stays
@@ -328,8 +371,27 @@ try {
     "Boolean(document.querySelector('[data-scene-phase]')) && !document.querySelector('[data-scene-phase]:not([data-scene-phase=\"current\"]):not([data-scene-phase=\"error\"])')",
     { timeout: requiresTerminalScene ? timeout : 1200 },
   );
-  if (requiresTerminalScene) await waitForSettledScene;
-  else await waitForSettledScene.catch(() => {});
+  if (requiresTerminalScene) {
+    try {
+      await waitForSettledScene;
+    } catch (error) {
+      const state = await page.evaluate(() => {
+        const director = document.querySelector('[data-scene-phase]');
+        const boundary = document.querySelector('[data-scene-generation]');
+        return {
+          href: window.location.href,
+          phase: director?.getAttribute('data-scene-phase') ?? null,
+          error: director?.getAttribute('data-scene-error') ?? null,
+          scene: boundary?.getAttribute('data-scene') ?? null,
+          generation: boundary?.getAttribute('data-scene-generation') ?? null,
+          participants: boundary?.getAttribute('data-scene-participants') ?? null,
+          unresolved: boundary?.getAttribute('data-scene-unresolved') ?? null,
+        };
+      });
+      console.error(`scene did not settle: ${JSON.stringify(state)}`);
+      throw error;
+    }
+  } else await waitForSettledScene.catch(() => {});
   if (assertMenuAtomic) {
     await page.waitForFunction(
       `(() => {
@@ -351,6 +413,10 @@ try {
   })).catch(() => null);
   if (terminalScene?.phase === 'error') {
     console.error(`scene terminal error: ${terminalScene.error || 'unknown'}`);
+    if (!allowSceneError) {
+      process.exitCode = 13;
+      throw new Error('unexpected terminal scene error');
+    }
   }
 
   await page.evaluate(() => document.fonts && document.fonts.ready).catch(() => {});
@@ -397,6 +463,29 @@ try {
       console.error(`board exposed a partial or interactive frame: ${JSON.stringify(violations[0])}`);
       process.exitCode = 5;
       throw new Error('atomic board assertion failed');
+    }
+  }
+  if (assertEditorViewer && targetIsLevelEditor) {
+    const editorFrame = await page.$eval('[data-testid="level-editor"]', (node) => ({
+      authority: node.getAttribute('data-editor-authority'),
+      terrain: node.getAttribute('data-editor-terrain'),
+      scene: node.getAttribute('data-editor-scene'),
+      frame: node.getAttribute('data-editor-frame'),
+      inert: node.inert,
+      opacity: Number.parseFloat(getComputedStyle(node).opacity),
+    })).catch(() => null);
+    if (
+      !editorFrame
+      || editorFrame.authority !== 'ready'
+      || !['painted', 'predrawn'].includes(editorFrame.terrain || '')
+      || editorFrame.scene !== 'painted'
+      || editorFrame.frame !== 'painted'
+      || editorFrame.inert
+      || editorFrame.opacity < 0.99
+    ) {
+      console.error(`editor exposed an incomplete frame: ${JSON.stringify(editorFrame)}`);
+      process.exitCode = 12;
+      throw new Error('atomic editor assertion failed');
     }
   }
   if (assertShellFontAtomic) {

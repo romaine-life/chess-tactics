@@ -2854,11 +2854,16 @@ export function LevelEditor(): ReactElement {
       : null),
     [editorFrameError, editorLoadError],
   );
+  const editorFramePainted = (
+    editorReady
+    && (isPredrawnBoard || editorTerrainPainted)
+    && editorScenePainted
+  );
   useSceneParticipant(
     'level-editor',
     editorRouteError
       ? 'error'
-      : editorReady && (isPredrawnBoard || editorTerrainPainted) && editorScenePainted
+      : editorFramePainted
         ? 'painted'
         : 'loading',
     editorRouteError,
@@ -8401,7 +8406,15 @@ export function LevelEditor(): ReactElement {
     // through the transparent chrome; /play keeps that battlefield (its game world).
     <div className="level-editor-root">
       <HomepageBackdrop />
-      <ArtRouteChrome className="skirmish-screen level-editor-screen" data-testid="level-editor" ready={editorReady}>
+      <ArtRouteChrome
+        className="skirmish-screen level-editor-screen"
+        data-testid="level-editor"
+        data-editor-authority={editorReady ? 'ready' : 'loading'}
+        data-editor-terrain={isPredrawnBoard ? 'predrawn' : editorTerrainPainted ? 'painted' : 'loading'}
+        data-editor-scene={editorScenePainted ? 'painted' : 'loading'}
+        data-editor-frame={editorRouteError ? 'error' : editorFramePainted ? 'painted' : 'loading'}
+        ready={editorReady}
+      >
         {installedChromeCss ? <style data-level-editor-chrome-family dangerouslySetInnerHTML={{ __html: installedChromeCss }} /> : null}
         {confirmDialog}
         {predrawnPickerOpen && predrawnPreview && editorReady ? (
