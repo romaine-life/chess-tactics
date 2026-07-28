@@ -11,6 +11,9 @@ import type { PieceType } from '../core/types';
 import { spawnEventsForLevel } from '../core/levelEvents';
 import { objectiveBriefingForSide } from '../game/objectiveBriefing';
 import type { PlayingSide } from '../game/clientPerspective';
+import { InnerChromeBox } from './shared/ChromeBox';
+import { levelToEditorBoard } from '../core/levelBoard';
+import { isPredrawnBackgroundActive } from '@chess-tactics/board-render';
 
 const PIECE_ORDER: PieceType[] = ['king', 'queen', 'rook', 'bishop', 'knight', 'pawn', 'rock', 'random-rock'];
 const PIECE_LABEL: Record<PieceType, string> = {
@@ -72,6 +75,12 @@ export function levelObjectiveLine(level: Level, perspectiveSide: PlayingSide = 
   return `${MODE_NAME[level.objective]} — ${objectiveBriefingForSide(rules, perspectiveSide).summary}`;
 }
 
+/** Whole-board AI artwork owns the environment pixels, so its logical terrain cannot be
+ * presented as a roster of individually rendered tile types. */
+export function levelShowsTerrainTypeCounts(level: Level): boolean {
+  return !isPredrawnBackgroundActive(levelToEditorBoard(level));
+}
+
 function Roster({ counts, tone, label }: { counts: PieceCounts; tone: string; label: string }): ReactElement {
   const present = PIECE_ORDER.filter((p) => counts[p]);
   return (
@@ -89,23 +98,28 @@ export function LevelInfoCompact({ level }: { level: Level }): ReactElement {
   const { cols, rows } = level.board;
   const total = cols * rows;
   const filled = level.layers.terrain.filter((tile) => tile.terrain !== 'void').length;
-  const terrainMix = Object.entries(countMap(level.layers.terrain.map((t) => t.terrain))).sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0));
+  const showsTerrainTypeCounts = levelShowsTerrainTypeCounts(level);
+  const terrainMix = showsTerrainTypeCounts
+    ? Object.entries(countMap(level.layers.terrain.map((t) => t.terrain))).sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
+    : [];
   const allies = forceCountsForSide(level, 'player');
   const enemies = forceCountsForSide(level, 'enemy');
   const zoneMix = countMap(level.layers.zones.map((z) => z.type));
   const zoneParts = ZONE_ORDER.filter((z) => zoneMix[z]).map((z) => `${ZONE_LABEL[z]} ${zoneMix[z]}`);
 
   return (
-    <div className="ce-level-info" data-testid="level-info-compact">
+    <InnerChromeBox className="ce-level-info" data-testid="level-info-compact">
       <section className="ce-li-board">
         <span className="ce-li-title">Board</span>
         <div className="ce-li-stat"><span>Size</span><strong>{cols} × {rows}</strong></div>
         <div className="ce-li-stat"><span>Tiles</span><strong>{filled} / {total}</strong></div>
-        <div className="ce-li-chips">
-          {terrainMix.map(([t, n]) => (
-            <span key={t} className="ce-li-chip"><i className={`ce-li-swatch terrain-${t}`} />{TERRAIN_LABEL[t] ?? t} <b>{n}</b></span>
-          ))}
-        </div>
+        {showsTerrainTypeCounts ? (
+          <div className="ce-li-chips">
+            {terrainMix.map(([t, n]) => (
+              <span key={t} className="ce-li-chip"><i className={`ce-li-swatch terrain-${t}`} />{TERRAIN_LABEL[t] ?? t} <b>{n}</b></span>
+            ))}
+          </div>
+        ) : null}
       </section>
 
       <section className="ce-li-forces">
@@ -134,6 +148,6 @@ export function LevelInfoCompact({ level }: { level: Level }): ReactElement {
             : 'Untimed'}
         </span>
       </section>
-    </div>
+    </InnerChromeBox>
   );
 }
