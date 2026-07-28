@@ -10,6 +10,7 @@ import type { PredrawnOcclusionDepthMap } from '@chess-tactics/board-render';
 import {
   buildSkirmishBoard,
   commitSkirmishSceneFirstFrame,
+  pieceRuntimeSpriteSources,
   pieceOp,
   skirmishArmyOverlaySet,
   skirmishTileClickIntent,
@@ -130,6 +131,24 @@ describe('Skirmish scene immutable depth guard', () => {
 });
 
 describe('pieceOp', () => {
+  it('warms one persistent eight-direction resource set regardless of a unit move or facing', () => {
+    applyLiveUnitCatalog(testLiveUnitCatalog());
+    const before: Piece = {
+      id: 'pawn-1',
+      side: 'player',
+      type: 'pawn',
+      x: 0,
+      y: 1,
+      startY: 1,
+      facing: 'north',
+      alive: true,
+    };
+    const after: Piece = { ...before, x: 1, y: 0, facing: 'north-east' };
+
+    expect(pieceRuntimeSpriteSources(before)).toHaveLength(8);
+    expect(pieceRuntimeSpriteSources(after)).toEqual(pieceRuntimeSpriteSources(before));
+  });
+
   it.each(['rock', 'random-rock'] as const)('renders %s obstacle art without live unit metadata', (type) => {
     const rock: Piece = { id: `${type}-1`, side: 'neutral', type, x: 0, y: 0, startY: 0, alive: true };
     const op = pieceOp(rock, { left: 36, top: 86 * 0.78 });

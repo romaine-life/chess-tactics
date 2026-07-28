@@ -7,6 +7,7 @@ import {
   drawBoardOps,
   isAnimatedGroundCoverOp,
   predrawnOcclusionDepthImageDimensionIssue,
+  sizeCanvasForBounds,
 } from './BoardCanvasLayer';
 
 function drawOp(overrides: Partial<BoardDrawOp> = {}): BoardDrawOp {
@@ -27,6 +28,15 @@ function drawOp(overrides: Partial<BoardDrawOp> = {}): BoardDrawOp {
 }
 
 describe('BoardCanvasLayer live ground-cover animation', () => {
+  it('defers backing-store geometry changes until the complete frame paint', () => {
+    const canvas = { width: 300, height: 150 };
+    sizeCanvasForBounds(canvas, { minX: -10, minY: -20, width: 640.2, height: 479.1 });
+    expect(canvas).toEqual({ width: 641, height: 480 });
+
+    sizeCanvasForBounds(canvas, { minX: 0, minY: 0, width: 0, height: -5 });
+    expect(canvas).toEqual({ width: 1, height: 1 });
+  });
+
   it('validates empty-scene depth resources without requiring a canvas paint', () => {
     expect(boardCanvasSources([])).toEqual([]);
     expect(boardCanvasFramePlan(
