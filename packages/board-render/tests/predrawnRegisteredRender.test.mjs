@@ -5,7 +5,7 @@ import boardRender from '../dist/index.cjs';
 const {
   boardBounds,
   boardDrawOps,
-  boardSocialFramingBounds,
+  boardPreviewFramingBounds,
   isPredrawnBackgroundActive,
   predrawnBoardFramePolygon,
   predrawnBoardHomography,
@@ -114,7 +114,13 @@ test('exact saved v4 registration drives the shared homography and complete fram
   assert.equal(plate.dy, rasterBounds.minY);
   assert.equal(plate.dw, rasterBounds.width);
   assert.equal(plate.dh, rasterBounds.height);
-  assert.deepEqual(boardSocialFramingBounds(board), boardBounds(board));
+  assert.notDeepEqual(boardPreviewFramingBounds(board), boardBounds(board));
+  assert.deepEqual(boardPreviewFramingBounds(board), {
+    minX: -566.4,
+    minY: -48.6,
+    width: 844.8,
+    height: 475.2,
+  });
 });
 
 test('guide remap changes the inverse source lookup while pinned boundary metadata does not', () => {

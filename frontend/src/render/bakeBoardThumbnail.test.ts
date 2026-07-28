@@ -5,9 +5,8 @@ import {
   boardDrawOps,
   uniqueDrawSrcs,
   boardBounds,
-  boardSocialFramingBounds,
+  boardPreviewFramingBounds,
   drawBoardThumbnailOps,
-  largestSolidRect,
   loadBoardThumbnailImages,
   paintBoardThumbnailOp,
 } from './bakeBoardThumbnail';
@@ -50,14 +49,6 @@ afterAll(() => {
   resetLiveMediaCatalog();
   resetDrawableCatalog();
 });
-
-// Coverage (opaque fraction) of a rect under an opacity predicate — the property object-fit:cover
-// relies on: a crop that's ~fully opaque cannot show a transparent corner as sky.
-function coverage(isOpaque: (x: number, y: number) => boolean, r: { x: number; y: number; w: number; h: number }): number {
-  let opaque = 0;
-  for (let y = r.y; y < r.y + r.h; y += 1) for (let x = r.x; x < r.x + r.w; x += 1) if (isOpaque(x, y)) opaque += 1;
-  return opaque / (r.w * r.h);
-}
 
 // No real <canvas> (jsdom has none): draw-op composition uses a recording context, while the
 // remaining coverage exercises content hashes, image-src dedup, and bounds/scale math. Actual
@@ -170,7 +161,6 @@ describe('loadBoardThumbnailImages — immutable pre-drawn availability', () => 
     expect(images.size).toBe(0);
   });
 });
-
 describe('paintBoardThumbnailOp — draw-op composition parity', () => {
   it('dispatches a saved registered plate through the projective raster painter', () => {
     const registration = {
@@ -1172,64 +1162,15 @@ describe('boardBounds — dimension / scale math', () => {
   });
 });
 
-describe('boardSocialFramingBounds — board-first social-card framing', () => {
-  it('keeps the full board width and top headroom but stops front edge depth from owning scale', () => {
+describe('boardPreviewFramingBounds — stable board-owned preview framing', () => {
+  it('uses playable geometry and proportional margin instead of scene draw bounds', () => {
     const board: EditorBoard = { ...blank(), cells: { '0,0': TILE } };
     const draw = boardBounds(board);
-    const frame = boardSocialFramingBounds(board);
+    const frame = boardPreviewFramingBounds(board);
 
-    expect(frame.minX).toBe(draw.minX);
-    expect(frame.minY).toBe(draw.minY);
-    expect(frame.width).toBe(draw.width);
+    expect(frame).not.toEqual(draw);
     expect(frame.height).toBeGreaterThan(0);
-    expect(frame.height).toBeLessThan(draw.height);
-  });
-});
-
-describe('largestSolidRect — the solid crop that fills a box without sky', () => {
-  const W = 200;
-  const H = 160;
-  // A board-shaped alpha: a solid isometric DIAMOND (rhombus) plus a sparse column of "headroom"
-  // pixels above it (grass tufts / unit-heads poking into the transparent band above the back row).
-  const cx = 100;
-  const cy = 95; // diamond centre sits below the image middle — the headroom lives up top
-  const A = 90;
-  const B = 55;
-  const diamond = (x: number, y: number): boolean => Math.abs(x - cx) / A + Math.abs(y - cy) / B <= 1;
-  const withHeadroom = (x: number, y: number): boolean =>
-    diamond(x, y) || (y >= 4 && y <= 22 && x >= 96 && x <= 104); // thin sparse tuft column up top
-
-  it('returns a FULLY solid rect (so cover can never show a transparent corner)', () => {
-    const rect = largestSolidRect(withHeadroom, W, H)!;
-    expect(rect).not.toBeNull();
-    // Every pixel opaque — the guarantee that lets object-fit:cover fill a box with board and never
-    // expose a transparent corner. A partial crop is what left the empty wedges.
-    expect(coverage(withHeadroom, rect)).toBe(1);
-  });
-
-  it('excludes the sparse headroom above the diamond', () => {
-    const rect = largestSolidRect(withHeadroom, W, H)!;
-    // The solid crop starts at/below the diamond's top vertex — never up in the tuft band (y≤22).
-    expect(rect.y).toBeGreaterThanOrEqual(cy - B);
-  });
-
-  it('is a substantial view, not a sliver', () => {
-    const rect = largestSolidRect(withHeadroom, W, H)!;
-    // The largest solid rect inscribed in a rhombus is ~A×B; assert it's a real central view (a
-    // healthy fraction of that), not the degenerate sliver the fallback would replace.
-    expect(rect.w).toBeGreaterThan(A * 0.6);
-    expect(rect.h).toBeGreaterThan(B * 0.6);
-    expect(rect.w * rect.h).toBeGreaterThan(0.25 * A * B);
-  });
-
-  it('a fully-solid rectangle comes back fully solid', () => {
-    const solid = (x: number, y: number): boolean => x >= 20 && x < 180 && y >= 20 && y < 140;
-    const rect = largestSolidRect(solid, W, H)!;
-    expect(coverage(solid, rect)).toBe(1);
-    expect(rect.w * rect.h).toBeGreaterThan(0.9 * (160 * 120));
-  });
-
-  it('returns null when nothing is painted', () => {
-    expect(largestSolidRect(() => false, W, H)).toBeNull();
+    expect(frame.width).toBeCloseTo(422.4);
+    expect(frame.height).toBeCloseTo(237.6);
   });
 });

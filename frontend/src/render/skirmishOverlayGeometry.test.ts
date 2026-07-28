@@ -31,8 +31,8 @@ describe('Skirmish tactical overlay geometry', () => {
   it('clips every gameplay cell-highlight channel while preserving the complete hit diamond', () => {
     const hitBody = ruleBody('.skirmish-board-cell-hit');
     const visualClipRule = css.slice(
-      css.indexOf('/*\n * One presentation-only footprint gate'),
-      css.indexOf('/* Army-wide display layers'),
+      css.indexOf('One presentation-only footprint gate'),
+      css.indexOf('Army-wide display layers'),
     );
 
     expect(hitBody).toContain('clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%)');
@@ -65,8 +65,8 @@ describe('Skirmish tactical overlay geometry', () => {
 
   it('clips Level Editor cell paint without changing its hit targets or logical grid marker', () => {
     const visualClipRule = css.slice(
-      css.indexOf('/*\n * One presentation-only footprint gate'),
-      css.indexOf('/* Army-wide display layers'),
+      css.indexOf('One presentation-only footprint gate'),
+      css.indexOf('Army-wide display layers'),
     );
     for (const selector of [
       '.le-tactical-cell',

@@ -46,10 +46,14 @@ export interface SkirmishViewState {
   /** Ordinary cap, raised only when a pre-drawn scene needs a higher coverage floor. */
   maxZoom: number;
   pan: { x: number; y: number };
+  openingZoom: number;
+  openingPan: { x: number; y: number };
+  cameraResetRevision: number;
   toggle: (key: OverlayKey) => void;
   setZoom: (zoom: number) => void;
   setMinZoom: (zoom: number) => void;
   setPan: (pan: { x: number; y: number }) => void;
+  setOpeningView: (camera: { zoom: number; pan: { x: number; y: number } }) => void;
   /** Hide every board information layer without changing camera position. */
   clearOverlays: () => void;
   resetView: () => void;
@@ -68,16 +72,25 @@ export const useSkirmishView = create<SkirmishViewState>((set) => ({
   minZoom: MIN_ZOOM,
   maxZoom: MAX_ZOOM,
   pan: DEFAULT_PAN,
+  openingZoom: DEFAULT_ZOOM,
+  openingPan: DEFAULT_PAN,
+  cameraResetRevision: 0,
   toggle: (key) => set((s) => ({ [key]: !s[key] })),
   setZoom: (zoom) => set((state) => ({
-    zoom: Math.min(state.maxZoom, Math.max(state.minZoom, Number(zoom.toFixed(2)))),
+    // Inputs may arrive on human-friendly increments, but a geometry-derived art floor can sit
+    // between them. Preserve that exact clamp so gameplay cannot round back below accepted art.
+    zoom: Math.min(state.maxZoom, Math.max(state.minZoom, zoom)),
   })),
   setMinZoom: (zoom) => set((state) => {
-    const minZoom = Math.max(MIN_ZOOM, Number(zoom.toFixed(2)));
+    const minZoom = Math.max(MIN_ZOOM, zoom);
     const maxZoom = Math.max(MAX_ZOOM, minZoom);
     return { minZoom, maxZoom, zoom: Math.min(maxZoom, Math.max(state.zoom, minZoom)) };
   }),
   setPan: (pan) => set({ pan }),
+  setOpeningView: (camera) => set({
+    openingZoom: camera.zoom,
+    openingPan: camera.pan,
+  }),
   clearOverlays: () => set({
     showMoves: false,
     showEnemyAttacks: false,
@@ -88,5 +101,9 @@ export const useSkirmishView = create<SkirmishViewState>((set) => ({
     showPromotionZones: false,
     showGrid: false,
   }),
-  resetView: () => set((state) => ({ zoom: Math.max(DEFAULT_ZOOM, state.minZoom), pan: DEFAULT_PAN })),
+  resetView: () => set((state) => ({
+    zoom: Math.min(state.maxZoom, Math.max(state.openingZoom, state.minZoom)),
+    pan: state.openingPan,
+    cameraResetRevision: state.cameraResetRevision + 1,
+  })),
 }));

@@ -6,7 +6,7 @@ const { createHash } = require('node:crypto');
 const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 const {
   filterPredrawnOcclusionDepthPixels,
-  largestSolidRect,
+  minimumZoomToCoverBoundsAtCenter,
   predrawnOcclusionMasksInFront,
   rasterizePredrawnBoardPixels,
 } = require('@chess-tactics/board-render');
@@ -83,37 +83,6 @@ function assertPredrawnThumbnailMedia(plan, images) {
       );
     }
   }
-}
-
-function largestOpaqueCanvasRect(canvas) {
-  if (!canvas || canvas.width <= 0 || canvas.height <= 0) return null;
-  const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
-  return largestSolidRect(
-    (x, y) => pixels[(y * canvas.width + x) * 4 + 3] === 255,
-    canvas.width,
-    canvas.height,
-  );
-}
-
-function coverSolidCanvasCrop(canvas, rect) {
-  const output = createCanvas(BOARD_THUMB_W, BOARD_THUMB_H);
-  const target = output.getContext('2d');
-  target.imageSmoothingEnabled = false;
-  const scale = Math.max(BOARD_THUMB_W / rect.w, BOARD_THUMB_H / rect.h);
-  const width = rect.w * scale;
-  const height = rect.h * scale;
-  target.drawImage(
-    canvas,
-    rect.x,
-    rect.y,
-    rect.w,
-    rect.h,
-    (BOARD_THUMB_W - width) / 2,
-    (BOARD_THUMB_H - height) / 2,
-    width,
-    height,
-  );
-  return output;
 }
 
 function sha256(bytes) {
@@ -565,6 +534,48 @@ function projectedDrawRect(op, projection) {
   };
 }
 
+function previewProjection(plan, viewport) {
+  const fitBounds = plan.framingBounds || plan.bounds;
+  const center = {
+    x: fitBounds.minX + fitBounds.width / 2,
+    y: fitBounds.minY + fitBounds.height / 2,
+  };
+  const naturalZoom = Math.min(
+    viewport.width / Math.max(1, fitBounds.width),
+    viewport.height / Math.max(1, fitBounds.height),
+  );
+  const backgroundOp = plan.predrawnBackgroundRaster
+    ? plan.ops.find((op) => (
+        op.layer === 'terrain'
+        && op.src === plan.predrawnBackgroundRaster.src
+        && op.z === -100000
+      ))
+    : null;
+  const artFloor = backgroundOp
+    ? minimumZoomToCoverBoundsAtCenter({
+        viewport,
+        coverBounds: {
+          minX: backgroundOp.dx,
+          minY: backgroundOp.dy,
+          width: backgroundOp.dw,
+          height: backgroundOp.dh,
+        },
+        center,
+      })
+    : 0;
+  if (backgroundOp && !Number.isFinite(artFloor)) {
+    throw new Error('Selected AI background cannot cover the playable-board centre.');
+  }
+  const scale = Math.max(naturalZoom, artFloor);
+  return {
+    originX: viewport.x + viewport.width / 2 - (center.x - fitBounds.minX) * scale,
+    originY: viewport.y + viewport.height / 2 - (center.y - fitBounds.minY) * scale,
+    minX: fitBounds.minX,
+    minY: fitBounds.minY,
+    scale,
+  };
+}
+
 function intersectPixelRect(rect, clipRect) {
   const left = Math.max(Math.floor(rect.x), Math.floor(clipRect.x));
   const top = Math.max(Math.floor(rect.y), Math.floor(clipRect.y));
@@ -808,14 +819,8 @@ async function renderLevelCard({
   const { ops, bounds } = plan;
   const occlusionMasks = Array.isArray(plan.occlusionMasks) ? plan.occlusionMasks : [];
   const occlusionDepthMap = plan.occlusionDepthMap || null;
-  const fitBounds = plan.framingBounds || bounds;
   const heroW = CARD_W - PAD * 2;
   const heroH = HERO_BOTTOM - HERO_TOP;
-  const scale = Math.min(heroW / Math.max(1, fitBounds.width), heroH / Math.max(1, fitBounds.height));
-  const drawnW = fitBounds.width * scale;
-  const drawnH = fitBounds.height * scale;
-  const originX = PAD + (heroW - drawnW) / 2;
-  const originY = HERO_TOP + (heroH - drawnH) / 2;
   ctx.imageSmoothingEnabled = false;
 
   const images = new Map();
@@ -839,13 +844,12 @@ async function renderLevelCard({
   ctx.beginPath();
   ctx.rect(0, HERO_TOP, CARD_W, heroH);
   ctx.clip();
-  const projection = {
-    originX,
-    originY,
-    minX: fitBounds.minX,
-    minY: fitBounds.minY,
-    scale,
-  };
+  const projection = previewProjection(plan, {
+    x: PAD,
+    y: HERO_TOP,
+    width: heroW,
+    height: heroH,
+  });
   const heroClipRect = { x: 0, y: HERO_TOP, width: CARD_W, height: heroH };
   for (const op of ops) {
     const img = images.get(op.src);
@@ -915,14 +919,6 @@ async function renderBoardThumbnail({ plan, loadDynamicSprite, mediaCatalogRevis
   const { ops, bounds } = plan;
   const occlusionMasks = Array.isArray(plan.occlusionMasks) ? plan.occlusionMasks : [];
   const occlusionDepthMap = plan.occlusionDepthMap || null;
-  const fitBounds = plan.framingBounds || bounds;
-  const pad = 8;
-  const scale = Math.min(
-    (BOARD_THUMB_W - pad * 2) / Math.max(1, fitBounds.width),
-    (BOARD_THUMB_H - pad * 2) / Math.max(1, fitBounds.height),
-  );
-  const originX = (BOARD_THUMB_W - fitBounds.width * scale) / 2;
-  const originY = (BOARD_THUMB_H - fitBounds.height * scale) / 2;
   const uniqueSources = [...new Set([
     ...[...ops, ...occlusionMasks].map((op) => op.src),
     ...(plan.predrawnBackgroundRaster ? [plan.predrawnBackgroundRaster.src] : []),
@@ -934,13 +930,12 @@ async function renderBoardThumbnail({ plan, loadDynamicSprite, mediaCatalogRevis
   const images = new Map(uniqueSources.map((src, index) => [src, loaded[index]]));
   assertPredrawnThumbnailMedia(plan, images);
   ctx.imageSmoothingEnabled = false;
-  const projection = {
-    originX,
-    originY,
-    minX: fitBounds.minX,
-    minY: fitBounds.minY,
-    scale,
-  };
+  const projection = previewProjection(plan, {
+    x: 0,
+    y: 0,
+    width: BOARD_THUMB_W,
+    height: BOARD_THUMB_H,
+  });
   const clipRect = { x: 0, y: 0, width: BOARD_THUMB_W, height: BOARD_THUMB_H };
   for (const op of ops) {
     const image = images.get(op.src);
@@ -967,11 +962,6 @@ async function renderBoardThumbnail({ plan, loadDynamicSprite, mediaCatalogRevis
       clipRect,
     });
   }
-  if (plan.predrawnBackgroundRaster || ops.some((op) => op.predrawnTransform)) {
-    const rect = largestOpaqueCanvasRect(canvas);
-    if (!rect) throw new Error('Selected AI background has no fully opaque thumbnail crop.');
-    return coverSolidCanvasCrop(canvas, rect).toBuffer('image/png');
-  }
   return canvas.toBuffer('image/png');
 }
 
@@ -992,8 +982,6 @@ module.exports = {
     ThumbnailMediaUnavailableError,
     immutableSourceSha,
     assertPredrawnThumbnailMedia,
-    coverSolidCanvasCrop,
-    largestOpaqueCanvasRect,
     loadSpriteWithAvailability,
     mapWithConcurrency,
     paintOccludedThumbnailOp,

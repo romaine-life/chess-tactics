@@ -9,13 +9,13 @@ const rectangle = [
 ];
 
 describe('ViewPane viewport-cover zoom floor', () => {
-  it('uses the limiting viewport axis and rounds upward to a safe two-decimal zoom', () => {
+  it('uses the limiting viewport axis and rounds upward only at safety precision', () => {
     expect(minimumZoomToCoverViewport({
       viewport: { width: 501, height: 300 },
       polygon: rectangle,
       minZoom: 0.4,
       maxZoom: 4,
-    })).toBe(0.51);
+    })).toBe(0.501);
 
     expect(minimumZoomToCoverViewport({
       viewport: { width: 600, height: 600 },
@@ -25,14 +25,54 @@ describe('ViewPane viewport-cover zoom floor', () => {
     })).toBe(1);
   });
 
-  it('keeps the zoom floor centered instead of raising it in response to pan', () => {
+  it('keeps the accepted-art floor proportional across differently sized matching viewports', () => {
+    const small = minimumZoomToCoverViewport({
+      viewport: { width: 501, height: 300 },
+      polygon: rectangle,
+      minZoom: 0.01,
+      maxZoom: 4,
+    });
+    const large = minimumZoomToCoverViewport({
+      viewport: { width: 2004, height: 1200 },
+      polygon: rectangle,
+      minZoom: 0.01,
+      maxZoom: 4,
+    });
+    expect(large).toBe(small * 4);
+  });
+
+  it('keeps the zoom floor independent of current pan', () => {
     expect(minimumZoomToCoverViewport({
       viewport: { width: 500, height: 300 },
       polygon: rectangle,
-      pan: { x: 250, y: 0 },
       minZoom: 0.4,
       maxZoom: 4,
     })).toBe(0.5);
+  });
+
+  it('uses the complete accepted boundary rather than requiring an asymmetric scene to stay board-centered', () => {
+    const asymmetricArt = [
+      { x: -744, y: -451 },
+      { x: 706, y: -451 },
+      { x: 706, y: 365 },
+      { x: -744, y: 365 },
+    ];
+    expect(minimumZoomToCoverViewport({
+      viewport: { width: 275.375, height: 183.578125 },
+      polygon: asymmetricArt,
+      minZoom: 0.2,
+      maxZoom: 4,
+    })).toBe(0.224974);
+
+    const reclamped = constrainPanToCoverViewport({
+      viewport: { width: 275.375, height: 183.578125 },
+      polygon: asymmetricArt,
+      zoom: 0.23,
+      from: { x: 0, y: 0 },
+      to: { x: 0, y: 0 },
+    });
+    expect(reclamped.x).toBeCloseTo(0, 5);
+    expect(reclamped.y).toBeCloseTo(7.839, 3);
   });
 
   it('blocks pan at the transformed art boundary without changing zoom', () => {
