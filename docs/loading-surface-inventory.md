@@ -1,6 +1,6 @@
 # Loading surface inventory
 
-Status: re-audited 2026-07-27 against the ADR-0189 scene system in this worktree.
+Status: re-audited 2026-07-28 against the ADR-0189 scene system in this worktree.
 
 This is the live migration ledger. A route is enrolled only when it declares a
 manifest, names its paint owner, has an explicit terminal failure, and cannot expose
@@ -70,5 +70,14 @@ The required release journeys are:
 6. Studio Loading Lab with declared manifest and terminal acknowledgement.
 7. Injected critical failure and retry generation.
 8. Retarget/back navigation while a destination is acquiring.
+
+The terminal-scene visual matrix additionally covers every renderer family and
+deep-link alias: main-menu fallbacks, Settings and Tracks, Party, Campaign Editor,
+Lobbies, gameplay, Level Editor, pre-drawn reference, Portrait Editor, Studio,
+Tileset Studio, Unit Studio, nine-slice, prop seat, tile compare, surface tiles,
+scene animation, doodad editor, artwork compare, standalone drawable/wall tools,
+and the data-backed Game Lab, Gym, Solver, and Loading Lab viewers. Each application
+capture now waits for `current` (or an explicitly requested coherent `error`) before
+pixels can count as evidence.
 
 Feature completion still requires owner verification in the running application.

@@ -16040,11 +16040,10 @@ button.tileset-relationship-cell {
 
 .settings-art-route {
   align-items: center;
-  /* Solid dark floor only — the animated menu scene (still art + waterfalls) + scrim ride
-     the shared <HomepageBackdrop> these screens render, the same continuous instance the
-     main menu shows, so the settings frames sit over the menu scene + synced rain.
-     This floor keeps the screen dark (never white) before the scene decodes. */
-  background: #02070b;
+  /* The director owns the continuous homepage scene and its #02070b decode floor.
+     A route-local solid floor covers that scene on standalone homepage-family routes
+     such as Party, so this composition root must remain transparent. */
+  background: transparent;
   display: grid;
   height: 100%;
   justify-items: center;
