@@ -8,14 +8,15 @@ loopback browser requests, so authenticated application and screenshot verificat
 owner identity established at setup; do not fall back to a signed-out editor or ask the owner to
 repair authentication during handoff.
 
-Windows Codex environment setup also asks the owner for one feature name and
-stores its non-secret identity in `.codex-session/environment.json`. `devctl`
+For a fresh Windows Codex environment, the same browser approval asks the owner
+for one non-secret feature name and returns it beside the token response. Setup
+stores that identity in `.codex-session/environment.json`. `devctl`
 starts the full Vite-owned process tree, and the workstation Caddy router maps
 its dynamic port to `http://<environment>.chess-tactics.localhost`. At the start
 of work, read that exact URL from `.codex-session/environment.json`;
 `devctl list -Json` is the fallback if the record needs diagnosis. Use the named
 URL for browser testing, screenshots, and owner handoff; `localhost:<port>` is
-an internal diagnostic fallback. See ADR-0197.
+an internal diagnostic fallback. See ADR-0199.
 
 `DEV_NO_BACKEND=1` and `DEV_OFFLINE=1` are owner-only escape hatches. Agents must
 not set them, suggest them, or use them to keep working after the backend fails to
