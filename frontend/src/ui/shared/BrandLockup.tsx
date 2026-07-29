@@ -10,12 +10,21 @@ import { installedUiMedia } from '../installedUiMedia';
 // mark. Returns to the main menu — as a BUTTON, not a hyperlink (ADR-0052): this is a
 // game shell, and the title mark is a UI control like every other; probed game-first
 // web apps expose no URL on their logo/menu, and neither do we.
-export function BrandLockup({ screenName }: { screenName: string }): ReactElement {
+export function BrandLockup({
+  screenName,
+  transitionStatus,
+}: {
+  screenName: string;
+  transitionStatus?: string | null;
+}): ReactElement {
   return (
     <NavButton className="brand-lockup" to="/" aria-label={`${screenName} — Chess Tactics home`}>
       <img className="brand-lockup-mark" src={installedUiMedia('ui-kit-icons-brand-shield-png')} alt="" aria-hidden="true" />
       <span className="brand-lockup-copy">
-        <em>Chess Tactics</em>
+        <span className="brand-lockup-title-line">
+          <em>Chess Tactics</em>
+          {transitionStatus ? <span className="brand-lockup-transition-status" role="status">{transitionStatus}</span> : null}
+        </span>
         <strong>{screenName}</strong>
       </span>
     </NavButton>

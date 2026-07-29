@@ -34,6 +34,7 @@ import { LevelThumbnail } from '../render/LevelThumbnail';
 import { FramedReadOnlyBoardView } from './shared/BoardViewFraming';
 import { fetchMe } from '../net/auth';
 import type { PieceType } from '../core/types';
+import { useSceneParticipant } from './shell/SceneBoundary';
 
 interface RunConfig {
   games: number;
@@ -211,7 +212,17 @@ export function GameLabCatalog({
  */
 export function GameLabViewer({ levelId, header }: { levelId?: string; header?: ReactNode }): ReactElement {
   const workspaceLevels = useCampaigns((s) => s.levels);
-  useEffect(() => { void ensureCampaignsHydrated(); }, []);
+  const [campaignsSettled, setCampaignsSettled] = useState(false);
+  const [campaignLoadError, setCampaignLoadError] = useState<Error | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void ensureCampaignsHydrated()
+      .then(() => { if (!cancelled) setCampaignsSettled(true); })
+      .catch((value: unknown) => {
+        if (!cancelled) setCampaignLoadError(value instanceof Error ? value : new Error(String(value)));
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   const [config, setConfig] = useState<RunConfig>(DEFAULT_CONFIG);
   const [variant, setVariant] = useState<VariantConfig>({ unitIndex: 'none', action: 'remove' });
@@ -228,6 +239,22 @@ export function GameLabViewer({ levelId, header }: { levelId?: string; header?: 
   const [savedRuns, setSavedRuns] = useState<LabRunSummary[] | null>(null);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | string>('idle');
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  const initialViewerError = useMemo(
+    () => campaignLoadError
+      ?? (campaignsSettled && levelId && !workspaceLevels[levelId]
+        ? new Error(`Selected Game Lab level ${levelId} is unavailable`)
+        : null),
+    [campaignLoadError, campaignsSettled, levelId, workspaceLevels],
+  );
+  useSceneParticipant(
+    'studio:gamelab-viewer',
+    initialViewerError
+      ? 'error'
+      : campaignsSettled && savedRuns !== null && signedIn !== null
+        ? 'painted'
+        : 'loading',
+    initialViewerError,
+  );
 
   const [selectedSeed, setSelectedSeed] = useState<number | null>(null);
   const [ply, setPly] = useState<number>(0);

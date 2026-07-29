@@ -116,7 +116,7 @@ function CatalogCard<A extends { id: string }>({ type, asset }: { type: CatalogT
         {type.cardMedia
           ? type.cardMedia(asset)
           : model.img
-            ? <img src={model.img} alt="" draggable={false} loading="eager" decoding="sync" />
+            ? <img src={model.img} alt="" draggable={false} loading="lazy" decoding="async" />
             : <span className="tileset-card-missing-media">Missing media</span>}
       </span>
       <span className="tileset-studio-card-meta">

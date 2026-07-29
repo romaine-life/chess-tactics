@@ -36,8 +36,8 @@ export function LightArtRouteShell({
 
   return (
     <div data-testid={testId} className={rootClassName} style={style}>
-      {/* A light-art route is, by definition, the main-menu scene + rain (routeSurfaces.ts):
-          the one shared HomepageBackdrop, under the faded chrome. */}
+      {/* Homepage-family routes share the director-owned scene and rain. This local
+          mount contributes the ambience credit; the singleton pixels stay with App. */}
       <HomepageBackdrop />
       {centerSlot ? (
         <TitleBarSlot region="center">

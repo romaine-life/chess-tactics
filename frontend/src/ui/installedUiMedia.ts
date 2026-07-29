@@ -40,12 +40,20 @@ export function installUiFonts(): void {
     }
     const media = face.media.font?.media;
     if (!media) throw new Error(`application font ${face.id} has no font media`);
+    // index.html loads the live semantic slot for the layout-critical face before
+    // the module graph. The catalog still proves this installed record, but adding
+    // a second @font-face URL for identical bytes would make document.fonts report
+    // the visible bootstrap family unsettled again.
+    const bootstrapFaceAlreadyInstalled = family === 'Advance Wars 2 GBA'
+      && face.media.font?.slot === 'fonts/advance-wars-2-gba/advance-wars-2-gba.otf'
+      && document.fonts.check('19px "Advance Wars 2 GBA"', 'Loading...');
+    if (bootstrapFaceAlreadyInstalled) return '';
     const range = typeof unicodeRange === 'string' ? `unicode-range:${unicodeRange};` : '';
     return `@font-face{font-family:${JSON.stringify(family)};font-style:${style};font-weight:${weight};font-display:${display};src:url(${JSON.stringify(media.immutableUrl)}) format(${JSON.stringify(format)});${range}}`;
   });
   const element = document.createElement('style');
   element.dataset.installedFonts = 'database';
-  element.textContent = rules.join('\n');
+  element.textContent = rules.filter(Boolean).join('\n');
   document.head.appendChild(element);
 }
 

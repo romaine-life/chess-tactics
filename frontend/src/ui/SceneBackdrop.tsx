@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, type ReactElement } from 'react';
 import { drawableAssets, requiredDrawableRole } from '@chess-tactics/board-render';
+import { homepageSceneMedia } from './homepageSceneMedia';
 
 // The main-menu background scene as REAL elements instead of a `::after`
 // background — so animated regions can anchor to scene coordinates.
@@ -89,7 +90,7 @@ export function buildSceneBackdropNode(): HTMLDivElement {
 
   const canvas = document.createElement('div');
   canvas.className = 'scene-backdrop-canvas';
-  canvas.style.backgroundImage = `url("${scene.background}")`;
+  canvas.style.backgroundImage = `url("${homepageSceneMedia().immutableUrl}")`;
 
   for (const a of sceneAnimations().filter((candidate) => candidate.sceneRole === scene.role)) {
     const span = document.createElement('span');
@@ -109,12 +110,30 @@ export function buildSceneBackdropNode(): HTMLDivElement {
     canvas.appendChild(span);
   }
   root.appendChild(canvas);
+  homepageCanvas = canvas;
 
   const scrim = document.createElement('div');
   scrim.className = 'scene-backdrop-scrim';
   root.appendChild(scrim);
 
   return root;
+}
+
+let homepageCanvas: HTMLDivElement | null = null;
+
+/**
+ * Re-arm the actual CSS consumer after a transient request failure and acknowledge
+ * two browser paint opportunities. A successful Image.decode() alone cannot prove
+ * that an already-failed background-image declaration repainted.
+ */
+export async function repaintHomepageScene(src: string): Promise<void> {
+  if (!homepageCanvas) throw new Error('Homepage scene canvas is not mounted.');
+  homepageCanvas.removeAttribute('data-homepage-scene-painted');
+  homepageCanvas.style.backgroundImage = 'none';
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  homepageCanvas.style.backgroundImage = `url("${src}")`;
+  await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+  homepageCanvas.dataset.homepageScenePainted = src;
 }
 
 // Standalone scene render for the studio inspector (SceneAnimLab overlays clickable

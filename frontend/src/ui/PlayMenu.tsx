@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState, type ComponentProps, type ReactElement, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import { ensureCampaignsHydrated, isUserWorkspaceAvailable } from '../campaign/hydrate';
 import {
   CAMPAIGN_PROGRESS_EVENT,
@@ -11,9 +11,7 @@ import { useCampaigns } from '../campaign/store';
 import type { Campaign as CampaignDoc, Level } from '../core/level';
 import { spawnEventsForLevel } from '../core/levelEvents';
 import { MODE_NAME } from '../core/objectives';
-import { LevelThumbnail } from '../render/LevelThumbnail';
-import { levelThumbnailUrl } from '../net/levelThumbnails';
-import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath } from './navigation';
+import { navigateApp } from './navigation';
 import { FittedTabLabel } from './shared/FittedTabLabel';
 import { KitScroll } from './KitScroll';
 import { levelObjectiveLine } from './LevelInfoCompact';
@@ -32,6 +30,13 @@ import { playSkirmishLevelHref, skirmishMapLevels } from './skirmishMaps';
 import { skirmishProfileLevels } from './skirmishProfiles';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { installedUiMedia } from './installedUiMedia';
+import { PaintedSurfaceBoundary } from './shell/PaintedSurfaceBoundary';
+import { sceneTransitionTargetAttributes } from './shell/sceneTransitionTarget';
+import {
+  GatedLevelThumbnail,
+  ThumbnailSurface as AtomicThumbnailSurface,
+  type ThumbnailSurfaceState,
+} from './shell/ThumbnailSurface';
 import { drawableAssets } from '@chess-tactics/board-render';
 import { useWars, runEligibleOfficialWars } from '../war/store';
 import { useActiveRun } from '../run/store';
@@ -178,20 +183,14 @@ function RunPanel({
           <h2>Run</h2>
           <p>Carry one persistent army through a randomly selected eligible War. Battles remain chess; shops, deployment, and relics shape the Run around them.</p>
         </div>
-
         {!hydrated || loading ? <p className="play-empty" role="status">Loading Runs…</p> : null}
-
         {adoptionConflict ? (
           <InnerChromeBox className="play-level-card" role="alert">
             <h3>Two active Runs</h3>
             <p>This browser has {adoptionConflict.browserRun.war.name}; your account has {adoptionConflict.accountRun.war.name}. Choose which one the account keeps.</p>
             <div className="run-inline-actions">
-              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button')} onClick={keepAccountRun}>
-                Keep account Run
-              </button>
-              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} disabled={syncing} onClick={() => { void adoptBrowserRun(); }}>
-                Adopt browser Run
-              </button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button')} onClick={keepAccountRun}>Keep account Run</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} disabled={syncing} onClick={() => { void adoptBrowserRun(); }}>Adopt browser Run</button>
             </div>
           </InnerChromeBox>
         ) : run ? (
@@ -199,17 +198,13 @@ function RunPanel({
             <h3>{run.war.name}</h3>
             <p>{run.war.description || 'Active War'}</p>
             <p>Battle {run.battleIndex + 1} of {run.war.battles.length} · {run.army.length} units · {formatGold(run.goldTenths)} gold</p>
-            <NavButton data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} to="/run">
-              Continue Run
-            </NavButton>
+            <NavButton data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} to="/run">Continue Run</NavButton>
           </InnerChromeBox>
         ) : null}
-
         {!loading && officialAvailable && eligible.length === 0 ? (
           <p className="play-empty">No official Wars are currently marked Eligible for Run. You can author and direct-play a private War in the War Editor.</p>
         ) : null}
         {!loading && !officialAvailable ? <p className="play-content-warning">Official Wars are unavailable. Reopen Play to retry.</p> : null}
-
         <button
           type="button"
           data-chrome-unit="inner-text-button"
@@ -225,56 +220,20 @@ function RunPanel({
   );
 }
 
-interface ThumbnailGateValue {
-  ready: (levelId: string) => void;
-  failed: (levelId: string, error: Error) => void;
-}
-
-const ThumbnailGateContext = createContext<ThumbnailGateValue | null>(null);
-
-function GatedLevelThumbnail(props: ComponentProps<typeof LevelThumbnail>): ReactElement {
-  const gate = useContext(ThumbnailGateContext);
-  return <LevelThumbnail {...props} onReady={gate?.ready} onError={gate?.failed} />;
-}
+const ThumbnailSurfaceReportContext = createContext<((state: ThumbnailSurfaceState) => void) | null>(null);
 
 function ThumbnailSurface({ levels, children }: { levels: readonly Level[]; children: ReactNode }): ReactElement {
-  const levelIds = levels.map((level) => level.id);
-  const signature = levels.map((level) => `${level.id}:${levelThumbnailUrl(level.id) ?? 'missing'}`).join('|');
-  const [painted, setPainted] = useState<ReadonlySet<string>>(() => new Set());
-  const [failure, setFailure] = useState<Error | null>(null);
-  const [attempt, setAttempt] = useState(0);
-
-  useLayoutEffect(() => {
-    setPainted(new Set());
-    setFailure(null);
-  }, [attempt, signature]);
-
-  const ready = useCallback((levelId: string) => {
-    setPainted((current) => current.has(levelId) ? current : new Set([...current, levelId]));
-  }, []);
-  const failed = useCallback((_levelId: string, error: Error) => setFailure(error), []);
-  const complete = levelIds.every((levelId) => painted.has(levelId));
-
+  const reportSurface = useContext(ThumbnailSurfaceReportContext);
   return (
-    <ThumbnailGateContext.Provider value={{ ready, failed }}>
-      <div className={`thumbnail-surface ${complete && !failure ? 'is-ready' : 'is-loading'} ${failure ? 'is-error' : ''}`.trim()}>
-        <div
-          className="thumbnail-surface-content"
-          key={`${signature}:${attempt}`}
-          aria-hidden={complete && !failure ? undefined : true}
-          inert={!complete || failure ? true : undefined}
-        >
-          {children}
-        </div>
-        {!complete && !failure ? <div className="thumbnail-surface-status" role="status">Preparing levels…</div> : null}
-        {failure ? (
-          <div className="thumbnail-surface-status" role="alert">
-            <strong>Level previews could not be loaded.</strong>
-            <button type="button" onClick={() => setAttempt((value) => value + 1)}>Retry</button>
-          </div>
-        ) : null}
-      </div>
-    </ThumbnailGateContext.Provider>
+    <AtomicThumbnailSurface
+      levels={levels}
+      participantId="play-list-thumbnails"
+      viewportSelector=".play-action-scroll"
+      loadingLabel="Preparing levels…"
+      onStateChange={reportSurface ?? undefined}
+    >
+      {children}
+    </AtomicThumbnailSurface>
   );
 }
 
@@ -526,17 +485,40 @@ function CampaignLevelsPanel({
   );
 }
 
-export function PlayMenu(): ReactElement {
+export function PlayMenu({
+  path,
+  sceneInstanceKey,
+}: {
+  path: string;
+  sceneInstanceKey: string;
+}): ReactElement {
   const campaigns = useCampaigns((state) => state.campaigns);
   const levels = useCampaigns((state) => state.levels);
-  const [selection, setSelection] = useState<PlayHubSelection>(
-    () => playHubSelection(window.location.pathname) ?? { mode: 'skirmish' },
+  // `path` is the scene director's mounted scene path. Browser navigation only
+  // requests a destination; it must never reveal Play content ahead of the
+  // director's exit, preparation, paint acknowledgement, and entrance lifecycle.
+  // Route selection is scene state, not an object to recreate on every render. A fresh
+  // object here used to retrigger the reset effect after setSelectedLevelId(), clearing
+  // the level immediately and briefly invalidating the complete Play surface.
+  const selection: PlayHubSelection = useMemo(
+    () => playHubSelection(path) ?? { mode: 'skirmish' },
+    [path],
   );
   const [progress, setProgress] = useState<CampaignProgress>(readProgress);
   const [selectedLevelId, setSelectedLevelId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [officialAvailable, setOfficialAvailable] = useState(false);
   const [userWorkspaceAvailable, setUserWorkspaceAvailable] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [thumbnailSurface, setThumbnailSurface] = useState<ThumbnailSurfaceState>({
+    complete: false,
+    error: null,
+  });
+  const reportThumbnailSurface = useCallback((next: ThumbnailSurfaceState) => {
+    setThumbnailSurface((current) => (
+      current.complete === next.complete && current.error === next.error ? current : next
+    ));
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -556,29 +538,7 @@ export function PlayMenu(): ReactElement {
       })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, []);
-
-  useEffect(() => {
-    const sync = () => {
-      const path = window.location.pathname;
-      // APP_NAVIGATION_EVENT fires before React unmounts this selector. Ignore a valid
-      // departure to the live board/editor/etc.; only canonicalize malformed addresses
-      // that still belong to the Play selector namespace.
-      if (!isPlaySelectorPath(path)) return;
-      const nextSelection = playHubSelection(path);
-      if (!nextSelection) {
-        navigateApp(PLAY_SKIRMISH_SELECTOR_HREF, { replace: true, scroll: false });
-        return;
-      }
-      setSelection(nextSelection);
-    };
-    window.addEventListener('popstate', sync);
-    window.addEventListener(APP_NAVIGATION_EVENT, sync);
-    return () => {
-      window.removeEventListener('popstate', sync);
-      window.removeEventListener(APP_NAVIGATION_EVENT, sync);
-    };
-  }, []);
+  }, [loadAttempt]);
 
   useEffect(() => {
     const sync = () => setProgress(readProgress());
@@ -591,10 +551,6 @@ export function PlayMenu(): ReactElement {
   }, []);
 
   useEffect(() => {
-    const path = normalizeRoutePath(window.location.pathname);
-    // The location changes before this component unmounts on a route departure. A late
-    // hydration/store update must not reinterpret the live board or editor as a malformed
-    // selector and pull the player back into Play.
     if (!isPlaySelectorPath(path)) return;
     if (!playHubSelection(path)) {
       navigateApp(PLAY_SKIRMISH_SELECTOR_HREF, { replace: true, scroll: false });
@@ -609,7 +565,7 @@ export function PlayMenu(): ReactElement {
     ) {
       navigateApp(PLAY_SKIRMISH_SELECTOR_HREF, { replace: true, scroll: false });
     }
-  }, [campaigns, loading, officialAvailable, selection, userWorkspaceAvailable]);
+  }, [campaigns, loading, officialAvailable, path, selection, userWorkspaceAvailable]);
 
   useEffect(() => { setSelectedLevelId(null); }, [selection]);
 
@@ -630,9 +586,26 @@ export function PlayMenu(): ReactElement {
   const selectedPlayHref = activeCampaign && selectedLevelId
     ? `/play?campaignId=${encodeURIComponent(activeCampaign.id)}&levelId=${encodeURIComponent(selectedLevelId)}`
     : '/play';
+  const surfaceSignature = [
+    selection.mode,
+    selection.mode === 'campaign' ? selection.campaignId : '',
+    ...profileLevels.map((level) => level.id),
+    ...standaloneLevels.map((level) => level.id),
+    ...activeRefs.map((ref) => ref.levelId),
+  ].join(':');
+  const loadError = !loading && (!officialAvailable || !userWorkspaceAvailable)
+    ? new Error('Canonical Play content is unavailable.')
+    : null;
+  const surfaceError = loadError ?? (selection.mode === 'run' ? null : thumbnailSurface.error);
 
   return (
-    <>
+    <ThumbnailSurfaceReportContext.Provider value={reportThumbnailSurface}>
+      <div
+        className={`play-scene-authority${selectedLevel ? ' has-level-preview' : ''}`}
+        data-official-authority={loading ? 'loading' : officialAvailable ? 'ready' : 'error'}
+        data-user-authority={loading ? 'loading' : userWorkspaceAvailable ? 'ready' : 'error'}
+        data-thumbnail-authority={thumbnailSurface.error ? 'error' : thumbnailSurface.complete ? 'ready' : 'loading'}
+      >
       <aside className="menu-dest-col menu-dest-tabs play-source-rail" aria-label="Play">
         <div className="play-source-fixed">
           <PlayRailTab
@@ -696,6 +669,28 @@ export function PlayMenu(): ReactElement {
         </section>
       </aside>
 
+      <PaintedSurfaceBoundary
+        surface="play-selector"
+        signature={surfaceSignature}
+        readyToCompose={
+          !loading
+          && !surfaceError
+          && (selection.mode === 'run' || thumbnailSurface.complete)
+        }
+        error={surfaceError}
+        loadingLabel="Preparing Play…"
+        onRetry={() => {
+          setThumbnailSurface({ complete: false, error: null });
+          setLoadAttempt((value) => value + 1);
+        }}
+        className="play-surface"
+        showStatus={false}
+      >
+      <div
+        className="play-destination-content"
+        {...sceneTransitionTargetAttributes('play-shell', 'contents')}
+        data-scene-instance={sceneInstanceKey}
+      >
       {selection.mode === 'skirmish' ? (
         <SkirmishProfilesPanel
           levels={profileLevels}
@@ -742,6 +737,9 @@ export function PlayMenu(): ReactElement {
           }
         />
       ) : null}
-    </>
+      </div>
+      </PaintedSurfaceBoundary>
+      </div>
+    </ThumbnailSurfaceReportContext.Provider>
   );
 }

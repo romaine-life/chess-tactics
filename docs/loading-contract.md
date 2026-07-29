@@ -1,6 +1,20 @@
 # Loading contract
 
-Derived from [ADR-0136](adr/0136-loading-is-manifest-driven-and-frame-acknowledged.md).
+Derived from [ADR-0136](adr/0136-loading-is-manifest-driven-and-frame-acknowledged.md)
+and [ADR-0205](adr/0205-navigation-loads-atomic-scenes-through-one-director.md),
+as refined by [ADR-0206](adr/0206-scenes-declare-persistent-visual-hosts.md).
+Persistent host nesting is governed by
+[ADR-0207](adr/0207-persistent-scene-hosts-form-a-nested-path.md).
+Preserved-host interaction is governed by
+[ADR-0208](adr/0208-preserved-host-controls-remain-interactive.md).
+Authored identity and visible ownership are governed by
+[ADR-0209](adr/0209-routes-request-authored-scene-instances.md).
+Empty child-slot transitions are governed by
+[ADR-0210](adr/0210-empty-scene-slots-commit-without-loading.md).
+The enrollment rule for navigational UI is governed by
+[ADR-0211](adr/0211-navigational-drawing-requires-an-authored-scene-slot.md).
+Transition presentation capability is governed by
+[ADR-0212](adr/0212-scene-transitioning-does-not-imply-loading-presentation.md).
 
 ## Readiness vocabulary
 
@@ -25,8 +39,12 @@ Only `painted` can satisfy surface readiness. A timeout is `degraded`, not `pain
 
 All loading phases use the shared `loadingTimeline` primitive and the browser's monotonic
 performance clock. Network observations include transfer and decoded sizes, cache-hit
-evidence, initiator, protocol, and duration. Manual lifecycle marks name a stable surface
-and phase. The Loading Lab in Studio is the canonical inspection and JSON-export surface.
+evidence, initiator, protocol, duration, and the scene that owned the request at its
+start time. Every same-origin API request and runtime asset/font/code resource is
+eligible evidence; the Lab never labels a request count that silently excludes data
+authorities. Manual lifecycle marks name a stable surface and phase, including
+superseded-generation cancellation and retry generation. The Loading Lab in Studio is
+the canonical inspection and JSON-export surface.
 
 The required representative traces are cold and warm versions of:
 
@@ -34,6 +52,95 @@ The required representative traces are cold and warm versions of:
 2. Play menu with its initially visible thumbnails.
 3. A canonical `/play` level through the board's first complete frame.
 4. A canonical Level Editor document through its first complete frame.
+
+The canonical capture tool distinguishes these modes explicitly: `--cold` disables
+the browser cache, while `--warm` first completes the same route in the same browser
+and then reloads it with that populated HTTP cache. A fresh default browser process
+is not accepted as evidence of a warm journey.
+
+## Scene lifecycle
+
+`SceneDirector` is the only route-level transition authority. A destination declares
+one authored `ScenePath` whose instances own named slots and one `SceneManifest`;
+`SceneBoundary` keeps the complete destination hidden and inert
+until its required paint owner and every registered participant report a drawable
+frame. Navigation retains the outgoing background and follows:
+
+`current → exiting → loading → destination-painted → entering → current`
+
+Repeated navigation to the active destination is idempotent. A later destination
+cancels the old generation. Failure terminates at one director-owned retry surface;
+a React-tree failure terminates at one root retry surface rather than a blank page.
+
+Manifests also declare a persistent visual host. When current and destination share
+that host, the director retains and locks its background, title, and controls without
+fading or remounting them. Only the declared destination region prepares unrevealed
+and enters after its own complete painted acknowledgement. Different-host navigation
+continues to replace the complete scene.
+
+Hosts form a registered path rather than a flat exception. The director preserves
+the deepest shared host and scopes acquisition, inertness, paint acknowledgement,
+failure, and entrance to its named destination region. The Play host is nested under
+the main-menu host: Play navigation remains mounted while Skirmish, Levels, and
+campaign content replace one another.
+
+During a same-host transition, inertness belongs only to the replaceable destination
+region. Preserved ancestor controls remain interactive and may retarget the active
+load; the latest accepted destination generation cancels stale acquisition and paint
+acknowledgements. A full-scene transition with no shared host still locks the complete
+outgoing hierarchy.
+
+Every replaceable hierarchy declares the same canonical transition target. The director
+retains that exact DOM target through exit, marks it hidden before committing the pending
+instance, and permits React replacement only after that commit. Complete-scene and
+persistent-host transitions differ only in which target is selected; they do not own
+separate fade implementations. Layout-preserving targets apply the same lifecycle to
+their direct visual children.
+
+Ordinary state changes inside a committed scene remain immediate. Tabs, toggles,
+selections, sliders, board overlays, inspectors, dialogs, and gameplay commands do not
+enter the scene lifecycle unless they replace an authored navigable drawn region. One
+control panel may therefore contain immediate local controls and explicit navigational
+controls without opting the whole panel into or out of transition ownership.
+
+The URL is intent, not visible authority. Each scene slot exposes its last committed
+instance and its pending instance separately. Views render from the director-mounted
+path and may not subscribe to history/navigation events to change visible selection.
+The pending instance can fetch, decode, compose, and paint invisibly, but only the
+director may commit and reveal its generation.
+
+Transitioning does not itself imply loading. When a retained host's authored
+destination slot becomes empty, the outgoing child exits and the empty slot commits
+directly to `current`. There is no acquisition, loading minimum, entrance phase, or
+Loading copy. Loading presentation begins only when the director is actually waiting
+on or revealing prepared destination work, never during the exit phase alone.
+
+Every navigational action that replaces a drawn region enrolls that region as an
+authored scene slot. Route-owning views do not listen to navigation or derive visible
+selection from `window.location`; only the director-mounted path selects the child.
+Local component state is reserved for interaction inside a committed scene rather
+than navigable region identity.
+
+Authored transition does not imply Loading presentation. A `transition-only`
+destination still exits, mounts hidden, acknowledges paint, enters, and remains
+cancellable, but has no Loading copy or artificial loading minimum. A `loading`
+destination uses the same lifecycle plus explicit wait presentation and its minimum.
+The distinction is declared by the destination manifest, never inferred from elapsed
+time or cache luck.
+
+After cold startup, wait presentation belongs to the persistent title bar rather
+than the replaceable scene canvas. During full-scene replacement, the director keeps
+the complete outgoing scene painted beneath the hidden, inert destination. Once the
+destination acknowledges a complete painted frame, the two authored scenes crossfade;
+only then may the outgoing DOM be destroyed. No blank intermediary or reconstructed
+background is permitted. This treats composited boards and complete pre-drawn board
+scenes identically. Center-screen `Loading...` exists only in the pre-React cold-start
+document, before the title bar is available. Retryable terminal failure remains a
+scene-canvas surface because it owns an action, not passive wait copy.
+
+Title-bar contributions discover targets inside their own committed scene. DOM-node
+refs are never lifted into the director, because portal attachment must not mutate the
+route lifecycle during the same React commit.
 
 ## Migration order
 
@@ -44,10 +151,25 @@ The required representative traces are cold and warm versions of:
 5. Move board/editor reveals to actual compositor acknowledgement.
 6. Optimize redirects, backend/Blob delivery, compression, and cache budgets from traces.
 
-## Implemented baseline
+## Implemented system
 
-- Shell startup hydrates its required live authorities, layout font, and installed chrome
-  before App's first commit. Critical failure stays on one explicit retry surface.
+- Cold startup owns a static loading presentation in the initial HTML, before the
+  application module graph. That document requests and verifies the final layout font
+  before exposing `Loading...`; React adopts and removes the same node instead of
+  replacing it, so neither a blank interval nor fallback-font flash can occur.
+- The initial document also requests one bounded database projection for the homepage
+  scene. That projection identifies the live immutable background without hydrating the
+  global catalogs, and starts its high-priority fetch and decode before the application
+  module. App reuses that acquisition while it hydrates the remaining live authorities
+  and installed chrome. Critical failure stays on one explicit retry surface.
+- The SceneDirector reducer also owns the cold-home startup ladder. Its `startup` phase
+  accepts background, title, and controls readiness acknowledgements in any arrival
+  order but reveals them only in that order with the required fade and beat. It cannot
+  report `current` until the controls fade finishes. Startup failure and retry advance
+  the same generation authority; there is no independent cold-reveal store.
+- The homepage background acknowledges its real CSS consumer after two browser paint
+  opportunities. Retry explicitly re-arms that consumer, because a recovered image
+  decode does not by itself repaint a background declaration whose first request failed.
 - Canonical level summaries project immutable Blob-backed list-thumbnail URLs. Missing or
   stale derivatives are generated server-side and published content-addressably; ordinary
   player lists never reconstruct boards in the browser. Derivative freshness is a pure
@@ -63,15 +185,62 @@ The required representative traces are cold and warm versions of:
   board artwork.
 - Initially presented level cards are one surface: the list remains hidden and inert until
   every expected thumbnail has painted, or it presents one retryable error.
+- Persisted Campaign Editor rows consume the same immutable database-backed derivatives
+  as player lists. Only a genuinely unsaved/new level without a canonical derivative may
+  use the authoring-only client bake. The selected live-board preview separately waits for
+  both terrain and scene compositor acknowledgements.
+- The complete Play selector is one DOM surface: canonical hydration, rendered image
+  consumers, and computed CSS image consumers settle before its columns reveal together.
+- The top-level installed Play destination is `/play/select/skirmish`. Opening it from
+  the main menu preserves the already-painted homepage scene; it does not unmount the
+  menu family or route through the bare `/play` battlefield while the selector loads.
 - Terrain and scene canvases share decoded image records and acknowledge their actual first
   composition to the board boundary. The board reveals only after terrain, barrier, and
   scene acknowledgements and a browser paint opportunity.
+- A playable board includes its first-frame HUD and title controls. The battle clock remains
+  paused until board compositors and HUD resources have painted and the complete surface is
+  revealed; network or asset latency is never charged as player thinking time.
 - Readiness timeouts were removed from menu, route, screen, and board boundaries. A failed
   critical resource is an error, never synthetic readiness.
+- Every route family resolves through `sceneManifest`; unmatched routes explicitly
+  inherit the main-menu scene rather than escaping enrollment.
+- Main Menu and Play resolve to an authored instance path
+  (`main-menu → play → selected Play content`). Play renders only from the path mounted
+  by the director; browser navigation cannot swap campaign/level imagery before the
+  loading lifecycle begins.
+- Settings resolves as `main-menu → settings → selected Settings content`. General,
+  Audio, Gameplay, Creator Tools, and Audio Tracks share the persistent Settings rail
+  and replace only `settings-content` through the director. The retired Settings-local
+  navigation listener and crossfade no longer form a parallel lifecycle.
+- Data-backed Studio viewers enroll their own initial authorities. Game Lab waits for
+  campaign hydration plus account/run metadata; Gym waits for campaign hydration,
+  opening-book authority, and worker readiness; the Solver waits for campaign hydration
+  and, on its Run tab, the initial server run list.
+- Campaign Editor waits for official/private hydration and visible recent drafts.
+  Level Editor waits for its durable document, both board compositors, scene canvas,
+  visible chrome, and the first palette viewport. Lobbies wait for identity, the
+  initial list, and the visible level-thumbnail group. Studio, portrait, and
+  pre-drawn reference routes publish named paint owners.
+- Private account thumbnails retain owner-only delivery while accepting the same
+  account-local level-ID grammar as the workspace. The client accepts only strict
+  same-origin public-media or owner-scoped immutable derivative identities.
+- The initial viewport is critical. Canonical thumbnails begin unloaded, acquire on
+  proximity, and only rows actually intersecting the clipped scroll viewport participate
+  in the selector frame. The 200px proximity window remains opportunistic prefetch; it is
+  never promoted into a critical requirement that a clipped row cannot satisfy. Below-fold
+  cards retain fixed geometry and remain opportunistic.
+- Loading Lab shows the active scene lifecycle, manifest tiers, participants, resource
+  timings, cache evidence, cancellations, retries, failures, generation identity, and
+  painted acknowledgement.
+- Canonical application captures fail closed until the director reaches `current` or a
+  deliberately allowed coherent `error` state. A plain screenshot can no longer turn a
+  still-loading frame into completion evidence.
 
-The next architectural reduction is a bounded shell/level manifest so complete global
-catalog projections no longer block every route. That optimization may reduce latency but
-must not weaken the atomic frame rules above.
+The homepage now has a bounded bootstrap projection, but render-module installation still
+requires complete global catalogs. The next architectural reduction is to extend bounded
+shell/level manifests beyond that first background so complete projections no longer block
+every route. That optimization may reduce latency but must not weaken the atomic frame
+rules above.
 
 Surface manifests are delivery projections only. Postgres remains the installed-content
 authority and Blob storage remains the media-byte authority under ADR-0106 and ADR-0085.

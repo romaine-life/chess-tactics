@@ -40,6 +40,7 @@ import { ChromeLabCatalog, ChromeLabViewer, CHROME_LAB_TARGETS, defaultChromeLab
 import { RailLab } from './RailLab';
 import { GameLabCatalog, GameLabViewer } from './GameLab';
 import { LoadingLab } from './LoadingLab';
+import { useSceneParticipant } from './shell/SceneBoundary';
 import { GymCatalog, GymViewer, type GymMode } from './Gym';
 import { SolveCatalog, SolveViewer } from './SolveRuns';
 import { PAGE_ENTRIES } from './pagesCatalog';
@@ -496,6 +497,7 @@ const defaultTransitionViewModeForRoute = (route: TilesetStudioRouteState): Tran
 
 
 export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?: StudioCategory } = {}): ReactElement {
+  useSceneParticipant('studio', 'painted');
   const initialRoute = useMemo(() => readTilesetStudioRoute(), []);
   // App startup hydrates this before mounting. Freeze both Studio libraries to
   // this one snapshot so a card, its dimensions, and its immutable pointer can

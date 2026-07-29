@@ -106,7 +106,7 @@ export function LevelThumbnail({
   // Canonical derivatives are already compact delivery rasters: request them with the
   // list data so a complete list can reveal together. Authoring-only client bakes stay
   // proximity-gated because they are substantially more expensive.
-  const [near, setNear] = useState(canonicalDerivative !== null);
+  const [near, setNear] = useState(false);
   const [url, setUrl] = useState<string | null>(null);
   const [painted, setPainted] = useState(false);
 
@@ -198,6 +198,7 @@ export function LevelThumbnail({
     <div
       ref={containerRef}
       className={`level-thumbnail ${painted ? 'is-ready' : 'is-pending'} ${className ?? ''}`.trim()}
+      data-level-thumbnail-id={level.id}
       style={boxStyle}
       data-aspect={aspect.toFixed(3)}
       aria-hidden={painted ? undefined : true}

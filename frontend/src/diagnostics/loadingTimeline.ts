@@ -17,6 +17,7 @@ const state = {
   events: [] as LoadingTimelineEvent[],
   listeners: new Set<Listener>(),
   observerInstalled: false,
+  activeScene: 'startup',
 };
 
 function emit(): void {
@@ -34,6 +35,9 @@ export function loadingMark(
   detail?: LoadingTimelineEvent['detail'],
   kind: LoadingEventKind = 'mark',
 ): void {
+  if (phase === 'scene-navigation-accepted' || phase === 'scene-loading' || phase === 'scene-current') {
+    state.activeScene = surface;
+  }
   append({ at: performance.now(), kind, surface, phase, detail });
 }
 
@@ -67,22 +71,33 @@ export function clearLoadingTimeline(): void {
 export function installLoadingResourceObserver(): void {
   if (state.observerInstalled || typeof PerformanceObserver === 'undefined') return;
   state.observerInstalled = true;
+  const sceneAt = (at: number): string => {
+    for (let index = state.events.length - 1; index >= 0; index -= 1) {
+      const event = state.events[index];
+      if (
+        event
+        && event.at <= at
+        && (event.phase === 'scene-navigation-accepted' || event.phase === 'scene-loading' || event.phase === 'scene-current')
+      ) return event.surface;
+    }
+    return 'startup';
+  };
   const record = (entry: PerformanceResourceTiming): void => {
     const url = new URL(entry.name, window.location.href);
     if (url.origin !== window.location.origin) return;
     const interesting = url.pathname.startsWith('/assets/')
-      || url.pathname.startsWith('/api/media/')
-      || url.pathname.startsWith('/api/asset-catalog')
-      || url.pathname.startsWith('/api/unit-catalog')
-      || url.pathname.startsWith('/api/campaign')
-      || url.pathname.includes('thumbnail');
+      || url.pathname.startsWith('/api/')
+      || url.pathname.includes('thumbnail')
+      || /\.(?:js|css|woff2?|otf|ttf)$/i.test(url.pathname);
     if (!interesting) return;
+    const owningScene = sceneAt(entry.startTime);
     append({
       at: entry.startTime,
       kind: 'resource',
-      surface: 'network',
+      surface: `network:${owningScene}`,
       phase: url.pathname,
       detail: {
+        scene: owningScene,
         durationMs: Math.round(entry.duration * 10) / 10,
         transferBytes: entry.transferSize,
         encodedBytes: entry.encodedBodySize,

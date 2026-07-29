@@ -12,6 +12,7 @@ import { installedPortraitAssets, installedPortraitCrops, PORTRAIT_PIECES, type 
 import { PORTRAIT_METHODS, defaultPortraitMethod, portraitMasterSrc, portraitMethodSupportsPalette, type PortraitMethod } from './portraitCandidates';
 import { PaletteSelect } from './shared/PaletteSelect';
 import { InnerChromeBox } from './shared/ChromeBox';
+import { useSceneParticipant } from './shell/SceneBoundary';
 
 const PIECES = PORTRAIT_PIECES;
 const paletteEnabledForMethod = (piece: Piece, method: PortraitMethod): boolean => (
@@ -304,6 +305,7 @@ export function PortraitLab({ header }: { header?: ReactNode }): ReactElement {
 
 export function PortraitEditor(): ReactElement {
   const { crops, piece, setPiece, palette, setPalette, crop, setCrop, setZoom, canvasRef, onPointerDown, onPointerMove, onPointerUp, onWheel, json, copied, copy, resetPiece, resetAll, save, saveState } = usePortraitEditor();
+  useSceneParticipant('portrait-editor', 'painted');
 
   useEffect(() => {
     const shell = document.querySelector('.shell');

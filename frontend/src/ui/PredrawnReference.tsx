@@ -18,6 +18,7 @@ import {
 } from '../net/campaignWorkspace';
 import { readValidatedReturnTo } from './navigation';
 import { TitleBarControlContribution } from './shell/TitleBarControls';
+import { useSceneParticipant } from './shell/SceneBoundary';
 
 export const PREDRAWN_REFERENCE_ROUTE = '/predrawn-reference';
 export const PREDRAWN_REFERENCE_CAPTURE_SELECTOR = '.predrawn-reference-export-frame';
@@ -182,7 +183,6 @@ export function PredrawnReference(): ReactElement {
     setLocalCaptureReady(false);
     setState({ kind: 'error', message: error instanceof Error ? error.message : String(error) });
   }, []);
-
   useEffect(() => {
     setLocalCaptureReady(false);
     setSourcesReady(false);
@@ -214,6 +214,19 @@ export function PredrawnReference(): ReactElement {
     [board],
   );
   const frame = frameValidation?.ok ? frameValidation.frame : undefined;
+  const referenceError = useMemo(
+    () => state.kind === 'error' ? new Error(state.message) : null,
+    [state],
+  );
+  const referencePainted = !levelId || (
+    state.kind === 'ready'
+    && (!frame || captureReady)
+  );
+  useSceneParticipant(
+    'predrawn-reference',
+    referenceError ? 'error' : referencePainted ? 'painted' : 'loading',
+    referenceError,
+  );
   const boardPan = useMemo(
     () => board && frame ? predrawnGenerationFrameBoardPan(board, frame) : undefined,
     [board, frame],

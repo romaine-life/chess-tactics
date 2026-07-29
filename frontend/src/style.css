@@ -215,7 +215,9 @@ h1 {
   /* Solid dark floor only — the photographic scene rides the ::after pseudo below so it
      can fade in FIRST in the cold-load order without fading the rain or UI above it.
      This floor keeps the screen dark (never white) from the very first paint. */
-  background: #02070b;
+  /* The application scene director owns the dark floor and the living backdrop.
+     Keeping another opaque floor here would cover that persistent scene. */
+  background: transparent;
   inset: 0;
   justify-content: stretch;
   overflow: hidden;
@@ -223,7 +225,7 @@ h1 {
 }
 
 /* The background scene as a fade-able layer (cold-load reveal step 1, see
-   shell/coldReveal). Sits above the floor and BELOW the rain (z2) + UI (z3), exactly
+   shell/startupScene). Sits above the floor and BELOW the rain (z2) + UI (z3), exactly
    where the layer's own background used to paint. Hidden until the director opens the
    'bg' stage, then fades in over the SAME 320ms used by the old menu reveal.
    REAL elements rather than a ::after (see ui/SceneBackdrop.tsx): the scene canvas
@@ -953,7 +955,7 @@ h1 {
     linear-gradient(180deg, rgba(0, 0, 0, .34), transparent 28%, rgba(0, 0, 0, .5));
 }
 
-/* Cold-load reveal (see shell/coldReveal): the menu's layers fade in over the dark
+/* Ordered startup scene (see shell/startupScene): the menu's layers fade in over the dark
    floor in a fixed order — background (.main-menu-layer::after, above) -> title bar
    (.app-shell-titlebar) -> buttons (.main-menu-twin-screen) -> rain. Each is hidden
    until the director opens its stage, then rides the SAME 320ms opacity fade as the old
@@ -979,44 +981,6 @@ h1 {
   opacity: 0;
 }
 
-/* Cross-route veil (App.tsx) — an atmospheric field that fades OVER the current
-   screen, lets a heavy destination load + compose underneath while opaque, then
-   fades UP into it: one calm dissolve instead of a "Loading…" snap. Only heavy
-   entrances trigger it (skirmish / level editor / campaign editor); light hops
-   swap instantly. Timings mirror VEIL_COVER_MS / VEIL_REVEAL_MS in App.tsx.
-   Retune the field + timing here — it's meant to be tuned by feel. */
-:root {
-  --route-veil-cover-ms: 260ms;
-  --route-veil-reveal-ms: 340ms;
-  /* Light-hop exit dissolve (ADR-0051) — the veil-less counterpart of the cover phase:
-     the outgoing chrome fades over this, then the route swaps. Keep in lockstep with
-     SCREEN_EXIT_MS in ui/shell/screenExit.ts. Shorter than the entrance fade on purpose
-     (exits accelerate; arriving matters more than leaving). */
-  --route-exit-ms: 200ms;
-  /* cold, rainy dark — never white (white is what reads as "browser loading") */
-  --route-veil-field: radial-gradient(130% 130% at 50% 34%, #151c29 0%, #0a0d13 62%, #05070b 100%);
-}
-.route-veil {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  opacity: 0;
-  pointer-events: none;
-  background: var(--route-veil-field);
-  transition: opacity var(--route-veil-reveal-ms) ease;
-  will-change: opacity;
-}
-.route-veil.is-cover {
-  opacity: 1;
-  pointer-events: auto; /* swallow clicks mid-transition */
-  transition-duration: var(--route-veil-cover-ms);
-}
-.route-veil.is-reveal {
-  opacity: 0;
-  pointer-events: none;
-  transition-duration: var(--route-veil-reveal-ms);
-}
-
 /* In-game confirmation dialog (ui/shared/ConfirmDialog.tsx) — replaces window.confirm() on
    player surfaces so an "are you sure?" wears the game's own chrome, not the browser's. The
    scrim dims + blurs the board (and swallows clicks); the panel wears the SAME kit panel.png
@@ -1025,7 +989,7 @@ h1 {
 .confirm-scrim {
   position: fixed;
   inset: 0;
-  z-index: 10000; /* above the route-veil (9999) so a mid-transition veil can't cover it */
+  z-index: 10000; /* above the scene transition presentation */
   display: grid;
   place-items: center;
   padding: 24px;
@@ -4625,8 +4589,9 @@ h1 {
   opacity: 0;
 }
 
-/* Before the live catalog/backend is ready, do not trigger stable-slot font requests.
-   main.tsx explicitly loads the layout face and removes this class before App mounts. */
+/* Error surfaces inherit a safe fallback during pre-App bootstrap. The visible
+   loading presentation and its final-font gate live in index.html so they paint
+   before the application module graph. */
 body.loading-bootstrap,
 body.loading-bootstrap .app-startup-status {
   font-family: ui-sans-serif, system-ui, sans-serif;
@@ -4679,7 +4644,7 @@ body.loading-bootstrap .app-startup-status {
 }
 .loading-lab-stage {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   min-height: 0;
   padding: 18px;
 }
@@ -4699,6 +4664,34 @@ body.loading-bootstrap .app-startup-status {
 .loading-lab-summary strong { color: #d9c38b; font: 18px var(--ds-font-mono); }
 .loading-lab-summary span { color: var(--ds-ink-3); font-size: 11px; text-transform: uppercase; }
 .loading-lab-summary .is-error strong { color: #f39a91; }
+.loading-lab-scene-contract {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.loading-lab-scene-contract > div {
+  background: #07101ad9;
+  border: 1px solid #34485c;
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 9px 11px;
+}
+.loading-lab-scene-contract span {
+  color: var(--ds-ink-3);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+.loading-lab-scene-contract strong { color: #d9c38b; font: 14px var(--ds-font-mono); }
+.loading-lab-scene-contract small {
+  color: var(--ds-ink-3);
+  font: 10px/1.35 var(--ds-font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.loading-lab-scene-contract .is-pending { border-color: #b88b49; }
 .loading-lab-table-wrap { min-height: 0; overflow: auto; border: 1px solid #34485c; background: #07101ad9; }
 .loading-lab-table { border-collapse: collapse; font: 11px/1.4 var(--ds-font-mono); width: 100%; }
 .loading-lab-table th { background: #152333; color: #d9c38b; position: sticky; text-align: left; top: 0; z-index: 1; }
@@ -9512,6 +9505,171 @@ body { font-size: 17px; }
   min-height: 120px;
   color: var(--ds-color-text, #f4ead7);
   text-align: center;
+}
+
+/* Shared DOM surface gate: content is fully mounted so its real image consumers can
+   load/decode, but the visual unit remains hidden and inert until the boundary records
+   a complete painted frame. The status is the sole visible state during that interval. */
+.painted-surface {
+  display: contents;
+}
+.painted-surface-content {
+  display: contents;
+}
+.painted-surface.is-loading .painted-surface-content > *,
+.painted-surface.is-error .painted-surface-content > * {
+  visibility: hidden;
+}
+.painted-surface-status {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  color: var(--ds-color-text, #f4ead7);
+  text-align: center;
+}
+.painted-surface-status small {
+  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .72));
+  line-height: 1.5;
+  max-width: 440px;
+}
+.painted-surface-status strong {
+  font-size: var(--ds-text-md);
+}
+.painted-surface-status button {
+  background: transparent;
+  border: 12px solid transparent;
+  border-image: var(--media-ui-kit-button-primary-png) 24 fill / 12px round;
+  color: var(--ds-color-text, #f4ead7);
+  cursor: pointer;
+  font: inherit;
+  min-height: 44px;
+  min-width: 128px;
+  padding: 0 10px;
+}
+.painted-surface.is-ready .painted-surface-content > * {
+  animation: surface-complete-reveal var(--ds-duration-fade) var(--ds-ease-standard) both;
+}
+@keyframes surface-complete-reveal {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ADR-0205: one application-owned scene transition. */
+.scene-director { min-height: 100%; }
+.scene-boundary {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  opacity: 1;
+}
+.scene-homepage-background {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  opacity: 1;
+  pointer-events: none;
+  background: #02070b;
+  transition: opacity var(--ds-duration-fade) var(--ds-ease-standard);
+}
+.scene-homepage-background.is-startup-pending { opacity: 0; }
+.scene-director.is-exiting [data-scene-transition-target][data-scene-transition-active] {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
+}
+.scene-director.is-exiting [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > * {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
+}
+.scene-boundary.is-preparing {
+  opacity: 0;
+  pointer-events: none;
+}
+.scene-boundary[data-scene-visual-role="outgoing"] {
+  opacity: 1;
+  z-index: 3;
+}
+.scene-boundary[data-scene-visual-role="incoming"] {
+  z-index: 4;
+}
+.scene-director.is-entering .scene-boundary[data-scene-visual-role="outgoing"] {
+  opacity: 0;
+  transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
+}
+.scene-boundary.is-region-preparing {
+  opacity: 1;
+}
+.scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active] {
+  opacity: 0;
+  pointer-events: none;
+}
+.scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > * {
+  opacity: 0;
+  pointer-events: none;
+}
+.scene-director.is-entering [data-scene-transition-target][data-scene-transition-active] {
+  opacity: 1;
+  transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
+}
+.scene-director.is-entering [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > * {
+  opacity: 1;
+  transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
+}
+
+.play-destination-content { display: contents; }
+.scene-loading-presentation {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9998;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--ds-space-3);
+  text-align: center;
+  color: var(--ds-ink-1);
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-xl);
+  opacity: 1;
+  pointer-events: none;
+  overflow: visible;
+  transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
+}
+.play-scene-authority { display: contents; }
+.scene-director.is-exiting .scene-loading-presentation,
+.scene-director.is-entering .scene-loading-presentation {
+  opacity: 0;
+}
+.scene-director.is-error .scene-loading-presentation {
+  pointer-events: auto;
+}
+.scene-director.is-error .scene-loading-presentation strong {
+  display: block;
+  font-size: var(--ds-text-xl);
+  line-height: 1.35;
+  max-width: min(560px, calc(100vw - 48px));
+}
+.scene-director.is-error .scene-loading-presentation small {
+  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .78));
+  font-size: var(--ds-text-sm);
+  line-height: 1.5;
+  max-width: min(520px, calc(100vw - 48px));
+}
+.scene-director.is-error .scene-loading-presentation button {
+  background: transparent;
+  border: 12px solid transparent;
+  border-image: var(--media-ui-kit-button-primary-png) 24 fill / 12px round;
+  color: var(--ds-color-text, #f4ead7);
+  font: inherit;
+  min-height: 44px;
+  min-width: 128px;
+  padding: 0 14px;
 }
 
 .ce-row-actions {
@@ -16049,11 +16207,10 @@ button.tileset-relationship-cell {
 
 .settings-art-route {
   align-items: center;
-  /* Solid dark floor only — the animated menu scene (still art + waterfalls) + scrim ride
-     the shared <HomepageBackdrop> these screens render, the same continuous instance the
-     main menu shows, so the settings frames sit over the menu scene + synced rain.
-     This floor keeps the screen dark (never white) before the scene decodes. */
-  background: #02070b;
+  /* The director owns the continuous homepage scene and its #02070b decode floor.
+     A route-local solid floor covers that scene on standalone homepage-family routes
+     such as Party, so this composition root must remain transparent. */
+  background: transparent;
   display: grid;
   height: 100%;
   justify-items: center;
@@ -16217,10 +16374,9 @@ button.tileset-relationship-cell {
   border-image-width: 0 0 0 var(--le-chrome-outer-rail-w) !important;
 }
 
-/* Persistent app-shell title bar (src/ui/shell/AppTitleBar) — rendered ONCE in App,
-   outside the routed screen, so the bar survives navigation. Fixed at the top, above
-   the route-veil (z 9999) so it stays LIT while the body dissolves through a heavy-
-   route transition. It carries .app-titlebar + .settings-header-frame for the shared
+/* Persistent app-shell title bar (src/ui/shell/AppTitleBar) — rendered once inside
+   the owning SceneBoundary so it fades and acknowledges pixels with the destination.
+   It carries .app-titlebar + .settings-header-frame for the shared
    oak look; only position + stacking are set here. A migrated screen adds
    .app-shell-bar-pad to its body root to reserve the header height the fixed bar now
    overlays (the per-screen <header> is gone — the bar lives in the shell). */
@@ -16527,6 +16683,13 @@ button.tileset-relationship-cell {
   min-width: 0;
 }
 
+.brand-lockup-title-line {
+  align-items: baseline;
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+}
+
 /* The game wordmark — the dominant, persistent header line. */
 .brand-lockup-copy em {
   color: #f0eadb;
@@ -16535,6 +16698,16 @@ button.tileset-relationship-cell {
   font-weight: 600;
   line-height: 1.04;
   text-shadow: 0 2px 0 #02070b;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.brand-lockup-transition-status {
+  color: #79d3ff;
+  font-size: var(--ds-text-sm);
+  font-weight: 400;
+  letter-spacing: .14em;
+  line-height: 1;
   text-transform: uppercase;
   white-space: nowrap;
 }
@@ -16815,58 +16988,6 @@ button.tileset-relationship-cell {
   overflow: visible;
 }
 
-/* Screen entrance (ADR-0046): the SHARED entrance fade, applied through ArtRouteChrome to a
-   screen's CHROME ROOT (.settings-shell in Settings / menu / Campaign / the Skirmish hub) —
-   never the screen's outer element, so the ambience backdrop (a sibling) stays continuous and
-   never re-fades across art-background screens (ADR-0046 B/G). Entrance tier (slow +
-   decelerate). Pure opacity = reduced-motion-safe -> not gated (ADR-0043). The hook only
-   engages on a navigation-driven mount; the cold-load menu reveal owns the first paint (no
-   double-fade). */
-.screen-enter {
-  animation: screen-enter-fade var(--ds-duration-fade) var(--ds-ease-standard) both !important;
-}
-
-@keyframes screen-enter-fade {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-/* Inert while the fade plays (ADR-0046 D): can't trigger a new transition mid-transition. */
-.screen-enter.screen-enter-lock {
-  pointer-events: none;
-}
-
-/* Readiness hold (ADR-0046 C.1, ADR-0051): chrome whose content is still arriving sits
-   invisible and inert; the entrance fade only starts once the screen reports ready, so
-   the reveal always shows real content — never an empty frame with the content popping
-   in after. Screens opt in via ArtRouteChrome's `ready` prop. */
-.screen-enter-hold {
-  opacity: 0;
-  pointer-events: none;
-}
-
-/* Light-hop exit dissolve (ADR-0051): the outgoing screen's chrome fades down, THEN the
-   route swaps (App holds the swap for SCREEN_EXIT_MS in ui/shell/screenExit.ts — keep
-   that and --route-exit-ms in lockstep). This is an ANIMATION, not a transition, on
-   purpose: settled chrome still carries .screen-enter's filled animation, and Chrome
-   does not start a transition off an animation being removed in the same style change
-   (verified live — the transition version faded the menu but froze settled campaign
-   chrome at 1 until the swap). Replacing the animation out-cascades .screen-enter's
-   !important fill by source order. --screen-exit-from is stamped per element by
-   ArtRouteChrome at exit start (the current computed opacity), so an exit interrupting
-   a mid-flight entrance fades from wherever the fade had reached — no up-blip to 1.
-   The duration is route choreography — the veil's bespoke family (ADR-0043
-   out-of-scope), NOT the one-fade-speed law: exits read shorter than entrances across
-   the motion canon. */
-.screen-exit {
-  animation: screen-exit-fade var(--route-exit-ms) var(--ds-ease-linear) both !important;
-  pointer-events: none;
-}
-
-@keyframes screen-exit-fade {
-  from { opacity: var(--screen-exit-from, 1); }
-  to { opacity: 0; }
-}
-
 .settings-rail-frame,
 .settings-main-frame {
   min-height: 0;
@@ -16921,6 +17042,7 @@ button.tileset-relationship-cell {
 }
 .menu-dest {
   display: flex;
+  position: relative;
   gap: 0;
   align-items: stretch;
   min-inline-size: 0;
@@ -16928,17 +17050,7 @@ button.tileset-relationship-cell {
   /* Same pull as the rail, from the shared vars (not a copied literal) so the row stays locked to
      col1 at every width and browser zoom. */
   transform: translate(calc(-1 * var(--rail-pull-x)), calc(-1 * var(--rail-pull-y)));
-  /* Destination dissolve (ADR-0046, one fade speed): the panel fades IN when opened (keyed remount
-     replays this), and .is-leaving fades it OUT before MainMenu drops it. The button column doesn't
-     animate — only this panel — so the hop reads as swapping a panel, not the screen. */
-  animation: menu-dest-in var(--ds-duration-fade) var(--ds-ease-standard) both;
 }
-.menu-dest.is-leaving {
-  animation: menu-dest-out var(--ds-duration-fade) var(--ds-ease-standard) both;
-  pointer-events: none;
-}
-@keyframes menu-dest-in { from { opacity: 0; } to { opacity: 1; } }
-@keyframes menu-dest-out { from { opacity: 1; } to { opacity: 0; } }
 .menu-dest-col {
   flex: none;
   min-block-size: 0;
@@ -17024,6 +17136,21 @@ button.tileset-relationship-cell {
 .play-action-col .settings-panel-content {
   align-content: start;
   padding-block-end: var(--ds-gutter);
+}
+
+/* A selected campaign level adds the authored preview as the next destination column.
+   On narrower desktop viewports, fit that master/detail pair inside the action column's
+   original width instead of drawing the preview beyond the right edge. The compact list
+   delegates the actual launch verb to the preview's Play control. */
+@media (max-width: 1516px) {
+  .play-scene-authority.has-level-preview .play-action-col {
+    inline-size: calc(var(--col-action-w) - var(--col-preview-w));
+  }
+
+  .play-scene-authority.has-level-preview .campaign-level-row .settings-row-thumb,
+  .play-scene-authority.has-level-preview .campaign-level-row .settings-row-control {
+    display: none;
+  }
 }
 
 /* (The home-menu-only margin fork that used to live here — `.main-menu-home .settings-shell`,
@@ -17260,12 +17387,8 @@ button.tileset-relationship-cell {
   white-space: nowrap;
 }
 
-/* Crossfade STACK: the panel body holds up to two layers in ONE grid cell — the incoming
-   (.settings-xfade-next) and, during a tab change, the outgoing (.settings-xfade-prev) — so
-   they OVERLAP-fade (old 1->0 while new 0->1) in a single --ds-duration-fade pass (ADR-0046),
-   not sequentially. Width constraint + centring stay here; the section layout lives on each
-   layer so both render identically. Scrolling + the drawn rail (ADR-0030) are owned by the
-   wrapping <KitScroll>. */
+/* Settings content is one authored settings-content scene slot. Width and
+   centring live here; SceneDirector owns its exit, preparation, and entrance. */
 .settings-panel-content {
   display: grid;
   inline-size: min(100%, 880px);
@@ -17273,27 +17396,14 @@ button.tileset-relationship-cell {
   min-height: 0;
 }
 
-.settings-xfade-layer {
-  grid-area: 1 / 1;            /* stack both layers in the same cell; cell sizes to the larger */
+.settings-panel-layer {
   align-content: start;
   display: grid;
   /* Inter-section spacing — looser than the row gap so groups read as distinct. */
   gap: clamp(14px, calc(var(--layout-vw, 100vw) * .013), 22px);
   min-width: 0;
   padding-block-end: 4px;
-  /* Pure opacity fade (no movement) = reduced-motion-safe, so NOT gated (ADR-0043); many
-     players run Windows "Animation effects" off (Chrome `reduce`) and still get it. The ONE
-     shared fade token — kept in sync with PANEL_FADE_MS in Settings.tsx (the JS swap timer). */
-  transition: opacity var(--ds-duration-fade) var(--ds-ease-standard);
 }
-
-/* enter = paint the start opacities instantly (prev visible, next hidden); JS flips to active
-   one frame later so the transition has a start value. */
-.settings-xfade-enter .settings-xfade-prev { opacity: 1; transition: none; }
-.settings-xfade-enter .settings-xfade-next { opacity: 0; transition: none; }
-/* active = end opacities; both layers transition at once → the overlap crossfade. */
-.settings-xfade-active .settings-xfade-prev { opacity: 0; }
-.settings-xfade-active .settings-xfade-next { opacity: 1; }
 
 /* The settings panel's scroll viewport always occupies the main frame's second (1fr)
    row so the ADR-0030 rail spans the scrollable height, below any pinned header. */
@@ -17301,6 +17411,29 @@ button.tileset-relationship-cell {
   block-size: 100%;
   grid-row: 2;
   min-height: 0;
+}
+.settings-scroll > .kit-scroll-content {
+  /* Settings owns two literal horizontal regions: a scroll viewport and a
+     separate 24px drawn-scrollbar gutter. Do not merely pad a full-width
+     viewport—the row frames would still extend beneath the rail. */
+  box-sizing: border-box;
+  inline-size: calc(100% - 24px);
+  padding-inline-end: 0;
+}
+.settings-scroll > .kit-scroll-rail {
+  inset-inline-end: 2px;
+}
+.settings-scroll .settings-row-control {
+  flex: 1 1 auto;
+}
+.settings-scroll .settings-slider {
+  flex: 1 1 150px;
+  min-inline-size: 100px;
+}
+.settings-scroll .settings-slider input[type="range"] {
+  flex: 1 1 150px;
+  inline-size: clamp(100px, 16vw, 250px);
+  min-inline-size: 100px;
 }
 
 /* Labeled row groups: an uppercase eyebrow over a tight cluster of rows. */
@@ -17348,6 +17481,9 @@ button.tileset-relationship-cell {
      ADR-0028 fixes. copy fills; value/control hug the end. */
   display: flex;
   gap: 16px;
+  inline-size: 100%;
+  max-inline-size: 100%;
+  min-inline-size: 0;
   min-height: 60px;
   padding: 18px 28px;
 }
@@ -19534,7 +19670,6 @@ button.tileset-relationship-cell {
    transaction, not another interactive screen: remove every app/control ancestor from the exact
    selector shot so fixed chrome can never be composited into the model's only image input. */
 html.predrawn-reference-capture-mode .app-shell-titlebar,
-html.predrawn-reference-capture-mode .route-veil,
 html.predrawn-reference-capture-mode .update-banner,
 html.predrawn-reference-capture-mode .predrawn-reference-toolbar {
   display: none !important;

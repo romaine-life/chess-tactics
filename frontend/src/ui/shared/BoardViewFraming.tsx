@@ -129,6 +129,9 @@ export function FramedReadOnlyBoardView({
   baseMinZoom = 0.2,
   maxZoom = 2,
   emphasisZoom,
+  onTerrainFirstFrame,
+  onSceneFirstFrame,
+  onFrameError,
 }: {
   board: EditorBoard;
   viewKey: string;
@@ -137,6 +140,9 @@ export function FramedReadOnlyBoardView({
   maxZoom?: number;
   /** Optional focused-review enlargement; it never weakens the accepted-art floor. */
   emphasisZoom?: number;
+  onTerrainFirstFrame?: () => void;
+  onSceneFirstFrame?: () => void;
+  onFrameError?: (error: unknown) => void;
 }): ReactElement {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -177,7 +183,15 @@ export function FramedReadOnlyBoardView({
       onViewInteraction={markViewInteraction}
     >
       <div className="tileset-view-board-content is-board">
-        <StudioReadOnlyBoard board={board} boardZoom={zoom} boardPan={pan} ariaLabel={ariaLabel} />
+        <StudioReadOnlyBoard
+          board={board}
+          boardZoom={zoom}
+          boardPan={pan}
+          ariaLabel={ariaLabel}
+          onTerrainFirstFrame={onTerrainFirstFrame}
+          onSceneFirstFrame={onSceneFirstFrame}
+          onFrameError={onFrameError}
+        />
       </div>
     </ViewPane>
   );

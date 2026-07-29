@@ -7,6 +7,7 @@ import { BoardCanvasLayer, boundsForOps } from '../render/BoardCanvasLayer';
 import { wallOverlayZIndex } from '../render/sceneDepth';
 import { defaultWallMaterial, wallMaterials } from '../core/featureAutotile';
 import { defaultTerrainFamily } from '../core/tileSockets';
+import { useSceneParticipant } from './shell/SceneBoundary';
 
 const RUN_LABEL = '2026-07-14 full-height generated ';
 
@@ -31,6 +32,8 @@ function candidateUrl(versions: readonly AdminMediaVersion[], material: string, 
 export function WallCandidateReview(): ReactElement {
   const [versions, setVersions] = useState<AdminMediaVersion[]>([]);
   const [error, setError] = useState('');
+  const [framePainted, setFramePainted] = useState(false);
+  const [frameError, setFrameError] = useState<Error | null>(null);
   const board = useMemo(() => solveSocketBoard({
     assets: tileAssets,
     terrainMap: Array.from({ length: 36 }, () => defaultTerrainFamily().id),
@@ -79,6 +82,12 @@ export function WallCandidateReview(): ReactElement {
 
   const bounds = useMemo(() => boundsForOps(ops, { minX: -64, minY: -192, width: 128, height: 336 }), [ops]);
   const ready = ops.length === 1 + (wallMaterials().length - 1) * 2;
+  const routeError = useMemo(() => frameError ?? (error ? new Error(error) : null), [error, frameError]);
+  useSceneParticipant(
+    'studio',
+    routeError ? 'error' : ready && framePainted ? 'painted' : 'loading',
+    routeError,
+  );
 
   return (
     <main style={{ minHeight: 'calc(100vh - 84px)', padding: '18px 24px', background: 'rgba(4, 12, 18, 0.94)', color: '#d8e8e6' }}>
@@ -94,7 +103,16 @@ export function WallCandidateReview(): ReactElement {
           boardPan={{ x: 140, y: 220 }}
           ariaLabel="Full-height wall candidate board"
           showGrid
-          sceneLayer={<BoardCanvasLayer ops={ops} bounds={bounds} />}
+          sceneLayer={(
+            <BoardCanvasLayer
+              ops={ops}
+              bounds={bounds}
+              onFirstFrame={() => setFramePainted(true)}
+              onFrameError={(reason) => setFrameError(
+                reason instanceof Error ? reason : new Error(String(reason)),
+              )}
+            />
+          )}
         />
       </section>
     </main>

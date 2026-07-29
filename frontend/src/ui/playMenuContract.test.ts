@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const mainMenu = readFileSync(new URL('./MainMenu.tsx', import.meta.url), 'utf8');
 const playMenu = readFileSync(new URL('./PlayMenu.tsx', import.meta.url), 'utf8');
+const style = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const campaignEditor = readFileSync(new URL('./CampaignEditor.tsx', import.meta.url), 'utf8');
 const headerAccountCluster = readFileSync(new URL('./shared/HeaderAccountCluster.tsx', import.meta.url), 'utf8');
 const profiles = readFileSync(new URL('./skirmishProfiles.ts', import.meta.url), 'utf8');
@@ -16,6 +17,8 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(mainMenu).not.toContain("href: '/campaign'");
     expect(mainMenu).not.toContain("'solo-skirmish': '/skirmish'");
     expect(mainMenu).not.toContain("ShellDest = 'settings' | 'campaign'");
+    expect(readFileSync(new URL('../test/drawableCatalog.ts', import.meta.url), 'utf8'))
+      .toContain("['play', 'Play', '/play/select/skirmish'");
   });
 
   it('pins Skirmish, Run, and Levels above one drawn-scroll Campaign collection', () => {
@@ -68,10 +71,25 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('Your workspace is unavailable');
   });
 
-  it('canonicalizes invalid selector paths and returns standalone play to Levels', () => {
+  it('renders only from the director-mounted path and returns standalone play to Levels', () => {
     expect(playMenu).toContain('if (!playHubSelection(path))');
-    expect(playMenu.match(/if \(!isPlaySelectorPath\(path\)\) return/g)).toHaveLength(2);
-    expect(playMenu).toContain('if (!nextSelection)');
+    expect(playMenu.match(/if \(!isPlaySelectorPath\(path\)\) return/g)).toHaveLength(1);
+    expect(playMenu).toContain('playHubSelection(path) ??');
+    expect(playMenu).not.toContain('APP_NAVIGATION_EVENT');
+    expect(playMenu).not.toContain('window.location');
+    expect(playMenu).not.toContain('setSelection');
     expect(playMenu).toContain('playSkirmishLevelHref(level.id, PLAY_LEVELS_SELECTOR_HREF)');
+  });
+
+  it('keeps level selection stable and delegates its paint wait to the preview', () => {
+    expect(playMenu).toContain('const selection: PlayHubSelection = useMemo(');
+    expect(playMenu).toContain('() => playHubSelection(path) ??');
+    expect(playMenu).toContain('[path],');
+    expect(playMenu).not.toContain('useEffect(() => setLevelPreviewPainted(false)');
+    expect(playMenu).not.toContain('&& (!selectedLevel || levelPreviewPainted)');
+    expect(playMenu).not.toContain("selectedLevelId ?? '',");
+    expect(playMenu).toContain('<LevelPreviewColumn');
+    expect(playMenu).toContain("selectedLevel ? ' has-level-preview' : ''");
+    expect(style).toContain('.play-scene-authority.has-level-preview .play-action-col');
   });
 });

@@ -12,6 +12,7 @@
 import { useCampaigns } from './store';
 import { loadOfficialCampaignsResult, loadWorkspace } from '../net/campaignWorkspace';
 import { isUnauthorized } from '../net/auth';
+import { loadingError, loadingMark, loadingMeasure } from '../diagnostics/loadingTimeline';
 import { useWars } from '../war/store';
 
 export interface CampaignHydrationResult {
@@ -40,8 +41,14 @@ export function ensureCampaignsHydrated(): Promise<CampaignHydrationResult> {
   // outage must not trigger another private-workspace merge over in-memory authoring changes.
   if (officialAvailable && userReady) return Promise.resolve({ officialAvailable, userWorkspace });
   inFlight = (async () => {
+    const startedAt = performance.now();
+    loadingMark('campaign-hydration', 'authorities-start', {
+      officialRequired: !officialAvailable,
+      userRequired: !userReady,
+    });
     try {
-      if (!officialAvailable) {
+      const officialTask = !officialAvailable ? (async () => {
+        const authorityStartedAt = performance.now();
         // Officials are public. Merge only a successful response; on a transient failure retain
         // any in-memory official edits and let the next caller retry this slice alone.
         const official = await loadOfficialCampaignsResult();
@@ -50,8 +57,12 @@ export function ensureCampaignsHydrated(): Promise<CampaignHydrationResult> {
           useWars.getState().mergeOfficial(official.workspace);
         }
         officialAvailable = official.available;
-      }
-      if (!userReady) {
+        loadingMeasure('campaign-hydration', 'official-settled', authorityStartedAt, {
+          available: official.available,
+        });
+      })() : Promise.resolve();
+      const userTask = !userReady ? (async () => {
+        const authorityStartedAt = performance.now();
         // A 401 is a complete, safe anonymous result. Network/5xx failures are different: the
         // private workspace is unknown, so callers must keep Save locked and retry later rather
         // than PUT a partial store over it.
@@ -62,8 +73,17 @@ export function ensureCampaignsHydrated(): Promise<CampaignHydrationResult> {
           userWorkspace = 'loaded';
         } catch (error) {
           userWorkspace = isUnauthorized(error) ? 'signed-out' : 'unavailable';
+          if (userWorkspace === 'unavailable') loadingError('campaign-hydration', 'user-failed', error);
         }
-      }
+        loadingMeasure('campaign-hydration', 'user-settled', authorityStartedAt, {
+          status: userWorkspace,
+        });
+      })() : Promise.resolve();
+      await Promise.all([officialTask, userTask]);
+      loadingMeasure('campaign-hydration', 'authorities-settled', startedAt, {
+        officialAvailable,
+        userWorkspace,
+      });
       return { officialAvailable, userWorkspace };
     } finally {
       // Never cache a rejected promise: if a merge ever throws, the next visit must

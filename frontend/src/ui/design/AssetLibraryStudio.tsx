@@ -49,7 +49,7 @@ function Card({ item, sub, selected, onSelect }: {
       aria-pressed={selected}
       title={`Select ${item.label}`}
     >
-      <span className="tileset-studio-card-image asset-card-image"><img src={item.immutableUrl} alt="" draggable={false} /></span>
+      <span className="tileset-studio-card-image asset-card-image"><img src={item.immutableUrl} alt="" loading="lazy" decoding="async" draggable={false} /></span>
       <span className="tileset-studio-card-meta">
         <span className="tileset-studio-card-text"><strong>{item.label}</strong><em>{sub}</em></span>
         <span className="asset-card-chips">

@@ -1,4 +1,13 @@
-import { useEffect, useId, useMemo, useRef, useState, type ComponentProps, type ReactElement, type ReactNode } from 'react';
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactElement,
+  type ReactNode,
+} from 'react';
 import { drawableAssets } from '@chess-tactics/board-render';
 import { useCampaigns } from '../campaign/store';
 import { useWars } from '../war/store';
@@ -8,7 +17,7 @@ import { validateLevel, type Campaign, type CampaignLevelRef, type Level } from 
 import { MODE_NAME } from '../core/objectives';
 import { isWorkspaceConflict } from '../net/campaignWorkspace';
 import { fetchMe, goSignIn, type AuthUser } from '../net/auth';
-import { LevelThumbnail } from '../render/LevelThumbnail';
+import { levelThumbnailUrl } from '../net/levelThumbnails';
 import { LevelPreviewColumn } from './LevelPreviewColumn';
 import { injectStressLevels } from '../campaign/stressFixture';
 import { levelObjectiveLine } from './LevelInfoCompact';
@@ -18,6 +27,8 @@ import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleBarControlContribution } from './shell/TitleBarControls';
 import { HomepageBackdrop } from './HomepageBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
+import { useSceneParticipant } from './shell/SceneBoundary';
+import { GatedLevelThumbnail, ThumbnailSurface } from './shell/ThumbnailSurface';
 import { KitScroll } from './KitScroll';
 import { SettingsButton, SettingsRow, SettingsSection } from './shared/SettingsControls';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
@@ -473,7 +484,11 @@ function LevelRow({
     >
       <div data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row-thumb')} aria-hidden="true">
         {level ? (
-          <LevelThumbnail level={level} width={66} authoringPreview />
+          <GatedLevelThumbnail
+            level={level}
+            width={66}
+            authoringPreview={!levelThumbnailUrl(level.id)}
+          />
         ) : (
           <span className="settings-row-thumb-empty" />
         )}
@@ -800,6 +815,7 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
   const [status, setStatus] = useState('');
   const [me, setMe] = useState<AuthUser | null>(null);
   const [recentDrafts, setRecentDrafts] = useState<EditorDocument[]>([]);
+  const [draftsSettled, setDraftsSettled] = useState(false);
   // A stale whole-workspace body must never be paired with the newer revision from a 409 and
   // retried. Keep the local work visible, stop that tier's writes, and require a deliberate reload.
   const [userSaveConflict, setUserSaveConflict] = useState(false);
@@ -812,11 +828,13 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
   // /play/select visit this session — then there's real content at mount and
   // nothing holds; otherwise hold the fade until the officials merge settles.
   const [loaded, setLoaded] = useState(() => useCampaigns.getState().campaigns.length > 0);
+  useSceneParticipant('campaign-editor', loaded && draftsSettled ? 'painted' : 'loading');
   const [userWorkspaceHydration, setUserWorkspaceHydration] = useState<'loading' | 'ready' | 'unavailable'>('loading');
   const [officialWorkspaceHydration, setOfficialWorkspaceHydration] = useState<'loading' | 'ready' | 'unavailable'>('loading');
   const userWorkspaceReady = userWorkspaceHydration === 'ready';
   const officialWorkspaceReady = officialWorkspaceHydration === 'ready';
   const currentWorkspace = useMemo(() => ({ campaigns, levels }), [campaigns, levels]);
+  const campaignThumbnailLevels = useMemo(() => Object.values(levels), [levels]);
   // Two tier-scoped dirty signals: a private "Save" and an official "Publish" are
   // independent acts, each with its own last-saved signature.
   const userSig = useMemo(() => userSliceSignature(), [currentWorkspace]);
@@ -889,7 +907,11 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
         // Discovery is optional UI. Workspace authoring remains available when the private list
         // endpoint is temporarily unavailable, and no fallback may invent or expose documents.
       }
-    }).catch(() => {});
+    }).catch(() => {
+      if (active) setStatus('Recent drafts could not be loaded. Campaign editing remains available.');
+    }).finally(() => {
+      if (active) setDraftsSettled(true);
+    });
     void (async () => {
       let userReady = false;
       let officialReady = false;
@@ -1390,6 +1412,11 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
             <h2 className="sr-only">{isSkirmishProfilesSelected ? 'Skirmish Profiles' : isUnassignedSelected ? 'Unassigned Levels' : camp?.name ?? 'Editor'}</h2>
             <div className="ce-editor-body">
               <KitScroll className="settings-scroll ce-editor-scroll">
+                <ThumbnailSurface
+                  levels={campaignThumbnailLevels}
+                  participantId="campaign-list-thumbnails"
+                  viewportSelector=".settings-scroll"
+                >
                 <div className="settings-panel-content">
                   {isSkirmishProfilesSelected ? (
                     <SettingsSection title="Skirmish Profiles">
@@ -1523,6 +1550,7 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
                     </SettingsSection>
                   )}
                 </div>
+                </ThumbnailSurface>
               </KitScroll>
             </div>
           </main>

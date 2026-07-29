@@ -9,8 +9,19 @@
 //
 // Usage:
 //   node scripts/shot.mjs <url> [--select <css>] [--out <path>] [--size <WxH>] [--ready <jsExpr>]
-//     [--timeout <ms>] [--throttle slow-4g|slow-3g] [--cold] [--assert-menu-atomic]
-//     [--assert-board-atomic] [--assert-editor-viewer]
+//     [--timeout <ms>] [--throttle slow-4g|slow-3g] [--cold|--warm] [--assert-menu-atomic]
+//     [--assert-board-atomic] [--assert-shell-font-atomic] [--assert-surface-atomic <name>]
+//     [--assert-bootstrap-priority]
+//     [--assert-menu-host-continuity]
+//     [--bootstrap-out <path>]
+//     [--assert-editor-viewer]
+//     [--abort-request <url-substring>] [--abort-request-once <url-substring>]
+//     [--abort-request-until-retry <url-substring>] [--retry-scene-error]
+//     [--click <selector>] [--click-ready <jsExpr>] [--assert-backdrop-continuity]
+//     [--assert-full-scene-exit]
+//     [--transition-out <path>]
+//     [--assert-immediate-local-control]
+//     [--back-after-click-ms <ms>]
 //     [--full] [--show-scrollbars] [--allow-motion]
 //
 // Examples:
@@ -34,14 +45,32 @@ const has = (name) => argv.includes(`--${name}`);
 
 const select = flag('select');
 const out = resolve(process.cwd(), flag('out', 'tmp-shots/shot.png'));
+const bootstrapOut = flag('bootstrap-out');
 const [w, h] = String(flag('size', '1280x800')).split('x').map(Number);
 const scale = Math.max(1, Number(flag('scale', 1)) || 1); // deviceScaleFactor — bump for small elements
 const readyExpr = flag('ready');
 const timeout = Math.max(1_000, Number(flag('timeout', 30_000)) || 30_000);
 const throttle = flag('throttle');
 const cold = has('cold');
+const warm = has('warm');
 const assertMenuAtomic = has('assert-menu-atomic');
 const assertBoardAtomic = has('assert-board-atomic');
+const assertShellFontAtomic = has('assert-shell-font-atomic');
+const assertBootstrapPriority = has('assert-bootstrap-priority');
+const assertMenuHostContinuity = has('assert-menu-host-continuity');
+const assertSurfaceAtomic = flag('assert-surface-atomic');
+const abortRequest = flag('abort-request');
+const abortRequestOnce = flag('abort-request-once');
+const abortRequestUntilRetry = flag('abort-request-until-retry');
+const retrySceneError = has('retry-scene-error');
+const allowSceneError = has('allow-scene-error');
+const click = flag('click');
+const clickReady = flag('click-ready');
+const backAfterClickMs = flag('back-after-click-ms');
+const assertBackdropContinuity = has('assert-backdrop-continuity');
+const assertFullSceneExit = has('assert-full-scene-exit');
+const transitionOut = flag('transition-out');
+const assertImmediateLocalControl = has('assert-immediate-local-control');
 const assertEditorViewer = has('assert-editor-viewer');
 const fullPage = has('full');
 const showScrollbars = has('show-scrollbars');
@@ -54,7 +83,8 @@ const CHROMES = [
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
 ];
 const executablePath = CHROMES.find(existsSync);
-if (!url || url.startsWith('--')) { console.error('usage: shot <url> [--select css] [--out path] [--size WxH] [--scale n] [--ready jsExpr] [--timeout ms] [--throttle slow-4g|slow-3g] [--cold] [--full] [--allow-motion] [--assert-editor-viewer]'); process.exit(2); }
+if (!url || url.startsWith('--')) { console.error('usage: shot <url> [--select css] [--out path] [--size WxH] [--scale n] [--ready jsExpr] [--timeout ms] [--throttle slow-4g|slow-3g] [--cold|--warm] [--full] [--allow-motion] [--assert-editor-viewer]'); process.exit(2); }
+if (cold && warm) { console.error('--cold and --warm are mutually exclusive'); process.exit(2); }
 if (!executablePath) { console.error('No Chrome/Edge found. Checked:\n' + CHROMES.join('\n')); process.exit(1); }
 mkdirSync(dirname(out), { recursive: true });
 
@@ -122,7 +152,49 @@ try {
             title: Boolean(title && !title.classList.contains('reveal-pending')),
           };
           const count = Number(state.bg) + Number(state.buttons) + Number(state.title);
-          if (count > 0 && count < 3) window.__ctMenuAtomicViolations.push(state);
+          const directorCurrent = document.querySelector('[data-scene-phase="current"]');
+          if (directorCurrent && count !== 3) {
+            window.__ctMenuAtomicViolations.push({ ...state, directorCurrent: true });
+          }
+          if ((state.title && !state.bg) || (state.buttons && (!state.bg || !state.title))) {
+            window.__ctMenuAtomicViolations.push(state);
+          }
+          if (count === 3) {
+            const criticalImages = [
+              ...menu.querySelectorAll('.settings-rail-frame img'),
+              ...(title?.querySelectorAll('img') || []),
+            ];
+            const imagesComplete = criticalImages.length > 0
+              && criticalImages.every((img) => img.complete && img.naturalWidth > 0);
+            const backgroundPainted = Boolean(document.querySelector(
+              '.scene-backdrop-canvas[data-homepage-scene-painted]',
+            ));
+            if (!imagesComplete || !backgroundPainted) {
+              window.__ctMenuAtomicViolations.push({ ...state, imagesComplete, backgroundPainted });
+            }
+          }
+        }
+        requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    });
+  }
+  if (assertBackdropContinuity) {
+    await page.evaluateOnNewDocument(() => {
+      window.__ctBackdropVisibleSeen = false;
+      window.__ctBackdropViolations = [];
+      const sample = () => {
+        const host = document.querySelector('.scene-homepage-background');
+        const menu = document.querySelector('.main-menu-layer');
+        const scene = host?.querySelector('.scene-backdrop');
+        const canvas = scene?.querySelector('.scene-backdrop-canvas');
+        const visible = Boolean(scene && canvas
+          && Number.parseFloat(getComputedStyle(host).opacity) > 0.001
+          && Number.parseFloat(getComputedStyle(scene).opacity) > 0.001
+          && getComputedStyle(canvas).backgroundImage !== 'none');
+        if (visible) window.__ctBackdropVisibleSeen = true;
+        else if (window.__ctBackdropVisibleSeen) {
+          window.__ctBackdropViolations.push({ host: Boolean(host), menu: Boolean(menu), scene: Boolean(scene), canvas: Boolean(canvas) });
         }
         requestAnimationFrame(sample);
       };
@@ -150,6 +222,259 @@ try {
       };
       requestAnimationFrame(sample);
     });
+  }
+  if (assertShellFontAtomic) {
+    await page.evaluateOnNewDocument(() => {
+      window.__ctShellFontSamples = 0;
+      window.__ctShellFontViolations = [];
+      const sample = () => {
+        const status = document.querySelector('.app-bootstrap-status, .app-startup-status');
+        if (status) {
+          window.__ctShellFontSamples += 1;
+          const style = getComputedStyle(status);
+          const visible = style.visibility !== 'hidden' && style.display !== 'none' && Number(style.opacity) > 0.001;
+          const finalFace = style.fontFamily.includes('Advance Wars 2 GBA')
+            && document.fonts.check('19px "Advance Wars 2 GBA"', status.textContent || 'Loading live assets');
+          if (visible && !finalFace) {
+            window.__ctShellFontViolations.push({ fontFamily: style.fontFamily, visibility: style.visibility });
+          }
+        }
+        requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    });
+  }
+  if (assertMenuHostContinuity) {
+    await page.evaluateOnNewDocument(() => {
+      window.__ctMenuHostContinuity = {
+        seen: false,
+        violations: [],
+        playSeen: false,
+        playViolations: [],
+        homeReturnSeen: false,
+        homeReturnViolations: [],
+        homeExitFaded: false,
+        settingsSeen: false,
+        settingsExitFaded: false,
+        settingsViolations: [],
+      };
+      window.__ctMenuHostRail = null;
+      window.__ctPlayHostRail = null;
+      const sample = () => {
+        const director = document.querySelector('.scene-director');
+        const boundary = document.querySelector('.scene-boundary');
+        const rail = document.querySelector('[aria-label="Game modes"]');
+        const playRail = document.querySelector('.play-source-rail[aria-label="Play"]');
+        if (rail && !window.__ctMenuHostRail) window.__ctMenuHostRail = rail;
+        if (playRail && !window.__ctPlayHostRail) window.__ctPlayHostRail = playRail;
+        if (director?.classList.contains('is-host-preserving')) {
+          window.__ctMenuHostContinuity.seen = true;
+          const title = document.querySelector('.app-shell-titlebar');
+          const railOpacity = rail ? Number.parseFloat(getComputedStyle(rail).opacity) : 0;
+          const titleOpacity = title ? Number.parseFloat(getComputedStyle(title).opacity) : 0;
+          const railInteractive = Boolean(
+            rail
+            && !rail.closest('[inert]')
+            && getComputedStyle(rail).pointerEvents !== 'none'
+          );
+          if (
+            !rail
+            || rail !== window.__ctMenuHostRail
+            || !rail.isConnected
+            || railOpacity < 0.99
+            || titleOpacity < 0.99
+            || !railInteractive
+          ) {
+            window.__ctMenuHostContinuity.violations.push({
+              phase: director.getAttribute('data-scene-phase'),
+              rail: Boolean(rail),
+              sameRail: rail === window.__ctMenuHostRail,
+              connected: Boolean(rail?.isConnected),
+              railOpacity,
+              titleOpacity,
+              railInteractive,
+            });
+          }
+        }
+        if (director?.getAttribute('data-scene-pending') === 'main-menu') {
+          const phase = director.getAttribute('data-scene-phase');
+          const loading = document.querySelector('.scene-loading-presentation');
+          const menuDestination = document.querySelector('[data-scene-region="menu-shell"]');
+          const menuDestinationOpacity = menuDestination
+            ? Number.parseFloat(getComputedStyle(menuDestination).opacity)
+            : null;
+          if (
+            phase === 'exiting'
+            && menuDestination?.childElementCount
+            && menuDestinationOpacity !== null
+            && menuDestinationOpacity < 0.9
+          ) {
+            window.__ctMenuHostContinuity.homeExitFaded = true;
+          }
+          const loadingVisible = Boolean(
+            loading
+            && getComputedStyle(loading).visibility !== 'hidden'
+            && Number.parseFloat(getComputedStyle(loading).opacity) > 0.001
+          );
+          if (phase === 'loading' || phase === 'entering' || loadingVisible) {
+            window.__ctMenuHostContinuity.homeReturnViolations.push({
+              phase,
+              loadingVisible,
+              menuDestinationOpacity,
+            });
+          }
+        }
+        if (
+          director?.classList.contains('is-host-preserving')
+          && boundary?.getAttribute('data-transition-region') === 'play-shell'
+        ) {
+          window.__ctMenuHostContinuity.playSeen = true;
+          const playRailOpacity = playRail ? Number.parseFloat(getComputedStyle(playRail).opacity) : 0;
+          const playRailInteractive = Boolean(
+            playRail
+            && !playRail.closest('[inert]')
+            && getComputedStyle(playRail).pointerEvents !== 'none'
+          );
+          const phase = director.getAttribute('data-scene-phase');
+          const committed = director.getAttribute('data-scene-committed');
+          const pending = director.getAttribute('data-scene-pending');
+          const content = document.querySelector('[data-scene-region="play-shell"]');
+          const mounted = content?.getAttribute('data-scene-instance') ?? null;
+          const contentOpacity = content ? Number.parseFloat(getComputedStyle(content).opacity) : 0;
+          const contentVisibilityViolation = (
+            phase === 'exiting' && mounted !== committed
+          ) || (
+            phase === 'loading'
+            && mounted === pending
+            && contentOpacity > 0.001
+          );
+          if (
+            !playRail
+            || playRail !== window.__ctPlayHostRail
+            || !playRail.isConnected
+            || playRailOpacity < 0.99
+            || !playRailInteractive
+            || contentVisibilityViolation
+          ) {
+            window.__ctMenuHostContinuity.playViolations.push({
+              phase,
+              playRail: Boolean(playRail),
+              samePlayRail: playRail === window.__ctPlayHostRail,
+              connected: Boolean(playRail?.isConnected),
+              playRailOpacity,
+              playRailInteractive,
+              committed,
+              pending,
+              mounted,
+              contentOpacity,
+              transitionActive: content?.hasAttribute('data-scene-transition-active') ?? false,
+              transitionMode: content?.getAttribute('data-scene-transition-mode') ?? null,
+              boundaryClass: boundary?.className ?? null,
+              preparingSelectorMatches: content?.matches('.scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active]') ?? false,
+              contentVisibilityViolation,
+            });
+          }
+        }
+        if (
+          director?.classList.contains('is-host-preserving')
+          && boundary?.getAttribute('data-transition-region') === 'settings-shell'
+        ) {
+          window.__ctMenuHostContinuity.settingsSeen = true;
+          const settingsRail = document.querySelector('[aria-label="Settings sections"]');
+          const settingsContent = document.querySelector('[data-scene-region="settings-shell"]');
+          const phase = director.getAttribute('data-scene-phase');
+          const committed = director.getAttribute('data-scene-committed');
+          const pending = director.getAttribute('data-scene-pending');
+          const mounted = settingsContent?.getAttribute('data-scene-instance') ?? null;
+          const contentOpacity = settingsContent
+            ? Number.parseFloat(getComputedStyle(settingsContent).opacity)
+            : 0;
+          if (settingsRail && !window.__ctSettingsHostRail) window.__ctSettingsHostRail = settingsRail;
+          if (phase === 'exiting' && contentOpacity < 0.9) {
+            window.__ctMenuHostContinuity.settingsExitFaded = true;
+          }
+          const loading = document.querySelector('.scene-loading-presentation');
+          const loadingVisible = Boolean(
+            loading
+            && getComputedStyle(loading).visibility !== 'hidden'
+            && Number.parseFloat(getComputedStyle(loading).opacity) > 0.001
+          );
+          const violation = !settingsRail
+            || settingsRail !== window.__ctSettingsHostRail
+            || settingsRail.closest('[inert]')
+            || getComputedStyle(settingsRail).pointerEvents === 'none'
+            || (phase === 'exiting' && mounted !== committed)
+            || (phase === 'loading' && mounted === pending && contentOpacity > 0.001)
+            || (pending === 'settings/audio' && loadingVisible);
+          if (violation) {
+            window.__ctMenuHostContinuity.settingsViolations.push({
+              phase,
+              committed,
+              pending,
+              mounted,
+              contentOpacity,
+              transitionActive: settingsContent?.hasAttribute('data-scene-transition-active') ?? false,
+              transitionMode: settingsContent?.getAttribute('data-scene-transition-mode') ?? null,
+              boundaryClass: boundary?.className ?? null,
+              preparingSelectorMatches: settingsContent?.matches('.scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active]') ?? false,
+              loadingVisible,
+              sameRail: settingsRail === window.__ctSettingsHostRail,
+            });
+          }
+        }
+        requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    });
+  }
+  if (assertBootstrapPriority) {
+    await page.evaluateOnNewDocument(() => {
+      window.__ctBootstrapPriority = { visibleAt: null, exitingAt: null };
+      const sample = () => {
+        const status = document.querySelector('#app-bootstrap-status');
+        if (status) {
+          const visible = getComputedStyle(status).visibility !== 'hidden'
+            && Number.parseFloat(getComputedStyle(status).opacity) > 0.001;
+          if (visible && window.__ctBootstrapPriority.visibleAt === null) {
+            window.__ctBootstrapPriority.visibleAt = performance.now();
+          }
+          if (
+            status.classList.contains('is-exiting')
+            && window.__ctBootstrapPriority.exitingAt === null
+          ) {
+            window.__ctBootstrapPriority.exitingAt = performance.now();
+          }
+        }
+        requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    });
+  }
+  if (assertSurfaceAtomic) {
+    await page.evaluateOnNewDocument((surfaceName) => {
+      window.__ctSurfaceAtomicSeen = 0;
+      window.__ctSurfaceAtomicViolations = [];
+      const sample = () => {
+        const surface = document.querySelector(`[data-loading-surface="${CSS.escape(surfaceName)}"]`);
+        if (surface) {
+          window.__ctSurfaceAtomicSeen += 1;
+          const content = surface.querySelector('.painted-surface-content');
+          const loading = surface.classList.contains('is-loading');
+          const failed = surface.classList.contains('is-error');
+          const childrenVisible = content
+            ? [...content.children].some((child) => getComputedStyle(child).visibility !== 'hidden')
+            : false;
+          const imagesComplete = content
+            ? [...content.querySelectorAll('img')].every((img) => img.complete && img.naturalWidth > 0)
+            : false;
+          if (!failed && ((loading && (childrenVisible || !content?.inert)) || (!loading && !imagesComplete))) {
+            window.__ctSurfaceAtomicViolations.push({ loading, failed, childrenVisible, inert: content?.inert, imagesComplete });
+          }
+        }
+        requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    }, String(assertSurfaceAtomic));
   }
   const throttleProfiles = {
     // DevTools-style profiles. Throughput values are bytes/second.
@@ -189,11 +514,26 @@ try {
   }
 
   // Visual verification is an authenticated observer, never a synthetic writer. Patch only the
-  // Level Editor's session-open request; all other requests and routes remain untouched.
+  // Level Editor's session-open request. The optional failure injection shares this one
+  // interception handler so a Level Editor capture never tries to continue the same request twice.
   const targetIsLevelEditor = isLevelEditorUrl(url);
-  if (targetIsLevelEditor) {
+  let retryFailureReleased = false;
+  if (targetIsLevelEditor || abortRequest || abortRequestOnce || abortRequestUntilRetry) {
+    let abortedOnce = false;
     await page.setRequestInterception(true);
     page.on('request', (request) => {
+      const abortAlways = abortRequest && request.url().includes(String(abortRequest));
+      const abortFirst = !abortedOnce
+        && abortRequestOnce
+        && request.url().includes(String(abortRequestOnce));
+      const abortUntilRetry = !retryFailureReleased
+        && abortRequestUntilRetry
+        && request.url().includes(String(abortRequestUntilRetry));
+      if (abortAlways || abortFirst || abortUntilRetry) {
+        if (abortFirst) abortedOnce = true;
+        void request.abort('failed');
+        return;
+      }
       const postData = observationOpenPostData({
         targetIsLevelEditor,
         method: request.method(),
@@ -207,26 +547,361 @@ try {
     });
   }
 
-  // One target navigation only: retrying a timed-out navigation silently doubles cold-load work.
-  // Persistent ambience connections also make network-idle an invalid readiness signal.
-  await page.goto(url, { waitUntil: 'domcontentloaded', timeout });
+  // A warm assertion deliberately completes the same route once in this browser, then
+  // reloads with its populated HTTP cache. Ordinary and cold assertions still perform
+  // exactly one target navigation; a timed-out navigation is never silently retried.
+  // Persistent ambience connections make network-idle an invalid readiness signal.
+  if (warm) {
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout });
+    await page.waitForFunction(
+      "Boolean(document.querySelector('[data-scene-phase=\"current\"]'))",
+      { timeout },
+    );
+    await page.reload({ waitUntil: 'domcontentloaded', timeout });
+  } else {
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout });
+  }
+  if (bootstrapOut) {
+    await page.waitForFunction(
+      `(() => {
+        const status = document.querySelector('#app-bootstrap-status.is-font-ready');
+        return Boolean(status)
+          && Number.parseFloat(getComputedStyle(status).opacity) > 0.99
+          && document.fonts.check('19px "Advance Wars 2 GBA"', status.textContent || 'Loading...');
+      })()`,
+      { timeout },
+    );
+    const bootstrapPath = resolve(process.cwd(), String(bootstrapOut));
+    mkdirSync(dirname(bootstrapPath), { recursive: true });
+    await page.screenshot({ path: bootstrapPath, fullPage: false });
+    console.log(`wrote early bootstrap ${bootstrapPath}`);
+  }
+  if (click) {
+    if (assertFullSceneExit || assertImmediateLocalControl) {
+      await page.waitForFunction(
+        `document.querySelector('[data-scene-phase]')?.getAttribute('data-scene-phase') === 'current'`,
+        { timeout },
+      );
+    }
+    if (clickReady) await page.waitForFunction(clickReady, { timeout });
+    await page.waitForSelector(String(click), { visible: true, timeout });
+    if (assertImmediateLocalControl) {
+      await page.evaluate(() => {
+        const director = document.querySelector('[data-scene-phase]');
+        const boundary = document.querySelector('[data-scene-generation]');
+        window.__ctImmediateLocalBefore = {
+          phase: director?.getAttribute('data-scene-phase') ?? null,
+          committed: director?.getAttribute('data-scene-committed') ?? null,
+          generation: boundary?.getAttribute('data-scene-generation') ?? null,
+          href: window.location.href,
+          boundary,
+        };
+      });
+    }
+    if (assertFullSceneExit) {
+      await page.evaluate(() => {
+        const director = document.querySelector('[data-scene-phase]');
+        window.__ctFullScenePhases = [director?.getAttribute('data-scene-phase') ?? null];
+        window.__ctFullScenePhaseObserver = new MutationObserver(() => {
+          window.__ctFullScenePhases.push(director?.getAttribute('data-scene-phase') ?? null);
+        });
+        if (director) {
+          window.__ctFullScenePhaseObserver.observe(director, {
+            attributes: true,
+            attributeFilter: ['data-scene-phase'],
+          });
+        }
+        window.__ctOutgoingSceneBoundary = document.querySelector('.scene-boundary');
+        window.__ctOutgoingSceneBoundaryStartedVisible = Boolean(
+          window.__ctOutgoingSceneBoundary
+          && Number.parseFloat(getComputedStyle(window.__ctOutgoingSceneBoundary).opacity) > 0.99
+        );
+      });
+    }
+    if (assertBackdropContinuity) {
+      const outgoingBackdropVisible = await page.evaluate(() => {
+        const host = document.querySelector('.scene-homepage-background');
+        const scene = host?.querySelector('.scene-backdrop');
+        const canvas = scene?.querySelector('.scene-backdrop-canvas');
+        const visible = Boolean(scene && canvas
+          && Number.parseFloat(getComputedStyle(host).opacity) > 0.001
+          && Number.parseFloat(getComputedStyle(scene).opacity) > 0.001
+          && getComputedStyle(canvas).backgroundImage !== 'none');
+        if (visible) window.__ctBackdropVisibleSeen = true;
+        return visible;
+      });
+      if (!outgoingBackdropVisible) {
+        throw new Error('outgoing homepage backdrop was not painted before navigation');
+      }
+    }
+    await page.click(String(click));
+    if (assertImmediateLocalControl) {
+      await new Promise((resolveSample) => setTimeout(resolveSample, 80));
+      const localSample = await page.evaluate(() => {
+        const before = window.__ctImmediateLocalBefore;
+        const director = document.querySelector('[data-scene-phase]');
+        const boundary = document.querySelector('[data-scene-generation]');
+        return {
+          before: before ? {
+            phase: before.phase,
+            committed: before.committed,
+            generation: before.generation,
+            href: before.href,
+          } : null,
+          after: {
+            phase: director?.getAttribute('data-scene-phase') ?? null,
+            committed: director?.getAttribute('data-scene-committed') ?? null,
+            generation: boundary?.getAttribute('data-scene-generation') ?? null,
+            href: window.location.href,
+          },
+          sameBoundary: Boolean(before && boundary === before.boundary),
+        };
+      });
+      if (
+        !localSample.before
+        || localSample.before.phase !== 'current'
+        || localSample.after.phase !== 'current'
+        || localSample.before.committed !== localSample.after.committed
+        || localSample.before.generation !== localSample.after.generation
+        || localSample.before.href !== localSample.after.href
+        || !localSample.sameBoundary
+      ) {
+        throw new Error(`immediate local control entered the scene lifecycle: ${JSON.stringify(localSample)}`);
+      }
+    }
+    if (assertFullSceneExit) {
+      await new Promise((resolveSample) => setTimeout(resolveSample, 120));
+      const exitSample = await page.evaluate(() => {
+        const boundary = document.querySelector('.scene-boundary[data-scene-visual-role="outgoing"]')
+          ?? document.querySelector('.scene-boundary');
+        const incoming = document.querySelector('.scene-boundary[data-scene-visual-role="incoming"]');
+        window.__ctIncomingSceneBoundary = incoming;
+        return {
+          phases: window.__ctFullScenePhases ?? [],
+          startedVisible: window.__ctOutgoingSceneBoundaryStartedVisible,
+          sameBoundary: boundary === window.__ctOutgoingSceneBoundary,
+          opacity: boundary ? Number.parseFloat(getComputedStyle(boundary).opacity) : null,
+          incomingMounted: Boolean(incoming),
+          incomingOpacity: incoming ? Number.parseFloat(getComputedStyle(incoming).opacity) : null,
+        };
+      });
+      if (
+        !exitSample.startedVisible
+        || !exitSample.phases.includes('exiting')
+        || !exitSample.sameBoundary
+        || exitSample.opacity === null
+        || exitSample.opacity < 0.99
+        || !exitSample.incomingMounted
+        || exitSample.incomingOpacity === null
+        || exitSample.incomingOpacity > 0.01
+      ) {
+        throw new Error(`full-scene wait did not retain the painted outgoing boundary beneath the hidden destination: ${JSON.stringify(exitSample)}`);
+      }
+      if (transitionOut) {
+        await new Promise((resolveSample) => setTimeout(resolveSample, 300));
+        const waitPresentation = await page.evaluate(() => {
+          const status = document.querySelector('.brand-lockup-transition-status[role="status"]');
+          const centered = document.querySelector('.scene-loading-presentation');
+          const transitionOwnedCenter = document.querySelector('.app-shell-titlebar-center.is-transition-status');
+          return {
+            phase: document.querySelector('[data-scene-phase]')?.getAttribute('data-scene-phase') ?? null,
+            titleStatus: status?.textContent?.trim() ?? null,
+            titleVisible: Boolean(status && Number.parseFloat(getComputedStyle(status).opacity) > 0.01),
+            centeredLoading: Boolean(centered?.textContent?.includes('Loading')),
+            transitionOwnedCenter: Boolean(transitionOwnedCenter),
+          };
+        });
+        if (
+          !['loading', 'entering'].includes(waitPresentation.phase)
+          || waitPresentation.titleStatus !== 'Loading…'
+          || !waitPresentation.titleVisible
+          || waitPresentation.centeredLoading
+          || waitPresentation.transitionOwnedCenter
+        ) {
+          throw new Error(`route wait presentation escaped the title bar: ${JSON.stringify(waitPresentation)}`);
+        }
+        const transitionPath = resolve(process.cwd(), String(transitionOut));
+        mkdirSync(dirname(transitionPath), { recursive: true });
+        await page.screenshot({ path: transitionPath, fullPage: false });
+        console.log(`wrote transition ${transitionPath}`);
+      }
+    }
+    if (backAfterClickMs !== undefined) {
+      const clickedHref = page.url();
+      const delay = Math.max(0, Number(backAfterClickMs) || 0);
+      if (delay) await new Promise((resolveDelay) => setTimeout(resolveDelay, delay));
+      await page.evaluate(() => window.history.back());
+      await page.waitForFunction(
+        (departedUrl) => window.location.href !== departedUrl,
+        { timeout },
+        clickedHref,
+      ).catch(() => {});
+    }
+  }
+  if (assertMenuHostContinuity && !click) {
+    await page.waitForFunction(
+      `Boolean(
+        document.querySelector('[data-scene-phase="current"]')
+        && document.querySelector('.main-menu-mode-tab[data-nav="/play/select/skirmish"]')
+      )`,
+      { timeout },
+    ).catch(async (error) => {
+      const state = await page.evaluate(() => ({
+        phase: document.querySelector('[data-scene-phase]')?.getAttribute('data-scene-phase'),
+        error: document.querySelector('[data-scene-phase]')?.getAttribute('data-scene-error'),
+        boundary: document.querySelector('[data-scene-generation]')?.getAttribute('data-scene'),
+        menu: Boolean(document.querySelector('.main-menu-mode-tab')),
+        bootstrap: document.querySelector('#app-bootstrap-status')?.className,
+      }));
+      console.error(`menu host initial scene unavailable: ${JSON.stringify(state)}`);
+      throw error;
+    });
+    await page.click('.main-menu-mode-tab[data-nav="/play/select/skirmish"]');
+    await page.waitForFunction(
+      `Boolean(
+        document.querySelector('[data-scene-phase="current"]')
+        && document.querySelector('.main-menu-mode-tab[data-nav="/play/select/campaign/off-c-crown-valoria"]')
+      )`,
+      { timeout },
+    );
+    await page.click('.main-menu-mode-tab[data-nav="/play/select/campaign/off-c-crown-valoria"]');
+    await page.waitForFunction(
+      `document.querySelector('[data-scene-phase]')?.getAttribute('data-scene-phase') === 'exiting'`,
+      { timeout },
+    );
+    await page.click('.main-menu-mode-tab[data-nav="/play/select/levels"]');
+    await page.waitForFunction(
+      `Boolean(
+        document.querySelector('[data-scene-phase="current"][data-scene-committed="play/levels"]')
+        && document.querySelector('.brand-lockup[data-nav="/"]')
+      )`,
+      { timeout },
+    );
+    await page.click('.brand-lockup[data-nav="/"]');
+    await page.waitForFunction(
+      `document.querySelector('[data-scene-phase="current"]')?.getAttribute('data-scene-committed') === 'main-menu'`,
+      { timeout },
+    );
+    await page.evaluate(() => { window.__ctMenuHostContinuity.homeReturnSeen = true; });
+    await page.click('.main-menu-mode-tab[data-nav="/settings"]');
+    await page.waitForFunction(
+      `Boolean(
+        document.querySelector('[data-scene-phase="current"][data-scene-committed="settings/general"]')
+        && document.querySelector('[aria-label="Settings sections"] [data-nav="/settings/audio"]')
+      )`,
+      { timeout },
+    );
+    await page.click('[aria-label="Settings sections"] [data-nav="/settings/audio"]');
+    await page.waitForFunction(
+      `document.querySelector('[data-scene-phase="current"]')?.getAttribute('data-scene-committed') === 'settings/audio'`,
+      { timeout },
+    );
+  }
+  if (retrySceneError) {
+    await page.waitForSelector('[data-scene-phase="error"] .scene-loading-presentation button', {
+      visible: true,
+      timeout,
+    });
+    const failedGeneration = await page.$eval(
+      '[data-scene-generation]',
+      (node) => Number(node.getAttribute('data-scene-generation')),
+    );
+    retryFailureReleased = true;
+    await page.click('[data-scene-phase="error"] .scene-loading-presentation button');
+    await page.waitForFunction(
+      (generation) => {
+        const scene = document.querySelector('[data-scene-phase="current"]');
+        const boundary = document.querySelector('[data-scene-generation]');
+        return Boolean(scene && boundary)
+          && Number(boundary.getAttribute('data-scene-generation')) > generation;
+      },
+      { timeout },
+      failedGeneration,
+    );
+  }
 
-  // Readiness: an explicit gate is a fail-closed capture contract. The implicit fixture gate stays
+  // An explicit readiness contract is an assertion: the explicit gate fails closed. The implicit fixture gate stays
   // best-effort so this generic tool can still capture ordinary live routes without `window.__ready`.
   if (readyExpr) await page.waitForFunction(readyExpr, { timeout });
   else await page.waitForFunction('window.__ready===true', { timeout: 1200 }).catch(() => {});
 
-  // Route chrome can remain deliberately invisible while content hydrates, then spend one fade
-  // settling after the content readiness gate opens. Freezing animation before that lifecycle
-  // completes strands ArtRouteChrome at its opacity-zero entrance state. An explicit capture gate
-  // therefore also makes entrance settlement fail closed; generic captures keep the bounded,
-  // best-effort behavior used by their implicit fixture gate.
-  const waitForSettledScreenEntrance = page.waitForFunction(
-    "!document.querySelector('.screen-enter-hold,.screen-enter-lock')",
-    { timeout: readyExpr ? timeout : 1200 },
+  // The scene director is the one route-level lifecycle owner. Freezing animation while it
+  // is exiting/loading/entering would strand a partial composition, so explicit captures
+  // fail closed until the director reports a terminal complete scene or an
+  // explicitly requested coherent error scene.
+  const isManagedApp = await page.evaluate(() => Array.from(
+    document.querySelectorAll('script[type="module"][src]'),
+  ).some((script) => (script.getAttribute('src') || '').includes('/src/main.tsx')));
+  const requiresTerminalScene = Boolean(
+    isManagedApp || readyExpr || assertMenuAtomic || assertBoardAtomic || assertShellFontAtomic
+    || assertSurfaceAtomic || assertBackdropContinuity || assertBootstrapPriority
+    || assertMenuHostContinuity,
   );
-  if (readyExpr) await waitForSettledScreenEntrance;
-  else await waitForSettledScreenEntrance.catch(() => {});
+  const waitForSettledScene = page.waitForFunction(
+    "Boolean(document.querySelector('[data-scene-phase]')) && !document.querySelector('[data-scene-phase]:not([data-scene-phase=\"current\"]):not([data-scene-phase=\"error\"])')",
+    { timeout: requiresTerminalScene ? timeout : 1200 },
+  );
+  if (requiresTerminalScene) {
+    try {
+      await waitForSettledScene;
+    } catch (error) {
+      const state = await page.evaluate(() => {
+        const director = document.querySelector('[data-scene-phase]');
+        const boundary = document.querySelector('[data-scene-generation]');
+        return {
+          href: window.location.href,
+          phase: director?.getAttribute('data-scene-phase') ?? null,
+          error: director?.getAttribute('data-scene-error') ?? null,
+          scene: boundary?.getAttribute('data-scene') ?? null,
+          generation: boundary?.getAttribute('data-scene-generation') ?? null,
+          participants: boundary?.getAttribute('data-scene-participants') ?? null,
+          unresolved: boundary?.getAttribute('data-scene-unresolved') ?? null,
+        };
+      });
+      console.error(`scene did not settle: ${JSON.stringify(state)}`);
+      throw error;
+    }
+  } else await waitForSettledScene.catch(() => {});
+  if (assertMenuAtomic) {
+    await page.waitForFunction(
+      `(() => {
+        const menu = document.querySelector('.main-menu-layer[data-reveal-bg][data-reveal-buttons]');
+        const controls = document.querySelector('.main-menu-twin-screen');
+        const title = document.querySelector('.app-titlebar:not(.reveal-pending)');
+        const background = document.querySelector('.scene-homepage-background');
+        return Boolean(menu && controls && title && background)
+          && Number.parseFloat(getComputedStyle(controls).opacity) > 0.99
+          && Number.parseFloat(getComputedStyle(title).opacity) > 0.99
+          && Number.parseFloat(getComputedStyle(background).opacity) > 0.99;
+      })()`,
+      { timeout },
+    );
+  }
+  const terminalScene = await page.$eval('[data-scene-phase]', (node) => ({
+    phase: node.getAttribute('data-scene-phase'),
+    error: node.getAttribute('data-scene-error'),
+  })).catch(() => null);
+  if (terminalScene?.phase === 'error') {
+    console.error(`scene terminal error: ${terminalScene.error || 'unknown'}`);
+    if (!allowSceneError) {
+      process.exitCode = 13;
+      throw new Error('unexpected terminal scene error');
+    }
+  }
+  if (assertFullSceneExit) {
+    const promotion = await page.evaluate(() => {
+      const current = document.querySelector('.scene-boundary[data-scene-visual-role="single"]');
+      return {
+        incomingWasCaptured: Boolean(window.__ctIncomingSceneBoundary),
+        incomingStillConnected: Boolean(window.__ctIncomingSceneBoundary?.isConnected),
+        sameBoundary: current === window.__ctIncomingSceneBoundary,
+        currentScene: current?.getAttribute('data-scene') ?? null,
+      };
+    });
+    if (!promotion.incomingWasCaptured || !promotion.incomingStillConnected || !promotion.sameBoundary) {
+      throw new Error(`painted destination was remounted instead of promoted in place: ${JSON.stringify(promotion)}`);
+    }
+  }
 
   await page.evaluate(() => document.fonts && document.fonts.ready).catch(() => {});
 
@@ -246,6 +921,17 @@ try {
       throw new Error('atomic menu assertion failed');
     }
   }
+  if (assertBackdropContinuity) {
+    const result = await page.evaluate(() => ({
+      seen: window.__ctBackdropVisibleSeen || false,
+      violations: window.__ctBackdropViolations || [],
+    }));
+    if (!result.seen || result.violations.length) {
+      console.error(`homepage backdrop continuity failed: ${JSON.stringify(result)}`);
+      process.exitCode = 8;
+      throw new Error('homepage backdrop continuity assertion failed');
+    }
+  }
   if (assertBoardAtomic) {
     const result = await page.evaluate(() => ({
       violations: window.__ctBoardAtomicViolations || [],
@@ -261,6 +947,145 @@ try {
       console.error(`board exposed a partial or interactive frame: ${JSON.stringify(violations[0])}`);
       process.exitCode = 5;
       throw new Error('atomic board assertion failed');
+    }
+  }
+  if (assertMenuHostContinuity) {
+    const result = await page.evaluate(() => {
+      const rail = document.querySelector('.settings-scroll > .kit-scroll-rail');
+      const rows = [...document.querySelectorAll(
+        '[data-scene-instance="settings/audio"] .settings-row',
+      )];
+      const railLeft = rail?.getBoundingClientRect().left ?? null;
+      const rect = (selector) => {
+        const node = document.querySelector(selector);
+        const bounds = node?.getBoundingClientRect();
+        return bounds ? { left: bounds.left, right: bounds.right, width: bounds.width } : null;
+      };
+      const rowsRight = rows.length
+        ? Math.max(...rows.map((row) => row.getBoundingClientRect().right))
+        : null;
+      return {
+        ...window.__ctMenuHostContinuity,
+        settingsGeometry: {
+          railLeft,
+          rowsRight,
+          gap: railLeft !== null && rowsRight !== null ? railLeft - rowsRight : null,
+          wrap: rect('.settings-scroll'),
+          content: rect('.settings-scroll > .kit-scroll-content'),
+          panel: rect('[data-scene-instance="settings/audio"] .settings-panel-content'),
+          firstRow: rect('[data-scene-instance="settings/audio"] .settings-row'),
+        },
+      };
+    });
+    if (
+      !result?.seen
+      || result.violations.length
+      || !result.playSeen
+      || result.playViolations.length
+      || !result.homeReturnSeen
+      || result.homeReturnViolations.length
+      || !result.homeExitFaded
+      || !result.settingsSeen
+      || !result.settingsExitFaded
+      || result.settingsViolations.length
+      || result.settingsGeometry.gap === null
+      || result.settingsGeometry.gap < 6
+    ) {
+      console.error(`menu host continuity failed: ${JSON.stringify(result)}`);
+      process.exitCode = 15;
+      throw new Error('menu host continuity assertion failed');
+    }
+    console.log(`menu host continuity OK: ${JSON.stringify(result)}`);
+  }
+  if (assertEditorViewer && targetIsLevelEditor) {
+    const editorFrame = await page.$eval('[data-testid="level-editor"]', (node) => ({
+      authority: node.getAttribute('data-editor-authority'),
+      terrain: node.getAttribute('data-editor-terrain'),
+      scene: node.getAttribute('data-editor-scene'),
+      frame: node.getAttribute('data-editor-frame'),
+      inert: node.inert,
+      opacity: Number.parseFloat(getComputedStyle(node).opacity),
+    })).catch(() => null);
+    if (
+      !editorFrame
+      || editorFrame.authority !== 'ready'
+      || !['painted', 'predrawn'].includes(editorFrame.terrain || '')
+      || editorFrame.scene !== 'painted'
+      || editorFrame.frame !== 'painted'
+      || editorFrame.inert
+      || editorFrame.opacity < 0.99
+    ) {
+      console.error(`editor exposed an incomplete frame: ${JSON.stringify(editorFrame)}`);
+      process.exitCode = 12;
+      throw new Error('atomic editor assertion failed');
+    }
+  }
+  if (assertShellFontAtomic) {
+    const result = await page.evaluate(() => ({
+      violations: window.__ctShellFontViolations || [],
+      samples: window.__ctShellFontSamples || 0,
+    }));
+    if (!result.samples) {
+      console.error('atomic shell-font assertion observed no startup status');
+      process.exitCode = 6;
+      throw new Error('atomic shell-font assertion had no target');
+    }
+    if (result.violations.length) {
+      console.error(`startup status exposed a fallback-font frame: ${JSON.stringify(result.violations[0])}`);
+      process.exitCode = 6;
+      throw new Error('atomic shell-font assertion failed');
+    }
+  }
+  if (assertBootstrapPriority) {
+    const result = await page.evaluate(async () => {
+      const projection = await window.__ctBootstrapScene;
+      const backgroundUrl = projection?.scene?.background?.immutableUrl || '';
+      const entries = performance.getEntriesByType('resource');
+      const start = (part) => entries.find((entry) => entry.name.includes(part))?.startTime ?? null;
+      return {
+        ...window.__ctBootstrapPriority,
+        bootstrapStart: start('/api/app-bootstrap-scene'),
+        mainStart: start('/src/main.tsx'),
+        backgroundStart: backgroundUrl ? start(backgroundUrl) : null,
+        catalogStarts: [
+          start('/api/asset-catalog'),
+          start('/api/drawable-catalog'),
+          start('/api/unit-catalog'),
+        ],
+        backgroundUrl,
+      };
+    });
+    const catalogStarts = result.catalogStarts.filter((value) => value !== null);
+    const visibleDuration = result.visibleAt !== null && result.exitingAt !== null
+      ? result.exitingAt - result.visibleAt
+      : null;
+    const ordered = result.bootstrapStart !== null
+      && result.mainStart !== null
+      && result.backgroundStart !== null
+      && catalogStarts.length === 3
+      && catalogStarts.every((start) => result.bootstrapStart < start)
+      && catalogStarts.every((start) => result.backgroundStart < start);
+    if (!ordered || visibleDuration === null || visibleDuration < 350) {
+      console.error(`bootstrap priority failed: ${JSON.stringify({ ...result, visibleDuration })}`);
+      process.exitCode = 14;
+      throw new Error('bootstrap priority assertion failed');
+    }
+    console.log(`bootstrap priority OK: ${JSON.stringify({ ...result, visibleDuration })}`);
+  }
+  if (assertSurfaceAtomic) {
+    const result = await page.evaluate(() => ({
+      violations: window.__ctSurfaceAtomicViolations || [],
+      seen: window.__ctSurfaceAtomicSeen || 0,
+    }));
+    if (!result.seen) {
+      console.error(`atomic surface assertion observed no ${assertSurfaceAtomic} surface`);
+      process.exitCode = 7;
+      throw new Error('atomic surface assertion had no target');
+    }
+    if (result.violations.length) {
+      console.error(`surface exposed a partial or interactive frame: ${JSON.stringify(result.violations[0])}`);
+      process.exitCode = 7;
+      throw new Error('atomic surface assertion failed');
     }
   }
 

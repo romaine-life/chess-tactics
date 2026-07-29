@@ -48,7 +48,20 @@ for (const [command, args, cwd] of setupCommands) {
 }
 
 const viteBin = path.join(frontendDir, 'node_modules', 'vite', 'bin', 'vite.js');
-const viteArgs = [viteBin, '--host', '0.0.0.0', ...forwardedArgs];
+const managedPort = process.env.DEVCTL_MANAGED === '1'
+  ? Number.parseInt(process.env.DEVCTL_FRONTEND_PORT || '', 10)
+  : null;
+if (process.env.DEVCTL_MANAGED === '1' && (!managedPort || managedPort < 1 || managedPort > 65535)) {
+  console.error('[dev server] DEVCTL_FRONTEND_PORT must be a valid port for a managed environment.');
+  process.exit(1);
+}
+const viteArgs = [
+  viteBin,
+  '--host',
+  '0.0.0.0',
+  ...(managedPort ? ['--port', String(managedPort), '--strictPort'] : []),
+  ...forwardedArgs,
+];
 
 const child = spawn(process.execPath, viteArgs, {
   cwd: frontendDir,

@@ -22,6 +22,7 @@ import { stateAtPosition, type BookPosition, type OpeningBookSettings } from '..
 import type { GymRequest, GymResponse } from '../lab/gymWorker';
 import type { StepProgress } from '../lab/gymStep';
 import type { ValState } from '../lab/validate';
+import { useSceneParticipant } from './shell/SceneBoundary';
 import type { TdProbe, TdRequest, TdResponse, TdRunConfig, TdSession } from '../lab/tdWorker';
 import { freshTdSession, upsertTdRun, type TdAdoptionRecord, type TdRunDoc, type TdSessionDoc } from '../lab/tdSession';
 import {
@@ -483,7 +484,17 @@ export type GymMode = 'book' | 'train' | 'cluster' | 'values';
 
 export function GymViewer({ levelId, header, initialMode }: { levelId?: string; header?: ReactNode; initialMode?: GymMode }): ReactElement {
   const workspaceLevels = useCampaigns((s) => s.levels);
-  useEffect(() => { void ensureCampaignsHydrated(); }, []);
+  const [campaignsSettled, setCampaignsSettled] = useState(false);
+  const [campaignLoadError, setCampaignLoadError] = useState<Error | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void ensureCampaignsHydrated()
+      .then(() => { if (!cancelled) setCampaignsSettled(true); })
+      .catch((value: unknown) => {
+        if (!cancelled) setCampaignLoadError(value instanceof Error ? value : new Error(String(value)));
+      });
+    return () => { cancelled = true; };
+  }, []);
   const level = levelId ? workspaceLevels[levelId] : undefined;
 
   // Per-level book store (account-scoped, backend-persisted). blob + activeId are
@@ -492,6 +503,8 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   const [blob, setBlob] = useState<BooksBlob>(() => emptyBlob());
   const [activeId, setActiveId] = useState<number | undefined>(undefined);
   const [loadingBooks, setLoadingBooks] = useState(false);
+  const [booksSettledFor, setBooksSettledFor] = useState<string | null>(null);
+  const [initialLoadError, setInitialLoadError] = useState<Error | null>(null);
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [mode, setMode] = useState<GymMode>(initialMode ?? 'book');
   // The per-level reset effect below stomps mode to 'book' on its first run (mount).
@@ -541,6 +554,21 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   // continues for hours against a dead persistence path (e.g. an oversized blob or
   // a server error) and the loss is only discovered on reload.
   const [saveError, setSaveError] = useState<string | null>(null);
+  const initialViewerError = useMemo(
+    () => campaignLoadError
+      ?? (campaignsSettled && levelId && !level ? new Error(`Selected Gym level ${levelId} is unavailable`) : null)
+      ?? (level ? initialLoadError : null),
+    [campaignLoadError, campaignsSettled, initialLoadError, level, levelId],
+  );
+  useSceneParticipant(
+    'studio:gym-viewer',
+    initialViewerError
+      ? 'error'
+      : campaignsSettled && (!level || (booksSettledFor === level.id && ready))
+        ? 'painted'
+        : 'loading',
+    initialViewerError,
+  );
 
   // Persist + set state together — every meaningful change goes through here. The
   // save is fire-and-forget (never blocks the UI); a signed-out save is swallowed
@@ -578,6 +606,8 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
     setMode(deepLinkModeRef.current ?? 'book');
     deepLinkModeRef.current = undefined;
     tdDocRef.current = null;
+    setBooksSettledFor(null);
+    setInitialLoadError(null);
     if (!levelId) { setLoadingBooks(false); setAdoptedVec(null); return undefined; }
     // Reflect the local cache immediately (the live AI's synchronous source); the
     // account blob below can overwrite it once it resolves.
@@ -625,10 +655,19 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
       .catch((error) => {
         if (cancelled) return;
         if (error instanceof HttpError && error.status === 401) setSignedIn(false);
-        else console.warn('opening-books load failed', error);
+        else {
+          const reason = error instanceof Error ? error : new Error(String(error));
+          setInitialLoadError(reason);
+          console.warn('opening-books load failed', reason);
+        }
         // Leave the empty blob in place; the user can still work locally.
       })
-      .finally(() => { if (!cancelled) setLoadingBooks(false); });
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingBooks(false);
+          setBooksSettledFor(levelId);
+        }
+      });
     return () => { cancelled = true; };
   }, [levelId]);
 
@@ -645,6 +684,9 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
     setVal(null); setValidating(false);
     const worker = new Worker(new URL('../lab/gymWorker.ts', import.meta.url), { type: 'module' });
     workerRef.current = worker;
+    worker.onerror = (event) => {
+      setInitialLoadError(new Error(event.message || 'Gym worker failed before its first frame'));
+    };
     worker.onmessage = (event: MessageEvent<GymResponse>) => {
       const msg = event.data;
       if (msg.type === 'ready') {

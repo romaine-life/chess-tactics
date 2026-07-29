@@ -4,7 +4,7 @@
 // app-shell title bar now — src/ui/shared/HeaderAccountCluster.)
 import './style.css';
 import { createRoot } from 'react-dom/client';
-import { armForColdHome, isMainMenuPath } from './ui/shell/coldReveal';
+import { Component, type ErrorInfo, type ReactNode } from 'react';
 // @ts-ignore — bgm.js is untyped legacy JS, imported for its side-effecting init.
 import { initBgm } from './bgm.js';
 import { primeSfx } from './sfx';
@@ -23,6 +23,30 @@ import { composeInstalledChromeCss } from './ui/useInstalledChromeCss';
 
 installLoadingResourceObserver();
 loadingMark('app', 'entry-module');
+
+class AppCrashBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+
+  static getDerivedStateFromError(error: Error): { error: Error } {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo): void {
+    document.getElementById('app-bootstrap-status')?.remove();
+    loadingError('app', 'react-tree-failed', error);
+    console.error('application render failed:', error, info.componentStack);
+  }
+
+  render(): ReactNode {
+    if (!this.state.error) return this.props.children;
+    return (
+      <main className="app-startup-status is-error" role="alert">
+        <h1>This scene could not be loaded.</h1>
+        <button type="button" onClick={() => window.location.reload()}>Retry</button>
+      </main>
+    );
+  }
+}
 
 async function retryStartup<T>(label: string, task: () => Promise<T>, attempts = 4): Promise<T> {
   let lastError: unknown;
@@ -63,17 +87,9 @@ window.addEventListener('vite:preloadError', (event) => {
   window.location.reload();
 });
 
-// The shell ships hidden (avoids an unstyled flash); reveal it once JS runs.
-const shell = document.querySelector('.shell');
-if (shell instanceof HTMLElement) shell.style.visibility = 'visible';
-
-// Cold-load reveal (see ui/shell/coldReveal). On a fresh main-menu load, sequence the
-// menu's background, title, and buttons as one complete visual unit, then let rain drift
-// independently. Arm BEFORE React renders so the first paint is already in the hidden/pending
-// state; it no-ops (everything stays revealed) on every other route and on later
-// soft navigations. The route-scoped background preload moves the scene — first in the
-// order — to the front of the network queue without taxing other routes (the global
-// preload was deliberately removed; see index.html).
+// App's SceneDirector owns the ordered cold-home reveal. This bootstrap only gives
+// the first background request priority before App imports; it does not own a second
+// reveal clock or declare readiness.
 // Arm authored terrain SFX on the first user gesture (mirrors initBgm). Only
 // attaches listeners — no AudioContext until a gesture, so it's cheap + autoplay-safe.
 try { primeSfx(); } catch { /* sound effects are decorative */ }
@@ -82,10 +98,27 @@ const root = document.getElementById('root');
 if (root) {
   const startupAt = performance.now();
   const reactRoot = createRoot(root);
-  reactRoot.render(<main className="app-startup-status" role="status">Loading live assets...</main>);
-  loadingMark('app', 'startup-placeholder-painted');
 
-  void retryStartup('critical-catalogs', () => Promise.all([loadLiveMediaCatalog(), loadDrawableCatalog(), loadLiveUnitCatalog()]))
+  // index.html starts this face before the module graph and owns the visible
+  // bootstrap copy. Re-prove it here before App can replace that static surface.
+  const criticalFonts = retryStartup('critical-fonts', loadCriticalFonts).then(() => {
+    document.body.classList.remove('loading-bootstrap');
+    const bootstrapStatus = document.getElementById('app-bootstrap-status');
+    bootstrapStatus?.classList.remove('is-font-pending');
+    bootstrapStatus?.classList.add('is-font-ready');
+    loadingMeasure('app', 'critical-fonts-ready', startupAt);
+    requestAnimationFrame(() => loadingMark('app', 'static-bootstrap-painted'));
+  });
+
+  const bootstrapPriority = (
+    window as typeof window & { __ctBootstrapScene?: Promise<unknown> }
+  ).__ctBootstrapScene ?? Promise.resolve(null);
+
+  // The initial document creates the background request while resolving this
+  // bounded projection. Do not let broad catalogs compete until that request
+  // has actually entered the browser's scheduler.
+  void bootstrapPriority
+    .then(() => retryStartup('critical-catalogs', () => Promise.all([loadLiveMediaCatalog(), loadDrawableCatalog(), loadLiveUnitCatalog()])))
     .then(async () => {
       applyGroundCoverCatalog();
       applyWallDecorCatalog();
@@ -96,15 +129,6 @@ if (root) {
       installNineSliceCssVariables();
       try { initBgm(installedUiMedia('ui-kit-icons-music-png')); } catch { /* background music is decorative */ }
       loadingMeasure('app', 'critical-catalogs-ready', startupAt);
-      if (isMainMenuPath(window.location.pathname)) {
-        const bgPreload = document.createElement('link');
-        bgPreload.rel = 'preload';
-        bgPreload.as = 'image';
-        bgPreload.type = 'image/avif';
-        bgPreload.href = installedUiMedia('ui-main-menu-background-scene-v1-avif');
-        bgPreload.setAttribute('fetchpriority', 'high');
-        document.head.appendChild(bgPreload);
-      }
       // Prop/doodad definitions derive active raster dimensions from the media
       // snapshot, so media must be installed before the complete seat document.
       // App is intentionally imported only after both authorities are hydrated:
@@ -112,14 +136,9 @@ if (root) {
       // a packaged fallback.
       await retryStartup('prop-seats', loadLiveSeats);
       loadingMeasure('app', 'critical-seats-ready', startupAt);
-      await retryStartup('critical-fonts', loadCriticalFonts);
-      document.body.classList.remove('loading-bootstrap');
-      loadingMeasure('app', 'critical-fonts-ready', startupAt);
+      await criticalFonts;
       await retryStartup('installed-chrome', composeInstalledChromeCss);
       loadingMeasure('app', 'critical-chrome-ready', startupAt);
-      // The real menu has not mounted yet, so arming here still precedes its first
-      // paint while allowing the director to pin the hydrated immutable background.
-      armForColdHome();
       // SFX are decorative: hydrate their DB-owned profile before importing the
       // Studio/runtime consumers, but keep honest silence when the row is missing
       // or temporarily unavailable. There is no committed profile fallback.
@@ -127,10 +146,11 @@ if (root) {
       assertInstalledChromeSlots();
       initUnitSizeTuning();
       const { App } = await import('./ui/App');
-      reactRoot.render(<App />);
+      reactRoot.render(<AppCrashBoundary><App /></AppCrashBoundary>);
       requestAnimationFrame(() => loadingMeasure('app', 'first-app-frame', startupAt));
     })
     .catch((error) => {
+      document.getElementById('app-bootstrap-status')?.remove();
       loadingError('app', 'critical-startup-failed', error);
       console.error('live asset catalog startup failed:', error);
       if (window.location.pathname === '/studio/drawables') {

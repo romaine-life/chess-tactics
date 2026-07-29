@@ -74,7 +74,9 @@ function asRevisionedWorkspace(value: unknown): RevisionedWorkspace {
 }
 
 export async function loadWorkspace(): Promise<RevisionedWorkspace> {
-  const res = await fetch('/api/campaign-workspace', { credentials: 'include' });
+  const res = await fetch('/api/campaign-workspace', {
+    credentials: 'include',
+  });
   if (!res.ok) throw await HttpError.fromResponse('load', res);
   return asRevisionedWorkspace(await res.json());
 }
@@ -133,7 +135,9 @@ export async function loadOfficialCampaignsResult(): Promise<OfficialCampaignLoa
   // separate so route hydration can retry a transient failure instead of caching it as success.
   const empty: RevisionedWorkspace = { campaigns: [], wars: [], levels: {}, revision: 0, updated_at: null };
   try {
-    const res = await fetch(`/api/official-campaigns/${OFFICIAL_ID}`, { cache: 'no-cache' });
+    const res = await fetch(`/api/official-campaigns/${OFFICIAL_ID}`, {
+      cache: 'no-cache',
+    });
     if (!res.ok) return { workspace: empty, available: false };
     const body = (await res.json()) as {
       portfolio?: { data?: unknown; revision?: unknown; updated_at?: unknown };
