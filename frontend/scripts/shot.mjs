@@ -295,20 +295,39 @@ try {
             && !playRail.closest('[inert]')
             && getComputedStyle(playRail).pointerEvents !== 'none'
           );
+          const phase = director.getAttribute('data-scene-phase');
+          const committed = director.getAttribute('data-scene-committed');
+          const pending = director.getAttribute('data-scene-pending');
+          const content = document.querySelector('[data-scene-region="play-shell"]');
+          const mounted = content?.getAttribute('data-scene-instance') ?? null;
+          const contentOpacity = content ? Number.parseFloat(getComputedStyle(content).opacity) : 0;
+          const contentVisibilityViolation = (
+            phase === 'exiting' && mounted !== committed
+          ) || (
+            phase === 'loading'
+            && mounted === pending
+            && contentOpacity > 0.001
+          );
           if (
             !playRail
             || playRail !== window.__ctPlayHostRail
             || !playRail.isConnected
             || playRailOpacity < 0.99
             || !playRailInteractive
+            || contentVisibilityViolation
           ) {
             window.__ctMenuHostContinuity.playViolations.push({
-              phase: director.getAttribute('data-scene-phase'),
+              phase,
               playRail: Boolean(playRail),
               samePlayRail: playRail === window.__ctPlayHostRail,
               connected: Boolean(playRail?.isConnected),
               playRailOpacity,
               playRailInteractive,
+              committed,
+              pending,
+              mounted,
+              contentOpacity,
+              contentVisibilityViolation,
             });
           }
         }

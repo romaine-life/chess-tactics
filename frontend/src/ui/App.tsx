@@ -40,8 +40,9 @@ import {
 } from './routePrefetch';
 import { SceneBoundary } from './shell/SceneBoundary';
 import { initialSceneState, reduceScene } from './shell/sceneDirector';
-import { sceneManifest } from './shell/sceneManifest';
-import type { SceneHost } from './shell/sceneManifest';
+import { deepestSharedSceneRegion, sceneManifest } from './shell/sceneManifest';
+import type { ScenePath } from './shell/sceneManifest';
+import { sceneSlots } from './shell/sceneSlots';
 import { HomepageBackdrop } from './HomepageBackdrop';
 import { loadingMark } from '../diagnostics/loadingTimeline';
 import { homepageSceneMedia } from './homepageSceneMedia';
@@ -60,21 +61,6 @@ const SCENE_FADE_MS = 350;
 const SCENE_LOADING_MIN_MS = 350;
 const STARTUP_STAGE_BEAT_MS = 140;
 const STARTUP_LADDER: readonly StartupLayer[] = ['background', 'title', 'controls'];
-const sceneHostPath = (host: SceneHost): readonly SceneHost[] => (
-  host === 'play-shell' ? ['menu-shell', 'play-shell']
-    : host === 'menu-shell' ? ['menu-shell']
-      : []
-);
-const deepestSharedHost = (current: SceneHost, destination: SceneHost): SceneHost | null => {
-  const currentPath = sceneHostPath(current);
-  const destinationPath = sceneHostPath(destination);
-  let shared: SceneHost | null = null;
-  for (let index = 0; index < Math.min(currentPath.length, destinationPath.length); index += 1) {
-    if (currentPath[index] !== destinationPath[index]) break;
-    shared = currentPath[index];
-  }
-  return shared;
-};
 const sceneFailureCopy = (error: Error | null): string => (
   error?.message.includes('Canonical thumbnail derivative')
     ? 'A required level preview could not be prepared. Retry to rebuild the preview.'
@@ -367,15 +353,20 @@ export function App(): ReactElement {
 
   const preparing = scene.phase === 'loading' || scene.phase === 'entering' || scene.phase === 'error';
   const manifest = scene.destination ?? scene.current;
+  // `path` advances only when the director accepts exit-finished. Keep the
+  // renderer bound to that mounted path; `manifest` may describe a pending
+  // destination during exit and is preparation metadata, not visibility.
+  const mountedScene = sceneManifest(path);
   const transitioning = scene.phase !== 'current' && scene.phase !== 'startup';
   const retainedBackground = scene.current.background;
   const homepageIsDestination = transitioning
     && retainedBackground !== 'homepage'
     && manifest.background === 'homepage';
   const preservedSceneHost = scene.destination
-    ? deepestSharedHost(scene.current.host, scene.destination.host)
+    ? deepestSharedSceneRegion(scene.current, scene.destination)
     : null;
   const preservesSceneHost = preservedSceneHost !== null;
+  const slots = sceneSlots(scene.current, scene.destination);
 
   return (
     <>
@@ -384,6 +375,13 @@ export function App(): ReactElement {
         className={`app-chrome-family-root chrome-family-surface scene-director is-${scene.phase}${preservesSceneHost ? ' is-host-preserving' : ''}`}
         data-scene-phase={scene.phase}
         data-scene-error={scene.error?.message}
+        data-scene-committed={scene.current.leaf.key}
+        data-scene-pending={scene.destination?.leaf.key}
+        data-scene-slots={JSON.stringify(slots.map((slot) => ({
+          id: slot.id,
+          committed: slot.committed?.key ?? null,
+          pending: slot.pending?.key ?? null,
+        })))}
       >
         <UpdateBanner />
         {transitioning && retainedBackground !== 'homepage' ? (
@@ -400,7 +398,7 @@ export function App(): ReactElement {
         </div>
         <StartupSceneContext.Provider value={startupController}>
           <SceneBoundary
-            key={sceneHostPath(manifest.host)[0] ?? scene.generation}
+            key={manifest.instances[0]?.key ?? scene.generation}
             manifest={manifest}
             generation={scene.generation}
             preparing={preparing}
@@ -415,7 +413,7 @@ export function App(): ReactElement {
               revealTitle={startupController.revealed('title')}
             />
             <RouteLoadBoundary resetKey={`${path}${search}`}>
-              <Suspense fallback={null}>{renderRoute(path, search)}</Suspense>
+              <Suspense fallback={null}>{renderScene(mountedScene, search)}</Suspense>
             </RouteLoadBoundary>
           </SceneBoundary>
         </StartupSceneContext.Provider>
@@ -441,7 +439,8 @@ export function App(): ReactElement {
   );
 }
 
-function renderRoute(path: string, search: string): ReactElement {
+function renderScene(scene: ScenePath, search: string): ReactElement {
+  const path = scene.pathname;
   if (path === '/play') return <Skirmish />;
   if (path === '/predrawn-reference') return <PredrawnReference />;
   if (path === '/studio' || path === '/tileset-studio') return <TilesetStudio />;
@@ -460,5 +459,5 @@ function renderRoute(path: string, search: string): ReactElement {
   }
   if (path === '/party') return <Party />;
   if (path === '/artwork-compare') return <TilesetStudio initialCategory="pages" />;
-  return <MainMenu path={path} />;
+  return <MainMenu path={scene.pathname} sceneInstanceKey={scene.leaf.key} />;
 }

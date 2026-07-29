@@ -1,7 +1,36 @@
 import { describe, expect, it } from 'vitest';
-import { sceneManifest } from './sceneManifest';
+import { deepestSharedSceneRegion, sceneManifest } from './sceneManifest';
 
 describe('scene manifests', () => {
+  it('resolves route intent into an authored nested scene path', () => {
+    const campaign = sceneManifest('/play/select/campaign/crown-of-valoria');
+    expect(campaign.instances.map((entry) => entry.definition.id)).toEqual([
+      'main-menu',
+      'play',
+      'play/campaign',
+    ]);
+    expect(campaign.leaf).toMatchObject({
+      key: 'play/campaign:campaignId=crown-of-valoria',
+      params: { campaignId: 'crown-of-valoria' },
+      definition: { slot: 'play-content', view: 'play-campaign' },
+    });
+  });
+
+  it('derives retained regions from authored ancestry', () => {
+    expect(deepestSharedSceneRegion(
+      sceneManifest('/play/select/skirmish'),
+      sceneManifest('/play/select/levels'),
+    )).toBe('play-shell');
+    expect(deepestSharedSceneRegion(
+      sceneManifest('/play/select/skirmish'),
+      sceneManifest('/settings/general'),
+    )).toBe('menu-shell');
+    expect(deepestSharedSceneRegion(
+      sceneManifest('/play/select/skirmish'),
+      sceneManifest('/play'),
+    )).toBeNull();
+  });
+
   it('treats a destination as a complete visual scene', () => {
     expect(sceneManifest('/play/select/skirmish')).toMatchObject({
       host: 'play-shell',

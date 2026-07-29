@@ -1,12 +1,14 @@
-import type { SceneManifest } from './sceneManifest';
+import type { ScenePath } from './sceneManifest';
 import type { StartupLayer } from './startupScene';
 
 export type ScenePhase = 'startup' | 'current' | 'exiting' | 'loading' | 'entering' | 'error';
 
 export interface SceneState {
   phase: ScenePhase;
-  current: SceneManifest;
-  destination: SceneManifest | null;
+  /** The authored scene path whose lifecycle has completed. */
+  current: ScenePath;
+  /** The authored scene path being prepared; it is never visible authority. */
+  destination: ScenePath | null;
   destinationHref: string | null;
   generation: number;
   error: Error | null;
@@ -16,7 +18,7 @@ export interface SceneState {
 }
 
 export type SceneAction =
-  | { type: 'navigate'; destination: SceneManifest; href: string }
+  | { type: 'navigate'; destination: ScenePath; href: string }
   | { type: 'exit-finished'; generation: number }
   | { type: 'destination-painted'; generation: number }
   | { type: 'entrance-finished'; generation: number }
@@ -28,7 +30,7 @@ export type SceneAction =
   | { type: 'retry' };
 
 export function initialSceneState(
-  current: SceneManifest,
+  current: ScenePath,
   prepareInitialScene = false,
   initialHref = '',
   prepareStartup = false,

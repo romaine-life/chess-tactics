@@ -92,7 +92,13 @@ function shellDest(path: string): ShellDest | null {
   return null;
 }
 
-export function MainMenu({ path = '/' }: { path?: string } = {}): ReactElement {
+export function MainMenu({
+  path = '/',
+  sceneInstanceKey = 'main-menu',
+}: {
+  path?: string;
+  sceneInstanceKey?: string;
+} = {}): ReactElement {
   // The persistent menu shell. The button column and selected destination are one
   // scene composition; App owns their navigation fade and paint gate.
   // A menu-config destination fills the shell's SECOND column with its own fixed-width columns; the
@@ -150,7 +156,7 @@ export function MainMenu({ path = '/' }: { path?: string } = {}): ReactElement {
           {dest ? (
             <div className="menu-dest" data-scene-region="menu-shell" key={dest} aria-label={DEST_LABEL[dest]}>
               {dest === 'settings' ? <Settings embedded />
-                : dest === 'play' ? <PlayMenu />
+                : dest === 'play' ? <PlayMenu path={path} sceneInstanceKey={sceneInstanceKey} />
                 : dest === 'lobbies' ? <Lobbies embedded />
                 : <CampaignEditor embedded />}
             </div>

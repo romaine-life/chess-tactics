@@ -69,10 +69,13 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('Your workspace is unavailable');
   });
 
-  it('canonicalizes invalid selector paths and returns standalone play to Levels', () => {
+  it('renders only from the director-mounted path and returns standalone play to Levels', () => {
     expect(playMenu).toContain('if (!playHubSelection(path))');
-    expect(playMenu.match(/if \(!isPlaySelectorPath\(path\)\) return/g)).toHaveLength(2);
-    expect(playMenu).toContain('if (!nextSelection)');
+    expect(playMenu.match(/if \(!isPlaySelectorPath\(path\)\) return/g)).toHaveLength(1);
+    expect(playMenu).toContain('playHubSelection(path) ??');
+    expect(playMenu).not.toContain('APP_NAVIGATION_EVENT');
+    expect(playMenu).not.toContain('window.location');
+    expect(playMenu).not.toContain('setSelection');
     expect(playMenu).toContain('playSkirmishLevelHref(level.id, PLAY_LEVELS_SELECTOR_HREF)');
   });
 });

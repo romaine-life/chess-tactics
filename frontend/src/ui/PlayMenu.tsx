@@ -11,7 +11,7 @@ import { useCampaigns } from '../campaign/store';
 import type { Campaign as CampaignDoc, Level } from '../core/level';
 import { spawnEventsForLevel } from '../core/levelEvents';
 import { MODE_NAME } from '../core/objectives';
-import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath } from './navigation';
+import { navigateApp } from './navigation';
 import { FittedTabLabel } from './shared/FittedTabLabel';
 import { KitScroll } from './KitScroll';
 import { levelObjectiveLine } from './LevelInfoCompact';
@@ -387,12 +387,19 @@ function CampaignLevelsPanel({
   );
 }
 
-export function PlayMenu(): ReactElement {
+export function PlayMenu({
+  path,
+  sceneInstanceKey,
+}: {
+  path: string;
+  sceneInstanceKey: string;
+}): ReactElement {
   const campaigns = useCampaigns((state) => state.campaigns);
   const levels = useCampaigns((state) => state.levels);
-  const [selection, setSelection] = useState<PlayHubSelection>(
-    () => playHubSelection(window.location.pathname) ?? { mode: 'skirmish' },
-  );
+  // `path` is the scene director's mounted scene path. Browser navigation only
+  // requests a destination; it must never reveal Play content ahead of the
+  // director's exit, preparation, paint acknowledgement, and entrance lifecycle.
+  const selection: PlayHubSelection = playHubSelection(path) ?? { mode: 'skirmish' };
   const [progress, setProgress] = useState<CampaignProgress>(readProgress);
   const [selectedLevelId, setSelectedLevelId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -430,28 +437,6 @@ export function PlayMenu(): ReactElement {
   }, [loadAttempt]);
 
   useEffect(() => {
-    const sync = () => {
-      const path = window.location.pathname;
-      // APP_NAVIGATION_EVENT fires before React unmounts this selector. Ignore a valid
-      // departure to the live board/editor/etc.; only canonicalize malformed addresses
-      // that still belong to the Play selector namespace.
-      if (!isPlaySelectorPath(path)) return;
-      const nextSelection = playHubSelection(path);
-      if (!nextSelection) {
-        navigateApp(PLAY_SKIRMISH_SELECTOR_HREF, { replace: true, scroll: false });
-        return;
-      }
-      setSelection(nextSelection);
-    };
-    window.addEventListener('popstate', sync);
-    window.addEventListener(APP_NAVIGATION_EVENT, sync);
-    return () => {
-      window.removeEventListener('popstate', sync);
-      window.removeEventListener(APP_NAVIGATION_EVENT, sync);
-    };
-  }, []);
-
-  useEffect(() => {
     const sync = () => setProgress(readProgress());
     window.addEventListener('storage', sync);
     window.addEventListener(CAMPAIGN_PROGRESS_EVENT, sync);
@@ -462,10 +447,6 @@ export function PlayMenu(): ReactElement {
   }, []);
 
   useEffect(() => {
-    const path = normalizeRoutePath(window.location.pathname);
-    // The location changes before this component unmounts on a route departure. A late
-    // hydration/store update must not reinterpret the live board or editor as a malformed
-    // selector and pull the player back into Play.
     if (!isPlaySelectorPath(path)) return;
     if (!playHubSelection(path)) {
       navigateApp(PLAY_SKIRMISH_SELECTOR_HREF, { replace: true, scroll: false });
@@ -480,7 +461,7 @@ export function PlayMenu(): ReactElement {
     ) {
       navigateApp(PLAY_SKIRMISH_SELECTOR_HREF, { replace: true, scroll: false });
     }
-  }, [campaigns, loading, officialAvailable, selection, userWorkspaceAvailable]);
+  }, [campaigns, loading, officialAvailable, path, selection, userWorkspaceAvailable]);
 
   useEffect(() => { setSelectedLevelId(null); }, [selection]);
 
@@ -599,7 +580,11 @@ export function PlayMenu(): ReactElement {
         className="play-surface"
         showStatus={false}
       >
-      <div className="play-destination-content" data-scene-region="play-shell">
+      <div
+        className="play-destination-content"
+        data-scene-region="play-shell"
+        data-scene-instance={sceneInstanceKey}
+      >
       {selection.mode === 'skirmish' ? (
         <SkirmishProfilesPanel
           levels={profileLevels}

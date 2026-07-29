@@ -48,12 +48,31 @@ describe('professional loading architecture guards', () => {
   it('gives every retry and retarget a fresh cancellable scene generation', () => {
     const app = read('./ui/App.tsx');
     const director = read('./ui/shell/sceneDirector.ts');
-    expect(app).toContain('key={sceneHostPath(manifest.host)[0] ?? scene.generation}');
+    expect(app).toContain('key={manifest.instances[0]?.key ?? scene.generation}');
+    expect(app).toContain('const mountedScene = sceneManifest(path)');
+    expect(app).toContain('renderScene(mountedScene, search)');
     expect(director).toContain('generation: state.generation + 1');
     expect(director).toContain('if (action.generation !== state.generation) return state');
     expect(app).toContain("'scene-cancelled'");
     expect(app).toContain("'scene-retry'");
     expect(app).toContain('A required level preview could not be prepared.');
+  });
+
+  it('keeps authored committed and pending scene instances separate from browser intent', () => {
+    const app = read('./ui/App.tsx');
+    const play = read('./ui/PlayMenu.tsx');
+    const manifest = read('./ui/shell/sceneManifest.ts');
+    const slots = read('./ui/shell/sceneSlots.ts');
+    expect(manifest).toContain('export interface SceneDefinition');
+    expect(manifest).toContain('export interface SceneInstance');
+    expect(manifest).toContain('export interface ScenePath');
+    expect(slots).toContain('committed: SceneInstance | null');
+    expect(slots).toContain('pending: SceneInstance | null');
+    expect(app).toContain('data-scene-committed={scene.current.leaf.key}');
+    expect(app).toContain('data-scene-pending={scene.destination?.leaf.key}');
+    expect(play).not.toContain('APP_NAVIGATION_EVENT');
+    expect(play).not.toContain('window.location');
+    expect(play).not.toContain('setSelection');
   });
 
   it('does not let menu, screen, or board readiness expire into success', () => {

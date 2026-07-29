@@ -7,6 +7,8 @@ Persistent host nesting is governed by
 [ADR-0195](adr/0195-persistent-scene-hosts-form-a-nested-path.md).
 Preserved-host interaction is governed by
 [ADR-0196](adr/0196-preserved-host-controls-remain-interactive.md).
+Authored identity and visible ownership are governed by
+[ADR-0197](adr/0197-routes-request-authored-scene-instances.md).
 
 ## Readiness vocabulary
 
@@ -53,7 +55,8 @@ is not accepted as evidence of a warm journey.
 ## Scene lifecycle
 
 `SceneDirector` is the only route-level transition authority. A destination declares
-one `SceneManifest`; `SceneBoundary` keeps the complete destination hidden and inert
+one authored `ScenePath` whose instances own named slots and one `SceneManifest`;
+`SceneBoundary` keeps the complete destination hidden and inert
 until its required paint owner and every registered participant report a drawable
 frame. Navigation retains the outgoing background and follows:
 
@@ -80,6 +83,12 @@ region. Preserved ancestor controls remain interactive and may retarget the acti
 load; the latest accepted destination generation cancels stale acquisition and paint
 acknowledgements. A full-scene transition with no shared host still locks the complete
 outgoing hierarchy.
+
+The URL is intent, not visible authority. Each scene slot exposes its last committed
+instance and its pending instance separately. Views render from the director-mounted
+path and may not subscribe to history/navigation events to change visible selection.
+The pending instance can fetch, decode, compose, and paint invisibly, but only the
+director may commit and reveal its generation.
 
 Title-bar contributions discover targets inside their own committed scene. DOM-node
 refs are never lifted into the director, because portal attachment must not mutate the
@@ -143,6 +152,10 @@ route lifecycle during the same React commit.
   critical resource is an error, never synthetic readiness.
 - Every route family resolves through `sceneManifest`; unmatched routes explicitly
   inherit the main-menu scene rather than escaping enrollment.
+- Main Menu and Play resolve to an authored instance path
+  (`main-menu → play → selected Play content`). Play renders only from the path mounted
+  by the director; browser navigation cannot swap campaign/level imagery before the
+  loading lifecycle begins.
 - Data-backed Studio viewers enroll their own initial authorities. Game Lab waits for
   campaign hydration plus account/run metadata; Gym waits for campaign hydration,
   opening-book authority, and worker readiness; the Solver waits for campaign hydration
