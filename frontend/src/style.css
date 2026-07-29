@@ -9560,36 +9560,12 @@ body { font-size: 17px; }
   transition: opacity var(--ds-duration-fade) var(--ds-ease-standard);
 }
 .scene-homepage-background.is-startup-pending { opacity: 0; }
-.scene-homepage-background.is-destination {
-  z-index: 2;
-}
-.scene-director.is-exiting .scene-homepage-background.is-destination,
-.scene-director.is-loading .scene-homepage-background.is-destination,
-.scene-director.is-error .scene-homepage-background.is-destination {
-  opacity: 0;
-}
-.scene-director.is-entering .scene-homepage-background.is-destination {
-  opacity: 1;
-}
-.scene-director.is-exiting:not(.is-host-preserving) .scene-boundary,
-.scene-director.is-exiting:not(.is-host-preserving) .app-shell-titlebar {
+.scene-director.is-exiting [data-scene-transition-target][data-scene-transition-active] {
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
 }
-.scene-director.is-exiting.is-host-preserving .scene-boundary[data-transition-region="menu-shell"] [data-scene-region="menu-shell"] {
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
-}
-.scene-director.is-exiting.is-host-preserving .scene-boundary[data-transition-region="settings-shell"] [data-scene-region="settings-shell"] {
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
-}
-/* play-shell is display:contents so its columns remain siblings in the menu
-   grid. Its direct visual children therefore carry the slot fade. */
-.scene-director.is-exiting.is-host-preserving .scene-boundary[data-transition-region="play-shell"] [data-scene-region="play-shell"] > * {
+.scene-director.is-exiting [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > * {
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
@@ -9598,59 +9574,38 @@ body { font-size: 17px; }
   opacity: 0;
   pointer-events: none;
 }
+.scene-boundary[data-scene-visual-role="outgoing"] {
+  opacity: 1;
+  z-index: 3;
+}
+.scene-boundary[data-scene-visual-role="incoming"] {
+  z-index: 4;
+}
+.scene-director.is-entering .scene-boundary[data-scene-visual-role="outgoing"] {
+  opacity: 0;
+  transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
+}
 .scene-boundary.is-region-preparing {
   opacity: 1;
 }
-.scene-boundary.is-region-preparing[data-transition-region="menu-shell"] [data-scene-region="menu-shell"],
-.scene-boundary.is-region-preparing[data-transition-region="play-shell"] [data-scene-region="play-shell"],
-.scene-boundary.is-region-preparing[data-transition-region="settings-shell"] [data-scene-region="settings-shell"] {
+.scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active] {
   opacity: 0;
   pointer-events: none;
 }
-.scene-boundary.is-region-preparing[data-transition-region="play-shell"] [data-scene-region="play-shell"] > * {
+.scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > * {
   opacity: 0;
   pointer-events: none;
 }
-.scene-director.is-entering:not(.is-host-preserving) .scene-boundary,
-.scene-director.is-entering:not(.is-host-preserving) .app-shell-titlebar {
+.scene-director.is-entering [data-scene-transition-target][data-scene-transition-active] {
   opacity: 1;
   transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
 }
-.scene-director.is-loading:not(.is-host-preserving) .app-shell-titlebar,
-.scene-director.is-error:not(.is-host-preserving) .app-shell-titlebar {
-  opacity: 0;
-  pointer-events: none;
-}
-.scene-director.is-entering.is-host-preserving .scene-boundary[data-transition-region="menu-shell"] [data-scene-region="menu-shell"],
-.scene-director.is-entering.is-host-preserving .scene-boundary[data-transition-region="play-shell"] [data-scene-region="play-shell"],
-.scene-director.is-entering.is-host-preserving .scene-boundary[data-transition-region="settings-shell"] [data-scene-region="settings-shell"] {
-  opacity: 1;
-  transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
-}
-.scene-director.is-entering.is-host-preserving .scene-boundary[data-transition-region="play-shell"] [data-scene-region="play-shell"] > * {
+.scene-director.is-entering [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > * {
   opacity: 1;
   transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
 }
 
 .play-destination-content { display: contents; }
-.scene-retained-background {
-  position: fixed;
-  inset: 0;
-  z-index: 2;
-  background-position: center;
-  background-size: cover;
-  background-repeat: no-repeat;
-}
-.scene-director.is-entering .scene-retained-background {
-  opacity: 0;
-  transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
-}
-.scene-retained-background.is-battlefield {
-  background: var(--skirmish-world-bg, linear-gradient(180deg, #071017, #02070c));
-}
-.scene-retained-background.is-tool {
-  background: var(--ds-surface-canvas, #080b11);
-}
 .scene-loading-presentation {
   position: fixed;
   inset: 0;
@@ -16694,6 +16649,13 @@ button.tileset-relationship-cell {
   min-width: 0;
 }
 
+.brand-lockup-title-line {
+  align-items: baseline;
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+}
+
 /* The game wordmark — the dominant, persistent header line. */
 .brand-lockup-copy em {
   color: #f0eadb;
@@ -16702,6 +16664,16 @@ button.tileset-relationship-cell {
   font-weight: 600;
   line-height: 1.04;
   text-shadow: 0 2px 0 #02070b;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.brand-lockup-transition-status {
+  color: #79d3ff;
+  font-size: var(--ds-text-sm);
+  font-weight: 400;
+  letter-spacing: .14em;
+  line-height: 1;
   text-transform: uppercase;
   white-space: nowrap;
 }
@@ -17130,6 +17102,21 @@ button.tileset-relationship-cell {
 .play-action-col .settings-panel-content {
   align-content: start;
   padding-block-end: var(--ds-gutter);
+}
+
+/* A selected campaign level adds the authored preview as the next destination column.
+   On narrower desktop viewports, fit that master/detail pair inside the action column's
+   original width instead of drawing the preview beyond the right edge. The compact list
+   delegates the actual launch verb to the preview's Play control. */
+@media (max-width: 1516px) {
+  .play-scene-authority.has-level-preview .play-action-col {
+    inline-size: calc(var(--col-action-w) - var(--col-preview-w));
+  }
+
+  .play-scene-authority.has-level-preview .campaign-level-row .settings-row-thumb,
+  .play-scene-authority.has-level-preview .campaign-level-row .settings-row-control {
+    display: none;
+  }
 }
 
 /* (The home-menu-only margin fork that used to live here — `.main-menu-home .settings-shell`,

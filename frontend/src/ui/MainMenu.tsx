@@ -18,6 +18,7 @@ const WarEditor = lazy(() => import('./WarEditor').then((m) => ({ default: m.War
 import { drawableAssets, requiredDrawableRole } from '@chess-tactics/board-render';
 import { useStartupScene } from './shell/startupScene';
 import { installedUiMedia } from './installedUiMedia';
+import { sceneTransitionTargetAttributes } from './shell/sceneTransitionTarget';
 
 const BRAND_SHIELD = () => installedUiMedia('ui-kit-icons-brand-shield-png');
 // The heaviest button asset — the carved-stone surface behind every rail tab. The
@@ -158,7 +159,7 @@ export function MainMenu({
           </aside>
           <div
             className="menu-dest"
-            data-scene-region="menu-shell"
+            {...sceneTransitionTargetAttributes('menu-shell')}
             data-scene-instance={sceneInstanceKey}
             key={dest ?? 'home'}
             aria-label={dest ? DEST_LABEL[dest] : 'Main menu destination'}

@@ -39,6 +39,29 @@ function buildInfo() {
   };
 }
 
+function devctlHealth() {
+  return {
+    name: 'devctl-health',
+    configureServer(server) {
+      server.middlewares.use('/__devctl/health', (_req, res) => {
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Cache-Control', 'no-store');
+        res.end(JSON.stringify({
+          managed: process.env.DEVCTL_MANAGED === '1',
+          environment: process.env.DEVCTL_ENVIRONMENT_NAME || null,
+          project: process.env.DEVCTL_PROJECT || null,
+          repo_dir: process.env.DEVCTL_REPO_DIR || null,
+          revision: process.env.DEVCTL_SOURCE_REVISION || null,
+          configuration_id: process.env.DEVCTL_CONFIGURATION_ID || null,
+          pid: process.pid,
+          port: Number(process.env.DEVCTL_FRONTEND_PORT || server.config.server.port || 0),
+        }));
+      });
+    },
+  };
+}
+
 // The legacy vanilla entry (index.html -> /src/app.js) is unchanged; the React
 // plugin only adds JSX/TSX handling for the new surfaces we migrate onto.
 // NOTE: the dev-only `/__prop-seat/save` + `/__prop-seat/delete` file-writing endpoints were RETIRED
@@ -432,7 +455,7 @@ export default defineConfig(async ({ command }) => {
     ? (noBackend ? [bgmDevMock(), officialCampaignsDevProxy(), devAuthMock()] : [prodBackend(backendPort)])
     : [];
   return {
-    plugins: [react(), buildInfo(), ...devApiPlugins],
+    plugins: [react(), buildInfo(), devctlHealth(), ...devApiPlugins],
     test: { setupFiles: ['./src/test/setupDrawableCatalog.ts'] },
     // `/assets/*` belongs exclusively to backend-resolved live media. Keep
     // executable Vite chunks in a disjoint namespace so production code can

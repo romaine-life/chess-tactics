@@ -15,6 +15,7 @@ import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { installedUiMedia } from './installedUiMedia';
 import { fetchMe } from '../net/auth';
 import { AdminControls } from './AdminControls';
+import { sceneTransitionTargetAttributes } from './shell/sceneTransitionTarget';
 
 const MUTE_KEY = 'chess-tactics-bgm-muted-v1';
 const MUTE_CHANGE_EVENT = 'chess-tactics:bgm-muted-change';
@@ -676,7 +677,7 @@ export function Settings({
 
       <main
         className={embedded ? 'menu-dest-col menu-dest-action' : 'settings-frame settings-main-frame'}
-        data-scene-region="settings-shell"
+        {...sceneTransitionTargetAttributes('settings-shell')}
         data-scene-instance={sceneInstanceKey}
       >
         {/* Screen + section are already shown by the brand lockup and the active

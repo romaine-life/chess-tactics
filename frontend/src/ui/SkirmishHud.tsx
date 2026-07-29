@@ -322,7 +322,12 @@ export function SkirmishHud({
         aria-label="Skirmish command HUD"
       >
         <OuterChromeHeader title="Controls">
-          <div className="skirmish-hud-tabs" role="tablist" aria-label="HUD sections">
+          <div
+            className="skirmish-hud-tabs"
+            role="tablist"
+            aria-label="HUD sections"
+            data-transition-policy="immediate-local"
+          >
             {HUD_TABS.map((t) => (
               <button
                 key={t.id}

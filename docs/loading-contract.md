@@ -90,6 +90,19 @@ load; the latest accepted destination generation cancels stale acquisition and p
 acknowledgements. A full-scene transition with no shared host still locks the complete
 outgoing hierarchy.
 
+Every replaceable hierarchy declares the same canonical transition target. The director
+retains that exact DOM target through exit, marks it hidden before committing the pending
+instance, and permits React replacement only after that commit. Complete-scene and
+persistent-host transitions differ only in which target is selected; they do not own
+separate fade implementations. Layout-preserving targets apply the same lifecycle to
+their direct visual children.
+
+Ordinary state changes inside a committed scene remain immediate. Tabs, toggles,
+selections, sliders, board overlays, inspectors, dialogs, and gameplay commands do not
+enter the scene lifecycle unless they replace an authored navigable drawn region. One
+control panel may therefore contain immediate local controls and explicit navigational
+controls without opting the whole panel into or out of transition ownership.
+
 The URL is intent, not visible authority. Each scene slot exposes its last committed
 instance and its pending instance separately. Views render from the director-mounted
 path and may not subscribe to history/navigation events to change visible selection.
@@ -114,6 +127,16 @@ cancellable, but has no Loading copy or artificial loading minimum. A `loading`
 destination uses the same lifecycle plus explicit wait presentation and its minimum.
 The distinction is declared by the destination manifest, never inferred from elapsed
 time or cache luck.
+
+After cold startup, wait presentation belongs to the persistent title bar rather
+than the replaceable scene canvas. During full-scene replacement, the director keeps
+the complete outgoing scene painted beneath the hidden, inert destination. Once the
+destination acknowledges a complete painted frame, the two authored scenes crossfade;
+only then may the outgoing DOM be destroyed. No blank intermediary or reconstructed
+background is permitted. This treats composited boards and complete pre-drawn board
+scenes identically. Center-screen `Loading...` exists only in the pre-React cold-start
+document, before the title bar is available. Retryable terminal failure remains a
+scene-canvas surface because it owns an action, not passive wait copy.
 
 Title-bar contributions discover targets inside their own committed scene. DOM-node
 refs are never lifted into the director, because portal attachment must not mutate the

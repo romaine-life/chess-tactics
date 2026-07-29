@@ -4209,6 +4209,19 @@ app.get('/api/build-info', (_req, res) => {
   });
 });
 
+app.get('/api/__devctl/health', (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({
+    managed: process.env.DEVCTL_MANAGED === '1',
+    environment: process.env.DEVCTL_ENVIRONMENT_NAME || null,
+    project: process.env.DEVCTL_PROJECT || null,
+    repo_dir: process.env.DEVCTL_REPO_DIR || null,
+    revision: process.env.DEVCTL_SOURCE_REVISION || null,
+    configuration_id: process.env.DEVCTL_CONFIGURATION_ID || null,
+    pid: process.pid,
+  });
+});
+
 // Readable fallback title from a slugged blob name, used only when a track has no
 // `title` metadata yet (e.g. just dropped in the container, not synced). e.g.
 // "03-heavens-devils.mp3" -> "Heavens Devils".

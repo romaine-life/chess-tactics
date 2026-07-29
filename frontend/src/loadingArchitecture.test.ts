@@ -11,6 +11,7 @@ describe('professional loading architecture guards', () => {
     const boundary = read('./ui/shell/SceneBoundary.tsx');
     expect(app).toContain('<SceneBoundary');
     expect(app).toContain('sceneManifest(initialPath)');
+    expect(app.indexOf('<AppTitleBar')).toBeLessThan(app.indexOf('<SceneBoundary'));
     expect(app).toContain('<Suspense fallback={null}>');
     expect(app).not.toMatch(/route-veil|screen-exit|screen-enter|useScreenEntrance|screenExit/);
     expect(director).toContain("ScenePhase = 'startup' | 'current' | 'exiting' | 'loading' | 'entering' | 'error'");
@@ -18,8 +19,10 @@ describe('professional loading architecture guards', () => {
     expect(app).toContain('<StartupSceneContext.Provider');
     expect(boundary).toContain("manifest.paintOwner === 'dom'");
     expect(boundary).toContain('participantsRef.current.get(manifest.paintOwner)');
-    expect(app).toContain("manifest.background === 'homepage'");
-    expect(read('./style.css')).toContain('.scene-director.is-entering .scene-homepage-background.is-destination');
+    expect(app).toContain("visualRole: 'outgoing' as const");
+    expect(app).toContain("visualRole: 'incoming' as const");
+    expect(app).not.toContain("manifest.background === 'homepage'");
+    expect(read('./style.css')).not.toContain('.scene-homepage-background.is-destination');
   });
 
   it('enrolls standalone Studio routes in the Studio scene owner', () => {
@@ -48,9 +51,17 @@ describe('professional loading architecture guards', () => {
   it('gives every retry and retarget a fresh cancellable scene generation', () => {
     const app = read('./ui/App.tsx');
     const director = read('./ui/shell/sceneDirector.ts');
-    expect(app).toContain('key={manifest.instances[0]?.key ?? scene.generation}');
+    expect(app).toContain('const sceneLayers = overlapsCompleteScenes');
+    expect(app).toContain('key: scene.destination!.instances[0]?.key ?? scene.destination!.leaf.key');
+    expect(app).toContain('sceneLayers.map((layer)');
+    expect(app).toContain('key={layer.key}');
+    expect(app).not.toContain('key={`incoming:');
+    expect(read('../scripts/shot.mjs')).toContain("const assertFullSceneExit = has('assert-full-scene-exit')");
+    expect(read('../scripts/shot.mjs')).toContain('sameBoundary: boundary === window.__ctOutgoingSceneBoundary');
+    expect(read('../scripts/shot.mjs')).toContain('full-scene wait did not retain the painted outgoing boundary');
+    expect(read('../scripts/shot.mjs')).toContain('painted destination was remounted instead of promoted in place');
     expect(app).toContain('const mountedScene = sceneManifest(path)');
-    expect(app).toContain('renderScene(mountedScene, search)');
+    expect(app).toContain('renderScene(layer.scene, layer.search)');
     expect(director).toContain('generation: state.generation + 1');
     expect(director).toContain('if (action.generation !== state.generation) return state');
     expect(app).toContain("'scene-cancelled'");
@@ -77,7 +88,7 @@ describe('professional loading architecture guards', () => {
 
   it('keeps an explicit empty main-menu slot so returning home can acknowledge paint', () => {
     const menu = read('./ui/MainMenu.tsx');
-    expect(menu).toContain('data-scene-region="menu-shell"');
+    expect(menu).toContain("sceneTransitionTargetAttributes('menu-shell')");
     expect(menu).toContain("key={dest ?? 'home'}");
     expect(menu).toContain(': null}');
     expect(menu).not.toContain('{dest ? (');
@@ -85,26 +96,76 @@ describe('professional loading architecture guards', () => {
 
   it('visibly fades a preserved host child before committing an empty slot', () => {
     const styles = read('./style.css');
+    const target = read('./ui/shell/sceneTransitionTarget.ts');
+    const boundary = read('./ui/shell/SceneBoundary.tsx');
     expect(styles).toContain(
-      '.scene-director.is-exiting.is-host-preserving .scene-boundary[data-transition-region="menu-shell"] [data-scene-region="menu-shell"]',
+      '.scene-director.is-exiting [data-scene-transition-target][data-scene-transition-active]',
     );
     expect(styles).toContain(
-      '.scene-director.is-exiting.is-host-preserving .scene-boundary[data-transition-region="play-shell"] [data-scene-region="play-shell"] > *',
+      '.scene-director.is-exiting [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > *',
+    );
+    expect(styles).not.toContain('[data-transition-region="menu-shell"] [data-scene-region="menu-shell"]');
+    expect(styles).not.toContain('[data-transition-region="play-shell"] [data-scene-region="play-shell"]');
+    expect(styles).not.toContain('[data-transition-region="settings-shell"] [data-scene-region="settings-shell"]');
+    expect(target).toContain('sceneTransitionTargetAttributes');
+    expect(boundary).toContain("target.setAttribute('data-scene-transition-active', '')");
+    expect(boundary).toContain('[generation, mountedKey, preserveHost, transitionRegion]');
+    expect(read('./ui/App.tsx')).toContain('mountedKey={layer.scene.leaf.key}');
+    expect(styles).not.toContain(
+      '.scene-director.is-exiting:not(.is-host-preserving) .app-shell-titlebar',
     );
   });
 
   it('routes Settings panels through an authored nested scene slot', () => {
     const settings = read('./ui/Settings.tsx');
     const styles = read('./style.css');
-    expect(settings).toContain('data-scene-region="settings-shell"');
+    expect(settings).toContain("sceneTransitionTargetAttributes('settings-shell')");
     expect(settings).toContain('const activeTab = tabFromPath(path)');
     expect(settings).not.toContain('APP_NAVIGATION_EVENT');
     expect(settings).not.toContain('window.location.pathname');
     expect(settings).not.toContain('settings-xfade-');
-    expect(styles).toContain('data-transition-region="settings-shell"');
+    expect(styles).toContain('data-scene-transition-active');
     expect(styles).toContain('.settings-scroll > .kit-scroll-content');
     expect(styles).toContain('inline-size: calc(100% - 24px)');
     expect(read('./ui/App.tsx')).toContain("manifest.waitPresentation === 'loading'");
+  });
+
+  it('uses the persistent title bar for route loading and never invents a board background', () => {
+    const app = read('./ui/App.tsx');
+    const titleBar = read('./ui/shell/AppTitleBar.tsx');
+    const styles = read('./style.css');
+    expect(app).toContain("transitionStatus={titleBarLoading ? 'Loading…' : null}");
+    expect(titleBar).toContain('screenName={config.screenName}');
+    expect(titleBar).toContain('transitionStatus={transitionStatus}');
+    expect(titleBar).toContain('config.centerSlot ? <div className="app-shell-titlebar-center"');
+    expect(titleBar).not.toContain('app-titlebar-transition-status');
+    expect(titleBar).not.toContain('config.centerSlot || transitionStatus');
+    expect(read('./ui/shared/BrandLockup.tsx')).toContain('brand-lockup-transition-status');
+    expect(app).not.toContain('className="scene-wait-canvas"');
+    expect(app).not.toContain('scene-retained-background');
+    expect(styles).not.toContain('.scene-retained-background');
+    expect(styles).not.toContain('.scene-wait-canvas');
+    expect(styles).toContain('[data-scene-visual-role="outgoing"]');
+    expect(styles).toContain('[data-scene-visual-role="incoming"]');
+    expect(styles).not.toContain('.app-titlebar-transition-status');
+    expect(styles).toContain('.brand-lockup-transition-status');
+    expect(app).toContain("scene.phase === 'startup' && scene.startupStage < 0");
+  });
+
+  it('keeps gameplay control-panel tabs immediate while navigation remains explicit', () => {
+    const hud = read('./ui/SkirmishHud.tsx');
+    expect(hud).toContain('data-transition-policy="immediate-local"');
+    expect(hud).toContain('onClick={() => setTab(t.id)}');
+    expect(hud).not.toContain('onClick={() => navigateApp(t.id)}');
+    expect(hud).toContain('<NavButton');
+    expect(read('../scripts/shot.mjs')).toContain("const assertImmediateLocalControl = has('assert-immediate-local-control')");
+    expect(read('../scripts/shot.mjs')).toContain('immediate local control entered the scene lifecycle');
+  });
+
+  it('preserves installed drawable identity when Chrome Lab saves visual tuning', () => {
+    const chromeLab = read('./ui/ChromeLab.tsx');
+    expect(chromeLab).toContain('...installed.behavior');
+    expect(chromeLab).toContain('roles: installed.behavior.roles');
   });
 
   it('does not let menu, screen, or board readiness expire into success', () => {
@@ -214,7 +275,8 @@ describe('professional loading architecture guards', () => {
     expect(preview).toContain('onTerrainFirstFrame');
     expect(preview).toContain('onSceneFirstFrame');
     expect(preview).toContain('onPaintedChange={onPaintedChange}');
-    expect(read('./ui/PlayMenu.tsx')).toContain('&& (!selectedLevel || levelPreviewPainted)');
+    expect(read('./ui/PlayMenu.tsx')).not.toContain('&& (!selectedLevel || levelPreviewPainted)');
+    expect(read('./ui/PlayMenu.tsx')).not.toContain("selectedLevelId ?? '',");
   });
 
   it('attributes every same-origin API and runtime resource to the active scene', () => {

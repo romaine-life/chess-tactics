@@ -14,6 +14,7 @@ import { loadingError, loadingMark } from '../../diagnostics/loadingTimeline';
 import { loadDecodedImage } from '../../render/imageResources';
 import type { SceneManifest } from './sceneManifest';
 import type { SceneHost } from './sceneManifest';
+import { sceneTransitionTargetSelector } from './sceneTransitionTarget';
 
 type ParticipantPhase = 'loading' | 'painted' | 'error';
 interface Participant { phase: ParticipantPhase; error: Error | null }
@@ -77,6 +78,8 @@ interface SceneBoundaryProps {
   preparing: boolean;
   preserveHost: boolean;
   transitionRegion: SceneHost | null;
+  mountedKey: string;
+  visualRole?: 'single' | 'outgoing' | 'incoming';
   children: ReactNode;
   onPainted: (generation: number) => void;
   onFailed: (generation: number, error: Error) => void;
@@ -88,6 +91,8 @@ export function SceneBoundary({
   preparing,
   preserveHost,
   transitionRegion,
+  mountedKey,
+  visualRole = 'single',
   children,
   onPainted,
   onFailed,
@@ -117,9 +122,19 @@ export function SceneBoundary({
     .map((entry) => entry.slice(0, entry.lastIndexOf(':')));
 
   useLayoutEffect(() => {
+    if (!preserveHost || !transitionRegion || !rootRef.current) return undefined;
+    const target = rootRef.current.querySelector<HTMLElement>(
+      sceneTransitionTargetSelector(transitionRegion),
+    );
+    if (!target) return undefined;
+    target.setAttribute('data-scene-transition-active', '');
+    return () => target.removeAttribute('data-scene-transition-active');
+  }, [generation, mountedKey, preserveHost, transitionRegion]);
+
+  useLayoutEffect(() => {
     if (!preparing || !preserveHost || !transitionRegion || !rootRef.current) return undefined;
     const region = rootRef.current.querySelector<HTMLElement>(
-      `[data-scene-region="${transitionRegion}"]`,
+      sceneTransitionTargetSelector(transitionRegion),
     );
     if (!region) return undefined;
     region.inert = true;
@@ -128,7 +143,7 @@ export function SceneBoundary({
       region.inert = false;
       region.removeAttribute('aria-hidden');
     };
-  }, [preparing, preserveHost, transitionRegion]);
+  }, [mountedKey, preparing, preserveHost, transitionRegion]);
 
   useEffect(() => {
     if (!preparing || !rootRef.current) return undefined;
@@ -152,7 +167,7 @@ export function SceneBoundary({
     // for two browser paint opportunities. A missing participant cannot be invented by
     // elapsed time; route families with async work must register an owner.
     const root = preserveHost && transitionRegion
-      ? rootRef.current.querySelector<HTMLElement>(`[data-scene-region="${transitionRegion}"]`)
+      ? rootRef.current.querySelector<HTMLElement>(sceneTransitionTargetSelector(transitionRegion))
       : rootRef.current;
     if (!root) return undefined;
     void paintFrames()
@@ -180,12 +195,16 @@ export function SceneBoundary({
     <SceneRegistrationContext.Provider value={registration}>
       <div
         ref={rootRef}
-        className={`scene-boundary${preparing ? preserveHost ? ' is-region-preparing' : ' is-preparing' : ' is-current'}`}
+        className={`scene-boundary scene-transition-target${preparing ? preserveHost ? ' is-region-preparing' : ' is-preparing' : ' is-current'}`}
+        data-scene-transition-target="scene-root"
+        data-scene-transition-mode="self"
+        data-scene-transition-active={!preserveHost && visualRole !== 'outgoing' ? '' : undefined}
         data-scene={manifest.id}
         data-scene-generation={generation}
         data-scene-participants={participantSnapshot.join(',')}
         data-scene-unresolved={unresolvedParticipants.join(',')}
         data-transition-region={transitionRegion ?? undefined}
+        data-scene-visual-role={visualRole}
         inert={preparing && !preserveHost ? true : undefined}
         aria-hidden={preparing && !preserveHost || undefined}
       >

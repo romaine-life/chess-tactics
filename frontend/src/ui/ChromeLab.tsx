@@ -392,7 +392,11 @@ async function saveChromeLabDefaults(payload: { target: string; outer: RoleTune;
     label: installed.label,
     sortOrder: installed.sortOrder,
     lifecycleState: installed.lifecycleState,
-    behavior: payload,
+    behavior: {
+      ...installed.behavior,
+      ...payload,
+      roles: installed.behavior.roles,
+    },
     metadata: installed.metadata,
     media: Object.fromEntries(Object.entries(installed.media).map(([role, binding]) => [role, binding.slot])),
     expectedRevision: installed.rowRevision,

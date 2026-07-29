@@ -18,6 +18,9 @@
 //     [--abort-request <url-substring>] [--abort-request-once <url-substring>]
 //     [--abort-request-until-retry <url-substring>] [--retry-scene-error]
 //     [--click <selector>] [--click-ready <jsExpr>] [--assert-backdrop-continuity]
+//     [--assert-full-scene-exit]
+//     [--transition-out <path>]
+//     [--assert-immediate-local-control]
 //     [--back-after-click-ms <ms>]
 //     [--full] [--show-scrollbars] [--allow-motion]
 //
@@ -65,6 +68,9 @@ const click = flag('click');
 const clickReady = flag('click-ready');
 const backAfterClickMs = flag('back-after-click-ms');
 const assertBackdropContinuity = has('assert-backdrop-continuity');
+const assertFullSceneExit = has('assert-full-scene-exit');
+const transitionOut = flag('transition-out');
+const assertImmediateLocalControl = has('assert-immediate-local-control');
 const assertEditorViewer = has('assert-editor-viewer');
 const fullPage = has('full');
 const showScrollbars = has('show-scrollbars');
@@ -361,6 +367,10 @@ try {
               pending,
               mounted,
               contentOpacity,
+              transitionActive: content?.hasAttribute('data-scene-transition-active') ?? false,
+              transitionMode: content?.getAttribute('data-scene-transition-mode') ?? null,
+              boundaryClass: boundary?.className ?? null,
+              preparingSelectorMatches: content?.matches('.scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active]') ?? false,
               contentVisibilityViolation,
             });
           }
@@ -403,6 +413,10 @@ try {
               pending,
               mounted,
               contentOpacity,
+              transitionActive: settingsContent?.hasAttribute('data-scene-transition-active') ?? false,
+              transitionMode: settingsContent?.getAttribute('data-scene-transition-mode') ?? null,
+              boundaryClass: boundary?.className ?? null,
+              preparingSelectorMatches: settingsContent?.matches('.scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active]') ?? false,
               loadingVisible,
               sameRail: settingsRail === window.__ctSettingsHostRail,
             });
@@ -563,8 +577,47 @@ try {
     console.log(`wrote early bootstrap ${bootstrapPath}`);
   }
   if (click) {
+    if (assertFullSceneExit || assertImmediateLocalControl) {
+      await page.waitForFunction(
+        `document.querySelector('[data-scene-phase]')?.getAttribute('data-scene-phase') === 'current'`,
+        { timeout },
+      );
+    }
     if (clickReady) await page.waitForFunction(clickReady, { timeout });
     await page.waitForSelector(String(click), { visible: true, timeout });
+    if (assertImmediateLocalControl) {
+      await page.evaluate(() => {
+        const director = document.querySelector('[data-scene-phase]');
+        const boundary = document.querySelector('[data-scene-generation]');
+        window.__ctImmediateLocalBefore = {
+          phase: director?.getAttribute('data-scene-phase') ?? null,
+          committed: director?.getAttribute('data-scene-committed') ?? null,
+          generation: boundary?.getAttribute('data-scene-generation') ?? null,
+          href: window.location.href,
+          boundary,
+        };
+      });
+    }
+    if (assertFullSceneExit) {
+      await page.evaluate(() => {
+        const director = document.querySelector('[data-scene-phase]');
+        window.__ctFullScenePhases = [director?.getAttribute('data-scene-phase') ?? null];
+        window.__ctFullScenePhaseObserver = new MutationObserver(() => {
+          window.__ctFullScenePhases.push(director?.getAttribute('data-scene-phase') ?? null);
+        });
+        if (director) {
+          window.__ctFullScenePhaseObserver.observe(director, {
+            attributes: true,
+            attributeFilter: ['data-scene-phase'],
+          });
+        }
+        window.__ctOutgoingSceneBoundary = document.querySelector('.scene-boundary');
+        window.__ctOutgoingSceneBoundaryStartedVisible = Boolean(
+          window.__ctOutgoingSceneBoundary
+          && Number.parseFloat(getComputedStyle(window.__ctOutgoingSceneBoundary).opacity) > 0.99
+        );
+      });
+    }
     if (assertBackdropContinuity) {
       const outgoingBackdropVisible = await page.evaluate(() => {
         const host = document.querySelector('.scene-homepage-background');
@@ -582,6 +635,97 @@ try {
       }
     }
     await page.click(String(click));
+    if (assertImmediateLocalControl) {
+      await new Promise((resolveSample) => setTimeout(resolveSample, 80));
+      const localSample = await page.evaluate(() => {
+        const before = window.__ctImmediateLocalBefore;
+        const director = document.querySelector('[data-scene-phase]');
+        const boundary = document.querySelector('[data-scene-generation]');
+        return {
+          before: before ? {
+            phase: before.phase,
+            committed: before.committed,
+            generation: before.generation,
+            href: before.href,
+          } : null,
+          after: {
+            phase: director?.getAttribute('data-scene-phase') ?? null,
+            committed: director?.getAttribute('data-scene-committed') ?? null,
+            generation: boundary?.getAttribute('data-scene-generation') ?? null,
+            href: window.location.href,
+          },
+          sameBoundary: Boolean(before && boundary === before.boundary),
+        };
+      });
+      if (
+        !localSample.before
+        || localSample.before.phase !== 'current'
+        || localSample.after.phase !== 'current'
+        || localSample.before.committed !== localSample.after.committed
+        || localSample.before.generation !== localSample.after.generation
+        || localSample.before.href !== localSample.after.href
+        || !localSample.sameBoundary
+      ) {
+        throw new Error(`immediate local control entered the scene lifecycle: ${JSON.stringify(localSample)}`);
+      }
+    }
+    if (assertFullSceneExit) {
+      await new Promise((resolveSample) => setTimeout(resolveSample, 120));
+      const exitSample = await page.evaluate(() => {
+        const boundary = document.querySelector('.scene-boundary[data-scene-visual-role="outgoing"]')
+          ?? document.querySelector('.scene-boundary');
+        const incoming = document.querySelector('.scene-boundary[data-scene-visual-role="incoming"]');
+        window.__ctIncomingSceneBoundary = incoming;
+        return {
+          phases: window.__ctFullScenePhases ?? [],
+          startedVisible: window.__ctOutgoingSceneBoundaryStartedVisible,
+          sameBoundary: boundary === window.__ctOutgoingSceneBoundary,
+          opacity: boundary ? Number.parseFloat(getComputedStyle(boundary).opacity) : null,
+          incomingMounted: Boolean(incoming),
+          incomingOpacity: incoming ? Number.parseFloat(getComputedStyle(incoming).opacity) : null,
+        };
+      });
+      if (
+        !exitSample.startedVisible
+        || !exitSample.phases.includes('exiting')
+        || !exitSample.sameBoundary
+        || exitSample.opacity === null
+        || exitSample.opacity < 0.99
+        || !exitSample.incomingMounted
+        || exitSample.incomingOpacity === null
+        || exitSample.incomingOpacity > 0.01
+      ) {
+        throw new Error(`full-scene wait did not retain the painted outgoing boundary beneath the hidden destination: ${JSON.stringify(exitSample)}`);
+      }
+      if (transitionOut) {
+        await new Promise((resolveSample) => setTimeout(resolveSample, 300));
+        const waitPresentation = await page.evaluate(() => {
+          const status = document.querySelector('.brand-lockup-transition-status[role="status"]');
+          const centered = document.querySelector('.scene-loading-presentation');
+          const transitionOwnedCenter = document.querySelector('.app-shell-titlebar-center.is-transition-status');
+          return {
+            phase: document.querySelector('[data-scene-phase]')?.getAttribute('data-scene-phase') ?? null,
+            titleStatus: status?.textContent?.trim() ?? null,
+            titleVisible: Boolean(status && Number.parseFloat(getComputedStyle(status).opacity) > 0.01),
+            centeredLoading: Boolean(centered?.textContent?.includes('Loading')),
+            transitionOwnedCenter: Boolean(transitionOwnedCenter),
+          };
+        });
+        if (
+          !['loading', 'entering'].includes(waitPresentation.phase)
+          || waitPresentation.titleStatus !== 'Loading…'
+          || !waitPresentation.titleVisible
+          || waitPresentation.centeredLoading
+          || waitPresentation.transitionOwnedCenter
+        ) {
+          throw new Error(`route wait presentation escaped the title bar: ${JSON.stringify(waitPresentation)}`);
+        }
+        const transitionPath = resolve(process.cwd(), String(transitionOut));
+        mkdirSync(dirname(transitionPath), { recursive: true });
+        await page.screenshot({ path: transitionPath, fullPage: false });
+        console.log(`wrote transition ${transitionPath}`);
+      }
+    }
     if (backAfterClickMs !== undefined) {
       const clickedHref = page.url();
       const delay = Math.max(0, Number(backAfterClickMs) || 0);
@@ -742,6 +886,20 @@ try {
     if (!allowSceneError) {
       process.exitCode = 13;
       throw new Error('unexpected terminal scene error');
+    }
+  }
+  if (assertFullSceneExit) {
+    const promotion = await page.evaluate(() => {
+      const current = document.querySelector('.scene-boundary[data-scene-visual-role="single"]');
+      return {
+        incomingWasCaptured: Boolean(window.__ctIncomingSceneBoundary),
+        incomingStillConnected: Boolean(window.__ctIncomingSceneBoundary?.isConnected),
+        sameBoundary: current === window.__ctIncomingSceneBoundary,
+        currentScene: current?.getAttribute('data-scene') ?? null,
+      };
+    });
+    if (!promotion.incomingWasCaptured || !promotion.incomingStillConnected || !promotion.sameBoundary) {
+      throw new Error(`painted destination was remounted instead of promoted in place: ${JSON.stringify(promotion)}`);
     }
   }
 

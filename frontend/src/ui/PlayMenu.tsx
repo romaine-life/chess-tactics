@@ -31,6 +31,7 @@ import { skirmishProfileLevels } from './skirmishProfiles';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { installedUiMedia } from './installedUiMedia';
 import { PaintedSurfaceBoundary } from './shell/PaintedSurfaceBoundary';
+import { sceneTransitionTargetAttributes } from './shell/sceneTransitionTarget';
 import {
   GatedLevelThumbnail,
   ThumbnailSurface as AtomicThumbnailSurface,
@@ -496,7 +497,13 @@ export function PlayMenu({
   // `path` is the scene director's mounted scene path. Browser navigation only
   // requests a destination; it must never reveal Play content ahead of the
   // director's exit, preparation, paint acknowledgement, and entrance lifecycle.
-  const selection: PlayHubSelection = playHubSelection(path) ?? { mode: 'skirmish' };
+  // Route selection is scene state, not an object to recreate on every render. A fresh
+  // object here used to retrigger the reset effect after setSelectedLevelId(), clearing
+  // the level immediately and briefly invalidating the complete Play surface.
+  const selection: PlayHubSelection = useMemo(
+    () => playHubSelection(path) ?? { mode: 'skirmish' },
+    [path],
+  );
   const [progress, setProgress] = useState<CampaignProgress>(readProgress);
   const [selectedLevelId, setSelectedLevelId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -579,13 +586,9 @@ export function PlayMenu({
   const selectedPlayHref = activeCampaign && selectedLevelId
     ? `/play?campaignId=${encodeURIComponent(activeCampaign.id)}&levelId=${encodeURIComponent(selectedLevelId)}`
     : '/play';
-  const [levelPreviewPainted, setLevelPreviewPainted] = useState(false);
-  useEffect(() => setLevelPreviewPainted(false), [selectedLevelId]);
-
   const surfaceSignature = [
     selection.mode,
     selection.mode === 'campaign' ? selection.campaignId : '',
-    selectedLevelId ?? '',
     ...profileLevels.map((level) => level.id),
     ...standaloneLevels.map((level) => level.id),
     ...activeRefs.map((ref) => ref.levelId),
@@ -598,7 +601,7 @@ export function PlayMenu({
   return (
     <ThumbnailSurfaceReportContext.Provider value={reportThumbnailSurface}>
       <div
-        className="play-scene-authority"
+        className={`play-scene-authority${selectedLevel ? ' has-level-preview' : ''}`}
         data-official-authority={loading ? 'loading' : officialAvailable ? 'ready' : 'error'}
         data-user-authority={loading ? 'loading' : userWorkspaceAvailable ? 'ready' : 'error'}
         data-thumbnail-authority={thumbnailSurface.error ? 'error' : thumbnailSurface.complete ? 'ready' : 'loading'}
@@ -673,7 +676,6 @@ export function PlayMenu({
           !loading
           && !surfaceError
           && (selection.mode === 'run' || thumbnailSurface.complete)
-          && (!selectedLevel || levelPreviewPainted)
         }
         error={surfaceError}
         loadingLabel="Preparing Play…"
@@ -686,7 +688,7 @@ export function PlayMenu({
       >
       <div
         className="play-destination-content"
-        data-scene-region="play-shell"
+        {...sceneTransitionTargetAttributes('play-shell', 'contents')}
         data-scene-instance={sceneInstanceKey}
       >
       {selection.mode === 'skirmish' ? (
@@ -726,7 +728,6 @@ export function PlayMenu({
           level={selectedLevel}
           title={selectedTitle}
           embedded
-          onPaintedChange={setLevelPreviewPainted}
           actions={
             <div className="ce-preview-actions is-single">
               {selectedUnlocked

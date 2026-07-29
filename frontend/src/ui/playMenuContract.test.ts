@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const mainMenu = readFileSync(new URL('./MainMenu.tsx', import.meta.url), 'utf8');
 const playMenu = readFileSync(new URL('./PlayMenu.tsx', import.meta.url), 'utf8');
+const style = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const campaignEditor = readFileSync(new URL('./CampaignEditor.tsx', import.meta.url), 'utf8');
 const headerAccountCluster = readFileSync(new URL('./shared/HeaderAccountCluster.tsx', import.meta.url), 'utf8');
 const profiles = readFileSync(new URL('./skirmishProfiles.ts', import.meta.url), 'utf8');
@@ -78,5 +79,17 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).not.toContain('window.location');
     expect(playMenu).not.toContain('setSelection');
     expect(playMenu).toContain('playSkirmishLevelHref(level.id, PLAY_LEVELS_SELECTOR_HREF)');
+  });
+
+  it('keeps level selection stable and delegates its paint wait to the preview', () => {
+    expect(playMenu).toContain('const selection: PlayHubSelection = useMemo(');
+    expect(playMenu).toContain('() => playHubSelection(path) ??');
+    expect(playMenu).toContain('[path],');
+    expect(playMenu).not.toContain('useEffect(() => setLevelPreviewPainted(false)');
+    expect(playMenu).not.toContain('&& (!selectedLevel || levelPreviewPainted)');
+    expect(playMenu).not.toContain("selectedLevelId ?? '',");
+    expect(playMenu).toContain('<LevelPreviewColumn');
+    expect(playMenu).toContain("selectedLevel ? ' has-level-preview' : ''");
+    expect(style).toContain('.play-scene-authority.has-level-preview .play-action-col');
   });
 });

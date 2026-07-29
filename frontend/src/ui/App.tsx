@@ -313,6 +313,15 @@ export function App(): ReactElement {
   useEffect(() => {
     if (scene.phase !== 'exiting') return undefined;
     const generation = scene.generation;
+    const destination = scene.destination;
+    const sharedRegion = destination
+      ? deepestSharedSceneRegion(scene.current, destination)
+      : null;
+    if (!sharedRegion) {
+      loadingStartedAt.current = performance.now();
+      dispatchScene({ type: 'exit-finished', generation });
+      return undefined;
+    }
     const timer = window.setTimeout(() => {
       const latest = sceneRef.current;
       if (latest.generation !== generation || !latest.destinationHref) return;
@@ -357,10 +366,20 @@ export function App(): ReactElement {
   useEffect(() => {
     if (scene.phase !== 'entering') return undefined;
     const generation = scene.generation;
-    const timer = window.setTimeout(
-      () => dispatchScene({ type: 'entrance-finished', generation }),
-      SCENE_FADE_MS,
-    );
+    const timer = window.setTimeout(() => {
+      const latest = sceneRef.current;
+      if (
+        latest.generation === generation
+        && latest.destinationHref
+        && latest.destination
+        && !deepestSharedSceneRegion(latest.current, latest.destination)
+      ) {
+        const url = new URL(latest.destinationHref, window.location.origin);
+        setPath(normalizeRoutePath(url.pathname));
+        setSearch(url.search);
+      }
+      dispatchScene({ type: 'entrance-finished', generation });
+    }, SCENE_FADE_MS);
     timers.current.push(timer);
     return () => window.clearTimeout(timer);
   }, [scene.generation, scene.phase]);
@@ -372,19 +391,68 @@ export function App(): ReactElement {
   // destination during exit and is preparation metadata, not visibility.
   const mountedScene = sceneManifest(path);
   const transitioning = scene.phase !== 'current' && scene.phase !== 'startup';
+  const showSceneFailure = scene.phase === 'error';
+  const titleBarLoading = manifest.waitPresentation === 'loading' && (
+    scene.phase === 'loading' || scene.phase === 'entering'
+  );
   const showLoadingPresentation = scene.phase === 'error'
-    || (manifest.waitPresentation === 'loading' && (
-      scene.phase === 'loading' || scene.phase === 'entering'
-    ))
     || (scene.phase === 'startup' && scene.startupStage < 0);
-  const retainedBackground = scene.current.background;
-  const homepageIsDestination = transitioning
-    && retainedBackground !== 'homepage'
-    && manifest.background === 'homepage';
   const preservedSceneHost = scene.destination
     ? deepestSharedSceneRegion(scene.current, scene.destination)
     : null;
   const preservesSceneHost = preservedSceneHost !== null;
+  const initialPreparation = Boolean(
+    scene.destination
+    && scene.generation === 0
+    && scene.current.id === scene.destination.id,
+  );
+  const overlapsCompleteScenes = Boolean(
+    scene.destination
+    && !preservesSceneHost
+    && !initialPreparation,
+  );
+  const destinationLocation = scene.destinationHref
+    ? new URL(scene.destinationHref, window.location.origin)
+    : null;
+  const destinationSearch = destinationLocation?.search ?? search;
+  const sceneLayers = overlapsCompleteScenes
+    ? [
+        {
+          key: scene.current.instances[0]?.key ?? scene.current.leaf.key,
+          scene: scene.current,
+          manifest: scene.current,
+          search,
+          href: `${path}${search}`,
+          preparing: false,
+          preserveHost: false,
+          transitionRegion: null,
+          visualRole: 'outgoing' as const,
+        },
+        {
+          key: scene.destination!.instances[0]?.key ?? scene.destination!.leaf.key,
+          scene: scene.destination!,
+          manifest: scene.destination!,
+          search: destinationSearch,
+          href: scene.destinationHref!,
+          preparing,
+          preserveHost: false,
+          transitionRegion: null,
+          visualRole: 'incoming' as const,
+        },
+      ]
+    : [
+        {
+          key: mountedScene.instances[0]?.key ?? String(scene.generation),
+          scene: mountedScene,
+          manifest,
+          search,
+          href: `${path}${search}`,
+          preparing,
+          preserveHost: preservesSceneHost,
+          transitionRegion: preservedSceneHost,
+          visualRole: 'single' as const,
+        },
+      ];
   const slots = sceneSlots(scene.current, scene.destination);
 
   return (
@@ -404,42 +472,41 @@ export function App(): ReactElement {
         })))}
       >
         <UpdateBanner />
-        {transitioning && retainedBackground !== 'homepage' ? (
-          <div
-            className={`scene-retained-background is-${retainedBackground}`}
-            aria-hidden="true"
-          />
-        ) : null}
         <div
-          className={`scene-homepage-background${startupController.revealed('background') ? '' : ' is-startup-pending'}${homepageIsDestination ? ' is-destination' : ''}`}
+          className={`scene-homepage-background${startupController.revealed('background') ? '' : ' is-startup-pending'}`}
           aria-hidden="true"
         >
           <HomepageBackdrop directorHostOnly />
         </div>
         <StartupSceneContext.Provider value={startupController}>
-          <SceneBoundary
-            key={manifest.instances[0]?.key ?? scene.generation}
-            manifest={manifest}
-            generation={scene.generation}
-            preparing={preparing}
-            preserveHost={preservesSceneHost}
-            transitionRegion={preservedSceneHost}
-            onPainted={destinationPainted}
-            onFailed={destinationFailed}
-          >
-            <AppTitleBar
-              path={path}
-              search={search}
-              revealTitle={startupController.revealed('title')}
-            />
-            <RouteLoadBoundary resetKey={`${path}${search}`}>
-              <Suspense fallback={null}>{renderScene(mountedScene, search)}</Suspense>
-            </RouteLoadBoundary>
-          </SceneBoundary>
+          <AppTitleBar
+            path={path}
+            search={search}
+            revealTitle={startupController.revealed('title')}
+            transitionStatus={titleBarLoading ? 'Loading…' : null}
+          />
+          {sceneLayers.map((layer) => (
+            <SceneBoundary
+              key={layer.key}
+              manifest={layer.manifest}
+              generation={scene.generation}
+              preparing={layer.preparing}
+              preserveHost={layer.preserveHost}
+              transitionRegion={layer.transitionRegion}
+              mountedKey={layer.scene.leaf.key}
+              visualRole={layer.visualRole}
+              onPainted={destinationPainted}
+              onFailed={destinationFailed}
+            >
+              <RouteLoadBoundary resetKey={layer.href}>
+                <Suspense fallback={null}>{renderScene(layer.scene, layer.search)}</Suspense>
+              </RouteLoadBoundary>
+            </SceneBoundary>
+          ))}
         </StartupSceneContext.Provider>
         {!bootstrapPresentationPresent && showLoadingPresentation ? (
           <div className="scene-loading-presentation" role={scene.phase === 'error' ? 'alert' : 'status'}>
-            {scene.phase === 'error' ? (
+            {showSceneFailure ? (
               <>
                 <strong>This scene could not be loaded.</strong>
                 <small>{sceneFailureCopy(scene.error)}</small>
