@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:80bbfe3a65fbcfeefb5b99e6b4ca365a4f79811ea5398fa2f3b53de362f83278"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:6175e29700f4b6f6f33ccf4eafbb9994247a34814a96ae63d62cba1bda6c20a5"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Route BGM playback through app-issued capabilities"
-  prNumber: "534"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/534"
-  commit: "cc84e458"
+  prTitle: "Unify board viewports with Play"
+  prNumber: "536"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/536"
+  commit: "3dffe87d"
 
 name: chess-tactics
 namespace: chess-tactics
