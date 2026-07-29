@@ -83,6 +83,16 @@ describe('professional loading architecture guards', () => {
     expect(menu).not.toContain('{dest ? (');
   });
 
+  it('visibly fades a preserved host child before committing an empty slot', () => {
+    const styles = read('./style.css');
+    expect(styles).toContain(
+      '.scene-director.is-exiting.is-host-preserving .scene-boundary[data-transition-region="menu-shell"] [data-scene-region="menu-shell"]',
+    );
+    expect(styles).toContain(
+      '.scene-director.is-exiting.is-host-preserving .scene-boundary[data-transition-region="play-shell"] [data-scene-region="play-shell"] > *',
+    );
+  });
+
   it('does not let menu, screen, or board readiness expire into success', () => {
     const app = read('./ui/App.tsx');
     const coldReveal = read('./ui/shell/startupScene.ts');

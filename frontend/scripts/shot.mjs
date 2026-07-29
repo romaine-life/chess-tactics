@@ -247,6 +247,7 @@ try {
         playViolations: [],
         homeReturnSeen: false,
         homeReturnViolations: [],
+        homeExitFaded: false,
       };
       window.__ctMenuHostRail = null;
       window.__ctPlayHostRail = null;
@@ -289,13 +290,29 @@ try {
         if (director?.getAttribute('data-scene-pending') === 'main-menu') {
           const phase = director.getAttribute('data-scene-phase');
           const loading = document.querySelector('.scene-loading-presentation');
+          const menuDestination = document.querySelector('[data-scene-region="menu-shell"]');
+          const menuDestinationOpacity = menuDestination
+            ? Number.parseFloat(getComputedStyle(menuDestination).opacity)
+            : null;
+          if (
+            phase === 'exiting'
+            && menuDestination?.childElementCount
+            && menuDestinationOpacity !== null
+            && menuDestinationOpacity < 0.9
+          ) {
+            window.__ctMenuHostContinuity.homeExitFaded = true;
+          }
           const loadingVisible = Boolean(
             loading
             && getComputedStyle(loading).visibility !== 'hidden'
             && Number.parseFloat(getComputedStyle(loading).opacity) > 0.001
           );
           if (phase === 'loading' || phase === 'entering' || loadingVisible) {
-            window.__ctMenuHostContinuity.homeReturnViolations.push({ phase, loadingVisible });
+            window.__ctMenuHostContinuity.homeReturnViolations.push({
+              phase,
+              loadingVisible,
+              menuDestinationOpacity,
+            });
           }
         }
         if (
@@ -724,6 +741,7 @@ try {
       || result.playViolations.length
       || !result.homeReturnSeen
       || result.homeReturnViolations.length
+      || !result.homeExitFaded
     ) {
       console.error(`menu host continuity failed: ${JSON.stringify(result)}`);
       process.exitCode = 15;

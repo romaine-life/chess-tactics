@@ -9462,6 +9462,18 @@ body { font-size: 17px; }
   pointer-events: none;
   transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
 }
+.scene-director.is-exiting.is-host-preserving .scene-boundary[data-transition-region="menu-shell"] [data-scene-region="menu-shell"] {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
+}
+/* play-shell is display:contents so its columns remain siblings in the menu
+   grid. Its direct visual children therefore carry the slot fade. */
+.scene-director.is-exiting.is-host-preserving .scene-boundary[data-transition-region="play-shell"] [data-scene-region="play-shell"] > * {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
+}
 .scene-boundary.is-preparing {
   opacity: 0;
   pointer-events: none;
@@ -9471,6 +9483,10 @@ body { font-size: 17px; }
 }
 .scene-boundary.is-region-preparing[data-transition-region="menu-shell"] [data-scene-region="menu-shell"],
 .scene-boundary.is-region-preparing[data-transition-region="play-shell"] [data-scene-region="play-shell"] {
+  opacity: 0;
+  pointer-events: none;
+}
+.scene-boundary.is-region-preparing[data-transition-region="play-shell"] [data-scene-region="play-shell"] > * {
   opacity: 0;
   pointer-events: none;
 }
@@ -9486,6 +9502,10 @@ body { font-size: 17px; }
 }
 .scene-director.is-entering.is-host-preserving .scene-boundary[data-transition-region="menu-shell"] [data-scene-region="menu-shell"],
 .scene-director.is-entering.is-host-preserving .scene-boundary[data-transition-region="play-shell"] [data-scene-region="play-shell"] {
+  opacity: 1;
+  transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
+}
+.scene-director.is-entering.is-host-preserving .scene-boundary[data-transition-region="play-shell"] [data-scene-region="play-shell"] > * {
   opacity: 1;
   transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
 }
