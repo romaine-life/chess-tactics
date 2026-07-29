@@ -8,6 +8,14 @@ loopback browser requests, so authenticated application and screenshot verificat
 owner identity established at setup; do not fall back to a signed-out editor or ask the owner to
 repair authentication during handoff.
 
+Windows Codex environment setup also asks the owner for one feature name and
+stores its non-secret identity in `.codex-session/environment.json`. `devctl`
+starts the full Vite-owned process tree, and the workstation Caddy router maps
+its dynamic port to `http://<environment>.chess-tactics.localhost`. A Codex
+`SessionStart` hook injects that exact URL into agent context. Use the named URL
+for browser testing, screenshots, and owner handoff; `localhost:<port>` is an
+internal diagnostic fallback. See ADR-0196.
+
 `DEV_NO_BACKEND=1` and `DEV_OFFLINE=1` are owner-only escape hatches. Agents must
 not set them, suggest them, or use them to keep working after the backend fails to
 start. If the Vite-spawned backend fails, fix the backend startup issue (for
@@ -85,10 +93,11 @@ and don't tell the user screenshots are impossible. Use the helper below.
 
 ### How
 
-1. Start the dev server **persistently** — through devctl (the dev-servers skill), not a
-   backgrounded bash that dies between turns. Plain fallback from `frontend/`:
-   `npm run dev`. It serves `index.html` for every route (SPA), so any path works.
-   Use the local URL Vite prints.
+1. Codex setup starts the dev server **persistently** through devctl and records
+   the stable URL in `.codex-session/environment.json`; use the URL injected by
+   the session hook. Do not start a duplicate process. Plain non-Codex fallback
+   from `frontend/` is `npm run dev`; only that fallback uses the dynamic local
+   URL Vite prints.
 
 2. Capture with the `shot` tool. It drives the installed Chrome via `puppeteer-core`
    (system browser, no bundled download), freezes animation for determinism, and **clips
@@ -158,7 +167,8 @@ The Studio encodes its state in the URL, so deep-link instead of clicking:
   `node ../../../frontend/node_modules/typescript/bin/tsc --noEmit -p tsconfig.json`.
 - Never create symlinks/junctions to share `node_modules` — do a real install.
 - Plain `npm run dev` serves the full app and lets Vite dynamically acquire a
-  frontend port. Use the URL Vite prints instead of assuming a fixed port.
+  frontend port. Named Codex environments hide that port behind their stable
+  `.localhost` URL; a plain non-Codex run uses the URL Vite prints.
 - **`npm run dev` (from `frontend/`) runs the WHOLE app** — vite auto-spawns the backend
   (each worktree gets its own free port + pidfile, so many run side-by-side). On a fresh
   worktree it now **auto-installs `backend/node_modules` on first run**, so you no longer
