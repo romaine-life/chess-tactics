@@ -63,10 +63,12 @@ import {
 import { useSkirmishView } from '../game/skirmishView';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox } from './shared/ChromeBox';
+import type { RunRelicId } from '../run/model';
 
 export interface RunBattlePresentation {
   level: Level;
   seed: number;
+  relicIds: readonly RunRelicId[];
   onVictory: (survivingPersistentUnitIds: string[]) => void;
   onRestart: () => void;
   onPawnCashOut?: (unitId: string) => void;
@@ -1128,6 +1130,7 @@ export function Skirmish({
         netInteractive={netSeatInteractive}
         onOpenPredrawnRegistration={predrawnPreview ? () => setPredrawnPickerOpen(true) : null}
         onPawnCashOut={runBattle?.onPawnCashOut ?? null}
+        runRelicIds={runBattle?.relicIds ?? []}
       />
 
       {predrawnPickerOpen && predrawnPreview ? (

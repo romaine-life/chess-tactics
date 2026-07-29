@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactElement } from 'react';
+import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import { defaultBackgroundSet } from '../art/backgroundSets';
 import { useSkirmish, setRunBattleTransformSink } from '../game/store';
 import { defaultFacingForSide } from '../core/pieces';
@@ -45,8 +45,9 @@ import {
   selectedDeploymentLayout,
 } from '../run/deployment';
 import { useActiveRun } from '../run/store';
+import { RunRelicIcon, RunRelicInventory } from './RunRelics';
 
-function RunShell({ run, children }: { run: RunDocument; children: ReactElement | ReactElement[] }): ReactElement {
+function RunShell({ run, children }: { run: RunDocument; children: ReactNode }): ReactElement {
   return (
     <div
       className="run-screen skirmish-screen"
@@ -71,7 +72,10 @@ function RunShell({ run, children }: { run: RunDocument; children: ReactElement 
           </TitleBarStatus>
         </div>
       </TitleBarSlot>
-      <main className="run-workspace">{children}</main>
+      <main className="run-workspace">
+        <RunRelicInventory relicIds={run.relics} placement="workspace" />
+        {children}
+      </main>
     </div>
   );
 }
@@ -295,7 +299,10 @@ function RelicOffer({
   const needsTarget = relicTargetRequired(relicId);
   return (
     <InnerChromeBox className="run-card run-relic-card">
-      <h3>{relic.name}</h3>
+      <header className="run-relic-card-heading">
+        <RunRelicIcon relicId={relicId} />
+        <h3>{relic.name}</h3>
+      </header>
       <p>{relic.description}</p>
       {needsTarget ? (
         <select value={target} onChange={(event) => setTarget(event.target.value)} aria-label="Discipline target">
@@ -479,6 +486,7 @@ function BattlePanel({ run }: { run: RunDocument }): ReactElement {
   const presentation = useMemo<RunBattlePresentation>(() => ({
     level: battleLevel,
     seed: run.deployment?.seed ?? run.seed,
+    relicIds: run.relics,
     onVictory: (survivors) => {
       const latest = useActiveRun.getState().run;
       if (latest?.id === run.id) replace(openShop(latest, survivors));

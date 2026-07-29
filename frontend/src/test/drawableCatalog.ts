@@ -309,6 +309,34 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
     ['lobbies', 'Lobbies', '/lobbies'], ['settings', 'Settings', '/settings'],
   ].map(([value, label, route], sortOrder) => ({ id: `menu-mode-${value}`, kind: 'menu-mode', label, sortOrder, lifecycleState: 'active',
     behavior: { value, route, ...(value === 'settings' ? { roles: ['settings'] } : {}) }, metadata: {}, rowRevision: 1, media: { icon: descriptor(`test/menu/${value}.png`, 64, 64) } }));
+  const runRelicSpecs: DrawableCatalog['assets'] = [
+    'conscription-notice',
+    'congressional-approval',
+    'inspirational-record',
+    'training-linens',
+    'royal-decree',
+    'crenellated-rampart',
+    'ghibelline-rampart',
+    'popes-staff',
+    'popes-robes',
+    'royal-tent',
+    'royal-sceptre',
+    'mercenarys-rifle',
+    'merchants-shopkey',
+    'occult-dagger',
+    'deployment-vehicle',
+    'mercenary-boat',
+  ].map((relicId, sortOrder) => ({
+    id: `run-relic-${relicId}`,
+    kind: 'run-relic',
+    label: `Test ${relicId}`,
+    sortOrder,
+    lifecycleState: 'active',
+    behavior: { relicId },
+    metadata: {},
+    rowRevision: 1,
+    media: { icon: descriptor(`test/run/relics/${relicId}.png`, 64, 64) },
+  }));
   return {
     schemaVersion: 1,
     revision: 1,
@@ -325,7 +353,7 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
       media: {
         surface: descriptor(`test/subterrain/${id}.png`),
       },
-    })), ...terrainFamilySpecs, ...terrainSpecs, ...terrainReviewSpecs, ...macroSpecs, ...structureSpecs, ...coverSpecs, ...mirrorSpecs, ...staticDecorSpecs, ...wallArtSpecs, ...presentationSpecs, ...portraitTreatmentSpecs, ...appUiSpecs, ...nineSliceSpecs, ...scrollbarSpecs, ...surfaceSpecs, ...sliderSpecs, ...chromeFillTintSpecs, ...uiKitFrameSpecs, ...studioPageSpecs, ...menuModeSpecs, ...materialSpecs.map(([id, kind, value, label, isDefault, roles], index) => ({
+    })), ...terrainFamilySpecs, ...terrainSpecs, ...terrainReviewSpecs, ...macroSpecs, ...structureSpecs, ...coverSpecs, ...mirrorSpecs, ...staticDecorSpecs, ...wallArtSpecs, ...presentationSpecs, ...portraitTreatmentSpecs, ...appUiSpecs, ...nineSliceSpecs, ...scrollbarSpecs, ...surfaceSpecs, ...sliderSpecs, ...chromeFillTintSpecs, ...uiKitFrameSpecs, ...studioPageSpecs, ...menuModeSpecs, ...runRelicSpecs, ...materialSpecs.map(([id, kind, value, label, isDefault, roles], index) => ({
       id, kind, label, sortOrder: index, lifecycleState: 'active' as const,
       behavior: { value, ...(isDefault ? { default: true } : {}) }, metadata: {}, rowRevision: 1,
       media: Object.fromEntries(roles.map((role) => [role, descriptor(`test/${id}-${role}.png`)])),
