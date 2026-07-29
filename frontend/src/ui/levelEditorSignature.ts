@@ -18,6 +18,7 @@ export function levelEditorLevelSignature(level: Level): string {
     level.timeControl ?? '',
     level.victory ?? '',
     effectiveLevelEvents(level),
+    level.battle ?? '',
   ]);
 }
 
@@ -36,6 +37,7 @@ export function normalizedLevelEditorSignature(level: Level): string {
     timeControl: seed.save.timeControl,
     victory: seed.save.victory,
     events: seed.save.events,
+    battle: level.battle,
   });
   return levelEditorLevelSignature(normalized);
 }

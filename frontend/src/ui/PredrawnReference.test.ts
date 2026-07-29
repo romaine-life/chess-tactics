@@ -12,6 +12,7 @@ import { boardForPredrawnSourceArtwork } from '../render/StudioReadOnlyBoard';
 
 const workspace = (...levels: ReturnType<typeof createBlankLevel>[]): RevisionedWorkspace => ({
   campaigns: [],
+  wars: [],
   levels: Object.fromEntries(levels.map((level) => [level.id, level])),
   revision: 1,
   updated_at: null,

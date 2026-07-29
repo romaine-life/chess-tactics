@@ -21,6 +21,8 @@ import { Stepper } from './shared/Stepper';
 import { clientSide, clientSideLabel, clientSideOrder, clientSideRelation, clientTurnLabel, type PlayingSide } from '../game/clientPerspective';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox, OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
+import { fetchMe } from '../net/auth';
+import { AdminControls } from './AdminControls';
 
 const TYPE_LABEL = PIECE_LABEL;
 
@@ -37,7 +39,7 @@ const ROLE: Record<PieceType, string> = {
 
 const MARK = PIECE_MARK;
 
-type HudTab = 'unit' | 'roster' | 'log' | 'view' | 'controls';
+type HudTab = 'unit' | 'roster' | 'log' | 'view' | 'controls' | 'admin';
 
 // Icon-based tab strip: each section is a kit glyph, not a text word. The `label`
 // stays as the accessible name (aria-label) + hover tooltip so the icon never loses
@@ -186,6 +188,8 @@ type SkirmishHudProps = {
   netInteractive?: boolean;
   /** Development-only owner calibration for a temporary pre-drawn plate candidate. */
   onOpenPredrawnRegistration?: (() => void) | null;
+  /** Run-only Mercenary Boat action for a persistent Pawn at promotion. */
+  onPawnCashOut?: ((pieceId: string) => void) | null;
 };
 
 export function SkirmishHud({
@@ -204,6 +208,7 @@ export function SkirmishHud({
   returnLabel = 'Back',
   netInteractive = true,
   onOpenPredrawnRegistration = null,
+  onPawnCashOut = null,
 }: SkirmishHudProps = {}) {
   const game = useSkirmish((s) => s.game);
   const selectedId = useSkirmish((s) => s.selectedId);
@@ -215,6 +220,7 @@ export function SkirmishHud({
   const resignLocal = useSkirmish((s) => s.resignLocal);
   const pendingPromotion = useSkirmish((s) => s.pendingPromotion);
   const choosePromotion = useSkirmish((s) => s.choosePromotion);
+  const cashOutPromotion = useSkirmish((s) => s.cashOutPromotion);
   const select = useSkirmish((s) => s.select);
   const focus = useSkirmish((s) => s.focus);
   const testMode = useSkirmish((s) => s.testMode);
@@ -227,6 +233,26 @@ export function SkirmishHud({
   const { ask, dialog } = useConfirm();
 
   const [tab, setTab] = useState<HudTab>('unit');
+  const [adminAuth, setAdminAuth] = useState<{ ready: boolean; isAdmin: boolean }>({
+    ready: false,
+    isAdmin: false,
+  });
+
+  useEffect(() => {
+    let active = true;
+    void fetchMe()
+      .then((me) => {
+        if (active) setAdminAuth({ ready: true, isAdmin: me.is_admin === true });
+      })
+      .catch(() => {
+        if (active) setAdminAuth({ ready: true, isAdmin: false });
+      });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (tab === 'admin' && adminAuth.ready && !adminAuth.isAdmin) setTab('controls');
+  }, [adminAuth.isAdmin, adminAuth.ready, tab]);
 
   const portraitCrops = installedPortraitCrops();
 
@@ -345,6 +371,22 @@ export function SkirmishHud({
                 </button>
               );
             })}
+            {onPawnCashOut && pendingPromotion.mode === 'move' && promotingPiece?.type === 'pawn' && promotingPiece.id.startsWith('run-') ? (
+              <button
+                type="button"
+                data-chrome-unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'skirmish-promotion-option')}
+                onClick={() => {
+                  onPawnCashOut(promotingPiece.id);
+                  cashOutPromotion();
+                }}
+                aria-label="Take 2 gold and permanently remove this Pawn"
+                title="Mercenary Boat: take 2 gold; this Pawn leaves the army permanently."
+              >
+                <span aria-hidden="true">¤</span>
+                <span>Take 2 gold</span>
+              </button>
+            ) : null}
           </div>
         </section>
       ) : null}
@@ -353,7 +395,8 @@ export function SkirmishHud({
         className="skirmish-hud-panel"
         role="tabpanel"
         id={`skirmish-panel-${tab}`}
-        aria-labelledby={`skirmish-tab-${tab}`}
+        aria-labelledby={tab === 'admin' ? undefined : `skirmish-tab-${tab}`}
+        aria-label={tab === 'admin' ? 'Admin Controls' : undefined}
       >
         {tab === 'unit' && (
           <section className="skirmish-card skirmish-selected-card" aria-label="Selected unit">
@@ -641,6 +684,44 @@ export function SkirmishHud({
                 ) : null}
               </div>
             </div>
+            {adminAuth.isAdmin && !net ? (
+              <div className="skirmish-view-group">
+                <span className="skirmish-eyebrow">Administration</span>
+                <div className="skirmish-view-row">
+                  <button
+                    type="button"
+                    data-chrome-unit="inner-text-button"
+                    className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
+                    data-testid="open-battle-admin-controls"
+                    onClick={() => setTab('admin')}
+                  >
+                    Admin Controls
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </section>
+        )}
+        {tab === 'admin' && (
+          <section className="skirmish-card skirmish-admin-panel" aria-label="Administrator playtest controls">
+            <div className="skirmish-admin-panel-head">
+              <h2>Admin Controls</h2>
+              <button
+                type="button"
+                data-chrome-unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
+                data-testid="close-battle-admin-controls"
+                onClick={() => setTab('controls')}
+              >
+                Back
+              </button>
+            </div>
+            <AdminControls
+              authReady={adminAuth.ready}
+              isAdmin={adminAuth.isAdmin}
+              presentation="battle"
+              onBattleArmed={() => setTab('unit')}
+            />
           </section>
         )}
       </div>

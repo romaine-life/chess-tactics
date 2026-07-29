@@ -10,7 +10,7 @@
 //    `boardCode` so the next open is exact, and projecting terrain/units into `layers` so
 //    the game (which reads `layers`, not `boardCode`) plays the authored board.
 
-import type { Level, LevelEconomy, LevelEvents, LevelUnit, ObjectiveType, Roster, TimeControl, VictoryRules, Zone } from './level';
+import type { BattleSettings, Level, LevelEconomy, LevelEvents, LevelUnit, ObjectiveType, Roster, TimeControl, VictoryRules, Zone } from './level';
 import { BOARD_COLS, BOARD_ROWS, LEVEL_FORMAT_VERSION } from './level';
 import type { PlacedProp } from './props';
 import type { Piece, Side, TerrainCell, TerrainType, UnitFacing } from './types';
@@ -148,6 +148,9 @@ export interface LevelMeta {
   victory?: VictoryRules;
   // Authored non-victory events: setup spawns, pawn promotion triggers, and future event kinds.
   events?: LevelEvents;
+  // Run-specific authored battle metadata. Board edits must carry this through unchanged;
+  // the War editor owns the setting while the Level editor owns the board.
+  battle?: BattleSettings;
   difficulty?: string;
   economy?: LevelEconomy;
   theme?: string;
@@ -392,5 +395,6 @@ export function editorBoardToLevel(board: EditorBoard, meta: LevelMeta): Level {
   if (meta.timeControl !== undefined) level.timeControl = meta.timeControl;
   if (meta.victory !== undefined) level.victory = meta.victory;
   if (meta.events !== undefined) level.events = meta.events;
+  if (meta.battle !== undefined) level.battle = meta.battle;
   return level;
 }

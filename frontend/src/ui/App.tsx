@@ -24,6 +24,7 @@ import {
   importCampaignEditor,
   importLevelEditor,
   importPortraitEditor,
+  importRunScreen,
   importSkirmish,
   importTilePreview,
   prefetchRoute,
@@ -35,6 +36,7 @@ import {
 // hover/focus warm-up) and are consumed by lazy() at click time — the module
 // registry dedupes, so warming === the click-time download.
 const Skirmish = lazy(() => importSkirmish().then((m) => ({ default: m.Skirmish })));
+const RunScreen = lazy(() => importRunScreen().then((m) => ({ default: m.RunScreen })));
 const CampaignEditor = lazy(() => importCampaignEditor().then((m) => ({ default: m.CampaignEditor })));
 const TilesetStudio = lazy(() => importTilePreview().then((m) => ({ default: m.TilesetStudio })));
 const LevelEditor = lazy(() => importLevelEditor().then((m) => ({ default: m.LevelEditor })));
@@ -362,7 +364,8 @@ export function App(): ReactElement {
 }
 
 function renderRoute(path: string, search: string): ReactElement {
-  if (path === '/play') return <Skirmish />;
+  if (path === '/play') return <Skirmish routeSearch={search} />;
+  if (path === '/run') return <RunScreen />;
   if (path === '/predrawn-reference') return <PredrawnReference />;
   if (path === '/studio' || path === '/tileset-studio') return <TilesetStudio />;
   if (path === '/studio/wall-candidates') return <WallCandidateReview />;

@@ -939,7 +939,7 @@ async function validatePrimarySparseNumericMigrationUpgrade43() {
       ORDER BY column_name`,
   );
   const versions = history.rows.map((row) => Number(row.version));
-  const expectedVersions = Array.from({ length: 43 }, (_, index) => index + 1);
+  const expectedVersions = Array.from({ length: 44 }, (_, index) => index + 1);
   const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
   const expectedByVersion = new Map(
     expectedMigrations.map((migration) => [migration.version, migration]),
@@ -954,7 +954,7 @@ async function validatePrimarySparseNumericMigrationUpgrade43() {
   });
   const appliedMigrationVersions = [
     ...Array.from({ length: 8 }, (_, index) => index + 28),
-    ...Array.from({ length: 7 }, (_, index) => index + 37),
+    ...Array.from({ length: 8 }, (_, index) => index + 37),
   ];
   const skippedMigrationVersions = [
     ...Array.from({ length: 27 }, (_, index) => index + 1),
@@ -1051,7 +1051,7 @@ async function validatePrimarySparseNumericMigrationUpgrade43() {
     )
   ) {
     throw new Error(
-      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 43: `
+      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 44: `
       + `${JSON.stringify({
         history: history.rows,
         identity_columns: identityColumns.rows,
@@ -3210,6 +3210,36 @@ async function main() {
     throw new Error(`Non-admin official write should be forbidden: ${nonAdminOfficialWrite.statusCode} ${nonAdminOfficialWrite.body}`);
   }
 
+  const anonymousPlaytestAuthorization = await request(
+    'POST', '/api/admin/playtest/authorize',
+    { 'content-type': 'application/json' },
+    JSON.stringify({ action: 'free-move' }),
+  );
+  if (anonymousPlaytestAuthorization.statusCode !== 401) {
+    throw new Error(`Anonymous playtest authorization should require sign-in: ${anonymousPlaytestAuthorization.statusCode} ${anonymousPlaytestAuthorization.body}`);
+  }
+  const nonAdminPlaytestAuthorization = await request(
+    'POST', '/api/admin/playtest/authorize',
+    { cookie: 'better-auth.session=rival', 'content-type': 'application/json' },
+    JSON.stringify({ action: 'kill-unit' }),
+  );
+  if (nonAdminPlaytestAuthorization.statusCode !== 403) {
+    throw new Error(`Non-admin playtest authorization should be forbidden: ${nonAdminPlaytestAuthorization.statusCode} ${nonAdminPlaytestAuthorization.body}`);
+  }
+  const adminPlaytestAuthorization = await request(
+    'POST', '/api/admin/playtest/authorize',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ action: 'gain-gold', amountTenths: 25 }),
+  );
+  const adminPlaytestAuthorizationBody = JSON.parse(adminPlaytestAuthorization.body);
+  if (
+    adminPlaytestAuthorization.statusCode !== 200
+    || adminPlaytestAuthorizationBody.ok !== true
+    || adminPlaytestAuthorizationBody.action !== 'gain-gold'
+  ) {
+    throw new Error(`Unexpected admin playtest authorization: ${adminPlaytestAuthorization.statusCode} ${adminPlaytestAuthorization.body}`);
+  }
+
   const invalidOfficialId = await get('/api/official-campaigns/Bad%20ID');
   if (invalidOfficialId.statusCode !== 400) {
     throw new Error(`Invalid official campaign id should fail: ${invalidOfficialId.statusCode} ${invalidOfficialId.body}`);
@@ -3559,6 +3589,22 @@ async function main() {
     id: 'recoverable-legacy',
     name: 'Recovered Saved Position',
   };
+  const warBattleLevel = {
+    ...workspaceLevel,
+    id: 'war-smoke-battle',
+    name: 'Smoke War Battle',
+    objective: 'rival-kings',
+    battle: { loot: true },
+    layers: {
+      ...workspaceLevel.layers,
+      zones: [{
+        id: 'run-player-deploy',
+        type: 'player-spawn',
+        tiles: [[0, 11], [1, 11], [2, 11]],
+      }],
+      units: [{ x: 7, y: 0, type: 'king', side: 'enemy' }],
+    },
+  };
   const workspaceDoc = {
     campaigns: [{
       formatVersion: 1,
@@ -3568,9 +3614,18 @@ async function main() {
       chapters: 1,
       levels: [{ levelId: 'smoke-1', ordinal: 0, objective: 'capture-all', stars: 0 }],
     }],
+    wars: [{
+      formatVersion: 1,
+      id: 'war-smoke',
+      name: 'Smoke War',
+      description: 'Backend War persistence proof.',
+      eligibleForRun: true,
+      battles: [{ levelId: 'war-smoke-battle', ordinal: 0 }],
+    }],
     levels: {
       'smoke-1': workspaceLevel,
       'recoverable-legacy': recoverableLegacyCanonical,
+      'war-smoke-battle': warBattleLevel,
     },
   };
   const missingWorkspaceRevision = await request(
@@ -3580,6 +3635,21 @@ async function main() {
   );
   if (missingWorkspaceRevision.statusCode !== 400 || JSON.parse(missingWorkspaceRevision.body).error !== 'workspace_revision_required') {
     throw new Error(`Whole-workspace writes must carry an observed revision: ${missingWorkspaceRevision.statusCode} ${missingWorkspaceRevision.body}`);
+  }
+  const sharedCampaignWarLevel = await request(
+    'PUT', '/api/campaign-workspace',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      ...workspaceDoc,
+      wars: [{
+        ...workspaceDoc.wars[0],
+        battles: [{ levelId: 'smoke-1', ordinal: 0 }],
+      }],
+      revision: emptyWorkspaceBody.revision,
+    }),
+  );
+  if (sharedCampaignWarLevel.statusCode !== 400 || !JSON.parse(sharedCampaignWarLevel.body).details.includes('belongs to both')) {
+    throw new Error(`A Level must not belong to both a Campaign and War: ${sharedCampaignWarLevel.statusCode} ${sharedCampaignWarLevel.body}`);
   }
   const savedWorkspace = await request(
     'PUT', '/api/campaign-workspace',
@@ -3597,6 +3667,8 @@ async function main() {
     loadedWorkspace.statusCode !== 200 ||
     loadedWorkspaceBody.campaigns.length !== 1 ||
     loadedWorkspaceBody.campaigns[0].name !== 'Smoke Campaign' ||
+    loadedWorkspaceBody.wars.length !== 1 ||
+    loadedWorkspaceBody.wars[0].battles[0].levelId !== 'war-smoke-battle' ||
     loadedWorkspaceBody.revision !== 1 ||
     !loadedWorkspaceBody.levels['smoke-1']
   ) {
@@ -3608,6 +3680,86 @@ async function main() {
   const rivalWorkspaceBody = JSON.parse(rivalWorkspace.body);
   if (rivalWorkspace.statusCode !== 200 || rivalWorkspaceBody.campaigns.length !== 0) {
     throw new Error(`Workspace should be scoped to owner: ${rivalWorkspace.statusCode} ${rivalWorkspace.body}`);
+  }
+
+  // --- Active Run (/api/active-run): one owner-scoped CAS document ----------
+  const anonymousRun = await get('/api/active-run');
+  if (anonymousRun.statusCode !== 401) {
+    throw new Error(`Anonymous active Run should require sign-in: ${anonymousRun.statusCode}`);
+  }
+  const emptyRun = await get('/api/active-run', { cookie: 'better-auth.session=abc' });
+  const emptyRunBody = JSON.parse(emptyRun.body);
+  if (emptyRun.statusCode !== 200 || emptyRunBody.run !== null || emptyRunBody.revision !== 0) {
+    throw new Error(`Active Run should begin empty: ${emptyRun.statusCode} ${emptyRun.body}`);
+  }
+  const activeRunDocument = {
+    formatVersion: 1,
+    id: 'run-smoke',
+    seed: 17,
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    war: {
+      id: 'war-smoke',
+      name: 'Smoke War',
+      description: 'Pinned War snapshot.',
+      battles: [{ level: warBattleLevel, loot: true }],
+    },
+    phase: 'draft',
+    battleIndex: 0,
+    conflictIndex: 0,
+    goldTenths: 0,
+    army: [
+      { id: 'run-king', type: 'king', abilities: [], source: 'king' },
+      { id: 'run-pawn-a', type: 'pawn', abilities: [], source: 'starting' },
+    ],
+    relics: [],
+    seenRelics: [],
+    conflictPaidRelics: {},
+    draftOffers: [
+      { id: 'draft-pawn-rook', draftId: 'pawn-rook', pieces: ['pawn', 'rook'], value: 6 },
+      { id: 'draft-knight-bishop', draftId: 'knight-bishop', pieces: ['knight', 'bishop'], value: 6 },
+    ],
+    chosenDraftId: null,
+    nextArmyUnitSequence: 1,
+    deployment: null,
+    battleRuntime: null,
+    shop: null,
+  };
+  const missingRunRevision = await request(
+    'PUT', '/api/active-run',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ run: activeRunDocument }),
+  );
+  if (missingRunRevision.statusCode !== 400 || JSON.parse(missingRunRevision.body).error !== 'active_run_revision_required') {
+    throw new Error(`Active Run writes must carry a revision: ${missingRunRevision.statusCode} ${missingRunRevision.body}`);
+  }
+  const savedRun = await request(
+    'PUT', '/api/active-run',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ run: activeRunDocument, revision: 0 }),
+  );
+  const savedRunBody = JSON.parse(savedRun.body);
+  if (savedRun.statusCode !== 200 || savedRunBody.revision !== 1 || savedRunBody.run.id !== 'run-smoke') {
+    throw new Error(`Active Run did not save: ${savedRun.statusCode} ${savedRun.body}`);
+  }
+  const rivalRun = await get('/api/active-run', { cookie: 'better-auth.session=rival' });
+  if (rivalRun.statusCode !== 200 || JSON.parse(rivalRun.body).run !== null) {
+    throw new Error(`Active Run should be owner-scoped: ${rivalRun.statusCode} ${rivalRun.body}`);
+  }
+  const staleRun = await request(
+    'PUT', '/api/active-run',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ run: { ...activeRunDocument, updatedAt: '2026-01-02T00:00:00.000Z' }, revision: 0 }),
+  );
+  if (staleRun.statusCode !== 409 || JSON.parse(staleRun.body).revision !== 1) {
+    throw new Error(`Stale active Run write should conflict: ${staleRun.statusCode} ${staleRun.body}`);
+  }
+  const deletedRun = await request(
+    'DELETE', '/api/active-run',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: 1 }),
+  );
+  if (deletedRun.statusCode !== 200 || JSON.parse(deletedRun.body).ok !== true) {
+    throw new Error(`Active Run did not delete: ${deletedRun.statusCode} ${deletedRun.body}`);
   }
 
   // A migrated v13 URL is translated client-side from ?map=<id> to the normal

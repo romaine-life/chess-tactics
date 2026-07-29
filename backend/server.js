@@ -2467,6 +2467,30 @@ const MIGRATIONS = [
         );
     `,
   },
+  {
+    version: 44,
+    name: 'wars in canonical workspaces + account active runs',
+    // ADR-0189 keeps Wars in the same revisioned canonical workspace transaction as
+    // Campaigns/Levels while the UI exposes a separate library. Active Run progress is
+    // account state, not authored content, so it gets one owner-scoped CAS document.
+    sql: `
+      UPDATE campaign_workspaces
+         SET body = jsonb_set(body, '{wars}', '[]'::jsonb, true)
+       WHERE NOT (body ? 'wars');
+
+      UPDATE official_campaigns
+         SET data = jsonb_set(data, '{wars}', '[]'::jsonb, true)
+       WHERE NOT (data ? 'wars');
+
+      CREATE TABLE IF NOT EXISTS active_runs (
+        owner_email text        PRIMARY KEY,
+        body        jsonb       NOT NULL,
+        revision    integer     NOT NULL DEFAULT 0 CHECK (revision >= 0),
+        created_at  timestamptz NOT NULL DEFAULT now(),
+        updated_at  timestamptz NOT NULL DEFAULT now()
+      );
+    `,
+  },
 ];
 
 let pool = null;
@@ -5561,6 +5585,13 @@ function validateWorkspaceLevel(level, key) {
       return `levels.${key}.timeControl is invalid`;
     }
   }
+  if (level.battle !== undefined) {
+    const battle = level.battle;
+    if (!battle || typeof battle !== 'object' || Array.isArray(battle)
+      || (battle.loot !== undefined && typeof battle.loot !== 'boolean')) {
+      return `levels.${key}.battle is invalid`;
+    }
+  }
   // ADR-0064 authored victory — optional, structural mirror of the frontend's validateLevel
   // (shape/enum only; the win/lose-non-empty gate stays editor-side, like P1–P6). Absent ⇒ the
   // objective preset defines win/lose; legacy bodies omit it and stay valid.
@@ -5628,9 +5659,12 @@ function validateWorkspaceLevel(level, key) {
 }
 
 function validateWorkspaceBody(raw) {
-  if (!Array.isArray(raw.campaigns) || !raw.levels || typeof raw.levels !== 'object' || Array.isArray(raw.levels)) {
+  if (!Array.isArray(raw.campaigns)
+    || (raw.wars !== undefined && !Array.isArray(raw.wars))
+    || !raw.levels || typeof raw.levels !== 'object' || Array.isArray(raw.levels)) {
     return 'invalid_workspace';
   }
+  const wars = raw.wars ?? [];
   const levelEntries = Object.entries(raw.levels);
   if (levelEntries.length > 200) return 'workspace_too_large';
   for (const [key, level] of levelEntries) {
@@ -5639,6 +5673,7 @@ function validateWorkspaceBody(raw) {
   }
   if (raw.campaigns.length > 100) return 'workspace_too_large';
   const campaignIds = new Set();
+  const levelMembership = new Map();
   for (const campaign of raw.campaigns) {
     if (!campaign || typeof campaign !== 'object') return 'campaigns must contain objects';
     if (campaign.formatVersion !== 1) return `campaigns.${campaign.id || '?'} formatVersion must be 1`;
@@ -5652,6 +5687,63 @@ function validateWorkspaceBody(raw) {
       if (!isFiniteInteger(ref.ordinal) || ref.ordinal < 0) return `campaigns.${campaign.id}.levels contains an invalid ordinal`;
       if (ref.objective !== undefined && !WORKSPACE_OBJECTIVES.has(ref.objective)) return `campaigns.${campaign.id}.levels contains an invalid objective`;
       if (ref.stars !== undefined && (!isFiniteInteger(ref.stars) || ref.stars < 0 || ref.stars > 3)) return `campaigns.${campaign.id}.levels contains invalid stars`;
+      const owner = levelMembership.get(ref.levelId);
+      if (owner) return `level ${ref.levelId} belongs to both ${owner} and campaign ${campaign.id}`;
+      levelMembership.set(ref.levelId, `campaign ${campaign.id}`);
+    }
+  }
+  if (wars.length > 100) return 'workspace_too_large';
+  const warIds = new Set();
+  for (const war of wars) {
+    if (!war || typeof war !== 'object') return 'wars must contain objects';
+    if (war.formatVersion !== 1) return `wars.${war.id || '?'} formatVersion must be 1`;
+    if (typeof war.id !== 'string' || !war.id) return 'war id is required';
+    if (warIds.has(war.id)) return `duplicate war id ${war.id}`;
+    warIds.add(war.id);
+    if (typeof war.name !== 'string') return `wars.${war.id}.name is required`;
+    if (typeof war.description !== 'string') return `wars.${war.id}.description is required`;
+    if (war.eligibleForRun !== undefined && typeof war.eligibleForRun !== 'boolean') {
+      return `wars.${war.id}.eligibleForRun must be a boolean`;
+    }
+    if (!Array.isArray(war.battles)) return `wars.${war.id}.battles must be an array`;
+    const localRefs = new Set();
+    const localOrdinals = new Set();
+    for (const ref of war.battles) {
+      if (!ref || typeof ref !== 'object' || typeof ref.levelId !== 'string' || !raw.levels[ref.levelId]) {
+        return `wars.${war.id}.battles contains a missing level reference`;
+      }
+      if (!isFiniteInteger(ref.ordinal) || ref.ordinal < 0) return `wars.${war.id}.battles contains an invalid ordinal`;
+      if (localRefs.has(ref.levelId)) return `wars.${war.id}.battles contains duplicate level ${ref.levelId}`;
+      if (localOrdinals.has(ref.ordinal)) return `wars.${war.id}.battles contains duplicate ordinal ${ref.ordinal}`;
+      localRefs.add(ref.levelId);
+      localOrdinals.add(ref.ordinal);
+      const owner = levelMembership.get(ref.levelId);
+      if (owner) return `level ${ref.levelId} belongs to both ${owner} and war ${war.id}`;
+      levelMembership.set(ref.levelId, `war ${war.id}`);
+    }
+    if ([...localOrdinals].some((ordinal) => ordinal >= war.battles.length)) {
+      return `wars.${war.id}.battles ordinals must be contiguous from zero`;
+    }
+    if (war.eligibleForRun === true) {
+      if (war.battles.length === 0) return `wars.${war.id} is eligible for Run but has no battles`;
+      for (const ref of war.battles) {
+        const level = raw.levels[ref.levelId];
+        const zones = level && level.layers && Array.isArray(level.layers.zones) ? level.layers.zones : [];
+        const blocked = new Set([
+          ...(level.layers.terrain || [])
+            .filter((cell) => cell.terrain === 'cliff' || cell.terrain === 'rock' || cell.terrain === 'void')
+            .map((cell) => `${cell.x},${cell.y}`),
+          ...(level.layers.units || []).map((unit) => `${unit.x},${unit.y}`),
+        ]);
+        const edgeSquare = zones
+          .filter((zone) => zone.type === 'player-spawn')
+          .flatMap((zone) => zone.tiles)
+          .some(([x, y]) => (
+            (x === 0 || y === 0 || x === level.board.cols - 1 || y === level.board.rows - 1)
+            && !blocked.has(`${x},${y}`)
+          ));
+        if (!edgeSquare) return `wars.${war.id} battle ${ref.levelId} needs a usable player placement-zone square on the board edge`;
+      }
     }
   }
   return null;
@@ -7314,7 +7406,7 @@ async function dbCreateEditorDocument(ownerEmail, initialLevel) {
     await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [ownerEmail]);
     await client.query(
       `INSERT INTO campaign_workspaces (owner_email, body)
-       VALUES ($1, '{"campaigns":[],"levels":{}}'::jsonb)
+       VALUES ($1, '{"campaigns":[],"wars":[],"levels":{}}'::jsonb)
        ON CONFLICT (owner_email) DO NOTHING`,
       [ownerEmail],
     );
@@ -7324,7 +7416,7 @@ async function dbCreateEditorDocument(ownerEmail, initialLevel) {
     );
     const workspaceBody = isObjectRecord(workspaceResult.rows[0] && workspaceResult.rows[0].body)
       ? workspaceResult.rows[0].body
-      : { campaigns: [], levels: {} };
+      : { campaigns: [], wars: [], levels: {} };
     const workingResult = await client.query(
       "SELECT level_id FROM level_working_copies WHERE owner_email = $1 AND workspace_kind = 'user' AND workspace_id = 'campaign'",
       [ownerEmail],
@@ -7442,16 +7534,17 @@ async function dbPromoteCanonicalLevel(client, ownerEmail, workspace, levelId, l
     // replaced by a snapshot built from an assumed empty row.
     await client.query(
       `INSERT INTO campaign_workspaces (owner_email, body)
-       VALUES ($1, '{"campaigns":[],"levels":{}}'::jsonb)
+       VALUES ($1, '{"campaigns":[],"wars":[],"levels":{}}'::jsonb)
        ON CONFLICT (owner_email) DO NOTHING`,
       [ownerEmail],
     );
     canonical = await dbCanonicalLevel(client, ownerEmail, workspace, levelId, { lock: true });
   }
-  const existing = canonical.body || { campaigns: [], levels: {} };
+  const existing = canonical.body || { campaigns: [], wars: [], levels: {} };
   const existingCampaigns = Array.isArray(existing.campaigns) ? existing.campaigns : [];
   const nextBody = {
     campaigns: editorDocumentCampaignsWithAssignment(existingCampaigns, levelId, level, campaignId),
+    wars: Array.isArray(existing.wars) ? existing.wars : [],
     levels: { ...(isObjectRecord(existing.levels) ? existing.levels : {}), [levelId]: level },
   };
   const validation = validateWorkspaceBody(nextBody);
@@ -8651,7 +8744,7 @@ async function dbSaveEditorDocument(ownerEmail, documentId, expectedRevision, re
       await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [ownerEmail]);
       await client.query(
         `INSERT INTO campaign_workspaces (owner_email, body)
-         VALUES ($1, '{"campaigns":[],"levels":{}}'::jsonb)
+         VALUES ($1, '{"campaigns":[],"wars":[],"levels":{}}'::jsonb)
          ON CONFLICT (owner_email) DO NOTHING`,
         [ownerEmail],
       );
@@ -12114,9 +12207,10 @@ function campaignWorkspaceRevision(raw) {
 }
 
 function publicCampaignWorkspace(row) {
-  const body = row && isObjectRecord(row.body) ? row.body : { campaigns: [], levels: {} };
+  const body = row && isObjectRecord(row.body) ? row.body : { campaigns: [], wars: [], levels: {} };
   return {
     campaigns: Array.isArray(body.campaigns) ? body.campaigns : [],
+    wars: Array.isArray(body.wars) ? body.wars : [],
     levels: isObjectRecord(body.levels) ? body.levels : {},
     revision: Number(row && row.revision) || 0,
     updated_at: row && row.updated_at ? row.updated_at : null,
@@ -12220,7 +12314,7 @@ app.put('/api/campaign-workspace', async (req, res) => {
     const result = await dbPutWorkspace(
       user.email,
       owner.name,
-      { campaigns: raw.campaigns, levels: raw.levels },
+      { campaigns: raw.campaigns, wars: raw.wars ?? [], levels: raw.levels },
       expectedRevision,
     );
     if (result.conflict === 'revision') {
@@ -12717,6 +12811,9 @@ function validateOfficialWorkspaceIds(data) {
   for (const campaign of (data && data.campaigns) || []) {
     if (!validId(campaign && campaign.id)) return `campaign id "${campaign && campaign.id}" must be an off- prefixed, lowercase, digit-free slug`;
   }
+  for (const war of (data && data.wars) || []) {
+    if (!validId(war && war.id)) return `war id "${war && war.id}" must be an off- prefixed, lowercase, digit-free slug`;
+  }
   return null;
 }
 
@@ -12842,7 +12939,7 @@ app.put('/api/official-campaigns/:id', async (req, res) => {
   }
   try {
     const result = await dbUpsertOfficialCampaigns(id, {
-      data: { campaigns: raw.data.campaigns, levels: raw.data.levels },
+      data: { campaigns: raw.data.campaigns, wars: raw.data.wars ?? [], levels: raw.data.levels },
       client_schema_version: Object.hasOwn(raw, 'client_schema_version') ? raw.client_schema_version : null,
       updated_by: user.email,
       updated_by_name: user.name || user.email,
@@ -17597,6 +17694,230 @@ app.put('/api/campaign-progress', async (req, res) => {
   } catch (error) {
     dbUnavailable(res, 'progress write failed', error, 'progress_store_unavailable');
   }
+});
+
+// --- Account-scoped active Run (ADR-0189) ---------------------------------
+// Anonymous Runs stay in browser storage. Once signed in, the client adopts that
+// document here; the server owns one CAS-updated active Run per account.
+const ACTIVE_RUN_PHASES = new Set(['draft', 'deployment', 'battle', 'shop', 'victory']);
+const ACTIVE_RUN_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
+function validateActiveRunBody(run) {
+  if (!run || typeof run !== 'object' || Array.isArray(run)) return 'run must be an object';
+  if (run.formatVersion !== 1) return 'run.formatVersion must be 1';
+  if (typeof run.id !== 'string' || !run.id || run.id.length > 160) return 'run.id is invalid';
+  if (!isFiniteInteger(run.seed) || run.seed < 0 || run.seed > 0xffffffff) return 'run.seed is invalid';
+  if (typeof run.updatedAt !== 'string' || !run.updatedAt) return 'run.updatedAt is required';
+  if (!ACTIVE_RUN_PHASES.has(run.phase)) return 'run.phase is invalid';
+  if (!isFiniteInteger(run.battleIndex) || run.battleIndex < 0) return 'run.battleIndex is invalid';
+  if (!isFiniteInteger(run.conflictIndex) || run.conflictIndex < 0) return 'run.conflictIndex is invalid';
+  if (typeof run.goldTenths !== 'number' || !Number.isFinite(run.goldTenths) || run.goldTenths < 0) return 'run.goldTenths is invalid';
+  if (!run.war || typeof run.war !== 'object' || Array.isArray(run.war)) return 'run.war is required';
+  if (typeof run.war.id !== 'string' || !run.war.id || typeof run.war.name !== 'string' || typeof run.war.description !== 'string') {
+    return 'run.war identity is invalid';
+  }
+  if (!Array.isArray(run.war.battles) || run.war.battles.length < 1 || run.war.battles.length > 100) {
+    return 'run.war.battles is invalid';
+  }
+  for (const [index, battle] of run.war.battles.entries()) {
+    if (!battle || typeof battle !== 'object' || typeof battle.loot !== 'boolean') return `run.war.battles.${index} is invalid`;
+    const level = battle.level;
+    const levelError = validateWorkspaceLevel(level, level && level.id);
+    if (levelError) return `run.war.battles.${index}: ${levelError}`;
+  }
+  if (run.battleIndex >= run.war.battles.length) return 'run.battleIndex is outside the War';
+  if (!Array.isArray(run.army) || run.army.length < 1 || run.army.length > 200) return 'run.army is invalid';
+  const unitIds = new Set();
+  for (const unit of run.army) {
+    if (!unit || typeof unit.id !== 'string' || !unit.id || unitIds.has(unit.id) || !ACTIVE_RUN_PIECES.has(unit.type)) {
+      return 'run.army contains an invalid unit';
+    }
+    unitIds.add(unit.id);
+    if (!Array.isArray(unit.abilities) || unit.abilities.some((ability) => ability !== 'discipline')) {
+      return 'run.army contains invalid abilities';
+    }
+  }
+  if (!run.army.some((unit) => unit.id === 'run-king' && unit.type === 'king')) return 'run.army must retain its King';
+  for (const field of ['relics', 'seenRelics']) {
+    if (!Array.isArray(run[field]) || run[field].length > 100 || run[field].some((id) => typeof id !== 'string' || !id)) {
+      return `run.${field} is invalid`;
+    }
+  }
+  if (!Array.isArray(run.draftOffers) || run.draftOffers.length !== 2) return 'run.draftOffers is invalid';
+  if (!isFiniteInteger(run.nextArmyUnitSequence) || run.nextArmyUnitSequence < 1) return 'run.nextArmyUnitSequence is invalid';
+  return null;
+}
+
+function publicActiveRun(row) {
+  return {
+    run: row && isObjectRecord(row.body) ? row.body : null,
+    revision: Number(row && row.revision) || 0,
+    updated_at: row && row.updated_at ? row.updated_at : null,
+  };
+}
+
+app.get('/api/active-run', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    await ensureDbReady();
+    const { rows } = await pool.query(
+      'SELECT body, revision, updated_at FROM active_runs WHERE owner_email = $1',
+      [user.email],
+    );
+    res.status(200).json(publicActiveRun(rows[0] || null));
+  } catch (error) {
+    dbUnavailable(res, 'active Run read failed', error, 'active_run_store_unavailable');
+  }
+});
+
+app.put('/api/active-run', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const raw = req.body && typeof req.body === 'object' ? req.body : {};
+  const expectedRevision = campaignWorkspaceRevision(raw.revision);
+  if (expectedRevision === null) {
+    res.status(400).json({ error: 'active_run_revision_required' });
+    return;
+  }
+  const validation = validateActiveRunBody(raw.run);
+  if (validation) {
+    res.status(400).json({ error: 'invalid_active_run', details: validation });
+    return;
+  }
+  try {
+    await ensureDbReady();
+    const result = await withEditorDocumentTransaction(async (client) => {
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`active-run:${user.email}`]);
+      const currentResult = await client.query(
+        'SELECT body, revision, updated_at FROM active_runs WHERE owner_email = $1 FOR UPDATE',
+        [user.email],
+      );
+      const current = currentResult.rows[0] || null;
+      if ((Number(current && current.revision) || 0) !== expectedRevision) return { conflict: true, row: current };
+      if (!current) {
+        const { rows } = await client.query(
+          `INSERT INTO active_runs (owner_email, body, revision)
+           VALUES ($1, $2::jsonb, 1)
+           RETURNING body, revision, updated_at`,
+          [user.email, JSON.stringify(raw.run)],
+        );
+        return { row: rows[0] };
+      }
+      const { rows } = await client.query(
+        `UPDATE active_runs
+            SET body = $2::jsonb, revision = revision + 1, updated_at = now()
+          WHERE owner_email = $1
+          RETURNING body, revision, updated_at`,
+        [user.email, JSON.stringify(raw.run)],
+      );
+      return { row: rows[0] };
+    });
+    if (result.conflict) {
+      res.status(409).json({ error: 'active_run_revision_conflict', ...publicActiveRun(result.row) });
+      return;
+    }
+    res.status(200).json(publicActiveRun(result.row));
+  } catch (error) {
+    dbUnavailable(res, 'active Run write failed', error, 'active_run_store_unavailable');
+  }
+});
+
+app.delete('/api/active-run', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const expectedRevision = campaignWorkspaceRevision(req.body && req.body.revision);
+  if (expectedRevision === null) {
+    res.status(400).json({ error: 'active_run_revision_required' });
+    return;
+  }
+  try {
+    await ensureDbReady();
+    const result = await withEditorDocumentTransaction(async (client) => {
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`active-run:${user.email}`]);
+      const currentResult = await client.query(
+        'SELECT body, revision, updated_at FROM active_runs WHERE owner_email = $1 FOR UPDATE',
+        [user.email],
+      );
+      const current = currentResult.rows[0] || null;
+      if (!current) return { missing: true };
+      if (Number(current.revision) !== expectedRevision) return { conflict: true, row: current };
+      await client.query('DELETE FROM active_runs WHERE owner_email = $1', [user.email]);
+      return { deleted: true };
+    });
+    if (result.conflict) {
+      res.status(409).json({ error: 'active_run_revision_conflict', ...publicActiveRun(result.row) });
+      return;
+    }
+    res.status(200).json({ ok: true, revision: 0 });
+  } catch (error) {
+    dbUnavailable(res, 'active Run delete failed', error, 'active_run_store_unavailable');
+  }
+});
+
+// --- Administrator playtest interventions (ADR-0190) -----------------------
+// Battles are deliberately client-simulated, including the surrounding Run model.
+// This endpoint is the server-owned capability check for every administrator control:
+// the UI may expose an affordance from /api/auth/me, but no intervention is armed or
+// applied until this fail-closed ADMIN_EMAILS gate acknowledges its exact shape.
+const ADMIN_PLAYTEST_ACTIONS = new Set([
+  'free-move',
+  'kill-unit',
+  'win-battle',
+  'gain-gold',
+  'gain-relic',
+]);
+const ADMIN_PLAYTEST_RELICS = new Set([
+  'conscription-notice',
+  'congressional-approval',
+  'inspirational-record',
+  'training-linens',
+  'royal-decree',
+  'crenellated-rampart',
+  'ghibelline-rampart',
+  'popes-staff',
+  'popes-robes',
+  'royal-tent',
+  'royal-sceptre',
+  'mercenarys-rifle',
+  'merchants-shopkey',
+  'occult-dagger',
+  'deployment-vehicle',
+  'mercenary-boat',
+  'quartermasters-ledger',
+  'fair-scales',
+  'muster-roll',
+  'surveyors-compass',
+]);
+
+app.post('/api/admin/playtest/authorize', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
+  if (!ADMIN_PLAYTEST_ACTIONS.has(body.action)) {
+    res.status(400).json({ error: 'invalid_admin_playtest_action' });
+    return;
+  }
+  if (
+    body.action === 'gain-gold'
+    && (!isFiniteInteger(body.amountTenths) || body.amountTenths < 1 || body.amountTenths > 10_000_000)
+  ) {
+    res.status(400).json({ error: 'invalid_admin_gold_amount' });
+    return;
+  }
+  if (
+    body.action === 'gain-relic'
+    && (
+      !ADMIN_PLAYTEST_RELICS.has(body.relicId)
+      || (
+        body.targetUnitId !== undefined
+        && (typeof body.targetUnitId !== 'string' || !body.targetUnitId || body.targetUnitId.length > 160)
+      )
+    )
+  ) {
+    res.status(400).json({ error: 'invalid_admin_relic_grant' });
+    return;
+  }
+  res.status(200).json({ ok: true, action: body.action });
 });
 
 app.use('/api', (_req, res) => {

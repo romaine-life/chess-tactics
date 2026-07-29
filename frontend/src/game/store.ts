@@ -21,6 +21,7 @@ import { persistMatch, type PersistedMatch } from './matchPersistence';
 import { loadShippedAiWeights } from '../net/aiWeights';
 import { PIECE_LABEL } from '../core/pieces';
 import { clearPersistedNetIntent, loadPersistedNetIntent, persistNetIntent } from './netIntentPersistence';
+import { adminMoveTargets, killUnitForAdmin } from './adminBattle';
 
 // Seed the shipped-AI-weights cache once so the live enemy AI picks up any weights an
 // admin shipped for a level (ship-to-everyone). Best-effort; a failure leaves the
@@ -110,6 +111,17 @@ function createNetIntentId(): string {
 export type NetResignSink = () => void;
 let netResignSink: NetResignSink | null = null;
 export function setNetResignSink(sink: NetResignSink | null): void { netResignSink = sink; }
+
+/**
+ * Run Battles may add an ordinarily behaving Reservist after a capture. The hook
+ * transforms only the committed board between move mechanics and adjudication; it is
+ * never consulted by legal move generation, so relics cannot change piece behavior.
+ */
+export type RunBattleTransformSink = (game: GameState, events: readonly GameEvent[]) => GameState;
+let runBattleTransformSink: RunBattleTransformSink | null = null;
+export function setRunBattleTransformSink(sink: RunBattleTransformSink | null): void {
+  runBattleTransformSink = sink;
+}
 
 // Turn tempo (ms). A move isn't one simultaneous swap — it's a rhythm: your move
 // lands, the board settles for a beat, the enemy "thinks", then answers. This
@@ -284,6 +296,8 @@ export interface PendingPromotion {
   choices: readonly PromotionPieceType[];
 }
 
+export type AdminBattleMode = 'free-move' | 'kill-unit' | 'win-battle';
+
 export interface SkirmishState {
   game: GameState;
   /** Indexed terrain for the current game; movement generation reads this. */
@@ -324,6 +338,8 @@ export interface SkirmishState {
   clock: ClockState | null;
   /** A local pawn has chosen a promotion-zone move and is waiting for the piece choice. */
   pendingPromotion: PendingPromotion | null;
+  /** One explicitly authorized administrator intervention. Ephemeral and consumed once. */
+  adminMode: AdminBattleMode | null;
   /** Monotonic match-session identity. Every delayed callback captures this value and
    *  no-ops after any new/resumed/network match replaces its owner. */
   sessionEpoch: number;
@@ -368,6 +384,12 @@ export interface SkirmishState {
   movesForSelected: () => Move[];
   tryMoveTo: (x: number, y: number) => void;
   choosePromotion: (type: PromotionPieceType) => void;
+  /** Run-only Mercenary Boat choice: complete the pending move, then remove the Pawn. */
+  cashOutPromotion: () => void;
+  armAdminMode: (mode: AdminBattleMode) => boolean;
+  clearAdminMode: () => void;
+  adminKillUnit: (pieceId: string) => boolean;
+  adminWinBattle: () => boolean;
   /** Moves queued while the opponent is thinking (premoves), fired one-per-turn as
    *  control returns. Ephemeral — dropped on reload, never persisted. */
   premoves: PremoveStep[];
@@ -477,6 +499,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       focusedId: null,
       sessionEpoch: epoch,
       pendingPromotion: null,
+      adminMode: null,
       premoves: [],
       premoveInputOpen: false,
       testMode: false,
@@ -519,6 +542,19 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     stopClockTicker();
     const remainingMs = Math.max(0, clockDeadline - Date.now()) + cur.clock.incrementMs;
     set({ clock: { ...cur.clock, remainingMs, running: false } });
+  };
+
+  const pauseClockForAdmin = () => {
+    const cur = get();
+    if (!cur.clock?.running) return;
+    stopClockTicker();
+    set({
+      clock: {
+        ...cur.clock,
+        remainingMs: Math.max(0, clockDeadline - Date.now()),
+        running: false,
+      },
+    });
   };
 
   const finishPremoveInputBeat = (gameRef: GameState, epoch: number) => {
@@ -582,12 +618,15 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
           const live = get();
           if (live.sessionEpoch !== epoch || live.game !== cur.game || live.net) return;
           const msgs = enemyRes.events.map(describeEvent).filter((m): m is string => m !== null);
-          const afterEnv = envFor(enemyRes.game);
+          const transformedEnemyGame = runBattleTransformSink
+            ? runBattleTransformSink(enemyRes.game, enemyRes.events)
+            : enemyRes.game;
+          const afterEnv = envFor(transformedEnemyGame);
           // A full player→enemy round just elapsed: advance the survive clock, then re-check the
           // objective — survive reached, or a player wipe = defeat.
           const turnsElapsed = (cur.turnsElapsed ?? 0) + 1;
           const ctx = { ...(cur.objectiveCtx ?? {}), turnsElapsed };
-          const settled = settleCommittedPosition(enemyRes.game, {
+          const settled = settleCommittedPosition(transformedEnemyGame, {
             victoryRules: cur.victoryOverride ?? victoryRulesForObjective(cur.objective, ctx),
             ctx,
             turnsElapsed,
@@ -707,20 +746,37 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   // stalemate/check on the enemy now to move, commit, stage the enemy reply, persist.
   // Shared by the live path (tryMoveTo) and the premove drain so an auto-fired premove
   // is byte-for-byte the same move a click would have made.
-  const commitPlayerMove = (piece: Piece, mv: Move, promotion?: PromotionPieceType) => {
+  const commitPlayerMove = (
+    piece: Piece,
+    mv: Move,
+    promotion?: PromotionPieceType,
+    removeAfterMove = false,
+  ) => {
     const s = get();
     pauseClockWithIncrement();
     const playerRes = applyMove(s.game, piece.id, mv, { promotion });
+    const afterSpecial = removeAfterMove
+      ? {
+          ...playerRes.state,
+          pieces: playerRes.state.pieces.map((candidate) => (
+            candidate.id === piece.id ? { ...candidate, alive: false } : candidate
+          )),
+        }
+      : playerRes.state;
+    const transformed = runBattleTransformSink
+      ? runBattleTransformSink(afterSpecial, playerRes.events)
+      : afterSpecial;
     // The settled position joins the threefold table BEFORE the terminal checks read it
     // (a no-op unless this game enforces threefold). enemyEnv matches the post-move state.
-    const enemyEnv = envFor(playerRes.state);
-    const committed = recordPosition(playerRes.state, enemyEnv);
+    const enemyEnv = envFor(transformed);
+    const committed = recordPosition(transformed, enemyEnv);
     // Footstep: only when the piece actually relocates, at the mover's real landing
     // square (a castle's gesture square can differ from where the king lands).
     if (playerRes.events.some((e) => e.kind === 'moved')) {
       playLandingSfx(s.env, mv.castle?.kingTo.x ?? mv.x, mv.castle?.kingTo.y ?? mv.y, LANDING_SFX_DELAY);
     }
     const msgs = playerRes.events.map(describeEvent).filter((m): m is string => m !== null);
+    if (removeAfterMove) msgs.push('A Pawn leaves the army with its pay.');
     const ctx = { ...(s.objectiveCtx ?? {}), turnsElapsed: s.turnsElapsed ?? 0 };
     const settled = settleCommittedPosition(committed, {
       victoryRules: s.victoryOverride ?? victoryRulesForObjective(s.objective, ctx),
@@ -876,6 +932,55 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     return true;
   };
 
+  const commitAdminPosition = (
+    rawGame: GameState,
+    events: readonly GameEvent[],
+    logLine: string,
+  ): boolean => {
+    pauseClockForAdmin();
+    const s = get();
+    if (!s.started || s.net || s.game.winner) return false;
+    const epoch = beginSession();
+    const transformed = runBattleTransformSink
+      ? runBattleTransformSink(rawGame, events)
+      : rawGame;
+    const afterEnv = envFor(transformed);
+    const committed = recordPosition(transformed, afterEnv);
+    const completedEnemyTurn = s.game.turn === 'enemy' && committed.turn === 'player';
+    const turnsElapsed = (s.turnsElapsed ?? 0) + (completedEnemyTurn ? 1 : 0);
+    const ctx = { ...(s.objectiveCtx ?? {}), turnsElapsed };
+    const settled = settleCommittedPosition(committed, {
+      victoryRules: s.victoryOverride ?? victoryRulesForObjective(s.objective, ctx),
+      ctx,
+      turnsElapsed,
+      env: afterEnv,
+    });
+    const game = settled.state;
+    const messages = [logLine];
+    if (settled.adjudication) {
+      messages.push(adjudicationCopy(settled.adjudication, 'player', !!s.victoryOverride));
+    }
+    set({
+      game,
+      env: afterEnv,
+      resultDetail: adjudicationResultDetail(settled.adjudication, 'player', !!s.victoryOverride),
+      turnsElapsed,
+      selectedId: null,
+      focusedId: null,
+      pendingPromotion: null,
+      adminMode: null,
+      premoves: [],
+      premoveInputOpen: false,
+      sessionEpoch: epoch,
+      clock: s.clock ? { ...s.clock, running: false } : null,
+      log: [...messages.reverse(), ...s.log].slice(0, 12),
+    });
+    if (!game.winner && game.turn === 'enemy') scheduleEnemyReply();
+    else if (!game.winner && game.turn === 'player') startClock();
+    persistMatch(get());
+    return true;
+  };
+
   return {
   game: INITIAL_GAME,
   env: envFor(INITIAL_GAME),
@@ -894,6 +999,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   aiMode: 'search',
   clock: null,
   pendingPromotion: null,
+  adminMode: null,
   sessionEpoch: 0,
   net: null,
   premoves: [],
@@ -947,7 +1053,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       : null;
     // An explicit opts.ai wins; otherwise keep the running mode (a HUD retry
     // preserves the A/B lever the route set on entry).
-    set({ game, env, seed: opts.seed, tick: 0, turnsElapsed: 0, objectiveCtx, victoryOverride, resultDetail, selectedId, focusedId: selectedId, log, objective, started: true, levelId: opts.level?.id ?? null, aiMode: opts.ai ?? get().aiMode, clock, pendingPromotion: null, sessionEpoch: epoch, net: null, premoves: [], premoveInputOpen: false });
+    set({ game, env, seed: opts.seed, tick: 0, turnsElapsed: 0, objectiveCtx, victoryOverride, resultDetail, selectedId, focusedId: selectedId, log, objective, started: true, levelId: opts.level?.id ?? null, aiMode: opts.ai ?? get().aiMode, clock, pendingPromotion: null, adminMode: null, sessionEpoch: epoch, net: null, premoves: [], premoveInputOpen: false });
     // The clock starts with the game — it is the player's move from the first beat
     // (a degenerate instant-draw start is guarded inside startClock).
     startClock();
@@ -1025,6 +1131,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       levelId: level.id,
       clock: null, // netplay is untimed in v1 (a shared wall-clock is future work)
       pendingPromotion: null,
+      adminMode: null,
       sessionEpoch: epoch,
       premoves: [],
       premoveInputOpen: false,
@@ -1069,6 +1176,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       selectedId,
       focusedId,
       pendingPromotion: null,
+      adminMode: null,
       premoveInputOpen: false,
     });
   },
@@ -1086,6 +1194,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     set({
       selectedId: null,
       pendingPromotion: null,
+      adminMode: null,
       premoves: [],
       premoveInputOpen: false,
     });
@@ -1105,6 +1214,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       focusedId: null,
       sessionEpoch: epoch,
       pendingPromotion: null,
+      adminMode: null,
       premoves: [],
       premoveInputOpen: false,
       testMode: false,
@@ -1135,6 +1245,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       premoves: [],
       premoveInputOpen: false,
       pendingPromotion: null,
+      adminMode: null,
       resultDetail: null,
       clock: s.clock ? { ...s.clock, running: false } : null,
       testMode: false,
@@ -1163,6 +1274,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       focusedId: null,
       sessionEpoch: epoch,
       pendingPromotion: null,
+      adminMode: null,
       resultDetail: reason === 'resign' ? null : s.resultDetail,
       premoves: [],
       premoveInputOpen: false,
@@ -1217,6 +1329,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       premoves: [],
       premoveInputOpen: false,
       pendingPromotion: null,
+      adminMode: null,
       sessionEpoch: epoch,
       // Resume with the clock paused; startClock re-arms the deadline from the
       // banked remainder when it's the player's live turn. A reload isn't thinking
@@ -1238,7 +1351,9 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   select: (id) => {
     if (id === null) { set({ selectedId: null, focusedId: null }); return; }
     const s = get();
-    const side = s.net ? s.net.localSide : 'player';
+    const side = s.adminMode === 'free-move' && (s.game.turn === 'player' || s.game.turn === 'enemy')
+      ? s.game.turn
+      : s.net ? s.net.localSide : 'player';
     const p = s.game.pieces.find((q) => q.id === id && q.alive);
     if (p && p.side === side) set({ selectedId: id, focusedId: id });
   },
@@ -1253,8 +1368,9 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   },
 
   movesForSelected: () => {
-    const { game, selectedId, env, net, pendingPromotion } = get();
+    const { game, selectedId, env, net, pendingPromotion, adminMode } = get();
     if (pendingPromotion || net?.pendingMove) return [];
+    if (adminMode === 'free-move' && !net) return adminMoveTargets(game, selectedId ?? '');
     const side = net ? net.localSide : 'player';
     if (game.turn !== side || game.winner) return [];
     const p = game.pieces.find((q) => q.id === selectedId && q.alive && q.side === side);
@@ -1265,6 +1381,14 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     const s = get();
     const side = s.net ? s.net.localSide : 'player';
     if (s.pendingPromotion || s.net?.pendingMove) return;
+    if (s.adminMode === 'free-move' && !s.net) {
+      const p = s.game.pieces.find((candidate) => candidate.id === s.selectedId && candidate.alive);
+      const move = adminMoveTargets(s.game, p?.id ?? '').find((candidate) => candidate.x === x && candidate.y === y);
+      if (!p || !move) return;
+      const result = applyMove(s.game, p.id, move);
+      commitAdminPosition(result.state, result.events, 'Admin Free Move committed.');
+      return;
+    }
     if (s.game.turn !== side || s.game.winner) return;
     const p = s.game.pieces.find((q) => q.id === s.selectedId && q.alive && q.side === side);
     if (!p) return;
@@ -1286,6 +1410,48 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     // a beat, then the enemy answers — lives in commitPlayerMove, shared with the premove
     // drain so an auto-fired premove is byte-for-byte the same move a click would make.
     commitPlayerMove(p, mv);
+  },
+
+  armAdminMode: (mode) => {
+    const s = get();
+    if (!s.started || s.game.winner || s.net || s.pendingPromotion) return false;
+    set({ adminMode: mode, selectedId: null, focusedId: null, premoves: [], premoveInputOpen: false });
+    return true;
+  },
+
+  clearAdminMode: () => {
+    if (get().adminMode) set({ adminMode: null, selectedId: null, focusedId: null });
+  },
+
+  adminKillUnit: (pieceId) => {
+    const s = get();
+    if (s.adminMode !== 'kill-unit' || s.net || s.game.winner) return false;
+    const result = killUnitForAdmin(s.game, pieceId);
+    if (!result.killed) return false;
+    return commitAdminPosition(result.state, result.events, `Admin removed ${PIECE_LABEL[result.killed.type] ?? 'a unit'}.`);
+  },
+
+  adminWinBattle: () => {
+    const before = get();
+    if (before.adminMode !== 'win-battle' || !before.started || before.net || before.game.winner) return false;
+    pauseClockForAdmin();
+    const s = get();
+    const epoch = beginSession();
+    set({
+      game: { ...s.game, winner: 'player', turn: 'done' },
+      resultDetail: null,
+      selectedId: null,
+      focusedId: null,
+      pendingPromotion: null,
+      adminMode: null,
+      premoves: [],
+      premoveInputOpen: false,
+      sessionEpoch: epoch,
+      clock: s.clock ? { ...s.clock, running: false } : null,
+      log: ['Admin awarded victory to the player.', ...s.log].slice(0, 12),
+    });
+    persistMatch(get());
+    return true;
   },
 
   choosePromotion: (type) => {
@@ -1324,6 +1490,22 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     }
     if (s.premoves.length || s.premoveInputOpen) set({ premoves: [], premoveInputOpen: false });
     commitPlayerMove(p, mv, type);
+  },
+
+  cashOutPromotion: () => {
+    const s = get();
+    const pending = s.pendingPromotion;
+    if (!pending || pending.mode !== 'move' || s.net) return;
+    const p = s.game.pieces.find((piece) => piece.id === pending.pieceId && piece.alive && piece.side === 'player');
+    const mv = p
+      ? legalMoves(p, s.game.pieces, s.game.size, s.env).find((move) => move.x === pending.move.x && move.y === pending.move.y)
+      : undefined;
+    if (!p || p.type !== 'pawn' || !mv || !movePromotesPawn(s.game, p, mv)) {
+      set({ pendingPromotion: null, premoveInputOpen: false });
+      return;
+    }
+    if (s.premoves.length || s.premoveInputOpen) set({ premoves: [], premoveInputOpen: false });
+    commitPlayerMove(p, mv, undefined, true);
   },
 
   queueMove: (pieceId, x, y) => {

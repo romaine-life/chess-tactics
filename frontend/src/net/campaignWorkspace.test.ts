@@ -9,7 +9,7 @@ import {
   type Workspace,
 } from './campaignWorkspace';
 
-const workspace: Workspace = { campaigns: [], levels: {} };
+const workspace: Workspace = { campaigns: [], wars: [], levels: {} };
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {

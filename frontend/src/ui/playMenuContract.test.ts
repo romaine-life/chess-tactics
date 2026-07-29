@@ -18,7 +18,7 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(mainMenu).not.toContain("ShellDest = 'settings' | 'campaign'");
   });
 
-  it('pins Skirmish and Levels above one drawn-scroll Campaign collection', () => {
+  it('pins Skirmish, Run, and Levels above one drawn-scroll Campaign collection', () => {
     const fixed = playMenu.indexOf('className="play-source-fixed"');
     const campaigns = playMenu.indexOf('className="play-campaign-region"');
     expect(fixed).toBeGreaterThan(-1);
@@ -26,7 +26,8 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('<KitScroll className="play-campaign-scroll">');
     expect(playMenu).toContain('index={0}');
     expect(playMenu).toContain('index={1}');
-    expect(playMenu).toContain('index={index + 2}');
+    expect(playMenu).toContain('index={2}');
+    expect(playMenu).toContain('index={index + 3}');
   });
 
   it('resolves Play rail icons from installed drawable membership, not retired path-shaped app-ui roles', () => {

@@ -12,6 +12,7 @@
 import { useCampaigns } from './store';
 import { loadOfficialCampaignsResult, loadWorkspace } from '../net/campaignWorkspace';
 import { isUnauthorized } from '../net/auth';
+import { useWars } from '../war/store';
 
 export interface CampaignHydrationResult {
   officialAvailable: boolean;
@@ -44,7 +45,10 @@ export function ensureCampaignsHydrated(): Promise<CampaignHydrationResult> {
         // Officials are public. Merge only a successful response; on a transient failure retain
         // any in-memory official edits and let the next caller retry this slice alone.
         const official = await loadOfficialCampaignsResult();
-        if (official.available) useCampaigns.getState().mergeOfficial(official.workspace);
+        if (official.available) {
+          useCampaigns.getState().mergeOfficial(official.workspace);
+          useWars.getState().mergeOfficial(official.workspace);
+        }
         officialAvailable = official.available;
       }
       if (!userReady) {
@@ -52,7 +56,9 @@ export function ensureCampaignsHydrated(): Promise<CampaignHydrationResult> {
         // private workspace is unknown, so callers must keep Save locked and retry later rather
         // than PUT a partial store over it.
         try {
-          useCampaigns.getState().mergeUser(await loadWorkspace());
+          const workspace = await loadWorkspace();
+          useCampaigns.getState().mergeUser(workspace);
+          useWars.getState().mergeUser(workspace);
           userWorkspace = 'loaded';
         } catch (error) {
           userWorkspace = isUnauthorized(error) ? 'signed-out' : 'unavailable';

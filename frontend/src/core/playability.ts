@@ -262,3 +262,33 @@ export function validatePlayability(level: Level): PlayabilityResult {
 
   return { ok: violations.length === 0, violations };
 }
+
+/**
+ * Run Battles receive the player's persistent army at runtime, so their authored board is
+ * intentionally allowed to contain no player pieces or player King. Everything else keeps the
+ * ordinary Level gate, with one additional War contract: the player placement zone must contain
+ * a usable board-edge square.
+ */
+export function validateWarBattlePlayability(level: Level): PlayabilityResult {
+  const ordinary = validatePlayability(level).violations.filter((violation) => {
+    if (violation.code === 'P1_SIDE_EMPTY' && violation.message.startsWith('Player side')) return false;
+    if (violation.code === 'P2_RIVAL_KINGS_KINGS' && violation.message.includes('Player side')) return false;
+    return true;
+  });
+  const blocked = blockedCells(level);
+  for (const unit of level.layers.units) blocked.add(key(unit.x, unit.y));
+  const edgePlacement = (level.layers.zones ?? [])
+    .filter((zone) => zone.type === 'player-spawn')
+    .flatMap((zone) => zone.tiles)
+    .some(([x, y]) => (
+      (x === 0 || y === 0 || x === level.board.cols - 1 || y === level.board.rows - 1)
+      && !blocked.has(key(x, y))
+    ));
+  if (!edgePlacement) {
+    ordinary.push({
+      code: 'W1_PLAYER_EDGE_ZONE',
+      message: 'Run Battle needs a usable Player Spawn zone tile on the board edge.',
+    });
+  }
+  return { ok: ordinary.length === 0, violations: ordinary };
+}

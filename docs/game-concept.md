@@ -50,9 +50,9 @@ these.
   with a set of rules and a win condition.
 - A board sits somewhere on a spectrum (§5): from a **directed puzzle** to a
   **full game against an AI**, with **PvP** against a human also supported.
-- Boards are **self-contained.** There is currently **no continuity** between
-  boards — no carried-over roster, no meta-progression. A roguelike layer is **not
-  planned**, but nothing in the design precludes adding one later.
+- Ordinary boards remain **self-contained**. **Run** adds the deliberate continuity
+  layer: a persistent chess army, shops, and relics move through an authored War while
+  every Battle still obeys recognizable chess-piece behavior (ADR-0189).
 - **Campaign** strings 5–10 boards into a curated, slowly-evolving sequence, and
   will grow richer over time.
 
@@ -122,6 +122,9 @@ terrain, fluid kings. The drift is gradual by design (pillars §3).
 Near-term scope:
 
 - **Campaign** — a curated sequence of 5–10 boards, growing over time.
+- **Run** — a seeded persistent army moves through a separately authored War; Battles
+  retain normal chess behavior while deployment, economy, information, objectives, and
+  rewards create run variety (ADR-0189).
 - **Solo Skirmish** — a quick one-off board vs. the AI: **mostly fixed boards, with
   a random-setup option.** Cheap to include, so it is in.
 - **Level Editor + sharing** — first-class (§9).
@@ -184,7 +187,8 @@ discussion. This section records *direction*, not a spec.
 - **No** stat / RPG layer (HP / AP / CP / powers).
 - **No** story or lore (for now).
 - **No** daily challenge.
-- **No** roguelike / meta-progression yet (not precluded later).
+- **No permanent account power progression.** Run continuity lasts for one active War;
+  relics may reshape its surrounding ecosystem but never a chess piece's behavior.
 - The asset / design portfolio is **not** a game feature.
 
 ## 12. Relationship to the current codebase
@@ -221,7 +225,8 @@ The first prototype stays deliberately minimal (pillars §3). Resolved scope:
    and the 50-move / threefold-repetition draws.
 2. **Win condition:** standard **king checkmate only.** The fluid-royal variants
    (two kings, queen-as-king, king-with-lives, …) are a later expansion.
-3. **Squads:** **authored per board.** No player drafting yet.
+3. **Squads:** ordinary boards remain authored per board. Run Battles combine authored
+   allies with the player's persistent drafted army through authored placement zones.
 4. **Tactics:** **not surfaced** to the player and not a near-term concern — no
    motif hints or teaching in v1.
 5. **Solo Skirmish:** **mostly fixed boards, with a random-setup option.**
@@ -229,5 +234,15 @@ The first prototype stays deliberately minimal (pillars §3). Resolved scope:
    engine directions live in issue #25 and §10 as the longer-term arc.
 
 **Deferred (post-v1, not precluded):** fluid royal / win conditions; mutating or
-cursed terrain and pieces; named-tactic surfacing; a competent search-based AI;
-player-drafted squads; roguelike / meta-progression.
+cursed terrain and pieces; named-tactic surfacing; a competent search-based AI.
+Player-drafted squads and Run progression are now governed by ADR-0189.
+
+## 14. Administrator playtesting
+
+Allowlisted administrators can open an in-place **Admin Controls** subview from the
+active Battle HUD's Controls panel. Its tools can arm one unrestricted move, kill one
+selected unit, award the current Battle, or grant Gold and an unheld Relic to the active
+Run without navigating away from the board. These are explicit playtest interventions
+around the canonical Battle and Run lifecycles, not new piece rules: the legal-move
+generator remains unchanged. The exact access, lifecycle, and excluded-control boundaries
+are governed by ADR-0191.
