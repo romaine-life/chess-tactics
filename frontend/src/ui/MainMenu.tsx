@@ -153,14 +153,20 @@ export function MainMenu({
           <aside className="settings-frame settings-rail-frame" aria-label="Game modes">
             {MENU_TABS.map((tab, index) => <ModeTab key={tab.slug} tab={tab} index={index} active={dest !== null && tab.href === DEST_HREF[dest]} />)}
           </aside>
-          {dest ? (
-            <div className="menu-dest" data-scene-region="menu-shell" key={dest} aria-label={DEST_LABEL[dest]}>
-              {dest === 'settings' ? <Settings embedded />
+          <div
+            className="menu-dest"
+            data-scene-region="menu-shell"
+            data-scene-instance={sceneInstanceKey}
+            key={dest ?? 'home'}
+            aria-label={dest ? DEST_LABEL[dest] : 'Main menu destination'}
+          >
+            {dest
+              ? dest === 'settings' ? <Settings embedded />
                 : dest === 'play' ? <PlayMenu path={path} sceneInstanceKey={sceneInstanceKey} />
                 : dest === 'lobbies' ? <Lobbies embedded />
-                : <CampaignEditor embedded />}
-            </div>
-          ) : null}
+                : <CampaignEditor embedded />
+              : null}
+          </div>
         </ArtRouteChrome>
       </div>
     </div>

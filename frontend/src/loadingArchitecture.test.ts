@@ -75,6 +75,14 @@ describe('professional loading architecture guards', () => {
     expect(play).not.toContain('setSelection');
   });
 
+  it('keeps an explicit empty main-menu slot so returning home can acknowledge paint', () => {
+    const menu = read('./ui/MainMenu.tsx');
+    expect(menu).toContain('data-scene-region="menu-shell"');
+    expect(menu).toContain("key={dest ?? 'home'}");
+    expect(menu).toContain(': null}');
+    expect(menu).not.toContain('{dest ? (');
+  });
+
   it('does not let menu, screen, or board readiness expire into success', () => {
     const app = read('./ui/App.tsx');
     const coldReveal = read('./ui/shell/startupScene.ts');

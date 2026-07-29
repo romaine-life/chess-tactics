@@ -245,6 +245,7 @@ try {
         violations: [],
         playSeen: false,
         playViolations: [],
+        homeReturnSeen: false,
       };
       window.__ctMenuHostRail = null;
       window.__ctPlayHostRail = null;
@@ -549,6 +550,19 @@ try {
       { timeout },
     );
     await page.click('.main-menu-mode-tab[data-nav="/play/select/levels"]');
+    await page.waitForFunction(
+      `Boolean(
+        document.querySelector('[data-scene-phase="current"][data-scene-committed="play/levels"]')
+        && document.querySelector('.brand-lockup[data-nav="/"]')
+      )`,
+      { timeout },
+    );
+    await page.click('.brand-lockup[data-nav="/"]');
+    await page.waitForFunction(
+      `document.querySelector('[data-scene-phase="current"]')?.getAttribute('data-scene-committed') === 'main-menu'`,
+      { timeout },
+    );
+    await page.evaluate(() => { window.__ctMenuHostContinuity.homeReturnSeen = true; });
   }
   if (retrySceneError) {
     await page.waitForSelector('[data-scene-phase="error"] .scene-loading-presentation button', {
@@ -695,6 +709,7 @@ try {
       || result.violations.length
       || !result.playSeen
       || result.playViolations.length
+      || !result.homeReturnSeen
     ) {
       console.error(`menu host continuity failed: ${JSON.stringify(result)}`);
       process.exitCode = 15;
