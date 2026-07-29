@@ -1,7 +1,8 @@
 # Loading contract
 
 Derived from [ADR-0136](adr/0136-loading-is-manifest-driven-and-frame-acknowledged.md)
-and [ADR-0193](adr/0193-navigation-loads-atomic-scenes-through-one-director.md).
+and [ADR-0193](adr/0193-navigation-loads-atomic-scenes-through-one-director.md),
+as refined by [ADR-0194](adr/0194-scenes-declare-persistent-visual-hosts.md).
 
 ## Readiness vocabulary
 
@@ -57,6 +58,12 @@ frame. Navigation retains the outgoing background and follows:
 Repeated navigation to the active destination is idempotent. A later destination
 cancels the old generation. Failure terminates at one director-owned retry surface;
 a React-tree failure terminates at one root retry surface rather than a blank page.
+
+Manifests also declare a persistent visual host. When current and destination share
+that host, the director retains and locks its background, title, and controls without
+fading or remounting them. Only the declared destination region prepares unrevealed
+and enters after its own complete painted acknowledgement. Different-host navigation
+continues to replace the complete scene.
 
 Title-bar contributions discover targets inside their own committed scene. DOM-node
 refs are never lifted into the director, because portal attachment must not mutate the

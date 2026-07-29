@@ -354,12 +354,17 @@ export function App(): ReactElement {
   const homepageIsDestination = transitioning
     && retainedBackground !== 'homepage'
     && manifest.background === 'homepage';
+  const preservesSceneHost = Boolean(
+    scene.destination
+    && scene.current.host === scene.destination.host
+    && scene.current.host === 'menu-shell',
+  );
 
   return (
     <>
       {installedChromeCss ? <style data-app-chrome-family dangerouslySetInnerHTML={{ __html: installedChromeCss }} /> : null}
       <div
-        className={`app-chrome-family-root chrome-family-surface scene-director is-${scene.phase}`}
+        className={`app-chrome-family-root chrome-family-surface scene-director is-${scene.phase}${preservesSceneHost ? ' is-host-preserving' : ''}`}
         data-scene-phase={scene.phase}
         data-scene-error={scene.error?.message}
       >
@@ -378,10 +383,11 @@ export function App(): ReactElement {
         </div>
         <StartupSceneContext.Provider value={startupController}>
           <SceneBoundary
-            key={scene.generation}
+            key={manifest.host === 'menu-shell' ? manifest.host : scene.generation}
             manifest={manifest}
             generation={scene.generation}
             preparing={preparing}
+            preserveHost={preservesSceneHost}
             onPainted={destinationPainted}
             onFailed={destinationFailed}
           >

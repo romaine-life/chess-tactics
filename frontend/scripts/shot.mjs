@@ -12,6 +12,7 @@
 //     [--timeout <ms>] [--throttle slow-4g|slow-3g] [--cold|--warm] [--assert-menu-atomic]
 //     [--assert-board-atomic] [--assert-shell-font-atomic] [--assert-surface-atomic <name>]
 //     [--assert-bootstrap-priority]
+//     [--assert-menu-host-continuity]
 //     [--bootstrap-out <path>]
 //     [--assert-editor-viewer]
 //     [--abort-request <url-substring>] [--abort-request-once <url-substring>]
@@ -53,6 +54,7 @@ const assertMenuAtomic = has('assert-menu-atomic');
 const assertBoardAtomic = has('assert-board-atomic');
 const assertShellFontAtomic = has('assert-shell-font-atomic');
 const assertBootstrapPriority = has('assert-bootstrap-priority');
+const assertMenuHostContinuity = has('assert-menu-host-continuity');
 const assertSurfaceAtomic = flag('assert-surface-atomic');
 const abortRequest = flag('abort-request');
 const abortRequestOnce = flag('abort-request-once');
@@ -229,6 +231,41 @@ try {
             && document.fonts.check('19px "Advance Wars 2 GBA"', status.textContent || 'Loading live assets');
           if (visible && !finalFace) {
             window.__ctShellFontViolations.push({ fontFamily: style.fontFamily, visibility: style.visibility });
+          }
+        }
+        requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    });
+  }
+  if (assertMenuHostContinuity) {
+    await page.evaluateOnNewDocument(() => {
+      window.__ctMenuHostContinuity = { seen: false, violations: [] };
+      window.__ctMenuHostRail = null;
+      const sample = () => {
+        const director = document.querySelector('.scene-director');
+        const rail = document.querySelector('[aria-label="Game modes"]');
+        if (rail && !window.__ctMenuHostRail) window.__ctMenuHostRail = rail;
+        if (director?.classList.contains('is-host-preserving')) {
+          window.__ctMenuHostContinuity.seen = true;
+          const title = document.querySelector('.app-shell-titlebar');
+          const railOpacity = rail ? Number.parseFloat(getComputedStyle(rail).opacity) : 0;
+          const titleOpacity = title ? Number.parseFloat(getComputedStyle(title).opacity) : 0;
+          if (
+            !rail
+            || rail !== window.__ctMenuHostRail
+            || !rail.isConnected
+            || railOpacity < 0.99
+            || titleOpacity < 0.99
+          ) {
+            window.__ctMenuHostContinuity.violations.push({
+              phase: director.getAttribute('data-scene-phase'),
+              rail: Boolean(rail),
+              sameRail: rail === window.__ctMenuHostRail,
+              connected: Boolean(rail?.isConnected),
+              railOpacity,
+              titleOpacity,
+            });
           }
         }
         requestAnimationFrame(sample);
@@ -417,6 +454,26 @@ try {
       ).catch(() => {});
     }
   }
+  if (assertMenuHostContinuity && !click) {
+    await page.waitForFunction(
+      `Boolean(
+        document.querySelector('[data-scene-phase="current"]')
+        && document.querySelector('.main-menu-mode-tab[data-nav="/play/select/skirmish"]')
+      )`,
+      { timeout },
+    ).catch(async (error) => {
+      const state = await page.evaluate(() => ({
+        phase: document.querySelector('[data-scene-phase]')?.getAttribute('data-scene-phase'),
+        error: document.querySelector('[data-scene-phase]')?.getAttribute('data-scene-error'),
+        boundary: document.querySelector('[data-scene-generation]')?.getAttribute('data-scene'),
+        menu: Boolean(document.querySelector('.main-menu-mode-tab')),
+        bootstrap: document.querySelector('#app-bootstrap-status')?.className,
+      }));
+      console.error(`menu host initial scene unavailable: ${JSON.stringify(state)}`);
+      throw error;
+    });
+    await page.click('.main-menu-mode-tab[data-nav="/play/select/skirmish"]');
+  }
   if (retrySceneError) {
     await page.waitForSelector('[data-scene-phase="error"] .scene-loading-presentation button', {
       visible: true,
@@ -454,7 +511,8 @@ try {
   ).some((script) => (script.getAttribute('src') || '').includes('/src/main.tsx')));
   const requiresTerminalScene = Boolean(
     isManagedApp || readyExpr || assertMenuAtomic || assertBoardAtomic || assertShellFontAtomic
-    || assertSurfaceAtomic || assertBackdropContinuity || assertBootstrapPriority,
+    || assertSurfaceAtomic || assertBackdropContinuity || assertBootstrapPriority
+    || assertMenuHostContinuity,
   );
   const waitForSettledScene = page.waitForFunction(
     "Boolean(document.querySelector('[data-scene-phase]')) && !document.querySelector('[data-scene-phase]:not([data-scene-phase=\"current\"]):not([data-scene-phase=\"error\"])')",
@@ -553,6 +611,15 @@ try {
       process.exitCode = 5;
       throw new Error('atomic board assertion failed');
     }
+  }
+  if (assertMenuHostContinuity) {
+    const result = await page.evaluate(() => window.__ctMenuHostContinuity);
+    if (!result?.seen || result.violations.length) {
+      console.error(`menu host continuity failed: ${JSON.stringify(result)}`);
+      process.exitCode = 15;
+      throw new Error('menu host continuity assertion failed');
+    }
+    console.log(`menu host continuity OK: ${JSON.stringify(result)}`);
   }
   if (assertEditorViewer && targetIsLevelEditor) {
     const editorFrame = await page.$eval('[data-testid="level-editor"]', (node) => ({

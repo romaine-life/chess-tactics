@@ -73,6 +73,7 @@ interface SceneBoundaryProps {
   manifest: SceneManifest;
   generation: number;
   preparing: boolean;
+  preserveHost: boolean;
   children: ReactNode;
   onPainted: (generation: number) => void;
   onFailed: (generation: number, error: Error) => void;
@@ -82,6 +83,7 @@ export function SceneBoundary({
   manifest,
   generation,
   preparing,
+  preserveHost,
   children,
   onPainted,
   onFailed,
@@ -131,7 +133,10 @@ export function SceneBoundary({
     // Then the boundary decodes the pixels actually referenced by this scene and waits
     // for two browser paint opportunities. A missing participant cannot be invented by
     // elapsed time; route families with async work must register an owner.
-    const root = rootRef.current;
+    const root = preserveHost
+      ? rootRef.current.querySelector<HTMLElement>('[data-scene-region]')
+      : rootRef.current;
+    if (!root) return undefined;
     void paintFrames()
       .then(() => Promise.all(imageUrls(root).map((url) => loadDecodedImage(url))))
       .then(paintFrames)
@@ -151,19 +156,19 @@ export function SceneBoundary({
         onFailed(generation, error);
       });
     return () => { cancelled = true; };
-  }, [generation, manifest, onFailed, onPainted, preparing, revision]);
+  }, [generation, manifest, onFailed, onPainted, preparing, preserveHost, revision]);
 
   return (
     <SceneRegistrationContext.Provider value={registration}>
       <div
         ref={rootRef}
-        className={`scene-boundary${preparing ? ' is-preparing' : ' is-current'}`}
+        className={`scene-boundary${preparing ? preserveHost ? ' is-region-preparing' : ' is-preparing' : ' is-current'}`}
         data-scene={manifest.id}
         data-scene-generation={generation}
         data-scene-participants={participantSnapshot.join(',')}
         data-scene-unresolved={unresolvedParticipants.join(',')}
         inert={preparing ? true : undefined}
-        aria-hidden={preparing || undefined}
+        aria-hidden={preparing && !preserveHost || undefined}
       >
         {children}
       </div>

@@ -3,6 +3,11 @@ import { sceneManifest } from './sceneManifest';
 import { initialSceneState, reduceScene } from './sceneDirector';
 
 describe('scene director', () => {
+  it('declares home and Play as destinations in the same persistent menu host', () => {
+    expect(sceneManifest('/').host).toBe('menu-shell');
+    expect(sceneManifest('/play/select/skirmish').host).toBe('menu-shell');
+    expect(sceneManifest('/play').host).toBe('standalone');
+  });
   it('does not restart a generation when a redirect repeats the active destination', () => {
     const home = sceneManifest('/');
     const play = sceneManifest('/play/select/skirmish');

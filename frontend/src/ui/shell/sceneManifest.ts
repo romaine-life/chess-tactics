@@ -15,6 +15,8 @@ export type ScenePaintOwner =
 
 export interface SceneManifest {
   id: string;
+  /** Stable visual host retained across destinations that occupy one shell. */
+  host: 'menu-shell' | 'standalone';
   background: SceneBackground;
   paintOwner: ScenePaintOwner;
   critical: readonly string[];
@@ -27,7 +29,8 @@ const manifest = (
   paintOwner: ScenePaintOwner,
   critical: readonly string[],
   opportunistic: readonly string[] = [],
-): SceneManifest => ({ id, background, paintOwner, critical, opportunistic });
+  host: SceneManifest['host'] = 'standalone',
+): SceneManifest => ({ id, host, background, paintOwner, critical, opportunistic });
 
 /**
  * Required scene declaration for every route family rendered by App.
@@ -54,7 +57,7 @@ export function sceneManifest(pathname: string): SceneManifest {
       'title-bar',
       'selector-chrome',
       'visible-level-thumbnails',
-    ], ['below-fold-level-thumbnails']);
+    ], ['below-fold-level-thumbnails'], 'menu-shell');
   }
   if (path === '/editor/level' || path === '/edit' || path === '/level-editor') {
     return manifest('level-editor', 'homepage', 'level-editor', [
@@ -72,7 +75,7 @@ export function sceneManifest(pathname: string): SceneManifest {
       'title-bar',
       'campaign-workspace',
       'visible-draft-cards',
-    ], ['below-fold-draft-cards']);
+    ], ['below-fold-draft-cards'], 'menu-shell');
   }
   if (
     path.startsWith('/studio') || path === '/tileset-studio' || path === '/unit-studio'
@@ -91,7 +94,7 @@ export function sceneManifest(pathname: string): SceneManifest {
       'homepage-background',
       'title-bar',
       'main-menu-controls',
-    ]);
+    ], [], 'menu-shell');
   }
   if (
     path === '/settings' || path.startsWith('/settings/')
@@ -101,7 +104,7 @@ export function sceneManifest(pathname: string): SceneManifest {
       'homepage-background',
       'title-bar',
       'visible-controls',
-    ]);
+    ], [], 'menu-shell');
   }
   if (path === '/lobbies' || path.startsWith('/lobbies/')) {
     return manifest('lobbies', 'homepage', 'lobbies', [
@@ -110,7 +113,7 @@ export function sceneManifest(pathname: string): SceneManifest {
       'lobby-identity',
       'initial-lobby-list',
       'visible-controls',
-    ]);
+    ], [], 'menu-shell');
   }
   if (path === '/predrawn-reference') {
     return manifest('predrawn-reference', 'tool', 'predrawn-reference', ['tool-chrome', 'selected-artwork']);
@@ -125,5 +128,5 @@ export function sceneManifest(pathname: string): SceneManifest {
     'homepage-background',
     'title-bar',
     'main-menu-controls',
-  ]);
+  ], [], 'menu-shell');
 }

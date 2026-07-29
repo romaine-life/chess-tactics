@@ -9456,8 +9456,8 @@ body { font-size: 17px; }
 .scene-director.is-entering .scene-homepage-background.is-destination {
   opacity: 1;
 }
-.scene-director.is-exiting .scene-boundary,
-.scene-director.is-exiting .app-shell-titlebar {
+.scene-director.is-exiting:not(.is-host-preserving) .scene-boundary,
+.scene-director.is-exiting:not(.is-host-preserving) .app-shell-titlebar {
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
@@ -9466,15 +9466,26 @@ body { font-size: 17px; }
   opacity: 0;
   pointer-events: none;
 }
-.scene-director.is-entering .scene-boundary,
-.scene-director.is-entering .app-shell-titlebar {
+.scene-boundary.is-region-preparing {
+  opacity: 1;
+  pointer-events: none;
+}
+.scene-boundary.is-region-preparing [data-scene-region] {
+  opacity: 0;
+}
+.scene-director.is-entering:not(.is-host-preserving) .scene-boundary,
+.scene-director.is-entering:not(.is-host-preserving) .app-shell-titlebar {
   opacity: 1;
   transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
 }
-.scene-director.is-loading .app-shell-titlebar,
-.scene-director.is-error .app-shell-titlebar {
+.scene-director.is-loading:not(.is-host-preserving) .app-shell-titlebar,
+.scene-director.is-error:not(.is-host-preserving) .app-shell-titlebar {
   opacity: 0;
   pointer-events: none;
+}
+.scene-director.is-entering.is-host-preserving [data-scene-region] {
+  opacity: 1;
+  transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
 }
 .scene-retained-background {
   position: fixed;

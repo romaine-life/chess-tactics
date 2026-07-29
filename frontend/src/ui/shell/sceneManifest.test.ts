@@ -4,12 +4,14 @@ import { sceneManifest } from './sceneManifest';
 describe('scene manifests', () => {
   it('treats a destination as a complete visual scene', () => {
     expect(sceneManifest('/play/select/skirmish')).toMatchObject({
+      host: 'menu-shell',
       background: 'homepage',
       paintOwner: 'play-selector',
       critical: expect.arrayContaining(['selector-chrome', 'visible-level-thumbnails']),
       opportunistic: ['below-fold-level-thumbnails'],
     });
     expect(sceneManifest('/play')).toMatchObject({
+      host: 'standalone',
       background: 'battlefield',
       paintOwner: 'gameplay-hud',
       critical: expect.arrayContaining(['board-compositors', 'gameplay-hud', 'title-controls']),
@@ -26,6 +28,6 @@ describe('scene manifests', () => {
 
   it('makes synchronous and unmatched routes explicit rather than optional', () => {
     expect(sceneManifest('/settings/general').critical).toContain('visible-controls');
-    expect(sceneManifest('/unknown')).toMatchObject({ id: 'main-menu', paintOwner: 'dom' });
+    expect(sceneManifest('/unknown')).toMatchObject({ id: 'main-menu', host: 'menu-shell', paintOwner: 'dom' });
   });
 });
