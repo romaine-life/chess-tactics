@@ -278,7 +278,7 @@ import { OBJECTIVE_TYPES, ZONE_COLORS, type CastleEventAction, type ChessDrawsEv
 import { computeCastleTemplatePairs, type CastleTemplateUnit } from './castlingTemplate';
 import { MODE_NAME, DEFAULT_SURVIVE_TURNS, victoryRulesForObjective, kingSideOf } from '../core/objectives';
 import { CLOCK_INCREMENT_SECONDS, CLOCK_INITIAL_SECONDS, DEFAULT_TIME_CONTROL, formatClockSeconds, parseClockSeconds, stepLadder } from '../core/clock';
-import { validatePlayability } from '../core/playability';
+import { validatePlayability, validateWarBattlePlayability } from '../core/playability';
 import { PLAYABLE_PIECE_TYPES, PIECE_LABEL, type PlayablePieceType } from '../core/pieces';
 import { effectiveLevelEvents, normalizeLevelEvents } from '../core/levelEvents';
 import { guardRulesSeed, levelRulesSeed, seededBaselineLevel, type AuthoredRulesField, type LevelRulesSeed } from './levelEditorRulesSeed';
@@ -1743,6 +1743,7 @@ const levelFromDraft = (draft: LevelEditorDraft, base: Level): Level => editorBo
   timeControl: draft.timeControl,
   victory: draft.victory,
   events: draft.events,
+  battle: base.battle,
   notes: base.notes,
   difficulty: base.difficulty,
   economy: base.economy,
@@ -2645,6 +2646,7 @@ export function LevelEditor(): ReactElement {
     const legacyMapId = params.get('map') ?? undefined;
     return {
       campaignId: params.get('campaignId') ?? undefined,
+      warId: params.get('warId') ?? undefined,
       levelId: params.get('levelId') ?? undefined,
       documentId: params.get('document') ?? (legacyMapId ? `legacy-${legacyMapId}` : undefined),
       documentRevision: Number.isSafeInteger(rawDocumentRevision) && rawDocumentRevision >= 1 ? rawDocumentRevision : undefined,
@@ -2703,7 +2705,7 @@ export function LevelEditor(): ReactElement {
     [initialTargetLevel],
   );
   const draftHasCampaignAssignment = unscopedLocalDraft?.campaignId !== undefined;
-  const initialCampaignAssignmentId = draftHasCampaignAssignment
+  const initialCampaignAssignmentId = routeParams.warId ? '' : draftHasCampaignAssignment
     ? unscopedLocalDraft?.campaignId ?? ''
     : routeParams.campaignId ?? '';
   // Campaign membership is staged alongside the working document and committed only by Save.
@@ -4708,13 +4710,18 @@ export function LevelEditor(): ReactElement {
       difficulty: candidateMetadataSource?.difficulty,
       economy: candidateMetadataSource?.economy,
       theme: candidateMetadataSource?.theme,
+      battle: candidateMetadataSource?.battle,
       previousTerrain: candidateMetadataSource?.layers.terrain,
     }),
     [candidateMetadataSource, currentEditorBoard, editingId, levelNameForSave, modeMeta],
   );
   // Live playability (ADR-0050): the plain-language violation list the panel shows, and the gate on
   // Save. Recomputed from the candidate Level so it always matches what would persist. Pure.
-  const playability = useMemo(() => validatePlayability(candidateLevel), [candidateLevel]);
+  const isWarBattle = Boolean(routeParams.warId);
+  const playability = useMemo(
+    () => isWarBattle ? validateWarBattlePlayability(candidateLevel) : validatePlayability(candidateLevel),
+    [candidateLevel, isWarBattle],
+  );
   const previewPlayerFaction = useMemo<UnitPalette | null>(() => {
     if (playerFaction) return playerFaction;
     for (let y = 0; y < boardRows; y += 1) {
@@ -7477,6 +7484,7 @@ export function LevelEditor(): ReactElement {
       difficulty: existing?.difficulty,
       economy: existing?.economy,
       theme: existing?.theme,
+      battle: existing?.battle,
       // Preserve non-editor-expressible terrain (road/bridge/cliff/rock) from the saved level so
       // republishing a legacy official (no boardCode) doesn't flatten those surfaces to grass.
       previousTerrain: existing?.layers.terrain,
@@ -9327,7 +9335,7 @@ export function LevelEditor(): ReactElement {
               </label>
               {isOfficialTarget && isAdmin ? <span className="le-official-tag">OFFICIAL</span> : null}
             </div>
-            {isAdmin ? (
+            {isAdmin && !isWarBattle ? (
               <div className="le-status-name-field le-status-campaign-field">
                 <span className="le-settings-label">Campaign</span>
                 <HouseSelect<string>
@@ -9340,6 +9348,8 @@ export function LevelEditor(): ReactElement {
                 />
                 <span className="le-board-note">Admin only · Save or publish to apply this assignment.</span>
               </div>
+            ) : isWarBattle ? (
+              <p className="le-board-note">This level belongs exclusively to a War. Battle order and Loot are managed in the War editor.</p>
             ) : null}
             <div className={`le-status-current ${cloudSaveState === 'error' || cloudSaveState === 'conflict' ? 'is-blocked' : 'is-ready'}`}>
               <strong>{progressStateLabel}</strong>

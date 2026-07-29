@@ -34,6 +34,7 @@ import { levelEditorRouteIdentity } from './levelEditorRouteIdentity';
 import {
   importLevelEditor,
   importPortraitEditor,
+  importRunScreen,
   importSkirmish,
   importTilePreview,
   prefetchRoute,
@@ -54,12 +55,14 @@ import { loadDecodedImage } from '../render/imageResources';
 import { repaintHomepageScene } from './SceneBackdrop';
 
 const Skirmish = lazy(() => importSkirmish().then((module) => ({ default: module.Skirmish })));
+const RunScreen = lazy(() => importRunScreen().then((module) => ({ default: module.RunScreen })));
 const TilesetStudio = lazy(() => importTilePreview().then((module) => ({ default: module.TilesetStudio })));
 const LevelEditor = lazy(() => importLevelEditor().then((module) => ({ default: module.LevelEditor })));
 const PortraitEditor = lazy(() => importPortraitEditor().then((module) => ({ default: module.PortraitEditor })));
 const WallCandidateReview = lazy(() => import('./WallCandidateReview').then((module) => ({ default: module.WallCandidateReview })));
 const PredrawnReference = lazy(() => import('./PredrawnReference').then((module) => ({ default: module.PredrawnReference })));
 const DrawableCatalogLab = lazy(() => import('./DrawableCatalogLab').then((module) => ({ default: module.DrawableCatalogLab })));
+const RunRelicReview = lazy(() => import('./RunRelicReview').then((module) => ({ default: module.RunRelicReview })));
 
 const SCENE_FADE_MS = 350;
 const SCENE_LOADING_MIN_MS = 350;
@@ -74,7 +77,7 @@ const sceneFailureCopy = (error: Error | null): string => (
 );
 
 /**
- * ADR-0193 application spine. History accepts navigation immediately while the
+ * ADR-0199 application spine. History accepts navigation immediately while the
  * rendered route remains the outgoing scene until its controls have faded. The
  * destination then mounts inert and unrevealed, reports a painted frame through
  * SceneBoundary, and enters as one background-and-controls composition.
@@ -458,8 +461,10 @@ export function App(): ReactElement {
 
 function renderScene(scene: ScenePath, search: string): ReactElement {
   const path = scene.pathname;
-  if (path === '/play') return <Skirmish />;
+  if (path === '/play') return <Skirmish routeSearch={search} />;
+  if (path === '/run') return <RunScreen />;
   if (path === '/predrawn-reference') return <PredrawnReference />;
+  if (path === '/studio' && new URLSearchParams(search).get('relicReview') === '1') return <RunRelicReview />;
   if (path === '/studio' || path === '/tileset-studio') return <TilesetStudio />;
   if (path === '/studio/wall-candidates') return <WallCandidateReview />;
   if (path === '/studio/drawables') return <DrawableCatalogLab />;

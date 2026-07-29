@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { drawableAssets } from '@chess-tactics/board-render';
 import { useCampaigns } from '../campaign/store';
+import { useWars } from '../war/store';
 import { saveUserWorkspace, publishOfficialWorkspace, userWorkspaceForSave, officialWorkspaceForSave, mapSaveError, tierOf } from '../campaign/save';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { validateLevel, type Campaign, type CampaignLevelRef, type Level } from '../core/level';
@@ -809,6 +810,7 @@ export function RecentDraftLevelRow({
 export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}) {
   const campaigns = useCampaigns((s) => s.campaigns);
   const levels = useCampaigns((s) => s.levels);
+  const wars = useWars((s) => s.wars);
   const selectedCampaignId = useCampaigns((s) => s.selectedCampaignId);
   const selectedLevelId = useCampaigns((s) => s.selectedLevelId);
   const [status, setStatus] = useState('');
@@ -1138,8 +1140,11 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
   // cold in the Level Editor (createUnassignedLevel) before it is filed into a campaign. They
   // live in the workspace and round-trip through campaign_workspaces just like any other level.
   const referencedLevelIds = useMemo(
-    () => new Set(campaigns.flatMap((c) => c.levels.map((r) => r.levelId))),
-    [campaigns],
+    () => new Set([
+      ...campaigns.flatMap((c) => c.levels.map((r) => r.levelId)),
+      ...wars.flatMap((war) => war.battles.map((battle) => battle.levelId)),
+    ]),
+    [campaigns, wars],
   );
   const unassignedLevels = useMemo(
     () => Object.values(levels)
@@ -1345,6 +1350,7 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
                 collection scope): New Level · New Campaign · Import · Save · Publish · Sign-in ·
                 status. Starting a standalone level never requires a hydrated user workspace. */}
             <div className="ce-rail-actions">
+              <SettingsButton href="/editor/wars">War Editor</SettingsButton>
               <SettingsButton
                 data-testid="new-level-shortcut"
                 href={`/editor/level?returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_UNASSIGNED_RETURN_TO)}`}

@@ -17,6 +17,20 @@ npm install
 npm run dev
 ```
 
+Windows Codex desktop environments are named during worktree setup. Setup
+starts Vite through `devctl` and registers the dynamic port with the
+workstation's loopback Caddy router, producing a stable URL such as:
+
+```text
+http://loading-feature.chess-tactics.localhost
+```
+
+The ignored `.codex-session/environment.json` is the non-secret source of truth
+for that environment identity. The auth grant, agent URL discovery, browser
+verification, screenshots, and user handoff all use the same name without a
+project lifecycle hook. See
+[ADR-0197](docs/adr/0197-codex-agents-discover-named-environments-from-setup-state.md).
+
 For baked preview:
 
 ```sh
@@ -38,7 +52,7 @@ object storage. `frontend/public` is limited to non-media code and legal text.
 
 ## Production Links
 
-- Main menu design portfolio: <https://chess.romaine.life/design/main-menu>
+- Main menu design portfolio: <https://chess-tactics.com/design/main-menu>
 
 ## Local Backend
 
@@ -54,10 +68,13 @@ Fresh worktrees do not have `backend/node_modules`; that is expected every time.
 `npm run dev` installs/refreshes backend dependencies before Vite starts the
 backend child process.
 
-The server uses `auth.romaine.life` for Microsoft sign-in. Optional env:
+The server uses `auth.romaine.life` as an OIDC provider for Microsoft sign-in.
+Authorization code + PKCE runs through the backend, which keeps access and
+refresh tokens in host-only HttpOnly cookies. Optional env:
 
 - `AUTH_BASE_URL` defaults to `https://auth.romaine.life`.
-- `PUBLIC_ORIGIN` defaults to the request host and can pin callback URLs.
+- `OIDC_CLIENT_ID` defaults to `chess-tactics`.
+- `PUBLIC_ORIGIN` defaults to `https://chess-tactics.com` and pins callback URLs.
 - `FRONTEND_DIR` defaults to the built `frontend/dist` directory.
 - `STATIC_FRONTEND_DIR` defaults to `/var/run/chess-tactics-static-override`.
 - `HOT_BACKEND_DIR` defaults to `/var/run/chess-tactics-hot`.

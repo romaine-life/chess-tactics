@@ -55,7 +55,7 @@ function buildInfo() {
 // BGM_DEV_TRACKS=1; override the source with BGM_API_URL.
 function bgmDevMock() {
   const enabled = process.env.BGM_DEV_TRACKS === '1';
-  const apiUrl = (process.env.BGM_API_URL || 'https://chess.romaine.life/api/bgm').replace(/\/+$/, '');
+  const apiUrl = (process.env.BGM_API_URL || 'https://chess-tactics.com/api/bgm').replace(/\/+$/, '');
   const TTL = 5 * 60 * 1000;
   let cache = { tracks: null, expiry: 0 };
   async function loadTracks() {
@@ -181,7 +181,7 @@ function devAuthMock() {
 // Dev-only, opt-in: read the OFFICIAL campaign tier from the LIVE prod DB during local
 // testing instead of the committed fallback file. The official GET is PUBLIC (no auth),
 // so this needs no DB credentials — it proxies GET /api/official-campaigns/<id> to the
-// deployed origin (default chess.romaine.life, override with PROD_ORIGIN — the same var
+// deployed origin (default chess-tactics.com, override with PROD_ORIGIN — the same var
 // the bake workflow uses) so the gym / campaign screens hydrate from whatever is live
 // right now, not the committed snapshot. READ-ONLY: any non-GET is refused so a local
 // edit can never write to prod, and a prod hiccup returns non-2xx so the frontend's own
@@ -192,7 +192,7 @@ function devAuthMock() {
 // (DATABASE_URL=<prod> DEV_AUTH=1 node server.js), a separate, write-capable choice.
 function officialCampaignsDevProxy() {
   const enabled = process.env.DEV_PROD_DATA === '1';
-  const origin = (process.env.PROD_ORIGIN || 'https://chess.romaine.life').replace(/\/+$/, '');
+  const origin = (process.env.PROD_ORIGIN || 'https://chess-tactics.com').replace(/\/+$/, '');
   return {
     name: 'official-campaigns-dev-proxy',
     apply: 'serve',
@@ -332,7 +332,7 @@ function prodBackend(port) {
       const start = () => {
         let ready = false;
         const liveMediaStorageDir = process.env.LIVE_MEDIA_STORAGE_DIR || '';
-        const defaultLiveMediaSeedOrigin = 'https://chess.romaine.life';
+        const defaultLiveMediaSeedOrigin = 'https://chess-tactics.com';
         if (liveMediaStorageDir && !String(process.env.DATABASE_URL || '').trim()) {
           fatal('LIVE_MEDIA_STORAGE_DIR requires a disposable DATABASE_URL; refusing to pair local media bytes with production Postgres.');
           return;

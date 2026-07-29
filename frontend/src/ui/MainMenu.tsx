@@ -14,6 +14,7 @@ import { loadDecodedImage } from '../render/imageResources';
 // The Editor is heavier / code-split out of the menu bundle. App's SceneBoundary
 // keeps the destination unrevealed while its shared Suspense boundary resolves.
 const CampaignEditor = lazy(() => import('./CampaignEditor').then((m) => ({ default: m.CampaignEditor })));
+const WarEditor = lazy(() => import('./WarEditor').then((m) => ({ default: m.WarEditor })));
 import { drawableAssets, requiredDrawableRole } from '@chess-tactics/board-render';
 import { useStartupScene } from './shell/startupScene';
 import { installedUiMedia } from './installedUiMedia';
@@ -86,7 +87,7 @@ function shellDest(path: string): ShellDest | null {
   if (isPlaySelectorPath(path)) return 'play';
   // The Editor is a settings-twin now (ADR-0065): canonical /editor + legacy /campaigns-next·/campaigns.
   // The board editor (/editor/level) is a separate heavy full screen — NOT a shell dest.
-  if (path === '/editor' || path === '/campaigns-next' || path === '/campaigns') return 'editor';
+  if (path === '/editor' || path === '/editor/wars' || path === '/campaigns-next' || path === '/campaigns') return 'editor';
   // Lobbies is a single ACTION column (tab → action) — host/join + the lobby list.
   if (path === '/lobbies' || path.startsWith('/lobbies/')) return 'lobbies';
   return null;
@@ -166,7 +167,7 @@ export function MainMenu({
               ? dest === 'settings' ? <Settings embedded path={path} search={search} sceneInstanceKey={sceneInstanceKey} />
                 : dest === 'play' ? <PlayMenu path={path} sceneInstanceKey={sceneInstanceKey} />
                 : dest === 'lobbies' ? <Lobbies embedded />
-                : <CampaignEditor embedded />
+                : path === '/editor/wars' ? <WarEditor embedded /> : <CampaignEditor embedded />
               : null}
           </div>
         </ArtRouteChrome>

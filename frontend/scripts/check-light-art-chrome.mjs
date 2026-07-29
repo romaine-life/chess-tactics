@@ -81,7 +81,7 @@ walk(uiDir);
 const app = readFileSync(join(uiDir, 'App.tsx'), 'utf8');
 // The live game board (<Skirmish/>) is reachable at exact /play ONLY. The unified selector lives
 // under /play/select/* inside the persistent menu shell and must never render the board directly.
-if (!/if \(path === '\/play'\) return <Skirmish \/>;/.test(app)) {
+if (!/if \(path === '\/play'\) return <Skirmish(?:\s+[^>]*)?\s*\/>;/.test(app)) {
   errors.push('src/ui/App.tsx: /play must render the live Skirmish board (<Skirmish/>).');
 }
 if (/play\/select[^\n]*<Skirmish\b/.test(app)) {

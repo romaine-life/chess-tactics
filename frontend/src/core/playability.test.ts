@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, it, expect } from 'vitest';
 import { applyLiveMediaCatalog, resetLiveMediaCatalog, resetPropSeats } from '@chess-tactics/board-render';
-import { validatePlayability } from './playability';
+import { validatePlayability, validateWarBattlePlayability } from './playability';
 import { applyTestPropSeats } from '../test/livePropSeats';
 import { testGroundCoverCatalog, testStructureMediaSlots } from '../test/liveMediaCatalog';
 
@@ -78,6 +78,21 @@ describe('P1 — each side fields at least one piece', () => {
     const emptyEnemy = randomLevel((l) => { l.roster = { player: { pawn: 1 }, enemy: {} }; });
     expect(validatePlayability(emptyEnemy).violations).toContainEqual(
       expect.objectContaining({ code: 'P1_SIDE_EMPTY', message: expect.stringContaining('Enemy side') }),
+    );
+  });
+});
+
+describe('War Battle playability', () => {
+  it('supplies the player army at runtime but requires an enemy and a usable edge deployment square', () => {
+    const level = createBlankLevel('war-battle', 'War Battle', 6, 6);
+    level.objective = 'rival-kings';
+    level.layers.units = [unit(5, 0, 'king', 'enemy')];
+    level.layers.zones = [zone('player-deploy', 'player-spawn', [[0, 5], [1, 5]])];
+    expect(validateWarBattlePlayability(level)).toEqual({ ok: true, violations: [] });
+
+    level.layers.units.push(unit(0, 5, 'rook', 'player'), unit(1, 5, 'bishop', 'player'));
+    expect(validateWarBattlePlayability(level).violations).toContainEqual(
+      expect.objectContaining({ code: 'W1_PLAYER_EDGE_ZONE' }),
     );
   });
 });

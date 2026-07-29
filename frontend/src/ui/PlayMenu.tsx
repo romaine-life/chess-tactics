@@ -18,6 +18,7 @@ import { levelObjectiveLine } from './LevelInfoCompact';
 import { LevelPreviewColumn } from './LevelPreviewColumn';
 import {
   PLAY_LEVELS_SELECTOR_HREF,
+  PLAY_RUN_SELECTOR_HREF,
   PLAY_SKIRMISH_SELECTOR_HREF,
   isPlaySelectorPath,
   playCampaignSelectorHref,
@@ -36,6 +37,11 @@ import {
   type ThumbnailSurfaceState,
 } from './shell/ThumbnailSurface';
 import { drawableAssets } from '@chess-tactics/board-render';
+import { useWars, runEligibleOfficialWars } from '../war/store';
+import { useActiveRun } from '../run/store';
+import { createRun, formatGold, snapshotWar } from '../run/model';
+import { useConfirm } from './shared/ConfirmDialog';
+import { InnerChromeBox } from './shared/ChromeBox';
 
 type PlayIcon = 'solo-skirmish' | 'campaign-editor' | 'level-editor' | 'lobbies';
 
@@ -119,6 +125,97 @@ function ActionColumn({ children }: { children: ReactElement }): ReactElement {
     <main className="menu-dest-col menu-dest-action play-action-col">
       <KitScroll className="play-action-scroll">{children}</KitScroll>
     </main>
+  );
+}
+
+function RunPanel({
+  levels,
+  loading,
+  officialAvailable,
+}: {
+  levels: Record<string, Level>;
+  loading: boolean;
+  officialAvailable: boolean;
+}): ReactElement {
+  const wars = useWars((state) => state.wars);
+  const run = useActiveRun((state) => state.run);
+  const hydrated = useActiveRun((state) => state.hydrated);
+  const persistenceError = useActiveRun((state) => state.persistenceError);
+  const adoptionConflict = useActiveRun((state) => state.adoptionConflict);
+  const syncing = useActiveRun((state) => state.syncing);
+  const hydrate = useActiveRun((state) => state.hydrate);
+  const replace = useActiveRun((state) => state.replace);
+  const abandon = useActiveRun((state) => state.abandon);
+  const keepAccountRun = useActiveRun((state) => state.keepAccountRun);
+  const adoptBrowserRun = useActiveRun((state) => state.adoptBrowserRun);
+  const { ask, dialog } = useConfirm();
+  const eligible = useMemo(() => runEligibleOfficialWars(wars), [wars]);
+
+  useEffect(() => { void hydrate(); }, [hydrate]);
+
+  const start = async (): Promise<void> => {
+    if (run) {
+      const confirmed = await ask({
+        title: 'Abandon the active Run?',
+        message: `${run.war.name} will be replaced. This cannot be undone.`,
+        confirmLabel: 'Abandon and start',
+        cancelLabel: 'Keep Run',
+      });
+      if (!confirmed) return;
+      await abandon();
+    }
+    if (!eligible.length) return;
+    const seedArray = new Uint32Array(1);
+    globalThis.crypto?.getRandomValues?.(seedArray);
+    const seed = seedArray[0] || (Date.now() >>> 0);
+    const war = [...eligible].sort((a, b) => a.id.localeCompare(b.id))[seed % eligible.length];
+    replace(createRun(snapshotWar(war, levels), seed));
+    navigateApp('/run');
+  };
+
+  return (
+    <ActionColumn>
+      <div className="play-action-stack run-selector-panel">
+        {dialog}
+        <div className="play-action-heading">
+          <span className="play-action-kicker">Roguelike chess</span>
+          <h2>Run</h2>
+          <p>Carry one persistent army through a randomly selected eligible War. Battles remain chess; shops, deployment, and relics shape the Run around them.</p>
+        </div>
+        {!hydrated || loading ? <p className="play-empty" role="status">Loading Runs…</p> : null}
+        {adoptionConflict ? (
+          <InnerChromeBox className="play-level-card" role="alert">
+            <h3>Two active Runs</h3>
+            <p>This browser has {adoptionConflict.browserRun.war.name}; your account has {adoptionConflict.accountRun.war.name}. Choose which one the account keeps.</p>
+            <div className="run-inline-actions">
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button')} onClick={keepAccountRun}>Keep account Run</button>
+              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} disabled={syncing} onClick={() => { void adoptBrowserRun(); }}>Adopt browser Run</button>
+            </div>
+          </InnerChromeBox>
+        ) : run ? (
+          <InnerChromeBox className="play-level-card">
+            <h3>{run.war.name}</h3>
+            <p>{run.war.description || 'Active War'}</p>
+            <p>Battle {run.battleIndex + 1} of {run.war.battles.length} · {run.army.length} units · {formatGold(run.goldTenths)} gold</p>
+            <NavButton data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} to="/run">Continue Run</NavButton>
+          </InnerChromeBox>
+        ) : null}
+        {!loading && officialAvailable && eligible.length === 0 ? (
+          <p className="play-empty">No official Wars are currently marked Eligible for Run. You can author and direct-play a private War in the War Editor.</p>
+        ) : null}
+        {!loading && !officialAvailable ? <p className="play-content-warning">Official Wars are unavailable. Reopen Play to retry.</p> : null}
+        <button
+          type="button"
+          data-chrome-unit="inner-text-button"
+          className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
+          disabled={loading || !hydrated || eligible.length === 0 || Boolean(adoptionConflict)}
+          onClick={() => { void start(); }}
+        >
+          {run ? 'Start a new Run' : 'Start Run'}
+        </button>
+        {persistenceError ? <p className="play-content-warning" role="status">{persistenceError}</p> : null}
+      </div>
+    </ActionColumn>
   );
 }
 
@@ -496,7 +593,7 @@ export function PlayMenu({
   const loadError = !loading && (!officialAvailable || !userWorkspaceAvailable)
     ? new Error('Canonical Play content is unavailable.')
     : null;
-  const surfaceError = loadError ?? thumbnailSurface.error;
+  const surfaceError = loadError ?? (selection.mode === 'run' ? null : thumbnailSurface.error);
 
   return (
     <ThumbnailSurfaceReportContext.Provider value={reportThumbnailSurface}>
@@ -516,11 +613,18 @@ export function PlayMenu({
             index={0}
           />
           <PlayRailTab
+            label="Run"
+            href={PLAY_RUN_SELECTOR_HREF}
+            icon="campaign-editor"
+            active={selection.mode === 'run'}
+            index={1}
+          />
+          <PlayRailTab
             label="Levels"
             href={PLAY_LEVELS_SELECTOR_HREF}
             icon="level-editor"
             active={selection.mode === 'levels'}
-            index={1}
+            index={2}
           />
         </div>
 
@@ -539,7 +643,7 @@ export function PlayMenu({
                       key={campaign.id}
                       campaign={campaign}
                       active={selection.mode === 'campaign' && selection.campaignId === campaign.id}
-                      index={index + 2}
+                      index={index + 3}
                     />
                   ))}
                 </>
@@ -552,7 +656,7 @@ export function PlayMenu({
                       key={campaign.id}
                       campaign={campaign}
                       active={selection.mode === 'campaign' && selection.campaignId === campaign.id}
-                      index={officialCampaigns.length + index + 2}
+                      index={officialCampaigns.length + index + 3}
                     />
                   ))}
                 </>
@@ -568,7 +672,7 @@ export function PlayMenu({
         readyToCompose={
           !loading
           && !surfaceError
-          && thumbnailSurface.complete
+          && (selection.mode === 'run' || thumbnailSurface.complete)
           && (!selectedLevel || levelPreviewPainted)
         }
         error={surfaceError}
@@ -599,6 +703,13 @@ export function PlayMenu({
           loading={loading}
           officialAvailable={officialAvailable}
           userWorkspaceAvailable={userWorkspaceAvailable}
+        />
+      ) : null}
+      {selection.mode === 'run' ? (
+        <RunPanel
+          levels={levels}
+          loading={loading}
+          officialAvailable={officialAvailable}
         />
       ) : null}
       {activeCampaign ? (

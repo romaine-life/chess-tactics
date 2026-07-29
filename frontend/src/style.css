@@ -4258,6 +4258,35 @@ h1 {
   z-index: 0;
 }
 
+.skirmish-admin-mode {
+  align-items: center;
+  display: flex;
+  gap: var(--ds-inline);
+  inset: calc(var(--app-titlebar-h, 72px) + var(--ds-space-3)) auto auto 50%;
+  min-inline-size: min(520px, calc(100vw - (2 * var(--ds-gutter))));
+  padding: var(--ds-space-2) var(--ds-inset);
+  position: fixed;
+  transform: translateX(-50%);
+  z-index: 40;
+}
+
+.skirmish-admin-mode > div {
+  display: grid;
+  flex: 1;
+  gap: var(--ds-space-1);
+}
+
+.skirmish-admin-mode strong {
+  color: #f1dca6;
+  font-size: var(--ds-text-sm);
+  text-transform: uppercase;
+}
+
+.skirmish-admin-mode small {
+  color: var(--skirmish-muted);
+  font-size: var(--ds-text-xs);
+}
+
 .skirmish-topbar {
   /* The oak frame, height, gap, and padding come from .app-titlebar + .settings-header-frame
      (ADR-0004/0023/0037) carried on the element — the in-game bar is the SAME standard bar as
@@ -4710,7 +4739,7 @@ body.loading-bootstrap .app-startup-status {
  * One presentation-only footprint gate for every square-local board highlight.
  * The interactive .skirmish-board-cell-hit and .tileset-cell-hit elements deliberately keep
  * their complete canonical diamonds; only these pointerless paint layers consume the fitted
- * artwork shape.
+ * artwork shape. This remains one shared clipping boundary.
  */
 .skirmish-board-cell-hit::before,
 .skirmish-board-cell-hit::after,
@@ -5351,6 +5380,92 @@ body.loading-bootstrap .app-startup-status {
   font-size: var(--ds-text-xs);
   min-block-size: 40px;
   padding: 0 var(--ds-gutter);
+}
+
+.skirmish-admin-panel {
+  display: grid;
+  gap: var(--ds-gutter);
+}
+
+.skirmish-admin-panel-head {
+  align-items: center;
+  display: flex;
+  gap: var(--ds-inline);
+  justify-content: space-between;
+}
+
+.skirmish-admin-panel-head h2 {
+  margin: 0;
+}
+
+.skirmish-admin-controls {
+  display: grid;
+  gap: var(--ds-gutter);
+}
+
+.skirmish-admin-action-list {
+  display: grid;
+  gap: var(--ds-inline-tight);
+}
+
+.skirmish-admin-action {
+  align-items: center;
+  display: grid;
+  gap: var(--ds-inline);
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: var(--ds-inset);
+}
+
+.skirmish-admin-action--stack {
+  align-items: stretch;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.skirmish-admin-action > div:first-child {
+  display: grid;
+  gap: var(--ds-space-1);
+  min-width: 0;
+}
+
+.skirmish-admin-action strong {
+  color: #f1dca6;
+  font-size: var(--ds-text-sm);
+  text-transform: uppercase;
+}
+
+.skirmish-admin-action small,
+.skirmish-admin-access-note {
+  color: var(--skirmish-muted);
+  font-size: var(--ds-text-xs);
+  line-height: 1.35;
+}
+
+.skirmish-admin-access-note {
+  padding: var(--ds-inset);
+}
+
+.skirmish-admin-panel .admin-control-inline,
+.skirmish-admin-panel .admin-control-stack {
+  min-inline-size: 0;
+  width: 100%;
+}
+
+.skirmish-admin-panel .admin-control-inline {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.skirmish-admin-panel .admin-gold-input {
+  inline-size: 100%;
+}
+
+.skirmish-admin-panel .settings-chrome-button {
+  inline-size: auto;
+  min-inline-size: 76px;
+}
+
+.skirmish-admin-panel .house-select {
+  width: 100%;
 }
 
 /* Icon-only battle-lifecycle buttons (Restart / New): a square kit frame with the glyph
@@ -9427,7 +9542,7 @@ body { font-size: 17px; }
   to { opacity: 1; }
 }
 
-/* ADR-0193: one application-owned scene transition. */
+/* ADR-0199: one application-owned scene transition. */
 .scene-director { min-height: 100%; }
 .scene-boundary {
   position: fixed;
@@ -17477,6 +17592,43 @@ button.tileset-relationship-cell {
   min-width: 0;
 }
 
+.admin-control-inline,
+.admin-control-stack {
+  align-items: stretch;
+  display: flex;
+  gap: var(--ds-inline-tight);
+}
+
+.admin-control-stack {
+  flex-direction: column;
+  min-inline-size: min(300px, 34vw);
+}
+
+.admin-gold-input {
+  background: rgba(3, 12, 19, .9);
+  border: 10px solid transparent;
+  border-image: var(--media-ui-kit-button-neutral-png) 24 fill / 10px round;
+  box-sizing: border-box;
+  color: #eff9ff;
+  font: inherit;
+  block-size: 40px;
+  inline-size: 112px;
+  min-width: 0;
+  padding: 0 var(--ds-inset);
+}
+
+.admin-gold-input:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
+}
+
+.admin-control-status {
+  color: #bcdcf0;
+  font-size: var(--ds-text-sm);
+  margin: 0;
+  padding-inline: var(--ds-space-2);
+}
+
 .settings-chrome-button {
   align-items: center;
   appearance: none;
@@ -17824,6 +17976,343 @@ button.tileset-relationship-cell {
   font-family: var(--ds-font-display);
   font-size: var(--ds-text-md);
   line-height: 1;
+}
+
+/* ===== War authoring =====
+   Wars reuse the canonical Editor shell and settings primitives. These rules describe only
+   the ordered-Battle affordance and its textarea; perceived surfaces stay kit-backed. */
+.war-description-input {
+  block-size: 92px;
+  min-block-size: 72px;
+  resize: vertical;
+}
+
+.war-battle-list {
+  display: grid;
+  gap: 8px;
+}
+
+.war-battle-row {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-block-size: 68px;
+  padding: 9px 12px;
+}
+
+.war-battle-row.is-selected {
+  box-shadow: inset 0 0 0 2px rgba(101, 184, 255, .78);
+}
+
+.war-battle-select {
+  align-items: center;
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  gap: 10px;
+  grid-template-columns: 34px minmax(0, 1fr);
+  min-inline-size: 0;
+  padding: 0;
+  text-align: left;
+}
+
+.war-battle-select > span:last-child {
+  display: grid;
+  gap: 3px;
+  min-inline-size: 0;
+}
+
+.war-battle-select strong,
+.war-battle-select small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.war-battle-select small {
+  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .62));
+}
+
+.war-battle-number {
+  align-items: center;
+  display: inline-flex;
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-lg);
+  justify-content: center;
+}
+
+.war-battle-actions {
+  display: flex;
+  gap: 4px;
+}
+
+/* ===== Run =====
+   The between-Battle loop shares the installed Skirmish world and control chrome. */
+.run-screen {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.run-workspace {
+  align-items: stretch;
+  display: grid;
+  gap: var(--skirmish-grid-gap);
+  grid-column: 1 / -1;
+  grid-row: 2;
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 320px);
+  min-block-size: 0;
+  overflow: hidden;
+  padding: var(--skirmish-grid-gap);
+}
+
+.run-workspace > .run-panel:only-child {
+  grid-column: 1 / -1;
+  justify-self: center;
+  inline-size: min(760px, 100%);
+}
+
+.run-panel {
+  min-block-size: 0;
+  overflow: auto;
+}
+
+.run-panel > .le-outer-panel-content {
+  align-content: start;
+  display: grid;
+  gap: 14px;
+}
+
+.run-panel :is(h2, h3, h4, p),
+.run-army :is(h3, p) {
+  margin: 0;
+}
+
+.run-card-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.run-card {
+  align-content: start;
+  display: grid;
+  gap: 9px;
+  min-block-size: 132px;
+  padding: 12px;
+}
+
+.run-relic-card {
+  min-block-size: 174px;
+}
+
+.run-relic-card-heading {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 64px minmax(0, 1fr);
+}
+
+.run-relic-icon {
+  align-items: center;
+  block-size: 64px;
+  display: inline-flex;
+  inline-size: 64px;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.run-relic-icon img {
+  block-size: 64px;
+  image-rendering: pixelated;
+  inline-size: 64px;
+  object-fit: contain;
+}
+
+.run-relic-icon.is-unavailable {
+  color: var(--skirmish-muted);
+  font-size: var(--ds-text-xs);
+  line-height: 1.05;
+  text-align: center;
+}
+
+.run-relic-inventory {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  min-inline-size: 0;
+  padding: 7px 10px;
+}
+
+.run-relic-inventory > strong {
+  color: #f1dca6;
+  flex: 0 0 auto;
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-sm);
+  text-transform: uppercase;
+}
+
+.run-relic-inventory-list {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-inline-size: 0;
+}
+
+.run-relic-inventory-item {
+  block-size: 42px;
+  cursor: help;
+  display: inline-flex;
+  inline-size: 42px;
+  outline: none;
+}
+
+.run-relic-inventory-item:focus-visible {
+  filter: drop-shadow(0 0 4px #9fe7ff);
+}
+
+.run-relic-inventory-item .run-relic-icon,
+.run-relic-inventory-item .run-relic-icon img {
+  block-size: 42px;
+  inline-size: 42px;
+}
+
+.run-relic-inventory-item .run-relic-icon.is-unavailable {
+  font-size: 8px;
+}
+
+.run-relic-inventory--workspace {
+  grid-column: 1 / -1;
+}
+
+.run-relic-inventory--hud {
+  margin-block: 0 8px;
+}
+
+.run-relic-review-screen {
+  block-size: 100%;
+  box-sizing: border-box;
+  grid-template-columns: minmax(0, 1fr);
+  overflow: auto;
+  padding: 12px;
+}
+
+.run-relic-review-panel {
+  grid-column: 1;
+  grid-row: 2;
+  margin-inline: auto;
+  max-inline-size: 1040px;
+  overflow: auto;
+  inline-size: 100%;
+}
+
+.run-relic-review-panel > .le-outer-panel-content {
+  display: grid;
+  gap: 12px;
+}
+
+.run-relic-review-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.run-relic-review-grid figure {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 64px minmax(0, 1fr);
+  margin: 0;
+  min-block-size: 88px;
+  padding: 10px;
+}
+
+.run-relic-review-grid img {
+  block-size: 64px;
+  image-rendering: pixelated;
+  inline-size: 64px;
+}
+
+.run-relic-review-grid figcaption {
+  display: grid;
+  gap: 4px;
+}
+
+.run-relic-review-grid small {
+  color: var(--skirmish-muted);
+}
+
+@media (max-width: 900px) {
+  .run-relic-review-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.run-card > :is(button, select) {
+  align-self: end;
+}
+
+.run-army {
+  align-content: start;
+  display: grid;
+  gap: 10px;
+  min-block-size: 0;
+  overflow: auto;
+  padding: 14px;
+}
+
+.run-army-list,
+.run-choice-list {
+  display: grid;
+  gap: 7px;
+}
+
+.run-army-unit,
+.run-placement-row,
+.run-choice-list > label {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.run-army-unit small {
+  color: var(--skirmish-muted);
+}
+
+.run-deployment-control {
+  display: grid;
+  gap: 8px;
+}
+
+.run-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.run-preview-note {
+  margin: 0;
+}
+
+.run-shop-panel > .le-outer-panel-content > section {
+  display: grid;
+  gap: 8px;
+}
+
+@media (max-width: 960px) {
+  .run-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    overflow: auto;
+  }
+
+  .run-workspace > .run-army {
+    min-block-size: 220px;
+  }
 }
 /* Play-screen level rows are selectable too (click the body to preview; Play stays one-click). */
 .campaign-level-row {

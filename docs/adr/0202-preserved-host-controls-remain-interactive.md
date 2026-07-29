@@ -3,11 +3,11 @@ status: "accepted"
 date: 2026-07-29
 deciders: Nelson, Codex
 refines:
-  - ADR-0193
-  - ADR-0195
+  - ADR-0199
+  - ADR-0201
 ---
 
-# ADR-0196: Preserved host controls remain interactive
+# ADR-0202: Preserved host controls remain interactive
 
 ## Context
 

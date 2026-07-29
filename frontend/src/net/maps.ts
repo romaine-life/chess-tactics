@@ -8,7 +8,7 @@ import { HttpError } from './http';
 
 export interface PublishedMap {
   public_id: string;
-  /** Absolute shareable URL, e.g. https://chess.romaine.life/play?map=<id>. */
+  /** Absolute shareable URL, e.g. https://chess-tactics.com/play?map=<id>. */
   url: string;
 }
 

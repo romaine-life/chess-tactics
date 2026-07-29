@@ -1,20 +1,20 @@
 # Loading contract
 
 Derived from [ADR-0136](adr/0136-loading-is-manifest-driven-and-frame-acknowledged.md)
-and [ADR-0193](adr/0193-navigation-loads-atomic-scenes-through-one-director.md),
-as refined by [ADR-0194](adr/0194-scenes-declare-persistent-visual-hosts.md).
+and [ADR-0199](adr/0199-navigation-loads-atomic-scenes-through-one-director.md),
+as refined by [ADR-0200](adr/0200-scenes-declare-persistent-visual-hosts.md).
 Persistent host nesting is governed by
-[ADR-0195](adr/0195-persistent-scene-hosts-form-a-nested-path.md).
+[ADR-0201](adr/0201-persistent-scene-hosts-form-a-nested-path.md).
 Preserved-host interaction is governed by
-[ADR-0196](adr/0196-preserved-host-controls-remain-interactive.md).
+[ADR-0202](adr/0202-preserved-host-controls-remain-interactive.md).
 Authored identity and visible ownership are governed by
-[ADR-0197](adr/0197-routes-request-authored-scene-instances.md).
+[ADR-0203](adr/0203-routes-request-authored-scene-instances.md).
 Empty child-slot transitions are governed by
-[ADR-0198](adr/0198-empty-scene-slots-commit-without-loading.md).
+[ADR-0204](adr/0204-empty-scene-slots-commit-without-loading.md).
 The enrollment rule for navigational UI is governed by
-[ADR-0199](adr/0199-navigational-drawing-requires-an-authored-scene-slot.md).
+[ADR-0205](adr/0205-navigational-drawing-requires-an-authored-scene-slot.md).
 Transition presentation capability is governed by
-[ADR-0200](adr/0200-scene-transitioning-does-not-imply-loading-presentation.md).
+[ADR-0206](adr/0206-scene-transitioning-does-not-imply-loading-presentation.md).
 
 ## Readiness vocabulary
 
@@ -152,7 +152,7 @@ route lifecycle during the same React commit.
   player lists never reconstruct boards in the browser. Derivative freshness is a pure
   version of the canonical level document plus its live prop-seat, unit, media, and drawable
   authority revisions; it never depends on mutable renderer-process state.
-- Per ADR-0193, list derivatives are fixed 3:2 renders of the shared playable-board opening
+- Per ADR-0199, list derivatives are fixed 3:2 renders of the shared playable-board opening
   frame rather than opaque-pixel or full-generated-scene crops. A framing-policy change bumps
   the renderer revision: reads repair stale derivatives and save/publish prepares the current
   version without regenerating accepted board artwork.

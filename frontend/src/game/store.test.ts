@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { useSkirmish, shouldStartFreshSkirmish, setNetMoveSink, setNetResignSink } from './store';
+import { useSkirmish, shouldStartFreshSkirmish, setNetMoveSink, setNetResignSink, setRunBattleTransformSink } from './store';
 import { legalMoves, livingPieces } from '../core/rules';
 import type { MoveEnv } from '../core/rules';
 import type { GameState, Piece, PieceType, Side } from '../core/types';
@@ -44,9 +44,10 @@ afterEach(() => {
   vi.useRealTimers();
   // The store is a module singleton shared across tests; a test that sets an authored victory
   // override (ADR-0064) must not leak it into the next test's preset eval. Reset the victory state.
-  useSkirmish.setState({ victoryOverride: null, resultDetail: null, pendingPromotion: null });
+  useSkirmish.setState({ victoryOverride: null, resultDetail: null, pendingPromotion: null, adminMode: null });
   setNetMoveSink(null);
   setNetResignSink(null);
+  setRunBattleTransformSink(null);
   vi.unstubAllGlobals();
 });
 
@@ -79,6 +80,67 @@ describe('skirmish store', () => {
     useSkirmish.getState().focus(enemy.id);
     expect(useSkirmish.getState().focusedId).toBe(enemy.id);
     expect(useSkirmish.getState().selectedId).toBe(selectedId);
+  });
+
+  it('consumes one Free Move through the committed move pipeline', () => {
+    useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null });
+    useSkirmish.setState({
+      game: {
+        size: { cols: 4, rows: 4 },
+        pieces: [
+          piece('player-rook', 'player', 'rook', 0, 0),
+          piece('player-friend', 'player', 'pawn', 1, 0),
+          piece('enemy-pawn', 'enemy', 'pawn', 3, 3),
+          piece('enemy-king', 'enemy', 'king', 2, 3),
+        ],
+        turn: 'player',
+        winner: null,
+      },
+      env: { terrain: undefined, lastMove: undefined },
+      objective: 'capture-all',
+      objectiveCtx: {},
+      victoryOverride: null,
+      selectedId: null,
+      focusedId: null,
+    });
+
+    expect(useSkirmish.getState().armAdminMode('free-move')).toBe(true);
+    useSkirmish.getState().select('player-rook');
+    expect(useSkirmish.getState().movesForSelected()).toContainEqual({ x: 3, y: 3, capture: 'enemy-pawn' });
+    expect(useSkirmish.getState().movesForSelected()).not.toContainEqual(expect.objectContaining({ x: 1, y: 0 }));
+    useSkirmish.getState().tryMoveTo(3, 3);
+
+    const state = useSkirmish.getState();
+    expect(state.adminMode).toBeNull();
+    expect(state.game.pieces.find((candidate) => candidate.id === 'player-rook')).toMatchObject({ x: 3, y: 3 });
+    expect(state.game.pieces.find((candidate) => candidate.id === 'enemy-pawn')?.alive).toBe(false);
+  });
+
+  it('kills any selected unit through the normal Run death transform hook', () => {
+    const transform = vi.fn((game: GameState) => game);
+    setRunBattleTransformSink(transform);
+    useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null });
+    const target = useSkirmish.getState().game.pieces.find((candidate) => candidate.side === 'player')!;
+
+    expect(useSkirmish.getState().armAdminMode('kill-unit')).toBe(true);
+    expect(useSkirmish.getState().adminKillUnit(target.id)).toBe(true);
+
+    expect(transform).toHaveBeenCalledWith(
+      expect.objectContaining({ pieces: expect.any(Array) }),
+      [{ kind: 'captured', pieceId: target.id, by: 'admin-playtest' }],
+    );
+    expect(useSkirmish.getState().game.pieces.find((candidate) => candidate.id === target.id)?.alive).toBe(false);
+    expect(useSkirmish.getState().adminMode).toBeNull();
+  });
+
+  it('awards a live local Battle but refuses client-only multiplayer intervention', () => {
+    useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null });
+    expect(useSkirmish.getState().armAdminMode('win-battle')).toBe(true);
+    expect(useSkirmish.getState().adminWinBattle()).toBe(true);
+    expect(useSkirmish.getState().game).toMatchObject({ winner: 'player', turn: 'done' });
+
+    useSkirmish.getState().newNetMatch({ lobbyId: 'admin-net', localSide: 'player', level: playableNetLevel(), seed: 7 });
+    expect(useSkirmish.getState().armAdminMode('win-battle')).toBe(false);
   });
 
   it('a legal move applies immediately and stages the enemy reply on a beat', () => {

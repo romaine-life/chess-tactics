@@ -8,9 +8,11 @@ export type SceneViewId =
   | 'main-menu'
   | 'play'
   | 'play-skirmish'
+  | 'play-run'
   | 'play-levels'
   | 'play-campaign'
   | 'gameplay'
+  | 'run'
   | 'campaign-editor'
   | 'level-editor'
   | 'settings'
@@ -19,6 +21,7 @@ export type SceneViewId =
   | 'settings-tracks'
   | 'settings-gameplay'
   | 'settings-creator-tools'
+  | 'settings-admin'
   | 'lobbies'
   | 'studio'
   | 'predrawn-reference'
@@ -74,9 +77,11 @@ export const SCENE_DEFINITIONS = Object.freeze({
   mainMenu: defineScene({ id: 'main-menu', parent: null, slot: 'root', view: 'main-menu' }),
   play: defineScene({ id: 'play', parent: 'main-menu', slot: 'menu-destination', view: 'play' }),
   playSkirmish: defineScene({ id: 'play/skirmish', parent: 'play', slot: 'play-content', view: 'play-skirmish' }),
+  playRun: defineScene({ id: 'play/run', parent: 'play', slot: 'play-content', view: 'play-run' }),
   playLevels: defineScene({ id: 'play/levels', parent: 'play', slot: 'play-content', view: 'play-levels' }),
   playCampaign: defineScene({ id: 'play/campaign', parent: 'play', slot: 'play-content', view: 'play-campaign' }),
   gameplay: defineScene({ id: 'gameplay', parent: null, slot: 'root', view: 'gameplay' }),
+  run: defineScene({ id: 'run', parent: null, slot: 'root', view: 'run' }),
   campaignEditor: defineScene({ id: 'campaign-editor', parent: 'main-menu', slot: 'menu-destination', view: 'campaign-editor' }),
   levelEditor: defineScene({ id: 'level-editor', parent: null, slot: 'root', view: 'level-editor' }),
   settings: defineScene({ id: 'settings', parent: 'main-menu', slot: 'menu-destination', view: 'settings' }),
@@ -85,6 +90,7 @@ export const SCENE_DEFINITIONS = Object.freeze({
   settingsTracks: defineScene({ id: 'settings/audio/tracks', parent: 'settings', slot: 'settings-content', view: 'settings-tracks' }),
   settingsGameplay: defineScene({ id: 'settings/gameplay', parent: 'settings', slot: 'settings-content', view: 'settings-gameplay' }),
   settingsCreatorTools: defineScene({ id: 'settings/creator-tools', parent: 'settings', slot: 'settings-content', view: 'settings-creator-tools' }),
+  settingsAdmin: defineScene({ id: 'settings/admin', parent: 'settings', slot: 'settings-content', view: 'settings-admin' }),
   lobbies: defineScene({ id: 'lobbies', parent: 'main-menu', slot: 'menu-destination', view: 'lobbies' }),
   studio: defineScene({ id: 'studio', parent: null, slot: 'root', view: 'studio' }),
   predrawnReference: defineScene({ id: 'predrawn-reference', parent: null, slot: 'root', view: 'predrawn-reference' }),
@@ -129,6 +135,14 @@ function leafSceneManifest(pathname: string): SceneManifest {
       'title-controls',
     ]);
   }
+  if (path === '/run') {
+    return manifest('run', 'battlefield', 'gameplay-hud', [
+      'battlefield-background',
+      'active-run',
+      'run-chrome',
+      'visible-relics',
+    ]);
+  }
   if (isPlaySelectorPath(path)) {
     return manifest(`play-selector:${path}`, 'homepage', 'play-selector', [
       'homepage-background',
@@ -147,7 +161,7 @@ function leafSceneManifest(pathname: string): SceneManifest {
       'visible-palette-slice',
     ], ['below-fold-palette']);
   }
-  if (path === '/editor' || path === '/campaigns' || path === '/campaigns-next') {
+  if (path === '/editor' || path === '/editor/wars' || path === '/campaigns' || path === '/campaigns-next') {
     return manifest('campaign-editor', 'homepage', 'campaign-editor', [
       'homepage-background',
       'title-bar',
@@ -232,15 +246,19 @@ export function sceneManifest(pathname: string): ScenePath {
 
   if (path === '/play') {
     instances = [instance(SCENE_DEFINITIONS.gameplay)];
+  } else if (path === '/run') {
+    instances = [instance(SCENE_DEFINITIONS.run)];
   } else if (isPlaySelectorPath(path)) {
     const selection = playHubSelection(path);
     const selectedInstance = selection?.mode === 'levels'
       ? instance(SCENE_DEFINITIONS.playLevels)
+      : selection?.mode === 'run'
+        ? instance(SCENE_DEFINITIONS.playRun)
       : selection?.mode === 'campaign'
         ? instance(SCENE_DEFINITIONS.playCampaign, { campaignId: selection.campaignId })
         : instance(SCENE_DEFINITIONS.playSkirmish);
     instances = [root, instance(SCENE_DEFINITIONS.play), selectedInstance];
-  } else if (path === '/editor' || path === '/campaigns' || path === '/campaigns-next') {
+  } else if (path === '/editor' || path === '/editor/wars' || path === '/campaigns' || path === '/campaigns-next') {
     instances = [root, instance(SCENE_DEFINITIONS.campaignEditor)];
   } else if (path === '/editor/level' || path === '/edit' || path === '/level-editor') {
     instances = [instance(SCENE_DEFINITIONS.levelEditor)];
@@ -251,9 +269,11 @@ export function sceneManifest(pathname: string): ScenePath {
         ? SCENE_DEFINITIONS.settingsTracks
         : path === '/settings/gameplay'
           ? SCENE_DEFINITIONS.settingsGameplay
-          : path === '/settings/creator-tools'
-            ? SCENE_DEFINITIONS.settingsCreatorTools
-            : SCENE_DEFINITIONS.settingsGeneral;
+        : path === '/settings/creator-tools'
+          ? SCENE_DEFINITIONS.settingsCreatorTools
+          : path === '/settings/admin'
+            ? SCENE_DEFINITIONS.settingsAdmin
+          : SCENE_DEFINITIONS.settingsGeneral;
     instances = [root, instance(SCENE_DEFINITIONS.settings), instance(settingsSection)];
   } else if (path === '/lobbies' || path.startsWith('/lobbies/')) {
     instances = [root, instance(SCENE_DEFINITIONS.lobbies)];

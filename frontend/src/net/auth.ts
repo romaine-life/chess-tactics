@@ -1,6 +1,6 @@
-// Client helpers for the chess-tactics auth surface. The backend proxies the
-// session to auth.romaine.life; same-origin cookies carry it, so no headers are
-// needed on any request.
+// Client helpers for the chess-tactics auth surface. The backend is an OIDC BFF;
+// host-only HttpOnly cookies carry its app-local session, so no token reaches
+// browser JavaScript and no auth headers are needed on application requests.
 
 export interface AuthUser {
   signed_in: boolean;

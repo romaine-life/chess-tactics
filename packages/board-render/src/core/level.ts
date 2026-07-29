@@ -232,11 +232,23 @@ export interface LevelUnit {
   // The 8-direction sprite facing painted in the editor. Optional + back-compat: the
   // game falls back to the side's default facing when absent (see game/setup.ts).
   facing?: UnitFacing;
+  /**
+   * Runtime-only identity used when a Run projects a persistent army onto an authored
+   * Battle. Authoring never needs to set it; createFromLevel preserves it as the Piece id
+   * so Run casualties, Reservists, and promotion cash-outs can address the durable unit.
+   */
+  runUnitId?: string;
 }
 
 export interface LevelEconomy {
   startingFunds: number;
   incomePerTurn: number;
+}
+
+/** War-specific metadata authored on the Level's Battle tab (ADR-0193). */
+export interface BattleSettings {
+  /** This non-final Battle's ordinary shop also deals three free relic choices. */
+  loot?: boolean;
 }
 
 export interface Level {
@@ -268,6 +280,15 @@ export interface Level {
   // The battle clock (see TimeControl). Absent ⇒ untimed — the back-compat default, same
   // optional-field pattern as placement/roster/surviveTurns.
   timeControl?: TimeControl;
+  /** Optional because ordinary Campaign/standalone Levels are not War Battles. */
+  battle?: BattleSettings;
+  /**
+   * Runtime-only modifiers projected by the active Run. They are never written by the
+   * Level Editor or persisted in a canonical workspace.
+   */
+  runRules?: {
+    occultDagger?: boolean;
+  };
   // Authored victory conditions (ADR-0064). Absent ⇒ the `objective` preset defines win/lose
   // (see victoryRulesForObjective); when present it OVERRIDES the preset — the two-list model
   // that lets one level combine several win and several lose conditions. Optional + back-compat
@@ -318,6 +339,28 @@ export interface Campaign {
   // 'mine' = the signed-in user's own campaign. Absent ⇒ treated as 'mine'.
   origin?: 'official' | 'mine';
   // Official campaigns render read-only in the editor (set alongside origin).
+  readOnly?: boolean;
+}
+
+export interface WarBattleRef {
+  levelId: string;
+  ordinal: number;
+}
+
+/**
+ * A Run's separately authored ordered content document. Wars share the canonical Level
+ * map and workspace transaction with Campaigns, while validation enforces exclusive
+ * membership and the UI keeps their libraries separate (ADR-0193).
+ */
+export interface War {
+  formatVersion: number;
+  id: string;
+  name: string;
+  description: string;
+  eligibleForRun?: boolean;
+  favorite?: boolean;
+  battles: WarBattleRef[];
+  origin?: 'official' | 'mine';
   readOnly?: boolean;
 }
 
@@ -616,6 +659,18 @@ export function validateLevel(value: unknown): ValidateResult {
       || !Number.isInteger(tc.initialSeconds) || (tc.initialSeconds as number) < 1
       || !Number.isInteger(tc.incrementSeconds) || (tc.incrementSeconds as number) < 0) {
       errors.push('timeControl needs an integer initialSeconds of at least 1 and a non-negative integer incrementSeconds');
+    }
+  }
+  if (v.battle !== undefined) {
+    if (!v.battle || typeof v.battle !== 'object' || Array.isArray(v.battle)
+      || (v.battle.loot !== undefined && typeof v.battle.loot !== 'boolean')) {
+      errors.push('battle must be an object with an optional boolean loot flag');
+    }
+  }
+  if (v.runRules !== undefined) {
+    if (!v.runRules || typeof v.runRules !== 'object' || Array.isArray(v.runRules)
+      || (v.runRules.occultDagger !== undefined && typeof v.runRules.occultDagger !== 'boolean')) {
+      errors.push('runRules must contain only supported boolean runtime modifiers');
     }
   }
   if (v.victory !== undefined) errors.push(...victoryRuleErrors(v.victory));

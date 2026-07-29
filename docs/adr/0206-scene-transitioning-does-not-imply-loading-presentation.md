@@ -3,11 +3,11 @@ status: "accepted"
 date: 2026-07-29
 deciders: Nelson, Codex
 refines:
-  - ADR-0193
   - ADR-0199
+  - ADR-0205
 ---
 
-# ADR-0200: Scene transitioning does not imply Loading presentation
+# ADR-0206: Scene transitioning does not imply Loading presentation
 
 ## Context
 

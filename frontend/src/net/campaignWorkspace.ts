@@ -1,12 +1,13 @@
 // Client for the campaign-editor workspace (all campaigns + their level docs as
 // one document). File-backed on the server today; swappable to a DB later.
 
-import type { Campaign, Level } from '../core/level';
+import type { Campaign, Level, War } from '../core/level';
 import { HttpError } from './http';
 import { installLevelThumbnailUrls } from './levelThumbnails';
 
 export interface Workspace {
   campaigns: Campaign[];
+  wars: War[];
   levels: Record<string, Level>;
 }
 
@@ -65,6 +66,7 @@ function asRevisionedWorkspace(value: unknown): RevisionedWorkspace {
   installLevelThumbnailUrls((data as Partial<RevisionedWorkspace> & { thumbnail_urls?: unknown }).thumbnail_urls);
   return {
     campaigns: Array.isArray(data.campaigns) ? data.campaigns : [],
+    wars: Array.isArray(data.wars) ? data.wars : [],
     levels: data.levels && typeof data.levels === 'object' ? data.levels : {},
     revision: safeRevision(data.revision),
     updated_at: safeUpdatedAt(data.updated_at),
@@ -131,7 +133,7 @@ export async function loadOfficialCampaignsResult(): Promise<OfficialCampaignLoa
   // The live DB row (public GET, design_portfolios envelope) is authoritative. Any error or a
   // synthesized-empty miss resolves to no officials rather than throwing. Keep availability
   // separate so route hydration can retry a transient failure instead of caching it as success.
-  const empty: RevisionedWorkspace = { campaigns: [], levels: {}, revision: 0, updated_at: null };
+  const empty: RevisionedWorkspace = { campaigns: [], wars: [], levels: {}, revision: 0, updated_at: null };
   try {
     const res = await fetch(`/api/official-campaigns/${OFFICIAL_ID}`, {
       cache: 'no-cache',

@@ -69,9 +69,15 @@ export function adjudicateCommittedPosition(state: GameState, input: Adjudicatio
   // second reason (which would lose the original fired-rule identity).
   if (state.winner || (state.turn !== 'player' && state.turn !== 'enemy')) return null;
 
+  const victoryRules = state.checkmateRequiresEnemyNonKingEliminated
+    ? input.victoryRules.filter((rule) => !rule.do.some((action) => (
+        (action.kind === 'win' && action.side === 'player')
+        || (action.kind === 'lose' && action.side === 'enemy')
+      )))
+    : input.victoryRules;
   const resolved = resolveVictory(
     state,
-    input.victoryRules,
+    victoryRules,
     { ...(input.ctx ?? {}), turnsElapsed: input.turnsElapsed ?? 0 },
   );
   if (resolved.winner === 'player' || resolved.winner === 'enemy') {
@@ -85,6 +91,13 @@ export function adjudicateCommittedPosition(state: GameState, input: Adjudicatio
     .some((piece) => legalMoves(piece, state.pieces, state.size, env).length > 0);
   if (!hasMove) {
     if (sideInCheck(state, side, env)) {
+      if (
+        state.checkmateRequiresEnemyNonKingEliminated
+        && side === 'enemy'
+        && state.pieces.some((piece) => piece.alive && piece.side === 'enemy' && piece.type !== 'king')
+      ) {
+        return null;
+      }
       return {
         kind: 'checkmate',
         winner: side === 'player' ? 'enemy' : 'player',

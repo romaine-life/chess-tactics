@@ -8,10 +8,16 @@
 import type { Campaign } from '../core/level';
 import { saveWorkspace, saveOfficialCampaigns, type Workspace } from '../net/campaignWorkspace';
 import { useCampaigns } from './store';
+import { useWars } from '../war/store';
+import type { War } from '../core/level';
 
 // Strip the in-memory tier tags before any PUT, so persisted bodies stay identical to
 // the canonical Workspace shape (ADR-0038).
 function stripTiers(list: Campaign[]): Campaign[] {
+  return list.map(({ origin: _origin, readOnly: _readOnly, ...rest }) => rest);
+}
+
+function stripWarTiers(list: War[]): War[] {
   return list.map(({ origin: _origin, readOnly: _readOnly, ...rest }) => rest);
 }
 
@@ -22,6 +28,7 @@ export function userWorkspaceForSave(): Workspace {
   const state = useCampaigns.getState();
   return {
     campaigns: stripTiers(state.campaigns.filter((c) => c.origin !== 'official')),
+    wars: stripWarTiers(useWars.getState().wars.filter((war) => war.origin !== 'official')),
     levels: Object.fromEntries(Object.entries(state.levels).filter(([id]) => !id.startsWith('off-'))),
   };
 }
@@ -34,6 +41,7 @@ export function officialWorkspaceForSave(): Workspace {
   const state = useCampaigns.getState();
   return {
     campaigns: stripTiers(state.campaigns.filter((c) => c.origin === 'official')),
+    wars: stripWarTiers(useWars.getState().wars.filter((war) => war.origin === 'official')),
     levels: Object.fromEntries(Object.entries(state.levels).filter(([id]) => id.startsWith('off-'))),
   };
 }

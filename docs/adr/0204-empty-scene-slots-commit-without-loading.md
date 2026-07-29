@@ -3,11 +3,11 @@ status: "accepted"
 date: 2026-07-29
 deciders: Nelson, Codex
 refines:
-  - ADR-0193
-  - ADR-0197
+  - ADR-0199
+  - ADR-0203
 ---
 
-# ADR-0198: Empty scene slots commit without loading
+# ADR-0204: Empty scene slots commit without loading
 
 ## Context
 

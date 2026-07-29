@@ -63,10 +63,26 @@ import {
 import { useSkirmishView } from '../game/skirmishView';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox } from './shared/ChromeBox';
+import { rememberAdminBattleHref } from '../admin/battleRoute';
+import type { RunRelicId } from '../run/model';
 
-export function Skirmish() {
+export interface RunBattlePresentation {
+  level: Level;
+  seed: number;
+  relicIds: readonly RunRelicId[];
+  onVictory: (survivingPersistentUnitIds: string[]) => void;
+  onRestart: () => void;
+  onPawnCashOut?: (unitId: string) => void;
+}
+
+export function Skirmish({
+  runBattle = null,
+  routeSearch = window.location.search,
+}: {
+  runBattle?: RunBattlePresentation | null;
+  routeSearch?: string;
+} = {}) {
   const installedChromeCss = useInstalledChromeCss();
-  const routeSearch = window.location.search;
   const routeParams = useMemo(() => new URLSearchParams(routeSearch), [routeSearch]);
   const predrawnPreview = useMemo(
     () => predrawnBoardPreviewSrc(routeSearch, window.location.origin),
@@ -83,7 +99,7 @@ export function Skirmish() {
     () => routeParams.get('predrawnPicker') === '1',
   );
   const routeCampaignId = routeParams.get('campaignId');
-  const routeLevelId = routeParams.get('levelId');
+  const routeLevelId = runBattle?.level.id ?? routeParams.get('levelId');
   const routeMode = routeParams.get('mode');
   // Play-test a shared board-code link directly (no save/sign-in): `?board=<code>` decodes an
   // authored board into a one-off fixed-placement level. `?obj=<mode>` picks the win rule
@@ -165,11 +181,14 @@ export function Skirmish() {
   const [netRelayFrozen, setNetRelayFrozen] = useState(false);
   // Real campaign play (records progress + shows the result flow), as opposed to the
   // editor's "Test Play" (mode=test) or an authored non-campaign level.
-  const isCampaignPlay = Boolean(routeCampaignId && routeLevelId && routeMode !== 'test');
+  const isCampaignPlay = !runBattle && Boolean(routeCampaignId && routeLevelId && routeMode !== 'test');
+  const isRunPlay = Boolean(runBattle);
   // The Level Editor's "Test Play" is ephemeral author iteration — never persisted or
   // resumed (a stale snapshot after an edit would mislead), unlike real play below.
   const isTestPlay = routeMode === 'test';
-  const [routeLevel, setRouteLevel] = useState(() => (routeLevelId ? useCampaigns.getState().levels[routeLevelId] ?? null : null));
+  const [routeLevel, setRouteLevel] = useState<Level | null>(() => (
+    runBattle?.level ?? (routeLevelId ? useCampaigns.getState().levels[routeLevelId] ?? null : null)
+  ));
   // The board mounts only once this screen has DECIDED which game to play (fresh vs resume).
   // The store ships a populated placeholder game (store.ts INITIAL_GAME), so mounting the
   // board before that decision would render the placeholder, then a second time when
@@ -295,6 +314,10 @@ export function Skirmish() {
     if (isCampaignPlay && routeLevel && game.winner === 'player') recordLevelWin(routeLevel.id);
   }, [isCampaignPlay, routeLevel, game.winner]);
 
+  useEffect(() => {
+    rememberAdminBattleHref(`${window.location.pathname}${window.location.search}${window.location.hash}`);
+  }, []);
+
   // Re-arm the netplay result card whenever a fresh game is built (winner clears), so a
   // dismissal from the previous match doesn't suppress the next one's result.
   useEffect(() => { if (!game.winner) setNetResultDismissed(false); }, [game.winner]);
@@ -313,7 +336,10 @@ export function Skirmish() {
     // Retry the SAME position when pieces are authored on the board: reuse the current seed so it
     // rebuilds byte-identical. Setup spawn events instead re-roll, since reshuffling the deal is
     // the point of event-driven deployment and reads better as a fresh deploy.
-    const seed = spawnEventsForLevel(level).length ? Math.floor(Math.random() * 999999) + 1 : useSkirmish.getState().seed;
+    const seed = runBattle
+      ? runBattle.seed
+      : spawnEventsForLevel(level).length ? Math.floor(Math.random() * 999999) + 1 : useSkirmish.getState().seed;
+    if (runBattle) runBattle.onRestart();
     setBoardSurfaceReady(false);
     newSkirmish({ seed, level, deferClockStart: true });
   };
@@ -332,7 +358,7 @@ export function Skirmish() {
   };
   // Show the Retry stud only once a single-player board is up (no netplay, no dead map link).
   const showRetryStud = boardSettled && !mapError && !routeLobby && !net;
-  const retryStudLabel = activeLevel ? (isCampaignPlay ? 'Retry level' : 'Retry board') : 'Back to Play';
+  const retryStudLabel = activeLevel ? (isRunPlay ? 'Retry Battle' : isCampaignPlay ? 'Retry level' : 'Retry board') : 'Back to Play';
   const newScenarioLabel = activeLevel ? 'New attempt' : 'Choose board';
 
   // The next level in this campaign after the one just cleared (null on the last level or
@@ -393,7 +419,7 @@ export function Skirmish() {
     // A live board must name canonical content (or carry an authored board/map link).
     // Bare /play and the retired ?random=1 path return to the selector instead of
     // synthesizing an item-less procedural match (ADR-0070/0074).
-    if (!routeLevelId && !routeBoard && !routeMap) {
+    if (!routeLevelId && !routeBoard && !routeMap && !runBattle) {
       navigateApp(PLAY_SKIRMISH_SELECTOR_HREF, { replace: true, scroll: false });
       return undefined;
     }
@@ -412,7 +438,7 @@ export function Skirmish() {
     // first launch, after a finished game, or when a different level is opened.
     const shouldStartFresh = (levelId: string | null): boolean =>
       shouldStartFreshSkirmish(useSkirmish.getState(), levelId);
-    const freshSeed = () => Math.floor(Math.random() * 999999) + 1;
+    const freshSeed = () => runBattle?.seed ?? Math.floor(Math.random() * 999999) + 1;
     // Dev A/B lever: `?ai=greedy` pits you against the legacy random-capture
     // enemy; anything else gets the objective-aware search AI.
     const ai = new URLSearchParams(window.location.search).get('ai') === 'greedy' ? 'greedy' as const : 'search' as const;
@@ -480,6 +506,12 @@ export function Skirmish() {
       return () => { active = false; };
     }
 
+    if (runBattle) {
+      setRouteLevel(runBattle.level);
+      startOrResume(runBattle.level.id, runBattle.level);
+      setBoardSettled(true);
+      return;
+    }
     if (routeLevel) {
       startOrResume(routeLevel.id, routeLevel);
       setBoardSettled(true);
@@ -514,7 +546,7 @@ export function Skirmish() {
         setBoardSettled(true);
       });
     return () => { active = false; };
-  }, [newSkirmish, resumeMatch, isTestPlay, routeBoard, routeBoardLevel, routeMap, routeCampaignId, routeLevel, routeLevelId, routeLobby]);
+  }, [newSkirmish, resumeMatch, isTestPlay, routeBoard, routeBoardLevel, routeMap, routeCampaignId, routeLevel, routeLevelId, routeLobby, runBattle]);
 
   useEffect(() => {
     if (playableSurfaceReady) activateClock();
@@ -1087,9 +1119,9 @@ export function Skirmish() {
           showStatus={false}
         >
           <SkirmishHud
-            canStartNewSkirmish={Boolean(activeLevel) && !isCampaignPlay}
+            canStartNewSkirmish={Boolean(activeLevel) && !isCampaignPlay && !isRunPlay}
             onRestart={showRetryStud ? retrySkirmish : null}
-            restartLabel={activeLevel ? (isCampaignPlay ? 'Restart level' : 'Restart board') : 'Restart skirmish'}
+            restartLabel={activeLevel ? (isRunPlay ? 'Restart Battle' : isCampaignPlay ? 'Restart level' : 'Restart board') : 'Restart skirmish'}
             onNewSkirmish={startNewScenario}
             newSkirmishLabel={newScenarioLabel}
             showClockControl={!isCampaignPlay}
@@ -1099,6 +1131,8 @@ export function Skirmish() {
             returnLabel={returnIsEditor ? 'Back to editor' : 'Back'}
             netInteractive={netSeatInteractive}
             onOpenPredrawnRegistration={predrawnPreview ? () => setPredrawnPickerOpen(true) : null}
+            onPawnCashOut={runBattle?.onPawnCashOut ?? null}
+            runRelicIds={runBattle?.relicIds ?? []}
           />
         </PaintedSurfaceBoundary>
       ) : null}
@@ -1131,6 +1165,40 @@ export function Skirmish() {
                 <NavButton data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} to={playCampaignSelectorHref(routeCampaignId)}>
                   Back to Campaign
                 </NavButton>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isRunPlay && runBattle && routeLevel && game.winner && (
+        <div className="campaign-result" role="dialog" aria-modal="true" aria-label="Run Battle result" data-testid="run-battle-result">
+          <div className="settings-frame campaign-result-panel">
+            <h2>{game.winner === 'player' ? 'Victory' : game.winner === 'draw' ? 'Draw' : 'Defeat'}</h2>
+            <p>{routeLevel.name} — {resultDetail ?? objectiveGoal}</p>
+            <div className="campaign-result-actions">
+              {game.winner === 'player' ? (
+                <button
+                  type="button"
+                  data-chrome-unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
+                  onClick={() => runBattle.onVictory(
+                    game.pieces
+                      .filter((piece) => piece.alive && piece.side === 'player' && piece.id.startsWith('run-'))
+                      .map((piece) => piece.id),
+                  )}
+                >
+                  Continue
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  data-chrome-unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
+                  onClick={replayLevel}
+                >
+                  Retry
+                </button>
               )}
             </div>
           </div>
