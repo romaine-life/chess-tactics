@@ -93,6 +93,18 @@ describe('professional loading architecture guards', () => {
     );
   });
 
+  it('routes Settings panels through an authored nested scene slot', () => {
+    const settings = read('./ui/Settings.tsx');
+    const styles = read('./style.css');
+    expect(settings).toContain('data-scene-region="settings-shell"');
+    expect(settings).toContain('const activeTab = tabFromPath(path)');
+    expect(settings).not.toContain('APP_NAVIGATION_EVENT');
+    expect(settings).not.toContain('window.location.pathname');
+    expect(settings).not.toContain('settings-xfade-');
+    expect(styles).toContain('data-transition-region="settings-shell"');
+    expect(styles).toContain('.settings-scroll > .kit-scroll-content');
+  });
+
   it('does not let menu, screen, or board readiness expire into success', () => {
     const app = read('./ui/App.tsx');
     const coldReveal = read('./ui/shell/startupScene.ts');

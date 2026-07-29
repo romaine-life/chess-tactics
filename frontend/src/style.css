@@ -9467,6 +9467,11 @@ body { font-size: 17px; }
   pointer-events: none;
   transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
 }
+.scene-director.is-exiting.is-host-preserving .scene-boundary[data-transition-region="settings-shell"] [data-scene-region="settings-shell"] {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
+}
 /* play-shell is display:contents so its columns remain siblings in the menu
    grid. Its direct visual children therefore carry the slot fade. */
 .scene-director.is-exiting.is-host-preserving .scene-boundary[data-transition-region="play-shell"] [data-scene-region="play-shell"] > * {
@@ -9482,7 +9487,8 @@ body { font-size: 17px; }
   opacity: 1;
 }
 .scene-boundary.is-region-preparing[data-transition-region="menu-shell"] [data-scene-region="menu-shell"],
-.scene-boundary.is-region-preparing[data-transition-region="play-shell"] [data-scene-region="play-shell"] {
+.scene-boundary.is-region-preparing[data-transition-region="play-shell"] [data-scene-region="play-shell"],
+.scene-boundary.is-region-preparing[data-transition-region="settings-shell"] [data-scene-region="settings-shell"] {
   opacity: 0;
   pointer-events: none;
 }
@@ -9501,7 +9507,8 @@ body { font-size: 17px; }
   pointer-events: none;
 }
 .scene-director.is-entering.is-host-preserving .scene-boundary[data-transition-region="menu-shell"] [data-scene-region="menu-shell"],
-.scene-director.is-entering.is-host-preserving .scene-boundary[data-transition-region="play-shell"] [data-scene-region="play-shell"] {
+.scene-director.is-entering.is-host-preserving .scene-boundary[data-transition-region="play-shell"] [data-scene-region="play-shell"],
+.scene-director.is-entering.is-host-preserving .scene-boundary[data-transition-region="settings-shell"] [data-scene-region="settings-shell"] {
   opacity: 1;
   transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
 }
@@ -17244,12 +17251,8 @@ button.tileset-relationship-cell {
   white-space: nowrap;
 }
 
-/* Crossfade STACK: the panel body holds up to two layers in ONE grid cell — the incoming
-   (.settings-xfade-next) and, during a tab change, the outgoing (.settings-xfade-prev) — so
-   they OVERLAP-fade (old 1->0 while new 0->1) in a single --ds-duration-fade pass (ADR-0046),
-   not sequentially. Width constraint + centring stay here; the section layout lives on each
-   layer so both render identically. Scrolling + the drawn rail (ADR-0030) are owned by the
-   wrapping <KitScroll>. */
+/* Settings content is one authored settings-content scene slot. Width and
+   centring live here; SceneDirector owns its exit, preparation, and entrance. */
 .settings-panel-content {
   display: grid;
   inline-size: min(100%, 880px);
@@ -17257,27 +17260,14 @@ button.tileset-relationship-cell {
   min-height: 0;
 }
 
-.settings-xfade-layer {
-  grid-area: 1 / 1;            /* stack both layers in the same cell; cell sizes to the larger */
+.settings-panel-layer {
   align-content: start;
   display: grid;
   /* Inter-section spacing — looser than the row gap so groups read as distinct. */
   gap: clamp(14px, calc(var(--layout-vw, 100vw) * .013), 22px);
   min-width: 0;
   padding-block-end: 4px;
-  /* Pure opacity fade (no movement) = reduced-motion-safe, so NOT gated (ADR-0043); many
-     players run Windows "Animation effects" off (Chrome `reduce`) and still get it. The ONE
-     shared fade token — kept in sync with PANEL_FADE_MS in Settings.tsx (the JS swap timer). */
-  transition: opacity var(--ds-duration-fade) var(--ds-ease-standard);
 }
-
-/* enter = paint the start opacities instantly (prev visible, next hidden); JS flips to active
-   one frame later so the transition has a start value. */
-.settings-xfade-enter .settings-xfade-prev { opacity: 1; transition: none; }
-.settings-xfade-enter .settings-xfade-next { opacity: 0; transition: none; }
-/* active = end opacities; both layers transition at once → the overlap crossfade. */
-.settings-xfade-active .settings-xfade-prev { opacity: 0; }
-.settings-xfade-active .settings-xfade-next { opacity: 1; }
 
 /* The settings panel's scroll viewport always occupies the main frame's second (1fr)
    row so the ADR-0030 rail spans the scrollable height, below any pinned header. */
@@ -17285,6 +17275,12 @@ button.tileset-relationship-cell {
   block-size: 100%;
   grid-row: 2;
   min-height: 0;
+}
+.settings-scroll > .kit-scroll-content {
+  /* Reserve the scrollbar gutter inside the viewport's declared width. Without
+     border-box, the 18px padding enlarged Audio's scroll canvas and let its wide
+     rows paint beneath the drawn rail/thumb. */
+  box-sizing: border-box;
 }
 
 /* Labeled row groups: an uppercase eyebrow over a tight cluster of rows. */

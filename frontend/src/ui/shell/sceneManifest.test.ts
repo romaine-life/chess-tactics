@@ -33,6 +33,22 @@ describe('scene manifests', () => {
       sceneManifest('/play/select/skirmish'),
       sceneManifest('/play'),
     )).toBeNull();
+    expect(deepestSharedSceneRegion(
+      sceneManifest('/settings/general'),
+      sceneManifest('/settings/audio'),
+    )).toBe('settings-shell');
+  });
+
+  it('authors every Settings panel and nested tracks view as a settings-content scene', () => {
+    expect(sceneManifest('/settings/audio').instances.map((entry) => entry.definition.id)).toEqual([
+      'main-menu',
+      'settings',
+      'settings/audio',
+    ]);
+    expect(sceneManifest('/settings/audio/tracks').leaf).toMatchObject({
+      key: 'settings/audio/tracks',
+      definition: { slot: 'settings-content', view: 'settings-tracks' },
+    });
   });
 
   it('recognizes removing a retained host child as an empty-slot destination', () => {

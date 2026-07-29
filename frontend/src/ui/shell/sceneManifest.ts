@@ -2,8 +2,8 @@ import { normalizeRoutePath } from '../navigation';
 import { isPlaySelectorPath, playHubSelection } from '../playHubRoute';
 
 export type SceneBackground = 'homepage' | 'battlefield' | 'tool';
-export type SceneHost = 'menu-shell' | 'play-shell' | 'standalone';
-export type SceneSlotId = 'root' | 'menu-destination' | 'play-content';
+export type SceneHost = 'menu-shell' | 'play-shell' | 'settings-shell' | 'standalone';
+export type SceneSlotId = 'root' | 'menu-destination' | 'play-content' | 'settings-content';
 export type SceneViewId =
   | 'main-menu'
   | 'play'
@@ -14,6 +14,11 @@ export type SceneViewId =
   | 'campaign-editor'
   | 'level-editor'
   | 'settings'
+  | 'settings-general'
+  | 'settings-audio'
+  | 'settings-tracks'
+  | 'settings-gameplay'
+  | 'settings-creator-tools'
   | 'lobbies'
   | 'studio'
   | 'predrawn-reference'
@@ -72,6 +77,11 @@ export const SCENE_DEFINITIONS = Object.freeze({
   campaignEditor: defineScene({ id: 'campaign-editor', parent: 'main-menu', slot: 'menu-destination', view: 'campaign-editor' }),
   levelEditor: defineScene({ id: 'level-editor', parent: null, slot: 'root', view: 'level-editor' }),
   settings: defineScene({ id: 'settings', parent: 'main-menu', slot: 'menu-destination', view: 'settings' }),
+  settingsGeneral: defineScene({ id: 'settings/general', parent: 'settings', slot: 'settings-content', view: 'settings-general' }),
+  settingsAudio: defineScene({ id: 'settings/audio', parent: 'settings', slot: 'settings-content', view: 'settings-audio' }),
+  settingsTracks: defineScene({ id: 'settings/audio/tracks', parent: 'settings', slot: 'settings-content', view: 'settings-tracks' }),
+  settingsGameplay: defineScene({ id: 'settings/gameplay', parent: 'settings', slot: 'settings-content', view: 'settings-gameplay' }),
+  settingsCreatorTools: defineScene({ id: 'settings/creator-tools', parent: 'settings', slot: 'settings-content', view: 'settings-creator-tools' }),
   lobbies: defineScene({ id: 'lobbies', parent: 'main-menu', slot: 'menu-destination', view: 'lobbies' }),
   studio: defineScene({ id: 'studio', parent: null, slot: 'root', view: 'studio' }),
   predrawnReference: defineScene({ id: 'predrawn-reference', parent: null, slot: 'root', view: 'predrawn-reference' }),
@@ -156,11 +166,11 @@ function leafSceneManifest(pathname: string): SceneManifest {
     path === '/settings' || path.startsWith('/settings/')
     || path === '/party'
   ) {
-    return manifest(path.split('/').filter(Boolean)[0] || 'main-menu', 'homepage', 'dom', [
+    return manifest(`settings:${path}`, 'homepage', 'dom', [
       'homepage-background',
       'title-bar',
       'visible-controls',
-    ], [], 'menu-shell');
+    ], [], 'settings-shell');
   }
   if (path === '/lobbies' || path.startsWith('/lobbies/')) {
     return manifest('lobbies', 'homepage', 'lobbies', [
@@ -223,7 +233,16 @@ export function sceneManifest(pathname: string): ScenePath {
   } else if (path === '/editor/level' || path === '/edit' || path === '/level-editor') {
     instances = [instance(SCENE_DEFINITIONS.levelEditor)];
   } else if (path === '/settings' || path.startsWith('/settings/')) {
-    instances = [root, instance(SCENE_DEFINITIONS.settings)];
+    const settingsSection = path === '/settings/audio'
+      ? SCENE_DEFINITIONS.settingsAudio
+      : path === '/settings/audio/tracks'
+        ? SCENE_DEFINITIONS.settingsTracks
+        : path === '/settings/gameplay'
+          ? SCENE_DEFINITIONS.settingsGameplay
+          : path === '/settings/creator-tools'
+            ? SCENE_DEFINITIONS.settingsCreatorTools
+            : SCENE_DEFINITIONS.settingsGeneral;
+    instances = [root, instance(SCENE_DEFINITIONS.settings), instance(settingsSection)];
   } else if (path === '/lobbies' || path.startsWith('/lobbies/')) {
     instances = [root, instance(SCENE_DEFINITIONS.lobbies)];
   } else if (path === '/party') {
@@ -248,6 +267,7 @@ export function sceneManifest(pathname: string): ScenePath {
 const HOST_REGION_BY_DEFINITION: Readonly<Partial<Record<string, SceneHost>>> = Object.freeze({
   'main-menu': 'menu-shell',
   play: 'play-shell',
+  settings: 'settings-shell',
 });
 
 /** Find the deepest retained destination region from authored instance ancestry. */
@@ -269,6 +289,7 @@ export function deepestSharedSceneRegion(
 const DESTINATION_SLOT_BY_REGION: Readonly<Partial<Record<SceneHost, SceneSlotId>>> = Object.freeze({
   'menu-shell': 'menu-destination',
   'play-shell': 'play-content',
+  'settings-shell': 'settings-content',
 });
 
 /** True when a retained host is transitioning by removing its current child slot. */

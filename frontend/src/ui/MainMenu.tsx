@@ -94,9 +94,11 @@ function shellDest(path: string): ShellDest | null {
 
 export function MainMenu({
   path = '/',
+  search = '',
   sceneInstanceKey = 'main-menu',
 }: {
   path?: string;
+  search?: string;
   sceneInstanceKey?: string;
 } = {}): ReactElement {
   // The persistent menu shell. The button column and selected destination are one
@@ -161,7 +163,7 @@ export function MainMenu({
             aria-label={dest ? DEST_LABEL[dest] : 'Main menu destination'}
           >
             {dest
-              ? dest === 'settings' ? <Settings embedded />
+              ? dest === 'settings' ? <Settings embedded path={path} search={search} sceneInstanceKey={sceneInstanceKey} />
                 : dest === 'play' ? <PlayMenu path={path} sceneInstanceKey={sceneInstanceKey} />
                 : dest === 'lobbies' ? <Lobbies embedded />
                 : <CampaignEditor embedded />

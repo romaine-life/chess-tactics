@@ -62,7 +62,7 @@ describe('scene director', () => {
     state = reduceScene(state, {
       type: 'navigate', destination: sceneManifest('/settings/general'), href: '/settings/general',
     });
-    expect(state.destination?.id).toBe('settings');
+    expect(state.destination?.id).toBe('settings:/settings/general');
     expect(reduceScene(state, { type: 'destination-painted', generation: staleGeneration })).toBe(state);
   });
 

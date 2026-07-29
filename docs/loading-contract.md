@@ -11,6 +11,8 @@ Authored identity and visible ownership are governed by
 [ADR-0197](adr/0197-routes-request-authored-scene-instances.md).
 Empty child-slot transitions are governed by
 [ADR-0198](adr/0198-empty-scene-slots-commit-without-loading.md).
+The enrollment rule for navigational UI is governed by
+[ADR-0199](adr/0199-navigational-drawing-requires-an-authored-scene-slot.md).
 
 ## Readiness vocabulary
 
@@ -98,6 +100,12 @@ directly to `current`. There is no acquisition, loading minimum, entrance phase,
 Loading copy. Loading presentation begins only when the director is actually waiting
 on or revealing prepared destination work, never during the exit phase alone.
 
+Every navigational action that replaces a drawn region enrolls that region as an
+authored scene slot. Route-owning views do not listen to navigation or derive visible
+selection from `window.location`; only the director-mounted path selects the child.
+Local component state is reserved for interaction inside a committed scene rather
+than navigable region identity.
+
 Title-bar contributions discover targets inside their own committed scene. DOM-node
 refs are never lifted into the director, because portal attachment must not mutate the
 route lifecycle during the same React commit.
@@ -164,6 +172,10 @@ route lifecycle during the same React commit.
   (`main-menu → play → selected Play content`). Play renders only from the path mounted
   by the director; browser navigation cannot swap campaign/level imagery before the
   loading lifecycle begins.
+- Settings resolves as `main-menu → settings → selected Settings content`. General,
+  Audio, Gameplay, Creator Tools, and Audio Tracks share the persistent Settings rail
+  and replace only `settings-content` through the director. The retired Settings-local
+  navigation listener and crossfade no longer form a parallel lifecycle.
 - Data-backed Studio viewers enroll their own initial authorities. Game Lab waits for
   campaign hydration plus account/run metadata; Gym waits for campaign hydration,
   opening-book authority, and worker readiness; the Solver waits for campaign hydration

@@ -472,5 +472,5 @@ function renderScene(scene: ScenePath, search: string): ReactElement {
   }
   if (path === '/party') return <Party />;
   if (path === '/artwork-compare') return <TilesetStudio initialCategory="pages" />;
-  return <MainMenu path={scene.pathname} sceneInstanceKey={scene.leaf.key} />;
+  return <MainMenu path={scene.pathname} search={search} sceneInstanceKey={scene.leaf.key} />;
 }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { readDisabledUrls, writeDisabledUrls, sendBgmCommand, BGM_STATE_EVENT } from '../bgmPrefs.js';
-import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath, readValidatedReturnTo } from './navigation';
+import { normalizeRoutePath, readValidatedReturnTo } from './navigation';
 import { KitScroll } from './KitScroll';
 import { NavButton } from './shared/NavButton';
 import { SettingsButton, SettingsRow, SettingsSection } from './shared/SettingsControls';
@@ -17,11 +17,6 @@ import { installedUiMedia } from './installedUiMedia';
 const MUTE_KEY = 'chess-tactics-bgm-muted-v1';
 const MUTE_CHANGE_EVENT = 'chess-tactics:bgm-muted-change';
 const SETTINGS_KEY = 'chess-tactics-settings-v1';
-// How long the panel body fades out before swapping in the next menu's controls,
-// then fades back in. MUST match --ds-duration-fade on .settings-panel-content in style.css
-// (the ONE shared fade duration, ADR-0046 — same speed as the screen entrance).
-const PANEL_FADE_MS = 350;
-
 type SettingsTab = 'general' | 'audio' | 'gameplay' | 'creator-tools';
 
 interface LocalSettings {
@@ -210,24 +205,28 @@ function Slider({
   );
 }
 
-export function Settings({ embedded = false }: { embedded?: boolean } = {}): ReactElement {
-  const [activeTab, setActiveTab] = useState<SettingsTab>(() => tabFromPath(window.location.pathname));
-  const [showTracks, setShowTracks] = useState<boolean>(() => isTracksView(window.location.pathname));
-  // The INCOMING/target panel (switches immediately on a tab change). `previous` holds the
-  // OUTGOING panel only during a crossfade, rendered stacked under `display` so the two
-  // overlap-fade (old 1->0 while new 0->1) in one --ds-duration-fade pass (ADR-0046). The
-  // rail highlight tracks activeTab directly, so the clicked tab lights instantly.
-  const [display, setDisplay] = useState<{ tab: SettingsTab; tracks: boolean }>(() => ({
-    tab: tabFromPath(window.location.pathname),
-    tracks: isTracksView(window.location.pathname),
-  }));
-  const [previous, setPrevious] = useState<{ tab: SettingsTab; tracks: boolean } | null>(null);
-  const [xfade, setXfade] = useState<'idle' | 'enter' | 'active'>('idle');
+export function Settings({
+  embedded = false,
+  path = '/settings/general',
+  search = '',
+  sceneInstanceKey = 'settings/general',
+}: {
+  embedded?: boolean;
+  path?: string;
+  search?: string;
+  sceneInstanceKey?: string;
+} = {}): ReactElement {
+  // The mounted authored scene path is the only visible-content authority.
+  // Browser navigation requests a destination through App's director; Settings
+  // never observes location/history to swap a panel ahead of that lifecycle.
+  const activeTab = tabFromPath(path);
+  const showTracks = isTracksView(path);
+  const display = { tab: activeTab, tracks: showTracks };
   // The origin the user opened Settings from (null on a direct URL open). Rendered as the
   // "‹ Back" control contributed to the title bar's before-divider lane (below), and
   // THREADED through every in-Settings link (withReturnTo) so the ?returnTo param — and
   // thus that Back — survives each tab/tracks hop.
-  const [returnTo, setReturnTo] = useState<string | null>(readValidatedReturnTo);
+  const returnTo = readValidatedReturnTo(search);
   const [muted, setMuted] = useState(readMuted());
   const [settings, setSettings] = useState<LocalSettings>(readLocalSettings);
   const [tracks, setTracks] = useState<BgmTrack[] | null>(null);
@@ -253,25 +252,6 @@ export function Settings({ embedded = false }: { embedded?: boolean } = {}): Rea
     const shell = document.querySelector('.shell');
     shell?.classList.add('settings-art-active');
     return () => shell?.classList.remove('settings-art-active');
-  }, []);
-
-  useEffect(() => {
-    // Bare /settings normalizes to the first section so the URL always names a tab.
-    // The query string rides along — dropping it here would strip ?returnTo and kill Back.
-    if (normalizeRoutePath(window.location.pathname) === '/settings') {
-      navigateApp(`${TAB_PATHS.general}${window.location.search}`, { replace: true, scroll: false });
-    }
-    const sync = () => {
-      setActiveTab(tabFromPath(window.location.pathname));
-      setShowTracks(isTracksView(window.location.pathname));
-      setReturnTo(readValidatedReturnTo());
-    };
-    window.addEventListener('popstate', sync);
-    window.addEventListener(APP_NAVIGATION_EVENT, sync);
-    return () => {
-      window.removeEventListener('popstate', sync);
-      window.removeEventListener(APP_NAVIGATION_EVENT, sync);
-    };
   }, []);
 
   useEffect(() => {
@@ -360,33 +340,6 @@ export function Settings({ embedded = false }: { embedded?: boolean } = {}): Rea
       .catch(() => { /* provenance is chrome; never block or surface */ });
     return () => controller.abort();
   }, []);
-
-  // Start a crossfade when the target menu changes: keep the current panel as `previous`,
-  // swap `display` to the new one, and render both stacked. The data fetch keys off
-  // showTracks, so the soundtrack list loads during the fade. Pure opacity = reduced-motion
-  // safe (runs even with Windows animations off → Chrome `reduce`).
-  useEffect(() => {
-    if (display.tab === activeTab && display.tracks === showTracks) return;
-    setPrevious(display);
-    setDisplay({ tab: activeTab, tracks: showTracks });
-    setXfade('enter');
-  }, [activeTab, showTracks, display.tab, display.tracks]);
-
-  // Drive enter -> active one frame later, so the start opacities (prev 1 / next 0) paint
-  // before the transition runs — then the two overlap-fade simultaneously.
-  useEffect(() => {
-    if (xfade !== 'enter') return undefined;
-    const raf = requestAnimationFrame(() => setXfade('active'));
-    return () => cancelAnimationFrame(raf);
-  }, [xfade]);
-
-  // Once a crossfade has run its --ds-duration-fade pass, drop the outgoing layer. Keyed on
-  // `previous` so a new tab click mid-fade cleanly restarts the timer (queue-last).
-  useEffect(() => {
-    if (!previous) return undefined;
-    const timer = window.setTimeout(() => { setPrevious(null); setXfade('idle'); }, PANEL_FADE_MS);
-    return () => window.clearTimeout(timer);
-  }, [previous]);
 
   const active = useMemo(() => tabs.find((tab) => tab.id === display.tab) || tabs[0], [display.tab]);
 
@@ -684,7 +637,11 @@ export function Settings({ embedded = false }: { embedded?: boolean } = {}): Rea
         ))}
       </aside>
 
-      <main className={embedded ? 'menu-dest-col menu-dest-action' : 'settings-frame settings-main-frame'}>
+      <main
+        className={embedded ? 'menu-dest-col menu-dest-action' : 'settings-frame settings-main-frame'}
+        data-scene-region="settings-shell"
+        data-scene-instance={sceneInstanceKey}
+      >
         {/* Screen + section are already shown by the brand lockup and the active
             nav button; a visible panel heading just duplicated them. Keep an
             accessible heading for screen-reader structure. */}
@@ -719,13 +676,8 @@ export function Settings({ embedded = false }: { embedded?: boolean } = {}): Rea
               </div>
             ) : null}
             <KitScroll className="settings-scroll">
-              <div className={`settings-panel-content settings-xfade-${xfade}`}>
-                {previous ? (
-                  <div className="settings-xfade-layer settings-xfade-prev" aria-hidden="true">
-                    {renderPanel(previous)}
-                  </div>
-                ) : null}
-                <div className="settings-xfade-layer settings-xfade-next">
+              <div className="settings-panel-content">
+                <div className="settings-panel-layer">
                   {renderPanel(display)}
                 </div>
               </div>

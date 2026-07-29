@@ -6,7 +6,7 @@ export interface SceneSlotState {
   pending: SceneInstance | null;
 }
 
-const ALL_SLOTS: readonly SceneSlotId[] = ['root', 'menu-destination', 'play-content'];
+const ALL_SLOTS: readonly SceneSlotId[] = ['root', 'menu-destination', 'play-content', 'settings-content'];
 
 function instanceForSlot(path: ScenePath | null, id: SceneSlotId): SceneInstance | null {
   return path?.instances.find((candidate) => candidate.definition.slot === id) ?? null;

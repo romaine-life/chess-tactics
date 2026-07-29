@@ -248,6 +248,9 @@ try {
         homeReturnSeen: false,
         homeReturnViolations: [],
         homeExitFaded: false,
+        settingsSeen: false,
+        settingsExitFaded: false,
+        settingsViolations: [],
       };
       window.__ctMenuHostRail = null;
       window.__ctPlayHostRail = null;
@@ -359,6 +362,41 @@ try {
               mounted,
               contentOpacity,
               contentVisibilityViolation,
+            });
+          }
+        }
+        if (
+          director?.classList.contains('is-host-preserving')
+          && boundary?.getAttribute('data-transition-region') === 'settings-shell'
+        ) {
+          window.__ctMenuHostContinuity.settingsSeen = true;
+          const settingsRail = document.querySelector('[aria-label="Settings sections"]');
+          const settingsContent = document.querySelector('[data-scene-region="settings-shell"]');
+          const phase = director.getAttribute('data-scene-phase');
+          const committed = director.getAttribute('data-scene-committed');
+          const pending = director.getAttribute('data-scene-pending');
+          const mounted = settingsContent?.getAttribute('data-scene-instance') ?? null;
+          const contentOpacity = settingsContent
+            ? Number.parseFloat(getComputedStyle(settingsContent).opacity)
+            : 0;
+          if (settingsRail && !window.__ctSettingsHostRail) window.__ctSettingsHostRail = settingsRail;
+          if (phase === 'exiting' && contentOpacity < 0.9) {
+            window.__ctMenuHostContinuity.settingsExitFaded = true;
+          }
+          const violation = !settingsRail
+            || settingsRail !== window.__ctSettingsHostRail
+            || settingsRail.closest('[inert]')
+            || getComputedStyle(settingsRail).pointerEvents === 'none'
+            || (phase === 'exiting' && mounted !== committed)
+            || (phase === 'loading' && mounted === pending && contentOpacity > 0.001);
+          if (violation) {
+            window.__ctMenuHostContinuity.settingsViolations.push({
+              phase,
+              committed,
+              pending,
+              mounted,
+              contentOpacity,
+              sameRail: settingsRail === window.__ctSettingsHostRail,
             });
           }
         }
@@ -593,6 +631,19 @@ try {
       { timeout },
     );
     await page.evaluate(() => { window.__ctMenuHostContinuity.homeReturnSeen = true; });
+    await page.click('.main-menu-mode-tab[data-nav="/settings"]');
+    await page.waitForFunction(
+      `Boolean(
+        document.querySelector('[data-scene-phase="current"][data-scene-committed="settings/general"]')
+        && document.querySelector('[aria-label="Settings sections"] [data-nav="/settings/audio"]')
+      )`,
+      { timeout },
+    );
+    await page.click('[aria-label="Settings sections"] [data-nav="/settings/audio"]');
+    await page.waitForFunction(
+      `document.querySelector('[data-scene-phase="current"]')?.getAttribute('data-scene-committed') === 'settings/audio'`,
+      { timeout },
+    );
   }
   if (retrySceneError) {
     await page.waitForSelector('[data-scene-phase="error"] .scene-loading-presentation button', {
@@ -742,6 +793,9 @@ try {
       || !result.homeReturnSeen
       || result.homeReturnViolations.length
       || !result.homeExitFaded
+      || !result.settingsSeen
+      || !result.settingsExitFaded
+      || result.settingsViolations.length
     ) {
       console.error(`menu host continuity failed: ${JSON.stringify(result)}`);
       process.exitCode = 15;
