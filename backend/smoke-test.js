@@ -344,7 +344,15 @@ function closeHttpServer(server) {
 
 function requestOnPort(targetPort, method, path, headers = {}, body = null, timeoutMs = 1000) {
   return new Promise((resolve, reject) => {
-    const req = http.request({ hostname: '127.0.0.1', port: targetPort, method, path, headers }, (res) => {
+    const requestHeaders = { ...headers };
+    if (
+      body !== null
+      && requestHeaders['content-length'] === undefined
+      && requestHeaders['transfer-encoding'] === undefined
+    ) {
+      requestHeaders['content-length'] = Buffer.byteLength(String(body));
+    }
+    const req = http.request({ hostname: '127.0.0.1', port: targetPort, method, path, headers: requestHeaders }, (res) => {
       let body = '';
       res.setEncoding('utf8');
       res.on('data', (chunk) => {
