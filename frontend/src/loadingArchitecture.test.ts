@@ -53,6 +53,7 @@ describe('professional loading architecture guards', () => {
     expect(director).toContain('if (action.generation !== state.generation) return state');
     expect(app).toContain("'scene-cancelled'");
     expect(app).toContain("'scene-retry'");
+    expect(app).toContain('A required level preview could not be prepared.');
   });
 
   it('does not let menu, screen, or board readiness expire into success', () => {

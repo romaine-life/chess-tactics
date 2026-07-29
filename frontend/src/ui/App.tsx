@@ -60,9 +60,11 @@ const SCENE_LOADING_MIN_MS = 350;
 const STARTUP_STAGE_BEAT_MS = 140;
 const STARTUP_LADDER: readonly StartupLayer[] = ['background', 'title', 'controls'];
 const sceneFailureCopy = (error: Error | null): string => (
-  error?.message.includes('Canonical Play content')
-    ? 'Play content could not be reached. Check your connection and try again.'
-    : 'Required scene data or artwork could not be reached. Check your connection and try again.'
+  error?.message.includes('Canonical thumbnail derivative')
+    ? 'A required level preview could not be prepared. Retry to rebuild the preview.'
+    : error?.message.includes('Canonical Play content')
+      ? 'Play content could not be reached. Check your connection and try again.'
+      : 'Required scene data or artwork could not be reached. Check your connection and try again.'
 );
 
 /**
