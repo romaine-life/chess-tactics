@@ -5,6 +5,8 @@ and [ADR-0193](adr/0193-navigation-loads-atomic-scenes-through-one-director.md),
 as refined by [ADR-0194](adr/0194-scenes-declare-persistent-visual-hosts.md).
 Persistent host nesting is governed by
 [ADR-0195](adr/0195-persistent-scene-hosts-form-a-nested-path.md).
+Preserved-host interaction is governed by
+[ADR-0196](adr/0196-preserved-host-controls-remain-interactive.md).
 
 ## Readiness vocabulary
 
@@ -72,6 +74,12 @@ the deepest shared host and scopes acquisition, inertness, paint acknowledgement
 failure, and entrance to its named destination region. The Play host is nested under
 the main-menu host: Play navigation remains mounted while Skirmish, Levels, and
 campaign content replace one another.
+
+During a same-host transition, inertness belongs only to the replaceable destination
+region. Preserved ancestor controls remain interactive and may retarget the active
+load; the latest accepted destination generation cancels stale acquisition and paint
+acknowledgements. A full-scene transition with no shared host still locks the complete
+outgoing hierarchy.
 
 Title-bar contributions discover targets inside their own committed scene. DOM-node
 refs are never lifted into the director, because portal attachment must not mutate the

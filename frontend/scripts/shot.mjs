@@ -260,12 +260,18 @@ try {
           const title = document.querySelector('.app-shell-titlebar');
           const railOpacity = rail ? Number.parseFloat(getComputedStyle(rail).opacity) : 0;
           const titleOpacity = title ? Number.parseFloat(getComputedStyle(title).opacity) : 0;
+          const railInteractive = Boolean(
+            rail
+            && !rail.closest('[inert]')
+            && getComputedStyle(rail).pointerEvents !== 'none'
+          );
           if (
             !rail
             || rail !== window.__ctMenuHostRail
             || !rail.isConnected
             || railOpacity < 0.99
             || titleOpacity < 0.99
+            || !railInteractive
           ) {
             window.__ctMenuHostContinuity.violations.push({
               phase: director.getAttribute('data-scene-phase'),
@@ -274,6 +280,7 @@ try {
               connected: Boolean(rail?.isConnected),
               railOpacity,
               titleOpacity,
+              railInteractive,
             });
           }
         }
@@ -283,11 +290,17 @@ try {
         ) {
           window.__ctMenuHostContinuity.playSeen = true;
           const playRailOpacity = playRail ? Number.parseFloat(getComputedStyle(playRail).opacity) : 0;
+          const playRailInteractive = Boolean(
+            playRail
+            && !playRail.closest('[inert]')
+            && getComputedStyle(playRail).pointerEvents !== 'none'
+          );
           if (
             !playRail
             || playRail !== window.__ctPlayHostRail
             || !playRail.isConnected
             || playRailOpacity < 0.99
+            || !playRailInteractive
           ) {
             window.__ctMenuHostContinuity.playViolations.push({
               phase: director.getAttribute('data-scene-phase'),
@@ -295,6 +308,7 @@ try {
               samePlayRail: playRail === window.__ctPlayHostRail,
               connected: Boolean(playRail?.isConnected),
               playRailOpacity,
+              playRailInteractive,
             });
           }
         }
@@ -511,6 +525,11 @@ try {
       { timeout },
     );
     await page.click('.main-menu-mode-tab[data-nav="/play/select/campaign/off-c-crown-valoria"]');
+    await page.waitForFunction(
+      `document.querySelector('[data-scene-phase]')?.getAttribute('data-scene-phase') === 'exiting'`,
+      { timeout },
+    );
+    await page.click('.main-menu-mode-tab[data-nav="/play/select/levels"]');
   }
   if (retrySceneError) {
     await page.waitForSelector('[data-scene-phase="error"] .scene-loading-presentation button', {

@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -115,6 +116,20 @@ export function SceneBoundary({
     .filter((entry) => !entry.endsWith(':painted'))
     .map((entry) => entry.slice(0, entry.lastIndexOf(':')));
 
+  useLayoutEffect(() => {
+    if (!preparing || !preserveHost || !transitionRegion || !rootRef.current) return undefined;
+    const region = rootRef.current.querySelector<HTMLElement>(
+      `[data-scene-region="${transitionRegion}"]`,
+    );
+    if (!region) return undefined;
+    region.inert = true;
+    region.setAttribute('aria-hidden', 'true');
+    return () => {
+      region.inert = false;
+      region.removeAttribute('aria-hidden');
+    };
+  }, [preparing, preserveHost, transitionRegion]);
+
   useEffect(() => {
     if (!preparing || !rootRef.current) return undefined;
     let cancelled = false;
@@ -171,7 +186,7 @@ export function SceneBoundary({
         data-scene-participants={participantSnapshot.join(',')}
         data-scene-unresolved={unresolvedParticipants.join(',')}
         data-transition-region={transitionRegion ?? undefined}
-        inert={preparing ? true : undefined}
+        inert={preparing && !preserveHost ? true : undefined}
         aria-hidden={preparing && !preserveHost || undefined}
       >
         {children}
