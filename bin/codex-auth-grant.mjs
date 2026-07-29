@@ -3,8 +3,15 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { approvalInstructions, openBrowser } from './codex-auth-browser.mjs';
+import {
+  guidanceSupportsApprovalInput,
+  requestedEnvironmentApprovalInputs,
+  requireApprovedEnvironmentName,
+} from './codex-auth-grant-contract.mjs';
+import { writeEnvironmentRecord } from './codex-environment-name.mjs';
 
 const AUTH_ORIGIN = 'https://auth.romaine.life';
 const repoDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -17,6 +24,18 @@ try {
   environment = JSON.parse(await readFile(environmentPath, 'utf8'));
 } catch (error) {
   if (error.code !== 'ENOENT') throw error;
+}
+
+const explicitEnvironmentName = process.platform === 'win32'
+  ? process.env.CODEX_ENVIRONMENT_NAME || ''
+  : '';
+const approvalInputs = requestedEnvironmentApprovalInputs({
+  platform: process.platform,
+  environment,
+  explicitEnvironmentName,
+});
+if (!environment?.name && explicitEnvironmentName) {
+  environment = await writeEnvironmentRecord(explicitEnvironmentName);
 }
 
 const postJson = async (pathname, body) => {
@@ -37,6 +56,13 @@ const guidanceResponse = await fetch(`${AUTH_ORIGIN}/api/cli/requester-guidance`
 });
 if (!guidanceResponse.ok) throw new Error(`requester guidance failed (${guidanceResponse.status})`);
 const guidance = await guidanceResponse.json();
+for (const inputName of approvalInputs) {
+  if (!guidanceSupportsApprovalInput(guidance, inputName)) {
+    throw new Error(
+      `auth.romaine.life does not advertise approval input "${inputName}"; deploy the compatible auth service before creating this environment`,
+    );
+  }
+}
 const previous = new Set(Array.isArray(guidance.previous_misc_identifiers) ? guidance.previous_misc_identifiers : []);
 const seed = createHash('sha256').update(`${repoDir}:${Date.now()}:${randomBytes(8).toString('hex')}`).digest().readUInt32BE(0);
 const miscIdentifier = nouns.find((noun, index) => !previous.has(nouns[(seed + index) % nouns.length]))
@@ -55,6 +81,7 @@ const request = await postJson('/api/cli/device', {
   where_happening: `Codex desktop environment ${environmentDescription}`,
   intended_use: `Authenticate ${environment?.name || 'localhost'} Chess Tactics development and browser verification for this Codex session`,
   misc_identifier: uniqueIdentifier,
+  ...(approvalInputs.length > 0 ? { approval_inputs: approvalInputs } : {}),
 });
 
 approvalInstructions(request).forEach((line) => console.log(line));
@@ -80,6 +107,12 @@ while (Date.now() < deadline) {
   throw new Error(`token grant failed (${response.status}): ${payload.error || 'unknown error'}`);
 }
 if (!granted?.token) throw new Error('token grant expired before approval');
+
+if (approvalInputs.includes('environment_name')) {
+  environment = await writeEnvironmentRecord(requireApprovedEnvironmentName(granted));
+  console.log(`Environment name: ${environment.name}`);
+  console.log(`Local URL: ${environment.url}`);
+}
 
 await mkdir(path.dirname(credentialPath), { recursive: true });
 await writeFile(credentialPath, `${JSON.stringify({

@@ -17,9 +17,11 @@ npm install
 npm run dev
 ```
 
-Windows Codex desktop environments are named during worktree setup. Setup
-starts Vite through `devctl` and registers the dynamic port with the
-workstation's loopback Caddy router, producing a stable URL such as:
+Windows Codex desktop environments are named on the
+`auth.romaine.life` approval page opened during worktree setup. The approved
+name returns beside the development token, then setup starts Vite through
+`devctl` and registers the dynamic port with the workstation's loopback Caddy
+router, producing a stable URL such as:
 
 ```text
 http://loading-feature.chess-tactics.localhost
@@ -29,7 +31,7 @@ The ignored `.codex-session/environment.json` is the non-secret source of truth
 for that environment identity. The auth grant, agent URL discovery, browser
 verification, screenshots, and user handoff all use the same name without a
 project lifecycle hook. See
-[ADR-0197](docs/adr/0197-codex-agents-discover-named-environments-from-setup-state.md).
+[ADR-0199](docs/adr/0199-codex-environment-names-are-chosen-during-auth-approval.md).
 
 For baked preview:
 

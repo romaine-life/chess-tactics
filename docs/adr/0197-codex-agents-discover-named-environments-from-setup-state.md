@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: "accepted; terminal environment-name prompt superseded by ADR-0199"
 date: 2026-07-29
 deciders: Nelson, Codex
 ---
