@@ -92,13 +92,12 @@ spec:
             - name: TRAINER_SA
               value: {{ .Values.serviceAccount | quote }}
             {{- end }}
-            {{- if .Values.bgm.baseUrl }}
-            # Public blob base for BGM track streaming. The backend also LISTS this
-            # container (each blob's metadata -> title/artist/album) to build
-            # /api/bgm, authenticating with the pod's workload identity (Storage
-            # Blob Data Reader, tofu). Empty value disables BGM.
-            - name: BGM_BASE_URL
-              value: {{ .Values.bgm.baseUrl | quote }}
+            {{- if and (ne (include "chess-tactics.isTestEnv" .) "true") .Values.bgm.containerUrl }}
+            # Private BGM storage locator. Workload identity lists metadata and
+            # obtains user-delegation keys; the app exposes only same-origin
+            # playlist/playback routes and Azure serves capability-bound bytes.
+            - name: BGM_CONTAINER_URL
+              value: {{ .Values.bgm.containerUrl | quote }}
             {{- end }}
             {{- if eq (include "chess-tactics.isTestEnv" .) "true" }}
             # Test slots hydrate the live asset model into isolated ephemeral

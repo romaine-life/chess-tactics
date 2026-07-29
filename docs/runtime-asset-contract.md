@@ -295,6 +295,11 @@ One backend-owned media boundary supports typed domain projections. The generic
 live-media substrate owns domains migrated from repository files; existing
 domain-native stores such as Unit Art and BGM remain conforming because their
 runtime bytes and pointers are already backend-resolved rather than Git-backed.
+Per
+[ADR-0199](adr/0199-bgm-is-private-storage-behind-app-owned-capability-routes.md),
+BGM specifically uses a backend-listed private container, app-owned opaque
+playback routes, and temporary per-Blob read capabilities; its browser-facing
+catalog never exposes a permanent storage URL.
 Each projection validates its own completeness and geometry before acceptance:
 
 The logical drawable catalog above those media slots is the authority for installed
@@ -330,7 +335,11 @@ an incomplete row is an availability failure.
   `sfx_profiles/default` document owns sound-set metadata/gains, all landable-
   terrain assignments, and arrival sample/gain/firing. Missing profile state is
   decorative silence and an unavailable editor, never a committed default.
-- BGM: its existing backend/Blob playlist and range-streaming contract.
+- BGM: the backend lists the private Blob catalog and returns only opaque
+  same-origin playback routes. Each current route mints a fresh read-only,
+  HTTPS-only, short-lived user-delegation SAS and redirects without caching;
+  Azure serves the bytes and ranges. BGM remains outside the generic candidate
+  lifecycle (ADR-0199).
 
 The browser, Studio, client image bakes, and server thumbnails must observe one
 catalog revision. A critical catalog that cannot hydrate is an availability
@@ -367,7 +376,7 @@ exact-byte review instrument exist:
 | Terrain surface tops | Shared live-media catalog + private Blob | Shared single/batch APIs | Complete; database-declared groups are reviewed on the canonical board and accepted atomically |
 | Structure source-art turntables | Structure drawable catalog + shared live-media catalog/private Blob | Outside-repository batch manifest + canonical source archive client; one archived pack may supply multiple exact object-allowlisted Artwork groups | Complete; Studio validates all eight native 512×512 rasters, requires each exact direction to mount in the interactive board placement proof, records the typed owner group proof, accepts atomically, then installs the drawable record |
 | Other terrain and generic media domains | Shared live-media catalog + private Blob | Shared single/batch APIs | Deliberately blocked until that projection has a typed completeness validator, domain-owned exact-byte review instrument, backend proof validation, and atomic acceptance/rollback tests |
-| BGM | Backend-listed private Blob container | Blob administration | Existing range-streaming projection; intentionally not the generic candidate lifecycle |
+| BGM | Backend-listed private Blob container; app-owned discovery/playback routes; per-Blob user-delegation SAS | Blob administration | Range-streamed by Azure after a bounded no-store redirect; intentionally not the generic candidate lifecycle (ADR-0199) |
 
 The remaining promotion docket is UI kit/Chrome; remaining terrain; props,
 walls, rocks, and atlases; portraits, backgrounds, and social media; then fonts
@@ -429,6 +438,10 @@ catalog.
   owner-facing content environment.
 - Unit tests use generated/synthetic fixture bytes and injected catalog records.
   Production media is not committed as a test fixture.
+- BGM tests inject a deterministic catalog and signer behind the production
+  app-route contract; normal local development uses the full backend and
+  established Azure credential. No static-index, public-read, or frontend-proxy
+  path exists (ADR-0199).
 
 ## Repository enforcement
 
