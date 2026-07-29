@@ -77,7 +77,7 @@ const sceneFailureCopy = (error: Error | null): string => (
 );
 
 /**
- * ADR-0201 application spine. History accepts navigation immediately while the
+ * ADR-0205 application spine. History accepts navigation immediately while the
  * rendered route remains the outgoing scene until its controls have faded. The
  * destination then mounts inert and unrevealed, reports a painted frame through
  * SceneBoundary, and enters as one background-and-controls composition.

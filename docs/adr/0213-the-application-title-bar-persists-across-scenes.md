@@ -3,11 +3,11 @@ status: "accepted"
 date: 2026-07-29
 deciders: Nelson, Codex
 refines:
-  - ADR-0201
-  - ADR-0202
+  - ADR-0205
+  - ADR-0206
 ---
 
-# ADR-0209: The application title bar persists across scenes
+# ADR-0213: The application title bar persists across scenes
 
 ## Context
 
@@ -42,9 +42,9 @@ The one `AppTitleBar` is a persistent application host outside every replaceable
   readiness where required, but that readiness cannot hide the persistent bar
   frame or its invariant controls.
 
-This refines ADR-0201's “complete scene” boundary: the atomic destination is the
+This refines ADR-0205's “complete scene” boundary: the atomic destination is the
 replaceable visual scene inside the persistent application host. It also extends
-ADR-0202's persistent-host principle above route-family hosts.
+ADR-0206's persistent-host principle above route-family hosts.
 
 ## Consequences
 

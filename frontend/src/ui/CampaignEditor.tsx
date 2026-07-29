@@ -487,7 +487,6 @@ function LevelRow({
           <GatedLevelThumbnail
             level={level}
             width={66}
-            height={44}
             authoringPreview={!levelThumbnailUrl(level.id)}
           />
         ) : (

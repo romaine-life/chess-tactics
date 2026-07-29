@@ -2,6 +2,10 @@
 status: "accepted"
 date: 2026-07-28
 deciders: Nelson, Codex
+partially_superseded_by:
+  - "[ADR-0201](0201-board-cameras-fit-the-actual-owning-viewport.md)"
+  - "[ADR-0203](0203-ordinary-board-previews-match-the-play-pane.md)"
+  - "[ADR-0204](0204-all-board-viewing-panes-match-play.md)"
 partially_supersedes:
   - "[ADR-0189](0189-board-facing-views-open-on-playable-geometry.md)'s selected-preview 3:2 and gameplay-responsive-shape clauses"
 refines:

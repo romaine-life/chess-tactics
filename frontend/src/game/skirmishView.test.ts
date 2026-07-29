@@ -2,10 +2,15 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { useSkirmishView } from './skirmishView';
 
 afterEach(() => {
-  useSkirmishView.getState().setMinZoom(0.55);
-  useSkirmishView.getState().setOpeningView({ zoom: 0.9, pan: { x: 0, y: -12 } });
-  useSkirmishView.getState().setZoom(0.9);
-  useSkirmishView.getState().setPan({ x: 0, y: -12 });
+  useSkirmishView.setState({
+    zoom: 0.9,
+    minZoom: 0.55,
+    maxZoom: 1.45,
+    pan: { x: 0, y: -12 },
+    openingZoom: 0.9,
+    openingPan: { x: 0, y: -12 },
+    cameraResetRevision: 0,
+  });
 });
 
 describe('skirmish dynamic zoom floor', () => {
@@ -37,5 +42,15 @@ describe('skirmish dynamic zoom floor', () => {
     useSkirmishView.getState().resetView();
     expect(useSkirmishView.getState().zoom).toBe(0.73);
     expect(useSkirmishView.getState().pan).toEqual({ x: 4, y: -8 });
+  });
+
+  it('raises the interactive ceiling when the canonical opening fit needs it', () => {
+    useSkirmishView.getState().setOpeningView({ zoom: 1.92, pan: { x: 0, y: 14 } });
+    useSkirmishView.getState().setZoom(1.92);
+    expect(useSkirmishView.getState().maxZoom).toBe(1.92);
+    expect(useSkirmishView.getState().zoom).toBe(1.92);
+
+    useSkirmishView.getState().setZoom(2.5);
+    expect(useSkirmishView.getState().zoom).toBe(1.92);
   });
 });

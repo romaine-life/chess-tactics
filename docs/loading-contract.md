@@ -1,20 +1,20 @@
 # Loading contract
 
 Derived from [ADR-0136](adr/0136-loading-is-manifest-driven-and-frame-acknowledged.md)
-and [ADR-0201](adr/0201-navigation-loads-atomic-scenes-through-one-director.md),
-as refined by [ADR-0202](adr/0202-scenes-declare-persistent-visual-hosts.md).
+and [ADR-0205](adr/0205-navigation-loads-atomic-scenes-through-one-director.md),
+as refined by [ADR-0206](adr/0206-scenes-declare-persistent-visual-hosts.md).
 Persistent host nesting is governed by
-[ADR-0203](adr/0203-persistent-scene-hosts-form-a-nested-path.md).
+[ADR-0207](adr/0207-persistent-scene-hosts-form-a-nested-path.md).
 Preserved-host interaction is governed by
-[ADR-0204](adr/0204-preserved-host-controls-remain-interactive.md).
+[ADR-0208](adr/0208-preserved-host-controls-remain-interactive.md).
 Authored identity and visible ownership are governed by
-[ADR-0205](adr/0205-routes-request-authored-scene-instances.md).
+[ADR-0209](adr/0209-routes-request-authored-scene-instances.md).
 Empty child-slot transitions are governed by
-[ADR-0206](adr/0206-empty-scene-slots-commit-without-loading.md).
+[ADR-0210](adr/0210-empty-scene-slots-commit-without-loading.md).
 The enrollment rule for navigational UI is governed by
-[ADR-0207](adr/0207-navigational-drawing-requires-an-authored-scene-slot.md).
+[ADR-0211](adr/0211-navigational-drawing-requires-an-authored-scene-slot.md).
 Transition presentation capability is governed by
-[ADR-0208](adr/0208-scene-transitioning-does-not-imply-loading-presentation.md).
+[ADR-0212](adr/0212-scene-transitioning-does-not-imply-loading-presentation.md).
 
 ## Readiness vocabulary
 
@@ -175,10 +175,14 @@ route lifecycle during the same React commit.
   player lists never reconstruct boards in the browser. Derivative freshness is a pure
   version of the canonical level document plus its live prop-seat, unit, media, and drawable
   authority revisions; it never depends on mutable renderer-process state.
-- Per ADR-0201, list derivatives are fixed 3:2 renders of the shared playable-board opening
-  frame rather than opaque-pixel or full-generated-scene crops. A framing-policy change bumps
-  the renderer revision: reads repair stale derivatives and save/publish prepares the current
-  version without regenerating accepted board artwork.
+- Per ADR-0189, ADR-0201, ADR-0202, and ADR-0204, list derivatives are fixed
+  390×248 renders matching Play's 195:124 board pane and use the shared
+  playable-board opening frame rather than opaque-pixel or full-generated-scene crops.
+  Play applies that framing policy to its stable 1560×992 design-pixel pane inside
+  the uniformly scaled 1920×1080 composition. Every live board viewer uses that same
+  195:124 drawable shape inside its surrounding UI. A framing-policy change bumps the renderer revision: reads repair stale
+  derivatives and save/publish prepares the current version without regenerating accepted
+  board artwork.
 - Initially presented level cards are one surface: the list remains hidden and inert until
   every expected thumbnail has painted, or it presents one retryable error.
 - Persisted Campaign Editor rows consume the same immutable database-backed derivatives

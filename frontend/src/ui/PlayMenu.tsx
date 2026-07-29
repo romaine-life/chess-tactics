@@ -286,7 +286,7 @@ function SkirmishProfilesPanel({
             {levels.map((level) => (
               <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} key={level.id}>
                 <span data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row-thumb')} aria-hidden="true">
-                  <GatedLevelThumbnail level={level} width={72} height={48} alt="" />
+                  <GatedLevelThumbnail level={level} width={72} alt="" />
                 </span>
                 <div className="settings-row-copy">
                   <h4>{level.name}</h4>
@@ -366,7 +366,7 @@ function StandaloneLevelsPanel({
               return (
                 <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} key={level.id}>
                   <span data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row-thumb')} aria-hidden="true">
-                    <GatedLevelThumbnail level={level} width={72} height={48} alt="" />
+                    <GatedLevelThumbnail level={level} width={72} alt="" />
                   </span>
                   <div className="settings-row-copy">
                     <h4>{level.name}</h4>
@@ -456,7 +456,7 @@ function CampaignLevelsPanel({
                 >
                   <span data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row-thumb')} aria-hidden="true">
                     {level
-                      ? <GatedLevelThumbnail level={level} width={66} height={44} alt="" />
+                      ? <GatedLevelThumbnail level={level} width={66} alt="" />
                       : <span className="settings-row-thumb-empty" />}
                   </span>
                   <div className="settings-row-copy">

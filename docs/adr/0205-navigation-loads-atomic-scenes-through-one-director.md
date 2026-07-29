@@ -10,7 +10,7 @@ refines:
   - ADR-0136
 ---
 
-# ADR-0201: Navigation loads atomic scenes through one director
+# ADR-0205: Navigation loads atomic scenes through one director
 
 ## Context
 

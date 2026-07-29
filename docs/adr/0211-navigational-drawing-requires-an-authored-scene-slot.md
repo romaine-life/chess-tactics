@@ -3,11 +3,11 @@ status: "accepted"
 date: 2026-07-29
 deciders: Nelson, Codex
 refines:
-  - ADR-0205
-  - ADR-0206
+  - ADR-0209
+  - ADR-0210
 ---
 
-# ADR-0207: Navigational drawing requires an authored scene slot
+# ADR-0211: Navigational drawing requires an authored scene slot
 
 ## Context
 

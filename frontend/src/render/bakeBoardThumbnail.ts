@@ -1,6 +1,7 @@
 import {
   BAKE_GEOMETRY,
   BOARD_PREVIEW_FRAMING_REVISION,
+  BOARD_THUMBNAIL_SIZE,
   UNIT_IMG_MAX_H,
   UNIT_IMG_MAX_W,
   boardBounds,
@@ -207,8 +208,8 @@ async function renderBoardCanvas(board: EditorBoard, scale: number): Promise<{ c
     ? predrawnOcclusionMaskOps(board)
     : [];
   const viewport = {
-    width: Math.max(1, Math.round(288 * scale)),
-    height: Math.max(1, Math.round(192 * scale)),
+    width: Math.max(1, Math.round(BOARD_THUMBNAIL_SIZE.width * scale)),
+    height: Math.max(1, Math.round(BOARD_THUMBNAIL_SIZE.height * scale)),
   };
   const center = {
     x: framingBounds.minX + framingBounds.width / 2,

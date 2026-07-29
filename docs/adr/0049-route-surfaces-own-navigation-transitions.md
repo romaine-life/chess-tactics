@@ -1,5 +1,5 @@
 ---
-status: "superseded by ADR-0201"
+status: "superseded by ADR-0205"
 date: 2026-07-02
 deciders: Nelson, Codex
 ---

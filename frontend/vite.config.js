@@ -39,23 +39,34 @@ function buildInfo() {
   };
 }
 
+// The named local-environment supervisor routes a worktree only after it proves
+// that the process owning the assigned port is the exact requested environment,
+// project, repository, and revision. This endpoint exists only for supervised
+// Vite development and cannot ship in a production build.
 function devctlHealth() {
+  const enabled = process.env.DEVCTL_MANAGED === '1';
   return {
     name: 'devctl-health',
+    apply: 'serve',
     configureServer(server) {
-      server.middlewares.use('/__devctl/health', (_req, res) => {
+      if (!enabled) return;
+      server.middlewares.use('/__devctl/health', (req, res, next) => {
+        if (req.method !== 'GET') {
+          next();
+          return;
+        }
         res.statusCode = 200;
-        res.setHeader('Content-Type', 'application/json');
         res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({
-          managed: process.env.DEVCTL_MANAGED === '1',
-          environment: process.env.DEVCTL_ENVIRONMENT_NAME || null,
-          project: process.env.DEVCTL_PROJECT || null,
-          repo_dir: process.env.DEVCTL_REPO_DIR || null,
-          revision: process.env.DEVCTL_SOURCE_REVISION || null,
-          configuration_id: process.env.DEVCTL_CONFIGURATION_ID || null,
+          managed: true,
+          environment: process.env.DEVCTL_ENVIRONMENT_NAME || '',
+          project: process.env.DEVCTL_PROJECT || '',
+          repo_dir: process.env.DEVCTL_REPO_DIR || '',
+          revision: process.env.DEVCTL_SOURCE_REVISION || '',
+          configuration_id: process.env.DEVCTL_CONFIGURATION_ID || '',
+          port: Number(process.env.DEVCTL_FRONTEND_PORT || process.env.PORT || 0),
           pid: process.pid,
-          port: Number(process.env.DEVCTL_FRONTEND_PORT || server.config.server.port || 0),
         }));
       });
     },
@@ -426,6 +437,8 @@ export default defineConfig(async ({ command }) => {
   const devApiPlugins = command === 'serve' && !isVitest
     ? (noBackend ? [officialCampaignsDevProxy(), devAuthMock()] : [prodBackend(backendPort)])
     : [];
+  const devctlManaged = command === 'serve' && process.env.DEVCTL_MANAGED === '1';
+  const devctlPort = Number(process.env.DEVCTL_FRONTEND_PORT || process.env.PORT || 0);
   return {
     plugins: [react(), buildInfo(), devctlHealth(), ...devApiPlugins],
     test: { setupFiles: ['./src/test/setupDrawableCatalog.ts'] },
@@ -433,11 +446,14 @@ export default defineConfig(async ({ command }) => {
     // executable Vite chunks in a disjoint namespace so production code can
     // never be mistaken for a semantic media slot.
     build: { assetsDir: 'app-code' },
-    ...(useBackend ? { server: { proxy: {
-      '/api': { target: `http://localhost:${backendPort}`, changeOrigin: true, secure: false, ws: true, xfwd: true },
-      // `/assets/*` is a stable semantic-slot route owned by the backend's live
-      // media catalog. Never let Vite's public directory mask a missing DB slot.
-      '/assets': { target: `http://localhost:${backendPort}`, changeOrigin: true, secure: false, xfwd: true },
-    } } } : {}),
+    server: {
+      ...(devctlManaged && devctlPort > 0 ? { port: devctlPort, strictPort: true } : {}),
+      ...(useBackend ? { proxy: {
+        '/api': { target: `http://localhost:${backendPort}`, changeOrigin: true, secure: false, ws: true, xfwd: true },
+        // `/assets/*` is a stable semantic-slot route owned by the backend's live
+        // media catalog. Never let Vite's public directory mask a missing DB slot.
+        '/assets': { target: `http://localhost:${backendPort}`, changeOrigin: true, secure: false, xfwd: true },
+      } } : {}),
+    },
   };
 });

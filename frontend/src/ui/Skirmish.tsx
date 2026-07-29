@@ -1,4 +1,5 @@
-import { type CSSProperties, useEffect, useMemo, useState } from 'react';
+import { type CSSProperties, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { isPredrawnBackgroundActive } from '@chess-tactics/board-render';
 import { SkirmishBoard } from '../render/SkirmishBoard';
 import { SkirmishHud } from './SkirmishHud';
 import { PaintedSurfaceBoundary } from './shell/PaintedSurfaceBoundary';
@@ -6,6 +7,7 @@ import { NavButton } from './shared/NavButton';
 import { RestartGlyph } from './shared/actionGlyphs';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleBarControlContribution, TitleBarStatus } from './shell/TitleBarControls';
+import { installPlayDesignCanvas } from './shell/fixedDesignCanvas';
 import { useSkirmish, shouldStartFreshSkirmish, setNetMoveSink, setNetResignSink } from '../game/store';
 import { loadMatch, setMatchPersistenceEnabled } from '../game/matchPersistence';
 import {
@@ -73,6 +75,13 @@ export interface RunBattlePresentation {
   onVictory: (survivingPersistentUnitIds: string[]) => void;
   onRestart: () => void;
   onPawnCashOut?: (unitId: string) => void;
+}
+
+export function shouldLoadSkirmishWorldBackground(
+  boardSettled: boolean,
+  predrawnBackgroundActive: boolean,
+): boolean {
+  return boardSettled && !predrawnBackgroundActive;
 }
 
 export function Skirmish({
@@ -205,6 +214,16 @@ export function Skirmish({
   const storeSessionEpoch = useSkirmish((s) => s.sessionEpoch);
   const playableSurfaceReady = boardSurfaceReady && hudSurfaceReady;
   const game = useSkirmish((s) => s.game);
+  const screenBoard = useMemo(
+    () => game.boardCode ? decodeBoard(game.boardCode) : null,
+    [game.boardCode],
+  );
+  const screenPredrawnBackgroundActive = Boolean(
+    screenBoard
+      && isPredrawnBackgroundActive(screenBoard, {
+        predrawnBackgroundActive: Boolean(predrawnPreview && screenBoard.surface),
+      }),
+  );
   // Subscribed (not getState) so the victory "Continue" button knows, reactively, whether
   // a next level exists once the workspace hydrates.
   const campaigns = useCampaigns((s) => s.campaigns);
@@ -388,10 +407,10 @@ export function Skirmish({
     newSkirmish({ seed: Math.floor(Math.random() * 999999) + 1, level: nextLevel, deferClockStart: true });
   };
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const shell = document.querySelector('.shell');
-    shell?.classList.add('skirmish-active');
-    return () => shell?.classList.remove('skirmish-active');
+    if (!(shell instanceof HTMLElement)) return undefined;
+    return installPlayDesignCanvas(shell);
   }, []);
 
   // Warm the portrait cache for the units actually on the board so the HUD bust
@@ -976,12 +995,24 @@ export function Skirmish({
     };
   }, [routeLobby]);
 
-  const screenStyle = {
-    '--skirmish-world-bg': `url("${defaultBackgroundSet().world}")`,
-  } as CSSProperties;
+  // A complete pre-drawn plate is the sole source of environment pixels (ADR-0158).
+  // Do not even resolve the ordinary world image into CSS until the chosen board has
+  // settled and proved that it needs that layer; this prevents a hidden wasted request.
+  const screenStyle = shouldLoadSkirmishWorldBackground(
+    boardSettled,
+    screenPredrawnBackgroundActive,
+  )
+    ? {
+        '--skirmish-world-bg': `url("${defaultBackgroundSet().world}")`,
+      } as CSSProperties
+    : undefined;
 
   return (
-    <div data-testid="skirmish" className="skirmish-screen" style={screenStyle}>
+    <div
+      data-testid="skirmish"
+      className={`skirmish-screen is-design-locked${screenPredrawnBackgroundActive ? ' is-predrawn-board' : ''}`}
+      style={screenStyle}
+    >
       {installedChromeCss ? <style data-skirmish-chrome-family dangerouslySetInnerHTML={{ __html: installedChromeCss }} /> : null}
       {/* Title bar lives in the app shell now; the in-game live status portals into its
           center section (turn/objective read from the game store, in scope here). The

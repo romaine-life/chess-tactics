@@ -3,11 +3,11 @@ status: "accepted"
 date: 2026-07-29
 deciders: Nelson, Codex
 refines:
-  - ADR-0201
-  - ADR-0207
+  - ADR-0205
+  - ADR-0211
 ---
 
-# ADR-0210: The scene director owns transition-target lifetime
+# ADR-0214: The scene director owns transition-target lifetime
 
 ## Context
 
@@ -35,7 +35,7 @@ region.
   committed outgoing target remains the same DOM object throughout exit. React may
   replace it only after the director commits the destination while the target is
   hidden.
-- Navigational drawing is transition-managed by default under ADR-0207: a click that
+- Navigational drawing is transition-managed by default under ADR-0211: a click that
   replaces an authored scene slot must use the director.
 - Component-local interaction remains immediate by default: tabs, toggles, sliders,
   selections, board overlays, inspectors, dialogs, and gameplay commands do not enter

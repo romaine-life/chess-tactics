@@ -3,14 +3,14 @@ status: "accepted"
 date: 2026-07-29
 deciders: Nelson, Codex
 refines:
-  - ADR-0201
+  - ADR-0205
 ---
 
-# ADR-0202: Scenes declare persistent visual hosts
+# ADR-0206: Scenes declare persistent visual hosts
 
 ## Context
 
-ADR-0201 correctly made navigation one directed lifecycle, but treated every
+ADR-0205 correctly made navigation one directed lifecycle, but treated every
 destination identity as a replacement of the complete rendered hierarchy. The
 main menu is itself a persistent visual host: Play, Settings, Campaign Editor,
 and Lobbies occupy its destination region while the background, title bar, and
@@ -23,7 +23,7 @@ Every scene manifest declares a stable visual-host identity. The director compar
 the current and destination hosts before choosing its transition boundary.
 
 - Different-host navigation retains the complete outgoing scene and atomically
-  replaces it under ADR-0201.
+  replaces it under ADR-0205.
 - Same-host navigation retains the shared hierarchy without remounting or fading
   it. Activation still locks the host decisively.
 - Only the destination region mounts unrevealed, owns the destination manifest and

@@ -4262,6 +4262,26 @@ app.get('/health', (_req, res) => {
   res.status(200).send('ok');
 });
 
+// Exact local-process identity for the named development supervisor. The route
+// is absent outside a supervised dev environment and carries no credentials.
+app.get('/api/__devctl/health', (_req, res, next) => {
+  if (process.env.DEVCTL_MANAGED !== '1') {
+    next();
+    return;
+  }
+  res.setHeader('Cache-Control', 'no-store');
+  res.status(200).json({
+    managed: true,
+    environment: process.env.DEVCTL_ENVIRONMENT_NAME || '',
+    project: process.env.DEVCTL_PROJECT || '',
+    repo_dir: process.env.DEVCTL_REPO_DIR || '',
+    revision: process.env.DEVCTL_SOURCE_REVISION || '',
+    configuration_id: process.env.DEVCTL_CONFIGURATION_ID || '',
+    port: Number(port),
+    pid: process.pid,
+  });
+});
+
 // Process liveness and application readiness are deliberately separate. The
 // process can stay alive to recover from a transient database or Blob failure,
 // but it must not receive game traffic until the schema, live catalog, and
@@ -18181,7 +18201,7 @@ async function withThumbnailRenderInputs(task, queryable = null) {
     return task(renderInputs);
   });
 }
-const BOARD_THUMBNAIL_RENDER_REVISION = 6;
+const BOARD_THUMBNAIL_RENDER_REVISION = 7;
 function thumbnailVersion(sourceHash, renderInputs) {
   const rendererRevision = `br${BOARD_THUMBNAIL_RENDER_REVISION}`;
   const propSeatsRevision = renderInputs && renderInputs.propSeatsRevision ? `ps${renderInputs.propSeatsRevision}` : '';
