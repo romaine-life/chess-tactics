@@ -3,8 +3,8 @@
 // the manual "two humans, two browsers" check required for multiplayer changes.
 //
 // It drives two isolated browser contexts (host + guest) against a REAL backend that serves
-// the built frontend, with a tiny mock auth server standing in for auth.romaine.life
-// (better-auth.session=abc -> player, =rival -> rival). It proves lobby and gameplay
+// the built frontend, with a tiny mock OIDC server standing in for auth.romaine.life
+// (access token abc -> player, rival -> rival). It proves lobby and gameplay
 // projection end to end through real EventSource streams and real DOM:
 //   1. HOST SEES GUEST JOIN LIVE — after the guest joins, the host's screen fills the guest
 //      seat WITHOUT a manual refresh (the original "friend joined but never appeared" bug).
@@ -156,16 +156,33 @@ if (!executablePath) {
   process.exit(1);
 }
 
-// Mock auth (mirrors backend/smoke-test.js): resolve the session cookie to a user.
+const mockAuthIssuer = `http://127.0.0.1:${AUTH_PORT}`;
+
+// Mock auth (mirrors backend/smoke-test.js): resolve the bearer access token.
 const mockAuth = createServer((req, res) => {
-  if (req.url === '/api/auth/get-session') {
-    const cookie = req.headers.cookie || '';
-    if (!cookie.includes('better-auth.session')) { res.writeHead(200, { 'content-type': 'application/json' }); res.end('null'); return; }
-    const user = cookie.includes('better-auth.session=rival')
-      ? { email: 'rival@example.com', name: 'Lobby Rival', role: 'pending' }
-      : { email: 'player@example.com', name: 'Tactics Player', role: 'pending' };
+  if (req.url === '/.well-known/openid-configuration') {
     res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ user }));
+    res.end(JSON.stringify({
+      issuer: mockAuthIssuer,
+      authorization_endpoint: `${mockAuthIssuer}/api/auth/oauth2/authorize`,
+      token_endpoint: `${mockAuthIssuer}/api/auth/oauth2/token`,
+      userinfo_endpoint: `${mockAuthIssuer}/api/auth/oauth2/userinfo`,
+      jwks_uri: `${mockAuthIssuer}/api/auth/jwks`,
+    }));
+    return;
+  }
+  if (req.url === '/api/auth/oauth2/userinfo') {
+    const token = String(req.headers.authorization || '').replace(/^Bearer /, '');
+    if (!token) {
+      res.writeHead(401, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ error: 'invalid_token' }));
+      return;
+    }
+    const user = token === 'rival'
+      ? { sub: 'rival', email: 'rival@example.com', name: 'Lobby Rival', role: 'pending' }
+      : { sub: 'player', email: 'player@example.com', name: 'Tactics Player', role: 'pending' };
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify(user));
     return;
   }
   res.writeHead(404);
@@ -308,15 +325,43 @@ async function main() {
     args: ['--no-sandbox', '--disable-gpu', '--disable-software-rasterizer', '--no-first-run', '--no-default-browser-check'],
   });
 
-  // Two isolated contexts so host and guest carry different session cookies.
+  // Two isolated contexts so host and guest carry different access cookies.
   const openSeat = async (session) => {
     const ctx = await browser.createBrowserContext();
     const page = await ctx.newPage();
     const fixture = await installContentFixture(page);
-    await page.setCookie({ url: BASE, name: 'better-auth.session', value: session, path: '/' });
+    await page.setCookie({
+      url: BASE,
+      name: '__Host-chess-tactics-access',
+      value: session,
+      path: '/',
+      httpOnly: true,
+      secure: true,
+      sameSite: 'Lax',
+    });
+    const installedCookies = await page.cookies(BASE);
+    assert(
+      installedCookies.some((cookie) => (
+        cookie.name === '__Host-chess-tactics-access' && cookie.value === session
+      )),
+      'Chromium rejected the host-only OIDC access cookie on the E2E origin',
+    );
     await page.goto(`${BASE}/lobbies`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    const currentUser = await page.evaluate(async () => {
+      const response = await fetch('/api/auth/me');
+      return response.json();
+    });
+    assert(
+      currentUser?.email,
+      `OIDC access cookie did not establish an E2E session: ${JSON.stringify(currentUser)}`,
+    );
     // Signed-in state renders the "Host a lobby" toolbar; wait for it (not the sign-in gate).
-    await page.waitForSelector('[data-testid=host-lobby]', { timeout: 10000 });
+    try {
+      await page.waitForSelector('[data-testid=host-lobby]', { timeout: 10000 });
+    } catch (error) {
+      const bodyText = await page.$eval('body', (body) => body.innerText.slice(0, 1200));
+      throw new Error(`${error.message}\n--- page text ---\n${bodyText}`);
+    }
     return { page, fixture };
   };
 

@@ -41,10 +41,15 @@ spec:
           image: {{ $imageRef | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
-            # Pins the app's own public origin so backend/server.js requestOrigin()
-            # never falls back to reflecting the client-controllable Host /
-            # X-Forwarded-Host header (which would let a crafted header influence the
-            # OAuth callback origin — a host-spoofing / open-redirect-adjacent vector).
+            # auth.romaine.life is the OIDC authorization server. Chess Tactics
+            # is a public BFF client: authorization-code + PKCE, no client secret.
+            - name: AUTH_BASE_URL
+              value: {{ required "auth.issuer is required" .Values.auth.issuer | quote }}
+            - name: OIDC_CLIENT_ID
+              value: {{ required "auth.oidcClientId is required" .Values.auth.oidcClientId | quote }}
+            # Pins the app's own public origin so the OIDC redirect_uri never
+            # reflects the client-controllable Host / X-Forwarded-Host headers
+            # (which would make callback selection host-spoofable).
             # hostname is the single served-hostname source of truth (cert dnsNames,
             # XListenerSet listener, HTTPRoute match all key off it), so this is the
             # correct per-lane public origin in prod, test slots, and the live-preview

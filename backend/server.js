@@ -9,6 +9,7 @@ const { Pool } = require('pg');
 // the baked backend dir instead of this process' __dirname.
 const bakedBackendDir = process.env.BAKED_BACKEND_DIR || __dirname;
 const { createDevGrantSessionReader } = require(path.join(bakedBackendDir, 'devAuthGrant'));
+const { createOIDCSessionManager } = require(path.join(bakedBackendDir, 'oidcAuth'));
 const { createByteReadBudget } = require(path.join(bakedBackendDir, 'liveMediaReadBudget'));
 const { createRenderCriticalSection } = require(path.join(bakedBackendDir, 'renderCriticalSection'));
 const { backgroundStoreSchemaViolation } = require(path.join(bakedBackendDir, 'backgroundStoreError'));
@@ -98,7 +99,12 @@ const port = process.env.PORT || 3000;
 const frontendDir = process.env.FRONTEND_DIR || path.join(__dirname, '..', 'frontend', 'dist');
 const staticFrontendDir = process.env.STATIC_FRONTEND_DIR || '';
 const authBaseUrl = (process.env.AUTH_BASE_URL || 'https://auth.romaine.life').replace(/\/+$/, '');
-const publicOrigin = (process.env.PUBLIC_ORIGIN || 'https://chess.romaine.life').replace(/\/+$/, '');
+const publicOrigin = (process.env.PUBLIC_ORIGIN || 'https://chess-tactics.com').replace(/\/+$/, '');
+const oidcSessions = createOIDCSessionManager({
+  issuer: authBaseUrl,
+  clientId: process.env.OIDC_CLIENT_ID || 'chess-tactics',
+  publicOrigin,
+});
 // Multiplayer lobbies + netplay relay live entirely in process: this Map is the
 // authoritative store and the SSE subscriber sets below hold live connections.
 // This is only correct because the deployment runs a SINGLE replica
@@ -3299,20 +3305,6 @@ function safeReturnPath(raw) {
   return raw;
 }
 
-function requestOrigin(req) {
-  if (process.env.PUBLIC_ORIGIN) return publicOrigin;
-
-  const proto = req.get('x-forwarded-proto') || req.protocol || 'http';
-  const host = req.get('x-forwarded-host') || req.get('host');
-  if (!host) return publicOrigin;
-  return `${proto}://${host}`;
-}
-
-function callbackUrl(req) {
-  const pathOnly = safeReturnPath(req.query.returnTo);
-  return `${requestOrigin(req)}${pathOnly}`;
-}
-
 function gravatarUrl(email, size = 96) {
   const normalized = String(email || '').trim().toLowerCase();
   if (!normalized) return null;
@@ -3866,7 +3858,7 @@ function applyLevelPatch(level, raw) {
 //   - a *.tank.dev.romaine.life host — the deployed dev-slot domain (unchanged), and
 //   - a loopback host when DEV_AUTH=1 — a local `node server.js` for exercising the
 //     real sign-in flow / lobbies without Postgres or Microsoft (see CLAUDE.md).
-// Prod pods never set DEV_AUTH and their ingress Host is chess.romaine.life, so a
+// Prod pods never set DEV_AUTH and their ingress Host is chess-tactics.com, so a
 // spoofed `Host: localhost` header cannot switch this on in production.
 function isDevAuthHost(req) {
   const host = (req.get('host') || '').toLowerCase();
@@ -3890,7 +3882,7 @@ const verifiedDevGrantSession = createDevGrantSessionReader({
   enabled: process.env.DEV_AUTH === '1',
 });
 
-async function readSession(req) {
+async function readSession(req, res) {
   if (isDevAuthHost(req)) {
     const cookie = req.get('cookie') || '';
     if (cookie.includes('better-auth.session=mock-dev-session')) {
@@ -3908,26 +3900,13 @@ async function readSession(req) {
     const granted = isLoopbackRequest(req) ? await verifiedDevGrantSession() : null;
     if (granted) return granted;
   }
-  const cookie = req.get('cookie');
-  if (!cookie) return null;
-  const upstream = await fetch(`${authBaseUrl}/api/auth/get-session`, {
-    headers: {
-      accept: 'application/json',
-      cookie,
-    },
-  });
-  if (!upstream.ok) {
-    const error = new Error('auth_unavailable');
-    error.statusCode = 502;
-    throw error;
-  }
-  return upstream.json();
+  return oidcSessions.readSession(req.get('cookie') || '', res);
 }
 
 async function requireUser(req, res) {
   let session;
   try {
-    session = await readSession(req);
+    session = await readSession(req, res);
   } catch (error) {
     console.error('auth session check failed:', error);
     res.status(error.statusCode || 502).json({ error: 'auth_unavailable' });
@@ -4158,13 +4137,6 @@ function lobbyNameFor(user) {
   return `${base}'s lobby`;
 }
 
-function forwardSetCookie(upstream, res) {
-  const cookies = typeof upstream.headers.getSetCookie === 'function'
-    ? upstream.headers.getSetCookie()
-    : [upstream.headers.get('set-cookie')].filter(Boolean);
-  cookies.forEach((cookie) => res.append('set-cookie', cookie));
-}
-
 function frontendIndexFile() {
   if (staticFrontendDir) {
     const overrideIndex = path.join(staticFrontendDir, 'index.html');
@@ -4340,7 +4312,7 @@ async function withDisplayName(user) {
 
 app.get('/api/auth/me', async (req, res) => {
   try {
-    const session = await readSession(req);
+    const session = await readSession(req, res);
     res.status(200).json(await withDisplayName(publicUser(session)));
   } catch (error) {
     console.error('auth session check failed:', error);
@@ -5281,42 +5253,41 @@ app.put('/api/design-portfolios/:id', async (req, res) => {
   }
 });
 
-app.get('/api/auth/sign-in', (req, res) => {
+app.get('/api/auth/sign-in', async (req, res) => {
   if (isDevAuthHost(req)) {
     res.setHeader('Set-Cookie', 'better-auth.session=mock-dev-session; Path=/; HttpOnly');
     const returnTo = req.query.returnTo || '/';
     res.redirect(302, returnTo);
     return;
   }
-  const next = encodeURIComponent(callbackUrl(req));
-  res.redirect(302, `${authBaseUrl}/sign-in/microsoft?callbackURL=${next}`);
+  try {
+    const authorizeURL = await oidcSessions.startLogin(safeReturnPath(req.query.returnTo), res);
+    res.redirect(302, authorizeURL);
+  } catch (error) {
+    console.error('OIDC sign-in start failed:', error);
+    res.status(error.statusCode || 502).send('sign-in unavailable');
+  }
 });
 
-app.post('/api/auth/sign-out', async (req, res) => {
-  const cookie = req.get('cookie');
-  if (cookie) {
-    try {
-      const upstream = await fetch(`${authBaseUrl}/api/auth/sign-out`, {
-        method: 'POST',
-        headers: {
-          accept: 'application/json',
-          'content-type': 'application/json',
-          cookie,
-          origin: requestOrigin(req),
-        },
-        body: '{}',
-      });
-      forwardSetCookie(upstream, res);
-      if (!upstream.ok) {
-        res.status(502).json({ error: 'sign_out_failed' });
-        return;
-      }
-    } catch (error) {
-      console.error('auth sign-out failed:', error);
-      res.status(502).json({ error: 'auth_unavailable' });
-      return;
-    }
+app.get('/api/auth/callback', async (req, res) => {
+  try {
+    const returnTo = await oidcSessions.completeLogin({
+      code: req.query.code,
+      state: req.query.state,
+      cookieHeader: req.get('cookie') || '',
+    }, res);
+    res.redirect(302, returnTo);
+  } catch (error) {
+    console.error('OIDC callback failed:', error);
+    res.status(error.statusCode || 502).send('sign-in failed');
   }
+});
+
+app.post('/api/auth/sign-out', (req, res) => {
+  oidcSessions.clearSession(res);
+  // Local DEV_AUTH uses the legacy-shaped mock cookie only inside loopback and
+  // test-slot lanes; clear it alongside the production OIDC cookies.
+  res.append('Set-Cookie', 'better-auth.session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
   res.status(204).end();
 });
 

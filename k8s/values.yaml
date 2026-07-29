@@ -25,7 +25,7 @@ build:
 name: chess-tactics
 namespace: chess-tactics
 
-hostname: chess.romaine.life
+hostname: chess-tactics.com
 
 # normal = full app (prod, what ArgoCD renders).
 # warm   = preliminary test-slot scaffolding only (SA, cert, route, listener).
@@ -140,7 +140,7 @@ unitAssets:
   containerUrl: "https://chesstacticsmedia.blob.core.windows.net/unit-assets"
   # Test slots copy the live catalog into their isolated Postgres + local blob
   # directory at startup because slot service accounts never receive prod identity.
-  seedCatalogUrl: "https://chess.romaine.life/api/unit-catalog"
+  seedCatalogUrl: "https://chess-tactics.com/api/unit-catalog"
 
 # Private content-addressed storage for the generic live-media catalog. Stable
 # browser URLs stay same-origin; only the backend talks to Blob Storage.
@@ -149,20 +149,24 @@ liveMedia:
   # Test slots seed metadata into their isolated Postgres, then fetch immutable
   # bytes by hash only when requested. Neither source grants the slot Azure
   # credentials or makes production writable.
-  seedCatalogUrl: "https://chess.romaine.life/api/asset-catalog"
-  seedMediaBaseUrl: "https://chess.romaine.life/api/media"
+  seedCatalogUrl: "https://chess-tactics.com/api/asset-catalog"
+  seedMediaBaseUrl: "https://chess-tactics.com/api/media"
 
 # Test-slot-only source for the required complete live placement document. The
 # backend copies it into isolated ephemeral Postgres at startup; production
 # never sets this variable and has no runtime seed path.
 propSeats:
-  seedUrl: "https://chess.romaine.life/api/prop-seats/default"
+  seedUrl: "https://chess-tactics.com/api/prop-seats/default"
 
 ingress:
   gatewayName: main
   gatewayNamespace: envoy-gateway-system
   certIssuer: letsencrypt-prod
   tlsSecret: chess-tactics-tls
+
+auth:
+  issuer: https://auth.romaine.life
+  oidcClientId: chess-tactics
 
 # ADR-0038: comma-separated allowlist of emails allowed to publish the global
 # OFFICIAL campaign tier (backend requireAdmin). Fail-closed when empty; not a secret.

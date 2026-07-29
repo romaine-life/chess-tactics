@@ -6,7 +6,7 @@ const mockIndex = (hash: string, ok = true) =>
 
 describe('extractEntryHash', () => {
   it('pulls the hash from a Vite entry-chunk script src', () => {
-    expect(extractEntryHash('https://chess.romaine.life/app-code/index-DExpuavm.js')).toBe('DExpuavm');
+    expect(extractEntryHash('https://chess-tactics.com/app-code/index-DExpuavm.js')).toBe('DExpuavm');
   });
 
   it('pulls the hash out of a full index.html that references the entry chunk', () => {
