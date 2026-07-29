@@ -316,7 +316,10 @@ an incomplete row is an availability failure.
   opaque to runtime semantics: neither terrain nor variant identity is inferred
   from its path. Installed identity and media membership come only from the
   drawable row and its named role assignment.
-- UI kit: state/slice geometry and native roles.
+- UI kit: state/slice geometry and native roles. Run relic icons are exact
+  native 64×64 PNGs with typed `run-relic-icon` metadata; installed
+  `kind='run-relic'` drawable records, not slot filenames, bind those pixels to
+  gameplay relic ids.
 - Props, walls, backgrounds, portraits, fonts, and OG media: their declared
   component and availability contracts.
 - Structure source artwork: one drawable record owns installed membership and

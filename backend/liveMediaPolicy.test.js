@@ -7,6 +7,7 @@ const {
   PREDRAWN_BOARD_COMPONENT,
   PREDRAWN_BOARD_PROOF_RENDERER,
   PREDRAWN_BOARD_PROOF_SCHEMA,
+  RUN_RELIC_ICON_COMPONENT,
   liveCatalogReadinessIssue,
   nativeMediaEvidenceIssue,
   predrawnBoardAlignmentIssue,
@@ -14,6 +15,8 @@ const {
   predrawnBoardOwnerProofIssue,
   predrawnBoardSlotSlug,
   preservesNativeEvidenceForUpload,
+  runRelicIconMediaIssue,
+  runRelicIconSlotId,
 } = require('./liveMediaPolicy');
 
 const originalSha = 'a'.repeat(64);
@@ -54,6 +57,44 @@ test('same-dimension replacement bytes clear stale native evidence', () => {
     width: 96,
     height: 180,
   }), true);
+});
+
+function runRelicIcon(overrides = {}) {
+  return {
+    slot: 'ui/run/relics/conscription-notice.png',
+    domain: 'ui-kit',
+    role: 'icon',
+    media_type: 'image/png',
+    width: 64,
+    height: 64,
+    metadata: {
+      runtime: {
+        component: RUN_RELIC_ICON_COMPONENT,
+        variant: 'conscription-notice',
+        frameWidth: 64,
+        frameHeight: 64,
+        frameCount: 1,
+        nativeRole: RUN_RELIC_ICON_COMPONENT,
+        altText: '',
+      },
+    },
+    ...overrides,
+  };
+}
+
+test('Run relic icon projection binds one native reviewed icon to its exact relic id', () => {
+  const row = runRelicIcon();
+  assert.equal(runRelicIconSlotId(row.slot), 'conscription-notice');
+  assert.equal(runRelicIconMediaIssue(row), null);
+  assert.match(runRelicIconMediaIssue(runRelicIcon({ domain: 'review-media' })), /ui-kit domain/);
+  assert.match(runRelicIconMediaIssue(runRelicIcon({ role: 'media' })), /icon role/);
+  assert.match(runRelicIconMediaIssue(runRelicIcon({ width: 63 })), /64x64/);
+  assert.match(runRelicIconMediaIssue(runRelicIcon({
+    metadata: { runtime: { ...row.metadata.runtime, variant: 'royal-decree' } },
+  })), /variant/);
+  assert.match(runRelicIconMediaIssue(runRelicIcon({
+    metadata: { runtime: { ...row.metadata.runtime, altText: 'duplicated accessible text' } },
+  })), /altText/);
 });
 
 test('container-backed readiness requires at least one active critical live slot', () => {

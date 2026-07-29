@@ -23,6 +23,8 @@ import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox, OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
 import { fetchMe } from '../net/auth';
 import { AdminControls } from './AdminControls';
+import type { RunRelicId } from '../run/model';
+import { RunRelicInventory } from './RunRelics';
 
 const TYPE_LABEL = PIECE_LABEL;
 
@@ -191,6 +193,8 @@ type SkirmishHudProps = {
   onOpenPredrawnRegistration?: (() => void) | null;
   /** Run-only Mercenary Boat action for a persistent Pawn at promotion. */
   onPawnCashOut?: ((pieceId: string) => void) | null;
+  /** Run-only persistent relic collection, kept visible while the Battle is live. */
+  runRelicIds?: readonly RunRelicId[];
 };
 
 export function SkirmishHud({
@@ -210,6 +214,7 @@ export function SkirmishHud({
   netInteractive = true,
   onOpenPredrawnRegistration = null,
   onPawnCashOut = null,
+  runRelicIds = [],
 }: SkirmishHudProps = {}) {
   const game = useSkirmish((s) => s.game);
   const selectedId = useSkirmish((s) => s.selectedId);
@@ -338,17 +343,19 @@ export function SkirmishHud({
           </div>
         </OuterChromeHeader>
 
-      <section className="skirmish-score-panel" aria-label="Turn summary">
-        <div>
-          <span className="skirmish-eyebrow">Status</span>
-          <strong data-testid="turn-label">{turnLabel}</strong>
-        </div>
-        <div className="skirmish-counts" aria-label="Remaining forces">
-          {rosterRows.map(({ side, pieces }, index) => (
-            <CountPip key={side} side={side} count={pieces.length} owner={index === 0 ? 'Your' : 'Opponent'} />
-          ))}
-        </div>
-      </section>
+        <RunRelicInventory relicIds={runRelicIds} placement="hud" />
+
+        <section className="skirmish-score-panel" aria-label="Turn summary">
+          <div>
+            <span className="skirmish-eyebrow">Status</span>
+            <strong data-testid="turn-label">{turnLabel}</strong>
+          </div>
+          <div className="skirmish-counts" aria-label="Remaining forces">
+            {rosterRows.map(({ side, pieces }, index) => (
+              <CountPip key={side} side={side} count={pieces.length} owner={index === 0 ? 'Your' : 'Opponent'} />
+            ))}
+          </div>
+        </section>
 
       {pendingPromotion ? (
         <section className="skirmish-card skirmish-promotion-card" aria-label="Pawn promotion">

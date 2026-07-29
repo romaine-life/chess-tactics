@@ -58,6 +58,8 @@ const {
   predrawnBoardOwnerProofIssue,
   predrawnBoardSlotSlug,
   preservesNativeEvidenceForUpload,
+  runRelicIconMediaIssue,
+  runRelicIconSlotId,
 } = require(path.join(bakedBackendDir, 'liveMediaPolicy'));
 const {
   ATTEMPT_PIPELINE_SOURCE_REQUEST_SCHEMA,
@@ -14964,6 +14966,9 @@ function mediaDomainProjectionIssue(row) {
       return 'pre-drawn board plates require standalone atomic acceptance';
     }
     return predrawnBoardMediaIssue(row, runtime.value);
+  }
+  if (runRelicIconSlotId(row.slot)) {
+    return runRelicIconMediaIssue(row, runtime.value);
   }
   const sourceArt = sourceArtTurntableProjection(row);
   if (sourceArt.claimed) return sourceArt.issue;

@@ -44,6 +44,7 @@ const PortraitEditor = lazy(() => importPortraitEditor().then((m) => ({ default:
 const WallCandidateReview = lazy(() => import('./WallCandidateReview').then((m) => ({ default: m.WallCandidateReview })));
 const PredrawnReference = lazy(() => import('./PredrawnReference').then((m) => ({ default: m.PredrawnReference })));
 const DrawableCatalogLab = lazy(() => import('./DrawableCatalogLab').then((m) => ({ default: m.DrawableCatalogLab })));
+const RunRelicReview = lazy(() => import('./RunRelicReview').then((m) => ({ default: m.RunRelicReview })));
 
 const fallback = <div style={{ padding: 40, color: 'var(--ds-ink-3)', fontFamily: 'var(--ds-font-sans)' }}>Loading…</div>;
 
@@ -367,6 +368,7 @@ function renderRoute(path: string, search: string): ReactElement {
   if (path === '/play') return <Skirmish routeSearch={search} />;
   if (path === '/run') return <RunScreen />;
   if (path === '/predrawn-reference') return <PredrawnReference />;
+  if (path === '/studio' && new URLSearchParams(search).get('relicReview') === '1') return <RunRelicReview />;
   if (path === '/studio' || path === '/tileset-studio') return <TilesetStudio />;
   if (path === '/studio/wall-candidates') return <WallCandidateReview />;
   if (path === '/studio/drawables') return <DrawableCatalogLab />;

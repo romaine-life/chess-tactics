@@ -7,6 +7,8 @@ const PREDRAWN_BOARD_SLOT = /^boards\/([a-z0-9][a-z0-9._-]{0,119})\/plate\.png$/
 const PREDRAWN_BOARD_COMPONENT = 'predrawn-board-plate';
 const PREDRAWN_BOARD_PROOF_SCHEMA = 'predrawn-board-canonical-level-proof-v1';
 const PREDRAWN_BOARD_PROOF_RENDERER = 'LevelEditor/PredrawnBoardLayer';
+const RUN_RELIC_ICON_COMPONENT = 'run-relic-icon';
+const RUN_RELIC_ICON_SLOT = /^ui\/run\/relics\/([a-z][a-z0-9-]{0,79})\.png$/;
 
 function isObjectRecord(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -19,6 +21,11 @@ function normalizedSha(value) {
 
 function predrawnBoardSlotSlug(slot) {
   const match = PREDRAWN_BOARD_SLOT.exec(String(slot || ''));
+  return match ? match[1] : null;
+}
+
+function runRelicIconSlotId(slot) {
+  const match = RUN_RELIC_ICON_SLOT.exec(String(slot || ''));
   return match ? match[1] : null;
 }
 
@@ -101,6 +108,47 @@ function predrawnBoardMediaIssue(row, projectedRuntime = null) {
     return 'pre-drawn board runtime frame dimensions must equal the uploaded PNG dimensions';
   }
   if (runtime.frameCount !== 1) return 'pre-drawn board runtime frameCount must be 1';
+  return null;
+}
+
+/**
+ * Domain-owned runtime projection for one native Run relic icon. Relic
+ * membership remains in the drawable catalog; the semantic slot only carries
+ * the exact reviewed pixels for that installed record.
+ */
+function runRelicIconMediaIssue(row, projectedRuntime = null) {
+  const relicId = runRelicIconSlotId(row.slot);
+  if (!relicId) return 'Run relic icon slots must match ui/run/relics/<relic-id>.png';
+  if (row.domain !== 'ui-kit') return 'Run relic icons require the ui-kit domain';
+  if (row.role !== 'icon') return 'Run relic icons require the icon role';
+  if (row.media_type !== 'image/png') return 'Run relic icons require image/png';
+  if (Number(row.width) !== 64 || Number(row.height) !== 64) {
+    return 'Run relic icons must be native 64x64 rasters';
+  }
+
+  const metadata = mediaVersionMetadata(row);
+  const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+  if (!isObjectRecord(runtime)) return 'Run relic icons require metadata.runtime';
+  const allowed = new Set([
+    'component', 'variant', 'frameWidth', 'frameHeight', 'frameCount', 'altText', 'nativeRole',
+  ]);
+  const unsupported = Object.keys(runtime).filter((key) => !allowed.has(key));
+  if (unsupported.length) {
+    return `Run relic icon runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
+  }
+  if (runtime.component !== RUN_RELIC_ICON_COMPONENT) {
+    return `Run relic icon metadata.runtime.component must be ${RUN_RELIC_ICON_COMPONENT}`;
+  }
+  if (runtime.variant !== relicId) return 'Run relic icon variant must match its semantic slot id';
+  if (runtime.frameWidth !== 64 || runtime.frameHeight !== 64 || runtime.frameCount !== 1) {
+    return 'Run relic icon runtime geometry must describe one native 64x64 frame';
+  }
+  if (runtime.nativeRole !== RUN_RELIC_ICON_COMPONENT) {
+    return `Run relic icon metadata.runtime.nativeRole must be ${RUN_RELIC_ICON_COMPONENT}`;
+  }
+  if (runtime.altText !== '') {
+    return 'Run relic icon metadata.runtime.altText must be empty because the relic label owns its accessible name';
+  }
   return null;
 }
 
@@ -200,6 +248,7 @@ module.exports = {
   PREDRAWN_BOARD_COMPONENT,
   PREDRAWN_BOARD_PROOF_RENDERER,
   PREDRAWN_BOARD_PROOF_SCHEMA,
+  RUN_RELIC_ICON_COMPONENT,
   liveCatalogReadinessIssue,
   nativeMediaEvidenceIssue,
   predrawnBoardAlignmentIssue,
@@ -207,4 +256,6 @@ module.exports = {
   predrawnBoardOwnerProofIssue,
   predrawnBoardSlotSlug,
   preservesNativeEvidenceForUpload,
+  runRelicIconMediaIssue,
+  runRelicIconSlotId,
 };

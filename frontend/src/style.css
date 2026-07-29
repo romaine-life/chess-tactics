@@ -17960,6 +17960,149 @@ button.tileset-relationship-cell {
   min-block-size: 174px;
 }
 
+.run-relic-card-heading {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 64px minmax(0, 1fr);
+}
+
+.run-relic-icon {
+  align-items: center;
+  block-size: 64px;
+  display: inline-flex;
+  inline-size: 64px;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.run-relic-icon img {
+  block-size: 64px;
+  image-rendering: pixelated;
+  inline-size: 64px;
+  object-fit: contain;
+}
+
+.run-relic-icon.is-unavailable {
+  color: var(--skirmish-muted);
+  font-size: var(--ds-text-xs);
+  line-height: 1.05;
+  text-align: center;
+}
+
+.run-relic-inventory {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  min-inline-size: 0;
+  padding: 7px 10px;
+}
+
+.run-relic-inventory > strong {
+  color: #f1dca6;
+  flex: 0 0 auto;
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-sm);
+  text-transform: uppercase;
+}
+
+.run-relic-inventory-list {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-inline-size: 0;
+}
+
+.run-relic-inventory-item {
+  block-size: 42px;
+  cursor: help;
+  display: inline-flex;
+  inline-size: 42px;
+  outline: none;
+}
+
+.run-relic-inventory-item:focus-visible {
+  filter: drop-shadow(0 0 4px #9fe7ff);
+}
+
+.run-relic-inventory-item .run-relic-icon,
+.run-relic-inventory-item .run-relic-icon img {
+  block-size: 42px;
+  inline-size: 42px;
+}
+
+.run-relic-inventory-item .run-relic-icon.is-unavailable {
+  font-size: 8px;
+}
+
+.run-relic-inventory--workspace {
+  grid-column: 1 / -1;
+}
+
+.run-relic-inventory--hud {
+  margin-block: 0 8px;
+}
+
+.run-relic-review-screen {
+  block-size: 100%;
+  box-sizing: border-box;
+  grid-template-columns: minmax(0, 1fr);
+  overflow: auto;
+  padding: 12px;
+}
+
+.run-relic-review-panel {
+  grid-column: 1;
+  grid-row: 2;
+  margin-inline: auto;
+  max-inline-size: 1040px;
+  overflow: auto;
+  inline-size: 100%;
+}
+
+.run-relic-review-panel > .le-outer-panel-content {
+  display: grid;
+  gap: 12px;
+}
+
+.run-relic-review-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.run-relic-review-grid figure {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 64px minmax(0, 1fr);
+  margin: 0;
+  min-block-size: 88px;
+  padding: 10px;
+}
+
+.run-relic-review-grid img {
+  block-size: 64px;
+  image-rendering: pixelated;
+  inline-size: 64px;
+}
+
+.run-relic-review-grid figcaption {
+  display: grid;
+  gap: 4px;
+}
+
+.run-relic-review-grid small {
+  color: var(--skirmish-muted);
+}
+
+@media (max-width: 900px) {
+  .run-relic-review-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .run-card > :is(button, select) {
   align-self: end;
 }
