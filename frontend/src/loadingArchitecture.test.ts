@@ -11,6 +11,11 @@ describe('professional loading architecture guards', () => {
     expect(read('./render/boardArtReady.ts')).not.toMatch(/FAILSAFE_MS|setTimeout/);
   });
 
+  it('keeps direct menu loads atomic while preserving the navigation arrival fade', () => {
+    expect(read('./ui/MainMenu.tsx')).toContain('useState(() => !hasScreenNavigation())');
+    expect(read('./ui/shell/useScreenEntrance.ts')).toContain('export function hasScreenNavigation()');
+  });
+
   it('uses persistent derivatives for canonical list thumbnails', () => {
     const source = read('./render/LevelThumbnail.tsx');
     expect(source).toContain('levelThumbnailUrl(level.id)');
@@ -37,5 +42,13 @@ describe('professional loading architecture guards', () => {
     expect(read('./render/SkirmishBoard.tsx')).toContain('inert={!boardReady && !boardFrame.error ? true : undefined}');
     expect(read('./ui/PlayMenu.tsx')).toContain('inert={!complete || failure ? true : undefined}');
     expect(read('./style.css')).not.toContain('A failsafe in the hook');
+  });
+
+  it('keeps the live Battle on the router snapshot while a heavy-route exit is covering', () => {
+    // navigateApp updates window.location before the veil swaps the mounted screen. The outgoing
+    // Battle must keep parsing App's committed search or it can mistake Settings' query for a bare
+    // /play route and redirect the pending navigation to the Play selector.
+    expect(read('./ui/App.tsx')).toContain("<Skirmish routeSearch={search} />");
+    expect(read('./ui/Skirmish.tsx')).toContain('routeSearch = window.location.search');
   });
 });

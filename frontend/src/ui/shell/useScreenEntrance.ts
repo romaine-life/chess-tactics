@@ -31,6 +31,14 @@ export function markScreenNavigation(): void {
   appHasNavigated = true;
 }
 
+// Screens with a small local entrance affordance can share the same definition of
+// "navigation-driven mount" instead of inferring it from a one-frame browser timing
+// heuristic. In particular, MainMenu uses this to skip its rail arrival fade on a
+// direct cold load while retaining that fade when returning from another screen.
+export function hasScreenNavigation(): boolean {
+  return appHasNavigated;
+}
+
 // MUST match --ds-duration-fade in style.css: the inert-during-motion window == the fade length.
 const SCREEN_FADE_MS = 350;
 

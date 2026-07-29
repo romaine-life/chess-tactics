@@ -10,7 +10,7 @@ export type RouteSurface = 'heavy-board' | 'heavy-editor' | 'light-art' | 'light
 export function routeSurface(pathname: string): RouteSurface {
   const path = normalizeRoutePath(pathname);
 
-  if (path === '/play') return 'heavy-board';
+  if (path === '/play' || path === '/run') return 'heavy-board';
   if (path === '/editor/level' || path === '/edit' || path === '/level-editor') return 'heavy-editor';
 
   if (
@@ -21,6 +21,7 @@ export function routeSurface(pathname: string): RouteSurface {
     path === '/main-menu' ||
     isPlaySelectorPath(path) ||
     path === '/editor' ||
+    path === '/editor/wars' ||
     path === '/campaigns-next' ||
     path === '/campaigns' ||
     path === '/lobbies' ||
@@ -67,6 +68,7 @@ export function routeScreenKey(pathname: string): string {
   // /play/select/* falls through to 'menu'; only the live board at exact /play is here.)
   if (
     path === '/play' ||
+    path === '/run' ||
     path === '/predrawn-reference' ||
     path === '/portrait-editor' ||
     path === '/party'

@@ -132,6 +132,18 @@ describe('Skirmish chrome hierarchy', () => {
     expect(styleCss).not.toMatch(/\.skirmish-resign-button[^\{]*\{[^}]*border-image(?:-source)?\s*:/);
   });
 
+  it('opens administrator controls inside the HUD without adding a sixth player tab', () => {
+    const tabRegistry = skirmishHud.match(/const HUD_TABS:[\s\S]*?\];/)?.[0] ?? '';
+    expect(tabRegistry).not.toContain("{ id: 'admin'");
+    expect(skirmishHud).toContain('data-testid="open-battle-admin-controls"');
+    expect(skirmishHud).toContain('presentation="battle"');
+    expect(skirmishHud).toContain("onBattleArmed={() => setTab('unit')}");
+    expect(skirmishHud.indexOf('data-testid="open-battle-admin-controls"'))
+      .toBeGreaterThan(skirmishHud.indexOf('data-testid="resign"'));
+    expectChromeUnit(buttonUsing('data-testid="open-battle-admin-controls"'), 'inner-text-button');
+    expectChromeUnit(buttonUsing('data-testid="close-battle-admin-controls"'), 'inner-text-button');
+  });
+
   it('maps tabs, promotion choices, and command-grid cells to existing units', () => {
     const promotion = buttonUsing('choosePromotion(type)');
     const tab = buttonUsing('setTab(t.id)');

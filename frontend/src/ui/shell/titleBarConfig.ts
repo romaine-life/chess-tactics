@@ -44,11 +44,11 @@ export function titleBarConfig(path: string, search = ''): TitleBarConfig | null
     };
   }
 
-  if (path === '/play') {
+  if (path === '/play' || path === '/run') {
     // studSlot lets a single-player battle turn the ornament diamond into a Retry button
     // (the Skirmish screen portals it in, netplay omitted).
     return {
-      screenName: playRouteScreenName({ path, search }),
+      screenName: path === '/run' ? 'Run' : playRouteScreenName({ path, search }),
       barClass: 'skirmish-topbar',
       centerSlot: true,
       studSlot: true,
@@ -66,7 +66,7 @@ export function titleBarConfig(path: string, search = ''): TitleBarConfig | null
   if (path === '/editor/level' || path === '/edit' || path === '/level-editor') {
     return { screenName: 'Level Editor', barClass: 'le-topbar' };
   }
-  if (path === '/editor' || path === '/campaigns-next' || path === '/campaigns') {
+  if (path === '/editor' || path === '/editor/wars' || path === '/campaigns-next' || path === '/campaigns') {
     // The Editor is a settings-twin now: a typed ‹ Back contribution plus the live
     // save-state chip in the center slot.
     return { screenName: 'Editor', barClass: 'ce-topbar', centerSlot: true };

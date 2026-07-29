@@ -233,6 +233,11 @@ export interface GameState {
    * states stay valid.
    */
   intents?: EnemyIntent[];
+  /**
+   * Run-only victory gate for Occult Dagger (ADR-0193). This changes when the
+   * surrounding Battle may conclude, never how any piece moves or captures.
+   */
+  checkmateRequiresEnemyNonKingEliminated?: boolean;
 }
 
 export type GameEvent =

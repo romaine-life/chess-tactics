@@ -42,7 +42,7 @@ describe('settings-rail stone continuity is index-driven (ADR-0063)', () => {
     // The known rails — a stand-in that guarantees the scan actually found files (a broken glob
     // would otherwise let this test pass vacuously). PlayMenu owns the pinned Skirmish/Levels +
     // Campaign rail; CampaignEditor is the Editor's campaigns rail (ADR-0065/0074).
-    expect(renderers.sort()).toEqual(['CampaignEditor.tsx', 'MainMenu.tsx', 'PlayMenu.tsx', 'Settings.tsx']);
+    expect(renderers.sort()).toEqual(['CampaignEditor.tsx', 'MainMenu.tsx', 'PlayMenu.tsx', 'Settings.tsx', 'WarEditor.tsx']);
 
     for (const f of renderers) {
       const src = readFileSync(new URL(f, import.meta.url), 'utf8');

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   PLAY_LEVELS_SELECTOR_HREF,
+  PLAY_RUN_SELECTOR_HREF,
   PLAY_SELECTOR_ROOT,
   PLAY_SKIRMISH_SELECTOR_HREF,
   isPlaySelectorPath,
@@ -17,6 +18,7 @@ describe('Play selector routes', () => {
 
   it('maps the fixed Skirmish and Levels entries to stable addresses', () => {
     expect(playHubSelection(PLAY_SKIRMISH_SELECTOR_HREF)).toEqual({ mode: 'skirmish' });
+    expect(playHubSelection(PLAY_RUN_SELECTOR_HREF)).toEqual({ mode: 'run' });
     expect(playHubSelection(PLAY_LEVELS_SELECTOR_HREF)).toEqual({ mode: 'levels' });
   });
 

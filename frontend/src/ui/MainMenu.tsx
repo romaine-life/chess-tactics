@@ -15,9 +15,11 @@ import { loadDecodedImage } from '../render/imageResources';
 // destination opens, inside a LOCAL Suspense so the fallback shows in the destination column
 // (not the whole menu). Settings, Play, and Lobbies are light enough to import directly.
 const CampaignEditor = lazy(() => import('./CampaignEditor').then((m) => ({ default: m.CampaignEditor })));
+const WarEditor = lazy(() => import('./WarEditor').then((m) => ({ default: m.WarEditor })));
 import { drawableAssets, requiredDrawableRole } from '@chess-tactics/board-render';
 import { getSnapshot, markFailed, markReady, subscribe } from './shell/coldReveal';
 import { installedUiMedia } from './installedUiMedia';
+import { hasScreenNavigation } from './shell/useScreenEntrance';
 
 const BRAND_SHIELD = () => installedUiMedia('ui-kit-icons-brand-shield-png');
 // The heaviest button asset — the carved-stone surface behind every rail tab. The
@@ -90,7 +92,7 @@ function shellDest(path: string): ShellDest | null {
   if (isPlaySelectorPath(path)) return 'play';
   // The Editor is a settings-twin now (ADR-0065): canonical /editor + legacy /campaigns-next·/campaigns.
   // The board editor (/editor/level) is a separate heavy full screen — NOT a shell dest.
-  if (path === '/editor' || path === '/campaigns-next' || path === '/campaigns') return 'editor';
+  if (path === '/editor' || path === '/editor/wars' || path === '/campaigns-next' || path === '/campaigns') return 'editor';
   // Lobbies is a single ACTION column (tab → action) — host/join + the lobby list.
   if (path === '/lobbies' || path.startsWith('/lobbies/')) return 'lobbies';
   return null;
@@ -137,7 +139,7 @@ export function MainMenu({ path = '/' }: { path?: string } = {}): ReactElement {
   // backdrop. On a COLD load this is harmless: the director hasn't opened `buttons` yet, so
   // the gate already holds them hidden and `entered` flips long before that stage opens. The
   // timeout backstops a throttled rAF (backgrounded tab) so the menu can never strand blank.
-  const [entered, setEntered] = useState(false);
+  const [entered, setEntered] = useState(() => !hasScreenNavigation());
   useEffect(() => {
     const raf = requestAnimationFrame(() => setEntered(true));
     const t = window.setTimeout(() => setEntered(true), 120);
@@ -189,7 +191,9 @@ export function MainMenu({ path = '/' }: { path?: string } = {}): ReactElement {
               {renderedDest === 'settings' ? <Settings embedded />
                 : renderedDest === 'play' ? <PlayMenu />
                 : renderedDest === 'lobbies' ? <Lobbies embedded />
-                : <Suspense fallback={<div className="menu-dest-col menu-dest-action" aria-hidden="true" />}><CampaignEditor embedded /></Suspense>}
+                : <Suspense fallback={<div className="menu-dest-col menu-dest-action" aria-hidden="true" />}>
+                    {path === '/editor/wars' ? <WarEditor embedded /> : <CampaignEditor embedded />}
+                  </Suspense>}
             </div>
           ) : null}
         </ArtRouteChrome>

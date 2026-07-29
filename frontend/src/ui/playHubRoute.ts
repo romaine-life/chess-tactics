@@ -2,10 +2,12 @@ import { normalizeRoutePath } from './navigation';
 
 export const PLAY_SELECTOR_ROOT = '/play/select';
 export const PLAY_SKIRMISH_SELECTOR_HREF = `${PLAY_SELECTOR_ROOT}/skirmish`;
+export const PLAY_RUN_SELECTOR_HREF = `${PLAY_SELECTOR_ROOT}/run`;
 export const PLAY_LEVELS_SELECTOR_HREF = `${PLAY_SELECTOR_ROOT}/levels`;
 
 export type PlayHubSelection =
   | { mode: 'skirmish' }
+  | { mode: 'run' }
   | { mode: 'levels' }
   | { mode: 'campaign'; campaignId: string };
 
@@ -21,6 +23,7 @@ export function isPlaySelectorPath(pathname: string): boolean {
 export function playHubSelection(pathname: string): PlayHubSelection | null {
   const path = normalizeRoutePath(pathname);
   if (path === PLAY_SKIRMISH_SELECTOR_HREF) return { mode: 'skirmish' };
+  if (path === PLAY_RUN_SELECTOR_HREF) return { mode: 'run' };
   if (path === PLAY_LEVELS_SELECTOR_HREF) return { mode: 'levels' };
   const campaignMatch = path.match(/^\/play\/select\/campaign\/([^/]+)$/);
   if (campaignMatch) {

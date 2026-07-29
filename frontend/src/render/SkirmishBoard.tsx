@@ -9,6 +9,7 @@ import { attackedSquares, blockedCandidateSquares, enemyThreats, legalMoves, liv
 import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, UNIT_FACINGS, defaultFacingForSide, paletteForSide, pieceSpritePath, type PlayablePieceType } from '../core/pieces';
 import { defaultTerrainFamily, familyForGameplayTerrain, familyIdForAsset, tileSocketsForAsset, type TileFamilyId } from '../core/tileSockets';
 import { useSkirmish } from '../game/store';
+import { adminMoveTargets } from '../game/adminBattle';
 import { useSkirmishView } from '../game/skirmishView';
 import { provisionalBoard, premoveArrows, premoveGhosts, premoveTargets, type PremoveArrow } from '../game/premoves';
 import { clientSide, opponentSide } from '../game/clientPerspective';
@@ -1078,6 +1079,8 @@ export function SkirmishBoard({
   const select = useSkirmish((s) => s.select);
   const focus = useSkirmish((s) => s.focus);
   const tryMoveTo = useSkirmish((s) => s.tryMoveTo);
+  const adminMode = useSkirmish((s) => s.adminMode);
+  const adminKillUnit = useSkirmish((s) => s.adminKillUnit);
   const premoves = useSkirmish((s) => s.premoves);
   const premoveInputOpen = useSkirmish((s) => s.premoveInputOpen);
   const queueMove = useSkirmish((s) => s.queueMove);
@@ -1139,7 +1142,7 @@ export function SkirmishBoard({
   // Premove input is open while the opposing seat owns the turn and for the short
   // post-reply landing beat before live control resumes. This is client input in both
   // solo and lobby play; the authoritative move still commits through the store/relay.
-  const premoveMode = (game.turn === remoteSide || premoveInputOpen) && !game.winner;
+  const premoveMode = !adminMode && (game.turn === remoteSide || premoveInputOpen) && !game.winner;
   // The ghost rides the cursor imperatively (per frame, no board re-render). When a drag-related
   // re-render DOES happen (pick-up, or the drop-target cell changing), React would otherwise
   // reset the ghost's inline position — so re-apply the last cursor after each such commit,
@@ -1152,10 +1155,12 @@ export function SkirmishBoard({
     }
   }, [drag, dropHoverKey, dropAimKey]);
   const selectedMoves = useMemo(() => {
-    if (premoveMode || pendingPromotion || netMovePending || game.turn !== localSide || game.winner) return [];
+    if (premoveMode || pendingPromotion || netMovePending || game.winner) return [];
+    if (adminMode === 'free-move') return adminMoveTargets(game, selectedId ?? '');
+    if (game.turn !== localSide) return [];
     const piece = game.pieces.find((candidate) => candidate.id === selectedId && candidate.alive && candidate.side === localSide);
     return piece ? legalMoves(piece, game.pieces, game.size, env) : [];
-  }, [env, game.pieces, game.size, game.turn, game.winner, netMovePending, pendingPromotion, premoveMode, selectedId, localSide]);
+  }, [adminMode, env, game, game.pieces, game.size, game.turn, game.winner, netMovePending, pendingPromotion, premoveMode, selectedId, localSide]);
   // Piece moves replace `game`, but terrain/cover/socket solving is session-static. Keep that
   // board and its static scene ops alive while the animator consumes only the changed pieces.
   const board = useMemo(
@@ -1401,6 +1406,11 @@ export function SkirmishBoard({
       if (inspected) focus(inspected.id);
       return;
     }
+    const adminHere = game.pieces.find((piece) => piece.alive && piece.x === x && piece.y === y);
+    if (adminMode === 'kill-unit') {
+      if (adminHere) adminKillUnit(adminHere.id);
+      return;
+    }
     // Opponent's turn: clicks build the premove chain instead of being ignored.
     if (pendingPromotion) return;
     if (premoveMode) {
@@ -1432,7 +1442,10 @@ export function SkirmishBoard({
       return;
     }
     const here = game.pieces.find((piece) => piece.alive && piece.x === x && piece.y === y);
-    const intent = skirmishTileClickIntent(x, y, selectedMoves, here, localSide);
+    const selectingSide = adminMode === 'free-move' && (game.turn === 'player' || game.turn === 'enemy')
+      ? game.turn
+      : localSide;
+    const intent = skirmishTileClickIntent(x, y, selectedMoves, here, selectingSide);
     switch (intent.kind) {
       case 'move':
         tryMoveTo(x, y);
@@ -1494,14 +1507,21 @@ export function SkirmishBoard({
     // Don't let a press start a drag before the board is even visible (cold load = opacity:0
     // but still hit-testable) — you'd be dragging a piece you can't see.
     if (pendingPromotion || game.winner || !boardReady) return;
+    if (adminMode === 'kill-unit') return;
     // On your turn a drag MOVES from the live board; on the opponent's turn it queues a
     // PREMOVE from the provisional board. That makes a queued
     // after-ghost draggable from the square the player already moved it to.
-    const canMove = game.turn === localSide && !premoveMode && !netMovePending;
+    const canMove = adminMode === 'free-move'
+      ? (game.turn === 'player' || game.turn === 'enemy')
+      : game.turn === localSide && !premoveMode && !netMovePending;
     if (!canMove && !premoveMode) return;
     const piece = premoveMode
       ? premoveDraggablePieceAt(cx, cy)
-      : livePieces.find((p) => p.x === cx && p.y === cy && p.side === localSide);
+      : livePieces.find((p) => (
+          p.x === cx
+          && p.y === cy
+          && p.side === (adminMode === 'free-move' ? game.turn : localSide)
+        ));
     if (!piece) return;
     // Pick it up: select (so the ring shows) and arm a potential drag. It only becomes a real
     // drag once the pointer crosses the threshold, so a plain tap still falls through to the
@@ -1520,7 +1540,11 @@ export function SkirmishBoard({
       startY: event.clientY,
       active: false,
       targets: new Set(
-        (canMove ? legalMoves(piece, game.pieces, game.size, env) : premoveTargets(game, premoves, piece.id, localSide))
+        (canMove
+          ? adminMode === 'free-move'
+            ? adminMoveTargets(game, piece.id)
+            : legalMoves(piece, game.pieces, game.size, env)
+          : premoveTargets(game, premoves, piece.id, localSide))
           .map((m) => `${m.x},${m.y}`),
       ),
       src: pieceImageSrc(piece),

@@ -3,7 +3,7 @@ import { isBoardArtRoute, isHeavyRoute, isLightArtRoute, routeScreenKey, routeSu
 
 describe('route surface classification', () => {
   it('keeps every Play selector section in the light art route family', () => {
-    for (const path of ['/play/select/skirmish', '/play/select/levels', '/play/select/campaign/official']) {
+    for (const path of ['/play/select/skirmish', '/play/select/run', '/play/select/levels', '/play/select/campaign/official']) {
       expect(routeSurface(path)).toBe('light-art');
       expect(isLightArtRoute(path)).toBe(true);
       expect(isHeavyRoute(path)).toBe(false);
@@ -11,11 +11,13 @@ describe('route surface classification', () => {
     }
   });
 
-  it('keeps live play as the only board-art route', () => {
+  it('keeps live play and the Run loop in the board-art route family', () => {
     expect(routeSurface('/play')).toBe('heavy-board');
     expect(isHeavyRoute('/play')).toBe(true);
     expect(isBoardArtRoute('/play')).toBe(true);
     expect(isLightArtRoute('/play')).toBe(false);
+    expect(routeSurface('/run')).toBe('heavy-board');
+    expect(isBoardArtRoute('/run')).toBe(true);
   });
 
   it('keeps heavy editors out of the board-art reveal gate', () => {
@@ -27,7 +29,7 @@ describe('route surface classification', () => {
   });
 
   it('classifies menu-family art routes explicitly', () => {
-    for (const path of ['/', '/play/select/skirmish', '/editor', '/campaigns-next', '/lobbies', '/party', '/settings/audio']) {
+    for (const path of ['/', '/play/select/skirmish', '/editor', '/editor/wars', '/campaigns-next', '/lobbies', '/party', '/settings/audio']) {
       expect(routeSurface(path)).toBe('light-art');
       expect(isLightArtRoute(path)).toBe(true);
       expect(isHeavyRoute(path)).toBe(false);
@@ -47,6 +49,7 @@ describe('route screen key (ADR-0051 exit-dissolve grouping)', () => {
     // The canonical /editor + /editor/level names share the screen instance with their
     // legacy aliases, so a hop between an alias and the canonical name doesn't dissolve.
     expect(routeScreenKey('/editor')).toBe(routeScreenKey('/campaigns-next'));
+    expect(routeScreenKey('/editor/wars')).toBe(routeScreenKey('/editor'));
     expect(routeScreenKey('/editor/level')).toBe(routeScreenKey('/edit'));
     expect(routeScreenKey('/')).toBe(routeScreenKey('/main-menu'));
   });
@@ -55,7 +58,7 @@ describe('route screen key (ADR-0051 exit-dissolve grouping)', () => {
     // All four menu-tab destinations render INSIDE the persistent menu shell — MainMenu fills its
     // second column — so they share the 'menu' screen key with '/'. React keeps the one MainMenu
     // instance mounted across every home↔destination hop, so the button column never dissolves.
-    for (const p of ['/settings', '/settings/audio', '/play/select/skirmish', '/play/select/levels', '/play/select/campaign/official-1', '/editor', '/campaigns-next', '/lobbies', '/lobbies/abc']) {
+    for (const p of ['/settings', '/settings/audio', '/play/select/skirmish', '/play/select/run', '/play/select/levels', '/play/select/campaign/official-1', '/editor', '/editor/wars', '/campaigns-next', '/lobbies', '/lobbies/abc']) {
       expect(routeScreenKey(p)).toBe(routeScreenKey('/'));
       expect(routeScreenKey(p)).toBe('menu');
     }

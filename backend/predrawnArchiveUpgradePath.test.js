@@ -61,7 +61,7 @@ test('already-applied migration 36 remains the immutable drawable-media migratio
   );
 });
 
-test('the exact sparse numeric legacy history upgrades through migration 43', () => {
+test('the exact sparse numeric legacy history upgrades through migration 44', () => {
   const versions = migrationVersions();
   const appliedBeforeUpgrade = new Set(
     versions.filter((version) => version <= 27 || version === 36),
@@ -91,6 +91,10 @@ test('the exact sparse numeric legacy history upgrades through migration 43', ()
   assert.ok(
     pending.includes(43),
     'forward-compatible attempt schema repair must have its own pending migration 43',
+  );
+  assert.ok(
+    pending.includes(44),
+    'War workspaces and account Run persistence must have their own pending migration 44',
   );
 
   const migration37 = inlineMigration(37);
@@ -235,6 +239,22 @@ test('the exact sparse numeric legacy history upgrades through migration 43', ()
     /DROP CONSTRAINT[\s\S]*ALTER COLUMN move_highlight_profile TYPE jsonb\s+USING move_highlight_profile::jsonb,\s*ALTER COLUMN move_highlight_profile DROP NOT NULL,\s*ALTER COLUMN move_highlight_profile_sha256 TYPE text\s+USING move_highlight_profile_sha256::text,\s*ALTER COLUMN move_highlight_profile_sha256 DROP NOT NULL,\s*ALTER COLUMN move_highlight_profile_warped_version_id TYPE uuid\s+USING move_highlight_profile_warped_version_id::uuid,\s*ALTER COLUMN move_highlight_profile_warped_version_id DROP NOT NULL;[\s\S]*ADD CONSTRAINT predrawn_generation_attempts_move_highlight_bundle_check/,
     'move-highlight repair must remove dependencies before restoring exact nullable column types',
   );
+  const migration44 = inlineMigration(44);
+  assert.equal(
+    migration44.name,
+    'wars in canonical workspaces + account active runs',
+    'migration 44 must retain its durable Run feature identity',
+  );
+  assert.match(
+    migration44.sql,
+    /UPDATE\s+campaign_workspaces[\s\S]*jsonb_set\(body,\s*'\{wars\}'[\s\S]*UPDATE\s+official_campaigns[\s\S]*jsonb_set\(data,\s*'\{wars\}'/i,
+    'migration 44 must upgrade both canonical workspace tiers with a Wars collection',
+  );
+  assert.match(
+    migration44.sql,
+    /CREATE TABLE IF NOT EXISTS\s+active_runs[\s\S]*owner_email\s+text\s+PRIMARY KEY[\s\S]*revision\s+integer/i,
+    'migration 44 must create one revisioned active Run document per account',
+  );
 
   const migration36 = inlineMigration(36);
   const allMigrations = versions.map(inlineMigration);
@@ -261,7 +281,7 @@ test('the exact sparse numeric legacy history upgrades through migration 43', ()
   );
   assert.deepEqual(
     plan.pending.map((entry) => entry.version),
-    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43],
+    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44],
     'the bridge must fill the historical gap before applying every post-36 contract',
   );
   assert.throws(
@@ -771,8 +791,8 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   );
   assert.match(
     primaryUpgradeProof,
-    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*43\s*\}/,
-    'the production upgrade proof must require a complete 1-43 history',
+    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*44\s*\}/,
+    'the production upgrade proof must require a complete 1-44 history',
   );
   assert.match(
     primaryUpgradeProof,
@@ -786,8 +806,8 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   );
   assert.match(
     primaryUpgradeProof,
-    /length:\s*7[\s\S]*index\s*\+\s*37/,
-    'the production report must include every post-36 migration through 43',
+    /length:\s*8[\s\S]*index\s*\+\s*37/,
+    'the production report must include every post-36 migration through 44',
   );
   assert.match(
     primaryUpgradeProof,

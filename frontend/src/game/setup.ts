@@ -63,7 +63,7 @@ export function createFromLevel(level: Level, seed: number): GameState {
     // also snapshot this as their immutable forward direction for the whole fight.
     const facing = unit.facing ?? defaultFacingForSide(unit.side);
     return {
-      id: `${unit.side}-${unit.type}-${index}`,
+      id: unit.runUnitId ?? `${unit.side}-${unit.type}-${index}`,
       side: unit.side,
       type: unit.type,
       x: unit.x,
@@ -179,6 +179,7 @@ export function createFromLevel(level: Level, seed: number): GameState {
     promotionRules: promotionRules.length ? promotionRules : undefined,
     castleRules: castleRules.length ? castleRules : undefined,
     drawRules,
+    checkmateRequiresEnemyNonKingEliminated: level.runRules?.occultDagger === true || undefined,
     turn: 'player',
     winner: null,
   };

@@ -13,6 +13,8 @@ import { TitleBarControlContribution } from './shell/TitleBarControls';
 import { SFX_SETTINGS_CHANGE_EVENT, previewTerrain } from '../sfx';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { installedUiMedia } from './installedUiMedia';
+import { fetchMe } from '../net/auth';
+import { AdminControls } from './AdminControls';
 
 const MUTE_KEY = 'chess-tactics-bgm-muted-v1';
 const MUTE_CHANGE_EVENT = 'chess-tactics:bgm-muted-change';
@@ -22,7 +24,8 @@ const SETTINGS_KEY = 'chess-tactics-settings-v1';
 // (the ONE shared fade duration, ADR-0046 — same speed as the screen entrance).
 const PANEL_FADE_MS = 350;
 
-type SettingsTab = 'general' | 'audio' | 'gameplay' | 'creator-tools';
+type SettingsTab = 'general' | 'audio' | 'gameplay' | 'creator-tools' | 'admin';
+type VisibleSettingsTab = Exclude<SettingsTab, 'admin'>;
 
 interface LocalSettings {
   uiScale: number;
@@ -49,7 +52,7 @@ interface NowPlayingState {
 }
 
 interface TabDefinition {
-  id: SettingsTab;
+  id: VisibleSettingsTab;
   label: string;
   icon: string;
 }
@@ -81,7 +84,7 @@ const tabs: TabDefinition[] = [
 // Each settings section is its own route (/settings/<tab>) so it can be linked,
 // reloaded, and back/forward-navigated. App.tsx mounts <Settings/> for the whole
 // /settings/* subtree; the active tab is derived from the URL, not local state.
-const TAB_PATHS: Record<SettingsTab, string> = {
+const TAB_PATHS: Record<VisibleSettingsTab, string> = {
   general: '/settings/general',
   audio: '/settings/audio',
   gameplay: '/settings/gameplay',
@@ -92,7 +95,7 @@ function tabFromPath(pathname: string): SettingsTab {
   // Match only the leading section segment, so deeper routes (e.g.
   // /settings/audio/tracks) still resolve to their owning tab and keep it lit.
   const id = normalizeRoutePath(pathname).match(/^\/settings\/([^/]+)/)?.[1];
-  if (id === 'audio' || id === 'gameplay' || id === 'creator-tools' || id === 'general') return id;
+  if (id === 'audio' || id === 'gameplay' || id === 'creator-tools' || id === 'general' || id === 'admin') return id;
   return 'general';
 }
 
@@ -249,10 +252,26 @@ export function Settings({ embedded = false }: { embedded?: boolean } = {}): Rea
   });
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [buildRemote, setBuildRemote] = useState<BuildInfoRemote | null>(null);
+  const [adminAuth, setAdminAuth] = useState<{ ready: boolean; isAdmin: boolean }>({
+    ready: false,
+    isAdmin: false,
+  });
   useEffect(() => {
     const shell = document.querySelector('.shell');
     shell?.classList.add('settings-art-active');
     return () => shell?.classList.remove('settings-art-active');
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    void fetchMe()
+      .then((me) => {
+        if (active) setAdminAuth({ ready: true, isAdmin: me.is_admin === true });
+      })
+      .catch(() => {
+        if (active) setAdminAuth({ ready: true, isAdmin: false });
+      });
+    return () => { active = false; };
   }, []);
 
   useEffect(() => {
@@ -388,7 +407,12 @@ export function Settings({ embedded = false }: { embedded?: boolean } = {}): Rea
     return () => window.clearTimeout(timer);
   }, [previous]);
 
-  const active = useMemo(() => tabs.find((tab) => tab.id === display.tab) || tabs[0], [display.tab]);
+  const active = useMemo(
+    () => display.tab === 'admin'
+      ? { id: 'admin' as const, label: 'Admin Controls', icon: '' }
+      : tabs.find((tab) => tab.id === display.tab) || tabs[0],
+    [display.tab],
+  );
 
   const updateSetting = <Key extends keyof LocalSettings>(key: Key, value: LocalSettings[Key]) => {
     setConfirmingReset(false);
@@ -526,6 +550,18 @@ export function Settings({ embedded = false }: { embedded?: boolean } = {}): Rea
           <SettingsButton tone="danger" onClick={resetDefaults}>Reset</SettingsButton>
         </SettingsRow>
       </SettingsSection>
+      {adminAuth.isAdmin ? (
+        <SettingsSection title="Administration">
+          <SettingsRow
+            title="Admin Controls"
+            description="Open playtest interventions for the active Battle or Run."
+          >
+            <SettingsButton tone="primary" href={withReturnTo('/settings/admin')} ariaLabel="Open Admin Controls">
+              Open
+            </SettingsButton>
+          </SettingsRow>
+        </SettingsSection>
+      ) : null}
     </>
   );
 
@@ -653,6 +689,7 @@ export function Settings({ embedded = false }: { embedded?: boolean } = {}): Rea
       {d.tab === 'audio' ? (d.tracks ? renderTracks() : renderAudio()) : null}
       {d.tab === 'gameplay' ? renderGameplay() : null}
       {d.tab === 'creator-tools' ? renderCreatorTools() : null}
+      {d.tab === 'admin' ? <AdminControls authReady={adminAuth.ready} isAdmin={adminAuth.isAdmin} /> : null}
     </>
   );
 

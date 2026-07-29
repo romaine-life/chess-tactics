@@ -8,6 +8,15 @@ describe('titleBarConfig play route screen names', () => {
     expect(titleBarConfig('/play/select/campaign/off-c-crown')?.screenName).toBe('Play');
   });
 
+  it('gives the Run loop the live-board title bar and retry socket', () => {
+    expect(titleBarConfig('/run')).toMatchObject({
+      screenName: 'Run',
+      barClass: 'skirmish-topbar',
+      centerSlot: true,
+      studSlot: true,
+    });
+  });
+
   it('returns from sign-in to the current Play selector section', () => {
     expect(titleBarConfig('/play/select/skirmish')?.signInReturnTo).toBe('/play/select/skirmish');
     expect(titleBarConfig('/play/select/levels')?.signInReturnTo).toBe('/play/select/levels');
