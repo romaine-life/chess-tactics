@@ -26,9 +26,10 @@ http://loading-feature.chess-tactics.localhost
 ```
 
 The ignored `.codex-session/environment.json` is the non-secret source of truth
-for that environment identity. The auth grant, Codex session context, browser
-verification, screenshots, and user handoff all use the same name. See
-[ADR-0196](docs/adr/0196-codex-environments-have-owner-named-localhost-identities.md).
+for that environment identity. The auth grant, agent URL discovery, browser
+verification, screenshots, and user handoff all use the same name without a
+project lifecycle hook. See
+[ADR-0197](docs/adr/0197-codex-agents-discover-named-environments-from-setup-state.md).
 
 For baked preview:
 
