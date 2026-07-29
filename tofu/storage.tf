@@ -107,12 +107,21 @@ moved {
 }
 
 # The app pod's workload identity (chess-tactics-identity, identity.tf) builds
-# /api/bgm by LISTING the container and reading each blob's metadata. Reader
-# includes list; the app never writes BGM. Unit asset write access is granted
-# separately and scoped to its private container below.
+# /api/bgm by listing the container and reading each blob's metadata. The app
+# never writes BGM. Unit asset write access is separate and container-scoped.
 resource "azurerm_role_assignment" "bgm_reader" {
   scope                = azurerm_storage_container.bgm.resource_manager_id
   role_definition_name = "Storage Blob Data Reader"
+  principal_id         = azurerm_user_assigned_identity.app.principal_id
+}
+
+# Azure authorizes Get User Delegation Key only at storage-account scope or
+# above. Storage Blob Delegator contains exactly that management-plane action;
+# data-plane list/read remains narrowly scoped to the BGM container above, and
+# the app gains no BGM write, delete, or ACL permission.
+resource "azurerm_role_assignment" "bgm_delegator" {
+  scope                = azurerm_storage_account.media.id
+  role_definition_name = "Storage Blob Delegator"
   principal_id         = azurerm_user_assigned_identity.app.principal_id
 }
 
