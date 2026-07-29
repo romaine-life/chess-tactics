@@ -265,3 +265,21 @@ export function deepestSharedSceneRegion(
   }
   return shared;
 }
+
+const DESTINATION_SLOT_BY_REGION: Readonly<Partial<Record<SceneHost, SceneSlotId>>> = Object.freeze({
+  'menu-shell': 'menu-destination',
+  'play-shell': 'play-content',
+});
+
+/** True when a retained host is transitioning by removing its current child slot. */
+export function isEmptySlotDestination(
+  current: ScenePath,
+  destination: ScenePath,
+): boolean {
+  const region = deepestSharedSceneRegion(current, destination);
+  if (!region) return false;
+  const slot = DESTINATION_SLOT_BY_REGION[region];
+  return Boolean(slot)
+    && current.instances.some((entry) => entry.definition.slot === slot)
+    && !destination.instances.some((entry) => entry.definition.slot === slot);
+}

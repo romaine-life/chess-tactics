@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { deepestSharedSceneRegion, sceneManifest } from './sceneManifest';
+import {
+  deepestSharedSceneRegion,
+  isEmptySlotDestination,
+  sceneManifest,
+} from './sceneManifest';
 
 describe('scene manifests', () => {
   it('resolves route intent into an authored nested scene path', () => {
@@ -29,6 +33,21 @@ describe('scene manifests', () => {
       sceneManifest('/play/select/skirmish'),
       sceneManifest('/play'),
     )).toBeNull();
+  });
+
+  it('recognizes removing a retained host child as an empty-slot destination', () => {
+    expect(isEmptySlotDestination(
+      sceneManifest('/play/select/levels'),
+      sceneManifest('/'),
+    )).toBe(true);
+    expect(isEmptySlotDestination(
+      sceneManifest('/play/select/levels'),
+      sceneManifest('/settings/general'),
+    )).toBe(false);
+    expect(isEmptySlotDestination(
+      sceneManifest('/settings/general'),
+      sceneManifest('/play/select/levels'),
+    )).toBe(false);
   });
 
   it('treats a destination as a complete visual scene', () => {

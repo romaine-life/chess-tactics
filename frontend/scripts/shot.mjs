@@ -246,6 +246,7 @@ try {
         playSeen: false,
         playViolations: [],
         homeReturnSeen: false,
+        homeReturnViolations: [],
       };
       window.__ctMenuHostRail = null;
       window.__ctPlayHostRail = null;
@@ -283,6 +284,18 @@ try {
               titleOpacity,
               railInteractive,
             });
+          }
+        }
+        if (director?.getAttribute('data-scene-pending') === 'main-menu') {
+          const phase = director.getAttribute('data-scene-phase');
+          const loading = document.querySelector('.scene-loading-presentation');
+          const loadingVisible = Boolean(
+            loading
+            && getComputedStyle(loading).visibility !== 'hidden'
+            && Number.parseFloat(getComputedStyle(loading).opacity) > 0.001
+          );
+          if (phase === 'loading' || phase === 'entering' || loadingVisible) {
+            window.__ctMenuHostContinuity.homeReturnViolations.push({ phase, loadingVisible });
           }
         }
         if (
@@ -710,6 +723,7 @@ try {
       || !result.playSeen
       || result.playViolations.length
       || !result.homeReturnSeen
+      || result.homeReturnViolations.length
     ) {
       console.error(`menu host continuity failed: ${JSON.stringify(result)}`);
       process.exitCode = 15;

@@ -40,7 +40,11 @@ import {
 } from './routePrefetch';
 import { SceneBoundary } from './shell/SceneBoundary';
 import { initialSceneState, reduceScene } from './shell/sceneDirector';
-import { deepestSharedSceneRegion, sceneManifest } from './shell/sceneManifest';
+import {
+  deepestSharedSceneRegion,
+  isEmptySlotDestination,
+  sceneManifest,
+} from './shell/sceneManifest';
 import type { ScenePath } from './shell/sceneManifest';
 import { sceneSlots } from './shell/sceneSlots';
 import { HomepageBackdrop } from './HomepageBackdrop';
@@ -312,6 +316,11 @@ export function App(): ReactElement {
       const url = new URL(latest.destinationHref, window.location.origin);
       setPath(normalizeRoutePath(url.pathname));
       setSearch(url.search);
+      if (latest.destination && isEmptySlotDestination(latest.current, latest.destination)) {
+        loadingMark(latest.destination.id, 'scene-empty-slot-committed', { generation });
+        dispatchScene({ type: 'empty-slot-committed', generation });
+        return;
+      }
       loadingStartedAt.current = performance.now();
       dispatchScene({ type: 'exit-finished', generation });
     }, SCENE_FADE_MS);
@@ -358,6 +367,10 @@ export function App(): ReactElement {
   // destination during exit and is preparation metadata, not visibility.
   const mountedScene = sceneManifest(path);
   const transitioning = scene.phase !== 'current' && scene.phase !== 'startup';
+  const showLoadingPresentation = scene.phase === 'loading'
+    || scene.phase === 'entering'
+    || scene.phase === 'error'
+    || (scene.phase === 'startup' && scene.startupStage < 0);
   const retainedBackground = scene.current.background;
   const homepageIsDestination = transitioning
     && retainedBackground !== 'homepage'
@@ -417,7 +430,7 @@ export function App(): ReactElement {
             </RouteLoadBoundary>
           </SceneBoundary>
         </StartupSceneContext.Provider>
-        {!bootstrapPresentationPresent && (transitioning || (scene.phase === 'startup' && scene.startupStage < 0)) ? (
+        {!bootstrapPresentationPresent && showLoadingPresentation ? (
           <div className="scene-loading-presentation" role={scene.phase === 'error' ? 'alert' : 'status'}>
             {scene.phase === 'error' ? (
               <>

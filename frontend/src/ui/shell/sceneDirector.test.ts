@@ -35,6 +35,25 @@ describe('scene director', () => {
     expect(state).toMatchObject({ phase: 'current', current: { id: 'gameplay' }, destination: null });
   });
 
+  it('commits a removed child slot directly after exit without loading or entrance', () => {
+    let state = initialSceneState(sceneManifest('/play/select/levels'));
+    state = reduceScene(state, {
+      type: 'navigate',
+      destination: sceneManifest('/'),
+      href: '/',
+    });
+    expect(state.phase).toBe('exiting');
+    state = reduceScene(state, {
+      type: 'empty-slot-committed',
+      generation: state.generation,
+    });
+    expect(state).toMatchObject({
+      phase: 'current',
+      current: { pathname: '/', leaf: { key: 'main-menu' } },
+      destination: null,
+    });
+  });
+
   it('keeps only the last destination and ignores stale completion', () => {
     let state = reduceScene(initialSceneState(sceneManifest('/')), {
       type: 'navigate', destination: sceneManifest('/play'), href: '/play',

@@ -9,6 +9,8 @@ Preserved-host interaction is governed by
 [ADR-0196](adr/0196-preserved-host-controls-remain-interactive.md).
 Authored identity and visible ownership are governed by
 [ADR-0197](adr/0197-routes-request-authored-scene-instances.md).
+Empty child-slot transitions are governed by
+[ADR-0198](adr/0198-empty-scene-slots-commit-without-loading.md).
 
 ## Readiness vocabulary
 
@@ -89,6 +91,12 @@ instance and its pending instance separately. Views render from the director-mou
 path and may not subscribe to history/navigation events to change visible selection.
 The pending instance can fetch, decode, compose, and paint invisibly, but only the
 director may commit and reveal its generation.
+
+Transitioning does not itself imply loading. When a retained host's authored
+destination slot becomes empty, the outgoing child exits and the empty slot commits
+directly to `current`. There is no acquisition, loading minimum, entrance phase, or
+Loading copy. Loading presentation begins only when the director is actually waiting
+on or revealing prepared destination work, never during the exit phase alone.
 
 Title-bar contributions discover targets inside their own committed scene. DOM-node
 refs are never lifted into the director, because portal attachment must not mutate the

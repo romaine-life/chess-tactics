@@ -20,6 +20,7 @@ export interface SceneState {
 export type SceneAction =
   | { type: 'navigate'; destination: ScenePath; href: string }
   | { type: 'exit-finished'; generation: number }
+  | { type: 'empty-slot-committed'; generation: number }
   | { type: 'destination-painted'; generation: number }
   | { type: 'entrance-finished'; generation: number }
   | { type: 'failed'; generation: number; error: Error }
@@ -105,6 +106,16 @@ export function reduceScene(state: SceneState, action: SceneAction): SceneState 
     return { ...state, phase: 'loading', generation: state.generation + 1, error: null };
   }
   if (action.generation !== state.generation) return state;
+  if (action.type === 'empty-slot-committed' && state.phase === 'exiting' && state.destination) {
+    return {
+      ...state,
+      phase: 'current',
+      current: state.destination,
+      destination: null,
+      destinationHref: null,
+      error: null,
+    };
+  }
   if (action.type === 'exit-finished' && state.phase === 'exiting') {
     return { ...state, phase: 'loading' };
   }
