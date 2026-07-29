@@ -9,9 +9,10 @@ name: Sync BGM metadata
 # portal are preserved (use the `force` input to overwrite). Nothing in the serving
 # path depends on this workflow; it is convenience only.
 #
-# Account + container are derived from k8s/values.yaml (bgm.baseUrl) so this and the
-# backend never drift. tools/bgm/sync-metadata.mjs does the work, authenticating
-# with the same CI service principal (Storage Blob Data Contributor, tofu).
+# Account + container are derived from k8s/values.yaml (bgm.containerUrl) so this
+# and the backend never drift. tools/bgm/sync-metadata.mjs authenticates every
+# list/range/metadata operation with the CI service principal's narrow custom
+# Blob data role; the private container is never opened for this workflow.
 
 on:
   workflow_dispatch:
@@ -39,13 +40,13 @@ jobs:
       - name: Install tool deps
         run: npm --prefix tools/bgm install --no-audit --no-fund
 
-      - name: Derive container base from values.yaml
+      - name: Derive private container locator from values.yaml
         id: target
         run: |
-          BASE=$(sed -nE 's/^[[:space:]]*baseUrl:[[:space:]]*"?([^"[:space:]]+)"?.*$/\1/p' k8s/values.yaml | head -1)
-          BASE=${BASE%/}
-          if [ -z "$BASE" ]; then echo "could not read bgm.baseUrl from k8s/values.yaml" >&2; exit 1; fi
-          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+          CONTAINER_URL=$(sed -nE '/^bgm:/,/^[^[:space:]]/{s/^[[:space:]]*containerUrl:[[:space:]]*"?([^"[:space:]]+)"?.*$/\1/p}' k8s/values.yaml | head -1)
+          CONTAINER_URL=${CONTAINER_URL%/}
+          if [ -z "$CONTAINER_URL" ]; then echo "could not read bgm.containerUrl from k8s/values.yaml" >&2; exit 1; fi
+          echo "container_url=$CONTAINER_URL" >> "$GITHUB_OUTPUT"
 
       - name: Azure login (OIDC)
         uses: azure/login@v3
@@ -55,4 +56,4 @@ jobs:
           subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
 
       - name: Sync metadata from ID3 tags
-        run: node tools/bgm/sync-metadata.mjs --base "${{ steps.target.outputs.base }}" ${{ inputs.force && '--force' || '' }}
+        run: node tools/bgm/sync-metadata.mjs --container-url "${{ steps.target.outputs.container_url }}" ${{ inputs.force && '--force' || '' }}

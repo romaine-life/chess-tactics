@@ -13,21 +13,22 @@
 // you set metadata by hand). Idempotent and non-clobbering by default.
 //
 // Auth: DefaultAzureCredential — `az login` locally, or the workflow's OIDC
-// federation in CI. Needs Storage Blob Data Contributor on the account
+// federation in CI. The custom immutable-media role grants only the Blob
+// read/write/add data actions needed to read ID3 ranges and set metadata
 // (tofu: azurerm_role_assignment.bgm_metadata_writer).
 //
 // Usage:
-//   node tools/bgm/sync-metadata.mjs [--base <containerUrl>] [--force] [--dry-run]
-//     --base      public container base URL
-//                 (default https://chesstacticsmedia.blob.core.windows.net/bgm)
-//     --account   storage account name   (overrides the account from --base)
-//     --container container name          (overrides the container from --base)
+//   node tools/bgm/sync-metadata.mjs [--container-url <url>] [--force] [--dry-run]
+//     --container-url private container locator
+//                     (default https://chesstacticsmedia.blob.core.windows.net/bgm)
+//     --account   storage account name   (overrides the account from --container-url)
+//     --container container name          (overrides the container from --container-url)
 //     --force     overwrite title metadata even when already set
 //     --dry-run   report what would change without writing
 import process from 'node:process';
 import { BlobServiceClient } from '@azure/storage-blob';
 import { DefaultAzureCredential } from '@azure/identity';
-import { fetchId3 } from '../../frontend/scripts/id3.mjs';
+import { readId3WithRange } from '../../frontend/scripts/id3.mjs';
 
 function parseArgs(argv) {
   const args = { flags: new Set() };
@@ -48,8 +49,8 @@ function titleFromName(file) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const base = (args.base || 'https://chesstacticsmedia.blob.core.windows.net/bgm').replace(/\/+$/, '');
-  const u = new URL(base);
+  const containerUrl = (args['container-url'] || 'https://chesstacticsmedia.blob.core.windows.net/bgm').replace(/\/+$/, '');
+  const u = new URL(containerUrl);
   const accountUrl = args.account ? `https://${args.account}.blob.core.windows.net` : `${u.protocol}//${u.host}`;
   const containerName = args.container || u.pathname.replace(/^\/+/, '');
   const force = args.flags.has('force');
@@ -67,8 +68,13 @@ async function main() {
       skipped += 1;
       continue;
     }
-    const publicUrl = `${base}/${encodeURIComponent(blob.name)}`;
-    const tags = await fetchId3(publicUrl);
+    const blobClient = container.getBlobClient(blob.name);
+    const tags = await readId3WithRange(async (offset, count) => {
+      const response = await blobClient.download(offset, count);
+      const chunks = [];
+      for await (const chunk of response.readableStreamBody) chunks.push(Buffer.from(chunk));
+      return Buffer.concat(chunks);
+    });
     const next = { ...existing };
     next.title = tags.title || titleFromName(blob.name);
     if (tags.artist) next.artist = tags.artist; else delete next.artist;

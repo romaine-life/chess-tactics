@@ -70,46 +70,6 @@ function devctlHealth() {
 // moved server-side into that PUT's validation (backend/server.js validatePropSeatsData).
 // ADR-0085 later deleted the committed baseline and made the complete DB row authoritative.
 
-// Dev-only stand-in for the backend's /api/bgm. Local dev has no backend process,
-// so this proxies the DEPLOYED backend's playlist (which lists the blob container
-// live, each track's title/artist/album coming from blob metadata) and serves it
-// verbatim — the {tracks:[{title,artist?,album?,url}]} shape the player and the
-// soundtrack manager consume, with absolute public blob urls. Opt in with
-// BGM_DEV_TRACKS=1; override the source with BGM_API_URL.
-function bgmDevMock() {
-  const enabled = process.env.BGM_DEV_TRACKS === '1';
-  const apiUrl = (process.env.BGM_API_URL || 'https://chess-tactics.com/api/bgm').replace(/\/+$/, '');
-  const TTL = 5 * 60 * 1000;
-  let cache = { tracks: null, expiry: 0 };
-  async function loadTracks() {
-    const now = Date.now();
-    if (cache.tracks && cache.expiry > now) return cache.tracks;
-    const res = await fetch(apiUrl, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) throw new Error(`bgm ${res.status}`);
-    const body = await res.json();
-    const tracks = Array.isArray(body && body.tracks) ? body.tracks : [];
-    cache = { tracks, expiry: now + TTL };
-    return tracks;
-  }
-  return {
-    name: 'bgm-dev-mock',
-    apply: 'serve',
-    configureServer(server) {
-      if (!enabled) return;
-      server.middlewares.use('/api/bgm', async (_req, res) => {
-        res.setHeader('Content-Type', 'application/json');
-        res.statusCode = 200;
-        try {
-          res.end(JSON.stringify({ tracks: await loadTracks() }));
-        } catch (err) {
-          server.config.logger.warn(`[bgm-dev-mock] could not load ${apiUrl}: ${err.message}`);
-          res.end(JSON.stringify({ tracks: [] }));
-        }
-      });
-    },
-  };
-}
-
 // Dev-only mock of the auth backend. frontend/src/net/auth.ts talks to relative
 // /api/auth/* paths that the deployed backend proxies to auth.romaine.life (Microsoft
 // sign-in). Local `vite` has no backend process, so the real "Sign In" button was a
@@ -268,6 +228,15 @@ function getFreePort() {
 function prodBackend(port) {
   const backendDir = fileURLToPath(new URL('../backend', import.meta.url));
   const boardRenderDir = fileURLToPath(new URL('../packages/board-render', import.meta.url));
+  const bgmContainerUrl = process.env.BGM_CONTAINER_URL || (() => {
+    try {
+      const values = readFileSync(new URL('../k8s/values.yaml', import.meta.url), 'utf8');
+      const block = values.match(/^bgm:\s*\r?\n((?:[ \t]+.*(?:\r?\n|$))*)/m)?.[1] || '';
+      return block.match(/^[ \t]+containerUrl:\s*"?([^"\s]+)"?/m)?.[1] || '';
+    } catch {
+      return '';
+    }
+  })();
   // Per-worktree pidfile in the OS temp dir. On start we kill any backend left running
   // by a previously force-killed dev server, so orphans (each holding a live prod DB
   // connection) never stack up.
@@ -395,6 +364,9 @@ function prodBackend(port) {
             DEV_AUTH_TOKEN_FILE: process.env.DEV_AUTH_TOKEN_FILE || join(backendDir, '..', '.codex-session', 'auth.json'),
             ADMIN_EMAILS: process.env.ADMIN_EMAILS || 'nelson@romaine.life',
             UNIT_ASSET_CONTAINER_URL: process.env.UNIT_ASSET_CONTAINER_URL || 'https://chesstacticsmedia.blob.core.windows.net/unit-assets',
+            // Exercise the production app-owned BGM contract locally. The
+            // required backend lists/signs with the developer's Azure identity.
+            BGM_CONTAINER_URL: bgmContainerUrl,
             // Local developers may opt into an isolated directory + disposable
             // DATABASE_URL. In that mode seed through the public backend and do
             // not silently retain credentials to the production Blob container.
@@ -452,7 +424,7 @@ export default defineConfig(async ({ command }) => {
   const useBackend = command === 'serve' && !noBackend && !isVitest;
   const backendPort = useBackend ? await getFreePort() : 0;
   const devApiPlugins = command === 'serve' && !isVitest
-    ? (noBackend ? [bgmDevMock(), officialCampaignsDevProxy(), devAuthMock()] : [prodBackend(backendPort)])
+    ? (noBackend ? [officialCampaignsDevProxy(), devAuthMock()] : [prodBackend(backendPort)])
     : [];
   return {
     plugins: [react(), buildInfo(), devctlHealth(), ...devApiPlugins],

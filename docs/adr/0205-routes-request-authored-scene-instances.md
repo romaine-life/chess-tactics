@@ -3,11 +3,11 @@ status: "accepted"
 date: 2026-07-29
 deciders: Nelson, Codex
 refines:
-  - ADR-0199
   - ADR-0201
+  - ADR-0203
 ---
 
-# ADR-0203: Routes request authored scene instances
+# ADR-0205: Routes request authored scene instances
 
 ## Context
 

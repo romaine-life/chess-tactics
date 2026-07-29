@@ -3,12 +3,12 @@ status: "accepted"
 date: 2026-07-29
 deciders: Nelson, Codex
 refines:
-  - ADR-0199
-  - ADR-0206
-  - ADR-0207
+  - ADR-0201
+  - ADR-0208
+  - ADR-0209
 ---
 
-# ADR-0209: Route loading status lives in the persistent title bar
+# ADR-0211: Route loading status lives in the persistent title bar
 
 ## Context
 
@@ -45,7 +45,7 @@ depend on any destination's artwork composition.
 - A terminal load failure may own a scene-canvas retry surface because it is an
   actionable destination state rather than passive wait text.
 
-This supersedes only ADR-0199's retained-background and centered route-Loading
+This supersedes only ADR-0201's retained-background and centered route-Loading
 presentation. Its single-director, atomic destination, manifest, readiness, and
 startup decisions remain in force.
 

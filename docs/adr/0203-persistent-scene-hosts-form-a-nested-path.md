@@ -3,14 +3,14 @@ status: "accepted"
 date: 2026-07-29
 deciders: Nelson, Codex
 refines:
-  - ADR-0200
+  - ADR-0202
 ---
 
-# ADR-0201: Persistent scene hosts form a nested path
+# ADR-0203: Persistent scene hosts form a nested path
 
 ## Context
 
-ADR-0200 introduced persistent visual hosts, but one flat host identity only
+ADR-0202 introduced persistent visual hosts, but one flat host identity only
 preserved the main-menu hierarchy. Play contains another stable hierarchy:
 Skirmish, Levels, and campaign controls remain anchored while the selected
 Play content changes. Treating all Play UI as the main menu's replaceable region

@@ -7,10 +7,9 @@
 # same UAMI is made the server's Entra administrator in postgres.tf, so the
 # schema migrations the app runs at startup execute under this identity.
 #
-# Mirrors the glimmung/tank-operator pattern, but deliberately grants the UAMI
-# NO subscription-level roles — its only privilege is being the Postgres Entra
-# admin (a data-plane grant on the server). Least privilege for an app that only
-# needs to talk to its own database.
+# Mirrors the glimmung/tank-operator pattern. The UAMI receives no
+# subscription-level role: database authority is scoped to Postgres, while
+# media permissions are declared separately and narrowly in storage.tf.
 
 resource "azurerm_user_assigned_identity" "app" {
   name                = "chess-tactics-identity"

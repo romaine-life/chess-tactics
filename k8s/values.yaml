@@ -94,8 +94,8 @@ livePreview:
 # azure.workload.identity/client-id annotation (serviceAccountClientId below) so
 # the backend can authenticate to Azure Database for PostgreSQL passwordless via
 # a federated token. Test slots use an ephemeral in-cluster Postgres and do not
-# federate. (BGM tracks stay public-read; the playlist listing reuses this same
-# workload identity — Storage Blob Data Reader on the media account.)
+# federate. In production, private BGM catalog listing and delegation-key
+# acquisition reuse this identity with the narrow storage.tf role assignments.
 serviceAccount: chess-tactics
 
 # Workload-identity client id of the chess-tactics-identity UAMI (tofu output
@@ -126,12 +126,12 @@ postgres:
     password: chess_tactics
     database: chess_tactics
 
-# Background music: public blob container base URL provisioned by tofu/
-# (storage account `chesstacticsmedia`, container `bgm`). The backend LISTS this
-# container (each blob's metadata -> title/artist/album) to serve /api/bgm; tracks
-# stream from <baseUrl>/<file>. Empty disables BGM (e.g. before it is populated).
+# Background music: private Blob container locator provisioned by tofu/. The
+# backend lists metadata for /api/bgm and issues short-lived per-track read
+# capabilities from /api/bgm/tracks/:id; Azure serves the bytes and ranges.
+# This is backend deployment configuration, never a frontend/public base.
 bgm:
-  baseUrl: "https://chesstacticsmedia.blob.core.windows.net/bgm"
+  containerUrl: "https://chesstacticsmedia.blob.core.windows.net/bgm"
 
 # Private content-addressed PNG storage for live Unit Studio assets. The backend
 # reads/writes this container with workload identity and serves same-origin image

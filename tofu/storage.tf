@@ -1,14 +1,12 @@
 # ============================================================================
 # Game media storage (background music)
 # ============================================================================
-# Large audio assets (the shuffled BGM library) live in public-read blob storage
-# and are streamed on demand by the browser, instead of being baked into the app
-# image. This keeps the Docker image and ArgoCD deploys lean while the soundtrack
-# can grow freely. The backend LISTS the container (each blob carries its
-# title/artist/album as blob metadata) and serves the playlist at /api/bgm; the
-# browser streams one track at a time via HTTP range requests. The container is
-# the single source of truth — add/remove a track here and the game follows it,
-# with no manifest to regenerate.
+# Large audio assets (the shuffled BGM library) live in a private Blob container
+# rather than the app image. The backend lists metadata for /api/bgm and issues
+# short-lived, read-only, per-Blob user-delegation SAS redirects through
+# /api/bgm/tracks/:id. Azure serves the browser's audio bytes and Range requests.
+# The container is the single source of truth — add/remove a track here and the
+# game follows it, with no manifest to regenerate.
 #
 # Unlike Git-backed media, Blob is now the durable byte authority. Versioning
 # and retention therefore protect every game-media container from accidental
@@ -28,8 +26,9 @@ resource "azurerm_storage_account" "media" {
   account_tier             = "Standard"
   account_replication_type = "LRS"
 
-  # Required for `container_access_type = "blob"` (anonymous read) below.
-  allow_nested_items_to_be_public = true
+  # Every game-media container is private. Anonymous visitors receive only the
+  # per-Blob capabilities issued by the app-owned playback route.
+  allow_nested_items_to_be_public = false
 
   blob_properties {
     versioning_enabled = true
@@ -43,9 +42,9 @@ resource "azurerm_storage_account" "media" {
     }
   }
 
-  # No CORS rule: the browser streams audio via <audio> (a no-cors media
-  # request) and the backend reads index.json server-side. Nothing fetches the
-  # blob cross-origin from JS, so a CORS rule would be dead config.
+  # No CORS rule: <audio> follows the app redirect with a no-cors media request,
+  # and Blob serves GET/HEAD plus Range directly. App JavaScript never reads the
+  # cross-origin response body or response headers.
 
   tags = {
     app       = "chess-tactics"
@@ -54,14 +53,12 @@ resource "azurerm_storage_account" "media" {
   }
 }
 
-# Background-music container. Anonymous blob READ so the browser streams tracks
-# directly from their public URLs — but NOT public-list. Enumerating the playlist
-# is the backend's job, authenticated via workload identity (role below); a
-# scraper can't list the library.
+# Background-music container. Both Blob reads and listing require authorization.
+# The backend owns discovery and narrowly scoped read-capability issuance.
 resource "azurerm_storage_container" "bgm" {
   name                  = "bgm"
   storage_account_id    = azurerm_storage_account.media.id
-  container_access_type = "blob"
+  container_access_type = "private"
 }
 
 # Editable unit sprites. The browser reads these through same-origin backend
@@ -107,12 +104,21 @@ moved {
 }
 
 # The app pod's workload identity (chess-tactics-identity, identity.tf) builds
-# /api/bgm by LISTING the container and reading each blob's metadata. Reader
-# includes list; the app never writes BGM. Unit asset write access is granted
-# separately and scoped to its private container below.
+# /api/bgm by listing the container and reading each blob's metadata. The app
+# never writes BGM. Unit asset write access is separate and container-scoped.
 resource "azurerm_role_assignment" "bgm_reader" {
   scope                = azurerm_storage_container.bgm.resource_manager_id
   role_definition_name = "Storage Blob Data Reader"
+  principal_id         = azurerm_user_assigned_identity.app.principal_id
+}
+
+# Azure authorizes Get User Delegation Key only at storage-account scope or
+# above. Storage Blob Delegator contains exactly that management-plane action;
+# data-plane list/read remains narrowly scoped to the BGM container above, and
+# the app gains no BGM write, delete, or ACL permission.
+resource "azurerm_role_assignment" "bgm_delegator" {
+  scope                = azurerm_storage_account.media.id
+  role_definition_name = "Storage Blob Delegator"
   principal_id         = azurerm_user_assigned_identity.app.principal_id
 }
 
@@ -163,11 +169,11 @@ output "bgm_container" {
   description = "Blob container holding the shuffled BGM tracks."
 }
 
-# This is the BGM_BASE_URL the backend uses (set in k8s/values.yaml): the
-# backend reads <url>/index.json and serves tracks under <url>/<file>.
+# Private backend storage locator set as BGM_CONTAINER_URL in Kubernetes. It is
+# not a browser/public base and never appears in the playlist response.
 output "bgm_container_url" {
   value       = "https://${azurerm_storage_account.media.name}.blob.core.windows.net/${azurerm_storage_container.bgm.name}"
-  description = "Public base URL for BGM index.json + tracks (the backend's BGM_BASE_URL)."
+  description = "Private BGM container locator used by the backend for listing and capability issuance."
 }
 
 output "unit_assets_container_url" {

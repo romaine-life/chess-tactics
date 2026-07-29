@@ -1,6 +1,6 @@
 # Loading surface inventory
 
-Status: re-audited 2026-07-28 against the ADR-0199 scene system in this worktree.
+Status: re-audited 2026-07-28 against the ADR-0201 scene system in this worktree.
 
 This is the live migration ledger. A route is enrolled only when it declares a
 manifest, names its paint owner, has an explicit terminal failure, and cannot expose

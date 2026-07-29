@@ -14,6 +14,12 @@ const { createByteReadBudget } = require(path.join(bakedBackendDir, 'liveMediaRe
 const { createRenderCriticalSection } = require(path.join(bakedBackendDir, 'renderCriticalSection'));
 const { backgroundStoreSchemaViolation } = require(path.join(bakedBackendDir, 'backgroundStoreError'));
 const {
+  BGM_SAS_START_SKEW_MS,
+  BGM_SAS_TTL_MS,
+  createAzureBgmStorage,
+  createBgmDelivery,
+} = require(path.join(bakedBackendDir, 'bgmDelivery'));
+const {
   prepareGenerationAttemptArchiveThumbnail,
 } = require(path.join(bakedBackendDir, 'generationAttemptArchiveThumbnail'));
 const {
@@ -137,27 +143,108 @@ if (process.env.NODE_ENV === 'test' && process.env.LOBBY_TEST_LEVEL_METADATA) {
 const lobbyListSubscribers = new Set(); // Set<res>
 const lobbyChannelSubscribers = new Map(); // Map<lobbyId, Set<{ res, email }>>
 
-// Background music. The browser streams tracks directly from BGM_BASE_URL (the
-// public-read blob container). The backend assembles the /api/bgm playlist one
-// of two ways:
-//   - BGM_READ_URL set -> read a static index.json served there (test slots and
-//     local dev point this at a same-origin fixture). Plain HTTPS, no creds.
-//   - else, an Azure blob base -> LIST the container live (with each blob's
-//     title/artist/album metadata) using the pod's workload identity. The
-//     container is the single source of truth: drop or delete a track in the
-//     container and the playlist follows it — there is no manifest to regenerate.
-// Either way this is non-critical chrome: /api/bgm never 500s — it degrades to
-// the last good list, then to an empty playlist.
-const bgmBaseUrl = (process.env.BGM_BASE_URL || '').replace(/\/+$/, '');
-const bgmIndexUrl = (process.env.BGM_READ_URL || '').replace(/\/+$/, '');
-const bgmIsAzureBlob = (() => {
-  if (!bgmBaseUrl) return false;
-  try { return /(^|\.)blob\.core\.windows\.net$/i.test(new URL(bgmBaseUrl).hostname); }
-  catch { return false; }
-})();
-const BGM_CACHE_TTL_MS = 5 * 60 * 1000;
-let bgmCache = { tracks: null, expiry: 0 };
-let bgmContainerClient = null; // lazily built Azure ContainerClient (list mode only)
+// Background music is anonymous app content backed by a private Blob container.
+// The workload identity lists metadata for /api/bgm and requests user-delegation
+// keys. Playlist entries expose only stable same-origin app routes; each playback
+// request receives a fresh blob-specific, read-only, short-lived SAS redirect so
+// Azure—not this pod—carries the audio bytes and range traffic (ADR-0200).
+const bgmContainerUrl = String(process.env.BGM_CONTAINER_URL || '').trim().replace(/\/+$/, '');
+const bgmSignals = {
+  capabilitySuccess: 0,
+  capabilityFailure: 0,
+  unknownTrack: 0,
+  capabilityLatencyMs: 0,
+};
+
+function recordBgmSignal(event, details = {}) {
+  if (event === 'catalog_refresh_success') {
+    console.info(`bgm catalog refresh success tracks=${details.trackCount} latency_ms=${details.durationMs}`);
+    return;
+  }
+  if (event === 'catalog_refresh_failure') {
+    console.warn(`bgm catalog refresh failure code=${details.errorCode} last_good=${details.usedLastGood ? 1 : 0} latency_ms=${details.durationMs}`);
+    return;
+  }
+  if (event === 'delegation_key_refresh_success') {
+    console.info(`bgm delegation-key refresh success latency_ms=${details.durationMs}`);
+    return;
+  }
+  if (event === 'delegation_key_refresh_failure') {
+    console.warn(`bgm delegation-key refresh failure code=${details.errorCode} latency_ms=${details.durationMs}`);
+    return;
+  }
+  if (event === 'capability_success') {
+    bgmSignals.capabilitySuccess += 1;
+    bgmSignals.capabilityLatencyMs += details.durationMs || 0;
+  } else if (event === 'capability_failure') {
+    bgmSignals.capabilityFailure += 1;
+    bgmSignals.capabilityLatencyMs += details.durationMs || 0;
+  } else if (event === 'unknown_track') {
+    bgmSignals.unknownTrack += 1;
+  } else {
+    return;
+  }
+  const totalCapabilities = bgmSignals.capabilitySuccess + bgmSignals.capabilityFailure;
+  const count = event === 'unknown_track' ? bgmSignals.unknownTrack : totalCapabilities;
+  if (count !== 1 && count % 100 !== 0 && event !== 'capability_failure') return;
+  const averageLatency = totalCapabilities
+    ? Math.round(bgmSignals.capabilityLatencyMs / totalCapabilities)
+    : 0;
+  console.info(
+    `bgm capability counters issued=${bgmSignals.capabilitySuccess}`
+    + ` failed=${bgmSignals.capabilityFailure} unknown=${bgmSignals.unknownTrack}`
+    + ` avg_latency_ms=${averageLatency}`,
+  );
+}
+
+function createTestBgmStorage() {
+  if (process.env.NODE_ENV !== 'test' || !process.env.BGM_TEST_CATALOG_JSON) return null;
+  const entries = JSON.parse(process.env.BGM_TEST_CATALOG_JSON);
+  if (!Array.isArray(entries)) throw new Error('BGM_TEST_CATALOG_JSON must be an array');
+  const capabilityBaseUrl = String(process.env.BGM_TEST_CAPABILITY_BASE_URL || '').replace(/\/+$/, '');
+  const signingSecret = String(process.env.BGM_TEST_SIGNING_SECRET || '');
+  if (!capabilityBaseUrl || !signingSecret) {
+    throw new Error('BGM test capability configuration is incomplete');
+  }
+  return {
+    listTracks: async () => entries,
+    signTrack: async (track) => {
+      const nowMs = Date.now();
+      const starts = Math.floor((nowMs - BGM_SAS_START_SKEW_MS) / 1000);
+      const expires = Math.floor((nowMs + BGM_SAS_TTL_MS) / 1000);
+      const signature = crypto
+        .createHmac('sha256', signingSecret)
+        .update(`${track.blobName}\0${starts}\0${expires}`)
+        .digest('hex');
+      const target = new URL(`${encodeURIComponent(track.blobName)}`, `${capabilityBaseUrl}/`);
+      target.searchParams.set('st', String(starts));
+      target.searchParams.set('exp', String(expires));
+      target.searchParams.set('sig', signature);
+      return target.toString();
+    },
+  };
+}
+
+function createConfiguredBgmDelivery() {
+  try {
+    const storage = createTestBgmStorage() || (bgmContainerUrl
+      ? createAzureBgmStorage({ containerUrl: bgmContainerUrl, onEvent: recordBgmSignal })
+      : { listTracks: async () => [], signTrack: async () => { throw new Error('bgm_not_configured'); } });
+    return createBgmDelivery({ ...storage, onEvent: recordBgmSignal });
+  } catch (error) {
+    const code = String(error && (error.code || error.name) || 'configuration_error')
+      .replace(/[^a-zA-Z0-9_.-]/g, '_')
+      .slice(0, 80);
+    console.warn(`bgm configuration unavailable code=${code}`);
+    return createBgmDelivery({
+      listTracks: async () => [],
+      signTrack: async () => { throw new Error('bgm_not_configured'); },
+      onEvent: recordBgmSignal,
+    });
+  }
+}
+
+const bgmDelivery = createConfiguredBgmDelivery();
 
 // Live Unit Studio art. Metadata and accepted pointers live in Postgres; PNG
 // bytes are content-addressed in this private container. UNIT_ASSET_STORAGE_DIR
@@ -4222,91 +4309,36 @@ app.get('/api/__devctl/health', (_req, res) => {
   });
 });
 
-// Readable fallback title from a slugged blob name, used only when a track has no
-// `title` metadata yet (e.g. just dropped in the container, not synced). e.g.
-// "03-heavens-devils.mp3" -> "Heavens Devils".
-function bgmTitleFromName(file) {
-  const base = String(file).replace(/\.mp3$/i, '').replace(/^\d+\s*[-._\s]\s*/, '');
-  const words = base.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
-  return words.replace(/\S+/g, (w) => w.charAt(0).toUpperCase() + w.slice(1)) || String(file);
-}
-
-// List the BGM container's .mp3 blobs with metadata (prod / Azure mode).
-// DefaultAzureCredential uses the pod's federated workload-identity token — the
-// same mechanism the Postgres pool uses — authorized by the Storage Blob Data
-// Reader role on the media account (tofu/storage.tf). Lazily required so non-Azure
-// environments (the index path) never load the SDK.
-async function listBgmTracksFromContainer() {
-  if (!bgmContainerClient) {
-    const { BlobServiceClient } = require('@azure/storage-blob');
-    const { DefaultAzureCredential } = require('@azure/identity');
-    const u = new URL(bgmBaseUrl);
-    const service = new BlobServiceClient(`${u.protocol}//${u.host}`, new DefaultAzureCredential());
-    bgmContainerClient = service.getContainerClient(u.pathname.replace(/^\/+/, ''));
-  }
-  const tracks = [];
-  for await (const blob of bgmContainerClient.listBlobsFlat({ includeMetadata: true })) {
-    if (!/\.mp3$/i.test(blob.name)) continue;
-    const md = blob.metadata || {};
-    const title = (md.title || '').trim();
-    const artist = (md.artist || '').trim();
-    const album = (md.album || '').trim();
-    tracks.push({
-      title: title || bgmTitleFromName(blob.name),
-      ...(artist ? { artist } : {}),
-      ...(album ? { album } : {}),
-      url: `${bgmBaseUrl}/${encodeURIComponent(blob.name)}`,
-    });
-  }
-  // Stable order so the cached payload is deterministic; the player reshuffles.
-  tracks.sort((a, b) => a.url.localeCompare(b.url));
-  return tracks;
-}
-
-// Background-music playlist. The frontend consumes this app-owned contract; the
-// blob storage account stays under the backend (borrow primitives, not
-// boundaries). Cached briefly so we don't re-list / re-fetch on every page load.
-// BGM is non-critical chrome: this endpoint never 500s — it degrades to the
-// last good list, then to an empty playlist.
+// Background-music playlist. The cached internal catalog retains Blob identity;
+// this public projection contains only display metadata plus stable app routes.
+// Listing failure serves the coherent last-good catalog, then graceful empty.
 app.get('/api/bgm', async (_req, res) => {
-  if (!bgmBaseUrl) {
-    res.status(200).json({ tracks: [] });
-    return;
-  }
-  const now = Date.now();
-  if (bgmCache.tracks && bgmCache.expiry > now) {
-    res.status(200).json({ tracks: bgmCache.tracks });
-    return;
-  }
+  res.setHeader('Cache-Control', 'public, max-age=60, stale-if-error=300');
+  res.status(200).json(await bgmDelivery.playlist());
+});
+
+// Anonymous app-owned playback route. It never accepts a Blob name or URL from
+// the client. A current opaque catalog id receives one fresh capability; Azure
+// serves the redirected GET/HEAD and any Range request.
+app.get('/api/bgm/tracks/:trackId', async (req, res) => {
+  const startedAt = Date.now();
+  res.setHeader('Cache-Control', 'no-store');
   try {
-    let tracks;
-    if (bgmIndexUrl) {
-      const response = await fetch(`${bgmIndexUrl}/index.json`, { signal: AbortSignal.timeout(5000) });
-      if (!response.ok) throw new Error(`index ${response.status}`);
-      const index = await response.json();
-      const list = Array.isArray(index && index.tracks) ? index.tracks : [];
-      tracks = list
-        .filter((track) => track && typeof track.file === 'string' && track.file)
-        .map((track) => ({
-          title: typeof track.title === 'string' && track.title ? track.title : track.file,
-          ...(typeof track.artist === 'string' && track.artist ? { artist: track.artist } : {}),
-          ...(typeof track.album === 'string' && track.album ? { album: track.album } : {}),
-          url: `${bgmBaseUrl}/${encodeURIComponent(track.file)}`,
-        }));
-    } else if (bgmIsAzureBlob) {
-      tracks = await listBgmTracksFromContainer();
-    } else {
-      tracks = [];
-    }
-    bgmCache = { tracks, expiry: now + BGM_CACHE_TTL_MS };
-    res.status(200).json({ tracks });
-  } catch (error) {
-    if (bgmCache.tracks) {
-      res.status(200).json({ tracks: bgmCache.tracks });
+    const location = await bgmDelivery.playbackLocation(req.params.trackId);
+    if (!location) {
+      recordBgmSignal('unknown_track');
+      res.status(404).json({ error: 'bgm_track_not_found' });
       return;
     }
-    console.warn(`/api/bgm: could not load playlist (${bgmIndexUrl ? 'index' : 'list'}): ${error.message}`);
-    res.status(200).json({ tracks: [] });
+    recordBgmSignal('capability_success', { durationMs: Date.now() - startedAt });
+    // Avoid Express's convenience redirect body: it repeats the complete
+    // credential-bearing Location in HTML/text even though the client needs
+    // only the header.
+    res.status(302).setHeader('Location', location);
+    res.end();
+  } catch {
+    recordBgmSignal('capability_failure', { durationMs: Date.now() - startedAt });
+    res.status(503).json({ error: 'bgm_capability_unavailable' });
   }
 });
 
@@ -16544,15 +16576,15 @@ async function serveImmutableMedia(req, res, record, { privateRead = false } = {
 // Private campaign list thumbnails may contain private pre-drawn scene pixels.
 // Keep their content-addressed bytes out of the anonymous /api/media namespace;
 // this route proves both current ownership and the exact current derivative.
-app.get(/^\/api\/campaign-workspace\/level-thumbnails\/([^/]+)\/([0-9a-f]{64})\.png$/, async (req, res) => {
+app.get(/^\/api\/campaign-workspace\/level-thumbnails\/(l\d+)\/([0-9a-f]{64})\.png$/, async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
-  const levelId = levelStoreId(req.params[0]);
+  const levelId = String(req.params[0] || '');
   const requestedSha256 = mediaSha(req.params[1]);
   try {
     const workspace = await dbGetWorkspace(user.email);
     const levels = isObjectRecord(workspace?.body?.levels) ? workspace.body.levels : {};
-    const level = levelId && isObjectRecord(levels[levelId]) ? levels[levelId] : null;
+    const level = isObjectRecord(levels[levelId]) ? levels[levelId] : null;
     if (!level || !requestedSha256) {
       res.setHeader('Cache-Control', 'private, no-store');
       res.status(404).send('not found');

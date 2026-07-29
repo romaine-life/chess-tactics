@@ -57,22 +57,68 @@ const mockAuth = http.createServer((req, res) => {
   res.end('not found');
 });
 
-// Stand in for the public BGM blob container: serves the index.json the backend
-// reads for GET /api/bgm.
+// Deterministic private-object stand-in for BGM playback. The backend receives
+// catalog input and an injected signing seam through NODE_ENV=test-only values;
+// this service validates the bounded capability and serves Range responses.
+const bgmSigningSecret = 'smoke-only-bgm-signing-secret';
+const bgmFixtureBytes = new Map([
+  ['alpha.mp3', Buffer.from('alpha-audio-fixture')],
+  ['bravo.mp3', Buffer.from('bravo-audio-fixture')],
+]);
 const mockBgm = http.createServer((req, res) => {
-  if (req.url === '/index.json') {
-    res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({
-      schemaVersion: 1,
-      tracks: [
-        { title: 'Alpha', file: 'alpha.mp3' },
-        { title: 'Bravo', file: 'bravo.mp3' },
-      ],
-    }));
+  const requestUrl = new URL(req.url, `http://127.0.0.1:${bgmPort}`);
+  const blobName = decodeURIComponent(requestUrl.pathname.replace(/^\/+/, ''));
+  const bytes = bgmFixtureBytes.get(blobName);
+  const starts = Number.parseInt(requestUrl.searchParams.get('st') || '', 10);
+  const expires = Number.parseInt(requestUrl.searchParams.get('exp') || '', 10);
+  const signature = requestUrl.searchParams.get('sig') || '';
+  const expected = Number.isFinite(starts) && Number.isFinite(expires)
+    ? crypto.createHmac('sha256', bgmSigningSecret)
+      .update(`${blobName}\0${starts}\0${expires}`)
+      .digest('hex')
+    : '';
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (
+    !bytes
+    || !signature
+    || signature.length !== expected.length
+    || !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
+    || starts > nowSeconds
+    || expires <= nowSeconds
+    || expires - starts > 2 * 60 * 60 + 5 * 60
+  ) {
+    res.writeHead(403, { 'content-type': 'text/plain' });
+    res.end('forbidden');
     return;
   }
-  res.writeHead(404);
-  res.end('not found');
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.writeHead(405);
+    res.end();
+    return;
+  }
+  const range = String(req.headers.range || '').match(/^bytes=(\d+)-(\d*)$/);
+  let start = 0;
+  let end = bytes.length - 1;
+  let status = 200;
+  if (range) {
+    start = Number.parseInt(range[1], 10);
+    end = range[2] ? Number.parseInt(range[2], 10) : end;
+    if (start >= bytes.length || end < start) {
+      res.writeHead(416, { 'content-range': `bytes */${bytes.length}` });
+      res.end();
+      return;
+    }
+    end = Math.min(end, bytes.length - 1);
+    status = 206;
+  }
+  const body = bytes.subarray(start, end + 1);
+  res.writeHead(status, {
+    'accept-ranges': 'bytes',
+    'content-type': 'audio/mpeg',
+    'content-length': body.length,
+    ...(status === 206 ? { 'content-range': `bytes ${start}-${end}/${bytes.length}` } : {}),
+  });
+  res.end(req.method === 'HEAD' ? undefined : body);
 });
 
 // The persistence endpoints are Postgres-backed, so the smoke-test needs a
@@ -229,10 +275,12 @@ const sharedBackendEnv = {
   NODE_ENV: 'test',
   AUTH_BASE_URL: `http://127.0.0.1:${authPort}`,
   PUBLIC_ORIGIN: 'https://chess-tactics.com',
-  BGM_BASE_URL: `http://127.0.0.1:${bgmPort}`,
-  // Non-Azure base: exercise the static-index path (the mock serves index.json).
-  // Prod sets no BGM_READ_URL and lists the Azure container live instead.
-  BGM_READ_URL: `http://127.0.0.1:${bgmPort}`,
+  BGM_TEST_CATALOG_JSON: JSON.stringify([
+    { title: 'Alpha', blobName: 'alpha.mp3' },
+    { title: 'Bravo', artist: 'Smoke Artist', blobName: 'bravo.mp3' },
+  ]),
+  BGM_TEST_CAPABILITY_BASE_URL: `http://127.0.0.1:${bgmPort}`,
+  BGM_TEST_SIGNING_SECRET: bgmSigningSecret,
   STATIC_FRONTEND_DIR: hotStaticDir,
   LOBBY_TEST_LEVEL_METADATA: JSON.stringify({
     'off-l-smoke-timed': { level: { id: 'off-l-smoke-timed', name: 'Smoke Timed Level', objective: 'survive', timeControl: { initialSeconds: 60, incrementSeconds: 0 } } },
@@ -3036,8 +3084,9 @@ async function main() {
     throw new Error(`Accepted unit archive should be rejected: ${rejectAcceptedArchive.statusCode} ${rejectAcceptedArchive.body}`);
   }
 
-  // BGM playlist: the backend reads the (mocked) blob index.json and resolves
-  // each track to an absolute URL under BGM_BASE_URL.
+  // BGM is publicly discoverable through the app contract, but the playlist
+  // contains only opaque same-origin routes. A current route mints one bounded
+  // capability and the private-object stand-in serves the requested byte range.
   const bgm = await get('/api/bgm');
   const bgmBody = JSON.parse(bgm.body);
   if (
@@ -3045,9 +3094,47 @@ async function main() {
     !Array.isArray(bgmBody.tracks) ||
     bgmBody.tracks.length !== 2 ||
     bgmBody.tracks[0].title !== 'Alpha' ||
-    bgmBody.tracks[0].url !== `http://127.0.0.1:${bgmPort}/alpha.mp3`
+    !/^[a-f0-9]{64}$/.test(bgmBody.tracks[0].id) ||
+    bgmBody.tracks[0].url !== `/api/bgm/tracks/${bgmBody.tracks[0].id}` ||
+    /blob\.core\.windows\.net|\.mp3|[?&](sig|sp|se)=|smoke-only-bgm-signing-secret/i.test(bgm.body)
   ) {
     throw new Error(`Unexpected /api/bgm response: ${bgm.statusCode} ${bgm.body}`);
+  }
+  const bgmRedirect = await get(bgmBody.tracks[0].url, { range: 'bytes=2-6' });
+  if (
+    bgmRedirect.statusCode !== 302
+    || !String(bgmRedirect.headers.location || '').startsWith(`http://127.0.0.1:${bgmPort}/alpha.mp3?`)
+    || bgmRedirect.headers['cache-control'] !== 'no-store'
+    || bgmRedirect.body.includes('sig=')
+  ) {
+    throw new Error(`Unexpected BGM capability response: ${bgmRedirect.statusCode} ${bgmRedirect.body}`);
+  }
+  const capabilityUrl = new URL(bgmRedirect.headers.location);
+  const bgmRange = await requestOnPort(
+    bgmPort,
+    'GET',
+    `${capabilityUrl.pathname}${capabilityUrl.search}`,
+    { range: 'bytes=2-6' },
+  );
+  if (
+    bgmRange.statusCode !== 206
+    || bgmRange.body !== 'pha-a'
+    || bgmRange.headers['content-range'] !== `bytes 2-6/${bgmFixtureBytes.get('alpha.mp3').length}`
+  ) {
+    throw new Error(`BGM range delivery failed: ${bgmRange.statusCode} ${bgmRange.body}`);
+  }
+  const bgmHead = await request('HEAD', bgmBody.tracks[0].url);
+  if (bgmHead.statusCode !== 302 || bgmHead.body || bgmHead.headers['cache-control'] !== 'no-store') {
+    throw new Error(`BGM HEAD capability failed: ${bgmHead.statusCode} ${bgmHead.body}`);
+  }
+  const malformedBgm = await get('/api/bgm/tracks/alpha.mp3');
+  const unknownBgm = await get(`/api/bgm/tracks/${'f'.repeat(64)}`);
+  if (
+    malformedBgm.statusCode !== 404
+    || unknownBgm.statusCode !== 404
+    || malformedBgm.body !== unknownBgm.body
+  ) {
+    throw new Error(`Unknown BGM routes should be presence-free 404s: ${malformedBgm.statusCode}/${unknownBgm.statusCode}`);
   }
 
   const anonymousLobbies = await get('/api/lobbies');

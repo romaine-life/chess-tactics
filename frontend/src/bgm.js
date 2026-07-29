@@ -8,9 +8,11 @@
 //     requests. The browser never downloads the whole library up front, so a
 //     20-track / ~150MB soundtrack costs the listener only the current song.
 //   - App-owned contract: the track list comes from the backend's /api/bgm
-//     endpoint ({tracks:[{title,url}]}). The blob storage account stays under the
-//     backend and is never exposed to the client; URLs arrive absolute and are
-//     streamed as-is.
+//     endpoint ({tracks:[{id,title,url}]}). Every URL is a stable relative app
+//     playback route; the backend validates the opaque current-catalog id and
+//     redirects to one temporary read capability when playback begins. Azure
+//     carries the bytes and ranges, while no permanent storage URL is configured
+//     in the player.
 //   - Autoplay-safe: browsers block audible autoplay until a user gesture, so
 //     playback is armed on the first interaction instead of fighting the policy.
 //   - User control: a persisted mute toggle; muting pauses (no silent
@@ -564,8 +566,8 @@ export function initBgm(iconUrl) {
   function renderControl() {
     const el = control.el;
     // ADR-0044: the mute control is a PERSISTENT member of the trailing cluster — it must
-    // not vanish, even when no soundtrack is configured for this environment (dev without
-    // BGM_DEV_TRACKS, or an empty library). Present it dimmed/inert in that case instead of
+    // not vanish, even when no soundtrack is configured for this environment (for example,
+    // an empty live library). Present it dimmed/inert in that case instead of
     // hiding it, so the cluster keeps the same members on every route.
     el.style.display = '';
     el.classList.remove('is-othertab'); // only the follower state below re-adds it

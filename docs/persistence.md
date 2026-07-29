@@ -535,7 +535,13 @@ addresses and immutable same-origin object routes. It never reads a packaged
 `frontend/public/assets` fallback, and Postgres does not store large media bytes.
 
 Unit Art remains a typed catalog over the same ownership model. BGM retains its
-existing Blob-index/range-streaming projection. See
+domain-native Blob-index/range-streaming projection, refined by
+[ADR-0200](adr/0200-bgm-is-private-storage-behind-app-owned-capability-routes.md):
+the container is private, the public playlist contains only opaque app playback
+routes, the anonymous route validates the current catalog and issues a
+short-lived per-Blob read capability, and Azure serves the media bytes. BGM is
+public game-content read under the standing anonymous-play rule; account
+authentication is not its access boundary. See
 [`runtime-asset-contract.md`](runtime-asset-contract.md).
 
 Per [ADR-0106](adr/0106-installed-content-is-database-owned.md), `drawable_assets`
