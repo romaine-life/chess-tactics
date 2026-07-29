@@ -3,7 +3,9 @@ status: "accepted"
 date: 2026-07-14
 deciders: Nelson, Codex
 supersedes: "[ADR-0117](0117-predrawn-scenes-own-a-viewport-cover-zoom-floor.md)"
-partially_superseded_by: "[ADR-0158](0158-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md)"
+partially_superseded_by:
+  - "[ADR-0158](0158-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md)"
+  - "[ADR-0190](0190-accepted-art-zoom-floor-uses-the-full-feasible-pan-region.md)"
 ---
 
 # ADR-0121: Pre-drawn pan stops at the art boundary

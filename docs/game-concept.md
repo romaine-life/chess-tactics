@@ -52,7 +52,7 @@ these.
   **full game against an AI**, with **PvP** against a human also supported.
 - Ordinary boards remain **self-contained**. **Run** adds the deliberate continuity
   layer: a persistent chess army, shops, and relics move through an authored War while
-  every Battle still obeys recognizable chess-piece behavior (ADR-0189).
+  every Battle still obeys recognizable chess-piece behavior (ADR-0193).
 - **Campaign** strings 5–10 boards into a curated, slowly-evolving sequence, and
   will grow richer over time.
 
@@ -124,7 +124,7 @@ Near-term scope:
 - **Campaign** — a curated sequence of 5–10 boards, growing over time.
 - **Run** — a seeded persistent army moves through a separately authored War; Battles
   retain normal chess behavior while deployment, economy, information, objectives, and
-  rewards create run variety (ADR-0189).
+  rewards create run variety (ADR-0193).
 - **Solo Skirmish** — a quick one-off board vs. the AI: **mostly fixed boards, with
   a random-setup option.** Cheap to include, so it is in.
 - **Level Editor + sharing** — first-class (§9).
@@ -235,7 +235,7 @@ The first prototype stays deliberately minimal (pillars §3). Resolved scope:
 
 **Deferred (post-v1, not precluded):** fluid royal / win conditions; mutating or
 cursed terrain and pieces; named-tactic surfacing; a competent search-based AI.
-Player-drafted squads and Run progression are now governed by ADR-0189.
+Player-drafted squads and Run progression are now governed by ADR-0193.
 
 ## 14. Administrator playtesting
 
@@ -245,4 +245,4 @@ selected unit, award the current Battle, or grant Gold and an unheld Relic to th
 Run without navigating away from the board. These are explicit playtest interventions
 around the canonical Battle and Run lifecycles, not new piece rules: the legal-move
 generator remains unchanged. The exact access, lifecycle, and excluded-control boundaries
-are governed by ADR-0191.
+are governed by ADR-0195.

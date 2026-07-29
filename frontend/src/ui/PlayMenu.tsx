@@ -497,7 +497,7 @@ function CampaignLevelsPanel({
                 >
                   <span data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row-thumb')} aria-hidden="true">
                     {level
-                      ? <GatedLevelThumbnail level={level} width={68} height={44} alt="" />
+                      ? <GatedLevelThumbnail level={level} width={66} height={44} alt="" />
                       : <span className="settings-row-thumb-empty" />}
                   </span>
                   <div className="settings-row-copy">

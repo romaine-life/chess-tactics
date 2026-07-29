@@ -18,8 +18,7 @@ import type { GameState } from '../../core/types';
 import { applyMove } from '../../core/rules';
 import { createFromLevel } from '../../game/setup';
 import { levelToEditorBoard, unitsForGamePieces } from '../../core/levelBoard';
-import { StudioReadOnlyBoard } from '../../render/StudioReadOnlyBoard';
-import { ViewPane } from '../shared/ViewPane';
+import { FramedReadOnlyBoardView } from '../shared/BoardViewFraming';
 import type { SolverStepResult, SolverViewState } from '../../lab/solver/solverRunner';
 import { fmtKey, fmtMove, WhyLine } from './phasePanels';
 
@@ -32,8 +31,6 @@ export function FrontierBoard({
   view: SolverViewState | null;
   lastStep: SolverStepResult | null;
 }): ReactElement {
-  const [zoom, setZoom] = useState(0.7);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
   const [sel, setSel] = useState(0);
 
   // A new step landing resets the pick to the first newly-decided position, so during play
@@ -104,20 +101,11 @@ export function FrontierBoard({
         <p className="solver-stage-why"><WhyLine d={selEntry} /></p>
       ) : null}
       <div className={`solver-board${shownValue ? ` is-${shownValue.outcome}` : ''}`}>
-        <ViewPane
-          kind="board"
+        <FramedReadOnlyBoardView
+          board={board}
+          viewKey={level.id}
           ariaLabel="Solver board"
-          zoom={zoom}
-          pan={pan}
-          minZoom={0.3}
-          maxZoom={2}
-          onZoomChange={setZoom}
-          onPanChange={setPan}
-        >
-          <div className="tileset-view-board-content is-board">
-            <StudioReadOnlyBoard board={board} boardZoom={zoom} boardPan={pan} ariaLabel="Solver board" />
-          </div>
-        </ViewPane>
+        />
         {shownValue ? (
           <span
             className={`solver-board-badge v-${shownValue.outcome}`}

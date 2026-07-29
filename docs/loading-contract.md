@@ -53,6 +53,10 @@ The required representative traces are cold and warm versions of:
   player lists never reconstruct boards in the browser. Derivative freshness is a pure
   version of the canonical level document plus its live prop-seat, unit, media, and drawable
   authority revisions; it never depends on mutable renderer-process state.
+- Per ADR-0189, list derivatives are fixed 3:2 renders of the shared playable-board opening
+  frame rather than opaque-pixel or full-generated-scene crops. A framing-policy change bumps
+  the renderer revision: reads repair stale derivatives and save/publish prepares the current
+  version without regenerating accepted board artwork.
 - Initially presented level cards are one surface: the list remains hidden and inert until
   every expected thumbnail has painted, or it presents one retryable error.
 - Terrain and scene canvases share decoded image records and acknowledge their actual first

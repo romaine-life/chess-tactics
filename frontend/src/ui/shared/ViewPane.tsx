@@ -13,6 +13,7 @@ type ViewPaneKind = 'tile' | 'transition' | 'board' | 'unit';
 
 const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
 const COVER_SEARCH_MAX_ZOOM = 16;
+const COVER_EPSILON = 1e-7;
 
 export interface ViewPanePoint {
   x: number;
@@ -61,6 +62,138 @@ function convexPolygonContains(
   });
 }
 
+interface PanHalfPlane {
+  a: number;
+  b: number;
+  threshold: number;
+}
+
+function viewportCorners(viewport: ViewPaneViewportSize): ViewPanePoint[] {
+  return [
+    { x: -viewport.width / 2, y: -viewport.height / 2 },
+    { x: viewport.width / 2, y: -viewport.height / 2 },
+    { x: viewport.width / 2, y: viewport.height / 2 },
+    { x: -viewport.width / 2, y: viewport.height / 2 },
+  ];
+}
+
+/**
+ * Screen-space pan positions for which every viewport corner remains inside the transformed
+ * accepted-art polygon. This is the polygon's Minkowski erosion by the viewport rectangle.
+ */
+function feasiblePanRegion({
+  viewport,
+  polygon,
+  zoom,
+}: {
+  viewport: ViewPaneViewportSize;
+  polygon: readonly ViewPanePoint[];
+  zoom: number;
+}): ViewPanePoint[] {
+  if (
+    polygon.length < 3
+    || zoom <= 0
+    || viewport.width <= 0
+    || viewport.height <= 0
+    || !Number.isFinite(viewport.width)
+    || !Number.isFinite(viewport.height)
+    || polygon.some((point) => !Number.isFinite(point.x) || !Number.isFinite(point.y))
+  ) return [];
+  const area = polygonSignedArea(polygon);
+  if (Math.abs(area) < COVER_EPSILON) return [];
+  const orientation = area > 0 ? 1 : -1;
+  const corners = viewportCorners(viewport);
+  const anchorCorner = corners[0];
+  const anchorPanBounds = polygon.map((point) => ({
+    x: anchorCorner.x - point.x * zoom,
+    y: anchorCorner.y - point.y * zoom,
+  }));
+  const xs = anchorPanBounds.map((point) => point.x);
+  const ys = anchorPanBounds.map((point) => point.y);
+  let region: ViewPanePoint[] = [
+    { x: Math.min(...xs), y: Math.min(...ys) },
+    { x: Math.max(...xs), y: Math.min(...ys) },
+    { x: Math.max(...xs), y: Math.max(...ys) },
+    { x: Math.min(...xs), y: Math.max(...ys) },
+  ];
+
+  const halfPlanes: PanHalfPlane[] = polygon.map((start, index) => {
+    const end = polygon[(index + 1) % polygon.length];
+    const edgeX = end.x - start.x;
+    const edgeY = end.y - start.y;
+    const edgeAtStart = edgeX * start.y - edgeY * start.x;
+    const minimumCornerTerm = Math.min(...corners.map((corner) => (
+      orientation * (
+        edgeX * corner.y
+        - edgeY * corner.x
+        - zoom * edgeAtStart
+      )
+    )));
+    return {
+      a: orientation * edgeY,
+      b: -orientation * edgeX,
+      threshold: -minimumCornerTerm,
+    };
+  });
+
+  for (const halfPlane of halfPlanes) {
+    if (!region.length) break;
+    const clipped: ViewPanePoint[] = [];
+    for (let index = 0; index < region.length; index += 1) {
+      const previous = region[(index + region.length - 1) % region.length];
+      const current = region[index];
+      const previousValue = halfPlane.a * previous.x + halfPlane.b * previous.y;
+      const currentValue = halfPlane.a * current.x + halfPlane.b * current.y;
+      const previousInside = previousValue >= halfPlane.threshold - COVER_EPSILON;
+      const currentInside = currentValue >= halfPlane.threshold - COVER_EPSILON;
+      if (previousInside !== currentInside) {
+        const denominator = currentValue - previousValue;
+        if (Math.abs(denominator) > COVER_EPSILON) {
+          const t = (halfPlane.threshold - previousValue) / denominator;
+          clipped.push({
+            x: previous.x + (current.x - previous.x) * t,
+            y: previous.y + (current.y - previous.y) * t,
+          });
+        }
+      }
+      if (currentInside) clipped.push(current);
+    }
+    region = clipped;
+  }
+  return region;
+}
+
+function closestPointOnSegment(
+  point: ViewPanePoint,
+  start: ViewPanePoint,
+  end: ViewPanePoint,
+): ViewPanePoint {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const lengthSquared = dx * dx + dy * dy;
+  if (lengthSquared <= COVER_EPSILON) return start;
+  const t = clamp(((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared, 0, 1);
+  return { x: start.x + dx * t, y: start.y + dy * t };
+}
+
+function closestPointOnPanRegion(region: readonly ViewPanePoint[], point: ViewPanePoint): ViewPanePoint {
+  if (region.length === 0) return point;
+  if (region.length === 1) return region[0];
+  let closest = region[0];
+  let closestDistanceSquared = Number.POSITIVE_INFINITY;
+  for (let index = 0; index < region.length; index += 1) {
+    const candidate = closestPointOnSegment(point, region[index], region[(index + 1) % region.length]);
+    const dx = candidate.x - point.x;
+    const dy = candidate.y - point.y;
+    const distanceSquared = dx * dx + dy * dy;
+    if (distanceSquared < closestDistanceSquared) {
+      closest = candidate;
+      closestDistanceSquared = distanceSquared;
+    }
+  }
+  return closest;
+}
+
 function viewportCoveredAtPan({
   viewport,
   polygon,
@@ -74,15 +207,9 @@ function viewportCoveredAtPan({
 }): boolean {
   if (polygon.length < 3 || zoom <= 0) return false;
   const area = polygonSignedArea(polygon);
-  if (Math.abs(area) < 1e-7) return false;
+  if (Math.abs(area) < COVER_EPSILON) return false;
   const orientation = area > 0 ? 1 : -1;
-  const viewportCorners = [
-    { x: -viewport.width / 2, y: -viewport.height / 2 },
-    { x: viewport.width / 2, y: -viewport.height / 2 },
-    { x: viewport.width / 2, y: viewport.height / 2 },
-    { x: -viewport.width / 2, y: viewport.height / 2 },
-  ];
-  return viewportCorners.every((corner) => convexPolygonContains(
+  return viewportCorners(viewport).every((corner) => convexPolygonContains(
     polygon,
     { x: (corner.x - pan.x) / zoom, y: (corner.y - pan.y) / zoom },
     orientation,
@@ -105,8 +232,9 @@ export function constrainPanToCoverViewport({
 }): ViewPanePoint {
   const covers = (pan: ViewPanePoint): boolean => viewportCoveredAtPan({ viewport, polygon, zoom, pan });
   if (covers(to)) return to;
-  const start = covers(from) ? from : { x: 0, y: 0 };
-  if (!covers(start)) return from;
+  const region = feasiblePanRegion({ viewport, polygon, zoom });
+  if (!region.length) return from;
+  const start = covers(from) ? from : closestPointOnPanRegion(region, from);
   let low = 0;
   let high = 1;
   for (let iteration = 0; iteration < 32; iteration += 1) {
@@ -125,9 +253,11 @@ export function constrainPanToCoverViewport({
 }
 
 /**
- * Smallest two-decimal zoom whose centred transformed content covers every viewport corner.
- * The polygon uses the same board-centred coordinate system as `.tileset-generated-board`;
- * The floor is centered and independent of pan. Pan is constrained separately at the art edge.
+ * Smallest safety-precision zoom at which the viewport can fit anywhere inside the accepted art.
+ * This is deliberately finer than the human-facing wheel/stepper increment: rounding a small
+ * preview to that control precision can collapse a valid zoom-out range. The polygon uses the
+ * same board-centred coordinate system as `.tileset-generated-board`; current pan does not affect
+ * the stable floor. Pan is reclamped separately when zoom changes.
  */
 export function minimumZoomToCoverViewport({
   viewport,
@@ -137,7 +267,6 @@ export function minimumZoomToCoverViewport({
 }: {
   viewport: { width: number; height: number };
   polygon: readonly ViewPanePoint[];
-  pan?: ViewPanePoint;
   minZoom: number;
   maxZoom: number;
 }): number {
@@ -151,21 +280,7 @@ export function minimumZoomToCoverViewport({
     || !Number.isFinite(viewport.height)
     || polygon.some((point) => !Number.isFinite(point.x) || !Number.isFinite(point.y))
   ) return lower;
-  const area = polygonSignedArea(polygon);
-  if (Math.abs(area) < 1e-7) return lower;
-  const orientation = area > 0 ? 1 : -1;
-  if (!convexPolygonContains(polygon, { x: 0, y: 0 }, orientation)) return upper;
-  const viewportCorners = [
-    { x: -viewport.width / 2, y: -viewport.height / 2 },
-    { x: viewport.width / 2, y: -viewport.height / 2 },
-    { x: viewport.width / 2, y: viewport.height / 2 },
-    { x: -viewport.width / 2, y: viewport.height / 2 },
-  ];
-  const covers = (zoom: number): boolean => viewportCorners.every((corner) => convexPolygonContains(
-    polygon,
-    { x: corner.x / zoom, y: corner.y / zoom },
-    orientation,
-  ));
+  const covers = (zoom: number): boolean => feasiblePanRegion({ viewport, polygon, zoom }).length > 0;
   if (covers(lower)) return lower;
   if (!covers(upper)) return upper;
   let low = lower;
@@ -175,7 +290,12 @@ export function minimumZoomToCoverViewport({
     if (covers(middle)) high = middle;
     else low = middle;
   }
-  return Math.min(upper, Math.ceil((high - 1e-9) * 100) / 100);
+  // Start from the first six-decimal candidate above the infeasible side of the search, then
+  // verify it. Exact decimal boundaries therefore stay exact; a candidate that is still just
+  // below the geometric limit advances by one safety-precision unit.
+  const safetyScale = 1_000_000;
+  const candidate = Math.ceil(low * safetyScale) / safetyScale;
+  return Math.min(upper, covers(candidate) ? candidate : candidate + 1 / safetyScale);
 }
 
 export function ViewPane({
@@ -190,6 +310,7 @@ export function ViewPane({
   coverPolygon,
   onMinimumZoomChange,
   onViewportSizeChange,
+  onViewInteraction,
   onAssetClick,
   children,
 }: {
@@ -207,6 +328,8 @@ export function ViewPane({
   onMinimumZoomChange?: (zoom: number) => void;
   /** Reports the live drawable viewport used by projection-aware editor actions. */
   onViewportSizeChange?: (size: ViewPaneViewportSize) => void;
+  /** Reports intentional user camera movement; automatic floor/reclamp updates do not call it. */
+  onViewInteraction?: () => void;
   onAssetClick?: (assetId: string) => void;
   children: ReactNode;
 }): ReactElement {
@@ -255,7 +378,7 @@ export function ViewPane({
       viewport: { width: stage.clientWidth, height: stage.clientHeight },
       polygon: coverPolygon,
       zoom,
-      from: { x: 0, y: 0 },
+      from: pan,
       to: pan,
     });
     if (Math.abs(constrained.x - pan.x) >= 1e-7 || Math.abs(constrained.y - pan.y) >= 1e-7) {
@@ -293,6 +416,7 @@ export function ViewPane({
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     if (Math.abs(event.clientX - drag.startX) > 4 || Math.abs(event.clientY - drag.startY) > 4) {
+      if (!didDragRef.current) onViewInteraction?.();
       didDragRef.current = true;
     }
     const candidate = {
@@ -326,6 +450,7 @@ export function ViewPane({
 
   const zoomPane = (event: WheelEvent<HTMLElement>) => {
     event.preventDefault();
+    onViewInteraction?.();
     const direction = event.deltaY < 0 ? 1 : -1;
     const nextZoom = clamp(Number((zoom + direction * 0.05).toFixed(2)), resolvedMinZoom, resolvedMaxZoom);
     const stage = stageRef.current;
@@ -334,7 +459,7 @@ export function ViewPane({
         viewport: { width: stage.clientWidth, height: stage.clientHeight },
         polygon: coverPolygon,
         zoom: nextZoom,
-        from: { x: 0, y: 0 },
+        from: pan,
         to: pan,
       }));
     }

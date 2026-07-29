@@ -245,7 +245,7 @@ export interface LevelEconomy {
   incomePerTurn: number;
 }
 
-/** War-specific metadata authored on the Level's Battle tab (ADR-0189). */
+/** War-specific metadata authored on the Level's Battle tab (ADR-0193). */
 export interface BattleSettings {
   /** This non-final Battle's ordinary shop also deals three free relic choices. */
   loot?: boolean;
@@ -350,7 +350,7 @@ export interface WarBattleRef {
 /**
  * A Run's separately authored ordered content document. Wars share the canonical Level
  * map and workspace transaction with Campaigns, while validation enforces exclusive
- * membership and the UI keeps their libraries separate (ADR-0189).
+ * membership and the UI keeps their libraries separate (ADR-0193).
  */
 export interface War {
   formatVersion: number;

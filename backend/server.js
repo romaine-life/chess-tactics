@@ -2470,7 +2470,7 @@ const MIGRATIONS = [
   {
     version: 44,
     name: 'wars in canonical workspaces + account active runs',
-    // ADR-0189 keeps Wars in the same revisioned canonical workspace transaction as
+    // ADR-0193 keeps Wars in the same revisioned canonical workspace transaction as
     // Campaigns/Levels while the UI exposes a separate library. Active Run progress is
     // account state, not authored content, so it gets one owner-scoped CAS document.
     sql: `
@@ -17696,7 +17696,7 @@ app.put('/api/campaign-progress', async (req, res) => {
   }
 });
 
-// --- Account-scoped active Run (ADR-0189) ---------------------------------
+// --- Account-scoped active Run (ADR-0193) ---------------------------------
 // Anonymous Runs stay in browser storage. Once signed in, the client adopts that
 // document here; the server owns one CAS-updated active Run per account.
 const ACTIVE_RUN_PHASES = new Set(['draft', 'deployment', 'battle', 'shop', 'victory']);
@@ -17854,7 +17854,7 @@ app.delete('/api/active-run', async (req, res) => {
   }
 });
 
-// --- Administrator playtest interventions (ADR-0190) -----------------------
+// --- Administrator playtest interventions (ADR-0194) -----------------------
 // Battles are deliberately client-simulated, including the surrounding Run model.
 // This endpoint is the server-owned capability check for every administrator control:
 // the UI may expose an affordance from /api/auth/me, but no intervention is armed or
@@ -18098,7 +18098,7 @@ async function withThumbnailRenderInputs(task, queryable = null) {
     return task(renderInputs);
   });
 }
-const BOARD_THUMBNAIL_RENDER_REVISION = 4;
+const BOARD_THUMBNAIL_RENDER_REVISION = 6;
 function thumbnailVersion(sourceHash, renderInputs) {
   const rendererRevision = `br${BOARD_THUMBNAIL_RENDER_REVISION}`;
   const propSeatsRevision = renderInputs && renderInputs.propSeatsRevision ? `ps${renderInputs.propSeatsRevision}` : '';

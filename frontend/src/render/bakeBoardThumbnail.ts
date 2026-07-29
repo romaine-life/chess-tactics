@@ -1,20 +1,22 @@
 import {
   BAKE_GEOMETRY,
+  BOARD_PREVIEW_FRAMING_REVISION,
   UNIT_IMG_MAX_H,
   UNIT_IMG_MAX_W,
   boardBounds,
   boardContentHash,
   boardDrawOps,
-  boardSocialFramingBounds,
+  boardPreviewFramingBounds,
   filterPredrawnOcclusionDepthPixels,
   isPredrawnBackgroundActive,
   isVersionedPredrawnBoardSurface,
-  largestSolidRect,
+  minimumZoomToCoverBoundsAtCenter,
   predrawnOcclusionDepthMapForSurface,
   predrawnOcclusionMaskOps,
   predrawnOcclusionMasksInFront,
   rasterizePredrawnBoardPixels,
   uniqueDrawSrcs,
+  worldViewportForFraming,
   type BakeBounds,
   type BoardDrawOp,
   type PredrawnOcclusionDepthMap,
@@ -32,8 +34,7 @@ export {
   boardBounds,
   boardContentHash,
   boardDrawOps,
-  boardSocialFramingBounds,
-  largestSolidRect,
+  boardPreviewFramingBounds,
   uniqueDrawSrcs,
 };
 
@@ -194,8 +195,8 @@ export async function loadBoardThumbnailImages(
 }
 
 async function renderBoardCanvas(board: EditorBoard, scale: number): Promise<{ canvas: Canvas2D; bounds: BakeBounds } | null> {
-  const bounds = boardBounds(board);
   const ops = boardDrawOps(board);
+  const framingBounds = boardPreviewFramingBounds(board);
   const predrawnBackgroundActive = isPredrawnBackgroundActive(board);
   const occlusionDepthMap = predrawnBackgroundActive
     ? predrawnOcclusionDepthMapForSurface(board.surface)
@@ -205,7 +206,39 @@ async function renderBoardCanvas(board: EditorBoard, scale: number): Promise<{ c
     && !isVersionedPredrawnBoardSurface(board.surface)
     ? predrawnOcclusionMaskOps(board)
     : [];
-  const canvas = createCanvas(Math.max(1, Math.round(bounds.width * scale)), Math.max(1, Math.round(bounds.height * scale)));
+  const viewport = {
+    width: Math.max(1, Math.round(288 * scale)),
+    height: Math.max(1, Math.round(192 * scale)),
+  };
+  const center = {
+    x: framingBounds.minX + framingBounds.width / 2,
+    y: framingBounds.minY + framingBounds.height / 2,
+  };
+  const backgroundOp = predrawnBackgroundActive
+    ? ops.find((op) => op.layer === 'terrain' && op.z === -100000)
+    : undefined;
+  const artFloor = backgroundOp
+    ? minimumZoomToCoverBoundsAtCenter({
+        viewport,
+        coverBounds: {
+          minX: backgroundOp.dx,
+          minY: backgroundOp.dy,
+          width: backgroundOp.dw,
+          height: backgroundOp.dh,
+        },
+        center,
+      })
+    : undefined;
+  if (backgroundOp && !Number.isFinite(artFloor)) {
+    throw new Error('bakeBoardThumbnail: selected AI background cannot cover the playable-board centre');
+  }
+  const fitted = worldViewportForFraming({
+    viewport,
+    bounds: framingBounds,
+    minZoom: artFloor,
+  });
+  const bounds = fitted.bounds;
+  const canvas = createCanvas(viewport.width, viewport.height);
   const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
   if (!ctx) return null;
   ctx.imageSmoothingEnabled = false;
@@ -216,7 +249,7 @@ async function renderBoardCanvas(board: EditorBoard, scale: number): Promise<{ c
   ])];
   const images = await loadBoardThumbnailImages(board, srcs);
 
-  drawBoardThumbnailOps(ctx, ops, bounds, scale, images, occlusionMasks, undefined, occlusionDepthMap);
+  drawBoardThumbnailOps(ctx, ops, bounds, fitted.zoom, images, occlusionMasks, undefined, occlusionDepthMap);
   return { canvas, bounds };
 }
 
@@ -433,55 +466,11 @@ export function paintBoardThumbnailOp(
   });
 }
 
-function largestOpaqueCanvasRect(canvas: Canvas2D): { x: number; y: number; w: number; h: number } | null {
-  const context = canvas.getContext('2d') as ThumbnailContext | null;
-  if (!context || canvas.width <= 0 || canvas.height <= 0) return null;
-  const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
-  return largestSolidRect(
-    (x, y) => pixels[(y * canvas.width + x) * 4 + 3] === 255,
-    canvas.width,
-    canvas.height,
-  );
-}
-
-function cropCanvas(canvas: Canvas2D, rect: { x: number; y: number; w: number; h: number }): Canvas2D | null {
-  const crop = createCanvas(rect.w, rect.h);
-  const context = crop.getContext('2d') as ThumbnailContext | null;
-  if (!context) return null;
-  context.imageSmoothingEnabled = false;
-  context.drawImage(canvas, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h);
-  return crop;
-}
-
 export async function bakeBoardThumbnail(board: EditorBoard, opts?: { scale?: number }): Promise<Blob> {
   const scale = Math.max(1, opts?.scale ?? 1);
   const rendered = await renderBoardCanvas(board, scale);
   if (!rendered) throw new Error('bakeBoardThumbnail: 2D context unavailable');
-  if (isPredrawnBackgroundActive(board)) {
-    const rect = largestOpaqueCanvasRect(rendered.canvas);
-    if (!rect) throw new Error('bakeBoardThumbnail: selected AI background has no fully opaque crop');
-    const crop = cropCanvas(rendered.canvas, rect);
-    if (!crop) throw new Error('bakeBoardThumbnail: crop context unavailable');
-    return canvasToBlob(crop);
-  }
   return canvasToBlob(rendered.canvas);
 }
 
-export async function bakeBoardPaintedImage(
-  board: EditorBoard,
-  opts?: { scale?: number },
-): Promise<{ url: string; width: number; height: number } | null> {
-  const scale = Math.max(1, Math.round(opts?.scale ?? 2));
-  const rendered = await renderBoardCanvas(board, scale);
-  if (!rendered) return null;
-  const { canvas } = rendered;
-  const W = canvas.width;
-  const H = canvas.height;
-  if (!W || !H) return null;
-  const rect = largestOpaqueCanvasRect(canvas);
-  if (!rect) return null;
-  const crop = cropCanvas(canvas, rect);
-  if (!crop) return null;
-  const blob = await canvasToBlob(crop);
-  return { url: URL.createObjectURL(blob), width: rect.w, height: rect.h };
-}
+export const BOARD_THUMBNAIL_FRAMING_REVISION = BOARD_PREVIEW_FRAMING_REVISION;

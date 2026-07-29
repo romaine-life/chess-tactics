@@ -1,11 +1,11 @@
 ---
-status: superseded by ADR-0191
+status: superseded by ADR-0195
 date: 2026-07-29
 deciders: owner (Nelson) + Codex
-superseded_by: 0191-admin-playtest-controls-open-in-place-from-the-battle-hud.md
+superseded_by: 0195-admin-playtest-controls-open-in-place-from-the-battle-hud.md
 ---
 
-# ADR-0190: Admin playtest controls are a hidden Settings destination
+# ADR-0194: Admin playtest controls are a hidden Settings destination
 
 ## Context
 

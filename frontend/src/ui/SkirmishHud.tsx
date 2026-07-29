@@ -83,6 +83,7 @@ export const SHORTCUT_BINDINGS: Record<string, GridAction> = {
   t: { kind: 'clear-overlays', label: 'Clear all', hint: 'Turn off all board overlays' },
   a: { kind: 'toggle', flag: 'showPlayerAttacks', label: 'Your attacks', hint: 'Show all friendly attack squares' },
   s: { kind: 'toggle', flag: 'showPlayerMoves', label: 'Your moves', hint: 'Show all friendly legal-move squares' },
+  d: { kind: 'toggle', flag: 'showPromotionZones', label: 'Promotion zones', hint: 'View pawn promotion zones' },
   z: { kind: 'zoom', dir: 1, label: 'Zoom in', hint: 'Zoom the board in' },
   x: { kind: 'zoom', dir: -1, label: 'Zoom out', hint: 'Zoom the board out' },
 };

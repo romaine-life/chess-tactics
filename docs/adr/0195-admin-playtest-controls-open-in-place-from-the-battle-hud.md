@@ -2,14 +2,14 @@
 status: accepted
 date: 2026-07-29
 deciders: owner (Nelson) + Codex
-supersedes: 0190-admin-playtest-controls-are-a-hidden-settings-destination.md
+supersedes: 0194-admin-playtest-controls-are-a-hidden-settings-destination.md
 ---
 
-# ADR-0191: Admin playtest controls open in place from the Battle HUD
+# ADR-0195: Admin playtest controls open in place from the Battle HUD
 
 ## Context
 
-ADR-0190 put administrator playtest controls behind a hidden Settings destination.
+ADR-0194 put administrator playtest controls behind a hidden Settings destination.
 Live owner review showed that leaving the board screen to arm a board intervention is
 not human-oriented: the administrator is looking at the position they want to manipulate
 and should not have to navigate away from that context.
@@ -32,7 +32,7 @@ natural place to discover playtest controls while keeping the board mounted and 
   same controls, but it is no longer the primary Battle workflow.
 - Backend authorization remains mandatory for every intervention. Live multiplayer remains
   server-sequenced and does not accept client-only board interventions.
-- The control semantics and exclusions established by ADR-0190 remain unchanged.
+- The control semantics and exclusions established by ADR-0194 remain unchanged.
 
 ## Consequences
 

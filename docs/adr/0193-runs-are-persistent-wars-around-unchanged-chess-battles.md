@@ -4,7 +4,7 @@ date: 2026-07-28
 deciders: owner (Nelson) + Codex
 ---
 
-# ADR-0189: Runs are persistent Wars around unchanged chess Battles
+# ADR-0193: Runs are persistent Wars around unchanged chess Battles
 
 ## Context
 
