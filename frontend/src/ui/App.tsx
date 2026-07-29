@@ -41,6 +41,7 @@ import {
 import { SceneBoundary } from './shell/SceneBoundary';
 import { initialSceneState, reduceScene } from './shell/sceneDirector';
 import { sceneManifest } from './shell/sceneManifest';
+import type { SceneHost } from './shell/sceneManifest';
 import { HomepageBackdrop } from './HomepageBackdrop';
 import { loadingMark } from '../diagnostics/loadingTimeline';
 import { homepageSceneMedia } from './homepageSceneMedia';
@@ -59,6 +60,21 @@ const SCENE_FADE_MS = 350;
 const SCENE_LOADING_MIN_MS = 350;
 const STARTUP_STAGE_BEAT_MS = 140;
 const STARTUP_LADDER: readonly StartupLayer[] = ['background', 'title', 'controls'];
+const sceneHostPath = (host: SceneHost): readonly SceneHost[] => (
+  host === 'play-shell' ? ['menu-shell', 'play-shell']
+    : host === 'menu-shell' ? ['menu-shell']
+      : []
+);
+const deepestSharedHost = (current: SceneHost, destination: SceneHost): SceneHost | null => {
+  const currentPath = sceneHostPath(current);
+  const destinationPath = sceneHostPath(destination);
+  let shared: SceneHost | null = null;
+  for (let index = 0; index < Math.min(currentPath.length, destinationPath.length); index += 1) {
+    if (currentPath[index] !== destinationPath[index]) break;
+    shared = currentPath[index];
+  }
+  return shared;
+};
 const sceneFailureCopy = (error: Error | null): string => (
   error?.message.includes('Canonical thumbnail derivative')
     ? 'A required level preview could not be prepared. Retry to rebuild the preview.'
@@ -356,11 +372,10 @@ export function App(): ReactElement {
   const homepageIsDestination = transitioning
     && retainedBackground !== 'homepage'
     && manifest.background === 'homepage';
-  const preservesSceneHost = Boolean(
-    scene.destination
-    && scene.current.host === scene.destination.host
-    && scene.current.host === 'menu-shell',
-  );
+  const preservedSceneHost = scene.destination
+    ? deepestSharedHost(scene.current.host, scene.destination.host)
+    : null;
+  const preservesSceneHost = preservedSceneHost !== null;
 
   return (
     <>
@@ -385,11 +400,12 @@ export function App(): ReactElement {
         </div>
         <StartupSceneContext.Provider value={startupController}>
           <SceneBoundary
-            key={manifest.host === 'menu-shell' ? manifest.host : scene.generation}
+            key={sceneHostPath(manifest.host)[0] ?? scene.generation}
             manifest={manifest}
             generation={scene.generation}
             preparing={preparing}
             preserveHost={preservesSceneHost}
+            transitionRegion={preservedSceneHost}
             onPainted={destinationPainted}
             onFailed={destinationFailed}
           >

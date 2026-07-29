@@ -525,23 +525,6 @@ export function PlayMenu(): ReactElement {
         data-user-authority={loading ? 'loading' : userWorkspaceAvailable ? 'ready' : 'error'}
         data-thumbnail-authority={thumbnailSurface.error ? 'error' : thumbnailSurface.complete ? 'ready' : 'loading'}
       >
-      <PaintedSurfaceBoundary
-        surface="play-selector"
-        signature={surfaceSignature}
-        readyToCompose={
-          !loading
-          && !surfaceError
-          && thumbnailSurface.complete
-          && (!selectedLevel || levelPreviewPainted)
-        }
-        error={surfaceError}
-        loadingLabel="Preparing Play…"
-        onRetry={() => {
-          setThumbnailSurface({ complete: false, error: null });
-          setLoadAttempt((value) => value + 1);
-        }}
-        className="play-surface"
-      >
       <aside className="menu-dest-col menu-dest-tabs play-source-rail" aria-label="Play">
         <div className="play-source-fixed">
           <PlayRailTab
@@ -598,6 +581,25 @@ export function PlayMenu(): ReactElement {
         </section>
       </aside>
 
+      <PaintedSurfaceBoundary
+        surface="play-selector"
+        signature={surfaceSignature}
+        readyToCompose={
+          !loading
+          && !surfaceError
+          && thumbnailSurface.complete
+          && (!selectedLevel || levelPreviewPainted)
+        }
+        error={surfaceError}
+        loadingLabel="Preparing Play…"
+        onRetry={() => {
+          setThumbnailSurface({ complete: false, error: null });
+          setLoadAttempt((value) => value + 1);
+        }}
+        className="play-surface"
+        showStatus={false}
+      >
+      <div className="play-destination-content" data-scene-region="play-shell">
       {selection.mode === 'skirmish' ? (
         <SkirmishProfilesPanel
           levels={profileLevels}
@@ -638,6 +640,7 @@ export function PlayMenu(): ReactElement {
           }
         />
       ) : null}
+      </div>
       </PaintedSurfaceBoundary>
       </div>
     </ThumbnailSurfaceReportContext.Provider>

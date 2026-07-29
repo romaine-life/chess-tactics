@@ -3,6 +3,8 @@
 Derived from [ADR-0136](adr/0136-loading-is-manifest-driven-and-frame-acknowledged.md)
 and [ADR-0193](adr/0193-navigation-loads-atomic-scenes-through-one-director.md),
 as refined by [ADR-0194](adr/0194-scenes-declare-persistent-visual-hosts.md).
+Persistent host nesting is governed by
+[ADR-0195](adr/0195-persistent-scene-hosts-form-a-nested-path.md).
 
 ## Readiness vocabulary
 
@@ -64,6 +66,12 @@ that host, the director retains and locks its background, title, and controls wi
 fading or remounting them. Only the declared destination region prepares unrevealed
 and enters after its own complete painted acknowledgement. Different-host navigation
 continues to replace the complete scene.
+
+Hosts form a registered path rather than a flat exception. The director preserves
+the deepest shared host and scopes acquisition, inertness, paint acknowledgement,
+failure, and entrance to its named destination region. The Play host is nested under
+the main-menu host: Play navigation remains mounted while Skirmish, Levels, and
+campaign content replace one another.
 
 Title-bar contributions discover targets inside their own committed scene. DOM-node
 refs are never lifted into the director, because portal attachment must not mutate the

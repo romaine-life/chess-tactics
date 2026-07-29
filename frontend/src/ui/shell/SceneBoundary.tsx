@@ -12,6 +12,7 @@ import {
 import { loadingError, loadingMark } from '../../diagnostics/loadingTimeline';
 import { loadDecodedImage } from '../../render/imageResources';
 import type { SceneManifest } from './sceneManifest';
+import type { SceneHost } from './sceneManifest';
 
 type ParticipantPhase = 'loading' | 'painted' | 'error';
 interface Participant { phase: ParticipantPhase; error: Error | null }
@@ -74,6 +75,7 @@ interface SceneBoundaryProps {
   generation: number;
   preparing: boolean;
   preserveHost: boolean;
+  transitionRegion: SceneHost | null;
   children: ReactNode;
   onPainted: (generation: number) => void;
   onFailed: (generation: number, error: Error) => void;
@@ -84,6 +86,7 @@ export function SceneBoundary({
   generation,
   preparing,
   preserveHost,
+  transitionRegion,
   children,
   onPainted,
   onFailed,
@@ -133,8 +136,8 @@ export function SceneBoundary({
     // Then the boundary decodes the pixels actually referenced by this scene and waits
     // for two browser paint opportunities. A missing participant cannot be invented by
     // elapsed time; route families with async work must register an owner.
-    const root = preserveHost
-      ? rootRef.current.querySelector<HTMLElement>('[data-scene-region]')
+    const root = preserveHost && transitionRegion
+      ? rootRef.current.querySelector<HTMLElement>(`[data-scene-region="${transitionRegion}"]`)
       : rootRef.current;
     if (!root) return undefined;
     void paintFrames()
@@ -156,7 +159,7 @@ export function SceneBoundary({
         onFailed(generation, error);
       });
     return () => { cancelled = true; };
-  }, [generation, manifest, onFailed, onPainted, preparing, preserveHost, revision]);
+  }, [generation, manifest, onFailed, onPainted, preparing, preserveHost, revision, transitionRegion]);
 
   return (
     <SceneRegistrationContext.Provider value={registration}>
@@ -167,6 +170,7 @@ export function SceneBoundary({
         data-scene-generation={generation}
         data-scene-participants={participantSnapshot.join(',')}
         data-scene-unresolved={unresolvedParticipants.join(',')}
+        data-transition-region={transitionRegion ?? undefined}
         inert={preparing ? true : undefined}
         aria-hidden={preparing && !preserveHost || undefined}
       >

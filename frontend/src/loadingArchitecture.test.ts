@@ -48,7 +48,7 @@ describe('professional loading architecture guards', () => {
   it('gives every retry and retarget a fresh cancellable scene generation', () => {
     const app = read('./ui/App.tsx');
     const director = read('./ui/shell/sceneDirector.ts');
-    expect(app).toContain("key={manifest.host === 'menu-shell' ? manifest.host : scene.generation}");
+    expect(app).toContain('key={sceneHostPath(manifest.host)[0] ?? scene.generation}');
     expect(director).toContain('generation: state.generation + 1');
     expect(director).toContain('if (action.generation !== state.generation) return state');
     expect(app).toContain("'scene-cancelled'");

@@ -240,12 +240,21 @@ try {
   }
   if (assertMenuHostContinuity) {
     await page.evaluateOnNewDocument(() => {
-      window.__ctMenuHostContinuity = { seen: false, violations: [] };
+      window.__ctMenuHostContinuity = {
+        seen: false,
+        violations: [],
+        playSeen: false,
+        playViolations: [],
+      };
       window.__ctMenuHostRail = null;
+      window.__ctPlayHostRail = null;
       const sample = () => {
         const director = document.querySelector('.scene-director');
+        const boundary = document.querySelector('.scene-boundary');
         const rail = document.querySelector('[aria-label="Game modes"]');
+        const playRail = document.querySelector('.play-source-rail[aria-label="Play"]');
         if (rail && !window.__ctMenuHostRail) window.__ctMenuHostRail = rail;
+        if (playRail && !window.__ctPlayHostRail) window.__ctPlayHostRail = playRail;
         if (director?.classList.contains('is-host-preserving')) {
           window.__ctMenuHostContinuity.seen = true;
           const title = document.querySelector('.app-shell-titlebar');
@@ -265,6 +274,27 @@ try {
               connected: Boolean(rail?.isConnected),
               railOpacity,
               titleOpacity,
+            });
+          }
+        }
+        if (
+          director?.classList.contains('is-host-preserving')
+          && boundary?.getAttribute('data-transition-region') === 'play-shell'
+        ) {
+          window.__ctMenuHostContinuity.playSeen = true;
+          const playRailOpacity = playRail ? Number.parseFloat(getComputedStyle(playRail).opacity) : 0;
+          if (
+            !playRail
+            || playRail !== window.__ctPlayHostRail
+            || !playRail.isConnected
+            || playRailOpacity < 0.99
+          ) {
+            window.__ctMenuHostContinuity.playViolations.push({
+              phase: director.getAttribute('data-scene-phase'),
+              playRail: Boolean(playRail),
+              samePlayRail: playRail === window.__ctPlayHostRail,
+              connected: Boolean(playRail?.isConnected),
+              playRailOpacity,
             });
           }
         }
@@ -473,6 +503,14 @@ try {
       throw error;
     });
     await page.click('.main-menu-mode-tab[data-nav="/play/select/skirmish"]');
+    await page.waitForFunction(
+      `Boolean(
+        document.querySelector('[data-scene-phase="current"]')
+        && document.querySelector('.main-menu-mode-tab[data-nav="/play/select/campaign/off-c-crown-valoria"]')
+      )`,
+      { timeout },
+    );
+    await page.click('.main-menu-mode-tab[data-nav="/play/select/campaign/off-c-crown-valoria"]');
   }
   if (retrySceneError) {
     await page.waitForSelector('[data-scene-phase="error"] .scene-loading-presentation button', {
@@ -614,7 +652,12 @@ try {
   }
   if (assertMenuHostContinuity) {
     const result = await page.evaluate(() => window.__ctMenuHostContinuity);
-    if (!result?.seen || result.violations.length) {
+    if (
+      !result?.seen
+      || result.violations.length
+      || !result.playSeen
+      || result.playViolations.length
+    ) {
       console.error(`menu host continuity failed: ${JSON.stringify(result)}`);
       process.exitCode = 15;
       throw new Error('menu host continuity assertion failed');

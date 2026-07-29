@@ -148,7 +148,7 @@ export function MainMenu({ path = '/' }: { path?: string } = {}): ReactElement {
             {MENU_TABS.map((tab, index) => <ModeTab key={tab.slug} tab={tab} index={index} active={dest !== null && tab.href === DEST_HREF[dest]} />)}
           </aside>
           {dest ? (
-            <div className="menu-dest" data-scene-region key={dest} aria-label={DEST_LABEL[dest]}>
+            <div className="menu-dest" data-scene-region="menu-shell" key={dest} aria-label={DEST_LABEL[dest]}>
               {dest === 'settings' ? <Settings embedded />
                 : dest === 'play' ? <PlayMenu />
                 : dest === 'lobbies' ? <Lobbies embedded />

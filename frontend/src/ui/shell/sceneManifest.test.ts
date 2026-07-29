@@ -4,7 +4,7 @@ import { sceneManifest } from './sceneManifest';
 describe('scene manifests', () => {
   it('treats a destination as a complete visual scene', () => {
     expect(sceneManifest('/play/select/skirmish')).toMatchObject({
-      host: 'menu-shell',
+      host: 'play-shell',
       background: 'homepage',
       paintOwner: 'play-selector',
       critical: expect.arrayContaining(['selector-chrome', 'visible-level-thumbnails']),

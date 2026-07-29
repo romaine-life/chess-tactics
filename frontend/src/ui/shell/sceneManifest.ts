@@ -2,6 +2,7 @@ import { normalizeRoutePath } from '../navigation';
 import { isPlaySelectorPath } from '../playHubRoute';
 
 export type SceneBackground = 'homepage' | 'battlefield' | 'tool';
+export type SceneHost = 'menu-shell' | 'play-shell' | 'standalone';
 export type ScenePaintOwner =
   | 'dom'
   | 'play-selector'
@@ -16,7 +17,7 @@ export type ScenePaintOwner =
 export interface SceneManifest {
   id: string;
   /** Stable visual host retained across destinations that occupy one shell. */
-  host: 'menu-shell' | 'standalone';
+  host: SceneHost;
   background: SceneBackground;
   paintOwner: ScenePaintOwner;
   critical: readonly string[];
@@ -29,7 +30,7 @@ const manifest = (
   paintOwner: ScenePaintOwner,
   critical: readonly string[],
   opportunistic: readonly string[] = [],
-  host: SceneManifest['host'] = 'standalone',
+  host: SceneHost = 'standalone',
 ): SceneManifest => ({ id, host, background, paintOwner, critical, opportunistic });
 
 /**
@@ -57,7 +58,7 @@ export function sceneManifest(pathname: string): SceneManifest {
       'title-bar',
       'selector-chrome',
       'visible-level-thumbnails',
-    ], ['below-fold-level-thumbnails'], 'menu-shell');
+    ], ['below-fold-level-thumbnails'], 'play-shell');
   }
   if (path === '/editor/level' || path === '/edit' || path === '/level-editor') {
     return manifest('level-editor', 'homepage', 'level-editor', [

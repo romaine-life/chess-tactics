@@ -9470,7 +9470,8 @@ body { font-size: 17px; }
   opacity: 1;
   pointer-events: none;
 }
-.scene-boundary.is-region-preparing [data-scene-region] {
+.scene-boundary.is-region-preparing[data-transition-region="menu-shell"] [data-scene-region="menu-shell"],
+.scene-boundary.is-region-preparing[data-transition-region="play-shell"] [data-scene-region="play-shell"] {
   opacity: 0;
 }
 .scene-director.is-entering:not(.is-host-preserving) .scene-boundary,
@@ -9483,10 +9484,13 @@ body { font-size: 17px; }
   opacity: 0;
   pointer-events: none;
 }
-.scene-director.is-entering.is-host-preserving [data-scene-region] {
+.scene-director.is-entering.is-host-preserving .scene-boundary[data-transition-region="menu-shell"] [data-scene-region="menu-shell"],
+.scene-director.is-entering.is-host-preserving .scene-boundary[data-transition-region="play-shell"] [data-scene-region="play-shell"] {
   opacity: 1;
   transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
 }
+
+.play-destination-content { display: contents; }
 .scene-retained-background {
   position: fixed;
   inset: 0;
