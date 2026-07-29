@@ -1207,7 +1207,9 @@ export function SkirmishBoard({
     viewKey: `${levelId ?? 'free'}:${sessionEpoch}`,
     viewport: viewViewportSize,
     minimumZoom: boardMinZoom,
-    maximumZoom: boardMaxZoom,
+    // The canonical opening fit owns its zoom. setOpeningView raises the interactive ceiling
+    // before applyOpening calls setZoom, so the old human-control cap cannot undershoot it.
+    maximumZoom: 16,
     zoom: boardZoom,
     setZoom,
     setPan: setBoardPan,

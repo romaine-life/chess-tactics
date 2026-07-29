@@ -83,14 +83,17 @@ export const useSkirmishView = create<SkirmishViewState>((set) => ({
   })),
   setMinZoom: (zoom) => set((state) => {
     const minZoom = Math.max(MIN_ZOOM, zoom);
-    const maxZoom = Math.max(MAX_ZOOM, minZoom);
+    const maxZoom = Math.max(MAX_ZOOM, minZoom, state.openingZoom);
     return { minZoom, maxZoom, zoom: Math.min(maxZoom, Math.max(state.zoom, minZoom)) };
   }),
   setPan: (pan) => set({ pan }),
-  setOpeningView: (camera) => set({
+  setOpeningView: (camera) => set((state) => ({
     openingZoom: camera.zoom,
     openingPan: camera.pan,
-  }),
+    // Opening composition is geometry, not a suggestion subject to the ordinary control cap.
+    // Raising the ceiling first lets the framing hook apply the exact camera on large viewports.
+    maxZoom: Math.max(MAX_ZOOM, state.minZoom, camera.zoom, state.zoom),
+  })),
   clearOverlays: () => set({
     showMoves: false,
     showEnemyAttacks: false,

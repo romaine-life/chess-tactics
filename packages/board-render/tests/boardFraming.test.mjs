@@ -8,6 +8,9 @@ const here = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const {
   BOARD_PREVIEW_MARGIN_RATIO,
+  BOARD_PREVIEW_ASPECT,
+  BOARD_THUMBNAIL_SIZE,
+  boardPreviewHeight,
   cameraToContainBounds,
   centeredPlayableBoardFramingBounds,
   minimumZoomToCoverBoundsAtCenter,
@@ -25,6 +28,13 @@ test('playable framing is stable board geometry with five percent on every side'
   assert.equal(framed.minX, visual.minX - visual.width * 0.05);
   assert.equal(framed.minY, visual.minY - visual.height * 0.05);
   assert.deepEqual(visual, { minX: -384, minY: -27, width: 768, height: 432 });
+});
+
+test('ordinary previews use the exact Play viewing-pane aspect', () => {
+  assert.deepEqual(BOARD_PREVIEW_ASPECT, { width: 195, height: 124 });
+  assert.deepEqual(BOARD_THUMBNAIL_SIZE, { width: 390, height: 248 });
+  assert.equal(boardPreviewHeight(195), 124);
+  assert.equal(1560 / 992, BOARD_PREVIEW_ASPECT.width / BOARD_PREVIEW_ASPECT.height);
 });
 
 test('centred framing is independent of generated art and scene content', () => {
@@ -65,7 +75,7 @@ test('rectangular art safety is measured around the board-owned centre', () => {
 test('fixed-raster viewport represents the same centred contain camera', () => {
   const frame = playableBoardFramingBounds({ cols: 4, rows: 6 });
   const fitted = worldViewportForFraming({
-    viewport: { width: 288, height: 192 },
+    viewport: BOARD_THUMBNAIL_SIZE,
     bounds: frame,
   });
   assert.ok(fitted.bounds.width >= frame.width);

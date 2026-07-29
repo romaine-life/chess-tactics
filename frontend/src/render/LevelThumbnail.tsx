@@ -8,6 +8,10 @@ import {
 } from './bakeBoardThumbnail';
 import { loadingError, loadingMark, loadingMeasure } from '../diagnostics/loadingTimeline';
 import { levelThumbnailUrl } from '../net/levelThumbnails';
+import {
+  BOARD_PREVIEW_ASPECT,
+  BOARD_THUMBNAIL_SIZE,
+} from '@chess-tactics/board-render';
 
 // Player lists consume one compact immutable derivative produced by the backend. The board
 // conversion/bake path below is reserved for explicitly named unsaved authoring previews.
@@ -74,7 +78,6 @@ function rasterScale(): number {
 export function LevelThumbnail({
   level,
   width,
-  height,
   className,
   alt,
   onReady,
@@ -83,7 +86,6 @@ export function LevelThumbnail({
 }: {
   level: Level;
   width: number;
-  height: number;
   className?: string;
   alt?: string;
   onReady?: (levelId: string) => void;
@@ -95,11 +97,10 @@ export function LevelThumbnail({
   const canonicalDerivative = !authoringPreview
     ? levelThumbnailUrl(level.id)
     : null;
-  // Canonical and authoring derivatives own the same fixed 3:2 board-relative composition.
+  // Canonical and authoring derivatives own the literal Play viewing-pane composition.
   const coverThumbnail = true;
   const contentHash = useMemo(() => board ? boardContentHash(board) : `canonical:${level.id}`, [board, level.id]);
-  // Runtime and authoring derivatives share one fixed 3:2 delivery composition.
-  const aspect = 1.5;
+  const aspect = BOARD_PREVIEW_ASPECT.width / BOARD_PREVIEW_ASPECT.height;
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   // Canonical derivatives are already compact delivery rasters: request them with the
@@ -186,9 +187,12 @@ export function LevelThumbnail({
     };
   }, [near, authoringPreview, board, canonicalDerivative, contentHash, level.id, onError]);
 
-  // Integer display dimensions; the box keeps the row's footprint stable whether or not the bake
-  // has resolved. Every derivative already owns the canonical 3:2 board-relative composition.
-  const boxStyle = { width: `${Math.round(width)}px`, height: `${Math.round(height)}px` } as const;
+  // The component owns its ratio. Callers choose only width, so no surface can accidentally
+  // stretch the exact Play-pane composition back to a legacy 3:2 or 4:3 rectangle.
+  const boxStyle = {
+    width: `${Math.round(width)}px`,
+    aspectRatio: `${BOARD_PREVIEW_ASPECT.width} / ${BOARD_PREVIEW_ASPECT.height}`,
+  } as const;
 
   return (
     <div
@@ -201,8 +205,8 @@ export function LevelThumbnail({
       {url ? (
         <img
           src={url}
-          width={Math.round(width)}
-          height={Math.round(height)}
+          width={BOARD_THUMBNAIL_SIZE.width}
+          height={BOARD_THUMBNAIL_SIZE.height}
           loading="eager"
           decoding="async"
           alt={alt ?? `${level.name} board`}

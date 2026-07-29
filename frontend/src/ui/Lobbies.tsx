@@ -100,7 +100,7 @@ function LevelPicker({ current, selectedId, onPick }: { current: Lobby; selected
               onClick={() => onPick(level.id)}
             >
               <span className="utility-level-thumb" aria-hidden="true">
-                <LevelThumbnail level={level} width={180} height={120} />
+                <LevelThumbnail level={level} width={180} />
               </span>
               <strong>{level.name}</strong>
               <small>{levelObjectiveLine(level)}</small>

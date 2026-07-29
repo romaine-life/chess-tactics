@@ -11,7 +11,29 @@ import {
  * only as optional camera room.
  */
 export const BOARD_PREVIEW_MARGIN_RATIO = 0.05;
-export const BOARD_PREVIEW_FRAMING_REVISION = 2;
+export const BOARD_PREVIEW_FRAMING_REVISION = 3;
+
+/**
+ * Every ordinary board preview uses the literal Play viewing-pane shape.
+ *
+ * Play's 1920×1080 design canvas reserves 360px for the HUD and 88px for the
+ * title bar, leaving 1560×992. Reduced to lowest terms, that is 195:124.
+ */
+export const BOARD_PREVIEW_ASPECT = Object.freeze({
+  width: 195,
+  height: 124,
+});
+
+/** Quarter-scale delivery raster with the exact canonical aspect. */
+export const BOARD_THUMBNAIL_SIZE = Object.freeze({
+  width: 390,
+  height: 248,
+});
+
+export function boardPreviewHeight(width: number): number {
+  if (!Number.isFinite(width) || width <= 0) return 0;
+  return width * BOARD_PREVIEW_ASPECT.height / BOARD_PREVIEW_ASPECT.width;
+}
 
 export interface BoardFramingBounds {
   minX: number;

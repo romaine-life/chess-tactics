@@ -528,6 +528,9 @@ h1 {
   aspect-ratio: 3 / 2;
   background: linear-gradient(180deg, #16243a, #0b1422);
 }
+.tileset-studio-card-image.pages-card-image:has(.level-thumbnail) {
+  aspect-ratio: var(--board-view-aspect);
+}
 /* Beats the base .tileset-studio-card-image img (iso-tile-sized, pixelated, contain). */
 .tileset-studio-card-image.pages-card-image img {
   width: 100%;
@@ -4131,9 +4134,11 @@ h1 {
 
 :root {
   --skirmish-rail-w: clamp(300px, 24vw, 360px);
-  --board-view-aspect-width: 4;
-  --board-view-aspect-height: 3;
-  --board-view-aspect: var(--board-view-aspect-width) / var(--board-view-aspect-height);
+  --skirmish-design-scale: 1;
+  --board-view-aspect-width: 195;
+  --board-view-aspect-height: 124;
+  --board-view-aspect:
+    var(--board-view-aspect-width) / var(--board-view-aspect-height);
 }
 
 .skirmish-screen {
@@ -4178,7 +4183,9 @@ h1 {
   color: var(--skirmish-ink);
   display: grid;
   font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
-  column-gap: var(--skirmish-grid-gap);
+  /* The board pane ends at the HUD's outer rail; exposing a background gutter between
+     those two surfaces makes the pane boundary look accidental and leaks hidden ambience. */
+  column-gap: 0;
   row-gap: 0;
   grid-template-columns: minmax(0, 1fr) var(--skirmish-rail-w);
   /* Row-first: a full-bleed title bar spanning both columns on top (ADR-0004),
@@ -4202,12 +4209,54 @@ h1 {
   padding: 0;
 }
 
+.shell.skirmish-active {
+  background: #02070b;
+  position: relative;
+}
+
+/*
+ * Play is authored once at 1920 × 1080. The browser rectangle only scales and
+ * centres this composition; it never changes the internal header/board/HUD tracks.
+ */
+.shell.skirmish-active .app-root {
+  height: var(--skirmish-design-height);
+  left: 50%;
+  min-height: var(--skirmish-design-height);
+  min-width: var(--skirmish-design-width);
+  overflow: hidden;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%) scale(var(--skirmish-design-scale));
+  transform-origin: center;
+  width: var(--skirmish-design-width);
+}
+
+.shell.skirmish-active .skirmish-screen.is-design-locked {
+  --app-header-h: var(--skirmish-header-height);
+  --skirmish-rail-w: var(--skirmish-hud-width);
+  grid-template-columns: minmax(0, 1fr) var(--skirmish-rail-w);
+  grid-template-rows: var(--app-header-h) minmax(0, 1fr);
+  height: var(--skirmish-design-height);
+  width: var(--skirmish-design-width);
+}
+
+.shell.skirmish-active .skirmish-screen.is-design-locked .skirmish-brand strong {
+  font-size: 1.55rem;
+}
+
+.shell.skirmish-active .skirmish-screen.is-design-locked .skirmish-admin-mode {
+  min-inline-size: min(520px, calc(100% - (2 * var(--ds-gutter))));
+}
+
 .shell.skirmish-active .app-root,
 .shell.is-immersive .app-root {
   grid-row: 1;
+  overflow: hidden;
+}
+
+.shell.is-immersive .app-root {
   height: 100%;
   min-height: 0;
-  overflow: hidden;
 }
 
 /* Studio/dev editor & inspector surfaces (Portrait Editor, Doodad Editor, Surface Lab,
@@ -4239,6 +4288,12 @@ h1 {
   pointer-events: none;
   position: absolute;
   z-index: -1;
+}
+
+/* A complete pre-drawn raster owns every environment pixel. Remove the ordinary
+   battlefield backdrop layer altogether instead of retaining an invisible decoded image. */
+.skirmish-screen.is-predrawn-board::before {
+  content: none;
 }
 
 /* The level editor is a homepage-family surface: it shows the ONE shared HomepageBackdrop
@@ -4520,8 +4575,6 @@ h1 {
 }
 
 .skirmish-field {
-  container-name: board-view-seat;
-  container-type: size;
   display: grid;
   min-height: 0;
   overflow: hidden;
@@ -4546,29 +4599,6 @@ h1 {
   z-index: 1;
 }
 
-/* Gameplay and the selected-level live preview share one literal 4:3 drawable viewport.
-   The playfield remains responsive; this frame takes the largest 4:3 rectangle that fits. */
-.skirmish-screen:not(.level-editor-screen) .skirmish-board-frame {
-  aspect-ratio: var(--board-view-aspect);
-  height: auto;
-  max-height: 100%;
-  max-width: 100%;
-  width: 100%;
-}
-
-@supports (width: 1cqw) {
-  .skirmish-screen:not(.level-editor-screen) .skirmish-board-frame {
-    block-size: min(
-      100cqh,
-      calc(100cqw * var(--board-view-aspect-height) / var(--board-view-aspect-width))
-    );
-    inline-size: min(
-      100cqw,
-      calc(100cqh * var(--board-view-aspect-width) / var(--board-view-aspect-height))
-    );
-  }
-}
-
 .skirmish-board-frame [data-testid="skirmish-board"] {
   display: grid;
   grid-template-rows: minmax(0, 1fr);
@@ -4577,22 +4607,6 @@ h1 {
   overflow: hidden;
   position: relative;
   width: 100%;
-}
-
-/* Full-bleed board: the board is a free-panned canvas, not a framed thumbnail, so it
-   must NOT be sliced where it's bigger than its box — that hard mid-screen cut under
-   the title bar is the bug. Drop the overflow clip on the board's OWN nested containers
-   so the board bleeds past them, behind the (opaque, floating) title bar + HUD, and is
-   cut only at the screen edge (.skirmish-screen keeps overflow:hidden).
-   Scoped to the REAL skirmish via :not(.level-editor-screen): the level editor shares
-   the .skirmish-screen chrome (its root carries BOTH classes) but is a framed authoring
-   tool, so it — and the Studio viewers — keep their clip. */
-.skirmish-screen:not(.level-editor-screen) .skirmish-field,
-.skirmish-screen:not(.level-editor-screen) .skirmish-board-frame,
-.skirmish-screen:not(.level-editor-screen) .skirmish-board-frame [data-testid="skirmish-board"],
-.skirmish-screen:not(.level-editor-screen) .tileset-view-stage,
-.skirmish-screen:not(.level-editor-screen) .tileset-view-art-layer {
-  overflow: visible;
 }
 
 /* No board box: the board container paints NO background — the board art floats on
@@ -5006,7 +5020,9 @@ body.loading-bootstrap .app-startup-status {
   position: fixed;
   z-index: 60000;
   pointer-events: none;
-  transform: translate(-50%, -64%);
+  transform:
+    translate(-50%, -64%)
+    scale(var(--skirmish-design-scale, 1));
   object-fit: contain;
   filter: drop-shadow(0 15px 13px rgba(0, 0, 0, .5));
   will-change: left, top;
@@ -8620,19 +8636,19 @@ body.loading-bootstrap .app-startup-status {
 
 @media (max-width: 1180px) {
   :root { --skirmish-rail-w: 324px; }
-  .skirmish-screen {
+  :root:not(.skirmish-design-locked) .skirmish-screen {
     grid-template-columns: minmax(0, 1fr) minmax(286px, 324px);
   }
 
   /* Drop the objective chip first when the bar gets tight; brand + turn + counts stay. */
-  .skirmish-objective {
+  :root:not(.skirmish-design-locked) .skirmish-objective {
     display: none;
   }
 
 }
 
 @media (max-width: 860px) {
-  .skirmish-screen {
+  :root:not(.skirmish-design-locked) .skirmish-screen {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(520px, 62vh) auto;
     /* The board art layer intentionally overdraws its fitted viewport. Keep the
@@ -8654,18 +8670,18 @@ body.loading-bootstrap .app-startup-status {
   }
 
   /* Single column: title bar stays full-bleed on top, board then HUD stacked under it. */
-  .skirmish-topbar {
+  :root:not(.skirmish-design-locked) .skirmish-topbar {
     grid-column: 1;
     grid-row: 1;
   }
 
-  .skirmish-war-room {
+  :root:not(.skirmish-design-locked) .skirmish-war-room {
     grid-column: 1;
     grid-row: 2;
     min-height: 520px;
   }
 
-  .skirmish-hud {
+  :root:not(.skirmish-design-locked) .skirmish-hud {
     grid-column: 1;
     grid-row: 3;
     height: auto;
@@ -8692,69 +8708,69 @@ body.loading-bootstrap .app-startup-status {
   }
 
   /* Page scrolls on mobile — don't nest a gameplay panel scroll inside it. */
-  .skirmish-hud-panel {
+  :root:not(.skirmish-design-locked) .skirmish-hud-panel {
     overflow: visible;
   }
 
-  .skirmish-score-panel {
+  :root:not(.skirmish-design-locked) .skirmish-score-panel {
     display: flex;
     grid-column: 1 / -1;
   }
 
   /* Stacked mobile bar: brand left, counts on the right; hide the center status group. */
-  .skirmish-topbar-status {
+  :root:not(.skirmish-design-locked) .skirmish-topbar-status {
     display: none;
   }
 }
 
 @media (max-width: 560px) {
-  .skirmish-screen {
+  :root:not(.skirmish-design-locked) .skirmish-screen {
     gap: 8px;
     padding: 8px;
   }
 
-  .skirmish-war-room {
+  :root:not(.skirmish-design-locked) .skirmish-war-room {
     min-height: 460px;
   }
 
-  .skirmish-topbar {
+  :root:not(.skirmish-design-locked) .skirmish-topbar {
     min-height: 62px;
     padding: 8px 10px;
   }
 
-  .skirmish-brand strong {
+  :root:not(.skirmish-design-locked) .skirmish-brand strong {
     font-size: .78rem;
     white-space: normal;
   }
 
-  .skirmish-brand small {
+  :root:not(.skirmish-design-locked) .skirmish-brand small {
     font-size: .9rem;
   }
 
-  .skirmish-brand .skirmish-icon,
-  .skirmish-objective .skirmish-icon {
+  :root:not(.skirmish-design-locked) .skirmish-brand .skirmish-icon,
+  :root:not(.skirmish-design-locked) .skirmish-objective .skirmish-icon {
     height: 34px;
     width: 34px;
   }
 
-  .skirmish-hud {
+  :root:not(.skirmish-design-locked) .skirmish-hud {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .skirmish-selected-body {
+  :root:not(.skirmish-design-locked) .skirmish-selected-body {
     grid-template-columns: 84px minmax(0, 1fr);
   }
 
-  .skirmish-portrait-frame {
+  :root:not(.skirmish-design-locked) .skirmish-portrait-frame {
     min-height: 84px;
     padding: 0;
   }
 
-  .skirmish-action-button {
+  :root:not(.skirmish-design-locked) .skirmish-action-button {
     grid-template-columns: 34px minmax(0, 1fr);
   }
 
-  .skirmish-action-button small {
+  :root:not(.skirmish-design-locked) .skirmish-action-button small {
     grid-column: 2;
     justify-self: start;
   }
@@ -9757,42 +9773,28 @@ body { font-size: 17px; }
 .terrain-void { background: #1f2430; }
 /* ===== end Compact Level Info ===== */
 
-/* The SELECTED-level live preview and gameplay share one canonical 4:3 drawable viewport.
-   The fixed preview-column width therefore owns height; compact raster derivatives remain 3:2.
-   The registered inner-box role (ADR-0082) exclusively owns the surrounding chrome. The live
-   viewer uses the shared playable-board opening composition, while generated overscan controls
-   only the independent accepted-art zoom/pan range. */
+/* The selected-level live preview uses the exact 195:124 shape of Play's fixed 1560×992
+   viewing pane. The registered inner-box role exclusively owns the surrounding chrome;
+   generated overscan controls only the independent accepted-art zoom/pan range. */
 .ce-preview-col {
   container-name: selected-board-preview;
   container-type: inline-size;
 }
 
 .ce-preview-frame {
-  --ce-preview-rail: var(--le-chrome-inner-rail-w, 7px);
   position: relative;
   flex: none;
-  aspect-ratio: var(--board-view-aspect);
   block-size: auto;
   inline-size: 100%;
   min-height: 0;
-}
-@supports (width: 1cqi) {
-  .ce-preview-frame {
-    /* Account for the canonical equal-width rails so the drawable content box is exactly 4:3. */
-    aspect-ratio: auto;
-    block-size: calc(
-      (100cqi - 2 * var(--ce-preview-rail))
-      * var(--board-view-aspect-height) / var(--board-view-aspect-width)
-      + 2 * var(--ce-preview-rail)
-    );
-  }
 }
 /* Position the world viewport in the canonical inner role's content box. The registered rail
    remains visible around it while the board covers the complete interior; transparent board
    corners reveal the level world, never a transparency checkerboard (ADR-0067). */
 .ce-level-viewer {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  aspect-ratio: var(--board-view-aspect);
+  inline-size: 100%;
   overflow: hidden;
   display: grid;
   grid-template-rows: minmax(0, 1fr);
@@ -10874,6 +10876,38 @@ body { font-size: 17px; }
   background-size: 24px 24px;
   border: 1px solid rgba(67, 127, 179, 0.28);
   border-radius: 6px;
+}
+
+/*
+ * Every rendered board viewport uses Play's exact 1560×992 (195:124) shape.
+ * The seat fills the surrounding UI allocation; the child is the largest
+ * matching pane that fits it, so camera measurement, clipping, and input all
+ * address the same visible rectangle.
+ */
+.board-view-pane-seat {
+  container-type: size;
+  display: grid;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  place-items: center;
+  width: 100%;
+}
+
+.board-view-pane-seat > .tileset-view-stage.is-board {
+  align-self: center;
+  aspect-ratio: var(--board-view-aspect);
+  box-sizing: border-box;
+  height: min(
+    100cqb,
+    calc(100cqi * var(--board-view-aspect-height) / var(--board-view-aspect-width))
+  );
+  justify-self: center;
+  width: min(
+    100cqi,
+    calc(100cqb * var(--board-view-aspect-width) / var(--board-view-aspect-height))
+  );
 }
 
 .tileset-view-stage {
@@ -17328,21 +17362,23 @@ button.tileset-relationship-cell {
   min-height: 80px;
 }
 
-/* Leading board preview in a campaign level-select row. The inner derivative owns a canonical
-   3:2 board-relative composition; the surrounding kit frame may remain slightly taller. */
+/* Leading board preview in a campaign level-select row. The content box uses Play's exact
+   195:124 board-pane shape; the shell calculation adds the frame rails outside that surface. */
 .settings-row-thumb {
+  --level-thumb-shell-width: 84px;
   flex: none;
   box-sizing: border-box;
   display: block;
-  width: 84px;
-  height: 60px;
+  inline-size: var(--level-thumb-shell-width);
+  block-size: auto;
   overflow: hidden;
 }
 
 .settings-row-thumb .level-thumbnail,
 .settings-row-thumb .settings-row-thumb-empty {
   display: block;
-  height: 100%;
+  aspect-ratio: var(--board-view-aspect);
+  height: auto;
   width: 100%;
 }
 
@@ -17738,11 +17774,10 @@ button.tileset-relationship-cell {
 }
 
 .ce-editor-level-row .settings-row-thumb {
-  block-size: 54px;
+  --level-thumb-shell-width: 76px;
   border-width: 5px;
   border-image-width: 5px;
   grid-area: thumb;
-  inline-size: 76px;
 }
 
 .ce-editor-level-copy {
@@ -18184,11 +18219,10 @@ button.tileset-relationship-cell {
   padding: 10px 18px;
 }
 .campaign-level-row .settings-row-thumb {
-  block-size: 54px;
+  --level-thumb-shell-width: 76px;
   border-width: 5px;
   border-image-width: 5px;
   grid-area: thumb;
-  inline-size: 76px;
 }
 .campaign-level-row .settings-row-copy {
   align-content: center;
@@ -19017,8 +19051,8 @@ button.tileset-relationship-cell {
      registered controls require a 60px control lane (4px clearance per side).
      The retired 60px bar made an 8px divider overlap mathematically unavoidable.
      Drop only the Settings UI-scale zoom and tighten the page inset. */
-  .app-shell-titlebar.app-titlebar--ui-scaled { zoom: 1; }
-  .app-shell-titlebar.settings-header-frame {
+  :root:not(.skirmish-design-locked) .app-shell-titlebar.app-titlebar--ui-scaled { zoom: 1; }
+  :root:not(.skirmish-design-locked) .app-shell-titlebar.settings-header-frame {
     --ds-titlebar-inset: 6px;
     --titlebar-pad-inline: 12px;
     padding-block: var(--ds-titlebar-inset);
@@ -19028,7 +19062,7 @@ button.tileset-relationship-cell {
   /* Skirmish: keep the board + HUD side-by-side. The 860px block stacks them, which
      forces an awkward vertical page-scroll on a short landscape screen; the base 2-column
      layout fits a wide phone far better, just with a slimmer HUD. */
-  .skirmish-screen {
+  :root:not(.skirmish-design-locked) .skirmish-screen {
     grid-template-columns: minmax(0, 1fr) clamp(176px, 30vw, 300px);
     grid-template-rows: var(--app-header-h) minmax(0, 1fr);
     overflow: hidden;
@@ -19036,8 +19070,8 @@ button.tileset-relationship-cell {
   :root {
     --skirmish-rail-w: clamp(176px, 30vw, 300px);
   }
-  .skirmish-war-room { grid-column: 1; grid-row: 2; min-height: 0; }
-  .skirmish-hud {
+  :root:not(.skirmish-design-locked) .skirmish-war-room { grid-column: 1; grid-row: 2; min-height: 0; }
+  :root:not(.skirmish-design-locked) .skirmish-hud {
     grid-column: 2; grid-row: 2;
     height: 100%; max-height: none;
     overflow-y: auto; -webkit-overflow-scrolling: touch;

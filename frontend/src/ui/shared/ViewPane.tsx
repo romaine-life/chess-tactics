@@ -25,6 +25,15 @@ export interface ViewPaneViewportSize {
   height: number;
 }
 
+export function clientDeltaToLocal(
+  delta: number,
+  localExtent: number,
+  renderedExtent: number,
+): number {
+  if (localExtent <= 0 || renderedExtent <= 0) return delta;
+  return delta * (localExtent / renderedExtent);
+}
+
 export function zoomAfterMinimumChange({
   zoom,
   minimum,
@@ -334,7 +343,18 @@ export function ViewPane({
   children: ReactNode;
 }): ReactElement {
   const stageRef = useRef<HTMLElement>(null);
-  const dragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number; assetId?: string } | null>(null);
+  const dragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    originX: number;
+    originY: number;
+    localWidth: number;
+    localHeight: number;
+    renderedWidth: number;
+    renderedHeight: number;
+    assetId?: string;
+  } | null>(null);
   const automaticFloorZoomRef = useRef<number | null>(null);
   const lastViewportSizeRef = useRef<ViewPaneViewportSize | null>(null);
   const didDragRef = useRef(false);
@@ -401,12 +421,18 @@ export function ViewPane({
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     const tileElement = (event.target as HTMLElement).closest<HTMLElement>('[data-asset-id]');
+    const stage = stageRef.current;
+    const rendered = stage?.getBoundingClientRect();
     dragRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
       originX: pan.x,
       originY: pan.y,
+      localWidth: stage?.clientWidth ?? 0,
+      localHeight: stage?.clientHeight ?? 0,
+      renderedWidth: rendered?.width ?? 0,
+      renderedHeight: rendered?.height ?? 0,
       assetId: tileElement?.dataset.assetId,
     };
     didDragRef.current = false;
@@ -420,8 +446,16 @@ export function ViewPane({
       didDragRef.current = true;
     }
     const candidate = {
-      x: drag.originX + event.clientX - drag.startX,
-      y: drag.originY + event.clientY - drag.startY,
+      x: drag.originX + clientDeltaToLocal(
+        event.clientX - drag.startX,
+        drag.localWidth,
+        drag.renderedWidth,
+      ),
+      y: drag.originY + clientDeltaToLocal(
+        event.clientY - drag.startY,
+        drag.localHeight,
+        drag.renderedHeight,
+      ),
     };
     const stage = stageRef.current;
     onPanChange(stage && coverPolygon
@@ -466,7 +500,7 @@ export function ViewPane({
     onZoomChange(nextZoom);
   };
 
-  return (
+  const stage = (
     <section
       ref={stageRef}
       className={`tileset-view-stage is-${kind}`}
@@ -488,4 +522,13 @@ export function ViewPane({
       </div>
     </section>
   );
+
+  // A board is always viewed through the same shaped window as Play. The seat absorbs any
+  // surplus workspace while the actual measured, clipped, and interactive stage stays 195:124.
+  // Non-board asset viewers retain the dimensions of the asset they are inspecting.
+  return kind === 'board' ? (
+    <div className="board-view-pane-seat">
+      {stage}
+    </div>
+  ) : stage;
 }

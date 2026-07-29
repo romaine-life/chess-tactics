@@ -22,8 +22,8 @@ function loadThumbnailVersionContract() {
 const { BOARD_THUMBNAIL_RENDER_REVISION, thumbnailVersion } = loadThumbnailVersionContract();
 
 test('thumbnail version always carries the committed renderer revision', () => {
-  assert.equal(BOARD_THUMBNAIL_RENDER_REVISION, 6);
-  assert.equal(thumbnailVersion('deadbeef'), 'deadbeef-br6');
+  assert.equal(BOARD_THUMBNAIL_RENDER_REVISION, 7);
+  assert.equal(thumbnailVersion('deadbeef'), 'deadbeef-br7');
   assert.notEqual(thumbnailVersion('deadbeef'), 'deadbeef');
 });
 
@@ -35,7 +35,7 @@ test('thumbnail version composes renderer and live render-input revisions determ
       mediaCatalogRevision: 5,
       drawableCatalogRevision: 6,
     }),
-    'deadbeef-br6-ps2-uc4-mc5-dc6',
+    'deadbeef-br7-ps2-uc4-mc5-dc6',
   );
   assert.equal(
     thumbnailVersion('deadbeef', {
@@ -44,6 +44,6 @@ test('thumbnail version composes renderer and live render-input revisions determ
       mediaCatalogRevision: 0,
       drawableCatalogRevision: 0,
     }),
-    'deadbeef-br6',
+    'deadbeef-br7',
   );
 });
