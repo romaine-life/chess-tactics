@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { constrainPanToCoverViewport, minimumZoomToCoverViewport, zoomAfterMinimumChange } from './ViewPane';
+import {
+  clientDeltaToLocal,
+  constrainPanToCoverViewport,
+  minimumZoomToCoverViewport,
+  zoomAfterMinimumChange,
+} from './ViewPane';
 
 const rectangle = [
   { x: -500, y: -300 },
@@ -9,6 +14,12 @@ const rectangle = [
 ];
 
 describe('ViewPane viewport-cover zoom floor', () => {
+  it('maps screen-space pointer movement back into a scaled design canvas', () => {
+    expect(clientDeltaToLocal(40, 1560, 1040)).toBeCloseTo(60);
+    expect(clientDeltaToLocal(-25, 1920, 960)).toBeCloseTo(-50);
+    expect(clientDeltaToLocal(12, 0, 0)).toBe(12);
+  });
+
   it('uses the limiting viewport axis and rounds upward only at safety precision', () => {
     expect(minimumZoomToCoverViewport({
       viewport: { width: 501, height: 300 },

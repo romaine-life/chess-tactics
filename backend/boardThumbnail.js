@@ -5,6 +5,7 @@
 const { createHash } = require('node:crypto');
 const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 const {
+  BOARD_THUMBNAIL_SIZE,
   filterPredrawnOcclusionDepthPixels,
   minimumZoomToCoverBoundsAtCenter,
   predrawnOcclusionMasksInFront,
@@ -908,8 +909,8 @@ async function renderLevelCard({
   return canvas.toBuffer('image/png');
 }
 
-const BOARD_THUMB_W = 288;
-const BOARD_THUMB_H = 192;
+const BOARD_THUMB_W = BOARD_THUMBNAIL_SIZE.width;
+const BOARD_THUMB_H = BOARD_THUMBNAIL_SIZE.height;
 
 /** Compact runtime derivative for level lists. No title chrome or background scene. */
 async function renderBoardThumbnail({ plan, loadDynamicSprite, mediaCatalogRevision, sourceAvailability }) {

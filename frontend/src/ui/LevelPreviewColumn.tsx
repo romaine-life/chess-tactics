@@ -40,8 +40,8 @@ export function LevelPreviewColumn({
           <span className="ce-force ce-force-enemy"><img src={installedUiMedia('ui-main-menu-profile-rook-red-png')} alt="" />Enemies <strong>{enemyCount}</strong></span>
         </div>
       </div>
-      {/* The registered inner box owns chrome around a canonical 4:3 live board viewport.
-          Opening composition and accepted-art safety remain independent (ADR-0067/0082/0192). */}
+      {/* The registered inner box owns chrome around a live preview with Play's exact pane shape.
+          Opening composition and accepted-art safety remain independent (ADR-0067/0082/0202). */}
       {board ? (
         <InnerChromeBox className="ce-preview-frame">
           <div className="ce-level-viewer">
