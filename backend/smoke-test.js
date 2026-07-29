@@ -24,56 +24,33 @@ const hotRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'chess-tactics-hot-'));
 const hotBackendDir = path.join(hotRoot, 'backend');
 const hotStaticDir = path.join(hotRoot, 'static');
 const liveMediaStorageDir = path.join(hotRoot, 'live-media');
+const mockAuthIssuer = `http://127.0.0.1:${authPort}`;
 const mockAuth = http.createServer((req, res) => {
-  if (req.url === '/api/auth/get-session') {
-    if (!req.headers.cookie || !req.headers.cookie.includes('better-auth.session')) {
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end('null');
-      return;
-    }
-    if (req.headers.cookie.includes('better-auth.session=rival')) {
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({
-        user: {
-          email: 'rival@example.com',
-          name: 'Lobby Rival',
-          role: 'pending',
-        },
-      }));
-      return;
-    }
-    if (req.headers.cookie.includes('better-auth.session=second-admin')) {
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({
-        user: {
-          email: 'second-admin@example.com',
-          name: 'Second Tactics Admin',
-          role: 'pending',
-        },
-      }));
-      return;
-    }
+  if (req.url === '/.well-known/openid-configuration') {
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify({
-      user: {
-        email: 'player@example.com',
-        name: 'Tactics Player',
-        role: 'pending',
-      },
+      issuer: mockAuthIssuer,
+      authorization_endpoint: `${mockAuthIssuer}/api/auth/oauth2/authorize`,
+      token_endpoint: `${mockAuthIssuer}/api/auth/oauth2/token`,
+      userinfo_endpoint: `${mockAuthIssuer}/api/auth/oauth2/userinfo`,
+      jwks_uri: `${mockAuthIssuer}/api/auth/jwks`,
     }));
     return;
   }
-  if (req.url === '/api/auth/sign-out' && req.method === 'POST') {
-    if (req.headers.origin !== 'https://chess.romaine.life') {
-      res.writeHead(403, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ code: 'MISSING_OR_NULL_ORIGIN' }));
+  if (req.url === '/api/auth/oauth2/userinfo') {
+    const token = String(req.headers.authorization || '').replace(/^Bearer /, '');
+    if (!token) {
+      res.writeHead(401, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ error: 'invalid_token' }));
       return;
     }
-    res.writeHead(200, {
-      'content-type': 'application/json',
-      'set-cookie': 'better-auth.session=; Max-Age=0; Domain=romaine.life; Path=/',
-    });
-    res.end('{}');
+    const user = token === 'rival'
+      ? { sub: 'rival', email: 'rival@example.com', name: 'Lobby Rival', role: 'pending' }
+      : token === 'second-admin'
+        ? { sub: 'second-admin', email: 'second-admin@example.com', name: 'Second Tactics Admin', role: 'pending' }
+        : { sub: 'player', email: 'player@example.com', name: 'Tactics Player', role: 'pending' };
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify(user));
     return;
   }
   res.writeHead(404);
@@ -251,7 +228,7 @@ const sharedBackendEnv = {
   ...process.env,
   NODE_ENV: 'test',
   AUTH_BASE_URL: `http://127.0.0.1:${authPort}`,
-  PUBLIC_ORIGIN: 'https://chess.romaine.life',
+  PUBLIC_ORIGIN: 'https://chess-tactics.com',
   BGM_BASE_URL: `http://127.0.0.1:${bgmPort}`,
   // Non-Azure base: exercise the static-index path (the mock serves index.json).
   // Prod sets no BGM_READ_URL and lists the Azure container live instead.
@@ -370,7 +347,7 @@ function get(path, headers, timeoutMs) {
 
 const editorAuthorities = new Map();
 
-function normalizedEditorCookie(cookie = 'better-auth.session=abc') {
+function normalizedEditorCookie(cookie = '__Host-chess-tactics-access=abc') {
   return cookie || '';
 }
 
@@ -379,7 +356,7 @@ function editorAuthorityKey(documentId, cookie) {
 }
 
 async function openEditorEditSession(documentId, {
-  cookie = 'better-auth.session=abc',
+  cookie = '__Host-chess-tactics-access=abc',
   sessionId = crypto.randomUUID(),
   sessionKey = crypto.randomBytes(32).toString('hex'),
   deviceId = `smoke-device-${crypto.randomUUID()}`,
@@ -451,7 +428,7 @@ function editorMutationBody(documentId, cookie, body, authority = null) {
   };
 }
 
-function closeEditorEditSessionRequest(documentId, sessionId, sessionKey, cookie = 'better-auth.session=abc', targetPort = port) {
+function closeEditorEditSessionRequest(documentId, sessionId, sessionKey, cookie = '__Host-chess-tactics-access=abc', targetPort = port) {
   const body = JSON.stringify({ session_key: sessionKey });
   return requestOnPort(
     targetPort,
@@ -466,7 +443,7 @@ function closeEditorEditSessionRequest(documentId, sessionId, sessionKey, cookie
   );
 }
 
-function deleteEditorRecoveryRequest(documentId, recoveryId, authorityBody, cookie = 'better-auth.session=abc') {
+function deleteEditorRecoveryRequest(documentId, recoveryId, authorityBody, cookie = '__Host-chess-tactics-access=abc') {
   const body = JSON.stringify(authorityBody);
   return request(
     'DELETE',
@@ -480,7 +457,7 @@ function deleteEditorRecoveryRequest(documentId, recoveryId, authorityBody, cook
   );
 }
 
-function deleteEditorRecoveriesRequest(documentId, recoveryIds, authorityBody, cookie = 'better-auth.session=abc') {
+function deleteEditorRecoveriesRequest(documentId, recoveryIds, authorityBody, cookie = '__Host-chess-tactics-access=abc') {
   const body = JSON.stringify({ recovery_ids: recoveryIds, ...authorityBody });
   return request(
     'DELETE',
@@ -511,7 +488,7 @@ function deleteEditorDocumentRequest(documentId, revision, cookie = null) {
 }
 
 function createBackgroundVersionRequest(documentId, body, {
-  cookie = 'better-auth.session=abc',
+  cookie = '__Host-chess-tactics-access=abc',
   idempotencyKey = body.idempotency_key,
   authority = null,
 } = {}) {
@@ -530,7 +507,7 @@ function createBackgroundVersionRequest(documentId, body, {
 }
 
 function createGenerationAttemptRequest(documentId, body, {
-  cookie = 'better-auth.session=abc',
+  cookie = '__Host-chess-tactics-access=abc',
   idempotencyKey = body.idempotency_key,
   authority = null,
 } = {}) {
@@ -552,7 +529,7 @@ async function archiveGenerationAttemptRequest(
   documentId,
   attemptId,
   revision,
-  cookie = 'better-auth.session=abc',
+  cookie = '__Host-chess-tactics-access=abc',
   authority = null,
   documentRevision = null,
 ) {
@@ -587,7 +564,7 @@ function discardGenerationAttemptWarpRequest(
   attemptId,
   warpedVersionId,
   revision,
-  cookie = 'better-auth.session=abc',
+  cookie = '__Host-chess-tactics-access=abc',
   authority = null,
 ) {
   const payload = editorMutationBody(
@@ -613,7 +590,7 @@ async function discardGenerationAttemptOcclusionRequest(
   attemptId,
   occlusionVersionId,
   revision,
-  cookie = 'better-auth.session=abc',
+  cookie = '__Host-chess-tactics-access=abc',
   authority = null,
   documentRevision = null,
 ) {
@@ -649,7 +626,7 @@ function uploadBackgroundVersionRequest(
   versionId,
   revision,
   bytes,
-  cookie = 'better-auth.session=abc',
+  cookie = '__Host-chess-tactics-access=abc',
   authority = null,
 ) {
   const current = authority || editorAuthorities.get(editorAuthorityKey(documentId, cookie));
@@ -677,7 +654,7 @@ function beginHeldBackgroundVersionUpload(
   versionId,
   revision,
   bytes,
-  cookie = 'better-auth.session=abc',
+  cookie = '__Host-chess-tactics-access=abc',
 ) {
   const current = editorAuthorities.get(editorAuthorityKey(documentId, cookie));
   let resolveResponse;
@@ -1502,7 +1479,7 @@ async function main() {
     throw new Error(`Unexpected anonymous auth response: ${anonymous.statusCode} ${anonymous.body}`);
   }
 
-  const signedIn = await get('/api/auth/me', { cookie: 'better-auth.session=abc' });
+  const signedIn = await get('/api/auth/me', { cookie: '__Host-chess-tactics-access=abc' });
   const signedInBody = JSON.parse(signedIn.body);
   if (signedIn.statusCode !== 200 || signedInBody.email !== 'player@example.com' || signedInBody.role !== 'pending') {
     throw new Error(`Unexpected signed-in auth response: ${signedIn.statusCode} ${signedIn.body}`);
@@ -1536,7 +1513,7 @@ async function main() {
     'POST', '/api/admin/unit-assets', { 'content-type': 'application/json' }, JSON.stringify(unitMetadata), 5000,
   );
   if (anonymousUnitCreate.statusCode !== 401) throw new Error(`Anonymous unit create should be 401: ${anonymousUnitCreate.statusCode}`);
-  const adminJson = { 'content-type': 'application/json', cookie: 'better-auth.session=abc' };
+  const adminJson = { 'content-type': 'application/json', cookie: '__Host-chess-tactics-access=abc' };
 
   // Shared live media: no packaged-file fallback, private candidates,
   // native/review-gated acceptance, immutable public bytes, stable slot
@@ -1579,12 +1556,12 @@ async function main() {
   ) throw new Error(`Unactivated critical staging slot leaked publicly: ${stagedMediaCatalog.statusCode} ${stagedMediaCatalog.body}`);
   const missingMediaRevision = await request(
     'PUT', `/api/admin/media-versions/${candidateVersion.id}/content`,
-    { 'content-type': 'image/png', cookie: 'better-auth.session=abc' }, candidateBytes, 5000,
+    { 'content-type': 'image/png', cookie: '__Host-chess-tactics-access=abc' }, candidateBytes, 5000,
   );
   if (missingMediaRevision.statusCode !== 428) throw new Error(`Media upload without revision should be 428: ${missingMediaRevision.statusCode} ${missingMediaRevision.body}`);
   const candidateUpload = await request(
     'PUT', `/api/admin/media-versions/${candidateVersion.id}/content`,
-    { 'content-type': 'image/png', 'if-match': '"0"', cookie: 'better-auth.session=abc' }, candidateBytes, 5000,
+    { 'content-type': 'image/png', 'if-match': '"0"', cookie: '__Host-chess-tactics-access=abc' }, candidateBytes, 5000,
   );
   const candidateUploadBody = JSON.parse(candidateUpload.body);
   if (
@@ -1593,7 +1570,7 @@ async function main() {
     || candidateUploadBody.version.media.sha256 !== candidateSha
     || candidateUploadBody.version.media.mediaType !== 'image/png'
   ) throw new Error(`Media candidate content upload failed: ${candidateUpload.statusCode} ${candidateUpload.body}`);
-  const privateCandidateRead = await get(candidateUploadBody.version.media.url, { cookie: 'better-auth.session=abc' }, 5000);
+  const privateCandidateRead = await get(candidateUploadBody.version.media.url, { cookie: '__Host-chess-tactics-access=abc' }, 5000);
   if (privateCandidateRead.statusCode !== 200 || privateCandidateRead.headers['cache-control'] !== 'private, no-store') {
     throw new Error(`Admin candidate immutable read failed: ${privateCandidateRead.statusCode} ${privateCandidateRead.body}`);
   }
@@ -1609,7 +1586,7 @@ async function main() {
     throw new Error(`Retired bridge creation route must remain absent: ${removedBridgeRoute.statusCode} ${removedBridgeRoute.body}`);
   }
   const stagedAdminCatalog = JSON.parse((await get(
-    '/api/admin/media-assets', { cookie: 'better-auth.session=abc' }, 5000,
+    '/api/admin/media-assets', { cookie: '__Host-chess-tactics-access=abc' }, 5000,
   )).body);
   const stagedSlot = stagedAdminCatalog.slots.find((slot) => slot.slot === surfaceTopSlots[0]);
   if (
@@ -1671,7 +1648,7 @@ async function main() {
     || JSON.parse(bridgedCatalogResponse.body).error !== 'media_catalog_incomplete'
   ) throw new Error(`Partial critical Water group should fail closed: ${bridgedCatalogResponse.statusCode} ${bridgedCatalogResponse.body}`);
   const bridgedAdminCatalog = JSON.parse((await get(
-    '/api/admin/media-assets', { cookie: 'better-auth.session=abc' }, 5000,
+    '/api/admin/media-assets', { cookie: '__Host-chess-tactics-access=abc' }, 5000,
   )).body);
   const bridgedSlot = bridgedAdminCatalog.slots.find((slot) => slot.slot === surfaceTopSlots[0]);
   if (
@@ -1713,7 +1690,7 @@ async function main() {
   const nativeVersion = JSON.parse(nativeCreate.body).version;
   const nativeUpload = await request(
     'PUT', `/api/admin/media-versions/${nativeVersion.id}/content`,
-    { 'content-type': 'image/png', 'if-match': '"0"', cookie: 'better-auth.session=abc' }, acceptedBytes, 5000,
+    { 'content-type': 'image/png', 'if-match': '"0"', cookie: '__Host-chess-tactics-access=abc' }, acceptedBytes, 5000,
   );
   const nativeUploadBody = JSON.parse(nativeUpload.body);
   if (nativeUpload.statusCode !== 200 || nativeUploadBody.version.rowRevision !== 1) {
@@ -1758,7 +1735,7 @@ async function main() {
   const privateVersion = JSON.parse(privateCreate.body).version;
   const privateUpload = await request(
     'PUT', `/api/admin/media-versions/${privateVersion.id}/content`,
-    { 'content-type': 'text/plain', 'if-match': '"0"', cookie: 'better-auth.session=abc' }, privateBytes, 5000,
+    { 'content-type': 'text/plain', 'if-match': '"0"', cookie: '__Host-chess-tactics-access=abc' }, privateBytes, 5000,
   );
   if (privateUpload.statusCode !== 200) throw new Error(`Private media upload failed: ${privateUpload.statusCode} ${privateUpload.body}`);
   const privateArchive = await request(
@@ -1775,7 +1752,7 @@ async function main() {
     || privateArchiveBody.version.sourcePath !== 'docs/art/smoke/private-source.txt'
   ) throw new Error(`Private media archive failed: ${privateArchive.statusCode} ${privateArchive.body}`);
   if ((await get(`/api/media/${privateSha}`)).statusCode !== 404) throw new Error('Private archived blob leaked through public immutable route');
-  const privateAdminRead = await get(`/api/admin/media/${privateSha}`, { cookie: 'better-auth.session=abc' }, 5000);
+  const privateAdminRead = await get(`/api/admin/media/${privateSha}`, { cookie: '__Host-chess-tactics-access=abc' }, 5000);
   if (
     privateAdminRead.statusCode !== 200 || privateAdminRead.body !== privateBytes.toString('utf8')
     || privateAdminRead.headers['cache-control'] !== 'private, no-store'
@@ -1818,7 +1795,7 @@ async function main() {
     const version = JSON.parse(create.body).version;
     const upload = await request(
       'PUT', `/api/admin/media-versions/${version.id}/content`,
-      { 'content-type': 'image/png', 'if-match': '"0"', cookie: 'better-auth.session=abc' }, groupBytes[index], 5000,
+      { 'content-type': 'image/png', 'if-match': '"0"', cookie: '__Host-chess-tactics-access=abc' }, groupBytes[index], 5000,
     );
     if (upload.statusCode !== 200 || JSON.parse(upload.body).version.media.sha256 !== sha) {
       throw new Error(`Grouped media upload failed: ${upload.statusCode} ${upload.body}`);
@@ -1826,7 +1803,7 @@ async function main() {
     preparedGroupVersions.push({ id: version.id, slot: groupSlots[index], sha256: sha, rowRevision: 1 });
   }
   const beforeGroupReviewCatalog = JSON.parse((await get(
-    '/api/admin/media-assets', { cookie: 'better-auth.session=abc' }, 5000,
+    '/api/admin/media-assets', { cookie: '__Host-chess-tactics-access=abc' }, 5000,
   )).body);
   const groupSlotSnapshotsBeforeReview = groupSlots.map((slot) => {
     const row = beforeGroupReviewCatalog.slots.find((item) => item.slot === slot);
@@ -1927,7 +1904,7 @@ async function main() {
   if (historicalBridgeRead.statusCode !== 200) {
     throw new Error(`Previously published immutable bridge hash disappeared after replacement: ${historicalBridgeRead.statusCode}`);
   }
-  const groupedAdminCatalog = JSON.parse((await get('/api/admin/media-assets', { cookie: 'better-auth.session=abc' }, 5000)).body);
+  const groupedAdminCatalog = JSON.parse((await get('/api/admin/media-assets', { cookie: '__Host-chess-tactics-access=abc' }, 5000)).body);
   const archivedBridge = groupedAdminCatalog.versions.find((version) => version.id === candidateVersion.id);
   if (
     archivedBridge.status !== 'archived'
@@ -1999,7 +1976,7 @@ async function main() {
     const version = JSON.parse(create.body).version;
     const upload = await request(
       'PUT', `/api/admin/media-versions/${version.id}/content`,
-      { 'content-type': 'image/png', 'if-match': '"0"', cookie: 'better-auth.session=abc' }, bytes, 5000,
+      { 'content-type': 'image/png', 'if-match': '"0"', cookie: '__Host-chess-tactics-access=abc' }, bytes, 5000,
     );
     if (upload.statusCode !== 200 || JSON.parse(upload.body).version.media.sha256 !== sha256) {
       throw new Error(`Source-art candidate upload failed: ${upload.statusCode} ${upload.body}`);
@@ -2012,7 +1989,7 @@ async function main() {
     });
   }
   const sourceArtAdminBeforeReview = JSON.parse((await get(
-    '/api/admin/media-assets', { cookie: 'better-auth.session=abc' }, 5000,
+    '/api/admin/media-assets', { cookie: '__Host-chess-tactics-access=abc' }, 5000,
   )).body);
   const sourceArtSlotSnapshots = sourceArtSlots.map((slot) => {
     const row = sourceArtAdminBeforeReview.slots.find((item) => item.slot === slot);
@@ -2141,7 +2118,7 @@ async function main() {
   const predrawnVersion = JSON.parse(predrawnCreate.body).version;
   const predrawnUpload = await request(
     'PUT', `/api/admin/media-versions/${predrawnVersion.id}/content`,
-    { 'content-type': 'image/png', 'if-match': '"0"', cookie: 'better-auth.session=abc' }, predrawnBytes, 5000,
+    { 'content-type': 'image/png', 'if-match': '"0"', cookie: '__Host-chess-tactics-access=abc' }, predrawnBytes, 5000,
   );
   const predrawnUploaded = JSON.parse(predrawnUpload.body).version;
   if (
@@ -2150,7 +2127,7 @@ async function main() {
     || predrawnUploaded.media.width !== 1672 || predrawnUploaded.media.height !== 941
   ) throw new Error(`Pre-drawn board upload did not preserve exact bytes/geometry: ${predrawnUpload.statusCode} ${predrawnUpload.body}`);
   const predrawnStagedCatalog = JSON.parse((await get(
-    '/api/admin/media-assets', { cookie: 'better-auth.session=abc' }, 5000,
+    '/api/admin/media-assets', { cookie: '__Host-chess-tactics-access=abc' }, 5000,
   )).body);
   const predrawnSlotBeforeReview = predrawnStagedCatalog.slots.find((slot) => slot.slot === predrawnSlot);
   if (!predrawnSlotBeforeReview || predrawnSlotBeforeReview.activeVersionId !== null) {
@@ -2212,7 +2189,7 @@ async function main() {
     || JSON.parse(rejectedPredrawnAccept.body).error !== 'media_slot_conflict'
   ) throw new Error(`Pre-drawn board stale CAS should fail atomically: ${rejectedPredrawnAccept.statusCode} ${rejectedPredrawnAccept.body}`);
   const predrawnAfterRollback = JSON.parse((await get(
-    '/api/admin/media-assets', { cookie: 'better-auth.session=abc' }, 5000,
+    '/api/admin/media-assets', { cookie: '__Host-chess-tactics-access=abc' }, 5000,
   )).body);
   const rolledBackPredrawnSlot = predrawnAfterRollback.slots.find((slot) => slot.slot === predrawnSlot);
   const rolledBackPredrawnVersion = predrawnAfterRollback.versions.find((version) => version.id === predrawnVersion.id);
@@ -2293,7 +2270,7 @@ async function main() {
   if ((await get(`/api/media/${retiredGroupSha}`)).statusCode !== 200) {
     throw new Error('Historically published immutable media disappeared after retirement');
   }
-  if ((await get(`/api/admin/media/${retiredGroupSha}`, { cookie: 'better-auth.session=abc' }, 5000)).statusCode !== 200) {
+  if ((await get(`/api/admin/media/${retiredGroupSha}`, { cookie: '__Host-chess-tactics-access=abc' }, 5000)).statusCode !== 200) {
     throw new Error('Retired grouped media bytes were not retained for admin audit');
   }
 
@@ -2343,7 +2320,7 @@ async function main() {
     const version = JSON.parse(created.body).version;
     const uploaded = await request(
       'PUT', `/api/admin/media-versions/${version.id}/content`,
-      { 'content-type': 'image/png', 'if-match': '"0"', cookie: 'better-auth.session=abc' }, bytes, 5000,
+      { 'content-type': 'image/png', 'if-match': '"0"', cookie: '__Host-chess-tactics-access=abc' }, bytes, 5000,
     );
     if (uploaded.statusCode !== 200 || JSON.parse(uploaded.body).version.media.sha256 !== sha256) {
       throw new Error(`Ground-cover media upload failed: ${uploaded.statusCode} ${uploaded.body}`);
@@ -2543,7 +2520,7 @@ async function main() {
   const uploadedUnit = await request(
     'PUT',
     `/api/admin/unit-assets/${firstUnitId}/sprites/navy-blue/south`,
-    { 'content-type': 'image/png', 'if-match': '"0"', cookie: 'better-auth.session=abc' },
+    { 'content-type': 'image/png', 'if-match': '"0"', cookie: '__Host-chess-tactics-access=abc' },
     pawnPng,
     5000,
   );
@@ -2573,7 +2550,7 @@ async function main() {
   if (archivedUnit.statusCode !== 200) throw new Error(`Unit archive failed: ${archivedUnit.statusCode} ${archivedUnit.body}`);
   const publicAfterArchive = JSON.parse((await get('/api/unit-catalog')).body);
   if (publicAfterArchive.assets.some((asset) => asset.id === firstUnitId)) throw new Error('Archived unit leaked into public catalog');
-  const adminAfterArchive = await get('/api/admin/unit-assets', { cookie: 'better-auth.session=abc' }, 5000);
+  const adminAfterArchive = await get('/api/admin/unit-assets', { cookie: '__Host-chess-tactics-access=abc' }, 5000);
   if (!JSON.parse(adminAfterArchive.body).assets.some((asset) => asset.id === firstUnitId && asset.status === 'archived')) {
     throw new Error(`Archived unit missing from admin catalog: ${adminAfterArchive.body}`);
   }
@@ -2935,7 +2912,7 @@ async function main() {
     || JSON.parse(wallArtBatchRollback.body).error !== 'drawable_asset_not_found'
   ) throw new Error(`Drawable batch conflict should fail atomically: ${wallArtBatchRollback.statusCode} ${wallArtBatchRollback.body}`);
   const drawableAfterRollback = JSON.parse((await get(
-    '/api/admin/drawable-assets', { cookie: 'better-auth.session=abc' }, 5000,
+    '/api/admin/drawable-assets', { cookie: '__Host-chess-tactics-access=abc' }, 5000,
   )).body).assets.find((asset) => asset.id === 'test-wall-art');
   if (drawableAfterRollback?.label !== 'Synthetic wall art' || drawableAfterRollback?.rowRevision !== 1) {
     throw new Error(`Drawable batch conflict did not roll back: ${JSON.stringify(drawableAfterRollback)}`);
@@ -3106,7 +3083,7 @@ async function main() {
   const signedPortfolioWrite = await request(
     'PUT',
     '/api/design-portfolios/main-menu-acceptance',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({
       client_schema_version: 7,
       metadata: { source: 'smoke-test', future_unknown_field: { ok: true } },
@@ -3203,7 +3180,7 @@ async function main() {
 
   const nonAdminOfficialWrite = await request(
     'PUT', '/api/official-campaigns/default',
-    { cookie: 'better-auth.session=rival', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=rival', 'content-type': 'application/json' },
     JSON.stringify({ data: officialWorkspace }),
   );
   if (nonAdminOfficialWrite.statusCode !== 403) {
@@ -3217,7 +3194,7 @@ async function main() {
 
   const adminOfficialWrite = await request(
     'PUT', '/api/official-campaigns/default',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ data: officialWorkspace, revision: emptyOfficialBody.portfolio.revision }),
   );
   const adminOfficialWriteBody = JSON.parse(adminOfficialWrite.body);
@@ -3232,7 +3209,7 @@ async function main() {
   }
   const missingOfficialRevision = await request(
     'PUT', '/api/official-campaigns/default',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ data: officialWorkspace }),
   );
   if (missingOfficialRevision.statusCode !== 400 || JSON.parse(missingOfficialRevision.body).error !== 'official_campaign_revision_required') {
@@ -3270,7 +3247,7 @@ async function main() {
   // Non-off-prefixed ids are rejected (would collide the per-user id counter).
   const nonOffIdWrite = await request(
     'PUT', '/api/official-campaigns/default',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ data: { campaigns: [{ formatVersion: 1, id: 'c1', name: 'Bad', difficulty: 'normal', chapters: 1, levels: [] }], levels: {} }, revision: 1 }),
   );
   if (nonOffIdWrite.statusCode !== 400 || JSON.parse(nonOffIdWrite.body).error !== 'invalid_official_ids') {
@@ -3280,7 +3257,7 @@ async function main() {
   // Digits inside an off- id are also rejected (must stay digit-free).
   const digitOffIdWrite = await request(
     'PUT', '/api/official-campaigns/default',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ data: { campaigns: [{ formatVersion: 1, id: 'off-c-test1', name: 'Bad', difficulty: 'normal', chapters: 1, levels: [] }], levels: {} }, revision: 1 }),
   );
   if (digitOffIdWrite.statusCode !== 400 || JSON.parse(digitOffIdWrite.body).error !== 'invalid_official_ids') {
@@ -3307,7 +3284,7 @@ async function main() {
 
   const nonAdminPropSeatsWrite = await request(
     'PUT', '/api/prop-seats/default',
-    { cookie: 'better-auth.session=rival', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=rival', 'content-type': 'application/json' },
     JSON.stringify({ data: propSeatsDoc }),
   );
   if (nonAdminPropSeatsWrite.statusCode !== 403) {
@@ -3321,7 +3298,7 @@ async function main() {
 
   const adminPropSeatsWrite = await request(
     'PUT', '/api/prop-seats/default',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ data: propSeatsDoc, expectedRevision: 1 }),
   );
   const adminPropSeatsWriteBody = JSON.parse(adminPropSeatsWrite.body);
@@ -3347,7 +3324,7 @@ async function main() {
 
   const blindPropSeatsWrite = await request(
     'PUT', '/api/prop-seats/default',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ data: propSeatsDoc }),
   );
   if (blindPropSeatsWrite.statusCode !== 400 || JSON.parse(blindPropSeatsWrite.body).error !== 'invalid_prop_seats_write') {
@@ -3356,7 +3333,7 @@ async function main() {
 
   const stalePropSeatsWrite = await request(
     'PUT', '/api/prop-seats/default',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ data: propSeatsDoc, expectedRevision: 1 }),
   );
   const stalePropSeatsWriteBody = JSON.parse(stalePropSeatsWrite.body);
@@ -3370,7 +3347,7 @@ async function main() {
 
   const sequentialPropSeatsWrite = await request(
     'PUT', '/api/prop-seats/default',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ data: propSeatsDoc, expectedRevision: 2 }),
   );
   if (sequentialPropSeatsWrite.statusCode !== 200 || JSON.parse(sequentialPropSeatsWrite.body).portfolio.revision !== 3) {
@@ -3379,7 +3356,7 @@ async function main() {
 
   const createdPropSeats = await request(
     'PUT', '/api/prop-seats/cas-create',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ data: propSeatsDoc, expectedRevision: null }),
   );
   if (createdPropSeats.statusCode !== 201 || JSON.parse(createdPropSeats.body).portfolio.revision !== 1) {
@@ -3387,7 +3364,7 @@ async function main() {
   }
   const duplicatePropSeatsCreate = await request(
     'PUT', '/api/prop-seats/cas-create',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ data: propSeatsDoc, expectedRevision: null }),
   );
   if (
@@ -3400,7 +3377,7 @@ async function main() {
   // A size-variant whose `base` doesn't resolve in-document is rejected (no orphan variant).
   const orphanVariantWrite = await request(
     'PUT', '/api/prop-seats/default',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({
       data: { ...propSeatsDoc, 'ghost-house': { base: 'missing', anchorX: 1, anchorY: 1, scale: 1 } },
       expectedRevision: 3,
@@ -3412,7 +3389,7 @@ async function main() {
 
   const reducedPropSeatsWrite = await request(
     'PUT', '/api/prop-seats/default',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ data: { oak: propSeatsDoc.oak }, expectedRevision: 3 }),
   );
   if (reducedPropSeatsWrite.statusCode !== 200 || JSON.parse(reducedPropSeatsWrite.body).portfolio.revision !== 4) {
@@ -3422,7 +3399,7 @@ async function main() {
   // checks. The reduced-roster assertion above remains independent and durable.
   const restoredPropSeatsWrite = await request(
     'PUT', '/api/prop-seats/default',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ data: propSeatsDoc, expectedRevision: 4 }),
   );
   if (restoredPropSeatsWrite.statusCode !== 200 || JSON.parse(restoredPropSeatsWrite.body).portfolio.revision !== 5) {
@@ -3437,14 +3414,14 @@ async function main() {
     throw new Error(`Anonymous level list should require sign-in: ${anonymousLevels.statusCode}`);
   }
 
-  const invalidLevelId = await get('/api/levels/Bad%20Id', { cookie: 'better-auth.session=abc' });
+  const invalidLevelId = await get('/api/levels/Bad%20Id', { cookie: '__Host-chess-tactics-access=abc' });
   if (invalidLevelId.statusCode !== 400) {
     throw new Error(`Invalid level id should fail: ${invalidLevelId.statusCode} ${invalidLevelId.body}`);
   }
 
   const invalidLevelBody = await request(
     'PUT', '/api/levels/smoke-1',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ level: { nope: true } }),
   );
   if (invalidLevelBody.statusCode !== 400) {
@@ -3453,7 +3430,7 @@ async function main() {
 
   const savedLevel = await request(
     'PUT', '/api/levels/smoke-1',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ level: levelBody }),
   );
   const savedLevelBody = JSON.parse(savedLevel.body);
@@ -3461,7 +3438,7 @@ async function main() {
     throw new Error(`Unexpected level save: ${savedLevel.statusCode} ${savedLevel.body}`);
   }
 
-  const playerLevels = await get('/api/levels', { cookie: 'better-auth.session=abc' });
+  const playerLevels = await get('/api/levels', { cookie: '__Host-chess-tactics-access=abc' });
   const playerLevelsBody = JSON.parse(playerLevels.body);
   if (
     playerLevels.statusCode !== 200 ||
@@ -3474,7 +3451,7 @@ async function main() {
     throw new Error(`Unexpected player level list: ${playerLevels.statusCode} ${playerLevels.body}`);
   }
 
-  const loadedLevel = await get('/api/levels/smoke-1', { cookie: 'better-auth.session=abc' });
+  const loadedLevel = await get('/api/levels/smoke-1', { cookie: '__Host-chess-tactics-access=abc' });
   const loadedLevelBody = JSON.parse(loadedLevel.body);
   if (loadedLevel.statusCode !== 200 || loadedLevelBody.level.name !== 'Smoke Level' || loadedLevelBody.level.id !== 'smoke-1' || loadedLevelBody.revision !== 1) {
     throw new Error(`Unexpected level load: ${loadedLevel.statusCode} ${loadedLevel.body}`);
@@ -3482,7 +3459,7 @@ async function main() {
 
   const reSavedLevel = await request(
     'PUT', '/api/levels/smoke-1',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ level: { ...levelBody, name: 'Smoke Level v2' } }),
   );
   const reSavedLevelBody = JSON.parse(reSavedLevel.body);
@@ -3491,26 +3468,26 @@ async function main() {
   }
 
   // Per-user scoping: the rival sees none of the player's levels.
-  const rivalLevels = await get('/api/levels', { cookie: 'better-auth.session=rival' });
+  const rivalLevels = await get('/api/levels', { cookie: '__Host-chess-tactics-access=rival' });
   const rivalLevelsBody = JSON.parse(rivalLevels.body);
   if (rivalLevels.statusCode !== 200 || rivalLevelsBody.levels.length !== 0) {
     throw new Error(`Levels should be scoped to owner: ${rivalLevels.statusCode} ${rivalLevels.body}`);
   }
-  const rivalLevelRead = await get('/api/levels/smoke-1', { cookie: 'better-auth.session=rival' });
+  const rivalLevelRead = await get('/api/levels/smoke-1', { cookie: '__Host-chess-tactics-access=rival' });
   if (rivalLevelRead.statusCode !== 404) {
     throw new Error(`Rival should not read the player's level: ${rivalLevelRead.statusCode} ${rivalLevelRead.body}`);
   }
   // The rival can reuse the same id in their own namespace without colliding.
   const rivalSave = await request(
     'PUT', '/api/levels/smoke-1',
-    { cookie: 'better-auth.session=rival', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=rival', 'content-type': 'application/json' },
     JSON.stringify({ level: { ...levelBody, name: 'Rival Level' } }),
   );
   const rivalSaveBody = JSON.parse(rivalSave.body);
   if (rivalSave.statusCode !== 200 || rivalSaveBody.revision !== 1) {
     throw new Error(`Rival's same-id level should be independent (revision 1): ${rivalSave.statusCode} ${rivalSave.body}`);
   }
-  const playerLevelStillV2 = await get('/api/levels/smoke-1', { cookie: 'better-auth.session=abc' });
+  const playerLevelStillV2 = await get('/api/levels/smoke-1', { cookie: '__Host-chess-tactics-access=abc' });
   const playerLevelStillV2Body = JSON.parse(playerLevelStillV2.body);
   if (playerLevelStillV2.statusCode !== 200 || playerLevelStillV2Body.revision !== 2 || playerLevelStillV2Body.level.name !== 'Smoke Level v2') {
     throw new Error(`Rival's write must not affect the player's level: ${playerLevelStillV2.statusCode} ${playerLevelStillV2.body}`);
@@ -3522,7 +3499,7 @@ async function main() {
     throw new Error(`Anonymous workspace should require sign-in: ${anonymousWorkspace.statusCode}`);
   }
 
-  const emptyWorkspace = await get('/api/campaign-workspace', { cookie: 'better-auth.session=abc' });
+  const emptyWorkspace = await get('/api/campaign-workspace', { cookie: '__Host-chess-tactics-access=abc' });
   const emptyWorkspaceBody = JSON.parse(emptyWorkspace.body);
   if (emptyWorkspace.statusCode !== 200 || emptyWorkspaceBody.revision !== 0 || emptyWorkspaceBody.campaigns.length !== 0 || Object.keys(emptyWorkspaceBody.levels).length !== 0) {
     throw new Error(`Empty workspace should be empty: ${emptyWorkspace.statusCode} ${emptyWorkspace.body}`);
@@ -3530,7 +3507,7 @@ async function main() {
 
   const invalidWorkspace = await request(
     'PUT', '/api/campaign-workspace',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ campaigns: 'nope' }),
   );
   if (invalidWorkspace.statusCode !== 400) {
@@ -3575,7 +3552,7 @@ async function main() {
   };
   const missingWorkspaceRevision = await request(
     'PUT', '/api/campaign-workspace',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify(workspaceDoc),
   );
   if (missingWorkspaceRevision.statusCode !== 400 || JSON.parse(missingWorkspaceRevision.body).error !== 'workspace_revision_required') {
@@ -3583,7 +3560,7 @@ async function main() {
   }
   const savedWorkspace = await request(
     'PUT', '/api/campaign-workspace',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ ...workspaceDoc, revision: emptyWorkspaceBody.revision }),
   );
   const savedWorkspaceBody = JSON.parse(savedWorkspace.body);
@@ -3591,7 +3568,7 @@ async function main() {
     throw new Error(`Unexpected workspace save: ${savedWorkspace.statusCode} ${savedWorkspace.body}`);
   }
 
-  const loadedWorkspace = await get('/api/campaign-workspace', { cookie: 'better-auth.session=abc' });
+  const loadedWorkspace = await get('/api/campaign-workspace', { cookie: '__Host-chess-tactics-access=abc' });
   const loadedWorkspaceBody = JSON.parse(loadedWorkspace.body);
   if (
     loadedWorkspace.statusCode !== 200 ||
@@ -3604,7 +3581,7 @@ async function main() {
   }
 
   // Per-user scoping: the rival has their own (empty) workspace.
-  const rivalWorkspace = await get('/api/campaign-workspace', { cookie: 'better-auth.session=rival' });
+  const rivalWorkspace = await get('/api/campaign-workspace', { cookie: '__Host-chess-tactics-access=rival' });
   const rivalWorkspaceBody = JSON.parse(rivalWorkspace.body);
   if (rivalWorkspace.statusCode !== 200 || rivalWorkspaceBody.campaigns.length !== 0) {
     throw new Error(`Workspace should be scoped to owner: ${rivalWorkspace.statusCode} ${rivalWorkspace.body}`);
@@ -3637,7 +3614,7 @@ async function main() {
       WHERE owner_email = $1`,
     ['player@example.com', JSON.stringify(canonicalBackedLegacyDraft)],
   );
-  const ownerReadsLegacyDocument = await get('/api/editor-documents/legacy-abcdefgh', { cookie: 'better-auth.session=abc' });
+  const ownerReadsLegacyDocument = await get('/api/editor-documents/legacy-abcdefgh', { cookie: '__Host-chess-tactics-access=abc' });
   const ownerReadsLegacyBody = JSON.parse(ownerReadsLegacyDocument.body);
   if (
     ownerReadsLegacyDocument.statusCode !== 200 ||
@@ -3647,7 +3624,7 @@ async function main() {
   ) {
     throw new Error(`Legacy editor URL did not recover the owner's private document: ${ownerReadsLegacyDocument.statusCode} ${ownerReadsLegacyDocument.body}`);
   }
-  const rivalReadsLegacyDocument = await get('/api/editor-documents/legacy-abcdefgh', { cookie: 'better-auth.session=rival' });
+  const rivalReadsLegacyDocument = await get('/api/editor-documents/legacy-abcdefgh', { cookie: '__Host-chess-tactics-access=rival' });
   if (rivalReadsLegacyDocument.statusCode !== 404) {
     throw new Error(`Legacy editor document must remain private to its owner: ${rivalReadsLegacyDocument.statusCode} ${rivalReadsLegacyDocument.body}`);
   }
@@ -3664,7 +3641,7 @@ async function main() {
   );
   const nonAdminLoadsOwnedOfficialDocument = await get(
     '/api/editor-documents/legacy-jkmnpqrs',
-    { cookie: 'better-auth.session=rival' },
+    { cookie: '__Host-chess-tactics-access=rival' },
   );
   if (nonAdminLoadsOwnedOfficialDocument.statusCode !== 403) {
     throw new Error(`Stored official workspace must be authorized before reconcile: ${nonAdminLoadsOwnedOfficialDocument.statusCode} ${nonAdminLoadsOwnedOfficialDocument.body}`);
@@ -3684,7 +3661,7 @@ async function main() {
   }
   const adminLoadsRivalOfficialDocument = await get(
     '/api/editor-documents/legacy-jkmnpqrs',
-    { cookie: 'better-auth.session=abc' },
+    { cookie: '__Host-chess-tactics-access=abc' },
   );
   const adminLoadsRivalOfficialBody = JSON.parse(adminLoadsRivalOfficialDocument.body);
   if (
@@ -3715,7 +3692,7 @@ async function main() {
   if (anonymousEditorDocumentList.statusCode !== 401) {
     throw new Error(`Editor document discovery must require sign-in: ${anonymousEditorDocumentList.statusCode} ${anonymousEditorDocumentList.body}`);
   }
-  const ownerEditorDocumentList = await get('/api/editor-documents', { cookie: 'better-auth.session=abc' });
+  const ownerEditorDocumentList = await get('/api/editor-documents', { cookie: '__Host-chess-tactics-access=abc' });
   const ownerEditorDocumentListBody = JSON.parse(ownerEditorDocumentList.body);
   const standaloneLegacySummary = ownerEditorDocumentListBody.documents.find((entry) => entry.document_id === 'legacy-abcdefgh');
   const canonicalBackedLegacySummary = ownerEditorDocumentListBody.documents.find((entry) => entry.document_id === 'legacy-kmnpqrst');
@@ -3727,11 +3704,11 @@ async function main() {
   ) {
     throw new Error(`Owner could not discover private legacy editor work: ${ownerEditorDocumentList.statusCode} ${ownerEditorDocumentList.body}`);
   }
-  const firstEditorDocumentPage = await get('/api/editor-documents?limit=1', { cookie: 'better-auth.session=abc' });
+  const firstEditorDocumentPage = await get('/api/editor-documents?limit=1', { cookie: '__Host-chess-tactics-access=abc' });
   const firstEditorDocumentPageBody = JSON.parse(firstEditorDocumentPage.body);
   const secondEditorDocumentPage = await get(
     `/api/editor-documents?limit=1&offset=${firstEditorDocumentPageBody.next_offset}`,
-    { cookie: 'better-auth.session=abc' },
+    { cookie: '__Host-chess-tactics-access=abc' },
   );
   const secondEditorDocumentPageBody = JSON.parse(secondEditorDocumentPage.body);
   if (
@@ -3746,7 +3723,7 @@ async function main() {
   }
   const neverSavedEditorDocuments = await get(
     '/api/editor-documents?status=never-saved',
-    { cookie: 'better-auth.session=abc' },
+    { cookie: '__Host-chess-tactics-access=abc' },
   );
   const neverSavedEditorDocumentsBody = JSON.parse(neverSavedEditorDocuments.body);
   if (
@@ -3756,11 +3733,11 @@ async function main() {
   ) {
     throw new Error(`Never-saved document filter was not baseline-aware: ${neverSavedEditorDocuments.statusCode} ${neverSavedEditorDocuments.body}`);
   }
-  const rivalEditorDocumentList = await get('/api/editor-documents', { cookie: 'better-auth.session=rival' });
+  const rivalEditorDocumentList = await get('/api/editor-documents', { cookie: '__Host-chess-tactics-access=rival' });
   if (rivalEditorDocumentList.statusCode !== 200 || JSON.parse(rivalEditorDocumentList.body).documents.length !== 0) {
     throw new Error(`Editor document discovery leaked another owner's work: ${rivalEditorDocumentList.statusCode} ${rivalEditorDocumentList.body}`);
   }
-  const loadedCanonicalBackedLegacy = await get('/api/editor-documents/legacy-kmnpqrst', { cookie: 'better-auth.session=abc' });
+  const loadedCanonicalBackedLegacy = await get('/api/editor-documents/legacy-kmnpqrst', { cookie: '__Host-chess-tactics-access=abc' });
   const loadedCanonicalBackedLegacyBody = JSON.parse(loadedCanonicalBackedLegacy.body);
   if (
     loadedCanonicalBackedLegacy.statusCode !== 200 ||
@@ -3776,8 +3753,8 @@ async function main() {
   }
   const discardCanonicalBackedLegacy = await request(
     'POST', '/api/editor-documents/legacy-kmnpqrst/discard',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody('legacy-kmnpqrst', 'better-auth.session=abc', { revision: 3 })),
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody('legacy-kmnpqrst', '__Host-chess-tactics-access=abc', { revision: 3 })),
   );
   const discardCanonicalBackedLegacyBody = JSON.parse(discardCanonicalBackedLegacy.body);
   if (
@@ -3802,7 +3779,7 @@ async function main() {
 
   const resolvedEditor = await request(
     'POST', '/api/editor-documents/resolve',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ level_id: 'smoke-1' }),
   );
   const resolvedEditorBody = JSON.parse(resolvedEditor.body);
@@ -3934,22 +3911,22 @@ async function main() {
   });
   const observerPresence = await request(
     'POST', `/api/editor-documents/${smokeDocumentId}/edit-presence`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ session_id: observer.sessionId, session_key: observer.sessionKey, device_id: observer.deviceId }),
   );
   const observerHeartbeat = await request(
     'POST', `/api/editor-documents/${smokeDocumentId}/edit-sessions/${observer.sessionId}/heartbeat`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ session_key: observer.sessionKey }),
   );
   const observerTakeover = await request(
     'POST', `/api/editor-documents/${smokeDocumentId}/edit-sessions/${observer.sessionId}/takeover`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ session_key: observer.sessionKey, expected_generation: Number(observerBefore.rows[0].edit_generation) }),
   );
   const observerWrite = await request(
     'PUT', `/api/editor-documents/${smokeDocumentId}`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({
       revision: Number(observerBefore.rows[0].revision),
       level: { ...workspaceLevel, name: 'Observer must not write' },
@@ -3961,7 +3938,7 @@ async function main() {
   const observerRecoveryUpload = await request(
     'POST',
     `/api/editor-documents/${smokeDocumentId}/edit-sessions/${observer.sessionId}/recoveries`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({
       revision: Number(observerBefore.rows[0].revision),
       edit_generation: Number(observerBefore.rows[0].edit_generation),
@@ -4043,7 +4020,7 @@ async function main() {
   const primaryHeartbeat = await request(
     'POST',
     `/api/editor-documents/${smokeDocumentId}/edit-sessions/${primaryAuthority.session_id}/heartbeat`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ session_key: primaryOpen.sessionKey }),
   );
   if (primaryHeartbeat.statusCode !== 200 || JSON.parse(primaryHeartbeat.body).session.state !== 'active') {
@@ -4062,7 +4039,7 @@ async function main() {
     const delayedHeartbeatPromise = request(
       'POST',
       `/api/editor-documents/${smokeDocumentId}/edit-sessions/${primaryAuthority.session_id}/heartbeat`,
-      { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+      { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
       JSON.stringify({ session_key: primaryOpen.sessionKey }),
       5000,
     );
@@ -4087,7 +4064,7 @@ async function main() {
   }
   const unfencedAutosave = await request(
     'PUT', `/api/editor-documents/${smokeDocumentId}`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ revision: 1, level: { ...workspaceLevel, name: 'Must Require Edit Authority' } }),
   );
   if (unfencedAutosave.statusCode !== 400 || JSON.parse(unfencedAutosave.body).error !== 'editor_document_edit_session_required') {
@@ -4097,8 +4074,8 @@ async function main() {
   const draftLevel = { ...workspaceLevel, name: 'Autosaved Draft' };
   const autosavedEditor = await request(
     'PUT', `/api/editor-documents/${smokeDocumentId}`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(smokeDocumentId, 'better-auth.session=abc', { revision: 1, level: draftLevel })),
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(smokeDocumentId, '__Host-chess-tactics-access=abc', { revision: 1, level: draftLevel })),
   );
   const autosavedEditorBody = JSON.parse(autosavedEditor.body);
   if (
@@ -4113,7 +4090,7 @@ async function main() {
 
   // Autosave changes only the private working copy. Canonical workspace reads
   // (and therefore thumbnails/gameplay) still see the last explicit Save.
-  const canonicalBeforeSave = await get('/api/campaign-workspace', { cookie: 'better-auth.session=abc' });
+  const canonicalBeforeSave = await get('/api/campaign-workspace', { cookie: '__Host-chess-tactics-access=abc' });
   if (JSON.parse(canonicalBeforeSave.body).levels['smoke-1'].name !== 'Smoke Level') {
     throw new Error(`Editor autosave must not mutate the canonical workspace: ${canonicalBeforeSave.body}`);
   }
@@ -4155,7 +4132,7 @@ async function main() {
   const forgedFenceWrite = await request(
     'PUT',
     `/api/editor-documents/${smokeDocumentId}`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({
       revision: 2,
       level: { ...workspaceLevel, name: 'Forged Active Fence' },
@@ -4170,7 +4147,7 @@ async function main() {
   const followerPresence = await request(
     'POST',
     `/api/editor-documents/${smokeDocumentId}/edit-presence`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({
       session_id: followerB.sessionId,
       session_key: followerB.sessionKey,
@@ -4189,7 +4166,7 @@ async function main() {
   const forgedFollowerPresence = await request(
     'POST',
     `/api/editor-documents/${smokeDocumentId}/edit-presence`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({
       session_id: followerB.sessionId,
       session_key: followerC.sessionKey,
@@ -4199,7 +4176,7 @@ async function main() {
   const mismatchedDevicePresence = await request(
     'POST',
     `/api/editor-documents/${smokeDocumentId}/edit-presence`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({
       session_id: followerB.sessionId,
       session_key: followerB.sessionKey,
@@ -4223,7 +4200,7 @@ async function main() {
   const takeoverAttempt = (follower) => request(
     'POST',
     `/api/editor-documents/${smokeDocumentId}/edit-sessions/${follower.sessionId}/takeover`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({
       session_key: follower.sessionKey,
       expected_generation: primaryAuthority.edit_generation,
@@ -4233,10 +4210,10 @@ async function main() {
   const oldAuthorityWriteAttempt = () => request(
     'PUT',
     `/api/editor-documents/${smokeDocumentId}`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify(editorMutationBody(
       smokeDocumentId,
-      'better-auth.session=abc',
+      '__Host-chess-tactics-access=abc',
       { revision: 2, level: { ...workspaceLevel, name: 'In-Flight Displaced Writer' } },
       primaryAuthority,
     )),
@@ -4316,12 +4293,12 @@ async function main() {
   if (takeoverCheckpoint.rows[0]?.checkpoint_is_fresh !== true) {
     throw new Error(`Takeover reused the waiting session's stale checkpoint time: ${JSON.stringify(takeoverCheckpoint.rows[0])}`);
   }
-  editorAuthorities.set(editorAuthorityKey(smokeDocumentId, 'better-auth.session=abc'), {
+  editorAuthorities.set(editorAuthorityKey(smokeDocumentId, '__Host-chess-tactics-access=abc'), {
     session_id: takeoverBody.session.session_id,
     edit_session_key: takeoverWinner.sessionKey,
     edit_generation: takeoverBody.session.edit_generation,
   });
-  const afterTakeover = await get(`/api/editor-documents/${smokeDocumentId}`, { cookie: 'better-auth.session=abc' });
+  const afterTakeover = await get(`/api/editor-documents/${smokeDocumentId}`, { cookie: '__Host-chess-tactics-access=abc' });
   const afterTakeoverBody = JSON.parse(afterTakeover.body);
   if (
     afterTakeover.statusCode !== 200 ||
@@ -4333,10 +4310,10 @@ async function main() {
   }
   const displacedWrite = await request(
     'PUT', `/api/editor-documents/${smokeDocumentId}`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify(editorMutationBody(
       smokeDocumentId,
-      'better-auth.session=abc',
+      '__Host-chess-tactics-access=abc',
       { revision: 2, level: { ...workspaceLevel, name: 'Displaced Writer Must Be Fenced' } },
       primaryAuthority,
     )),
@@ -4354,7 +4331,7 @@ async function main() {
   const appendedLocalRecovery = await request(
     'POST',
     `/api/editor-documents/${smokeDocumentId}/edit-sessions/${primaryAuthority.session_id}/recoveries`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({
       revision: 2,
       edit_generation: primaryAuthority.edit_generation,
@@ -4372,7 +4349,7 @@ async function main() {
   ) {
     throw new Error(`Displaced session could not append its local recovery: ${appendedLocalRecovery.statusCode} ${appendedLocalRecovery.body}`);
   }
-  const recoveryList = await get(`/api/editor-documents/${smokeDocumentId}/recoveries`, { cookie: 'better-auth.session=abc' });
+  const recoveryList = await get(`/api/editor-documents/${smokeDocumentId}/recoveries`, { cookie: '__Host-chess-tactics-access=abc' });
   const recoveryListBody = JSON.parse(recoveryList.body);
   if (
     recoveryList.statusCode !== 200 ||
@@ -4396,7 +4373,7 @@ async function main() {
   const expiredTakeoverWinnerHeartbeat = await request(
     'POST',
     `/api/editor-documents/${smokeDocumentId}/edit-sessions/${takeoverBody.session.session_id}/heartbeat`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ session_key: takeoverWinner.sessionKey }),
   );
   if (
@@ -4422,7 +4399,7 @@ async function main() {
   ) {
     throw new Error(`Reacquiring session returned its stale recovery instead of the immediate expired predecessor: ${reacquiredPrimarySession.response.statusCode} ${reacquiredPrimarySession.response.body}`);
   }
-  editorAuthorities.set(editorAuthorityKey(smokeDocumentId, 'better-auth.session=abc'), {
+  editorAuthorities.set(editorAuthorityKey(smokeDocumentId, '__Host-chess-tactics-access=abc'), {
     session_id: reacquiredPrimarySession.body.session.session_id,
     edit_session_key: primaryOpen.sessionKey,
     edit_generation: reacquiredPrimarySession.body.session.edit_generation,
@@ -4430,8 +4407,8 @@ async function main() {
 
   const staleAutosave = await request(
     'PUT', `/api/editor-documents/${smokeDocumentId}`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(smokeDocumentId, 'better-auth.session=abc', { revision: 1, level: { ...workspaceLevel, name: 'Stale Tab' } })),
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(smokeDocumentId, '__Host-chess-tactics-access=abc', { revision: 1, level: { ...workspaceLevel, name: 'Stale Tab' } })),
   );
   const staleAutosaveBody = JSON.parse(staleAutosave.body);
   if (
@@ -4443,7 +4420,7 @@ async function main() {
     throw new Error(`Stale editor autosave should return the current document: ${staleAutosave.statusCode} ${staleAutosave.body}`);
   }
 
-  const rivalEditorRead = await get(`/api/editor-documents/${smokeDocumentId}`, { cookie: 'better-auth.session=rival' });
+  const rivalEditorRead = await get(`/api/editor-documents/${smokeDocumentId}`, { cookie: '__Host-chess-tactics-access=rival' });
   if (rivalEditorRead.statusCode !== 404) {
     throw new Error(`Editor documents must be account-scoped: ${rivalEditorRead.statusCode} ${rivalEditorRead.body}`);
   }
@@ -4452,7 +4429,7 @@ async function main() {
   // owner-only and admin review does not become discovery or mutation access.
   const rivalCollisionWorkspace = await request(
     'PUT', '/api/campaign-workspace',
-    { cookie: 'better-auth.session=rival', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=rival', 'content-type': 'application/json' },
     JSON.stringify({ campaigns: [], levels: { 'smoke-1': workspaceLevel }, revision: rivalWorkspaceBody.revision }),
   );
   if (rivalCollisionWorkspace.statusCode !== 200) {
@@ -4460,7 +4437,7 @@ async function main() {
   }
   const rivalResolvedEditor = await request(
     'POST', '/api/editor-documents/resolve',
-    { cookie: 'better-auth.session=rival', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=rival', 'content-type': 'application/json' },
     JSON.stringify({ level_id: 'smoke-1' }),
   );
   const rivalResolvedEditorBody = JSON.parse(rivalResolvedEditor.body);
@@ -4472,7 +4449,7 @@ async function main() {
   ) {
     throw new Error(`Colliding owner level ids must receive distinct document ids: ${rivalResolvedEditor.statusCode} ${rivalResolvedEditor.body}`);
   }
-  const playerReadsRivalDocument = await get(`/api/editor-documents/${rivalDocumentId}`, { cookie: 'better-auth.session=abc' });
+  const playerReadsRivalDocument = await get(`/api/editor-documents/${rivalDocumentId}`, { cookie: '__Host-chess-tactics-access=abc' });
   const playerReadsRivalDocumentBody = JSON.parse(playerReadsRivalDocument.body);
   if (
     playerReadsRivalDocument.statusCode !== 200 ||
@@ -4481,7 +4458,7 @@ async function main() {
   ) {
     throw new Error(`Admin could not open an existing editor document by opaque id: ${playerReadsRivalDocument.statusCode} ${playerReadsRivalDocument.body}`);
   }
-  const adminDocumentListAfterRivalResolve = await get('/api/editor-documents', { cookie: 'better-auth.session=abc' });
+  const adminDocumentListAfterRivalResolve = await get('/api/editor-documents', { cookie: '__Host-chess-tactics-access=abc' });
   if (
     adminDocumentListAfterRivalResolve.statusCode !== 200 ||
     JSON.parse(adminDocumentListAfterRivalResolve.body).documents.some((entry) => entry.document_id === rivalDocumentId)
@@ -4490,7 +4467,7 @@ async function main() {
   }
   const adminReadsRivalHistory = await get(
     `/api/editor-documents/${rivalDocumentId}/revisions`,
-    { cookie: 'better-auth.session=abc' },
+    { cookie: '__Host-chess-tactics-access=abc' },
   );
   if (adminReadsRivalHistory.statusCode !== 404) {
     throw new Error(`Admin review access leaked another owner's revision history: ${adminReadsRivalHistory.statusCode} ${adminReadsRivalHistory.body}`);
@@ -4498,63 +4475,63 @@ async function main() {
   const adminMutationRequests = [
     await request(
       'PUT', `/api/editor-documents/${rivalDocumentId}`,
-      { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+      { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
       JSON.stringify({ revision: 1, level: { ...workspaceLevel, name: 'Admin Must Not Autosave' } }),
     ),
     await request(
       'POST', `/api/editor-documents/${rivalDocumentId}/save`,
-      { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+      { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
       JSON.stringify({ revision: 1 }),
     ),
     await request(
       'POST', `/api/editor-documents/${rivalDocumentId}/discard`,
-      { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+      { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
       JSON.stringify({ revision: 1 }),
     ),
     await request(
       'POST', `/api/editor-documents/${rivalDocumentId}/revisions/restore`,
-      { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+      { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
       JSON.stringify({ revision: 1, target_revision: 1 }),
     ),
     await deleteEditorRecoveriesRequest(
       rivalDocumentId,
       [crypto.randomUUID()],
       {},
-      'better-auth.session=abc',
+      '__Host-chess-tactics-access=abc',
     ),
-    await deleteEditorDocumentRequest(rivalDocumentId, 1, 'better-auth.session=abc'),
+    await deleteEditorDocumentRequest(rivalDocumentId, 1, '__Host-chess-tactics-access=abc'),
   ];
   if (adminMutationRequests.some((response) => response.statusCode !== 404)) {
     throw new Error(`Admin review access must not grant cross-owner mutation: ${adminMutationRequests.map((response) => `${response.statusCode} ${response.body}`).join(' / ')}`);
   }
   const adminSessionAttempt = await openEditorEditSession(rivalDocumentId, {
-    cookie: 'better-auth.session=abc',
+    cookie: '__Host-chess-tactics-access=abc',
     sessionId: crypto.randomUUID(),
     deviceId: 'admin-must-not-own-rival-session',
     remember: false,
   });
   const adminRecoveryAttempt = await get(
     `/api/editor-documents/${rivalDocumentId}/recoveries`,
-    { cookie: 'better-auth.session=abc' },
+    { cookie: '__Host-chess-tactics-access=abc' },
   );
   const fabricatedRivalRecoveryId = crypto.randomUUID();
   const adminForeignSessionRequests = [
     await request(
       'POST',
       `/api/editor-documents/${rivalDocumentId}/edit-sessions/${adminSessionAttempt.sessionId}/heartbeat`,
-      { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+      { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
       JSON.stringify({ session_key: adminSessionAttempt.sessionKey }),
     ),
     await request(
       'POST',
       `/api/editor-documents/${rivalDocumentId}/edit-sessions/${adminSessionAttempt.sessionId}/takeover`,
-      { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+      { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
       JSON.stringify({ session_key: adminSessionAttempt.sessionKey, expected_generation: 0 }),
     ),
     await request(
       'POST',
       `/api/editor-documents/${rivalDocumentId}/edit-sessions/${adminSessionAttempt.sessionId}/recoveries`,
-      { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+      { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
       JSON.stringify({
         session_key: adminSessionAttempt.sessionKey,
         revision: 1,
@@ -4565,7 +4542,7 @@ async function main() {
     await request(
       'POST',
       `/api/editor-documents/${rivalDocumentId}/recoveries/${fabricatedRivalRecoveryId}/restore`,
-      { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+      { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
       JSON.stringify({
         revision: 1,
         edit_session_id: adminSessionAttempt.sessionId,
@@ -4576,7 +4553,7 @@ async function main() {
     await request(
       'DELETE',
       `/api/editor-documents/${rivalDocumentId}/recoveries/${fabricatedRivalRecoveryId}`,
-      { cookie: 'better-auth.session=abc' },
+      { cookie: '__Host-chess-tactics-access=abc' },
     ),
   ];
   const rivalSessionCount = await queryDb(
@@ -4599,13 +4576,13 @@ async function main() {
     // (including CI) continues through the two-process path below.
     processClaims = await Promise.all([
       openEditorEditSession(rivalDocumentId, {
-        cookie: 'better-auth.session=rival',
+        cookie: '__Host-chess-tactics-access=rival',
         deviceId: 'rival-primary-process-device',
         clientLabel: 'Primary backend claimant',
         remember: false,
       }),
       openEditorEditSession(rivalDocumentId, {
-        cookie: 'better-auth.session=rival',
+        cookie: '__Host-chess-tactics-access=rival',
         deviceId: 'rival-secondary-claim-device',
         clientLabel: 'Concurrent backend claimant',
         remember: false,
@@ -4628,14 +4605,14 @@ async function main() {
     }
     processClaims = await Promise.all([
       openEditorEditSession(rivalDocumentId, {
-        cookie: 'better-auth.session=rival',
+        cookie: '__Host-chess-tactics-access=rival',
         deviceId: 'rival-primary-process-device',
         clientLabel: 'Primary backend claimant',
         remember: false,
         targetPort: port,
       }),
       openEditorEditSession(rivalDocumentId, {
-        cookie: 'better-auth.session=rival',
+        cookie: '__Host-chess-tactics-access=rival',
         deviceId: 'rival-secondary-process-device',
         clientLabel: 'Secondary backend claimant',
         remember: false,
@@ -4663,7 +4640,7 @@ async function main() {
       rivalDocumentId,
       claim.sessionId,
       claim.sessionKey,
-      'better-auth.session=rival',
+      '__Host-chess-tactics-access=rival',
       claim.targetPort,
     );
     if (closedClaim.statusCode !== 200 || JSON.parse(closedClaim.body).session.state !== 'closed') {
@@ -4677,7 +4654,7 @@ async function main() {
   }
 
   const rivalManagementSession = await openEditorEditSession(rivalDocumentId, {
-    cookie: 'better-auth.session=rival',
+    cookie: '__Host-chess-tactics-access=rival',
     deviceId: 'rival-management-device',
     clientLabel: 'Campaign management',
     remember: false,
@@ -4692,7 +4669,7 @@ async function main() {
     rivalDocumentId,
     rivalManagementSession.sessionId,
     rivalManagementSession.sessionKey,
-    'better-auth.session=abc',
+    '__Host-chess-tactics-access=abc',
   );
   if (adminCloseRivalSession.statusCode !== 404) {
     throw new Error(`Admin review closed another owner's edit session: ${adminCloseRivalSession.statusCode} ${adminCloseRivalSession.body}`);
@@ -4701,7 +4678,7 @@ async function main() {
     rivalDocumentId,
     rivalManagementSession.sessionId,
     rivalManagementSession.sessionKey,
-    'better-auth.session=rival',
+    '__Host-chess-tactics-access=rival',
   );
   const closedRivalManagementBody = JSON.parse(closedRivalManagementSession.body);
   if (
@@ -4722,7 +4699,7 @@ async function main() {
     rivalDocumentId,
     rivalManagementSession.sessionId,
     rivalManagementSession.sessionKey,
-    'better-auth.session=rival',
+    '__Host-chess-tactics-access=rival',
   );
   if (
     repeatedRivalManagementClose.statusCode !== 200 ||
@@ -4730,7 +4707,7 @@ async function main() {
   ) {
     throw new Error(`Session close was not idempotent: ${repeatedRivalManagementClose.statusCode} ${repeatedRivalManagementClose.body}`);
   }
-  const rivalAfterClose = await get(`/api/editor-documents/${rivalDocumentId}`, { cookie: 'better-auth.session=rival' });
+  const rivalAfterClose = await get(`/api/editor-documents/${rivalDocumentId}`, { cookie: '__Host-chess-tactics-access=rival' });
   const rivalAfterCloseBody = JSON.parse(rivalAfterClose.body);
   if (
     rivalAfterClose.statusCode !== 200 ||
@@ -4741,7 +4718,7 @@ async function main() {
     throw new Error(`Closing an edit session mutated its document: ${rivalAfterClose.statusCode} ${rivalAfterClose.body}`);
   }
   const reopenedClosedManagementSession = await openEditorEditSession(rivalDocumentId, {
-    cookie: 'better-auth.session=rival',
+    cookie: '__Host-chess-tactics-access=rival',
     sessionId: rivalManagementSession.sessionId,
     sessionKey: rivalManagementSession.sessionKey,
     deviceId: rivalManagementSession.deviceId,
@@ -4756,7 +4733,7 @@ async function main() {
     throw new Error(`Closed session id was not terminal on reopen: ${reopenedClosedManagementSession.response.statusCode} ${reopenedClosedManagementSession.response.body}`);
   }
   const rivalReplacementSession = await openEditorEditSession(rivalDocumentId, {
-    cookie: 'better-auth.session=rival',
+    cookie: '__Host-chess-tactics-access=rival',
     deviceId: 'rival-replacement-device',
     clientLabel: 'Campaign management replacement',
     remember: false,
@@ -4771,7 +4748,7 @@ async function main() {
   const closedSessionTakeover = await request(
     'POST',
     `/api/editor-documents/${rivalDocumentId}/edit-sessions/${rivalManagementSession.sessionId}/takeover`,
-    { cookie: 'better-auth.session=rival', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=rival', 'content-type': 'application/json' },
     JSON.stringify({
       session_key: rivalManagementSession.sessionKey,
       expected_generation: rivalReplacementSession.body.session.edit_generation,
@@ -4784,7 +4761,7 @@ async function main() {
     rivalDocumentId,
     rivalReplacementSession.sessionId,
     rivalManagementSession.sessionKey,
-    'better-auth.session=rival',
+    '__Host-chess-tactics-access=rival',
   );
   if (forgedReplacementClose.statusCode !== 403 || JSON.parse(forgedReplacementClose.body).error !== 'editor_document_edit_session_key_invalid') {
     throw new Error(`Closed session key released a replacement writer: ${forgedReplacementClose.statusCode} ${forgedReplacementClose.body}`);
@@ -4793,14 +4770,14 @@ async function main() {
     rivalDocumentId,
     rivalReplacementSession.sessionId,
     rivalReplacementSession.sessionKey,
-    'better-auth.session=rival',
+    '__Host-chess-tactics-access=rival',
   );
   if (closedRivalReplacementSession.statusCode !== 200 || JSON.parse(closedRivalReplacementSession.body).session.state !== 'closed') {
     throw new Error(`Replacement management session did not release cleanly: ${closedRivalReplacementSession.statusCode} ${closedRivalReplacementSession.body}`);
   }
 
   const expiringRivalSession = await openEditorEditSession(rivalDocumentId, {
-    cookie: 'better-auth.session=rival',
+    cookie: '__Host-chess-tactics-access=rival',
     deviceId: 'rival-expiring-device',
     clientLabel: 'Expiring rival editor',
     remember: false,
@@ -4809,7 +4786,7 @@ async function main() {
     throw new Error(`Could not acquire expiry-test session: ${expiringRivalSession.response.statusCode} ${expiringRivalSession.response.body}`);
   }
   const expiryFollowerSession = await openEditorEditSession(rivalDocumentId, {
-    cookie: 'better-auth.session=rival',
+    cookie: '__Host-chess-tactics-access=rival',
     deviceId: 'rival-expiry-follower-device',
     clientLabel: 'Expiry follower editor',
     remember: false,
@@ -4830,7 +4807,7 @@ async function main() {
   const expiredRivalHeartbeat = await request(
     'POST',
     `/api/editor-documents/${rivalDocumentId}/edit-sessions/${expiringRivalSession.sessionId}/heartbeat`,
-    { cookie: 'better-auth.session=rival', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=rival', 'content-type': 'application/json' },
     JSON.stringify({ session_key: expiringRivalSession.sessionKey }),
   );
   const expiredRivalHeartbeatBody = JSON.parse(expiredRivalHeartbeat.body);
@@ -4869,7 +4846,7 @@ async function main() {
   const followerExpiryHeartbeat = await request(
     'POST',
     `/api/editor-documents/${rivalDocumentId}/edit-sessions/${expiryFollowerSession.sessionId}/heartbeat`,
-    { cookie: 'better-auth.session=rival', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=rival', 'content-type': 'application/json' },
     JSON.stringify({ session_key: expiryFollowerSession.sessionKey }),
   );
   const followerExpiryHeartbeatBody = JSON.parse(followerExpiryHeartbeat.body);
@@ -4895,7 +4872,7 @@ async function main() {
   const followerPostExpiryPresence = await request(
     'POST',
     `/api/editor-documents/${rivalDocumentId}/edit-presence`,
-    { cookie: 'better-auth.session=rival', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=rival', 'content-type': 'application/json' },
     JSON.stringify({
       session_id: expiryFollowerSession.sessionId,
       session_key: expiryFollowerSession.sessionKey,
@@ -4918,7 +4895,7 @@ async function main() {
     rivalDocumentId,
     expiryFollowerSession.sessionId,
     expiryFollowerSession.sessionKey,
-    'better-auth.session=rival',
+    '__Host-chess-tactics-access=rival',
   );
   const closedExpiryFollowerBody = JSON.parse(closedExpiryFollower.body);
   if (
@@ -4930,7 +4907,7 @@ async function main() {
     throw new Error(`Never-authoritative waiting session replaced last-editor attribution: ${closedExpiryFollower.statusCode} ${closedExpiryFollower.body}`);
   }
   const postExpiryRivalSession = await openEditorEditSession(rivalDocumentId, {
-    cookie: 'better-auth.session=rival',
+    cookie: '__Host-chess-tactics-access=rival',
     deviceId: 'rival-post-expiry-device',
     clientLabel: 'Post-expiry rival editor',
     remember: false,
@@ -4951,7 +4928,7 @@ async function main() {
     rivalDocumentId,
     postExpiryRivalSession.sessionId,
     postExpiryRivalSession.sessionKey,
-    'better-auth.session=rival',
+    '__Host-chess-tactics-access=rival',
   );
   if (closedPostExpiryRivalSession.statusCode !== 200) {
     throw new Error(`Post-expiry replacement session did not close: ${closedPostExpiryRivalSession.statusCode} ${closedPostExpiryRivalSession.body}`);
@@ -4959,8 +4936,8 @@ async function main() {
 
   const discardedEditor = await request(
     'POST', `/api/editor-documents/${smokeDocumentId}/discard`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(smokeDocumentId, 'better-auth.session=abc', { revision: 2 })),
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(smokeDocumentId, '__Host-chess-tactics-access=abc', { revision: 2 })),
   );
   const discardedEditorBody = JSON.parse(discardedEditor.body);
   if (
@@ -4975,8 +4952,8 @@ async function main() {
 
   const autosavedAgain = await request(
     'PUT', `/api/editor-documents/${smokeDocumentId}`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(smokeDocumentId, 'better-auth.session=abc', { revision: 3, level: { ...workspaceLevel, name: 'Debounced Version' } })),
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(smokeDocumentId, '__Host-chess-tactics-access=abc', { revision: 3, level: { ...workspaceLevel, name: 'Debounced Version' } })),
   );
   if (autosavedAgain.statusCode !== 200 || JSON.parse(autosavedAgain.body).document.revision !== 4) {
     throw new Error(`Second autosave failed: ${autosavedAgain.statusCode} ${autosavedAgain.body}`);
@@ -4987,8 +4964,8 @@ async function main() {
   const exactSaveLevel = { ...workspaceLevel, name: 'Exact Save Click' };
   const savedEditor = await request(
     'POST', `/api/editor-documents/${smokeDocumentId}/save`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(smokeDocumentId, 'better-auth.session=abc', { revision: 4, level: exactSaveLevel, campaign_id: null })),
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(smokeDocumentId, '__Host-chess-tactics-access=abc', { revision: 4, level: exactSaveLevel, campaign_id: null })),
   );
   const savedEditorBody = JSON.parse(savedEditor.body);
   if (
@@ -5000,7 +4977,7 @@ async function main() {
   ) {
     throw new Error(`Editor Save should promote the exact supplied Level: ${savedEditor.statusCode} ${savedEditor.body}`);
   }
-  const canonicalAfterSave = await get('/api/campaign-workspace', { cookie: 'better-auth.session=abc' });
+  const canonicalAfterSave = await get('/api/campaign-workspace', { cookie: '__Host-chess-tactics-access=abc' });
   const canonicalAfterSaveBody = JSON.parse(canonicalAfterSave.body);
   if (
     canonicalAfterSaveBody.levels['smoke-1'].name !== 'Exact Save Click' ||
@@ -5011,7 +4988,7 @@ async function main() {
   }
   const staleWholeWorkspaceSave = await request(
     'PUT', '/api/campaign-workspace',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ ...workspaceDoc, revision: loadedWorkspaceBody.revision }),
   );
   const staleWholeWorkspaceSaveBody = JSON.parse(staleWholeWorkspaceSave.body);
@@ -5026,8 +5003,8 @@ async function main() {
   const restoreDisplacedRecovery = await request(
     'POST',
     `/api/editor-documents/${smokeDocumentId}/recoveries/${appendedLocalRecoveryBody.recovery.recovery_id}/restore`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(smokeDocumentId, 'better-auth.session=abc', { revision: 5 })),
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(smokeDocumentId, '__Host-chess-tactics-access=abc', { revision: 5 })),
   );
   const restoreDisplacedRecoveryBody = JSON.parse(restoreDisplacedRecovery.body);
   if (
@@ -5043,11 +5020,11 @@ async function main() {
   ) {
     throw new Error(`Recovery restore did not checkpoint current work before a fenced revision: ${restoreDisplacedRecovery.statusCode} ${restoreDisplacedRecovery.body}`);
   }
-  const canonicalAfterRecoveryRestore = await get('/api/campaign-workspace', { cookie: 'better-auth.session=abc' });
+  const canonicalAfterRecoveryRestore = await get('/api/campaign-workspace', { cookie: '__Host-chess-tactics-access=abc' });
   if (JSON.parse(canonicalAfterRecoveryRestore.body).levels['smoke-1'].name !== 'Exact Save Click') {
     throw new Error(`Recovery restore crossed the canonical Save boundary: ${canonicalAfterRecoveryRestore.body}`);
   }
-  const recoveriesAfterRestore = await get(`/api/editor-documents/${smokeDocumentId}/recoveries`, { cookie: 'better-auth.session=abc' });
+  const recoveriesAfterRestore = await get(`/api/editor-documents/${smokeDocumentId}/recoveries`, { cookie: '__Host-chess-tactics-access=abc' });
   const resolvedRecoveryAfterRestore = JSON.parse(recoveriesAfterRestore.body).recoveries?.find(
     (entry) => entry.recovery_id === appendedLocalRecoveryBody.recovery.recovery_id,
   );
@@ -5070,7 +5047,7 @@ async function main() {
   ) {
     throw new Error(`Owner-only recovery delete bypassed writer authority: ${unfencedRecoveryDelete.statusCode} ${unfencedRecoveryDelete.body}`);
   }
-  const recoveryDeleteOldAuthority = editorAuthorities.get(editorAuthorityKey(smokeDocumentId, 'better-auth.session=abc'));
+  const recoveryDeleteOldAuthority = editorAuthorities.get(editorAuthorityKey(smokeDocumentId, '__Host-chess-tactics-access=abc'));
   if (!recoveryDeleteOldAuthority) throw new Error('Recovery delete test lost the active editor authority');
   const recoveryDeleteChallenger = await openEditorEditSession(smokeDocumentId, {
     deviceId: 'recovery-delete-takeover-device',
@@ -5086,7 +5063,7 @@ async function main() {
   const recoveryDeleteTakeover = await request(
     'POST',
     `/api/editor-documents/${smokeDocumentId}/edit-sessions/${recoveryDeleteChallenger.sessionId}/takeover`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({
       session_key: recoveryDeleteChallenger.sessionKey,
       expected_generation: recoveryDeleteOldAuthority.edit_generation,
@@ -5106,7 +5083,7 @@ async function main() {
     edit_generation: recoveryDeleteTakeoverBody.session.edit_generation,
   };
   editorAuthorities.set(
-    editorAuthorityKey(smokeDocumentId, 'better-auth.session=abc'),
+    editorAuthorityKey(smokeDocumentId, '__Host-chess-tactics-access=abc'),
     recoveryDeleteNewAuthority,
   );
   const staleRecoveryDelete = await deleteEditorRecoveryRequest(
@@ -5114,13 +5091,13 @@ async function main() {
     appendedLocalRecoveryBody.recovery.recovery_id,
     editorMutationBody(
       smokeDocumentId,
-      'better-auth.session=abc',
+      '__Host-chess-tactics-access=abc',
       {},
       recoveryDeleteOldAuthority,
     ),
   );
   const staleRecoveryDeleteBody = JSON.parse(staleRecoveryDelete.body);
-  const recoveriesAfterStaleDelete = await get(`/api/editor-documents/${smokeDocumentId}/recoveries`, { cookie: 'better-auth.session=abc' });
+  const recoveriesAfterStaleDelete = await get(`/api/editor-documents/${smokeDocumentId}/recoveries`, { cookie: '__Host-chess-tactics-access=abc' });
   if (
     staleRecoveryDelete.statusCode !== 409 ||
     staleRecoveryDeleteBody.error !== 'editor_document_session_displaced' ||
@@ -5135,7 +5112,7 @@ async function main() {
     appendedLocalRecoveryBody.recovery.recovery_id,
     editorMutationBody(
       smokeDocumentId,
-      'better-auth.session=abc',
+      '__Host-chess-tactics-access=abc',
       {},
       recoveryDeleteNewAuthority,
     ),
@@ -5143,7 +5120,7 @@ async function main() {
   if (deletedRecovery.statusCode !== 200 || JSON.parse(deletedRecovery.body).recovery.recovery_id !== appendedLocalRecoveryBody.recovery.recovery_id) {
     throw new Error(`Explicit recovery deletion failed: ${deletedRecovery.statusCode} ${deletedRecovery.body}`);
   }
-  const recoveriesBeforeExpiryDelete = await get(`/api/editor-documents/${smokeDocumentId}/recoveries`, { cookie: 'better-auth.session=abc' });
+  const recoveriesBeforeExpiryDelete = await get(`/api/editor-documents/${smokeDocumentId}/recoveries`, { cookie: '__Host-chess-tactics-access=abc' });
   const expiryDeleteCandidate = JSON.parse(recoveriesBeforeExpiryDelete.body).recoveries?.[0];
   if (recoveriesBeforeExpiryDelete.statusCode !== 200 || !expiryDeleteCandidate?.recovery_id) {
     throw new Error(`Recovery delete expiry test had no durable candidate: ${recoveriesBeforeExpiryDelete.statusCode} ${recoveriesBeforeExpiryDelete.body}`);
@@ -5159,7 +5136,7 @@ async function main() {
     expiryDeleteCandidate.recovery_id,
     editorMutationBody(
       smokeDocumentId,
-      'better-auth.session=abc',
+      '__Host-chess-tactics-access=abc',
       {},
       recoveryDeleteNewAuthority,
     ),
@@ -5197,7 +5174,7 @@ async function main() {
     throw new Error(`Expired recovery-delete rejection rolled back or removed data: ${JSON.stringify(durableExpiredRecoveryDelete.rows[0])}`);
   }
 
-  const bulkRecoverySnapshot = await get(`/api/editor-documents/${smokeDocumentId}/recoveries`, { cookie: 'better-auth.session=abc' });
+  const bulkRecoverySnapshot = await get(`/api/editor-documents/${smokeDocumentId}/recoveries`, { cookie: '__Host-chess-tactics-access=abc' });
   const bulkRecoverySnapshotBody = JSON.parse(bulkRecoverySnapshot.body);
   if (
     bulkRecoverySnapshot.statusCode !== 200 ||
@@ -5221,7 +5198,7 @@ async function main() {
     bulkRecoveryIds,
     editorMutationBody(
       smokeDocumentId,
-      'better-auth.session=abc',
+      '__Host-chess-tactics-access=abc',
       {},
       recoveryDeleteNewAuthority,
     ),
@@ -5243,16 +5220,16 @@ async function main() {
   ) {
     throw new Error(`Could not acquire bulk recovery-delete authority: ${bulkRecoveryDeleteSession.response.statusCode} ${bulkRecoveryDeleteSession.response.body}`);
   }
-  const activeBulkAuthority = editorAuthorities.get(editorAuthorityKey(smokeDocumentId, 'better-auth.session=abc'));
+  const activeBulkAuthority = editorAuthorities.get(editorAuthorityKey(smokeDocumentId, '__Host-chess-tactics-access=abc'));
   if (!activeBulkAuthority) throw new Error('Bulk recovery delete test lost active editor authority');
 
   const missingRecoveryId = crypto.randomUUID();
   const conflictingBulkRecoveryDelete = await deleteEditorRecoveriesRequest(
     smokeDocumentId,
     [bulkRecoveryIds[0], missingRecoveryId],
-    editorMutationBody(smokeDocumentId, 'better-auth.session=abc', {}, activeBulkAuthority),
+    editorMutationBody(smokeDocumentId, '__Host-chess-tactics-access=abc', {}, activeBulkAuthority),
   );
-  const recoveriesAfterConflictingBulkDelete = await get(`/api/editor-documents/${smokeDocumentId}/recoveries`, { cookie: 'better-auth.session=abc' });
+  const recoveriesAfterConflictingBulkDelete = await get(`/api/editor-documents/${smokeDocumentId}/recoveries`, { cookie: '__Host-chess-tactics-access=abc' });
   if (
     conflictingBulkRecoveryDelete.statusCode !== 409 ||
     JSON.parse(conflictingBulkRecoveryDelete.body).error !== 'editor_document_recovery_snapshot_conflict' ||
@@ -5261,7 +5238,7 @@ async function main() {
     throw new Error(`Changed bulk recovery snapshot was not rejected atomically: ${conflictingBulkRecoveryDelete.statusCode} ${conflictingBulkRecoveryDelete.body} / ${recoveriesAfterConflictingBulkDelete.body}`);
   }
 
-  const wrongDocumentRecoverySnapshot = await get(`/api/editor-documents/${rivalDocumentId}/recoveries`, { cookie: 'better-auth.session=rival' });
+  const wrongDocumentRecoverySnapshot = await get(`/api/editor-documents/${rivalDocumentId}/recoveries`, { cookie: '__Host-chess-tactics-access=rival' });
   const wrongDocumentRecoveryId = JSON.parse(wrongDocumentRecoverySnapshot.body).recoveries?.[0]?.recovery_id;
   if (wrongDocumentRecoverySnapshot.statusCode !== 200 || !wrongDocumentRecoveryId) {
     throw new Error(`Wrong-document bulk delete test needs a rival recovery: ${wrongDocumentRecoverySnapshot.statusCode} ${wrongDocumentRecoverySnapshot.body}`);
@@ -5269,9 +5246,9 @@ async function main() {
   const wrongDocumentBulkRecoveryDelete = await deleteEditorRecoveriesRequest(
     smokeDocumentId,
     [bulkRecoveryIds[0], wrongDocumentRecoveryId],
-    editorMutationBody(smokeDocumentId, 'better-auth.session=abc', {}, activeBulkAuthority),
+    editorMutationBody(smokeDocumentId, '__Host-chess-tactics-access=abc', {}, activeBulkAuthority),
   );
-  const recoveriesAfterWrongDocumentBulkDelete = await get(`/api/editor-documents/${smokeDocumentId}/recoveries`, { cookie: 'better-auth.session=abc' });
+  const recoveriesAfterWrongDocumentBulkDelete = await get(`/api/editor-documents/${smokeDocumentId}/recoveries`, { cookie: '__Host-chess-tactics-access=abc' });
   if (
     wrongDocumentBulkRecoveryDelete.statusCode !== 409 ||
     JSON.parse(wrongDocumentBulkRecoveryDelete.body).error !== 'editor_document_recovery_snapshot_conflict' ||
@@ -5280,23 +5257,23 @@ async function main() {
     throw new Error(`Wrong-document recovery id was not rejected atomically: ${wrongDocumentBulkRecoveryDelete.statusCode} ${wrongDocumentBulkRecoveryDelete.body} / ${recoveriesAfterWrongDocumentBulkDelete.body}`);
   }
 
-  const documentBeforeBulkRecoveryDelete = await get(`/api/editor-documents/${smokeDocumentId}`, { cookie: 'better-auth.session=abc' });
+  const documentBeforeBulkRecoveryDelete = await get(`/api/editor-documents/${smokeDocumentId}`, { cookie: '__Host-chess-tactics-access=abc' });
   const documentBeforeBulkRecoveryDeleteBody = JSON.parse(documentBeforeBulkRecoveryDelete.body);
-  const historyBeforeBulkRecoveryDelete = await get(`/api/editor-documents/${smokeDocumentId}/revisions?limit=100`, { cookie: 'better-auth.session=abc' });
+  const historyBeforeBulkRecoveryDelete = await get(`/api/editor-documents/${smokeDocumentId}/revisions?limit=100`, { cookie: '__Host-chess-tactics-access=abc' });
   const historyBeforeBulkRecoveryDeleteBody = JSON.parse(historyBeforeBulkRecoveryDelete.body);
   const bulkRecoveryDelete = await deleteEditorRecoveriesRequest(
     smokeDocumentId,
     bulkRecoveryIds,
-    editorMutationBody(smokeDocumentId, 'better-auth.session=abc', {}, activeBulkAuthority),
+    editorMutationBody(smokeDocumentId, '__Host-chess-tactics-access=abc', {}, activeBulkAuthority),
   );
   const bulkRecoveryDeleteBody = JSON.parse(bulkRecoveryDelete.body);
-  const recoveriesAfterBulkDelete = await get(`/api/editor-documents/${smokeDocumentId}/recoveries`, { cookie: 'better-auth.session=abc' });
+  const recoveriesAfterBulkDelete = await get(`/api/editor-documents/${smokeDocumentId}/recoveries`, { cookie: '__Host-chess-tactics-access=abc' });
   const recoveriesAfterBulkDeleteBody = JSON.parse(recoveriesAfterBulkDelete.body);
-  const documentAfterBulkRecoveryDelete = await get(`/api/editor-documents/${smokeDocumentId}`, { cookie: 'better-auth.session=abc' });
+  const documentAfterBulkRecoveryDelete = await get(`/api/editor-documents/${smokeDocumentId}`, { cookie: '__Host-chess-tactics-access=abc' });
   const documentAfterBulkRecoveryDeleteBody = JSON.parse(documentAfterBulkRecoveryDelete.body);
-  const historyAfterBulkRecoveryDelete = await get(`/api/editor-documents/${smokeDocumentId}/revisions?limit=100`, { cookie: 'better-auth.session=abc' });
+  const historyAfterBulkRecoveryDelete = await get(`/api/editor-documents/${smokeDocumentId}/revisions?limit=100`, { cookie: '__Host-chess-tactics-access=abc' });
   const historyAfterBulkRecoveryDeleteBody = JSON.parse(historyAfterBulkRecoveryDelete.body);
-  const canonicalAfterBulkRecoveryDelete = await get('/api/campaign-workspace', { cookie: 'better-auth.session=abc' });
+  const canonicalAfterBulkRecoveryDelete = await get('/api/campaign-workspace', { cookie: '__Host-chess-tactics-access=abc' });
   const canonicalAfterBulkRecoveryDeleteBody = JSON.parse(canonicalAfterBulkRecoveryDelete.body);
   if (
     bulkRecoveryDelete.statusCode !== 200 ||
@@ -5345,7 +5322,7 @@ async function main() {
 
   const firstHistoryPage = await get(
     `/api/editor-documents/${smokeDocumentId}/revisions?limit=2`,
-    { cookie: 'better-auth.session=abc' },
+    { cookie: '__Host-chess-tactics-access=abc' },
   );
   const firstHistoryPageBody = JSON.parse(firstHistoryPage.body);
   if (
@@ -5364,7 +5341,7 @@ async function main() {
   }
   const secondHistoryPage = await get(
     `/api/editor-documents/${smokeDocumentId}/revisions?limit=2&before=5`,
-    { cookie: 'better-auth.session=abc' },
+    { cookie: '__Host-chess-tactics-access=abc' },
   );
   const secondHistoryPageBody = JSON.parse(secondHistoryPage.body);
   if (
@@ -5375,7 +5352,7 @@ async function main() {
   }
   const rivalHistoryRead = await get(
     `/api/editor-documents/${smokeDocumentId}/revisions`,
-    { cookie: 'better-auth.session=rival' },
+    { cookie: '__Host-chess-tactics-access=rival' },
   );
   if (rivalHistoryRead.statusCode !== 404) {
     throw new Error(`Working-copy history must remain owner-scoped: ${rivalHistoryRead.statusCode} ${rivalHistoryRead.body}`);
@@ -5383,7 +5360,7 @@ async function main() {
 
   const unfencedHistoricalRestore = await request(
     'POST', `/api/editor-documents/${smokeDocumentId}/revisions/restore`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ revision: 6, target_revision: 2 }),
   );
   if (
@@ -5405,8 +5382,8 @@ async function main() {
 
   const restoredAutosave = await request(
     'POST', `/api/editor-documents/${smokeDocumentId}/revisions/restore`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(smokeDocumentId, 'better-auth.session=abc', { revision: 6, target_revision: 2 })),
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(smokeDocumentId, '__Host-chess-tactics-access=abc', { revision: 6, target_revision: 2 })),
   );
   const restoredAutosaveBody = JSON.parse(restoredAutosave.body);
   if (
@@ -5420,8 +5397,8 @@ async function main() {
   }
   const staleHistoricalRestore = await request(
     'POST', `/api/editor-documents/${smokeDocumentId}/revisions/restore`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(smokeDocumentId, 'better-auth.session=abc', { revision: 6, target_revision: 1 })),
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(smokeDocumentId, '__Host-chess-tactics-access=abc', { revision: 6, target_revision: 1 })),
   );
   const staleHistoricalRestoreBody = JSON.parse(staleHistoricalRestore.body);
   if (
@@ -5433,8 +5410,8 @@ async function main() {
   }
   const restoredSavedRevision = await request(
     'POST', `/api/editor-documents/${smokeDocumentId}/revisions/restore`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(smokeDocumentId, 'better-auth.session=abc', { revision: 7, target_revision: 5 })),
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(smokeDocumentId, '__Host-chess-tactics-access=abc', { revision: 7, target_revision: 5 })),
   );
   const restoredSavedRevisionBody = JSON.parse(restoredSavedRevision.body);
   if (
@@ -5448,7 +5425,7 @@ async function main() {
   }
   const restoredHistory = await get(
     `/api/editor-documents/${smokeDocumentId}/revisions?limit=2`,
-    { cookie: 'better-auth.session=abc' },
+    { cookie: '__Host-chess-tactics-access=abc' },
   );
   const restoredHistoryBody = JSON.parse(restoredHistory.body);
   if (
@@ -5470,7 +5447,7 @@ async function main() {
   workspaceForBaseline.levels[baselineLevelId] = baselineCanonicalV1;
   const createBaselineCanonical = await request(
     'PUT', '/api/campaign-workspace',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify(workspaceForBaseline),
   );
   if (createBaselineCanonical.statusCode !== 200) {
@@ -5479,7 +5456,7 @@ async function main() {
   workspaceForBaseline.revision = JSON.parse(createBaselineCanonical.body).revision;
   const baselineResolved = await request(
     'POST', '/api/editor-documents/resolve',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ level_id: baselineLevelId }),
   );
   const baselineResolvedBody = JSON.parse(baselineResolved.body);
@@ -5503,7 +5480,7 @@ async function main() {
   workspaceForBaseline.levels[baselineLevelId] = baselineCanonicalV2;
   const externalCleanChange = await request(
     'PUT', '/api/campaign-workspace',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify(workspaceForBaseline),
   );
   if (externalCleanChange.statusCode !== 200) {
@@ -5512,7 +5489,7 @@ async function main() {
   workspaceForBaseline.revision = JSON.parse(externalCleanChange.body).revision;
   const refreshedCleanDocument = await request(
     'POST', '/api/editor-documents/resolve',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ level_id: baselineLevelId }),
   );
   const refreshedCleanBody = JSON.parse(refreshedCleanDocument.body);
@@ -5526,7 +5503,7 @@ async function main() {
   ) {
     throw new Error(`Resolve mutated a clean editor document instead of reporting canonical divergence: ${refreshedCleanDocument.statusCode} ${refreshedCleanDocument.body}`);
   }
-  const loadedCleanDivergence = await get(`/api/editor-documents/${baselineDocumentId}`, { cookie: 'better-auth.session=abc' });
+  const loadedCleanDivergence = await get(`/api/editor-documents/${baselineDocumentId}`, { cookie: '__Host-chess-tactics-access=abc' });
   const loadedCleanDivergenceBody = JSON.parse(loadedCleanDivergence.body);
   if (
     loadedCleanDivergence.statusCode !== 200 ||
@@ -5539,8 +5516,8 @@ async function main() {
   }
   const autosavedOldBaseline = await request(
     'PUT', `/api/editor-documents/${baselineDocumentId}`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(baselineDocumentId, 'better-auth.session=abc', {
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(baselineDocumentId, '__Host-chess-tactics-access=abc', {
       revision: 1,
       level: baselineCanonicalV1,
     })),
@@ -5558,8 +5535,8 @@ async function main() {
   }
   const adoptedCleanCanonical = await request(
     'POST', `/api/editor-documents/${baselineDocumentId}/discard`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(baselineDocumentId, 'better-auth.session=abc', { revision: 2 })),
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(baselineDocumentId, '__Host-chess-tactics-access=abc', { revision: 2 })),
   );
   const adoptedCleanCanonicalBody = JSON.parse(adoptedCleanCanonical.body);
   if (
@@ -5576,8 +5553,8 @@ async function main() {
   const baselineDraft = { ...baselineCanonicalV2, name: 'Preserve This Dirty Draft' };
   const dirtyBaselineDocument = await request(
     'PUT', `/api/editor-documents/${baselineDocumentId}`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(baselineDocumentId, 'better-auth.session=abc', { revision: 3, level: baselineDraft })),
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(baselineDocumentId, '__Host-chess-tactics-access=abc', { revision: 3, level: baselineDraft })),
   );
   if (dirtyBaselineDocument.statusCode !== 200 || JSON.parse(dirtyBaselineDocument.body).document.revision !== 4) {
     throw new Error(`Could not autosave dirty baseline document: ${dirtyBaselineDocument.statusCode} ${dirtyBaselineDocument.body}`);
@@ -5586,13 +5563,13 @@ async function main() {
   workspaceForBaseline.levels[baselineLevelId] = baselineCanonicalV3;
   const externalDirtyChange = await request(
     'PUT', '/api/campaign-workspace',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify(workspaceForBaseline),
   );
   if (externalDirtyChange.statusCode !== 200) {
     throw new Error(`Could not apply external dirty canonical change: ${externalDirtyChange.statusCode} ${externalDirtyChange.body}`);
   }
-  const loadedConflictedDocument = await get(`/api/editor-documents/${baselineDocumentId}`, { cookie: 'better-auth.session=abc' });
+  const loadedConflictedDocument = await get(`/api/editor-documents/${baselineDocumentId}`, { cookie: '__Host-chess-tactics-access=abc' });
   const loadedConflictedBody = JSON.parse(loadedConflictedDocument.body);
   if (
     loadedConflictedDocument.statusCode !== 200 ||
@@ -5604,8 +5581,8 @@ async function main() {
   }
   const rejectedBaselineSave = await request(
     'POST', `/api/editor-documents/${baselineDocumentId}/save`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(baselineDocumentId, 'better-auth.session=abc', { revision: 4, level: baselineDraft })),
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(baselineDocumentId, '__Host-chess-tactics-access=abc', { revision: 4, level: baselineDraft })),
   );
   const rejectedBaselineSaveBody = JSON.parse(rejectedBaselineSave.body);
   if (
@@ -5616,14 +5593,14 @@ async function main() {
   ) {
     throw new Error(`Stale baseline Save should preserve work and refuse promotion: ${rejectedBaselineSave.statusCode} ${rejectedBaselineSave.body}`);
   }
-  const canonicalAfterRejectedBaselineSave = await get('/api/campaign-workspace', { cookie: 'better-auth.session=abc' });
+  const canonicalAfterRejectedBaselineSave = await get('/api/campaign-workspace', { cookie: '__Host-chess-tactics-access=abc' });
   if (JSON.parse(canonicalAfterRejectedBaselineSave.body).levels[baselineLevelId].name !== 'Baseline Canonical V3 External') {
     throw new Error(`Rejected baseline Save overwrote canonical content: ${canonicalAfterRejectedBaselineSave.body}`);
   }
   const discardedBaselineConflict = await request(
     'POST', `/api/editor-documents/${baselineDocumentId}/discard`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(baselineDocumentId, 'better-auth.session=abc', { revision: 4 })),
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(baselineDocumentId, '__Host-chess-tactics-access=abc', { revision: 4 })),
   );
   const discardedBaselineConflictBody = JSON.parse(discardedBaselineConflict.body);
   if (
@@ -5655,7 +5632,7 @@ async function main() {
   // It is durable immediately, but remains dirty until its first explicit Save.
   const newEditor = await request(
     'POST', '/api/editor-documents/resolve',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ level: { ...workspaceLevel, id: 'client-placeholder', name: 'New Working Level' } }),
   );
   const newEditorBody = JSON.parse(newEditor.body);
@@ -5678,7 +5655,7 @@ async function main() {
   if (newDocumentEditSession.response.statusCode !== 200 || newDocumentEditSession.body.session.state !== 'active') {
     throw new Error(`Could not acquire new document edit authority: ${newDocumentEditSession.response.statusCode} ${newDocumentEditSession.response.body}`);
   }
-  const recentAfterNewDocument = await get('/api/editor-documents', { cookie: 'better-auth.session=abc' });
+  const recentAfterNewDocument = await get('/api/editor-documents', { cookie: '__Host-chess-tactics-access=abc' });
   const recentAfterNewDocumentBody = JSON.parse(recentAfterNewDocument.body);
   const discoveredNewDocument = recentAfterNewDocumentBody.documents.find((entry) => entry.document_id === newDocumentId);
   if (
@@ -5696,7 +5673,7 @@ async function main() {
   // canonical workspace Level.
   const deleteCandidate = await request(
     'POST', '/api/editor-documents/resolve',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ level: { ...workspaceLevel, id: 'delete-placeholder', name: 'Delete Candidate' } }),
   );
   const deleteCandidateBody = JSON.parse(deleteCandidate.body);
@@ -5718,8 +5695,8 @@ async function main() {
   }
   const advancedDeleteCandidate = await request(
     'PUT', `/api/editor-documents/${deleteCandidateId}`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(deleteCandidateId, 'better-auth.session=abc', {
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(deleteCandidateId, '__Host-chess-tactics-access=abc', {
       revision: 1,
       level: { ...deleteCandidateBody.document.level, name: 'Delete Candidate Autosaved' },
     })),
@@ -5731,11 +5708,11 @@ async function main() {
   if (anonymousDeleteCandidate.statusCode !== 401) {
     throw new Error(`Never-saved document deletion must require sign-in: ${anonymousDeleteCandidate.statusCode} ${anonymousDeleteCandidate.body}`);
   }
-  const rivalDeleteCandidate = await deleteEditorDocumentRequest(deleteCandidateId, 2, 'better-auth.session=rival');
+  const rivalDeleteCandidate = await deleteEditorDocumentRequest(deleteCandidateId, 2, '__Host-chess-tactics-access=rival');
   if (rivalDeleteCandidate.statusCode !== 404 || JSON.parse(rivalDeleteCandidate.body).error !== 'editor_document_not_found') {
     throw new Error(`Never-saved document deletion leaked another owner's work: ${rivalDeleteCandidate.statusCode} ${rivalDeleteCandidate.body}`);
   }
-  const staleDeleteCandidate = await deleteEditorDocumentRequest(deleteCandidateId, 1, 'better-auth.session=abc');
+  const staleDeleteCandidate = await deleteEditorDocumentRequest(deleteCandidateId, 1, '__Host-chess-tactics-access=abc');
   const staleDeleteCandidateBody = JSON.parse(staleDeleteCandidate.body);
   if (
     staleDeleteCandidate.statusCode !== 409 ||
@@ -5745,7 +5722,7 @@ async function main() {
   ) {
     throw new Error(`Stale never-saved document deletion lost CAS protection: ${staleDeleteCandidate.statusCode} ${staleDeleteCandidate.body}`);
   }
-  const deletedCandidate = await deleteEditorDocumentRequest(deleteCandidateId, 2, 'better-auth.session=abc');
+  const deletedCandidate = await deleteEditorDocumentRequest(deleteCandidateId, 2, '__Host-chess-tactics-access=abc');
   const deletedCandidateBody = JSON.parse(deletedCandidate.body);
   if (
     deletedCandidate.statusCode !== 200 ||
@@ -5756,16 +5733,16 @@ async function main() {
   ) {
     throw new Error(`Never-saved document deletion returned the wrong document: ${deletedCandidate.statusCode} ${deletedCandidate.body}`);
   }
-  const deletedCandidateRead = await get(`/api/editor-documents/${deleteCandidateId}`, { cookie: 'better-auth.session=abc' });
+  const deletedCandidateRead = await get(`/api/editor-documents/${deleteCandidateId}`, { cookie: '__Host-chess-tactics-access=abc' });
   if (deletedCandidateRead.statusCode !== 404 || JSON.parse(deletedCandidateRead.body).error !== 'editor_document_not_found') {
     throw new Error(`Deleted never-saved document remained readable: ${deletedCandidateRead.statusCode} ${deletedCandidateRead.body}`);
   }
 
-  const workspaceBeforeReservedCollision = await get('/api/campaign-workspace', { cookie: 'better-auth.session=abc' });
+  const workspaceBeforeReservedCollision = await get('/api/campaign-workspace', { cookie: '__Host-chess-tactics-access=abc' });
   const workspaceBeforeReservedCollisionBody = JSON.parse(workspaceBeforeReservedCollision.body);
   const reservedCollisionAttempt = await request(
     'PUT', '/api/campaign-workspace',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({
       ...workspaceBeforeReservedCollisionBody,
       levels: {
@@ -5786,8 +5763,8 @@ async function main() {
   }
   const discardNeverSaved = await request(
     'POST', `/api/editor-documents/${newDocumentId}/discard`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', { revision: 1 })),
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, '__Host-chess-tactics-access=abc', { revision: 1 })),
   );
   if (discardNeverSaved.statusCode !== 409 || JSON.parse(discardNeverSaved.body).error !== 'no_saved_level') {
     throw new Error(`Never-saved document should have no discard target: ${discardNeverSaved.statusCode} ${discardNeverSaved.body}`);
@@ -5822,16 +5799,16 @@ async function main() {
   };
   const newEditorAutosave = await request(
     'PUT', `/api/editor-documents/${newDocumentId}`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', { revision: 1, level: newEditorAutosaveLevel })),
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, '__Host-chess-tactics-access=abc', { revision: 1, level: newEditorAutosaveLevel })),
   );
   if (newEditorAutosave.statusCode !== 200 || JSON.parse(newEditorAutosave.body).document.revision !== 2) {
     throw new Error(`New document autosave failed: ${newEditorAutosave.statusCode} ${newEditorAutosave.body}`);
   }
   const firstNewEditorSave = await request(
     'POST', `/api/editor-documents/${newDocumentId}/save`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', { revision: 2 })),
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, '__Host-chess-tactics-access=abc', { revision: 2 })),
   );
   const firstNewEditorSaveBody = JSON.parse(firstNewEditorSave.body);
   if (
@@ -5844,7 +5821,7 @@ async function main() {
   ) {
     throw new Error(`First Save should promote a new document: ${firstNewEditorSave.statusCode} ${firstNewEditorSave.body}\nbackend output:\n${output}`);
   }
-  const workspaceWithNewLevel = await get('/api/campaign-workspace', { cookie: 'better-auth.session=abc' });
+  const workspaceWithNewLevel = await get('/api/campaign-workspace', { cookie: '__Host-chess-tactics-access=abc' });
   const workspaceWithNewLevelBody = JSON.parse(workspaceWithNewLevel.body);
   if (
     workspaceWithNewLevelBody.levels.l2.name !== 'New Working Level Autosaved' ||
@@ -5857,7 +5834,7 @@ async function main() {
   const anonymousStoredListThumbnail = await get(workspaceWithNewLevelBody.thumbnail_urls.l2);
   const storedListThumbnail = await get(
     workspaceWithNewLevelBody.thumbnail_urls.l2,
-    { cookie: 'better-auth.session=abc' },
+    { cookie: '__Host-chess-tactics-access=abc' },
   );
   const privateThumbnailBlob = await queryDb(
     `SELECT derivative.blob_sha256, blob.published_at
@@ -5879,7 +5856,7 @@ async function main() {
   ) {
     throw new Error(`Private canonical thumbnail escaped owner delivery: ${anonymousStoredListThumbnail.statusCode} / ${storedListThumbnail.statusCode} / ${JSON.stringify(privateThumbnailBlob.rows)} / ${anonymousPrivateThumbnailBlob.statusCode}`);
   }
-  const deleteSavedBaseline = await deleteEditorDocumentRequest(newDocumentId, 3, 'better-auth.session=abc');
+  const deleteSavedBaseline = await deleteEditorDocumentRequest(newDocumentId, 3, '__Host-chess-tactics-access=abc');
   const deleteSavedBaselineBody = JSON.parse(deleteSavedBaseline.body);
   if (
     deleteSavedBaseline.statusCode !== 409 ||
@@ -5889,22 +5866,22 @@ async function main() {
   ) {
     throw new Error(`Saved-baseline editor document was deletable: ${deleteSavedBaseline.statusCode} ${deleteSavedBaseline.body}`);
   }
-  const workspaceAfterRejectedDocumentDelete = await get('/api/campaign-workspace', { cookie: 'better-auth.session=abc' });
+  const workspaceAfterRejectedDocumentDelete = await get('/api/campaign-workspace', { cookie: '__Host-chess-tactics-access=abc' });
   if (JSON.parse(workspaceAfterRejectedDocumentDelete.body).levels.l2.name !== 'New Working Level Autosaved') {
     throw new Error(`Rejected editor-document deletion changed canonical content: ${workspaceAfterRejectedDocumentDelete.body}`);
   }
   const postSaveDraft = await request(
     'PUT', `/api/editor-documents/${newDocumentId}`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', { revision: 3, level: { ...newEditorAutosaveLevel, name: 'Throw This Away' } })),
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, '__Host-chess-tactics-access=abc', { revision: 3, level: { ...newEditorAutosaveLevel, name: 'Throw This Away' } })),
   );
   if (postSaveDraft.statusCode !== 200 || JSON.parse(postSaveDraft.body).document.revision !== 4) {
     throw new Error(`Post-save draft failed: ${postSaveDraft.statusCode} ${postSaveDraft.body}`);
   }
   const discardNewEditorDraft = await request(
     'POST', `/api/editor-documents/${newDocumentId}/discard`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', { revision: 4 })),
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, '__Host-chess-tactics-access=abc', { revision: 4 })),
   );
   const discardNewEditorDraftBody = JSON.parse(discardNewEditorDraft.body);
   if (
@@ -6001,7 +5978,7 @@ async function main() {
   );
   const sourceArtworkList = await get(
     `/api/editor-documents/${newDocumentId}/background-versions?kind=source&status=ready`,
-    { cookie: 'better-auth.session=abc' },
+    { cookie: '__Host-chess-tactics-access=abc' },
   );
   const generationAttemptPayload = {
     label: 'Primary AI artwork attempt',
@@ -6019,7 +5996,7 @@ async function main() {
   );
   const generationAttemptList = await get(
     `/api/editor-documents/${newDocumentId}/generation-attempts?status=active`,
-    { cookie: 'better-auth.session=abc' },
+    { cookie: '__Host-chess-tactics-access=abc' },
   );
   if (
     sourceArtworkCreate.statusCode !== 201
@@ -6323,7 +6300,7 @@ async function main() {
     'POST',
     `/api/editor-documents/${newDocumentId}/background-versions`,
     {
-      cookie: 'better-auth.session=abc',
+      cookie: '__Host-chess-tactics-access=abc',
       'content-type': 'application/json',
       'idempotency-key': `background-unfenced:${newDocumentId}`,
     },
@@ -6334,7 +6311,7 @@ async function main() {
     5000,
   );
   const currentBackgroundAuthority = editorAuthorities.get(
-    editorAuthorityKey(newDocumentId, 'better-auth.session=abc'),
+    editorAuthorityKey(newDocumentId, '__Host-chess-tactics-access=abc'),
   );
   const invalidFenceBackgroundCreate = await createBackgroundVersionRequest(
     newDocumentId,
@@ -6364,11 +6341,11 @@ async function main() {
   });
   const readyBeforeRawUpload = await get(
     `/api/editor-documents/${newDocumentId}/background-versions?status=ready`,
-    { cookie: 'better-auth.session=abc' },
+    { cookie: '__Host-chess-tactics-access=abc' },
   );
   const draftsBeforeRawUpload = await get(
     `/api/editor-documents/${newDocumentId}/background-versions?status=draft`,
-    { cookie: 'better-auth.session=abc' },
+    { cookie: '__Host-chess-tactics-access=abc' },
   );
   if (
     rawBackgroundCreate.statusCode !== 201 || !rawBackground?.id || rawBackground.status !== 'draft'
@@ -6458,7 +6435,7 @@ async function main() {
   );
   const legacyPipelineSourceList = await get(
     `/api/editor-documents/${newDocumentId}/background-versions?status=ready&kind=raw`,
-    { cookie: 'better-auth.session=abc' },
+    { cookie: '__Host-chess-tactics-access=abc' },
   );
   const listedLegacyPipelineSource = JSON.parse(legacyPipelineSourceList.body).versions
     .find((version) => version.id === rawBackground.id);
@@ -6584,8 +6561,8 @@ async function main() {
   const archiveRawWhileHistoricalSourceActive = await request(
     'POST',
     `/api/editor-documents/${newDocumentId}/background-versions/${rawBackground.id}/archive`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', { expected_revision: 1 })),
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, '__Host-chess-tactics-access=abc', { expected_revision: 1 })),
   );
   if (
     archiveRawWhileHistoricalSourceActive.statusCode !== 409
@@ -6615,16 +6592,16 @@ async function main() {
   const anonymousDraftBackground = await get(`/api/background-versions/${rawBackground.id}/content`);
   const rivalDraftBackground = await get(
     `/api/background-versions/${rawBackground.id}/content`,
-    { cookie: 'better-auth.session=rival' },
+    { cookie: '__Host-chess-tactics-access=rival' },
   );
   const ownerDraftBackground = await get(
     `/api/background-versions/${rawBackground.id}/content`,
-    { cookie: 'better-auth.session=abc' },
+    { cookie: '__Host-chess-tactics-access=abc' },
     5000,
   );
   const rivalBackgroundList = await get(
     `/api/editor-documents/${newDocumentId}/background-versions`,
-    { cookie: 'better-auth.session=rival' },
+    { cookie: '__Host-chess-tactics-access=rival' },
   );
   if (
     anonymousDraftBackground.statusCode !== 401 || rivalDraftBackground.statusCode !== 404
@@ -6771,8 +6748,8 @@ async function main() {
   const fittedMoveHighlights = await request(
     'PUT',
     `/api/editor-documents/${newDocumentId}/generation-attempts/${generationAttempt.id}/move-highlight-profile`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', {
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, '__Host-chess-tactics-access=abc', {
       expected_revision: retriedWarpCreateBody.attempt.row_revision,
       expected_warped_version_id: warpedReady.id,
       cells: {},
@@ -7002,22 +6979,22 @@ async function main() {
   const archiveSourceWhileActive = await request(
     'POST',
     `/api/editor-documents/${newDocumentId}/background-versions/${sourceArtworkReady.id}/archive`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', { expected_revision: 1 })),
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, '__Host-chess-tactics-access=abc', { expected_revision: 1 })),
   );
   const archiveRawWhileActive = await request(
     'POST',
     `/api/editor-documents/${newDocumentId}/background-versions/${rawBackground.id}/archive`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', { expected_revision: 1 })),
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, '__Host-chess-tactics-access=abc', { expected_revision: 1 })),
   );
   const archiveAttemptWithoutDocumentRevision = await request(
     'POST',
     `/api/editor-documents/${newDocumentId}/generation-attempts/${generationAttempt.id}/archive`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify(editorMutationBody(
       newDocumentId,
-      'better-auth.session=abc',
+      '__Host-chess-tactics-access=abc',
       { expected_revision: selectedMask.attempt.row_revision },
     )),
   );
@@ -7025,7 +7002,7 @@ async function main() {
     newDocumentId,
     generationAttempt.id,
     selectedMask.attempt.row_revision,
-    'better-auth.session=abc',
+    '__Host-chess-tactics-access=abc',
     null,
     4,
   );
@@ -7047,11 +7024,11 @@ async function main() {
   );
   const activeAttemptsAfterArchive = await get(
     `/api/editor-documents/${newDocumentId}/generation-attempts?status=active`,
-    { cookie: 'better-auth.session=abc' },
+    { cookie: '__Host-chess-tactics-access=abc' },
   );
   const archivedAttemptsAfterArchive = await get(
     `/api/editor-documents/${newDocumentId}/generation-attempts?status=archived`,
-    { cookie: 'better-auth.session=abc' },
+    { cookie: '__Host-chess-tactics-access=abc' },
   );
   const generationAttemptEvents = await queryDb(
     `SELECT action, actor_email, actor_name
@@ -7063,8 +7040,8 @@ async function main() {
   const archiveRaw = await request(
     'POST',
     `/api/editor-documents/${newDocumentId}/background-versions/${rawBackground.id}/archive`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', { expected_revision: 1 })),
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, '__Host-chess-tactics-access=abc', { expected_revision: 1 })),
   );
   if (
     archiveSourceWhileActive.statusCode !== 409
@@ -7112,8 +7089,8 @@ async function main() {
   const staleBackgroundGeometrySave = await request(
     'POST',
     `/api/editor-documents/${newDocumentId}/save`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', {
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, '__Host-chess-tactics-access=abc', {
       revision: 5,
       level: {
         ...newEditorAutosaveLevel,
@@ -7128,8 +7105,8 @@ async function main() {
   const staleMaskGeometrySave = await request(
     'POST',
     `/api/editor-documents/${newDocumentId}/save`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', {
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, '__Host-chess-tactics-access=abc', {
       revision: 5,
       level: {
         ...newEditorAutosaveLevel,
@@ -7141,8 +7118,8 @@ async function main() {
   const mismatchedSelectionSave = await request(
     'POST',
     `/api/editor-documents/${newDocumentId}/save`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', {
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, '__Host-chess-tactics-access=abc', {
       revision: 5,
       level: mismatchedSelectionLevel,
     })),
@@ -7177,8 +7154,8 @@ async function main() {
   const invalidWarpedParentSave = await request(
     'POST',
     `/api/editor-documents/${newDocumentId}/save`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', {
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, '__Host-chess-tactics-access=abc', {
       revision: 5,
       level: selectedLevel,
     })),
@@ -7205,8 +7182,8 @@ async function main() {
   const invalidOcclusionContractSave = await request(
     'POST',
     `/api/editor-documents/${newDocumentId}/save`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', {
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, '__Host-chess-tactics-access=abc', {
       revision: 5,
       level: selectedLevel,
     })),
@@ -7227,8 +7204,8 @@ async function main() {
   const versionedSave = await request(
     'POST',
     `/api/editor-documents/${newDocumentId}/save`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', {
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, '__Host-chess-tactics-access=abc', {
       revision: 5,
       level: selectedLevel,
     })),
@@ -7256,12 +7233,12 @@ async function main() {
   const anonymousSavedBackground = await get(`/api/background-versions/${warpedReady.id}/content`, {}, 5000);
   const ownerSavedBackground = await get(
     `/api/background-versions/${warpedReady.id}/content`,
-    { cookie: 'better-auth.session=abc' },
+    { cookie: '__Host-chess-tactics-access=abc' },
     5000,
   );
   const workspaceWithPrivateScene = await get(
     '/api/campaign-workspace',
-    { cookie: 'better-auth.session=abc' },
+    { cookie: '__Host-chess-tactics-access=abc' },
   );
   const workspaceWithPrivateSceneBody = JSON.parse(workspaceWithPrivateScene.body);
   const privateSceneThumbnailUrl = workspaceWithPrivateSceneBody.thumbnail_urls?.l2 || '';
@@ -7270,7 +7247,7 @@ async function main() {
     ? await get(privateSceneThumbnailUrl)
     : { statusCode: 0 };
   const ownerPrivateSceneThumbnail = privateSceneThumbnailUrl
-    ? await get(privateSceneThumbnailUrl, { cookie: 'better-auth.session=abc' })
+    ? await get(privateSceneThumbnailUrl, { cookie: '__Host-chess-tactics-access=abc' })
     : { statusCode: 0 };
   const anonymousPrivateSceneBlob = privateSceneThumbnailSha
     ? await get(`/api/media/${privateSceneThumbnailSha}`)
@@ -7309,13 +7286,13 @@ async function main() {
   }
   const userWorkspaceAtVersionBoundary = await get(
     '/api/campaign-workspace',
-    { cookie: 'better-auth.session=abc' },
+    { cookie: '__Host-chess-tactics-access=abc' },
   );
   const userWorkspaceAtVersionBoundaryBody = JSON.parse(userWorkspaceAtVersionBoundary.body);
   const missingUserBackgroundPut = await request(
     'PUT',
     '/api/campaign-workspace',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({
       campaigns: userWorkspaceAtVersionBoundaryBody.campaigns,
       levels: {
@@ -7331,12 +7308,12 @@ async function main() {
   );
   const userWorkspaceAfterRejectedVersionPut = await get(
     '/api/campaign-workspace',
-    { cookie: 'better-auth.session=abc' },
+    { cookie: '__Host-chess-tactics-access=abc' },
   );
   const legacyRememberedMissingPut = await request(
     'PUT',
     '/api/campaign-workspace',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({
       campaigns: userWorkspaceAtVersionBoundaryBody.campaigns,
       levels: {
@@ -7357,7 +7334,7 @@ async function main() {
   const exactReadyUserPut = await request(
     'PUT',
     '/api/campaign-workspace',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({
       campaigns: userWorkspaceAtVersionBoundaryBody.campaigns,
       levels: userWorkspaceAtVersionBoundaryBody.levels,
@@ -7401,7 +7378,7 @@ async function main() {
   const invalidWarpedParentPublish = await request(
     'POST',
     '/api/maps/publish',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ levelId: 'l2' }),
     5000,
   );
@@ -7420,7 +7397,7 @@ async function main() {
   const publishedUserMap = await request(
     'POST',
     '/api/maps/publish',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ levelId: 'l2' }),
     5000,
   );
@@ -7486,8 +7463,8 @@ async function main() {
   const archiveSelectedPrivate = await request(
     'POST',
     `/api/editor-documents/${newDocumentId}/background-versions/${warpedReady.id}/archive`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', { expected_revision: 1 })),
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, '__Host-chess-tactics-access=abc', { expected_revision: 1 })),
   );
   if (
     archiveSelectedPrivate.statusCode !== 409
@@ -7547,8 +7524,8 @@ async function main() {
   const activeArchiveAutosave = await request(
     'PUT',
     `/api/editor-documents/${newDocumentId}`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', {
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, '__Host-chess-tactics-access=abc', {
       revision: 6,
       level: activeArchiveLevel,
     })),
@@ -7593,8 +7570,8 @@ async function main() {
   const dormantArchiveAutosave = await request(
     'PUT',
     `/api/editor-documents/${newDocumentId}`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', {
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, '__Host-chess-tactics-access=abc', {
       revision: 7,
       level: dormantArchiveLevel,
     })),
@@ -7602,8 +7579,8 @@ async function main() {
   const dormantArchiveSave = await request(
     'POST',
     `/api/editor-documents/${newDocumentId}/save`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', {
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, '__Host-chess-tactics-access=abc', {
       revision: 8,
     })),
     5000,
@@ -7618,7 +7595,7 @@ async function main() {
     newDocumentId,
     dormantArchiveAttemptId,
     0,
-    'better-auth.session=abc',
+    '__Host-chess-tactics-access=abc',
     null,
     9,
   );
@@ -7692,8 +7669,8 @@ async function main() {
   const partialArchiveAutosave = await request(
     'PUT',
     `/api/editor-documents/${newDocumentId}`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', {
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, '__Host-chess-tactics-access=abc', {
       revision: 10,
       level: partialArchiveLevel,
     })),
@@ -7701,8 +7678,8 @@ async function main() {
   const partialArchiveSave = await request(
     'POST',
     `/api/editor-documents/${newDocumentId}/save`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', {
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, '__Host-chess-tactics-access=abc', {
       revision: 11,
     })),
     5000,
@@ -7711,7 +7688,7 @@ async function main() {
     newDocumentId,
     dormantArchiveAttemptId,
     0,
-    'better-auth.session=abc',
+    '__Host-chess-tactics-access=abc',
     null,
     11,
   );
@@ -7802,8 +7779,8 @@ async function main() {
   const workingOnlyArchiveAutosave = await request(
     'PUT',
     `/api/editor-documents/${newDocumentId}`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', {
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, '__Host-chess-tactics-access=abc', {
       revision: 13,
       level: workingOnlyArchiveLevel,
     })),
@@ -7818,7 +7795,7 @@ async function main() {
     newDocumentId,
     dormantArchiveAttemptId,
     0,
-    'better-auth.session=abc',
+    '__Host-chess-tactics-access=abc',
     null,
     15,
   );
@@ -7869,19 +7846,19 @@ async function main() {
   );
   const canonicalBeforePublishedMaskDiscard = await get(
     '/api/campaign-workspace',
-    { cookie: 'better-auth.session=abc' },
+    { cookie: '__Host-chess-tactics-access=abc' },
   );
   const publishedMaskSelectionAutosave = await request(
     'PUT',
     `/api/editor-documents/${newDocumentId}`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(newDocumentId, 'better-auth.session=abc', {
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(newDocumentId, '__Host-chess-tactics-access=abc', {
       revision: 15,
       level: selectedLevel,
     })),
   );
   const invalidDiscardAuthority = {
-    ...editorAuthorities.get(editorAuthorityKey(newDocumentId, 'better-auth.session=abc')),
+    ...editorAuthorities.get(editorAuthorityKey(newDocumentId, '__Host-chess-tactics-access=abc')),
     edit_session_key: 'b'.repeat(64),
   };
   const staleOcclusionAttemptDiscard = await discardGenerationAttemptOcclusionRequest(
@@ -7889,7 +7866,7 @@ async function main() {
     publishedArchiveAttemptId,
     selectedMask.version.id,
     99,
-    'better-auth.session=abc',
+    '__Host-chess-tactics-access=abc',
     null,
     16,
   );
@@ -7898,7 +7875,7 @@ async function main() {
     publishedArchiveAttemptId,
     selectedMask.version.id,
     0,
-    'better-auth.session=abc',
+    '__Host-chess-tactics-access=abc',
     null,
     15,
   );
@@ -7907,7 +7884,7 @@ async function main() {
     publishedArchiveAttemptId,
     selectedMask.version.id,
     0,
-    'better-auth.session=abc',
+    '__Host-chess-tactics-access=abc',
     invalidDiscardAuthority,
     16,
   );
@@ -7916,7 +7893,7 @@ async function main() {
     publishedArchiveAttemptId,
     selectedMask.version.id,
     0,
-    'better-auth.session=abc',
+    '__Host-chess-tactics-access=abc',
     null,
     16,
   );
@@ -7926,14 +7903,14 @@ async function main() {
     publishedArchiveAttemptId,
     selectedMask.version.id,
     0,
-    'better-auth.session=abc',
+    '__Host-chess-tactics-access=abc',
     null,
     16,
   );
   const publishedMaskDiscardReplayBody = JSON.parse(publishedMaskDiscardReplay.body);
   const canonicalAfterPublishedMaskDiscard = await get(
     '/api/campaign-workspace',
-    { cookie: 'better-auth.session=abc' },
+    { cookie: '__Host-chess-tactics-access=abc' },
   );
   const publishedMaskDiscardRevision = await queryDb(
     `SELECT reason
@@ -8038,7 +8015,7 @@ async function main() {
     publishedArchiveAttemptId,
     retriedPublishedMask.version.id,
     retriedPublishedMask.attempt.row_revision,
-    'better-auth.session=abc',
+    '__Host-chess-tactics-access=abc',
     null,
     17,
   );
@@ -8048,7 +8025,7 @@ async function main() {
     publishedArchiveAttemptId,
     retriedPublishedMask.version.id,
     retriedPublishedMask.attempt.row_revision,
-    'better-auth.session=abc',
+    '__Host-chess-tactics-access=abc',
     null,
     17,
   );
@@ -8111,7 +8088,7 @@ async function main() {
   const legacyEditor = await request(
     'POST',
     '/api/editor-documents/resolve',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ level: { ...workspaceLevel, id: 'legacy-geometry-placeholder', name: 'Legacy geometry migration' } }),
   );
   const legacyEditorBody = JSON.parse(legacyEditor.body);
@@ -8195,8 +8172,8 @@ async function main() {
   const selectLegacyAutosave = await request(
     'PUT',
     `/api/editor-documents/${legacyDocumentId}`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(legacyDocumentId, 'better-auth.session=abc', {
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(legacyDocumentId, '__Host-chess-tactics-access=abc', {
       revision: 1,
       level: legacySelectedLevel,
     })),
@@ -8293,8 +8270,8 @@ async function main() {
   const directMoveHighlightFit = await request(
     'PUT',
     `/api/editor-documents/${legacyDocumentId}/generation-attempts/${directLegacyAttemptFixture.attemptId}/move-highlight-profile`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(legacyDocumentId, 'better-auth.session=abc', {
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(legacyDocumentId, '__Host-chess-tactics-access=abc', {
       expected_revision: directV2WarpCreateBody.attempt.row_revision,
       expected_warped_version_id: directLegacyWarpReady.id,
       cells: {},
@@ -8380,8 +8357,8 @@ async function main() {
   const coverFirstAutosave = await request(
     'PUT',
     `/api/editor-documents/${legacyDocumentId}`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(legacyDocumentId, 'better-auth.session=abc', {
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(legacyDocumentId, '__Host-chess-tactics-access=abc', {
       revision: 2,
       level: coverChangedLevel,
     })),
@@ -8395,7 +8372,7 @@ async function main() {
   );
   const listedLegacyVersions = await get(
     `/api/editor-documents/${legacyDocumentId}/background-versions`,
-    { cookie: 'better-auth.session=abc' },
+    { cookie: '__Host-chess-tactics-access=abc' },
   );
   const listedLegacyVersion = JSON.parse(listedLegacyVersions.body).versions?.find(
     (version) => version.id === legacyRawReady.id,
@@ -8403,8 +8380,8 @@ async function main() {
   const coverChangedSave = await request(
     'POST',
     `/api/editor-documents/${legacyDocumentId}/save`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(legacyDocumentId, 'better-auth.session=abc', { revision: 3 })),
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(legacyDocumentId, '__Host-chess-tactics-access=abc', { revision: 3 })),
     5000,
   );
   const coverChangedBoard = boardRender.decodeBoard(coverChangedBoardCode);
@@ -8415,8 +8392,8 @@ async function main() {
   const staleBakedAutosave = await request(
     'PUT',
     `/api/editor-documents/${legacyDocumentId}`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(legacyDocumentId, 'better-auth.session=abc', {
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(legacyDocumentId, '__Host-chess-tactics-access=abc', {
       revision: 4,
       level: { ...coverChangedLevel, boardCode: staleBakedBoardCode },
     })),
@@ -8424,8 +8401,8 @@ async function main() {
   const staleBakedSave = await request(
     'POST',
     `/api/editor-documents/${legacyDocumentId}/save`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(legacyDocumentId, 'better-auth.session=abc', { revision: 5 })),
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(legacyDocumentId, '__Host-chess-tactics-access=abc', { revision: 5 })),
     5000,
   );
   const binding = durableLegacyBinding.rows[0];
@@ -8644,7 +8621,7 @@ async function main() {
   // resolve or mutate them; the promoted workspace remains globally readable.
   const nonAdminOfficialEditor = await request(
     'POST', '/api/editor-documents/resolve',
-    { cookie: 'better-auth.session=rival', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=rival', 'content-type': 'application/json' },
     JSON.stringify({ level_id: 'off-l-test', workspace_kind: 'official', workspace_id: 'default' }),
   );
   if (nonAdminOfficialEditor.statusCode !== 403) {
@@ -8652,7 +8629,7 @@ async function main() {
   }
   const officialEditor = await request(
     'POST', '/api/editor-documents/resolve',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ level_id: 'off-l-test', workspace_kind: 'official', workspace_id: 'default' }),
   );
   const officialEditorBody = JSON.parse(officialEditor.body);
@@ -8736,8 +8713,8 @@ async function main() {
   );
   const invalidRawContractOfficialSave = await request(
     'POST', `/api/editor-documents/${officialDocumentId}/save`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(officialDocumentId, 'better-auth.session=abc', {
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(officialDocumentId, '__Host-chess-tactics-access=abc', {
       revision: 1,
       level: officialExactSaveLevel,
     })),
@@ -8756,8 +8733,8 @@ async function main() {
   }
   const officialEditorSave = await request(
     'POST', `/api/editor-documents/${officialDocumentId}/save`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(officialDocumentId, 'better-auth.session=abc', {
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(officialDocumentId, '__Host-chess-tactics-access=abc', {
       revision: 1,
       level: officialExactSaveLevel,
     })),
@@ -8815,7 +8792,7 @@ async function main() {
   }
   const staleOfficialWorkspaceSave = await request(
     'PUT', '/api/official-campaigns/default',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ data: officialWorkspace, revision: publishedOfficialBody.portfolio.revision }),
   );
   const staleOfficialWorkspaceSaveBody = JSON.parse(staleOfficialWorkspaceSave.body);
@@ -8880,7 +8857,7 @@ async function main() {
   const secondAdminOfficialEditor = await request(
     'POST',
     '/api/editor-documents/resolve',
-    { cookie: 'better-auth.session=second-admin', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=second-admin', 'content-type': 'application/json' },
     JSON.stringify({ level_id: 'off-l-test', workspace_kind: 'official', workspace_id: 'default' }),
   );
   const secondAdminOfficialBody = JSON.parse(secondAdminOfficialEditor.body);
@@ -8893,7 +8870,7 @@ async function main() {
     throw new Error(`Second admin could not resolve the published official selection: ${secondAdminOfficialEditor.statusCode} ${secondAdminOfficialEditor.body}`);
   }
   const secondAdminSession = await openEditorEditSession(secondAdminDocumentId, {
-    cookie: 'better-auth.session=second-admin',
+    cookie: '__Host-chess-tactics-access=second-admin',
     deviceId: 'smoke-second-admin-device',
     clientLabel: 'Second official admin',
   });
@@ -8902,7 +8879,7 @@ async function main() {
   }
   const secondAdminVersions = await get(
     `/api/editor-documents/${secondAdminDocumentId}/background-versions`,
-    { cookie: 'better-auth.session=second-admin' },
+    { cookie: '__Host-chess-tactics-access=second-admin' },
   );
   const secondAdminVersionsBody = JSON.parse(secondAdminVersions.body);
   if (
@@ -8917,8 +8894,8 @@ async function main() {
   const secondAdminUnchangedSave = await request(
     'POST',
     `/api/editor-documents/${secondAdminDocumentId}/save`,
-    { cookie: 'better-auth.session=second-admin', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(secondAdminDocumentId, 'better-auth.session=second-admin', {
+    { cookie: '__Host-chess-tactics-access=second-admin', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(secondAdminDocumentId, '__Host-chess-tactics-access=second-admin', {
       revision: 1,
       level: officialAfterEditorSaveBody.portfolio.data.levels['off-l-test'],
     })),
@@ -8952,14 +8929,14 @@ async function main() {
   const missingOfficialBackgroundPut = await request(
     'PUT',
     '/api/official-campaigns/default',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ data: officialWorkspaceAtVersionBoundary, revision: 3 }),
     5000,
   );
   const privateCrossWorkspaceOfficialPut = await request(
     'PUT',
     '/api/official-campaigns/default',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({
       data: {
         ...officialWorkspaceAtVersionBoundary,
@@ -8978,7 +8955,7 @@ async function main() {
   const foreignReadyOfficialPut = await request(
     'PUT',
     '/api/official-campaigns/default',
-    { cookie: 'better-auth.session=second-admin', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=second-admin', 'content-type': 'application/json' },
     JSON.stringify({
       data: {
         ...officialWorkspaceAtVersionBoundary,
@@ -9009,7 +8986,7 @@ async function main() {
   const exactReadyOfficialPut = await request(
     'PUT',
     '/api/official-campaigns/default',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ data: exactReadyOfficialWorkspace, revision: 3 }),
     5000,
   );
@@ -9055,7 +9032,7 @@ async function main() {
     throw new Error(`Anonymous lab runs should require sign-in: ${anonymousLabRuns.statusCode}`);
   }
 
-  const emptyLabRuns = await get('/api/lab-runs', { cookie: 'better-auth.session=abc' });
+  const emptyLabRuns = await get('/api/lab-runs', { cookie: '__Host-chess-tactics-access=abc' });
   const emptyLabRunsBody = JSON.parse(emptyLabRuns.body);
   if (emptyLabRuns.statusCode !== 200 || emptyLabRunsBody.runs.length !== 0) {
     throw new Error(`Empty lab run list should be empty: ${emptyLabRuns.statusCode} ${emptyLabRuns.body}`);
@@ -9063,7 +9040,7 @@ async function main() {
 
   const invalidLabRun = await request(
     'POST', '/api/lab-runs',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ meta: 'nope', body: { games: [] } }),
   );
   const invalidLabRunBody = JSON.parse(invalidLabRun.body);
@@ -9073,7 +9050,7 @@ async function main() {
 
   const savedLabRun = await request(
     'POST', '/api/lab-runs',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ meta: { name: 't' }, body: { games: [1, 2] } }),
   );
   const savedLabRunBody = JSON.parse(savedLabRun.body);
@@ -9082,7 +9059,7 @@ async function main() {
   }
   const labRunId = savedLabRunBody.id;
 
-  const listedLabRuns = await get('/api/lab-runs', { cookie: 'better-auth.session=abc' });
+  const listedLabRuns = await get('/api/lab-runs', { cookie: '__Host-chess-tactics-access=abc' });
   const listedLabRunsBody = JSON.parse(listedLabRuns.body);
   if (
     listedLabRuns.statusCode !== 200 ||
@@ -9094,7 +9071,7 @@ async function main() {
     throw new Error(`Lab run list should carry meta but never body: ${listedLabRuns.statusCode} ${listedLabRuns.body}`);
   }
 
-  const loadedLabRun = await get(`/api/lab-runs/${labRunId}`, { cookie: 'better-auth.session=abc' });
+  const loadedLabRun = await get(`/api/lab-runs/${labRunId}`, { cookie: '__Host-chess-tactics-access=abc' });
   const loadedLabRunBody = JSON.parse(loadedLabRun.body);
   if (
     loadedLabRun.statusCode !== 200 ||
@@ -9107,26 +9084,26 @@ async function main() {
 
   // Per-user scoping: the rival can neither read the player's run nor delete
   // it (their DELETE is a 200 no-op).
-  const rivalLabRunRead = await get(`/api/lab-runs/${labRunId}`, { cookie: 'better-auth.session=rival' });
+  const rivalLabRunRead = await get(`/api/lab-runs/${labRunId}`, { cookie: '__Host-chess-tactics-access=rival' });
   if (rivalLabRunRead.statusCode !== 404) {
     throw new Error(`Rival should not read the player's lab run: ${rivalLabRunRead.statusCode} ${rivalLabRunRead.body}`);
   }
-  const rivalLabRunDelete = await request('DELETE', `/api/lab-runs/${labRunId}`, { cookie: 'better-auth.session=rival' });
+  const rivalLabRunDelete = await request('DELETE', `/api/lab-runs/${labRunId}`, { cookie: '__Host-chess-tactics-access=rival' });
   const rivalLabRunDeleteBody = JSON.parse(rivalLabRunDelete.body);
   if (rivalLabRunDelete.statusCode !== 200 || rivalLabRunDeleteBody.ok !== true) {
     throw new Error(`Rival lab run delete should be an idempotent 200: ${rivalLabRunDelete.statusCode} ${rivalLabRunDelete.body}`);
   }
-  const labRunSurvived = await get(`/api/lab-runs/${labRunId}`, { cookie: 'better-auth.session=abc' });
+  const labRunSurvived = await get(`/api/lab-runs/${labRunId}`, { cookie: '__Host-chess-tactics-access=abc' });
   if (labRunSurvived.statusCode !== 200) {
     throw new Error(`Rival's delete must not remove the player's lab run: ${labRunSurvived.statusCode} ${labRunSurvived.body}`);
   }
 
-  const deletedLabRun = await request('DELETE', `/api/lab-runs/${labRunId}`, { cookie: 'better-auth.session=abc' });
+  const deletedLabRun = await request('DELETE', `/api/lab-runs/${labRunId}`, { cookie: '__Host-chess-tactics-access=abc' });
   const deletedLabRunBody = JSON.parse(deletedLabRun.body);
   if (deletedLabRun.statusCode !== 200 || deletedLabRunBody.ok !== true) {
     throw new Error(`Unexpected lab run delete: ${deletedLabRun.statusCode} ${deletedLabRun.body}`);
   }
-  const labRunsAfterDelete = await get('/api/lab-runs', { cookie: 'better-auth.session=abc' });
+  const labRunsAfterDelete = await get('/api/lab-runs', { cookie: '__Host-chess-tactics-access=abc' });
   const labRunsAfterDeleteBody = JSON.parse(labRunsAfterDelete.body);
   if (labRunsAfterDelete.statusCode !== 200 || labRunsAfterDeleteBody.runs.length !== 0) {
     throw new Error(`Lab run list should be empty after delete: ${labRunsAfterDelete.statusCode} ${labRunsAfterDelete.body}`);
@@ -9135,7 +9112,7 @@ async function main() {
   const createdCampaign = await request(
     'POST',
     '/api/campaigns',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({
       title: 'Forked Opening',
       description: 'First draft campaign',
@@ -9177,13 +9154,13 @@ async function main() {
     throw new Error(`Created campaign should persist to Postgres: ${JSON.stringify(storedCampaign.rows)}`);
   }
 
-  const rivalCampaigns = await get('/api/campaigns', { cookie: 'better-auth.session=rival' });
+  const rivalCampaigns = await get('/api/campaigns', { cookie: '__Host-chess-tactics-access=rival' });
   const rivalCampaignsBody = JSON.parse(rivalCampaigns.body);
   if (rivalCampaigns.statusCode !== 200 || rivalCampaignsBody.campaigns.length !== 0) {
     throw new Error(`Campaigns should be scoped to owner: ${rivalCampaigns.statusCode} ${rivalCampaigns.body}`);
   }
 
-  const forbiddenCampaign = await get(`/api/campaigns/${campaignId}`, { cookie: 'better-auth.session=rival' });
+  const forbiddenCampaign = await get(`/api/campaigns/${campaignId}`, { cookie: '__Host-chess-tactics-access=rival' });
   if (forbiddenCampaign.statusCode !== 404) {
     throw new Error(`Rival should not read player campaign: ${forbiddenCampaign.statusCode} ${forbiddenCampaign.body}`);
   }
@@ -9191,7 +9168,7 @@ async function main() {
   const renamedCampaign = await request(
     'PATCH',
     `/api/campaigns/${campaignId}`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ title: 'Knight Forks', description: 'Renamed draft' }),
   );
   const renamedCampaignBody = JSON.parse(renamedCampaign.body);
@@ -9209,7 +9186,7 @@ async function main() {
   const addedLevel = await request(
     'POST',
     `/api/campaigns/${campaignId}/levels`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ name: 'Bishop Net', difficulty: 'hard', enemy_budget: 8 }),
   );
   const addedLevelBody = JSON.parse(addedLevel.body);
@@ -9220,7 +9197,7 @@ async function main() {
   const rejectedSmallSpawn = await request(
     'PATCH',
     `/api/campaigns/${campaignId}/levels/${addedLevelBody.level.id}`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({
       zones: [
         { id: 'player-1-spawn', name: 'Player 1 Spawn', selections: [{ id: 'selection-1', type: 'cell', x: 0, y: 7 }] },
@@ -9238,7 +9215,7 @@ async function main() {
   const patchedLevel = await request(
     'PATCH',
     `/api/campaigns/${campaignId}/levels/${addedLevelBody.level.id}`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({
       height: 18,
       notes: 'Late pressure test.',
@@ -9310,7 +9287,7 @@ async function main() {
   const deletedLevel = await request(
     'DELETE',
     `/api/campaigns/${campaignId}/levels/${addedLevelBody.level.id}`,
-    { cookie: 'better-auth.session=abc' },
+    { cookie: '__Host-chess-tactics-access=abc' },
   );
   const deletedLevelBody = JSON.parse(deletedLevel.body);
   if (deletedLevel.statusCode !== 200 || deletedLevelBody.campaign.level_count !== 1) {
@@ -9321,7 +9298,7 @@ async function main() {
   const rejectedLastLevelDelete = await request(
     'DELETE',
     `/api/campaigns/${campaignId}/levels/${lastLevelId}`,
-    { cookie: 'better-auth.session=abc' },
+    { cookie: '__Host-chess-tactics-access=abc' },
   );
   if (rejectedLastLevelDelete.statusCode !== 409) {
     throw new Error(`Deleting the last level should fail: ${rejectedLastLevelDelete.statusCode} ${rejectedLastLevelDelete.body}`);
@@ -9330,12 +9307,12 @@ async function main() {
   const deletedCampaign = await request(
     'DELETE',
     `/api/campaigns/${campaignId}`,
-    { cookie: 'better-auth.session=abc' },
+    { cookie: '__Host-chess-tactics-access=abc' },
   );
   if (deletedCampaign.statusCode !== 204) {
     throw new Error(`Unexpected campaign delete response: ${deletedCampaign.statusCode} ${deletedCampaign.body}`);
   }
-  const deletedCampaignRead = await get(`/api/campaigns/${campaignId}`, { cookie: 'better-auth.session=abc' });
+  const deletedCampaignRead = await get(`/api/campaigns/${campaignId}`, { cookie: '__Host-chess-tactics-access=abc' });
   if (deletedCampaignRead.statusCode !== 404) {
     throw new Error(`Deleted campaign should not be readable: ${deletedCampaignRead.statusCode} ${deletedCampaignRead.body}`);
   }
@@ -9357,13 +9334,13 @@ async function main() {
   // two-browser E2E, frontend/scripts/lobby-e2e.mjs; the gateway timeout that severs the
   // stream is guarded by backend/check-sse-route.js.)
   {
-    const sseHost = await request('POST', '/api/lobbies', { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');
+    const sseHost = await request('POST', '/api/lobbies', { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' }, '{}');
     if (sseHost.statusCode !== 201) {
       throw new Error(`SSE test: could not host lobby: ${sseHost.statusCode} ${sseHost.body}`);
     }
     const sseLobbyId = JSON.parse(sseHost.body).lobby.id;
 
-    const stream = await openSse('/api/lobbies/events', { cookie: 'better-auth.session=abc' });
+    const stream = await openSse('/api/lobbies/events', { cookie: '__Host-chess-tactics-access=abc' });
     try {
       // 1) Connect-time snapshot: the stream must push a frame immediately on open, so a
       //    freshly (re)connected host resyncs without waiting for a future mutation.
@@ -9372,14 +9349,14 @@ async function main() {
 
       // 2) A guest join must reach the connected host as a NEW live frame — the actual
       //    "friend joined" event that was silently dropped in production.
-      const sseJoin = await request('POST', `/api/lobbies/${sseLobbyId}/join`, { cookie: 'better-auth.session=rival', 'content-type': 'application/json' }, '{}');
+      const sseJoin = await request('POST', `/api/lobbies/${sseLobbyId}/join`, { cookie: '__Host-chess-tactics-access=rival', 'content-type': 'application/json' }, '{}');
       if (sseJoin.statusCode !== 200) {
         throw new Error(`SSE test: guest join failed: ${sseJoin.statusCode} ${sseJoin.body}`);
       }
       await stream.waitUntil((f) => f.length > beforeJoin, 2000, 'live lobbies-changed frame after guest join');
 
       // 3) And the host's authoritative view now shows the guest (the visible symptom).
-      const afterJoin = JSON.parse((await get('/api/lobbies', { cookie: 'better-auth.session=abc' })).body);
+      const afterJoin = JSON.parse((await get('/api/lobbies', { cookie: '__Host-chess-tactics-access=abc' })).body);
       if (!afterJoin.current || afterJoin.current.seats.filled !== 2 || !afterJoin.current.guest) {
         throw new Error(`SSE test: host list should show the joined guest: ${JSON.stringify(afterJoin.current)}`);
       }
@@ -9389,13 +9366,13 @@ async function main() {
 
     // Clean up so the lobby-lifecycle test below starts from an empty state (host leave
     // closes + deletes the lobby, freeing both abc and rival).
-    const sseCleanup = await request('POST', `/api/lobbies/${sseLobbyId}/leave`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');
+    const sseCleanup = await request('POST', `/api/lobbies/${sseLobbyId}/leave`, { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' }, '{}');
     if (sseCleanup.statusCode !== 204) {
       throw new Error(`SSE test: host leave/cleanup failed: ${sseCleanup.statusCode} ${sseCleanup.body}`);
     }
   }
 
-  const hosted = await request('POST', '/api/lobbies', { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');
+  const hosted = await request('POST', '/api/lobbies', { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' }, '{}');
   const hostedBody = JSON.parse(hosted.body);
   if (hosted.statusCode !== 201 || hostedBody.lobby.phase !== 'waiting' || hostedBody.lobby.viewer_role !== 'host') {
     throw new Error(`Unexpected host lobby response: ${hosted.statusCode} ${hosted.body}`);
@@ -9404,55 +9381,55 @@ async function main() {
     throw new Error(`Lobby host is missing Gravatar URL: ${hosted.body}`);
   }
 
-  const listed = await get('/api/lobbies', { cookie: 'better-auth.session=rival' });
+  const listed = await get('/api/lobbies', { cookie: '__Host-chess-tactics-access=rival' });
   const listedBody = JSON.parse(listed.body);
   if (listed.statusCode !== 200 || listedBody.lobbies.length !== 1 || listedBody.lobbies[0].viewer_role !== 'observer') {
     throw new Error(`Unexpected lobby list response: ${listed.statusCode} ${listed.body}`);
   }
 
   const lobbyId = hostedBody.lobby.id;
-  const joined = await request('POST', `/api/lobbies/${lobbyId}/join`, { cookie: 'better-auth.session=rival', 'content-type': 'application/json' }, '{}');
+  const joined = await request('POST', `/api/lobbies/${lobbyId}/join`, { cookie: '__Host-chess-tactics-access=rival', 'content-type': 'application/json' }, '{}');
   const joinedBody = JSON.parse(joined.body);
   if (joined.statusCode !== 200 || joinedBody.lobby.phase !== 'ready' || joinedBody.lobby.viewer_role !== 'guest') {
     throw new Error(`Unexpected join lobby response: ${joined.statusCode} ${joined.body}`);
   }
 
-  const rivalStart = await request('POST', `/api/lobbies/${lobbyId}/start`, { cookie: 'better-auth.session=rival', 'content-type': 'application/json' }, '{}');
+  const rivalStart = await request('POST', `/api/lobbies/${lobbyId}/start`, { cookie: '__Host-chess-tactics-access=rival', 'content-type': 'application/json' }, '{}');
   if (rivalStart.statusCode !== 403) {
     throw new Error(`Guest should not be able to start lobby: ${rivalStart.statusCode} ${rivalStart.body}`);
   }
 
   // Start now requires a level (netplay: both clients build the same board from
   // the shared (level, seed)). Starting without one is a 409 no_level.
-  const startNoLevel = await request('POST', `/api/lobbies/${lobbyId}/start`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');
+  const startNoLevel = await request('POST', `/api/lobbies/${lobbyId}/start`, { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' }, '{}');
   if (startNoLevel.statusCode !== 409 || JSON.parse(startNoLevel.body).error !== 'no_level') {
     throw new Error(`Start without a level should 409 no_level: ${startNoLevel.statusCode} ${startNoLevel.body}`);
   }
 
   // Only the host may pick a canonical official level; timing comes from its content.
-  const rivalSetLevel = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: 'better-auth.session=rival', 'content-type': 'application/json' }, JSON.stringify({ levelId: 'off-l-test' }));
+  const rivalSetLevel = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: '__Host-chess-tactics-access=rival', 'content-type': 'application/json' }, JSON.stringify({ levelId: 'off-l-test' }));
   if (rivalSetLevel.statusCode !== 403) {
     throw new Error(`Guest should not be able to set the lobby level: ${rivalSetLevel.statusCode} ${rivalSetLevel.body}`);
   }
-  const missingLevelId = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');
+  const missingLevelId = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' }, '{}');
   if (missingLevelId.statusCode !== 400 || JSON.parse(missingLevelId.body).error !== 'missing_level_id') {
     throw new Error(`Setting a level without an id should 400 missing_level_id: ${missingLevelId.statusCode} ${missingLevelId.body}`);
   }
-  const unknownCanonicalLevel = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ levelId: 'off-l-missing-smoke' }));
+  const unknownCanonicalLevel = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' }, JSON.stringify({ levelId: 'off-l-missing-smoke' }));
   if (unknownCanonicalLevel.statusCode !== 404 || JSON.parse(unknownCanonicalLevel.body).error !== 'level_not_found') {
     throw new Error(`Unknown canonical level should 404 level_not_found: ${unknownCanonicalLevel.statusCode} ${unknownCanonicalLevel.body}`);
   }
-  const setTimedLevel = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ levelId: 'off-l-smoke-timed', timed: false }));
+  const setTimedLevel = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' }, JSON.stringify({ levelId: 'off-l-smoke-timed', timed: false }));
   if (setTimedLevel.statusCode !== 200 || JSON.parse(setTimedLevel.body).lobby.level_timed !== true) {
     throw new Error(`Unexpected timed-level response: ${setTimedLevel.statusCode} ${setTimedLevel.body}`);
   }
-  const startTimedLevel = await request('POST', `/api/lobbies/${lobbyId}/start`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');
+  const startTimedLevel = await request('POST', `/api/lobbies/${lobbyId}/start`, { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' }, '{}');
   if (startTimedLevel.statusCode !== 409 || JSON.parse(startTimedLevel.body).error !== 'timed_level_unsupported') {
     throw new Error(`Timed level should 409 timed_level_unsupported: ${startTimedLevel.statusCode} ${startTimedLevel.body}`);
   }
   // This id is intentionally absent from LOBBY_TEST_LEVEL_METADATA: Level and Start
   // must resolve the exact DB-backed official document written earlier in this smoke.
-  const setLevel = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ levelId: 'off-l-test', timed: true }));
+  const setLevel = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' }, JSON.stringify({ levelId: 'off-l-test', timed: true }));
   const setLevelBody = JSON.parse(setLevel.body);
   if (setLevel.statusCode !== 200 || setLevelBody.lobby.level_id !== 'off-l-test' || setLevelBody.lobby.level_timed !== false
     || setLevelBody.lobby.level_name !== 'Official Exact Save' || setLevelBody.lobby.level_objective !== 'capture-all'
@@ -9460,7 +9437,7 @@ async function main() {
     throw new Error(`Unexpected set-level response: ${setLevel.statusCode} ${setLevel.body}`);
   }
 
-  const started = await request('POST', `/api/lobbies/${lobbyId}/start`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');
+  const started = await request('POST', `/api/lobbies/${lobbyId}/start`, { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' }, '{}');
   const startedBody = JSON.parse(started.body);
   if (started.statusCode !== 200 || startedBody.lobby.phase !== 'started' || !Number.isInteger(startedBody.lobby.seed) || startedBody.lobby.seed <= 0) {
     throw new Error(`Unexpected start lobby response: ${started.statusCode} ${started.body}`);
@@ -9468,23 +9445,23 @@ async function main() {
 
   // Relay moves. Host ('player') moves first (index 0), then guest ('enemy') at index 1 —
   // strict one-move-per-turn alternation is enforced server-side (host=even, guest=odd).
-  const hostMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ intentId: 'smoke-host-0', expectedMoveCount: 0, pieceId: 'p-1', move: { x: 3, y: 4 } }));
+  const hostMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' }, JSON.stringify({ intentId: 'smoke-host-0', expectedMoveCount: 0, pieceId: 'p-1', move: { x: 3, y: 4 } }));
   const hostMoveBody = JSON.parse(hostMove.body);
   if (hostMove.statusCode !== 200 || hostMoveBody.move.i !== 0 || hostMoveBody.move.side !== 'player' || hostMoveBody.move.pieceId !== 'p-1') {
     throw new Error(`Unexpected host move response: ${hostMove.statusCode} ${hostMove.body}`);
   }
   // Turn integrity: the host cannot move again out of turn (index 1 belongs to the guest).
-  const outOfTurn = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ intentId: 'smoke-host-out-of-turn', expectedMoveCount: 1, pieceId: 'p-2', move: { x: 1, y: 1 } }));
+  const outOfTurn = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' }, JSON.stringify({ intentId: 'smoke-host-out-of-turn', expectedMoveCount: 1, pieceId: 'p-2', move: { x: 1, y: 1 } }));
   if (outOfTurn.statusCode !== 409 || JSON.parse(outOfTurn.body).error !== 'not_your_turn') {
     throw new Error(`Out-of-turn move should 409 not_your_turn: ${outOfTurn.statusCode} ${outOfTurn.body}`);
   }
-  const guestMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=rival', 'content-type': 'application/json' }, JSON.stringify({ intentId: 'smoke-guest-1', expectedMoveCount: 1, pieceId: 'e-1', move: { x: 3, y: 4 } }));
+  const guestMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: '__Host-chess-tactics-access=rival', 'content-type': 'application/json' }, JSON.stringify({ intentId: 'smoke-guest-1', expectedMoveCount: 1, pieceId: 'e-1', move: { x: 3, y: 4 } }));
   const guestMoveBody = JSON.parse(guestMove.body);
   if (guestMove.statusCode !== 200 || guestMoveBody.move.i !== 1 || guestMoveBody.move.side !== 'enemy' || guestMoveBody.move.pieceId !== 'e-1') {
     throw new Error(`Unexpected guest move response: ${guestMove.statusCode} ${guestMove.body}`);
   }
   // Payload validation runs before the turn check, so a malformed move is 400 bad_move.
-  const badMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ intentId: 'smoke-bad-move', expectedMoveCount: 2, pieceId: 'p-1', move: { x: 'nope' } }));
+  const badMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' }, JSON.stringify({ intentId: 'smoke-bad-move', expectedMoveCount: 2, pieceId: 'p-1', move: { x: 'nope' } }));
   if (badMove.statusCode !== 400 || JSON.parse(badMove.body).error !== 'bad_move') {
     throw new Error(`Malformed move should 400 bad_move: ${badMove.statusCode} ${badMove.body}`);
   }
@@ -9492,12 +9469,12 @@ async function main() {
   if (outsiderMove.statusCode !== 401) {
     throw new Error(`Anonymous move should require sign-in: ${outsiderMove.statusCode} ${outsiderMove.body}`);
   }
-  const backfill = await get(`/api/lobbies/${lobbyId}/moves?since=0`, { cookie: 'better-auth.session=abc' });
+  const backfill = await get(`/api/lobbies/${lobbyId}/moves?since=0`, { cookie: '__Host-chess-tactics-access=abc' });
   const backfillBody = JSON.parse(backfill.body);
   if (backfill.statusCode !== 200 || backfillBody.moves.length !== 2 || backfillBody.moves[0].pieceId !== 'p-1' || backfillBody.moves[1].pieceId !== 'e-1') {
     throw new Error(`Unexpected moves backfill: ${backfill.statusCode} ${backfill.body}`);
   }
-  const startedList = await get('/api/lobbies', { cookie: 'better-auth.session=abc' });
+  const startedList = await get('/api/lobbies', { cookie: '__Host-chess-tactics-access=abc' });
   const startedListBody = JSON.parse(startedList.body);
   if (startedList.statusCode !== 200 || startedListBody.current.move_count !== 2 || startedListBody.current.level_id !== 'off-l-test') {
     throw new Error(`Started lobby should expose move_count/level_id: ${startedList.statusCode} ${startedList.body}`);
@@ -9511,45 +9488,45 @@ async function main() {
     throw new Error(`Anonymous resign should require sign-in: ${anonResign.statusCode} ${anonResign.body}`);
   }
   // Guest ('enemy') resigns → 'player' (the host) wins.
-  const guestResign = await request('POST', `/api/lobbies/${lobbyId}/resign`, { cookie: 'better-auth.session=rival', 'content-type': 'application/json' }, '{}');
+  const guestResign = await request('POST', `/api/lobbies/${lobbyId}/resign`, { cookie: '__Host-chess-tactics-access=rival', 'content-type': 'application/json' }, '{}');
   const guestResignBody = JSON.parse(guestResign.body);
   if (guestResign.statusCode !== 200 || !guestResignBody.lobby.result || guestResignBody.lobby.result.winner !== 'player' || guestResignBody.lobby.result.reason !== 'resign') {
     throw new Error(`Unexpected resign response: ${guestResign.statusCode} ${guestResign.body}`);
   }
   // The result is visible to the other seat too (how the host learns the match ended).
-  const resignedView = await get(`/api/lobbies/${lobbyId}`, { cookie: 'better-auth.session=abc' });
+  const resignedView = await get(`/api/lobbies/${lobbyId}`, { cookie: '__Host-chess-tactics-access=abc' });
   const resignedViewBody = JSON.parse(resignedView.body);
   if (resignedView.statusCode !== 200 || !resignedViewBody.lobby.result || resignedViewBody.lobby.result.winner !== 'player') {
     throw new Error(`Resigned lobby should expose the result to the host: ${resignedView.statusCode} ${resignedView.body}`);
   }
   // The match is over — further moves are rejected rather than re-opening a decided game.
-  const moveAfterResign = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ intentId: 'smoke-after-resign', expectedMoveCount: 2, pieceId: 'p-2', move: { x: 5, y: 5 } }));
+  const moveAfterResign = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' }, JSON.stringify({ intentId: 'smoke-after-resign', expectedMoveCount: 2, pieceId: 'p-2', move: { x: 5, y: 5 } }));
   if (moveAfterResign.statusCode !== 409 || JSON.parse(moveAfterResign.body).error !== 'match_over') {
     throw new Error(`Move after resign should 409 match_over: ${moveAfterResign.statusCode} ${moveAfterResign.body}`);
   }
   // Idempotent: the host resigning now keeps the first result rather than flipping the winner.
-  const hostResign = await request('POST', `/api/lobbies/${lobbyId}/resign`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');
+  const hostResign = await request('POST', `/api/lobbies/${lobbyId}/resign`, { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' }, '{}');
   const hostResignBody = JSON.parse(hostResign.body);
   if (hostResign.statusCode !== 200 || hostResignBody.lobby.result.winner !== 'player') {
     throw new Error(`Resign should be idempotent (first result kept): ${hostResign.statusCode} ${hostResign.body}`);
   }
   // Start is a one-shot ready→started transition; it cannot reset a live/finished match.
-  const restart = await request('POST', `/api/lobbies/${lobbyId}/start`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');
+  const restart = await request('POST', `/api/lobbies/${lobbyId}/start`, { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' }, '{}');
   const restartBody = JSON.parse(restart.body);
   if (restart.statusCode !== 409 || restartBody.error !== 'lobby_already_started') {
     throw new Error(`Re-start should 409 lobby_already_started: ${restart.statusCode} ${restart.body}`);
   }
-  const restartBackfill = await get(`/api/lobbies/${lobbyId}/moves?since=0`, { cookie: 'better-auth.session=abc' });
+  const restartBackfill = await get(`/api/lobbies/${lobbyId}/moves?since=0`, { cookie: '__Host-chess-tactics-access=abc' });
   if (restartBackfill.statusCode !== 200 || JSON.parse(restartBackfill.body).moves.length !== 2) {
     throw new Error(`Rejected Re-start must preserve move log: ${restartBackfill.statusCode} ${restartBackfill.body}`);
   }
 
   const redirect = await get('/api/auth/sign-in?returnTo=%2Fplay');
-  if (redirect.statusCode !== 302 || !String(redirect.headers.location).startsWith(`http://127.0.0.1:${authPort}/sign-in/microsoft?`)) {
+  if (redirect.statusCode !== 302 || !String(redirect.headers.location).startsWith(`${mockAuthIssuer}/api/auth/oauth2/authorize?`)) {
     throw new Error(`Unexpected sign-in redirect: ${redirect.statusCode} ${redirect.headers.location}`);
   }
 
-  const signOut = await request('POST', '/api/auth/sign-out', { cookie: 'better-auth.session=abc' });
+  const signOut = await request('POST', '/api/auth/sign-out', { cookie: '__Host-chess-tactics-access=abc' });
   if (signOut.statusCode !== 204 || !signOut.headers['set-cookie']) {
     throw new Error(`Unexpected sign-out response: ${signOut.statusCode}`);
   }

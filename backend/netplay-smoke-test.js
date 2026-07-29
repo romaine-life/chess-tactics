@@ -19,20 +19,37 @@ const port = 31347;
 const authPort = 31348;
 const staticDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ct-netplay-'));
 
-// Minimal Better-Auth stand-in with three distinct identities: host, guest, and a true
-// observer who never takes a seat. No cookie is signed-out. Mirrors smoke-test.js's mock.
+// Minimal OIDC stand-in with three distinct identities: host, guest, and a true
+// observer who never takes a seat. No access token is signed-out. Mirrors
+// smoke-test.js's mock.
 const HOST_USER = { email: 'player@example.com', name: 'Tactics Player', role: 'pending' };
 const GUEST_USER = { email: 'rival@example.com', name: 'Lobby Rival', role: 'pending' };
 const OBSERVER_USER = { email: 'observer@example.com', name: 'Lobby Observer', role: 'pending' };
+const mockAuthIssuer = `http://127.0.0.1:${authPort}`;
 const mockAuth = http.createServer((req, res) => {
-  if (req.url !== '/api/auth/get-session') { res.writeHead(404); res.end('not found'); return; }
-  const cookie = req.headers.cookie || '';
-  res.writeHead(200, { 'content-type': 'application/json' });
-  if (!cookie.includes('better-auth.session')) { res.end('null'); return; }
-  const user = cookie.includes('better-auth.session=rival')
+  if (req.url === '/.well-known/openid-configuration') {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({
+      issuer: mockAuthIssuer,
+      authorization_endpoint: `${mockAuthIssuer}/api/auth/oauth2/authorize`,
+      token_endpoint: `${mockAuthIssuer}/api/auth/oauth2/token`,
+      userinfo_endpoint: `${mockAuthIssuer}/api/auth/oauth2/userinfo`,
+      jwks_uri: `${mockAuthIssuer}/api/auth/jwks`,
+    }));
+    return;
+  }
+  if (req.url !== '/api/auth/oauth2/userinfo') { res.writeHead(404); res.end('not found'); return; }
+  const token = String(req.headers.authorization || '').replace(/^Bearer /, '');
+  if (!token) {
+    res.writeHead(401, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: 'invalid_token' }));
+    return;
+  }
+  const user = token === 'rival'
     ? GUEST_USER
-    : (cookie.includes('better-auth.session=observer') ? OBSERVER_USER : HOST_USER);
-  res.end(JSON.stringify({ user }));
+    : (token === 'observer' ? OBSERVER_USER : HOST_USER);
+  res.writeHead(200, { 'content-type': 'application/json' });
+  res.end(JSON.stringify({ sub: token, ...user }));
 });
 
 // Boot the real server with NO database configured (DATABASE_URL / POSTGRES_* stripped
@@ -46,7 +63,7 @@ Object.assign(childEnv, {
   NODE_ENV: 'test',
   PORT: String(port),
   AUTH_BASE_URL: `http://127.0.0.1:${authPort}`,
-  PUBLIC_ORIGIN: 'https://chess.romaine.life',
+  PUBLIC_ORIGIN: 'https://chess-tactics.com',
   STATIC_FRONTEND_DIR: staticDir,
   LOBBY_TEST_LEVEL_METADATA: JSON.stringify({
     'test-level-1': { level: { id: 'test-level-1', name: 'Protocol One', objective: 'capture-all', marker: 'pinned-one' } },
@@ -127,9 +144,9 @@ function parseSseFrames(body) {
 }
 
 const JSON_HEADERS = { 'content-type': 'application/json' };
-const asHost = { cookie: 'better-auth.session=abc', ...JSON_HEADERS };
-const asGuest = { cookie: 'better-auth.session=rival', ...JSON_HEADERS };
-const asObserver = { cookie: 'better-auth.session=observer', ...JSON_HEADERS };
+const asHost = { cookie: '__Host-chess-tactics-access=abc', ...JSON_HEADERS };
+const asGuest = { cookie: '__Host-chess-tactics-access=rival', ...JSON_HEADERS };
+const asObserver = { cookie: '__Host-chess-tactics-access=observer', ...JSON_HEADERS };
 const post = (p, headers, body = '{}') => request('POST', p, headers, body);
 const get = (p, headers) => request('GET', p, headers);
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
