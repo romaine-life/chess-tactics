@@ -17,6 +17,19 @@ npm install
 npm run dev
 ```
 
+Windows Codex desktop environments are named during worktree setup. Setup
+starts Vite through `devctl` and registers the dynamic port with the
+workstation's loopback Caddy router, producing a stable URL such as:
+
+```text
+http://loading-feature.chess-tactics.localhost
+```
+
+The ignored `.codex-session/environment.json` is the non-secret source of truth
+for that environment identity. The auth grant, Codex session context, browser
+verification, screenshots, and user handoff all use the same name. See
+[ADR-0196](docs/adr/0196-codex-environments-have-owner-named-localhost-identities.md).
+
 For baked preview:
 
 ```sh

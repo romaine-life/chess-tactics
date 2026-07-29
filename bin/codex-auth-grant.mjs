@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { approvalInstructions, openBrowser } from './codex-auth-browser.mjs';
@@ -9,7 +9,15 @@ import { approvalInstructions, openBrowser } from './codex-auth-browser.mjs';
 const AUTH_ORIGIN = 'https://auth.romaine.life';
 const repoDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const credentialPath = path.join(repoDir, '.codex-session', 'auth.json');
+const environmentPath = path.join(repoDir, '.codex-session', 'environment.json');
 const nouns = ['compass', 'lantern', 'harbor', 'meadow', 'thimble', 'anvil', 'teapot', 'maple', 'rivet', 'quartz'];
+
+let environment = null;
+try {
+  environment = JSON.parse(await readFile(environmentPath, 'utf8'));
+} catch (error) {
+  if (error.code !== 'ENOENT') throw error;
+}
 
 const postJson = async (pathname, body) => {
   const response = await fetch(`${AUTH_ORIGIN}${pathname}`, {
@@ -34,11 +42,19 @@ const seed = createHash('sha256').update(`${repoDir}:${Date.now()}:${randomBytes
 const miscIdentifier = nouns.find((noun, index) => !previous.has(nouns[(seed + index) % nouns.length]))
   ?? `session-${randomBytes(4).toString('hex')}`;
 const chosenNoun = nouns.includes(miscIdentifier) ? nouns[(nouns.indexOf(miscIdentifier) + seed) % nouns.length] : miscIdentifier;
+const environmentIdentifier = String(environment?.name || '').slice(0, 48);
+const chosenIdentifier = environmentIdentifier || chosenNoun;
+const uniqueIdentifier = previous.has(chosenIdentifier)
+  ? `${chosenIdentifier.slice(0, 39)}-${randomBytes(4).toString('hex')}`
+  : chosenIdentifier;
+const environmentDescription = environment?.url
+  ? `"${environment.name}" at ${environment.url}`
+  : `the worktree at ${repoDir}`;
 
 const request = await postJson('/api/cli/device', {
-  where_happening: `Codex desktop environment in ${repoDir}`,
-  intended_use: 'Authenticate localhost Chess Tactics development and browser verification for this Codex session',
-  misc_identifier: previous.has(chosenNoun) ? `session-${randomBytes(4).toString('hex')}` : chosenNoun,
+  where_happening: `Codex desktop environment ${environmentDescription}`,
+  intended_use: `Authenticate ${environment?.name || 'localhost'} Chess Tactics development and browser verification for this Codex session`,
+  misc_identifier: uniqueIdentifier,
 });
 
 approvalInstructions(request).forEach((line) => console.log(line));
@@ -71,5 +87,7 @@ await writeFile(credentialPath, `${JSON.stringify({
   expires_at: granted.expires_at,
   purpose: granted.purpose,
   auth_origin: AUTH_ORIGIN,
+  environment_name: environment?.name || null,
+  environment_url: environment?.url || null,
 }, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
 console.log(`Authentication grant stored for this environment (expires ${granted.expires_at}).`);
