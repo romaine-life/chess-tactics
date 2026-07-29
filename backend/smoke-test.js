@@ -350,7 +350,9 @@ function requestOnPort(targetPort, method, path, headers = {}, body = null, time
       && requestHeaders['content-length'] === undefined
       && requestHeaders['transfer-encoding'] === undefined
     ) {
-      requestHeaders['content-length'] = Buffer.byteLength(String(body));
+      requestHeaders['content-length'] = Buffer.isBuffer(body)
+        ? body.length
+        : Buffer.byteLength(String(body));
     }
     const req = http.request({ hostname: '127.0.0.1', port: targetPort, method, path, headers: requestHeaders }, (res) => {
       let body = '';
