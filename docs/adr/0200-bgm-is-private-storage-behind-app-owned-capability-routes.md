@@ -7,7 +7,7 @@ refines:
   - ADR-0044
 ---
 
-# ADR-0199: BGM is private storage behind app-owned discovery and capability routes
+# ADR-0200: BGM is private storage behind app-owned discovery and capability routes
 
 ## Context and Problem Statement
 
@@ -111,7 +111,7 @@ ids, Blob names, delegation keys, SAS queries, or redirect locations.
 
 This decision **refines rather than supersedes ADR-0085's BGM exception**.
 BGM still uses a backend-resolved, domain-native Blob-index/range-streaming
-projection outside the generic candidate lifecycle. ADR-0199 specifies the
+projection outside the generic candidate lifecycle. ADR-0200 specifies the
 previously ambiguous access and delivery boundary. It also preserves ADR-0044's
 single persistent mute control and player ownership model; no second player or
 control is introduced.

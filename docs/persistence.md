@@ -536,7 +536,7 @@ addresses and immutable same-origin object routes. It never reads a packaged
 
 Unit Art remains a typed catalog over the same ownership model. BGM retains its
 domain-native Blob-index/range-streaming projection, refined by
-[ADR-0199](adr/0199-bgm-is-private-storage-behind-app-owned-capability-routes.md):
+[ADR-0200](adr/0200-bgm-is-private-storage-behind-app-owned-capability-routes.md):
 the container is private, the public playlist contains only opaque app playback
 routes, the anonymous route validates the current catalog and issues a
 short-lived per-Blob read capability, and Azure serves the media bytes. BGM is

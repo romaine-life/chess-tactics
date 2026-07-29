@@ -3,7 +3,7 @@
 The game plays a continuously **shuffled** soundtrack. This doc covers the
 current private-storage delivery contract and how to change the soundtrack. It
 is derived from
-[ADR-0199](adr/0199-bgm-is-private-storage-behind-app-owned-capability-routes.md).
+[ADR-0200](adr/0200-bgm-is-private-storage-behind-app-owned-capability-routes.md).
 
 ## Architecture
 
@@ -134,7 +134,7 @@ storage configuration.
 
 ## Production cutover
 
-Privatization must follow the order in ADR-0199:
+Privatization must follow the order in ADR-0200:
 
 1. deploy backend capability issuance and the same-origin playlist projection;
 2. verify anonymous playback and Range/seek through the app routes;

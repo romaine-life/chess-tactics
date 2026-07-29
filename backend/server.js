@@ -147,7 +147,7 @@ const lobbyChannelSubscribers = new Map(); // Map<lobbyId, Set<{ res, email }>>
 // The workload identity lists metadata for /api/bgm and requests user-delegation
 // keys. Playlist entries expose only stable same-origin app routes; each playback
 // request receives a fresh blob-specific, read-only, short-lived SAS redirect so
-// Azure—not this pod—carries the audio bytes and range traffic (ADR-0199).
+// Azure—not this pod—carries the audio bytes and range traffic (ADR-0200).
 const bgmContainerUrl = String(process.env.BGM_CONTAINER_URL || '').trim().replace(/\/+$/, '');
 const bgmSignals = {
   capabilitySuccess: 0,

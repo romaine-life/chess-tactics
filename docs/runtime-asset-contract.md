@@ -296,7 +296,7 @@ live-media substrate owns domains migrated from repository files; existing
 domain-native stores such as Unit Art and BGM remain conforming because their
 runtime bytes and pointers are already backend-resolved rather than Git-backed.
 Per
-[ADR-0199](adr/0199-bgm-is-private-storage-behind-app-owned-capability-routes.md),
+[ADR-0200](adr/0200-bgm-is-private-storage-behind-app-owned-capability-routes.md),
 BGM specifically uses a backend-listed private container, app-owned opaque
 playback routes, and temporary per-Blob read capabilities; its browser-facing
 catalog never exposes a permanent storage URL.
@@ -339,7 +339,7 @@ an incomplete row is an availability failure.
   same-origin playback routes. Each current route mints a fresh read-only,
   HTTPS-only, short-lived user-delegation SAS and redirects without caching;
   Azure serves the bytes and ranges. BGM remains outside the generic candidate
-  lifecycle (ADR-0199).
+  lifecycle (ADR-0200).
 
 The browser, Studio, client image bakes, and server thumbnails must observe one
 catalog revision. A critical catalog that cannot hydrate is an availability
@@ -376,7 +376,7 @@ exact-byte review instrument exist:
 | Terrain surface tops | Shared live-media catalog + private Blob | Shared single/batch APIs | Complete; database-declared groups are reviewed on the canonical board and accepted atomically |
 | Structure source-art turntables | Structure drawable catalog + shared live-media catalog/private Blob | Outside-repository batch manifest + canonical source archive client; one archived pack may supply multiple exact object-allowlisted Artwork groups | Complete; Studio validates all eight native 512×512 rasters, requires each exact direction to mount in the interactive board placement proof, records the typed owner group proof, accepts atomically, then installs the drawable record |
 | Other terrain and generic media domains | Shared live-media catalog + private Blob | Shared single/batch APIs | Deliberately blocked until that projection has a typed completeness validator, domain-owned exact-byte review instrument, backend proof validation, and atomic acceptance/rollback tests |
-| BGM | Backend-listed private Blob container; app-owned discovery/playback routes; per-Blob user-delegation SAS | Blob administration | Range-streamed by Azure after a bounded no-store redirect; intentionally not the generic candidate lifecycle (ADR-0199) |
+| BGM | Backend-listed private Blob container; app-owned discovery/playback routes; per-Blob user-delegation SAS | Blob administration | Range-streamed by Azure after a bounded no-store redirect; intentionally not the generic candidate lifecycle (ADR-0200) |
 
 The remaining promotion docket is UI kit/Chrome; remaining terrain; props,
 walls, rocks, and atlases; portraits, backgrounds, and social media; then fonts
@@ -441,7 +441,7 @@ catalog.
 - BGM tests inject a deterministic catalog and signer behind the production
   app-route contract; normal local development uses the full backend and
   established Azure credential. No static-index, public-read, or frontend-proxy
-  path exists (ADR-0199).
+  path exists (ADR-0200).
 
 ## Repository enforcement
 
