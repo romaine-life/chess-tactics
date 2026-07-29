@@ -330,7 +330,9 @@ export function App(): ReactElement {
 
   const destinationPainted = useCallback((generation: number): void => {
     const elapsed = performance.now() - loadingStartedAt.current;
-    const remaining = Math.max(0, SCENE_LOADING_MIN_MS - elapsed);
+    const destination = sceneRef.current.destination ?? sceneRef.current.current;
+    const minimum = destination.waitPresentation === 'loading' ? SCENE_LOADING_MIN_MS : 0;
+    const remaining = Math.max(0, minimum - elapsed);
     const timer = window.setTimeout(
       () => dispatchScene({ type: 'destination-painted', generation }),
       remaining,
@@ -367,9 +369,10 @@ export function App(): ReactElement {
   // destination during exit and is preparation metadata, not visibility.
   const mountedScene = sceneManifest(path);
   const transitioning = scene.phase !== 'current' && scene.phase !== 'startup';
-  const showLoadingPresentation = scene.phase === 'loading'
-    || scene.phase === 'entering'
-    || scene.phase === 'error'
+  const showLoadingPresentation = scene.phase === 'error'
+    || (manifest.waitPresentation === 'loading' && (
+      scene.phase === 'loading' || scene.phase === 'entering'
+    ))
     || (scene.phase === 'startup' && scene.startupStage < 0);
   const retainedBackground = scene.current.background;
   const homepageIsDestination = transitioning
@@ -390,6 +393,7 @@ export function App(): ReactElement {
         data-scene-error={scene.error?.message}
         data-scene-committed={scene.current.leaf.key}
         data-scene-pending={scene.destination?.leaf.key}
+        data-scene-wait-presentation={manifest.waitPresentation}
         data-scene-slots={JSON.stringify(slots.map((slot) => ({
           id: slot.id,
           committed: slot.committed?.key ?? null,

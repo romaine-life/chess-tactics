@@ -17277,10 +17277,27 @@ button.tileset-relationship-cell {
   min-height: 0;
 }
 .settings-scroll > .kit-scroll-content {
-  /* Reserve the scrollbar gutter inside the viewport's declared width. Without
-     border-box, the 18px padding enlarged Audio's scroll canvas and let its wide
-     rows paint beneath the drawn rail/thumb. */
+  /* Settings owns two literal horizontal regions: a scroll viewport and a
+     separate 24px drawn-scrollbar gutter. Do not merely pad a full-width
+     viewport—the row frames would still extend beneath the rail. */
   box-sizing: border-box;
+  inline-size: calc(100% - 24px);
+  padding-inline-end: 0;
+}
+.settings-scroll > .kit-scroll-rail {
+  inset-inline-end: 2px;
+}
+.settings-scroll .settings-row-control {
+  flex: 1 1 auto;
+}
+.settings-scroll .settings-slider {
+  flex: 1 1 150px;
+  min-inline-size: 100px;
+}
+.settings-scroll .settings-slider input[type="range"] {
+  flex: 1 1 150px;
+  inline-size: clamp(100px, 16vw, 250px);
+  min-inline-size: 100px;
 }
 
 /* Labeled row groups: an uppercase eyebrow over a tight cluster of rows. */
@@ -17328,6 +17345,9 @@ button.tileset-relationship-cell {
      ADR-0028 fixes. copy fills; value/control hug the end. */
   display: flex;
   gap: 16px;
+  inline-size: 100%;
+  max-inline-size: 100%;
+  min-inline-size: 0;
   min-height: 60px;
   padding: 18px 28px;
 }

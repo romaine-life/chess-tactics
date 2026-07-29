@@ -49,6 +49,8 @@ describe('scene manifests', () => {
       key: 'settings/audio/tracks',
       definition: { slot: 'settings-content', view: 'settings-tracks' },
     });
+    expect(sceneManifest('/settings/audio').waitPresentation).toBe('transition-only');
+    expect(sceneManifest('/settings/audio/tracks').waitPresentation).toBe('loading');
   });
 
   it('recognizes removing a retained host child as an empty-slot destination', () => {

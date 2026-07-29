@@ -383,12 +383,19 @@ try {
           if (phase === 'exiting' && contentOpacity < 0.9) {
             window.__ctMenuHostContinuity.settingsExitFaded = true;
           }
+          const loading = document.querySelector('.scene-loading-presentation');
+          const loadingVisible = Boolean(
+            loading
+            && getComputedStyle(loading).visibility !== 'hidden'
+            && Number.parseFloat(getComputedStyle(loading).opacity) > 0.001
+          );
           const violation = !settingsRail
             || settingsRail !== window.__ctSettingsHostRail
             || settingsRail.closest('[inert]')
             || getComputedStyle(settingsRail).pointerEvents === 'none'
             || (phase === 'exiting' && mounted !== committed)
-            || (phase === 'loading' && mounted === pending && contentOpacity > 0.001);
+            || (phase === 'loading' && mounted === pending && contentOpacity > 0.001)
+            || (pending === 'settings/audio' && loadingVisible);
           if (violation) {
             window.__ctMenuHostContinuity.settingsViolations.push({
               phase,
@@ -396,6 +403,7 @@ try {
               pending,
               mounted,
               contentOpacity,
+              loadingVisible,
               sameRail: settingsRail === window.__ctSettingsHostRail,
             });
           }
@@ -784,7 +792,33 @@ try {
     }
   }
   if (assertMenuHostContinuity) {
-    const result = await page.evaluate(() => window.__ctMenuHostContinuity);
+    const result = await page.evaluate(() => {
+      const rail = document.querySelector('.settings-scroll > .kit-scroll-rail');
+      const rows = [...document.querySelectorAll(
+        '[data-scene-instance="settings/audio"] .settings-row',
+      )];
+      const railLeft = rail?.getBoundingClientRect().left ?? null;
+      const rect = (selector) => {
+        const node = document.querySelector(selector);
+        const bounds = node?.getBoundingClientRect();
+        return bounds ? { left: bounds.left, right: bounds.right, width: bounds.width } : null;
+      };
+      const rowsRight = rows.length
+        ? Math.max(...rows.map((row) => row.getBoundingClientRect().right))
+        : null;
+      return {
+        ...window.__ctMenuHostContinuity,
+        settingsGeometry: {
+          railLeft,
+          rowsRight,
+          gap: railLeft !== null && rowsRight !== null ? railLeft - rowsRight : null,
+          wrap: rect('.settings-scroll'),
+          content: rect('.settings-scroll > .kit-scroll-content'),
+          panel: rect('[data-scene-instance="settings/audio"] .settings-panel-content'),
+          firstRow: rect('[data-scene-instance="settings/audio"] .settings-row'),
+        },
+      };
+    });
     if (
       !result?.seen
       || result.violations.length
@@ -796,6 +830,8 @@ try {
       || !result.settingsSeen
       || !result.settingsExitFaded
       || result.settingsViolations.length
+      || result.settingsGeometry.gap === null
+      || result.settingsGeometry.gap < 6
     ) {
       console.error(`menu host continuity failed: ${JSON.stringify(result)}`);
       process.exitCode = 15;

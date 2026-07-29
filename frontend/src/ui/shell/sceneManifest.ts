@@ -34,6 +34,7 @@ export type ScenePaintOwner =
   | 'predrawn-reference'
   | 'portrait-editor'
   | 'lobbies';
+export type SceneWaitPresentation = 'loading' | 'transition-only';
 
 export interface SceneManifest {
   id: string;
@@ -43,6 +44,8 @@ export interface SceneManifest {
   paintOwner: ScenePaintOwner;
   critical: readonly string[];
   opportunistic: readonly string[];
+  /** Whether unresolved preparation needs explicit Loading copy or only transition choreography. */
+  waitPresentation: SceneWaitPresentation;
 }
 
 export interface SceneDefinition {
@@ -96,7 +99,16 @@ const manifest = (
   critical: readonly string[],
   opportunistic: readonly string[] = [],
   host: SceneHost = 'standalone',
-): SceneManifest => ({ id, host, background, paintOwner, critical, opportunistic });
+  waitPresentation: SceneWaitPresentation = 'loading',
+): SceneManifest => ({
+  id,
+  host,
+  background,
+  paintOwner,
+  critical,
+  opportunistic,
+  waitPresentation,
+});
 
 /**
  * Required scene declaration for every route family rendered by App.
@@ -170,7 +182,7 @@ function leafSceneManifest(pathname: string): SceneManifest {
       'homepage-background',
       'title-bar',
       'visible-controls',
-    ], [], 'settings-shell');
+    ], [], 'settings-shell', path === '/settings/audio/tracks' ? 'loading' : 'transition-only');
   }
   if (path === '/lobbies' || path.startsWith('/lobbies/')) {
     return manifest('lobbies', 'homepage', 'lobbies', [

@@ -103,6 +103,8 @@ describe('professional loading architecture guards', () => {
     expect(settings).not.toContain('settings-xfade-');
     expect(styles).toContain('data-transition-region="settings-shell"');
     expect(styles).toContain('.settings-scroll > .kit-scroll-content');
+    expect(styles).toContain('inline-size: calc(100% - 24px)');
+    expect(read('./ui/App.tsx')).toContain("manifest.waitPresentation === 'loading'");
   });
 
   it('does not let menu, screen, or board readiness expire into success', () => {

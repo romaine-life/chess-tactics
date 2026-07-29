@@ -13,6 +13,8 @@ Empty child-slot transitions are governed by
 [ADR-0198](adr/0198-empty-scene-slots-commit-without-loading.md).
 The enrollment rule for navigational UI is governed by
 [ADR-0199](adr/0199-navigational-drawing-requires-an-authored-scene-slot.md).
+Transition presentation capability is governed by
+[ADR-0200](adr/0200-scene-transitioning-does-not-imply-loading-presentation.md).
 
 ## Readiness vocabulary
 
@@ -105,6 +107,13 @@ authored scene slot. Route-owning views do not listen to navigation or derive vi
 selection from `window.location`; only the director-mounted path selects the child.
 Local component state is reserved for interaction inside a committed scene rather
 than navigable region identity.
+
+Authored transition does not imply Loading presentation. A `transition-only`
+destination still exits, mounts hidden, acknowledges paint, enters, and remains
+cancellable, but has no Loading copy or artificial loading minimum. A `loading`
+destination uses the same lifecycle plus explicit wait presentation and its minimum.
+The distinction is declared by the destination manifest, never inferred from elapsed
+time or cache luck.
 
 Title-bar contributions discover targets inside their own committed scene. DOM-node
 refs are never lifted into the director, because portal attachment must not mutate the
