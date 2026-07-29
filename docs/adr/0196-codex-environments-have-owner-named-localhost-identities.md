@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by ADR-0197
 date: 2026-07-29
 deciders: Nelson, Codex
 ---

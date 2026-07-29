@@ -11,10 +11,11 @@ repair authentication during handoff.
 Windows Codex environment setup also asks the owner for one feature name and
 stores its non-secret identity in `.codex-session/environment.json`. `devctl`
 starts the full Vite-owned process tree, and the workstation Caddy router maps
-its dynamic port to `http://<environment>.chess-tactics.localhost`. A Codex
-`SessionStart` hook injects that exact URL into agent context. Use the named URL
-for browser testing, screenshots, and owner handoff; `localhost:<port>` is an
-internal diagnostic fallback. See ADR-0196.
+its dynamic port to `http://<environment>.chess-tactics.localhost`. At the start
+of work, read that exact URL from `.codex-session/environment.json`;
+`devctl list -Json` is the fallback if the record needs diagnosis. Use the named
+URL for browser testing, screenshots, and owner handoff; `localhost:<port>` is
+an internal diagnostic fallback. See ADR-0197.
 
 `DEV_NO_BACKEND=1` and `DEV_OFFLINE=1` are owner-only escape hatches. Agents must
 not set them, suggest them, or use them to keep working after the backend fails to
@@ -94,10 +95,10 @@ and don't tell the user screenshots are impossible. Use the helper below.
 ### How
 
 1. Codex setup starts the dev server **persistently** through devctl and records
-   the stable URL in `.codex-session/environment.json`; use the URL injected by
-   the session hook. Do not start a duplicate process. Plain non-Codex fallback
-   from `frontend/` is `npm run dev`; only that fallback uses the dynamic local
-   URL Vite prints.
+   the stable URL in `.codex-session/environment.json`; read the URL from that
+   record. Do not start a duplicate process. Plain non-Codex fallback from
+   `frontend/` is `npm run dev`; only that fallback uses the dynamic local URL
+   Vite prints.
 
 2. Capture with the `shot` tool. It drives the installed Chrome via `puppeteer-core`
    (system browser, no bundled download), freezes animation for determinism, and **clips

@@ -114,7 +114,7 @@ contracts whenever the task vocabulary suggests one.
   `DEV_OFFLINE=1`; follow `CLAUDE.md` if startup fails.
 - Run checks proportional to the changed surface. For changes that affect the
   running application, verify the real full app on the exact route and state
-  affected. In a named Codex environment, use the stable URL injected from
+  affected. In a named Codex environment, read the stable URL from
   `.codex-session/environment.json`; the dynamically printed Vite URL is an
   internal fallback, never an assumed port or owner handoff. Use the supported
   screenshot path documented in `CLAUDE.md`.
