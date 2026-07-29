@@ -2473,6 +2473,30 @@ const MIGRATIONS = [
         );
     `,
   },
+  {
+    version: 44,
+    name: 'wars in canonical workspaces + account active runs',
+    // ADR-0189 keeps Wars in the same revisioned canonical workspace transaction as
+    // Campaigns/Levels while the UI exposes a separate library. Active Run progress is
+    // account state, not authored content, so it gets one owner-scoped CAS document.
+    sql: `
+      UPDATE campaign_workspaces
+         SET body = jsonb_set(body, '{wars}', '[]'::jsonb, true)
+       WHERE NOT (body ? 'wars');
+
+      UPDATE official_campaigns
+         SET data = jsonb_set(data, '{wars}', '[]'::jsonb, true)
+       WHERE NOT (data ? 'wars');
+
+      CREATE TABLE IF NOT EXISTS active_runs (
+        owner_email text        PRIMARY KEY,
+        body        jsonb       NOT NULL,
+        revision    integer     NOT NULL DEFAULT 0 CHECK (revision >= 0),
+        created_at  timestamptz NOT NULL DEFAULT now(),
+        updated_at  timestamptz NOT NULL DEFAULT now()
+      );
+    `,
+  },
 ];
 
 let pool = null;
