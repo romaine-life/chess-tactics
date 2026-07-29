@@ -18,7 +18,8 @@ baseline:
 
 Board-unit art and BGM are the exceptions. Unit Art uses Postgres-owned active
 pointers and accepted status with immutable bytes in private Blob Storage. BGM is listed from Blob
-Storage through the backend. Terrain, UI chrome, backgrounds, props, doodads,
+Storage through the backend; its public app playback route authorizes a bounded
+per-Blob read while Azure streams the bytes. Terrain, UI chrome, backgrounds, props, doodads,
 ground cover, portraits, wall decoration, SFX, fonts, OG images, review images,
 and most generation inputs remain Git-backed.
 
@@ -133,8 +134,8 @@ catalogs:
   a repository file.
 - Domain projections retain their real contracts: Units keep their palette and
   direction completeness rules; terrain keeps top/side/animation and alpha
-  rules; UI kit assets keep nine-slice geometry; BGM keeps range-streaming and
-  playlist semantics.
+  rules; UI kit assets keep nine-slice geometry; BGM keeps app-owned playlist
+  identity and Azure range streaming behind temporary read capability.
 - Promotion is an admin-gated backend transaction. A browser-local review marker,
   Git manifest, filename, or copied PNG cannot promote an asset.
 - Critical catalogs are required at startup and in server rendering. There is no

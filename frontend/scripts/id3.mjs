@@ -66,22 +66,33 @@ export function parseId3(buf) {
   return out;
 }
 
-// Fetch just enough of a remote mp3 to read its ID3v2 tag, then parse it. Best-effort:
-// any network/parse problem yields empty fields.
-export async function fetchId3(url, { timeoutMs = 8000 } = {}) {
+// Read just enough of an mp3 source to parse its ID3v2 tag. The injected range
+// reader keeps private Blob tooling authenticated without teaching this parser
+// about Azure; any read/parse problem yields empty fields.
+export async function readId3WithRange(readRange) {
   try {
-    const first = await fetch(url, { headers: { Range: 'bytes=0-65535' }, signal: AbortSignal.timeout(timeoutMs) });
-    if (!first.ok && first.status !== 206) return parseId3(Buffer.alloc(0));
-    let buf = Buffer.from(await first.arrayBuffer());
+    let buf = Buffer.from(await readRange(0, 65536));
     if (buf.length >= 10 && buf.toString('latin1', 0, 3) === 'ID3') {
       const need = 10 + synchsafe(buf, 6);
       if (need > buf.length && need <= 1024 * 1024) {
-        const more = await fetch(url, { headers: { Range: `bytes=0-${need - 1}` }, signal: AbortSignal.timeout(timeoutMs) });
-        if (more.ok || more.status === 206) buf = Buffer.from(await more.arrayBuffer());
+        buf = Buffer.from(await readRange(0, need));
       }
     }
     return parseId3(buf);
   } catch {
     return parseId3(Buffer.alloc(0));
   }
+}
+
+// HTTP adapter retained for non-Azure callers. It also performs bounded Range
+// reads and never downloads a complete track merely to inspect its metadata.
+export async function fetchId3(url, { timeoutMs = 8000 } = {}) {
+  return readId3WithRange(async (offset, count) => {
+    const response = await fetch(url, {
+      headers: { Range: `bytes=${offset}-${offset + count - 1}` },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!response.ok && response.status !== 206) throw new Error(`id3 range ${response.status}`);
+    return Buffer.from(await response.arrayBuffer());
+  });
 }
