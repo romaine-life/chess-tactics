@@ -3207,7 +3207,7 @@ async function main() {
   }
   const nonAdminPlaytestAuthorization = await request(
     'POST', '/api/admin/playtest/authorize',
-    { cookie: 'better-auth.session=rival', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=rival', 'content-type': 'application/json' },
     JSON.stringify({ action: 'kill-unit' }),
   );
   if (nonAdminPlaytestAuthorization.statusCode !== 403) {
@@ -3215,7 +3215,7 @@ async function main() {
   }
   const adminPlaytestAuthorization = await request(
     'POST', '/api/admin/playtest/authorize',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ action: 'gain-gold', amountTenths: 25 }),
   );
   const adminPlaytestAuthorizationBody = JSON.parse(adminPlaytestAuthorization.body);
@@ -3625,7 +3625,7 @@ async function main() {
   }
   const sharedCampaignWarLevel = await request(
     'PUT', '/api/campaign-workspace',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({
       ...workspaceDoc,
       wars: [{
@@ -3674,7 +3674,7 @@ async function main() {
   if (anonymousRun.statusCode !== 401) {
     throw new Error(`Anonymous active Run should require sign-in: ${anonymousRun.statusCode}`);
   }
-  const emptyRun = await get('/api/active-run', { cookie: 'better-auth.session=abc' });
+  const emptyRun = await get('/api/active-run', { cookie: '__Host-chess-tactics-access=abc' });
   const emptyRunBody = JSON.parse(emptyRun.body);
   if (emptyRun.statusCode !== 200 || emptyRunBody.run !== null || emptyRunBody.revision !== 0) {
     throw new Error(`Active Run should begin empty: ${emptyRun.statusCode} ${emptyRun.body}`);
@@ -3713,7 +3713,7 @@ async function main() {
   };
   const missingRunRevision = await request(
     'PUT', '/api/active-run',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ run: activeRunDocument }),
   );
   if (missingRunRevision.statusCode !== 400 || JSON.parse(missingRunRevision.body).error !== 'active_run_revision_required') {
@@ -3721,20 +3721,20 @@ async function main() {
   }
   const savedRun = await request(
     'PUT', '/api/active-run',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ run: activeRunDocument, revision: 0 }),
   );
   const savedRunBody = JSON.parse(savedRun.body);
   if (savedRun.statusCode !== 200 || savedRunBody.revision !== 1 || savedRunBody.run.id !== 'run-smoke') {
     throw new Error(`Active Run did not save: ${savedRun.statusCode} ${savedRun.body}`);
   }
-  const rivalRun = await get('/api/active-run', { cookie: 'better-auth.session=rival' });
+  const rivalRun = await get('/api/active-run', { cookie: '__Host-chess-tactics-access=rival' });
   if (rivalRun.statusCode !== 200 || JSON.parse(rivalRun.body).run !== null) {
     throw new Error(`Active Run should be owner-scoped: ${rivalRun.statusCode} ${rivalRun.body}`);
   }
   const staleRun = await request(
     'PUT', '/api/active-run',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ run: { ...activeRunDocument, updatedAt: '2026-01-02T00:00:00.000Z' }, revision: 0 }),
   );
   if (staleRun.statusCode !== 409 || JSON.parse(staleRun.body).revision !== 1) {
@@ -3742,7 +3742,7 @@ async function main() {
   }
   const deletedRun = await request(
     'DELETE', '/api/active-run',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ revision: 1 }),
   );
   if (deletedRun.statusCode !== 200 || JSON.parse(deletedRun.body).ok !== true) {
