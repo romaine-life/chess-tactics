@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:2b984f3cc10dd5adf5a31b3e8e811a94a981461f3eee245139ca00e543e49577"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:bfba7a2710a727af4756c7c32aea1714a3fa211063ae17743006ee07848446f0"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Fix OIDC cookies in run smoke tests"
-  prNumber: "529"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/529"
-  commit: "b34f2776"
+  prTitle: "Show approved relic icons throughout Runs"
+  prNumber: "531"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/531"
+  commit: "d8d08832"
 
 name: chess-tactics
 namespace: chess-tactics
