@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:7b767e79edb0a213de7b7f0b36bd6f34076dd8e9ae8673ef7d2523a51ebeff58"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:38b1ae365c1823f863d961f3c6af2eddf3fe9980f1de694d3fdf802133a1bac5"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Fix atomic portrait swaps"
-  prNumber: "542"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/542"
-  commit: "fafc9604"
+  prTitle: "Complete Run relic artwork coverage"
+  prNumber: "543"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/543"
+  commit: "b043421f"
 
 name: chess-tactics
 namespace: chess-tactics
