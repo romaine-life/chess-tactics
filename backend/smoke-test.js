@@ -980,7 +980,7 @@ function inlineMigrationSql(version) {
   return inlineMigrationDefinition(version).sql;
 }
 
-async function validatePrimarySparseNumericMigrationUpgrade45() {
+async function validatePrimarySparseNumericMigrationUpgrade46() {
   const history = await queryDb(
     `SELECT version, name, checksum
        FROM schema_migrations
@@ -995,7 +995,7 @@ async function validatePrimarySparseNumericMigrationUpgrade45() {
       ORDER BY column_name`,
   );
   const versions = history.rows.map((row) => Number(row.version));
-  const expectedVersions = Array.from({ length: 45 }, (_, index) => index + 1);
+  const expectedVersions = Array.from({ length: 46 }, (_, index) => index + 1);
   const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
   const expectedByVersion = new Map(
     expectedMigrations.map((migration) => [migration.version, migration]),
@@ -1010,7 +1010,7 @@ async function validatePrimarySparseNumericMigrationUpgrade45() {
   });
   const appliedMigrationVersions = [
     ...Array.from({ length: 8 }, (_, index) => index + 28),
-    ...Array.from({ length: 9 }, (_, index) => index + 37),
+    ...Array.from({ length: 10 }, (_, index) => index + 37),
   ];
   const skippedMigrationVersions = [
     ...Array.from({ length: 27 }, (_, index) => index + 1),
@@ -1378,7 +1378,7 @@ async function main() {
   await new Promise((resolve) => mockAuth.listen(authPort, '127.0.0.1', resolve));
   await new Promise((resolve) => mockBgm.listen(bgmPort, '127.0.0.1', resolve));
   await waitForServer();
-  await validatePrimarySparseNumericMigrationUpgrade45();
+  await validatePrimarySparseNumericMigrationUpgrade46();
   if (!fs.existsSync(path.join(hotBackendDir, 'server.js'))) {
     throw new Error('Supervisor did not initialize the hot backend entrypoint');
   }
@@ -1527,6 +1527,7 @@ async function main() {
     '/level-editor/skeleton',
     '/design/level-editor/render',
     '/design/level-editor/render/hotspots',
+    '/play/select',
     '/play/select/skirmish',
     '/play/select/levels',
     '/play/select/campaign/off-c-crown-valoria',
@@ -3114,7 +3115,7 @@ async function main() {
       metadata: { blurb: `Synthetic ${label}`, ...(value === 'level-editor' ? { chromeLabBadge: 'outer + inner chrome' } : {}) }, media: { thumbnail: sharedPresentationSlot } });
   }
   for (const [sortOrder, [value, label, route]] of [
-    ['play', 'Play', '/play/select/skirmish'], ['campaign-editor', 'Editor', '/editor'], ['lobbies', 'Lobbies', '/lobbies'], ['settings', 'Settings', '/settings'],
+    ['play', 'Play', '/play/select'], ['campaign-editor', 'Editor', '/editor'], ['lobbies', 'Lobbies', '/lobbies'], ['settings', 'Settings', '/settings'],
   ].entries()) {
     await seedSyntheticDrawable({ id: `menu-mode-${value}`, kind: 'menu-mode', label, sortOrder,
       behavior: { value, route, ...(value === 'settings' ? { roles: ['settings'] } : {}) }, media: { icon: sharedPresentationSlot } });

@@ -305,7 +305,7 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
     behavior: { value, route, viewerStatus, default: value === 'main-menu', ...(value === 'level-editor' ? { roles: ['chrome-lab-page'], chromeLabRoute: '/editor/level?chromeLab=1' } : {}) },
     metadata: { blurb: `Test ${label}`, ...(value === 'level-editor' ? { chromeLabBadge: 'outer + inner chrome' } : {}) }, rowRevision: 1, media: { thumbnail: descriptor(`test/pages/${value}.webp`, 640, 400) } }));
   const menuModeSpecs: DrawableCatalog['assets'] = [
-    ['play', 'Play', '/play/select/skirmish'], ['campaign-editor', 'Editor', '/editor'],
+    ['play', 'Play', '/play/select'], ['campaign-editor', 'Editor', '/editor'],
     ['lobbies', 'Lobbies', '/lobbies'], ['enchiridion', 'Enchiridion', '/enchiridion/units'],
     ['settings', 'Settings', '/settings'],
   ].map(([value, label, route], sortOrder) => ({ id: `menu-mode-${value}`, kind: 'menu-mode', label, sortOrder, lifecycleState: 'active',

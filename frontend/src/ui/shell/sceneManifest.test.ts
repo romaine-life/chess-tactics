@@ -20,6 +20,24 @@ describe('scene manifests', () => {
     });
   });
 
+  it('authors the neutral Play hub root as play with no play-content child', () => {
+    expect(sceneManifest('/play/select').instances.map((entry) => entry.definition.id)).toEqual([
+      'main-menu',
+      'play',
+    ]);
+    expect(sceneManifest('/play/select')).toMatchObject({
+      host: 'play-shell',
+      background: 'homepage',
+      paintOwner: 'play-selector',
+    });
+    // A malformed selector path canonicalizes to the root; its transient
+    // manifest must not claim a skirmish selection the address never made.
+    expect(sceneManifest('/play/select/unknown').instances.map((entry) => entry.definition.id)).toEqual([
+      'main-menu',
+      'play',
+    ]);
+  });
+
   it('derives retained regions from authored ancestry', () => {
     expect(deepestSharedSceneRegion(
       sceneManifest('/play/select/skirmish'),
@@ -112,6 +130,25 @@ describe('scene manifests', () => {
       sceneManifest('/enchiridion/units'),
       sceneManifest('/enchiridion/relics'),
     )).toBe('enchiridion-shell');
+  });
+
+  it('addresses individual relics inside the one retained relic-reference scene (ADR-0256)', () => {
+    const base = sceneManifest('/enchiridion/relics');
+    const addressed = sceneManifest('/enchiridion/relics/royal-decree');
+    // Same manifest id + instance keys ⇒ relic selection is an address-only update:
+    // App's same-scene path applies and no exit/enter choreography runs per relic.
+    expect(addressed.id).toBe(base.id);
+    expect(addressed.instances.map((entry) => entry.key)).toEqual(base.instances.map((entry) => entry.key));
+    expect(addressed.leaf.definition.id).toBe('enchiridion/relics');
+    expect(addressed).toMatchObject({
+      host: 'enchiridion-shell',
+      background: 'homepage',
+      paintOwner: 'dom',
+    });
+    // Section changes remain real scene transitions.
+    expect(sceneManifest('/enchiridion/units').id).not.toBe(base.id);
+    // The bare and unknown fallbacks share the units scene they already render.
+    expect(sceneManifest('/enchiridion').id).toBe(sceneManifest('/enchiridion/units').id);
   });
 
   it('requires declarations for expensive editor and Studio first viewports', () => {

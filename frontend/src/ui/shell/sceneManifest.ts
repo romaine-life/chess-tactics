@@ -1,3 +1,4 @@
+import { enchiridionSectionFromPath, enchiridionSectionPath } from '../enchiridionRoute';
 import { normalizeRoutePath } from '../navigation';
 import { isPlaySelectorPath, playHubSelection } from '../playHubRoute';
 
@@ -211,8 +212,12 @@ function leafSceneManifest(pathname: string): SceneManifest {
       'visible-controls',
     ], [], 'settings-shell', path === '/settings/audio/tracks' ? 'loading' : 'transition-only');
   }
+  // The manifest id is the RESOLVED SECTION route, not the raw path: deeper addresses
+  // (one relic today, ADR-0256) and the bare/unknown fallbacks that already render the
+  // units view all share their section's id, so navigating between them is an
+  // address-only update inside one committed scene — never a veil per relic selection.
   if (path === '/enchiridion' || path.startsWith('/enchiridion/')) {
-    return manifest(`enchiridion:${path}`, 'homepage', 'dom', [
+    return manifest(`enchiridion:${enchiridionSectionPath(path)}`, 'homepage', 'dom', [
       'homepage-background',
       'title-bar',
       'visible-controls',
@@ -275,14 +280,20 @@ export function sceneManifest(pathname: string): ScenePath {
       : [instance(SCENE_DEFINITIONS.run), instance(SCENE_DEFINITIONS.runStrategikon, { path })];
   } else if (isPlaySelectorPath(path)) {
     const selection = playHubSelection(path);
+    // The bare root (and any malformed selector path about to canonicalize to it)
+    // is the neutral hub: main-menu → play with no play-content child mounted.
     const selectedInstance = selection?.mode === 'levels'
       ? instance(SCENE_DEFINITIONS.playLevels)
       : selection?.mode === 'run'
         ? instance(SCENE_DEFINITIONS.playRun)
       : selection?.mode === 'campaign'
         ? instance(SCENE_DEFINITIONS.playCampaign, { campaignId: selection.campaignId })
-        : instance(SCENE_DEFINITIONS.playSkirmish);
-    instances = [root, instance(SCENE_DEFINITIONS.play), selectedInstance];
+      : selection?.mode === 'skirmish'
+        ? instance(SCENE_DEFINITIONS.playSkirmish)
+        : null;
+    instances = selectedInstance
+      ? [root, instance(SCENE_DEFINITIONS.play), selectedInstance]
+      : [root, instance(SCENE_DEFINITIONS.play)];
   } else if (path === '/editor' || path === '/editor/wars' || path === '/campaigns' || path === '/campaigns-next') {
     instances = [root, instance(SCENE_DEFINITIONS.campaignEditor)];
   } else if (path === '/editor/level' || path === '/edit' || path === '/level-editor') {
@@ -301,11 +312,14 @@ export function sceneManifest(pathname: string): ScenePath {
           : SCENE_DEFINITIONS.settingsGeneral;
     instances = [root, instance(SCENE_DEFINITIONS.settings), instance(settingsSection)];
   } else if (path === '/enchiridion' || path.startsWith('/enchiridion/')) {
-    const section = path === '/enchiridion/terrain'
+    // Instances carry no relic param on purpose: a relic address is the same retained
+    // relic-reference scene (stable leaf key), so relic selection never re-keys the slot.
+    const sectionId = enchiridionSectionFromPath(path);
+    const section = sectionId === 'terrain'
       ? SCENE_DEFINITIONS.enchiridionTerrain
-      : path === '/enchiridion/relics'
+      : sectionId === 'relics'
         ? SCENE_DEFINITIONS.enchiridionRelics
-        : path === '/enchiridion/abilities'
+        : sectionId === 'abilities'
           ? SCENE_DEFINITIONS.enchiridionAbilities
           : SCENE_DEFINITIONS.enchiridionUnits;
     instances = [root, instance(SCENE_DEFINITIONS.enchiridion), instance(section)];

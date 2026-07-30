@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useState, type ButtonHTMLAttributes, type ReactElement, type ReactNode } from 'react';
 import { legalMoves } from '../core/rules';
 import { PIECE_LABEL, PLAYABLE_PIECE_TYPES, paletteForSide, pieceSpritePath, type PlayablePieceType } from '../core/pieces';
 import type { BoardSize, Piece } from '../core/types';
@@ -9,13 +9,12 @@ import {
   type RunRelicStatistics,
 } from '../run/relicStatistics';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
+import { ENCHIRIDION_SECTIONS, enchiridionSectionHref, type EnchiridionSection } from './enchiridionRoute';
 import { RunRelicIcon } from './RunRelics';
 import { ApparatusRailTab } from './shared/ApparatusRailTab';
 import { InnerChromeBox, OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
+import { NavButton } from './shared/NavButton';
 import { sceneTransitionTargetAttributes } from './shell/sceneTransitionTarget';
-
-export const ENCHIRIDION_SECTIONS = ['units', 'terrain', 'relics', 'abilities'] as const;
-export type EnchiridionSection = typeof ENCHIRIDION_SECTIONS[number];
 
 const SECTION_LABEL: Record<EnchiridionSection, string> = {
   units: 'Units',
@@ -225,18 +224,39 @@ function statisticFor(statistics: RunRelicStatistics, relicId: RunRelicId) {
 
 type RelicBrowseMode = 'rows' | 'grouped';
 
+// One relic entry control in two transports (ADR-0256): a host that gives relics
+// addresses renders a NavButton whose route is the relic's address (ADR-0052 — the
+// route is kept updated, never a hoverable link); a host with ephemeral reference
+// selection (the Battle-hosted Strategikon) keeps a plain selection button.
+function RelicTrigger({ to, onSelect, children, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & {
+  to?: string;
+  onSelect: () => void;
+}): ReactElement {
+  if (to) return <NavButton to={to} {...props}>{children}</NavButton>;
+  return <button type="button" onClick={onSelect} {...props}>{children}</button>;
+}
+
 export function RelicCodex({
   relicIds = RUN_RELICS.map((relic) => relic.id),
   title = 'Relics',
   showStatistics = true,
   framed = true,
+  selectedRelicId = null,
+  relicHref,
 }: {
   relicIds?: readonly RunRelicId[];
   title?: string;
   showStatistics?: boolean;
   framed?: boolean;
+  /** The route-addressed relic; read only when relicHref makes selection navigational. */
+  selectedRelicId?: RunRelicId | null;
+  /** When present, relic selection navigates to this address instead of setting local state. */
+  relicHref?: (relicId: RunRelicId) => string;
 }): ReactElement {
-  const [selectedId, setSelectedId] = useState<RunRelicId>(relicIds[0] ?? RUN_RELICS[0].id);
+  const [localSelectedId, setLocalSelectedId] = useState<RunRelicId>(relicIds[0] ?? RUN_RELICS[0].id);
+  // Routed hosts derive the selection from the address every render; an unknown or
+  // absent relic address falls back to the first visible relic without rewriting the URL.
+  const selectedId = relicHref ? (selectedRelicId ?? relicIds[0] ?? RUN_RELICS[0].id) : localSelectedId;
   const [browseMode, setBrowseMode] = useState<RelicBrowseMode>('rows');
   const [statistics, setStatistics] = useState<RunRelicStatistics>({});
   const [statisticsStatus, setStatisticsStatus] = useState<'loading' | 'account' | 'browser'>('loading');
@@ -247,8 +267,9 @@ export function RelicCodex({
     ?? RUN_RELICS[0];
 
   useEffect(() => {
-    if (!relicIds.includes(selectedId) && relicIds[0]) setSelectedId(relicIds[0]);
-  }, [relicIds, selectedId]);
+    if (relicHref) return;
+    if (!relicIds.includes(localSelectedId) && relicIds[0]) setLocalSelectedId(relicIds[0]);
+  }, [relicHref, relicIds, localSelectedId]);
 
   useEffect(() => {
     if (!showStatistics) return undefined;
@@ -315,8 +336,9 @@ export function RelicCodex({
                 <ul className="enchiridion-relic-rows" aria-label={title}>
                   {visibleRelics.map((relic) => (
                     <li key={relic.id}>
-                      <button
-                        type="button"
+                      <RelicTrigger
+                        to={relicHref?.(relic.id)}
+                        onSelect={() => setLocalSelectedId(relic.id)}
                         data-chrome-unit="inner-list-row"
                         className={chromeUnitClassNames(
                           'inner-list-row',
@@ -325,11 +347,10 @@ export function RelicCodex({
                         )}
                         aria-label={`${relic.name}. ${relic.description}`}
                         aria-pressed={selected.id === relic.id}
-                        onClick={() => setSelectedId(relic.id)}
                       >
                         <RunRelicIcon relicId={relic.id} className="enchiridion-relic-row-icon" />
                         <span className="enchiridion-relic-row-name">{relic.name}</span>
-                      </button>
+                      </RelicTrigger>
                     </li>
                   ))}
                 </ul>
@@ -338,15 +359,15 @@ export function RelicCodex({
                   <ul className="enchiridion-relic-group-grid" aria-label={title}>
                     {visibleRelics.map((relic) => (
                       <li key={relic.id}>
-                        <button
-                          type="button"
+                        <RelicTrigger
+                          to={relicHref?.(relic.id)}
+                          onSelect={() => setLocalSelectedId(relic.id)}
                           className={`enchiridion-relic-grouped-trigger${selected.id === relic.id ? ' is-active' : ''}`}
                           aria-label={`${relic.name}. ${relic.description}`}
                           aria-pressed={selected.id === relic.id}
-                          onClick={() => setSelectedId(relic.id)}
                         >
                           <RunRelicIcon relicId={relic.id} />
-                        </button>
+                        </RelicTrigger>
                       </li>
                     ))}
                   </ul>
@@ -409,22 +430,33 @@ function AbilitiesSection({ framed }: { framed: boolean }): ReactElement {
   );
 }
 
-function EnchiridionContent({ section, framed }: { section: EnchiridionSection; framed: boolean }): ReactElement {
+function EnchiridionContent({ section, framed, selectedRelicId, relicHref }: {
+  section: EnchiridionSection;
+  framed: boolean;
+  selectedRelicId: RunRelicId | null;
+  relicHref?: (relicId: RunRelicId) => string;
+}): ReactElement {
   if (section === 'terrain') return <TerrainSection framed={framed} />;
-  if (section === 'relics') return <RelicCodex framed={framed} />;
+  if (section === 'relics') return <RelicCodex framed={framed} selectedRelicId={selectedRelicId} relicHref={relicHref} />;
   if (section === 'abilities') return <AbilitiesSection framed={framed} />;
   return <UnitsSection framed={framed} />;
 }
 
 export function Enchiridion({
   section = 'units',
-  sectionHref = (next) => `/enchiridion/${next}`,
+  sectionHref = enchiridionSectionHref,
+  selectedRelicId = null,
+  relicHref,
   showSectionRail = true,
   sceneInstanceKey = `enchiridion/${section}`,
   framed = true,
 }: {
   section?: EnchiridionSection;
   sectionHref?: (section: EnchiridionSection) => string;
+  /** The route-addressed relic for the relics section; see RelicCodex. */
+  selectedRelicId?: RunRelicId | null;
+  /** When present, relic selection in the relics section navigates to this address. */
+  relicHref?: (relicId: RunRelicId) => string;
   showSectionRail?: boolean;
   sceneInstanceKey?: string;
   framed?: boolean;
@@ -450,7 +482,7 @@ export function Enchiridion({
         {...sceneTransitionTargetAttributes('enchiridion-shell')}
         data-scene-instance={sceneInstanceKey}
       >
-        <EnchiridionContent section={section} framed={framed} />
+        <EnchiridionContent section={section} framed={framed} selectedRelicId={selectedRelicId} relicHref={relicHref} />
       </main>
     </div>
   );
