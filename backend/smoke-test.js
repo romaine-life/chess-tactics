@@ -1527,6 +1527,7 @@ async function main() {
     '/level-editor/skeleton',
     '/design/level-editor/render',
     '/design/level-editor/render/hotspots',
+    '/play/select',
     '/play/select/skirmish',
     '/play/select/levels',
     '/play/select/campaign/off-c-crown-valoria',
@@ -3114,7 +3115,7 @@ async function main() {
       metadata: { blurb: `Synthetic ${label}`, ...(value === 'level-editor' ? { chromeLabBadge: 'outer + inner chrome' } : {}) }, media: { thumbnail: sharedPresentationSlot } });
   }
   for (const [sortOrder, [value, label, route]] of [
-    ['play', 'Play', '/play/select/skirmish'], ['campaign-editor', 'Editor', '/editor'], ['lobbies', 'Lobbies', '/lobbies'], ['settings', 'Settings', '/settings'],
+    ['play', 'Play', '/play/select'], ['campaign-editor', 'Editor', '/editor'], ['lobbies', 'Lobbies', '/lobbies'], ['settings', 'Settings', '/settings'],
   ].entries()) {
     await seedSyntheticDrawable({ id: `menu-mode-${value}`, kind: 'menu-mode', label, sortOrder,
       behavior: { value, route, ...(value === 'settings' ? { roles: ['settings'] } : {}) }, media: { icon: sharedPresentationSlot } });

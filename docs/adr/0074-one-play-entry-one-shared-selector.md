@@ -2,6 +2,7 @@
 status: accepted
 date: 2026-07-10
 deciders: owner (Nelson) + Codex
+partially_superseded_by: "[ADR-0256](0256-play-lands-on-the-resumable-activity-or-the-neutral-hub-root.md)"
 ---
 
 # ADR-0074: One Play entry opens one shared selector

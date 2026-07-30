@@ -19,6 +19,7 @@ import { LevelPreviewColumn } from './LevelPreviewColumn';
 import {
   PLAY_LEVELS_SELECTOR_HREF,
   PLAY_RUN_SELECTOR_HREF,
+  PLAY_SELECTOR_ROOT,
   PLAY_SKIRMISH_SELECTOR_HREF,
   isPlaySelectorPath,
   playCampaignSelectorHref,
@@ -486,6 +487,7 @@ export function PlayMenu({
   const campaigns = useCampaigns((state) => state.campaigns);
   const levels = useCampaigns((state) => state.levels);
   const activeRun = useActiveRun((state) => state.run);
+  const runHydrated = useActiveRun((state) => state.hydrated);
   const hydrateRun = useActiveRun((state) => state.hydrate);
   const [persistedMatch, setPersistedMatch] = useState<PersistedMatch | null>(() => loadMatch());
   // `path` is the scene director's mounted scene path. Browser navigation only
@@ -495,7 +497,7 @@ export function PlayMenu({
   // object here used to retrigger the reset effect after setSelectedLevelId(), clearing
   // the level immediately and briefly invalidating the complete Play surface.
   const selection: PlayHubSelection = useMemo(
-    () => playHubSelection(path) ?? { mode: 'skirmish' },
+    () => playHubSelection(path) ?? { mode: 'hub' },
     [path],
   );
   const [progress, setProgress] = useState<CampaignProgress>(readProgress);
@@ -562,7 +564,7 @@ export function PlayMenu({
   useEffect(() => {
     if (!isPlaySelectorPath(path)) return;
     if (!playHubSelection(path)) {
-      navigateApp(PLAY_SKIRMISH_SELECTOR_HREF, { replace: true, scroll: false });
+      navigateApp(PLAY_SELECTOR_ROOT, { replace: true, scroll: false });
       return;
     }
     if (
@@ -572,9 +574,20 @@ export function PlayMenu({
       && selection.mode === 'campaign'
       && !campaigns.some((campaign) => campaign.id === selection.campaignId)
     ) {
-      navigateApp(PLAY_SKIRMISH_SELECTOR_HREF, { replace: true, scroll: false });
+      navigateApp(PLAY_SELECTOR_ROOT, { replace: true, scroll: false });
     }
   }, [campaigns, loading, officialAvailable, path, selection, userWorkspaceAvailable]);
+
+  // The bare Play root is the click-Play landing (ADR-0256). Once both content
+  // sources and the Run document settle, it resumes the one in-progress
+  // activity; with nothing to resume it reveals the hub with no mode selected.
+  // The forward waits for settled sources so a campaign match resumes with its
+  // campaign identity rather than a mislabeled standalone address.
+  useEffect(() => {
+    if (selection.mode !== 'hub' || loading || !runHydrated) return;
+    if (!officialAvailable || !userWorkspaceAvailable) return;
+    if (resumable) navigateApp(resumable.href, { replace: true, scroll: false });
+  }, [loading, officialAvailable, resumable, runHydrated, selection, userWorkspaceAvailable]);
 
   useEffect(() => { setSelectedLevelId(null); }, [selection]);
 
@@ -605,7 +618,13 @@ export function PlayMenu({
   const loadError = !loading && (!officialAvailable || !userWorkspaceAvailable)
     ? new Error('Canonical Play content is unavailable.')
     : null;
-  const surfaceError = loadError ?? (selection.mode === 'run' ? null : thumbnailSurface.error);
+  // Run and the neutral hub mount no thumbnail surface, so a stale thumbnail
+  // failure from a previously selected list must not condemn them.
+  const surfaceError = loadError
+    ?? (selection.mode === 'run' || selection.mode === 'hub' ? null : thumbnailSurface.error);
+  // While the hub landing is still deciding between resume and neutral reveal,
+  // nothing may compose: a revealed hub that immediately forwards would flash.
+  const hubLandingSettled = selection.mode !== 'hub' || (runHydrated && !resumable);
 
   return (
     <ThumbnailSurfaceReportContext.Provider value={reportThumbnailSurface}>
@@ -695,7 +714,8 @@ export function PlayMenu({
         readyToCompose={
           !loading
           && !surfaceError
-          && (selection.mode === 'run' || thumbnailSurface.complete)
+          && hubLandingSettled
+          && (selection.mode === 'run' || selection.mode === 'hub' || thumbnailSurface.complete)
         }
         error={surfaceError}
         loadingLabel="Preparing Play…"
@@ -711,6 +731,17 @@ export function PlayMenu({
         {...sceneTransitionTargetAttributes('play-shell', 'contents')}
         data-scene-instance={sceneInstanceKey}
       >
+      {selection.mode === 'hub' ? (
+        <ActionColumn>
+          <div className="play-action-stack play-hub-neutral">
+            <div className="play-action-heading">
+              <span className="play-action-kicker">Play</span>
+              <h2>Choose a mode</h2>
+              <p>Pick Skirmish, Run, or Levels on the left, or open a Campaign beneath them.</p>
+            </div>
+          </div>
+        </ActionColumn>
+      ) : null}
       {selection.mode === 'skirmish' ? (
         <SkirmishProfilesPanel
           levels={profileLevels}

@@ -275,14 +275,20 @@ export function sceneManifest(pathname: string): ScenePath {
       : [instance(SCENE_DEFINITIONS.run), instance(SCENE_DEFINITIONS.runStrategikon, { path })];
   } else if (isPlaySelectorPath(path)) {
     const selection = playHubSelection(path);
+    // The bare root (and any malformed selector path about to canonicalize to it)
+    // is the neutral hub: main-menu → play with no play-content child mounted.
     const selectedInstance = selection?.mode === 'levels'
       ? instance(SCENE_DEFINITIONS.playLevels)
       : selection?.mode === 'run'
         ? instance(SCENE_DEFINITIONS.playRun)
       : selection?.mode === 'campaign'
         ? instance(SCENE_DEFINITIONS.playCampaign, { campaignId: selection.campaignId })
-        : instance(SCENE_DEFINITIONS.playSkirmish);
-    instances = [root, instance(SCENE_DEFINITIONS.play), selectedInstance];
+      : selection?.mode === 'skirmish'
+        ? instance(SCENE_DEFINITIONS.playSkirmish)
+        : null;
+    instances = selectedInstance
+      ? [root, instance(SCENE_DEFINITIONS.play), selectedInstance]
+      : [root, instance(SCENE_DEFINITIONS.play)];
   } else if (path === '/editor' || path === '/editor/wars' || path === '/campaigns' || path === '/campaigns-next') {
     instances = [root, instance(SCENE_DEFINITIONS.campaignEditor)];
   } else if (path === '/editor/level' || path === '/edit' || path === '/level-editor') {

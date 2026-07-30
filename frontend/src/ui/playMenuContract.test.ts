@@ -18,7 +18,23 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(mainMenu).not.toContain("'solo-skirmish': '/skirmish'");
     expect(mainMenu).not.toContain("ShellDest = 'settings' | 'campaign'");
     expect(readFileSync(new URL('../test/drawableCatalog.ts', import.meta.url), 'utf8'))
-      .toContain("['play', 'Play', '/play/select/skirmish'");
+      .toContain("['play', 'Play', '/play/select']");
+  });
+
+  it('lands Play on the resumable activity or the neutral hub root (ADR-0256)', () => {
+    expect(mainMenu).toContain('play: PLAY_SELECTOR_ROOT');
+    // Canonicalization and the missing-campaign fallback return to the neutral
+    // root; nothing in the landing path manufactures a skirmish selection.
+    expect(playMenu).toContain("navigateApp(PLAY_SELECTOR_ROOT, { replace: true, scroll: false })");
+    expect(playMenu).not.toContain('navigateApp(PLAY_SKIRMISH_SELECTOR_HREF');
+    expect(playMenu).toContain("playHubSelection(path) ?? { mode: 'hub' }");
+    // The root resumes the one in-progress activity only after content and Run
+    // authority settle, and holds composition while that decision is pending.
+    expect(playMenu).toContain('if (selection.mode !== \'hub\' || loading || !runHydrated) return;');
+    expect(playMenu).toContain('if (resumable) navigateApp(resumable.href, { replace: true, scroll: false });');
+    expect(playMenu).toContain('const hubLandingSettled =');
+    expect(playMenu).toContain('&& hubLandingSettled');
+    expect(playMenu).toContain('play-hub-neutral');
   });
 
   it('leads with a resumable activity, then pins Skirmish, Run, and Levels above Campaigns', () => {

@@ -28,8 +28,12 @@ describe('Play selector routes', () => {
     expect(playHubSelection(href)).toEqual({ mode: 'campaign', campaignId: 'campaign / one' });
   });
 
+  it('treats the bare root as the neutral hub landing with no mode selected', () => {
+    expect(playHubSelection(PLAY_SELECTOR_ROOT)).toEqual({ mode: 'hub' });
+    expect(playHubSelection('/play/select/')).toEqual({ mode: 'hub' });
+  });
+
   it('rejects selector states that the Play rail cannot produce', () => {
-    expect(playHubSelection(PLAY_SELECTOR_ROOT)).toBeNull();
     expect(playHubSelection('/play/select/unknown')).toBeNull();
     expect(playHubSelection('/play/select/campaign/id/extra')).toBeNull();
     expect(playHubSelection('/play/select/campaign/%')).toBeNull();

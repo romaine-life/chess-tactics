@@ -7,7 +7,7 @@ import { PlayMenu } from './PlayMenu';
 import { Lobbies } from './Lobbies';
 import { Enchiridion, ENCHIRIDION_SECTIONS, type EnchiridionSection } from './Enchiridion';
 import { ApparatusRailTab } from './shared/ApparatusRailTab';
-import { isPlaySelectorPath, PLAY_SKIRMISH_SELECTOR_HREF } from './playHubRoute';
+import { isPlaySelectorPath, PLAY_SELECTOR_ROOT } from './playHubRoute';
 import { loadDecodedImage } from '../render/imageResources';
 
 // The Editor is heavier / code-split out of the menu bundle. App's SceneBoundary
@@ -66,7 +66,7 @@ function ModeTab({ tab, index, active }: { tab: MenuTab; index: number; active?:
 type ShellDest = 'settings' | 'play' | 'editor' | 'lobbies' | 'enchiridion';
 const DEST_HREF: Record<ShellDest, string> = {
   settings: '/settings',
-  play: PLAY_SKIRMISH_SELECTOR_HREF,
+  play: PLAY_SELECTOR_ROOT,
   editor: '/editor',
   lobbies: '/lobbies',
   enchiridion: '/enchiridion/units',
@@ -155,7 +155,10 @@ export function MainMenu({
       <div className={`settings-screen main-menu-twin-screen app-shell-bar-pad ${dest ? 'has-dest' : ''}`.trim()} data-dest={dest ?? undefined}>
         <ArtRouteChrome className="settings-shell">
           <aside className="settings-frame settings-rail-frame" aria-label="Game modes">
-            {MENU_TABS.map((tab, index) => <ModeTab key={tab.slug} tab={tab} index={index} active={dest !== null && tab.href === DEST_HREF[dest]} />)}
+            {/* Family membership, not string equality: the installed route may be any
+                address within the destination (e.g. the Play record migrating from the
+                skirmish tab to the hub root) and the tab must still light. */}
+            {MENU_TABS.map((tab, index) => <ModeTab key={tab.slug} tab={tab} index={index} active={dest !== null && shellDest(tab.href) === dest} />)}
           </aside>
           <div
             className="menu-dest"
