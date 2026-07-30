@@ -5,7 +5,8 @@ import {
   RunArmyWorkspace,
   type RunArmyFilters,
 } from './RunArmyWorkspace';
-import { Enchiridion, ENCHIRIDION_SECTIONS, RelicCodex, type EnchiridionSection } from './Enchiridion';
+import { Enchiridion, RelicCodex } from './Enchiridion';
+import { ENCHIRIDION_SECTIONS, type EnchiridionSection } from './enchiridionRoute';
 import { ApparatusRailTab } from './shared/ApparatusRailTab';
 import { ChromeSurfaceFill, InnerChromeBox } from './shared/ChromeBox';
 

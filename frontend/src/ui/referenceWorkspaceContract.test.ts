@@ -80,6 +80,25 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(style).toMatch(/\.enchiridion-relic-detail\s*\{[\s\S]*?align-self:\s*start[\s\S]*?block-size:\s*auto[\s\S]*?inline-size:\s*100%[\s\S]*?min-inline-size:\s*0/);
   });
 
+  it('routes individual relic selection where the host addresses relics (ADR-0256)', () => {
+    const start = enchiridion.indexOf('function RelicTrigger');
+    const end = enchiridion.indexOf('function AbilitiesSection', start);
+    const relicCodex = enchiridion.slice(start, end);
+    // One trigger control, two transports: NavButton when the relic has an address
+    // (ADR-0052 — a button that navigates, never an anchor), plain selection otherwise.
+    expect(relicCodex).toContain('if (to) return <NavButton to={to}');
+    expect(relicCodex).not.toContain('<a ');
+    expect(relicCodex.match(/<RelicTrigger/g)).toHaveLength(2);
+    expect(relicCodex).toMatch(/to=\{relicHref\?\.\(relic\.id\)\}/);
+    // Routed hosts derive selection from the address; local state is the ephemeral fallback.
+    expect(relicCodex).toContain('const selectedId = relicHref ? (selectedRelicId ?? relicIds[0] ?? RUN_RELICS[0].id) : localSelectedId;');
+    // The main menu is the addressing host…
+    expect(mainMenu).toContain('selectedRelicId={enchiridionRelicFromPath(path)}');
+    expect(mainMenu).toContain('relicHref={enchiridionRelicHref}');
+    // …and the Battle-hosted Strategikon keeps ephemeral reference selection.
+    expect(strategikon).not.toContain('relicHref');
+  });
+
   it('opens from Controls while retaining the mounted Battle field', () => {
     expect(hud).toContain('data-testid="strategikon-toggle"');
     expect(hud).toContain('const strategikonToggle = strategikonHref ? (');

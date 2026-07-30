@@ -1,3 +1,4 @@
+import { enchiridionSectionFromPath, enchiridionSectionPath } from '../enchiridionRoute';
 import { normalizeRoutePath } from '../navigation';
 import { isPlaySelectorPath, playHubSelection } from '../playHubRoute';
 
@@ -211,8 +212,12 @@ function leafSceneManifest(pathname: string): SceneManifest {
       'visible-controls',
     ], [], 'settings-shell', path === '/settings/audio/tracks' ? 'loading' : 'transition-only');
   }
+  // The manifest id is the RESOLVED SECTION route, not the raw path: deeper addresses
+  // (one relic today, ADR-0256) and the bare/unknown fallbacks that already render the
+  // units view all share their section's id, so navigating between them is an
+  // address-only update inside one committed scene — never a veil per relic selection.
   if (path === '/enchiridion' || path.startsWith('/enchiridion/')) {
-    return manifest(`enchiridion:${path}`, 'homepage', 'dom', [
+    return manifest(`enchiridion:${enchiridionSectionPath(path)}`, 'homepage', 'dom', [
       'homepage-background',
       'title-bar',
       'visible-controls',
@@ -301,11 +306,14 @@ export function sceneManifest(pathname: string): ScenePath {
           : SCENE_DEFINITIONS.settingsGeneral;
     instances = [root, instance(SCENE_DEFINITIONS.settings), instance(settingsSection)];
   } else if (path === '/enchiridion' || path.startsWith('/enchiridion/')) {
-    const section = path === '/enchiridion/terrain'
+    // Instances carry no relic param on purpose: a relic address is the same retained
+    // relic-reference scene (stable leaf key), so relic selection never re-keys the slot.
+    const sectionId = enchiridionSectionFromPath(path);
+    const section = sectionId === 'terrain'
       ? SCENE_DEFINITIONS.enchiridionTerrain
-      : path === '/enchiridion/relics'
+      : sectionId === 'relics'
         ? SCENE_DEFINITIONS.enchiridionRelics
-        : path === '/enchiridion/abilities'
+        : sectionId === 'abilities'
           ? SCENE_DEFINITIONS.enchiridionAbilities
           : SCENE_DEFINITIONS.enchiridionUnits;
     instances = [root, instance(SCENE_DEFINITIONS.enchiridion), instance(section)];
