@@ -13,9 +13,11 @@ describe('Skirmish world background ownership', () => {
   it('does not request ordinary ambience behind a complete pre-drawn board', () => {
     expect(shouldLoadSkirmishWorldBackground(true, true)).toBe(false);
     expect(skirmishSource).toContain(
-      "className={`is-design-locked${screenPredrawnBackgroundActive ? ' is-predrawn-board' : ''}`}",
+      "className={screenPredrawnBackgroundActive ? 'is-predrawn-board' : ''}",
     );
-    expect(skirmishSource).toContain('className={`skirmish-screen ${className}`.trim()}');
+    expect(skirmishSource).toContain(
+      'className={`skirmish-screen is-play-canvas ${className}`.trim()}',
+    );
     expect(styleCss).toMatch(
       /\.skirmish-screen\.is-predrawn-board::before\s*\{[\s\S]*?content:\s*none;/,
     );

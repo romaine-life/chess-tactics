@@ -2,6 +2,8 @@
 status: accepted
 date: 2026-07-29
 deciders: owner (Nelson) + Codex
+partially_superseded_by:
+  - "[ADR-0226](0226-play-expands-before-ultrawide-wings.md)"
 partially_supersedes:
   - "[ADR-0201](0201-board-cameras-fit-the-actual-owning-viewport.md)'s responsive Play-seat clause"
 refines:

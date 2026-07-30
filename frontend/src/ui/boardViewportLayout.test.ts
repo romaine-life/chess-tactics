@@ -4,21 +4,22 @@ import { describe, expect, it } from 'vitest';
 
 const styleCss = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const levelThumbnailSource = readFileSync(new URL('../render/LevelThumbnail.tsx', import.meta.url), 'utf8');
+const skirmishBoardSource = readFileSync(new URL('../render/SkirmishBoard.tsx', import.meta.url), 'utf8');
 const viewPaneSource = readFileSync(new URL('./shared/ViewPane.tsx', import.meta.url), 'utf8');
 
-describe('board viewports share the Play viewing-pane shape', () => {
+describe('board viewports share Play reference framing', () => {
   it('joins the visible gameplay pane directly to the HUD rail', () => {
     expect(styleCss).toMatch(
       /\.skirmish-screen\s*\{[\s\S]*?column-gap:\s*0;/,
     );
   });
 
-  it('locks gameplay to the canonical design canvas and its complete board seat', () => {
+  it('uses the bounded-fluid Play canvas and its complete board seat', () => {
     expect(styleCss).toMatch(
-      /\.shell\.skirmish-active \.app-root\s*\{[\s\S]*?height:\s*var\(--skirmish-design-height\);[\s\S]*?width:\s*var\(--skirmish-design-width\);/,
+      /\.shell\.skirmish-active \.app-root\s*\{[\s\S]*?height:\s*var\(--skirmish-canvas-height\);[\s\S]*?width:\s*var\(--skirmish-canvas-width\);/,
     );
     expect(styleCss).toMatch(
-      /\.skirmish-screen\.is-design-locked\s*\{[\s\S]*?--app-header-h:\s*var\(--skirmish-header-height\);[\s\S]*?--skirmish-rail-w:\s*var\(--skirmish-hud-width\);/,
+      /\.skirmish-screen\.is-play-canvas\s*\{[\s\S]*?--app-header-h:\s*var\(--skirmish-header-height\);[\s\S]*?--skirmish-rail-w:\s*var\(--skirmish-hud-width\);/,
     );
     expect(styleCss).toMatch(
       /\.skirmish-board-frame\s*\{[\s\S]*?height:\s*100%;[\s\S]*?overflow:\s*hidden;[\s\S]*?width:\s*100%;/,
@@ -35,8 +36,14 @@ describe('board viewports share the Play viewing-pane shape', () => {
     expect(styleCss).toMatch(
       /\.board-view-pane-seat > \.tileset-view-stage\.is-board\s*\{[\s\S]*?aspect-ratio:\s*var\(--board-view-aspect\);/,
     );
-    expect(viewPaneSource).toContain("return kind === 'board' ? (");
     expect(viewPaneSource).toContain('className="board-view-pane-seat"');
+  });
+
+  it('lets Play fill its expanded live board allocation without changing fixed previews', () => {
+    expect(skirmishBoardSource).toContain('boardViewportMode="fill"');
+    expect(viewPaneSource).toContain(
+      "return kind === 'board' && boardViewportMode === 'canonical' ? (",
+    );
   });
 
   it('keeps the selected live preview on the same shared aspect', () => {

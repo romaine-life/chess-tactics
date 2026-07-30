@@ -14,10 +14,11 @@ export const BOARD_PREVIEW_MARGIN_RATIO = 0.05;
 export const BOARD_PREVIEW_FRAMING_REVISION = 3;
 
 /**
- * Every ordinary board preview uses the literal Play viewing-pane shape.
+ * Every ordinary board preview uses Play's canonical reference opening shape.
  *
- * Play's 1920×1080 design canvas reserves 360px for the HUD and 88px for the
- * title bar, leaving 1560×992. Reduced to lowest terms, that is 195:124.
+ * Play's 1920×1080 reference reserves 360px for the HUD and 88px for the title
+ * bar, leaving 1560×992. Wider live Play panes reveal peripheral world around
+ * this safe area; fixed previews retain its reduced 195:124 shape.
  */
 export const BOARD_PREVIEW_ASPECT = Object.freeze({
   width: 195,
@@ -54,6 +55,31 @@ export interface BoardFramingCamera {
 }
 
 type BoardDimensions = { cols: number; rows: number };
+
+/**
+ * Preserve a canonical opening-composition aspect inside a wider live viewport.
+ *
+ * The returned rectangle is only the camera's centred framing safe area. Rendering,
+ * clipping, accepted-art coverage, and input continue to use the complete live viewport,
+ * so added width reveals peripheral world instead of enlarging or cropping the board.
+ */
+export function viewportForMaximumOpeningAspect(
+  viewport: BoardFramingViewport,
+  maximumAspect: number,
+): BoardFramingViewport {
+  if (
+    !Number.isFinite(viewport.width)
+    || !Number.isFinite(viewport.height)
+    || viewport.width <= 0
+    || viewport.height <= 0
+    || !Number.isFinite(maximumAspect)
+    || maximumAspect <= 0
+  ) return viewport;
+  return {
+    width: Math.min(viewport.width, viewport.height * maximumAspect),
+    height: viewport.height,
+  };
+}
 
 function positiveBoardDimension(value: number): number {
   return Number.isSafeInteger(value) && value > 0 ? value : 1;

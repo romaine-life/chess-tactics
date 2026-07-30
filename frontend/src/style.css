@@ -4098,7 +4098,7 @@ h1 {
 
 :root {
   --skirmish-rail-w: clamp(300px, 24vw, 360px);
-  --skirmish-design-scale: 1;
+  --skirmish-canvas-scale: 1;
   --board-view-aspect-width: 195;
   --board-view-aspect-height: 124;
   --board-view-aspect:
@@ -4179,36 +4179,37 @@ h1 {
 }
 
 /*
- * Play is authored once at 1920 × 1080. The browser rectangle only scales and
- * centres this composition; it never changes the internal header/board/HUD tracks.
+ * Play keeps its authored 1080px-tall design space while ordinary wide browser
+ * rectangles expand the board track. The canvas stops at 2.1:1; only true
+ * ultrawide surplus remains in the shell as centered wings (ADR-0226).
  */
 .shell.skirmish-active .app-root {
-  height: var(--skirmish-design-height);
+  height: var(--skirmish-canvas-height);
   left: 50%;
-  min-height: var(--skirmish-design-height);
-  min-width: var(--skirmish-design-width);
+  min-height: var(--skirmish-canvas-height);
+  min-width: var(--skirmish-canvas-width);
   overflow: hidden;
   position: absolute;
   top: 50%;
-  transform: translate(-50%, -50%) scale(var(--skirmish-design-scale));
+  transform: translate(-50%, -50%) scale(var(--skirmish-canvas-scale));
   transform-origin: center;
-  width: var(--skirmish-design-width);
+  width: var(--skirmish-canvas-width);
 }
 
-.shell.skirmish-active .skirmish-screen.is-design-locked {
+.shell.skirmish-active .skirmish-screen.is-play-canvas {
   --app-header-h: var(--skirmish-header-height);
   --skirmish-rail-w: var(--skirmish-hud-width);
   grid-template-columns: minmax(0, 1fr) var(--skirmish-rail-w);
   grid-template-rows: var(--app-header-h) minmax(0, 1fr);
-  height: var(--skirmish-design-height);
-  width: var(--skirmish-design-width);
+  height: var(--skirmish-canvas-height);
+  width: var(--skirmish-canvas-width);
 }
 
-.shell.skirmish-active .skirmish-screen.is-design-locked .skirmish-brand strong {
+.shell.skirmish-active .skirmish-screen.is-play-canvas .skirmish-brand strong {
   font-size: 1.55rem;
 }
 
-.shell.skirmish-active .skirmish-screen.is-design-locked .skirmish-admin-mode {
+.shell.skirmish-active .skirmish-screen.is-play-canvas .skirmish-admin-mode {
   min-inline-size: min(520px, calc(100% - (2 * var(--ds-gutter))));
 }
 
@@ -5015,7 +5016,7 @@ body.loading-bootstrap .app-startup-status {
   pointer-events: none;
   transform:
     translate(-50%, -64%)
-    scale(var(--skirmish-design-scale, 1));
+    scale(var(--skirmish-canvas-scale, 1));
   object-fit: contain;
   filter: drop-shadow(0 15px 13px rgba(0, 0, 0, .5));
   will-change: left, top;
@@ -8629,19 +8630,19 @@ body.loading-bootstrap .app-startup-status {
 
 @media (max-width: 1180px) {
   :root { --skirmish-rail-w: 324px; }
-  :root:not(.skirmish-design-locked) .skirmish-screen {
+  :root:not(.skirmish-play-canvas) .skirmish-screen {
     grid-template-columns: minmax(0, 1fr) minmax(286px, 324px);
   }
 
   /* Drop the objective chip first when the bar gets tight; brand + turn + counts stay. */
-  :root:not(.skirmish-design-locked) .skirmish-objective {
+  :root:not(.skirmish-play-canvas) .skirmish-objective {
     display: none;
   }
 
 }
 
 @media (max-width: 860px) {
-  :root:not(.skirmish-design-locked) .skirmish-screen {
+  :root:not(.skirmish-play-canvas) .skirmish-screen {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(520px, 62vh) auto;
     /* The board art layer intentionally overdraws its fitted viewport. Keep the
@@ -8667,18 +8668,18 @@ body.loading-bootstrap .app-startup-status {
   }
 
   /* Single column: title bar stays full-bleed on top, board then HUD stacked under it. */
-  :root:not(.skirmish-design-locked) .skirmish-topbar {
+  :root:not(.skirmish-play-canvas) .skirmish-topbar {
     grid-column: 1;
     grid-row: 1;
   }
 
-  :root:not(.skirmish-design-locked) .skirmish-war-room {
+  :root:not(.skirmish-play-canvas) .skirmish-war-room {
     grid-column: 1;
     grid-row: 2;
     min-height: 520px;
   }
 
-  :root:not(.skirmish-design-locked) .skirmish-hud {
+  :root:not(.skirmish-play-canvas) .skirmish-hud {
     grid-column: 1;
     grid-row: 3;
     height: auto;
@@ -8705,69 +8706,69 @@ body.loading-bootstrap .app-startup-status {
   }
 
   /* Page scrolls on mobile — don't nest a gameplay panel scroll inside it. */
-  :root:not(.skirmish-design-locked) .skirmish-hud-panel {
+  :root:not(.skirmish-play-canvas) .skirmish-hud-panel {
     overflow: visible;
   }
 
-  :root:not(.skirmish-design-locked) .skirmish-score-panel {
+  :root:not(.skirmish-play-canvas) .skirmish-score-panel {
     display: flex;
     grid-column: 1 / -1;
   }
 
   /* Stacked mobile bar: brand left, counts on the right; hide the center status group. */
-  :root:not(.skirmish-design-locked) .skirmish-topbar-status {
+  :root:not(.skirmish-play-canvas) .skirmish-topbar-status {
     display: none;
   }
 }
 
 @media (max-width: 560px) {
-  :root:not(.skirmish-design-locked) .skirmish-screen {
+  :root:not(.skirmish-play-canvas) .skirmish-screen {
     gap: 8px;
     padding: 8px;
   }
 
-  :root:not(.skirmish-design-locked) .skirmish-war-room {
+  :root:not(.skirmish-play-canvas) .skirmish-war-room {
     min-height: 460px;
   }
 
-  :root:not(.skirmish-design-locked) .skirmish-topbar {
+  :root:not(.skirmish-play-canvas) .skirmish-topbar {
     min-height: 62px;
     padding: 8px 10px;
   }
 
-  :root:not(.skirmish-design-locked) .skirmish-brand strong {
+  :root:not(.skirmish-play-canvas) .skirmish-brand strong {
     font-size: .78rem;
     white-space: normal;
   }
 
-  :root:not(.skirmish-design-locked) .skirmish-brand small {
+  :root:not(.skirmish-play-canvas) .skirmish-brand small {
     font-size: .9rem;
   }
 
-  :root:not(.skirmish-design-locked) .skirmish-brand .skirmish-icon,
-  :root:not(.skirmish-design-locked) .skirmish-objective .skirmish-icon {
+  :root:not(.skirmish-play-canvas) .skirmish-brand .skirmish-icon,
+  :root:not(.skirmish-play-canvas) .skirmish-objective .skirmish-icon {
     height: 34px;
     width: 34px;
   }
 
-  :root:not(.skirmish-design-locked) .skirmish-hud {
+  :root:not(.skirmish-play-canvas) .skirmish-hud {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  :root:not(.skirmish-design-locked) .skirmish-selected-body {
+  :root:not(.skirmish-play-canvas) .skirmish-selected-body {
     grid-template-columns: 84px minmax(0, 1fr);
   }
 
-  :root:not(.skirmish-design-locked) .skirmish-portrait-frame {
+  :root:not(.skirmish-play-canvas) .skirmish-portrait-frame {
     min-height: 84px;
     padding: 0;
   }
 
-  :root:not(.skirmish-design-locked) .skirmish-action-button {
+  :root:not(.skirmish-play-canvas) .skirmish-action-button {
     grid-template-columns: 34px minmax(0, 1fr);
   }
 
-  :root:not(.skirmish-design-locked) .skirmish-action-button small {
+  :root:not(.skirmish-play-canvas) .skirmish-action-button small {
     grid-column: 2;
     justify-self: start;
   }
@@ -11041,10 +11042,10 @@ body { font-size: 17px; }
 }
 
 /*
- * Every rendered board viewport uses Play's exact 1560×992 (195:124) shape.
- * The seat fills the surrounding UI allocation; the child is the largest
- * matching pane that fits it, so camera measurement, clipping, and input all
- * address the same visible rectangle.
+ * Fixed previews and non-Play board workspaces use the canonical reference
+ * 1560×992 (195:124) shape. Play opts into its complete bounded-fluid seat.
+ * The fixed seat fills the surrounding allocation; the child is the largest
+ * matching pane that fits it.
  */
 .board-view-pane-seat {
   container-type: size;
@@ -17502,8 +17503,8 @@ button.tileset-relationship-cell {
   min-height: 80px;
 }
 
-/* Leading board preview in a campaign level-select row. The content box uses Play's exact
-   195:124 board-pane shape; the shell calculation adds the frame rails outside that surface. */
+/* Leading board preview in a campaign level-select row. The content box uses Play's canonical
+   195:124 reference shape; the shell calculation adds the frame rails outside that surface. */
 .settings-row-thumb {
   --level-thumb-shell-width: 84px;
   flex: none;
@@ -19340,8 +19341,8 @@ button.tileset-relationship-cell {
      registered controls require a 60px control lane (4px clearance per side).
      The retired 60px bar made an 8px divider overlap mathematically unavoidable.
      Drop only the Settings UI-scale zoom and tighten the page inset. */
-  :root:not(.skirmish-design-locked) .app-shell-titlebar.app-titlebar--ui-scaled { zoom: 1; }
-  :root:not(.skirmish-design-locked) .app-shell-titlebar.settings-header-frame {
+  :root:not(.skirmish-play-canvas) .app-shell-titlebar.app-titlebar--ui-scaled { zoom: 1; }
+  :root:not(.skirmish-play-canvas) .app-shell-titlebar.settings-header-frame {
     --ds-titlebar-inset: 6px;
     --titlebar-pad-inline: 12px;
     padding-block: var(--ds-titlebar-inset);
@@ -19351,7 +19352,7 @@ button.tileset-relationship-cell {
   /* Skirmish: keep the board + HUD side-by-side. The 860px block stacks them, which
      forces an awkward vertical page-scroll on a short landscape screen; the base 2-column
      layout fits a wide phone far better, just with a slimmer HUD. */
-  :root:not(.skirmish-design-locked) .skirmish-screen {
+  :root:not(.skirmish-play-canvas) .skirmish-screen {
     grid-template-columns: minmax(0, 1fr) clamp(176px, 30vw, 300px);
     grid-template-rows: var(--app-header-h) minmax(0, 1fr);
     overflow: hidden;
@@ -19359,8 +19360,8 @@ button.tileset-relationship-cell {
   :root {
     --skirmish-rail-w: clamp(176px, 30vw, 300px);
   }
-  :root:not(.skirmish-design-locked) .skirmish-war-room { grid-column: 1; grid-row: 2; min-height: 0; }
-  :root:not(.skirmish-design-locked) .skirmish-hud {
+  :root:not(.skirmish-play-canvas) .skirmish-war-room { grid-column: 1; grid-row: 2; min-height: 0; }
+  :root:not(.skirmish-play-canvas) .skirmish-hud {
     grid-column: 2; grid-row: 2;
     height: 100%; max-height: none;
     overflow-y: auto; -webkit-overflow-scrolling: touch;

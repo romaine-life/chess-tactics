@@ -16,6 +16,7 @@ const {
   minimumZoomToCoverBoundsAtCenter,
   playableBoardFramingBounds,
   playableBoardVisualBounds,
+  viewportForMaximumOpeningAspect,
   worldViewportForFraming,
 } = require(resolve(here, '../dist/index.cjs'));
 
@@ -30,11 +31,26 @@ test('playable framing is stable board geometry with five percent on every side'
   assert.deepEqual(visual, { minX: -384, minY: -27, width: 768, height: 432 });
 });
 
-test('ordinary previews use the exact Play viewing-pane aspect', () => {
+test('ordinary previews use the canonical reference viewing-pane aspect', () => {
   assert.deepEqual(BOARD_PREVIEW_ASPECT, { width: 195, height: 124 });
   assert.deepEqual(BOARD_THUMBNAIL_SIZE, { width: 390, height: 248 });
   assert.equal(boardPreviewHeight(195), 124);
   assert.equal(1560 / 992, BOARD_PREVIEW_ASPECT.width / BOARD_PREVIEW_ASPECT.height);
+});
+
+test('a wider Play viewport preserves the reference opening safe area', () => {
+  const capped = viewportForMaximumOpeningAspect(
+    { width: 1750, height: 992 },
+    BOARD_PREVIEW_ASPECT.width / BOARD_PREVIEW_ASPECT.height,
+  );
+  assert.deepEqual(capped, { width: 1560, height: 992 });
+  assert.deepEqual(
+    viewportForMaximumOpeningAspect(
+      { width: 1200, height: 992 },
+      BOARD_PREVIEW_ASPECT.width / BOARD_PREVIEW_ASPECT.height,
+    ),
+    { width: 1200, height: 992 },
+  );
 });
 
 test('centred framing is independent of generated art and scene content', () => {

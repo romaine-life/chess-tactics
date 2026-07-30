@@ -10,6 +10,7 @@ import {
   cameraToContainBounds,
   centeredPlayableBoardFramingBounds,
   isPredrawnBackgroundActive,
+  viewportForMaximumOpeningAspect,
   type EditorBoard,
 } from '@chess-tactics/board-render';
 import { StudioReadOnlyBoard } from '../../render/StudioReadOnlyBoard';
@@ -46,6 +47,7 @@ export function useBoardCameraFraming({
   setZoom,
   setPan,
   onOpeningCameraChange,
+  openingViewportAspectCap,
   resetRevision = 0,
 }: {
   board: Pick<EditorBoard, 'cols' | 'rows'>;
@@ -57,6 +59,8 @@ export function useBoardCameraFraming({
   setZoom: (zoom: number) => void;
   setPan: (pan: { x: number; y: number }) => void;
   onOpeningCameraChange?: (camera: BoardViewCamera) => void;
+  /** Wider live panes reveal peripheral world without changing the canonical opening zoom. */
+  openingViewportAspectCap?: number;
   resetRevision?: number;
 }): { markViewInteraction: () => void; resetView: () => void } {
   const userAdjustedRef = useRef(false);
@@ -67,12 +71,21 @@ export function useBoardCameraFraming({
   const openingCamera = useMemo((): BoardViewCamera | null => {
     if (!viewport) return null;
     return cameraToContainBounds({
-      viewport,
+      viewport: openingViewportAspectCap === undefined
+        ? viewport
+        : viewportForMaximumOpeningAspect(viewport, openingViewportAspectCap),
       bounds: centeredPlayableBoardFramingBounds(board),
       minZoom: minimumZoom,
       maxZoom: maximumZoom,
     });
-  }, [board.cols, board.rows, maximumZoom, minimumZoom, viewport]);
+  }, [
+    board.cols,
+    board.rows,
+    maximumZoom,
+    minimumZoom,
+    openingViewportAspectCap,
+    viewport,
+  ]);
 
   const applyOpening = useCallback(() => {
     if (!openingCamera) return;

@@ -321,6 +321,7 @@ export function ViewPane({
   onViewportSizeChange,
   onViewInteraction,
   onAssetClick,
+  boardViewportMode = 'canonical',
   children,
 }: {
   kind: ViewPaneKind;
@@ -340,6 +341,8 @@ export function ViewPane({
   /** Reports intentional user camera movement; automatic floor/reclamp updates do not call it. */
   onViewInteraction?: () => void;
   onAssetClick?: (assetId: string) => void;
+  /** Play fills its live board allocation; fixed previews retain the canonical aspect. */
+  boardViewportMode?: 'canonical' | 'fill';
   children: ReactNode;
 }): ReactElement {
   const stageRef = useRef<HTMLElement>(null);
@@ -523,10 +526,10 @@ export function ViewPane({
     </section>
   );
 
-  // A board is always viewed through the same shaped window as Play. The seat absorbs any
-  // surplus workspace while the actual measured, clipped, and interactive stage stays 195:124.
-  // Non-board asset viewers retain the dimensions of the asset they are inspecting.
-  return kind === 'board' ? (
+  // Fixed previews and non-Play board workspaces retain the canonical 195:124 window.
+  // Play explicitly fills its bounded-fluid allocation; non-board asset viewers retain
+  // the dimensions of the asset they are inspecting.
+  return kind === 'board' && boardViewportMode === 'canonical' ? (
     <div className="board-view-pane-seat">
       {stage}
     </div>
