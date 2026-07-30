@@ -337,6 +337,17 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
     rowRevision: 1,
     media: { icon: descriptor(`test/run/relics/${relicId}.png`, 64, 64) },
   }));
+  const runResourceSpecs: DrawableCatalog['assets'] = [{
+    id: 'run-resource-gold',
+    kind: 'run-resource',
+    label: 'Test Run gold',
+    sortOrder: 0,
+    lifecycleState: 'active',
+    behavior: { resourceId: 'gold' },
+    metadata: {},
+    rowRevision: 1,
+    media: { icon: descriptor('test/run/resources/gold.png', 64, 64) },
+  }];
   return {
     schemaVersion: 1,
     revision: 1,
@@ -353,7 +364,7 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
       media: {
         surface: descriptor(`test/subterrain/${id}.png`),
       },
-    })), ...terrainFamilySpecs, ...terrainSpecs, ...terrainReviewSpecs, ...macroSpecs, ...structureSpecs, ...coverSpecs, ...mirrorSpecs, ...staticDecorSpecs, ...wallArtSpecs, ...presentationSpecs, ...portraitTreatmentSpecs, ...appUiSpecs, ...nineSliceSpecs, ...scrollbarSpecs, ...surfaceSpecs, ...sliderSpecs, ...chromeFillTintSpecs, ...uiKitFrameSpecs, ...studioPageSpecs, ...menuModeSpecs, ...runRelicSpecs, ...materialSpecs.map(([id, kind, value, label, isDefault, roles], index) => ({
+    })), ...terrainFamilySpecs, ...terrainSpecs, ...terrainReviewSpecs, ...macroSpecs, ...structureSpecs, ...coverSpecs, ...mirrorSpecs, ...staticDecorSpecs, ...wallArtSpecs, ...presentationSpecs, ...portraitTreatmentSpecs, ...appUiSpecs, ...nineSliceSpecs, ...scrollbarSpecs, ...surfaceSpecs, ...sliderSpecs, ...chromeFillTintSpecs, ...uiKitFrameSpecs, ...studioPageSpecs, ...menuModeSpecs, ...runRelicSpecs, ...runResourceSpecs, ...materialSpecs.map(([id, kind, value, label, isDefault, roles], index) => ({
       id, kind, label, sortOrder: index, lifecycleState: 'active' as const,
       behavior: { value, ...(isDefault ? { default: true } : {}) }, metadata: {}, rowRevision: 1,
       media: Object.fromEntries(roles.map((role) => [role, descriptor(`test/${id}-${role}.png`)])),

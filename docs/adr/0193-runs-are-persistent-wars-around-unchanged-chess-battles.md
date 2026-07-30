@@ -2,6 +2,8 @@
 status: accepted
 date: 2026-07-28
 deciders: owner (Nelson) + Codex
+partially_superseded_by:
+  - "[ADR-0220](0220-run-victory-gold-scales-with-enemy-force-value.md)"
 ---
 
 # ADR-0193: Runs are persistent Wars around unchanged chess Battles

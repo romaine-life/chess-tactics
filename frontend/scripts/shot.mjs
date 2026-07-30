@@ -502,7 +502,10 @@ try {
   // the verified device grant's remote JWKS endpoint is temporarily unreachable; it never runs
   // for a non-loopback target.
   const target = new URL(url);
-  if (['127.0.0.1', 'localhost', '[::1]'].includes(target.hostname)) {
+  if (
+    ['127.0.0.1', 'localhost', '[::1]'].includes(target.hostname)
+    || target.hostname.endsWith('.localhost')
+  ) {
     const signIn = new URL('/api/auth/sign-in', target);
     signIn.searchParams.set('returnTo', '/api/auth/me');
     const authResponse = await page.goto(signIn.href, { waitUntil: 'domcontentloaded', timeout });
@@ -577,7 +580,7 @@ try {
     console.log(`wrote early bootstrap ${bootstrapPath}`);
   }
   if (click) {
-    if (assertFullSceneExit || assertImmediateLocalControl) {
+    if (assertFullSceneExit || assertImmediateLocalControl || backAfterClickMs !== undefined) {
       await page.waitForFunction(
         `document.querySelector('[data-scene-phase]')?.getAttribute('data-scene-phase') === 'current'`,
         { timeout },

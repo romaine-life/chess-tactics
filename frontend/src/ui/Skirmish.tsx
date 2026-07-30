@@ -1,7 +1,15 @@
-import { type CSSProperties, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import {
+  type CSSProperties,
+  type ReactElement,
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+} from 'react';
 import { isPredrawnBackgroundActive } from '@chess-tactics/board-render';
 import { SkirmishBoard } from '../render/SkirmishBoard';
-import { SkirmishHud } from './SkirmishHud';
+import { SkirmishHud, type SkirmishHudProps } from './SkirmishHud';
 import { PaintedSurfaceBoundary } from './shell/PaintedSurfaceBoundary';
 import { NavButton } from './shared/NavButton';
 import { RestartGlyph } from './shared/actionGlyphs';
@@ -67,6 +75,7 @@ import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox } from './shared/ChromeBox';
 import { rememberAdminBattleHref } from '../admin/battleRoute';
 import type { RunRelicId } from '../run/model';
+import { RunRelicStrip } from './RunRelics';
 
 export interface RunBattlePresentation {
   level: Level;
@@ -75,6 +84,7 @@ export interface RunBattlePresentation {
   onVictory: (survivingPersistentUnitIds: string[]) => void;
   onRestart: () => void;
   onPawnCashOut?: (unitId: string) => void;
+  onAbandonRun?: () => void;
 }
 
 export function shouldLoadSkirmishWorldBackground(
@@ -84,6 +94,73 @@ export function shouldLoadSkirmishWorldBackground(
   return boardSettled && !predrawnBackgroundActive;
 }
 
+export function SkirmishShell({
+  className = '',
+  testId = 'skirmish',
+  titleBarContent,
+  relicIds = [],
+  controlsContent,
+  hudProps,
+  hudContent,
+  screenStyle,
+  registerSceneSurface = true,
+  readyToCompose = true,
+  children,
+}: {
+  className?: string;
+  testId?: string;
+  titleBarContent: ReactNode;
+  relicIds?: readonly RunRelicId[];
+  controlsContent?: ReactNode;
+  hudProps?: SkirmishHudProps;
+  hudContent?: ReactNode;
+  screenStyle?: CSSProperties | null;
+  registerSceneSurface?: boolean;
+  readyToCompose?: boolean;
+  children: ReactNode;
+}): ReactElement {
+  const installedChromeCss = useInstalledChromeCss();
+  const [paintAttempt, setPaintAttempt] = useState(0);
+  useLayoutEffect(() => {
+    const shell = document.querySelector('.shell');
+    if (!(shell instanceof HTMLElement)) return undefined;
+    return installPlayDesignCanvas(shell);
+  }, []);
+  const resolvedScreenStyle = screenStyle === undefined
+    ? {
+        '--skirmish-world-bg': `url("${defaultBackgroundSet().world}")`,
+      } as CSSProperties
+    : screenStyle ?? undefined;
+  const surface = (
+    <>
+      <RunRelicStrip relicIds={relicIds} />
+      {children}
+      {hudContent === undefined
+        ? <SkirmishHud {...hudProps} controlsContent={controlsContent} />
+        : hudContent}
+    </>
+  );
+
+  return (
+    <div data-testid={testId} className={`skirmish-screen ${className}`.trim()} style={resolvedScreenStyle}>
+      {installedChromeCss ? <style data-skirmish-chrome-family dangerouslySetInnerHTML={{ __html: installedChromeCss }} /> : null}
+      <TitleBarSlot region="center">{titleBarContent}</TitleBarSlot>
+      {registerSceneSurface ? (
+        <PaintedSurfaceBoundary
+          surface="gameplay-hud"
+          signature={`${testId}:${paintAttempt}`}
+          readyToCompose={readyToCompose}
+          loadingLabel="Preparing Run…"
+          onRetry={() => setPaintAttempt((value) => value + 1)}
+          showStatus={false}
+        >
+          {surface}
+        </PaintedSurfaceBoundary>
+      ) : surface}
+    </div>
+  );
+}
+
 export function Skirmish({
   runBattle = null,
   routeSearch = window.location.search,
@@ -91,7 +168,6 @@ export function Skirmish({
   runBattle?: RunBattlePresentation | null;
   routeSearch?: string;
 } = {}) {
-  const installedChromeCss = useInstalledChromeCss();
   const routeParams = useMemo(() => new URLSearchParams(routeSearch), [routeSearch]);
   const predrawnPreview = useMemo(
     () => predrawnBoardPreviewSrc(routeSearch, window.location.origin),
@@ -406,12 +482,6 @@ export function Skirmish({
     setBoardSurfaceReady(false);
     newSkirmish({ seed: Math.floor(Math.random() * 999999) + 1, level: nextLevel, deferClockStart: true });
   };
-
-  useLayoutEffect(() => {
-    const shell = document.querySelector('.shell');
-    if (!(shell instanceof HTMLElement)) return undefined;
-    return installPlayDesignCanvas(shell);
-  }, []);
 
   // Warm the portrait cache for the units actually on the board so the HUD bust
   // paints instantly on the first click instead of waiting for a fetch+decode at
@@ -1006,24 +1076,46 @@ export function Skirmish({
         '--skirmish-world-bg': `url("${defaultBackgroundSet().world}")`,
       } as CSSProperties
     : undefined;
+  const hudContent = boardSettled && !boardSurfaceError ? (
+    <PaintedSurfaceBoundary
+      surface="gameplay-hud"
+      signature={String(storeSessionEpoch)}
+      readyToCompose={boardSurfaceReady}
+      loadingLabel="Preparing controls…"
+      onRetry={() => setHudSurfaceReady(false)}
+      onPaintedChange={setHudSurfaceReady}
+      showStatus={false}
+    >
+      <SkirmishHud
+        canStartNewSkirmish={Boolean(activeLevel) && !isCampaignPlay && !isRunPlay}
+        onRestart={showRetryStud ? retrySkirmish : null}
+        restartLabel={activeLevel ? (isRunPlay ? 'Restart Battle' : isCampaignPlay ? 'Restart level' : 'Restart board') : 'Restart skirmish'}
+        onNewSkirmish={startNewScenario}
+        newSkirmishLabel={newScenarioLabel}
+        showClockControl={!isCampaignPlay}
+        clockControlValue={activeLevel ? scenarioTimeControl : undefined}
+        onClockControlChange={activeLevel ? setScenarioTimeControl : undefined}
+        returnHref={returnHref}
+        returnLabel={returnIsEditor ? 'Back to editor' : 'Back'}
+        netInteractive={netSeatInteractive}
+        onOpenPredrawnRegistration={predrawnPreview ? () => setPredrawnPickerOpen(true) : null}
+        onPawnCashOut={runBattle?.onPawnCashOut ?? null}
+        onAbandonRun={runBattle?.onAbandonRun ?? null}
+      />
+    </PaintedSurfaceBoundary>
+  ) : null;
 
   return (
-    <div
-      data-testid="skirmish"
-      className={`skirmish-screen is-design-locked${screenPredrawnBackgroundActive ? ' is-predrawn-board' : ''}`}
-      style={screenStyle}
-    >
-      {installedChromeCss ? <style data-skirmish-chrome-family dangerouslySetInnerHTML={{ __html: installedChromeCss }} /> : null}
-      {/* Title bar lives in the app shell now; the in-game live status portals into its
-          center section (turn/objective read from the game store, in scope here). The
-          brand + account cluster are rendered by the shell bar itself. */}
-      {playableSurfaceReady ? <TitleBarSlot region="center">
-        {/* The battle clock is ALWAYS the middle chip on every play surface — a timed game
+    <SkirmishShell
+      testId="skirmish"
+      className={`is-design-locked${screenPredrawnBackgroundActive ? ' is-predrawn-board' : ''}`}
+      titleBarContent={playableSurfaceReady ? (
+        <div className="skirmish-topbar-status">
+          {/* The battle clock is ALWAYS the middle chip on every play surface — a timed game
             counts down and an authored untimed level reads "∞ / No limit". Keeping the
             centre chip present means
             the turn plate and objective always flank a real element, so the clock stays
             page-centred over the title bar's diamond (equal-width flanks, see style.css). */}
-        <div className="skirmish-topbar-status">
           <TitleBarStatus className="skirmish-status-chip skirmish-turn-plate">
             <strong>{turnLabel}</strong>
             <small>{game.winner ? 'Skirmish Complete' : 'Live Board'}</small>
@@ -1049,7 +1141,12 @@ export function Skirmish({
             </span>
           </TitleBarStatus>
         </div>
-      </TitleBarSlot> : null}
+      ) : null}
+      relicIds={runBattle?.relicIds ?? []}
+      screenStyle={screenStyle ?? null}
+      registerSceneSurface={false}
+      hudContent={hudContent}
+    >
 
       {/* Test play is an authoring loop, so its return is a persistent title-bar action rather
           than an easy-to-miss floating chip. The target still comes from the validated exact
@@ -1139,35 +1236,6 @@ export function Skirmish({
           </InnerChromeBox>
         ) : null}
       </section>
-      {boardSettled && !boardSurfaceError ? (
-        <PaintedSurfaceBoundary
-          surface="gameplay-hud"
-          signature={String(storeSessionEpoch)}
-          readyToCompose={boardSurfaceReady}
-          loadingLabel="Preparing controls…"
-          onRetry={() => setHudSurfaceReady(false)}
-          onPaintedChange={setHudSurfaceReady}
-          showStatus={false}
-        >
-          <SkirmishHud
-            canStartNewSkirmish={Boolean(activeLevel) && !isCampaignPlay && !isRunPlay}
-            onRestart={showRetryStud ? retrySkirmish : null}
-            restartLabel={activeLevel ? (isRunPlay ? 'Restart Battle' : isCampaignPlay ? 'Restart level' : 'Restart board') : 'Restart skirmish'}
-            onNewSkirmish={startNewScenario}
-            newSkirmishLabel={newScenarioLabel}
-            showClockControl={!isCampaignPlay}
-            clockControlValue={activeLevel ? scenarioTimeControl : undefined}
-            onClockControlChange={activeLevel ? setScenarioTimeControl : undefined}
-            returnHref={returnHref}
-            returnLabel={returnIsEditor ? 'Back to editor' : 'Back'}
-            netInteractive={netSeatInteractive}
-            onOpenPredrawnRegistration={predrawnPreview ? () => setPredrawnPickerOpen(true) : null}
-            onPawnCashOut={runBattle?.onPawnCashOut ?? null}
-            runRelicIds={runBattle?.relicIds ?? []}
-          />
-        </PaintedSurfaceBoundary>
-      ) : null}
-
       {predrawnPickerOpen && predrawnPreview ? (
         <PredrawnCornerPicker
           src={predrawnPreview}
@@ -1274,6 +1342,6 @@ export function Skirmish({
           </button>
         </div>
       )}
-    </div>
+    </SkirmishShell>
   );
 }

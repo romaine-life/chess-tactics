@@ -177,6 +177,7 @@ interface TilesetStudioRouteState {
   selectedGameLabLevelId?: string;
   selectedGymLevelId?: string;
   selectedSolverLevelId?: string;
+  selectedSfxReviewId?: string;
   /** Which Board Solver surface is open (Stepper / cluster Run / Help / Glossary) — the `stab=` param. */
   solverTab?: 'step' | 'run' | 'help' | 'glossary';
   selectedTileSideId?: string;
@@ -274,6 +275,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const glvl = params.get('glvl');
   const gymlvl = params.get('gymlvl');
   const slvl = params.get('slvl');
+  const sfxReview = params.get('sfxReview');
   const stab = params.get('stab');
   const side = params.get('side');
   const vk = params.get('vk');
@@ -350,6 +352,9 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedGameLabLevelId: glvl || undefined,
     selectedGymLevelId: gymlvl || undefined,
     selectedSolverLevelId: slvl || undefined,
+    selectedSfxReviewId: sfxReview && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(sfxReview)
+      ? sfxReview
+      : undefined,
     solverTab: stab === 'run' ? 'run' : stab === 'help' ? 'help' : stab === 'glossary' ? 'glossary' : stab === 'step' ? 'step' : undefined,
     selectedTileSideId: side || undefined,
     selectedFrameName: frame || undefined,
@@ -460,6 +465,7 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
     else if (route.viewerKind === 'sceneanim' && route.selectedRegionId) params.set('region', route.selectedRegionId);
     else if (route.viewerKind === 'walldecor' && route.selectedWallDecorId) params.set('wdecor', route.selectedWallDecorId);
     else if (route.viewerKind === 'wallart' && route.selectedWallArtId) params.set('wart', route.selectedWallArtId);
+    else if (route.viewerKind === 'sfx' && route.selectedSfxReviewId) params.set('sfxReview', route.selectedSfxReviewId);
     // The solver's open surface (Stepper is the default, so only non-default tabs are
     // written) — rides beside slvl so a solver deep link restores both the level AND the tab.
     if (route.viewerKind === 'solver' && route.solverTab && route.solverTab !== 'step') params.set('stab', route.solverTab);
@@ -546,6 +552,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [selectedSliderName, setSelectedSliderName] = useState<string | undefined>(undefined);
   const [sfxSearch, setSfxSearch] = useState('');
   const [selectedSfxName, setSelectedSfxName] = useState<string | undefined>(undefined);
+  const [selectedSfxReviewId, setSelectedSfxReviewId] = useState<string | undefined>(initialRoute.selectedSfxReviewId);
   const [pageSearch, setPageSearch] = useState('');
   const [selectedPageName, setSelectedPageName] = useState<string | undefined>(initialRoute.selectedPageName);
   const [chromeLabSearch, setChromeLabSearch] = useState('');
@@ -761,6 +768,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       if (route.selectedGameLabLevelId) setSelectedGameLabLevelId(route.selectedGameLabLevelId);
       if (route.selectedGymLevelId) setSelectedGymLevelId(route.selectedGymLevelId);
       if (route.selectedSolverLevelId) setSelectedSolverLevelId(route.selectedSolverLevelId);
+      setSelectedSfxReviewId(route.selectedSfxReviewId);
       // No-param means the default Stepper tab — browser-Back from ?stab=run must actually
       // leave the Run tab, so this resets rather than only setting when present.
       setSolverTab(route.solverTab ?? 'step');
@@ -836,6 +844,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       selectedGameLabLevelId,
       selectedGymLevelId,
       selectedSolverLevelId,
+      selectedSfxReviewId,
       solverTab,
       selectedTileSideId,
       selectedFrameName,
@@ -862,7 +871,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       brushKind,
       selectedUnitId: unitBrushId,
     });
-  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedArtworkName, selectedSourceArtId, selectedChromeLabTargetId, selectedFenceArtworkId, selectedGlossaryName, selectedPageName, selectedGameLabLevelId, selectedGymLevelId, selectedSolverLevelId, solverTab, selectedTileSideId, selectedFrameName, selectedDividerName, selectedRailFamilyId, selectedPropName, selectedTileCompareId, selectedGroundCoverId, selectedWallDecorId, selectedWallArtId, selectedSurfaceFamily, selectedRegionId, viewerKind, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
+  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedArtworkName, selectedSourceArtId, selectedChromeLabTargetId, selectedFenceArtworkId, selectedGlossaryName, selectedPageName, selectedGameLabLevelId, selectedGymLevelId, selectedSolverLevelId, selectedSfxReviewId, solverTab, selectedTileSideId, selectedFrameName, selectedDividerName, selectedRailFamilyId, selectedPropName, selectedTileCompareId, selectedGroundCoverId, selectedWallDecorId, selectedWallArtId, selectedSurfaceFamily, selectedRegionId, viewerKind, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
 
   // Returning to the Catalog (from the Viewer/Lab, or a deep-link) must land you on
   // the card you came from — not the top of the grid. The selection is already kept
@@ -1762,7 +1771,27 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     },
     {
       id: 'sfx', label: 'Sound Effects', hint: 'Audition the landing sounds — recorded foley (grass/water/sand) + the arrival thump. Played live.',
-      main: <SfxLibraryStudio search={sfxSearch} zoom={zoom} selected={selectedSfxName} onSelect={setSelectedSfxName} />,
+      main: (
+        <SfxLibraryStudio
+          search={sfxSearch}
+          zoom={zoom}
+          selected={selectedSfxName}
+          onSelect={(name) => {
+            setSelectedSfxName(name);
+            setSelectedSfxReviewId(undefined);
+          }}
+          selectedReviewId={selectedSfxReviewId}
+          onSelectReview={(id) => {
+            setSelectedSfxName(undefined);
+            setSelectedSfxReviewId(id);
+          }}
+          onViewReview={(id) => {
+            setSelectedSfxName(undefined);
+            setSelectedSfxReviewId(id);
+            openViewer('sfx');
+          }}
+        />
+      ),
       controls: (
         <>
           <label className="tileset-catalog-search">
@@ -1773,7 +1802,24 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             <span>Zoom</span>
             <input type="range" min="0.75" max="2" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
           </label>
-          <button type="button" className="tileset-view-action" onClick={() => openViewer('sfx')}>Assign sounds…</button>
+          <button
+            type="button"
+            className="tileset-view-action"
+            disabled={!selectedSfxReviewId}
+            onClick={() => openViewer('sfx')}
+          >
+            Edit selected recording
+          </button>
+          <button
+            type="button"
+            className="tileset-view-action"
+            onClick={() => {
+              setSelectedSfxReviewId(undefined);
+              openViewer('sfx');
+            }}
+          >
+            Assign live sounds…
+          </button>
         </>
       ),
     },
@@ -2048,7 +2094,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                                 onDraftSourceConsumed={() => setWallArtDraftSourceId(null)}
                               />
                           : viewerKind === 'sfx'
-                            ? <SfxViewer header={studioViewerHeader} />
+                            ? <SfxViewer header={studioViewerHeader} reviewVersionId={selectedSfxReviewId} />
                             : <AssetLab library={studioMedia.assets} name={selectedAssetName} header={studioViewerHeader} onEditFrame={(id) => { setSelectedFrameName(id); openViewer('nineslice'); }} onOpenDivider={(id) => { setSelectedDividerName(id); openViewer('divider'); }} />
         ) : null}
       </section>

@@ -8651,6 +8651,10 @@ body.loading-bootstrap .app-startup-status {
     overflow-y: auto;
   }
 
+  .run-relic-strip {
+    max-inline-size: calc(100% - 24px);
+  }
+
   /* The editor assigns named board/rail areas on desktop. When the shared Skirmish shell drops
      to one column those names must stack too; otherwise CSS creates an implicit second column for
      `rail`, letting the HUD cover nearly the entire board at tablet/in-app-browser widths. */
@@ -18075,15 +18079,11 @@ button.tileset-relationship-cell {
 
 /* ===== Run =====
    The between-Battle loop shares the installed Skirmish world and control chrome. */
-.run-screen {
-  grid-template-columns: minmax(0, 1fr);
-}
-
 .run-workspace {
   align-items: stretch;
   display: grid;
   gap: var(--skirmish-grid-gap);
-  grid-column: 1 / -1;
+  grid-column: 1;
   grid-row: 2;
   grid-template-columns: minmax(0, 1fr) minmax(250px, 320px);
   min-block-size: 0;
@@ -18093,8 +18093,7 @@ button.tileset-relationship-cell {
 
 .run-workspace > .run-panel:only-child {
   grid-column: 1 / -1;
-  justify-self: center;
-  inline-size: min(760px, 100%);
+  inline-size: 100%;
 }
 
 .run-panel {
@@ -18125,6 +18124,135 @@ button.tileset-relationship-cell {
   gap: 9px;
   min-block-size: 132px;
   padding: 12px;
+}
+
+.run-bundle-card {
+  align-content: space-between;
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  gap: 12px;
+  inline-size: 100%;
+  min-block-size: 162px;
+  padding: 14px;
+  text-align: start;
+}
+
+.run-bundle-card:disabled {
+  cursor: not-allowed;
+  opacity: .72;
+}
+
+.run-bundle-card.is-purchased {
+  opacity: 1;
+}
+
+.run-bundle-piece-grid {
+  align-content: center;
+  display: grid;
+  gap: 3px;
+  grid-template-columns: repeat(3, 32px);
+  justify-content: center;
+  min-block-size: 110px;
+}
+
+.run-bundle-piece-grid[data-piece-count="1"] {
+  grid-template-columns: minmax(0, 88px);
+}
+
+.run-bundle-piece-grid[data-piece-count="2"] {
+  grid-template-columns: repeat(2, minmax(0, 84px));
+}
+
+.run-bundle-piece-grid[data-piece-count="3"] {
+  grid-template-columns: repeat(3, minmax(0, 72px));
+}
+
+.run-bundle-piece-grid[data-piece-count="4"] {
+  grid-template-columns: repeat(4, minmax(0, 54px));
+}
+
+.run-bundle-piece-grid:is([data-piece-count="5"], [data-piece-count="6"]) {
+  grid-template-columns: repeat(3, minmax(0, 48px));
+}
+
+.run-bundle-board-piece {
+  aspect-ratio: 78 / 92;
+  block-size: auto;
+  inline-size: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.run-bundle-card-footer,
+.run-shop-rules,
+.run-paid-relic-price,
+.run-victory-summary {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.run-bundle-card-footer {
+  justify-content: space-between;
+  min-block-size: 32px;
+}
+
+.run-shop-rules > :last-child {
+  margin-inline-start: auto;
+}
+
+.run-gold-amount {
+  align-items: center;
+  display: inline-flex;
+  font: var(--ds-weight-bold) var(--ds-text-lg)/1 var(--ds-font-display);
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.run-gold-icon {
+  align-items: center;
+  block-size: 28px;
+  display: inline-flex;
+  inline-size: 28px;
+  justify-content: center;
+}
+
+.run-gold-icon img {
+  block-size: 100%;
+  image-rendering: pixelated;
+  inline-size: 100%;
+  object-fit: contain;
+  transform: scale(1.55);
+}
+
+.run-gold-icon.is-unavailable {
+  font-size: var(--ds-text-sm);
+}
+
+.run-gold-amount--title {
+  font-size: var(--ds-text-md);
+}
+
+.run-gold-amount--title .run-gold-icon {
+  block-size: 22px;
+  inline-size: 22px;
+}
+
+.run-gold-amount--button {
+  font-size: var(--ds-text-sm);
+}
+
+.run-gold-amount--button .run-gold-icon {
+  block-size: 18px;
+  inline-size: 18px;
+}
+
+.run-victory-summary > span + span::before {
+  content: "·";
+  margin-inline-end: 8px;
 }
 
 .run-relic-card {
@@ -18161,58 +18289,85 @@ button.tileset-relationship-cell {
   text-align: center;
 }
 
-.run-relic-inventory {
-  align-items: center;
-  display: flex;
-  gap: 10px;
+.run-relic-strip {
+  inset-block-start: calc(var(--app-header-h) + 8px);
+  inset-inline-start: 12px;
+  max-inline-size: calc(100% - var(--skirmish-rail-w) - 36px);
   min-inline-size: 0;
-  padding: 7px 10px;
-}
-
-.run-relic-inventory > strong {
-  color: #f1dca6;
-  flex: 0 0 auto;
-  font-family: var(--ds-font-display);
-  font-size: var(--ds-text-sm);
-  text-transform: uppercase;
+  position: absolute;
+  z-index: 20;
 }
 
 .run-relic-inventory-list {
   align-items: center;
   display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
+  flex-wrap: nowrap;
+  gap: 4px;
   min-inline-size: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.run-relic-inventory-list::-webkit-scrollbar {
+  display: none;
 }
 
 .run-relic-inventory-item {
-  block-size: 42px;
+  block-size: 64px;
   cursor: help;
   display: inline-flex;
-  inline-size: 42px;
+  flex: 0 0 64px;
+  inline-size: 64px;
+}
+
+.run-relic-inventory-trigger {
+  block-size: 64px;
+  display: inline-flex;
+  inline-size: 64px;
   outline: none;
 }
 
-.run-relic-inventory-item:focus-visible {
+.run-relic-inventory-trigger:focus-visible {
   filter: drop-shadow(0 0 4px #9fe7ff);
 }
 
 .run-relic-inventory-item .run-relic-icon,
 .run-relic-inventory-item .run-relic-icon img {
-  block-size: 42px;
-  inline-size: 42px;
+  block-size: 64px;
+  inline-size: 64px;
 }
 
 .run-relic-inventory-item .run-relic-icon.is-unavailable {
-  font-size: 8px;
+  font-size: var(--ds-text-xs);
 }
 
-.run-relic-inventory--workspace {
-  grid-column: 1 / -1;
+.run-relic-inventory-item img {
+  filter: drop-shadow(0 2px 1px rgba(0, 0, 0, .85));
 }
 
-.run-relic-inventory--hud {
-  margin-block: 0 8px;
+.run-relic-tooltip-pop {
+  display: grid;
+  gap: var(--ds-space-1);
+  padding: var(--ds-space-2) var(--ds-space-3);
+}
+
+.run-relic-tooltip-name {
+  color: #9fe7ff;
+  font: var(--ds-weight-regular) var(--ds-text-sm)/1.15 var(--ds-font-display);
+  letter-spacing: var(--ds-tracking-tight);
+}
+
+.run-relic-tooltip-description {
+  color: #e5edf3;
+  font: var(--ds-weight-regular) var(--ds-text-xs)/1.4 var(--ds-font-sans);
+}
+
+.run-screen .run-relic-strip {
+  max-inline-size: calc(100% - 24px);
+}
+
+.run-screen.has-relics .run-workspace {
+  padding-block-start: calc(var(--skirmish-grid-gap) + 72px);
 }
 
 .run-relic-review-screen {
@@ -18281,10 +18436,11 @@ button.tileset-relationship-cell {
 .run-army {
   align-content: start;
   display: grid;
+  flex: 1 1 auto;
   gap: 10px;
   min-block-size: 0;
-  overflow: auto;
-  padding: 14px;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .run-army-list,
@@ -18331,11 +18487,8 @@ button.tileset-relationship-cell {
     grid-template-columns: minmax(0, 1fr);
     overflow: auto;
   }
-
-  .run-workspace > .run-army {
-    min-block-size: 220px;
-  }
 }
+
 /* Play-screen level rows are selectable too (click the body to preview; Play stays one-click). */
 .campaign-level-row {
   align-items: center;
@@ -19263,12 +19416,19 @@ button.tileset-relationship-cell {
 }
 .infotip-dot:hover, .infotip-dot:focus-visible { color: #e7ebf0; border-color: #46d6b8; }
 .infotip-dot:focus-visible { outline: 2px solid rgba(101, 184, 255, .72); outline-offset: 2px; }
+.tooltip { position: relative; display: inline-flex; }
+.tooltip-trigger { display: inline-flex; }
+.tooltip-pop-positioner {
+  inline-size: max-content;
+  pointer-events: none;
+  position: fixed;
+  z-index: 1000;
+}
 .infotip-pop {
-  position: fixed; z-index: 1000; inline-size: max-content; max-inline-size: 256px;
-  padding: 8px 10px; background: #161d26; color: #cfd6df; border: 1px solid #29323f;
-  border-radius: 6px; font: 400 12px/1.45 system-ui, sans-serif; text-align: left;
+  max-inline-size: 100%;
+  padding: 8px 10px; color: #cfd6df; font: 400 12px/1.45 system-ui, sans-serif; text-align: left;
   text-transform: none; letter-spacing: normal;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, .45); pointer-events: none;
+  pointer-events: none;
 }
 .le-fence-review-banner {
   align-items: center;

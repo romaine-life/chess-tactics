@@ -1,29 +1,29 @@
-import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
-import { defaultBackgroundSet } from '../art/backgroundSets';
+import { useCallback, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import { useSkirmish, setRunBattleTransformSink } from '../game/store';
-import { defaultFacingForSide } from '../core/pieces';
+import { defaultFacingForSide, paletteForSide, pieceSpritePath } from '../core/pieces';
 import type { GameState, Piece } from '../core/types';
 import { LevelPreviewColumn } from './LevelPreviewColumn';
 import { NavButton } from './shared/NavButton';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox, OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
-import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleBarStatus } from './shell/TitleBarControls';
 import { PLAY_RUN_SELECTOR_HREF } from './playHubRoute';
-import { Skirmish, type RunBattlePresentation } from './Skirmish';
+import { Skirmish, SkirmishShell, type RunBattlePresentation } from './Skirmish';
+import { navigateApp } from './navigation';
+import { useConfirm } from './shared/ConfirmDialog';
 import {
   GOLD_SCALE,
   PIECE_BUNDLE_BY_ID,
   PIECE_LABEL,
   PIECE_VALUE,
   RUN_RELIC_BY_ID,
+  battleVictoryGoldTenths,
   beginBattle,
   bundleLabel,
   buyBundle,
   buyPaidRelic,
   cashOutPawn,
   chooseDraft,
-  formatGold,
   hasRelic,
   leaveShop,
   markReservistDeployed,
@@ -35,6 +35,7 @@ import {
   setDeploymentChoices,
   takeLootRelic,
   type RunDocument,
+  type PieceBundle,
   type RunRelicId,
 } from '../run/model';
 import {
@@ -45,101 +46,196 @@ import {
   selectedDeploymentLayout,
 } from '../run/deployment';
 import { useActiveRun } from '../run/store';
-import { RunRelicIcon, RunRelicInventory } from './RunRelics';
+import { RunRelicIcon } from './RunRelics';
+import { RunGoldAmount } from './RunResources';
 
-function RunShell({ run, children }: { run: RunDocument; children: ReactNode }): ReactElement {
+const PLAYER_BUNDLE_PALETTE = paletteForSide('player');
+const PLAYER_BUNDLE_FACING = defaultFacingForSide('player');
+
+export function RunBundleCard({
+  bundle,
+  mode,
+  bought = false,
+  disabled = false,
+  onSelect,
+}: {
+  bundle: PieceBundle;
+  mode: 'draft' | 'shop';
+  bought?: boolean;
+  disabled?: boolean;
+  onSelect: () => void;
+}): ReactElement {
+  const label = bundleLabel(bundle);
+  const actionLabel = mode === 'draft'
+    ? `Take ${label}`
+    : `${bought ? 'Purchased' : 'Buy'} ${label} for ${bundle.value} gold`;
   return (
-    <div
-      className="run-screen skirmish-screen"
-      style={{ ['--skirmish-world-bg' as string]: `url("${defaultBackgroundSet().world}")` }}
-      data-testid="run-screen"
+    <button
+      type="button"
+      data-ui-sfx={mode === 'shop' ? 'card-purchase' : undefined}
+      data-chrome-unit="inner-box"
+      className={chromeUnitClassNames('inner-box', 'run-bundle-card', bought && 'active is-purchased')}
+      aria-label={actionLabel}
+      disabled={disabled}
+      onClick={onSelect}
     >
-      <TitleBarSlot region="center">
-        <div className="skirmish-topbar-status">
-          <TitleBarStatus className="skirmish-status-chip skirmish-turn-plate">
-            <strong>{run.war.name}</strong>
-            <small>Run</small>
-          </TitleBarStatus>
-          <TitleBarStatus className="skirmish-status-chip skirmish-clock">
-            <strong>{formatGold(run.goldTenths)}</strong>
-            <small>Gold</small>
-          </TitleBarStatus>
-          <TitleBarStatus className="skirmish-status-chip skirmish-objective">
-            <span>
-              <strong>Battle {Math.min(run.battleIndex + 1, run.war.battles.length)} / {run.war.battles.length}</strong>
-              <small>{run.phase === 'shop' ? 'Shop' : run.phase === 'victory' ? 'War won' : run.phase}</small>
-            </span>
-          </TitleBarStatus>
-        </div>
-      </TitleBarSlot>
-      <main className="run-workspace">
-        <RunRelicInventory relicIds={run.relics} placement="workspace" />
-        {children}
-      </main>
+      <span
+        className="run-bundle-piece-grid"
+        data-piece-count={Math.min(bundle.pieces.length, 9)}
+        aria-hidden="true"
+      >
+        {bundle.pieces.map((piece, index) => (
+          <img
+            className="run-bundle-board-piece"
+            src={pieceSpritePath(piece, PLAYER_BUNDLE_PALETTE, PLAYER_BUNDLE_FACING)}
+            alt=""
+            draggable={false}
+            key={`${piece}-${index}`}
+          />
+        ))}
+      </span>
+      <span className="run-bundle-card-footer" aria-hidden="true">
+        {mode === 'shop' ? <RunGoldAmount valueTenths={bundle.value * GOLD_SCALE} /> : <strong>Take</strong>}
+        {bought ? <strong>Purchased</strong> : null}
+      </span>
+    </button>
+  );
+}
+
+function RunTitleBarStatus({ run }: { run: RunDocument }): ReactElement {
+  return (
+    <div className="skirmish-topbar-status">
+      <TitleBarStatus className="skirmish-status-chip skirmish-turn-plate">
+        <strong>{run.war.name}</strong>
+        <small>Run</small>
+      </TitleBarStatus>
+      <TitleBarStatus className="skirmish-status-chip skirmish-clock">
+        <RunGoldAmount valueTenths={run.goldTenths} className="run-gold-amount--title" />
+      </TitleBarStatus>
+      <TitleBarStatus className="skirmish-status-chip skirmish-objective">
+        <span>
+          <strong>Battle {Math.min(run.battleIndex + 1, run.war.battles.length)} / {run.war.battles.length}</strong>
+          <small>{run.phase === 'shop' ? 'Shop' : run.phase === 'victory' ? 'War won' : run.phase}</small>
+        </span>
+      </TitleBarStatus>
     </div>
   );
 }
 
-function ArmyList({ run, selling = false }: { run: RunDocument; selling?: boolean }): ReactElement {
+function useRunAbandon(run: RunDocument): {
+  abandonDialog: ReactElement | null;
+  abandoning: boolean;
+  requestAbandon: () => Promise<void>;
+} {
+  const abandon = useActiveRun((state) => state.abandon);
+  const [abandoning, setAbandoning] = useState(false);
+  const { ask, dialog } = useConfirm();
+  const requestAbandon = useCallback(async (): Promise<void> => {
+    if (abandoning) return;
+    const confirmed = await ask({
+      title: 'Abandon this Run?',
+      message: `${run.war.name} and all of its army, gold, relics, and Battle progress will be permanently removed.`,
+      confirmLabel: 'Abandon Run',
+      cancelLabel: 'Keep Run',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+    setAbandoning(true);
+    await abandon();
+    navigateApp(PLAY_RUN_SELECTOR_HREF, { replace: true, scroll: false });
+  }, [abandon, abandoning, ask, run.war.name]);
+  return { abandonDialog: dialog, abandoning, requestAbandon };
+}
+
+function RunArmyControls({
+  run,
+  selling = false,
+  showAbandon = true,
+}: {
+  run: RunDocument;
+  selling?: boolean;
+  showAbandon?: boolean;
+}): ReactElement {
   const replace = useActiveRun((state) => state.replace);
+  const { abandonDialog, abandoning, requestAbandon } = useRunAbandon(run);
   return (
-    <section
-      data-chrome-unit="inner-box"
-      className={chromeUnitClassNames('inner-box', 'run-army')}
-      aria-label="Persistent army"
-    >
-      <h3>Army</h3>
-      <div className="run-army-list">
-        {run.army.map((unit) => {
-          const sale = PIECE_VALUE[unit.type] * (hasRelic(run, 'fair-scales') ? 0.75 : 0.5);
-          return (
-            <div className="run-army-unit" key={unit.id}>
-              <span>{PIECE_LABEL[unit.type]}</span>
-              {unit.abilities.includes('discipline') ? <small>Discipline</small> : null}
-              {selling && unit.type !== 'king' ? (
-                <button
-                  type="button"
-                  data-chrome-unit="inner-text-button"
-                  className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
-                  onClick={() => replace(sellArmyUnit(run, unit.id))}
-                >
-                  Sell {Number.isInteger(sale) ? sale : sale.toFixed(2)}
-                </button>
-              ) : unit.type === 'king' ? <small>Retained</small> : null}
+    <>
+      {abandonDialog}
+      <section className="run-army" aria-label="Persistent army">
+        <h3>Army</h3>
+        <div className="run-army-list">
+          {run.army.map((unit) => {
+            const sale = PIECE_VALUE[unit.type] * (hasRelic(run, 'fair-scales') ? 0.75 : 0.5);
+            return (
+              <div className="run-army-unit" key={unit.id}>
+                <span>{PIECE_LABEL[unit.type]}</span>
+                {unit.abilities.includes('discipline') ? <small>Discipline</small> : null}
+                {selling && unit.type !== 'king' ? (
+                  <button
+                    type="button"
+                    data-ui-sfx="gold-sell"
+                    data-chrome-unit="inner-text-button"
+                    className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
+                    onClick={() => replace(sellArmyUnit(run, unit.id))}
+                  >
+                    <span>Sell</span>
+                    <RunGoldAmount valueTenths={sale * GOLD_SCALE} className="run-gold-amount--button" />
+                  </button>
+                ) : unit.type === 'king' ? <small>Retained</small> : null}
+              </div>
+            );
+          })}
+        </div>
+        {showAbandon ? (
+          <div className="skirmish-view-group">
+            <span className="skirmish-eyebrow">Run</span>
+            <div className="skirmish-view-row">
+              <button
+                type="button"
+                data-chrome-unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'danger')}
+                data-testid="abandon-run"
+                disabled={abandoning}
+                onClick={() => { void requestAbandon(); }}
+              >
+                {abandoning ? 'Abandoning…' : 'Abandon Run'}
+              </button>
             </div>
-          );
-        })}
-      </div>
-    </section>
+          </div>
+        ) : null}
+      </section>
+    </>
   );
 }
 
 function DraftPanel({ run }: { run: RunDocument }): ReactElement {
   const replace = useActiveRun((state) => state.replace);
   return (
-    <RunShell run={run}>
-      <OuterChromeBox chromeConsumer="run-draft" titled className="run-panel">
-        <OuterChromeHeader title="Muster your army" />
-        <p>Your King and three Pawns are ready. Choose one of the two dealt six-point reinforcements.</p>
-        <div className="run-card-grid" aria-label="Opening draft">
-          {run.draftOffers.map((offer) => (
-            <InnerChromeBox className="run-card" key={offer.draftId}>
-              <h3>{bundleLabel(offer)}</h3>
-              <p>{offer.value} points</p>
-              <button
-                type="button"
-                data-chrome-unit="inner-text-button"
-                className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-                onClick={() => replace(prepareDeployment(chooseDraft(run, offer.draftId)))}
-              >
-                Take this hand
-              </button>
-            </InnerChromeBox>
-          ))}
-        </div>
-      </OuterChromeBox>
-      <ArmyList run={run} />
-    </RunShell>
+    <SkirmishShell
+      className={`run-screen${run.relics.length ? ' has-relics' : ''}`}
+      testId="run-screen"
+      titleBarContent={<RunTitleBarStatus run={run} />}
+      relicIds={run.relics}
+      controlsContent={<RunArmyControls run={run} />}
+      hudProps={{ enableGlobalShortcuts: false }}
+    >
+      <main className="run-workspace">
+        <OuterChromeBox chromeConsumer="run-draft" titled className="run-panel">
+          <OuterChromeHeader title="Muster your army" />
+          <p>Your King and three Pawns are ready. Choose one of the two dealt six-point reinforcements.</p>
+          <div className="run-card-grid" aria-label="Opening draft">
+            {run.draftOffers.map((offer) => (
+              <RunBundleCard
+                bundle={offer}
+                mode="draft"
+                key={offer.draftId}
+                onSelect={() => replace(prepareDeployment(chooseDraft(run, offer.draftId)))}
+              />
+            ))}
+          </div>
+        </OuterChromeBox>
+      </main>
+    </SkirmishShell>
   );
 }
 
@@ -181,8 +277,16 @@ function DeploymentPanel({ run }: { run: RunDocument }): ReactElement {
   };
 
   return (
-    <RunShell run={prepared}>
-      <OuterChromeBox chromeConsumer="run-deployment" titled className="run-panel run-deployment-panel">
+    <SkirmishShell
+      className={`run-screen${prepared.relics.length ? ' has-relics' : ''}`}
+      testId="run-screen"
+      titleBarContent={<RunTitleBarStatus run={prepared} />}
+      relicIds={prepared.relics}
+      controlsContent={<RunArmyControls run={prepared} />}
+      hudProps={{ enableGlobalShortcuts: false }}
+    >
+      <main className="run-workspace">
+        <OuterChromeBox chromeConsumer="run-deployment" titled className="run-panel run-deployment-panel">
         <OuterChromeHeader title={`Deploy — ${level.name}`} />
         <p>{prepared.war.description || 'An authored War Battle.'}</p>
 
@@ -265,15 +369,16 @@ function DeploymentPanel({ run }: { run: RunDocument }): ReactElement {
         >
           Begin Battle
         </button>
-      </OuterChromeBox>
+        </OuterChromeBox>
 
-      <LevelPreviewColumn
-        level={previewLevel}
-        title={`${level.name} deployment`}
-        embedded
-        actions={<p className="run-preview-note">{Object.keys(layout.placements).length} deployed · {layout.blockedUnitIds.length} in reserve</p>}
-      />
-    </RunShell>
+        <LevelPreviewColumn
+          level={previewLevel}
+          title={`${level.name} deployment`}
+          embedded
+          actions={<p className="run-preview-note">{Object.keys(layout.placements).length} deployed · {layout.blockedUnitIds.length} in reserve</p>}
+        />
+      </main>
+    </SkirmishShell>
   );
 }
 
@@ -291,7 +396,7 @@ function RelicOffer({
   run: RunDocument;
   relicId: RunRelicId;
   action: (targetUnitId?: string) => void;
-  actionLabel: string;
+  actionLabel: ReactNode;
   disabled?: boolean;
 }): ReactElement {
   const relic = RUN_RELIC_BY_ID[relicId];
@@ -328,12 +433,28 @@ function RelicOffer({
 function ShopPanel({ run }: { run: RunDocument }): ReactElement {
   const replace = useActiveRun((state) => state.replace);
   const shop = run.shop!;
+  const victoryGoldTenths = Number.isSafeInteger(shop.victoryGoldTenths) && shop.victoryGoldTenths >= 0
+    ? shop.victoryGoldTenths
+    : battleVictoryGoldTenths(run.war.battles[shop.afterBattleIndex].level);
   const canLeave = shop.lootRelicOffers.length === 0 || shop.chosenLootRelicId !== null;
   return (
-    <RunShell run={run}>
-      <OuterChromeBox chromeConsumer="run-shop" titled className="run-panel run-shop-panel">
+    <SkirmishShell
+      className={`run-screen${run.relics.length ? ' has-relics' : ''}`}
+      testId="run-screen"
+      titleBarContent={<RunTitleBarStatus run={run} />}
+      relicIds={run.relics}
+      controlsContent={<RunArmyControls run={run} selling />}
+      hudProps={{ enableGlobalShortcuts: false }}
+    >
+      <main className="run-workspace">
+        <OuterChromeBox chromeConsumer="run-shop" titled className="run-panel run-shop-panel">
         <OuterChromeHeader title={run.war.battles[shop.afterBattleIndex]?.loot ? 'Loot Shop' : 'Shop'} />
-        <p>Victory grants 1 gold. Buy at most one piece bundle; sell any non-King units you no longer need.</p>
+        <div className="run-shop-rules">
+          <span>Victory</span>
+          <span aria-hidden="true">+</span>
+          <RunGoldAmount valueTenths={victoryGoldTenths} />
+          <span>Choose one bundle</span>
+        </div>
         <section>
           <h3>Piece bundles</h3>
           <div className="run-card-grid">
@@ -342,19 +463,14 @@ function ShopPanel({ run }: { run: RunDocument }): ReactElement {
               if (!bundle) return null;
               const bought = shop.purchasedBundleId === id;
               return (
-                <InnerChromeBox className="run-card" key={id}>
-                  <h4>{bundleLabel(bundle)}</h4>
-                  <p>{bundle.value} gold</p>
-                  <button
-                    type="button"
-                    data-chrome-unit="inner-text-button"
-                    className={chromeUnitClassNames('inner-text-button', 'app-header-button', bought && 'active')}
-                    disabled={Boolean(shop.purchasedBundleId) || run.goldTenths < bundle.value * GOLD_SCALE}
-                    onClick={() => replace(buyBundle(run, id))}
-                  >
-                    {bought ? 'Purchased' : 'Buy'}
-                  </button>
-                </InnerChromeBox>
+                <RunBundleCard
+                  bundle={bundle}
+                  mode="shop"
+                  bought={bought}
+                  key={id}
+                  disabled={Boolean(shop.purchasedBundleId) || run.goldTenths < bundle.value * GOLD_SCALE}
+                  onSelect={() => replace(buyBundle(run, id))}
+                />
               );
             })}
           </div>
@@ -384,7 +500,12 @@ function ShopPanel({ run }: { run: RunDocument }): ReactElement {
             <RelicOffer
               run={run}
               relicId={shop.paidRelicOffer}
-              actionLabel={shop.paidRelicBought ? 'Sold out this Conflict' : 'Buy for 10 gold'}
+              actionLabel={shop.paidRelicBought ? 'Sold out this Conflict' : (
+                <span className="run-paid-relic-price">
+                  <span>Buy</span>
+                  <RunGoldAmount valueTenths={10 * GOLD_SCALE} className="run-gold-amount--button" />
+                </span>
+              )}
               disabled={shop.paidRelicBought || run.goldTenths < 10 * GOLD_SCALE}
               action={(target) => replace(buyPaidRelic(run, target))}
             />
@@ -400,38 +521,55 @@ function ShopPanel({ run }: { run: RunDocument }): ReactElement {
         >
           Continue to next Battle
         </button>
-      </OuterChromeBox>
-      <ArmyList run={run} selling />
-    </RunShell>
+        </OuterChromeBox>
+      </main>
+    </SkirmishShell>
   );
 }
 
 function VictoryPanel({ run }: { run: RunDocument }): ReactElement {
   const abandon = useActiveRun((state) => state.abandon);
   return (
-    <RunShell run={run}>
-      <OuterChromeBox chromeConsumer="run-victory" titled className="run-panel run-victory-panel">
-        <OuterChromeHeader title="War won" />
-        <h2>{run.war.name}</h2>
-        <p>{run.war.description}</p>
-        <p>{run.army.length} persistent units · {run.relics.length} relics · {formatGold(run.goldTenths)} gold</p>
-        <button
-          type="button"
-          data-chrome-unit="inner-text-button"
-          className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-          onClick={() => { void abandon(); }}
-        >
-          Finish Run
-        </button>
-      </OuterChromeBox>
-      <ArmyList run={run} />
-    </RunShell>
+    <SkirmishShell
+      className={`run-screen${run.relics.length ? ' has-relics' : ''}`}
+      testId="run-screen"
+      titleBarContent={<RunTitleBarStatus run={run} />}
+      relicIds={run.relics}
+      controlsContent={<RunArmyControls run={run} showAbandon={false} />}
+      hudProps={{ enableGlobalShortcuts: false }}
+    >
+      <main className="run-workspace">
+        <OuterChromeBox chromeConsumer="run-victory" titled className="run-panel run-victory-panel">
+          <OuterChromeHeader title="War won" />
+          <h2>{run.war.name}</h2>
+          <p>{run.war.description}</p>
+          <p className="run-victory-summary">
+            <span>{run.army.length} persistent units</span>
+            <span>{run.relics.length} relics</span>
+            <RunGoldAmount valueTenths={run.goldTenths} />
+          </p>
+          <button
+            type="button"
+            data-chrome-unit="inner-text-button"
+            className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
+            onClick={() => {
+              void abandon().then(() => {
+                navigateApp(PLAY_RUN_SELECTOR_HREF, { replace: true, scroll: false });
+              });
+            }}
+          >
+            Finish Run
+          </button>
+        </OuterChromeBox>
+      </main>
+    </SkirmishShell>
   );
 }
 
 function BattlePanel({ run }: { run: RunDocument }): ReactElement {
   const replace = useActiveRun((state) => state.replace);
   const currentRun = useActiveRun((state) => state.run);
+  const { abandonDialog, requestAbandon } = useRunAbandon(run);
   const baseLevel = run.war.battles[run.battleIndex].level;
   const options = useMemo(() => deploymentOptions(run, baseLevel), [baseLevel, run]);
   const layout = useMemo(() => selectedDeploymentLayout(run, options), [options, run]);
@@ -495,18 +633,19 @@ function BattlePanel({ run }: { run: RunDocument }): ReactElement {
       const latest = useActiveRun.getState().run;
       if (latest?.id === run.id) replace(restartBattle(latest));
     },
+    onAbandonRun: () => { void requestAbandon(); },
     onPawnCashOut: hasRelic(run, 'mercenary-boat')
       ? (unitId) => {
           const latest = useActiveRun.getState().run;
           if (latest?.id === run.id) replace(cashOutPawn(latest, unitId));
         }
       : undefined,
-  }), [battleLevel, replace, run]);
+  }), [battleLevel, replace, requestAbandon, run]);
 
   // Subscribe to the current document so a Mercenary Boat cash-out or Reservist event
   // refreshes the hook inputs without restarting the already-live matching board.
   void currentRun;
-  return <Skirmish runBattle={presentation} />;
+  return <>{abandonDialog}<Skirmish runBattle={presentation} /></>;
 }
 
 export function RunScreen(): ReactElement {
@@ -514,22 +653,30 @@ export function RunScreen(): ReactElement {
   const hydrated = useActiveRun((state) => state.hydrated);
   const hydrate = useActiveRun((state) => state.hydrate);
   useEffect(() => { void hydrate(); }, [hydrate]);
-  useEffect(() => {
-    const shell = document.querySelector('.shell');
-    shell?.classList.add('skirmish-active');
-    return () => shell?.classList.remove('skirmish-active');
-  }, []);
 
   if (!hydrated) {
     return (
-      <div className="run-screen skirmish-screen">
+      <SkirmishShell
+        className="run-screen"
+        testId="run-screen"
+        titleBarContent={null}
+        controlsContent={null}
+        readyToCompose={false}
+        hudProps={{ enableGlobalShortcuts: false }}
+      >
         <main className="run-workspace"><InnerChromeBox className="run-panel" role="status">Loading Run…</InnerChromeBox></main>
-      </div>
+      </SkirmishShell>
     );
   }
   if (!run) {
     return (
-      <div className="run-screen skirmish-screen">
+      <SkirmishShell
+        className="run-screen"
+        testId="run-screen"
+        titleBarContent={null}
+        controlsContent={null}
+        hudProps={{ enableGlobalShortcuts: false }}
+      >
         <main className="run-workspace">
           <OuterChromeBox chromeConsumer="run-empty" titled className="run-panel">
             <OuterChromeHeader title="No active Run" />
@@ -543,7 +690,7 @@ export function RunScreen(): ReactElement {
             </NavButton>
           </OuterChromeBox>
         </main>
-      </div>
+      </SkirmishShell>
     );
   }
   if (run.phase === 'draft') return <DraftPanel run={run} />;

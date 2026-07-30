@@ -150,28 +150,35 @@ function RunPanel({
   const keepAccountRun = useActiveRun((state) => state.keepAccountRun);
   const adoptBrowserRun = useActiveRun((state) => state.adoptBrowserRun);
   const { ask, dialog } = useConfirm();
+  const [starting, setStarting] = useState(false);
   const eligible = useMemo(() => runEligibleOfficialWars(wars), [wars]);
 
   useEffect(() => { void hydrate(); }, [hydrate]);
 
   const start = async (): Promise<void> => {
-    if (run) {
-      const confirmed = await ask({
-        title: 'Abandon the active Run?',
-        message: `${run.war.name} will be replaced. This cannot be undone.`,
-        confirmLabel: 'Abandon and start',
-        cancelLabel: 'Keep Run',
-      });
-      if (!confirmed) return;
-      await abandon();
+    if (starting || syncing || !eligible.length) return;
+    setStarting(true);
+    try {
+      if (run) {
+        const confirmed = await ask({
+          title: 'Abandon the active Run?',
+          message: `${run.war.name} will be replaced. This cannot be undone.`,
+          confirmLabel: 'Abandon and start',
+          cancelLabel: 'Keep Run',
+          tone: 'danger',
+        });
+        if (!confirmed) return;
+        await abandon();
+      }
+      const seedArray = new Uint32Array(1);
+      globalThis.crypto?.getRandomValues?.(seedArray);
+      const seed = seedArray[0] || (Date.now() >>> 0);
+      const war = [...eligible].sort((a, b) => a.id.localeCompare(b.id))[seed % eligible.length];
+      replace(createRun(snapshotWar(war, levels), seed));
+      navigateApp('/run');
+    } finally {
+      setStarting(false);
     }
-    if (!eligible.length) return;
-    const seedArray = new Uint32Array(1);
-    globalThis.crypto?.getRandomValues?.(seedArray);
-    const seed = seedArray[0] || (Date.now() >>> 0);
-    const war = [...eligible].sort((a, b) => a.id.localeCompare(b.id))[seed % eligible.length];
-    replace(createRun(snapshotWar(war, levels), seed));
-    navigateApp('/run');
   };
 
   return (
@@ -209,10 +216,10 @@ function RunPanel({
           type="button"
           data-chrome-unit="inner-text-button"
           className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-          disabled={loading || !hydrated || eligible.length === 0 || Boolean(adoptionConflict)}
+          disabled={loading || !hydrated || starting || syncing || eligible.length === 0 || Boolean(adoptionConflict)}
           onClick={() => { void start(); }}
         >
-          {run ? 'Start a new Run' : 'Start Run'}
+          {starting ? 'Starting…' : run ? 'Start a new Run' : 'Start Run'}
         </button>
         {persistenceError ? <p className="play-content-warning" role="status">{persistenceError}</p> : null}
       </div>

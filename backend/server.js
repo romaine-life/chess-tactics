@@ -66,6 +66,11 @@ const {
   preservesNativeEvidenceForUpload,
   runRelicIconMediaIssue,
   runRelicIconSlotId,
+  runResourceIconMediaIssue,
+  runResourceIconSlotId,
+  sfxSampleMediaIssue,
+  sfxSampleOwnerProofIssue,
+  sfxSampleSlot,
 } = require(path.join(bakedBackendDir, 'liveMediaPolicy'));
 const {
   ATTEMPT_PIPELINE_SOURCE_REQUEST_SCHEMA,
@@ -14754,6 +14759,9 @@ function reviewedMediaEvidenceIssue(row) {
   if (predrawnBoardSlotSlug(row.slot)) {
     const issue = predrawnBoardOwnerProofIssue(row, proof, evidence.surfaceUrl);
     if (issue) return issue;
+  } else if (sfxSampleSlot(row.slot)) {
+    const issue = sfxSampleOwnerProofIssue(row, proof, evidence.surfaceUrl);
+    if (issue) return issue;
   } else if (sourceArt.claimed && !sourceArt.issue) {
     const issue = sourceArtTurntableOwnerProofIssue(sourceArt.value, proof, evidence.surfaceUrl);
     if (issue) return issue;
@@ -15076,6 +15084,12 @@ function mediaDomainProjectionIssue(row) {
   }
   if (runRelicIconSlotId(row.slot)) {
     return runRelicIconMediaIssue(row, runtime.value);
+  }
+  if (runResourceIconSlotId(row.slot)) {
+    return runResourceIconMediaIssue(row, runtime.value);
+  }
+  if (sfxSampleSlot(row.slot)) {
+    return sfxSampleMediaIssue(row, runtime.value);
   }
   const sourceArt = sourceArtTurntableProjection(row);
   if (sourceArt.claimed) return sourceArt.issue;
@@ -15883,6 +15897,32 @@ async function validateMediaReviewProofSnapshot(client, current, evidence, surfa
     ) throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: 'candidate snapshot mismatch' });
     return;
   }
+  if (sfxSampleSlot(current.slot)) {
+    const projectionIssue = mediaDomainProjectionIssue(current);
+    if (projectionIssue) {
+      throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: projectionIssue });
+    }
+    const proofIssue = sfxSampleOwnerProofIssue(current, evidence, surfaceUrl);
+    if (proofIssue) {
+      throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: proofIssue });
+    }
+    const selected = evidence.selectedCandidates[0];
+    const snapshot = evidence.slotSnapshots[0];
+    const slotResult = await client.query(
+      'SELECT slot, active_version_id, row_revision FROM media_slots WHERE slot = $1',
+      [current.slot],
+    );
+    const slotRow = slotResult.rows[0];
+    if (!slotRow) throw mediaMutationError('media_slot_not_found', 404);
+    if (
+      Number(snapshot.rowRevision) !== Number(slotRow.row_revision)
+      || (snapshot.activeVersionId ?? null) !== (slotRow.active_version_id ? String(slotRow.active_version_id) : null)
+    ) throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: 'slot snapshot mismatch' });
+    if (
+      current.status !== 'candidate' || Number(selected.rowRevision) !== Number(current.row_revision)
+    ) throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: 'candidate snapshot mismatch' });
+    return;
+  }
   if (new URL(surfaceUrl).pathname !== '/studio') {
     throw mediaMutationError('invalid_media_review_proof', 409, 'this media domain requires its Studio proof surface');
   }
@@ -16162,6 +16202,24 @@ function assertPredrawnBoardAcceptanceProof(row, slot) {
   ) throw mediaMutationError('media_review_slot_snapshot_stale', 409, { slot: row.slot });
 }
 
+function assertSfxSampleAcceptanceProof(row, slot) {
+  if (!sfxSampleSlot(row.slot)) return;
+  if (mediaAcceptanceContract(row).mode !== 'standalone') {
+    throw mediaMutationError('media_group_contract_mismatch', 409, { slot: row.slot });
+  }
+  const review = isObjectRecord(row.review_evidence) ? row.review_evidence : {};
+  const proof = isObjectRecord(review.evidence) ? review.evidence : {};
+  const issue = sfxSampleOwnerProofIssue(row, proof, review.surfaceUrl);
+  if (issue) throw mediaMutationError('media_owner_review_required', 409, { slot: row.slot, reason: issue });
+  const selected = proof.selectedCandidates[0];
+  const snapshot = proof.slotSnapshots[0];
+  if (
+    Number(selected.rowRevision) + 1 !== Number(row.row_revision)
+    || !slot || Number(snapshot.rowRevision) !== Number(slot.row_revision)
+    || (snapshot.activeVersionId ?? null) !== (slot.active_version_id ? String(slot.active_version_id) : null)
+  ) throw mediaMutationError('media_review_slot_snapshot_stale', 409, { slot: row.slot });
+}
+
 function assertTerrainAcceptanceProof(rows, slotById, contract = null) {
   if (!rows.length || rows.some((row) => row.domain !== 'terrain')) return;
   const expectedSlots = contract?.mode === 'group' ? contract.requiredSlots : rows.map((row) => row.slot).sort();
@@ -16379,6 +16437,7 @@ async function acceptMediaVersionBatch(items, actorEmail) {
         assertTerrainAcceptanceProof([row], slotById);
       }
       assertPredrawnBoardAcceptanceProof(row, slotById.get(row.slot));
+      assertSfxSampleAcceptanceProof(row, slotById.get(row.slot));
     }
 
     const bySlot = new Map(rows.map((row) => [row.slot, row]));

@@ -64,9 +64,11 @@ describe('Skirmish chrome hierarchy', () => {
   });
 
   it('registers every level-specific title-bar status box as inner chrome', () => {
-    const centerSlot = skirmish.match(/<TitleBarSlot region="center">([\s\S]*?)<\/TitleBarSlot>/)?.[1] ?? '';
-    expect(centerSlot.match(/<TitleBarStatus\b/g)).toHaveLength(3);
-    expect(centerSlot).not.toMatch(/<div\b[^>]*skirmish-status-chip/);
+    const titleStart = skirmish.indexOf('titleBarContent={playableSurfaceReady ? (');
+    const titleEnd = skirmish.indexOf('relicIds={runBattle?.relicIds', titleStart);
+    const titleContent = titleStart >= 0 && titleEnd > titleStart ? skirmish.slice(titleStart, titleEnd) : '';
+    expect(titleContent.match(/<TitleBarStatus\b/g)).toHaveLength(3);
+    expect(titleContent).not.toMatch(/<div\b[^>]*skirmish-status-chip/);
     expect(skirmish).toMatch(/import \{[^}]*TitleBarStatus[^}]*\} from '\.\/shell\/TitleBarControls';/);
   });
 

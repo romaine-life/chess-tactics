@@ -9,6 +9,22 @@ const PREDRAWN_BOARD_PROOF_SCHEMA = 'predrawn-board-canonical-level-proof-v1';
 const PREDRAWN_BOARD_PROOF_RENDERER = 'LevelEditor/PredrawnBoardLayer';
 const RUN_RELIC_ICON_COMPONENT = 'run-relic-icon';
 const RUN_RELIC_ICON_SLOT = /^ui\/run\/relics\/([a-z][a-z0-9-]{0,79})\.png$/;
+const RUN_RESOURCE_ICON_COMPONENT = 'run-resource-icon';
+const RUN_RESOURCE_ICON_SLOT = /^ui\/run\/resources\/([a-z][a-z0-9-]{0,79})\.png$/;
+const SFX_SAMPLE_COMPONENT = 'sfx-sample';
+const SFX_SAMPLE_PROOF_RENDERER = 'SfxViewer/ExactCandidateAudition';
+const SFX_SAMPLE_PROOF_SCHEMA = 'sfx-sample-exact-byte-proof-v1';
+const SFX_SAMPLE_SLOT = /^sfx\/([a-z0-9][a-z0-9_-]{0,63})\/v([0-9]+)\.(aac|flac|m4a|mp3|oga|ogg|wav|webm)$/;
+const SFX_MEDIA_TYPE_BY_EXTENSION = Object.freeze({
+  aac: 'audio/aac',
+  flac: 'audio/flac',
+  m4a: 'audio/mp4',
+  mp3: 'audio/mpeg',
+  oga: 'audio/ogg',
+  ogg: 'audio/ogg',
+  wav: 'audio/wav',
+  webm: 'audio/webm',
+});
 
 function isObjectRecord(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -27,6 +43,19 @@ function predrawnBoardSlotSlug(slot) {
 function runRelicIconSlotId(slot) {
   const match = RUN_RELIC_ICON_SLOT.exec(String(slot || ''));
   return match ? match[1] : null;
+}
+
+function runResourceIconSlotId(slot) {
+  const match = RUN_RESOURCE_ICON_SLOT.exec(String(slot || ''));
+  return match ? match[1] : null;
+}
+
+function sfxSampleSlot(slot) {
+  const match = SFX_SAMPLE_SLOT.exec(String(slot || ''));
+  if (!match) return null;
+  const variantIndex = Number(match[2]);
+  if (!Number.isSafeInteger(variantIndex) || variantIndex < 0 || variantIndex > 9999) return null;
+  return { soundSetKey: match[1], variantIndex, extension: match[3] };
 }
 
 function mediaVersionMetadata(row) {
@@ -152,6 +181,131 @@ function runRelicIconMediaIssue(row, projectedRuntime = null) {
   return null;
 }
 
+/**
+ * Domain-owned runtime projection for one native Run resource icon. The
+ * surrounding live number owns the accessible currency value.
+ */
+function runResourceIconMediaIssue(row, projectedRuntime = null) {
+  const resourceId = runResourceIconSlotId(row.slot);
+  if (!resourceId) return 'Run resource icon slots must match ui/run/resources/<resource-id>.png';
+  if (row.domain !== 'ui-kit') return 'Run resource icons require the ui-kit domain';
+  if (row.role !== 'icon') return 'Run resource icons require the icon role';
+  if (row.media_type !== 'image/png') return 'Run resource icons require image/png';
+  if (Number(row.width) !== 64 || Number(row.height) !== 64) {
+    return 'Run resource icons must be native 64x64 rasters';
+  }
+
+  const metadata = mediaVersionMetadata(row);
+  const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+  if (!isObjectRecord(runtime)) return 'Run resource icons require metadata.runtime';
+  const allowed = new Set([
+    'component', 'variant', 'frameWidth', 'frameHeight', 'frameCount', 'altText', 'nativeRole',
+  ]);
+  const unsupported = Object.keys(runtime).filter((key) => !allowed.has(key));
+  if (unsupported.length) {
+    return `Run resource icon runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
+  }
+  if (runtime.component !== RUN_RESOURCE_ICON_COMPONENT) {
+    return `Run resource icon metadata.runtime.component must be ${RUN_RESOURCE_ICON_COMPONENT}`;
+  }
+  if (runtime.variant !== resourceId) return 'Run resource icon variant must match its semantic slot id';
+  if (runtime.frameWidth !== 64 || runtime.frameHeight !== 64 || runtime.frameCount !== 1) {
+    return 'Run resource icon runtime geometry must describe one native 64x64 frame';
+  }
+  if (runtime.nativeRole !== RUN_RESOURCE_ICON_COMPONENT) {
+    return `Run resource icon metadata.runtime.nativeRole must be ${RUN_RESOURCE_ICON_COMPONENT}`;
+  }
+  if (runtime.altText !== '') {
+    return 'Run resource icon metadata.runtime.altText must be empty because the live value owns its accessible name';
+  }
+  return null;
+}
+
+/**
+ * Domain-owned runtime projection for one authored one-shot take. Sound-set
+ * labels, gains, and assignments remain in the DB-owned SFX profile.
+ */
+function sfxSampleMediaIssue(row, projectedRuntime = null) {
+  const slot = sfxSampleSlot(row.slot);
+  if (!slot) return 'SFX sample slots must match sfx/<sound-set>/v<n>.<supported-audio-format>';
+  if (row.domain !== 'sfx') return 'SFX samples require the sfx domain';
+  if (row.role !== 'audio') return 'SFX samples require the audio role';
+  if (row.media_type !== SFX_MEDIA_TYPE_BY_EXTENSION[slot.extension]) {
+    return 'SFX sample media type must match its slot extension';
+  }
+
+  const metadata = mediaVersionMetadata(row);
+  const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+  if (!isObjectRecord(runtime)) return 'SFX samples require metadata.runtime';
+  const allowed = new Set(['component', 'variant', 'state', 'durationMs', 'loop']);
+  const unsupported = Object.keys(runtime).filter((key) => !allowed.has(key));
+  if (unsupported.length) {
+    return `SFX sample runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
+  }
+  if (runtime.component !== SFX_SAMPLE_COMPONENT) {
+    return `SFX sample metadata.runtime.component must be ${SFX_SAMPLE_COMPONENT}`;
+  }
+  if (runtime.variant !== slot.soundSetKey) return 'SFX sample variant must match its sound-set slot key';
+  if (runtime.state !== 'one-shot') return 'SFX sample runtime state must be one-shot';
+  if (!Number.isSafeInteger(runtime.durationMs) || runtime.durationMs < 1 || runtime.durationMs > 3_600_000) {
+    return 'SFX sample runtime durationMs must be a positive bounded integer';
+  }
+  if (runtime.loop !== false) return 'SFX one-shot runtime loop must be false';
+  return null;
+}
+
+function sfxSampleOwnerProofIssue(row, proof, surfaceUrl = null) {
+  const slot = sfxSampleSlot(row.slot);
+  if (!slot) return 'SFX sample proof requires a typed SFX sample slot';
+  if (!isObjectRecord(proof) || proof.schema !== SFX_SAMPLE_PROOF_SCHEMA) {
+    return `SFX sample review requires ${SFX_SAMPLE_PROOF_SCHEMA}`;
+  }
+  if (
+    proof.renderer !== SFX_SAMPLE_PROOF_RENDERER
+    || proof.exactByteAudition !== true
+    || proof.playbackRate !== 1
+  ) return 'SFX sample proof must use the exact-byte Studio audition at playback rate 1';
+  if (surfaceUrl !== null && proof.surfaceUrl !== surfaceUrl) {
+    return 'SFX sample proof surfaceUrl does not match the reviewed surface';
+  }
+  let parsedSurface;
+  try { parsedSurface = new URL(proof.surfaceUrl); } catch { return 'SFX sample proof surfaceUrl is invalid'; }
+  if (
+    parsedSurface.pathname !== '/studio'
+    || parsedSurface.searchParams.get('mode') !== 'viewer'
+    || parsedSurface.searchParams.get('vk') !== 'sfx'
+    || parsedSurface.searchParams.get('sfxReview') !== String(row.id)
+  ) return 'SFX sample proof must identify its exact Studio candidate audition';
+
+  const runtime = mediaVersionMetadata(row).runtime;
+  const decoded = proof.decodedAudio;
+  if (
+    !isObjectRecord(decoded)
+    || !Number.isSafeInteger(decoded.durationMs)
+    || Math.abs(decoded.durationMs - Number(runtime?.durationMs)) > 20
+    || !Number.isSafeInteger(decoded.sampleRate) || decoded.sampleRate < 8_000 || decoded.sampleRate > 384_000
+    || !Number.isSafeInteger(decoded.channels) || decoded.channels < 1 || decoded.channels > 16
+  ) return 'SFX sample proof must record valid decoded audio geometry matching the candidate duration';
+
+  const candidateSha256 = normalizedSha(row.blob_sha256);
+  if (!candidateSha256 || !Array.isArray(proof.selectedCandidates) || proof.selectedCandidates.length !== 1) {
+    return 'SFX sample proof must identify exactly one candidate';
+  }
+  const selected = proof.selectedCandidates[0];
+  if (
+    !isObjectRecord(selected) || selected.slot !== row.slot || selected.versionId !== String(row.id)
+    || normalizedSha(selected.sha256) !== candidateSha256
+  ) return 'SFX sample proof does not identify the reviewed candidate bytes';
+  if (!Array.isArray(proof.slotSnapshots) || proof.slotSnapshots.length !== 1) {
+    return 'SFX sample proof must snapshot exactly one semantic slot';
+  }
+  const snapshot = proof.slotSnapshots[0];
+  if (!isObjectRecord(snapshot) || snapshot.slot !== row.slot) {
+    return 'SFX sample proof slot snapshot is invalid';
+  }
+  return null;
+}
+
 function predrawnBoardOwnerProofIssue(row, proof, surfaceUrl = null) {
   const slug = predrawnBoardSlotSlug(row.slot);
   if (!slug) return 'pre-drawn board proof requires a canonical board slot';
@@ -249,6 +403,10 @@ module.exports = {
   PREDRAWN_BOARD_PROOF_RENDERER,
   PREDRAWN_BOARD_PROOF_SCHEMA,
   RUN_RELIC_ICON_COMPONENT,
+  RUN_RESOURCE_ICON_COMPONENT,
+  SFX_SAMPLE_COMPONENT,
+  SFX_SAMPLE_PROOF_RENDERER,
+  SFX_SAMPLE_PROOF_SCHEMA,
   liveCatalogReadinessIssue,
   nativeMediaEvidenceIssue,
   predrawnBoardAlignmentIssue,
@@ -258,4 +416,9 @@ module.exports = {
   preservesNativeEvidenceForUpload,
   runRelicIconMediaIssue,
   runRelicIconSlotId,
+  runResourceIconMediaIssue,
+  runResourceIconSlotId,
+  sfxSampleMediaIssue,
+  sfxSampleOwnerProofIssue,
+  sfxSampleSlot,
 };

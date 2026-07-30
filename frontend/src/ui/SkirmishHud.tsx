@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { useSkirmish } from '../game/store';
 import { useSkirmishView } from '../game/skirmishView';
 import { livingPieces } from '../core/rules';
@@ -23,8 +23,6 @@ import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox, OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
 import { fetchMe } from '../net/auth';
 import { AdminControls } from './AdminControls';
-import type { RunRelicId } from '../run/model';
-import { RunRelicInventory } from './RunRelics';
 
 const TYPE_LABEL = PIECE_LABEL;
 
@@ -164,7 +162,7 @@ export function skirmishRosterAction(side: Side, localSide: PlayingSide): 'selec
   return clientSideRelation(side, localSide) === 'self' ? 'select' : 'focus';
 }
 
-type SkirmishHudProps = {
+export type SkirmishHudProps = {
   className?: string;
   style?: CSSProperties;
   /** Audit/embedded surfaces can retain tab interaction without installing match-wide shortcuts. */
@@ -193,8 +191,10 @@ type SkirmishHudProps = {
   onOpenPredrawnRegistration?: (() => void) | null;
   /** Run-only Mercenary Boat action for a persistent Pawn at promotion. */
   onPawnCashOut?: ((pieceId: string) => void) | null;
-  /** Run-only persistent relic collection, kept visible while the Battle is live. */
-  runRelicIds?: readonly RunRelicId[];
+  /** Permanently end the active Run. RunScreen owns confirmation and persistence. */
+  onAbandonRun?: (() => void) | null;
+  /** Between-Battle phases replace only the existing panel's contents. */
+  controlsContent?: ReactNode;
 };
 
 export function SkirmishHud({
@@ -214,7 +214,8 @@ export function SkirmishHud({
   netInteractive = true,
   onOpenPredrawnRegistration = null,
   onPawnCashOut = null,
-  runRelicIds = [],
+  onAbandonRun = null,
+  controlsContent,
 }: SkirmishHudProps = {}) {
   const game = useSkirmish((s) => s.game);
   const selectedId = useSkirmish((s) => s.selectedId);
@@ -322,6 +323,7 @@ export function SkirmishHud({
         aria-label="Skirmish command HUD"
       >
         <OuterChromeHeader title="Controls">
+          {controlsContent === undefined ? (
           <div
             className="skirmish-hud-tabs"
             role="tablist"
@@ -346,10 +348,11 @@ export function SkirmishHud({
               </button>
             ))}
           </div>
+          ) : null}
         </OuterChromeHeader>
 
-        <RunRelicInventory relicIds={runRelicIds} placement="hud" />
-
+        {controlsContent === undefined ? (
+          <>
         <section className="skirmish-score-panel" aria-label="Turn summary">
           <div>
             <span className="skirmish-eyebrow">Status</span>
@@ -697,6 +700,22 @@ export function SkirmishHud({
                 ) : null}
               </div>
             </div>
+            {onAbandonRun && !net ? (
+              <div className="skirmish-view-group">
+                <span className="skirmish-eyebrow">Run</span>
+                <div className="skirmish-view-row">
+                  <button
+                    type="button"
+                    data-chrome-unit="inner-text-button"
+                    className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'danger')}
+                    data-testid="abandon-run"
+                    onClick={onAbandonRun}
+                  >
+                    Abandon Run
+                  </button>
+                </div>
+              </div>
+            ) : null}
             {adminAuth.isAdmin && !net ? (
               <div className="skirmish-view-group">
                 <span className="skirmish-eyebrow">Administration</span>
@@ -738,6 +757,8 @@ export function SkirmishHud({
           </section>
         )}
       </div>
+          </>
+        ) : controlsContent}
       </OuterChromeBox>
     </>
   );

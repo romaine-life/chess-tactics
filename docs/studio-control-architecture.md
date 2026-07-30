@@ -471,3 +471,21 @@ category** — that's what makes the Viewer tab a standing destination you can r
 even while browsing Tiles. Each read-only kind owns its **own** selection state
 (`selectedAssetName` vs `selectedArtworkName`) — never one shared field, or a stale
 id from one leaks into the other's stage.
+
+## Sound Effects candidate editing
+
+The Sound Effects Viewer kind has two addressable states inside the same fixed
+Studio shell. Its ordinary state edits the global sound-set profile and
+assignments. A URL carrying `sfxReview=<version-id>` instead focuses one private
+audio candidate: the main pane shows its complete waveform and exact selection,
+while the standing Controls rail owns start/end sliders and numeric values,
+complete/selection audition, reset, immutable derived-candidate save, and
+proof-gated approval. The candidate instrument replaces the assignment content
+for that focus; it is never inserted above it as an optional top block.
+
+Every editable SFX candidate is also a live-backed card on the Sound Effects
+Catalog shelf. Selecting a card and activating **Edit selected recording** opens
+that same Viewer state; double activation is the direct catalog shortcut.
+Candidate-review URLs reproduce only this click-reachable state. They are never
+the sole navigation mechanism, and the catalog does not substitute a compiled-in
+candidate list when its admin source is unavailable.

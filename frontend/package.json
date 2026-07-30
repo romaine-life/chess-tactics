@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/start-vite-dev.mjs",
-    "build": "node scripts/check-no-committed-media.mjs && vite build && node scripts/check-no-committed-media.mjs --built-output-only",
+    "build": "node scripts/check-no-committed-media.mjs && node scripts/check-ui-surface-contract.mjs && vite build && node scripts/check-no-committed-media.mjs --built-output-only",
     "build:trainer": "vite build --config vite.trainer.config.js",
     "build:board-render": "npm --prefix ../packages/board-render run build",
     "preview": "vite preview --host 0.0.0.0",
@@ -25,7 +25,7 @@
     "pretest": "npm run build:board-render",
     "test": "vitest run",
     "precheck": "npm run build:board-render",
-    "check": "node --check src/bgm.js && node scripts/check-no-committed-media.mjs && node scripts/check-bgm-shuffle.mjs && node scripts/check-imagegen-gate.mjs && node scripts/check-light-art-chrome.mjs && node scripts/check-titlebar-actions.mjs && node scripts/check-empty-panel-frame-overlay.mjs && node scripts/check-level-editor-chrome.mjs && node --test scripts/check-level-editor-chrome.node-test.mjs && node scripts/check-no-dev-data-seam.mjs && vitest run && tsc --noEmit",
+    "check": "node --check src/bgm.js && node scripts/check-no-committed-media.mjs && node scripts/check-ui-surface-contract.mjs && node --test scripts/check-ui-surface-contract.node-test.mjs && node scripts/check-bgm-shuffle.mjs && node scripts/check-imagegen-gate.mjs && node scripts/check-light-art-chrome.mjs && node scripts/check-titlebar-actions.mjs && node scripts/check-empty-panel-frame-overlay.mjs && node scripts/check-level-editor-chrome.mjs && node --test scripts/check-level-editor-chrome.node-test.mjs && node scripts/check-no-dev-data-seam.mjs && vitest run && tsc --noEmit",
     "check:media-final": "node scripts/check-no-committed-media.mjs"
   },
   "devDependencies": {
