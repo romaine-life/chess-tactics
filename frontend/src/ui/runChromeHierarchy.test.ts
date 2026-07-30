@@ -5,6 +5,9 @@ import { describe, expect, it } from 'vitest';
 const runScreen = readFileSync(new URL('./RunScreen.tsx', import.meta.url), 'utf8');
 const runArmyWorkspace = readFileSync(new URL('./RunArmyWorkspace.tsx', import.meta.url), 'utf8');
 const runWorkspace = readFileSync(new URL('./RunWorkspace.tsx', import.meta.url), 'utf8');
+const runUnitInspectionScene = readFileSync(new URL('./RunUnitInspectionScene.tsx', import.meta.url), 'utf8');
+const runRelics = readFileSync(new URL('./RunRelics.tsx', import.meta.url), 'utf8');
+const runSelfInspection = readFileSync(new URL('./RunSelfInspection.tsx', import.meta.url), 'utf8');
 const skirmish = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
 const skirmishHud = readFileSync(new URL('./SkirmishHud.tsx', import.meta.url), 'utf8');
 const chromeBox = readFileSync(new URL('./shared/ChromeBox.tsx', import.meta.url), 'utf8');
@@ -32,19 +35,46 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('controlsContent={<RunMetaControls run={run} view={view} onNavigate={onNavigate} />}');
     expect(metaControls).toContain('<section className="run-meta-controls" aria-label="Run controls">');
     expect(metaControls).toContain('Sell Units');
+    expect(metaControls).toContain('<span className="skirmish-eyebrow">Self inspection</span>');
+    expect(metaControls).toContain('<RunSelfInspectionControls');
+    expect(runSelfInspection).toContain('Army');
+    expect(runSelfInspection).toContain('Relics');
+    expect(runSelfInspection).toContain("url.searchParams.set('view', view)");
+    expect(runScreen).toContain('runSelfInspectionViewFromSearch(');
+    expect(runScreen).toContain('runSelfInspectionHref(window.location.href, nextInspectionView)');
     expect(metaControls).toContain('Reset Shop');
     expect(metaControls).toContain('Continue to next Battle');
     expect(metaControls).not.toContain('data-ui-sfx="gold-sell"');
     expect(metaControls).not.toContain('<OuterChromeBox');
     expect(metaControls).not.toContain('data-chrome-unit="outer-panel"');
     expect(runArmyWorkspace).toContain('data-ui-sfx={status === \'available\' ? \'gold-sell\' : undefined}');
+    expect(runArmyWorkspace).not.toContain('chromeConsumer="run-army-ledger"');
+    expect(runArmyWorkspace).not.toContain('chromeConsumer="run-army-profile"');
+    expect(runArmyWorkspace).toContain('<RunWorkspace');
+    expect(runArmyWorkspace).toContain('className="run-self-inspection-workspace run-army-workspace run-army-ledger"');
+    expect(runRelics).toContain('className="run-self-inspection-workspace run-relics-workspace"');
     expect(skirmishHud).toContain('chromeConsumer="skirmish-hud"');
     expect(skirmishHud).toContain('{controlsContent === undefined ? (');
     expect(runScreen).not.toContain('function RunShell');
     expect(runScreen).not.toContain('function RunControlsRail');
     expect(runScreen).not.toContain('chromeConsumer="run-controls"');
     expect(styleCss).not.toContain('.run-controls-panel');
-    expect(styleCss).toMatch(/\.run-workspace\s*\{[\s\S]*?grid-column:\s*1;[\s\S]*?grid-row:\s*2;/);
+    expect(styleCss).toMatch(/\.run-phase-workspace\s*\{[\s\S]*?grid-column:\s*1;[\s\S]*?grid-row:\s*2;/);
+  });
+
+  it('replaces the complete left shell workspace for Army and Relics while preserving the covered phase', () => {
+    expect(runScreen).toContain('function RunPhaseWorkspace');
+    expect(runScreen).toContain("className={`run-phase-primary${covered ? ' is-workspace-covered' : ''}`}");
+    expect(runScreen).toContain('inert={covered ? true : undefined}');
+    expect(runScreen).toContain('aria-hidden={covered ? true : undefined}');
+    expect(runScreen).toContain("view === 'relics'");
+    expect(runScreen).toContain('<RunRelicsWorkspace relicIds={run.relics} />');
+    expect(skirmish).toContain("className={`skirmish-field${runWorkspace ? ' is-workspace-covered' : ''}`}");
+    expect(skirmish).toContain('inert={runWorkspace ? true : undefined}');
+    expect(skirmish).toContain('aria-hidden={runWorkspace ? true : undefined}');
+    expect(skirmish).toContain('{runSelfInspectionOpen ? null : <RunRelicStrip relicIds={relicIds} />}');
+    expect(skirmish).toMatch(/<section className="skirmish-war-room"[\s\S]*?\{runWorkspace\}[\s\S]*?<\/section>/);
+    expect(styleCss).toMatch(/\.run-phase-primary\.is-workspace-covered,[\s\S]*?\.skirmish-field\.is-workspace-covered\s*\{[\s\S]*?visibility:\s*hidden;/);
   });
 
   it('keeps Run abandonment at the bottom of Controls and distinct from Battle resignation', () => {
@@ -126,5 +156,54 @@ describe('Run chrome hierarchy', () => {
     expect(bundleCard).toContain('className="run-bundle-board-piece"');
     expect(bundleCard).not.toContain('UnitPortrait');
     expect(bundleCard).not.toContain('run-bundle-quantity');
+  });
+
+  it('uses one divided Army ledger grid with readable metadata and value hierarchy', () => {
+    expect(runArmyWorkspace).toContain('<DividedInnerChromeBox');
+    expect(runArmyWorkspace).toContain('className="run-army-ledger-grid"');
+    expect(runArmyWorkspace).toContain("columns={['var(--run-army-row-block-size, 158px)', 'minmax(0, 1fr)', '112px']}");
+    expect(runArmyWorkspace).toContain('contentRef={ledgerRef}');
+    expect(runArmyWorkspace).toContain('<ChromeDividedGridRow');
+    expect(runArmyWorkspace).not.toContain('<ChromeDivider');
+    expect(runArmyWorkspace).not.toContain('<KitScroll');
+    expect(runArmyWorkspace).not.toContain('data-chrome-unit="inner-list-row"');
+    expect(runArmyWorkspace).not.toContain('data-chrome-frame-layout="overlay"');
+    expect(runArmyWorkspace).not.toContain('ChromeFrameOverlay');
+    expect(runArmyWorkspace).toContain('className="run-army-ledger-portrait unit-portrait--divided"');
+    expect(runArmyWorkspace).toContain('framed={false}');
+    expect(styleCss).toMatch(/\.chrome-divided-grid\s*\{[\s\S]*?--chrome-divided-grid-scroll-gutter:/);
+    expect(styleCss).toMatch(/\.chrome-divided-grid\s*\{[\s\S]*?--chrome-divided-grid-inline-apron-start:[\s\S]*?--le-inner-divider-atom-left-overhang/);
+    expect(styleCss).toMatch(/\.chrome-divided-grid__scroll\s*\{[\s\S]*?margin-inline-start:\s*calc\(-1 \* var\(--chrome-divided-grid-inline-apron-start\)\)/);
+    expect(styleCss).toMatch(/\.chrome-divided-grid__scroll > \.kit-scroll-content\s*\{[\s\S]*?padding-inline:\s*var\(--chrome-divided-grid-inline-apron-start\) 0;/);
+    expect(styleCss).toMatch(/\.chrome-divided-grid__vertical-rail\s*\{[\s\S]*?align-self:\s*stretch;[\s\S]*?margin-block:\s*calc\(-1 \* var\(--chrome-divided-grid-reach\)\)/);
+    expect(styleCss).not.toContain('--run-army-ledger-apron');
+    expect(styleCss).not.toContain('.run-army-ledger-scroll-divider');
+    expect(styleCss).not.toContain('.run-army-ledger-portrait-divider');
+    expect(styleCss).not.toContain('.run-army-ledger-value-divider');
+    expect(styleCss).toMatch(/\.run-army-ledger-grid\s*\{[\s\S]*?--run-army-row-block-size:\s*158px;/);
+    expect(styleCss).toMatch(/\.run-army-ledger-row\s*\{[\s\S]*?all:\s*unset;/);
+    expect(styleCss).toMatch(/\.run-army-ledger-portrait\s*\{[\s\S]*?block-size:\s*100%;[\s\S]*?inline-size:\s*100%;/);
+    expect(styleCss).toMatch(/\.run-army-ledger-copy > small,[\s\S]*?font:\s*var\(--ds-weight-regular\)\s+var\(--ds-text-md\)/);
+    expect(styleCss).toMatch(/\.run-army-ledger-value > small\s*\{[\s\S]*?var\(--ds-text-md\)/);
+    expect(styleCss).toMatch(/\.run-army-ledger-value > strong\s*\{[\s\S]*?var\(--ds-text-xl\)/);
+  });
+
+  it('uses a canonical tile-backed board scene instead of enlarging a portrait in the unit profile', () => {
+    const profile = runArmyWorkspace.match(
+      /if \(selected\) \{[\s\S]*?\r?\n  \}\r?\n\r?\n  return \(/,
+    )?.[0] ?? '';
+
+    expect(profile).toContain('<RunUnitInspectionScene unit={selected} />');
+    expect(profile).not.toContain('<RunArmyPortrait');
+    expect(runUnitInspectionScene).toContain('<StudioReadOnlyBoard');
+    expect(runUnitInspectionScene).toContain('board={plan.board}');
+    expect(runUnitInspectionScene).toContain('boardPan={RUN_UNIT_INSPECTION_CAMERA.pan}');
+    expect(runUnitInspectionScene).toContain('coverSeed={plan.coverSeed}');
+    expect(runUnitInspectionScene).not.toContain('UnitPortrait');
+    expect(runUnitInspectionScene).toContain('className="run-army-profile-scene-viewport"');
+    expect(styleCss).toMatch(/\.run-army-profile-body\s*\{[\s\S]*?overflow:\s*visible;/);
+    expect(styleCss).toMatch(/\.run-army-profile-scene\s*\{[\s\S]*?position:\s*relative;/);
+    expect(styleCss).toMatch(/\.run-army-profile-scene-viewport\s*\{[\s\S]*?overflow:\s*hidden;[\s\S]*?position:\s*absolute;/);
+    expect(styleCss).not.toContain('.run-army-profile-portrait');
   });
 });

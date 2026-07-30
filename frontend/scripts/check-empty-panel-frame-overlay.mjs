@@ -19,6 +19,7 @@ const levelEditor = readFileSync(join(frontend, 'src/ui/LevelEditor.tsx'), 'utf8
 const levelEditorChromeConsumers = readFileSync(join(frontend, 'src/ui/LevelEditorChromeConsumers.tsx'), 'utf8');
 const houseSelect = readFileSync(join(frontend, 'src/ui/shared/HouseSelect.tsx'), 'utf8');
 const chromeBox = readFileSync(join(frontend, 'src/ui/shared/ChromeBox.tsx'), 'utf8');
+const chromeDividedGrid = readFileSync(join(frontend, 'src/ui/shared/ChromeDividedGrid.tsx'), 'utf8');
 const skirmish = readFileSync(join(frontend, 'src/ui/Skirmish.tsx'), 'utf8');
 const skirmishHud = readFileSync(join(frontend, 'src/ui/SkirmishHud.tsx'), 'utf8');
 const runScreen = readFileSync(join(frontend, 'src/ui/RunScreen.tsx'), 'utf8');
@@ -591,6 +592,19 @@ if (!/data-chrome-unit="inner-box"/.test(chromeBox)
   || !/className=\{`kit-divider chrome-divider/.test(chromeBox)) {
   failures.push('shared ChromeBox primitives must own the registered inner frame and role-keyed structural divider DOM');
 }
+const junctionRendererStart = chromeRuntime.indexOf('function junctionCss');
+const junctionRendererEnd = chromeRuntime.indexOf('export function frameCss', junctionRendererStart);
+const junctionRenderer = chromeRuntime.slice(junctionRendererStart, junctionRendererEnd);
+if (junctionRendererStart < 0
+  || junctionRendererEnd < 0
+  || !junctionRenderer.includes('tee.upright')
+  || !junctionRenderer.includes("'nesw'")
+  || /\btee\.(?:left|right|top|bottom)\b/.test(junctionRenderer)) {
+  failures.push('topology junctions must use one upright lit ornament; connectivity masks may not rotate or mirror its pixels');
+}
+if (!/function FreeBoxSpecimen[\s\S]*?<DividedInnerChromeBox[\s\S]*?columns=\{\['minmax\(0, 1fr\)', 'minmax\(0, 1fr\)'\]\}[\s\S]*?<ChromeDividedGridRow/.test(chromeUnitAudit)) {
+  failures.push('Chrome Audit Inner Box must expose the shared row-and-column topology, including interior cross junctions');
+}
 if (!/data-chrome-unit="outer-panel"/.test(chromeBox)
   || !/data-chrome-consumer=\{chromeConsumer\}/.test(chromeBox)
   || !/chromeUnitClassNames\('outer-panel',\s*'le-outer-panel',\s*className\)/.test(chromeBox)
@@ -955,15 +969,12 @@ if (!runCss || rawRunSpacing.length > 0) {
 }
 const runRelicRules = blocksTargeting('.run-relic-strip');
 const rawRelicSpacing = runRelicRules.filter((block) => /(?:margin|padding|(?:row-|column-)?gap|top|right|bottom|left|inset(?:-[\w-]+)?)\s*:[^;]*\b\d+(?:\.\d+)?px\b/.test(block));
-const runRelicLayer = Number.parseInt(runRelicRules.map((block) => block.match(/z-index\s*:\s*(\d+)/)?.[1]).find(Boolean) ?? '', 10);
-const runWorkspaceLayer = Number.parseInt(blocksTargeting('.run-army-workspace').map((block) => block.match(/z-index\s*:\s*(\d+)/)?.[1]).find(Boolean) ?? '', 10);
 if (rawRelicSpacing.length > 0) {
   failures.push('Run relic overlay spacing must use ADR-0031 tokens at every responsive width');
 }
-if (!Number.isFinite(runRelicLayer)
-  || !Number.isFinite(runWorkspaceLayer)
-  || runRelicLayer <= runWorkspaceLayer) {
-  failures.push('Run relic inventory must remain visible above Army and other full-playfield workspaces');
+if (!/\{runSelfInspectionOpen \? null : <RunRelicStrip relicIds=\{relicIds\} \/>\}/.test(skirmish)
+  || !/runSelfInspectionOpen=\{Boolean\(inspectionWorkspace\)\}/.test(runScreen)) {
+  failures.push('Run self-inspection must explicitly suppress the covered relic strip and expose Relics as its replacement');
 }
 if (!/import\s+\{\s*SkirmishHud\s*\}/.test(chromeUnitAudit)
   || !/preview\.kind === 'skirmish-hud'/.test(chromeUnitAudit)
@@ -984,8 +995,16 @@ if (!skirmishHudBlock) {
 
 if (!/<InnerChromeBox className="skirmish-service-record">/.test(skirmishHud)
   || !/<InnerChromeBox className="unit-portrait unit-portrait--hud"/.test(skirmishHud)
-  || !/<InnerChromeBox className=\{`unit-portrait/.test(portraitEditor)) {
-  failures.push('Skirmish portrait and service-record boxes must instantiate the registered InnerChromeBox primitive');
+  || !/<InnerChromeBox className=\{classes\}/.test(portraitEditor)
+  || !/if \(!framed\) return <div className=\{classes\}/.test(portraitEditor)
+  || !/className="run-army-ledger-portrait unit-portrait--divided"[\s\S]*?framed=\{false\}/.test(runArmyWorkspace)
+  || !/<DividedInnerChromeBox[\s\S]*?columns=\{\['var\(--run-army-row-block-size,\s*158px\)',\s*'minmax\(0,\s*1fr\)',\s*'112px'\]\}/.test(runArmyWorkspace)
+  || !/<ChromeDivider[\s\S]*?role="inner"[\s\S]*?orientation="vertical"[\s\S]*?junctions="none"/.test(chromeDividedGrid)) {
+  failures.push('Portrait hosts must use the registered InnerChromeBox or the Run Army row’s registered vertical divider composition');
+}
+if (/<ChromeDivider\b/.test(runArmyWorkspace)
+  || /run-army-ledger-(?:portrait|value|scroll)-divider|--run-army-ledger-apron/.test(`${runArmyWorkspace}\n${css}`)) {
+  failures.push('Run Army must declare divided-grid tracks and leave all rail, junction, and scrollbar-gutter placement to the shared topology primitive');
 }
 for (const selector of ['.skirmish-service-record', '.unit-portrait', '.unit-portrait--roster']) {
   const block = blockFor(selector);

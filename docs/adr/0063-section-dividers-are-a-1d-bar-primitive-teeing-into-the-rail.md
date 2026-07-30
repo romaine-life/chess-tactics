@@ -1,5 +1,5 @@
 ---
-status: "accepted; asset-storage clauses superseded by ADR-0085"
+status: "accepted; asset-storage clauses superseded by ADR-0085; horizontal-only scope partially superseded by ADR-0239"
 date: 2026-07-04
 deciders: Nelson, Claude
 ---

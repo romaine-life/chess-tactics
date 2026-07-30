@@ -767,6 +767,13 @@ h1 {
   flex: none;
 }
 
+.kit-divider[data-chrome-divider-orientation="vertical"] {
+  align-self: stretch;
+  height: auto;
+  margin: calc(-1 * var(--kit-divider-reach, var(--rail-w, 16px))) var(--kit-divider-gap, 6px);
+  width: var(--kit-panel-divider-height, 34px);
+}
+
 /* Element 03 - hybrid (render-accuracy + text rule, docs/ui-art-direction.md):
    art-crop the painterly lion crest from main-menu-aspirational.png; clean SVG cog/rook
    silhouettes; all copy + counts are live DOM text. Two stacked bars matching the concept. */
@@ -6899,7 +6906,12 @@ body.loading-bootstrap .app-startup-status {
    that shows only when scrollable. Content scrolls natively; we just paint and drive the bar. This
    is why the rail can't vanish on an empty pane — and why it screenshots (native ::-webkit skins
    do not render in headless captures). */
-.kit-scroll-wrap { position: relative; min-height: 0; }
+.kit-scroll-wrap {
+  --kit-scroll-rail-inline-offset: 2px;
+  --kit-scroll-rail-width: 14px;
+  position: relative;
+  min-height: 0;
+}
 .kit-scroll-content { height: 100%; overflow-y: auto; overflow-x: hidden; padding-right: 18px; scrollbar-width: none; }
 .kit-scroll-content::-webkit-scrollbar { width: 0; height: 0; }
 .kit-scroll-rail { position: absolute; top: 0; right: 2px; bottom: 0; width: 14px; border-radius: 3px; background: linear-gradient(180deg, #060d16, #091523); box-shadow: inset 2px 2px 4px rgba(0, 0, 0, 0.72), inset -1px -1px 1px rgba(130, 170, 215, 0.2), 0 0 0 1px rgba(118, 158, 203, 0.22); pointer-events: none; }
@@ -6910,6 +6922,133 @@ body.loading-bootstrap .app-startup-status {
    so its grip is nearly full-height — smeared the caps and the central motif vertically. */
 .kit-scroll-thumb { position: absolute; left: 1px; right: 1px; top: 0; min-height: 24px; border-style: solid; border-color: transparent; border-width: 18px 0 20px 0; border-image: var(--media-ui-scrollbar-installed) 21 0 24 0 fill / 18px 0 20px 0 / 0 stretch; image-rendering: pixelated; cursor: grab; pointer-events: auto; }
 .kit-scroll-thumb:active { cursor: grabbing; }
+
+/* One topology owner for a 9-slice split into continuous cells. Consumers
+   declare only column tracks and rows; this primitive owns every rail, tee,
+   cross, frame reach, and optional scrollbar-gutter junction. */
+.chrome-divided-grid {
+  --chrome-divided-grid-reach: var(--le-chrome-inner-rail-w, 7px);
+  --chrome-divided-grid-boundary-node-offset:
+    calc(var(--chrome-divided-grid-reach) / 2);
+  --chrome-divided-grid-inline-apron-start:
+    calc(
+      var(--chrome-divided-grid-reach)
+      + max(
+        var(--le-inner-atom-left-overhang, 0px),
+        var(--le-inner-divider-atom-left-overhang, 0px)
+      )
+    );
+  --chrome-divided-grid-scroll-gutter:
+    calc(
+      var(--kit-scroll-rail-inline-offset, 2px)
+      + var(--kit-scroll-rail-width, 14px)
+      + var(--le-chrome-inner-rail-w, 7px) / 2
+    );
+  min-block-size: 0;
+  min-inline-size: 0;
+  overflow: visible;
+  position: relative;
+}
+
+.chrome-divided-grid__fixed-rails,
+.chrome-divided-grid__row-boundary,
+.chrome-divided-grid__row {
+  grid-template-columns: var(--chrome-divided-grid-columns);
+}
+
+.chrome-divided-grid__fixed-rails {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
+}
+
+.chrome-divided-grid__scroll {
+  block-size: 100%;
+  margin-inline-start: calc(-1 * var(--chrome-divided-grid-inline-apron-start));
+  min-block-size: 0;
+}
+
+.chrome-divided-grid__scroll > .kit-scroll-content {
+  box-sizing: border-box;
+  overflow-x: hidden;
+  padding-inline: var(--chrome-divided-grid-inline-apron-start) 0;
+}
+
+.chrome-divided-grid__rows {
+  align-content: start;
+  min-block-size: 0;
+}
+
+.chrome-divided-grid__row {
+  box-sizing: border-box;
+  display: grid;
+  min-inline-size: 0;
+}
+
+.chrome-divided-grid__row-boundary {
+  block-size: 0;
+  display: grid;
+  position: relative;
+  z-index: 3;
+}
+
+.chrome-divided-grid__horizontal-rail {
+  align-self: center;
+  margin: 0 !important;
+  transform: translateY(-50%);
+}
+
+.chrome-divided-grid__horizontal-rail[data-chrome-grid-inline-start="frame-start"] {
+  margin-inline-start: calc(-1 * var(--chrome-divided-grid-reach)) !important;
+}
+
+.chrome-divided-grid__horizontal-rail[data-chrome-grid-inline-end="frame-end"] {
+  margin-inline-end: calc(-1 * var(--chrome-divided-grid-reach)) !important;
+}
+
+.chrome-divided-grid__vertical-rail {
+  align-self: stretch;
+  grid-row: 1;
+  margin-block: calc(-1 * var(--chrome-divided-grid-reach)) !important;
+  margin-inline: 0 !important;
+  transform: translateX(-50%);
+}
+
+.chrome-divided-grid__junction {
+  --chrome-divided-grid-junction-x: 0px;
+  --chrome-divided-grid-junction-y: 0px;
+  align-self: center;
+  grid-row: 1;
+  translate:
+    var(--chrome-divided-grid-junction-x)
+    var(--chrome-divided-grid-junction-y);
+}
+
+.chrome-divided-grid__junction[data-chrome-grid-inline-boundary="frame-start"] {
+  --chrome-divided-grid-junction-x:
+    calc(-1 * var(--chrome-divided-grid-boundary-node-offset));
+}
+
+.chrome-divided-grid__junction[data-chrome-grid-inline-boundary="frame-end"] {
+  --chrome-divided-grid-junction-x:
+    var(--chrome-divided-grid-boundary-node-offset);
+}
+
+.chrome-divided-grid__junction[data-chrome-grid-block-boundary="frame-start"] {
+  --chrome-divided-grid-junction-y:
+    calc(-1 * var(--chrome-divided-grid-boundary-node-offset));
+  align-self: start;
+}
+
+.chrome-divided-grid__junction[data-chrome-grid-block-boundary="frame-end"] {
+  --chrome-divided-grid-junction-y:
+    var(--chrome-divided-grid-boundary-node-offset);
+  align-self: end;
+}
+
 .le-pal-group { margin: 0 0 4px; }
 .le-pal-grouplabel { color: #8fb6c6; display: block; font-size: var(--ds-text-xs); letter-spacing: .06em; margin: 8px 0 5px; text-transform: uppercase; }
 .le-pal-grouplabel:first-child { margin-top: 0; }
@@ -8357,6 +8496,12 @@ body.loading-bootstrap .app-startup-status {
 /* Selected-Unit HUD: fills the 86px first column of the info grid. */
 .unit-portrait--hud {
   min-height: 86px;
+}
+
+.unit-portrait--divided {
+  /* A divided row supplies the canonical boundary itself, so only the portrait
+     composition remains and the image can fill its assigned bay. */
+  padding: 0;
 }
 
 /* Roster thumbnail: fills its button; frame thickness still comes from the inner chrome role. */
@@ -12072,14 +12217,23 @@ body { font-size: 17px; }
   border-radius: 4px;
 }
 
-.chrome-lab-divider-mini {
-  align-self: center;
-  display: block;
-  height: 34px;
-  image-rendering: pixelated;
+.chrome-lab-divider-orientation-preview {
+  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  height: 72px;
+  justify-items: center;
   width: 72px;
-  background-color: rgba(2, 8, 13, .44);
-  background-position: left center;
+}
+
+.chrome-lab-divider-preview-horizontal {
+  margin: 0 !important;
+  width: 30px;
+}
+
+.chrome-lab-divider-preview-vertical {
+  height: 52px !important;
+  margin: 0 !important;
 }
 
 .chrome-lab-align-tools {
@@ -18101,6 +18255,45 @@ button.tileset-relationship-cell {
   --shell-workspace-content-padding: var(--ds-gutter);
 }
 
+.run-phase-workspace {
+  display: grid;
+  grid-column: 1;
+  grid-row: 2;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  min-block-size: 0;
+  min-inline-size: 0;
+  position: relative;
+}
+
+.run-phase-primary {
+  block-size: 100%;
+  grid-column: 1;
+  grid-row: 1;
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
+.run-phase-primary.is-workspace-covered,
+.skirmish-field.is-workspace-covered {
+  visibility: hidden;
+}
+
+.run-phase-primary > .run-workspace {
+  block-size: 100%;
+  grid-column: auto;
+  grid-row: auto;
+}
+
+.run-phase-workspace > .run-self-inspection-workspace,
+.skirmish-war-room > .run-self-inspection-workspace {
+  block-size: 100%;
+  grid-column: 1;
+  grid-row: 1;
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
 .run-shell-workspace-content {
   align-content: start;
   display: grid;
@@ -18574,13 +18767,41 @@ button.tileset-relationship-cell {
   margin-block-start: auto;
 }
 
-.run-army-workspace,
 .run-sell-workspace {
   position: relative;
   z-index: 35;
 }
 
+.run-self-inspection-workspace {
+  z-index: 35;
+}
+
+.run-self-inspection-content {
+  gap: var(--ds-space-3);
+}
+
+.run-self-inspection-head {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--ds-space-3);
+  justify-content: space-between;
+  min-block-size: 42px;
+}
+
+.run-self-inspection-head h2 {
+  color: #eafaff;
+  font: var(--ds-weight-regular) var(--ds-text-xl)/1 var(--ds-font-display);
+  margin: 0;
+}
+
+.run-self-inspection-head > span {
+  color: var(--skirmish-muted);
+  font: var(--ds-weight-regular) var(--ds-text-md)/1 var(--ds-font-display);
+}
+
 .run-army-ledger-content {
+  display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   min-block-size: 0;
   overflow: hidden;
@@ -18604,7 +18825,12 @@ button.tileset-relationship-cell {
   min-inline-size: 0;
 }
 
-.run-army-ledger-list,
+.run-army-ledger-grid {
+  --run-army-row-block-size: 158px;
+  block-size: 100%;
+  min-block-size: 0;
+}
+
 .run-sell-list {
   align-content: start;
   display: grid;
@@ -18616,20 +18842,26 @@ button.tileset-relationship-cell {
 }
 
 .run-army-ledger-row {
+  all: unset;
   align-items: center;
+  block-size: var(--run-army-row-block-size);
+  box-sizing: border-box;
   cursor: pointer;
   display: grid;
-  gap: var(--ds-inline);
-  grid-template-columns: 92px minmax(0, 1fr) auto;
+  gap: 0;
+  grid-template-columns: var(--chrome-divided-grid-columns);
   inline-size: 100%;
-  min-block-size: 108px;
-  padding: var(--ds-space-2) var(--ds-inset);
+  min-block-size: var(--run-army-row-block-size);
   text-align: start;
 }
 
+.run-army-ledger-row:hover {
+  filter: brightness(1.12);
+}
+
 .run-army-ledger-portrait {
-  block-size: 88px;
-  inline-size: 88px;
+  block-size: 100%;
+  inline-size: 100%;
 }
 
 .run-army-ledger-copy,
@@ -18638,6 +18870,10 @@ button.tileset-relationship-cell {
   display: grid;
   gap: var(--ds-space-1);
   min-inline-size: 0;
+}
+
+.run-army-ledger-copy {
+  padding-inline: var(--ds-inset);
 }
 
 .run-army-ledger-copy > strong,
@@ -18655,6 +18891,15 @@ button.tileset-relationship-cell {
   color: var(--skirmish-muted);
 }
 
+.run-army-ledger-copy > small,
+.run-army-ledger-copy > .run-unit-no-traits {
+  font: var(--ds-weight-regular) var(--ds-text-md)/1.15 var(--ds-font-display);
+}
+
+.run-army-ledger-copy > .run-unit-traits {
+  font-size: var(--ds-text-md);
+}
+
 .run-army-ledger-value,
 .run-sell-return {
   align-items: end;
@@ -18662,6 +18907,32 @@ button.tileset-relationship-cell {
   gap: var(--ds-space-1);
   justify-items: end;
   min-inline-size: 80px;
+}
+
+.run-army-ledger-value {
+  min-inline-size: 112px;
+  padding-inline: var(--ds-inset);
+}
+
+.run-army-ledger-empty {
+  margin: 0;
+  padding: var(--ds-gutter);
+}
+
+.run-army-ledger-empty > * {
+  grid-column: 1 / -1;
+}
+
+.run-army-ledger-value > small {
+  color: var(--skirmish-muted);
+  font: var(--ds-weight-medium) var(--ds-text-md)/1 var(--ds-font-display);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.run-army-ledger-value > strong {
+  color: #fff5df;
+  font: var(--ds-weight-regular) var(--ds-text-xl)/1 var(--ds-font-display);
 }
 
 .run-unit-traits {
@@ -18701,25 +18972,41 @@ button.tileset-relationship-cell {
 }
 
 .run-army-profile-content {
+  block-size: 100%;
+  display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-block-size: 0;
   overflow: hidden;
 }
 
+.run-army-profile .run-self-inspection-head button {
+  min-inline-size: 168px;
+}
 .run-army-profile-body {
   align-items: stretch;
   display: grid;
   gap: var(--ds-gutter);
   grid-template-columns: minmax(260px, 36%) minmax(0, 1fr);
   min-block-size: 0;
-  overflow: auto;
+  overflow: visible;
 }
 
-.run-army-profile-portrait {
+.run-army-profile-scene {
   aspect-ratio: 1;
   block-size: auto;
   inline-size: 100%;
   max-block-size: 520px;
+  position: relative;
+}
+
+.run-army-profile-scene-viewport {
+  inset: var(--le-chrome-inner-rail-w, var(--ds-space-2));
+  overflow: hidden;
+  position: absolute;
+}
+
+.run-army-profile-scene .tileset-generated-board {
+  pointer-events: none;
 }
 
 .run-army-profile-copy {
@@ -18758,6 +19045,48 @@ button.tileset-relationship-cell {
 .run-army-profile-stats dd {
   margin: 0;
   text-align: end;
+}
+
+.run-relics-ledger {
+  align-content: start;
+  display: grid;
+  flex: 1 1 auto;
+  gap: var(--ds-inline-tight);
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  min-block-size: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-inline-end: var(--ds-space-1);
+}
+
+.run-relics-ledger-row {
+  align-items: center;
+  display: grid;
+  gap: var(--ds-space-4);
+  grid-template-columns: 72px minmax(0, 1fr);
+  min-block-size: 104px;
+  padding: var(--ds-space-3);
+}
+
+.run-relics-ledger-copy {
+  display: grid;
+  gap: var(--ds-space-2);
+  min-inline-size: 0;
+}
+
+.run-relics-ledger-copy > strong {
+  color: #eafaff;
+  font: var(--ds-weight-regular) var(--ds-text-lg)/1 var(--ds-font-display);
+}
+
+.run-relics-ledger-copy > span,
+.run-self-inspection-empty {
+  color: var(--skirmish-muted);
+  font: var(--ds-weight-regular) var(--ds-text-md)/1.35 var(--ds-font-display);
+}
+
+.run-self-inspection-empty {
+  margin: 0;
 }
 
 .run-sell-workspace-content {
@@ -18803,9 +19132,11 @@ button.tileset-relationship-cell {
 
   .run-army-profile-body {
     grid-template-columns: minmax(0, 1fr);
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
-  .run-army-profile-portrait {
+  .run-army-profile-scene {
     max-inline-size: 360px;
   }
 

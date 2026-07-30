@@ -69,6 +69,7 @@ import {
   type TitleHorizontalAlign,
   type TitleVerticalAlign,
 } from './chromeFamilyRuntime';
+import { ChromeDivider } from './shared/ChromeBox';
 
 
 type PreviewMode = 'interact' | 'pan';
@@ -1025,13 +1026,11 @@ function DividerControls({
   tune,
   onTune,
   render,
-  railFit,
 }: {
   role: ChromeRole;
   tune: DividerTune;
   onTune: (patch: Partial<DividerTune>) => void;
   render: DividerRender;
-  railFit: RailFit;
 }): ReactElement {
   const sources = dividerJointSources();
   const source = dividerJointSourceById(tune.atomSourceId);
@@ -1044,24 +1043,16 @@ function DividerControls({
   const defaults = dividerDefault(role);
   const hasAtom = tune.atomSourceId !== NO_ATOM_SOURCE_ID;
   const jointScalePercent = sourceScalePercent(tune.atomSize, source);
-  const railRepeat = railFit === 'tile' ? 'repeat-x' : 'no-repeat';
-  const railSize = railFit === 'tile'
-    ? `${render.railTileWidth}px ${render.railHeight}px`
-    : `100% ${render.railHeight}px`;
   const roleLabel = role === 'outer' ? 'Outer' : 'Inner';
   return (
     <section className="chrome-lab-subsection chrome-lab-subpane">
           <p className="chrome-lab-note">Installed joint material is shared by both roles; {roleLabel.toLowerCase()} divider geometry is independent.</p>
           <div className="chrome-lab-frame-preview">
-            <div
-              className="chrome-lab-divider-mini"
-              style={{
-                backgroundImage: render.railUrl ? `url("${render.railUrl}")` : undefined,
-                backgroundRepeat: railRepeat,
-                backgroundSize: railSize,
-              }}
-            />
-            <span>Divider row - height {render.height}px</span>
+            <div className="chrome-lab-divider-orientation-preview" aria-label={`${roleLabel} divider orientation preview`}>
+              <ChromeDivider role={role} className="chrome-lab-divider-preview-horizontal" />
+              <ChromeDivider role={role} orientation="vertical" className="chrome-lab-divider-preview-vertical" />
+            </div>
+            <span>Horizontal row + vertical column - band {render.height}px</span>
           </div>
           <SliderRow
             label={<>Divider band height - {tune.bandHeight}px</>}
@@ -1208,7 +1199,7 @@ function ChromeLabUnitChromeControls({
           activeTab={outerRoleTab}
           onActiveTab={onOuterRoleTab}
           onTune={onOuter}
-          dividerControls={<DividerControls role="outer" tune={dividers.outer} render={dividerRenders.outer} railFit={outer.railFit} onTune={(patch) => onDivider('outer', patch)} />}
+          dividerControls={<DividerControls role="outer" tune={dividers.outer} render={dividerRenders.outer} onTune={(patch) => onDivider('outer', patch)} />}
           titleControls={<TitleTextControls tune={outer} onTune={onOuter} />}
           infoControls={infoControls}
         />
@@ -1226,7 +1217,7 @@ function ChromeLabUnitChromeControls({
           activeTab={innerRoleTab}
           onActiveTab={onInnerRoleTab}
           onTune={onInner}
-          dividerControls={<DividerControls role="inner" tune={dividers.inner} render={dividerRenders.inner} railFit={inner.railFit} onTune={(patch) => onDivider('inner', patch)} />}
+          dividerControls={<DividerControls role="inner" tune={dividers.inner} render={dividerRenders.inner} onTune={(patch) => onDivider('inner', patch)} />}
           infoControls={infoControls}
         />
       </>
@@ -1939,7 +1930,7 @@ function ChromeLabPageViewer({
                     activeTab={outerRoleTab}
                     onActiveTab={setOuterRoleTab}
                     onTune={(patch) => setOuter((current) => ({ ...current, ...patch }))}
-                    dividerControls={<DividerControls role="outer" tune={dividers.outer} render={dividerRenders.outer} railFit={outer.railFit} onTune={(patch) => setDividers((current) => ({ ...current, outer: { ...current.outer, ...patch } }))} />}
+                    dividerControls={<DividerControls role="outer" tune={dividers.outer} render={dividerRenders.outer} onTune={(patch) => setDividers((current) => ({ ...current, outer: { ...current.outer, ...patch } }))} />}
                     titleControls={<TitleTextControls tune={outer} onTune={(patch) => setOuter((current) => ({ ...current, ...patch }))} />}
                   />
                 </div>
@@ -1953,7 +1944,7 @@ function ChromeLabPageViewer({
                     activeTab={innerRoleTab}
                     onActiveTab={setInnerRoleTab}
                     onTune={(patch) => setInner((current) => ({ ...current, ...patch }))}
-                    dividerControls={<DividerControls role="inner" tune={dividers.inner} render={dividerRenders.inner} railFit={inner.railFit} onTune={(patch) => setDividers((current) => ({ ...current, inner: { ...current.inner, ...patch } }))} />}
+                    dividerControls={<DividerControls role="inner" tune={dividers.inner} render={dividerRenders.inner} onTune={(patch) => setDividers((current) => ({ ...current, inner: { ...current.inner, ...patch } }))} />}
                   />
                 </div>
               ) : null}

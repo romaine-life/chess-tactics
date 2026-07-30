@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { SliderRow } from './dressing/SliderRow';
 import {
   chromeUnitById,
@@ -10,7 +10,8 @@ import {
 } from './chromeUnitRegistry';
 import { useInstalledChromeCss } from './useInstalledChromeCss';
 import { HouseSelect } from './shared/HouseSelect';
-import { ChromeDivider, InnerChromeBox, OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
+import { ChromeDivider, OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
+import { ChromeDividedGridRow, DividedInnerChromeBox } from './shared/ChromeDividedGrid';
 import { Toggle } from './shared/Toggle';
 import { LevelEditorControlsPanel, type LevelEditorLayerOption } from './LevelEditorChromeConsumers';
 import { SkirmishHud } from './SkirmishHud';
@@ -319,23 +320,25 @@ function SquareSpecimen({ unit, interactive }: { unit: ChromeUnitSpec; interacti
 function FreeBoxSpecimen({ dims }: { dims: ChromeUnitAuditDims }): ReactElement {
   const dividerCount = Math.max(0, Math.round(dims.dividers));
   return (
-    <InnerChromeBox
+    <DividedInnerChromeBox
+      columns={['minmax(0, 1fr)', 'minmax(0, 1fr)']}
       className="chrome-unit-rect chrome-unit-empty-template"
       style={{
-        display: 'flex',
-        flexDirection: 'column',
         width: `${dims.width}px`,
         minHeight: `${dims.height}px`,
       }}
       aria-hidden="true"
     >
       {Array.from({ length: dividerCount + 1 }, (_, index) => (
-        <Fragment key={`inner-section-${index}`}>
-          <span className="chrome-unit-inner-box-slot" style={{ flex: '1 1 0', minHeight: 0 }} />
-          {index < dividerCount ? <ChromeDivider role="inner" /> : null}
-        </Fragment>
+        <ChromeDividedGridRow
+          key={`inner-section-${index}`}
+          style={{ minHeight: `${dims.height / (dividerCount + 1)}px` }}
+        >
+          <span className="chrome-unit-inner-box-slot" />
+          <span className="chrome-unit-inner-box-slot" />
+        </ChromeDividedGridRow>
       ))}
-    </InnerChromeBox>
+    </DividedInnerChromeBox>
   );
 }
 

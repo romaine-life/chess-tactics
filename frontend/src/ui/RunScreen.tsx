@@ -49,8 +49,14 @@ import {
   selectedDeploymentLayout,
 } from '../run/deployment';
 import { useActiveRun } from '../run/store';
-import { RunRelicIcon } from './RunRelics';
+import { RunRelicIcon, RunRelicsWorkspace } from './RunRelics';
 import { RunGoldAmount } from './RunResources';
+import {
+  runSelfInspectionHref,
+  runSelfInspectionViewFromSearch,
+  RunSelfInspectionControls,
+  type RunSelfInspectionView,
+} from './RunSelfInspection';
 import {
   DEFAULT_RUN_ARMY_FILTERS,
   DEFAULT_RUN_SELL_FILTERS,
@@ -64,7 +70,7 @@ import {
 
 const PLAYER_BUNDLE_PALETTE = paletteForSide('player');
 const PLAYER_BUNDLE_FACING = 'south' as const;
-type RunScreenView = 'primary' | 'army' | 'sell';
+type RunScreenView = 'primary' | 'sell' | RunSelfInspectionView;
 
 function visibleRunRelicCount(run: RunDocument): number {
   return run.relics.filter((relicId) => Boolean(RUN_RELIC_BY_ID[relicId])).length;
@@ -206,16 +212,6 @@ function RunMetaControls({
             >
               {primaryLabel}
             </button>
-            <button
-              type="button"
-              data-chrome-unit="inner-text-button"
-              data-testid="run-view-army"
-              className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === 'army' && 'active')}
-              aria-pressed={view === 'army'}
-              onClick={() => onNavigate('army')}
-            >
-              Army
-            </button>
             {shop ? (
               <button
                 type="button"
@@ -229,6 +225,13 @@ function RunMetaControls({
               </button>
             ) : null}
           </div>
+        </div>
+        <div className="skirmish-view-group">
+          <span className="skirmish-eyebrow">Self inspection</span>
+          <RunSelfInspectionControls
+            view={view === 'army' || view === 'relics' ? view : null}
+            onNavigate={onNavigate}
+          />
         </div>
         {shop ? (
           <div className="skirmish-view-group">
@@ -287,16 +290,38 @@ function RunMetaControls({
   );
 }
 
+function RunPhaseWorkspace({
+  inspectionWorkspace,
+  children,
+}: {
+  inspectionWorkspace: ReactElement | null;
+  children: ReactElement;
+}): ReactElement {
+  const covered = Boolean(inspectionWorkspace);
+  return (
+    <section className="run-phase-workspace" aria-label="Run workspace">
+      <div
+        className={`run-phase-primary${covered ? ' is-workspace-covered' : ''}`}
+        inert={covered ? true : undefined}
+        aria-hidden={covered ? true : undefined}
+      >
+        {children}
+      </div>
+      {inspectionWorkspace}
+    </section>
+  );
+}
+
 function DraftPanel({
   run,
   view,
   onNavigate,
-  armyWorkspace,
+  inspectionWorkspace,
 }: {
   run: RunDocument;
   view: RunScreenView;
   onNavigate: (view: RunScreenView) => void;
-  armyWorkspace: ReactElement;
+  inspectionWorkspace: ReactElement | null;
 }): ReactElement {
   const replace = useActiveRun((state) => state.replace);
   return (
@@ -305,10 +330,11 @@ function DraftPanel({
       testId="run-screen"
       titleBarContent={<RunTitleBarStatus run={run} />}
       relicIds={run.relics}
+      runSelfInspectionOpen={Boolean(inspectionWorkspace)}
       controlsContent={<RunMetaControls run={run} view={view} onNavigate={onNavigate} />}
       hudProps={{ enableGlobalShortcuts: false }}
     >
-      {view === 'army' ? armyWorkspace : (
+      <RunPhaseWorkspace inspectionWorkspace={inspectionWorkspace}>
         <RunWorkspace
           className="run-draft-workspace"
           contentClassName="run-draft-workspace-content"
@@ -328,7 +354,7 @@ function DraftPanel({
             ))}
           </div>
         </RunWorkspace>
-      )}
+      </RunPhaseWorkspace>
     </SkirmishShell>
   );
 }
@@ -337,12 +363,12 @@ function DeploymentPanel({
   run,
   view,
   onNavigate,
-  armyWorkspace,
+  inspectionWorkspace,
 }: {
   run: RunDocument;
   view: RunScreenView;
   onNavigate: (view: RunScreenView) => void;
-  armyWorkspace: ReactElement;
+  inspectionWorkspace: ReactElement | null;
 }): ReactElement {
   const replace = useActiveRun((state) => state.replace);
   const prepared = run.deployment ? run : prepareDeployment(run);
@@ -386,10 +412,11 @@ function DeploymentPanel({
       testId="run-screen"
       titleBarContent={<RunTitleBarStatus run={prepared} />}
       relicIds={prepared.relics}
+      runSelfInspectionOpen={Boolean(inspectionWorkspace)}
       controlsContent={<RunMetaControls run={prepared} view={view} onNavigate={onNavigate} />}
       hudProps={{ enableGlobalShortcuts: false }}
     >
-      {view === 'army' ? armyWorkspace : (
+      <RunPhaseWorkspace inspectionWorkspace={inspectionWorkspace}>
         <RunWorkspace
           className="run-deployment-workspace"
           contentClassName="run-deployment-workspace-content"
@@ -499,7 +526,7 @@ function DeploymentPanel({
             actions={<p className="run-preview-note">{Object.keys(layout.placements).length} deployed · {layout.blockedUnitIds.length} in reserve</p>}
           />
         </RunWorkspace>
-      )}
+      </RunPhaseWorkspace>
     </SkirmishShell>
   );
 }
@@ -559,13 +586,13 @@ function ShopPanel({
   run,
   view,
   onNavigate,
-  armyWorkspace,
+  inspectionWorkspace,
   sellWorkspace,
 }: {
   run: RunDocument;
   view: RunScreenView;
   onNavigate: (view: RunScreenView) => void;
-  armyWorkspace: ReactElement;
+  inspectionWorkspace: ReactElement | null;
   sellWorkspace: ReactElement;
 }): ReactElement {
   const replace = useActiveRun((state) => state.replace);
@@ -579,10 +606,12 @@ function ShopPanel({
       testId="run-screen"
       titleBarContent={<RunTitleBarStatus run={run} />}
       relicIds={run.relics}
+      runSelfInspectionOpen={Boolean(inspectionWorkspace)}
       controlsContent={<RunMetaControls run={run} view={view} onNavigate={onNavigate} />}
       hudProps={{ enableGlobalShortcuts: false }}
     >
-      {view === 'army' ? armyWorkspace : view === 'sell' ? sellWorkspace : (
+      <RunPhaseWorkspace inspectionWorkspace={inspectionWorkspace}>
+      {view === 'sell' ? sellWorkspace : (
         <RunWorkspace
           className="run-shop-workspace"
           contentClassName="run-shop-workspace-content"
@@ -655,6 +684,7 @@ function ShopPanel({
 
         </RunWorkspace>
       )}
+      </RunPhaseWorkspace>
     </SkirmishShell>
   );
 }
@@ -663,12 +693,12 @@ function VictoryPanel({
   run,
   view,
   onNavigate,
-  armyWorkspace,
+  inspectionWorkspace,
 }: {
   run: RunDocument;
   view: RunScreenView;
   onNavigate: (view: RunScreenView) => void;
-  armyWorkspace: ReactElement;
+  inspectionWorkspace: ReactElement | null;
 }): ReactElement {
   const abandon = useActiveRun((state) => state.abandon);
   return (
@@ -677,10 +707,11 @@ function VictoryPanel({
       testId="run-screen"
       titleBarContent={<RunTitleBarStatus run={run} />}
       relicIds={run.relics}
+      runSelfInspectionOpen={Boolean(inspectionWorkspace)}
       controlsContent={<RunMetaControls run={run} view={view} onNavigate={onNavigate} showAbandon={false} />}
       hudProps={{ enableGlobalShortcuts: false }}
     >
-      {view === 'army' ? armyWorkspace : (
+      <RunPhaseWorkspace inspectionWorkspace={inspectionWorkspace}>
         <RunWorkspace
           className="run-victory-workspace"
           contentClassName="run-victory-workspace-content"
@@ -708,7 +739,7 @@ function VictoryPanel({
             Finish Run
           </button>
         </RunWorkspace>
-      )}
+      </RunPhaseWorkspace>
     </SkirmishShell>
   );
 }
@@ -717,12 +748,12 @@ function BattlePanel({
   run,
   view,
   onNavigate,
-  armyWorkspace,
+  inspectionWorkspace,
 }: {
   run: RunDocument;
   view: RunScreenView;
   onNavigate: (view: RunScreenView) => void;
-  armyWorkspace: ReactElement;
+  inspectionWorkspace: ReactElement | null;
 }): ReactElement {
   const replace = useActiveRun((state) => state.replace);
   const currentRun = useActiveRun((state) => state.run);
@@ -824,9 +855,9 @@ function BattlePanel({
       {abandonDialog}
       <Skirmish
         runBattle={presentation}
-        runWorkspace={view === 'army' ? armyWorkspace : null}
-        runArmyOpen={view === 'army'}
-        onToggleRunArmy={() => onNavigate(view === 'army' ? 'primary' : 'army')}
+        runWorkspace={inspectionWorkspace}
+        runSelfInspectionView={view === 'army' || view === 'relics' ? view : null}
+        onNavigateRunView={onNavigate}
       />
     </>
   );
@@ -861,6 +892,9 @@ export function RunScreen(): ReactElement {
     scope: 'no-run',
     filters: { ...DEFAULT_RUN_SELL_FILTERS },
   });
+  const requestedInspectionView = runSelfInspectionViewFromSearch(
+    typeof window === 'undefined' ? '' : window.location.search,
+  );
   useEffect(() => { void hydrate(); }, [hydrate]);
 
   if (!hydrated) {
@@ -912,7 +946,9 @@ export function RunScreen(): ReactElement {
       </SkirmishShell>
     );
   }
-  const rawView = viewState.scope === viewScope ? viewState.view : 'primary';
+  const rawView = viewState.scope === viewScope
+    ? viewState.view
+    : requestedInspectionView ?? 'primary';
   const view = run.phase !== 'shop' && rawView === 'sell' ? 'primary' : rawView;
   const selectedUnitId = selectedState.scope === viewScope ? selectedState.unitId : null;
   const armyFilters = armyFilterState.scope === filterScope
@@ -922,6 +958,9 @@ export function RunScreen(): ReactElement {
     ? sellFilterState.filters
     : { ...DEFAULT_RUN_SELL_FILTERS };
   const navigateRunView = (nextView: RunScreenView): void => {
+    const nextInspectionView = nextView === 'army' || nextView === 'relics' ? nextView : null;
+    const nextHref = runSelfInspectionHref(window.location.href, nextInspectionView);
+    window.history.replaceState(window.history.state, '', nextHref);
     setViewState({ scope: viewScope, view: nextView });
     if (nextView !== 'army') setSelectedState({ scope: viewScope, unitId: null });
   };
@@ -943,6 +982,12 @@ export function RunScreen(): ReactElement {
       onSell={sellUnit}
     />
   );
+  const relicsWorkspace = <RunRelicsWorkspace relicIds={run.relics} />;
+  const inspectionWorkspace = view === 'army'
+    ? armyWorkspace
+    : view === 'relics'
+      ? relicsWorkspace
+      : null;
   const sellWorkspace = (
     <RunSellWorkspace
       run={run}
@@ -952,13 +997,13 @@ export function RunScreen(): ReactElement {
     />
   );
   if (run.phase === 'draft') {
-    return <DraftPanel run={run} view={view} onNavigate={navigateRunView} armyWorkspace={armyWorkspace} />;
+    return <DraftPanel run={run} view={view} onNavigate={navigateRunView} inspectionWorkspace={inspectionWorkspace} />;
   }
   if (run.phase === 'deployment') {
-    return <DeploymentPanel run={run} view={view} onNavigate={navigateRunView} armyWorkspace={armyWorkspace} />;
+    return <DeploymentPanel run={run} view={view} onNavigate={navigateRunView} inspectionWorkspace={inspectionWorkspace} />;
   }
   if (run.phase === 'battle') {
-    return <BattlePanel run={run} view={view} onNavigate={navigateRunView} armyWorkspace={armyWorkspace} />;
+    return <BattlePanel run={run} view={view} onNavigate={navigateRunView} inspectionWorkspace={inspectionWorkspace} />;
   }
   if (run.phase === 'shop' && run.shop) {
     return (
@@ -966,10 +1011,10 @@ export function RunScreen(): ReactElement {
         run={run}
         view={view}
         onNavigate={navigateRunView}
-        armyWorkspace={armyWorkspace}
+        inspectionWorkspace={inspectionWorkspace}
         sellWorkspace={sellWorkspace}
       />
     );
   }
-  return <VictoryPanel run={run} view={view} onNavigate={navigateRunView} armyWorkspace={armyWorkspace} />;
+  return <VictoryPanel run={run} view={view} onNavigate={navigateRunView} inspectionWorkspace={inspectionWorkspace} />;
 }

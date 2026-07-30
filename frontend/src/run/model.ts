@@ -4,7 +4,7 @@ import { spawnEventsForLevel } from '../core/levelEvents';
 import { createRng } from '../core/rng';
 import { runUnitName } from './unitNames';
 
-export const RUN_FORMAT_VERSION = 3;
+export const RUN_FORMAT_VERSION = 4;
 export const GOLD_SCALE = 10;
 
 export type PurchasablePieceType = 'pawn' | 'knight' | 'bishop' | 'rook' | 'queen';
@@ -56,6 +56,8 @@ export interface RunArmyUnit {
   name: string;
   type: RunArmyPieceType;
   number: number;
+  /** Persistent seed for the unit's tile-backed Army inspection scene. */
+  inspectionSeed: number;
   abilities: RunAbility[];
   source: 'king' | 'starting' | 'draft' | 'shop';
 }
@@ -318,10 +320,42 @@ export function snapshotWar(war: War, levels: Record<string, Level>): RunWarSnap
 
 function initialArmy(seed: number): RunArmyUnit[] {
   return [
-    { id: 'run-king', name: runUnitName(seed, 'king', 0), type: 'king', number: 1, abilities: [], source: 'king' },
-    { id: 'run-pawn-a', name: runUnitName(seed, 'pawn', 0), type: 'pawn', number: 1, abilities: [], source: 'starting' },
-    { id: 'run-pawn-b', name: runUnitName(seed, 'pawn', 1), type: 'pawn', number: 2, abilities: [], source: 'starting' },
-    { id: 'run-pawn-c', name: runUnitName(seed, 'pawn', 2), type: 'pawn', number: 3, abilities: [], source: 'starting' },
+    {
+      id: 'run-king',
+      name: runUnitName(seed, 'king', 0),
+      type: 'king',
+      number: 1,
+      inspectionSeed: mixSeed(seed, 'run-unit-inspection:run-king'),
+      abilities: [],
+      source: 'king',
+    },
+    {
+      id: 'run-pawn-a',
+      name: runUnitName(seed, 'pawn', 0),
+      type: 'pawn',
+      number: 1,
+      inspectionSeed: mixSeed(seed, 'run-unit-inspection:run-pawn-a'),
+      abilities: [],
+      source: 'starting',
+    },
+    {
+      id: 'run-pawn-b',
+      name: runUnitName(seed, 'pawn', 1),
+      type: 'pawn',
+      number: 2,
+      inspectionSeed: mixSeed(seed, 'run-unit-inspection:run-pawn-b'),
+      abilities: [],
+      source: 'starting',
+    },
+    {
+      id: 'run-pawn-c',
+      name: runUnitName(seed, 'pawn', 2),
+      type: 'pawn',
+      number: 3,
+      inspectionSeed: mixSeed(seed, 'run-unit-inspection:run-pawn-c'),
+      abilities: [],
+      source: 'starting',
+    },
   ];
 }
 
@@ -404,9 +438,10 @@ function normalizedArmyIdentity(run: RunDocument): {
   >;
   const assignedNumbers = new Map<string, number>();
   const assignedNames = new Map<string, string>();
+  const assignedInspectionSeeds = new Map<string, number>();
   const roleOrdinals = initialArmyNumberState();
   for (const type of ARMY_PIECE_ORDER) roleOrdinals[type] = 0;
-  const replacesLegacyNames = Number(run.formatVersion) < RUN_FORMAT_VERSION;
+  const replacesLegacyNames = Number(run.formatVersion) < 3;
   for (const unit of byId.values()) {
     let number = Number.isSafeInteger(unit.number) && unit.number > 0 ? unit.number : 1;
     while (used[unit.type].has(number)) number += 1;
@@ -424,15 +459,25 @@ function normalizedArmyIdentity(run: RunDocument): {
         ? unit.name
         : runUnitName(run.seed, unit.type, roleOrdinal),
     );
+    assignedInspectionSeeds.set(
+      unit.id,
+      Number.isSafeInteger(unit.inspectionSeed)
+        && unit.inspectionSeed >= 0
+        && unit.inspectionSeed <= 0xffffffff
+        ? unit.inspectionSeed
+        : mixSeed(run.seed, `run-unit-inspection:${unit.id}`, roleOrdinal),
+    );
   }
 
   let changed = false;
   const rewriteArmy = (army: readonly RunArmyUnit[]): RunArmyUnit[] => army.map((unit) => {
     const number = assignedNumbers.get(unit.id) ?? 1;
     const name = assignedNames.get(unit.id) ?? runUnitName(run.seed, unit.type, number - 1);
-    if (unit.number === number && unit.name === name) return unit;
+    const inspectionSeed = assignedInspectionSeeds.get(unit.id)
+      ?? mixSeed(run.seed, `run-unit-inspection:${unit.id}`, number - 1);
+    if (unit.number === number && unit.name === name && unit.inspectionSeed === inspectionSeed) return unit;
     changed = true;
-    return { ...unit, name, number };
+    return { ...unit, name, number, inspectionSeed };
   });
   const army = rewriteArmy(run.army);
   let shop = run.shop;
@@ -525,6 +570,7 @@ function addArmyPieces(
       name: runUnitName(run.seed, type, number - 1),
       type,
       number,
+      inspectionSeed: mixSeed(run.seed, `run-unit-inspection:run-unit-${sequence}`, sequence),
       abilities: [],
       source,
     };

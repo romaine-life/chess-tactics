@@ -18,7 +18,9 @@ import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { RunWorkspace } from './RunWorkspace';
 import { InnerChromeBox } from './shared/ChromeBox';
 import { HouseSelect } from './shared/HouseSelect';
+import { ChromeDividedGridRow, DividedInnerChromeBox } from './shared/ChromeDividedGrid';
 import { Tooltip } from './shared/InfoTip';
+import { RunUnitInspectionScene } from './RunUnitInspectionScene';
 
 export type RunRosterOrder = 'type' | 'value' | 'ability' | 'acquired';
 export type RunRosterTypeFilter = 'all' | RunArmyPieceType;
@@ -245,9 +247,11 @@ function unitRunStatus(run: RunDocument, unit: RunArmyUnit): string {
 function RunArmyPortrait({
   unit,
   className,
+  framed = true,
 }: {
   unit: RunArmyUnit;
   className: string;
+  framed?: boolean;
 }): ReactElement {
   const crops = installedPortraitCrops();
   const piece = unit.type as PortraitPiece;
@@ -258,6 +262,7 @@ function RunArmyPortrait({
       crop={crops[piece]}
       backdrop={defaultBackgroundSet().portraits[piece]}
       className={className}
+      framed={framed}
       masterUrl={runtimePortraitMasterSrc(piece, PLAYER_PORTRAIT_PALETTE)}
     />
   );
@@ -495,84 +500,100 @@ export function RunArmyWorkspace({
     const kills = optionalUnitKills(selected);
     return (
       <RunWorkspace
-        className="run-army-workspace run-army-profile"
-        contentClassName="run-army-profile-content"
+        className="run-self-inspection-workspace run-army-workspace run-army-profile"
+        contentClassName="run-self-inspection-content run-army-profile-content"
         data-testid="run-army-profile-workspace"
-        aria-labelledby="run-army-profile-title"
+        aria-labelledby="run-army-workspace-title"
       >
-        <header className="run-workspace-head">
-          <h2 id="run-army-profile-title">{runUnitDisplayName(selected)}</h2>
-          <button
-            type="button"
-            data-chrome-unit="inner-text-button"
-            className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
-            onClick={onBack}
-          >
-            Back to Army
-          </button>
-        </header>
-        <div className="run-army-profile-body">
-          <RunArmyPortrait unit={selected} className="run-army-profile-portrait" />
-          <section className="run-army-profile-copy">
-            <p className="run-army-profile-identity">
-              <strong>{runUnitIdentifier(selected)}</strong>
-              {optionalUnitName(selected) ? <span>{PIECE_LABEL[selected.type]}</span> : null}
-              {rank ? <span>{rank}</span> : null}
-            </p>
-            <RunUnitTraitList run={run} unit={selected} />
-            <InnerChromeBox className="run-army-profile-stats">
-              <dl>
-                <div><dt>Value</dt><dd>{PIECE_VALUE[selected.type]}</dd></div>
-                <div><dt>Status</dt><dd>{unitRunStatus(run, selected)}</dd></div>
-                <div><dt>Source</dt><dd>{unitSourceLabel(selected)}</dd></div>
-                <div><dt>Kills</dt><dd>{kills ?? '—'}</dd></div>
-              </dl>
-            </InnerChromeBox>
-            <ProfileSellAction run={run} unit={selected} onSell={onSell} />
-          </section>
-        </div>
+          <header className="run-self-inspection-head">
+            <h2 id="run-army-workspace-title">{runUnitDisplayName(selected)}</h2>
+            <button
+              type="button"
+              data-chrome-unit="inner-text-button"
+              className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
+              onClick={onBack}
+            >
+              Back to Army
+            </button>
+          </header>
+          <div className="run-army-profile-body">
+            <RunUnitInspectionScene unit={selected} />
+            <section className="run-army-profile-copy">
+              <p className="run-army-profile-identity">
+                <strong>{runUnitIdentifier(selected)}</strong>
+                {optionalUnitName(selected) ? <span>{PIECE_LABEL[selected.type]}</span> : null}
+                {rank ? <span>{rank}</span> : null}
+              </p>
+              <RunUnitTraitList run={run} unit={selected} />
+              <InnerChromeBox className="run-army-profile-stats">
+                <dl>
+                  <div><dt>Value</dt><dd>{PIECE_VALUE[selected.type]}</dd></div>
+                  <div><dt>Status</dt><dd>{unitRunStatus(run, selected)}</dd></div>
+                  <div><dt>Source</dt><dd>{unitSourceLabel(selected)}</dd></div>
+                  <div><dt>Kills</dt><dd>{kills ?? '—'}</dd></div>
+                </dl>
+              </InnerChromeBox>
+              <ProfileSellAction run={run} unit={selected} onSell={onSell} />
+            </section>
+          </div>
       </RunWorkspace>
     );
   }
 
   return (
     <RunWorkspace
-      className="run-army-workspace run-army-ledger"
-      contentClassName="run-army-ledger-content"
+      className="run-self-inspection-workspace run-army-workspace run-army-ledger"
+      contentClassName="run-self-inspection-content run-army-ledger-content"
       data-testid="run-army-ledger-workspace"
-      aria-labelledby="run-army-ledger-title"
+      aria-labelledby="run-army-workspace-title"
     >
-      <h2 id="run-army-ledger-title">Army</h2>
-      <RunRosterFilters filters={filters} onChange={onFiltersChange} />
-      <div ref={ledgerRef} className="run-army-ledger-list" aria-label="Persistent army">
-        {units.map((unit) => (
-          <button
-            type="button"
-            data-chrome-unit="inner-list-row"
-            className={chromeUnitClassNames('inner-list-row', 'run-army-ledger-row')}
-            onClick={() => {
-              ledgerScrollTop.current = ledgerRef.current?.scrollTop ?? 0;
-              onSelectUnit(unit.id);
-            }}
-            key={unit.id}
-          >
-            <RunArmyPortrait unit={unit} className="run-army-ledger-portrait" />
-            <span className="run-army-ledger-copy">
-              <strong>{runUnitDisplayName(unit)}</strong>
-              <small>
-                {optionalUnitName(unit) ? `${runUnitIdentifier(unit)} · ` : ''}
-                {unitRunStatus(run, unit)}
-              </small>
-              <RunUnitTraitList run={run} unit={unit} compact />
-            </span>
-            <span className="run-army-ledger-value">
-              <small>Value</small>
-              <strong>{PIECE_VALUE[unit.type]}</strong>
-            </span>
-          </button>
-        ))}
-        {!units.length ? <p>No units match these filters.</p> : null}
-      </div>
+        <header className="run-self-inspection-head">
+          <h2 id="run-army-workspace-title">Army</h2>
+          <span>{run.army.length} units</span>
+        </header>
+        <RunRosterFilters filters={filters} onChange={onFiltersChange} />
+        <DividedInnerChromeBox
+          className="run-army-ledger-grid"
+          columns={['var(--run-army-row-block-size, 158px)', 'minmax(0, 1fr)', '112px']}
+          scroll
+          contentRef={ledgerRef}
+          aria-label="Persistent army"
+        >
+          {units.map((unit) => (
+            <ChromeDividedGridRow
+              as="button"
+              className="run-army-ledger-row"
+              onClick={() => {
+                ledgerScrollTop.current = ledgerRef.current?.scrollTop ?? 0;
+                onSelectUnit(unit.id);
+              }}
+              key={unit.id}
+            >
+              <RunArmyPortrait
+                unit={unit}
+                className="run-army-ledger-portrait unit-portrait--divided"
+                framed={false}
+              />
+              <span className="run-army-ledger-copy">
+                <strong>{runUnitDisplayName(unit)}</strong>
+                <small>
+                  {optionalUnitName(unit) ? `${runUnitIdentifier(unit)} · ` : ''}
+                  {unitRunStatus(run, unit)}
+                </small>
+                <RunUnitTraitList run={run} unit={unit} compact />
+              </span>
+              <span className="run-army-ledger-value">
+                <small>Value</small>
+                <strong>{PIECE_VALUE[unit.type]}</strong>
+              </span>
+            </ChromeDividedGridRow>
+          ))}
+          {!units.length ? (
+            <ChromeDividedGridRow className="run-army-ledger-empty">
+              <p>No units match these filters.</p>
+            </ChromeDividedGridRow>
+          ) : null}
+        </DividedInnerChromeBox>
     </RunWorkspace>
   );
 }

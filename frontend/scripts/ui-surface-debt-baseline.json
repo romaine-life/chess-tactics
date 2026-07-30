@@ -790,14 +790,6 @@
       "kind": "css",
       "file": "src/style.css",
       "context": "",
-      "selector": ".chrome-lab-divider-mini",
-      "surfaceHash": "36216f1559e193b8fc0607c00f1dec97475877ede9dea10d33e953345e817913",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
       "selector": ".chrome-lab-fill-preview",
       "surfaceHash": "a06b5c8aa70748a8bbc02245bfb679661b21e603f66ec9b22f1ce6f69a2115ca",
       "occurrence": 1
@@ -6056,14 +6048,6 @@
       "context": "",
       "selector": "<iframe style>",
       "surfaceHash": "6438c2753b2d154a4b0e8bc1745e8c5db48f077e5a94fafab32e0262dc87480e",
-      "occurrence": 1
-    },
-    {
-      "kind": "inline",
-      "file": "src/ui/ChromeLab.tsx",
-      "context": "",
-      "selector": "<div style>",
-      "surfaceHash": "cdaecdfeff9e2ac5cfaafd3513a2f829535a9922af0bc18eb8faef0349e61b74",
       "occurrence": 1
     },
     {

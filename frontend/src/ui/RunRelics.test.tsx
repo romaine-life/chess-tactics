@@ -1,7 +1,12 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { RUN_RELICS } from '../run/model';
-import { installedRunRelicArtwork, RunRelicIcon, RunRelicStrip } from './RunRelics';
+import {
+  installedRunRelicArtwork,
+  RunRelicIcon,
+  RunRelicStrip,
+  RunRelicsWorkspace,
+} from './RunRelics';
 
 describe('Run relic artwork', () => {
   it('resolves an installed relic only through its immutable drawable role', () => {
@@ -50,5 +55,23 @@ describe('Run relic artwork', () => {
     );
     expect(markup).toContain('Conscription Notice.');
     expect(markup).not.toContain('private-quarters');
+  });
+
+  it('renders held relics as a readable fill-only self-inspection workspace', () => {
+    const markup = renderToStaticMarkup(
+      <RunRelicsWorkspace relicIds={['conscription-notice', 'mercenary-boat']} />,
+    );
+    expect(markup).toContain('data-testid="run-relics-workspace"');
+    expect(markup).toContain('class="run-workspace run-self-inspection-workspace run-relics-workspace"');
+    expect(markup).toContain('class="shell-workspace run-shell-workspace"');
+    expect(markup).toContain('Conscription Notice');
+    expect(markup).toContain('Mercenary Boat');
+    expect(markup).not.toContain('data-chrome-consumer');
+  });
+
+  it('keeps the Relics self-inspection destination useful before the first acquisition', () => {
+    const markup = renderToStaticMarkup(<RunRelicsWorkspace relicIds={[]} />);
+    expect(markup).toContain('No relics held.');
+    expect(markup).toContain('role="status"');
   });
 });
