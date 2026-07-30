@@ -15,7 +15,9 @@ import { runtimePortraitMasterSrc } from './portraitCandidates';
 import { UnitPortrait, type Palette as PortraitPalette, type Piece as PortraitPiece } from './PortraitEditor';
 import { RunGoldAmount } from './RunResources';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
-import { InnerChromeBox, OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
+import { RunWorkspace } from './RunWorkspace';
+import { InnerChromeBox } from './shared/ChromeBox';
+import { HouseSelect } from './shared/HouseSelect';
 import { Tooltip } from './shared/InfoTip';
 
 export type RunRosterOrder = 'type' | 'value' | 'ability' | 'acquired';
@@ -316,63 +318,63 @@ function RunRosterFilters({
     <section className="run-roster-filters" aria-label="Army filters">
       <label>
         <span>Order</span>
-        <span data-chrome-unit="inner-dropdown" className={chromeUnitClassNames('inner-dropdown', 'le-select-wrap')}>
-          <select
-            value={filters.order}
-            onChange={(event) => onChange({ ...filters, order: event.target.value as RunRosterOrder })}
-          >
-            <option value="type">Type</option>
-            <option value="value">Value</option>
-            <option value="ability">Ability</option>
-            <option value="acquired">Acquisition order</option>
-          </select>
-        </span>
+        <HouseSelect
+          value={filters.order}
+          options={[
+            { value: 'type', label: 'Type' },
+            { value: 'value', label: 'Value' },
+            { value: 'ability', label: 'Ability' },
+            { value: 'acquired', label: 'Acquisition order' },
+          ]}
+          onChange={(order) => onChange({ ...filters, order })}
+          ariaLabel="Army order"
+        />
       </label>
       <label>
         <span>Piece</span>
-        <span data-chrome-unit="inner-dropdown" className={chromeUnitClassNames('inner-dropdown', 'le-select-wrap')}>
-          <select
-            value={filters.type}
-            onChange={(event) => onChange({ ...filters, type: event.target.value as RunRosterTypeFilter })}
-          >
-            <option value="all">All types</option>
-            {TYPE_ORDER.map((type) => <option key={type} value={type}>{PIECE_LABEL[type]}</option>)}
-          </select>
-        </span>
+        <HouseSelect
+          value={filters.type}
+          options={[
+            { value: 'all', label: 'All types' },
+            ...TYPE_ORDER.map((type) => ({ value: type, label: PIECE_LABEL[type] })),
+          ]}
+          onChange={(type) => onChange({ ...filters, type })}
+          ariaLabel="Army piece type"
+        />
       </label>
       <label>
         <span>Ability</span>
-        <span data-chrome-unit="inner-dropdown" className={chromeUnitClassNames('inner-dropdown', 'le-select-wrap')}>
-          <select
-            value={filters.ability}
-            onChange={(event) => onChange({ ...filters, ability: event.target.value as RunRosterAbilityFilter })}
-          >
-            <option value="all">All abilities</option>
-            <option value="discipline">Discipline</option>
-            <option value="positioned">Positioned</option>
-            <option value="back-row">Back Row</option>
-            <option value="board-edge">Board Edge</option>
-            <option value="king-flanks">King Flanks</option>
-            <option value="alternating-color">Alternating Color</option>
-            <option value="royal-tent">Royal Tent</option>
-            <option value="pawn-cash-out">Cash Out</option>
-          </select>
-        </span>
+        <HouseSelect
+          value={filters.ability}
+          options={[
+            { value: 'all', label: 'All abilities' },
+            { value: 'discipline', label: 'Discipline' },
+            { value: 'positioned', label: 'Positioned' },
+            { value: 'back-row', label: 'Back Row' },
+            { value: 'board-edge', label: 'Board Edge' },
+            { value: 'king-flanks', label: 'King Flanks' },
+            { value: 'alternating-color', label: 'Alternating Color' },
+            { value: 'royal-tent', label: 'Royal Tent' },
+            { value: 'pawn-cash-out', label: 'Cash Out' },
+          ]}
+          onChange={(ability) => onChange({ ...filters, ability })}
+          ariaLabel="Army ability"
+        />
       </label>
       {saleState !== null && onSaleStateChange ? (
         <label>
           <span>Sale state</span>
-          <span data-chrome-unit="inner-dropdown" className={chromeUnitClassNames('inner-dropdown', 'le-select-wrap')}>
-            <select
-              value={saleState}
-              onChange={(event) => onSaleStateChange(event.target.value as RunSaleStateFilter)}
-            >
-              <option value="all">All units</option>
-              <option value="available">Available</option>
-              <option value="sold">Sold this visit</option>
-              <option value="retained">Retained</option>
-            </select>
-          </span>
+          <HouseSelect
+            value={saleState}
+            options={[
+              { value: 'all', label: 'All units' },
+              { value: 'available', label: 'Available' },
+              { value: 'sold', label: 'Sold this visit' },
+              { value: 'retained', label: 'Retained' },
+            ]}
+            onChange={onSaleStateChange}
+            ariaLabel="Unit sale state"
+          />
         </label>
       ) : null}
     </section>
@@ -492,79 +494,86 @@ export function RunArmyWorkspace({
     const rank = optionalUnitRank(selected);
     const kills = optionalUnitKills(selected);
     return (
-      <main className="run-workspace run-army-workspace">
-        <OuterChromeBox chromeConsumer="run-army-profile" titled className="run-panel run-army-profile">
-          <OuterChromeHeader title={runUnitDisplayName(selected)}>
-            <button
-              type="button"
-              data-chrome-unit="inner-text-button"
-              className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
-              onClick={onBack}
-            >
-              Back to Army
-            </button>
-          </OuterChromeHeader>
-          <div className="run-army-profile-body">
-            <RunArmyPortrait unit={selected} className="run-army-profile-portrait" />
-            <section className="run-army-profile-copy">
-              <p className="run-army-profile-identity">
-                <strong>{runUnitIdentifier(selected)}</strong>
-                {optionalUnitName(selected) ? <span>{PIECE_LABEL[selected.type]}</span> : null}
-                {rank ? <span>{rank}</span> : null}
-              </p>
-              <RunUnitTraitList run={run} unit={selected} />
-              <InnerChromeBox className="run-army-profile-stats">
-                <dl>
-                  <div><dt>Value</dt><dd>{PIECE_VALUE[selected.type]}</dd></div>
-                  <div><dt>Status</dt><dd>{unitRunStatus(run, selected)}</dd></div>
-                  <div><dt>Source</dt><dd>{unitSourceLabel(selected)}</dd></div>
-                  <div><dt>Kills</dt><dd>{kills ?? '—'}</dd></div>
-                </dl>
-              </InnerChromeBox>
-              <ProfileSellAction run={run} unit={selected} onSell={onSell} />
-            </section>
-          </div>
-        </OuterChromeBox>
-      </main>
+      <RunWorkspace
+        className="run-army-workspace run-army-profile"
+        contentClassName="run-army-profile-content"
+        data-testid="run-army-profile-workspace"
+        aria-labelledby="run-army-profile-title"
+      >
+        <header className="run-workspace-head">
+          <h2 id="run-army-profile-title">{runUnitDisplayName(selected)}</h2>
+          <button
+            type="button"
+            data-chrome-unit="inner-text-button"
+            className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
+            onClick={onBack}
+          >
+            Back to Army
+          </button>
+        </header>
+        <div className="run-army-profile-body">
+          <RunArmyPortrait unit={selected} className="run-army-profile-portrait" />
+          <section className="run-army-profile-copy">
+            <p className="run-army-profile-identity">
+              <strong>{runUnitIdentifier(selected)}</strong>
+              {optionalUnitName(selected) ? <span>{PIECE_LABEL[selected.type]}</span> : null}
+              {rank ? <span>{rank}</span> : null}
+            </p>
+            <RunUnitTraitList run={run} unit={selected} />
+            <InnerChromeBox className="run-army-profile-stats">
+              <dl>
+                <div><dt>Value</dt><dd>{PIECE_VALUE[selected.type]}</dd></div>
+                <div><dt>Status</dt><dd>{unitRunStatus(run, selected)}</dd></div>
+                <div><dt>Source</dt><dd>{unitSourceLabel(selected)}</dd></div>
+                <div><dt>Kills</dt><dd>{kills ?? '—'}</dd></div>
+              </dl>
+            </InnerChromeBox>
+            <ProfileSellAction run={run} unit={selected} onSell={onSell} />
+          </section>
+        </div>
+      </RunWorkspace>
     );
   }
 
   return (
-    <main className="run-workspace run-army-workspace">
-      <OuterChromeBox chromeConsumer="run-army-ledger" titled className="run-panel run-army-ledger">
-        <OuterChromeHeader title="Army" />
-        <RunRosterFilters filters={filters} onChange={onFiltersChange} />
-        <div ref={ledgerRef} className="run-army-ledger-list" aria-label="Persistent army">
-          {units.map((unit) => (
-            <button
-              type="button"
-              data-chrome-unit="inner-list-row"
-              className={chromeUnitClassNames('inner-list-row', 'run-army-ledger-row')}
-              onClick={() => {
-                ledgerScrollTop.current = ledgerRef.current?.scrollTop ?? 0;
-                onSelectUnit(unit.id);
-              }}
-              key={unit.id}
-            >
-              <RunArmyPortrait unit={unit} className="run-army-ledger-portrait" />
-              <span className="run-army-ledger-copy">
-                <strong>{runUnitDisplayName(unit)}</strong>
-                <small>
-                  {optionalUnitName(unit) ? `${runUnitIdentifier(unit)} · ` : ''}
-                  {unitRunStatus(run, unit)}
-                </small>
-                <RunUnitTraitList run={run} unit={unit} compact />
-              </span>
-              <span className="run-army-ledger-value">
-                <small>Value</small>
-                <strong>{PIECE_VALUE[unit.type]}</strong>
-              </span>
-            </button>
-          ))}
-          {!units.length ? <p>No units match these filters.</p> : null}
-        </div>
-      </OuterChromeBox>
-    </main>
+    <RunWorkspace
+      className="run-army-workspace run-army-ledger"
+      contentClassName="run-army-ledger-content"
+      data-testid="run-army-ledger-workspace"
+      aria-labelledby="run-army-ledger-title"
+    >
+      <h2 id="run-army-ledger-title">Army</h2>
+      <RunRosterFilters filters={filters} onChange={onFiltersChange} />
+      <div ref={ledgerRef} className="run-army-ledger-list" aria-label="Persistent army">
+        {units.map((unit) => (
+          <button
+            type="button"
+            data-chrome-unit="inner-list-row"
+            className={chromeUnitClassNames('inner-list-row', 'run-army-ledger-row')}
+            onClick={() => {
+              ledgerScrollTop.current = ledgerRef.current?.scrollTop ?? 0;
+              onSelectUnit(unit.id);
+            }}
+            key={unit.id}
+          >
+            <RunArmyPortrait unit={unit} className="run-army-ledger-portrait" />
+            <span className="run-army-ledger-copy">
+              <strong>{runUnitDisplayName(unit)}</strong>
+              <small>
+                {optionalUnitName(unit) ? `${runUnitIdentifier(unit)} · ` : ''}
+                {unitRunStatus(run, unit)}
+              </small>
+              <RunUnitTraitList run={run} unit={unit} compact />
+            </span>
+            <span className="run-army-ledger-value">
+              <small>Value</small>
+              <strong>{PIECE_VALUE[unit.type]}</strong>
+            </span>
+          </button>
+        ))}
+        {!units.length ? <p>No units match these filters.</p> : null}
+      </div>
+    </RunWorkspace>
   );
 }
 
@@ -607,48 +616,52 @@ export function RunSellWorkspace({
   }, [filters, run]);
 
   return (
-    <main className="run-workspace run-sell-workspace">
-      <OuterChromeBox chromeConsumer="run-sell-units" titled className="run-panel run-sell-panel">
-        <OuterChromeHeader title="Sell Units" />
-        <p>Sales apply immediately. Reset Shop restores every transaction from this visit.</p>
-        <RunRosterFilters
-          filters={filters}
-          onChange={(next) => onFiltersChange({ ...filters, ...next })}
-          saleState={filters.saleState}
-          onSaleStateChange={(saleState) => onFiltersChange({ ...filters, saleState })}
-        />
-        <div className="run-sell-list" aria-label="Units available to sell">
-          {rows.map(({ unit, status, proceedsTenths }) => {
-            const sellButton = (
-              <button
-                type="button"
-                data-ui-sfx={status === 'available' ? 'gold-sell' : undefined}
-                data-chrome-unit="inner-text-button"
-                className={chromeUnitClassNames('inner-text-button', 'app-header-button', status === 'available' && 'danger')}
-                disabled={status !== 'available'}
-                onClick={() => onSell(unit.id)}
-              >
-                {status === 'available' ? 'Sell' : status === 'sold' ? 'Sold this visit' : 'Retained'}
-              </button>
-            );
-            const sellAction = status === 'available' ? sellButton : (
-              <Tooltip
-                trigger={sellButton}
-                label={status === 'sold'
-                  ? `${runUnitDisplayName(unit)} was sold during this shop visit. Reset Shop to restore it.`
+    <RunWorkspace
+      className="run-sell-workspace"
+      contentClassName="run-sell-workspace-content"
+      data-testid="run-sell-workspace"
+      aria-labelledby="run-sell-workspace-title"
+    >
+      <h2 id="run-sell-workspace-title">Sell Units</h2>
+      <p>Sales apply immediately. Reset Shop restores every transaction from this visit.</p>
+      <RunRosterFilters
+        filters={filters}
+        onChange={(next) => onFiltersChange({ ...filters, ...next })}
+        saleState={filters.saleState}
+        onSaleStateChange={(saleState) => onFiltersChange({ ...filters, saleState })}
+      />
+      <div className="run-sell-list" aria-label="Units available to sell">
+        {rows.map(({ unit, status, proceedsTenths }) => {
+          const sellButton = (
+            <button
+              type="button"
+              data-ui-sfx={status === 'available' ? 'gold-sell' : undefined}
+              data-chrome-unit="inner-text-button"
+              className={chromeUnitClassNames('inner-text-button', 'app-header-button', status === 'available' && 'danger')}
+              disabled={status !== 'available'}
+              onClick={() => onSell(unit.id)}
+            >
+              {status === 'available' ? 'Sell' : status === 'sold' ? 'Sold this visit' : 'Retained'}
+            </button>
+          );
+          const sellAction = status === 'available' ? sellButton : (
+            <Tooltip
+              trigger={sellButton}
+              label={status === 'sold'
+                ? `${runUnitDisplayName(unit)} was sold during this shop visit. Reset Shop to restore it.`
+                : 'The King is permanently retained and cannot be sold.'}
+              popupClassName="run-relic-tooltip-pop"
+              popupMaxInlineSize={300}
+            >
+              <span className="run-relic-tooltip-description">
+                {status === 'sold'
+                  ? 'Sold during this shop visit. Reset Shop to restore this unit.'
                   : 'The King is permanently retained and cannot be sold.'}
-                popupClassName="run-relic-tooltip-pop"
-                popupMaxInlineSize={300}
-              >
-                <span className="run-relic-tooltip-description">
-                  {status === 'sold'
-                    ? 'Sold during this shop visit. Reset Shop to restore this unit.'
-                    : 'The King is permanently retained and cannot be sold.'}
-                </span>
-              </Tooltip>
-            );
-            return (
-              <InnerChromeBox className={`run-sell-row is-${status}`} key={unit.id}>
+              </span>
+            </Tooltip>
+          );
+          return (
+            <InnerChromeBox className={`run-sell-row is-${status}`} key={unit.id}>
               <img
                 className="run-sell-board-piece"
                 src={pieceSpritePath(unit.type, PLAYER_PORTRAIT_PALETTE, PLAYER_PIECE_FACING)}
@@ -668,11 +681,10 @@ export function RunSellWorkspace({
               </span>
               {sellAction}
             </InnerChromeBox>
-            );
-          })}
-          {!rows.length ? <p>No units match these filters.</p> : null}
-        </div>
-      </OuterChromeBox>
-    </main>
+          );
+        })}
+        {!rows.length ? <p>No units match these filters.</p> : null}
+      </div>
+    </RunWorkspace>
   );
 }

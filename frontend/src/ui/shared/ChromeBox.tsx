@@ -18,6 +18,24 @@ export function ChromeSurfaceFill({
   );
 }
 
+export function ShellWorkspace({
+  className = '',
+  contentClassName = '',
+  children,
+  ...props
+}: HTMLAttributes<HTMLElement> & {
+  contentClassName?: string;
+}): ReactElement {
+  return (
+    <section {...props} className={`shell-workspace ${className}`.trim()}>
+      <ChromeSurfaceFill role="outer" className="shell-workspace-fill" />
+      <div className={`shell-workspace-content ${contentClassName}`.trim()}>
+        {children}
+      </div>
+    </section>
+  );
+}
+
 export function OuterChromeBox({
   as: Element = 'aside',
   chromeConsumer,

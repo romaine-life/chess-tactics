@@ -4,8 +4,10 @@ import { describe, expect, it } from 'vitest';
 
 const runScreen = readFileSync(new URL('./RunScreen.tsx', import.meta.url), 'utf8');
 const runArmyWorkspace = readFileSync(new URL('./RunArmyWorkspace.tsx', import.meta.url), 'utf8');
+const runWorkspace = readFileSync(new URL('./RunWorkspace.tsx', import.meta.url), 'utf8');
 const skirmish = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
 const skirmishHud = readFileSync(new URL('./SkirmishHud.tsx', import.meta.url), 'utf8');
+const chromeBox = readFileSync(new URL('./shared/ChromeBox.tsx', import.meta.url), 'utf8');
 const styleCss = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 
 describe('Run chrome hierarchy', () => {
@@ -36,8 +38,6 @@ describe('Run chrome hierarchy', () => {
     expect(metaControls).not.toContain('<OuterChromeBox');
     expect(metaControls).not.toContain('data-chrome-unit="outer-panel"');
     expect(runArmyWorkspace).toContain('data-ui-sfx={status === \'available\' ? \'gold-sell\' : undefined}');
-    expect(runArmyWorkspace).toContain('chromeConsumer="run-army-ledger"');
-    expect(runArmyWorkspace).toContain('chromeConsumer="run-sell-units"');
     expect(skirmishHud).toContain('chromeConsumer="skirmish-hud"');
     expect(skirmishHud).toContain('{controlsContent === undefined ? (');
     expect(runScreen).not.toContain('function RunShell');
@@ -65,6 +65,54 @@ describe('Run chrome hierarchy', () => {
     )?.[0] ?? '';
 
     expect(bundleCard).toContain("data-ui-sfx={mode === 'shop' ? 'card-purchase' : undefined}");
+  });
+
+  it('fills the shell-owned playfield for every non-Battle Run destination', () => {
+    const playerRunSources = `${runScreen}\n${runArmyWorkspace}`;
+    const runWorkspaceRule = styleCss.match(/\.run-workspace\s*\{([^}]*)\}/)?.[1] ?? '';
+
+    expect(runWorkspace).toContain('export function RunWorkspace');
+    expect(runWorkspace).toContain('<main className={`run-workspace ${className}`.trim()}>');
+    expect(runWorkspace).toContain('<ShellWorkspace');
+    expect(runWorkspace).toContain('className="run-shell-workspace"');
+    expect(chromeBox).toContain('export function ShellWorkspace');
+    for (const testId of [
+      'run-draft-workspace',
+      'run-deployment-workspace',
+      'run-shop-workspace',
+      'run-victory-workspace',
+      'run-army-ledger-workspace',
+      'run-army-profile-workspace',
+      'run-sell-workspace',
+      'run-loading-workspace',
+      'run-empty-workspace',
+    ]) {
+      expect(playerRunSources).toContain(`data-testid="${testId}"`);
+    }
+    for (const retiredConsumer of [
+      'run-draft',
+      'run-deployment',
+      'run-shop',
+      'run-victory',
+      'run-army-ledger',
+      'run-army-profile',
+      'run-sell-units',
+      'run-empty',
+    ]) {
+      expect(playerRunSources).not.toContain(`chromeConsumer="${retiredConsumer}"`);
+    }
+    expect(playerRunSources).not.toContain('<OuterChromeBox');
+    expect(playerRunSources).not.toContain('<OuterChromeHeader');
+    expect(playerRunSources).not.toContain('<select');
+    expect(playerRunSources).not.toContain('type="checkbox"');
+    expect(runScreen).toContain('<HouseSelect');
+    expect(runArmyWorkspace).toContain('<HouseSelect');
+    expect(runWorkspaceRule).toContain('position: relative');
+    expect(runWorkspaceRule).not.toMatch(/\b(?:padding|gap)\s*:/);
+    expect(styleCss).toContain('.run-shell-workspace-content');
+    expect(styleCss).toContain('.run-screen.has-relics .run-shell-workspace-content');
+    expect(styleCss).not.toContain('.run-workspace--full');
+    expect(styleCss).not.toContain('.run-screen.has-relics .run-workspace');
   });
 
   it('shows every bundle unit with the same installed sprites used by the board', () => {

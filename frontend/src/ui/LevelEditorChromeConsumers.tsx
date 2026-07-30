@@ -1,8 +1,8 @@
-import { useEffect, useRef, type CSSProperties, type HTMLAttributes, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useRef, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { KitScroll } from './KitScroll';
 import { NavButton } from './shared/NavButton';
 import { HouseSelect } from './shared/HouseSelect';
-import { ChromeDivider, ChromeSurfaceFill, OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
+import { ChromeDivider, OuterChromeBox, OuterChromeHeader, ShellWorkspace } from './shared/ChromeBox';
 import type { LevelEditorLayerKey } from './levelEditorRoute';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 
@@ -175,24 +175,6 @@ export function LevelEditorControlsPanel({
   );
 }
 
-export function LevelEditorShellWorkspace({
-  className = '',
-  contentClassName = '',
-  children,
-  ...props
-}: HTMLAttributes<HTMLElement> & {
-  contentClassName?: string;
-}): ReactElement {
-  return (
-    <section {...props} className={`le-shell-workspace ${className}`.trim()}>
-      <ChromeSurfaceFill role="outer" className="le-shell-workspace-fill" />
-      <div className={`le-shell-workspace-content ${contentClassName}`.trim()}>
-        {children}
-      </div>
-    </section>
-  );
-}
-
 export function LevelEditorEventsWorkspace({
   tab,
   onTabChange,
@@ -213,7 +195,7 @@ export function LevelEditorEventsWorkspace({
   }, []);
 
   return (
-    <LevelEditorShellWorkspace
+    <ShellWorkspace
       className="le-events-workspace"
       contentClassName="le-events-workspace-content"
       data-testid="level-events-workspace"
@@ -230,6 +212,6 @@ export function LevelEditorEventsWorkspace({
         </div>
       </div>
       {tab === 'victory' ? victoryContent : otherContent}
-    </LevelEditorShellWorkspace>
+    </ShellWorkspace>
   );
 }

@@ -5,12 +5,14 @@ import type { GameState, Piece } from '../core/types';
 import { LevelPreviewColumn } from './LevelPreviewColumn';
 import { NavButton } from './shared/NavButton';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
-import { InnerChromeBox, OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
+import { InnerChromeBox } from './shared/ChromeBox';
+import { HouseSelect } from './shared/HouseSelect';
 import { TitleBarStatus } from './shell/TitleBarControls';
 import { PLAY_RUN_SELECTOR_HREF } from './playHubRoute';
 import { Skirmish, SkirmishShell, type RunBattlePresentation } from './Skirmish';
 import { navigateApp } from './navigation';
 import { useConfirm } from './shared/ConfirmDialog';
+import { RunWorkspace } from './RunWorkspace';
 import {
   GOLD_SCALE,
   PIECE_BUNDLE_BY_ID,
@@ -306,9 +308,14 @@ function DraftPanel({
       controlsContent={<RunMetaControls run={run} view={view} onNavigate={onNavigate} />}
       hudProps={{ enableGlobalShortcuts: false }}
     >
-      {view === 'army' ? armyWorkspace : <main className="run-workspace">
-        <OuterChromeBox chromeConsumer="run-draft" titled className="run-panel">
-          <OuterChromeHeader title="Muster your army" />
+      {view === 'army' ? armyWorkspace : (
+        <RunWorkspace
+          className="run-draft-workspace"
+          contentClassName="run-draft-workspace-content"
+          data-testid="run-draft-workspace"
+          aria-labelledby="run-draft-workspace-title"
+        >
+          <h2 id="run-draft-workspace-title">Muster your army</h2>
           <p>Your King and three Pawns are ready. Choose one of the two dealt six-point reinforcements.</p>
           <div className="run-card-grid" aria-label="Opening draft">
             {run.draftOffers.map((offer) => (
@@ -320,8 +327,8 @@ function DraftPanel({
               />
             ))}
           </div>
-        </OuterChromeBox>
-      </main>}
+        </RunWorkspace>
+      )}
     </SkirmishShell>
   );
 }
@@ -382,99 +389,117 @@ function DeploymentPanel({
       controlsContent={<RunMetaControls run={prepared} view={view} onNavigate={onNavigate} />}
       hudProps={{ enableGlobalShortcuts: false }}
     >
-      {view === 'army' ? armyWorkspace : <main className="run-workspace">
-        <OuterChromeBox chromeConsumer="run-deployment" titled className="run-panel run-deployment-panel">
-        <OuterChromeHeader title={`Deploy — ${level.name}`} />
-        <p>{prepared.war.description || 'An authored War Battle.'}</p>
-
-        {options.needsBlockedChoice ? (
-          <section className="run-deployment-control">
-            <h3>Muster Roll</h3>
-            <p>Choose exactly {options.blockedChoiceCount} unit{options.blockedChoiceCount === 1 ? '' : 's'} to sit out.</p>
-            <div className="run-choice-list">
-              {prepared.army.filter((unit) => unit.type !== 'king').map((unit) => (
-                <label key={unit.id}>
-                  <input
-                    type="checkbox"
-                    checked={chosenBlocked.includes(unit.id)}
-                    onChange={() => toggleBlocked(unit.id)}
-                  />
-                  {runUnitRosterLabel(unit)}
-                </label>
-              ))}
-            </div>
-          </section>
-        ) : options.overflowCount > 0 ? (
-          <p>{options.overflowCount} excess unit{options.overflowCount === 1 ? '' : 's'} will sit out this Battle.</p>
-        ) : null}
-
-        {options.disciplineUnitIds.length > 0 ? (
-          <section className="run-deployment-control">
-            <h3>Discipline</h3>
-            <p>Place every disciplined unit before the remaining army is dealt.</p>
-            {options.disciplineUnitIds.map((unitId) => {
-              const unit = prepared.army.find((candidate) => candidate.id === unitId);
-              const used = new Set(Object.entries(prepared.deployment?.manualPlacements ?? {})
-                .filter(([id]) => id !== unitId)
-                .map(([, cell]) => cell));
-              return (
-                <label className="run-placement-row" key={unitId}>
-                  <span>{unit ? runUnitRosterLabel(unit) : unitId}</span>
-                  <select
-                    value={prepared.deployment?.manualPlacements[unitId] ?? ''}
-                    onChange={(event) => setManual(unitId, event.target.value)}
-                  >
-                    <option value="">Choose square…</option>
-                    {options.zoneCells.filter((cell) => !used.has(`${cell.x},${cell.y}`)).map((cell) => (
-                      <option value={`${cell.x},${cell.y}`} key={`${cell.x},${cell.y}`}>
-                        {String.fromCharCode(65 + cell.x)}{level.board.rows - cell.y}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              );
-            })}
-          </section>
-        ) : null}
-
-        {hasRelic(prepared, 'surveyors-compass') ? (
-          <section className="run-deployment-control">
-            <h3>Surveyor&apos;s Compass</h3>
-            <p>Choose which valid random layout to use.</p>
-            <div className="run-inline-actions">
-              {[0, 1].map((index) => (
-                <button
-                  type="button"
-                  key={index}
-                  data-chrome-unit="inner-text-button"
-                  className={chromeUnitClassNames('inner-text-button', 'app-header-button', prepared.deployment?.layoutChoice === index && 'active')}
-                  onClick={() => replace(setDeploymentChoices(prepared, { layoutChoice: index as 0 | 1 }))}
-                >
-                  Layout {index + 1}
-                </button>
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        <button
-          type="button"
-          data-chrome-unit="inner-text-button"
-          className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-          disabled={!deploymentReady(prepared, options)}
-          onClick={start}
+      {view === 'army' ? armyWorkspace : (
+        <RunWorkspace
+          className="run-deployment-workspace"
+          contentClassName="run-deployment-workspace-content"
+          data-testid="run-deployment-workspace"
+          aria-labelledby="run-deployment-workspace-title"
         >
-          Begin Battle
-        </button>
-        </OuterChromeBox>
+          <section className="run-deployment-pane">
+            <h2 id="run-deployment-workspace-title">Deploy — {level.name}</h2>
+            <p>{prepared.war.description || 'An authored War Battle.'}</p>
 
-        <LevelPreviewColumn
-          level={previewLevel}
-          title={`${level.name} deployment`}
-          embedded
-          actions={<p className="run-preview-note">{Object.keys(layout.placements).length} deployed · {layout.blockedUnitIds.length} in reserve</p>}
-        />
-      </main>}
+            {options.needsBlockedChoice ? (
+              <section className="run-deployment-control">
+                <h3>Muster Roll</h3>
+                <p>Choose exactly {options.blockedChoiceCount} unit{options.blockedChoiceCount === 1 ? '' : 's'} to sit out.</p>
+                <div className="run-choice-list">
+                  {prepared.army.filter((unit) => unit.type !== 'king').map((unit) => {
+                    const selected = chosenBlocked.includes(unit.id);
+                    return (
+                      <button
+                        type="button"
+                        data-chrome-unit="inner-list-row"
+                        className={chromeUnitClassNames('inner-list-row', 'run-choice-option', selected && 'active')}
+                        aria-pressed={selected}
+                        disabled={!selected && chosenBlocked.length >= options.blockedChoiceCount}
+                        onClick={() => toggleBlocked(unit.id)}
+                        key={unit.id}
+                      >
+                        <span>{runUnitRosterLabel(unit)}</span>
+                        <small>{selected ? 'Sitting out' : 'Deploying'}</small>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            ) : options.overflowCount > 0 ? (
+              <p>{options.overflowCount} excess unit{options.overflowCount === 1 ? '' : 's'} will sit out this Battle.</p>
+            ) : null}
+
+            {options.disciplineUnitIds.length > 0 ? (
+              <section className="run-deployment-control">
+                <h3>Discipline</h3>
+                <p>Place every disciplined unit before the remaining army is dealt.</p>
+                {options.disciplineUnitIds.map((unitId) => {
+                  const unit = prepared.army.find((candidate) => candidate.id === unitId);
+                  const used = new Set(Object.entries(prepared.deployment?.manualPlacements ?? {})
+                    .filter(([id]) => id !== unitId)
+                    .map(([, cell]) => cell));
+                  const squareOptions = [
+                    { value: '', label: 'Choose square…' },
+                    ...options.zoneCells
+                      .filter((cell) => !used.has(`${cell.x},${cell.y}`))
+                      .map((cell) => ({
+                        value: `${cell.x},${cell.y}`,
+                        label: `${String.fromCharCode(65 + cell.x)}${level.board.rows - cell.y}`,
+                      })),
+                  ];
+                  return (
+                    <label className="run-placement-row" key={unitId}>
+                      <span>{unit ? runUnitRosterLabel(unit) : unitId}</span>
+                      <HouseSelect
+                        value={prepared.deployment?.manualPlacements[unitId] ?? ''}
+                        options={squareOptions}
+                        onChange={(cellKey) => setManual(unitId, cellKey)}
+                        ariaLabel={`Deployment square for ${unit ? runUnitRosterLabel(unit) : unitId}`}
+                      />
+                    </label>
+                  );
+                })}
+              </section>
+            ) : null}
+
+            {hasRelic(prepared, 'surveyors-compass') ? (
+              <section className="run-deployment-control">
+                <h3>Surveyor&apos;s Compass</h3>
+                <p>Choose which valid random layout to use.</p>
+                <div className="run-inline-actions">
+                  {[0, 1].map((index) => (
+                    <button
+                      type="button"
+                      key={index}
+                      data-chrome-unit="inner-text-button"
+                      className={chromeUnitClassNames('inner-text-button', 'app-header-button', prepared.deployment?.layoutChoice === index && 'active')}
+                      onClick={() => replace(setDeploymentChoices(prepared, { layoutChoice: index as 0 | 1 }))}
+                    >
+                      Layout {index + 1}
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            <button
+              type="button"
+              data-chrome-unit="inner-text-button"
+              className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
+              disabled={!deploymentReady(prepared, options)}
+              onClick={start}
+            >
+              Begin Battle
+            </button>
+          </section>
+
+          <LevelPreviewColumn
+            level={previewLevel}
+            title={`${level.name} deployment`}
+            embedded
+            actions={<p className="run-preview-note">{Object.keys(layout.placements).length} deployed · {layout.blockedUnitIds.length} in reserve</p>}
+          />
+        </RunWorkspace>
+      )}
     </SkirmishShell>
   );
 }
@@ -507,12 +532,15 @@ function RelicOffer({
       </header>
       <p>{relic.description}</p>
       {needsTarget ? (
-        <select value={target} onChange={(event) => setTarget(event.target.value)} aria-label="Discipline target">
-          <option value="">Choose a unit…</option>
-          {run.army.map((unit) => (
-            <option key={unit.id} value={unit.id}>{runUnitRosterLabel(unit)}</option>
-          ))}
-        </select>
+        <HouseSelect
+          value={target}
+          options={[
+            { value: '', label: 'Choose a unit…' },
+            ...run.army.map((unit) => ({ value: unit.id, label: runUnitRosterLabel(unit) })),
+          ]}
+          onChange={setTarget}
+          ariaLabel="Discipline target"
+        />
       ) : null}
       <button
         type="button"
@@ -554,9 +582,14 @@ function ShopPanel({
       controlsContent={<RunMetaControls run={run} view={view} onNavigate={onNavigate} />}
       hudProps={{ enableGlobalShortcuts: false }}
     >
-      {view === 'army' ? armyWorkspace : view === 'sell' ? sellWorkspace : <main className="run-workspace">
-        <OuterChromeBox chromeConsumer="run-shop" titled className="run-panel run-shop-panel">
-        <OuterChromeHeader title={run.war.battles[shop.afterBattleIndex]?.loot ? 'Loot Shop' : 'Shop'} />
+      {view === 'army' ? armyWorkspace : view === 'sell' ? sellWorkspace : (
+        <RunWorkspace
+          className="run-shop-workspace"
+          contentClassName="run-shop-workspace-content"
+          data-testid="run-shop-workspace"
+          aria-labelledby="run-shop-workspace-title"
+        >
+        <h2 id="run-shop-workspace-title">{run.war.battles[shop.afterBattleIndex]?.loot ? 'Loot Shop' : 'Shop'}</h2>
         <div className="run-shop-rules">
           <span>Victory</span>
           <span aria-hidden="true">+</span>
@@ -620,8 +653,8 @@ function ShopPanel({
           </section>
         ) : null}
 
-        </OuterChromeBox>
-      </main>}
+        </RunWorkspace>
+      )}
     </SkirmishShell>
   );
 }
@@ -647,9 +680,14 @@ function VictoryPanel({
       controlsContent={<RunMetaControls run={run} view={view} onNavigate={onNavigate} showAbandon={false} />}
       hudProps={{ enableGlobalShortcuts: false }}
     >
-      {view === 'army' ? armyWorkspace : <main className="run-workspace">
-        <OuterChromeBox chromeConsumer="run-victory" titled className="run-panel run-victory-panel">
-          <OuterChromeHeader title="War won" />
+      {view === 'army' ? armyWorkspace : (
+        <RunWorkspace
+          className="run-victory-workspace"
+          contentClassName="run-victory-workspace-content"
+          data-testid="run-victory-workspace"
+          aria-labelledby="run-victory-workspace-title"
+        >
+          <h2 id="run-victory-workspace-title">War won</h2>
           <h2>{run.war.name}</h2>
           <p>{run.war.description}</p>
           <p className="run-victory-summary">
@@ -669,8 +707,8 @@ function VictoryPanel({
           >
             Finish Run
           </button>
-        </OuterChromeBox>
-      </main>}
+        </RunWorkspace>
+      )}
     </SkirmishShell>
   );
 }
@@ -835,7 +873,14 @@ export function RunScreen(): ReactElement {
         readyToCompose={false}
         hudProps={{ enableGlobalShortcuts: false }}
       >
-        <main className="run-workspace"><InnerChromeBox className="run-panel" role="status">Loading Run…</InnerChromeBox></main>
+        <RunWorkspace
+          className="run-loading-workspace"
+          contentClassName="run-status-workspace-content"
+          data-testid="run-loading-workspace"
+          role="status"
+        >
+          <p>Loading Run…</p>
+        </RunWorkspace>
       </SkirmishShell>
     );
   }
@@ -848,9 +893,13 @@ export function RunScreen(): ReactElement {
         controlsContent={null}
         hudProps={{ enableGlobalShortcuts: false }}
       >
-        <main className="run-workspace">
-          <OuterChromeBox chromeConsumer="run-empty" titled className="run-panel">
-            <OuterChromeHeader title="No active Run" />
+        <RunWorkspace
+          className="run-empty-workspace"
+          contentClassName="run-status-workspace-content"
+          data-testid="run-empty-workspace"
+          aria-labelledby="run-empty-workspace-title"
+        >
+            <h2 id="run-empty-workspace-title">No active Run</h2>
             <p>Start a Run from Play, or direct-play one of your Wars from the War Editor.</p>
             <NavButton
               data-chrome-unit="inner-text-button"
@@ -859,8 +908,7 @@ export function RunScreen(): ReactElement {
             >
               Back to Run
             </NavButton>
-          </OuterChromeBox>
-        </main>
+        </RunWorkspace>
       </SkirmishShell>
     );
   }
