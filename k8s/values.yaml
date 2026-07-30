@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:3846c9d5121211a37422c1017f7c3da8f76a3c68d2c202fc5cef5a142d862c5e"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:49f617acc64e17a89fc24a6d6a7f0273e435bdcd771b9fdc981505ac7bbfc76a"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Restore viewport-edge title bar padding"
-  prNumber: "550"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/550"
-  commit: "5e3e38f7"
+  prTitle: "Build continuous Run army inspection"
+  prNumber: "551"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/551"
+  commit: "64fdf8e4"
 
 name: chess-tactics
 namespace: chess-tactics
