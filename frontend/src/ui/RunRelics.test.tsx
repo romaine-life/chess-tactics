@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { RUN_RELICS } from '../run/model';
 import { installedRunRelicArtwork, RunRelicIcon, RunRelicStrip } from './RunRelics';
 
 describe('Run relic artwork', () => {
@@ -10,11 +11,16 @@ describe('Run relic artwork', () => {
     expect(artwork?.src).not.toContain('/assets/');
   });
 
-  it('renders the approved offer icon and an honest unavailable state for relics without approved art', () => {
-    const approved = renderToStaticMarkup(<RunRelicIcon relicId="royal-decree" />);
-    const unavailable = renderToStaticMarkup(<RunRelicIcon relicId="fair-scales" />);
+  it('has one installed native icon for every canonical Run relic', () => {
+    expect(RUN_RELICS.map(({ id }) => installedRunRelicArtwork(id))).toHaveLength(20);
+    expect(RUN_RELICS.every(({ id }) => installedRunRelicArtwork(id) !== null)).toBe(true);
+  });
+
+  it('renders a newly approved offer icon and an honest unavailable state for an unknown legacy relic', () => {
+    const approved = renderToStaticMarkup(<RunRelicIcon relicId="fair-scales" />);
+    const unavailable = renderToStaticMarkup(<RunRelicIcon relicId={'private-quarters' as never} />);
     expect(approved).toContain('<img');
-    expect(approved).toContain('data-relic-id="royal-decree"');
+    expect(approved).toContain('data-relic-id="fair-scales"');
     expect(unavailable).toContain('Art unavailable');
     expect(unavailable).not.toContain('<img');
   });

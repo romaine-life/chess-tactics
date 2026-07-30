@@ -8,6 +8,7 @@ import {
 import { RUN_RELIC_BY_ID, type RunRelicId } from '../run/model';
 import { defaultBackgroundSet } from '../art/backgroundSets';
 import { OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
+import { useSceneParticipant } from './shell/SceneBoundary';
 
 const RUN_RELIC_SLOT = /^ui\/run\/relics\/([a-z][a-z0-9-]*)\.png$/;
 
@@ -15,6 +16,16 @@ export interface RunRelicReviewCandidate {
   relicId: RunRelicId;
   version: AdminLiveMediaVersion;
   slot: AdminLiveMediaSlot;
+}
+
+export function partitionRunRelicReviewCandidates(entries: readonly RunRelicReviewCandidate[]): {
+  newCandidates: RunRelicReviewCandidate[];
+  installedReferences: RunRelicReviewCandidate[];
+} {
+  return {
+    newCandidates: entries.filter(({ version }) => version.status === 'candidate'),
+    installedReferences: entries.filter(({ version }) => version.status !== 'candidate'),
+  };
 }
 
 export function runRelicReviewCandidates(catalog: AdminLiveMediaCatalog): RunRelicReviewCandidate[] {
@@ -31,6 +42,38 @@ export function runRelicReviewCandidates(catalog: AdminLiveMediaCatalog): RunRel
   ));
 }
 
+function RunRelicReviewGrid({
+  entries,
+  testId,
+}: {
+  entries: readonly RunRelicReviewCandidate[];
+  testId: string;
+}): ReactElement {
+  return (
+    <div className="run-relic-review-grid" data-testid={testId}>
+      {entries.map(({ relicId, version }) => (
+        <figure key={version.id} data-version-id={version.id} data-slot={version.slot ?? undefined}>
+          <img
+            src={version.media!.url}
+            width="64"
+            height="64"
+            alt=""
+            draggable={false}
+          />
+          <figcaption>
+            <strong>{RUN_RELIC_BY_ID[relicId].name}</strong>
+            <small>
+              native 64×64 · {version.status === 'candidate'
+                ? 'new candidate · not installed'
+                : `installed reference · ${version.status} r${version.rowRevision}`}
+            </small>
+          </figcaption>
+        </figure>
+      ))}
+    </div>
+  );
+}
+
 export function RunRelicReview(): ReactElement {
   const [catalog, setCatalog] = useState<AdminLiveMediaCatalog | null>(null);
   const [error, setError] = useState('');
@@ -41,7 +84,13 @@ export function RunRelicReview(): ReactElement {
       .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : String(reason)); });
     return () => { active = false; };
   }, []);
-  const candidates = useMemo(() => catalog ? runRelicReviewCandidates(catalog) : [], [catalog]);
+  const entries = useMemo(() => catalog ? runRelicReviewCandidates(catalog) : [], [catalog]);
+  const { newCandidates, installedReferences } = useMemo(
+    () => partitionRunRelicReviewCandidates(entries),
+    [entries],
+  );
+  const sceneError = useMemo(() => error ? new Error(error) : null, [error]);
+  useSceneParticipant('studio', sceneError ? 'error' : catalog ? 'painted' : 'loading', sceneError);
 
   return (
     <main
@@ -55,24 +104,17 @@ export function RunRelicReview(): ReactElement {
         {!catalog && !error ? <p role="status">Loading candidates…</p> : null}
         {catalog ? (
           <>
-            <p>{candidates.length} relic icon versions</p>
-            <div className="run-relic-review-grid" data-testid="run-relic-review-grid">
-              {candidates.map(({ relicId, version }) => (
-                <figure key={version.id} data-version-id={version.id} data-slot={version.slot ?? undefined}>
-                  <img
-                    src={version.media!.url}
-                    width="64"
-                    height="64"
-                    alt=""
-                    draggable={false}
-                  />
-                  <figcaption>
-                    <strong>{RUN_RELIC_BY_ID[relicId].name}</strong>
-                    <small>native 64×64 · {version.status} r{version.rowRevision}</small>
-                  </figcaption>
-                </figure>
-              ))}
-            </div>
+            <p><strong>{newCandidates.length} newly generated candidate icons</strong> · not installed</p>
+            {newCandidates.length ? (
+              <RunRelicReviewGrid entries={newCandidates} testId="run-relic-candidate-grid" />
+            ) : <p>No new relic art candidates.</p>}
+            {installedReferences.length ? (
+              <details className="run-relic-reference-art" open={newCandidates.length === 0}>
+                <summary>Installed reference art · {installedReferences.length} existing icons</summary>
+                <p>Already accepted and installed; available here only for family comparison.</p>
+                <RunRelicReviewGrid entries={installedReferences} testId="run-relic-installed-grid" />
+              </details>
+            ) : null}
           </>
         ) : null}
       </OuterChromeBox>
