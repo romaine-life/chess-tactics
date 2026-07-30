@@ -18424,6 +18424,16 @@ button.tileset-relationship-cell {
   color: var(--skirmish-muted);
 }
 
+.run-relic-reference-art {
+  display: grid;
+  gap: 12px;
+}
+
+.run-relic-reference-art summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
 @media (max-width: 900px) {
   .run-relic-review-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { AdminLiveMediaCatalog } from '../net/liveMediaAdmin';
-import { runRelicReviewCandidates } from './RunRelicReview';
+import {
+  partitionRunRelicReviewCandidates,
+  runRelicReviewCandidates,
+  type RunRelicReviewCandidate,
+} from './RunRelicReview';
 
 describe('Run relic art review', () => {
   it('ignores unrelated accepted media versions that have no matching Run relic slot', () => {
@@ -73,5 +77,21 @@ describe('Run relic art review', () => {
     expect(runRelicReviewCandidates(catalog)).toEqual([
       expect.objectContaining({ relicId: 'royal-decree' }),
     ]);
+  });
+
+  it('separates new candidates from already installed reference art', () => {
+    const installed = {
+      relicId: 'royal-decree',
+      version: { status: 'accepted' },
+    } as RunRelicReviewCandidate;
+    const candidate = {
+      relicId: 'fair-scales',
+      version: { status: 'candidate' },
+    } as RunRelicReviewCandidate;
+
+    expect(partitionRunRelicReviewCandidates([installed, candidate])).toEqual({
+      newCandidates: [candidate],
+      installedReferences: [installed],
+    });
   });
 });
