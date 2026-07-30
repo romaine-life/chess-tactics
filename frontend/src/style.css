@@ -5849,6 +5849,20 @@ body.loading-bootstrap .app-startup-status {
   margin-inline: var(--le-control-content-inset);
 }
 
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .outer-chrome-header {
+  position: relative;
+}
+
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .outer-chrome-header > .outer-chrome-header-title-actions {
+  align-items: center;
+  display: flex;
+  inset-block-start: calc(var(--le-outer-fill-box-top, 0px) + var(--le-control-rail-w, 12px));
+  inset-inline-end: calc(var(--ds-space-3) + var(--le-panel-title-align-extra-x, 0px) + var(--le-control-content-inset));
+  margin-inline: 0;
+  position: absolute;
+  z-index: 3;
+}
+
 .level-editor-screen .outer-chrome-header > .le-layer-picker-row {
   width: auto;
 }
@@ -16901,6 +16915,37 @@ button.tileset-relationship-cell {
   text-shadow: 0 2px 0 #02070b;
 }
 
+.apparatus-tab-copy {
+  align-content: center;
+  display: grid;
+  gap: 2px;
+  min-inline-size: 0;
+  overflow: hidden;
+}
+
+.apparatus-tab-copy > strong,
+.apparatus-tab-copy > small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.apparatus-tab-copy > strong {
+  font-size: var(--ds-text-md);
+}
+
+.apparatus-tab-copy > small {
+  color: var(--skirmish-muted);
+  font-size: var(--ds-text-xs);
+  text-transform: none;
+}
+
+.settings-tab-icon > :is(.skirmish-tab-icon, .skirmish-icon, [class^="ic-"]) {
+  block-size: 30px;
+  inline-size: 30px;
+}
+
 .settings-row p,
 .settings-row-value {
   color: #9fc4d5;
@@ -18979,6 +19024,12 @@ button.tileset-relationship-cell {
   overflow: hidden;
 }
 
+.run-panel-unframed {
+  box-sizing: border-box;
+  min-block-size: 0;
+  overflow: hidden;
+}
+
 .run-army-profile .run-self-inspection-head button {
   min-inline-size: 168px;
 }
@@ -19122,6 +19173,505 @@ button.tileset-relationship-cell {
 .run-sell-row > .tooltip .tooltip-trigger,
 .run-sell-row > .tooltip button {
   inline-size: 100%;
+}
+
+/* ===== Enchiridion + Strategikon (ADR-0231) ==============================
+   These declarations own geometry only. Strategikon keeps the board-workspace
+   outer frame; the main-menu host uses the menu's frameless section language.
+   Content cards remain registered InnerChromeBoxes in both hosts. */
+
+.menu-dest > .enchiridion-workspace {
+  display: flex;
+  flex: none;
+  /* Enchiridion keeps the two canonical rail anchors, then owns every remaining
+     visible pixel instead of treating --col-action-w as an invisible cap.
+     The expression is the viewport width minus this workspace's actual
+     translated start edge and one normal end gutter. */
+  inline-size: calc(
+    var(--layout-vw, 100vw)
+    - max(
+      var(--rail-pull-x),
+      calc((var(--layout-vw, 100vw) - var(--settings-shell-w)) / 2)
+    )
+    - var(--col-tab-w)
+    + var(--rail-pull-x)
+    - var(--col-side-inset)
+  );
+  max-inline-size: none;
+  min-block-size: 0;
+  min-inline-size: 0;
+  /* .settings-screen deliberately makes unused canvas click-through. Like the
+     canonical .menu-dest-col, this real destination must opt its controls back
+     into pointer input at the host boundary. */
+  pointer-events: auto;
+}
+
+.menu-dest > .enchiridion-workspace > .enchiridion-section-rail {
+  align-content: start;
+  display: grid;
+  flex: none;
+  gap: clamp(9px, calc(var(--layout-vw, 100vw) * .008), 13px);
+  inline-size: var(--col-tab-w);
+  padding-block-start: var(--col-top-inset);
+  padding-inline-start: var(--col-side-inset);
+}
+
+.menu-dest > .enchiridion-workspace > .enchiridion-content {
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  inline-size: auto;
+  min-block-size: 0;
+  min-inline-size: 0;
+  padding-block-start: var(--col-top-inset);
+  padding-inline-start: var(--col-side-inset);
+}
+
+.enchiridion-content,
+.strategikon-content {
+  min-block-size: 0;
+  min-inline-size: 0;
+  overflow: hidden;
+}
+
+.enchiridion-content > .enchiridion-panel,
+.strategikon-content > .enchiridion-panel,
+.strategikon-reference > .enchiridion-panel {
+  block-size: 100%;
+  box-sizing: border-box;
+  min-block-size: 0;
+}
+
+.enchiridion-panel > .le-outer-panel-content {
+  block-size: 100%;
+  box-sizing: border-box;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.enchiridion-panel-unframed {
+  block-size: 100%;
+  box-sizing: border-box;
+  display: grid;
+  gap: var(--ds-stack);
+  grid-template-rows: auto minmax(0, 1fr);
+  min-block-size: 0;
+  overflow: hidden;
+}
+
+.enchiridion-unit-panel.enchiridion-panel-unframed {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
+.enchiridion-terrain-panel.enchiridion-panel-unframed {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.enchiridion-panel :is(h3, p),
+.enchiridion-empty :is(h3, p) {
+  margin: 0;
+}
+
+.enchiridion-unit-grid,
+.enchiridion-terrain-list,
+.enchiridion-ability-list {
+  align-content: start;
+  display: grid;
+  gap: var(--ds-stack);
+  min-block-size: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-inline-end: 4px;
+}
+
+.enchiridion-unit-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.enchiridion-unit-card {
+  align-items: center;
+  display: grid;
+  gap: var(--ds-stack);
+  grid-template-columns: minmax(0, 1fr) 154px;
+  min-block-size: 170px;
+  padding: var(--ds-inset);
+}
+
+.enchiridion-unit-card > div {
+  align-content: start;
+  display: grid;
+  gap: var(--ds-space-2);
+}
+
+.enchiridion-movement-diagram {
+  aspect-ratio: 1;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  grid-template-rows: repeat(7, 1fr);
+  inline-size: 154px;
+}
+
+.enchiridion-move-cell {
+  align-items: center;
+  color: var(--skirmish-muted);
+  display: flex;
+  font-size: var(--ds-text-xs);
+  justify-content: center;
+  line-height: 1;
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
+.enchiridion-move-cell.is-move {
+  color: #9fe7ff;
+}
+
+.enchiridion-move-cell.is-capture {
+  color: #ffadad;
+}
+
+.enchiridion-move-cell img {
+  block-size: 34px;
+  inline-size: 30px;
+  object-fit: contain;
+}
+
+.enchiridion-terrain-row,
+.enchiridion-ability-card {
+  align-items: center;
+  display: grid;
+  gap: var(--ds-inset);
+  grid-template-columns: 42px minmax(0, 1fr);
+  min-block-size: 82px;
+  padding: var(--ds-inset);
+}
+
+.enchiridion-terrain-row > span:last-child,
+.enchiridion-ability-card > span:last-child,
+.enchiridion-rule-exceptions {
+  align-content: start;
+  display: grid;
+  gap: var(--ds-space-2);
+}
+
+.enchiridion-terrain-row > :first-child,
+.enchiridion-ability-card > :first-child {
+  block-size: 34px;
+  inline-size: 34px;
+}
+
+.enchiridion-rule-exceptions {
+  margin-block-start: var(--ds-stack);
+  padding: var(--ds-inset);
+}
+
+.enchiridion-relic-panel > .le-outer-panel-content {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.enchiridion-relic-layout {
+  align-content: start;
+  align-items: start;
+  block-size: 100%;
+  display: grid;
+  gap: var(--ds-stack);
+  grid-template-columns: minmax(256px, 38%) minmax(300px, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  min-block-size: 0;
+  overflow: hidden;
+}
+
+.enchiridion-relic-browser {
+  align-self: stretch;
+  display: grid;
+  gap: var(--ds-space-2);
+  grid-template-rows: auto minmax(0, 1fr);
+  min-block-size: 0;
+}
+
+.enchiridion-relic-view-tabs {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.enchiridion-relic-browse-panel {
+  min-block-size: 0;
+  overflow: hidden;
+}
+
+.enchiridion-relic-rows,
+.enchiridion-relic-group-grid {
+  align-content: start;
+  display: grid;
+  gap: var(--ds-space-2);
+  list-style: none;
+  margin: 0;
+  min-block-size: 0;
+  padding: 0;
+}
+
+.enchiridion-relic-rows {
+  block-size: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-inline-end: 4px;
+}
+
+.enchiridion-relic-row {
+  inline-size: 100%;
+}
+
+.enchiridion-relic-row {
+  align-items: center;
+  cursor: pointer;
+  display: grid;
+  gap: var(--ds-space-2);
+  grid-template-columns: 48px minmax(0, 1fr);
+  min-block-size: 72px;
+  padding: 4px 10px;
+  text-align: start;
+}
+
+.enchiridion-relic-row-icon,
+.enchiridion-relic-row-icon img {
+  block-size: 48px;
+  inline-size: 48px;
+}
+
+.enchiridion-relic-row-name {
+  font-size: var(--ds-text-md);
+  line-height: 1.2;
+}
+
+.enchiridion-relic-group {
+  block-size: auto;
+  max-block-size: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: var(--ds-inset);
+}
+
+.enchiridion-relic-group-grid {
+  grid-template-columns: repeat(auto-fill, 64px);
+  justify-content: start;
+}
+
+.enchiridion-relic-group-grid > li,
+.enchiridion-relic-grouped-trigger {
+  block-size: 64px;
+  inline-size: 64px;
+}
+
+.enchiridion-relic-grouped-trigger {
+  appearance: none;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  min-block-size: 64px;
+  padding: 0;
+}
+
+.enchiridion-relic-grouped-trigger:is(:hover, :focus-visible, .is-active) .run-relic-icon {
+  filter: brightness(1.18) drop-shadow(0 0 3px rgba(101, 184, 255, .82));
+}
+
+.enchiridion-relic-detail {
+  align-self: start;
+  align-content: start;
+  block-size: auto;
+  box-sizing: border-box;
+  display: grid;
+  gap: var(--ds-inset);
+  grid-template-columns: 64px minmax(0, 1fr);
+  inline-size: 100%;
+  max-inline-size: 560px;
+  min-inline-size: 0;
+  padding: var(--ds-inset);
+}
+
+.enchiridion-relic-detail > dl,
+.enchiridion-relic-detail > small {
+  grid-column: 1 / -1;
+}
+
+.enchiridion-relic-detail > div {
+  align-content: start;
+  display: grid;
+  gap: var(--ds-space-2);
+}
+
+.enchiridion-relic-detail dl {
+  display: grid;
+  gap: var(--ds-space-2);
+  margin: 0;
+}
+
+.enchiridion-relic-detail dl > div {
+  align-items: baseline;
+  display: flex;
+  gap: var(--ds-stack);
+  justify-content: space-between;
+}
+
+.enchiridion-relic-detail dd {
+  margin: 0;
+}
+
+.enchiridion-empty {
+  align-content: start;
+  display: grid;
+  gap: var(--ds-space-2);
+  padding: var(--ds-inset);
+}
+
+.strategikon-workspace {
+  block-size: 100%;
+  box-sizing: border-box;
+  display: grid;
+  gap: var(--skirmish-grid-gap);
+  grid-template-columns: 322px minmax(0, 1fr);
+  inset: 0;
+  isolation: isolate;
+  min-block-size: 0;
+  min-inline-size: 0;
+  padding: var(--skirmish-grid-gap);
+  position: absolute;
+}
+
+.strategikon-slot {
+  inset: 0;
+  min-block-size: 0;
+  min-inline-size: 0;
+  position: absolute;
+  z-index: 35;
+}
+
+.strategikon-workspace-fill {
+  inset: 0;
+}
+
+.strategikon-rail,
+.strategikon-content {
+  position: relative;
+  z-index: 1;
+}
+
+.strategikon-rail {
+  align-content: start;
+  display: grid;
+  gap: clamp(9px, calc(var(--layout-vw, 100vw) * .008), 13px);
+  min-block-size: 0;
+  padding: clamp(8px, calc(var(--layout-vw, 100vw) * .008), 12px) clamp(6px, calc(var(--layout-vw, 100vw) * .006), 10px);
+}
+
+.strategikon-content > .enchiridion-workspace {
+  block-size: 100%;
+  display: grid;
+  gap: var(--skirmish-grid-gap);
+  grid-template-columns: 270px minmax(0, 1fr);
+  min-block-size: 0;
+}
+
+.strategikon-content .enchiridion-section-rail {
+  align-content: start;
+  display: grid;
+  gap: clamp(9px, calc(var(--layout-vw, 100vw) * .008), 13px);
+  min-block-size: 0;
+  padding: clamp(8px, calc(var(--layout-vw, 100vw) * .008), 12px) clamp(6px, calc(var(--layout-vw, 100vw) * .006), 10px);
+}
+
+.strategikon-content > .run-workspace,
+.strategikon-reference {
+  block-size: 100%;
+  box-sizing: border-box;
+  grid-template-columns: minmax(0, 1fr);
+  min-block-size: 0;
+  padding: 0;
+  position: relative;
+  z-index: auto;
+}
+
+.skirmish-hud-titlebar > .kit-panel-title {
+  padding-inline-end: calc(32px + var(--ds-space-3) + var(--le-control-content-inset));
+}
+
+.skirmish-screen .skirmish-hud-titlebar > .outer-chrome-header-title-actions {
+  /* Seat the visible book edge on the same right boundary as every control
+     below it. The installed codex canvas contributes 5px of transparent edge
+     at this display size; use the visible pixels, not the image element. */
+  inset-inline-end: calc(var(--le-control-content-inset) - 5px);
+}
+
+.skirmish-hud-title-action {
+  appearance: none;
+  align-items: center;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  cursor: pointer;
+  display: inline-flex;
+  justify-content: center;
+  line-height: 0;
+  min-block-size: 0;
+  padding: 0;
+}
+
+.skirmish-hud-title-action.active {
+  background: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.skirmish-hud-title-action:hover {
+  filter: brightness(1.2) saturate(1.08);
+}
+
+.skirmish-hud-title-action:focus-visible {
+  outline: 2px solid rgba(255, 216, 122, .85);
+  outline-offset: 2px;
+}
+
+.skirmish-hud-title-action-glyph {
+  block-size: 32px;
+  image-rendering: pixelated;
+  inline-size: 32px;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+@media (max-width: 1100px) {
+  .enchiridion-unit-card {
+    grid-template-columns: minmax(0, 1fr) 132px;
+  }
+
+  .enchiridion-movement-diagram {
+    inline-size: 132px;
+  }
+
+  .enchiridion-relic-layout,
+  .strategikon-content > .enchiridion-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .enchiridion-relic-layout {
+    grid-template-rows: auto auto;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-inline-end: 4px;
+  }
+
+  .enchiridion-relic-browser {
+    align-self: start;
+  }
+
+  .enchiridion-relic-browse-panel {
+    overflow: visible;
+  }
+
+  .enchiridion-relic-rows,
+  .enchiridion-relic-group {
+    block-size: auto;
+    overflow: visible;
+  }
 }
 
 @media (max-width: 960px) {

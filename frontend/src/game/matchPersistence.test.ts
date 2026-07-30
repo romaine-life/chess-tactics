@@ -74,7 +74,9 @@ describe('match persistence', () => {
       turnsElapsed: state.turnsElapsed,
       levelId: state.levelId,
       clock: state.clock,
+      savedAt: expect.any(String),
     });
+    expect(Number.isNaN(Date.parse(loaded?.savedAt ?? ''))).toBe(false);
     expect(loaded).not.toHaveProperty('version');
     expect(loaded).not.toHaveProperty('env');
   });

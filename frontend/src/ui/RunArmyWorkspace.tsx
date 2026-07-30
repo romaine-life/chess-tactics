@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, type ReactElement } from 'react';
+import { useLayoutEffect, useMemo, useRef, type ReactElement, type ReactNode } from 'react';
 import { defaultBackgroundSet } from '../art/backgroundSets';
 import { defaultFacingForSide, paletteForSide, pieceSpritePath } from '../core/pieces';
 import {
@@ -470,8 +470,47 @@ function ProfileSellAction({
   );
 }
 
+function RunArmyWorkspaceHost({
+  children,
+  className,
+  contentClassName,
+  'data-testid': dataTestId,
+  framed,
+}: {
+  children: ReactNode;
+  className: string;
+  contentClassName: string;
+  'data-testid': string;
+  framed: boolean;
+}): ReactElement {
+  if (framed) {
+    return (
+      <RunWorkspace
+        className={className}
+        contentClassName={contentClassName}
+        data-testid={dataTestId}
+        aria-labelledby="run-army-workspace-title"
+      >
+        {children}
+      </RunWorkspace>
+    );
+  }
+  return (
+    <section
+      className={`${className} ${contentClassName} run-panel-unframed`}
+      data-testid={dataTestId}
+      aria-labelledby="run-army-workspace-title"
+    >
+      {children}
+    </section>
+  );
+}
+
 export function RunArmyWorkspace({
   run,
+  title = 'Army',
+  backLabel = 'Back to Army',
+  framed = true,
   filters,
   selectedUnitId,
   onFiltersChange,
@@ -480,6 +519,9 @@ export function RunArmyWorkspace({
   onSell,
 }: {
   run: RunDocument;
+  title?: string;
+  backLabel?: string;
+  framed?: boolean;
   filters: RunArmyFilters;
   selectedUnitId: string | null;
   onFiltersChange: (filters: RunArmyFilters) => void;
@@ -499,11 +541,11 @@ export function RunArmyWorkspace({
     const rank = optionalUnitRank(selected);
     const kills = optionalUnitKills(selected);
     return (
-      <RunWorkspace
+      <RunArmyWorkspaceHost
         className="run-self-inspection-workspace run-army-workspace run-army-profile"
         contentClassName="run-self-inspection-content run-army-profile-content"
         data-testid="run-army-profile-workspace"
-        aria-labelledby="run-army-workspace-title"
+        framed={framed}
       >
           <header className="run-self-inspection-head">
             <h2 id="run-army-workspace-title">{runUnitDisplayName(selected)}</h2>
@@ -513,7 +555,7 @@ export function RunArmyWorkspace({
               className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
               onClick={onBack}
             >
-              Back to Army
+              {backLabel}
             </button>
           </header>
           <div className="run-army-profile-body">
@@ -536,19 +578,19 @@ export function RunArmyWorkspace({
               <ProfileSellAction run={run} unit={selected} onSell={onSell} />
             </section>
           </div>
-      </RunWorkspace>
+      </RunArmyWorkspaceHost>
     );
   }
 
   return (
-    <RunWorkspace
+    <RunArmyWorkspaceHost
       className="run-self-inspection-workspace run-army-workspace run-army-ledger"
       contentClassName="run-self-inspection-content run-army-ledger-content"
       data-testid="run-army-ledger-workspace"
-      aria-labelledby="run-army-workspace-title"
+      framed={framed}
     >
         <header className="run-self-inspection-head">
-          <h2 id="run-army-workspace-title">Army</h2>
+          <h2 id="run-army-workspace-title">{title}</h2>
           <span>{run.army.length} units</span>
         </header>
         <RunRosterFilters filters={filters} onChange={onFiltersChange} />
@@ -594,7 +636,7 @@ export function RunArmyWorkspace({
             </ChromeDividedGridRow>
           ) : null}
         </DividedInnerChromeBox>
-    </RunWorkspace>
+    </RunArmyWorkspaceHost>
   );
 }
 

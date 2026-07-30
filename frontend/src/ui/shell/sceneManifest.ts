@@ -2,8 +2,8 @@ import { normalizeRoutePath } from '../navigation';
 import { isPlaySelectorPath, playHubSelection } from '../playHubRoute';
 
 export type SceneBackground = 'homepage' | 'battlefield' | 'tool';
-export type SceneHost = 'menu-shell' | 'play-shell' | 'settings-shell' | 'standalone';
-export type SceneSlotId = 'root' | 'menu-destination' | 'play-content' | 'settings-content';
+export type SceneHost = 'menu-shell' | 'play-shell' | 'settings-shell' | 'enchiridion-shell' | 'gameplay-shell' | 'standalone';
+export type SceneSlotId = 'root' | 'menu-destination' | 'play-content' | 'settings-content' | 'enchiridion-content' | 'gameplay-content';
 export type SceneViewId =
   | 'main-menu'
   | 'play'
@@ -22,6 +22,12 @@ export type SceneViewId =
   | 'settings-gameplay'
   | 'settings-creator-tools'
   | 'settings-admin'
+  | 'enchiridion'
+  | 'enchiridion-units'
+  | 'enchiridion-terrain'
+  | 'enchiridion-relics'
+  | 'enchiridion-abilities'
+  | 'strategikon'
   | 'lobbies'
   | 'studio'
   | 'predrawn-reference'
@@ -91,6 +97,13 @@ export const SCENE_DEFINITIONS = Object.freeze({
   settingsGameplay: defineScene({ id: 'settings/gameplay', parent: 'settings', slot: 'settings-content', view: 'settings-gameplay' }),
   settingsCreatorTools: defineScene({ id: 'settings/creator-tools', parent: 'settings', slot: 'settings-content', view: 'settings-creator-tools' }),
   settingsAdmin: defineScene({ id: 'settings/admin', parent: 'settings', slot: 'settings-content', view: 'settings-admin' }),
+  enchiridion: defineScene({ id: 'enchiridion', parent: 'main-menu', slot: 'menu-destination', view: 'enchiridion' }),
+  enchiridionUnits: defineScene({ id: 'enchiridion/units', parent: 'enchiridion', slot: 'enchiridion-content', view: 'enchiridion-units' }),
+  enchiridionTerrain: defineScene({ id: 'enchiridion/terrain', parent: 'enchiridion', slot: 'enchiridion-content', view: 'enchiridion-terrain' }),
+  enchiridionRelics: defineScene({ id: 'enchiridion/relics', parent: 'enchiridion', slot: 'enchiridion-content', view: 'enchiridion-relics' }),
+  enchiridionAbilities: defineScene({ id: 'enchiridion/abilities', parent: 'enchiridion', slot: 'enchiridion-content', view: 'enchiridion-abilities' }),
+  gameplayStrategikon: defineScene({ id: 'gameplay/strategikon', parent: 'gameplay', slot: 'gameplay-content', view: 'strategikon' }),
+  runStrategikon: defineScene({ id: 'run/strategikon', parent: 'run', slot: 'gameplay-content', view: 'strategikon' }),
   lobbies: defineScene({ id: 'lobbies', parent: 'main-menu', slot: 'menu-destination', view: 'lobbies' }),
   studio: defineScene({ id: 'studio', parent: null, slot: 'root', view: 'studio' }),
   predrawnReference: defineScene({ id: 'predrawn-reference', parent: null, slot: 'root', view: 'predrawn-reference' }),
@@ -125,7 +138,7 @@ const manifest = (
 function leafSceneManifest(pathname: string): SceneManifest {
   const path = normalizeRoutePath(pathname);
 
-  if (path === '/play') {
+  if (path === '/play' || path.startsWith('/play/strategikon/')) {
     return manifest('gameplay', 'battlefield', 'gameplay-hud', [
       'battlefield-background',
       'level-snapshot',
@@ -133,15 +146,15 @@ function leafSceneManifest(pathname: string): SceneManifest {
       'visible-units-and-overlays',
       'gameplay-hud',
       'title-controls',
-    ]);
+    ], [], 'gameplay-shell', 'transition-only');
   }
-  if (path === '/run') {
+  if (path === '/run' || path.startsWith('/run/strategikon/')) {
     return manifest('run', 'battlefield', 'gameplay-hud', [
       'battlefield-background',
       'active-run',
       'run-chrome',
       'visible-relics',
-    ]);
+    ], [], 'gameplay-shell', 'transition-only');
   }
   if (isPlaySelectorPath(path)) {
     return manifest(`play-selector:${path}`, 'homepage', 'play-selector', [
@@ -198,6 +211,14 @@ function leafSceneManifest(pathname: string): SceneManifest {
       'visible-controls',
     ], [], 'settings-shell', path === '/settings/audio/tracks' ? 'loading' : 'transition-only');
   }
+  if (path === '/enchiridion' || path.startsWith('/enchiridion/')) {
+    return manifest(`enchiridion:${path}`, 'homepage', 'dom', [
+      'homepage-background',
+      'title-bar',
+      'visible-controls',
+      'visible-reference-art',
+    ], [], 'enchiridion-shell', 'transition-only');
+  }
   if (path === '/lobbies' || path.startsWith('/lobbies/')) {
     return manifest('lobbies', 'homepage', 'lobbies', [
       'homepage-background',
@@ -244,10 +265,14 @@ export function sceneManifest(pathname: string): ScenePath {
   const root = instance(SCENE_DEFINITIONS.mainMenu);
   let instances: readonly SceneInstance[];
 
-  if (path === '/play') {
-    instances = [instance(SCENE_DEFINITIONS.gameplay)];
-  } else if (path === '/run') {
-    instances = [instance(SCENE_DEFINITIONS.run)];
+  if (path === '/play' || path.startsWith('/play/strategikon/')) {
+    instances = path === '/play'
+      ? [instance(SCENE_DEFINITIONS.gameplay)]
+      : [instance(SCENE_DEFINITIONS.gameplay), instance(SCENE_DEFINITIONS.gameplayStrategikon, { path })];
+  } else if (path === '/run' || path.startsWith('/run/strategikon/')) {
+    instances = path === '/run'
+      ? [instance(SCENE_DEFINITIONS.run)]
+      : [instance(SCENE_DEFINITIONS.run), instance(SCENE_DEFINITIONS.runStrategikon, { path })];
   } else if (isPlaySelectorPath(path)) {
     const selection = playHubSelection(path);
     const selectedInstance = selection?.mode === 'levels'
@@ -275,6 +300,15 @@ export function sceneManifest(pathname: string): ScenePath {
             ? SCENE_DEFINITIONS.settingsAdmin
           : SCENE_DEFINITIONS.settingsGeneral;
     instances = [root, instance(SCENE_DEFINITIONS.settings), instance(settingsSection)];
+  } else if (path === '/enchiridion' || path.startsWith('/enchiridion/')) {
+    const section = path === '/enchiridion/terrain'
+      ? SCENE_DEFINITIONS.enchiridionTerrain
+      : path === '/enchiridion/relics'
+        ? SCENE_DEFINITIONS.enchiridionRelics
+        : path === '/enchiridion/abilities'
+          ? SCENE_DEFINITIONS.enchiridionAbilities
+          : SCENE_DEFINITIONS.enchiridionUnits;
+    instances = [root, instance(SCENE_DEFINITIONS.enchiridion), instance(section)];
   } else if (path === '/lobbies' || path.startsWith('/lobbies/')) {
     instances = [root, instance(SCENE_DEFINITIONS.lobbies)];
   } else if (path === '/party') {
@@ -300,6 +334,9 @@ const HOST_REGION_BY_DEFINITION: Readonly<Partial<Record<string, SceneHost>>> = 
   'main-menu': 'menu-shell',
   play: 'play-shell',
   settings: 'settings-shell',
+  enchiridion: 'enchiridion-shell',
+  gameplay: 'gameplay-shell',
+  run: 'gameplay-shell',
 });
 
 /** Find the deepest retained destination region from authored instance ancestry. */
@@ -322,6 +359,8 @@ const DESTINATION_SLOT_BY_REGION: Readonly<Partial<Record<SceneHost, SceneSlotId
   'menu-shell': 'menu-destination',
   'play-shell': 'play-content',
   'settings-shell': 'settings-content',
+  'enchiridion-shell': 'enchiridion-content',
+  'gameplay-shell': 'gameplay-content',
 });
 
 /** True when a retained host is transitioning by removing its current child slot. */

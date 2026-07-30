@@ -246,11 +246,32 @@ homepage family uses one continuous generated scenic backdrop, one invariant tit
 bar, shared settings-twin rails, live rows, and data-backed board previews. The saved
 concept renders remain direction and comparison references rather than runtime screens.
 
-The default work surfaces are `/`, `/play/select/skirmish`,
+The default work surfaces are `/`, `/enchiridion/units`,
+`/enchiridion/terrain`, `/enchiridion/relics`,
+`/enchiridion/abilities`, `/play/select/skirmish`,
 `/play/select/levels`, `/play/select/campaign/<id>`, `/editor`,
 `/editor/level`, and exact `/play?...` for a selected live board. The main menu has
-four top-level controls — Play, Editor, Lobbies, Settings — and Play owns the shared
-Skirmish/Levels/Campaign selector described by ADR-0074. The generated no-board scenic
+five top-level controls — Play, Editor, Lobbies, Enchiridion, Settings — and Play owns the shared
+Continue/Skirmish/Run/Levels/Campaign selector described by ADR-0074 and ADR-0232.
+Continue Run selects the existing Run action panel; its nested Play control alone
+enters the active Run.
+Enchiridion is immediately above Settings. In Battle, frameless open-codex art
+at the same visual scale as the Controls title and aligned to the Controls
+content boundary opens
+Strategikon; its hover/focus information names the unfamiliar destination and
+summarizes its references, army, and relic contents under ADR-0250. Strategikon's rail reuses the exact menu-tab size,
+inset, and stone-continuity language but replaces the board only. The right Controls
+column remains present and is outside the Strategikon content rectangle. Its
+fill occupies that complete board pane without adding an outer frame, and its
+route transition leaves the current level scene mounted; only main-menu
+Enchiridion uses the homepage scene. In both hosts, relic references use the
+ADR-0254 dual-view browser: a compact Rows/Grouped tab sits above the selection
+column; Rows uses corrected named list frames, while Grouped uses one containing
+inner frame around an otherwise unframed native-icon grid. Neither view opens
+relic tooltips: the selected content-sized record is the sole visible
+name/effect/history authority. In the main-menu host, the two canonical rail
+anchors remain fixed while Enchiridion content consumes the remaining visible
+canvas; the ordinary action-column width does not cap it. The generated no-board scenic
 background remains the accepted background-only scene. Daily/news and the duplicate
 bottom dock remain absent. The production route must not bake a board into the
 background or grow a separate battlefield preview panel. `/design/*/render` routes preserve the approved renders for comparison:
@@ -261,7 +282,7 @@ asset families before wiring them into a bridge.
 
 The main menu acceptance state lives in
 [main-menu-acceptance.md](main-menu-acceptance.md). As of the current pass, the
-four-entry mode rail, invariant title bar, shared live-DOM kit, and scenic background
+five-entry mode rail, invariant title bar, shared live-DOM kit, and scenic background
 are settled. Daily/news is removed.
 The real board/battlefield layer is out of scope for this pass, and desktop is
 the validation target. Profile/account and the overall desktop composition still

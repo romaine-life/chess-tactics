@@ -75,7 +75,10 @@ import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox } from './shared/ChromeBox';
 import { rememberAdminBattleHref } from '../admin/battleRoute';
 import type { RunRelicId } from '../run/model';
+import { useActiveRun } from '../run/store';
 import { RunRelicStrip } from './RunRelics';
+import { Strategikon } from './Strategikon';
+import { sceneTransitionTargetAttributes } from './shell/sceneTransitionTarget';
 import type { RunSelfInspectionView } from './RunSelfInspection';
 
 export interface RunBattlePresentation {
@@ -171,17 +174,24 @@ export function SkirmishShell({
 export function Skirmish({
   runBattle = null,
   runWorkspace = null,
+  routePath = window.location.pathname,
   runSelfInspectionView = null,
   onNavigateRunView = null,
   routeSearch = window.location.search,
 }: {
   runBattle?: RunBattlePresentation | null;
   runWorkspace?: ReactNode;
+  routePath?: string;
   runSelfInspectionView?: RunSelfInspectionView | null;
   onNavigateRunView?: ((view: 'primary' | RunSelfInspectionView) => void) | null;
   routeSearch?: string;
 } = {}) {
   const routeParams = useMemo(() => new URLSearchParams(routeSearch), [routeSearch]);
+  const strategikonOpen = routePath.startsWith('/play/strategikon/') || routePath.startsWith('/run/strategikon/');
+  const strategikonBase = runBattle ? '/run' : '/play';
+  const strategikonHref = strategikonOpen
+    ? `${strategikonBase}${routeSearch}`
+    : `${strategikonBase}/strategikon/enchiridion/units${routeSearch}`;
   const predrawnPreview = useMemo(
     () => predrawnBoardPreviewSrc(routeSearch, window.location.origin),
     [routeSearch],
@@ -1125,6 +1135,8 @@ export function Skirmish({
         onOpenPredrawnRegistration={predrawnPreview ? () => setPredrawnPickerOpen(true) : null}
         onPawnCashOut={runBattle?.onPawnCashOut ?? null}
         onAbandonRun={runBattle?.onAbandonRun ?? null}
+        strategikonHref={strategikonHref}
+        strategikonOpen={strategikonOpen}
         runSelfInspectionView={runSelfInspectionView}
         onNavigateRunView={onNavigateRunView}
       />
@@ -1135,7 +1147,7 @@ export function Skirmish({
     <SkirmishShell
       testId="skirmish"
       className={screenPredrawnBackgroundActive ? 'is-predrawn-board' : ''}
-      runSelfInspectionOpen={Boolean(runWorkspace)}
+      runSelfInspectionOpen={Boolean(runWorkspace) || strategikonOpen}
       titleBarContent={playableSurfaceReady ? (
         <div className="skirmish-topbar-status">
           {/* The battle clock is ALWAYS the middle chip on every play surface — a timed game
@@ -1211,11 +1223,15 @@ export function Skirmish({
         </TitleBarSlot>
       ) : null}
 
-      <section className="skirmish-war-room" aria-label="Skirmish battlefield">
+      <section
+        className={`skirmish-war-room${strategikonOpen ? ' has-strategikon' : ''}`}
+        aria-label={strategikonOpen ? 'Battle reference workspace' : 'Skirmish battlefield'}
+        data-scene-instance={strategikonBase}
+      >
         <div
-          className={`skirmish-field${runWorkspace ? ' is-workspace-covered' : ''}`}
-          inert={runWorkspace ? true : undefined}
-          aria-hidden={runWorkspace ? true : undefined}
+          className={`skirmish-field${strategikonOpen || runWorkspace ? ' is-workspace-covered' : ''}`}
+          inert={strategikonOpen || runWorkspace ? true : undefined}
+          aria-hidden={strategikonOpen || runWorkspace ? true : undefined}
         >
           <div className="skirmish-board-frame">
             {mapError ? (
@@ -1270,6 +1286,19 @@ export function Skirmish({
           </InnerChromeBox>
         ) : null}
         {runWorkspace}
+        <div
+          className="strategikon-slot"
+          {...sceneTransitionTargetAttributes('gameplay-shell')}
+          data-scene-instance={strategikonOpen ? routePath : `${strategikonBase}/strategikon`}
+        >
+          {strategikonOpen ? (
+            <Strategikon
+              path={routePath}
+              search={routeSearch}
+              run={runBattle ? useActiveRun.getState().run : null}
+            />
+          ) : null}
+        </div>
       </section>
       {predrawnPickerOpen && predrawnPreview ? (
         <PredrawnCornerPicker

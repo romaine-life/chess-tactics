@@ -12,7 +12,7 @@ import type { Campaign as CampaignDoc, Level } from '../core/level';
 import { spawnEventsForLevel } from '../core/levelEvents';
 import { MODE_NAME } from '../core/objectives';
 import { navigateApp } from './navigation';
-import { FittedTabLabel } from './shared/FittedTabLabel';
+import { ApparatusRailTab } from './shared/ApparatusRailTab';
 import { KitScroll } from './KitScroll';
 import { levelObjectiveLine } from './LevelInfoCompact';
 import { LevelPreviewColumn } from './LevelPreviewColumn';
@@ -43,6 +43,8 @@ import { useActiveRun } from '../run/store';
 import { createRun, formatGold, snapshotWar } from '../run/model';
 import { useConfirm } from './shared/ConfirmDialog';
 import { InnerChromeBox } from './shared/ChromeBox';
+import { loadMatch, type PersistedMatch } from '../game/matchPersistence';
+import { continueActivity } from './playContinue';
 
 type PlayIcon = 'solo-skirmish' | 'campaign-editor' | 'level-editor' | 'lobbies';
 
@@ -77,36 +79,18 @@ function PlayRailTab({
   active: boolean;
   index: number;
 }): ReactElement {
-  return (
-    <NavButton
-      data-chrome-unit="inner-box"
-      className={chromeUnitClassNames('inner-box', 'settings-tab main-menu-mode-tab', active && 'is-active')}
-      to={href}
-      style={{ ['--tab-index' as string]: index }}
-      aria-current={active ? 'page' : undefined}
-    >
-      <span className="settings-tab-icon" aria-hidden="true">
-        <img src={carvedIcon(icon)} alt="" />
-      </span>
-      <FittedTabLabel>{label}</FittedTabLabel>
-    </NavButton>
-  );
+  return <ApparatusRailTab label={label} to={href} iconSrc={carvedIcon(icon)} active={active} index={index} />;
 }
 
 function CampaignTab({ campaign, active, index }: { campaign: CampaignDoc; active: boolean; index: number }): ReactElement {
   return (
-    <NavButton
-      data-chrome-unit="inner-box"
-      className={chromeUnitClassNames('inner-box', 'settings-tab main-menu-mode-tab', active && 'is-active')}
+    <ApparatusRailTab
+      label={campaign.name}
       to={playCampaignSelectorHref(campaign.id)}
-      style={{ ['--tab-index' as string]: index }}
-      aria-current={active ? 'page' : undefined}
-    >
-      <span className="settings-tab-icon" aria-hidden="true">
-        <img src={CAMPAIGN_ICON} alt="" />
-      </span>
-      <FittedTabLabel>{campaign.name}</FittedTabLabel>
-    </NavButton>
+      iconSrc={CAMPAIGN_ICON}
+      active={active}
+      index={index}
+    />
   );
 }
 
@@ -205,7 +189,7 @@ function RunPanel({
             <h3>{run.war.name}</h3>
             <p>{run.war.description || 'Active War'}</p>
             <p>Battle {run.battleIndex + 1} of {run.war.battles.length} · {run.army.length} units · {formatGold(run.goldTenths)} gold</p>
-            <NavButton data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} to="/run">Continue Run</NavButton>
+            <NavButton data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} to="/run">Play</NavButton>
           </InnerChromeBox>
         ) : null}
         {!loading && officialAvailable && eligible.length === 0 ? (
@@ -501,6 +485,9 @@ export function PlayMenu({
 }): ReactElement {
   const campaigns = useCampaigns((state) => state.campaigns);
   const levels = useCampaigns((state) => state.levels);
+  const activeRun = useActiveRun((state) => state.run);
+  const hydrateRun = useActiveRun((state) => state.hydrate);
+  const [persistedMatch, setPersistedMatch] = useState<PersistedMatch | null>(() => loadMatch());
   // `path` is the scene director's mounted scene path. Browser navigation only
   // requests a destination; it must never reveal Play content ahead of the
   // director's exit, preparation, paint acknowledgement, and entrance lifecycle.
@@ -514,6 +501,10 @@ export function PlayMenu({
   const [progress, setProgress] = useState<CampaignProgress>(readProgress);
   const [selectedLevelId, setSelectedLevelId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const resumable = useMemo(
+    () => continueActivity(activeRun, persistedMatch, campaigns, levels),
+    [activeRun, campaigns, levels, persistedMatch],
+  );
   const [officialAvailable, setOfficialAvailable] = useState(false);
   const [userWorkspaceAvailable, setUserWorkspaceAvailable] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
@@ -526,6 +517,17 @@ export function PlayMenu({
       current.complete === next.complete && current.error === next.error ? current : next
     ));
   }, []);
+
+  useEffect(() => {
+    void hydrateRun();
+    const refresh = () => setPersistedMatch(loadMatch());
+    window.addEventListener('storage', refresh);
+    window.addEventListener('focus', refresh);
+    return () => {
+      window.removeEventListener('storage', refresh);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [hydrateRun]);
 
   useEffect(() => {
     let active = true;
@@ -615,26 +617,37 @@ export function PlayMenu({
       >
       <aside className="menu-dest-col menu-dest-tabs play-source-rail" aria-label="Play">
         <div className="play-source-fixed">
+          {resumable ? (
+            <ApparatusRailTab
+              label={resumable.label}
+              detail={resumable.detail}
+              to={resumable.href}
+              iconSrc={carvedIcon(resumable.icon)}
+              active={false}
+              index={0}
+              testId="play-continue"
+            />
+          ) : null}
           <PlayRailTab
             label="Skirmish"
             href={PLAY_SKIRMISH_SELECTOR_HREF}
             icon="solo-skirmish"
             active={selection.mode === 'skirmish'}
-            index={0}
+            index={resumable ? 1 : 0}
           />
           <PlayRailTab
             label="Run"
             href={PLAY_RUN_SELECTOR_HREF}
             icon="campaign-editor"
             active={selection.mode === 'run'}
-            index={1}
+            index={resumable ? 2 : 1}
           />
           <PlayRailTab
             label="Levels"
             href={PLAY_LEVELS_SELECTOR_HREF}
             icon="level-editor"
             active={selection.mode === 'levels'}
-            index={2}
+            index={resumable ? 3 : 2}
           />
         </div>
 
@@ -653,7 +666,7 @@ export function PlayMenu({
                       key={campaign.id}
                       campaign={campaign}
                       active={selection.mode === 'campaign' && selection.campaignId === campaign.id}
-                      index={index + 3}
+                      index={index + 3 + (resumable ? 1 : 0)}
                     />
                   ))}
                 </>
@@ -666,7 +679,7 @@ export function PlayMenu({
                       key={campaign.id}
                       campaign={campaign}
                       active={selection.mode === 'campaign' && selection.campaignId === campaign.id}
-                      index={officialCampaigns.length + index + 3}
+                      index={officialCampaigns.length + index + 3 + (resumable ? 1 : 0)}
                     />
                   ))}
                 </>

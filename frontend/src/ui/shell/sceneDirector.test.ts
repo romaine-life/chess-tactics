@@ -6,7 +6,7 @@ describe('scene director', () => {
   it('declares Play as a host nested inside the persistent menu host', () => {
     expect(sceneManifest('/').host).toBe('menu-shell');
     expect(sceneManifest('/play/select/skirmish').host).toBe('play-shell');
-    expect(sceneManifest('/play').host).toBe('standalone');
+    expect(sceneManifest('/play').host).toBe('gameplay-shell');
   });
   it('does not restart a generation when a redirect repeats the active destination', () => {
     const home = sceneManifest('/');

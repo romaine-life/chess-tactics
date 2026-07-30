@@ -21,16 +21,27 @@ describe('unified Play menu contract (ADR-0074)', () => {
       .toContain("['play', 'Play', '/play/select/skirmish'");
   });
 
-  it('pins Skirmish, Run, and Levels above one drawn-scroll Campaign collection', () => {
+  it('leads with a resumable activity, then pins Skirmish, Run, and Levels above Campaigns', () => {
     const fixed = playMenu.indexOf('className="play-source-fixed"');
     const campaigns = playMenu.indexOf('className="play-campaign-region"');
     expect(fixed).toBeGreaterThan(-1);
     expect(campaigns).toBeGreaterThan(fixed);
     expect(playMenu).toContain('<KitScroll className="play-campaign-scroll">');
+    expect(playMenu).toContain('testId="play-continue"');
+    expect(playMenu).toContain("label={resumable.label}");
+    expect(playMenu).toContain("detail={resumable.detail}");
     expect(playMenu).toContain('index={0}');
-    expect(playMenu).toContain('index={1}');
-    expect(playMenu).toContain('index={2}');
-    expect(playMenu).toContain('index={index + 3}');
+    expect(playMenu).toContain('index={resumable ? 1 : 0}');
+    expect(playMenu).toContain('index={resumable ? 2 : 1}');
+    expect(playMenu).toContain('index={resumable ? 3 : 2}');
+    expect(playMenu).toContain('index={index + 3 + (resumable ? 1 : 0)}');
+  });
+
+  it('selects the Run submenu before its nested Play action enters the active Run', () => {
+    expect(readFileSync(new URL('./playContinue.ts', import.meta.url), 'utf8'))
+      .toContain('href: PLAY_RUN_SELECTOR_HREF');
+    expect(playMenu).toContain('to="/run">Play</NavButton>');
+    expect(playMenu).not.toContain('to="/run">Continue Run</NavButton>');
   });
 
   it('resolves Play rail icons from installed drawable membership, not retired path-shaped app-ui roles', () => {

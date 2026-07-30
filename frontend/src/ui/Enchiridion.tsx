@@ -1,0 +1,457 @@
+import { useEffect, useId, useMemo, useState, type ReactElement, type ReactNode } from 'react';
+import { legalMoves } from '../core/rules';
+import { PIECE_LABEL, PLAYABLE_PIECE_TYPES, paletteForSide, pieceSpritePath, type PlayablePieceType } from '../core/pieces';
+import type { BoardSize, Piece } from '../core/types';
+import { RUN_RELICS, type RunRelicId } from '../run/model';
+import {
+  loadRunRelicStatistics,
+  RUN_RELIC_STATISTICS_EVENT,
+  type RunRelicStatistics,
+} from '../run/relicStatistics';
+import { chromeUnitClassNames } from './chromeUnitRegistry';
+import { RunRelicIcon } from './RunRelics';
+import { ApparatusRailTab } from './shared/ApparatusRailTab';
+import { InnerChromeBox, OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
+import { sceneTransitionTargetAttributes } from './shell/sceneTransitionTarget';
+
+export const ENCHIRIDION_SECTIONS = ['units', 'terrain', 'relics', 'abilities'] as const;
+export type EnchiridionSection = typeof ENCHIRIDION_SECTIONS[number];
+
+const SECTION_LABEL: Record<EnchiridionSection, string> = {
+  units: 'Units',
+  terrain: 'Terrain',
+  relics: 'Relics',
+  abilities: 'Abilities',
+};
+
+const SECTION_ICON: Record<EnchiridionSection, string> = {
+  units: 'skirmish-tab-icon skirmish-tab-icon-unit',
+  terrain: 'ic-grid',
+  relics: 'skirmish-tab-icon skirmish-tab-icon-log',
+  abilities: 'skirmish-icon skirmish-icon-shield',
+};
+
+const UNIT_COPY: Record<PlayablePieceType, string> = {
+  pawn: 'Moves one square forward; from its starting square it may move two. Captures one square diagonally forward.',
+  knight: 'Jumps in an L: two squares along one axis and one along the other.',
+  bishop: 'Slides any distance along a diagonal until its diagonal path is blocked.',
+  rook: 'Slides any distance in a straight orthogonal line until its path is blocked.',
+  queen: 'Slides any distance orthogonally or diagonally until its path is blocked.',
+  king: 'Moves one square in any direction. Authored Battles may also permit specific castling moves.',
+};
+
+const MOVEMENT_SIZE: BoardSize = { cols: 7, rows: 7 };
+
+function movementExample(type: PlayablePieceType): {
+  piece: Piece;
+  pieces: Piece[];
+  moves: Set<string>;
+  captures: Set<string>;
+} {
+  const piece: Piece = {
+    id: `enchiridion-${type}`,
+    side: 'player',
+    type,
+    x: 3,
+    y: 3,
+    alive: true,
+    startX: 3,
+    startY: 3,
+    pawnForward: 'north',
+    facing: 'north',
+  };
+  const targets: Piece[] = type === 'pawn'
+    ? [
+        { id: 'pawn-capture-left', side: 'enemy', type: 'pawn', x: 2, y: 2, alive: true, startY: 0 },
+        { id: 'pawn-capture-right', side: 'enemy', type: 'pawn', x: 4, y: 2, alive: true, startY: 0 },
+      ]
+    : [];
+  const pieces = [piece, ...targets];
+  const legal = legalMoves(piece, pieces, MOVEMENT_SIZE);
+  return {
+    piece,
+    pieces,
+    moves: new Set(legal.map((move) => `${move.x},${move.y}`)),
+    captures: new Set(legal.filter((move) => move.capture).map((move) => `${move.x},${move.y}`)),
+  };
+}
+
+function MovementDiagram({ type }: { type: PlayablePieceType }): ReactElement {
+  const example = useMemo(() => movementExample(type), [type]);
+  const cells = [];
+  for (let y = 0; y < MOVEMENT_SIZE.rows; y += 1) {
+    for (let x = 0; x < MOVEMENT_SIZE.cols; x += 1) {
+      const key = `${x},${y}`;
+      const isPiece = x === example.piece.x && y === example.piece.y;
+      const isMove = example.moves.has(key);
+      const isCapture = example.captures.has(key);
+      cells.push(
+        <span
+          className={`enchiridion-move-cell${isMove ? ' is-move' : ''}${isCapture ? ' is-capture' : ''}${isPiece ? ' is-piece' : ''}`}
+          key={key}
+          aria-hidden="true"
+        >
+          {isPiece ? (
+            <img
+              src={pieceSpritePath(type, paletteForSide('player'), 'north')}
+              alt=""
+              draggable={false}
+            />
+          ) : isCapture ? '×' : isMove ? '◆' : '·'}
+        </span>,
+      );
+    }
+  }
+  return (
+    <div className="enchiridion-movement-diagram" role="img" aria-label={`${PIECE_LABEL[type]} legal movement from the center of an open board`}>
+      {cells}
+    </div>
+  );
+}
+
+function ReferenceSectionFrame({
+  children,
+  chromeConsumer,
+  className = '',
+  framed,
+  title,
+}: {
+  children: ReactNode;
+  chromeConsumer: string;
+  className?: string;
+  framed: boolean;
+  title: string;
+}): ReactElement {
+  const panelClassName = `enchiridion-panel ${className}`.trim();
+  if (framed) {
+    return (
+      <OuterChromeBox chromeConsumer={chromeConsumer} titled className={panelClassName}>
+        <OuterChromeHeader title={title} />
+        {children}
+      </OuterChromeBox>
+    );
+  }
+  return (
+    <section className={`${panelClassName} enchiridion-panel-unframed`}>
+      <h2 className="settings-section-title">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+function UnitsSection({ framed }: { framed: boolean }): ReactElement {
+  return (
+    <ReferenceSectionFrame
+      chromeConsumer="enchiridion-units"
+      className="enchiridion-unit-panel"
+      framed={framed}
+      title="Units"
+    >
+      <p>Each diagram is generated by the same movement engine used in Battle. Diamonds are legal destinations; crosses are captures.</p>
+      <div className="enchiridion-unit-grid">
+        {PLAYABLE_PIECE_TYPES.map((type) => (
+          <InnerChromeBox className="enchiridion-unit-card" key={type}>
+            <div>
+              <h3>{PIECE_LABEL[type]}</h3>
+              <p>{UNIT_COPY[type]}</p>
+            </div>
+            <MovementDiagram type={type} />
+          </InnerChromeBox>
+        ))}
+      </div>
+    </ReferenceSectionFrame>
+  );
+}
+
+const TERRAIN_FEATURES = [
+  {
+    label: 'Open ground',
+    copy: 'Grass, dirt, stone, roads, bridges, pebbles, and sand permit ordinary movement.',
+    icon: 'ic-grid',
+  },
+  {
+    label: 'Water',
+    copy: 'A sliding unit may enter water, but its move ends there. A unit already in water leaves normally.',
+    icon: 'skirmish-icon skirmish-icon-move',
+  },
+  {
+    label: 'Gaps and blocking terrain',
+    copy: 'Cliff, rock, and void cells cannot be occupied. They stop sliding rays at the first blocked diagonal or orthogonal cell.',
+    icon: 'skirmish-icon skirmish-icon-shield',
+  },
+  {
+    label: 'Elevation',
+    copy: 'A unit may climb one level in a step. Higher rises block entry; descending is unrestricted.',
+    icon: 'skirmish-icon skirmish-icon-flag',
+  },
+  {
+    label: 'Fences',
+    copy: 'A fence blocks the orthogonal edge it occupies. A diagonal is blocked only when both routes around that corner are closed.',
+    icon: 'skirmish-icon skirmish-icon-crossed-swords',
+  },
+] as const;
+
+function TerrainSection({ framed }: { framed: boolean }): ReactElement {
+  return (
+    <ReferenceSectionFrame
+      chromeConsumer="enchiridion-terrain"
+      className="enchiridion-terrain-panel"
+      framed={framed}
+      title="Terrain"
+    >
+      <div className="enchiridion-terrain-list">
+        {TERRAIN_FEATURES.map((feature) => (
+          <InnerChromeBox className="enchiridion-terrain-row" key={feature.label}>
+            <span className={feature.icon} aria-hidden="true" />
+            <span>
+              <h3>{feature.label}</h3>
+              <p>{feature.copy}</p>
+            </span>
+          </InnerChromeBox>
+        ))}
+      </div>
+      <InnerChromeBox className="enchiridion-rule-exceptions">
+        <h3>Path exceptions</h3>
+        <p><strong>Knights</strong> jump over gaps, fences, and intervening obstacles. Only the landing square must be legal.</p>
+        <p><strong>Bishops</strong> inspect the diagonal they actually travel. Obstacles on neighboring non-diagonal tiles are ignored; a blocker on the diagonal itself still ends the path.</p>
+      </InnerChromeBox>
+    </ReferenceSectionFrame>
+  );
+}
+
+function statisticFor(statistics: RunRelicStatistics, relicId: RunRelicId) {
+  return statistics[relicId] ?? { timesPicked: 0, battlesWonWhileHeld: 0 };
+}
+
+type RelicBrowseMode = 'rows' | 'grouped';
+
+export function RelicCodex({
+  relicIds = RUN_RELICS.map((relic) => relic.id),
+  title = 'Relics',
+  showStatistics = true,
+  framed = true,
+}: {
+  relicIds?: readonly RunRelicId[];
+  title?: string;
+  showStatistics?: boolean;
+  framed?: boolean;
+}): ReactElement {
+  const [selectedId, setSelectedId] = useState<RunRelicId>(relicIds[0] ?? RUN_RELICS[0].id);
+  const [browseMode, setBrowseMode] = useState<RelicBrowseMode>('rows');
+  const [statistics, setStatistics] = useState<RunRelicStatistics>({});
+  const [statisticsStatus, setStatisticsStatus] = useState<'loading' | 'account' | 'browser'>('loading');
+  const browsePanelId = useId();
+  const visibleRelics = RUN_RELICS.filter((relic) => relicIds.includes(relic.id));
+  const selected = RUN_RELICS.find((relic) => relic.id === selectedId)
+    ?? visibleRelics[0]
+    ?? RUN_RELICS[0];
+
+  useEffect(() => {
+    if (!relicIds.includes(selectedId) && relicIds[0]) setSelectedId(relicIds[0]);
+  }, [relicIds, selectedId]);
+
+  useEffect(() => {
+    if (!showStatistics) return undefined;
+    let active = true;
+    const refresh = () => {
+      void loadRunRelicStatistics().then((result) => {
+        if (!active) return;
+        setStatistics(result.statistics);
+        setStatisticsStatus(result.accountBacked ? 'account' : 'browser');
+      });
+    };
+    refresh();
+    window.addEventListener(RUN_RELIC_STATISTICS_EVENT, refresh);
+    return () => {
+      active = false;
+      window.removeEventListener(RUN_RELIC_STATISTICS_EVENT, refresh);
+    };
+  }, [showStatistics]);
+
+  const selectedStatistic = statisticFor(statistics, selected.id);
+  return (
+    <ReferenceSectionFrame
+      chromeConsumer="enchiridion-relics"
+      className="enchiridion-relic-panel"
+      framed={framed}
+      title={title}
+    >
+      {relicIds.length ? (
+        <div className="enchiridion-relic-layout">
+          <div className="enchiridion-relic-browser">
+            <div className="le-seg enchiridion-relic-view-tabs" role="tablist" aria-label="Relic browsing layout">
+              <button
+                type="button"
+                data-chrome-unit="inner-text-button"
+                data-testid="relic-view-rows"
+                role="tab"
+                aria-controls={browsePanelId}
+                aria-selected={browseMode === 'rows'}
+                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', browseMode === 'rows' && 'active')}
+                onClick={() => setBrowseMode('rows')}
+              >
+                Rows
+              </button>
+              <button
+                type="button"
+                data-chrome-unit="inner-text-button"
+                data-testid="relic-view-grouped"
+                role="tab"
+                aria-controls={browsePanelId}
+                aria-selected={browseMode === 'grouped'}
+                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', browseMode === 'grouped' && 'active')}
+                onClick={() => setBrowseMode('grouped')}
+              >
+                Grouped
+              </button>
+            </div>
+            <div
+              id={browsePanelId}
+              className={`enchiridion-relic-browse-panel is-${browseMode}`}
+              role="tabpanel"
+              aria-label={`${browseMode === 'rows' ? 'Rows' : 'Grouped'} relic view`}
+            >
+              {browseMode === 'rows' ? (
+                <ul className="enchiridion-relic-rows" aria-label={title}>
+                  {visibleRelics.map((relic) => (
+                    <li key={relic.id}>
+                      <button
+                        type="button"
+                        data-chrome-unit="inner-list-row"
+                        className={chromeUnitClassNames(
+                          'inner-list-row',
+                          'enchiridion-relic-row',
+                          selected.id === relic.id && 'is-active',
+                        )}
+                        aria-label={`${relic.name}. ${relic.description}`}
+                        aria-pressed={selected.id === relic.id}
+                        onClick={() => setSelectedId(relic.id)}
+                      >
+                        <RunRelicIcon relicId={relic.id} className="enchiridion-relic-row-icon" />
+                        <span className="enchiridion-relic-row-name">{relic.name}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <InnerChromeBox className="enchiridion-relic-group">
+                  <ul className="enchiridion-relic-group-grid" aria-label={title}>
+                    {visibleRelics.map((relic) => (
+                      <li key={relic.id}>
+                        <button
+                          type="button"
+                          className={`enchiridion-relic-grouped-trigger${selected.id === relic.id ? ' is-active' : ''}`}
+                          aria-label={`${relic.name}. ${relic.description}`}
+                          aria-pressed={selected.id === relic.id}
+                          onClick={() => setSelectedId(relic.id)}
+                        >
+                          <RunRelicIcon relicId={relic.id} />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </InnerChromeBox>
+              )}
+            </div>
+          </div>
+          <InnerChromeBox className="enchiridion-relic-detail">
+            <RunRelicIcon relicId={selected.id} />
+            <div>
+              <h3>{selected.name}</h3>
+              <p>{selected.description}</p>
+            </div>
+            {showStatistics ? (
+              <dl>
+                <div><dt>Times picked</dt><dd>{selectedStatistic.timesPicked}</dd></div>
+                <div><dt>Battles won while held</dt><dd>{selectedStatistic.battlesWonWhileHeld}</dd></div>
+              </dl>
+            ) : null}
+            {showStatistics ? (
+              <small>{statisticsStatus === 'loading' ? 'Loading history…' : statisticsStatus === 'account' ? 'Account history' : 'This browser'}</small>
+            ) : null}
+          </InnerChromeBox>
+        </div>
+      ) : (
+        <InnerChromeBox className="enchiridion-empty">
+          <h3>No relics held</h3>
+          <p>This Lipsanotheca is presently, and perhaps suspiciously, empty.</p>
+        </InnerChromeBox>
+      )}
+    </ReferenceSectionFrame>
+  );
+}
+
+function AbilitiesSection({ framed }: { framed: boolean }): ReactElement {
+  return (
+    <ReferenceSectionFrame
+      chromeConsumer="enchiridion-abilities"
+      className="enchiridion-abilities-panel"
+      framed={framed}
+      title="Unit Abilities"
+    >
+      <div className="enchiridion-ability-list">
+        <InnerChromeBox className="enchiridion-ability-card">
+          <span className="skirmish-icon skirmish-icon-shield" aria-hidden="true" />
+          <span>
+            <h3>Discipline</h3>
+            <p>The unit may be deliberately placed on a legal square in the player deployment zone before the remainder of the army is deployed.</p>
+          </span>
+        </InnerChromeBox>
+        <InnerChromeBox className="enchiridion-ability-card">
+          <span className="skirmish-icon skirmish-icon-move" aria-hidden="true" />
+          <span>
+            <h3>Positioned</h3>
+            <p>The unit’s automatic deployment favors its specified legal region—such as a front row, back row, edge, or corner—before using the ordinary fallback layout.</p>
+          </span>
+        </InnerChromeBox>
+      </div>
+    </ReferenceSectionFrame>
+  );
+}
+
+function EnchiridionContent({ section, framed }: { section: EnchiridionSection; framed: boolean }): ReactElement {
+  if (section === 'terrain') return <TerrainSection framed={framed} />;
+  if (section === 'relics') return <RelicCodex framed={framed} />;
+  if (section === 'abilities') return <AbilitiesSection framed={framed} />;
+  return <UnitsSection framed={framed} />;
+}
+
+export function Enchiridion({
+  section = 'units',
+  sectionHref = (next) => `/enchiridion/${next}`,
+  showSectionRail = true,
+  sceneInstanceKey = `enchiridion/${section}`,
+  framed = true,
+}: {
+  section?: EnchiridionSection;
+  sectionHref?: (section: EnchiridionSection) => string;
+  showSectionRail?: boolean;
+  sceneInstanceKey?: string;
+  framed?: boolean;
+}): ReactElement {
+  return (
+    <div className={`enchiridion-workspace${showSectionRail ? ' has-section-rail' : ''}`}>
+      {showSectionRail ? (
+        <aside className="enchiridion-section-rail" aria-label="Enchiridion sections">
+          {ENCHIRIDION_SECTIONS.map((candidate, index) => (
+            <ApparatusRailTab
+              key={candidate}
+              label={SECTION_LABEL[candidate]}
+              to={sectionHref(candidate)}
+              index={index}
+              active={section === candidate}
+              iconClassName={SECTION_ICON[candidate]}
+            />
+          ))}
+        </aside>
+      ) : null}
+      <main
+        className="enchiridion-content"
+        {...sceneTransitionTargetAttributes('enchiridion-shell')}
+        data-scene-instance={sceneInstanceKey}
+      >
+        <EnchiridionContent section={section} framed={framed} />
+      </main>
+    </div>
+  );
+}

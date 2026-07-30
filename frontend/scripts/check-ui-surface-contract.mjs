@@ -11,6 +11,28 @@ const BASELINE_PATH = 'scripts/ui-surface-debt-baseline.json';
 const TOOLTIP_OWNER = 'src/ui/shared/InfoTip.tsx';
 const SURFACE_CSS_PROPERTY = /^(?:background(?:-[a-z-]+)?|border(?:-[a-z-]+)?|box-shadow)$/i;
 const SURFACE_JS_PROPERTY = /^(?:background[A-Z_a-z0-9]*|border[A-Z_a-z0-9]*|boxShadow)$/;
+const APPROVED_FRAMELESS_SURFACE_RESETS = new Map([
+  // ADR-0250 keeps the book art itself as the control. These declarations remove
+  // native/active button chrome; they do not paint a parallel surface.
+  ['src/style.css|.skirmish-hud-title-action', new Set([
+    'background:none',
+    'border:0',
+    'border-radius:0',
+    'box-shadow:none',
+  ])],
+  ['src/style.css|.skirmish-hud-title-action.active', new Set([
+    'background:none',
+    'border-color:transparent',
+    'box-shadow:none',
+  ])],
+  // ADR-0254 retains one shared inner frame around the grouped reliquary. These
+  // resets keep its icon triggers visually unframed inside that owned surface.
+  ['src/style.css|.enchiridion-relic-grouped-trigger', new Set([
+    'background:none',
+    'border:0',
+    'border-radius:0',
+  ])],
+]);
 
 function normalize(value) {
   return value.trim().replace(/\s+/g, ' ');
@@ -108,6 +130,12 @@ function isContainerAtRule(header, body) {
   return findOpenBrace(body, 0, body.length) !== -1;
 }
 
+function isApprovedFramelessSurfaceReset(file, selector, property, value) {
+  return APPROVED_FRAMELESS_SURFACE_RESETS
+    .get(`${file}|${selector}`)
+    ?.has(`${property}:${value}`) ?? false;
+}
+
 function parseCssRange(source, file, start, end, context, entries) {
   let cursor = start;
   while (cursor < end) {
@@ -124,6 +152,8 @@ function parseCssRange(source, file, start, end, context, entries) {
       } else {
         const declarations = splitDeclarations(body)
           .filter(({ property }) => SURFACE_CSS_PROPERTY.test(property))
+          .filter(({ property, value }) =>
+            !isApprovedFramelessSurfaceReset(file, header, property, value))
           .map(({ property, value }) => `${property}:${value}`)
           .sort();
         if (declarations.length) {

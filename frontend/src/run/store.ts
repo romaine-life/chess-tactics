@@ -3,6 +3,7 @@ import { fetchMe } from '../net/auth';
 import { deleteActiveRun, loadActiveRun, saveActiveRun } from '../net/activeRun';
 import { HttpError } from '../net/http';
 import { normalizeRunDocument, type RunDocument } from './model';
+import { recordRunRelicStatEvents, relicStatEventsForRunTransition } from './relicStatistics';
 
 const LOCAL_RUN_KEY = 'chess-tactics:active-run:v1';
 
@@ -146,6 +147,7 @@ export const useActiveRun = create<ActiveRunState>((set, get) => ({
   },
 
   replace: (run) => {
+    recordRunRelicStatEvents(relicStatEventsForRunTransition(get().run, run));
     writeLocalRun(run);
     set({ run, persistenceError: null });
     queueRemoteSave(run);

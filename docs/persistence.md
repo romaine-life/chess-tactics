@@ -17,6 +17,7 @@ Durable document and live-content tables are created by the inline migrations in
 | `levels` | per signed-in owner (`PK (owner_email, id)`) | `/api/levels`, `/api/levels/:id` | sign-in required |
 | `campaign_workspaces` | one row per signed-in owner | `/api/campaign-workspace` | sign-in required |
 | `active_runs` | one versioned, CAS-updated active Run document per signed-in owner, including persistent named army units | `/api/active-run` | sign-in required; anonymous Runs remain browser-local until adoption |
+| `run_relic_stat_events` | idempotent owner-scoped relic pick and Battle-win facts | `/api/run-relic-statistics`, `/api/run-relic-stat-events` | sign-in required; anonymous and unsynced facts remain browser-local |
 | `level_working_copies` | one durable working copy per signed-in owner + workspace + level | `/api/editor-documents` | sign-in required; official workspaces also require admin |
 | `level_working_copy_revisions` | retained checkpoints for each durable working copy | `/api/editor-documents/:id/revisions` | owner only; restore requires current CAS revision |
 | `level_working_copy_revision_reasons` | closed canonical registry for retained working-copy revision reasons | internal schema contract | backend-owned; referenced by one validated foreign key from revision history |
@@ -29,11 +30,13 @@ Durable document and live-content tables are created by the inline migrations in
 | `predrawn_background_raw_contract_bindings` | immutable one-row-per-version proof of historically absent Raw Pipeline Source coordinate-basis/viewing-pane metadata, pinned to exact saved-Level frame/bounds, bytes, provenance, and geometry | internal; effective raw-source contract is projected with background-version reads | written only inside fenced processing-attempt creation after exact server-held saved-Level proof; GET/list/picker never writes |
 | `public_maps` | owner-free snapshot of an explicitly published user Level | `POST /api/maps/publish`, `GET /api/maps/:publicId` | publish requires the signed-in owner; snapshot reads are public |
 | `campaigns` | per signed-in owner (`PK (owner_email, id)`) | `/api/campaigns`, `/api/campaigns/:id`, `/api/campaigns/:id/levels` | sign-in required |
-| `active_runs` | one current roguelike Run document per signed-in owner, including its stable army identities and resettable current-shop entry snapshot | `/api/active-run` | sign-in required; compare-and-swap revision on mutation |
 | `design_portfolios` | global, by id | `/api/design-portfolios/:id` | GET public, PUT requires sign-in (designer) |
 | `prop_seats` | one complete global prop geometry/tuning document (`default`) | `/api/prop-seats/default` | GET public, PUT requires admin |
 | `sfx_profiles` | one complete global SFX metadata/mix/assignment document (`default`) | `/api/sfx-profiles/default` | GET public, optimistic PUT requires admin |
 | `unit_families` / `unit_assets` / `unit_sprites` | global live Unit Art catalog | `/api/unit-catalog`, `/api/admin/unit-assets` | GET public, mutations require admin |
+| `unit_catalog_state` / `unit_asset_events` | Unit Art revision and audit history | internal | admin mutations write them |
+| `media_slots` / `media_versions` / `media_blobs` | shared live-media substrate and active pointers | `/api/asset-catalog`, `/api/media/:sha`, `/assets/:slot`, `/api/admin/media-assets` | GET public, mutations require admin |
+| `media_catalog_state` / `media_asset_events` | shared asset revision and audit history | internal | admin mutations write them |
 
 Active Run format 3 stores each army unit's role-specific historical name.
 Format-1 unnamed documents and the provisional format-2 generated-name documents
@@ -42,9 +45,6 @@ type's acquisition order before the next save. Once a document is format 3, a
 valid stored name is authoritative so the future name editor can change it
 without normalization undoing the player's choice. See
 [ADR-0228](adr/0228-run-unit-names-are-role-specific-historical-identities.md).
-| `unit_catalog_state` / `unit_asset_events` | Unit Art revision and audit history | internal | admin mutations write them |
-| `media_slots` / `media_versions` / `media_blobs` | shared live-media substrate and active pointers | `/api/asset-catalog`, `/api/media/:sha`, `/assets/:slot`, `/api/admin/media-assets` | GET public, mutations require admin |
-| `media_catalog_state` / `media_asset_events` | shared asset revision and audit history | internal | admin mutations write them |
 
 Per-user scoping means each user has their own `id` namespace — two users can
 both have a level `my-level` without colliding, and neither can read or
@@ -58,6 +58,15 @@ that document also owns each unit's stable per-piece-type number and the current
 shop's entry snapshot. Shop purchases, sales, and relic choices save normally;
 **Reset Shop** restores the snapshot while retaining the exact offers already
 dealt for that visit.
+
+Per
+[ADR-0231](adr/0231-strategikon-and-enchiridion-share-one-reference-workspace-language.md),
+relic history is not derived from the one mutable active Run document. Each
+pick and each Battle victory while holding a relic is recorded as an
+owner-scoped event with a deterministic event id. The composite primary key
+makes retries idempotent. Enchiridion reads server aggregates and merges only
+the browser events that have not yet been acknowledged; signed-out play keeps
+the same event shape in local storage until an authenticated sync is possible.
 
 The global `prop_seats/default` document is also compare-and-swap protected.
 Its admin PUT must send `expectedRevision`: `null` creates only when the row is
