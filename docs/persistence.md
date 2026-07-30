@@ -883,7 +883,7 @@ change. Hosts without Postgres binaries (e.g. the musl session pod) must supply
 The smoke database begins with the exact former ledger: immutable migrations
 1–27 and 36 have executed and only those versions are recorded in the old
 numeric-only format. The production auto-mode runner must skip 1–27 and 36,
-apply 28–35 and 37–43, seal the completed historical rows 1–36, enforce
+apply 28–35 and 37–45, seal the completed historical rows 1–36, enforce
 non-null identity, report that exact plan, and pass its live relation and
 constraint-topology postconditions. The same upgraded database then receives
 the real authenticated generation-attempt archive request; the test verifies

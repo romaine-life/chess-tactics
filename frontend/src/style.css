@@ -4179,28 +4179,27 @@ h1 {
 }
 
 /*
- * Play keeps its authored 1080px-tall design space while ordinary wide browser
- * rectangles expand the board track. The canvas stops at 2.1:1; only true
- * ultrawide surplus remains in the shell as centered wings (ADR-0226).
+ * Play's persistent title bar stays in viewport coordinates (ADR-0213). Only
+ * the replaceable 992px scene stage beneath it participates in ADR-0226's
+ * bounded-fluid transform; scaling #root would resize the invariant app chrome.
  */
-.shell.skirmish-active .app-root {
+.shell.skirmish-active .scene-boundary:has(.skirmish-screen.is-play-canvas) {
   height: var(--skirmish-canvas-height);
-  left: 50%;
+  inset: var(--skirmish-canvas-top) auto auto 50%;
   min-height: var(--skirmish-canvas-height);
   min-width: var(--skirmish-canvas-width);
   overflow: hidden;
-  position: absolute;
-  top: 50%;
-  transform: translate(-50%, -50%) scale(var(--skirmish-canvas-scale));
-  transform-origin: center;
+  transform: translateX(-50%) scale(var(--skirmish-canvas-scale));
+  transform-origin: top center;
   width: var(--skirmish-canvas-width);
 }
 
 .shell.skirmish-active .skirmish-screen.is-play-canvas {
-  --app-header-h: var(--skirmish-header-height);
   --skirmish-rail-w: var(--skirmish-hud-width);
   grid-template-columns: minmax(0, 1fr) var(--skirmish-rail-w);
-  grid-template-rows: var(--app-header-h) minmax(0, 1fr);
+  /* The persistent AppTitleBar owns the viewport row above this scene. Retain a
+     zero first track so existing board/HUD row assignments remain canonical. */
+  grid-template-rows: 0 minmax(0, 1fr);
   height: var(--skirmish-canvas-height);
   width: var(--skirmish-canvas-width);
 }
@@ -8635,7 +8634,7 @@ body.loading-bootstrap .app-startup-status {
   }
 
   /* Drop the objective chip first when the bar gets tight; brand + turn + counts stay. */
-  :root:not(.skirmish-play-canvas) .skirmish-objective {
+  .app-shell-titlebar .skirmish-objective {
     display: none;
   }
 
@@ -16379,10 +16378,11 @@ button.tileset-relationship-cell {
   border-image-width: 0 0 0 var(--le-chrome-outer-rail-w) !important;
 }
 
-/* Persistent app-shell title bar (src/ui/shell/AppTitleBar) — rendered once inside
-   the owning SceneBoundary so it fades and acknowledges pixels with the destination.
-   It carries .app-titlebar + .settings-header-frame for the shared
-   oak look; only position + stacking are set here. A migrated screen adds
+/* Persistent app-shell title bar (src/ui/shell/AppTitleBar) — rendered once by
+   App outside every replaceable SceneBoundary, so route transitions and Play's
+   bounded-fluid transform cannot resize, fade, or unmount its invariant frame.
+   It carries .app-titlebar + .settings-header-frame for the shared oak look;
+   only position + stacking are set here. A migrated screen adds
    .app-shell-bar-pad to its body root to reserve the header height the fixed bar now
    overlays (the per-screen <header> is gone — the bar lives in the shell). */
 .app-shell-titlebar {
@@ -18297,6 +18297,11 @@ button.tileset-relationship-cell {
   min-inline-size: 0;
   position: absolute;
   z-index: 20;
+}
+
+/* Play's scene boundary already starts beneath the persistent title bar. */
+.skirmish-screen.is-play-canvas .run-relic-strip {
+  inset-block-start: 8px;
 }
 
 .run-relic-inventory-list {

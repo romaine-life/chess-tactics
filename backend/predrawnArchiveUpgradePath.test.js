@@ -265,6 +265,11 @@ test('the exact sparse numeric legacy history upgrades through migration 45', ()
     'owner-scoped idempotent Run relic statistics',
     'migration 45 must retain its applied database identity',
   );
+  assert.equal(
+    migrationChecksum(migration45),
+    '92ac1e06bcc16bc73cadfeb9c0cab39f08bf8b15a106cfe198d434c693fb2e67',
+    'migration 45 must match the identity already recorded in the shared development ledger',
+  );
   assert.match(
     migration45.sql,
     /CREATE TABLE IF NOT EXISTS\s+run_relic_stat_events[\s\S]*PRIMARY KEY\s*\(\s*owner_email,\s*event_id,\s*relic_id\s*\)/i,
