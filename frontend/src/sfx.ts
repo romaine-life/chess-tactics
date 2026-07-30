@@ -210,6 +210,7 @@ function disarmGesture(): void {
 // wiring. Scoped by selector so clicks on the Pixi board canvas, plain text, panels, etc.
 // never match and gameplay stays silent. The toggle/volume gating lives in playInterface().
 const UI_CONTROL_SELECTOR = 'button, a[href], [role="button"], [role="switch"], [role="tab"], summary';
+const UI_SFX_ATTRIBUTE = 'data-ui-sfx';
 
 function onUiClick(event: Event): void {
   const target = event.target;
@@ -219,7 +220,9 @@ function onUiClick(event: Event): void {
   // A disabled control doesn't act, so it shouldn't click either.
   if (control instanceof HTMLButtonElement && control.disabled) return;
   if (control.getAttribute('aria-disabled') === 'true') return;
-  playInterface();
+  const requestedSample = control.getAttribute(UI_SFX_ATTRIBUTE);
+  if (requestedSample === 'none') return;
+  playInterface(requestedSample ? { sample: requestedSample } : undefined);
 }
 
 let uiClickListenerAttached = false;
@@ -319,7 +322,7 @@ function registerVoice(node: GainNode, duration: number): void {
 // Sound-set identity, level trims, terrain assignments, and arrival behavior all
 // come from the live SFX profile. A missing profile means decorative silence; it
 // never selects a committed default.
-type SampleKey = string;
+export type SampleKey = string;
 
 interface SampleSet {
   key: SampleKey;
@@ -481,7 +484,7 @@ export function playArrival(opts?: { unitIndex?: number }): void {
  *
  * @param opts.gain optional per-call multiplier (0..1+) layered onto the voice.
  */
-export function playInterface(opts?: { gain?: number }): void {
+export function playInterface(opts?: { gain?: number; sample?: SampleKey }): void {
   const settings = effectsSettings();
   if (!settings.interfaceSounds) return; // toggle off → no UI feedback at all
   const context = ensureContext();
@@ -490,7 +493,10 @@ export function playInterface(opts?: { gain?: number }): void {
     void context.resume().catch(() => { /* may need a real gesture first */ });
   }
   if (masterGainFor(settings) <= 0) return;
-  const interfaceSample = Object.hasOwn(currentLiveSfxProfile()?.soundSets ?? {}, 'click') ? 'click' : null;
+  const requestedSample = opts?.sample ?? 'click';
+  const interfaceSample = Object.hasOwn(currentLiveSfxProfile()?.soundSets ?? {}, requestedSample)
+    ? requestedSample
+    : null;
   if (!interfaceSample) return;
   const gain = normGain(opts?.gain);
   if (!playSampleSet(interfaceSample, gain)) {
@@ -499,6 +505,90 @@ export function playInterface(opts?: { gain?: number }): void {
       if (latest.interfaceSounds && masterGainFor(latest) > 0) playSampleSet(interfaceSample, gain);
     });
   }
+}
+
+export interface DecodedAudioSummary {
+  durationMs: number;
+  sampleRate: number;
+  channels: number;
+}
+
+export interface DecodedCandidateAudio {
+  buffer: AudioBuffer;
+  summary: DecodedAudioSummary;
+}
+
+/**
+ * Fetch and decode one private candidate without reading or mutating the active
+ * catalog. Studio keeps the resulting AudioBuffer in its editor so changing a
+ * trim range never re-fetches or silently swaps the source bytes.
+ */
+export async function loadCandidateSampleRaw(url: string): Promise<DecodedCandidateAudio> {
+  const w = win();
+  const context = ensureContext();
+  if (!w || !context || typeof w.fetch !== 'function') throw new Error('Web Audio is unavailable');
+  const response = await w.fetch(url, {
+    cache: 'no-store',
+    credentials: 'include',
+  });
+  if (!response.ok) throw new Error(`Candidate audio returned ${response.status}`);
+  const buffer = await context.decodeAudioData(await response.arrayBuffer());
+  return {
+    buffer,
+    summary: {
+      durationMs: Math.round(buffer.duration * 1000),
+      sampleRate: buffer.sampleRate,
+      channels: buffer.numberOfChannels,
+    },
+  };
+}
+
+/**
+ * Play all or part of an already-decoded private candidate at unity. Range
+ * audition is Studio-only and bypasses the runtime mix.
+ */
+export function auditionDecodedCandidateRaw(
+  buffer: AudioBuffer,
+  startMs = 0,
+  endMs = buffer.duration * 1000,
+): DecodedAudioSummary {
+  const context = ensureContext();
+  if (!context) throw new Error('Web Audio is unavailable');
+  if (context.state === 'suspended') {
+    void context.resume().catch(() => { /* the audition click is the gesture */ });
+  }
+  const startSeconds = Math.max(0, Math.min(buffer.duration, startMs / 1000));
+  const endSeconds = Math.max(startSeconds, Math.min(buffer.duration, endMs / 1000));
+  const durationSeconds = endSeconds - startSeconds;
+  if (durationSeconds <= 0) throw new Error('The audition range is empty');
+  const gain = context.createGain();
+  gain.gain.value = 1;
+  gain.connect(context.destination);
+  const source = context.createBufferSource();
+  source.buffer = buffer;
+  source.playbackRate.value = 1;
+  source.connect(gain);
+  source.onended = () => {
+    try { source.disconnect(); } catch { /* already disconnected */ }
+    try { gain.disconnect(); } catch { /* already disconnected */ }
+  };
+  source.start(context.currentTime, startSeconds, durationSeconds);
+  return {
+    durationMs: Math.round(durationSeconds * 1000),
+    sampleRate: buffer.sampleRate,
+    channels: buffer.numberOfChannels,
+  };
+}
+
+/**
+ * Studio-only exact-candidate audition. The private candidate URL is fetched
+ * with the current admin session, decoded from those bytes, and played at unity
+ * through a direct preview path. It never reads or mutates the active catalog.
+ */
+export async function auditionCandidateSampleRaw(url: string): Promise<DecodedAudioSummary> {
+  const decoded = await loadCandidateSampleRaw(url);
+  auditionDecodedCandidateRaw(decoded.buffer);
+  return decoded.summary;
 }
 
 /** Audition alias for playTerrain (the Studio SFX catalog / Settings test). */
@@ -563,8 +653,6 @@ export function isSampleReady(key: SampleKey): boolean {
 // ---- catalog / audition accessors ------------------------------------------
 // Surface the authored-sample wiring to the Studio so it can tell which terrains are
 // voiced by recordings and render the real take waveforms.
-
-export type { SampleKey };
 
 /** Every sound set declared by the hydrated backend profile. */
 export function authoredSampleKeys(): SampleKey[] {

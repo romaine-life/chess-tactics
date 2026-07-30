@@ -8,6 +8,10 @@ const {
   PREDRAWN_BOARD_PROOF_RENDERER,
   PREDRAWN_BOARD_PROOF_SCHEMA,
   RUN_RELIC_ICON_COMPONENT,
+  RUN_RESOURCE_ICON_COMPONENT,
+  SFX_SAMPLE_COMPONENT,
+  SFX_SAMPLE_PROOF_RENDERER,
+  SFX_SAMPLE_PROOF_SCHEMA,
   liveCatalogReadinessIssue,
   nativeMediaEvidenceIssue,
   predrawnBoardAlignmentIssue,
@@ -17,6 +21,11 @@ const {
   preservesNativeEvidenceForUpload,
   runRelicIconMediaIssue,
   runRelicIconSlotId,
+  runResourceIconMediaIssue,
+  runResourceIconSlotId,
+  sfxSampleMediaIssue,
+  sfxSampleOwnerProofIssue,
+  sfxSampleSlot,
 } = require('./liveMediaPolicy');
 
 const originalSha = 'a'.repeat(64);
@@ -95,6 +104,112 @@ test('Run relic icon projection binds one native reviewed icon to its exact reli
   assert.match(runRelicIconMediaIssue(runRelicIcon({
     metadata: { runtime: { ...row.metadata.runtime, altText: 'duplicated accessible text' } },
   })), /altText/);
+});
+
+function runResourceIcon(overrides = {}) {
+  return {
+    slot: 'ui/run/resources/gold.png',
+    domain: 'ui-kit',
+    role: 'icon',
+    media_type: 'image/png',
+    width: 64,
+    height: 64,
+    metadata: {
+      runtime: {
+        component: RUN_RESOURCE_ICON_COMPONENT,
+        variant: 'gold',
+        frameWidth: 64,
+        frameHeight: 64,
+        frameCount: 1,
+        nativeRole: RUN_RESOURCE_ICON_COMPONENT,
+        altText: '',
+      },
+    },
+    ...overrides,
+  };
+}
+
+test('Run resource icon projection binds one native reviewed icon to its resource id', () => {
+  const row = runResourceIcon();
+  assert.equal(runResourceIconSlotId(row.slot), 'gold');
+  assert.equal(runResourceIconMediaIssue(row), null);
+  assert.match(runResourceIconMediaIssue(runResourceIcon({ domain: 'review-media' })), /ui-kit domain/);
+  assert.match(runResourceIconMediaIssue(runResourceIcon({ role: 'media' })), /icon role/);
+  assert.match(runResourceIconMediaIssue(runResourceIcon({ height: 63 })), /64x64/);
+  assert.match(runResourceIconMediaIssue(runResourceIcon({
+    metadata: { runtime: { ...row.metadata.runtime, variant: 'favor' } },
+  })), /variant/);
+  assert.match(runResourceIconMediaIssue(runResourceIcon({
+    metadata: { runtime: { ...row.metadata.runtime, altText: 'Gold' } },
+  })), /altText/);
+});
+
+function sfxSample(overrides = {}) {
+  return {
+    id: '11111111-1111-4111-8111-111111111111',
+    slot: 'sfx/gold-sell/v0.wav',
+    domain: 'sfx',
+    role: 'audio',
+    media_type: 'audio/wav',
+    blob_sha256: originalSha,
+    metadata: {
+      runtime: {
+        component: SFX_SAMPLE_COMPONENT,
+        variant: 'gold-sell',
+        state: 'one-shot',
+        durationMs: 2900,
+        loop: false,
+      },
+    },
+    ...overrides,
+  };
+}
+
+test('SFX projection binds a one-shot take to its sound-set slot', () => {
+  const row = sfxSample();
+  assert.deepEqual(sfxSampleSlot(row.slot), {
+    soundSetKey: 'gold-sell',
+    variantIndex: 0,
+    extension: 'wav',
+  });
+  assert.equal(sfxSampleMediaIssue(row), null);
+  assert.match(sfxSampleMediaIssue(sfxSample({ role: 'sfx' })), /audio role/);
+  assert.match(sfxSampleMediaIssue(sfxSample({ media_type: 'audio/mpeg' })), /slot extension/);
+  assert.match(sfxSampleMediaIssue(sfxSample({
+    metadata: { runtime: { ...row.metadata.runtime, variant: 'click' } },
+  })), /variant/);
+  assert.match(sfxSampleMediaIssue(sfxSample({
+    metadata: { runtime: { ...row.metadata.runtime, loop: true } },
+  })), /loop/);
+});
+
+test('SFX review proof pins the decoded exact candidate bytes and slot snapshot', () => {
+  const row = sfxSample();
+  const surfaceUrl = `http://runs.chess-tactics.localhost/studio?mode=viewer&vk=sfx&sfxReview=${row.id}`;
+  const proof = {
+    schema: SFX_SAMPLE_PROOF_SCHEMA,
+    renderer: SFX_SAMPLE_PROOF_RENDERER,
+    surfaceUrl,
+    exactByteAudition: true,
+    playbackRate: 1,
+    decodedAudio: { durationMs: 2900, sampleRate: 48000, channels: 2 },
+    selectedCandidates: [{
+      slot: row.slot,
+      versionId: row.id,
+      sha256: row.blob_sha256,
+      rowRevision: 1,
+    }],
+    slotSnapshots: [{ slot: row.slot, rowRevision: 0, activeVersionId: null }],
+  };
+  assert.equal(sfxSampleOwnerProofIssue(row, proof, surfaceUrl), null);
+  assert.match(sfxSampleOwnerProofIssue(row, {
+    ...proof,
+    decodedAudio: { durationMs: 1000, sampleRate: 48000, channels: 2 },
+  }, surfaceUrl), /duration/);
+  assert.match(sfxSampleOwnerProofIssue(row, {
+    ...proof,
+    selectedCandidates: [{ ...proof.selectedCandidates[0], sha256: 'b'.repeat(64) }],
+  }, surfaceUrl), /candidate bytes/);
 });
 
 test('container-backed readiness requires at least one active critical live slot', () => {

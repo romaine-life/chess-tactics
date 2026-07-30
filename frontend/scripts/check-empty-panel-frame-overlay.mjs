@@ -21,6 +21,7 @@ const houseSelect = readFileSync(join(frontend, 'src/ui/shared/HouseSelect.tsx')
 const chromeBox = readFileSync(join(frontend, 'src/ui/shared/ChromeBox.tsx'), 'utf8');
 const skirmish = readFileSync(join(frontend, 'src/ui/Skirmish.tsx'), 'utf8');
 const skirmishHud = readFileSync(join(frontend, 'src/ui/SkirmishHud.tsx'), 'utf8');
+const runScreen = readFileSync(join(frontend, 'src/ui/RunScreen.tsx'), 'utf8');
 const portraitEditor = readFileSync(join(frontend, 'src/ui/PortraitEditor.tsx'), 'utf8');
 const installedChromeCss = readFileSync(join(frontend, 'src/ui/useInstalledChromeCss.ts'), 'utf8');
 const victoryConditionsEditor = readFileSync(join(frontend, 'src/ui/VictoryConditionsEditor.tsx'), 'utf8');
@@ -893,7 +894,15 @@ if (!levelEditorEventsWorkspace
 if (!/<OuterChromeBox[\s\S]*?chromeConsumer="skirmish-hud"[\s\S]*?titled[\s\S]*?className=\{`skirmish-hud \$\{className\}`\.trim\(\)\}/.test(skirmishHud)
   || !/<OuterChromeHeader title="Controls">/.test(skirmishHud)
   || /<h2>Controls<\/h2>/.test(skirmishHud)) {
-  failures.push('live Skirmish HUD must use the same titled OuterChromeBox and Controls header as the editor');
+  failures.push('live Skirmish HUD must own the titled OuterChromeBox and Controls header');
+}
+if (!/export function SkirmishShell[\s\S]*?<SkirmishHud \{\.\.\.hudProps\} controlsContent=\{controlsContent\} \/>/.test(skirmish)
+  || !/export function Skirmish\b[\s\S]*?return \(\s*<SkirmishShell/.test(skirmish)) {
+  failures.push('Battle must render through the one SkirmishShell that owns SkirmishHud');
+}
+if (!/<SkirmishShell[\s\S]*?controlsContent=\{<RunArmyControls run=\{run\} selling \/>\}/.test(runScreen)
+  || /function RunShell|function RunControlsRail|chromeConsumer="run-controls"/.test(runScreen)) {
+  failures.push('Run shop must use the Battle-owned SkirmishShell and replace only SkirmishHud contents');
 }
 if (!/import\s+\{\s*SkirmishHud\s*\}/.test(chromeUnitAudit)
   || !/preview\.kind === 'skirmish-hud'/.test(chromeUnitAudit)

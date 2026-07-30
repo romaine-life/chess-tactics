@@ -25,11 +25,20 @@ describe('professional loading architecture guards', () => {
     expect(read('./style.css')).not.toContain('.scene-homepage-background.is-destination');
   });
 
+  it('accepts redundant legacy port flags only inside a devctl-managed environment', () => {
+    const launcher = read('../scripts/start-vite-dev.mjs');
+    expect(launcher).toContain('if (badArg && managedPort === null)');
+    expect(launcher).toContain("managedPort !== null && (arg === '--port' || arg === '-p')");
+    expect(launcher).toContain("managedPort !== null && (arg === '--strictPort' || arg.startsWith('--port='))");
+    expect(launcher).toContain("...(managedPort ? ['--port', String(managedPort), '--strictPort'] : [])");
+  });
+
   it('enrolls standalone Studio routes in the Studio scene owner', () => {
-    expect(read('./ui/WallCandidateReview.tsx')).toContain("useSceneParticipant(\n    'studio'");
+    expect(read('./ui/WallCandidateReview.tsx').replace(/\r\n/g, '\n')).toContain("useSceneParticipant(\n    'studio'");
     expect(read('./ui/WallCandidateReview.tsx')).toContain('onFirstFrame');
     expect(read('./ui/WallCandidateReview.tsx')).toContain('onFrameError');
-    expect(read('./ui/DrawableCatalogLab.tsx')).toContain("useSceneParticipant(\n    'studio'");
+    expect(read('./ui/DrawableCatalogLab.tsx').replace(/\r\n/g, '\n')).toContain("useSceneParticipant(\n    'studio'");
+    expect(read('./ui/RunShopArtReview.tsx')).toContain("useSceneParticipant('studio'");
   });
 
   it('keeps asynchronous deep-linked Studio viewers inside the scene gate', () => {
@@ -58,6 +67,7 @@ describe('professional loading architecture guards', () => {
     expect(app).not.toContain('key={`incoming:');
     expect(read('../scripts/shot.mjs')).toContain("const assertFullSceneExit = has('assert-full-scene-exit')");
     expect(read('../scripts/shot.mjs')).toContain('sameBoundary: boundary === window.__ctOutgoingSceneBoundary');
+    expect(read('../scripts/shot.mjs')).toContain('assertImmediateLocalControl || backAfterClickMs !== undefined');
     expect(read('../scripts/shot.mjs')).toContain('full-scene wait did not retain the painted outgoing boundary');
     expect(read('../scripts/shot.mjs')).toContain('painted destination was remounted instead of promoted in place');
     expect(app).toContain('const mountedScene = sceneManifest(path)');
@@ -292,7 +302,7 @@ describe('professional loading architecture guards', () => {
     const skirmish = read('./ui/Skirmish.tsx');
     const board = read('./render/SkirmishBoard.tsx');
     expect(board).toContain('onSurfaceReady?.(boardReady)');
-    expect(skirmish).toContain('playableSurfaceReady ? <TitleBarSlot');
+    expect(skirmish).toContain('titleBarContent={playableSurfaceReady ? (');
     expect(skirmish).toContain('surface="gameplay-hud"');
     expect(skirmish).toContain('Preparing battlefield…');
     expect(read('../scripts/shot.mjs')).toContain('An explicit readiness contract is an assertion');

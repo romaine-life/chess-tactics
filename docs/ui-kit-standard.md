@@ -210,3 +210,9 @@ style them to the app separately. Do not touch.
 - One source asset renders at multiple element sizes without distortion.
 - Desktop screenshot matches the surface's concept.
 - No new per-surface class namespace was introduced.
+
+The repository-wide enforcement in ADR-0218 is stricter than a review
+checklist: frontend build/check inventory CSS and React-inline background,
+border, and box-shadow paint against the exact checked-in current-state
+baseline. New or mutated entries fail. A tooltip additionally has one shared
+source owner and must render its popup through registered inner chrome.

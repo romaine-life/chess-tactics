@@ -325,6 +325,9 @@ an incomplete row is an availability failure.
   native 64×64 PNGs with typed `run-relic-icon` metadata; installed
   `kind='run-relic'` drawable records, not slot filenames, bind those pixels to
   gameplay relic ids.
+  The Run gold resource is likewise an exact native 64×64 PNG with typed
+  `run-resource-icon` metadata; one installed `kind='run-resource'` drawable
+  record binds `behavior.resourceId='gold'` to its `icon` media role.
 - Props, walls, backgrounds, portraits, fonts, and OG media: their declared
   component and availability contracts.
 - Structure source artwork: one drawable record owns installed membership and
@@ -375,18 +378,24 @@ exact-byte review instrument exist:
 | Board Unit Art | Unit Art Postgres catalog + private Blob | Unit Art APIs | Complete; atomic family acceptance after palette, direction, geometry, and native-pixel checks |
 | Terrain surface tops | Shared live-media catalog + private Blob | Shared single/batch APIs | Complete; database-declared groups are reviewed on the canonical board and accepted atomically |
 | Structure source-art turntables | Structure drawable catalog + shared live-media catalog/private Blob | Outside-repository batch manifest + canonical source archive client; one archived pack may supply multiple exact object-allowlisted Artwork groups | Complete; Studio validates all eight native 512×512 rasters, requires each exact direction to mount in the interactive board placement proof, records the typed owner group proof, accepts atomically, then installs the drawable record |
+| Authored SFX one-shots | Shared live-media catalog/private Blob + revisioned `sfx_profiles/default` | Shared candidate API under typed `sfx/<sound-set>/v<n>.<format>` slots | Complete; the SFX Viewer mounts a complete private source waveform, lets the owner trim and audition an exact range, saves an immutable hash-verified derived candidate with frame/time provenance, then exact-byte auditions, atomically accepts, and declares that set in the live profile |
 | Other terrain and generic media domains | Shared live-media catalog + private Blob | Shared single/batch APIs | Deliberately blocked until that projection has a typed completeness validator, domain-owned exact-byte review instrument, backend proof validation, and atomic acceptance/rollback tests |
 | BGM | Backend-listed private Blob container; app-owned discovery/playback routes; per-Blob user-delegation SAS | Blob administration | Range-streamed by Azure after a bounded no-store redirect; intentionally not the generic candidate lifecycle (ADR-0200) |
 
 The remaining promotion docket is UI kit/Chrome; remaining terrain; props,
 walls, rocks, and atlases; portraits, backgrounds, and social media; then fonts
-and SFX. A generic proof payload or network helper is not a review instrument,
+and remaining domain-specific media. A generic proof payload or network helper is not a review instrument,
 and must not be used to bypass a missing domain projection.
 
-The SFX profile editor is a configuration instrument, not an audio acceptance
-instrument. It saves the DB document with optimistic revision control; browser
-storage retains only an unsaved draft. Changing a profile reference cannot make
-a candidate recording public or production-eligible.
+The SFX profile editor remains a configuration instrument rather than an audio
+acceptance authority. Its candidate editor is the separate typed audio
+instrument: an owner-supplied full source can be trimmed through visible
+start/end controls and selection audition, but Save creates a new immutable
+candidate instead of mutating the source. The derived candidate must then be
+auditioned in full, approved, and atomically accepted before the sound set is
+added to the optimistic-revision profile. Browser storage retains only an
+unsaved profile draft, and changing a profile reference cannot make candidate
+recording bytes public or production-eligible.
 
 ## Generation and editing
 

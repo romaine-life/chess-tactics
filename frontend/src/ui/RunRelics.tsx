@@ -1,7 +1,7 @@
 import { drawableAssets } from '@chess-tactics/board-render';
 import type { ReactElement } from 'react';
 import { RUN_RELIC_BY_ID, type RunRelicId } from '../run/model';
-import { chromeUnitClassNames } from './chromeUnitRegistry';
+import { Tooltip } from './shared/InfoTip';
 
 export interface RunRelicArtwork {
   src: string;
@@ -50,35 +50,34 @@ export function RunRelicIcon({
   );
 }
 
-export function RunRelicInventory({
+export function RunRelicStrip({
   relicIds,
-  placement,
 }: {
   relicIds: readonly RunRelicId[];
-  placement: 'workspace' | 'hud';
 }): ReactElement | null {
   if (relicIds.length === 0) return null;
   return (
     <section
-      data-chrome-unit="inner-box"
-      className={chromeUnitClassNames('inner-box', 'run-relic-inventory', `run-relic-inventory--${placement}`)}
+      className="run-relic-strip"
       aria-label="Held relics"
-      data-testid={`run-relic-inventory-${placement}`}
+      data-testid="run-relic-strip"
     >
-      <strong>Relics</strong>
       <div className="run-relic-inventory-list">
         {relicIds.map((relicId) => {
           const relic = RUN_RELIC_BY_ID[relicId];
           return (
-            <span
+            <Tooltip
               className="run-relic-inventory-item"
               key={relicId}
-              tabIndex={0}
-              title={`${relic.name} — ${relic.description}`}
-              aria-label={`${relic.name}. ${relic.description}`}
+              triggerClassName="run-relic-inventory-trigger"
+              popupClassName="run-relic-tooltip-pop"
+              popupMaxInlineSize={288}
+              label={`${relic.name}. ${relic.description}`}
+              trigger={<RunRelicIcon relicId={relicId} />}
             >
-              <RunRelicIcon relicId={relicId} />
-            </span>
+              <strong className="run-relic-tooltip-name">{relic.name}</strong>
+              <span className="run-relic-tooltip-description">{relic.description}</span>
+            </Tooltip>
           );
         })}
       </div>

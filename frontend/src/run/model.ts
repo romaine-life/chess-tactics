@@ -1,5 +1,6 @@
 import type { Level, War } from '../core/level';
 import type { PieceType } from '../core/types';
+import { spawnEventsForLevel } from '../core/levelEvents';
 import { createRng } from '../core/rng';
 
 export const RUN_FORMAT_VERSION = 1;
@@ -26,6 +27,28 @@ export const PIECE_LABEL: Readonly<Record<RunArmyPieceType, string>> = Object.fr
   queen: 'Queen',
   king: 'King',
 });
+
+function pieceVictoryRewardTenths(type: PieceType, count = 1): number {
+  if (type === 'king') return count * GOLD_SCALE;
+  if (!(type in PIECE_VALUE)) return 0;
+  return count * PIECE_VALUE[type as RunArmyPieceType] * GOLD_SCALE / 2;
+}
+
+export function battleVictoryGoldTenths(level: Level): number {
+  const fixedReward = level.layers.units.reduce(
+    (total, unit) => total + (unit.side === 'enemy' ? pieceVictoryRewardTenths(unit.type) : 0),
+    0,
+  );
+  const spawnedReward = spawnEventsForLevel(level)
+    .filter((event) => event.side === 'enemy')
+    .reduce((total, event) => (
+      total + (Object.entries(event.roster) as Array<[PieceType, number | undefined]>)
+        .reduce((rosterTotal, [type, count]) => (
+          rosterTotal + pieceVictoryRewardTenths(type, count ?? 0)
+        ), 0)
+    ), 0);
+  return fixedReward + spawnedReward;
+}
 
 export interface RunArmyUnit {
   id: string;
@@ -139,6 +162,7 @@ export interface RunBattleRuntime {
 export interface RunShopState {
   afterBattleIndex: number;
   conflictIndex: number;
+  victoryGoldTenths: number;
   bundleOfferIds: string[];
   purchasedBundleId: string | null;
   lootRelicOffers: RunRelicId[];
@@ -294,6 +318,22 @@ export function createRun(war: RunWarSnapshot, seed: number, now = new Date().to
 
 function touch(run: RunDocument): RunDocument {
   return { ...run, updatedAt: new Date().toISOString() };
+}
+
+export function normalizeRunDocument(run: RunDocument): RunDocument {
+  if (
+    run.phase !== 'shop'
+    || !run.shop
+    || (Number.isSafeInteger(run.shop.victoryGoldTenths) && run.shop.victoryGoldTenths >= 0)
+  ) return run;
+  const battle = run.war.battles[run.shop.afterBattleIndex];
+  if (!battle) return run;
+  const reward = battleVictoryGoldTenths(battle.level);
+  return {
+    ...run,
+    goldTenths: Math.max(0, run.goldTenths + reward - GOLD_SCALE),
+    shop: { ...run.shop, victoryGoldTenths: reward },
+  };
 }
 
 function addArmyPieces(
@@ -518,10 +558,11 @@ export function openShop(run: RunDocument, survivingUnitIds: readonly string[]):
   const rifleTenths = hasRelic(run, 'mercenarys-rifle')
     ? run.army.reduce((total, unit) => total + (survivorSet.has(unit.id) ? PIECE_VALUE[unit.type] : 0), 0)
     : 0;
+  const victoryGoldTenths = battleVictoryGoldTenths(run.war.battles[run.battleIndex].level);
   let next: RunDocument = {
     ...run,
     phase: 'shop',
-    goldTenths: run.goldTenths + GOLD_SCALE + rifleTenths,
+    goldTenths: run.goldTenths + victoryGoldTenths + rifleTenths,
     deployment: null,
     battleRuntime: null,
   };
@@ -559,6 +600,7 @@ export function openShop(run: RunDocument, survivingUnitIds: readonly string[]):
     shop: {
       afterBattleIndex: next.battleIndex,
       conflictIndex: next.conflictIndex,
+      victoryGoldTenths,
       bundleOfferIds,
       purchasedBundleId: null,
       lootRelicOffers: lootReveal.offers,

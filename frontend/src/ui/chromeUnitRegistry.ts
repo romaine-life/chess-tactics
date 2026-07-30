@@ -148,6 +148,7 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     maxDividers: 12,
     selectors: [
       '[data-chrome-unit="inner-box"]',
+      '.tooltip-pop',
       '.le-brush-thumb',
       '.le-violations',
       '.le-status-current',
@@ -159,6 +160,7 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     usage: [
       'Base free-form primitive for inner-role controls',
       'Containing box with repeatable structural dividers inherited from the inner rail',
+      'Immediate hover and keyboard-focus tooltips',
       'Level Editor active brush thumbnail shared by every brush kind',
       'Concrete inner controls inherit their geometry contract from child classes',
     ],

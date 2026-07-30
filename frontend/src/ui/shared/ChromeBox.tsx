@@ -78,11 +78,14 @@ export function OuterChromeHeader({
 }
 
 export function InnerChromeBox({
+  as: Element = 'div',
   className = '',
   ...props
-}: HTMLAttributes<HTMLDivElement>): ReactElement {
+}: HTMLAttributes<HTMLElement> & {
+  as?: 'div' | 'span';
+}): ReactElement {
   return (
-    <div
+    <Element
       {...props}
       data-chrome-unit="inner-box"
       className={chromeUnitClassNames('inner-box', 'inner-chrome-box', className)}

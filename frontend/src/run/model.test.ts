@@ -5,6 +5,7 @@ import {
   PIECE_BUNDLE_DECK,
   PIECE_VALUE,
   acquireRelic,
+  battleVictoryGoldTenths,
   beginBattle,
   buyBundle,
   cashOutPawn,
@@ -13,6 +14,7 @@ import {
   formatGold,
   grantGold,
   leaveShop,
+  normalizeRunDocument,
   openShop,
   prepareDeployment,
   sellArmyUnit,
@@ -26,10 +28,11 @@ function war(battles = 4, lootAt: number[] = []): RunWarSnapshot {
     id: 'war-test',
     name: 'Test War',
     description: 'A deterministic test War.',
-    battles: Array.from({ length: battles }, (_, index) => ({
-      level: createBlankLevel(`battle-${index}`, `Battle ${index + 1}`, 8, 8),
-      loot: lootAt.includes(index),
-    })),
+    battles: Array.from({ length: battles }, (_, index) => {
+      const level = createBlankLevel(`battle-${index}`, `Battle ${index + 1}`, 8, 8);
+      level.layers.units.push({ x: 4, y: 0, type: 'king', side: 'enemy' });
+      return { level, loot: lootAt.includes(index) };
+    }),
   };
 }
 
@@ -85,15 +88,62 @@ describe('Run progression and relic offers', () => {
     expect(grantGold(granted, 0)).toBe(granted);
   });
 
-  it('opens a shop with one gold after non-final victories and skips the shop after the final boss', () => {
+  it('opens a shop with strength-scaled gold after non-final victories and skips the shop after the final boss', () => {
     const afterFirst = openShop(deployedRun(12, war(2)), []);
     expect(afterFirst.phase).toBe('shop');
     expect(afterFirst.goldTenths).toBe(GOLD_SCALE);
+    expect(afterFirst.shop?.victoryGoldTenths).toBe(GOLD_SCALE);
 
     const finalBattle = beginBattle(prepareDeployment(leaveShop(afterFirst)), [], [], []);
     const won = openShop(finalBattle, []);
     expect(won.phase).toBe('victory');
     expect(won.shop).toBeNull();
+  });
+
+  it('values each enemy King at one gold and every other enemy force at half standard value', () => {
+    const snapshot = war(2);
+    const level = snapshot.battles[0].level;
+    level.layers.units.push(
+      { x: 0, y: 0, type: 'pawn', side: 'enemy' },
+      { x: 1, y: 0, type: 'knight', side: 'enemy' },
+      { x: 2, y: 0, type: 'bishop', side: 'enemy' },
+      { x: 3, y: 0, type: 'rook', side: 'enemy' },
+      { x: 5, y: 0, type: 'queen', side: 'enemy' },
+      { x: 6, y: 0, type: 'rock', side: 'neutral' },
+      { x: 7, y: 7, type: 'queen', side: 'player' },
+    );
+    level.events = [{
+      name: 'Enemy reserves',
+      trigger: { kind: 'setup' },
+      do: [{
+        kind: 'spawn',
+        side: 'enemy',
+        roster: { pawn: 2, rook: 1, king: 1 },
+        zoneIds: ['enemy-spawn'],
+      }],
+    }];
+
+    expect(battleVictoryGoldTenths(level)).toBe(160);
+    const shop = openShop(deployedRun(12, snapshot), []);
+    expect(shop.goldTenths).toBe(160);
+    expect(shop.shop?.victoryGoldTenths).toBe(160);
+  });
+
+  it('upgrades an already-open fixed-reward shop exactly once', () => {
+    const snapshot = war(2);
+    snapshot.battles[0].level.layers.units.push({ x: 0, y: 0, type: 'queen', side: 'enemy' });
+    const currentReward = battleVictoryGoldTenths(snapshot.battles[0].level);
+    const current = openShop(deployedRun(12, snapshot), []);
+    const legacy = {
+      ...current,
+      goldTenths: GOLD_SCALE,
+      shop: { ...current.shop!, victoryGoldTenths: undefined as never },
+    };
+    const upgraded = normalizeRunDocument(legacy);
+
+    expect(upgraded.goldTenths).toBe(currentReward);
+    expect(upgraded.shop?.victoryGoldTenths).toBe(currentReward);
+    expect(normalizeRunDocument(upgraded)).toBe(upgraded);
   });
 
   it('burns all three seen Loot offers, including the two not chosen', () => {

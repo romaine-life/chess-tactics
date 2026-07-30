@@ -2,6 +2,8 @@
 status: accepted
 date: 2026-07-29
 deciders: owner (Nelson) + Codex
+partially_superseded_by:
+  - "[ADR-0216](0216-run-relics-live-in-a-playfield-overlay-beneath-the-title-bar.md)"
 ---
 
 # ADR-0198: Run relic icons are installed live art and persistently visible

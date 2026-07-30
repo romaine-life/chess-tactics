@@ -1,0 +1,322 @@
+import { createHash } from 'node:crypto';
+import {
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+} from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
+
+const BASELINE_PATH = 'scripts/ui-surface-debt-baseline.json';
+const TOOLTIP_OWNER = 'src/ui/shared/InfoTip.tsx';
+const SURFACE_CSS_PROPERTY = /^(?:background(?:-[a-z-]+)?|border(?:-[a-z-]+)?|box-shadow)$/i;
+const SURFACE_JS_PROPERTY = /^(?:background[A-Z_a-z0-9]*|border[A-Z_a-z0-9]*|boxShadow)$/;
+
+function normalize(value) {
+  return value.trim().replace(/\s+/g, ' ');
+}
+
+function hash(parts) {
+  return createHash('sha256').update(parts.join('\n')).digest('hex');
+}
+
+function findOpenBrace(source, start, end) {
+  let quote = '';
+  for (let index = start; index < end; index += 1) {
+    const char = source[index];
+    const next = source[index + 1];
+    if (!quote && char === '/' && next === '*') {
+      const close = source.indexOf('*/', index + 2);
+      return close === -1 ? -1 : findOpenBrace(source, close + 2, end);
+    }
+    if (quote) {
+      if (char === '\\') index += 1;
+      else if (char === quote) quote = '';
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (char === '{') return index;
+  }
+  return -1;
+}
+
+function findCloseBrace(source, open, end) {
+  let depth = 1;
+  let quote = '';
+  for (let index = open + 1; index < end; index += 1) {
+    const char = source[index];
+    const next = source[index + 1];
+    if (!quote && char === '/' && next === '*') {
+      const close = source.indexOf('*/', index + 2);
+      if (close === -1) return -1;
+      index = close + 1;
+      continue;
+    }
+    if (quote) {
+      if (char === '\\') index += 1;
+      else if (char === quote) quote = '';
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (char === '{') depth += 1;
+    if (char === '}') depth -= 1;
+    if (depth === 0) return index;
+  }
+  return -1;
+}
+
+function splitDeclarations(body) {
+  const declarations = [];
+  let start = 0;
+  let quote = '';
+  let parenDepth = 0;
+  for (let index = 0; index <= body.length; index += 1) {
+    const char = body[index] ?? ';';
+    if (quote) {
+      if (char === '\\') index += 1;
+      else if (char === quote) quote = '';
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (char === '(' || char === '[') parenDepth += 1;
+    if (char === ')' || char === ']') parenDepth = Math.max(0, parenDepth - 1);
+    if (char !== ';' || parenDepth !== 0) continue;
+    const raw = body.slice(start, index).trim();
+    start = index + 1;
+    const colon = raw.indexOf(':');
+    if (colon <= 0) continue;
+    declarations.push({
+      property: normalize(raw.slice(0, colon)).toLowerCase(),
+      value: normalize(raw.slice(colon + 1)),
+    });
+  }
+  return declarations;
+}
+
+function isContainerAtRule(header, body) {
+  if (!header.startsWith('@')) return false;
+  if (/^@(font-face|page|property|counter-style)\b/i.test(header)) return false;
+  return findOpenBrace(body, 0, body.length) !== -1;
+}
+
+function parseCssRange(source, file, start, end, context, entries) {
+  let cursor = start;
+  while (cursor < end) {
+    const open = findOpenBrace(source, cursor, end);
+    if (open === -1) break;
+    const close = findCloseBrace(source, open, end);
+    if (close === -1) throw new Error(`${file}: unbalanced CSS block`);
+    const rawHeader = source.slice(cursor, open);
+    const header = normalize(rawHeader.slice(rawHeader.lastIndexOf(';') + 1));
+    const body = source.slice(open + 1, close);
+    if (header) {
+      if (isContainerAtRule(header, body)) {
+        parseCssRange(source, file, open + 1, close, [...context, header], entries);
+      } else {
+        const declarations = splitDeclarations(body)
+          .filter(({ property }) => SURFACE_CSS_PROPERTY.test(property))
+          .map(({ property, value }) => `${property}:${value}`)
+          .sort();
+        if (declarations.length) {
+          entries.push({
+            kind: 'css',
+            file,
+            context: context.join(' / '),
+            selector: header,
+            surfaceHash: hash(declarations),
+          });
+        }
+      }
+    }
+    cursor = close + 1;
+  }
+}
+
+function addOccurrences(entries) {
+  const counts = new Map();
+  return entries.map((entry) => {
+    const base = `${entry.kind}\u0000${entry.file}\u0000${entry.context}\u0000${entry.selector}`;
+    const occurrence = (counts.get(base) ?? 0) + 1;
+    counts.set(base, occurrence);
+    return { ...entry, occurrence };
+  });
+}
+
+export function collectCssSurfaceRules(source, file = 'src/style.css') {
+  const entries = [];
+  parseCssRange(source, file, 0, source.length, [], entries);
+  return addOccurrences(entries);
+}
+
+function propertyName(node, file) {
+  if (!node.name) return '';
+  if (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name) || ts.isNumericLiteral(node.name)) return node.name.text;
+  return node.name.getText(file);
+}
+
+function jsxAttributeString(opening, name) {
+  const attribute = opening.attributes.properties.find((candidate) =>
+    ts.isJsxAttribute(candidate) && candidate.name.text === name);
+  if (!attribute || !ts.isJsxAttribute(attribute) || !attribute.initializer) return null;
+  if (ts.isStringLiteral(attribute.initializer)) return attribute.initializer.text;
+  if (ts.isJsxExpression(attribute.initializer)
+    && attribute.initializer.expression
+    && ts.isStringLiteral(attribute.initializer.expression)) {
+    return attribute.initializer.expression.text;
+  }
+  return null;
+}
+
+export function collectInlineSurfaceStyles(source, relativePath = 'src/example.tsx') {
+  const file = ts.createSourceFile(relativePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const entries = [];
+  const visit = (node) => {
+    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+      const style = node.attributes.properties.find((candidate) =>
+        ts.isJsxAttribute(candidate) && candidate.name.text === 'style');
+      const expression = style && ts.isJsxAttribute(style)
+        && style.initializer && ts.isJsxExpression(style.initializer)
+        ? style.initializer.expression
+        : null;
+      if (expression && ts.isObjectLiteralExpression(expression)) {
+        const declarations = expression.properties
+          .filter((property) => ts.isPropertyAssignment(property))
+          .map((property) => ({
+            property: propertyName(property, file),
+            value: ts.isPropertyAssignment(property) ? normalize(property.initializer.getText(file)) : '',
+          }))
+          .filter(({ property }) => SURFACE_JS_PROPERTY.test(property))
+          .map(({ property, value }) => `${property}:${value}`)
+          .sort();
+        if (declarations.length) {
+          entries.push({
+            kind: 'inline',
+            file: relativePath,
+            context: '',
+            selector: `<${node.tagName.getText(file)} style>`,
+            surfaceHash: hash(declarations),
+          });
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+  return addOccurrences(entries);
+}
+
+export function checkTooltipSource(relativePath, source) {
+  const failures = [];
+  const file = ts.createSourceFile(relativePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const visit = (node) => {
+    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+      if (jsxAttributeString(node, 'role') === 'tooltip') {
+        const tag = node.tagName.getText(file);
+        const line = file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1;
+        if (relativePath !== TOOLTIP_OWNER || tag !== 'InnerChromeBox') {
+          failures.push(`${relativePath}:${line}: role="tooltip" must be owned by ${TOOLTIP_OWNER} and rendered through InnerChromeBox.`);
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+  return failures;
+}
+
+function sourceFilesPortable(root) {
+  const results = [];
+  const visit = (directoryUrl, relative) => {
+    for (const entry of readdirSync(directoryUrl, { withFileTypes: true })) {
+      const entryUrl = new URL(`${entry.name}${entry.isDirectory() ? '/' : ''}`, directoryUrl);
+      const entryRelative = `${relative}/${entry.name}`;
+      if (entry.isDirectory()) visit(entryUrl, entryRelative);
+      else results.push(entryRelative);
+    }
+  };
+  visit(new URL('src/', root), 'src');
+  return results;
+}
+
+export function buildSurfaceSnapshot(root = new URL('../', import.meta.url)) {
+  const entries = [];
+  const failures = [];
+  for (const relativePath of sourceFilesPortable(root)) {
+    const source = readFileSync(new URL(relativePath, root), 'utf8');
+    if (relativePath.endsWith('.css')) entries.push(...collectCssSurfaceRules(source, relativePath));
+    if (/\.[jt]sx$/.test(relativePath)) {
+      entries.push(...collectInlineSurfaceStyles(source, relativePath));
+      failures.push(...checkTooltipSource(relativePath, source));
+    }
+  }
+  entries.sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+  return {
+    snapshot: {
+      version: 1,
+      rule: 'No new CSS or inline background/border/box-shadow surface paint outside registered chrome primitives.',
+      entries,
+    },
+    failures,
+  };
+}
+
+function entryIdentity(entry) {
+  return `${entry.kind}|${entry.file}|${entry.context}|${entry.selector}|${entry.occurrence}`;
+}
+
+export function compareSurfaceSnapshots(baseline, current) {
+  const failures = [];
+  const baselineById = new Map(baseline.entries.map((entry) => [entryIdentity(entry), entry]));
+  const currentById = new Map(current.entries.map((entry) => [entryIdentity(entry), entry]));
+  for (const [id, entry] of currentById) {
+    const previous = baselineById.get(id);
+    if (!previous) failures.push(`new unregistered surface paint: ${id}`);
+    else if (previous.surfaceHash !== entry.surfaceHash) failures.push(`changed unregistered surface paint: ${id}`);
+  }
+  for (const id of baselineById.keys()) {
+    if (!currentById.has(id)) failures.push(`retired surface debt remains in the baseline: ${id}`);
+  }
+  return failures;
+}
+
+export function run(root = new URL('../', import.meta.url), { writeBaseline = false } = {}) {
+  const { snapshot, failures } = buildSurfaceSnapshot(root);
+  if (failures.length) return failures;
+  const baselineUrl = new URL(BASELINE_PATH, root);
+  if (writeBaseline) {
+    writeFileSync(baselineUrl, `${JSON.stringify(snapshot, null, 2)}\n`);
+    return [];
+  }
+  let baseline;
+  try {
+    baseline = JSON.parse(readFileSync(baselineUrl, 'utf8'));
+  } catch (error) {
+    return [`${BASELINE_PATH}: cannot read the required surface-debt baseline (${error.message}).`];
+  }
+  return compareSurfaceSnapshots(baseline, snapshot);
+}
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  const writeBaseline = process.argv.includes('--write-baseline');
+  const failures = run(new URL('../', import.meta.url), { writeBaseline });
+  if (failures.length) {
+    console.error('\n✗ UI surface contract gate FAILED (ADR-0032/0059/0201):');
+    for (const failure of failures) console.error(`  - ${failure}`);
+    console.error('Use registered shared chrome. Update the explicit baseline only for owner-approved legacy debt.');
+    process.exit(1);
+  }
+  if (writeBaseline) {
+    console.log(`✓ Wrote ${BASELINE_PATH}. Review every baseline change as legacy UI debt.`);
+  } else {
+    console.log('✓ UI surface contract gate OK: no new raw surface paint or tooltip owner bypass.');
+  }
+}

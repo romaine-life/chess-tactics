@@ -878,6 +878,27 @@ function syntheticPng(width = 512, height = 512, background = '#16324a', foregro
   return canvas.toBuffer('image/png');
 }
 
+function syntheticWav({ durationMs = 100, sampleRate = 8000, channels = 1 } = {}) {
+  const sampleCount = Math.round(sampleRate * durationMs / 1000);
+  const bytesPerSample = 2;
+  const dataLength = sampleCount * channels * bytesPerSample;
+  const buffer = Buffer.alloc(44 + dataLength);
+  buffer.write('RIFF', 0, 'ascii');
+  buffer.writeUInt32LE(36 + dataLength, 4);
+  buffer.write('WAVE', 8, 'ascii');
+  buffer.write('fmt ', 12, 'ascii');
+  buffer.writeUInt32LE(16, 16);
+  buffer.writeUInt16LE(1, 20);
+  buffer.writeUInt16LE(channels, 22);
+  buffer.writeUInt32LE(sampleRate, 24);
+  buffer.writeUInt32LE(sampleRate * channels * bytesPerSample, 28);
+  buffer.writeUInt16LE(channels * bytesPerSample, 32);
+  buffer.writeUInt16LE(bytesPerSample * 8, 34);
+  buffer.write('data', 36, 'ascii');
+  buffer.writeUInt32LE(dataLength, 40);
+  return buffer;
+}
+
 // Direct importer-shaped bridge fixture for readiness-only semantic slots.
 // The production bridge mutation route is deliberately absent; this disposable
 // database and local object store model already-imported live content.
@@ -1778,6 +1799,135 @@ async function main() {
   if (invalidReviewSurface.statusCode !== 400 || JSON.parse(invalidReviewSurface.body).error !== 'invalid_media_review') {
     throw new Error(`External review surface should fail closed: ${invalidReviewSurface.statusCode} ${invalidReviewSurface.body}`);
   }
+
+  // Typed authored SFX promotion: an exact candidate audition proof binds the
+  // decoded one-shot geometry and slot snapshot, stale acceptance rolls back,
+  // and the reviewed WAV publishes through the same atomic pointer transaction.
+  const sfxSlot = 'sfx/smoke-clink/v0.wav';
+  const sfxBytes = syntheticWav();
+  const sfxSha = crypto.createHash('sha256').update(sfxBytes).digest('hex');
+  const sfxCreate = await request('POST', '/api/admin/media-versions', adminJson, JSON.stringify({
+    slot: sfxSlot,
+    domain: 'sfx',
+    role: 'audio',
+    label: 'Smoke exact-byte clink',
+    availabilityPolicy: 'decorative',
+    metadata: {
+      runtime: {
+        component: 'sfx-sample',
+        variant: 'smoke-clink',
+        state: 'one-shot',
+        durationMs: 100,
+        loop: false,
+      },
+    },
+    provenance: { generator: 'synthetic-wav-smoke' },
+  }), 5000);
+  if (sfxCreate.statusCode !== 201) throw new Error(`SFX candidate create failed: ${sfxCreate.statusCode} ${sfxCreate.body}`);
+  const sfxVersion = JSON.parse(sfxCreate.body).version;
+  const sfxUpload = await request(
+    'PUT', `/api/admin/media-versions/${sfxVersion.id}/content`,
+    { 'content-type': 'audio/wav', 'if-match': '"0"', cookie: '__Host-chess-tactics-access=abc' }, sfxBytes, 5000,
+  );
+  const sfxUploaded = JSON.parse(sfxUpload.body).version;
+  if (
+    sfxUpload.statusCode !== 200 || sfxUploaded.rowRevision !== 1
+    || sfxUploaded.media.sha256 !== sfxSha || sfxUploaded.media.mediaType !== 'audio/wav'
+  ) throw new Error(`SFX candidate upload failed: ${sfxUpload.statusCode} ${sfxUpload.body}`);
+  const sfxAdminBeforeReview = JSON.parse((await get(
+    '/api/admin/media-assets', { cookie: '__Host-chess-tactics-access=abc' }, 5000,
+  )).body);
+  const sfxSlotBeforeReview = sfxAdminBeforeReview.slots.find((slot) => slot.slot === sfxSlot);
+  if (!sfxSlotBeforeReview || sfxSlotBeforeReview.activeVersionId !== null) {
+    throw new Error(`SFX staging slot is invalid: ${JSON.stringify(sfxSlotBeforeReview)}`);
+  }
+  const sfxSurfaceUrl = `http://127.0.0.1:${port}/studio?mode=viewer&vk=sfx&sfxReview=${sfxVersion.id}`;
+  const sfxProof = {
+    schema: 'sfx-sample-exact-byte-proof-v1',
+    renderer: 'SfxViewer/ExactCandidateAudition',
+    surfaceUrl: sfxSurfaceUrl,
+    exactByteAudition: true,
+    playbackRate: 1,
+    decodedAudio: { durationMs: 100, sampleRate: 8000, channels: 1 },
+    selectedCandidates: [{
+      slot: sfxSlot,
+      versionId: sfxVersion.id,
+      sha256: sfxSha,
+      rowRevision: 1,
+    }],
+    slotSnapshots: [{
+      slot: sfxSlot,
+      rowRevision: sfxSlotBeforeReview.rowRevision,
+      activeVersionId: sfxSlotBeforeReview.activeVersionId,
+    }],
+  };
+  const rejectedSfxReview = await request(
+    'POST', `/api/admin/media-versions/${sfxVersion.id}/review`, adminJson,
+    JSON.stringify({
+      expectedRevision: 1,
+      approved: true,
+      notes: 'Mismatched decoded duration must fail.',
+      surfaceUrl: sfxSurfaceUrl,
+      evidence: { ...sfxProof, decodedAudio: { ...sfxProof.decodedAudio, durationMs: 500 } },
+    }), 5000,
+  );
+  if (
+    rejectedSfxReview.statusCode !== 409
+    || JSON.parse(rejectedSfxReview.body).error !== 'invalid_media_review_proof'
+  ) throw new Error(`Mismatched SFX audition proof should fail: ${rejectedSfxReview.statusCode} ${rejectedSfxReview.body}`);
+  const sfxReview = await request(
+    'POST', `/api/admin/media-versions/${sfxVersion.id}/review`, adminJson,
+    JSON.stringify({
+      expectedRevision: 1,
+      approved: true,
+      notes: 'Exact candidate decoded and auditioned once at unity playback rate.',
+      surfaceUrl: sfxSurfaceUrl,
+      evidence: sfxProof,
+    }), 5000,
+  );
+  if (sfxReview.statusCode !== 200 || JSON.parse(sfxReview.body).version.rowRevision !== 2) {
+    throw new Error(`SFX exact-byte review failed: ${sfxReview.statusCode} ${sfxReview.body}`);
+  }
+  const rejectedSfxAccept = await request(
+    'POST', `/api/admin/media-versions/${sfxVersion.id}/accept`, adminJson,
+    JSON.stringify({
+      expectedRevision: 2,
+      expectedSlotRevision: sfxSlotBeforeReview.rowRevision + 1,
+      expectedActiveVersionId: null,
+    }), 5000,
+  );
+  if (
+    rejectedSfxAccept.statusCode !== 409
+    || JSON.parse(rejectedSfxAccept.body).error !== 'media_slot_conflict'
+  ) throw new Error(`Stale SFX acceptance should fail atomically: ${rejectedSfxAccept.statusCode} ${rejectedSfxAccept.body}`);
+  const sfxAfterRollback = JSON.parse((await get(
+    '/api/admin/media-assets', { cookie: '__Host-chess-tactics-access=abc' }, 5000,
+  )).body);
+  const rolledBackSfxSlot = sfxAfterRollback.slots.find((slot) => slot.slot === sfxSlot);
+  const rolledBackSfxVersion = sfxAfterRollback.versions.find((version) => version.id === sfxVersion.id);
+  if (
+    rolledBackSfxSlot.activeVersionId !== null
+    || rolledBackSfxSlot.rowRevision !== sfxSlotBeforeReview.rowRevision
+    || rolledBackSfxVersion.status !== 'candidate' || rolledBackSfxVersion.rowRevision !== 2
+  ) throw new Error(`Failed SFX acceptance mutated catalog state: ${JSON.stringify({ rolledBackSfxSlot, rolledBackSfxVersion })}`);
+  const sfxAccept = await request(
+    'POST', `/api/admin/media-versions/${sfxVersion.id}/accept`, adminJson,
+    JSON.stringify({
+      expectedRevision: 2,
+      expectedSlotRevision: sfxSlotBeforeReview.rowRevision,
+      expectedActiveVersionId: null,
+    }), 5000,
+  );
+  if (sfxAccept.statusCode !== 200 || JSON.parse(sfxAccept.body).version.status !== 'accepted') {
+    throw new Error(`SFX acceptance failed: ${sfxAccept.statusCode} ${sfxAccept.body}`);
+  }
+  const sfxPublicCatalog = JSON.parse((await get('/api/asset-catalog')).body);
+  const publishedSfx = sfxPublicCatalog.slots.find((slot) => slot.slot === sfxSlot);
+  if (
+    publishedSfx?.versionStatus !== 'accepted'
+    || publishedSfx.media.sha256 !== sfxSha
+    || publishedSfx.productionEligible !== true
+  ) throw new Error(`Accepted SFX did not publish through the runtime catalog: ${JSON.stringify(publishedSfx)}`);
 
   const privateBytes = Buffer.from('private source proof\n', 'utf8');
   const privateSha = crypto.createHash('sha256').update(privateBytes).digest('hex');

@@ -92,4 +92,11 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain("selectedLevel ? ' has-level-preview' : ''");
     expect(style).toContain('.play-scene-authority.has-level-preview .play-action-col');
   });
+
+  it('serializes replacement of an active Run before entering the Run scene', () => {
+    expect(playMenu).toContain('if (starting || syncing || !eligible.length) return;');
+    expect(playMenu).toContain("tone: 'danger'");
+    expect(playMenu).toMatch(/await abandon\(\);[\s\S]*?replace\(createRun\([\s\S]*?navigateApp\('\/run'\)/);
+    expect(playMenu).toContain("starting ? 'Starting…' : run ? 'Start a new Run' : 'Start Run'");
+  });
 });

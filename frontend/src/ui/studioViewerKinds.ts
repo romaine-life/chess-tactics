@@ -22,7 +22,7 @@ export const STUDIO_VIEWER_KIND_LABELS = {
   tileside: 'Subterrain',
   walldecor: 'Wall Art Sources',
   wallart: 'Wall Art',
-  sfx: 'Sound Assignments',
+  sfx: 'Sound Effects',
   gamelab: 'Game Lab',
   gym: 'Training Gym',
   solver: 'Board Solver',

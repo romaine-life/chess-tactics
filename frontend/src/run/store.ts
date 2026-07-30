@@ -2,14 +2,14 @@ import { create } from 'zustand';
 import { fetchMe } from '../net/auth';
 import { deleteActiveRun, loadActiveRun, saveActiveRun } from '../net/activeRun';
 import { HttpError } from '../net/http';
-import type { RunDocument } from './model';
+import { normalizeRunDocument, type RunDocument } from './model';
 
 const LOCAL_RUN_KEY = 'chess-tactics:active-run:v1';
 
 function readLocalRun(): RunDocument | null {
   try {
     const parsed = JSON.parse(localStorage.getItem(LOCAL_RUN_KEY) ?? 'null') as RunDocument | null;
-    return parsed?.formatVersion === 1 ? parsed : null;
+    return parsed?.formatVersion === 1 ? normalizeRunDocument(parsed) : null;
   } catch {
     return null;
   }
@@ -98,24 +98,25 @@ export const useActiveRun = create<ActiveRunState>((set, get) => ({
         return;
       }
       const remote = await loadActiveRun();
-      if (remote.run && browserRun && remote.run.id !== browserRun.id) {
+      const accountRun = remote.run ? normalizeRunDocument(remote.run) : null;
+      if (accountRun && browserRun && accountRun.id !== browserRun.id) {
         set({
-          run: remote.run,
+          run: accountRun,
           hydrated: true,
           signedIn: true,
           remoteRevision: remote.revision,
-          adoptionConflict: { browserRun, accountRun: remote.run },
+          adoptionConflict: { browserRun, accountRun },
           persistenceError: 'This browser and account each have an active Run.',
         });
         return;
       }
       const browserIsNewer = Boolean(
-        remote.run
+        accountRun
         && browserRun
-        && remote.run.id === browserRun.id
-        && Date.parse(browserRun.updatedAt) > Date.parse(remote.run.updatedAt),
+        && accountRun.id === browserRun.id
+        && Date.parse(browserRun.updatedAt) > Date.parse(accountRun.updatedAt),
       );
-      const run = browserIsNewer ? browserRun : remote.run ?? browserRun;
+      const run = browserIsNewer ? browserRun : accountRun ?? browserRun;
       set({
         run,
         hydrated: true,
@@ -124,7 +125,7 @@ export const useActiveRun = create<ActiveRunState>((set, get) => ({
         persistenceError: null,
       });
       writeLocalRun(run);
-      if ((!remote.run || browserIsNewer) && browserRun) queueRemoteSave(browserRun);
+      if ((!accountRun || browserIsNewer) && browserRun) queueRemoteSave(browserRun);
     } catch (error) {
       set({
         run: browserRun,

@@ -53,6 +53,17 @@ these.
 - Ordinary boards remain **self-contained**. **Run** adds the deliberate continuity
   layer: a persistent chess army, shops, and relics move through an authored War while
   every Battle still obeys recognizable chess-piece behavior (ADR-0193).
+- Acquired relics read as persistent Run state: one frameless native-size icon
+  strip stays at the upper-left beneath the title bar in Battles and between-Battle
+  screens, independent of the Battle Controls panel; pointing at or focusing an
+  icon immediately explains its name and complete effect (ADR-0216, ADR-0217).
+- Opening hands and shop piece bundles read as chess cards rather than prose:
+  each actual unit appears as the same canonical player-side sprite used on the
+  board, dense bundles form a compact grid, and shop prices use the installed
+  gold icon with a live number (ADR-0219, ADR-0225).
+- A non-final Run victory funds its shop from the authored enemy force: each
+  King is worth 1 gold and every other enemy chess piece pays 50% of its
+  standard value (ADR-0220).
 - **Campaign** strings 5–10 boards into a curated, slowly-evolving sequence, and
   will grow richer over time.
 
