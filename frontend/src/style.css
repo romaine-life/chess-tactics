@@ -16310,8 +16310,11 @@ button.tileset-relationship-cell {
 /* ADR-0095: the persistent bar is an outer-role box. The generated Chrome-family
    stylesheet owns ::before (rail), the fill span, and the trailing divider rail. */
 .app-titlebar > .app-titlebar-fill {
-  inset: var(--le-outer-fill-box-top, 0) var(--le-outer-fill-box-right, 0)
-    calc(var(--le-outer-fill-box-bottom, 0px) + 1px) var(--le-outer-fill-box-left, 0);
+  /* The title bar's top and inline edges are viewport edges, not enclosed outer-panel
+     rails. Keep its role-owned surface full-bleed there even when Chrome Lab tunes the
+     ordinary outer Fill Box inward; otherwise that shared tuning exposes the page
+     beneath the bar and consumes the controls' visible top clearance. */
+  inset: 0 0 calc(var(--le-outer-fill-box-bottom, 0px) + 1px);
   /* The structural divider's final source row is transparent. Stop the title
      texture one pixel inside it so that row cannot reveal fill below the rail. */
   pointer-events: none;
