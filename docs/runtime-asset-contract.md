@@ -345,8 +345,11 @@ an incomplete row is an availability failure.
   lifecycle (ADR-0200).
 
 The browser, Studio, client image bakes, and server thumbnails must observe one
-catalog revision. A critical catalog that cannot hydrate is an availability
-failure. There is no committed or generic-art fallback.
+coherent catalog snapshot. Per ADR-0234, a catalog's global revision selects and
+isolates that snapshot but does not become a dependency of every derived image;
+server thumbnails fingerprint only the exact resolved plan and media they
+consume. A critical catalog that cannot hydrate is an availability failure.
+There is no committed or generic-art fallback.
 
 ## Candidate and acceptance lifecycle
 
