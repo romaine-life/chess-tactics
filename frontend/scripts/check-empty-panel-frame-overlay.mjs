@@ -961,7 +961,7 @@ if (!blockFor('.run-shell-workspace-content')
   failures.push('Run content spacing and relic reservation must stay inside the continuous shell workspace surface');
 }
 const runCssStart = css.indexOf('/* ===== Run =====');
-const runCssEnd = css.indexOf('/* Play-screen level rows', runCssStart);
+const runCssEnd = css.indexOf('/* ===== Enchiridion + Strategikon', runCssStart);
 const runCss = runCssStart >= 0 && runCssEnd > runCssStart ? css.slice(runCssStart, runCssEnd) : '';
 const rawRunSpacing = runCss.match(/(?:^|\n)\s*(?:margin(?:-[\w-]+)?|padding(?:-[\w-]+)?|(?:row-|column-)?gap|top|right|bottom|left|inset(?:-[\w-]+)?)\s*:[^;\n]*\b\d+(?:\.\d+)?px\b/g) ?? [];
 if (!runCss || rawRunSpacing.length > 0) {

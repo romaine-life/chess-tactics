@@ -69,11 +69,11 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('aria-hidden={covered ? true : undefined}');
     expect(runScreen).toContain("view === 'relics'");
     expect(runScreen).toContain('<RunRelicsWorkspace relicIds={run.relics} />');
-    expect(skirmish).toContain("className={`skirmish-field${runWorkspace ? ' is-workspace-covered' : ''}`}");
-    expect(skirmish).toContain('inert={runWorkspace ? true : undefined}');
-    expect(skirmish).toContain('aria-hidden={runWorkspace ? true : undefined}');
+    expect(skirmish).toContain("className={`skirmish-field${strategikonOpen || runWorkspace ? ' is-workspace-covered' : ''}`}");
+    expect(skirmish).toContain('inert={strategikonOpen || runWorkspace ? true : undefined}');
+    expect(skirmish).toContain('aria-hidden={strategikonOpen || runWorkspace ? true : undefined}');
     expect(skirmish).toContain('{runSelfInspectionOpen ? null : <RunRelicStrip relicIds={relicIds} />}');
-    expect(skirmish).toMatch(/<section className="skirmish-war-room"[\s\S]*?\{runWorkspace\}[\s\S]*?<\/section>/);
+    expect(skirmish).toMatch(/className=\{`skirmish-war-room[\s\S]*?\{runWorkspace\}[\s\S]*?<\/section>/);
     expect(styleCss).toMatch(/\.run-phase-primary\.is-workspace-covered,[\s\S]*?\.skirmish-field\.is-workspace-covered\s*\{[\s\S]*?visibility:\s*hidden;/);
   });
 

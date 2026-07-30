@@ -474,13 +474,13 @@ function RunArmyWorkspaceHost({
   children,
   className,
   contentClassName,
-  dataTestId,
+  'data-testid': dataTestId,
   framed,
 }: {
   children: ReactNode;
   className: string;
   contentClassName: string;
-  dataTestId: string;
+  'data-testid': string;
   framed: boolean;
 }): ReactElement {
   if (framed) {
@@ -544,7 +544,7 @@ export function RunArmyWorkspace({
       <RunArmyWorkspaceHost
         className="run-self-inspection-workspace run-army-workspace run-army-profile"
         contentClassName="run-self-inspection-content run-army-profile-content"
-        dataTestId="run-army-profile-workspace"
+        data-testid="run-army-profile-workspace"
         framed={framed}
       >
           <header className="run-self-inspection-head">
@@ -586,7 +586,7 @@ export function RunArmyWorkspace({
     <RunArmyWorkspaceHost
       className="run-self-inspection-workspace run-army-workspace run-army-ledger"
       contentClassName="run-self-inspection-content run-army-ledger-content"
-      dataTestId="run-army-ledger-workspace"
+      data-testid="run-army-ledger-workspace"
       framed={framed}
     >
         <header className="run-self-inspection-head">

@@ -98,9 +98,11 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(style).not.toMatch(/\.skirmish-hud-title-action:is\(:hover,\s*\.active\)/);
     expect(style).toMatch(/\.skirmish-hud-title-action-glyph\s*\{[\s\S]*?block-size:\s*32px[\s\S]*?inline-size:\s*32px/);
     expect(skirmish).toContain("className={`skirmish-war-room${strategikonOpen ? ' has-strategikon' : ''}`}");
-    expect(skirmish).toMatch(/className="skirmish-field"[\s\S]*?inert=\{strategikonOpen \? true : undefined\}[\s\S]*?aria-hidden=\{strategikonOpen \|\| undefined\}/);
+    expect(skirmish).toContain("className={`skirmish-field${strategikonOpen || runWorkspace ? ' is-workspace-covered' : ''}`}");
+    expect(skirmish).toContain('inert={strategikonOpen || runWorkspace ? true : undefined}');
+    expect(skirmish).toContain('aria-hidden={strategikonOpen || runWorkspace ? true : undefined}');
     expect(skirmish).toMatch(/className="strategikon-slot"[\s\S]*?sceneTransitionTargetAttributes\('gameplay-shell'\)[\s\S]*?\{strategikonOpen \? \(/);
-    expect(skirmish.indexOf('className="skirmish-field"')).toBeLessThan(skirmish.indexOf('className="strategikon-slot"'));
+    expect(skirmish.indexOf('className={`skirmish-field')).toBeLessThan(skirmish.indexOf('className="strategikon-slot"'));
     expect(style).toMatch(/\.strategikon-slot\s*\{[\s\S]*?inset:\s*0[\s\S]*?position:\s*absolute/);
     expect(style).toMatch(/\.strategikon-workspace-fill\s*\{[\s\S]*?inset:\s*0/);
     expect(style).not.toMatch(/\.skirmish-war-room\.has-strategikon > \.skirmish-field\s*\{[\s\S]*?visibility:\s*hidden/);
