@@ -13,6 +13,7 @@ function readLocalRun(): RunDocument | null {
       Number(parsed.formatVersion) === 1
       || Number(parsed.formatVersion) === 2
       || Number(parsed.formatVersion) === 3
+      || Number(parsed.formatVersion) === 4
     )
       ? normalizeRunDocument(parsed)
       : null;

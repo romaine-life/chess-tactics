@@ -111,17 +111,46 @@ export function InnerChromeBox({
   );
 }
 
+export type ChromeJunctionSides = 'nes' | 'nsw' | 'esw' | 'new' | 'nesw';
+
 export function ChromeDivider({
   role,
+  orientation = 'horizontal',
+  junctions = 'endpoints',
   className = '',
-}: {
+  ...props
+}: HTMLAttributes<HTMLDivElement> & {
   role: ChromeRole;
-  className?: string;
+  orientation?: 'horizontal' | 'vertical';
+  junctions?: 'endpoints' | 'none';
 }): ReactElement {
   return (
     <div
+      {...props}
       data-chrome-divider-role={role}
+      data-chrome-divider-orientation={orientation}
+      data-chrome-divider-junctions={junctions}
       className={`kit-divider chrome-divider ${className}`.trim()}
+      aria-hidden="true"
+    />
+  );
+}
+
+export function ChromeJunction({
+  role,
+  sides,
+  className = '',
+  ...props
+}: HTMLAttributes<HTMLSpanElement> & {
+  role: ChromeRole;
+  sides: ChromeJunctionSides;
+}): ReactElement {
+  return (
+    <span
+      {...props}
+      data-chrome-junction-role={role}
+      data-chrome-junction-sides={sides}
+      className={`chrome-junction ${className}`.trim()}
       aria-hidden="true"
     />
   );

@@ -60,6 +60,9 @@ describe('Run piece economy', () => {
     expect(run.army.map((unit) => unit.type)).toEqual(['king', 'pawn', 'pawn', 'pawn']);
     expect(run.army.every((unit) => unit.name.length > 0)).toBe(true);
     expect(new Set(run.army.map((unit) => unit.name)).size).toBe(run.army.length);
+    expect(run.army.every((unit) => Number.isSafeInteger(unit.inspectionSeed))).toBe(true);
+    expect(createRun(war(), 91).army.map((unit) => unit.inspectionSeed))
+      .toEqual(run.army.map((unit) => unit.inspectionSeed));
     expect(run.army.map((unit) => [unit.type, unit.number])).toEqual([
       ['king', 1],
       ['pawn', 1],
@@ -75,10 +78,12 @@ describe('Run piece economy', () => {
     const fresh = createRun(war(), 91);
     const drafted = chooseDraft(fresh, fresh.draftOffers[0].draftId);
     expect(drafted.army.filter((unit) => unit.source === 'draft').every((unit) => unit.name.length > 0)).toBe(true);
+    expect(drafted.army.filter((unit) => unit.source === 'draft').every((unit) => Number.isSafeInteger(unit.inspectionSeed))).toBe(true);
 
     const shop = openShop({ ...deployedRun(91), goldTenths: 100 * GOLD_SCALE }, []);
     const bought = buyBundle(shop, shop.shop!.bundleOfferIds[0]);
     expect(bought.army.filter((unit) => unit.source === 'shop').every((unit) => unit.name.length > 0)).toBe(true);
+    expect(bought.army.filter((unit) => unit.source === 'shop').every((unit) => Number.isSafeInteger(unit.inspectionSeed))).toBe(true);
     expect(new Set(bought.army.map((unit) => unit.name)).size).toBe(bought.army.length);
   });
 
@@ -207,7 +212,7 @@ describe('Run progression and relic offers', () => {
     } as unknown as RunDocument;
     const upgraded = normalizeRunDocument(legacy);
 
-    expect(upgraded.formatVersion).toBe(3);
+    expect(upgraded.formatVersion).toBe(4);
     expect(upgraded.id).toBe(current.id);
     expect(upgraded.army.map((unit) => unit.name)).toEqual(current.army.map((unit) => unit.name));
     expect(normalizeRunDocument(upgraded)).toBe(upgraded);
@@ -222,8 +227,22 @@ describe('Run progression and relic offers', () => {
     } as unknown as RunDocument;
     const upgraded = normalizeRunDocument(provisional);
 
-    expect(upgraded.formatVersion).toBe(3);
+    expect(upgraded.formatVersion).toBe(4);
     expect(upgraded.army.map((unit) => unit.name)).toEqual(current.army.map((unit) => unit.name));
+    expect(normalizeRunDocument(upgraded)).toBe(upgraded);
+  });
+
+  it('assigns persistent inspection-scene seeds when upgrading format-3 units', () => {
+    const current = createRun(war(), 73);
+    const legacy = {
+      ...current,
+      formatVersion: 3,
+      army: current.army.map(({ inspectionSeed: _inspectionSeed, ...unit }) => unit),
+    } as unknown as RunDocument;
+    const upgraded = normalizeRunDocument(legacy);
+
+    expect(upgraded.formatVersion).toBe(4);
+    expect(upgraded.army.every((unit) => Number.isSafeInteger(unit.inspectionSeed))).toBe(true);
     expect(normalizeRunDocument(upgraded)).toBe(upgraded);
   });
 

@@ -75,6 +75,18 @@ these.
   persistent Controls panel navigates those destinations, resets the complete
   same-offer shop visit, and continues the Run; Army inspection remains
   available in every Run phase without pausing an active Battle (ADR-0230).
+- Army and Relics are grouped as player **Self inspection** in Run Controls.
+  Either replaces the complete left Play workspace through the shared
+  fill-only shell surface while the current phase stays mounted underneath;
+  the normal relic strip yields to the readable Relics workspace during
+  inspection. The exact workspaces are directly reviewable at
+  `/run?view=army` and `/run?view=relics` (ADR-0240, ADR-0244).
+- Selecting one Army unit opens a tile-backed inspection scene, not an enlarged
+  portrait. The canonical board renderer draws that unit's real board sprite
+  on a stable terrain surface with seeded optional grass. A persistent scene
+  seed is assigned in the same transaction that adds the unit to the army, so
+  the scene survives Battles, shops, resets, and cross-device resume
+  (ADR-0247).
 - **Campaign** strings 5–10 boards into a curated, slowly-evolving sequence, and
   will grow richer over time.
 

@@ -97,6 +97,30 @@ each structural divider inherits the rail, thickness, fit, and reach of its
 `outer` or `inner` host; Chrome Lab owns independent visible band and joint
 geometry for those two roles. Consumers compose the shared `ChromeDivider`
 component as many times as needed and never paint local separator borders.
+ADR-0239 extends that same primitive across both layout axes: horizontal
+dividers separate stacked rows and vertical dividers separate adjacent columns.
+The vertical form uses the host's vertical rail and rotated copies of the same
+installed junction source; it is not another chrome role or media slot.
+Under [ADR-0242](adr/0242-divided-inner-grids-own-one-rail-topology.md),
+[ADR-0243](adr/0243-grid-crossings-use-the-installed-divider-joint-atom.md),
+[ADR-0245](adr/0245-topology-junction-atoms-center-on-the-node.md),
+[ADR-0246](adr/0246-boundary-junctions-center-on-the-frame-rail.md), and
+[ADR-0248](adr/0248-topology-junction-ornaments-remain-upright.md),
+dense table-shaped content uses the shared `DividedInnerChromeBox`: one
+canonical inner 9-slice around the complete grid, with callers declaring only
+column tracks and rows. The primitive derives every rail from CSS grid lines and
+renders exactly one connectivity-addressed `ChromeJunction` at each node. Its managed
+`ChromeDivider`s do not paint standalone endpoints. Perimeter nodes use the
+role-owned divider-joint atom; interior crossings draw all four rails beneath
+that same role-owned divider-joint atom and never compose host-frame corners.
+Every topology atom centers on the node and uses the same upright, unreflected
+divider-joint raster; its mask records connected rails but does not transform
+the ornament. Interior nodes use the CSS grid-line coordinate directly. At a frame
+boundary, the content edge is not the node: the primitive moves inward by half
+the role rail's reach so the node lands on the visible frame rail's centerline,
+never on its outer edge. A drawn scrollbar is a derived final track, never a
+locally positioned divider. Consumers must not add divider elements, junctions,
+aprons, or corrective offsets inside this composition.
 
 Under [ADR-0093](adr/0093-chrome-rails-own-alignment-atoms-use-clip-aprons.md),
 the **rail edge** is every box's layout and alignment edge. Corner atoms and
@@ -152,6 +176,17 @@ shared `RunWorkspace`/`ShellWorkspace` composition. Content gutters and relic
 reservation live inside that continuous surface. Destinations do not add an
 `OuterChromeBox`, outer-panel consumer, or duplicate title frame merely to
 acquire a background; subordinate controls remain registered inner chrome.
+
+Under [ADR-0240](adr/0240-run-self-inspection-owns-the-left-shell-workspace.md)
+and [ADR-0244](adr/0244-run-self-inspection-views-are-deep-linkable.md),
+that same fill-only composition remains the workflow-neutral
+`RunWorkspace`/`ShellWorkspace` primitive.
+Run Army and Relics self-inspection reuse it to replace the complete left Play
+workspace while title and Controls remain fixed; `/run?view=army` and
+`/run?view=relics` open those exact workspaces. A shell workspace consumes the
+installed outer-role fill but is never an `outer-panel` consumer: it owns no
+exterior rails, corner atoms, viewport offsets, or second frame. Covered content
+stays mounted, hidden, inert, and inaccessible until the workspace closes.
 
 Under [ADR-0102](adr/0102-runtime-buttons-use-registered-inner-chrome.md), that
 ownership rule applies to runtime controls throughout the application. The old

@@ -1,0 +1,99 @@
+import { readFileSync } from 'node:fs';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { describe, expect, it } from 'vitest';
+import {
+  ChromeDividedGridRow,
+  DividedInnerChromeBox,
+  chromeDividedGridTopology,
+} from './ChromeDividedGrid';
+
+const styleCss = readFileSync(new URL('../../style.css', import.meta.url), 'utf8');
+
+function cssRule(selector: string): string {
+  const start = styleCss.indexOf(`${selector} {`);
+  expect(start, `style.css should contain ${selector}`).toBeGreaterThanOrEqual(0);
+  return styleCss.slice(start, styleCss.indexOf('}', start) + 1);
+}
+
+describe('divided inner chrome topology', () => {
+  it('derives every rail and junction from column lines with a scrollbar gutter', () => {
+    const topology = chromeDividedGridTopology(3, true);
+
+    expect(topology.trackCount).toBe(4);
+    expect(topology.verticalLines).toEqual([2, 3, 4]);
+    expect(topology.rowNodes).toEqual([
+      { line: 1, sides: 'nes', inlineBoundary: 'frame-start' },
+      { line: 2, sides: 'nesw', inlineBoundary: 'internal' },
+      { line: 3, sides: 'nesw', inlineBoundary: 'internal' },
+      { line: 4, sides: 'nsw', inlineBoundary: 'internal' },
+    ]);
+    expect(topology.topNodes.map(({ line, sides }) => ({ line, sides }))).toEqual([
+      { line: 2, sides: 'esw' },
+      { line: 3, sides: 'esw' },
+      { line: 4, sides: 'esw' },
+    ]);
+    expect(topology.bottomNodes.map(({ line, sides }) => ({ line, sides }))).toEqual([
+      { line: 2, sides: 'new' },
+      { line: 3, sides: 'new' },
+      { line: 4, sides: 'new' },
+    ]);
+  });
+
+  it('tees row rails into both frame sides when no scrollbar gutter exists', () => {
+    const topology = chromeDividedGridTopology(2, false);
+
+    expect(topology.trackCount).toBe(2);
+    expect(topology.verticalLines).toEqual([2]);
+    expect(topology.horizontalEndBoundary).toBe('frame-end');
+    expect(topology.rowNodes).toEqual([
+      { line: 1, sides: 'nes', inlineBoundary: 'frame-start' },
+      { line: 2, sides: 'nesw', inlineBoundary: 'internal' },
+      { line: 3, sides: 'nsw', inlineBoundary: 'frame-end' },
+    ]);
+  });
+
+  it('renders one topology-owned node at each intersection and no divider-owned endpoints', () => {
+    const html = renderToStaticMarkup(
+      <DividedInnerChromeBox columns={['80px', '1fr', '72px']} scroll>
+        <ChromeDividedGridRow><span>A</span><span>B</span><span>C</span></ChromeDividedGridRow>
+        <ChromeDividedGridRow><span>D</span><span>E</span><span>F</span></ChromeDividedGridRow>
+      </DividedInnerChromeBox>,
+    );
+
+    expect(html.match(/data-chrome-divider-junctions="none"/g)).toHaveLength(4);
+    expect(html.match(/data-chrome-junction-role="inner"/g)).toHaveLength(10);
+    expect(html.match(/data-chrome-junction-sides="nesw"/g)).toHaveLength(2);
+    expect(html).not.toContain('data-chrome-divider-junctions="endpoints"');
+  });
+
+  it('centers perimeter tees on the frame rail instead of the frame outer edge', () => {
+    expect(styleCss).toMatch(
+      /--chrome-divided-grid-boundary-node-offset:\s*calc\(var\(--chrome-divided-grid-reach\) \/ 2\);/,
+    );
+    expect(cssRule(
+      '.chrome-divided-grid__junction[data-chrome-grid-inline-boundary="frame-start"]',
+    )).toContain(
+      'calc(-1 * var(--chrome-divided-grid-boundary-node-offset))',
+    );
+    expect(cssRule(
+      '.chrome-divided-grid__junction[data-chrome-grid-inline-boundary="frame-end"]',
+    )).toContain(
+      'var(--chrome-divided-grid-boundary-node-offset)',
+    );
+    expect(cssRule(
+      '.chrome-divided-grid__junction[data-chrome-grid-block-boundary="frame-start"]',
+    )).toContain(
+      'calc(-1 * var(--chrome-divided-grid-boundary-node-offset))',
+    );
+    expect(cssRule(
+      '.chrome-divided-grid__junction[data-chrome-grid-block-boundary="frame-end"]',
+    )).toContain(
+      'var(--chrome-divided-grid-boundary-node-offset)',
+    );
+  });
+
+  it('rejects an unpartitioned grid instead of silently inventing tracks', () => {
+    expect(() => chromeDividedGridTopology(0, false))
+      .toThrow('A divided chrome grid requires at least one content column.');
+  });
+});

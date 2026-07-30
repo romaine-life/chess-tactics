@@ -93,7 +93,8 @@ describe('Skirmish chrome hierarchy', () => {
     expect(chromeBox).toContain("chromeUnitClassNames('outer-panel', 'le-outer-panel', className)");
     expect(chromeBox).toContain("titled ? 'le-outer-panel-content--titled' : ''");
 
-    expect(portraitEditor).toMatch(/<InnerChromeBox className=\{`unit-portrait/);
+    expect(portraitEditor).toContain('<InnerChromeBox className={classes}');
+    expect(portraitEditor).toContain('if (!framed) return <div className={classes}');
     expect(skirmishHud).toContain('<InnerChromeBox className="unit-portrait unit-portrait--hud"');
     expect(skirmishHud).toContain('<InnerChromeBox className="skirmish-service-record">');
 

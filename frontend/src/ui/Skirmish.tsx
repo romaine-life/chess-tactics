@@ -76,6 +76,7 @@ import { InnerChromeBox } from './shared/ChromeBox';
 import { rememberAdminBattleHref } from '../admin/battleRoute';
 import type { RunRelicId } from '../run/model';
 import { RunRelicStrip } from './RunRelics';
+import type { RunSelfInspectionView } from './RunSelfInspection';
 
 export interface RunBattlePresentation {
   level: Level;
@@ -99,6 +100,7 @@ export function SkirmishShell({
   testId = 'skirmish',
   titleBarContent,
   relicIds = [],
+  runSelfInspectionOpen = false,
   controlsContent,
   hudProps,
   hudContent,
@@ -111,6 +113,7 @@ export function SkirmishShell({
   testId?: string;
   titleBarContent: ReactNode;
   relicIds?: readonly RunRelicId[];
+  runSelfInspectionOpen?: boolean;
   controlsContent?: ReactNode;
   hudProps?: SkirmishHudProps;
   hudContent?: ReactNode;
@@ -133,7 +136,7 @@ export function SkirmishShell({
     : screenStyle ?? undefined;
   const surface = (
     <>
-      <RunRelicStrip relicIds={relicIds} />
+      {runSelfInspectionOpen ? null : <RunRelicStrip relicIds={relicIds} />}
       {children}
       {hudContent === undefined
         ? <SkirmishHud {...hudProps} controlsContent={controlsContent} />
@@ -144,7 +147,7 @@ export function SkirmishShell({
   return (
     <div
       data-testid={testId}
-      className={`skirmish-screen is-play-canvas ${className}`.trim()}
+      className={`skirmish-screen is-play-canvas${runSelfInspectionOpen ? ' is-run-self-inspection-open' : ''} ${className}`.trim()}
       style={resolvedScreenStyle}
     >
       {installedChromeCss ? <style data-skirmish-chrome-family dangerouslySetInnerHTML={{ __html: installedChromeCss }} /> : null}
@@ -168,14 +171,14 @@ export function SkirmishShell({
 export function Skirmish({
   runBattle = null,
   runWorkspace = null,
-  runArmyOpen = false,
-  onToggleRunArmy = null,
+  runSelfInspectionView = null,
+  onNavigateRunView = null,
   routeSearch = window.location.search,
 }: {
   runBattle?: RunBattlePresentation | null;
   runWorkspace?: ReactNode;
-  runArmyOpen?: boolean;
-  onToggleRunArmy?: (() => void) | null;
+  runSelfInspectionView?: RunSelfInspectionView | null;
+  onNavigateRunView?: ((view: 'primary' | RunSelfInspectionView) => void) | null;
   routeSearch?: string;
 } = {}) {
   const routeParams = useMemo(() => new URLSearchParams(routeSearch), [routeSearch]);
@@ -1122,8 +1125,8 @@ export function Skirmish({
         onOpenPredrawnRegistration={predrawnPreview ? () => setPredrawnPickerOpen(true) : null}
         onPawnCashOut={runBattle?.onPawnCashOut ?? null}
         onAbandonRun={runBattle?.onAbandonRun ?? null}
-        onToggleRunArmy={onToggleRunArmy}
-        runArmyOpen={runArmyOpen}
+        runSelfInspectionView={runSelfInspectionView}
+        onNavigateRunView={onNavigateRunView}
       />
     </PaintedSurfaceBoundary>
   ) : null;
@@ -1132,6 +1135,7 @@ export function Skirmish({
     <SkirmishShell
       testId="skirmish"
       className={screenPredrawnBackgroundActive ? 'is-predrawn-board' : ''}
+      runSelfInspectionOpen={Boolean(runWorkspace)}
       titleBarContent={playableSurfaceReady ? (
         <div className="skirmish-topbar-status">
           {/* The battle clock is ALWAYS the middle chip on every play surface — a timed game
@@ -1208,7 +1212,11 @@ export function Skirmish({
       ) : null}
 
       <section className="skirmish-war-room" aria-label="Skirmish battlefield">
-        <div className="skirmish-field">
+        <div
+          className={`skirmish-field${runWorkspace ? ' is-workspace-covered' : ''}`}
+          inert={runWorkspace ? true : undefined}
+          aria-hidden={runWorkspace ? true : undefined}
+        >
           <div className="skirmish-board-frame">
             {mapError ? (
               <InnerChromeBox className="skirmish-status-chip skirmish-turn-plate" role="alert" style={{ gap: 10 }}>
@@ -1261,8 +1269,8 @@ export function Skirmish({
             <small>Multiplayer</small>
           </InnerChromeBox>
         ) : null}
+        {runWorkspace}
       </section>
-      {runWorkspace}
       {predrawnPickerOpen && predrawnPreview ? (
         <PredrawnCornerPicker
           src={predrawnPreview}

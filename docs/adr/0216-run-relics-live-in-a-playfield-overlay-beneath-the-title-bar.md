@@ -4,6 +4,7 @@ date: 2026-07-29
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
   - "[ADR-0217](0217-run-relic-icons-use-immediate-styled-tooltips.md)"
+  - "[ADR-0240](0240-run-self-inspection-owns-the-left-shell-workspace.md)"
 ---
 
 # ADR-0216: Run relics live in a playfield overlay beneath the title bar

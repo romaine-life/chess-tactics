@@ -239,8 +239,12 @@ function installedChromeDefaults(): InstalledChromeDefaults {
 }
 
 export type DividerAtomOverlay = {
+  /** Canonical lit orientation used by topology-owned junction covers. */
+  upright: string;
   left: string;
   right: string;
+  top?: string;
+  bottom?: string;
   width: number;
   height: number;
   outset: number;
@@ -553,6 +557,17 @@ function renderDividerJointDataUrl(atom: HTMLCanvasElement, width: number, heigh
   return canvas.toDataURL('image/png');
 }
 
+function renderVerticalDividerJointDataUrl(atom: HTMLCanvasElement, flipY: boolean): string {
+  const rotated = rotateCanvas(atom, 1);
+  const canvas = document.createElement('canvas');
+  canvas.width = rotated.width;
+  canvas.height = rotated.height;
+  const context = canvas.getContext('2d')!;
+  context.imageSmoothingEnabled = false;
+  drawMirrored(context, rotated, 0, 0, rotated.width, rotated.height, false, flipY);
+  return canvas.toDataURL('image/png');
+}
+
 function dividerAtomBaseOffset(divider: DividerTune, atomW: number, atomH: number): { x: number; y: number; anchorX: number; anchorY: number; targetX: number; targetY: number } {
   const mode = divider.atomAlignMode ?? 'manual';
   const targetX = 0;
@@ -658,9 +673,13 @@ export async function composeDividerRender(host: RoleTune, divider: DividerTune)
     const leftY = base.y + divider.atomLeftY;
     const rightY = base.y + divider.atomRightY;
     const maxOffset = Math.max(Math.abs(leftX), Math.abs(rightX), Math.abs(leftY), Math.abs(rightY));
+    const upright = renderDividerJointDataUrl(atom, atomW, atomH, false);
     atomOverlay = {
-      left: renderDividerJointDataUrl(atom, atomW, atomH, false),
+      upright,
+      left: upright,
       right: renderDividerJointDataUrl(atom, atomW, atomH, true),
+      top: renderVerticalDividerJointDataUrl(atom, false),
+      bottom: renderVerticalDividerJointDataUrl(atom, true),
       width: atomW,
       height: atomH,
       outset: Math.ceil(Math.max(atomW, atomH) + maxOffset + 4),
@@ -845,15 +864,23 @@ ${overlaySelector} {
 
 function dividerCss(role: ChromeRole, host: RoleTune, hostFrame: FrameRender, divider: DividerRender): string {
   if (!hostFrame.url) return '';
-  const selector = `${CHROME_FAMILY_SURFACE_SELECTOR} [data-chrome-divider-role="${role}"]`;
+  const roleSelector = `${CHROME_FAMILY_SURFACE_SELECTOR} [data-chrome-divider-role="${role}"]`;
+  const selector = `${roleSelector}:not([data-chrome-divider-orientation="vertical"])`;
+  const verticalSelector = `${roleSelector}[data-chrome-divider-orientation="vertical"]`;
+  const endpointSelector = `${selector}:not([data-chrome-divider-junctions="none"])`;
+  const verticalEndpointSelector = `${verticalSelector}:not([data-chrome-divider-junctions="none"])`;
   const viewportEdgeControlsSelector = role === 'outer'
-    ? `:root:has(.app-titlebar.chrome-rails-offscreen) ${CHROME_FAMILY_SURFACE_SELECTOR} .le-outer-panel:is([data-chrome-consumer="level-editor-controls"], [data-chrome-consumer="skirmish-hud"]) [data-chrome-divider-role="outer"]`
+    ? `:root:has(.app-titlebar.chrome-rails-offscreen) ${CHROME_FAMILY_SURFACE_SELECTOR} .le-outer-panel:is([data-chrome-consumer="level-editor-controls"], [data-chrome-consumer="skirmish-hud"]) [data-chrome-divider-role="outer"]:not([data-chrome-divider-orientation="vertical"])`
     : '';
   const railWidth = divider.railHeight;
   const railTop = Math.round((divider.height - railWidth) / 2);
+  const railLeft = Math.round((divider.height - railWidth) / 2);
   const reach = role === 'outer' ? roleContentInset(host) : renderedRailThickness(host);
   let atomCss = `
 ${selector}::after {
+  content: none !important;
+}
+${verticalSelector}::after {
   content: none !important;
 }
 `;
@@ -864,8 +891,16 @@ ${selector}::after {
     const rightX = cssPx(overlay.outset + overlay.rightX);
     const leftY = cssPx(overlay.outset + overlay.leftY);
     const rightY = cssPx(overlay.outset + overlay.rightY);
+    const topX = cssPx(overlay.outset + overlay.leftY);
+    const bottomX = cssPx(overlay.outset + overlay.rightY);
+    const topY = cssPx(overlay.outset + overlay.leftX);
+    const bottomY = cssPx(overlay.outset + overlay.rightX);
     atomCss = `
-${selector}::after {
+${selector}::after,
+${verticalSelector}::after {
+  content: none !important;
+}
+${endpointSelector}::after {
   background-image: url("${overlay.left}"), url("${overlay.right}");
   background-position: left ${leftX} top ${leftY}, right ${rightX} top ${rightY};
   background-repeat: no-repeat;
@@ -877,6 +912,24 @@ ${selector}::after {
   position: absolute;
   z-index: 1;
 }
+${overlay.top && overlay.bottom ? `
+${verticalEndpointSelector}::after {
+  background-image: url("${overlay.top}"), url("${overlay.bottom}");
+  background-position: left ${topX} top ${topY}, left ${bottomX} bottom ${bottomY};
+  background-repeat: no-repeat;
+  background-size: ${cssPx(overlay.height)} ${cssPx(overlay.width)}, ${cssPx(overlay.height)} ${cssPx(overlay.width)};
+  content: "";
+  image-rendering: pixelated;
+  inset: -${outset};
+  pointer-events: none;
+  position: absolute;
+  z-index: 1;
+}
+` : `
+${verticalEndpointSelector}::after {
+  content: none !important;
+}
+`}
 ${viewportEdgeControlsSelector ? `
 ${viewportEdgeControlsSelector}::after {
   background-image: url("${overlay.left}");
@@ -897,6 +950,17 @@ ${selector} {
   overflow: visible !important;
   position: relative;
 }
+${verticalSelector} {
+  --kit-divider-reach: ${cssPx(reach)};
+  background: none !important;
+  border: 0 !important;
+  border-image: none !important;
+  box-sizing: border-box;
+  height: auto !important;
+  overflow: visible !important;
+  position: relative;
+  width: ${cssPx(divider.height)} !important;
+}
 ${selector}::before {
   border-color: transparent !important;
   border-style: solid !important;
@@ -916,8 +980,67 @@ ${selector}::before {
   top: ${cssPx(railTop)};
   z-index: 0;
 }
+${verticalSelector}::before {
+  border-color: transparent !important;
+  border-style: solid !important;
+  border-width: 0 0 0 ${cssPx(railWidth)} !important;
+  border-image-source: url("${hostFrame.url}") !important;
+  border-image-slice: ${hostFrame.slice} !important;
+  border-image-width: 0 0 0 ${cssPx(railWidth)} !important;
+  border-image-repeat: ${borderImageRepeatForTune(host)} !important;
+  bottom: 0;
+  box-sizing: border-box;
+  content: "";
+  image-rendering: pixelated;
+  left: ${cssPx(railLeft)};
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  width: ${cssPx(railWidth)};
+  z-index: 0;
+}
 ${atomCss}
 `;
+}
+
+function junctionCss(role: ChromeRole, divider: DividerRender): string {
+  const selector = `${CHROME_FAMILY_SURFACE_SELECTOR} [data-chrome-junction-role="${role}"]`;
+  const tee = divider.atomOverlay;
+  const base = `
+${selector} {
+  block-size: 0;
+  inline-size: 0;
+  pointer-events: none;
+  position: relative;
+  z-index: 3;
+}
+${selector}::before {
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  content: none;
+  image-rendering: pixelated;
+  pointer-events: none;
+  position: absolute;
+}
+`;
+  if (!tee) return base;
+  const atomInlineStart = cssPx(-tee.width / 2);
+  const atomBlockStart = cssPx(-tee.height / 2);
+  const topologySelectors = (['nes', 'nsw', 'esw', 'new', 'nesw'] as const)
+    .map((sides) => `${selector}[data-chrome-junction-sides="${sides}"]::before`)
+    .join(',\n');
+  const topologyCss = `
+${topologySelectors} {
+  background-image: url("${tee.upright}");
+  block-size: ${cssPx(tee.height)};
+  content: "";
+  inline-size: ${cssPx(tee.width)};
+  inset-block-start: ${atomBlockStart};
+  inset-inline-start: ${atomInlineStart};
+}
+`;
+  return `${base}${topologyCss}`;
 }
 
 export function frameCss(
@@ -1171,5 +1294,7 @@ ${cornerAtomOverlayCss(innerControlSelectors, innerFrame.atomOverlay, { forcePos
 ${cornerAtomOverlayCss(innerSelectFrameSelectors, innerFrame.atomOverlay, { forcePosition: true, pseudo: '::before' })}
 ${dividerCss('outer', outer, outerFrame, dividers.outer)}
 ${dividerCss('inner', inner, innerFrame, dividers.inner)}
+${junctionCss('outer', dividers.outer)}
+${junctionCss('inner', dividers.inner)}
 `;
 }

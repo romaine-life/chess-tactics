@@ -142,6 +142,7 @@ describe('chrome family geometry ownership (ADR-0083)', () => {
       inner: {
         ...innerDivider,
         atomOverlay: {
+          upright: 'left-joint.png',
           left: 'left-joint.png',
           right: 'right-joint.png',
           width: 11,
@@ -178,6 +179,7 @@ describe('chrome family geometry ownership (ADR-0083)', () => {
       outer: {
         ...outerDivider,
         atomOverlay: {
+          upright: 'left-joint.png',
           left: 'left-joint.png',
           right: 'right-joint.png',
           width: 24,
@@ -191,7 +193,7 @@ describe('chrome family geometry ownership (ADR-0083)', () => {
       },
     };
     const css = frameCss(outer, inner, frame('outer.png', 19), frame('inner.png', 5), dividerRenders);
-    const viewportEdgeSelector = ':root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .le-outer-panel:is([data-chrome-consumer="level-editor-controls"], [data-chrome-consumer="skirmish-hud"]) [data-chrome-divider-role="outer"]::after';
+    const viewportEdgeSelector = ':root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .le-outer-panel:is([data-chrome-consumer="level-editor-controls"], [data-chrome-consumer="skirmish-hud"]) [data-chrome-divider-role="outer"]:not([data-chrome-divider-orientation="vertical"])::after';
     const viewportEdgeRuleStart = css.indexOf(`${viewportEdgeSelector} {`);
     const viewportEdgeRule = css.slice(viewportEdgeRuleStart, css.indexOf('}', viewportEdgeRuleStart) + 1);
 
@@ -199,7 +201,85 @@ describe('chrome family geometry ownership (ADR-0083)', () => {
     expect(viewportEdgeRuleStart).toBeGreaterThanOrEqual(0);
     expect(viewportEdgeRule).toContain('background-image: url("left-joint.png");');
     expect(viewportEdgeRule).not.toContain('right-joint.png');
-    expect(css).toMatch(/\[data-chrome-divider-role="outer"\]::before \{[\s\S]*?left: 0;[\s\S]*?right: 0;/);
+    expect(css).toMatch(/\[data-chrome-divider-role="outer"\]:not\(\[data-chrome-divider-orientation="vertical"\]\)::before \{[\s\S]*?left: 0;[\s\S]*?right: 0;/);
+  });
+
+  it('rotates a role-owned divider into a vertical rail with top and bottom joints', () => {
+    const outer = roleDefault('outer');
+    const inner = roleDefault('inner');
+    const dividerRenders = {
+      ...dividers,
+      inner: {
+        ...innerDivider,
+        atomOverlay: {
+          upright: 'left-joint.png',
+          left: 'left-joint.png',
+          right: 'right-joint.png',
+          top: 'top-joint.png',
+          bottom: 'bottom-joint.png',
+          width: 12,
+          height: 10,
+          outset: 14,
+          leftX: -2,
+          rightX: -3,
+          leftY: 1,
+          rightY: 2,
+        },
+      },
+    };
+    const css = frameCss(outer, inner, frame('outer.png', 19), frame('inner.png', 5), dividerRenders);
+
+    expect(css).toContain('[data-chrome-divider-role="inner"][data-chrome-divider-orientation="vertical"]');
+    expect(css).toContain('background-image: url("top-joint.png"), url("bottom-joint.png");');
+    expect(css).toContain('background-size: 10px 12px, 10px 12px;');
+    expect(css).toMatch(/\[data-chrome-divider-role="inner"\]\[data-chrome-divider-orientation="vertical"\]::before \{[\s\S]*?border-width: 0 0 0 5px !important;[\s\S]*?bottom: 0;[\s\S]*?top: 0;/);
+  });
+
+  it('keeps one upright lit ornament centered on every topology-owned junction', () => {
+    const outer = roleDefault('outer');
+    const inner = roleDefault('inner');
+    const dividerRenders = {
+      ...dividers,
+      inner: {
+        ...innerDivider,
+        atomOverlay: {
+          upright: 'canonical-joint.png',
+          left: 'left-joint.png',
+          right: 'right-joint.png',
+          top: 'top-joint.png',
+          bottom: 'bottom-joint.png',
+          width: 12,
+          height: 10,
+          outset: 14,
+          leftX: -2,
+          rightX: -3,
+          leftY: 1,
+          rightY: 2,
+        },
+      },
+    };
+    const css = frameCss(outer, inner, frame('outer.png', 19), frame('inner.png', 5), dividerRenders);
+
+    expect(css).toContain('[data-chrome-divider-junctions="none"]');
+    expect(css).toContain('[data-chrome-junction-role="inner"][data-chrome-junction-sides="nes"]::before');
+    expect(css).toContain('[data-chrome-junction-role="inner"][data-chrome-junction-sides="nsw"]::before');
+    expect(css).toContain('[data-chrome-junction-role="inner"][data-chrome-junction-sides="esw"]::before');
+    expect(css).toContain('[data-chrome-junction-role="inner"][data-chrome-junction-sides="new"]::before');
+    expect(css).toContain('[data-chrome-junction-role="inner"][data-chrome-junction-sides="nesw"]::before');
+    for (const sides of ['nes', 'nsw', 'esw', 'new', 'nesw']) {
+      const selector = `[data-chrome-junction-role="inner"][data-chrome-junction-sides="${sides}"]::before`;
+      const ruleStart = css.indexOf(selector);
+      const rule = css.slice(ruleStart, css.indexOf('}', ruleStart) + 1);
+      expect(rule).toContain('background-image: url("canonical-joint.png");');
+      expect(rule).toContain('inset-inline-start: -6px;');
+      expect(rule).toContain('inset-block-start: -5px;');
+      expect(rule).not.toContain('right-joint.png');
+      expect(rule).not.toContain('top-joint.png');
+      expect(rule).not.toContain('bottom-joint.png');
+    }
+    expect(css).not.toContain('inset-inline-start: -2px;');
+    expect(css).not.toContain('inset-inline-start: -9px;');
+    expect(css).not.toContain('inner-cross.png');
   });
 
   it('targets real hierarchy classes and registry legacy selectors on every family surface', () => {

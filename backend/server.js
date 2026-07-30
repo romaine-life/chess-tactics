@@ -17893,7 +17893,7 @@ const ACTIVE_RUN_PHASES = new Set(['draft', 'deployment', 'battle', 'shop', 'vic
 const ACTIVE_RUN_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
 function validateActiveRunBody(run) {
   if (!run || typeof run !== 'object' || Array.isArray(run)) return 'run must be an object';
-  if (run.formatVersion !== 1 && run.formatVersion !== 2 && run.formatVersion !== 3) return 'run.formatVersion is unsupported';
+  if (run.formatVersion !== 1 && run.formatVersion !== 2 && run.formatVersion !== 3 && run.formatVersion !== 4) return 'run.formatVersion is unsupported';
   if (typeof run.id !== 'string' || !run.id || run.id.length > 160) return 'run.id is invalid';
   if (!isFiniteInteger(run.seed) || run.seed < 0 || run.seed > 0xffffffff) return 'run.seed is invalid';
   if (typeof run.updatedAt !== 'string' || !run.updatedAt) return 'run.updatedAt is required';
@@ -17931,6 +17931,15 @@ function validateActiveRunBody(run) {
     }
     if (unit.number !== undefined && (!isFiniteInteger(unit.number) || unit.number < 1)) {
       return 'run.army contains an invalid unit number';
+    }
+    if (
+      (run.formatVersion >= 4 && unit.inspectionSeed === undefined)
+      || (
+        unit.inspectionSeed !== undefined
+        && (!isFiniteInteger(unit.inspectionSeed) || unit.inspectionSeed < 0 || unit.inspectionSeed > 0xffffffff)
+      )
+    ) {
+      return 'run.army contains an invalid inspection seed';
     }
   }
   if (!run.army.some((unit) => unit.id === 'run-king' && unit.type === 'king')) return 'run.army must retain its King';
