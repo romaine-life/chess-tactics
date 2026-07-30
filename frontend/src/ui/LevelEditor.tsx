@@ -180,10 +180,9 @@ import { useInstalledChromeCss } from './useInstalledChromeCss';
 import {
   LevelEditorControlsPanel,
   LevelEditorEventsWorkspace,
-  LevelEditorShellWorkspace,
   type LevelEditorToolKey,
 } from './LevelEditorChromeConsumers';
-import { OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
+import { OuterChromeBox, OuterChromeHeader, ShellWorkspace } from './shared/ChromeBox';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import {
   directionCompassCells,
@@ -8706,7 +8705,7 @@ export function LevelEditor(): ReactElement {
             </ViewPane>
           </div>
           {layer === 'level-artwork' && levelArtworkWorkspace && !eventsOpen ? (
-            <LevelEditorShellWorkspace
+            <ShellWorkspace
               className="le-artwork-workspace"
               contentClassName="le-artwork-workspace-content"
               data-testid="level-artwork-workspace"
@@ -8842,7 +8841,7 @@ export function LevelEditor(): ReactElement {
                   <span>The artwork pipeline needs the level’s durable editor document.</span>
                 </div>
               )}
-            </LevelEditorShellWorkspace>
+            </ShellWorkspace>
           ) : null}
           {eventsOpen ? (
             <LevelEditorEventsWorkspace

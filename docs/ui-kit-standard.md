@@ -144,6 +144,15 @@ use registered inner chrome. Its open state is part of the canonical Level Edito
 address (`eventsEditor=1`, with optional `eventsTab=other`) so a review link opens
 the exact workspace state without requiring follow-up clicks.
 
+Under [ADR-0237](adr/0237-run-destinations-fill-the-shell-workspace.md), the same
+ownership test applies to every player-facing non-Battle Run destination. Draft,
+Deployment and its preview, Shop/Loot, Victory, Army ledger and profile, Sell
+Units, loading, and empty states fill the shell-owned playfield through the
+shared `RunWorkspace`/`ShellWorkspace` composition. Content gutters and relic
+reservation live inside that continuous surface. Destinations do not add an
+`OuterChromeBox`, outer-panel consumer, or duplicate title frame merely to
+acquire a background; subordinate controls remain registered inner chrome.
+
 Under [ADR-0102](adr/0102-runtime-buttons-use-registered-inner-chrome.md), that
 ownership rule applies to runtime controls throughout the application. The old
 `mode-button` images have no runtime consumers; `.app-header-button` is

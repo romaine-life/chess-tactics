@@ -4142,7 +4142,7 @@ h1 {
   --ds-inline: var(--ds-space-2);
   --ds-inline-tight: var(--ds-space-1);
   --ds-gutter: var(--ds-space-3);
-  --skirmish-grid-gap: 12px;
+  --skirmish-grid-gap: var(--ds-space-3);
   align-items: stretch;
   color: var(--skirmish-ink);
   display: grid;
@@ -7027,15 +7027,14 @@ body.loading-bootstrap .app-startup-status {
 .le-rule-add { margin-top: 12px; }
 .le-seg-compact .le-seg-btn { min-width: 0; padding: 0 12px; }
 
-/* A Level Editor shell workspace is alternate content for the center board region. The
-   positioned parent already owns the exact title/control boundaries, so every workflow fills
-   that parent without recreating viewport, rail, frame, or outer-atom geometry. Events is the
-   first consumer; level-art authoring uses the same primitive. */
+/* A shell workspace is alternate content for an existing board/playfield region. The positioned
+   parent already owns the exact title/control boundaries, so every workflow fills that parent
+   without recreating viewport, rail, frame, or outer-atom geometry. */
 .le-events-open { width: 100%; }
 .level-editor-screen .skirmish-board-frame.is-workspace-covered {
   visibility: hidden;
 }
-.le-shell-workspace {
+.shell-workspace {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -7049,10 +7048,10 @@ body.loading-bootstrap .app-startup-status {
   text-align: left;
   z-index: 2;
 }
-.le-shell-workspace-fill {
+.shell-workspace-fill {
   inset: 0;
 }
-.le-shell-workspace-content {
+.shell-workspace-content {
   box-sizing: border-box;
   display: flex;
   flex: 1 1 auto;
@@ -7061,9 +7060,12 @@ body.loading-bootstrap .app-startup-status {
   min-height: 0;
   min-width: 0;
   overflow: hidden;
-  padding: var(--le-outer-content-padding, 0px);
+  padding: var(--shell-workspace-content-padding, 0px);
   position: relative;
   z-index: 1;
+}
+.level-editor-screen .shell-workspace {
+  --shell-workspace-content-padding: var(--le-outer-content-padding, 0px);
 }
 .le-events-head { align-items: center; border-bottom: 1px solid rgba(150, 180, 200, .18); display: flex; flex: 0 0 auto; gap: 12px; justify-content: space-between; padding: 0 2px 8px; }
 .le-events-head h2 { color: #eafaff; margin: 0; }
@@ -7182,7 +7184,7 @@ body.loading-bootstrap .app-startup-status {
 .le-events-placeholder { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 2px; }
 
 @media (max-width: 560px) {
-  .le-shell-workspace-content { gap: 8px; overflow-x: hidden; overflow-y: auto; }
+  .shell-workspace-content { gap: 8px; overflow-x: hidden; overflow-y: auto; }
   .le-events-head { align-items: stretch; flex-direction: column; gap: 8px; }
   .le-events-head-actions { justify-content: stretch; }
   .le-events-tabs { flex: 1 1 auto; max-width: none; }
@@ -8652,7 +8654,7 @@ body.loading-bootstrap .app-startup-status {
   }
 
   .run-relic-strip {
-    max-inline-size: calc(100% - 24px);
+    max-inline-size: calc(100% - (2 * var(--ds-space-3)));
   }
 
   /* The editor assigns named board/rail areas on desktop. When the shared Skirmish shell drops
@@ -18080,51 +18082,79 @@ button.tileset-relationship-cell {
 
 /* ===== Run =====
    The between-Battle loop shares the installed Skirmish world and control chrome. */
+.run-screen {
+  --run-relic-strip-block-size: 64px;
+}
+
 .run-workspace {
-  align-items: stretch;
-  display: grid;
-  gap: var(--skirmish-grid-gap);
   grid-column: 1;
   grid-row: 2;
-  grid-template-columns: minmax(0, 1fr) minmax(250px, 320px);
   min-block-size: 0;
   overflow: hidden;
-  padding: var(--skirmish-grid-gap);
+  position: relative;
 }
 
-.run-workspace > .run-panel:only-child {
-  grid-column: 1 / -1;
-  inline-size: 100%;
+.run-shell-workspace {
+  --shell-workspace-content-padding: var(--ds-gutter);
 }
 
-.run-panel {
-  min-block-size: 0;
-  overflow: auto;
-}
-
-.run-panel > .le-outer-panel-content {
+.run-shell-workspace-content {
   align-content: start;
   display: grid;
-  gap: 14px;
+  gap: var(--ds-stack);
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
-.run-panel :is(h2, h3, h4, p),
+.run-shell-workspace-content :is(h2, h3, h4, p),
 .run-army :is(h3, p) {
   margin: 0;
 }
 
+.run-deployment-workspace-content {
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 320px);
+  overflow: hidden;
+}
+
+.run-deployment-pane {
+  align-content: start;
+  display: grid;
+  gap: var(--ds-stack);
+  min-block-size: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.run-shop-workspace-content > section {
+  display: grid;
+  gap: var(--ds-inline-tight);
+}
+
+.run-status-workspace-content {
+  place-content: center;
+  place-items: center;
+  text-align: center;
+}
+
+.run-workspace-head {
+  align-items: center;
+  display: flex;
+  gap: var(--ds-inline);
+  justify-content: space-between;
+}
+
 .run-card-grid {
   display: grid;
-  gap: 10px;
+  gap: var(--ds-inline-tight);
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
 }
 
 .run-card {
   align-content: start;
   display: grid;
-  gap: 9px;
+  gap: var(--ds-inline-tight);
   min-block-size: 132px;
-  padding: 12px;
+  padding: var(--ds-inset);
 }
 
 .run-bundle-card {
@@ -18133,10 +18163,10 @@ button.tileset-relationship-cell {
   cursor: pointer;
   display: grid;
   font: inherit;
-  gap: 12px;
+  gap: var(--ds-inline);
   inline-size: 100%;
   min-block-size: 162px;
-  padding: 14px;
+  padding: var(--ds-inset);
   text-align: start;
 }
 
@@ -18152,7 +18182,7 @@ button.tileset-relationship-cell {
 .run-bundle-piece-grid {
   align-content: center;
   display: grid;
-  gap: 3px;
+  gap: var(--ds-space-1);
   grid-template-columns: repeat(3, 32px);
   justify-content: center;
   min-block-size: 110px;
@@ -18193,7 +18223,7 @@ button.tileset-relationship-cell {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--ds-inline-tight);
 }
 
 .run-bundle-card-footer {
@@ -18209,7 +18239,7 @@ button.tileset-relationship-cell {
   align-items: center;
   display: inline-flex;
   font: var(--ds-weight-bold) var(--ds-text-lg)/1 var(--ds-font-display);
-  gap: 4px;
+  gap: var(--ds-space-1);
   white-space: nowrap;
 }
 
@@ -18253,7 +18283,7 @@ button.tileset-relationship-cell {
 
 .run-victory-summary > span + span::before {
   content: "·";
-  margin-inline-end: 8px;
+  margin-inline-end: var(--ds-inline-tight);
 }
 
 .run-relic-card {
@@ -18263,7 +18293,7 @@ button.tileset-relationship-cell {
 .run-relic-card-heading {
   align-items: center;
   display: grid;
-  gap: 10px;
+  gap: var(--ds-inline-tight);
   grid-template-columns: 64px minmax(0, 1fr);
 }
 
@@ -18291,24 +18321,24 @@ button.tileset-relationship-cell {
 }
 
 .run-relic-strip {
-  inset-block-start: calc(var(--app-header-h) + 8px);
-  inset-inline-start: 12px;
-  max-inline-size: calc(100% - var(--skirmish-rail-w) - 36px);
+  inset-block-start: calc(var(--app-header-h) + var(--ds-space-2));
+  inset-inline-start: var(--ds-space-3);
+  max-inline-size: calc(100% - var(--skirmish-rail-w) - var(--ds-space-6) - var(--ds-space-1));
   min-inline-size: 0;
   position: absolute;
-  z-index: 20;
+  z-index: 40;
 }
 
 /* Play's scene boundary already starts beneath the persistent title bar. */
 .skirmish-screen.is-play-canvas .run-relic-strip {
-  inset-block-start: 8px;
+  inset-block-start: var(--ds-space-2);
 }
 
 .run-relic-inventory-list {
   align-items: center;
   display: flex;
   flex-wrap: nowrap;
-  gap: 4px;
+  gap: var(--ds-space-1);
   min-inline-size: 0;
   overflow-x: auto;
   scrollbar-width: none;
@@ -18369,11 +18399,11 @@ button.tileset-relationship-cell {
 }
 
 .run-screen .run-relic-strip {
-  max-inline-size: calc(100% - 24px);
+  max-inline-size: calc(100% - (2 * var(--ds-space-3)));
 }
 
-.run-screen.has-relics .run-workspace {
-  padding-block-start: calc(var(--skirmish-grid-gap) + 72px);
+.run-screen.has-relics .run-shell-workspace-content {
+  padding-block-start: calc(var(--ds-gutter) + var(--run-relic-strip-block-size) + var(--ds-space-2));
 }
 
 .run-relic-review-screen {
@@ -18381,7 +18411,7 @@ button.tileset-relationship-cell {
   box-sizing: border-box;
   grid-template-columns: minmax(0, 1fr);
   overflow: auto;
-  padding: 12px;
+  padding: var(--ds-inset);
 }
 
 .run-relic-review-panel {
@@ -18395,23 +18425,23 @@ button.tileset-relationship-cell {
 
 .run-relic-review-panel > .le-outer-panel-content {
   display: grid;
-  gap: 12px;
+  gap: var(--ds-inline);
 }
 
 .run-relic-review-grid {
   display: grid;
-  gap: 10px;
+  gap: var(--ds-inline-tight);
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .run-relic-review-grid figure {
   align-items: center;
   display: grid;
-  gap: 10px;
+  gap: var(--ds-inline-tight);
   grid-template-columns: 64px minmax(0, 1fr);
   margin: 0;
   min-block-size: 88px;
-  padding: 10px;
+  padding: var(--ds-inset);
 }
 
 .run-relic-review-grid img {
@@ -18422,7 +18452,7 @@ button.tileset-relationship-cell {
 
 .run-relic-review-grid figcaption {
   display: grid;
-  gap: 4px;
+  gap: var(--ds-space-1);
 }
 
 .run-relic-review-grid small {
@@ -18431,7 +18461,7 @@ button.tileset-relationship-cell {
 
 .run-relic-reference-art {
   display: grid;
-  gap: 12px;
+  gap: var(--ds-inline);
 }
 
 .run-relic-reference-art summary {
@@ -18453,7 +18483,7 @@ button.tileset-relationship-cell {
   align-content: start;
   display: grid;
   flex: 1 1 auto;
-  gap: 10px;
+  gap: var(--ds-inline-tight);
   min-block-size: 0;
   overflow-x: hidden;
   overflow-y: auto;
@@ -18462,16 +18492,25 @@ button.tileset-relationship-cell {
 .run-army-list,
 .run-choice-list {
   display: grid;
-  gap: 7px;
+  gap: var(--ds-inline-tight);
 }
 
 .run-army-unit,
-.run-placement-row,
-.run-choice-list > label {
+.run-placement-row {
   align-items: center;
   display: flex;
-  gap: 8px;
+  gap: var(--ds-inline-tight);
   justify-content: space-between;
+}
+
+.run-choice-option {
+  align-items: center;
+  display: flex;
+  gap: var(--ds-inline-tight);
+  inline-size: 100%;
+  justify-content: space-between;
+  padding: var(--ds-space-2) var(--ds-inset);
+  text-align: start;
 }
 
 .run-army-unit small {
@@ -18480,7 +18519,7 @@ button.tileset-relationship-cell {
 
 .run-army-unit-identity {
   display: grid;
-  gap: 2px;
+  gap: var(--ds-space-1);
   min-width: 0;
 }
 
@@ -18490,22 +18529,21 @@ button.tileset-relationship-cell {
 
 .run-deployment-control {
   display: grid;
-  gap: 8px;
+  gap: var(--ds-inline-tight);
+}
+
+.run-placement-row .house-select {
+  min-inline-size: min(240px, 50%);
 }
 
 .run-inline-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--ds-inline-tight);
 }
 
 .run-preview-note {
   margin: 0;
-}
-
-.run-shop-panel > .le-outer-panel-content > section {
-  display: grid;
-  gap: 8px;
 }
 
 .run-meta-controls {
@@ -18513,7 +18551,7 @@ button.tileset-relationship-cell {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--ds-stack);
   min-block-size: 0;
   overflow-x: hidden;
   overflow-y: auto;
@@ -18521,7 +18559,7 @@ button.tileset-relationship-cell {
 
 .run-meta-navigation {
   display: grid;
-  gap: 7px;
+  gap: var(--ds-inline-tight);
   inline-size: 100%;
 }
 
@@ -18535,33 +18573,30 @@ button.tileset-relationship-cell {
 
 .run-army-workspace,
 .run-sell-workspace {
-  grid-template-columns: minmax(0, 1fr);
   position: relative;
   z-index: 35;
 }
 
-.run-army-ledger > .le-outer-panel-content,
-.run-sell-panel > .le-outer-panel-content {
+.run-army-ledger-content {
   grid-template-rows: auto auto minmax(0, 1fr);
-  block-size: 100%;
+  min-block-size: 0;
   overflow: hidden;
 }
 
 .run-roster-filters {
   align-items: end;
   display: grid;
-  gap: 10px;
+  gap: var(--ds-inline-tight);
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
 }
 
 .run-roster-filters > label {
   display: grid;
-  gap: 4px;
+  gap: var(--ds-space-1);
   min-inline-size: 0;
 }
 
-.run-roster-filters .le-select-wrap,
-.run-roster-filters select {
+.run-roster-filters .house-select {
   inline-size: 100%;
   min-inline-size: 0;
 }
@@ -18570,22 +18605,22 @@ button.tileset-relationship-cell {
 .run-sell-list {
   align-content: start;
   display: grid;
-  gap: 8px;
+  gap: var(--ds-inline-tight);
   min-block-size: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  padding-inline-end: 4px;
+  padding-inline-end: var(--ds-space-1);
 }
 
 .run-army-ledger-row {
   align-items: center;
   cursor: pointer;
   display: grid;
-  gap: 14px;
+  gap: var(--ds-inline);
   grid-template-columns: 92px minmax(0, 1fr) auto;
   inline-size: 100%;
   min-block-size: 108px;
-  padding: 8px 14px;
+  padding: var(--ds-space-2) var(--ds-inset);
   text-align: start;
 }
 
@@ -18598,7 +18633,7 @@ button.tileset-relationship-cell {
 .run-sell-copy {
   align-content: center;
   display: grid;
-  gap: 5px;
+  gap: var(--ds-space-1);
   min-inline-size: 0;
 }
 
@@ -18621,7 +18656,7 @@ button.tileset-relationship-cell {
 .run-sell-return {
   align-items: end;
   display: grid;
-  gap: 3px;
+  gap: var(--ds-space-1);
   justify-items: end;
   min-inline-size: 80px;
 }
@@ -18630,17 +18665,17 @@ button.tileset-relationship-cell {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: 7px 12px;
+  gap: var(--ds-inline-tight) var(--ds-inline);
 }
 
 .run-unit-traits.is-compact {
-  gap: 4px 9px;
+  gap: var(--ds-space-1) var(--ds-inline-tight);
 }
 
 .run-unit-trait {
   align-items: center;
   display: inline-flex;
-  gap: 4px;
+  gap: var(--ds-space-1);
   white-space: nowrap;
 }
 
@@ -18662,23 +18697,16 @@ button.tileset-relationship-cell {
   display: block;
 }
 
-.run-army-profile > .le-outer-panel-content {
-  block-size: 100%;
+.run-army-profile-content {
   grid-template-rows: auto minmax(0, 1fr);
+  min-block-size: 0;
   overflow: hidden;
-}
-
-.run-army-profile .outer-chrome-header {
-  align-items: center;
-  display: flex;
-  gap: 12px;
-  justify-content: space-between;
 }
 
 .run-army-profile-body {
   align-items: stretch;
   display: grid;
-  gap: 24px;
+  gap: var(--ds-gutter);
   grid-template-columns: minmax(260px, 36%) minmax(0, 1fr);
   min-block-size: 0;
   overflow: auto;
@@ -18694,13 +18722,13 @@ button.tileset-relationship-cell {
 .run-army-profile-copy {
   align-content: start;
   display: grid;
-  gap: 18px;
+  gap: var(--ds-stack);
   min-inline-size: 0;
 }
 
 .run-army-profile-identity {
   display: grid;
-  gap: 5px;
+  gap: var(--ds-space-1);
 }
 
 .run-army-profile-identity > strong {
@@ -18708,19 +18736,19 @@ button.tileset-relationship-cell {
 }
 
 .run-army-profile-stats {
-  padding: 12px;
+  padding: var(--ds-inset);
 }
 
 .run-army-profile-stats dl {
   display: grid;
-  gap: 8px;
+  gap: var(--ds-inline-tight);
   margin: 0;
 }
 
 .run-army-profile-stats dl > div {
   align-items: baseline;
   display: flex;
-  gap: 12px;
+  gap: var(--ds-inline);
   justify-content: space-between;
 }
 
@@ -18729,17 +18757,19 @@ button.tileset-relationship-cell {
   text-align: end;
 }
 
-.run-sell-panel > .le-outer-panel-content {
+.run-sell-workspace-content {
   grid-template-rows: auto auto auto minmax(0, 1fr);
+  min-block-size: 0;
+  overflow: hidden;
 }
 
 .run-sell-row {
   align-items: center;
   display: grid;
-  gap: 14px;
+  gap: var(--ds-inline);
   grid-template-columns: 86px minmax(0, 1fr) minmax(110px, auto) minmax(140px, auto);
   min-block-size: 112px;
-  padding: 9px 12px;
+  padding: var(--ds-space-2) var(--ds-inset);
 }
 
 .run-sell-row.is-sold,
@@ -18763,7 +18793,7 @@ button.tileset-relationship-cell {
 }
 
 @media (max-width: 960px) {
-  .run-workspace {
+  .run-deployment-workspace-content {
     grid-template-columns: minmax(0, 1fr);
     overflow: auto;
   }
