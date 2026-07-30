@@ -690,9 +690,25 @@ function BattlePanel({
   const currentRun = useActiveRun((state) => state.run);
   const { abandonDialog, requestAbandon } = useRunAbandon(run);
   const baseLevel = run.war.battles[run.battleIndex].level;
-  const options = useMemo(() => deploymentOptions(run, baseLevel), [baseLevel, run]);
-  const layout = useMemo(() => selectedDeploymentLayout(run, options), [options, run]);
-  const battleLevel = useMemo(() => levelWithRunDeployment(run, baseLevel, layout), [baseLevel, layout, run]);
+  // Battle-runtime writes (including Restart) do not change deployment. Keep the
+  // projected board document referentially stable across those persistence updates,
+  // so Skirmish does not re-run its board-entry effect for an unchanged battle.
+  const options = useMemo(
+    () => deploymentOptions(run, baseLevel),
+    [baseLevel, run.army, run.deployment, run.relics, run.seed],
+  );
+  const layout = useMemo(
+    () => selectedDeploymentLayout(run, options),
+    [options, run.deployment, run.relics],
+  );
+  const battleLevel = useMemo(
+    () => levelWithRunDeployment(run, baseLevel, layout),
+    [baseLevel, layout, run.army, run.relics],
+  );
+  const runId = run.id;
+  const battleSeed = run.deployment?.seed ?? run.seed;
+  const relicIds = run.relics;
+  const canCashOutPawn = hasRelic(run, 'mercenary-boat');
 
   useEffect(() => {
     setRunBattleTransformSink((game, _events) => {
@@ -743,24 +759,24 @@ function BattlePanel({
 
   const presentation = useMemo<RunBattlePresentation>(() => ({
     level: battleLevel,
-    seed: run.deployment?.seed ?? run.seed,
-    relicIds: run.relics,
+    seed: battleSeed,
+    relicIds,
     onVictory: (survivors) => {
       const latest = useActiveRun.getState().run;
-      if (latest?.id === run.id) replace(openShop(latest, survivors));
+      if (latest?.id === runId) replace(openShop(latest, survivors));
     },
     onRestart: () => {
       const latest = useActiveRun.getState().run;
-      if (latest?.id === run.id) replace(restartBattle(latest));
+      if (latest?.id === runId) replace(restartBattle(latest));
     },
     onAbandonRun: () => { void requestAbandon(); },
-    onPawnCashOut: hasRelic(run, 'mercenary-boat')
+    onPawnCashOut: canCashOutPawn
       ? (unitId) => {
           const latest = useActiveRun.getState().run;
-          if (latest?.id === run.id) replace(cashOutPawn(latest, unitId));
+          if (latest?.id === runId) replace(cashOutPawn(latest, unitId));
         }
       : undefined,
-  }), [battleLevel, replace, requestAbandon, run]);
+  }), [battleLevel, battleSeed, canCashOutPawn, relicIds, replace, requestAbandon, runId]);
 
   // Subscribe to the current document so a Mercenary Boat cash-out or Reservist event
   // refreshes the hook inputs without restarting the already-live matching board.
