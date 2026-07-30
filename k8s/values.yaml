@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:0360bbf3f902f17910523a23b632c4267510e8f485a1e510661d72eca9c8f166"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:5b341352e1e29686615b27e411f5268438e20b999a82dea2a1c77d0c57fd5186"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Add Enchiridion and Strategikon reference workspaces"
-  prNumber: "552"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/552"
-  commit: "11ecb20b"
+  prTitle: "Run backend and frontend CI in parallel"
+  prNumber: "553"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/553"
+  commit: "0fce8940"
 
 name: chess-tactics
 namespace: chess-tactics
