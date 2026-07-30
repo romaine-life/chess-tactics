@@ -167,10 +167,14 @@ spec:
               containerPort: 3000
           resources:
             requests:
-              cpu: 10m
+              cpu: 100m
               memory: 96Mi
             limits:
-              cpu: 100m
+              # ADR-0256: this process renders board thumbnails and serializes
+              # MB-scale catalogs. At 100m it spent 80% of scheduler periods
+              # throttled and a menu read took 27s; the node runs ~16% actual
+              # CPU, and limits only borrow idle cycles.
+              cpu: 1000m
               memory: 256Mi
           startupProbe:
             httpGet:
@@ -193,6 +197,10 @@ spec:
               path: /health
               port: {{ include "chess-tactics.appPortName" . }}
             periodSeconds: 30
+            # ADR-0256: default 1s gave a busy-but-alive process three strikes
+            # to a kill; a liveness answer under load can legitimately take
+            # longer than 1s without the process being dead.
+            timeoutSeconds: 5
             failureThreshold: 3
         {{- /*
         The live-preview edge, in front of the backend. Self-gated on
