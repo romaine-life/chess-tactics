@@ -110,7 +110,7 @@ try {
 const withServerRenderCriticalSection = createRenderCriticalSection();
 const LEVEL_THUMBNAIL_RENDER_CONCURRENCY = 2;
 const withLevelThumbnailRenderSlot = createAsyncWorkLimiter(LEVEL_THUMBNAIL_RENDER_CONCURRENCY);
-// ADR-0256: thumbnail URL manifests are memoized per authority. Reads consult
+// ADR-0258: thumbnail URL manifests are memoized per authority. Reads consult
 // this memo; the per-level plan/fingerprint derivation runs only when a document
 // or catalog revision actually moved.
 const thumbnailManifestMemo = createRevisionMemo({
@@ -122,7 +122,7 @@ const backgroundVersionUploadsInFlight = new Set();
 
 const app = express();
 const port = process.env.PORT || 3000;
-// ADR-0256: a slow endpoint must scream in the pod log before a person finds it.
+// ADR-0258: a slow endpoint must scream in the pod log before a person finds it.
 // Log the path only — query strings can carry private editor document ids.
 const SLOW_REQUEST_LOG_MS = Number(process.env.SLOW_REQUEST_LOG_MS || 2000);
 app.use((req, res, next) => {
@@ -18476,7 +18476,7 @@ function prepareLevelThumbnailEntry(rawEntry, renderInputs) {
 async function prepareLevelThumbnailEntries(entries, providedRenderInputs = null) {
   if (!serverRender) throw new Error('thumbnail renderer unavailable');
   const renderInputs = providedRenderInputs || await loadThumbnailRenderInputs();
-  // ADR-0256: plan projection is CPU work proportional to the level count. Yield
+  // ADR-0258: plan projection is CPU work proportional to the level count. Yield
   // between levels so a cold pass never starves unrelated requests; the critical
   // section stays held, which other render users already queue on.
   const prepared = await withAppliedThumbnailRenderInputs(renderInputs, async () => {
@@ -18539,7 +18539,7 @@ async function storedLevelThumbnailUrls(authorityEntries) {
 
 const levelThumbnailDerivativeInFlight = new Map();
 
-// ADR-0256 read-side memo plumbing. The inputs key concatenates every
+// ADR-0258 read-side memo plumbing. The inputs key concatenates every
 // revision-tracked catalog input that can change a thumbnail manifest; the
 // document revision rides separately in the memo so a retained manifest can
 // never cross level sets. One UNION round trip keeps the freshness check ~free.
@@ -18580,7 +18580,7 @@ async function memoizedLevelThumbnailUrls(key, docRevision, authorityEntries) {
   return read.value;
 }
 
-// ADR-0256: after a deploy the officials manifest recomputes in the background
+// ADR-0258: after a deploy the officials manifest recomputes in the background
 // so no reader ever pays the cold pass. Best-effort by design.
 function warmOfficialCampaignThumbnailManifest(reason) {
   (async () => {

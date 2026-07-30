@@ -174,7 +174,7 @@ test('inputs are validated', async () => {
   assert.throws(() => createRevisionMemo({ maxEntries: 0 }), TypeError);
 });
 
-// --- ADR-0256 wiring projections -------------------------------------------
+// --- ADR-0258 wiring projections -------------------------------------------
 // The memo only helps if the read routes actually consult it. Pin the wiring the
 // same way thumbnailAvailability.test.js pins the repair path.
 

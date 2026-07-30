@@ -1,6 +1,6 @@
 'use strict';
 
-// Revision-keyed memo for derived read manifests (ADR-0256).
+// Revision-keyed memo for derived read manifests (ADR-0258).
 //
 // A derived manifest (e.g. the thumbnail_urls block of a workspace response) is a
 // pure function of revision-tracked inputs: the owning document's revision plus a
