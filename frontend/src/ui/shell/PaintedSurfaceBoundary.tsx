@@ -12,7 +12,7 @@ function userFacingError(error: Error | null): string {
   return 'Required artwork could not be reached. Check your connection and try again.';
 }
 
-function waitForRenderedImage(image: HTMLImageElement): Promise<void> {
+export function waitForRenderedImage(image: HTMLImageElement): Promise<void> {
   const loaded = image.complete
     ? image.naturalWidth > 0
       ? Promise.resolve()
@@ -27,11 +27,11 @@ function waitForRenderedImage(image: HTMLImageElement): Promise<void> {
   });
 }
 
-function afterTwoPaintOpportunities(): Promise<void> {
+export function afterTwoPaintOpportunities(): Promise<void> {
   return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
 }
 
-function renderedCssImageUrls(root: HTMLElement): string[] {
+export function renderedCssImageUrls(root: HTMLElement): string[] {
   const urls = new Set<string>();
   const extract = (value: string): void => {
     for (const match of value.matchAll(/url\(["']?([^"')]+)["']?\)/g)) {
