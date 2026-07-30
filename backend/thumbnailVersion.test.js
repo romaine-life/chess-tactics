@@ -1,124 +1,144 @@
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const { test } = require('node:test');
-const vm = require('node:vm');
+'use strict';
 
-function loadThumbnailVersionContract() {
-  const source = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
-  const startMarker = 'const BOARD_THUMBNAIL_RENDER_REVISION =';
-  const endMarker = '\nfunction playScreenName(';
-  const start = source.indexOf(startMarker);
-  const end = source.indexOf(endMarker, start);
-  assert.ok(start >= 0 && end > start, 'server thumbnail-version contract markers must remain inspectable');
-  const sandbox = {
-    crypto: require('node:crypto'),
-    canonicalJson: (value) => JSON.stringify(value),
-    serverRender: {
-      levelThumbnailMediaSlots: (level) => level.thumbnailMediaSlots || [],
-    },
-  };
-  vm.runInNewContext(
-    `${source.slice(start, end)}\nthis.contract = { BOARD_THUMBNAIL_RENDER_REVISION, thumbnailVersion, thumbnailVersionMatchesLevel, thumbnailMediaDependencyRevision };`,
-    sandbox,
-  );
-  return sandbox.contract;
+const assert = require('node:assert/strict');
+const test = require('node:test');
+const {
+  THUMBNAIL_DEPENDENCY_SCHEMA_VERSION,
+  thumbnailContentVersion,
+  thumbnailContentVersionForPlan,
+} = require('./thumbnailVersion');
+
+const PLAN = {
+  ops: [{
+    layer: 'terrain',
+    src: `/api/media/${'a'.repeat(64)}`,
+    dx: 0,
+    dy: 0,
+    dw: 96,
+    dh: 64,
+    z: 1000,
+  }],
+  occlusionMasks: [],
+  bounds: { minX: 0, minY: 0, width: 96, height: 64 },
+  framingBounds: { minX: 0, minY: 0, width: 96, height: 64 },
+  contentHash: 'deadbeef',
+};
+
+function version({
+  plan = PLAN,
+  dependencies = [{
+    src: PLAN.ops[0].src,
+    availability: 'critical',
+    sha256: 'a'.repeat(64),
+  }],
+} = {}) {
+  return thumbnailContentVersion({
+    kind: 'board-thumbnail',
+    rendererRevision: 8,
+    renderInputs: { plan },
+    sourceDependencies: dependencies,
+  });
 }
 
-const {
-  BOARD_THUMBNAIL_RENDER_REVISION,
-  thumbnailVersion,
-  thumbnailVersionMatchesLevel,
-  thumbnailMediaDependencyRevision,
-} = loadThumbnailVersionContract();
-
-test('thumbnail version always carries the committed renderer revision', () => {
-  assert.equal(BOARD_THUMBNAIL_RENDER_REVISION, 7);
-  assert.equal(thumbnailVersion('deadbeef'), 'deadbeef-br7');
-  assert.notEqual(thumbnailVersion('deadbeef'), 'deadbeef');
+test('thumbnail versions carry the renderer and dependency-schema revisions', () => {
+  assert.equal(THUMBNAIL_DEPENDENCY_SCHEMA_VERSION, 1);
+  assert.match(version(), /^board-thumbnail-r8-d1-[0-9a-f]{64}$/);
 });
 
-test('thumbnail version composes renderer and board-owned live render-input revisions deterministically', () => {
-  assert.equal(
-    thumbnailVersion('deadbeef', {
-      propSeatsRevision: 2,
-      unitCatalogRevision: 4,
-      mediaCatalogRevision: 5,
-      mediaDependencyRevision: 'a1b2c3',
-      drawableCatalogRevision: 6,
-    }),
-    'deadbeef-br7-ps2-uc4-mc5-mda1b2c3-dc6',
-  );
-  assert.equal(
-    thumbnailVersion('deadbeef', {
-      propSeatsRevision: 0,
-      unitCatalogRevision: 0,
-      mediaDependencyRevision: '',
-      drawableCatalogRevision: 0,
-    }),
-    'deadbeef-br7',
-  );
-});
-
-test('unrelated global media catalog changes do not invalidate a level with no semantic media dependency', () => {
-  const level = { thumbnailMediaSlots: [] };
-  assert.equal(
-    thumbnailVersionMatchesLevel(
-      level,
-      'deadbeef-br7-ps2-uc4-mc1663-dc6',
-      {
-        propSeatsRevision: 2,
-        unitCatalogRevision: 4,
-        mediaCatalogRevision: 1664,
-        drawableCatalogRevision: 6,
-        thumbnailMediaCatalog: { slots: [] },
-      },
-      'deadbeef',
-    ),
-    true,
-  );
-});
-
-test('only the semantic media slot selected by the level affects its dependency revision', () => {
-  const level = { thumbnailMediaSlots: ['boards/example/plate.png'] };
-  const catalog = {
-    slots: [
-      {
-        slot: 'boards/example/plate.png',
-        availabilityPolicy: 'critical',
-        lifecycleState: 'active',
-        activeVersionId: 'board-v1',
-        rowRevision: 1,
-        versionStatus: 'accepted',
-        media: { sha256: 'a'.repeat(64) },
-      },
-      {
-        slot: 'sfx/card-purchase/v0.wav',
-        availabilityPolicy: 'decorative',
-        lifecycleState: 'active',
-        activeVersionId: 'sfx-v1',
-        rowRevision: 1,
-        versionStatus: 'accepted',
-        media: { sha256: 'b'.repeat(64) },
-      },
-    ],
+test('the same exact render inputs produce the same version regardless of object key order', () => {
+  const reorderedPlan = {
+    contentHash: PLAN.contentHash,
+    framingBounds: PLAN.framingBounds,
+    bounds: PLAN.bounds,
+    occlusionMasks: PLAN.occlusionMasks,
+    ops: PLAN.ops,
   };
-  const initial = thumbnailMediaDependencyRevision(level, catalog);
-  const unrelatedChange = thumbnailMediaDependencyRevision(level, {
+  assert.equal(version(), version({ plan: reorderedPlan }));
+});
+
+test('only semantic media consumed by the render plan affects the thumbnail version', () => {
+  const semanticPlan = {
+    ...PLAN,
+    ops: [{ ...PLAN.ops[0], src: '/assets/boards/example/plate.png' }],
+  };
+  const catalog = {
+    slots: [{
+      slot: 'boards/example/plate.png',
+      availabilityPolicy: 'critical',
+      media: { sha256: 'a'.repeat(64) },
+    }, {
+      slot: 'sfx/card-purchase/v0.wav',
+      availabilityPolicy: 'decorative',
+      media: { sha256: 'b'.repeat(64) },
+    }],
+  };
+  const contentVersion = (mediaCatalog) => thumbnailContentVersionForPlan({
+    kind: 'board-thumbnail',
+    rendererRevision: 8,
+    plan: semanticPlan,
+    mediaCatalog,
+    mediaAvailability: mediaCatalog,
+  });
+  const initial = contentVersion(catalog);
+  const unrelatedChange = {
     slots: catalog.slots.map((entry) => (
       entry.slot.startsWith('sfx/')
-        ? { ...entry, activeVersionId: 'sfx-v2', media: { sha256: 'c'.repeat(64) } }
+        ? { ...entry, media: { sha256: 'c'.repeat(64) } }
         : entry
     )),
-  });
-  const selectedChange = thumbnailMediaDependencyRevision(level, {
+  };
+  const selectedChange = {
     slots: catalog.slots.map((entry) => (
       entry.slot.startsWith('boards/')
-        ? { ...entry, activeVersionId: 'board-v2', media: { sha256: 'd'.repeat(64) } }
+        ? { ...entry, media: { sha256: 'd'.repeat(64) } }
         : entry
     )),
-  });
+  };
 
-  assert.equal(unrelatedChange, initial);
-  assert.notEqual(selectedChange, initial);
+  assert.equal(contentVersion(unrelatedChange), initial);
+  assert.notEqual(
+    contentVersion(selectedChange),
+    initial,
+  );
+});
+
+test('a consumed media version, geometry, or availability change invalidates the thumbnail', () => {
+  const initial = version();
+  assert.notEqual(initial, version({
+    plan: {
+      ...PLAN,
+      ops: PLAN.ops.map((op) => ({ ...op, dx: op.dx + 1 })),
+    },
+  }));
+  assert.notEqual(initial, version({
+    dependencies: [{
+      src: PLAN.ops[0].src,
+      availability: 'critical',
+      sha256: 'b'.repeat(64),
+    }],
+  }));
+  assert.notEqual(initial, version({
+    dependencies: [{
+      src: PLAN.ops[0].src,
+      availability: 'decorative',
+      sha256: 'a'.repeat(64),
+    }],
+  }));
+});
+
+test('source dependencies are canonicalized by source identity', () => {
+  const first = {
+    src: `/api/media/${'a'.repeat(64)}`,
+    availability: 'critical',
+    sha256: 'a'.repeat(64),
+  };
+  const second = {
+    src: `/api/media/${'b'.repeat(64)}`,
+    availability: 'decorative',
+    sha256: 'b'.repeat(64),
+  };
+  assert.equal(
+    version({ dependencies: [first, second] }),
+    version({ dependencies: [second, first] }),
+  );
 });

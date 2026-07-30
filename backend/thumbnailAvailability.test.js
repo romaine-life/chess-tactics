@@ -98,10 +98,10 @@ test('mismatched policy rows cannot weaken a different catalog revision', () => 
 test('canonical summary reads repair missing derivatives without level-id shape gates', () => {
   const server = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
   const start = server.indexOf('async function storedLevelThumbnailUrls(');
-  const end = server.indexOf('\nasync function currentThumbnailRevisions(', start);
+  const end = server.indexOf('\nconst levelThumbnailDerivativeInFlight', start);
   assert.ok(start >= 0 && end > start, 'thumbnail summary projection must remain inspectable');
   const projection = server.slice(start, end);
-  assert.match(projection, /ensureLevelThumbnailDerivativeBatch\(/);
-  assert.doesNotMatch(projection, /Promise\.allSettled\(missing\.map/);
+  assert.match(projection, /ensurePreparedLevelThumbnailDerivativeBatch\(/);
+  assert.doesNotMatch(projection, /mediaCatalogRevision|unitCatalogRevision|drawableCatalogRevision/);
   assert.doesNotMatch(server, /function resolveListThumbnailTarget\(/);
 });

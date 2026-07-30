@@ -24,7 +24,7 @@ function semanticSlotFromSource(src) {
 
 function immutableShaFromSource(src) {
   const value = String(src || '').split('?', 1)[0];
-  const match = /^\/api\/media\/([0-9a-f]{64})$/.exec(value);
+  const match = /^\/api\/(?:media\/|unit-sprites\/)([0-9a-f]{64})(?:\.png)?$/.exec(value);
   return match ? match[1] : null;
 }
 
@@ -71,6 +71,7 @@ function thumbnailSourceAvailability(src, catalog) {
 module.exports = {
   AVAILABILITY_CRITICAL,
   AVAILABILITY_DECORATIVE,
+  immutableShaFromSource,
   semanticSlotFromSource,
   thumbnailAvailabilityCatalogFromRows,
   thumbnailSourceAvailability,

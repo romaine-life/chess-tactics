@@ -12,6 +12,8 @@ const { createDevGrantSessionReader } = require(path.join(bakedBackendDir, 'devA
 const { createOIDCSessionManager } = require(path.join(bakedBackendDir, 'oidcAuth'));
 const { createByteReadBudget } = require(path.join(bakedBackendDir, 'liveMediaReadBudget'));
 const { createRenderCriticalSection } = require(path.join(bakedBackendDir, 'renderCriticalSection'));
+const { createAsyncWorkLimiter } = require(path.join(bakedBackendDir, 'asyncWorkLimiter'));
+const { thumbnailContentVersionForPlan } = require(path.join(bakedBackendDir, 'thumbnailVersion'));
 const { backgroundStoreSchemaViolation } = require(path.join(bakedBackendDir, 'backgroundStoreError'));
 const {
   BGM_SAS_START_SKEW_MS,
@@ -105,6 +107,8 @@ try {
   console.error('board-render package unavailable; level thumbnails will return 503:', error && error.message);
 }
 const withServerRenderCriticalSection = createRenderCriticalSection();
+const LEVEL_THUMBNAIL_RENDER_CONCURRENCY = 2;
+const withLevelThumbnailRenderSlot = createAsyncWorkLimiter(LEVEL_THUMBNAIL_RENDER_CONCURRENCY);
 const backgroundVersionUploadsInFlight = new Set();
 
 const app = express();
@@ -16670,13 +16674,14 @@ app.get(/^\/api\/campaign-workspace\/level-thumbnails\/([^/]{1,80})\/([0-9a-f]{6
       return;
     }
     const authorityKey = `user:${user.email}:${levelId}`;
-    const [thumbnail, renderInputs] = await Promise.all([
+    const [thumbnail, preparedBatch] = await Promise.all([
       storedLevelThumbnail(authorityKey),
-      currentThumbnailRevisions([level]),
+      prepareLevelThumbnailEntries([[authorityKey, level]]),
     ]);
+    const prepared = preparedBatch.entries[0];
     if (
       !thumbnail
-      || !thumbnailVersionMatchesLevel(level, thumbnail.content_version, renderInputs)
+      || thumbnail.content_version !== prepared.contentVersion
       || thumbnail.blob_sha256 !== requestedSha256
     ) {
       res.setHeader('Cache-Control', 'private, no-store');
@@ -17747,7 +17752,7 @@ async function dbPublishPublicMap(owner, levelId) {
     let contentHash = null;
     try {
       contentHash = serverRender && await withThumbnailRenderInputs((renderInputs) => (
-        thumbnailVersionForLevel(level, renderInputs, serverRender.boardHashForLevel(level))
+        thumbnailVersion(serverRender.levelRenderPlan(level), renderInputs)
       ), client);
     } catch { contentHash = null; }
     const publicId = await dbEnsurePublicId(
@@ -18238,9 +18243,11 @@ async function thumbnailMediaAvailabilityCatalog(mediaCatalog, queryable = null)
   }
 }
 async function loadThumbnailRenderInputs(queryable = null) {
-  // A derivative is stamped with the authority revisions it actually rendered.
+  // A derivative fingerprints the exact plan and sources projected from this
+  // snapshot. Global revisions isolate loader caches and snapshot freshness;
+  // they are deliberately not derivative invalidation keys.
   // The public projection's short TTL is appropriate for request fan-out, but
-  // reusing it here can mint a brand-new derivative from an old media snapshot.
+  // reusing it here can still mint a brand-new derivative from an old snapshot.
   // Mutation callers pass their transaction client through every reader. This
   // is both the authoritative transaction view and a hard no-extra-checkout
   // boundary when the pool's remaining connections are occupied.
@@ -18258,13 +18265,9 @@ async function loadThumbnailRenderInputs(queryable = null) {
     readUnitCatalog: (db) => (db ? dbReadUnitCatalog({ queryable: db }) : publicUnitCatalog()),
     readMediaAvailability: (catalog, db) => thumbnailMediaAvailabilityCatalog(catalog, db),
   });
-  const unitCatalogRevision = unitCatalog.revision || 0;
   const mediaCatalogRevision = mediaCatalog.revision || 0;
   return {
-    propSeatsRevision: seats.revision || 0,
-    unitCatalogRevision,
     mediaCatalogRevision,
-    drawableCatalogRevision: drawableCatalog.revision || 0,
     mediaCatalog,
     drawableCatalog,
     mediaAvailability,
@@ -18288,111 +18291,49 @@ async function withAppliedThumbnailRenderInputs(renderInputs, task) {
     return task(renderInputs);
   });
 }
-const BOARD_THUMBNAIL_RENDER_REVISION = 7;
-function thumbnailVersion(sourceHash, renderInputs) {
-  const rendererRevision = `br${BOARD_THUMBNAIL_RENDER_REVISION}`;
-  const propSeatsRevision = renderInputs && renderInputs.propSeatsRevision ? `ps${renderInputs.propSeatsRevision}` : '';
-  const unitCatalogRevision = renderInputs && renderInputs.unitCatalogRevision ? `uc${renderInputs.unitCatalogRevision}` : '';
-  const mediaCatalogRevision = renderInputs && renderInputs.mediaCatalogRevision ? `mc${renderInputs.mediaCatalogRevision}` : '';
-  const mediaDependencyRevision = renderInputs && renderInputs.mediaDependencyRevision ? `md${renderInputs.mediaDependencyRevision}` : '';
-  const drawableCatalogRevision = renderInputs && renderInputs.drawableCatalogRevision ? `dc${renderInputs.drawableCatalogRevision}` : '';
-  return [sourceHash, rendererRevision, propSeatsRevision, unitCatalogRevision, mediaCatalogRevision, mediaDependencyRevision, drawableCatalogRevision].filter(Boolean).join('-');
-}
+const BOARD_THUMBNAIL_RENDER_REVISION = 8;
 
-function levelThumbnailSourceHash(level) {
-  // Freshness must not depend on the process-global board renderer snapshot:
-  // another request is allowed to hydrate that mutable snapshot at any time.
-  return crypto.createHash('sha256').update(canonicalJson(level)).digest('hex');
-}
-
-function levelThumbnailMediaSlots(level) {
-  if (!serverRender || typeof serverRender.levelThumbnailMediaSlots !== 'function') {
-    throw new Error('bounded thumbnail media dependency projector is unavailable');
-  }
-  return serverRender.levelThumbnailMediaSlots(level);
-}
-
-function normalizedThumbnailMediaDependency(entry, availabilityEntry, slot) {
-  const availabilityPolicy = entry?.availabilityPolicy
-    ?? entry?.availability_policy
-    ?? availabilityEntry?.availabilityPolicy
-    ?? availabilityEntry?.availability_policy
-    ?? null;
-  const lifecycleState = entry?.lifecycleState ?? entry?.lifecycle_state ?? null;
-  const versionStatus = entry?.versionStatus ?? entry?.version_status ?? null;
-  const sha256 = entry?.media?.sha256 ?? entry?.sha256 ?? null;
-  const usable = entry
-    && (lifecycleState === null || lifecycleState === 'active')
-    && (versionStatus === 'accepted' || versionStatus === 'legacy-bridge')
-    && typeof sha256 === 'string';
-  if (!usable) return {
-    slot,
-    availabilityPolicy,
-    lifecycleState: null,
-    activeVersionId: null,
-    rowRevision: null,
-    versionStatus: null,
-    sha256: null,
-  };
-  return {
-    slot,
-    availabilityPolicy,
-    lifecycleState,
-    activeVersionId: entry.activeVersionId ?? entry.active_version_id ?? null,
-    rowRevision: Number(entry.rowRevision ?? entry.row_revision ?? 0),
-    versionStatus,
-    sha256,
-  };
-}
-
-function thumbnailMediaDependencyRevision(level, mediaCatalog, availabilityCatalog = null) {
-  const slots = levelThumbnailMediaSlots(level);
-  if (!slots.length) return '';
-  const catalogSlots = Array.isArray(mediaCatalog?.slots) ? mediaCatalog.slots : [];
-  const availabilitySlots = Array.isArray(availabilityCatalog?.slots) ? availabilityCatalog.slots : [];
-  const bySlot = new Map(catalogSlots.map((entry) => [entry.slot, entry]));
-  const availabilityBySlot = new Map(availabilitySlots.map((entry) => [entry.slot, entry]));
-  const dependency = slots
-    .map((slot) => normalizedThumbnailMediaDependency(
-      bySlot.get(slot),
-      availabilityBySlot.get(slot),
-      slot,
-    ))
-    .sort((left, right) => left.slot.localeCompare(right.slot));
-  return crypto.createHash('sha256').update(canonicalJson(dependency)).digest('hex').slice(0, 16);
-}
-
-function thumbnailVersionForLevel(level, renderInputs, sourceHash = levelThumbnailSourceHash(level)) {
-  const dependencyCatalog = renderInputs.thumbnailMediaCatalog || renderInputs.mediaCatalog;
-  const mediaDependencyRevision = thumbnailMediaDependencyRevision(
-    level,
-    dependencyCatalog,
-    renderInputs.mediaAvailability,
-  );
-  return thumbnailVersion(sourceHash, {
-    ...renderInputs,
-    // Keep the historical global marker for levels with no semantic media
-    // dependency so older running worktrees accept the same derivative. The
-    // matcher below deliberately treats only that marker as non-authoritative.
-    mediaCatalogRevision: mediaDependencyRevision ? 0 : renderInputs.mediaCatalogRevision,
-    mediaDependencyRevision,
+function thumbnailVersion(
+  plan,
+  renderInputs,
+  {
+    kind = 'board-thumbnail',
+    exactRenderInputs = { plan },
+    extraSources = [],
+  } = {},
+) {
+  return thumbnailContentVersionForPlan({
+    kind,
+    rendererRevision: BOARD_THUMBNAIL_RENDER_REVISION,
+    plan,
+    exactRenderInputs,
+    extraSources,
+    mediaCatalog: renderInputs.mediaCatalog,
+    mediaAvailability: renderInputs.mediaAvailability,
   });
 }
 
-function thumbnailVersionMatchesLevel(
-  level,
-  contentVersion,
-  renderInputs,
-  sourceHash = levelThumbnailSourceHash(level),
-) {
-  const expected = thumbnailVersionForLevel(level, renderInputs, sourceHash);
-  if (contentVersion === expected) return true;
-  const dependencyCatalog = renderInputs.thumbnailMediaCatalog || renderInputs.mediaCatalog;
-  if (thumbnailMediaDependencyRevision(level, dependencyCatalog, renderInputs.mediaAvailability)) {
-    return false;
-  }
-  const withoutGlobalMediaMarker = (value) => String(value || '').replace(/-mc[^-]+(?=-|$)/, '');
-  return withoutGlobalMediaMarker(contentVersion) === withoutGlobalMediaMarker(expected);
+function prepareLevelThumbnailEntry(rawEntry, renderInputs) {
+  const [authorityKey, second, third] = rawEntry;
+  const levelId = third === undefined ? null : second;
+  const level = third === undefined ? second : third;
+  const plan = serverRender.levelRenderPlan(level);
+  return {
+    authorityKey,
+    levelId,
+    level,
+    plan,
+    contentVersion: thumbnailVersion(plan, renderInputs),
+  };
+}
+
+async function prepareLevelThumbnailEntries(entries, providedRenderInputs = null) {
+  if (!serverRender) throw new Error('thumbnail renderer unavailable');
+  const renderInputs = providedRenderInputs || await loadThumbnailRenderInputs();
+  const prepared = await withAppliedThumbnailRenderInputs(renderInputs, () => (
+    entries.map((entry) => prepareLevelThumbnailEntry(entry, renderInputs))
+  ));
+  return { renderInputs, entries: prepared };
 }
 
 async function storedLevelThumbnail(authorityKey) {
@@ -18405,12 +18346,11 @@ async function storedLevelThumbnail(authorityKey) {
   return rows[0] || null;
 }
 
-async function currentStoredLevelThumbnailUrls(authorityEntries) {
-  if (!authorityEntries.length) return {};
+async function currentStoredLevelThumbnailUrls(preparedEntries) {
+  if (!preparedEntries.length) return {};
   await ensureDbReady();
-  const keys = authorityEntries.map(([authorityKey]) => authorityKey);
-  const entryByAuthority = new Map(authorityEntries.map(([authorityKey, levelId, level]) => [authorityKey, { levelId, level }]));
-  const revisions = await currentThumbnailRevisions(authorityEntries.map(([_authorityKey, _levelId, level]) => level));
+  const keys = preparedEntries.map((entry) => entry.authorityKey);
+  const entryByAuthority = new Map(preparedEntries.map((entry) => [entry.authorityKey, entry]));
   const { rows } = await pool.query(
     `SELECT authority_key, content_version, blob_sha256
        FROM level_thumbnail_derivatives
@@ -18420,7 +18360,7 @@ async function currentStoredLevelThumbnailUrls(authorityEntries) {
   return Object.fromEntries(rows.flatMap((row) => {
     const entry = entryByAuthority.get(row.authority_key);
     if (!entry) return [];
-    if (!thumbnailVersionMatchesLevel(entry.level, row.content_version, revisions)) return [];
+    if (row.content_version !== entry.contentVersion) return [];
     const url = row.authority_key.startsWith('user:')
       ? `/api/campaign-workspace/level-thumbnails/${encodeURIComponent(entry.levelId)}/${row.blob_sha256}.png`
       : `/api/media/${row.blob_sha256}`;
@@ -18429,104 +18369,59 @@ async function currentStoredLevelThumbnailUrls(authorityEntries) {
 }
 
 async function storedLevelThumbnailUrls(authorityEntries) {
-  const current = await currentStoredLevelThumbnailUrls(authorityEntries);
-  const missing = authorityEntries.filter(([_authorityKey, levelId]) => !Object.hasOwn(current, levelId));
+  const preparedBatch = await prepareLevelThumbnailEntries(authorityEntries);
+  const current = await currentStoredLevelThumbnailUrls(preparedBatch.entries);
+  const missing = preparedBatch.entries.filter((entry) => !Object.hasOwn(current, entry.levelId));
   if (!missing.length) return current;
 
-  const retries = await ensureLevelThumbnailDerivativeBatch(
-    missing.map(([authorityKey, _levelId, level]) => [authorityKey, level]),
-  );
+  const retries = await ensurePreparedLevelThumbnailDerivativeBatch(missing, preparedBatch.renderInputs);
   for (const retry of retries) {
     if (retry.status === 'rejected') {
       console.error('canonical level thumbnail read repair failed:', retry.reason && retry.reason.message);
     }
   }
-  return currentStoredLevelThumbnailUrls(authorityEntries);
-}
-
-async function currentThumbnailRevisions(levels = []) {
-  await ensureDbReady();
-  const mediaSlots = [...new Set(levels.flatMap((level) => levelThumbnailMediaSlots(level)))].sort();
-  const { rows } = await pool.query(
-    `SELECT
-       (SELECT revision FROM prop_seats WHERE id = 'default') AS prop_seats_revision,
-       (SELECT revision FROM unit_catalog_state WHERE singleton = true) AS unit_catalog_revision,
-       (SELECT revision FROM media_catalog_state WHERE singleton = true) AS media_catalog_revision,
-       (SELECT revision FROM drawable_catalog_state WHERE singleton = true) AS drawable_catalog_revision,
-       COALESCE((
-         SELECT jsonb_agg(jsonb_build_object(
-           'slot', s.slot,
-           'availabilityPolicy', s.availability_policy,
-           'lifecycleState', s.lifecycle_state,
-           'activeVersionId', s.active_version_id,
-           'rowRevision', s.row_revision,
-           'versionStatus', v.status,
-           'sha256', b.sha256
-         ) ORDER BY s.slot)
-           FROM media_slots s
-           LEFT JOIN media_versions v ON v.id = s.active_version_id AND v.slot = s.slot
-           LEFT JOIN media_blobs b ON b.sha256 = v.blob_sha256
-          WHERE s.slot = ANY($1::text[])
-       ), '[]'::jsonb) AS thumbnail_media_slots`,
-    [mediaSlots],
-  );
-  const revisions = rows[0] || {};
-  return {
-    propSeatsRevision: Number(revisions.prop_seats_revision || 0),
-    unitCatalogRevision: Number(revisions.unit_catalog_revision || 0),
-    mediaCatalogRevision: Number(revisions.media_catalog_revision || 0),
-    drawableCatalogRevision: Number(revisions.drawable_catalog_revision || 0),
-    thumbnailMediaCatalog: { slots: revisions.thumbnail_media_slots || [] },
-  };
+  return currentStoredLevelThumbnailUrls(preparedBatch.entries);
 }
 
 const levelThumbnailDerivativeInFlight = new Map();
 
-async function createLevelThumbnailDerivative(authorityKey, level, providedRenderInputs = null) {
+async function createPreparedLevelThumbnailDerivative(prepared, renderInputs) {
   if (!serverRender) throw new Error('thumbnail renderer unavailable');
-  const current = await storedLevelThumbnail(authorityKey);
-  if (current) {
-    const currentRenderInputs = providedRenderInputs || await currentThumbnailRevisions([level]);
-    if (thumbnailVersionMatchesLevel(level, current.content_version, currentRenderInputs)) return current;
-  }
-  const render = async (renderInputs) => {
-    const plan = serverRender.levelRenderPlan(level);
-    const contentVersion = thumbnailVersionForLevel(level, renderInputs);
-    const privateAuthority = /^user:(.+):([^:]+)$/.exec(authorityKey);
-    const selectedSurface = privateAuthority
-      ? decodedVersionedPredrawnSurface(level, { activeOnly: true })
-      : null;
-    const privateBackgroundScope = privateAuthority
-      ? {
-          ownerEmail: privateAuthority[1],
-          levelId: privateAuthority[2],
-          allowedVersionIds: new Set([
-            selectedSurface?.background_version_id,
-            selectedSurface?.occlusion_version_id,
-          ].filter(Boolean)),
-        }
-      : null;
+  const current = await storedLevelThumbnail(prepared.authorityKey);
+  if (current && current.content_version === prepared.contentVersion) return current;
 
-    const { renderBoardThumbnail, BOARD_THUMB_W, BOARD_THUMB_H } = require(path.join(bakedBackendDir, 'boardThumbnail'));
-    const png = await renderBoardThumbnail({
-      plan,
-      loadDynamicSprite: (src) => thumbnailDynamicSprite(
-        src,
-        renderInputs.mediaCatalog,
-        privateBackgroundScope,
-      ),
-      mediaCatalogRevision: renderInputs.mediaCatalogRevision,
-      sourceAvailability: (src) => thumbnailSourceAvailability(src, renderInputs.mediaAvailability),
-    });
-    return { png, contentVersion, width: BOARD_THUMB_W, height: BOARD_THUMB_H };
-  };
-  const rendered = providedRenderInputs
-    ? await withAppliedThumbnailRenderInputs(providedRenderInputs, render)
-    : await withThumbnailRenderInputs(render);
-  const { png, contentVersion, width, height } = rendered;
+  const privateAuthority = /^user:(.+):([^:]+)$/.exec(prepared.authorityKey);
+  const selectedSurface = privateAuthority
+    ? decodedVersionedPredrawnSurface(prepared.level, { activeOnly: true })
+    : null;
+  const privateBackgroundScope = privateAuthority
+    ? {
+        ownerEmail: privateAuthority[1],
+        levelId: privateAuthority[2],
+        allowedVersionIds: new Set([
+          selectedSurface?.background_version_id,
+          selectedSurface?.occlusion_version_id,
+        ].filter(Boolean)),
+      }
+    : null;
+
+  const { renderBoardThumbnail, BOARD_THUMB_W, BOARD_THUMB_H } = require(path.join(bakedBackendDir, 'boardThumbnail'));
+  const png = await renderBoardThumbnail({
+    plan: prepared.plan,
+    loadDynamicSprite: (src) => thumbnailDynamicSprite(
+      src,
+      renderInputs.mediaCatalog,
+      privateBackgroundScope,
+    ),
+    mediaCatalogRevision: renderInputs.mediaCatalogRevision,
+    sourceAvailability: (src) => thumbnailSourceAvailability(src, renderInputs.mediaAvailability),
+  });
+  const contentVersion = prepared.contentVersion;
+  const width = BOARD_THUMB_W;
+  const height = BOARD_THUMB_H;
   const sha256 = crypto.createHash('sha256').update(png).digest('hex');
   const blobKey = liveMediaBlobKey(sha256);
-  const publishDerivative = authorityKey.startsWith('official:');
+  const publishDerivative = prepared.authorityKey.startsWith('official:');
   await writeLiveMediaBlob(blobKey, png, sha256, 'image/png');
   const client = await pool.connect();
   try {
@@ -18551,7 +18446,7 @@ async function createLevelThumbnailDerivative(authorityKey, level, providedRende
          height = EXCLUDED.height,
          updated_at = now()
        RETURNING authority_key, content_version, blob_sha256, width, height`,
-      [authorityKey, contentVersion, sha256, width, height],
+      [prepared.authorityKey, contentVersion, sha256, width, height],
     );
     await client.query('COMMIT');
     return rows[0];
@@ -18563,49 +18458,42 @@ async function createLevelThumbnailDerivative(authorityKey, level, providedRende
   }
 }
 
-async function ensureLevelThumbnailDerivative(authorityKey, level, providedRenderInputs = null) {
-  const existing = levelThumbnailDerivativeInFlight.get(authorityKey);
+async function ensurePreparedLevelThumbnailDerivative(prepared, renderInputs) {
+  const existing = levelThumbnailDerivativeInFlight.get(prepared.authorityKey);
   if (existing) {
-    await existing.catch(() => {});
-    return ensureLevelThumbnailDerivative(authorityKey, level, providedRenderInputs);
+    if (existing.contentVersion === prepared.contentVersion) return existing.pending;
+    await existing.pending.catch(() => {});
+    return ensureLevelThumbnailDerivative(prepared.authorityKey, prepared.level);
   }
-  const pending = createLevelThumbnailDerivative(authorityKey, level, providedRenderInputs);
-  levelThumbnailDerivativeInFlight.set(authorityKey, pending);
+  const pending = withLevelThumbnailRenderSlot(() => (
+    createPreparedLevelThumbnailDerivative(prepared, renderInputs)
+  ));
+  const record = { contentVersion: prepared.contentVersion, pending };
+  levelThumbnailDerivativeInFlight.set(prepared.authorityKey, record);
   try {
     return await pending;
   } finally {
-    if (levelThumbnailDerivativeInFlight.get(authorityKey) === pending) {
-      levelThumbnailDerivativeInFlight.delete(authorityKey);
+    if (levelThumbnailDerivativeInFlight.get(prepared.authorityKey) === record) {
+      levelThumbnailDerivativeInFlight.delete(prepared.authorityKey);
     }
   }
 }
 
-const LEVEL_THUMBNAIL_REPAIR_CONCURRENCY = 2;
+async function ensureLevelThumbnailDerivative(authorityKey, level) {
+  const preparedBatch = await prepareLevelThumbnailEntries([[authorityKey, level]]);
+  return ensurePreparedLevelThumbnailDerivative(preparedBatch.entries[0], preparedBatch.renderInputs);
+}
+
+async function ensurePreparedLevelThumbnailDerivativeBatch(entries, renderInputs) {
+  return Promise.allSettled(entries.map((entry) => (
+    ensurePreparedLevelThumbnailDerivative(entry, renderInputs)
+  )));
+}
+
 async function ensureLevelThumbnailDerivativeBatch(entries) {
   if (!entries.length) return [];
-  const renderInputs = await loadThumbnailRenderInputs();
-  const results = new Array(entries.length);
-  let nextIndex = 0;
-  const workers = Array.from(
-    { length: Math.min(LEVEL_THUMBNAIL_REPAIR_CONCURRENCY, entries.length) },
-    async () => {
-      while (nextIndex < entries.length) {
-        const index = nextIndex;
-        nextIndex += 1;
-        const [authorityKey, level] = entries[index];
-        try {
-          results[index] = {
-            status: 'fulfilled',
-            value: await ensureLevelThumbnailDerivative(authorityKey, level, renderInputs),
-          };
-        } catch (reason) {
-          results[index] = { status: 'rejected', reason };
-        }
-      }
-    },
-  );
-  await Promise.all(workers);
-  return results;
+  const preparedBatch = await prepareLevelThumbnailEntries(entries);
+  return ensurePreparedLevelThumbnailDerivativeBatch(preparedBatch.entries, preparedBatch.renderInputs);
 }
 
 function playScreenName(input) {
@@ -18656,6 +18544,42 @@ async function resolveShareTarget({ levelId, campaignId, mapId }) {
 const { ByteWeightedAsyncCache } = require(path.join(bakedBackendDir, 'byteWeightedCache'));
 const THUMB_CACHE_MAX_BYTES = 24 * 1024 * 1024;
 const _thumbCache = new ByteWeightedAsyncCache({ maxBytes: THUMB_CACHE_MAX_BYTES });
+
+async function prepareLevelCardThumbnail(target, providedRenderInputs = null) {
+  const renderInputs = providedRenderInputs || await loadThumbnailRenderInputs();
+  const prepared = await withAppliedThumbnailRenderInputs(renderInputs, () => {
+    const plan = serverRender.levelRenderPlan(target.level);
+    const backgroundSrc = typeof serverRender.worldBackgroundSrc === 'function'
+      ? serverRender.worldBackgroundSrc()
+      : null;
+    const presentation = resolveLevelCardPresentation(renderInputs.drawableCatalog);
+    const extraSources = [
+      backgroundSrc,
+      presentation.fontSrc,
+      ...Object.values(presentation.uiMedia),
+    ].filter(Boolean);
+    const exactRenderInputs = {
+      plan,
+      title: target.title || null,
+      subtitle: target.subtitle || null,
+      screenName: target.screenName || null,
+      backgroundSrc,
+      presentation,
+    };
+    return {
+      plan,
+      backgroundSrc,
+      presentation,
+      contentVersion: thumbnailVersion(plan, renderInputs, {
+        kind: 'level-card',
+        exactRenderInputs,
+        extraSources,
+      }),
+    };
+  });
+  return { ...prepared, renderInputs };
+}
+
 app.get(/^\/assets\/level-thumb\/(.+)\.png$/, async (req, res) => {
   const id = String(req.params[0] || '');
   const isOfficial = OFFICIAL_WORKSPACE_ID_PATTERN.test(id);
@@ -18666,27 +18590,25 @@ app.get(/^\/assets\/level-thumb\/(.+)\.png$/, async (req, res) => {
     if (!serverRender) { res.status(503).json({ error: 'thumbnail_renderer_unavailable' }); return; }
     const target = await resolveShareTarget(isOfficial ? { levelId: id, campaignId } : { mapId: id });
     if (!target) { res.status(404).send('not found'); return; }
-    const png = await withThumbnailRenderInputs(async (renderInputs) => {
-      const plan = serverRender.levelRenderPlan(target.level);
-      const cacheKey = `${id}:${campaignId || ''}:${thumbnailVersionForLevel(target.level, renderInputs, plan.contentHash)}`;
-      return _thumbCache.getOrCreate(cacheKey, async () => {
+    const prepared = await prepareLevelCardThumbnail(target);
+    const cacheKey = `${id}:${campaignId || ''}:${prepared.contentVersion}`;
+    const png = await _thumbCache.getOrCreate(cacheKey, () => (
+      withLevelThumbnailRenderSlot(async () => {
         const { renderLevelCard } = require(path.join(bakedBackendDir, 'boardThumbnail'));
-        const backgroundSrc = typeof serverRender.worldBackgroundSrc === 'function' ? serverRender.worldBackgroundSrc() : undefined;
-        const presentation = resolveLevelCardPresentation(renderInputs.drawableCatalog);
         return renderLevelCard({
-          plan,
+          plan: prepared.plan,
           title: target.title,
           subtitle: target.subtitle,
           screenName: target.screenName,
-          backgroundSrc,
-          loadDynamicSprite: (src) => thumbnailDynamicSprite(src, renderInputs.mediaCatalog),
-          mediaCatalogRevision: renderInputs.mediaCatalogRevision,
-          sourceAvailability: (src) => thumbnailSourceAvailability(src, renderInputs.mediaAvailability),
-          fontSrc: presentation.fontSrc,
-          uiMedia: presentation.uiMedia,
+          backgroundSrc: prepared.backgroundSrc,
+          loadDynamicSprite: (src) => thumbnailDynamicSprite(src, prepared.renderInputs.mediaCatalog),
+          mediaCatalogRevision: prepared.renderInputs.mediaCatalogRevision,
+          sourceAvailability: (src) => thumbnailSourceAvailability(src, prepared.renderInputs.mediaAvailability),
+          fontSrc: prepared.presentation.fontSrc,
+          uiMedia: prepared.presentation.uiMedia,
         });
-      });
-    });
+      })
+    ));
     res.setHeader('Content-Type', 'image/png');
     res.setHeader('Cache-Control', 'public, max-age=86400');
     res.status(200).end(png);
@@ -18736,9 +18658,7 @@ async function ogTagsFor(req) {
       const key = mapId || levelId;
       let hash = '';
       try {
-        hash = await withThumbnailRenderInputs((renderInputs) => (
-          thumbnailVersionForLevel(target.level, renderInputs, serverRender.boardHashForLevel(target.level))
-        ));
+        hash = (await prepareLevelCardThumbnail(target)).contentVersion;
       } catch { hash = ''; }
       const imageParams = new URLSearchParams();
       if (hash) imageParams.set('v', hash);
