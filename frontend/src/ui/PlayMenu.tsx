@@ -578,7 +578,7 @@ export function PlayMenu({
     }
   }, [campaigns, loading, officialAvailable, path, selection, userWorkspaceAvailable]);
 
-  // The bare Play root is the click-Play landing (ADR-0256). Once both content
+  // The bare Play root is the click-Play landing (ADR-0257). Once both content
   // sources and the Run document settle, it resumes the one in-progress
   // activity; with nothing to resume it reveals the hub with no mode selected.
   // The forward waits for settled sources so a campaign match resumes with its

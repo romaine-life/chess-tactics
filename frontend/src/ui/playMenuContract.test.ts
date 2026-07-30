@@ -21,7 +21,7 @@ describe('unified Play menu contract (ADR-0074)', () => {
       .toContain("['play', 'Play', '/play/select']");
   });
 
-  it('lands Play on the resumable activity or the neutral hub root (ADR-0256)', () => {
+  it('lands Play on the resumable activity or the neutral hub root (ADR-0257)', () => {
     expect(mainMenu).toContain('play: PLAY_SELECTOR_ROOT');
     // Canonicalization and the missing-campaign fallback return to the neutral
     // root; nothing in the landing path manufactures a skirmish selection.

@@ -9,7 +9,7 @@ refines:
   - "[ADR-0232](0232-continue-run-selects-run-before-play.md)"
 ---
 
-# ADR-0256: Play lands on the resumable activity or the neutral hub root
+# ADR-0257: Play lands on the resumable activity or the neutral hub root
 
 ## Context
 
