@@ -300,6 +300,8 @@ export function Skirmish({
   const storeSessionEpoch = useSkirmish((s) => s.sessionEpoch);
   const playableSurfaceReady = boardSurfaceReady && hudSurfaceReady;
   const game = useSkirmish((s) => s.game);
+  const adminMode = useSkirmish((s) => s.adminMode);
+  const adminWinBattle = useSkirmish((s) => s.adminWinBattle);
   const screenBoard = useMemo(
     () => game.boardCode ? decodeBoard(game.boardCode) : null,
     [game.boardCode],
@@ -413,6 +415,13 @@ export function Skirmish({
     });
     return () => { active = false; };
   }, [net?.lobbyId, net?.terminalResult, netResultDisputed, netSeatInteractive]);
+
+  // Free Move and Kill Unit wait for a board gesture. Win Battle is the one immediate
+  // intervention: consume it from the mounted Battle so the in-HUD action resolves in
+  // place and the Settings round trip returns before deciding the existing position.
+  useEffect(() => {
+    if (adminMode === 'win-battle') adminWinBattle();
+  }, [adminMode, adminWinBattle]);
 
   // Bank the win the moment a campaign battle is won (idempotent).
   useEffect(() => {
