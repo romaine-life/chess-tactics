@@ -1921,21 +1921,6 @@ async function main() {
   if (sfxAccept.statusCode !== 200 || JSON.parse(sfxAccept.body).version.status !== 'accepted') {
     throw new Error(`SFX acceptance failed: ${sfxAccept.statusCode} ${sfxAccept.body}`);
   }
-  const sfxPublicResponse = await get('/api/asset-catalog');
-  if (sfxPublicResponse.statusCode !== 200) {
-    throw new Error(`Accepted SFX runtime catalog failed: ${sfxPublicResponse.statusCode} ${sfxPublicResponse.body}`);
-  }
-  const sfxPublicCatalog = JSON.parse(sfxPublicResponse.body);
-  if (!Array.isArray(sfxPublicCatalog.slots)) {
-    throw new Error(`Accepted SFX runtime catalog omitted slots: ${sfxPublicResponse.body}`);
-  }
-  const publishedSfx = sfxPublicCatalog.slots.find((slot) => slot.slot === sfxSlot);
-  if (
-    publishedSfx?.versionStatus !== 'accepted'
-    || publishedSfx.media.sha256 !== sfxSha
-    || publishedSfx.productionEligible !== true
-  ) throw new Error(`Accepted SFX did not publish through the runtime catalog: ${JSON.stringify(publishedSfx)}`);
-
   const privateBytes = Buffer.from('private source proof\n', 'utf8');
   const privateSha = crypto.createHash('sha256').update(privateBytes).digest('hex');
   const privateCreate = await request('POST', '/api/admin/media-versions', adminJson, JSON.stringify({
@@ -2097,10 +2082,20 @@ async function main() {
     groupAccept.statusCode !== 200 || groupAcceptBody.versions.length !== 8
     || groupAcceptBody.versions.some((version) => version.status !== 'accepted') || !groupAcceptBody.batchId
   ) throw new Error(`Grouped media batch acceptance failed: ${groupAccept.statusCode} ${groupAccept.body}`);
-  const groupedCatalog = JSON.parse((await get('/api/asset-catalog')).body);
+  const groupedCatalogResponse = await get('/api/asset-catalog');
+  if (groupedCatalogResponse.statusCode !== 200) {
+    throw new Error(`Completed grouped runtime catalog failed: ${groupedCatalogResponse.statusCode} ${groupedCatalogResponse.body}`);
+  }
+  const groupedCatalog = JSON.parse(groupedCatalogResponse.body);
   if (groupSlots.some((slot) => groupedCatalog.slots.find((item) => item.slot === slot)?.versionStatus !== 'accepted')) {
     throw new Error(`Grouped slots did not publish atomically: ${JSON.stringify(groupedCatalog.slots)}`);
   }
+  const publishedSfx = groupedCatalog.slots.find((slot) => slot.slot === sfxSlot);
+  if (
+    publishedSfx?.versionStatus !== 'accepted'
+    || publishedSfx.media.sha256 !== sfxSha
+    || publishedSfx.productionEligible !== true
+  ) throw new Error(`Accepted SFX did not publish through the runtime catalog: ${JSON.stringify(publishedSfx)}`);
   const acceptedFirstSlot = groupedCatalog.slots.find((item) => item.slot === groupSlots[0]);
   if (
     acceptedFirstSlot.activeVersionId !== nativeVersion.id || acceptedFirstSlot.media.sha256 !== acceptedSha
