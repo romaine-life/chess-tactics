@@ -9,6 +9,7 @@ import {
 const {
   decodeBoard,
   encodeBoard,
+  levelThumbnailMediaSlots,
   withPredrawnBoardSurface,
   withoutPredrawnBoardOcclusionMask,
   withoutPredrawnBoardSurface,
@@ -136,6 +137,18 @@ test('withPredrawnBoardSurface changes only boardCode and preserves all gameplay
   assert.deepEqual(patchedBoardFields, sourceBoardFields);
   assert.deepEqual(source, level());
   assert.equal(withPredrawnBoardSurface(source, surface).boardCode, patchedCode);
+});
+
+test('thumbnail media dependencies include only a level-owned semantic surface slot', () => {
+  assert.deepEqual(levelThumbnailMediaSlots(level()), []);
+  assert.deepEqual(
+    levelThumbnailMediaSlots(withPredrawnBoardSurface(level(), surface)),
+    ['boards/fortress-gate/plate.png'],
+  );
+  assert.deepEqual(
+    levelThumbnailMediaSlots(withPredrawnBoardSurface(level(), versionedSurface)),
+    [],
+  );
 });
 
 test('withPredrawnBoardSurface rejects levels without a valid lossless board', () => {

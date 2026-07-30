@@ -23,7 +23,7 @@ import {
 } from './render/renderPlan';
 import { predrawnOcclusionMaskOps } from './render/predrawnOcclusion';
 import { predrawnOcclusionDepthMapForSurface, type PredrawnOcclusionDepthMap } from './render/predrawnOcclusionDepth';
-import { isVersionedPredrawnBoardSurface } from './ui/boardCode';
+import { decodeBoard, isVersionedPredrawnBoardSurface } from './ui/boardCode';
 
 export type ServerDrawOp = BoardDrawOp;
 
@@ -78,6 +78,29 @@ export function levelRenderPlan(level: Level): ServerRenderPlan {
 export function boardHashForLevel(level: Level): string {
   currentSeats();
   return boardContentHash(levelToEditorBoard(level));
+}
+
+/**
+ * Return the live-media semantic slots whose active bytes can affect this
+ * level's compact thumbnail.
+ *
+ * Most board pixels arrive through the drawable and unit catalogs and already
+ * carry immutable URLs in the render plan. The only live-media catalog
+ * dependency owned directly by Level data is the retired, slot-backed
+ * pre-drawn surface shape. Versioned pre-drawn backgrounds have their immutable
+ * version identity in the Level itself and therefore add no semantic slot here.
+ */
+export function levelThumbnailMediaSlots(level: Level): string[] {
+  const board = level.boardCode ? decodeBoard(level.boardCode) : null;
+  if (!board) return [];
+  if (
+    isPredrawnBackgroundActive(board)
+    && board.surface?.kind === 'predrawn'
+    && !isVersionedPredrawnBoardSurface(board.surface)
+  ) {
+    return [board.surface.slot];
+  }
+  return [];
 }
 
 export function hydratePropSeats(seats: PropSeatMap): boolean {

@@ -101,6 +101,7 @@ test('canonical summary reads repair missing derivatives without level-id shape 
   const end = server.indexOf('\nasync function currentThumbnailRevisions(', start);
   assert.ok(start >= 0 && end > start, 'thumbnail summary projection must remain inspectable');
   const projection = server.slice(start, end);
-  assert.match(projection, /ensureLevelThumbnailDerivative\(authorityKey, level\)/);
+  assert.match(projection, /ensureLevelThumbnailDerivativeBatch\(/);
+  assert.doesNotMatch(projection, /Promise\.allSettled\(missing\.map/);
   assert.doesNotMatch(server, /function resolveListThumbnailTarget\(/);
 });
