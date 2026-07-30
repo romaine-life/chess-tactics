@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:dad52eb698ce3a92439cef178402080a4ae01f39e6e4ccd4952607e878f79f28"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:a057529b4115733340b06d6a8ced81b1793951424d19c09750b046a22c421cbe"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Publish migration 45 to the shared manifest"
-  prNumber: "546"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/546"
-  commit: "ae46a461"
+  prTitle: "Keep battle restart board-mounted"
+  prNumber: "548"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/548"
+  commit: "ad13750d"
 
 name: chess-tactics
 namespace: chess-tactics
