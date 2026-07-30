@@ -13,7 +13,8 @@ const { createOIDCSessionManager } = require(path.join(bakedBackendDir, 'oidcAut
 const { createByteReadBudget } = require(path.join(bakedBackendDir, 'liveMediaReadBudget'));
 const { createRenderCriticalSection } = require(path.join(bakedBackendDir, 'renderCriticalSection'));
 const { createAsyncWorkLimiter } = require(path.join(bakedBackendDir, 'asyncWorkLimiter'));
-const { thumbnailContentVersionForPlan } = require(path.join(bakedBackendDir, 'thumbnailVersion'));
+const { THUMBNAIL_DEPENDENCY_SCHEMA_VERSION, thumbnailContentVersionForPlan } = require(path.join(bakedBackendDir, 'thumbnailVersion'));
+const { createRevisionMemo } = require(path.join(bakedBackendDir, 'revisionMemo'));
 const { backgroundStoreSchemaViolation } = require(path.join(bakedBackendDir, 'backgroundStoreError'));
 const {
   BGM_SAS_START_SKEW_MS,
@@ -109,10 +110,31 @@ try {
 const withServerRenderCriticalSection = createRenderCriticalSection();
 const LEVEL_THUMBNAIL_RENDER_CONCURRENCY = 2;
 const withLevelThumbnailRenderSlot = createAsyncWorkLimiter(LEVEL_THUMBNAIL_RENDER_CONCURRENCY);
+// ADR-0258: thumbnail URL manifests are memoized per authority. Reads consult
+// this memo; the per-level plan/fingerprint derivation runs only when a document
+// or catalog revision actually moved.
+const thumbnailManifestMemo = createRevisionMemo({
+  onBackgroundError: (error, key) => {
+    console.error(`thumbnail manifest refresh failed (${key}):`, error && error.message);
+  },
+});
 const backgroundVersionUploadsInFlight = new Set();
 
 const app = express();
 const port = process.env.PORT || 3000;
+// ADR-0258: a slow endpoint must scream in the pod log before a person finds it.
+// Log the path only — query strings can carry private editor document ids.
+const SLOW_REQUEST_LOG_MS = Number(process.env.SLOW_REQUEST_LOG_MS || 2000);
+app.use((req, res, next) => {
+  const startedAt = process.hrtime.bigint();
+  res.on('finish', () => {
+    const elapsedMs = Number((process.hrtime.bigint() - startedAt) / 1000000n);
+    if (elapsedMs >= SLOW_REQUEST_LOG_MS) {
+      console.warn(`slow request: ${req.method} ${req.path} ${res.statusCode} ${elapsedMs}ms`);
+    }
+  });
+  next();
+});
 const frontendDir = process.env.FRONTEND_DIR || path.join(__dirname, '..', 'frontend', 'dist');
 const staticFrontendDir = process.env.STATIC_FRONTEND_DIR || '';
 const authBaseUrl = (process.env.AUTH_BASE_URL || 'https://auth.romaine.life').replace(/\/+$/, '');
@@ -12392,7 +12414,9 @@ app.get('/api/campaign-workspace', async (req, res) => {
   try {
     const row = await dbGetWorkspace(user.email);
     const workspace = publicCampaignWorkspace(row);
-    workspace.thumbnail_urls = await storedLevelThumbnailUrls(
+    workspace.thumbnail_urls = await memoizedLevelThumbnailUrls(
+      `user:${user.email}`,
+      `v${workspace.revision}`,
       Object.entries(workspace.levels).map(([levelId, level]) => [`user:${user.email}:${levelId}`, levelId, level]),
     );
     res.status(200).json(workspace);
@@ -13005,7 +13029,9 @@ app.get('/api/official-campaigns/:id', async (req, res) => {
     const levels = isObjectRecord(portfolio.data?.levels) ? portfolio.data.levels : {};
     res.status(200).json({
       portfolio,
-      thumbnail_urls: await storedLevelThumbnailUrls(
+      thumbnail_urls: await memoizedLevelThumbnailUrls(
+        `official:${id}`,
+        `v${portfolio.revision}`,
         Object.entries(levels).map(([levelId, level]) => [`official:${id}:${levelId}`, levelId, level]),
       ),
       store_schema_version: OFFICIAL_CAMPAIGNS_STORE_SCHEMA_VERSION,
@@ -18484,9 +18510,17 @@ function prepareLevelThumbnailEntry(rawEntry, renderInputs) {
 async function prepareLevelThumbnailEntries(entries, providedRenderInputs = null) {
   if (!serverRender) throw new Error('thumbnail renderer unavailable');
   const renderInputs = providedRenderInputs || await loadThumbnailRenderInputs();
-  const prepared = await withAppliedThumbnailRenderInputs(renderInputs, () => (
-    entries.map((entry) => prepareLevelThumbnailEntry(entry, renderInputs))
-  ));
+  // ADR-0258: plan projection is CPU work proportional to the level count. Yield
+  // between levels so a cold pass never starves unrelated requests; the critical
+  // section stays held, which other render users already queue on.
+  const prepared = await withAppliedThumbnailRenderInputs(renderInputs, async () => {
+    const projected = [];
+    for (const entry of entries) {
+      projected.push(prepareLevelThumbnailEntry(entry, renderInputs));
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    return projected;
+  });
   return { renderInputs, entries: prepared };
 }
 
@@ -18538,6 +18572,65 @@ async function storedLevelThumbnailUrls(authorityEntries) {
 }
 
 const levelThumbnailDerivativeInFlight = new Map();
+
+// ADR-0258 read-side memo plumbing. The inputs key concatenates every
+// revision-tracked catalog input that can change a thumbnail manifest; the
+// document revision rides separately in the memo so a retained manifest can
+// never cross level sets. One UNION round trip keeps the freshness check ~free.
+async function thumbnailManifestInputsKey() {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    `SELECT 'media' AS source, revision FROM media_catalog_state WHERE singleton = true
+     UNION ALL SELECT 'drawable', revision FROM drawable_catalog_state WHERE singleton = true
+     UNION ALL SELECT 'unit', revision FROM unit_catalog_state WHERE singleton = true
+     UNION ALL SELECT 'prop-seats', revision FROM prop_seats WHERE id = 'default'`,
+  );
+  const revisions = new Map(rows.map((row) => [row.source, Number(row.revision)]));
+  return [
+    `m${revisions.get('media') ?? 0}`,
+    `d${revisions.get('drawable') ?? 0}`,
+    `u${revisions.get('unit') ?? 0}`,
+    `p${revisions.get('prop-seats') ?? 0}`,
+    `r${BOARD_THUMBNAIL_RENDER_REVISION}`,
+    `s${THUMBNAIL_DEPENDENCY_SCHEMA_VERSION}`,
+  ].join('-');
+}
+
+async function storedLevelThumbnailManifest(authorityEntries) {
+  const value = await storedLevelThumbnailUrls(authorityEntries);
+  // A gap means a derivative could not be repaired. Retain but never settle:
+  // reads stay fast while later reads keep retrying in the background.
+  const settled = authorityEntries.every((entry) => Object.hasOwn(value, entry[1]));
+  return { value, settled };
+}
+
+async function memoizedLevelThumbnailUrls(key, docRevision, authorityEntries) {
+  const read = await thumbnailManifestMemo.read({
+    key,
+    docRevision,
+    inputsKey: await thumbnailManifestInputsKey(),
+    compute: () => storedLevelThumbnailManifest(authorityEntries),
+  });
+  return read.value;
+}
+
+// ADR-0258: after a deploy the officials manifest recomputes in the background
+// so no reader ever pays the cold pass. Best-effort by design.
+function warmOfficialCampaignThumbnailManifest(reason) {
+  (async () => {
+    const id = officialCampaignsRowId('default');
+    const document = await dbGetOfficialCampaigns(id);
+    const portfolio = publicOfficialCampaignsDocument(id, document);
+    const levels = isObjectRecord(portfolio.data?.levels) ? portfolio.data.levels : {};
+    await memoizedLevelThumbnailUrls(
+      `official:${id}`,
+      `v${portfolio.revision}`,
+      Object.entries(levels).map(([levelId, level]) => [`official:${id}:${levelId}`, levelId, level]),
+    );
+  })().catch((error) => {
+    console.error(`official thumbnail manifest warmup failed (${reason}):`, error && error.message);
+  });
+}
 
 async function createPreparedLevelThumbnailDerivative(prepared, renderInputs) {
   if (!serverRender) throw new Error('thumbnail renderer unavailable');
@@ -18931,7 +19024,10 @@ if (schemaMigrationCommand) {
   }
   pool.on('error', (error) => console.error('postgres pool error:', error));
   ensureDbReady()
-    .then(() => console.log(`postgres ready (mode=${databaseUrl ? 'connection-string' : 'workload-identity'}, schema=${schemaMigrationMode}); ${schemaReadyMessage()}`))
+    .then(() => {
+      console.log(`postgres ready (mode=${databaseUrl ? 'connection-string' : 'workload-identity'}, schema=${schemaMigrationMode}); ${schemaReadyMessage()}`);
+      warmOfficialCampaignThumbnailManifest('boot');
+    })
     .catch((error) => {
       if (error instanceof MigrationExecutionError) {
         console.error(
