@@ -159,6 +159,14 @@ describe('Skirmish chrome hierarchy', () => {
     expectChromeUnit(buttonUsing('data-testid="close-battle-admin-controls"'), 'inner-text-button');
   });
 
+  it('consumes the immediate Win Battle intervention in the mounted Battle lifecycle', () => {
+    expect(skirmish).toContain('const adminMode = useSkirmish((s) => s.adminMode);');
+    expect(skirmish).toContain('const adminWinBattle = useSkirmish((s) => s.adminWinBattle);');
+    expect(skirmish).toMatch(
+      /useEffect\(\(\) => \{\s*if \(adminMode === 'win-battle'\) adminWinBattle\(\);\s*\}, \[adminMode, adminWinBattle\]\);/,
+    );
+  });
+
   it('maps tabs, promotion choices, and command-grid cells to existing units', () => {
     const promotion = buttonUsing('choosePromotion(type)');
     const tab = buttonUsing('setTab(t.id)');
