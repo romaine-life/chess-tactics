@@ -21,16 +21,17 @@ One observed pull-request run spent 2 minutes 41 seconds in the all-app backend
 step and another 2 minutes 1 second repeating frontend validation. The required
 image build could not begin until both serialized copies completed.
 
-The backend solver smoke test does have one real frontend-derived prerequisite:
-the DOM-free trainer bundle. That prerequisite does not justify making the
-backend package own frontend validation or the production web build.
+The backend smoke tests do have two real frontend-derived prerequisites: the
+HTTP smoke test serves the production shell and the solver smoke test imports
+the DOM-free trainer bundle. Those prerequisites do not justify making the
+backend package own frontend validation.
 
 ## Decision
 
-- `backend npm test` is backend-owned. It prepares the board-render package and
-  trainer bundle required by backend/worker smoke tests, then runs backend
-  checks and smoke tests. It does not run the frontend contract gate or build
-  the production frontend.
+- `backend npm test` is backend-owned. It prepares the production web shell,
+  board-render package, and trainer bundle required by backend/worker smoke
+  tests, then runs backend checks and smoke tests. It does not run the frontend
+  contract gate.
 - Pull-request validation and post-merge deployment each use separate backend
   and frontend jobs. Those jobs check out the same requested commit and run in
   parallel.
@@ -51,8 +52,9 @@ backend package own frontend validation or the production web build.
 - Backend smoke tests and frontend contracts consume wall-clock time in
   parallel.
 - PostgreSQL initialization is limited to the backend lane.
-- The trainer is still rebuilt in the backend lane because the solver smoke
-  test consumes its exact production module boundary.
+- The production shell and trainer are still rebuilt in the backend lane
+  because its HTTP and solver smoke tests consume those exact production
+  boundaries.
 - Separate jobs repeat checkout and Node setup, trading a small amount of
   runner work for a substantially shorter critical path.
 - ADR-0094's exact-ref, immutable-image, and merge-authorizes-deployment

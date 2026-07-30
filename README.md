@@ -132,9 +132,9 @@ Postgres. It uses `DATABASE_URL` if set, otherwise self-provisions a throwaway
 local Postgres from system binaries (as on the GitHub-hosted CI runners). Hosts
 without Postgres binaries should set `DATABASE_URL`. The smoke-test explicitly
 runs with `SCHEMA_MIGRATIONS=auto` because its database is throwaway/reset.
-Backend `npm test` builds the DOM-free trainer bundle required by the solver
-smoke test, but does not own frontend validation or the production web build.
-The frontend gate runs without a database:
+Backend `npm test` builds the production shell exercised by its HTTP smoke test
+and the DOM-free trainer bundle required by its solver smoke test, but does not
+own frontend validation. The frontend gate runs without a database:
 
 ```sh
 cd frontend

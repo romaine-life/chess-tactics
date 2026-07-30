@@ -60,9 +60,9 @@ test('backend and frontend validation run once in parallel before image work', (
   }
 
   assert.equal(backendPackage.scripts.test, 'npm run test:prepare && npm run test:backend');
+  assert.match(backendPackage.scripts['test:prepare'], /frontend run build &&/);
   assert.match(backendPackage.scripts['test:prepare'], /frontend run build:trainer/);
   assert.doesNotMatch(backendPackage.scripts['test:prepare'], /frontend run check/);
-  assert.doesNotMatch(backendPackage.scripts['test:prepare'], /frontend run build(?:\s|&&)/);
   assert.doesNotMatch(backendPackage.scripts['test:backend'], /frontend/);
 });
 
