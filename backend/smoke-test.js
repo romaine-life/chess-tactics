@@ -822,7 +822,7 @@ function openSse(path, headers = {}) {
 // process liveness; `/ready` is asserted after this reset establishes a known
 // complete catalog state.
 async function resetDb() {
-  await queryDb('TRUNCATE levels, campaign_workspaces, public_maps, editor_document_edit_events, editor_document_recoveries, editor_document_edit_sessions, predrawn_background_geometry_bindings, predrawn_background_version_events, predrawn_background_versions, level_working_copies, level_thumbnail_derivatives, design_portfolios, campaigns, official_campaigns, lab_runs, prop_seats, sfx_profiles, drawable_asset_events, drawable_asset_media, drawable_assets, drawable_catalog_state, media_asset_events, media_versions, media_blobs, media_slots, media_catalog_state, unit_asset_events, unit_sprites, unit_families, unit_assets, unit_catalog_state CASCADE');
+  await queryDb('TRUNCATE levels, campaign_workspaces, public_maps, editor_document_edit_events, editor_document_recoveries, editor_document_edit_sessions, predrawn_background_geometry_bindings, predrawn_background_version_events, predrawn_background_versions, level_working_copies, level_thumbnail_derivatives, design_portfolios, campaigns, official_campaigns, active_runs, run_relic_stat_events, lab_runs, prop_seats, sfx_profiles, drawable_asset_events, drawable_asset_media, drawable_assets, drawable_catalog_state, media_asset_events, media_versions, media_blobs, media_slots, media_catalog_state, unit_asset_events, unit_sprites, unit_families, unit_assets, unit_catalog_state CASCADE');
   await queryDb("INSERT INTO media_catalog_state (singleton) VALUES (true); INSERT INTO drawable_catalog_state (singleton) VALUES (true); INSERT INTO unit_catalog_state (singleton) VALUES (true); INSERT INTO unit_families (family) VALUES ('pawn'), ('rook'), ('knight'), ('bishop'), ('queen'), ('king');");
 }
 
@@ -980,7 +980,7 @@ function inlineMigrationSql(version) {
   return inlineMigrationDefinition(version).sql;
 }
 
-async function validatePrimarySparseNumericMigrationUpgrade43() {
+async function validatePrimarySparseNumericMigrationUpgrade45() {
   const history = await queryDb(
     `SELECT version, name, checksum
        FROM schema_migrations
@@ -995,7 +995,7 @@ async function validatePrimarySparseNumericMigrationUpgrade43() {
       ORDER BY column_name`,
   );
   const versions = history.rows.map((row) => Number(row.version));
-  const expectedVersions = Array.from({ length: 44 }, (_, index) => index + 1);
+  const expectedVersions = Array.from({ length: 45 }, (_, index) => index + 1);
   const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
   const expectedByVersion = new Map(
     expectedMigrations.map((migration) => [migration.version, migration]),
@@ -1010,7 +1010,7 @@ async function validatePrimarySparseNumericMigrationUpgrade43() {
   });
   const appliedMigrationVersions = [
     ...Array.from({ length: 8 }, (_, index) => index + 28),
-    ...Array.from({ length: 8 }, (_, index) => index + 37),
+    ...Array.from({ length: 9 }, (_, index) => index + 37),
   ];
   const skippedMigrationVersions = [
     ...Array.from({ length: 27 }, (_, index) => index + 1),
@@ -1084,6 +1084,20 @@ async function validatePrimarySparseNumericMigrationUpgrade43() {
   const staleReasonChecks = revisionReasonConstraints.rows.filter(
     (row) => row.constraint_type === 'c',
   );
+  await queryDb(
+    `INSERT INTO run_relic_stat_events (owner_email, event_id, relic_id, event_kind)
+     VALUES ('migration-45-smoke@example.com', 'migration-45-idempotency', 'conscription-notice', 'picked')
+     ON CONFLICT (owner_email, event_id, relic_id) DO NOTHING;
+     INSERT INTO run_relic_stat_events (owner_email, event_id, relic_id, event_kind)
+     VALUES ('migration-45-smoke@example.com', 'migration-45-idempotency', 'conscription-notice', 'picked')
+     ON CONFLICT (owner_email, event_id, relic_id) DO NOTHING;`,
+  );
+  const relicEventRows = await queryDb(
+    `SELECT owner_email, event_id, relic_id, event_kind
+       FROM run_relic_stat_events
+      WHERE owner_email = 'migration-45-smoke@example.com'
+        AND event_id = 'migration-45-idempotency'`,
+  );
   if (
     versions.join(',') !== expectedVersions.join(',')
     || identityColumns.rows.length !== 2
@@ -1102,17 +1116,21 @@ async function validatePrimarySparseNumericMigrationUpgrade43() {
     || canonicalReasonForeignKey.delete_action !== 'r'
     || canonicalReasonForeignKey.referenced_schema !== 'public'
     || canonicalReasonForeignKey.referenced_table !== 'level_working_copy_revision_reasons'
+    || relicEventRows.rows.length !== 1
+    || relicEventRows.rows[0].relic_id !== 'conscription-notice'
+    || relicEventRows.rows[0].event_kind !== 'picked'
     || !/^FOREIGN KEY \(reason\) REFERENCES level_working_copy_revision_reasons\(reason\)/.test(
       canonicalReasonForeignKey.definition,
     )
   ) {
     throw new Error(
-      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 44: `
+      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 45: `
       + `${JSON.stringify({
         history: history.rows,
         identity_columns: identityColumns.rows,
         reasons: revisionReasonRows.rows,
         constraints: revisionReasonConstraints.rows,
+        relic_events: relicEventRows.rows,
       })}\noutput:\n${output}`,
     );
   }
@@ -1360,7 +1378,7 @@ async function main() {
   await new Promise((resolve) => mockAuth.listen(authPort, '127.0.0.1', resolve));
   await new Promise((resolve) => mockBgm.listen(bgmPort, '127.0.0.1', resolve));
   await waitForServer();
-  await validatePrimarySparseNumericMigrationUpgrade43();
+  await validatePrimarySparseNumericMigrationUpgrade45();
   if (!fs.existsSync(path.join(hotBackendDir, 'server.js'))) {
     throw new Error('Supervisor did not initialize the hot backend entrypoint');
   }
