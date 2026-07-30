@@ -193,6 +193,9 @@ export type SkirmishHudProps = {
   onPawnCashOut?: ((pieceId: string) => void) | null;
   /** Permanently end the active Run. RunScreen owns confirmation and persistence. */
   onAbandonRun?: (() => void) | null;
+  /** Opens the persistent Run army over the board without unmounting or pausing Battle. */
+  onToggleRunArmy?: (() => void) | null;
+  runArmyOpen?: boolean;
   /** Between-Battle phases replace only the existing panel's contents. */
   controlsContent?: ReactNode;
 };
@@ -215,6 +218,8 @@ export function SkirmishHud({
   onOpenPredrawnRegistration = null,
   onPawnCashOut = null,
   onAbandonRun = null,
+  onToggleRunArmy = null,
+  runArmyOpen = false,
   controlsContent,
 }: SkirmishHudProps = {}) {
   const game = useSkirmish((s) => s.game);
@@ -703,7 +708,19 @@ export function SkirmishHud({
             {onAbandonRun && !net ? (
               <div className="skirmish-view-group">
                 <span className="skirmish-eyebrow">Run</span>
-                <div className="skirmish-view-row">
+                <div className="run-meta-navigation">
+                  {onToggleRunArmy ? (
+                    <button
+                      type="button"
+                      data-chrome-unit="inner-text-button"
+                      data-testid="run-battle-army"
+                      className={chromeUnitClassNames('inner-text-button', 'app-header-button', runArmyOpen && 'active')}
+                      aria-pressed={runArmyOpen}
+                      onClick={onToggleRunArmy}
+                    >
+                      {runArmyOpen ? 'Back to Battle' : 'Army'}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     data-chrome-unit="inner-text-button"

@@ -55,9 +55,12 @@ export interface RunArmyUnit {
   id: string;
   name: string;
   type: RunArmyPieceType;
+  number: number;
   abilities: RunAbility[];
   source: 'king' | 'starting' | 'draft' | 'shop';
 }
+
+export type RunArmyNumberState = Record<RunArmyPieceType, number>;
 
 export interface PieceBundle {
   id: string;
@@ -171,6 +174,22 @@ export interface RunShopState {
   chosenLootRelicId: RunRelicId | null;
   paidRelicOffer: RunRelicId | null;
   paidRelicBought: boolean;
+  soldUnits: Array<{
+    unit: RunArmyUnit;
+    proceedsTenths: number;
+  }>;
+  entrySnapshot: RunShopEntrySnapshot;
+}
+
+export interface RunShopEntrySnapshot {
+  goldTenths: number;
+  army: RunArmyUnit[];
+  relics: RunRelicId[];
+  seenRelics: RunRelicId[];
+  conflictPaidRelics: Record<string, { relicId: RunRelicId; bought: boolean }>;
+  nextArmyUnitSequence: number;
+  nextArmyUnitNumberByType: RunArmyNumberState;
+  paidRelicBought: boolean;
 }
 
 export interface RunDocument {
@@ -190,12 +209,25 @@ export interface RunDocument {
   draftOffers: DraftOffer[];
   chosenDraftId: DraftOffer['draftId'] | null;
   nextArmyUnitSequence: number;
+  nextArmyUnitNumberByType: RunArmyNumberState;
   deployment: RunDeploymentState | null;
   battleRuntime: RunBattleRuntime | null;
   shop: RunShopState | null;
 }
 
 const PURCHASE_ORDER: readonly PurchasablePieceType[] = ['pawn', 'knight', 'bishop', 'rook', 'queen'];
+const ARMY_PIECE_ORDER: readonly RunArmyPieceType[] = ['king', ...PURCHASE_ORDER];
+
+function initialArmyNumberState(): RunArmyNumberState {
+  return {
+    pawn: 1,
+    knight: 1,
+    bishop: 1,
+    rook: 1,
+    queen: 1,
+    king: 1,
+  };
+}
 
 function bundleId(pieces: readonly PurchasablePieceType[]): string {
   return pieces.map((piece) => piece[0]).join('');
@@ -286,10 +318,10 @@ export function snapshotWar(war: War, levels: Record<string, Level>): RunWarSnap
 
 function initialArmy(seed: number): RunArmyUnit[] {
   return [
-    { id: 'run-king', name: runUnitName(seed, 'king', 0), type: 'king', abilities: [], source: 'king' },
-    { id: 'run-pawn-a', name: runUnitName(seed, 'pawn', 0), type: 'pawn', abilities: [], source: 'starting' },
-    { id: 'run-pawn-b', name: runUnitName(seed, 'pawn', 1), type: 'pawn', abilities: [], source: 'starting' },
-    { id: 'run-pawn-c', name: runUnitName(seed, 'pawn', 2), type: 'pawn', abilities: [], source: 'starting' },
+    { id: 'run-king', name: runUnitName(seed, 'king', 0), type: 'king', number: 1, abilities: [], source: 'king' },
+    { id: 'run-pawn-a', name: runUnitName(seed, 'pawn', 0), type: 'pawn', number: 1, abilities: [], source: 'starting' },
+    { id: 'run-pawn-b', name: runUnitName(seed, 'pawn', 1), type: 'pawn', number: 2, abilities: [], source: 'starting' },
+    { id: 'run-pawn-c', name: runUnitName(seed, 'pawn', 2), type: 'pawn', number: 3, abilities: [], source: 'starting' },
   ];
 }
 
@@ -312,6 +344,11 @@ export function createRun(war: RunWarSnapshot, seed: number, now = new Date().to
     draftOffers: offers,
     chosenDraftId: null,
     nextArmyUnitSequence: 1,
+    nextArmyUnitNumberByType: {
+      ...initialArmyNumberState(),
+      pawn: 4,
+      king: 2,
+    },
     deployment: null,
     battleRuntime: null,
     shop: null,
@@ -322,69 +359,184 @@ function touch(run: RunDocument): RunDocument {
   return { ...run, updatedAt: new Date().toISOString() };
 }
 
-export function normalizeRunDocument(run: RunDocument): RunDocument {
-  const roleOrdinals: Record<RunArmyPieceType, number> = {
-    pawn: 0,
-    knight: 0,
-    bishop: 0,
-    rook: 0,
-    queen: 0,
-    king: 0,
+function cloneArmy(army: readonly RunArmyUnit[]): RunArmyUnit[] {
+  return army.map((unit) => ({ ...unit, abilities: [...unit.abilities] }));
+}
+
+function cloneConflictPaidRelics(
+  conflictPaidRelics: RunDocument['conflictPaidRelics'],
+): RunDocument['conflictPaidRelics'] {
+  return Object.fromEntries(
+    Object.entries(conflictPaidRelics).map(([key, value]) => [key, { ...value }]),
+  );
+}
+
+function createShopEntrySnapshot(run: RunDocument, paidRelicBought: boolean): RunShopEntrySnapshot {
+  return {
+    goldTenths: run.goldTenths,
+    army: cloneArmy(run.army),
+    relics: [...run.relics],
+    seenRelics: [...run.seenRelics],
+    conflictPaidRelics: cloneConflictPaidRelics(run.conflictPaidRelics),
+    nextArmyUnitSequence: run.nextArmyUnitSequence,
+    nextArmyUnitNumberByType: { ...run.nextArmyUnitNumberByType },
+    paidRelicBought,
   };
-  const replacesGenericFormatTwoNames = Number(run.formatVersion) < RUN_FORMAT_VERSION;
-  let namesChanged = false;
-  const army = run.army.map((unit) => {
+}
+
+function normalizedArmyIdentity(run: RunDocument): {
+  army: RunArmyUnit[];
+  shop: RunShopState | null;
+  nextArmyUnitNumberByType: RunArmyNumberState;
+  changed: boolean;
+} {
+  const entryArmy = run.shop?.entrySnapshot?.army ?? [];
+  const soldArmy = run.shop?.soldUnits?.map((entry) => entry.unit) ?? [];
+  const units = [...entryArmy, ...run.army, ...soldArmy];
+  const byId = new Map<string, RunArmyUnit>();
+  for (const unit of units) {
+    if (!byId.has(unit.id)) byId.set(unit.id, unit);
+  }
+
+  const used = Object.fromEntries(ARMY_PIECE_ORDER.map((type) => [type, new Set<number>()])) as Record<
+    RunArmyPieceType,
+    Set<number>
+  >;
+  const assignedNumbers = new Map<string, number>();
+  const assignedNames = new Map<string, string>();
+  const roleOrdinals = initialArmyNumberState();
+  for (const type of ARMY_PIECE_ORDER) roleOrdinals[type] = 0;
+  const replacesLegacyNames = Number(run.formatVersion) < RUN_FORMAT_VERSION;
+  for (const unit of byId.values()) {
+    let number = Number.isSafeInteger(unit.number) && unit.number > 0 ? unit.number : 1;
+    while (used[unit.type].has(number)) number += 1;
+    used[unit.type].add(number);
+    assignedNumbers.set(unit.id, number);
+
     const roleOrdinal = roleOrdinals[unit.type];
     roleOrdinals[unit.type] += 1;
-    const validName = typeof unit.name === 'string' && unit.name.trim() && unit.name.length <= 80;
-    if (!replacesGenericFormatTwoNames && validName) return unit;
-    namesChanged = true;
-    return { ...unit, name: runUnitName(run.seed, unit.type, roleOrdinal) };
-  });
-  const versionChanged = Number(run.formatVersion) !== RUN_FORMAT_VERSION;
-  let normalized: RunDocument = namesChanged || versionChanged
-    ? { ...run, formatVersion: RUN_FORMAT_VERSION, army }
-    : run;
+    const validName = typeof unit.name === 'string'
+      && unit.name.trim().length > 0
+      && unit.name.length <= 80;
+    assignedNames.set(
+      unit.id,
+      !replacesLegacyNames && validName
+        ? unit.name
+        : runUnitName(run.seed, unit.type, roleOrdinal),
+    );
+  }
 
+  let changed = false;
+  const rewriteArmy = (army: readonly RunArmyUnit[]): RunArmyUnit[] => army.map((unit) => {
+    const number = assignedNumbers.get(unit.id) ?? 1;
+    const name = assignedNames.get(unit.id) ?? runUnitName(run.seed, unit.type, number - 1);
+    if (unit.number === number && unit.name === name) return unit;
+    changed = true;
+    return { ...unit, name, number };
+  });
+  const army = rewriteArmy(run.army);
+  let shop = run.shop;
+  if (shop) {
+    const soldUnits = (shop.soldUnits ?? []).map((entry) => {
+      const [unit] = rewriteArmy([entry.unit]);
+      return unit === entry.unit ? entry : { ...entry, unit };
+    });
+    const entrySnapshot = shop.entrySnapshot
+      ? { ...shop.entrySnapshot, army: rewriteArmy(shop.entrySnapshot.army) }
+      : shop.entrySnapshot;
+    if (soldUnits !== shop.soldUnits || entrySnapshot !== shop.entrySnapshot) {
+      shop = { ...shop, soldUnits, entrySnapshot };
+    }
+  }
+
+  const existingNumbers = run.nextArmyUnitNumberByType;
+  const nextArmyUnitNumberByType = initialArmyNumberState();
+  for (const type of ARMY_PIECE_ORDER) {
+    const highestUsed = used[type].size ? Math.max(...used[type]) + 1 : 1;
+    const existing = Number.isSafeInteger(existingNumbers?.[type]) && existingNumbers[type] > 0
+      ? existingNumbers[type]
+      : 1;
+    nextArmyUnitNumberByType[type] = Math.max(highestUsed, existing);
+  }
   if (
-    normalized.phase !== 'shop'
-    || !normalized.shop
-    || (Number.isSafeInteger(normalized.shop.victoryGoldTenths) && normalized.shop.victoryGoldTenths >= 0)
-  ) return normalized;
-  const battle = normalized.war.battles[normalized.shop.afterBattleIndex];
-  if (!battle) return normalized;
-  const reward = battleVictoryGoldTenths(battle.level);
-  normalized = {
-    ...normalized,
-    goldTenths: Math.max(0, normalized.goldTenths + reward - GOLD_SCALE),
-    shop: { ...normalized.shop, victoryGoldTenths: reward },
-  };
-  return normalized;
+    !existingNumbers
+    || ARMY_PIECE_ORDER.some((type) => existingNumbers[type] !== nextArmyUnitNumberByType[type])
+  ) changed = true;
+
+  return { army, shop, nextArmyUnitNumberByType, changed };
+}
+
+export function normalizeRunDocument(run: RunDocument): RunDocument {
+  let next = run;
+  if (
+    run.phase !== 'shop'
+    || !run.shop
+    || (Number.isSafeInteger(run.shop.victoryGoldTenths) && run.shop.victoryGoldTenths >= 0)
+  ) {
+    // Current documents already carry the exact reward.
+  } else {
+    const battle = run.war.battles[run.shop.afterBattleIndex];
+    if (battle) {
+      const reward = battleVictoryGoldTenths(battle.level);
+      next = {
+        ...run,
+        goldTenths: Math.max(0, run.goldTenths + reward - GOLD_SCALE),
+        shop: { ...run.shop, victoryGoldTenths: reward },
+      };
+    }
+  }
+
+  const identity = normalizedArmyIdentity(next);
+  const versionChanged = Number(next.formatVersion) !== RUN_FORMAT_VERSION;
+  if (identity.changed || versionChanged) {
+    next = {
+      ...next,
+      formatVersion: RUN_FORMAT_VERSION,
+      army: identity.army,
+      shop: identity.shop,
+      nextArmyUnitNumberByType: identity.nextArmyUnitNumberByType,
+    };
+  }
+  if (next.phase === 'shop' && next.shop && (!next.shop.entrySnapshot || !Array.isArray(next.shop.soldUnits))) {
+    const paidRelicBought = next.shop.paidRelicBought === true;
+    next = {
+      ...next,
+      shop: {
+        ...next.shop,
+        soldUnits: Array.isArray(next.shop.soldUnits) ? next.shop.soldUnits : [],
+        entrySnapshot: next.shop.entrySnapshot ?? createShopEntrySnapshot(next, paidRelicBought),
+      },
+    };
+  }
+  return next;
 }
 
 function addArmyPieces(
   run: RunDocument,
   pieces: readonly PurchasablePieceType[],
   source: RunArmyUnit['source'],
-): Pick<RunDocument, 'army' | 'nextArmyUnitSequence'> {
+): Pick<RunDocument, 'army' | 'nextArmyUnitSequence' | 'nextArmyUnitNumberByType'> {
   let sequence = run.nextArmyUnitSequence;
-  const roleOrdinals = run.army.reduce<Record<RunArmyPieceType, number>>((counts, unit) => {
-    counts[unit.type] += 1;
-    return counts;
-  }, { pawn: 0, knight: 0, bishop: 0, rook: 0, queen: 0, king: 0 });
+  const nextArmyUnitNumberByType = { ...run.nextArmyUnitNumberByType };
   const added = pieces.map((type): RunArmyUnit => {
+    const number = nextArmyUnitNumberByType[type];
     const unit = {
       id: `run-unit-${sequence}`,
-      name: runUnitName(run.seed, type, roleOrdinals[type]),
+      name: runUnitName(run.seed, type, number - 1),
       type,
+      number,
       abilities: [],
       source,
     };
-    roleOrdinals[type] += 1;
     sequence += 1;
+    nextArmyUnitNumberByType[type] += 1;
     return unit;
   });
-  return { army: [...run.army, ...added], nextArmyUnitSequence: sequence };
+  return {
+    army: [...run.army, ...added],
+    nextArmyUnitSequence: sequence,
+    nextArmyUnitNumberByType,
+  };
 }
 
 export function chooseDraft(run: RunDocument, draftId: DraftOffer['draftId']): RunDocument {
@@ -632,6 +784,7 @@ export function openShop(run: RunDocument, survivingUnitIds: readonly string[]):
       };
     }
   }
+  const entrySnapshot = createShopEntrySnapshot(next, paidRelicBought);
   return touch({
     ...next,
     shop: {
@@ -644,6 +797,8 @@ export function openShop(run: RunDocument, survivingUnitIds: readonly string[]):
       chosenLootRelicId: null,
       paidRelicOffer,
       paidRelicBought,
+      soldUnits: [],
+      entrySnapshot,
     },
   });
 }
@@ -671,7 +826,51 @@ export function sellArmyUnit(run: RunDocument, unitId: string): RunDocument {
     ...run,
     army: run.army.filter((candidate) => candidate.id !== unitId),
     goldTenths: run.goldTenths + proceedsTenths,
+    shop: run.shop
+      ? {
+          ...run.shop,
+          soldUnits: [...run.shop.soldUnits, { unit: { ...unit, abilities: [...unit.abilities] }, proceedsTenths }],
+        }
+      : null,
   });
+}
+
+export function resetShop(run: RunDocument): RunDocument {
+  if (run.phase !== 'shop' || !run.shop?.entrySnapshot) return run;
+  const snapshot = run.shop.entrySnapshot;
+  return touch({
+    ...run,
+    goldTenths: snapshot.goldTenths,
+    army: cloneArmy(snapshot.army),
+    relics: [...snapshot.relics],
+    seenRelics: [...snapshot.seenRelics],
+    conflictPaidRelics: cloneConflictPaidRelics(snapshot.conflictPaidRelics),
+    nextArmyUnitSequence: snapshot.nextArmyUnitSequence,
+    nextArmyUnitNumberByType: { ...snapshot.nextArmyUnitNumberByType },
+    shop: {
+      ...run.shop,
+      purchasedBundleId: null,
+      chosenLootRelicId: null,
+      paidRelicBought: snapshot.paidRelicBought,
+      soldUnits: [],
+    },
+  });
+}
+
+export function shopHasChanges(run: RunDocument): boolean {
+  if (run.phase !== 'shop' || !run.shop?.entrySnapshot) return false;
+  const snapshot = run.shop.entrySnapshot;
+  return (
+    run.goldTenths !== snapshot.goldTenths
+    || run.nextArmyUnitSequence !== snapshot.nextArmyUnitSequence
+    || run.shop.purchasedBundleId !== null
+    || run.shop.chosenLootRelicId !== null
+    || run.shop.paidRelicBought !== snapshot.paidRelicBought
+    || run.shop.soldUnits.length > 0
+    || JSON.stringify(run.army) !== JSON.stringify(snapshot.army)
+    || JSON.stringify(run.relics) !== JSON.stringify(snapshot.relics)
+    || JSON.stringify(run.conflictPaidRelics) !== JSON.stringify(snapshot.conflictPaidRelics)
+  );
 }
 
 export function takeLootRelic(run: RunDocument, relic: RunRelicId, targetUnitId?: string): RunDocument {

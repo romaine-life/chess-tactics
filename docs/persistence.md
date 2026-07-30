@@ -29,6 +29,7 @@ Durable document and live-content tables are created by the inline migrations in
 | `predrawn_background_raw_contract_bindings` | immutable one-row-per-version proof of historically absent Raw Pipeline Source coordinate-basis/viewing-pane metadata, pinned to exact saved-Level frame/bounds, bytes, provenance, and geometry | internal; effective raw-source contract is projected with background-version reads | written only inside fenced processing-attempt creation after exact server-held saved-Level proof; GET/list/picker never writes |
 | `public_maps` | owner-free snapshot of an explicitly published user Level | `POST /api/maps/publish`, `GET /api/maps/:publicId` | publish requires the signed-in owner; snapshot reads are public |
 | `campaigns` | per signed-in owner (`PK (owner_email, id)`) | `/api/campaigns`, `/api/campaigns/:id`, `/api/campaigns/:id/levels` | sign-in required |
+| `active_runs` | one current roguelike Run document per signed-in owner, including its stable army identities and resettable current-shop entry snapshot | `/api/active-run` | sign-in required; compare-and-swap revision on mutation |
 | `design_portfolios` | global, by id | `/api/design-portfolios/:id` | GET public, PUT requires sign-in (designer) |
 | `prop_seats` | one complete global prop geometry/tuning document (`default`) | `/api/prop-seats/default` | GET public, PUT requires admin |
 | `sfx_profiles` | one complete global SFX metadata/mix/assignment document (`default`) | `/api/sfx-profiles/default` | GET public, optimistic PUT requires admin |
@@ -48,6 +49,15 @@ without normalization undoing the player's choice. See
 Per-user scoping means each user has their own `id` namespace — two users can
 both have a level `my-level` without colliding, and neither can read or
 overwrite the other's. Writes upsert and bump a `revision`.
+
+Per [ADR-0193](adr/0193-runs-are-war-driven-account-persisted-and-share-the-skirmish-shell.md),
+anonymous Run progress remains browser-local while a signed-in account owns one
+compare-and-swap protected `active_runs` document. Per
+[ADR-0230](adr/0230-run-shops-separate-buying-army-inspection-and-selling.md),
+that document also owns each unit's stable per-piece-type number and the current
+shop's entry snapshot. Shop purchases, sales, and relic choices save normally;
+**Reset Shop** restores the snapshot while retaining the exact offers already
+dealt for that visit.
 
 The global `prop_seats/default` document is also compare-and-swap protected.
 Its admin PUT must send `expectedRevision`: `null` creates only when the row is

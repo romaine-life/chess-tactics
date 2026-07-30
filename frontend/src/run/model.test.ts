@@ -17,7 +17,9 @@ import {
   normalizeRunDocument,
   openShop,
   prepareDeployment,
+  resetShop,
   sellArmyUnit,
+  shopHasChanges,
   takeLootRelic,
   type RunDocument,
   type RunWarSnapshot,
@@ -58,6 +60,12 @@ describe('Run piece economy', () => {
     expect(run.army.map((unit) => unit.type)).toEqual(['king', 'pawn', 'pawn', 'pawn']);
     expect(run.army.every((unit) => unit.name.length > 0)).toBe(true);
     expect(new Set(run.army.map((unit) => unit.name)).size).toBe(run.army.length);
+    expect(run.army.map((unit) => [unit.type, unit.number])).toEqual([
+      ['king', 1],
+      ['pawn', 1],
+      ['pawn', 2],
+      ['pawn', 3],
+    ]);
     expect(run.draftOffers).toHaveLength(2);
     expect(new Set(run.draftOffers.map((offer) => offer.draftId)).size).toBe(2);
     expect(run.draftOffers.every((offer) => offer.value === 6)).toBe(true);
@@ -82,6 +90,17 @@ describe('Run piece economy', () => {
     expect(buyBundle(bought, second)).toBe(bought);
   });
 
+  it('assigns stable per-type numbers to acquired units', () => {
+    let run = createRun(war(), 91);
+    const offer = run.draftOffers.find((candidate) => (
+      candidate.pieces.filter((piece) => piece === 'pawn').length >= 1
+    )) ?? run.draftOffers[0];
+    run = chooseDraft(run, offer.draftId);
+    const pawnNumbers = run.army.filter((unit) => unit.type === 'pawn').map((unit) => unit.number);
+    expect(new Set(pawnNumbers).size).toBe(pawnNumbers.length);
+    expect(pawnNumbers.slice(0, 3)).toEqual([1, 2, 3]);
+  });
+
   it('sells every non-King and formats Fair Scales quarter-gold exactly', () => {
     let shop = openShop(deployedRun(), []);
     shop = acquireRelic(shop, 'fair-scales');
@@ -89,7 +108,27 @@ describe('Run piece economy', () => {
     const sold = sellArmyUnit(shop, pawn.id);
     expect(sold.goldTenths - shop.goldTenths).toBe(7.5);
     expect(formatGold(7.5)).toBe('0.75');
+    expect(sold.shop?.soldUnits).toEqual([{ unit: pawn, proceedsTenths: 7.5 }]);
     expect(sellArmyUnit(sold, 'run-king')).toBe(sold);
+  });
+
+  it('resets the complete shop transaction without rerolling its offers', () => {
+    let shop = openShop({ ...deployedRun(29), goldTenths: 100 * GOLD_SCALE }, []);
+    const originalOffers = [...shop.shop!.bundleOfferIds];
+    const originalArmy = structuredClone(shop.army);
+    const originalGold = shop.goldTenths;
+    const bought = shop.shop!.bundleOfferIds[0];
+    shop = buyBundle(shop, bought);
+    shop = sellArmyUnit(shop, shop.army.find((unit) => unit.type !== 'king')!.id);
+    expect(shopHasChanges(shop)).toBe(true);
+
+    const reset = resetShop(shop);
+    expect(reset.shop?.bundleOfferIds).toEqual(originalOffers);
+    expect(reset.shop?.purchasedBundleId).toBeNull();
+    expect(reset.shop?.soldUnits).toEqual([]);
+    expect(reset.army).toEqual(originalArmy);
+    expect(reset.goldTenths).toBe(originalGold);
+    expect(shopHasChanges(reset)).toBe(false);
   });
 });
 
@@ -185,6 +224,29 @@ describe('Run progression and relic offers', () => {
 
     expect(upgraded.formatVersion).toBe(3);
     expect(upgraded.army.map((unit) => unit.name)).toEqual(current.army.map((unit) => unit.name));
+    expect(normalizeRunDocument(upgraded)).toBe(upgraded);
+  });
+
+  it('normalizes legacy unit identities and shop reset state once', () => {
+    const current = openShop(deployedRun(12, war(2)), []);
+    const legacy = {
+      ...current,
+      army: current.army.map(({ number: _number, ...unit }) => unit),
+      nextArmyUnitNumberByType: undefined,
+      shop: {
+        ...current.shop!,
+        soldUnits: undefined,
+        entrySnapshot: undefined,
+      },
+    } as unknown as RunDocument;
+    const upgraded = normalizeRunDocument(legacy);
+
+    for (const type of new Set(upgraded.army.map((unit) => unit.type))) {
+      const numbers = upgraded.army.filter((unit) => unit.type === type).map((unit) => unit.number);
+      expect(numbers).toEqual(Array.from({ length: numbers.length }, (_, index) => index + 1));
+    }
+    expect(upgraded.shop?.soldUnits).toEqual([]);
+    expect(upgraded.shop?.entrySnapshot.army).toEqual(upgraded.army);
     expect(normalizeRunDocument(upgraded)).toBe(upgraded);
   });
 

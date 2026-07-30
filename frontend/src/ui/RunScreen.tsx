@@ -14,7 +14,6 @@ import { useConfirm } from './shared/ConfirmDialog';
 import {
   GOLD_SCALE,
   PIECE_BUNDLE_BY_ID,
-  PIECE_LABEL,
   PIECE_VALUE,
   RUN_RELIC_BY_ID,
   battleVictoryGoldTenths,
@@ -30,9 +29,11 @@ import {
   observeRunUnitDeath,
   openShop,
   prepareDeployment,
+  resetShop,
   restartBattle,
   sellArmyUnit,
   setDeploymentChoices,
+  shopHasChanges,
   takeLootRelic,
   type RunDocument,
   type PieceBundle,
@@ -48,9 +49,24 @@ import {
 import { useActiveRun } from '../run/store';
 import { RunRelicIcon } from './RunRelics';
 import { RunGoldAmount } from './RunResources';
+import {
+  DEFAULT_RUN_ARMY_FILTERS,
+  DEFAULT_RUN_SELL_FILTERS,
+  RunArmyWorkspace,
+  RunSellWorkspace,
+  runUnitIdentifier,
+  runUnitRosterLabel,
+  type RunArmyFilters,
+  type RunSellFilters,
+} from './RunArmyWorkspace';
 
 const PLAYER_BUNDLE_PALETTE = paletteForSide('player');
-const PLAYER_BUNDLE_FACING = defaultFacingForSide('player');
+const PLAYER_BUNDLE_FACING = 'south' as const;
+type RunScreenView = 'primary' | 'army' | 'sell';
+
+function visibleRunRelicCount(run: RunDocument): number {
+  return run.relics.filter((relicId) => Boolean(RUN_RELIC_BY_ID[relicId])).length;
+}
 
 export function RunBundleCard({
   bundle,
@@ -147,50 +163,108 @@ function useRunAbandon(run: RunDocument): {
   return { abandonDialog: dialog, abandoning, requestAbandon };
 }
 
-function RunArmyControls({
+function RunMetaControls({
   run,
-  selling = false,
+  view,
+  onNavigate,
   showAbandon = true,
 }: {
   run: RunDocument;
-  selling?: boolean;
+  view: RunScreenView;
+  onNavigate: (view: RunScreenView) => void;
   showAbandon?: boolean;
 }): ReactElement {
   const replace = useActiveRun((state) => state.replace);
   const { abandonDialog, abandoning, requestAbandon } = useRunAbandon(run);
+  const shop = run.phase === 'shop' ? run.shop : null;
+  const canLeave = !shop || shop.lootRelicOffers.length === 0 || shop.chosenLootRelicId !== null;
+  const primaryLabel = run.phase === 'draft'
+    ? 'Muster'
+    : run.phase === 'deployment'
+      ? 'Deployment'
+      : run.phase === 'battle'
+        ? 'Battle'
+        : run.phase === 'victory'
+          ? 'Victory'
+          : 'Shop';
   return (
     <>
       {abandonDialog}
-      <section className="run-army" aria-label="Persistent army">
-        <h3>Army</h3>
-        <div className="run-army-list">
-          {run.army.map((unit) => {
-            const sale = PIECE_VALUE[unit.type] * (hasRelic(run, 'fair-scales') ? 0.75 : 0.5);
-            return (
-              <div className="run-army-unit" key={unit.id}>
-                <span className="run-army-unit-identity">
-                  <strong>{unit.name}</strong>
-                  <small>{PIECE_LABEL[unit.type]}</small>
-                </span>
-                {unit.abilities.includes('discipline') ? <small>Discipline</small> : null}
-                {selling && unit.type !== 'king' ? (
-                  <button
-                    type="button"
-                    data-ui-sfx="gold-sell"
-                    data-chrome-unit="inner-text-button"
-                    className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
-                    onClick={() => replace(sellArmyUnit(run, unit.id))}
-                  >
-                    <span>Sell</span>
-                    <RunGoldAmount valueTenths={sale * GOLD_SCALE} className="run-gold-amount--button" />
-                  </button>
-                ) : unit.type === 'king' ? <small>Retained</small> : null}
-              </div>
-            );
-          })}
+      <section className="run-meta-controls" aria-label="Run controls">
+        <div className="skirmish-view-group">
+          <span className="skirmish-eyebrow">{shop ? 'Shop views' : 'Run views'}</span>
+          <div className="run-meta-navigation">
+            <button
+              type="button"
+              data-chrome-unit="inner-text-button"
+              data-testid="run-view-primary"
+              className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === 'primary' && 'active')}
+              aria-pressed={view === 'primary'}
+              onClick={() => onNavigate('primary')}
+            >
+              {primaryLabel}
+            </button>
+            <button
+              type="button"
+              data-chrome-unit="inner-text-button"
+              data-testid="run-view-army"
+              className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === 'army' && 'active')}
+              aria-pressed={view === 'army'}
+              onClick={() => onNavigate('army')}
+            >
+              Army
+            </button>
+            {shop ? (
+              <button
+                type="button"
+                data-chrome-unit="inner-text-button"
+                data-testid="run-view-sell"
+                className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === 'sell' && 'active')}
+                aria-pressed={view === 'sell'}
+                onClick={() => onNavigate('sell')}
+              >
+                Sell Units
+              </button>
+            ) : null}
+          </div>
         </div>
-        {showAbandon ? (
+        {shop ? (
           <div className="skirmish-view-group">
+            <span className="skirmish-eyebrow">Shop</span>
+            <div className="run-meta-navigation">
+              <button
+                type="button"
+                data-chrome-unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
+                disabled={!shopHasChanges(run)}
+                data-testid="reset-run-shop"
+                onClick={() => {
+                  replace(resetShop(run));
+                  onNavigate('primary');
+                }}
+              >
+                Reset Shop
+              </button>
+              <button
+                type="button"
+                data-chrome-unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
+                disabled={!canLeave}
+                data-testid="continue-run-shop"
+                title={canLeave ? undefined : 'Choose one Loot relic before continuing.'}
+                onClick={() => {
+                  replace(prepareDeployment(leaveShop(run)));
+                  onNavigate('primary');
+                }}
+              >
+                Continue to next Battle
+              </button>
+            </div>
+            {!canLeave ? <p className="skirmish-grid-hint">Choose one Loot relic before continuing.</p> : null}
+          </div>
+        ) : null}
+        {showAbandon ? (
+          <div className="skirmish-view-group run-meta-abandon">
             <span className="skirmish-eyebrow">Run</span>
             <div className="skirmish-view-row">
               <button
@@ -211,18 +285,28 @@ function RunArmyControls({
   );
 }
 
-function DraftPanel({ run }: { run: RunDocument }): ReactElement {
+function DraftPanel({
+  run,
+  view,
+  onNavigate,
+  armyWorkspace,
+}: {
+  run: RunDocument;
+  view: RunScreenView;
+  onNavigate: (view: RunScreenView) => void;
+  armyWorkspace: ReactElement;
+}): ReactElement {
   const replace = useActiveRun((state) => state.replace);
   return (
     <SkirmishShell
-      className={`run-screen${run.relics.length ? ' has-relics' : ''}`}
+      className={`run-screen${visibleRunRelicCount(run) ? ' has-relics' : ''}`}
       testId="run-screen"
       titleBarContent={<RunTitleBarStatus run={run} />}
       relicIds={run.relics}
-      controlsContent={<RunArmyControls run={run} />}
+      controlsContent={<RunMetaControls run={run} view={view} onNavigate={onNavigate} />}
       hudProps={{ enableGlobalShortcuts: false }}
     >
-      <main className="run-workspace">
+      {view === 'army' ? armyWorkspace : <main className="run-workspace">
         <OuterChromeBox chromeConsumer="run-draft" titled className="run-panel">
           <OuterChromeHeader title="Muster your army" />
           <p>Your King and three Pawns are ready. Choose one of the two dealt six-point reinforcements.</p>
@@ -237,12 +321,22 @@ function DraftPanel({ run }: { run: RunDocument }): ReactElement {
             ))}
           </div>
         </OuterChromeBox>
-      </main>
+      </main>}
     </SkirmishShell>
   );
 }
 
-function DeploymentPanel({ run }: { run: RunDocument }): ReactElement {
+function DeploymentPanel({
+  run,
+  view,
+  onNavigate,
+  armyWorkspace,
+}: {
+  run: RunDocument;
+  view: RunScreenView;
+  onNavigate: (view: RunScreenView) => void;
+  armyWorkspace: ReactElement;
+}): ReactElement {
   const replace = useActiveRun((state) => state.replace);
   const prepared = run.deployment ? run : prepareDeployment(run);
   useEffect(() => {
@@ -281,14 +375,14 @@ function DeploymentPanel({ run }: { run: RunDocument }): ReactElement {
 
   return (
     <SkirmishShell
-      className={`run-screen${prepared.relics.length ? ' has-relics' : ''}`}
+      className={`run-screen${visibleRunRelicCount(prepared) ? ' has-relics' : ''}`}
       testId="run-screen"
       titleBarContent={<RunTitleBarStatus run={prepared} />}
       relicIds={prepared.relics}
-      controlsContent={<RunArmyControls run={prepared} />}
+      controlsContent={<RunMetaControls run={prepared} view={view} onNavigate={onNavigate} />}
       hudProps={{ enableGlobalShortcuts: false }}
     >
-      <main className="run-workspace">
+      {view === 'army' ? armyWorkspace : <main className="run-workspace">
         <OuterChromeBox chromeConsumer="run-deployment" titled className="run-panel run-deployment-panel">
         <OuterChromeHeader title={`Deploy — ${level.name}`} />
         <p>{prepared.war.description || 'An authored War Battle.'}</p>
@@ -305,7 +399,7 @@ function DeploymentPanel({ run }: { run: RunDocument }): ReactElement {
                     checked={chosenBlocked.includes(unit.id)}
                     onChange={() => toggleBlocked(unit.id)}
                   />
-                  {unit.name} — {PIECE_LABEL[unit.type]}
+                  {runUnitRosterLabel(unit)}
                 </label>
               ))}
             </div>
@@ -325,7 +419,7 @@ function DeploymentPanel({ run }: { run: RunDocument }): ReactElement {
                 .map(([, cell]) => cell));
               return (
                 <label className="run-placement-row" key={unitId}>
-                  <span>{unit ? `${unit.name} — ${PIECE_LABEL[unit.type]}` : unitId}</span>
+                  <span>{unit ? runUnitRosterLabel(unit) : unitId}</span>
                   <select
                     value={prepared.deployment?.manualPlacements[unitId] ?? ''}
                     onChange={(event) => setManual(unitId, event.target.value)}
@@ -380,7 +474,7 @@ function DeploymentPanel({ run }: { run: RunDocument }): ReactElement {
           embedded
           actions={<p className="run-preview-note">{Object.keys(layout.placements).length} deployed · {layout.blockedUnitIds.length} in reserve</p>}
         />
-      </main>
+      </main>}
     </SkirmishShell>
   );
 }
@@ -416,7 +510,7 @@ function RelicOffer({
         <select value={target} onChange={(event) => setTarget(event.target.value)} aria-label="Discipline target">
           <option value="">Choose a unit…</option>
           {run.army.map((unit) => (
-            <option key={unit.id} value={unit.id}>{unit.name} — {PIECE_LABEL[unit.type]}</option>
+            <option key={unit.id} value={unit.id}>{runUnitRosterLabel(unit)}</option>
           ))}
         </select>
       ) : null}
@@ -433,23 +527,34 @@ function RelicOffer({
   );
 }
 
-function ShopPanel({ run }: { run: RunDocument }): ReactElement {
+function ShopPanel({
+  run,
+  view,
+  onNavigate,
+  armyWorkspace,
+  sellWorkspace,
+}: {
+  run: RunDocument;
+  view: RunScreenView;
+  onNavigate: (view: RunScreenView) => void;
+  armyWorkspace: ReactElement;
+  sellWorkspace: ReactElement;
+}): ReactElement {
   const replace = useActiveRun((state) => state.replace);
   const shop = run.shop!;
   const victoryGoldTenths = Number.isSafeInteger(shop.victoryGoldTenths) && shop.victoryGoldTenths >= 0
     ? shop.victoryGoldTenths
     : battleVictoryGoldTenths(run.war.battles[shop.afterBattleIndex].level);
-  const canLeave = shop.lootRelicOffers.length === 0 || shop.chosenLootRelicId !== null;
   return (
     <SkirmishShell
-      className={`run-screen${run.relics.length ? ' has-relics' : ''}`}
+      className={`run-screen${visibleRunRelicCount(run) ? ' has-relics' : ''}`}
       testId="run-screen"
       titleBarContent={<RunTitleBarStatus run={run} />}
       relicIds={run.relics}
-      controlsContent={<RunArmyControls run={run} selling />}
+      controlsContent={<RunMetaControls run={run} view={view} onNavigate={onNavigate} />}
       hudProps={{ enableGlobalShortcuts: false }}
     >
-      <main className="run-workspace">
+      {view === 'army' ? armyWorkspace : view === 'sell' ? sellWorkspace : <main className="run-workspace">
         <OuterChromeBox chromeConsumer="run-shop" titled className="run-panel run-shop-panel">
         <OuterChromeHeader title={run.war.battles[shop.afterBattleIndex]?.loot ? 'Loot Shop' : 'Shop'} />
         <div className="run-shop-rules">
@@ -515,40 +620,41 @@ function ShopPanel({ run }: { run: RunDocument }): ReactElement {
           </section>
         ) : null}
 
-        <button
-          type="button"
-          data-chrome-unit="inner-text-button"
-          className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-          disabled={!canLeave}
-          onClick={() => replace(prepareDeployment(leaveShop(run)))}
-        >
-          Continue to next Battle
-        </button>
         </OuterChromeBox>
-      </main>
+      </main>}
     </SkirmishShell>
   );
 }
 
-function VictoryPanel({ run }: { run: RunDocument }): ReactElement {
+function VictoryPanel({
+  run,
+  view,
+  onNavigate,
+  armyWorkspace,
+}: {
+  run: RunDocument;
+  view: RunScreenView;
+  onNavigate: (view: RunScreenView) => void;
+  armyWorkspace: ReactElement;
+}): ReactElement {
   const abandon = useActiveRun((state) => state.abandon);
   return (
     <SkirmishShell
-      className={`run-screen${run.relics.length ? ' has-relics' : ''}`}
+      className={`run-screen${visibleRunRelicCount(run) ? ' has-relics' : ''}`}
       testId="run-screen"
       titleBarContent={<RunTitleBarStatus run={run} />}
       relicIds={run.relics}
-      controlsContent={<RunArmyControls run={run} showAbandon={false} />}
+      controlsContent={<RunMetaControls run={run} view={view} onNavigate={onNavigate} showAbandon={false} />}
       hudProps={{ enableGlobalShortcuts: false }}
     >
-      <main className="run-workspace">
+      {view === 'army' ? armyWorkspace : <main className="run-workspace">
         <OuterChromeBox chromeConsumer="run-victory" titled className="run-panel run-victory-panel">
           <OuterChromeHeader title="War won" />
           <h2>{run.war.name}</h2>
           <p>{run.war.description}</p>
           <p className="run-victory-summary">
             <span>{run.army.length} persistent units</span>
-            <span>{run.relics.length} relics</span>
+            <span>{visibleRunRelicCount(run)} relics</span>
             <RunGoldAmount valueTenths={run.goldTenths} />
           </p>
           <button
@@ -564,12 +670,22 @@ function VictoryPanel({ run }: { run: RunDocument }): ReactElement {
             Finish Run
           </button>
         </OuterChromeBox>
-      </main>
+      </main>}
     </SkirmishShell>
   );
 }
 
-function BattlePanel({ run }: { run: RunDocument }): ReactElement {
+function BattlePanel({
+  run,
+  view,
+  onNavigate,
+  armyWorkspace,
+}: {
+  run: RunDocument;
+  view: RunScreenView;
+  onNavigate: (view: RunScreenView) => void;
+  armyWorkspace: ReactElement;
+}): ReactElement {
   const replace = useActiveRun((state) => state.replace);
   const currentRun = useActiveRun((state) => state.run);
   const { abandonDialog, requestAbandon } = useRunAbandon(run);
@@ -649,13 +765,48 @@ function BattlePanel({ run }: { run: RunDocument }): ReactElement {
   // Subscribe to the current document so a Mercenary Boat cash-out or Reservist event
   // refreshes the hook inputs without restarting the already-live matching board.
   void currentRun;
-  return <>{abandonDialog}<Skirmish runBattle={presentation} /></>;
+  return (
+    <>
+      {abandonDialog}
+      <Skirmish
+        runBattle={presentation}
+        runWorkspace={view === 'army' ? armyWorkspace : null}
+        runArmyOpen={view === 'army'}
+        onToggleRunArmy={() => onNavigate(view === 'army' ? 'primary' : 'army')}
+      />
+    </>
+  );
 }
 
 export function RunScreen(): ReactElement {
   const run = useActiveRun((state) => state.run);
   const hydrated = useActiveRun((state) => state.hydrated);
   const hydrate = useActiveRun((state) => state.hydrate);
+  const replace = useActiveRun((state) => state.replace);
+  const viewScope = run
+    ? `${run.id}:${run.phase}:${run.phase === 'shop' ? run.shop?.afterBattleIndex ?? run.battleIndex : run.battleIndex}`
+    : 'no-run';
+  const filterScope = run?.phase === 'shop'
+    ? `${run.id}:shop:${run.shop?.afterBattleIndex ?? run.battleIndex}`
+    : run
+      ? `${run.id}:outside-shop`
+      : 'no-run';
+  const [viewState, setViewState] = useState<{ scope: string; view: RunScreenView }>({
+    scope: 'no-run',
+    view: 'primary',
+  });
+  const [selectedState, setSelectedState] = useState<{ scope: string; unitId: string | null }>({
+    scope: 'no-run',
+    unitId: null,
+  });
+  const [armyFilterState, setArmyFilterState] = useState<{ scope: string; filters: RunArmyFilters }>({
+    scope: 'no-run',
+    filters: { ...DEFAULT_RUN_ARMY_FILTERS },
+  });
+  const [sellFilterState, setSellFilterState] = useState<{ scope: string; filters: RunSellFilters }>({
+    scope: 'no-run',
+    filters: { ...DEFAULT_RUN_SELL_FILTERS },
+  });
   useEffect(() => { void hydrate(); }, [hydrate]);
 
   if (!hydrated) {
@@ -697,9 +848,64 @@ export function RunScreen(): ReactElement {
       </SkirmishShell>
     );
   }
-  if (run.phase === 'draft') return <DraftPanel run={run} />;
-  if (run.phase === 'deployment') return <DeploymentPanel run={run} />;
-  if (run.phase === 'battle') return <BattlePanel run={run} />;
-  if (run.phase === 'shop' && run.shop) return <ShopPanel run={run} />;
-  return <VictoryPanel run={run} />;
+  const rawView = viewState.scope === viewScope ? viewState.view : 'primary';
+  const view = run.phase !== 'shop' && rawView === 'sell' ? 'primary' : rawView;
+  const selectedUnitId = selectedState.scope === viewScope ? selectedState.unitId : null;
+  const armyFilters = armyFilterState.scope === filterScope
+    ? armyFilterState.filters
+    : { ...DEFAULT_RUN_ARMY_FILTERS };
+  const sellFilters = sellFilterState.scope === filterScope
+    ? sellFilterState.filters
+    : { ...DEFAULT_RUN_SELL_FILTERS };
+  const navigateRunView = (nextView: RunScreenView): void => {
+    setViewState({ scope: viewScope, view: nextView });
+    if (nextView !== 'army') setSelectedState({ scope: viewScope, unitId: null });
+  };
+  const sellUnit = (unitId: string): void => {
+    const latest = useActiveRun.getState().run;
+    if (!latest || latest.id !== run.id) return;
+    const sold = sellArmyUnit(latest, unitId);
+    if (sold !== latest) replace(sold);
+    setSelectedState({ scope: viewScope, unitId: null });
+  };
+  const armyWorkspace = (
+    <RunArmyWorkspace
+      run={run}
+      filters={armyFilters}
+      selectedUnitId={selectedUnitId}
+      onFiltersChange={(filters) => setArmyFilterState({ scope: filterScope, filters })}
+      onSelectUnit={(unitId) => setSelectedState({ scope: viewScope, unitId })}
+      onBack={() => setSelectedState({ scope: viewScope, unitId: null })}
+      onSell={sellUnit}
+    />
+  );
+  const sellWorkspace = (
+    <RunSellWorkspace
+      run={run}
+      filters={sellFilters}
+      onFiltersChange={(filters) => setSellFilterState({ scope: filterScope, filters })}
+      onSell={sellUnit}
+    />
+  );
+  if (run.phase === 'draft') {
+    return <DraftPanel run={run} view={view} onNavigate={navigateRunView} armyWorkspace={armyWorkspace} />;
+  }
+  if (run.phase === 'deployment') {
+    return <DeploymentPanel run={run} view={view} onNavigate={navigateRunView} armyWorkspace={armyWorkspace} />;
+  }
+  if (run.phase === 'battle') {
+    return <BattlePanel run={run} view={view} onNavigate={navigateRunView} armyWorkspace={armyWorkspace} />;
+  }
+  if (run.phase === 'shop' && run.shop) {
+    return (
+      <ShopPanel
+        run={run}
+        view={view}
+        onNavigate={navigateRunView}
+        armyWorkspace={armyWorkspace}
+        sellWorkspace={sellWorkspace}
+      />
+    );
+  }
+  return <VictoryPanel run={run} view={view} onNavigate={navigateRunView} armyWorkspace={armyWorkspace} />;
 }
