@@ -61,7 +61,7 @@ test('already-applied migration 36 remains the immutable drawable-media migratio
   );
 });
 
-test('the exact sparse numeric legacy history upgrades through migration 44', () => {
+test('the exact sparse numeric legacy history upgrades through migration 45', () => {
   const versions = migrationVersions();
   const appliedBeforeUpgrade = new Set(
     versions.filter((version) => version <= 27 || version === 36),
@@ -95,6 +95,10 @@ test('the exact sparse numeric legacy history upgrades through migration 44', ()
   assert.ok(
     pending.includes(44),
     'War workspaces and account Run persistence must have their own pending migration 44',
+  );
+  assert.ok(
+    pending.includes(45),
+    'owner-scoped Run relic statistics must have their own pending migration 45',
   );
 
   const migration37 = inlineMigration(37);
@@ -255,6 +259,22 @@ test('the exact sparse numeric legacy history upgrades through migration 44', ()
     /CREATE TABLE IF NOT EXISTS\s+active_runs[\s\S]*owner_email\s+text\s+PRIMARY KEY[\s\S]*revision\s+integer/i,
     'migration 44 must create one revisioned active Run document per account',
   );
+  const migration45 = inlineMigration(45);
+  assert.equal(
+    migration45.name,
+    'owner-scoped idempotent Run relic statistics',
+    'migration 45 must retain its applied database identity',
+  );
+  assert.match(
+    migration45.sql,
+    /CREATE TABLE IF NOT EXISTS\s+run_relic_stat_events[\s\S]*PRIMARY KEY\s*\(\s*owner_email,\s*event_id,\s*relic_id\s*\)/i,
+    'migration 45 must make repeated event delivery idempotent per owner and relic',
+  );
+  assert.match(
+    migration45.sql,
+    /CHECK\s*\(\s*event_kind IN\s*\(\s*'picked',\s*'battle-win'\s*\)\s*\)/i,
+    'migration 45 must keep the relic-stat event vocabulary closed',
+  );
 
   const migration36 = inlineMigration(36);
   const allMigrations = versions.map(inlineMigration);
@@ -281,7 +301,7 @@ test('the exact sparse numeric legacy history upgrades through migration 44', ()
   );
   assert.deepEqual(
     plan.pending.map((entry) => entry.version),
-    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44],
+    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45],
     'the bridge must fill the historical gap before applying every post-36 contract',
   );
   assert.throws(
@@ -313,7 +333,7 @@ test('the exact sparse numeric legacy history upgrades through migration 44', ()
   );
 });
 
-test('required-schema readiness and repair enforce the migrations 37 through 43 contracts', () => {
+test('required-schema readiness and repair enforce the migrations 37 through 45 contracts', () => {
   const relations = sourceSection(
     serverSource,
     'const REQUIRED_SCHEMA_RELATIONS = [',
@@ -348,6 +368,16 @@ test('required-schema readiness and repair enforce the migrations 37 through 43 
     repairs,
     /\['predrawn_generation_attempt_events',\s*43\]/,
     'generation-attempt event repair must use the final-state migration',
+  );
+  assert.match(
+    relations,
+    /run_relic_stat_events/,
+    'Run relic-stat events must be required runtime schema once migration 45 is recorded',
+  );
+  assert.match(
+    repairs,
+    /\['run_relic_stat_events',\s*45\]/,
+    'Run relic-stat relation repair must replay migration 45',
   );
   const relationRepair = sourceSection(
     serverSource,
@@ -786,13 +816,13 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
 
   const primaryUpgradeProof = sourceSection(
     smokeSource,
-    'async function validatePrimarySparseNumericMigrationUpgrade43()',
+    'async function validatePrimarySparseNumericMigrationUpgrade45()',
     '\nasync function validateEditorMigration16Preservation()',
   );
   assert.match(
     primaryUpgradeProof,
-    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*44\s*\}/,
-    'the production upgrade proof must require a complete 1-44 history',
+    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*45\s*\}/,
+    'the production upgrade proof must require a complete 1-45 history',
   );
   assert.match(
     primaryUpgradeProof,
@@ -806,8 +836,8 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   );
   assert.match(
     primaryUpgradeProof,
-    /length:\s*8[\s\S]*index\s*\+\s*37/,
-    'the production report must include every post-36 migration through 44',
+    /length:\s*9[\s\S]*index\s*\+\s*37/,
+    'the production report must include every post-36 migration through 45',
   );
   assert.match(
     primaryUpgradeProof,

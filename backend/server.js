@@ -2595,6 +2595,25 @@ const MIGRATIONS = [
       );
     `,
   },
+  {
+    version: 45,
+    name: 'owner-scoped idempotent Run relic statistics',
+    sql: `
+      CREATE TABLE IF NOT EXISTS run_relic_stat_events (
+        owner_email text        NOT NULL,
+        event_id    text        NOT NULL,
+        relic_id    text        NOT NULL,
+        event_kind  text        NOT NULL,
+        created_at  timestamptz NOT NULL DEFAULT now(),
+        PRIMARY KEY (owner_email, event_id, relic_id),
+        CONSTRAINT run_relic_stat_events_kind_check
+          CHECK (event_kind IN ('picked', 'battle-win'))
+      );
+
+      CREATE INDEX IF NOT EXISTS run_relic_stat_events_owner_relic_idx
+        ON run_relic_stat_events (owner_email, relic_id, event_kind);
+    `,
+  },
 ];
 
 let pool = null;
@@ -2629,6 +2648,7 @@ const REQUIRED_SCHEMA_RELATIONS = [
   'predrawn_background_raw_contract_bindings',
   'predrawn_generation_attempts',
   'predrawn_generation_attempt_events',
+  'run_relic_stat_events',
 ];
 const REQUIRED_SCHEMA_REPAIR_MIGRATIONS = new Map([
   ['level_thumbnail_derivatives', 22],
@@ -2643,6 +2663,7 @@ const REQUIRED_SCHEMA_REPAIR_MIGRATIONS = new Map([
   ['predrawn_background_raw_contract_bindings', 35],
   ['predrawn_generation_attempts', 43],
   ['predrawn_generation_attempt_events', 43],
+  ['run_relic_stat_events', 45],
 ]);
 
 function buildPool() {
