@@ -131,13 +131,19 @@ The backend smoke-test exercises the Postgres-backed endpoints, so it needs a
 Postgres. It uses `DATABASE_URL` if set, otherwise self-provisions a throwaway
 local Postgres from system binaries (as on the GitHub-hosted CI runners). Hosts
 without Postgres binaries should set `DATABASE_URL`. The smoke-test explicitly
-runs with `SCHEMA_MIGRATIONS=auto` because its database is throwaway/reset. The
-frontend gate runs without a database:
+runs with `SCHEMA_MIGRATIONS=auto` because its database is throwaway/reset.
+Backend `npm test` builds the production shell exercised by its HTTP smoke test
+and the DOM-free trainer bundle required by its solver smoke test, but does not
+own frontend validation. The frontend gate runs without a database:
 
 ```sh
 cd frontend
 npm run check   # node checks + vitest + tsc
 ```
+
+CI runs those backend and frontend lanes in parallel. The required image job
+depends on both, so registry or deployment work cannot begin until both pass
+without serializing or repeating the frontend gate (ADR-0255).
 
 ## Deploy
 
@@ -146,7 +152,8 @@ its content-fingerprint image for validation, and records the `sha-<commit>`
 alias used by Glimmung test slots. PR images do not own production release state.
 
 Merging to `main` authorizes deployment. Build and Deploy checks out and tests
-that exact merged revision, computes the patch version and a fingerprint over
+that exact merged revision, running backend and frontend validation in parallel
+before it computes the patch version and a fingerprint over
 the complete tracked Docker inputs, explicit `linux/amd64` platform, Buildx
 version, and resolved base-image digest, then builds and pushes the production
 image when it is not already present. The workflow locks both the fingerprint
