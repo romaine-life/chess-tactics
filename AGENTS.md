@@ -112,6 +112,12 @@ contracts whenever the task vocabulary suggests one.
 
 - The backend is a hard dependency. Agents must not use `DEV_NO_BACKEND=1` or
   `DEV_OFFLINE=1`; follow `CLAUDE.md` if startup fails.
+- A missing database migration is a hard stop. If database history records a
+  migration that is absent from the current checkout, do not copy, recreate,
+  temporarily inject, bypass, or remove that migration; do not alter database
+  history; and do not stop the existing named development environment. Report
+  the exact mismatch and wait for the checkout to be synchronized or for
+  explicit owner direction.
 - Run checks proportional to the changed surface. For changes that affect the
   running application, verify the real full app on the exact route and state
   affected. In a named Codex environment, read the stable URL from

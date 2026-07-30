@@ -310,4 +310,21 @@ describe('professional loading architecture guards', () => {
     expect(skirmish).toContain('if (playableSurfaceReady) activateClock()');
     expect(read('./game/store.ts')).toContain('if (!opts.deferClockStart) startClock()');
   });
+
+  it('keeps Battle Restart separate from board-surface destruction', () => {
+    const skirmish = read('./ui/Skirmish.tsx');
+    const replayStart = skirmish.indexOf('const replayLevel = () => {');
+    const replayEnd = skirmish.indexOf('\n  // The title-bar ornament', replayStart);
+    const replay = skirmish.slice(replayStart, replayEnd);
+    expect(replayStart).toBeGreaterThanOrEqual(0);
+    expect(replayEnd).toBeGreaterThan(replayStart);
+    expect(replay).not.toContain('setBoardSurfaceReady(false)');
+    expect(replay).not.toContain('deferClockStart: true');
+    expect(replay).toContain('restartSkirmish({ seed, level })');
+    expect(replay).not.toContain('newSkirmish({ seed, level');
+    expect(skirmish).not.toMatch(/<SkirmishBoard\s+key=/);
+    expect(skirmish).not.toContain('storeSessionEpoch');
+    expect(skirmish).toContain('signature="gameplay-hud"');
+    expect(read('./render/SkirmishBoard.tsx')).toContain("viewKey: `${levelId ?? 'free'}:${boardViewEpoch}`");
+  });
 });

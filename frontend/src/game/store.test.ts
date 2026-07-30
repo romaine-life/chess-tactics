@@ -200,6 +200,19 @@ describe('skirmish store', () => {
     expect(useSkirmish.getState().levelId).toBe('lvl-7');
   });
 
+  it('restarts an identical match without replacing the board presentation', () => {
+    const level = createBlankLevel('run-battle', 'Run Battle');
+    useSkirmish.getState().newSkirmish({ seed: 17, level, deferClockStart: true });
+    const first = useSkirmish.getState();
+
+    useSkirmish.getState().restartSkirmish({ seed: 17, level, deferClockStart: true });
+    const retry = useSkirmish.getState();
+
+    expect(retry.game).toEqual(first.game);
+    expect(retry.sessionEpoch).toBe(first.sessionEpoch + 1);
+    expect(retry.boardViewEpoch).toBe(first.boardViewEpoch);
+  });
+
   it('resumeMatch restores a saved board and reads as resumable for its level', () => {
     // A real (full-board) game stands in for the saved match; label it as a campaign
     // level so the fresh-vs-resume gate has a levelId to key on.

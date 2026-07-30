@@ -295,9 +295,9 @@ export function Skirmish({
   const [boardSurfaceError, setBoardSurfaceError] = useState<Error | null>(null);
   const [hudSurfaceReady, setHudSurfaceReady] = useState(false);
   const newSkirmish = useSkirmish((s) => s.newSkirmish);
+  const restartSkirmish = useSkirmish((s) => s.restartSkirmish);
   const resumeMatch = useSkirmish((s) => s.resumeMatch);
   const activateClock = useSkirmish((s) => s.activateClock);
-  const storeSessionEpoch = useSkirmish((s) => s.sessionEpoch);
   const playableSurfaceReady = boardSurfaceReady && hudSurfaceReady;
   const game = useSkirmish((s) => s.game);
   const screenBoard = useMemo(
@@ -445,8 +445,10 @@ export function Skirmish({
       ? runBattle.seed
       : spawnEventsForLevel(level).length ? Math.floor(Math.random() * 999999) + 1 : useSkirmish.getState().seed;
     if (runBattle) runBattle.onRestart();
-    setBoardSurfaceReady(false);
-    newSkirmish({ seed, level, deferClockStart: true });
+    // ADR-0235: restarting healthy gameplay replaces match state in place. The
+    // already-painted board and HUD remain ready, so the new clock may start
+    // immediately without routing through surface acquisition.
+    restartSkirmish({ seed, level });
   };
 
   // The title-bar ornament diamond doubles as a Retry control in single-player (see the
@@ -1089,7 +1091,7 @@ export function Skirmish({
   const hudContent = boardSettled && !boardSurfaceError ? (
     <PaintedSurfaceBoundary
       surface="gameplay-hud"
-      signature={String(storeSessionEpoch)}
+      signature="gameplay-hud"
       readyToCompose={boardSurfaceReady}
       loadingLabel="Preparing controls…"
       onRetry={() => setHudSurfaceReady(false)}
@@ -1208,6 +1210,9 @@ export function Skirmish({
               </InnerChromeBox>
             ) : boardSettled ? (
               <>
+                {/* ADR-0235: Restart changes match state, not board identity. Keep this
+                  compositor mounted so pieces return to their starting positions without
+                  hiding, reacquiring, or replaying the board's first-frame lifecycle. */}
                 <SkirmishBoard
                   interactive={!net || (netSeatInteractive && !netRelayFrozen)}
                   onSurfaceReady={setBoardSurfaceReady}

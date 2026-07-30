@@ -343,10 +343,17 @@ export interface SkirmishState {
   /** Monotonic match-session identity. Every delayed callback captures this value and
    *  no-ops after any new/resumed/network match replaces its owner. */
   sessionEpoch: number;
+  /** Monotonic identity of the board presentation. Unlike sessionEpoch, this does not
+   *  change for an in-place restart of the same battle, so camera framing and other
+   *  board-owned presentation state remain untouched. */
+  boardViewEpoch: number;
   /** Multiplayer context (null = single-player). When set, the AI never fires and
    *  input is gated to `net.localSide` instead of 'player'. */
   net: NetState | null;
-  newSkirmish: (opts: SkirmishOptions) => void;
+  newSkirmish: (opts: SkirmishOptions & { preserveBoardPresentation?: boolean }) => void;
+  /** Reset match state on the board already being presented. This invalidates async
+   *  match work without replacing, reframing, or replaying the board presentation. */
+  restartSkirmish: (opts: SkirmishOptions) => void;
   /** Begin a deferred player's clock once the playable surface has painted. */
   activateClock: () => void;
   /** Start a multiplayer match: build the shared (level, seed) board, record which
@@ -1003,6 +1010,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   pendingPromotion: null,
   adminMode: null,
   sessionEpoch: 0,
+  boardViewEpoch: 0,
   net: null,
   premoves: [],
   premoveInputOpen: false,
@@ -1055,7 +1063,31 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       : null;
     // An explicit opts.ai wins; otherwise keep the running mode (a HUD retry
     // preserves the A/B lever the route set on entry).
-    set({ game, env, seed: opts.seed, tick: 0, turnsElapsed: 0, objectiveCtx, victoryOverride, resultDetail, selectedId, focusedId: selectedId, log, objective, started: true, levelId: opts.level?.id ?? null, aiMode: opts.ai ?? get().aiMode, clock, pendingPromotion: null, adminMode: null, sessionEpoch: epoch, net: null, premoves: [], premoveInputOpen: false });
+    set({
+      game,
+      env,
+      seed: opts.seed,
+      tick: 0,
+      turnsElapsed: 0,
+      objectiveCtx,
+      victoryOverride,
+      resultDetail,
+      selectedId,
+      focusedId: selectedId,
+      log,
+      objective,
+      started: true,
+      levelId: opts.level?.id ?? null,
+      aiMode: opts.ai ?? get().aiMode,
+      clock,
+      pendingPromotion: null,
+      adminMode: null,
+      sessionEpoch: epoch,
+      boardViewEpoch: opts.preserveBoardPresentation ? get().boardViewEpoch : epoch,
+      net: null,
+      premoves: [],
+      premoveInputOpen: false,
+    });
     // The clock starts with the game — it is the player's move from the first beat
     // (a degenerate instant-draw start is guarded inside startClock).
     if (!opts.deferClockStart) startClock();
@@ -1066,16 +1098,22 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     // squad arriving reads as a roll-call swell, not one loud stack. Silent until a
     // gesture arms the AudioContext — entering a skirmish is one, so the navigating
     // click covers it.
-    game.pieces
-      .filter((pc) => pc.alive && pc.side === 'player')
-      .forEach((pc, i) => {
-        const delay = SPAWN_SFX_BASE_DELAY + i * SPAWN_SFX_STAGGER;
-        playLandingSfx(env, pc.x, pc.y, delay, 0.7);
-        scheduleSessionEffect(() => playArrival({ unitIndex: i }), delay);
-      });
+    if (!opts.preserveBoardPresentation) {
+      game.pieces
+        .filter((pc) => pc.alive && pc.side === 'player')
+        .forEach((pc, i) => {
+          const delay = SPAWN_SFX_BASE_DELAY + i * SPAWN_SFX_STAGGER;
+          playLandingSfx(env, pc.x, pc.y, delay, 0.7);
+          scheduleSessionEffect(() => playArrival({ unitIndex: i }), delay);
+        });
+    }
     // Snapshot the fresh board immediately, so a reload before the first move
     // resumes THIS game rather than re-rolling a different random start.
     persistMatch(get());
+  },
+
+  restartSkirmish: (opts) => {
+    get().newSkirmish({ ...opts, preserveBoardPresentation: true });
   },
 
   newNetMatch: ({ lobbyId, localSide, level, seed }) => {
@@ -1135,6 +1173,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       pendingPromotion: null,
       adminMode: null,
       sessionEpoch: epoch,
+      boardViewEpoch: epoch,
       premoves: [],
       premoveInputOpen: false,
       testMode: false,
@@ -1335,6 +1374,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       pendingPromotion: null,
       adminMode: null,
       sessionEpoch: epoch,
+      boardViewEpoch: epoch,
       // Resume with the clock paused; startClock re-arms the deadline from the
       // banked remainder when it's the player's live turn. A reload isn't thinking
       // time, so the player keeps the time they had at their last move.

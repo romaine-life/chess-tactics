@@ -1077,7 +1077,7 @@ export function SkirmishBoard({
   const [viewViewportSize, setViewViewportSize] = useState<ViewPaneViewportSize | null>(null);
   const game = useSkirmish((s) => s.game);
   const levelId = useSkirmish((s) => s.levelId);
-  const sessionEpoch = useSkirmish((s) => s.sessionEpoch);
+  const boardViewEpoch = useSkirmish((s) => s.boardViewEpoch);
   const env = useSkirmish((s) => s.env);
   const selectedId = useSkirmish((s) => s.selectedId);
   const focusedId = useSkirmish((s) => s.focusedId);
@@ -1211,7 +1211,7 @@ export function SkirmishBoard({
   );
   const { markViewInteraction } = useBoardCameraFraming({
     board: { cols: game.size.cols, rows: game.size.rows },
-    viewKey: `${levelId ?? 'free'}:${sessionEpoch}`,
+    viewKey: `${levelId ?? 'free'}:${boardViewEpoch}`,
     viewport: viewViewportSize,
     minimumZoom: boardMinZoom,
     // The canonical opening fit owns its zoom. setOpeningView raises the interactive ceiling

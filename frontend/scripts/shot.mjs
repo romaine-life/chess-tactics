@@ -21,6 +21,7 @@
 //     [--assert-full-scene-exit]
 //     [--transition-out <path>]
 //     [--assert-immediate-local-control]
+//     [--assert-battle-restart-continuity]
 //     [--back-after-click-ms <ms>]
 //     [--full] [--show-scrollbars] [--allow-motion]
 //
@@ -71,6 +72,7 @@ const assertBackdropContinuity = has('assert-backdrop-continuity');
 const assertFullSceneExit = has('assert-full-scene-exit');
 const transitionOut = flag('transition-out');
 const assertImmediateLocalControl = has('assert-immediate-local-control');
+const assertBattleRestartContinuity = has('assert-battle-restart-continuity');
 const assertEditorViewer = has('assert-editor-viewer');
 const fullPage = has('full');
 const showScrollbars = has('show-scrollbars');
@@ -601,6 +603,90 @@ try {
         };
       });
     }
+    if (assertBattleRestartContinuity) {
+      await page.evaluate(() => {
+        const shell = document.querySelector('[data-testid="skirmish"]');
+        const board = document.querySelector('[data-testid="skirmish-board"]');
+        const viewport = board?.querySelector('.tileset-view-stage.is-board');
+        const art = viewport?.querySelector('.tileset-view-art-layer');
+        const hud = document.querySelector('[data-testid="skirmish-hud"]');
+        if (!shell || !board || !viewport || !art || !hud) {
+          throw new Error('battle restart continuity requires a fully painted Run battle');
+        }
+        const rect = (element) => {
+          const value = element.getBoundingClientRect();
+          return {
+            x: value.x,
+            y: value.y,
+            width: value.width,
+            height: value.height,
+          };
+        };
+        const camera = () => {
+          const style = getComputedStyle(art);
+          return {
+            zoom: style.getPropertyValue('--view-zoom'),
+            panX: style.getPropertyValue('--view-pan-x'),
+            panY: style.getPropertyValue('--view-pan-y'),
+          };
+        };
+        const nodes = { shell, board, viewport, art, hud };
+        const before = {
+          shell: rect(shell),
+          board: rect(board),
+          viewport: rect(viewport),
+          hud: rect(hud),
+          camera: camera(),
+        };
+        const violations = [];
+        const sameRect = (left, right) => (
+          Math.abs(left.x - right.x) < 0.51
+          && Math.abs(left.y - right.y) < 0.51
+          && Math.abs(left.width - right.width) < 0.51
+          && Math.abs(left.height - right.height) < 0.51
+        );
+        let active = true;
+        const sample = () => {
+          if (!active) return;
+          const current = {
+            shell: document.querySelector('[data-testid="skirmish"]'),
+            board: document.querySelector('[data-testid="skirmish-board"]'),
+            viewport: document.querySelector('[data-testid="skirmish-board"] .tileset-view-stage.is-board'),
+            art: document.querySelector('[data-testid="skirmish-board"] .tileset-view-art-layer'),
+            hud: document.querySelector('[data-testid="skirmish-hud"]'),
+          };
+          for (const name of Object.keys(nodes)) {
+            if (current[name] !== nodes[name] || !nodes[name].isConnected) {
+              violations.push({ kind: 'node-replaced', name });
+            }
+          }
+          if (
+            board.classList.contains('is-board-loading')
+            || document.querySelector('.painted-surface-loading, .scene-loading-presentation')
+          ) {
+            violations.push({ kind: 'loading-reentered' });
+          }
+          for (const name of ['shell', 'board', 'viewport', 'hud']) {
+            if (!sameRect(before[name], rect(nodes[name]))) {
+              violations.push({ kind: 'layout-changed', name, before: before[name], after: rect(nodes[name]) });
+            }
+          }
+          const nextCamera = camera();
+          if (JSON.stringify(nextCamera) !== JSON.stringify(before.camera)) {
+            violations.push({ kind: 'camera-changed', before: before.camera, after: nextCamera });
+          }
+          if (violations.length > 30) violations.length = 30;
+          requestAnimationFrame(sample);
+        };
+        window.__ctBattleRestartContinuity = {
+          before,
+          nodes,
+          violations,
+          stop: () => { active = false; },
+        };
+        requestAnimationFrame(sample);
+      });
+    }
     if (assertFullSceneExit) {
       await page.evaluate(() => {
         const director = document.querySelector('[data-scene-phase]');
@@ -670,6 +756,20 @@ try {
         || !localSample.sameBoundary
       ) {
         throw new Error(`immediate local control entered the scene lifecycle: ${JSON.stringify(localSample)}`);
+      }
+    }
+    if (assertBattleRestartContinuity) {
+      await new Promise((resolveSample) => setTimeout(resolveSample, 800));
+      const restartSample = await page.evaluate(() => {
+        const state = window.__ctBattleRestartContinuity;
+        state?.stop();
+        return {
+          before: state?.before ?? null,
+          violations: state?.violations ?? [{ kind: 'assertion-not-installed' }],
+        };
+      });
+      if (restartSample.violations.length > 0) {
+        throw new Error(`battle restart changed board presentation: ${JSON.stringify(restartSample)}`);
       }
     }
     if (assertFullSceneExit) {

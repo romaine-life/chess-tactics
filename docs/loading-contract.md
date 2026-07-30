@@ -15,6 +15,8 @@ The enrollment rule for navigational UI is governed by
 [ADR-0211](adr/0211-navigational-drawing-requires-an-authored-scene-slot.md).
 Transition presentation capability is governed by
 [ADR-0212](adr/0212-scene-transitioning-does-not-imply-loading-presentation.md).
+Non-destructive Battle restart is governed by
+[ADR-0235](adr/0235-battle-restart-is-not-a-board-destructive-operation.md).
 
 ## Readiness vocabulary
 
@@ -102,6 +104,15 @@ selections, sliders, board overlays, inspectors, dialogs, and gameplay commands 
 enter the scene lifecycle unless they replace an authored navigable drawn region. One
 control panel may therefore contain immediate local controls and explicit navigational
 controls without opting the whole panel into or out of transition ownership.
+
+Battle Restart and Retry Battle are canonical immediate gameplay commands. They replace
+mutable match state with its starting state while preserving the mounted board, HUD,
+camera, compositors, decoded resources, and existing painted acknowledgement. They do
+not clear surface readiness, key or remount the board from a match/session epoch, hide
+the Play surface, display Loading/Preparing copy, or reacquire unchanged visual
+dependencies. A genuinely different board, level, installed-art identity, or visual
+contract is a board replacement or new-Battle operation and follows the painted-frame
+acquisition lifecycle; it is not a restart.
 
 The URL is intent, not visible authority. Each scene slot exposes its last committed
 instance and its pending instance separately. Views render from the director-mounted
