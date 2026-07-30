@@ -3900,6 +3900,21 @@ async function main() {
   ) {
     throw new Error(`Workspace did not persist: ${loadedWorkspace.statusCode} ${loadedWorkspace.body}`);
   }
+  const namedPrivateThumbnailUrl = loadedWorkspaceBody.thumbnail_urls?.['smoke-1'] || '';
+  const anonymousNamedPrivateThumbnail = namedPrivateThumbnailUrl
+    ? await get(namedPrivateThumbnailUrl)
+    : { statusCode: 0 };
+  const ownerNamedPrivateThumbnail = namedPrivateThumbnailUrl
+    ? await get(namedPrivateThumbnailUrl, { cookie: '__Host-chess-tactics-access=abc' })
+    : { statusCode: 0, headers: {} };
+  if (
+    !/^\/api\/campaign-workspace\/level-thumbnails\/smoke-1\/[0-9a-f]{64}\.png$/.test(namedPrivateThumbnailUrl)
+    || anonymousNamedPrivateThumbnail.statusCode !== 401
+    || ownerNamedPrivateThumbnail.statusCode !== 200
+    || ownerNamedPrivateThumbnail.headers['content-type'] !== 'image/png'
+  ) {
+    throw new Error(`Named private Level thumbnail was not owner-readable: ${namedPrivateThumbnailUrl} / ${anonymousNamedPrivateThumbnail.statusCode}/${ownerNamedPrivateThumbnail.statusCode}`);
+  }
 
   // Per-user scoping: the rival has their own (empty) workspace.
   const rivalWorkspace = await get('/api/campaign-workspace', { cookie: '__Host-chess-tactics-access=rival' });
