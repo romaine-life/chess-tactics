@@ -32,16 +32,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-and-deploy:
-    name: Build merged image and pin Helm digest
+  backend-tests:
+    name: Test backend
     if: github.event_name == 'workflow_dispatch' || vars.ARM_CLIENT_ID != ''
     runs-on: ubuntu-latest
-    environment: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
-    env:
-      REGISTRY: romainecr.azurecr.io
-      IMAGE: chess-tactics
-    # The backend smoke-test (npm test) exercises the Postgres-backed
-    # persistence endpoints, so the test job needs a real Postgres.
     services:
       postgres:
         image: postgres:16
@@ -56,6 +50,71 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.git_ref || github.sha }}
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+            packages/board-render/package-lock.json
+
+      - name: Test backend
+        working-directory: backend
+        env:
+          DATABASE_URL: postgres://chess_tactics:chess_tactics@localhost:5432/chess_tactics
+        run: |
+          npm ci
+          npm test
+
+  frontend-checks:
+    name: Check frontend contracts
+    if: github.event_name == 'workflow_dispatch' || vars.ARM_CLIENT_ID != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.git_ref || github.sha }}
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            packages/board-render/package-lock.json
+
+      - name: Check frontend contracts
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run check
+
+      - name: Test immutable-image release contract
+        run: node --test scripts/immutable-image-release.test.mjs
+
+  build-and-deploy:
+    name: Build merged image and pin Helm digest
+    if: github.event_name == 'workflow_dispatch' || vars.ARM_CLIENT_ID != ''
+    needs: [backend-tests, frontend-checks]
+    runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
+    env:
+      REGISTRY: romainecr.azurecr.io
+      IMAGE: chess-tactics
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -136,23 +195,6 @@ jobs:
             backend/package-lock.json
             frontend/package-lock.json
             packages/board-render/package-lock.json
-
-      - name: Test app
-        working-directory: backend
-        env:
-          DATABASE_URL: postgres://chess_tactics:chess_tactics@localhost:5432/chess_tactics
-        run: |
-          npm ci
-          npm test
-
-      - name: Check frontend contracts
-        working-directory: frontend
-        run: |
-          npm ci
-          npm run check
-
-      - name: Test immutable-image release contract
-        run: node --test scripts/immutable-image-release.test.mjs
 
       - name: Azure Login
         uses: azure/login@v3

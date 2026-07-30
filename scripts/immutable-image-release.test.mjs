@@ -6,9 +6,11 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const candidatePath = `${root}.github/workflows/docker-build-check.yaml`;
 const productionPath = `${root}.github/workflows/build-and-deploy.yaml`;
+const backendPackagePath = `${root}backend/package.json`;
 const readWorkflow = (path) => readFileSync(path, 'utf8').replaceAll('\r\n', '\n');
 const candidate = readWorkflow(candidatePath);
 const production = readWorkflow(productionPath);
+const backendPackage = JSON.parse(readFileSync(backendPackagePath, 'utf8'));
 
 function workflowStep(source, name) {
   const marker = `      - name: ${name}\n`;
@@ -17,6 +19,52 @@ function workflowStep(source, name) {
   const next = source.indexOf('\n      - name:', start + marker.length);
   return source.slice(start, next === -1 ? source.length : next);
 }
+
+function workflowJob(source, id) {
+  const marker = `  ${id}:\n`;
+  const start = source.indexOf(marker);
+  assert.notEqual(start, -1, `missing workflow job: ${id}`);
+  const remainder = source.slice(start + marker.length);
+  const next = remainder.search(/^  [a-z0-9-]+:\n/m);
+  return source.slice(start, next === -1 ? source.length : start + marker.length + next);
+}
+
+test('backend and frontend validation run once in parallel before image work', () => {
+  for (const [label, source, finalJobId, finalJobName] of [
+    ['pull-request', candidate, 'test-and-build', 'Test and build app image'],
+    ['production', production, 'build-and-deploy', 'Build merged image and pin Helm digest'],
+  ]) {
+    const backend = workflowJob(source, 'backend-tests');
+    const frontend = workflowJob(source, 'frontend-checks');
+    const final = workflowJob(source, finalJobId);
+
+    assert.match(backend, /name: Test backend/);
+    assert.match(backend, /DATABASE_URL:/);
+    assert.match(backend, /\bnpm test\b/);
+    assert.doesNotMatch(backend, /npm run check/);
+
+    assert.match(frontend, /name: Check frontend contracts/);
+    assert.match(frontend, /\bnpm run check\b/);
+    assert.match(frontend, /node --test scripts\/immutable-image-release\.test\.mjs/);
+    assert.doesNotMatch(frontend, /DATABASE_URL:/);
+
+    assert.match(final, new RegExp(`name: ${finalJobName}`));
+    assert.match(final, /needs: \[backend-tests, frontend-checks\]/);
+    assert.doesNotMatch(final, /\bnpm test\b|\bnpm run check\b|DATABASE_URL:/);
+
+    assert.equal(
+      (source.match(/\bnpm run check\b/g) ?? []).length,
+      1,
+      `${label} workflow must run the frontend gate exactly once`,
+    );
+  }
+
+  assert.equal(backendPackage.scripts.test, 'npm run test:prepare && npm run test:backend');
+  assert.match(backendPackage.scripts['test:prepare'], /frontend run build:trainer/);
+  assert.doesNotMatch(backendPackage.scripts['test:prepare'], /frontend run check/);
+  assert.doesNotMatch(backendPackage.scripts['test:prepare'], /frontend run build(?:\s|&&)/);
+  assert.doesNotMatch(backendPackage.scripts['test:backend'], /frontend/);
+});
 
 test('pull-request CI publishes the tested ref for validation without owning production release state', () => {
   const build = workflowStep(candidate, 'Build and push image');
