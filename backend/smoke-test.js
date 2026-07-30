@@ -1921,7 +1921,14 @@ async function main() {
   if (sfxAccept.statusCode !== 200 || JSON.parse(sfxAccept.body).version.status !== 'accepted') {
     throw new Error(`SFX acceptance failed: ${sfxAccept.statusCode} ${sfxAccept.body}`);
   }
-  const sfxPublicCatalog = JSON.parse((await get('/api/asset-catalog')).body);
+  const sfxPublicResponse = await get('/api/asset-catalog');
+  if (sfxPublicResponse.statusCode !== 200) {
+    throw new Error(`Accepted SFX runtime catalog failed: ${sfxPublicResponse.statusCode} ${sfxPublicResponse.body}`);
+  }
+  const sfxPublicCatalog = JSON.parse(sfxPublicResponse.body);
+  if (!Array.isArray(sfxPublicCatalog.slots)) {
+    throw new Error(`Accepted SFX runtime catalog omitted slots: ${sfxPublicResponse.body}`);
+  }
   const publishedSfx = sfxPublicCatalog.slots.find((slot) => slot.slot === sfxSlot);
   if (
     publishedSfx?.versionStatus !== 'accepted'
