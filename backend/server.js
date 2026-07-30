@@ -2618,6 +2618,40 @@ const MIGRATIONS = [
         ON run_relic_stat_events (owner_email, relic_id, event_kind);
     `,
   },
+  {
+    version: 46,
+    name: 'installed play menu entry lands on the play hub root',
+    // This identity already exists in the shared development ledger. ADR-0174
+    // requires its version, name, and SQL to remain byte-for-byte canonical.
+    // ADR-0257: the Play entry navigates to the bare selector root, where the
+    // client resumes the one in-progress activity or reveals the neutral hub.
+    // The update is guarded to the retired canonical default so an
+    // owner-authored route is never overwritten, and a database without the
+    // installed row (fresh smoke environments seed their own) is a clean no-op.
+    sql: `
+      WITH changed AS (
+        UPDATE drawable_assets
+           SET behavior = jsonb_set(behavior, '{route}', '"/play/select"'::jsonb),
+               row_revision = row_revision + 1,
+               updated_at = now(),
+               updated_by = 'play-hub-root-migration'
+         WHERE kind = 'menu-mode'
+           AND behavior->>'value' = 'play'
+           AND behavior->>'route' = '/play/select/skirmish'
+        RETURNING id
+      ), logged AS (
+        INSERT INTO drawable_asset_events (asset_id, action, actor_email, details)
+        SELECT id, 'updated', 'play-hub-root-migration',
+               jsonb_build_object('route', '/play/select', 'previousRoute', '/play/select/skirmish')
+          FROM changed
+        RETURNING asset_id
+      )
+      UPDATE drawable_catalog_state
+         SET revision = revision + 1, updated_at = now()
+       WHERE singleton = true
+         AND EXISTS (SELECT 1 FROM logged);
+    `,
+  },
 ];
 
 let pool = null;

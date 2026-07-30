@@ -209,9 +209,12 @@ route lifecycle during the same React commit.
   both terrain and scene compositor acknowledgements.
 - The complete Play selector is one DOM surface: canonical hydration, rendered image
   consumers, and computed CSS image consumers settle before its columns reveal together.
-- The top-level installed Play destination is `/play/select/skirmish`. Opening it from
-  the main menu preserves the already-painted homepage scene; it does not unmount the
-  menu family or route through the bare `/play` battlefield while the selector loads.
+- The top-level installed Play destination is the bare selector root `/play/select`
+  (ADR-0257). Opening it from the main menu preserves the already-painted homepage
+  scene; it does not unmount the menu family or route through the bare `/play`
+  battlefield while the selector loads. The root composes nothing until content and
+  Run authority settle: it then either replace-navigates to the one resumable
+  activity's Continue destination or reveals the neutral hub with no selected mode.
 - Terrain and scene canvases share decoded image records and acknowledge their actual first
   composition to the board boundary. The board reveals only after terrain, barrier, and
   scene acknowledgements and a browser paint opportunity.

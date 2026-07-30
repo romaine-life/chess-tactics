@@ -845,7 +845,7 @@ try {
     await page.waitForFunction(
       `Boolean(
         document.querySelector('[data-scene-phase="current"]')
-        && document.querySelector('.main-menu-mode-tab[data-nav="/play/select/skirmish"]')
+        && document.querySelector('.main-menu-mode-tab[data-nav="/play/select"]')
       )`,
       { timeout },
     ).catch(async (error) => {
@@ -859,7 +859,7 @@ try {
       console.error(`menu host initial scene unavailable: ${JSON.stringify(state)}`);
       throw error;
     });
-    await page.click('.main-menu-mode-tab[data-nav="/play/select/skirmish"]');
+    await page.click('.main-menu-mode-tab[data-nav="/play/select"]');
     await page.waitForFunction(
       `Boolean(
         document.querySelector('[data-scene-phase="current"]')

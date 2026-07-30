@@ -5,7 +5,7 @@ deciders: owner (Nelson) + Codex
 supersedes:
   - "[ADR-0231](0231-strategikon-and-enchiridion-share-one-reference-workspace-language.md)'s direct-route rule for Continue Run"
 refines:
-  - "[ADR-0074](0074-play-is-one-selector-not-three-homepage-modes.md)"
+  - "[ADR-0074](0074-one-play-entry-one-shared-selector.md)"
   - "[ADR-0193](0193-runs-are-persistent-wars-around-unchanged-chess-battles.md)"
 ---
 

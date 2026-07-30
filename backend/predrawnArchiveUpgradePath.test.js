@@ -61,7 +61,7 @@ test('already-applied migration 36 remains the immutable drawable-media migratio
   );
 });
 
-test('the exact sparse numeric legacy history upgrades through migration 45', () => {
+test('the exact sparse numeric legacy history upgrades through migration 46', () => {
   const versions = migrationVersions();
   const appliedBeforeUpgrade = new Set(
     versions.filter((version) => version <= 27 || version === 36),
@@ -99,6 +99,10 @@ test('the exact sparse numeric legacy history upgrades through migration 45', ()
   assert.ok(
     pending.includes(45),
     'owner-scoped Run relic statistics must have their own pending migration 45',
+  );
+  assert.ok(
+    pending.includes(46),
+    'the installed Play hub-root route must have its own pending migration 46',
   );
 
   const migration37 = inlineMigration(37);
@@ -280,6 +284,32 @@ test('the exact sparse numeric legacy history upgrades through migration 45', ()
     /CHECK\s*\(\s*event_kind IN\s*\(\s*'picked',\s*'battle-win'\s*\)\s*\)/i,
     'migration 45 must keep the relic-stat event vocabulary closed',
   );
+  const migration46 = inlineMigration(46);
+  assert.equal(
+    migration46.name,
+    'installed play menu entry lands on the play hub root',
+    'migration 46 must retain its applied database identity',
+  );
+  assert.equal(
+    migrationChecksum(migration46),
+    '7895259aeadb1a4729e61a2b08ae502f37a6006bdea8327e158fd82cb5bb0549',
+    'migration 46 must match the identity already recorded in the shared development ledger',
+  );
+  assert.match(
+    migration46.sql,
+    /behavior->>'value' = 'play'[\s\S]*behavior->>'route' = '\/play\/select\/skirmish'/,
+    'migration 46 must be guarded to the retired canonical Play route so an owner-authored route survives',
+  );
+  assert.match(
+    migration46.sql,
+    /jsonb_set\(behavior,\s*'\{route\}',\s*'"\/play\/select"'::jsonb\)/,
+    'migration 46 must land the installed Play entry on the bare selector root',
+  );
+  assert.match(
+    migration46.sql,
+    /INSERT INTO drawable_asset_events[\s\S]*UPDATE drawable_catalog_state[\s\S]*EXISTS \(SELECT 1 FROM logged\)/,
+    'migration 46 must audit the route change and bump the catalog revision only when a row changed',
+  );
 
   const migration36 = inlineMigration(36);
   const allMigrations = versions.map(inlineMigration);
@@ -306,7 +336,7 @@ test('the exact sparse numeric legacy history upgrades through migration 45', ()
   );
   assert.deepEqual(
     plan.pending.map((entry) => entry.version),
-    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45],
+    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46],
     'the bridge must fill the historical gap before applying every post-36 contract',
   );
   assert.throws(
@@ -821,13 +851,13 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
 
   const primaryUpgradeProof = sourceSection(
     smokeSource,
-    'async function validatePrimarySparseNumericMigrationUpgrade45()',
+    'async function validatePrimarySparseNumericMigrationUpgrade46()',
     '\nasync function validateEditorMigration16Preservation()',
   );
   assert.match(
     primaryUpgradeProof,
-    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*45\s*\}/,
-    'the production upgrade proof must require a complete 1-45 history',
+    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*46\s*\}/,
+    'the production upgrade proof must require a complete 1-46 history',
   );
   assert.match(
     primaryUpgradeProof,
@@ -841,8 +871,8 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   );
   assert.match(
     primaryUpgradeProof,
-    /length:\s*9[\s\S]*index\s*\+\s*37/,
-    'the production report must include every post-36 migration through 45',
+    /length:\s*10[\s\S]*index\s*\+\s*37/,
+    'the production report must include every post-36 migration through 46',
   );
   assert.match(
     primaryUpgradeProof,

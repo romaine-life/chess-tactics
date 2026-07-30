@@ -20,6 +20,24 @@ describe('scene manifests', () => {
     });
   });
 
+  it('authors the neutral Play hub root as play with no play-content child', () => {
+    expect(sceneManifest('/play/select').instances.map((entry) => entry.definition.id)).toEqual([
+      'main-menu',
+      'play',
+    ]);
+    expect(sceneManifest('/play/select')).toMatchObject({
+      host: 'play-shell',
+      background: 'homepage',
+      paintOwner: 'play-selector',
+    });
+    // A malformed selector path canonicalizes to the root; its transient
+    // manifest must not claim a skirmish selection the address never made.
+    expect(sceneManifest('/play/select/unknown').instances.map((entry) => entry.definition.id)).toEqual([
+      'main-menu',
+      'play',
+    ]);
+  });
+
   it('derives retained regions from authored ancestry', () => {
     expect(deepestSharedSceneRegion(
       sceneManifest('/play/select/skirmish'),
