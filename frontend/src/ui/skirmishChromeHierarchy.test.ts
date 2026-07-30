@@ -10,6 +10,7 @@ const appTitleBar = readFileSync(new URL('./shell/AppTitleBar.tsx', import.meta.
 const chromeRuntime = readFileSync(new URL('./chromeFamilyRuntime.ts', import.meta.url), 'utf8');
 const styleCss = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const skirmish = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
+const portraitPreload = readFileSync(new URL('../art/preload.ts', import.meta.url), 'utf8');
 
 const buttonBlocks = (source: string): string[] => source.match(/<button\b[\s\S]*?<\/button>/g) ?? [];
 
@@ -98,6 +99,18 @@ describe('Skirmish chrome hierarchy', () => {
 
     expect(styleCss).not.toMatch(/\.unit-portrait\s*\{[^}]*border-image\s*:/);
     expect(styleCss).not.toMatch(/\.skirmish-service-record\s*\{[^}]*border-image\s*:/);
+  });
+
+  it('atomically replaces the portrait frame so crop geometry cannot leak across units', () => {
+    expect(portraitEditor).toContain('key={frame.src}');
+    expect(portraitEditor).toContain('displayedSrc === src');
+    expect(portraitEditor).toContain("if (typeof image.decode === 'function') await image.decode()");
+    expect(portraitEditor).toContain('decodeAndPromote(event.currentTarget, frame.src)');
+    expect(portraitEditor.match(/requestAnimationFrame\(/g)).toHaveLength(1);
+    expect(portraitEditor).toContain('onDisplayedSrcChange?.(readySrc)');
+    expect(portraitEditor).toContain('<CroppedView src={requestedSrc} crop={crop} onDisplayedSrcChange={onDisplayedSrcChange} />');
+    expect(portraitPreload).toContain("import { loadDecodedImage } from '../render/imageResources'");
+    expect(portraitPreload).not.toContain('new Image()');
   });
 
   it('maps every Board View control to its existing semantic unit', () => {

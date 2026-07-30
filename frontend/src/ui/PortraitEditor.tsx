@@ -55,16 +55,79 @@ export const masterSrc = (piece: Piece, pal: Palette, method: PortraitMethod = d
 
 // Render the cropped region of a square master to fill a frame, via an absolutely
 // positioned img (width 1/s of the frame, translated so the crop centre is centred).
-export function CroppedView({ src, crop }: { src: string; crop: Crop }): ReactElement {
-  const { cx, cy, s } = crop;
-  const imgStyle: CSSProperties = {
+export function CroppedView({ src, crop, onDisplayedSrcChange }: {
+  src: string;
+  crop: Crop;
+  onDisplayedSrcChange?: (src: string) => void;
+}): ReactElement {
+  const [displayedSrc, setDisplayedSrc] = useState(src);
+  const displayedCropRef = useRef(crop);
+  const requestedSrcRef = useRef(src);
+  const promotionFrameRef = useRef<number | null>(null);
+  requestedSrcRef.current = src;
+
+  useEffect(() => {
+    if (displayedSrc === src) displayedCropRef.current = crop;
+  }, [crop, displayedSrc, src]);
+
+  const cancelPromotion = useCallback(() => {
+    if (promotionFrameRef.current == null) return;
+    cancelAnimationFrame(promotionFrameRef.current);
+    promotionFrameRef.current = null;
+  }, []);
+
+  useEffect(() => cancelPromotion, [cancelPromotion, src]);
+
+  const promoteOnNextFrame = useCallback((readySrc: string) => {
+    cancelPromotion();
+    promotionFrameRef.current = requestAnimationFrame(() => {
+      promotionFrameRef.current = null;
+      if (requestedSrcRef.current !== readySrc) return;
+      onDisplayedSrcChange?.(readySrc);
+      setDisplayedSrc(readySrc);
+    });
+  }, [cancelPromotion, onDisplayedSrcChange]);
+
+  const decodeAndPromote = useCallback(async (image: HTMLImageElement, readySrc: string) => {
+    try {
+      if (typeof image.decode === 'function') await image.decode();
+      if (image.naturalWidth <= 0) throw new Error(`Portrait has no drawable pixels: ${readySrc}`);
+    } catch {
+      // Promote the failed requested source as an explicit missing-art state;
+      // retaining the previous unit indefinitely would be a misleading fallback.
+      if (requestedSrcRef.current === readySrc) promoteOnNextFrame(readySrc);
+      return;
+    }
+    if (requestedSrcRef.current === readySrc) promoteOnNextFrame(readySrc);
+  }, [promoteOnNextFrame]);
+
+  const frameStyle = ({ cx, cy, s }: Crop, pending = false): CSSProperties => ({
     position: 'absolute', width: `${100 / s}%`, height: 'auto',
     left: `${(0.5 - cx / s) * 100}%`, top: `${(0.5 - cy / s) * 100}%`,
-    imageRendering: 'auto', pointerEvents: 'none', userSelect: 'none',
-  };
+    imageRendering: 'auto', pointerEvents: 'none', userSelect: 'none', opacity: pending ? 0 : 1,
+  });
+  const displayedCrop = displayedSrc === src ? crop : displayedCropRef.current;
+  const frames = displayedSrc === src
+    ? [{ src, crop, pending: false }]
+    : [
+        { src: displayedSrc, crop: displayedCrop, pending: false },
+        { src, crop, pending: true },
+      ];
+
   return (
     <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
-      <img src={src} alt="" draggable={false} style={imgStyle} />
+      {frames.map((frame) => (
+        <img
+          key={frame.src}
+          src={frame.src}
+          alt=""
+          decoding="async"
+          draggable={false}
+          style={frameStyle(frame.crop, frame.pending)}
+          onLoad={frame.pending ? (event) => { void decodeAndPromote(event.currentTarget, frame.src); } : undefined}
+          onError={frame.pending ? () => promoteOnNextFrame(frame.src) : undefined}
+        />
+      ))}
     </div>
   );
 }
@@ -78,12 +141,25 @@ export function CroppedView({ src, crop }: { src: string; crop: Crop }): ReactEl
 export function UnitPortrait({ piece, palette, crop, backdrop, size, className, method, masterUrl }: {
   piece: Piece; palette: Palette; crop: Crop; backdrop?: string | null; size?: number; className?: string; method?: PortraitMethod; masterUrl?: string;
 }): ReactElement {
+  const requestedSrc = masterUrl ?? masterSrc(piece, palette, method);
+  const [displayedBackdrop, setDisplayedBackdrop] = useState({ src: requestedSrc, backdrop });
+  useEffect(() => {
+    if (displayedBackdrop.src !== requestedSrc) return;
+    if (displayedBackdrop.backdrop === backdrop) return;
+    setDisplayedBackdrop({ src: requestedSrc, backdrop });
+  }, [backdrop, displayedBackdrop, requestedSrc]);
+  const onDisplayedSrcChange = useCallback((displayedSrc: string) => {
+    if (displayedSrc === requestedSrc) setDisplayedBackdrop({ src: displayedSrc, backdrop });
+  }, [backdrop, requestedSrc]);
+
   const style: CSSProperties = {};
   if (size != null) { style.width = size; style.height = size; }
-  if (backdrop) (style as Record<string, string>)['--up-backdrop'] = `url("${backdrop}")`;
+  if (displayedBackdrop.backdrop) (style as Record<string, string>)['--up-backdrop'] = `url("${displayedBackdrop.backdrop}")`;
   return (
-    <InnerChromeBox className={`unit-portrait ${backdrop ? 'has-backdrop' : ''} ${className ?? ''}`.trim()} style={style}>
-      <div className="unit-portrait__bust"><CroppedView src={masterUrl ?? masterSrc(piece, palette, method)} crop={crop} /></div>
+    <InnerChromeBox className={`unit-portrait ${displayedBackdrop.backdrop ? 'has-backdrop' : ''} ${className ?? ''}`.trim()} style={style}>
+      <div className="unit-portrait__bust">
+        <CroppedView src={requestedSrc} crop={crop} onDisplayedSrcChange={onDisplayedSrcChange} />
+      </div>
     </InnerChromeBox>
   );
 }

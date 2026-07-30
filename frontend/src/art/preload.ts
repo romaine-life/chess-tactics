@@ -6,17 +6,13 @@
 // first portrait paint instant. Decoding is best-effort; a missing asset must
 // never throw or block.
 
-const warmed = new Set<string>();
+import { loadDecodedImage } from '../render/imageResources';
 
 export function preloadImages(urls: Iterable<string>): void {
   for (const url of urls) {
-    if (!url || warmed.has(url)) continue;
-    warmed.add(url);
-    const img = new Image();
-    img.decoding = 'async';
-    img.src = url;
-    // decode() resolves once the bitmap is ready; ignore failures (e.g. 404)
-    // so a single missing portrait can't reject and spam the console.
-    img.decode?.().catch(() => {});
+    if (!url) continue;
+    // Join the runtime's shared decoded-image record so the late-mounting
+    // consumer does not start a second Image lifecycle for the same asset.
+    void loadDecodedImage(url).catch(() => {});
   }
 }
