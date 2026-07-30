@@ -5,7 +5,8 @@ import { loadingMark, loadingMeasure } from '../diagnostics/loadingTimeline';
 import { Settings } from './Settings';
 import { PlayMenu } from './PlayMenu';
 import { Lobbies } from './Lobbies';
-import { Enchiridion, ENCHIRIDION_SECTIONS, type EnchiridionSection } from './Enchiridion';
+import { Enchiridion } from './Enchiridion';
+import { enchiridionRelicFromPath, enchiridionRelicHref, enchiridionSectionFromPath } from './enchiridionRoute';
 import { ApparatusRailTab } from './shared/ApparatusRailTab';
 import { isPlaySelectorPath, PLAY_SKIRMISH_SELECTOR_HREF } from './playHubRoute';
 import { loadDecodedImage } from '../render/imageResources';
@@ -90,9 +91,6 @@ function shellDest(path: string): ShellDest | null {
   return null;
 }
 
-function enchiridionSection(path: string): EnchiridionSection {
-  return ENCHIRIDION_SECTIONS.find((section) => path === `/enchiridion/${section}`) ?? 'units';
-}
 
 export function MainMenu({
   path = '/',
@@ -168,7 +166,15 @@ export function MainMenu({
               ? dest === 'settings' ? <Settings embedded path={path} search={search} sceneInstanceKey={sceneInstanceKey} />
                 : dest === 'play' ? <PlayMenu path={path} sceneInstanceKey={sceneInstanceKey} />
                 : dest === 'lobbies' ? <Lobbies embedded />
-                : dest === 'enchiridion' ? <Enchiridion section={enchiridionSection(path)} sceneInstanceKey={sceneInstanceKey} framed={false} />
+                : dest === 'enchiridion' ? (
+                    <Enchiridion
+                      section={enchiridionSectionFromPath(path)}
+                      selectedRelicId={enchiridionRelicFromPath(path)}
+                      relicHref={enchiridionRelicHref}
+                      sceneInstanceKey={sceneInstanceKey}
+                      framed={false}
+                    />
+                  )
                 : path === '/editor/wars' ? <WarEditor embedded /> : <CampaignEditor embedded />
               : null}
           </div>

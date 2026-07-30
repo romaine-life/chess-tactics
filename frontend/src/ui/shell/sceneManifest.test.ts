@@ -114,6 +114,25 @@ describe('scene manifests', () => {
     )).toBe('enchiridion-shell');
   });
 
+  it('addresses individual relics inside the one retained relic-reference scene (ADR-0256)', () => {
+    const base = sceneManifest('/enchiridion/relics');
+    const addressed = sceneManifest('/enchiridion/relics/royal-decree');
+    // Same manifest id + instance keys ⇒ relic selection is an address-only update:
+    // App's same-scene path applies and no exit/enter choreography runs per relic.
+    expect(addressed.id).toBe(base.id);
+    expect(addressed.instances.map((entry) => entry.key)).toEqual(base.instances.map((entry) => entry.key));
+    expect(addressed.leaf.definition.id).toBe('enchiridion/relics');
+    expect(addressed).toMatchObject({
+      host: 'enchiridion-shell',
+      background: 'homepage',
+      paintOwner: 'dom',
+    });
+    // Section changes remain real scene transitions.
+    expect(sceneManifest('/enchiridion/units').id).not.toBe(base.id);
+    // The bare and unknown fallbacks share the units scene they already render.
+    expect(sceneManifest('/enchiridion').id).toBe(sceneManifest('/enchiridion/units').id);
+  });
+
   it('requires declarations for expensive editor and Studio first viewports', () => {
     expect(sceneManifest('/editor/level').critical).toContain('visible-palette-slice');
     expect(sceneManifest('/studio')).toMatchObject({
