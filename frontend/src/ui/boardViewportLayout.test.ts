@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const styleCss = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+const appSource = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8');
 const levelThumbnailSource = readFileSync(new URL('../render/LevelThumbnail.tsx', import.meta.url), 'utf8');
 const skirmishBoardSource = readFileSync(new URL('../render/SkirmishBoard.tsx', import.meta.url), 'utf8');
 const viewPaneSource = readFileSync(new URL('./shared/ViewPane.tsx', import.meta.url), 'utf8');
@@ -16,16 +17,27 @@ describe('board viewports share Play reference framing', () => {
 
   it('uses the bounded-fluid Play canvas and its complete board seat', () => {
     expect(styleCss).toMatch(
-      /\.shell\.skirmish-active \.app-root\s*\{[\s\S]*?height:\s*var\(--skirmish-canvas-height\);[\s\S]*?width:\s*var\(--skirmish-canvas-width\);/,
+      /\.shell\.skirmish-active \.scene-boundary:has\(\.skirmish-screen\.is-play-canvas\)\s*\{[\s\S]*?height:\s*var\(--skirmish-canvas-height\);[\s\S]*?transform:\s*translateX\(-50%\) scale\(var\(--skirmish-canvas-scale\)\);[\s\S]*?width:\s*var\(--skirmish-canvas-width\);/,
     );
     expect(styleCss).toMatch(
-      /\.skirmish-screen\.is-play-canvas\s*\{[\s\S]*?--app-header-h:\s*var\(--skirmish-header-height\);[\s\S]*?--skirmish-rail-w:\s*var\(--skirmish-hud-width\);/,
+      /\.skirmish-screen\.is-play-canvas\s*\{[\s\S]*?--skirmish-rail-w:\s*var\(--skirmish-hud-width\);[\s\S]*?grid-template-rows:\s*0 minmax\(0, 1fr\);/,
     );
     expect(styleCss).toMatch(
       /\.skirmish-board-frame\s*\{[\s\S]*?height:\s*100%;[\s\S]*?overflow:\s*hidden;[\s\S]*?width:\s*100%;/,
     );
     expect(styleCss).not.toMatch(
       /\.skirmish-screen:not\(\.level-editor-screen\) \.skirmish-board-frame\s*\{[\s\S]{0,500}?aspect-ratio:/,
+    );
+  });
+
+  it('keeps the persistent title bar outside the transformed Play scene', () => {
+    expect(appSource.indexOf('<AppTitleBar')).toBeGreaterThan(-1);
+    expect(appSource.indexOf('<SceneBoundary')).toBeGreaterThan(appSource.indexOf('<AppTitleBar'));
+    expect(styleCss).toMatch(
+      /\.app-shell-titlebar\s*\{[\s\S]*?position:\s*fixed;[\s\S]*?inset:\s*0 0 auto 0;/,
+    );
+    expect(styleCss).not.toMatch(
+      /\.shell\.skirmish-active \.app-root\s*\{[^}]*transform:/,
     );
   });
 

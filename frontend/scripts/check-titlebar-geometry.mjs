@@ -38,7 +38,7 @@ try {
   await page.setViewport({ width, height, deviceScaleFactor: 1 });
   await page.goto(url, { waitUntil: 'networkidle0', timeout: 8000 })
     .catch(() => page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 }));
-  await page.waitForSelector('.app-titlebar-contributed-controls > .titlebar-control', { timeout: 15000 });
+  await page.waitForSelector('.app-shell-titlebar', { timeout: 15000 });
   await page.waitForSelector('.header-account-cluster .titlebar-control', { timeout: 15000 });
   await page.evaluate(() => document.fonts?.ready).catch(() => {});
   await new Promise((resolve) => setTimeout(resolve, 200));
@@ -101,12 +101,15 @@ try {
   if (geometry.fill.bottom > geometry.horizontalDividerBottom - 1 + tolerance) {
     failures.push(`title fill reaches below the divider's opaque boundary: expected at most ${geometry.horizontalDividerBottom - 1}px, received ${geometry.fill.bottom}px`);
   }
-  near(geometry.divider.left - geometry.contributed.at(-1).right, geometry.expectedGap, 'contributed control to divider');
+  if (geometry.contributed.length) {
+    near(geometry.divider.left - geometry.contributed.at(-1).right, geometry.expectedGap, 'contributed control to divider');
+  }
   near(geometry.persistent[0].left - geometry.divider.right, geometry.expectedGap, 'divider to persistent control');
   near(geometry.bar.right - geometry.persistent.at(-1).right, geometry.expectedGap, 'last control to viewport edge');
 
   const summary = {
     viewport: `${width}x${height}`,
+    bar: geometry.bar,
     expectedGap: geometry.expectedGap,
     buttonTop: top,
     buttonBottom: baseline,
@@ -114,7 +117,9 @@ try {
     horizontalDividerBottom: geometry.horizontalDividerBottom,
     titleFillBottom: geometry.fill.bottom,
     bottomClearance: geometry.horizontalDividerTop - baseline,
-    contributedToDivider: geometry.divider.left - geometry.contributed.at(-1).right,
+    contributedToDivider: geometry.contributed.length
+      ? geometry.divider.left - geometry.contributed.at(-1).right
+      : null,
     dividerToPersistent: geometry.persistent[0].left - geometry.divider.right,
     trailingEdge: geometry.bar.right - geometry.persistent.at(-1).right,
   };

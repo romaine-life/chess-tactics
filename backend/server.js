@@ -2598,6 +2598,8 @@ const MIGRATIONS = [
   {
     version: 45,
     name: 'owner-scoped idempotent Run relic statistics',
+    // This identity already exists in the shared development ledger. ADR-0174
+    // requires its version, name, and SQL to remain byte-for-byte canonical.
     sql: `
       CREATE TABLE IF NOT EXISTS run_relic_stat_events (
         owner_email text        NOT NULL,
