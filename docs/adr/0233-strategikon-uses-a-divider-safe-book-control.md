@@ -1,9 +1,9 @@
 ---
-status: superseded by ADR-0236
+status: superseded by ADR-0249
 date: 2026-07-29
 deciders: owner (Nelson) + Codex
 superseded_by:
-  - "[ADR-0236](0236-strategikon-book-art-is-the-title-control.md)"
+  - "[ADR-0249](0249-strategikon-book-art-is-the-title-control.md)"
 supersedes:
   - "[ADR-0231](0231-strategikon-and-enchiridion-share-one-reference-workspace-language.md)'s labeled Strategikon action presentation"
 refines:

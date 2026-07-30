@@ -2,6 +2,8 @@
 status: accepted
 date: 2026-07-29
 deciders: owner (Nelson) + Codex
+partially_superseded_by:
+  - "[ADR-0240](0240-run-self-inspection-owns-the-left-shell-workspace.md)"
 ---
 
 # ADR-0230: Run shops separate buying, army inspection, and selling

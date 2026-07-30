@@ -1,6 +1,8 @@
 import { drawableAssets } from '@chess-tactics/board-render';
 import type { ReactElement } from 'react';
 import { RUN_RELIC_BY_ID, type RunRelicId } from '../run/model';
+import { RunWorkspace } from './RunWorkspace';
+import { InnerChromeBox } from './shared/ChromeBox';
 import { Tooltip } from './shared/InfoTip';
 
 export interface RunRelicArtwork {
@@ -83,5 +85,50 @@ export function RunRelicStrip({
         })}
       </div>
     </section>
+  );
+}
+
+export function RunRelicsWorkspace({
+  relicIds,
+}: {
+  relicIds: readonly RunRelicId[];
+}): ReactElement {
+  const knownRelicIds = relicIds.filter((relicId) => Boolean(RUN_RELIC_BY_ID[relicId]));
+  return (
+    <RunWorkspace
+      className="run-self-inspection-workspace run-relics-workspace"
+      contentClassName="run-self-inspection-content"
+      data-testid="run-relics-workspace"
+      aria-labelledby="run-relics-workspace-title"
+    >
+      <header className="run-self-inspection-head">
+        <h2 id="run-relics-workspace-title">Relics</h2>
+        <span>{knownRelicIds.length} held</span>
+      </header>
+      {knownRelicIds.length > 0 ? (
+        <div className="run-relics-ledger" role="list" aria-label="Held relics">
+          {knownRelicIds.map((relicId, index) => {
+            const relic = RUN_RELIC_BY_ID[relicId];
+            return (
+              <InnerChromeBox
+                className="run-relics-ledger-row"
+                role="listitem"
+                key={`${relicId}-${index}`}
+              >
+                <RunRelicIcon relicId={relicId} />
+                <span className="run-relics-ledger-copy">
+                  <strong>{relic.name}</strong>
+                  <span>{relic.description}</span>
+                </span>
+              </InnerChromeBox>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="run-self-inspection-empty" role="status">
+          No relics held. Relics acquired during this Run will appear here.
+        </p>
+      )}
+    </RunWorkspace>
   );
 }

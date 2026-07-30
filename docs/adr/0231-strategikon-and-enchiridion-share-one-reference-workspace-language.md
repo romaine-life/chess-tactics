@@ -1,10 +1,10 @@
 ---
-status: "accepted; Continue Run direct-route clause superseded by ADR-0232; Strategikon labeled-action presentation superseded by ADR-0237"
+status: "accepted; Continue Run direct-route clause superseded by ADR-0232; Strategikon labeled-action presentation superseded by ADR-0250"
 date: 2026-07-29
 deciders: owner (Nelson) + Codex
 superseded_in_part_by:
   - "[ADR-0232](0232-continue-run-selects-run-before-play.md)"
-  - "[ADR-0237](0237-strategikon-book-aligns-to-the-controls-content-boundary.md)"
+  - "[ADR-0250](0250-strategikon-book-aligns-to-the-controls-content-boundary.md)"
 ---
 
 # ADR-0231: Strategikon and Enchiridion share one reference-workspace language

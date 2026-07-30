@@ -1,16 +1,16 @@
 ---
-status: superseded by ADR-0239
+status: superseded by ADR-0252
 date: 2026-07-30
 deciders: owner (Nelson) + Codex
 superseded_by:
-  - "[ADR-0239](0239-relic-references-switch-between-rows-and-a-grouped-reliquary.md)"
+  - "[ADR-0252](0252-relic-references-switch-between-rows-and-a-grouped-reliquary.md)"
 refines:
   - "[ADR-0231](0231-strategikon-and-enchiridion-share-one-reference-workspace-language.md)"
   - "[ADR-0217](0217-run-relic-icons-use-immediate-styled-tooltips.md)"
   - "[ADR-0059](0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md)"
 ---
 
-# ADR-0238: Relic references use an artwork-first reliquary
+# ADR-0251: Relic references use an artwork-first reliquary
 
 ## Context
 

@@ -3,16 +3,16 @@ status: accepted
 date: 2026-07-29
 deciders: owner (Nelson) + Codex
 supersedes:
-  - "[ADR-0236](0236-strategikon-book-art-is-the-title-control.md)"
+  - "[ADR-0249](0249-strategikon-book-art-is-the-title-control.md)"
 refines:
   - "[ADR-0231](0231-strategikon-and-enchiridion-share-one-reference-workspace-language.md)"
 ---
 
-# ADR-0237: Strategikon book aligns to the Controls content boundary
+# ADR-0250: Strategikon book aligns to the Controls content boundary
 
 ## Context
 
-ADR-0236 aligned the book's visible right edge by mirroring the **Controls**
+ADR-0249 aligned the book's visible right edge by mirroring the **Controls**
 title copy's left inset. The owner clarified that the stronger relationship is
 with the invisible content box respected by the Controls beneath the title.
 The book is navigation for that panel, so its right edge should terminate on
@@ -30,7 +30,7 @@ title typography.
   calculation so the visible pixels—not merely the image element—meet the
   boundary.
 - Horizontal placement no longer derives from the title copy's inset.
-- ADR-0236's hover, focus, and state-specific accessibility requirements remain
+- ADR-0249's hover, focus, and state-specific accessibility requirements remain
   in force.
 
 ## Consequences

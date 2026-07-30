@@ -3,13 +3,13 @@ status: accepted
 date: 2026-07-30
 deciders: owner (Nelson) + Codex
 supersedes:
-  - "[ADR-0240](0240-relic-reference-selection-owns-one-description.md)"
+  - "[ADR-0253](0253-relic-reference-selection-owns-one-description.md)"
 refines:
   - "[ADR-0231](0231-strategikon-and-enchiridion-share-one-reference-workspace-language.md)"
   - "[ADR-0059](0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md)"
 ---
 
-# ADR-0241: Enchiridion content owns the remaining menu canvas
+# ADR-0254: Enchiridion content owns the remaining menu canvas
 
 ## Context
 
@@ -35,7 +35,7 @@ the relic list and selected record into it.
   it is not.
 - The Battle-hosted Strategikon composition is unchanged. It continues to size
   Enchiridion against the Battle pane rather than the main-menu canvas.
-- ADR-0240's tooltip decision remains in force: relic-reference entries are
+- ADR-0253's tooltip decision remains in force: relic-reference entries are
   direct selection buttons and the selected record is the sole visible
   description authority.
 

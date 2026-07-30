@@ -1,18 +1,18 @@
 ---
-status: superseded by ADR-0241
+status: superseded by ADR-0254
 date: 2026-07-30
 deciders: owner (Nelson) + Codex
 superseded_by:
-  - "[ADR-0241](0241-enchiridion-content-owns-the-remaining-menu-canvas.md)"
+  - "[ADR-0254](0254-enchiridion-content-owns-the-remaining-menu-canvas.md)"
 supersedes:
-  - "[ADR-0239](0239-relic-references-switch-between-rows-and-a-grouped-reliquary.md)"
+  - "[ADR-0252](0252-relic-references-switch-between-rows-and-a-grouped-reliquary.md)"
 refines:
   - "[ADR-0231](0231-strategikon-and-enchiridion-share-one-reference-workspace-language.md)"
   - "[ADR-0217](0217-run-relic-icons-use-immediate-styled-tooltips.md)"
   - "[ADR-0059](0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md)"
 ---
 
-# ADR-0240: Relic reference selection owns one description
+# ADR-0253: Relic reference selection owns one description
 
 ## Context
 
@@ -30,7 +30,7 @@ content-sized.
 ## Decision
 
 - Rows and Grouped remain the two relic-reference views established by
-  ADR-0239.
+  ADR-0252.
 - Relics in this reference browser are direct selection buttons and never open
   hover, focus, active, or click tooltips. Their accessible names remain on the
   buttons.

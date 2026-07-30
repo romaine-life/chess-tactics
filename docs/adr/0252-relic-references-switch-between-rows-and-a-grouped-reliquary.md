@@ -1,22 +1,22 @@
 ---
-status: superseded by ADR-0240
+status: superseded by ADR-0253
 date: 2026-07-30
 deciders: owner (Nelson) + Codex
 superseded_by:
-  - "[ADR-0240](0240-relic-reference-selection-owns-one-description.md)"
+  - "[ADR-0253](0253-relic-reference-selection-owns-one-description.md)"
 supersedes:
-  - "[ADR-0238](0238-relic-references-use-an-artwork-first-reliquary.md)"
+  - "[ADR-0251](0251-relic-references-use-an-artwork-first-reliquary.md)"
 refines:
   - "[ADR-0231](0231-strategikon-and-enchiridion-share-one-reference-workspace-language.md)"
   - "[ADR-0217](0217-run-relic-icons-use-immediate-styled-tooltips.md)"
   - "[ADR-0059](0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md)"
 ---
 
-# ADR-0239: Relic references switch between rows and a grouped reliquary
+# ADR-0252: Relic references switch between rows and a grouped reliquary
 
 ## Context
 
-ADR-0238 corrected the original oversized relic rows by replacing them with
+ADR-0251 corrected the original oversized relic rows by replacing them with
 individually framed artwork swatches. The owner retained a preference for named
 rows and clarified that a batch of artwork should not repeat a box around every
 item: the grouped alternative should own one containing frame around an
@@ -42,4 +42,4 @@ otherwise invisible icon grid. Neither presentation should exclude the other.
 - Players may browse by readable names or scan the collection visually.
 - The grouped view reads as one collection instead of twenty miniature panels.
 - The row view remains useful without restoring the icon/frame collisions that
-  prompted ADR-0238.
+  prompted ADR-0251.

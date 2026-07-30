@@ -16,11 +16,7 @@ const chromeBox = readFileSync(new URL('./shared/ChromeBox.tsx', import.meta.url
 const confirmDialog = readFileSync(new URL('./shared/ConfirmDialog.tsx', import.meta.url), 'utf8');
 const titleBarControls = readFileSync(new URL('./shell/TitleBarControls.tsx', import.meta.url), 'utf8');
 const styleCss = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
-const shellWorkspaceStart = levelEditorChromeConsumers.indexOf('export function LevelEditorShellWorkspace');
 const eventsWorkspaceStart = levelEditorChromeConsumers.indexOf('export function LevelEditorEventsWorkspace');
-const shellWorkspace = shellWorkspaceStart >= 0 && eventsWorkspaceStart > shellWorkspaceStart
-  ? levelEditorChromeConsumers.slice(shellWorkspaceStart, eventsWorkspaceStart)
-  : '';
 const eventsWorkspace = eventsWorkspaceStart >= 0
   ? levelEditorChromeConsumers.slice(eventsWorkspaceStart)
   : '';
@@ -51,12 +47,12 @@ function expectRegisteredFamily(source: string, legacyClass: string, unit: strin
 
 describe('Level Editor chrome hierarchy', () => {
   it('shares one shell-owned center-workspace primitive without a parallel outer panel', () => {
-    expect(shellWorkspace).toContain('<section {...props} className={`le-shell-workspace ${className}`.trim()}>');
-    expect(shellWorkspace).toContain('<ChromeSurfaceFill role="outer" className="le-shell-workspace-fill" />');
-    expect(shellWorkspace).toContain('<div className={`le-shell-workspace-content ${contentClassName}`.trim()}>');
-    expect(shellWorkspace).not.toContain('<OuterChromeBox');
+    expect(chromeBox).toContain('export function ShellWorkspace');
+    expect(chromeBox).toContain('<section {...props} className={`shell-workspace ${className}`.trim()}>');
+    expect(chromeBox).toContain('<ChromeSurfaceFill role="outer" className="shell-workspace-fill" />');
+    expect(chromeBox).toContain('<div className={`shell-workspace-content ${contentClassName}`.trim()}>');
 
-    expect(eventsWorkspace).toContain('<LevelEditorShellWorkspace');
+    expect(eventsWorkspace).toContain('<ShellWorkspace');
     expect(eventsWorkspace).toContain('className="le-events-workspace"');
     expect(eventsWorkspace).toContain('data-testid="level-events-workspace"');
     expect(eventsWorkspace).toContain('aria-labelledby="level-events-workspace-title"');
@@ -70,6 +66,7 @@ describe('Level Editor chrome hierarchy', () => {
     expect(chromeBox).toContain('export function ChromeSurfaceFill');
     expect(chromeBox).toContain('data-chrome-fill-role={role}');
     expect(chromeBox).toContain('<ChromeSurfaceFill role="outer" className="le-outer-panel-fill" />');
+    expect(levelEditor).toContain('<ShellWorkspace');
     expect(levelEditor).toMatch(/className=\{`skirmish-board-frame\$\{eventsOpen \|\| levelArtworkWorkspace \? ' is-workspace-covered' : ''\}`\}[\s\S]*?inert=\{eventsOpen \|\| levelArtworkWorkspace \? true : undefined\}[\s\S]*?aria-hidden=\{eventsOpen \|\| levelArtworkWorkspace \? true : undefined\}/);
     expect(levelEditor).toMatch(/\{eventsOpen \? \(\s*<LevelEditorEventsWorkspace/);
     expect(levelEditor).toContain('const [eventsOpen, setEventsOpen] = useState(initialEventsOpen);');
@@ -79,11 +76,11 @@ describe('Level Editor chrome hierarchy', () => {
     expect(levelEditor).toMatch(/if \(eventsOpenRef\.current\) \{\s*selectEventsTab\(tab\);\s*return;\s*\}/);
     expect(levelEditor).toMatch(/disabled=\{eventsOpen\}[\s\S]{0,120}?onClick=\{\(\) => openEventsEditor\('victory'\)\}/);
     expect(levelEditor).not.toContain('window.history.state?.levelEditorRules');
-    expect(styleCss).toMatch(/\.le-shell-workspace\s*\{[\s\S]*?inset:\s*0;[\s\S]*?position:\s*absolute;/);
+    expect(styleCss).toMatch(/\.shell-workspace\s*\{[\s\S]*?inset:\s*0;[\s\S]*?position:\s*absolute;/);
     expect(styleCss).toMatch(/\.level-editor-screen \.skirmish-board-frame\.is-workspace-covered\s*\{[\s\S]*?visibility:\s*hidden;/);
-    expect(styleCss).toMatch(/\.le-shell-workspace-content\s*\{[\s\S]*?min-height:\s*0;[\s\S]*?overflow:\s*hidden;/);
+    expect(styleCss).toMatch(/\.shell-workspace-content\s*\{[\s\S]*?min-height:\s*0;[\s\S]*?overflow:\s*hidden;/);
     expect(styleCss).toMatch(/\.skirmish-screen\.level-editor-screen\s*\{[\s\S]*?column-gap:\s*0;[\s\S]*?row-gap:\s*0;/);
-    expect(styleCss).toMatch(/@media \(max-width: 560px\)\s*\{[\s\S]*?\.le-shell-workspace-content\s*\{[\s\S]*?overflow-y:\s*auto;/);
+    expect(styleCss).toMatch(/@media \(max-width: 560px\)\s*\{[\s\S]*?\.shell-workspace-content\s*\{[\s\S]*?overflow-y:\s*auto;/);
     expect(styleCss).not.toContain('.le-events-overlay');
   });
 

@@ -12,7 +12,7 @@ const TOOLTIP_OWNER = 'src/ui/shared/InfoTip.tsx';
 const SURFACE_CSS_PROPERTY = /^(?:background(?:-[a-z-]+)?|border(?:-[a-z-]+)?|box-shadow)$/i;
 const SURFACE_JS_PROPERTY = /^(?:background[A-Z_a-z0-9]*|border[A-Z_a-z0-9]*|boxShadow)$/;
 const APPROVED_FRAMELESS_SURFACE_RESETS = new Map([
-  // ADR-0237 makes the book art itself the control. These declarations remove
+  // ADR-0250 keeps the book art itself as the control. These declarations remove
   // native/active button chrome; they do not paint a parallel surface.
   ['src/style.css|.skirmish-hud-title-action', new Set([
     'background:none',
@@ -25,7 +25,7 @@ const APPROVED_FRAMELESS_SURFACE_RESETS = new Map([
     'border-color:transparent',
     'box-shadow:none',
   ])],
-  // ADR-0241 retains one shared inner frame around the grouped reliquary. These
+  // ADR-0254 retains one shared inner frame around the grouped reliquary. These
   // resets keep its icon triggers visually unframed inside that owned surface.
   ['src/style.css|.enchiridion-relic-grouped-trigger', new Set([
     'background:none',

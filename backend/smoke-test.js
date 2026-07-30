@@ -3952,7 +3952,7 @@ async function main() {
     throw new Error(`Active Run should begin empty: ${emptyRun.statusCode} ${emptyRun.body}`);
   }
   const activeRunDocument = {
-    formatVersion: 3,
+    formatVersion: 4,
     id: 'run-smoke',
     seed: 17,
     updatedAt: '2026-01-01T00:00:00.000Z',
@@ -3967,8 +3967,8 @@ async function main() {
     conflictIndex: 0,
     goldTenths: 0,
     army: [
-      { id: 'run-king', name: 'David of Israel', type: 'king', abilities: [], source: 'king' },
-      { id: 'run-pawn-a', name: 'Stephen Botiller', type: 'pawn', abilities: [], source: 'starting' },
+      { id: 'run-king', name: 'David of Israel', type: 'king', inspectionSeed: 1701, abilities: [], source: 'king' },
+      { id: 'run-pawn-a', name: 'Stephen Botiller', type: 'pawn', inspectionSeed: 1702, abilities: [], source: 'starting' },
     ],
     relics: [],
     seenRelics: [],

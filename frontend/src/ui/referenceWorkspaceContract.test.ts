@@ -42,7 +42,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(strategikon).toMatch(/<RunArmyWorkspace[\s\S]*?framed=\{false\}/);
     expect(strategikon).toMatch(/<RelicCodex[^>]*framed=\{false\}/);
     expect(runArmy).toContain('framed = true');
-    expect(runArmy).toContain('className={`${className} run-panel-unframed`}');
+    expect(runArmy).toContain('className={`${className} ${contentClassName} run-panel-unframed`}');
   });
 
   it('opts the main-menu workspace back into pointer input', () => {
@@ -50,7 +50,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(workspaceRule).toContain('pointer-events: auto');
   });
 
-  it('supports tooltip-free relic views that consume the remaining main-menu canvas (ADR-0241)', () => {
+  it('supports tooltip-free relic views that consume the remaining main-menu canvas (ADR-0254)', () => {
     const start = enchiridion.indexOf('export function RelicCodex');
     const end = enchiridion.indexOf('function AbilitiesSection', start);
     const relicCodex = enchiridion.slice(start, end);

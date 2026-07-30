@@ -259,13 +259,13 @@ Enchiridion is immediately above Settings. In Battle, frameless open-codex art
 at the same visual scale as the Controls title and aligned to the Controls
 content boundary opens
 Strategikon; its hover/focus information names the unfamiliar destination and
-summarizes its references, army, and relic contents under ADR-0237. Strategikon's rail reuses the exact menu-tab size,
+summarizes its references, army, and relic contents under ADR-0250. Strategikon's rail reuses the exact menu-tab size,
 inset, and stone-continuity language but replaces the board only. The right Controls
 column remains present and is outside the Strategikon content rectangle. Its
 fill occupies that complete board pane without adding an outer frame, and its
 route transition leaves the current level scene mounted; only main-menu
 Enchiridion uses the homepage scene. In both hosts, relic references use the
-ADR-0241 dual-view browser: a compact Rows/Grouped tab sits above the selection
+ADR-0254 dual-view browser: a compact Rows/Grouped tab sits above the selection
 column; Rows uses corrected named list frames, while Grouped uses one containing
 inner frame around an otherwise unframed native-icon grid. Neither view opens
 relic tooltips: the selected content-sized record is the sole visible

@@ -446,16 +446,16 @@ workspace. Strategikon fills the complete board pane through the shared
 fill-only primitive; it does not instantiate an `OuterChromeBox`, add exterior
 rails, or leave a smaller framed island inside that pane. No child measures the
 viewport or renders into the Controls column. Its entry is the divider-safe, frameless open-codex
-art control aligned to the Controls content boundary by ADR-0237, with
+art control aligned to the Controls content boundary by ADR-0250, with
 state-specific hover/focus information. Relic references use the shared
-dual-view browser from ADR-0241: a top-of-column Rows/Grouped tab switches
+dual-view browser from ADR-0254: a top-of-column Rows/Grouped tab switches
 between corrected named rows and one containing inner frame around an unframed
 icon grid. Relic entries do not open tooltips; both views select the same
 content-sized record as the sole visible description authority. In the
 main-menu host, the two canonical rail anchors remain fixed while Enchiridion
 content consumes the remaining visible canvas; the ordinary action-column width
 does not cap it.
-See ADR-0231 and ADR-0241.
+See ADR-0231 and ADR-0254.
 
 Dense and restrained. A tier selector is a tight **segmented control** — one
 cohesive unit, small — never a stack of fat full-width buttons that wrap to two

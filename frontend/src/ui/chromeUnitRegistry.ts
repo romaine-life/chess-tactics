@@ -154,12 +154,12 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
       '.le-status-current',
       '.le-material-values',
       '.le-status-entry',
-      '.unit-portrait',
       '.skirmish-service-record',
     ],
     usage: [
       'Base free-form primitive for inner-role controls',
       'Containing box with repeatable structural dividers inherited from the inner rail',
+      'Topology-owned divided grids with one tee or cross at every rail node',
       'Immediate hover and keyboard-focus tooltips',
       'Level Editor active brush thumbnail shared by every brush kind',
       'Concrete inner controls inherit their geometry contract from child classes',

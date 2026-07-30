@@ -1,8 +1,20 @@
 # Piece portrait contract
 
-The portrait is the framed bust shown in the Skirmish HUD's Selected Unit card.
-It is a separate visual role from the fixed-isometric board sprite and a separate
-live-media semantic slot.
+The portrait is the cropped bust treatment used by the Skirmish HUD, Run Army
+ledger, roster, and portrait-authoring surfaces. It is a separate visual role
+from the fixed-isometric board sprite and a separate live-media semantic slot.
+Those surfaces normally place it in the canonical inner box. The clicked Run
+Army unit profile is deliberately not a portrait surface: under ADR-0247 it
+uses the canonical fixed-isometric board sprite on a tile-backed one-cell board.
+Under
+[ADR-0241](adr/0241-run-army-ledger-is-one-continuous-divided-inner-grid.md),
+the Run Army ledger instead gives each portrait a frameless cell inside one
+continuous divided inner box. The ledger perimeter, horizontal row dividers,
+and portrait-column vertical divider are the cell's bounds. The portrait fills
+that cell's content rectangle and retains the same database-authored crop used
+by every other portrait surface. No local crop, nested frame, second vertical
+inset, or smaller fixed portrait dimension may create an empty band around the
+image.
 
 ## Camera and composition
 

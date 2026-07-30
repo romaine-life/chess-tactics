@@ -767,6 +767,13 @@ h1 {
   flex: none;
 }
 
+.kit-divider[data-chrome-divider-orientation="vertical"] {
+  align-self: stretch;
+  height: auto;
+  margin: calc(-1 * var(--kit-divider-reach, var(--rail-w, 16px))) var(--kit-divider-gap, 6px);
+  width: var(--kit-panel-divider-height, 34px);
+}
+
 /* Element 03 - hybrid (render-accuracy + text rule, docs/ui-art-direction.md):
    art-crop the painterly lion crest from main-menu-aspirational.png; clean SVG cog/rook
    silhouettes; all copy + counts are live DOM text. Two stacked bars matching the concept. */
@@ -4142,7 +4149,7 @@ h1 {
   --ds-inline: var(--ds-space-2);
   --ds-inline-tight: var(--ds-space-1);
   --ds-gutter: var(--ds-space-3);
-  --skirmish-grid-gap: 12px;
+  --skirmish-grid-gap: var(--ds-space-3);
   align-items: stretch;
   color: var(--skirmish-ink);
   display: grid;
@@ -6913,7 +6920,12 @@ body.loading-bootstrap .app-startup-status {
    that shows only when scrollable. Content scrolls natively; we just paint and drive the bar. This
    is why the rail can't vanish on an empty pane — and why it screenshots (native ::-webkit skins
    do not render in headless captures). */
-.kit-scroll-wrap { position: relative; min-height: 0; }
+.kit-scroll-wrap {
+  --kit-scroll-rail-inline-offset: 2px;
+  --kit-scroll-rail-width: 14px;
+  position: relative;
+  min-height: 0;
+}
 .kit-scroll-content { height: 100%; overflow-y: auto; overflow-x: hidden; padding-right: 18px; scrollbar-width: none; }
 .kit-scroll-content::-webkit-scrollbar { width: 0; height: 0; }
 .kit-scroll-rail { position: absolute; top: 0; right: 2px; bottom: 0; width: 14px; border-radius: 3px; background: linear-gradient(180deg, #060d16, #091523); box-shadow: inset 2px 2px 4px rgba(0, 0, 0, 0.72), inset -1px -1px 1px rgba(130, 170, 215, 0.2), 0 0 0 1px rgba(118, 158, 203, 0.22); pointer-events: none; }
@@ -6924,6 +6936,133 @@ body.loading-bootstrap .app-startup-status {
    so its grip is nearly full-height — smeared the caps and the central motif vertically. */
 .kit-scroll-thumb { position: absolute; left: 1px; right: 1px; top: 0; min-height: 24px; border-style: solid; border-color: transparent; border-width: 18px 0 20px 0; border-image: var(--media-ui-scrollbar-installed) 21 0 24 0 fill / 18px 0 20px 0 / 0 stretch; image-rendering: pixelated; cursor: grab; pointer-events: auto; }
 .kit-scroll-thumb:active { cursor: grabbing; }
+
+/* One topology owner for a 9-slice split into continuous cells. Consumers
+   declare only column tracks and rows; this primitive owns every rail, tee,
+   cross, frame reach, and optional scrollbar-gutter junction. */
+.chrome-divided-grid {
+  --chrome-divided-grid-reach: var(--le-chrome-inner-rail-w, 7px);
+  --chrome-divided-grid-boundary-node-offset:
+    calc(var(--chrome-divided-grid-reach) / 2);
+  --chrome-divided-grid-inline-apron-start:
+    calc(
+      var(--chrome-divided-grid-reach)
+      + max(
+        var(--le-inner-atom-left-overhang, 0px),
+        var(--le-inner-divider-atom-left-overhang, 0px)
+      )
+    );
+  --chrome-divided-grid-scroll-gutter:
+    calc(
+      var(--kit-scroll-rail-inline-offset, 2px)
+      + var(--kit-scroll-rail-width, 14px)
+      + var(--le-chrome-inner-rail-w, 7px) / 2
+    );
+  min-block-size: 0;
+  min-inline-size: 0;
+  overflow: visible;
+  position: relative;
+}
+
+.chrome-divided-grid__fixed-rails,
+.chrome-divided-grid__row-boundary,
+.chrome-divided-grid__row {
+  grid-template-columns: var(--chrome-divided-grid-columns);
+}
+
+.chrome-divided-grid__fixed-rails {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
+}
+
+.chrome-divided-grid__scroll {
+  block-size: 100%;
+  margin-inline-start: calc(-1 * var(--chrome-divided-grid-inline-apron-start));
+  min-block-size: 0;
+}
+
+.chrome-divided-grid__scroll > .kit-scroll-content {
+  box-sizing: border-box;
+  overflow-x: hidden;
+  padding-inline: var(--chrome-divided-grid-inline-apron-start) 0;
+}
+
+.chrome-divided-grid__rows {
+  align-content: start;
+  min-block-size: 0;
+}
+
+.chrome-divided-grid__row {
+  box-sizing: border-box;
+  display: grid;
+  min-inline-size: 0;
+}
+
+.chrome-divided-grid__row-boundary {
+  block-size: 0;
+  display: grid;
+  position: relative;
+  z-index: 3;
+}
+
+.chrome-divided-grid__horizontal-rail {
+  align-self: center;
+  margin: 0 !important;
+  transform: translateY(-50%);
+}
+
+.chrome-divided-grid__horizontal-rail[data-chrome-grid-inline-start="frame-start"] {
+  margin-inline-start: calc(-1 * var(--chrome-divided-grid-reach)) !important;
+}
+
+.chrome-divided-grid__horizontal-rail[data-chrome-grid-inline-end="frame-end"] {
+  margin-inline-end: calc(-1 * var(--chrome-divided-grid-reach)) !important;
+}
+
+.chrome-divided-grid__vertical-rail {
+  align-self: stretch;
+  grid-row: 1;
+  margin-block: calc(-1 * var(--chrome-divided-grid-reach)) !important;
+  margin-inline: 0 !important;
+  transform: translateX(-50%);
+}
+
+.chrome-divided-grid__junction {
+  --chrome-divided-grid-junction-x: 0px;
+  --chrome-divided-grid-junction-y: 0px;
+  align-self: center;
+  grid-row: 1;
+  translate:
+    var(--chrome-divided-grid-junction-x)
+    var(--chrome-divided-grid-junction-y);
+}
+
+.chrome-divided-grid__junction[data-chrome-grid-inline-boundary="frame-start"] {
+  --chrome-divided-grid-junction-x:
+    calc(-1 * var(--chrome-divided-grid-boundary-node-offset));
+}
+
+.chrome-divided-grid__junction[data-chrome-grid-inline-boundary="frame-end"] {
+  --chrome-divided-grid-junction-x:
+    var(--chrome-divided-grid-boundary-node-offset);
+}
+
+.chrome-divided-grid__junction[data-chrome-grid-block-boundary="frame-start"] {
+  --chrome-divided-grid-junction-y:
+    calc(-1 * var(--chrome-divided-grid-boundary-node-offset));
+  align-self: start;
+}
+
+.chrome-divided-grid__junction[data-chrome-grid-block-boundary="frame-end"] {
+  --chrome-divided-grid-junction-y:
+    var(--chrome-divided-grid-boundary-node-offset);
+  align-self: end;
+}
+
 .le-pal-group { margin: 0 0 4px; }
 .le-pal-grouplabel { color: #8fb6c6; display: block; font-size: var(--ds-text-xs); letter-spacing: .06em; margin: 8px 0 5px; text-transform: uppercase; }
 .le-pal-grouplabel:first-child { margin-top: 0; }
@@ -7041,15 +7180,14 @@ body.loading-bootstrap .app-startup-status {
 .le-rule-add { margin-top: 12px; }
 .le-seg-compact .le-seg-btn { min-width: 0; padding: 0 12px; }
 
-/* A Level Editor shell workspace is alternate content for the center board region. The
-   positioned parent already owns the exact title/control boundaries, so every workflow fills
-   that parent without recreating viewport, rail, frame, or outer-atom geometry. Events is the
-   first consumer; level-art authoring uses the same primitive. */
+/* A shell workspace is alternate content for an existing board/playfield region. The positioned
+   parent already owns the exact title/control boundaries, so every workflow fills that parent
+   without recreating viewport, rail, frame, or outer-atom geometry. */
 .le-events-open { width: 100%; }
 .level-editor-screen .skirmish-board-frame.is-workspace-covered {
   visibility: hidden;
 }
-.le-shell-workspace {
+.shell-workspace {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -7063,10 +7201,10 @@ body.loading-bootstrap .app-startup-status {
   text-align: left;
   z-index: 2;
 }
-.le-shell-workspace-fill {
+.shell-workspace-fill {
   inset: 0;
 }
-.le-shell-workspace-content {
+.shell-workspace-content {
   box-sizing: border-box;
   display: flex;
   flex: 1 1 auto;
@@ -7075,9 +7213,12 @@ body.loading-bootstrap .app-startup-status {
   min-height: 0;
   min-width: 0;
   overflow: hidden;
-  padding: var(--le-outer-content-padding, 0px);
+  padding: var(--shell-workspace-content-padding, 0px);
   position: relative;
   z-index: 1;
+}
+.level-editor-screen .shell-workspace {
+  --shell-workspace-content-padding: var(--le-outer-content-padding, 0px);
 }
 .le-events-head { align-items: center; border-bottom: 1px solid rgba(150, 180, 200, .18); display: flex; flex: 0 0 auto; gap: 12px; justify-content: space-between; padding: 0 2px 8px; }
 .le-events-head h2 { color: #eafaff; margin: 0; }
@@ -7196,7 +7337,7 @@ body.loading-bootstrap .app-startup-status {
 .le-events-placeholder { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 2px; }
 
 @media (max-width: 560px) {
-  .le-shell-workspace-content { gap: 8px; overflow-x: hidden; overflow-y: auto; }
+  .shell-workspace-content { gap: 8px; overflow-x: hidden; overflow-y: auto; }
   .le-events-head { align-items: stretch; flex-direction: column; gap: 8px; }
   .le-events-head-actions { justify-content: stretch; }
   .le-events-tabs { flex: 1 1 auto; max-width: none; }
@@ -8371,6 +8512,12 @@ body.loading-bootstrap .app-startup-status {
   min-height: 86px;
 }
 
+.unit-portrait--divided {
+  /* A divided row supplies the canonical boundary itself, so only the portrait
+     composition remains and the image can fill its assigned bay. */
+  padding: 0;
+}
+
 /* Roster thumbnail: fills its button; frame thickness still comes from the inner chrome role. */
 .unit-portrait--roster {
   width: 100%;
@@ -8666,7 +8813,7 @@ body.loading-bootstrap .app-startup-status {
   }
 
   .run-relic-strip {
-    max-inline-size: calc(100% - 24px);
+    max-inline-size: calc(100% - (2 * var(--ds-space-3)));
   }
 
   /* The editor assigns named board/rail areas on desktop. When the shared Skirmish shell drops
@@ -12084,14 +12231,23 @@ body { font-size: 17px; }
   border-radius: 4px;
 }
 
-.chrome-lab-divider-mini {
-  align-self: center;
-  display: block;
-  height: 34px;
-  image-rendering: pixelated;
+.chrome-lab-divider-orientation-preview {
+  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  height: 72px;
+  justify-items: center;
   width: 72px;
-  background-color: rgba(2, 8, 13, .44);
-  background-position: left center;
+}
+
+.chrome-lab-divider-preview-horizontal {
+  margin: 0 !important;
+  width: 30px;
+}
+
+.chrome-lab-divider-preview-vertical {
+  height: 52px !important;
+  margin: 0 !important;
 }
 
 .chrome-lab-align-tools {
@@ -16322,8 +16478,11 @@ button.tileset-relationship-cell {
 /* ADR-0095: the persistent bar is an outer-role box. The generated Chrome-family
    stylesheet owns ::before (rail), the fill span, and the trailing divider rail. */
 .app-titlebar > .app-titlebar-fill {
-  inset: var(--le-outer-fill-box-top, 0) var(--le-outer-fill-box-right, 0)
-    calc(var(--le-outer-fill-box-bottom, 0px) + 1px) var(--le-outer-fill-box-left, 0);
+  /* The title bar's top and inline edges are viewport edges, not enclosed outer-panel
+     rails. Keep its role-owned surface full-bleed there even when Chrome Lab tunes the
+     ordinary outer Fill Box inward; otherwise that shared tuning exposes the page
+     beneath the bar and consumes the controls' visible top clearance. */
+  inset: 0 0 calc(var(--le-outer-fill-box-bottom, 0px) + 1px);
   /* The structural divider's final source row is transparent. Stop the title
      texture one pixel inside it so that row cannot reveal fill below the rail. */
   pointer-events: none;
@@ -18125,51 +18284,118 @@ button.tileset-relationship-cell {
 
 /* ===== Run =====
    The between-Battle loop shares the installed Skirmish world and control chrome. */
+.run-screen {
+  --run-relic-strip-block-size: 64px;
+}
+
 .run-workspace {
-  align-items: stretch;
-  display: grid;
-  gap: var(--skirmish-grid-gap);
   grid-column: 1;
   grid-row: 2;
-  grid-template-columns: minmax(0, 1fr) minmax(250px, 320px);
   min-block-size: 0;
   overflow: hidden;
-  padding: var(--skirmish-grid-gap);
+  position: relative;
 }
 
-.run-workspace > .run-panel:only-child {
-  grid-column: 1 / -1;
-  inline-size: 100%;
+.run-shell-workspace {
+  --shell-workspace-content-padding: var(--ds-gutter);
 }
 
-.run-panel {
+.run-phase-workspace {
+  display: grid;
+  grid-column: 1;
+  grid-row: 2;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   min-block-size: 0;
-  overflow: auto;
+  min-inline-size: 0;
+  position: relative;
 }
 
-.run-panel > .le-outer-panel-content {
+.run-phase-primary {
+  block-size: 100%;
+  grid-column: 1;
+  grid-row: 1;
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
+.run-phase-primary.is-workspace-covered,
+.skirmish-field.is-workspace-covered {
+  visibility: hidden;
+}
+
+.run-phase-primary > .run-workspace {
+  block-size: 100%;
+  grid-column: auto;
+  grid-row: auto;
+}
+
+.run-phase-workspace > .run-self-inspection-workspace,
+.skirmish-war-room > .run-self-inspection-workspace {
+  block-size: 100%;
+  grid-column: 1;
+  grid-row: 1;
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
+.run-shell-workspace-content {
   align-content: start;
   display: grid;
-  gap: 14px;
+  gap: var(--ds-stack);
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
-.run-panel :is(h2, h3, h4, p),
+.run-shell-workspace-content :is(h2, h3, h4, p),
 .run-army :is(h3, p) {
   margin: 0;
 }
 
+.run-deployment-workspace-content {
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 320px);
+  overflow: hidden;
+}
+
+.run-deployment-pane {
+  align-content: start;
+  display: grid;
+  gap: var(--ds-stack);
+  min-block-size: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.run-shop-workspace-content > section {
+  display: grid;
+  gap: var(--ds-inline-tight);
+}
+
+.run-status-workspace-content {
+  place-content: center;
+  place-items: center;
+  text-align: center;
+}
+
+.run-workspace-head {
+  align-items: center;
+  display: flex;
+  gap: var(--ds-inline);
+  justify-content: space-between;
+}
+
 .run-card-grid {
   display: grid;
-  gap: 10px;
+  gap: var(--ds-inline-tight);
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
 }
 
 .run-card {
   align-content: start;
   display: grid;
-  gap: 9px;
+  gap: var(--ds-inline-tight);
   min-block-size: 132px;
-  padding: 12px;
+  padding: var(--ds-inset);
 }
 
 .run-bundle-card {
@@ -18178,10 +18404,10 @@ button.tileset-relationship-cell {
   cursor: pointer;
   display: grid;
   font: inherit;
-  gap: 12px;
+  gap: var(--ds-inline);
   inline-size: 100%;
   min-block-size: 162px;
-  padding: 14px;
+  padding: var(--ds-inset);
   text-align: start;
 }
 
@@ -18197,7 +18423,7 @@ button.tileset-relationship-cell {
 .run-bundle-piece-grid {
   align-content: center;
   display: grid;
-  gap: 3px;
+  gap: var(--ds-space-1);
   grid-template-columns: repeat(3, 32px);
   justify-content: center;
   min-block-size: 110px;
@@ -18238,7 +18464,7 @@ button.tileset-relationship-cell {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--ds-inline-tight);
 }
 
 .run-bundle-card-footer {
@@ -18254,7 +18480,7 @@ button.tileset-relationship-cell {
   align-items: center;
   display: inline-flex;
   font: var(--ds-weight-bold) var(--ds-text-lg)/1 var(--ds-font-display);
-  gap: 4px;
+  gap: var(--ds-space-1);
   white-space: nowrap;
 }
 
@@ -18298,7 +18524,7 @@ button.tileset-relationship-cell {
 
 .run-victory-summary > span + span::before {
   content: "·";
-  margin-inline-end: 8px;
+  margin-inline-end: var(--ds-inline-tight);
 }
 
 .run-relic-card {
@@ -18308,7 +18534,7 @@ button.tileset-relationship-cell {
 .run-relic-card-heading {
   align-items: center;
   display: grid;
-  gap: 10px;
+  gap: var(--ds-inline-tight);
   grid-template-columns: 64px minmax(0, 1fr);
 }
 
@@ -18336,24 +18562,24 @@ button.tileset-relationship-cell {
 }
 
 .run-relic-strip {
-  inset-block-start: calc(var(--app-header-h) + 8px);
-  inset-inline-start: 12px;
-  max-inline-size: calc(100% - var(--skirmish-rail-w) - 36px);
+  inset-block-start: calc(var(--app-header-h) + var(--ds-space-2));
+  inset-inline-start: var(--ds-space-3);
+  max-inline-size: calc(100% - var(--skirmish-rail-w) - var(--ds-space-6) - var(--ds-space-1));
   min-inline-size: 0;
   position: absolute;
-  z-index: 20;
+  z-index: 40;
 }
 
 /* Play's scene boundary already starts beneath the persistent title bar. */
 .skirmish-screen.is-play-canvas .run-relic-strip {
-  inset-block-start: 8px;
+  inset-block-start: var(--ds-space-2);
 }
 
 .run-relic-inventory-list {
   align-items: center;
   display: flex;
   flex-wrap: nowrap;
-  gap: 4px;
+  gap: var(--ds-space-1);
   min-inline-size: 0;
   overflow-x: auto;
   scrollbar-width: none;
@@ -18414,11 +18640,11 @@ button.tileset-relationship-cell {
 }
 
 .run-screen .run-relic-strip {
-  max-inline-size: calc(100% - 24px);
+  max-inline-size: calc(100% - (2 * var(--ds-space-3)));
 }
 
-.run-screen.has-relics .run-workspace {
-  padding-block-start: calc(var(--skirmish-grid-gap) + 72px);
+.run-screen.has-relics .run-shell-workspace-content {
+  padding-block-start: calc(var(--ds-gutter) + var(--run-relic-strip-block-size) + var(--ds-space-2));
 }
 
 .run-relic-review-screen {
@@ -18426,7 +18652,7 @@ button.tileset-relationship-cell {
   box-sizing: border-box;
   grid-template-columns: minmax(0, 1fr);
   overflow: auto;
-  padding: 12px;
+  padding: var(--ds-inset);
 }
 
 .run-relic-review-panel {
@@ -18440,23 +18666,23 @@ button.tileset-relationship-cell {
 
 .run-relic-review-panel > .le-outer-panel-content {
   display: grid;
-  gap: 12px;
+  gap: var(--ds-inline);
 }
 
 .run-relic-review-grid {
   display: grid;
-  gap: 10px;
+  gap: var(--ds-inline-tight);
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .run-relic-review-grid figure {
   align-items: center;
   display: grid;
-  gap: 10px;
+  gap: var(--ds-inline-tight);
   grid-template-columns: 64px minmax(0, 1fr);
   margin: 0;
   min-block-size: 88px;
-  padding: 10px;
+  padding: var(--ds-inset);
 }
 
 .run-relic-review-grid img {
@@ -18467,7 +18693,7 @@ button.tileset-relationship-cell {
 
 .run-relic-review-grid figcaption {
   display: grid;
-  gap: 4px;
+  gap: var(--ds-space-1);
 }
 
 .run-relic-review-grid small {
@@ -18476,7 +18702,7 @@ button.tileset-relationship-cell {
 
 .run-relic-reference-art {
   display: grid;
-  gap: 12px;
+  gap: var(--ds-inline);
 }
 
 .run-relic-reference-art summary {
@@ -18498,7 +18724,7 @@ button.tileset-relationship-cell {
   align-content: start;
   display: grid;
   flex: 1 1 auto;
-  gap: 10px;
+  gap: var(--ds-inline-tight);
   min-block-size: 0;
   overflow-x: hidden;
   overflow-y: auto;
@@ -18507,16 +18733,25 @@ button.tileset-relationship-cell {
 .run-army-list,
 .run-choice-list {
   display: grid;
-  gap: 7px;
+  gap: var(--ds-inline-tight);
 }
 
 .run-army-unit,
-.run-placement-row,
-.run-choice-list > label {
+.run-placement-row {
   align-items: center;
   display: flex;
-  gap: 8px;
+  gap: var(--ds-inline-tight);
   justify-content: space-between;
+}
+
+.run-choice-option {
+  align-items: center;
+  display: flex;
+  gap: var(--ds-inline-tight);
+  inline-size: 100%;
+  justify-content: space-between;
+  padding: var(--ds-space-2) var(--ds-inset);
+  text-align: start;
 }
 
 .run-army-unit small {
@@ -18525,7 +18760,7 @@ button.tileset-relationship-cell {
 
 .run-army-unit-identity {
   display: grid;
-  gap: 2px;
+  gap: var(--ds-space-1);
   min-width: 0;
 }
 
@@ -18535,22 +18770,21 @@ button.tileset-relationship-cell {
 
 .run-deployment-control {
   display: grid;
-  gap: 8px;
+  gap: var(--ds-inline-tight);
+}
+
+.run-placement-row .house-select {
+  min-inline-size: min(240px, 50%);
 }
 
 .run-inline-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--ds-inline-tight);
 }
 
 .run-preview-note {
   margin: 0;
-}
-
-.run-shop-panel > .le-outer-panel-content > section {
-  display: grid;
-  gap: 8px;
 }
 
 .run-meta-controls {
@@ -18558,7 +18792,7 @@ button.tileset-relationship-cell {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--ds-stack);
   min-block-size: 0;
   overflow-x: hidden;
   overflow-y: auto;
@@ -18566,7 +18800,7 @@ button.tileset-relationship-cell {
 
 .run-meta-navigation {
   display: grid;
-  gap: 7px;
+  gap: var(--ds-inline-tight);
   inline-size: 100%;
 }
 
@@ -18578,73 +18812,113 @@ button.tileset-relationship-cell {
   margin-block-start: auto;
 }
 
-.run-army-workspace,
 .run-sell-workspace {
-  grid-template-columns: minmax(0, 1fr);
   position: relative;
   z-index: 35;
 }
 
-.run-army-ledger > .le-outer-panel-content,
-.run-sell-panel > .le-outer-panel-content {
+.run-self-inspection-workspace {
+  z-index: 35;
+}
+
+.run-self-inspection-content {
+  gap: var(--ds-space-3);
+}
+
+.run-self-inspection-head {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--ds-space-3);
+  justify-content: space-between;
+  min-block-size: 42px;
+}
+
+.run-self-inspection-head h2 {
+  color: #eafaff;
+  font: var(--ds-weight-regular) var(--ds-text-xl)/1 var(--ds-font-display);
+  margin: 0;
+}
+
+.run-self-inspection-head > span {
+  color: var(--skirmish-muted);
+  font: var(--ds-weight-regular) var(--ds-text-md)/1 var(--ds-font-display);
+}
+
+.run-army-ledger-content {
+  display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
-  block-size: 100%;
+  min-block-size: 0;
   overflow: hidden;
 }
 
 .run-roster-filters {
   align-items: end;
   display: grid;
-  gap: 10px;
+  gap: var(--ds-inline-tight);
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
 }
 
 .run-roster-filters > label {
   display: grid;
-  gap: 4px;
+  gap: var(--ds-space-1);
   min-inline-size: 0;
 }
 
-.run-roster-filters .le-select-wrap,
-.run-roster-filters select {
+.run-roster-filters .house-select {
   inline-size: 100%;
   min-inline-size: 0;
 }
 
-.run-army-ledger-list,
+.run-army-ledger-grid {
+  --run-army-row-block-size: 158px;
+  block-size: 100%;
+  min-block-size: 0;
+}
+
 .run-sell-list {
   align-content: start;
   display: grid;
-  gap: 8px;
+  gap: var(--ds-inline-tight);
   min-block-size: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  padding-inline-end: 4px;
+  padding-inline-end: var(--ds-space-1);
 }
 
 .run-army-ledger-row {
+  all: unset;
   align-items: center;
+  block-size: var(--run-army-row-block-size);
+  box-sizing: border-box;
   cursor: pointer;
   display: grid;
-  gap: 14px;
-  grid-template-columns: 92px minmax(0, 1fr) auto;
+  gap: 0;
+  grid-template-columns: var(--chrome-divided-grid-columns);
   inline-size: 100%;
-  min-block-size: 108px;
-  padding: 8px 14px;
+  min-block-size: var(--run-army-row-block-size);
   text-align: start;
 }
 
+.run-army-ledger-row:hover {
+  filter: brightness(1.12);
+}
+
 .run-army-ledger-portrait {
-  block-size: 88px;
-  inline-size: 88px;
+  block-size: 100%;
+  inline-size: 100%;
 }
 
 .run-army-ledger-copy,
 .run-sell-copy {
   align-content: center;
   display: grid;
-  gap: 5px;
+  gap: var(--ds-space-1);
   min-inline-size: 0;
+}
+
+.run-army-ledger-copy {
+  padding-inline: var(--ds-inset);
 }
 
 .run-army-ledger-copy > strong,
@@ -18662,30 +18936,65 @@ button.tileset-relationship-cell {
   color: var(--skirmish-muted);
 }
 
+.run-army-ledger-copy > small,
+.run-army-ledger-copy > .run-unit-no-traits {
+  font: var(--ds-weight-regular) var(--ds-text-md)/1.15 var(--ds-font-display);
+}
+
+.run-army-ledger-copy > .run-unit-traits {
+  font-size: var(--ds-text-md);
+}
+
 .run-army-ledger-value,
 .run-sell-return {
   align-items: end;
   display: grid;
-  gap: 3px;
+  gap: var(--ds-space-1);
   justify-items: end;
   min-inline-size: 80px;
+}
+
+.run-army-ledger-value {
+  min-inline-size: 112px;
+  padding-inline: var(--ds-inset);
+}
+
+.run-army-ledger-empty {
+  margin: 0;
+  padding: var(--ds-gutter);
+}
+
+.run-army-ledger-empty > * {
+  grid-column: 1 / -1;
+}
+
+.run-army-ledger-value > small {
+  color: var(--skirmish-muted);
+  font: var(--ds-weight-medium) var(--ds-text-md)/1 var(--ds-font-display);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.run-army-ledger-value > strong {
+  color: #fff5df;
+  font: var(--ds-weight-regular) var(--ds-text-xl)/1 var(--ds-font-display);
 }
 
 .run-unit-traits {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: 7px 12px;
+  gap: var(--ds-inline-tight) var(--ds-inline);
 }
 
 .run-unit-traits.is-compact {
-  gap: 4px 9px;
+  gap: var(--ds-space-1) var(--ds-inline-tight);
 }
 
 .run-unit-trait {
   align-items: center;
   display: inline-flex;
-  gap: 4px;
+  gap: var(--ds-space-1);
   white-space: nowrap;
 }
 
@@ -18707,9 +19016,11 @@ button.tileset-relationship-cell {
   display: block;
 }
 
-.run-army-profile > .le-outer-panel-content {
+.run-army-profile-content {
   block-size: 100%;
+  display: grid;
   grid-template-rows: auto minmax(0, 1fr);
+  min-block-size: 0;
   overflow: hidden;
 }
 
@@ -18719,59 +19030,46 @@ button.tileset-relationship-cell {
   overflow: hidden;
 }
 
-.run-army-ledger.run-panel-unframed {
-  display: grid;
-  gap: var(--ds-gutter);
-  grid-template-rows: auto auto minmax(0, 1fr);
+.run-army-profile .run-self-inspection-head button {
+  min-inline-size: 168px;
 }
-
-.run-army-profile.run-panel-unframed {
-  display: grid;
-  gap: var(--ds-gutter);
-  grid-template-rows: auto minmax(0, 1fr);
-}
-
-.run-panel-unframed-header {
-  align-items: center;
-  display: flex;
-  gap: var(--ds-gutter);
-  justify-content: space-between;
-  min-inline-size: 0;
-}
-
-.run-army-profile .outer-chrome-header {
-  align-items: center;
-  display: flex;
-  gap: 12px;
-  justify-content: space-between;
-}
-
 .run-army-profile-body {
   align-items: stretch;
   display: grid;
-  gap: 24px;
+  gap: var(--ds-gutter);
   grid-template-columns: minmax(260px, 36%) minmax(0, 1fr);
   min-block-size: 0;
-  overflow: auto;
+  overflow: visible;
 }
 
-.run-army-profile-portrait {
+.run-army-profile-scene {
   aspect-ratio: 1;
   block-size: auto;
   inline-size: 100%;
   max-block-size: 520px;
+  position: relative;
+}
+
+.run-army-profile-scene-viewport {
+  inset: var(--le-chrome-inner-rail-w, var(--ds-space-2));
+  overflow: hidden;
+  position: absolute;
+}
+
+.run-army-profile-scene .tileset-generated-board {
+  pointer-events: none;
 }
 
 .run-army-profile-copy {
   align-content: start;
   display: grid;
-  gap: 18px;
+  gap: var(--ds-stack);
   min-inline-size: 0;
 }
 
 .run-army-profile-identity {
   display: grid;
-  gap: 5px;
+  gap: var(--ds-space-1);
 }
 
 .run-army-profile-identity > strong {
@@ -18779,19 +19077,19 @@ button.tileset-relationship-cell {
 }
 
 .run-army-profile-stats {
-  padding: 12px;
+  padding: var(--ds-inset);
 }
 
 .run-army-profile-stats dl {
   display: grid;
-  gap: 8px;
+  gap: var(--ds-inline-tight);
   margin: 0;
 }
 
 .run-army-profile-stats dl > div {
   align-items: baseline;
   display: flex;
-  gap: 12px;
+  gap: var(--ds-inline);
   justify-content: space-between;
 }
 
@@ -18800,17 +19098,61 @@ button.tileset-relationship-cell {
   text-align: end;
 }
 
-.run-sell-panel > .le-outer-panel-content {
+.run-relics-ledger {
+  align-content: start;
+  display: grid;
+  flex: 1 1 auto;
+  gap: var(--ds-inline-tight);
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  min-block-size: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-inline-end: var(--ds-space-1);
+}
+
+.run-relics-ledger-row {
+  align-items: center;
+  display: grid;
+  gap: var(--ds-space-4);
+  grid-template-columns: 72px minmax(0, 1fr);
+  min-block-size: 104px;
+  padding: var(--ds-space-3);
+}
+
+.run-relics-ledger-copy {
+  display: grid;
+  gap: var(--ds-space-2);
+  min-inline-size: 0;
+}
+
+.run-relics-ledger-copy > strong {
+  color: #eafaff;
+  font: var(--ds-weight-regular) var(--ds-text-lg)/1 var(--ds-font-display);
+}
+
+.run-relics-ledger-copy > span,
+.run-self-inspection-empty {
+  color: var(--skirmish-muted);
+  font: var(--ds-weight-regular) var(--ds-text-md)/1.35 var(--ds-font-display);
+}
+
+.run-self-inspection-empty {
+  margin: 0;
+}
+
+.run-sell-workspace-content {
   grid-template-rows: auto auto auto minmax(0, 1fr);
+  min-block-size: 0;
+  overflow: hidden;
 }
 
 .run-sell-row {
   align-items: center;
   display: grid;
-  gap: 14px;
+  gap: var(--ds-inline);
   grid-template-columns: 86px minmax(0, 1fr) minmax(110px, auto) minmax(140px, auto);
   min-block-size: 112px;
-  padding: 9px 12px;
+  padding: var(--ds-space-2) var(--ds-inset);
 }
 
 .run-sell-row.is-sold,
@@ -19333,16 +19675,18 @@ button.tileset-relationship-cell {
 }
 
 @media (max-width: 960px) {
-  .run-workspace {
+  .run-deployment-workspace-content {
     grid-template-columns: minmax(0, 1fr);
     overflow: auto;
   }
 
   .run-army-profile-body {
     grid-template-columns: minmax(0, 1fr);
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
-  .run-army-profile-portrait {
+  .run-army-profile-scene {
     max-inline-size: 360px;
   }
 

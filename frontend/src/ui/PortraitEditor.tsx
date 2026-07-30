@@ -132,14 +132,12 @@ export function CroppedView({ src, crop, onDisplayedSrcChange }: {
   );
 }
 
-// The ONE "unit portrait box": the shared CroppedView (master + crop) inside the standard
-// transparent line-frame with the fill boundary. Every surface — the Selected-Unit HUD, the
-// roster slots, and these editor previews — renders through THIS, so the framing/fill/crop are
-// defined once (here + the `.unit-portrait` CSS) and never re-derived per surface. Size, backdrop,
-// and the selected highlight vary via `size`/`backdrop`/a `className` modifier. `masterUrl`
-// is an explicit semantic-slot override for runtime callers; `method` remains review-only.
-export function UnitPortrait({ piece, palette, crop, backdrop, size, className, method, masterUrl }: {
-  piece: Piece; palette: Palette; crop: Crop; backdrop?: string | null; size?: number; className?: string; method?: PortraitMethod; masterUrl?: string;
+// The one unit-portrait renderer: shared CroppedView composition plus an optional canonical
+// InnerChromeBox. HUD, profile, roster, and authoring portraits keep the box; a composition
+// that provides a canonical divider boundary may opt out without reimplementing the crop,
+// backdrop, sizing, or semantic media resolution.
+export function UnitPortrait({ piece, palette, crop, backdrop, size, className, method, masterUrl, framed = true }: {
+  piece: Piece; palette: Palette; crop: Crop; backdrop?: string | null; size?: number; className?: string; method?: PortraitMethod; masterUrl?: string; framed?: boolean;
 }): ReactElement {
   const requestedSrc = masterUrl ?? masterSrc(piece, palette, method);
   const [displayedBackdrop, setDisplayedBackdrop] = useState({ src: requestedSrc, backdrop });
@@ -155,11 +153,16 @@ export function UnitPortrait({ piece, palette, crop, backdrop, size, className, 
   const style: CSSProperties = {};
   if (size != null) { style.width = size; style.height = size; }
   if (displayedBackdrop.backdrop) (style as Record<string, string>)['--up-backdrop'] = `url("${displayedBackdrop.backdrop}")`;
+  const classes = `unit-portrait ${displayedBackdrop.backdrop ? 'has-backdrop' : ''} ${className ?? ''}`.trim();
+  const bust = (
+    <div className="unit-portrait__bust">
+      <CroppedView src={requestedSrc} crop={crop} onDisplayedSrcChange={onDisplayedSrcChange} />
+    </div>
+  );
+  if (!framed) return <div className={classes} style={style}>{bust}</div>;
   return (
-    <InnerChromeBox className={`unit-portrait ${displayedBackdrop.backdrop ? 'has-backdrop' : ''} ${className ?? ''}`.trim()} style={style}>
-      <div className="unit-portrait__bust">
-        <CroppedView src={requestedSrc} crop={crop} onDisplayedSrcChange={onDisplayedSrcChange} />
-      </div>
+    <InnerChromeBox className={classes} style={style}>
+      {bust}
     </InnerChromeBox>
   );
 }

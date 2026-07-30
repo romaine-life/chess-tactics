@@ -24,6 +24,10 @@ import { installedUiMedia } from './installedUiMedia';
 import { InnerChromeBox, OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
 import { fetchMe } from '../net/auth';
 import { AdminControls } from './AdminControls';
+import {
+  RunSelfInspectionControls,
+  type RunSelfInspectionView,
+} from './RunSelfInspection';
 
 const TYPE_LABEL = PIECE_LABEL;
 
@@ -194,12 +198,12 @@ export type SkirmishHudProps = {
   onPawnCashOut?: ((pieceId: string) => void) | null;
   /** Permanently end the active Run. RunScreen owns confirmation and persistence. */
   onAbandonRun?: (() => void) | null;
-  /** Opens the persistent Run army over the board without unmounting or pausing Battle. */
-  onToggleRunArmy?: (() => void) | null;
-  runArmyOpen?: boolean;
   /** Battle-context reference workspace. The route owns whether it is open. */
   strategikonHref?: string | null;
   strategikonOpen?: boolean;
+  /** Switches the Run's primary Battle and self-inspection workspaces without unmounting Battle. */
+  onNavigateRunView?: ((view: 'primary' | RunSelfInspectionView) => void) | null;
+  runSelfInspectionView?: RunSelfInspectionView | null;
   /** Between-Battle phases replace only the existing panel's contents. */
   controlsContent?: ReactNode;
 };
@@ -222,10 +226,10 @@ export function SkirmishHud({
   onOpenPredrawnRegistration = null,
   onPawnCashOut = null,
   onAbandonRun = null,
-  onToggleRunArmy = null,
-  runArmyOpen = false,
   strategikonHref = null,
   strategikonOpen = false,
+  onNavigateRunView = null,
+  runSelfInspectionView = null,
   controlsContent,
 }: SkirmishHudProps = {}) {
   const game = useSkirmish((s) => s.game);
@@ -737,21 +741,37 @@ export function SkirmishHud({
               </div>
             </div>
             {onAbandonRun && !net ? (
-              <div className="skirmish-view-group">
-                <span className="skirmish-eyebrow">Run</span>
-                <div className="run-meta-navigation">
-                  {onToggleRunArmy ? (
+              <>
+                {onNavigateRunView ? (
+                  <div className="skirmish-view-group">
+                    <span className="skirmish-eyebrow">Run view</span>
+                    <div className="run-meta-navigation">
                     <button
                       type="button"
                       data-chrome-unit="inner-text-button"
-                      data-testid="run-battle-army"
-                      className={chromeUnitClassNames('inner-text-button', 'app-header-button', runArmyOpen && 'active')}
-                      aria-pressed={runArmyOpen}
-                      onClick={onToggleRunArmy}
+                      data-testid="run-battle-view-primary"
+                      className={chromeUnitClassNames('inner-text-button', 'app-header-button', !runSelfInspectionView && 'active')}
+                      aria-pressed={!runSelfInspectionView}
+                      onClick={() => onNavigateRunView('primary')}
                     >
-                      {runArmyOpen ? 'Back to Battle' : 'Army'}
+                      Battle
                     </button>
-                  ) : null}
+                    </div>
+                  </div>
+                ) : null}
+                {onNavigateRunView ? (
+                  <div className="skirmish-view-group">
+                    <span className="skirmish-eyebrow">Self inspection</span>
+                    <RunSelfInspectionControls
+                      view={runSelfInspectionView}
+                      onNavigate={onNavigateRunView}
+                      testIdPrefix="run-battle-view"
+                    />
+                  </div>
+                ) : null}
+                <div className="skirmish-view-group">
+                  <span className="skirmish-eyebrow">Run</span>
+                  <div className="run-meta-navigation">
                   <button
                     type="button"
                     data-chrome-unit="inner-text-button"
@@ -761,8 +781,9 @@ export function SkirmishHud({
                   >
                     Abandon Run
                   </button>
+                  </div>
                 </div>
-              </div>
+              </>
             ) : null}
             {adminAuth.isAdmin && !net ? (
               <div className="skirmish-view-group">

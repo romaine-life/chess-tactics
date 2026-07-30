@@ -1,16 +1,16 @@
 ---
-status: superseded by ADR-0237
+status: superseded by ADR-0250
 date: 2026-07-29
 deciders: owner (Nelson) + Codex
 superseded_by:
-  - "[ADR-0237](0237-strategikon-book-aligns-to-the-controls-content-boundary.md)"
+  - "[ADR-0250](0250-strategikon-book-aligns-to-the-controls-content-boundary.md)"
 supersedes:
   - "[ADR-0233](0233-strategikon-uses-a-divider-safe-book-control.md)"
 refines:
   - "[ADR-0231](0231-strategikon-and-enchiridion-share-one-reference-workspace-language.md)"
 ---
 
-# ADR-0236: Strategikon book art is the title control
+# ADR-0249: Strategikon book art is the title control
 
 ## Context
 

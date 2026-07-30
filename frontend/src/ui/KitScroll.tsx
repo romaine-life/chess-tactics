@@ -1,16 +1,27 @@
-import { useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactElement, type ReactNode } from 'react';
+import {
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
+  type ReactElement,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 
 // A DRAWN scrollbar (ADR-0030). The native scrollbar is hidden; we render an always-present rail
 // (a real DOM element — the browser can't hide it) plus a grip thumb that appears only when there's
 // scrollable content and tracks the scroll position. Because it's DOM, the rail never vanishes on an
 // empty pane AND it screenshots like any other element (native ::-webkit skins don't render in
 // headless captures). Content still scrolls natively (wheel/keys); we only draw + drive the bar.
-export function KitScroll({ children, className, style }: {
+export function KitScroll({ children, className, style, contentRef }: {
   children: ReactNode;
   className?: string;
   style?: CSSProperties;
+  contentRef?: RefObject<HTMLDivElement | null>;
 }): ReactElement {
-  const content = useRef<HTMLDivElement>(null);
+  const localContent = useRef<HTMLDivElement>(null);
+  const content = contentRef ?? localContent;
   const drag = useRef<{ y: number; top: number; h: number } | null>(null);
   const [m, setM] = useState<{ scrollable: boolean; h: number; top: number }>({ scrollable: false, h: 0, top: 0 });
 

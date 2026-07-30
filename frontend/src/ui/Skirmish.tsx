@@ -79,6 +79,7 @@ import { useActiveRun } from '../run/store';
 import { RunRelicStrip } from './RunRelics';
 import { Strategikon } from './Strategikon';
 import { sceneTransitionTargetAttributes } from './shell/sceneTransitionTarget';
+import type { RunSelfInspectionView } from './RunSelfInspection';
 
 export interface RunBattlePresentation {
   level: Level;
@@ -102,6 +103,7 @@ export function SkirmishShell({
   testId = 'skirmish',
   titleBarContent,
   relicIds = [],
+  runSelfInspectionOpen = false,
   controlsContent,
   hudProps,
   hudContent,
@@ -114,6 +116,7 @@ export function SkirmishShell({
   testId?: string;
   titleBarContent: ReactNode;
   relicIds?: readonly RunRelicId[];
+  runSelfInspectionOpen?: boolean;
   controlsContent?: ReactNode;
   hudProps?: SkirmishHudProps;
   hudContent?: ReactNode;
@@ -136,7 +139,7 @@ export function SkirmishShell({
     : screenStyle ?? undefined;
   const surface = (
     <>
-      <RunRelicStrip relicIds={relicIds} />
+      {runSelfInspectionOpen ? null : <RunRelicStrip relicIds={relicIds} />}
       {children}
       {hudContent === undefined
         ? <SkirmishHud {...hudProps} controlsContent={controlsContent} />
@@ -147,7 +150,7 @@ export function SkirmishShell({
   return (
     <div
       data-testid={testId}
-      className={`skirmish-screen is-play-canvas ${className}`.trim()}
+      className={`skirmish-screen is-play-canvas${runSelfInspectionOpen ? ' is-run-self-inspection-open' : ''} ${className}`.trim()}
       style={resolvedScreenStyle}
     >
       {installedChromeCss ? <style data-skirmish-chrome-family dangerouslySetInnerHTML={{ __html: installedChromeCss }} /> : null}
@@ -171,16 +174,16 @@ export function SkirmishShell({
 export function Skirmish({
   runBattle = null,
   runWorkspace = null,
-  runArmyOpen = false,
-  onToggleRunArmy = null,
   routePath = window.location.pathname,
+  runSelfInspectionView = null,
+  onNavigateRunView = null,
   routeSearch = window.location.search,
 }: {
   runBattle?: RunBattlePresentation | null;
   runWorkspace?: ReactNode;
-  runArmyOpen?: boolean;
-  onToggleRunArmy?: (() => void) | null;
   routePath?: string;
+  runSelfInspectionView?: RunSelfInspectionView | null;
+  onNavigateRunView?: ((view: 'primary' | RunSelfInspectionView) => void) | null;
   routeSearch?: string;
 } = {}) {
   const routeParams = useMemo(() => new URLSearchParams(routeSearch), [routeSearch]);
@@ -1132,10 +1135,10 @@ export function Skirmish({
         onOpenPredrawnRegistration={predrawnPreview ? () => setPredrawnPickerOpen(true) : null}
         onPawnCashOut={runBattle?.onPawnCashOut ?? null}
         onAbandonRun={runBattle?.onAbandonRun ?? null}
-        onToggleRunArmy={onToggleRunArmy}
-        runArmyOpen={runArmyOpen}
         strategikonHref={strategikonHref}
         strategikonOpen={strategikonOpen}
+        runSelfInspectionView={runSelfInspectionView}
+        onNavigateRunView={onNavigateRunView}
       />
     </PaintedSurfaceBoundary>
   ) : null;
@@ -1144,6 +1147,7 @@ export function Skirmish({
     <SkirmishShell
       testId="skirmish"
       className={screenPredrawnBackgroundActive ? 'is-predrawn-board' : ''}
+      runSelfInspectionOpen={Boolean(runWorkspace) || strategikonOpen}
       titleBarContent={playableSurfaceReady ? (
         <div className="skirmish-topbar-status">
           {/* The battle clock is ALWAYS the middle chip on every play surface — a timed game
@@ -1225,9 +1229,9 @@ export function Skirmish({
         data-scene-instance={strategikonBase}
       >
         <div
-          className="skirmish-field"
-          inert={strategikonOpen ? true : undefined}
-          aria-hidden={strategikonOpen || undefined}
+          className={`skirmish-field${strategikonOpen || runWorkspace ? ' is-workspace-covered' : ''}`}
+          inert={strategikonOpen || runWorkspace ? true : undefined}
+          aria-hidden={strategikonOpen || runWorkspace ? true : undefined}
         >
           <div className="skirmish-board-frame">
             {mapError ? (
@@ -1281,6 +1285,7 @@ export function Skirmish({
             <small>Multiplayer</small>
           </InnerChromeBox>
         ) : null}
+        {runWorkspace}
         <div
           className="strategikon-slot"
           {...sceneTransitionTargetAttributes('gameplay-shell')}
@@ -1295,7 +1300,6 @@ export function Skirmish({
           ) : null}
         </div>
       </section>
-      {runWorkspace}
       {predrawnPickerOpen && predrawnPreview ? (
         <PredrawnCornerPicker
           src={predrawnPreview}
