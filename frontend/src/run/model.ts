@@ -2,8 +2,9 @@ import type { Level, War } from '../core/level';
 import type { PieceType } from '../core/types';
 import { spawnEventsForLevel } from '../core/levelEvents';
 import { createRng } from '../core/rng';
+import { runUnitName } from './unitNames';
 
-export const RUN_FORMAT_VERSION = 1;
+export const RUN_FORMAT_VERSION = 3;
 export const GOLD_SCALE = 10;
 
 export type PurchasablePieceType = 'pawn' | 'knight' | 'bishop' | 'rook' | 'queen';
@@ -52,6 +53,7 @@ export function battleVictoryGoldTenths(level: Level): number {
 
 export interface RunArmyUnit {
   id: string;
+  name: string;
   type: RunArmyPieceType;
   abilities: RunAbility[];
   source: 'king' | 'starting' | 'draft' | 'shop';
@@ -282,12 +284,12 @@ export function snapshotWar(war: War, levels: Record<string, Level>): RunWarSnap
   return { id: war.id, name: war.name, description: war.description, battles };
 }
 
-function initialArmy(): RunArmyUnit[] {
+function initialArmy(seed: number): RunArmyUnit[] {
   return [
-    { id: 'run-king', type: 'king', abilities: [], source: 'king' },
-    { id: 'run-pawn-a', type: 'pawn', abilities: [], source: 'starting' },
-    { id: 'run-pawn-b', type: 'pawn', abilities: [], source: 'starting' },
-    { id: 'run-pawn-c', type: 'pawn', abilities: [], source: 'starting' },
+    { id: 'run-king', name: runUnitName(seed, 'king', 0), type: 'king', abilities: [], source: 'king' },
+    { id: 'run-pawn-a', name: runUnitName(seed, 'pawn', 0), type: 'pawn', abilities: [], source: 'starting' },
+    { id: 'run-pawn-b', name: runUnitName(seed, 'pawn', 1), type: 'pawn', abilities: [], source: 'starting' },
+    { id: 'run-pawn-c', name: runUnitName(seed, 'pawn', 2), type: 'pawn', abilities: [], source: 'starting' },
   ];
 }
 
@@ -303,7 +305,7 @@ export function createRun(war: RunWarSnapshot, seed: number, now = new Date().to
     battleIndex: 0,
     conflictIndex: 0,
     goldTenths: 0,
-    army: initialArmy(),
+    army: initialArmy(seed),
     relics: [],
     seenRelics: [],
     conflictPaidRelics: {},
@@ -321,19 +323,43 @@ function touch(run: RunDocument): RunDocument {
 }
 
 export function normalizeRunDocument(run: RunDocument): RunDocument {
-  if (
-    run.phase !== 'shop'
-    || !run.shop
-    || (Number.isSafeInteger(run.shop.victoryGoldTenths) && run.shop.victoryGoldTenths >= 0)
-  ) return run;
-  const battle = run.war.battles[run.shop.afterBattleIndex];
-  if (!battle) return run;
-  const reward = battleVictoryGoldTenths(battle.level);
-  return {
-    ...run,
-    goldTenths: Math.max(0, run.goldTenths + reward - GOLD_SCALE),
-    shop: { ...run.shop, victoryGoldTenths: reward },
+  const roleOrdinals: Record<RunArmyPieceType, number> = {
+    pawn: 0,
+    knight: 0,
+    bishop: 0,
+    rook: 0,
+    queen: 0,
+    king: 0,
   };
+  const replacesGenericFormatTwoNames = Number(run.formatVersion) < RUN_FORMAT_VERSION;
+  let namesChanged = false;
+  const army = run.army.map((unit) => {
+    const roleOrdinal = roleOrdinals[unit.type];
+    roleOrdinals[unit.type] += 1;
+    const validName = typeof unit.name === 'string' && unit.name.trim() && unit.name.length <= 80;
+    if (!replacesGenericFormatTwoNames && validName) return unit;
+    namesChanged = true;
+    return { ...unit, name: runUnitName(run.seed, unit.type, roleOrdinal) };
+  });
+  const versionChanged = Number(run.formatVersion) !== RUN_FORMAT_VERSION;
+  let normalized: RunDocument = namesChanged || versionChanged
+    ? { ...run, formatVersion: RUN_FORMAT_VERSION, army }
+    : run;
+
+  if (
+    normalized.phase !== 'shop'
+    || !normalized.shop
+    || (Number.isSafeInteger(normalized.shop.victoryGoldTenths) && normalized.shop.victoryGoldTenths >= 0)
+  ) return normalized;
+  const battle = normalized.war.battles[normalized.shop.afterBattleIndex];
+  if (!battle) return normalized;
+  const reward = battleVictoryGoldTenths(battle.level);
+  normalized = {
+    ...normalized,
+    goldTenths: Math.max(0, normalized.goldTenths + reward - GOLD_SCALE),
+    shop: { ...normalized.shop, victoryGoldTenths: reward },
+  };
+  return normalized;
 }
 
 function addArmyPieces(
@@ -342,8 +368,19 @@ function addArmyPieces(
   source: RunArmyUnit['source'],
 ): Pick<RunDocument, 'army' | 'nextArmyUnitSequence'> {
   let sequence = run.nextArmyUnitSequence;
+  const roleOrdinals = run.army.reduce<Record<RunArmyPieceType, number>>((counts, unit) => {
+    counts[unit.type] += 1;
+    return counts;
+  }, { pawn: 0, knight: 0, bishop: 0, rook: 0, queen: 0, king: 0 });
   const added = pieces.map((type): RunArmyUnit => {
-    const unit = { id: `run-unit-${sequence}`, type, abilities: [], source };
+    const unit = {
+      id: `run-unit-${sequence}`,
+      name: runUnitName(run.seed, type, roleOrdinals[type]),
+      type,
+      abilities: [],
+      source,
+    };
+    roleOrdinals[type] += 1;
     sequence += 1;
     return unit;
   });

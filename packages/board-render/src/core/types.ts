@@ -42,6 +42,8 @@ export interface TerrainCell {
 
 export interface Piece {
   id: string;
+  /** Persistent Run display name. Ordinary authored/skirmish pieces remain unnamed. */
+  name?: string;
   side: Side;
   type: PieceType;
   x: number;

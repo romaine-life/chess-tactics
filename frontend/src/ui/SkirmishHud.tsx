@@ -436,8 +436,8 @@ export function SkirmishHud({
                 </InnerChromeBox>
               )}
               <div className="skirmish-selected-copy">
-                <strong data-testid="selected-name">{focused ? TYPE_LABEL[focused.type] : 'None'}</strong>
-                <span>{focused ? `${skirmishUnitOwnerLabel(focused.side, localSide)} - ${ROLE[focused.type]}` : 'Choose a unit on the board.'}</span>
+                <strong data-testid="selected-name">{focused ? focused.name ?? TYPE_LABEL[focused.type] : 'None'}</strong>
+                <span>{focused ? `${TYPE_LABEL[focused.type]} · ${skirmishUnitOwnerLabel(focused.side, localSide)} - ${ROLE[focused.type]}` : 'Choose a unit on the board.'}</span>
               </div>
             </div>
             {focused && (focused.side === 'player' || focused.side === 'enemy') && (
@@ -467,7 +467,7 @@ export function SkirmishHud({
                       type="button"
                       className={`skirmish-roster-slot ${piece.id === focused?.id ? 'active' : ''}`.trim()}
                       onClick={() => skirmishRosterAction(piece.side, localSide) === 'select' ? select(piece.id) : focus(piece.id)}
-                      aria-label={`${clientSideLabel(piece.side, localSide)} ${TYPE_LABEL[piece.type]}`}
+                      aria-label={`${clientSideLabel(piece.side, localSide)} ${piece.name ? `${piece.name}, ` : ''}${TYPE_LABEL[piece.type]}`}
                     >
                       {isPlayablePieceType(piece.type) ? (
                         <UnitPortrait

@@ -61,6 +61,12 @@ these.
   each actual unit appears as the same canonical player-side sprite used on the
   board, dense bundles form a compact grid, and shop prices use the installed
   gold icon with a live number (ADR-0219, ADR-0225).
+- Every persistent Run unit receives a seeded, stored historical identity when
+  it joins the army. Piece type chooses the register: recorded archers for
+  Pawns, documented knights, religious leaders, real castles for Rooks, queens
+  or regents, and kings or emperors. Names remain stable through Battles,
+  retries, and cross-device resume while the chess-piece type stays visible
+  beside that identity (ADR-0228).
 - A non-final Run victory funds its shop from the authored enemy force: each
   King is worth 1 gold and every other enemy chess piece pays 50% of its
   standard value (ADR-0220).

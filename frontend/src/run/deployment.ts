@@ -268,6 +268,7 @@ export function levelWithRunDeployment(run: RunDocument, level: Level, layout: R
       side: 'player' as const,
       facing: defaultFacingForSide('player'),
       runUnitId: unit.id,
+      runUnitName: unit.name,
     }];
   });
   const rocks: LevelUnit[] = layout.temporaryRocks.map((cell, index) => ({

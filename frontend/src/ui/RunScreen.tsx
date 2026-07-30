@@ -168,7 +168,10 @@ function RunArmyControls({
             const sale = PIECE_VALUE[unit.type] * (hasRelic(run, 'fair-scales') ? 0.75 : 0.5);
             return (
               <div className="run-army-unit" key={unit.id}>
-                <span>{PIECE_LABEL[unit.type]}</span>
+                <span className="run-army-unit-identity">
+                  <strong>{unit.name}</strong>
+                  <small>{PIECE_LABEL[unit.type]}</small>
+                </span>
                 {unit.abilities.includes('discipline') ? <small>Discipline</small> : null}
                 {selling && unit.type !== 'king' ? (
                   <button
@@ -302,7 +305,7 @@ function DeploymentPanel({ run }: { run: RunDocument }): ReactElement {
                     checked={chosenBlocked.includes(unit.id)}
                     onChange={() => toggleBlocked(unit.id)}
                   />
-                  {PIECE_LABEL[unit.type]}
+                  {unit.name} — {PIECE_LABEL[unit.type]}
                 </label>
               ))}
             </div>
@@ -322,7 +325,7 @@ function DeploymentPanel({ run }: { run: RunDocument }): ReactElement {
                 .map(([, cell]) => cell));
               return (
                 <label className="run-placement-row" key={unitId}>
-                  <span>{unit ? PIECE_LABEL[unit.type] : unitId}</span>
+                  <span>{unit ? `${unit.name} — ${PIECE_LABEL[unit.type]}` : unitId}</span>
                   <select
                     value={prepared.deployment?.manualPlacements[unitId] ?? ''}
                     onChange={(event) => setManual(unitId, event.target.value)}
@@ -413,7 +416,7 @@ function RelicOffer({
         <select value={target} onChange={(event) => setTarget(event.target.value)} aria-label="Discipline target">
           <option value="">Choose a unit…</option>
           {run.army.map((unit) => (
-            <option key={unit.id} value={unit.id}>{PIECE_LABEL[unit.type]}</option>
+            <option key={unit.id} value={unit.id}>{unit.name} — {PIECE_LABEL[unit.type]}</option>
           ))}
         </select>
       ) : null}
@@ -602,6 +605,7 @@ function BattlePanel({ run }: { run: RunDocument }): ReactElement {
         const facing = defaultFacingForSide('player');
         const spawned: Piece = {
           id: reservist.id,
+          name: reservist.name,
           type: reservist.type,
           side: 'player',
           ...cell,

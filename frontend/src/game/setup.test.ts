@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, it, expect } from 'vitest';
 import { applyLiveMediaCatalog, resetLiveMediaCatalog, resetPropSeats } from '@chess-tactics/board-render';
-import { createSkirmish } from './setup';
+import { createFromLevel, createSkirmish } from './setup';
 import { applyTestPropSeats } from '../test/livePropSeats';
 import { testGroundCoverCatalog, testStructureMediaSlots } from '../test/liveMediaCatalog';
 
@@ -39,6 +39,23 @@ const hasMove = (moves: ReadonlyArray<{ x: number; y: number }>, x: number, y: n
   moves.some((move) => move.x === x && move.y === y);
 
 describe('createSkirmish', () => {
+  it('preserves a persistent Run unit name in live Battle state', () => {
+    const level = createBlankLevel('named-run-unit', 'Named Run Unit', 2, 2);
+    level.layers.units.push({
+      x: 0,
+      y: 1,
+      type: 'pawn',
+      side: 'player',
+      runUnitId: 'run-pawn-a',
+      runUnitName: 'Stephen Botiller',
+    });
+
+    expect(createFromLevel(level, 1).pieces[0]).toMatchObject({
+      id: 'run-pawn-a',
+      name: 'Stephen Botiller',
+    });
+  });
+
   it('is deterministic for a given seed', () => {
     expect(createSkirmish({ seed: 42 })).toEqual(createSkirmish({ seed: 42 }));
   });

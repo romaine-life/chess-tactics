@@ -67,6 +67,7 @@ export function createFromLevel(level: Level, seed: number): GameState {
     const facing = unit.facing ?? defaultFacingForSide(unit.side);
     return {
       id: unit.runUnitId ?? `${unit.side}-${unit.type}-${index}`,
+      name: unit.runUnitName,
       side: unit.side,
       type: unit.type,
       x: unit.x,
