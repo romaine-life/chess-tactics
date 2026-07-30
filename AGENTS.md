@@ -50,6 +50,7 @@ contracts whenever the task vocabulary suggests one.
 | Generated visual art and runtime visual assets | [`docs/runtime-asset-contract.md`](docs/runtime-asset-contract.md), [`docs/asset-generation-contract.md`](docs/asset-generation-contract.md), [`docs/asset-terminology.md`](docs/asset-terminology.md), and the relevant portrait, background, UI, or tile contract. For complete pre-drawn level scenes, also read [`docs/art/predrawn-board-generation.md`](docs/art/predrawn-board-generation.md). |
 | UI, chrome, Studio, and editors | [`docs/ui-art-direction.md`](docs/ui-art-direction.md), [`docs/ui-kit-standard.md`](docs/ui-kit-standard.md), and [`docs/studio-control-architecture.md`](docs/studio-control-architecture.md) |
 | Content, persistence, and authentication | [`docs/persistence.md`](docs/persistence.md) and the ADRs governing the affected content system |
+| Database schema migrations | [ADR-0174](docs/adr/0174-database-migrations-are-append-only-checksummed-and-explicit.md), [`docs/persistence.md`](docs/persistence.md), and the shared-database workflow below |
 | Backend, multiplayer, and local server work | `CLAUDE.md` and the relevant backend smoke tests |
 | Solver and AI work | [`docs/per-board-ai-plan.md`](docs/per-board-ai-plan.md), [`docs/board-solver-implementation-plan.md`](docs/board-solver-implementation-plan.md), and ADR-0069 through ADR-0071 as applicable |
 | Deployment and infrastructure | The Deploy section of [`README.md`](README.md), [`.github/workflows/`](.github/workflows/), [`k8s/`](k8s/), and [`tofu/`](tofu/) |
@@ -107,6 +108,50 @@ contracts whenever the task vocabulary suggests one.
 - A request to open a pull request alone does not authorize merging it. Merge
   only after required checks are green and the user has explicitly requested or
   approved that PR for merge.
+
+## Shared database migration workflow
+
+A development database that can be reached by more than one checkout, worktree,
+agent, or session is shared infrastructure. Assume a development database is
+shared unless the task has created and identified a disposable database used
+only by that task.
+
+- Never apply a migration that exists only on an unmerged branch to a shared
+  development database. This includes `npm --prefix backend run schema:migrate`,
+  `SCHEMA_MIGRATIONS=apply`, and any equivalent schema-mutating command.
+- Author the next append-only migration on a branch based on current
+  `origin/main`. Add its postcondition, upgrade-path coverage, and relevant
+  operation-level smoke test as required by
+  [ADR-0174](docs/adr/0174-database-migrations-are-append-only-checksummed-and-explicit.md).
+- Before merging, exercise the migration only against a disposable, isolated
+  database owned by the task or test. Verify that it is not the shared
+  development database before running an applying process.
+- Put the migration through a pull request, obtain green required checks, and
+  merge it to `main` only with the user's explicit approval. The migration's
+  exact version, name, checksum, implementation, and validation must be
+  available from `main` before the shared database is advanced.
+- Coordinate active sessions before applying it: persistent worktrees that use
+  the shared database must update to the containing `main` commit or stop their
+  backend processes. Then run the canonical migration command from a clean,
+  up-to-date `main` checkout and report the exact migration plan it applied.
+  Restart affected sessions in the normal read-only check mode afterward.
+
+This ordering is required because the database migration ledger is global, not
+worktree-local. A shared database cannot record that a migration belongs only
+to the feature branch that applied it. Every backend in check mode compares that
+global ledger with the migration manifest in its own checkout, including the
+version, name, and checksum. If a branch advances the database before its
+migration reaches `main`, all other sessions still based on `main` see database
+history their code does not contain and fail startup or readiness even though
+their own code did not change. The append-only, immutable history required by
+ADR-0174 makes an early shared apply a repository-wide coordination event, not
+a private branch test.
+
+If an unmerged migration is accidentally applied to the shared database, stop
+further schema work and report the applied version plus the highest version on
+`origin/main`. Preserve the exact applied migration identity and prioritize a PR
+that makes that history available from `main`, with its checks and explicit
+merge approval; any corrective schema work must be a subsequent migration.
 
 ## Run and validate the real application
 

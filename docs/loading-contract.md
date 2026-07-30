@@ -183,9 +183,15 @@ route lifecycle during the same React commit.
   decode does not by itself repaint a background declaration whose first request failed.
 - Canonical level summaries project immutable Blob-backed list-thumbnail URLs. Missing or
   stale derivatives are generated server-side and published content-addressably; ordinary
-  player lists never reconstruct boards in the browser. Derivative freshness is a pure
-  version of the canonical level document plus its live prop-seat, unit, media, and drawable
-  authority revisions; it never depends on mutable renderer-process state.
+  player lists never reconstruct boards in the browser. Per ADR-0234, derivative freshness
+  fingerprints the exact resolved render plan, consumed source hashes, and availability
+  behavior. Global prop-seat, unit, media, and drawable revisions select one coherent
+  projection but never invalidate a derivative that does not consume their changed member.
+  The fingerprint never depends on mutable renderer-process state.
+- Canonical read repair coalesces identical work and every thumbnail render passes through
+  one bounded process-wide FIFO limiter. A genuinely changed visible derivative remains
+  fail-closed until current pixels exist; unrelated authority changes are immediate cache
+  hits, and below-fold acquisition remains opportunistic.
 - Per ADR-0189, ADR-0201, ADR-0202, ADR-0204, and ADR-0226, list derivatives are fixed
   390×248 renders matching Play's 195:124 reference opening pane and use the shared
   playable-board opening frame rather than opaque-pixel or full-generated-scene crops.
