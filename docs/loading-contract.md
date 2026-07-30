@@ -175,12 +175,13 @@ route lifecycle during the same React commit.
   player lists never reconstruct boards in the browser. Derivative freshness is a pure
   version of the canonical level document plus its live prop-seat, unit, media, and drawable
   authority revisions; it never depends on mutable renderer-process state.
-- Per ADR-0189, ADR-0201, ADR-0202, and ADR-0204, list derivatives are fixed
-  390×248 renders matching Play's 195:124 board pane and use the shared
+- Per ADR-0189, ADR-0201, ADR-0202, ADR-0204, and ADR-0226, list derivatives are fixed
+  390×248 renders matching Play's 195:124 reference opening pane and use the shared
   playable-board opening frame rather than opaque-pixel or full-generated-scene crops.
-  Play applies that framing policy to its stable 1560×992 design-pixel pane inside
-  the uniformly scaled 1920×1080 composition. Every live board viewer uses that same
-  195:124 drawable shape inside its surrounding UI. A framing-policy change bumps the renderer revision: reads repair stale
+  Play applies that framing policy to a centered 195:124 safe area while its live pane
+  expands through a 2.1:1 browser-content aspect and true ultrawide surplus becomes
+  shell-owned wings. Non-Play live board viewers retain the same 195:124 drawable shape
+  inside their surrounding UI. A framing-policy change bumps the renderer revision: reads repair stale
   derivatives and save/publish prepares the current version without regenerating accepted
   board artwork.
 - Initially presented level cards are one surface: the list remains hidden and inert until

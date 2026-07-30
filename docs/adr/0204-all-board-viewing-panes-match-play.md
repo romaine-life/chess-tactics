@@ -2,6 +2,8 @@
 status: accepted
 date: 2026-07-29
 deciders: owner (Nelson) + Codex
+partially_superseded_by:
+  - "[ADR-0226](0226-play-expands-before-ultrawide-wings.md)"
 supersedes:
   - "[ADR-0203](0203-ordinary-board-previews-match-the-play-pane.md)'s ordinary-preview-only scope"
 partially_supersedes:

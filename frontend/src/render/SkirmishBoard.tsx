@@ -43,6 +43,7 @@ import {
 import {
   UNIT_IMG_MAX_H,
   UNIT_IMG_MAX_W,
+  BOARD_PREVIEW_ASPECT,
   boardBounds,
   boardContentHash,
   boardDrawOps,
@@ -1219,6 +1220,8 @@ export function SkirmishBoard({
     zoom: boardZoom,
     setZoom,
     setPan: setBoardPan,
+    openingViewportAspectCap:
+      BOARD_PREVIEW_ASPECT.width / BOARD_PREVIEW_ASPECT.height,
     onOpeningCameraChange: setOpeningView,
     resetRevision: cameraResetRevision,
   });
@@ -1683,6 +1686,7 @@ export function SkirmishBoard({
       <ViewPane
         key={`${boardArt.signature}:${boardFrame.retryKey}`}
         kind="board"
+        boardViewportMode="fill"
         ariaLabel="Skirmish board viewport"
         zoom={boardZoom}
         pan={boardPan}

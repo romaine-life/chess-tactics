@@ -97,7 +97,7 @@ export function LevelThumbnail({
   const canonicalDerivative = !authoringPreview
     ? levelThumbnailUrl(level.id)
     : null;
-  // Canonical and authoring derivatives own the literal Play viewing-pane composition.
+  // Canonical and authoring derivatives own Play's reference opening composition.
   const coverThumbnail = true;
   const contentHash = useMemo(() => board ? boardContentHash(board) : `canonical:${level.id}`, [board, level.id]);
   const aspect = BOARD_PREVIEW_ASPECT.width / BOARD_PREVIEW_ASPECT.height;

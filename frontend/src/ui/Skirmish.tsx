@@ -15,7 +15,7 @@ import { NavButton } from './shared/NavButton';
 import { RestartGlyph } from './shared/actionGlyphs';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleBarControlContribution, TitleBarStatus } from './shell/TitleBarControls';
-import { installPlayDesignCanvas } from './shell/fixedDesignCanvas';
+import { installPlayCanvas } from './shell/playCanvas';
 import { useSkirmish, shouldStartFreshSkirmish, setNetMoveSink, setNetResignSink } from '../game/store';
 import { loadMatch, setMatchPersistenceEnabled } from '../game/matchPersistence';
 import {
@@ -124,7 +124,7 @@ export function SkirmishShell({
   useLayoutEffect(() => {
     const shell = document.querySelector('.shell');
     if (!(shell instanceof HTMLElement)) return undefined;
-    return installPlayDesignCanvas(shell);
+    return installPlayCanvas(shell);
   }, []);
   const resolvedScreenStyle = screenStyle === undefined
     ? {
@@ -142,7 +142,11 @@ export function SkirmishShell({
   );
 
   return (
-    <div data-testid={testId} className={`skirmish-screen ${className}`.trim()} style={resolvedScreenStyle}>
+    <div
+      data-testid={testId}
+      className={`skirmish-screen is-play-canvas ${className}`.trim()}
+      style={resolvedScreenStyle}
+    >
       {installedChromeCss ? <style data-skirmish-chrome-family dangerouslySetInnerHTML={{ __html: installedChromeCss }} /> : null}
       <TitleBarSlot region="center">{titleBarContent}</TitleBarSlot>
       {registerSceneSurface ? (
@@ -1108,7 +1112,7 @@ export function Skirmish({
   return (
     <SkirmishShell
       testId="skirmish"
-      className={`is-design-locked${screenPredrawnBackgroundActive ? ' is-predrawn-board' : ''}`}
+      className={screenPredrawnBackgroundActive ? 'is-predrawn-board' : ''}
       titleBarContent={playableSurfaceReady ? (
         <div className="skirmish-topbar-status">
           {/* The battle clock is ALWAYS the middle chip on every play surface — a timed game
