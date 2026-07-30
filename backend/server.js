@@ -16655,15 +16655,15 @@ async function serveImmutableMedia(req, res, record, { privateRead = false } = {
 // Private campaign list thumbnails may contain private pre-drawn scene pixels.
 // Keep their content-addressed bytes out of the anonymous /api/media namespace;
 // this route proves both current ownership and the exact current derivative.
-app.get(/^\/api\/campaign-workspace\/level-thumbnails\/(l\d+)\/([0-9a-f]{64})\.png$/, async (req, res) => {
+app.get(/^\/api\/campaign-workspace\/level-thumbnails\/([^/]{1,80})\/([0-9a-f]{64})\.png$/, async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
-  const levelId = String(req.params[0] || '');
+  const levelId = levelStoreId(req.params[0]);
   const requestedSha256 = mediaSha(req.params[1]);
   try {
     const workspace = await dbGetWorkspace(user.email);
     const levels = isObjectRecord(workspace?.body?.levels) ? workspace.body.levels : {};
-    const level = isObjectRecord(levels[levelId]) ? levels[levelId] : null;
+    const level = levelId && isObjectRecord(levels[levelId]) ? levels[levelId] : null;
     if (!level || !requestedSha256) {
       res.setHeader('Cache-Control', 'private, no-store');
       res.status(404).send('not found');
