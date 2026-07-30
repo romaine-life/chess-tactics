@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createBlankLevel, type Level } from '../core/level';
 import { chooseDraft, createRun, prepareDeployment, setDeploymentChoices, type RunDocument } from './model';
-import { deploymentOptions, playerDeploymentCells } from './deployment';
+import { deploymentOptions, levelWithRunDeployment, playerDeploymentCells } from './deployment';
 
 function battle(): Level {
   const level = createBlankLevel('run-deploy', 'Deployment', 4, 4);
@@ -70,5 +70,17 @@ describe('Run deployment', () => {
     const king = deploymentOptions(royal, level).layouts[0].placements['run-king'];
     expect(king.y).toBe(3);
     expect(king.x === 0 || king.x === 3 || king.y === 0 || king.y === 3).toBe(true);
+  });
+
+  it('projects each persistent name with its unit identity into the Battle level', () => {
+    const current = run();
+    const layout = deploymentOptions(current, battle()).layouts[0];
+    const projected = levelWithRunDeployment(current, battle(), layout);
+    const persistentUnits = projected.layers.units.filter((unit) => unit.runUnitId && !unit.runUnitId.startsWith('run-tent-rock'));
+
+    expect(persistentUnits).not.toHaveLength(0);
+    for (const unit of persistentUnits) {
+      expect(unit.runUnitName).toBe(current.army.find((candidate) => candidate.id === unit.runUnitId)?.name);
+    }
   });
 });

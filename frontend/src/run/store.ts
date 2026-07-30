@@ -9,7 +9,13 @@ const LOCAL_RUN_KEY = 'chess-tactics:active-run:v1';
 function readLocalRun(): RunDocument | null {
   try {
     const parsed = JSON.parse(localStorage.getItem(LOCAL_RUN_KEY) ?? 'null') as RunDocument | null;
-    return parsed?.formatVersion === 1 ? normalizeRunDocument(parsed) : null;
+    return parsed && (
+      Number(parsed.formatVersion) === 1
+      || Number(parsed.formatVersion) === 2
+      || Number(parsed.formatVersion) === 3
+    )
+      ? normalizeRunDocument(parsed)
+      : null;
   } catch {
     return null;
   }

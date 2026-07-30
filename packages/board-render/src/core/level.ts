@@ -238,6 +238,8 @@ export interface LevelUnit {
    * so Run casualties, Reservists, and promotion cash-outs can address the durable unit.
    */
   runUnitId?: string;
+  /** Runtime-only persistent Run name projected beside `runUnitId`. */
+  runUnitName?: string;
 }
 
 export interface LevelEconomy {

@@ -56,9 +56,22 @@ describe('Run piece economy', () => {
   it('deals two different six-point opening hands from the approved five', () => {
     const run = createRun(war(), 91);
     expect(run.army.map((unit) => unit.type)).toEqual(['king', 'pawn', 'pawn', 'pawn']);
+    expect(run.army.every((unit) => unit.name.length > 0)).toBe(true);
+    expect(new Set(run.army.map((unit) => unit.name)).size).toBe(run.army.length);
     expect(run.draftOffers).toHaveLength(2);
     expect(new Set(run.draftOffers.map((offer) => offer.draftId)).size).toBe(2);
     expect(run.draftOffers.every((offer) => offer.value === 6)).toBe(true);
+  });
+
+  it('names draft and shop units in the same transaction that adds them to the army', () => {
+    const fresh = createRun(war(), 91);
+    const drafted = chooseDraft(fresh, fresh.draftOffers[0].draftId);
+    expect(drafted.army.filter((unit) => unit.source === 'draft').every((unit) => unit.name.length > 0)).toBe(true);
+
+    const shop = openShop({ ...deployedRun(91), goldTenths: 100 * GOLD_SCALE }, []);
+    const bought = buyBundle(shop, shop.shop!.bundleOfferIds[0]);
+    expect(bought.army.filter((unit) => unit.source === 'shop').every((unit) => unit.name.length > 0)).toBe(true);
+    expect(new Set(bought.army.map((unit) => unit.name)).size).toBe(bought.army.length);
   });
 
   it('allows at most one bundle purchase in a shop', () => {
@@ -143,6 +156,35 @@ describe('Run progression and relic offers', () => {
 
     expect(upgraded.goldTenths).toBe(currentReward);
     expect(upgraded.shop?.victoryGoldTenths).toBe(currentReward);
+    expect(normalizeRunDocument(upgraded)).toBe(upgraded);
+  });
+
+  it('deterministically upgrades unnamed format-1 army units without resetting the Run', () => {
+    const current = createRun(war(), 73);
+    const legacy = {
+      ...current,
+      formatVersion: 1,
+      army: current.army.map(({ name: _name, ...unit }) => unit),
+    } as unknown as RunDocument;
+    const upgraded = normalizeRunDocument(legacy);
+
+    expect(upgraded.formatVersion).toBe(3);
+    expect(upgraded.id).toBe(current.id);
+    expect(upgraded.army.map((unit) => unit.name)).toEqual(current.army.map((unit) => unit.name));
+    expect(normalizeRunDocument(upgraded)).toBe(upgraded);
+  });
+
+  it('replaces the provisional format-2 fantasy names with role-appropriate historical identities', () => {
+    const current = createRun(war(), 73);
+    const provisional = {
+      ...current,
+      formatVersion: 2,
+      army: current.army.map((unit, index) => ({ ...unit, name: `Provisional Name ${index}` })),
+    } as unknown as RunDocument;
+    const upgraded = normalizeRunDocument(provisional);
+
+    expect(upgraded.formatVersion).toBe(3);
+    expect(upgraded.army.map((unit) => unit.name)).toEqual(current.army.map((unit) => unit.name));
     expect(normalizeRunDocument(upgraded)).toBe(upgraded);
   });
 

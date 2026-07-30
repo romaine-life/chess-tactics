@@ -17865,7 +17865,7 @@ const ACTIVE_RUN_PHASES = new Set(['draft', 'deployment', 'battle', 'shop', 'vic
 const ACTIVE_RUN_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
 function validateActiveRunBody(run) {
   if (!run || typeof run !== 'object' || Array.isArray(run)) return 'run must be an object';
-  if (run.formatVersion !== 1) return 'run.formatVersion must be 1';
+  if (run.formatVersion !== 1 && run.formatVersion !== 2 && run.formatVersion !== 3) return 'run.formatVersion is unsupported';
   if (typeof run.id !== 'string' || !run.id || run.id.length > 160) return 'run.id is invalid';
   if (!isFiniteInteger(run.seed) || run.seed < 0 || run.seed > 0xffffffff) return 'run.seed is invalid';
   if (typeof run.updatedAt !== 'string' || !run.updatedAt) return 'run.updatedAt is required';
@@ -17894,6 +17894,10 @@ function validateActiveRunBody(run) {
       return 'run.army contains an invalid unit';
     }
     unitIds.add(unit.id);
+    const validName = typeof unit.name === 'string' && unit.name.trim().length > 0 && unit.name.length <= 80;
+    if ((run.formatVersion >= 2 && !validName) || (unit.name !== undefined && !validName)) {
+      return 'run.army contains an invalid unit name';
+    }
     if (!Array.isArray(unit.abilities) || unit.abilities.some((ability) => ability !== 'discipline')) {
       return 'run.army contains invalid abilities';
     }

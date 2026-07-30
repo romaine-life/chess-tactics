@@ -55,7 +55,8 @@ export function RunRelicStrip({
 }: {
   relicIds: readonly RunRelicId[];
 }): ReactElement | null {
-  if (relicIds.length === 0) return null;
+  const knownRelicIds = relicIds.filter((relicId) => Boolean(RUN_RELIC_BY_ID[relicId]));
+  if (knownRelicIds.length === 0) return null;
   return (
     <section
       className="run-relic-strip"
@@ -63,7 +64,7 @@ export function RunRelicStrip({
       data-testid="run-relic-strip"
     >
       <div className="run-relic-inventory-list">
-        {relicIds.map((relicId) => {
+        {knownRelicIds.map((relicId) => {
           const relic = RUN_RELIC_BY_ID[relicId];
           return (
             <Tooltip

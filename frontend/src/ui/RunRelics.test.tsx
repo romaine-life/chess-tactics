@@ -35,4 +35,14 @@ describe('Run relic artwork', () => {
     expect(markup).not.toContain('title=');
     expect(markup.match(/<img/g)).toHaveLength(2);
   });
+
+  it('ignores a retired relic id in a legacy Run instead of crashing the screen', () => {
+    const markup = renderToStaticMarkup(
+      <RunRelicStrip
+        relicIds={['private-quarters' as never, 'conscription-notice']}
+      />,
+    );
+    expect(markup).toContain('Conscription Notice.');
+    expect(markup).not.toContain('private-quarters');
+  });
 });
