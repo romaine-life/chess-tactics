@@ -677,14 +677,12 @@ function VictoryPanel({
 
 function BattlePanel({
   run,
-  view,
-  onNavigate,
-  armyWorkspace,
+  routePath,
+  routeSearch,
 }: {
   run: RunDocument;
-  view: RunScreenView;
-  onNavigate: (view: RunScreenView) => void;
-  armyWorkspace: ReactElement;
+  routePath: string;
+  routeSearch: string;
 }): ReactElement {
   const replace = useActiveRun((state) => state.replace);
   const currentRun = useActiveRun((state) => state.run);
@@ -786,15 +784,20 @@ function BattlePanel({
       {abandonDialog}
       <Skirmish
         runBattle={presentation}
-        runWorkspace={view === 'army' ? armyWorkspace : null}
-        runArmyOpen={view === 'army'}
-        onToggleRunArmy={() => onNavigate(view === 'army' ? 'primary' : 'army')}
+        routePath={routePath}
+        routeSearch={routeSearch}
       />
     </>
   );
 }
 
-export function RunScreen(): ReactElement {
+export function RunScreen({
+  routePath = window.location.pathname,
+  routeSearch = window.location.search,
+}: {
+  routePath?: string;
+  routeSearch?: string;
+} = {}): ReactElement {
   const run = useActiveRun((state) => state.run);
   const hydrated = useActiveRun((state) => state.hydrated);
   const hydrate = useActiveRun((state) => state.hydrate);
@@ -824,6 +827,15 @@ export function RunScreen(): ReactElement {
     filters: { ...DEFAULT_RUN_SELL_FILTERS },
   });
   useEffect(() => { void hydrate(); }, [hydrate]);
+  useEffect(() => {
+    if (
+      hydrated
+      && routePath.startsWith('/run/strategikon/')
+      && run?.phase !== 'battle'
+    ) {
+      navigateApp(`/run${routeSearch}`, { replace: true, scroll: false });
+    }
+  }, [hydrated, routePath, routeSearch, run?.phase]);
 
   if (!hydrated) {
     return (
@@ -910,7 +922,13 @@ export function RunScreen(): ReactElement {
     return <DeploymentPanel run={run} view={view} onNavigate={navigateRunView} armyWorkspace={armyWorkspace} />;
   }
   if (run.phase === 'battle') {
-    return <BattlePanel run={run} view={view} onNavigate={navigateRunView} armyWorkspace={armyWorkspace} />;
+    return (
+      <BattlePanel
+        run={run}
+        routePath={routePath}
+        routeSearch={routeSearch}
+      />
+    );
   }
   if (run.phase === 'shop' && run.shop) {
     return (

@@ -38,15 +38,22 @@ describe('settings-rail stone continuity is index-driven (ADR-0063)', () => {
   it('every component that renders a .settings-tab wires --tab-index', () => {
     const files = readdirSync(uiDir).filter((f) => f.endsWith('.tsx'));
     const renderers = files.filter((f) => rendersSettingsTab(readFileSync(new URL(f, import.meta.url), 'utf8')));
+    const apparatus = readFileSync(new URL('./shared/ApparatusRailTab.tsx', import.meta.url), 'utf8');
+    const mainMenu = readFileSync(new URL('./MainMenu.tsx', import.meta.url), 'utf8');
+    const playMenu = readFileSync(new URL('./PlayMenu.tsx', import.meta.url), 'utf8');
 
-    // The known rails — a stand-in that guarantees the scan actually found files (a broken glob
-    // would otherwise let this test pass vacuously). PlayMenu owns the pinned Skirmish/Levels +
-    // Campaign rail; CampaignEditor is the Editor's campaigns rail (ADR-0065/0074).
-    expect(renderers.sort()).toEqual(['CampaignEditor.tsx', 'MainMenu.tsx', 'PlayMenu.tsx', 'Settings.tsx', 'WarEditor.tsx']);
+    // The remaining direct renderers are a stand-in that guarantees the scan actually
+    // found files. MainMenu and PlayMenu intentionally delegate their rails to the
+    // shared apparatus primitive instead of duplicating the registered control.
+    expect(renderers.sort()).toEqual(['CampaignEditor.tsx', 'Settings.tsx', 'WarEditor.tsx']);
 
     for (const f of renderers) {
       const src = readFileSync(new URL(f, import.meta.url), 'utf8');
       expect(src, `${f} renders .settings-tab but never sets --tab-index — its stone won't be continuous`).toContain('--tab-index');
     }
+    expect(rendersSettingsTab(apparatus)).toBe(true);
+    expect(apparatus).toContain('--tab-index');
+    expect(mainMenu).toContain('<ApparatusRailTab');
+    expect(playMenu).toContain('<ApparatusRailTab');
   });
 });

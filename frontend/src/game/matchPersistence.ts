@@ -27,7 +27,10 @@ export type PersistedMatch = Pick<
 > &
   // Optional: snapshots written before the enemy-policy lever existed lack it, and
   // resumeMatch defaults a missing value to the search AI.
-  Partial<Pick<SkirmishState, 'aiMode'>>;
+  Partial<Pick<SkirmishState, 'aiMode'>> & {
+    /** Wall-clock recency used only to order Play's resumable activities. */
+    savedAt?: string;
+  };
 
 interface StoredEnvelope extends PersistedMatch {
   version: number;
@@ -67,6 +70,7 @@ function sliceOf(state: SkirmishState): PersistedMatch {
     levelId: state.levelId,
     clock: state.clock,
     aiMode: state.aiMode,
+    savedAt: new Date().toISOString(),
   };
 }
 

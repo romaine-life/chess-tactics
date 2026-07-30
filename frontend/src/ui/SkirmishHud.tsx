@@ -20,6 +20,7 @@ import { loadSkirmishClockPref } from '../game/skirmishClockPref';
 import { Stepper } from './shared/Stepper';
 import { clientSide, clientSideLabel, clientSideOrder, clientSideRelation, clientTurnLabel, type PlayingSide } from '../game/clientPerspective';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
+import { installedUiMedia } from './installedUiMedia';
 import { InnerChromeBox, OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
 import { fetchMe } from '../net/auth';
 import { AdminControls } from './AdminControls';
@@ -196,6 +197,9 @@ export type SkirmishHudProps = {
   /** Opens the persistent Run army over the board without unmounting or pausing Battle. */
   onToggleRunArmy?: (() => void) | null;
   runArmyOpen?: boolean;
+  /** Battle-context reference workspace. The route owns whether it is open. */
+  strategikonHref?: string | null;
+  strategikonOpen?: boolean;
   /** Between-Battle phases replace only the existing panel's contents. */
   controlsContent?: ReactNode;
 };
@@ -220,6 +224,8 @@ export function SkirmishHud({
   onAbandonRun = null,
   onToggleRunArmy = null,
   runArmyOpen = false,
+  strategikonHref = null,
+  strategikonOpen = false,
   controlsContent,
 }: SkirmishHudProps = {}) {
   const game = useSkirmish((s) => s.game);
@@ -314,6 +320,27 @@ export function SkirmishHud({
   const focusedPortraitBackdrop = focused && isPlayablePieceType(focused.type) ? defaultBackgroundSet().portraits[focused.type] : null;
   const promotingPiece = pendingPromotion ? game.pieces.find((piece) => piece.id === pendingPromotion.pieceId) ?? null : null;
   const turnLabel = clientTurnLabel(game, localSide, !!net?.pendingMove);
+  const strategikonLabel = strategikonOpen ? 'Return to Battle' : 'Open Strategikon';
+  const strategikonTitle = strategikonOpen
+    ? 'Return to Battle — close Strategikon without leaving this fight.'
+    : 'Strategikon — inspect battle references, the current army, and held relics.';
+  const strategikonToggle = strategikonHref ? (
+    <NavButton
+      data-testid="strategikon-toggle"
+      className={`skirmish-hud-title-action${strategikonOpen ? ' active' : ''}`}
+      to={strategikonHref}
+      aria-label={strategikonLabel}
+      aria-current={strategikonOpen ? 'page' : undefined}
+      title={strategikonTitle}
+    >
+      <img
+        className="skirmish-hud-title-action-glyph"
+        src={installedUiMedia('ui-kit-icons-studio-catalog-png')}
+        alt=""
+        aria-hidden="true"
+      />
+    </NavButton>
+  ) : null;
 
   return (
     <>
@@ -327,7 +354,11 @@ export function SkirmishHud({
         style={style}
         aria-label="Skirmish command HUD"
       >
-        <OuterChromeHeader title="Controls">
+        <OuterChromeHeader
+          title="Controls"
+          actions={strategikonToggle}
+          className="skirmish-hud-titlebar"
+        >
           {controlsContent === undefined ? (
           <div
             className="skirmish-hud-tabs"

@@ -75,7 +75,10 @@ import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox } from './shared/ChromeBox';
 import { rememberAdminBattleHref } from '../admin/battleRoute';
 import type { RunRelicId } from '../run/model';
+import { useActiveRun } from '../run/store';
 import { RunRelicStrip } from './RunRelics';
+import { Strategikon } from './Strategikon';
+import { sceneTransitionTargetAttributes } from './shell/sceneTransitionTarget';
 
 export interface RunBattlePresentation {
   level: Level;
@@ -170,15 +173,22 @@ export function Skirmish({
   runWorkspace = null,
   runArmyOpen = false,
   onToggleRunArmy = null,
+  routePath = window.location.pathname,
   routeSearch = window.location.search,
 }: {
   runBattle?: RunBattlePresentation | null;
   runWorkspace?: ReactNode;
   runArmyOpen?: boolean;
   onToggleRunArmy?: (() => void) | null;
+  routePath?: string;
   routeSearch?: string;
 } = {}) {
   const routeParams = useMemo(() => new URLSearchParams(routeSearch), [routeSearch]);
+  const strategikonOpen = routePath.startsWith('/play/strategikon/') || routePath.startsWith('/run/strategikon/');
+  const strategikonBase = runBattle ? '/run' : '/play';
+  const strategikonHref = strategikonOpen
+    ? `${strategikonBase}${routeSearch}`
+    : `${strategikonBase}/strategikon/enchiridion/units${routeSearch}`;
   const predrawnPreview = useMemo(
     () => predrawnBoardPreviewSrc(routeSearch, window.location.origin),
     [routeSearch],
@@ -1124,6 +1134,8 @@ export function Skirmish({
         onAbandonRun={runBattle?.onAbandonRun ?? null}
         onToggleRunArmy={onToggleRunArmy}
         runArmyOpen={runArmyOpen}
+        strategikonHref={strategikonHref}
+        strategikonOpen={strategikonOpen}
       />
     </PaintedSurfaceBoundary>
   ) : null;
@@ -1207,8 +1219,16 @@ export function Skirmish({
         </TitleBarSlot>
       ) : null}
 
-      <section className="skirmish-war-room" aria-label="Skirmish battlefield">
-        <div className="skirmish-field">
+      <section
+        className={`skirmish-war-room${strategikonOpen ? ' has-strategikon' : ''}`}
+        aria-label={strategikonOpen ? 'Battle reference workspace' : 'Skirmish battlefield'}
+        data-scene-instance={strategikonBase}
+      >
+        <div
+          className="skirmish-field"
+          inert={strategikonOpen ? true : undefined}
+          aria-hidden={strategikonOpen || undefined}
+        >
           <div className="skirmish-board-frame">
             {mapError ? (
               <InnerChromeBox className="skirmish-status-chip skirmish-turn-plate" role="alert" style={{ gap: 10 }}>
@@ -1261,6 +1281,19 @@ export function Skirmish({
             <small>Multiplayer</small>
           </InnerChromeBox>
         ) : null}
+        <div
+          className="strategikon-slot"
+          {...sceneTransitionTargetAttributes('gameplay-shell')}
+          data-scene-instance={strategikonOpen ? routePath : `${strategikonBase}/strategikon`}
+        >
+          {strategikonOpen ? (
+            <Strategikon
+              path={routePath}
+              search={routeSearch}
+              run={runBattle ? useActiveRun.getState().run : null}
+            />
+          ) : null}
+        </div>
       </section>
       {runWorkspace}
       {predrawnPickerOpen && predrawnPreview ? (

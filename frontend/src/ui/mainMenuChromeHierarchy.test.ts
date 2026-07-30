@@ -9,6 +9,7 @@ const settings = readFileSync(new URL('./Settings.tsx', import.meta.url), 'utf8'
 const editor = readFileSync(new URL('./CampaignEditor.tsx', import.meta.url), 'utf8');
 const lobbies = readFileSync(new URL('./Lobbies.tsx', import.meta.url), 'utf8');
 const settingsControls = readFileSync(new URL('./shared/SettingsControls.tsx', import.meta.url), 'utf8');
+const apparatusRailTab = readFileSync(new URL('./shared/ApparatusRailTab.tsx', import.meta.url), 'utf8');
 
 function expectTaggedLegacyControls(source: string, legacyClass: string, helper = 'chromeUnitClassNames('): void {
   const tags = source.match(new RegExp(`<(?:button|NavButton|div)\\b[\\s\\S]*?${legacyClass}[\\s\\S]*?>`, 'g')) ?? [];
@@ -29,8 +30,9 @@ describe('Main Menu chrome hierarchy', () => {
   it('registers every mode button as a canonical inner-box consumer', () => {
     const modeTab = mainMenu.match(/function ModeTab[\s\S]*?^}/m)?.[0] ?? '';
 
-    expect(modeTab).toContain('data-chrome-unit="inner-box"');
-    expect(modeTab).toContain("chromeUnitClassNames('inner-box', 'settings-tab main-menu-mode-tab'");
+    expect(modeTab).toContain('<ApparatusRailTab');
+    expect(apparatusRailTab).toContain('data-chrome-unit="inner-box"');
+    expect(apparatusRailTab).toContain("chromeUnitClassNames('inner-box', 'settings-tab main-menu-mode-tab'");
     expect(modeTab).not.toMatch(/className=\{`settings-tab main-menu-mode-tab/);
   });
 
@@ -41,7 +43,10 @@ describe('Main Menu chrome hierarchy', () => {
   });
 
   it('rejects legacy button boxes anywhere in a menu destination', () => {
-    for (const source of [mainMenu, playMenu, settings, editor]) expectTaggedLegacyControls(source, 'settings-tab main-menu-mode-tab');
+    expect(mainMenu).toContain('<ApparatusRailTab');
+    expect(playMenu).toContain('<ApparatusRailTab');
+    expectTaggedLegacyControls(apparatusRailTab, 'settings-tab main-menu-mode-tab');
+    for (const source of [settings, editor]) expectTaggedLegacyControls(source, 'settings-tab main-menu-mode-tab');
     expectTaggedLegacyControls(playMenu, 'ce-link-button');
     expectTaggedLegacyControls(editor, 'ce-link-button');
     expectTaggedLegacyControls(lobbies, 'utility-button', 'utilityButtonClassNames(');

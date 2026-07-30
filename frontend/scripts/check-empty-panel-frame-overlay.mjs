@@ -892,9 +892,9 @@ if (!levelEditorEventsWorkspace
   failures.push('Events workspace must not restore outer-panel or dialog semantics');
 }
 if (!/<OuterChromeBox[\s\S]*?chromeConsumer="skirmish-hud"[\s\S]*?titled[\s\S]*?className=\{`skirmish-hud \$\{className\}`\.trim\(\)\}/.test(skirmishHud)
-  || !/<OuterChromeHeader title="Controls">/.test(skirmishHud)
+  || !/<OuterChromeHeader[\s\S]*?title="Controls"[\s\S]*?actions=\{strategikonToggle\}[\s\S]*?>/.test(skirmishHud)
   || /<h2>Controls<\/h2>/.test(skirmishHud)) {
-  failures.push('live Skirmish HUD must own the titled OuterChromeBox and Controls header');
+  failures.push('live Skirmish HUD must own the titled OuterChromeBox and Controls header with the Strategikon title action');
 }
 if (!/export function SkirmishShell[\s\S]*?<SkirmishHud \{\.\.\.hudProps\} controlsContent=\{controlsContent\} \/>/.test(skirmish)
   || !/export function Skirmish\b[\s\S]*?return \(\s*<SkirmishShell/.test(skirmish)) {

@@ -77,11 +77,41 @@ describe('scene manifests', () => {
       opportunistic: ['below-fold-level-thumbnails'],
     });
     expect(sceneManifest('/play')).toMatchObject({
-      host: 'standalone',
+      host: 'gameplay-shell',
       background: 'battlefield',
       paintOwner: 'gameplay-hud',
       critical: expect.arrayContaining(['board-compositors', 'gameplay-hud', 'title-controls']),
     });
+  });
+
+  it('retains Battle and the main-menu Enchiridion while their reference children change', () => {
+    expect(sceneManifest('/play/strategikon/enchiridion/units')).toMatchObject({
+      host: 'gameplay-shell',
+      background: 'battlefield',
+      paintOwner: 'gameplay-hud',
+    });
+    expect(sceneManifest('/run/strategikon/lipsanotheca').instances.map((entry) => entry.definition.id)).toEqual([
+      'run',
+      'run/strategikon',
+    ]);
+    expect(deepestSharedSceneRegion(
+      sceneManifest('/run'),
+      sceneManifest('/run/strategikon/prosopography'),
+    )).toBe('gameplay-shell');
+    expect(sceneManifest('/enchiridion/abilities').instances.map((entry) => entry.definition.id)).toEqual([
+      'main-menu',
+      'enchiridion',
+      'enchiridion/abilities',
+    ]);
+    expect(sceneManifest('/enchiridion/abilities')).toMatchObject({
+      host: 'enchiridion-shell',
+      background: 'homepage',
+      paintOwner: 'dom',
+    });
+    expect(deepestSharedSceneRegion(
+      sceneManifest('/enchiridion/units'),
+      sceneManifest('/enchiridion/relics'),
+    )).toBe('enchiridion-shell');
   });
 
   it('requires declarations for expensive editor and Studio first viewports', () => {

@@ -2600,6 +2600,8 @@ const MIGRATIONS = [
     name: 'owner-scoped idempotent Run relic statistics',
     // This identity already exists in the shared development ledger. ADR-0174
     // requires its version, name, and SQL to remain byte-for-byte canonical.
+    // ADR-0231 explains why lifetime relic facts remain separate from the one
+    // mutable active Run document and why deterministic event ids make retries safe.
     sql: `
       CREATE TABLE IF NOT EXISTS run_relic_stat_events (
         owner_email text        NOT NULL,
@@ -17891,6 +17893,28 @@ app.put('/api/campaign-progress', async (req, res) => {
 // document here; the server owns one CAS-updated active Run per account.
 const ACTIVE_RUN_PHASES = new Set(['draft', 'deployment', 'battle', 'shop', 'victory']);
 const ACTIVE_RUN_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
+const RUN_RELIC_IDS = new Set([
+  'conscription-notice',
+  'congressional-approval',
+  'inspirational-record',
+  'training-linens',
+  'royal-decree',
+  'crenellated-rampart',
+  'ghibelline-rampart',
+  'popes-staff',
+  'popes-robes',
+  'royal-tent',
+  'royal-sceptre',
+  'mercenarys-rifle',
+  'merchants-shopkey',
+  'occult-dagger',
+  'deployment-vehicle',
+  'mercenary-boat',
+  'quartermasters-ledger',
+  'fair-scales',
+  'muster-roll',
+  'surveyors-compass',
+]);
 function validateActiveRunBody(run) {
   if (!run || typeof run !== 'object' || Array.isArray(run)) return 'run must be an object';
   if (run.formatVersion !== 1 && run.formatVersion !== 2 && run.formatVersion !== 3) return 'run.formatVersion is unsupported';
@@ -18066,6 +18090,91 @@ app.delete('/api/active-run', async (req, res) => {
   }
 });
 
+// --- Account-scoped Run relic history (ADR-0231) --------------------------
+// The mutable active Run cannot answer lifetime questions after completion or
+// abandonment. Clients submit deterministic facts; the composite key makes
+// retries and cross-tab delivery idempotent.
+const RUN_RELIC_STAT_KINDS = new Set(['picked', 'battle-win']);
+const RUN_RELIC_STAT_EVENT_ID = /^[a-z0-9][a-z0-9:._-]{0,239}$/;
+
+function validateRunRelicStatEvents(raw) {
+  if (!Array.isArray(raw) || raw.length < 1 || raw.length > 500) {
+    return { error: 'events must contain 1-500 entries' };
+  }
+  const events = [];
+  for (const event of raw) {
+    if (!isObjectRecord(event)
+      || !RUN_RELIC_STAT_EVENT_ID.test(String(event.eventId || ''))
+      || !RUN_RELIC_IDS.has(event.relicId)
+      || !RUN_RELIC_STAT_KINDS.has(event.kind)) {
+      return { error: 'events contain an invalid eventId, relicId, or kind' };
+    }
+    events.push({
+      eventId: String(event.eventId),
+      relicId: String(event.relicId),
+      kind: String(event.kind),
+    });
+  }
+  return { events };
+}
+
+app.get('/api/run-relic-statistics', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    await ensureDbReady();
+    const { rows } = await pool.query(
+      `SELECT relic_id,
+              count(*) FILTER (WHERE event_kind = 'picked')::integer AS times_picked,
+              count(*) FILTER (WHERE event_kind = 'battle-win')::integer AS battles_won_while_held
+         FROM run_relic_stat_events
+        WHERE owner_email = $1
+        GROUP BY relic_id`,
+      [user.email],
+    );
+    res.status(200).json({
+      statistics: Object.fromEntries(rows.map((row) => [
+        row.relic_id,
+        {
+          timesPicked: Number(row.times_picked) || 0,
+          battlesWonWhileHeld: Number(row.battles_won_while_held) || 0,
+        },
+      ])),
+    });
+  } catch (error) {
+    dbUnavailable(res, 'Run relic statistics read failed', error, 'run_relic_statistics_unavailable');
+  }
+});
+
+app.post('/api/run-relic-stat-events', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const validation = validateRunRelicStatEvents(req.body && req.body.events);
+  if (validation.error) {
+    res.status(400).json({ error: 'invalid_run_relic_stat_events', details: validation.error });
+    return;
+  }
+  try {
+    await ensureDbReady();
+    const result = await withEditorDocumentTransaction(async (client) => {
+      let accepted = 0;
+      for (const event of validation.events) {
+        const inserted = await client.query(
+          `INSERT INTO run_relic_stat_events (owner_email, event_id, relic_id, event_kind)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (owner_email, event_id, relic_id) DO NOTHING`,
+          [user.email, event.eventId, event.relicId, event.kind],
+        );
+        accepted += inserted.rowCount || 0;
+      }
+      return accepted;
+    });
+    res.status(200).json({ ok: true, received: validation.events.length, inserted: result });
+  } catch (error) {
+    dbUnavailable(res, 'Run relic statistics write failed', error, 'run_relic_statistics_unavailable');
+  }
+});
+
 // --- Administrator playtest interventions (ADR-0194) -----------------------
 // Battles are deliberately client-simulated, including the surrounding Run model.
 // This endpoint is the server-owned capability check for every administrator control:
@@ -18078,28 +18187,7 @@ const ADMIN_PLAYTEST_ACTIONS = new Set([
   'gain-gold',
   'gain-relic',
 ]);
-const ADMIN_PLAYTEST_RELICS = new Set([
-  'conscription-notice',
-  'congressional-approval',
-  'inspirational-record',
-  'training-linens',
-  'royal-decree',
-  'crenellated-rampart',
-  'ghibelline-rampart',
-  'popes-staff',
-  'popes-robes',
-  'royal-tent',
-  'royal-sceptre',
-  'mercenarys-rifle',
-  'merchants-shopkey',
-  'occult-dagger',
-  'deployment-vehicle',
-  'mercenary-boat',
-  'quartermasters-ledger',
-  'fair-scales',
-  'muster-roll',
-  'surveyors-compass',
-]);
+const ADMIN_PLAYTEST_RELICS = RUN_RELIC_IDS;
 
 app.post('/api/admin/playtest/authorize', async (req, res) => {
   const user = await requireAdmin(req, res);

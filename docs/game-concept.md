@@ -75,6 +75,15 @@ these.
   persistent Controls panel navigates those destinations, resets the complete
   same-offer shop visit, and continues the Run; Army inspection remains
   available in every Run phase without pausing an active Battle (ADR-0230).
+- **Enchiridion** is the player-facing reference for unit movement, terrain
+  rules, all relics, and the behavior of current unit abilities. During Battle,
+  the Controls title bar opens **Strategikon** over the board without unmounting
+  the fight; its Martial Prosopography and Lipsanotheca expose the persistent
+  army and held relics beside the same Enchiridion (ADR-0231).
+- Play leads with **Continue** whenever a Run or Battle is unresolved and names
+  that exact activity before the ordinary mode choices. **Continue Run** selects
+  the Run submenu; only its nested **Play** action enters the active Run
+  (ADR-0232).
 - **Campaign** strings 5–10 boards into a curated, slowly-evolving sequence, and
   will grow richer over time.
 

@@ -529,8 +529,10 @@ export function App(): ReactElement {
 
 function renderScene(scene: ScenePath, search: string): ReactElement {
   const path = scene.pathname;
-  if (path === '/play') return <Skirmish routeSearch={search} />;
-  if (path === '/run') return <RunScreen />;
+  if (path === '/play') return <Skirmish routePath={path} routeSearch={search} />;
+  if (path.startsWith('/play/strategikon/')) return <Skirmish routePath={path} routeSearch={search} />;
+  if (path === '/run') return <RunScreen routePath={path} routeSearch={search} />;
+  if (path.startsWith('/run/strategikon/')) return <RunScreen routePath={path} routeSearch={search} />;
   if (path === '/predrawn-reference') return <PredrawnReference />;
   if (path === '/studio' && new URLSearchParams(search).get('runShopReview') === '1') return <RunShopArtReview />;
   if (path === '/studio' && new URLSearchParams(search).get('relicReview') === '1') return <RunRelicReview />;

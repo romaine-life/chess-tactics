@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, type ReactElement } from 'react';
+import { useLayoutEffect, useMemo, useRef, type ReactElement, type ReactNode } from 'react';
 import { defaultBackgroundSet } from '../art/backgroundSets';
 import { defaultFacingForSide, paletteForSide, pieceSpritePath } from '../core/pieces';
 import {
@@ -463,8 +463,45 @@ function ProfileSellAction({
   );
 }
 
+function RunArmyPanel({
+  children,
+  chromeConsumer,
+  className,
+  framed,
+  headerAction = null,
+  title,
+}: {
+  children: ReactNode;
+  chromeConsumer: string;
+  className: string;
+  framed: boolean;
+  headerAction?: ReactNode;
+  title: string;
+}): ReactElement {
+  if (framed) {
+    return (
+      <OuterChromeBox chromeConsumer={chromeConsumer} titled className={className}>
+        <OuterChromeHeader title={title}>{headerAction}</OuterChromeHeader>
+        {children}
+      </OuterChromeBox>
+    );
+  }
+  return (
+    <section className={`${className} run-panel-unframed`}>
+      <header className="run-panel-unframed-header">
+        <h2 className="settings-section-title">{title}</h2>
+        {headerAction}
+      </header>
+      {children}
+    </section>
+  );
+}
+
 export function RunArmyWorkspace({
   run,
+  title = 'Army',
+  backLabel = 'Back to Army',
+  framed = true,
   filters,
   selectedUnitId,
   onFiltersChange,
@@ -473,6 +510,9 @@ export function RunArmyWorkspace({
   onSell,
 }: {
   run: RunDocument;
+  title?: string;
+  backLabel?: string;
+  framed?: boolean;
   filters: RunArmyFilters;
   selectedUnitId: string | null;
   onFiltersChange: (filters: RunArmyFilters) => void;
@@ -493,17 +533,22 @@ export function RunArmyWorkspace({
     const kills = optionalUnitKills(selected);
     return (
       <main className="run-workspace run-army-workspace">
-        <OuterChromeBox chromeConsumer="run-army-profile" titled className="run-panel run-army-profile">
-          <OuterChromeHeader title={runUnitDisplayName(selected)}>
+        <RunArmyPanel
+          chromeConsumer="run-army-profile"
+          className="run-panel run-army-profile"
+          framed={framed}
+          title={runUnitDisplayName(selected)}
+          headerAction={(
             <button
               type="button"
               data-chrome-unit="inner-text-button"
               className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
               onClick={onBack}
             >
-              Back to Army
+              {backLabel}
             </button>
-          </OuterChromeHeader>
+          )}
+        >
           <div className="run-army-profile-body">
             <RunArmyPortrait unit={selected} className="run-army-profile-portrait" />
             <section className="run-army-profile-copy">
@@ -524,15 +569,19 @@ export function RunArmyWorkspace({
               <ProfileSellAction run={run} unit={selected} onSell={onSell} />
             </section>
           </div>
-        </OuterChromeBox>
+        </RunArmyPanel>
       </main>
     );
   }
 
   return (
     <main className="run-workspace run-army-workspace">
-      <OuterChromeBox chromeConsumer="run-army-ledger" titled className="run-panel run-army-ledger">
-        <OuterChromeHeader title="Army" />
+      <RunArmyPanel
+        chromeConsumer="run-army-ledger"
+        className="run-panel run-army-ledger"
+        framed={framed}
+        title={title}
+      >
         <RunRosterFilters filters={filters} onChange={onFiltersChange} />
         <div ref={ledgerRef} className="run-army-ledger-list" aria-label="Persistent army">
           {units.map((unit) => (
@@ -563,7 +612,7 @@ export function RunArmyWorkspace({
           ))}
           {!units.length ? <p>No units match these filters.</p> : null}
         </div>
-      </OuterChromeBox>
+      </RunArmyPanel>
     </main>
   );
 }

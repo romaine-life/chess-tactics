@@ -65,13 +65,15 @@ export function OuterChromeTitle({
 
 export function OuterChromeHeader({
   title,
+  actions,
   className = '',
   children,
   ...props
-}: HTMLAttributes<HTMLElement> & { title: ReactNode }): ReactElement {
+}: HTMLAttributes<HTMLElement> & { title: ReactNode; actions?: ReactNode }): ReactElement {
   return (
     <section {...props} className={`skirmish-card outer-chrome-header ${className}`.trim()}>
       <OuterChromeTitle>{title}</OuterChromeTitle>
+      {actions ? <div className="outer-chrome-header-title-actions">{actions}</div> : null}
       {children}
     </section>
   );

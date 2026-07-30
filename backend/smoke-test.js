@@ -4021,6 +4021,89 @@ async function main() {
     throw new Error(`Active Run did not delete: ${deletedRun.statusCode} ${deletedRun.body}`);
   }
 
+  // --- Run relic statistics: owner-scoped, append-only, retry-idempotent ----
+  const anonymousRelicStatistics = await get('/api/run-relic-statistics');
+  if (anonymousRelicStatistics.statusCode !== 401) {
+    throw new Error(`Anonymous relic statistics should require sign-in: ${anonymousRelicStatistics.statusCode}`);
+  }
+  const emptyRelicStatistics = await get(
+    '/api/run-relic-statistics',
+    { cookie: '__Host-chess-tactics-access=abc' },
+  );
+  if (
+    emptyRelicStatistics.statusCode !== 200
+    || Object.keys(JSON.parse(emptyRelicStatistics.body).statistics || {}).length !== 0
+  ) {
+    throw new Error(`Relic statistics should begin empty: ${emptyRelicStatistics.statusCode} ${emptyRelicStatistics.body}`);
+  }
+  const relicEventsBody = JSON.stringify({
+    events: [
+      { eventId: 'pick:run-smoke:conscription-notice', relicId: 'conscription-notice', kind: 'picked' },
+      { eventId: 'battle-win:run-smoke:0', relicId: 'conscription-notice', kind: 'battle-win' },
+      { eventId: 'battle-win:run-smoke:0', relicId: 'training-linens', kind: 'battle-win' },
+    ],
+  });
+  const savedRelicEvents = await request(
+    'POST',
+    '/api/run-relic-stat-events',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    relicEventsBody,
+  );
+  const retriedRelicEvents = await request(
+    'POST',
+    '/api/run-relic-stat-events',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    relicEventsBody,
+  );
+  const savedRelicEventsBody = JSON.parse(savedRelicEvents.body);
+  const retriedRelicEventsBody = JSON.parse(retriedRelicEvents.body);
+  if (
+    savedRelicEvents.statusCode !== 200
+    || savedRelicEventsBody.inserted !== 3
+    || retriedRelicEvents.statusCode !== 200
+    || retriedRelicEventsBody.inserted !== 0
+  ) {
+    throw new Error(`Relic event retries were not idempotent: ${savedRelicEvents.statusCode} ${savedRelicEvents.body} / ${retriedRelicEvents.statusCode} ${retriedRelicEvents.body}`);
+  }
+  const loadedRelicStatistics = await get(
+    '/api/run-relic-statistics',
+    { cookie: '__Host-chess-tactics-access=abc' },
+  );
+  const loadedRelicStatisticsBody = JSON.parse(loadedRelicStatistics.body);
+  if (
+    loadedRelicStatistics.statusCode !== 200
+    || loadedRelicStatisticsBody.statistics['conscription-notice']?.timesPicked !== 1
+    || loadedRelicStatisticsBody.statistics['conscription-notice']?.battlesWonWhileHeld !== 1
+    || loadedRelicStatisticsBody.statistics['training-linens']?.timesPicked !== 0
+    || loadedRelicStatisticsBody.statistics['training-linens']?.battlesWonWhileHeld !== 1
+  ) {
+    throw new Error(`Relic statistics did not aggregate exact facts: ${loadedRelicStatistics.statusCode} ${loadedRelicStatistics.body}`);
+  }
+  const rivalRelicStatistics = await get(
+    '/api/run-relic-statistics',
+    { cookie: '__Host-chess-tactics-access=rival' },
+  );
+  if (
+    rivalRelicStatistics.statusCode !== 200
+    || Object.keys(JSON.parse(rivalRelicStatistics.body).statistics || {}).length !== 0
+  ) {
+    throw new Error(`Relic statistics should be owner-scoped: ${rivalRelicStatistics.statusCode} ${rivalRelicStatistics.body}`);
+  }
+  const invalidRelicEvents = await request(
+    'POST',
+    '/api/run-relic-stat-events',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      events: [{ eventId: 'pick:run-smoke:not-a-relic', relicId: 'not-a-relic', kind: 'picked' }],
+    }),
+  );
+  if (
+    invalidRelicEvents.statusCode !== 400
+    || JSON.parse(invalidRelicEvents.body).error !== 'invalid_run_relic_stat_events'
+  ) {
+    throw new Error(`Unknown relic statistics must fail closed: ${invalidRelicEvents.statusCode} ${invalidRelicEvents.body}`);
+  }
+
   // A migrated v13 URL is translated client-side from ?map=<id> to the normal
   // owner-scoped document id legacy-<id>. There is intentionally no public or
   // edit-key compatibility endpoint: only the signed-in owner can recover it.

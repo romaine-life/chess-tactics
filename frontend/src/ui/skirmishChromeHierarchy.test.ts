@@ -13,10 +13,17 @@ const skirmish = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8'
 const portraitPreload = readFileSync(new URL('../art/preload.ts', import.meta.url), 'utf8');
 
 const buttonBlocks = (source: string): string[] => source.match(/<button\b[\s\S]*?<\/button>/g) ?? [];
+const navButtonBlocks = (source: string): string[] => source.match(/<NavButton\b[\s\S]*?<\/NavButton>/g) ?? [];
 
 function buttonUsing(fragment: string): string {
   const block = buttonBlocks(skirmishHud).find((candidate) => candidate.includes(fragment));
   expect(block, `expected Skirmish HUD button using ${fragment}`).toBeDefined();
+  return block!;
+}
+
+function navButtonUsing(fragment: string): string {
+  const block = navButtonBlocks(skirmishHud).find((candidate) => candidate.includes(fragment));
+  expect(block, `expected Skirmish HUD NavButton using ${fragment}`).toBeDefined();
   return block!;
 }
 
@@ -87,7 +94,7 @@ describe('Skirmish chrome hierarchy', () => {
     expect(skirmishHud).toContain('<OuterChromeBox');
     expect(skirmishHud).toContain('chromeConsumer="skirmish-hud"');
     expect(skirmishHud).toContain('className={`skirmish-hud ${className}`.trim()}');
-    expect(skirmishHud).toContain('<OuterChromeHeader title="Controls">');
+    expect(skirmishHud).toMatch(/<OuterChromeHeader[\s\S]*?title="Controls"[\s\S]*?actions=\{strategikonToggle\}/);
     expect(skirmishHud).not.toContain('<h2>Controls</h2>');
     expect(chromeBox).toContain('data-chrome-unit="outer-panel"');
     expect(chromeBox).toContain("chromeUnitClassNames('outer-panel', 'le-outer-panel', className)");
@@ -134,9 +141,8 @@ describe('Skirmish chrome hierarchy', () => {
   });
 
   it('maps scenario actions to existing text-button and tool-square units', () => {
-    const returnBlock = skirmishHud.match(/<NavButton\b[\s\S]*?<\/NavButton>/)?.[0];
-    expect(returnBlock).toBeDefined();
-    expectChromeUnit(returnBlock!, 'inner-text-button');
+    const returnBlock = navButtonUsing('data-testid="skirmish-return-scenario"');
+    expectChromeUnit(returnBlock, 'inner-text-button');
 
     expectChromeUnit(buttonUsing('data-testid="restart-level"'), 'inner-tool-square');
     expectChromeUnit(buttonUsing('data-testid="new-skirmish"'), 'inner-tool-square');

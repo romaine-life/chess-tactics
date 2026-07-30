@@ -306,7 +306,8 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
     metadata: { blurb: `Test ${label}`, ...(value === 'level-editor' ? { chromeLabBadge: 'outer + inner chrome' } : {}) }, rowRevision: 1, media: { thumbnail: descriptor(`test/pages/${value}.webp`, 640, 400) } }));
   const menuModeSpecs: DrawableCatalog['assets'] = [
     ['play', 'Play', '/play/select/skirmish'], ['campaign-editor', 'Editor', '/editor'],
-    ['lobbies', 'Lobbies', '/lobbies'], ['settings', 'Settings', '/settings'],
+    ['lobbies', 'Lobbies', '/lobbies'], ['enchiridion', 'Enchiridion', '/enchiridion/units'],
+    ['settings', 'Settings', '/settings'],
   ].map(([value, label, route], sortOrder) => ({ id: `menu-mode-${value}`, kind: 'menu-mode', label, sortOrder, lifecycleState: 'active',
     behavior: { value, route, ...(value === 'settings' ? { roles: ['settings'] } : {}) }, metadata: {}, rowRevision: 1, media: { icon: descriptor(`test/menu/${value}.png`, 64, 64) } }));
   const runRelicSpecs: DrawableCatalog['assets'] = [

@@ -23,8 +23,8 @@ export const importPortraitEditor = () => import('./PortraitEditor');
 // routes (Campaign, Lobbies, Settings…) return null — they're already in the main
 // bundle, nothing to warm.
 function chunkForPath(path: string): (() => Promise<unknown>) | null {
-  if (path === '/play') return importSkirmish;
-  if (path === '/run') return importRunScreen;
+  if (path === '/play' || path.startsWith('/play/strategikon/')) return importSkirmish;
+  if (path === '/run' || path.startsWith('/run/strategikon/')) return importRunScreen;
   if (path === '/studio' || path === '/tileset-studio' || path === '/unit-studio' || path === '/nine-slice-editor' || path === '/prop-lab' || path === '/tile-compare' || path === '/surface-lab' || path === '/scene-anim-lab' || path === '/doodad-editor' || path === '/artwork-compare') return importTilePreview;
   if (path === '/editor/level' || path === '/edit' || path === '/level-editor') return importLevelEditor;
   if (path === '/portrait-editor') return importPortraitEditor;

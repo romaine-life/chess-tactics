@@ -5,10 +5,9 @@ import { loadingMark, loadingMeasure } from '../diagnostics/loadingTimeline';
 import { Settings } from './Settings';
 import { PlayMenu } from './PlayMenu';
 import { Lobbies } from './Lobbies';
-import { NavButton } from './shared/NavButton';
-import { FittedTabLabel } from './shared/FittedTabLabel';
+import { Enchiridion, ENCHIRIDION_SECTIONS, type EnchiridionSection } from './Enchiridion';
+import { ApparatusRailTab } from './shared/ApparatusRailTab';
 import { isPlaySelectorPath, PLAY_SKIRMISH_SELECTOR_HREF } from './playHubRoute';
-import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { loadDecodedImage } from '../render/imageResources';
 
 // The Editor is heavier / code-split out of the menu bundle. App's SceneBoundary
@@ -58,31 +57,27 @@ const SETTINGS_ICON = () => requiredDrawableRole('menu-mode', 'settings').media.
 // (the menu carries five; the Settings screen four). See .settings-tab in style.css.
 // `active` lights the tab whose destination is currently open in the shell (ADR-0062 family).
 function ModeTab({ tab, index, active }: { tab: MenuTab; index: number; active?: boolean }): ReactElement {
-  return (
-    <NavButton
-      data-chrome-unit="inner-box"
-      className={chromeUnitClassNames('inner-box', 'settings-tab main-menu-mode-tab', active && 'is-active')}
-      // Toggle: clicking a tab whose destination is already open closes it (back to the bare
-      // menu at '/'); otherwise it opens that destination. Home is a menu path, so React keeps
-      // this MainMenu instance mounted either way — the button column never blinks.
-      to={active ? '/' : tab.href}
-      aria-current={active ? 'page' : undefined}
-      style={{ ['--tab-index' as string]: index }}
-    >
-      <span className="settings-tab-icon" aria-hidden="true">
-        <img src={tab.icon} alt="" />
-      </span>
-      <FittedTabLabel>{tab.label}</FittedTabLabel>
-    </NavButton>
-  );
+  return <ApparatusRailTab label={tab.label} to={active ? '/' : tab.href} index={index} active={active} iconSrc={tab.icon} />;
 }
 
 // Which menu destinations render INSIDE the persistent shell (their own columns beside the pinned
 // button column) vs. navigate away to a full screen. Settings, Play, Editor, and Lobbies live in
 // the shell; the selected live board and nested Level Editor take the whole screen.
-type ShellDest = 'settings' | 'play' | 'editor' | 'lobbies';
-const DEST_HREF: Record<ShellDest, string> = { settings: '/settings', play: PLAY_SKIRMISH_SELECTOR_HREF, editor: '/editor', lobbies: '/lobbies' };
-const DEST_LABEL: Record<ShellDest, string> = { settings: 'Settings', play: 'Play', editor: 'Editor', lobbies: 'Lobbies' };
+type ShellDest = 'settings' | 'play' | 'editor' | 'lobbies' | 'enchiridion';
+const DEST_HREF: Record<ShellDest, string> = {
+  settings: '/settings',
+  play: PLAY_SKIRMISH_SELECTOR_HREF,
+  editor: '/editor',
+  lobbies: '/lobbies',
+  enchiridion: '/enchiridion/units',
+};
+const DEST_LABEL: Record<ShellDest, string> = {
+  settings: 'Settings',
+  play: 'Play',
+  editor: 'Editor',
+  lobbies: 'Lobbies',
+  enchiridion: 'Enchiridion',
+};
 function shellDest(path: string): ShellDest | null {
   if (path === '/settings' || path.startsWith('/settings/')) return 'settings';
   if (isPlaySelectorPath(path)) return 'play';
@@ -91,7 +86,12 @@ function shellDest(path: string): ShellDest | null {
   if (path === '/editor' || path === '/editor/wars' || path === '/campaigns-next' || path === '/campaigns') return 'editor';
   // Lobbies is a single ACTION column (tab → action) — host/join + the lobby list.
   if (path === '/lobbies' || path.startsWith('/lobbies/')) return 'lobbies';
+  if (path === '/enchiridion' || path.startsWith('/enchiridion/')) return 'enchiridion';
   return null;
+}
+
+function enchiridionSection(path: string): EnchiridionSection {
+  return ENCHIRIDION_SECTIONS.find((section) => path === `/enchiridion/${section}`) ?? 'units';
 }
 
 export function MainMenu({
@@ -168,6 +168,7 @@ export function MainMenu({
               ? dest === 'settings' ? <Settings embedded path={path} search={search} sceneInstanceKey={sceneInstanceKey} />
                 : dest === 'play' ? <PlayMenu path={path} sceneInstanceKey={sceneInstanceKey} />
                 : dest === 'lobbies' ? <Lobbies embedded />
+                : dest === 'enchiridion' ? <Enchiridion section={enchiridionSection(path)} sceneInstanceKey={sceneInstanceKey} framed={false} />
                 : path === '/editor/wars' ? <WarEditor embedded /> : <CampaignEditor embedded />
               : null}
           </div>

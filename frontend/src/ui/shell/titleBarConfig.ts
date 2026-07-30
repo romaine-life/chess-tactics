@@ -44,11 +44,12 @@ export function titleBarConfig(path: string, search = ''): TitleBarConfig | null
     };
   }
 
-  if (path === '/play' || path === '/run') {
+  if (path === '/play' || path.startsWith('/play/strategikon/')
+    || path === '/run' || path.startsWith('/run/strategikon/')) {
     // studSlot lets a single-player battle turn the ornament diamond into a Retry button
     // (the Skirmish screen portals it in, netplay omitted).
     return {
-      screenName: path === '/run' ? 'Run' : playRouteScreenName({ path, search }),
+      screenName: path.startsWith('/run') ? 'Run' : playRouteScreenName({ path: '/play', search }),
       barClass: 'skirmish-topbar',
       centerSlot: true,
       studSlot: true,
@@ -79,6 +80,9 @@ export function titleBarConfig(path: string, search = ''): TitleBarConfig | null
     // the first tab. (Default showSettingsGear=true, so it's simply not hidden.)
     // A valid returnTo contributes a typed Back control before the persistent divider.
     return { screenName: 'Settings', signInReturnTo: '/settings', barClass: 'app-titlebar--ui-scaled settings-topbar' };
+  }
+  if (path === '/enchiridion' || path.startsWith('/enchiridion/')) {
+    return { screenName: 'Enchiridion', signInReturnTo: path, barClass: 'main-menu-twin-header' };
   }
   // Fallback: the Main Menu — renderRoute's default for any unmatched path.
   return { screenName: 'Main Menu', signInReturnTo: '/', barClass: 'main-menu-twin-header' };
