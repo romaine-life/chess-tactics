@@ -900,7 +900,8 @@ if (!/export function SkirmishShell[\s\S]*?<SkirmishHud \{\.\.\.hudProps\} contr
   || !/export function Skirmish\b[\s\S]*?return \(\s*<SkirmishShell/.test(skirmish)) {
   failures.push('Battle must render through the one SkirmishShell that owns SkirmishHud');
 }
-if (!/<SkirmishShell[\s\S]*?controlsContent=\{<RunArmyControls run=\{run\} selling \/>\}/.test(runScreen)
+if (!/<SkirmishShell[\s\S]*?controlsContent=\{<RunMetaControls run=\{run\} view=\{view\} onNavigate=\{onNavigate\} \/>\}/.test(runScreen)
+  || !/function RunMetaControls[\s\S]*?<section className="run-meta-controls" aria-label="Run controls">/.test(runScreen)
   || /function RunShell|function RunControlsRail|chromeConsumer="run-controls"/.test(runScreen)) {
   failures.push('Run shop must use the Battle-owned SkirmishShell and replace only SkirmishHud contents');
 }

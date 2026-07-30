@@ -167,9 +167,15 @@ export function SkirmishShell({
 
 export function Skirmish({
   runBattle = null,
+  runWorkspace = null,
+  runArmyOpen = false,
+  onToggleRunArmy = null,
   routeSearch = window.location.search,
 }: {
   runBattle?: RunBattlePresentation | null;
+  runWorkspace?: ReactNode;
+  runArmyOpen?: boolean;
+  onToggleRunArmy?: (() => void) | null;
   routeSearch?: string;
 } = {}) {
   const routeParams = useMemo(() => new URLSearchParams(routeSearch), [routeSearch]);
@@ -1105,6 +1111,8 @@ export function Skirmish({
         onOpenPredrawnRegistration={predrawnPreview ? () => setPredrawnPickerOpen(true) : null}
         onPawnCashOut={runBattle?.onPawnCashOut ?? null}
         onAbandonRun={runBattle?.onAbandonRun ?? null}
+        onToggleRunArmy={onToggleRunArmy}
+        runArmyOpen={runArmyOpen}
       />
     </PaintedSurfaceBoundary>
   ) : null;
@@ -1240,6 +1248,7 @@ export function Skirmish({
           </InnerChromeBox>
         ) : null}
       </section>
+      {runWorkspace}
       {predrawnPickerOpen && predrawnPreview ? (
         <PredrawnCornerPicker
           src={predrawnPreview}

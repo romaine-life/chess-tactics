@@ -17901,6 +17901,9 @@ function validateActiveRunBody(run) {
     if (!Array.isArray(unit.abilities) || unit.abilities.some((ability) => ability !== 'discipline')) {
       return 'run.army contains invalid abilities';
     }
+    if (unit.number !== undefined && (!isFiniteInteger(unit.number) || unit.number < 1)) {
+      return 'run.army contains an invalid unit number';
+    }
   }
   if (!run.army.some((unit) => unit.id === 'run-king' && unit.type === 'king')) return 'run.army must retain its King';
   for (const field of ['relics', 'seenRelics']) {
@@ -17910,6 +17913,21 @@ function validateActiveRunBody(run) {
   }
   if (!Array.isArray(run.draftOffers) || run.draftOffers.length !== 2) return 'run.draftOffers is invalid';
   if (!isFiniteInteger(run.nextArmyUnitSequence) || run.nextArmyUnitSequence < 1) return 'run.nextArmyUnitSequence is invalid';
+  if (run.nextArmyUnitNumberByType !== undefined) {
+    if (!isObjectRecord(run.nextArmyUnitNumberByType)) return 'run.nextArmyUnitNumberByType is invalid';
+    for (const type of ACTIVE_RUN_PIECES) {
+      if (!isFiniteInteger(run.nextArmyUnitNumberByType[type]) || run.nextArmyUnitNumberByType[type] < 1) {
+        return 'run.nextArmyUnitNumberByType is invalid';
+      }
+    }
+  }
+  if (run.shop !== null && run.shop !== undefined) {
+    if (!isObjectRecord(run.shop)) return 'run.shop is invalid';
+    if (run.shop.soldUnits !== undefined && !Array.isArray(run.shop.soldUnits)) return 'run.shop.soldUnits is invalid';
+    if (run.shop.entrySnapshot !== undefined && !isObjectRecord(run.shop.entrySnapshot)) {
+      return 'run.shop.entrySnapshot is invalid';
+    }
+  }
   return null;
 }
 

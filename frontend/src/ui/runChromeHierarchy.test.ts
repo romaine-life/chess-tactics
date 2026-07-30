@@ -3,14 +3,15 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const runScreen = readFileSync(new URL('./RunScreen.tsx', import.meta.url), 'utf8');
+const runArmyWorkspace = readFileSync(new URL('./RunArmyWorkspace.tsx', import.meta.url), 'utf8');
 const skirmish = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
 const skirmishHud = readFileSync(new URL('./SkirmishHud.tsx', import.meta.url), 'utf8');
 const styleCss = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 
 describe('Run chrome hierarchy', () => {
   it('uses the Battle-owned shell and HUD while replacing only Controls contents', () => {
-    const armyControls = runScreen.match(
-      /function RunArmyControls\b[\s\S]*?\r?\n}\r?\n\r?\nfunction DraftPanel/,
+    const metaControls = runScreen.match(
+      /function RunMetaControls\b[\s\S]*?\r?\n}\r?\n\r?\nfunction DraftPanel/,
     )?.[0] ?? '';
     const sharedShell = skirmish.match(
       /export function SkirmishShell\b[\s\S]*?\r?\n}\r?\n\r?\nexport function Skirmish/,
@@ -26,11 +27,17 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('<SkirmishShell');
     expect(runScreen).toContain('readyToCompose={false}');
     expect(runScreen).not.toContain("classList.add('skirmish-active')");
-    expect(runScreen).toContain('controlsContent={<RunArmyControls run={run} selling />}');
-    expect(armyControls).toContain('<section className="run-army" aria-label="Persistent army">');
-    expect(armyControls).toContain('data-ui-sfx="gold-sell"');
-    expect(armyControls).not.toContain('<OuterChromeBox');
-    expect(armyControls).not.toContain('data-chrome-unit="outer-panel"');
+    expect(runScreen).toContain('controlsContent={<RunMetaControls run={run} view={view} onNavigate={onNavigate} />}');
+    expect(metaControls).toContain('<section className="run-meta-controls" aria-label="Run controls">');
+    expect(metaControls).toContain('Sell Units');
+    expect(metaControls).toContain('Reset Shop');
+    expect(metaControls).toContain('Continue to next Battle');
+    expect(metaControls).not.toContain('data-ui-sfx="gold-sell"');
+    expect(metaControls).not.toContain('<OuterChromeBox');
+    expect(metaControls).not.toContain('data-chrome-unit="outer-panel"');
+    expect(runArmyWorkspace).toContain('data-ui-sfx={status === \'available\' ? \'gold-sell\' : undefined}');
+    expect(runArmyWorkspace).toContain('chromeConsumer="run-army-ledger"');
+    expect(runArmyWorkspace).toContain('chromeConsumer="run-sell-units"');
     expect(skirmishHud).toContain('chromeConsumer="skirmish-hud"');
     expect(skirmishHud).toContain('{controlsContent === undefined ? (');
     expect(runScreen).not.toContain('function RunShell');
@@ -66,6 +73,7 @@ describe('Run chrome hierarchy', () => {
     )?.[0] ?? '';
 
     expect(bundleCard).toContain('bundle.pieces.map((piece, index)');
+    expect(runScreen).toContain("const PLAYER_BUNDLE_FACING = 'south' as const;");
     expect(bundleCard).toContain('pieceSpritePath(piece, PLAYER_BUNDLE_PALETTE, PLAYER_BUNDLE_FACING)');
     expect(bundleCard).toContain('className="run-bundle-board-piece"');
     expect(bundleCard).not.toContain('UnitPortrait');

@@ -70,6 +70,11 @@ these.
 - A non-final Run victory funds its shop from the authored enemy force: each
   King is worth 1 gold and every other enemy chess piece pays 50% of its
   standard value (ADR-0220).
+- Run shops separate buying, detailed army inspection, and a compact
+  decision-complete selling list into explicit main-pane destinations. The
+  persistent Controls panel navigates those destinations, resets the complete
+  same-offer shop visit, and continues the Run; Army inspection remains
+  available in every Run phase without pausing an active Battle (ADR-0230).
 - **Campaign** strings 5–10 boards into a curated, slowly-evolving sequence, and
   will grow richer over time.
 
