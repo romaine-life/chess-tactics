@@ -2621,6 +2621,8 @@ const MIGRATIONS = [
   {
     version: 46,
     name: 'installed play menu entry lands on the play hub root',
+    // This identity already exists in the shared development ledger. ADR-0174
+    // requires its version, name, and SQL to remain byte-for-byte canonical.
     // ADR-0256: the Play entry navigates to the bare selector root, where the
     // client resumes the one in-progress activity or reveals the neutral hub.
     // The update is guarded to the retired canonical default so an
