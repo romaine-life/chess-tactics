@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState, type ReactElement } from 'react';
 import { defaultBackgroundSet } from '../art/backgroundSets';
 import { runCardName } from '../run/cardNames';
 import { PIECE_BUNDLE_BY_ID, PIECE_BUNDLE_DECK, bundleLabel } from '../run/model';
+import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { RunBundleCard } from './RunBundleCard';
 import { runCardScenePlan, RunCardScene, RUN_CARD_SCENE_CAPTURE } from './RunCardScene';
 import { NavButton } from './shared/NavButton';
@@ -73,7 +74,7 @@ export function RunCardSceneLab(): ReactElement {
               <p>
                 <NavButton
                   data-chrome-unit="inner-text-button"
-                  className="inner-text-button app-header-button"
+                  className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
                   to={editorHref}
                 >
                   Edit this scene in the Level Editor
