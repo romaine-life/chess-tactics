@@ -526,9 +526,10 @@ export function ViewPane({
     </section>
   );
 
-  // Fixed previews and non-Play board workspaces retain the canonical 195:124 window.
-  // Play explicitly fills its bounded-fluid allocation; non-board asset viewers retain
-  // the dimensions of the asset they are inspecting.
+  // Fixed previews and non-Play board workspaces retain the canonical 4:3 board window
+  // (ADR-0192/ADR-0259). Play's live board fills its playfield allocation — its 4:3 frame
+  // is the surrounding .skirmish-board-frame — and non-board asset viewers retain the
+  // dimensions of the asset they are inspecting.
   return kind === 'board' && boardViewportMode === 'canonical' ? (
     <div className="board-view-pane-seat">
       {stage}

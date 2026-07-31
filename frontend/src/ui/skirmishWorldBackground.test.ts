@@ -16,7 +16,7 @@ describe('Skirmish world background ownership', () => {
       "className={screenPredrawnBackgroundActive ? 'is-predrawn-board' : ''}",
     );
     expect(skirmishSource).toContain(
-      "className={`skirmish-screen is-play-canvas${runSelfInspectionOpen ? ' is-run-self-inspection-open' : ''} ${className}`.trim()}",
+      "className={`skirmish-screen${runSelfInspectionOpen ? ' is-run-self-inspection-open' : ''} ${className}`.trim()}",
     );
     expect(styleCss).toMatch(
       /\.skirmish-screen\.is-predrawn-board::before\s*\{[\s\S]*?content:\s*none;/,

@@ -30,7 +30,6 @@ describe('Run chrome hierarchy', () => {
     expect(sharedShell).toContain('<PaintedSurfaceBoundary');
     expect(sharedShell).toContain('surface="gameplay-hud"');
     expect(sharedShell).toContain('readyToCompose={readyToCompose}');
-    expect(sharedShell).toContain('return installPlayCanvas(shell)');
     expect(runScreen).toContain('<SkirmishShell');
     expect(runScreen).toContain('readyToCompose={hydrated}');
     expect(runScreen).not.toContain("classList.add('skirmish-active')");

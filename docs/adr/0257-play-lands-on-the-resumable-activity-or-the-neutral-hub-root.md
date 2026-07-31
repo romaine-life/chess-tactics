@@ -2,6 +2,8 @@
 status: accepted
 date: 2026-07-30
 deciders: owner (Nelson) + Codex
+partially_superseded_by:
+  - "[ADR-0260](0260-play-always-presents-the-picker-continue-is-an-offer.md)'s always-picker rule (the resume-forward clause is retired; the neutral root, canonicalization, and installed-row clauses remain)"
 supersedes:
   - "[ADR-0074](0074-one-play-entry-one-shared-selector.md)'s canonicalize-to-Skirmish landing clause"
 refines:

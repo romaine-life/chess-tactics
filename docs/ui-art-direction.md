@@ -252,9 +252,10 @@ The default work surfaces are `/`, `/enchiridion/units`,
 `/play/select/levels`, `/play/select/campaign/<id>`, `/editor`,
 `/editor/level`, and exact `/play?...` for a selected live board. The main menu has
 five top-level controls — Play, Editor, Lobbies, Enchiridion, Settings — and Play owns the shared
-Continue/Skirmish/Run/Levels/Campaign selector described by ADR-0074, ADR-0232, and
-ADR-0257. Clicking Play lands on the bare selector root, which resumes the one
-in-progress activity or reveals a neutral hub with no preselected mode.
+Continue/Skirmish/Run/Levels/Campaign selector described by ADR-0074, ADR-0232,
+ADR-0257, and ADR-0260. Clicking Play lands on the bare selector root, which
+always reveals the picker with no preselected mode; a resumable activity is
+offered as a prominent Continue card and rail entry, never an automatic redirect.
 Continue Run selects the existing Run action panel; its nested Play control alone
 enters the active Run.
 Enchiridion is immediately above Settings. In Battle, frameless open-codex art

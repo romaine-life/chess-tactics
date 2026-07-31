@@ -1,7 +1,9 @@
 ---
-status: accepted
+status: superseded
 date: 2026-07-29
 deciders: owner (Nelson) + Codex
+superseded_by:
+  - "[ADR-0259](0259-the-live-play-composition-is-the-authority-derived-views-conform.md)"
 partially_superseded_by:
   - "[ADR-0226](0226-play-expands-before-ultrawide-wings.md)"
 partially_supersedes:

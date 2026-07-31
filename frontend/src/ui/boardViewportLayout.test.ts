@@ -6,31 +6,48 @@ const styleCss = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const appSource = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8');
 const levelThumbnailSource = readFileSync(new URL('../render/LevelThumbnail.tsx', import.meta.url), 'utf8');
 const skirmishBoardSource = readFileSync(new URL('../render/SkirmishBoard.tsx', import.meta.url), 'utf8');
+const skirmishSource = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
 const viewPaneSource = readFileSync(new URL('./shared/ViewPane.tsx', import.meta.url), 'utf8');
 
-describe('board viewports share Play reference framing', () => {
-  it('joins the visible gameplay pane directly to the HUD rail', () => {
+describe('board viewports speak the board\'s canonical 4:3 language (ADR-0259)', () => {
+  it('keeps Play in real viewport pixels — no design-canvas transform machinery', () => {
+    expect(styleCss).not.toContain('is-play-canvas');
+    expect(styleCss).not.toContain('--skirmish-canvas-');
+    expect(styleCss).not.toContain('--skirmish-hud-width');
+    expect(skirmishSource).not.toContain('installPlayCanvas');
+    expect(skirmishSource).not.toContain('is-play-canvas');
+  });
+
+  it('sizes the HUD rail from the one shared real-pixel width every consumer reads', () => {
     expect(styleCss).toMatch(
-      /\.skirmish-screen\s*\{[\s\S]*?column-gap:\s*0;/,
+      /:root\s*\{[\s\S]{0,200}?--skirmish-rail-w:\s*clamp\(300px, 24vw, 360px\);/,
+    );
+    expect(styleCss).toMatch(
+      /\.skirmish-screen\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) var\(--skirmish-rail-w\);/,
     );
   });
 
-  it('uses the bounded-fluid Play canvas and its complete board seat', () => {
+  it('frames the live gameplay board in the largest 4:3 drawable viewport', () => {
     expect(styleCss).toMatch(
-      /\.shell\.skirmish-active \.scene-boundary:has\(\.skirmish-screen\.is-play-canvas\)\s*\{[\s\S]*?height:\s*var\(--skirmish-canvas-height\);[\s\S]*?transform:\s*translateX\(-50%\) scale\(var\(--skirmish-canvas-scale\)\);[\s\S]*?width:\s*var\(--skirmish-canvas-width\);/,
+      /\.skirmish-screen:not\(\.level-editor-screen\) \.skirmish-board-frame\s*\{[\s\S]{0,300}?aspect-ratio:\s*var\(--board-view-aspect\);/,
     );
     expect(styleCss).toMatch(
-      /\.skirmish-screen\.is-play-canvas\s*\{[\s\S]*?--skirmish-rail-w:\s*var\(--skirmish-hud-width\);[\s\S]*?grid-template-rows:\s*0 minmax\(0, 1fr\);/,
+      /\.skirmish-field\s*\{[\s\S]{0,200}?container-name:\s*board-view-seat;[\s\S]{0,200}?container-type:\s*size;/,
     );
+  });
+
+  it('bleeds the free-panned board art past its frame, but only for the Play board', () => {
     expect(styleCss).toMatch(
-      /\.skirmish-board-frame\s*\{[\s\S]*?height:\s*100%;[\s\S]*?overflow:\s*hidden;[\s\S]*?width:\s*100%;/,
+      /\.skirmish-screen:not\(\.level-editor-screen\) \.skirmish-field,[\s\S]{0,700}?overflow:\s*visible;/,
     );
+    // Seated board previews inside Run workspaces keep their clip: the stage
+    // selectors must stay scoped beneath .skirmish-board-frame.
     expect(styleCss).not.toMatch(
-      /\.skirmish-screen:not\(\.level-editor-screen\) \.skirmish-board-frame\s*\{[\s\S]{0,500}?aspect-ratio:/,
+      /\.skirmish-screen:not\(\.level-editor-screen\) \.tileset-view-stage,/,
     );
   });
 
-  it('keeps the persistent title bar outside the transformed Play scene', () => {
+  it('keeps the persistent title bar outside the replaceable scene', () => {
     expect(appSource.indexOf('<AppTitleBar')).toBeGreaterThan(-1);
     expect(appSource.indexOf('<SceneBoundary')).toBeGreaterThan(appSource.indexOf('<AppTitleBar'));
     expect(styleCss).toMatch(
@@ -41,9 +58,9 @@ describe('board viewports share Play reference framing', () => {
     );
   });
 
-  it('declares the Play-pane aspect once for every board-viewing surface', () => {
+  it('declares the canonical board aspect once for every board-viewing surface', () => {
     expect(styleCss).toMatch(
-      /--board-view-aspect-width:\s*195;[\s\S]*?--board-view-aspect-height:\s*124;/,
+      /--board-view-aspect-width:\s*4;[\s\S]*?--board-view-aspect-height:\s*3;/,
     );
     expect(styleCss).toMatch(
       /\.board-view-pane-seat > \.tileset-view-stage\.is-board\s*\{[\s\S]*?aspect-ratio:\s*var\(--board-view-aspect\);/,
@@ -51,7 +68,7 @@ describe('board viewports share Play reference framing', () => {
     expect(viewPaneSource).toContain('className="board-view-pane-seat"');
   });
 
-  it('lets Play fill its expanded live board allocation without changing fixed previews', () => {
+  it('lets the Play board fill its 4:3 frame while fixed previews keep the shared seat', () => {
     expect(skirmishBoardSource).toContain('boardViewportMode="fill"');
     expect(viewPaneSource).toContain(
       "return kind === 'board' && boardViewportMode === 'canonical' ? (",
@@ -70,11 +87,5 @@ describe('board viewports share Play reference framing', () => {
       'aspectRatio: `${BOARD_PREVIEW_ASPECT.width} / ${BOARD_PREVIEW_ASPECT.height}`',
     );
     expect(levelThumbnailSource).not.toMatch(/\n\s*height:\s*number;/);
-  });
-
-  it('clips gameplay to the same drawable boundary used by its camera', () => {
-    expect(styleCss).not.toMatch(
-      /\.skirmish-screen:not\(\.level-editor-screen\) \.skirmish-field,[\s\S]{0,700}?overflow:\s*visible;/,
-    );
   });
 });

@@ -3,7 +3,6 @@ import {
   type ReactElement,
   type ReactNode,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useState,
 } from 'react';
@@ -15,7 +14,6 @@ import { NavButton } from './shared/NavButton';
 import { RestartGlyph } from './shared/actionGlyphs';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleBarControlContribution, TitleBarStatus } from './shell/TitleBarControls';
-import { installPlayCanvas } from './shell/playCanvas';
 import { useSkirmish, shouldStartFreshSkirmish, setNetMoveSink, setNetResignSink } from '../game/store';
 import { loadMatch, setMatchPersistenceEnabled } from '../game/matchPersistence';
 import {
@@ -127,10 +125,10 @@ export function SkirmishShell({
 }): ReactElement {
   const installedChromeCss = useInstalledChromeCss();
   const [paintAttempt, setPaintAttempt] = useState(0);
-  useLayoutEffect(() => {
+  useEffect(() => {
     const shell = document.querySelector('.shell');
-    if (!(shell instanceof HTMLElement)) return undefined;
-    return installPlayCanvas(shell);
+    shell?.classList.add('skirmish-active');
+    return () => shell?.classList.remove('skirmish-active');
   }, []);
   const resolvedScreenStyle = screenStyle === undefined
     ? {
@@ -150,7 +148,7 @@ export function SkirmishShell({
   return (
     <div
       data-testid={testId}
-      className={`skirmish-screen is-play-canvas${runSelfInspectionOpen ? ' is-run-self-inspection-open' : ''} ${className}`.trim()}
+      className={`skirmish-screen${runSelfInspectionOpen ? ' is-run-self-inspection-open' : ''} ${className}`.trim()}
       style={resolvedScreenStyle}
     >
       {installedChromeCss ? <style data-skirmish-chrome-family dangerouslySetInnerHTML={{ __html: installedChromeCss }} /> : null}

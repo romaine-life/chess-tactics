@@ -11,24 +11,25 @@ import {
  * only as optional camera room.
  */
 export const BOARD_PREVIEW_MARGIN_RATIO = 0.05;
-export const BOARD_PREVIEW_FRAMING_REVISION = 3;
+export const BOARD_PREVIEW_FRAMING_REVISION = 4;
 
 /**
- * Every ordinary board preview uses Play's canonical reference opening shape.
+ * Every derived board view speaks the board's own language: the shared 4:3
+ * viewing frame interactive board viewports already use (ADR-0192, ADR-0259).
  *
- * Play's 1920×1080 reference reserves 360px for the HUD and 88px for the title
- * bar, leaving 1560×992. Wider live Play panes reveal peripheral world around
- * this safe area; fixed previews retain its reduced 195:124 shape.
+ * The live Play composition is the authority and is not resized to match its
+ * derivatives; previews and thumbnails conform to the board's 4:3 window while
+ * Play's opening camera frames the same 4:3 safe area inside its live pane.
  */
 export const BOARD_PREVIEW_ASPECT = Object.freeze({
-  width: 195,
-  height: 124,
+  width: 4,
+  height: 3,
 });
 
-/** Quarter-scale delivery raster with the exact canonical aspect. */
+/** Compact delivery raster: the pre-canvas 288px width at the canonical aspect. */
 export const BOARD_THUMBNAIL_SIZE = Object.freeze({
-  width: 390,
-  height: 248,
+  width: 288,
+  height: 216,
 });
 
 export function boardPreviewHeight(width: number): number {

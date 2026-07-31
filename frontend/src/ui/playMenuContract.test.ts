@@ -21,20 +21,22 @@ describe('unified Play menu contract (ADR-0074)', () => {
       .toContain("['play', 'Play', '/play/select']");
   });
 
-  it('lands Play on the resumable activity or the neutral hub root (ADR-0257)', () => {
+  it('lands Play on the picker with Continue as an offer, never a redirect (ADR-0260)', () => {
     expect(mainMenu).toContain('play: PLAY_SELECTOR_ROOT');
     // Canonicalization and the missing-campaign fallback return to the neutral
     // root; nothing in the landing path manufactures a skirmish selection.
     expect(playMenu).toContain("navigateApp(PLAY_SELECTOR_ROOT, { replace: true, scroll: false })");
     expect(playMenu).not.toContain('navigateApp(PLAY_SKIRMISH_SELECTOR_HREF');
     expect(playMenu).toContain("playHubSelection(path) ?? { mode: 'hub' }");
-    // The root resumes the one in-progress activity only after content and Run
-    // authority settle, and holds composition while that decision is pending.
-    expect(playMenu).toContain('if (selection.mode !== \'hub\' || loading || !runHydrated) return;');
-    expect(playMenu).toContain('if (resumable) navigateApp(resumable.href, { replace: true, scroll: false });');
+    // The root never auto-forwards to a resumable activity: the hub composes
+    // once the Run document settles and offers Continue as a card instead.
+    expect(playMenu).not.toContain('navigateApp(resumable.href');
     expect(playMenu).toContain('const hubLandingSettled =');
+    expect(playMenu).toContain("selection.mode !== 'hub' || runHydrated");
     expect(playMenu).toContain('&& hubLandingSettled');
     expect(playMenu).toContain('play-hub-neutral');
+    expect(playMenu).toContain('data-testid="play-hub-continue"');
+    expect(playMenu).toMatch(/play-hub-continue[\s\S]{0,400}?to=\{resumable\.href\}/);
   });
 
   it('leads with a resumable activity, then pins Skirmish, Run, and Levels above Campaigns', () => {

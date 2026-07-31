@@ -1,7 +1,9 @@
 ---
-status: accepted
+status: superseded
 date: 2026-07-29
 deciders: owner (Nelson) + Codex
+superseded_by:
+  - "[ADR-0259](0259-the-live-play-composition-is-the-authority-derived-views-conform.md)"
 partially_supersedes:
   - "[ADR-0202](0202-play-uses-one-fixed-design-resolution.md)'s fixed-width and wide-letterbox clauses"
   - "[ADR-0204](0204-all-board-viewing-panes-match-play.md)'s exact-aspect Play clause"
