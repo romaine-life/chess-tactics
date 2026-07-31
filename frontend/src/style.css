@@ -9773,6 +9773,12 @@ body { font-size: 17px; }
   opacity: 0;
   pointer-events: none;
 }
+/* Children that opt back into the pointer (e.g. .strategikon-slot > *) must not
+   punch through the preparing silence — a parent's pointer-events: none does not
+   bind children that declare their own. */
+.scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active] > * {
+  pointer-events: none;
+}
 .scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > * {
   opacity: 0;
   pointer-events: none;
@@ -19560,8 +19566,16 @@ button.tileset-relationship-cell {
   inset: 0;
   min-block-size: 0;
   min-inline-size: 0;
+  /* The slot sits over the battlefield at all times so the workspace can swap in
+     place; while it is EMPTY it must stay pointer-transparent or it shields every
+     board tile from the cursor. Only mounted workspace content takes the pointer. */
+  pointer-events: none;
   position: absolute;
   z-index: 35;
+}
+
+.strategikon-slot > * {
+  pointer-events: auto;
 }
 
 .strategikon-workspace-fill {
