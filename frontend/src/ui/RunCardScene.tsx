@@ -3,6 +3,7 @@ import {
   currentDoodadAssets,
   drawableAssets,
   structureArtDirections,
+  structureArtDirectionSprite,
 } from '@chess-tactics/board-render';
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { TILE_STEP_Y } from '../art/projectionContract';
@@ -109,7 +110,7 @@ function placeDoodads(
     .sort((left, right) => left.id.localeCompare(right.id));
   const placed: EditorBoard['doodads'] = {};
   if (!eligible.length) return placed;
-  const wanted = rng.int(4);
+  const wanted = 2 + rng.int(3);
   const cells = [...free].sort();
   for (let index = 0; index < wanted && cells.length > 0; index += 1) {
     const key = cells.splice(rng.int(cells.length), 1)[0];
@@ -148,15 +149,22 @@ const LANDMARKS_LUSH = [
 const LANDMARKS_ARID = ['saguaro-cactus'] as const;
 const LUSH_TERRAINS = new Set(['grass', 'dirt']);
 const ARID_TERRAINS = new Set(['sand']);
-// Rear-apron seats behind the formation, inside the capture frame's upper band
-// (screen-up is smaller x+y).
-const LANDMARK_ANCHORS: ReadonlyArray<{ x: number; y: number }> = [
-  { x: 0, y: -2 },
-  { x: 1, y: -2 },
-  { x: 2, y: -2 },
-  { x: -1, y: -1 },
-  { x: -2, y: 0 },
-];
+/**
+ * The capture framing's visible world rectangle: the fixed stage mapped through the
+ * shared camera (zoom + pan) around the centred playable board. Landmark placement is
+ * solved inside this rectangle from real sprite metrics, so nothing lands off frame.
+ */
+function captureWorldRect(): { minX: number; maxX: number; minY: number; maxY: number } {
+  const { zoom, pan } = RUN_CARD_SCENE_CAPTURE.camera;
+  const centre = boardLabCellPosition({
+    x: (RUN_CARD_SCENE_COLS - 1) / 2,
+    y: (RUN_CARD_SCENE_ROWS - 1) / 2,
+  });
+  const halfW = RUN_CARD_SCENE_CAPTURE.width / 2 / zoom;
+  const halfH = RUN_CARD_SCENE_CAPTURE.height / 2 / zoom;
+  const centreY = centre.top - pan.y / zoom;
+  return { minX: -halfW, maxX: halfW, minY: centreY - halfH, maxY: centreY + halfH };
+}
 
 function placeLandmark(rng: Rng, familyId: TileFamilyId): FloatingArtworkPlacement[] {
   const terrain = gameplayTerrainForFamily(familyId);
@@ -165,18 +173,32 @@ function placeLandmark(rng: Rng, familyId: TileFamilyId): FloatingArtworkPlaceme
     ...(terrain && LUSH_TERRAINS.has(terrain) ? LANDMARKS_LUSH : []),
     ...(terrain && ARID_TERRAINS.has(terrain) ? LANDMARKS_ARID : []),
   ].filter((id) => structureArtDirections(id).length > 0);
-  if (!pool.length || rng.int(5) === 0) return [];
+  if (!pool.length) return [];
   const sourceArtId = pool[rng.int(pool.length)];
   const directions = structureArtDirections(sourceArtId);
   const direction = directions[rng.int(directions.length)];
-  const anchor = LANDMARK_ANCHORS[rng.int(LANDMARK_ANCHORS.length)];
-  const seat = boardLabCellPosition(anchor);
-  const scale = 0.7 + rng.int(3) * 0.1;
+  const sprite = structureArtDirectionSprite(sourceArtId, direction);
+  if (!sprite) return [];
+
+  // Floating artwork draws centred on (pixelX, pixelY) at sprite.scale × placement
+  // scale (see renderPlan). Size it to a readable backdrop and seat it fully inside
+  // the frame's upper band, horizontally seeded between the corners and centre.
+  const frame = captureWorldRect();
+  const inset = 8;
+  const nativeW = sprite.w * sprite.scale;
+  const nativeH = sprite.h * sprite.scale;
+  const targetH = 80 + rng.int(3) * 10;
+  const scale = Math.min(targetH / nativeH, (frame.maxX - frame.minX - inset * 2) / nativeW);
+  const width = nativeW * scale;
+  const height = nativeH * scale;
+  const pixelY = frame.minY + inset + height / 2;
+  const maxOffset = Math.max(0, frame.maxX - inset - width / 2);
+  const pixelX = (rng.int(3) - 1) * Math.min(70, maxOffset);
   return [{
     id: `card-landmark-${sourceArtId}`,
     sourceArtId,
-    pixelX: seat.left,
-    pixelY: seat.top,
+    pixelX,
+    pixelY,
     direction,
     scale,
   }];
@@ -351,11 +373,13 @@ export function RunCardScene({
   bundle: Pick<PieceBundle, 'pieces'>;
   className?: string;
   /**
-   * 'live' is the card face: installed enriched artwork under the mustered units when a
-   * scene slot is accepted, else the full live tile scene. 'source' is the unit-less
-   * tile scene — the deterministic art-generation input captured for restyling.
+   * 'live' is the card face: installed enriched artwork under the mustered units when
+   * a scene slot is accepted, else the tile scene without landmark overlays (floating
+   * artwork always draws above units, so it belongs to generated art, not the live
+   * composite). 'source' is the unit-less full scene — the art-generation seed.
+   * 'guide' is the full scene including units, for with-units generation trials.
    */
-  variant?: 'live' | 'source';
+  variant?: 'live' | 'source' | 'guide';
   /** Card-window framing by default; the capture stage passes its wider framing. */
   camera?: { zoom: number; pan: { x: number; y: number } };
   /** First completed paint of each canvas layer — a staging host's readiness gate. */
@@ -415,11 +439,15 @@ export function RunCardScene({
   const board = useMemo(() => (
     variant === 'source'
       ? { ...plan.board, units: {} }
-      : artwork
-        // Installed artwork already contains the whole environment; the live render
-        // contributes only the units so sprites stay crisp above the painted scene.
-        ? { ...plan.board, cover: {}, coverTypes: {}, props: {}, doodads: {}, floatingArtwork: [] }
-        : plan.board
+      : variant === 'guide'
+        ? plan.board
+        : artwork
+          // Installed artwork already contains the whole environment; the live render
+          // contributes only the units so sprites stay crisp above the painted scene.
+          ? { ...plan.board, cover: {}, coverTypes: {}, props: {}, doodads: {}, floatingArtwork: [] }
+          // Landmark overlays paint above units by contract, so the interim tile-scene
+          // face omits them; they arrive with the generated art.
+          : { ...plan.board, floatingArtwork: [] }
   ), [artwork, plan.board, variant]);
   return (
     <span

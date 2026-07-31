@@ -1,9 +1,11 @@
-import { useCallback, useState, type ReactElement } from 'react';
+import { encodeBoard } from '@chess-tactics/board-render';
+import { useCallback, useMemo, useState, type ReactElement } from 'react';
 import { defaultBackgroundSet } from '../art/backgroundSets';
 import { runCardName } from '../run/cardNames';
 import { PIECE_BUNDLE_BY_ID, PIECE_BUNDLE_DECK, bundleLabel } from '../run/model';
 import { RunBundleCard } from './RunBundleCard';
-import { RunCardScene, RUN_CARD_SCENE_CAPTURE } from './RunCardScene';
+import { runCardScenePlan, RunCardScene, RUN_CARD_SCENE_CAPTURE } from './RunCardScene';
+import { NavButton } from './shared/NavButton';
 import { OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
 import { useSceneParticipant } from './shell/SceneBoundary';
 
@@ -11,8 +13,11 @@ import { useSceneParticipant } from './shell/SceneBoundary';
 // the Run shop art review):
 //   - no card param → the complete deck as real card faces, the side-by-side review batch;
 //   - &card=<bundle-id> → that card's scene on the fixed capture stage. The default
-//     'source' variant is the unit-less deterministic vignette `npm run shot` captures as
-//     the img2img restyle input; &variant=live mounts the exact live card composition.
+//     'source' variant is the unit-less full scene `npm run shot` captures as the
+//     img2img restyle seed; &variant=guide adds the units for with-units generation
+//     trials; &variant=live mounts the exact live card composition.
+// Each card's scene is also openable in the Level Editor via its board code, so the
+// owner can hand-edit a seed with the real tools before capture.
 // The stage size and framing are the RUN_CARD_SCENE_CAPTURE contract: installed art is
 // mounted back as a board-registered plate, so a restyle of this exact capture seats
 // the runtime unit overlay precisely.
@@ -21,7 +26,12 @@ export function RunCardSceneLab(): ReactElement {
   const params = new URLSearchParams(window.location.search);
   const cardId = params.get('card');
   const bundle = cardId ? PIECE_BUNDLE_BY_ID[cardId] : null;
-  const variant = params.get('variant') === 'live' ? 'live' : 'source';
+  const variantParam = params.get('variant');
+  const variant = variantParam === 'live' ? 'live' : variantParam === 'guide' ? 'guide' : 'source';
+  const editorHref = useMemo(() => {
+    if (!bundle) return null;
+    return `/editor/level?board=${encodeURIComponent(encodeBoard(runCardScenePlan(bundle).board))}`;
+  }, [bundle]);
   // A single capture stage reports honestly: the scene commits (and `npm run shot`
   // captures) only after both board canvas layers have painted their first frame.
   // The whole-deck gallery composes progressively like other Studio catalogs.
@@ -51,8 +61,25 @@ export function RunCardSceneLab(): ReactElement {
         ) : bundle ? (
           <>
             <p data-card-id={bundle.id}>
-              <strong>{runCardName(bundle)}</strong> — {bundleLabel(bundle)} — {variant === 'source' ? 'art-generation source (units withheld)' : 'live card composition'}
+              <strong>{runCardName(bundle)}</strong> — {bundleLabel(bundle)} — {
+                variant === 'source'
+                  ? 'art-generation seed (units withheld)'
+                  : variant === 'guide'
+                    ? 'art-generation seed with units'
+                    : 'live card composition'
+              }
             </p>
+            {editorHref ? (
+              <p>
+                <NavButton
+                  data-chrome-unit="inner-text-button"
+                  className="inner-text-button app-header-button"
+                  to={editorHref}
+                >
+                  Edit this scene in the Level Editor
+                </NavButton>
+              </p>
+            ) : null}
             <div
               className="run-card-capture-stage"
               data-testid="run-card-capture-stage"
