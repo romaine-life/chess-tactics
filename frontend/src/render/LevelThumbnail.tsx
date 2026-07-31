@@ -97,7 +97,7 @@ export function LevelThumbnail({
   const canonicalDerivative = !authoringPreview
     ? levelThumbnailUrl(level.id)
     : null;
-  // Canonical and authoring derivatives own Play's reference opening composition.
+  // Canonical and authoring derivatives own the canonical 4:3 board window (ADR-0259).
   const coverThumbnail = true;
   const contentHash = useMemo(() => board ? boardContentHash(board) : `canonical:${level.id}`, [board, level.id]);
   const aspect = BOARD_PREVIEW_ASPECT.width / BOARD_PREVIEW_ASPECT.height;
@@ -188,7 +188,7 @@ export function LevelThumbnail({
   }, [near, authoringPreview, board, canonicalDerivative, contentHash, level.id, onError]);
 
   // The component owns its ratio. Callers choose only width, so no surface can accidentally
-  // stretch the exact Play-pane composition back to a legacy 3:2 or 4:3 rectangle.
+  // stretch the canonical board window into a bespoke rectangle.
   const boxStyle = {
     width: `${Math.round(width)}px`,
     aspectRatio: `${BOARD_PREVIEW_ASPECT.width} / ${BOARD_PREVIEW_ASPECT.height}`,

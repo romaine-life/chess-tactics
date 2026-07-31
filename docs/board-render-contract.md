@@ -774,24 +774,22 @@ every side, is contained and centered in the measured viewport, and is then
 raised only when the accepted-art cover floor requires it. Gameplay, Reset, the Level Editor,
 selected-level preview, replay/solver views, browser authoring bakes, server
 list derivatives, and social cards consume the same primitive. Per
-[ADR-0201](adr/0201-board-cameras-fit-the-actual-owning-viewport.md),
-[ADR-0202](adr/0202-play-uses-one-fixed-design-resolution.md), and
-[ADR-0226](adr/0226-play-expands-before-ultrawide-wings.md), gameplay retains
-the 1920×1080 reference scale, 88px title bar, and 360px adjoining HUD while its
-board seat expands to consume ordinary wide browser rectangles. At 2.1:1 the
-Play canvas caps at 2268×1080; wider browser space becomes equal shell-owned
-wings. The complete live board seat remains the measurement, accepted-art
-coverage, input, clip, and visible-output rectangle. Automatic opening and
-Reset use a centered 195:124 safe area inside wider Play panes, so added width
-reveals lateral world without changing the canonical board scale. Per
-[ADR-0204](adr/0204-all-board-viewing-panes-match-play.md), non-Play rendered
-game-board panes retain the reduced 195:124 shape: the Level Editor,
-selected-level and read-only previews, replay and solver boards, Gym and Game
-Lab boards, Studio board viewers, and canonical or unsaved-authoring
-thumbnails. Compact raster delivery is 390×248. Source media, model inputs,
-fixed-format exports, and social cards retain their required artifact
-dimensions because they are not application board viewports. Every board
-surface applies the same playable-contact-surface opening policy. The natural
+[ADR-0201](adr/0201-board-cameras-fit-the-actual-owning-viewport.md) and
+[ADR-0259](adr/0259-the-live-play-composition-is-the-authority-derived-views-conform.md),
+gameplay is composed in real viewport pixels: the persistent title bar and the
+real-pixel HUD rail keep their authored dimensions, and the playfield takes the
+remaining browser rectangle. The live gameplay camera frames the largest 4:3
+drawable viewport inside that playfield while the board art bleeds full-screen
+behind the floating chrome; that framed pane remains the measurement,
+accepted-art coverage, and input rectangle. Per
+[ADR-0204](adr/0204-all-board-viewing-panes-match-play.md) as amended by
+ADR-0259, non-Play rendered game-board panes share the same canonical 4:3
+board window: the Level Editor, selected-level and read-only previews, replay
+and solver boards, Gym and Game Lab boards, Studio board viewers, and canonical
+or unsaved-authoring thumbnails. Compact raster delivery is 288×216. Source
+media, model inputs, fixed-format exports, and social cards retain their
+required artifact dimensions because they are not application board viewports.
+Every board surface applies the same playable-contact-surface opening policy. The natural
 opening fit may raise the gameplay zoom ceiling rather than being stopped by
 its ordinary human-control cap. User camera input releases automatic framing
 until a level change or Reset.

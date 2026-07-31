@@ -192,13 +192,12 @@ route lifecycle during the same React commit.
   one bounded process-wide FIFO limiter. A genuinely changed visible derivative remains
   fail-closed until current pixels exist; unrelated authority changes are immediate cache
   hits, and below-fold acquisition remains opportunistic.
-- Per ADR-0189, ADR-0201, ADR-0202, ADR-0204, and ADR-0226, list derivatives are fixed
-  390×248 renders matching Play's 195:124 reference opening pane and use the shared
+- Per ADR-0189, ADR-0201, ADR-0204, and ADR-0259, list derivatives are fixed
+  288×216 renders in the canonical 4:3 board window and use the shared
   playable-board opening frame rather than opaque-pixel or full-generated-scene crops.
-  Play applies that framing policy to a centered 195:124 safe area while its live pane
-  expands through a 2.1:1 browser-content aspect and true ultrawide surplus becomes
-  shell-owned wings. Non-Play live board viewers retain the same 195:124 drawable shape
-  inside their surrounding UI. A framing-policy change bumps the renderer revision: reads repair stale
+  Play frames the same 4:3 window as the largest drawable viewport inside its
+  real-pixel playfield. Non-Play live board viewers retain the same 4:3 drawable
+  shape inside their surrounding UI. A framing-policy change bumps the renderer revision: reads repair stale
   derivatives and save/publish prepares the current version without regenerating accepted
   board artwork.
 - Initially presented level cards are one surface: the list remains hidden and inert until

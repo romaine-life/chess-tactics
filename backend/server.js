@@ -18471,7 +18471,7 @@ async function withAppliedThumbnailRenderInputs(renderInputs, task) {
     return task(renderInputs);
   });
 }
-const BOARD_THUMBNAIL_RENDER_REVISION = 8;
+const BOARD_THUMBNAIL_RENDER_REVISION = 9;
 
 function thumbnailVersion(
   plan,
