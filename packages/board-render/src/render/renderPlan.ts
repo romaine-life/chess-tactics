@@ -147,6 +147,12 @@ export type RenderBoard = EditorBoard;
 export interface BoardDrawOptions {
   coverSeed?: number;
   ambientCover?: boolean;
+  /**
+   * Uniform ground-cover tuft scale (default 1), anchored at each tuft's planted base.
+   * Miniature scenes (the Run card vignettes) use it to keep grass in proportion;
+   * gameplay boards never pass it.
+   */
+  coverScale?: number;
   /** Generation-reference mode: retain tops, features, and only explicitly authored Subterrain. */
   topSurfacesOnly?: boolean;
   /**
@@ -745,6 +751,7 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
   const ambientCover = options.ambientCover ?? false;
   resolveGroundCover(coverCells, COVER_SEED, (cell) =>
     board.cover?.[`${cell.x},${cell.y}`] ?? (hasPaintedCover || !ambientCover ? null : densityFieldAt(cell.x, cell.y, COVER_SEED)));
+  const coverScale = options.coverScale ?? 1;
   for (const cell of coverCells) {
     if (!cell.groundCover) continue;
     const set = groundCoverSet(cell.terrain);
@@ -760,10 +767,11 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
         sy: 0,
         sw: meta.frameWidth,
         sh: meta.frameHeight,
-        dx: left + tuft.dx - meta.baseX,
-        dy: top + tuft.dy - meta.baseY,
-        dw: meta.frameWidth,
-        dh: meta.frameHeight,
+        // The planted base point (baseX/baseY) stays fixed while the sprite scales.
+        dx: left + tuft.dx - meta.baseX * coverScale,
+        dy: top + tuft.dy - meta.baseY * coverScale,
+        dw: meta.frameWidth * coverScale,
+        dh: meta.frameHeight * coverScale,
         z: groundCoverZIndex(cell, tuft.dy),
         flipX: tuft.flip,
         animation: {

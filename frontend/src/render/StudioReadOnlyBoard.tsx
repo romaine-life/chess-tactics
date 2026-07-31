@@ -238,6 +238,8 @@ export function StudioReadOnlyBoard({
   className = '',
   ariaLabel = 'Level board',
   hidden,
+  still = false,
+  coverScale = 1,
   topSurfacesOnly = false,
   showGrid = false,
   reviewGridRegistration,
@@ -254,6 +256,10 @@ export function StudioReadOnlyBoard({
   className?: string;
   ariaLabel?: string;
   hidden?: BoardLayerVisibility;
+  /** One static frame with no layer clock: terrain tops hold this frame and scene sway pins to rest. */
+  still?: boolean;
+  /** Miniature-scene tuft scale, anchored at each tuft's planted base (default 1). */
+  coverScale?: number;
   /** Generation-reference view: preserve authored art, including explicit Subterrain, without defaults. */
   topSurfacesOnly?: boolean;
   /** Owner-inspection grid drawn through the canonical board grid layer. */
@@ -272,12 +278,15 @@ export function StudioReadOnlyBoard({
   onSceneFirstFrame?: () => void;
   onFrameError?: (error: unknown) => void;
 }): ReactElement {
-  const { gridCells, playableGridCells, terrainCells } = studioVisualTerrainPlan({
+  const { gridCells, playableGridCells, terrainCells: plannedTerrainCells } = studioVisualTerrainPlan({
     board,
     animationFrame,
     hidden,
     topSurfacesOnly,
   });
+  const terrainCells = still
+    ? plannedTerrainCells.map((cell) => ({ ...cell, animate: false }))
+    : plannedTerrainCells;
   const macroTiles = resolveMacroTilePlacements({
     placements: board.macroTiles,
     columns: board.cols,
@@ -328,7 +337,9 @@ export function StudioReadOnlyBoard({
             hidden={hidden}
             coverSeed={coverSeed}
             ambientCover={false}
+            coverScale={coverScale}
             omitTerrain
+            still={still}
             onFirstFrame={onSceneFirstFrame}
             onFrameError={onFrameError}
           />

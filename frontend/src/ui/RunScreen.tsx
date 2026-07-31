@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import { useSkirmish, setRunBattleTransformSink } from '../game/store';
-import { defaultFacingForSide, paletteForSide, pieceSpritePath } from '../core/pieces';
+import { defaultFacingForSide } from '../core/pieces';
 import type { GameState, Piece } from '../core/types';
 import { LevelPreviewColumn } from './LevelPreviewColumn';
 import { NavButton } from './shared/NavButton';
@@ -16,11 +16,9 @@ import { RunWorkspace } from './RunWorkspace';
 import {
   GOLD_SCALE,
   PIECE_BUNDLE_BY_ID,
-  PIECE_VALUE,
   RUN_RELIC_BY_ID,
   battleVictoryGoldTenths,
   beginBattle,
-  bundleLabel,
   buyBundle,
   buyPaidRelic,
   cashOutPawn,
@@ -38,7 +36,6 @@ import {
   shopHasChanges,
   takeLootRelic,
   type RunDocument,
-  type PieceBundle,
   type RunRelicId,
 } from '../run/model';
 import {
@@ -68,9 +65,8 @@ import {
   type RunSellFilters,
 } from './RunArmyWorkspace';
 import { RunWorkspaceStages } from './RunWorkspaceStages';
+import { RunBundleCard } from './RunBundleCard';
 
-const PLAYER_BUNDLE_PALETTE = paletteForSide('player');
-const PLAYER_BUNDLE_FACING = 'south' as const;
 type RunScreenView = 'primary' | 'sell' | RunSelfInspectionView;
 // The hydration placeholder only ever exists beneath the route's own entrance gate,
 // so swapping away from it needs no in-place choreography.
@@ -79,56 +75,6 @@ const RUN_STAGE_PLACEHOLDERS = [RUN_HYDRATING_STAGE] as const;
 
 function visibleRunRelicCount(run: RunDocument): number {
   return run.relics.filter((relicId) => Boolean(RUN_RELIC_BY_ID[relicId])).length;
-}
-
-export function RunBundleCard({
-  bundle,
-  mode,
-  bought = false,
-  disabled = false,
-  onSelect,
-}: {
-  bundle: PieceBundle;
-  mode: 'draft' | 'shop';
-  bought?: boolean;
-  disabled?: boolean;
-  onSelect: () => void;
-}): ReactElement {
-  const label = bundleLabel(bundle);
-  const actionLabel = mode === 'draft'
-    ? `Take ${label}`
-    : `${bought ? 'Purchased' : 'Buy'} ${label} for ${bundle.value} gold`;
-  return (
-    <button
-      type="button"
-      data-ui-sfx={mode === 'shop' ? 'card-purchase' : undefined}
-      data-chrome-unit="inner-box"
-      className={chromeUnitClassNames('inner-box', 'run-bundle-card', bought && 'active is-purchased')}
-      aria-label={actionLabel}
-      disabled={disabled}
-      onClick={onSelect}
-    >
-      <span
-        className="run-bundle-piece-grid"
-        data-piece-count={Math.min(bundle.pieces.length, 9)}
-        aria-hidden="true"
-      >
-        {bundle.pieces.map((piece, index) => (
-          <img
-            className="run-bundle-board-piece"
-            src={pieceSpritePath(piece, PLAYER_BUNDLE_PALETTE, PLAYER_BUNDLE_FACING)}
-            alt=""
-            draggable={false}
-            key={`${piece}-${index}`}
-          />
-        ))}
-      </span>
-      <span className="run-bundle-card-footer" aria-hidden="true">
-        {mode === 'shop' ? <RunGoldAmount valueTenths={bundle.value * GOLD_SCALE} /> : <strong>Take</strong>}
-        {bought ? <strong>Purchased</strong> : null}
-      </span>
-    </button>
-  );
 }
 
 function RunTitleBarStatus({ run }: { run: RunDocument }): ReactElement {

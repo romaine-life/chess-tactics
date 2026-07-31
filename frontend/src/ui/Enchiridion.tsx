@@ -1,13 +1,15 @@
-import { useEffect, useId, useMemo, useState, type ButtonHTMLAttributes, type ReactElement, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ButtonHTMLAttributes, type ReactElement, type ReactNode } from 'react';
 import { legalMoves } from '../core/rules';
 import { createBlankLevel } from '../core/level';
 import { levelToEditorBoard, unitsForGamePieces } from '../core/levelBoard';
 import { PIECE_LABEL, PLAYABLE_PIECE_TYPES, type PlayablePieceType } from '../core/pieces';
 import type { BoardSize, Piece } from '../core/types';
 import { PredrawnMoveHighlightPaint } from '../render/PredrawnMoveHighlightPaint';
+import { canonicalCardId, runCardName } from '../run/cardNames';
+import { PIECE_BUNDLE_DECK, RUN_RELICS, bundleLabel, type PieceBundle, type RunRelicId } from '../run/model';
 import { generateTerrainDressing } from './generatedReferenceBoard';
+import { RunBundleCard } from './RunBundleCard';
 import { StaticReadOnlyBoardView } from './shared/BoardViewFraming';
-import { RUN_RELICS, type RunRelicId } from '../run/model';
 import {
   loadRunRelicStatistics,
   RUN_RELIC_STATISTICS_EVENT,
@@ -25,12 +27,14 @@ import { sceneTransitionTargetAttributes } from './shell/sceneTransitionTarget';
 const SECTION_LABEL: Record<EnchiridionSection, string> = {
   units: 'Units',
   terrain: 'Terrain',
+  cards: 'Cards',
   relics: 'Relics',
   abilities: 'Abilities',
 };
 
 const SECTION_ICON: Partial<Record<EnchiridionSection, string>> = {
   units: 'skirmish-tab-icon skirmish-tab-icon-unit',
+  cards: 'skirmish-tab-icon skirmish-tab-icon-roster',
   relics: 'skirmish-tab-icon skirmish-tab-icon-log',
   abilities: 'skirmish-icon skirmish-icon-shield',
 };
@@ -267,11 +271,11 @@ function statisticFor(statistics: RunRelicStatistics, relicId: RunRelicId) {
 
 type RelicBrowseMode = 'rows' | 'grouped';
 
-// One relic entry control in two transports (ADR-0256): a host that gives relics
-// addresses renders a NavButton whose route is the relic's address (ADR-0052 — the
-// route is kept updated, never a hoverable link); a host with ephemeral reference
-// selection (the Battle-hosted Strategikon) keeps a plain selection button.
-function RelicTrigger({ to, onSelect, children, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & {
+// One reference entry control in two transports (ADR-0256): a host that gives records
+// addresses (relics, cards) renders a NavButton whose route is the record's address
+// (ADR-0052 — the route is kept updated, never a hoverable link); a host with ephemeral
+// reference selection (the Battle-hosted Strategikon) keeps a plain selection button.
+function ReferenceTrigger({ to, onSelect, children, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & {
   to?: string;
   onSelect: () => void;
 }): ReactElement {
@@ -379,7 +383,7 @@ export function RelicCodex({
                 <ul className="enchiridion-relic-rows" aria-label={title}>
                   {visibleRelics.map((relic) => (
                     <li key={relic.id}>
-                      <RelicTrigger
+                      <ReferenceTrigger
                         to={relicHref?.(relic.id)}
                         onSelect={() => setLocalSelectedId(relic.id)}
                         data-chrome-unit="inner-list-row"
@@ -393,7 +397,7 @@ export function RelicCodex({
                       >
                         <RunRelicIcon relicId={relic.id} className="enchiridion-relic-row-icon" />
                         <span className="enchiridion-relic-row-name">{relic.name}</span>
-                      </RelicTrigger>
+                      </ReferenceTrigger>
                     </li>
                   ))}
                 </ul>
@@ -402,7 +406,7 @@ export function RelicCodex({
                   <ul className="enchiridion-relic-group-grid" aria-label={title}>
                     {visibleRelics.map((relic) => (
                       <li key={relic.id}>
-                        <RelicTrigger
+                        <ReferenceTrigger
                           to={relicHref?.(relic.id)}
                           onSelect={() => setLocalSelectedId(relic.id)}
                           className={`enchiridion-relic-grouped-trigger${selected.id === relic.id ? ' is-active' : ''}`}
@@ -410,7 +414,7 @@ export function RelicCodex({
                           aria-pressed={selected.id === relic.id}
                         >
                           <RunRelicIcon relicId={relic.id} />
-                        </RelicTrigger>
+                        </ReferenceTrigger>
                       </li>
                     ))}
                   </ul>
@@ -445,6 +449,149 @@ export function RelicCodex({
   );
 }
 
+// The full generated bundle deck, grouped by gold value: a browser of card records and
+// one selected card rendered as the exact face the Run deals (ADR-0253's one-selection,
+// one-description shape). A host that gives cards addresses routes selection like the
+// relic records (ADR-0256); an ephemeral host keeps plain local selection.
+export function CardCodex({
+  framed = true,
+  selectedCardId = null,
+  cardHref,
+}: {
+  framed?: boolean;
+  /** The route-addressed card; read only when cardHref makes selection navigational. */
+  selectedCardId?: string | null;
+  /** When present, card selection navigates to this address instead of setting local state. */
+  cardHref?: (bundleId: string) => string;
+}): ReactElement {
+  const [localSelectedId, setLocalSelectedId] = useState<string>(PIECE_BUNDLE_DECK[0].id);
+  const selectedId = cardHref ? (selectedCardId ?? PIECE_BUNDLE_DECK[0].id) : localSelectedId;
+  const selected: PieceBundle = PIECE_BUNDLE_DECK.find((bundle) => bundle.id === selectedId)
+    ?? PIECE_BUNDLE_DECK[0];
+  const groups = useMemo(() => {
+    const byValue = new Map<number, PieceBundle[]>();
+    for (const bundle of PIECE_BUNDLE_DECK) {
+      byValue.set(bundle.value, [...(byValue.get(bundle.value) ?? []), bundle]);
+    }
+    return [...byValue.entries()].sort((left, right) => left[0] - right[0]);
+  }, []);
+  return (
+    <ReferenceSectionFrame
+      chromeConsumer="enchiridion-cards"
+      className="enchiridion-card-panel"
+      framed={framed}
+      title="Cards"
+    >
+      <p>Every piece bundle the Run can deal, drawn as its card. Opening drafts and shops deal from this one deck; in a shop, a card costs its gold value.</p>
+      <div className="enchiridion-card-layout">
+        <div className="enchiridion-card-browser" role="list" aria-label="The card deck by gold value">
+          {groups.map(([value, bundles]) => (
+            <section className="enchiridion-card-group" key={value}>
+              <span className="skirmish-eyebrow">{value} gold</span>
+              <ul className="enchiridion-card-rows">
+                {bundles.map((bundle) => (
+                  <li key={bundle.id}>
+                    <ReferenceTrigger
+                      to={cardHref?.(bundle.id)}
+                      onSelect={() => setLocalSelectedId(bundle.id)}
+                      data-chrome-unit="inner-list-row"
+                      className={chromeUnitClassNames(
+                        'inner-list-row',
+                        'enchiridion-card-row',
+                        selected.id === bundle.id && 'is-active',
+                      )}
+                      aria-label={`${runCardName(bundle)}. ${bundleLabel(bundle)}. Worth ${bundle.value} gold.`}
+                      aria-pressed={selected.id === bundle.id}
+                    >
+                      <span className="enchiridion-card-row-name">{runCardName(bundle)}</span>
+                      <small className="enchiridion-card-row-contents">{bundleLabel(bundle)}</small>
+                    </ReferenceTrigger>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+        <div className="enchiridion-card-detail">
+          <CardDetailStage bundle={selected} />
+        </div>
+      </div>
+    </ReferenceSectionFrame>
+  );
+}
+
+// The selected record swaps only as a complete face: the incoming card mounts hidden
+// beside the current one until both of its scene canvas layers have painted, then takes
+// the slot in a single frame — this pane's small echo of the Run stages' complete-frame
+// discipline. A still card must never assemble in front of the reader.
+function CardDetailStage({ bundle }: { bundle: PieceBundle }): ReactElement {
+  const [faces, setFaces] = useState<{ shown: PieceBundle; incoming: PieceBundle | null }>({
+    shown: bundle,
+    incoming: null,
+  });
+  const targetId = canonicalCardId(bundle);
+  useEffect(() => {
+    setFaces((current) => {
+      if (canonicalCardId(current.shown) === targetId) {
+        return current.incoming ? { shown: current.shown, incoming: null } : current;
+      }
+      if (current.incoming && canonicalCardId(current.incoming) === targetId) return current;
+      return { shown: current.shown, incoming: bundle };
+    });
+  }, [bundle, targetId]);
+  const promote = useCallback(() => {
+    setFaces((current) => (current.incoming ? { shown: current.incoming, incoming: null } : current));
+  }, []);
+  const entries = [
+    { bundle: faces.shown, id: canonicalCardId(faces.shown), preparing: false },
+    ...(faces.incoming
+      ? [{ bundle: faces.incoming, id: canonicalCardId(faces.incoming), preparing: true }]
+      : []),
+  ];
+  return (
+    <div className="enchiridion-card-stage">
+      {entries.map((entry) => (
+        <div
+          className={`enchiridion-card-stage-slot${entry.preparing ? ' is-preparing' : ''}`}
+          aria-hidden={entry.preparing ? true : undefined}
+          key={entry.id}
+        >
+          <StagedCardFace bundle={entry.bundle} onComplete={promote} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function StagedCardFace({ bundle, onComplete }: {
+  bundle: PieceBundle;
+  onComplete: () => void;
+}): ReactElement {
+  const painted = useRef({ terrain: false, scene: false, done: false });
+  const onCompleteRef = useRef(onComplete);
+  useEffect(() => { onCompleteRef.current = onComplete; }, [onComplete]);
+  // Stable identities: a changing scene callback would restart the canvas paint effect.
+  const finish = useCallback(() => {
+    if (painted.current.done) return;
+    painted.current.done = true;
+    onCompleteRef.current();
+  }, []);
+  const handleLayer = useCallback((layer: 'terrain' | 'scene') => {
+    painted.current[layer] = true;
+    if (painted.current.terrain && painted.current.scene) finish();
+  }, [finish]);
+  // A failed frame still promotes, showing the renderer's own failure state rather
+  // than trapping the codex on the previous record.
+  return (
+    <RunBundleCard
+      bundle={bundle}
+      mode="reference"
+      onSceneLayerFirstFrame={handleLayer}
+      onSceneFrameError={finish}
+    />
+  );
+}
+
 function AbilitiesSection({ framed }: { framed: boolean }): ReactElement {
   return (
     <ReferenceSectionFrame
@@ -473,13 +620,16 @@ function AbilitiesSection({ framed }: { framed: boolean }): ReactElement {
   );
 }
 
-function EnchiridionContent({ section, framed, selectedRelicId, relicHref }: {
+function EnchiridionContent({ section, framed, selectedRelicId, relicHref, selectedCardId, cardHref }: {
   section: EnchiridionSection;
   framed: boolean;
   selectedRelicId: RunRelicId | null;
   relicHref?: (relicId: RunRelicId) => string;
+  selectedCardId: string | null;
+  cardHref?: (bundleId: string) => string;
 }): ReactElement {
   if (section === 'terrain') return <TerrainSection framed={framed} />;
+  if (section === 'cards') return <CardCodex framed={framed} selectedCardId={selectedCardId} cardHref={cardHref} />;
   if (section === 'relics') return <RelicCodex framed={framed} selectedRelicId={selectedRelicId} relicHref={relicHref} />;
   if (section === 'abilities') return <AbilitiesSection framed={framed} />;
   return <UnitsSection framed={framed} />;
@@ -490,6 +640,8 @@ export function Enchiridion({
   sectionHref = enchiridionSectionHref,
   selectedRelicId = null,
   relicHref,
+  selectedCardId = null,
+  cardHref,
   showSectionRail = true,
   sceneInstanceKey = `enchiridion/${section}`,
   framed = true,
@@ -500,6 +652,10 @@ export function Enchiridion({
   selectedRelicId?: RunRelicId | null;
   /** When present, relic selection in the relics section navigates to this address. */
   relicHref?: (relicId: RunRelicId) => string;
+  /** The route-addressed card for the cards section; see CardCodex. */
+  selectedCardId?: string | null;
+  /** When present, card selection in the cards section navigates to this address. */
+  cardHref?: (bundleId: string) => string;
   showSectionRail?: boolean;
   sceneInstanceKey?: string;
   framed?: boolean;
@@ -526,7 +682,14 @@ export function Enchiridion({
         {...sceneTransitionTargetAttributes('enchiridion-shell')}
         data-scene-instance={sceneInstanceKey}
       >
-        <EnchiridionContent section={section} framed={framed} selectedRelicId={selectedRelicId} relicHref={relicHref} />
+        <EnchiridionContent
+          section={section}
+          framed={framed}
+          selectedRelicId={selectedRelicId}
+          relicHref={relicHref}
+          selectedCardId={selectedCardId}
+          cardHref={cardHref}
+        />
       </main>
     </div>
   );

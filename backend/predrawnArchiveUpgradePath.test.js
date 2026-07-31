@@ -61,7 +61,7 @@ test('already-applied migration 36 remains the immutable drawable-media migratio
   );
 });
 
-test('the exact sparse numeric legacy history upgrades through migration 46', () => {
+test('the exact sparse numeric legacy history upgrades through migration 47', () => {
   const versions = migrationVersions();
   const appliedBeforeUpgrade = new Set(
     versions.filter((version) => version <= 27 || version === 36),
@@ -103,6 +103,10 @@ test('the exact sparse numeric legacy history upgrades through migration 46', ()
   assert.ok(
     pending.includes(46),
     'the installed Play hub-root route must have its own pending migration 46',
+  );
+  assert.ok(
+    pending.includes(47),
+    'owner-authored Run card scene overrides must have their own pending migration 47',
   );
 
   const migration37 = inlineMigration(37);
@@ -336,7 +340,7 @@ test('the exact sparse numeric legacy history upgrades through migration 46', ()
   );
   assert.deepEqual(
     plan.pending.map((entry) => entry.version),
-    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46],
+    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47],
     'the bridge must fill the historical gap before applying every post-36 contract',
   );
   assert.throws(
@@ -851,13 +855,13 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
 
   const primaryUpgradeProof = sourceSection(
     smokeSource,
-    'async function validatePrimarySparseNumericMigrationUpgrade46()',
+    'async function validatePrimarySparseNumericMigrationUpgrade47()',
     '\nasync function validateEditorMigration16Preservation()',
   );
   assert.match(
     primaryUpgradeProof,
-    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*46\s*\}/,
-    'the production upgrade proof must require a complete 1-46 history',
+    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*47\s*\}/,
+    'the production upgrade proof must require a complete 1-47 history',
   );
   assert.match(
     primaryUpgradeProof,
@@ -871,8 +875,8 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   );
   assert.match(
     primaryUpgradeProof,
-    /length:\s*10[\s\S]*index\s*\+\s*37/,
-    'the production report must include every post-36 migration through 46',
+    /length:\s*11[\s\S]*index\s*\+\s*37/,
+    'the production report must include every post-36 migration through 47',
   );
   assert.match(
     primaryUpgradeProof,
