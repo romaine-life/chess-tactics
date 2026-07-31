@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:d4cbde0388010052b8b7f8dc7ef3cadd8a8faad8c8db9773ed09898c28fe2aba"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:0f56288bd2097c11f07ded2e4583f6ef81b9c2c116f3492f53a72908363b620b"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Restore the accepted Play composition; Play always presents the picker (ADR-0259/0260)"
-  prNumber: "559"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/559"
-  commit: "35d10b91"
+  prTitle: "Enchiridion unit cards render the real Battle board with Generate-dressed terrain"
+  prNumber: "560"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/560"
+  commit: "fe2e4401"
 
 name: chess-tactics
 namespace: chess-tactics
