@@ -18468,6 +18468,13 @@ button.tileset-relationship-cell {
   pointer-events: none;
 }
 
+/* The scene window is a painted surface (its loading state holds the Run stage
+   scan), but a still card appears as one complete frame — no per-card fade on
+   top of the host's own reveal choreography. */
+.run-card-scene-surface.is-ready .painted-surface-content > * {
+  animation: none;
+}
+
 /* Accepted enriched scene artwork sits under the live unit sprites as a
    board-registered plate: centred on the shared world origin and scaled by the
    camera-zoom ratio (inline transform), never cover-fit. */

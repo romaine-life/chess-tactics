@@ -194,6 +194,15 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain("import { RunBundleCard } from './RunBundleCard';");
     expect(styleCss).toMatch(/\.run-bundle-card\s*\{[\s\S]*?aspect-ratio:\s*5 \/ 7;/);
     expect(styleCss).toMatch(/\.run-card-scene-viewport\s*\{[\s\S]*?overflow:\s*hidden;/);
+
+    // The scene window speaks the painted-surface protocol, so the Run workspace
+    // stages (which wait for `.painted-surface.is-loading` to clear) reveal draft
+    // and shop hands only as complete card faces — and a card appears as one
+    // complete frame, never re-fading over the host's own choreography.
+    expect(runCardScene).toContain('painted-surface run-card-scene-surface');
+    expect(runCardScene).toContain("revealed ? 'is-ready' : 'is-loading'");
+    expect(runCardScene).toContain('className="painted-surface-content"');
+    expect(styleCss).toMatch(/\.run-card-scene-surface\.is-ready \.painted-surface-content > \*\s*\{[\s\S]*?animation:\s*none;/);
   });
 
   it('uses one divided Army ledger grid with readable metadata and value hierarchy', () => {

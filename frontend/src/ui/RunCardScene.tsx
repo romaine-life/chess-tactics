@@ -1,5 +1,5 @@
 import { drawableAssets } from '@chess-tactics/board-render';
-import { useMemo, type ReactElement } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { TILE_STEP_Y } from '../art/projectionContract';
 import { tileAssets } from '../art/tileset';
 import { paletteForSide } from '../core/pieces';
@@ -262,7 +262,7 @@ export function RunCardScene({
   variant?: 'live' | 'source';
   /** Card-window framing by default; the capture stage passes its wider framing. */
   camera?: { zoom: number; pan: { x: number; y: number } };
-  /** First completed paint of each canvas layer — the capture stage's readiness gate. */
+  /** First completed paint of each canvas layer — a staging host's readiness gate. */
   onLayerFirstFrame?: (layer: 'terrain' | 'scene') => void;
   onFrameError?: (error: unknown) => void;
 }): ReactElement {
@@ -270,16 +270,52 @@ export function RunCardScene({
   const cardId = canonicalCardId(bundle);
   const plan = useMemo(() => runCardScenePlan(bundle), [cardId]);
   const artwork = variant === 'live' ? installedRunCardSceneArt(plan.sceneId) : null;
+
+  // The scene window speaks the app's painted-surface protocol: it is a loading
+  // surface until every gate below has painted (both canvas layers, plus the art
+  // plate when one is installed), so the Run workspace stages — which already wait
+  // for `.painted-surface.is-loading` to clear — reveal draft and shop hands only
+  // as complete card faces. A frame error reveals rather than strands the phase.
+  const [revealed, setRevealed] = useState(false);
+  const gatesRef = useRef({ terrain: false, scene: false, art: false });
+  const needsArtRef = useRef(false);
+  needsArtRef.current = Boolean(artwork);
+  const revealIfComplete = useRef<() => void>(() => {});
+  revealIfComplete.current = () => {
+    const gates = gatesRef.current;
+    if (gates.terrain && gates.scene && (gates.art || !needsArtRef.current)) setRevealed(true);
+  };
+  useEffect(() => {
+    // A reused mount showing a different card (or newly installed art) re-arms its gates.
+    gatesRef.current = { terrain: false, scene: false, art: false };
+    setRevealed(false);
+  }, [cardId, artwork?.src]);
   // Stable per-layer callbacks: the canvas layers repaint when their callbacks change
   // identity, so these must not be re-created by unrelated parent renders.
-  const handleTerrainFirstFrame = useMemo(
-    () => (onLayerFirstFrame ? () => onLayerFirstFrame('terrain') : undefined),
-    [onLayerFirstFrame],
-  );
-  const handleSceneFirstFrame = useMemo(
-    () => (onLayerFirstFrame ? () => onLayerFirstFrame('scene') : undefined),
-    [onLayerFirstFrame],
-  );
+  const externalLayerRef = useRef(onLayerFirstFrame);
+  externalLayerRef.current = onLayerFirstFrame;
+  const externalErrorRef = useRef(onFrameError);
+  externalErrorRef.current = onFrameError;
+  const handleTerrainFirstFrame = useMemo(() => () => {
+    gatesRef.current.terrain = true;
+    revealIfComplete.current();
+    externalLayerRef.current?.('terrain');
+  }, []);
+  const handleSceneFirstFrame = useMemo(() => () => {
+    gatesRef.current.scene = true;
+    revealIfComplete.current();
+    externalLayerRef.current?.('scene');
+  }, []);
+  const handleFrameError = useMemo(() => (error: unknown) => {
+    setRevealed(true);
+    externalErrorRef.current?.(error);
+  }, []);
+  const markArtGate = useMemo(() => (image: HTMLImageElement | null) => {
+    if (!image || !image.complete || image.naturalWidth <= 0) return;
+    gatesRef.current.art = true;
+    revealIfComplete.current();
+  }, []);
+
   const board = useMemo(() => (
     variant === 'source'
       ? { ...plan.board, units: {} }
@@ -295,37 +331,44 @@ export function RunCardScene({
       data-scene-art={artwork ? 'installed' : 'live'}
       aria-hidden="true"
     >
-      {artwork ? (
-        // A board-registered plate, not a cover-fit background: both framings share one
-        // world centre and pan rule, so scaling by the zoom ratio seats the live unit
-        // sprites exactly where the captured terrain stood.
-        <img
-          className="run-card-scene-art"
-          src={artwork.src}
-          width={artwork.width}
-          height={artwork.height}
-          style={{
-            transform: `translate(-50%, -50%) scale(${camera.zoom / RUN_CARD_SCENE_CAPTURE.camera.zoom})`,
-          }}
-          alt=""
-          draggable={false}
-        />
-      ) : null}
-      {/* A card is a still: one authored frame, no sway, no repaint clock. The living
-          version of this scene belongs to gameplay boards, not to a card painting. */}
-      <StudioReadOnlyBoard
-        board={board}
-        hidden={artwork ? { tile: true, unit: false, doodad: true } : undefined}
-        still
-        boardZoom={camera.zoom}
-        boardPan={camera.pan}
-        coverSeed={plan.coverSeed}
-        className="run-card-scene-board"
-        ariaLabel=""
-        onTerrainFirstFrame={handleTerrainFirstFrame}
-        onSceneFirstFrame={handleSceneFirstFrame}
-        onFrameError={onFrameError}
-      />
+      <span className={`painted-surface run-card-scene-surface ${revealed ? 'is-ready' : 'is-loading'}`}>
+        <span className="painted-surface-content">
+          {artwork ? (
+            // A board-registered plate, not a cover-fit background: both framings share
+            // one world centre and pan rule, so scaling by the zoom ratio seats the live
+            // unit sprites exactly where the captured terrain stood.
+            <img
+              className="run-card-scene-art"
+              src={artwork.src}
+              width={artwork.width}
+              height={artwork.height}
+              style={{
+                transform: `translate(-50%, -50%) scale(${camera.zoom / RUN_CARD_SCENE_CAPTURE.camera.zoom})`,
+              }}
+              alt=""
+              draggable={false}
+              ref={markArtGate}
+              onLoad={(event) => markArtGate(event.currentTarget)}
+              onError={() => handleFrameError(new Error(`Run card scene art failed: ${plan.sceneId}`))}
+            />
+          ) : null}
+          {/* A card is a still: one authored frame, no sway, no repaint clock. The living
+              version of this scene belongs to gameplay boards, not to a card painting. */}
+          <StudioReadOnlyBoard
+            board={board}
+            hidden={artwork ? { tile: true, unit: false, doodad: true } : undefined}
+            still
+            boardZoom={camera.zoom}
+            boardPan={camera.pan}
+            coverSeed={plan.coverSeed}
+            className="run-card-scene-board"
+            ariaLabel=""
+            onTerrainFirstFrame={handleTerrainFirstFrame}
+            onSceneFirstFrame={handleSceneFirstFrame}
+            onFrameError={handleFrameError}
+          />
+        </span>
+      </span>
     </span>
   );
 }
