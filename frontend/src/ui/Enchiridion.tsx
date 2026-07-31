@@ -5,6 +5,7 @@ import { levelToEditorBoard, unitsForGamePieces } from '../core/levelBoard';
 import { PIECE_LABEL, PLAYABLE_PIECE_TYPES, type PlayablePieceType } from '../core/pieces';
 import type { BoardSize, Piece } from '../core/types';
 import { PredrawnMoveHighlightPaint } from '../render/PredrawnMoveHighlightPaint';
+import { generateTerrainDressing } from './generatedReferenceBoard';
 import { StaticReadOnlyBoardView } from './shared/BoardViewFraming';
 import { RUN_RELICS, type RunRelicId } from '../run/model';
 import {
@@ -45,13 +46,15 @@ const UNIT_COPY: Record<PlayablePieceType, string> = {
 
 // Each example board is sized to its unit's reach: short-range units get a tight board so
 // their sprite and marks stay large; sliding units keep the long board that shows their rays.
-const MOVEMENT_EXAMPLE_LAYOUT: Record<PlayablePieceType, { size: BoardSize; at: { x: number; y: number } }> = {
-  pawn: { size: { cols: 5, rows: 5 }, at: { x: 2, y: 3 } },
-  knight: { size: { cols: 5, rows: 5 }, at: { x: 2, y: 2 } },
-  bishop: { size: { cols: 7, rows: 7 }, at: { x: 3, y: 3 } },
-  rook: { size: { cols: 7, rows: 7 }, at: { x: 3, y: 3 } },
-  queen: { size: { cols: 7, rows: 7 }, at: { x: 3, y: 3 } },
-  king: { size: { cols: 5, rows: 5 }, at: { x: 2, y: 2 } },
+// `seed` feeds the Generate terrain dressing — per-unit values curated so every card rolls a
+// distinct, readable landscape (rerolling a card = changing its seed).
+const MOVEMENT_EXAMPLE_LAYOUT: Record<PlayablePieceType, { size: BoardSize; at: { x: number; y: number }; seed: number }> = {
+  pawn: { size: { cols: 5, rows: 5 }, at: { x: 2, y: 3 }, seed: 101 },
+  knight: { size: { cols: 5, rows: 5 }, at: { x: 2, y: 2 }, seed: 214 },
+  bishop: { size: { cols: 7, rows: 7 }, at: { x: 3, y: 3 }, seed: 307 },
+  rook: { size: { cols: 7, rows: 7 }, at: { x: 3, y: 3 }, seed: 401 },
+  queen: { size: { cols: 7, rows: 7 }, at: { x: 3, y: 3 }, seed: 503 },
+  king: { size: { cols: 5, rows: 5 }, at: { x: 2, y: 2 }, seed: 601 },
 };
 
 function movementExample(type: PlayablePieceType): {
@@ -91,14 +94,30 @@ function movementExample(type: PlayablePieceType): {
   };
 }
 
-// The real Battle board at reference scale: canonical grass terrain plus the example's
-// live pieces, drawn by the same read-only renderer every board surface uses. Legal
-// destinations and captures overlay through the game's own diamond cell paint.
+// The real Battle board at reference scale: Generate-dressed ordinary-ground terrain plus
+// the example's live pieces, drawn by the same read-only renderer every board surface uses.
+// Legal destinations and captures overlay through the game's own diamond cell paint.
 function MovementDiagram({ type }: { type: PlayablePieceType }): ReactElement {
   const example = useMemo(() => movementExample(type), [type]);
   const board = useMemo(() => {
     const level = createBlankLevel(`enchiridion-${type}`, PIECE_LABEL[type], example.size.cols, example.size.rows);
-    return { ...levelToEditorBoard(level), units: unitsForGamePieces(example.pieces) };
+    const dressing = generateTerrainDressing({
+      cols: example.size.cols,
+      rows: example.size.rows,
+      seed: MOVEMENT_EXAMPLE_LAYOUT[type].seed,
+      // The tactical content — marked squares and every standing piece — stays on calm
+      // default grass; the generated accents dress the board around it.
+      keepClear: new Set([
+        ...example.moves,
+        ...example.captures,
+        ...example.pieces.map((piece) => `${piece.x},${piece.y}`),
+      ]),
+    });
+    return {
+      ...levelToEditorBoard(level),
+      ...dressing,
+      units: unitsForGamePieces(example.pieces),
+    };
   }, [example, type]);
   return (
     <div
