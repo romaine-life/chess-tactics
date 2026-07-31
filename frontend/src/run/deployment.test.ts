@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { createBlankLevel, type Level } from '../core/level';
-import { chooseDraft, createRun, prepareDeployment, setDeploymentChoices, type RunDocument } from './model';
+import {
+  chooseDraft,
+  createRun,
+  hasRunAbility,
+  prepareDeployment,
+  setDeploymentChoices,
+  type RunArmyUnit,
+  type RunDocument,
+} from './model';
 import { deploymentOptions, levelWithRunDeployment, playerDeploymentCells } from './deployment';
 
 function battle(): Level {
@@ -70,6 +78,51 @@ describe('Run deployment', () => {
     const king = deploymentOptions(royal, level).layouts[0].placements['run-king'];
     expect(king.y).toBe(3);
     expect(king.x === 0 || king.x === 3 || king.y === 0 || king.y === 3).toBe(true);
+  });
+
+  it('derives relic grants through the same abilities stored on individual units', () => {
+    const current = run();
+    const king = current.army.find((unit) => unit.type === 'king')!;
+    const inherited = {
+      ...current,
+      relics: ['royal-sceptre', 'royal-decree'] as RunDocument['relics'],
+    };
+    expect(hasRunAbility(inherited, king, 'positioned')).toBe(true);
+    expect(hasRunAbility(inherited, king, 'marshalled')).toBe(true);
+
+    const permanentKing = { ...king, abilities: ['positioned', 'marshalled'] as RunArmyUnit['abilities'] };
+    const permanent = { ...current, army: current.army.map((unit) => unit.id === king.id ? permanentKing : unit) };
+    expect(hasRunAbility(permanent, permanentKing, 'positioned')).toBe(true);
+    expect(hasRunAbility(permanent, permanentKing, 'marshalled')).toBe(true);
+    expect(deploymentOptions(permanent, battle()).layouts[0].placements['run-king']).toEqual(
+      deploymentOptions(inherited, battle()).layouts[0].placements['run-king'],
+    );
+  });
+
+  it('lets one Marshalled Bishop prefer the opposite color from an ordinary Bishop', () => {
+    const current = run();
+    const king = current.army.find((unit) => unit.type === 'king')!;
+    const bishop = (id: string, number: number, abilities: RunArmyUnit['abilities']): RunArmyUnit => ({
+      id,
+      name: id,
+      type: 'bishop',
+      number,
+      inspectionSeed: number,
+      abilities,
+      source: 'shop',
+    });
+    const bishops = {
+      ...current,
+      army: [
+        king,
+        bishop('ordinary-bishop', 1, []),
+        bishop('marshalled-bishop', 2, ['marshalled']),
+      ],
+    };
+    const placements = deploymentOptions(bishops, battle()).layouts[0].placements;
+    const ordinary = placements['ordinary-bishop'];
+    const marshalled = placements['marshalled-bishop'];
+    expect((ordinary.x + ordinary.y) % 2).not.toBe((marshalled.x + marshalled.y) % 2);
   });
 
   it('projects each persistent name with its unit identity into the Battle level', () => {

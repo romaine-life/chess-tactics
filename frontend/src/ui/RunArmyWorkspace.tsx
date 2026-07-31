@@ -5,7 +5,10 @@ import {
   GOLD_SCALE,
   PIECE_LABEL,
   PIECE_VALUE,
+  RUN_RELIC_BY_ID,
   hasRelic,
+  relicGrantingRunAbility,
+  type RunAbility,
   type RunArmyPieceType,
   type RunArmyUnit,
   type RunDocument,
@@ -55,10 +58,7 @@ const TYPE_ORDER: readonly RunArmyPieceType[] = ['king', 'pawn', 'knight', 'bish
 export type RunUnitTraitId =
   | 'discipline'
   | 'positioned'
-  | 'back-row'
-  | 'board-edge'
-  | 'king-flanks'
-  | 'alternating-color'
+  | 'marshalled'
   | 'royal-tent'
   | 'pawn-cash-out';
 
@@ -81,6 +81,42 @@ function inheritedTrait(
   return { id, label, description, source, inherited: true, iconClass };
 }
 
+function abilityDescription(unit: RunArmyUnit, ability: Extract<RunAbility, 'positioned' | 'marshalled'>): string {
+  if (ability === 'positioned') {
+    if (unit.type === 'pawn') return 'Prefers the front row during automatic deployment.';
+    if (unit.type === 'rook') return 'Prefers an outer back-row square during automatic deployment.';
+    if (unit.type === 'bishop' || unit.type === 'king') return 'Prefers the back row during automatic deployment.';
+    return 'Prefers its piece-specific region during automatic deployment.';
+  }
+  if (unit.type === 'king') return 'Prefers a board-edge square in the player placement zone.';
+  if (unit.type === 'rook') return 'Prefers the established King-flank and corner formation.';
+  if (unit.type === 'bishop') return 'Prefers a square color opposite another Bishop when possible.';
+  return 'Prefers its piece-specific station during automatic deployment.';
+}
+
+function deploymentAbilityTrait(
+  run: RunDocument,
+  unit: RunArmyUnit,
+  ability: Extract<RunAbility, 'positioned' | 'marshalled'>,
+): RunUnitTrait | null {
+  const label = ability === 'positioned' ? 'Positioned' : 'Marshalled';
+  const iconClass = ability === 'positioned' ? 'skirmish-icon-move' : 'skirmish-icon-flag';
+  if (unit.abilities.includes(ability)) {
+    return {
+      id: ability,
+      label,
+      description: abilityDescription(unit, ability),
+      source: 'Permanent unit ability',
+      inherited: false,
+      iconClass,
+    };
+  }
+  const relicId = relicGrantingRunAbility(run, unit, ability);
+  return relicId
+    ? inheritedTrait(ability, label, abilityDescription(unit, ability), RUN_RELIC_BY_ID[relicId].name, iconClass)
+    : null;
+}
+
 export function runUnitTraits(run: RunDocument, unit: RunArmyUnit): RunUnitTrait[] {
   const traits: RunUnitTrait[] = [];
   if (unit.abilities.includes('discipline')) {
@@ -97,80 +133,21 @@ export function runUnitTraits(run: RunDocument, unit: RunArmyUnit): RunUnitTrait
       'discipline',
       'Discipline',
       'May be deliberately placed in the player zone for this Battle.',
-      'Inspirational Record',
+      RUN_RELIC_BY_ID['inspirational-record'].name,
       'skirmish-icon-shield',
     ));
   }
 
-  if (unit.type === 'pawn' && hasRelic(run, 'training-linens')) {
-    traits.push(inheritedTrait(
-      'positioned',
-      'Positioned',
-      'Prefers the front row during random deployment.',
-      'Training Linens',
-      'skirmish-icon-move',
-    ));
-  }
-  if (unit.type === 'king' && hasRelic(run, 'royal-decree')) {
-    traits.push(inheritedTrait(
-      'positioned',
-      'Positioned',
-      'Prefers the back row during random deployment.',
-      'Royal Decree',
-      'skirmish-icon-move',
-    ));
-  }
-  if (unit.type === 'rook' && hasRelic(run, 'crenellated-rampart')) {
-    traits.push(inheritedTrait(
-      'positioned',
-      'Positioned',
-      'Prefers an outer back-row square during random deployment.',
-      'Crenellated Rampart',
-      'skirmish-icon-move',
-    ));
-  }
-  if (unit.type === 'bishop' && hasRelic(run, 'popes-staff')) {
-    traits.push(inheritedTrait(
-      'back-row',
-      'Back Row',
-      'Prefers the back row during random deployment.',
-      "Pope's Staff",
-      'skirmish-icon-flag',
-    ));
-  }
-  if (unit.type === 'bishop' && hasRelic(run, 'popes-robes')) {
-    traits.push(inheritedTrait(
-      'alternating-color',
-      'Alternating Color',
-      'Bishops alternate light and dark starting squares when possible.',
-      "Pope's Robes",
-      'ic-grid',
-    ));
-  }
-  if (unit.type === 'rook' && hasRelic(run, 'ghibelline-rampart')) {
-    traits.push(inheritedTrait(
-      'king-flanks',
-      'King Flanks',
-      'Prefers the opposite side of the King while retaining corner placement.',
-      'Ghibelline Rampart',
-      'skirmish-icon-flag',
-    ));
-  }
-  if (unit.type === 'king' && hasRelic(run, 'royal-sceptre')) {
-    traits.push(inheritedTrait(
-      'board-edge',
-      'Board Edge',
-      'Starts on a board-edge square in the player placement zone.',
-      'Royal Sceptre',
-      'skirmish-icon-flag',
-    ));
-  }
+  const positioned = deploymentAbilityTrait(run, unit, 'positioned');
+  if (positioned) traits.push(positioned);
+  const marshalled = deploymentAbilityTrait(run, unit, 'marshalled');
+  if (marshalled) traits.push(marshalled);
   if (unit.type === 'king' && hasRelic(run, 'royal-tent')) {
     traits.push(inheritedTrait(
       'royal-tent',
       'Royal Tent',
       'Places up to three temporary rocks in front of the King.',
-      'Royal Tent',
+      RUN_RELIC_BY_ID['royal-tent'].name,
       'skirmish-icon-shield',
     ));
   }
@@ -179,7 +156,7 @@ export function runUnitTraits(run: RunDocument, unit: RunArmyUnit): RunUnitTrait
       'pawn-cash-out',
       'Cash Out',
       'May leave the army for two gold instead of promoting.',
-      'Mercenary Boat',
+      RUN_RELIC_BY_ID['mercenary-boat'].name,
       'skirmish-icon-crossed-swords',
     ));
   }
@@ -355,10 +332,7 @@ function RunRosterFilters({
             { value: 'all', label: 'All abilities' },
             { value: 'discipline', label: 'Discipline' },
             { value: 'positioned', label: 'Positioned' },
-            { value: 'back-row', label: 'Back Row' },
-            { value: 'board-edge', label: 'Board Edge' },
-            { value: 'king-flanks', label: 'King Flanks' },
-            { value: 'alternating-color', label: 'Alternating Color' },
+            { value: 'marshalled', label: 'Marshalled' },
             { value: 'royal-tent', label: 'Royal Tent' },
             { value: 'pawn-cash-out', label: 'Cash Out' },
           ]}

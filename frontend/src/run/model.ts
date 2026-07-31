@@ -9,7 +9,7 @@ export const GOLD_SCALE = 10;
 
 export type PurchasablePieceType = 'pawn' | 'knight' | 'bishop' | 'rook' | 'queen';
 export type RunArmyPieceType = PurchasablePieceType | 'king';
-export type RunAbility = 'discipline';
+export type RunAbility = 'discipline' | 'positioned' | 'marshalled';
 
 export const PIECE_VALUE: Readonly<Record<RunArmyPieceType, number>> = Object.freeze({
   pawn: 1,
@@ -100,36 +100,165 @@ export interface RunRelicDefinition {
   id: RunRelicId;
   name: string;
   description: string;
+  flavorText: string;
+  /** The stable relic id may still resolve superseded pixels while replacement art is pending. */
+  replacementArtworkPending?: true;
   requires?: RunRelicId;
   immediate?: boolean;
 }
 
 export const RUN_RELICS: readonly RunRelicDefinition[] = Object.freeze([
-  { id: 'conscription-notice', name: 'Conscription Notice', description: 'Choose one army unit. It permanently gains Discipline.' },
-  { id: 'congressional-approval', name: 'Congressional Approval', description: 'Gain 5 gold immediately.', immediate: true },
-  { id: 'inspirational-record', name: 'Inspirational Record', description: 'Before each Battle, one random persistent unit gains Discipline for that Battle.' },
-  { id: 'training-linens', name: 'Training Linens', description: 'Pawns gain Positioned and prefer the front deployment row.' },
-  { id: 'royal-decree', name: 'Royal Decree', description: 'Your King gains Positioned and prefers the back deployment row.' },
-  { id: 'crenellated-rampart', name: 'Crenellated Rampart', description: 'Rooks gain Positioned and prefer the outer back-row squares.' },
-  { id: 'ghibelline-rampart', name: 'Ghibelline Rampart', description: 'Rooks prefer opposite sides of the King and retain corner placement when possible.' },
-  { id: 'popes-staff', name: "Pope's Staff", description: 'Bishops prefer the back deployment row.' },
-  { id: 'popes-robes', name: "Pope's Robes", description: 'Bishops alternate light and dark starting squares; an odd extra color is random.' },
-  { id: 'royal-tent', name: 'Royal Tent', description: 'Place up to three temporary rocks in front of the King.', requires: 'royal-decree' },
-  { id: 'royal-sceptre', name: 'Royal Sceptre', description: 'Your King starts on a board-edge square in the placement zone.' },
-  { id: 'mercenarys-rifle', name: "Mercenary's Rifle", description: 'After victory, gain 10% of the value of surviving persistent units.' },
-  { id: 'merchants-shopkey', name: "Merchant's Shopkey", description: 'Each Conflict keeps one additional relic in its shops for 10 gold.' },
-  { id: 'occult-dagger', name: 'Occult Dagger', description: 'Gain 10 gold. Eliminate every enemy non-King before checkmating the King.', immediate: true },
-  { id: 'deployment-vehicle', name: 'Deployment Vehicle', description: 'Deaths can call equal-or-lower-value blocked units through the Reservist pool.' },
-  { id: 'mercenary-boat', name: 'Mercenary Boat', description: 'A promoting persistent Pawn may vanish permanently instead and grant 2 gold.' },
-  { id: 'quartermasters-ledger', name: "Quartermaster's Ledger", description: 'Piece shops reveal four bundles instead of three.' },
-  { id: 'fair-scales', name: 'Fair Scales', description: 'Units sell for 75% of their value instead of 50%.' },
-  { id: 'muster-roll', name: 'Muster Roll', description: 'When capacity is short, choose which army units sit out.' },
-  { id: 'surveyors-compass', name: "Surveyor's Compass", description: 'Choose between two deterministic random deployment layouts.' },
+  {
+    id: 'conscription-notice',
+    name: 'Conscription Notice',
+    description: 'Choose one army unit. It permanently gains Discipline.',
+    flavorText: 'One name was underlined. No reason was entered.',
+  },
+  {
+    id: 'congressional-approval',
+    name: 'Sealed Valuation',
+    description: 'Gain 5 gold immediately.',
+    flavorText: 'The vessels were weighed after the prayers had stopped.',
+    replacementArtworkPending: true,
+    immediate: true,
+  },
+  {
+    id: 'inspirational-record',
+    name: 'Dawn Register',
+    description: 'Before each Battle, one random persistent unit gains Discipline for that Battle.',
+    flavorText: 'Before each departure, a different name was read.',
+    replacementArtworkPending: true,
+  },
+  {
+    id: 'training-linens',
+    name: 'Field Linens',
+    description: 'Your Pawns gain Positioned.',
+    flavorText: 'The sheets dried before the road did.',
+    replacementArtworkPending: true,
+  },
+  {
+    id: 'royal-decree',
+    name: 'Royal Decree',
+    description: 'Your King gains Positioned.',
+    flavorText: 'The order arrived after the keys had changed hands.',
+  },
+  {
+    id: 'crenellated-rampart',
+    name: 'Crenellated Rampart',
+    description: 'Your Rooks gain Positioned.',
+    flavorText: 'The stones remembered a roof. The sheep did not.',
+  },
+  {
+    id: 'ghibelline-rampart',
+    name: 'Ghibelline Rampart',
+    description: 'Your Rooks gain Marshalled.',
+    flavorText: 'One wall faced the road. The other faced what was gone.',
+  },
+  {
+    id: 'popes-staff',
+    name: "Pope's Staff",
+    description: 'Your Bishops gain Positioned.',
+    flavorText: 'The staff remained wrapped after the chapel doors were opened.',
+  },
+  {
+    id: 'popes-robes',
+    name: "Pope's Robes",
+    description: 'Your Bishops gain Marshalled.',
+    flavorText: 'Pale cloth and dark cloth were packed in separate chests.',
+  },
+  {
+    id: 'royal-tent',
+    name: 'Royal Tent',
+    description: 'Place up to three temporary rocks in front of the King.',
+    flavorText: 'Three stones were set where the canvas would not hold.',
+    requires: 'royal-decree',
+  },
+  {
+    id: 'royal-sceptre',
+    name: 'Royal Sceptre',
+    description: 'Your King gains Marshalled.',
+    flavorText: 'It pointed outward after the gate was closed.',
+  },
+  {
+    id: 'mercenarys-rifle',
+    name: 'Returned Rifle',
+    description: 'After victory, gain 10% of the value of surviving persistent units.',
+    flavorText: 'Only the returned rifles were entered in the final column.',
+    replacementArtworkPending: true,
+  },
+  {
+    id: 'merchants-shopkey',
+    name: 'After-Hours Key',
+    description: 'Each Conflict keeps one additional relic in its shops for 10 gold.',
+    flavorText: 'The small door opened after the courtyard emptied.',
+    replacementArtworkPending: true,
+  },
+  {
+    id: 'occult-dagger',
+    name: 'Unclaimed Dagger',
+    description: 'Gain 10 gold. Eliminate every enemy non-King before checkmating the King.',
+    flavorText: 'It was counted with the valuables. No hand claimed it.',
+    replacementArtworkPending: true,
+    immediate: true,
+  },
+  {
+    id: 'deployment-vehicle',
+    name: 'The Waiting Cart',
+    description: 'Deaths can call equal-or-lower-value blocked units through the Reservist pool.',
+    flavorText: 'When one cart left, another waited at the siding.',
+    replacementArtworkPending: true,
+  },
+  {
+    id: 'mercenary-boat',
+    name: 'The Paid Crossing',
+    description: 'A promoting persistent Pawn may vanish permanently instead and grant 2 gold.',
+    flavorText: 'The fare was counted once. The passenger was not.',
+    replacementArtworkPending: true,
+  },
+  {
+    id: 'quartermasters-ledger',
+    name: "Quartermaster's Ledger",
+    description: 'Piece shops reveal four bundles instead of three.',
+    flavorText: 'The ledger had a column for onward.',
+  },
+  {
+    id: 'fair-scales',
+    name: 'Fair Scales',
+    description: 'Units sell for 75% of their value instead of 50%.',
+    flavorText: 'That summer, seed was weighed more carefully than silver.',
+  },
+  {
+    id: 'muster-roll',
+    name: 'Muster Roll',
+    description: 'When capacity is short, choose which army units sit out.',
+    flavorText: 'Those left in the margin did not board the train.',
+  },
+  {
+    id: 'surveyors-compass',
+    name: "Surveyor's Compass",
+    description: 'Choose between two deterministic random deployment layouts.',
+    flavorText: 'The road west grew busy after the second frost.',
+  },
 ] as const);
 
 export const RUN_RELIC_BY_ID: Readonly<Record<RunRelicId, RunRelicDefinition>> = Object.freeze(
   Object.fromEntries(RUN_RELICS.map((relic) => [relic.id, relic])) as Record<RunRelicId, RunRelicDefinition>,
 );
+
+export interface RunRelicAbilityGrant {
+  ability: Extract<RunAbility, 'positioned' | 'marshalled'>;
+  unitType: RunArmyPieceType;
+}
+
+export const RUN_RELIC_ABILITY_GRANTS: Readonly<Partial<Record<RunRelicId, RunRelicAbilityGrant>>> = Object.freeze({
+  'training-linens': { ability: 'positioned', unitType: 'pawn' },
+  'royal-decree': { ability: 'positioned', unitType: 'king' },
+  'crenellated-rampart': { ability: 'positioned', unitType: 'rook' },
+  'popes-staff': { ability: 'positioned', unitType: 'bishop' },
+  'ghibelline-rampart': { ability: 'marshalled', unitType: 'rook' },
+  'popes-robes': { ability: 'marshalled', unitType: 'bishop' },
+  'royal-sceptre': { ability: 'marshalled', unitType: 'king' },
+});
 
 export interface RunWarBattleSnapshot {
   level: Level;
@@ -599,6 +728,22 @@ export function chooseDraft(run: RunDocument, draftId: DraftOffer['draftId']): R
 
 export function hasRelic(run: RunDocument, relic: RunRelicId): boolean {
   return run.relics.includes(relic);
+}
+
+export function relicGrantingRunAbility(
+  run: RunDocument,
+  unit: RunArmyUnit,
+  ability: RunAbility,
+): RunRelicId | null {
+  for (const relicId of run.relics) {
+    const grant = RUN_RELIC_ABILITY_GRANTS[relicId];
+    if (grant?.ability === ability && grant.unitType === unit.type) return relicId;
+  }
+  return null;
+}
+
+export function hasRunAbility(run: RunDocument, unit: RunArmyUnit, ability: RunAbility): boolean {
+  return unit.abilities.includes(ability) || relicGrantingRunAbility(run, unit, ability) !== null;
 }
 
 function availableRelics(run: RunDocument): RunRelicId[] {

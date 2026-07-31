@@ -65,7 +65,9 @@ function RunRelicReviewGrid({
             <small>
               native 64×64 · {version.status === 'candidate'
                 ? 'new candidate · not installed'
-                : `installed reference · ${version.status} r${version.rowRevision}`}
+                : RUN_RELIC_BY_ID[relicId].replacementArtworkPending
+                  ? 'superseded reference · replacement not generated'
+                  : `installed reference · ${version.status} r${version.rowRevision}`}
             </small>
           </figcaption>
         </figure>

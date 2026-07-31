@@ -3969,7 +3969,7 @@ async function main() {
     goldTenths: 0,
     army: [
       { id: 'run-king', name: 'David of Israel', type: 'king', inspectionSeed: 1701, abilities: [], source: 'king' },
-      { id: 'run-pawn-a', name: 'Stephen Botiller', type: 'pawn', inspectionSeed: 1702, abilities: [], source: 'starting' },
+      { id: 'run-pawn-a', name: 'Stephen Botiller', type: 'pawn', inspectionSeed: 1702, abilities: ['positioned', 'marshalled'], source: 'starting' },
     ],
     relics: [],
     seenRelics: [],

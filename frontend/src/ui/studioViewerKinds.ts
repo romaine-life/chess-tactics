@@ -26,6 +26,7 @@ export const STUDIO_VIEWER_KIND_LABELS = {
   gamelab: 'Game Lab',
   gym: 'Training Gym',
   solver: 'Board Solver',
+  cardlayout: 'Card Layout',
   loading: 'Loading Lab',
 } as const;
 

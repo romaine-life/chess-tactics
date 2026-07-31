@@ -79,6 +79,7 @@ import { STUDIO_VIEWER_KIND_OPTIONS, isViewerKind, type ViewerKind } from './stu
 import { listEditorDocuments } from '../net/editorDocuments';
 import { fetchAdminLiveMediaCatalog, type AdminLiveMediaCatalog } from '../net/liveMediaAdmin';
 import { TitleBarControlContribution, type TitleBarControlSpec } from './shell/TitleBarControls';
+import { RunCardPrototypeCatalog, RunCardPrototypeViewer } from './RunCardPrototype';
 import {
   activeUnitFamilies,
   familyLabels,
@@ -115,7 +116,7 @@ type StudioMode = 'catalog' | 'viewer';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
-type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'sourceart' | 'groundcover' | 'walldecor' | 'wallart' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'walls' | 'scrollbars' | 'sliders' | 'pages' | 'chromelab' | 'sfx' | 'gamelab' | 'gym' | 'solver';
+type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'sourceart' | 'groundcover' | 'walldecor' | 'wallart' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'walls' | 'scrollbars' | 'sliders' | 'pages' | 'chromelab' | 'sfx' | 'gamelab' | 'gym' | 'solver' | 'cardlayout';
 
 // Every prop KIND present in the catalog, in definition order — DERIVED from PROP_DEFS so a new
 // kind (e.g. 'rock') is a filter facet automatically. Hardcoding ['tree','house'] here silently
@@ -249,7 +250,7 @@ const studioFamilyById = (familyId: StudioFamilyId): StudioFamily =>
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => Boolean(value && studioFamilies.some((family) => family.id === value));
 
 const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'viewer';
-const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'sourceart' || value === 'groundcover' || value === 'walldecor' || value === 'wallart' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'walls' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'chromelab' || value === 'sfx' || value === 'gamelab' || value === 'gym' || value === 'solver';
+const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'sourceart' || value === 'groundcover' || value === 'walldecor' || value === 'wallart' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'walls' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'chromelab' || value === 'sfx' || value === 'gamelab' || value === 'gym' || value === 'solver' || value === 'cardlayout';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
@@ -405,6 +406,15 @@ function preserveChromeLabRouteParams(params: URLSearchParams, route: TilesetStu
   });
 }
 
+function preserveCardLayoutRouteParams(params: URLSearchParams, route: TilesetStudioRouteState): void {
+  if (route.viewerKind !== 'cardlayout') return;
+  const current = new URLSearchParams(window.location.search);
+  (['frameCandidate', 'artCandidate'] as const).forEach((key) => {
+    const value = current.get(key);
+    if (value) params.set(key, value);
+  });
+}
+
 const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
   // Canonicalise to /studio even when entered via the /nine-slice-editor
   // alias, so the alias is a pure entry point and all subsequent state rides the
@@ -482,6 +492,7 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
   else if (route.brushKind === 'doodad') params.set('brush', 'doodad');
   if (route.selectedUnitId) params.set('unit', route.selectedUnitId);
   preserveChromeLabRouteParams(params, route);
+  preserveCardLayoutRouteParams(params, route);
   const nextHref = `${STUDIO_PATH}?${params.toString()}`;
   const currentHref = `${window.location.pathname}${window.location.search}`;
   if (nextHref !== currentHref) {
@@ -1896,6 +1907,11 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         </>
       ),
     },
+    {
+      id: 'cardlayout', label: 'Card Layout', hint: 'Tune the complete Run card face with exact live frame and artwork candidates.',
+      main: <RunCardPrototypeCatalog onOpen={() => openViewer('cardlayout')} />,
+      controls: <button type="button" className="tileset-view-action" onClick={() => openViewer('cardlayout')}>Open Card Layout</button>,
+    },
   ];
   const activeCatalog = catalogCategories.find((entry) => entry.id === category) ?? catalogCategories[0];
   const catalogCategoryOptions = [...catalogCategories].sort(compareByLabel);
@@ -2095,6 +2111,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                               />
                           : viewerKind === 'sfx'
                             ? <SfxViewer header={studioViewerHeader} reviewVersionId={selectedSfxReviewId} />
+                            : viewerKind === 'cardlayout'
+                              ? <RunCardPrototypeViewer header={studioViewerHeader} viewerZoom={viewerZoom} />
                             : <AssetLab library={studioMedia.assets} name={selectedAssetName} header={studioViewerHeader} onEditFrame={(id) => { setSelectedFrameName(id); openViewer('nineslice'); }} onOpenDivider={(id) => { setSelectedDividerName(id); openViewer('divider'); }} />
         ) : null}
       </section>
