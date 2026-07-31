@@ -32,6 +32,13 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(strategikon).toContain('title="The Lipsanotheca — Held Relics"');
   });
 
+  it('uses the canonical terrain-tile glyph instead of the creator-tools grid mark', () => {
+    expect(enchiridion).toContain("terrain: installedUiMedia('ui-kit-icons-tileset-studio-png')");
+    expect(enchiridion).toContain('iconSrc={SECTION_ICON_SRC[candidate]}');
+    expect(enchiridion).not.toContain("terrain: 'ic-grid'");
+    expect(style).not.toContain('.ic-terrain');
+  });
+
   it('uses host-owned fill composition without adding an outer box to either host', () => {
     expect(mainMenu).toMatch(/<Enchiridion[^>]*framed=\{false\}/);
     expect(enchiridion).toContain('enchiridion-panel-unframed');
