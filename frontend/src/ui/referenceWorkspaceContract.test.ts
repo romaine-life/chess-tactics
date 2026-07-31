@@ -85,14 +85,14 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
   });
 
   it('routes individual relic selection where the host addresses relics (ADR-0256)', () => {
-    const start = enchiridion.indexOf('function RelicTrigger');
-    const end = enchiridion.indexOf('function AbilitiesSection', start);
+    const start = enchiridion.indexOf('function ReferenceTrigger');
+    const end = enchiridion.indexOf('export function CardCodex', start);
     const relicCodex = enchiridion.slice(start, end);
-    // One trigger control, two transports: NavButton when the relic has an address
+    // One trigger control, two transports: NavButton when the record has an address
     // (ADR-0052 — a button that navigates, never an anchor), plain selection otherwise.
     expect(relicCodex).toContain('if (to) return <NavButton to={to}');
     expect(relicCodex).not.toContain('<a ');
-    expect(relicCodex.match(/<RelicTrigger/g)).toHaveLength(2);
+    expect(relicCodex.match(/<ReferenceTrigger/g)).toHaveLength(2);
     expect(relicCodex).toMatch(/to=\{relicHref\?\.\(relic\.id\)\}/);
     // Routed hosts derive selection from the address; local state is the ephemeral fallback.
     expect(relicCodex).toContain('const selectedId = relicHref ? (selectedRelicId ?? relicIds[0] ?? RUN_RELICS[0].id) : localSelectedId;');
@@ -101,6 +101,25 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(mainMenu).toContain('relicHref={enchiridionRelicHref}');
     // …and the Battle-hosted Strategikon keeps ephemeral reference selection.
     expect(strategikon).not.toContain('relicHref');
+  });
+
+  it('lists the full bundle deck as real card faces with routed selection', () => {
+    const start = enchiridion.indexOf('export function CardCodex');
+    const end = enchiridion.indexOf('function AbilitiesSection', start);
+    const cardCodex = enchiridion.slice(start, end);
+    // The browser lists every deck card grouped by value; the detail is the exact
+    // card face the Run deals (one selection, one description — ADR-0253's shape).
+    expect(cardCodex).toContain('PIECE_BUNDLE_DECK');
+    expect(cardCodex).toContain('<RunBundleCard bundle={selected} mode="reference" />');
+    expect(cardCodex).toContain('runCardName(bundle)');
+    expect(cardCodex).toContain('bundleLabel(bundle)');
+    expect(cardCodex).toMatch(/to=\{cardHref\?\.\(bundle\.id\)\}/);
+    expect(cardCodex.match(/<ReferenceTrigger/g)).toHaveLength(1);
+    // The main menu addresses individual cards like relic records…
+    expect(mainMenu).toContain('selectedCardId={enchiridionCardFromPath(path)}');
+    expect(mainMenu).toContain('cardHref={enchiridionCardHref}');
+    // …and the Battle-hosted Strategikon keeps ephemeral reference selection.
+    expect(strategikon).not.toContain('cardHref');
   });
 
   it('opens from Controls while retaining the mounted Battle field', () => {

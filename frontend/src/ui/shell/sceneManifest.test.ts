@@ -151,6 +151,15 @@ describe('scene manifests', () => {
     expect(sceneManifest('/enchiridion').id).toBe(sceneManifest('/enchiridion/units').id);
   });
 
+  it('addresses individual cards inside the one retained card-reference scene', () => {
+    const base = sceneManifest('/enchiridion/cards');
+    const addressed = sceneManifest('/enchiridion/cards/ppb');
+    expect(addressed.id).toBe(base.id);
+    expect(addressed.instances.map((entry) => entry.key)).toEqual(base.instances.map((entry) => entry.key));
+    expect(addressed.leaf.definition.id).toBe('enchiridion/cards');
+    expect(sceneManifest('/enchiridion/units').id).not.toBe(base.id);
+  });
+
   it('requires declarations for expensive editor and Studio first viewports', () => {
     expect(sceneManifest('/editor/level').critical).toContain('visible-palette-slice');
     expect(sceneManifest('/studio')).toMatchObject({

@@ -18415,8 +18415,9 @@ button.tileset-relationship-cell {
 
 .run-card-grid {
   display: grid;
-  gap: var(--ds-inline-tight);
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: var(--ds-inline);
+  grid-template-columns: repeat(auto-fill, minmax(196px, 236px));
+  justify-content: start;
 }
 
 .run-card {
@@ -18427,17 +18428,24 @@ button.tileset-relationship-cell {
   padding: var(--ds-inset);
 }
 
+/* Portrait trading-card proportions: scene art window on top, name plate, then the
+   price/action footer. The scene is a live board render that self-centres inside the
+   overflow-hidden art window, so the vignette bleeds to the window's edges. */
 .run-bundle-card {
-  align-content: space-between;
+  aspect-ratio: 5 / 7;
   color: inherit;
   cursor: pointer;
   display: grid;
   font: inherit;
-  gap: var(--ds-inline);
+  gap: var(--ds-inline-tight);
+  grid-template-rows: minmax(0, 1fr) auto auto;
   inline-size: 100%;
-  min-block-size: 162px;
   padding: var(--ds-inset);
   text-align: start;
+}
+
+.run-bundle-card.is-reference {
+  cursor: default;
 }
 
 .run-bundle-card:disabled {
@@ -18449,41 +18457,65 @@ button.tileset-relationship-cell {
   opacity: 1;
 }
 
-.run-bundle-piece-grid {
-  align-content: center;
+.run-card-scene-viewport {
+  display: block;
+  min-block-size: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.run-card-scene-viewport .tileset-generated-board {
+  pointer-events: none;
+}
+
+/* Accepted enriched scene artwork sits under the live unit sprites as a
+   board-registered plate: centred on the shared world origin and scaled by the
+   camera-zoom ratio (inline transform), never cover-fit. */
+.run-card-scene-art {
+  image-rendering: pixelated;
+  inset-block-start: 50%;
+  inset-inline-start: 50%;
+  max-inline-size: none;
+  position: absolute;
+}
+
+/* Card-scene workshop (/studio?cardScenes=1): fixed capture stage + deck gallery. */
+.run-card-scene-lab-panel {
+  grid-column: 1;
+  grid-row: 2;
+  inline-size: 100%;
+  margin-inline: auto;
+  max-inline-size: 1280px;
+  overflow: auto;
+}
+
+.run-card-scene-lab-panel > .le-outer-panel-content {
+  display: grid;
+  gap: var(--ds-inline);
+}
+
+.run-card-capture-stage {
+  overflow: hidden;
+  position: relative;
+}
+
+.run-card-capture-stage .run-card-scene-viewport {
+  inset: 0;
+  position: absolute;
+}
+
+.run-bundle-card-plate {
   display: grid;
   gap: var(--ds-space-1);
-  grid-template-columns: repeat(3, 32px);
-  justify-content: center;
-  min-block-size: 110px;
 }
 
-.run-bundle-piece-grid[data-piece-count="1"] {
-  grid-template-columns: minmax(0, 88px);
+.run-bundle-card-name {
+  font: var(--ds-weight-bold) var(--ds-text-md)/1.15 var(--ds-font-display);
 }
 
-.run-bundle-piece-grid[data-piece-count="2"] {
-  grid-template-columns: repeat(2, minmax(0, 84px));
-}
-
-.run-bundle-piece-grid[data-piece-count="3"] {
-  grid-template-columns: repeat(3, minmax(0, 72px));
-}
-
-.run-bundle-piece-grid[data-piece-count="4"] {
-  grid-template-columns: repeat(4, minmax(0, 54px));
-}
-
-.run-bundle-piece-grid:is([data-piece-count="5"], [data-piece-count="6"]) {
-  grid-template-columns: repeat(3, minmax(0, 48px));
-}
-
-.run-bundle-board-piece {
-  aspect-ratio: 78 / 92;
-  block-size: auto;
-  inline-size: 100%;
-  object-fit: contain;
-  pointer-events: none;
+.run-bundle-card-contents {
+  font-size: var(--ds-text-sm);
+  opacity: .82;
 }
 
 .run-bundle-card-footer,
@@ -19537,6 +19569,72 @@ button.tileset-relationship-cell {
 
 .enchiridion-relic-detail dd {
   margin: 0;
+}
+
+/* Cards codex: a value-grouped browser of the full bundle deck beside one selected
+   card rendered as its real face (the same RunBundleCard the Run deals). */
+.enchiridion-card-layout {
+  align-content: start;
+  align-items: start;
+  block-size: 100%;
+  display: grid;
+  gap: var(--ds-stack);
+  grid-template-columns: minmax(280px, 1fr) minmax(232px, 300px);
+  grid-template-rows: minmax(0, 1fr);
+  min-block-size: 0;
+  overflow: hidden;
+}
+
+.enchiridion-card-browser {
+  align-content: start;
+  block-size: 100%;
+  display: grid;
+  gap: var(--ds-stack);
+  min-block-size: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-inline-end: 4px;
+}
+
+.enchiridion-card-group {
+  align-content: start;
+  display: grid;
+  gap: var(--ds-space-2);
+}
+
+.enchiridion-card-rows {
+  align-content: start;
+  display: grid;
+  gap: var(--ds-space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.enchiridion-card-row {
+  align-content: center;
+  cursor: pointer;
+  display: grid;
+  gap: 2px;
+  inline-size: 100%;
+  min-block-size: 52px;
+  padding: 6px 10px;
+  text-align: start;
+}
+
+.enchiridion-card-row-name {
+  font-size: var(--ds-text-md);
+}
+
+.enchiridion-card-row-contents {
+  font-size: var(--ds-text-sm);
+  opacity: .8;
+}
+
+.enchiridion-card-detail {
+  align-self: start;
+  display: grid;
+  min-block-size: 0;
 }
 
 .enchiridion-empty {

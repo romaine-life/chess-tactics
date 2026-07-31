@@ -8,6 +8,8 @@ const runWorkspaceStages = readFileSync(new URL('./RunWorkspaceStages.tsx', impo
 const titleBarPortal = readFileSync(new URL('./shell/TitleBarPortalContext.tsx', import.meta.url), 'utf8');
 const runWorkspace = readFileSync(new URL('./RunWorkspace.tsx', import.meta.url), 'utf8');
 const runUnitInspectionScene = readFileSync(new URL('./RunUnitInspectionScene.tsx', import.meta.url), 'utf8');
+const runCardScene = readFileSync(new URL('./RunCardScene.tsx', import.meta.url), 'utf8');
+const runBundleCard = readFileSync(new URL('./RunBundleCard.tsx', import.meta.url), 'utf8');
 const runRelics = readFileSync(new URL('./RunRelics.tsx', import.meta.url), 'utf8');
 const runSelfInspection = readFileSync(new URL('./RunSelfInspection.tsx', import.meta.url), 'utf8');
 const skirmish = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
@@ -120,11 +122,7 @@ describe('Run chrome hierarchy', () => {
   });
 
   it('gives shop bundle purchases one dedicated card cue without changing draft feedback', () => {
-    const bundleCard = runScreen.match(
-      /export function RunBundleCard\b[\s\S]*?\r?\n}\r?\n\r?\nfunction RunTitleBarStatus/,
-    )?.[0] ?? '';
-
-    expect(bundleCard).toContain("data-ui-sfx={mode === 'shop' ? 'card-purchase' : undefined}");
+    expect(runBundleCard).toContain("data-ui-sfx={mode === 'shop' ? 'card-purchase' : undefined}");
   });
 
   it('fills the shell-owned playfield for every non-Battle Run destination', () => {
@@ -175,17 +173,23 @@ describe('Run chrome hierarchy', () => {
     expect(styleCss).not.toContain('.run-screen.has-relics .run-workspace');
   });
 
-  it('shows every bundle unit with the same installed sprites used by the board', () => {
-    const bundleCard = runScreen.match(
-      /export function RunBundleCard\b[\s\S]*?\r?\n}\r?\n\r?\nfunction RunTitleBarStatus/,
-    )?.[0] ?? '';
-
-    expect(bundleCard).toContain('bundle.pieces.map((piece, index)');
-    expect(runScreen).toContain("const PLAYER_BUNDLE_FACING = 'south' as const;");
-    expect(bundleCard).toContain('pieceSpritePath(piece, PLAYER_BUNDLE_PALETTE, PLAYER_BUNDLE_FACING)');
-    expect(bundleCard).toContain('className="run-bundle-board-piece"');
-    expect(bundleCard).not.toContain('UnitPortrait');
-    expect(bundleCard).not.toContain('run-bundle-quantity');
+  it('draws every bundle card as a seeded board-scene vignette with an authored name', () => {
+    // The vignette musters every bundle piece with its canonical installed board
+    // sprite through the shared read-only renderer (ADR-0225 continues to hold).
+    expect(runBundleCard).toContain('<RunCardScene bundle={bundle}');
+    expect(runCardScene).toContain('<StudioReadOnlyBoard');
+    expect(runCardScene).toContain("const CARD_FACING = 'south' as const;");
+    expect(runCardScene).toContain('camera = RUN_CARD_SCENE_CAMERA');
+    expect(runCardScene).toContain('boardPan={camera.pan}');
+    expect(runBundleCard).toContain('runCardName(bundle)');
+    expect(runBundleCard).toContain('className="run-bundle-card-name"');
+    expect(runBundleCard).toContain('className="run-bundle-card-contents"');
+    expect(runBundleCard).not.toContain('UnitPortrait');
+    expect(runBundleCard).not.toContain('run-bundle-quantity');
+    expect(runBundleCard).not.toContain('pieceSpritePath');
+    expect(runScreen).toContain("import { RunBundleCard } from './RunBundleCard';");
+    expect(styleCss).toMatch(/\.run-bundle-card\s*\{[\s\S]*?aspect-ratio:\s*5 \/ 7;/);
+    expect(styleCss).toMatch(/\.run-card-scene-viewport\s*\{[\s\S]*?overflow:\s*hidden;/);
   });
 
   it('uses one divided Army ledger grid with readable metadata and value hierarchy', () => {

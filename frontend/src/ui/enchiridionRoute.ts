@@ -1,13 +1,14 @@
 // The main-menu Enchiridion's route language (ADR-0256), split from the component so
 // MainMenu and the scene manifest resolve one address contract instead of lookalike
 // parsers. `/enchiridion/<section>` selects a reference section; the relics section
-// additionally addresses one relic as `/enchiridion/relics/<relic-id>`. The
+// additionally addresses one relic as `/enchiridion/relics/<relic-id>`, and the cards
+// section addresses one bundle card as `/enchiridion/cards/<bundle-id>`. The
 // Battle-hosted Strategikon keeps its own `/play|/run/strategikon/...` prefixes and
-// ephemeral relic selection — these helpers speak only the main-menu addresses.
+// ephemeral reference selection — these helpers speak only the main-menu addresses.
 
-import { RUN_RELICS, type RunRelicId } from '../run/model';
+import { PIECE_BUNDLE_BY_ID, RUN_RELICS, type RunRelicId } from '../run/model';
 
-export const ENCHIRIDION_SECTIONS = ['units', 'terrain', 'relics', 'abilities'] as const;
+export const ENCHIRIDION_SECTIONS = ['units', 'terrain', 'cards', 'relics', 'abilities'] as const;
 export type EnchiridionSection = typeof ENCHIRIDION_SECTIONS[number];
 
 export function enchiridionSectionHref(section: EnchiridionSection): string {
@@ -44,4 +45,16 @@ export function enchiridionRelicFromPath(path: string): RunRelicId | null {
   const match = /^\/enchiridion\/relics\/([^/]+)$/.exec(path);
   const id = match?.[1];
   return id && RUN_RELICS.some((relic) => relic.id === id) ? (id as RunRelicId) : null;
+}
+
+/** The address of one bundle card's record in the main-menu Enchiridion. */
+export function enchiridionCardHref(bundleId: string): string {
+  return `/enchiridion/cards/${bundleId}`;
+}
+
+/** The deck card addressed by /enchiridion/cards/<bundle-id>; null when absent or unknown. */
+export function enchiridionCardFromPath(path: string): string | null {
+  const match = /^\/enchiridion\/cards\/([^/]+)$/.exec(path);
+  const id = match?.[1];
+  return id && PIECE_BUNDLE_BY_ID[id] ? id : null;
 }

@@ -6,7 +6,13 @@ import { Settings } from './Settings';
 import { PlayMenu } from './PlayMenu';
 import { Lobbies } from './Lobbies';
 import { Enchiridion } from './Enchiridion';
-import { enchiridionRelicFromPath, enchiridionRelicHref, enchiridionSectionFromPath } from './enchiridionRoute';
+import {
+  enchiridionCardFromPath,
+  enchiridionCardHref,
+  enchiridionRelicFromPath,
+  enchiridionRelicHref,
+  enchiridionSectionFromPath,
+} from './enchiridionRoute';
 import { ApparatusRailTab } from './shared/ApparatusRailTab';
 import { isPlaySelectorPath, PLAY_SELECTOR_ROOT } from './playHubRoute';
 import { loadDecodedImage } from '../render/imageResources';
@@ -174,6 +180,8 @@ export function MainMenu({
                       section={enchiridionSectionFromPath(path)}
                       selectedRelicId={enchiridionRelicFromPath(path)}
                       relicHref={enchiridionRelicHref}
+                      selectedCardId={enchiridionCardFromPath(path)}
+                      cardHref={enchiridionCardHref}
                       sceneInstanceKey={sceneInstanceKey}
                       framed={false}
                     />

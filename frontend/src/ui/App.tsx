@@ -64,6 +64,7 @@ const PredrawnReference = lazy(() => import('./PredrawnReference').then((module)
 const DrawableCatalogLab = lazy(() => import('./DrawableCatalogLab').then((module) => ({ default: module.DrawableCatalogLab })));
 const RunRelicReview = lazy(() => import('./RunRelicReview').then((module) => ({ default: module.RunRelicReview })));
 const RunShopArtReview = lazy(() => import('./RunShopArtReview').then((module) => ({ default: module.RunShopArtReview })));
+const RunCardSceneLab = lazy(() => import('./RunCardSceneLab').then((module) => ({ default: module.RunCardSceneLab })));
 
 const SCENE_FADE_MS = 350;
 const SCENE_LOADING_MIN_MS = 350;
@@ -535,6 +536,7 @@ function renderScene(scene: ScenePath, search: string): ReactElement {
   if (path.startsWith('/run/strategikon/')) return <RunScreen routePath={path} routeSearch={search} />;
   if (path === '/predrawn-reference') return <PredrawnReference />;
   if (path === '/studio' && new URLSearchParams(search).get('runShopReview') === '1') return <RunShopArtReview />;
+  if (path === '/studio' && new URLSearchParams(search).get('cardScenes') === '1') return <RunCardSceneLab />;
   if (path === '/studio' && new URLSearchParams(search).get('relicReview') === '1') return <RunRelicReview />;
   if (path === '/studio' || path === '/tileset-studio') return <TilesetStudio />;
   if (path === '/studio/wall-candidates') return <WallCandidateReview />;
