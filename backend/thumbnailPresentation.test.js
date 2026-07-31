@@ -5,6 +5,7 @@ const test = require('node:test');
 const {
   resolveDefaultOgImage,
   resolveLevelCardPresentation,
+  resolveRunRelicIcon,
 } = require('./thumbnailPresentation');
 
 let sequence = 0;
@@ -73,4 +74,58 @@ test('level-card presentation fails closed when a component is absent or ambiguo
     id: 'duplicate-title-surface',
   });
   assert.throws(() => resolveLevelCardPresentation(duplicateSurface), /found 2/);
+});
+
+test('relic unfurl presentation resolves the installed native icon by canonical relic id', () => {
+  const catalog = productionShapedCatalog();
+  catalog.assets.push({
+    id: 'run-relic-royal-decree',
+    kind: 'run-relic',
+    label: 'Royal Decree',
+    behavior: { relicId: 'royal-decree' },
+    media: {
+      icon: {
+        media: {
+          immutableUrl: '/api/media/royal-decree',
+          mediaType: 'image/png',
+          width: 64,
+          height: 64,
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(resolveRunRelicIcon(catalog, 'royal-decree'), {
+    src: '/api/media/royal-decree',
+    width: 64,
+    height: 64,
+    mediaType: 'image/png',
+  });
+});
+
+test('relic unfurl presentation fails closed for missing, ambiguous, or non-native artwork', () => {
+  const catalog = productionShapedCatalog();
+  const relic = {
+    id: 'run-relic-royal-decree',
+    kind: 'run-relic',
+    label: 'Royal Decree',
+    behavior: { relicId: 'royal-decree' },
+    media: {
+      icon: {
+        media: {
+          immutableUrl: '/api/media/royal-decree',
+          mediaType: 'image/png',
+          width: 64,
+          height: 64,
+        },
+      },
+    },
+  };
+
+  assert.throws(() => resolveRunRelicIcon(catalog, 'royal-decree'), /found 0/);
+  catalog.assets.push(relic, { ...relic, id: 'duplicate-royal-decree' });
+  assert.throws(() => resolveRunRelicIcon(catalog, 'royal-decree'), /found 2/);
+  catalog.assets.pop();
+  relic.media.icon.media.width = 63;
+  assert.throws(() => resolveRunRelicIcon(catalog, 'royal-decree'), /native 64x64 PNG/);
 });
