@@ -2674,6 +2674,24 @@ const MIGRATIONS = [
          AND EXISTS (SELECT 1 FROM logged);
     `,
   },
+  {
+    version: 47,
+    name: 'owner-authored Run card scene overrides',
+    // One complete, owner-editable card-scenes document (the sfx_profiles shape).
+    // The row is intentionally not seeded: absence means every card shows its
+    // deterministic generated scene, and there is no committed override fallback.
+    sql: `
+      CREATE TABLE IF NOT EXISTS card_scene_documents (
+        id                    text        PRIMARY KEY CHECK (id = 'default'),
+        data                  jsonb       NOT NULL,
+        client_schema_version integer     NOT NULL CHECK (client_schema_version = 1),
+        revision              bigint      NOT NULL DEFAULT 0 CHECK (revision >= 0),
+        created_at            timestamptz NOT NULL DEFAULT now(),
+        updated_at            timestamptz NOT NULL DEFAULT now(),
+        updated_by            text
+      );
+    `,
+  },
 ];
 
 let pool = null;
@@ -13539,6 +13557,175 @@ app.put('/api/sfx-profiles/:id', async (req, res) => {
       return;
     }
     dbUnavailable(res, 'SFX profile write failed', error, 'sfx_profile_unavailable');
+  }
+});
+
+// --- Owner-authored Run card scene overrides --------------------------------
+// One revisioned document (the sfx_profiles shape): public GET hydrates runtime
+// and Studio; the admin optimistic PUT saves the owner-operated instrument. A
+// missing row means generated scenes with no committed fallback (ADR-0089 shape).
+const CARD_SCENES_SCHEMA_VERSION = 1;
+const CARD_SCENES_ID = 'default';
+const CARD_SCENES_LOCK_KEY = 4300193003;
+const CARD_SCENE_CELL_KEY = /^-?\d{1,2},-?\d{1,2}$/;
+const CARD_SCENE_ART_ID = /^[A-Za-z0-9][A-Za-z0-9._:@+-]{0,127}$/;
+const CARD_SCENE_COVER_MODES = new Set(['none', 'sparse', 'filled']);
+const CARD_SCENE_DIRECTIONS = new Set([
+  'south', 'south-east', 'east', 'north-east', 'north', 'north-west', 'west', 'south-west',
+]);
+
+function cardScenePlacedMapIssue(value, key, cardId) {
+  if (!isObjectRecord(value)) return `override ${cardId} ${key} map is invalid`;
+  for (const [cell, placed] of Object.entries(value)) {
+    if (!CARD_SCENE_CELL_KEY.test(cell) || !isObjectRecord(placed)
+      || typeof placed[key] !== 'string' || !CARD_SCENE_ART_ID.test(placed[key])) {
+      return `override ${cardId} ${key} entry ${cell} is invalid`;
+    }
+  }
+  return null;
+}
+
+function validateCardScenesData(data) {
+  if (!isObjectRecord(data) || !isObjectRecord(data.overrides)) return 'document shape is invalid';
+  for (const [cardId, override] of Object.entries(data.overrides)) {
+    if (!/^[a-z]{1,9}$/.test(cardId) || !isObjectRecord(override)) return `override ${cardId} is invalid`;
+    if (override.salt !== undefined && (!Number.isSafeInteger(override.salt) || override.salt < 0)) {
+      return `override ${cardId} salt is invalid`;
+    }
+    if (override.landmark !== undefined && override.landmark !== null) {
+      const landmark = override.landmark;
+      if (!isObjectRecord(landmark)
+        || typeof landmark.sourceArtId !== 'string' || !CARD_SCENE_ART_ID.test(landmark.sourceArtId)
+        || !CARD_SCENE_DIRECTIONS.has(landmark.direction)
+        || !Number.isFinite(landmark.pixelX) || !Number.isFinite(landmark.pixelY)
+        || !Number.isFinite(landmark.scale) || landmark.scale <= 0 || landmark.scale > 8) {
+        return `override ${cardId} landmark is invalid`;
+      }
+    }
+    if (override.doodads !== undefined) {
+      const issue = cardScenePlacedMapIssue(override.doodads, 'doodadId', cardId);
+      if (issue) return issue;
+    }
+    if (override.props !== undefined) {
+      const issue = cardScenePlacedMapIssue(override.props, 'propId', cardId);
+      if (issue) return issue;
+    }
+    if (override.cover !== undefined && !CARD_SCENE_COVER_MODES.has(override.cover)) {
+      return `override ${cardId} cover mode is invalid`;
+    }
+  }
+  return null;
+}
+
+function publicCardScenes(row) {
+  return {
+    id: CARD_SCENES_ID,
+    data: row.data,
+    clientSchemaVersion: Number(row.client_schema_version),
+    revision: Number(row.revision),
+    createdAt: nullableTimestampString(row.created_at),
+    updatedAt: nullableTimestampString(row.updated_at),
+    updatedBy: row.updated_by || null,
+  };
+}
+
+async function dbGetCardScenes() {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    `SELECT data, client_schema_version, revision, created_at, updated_at, updated_by
+       FROM card_scene_documents WHERE id = $1`,
+    [CARD_SCENES_ID],
+  );
+  return rows[0] || null;
+}
+
+async function dbSaveCardScenes(data, expectedRevision, actorEmail) {
+  await ensureDbReady();
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('SELECT pg_advisory_xact_lock($1)', [CARD_SCENES_LOCK_KEY]);
+    const current = await client.query(
+      `SELECT revision FROM card_scene_documents WHERE id = $1 FOR UPDATE`,
+      [CARD_SCENES_ID],
+    );
+    const row = current.rows[0] || null;
+    if ((!row && expectedRevision !== null) || (row && Number(row.revision) !== expectedRevision)) {
+      const error = new Error('card_scenes_conflict');
+      error.cardScenesConflict = true;
+      error.currentRevision = row ? Number(row.revision) : null;
+      throw error;
+    }
+    let saved;
+    let created = false;
+    if (!row) {
+      created = true;
+      saved = await client.query(
+        `INSERT INTO card_scene_documents (id, data, client_schema_version, revision, updated_by)
+         VALUES ($1, $2::jsonb, $3, 0, $4)
+         RETURNING data, client_schema_version, revision, created_at, updated_at, updated_by`,
+        [CARD_SCENES_ID, JSON.stringify(data), CARD_SCENES_SCHEMA_VERSION, actorEmail],
+      );
+    } else {
+      saved = await client.query(
+        `UPDATE card_scene_documents SET data = $2::jsonb, client_schema_version = $3,
+            revision = revision + 1, updated_at = now(), updated_by = $4
+          WHERE id = $1
+        RETURNING data, client_schema_version, revision, created_at, updated_at, updated_by`,
+        [CARD_SCENES_ID, JSON.stringify(data), CARD_SCENES_SCHEMA_VERSION, actorEmail],
+      );
+    }
+    await client.query('COMMIT');
+    return { row: saved.rows[0], created };
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve original error */ }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+app.get('/api/card-scenes/:id', async (req, res) => {
+  if (req.params.id !== CARD_SCENES_ID) { res.status(400).json({ error: 'invalid_card_scenes_id' }); return; }
+  try {
+    const row = await dbGetCardScenes();
+    if (!row) { res.setHeader('Cache-Control', 'no-store'); res.status(404).json({ error: 'card_scenes_not_found' }); return; }
+    const issue = validateCardScenesData(row.data);
+    if (issue || Number(row.client_schema_version) !== CARD_SCENES_SCHEMA_VERSION) {
+      throw new Error(`stored card scenes document is invalid: ${issue || 'client schema version mismatch'}`);
+    }
+    const etag = `"card-scenes-${Number(row.revision)}"`;
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('ETag', etag);
+    if (req.headers['if-none-match'] === etag) { res.status(304).end(); return; }
+    res.status(200).json({ document: publicCardScenes(row) });
+  } catch (error) {
+    dbUnavailable(res, 'card scenes read failed', error, 'card_scenes_unavailable');
+  }
+});
+
+app.put('/api/card-scenes/:id', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  if (req.params.id !== CARD_SCENES_ID) { res.status(400).json({ error: 'invalid_card_scenes_id' }); return; }
+  const raw = isObjectRecord(req.body) ? req.body : {};
+  const expectedRevision = raw.expectedRevision === null
+    ? null : Number.isInteger(raw.expectedRevision) && raw.expectedRevision >= 0 ? raw.expectedRevision : undefined;
+  if (expectedRevision === undefined || raw.clientSchemaVersion !== CARD_SCENES_SCHEMA_VERSION) {
+    res.status(400).json({ error: 'invalid_card_scenes_write', details: 'expectedRevision and clientSchemaVersion are required' });
+    return;
+  }
+  const issue = validateCardScenesData(raw.data);
+  if (issue) { res.status(400).json({ error: 'invalid_card_scenes', details: issue }); return; }
+  try {
+    const saved = await dbSaveCardScenes(raw.data, expectedRevision, user.email);
+    res.status(saved.created ? 201 : 200).json({ document: publicCardScenes(saved.row) });
+  } catch (error) {
+    if (error && error.cardScenesConflict) {
+      res.status(409).json({ error: 'card_scenes_conflict', currentRevision: error.currentRevision });
+      return;
+    }
+    dbUnavailable(res, 'card scenes write failed', error, 'card_scenes_unavailable');
   }
 });
 

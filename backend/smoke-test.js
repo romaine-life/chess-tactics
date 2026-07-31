@@ -2682,6 +2682,72 @@ async function main() {
     || updatedSfxBody.profile.data.arrival.firing !== 'once'
   ) throw new Error(`Optimistic SFX profile update failed: ${updatedSfxProfile.statusCode} ${updatedSfxProfile.body}`);
 
+  // Owner-authored Run card scene overrides (the sfx_profiles shape): missing is
+  // explicit generated-scenes, anonymous writes are rejected, malformed documents are
+  // rejected, and admin saves compare-and-swap the document revision.
+  const missingCardScenes = await get('/api/card-scenes/default');
+  if (missingCardScenes.statusCode !== 404 || JSON.parse(missingCardScenes.body).error !== 'card_scenes_not_found') {
+    throw new Error(`Missing card scenes should be explicit: ${missingCardScenes.statusCode} ${missingCardScenes.body}`);
+  }
+  const syntheticCardScenes = {
+    overrides: {
+      kb: {
+        salt: 2,
+        cover: 'filled',
+        landmark: { sourceArtId: 'castle-ii', direction: 'south', pixelX: 12, pixelY: -30, scale: 0.4 },
+        doodads: { '0,0': { doodadId: 'fern' } },
+        props: {},
+      },
+    },
+  };
+  const anonymousCardScenesWrite = await request(
+    'PUT', '/api/card-scenes/default', { 'content-type': 'application/json' },
+    JSON.stringify({ data: syntheticCardScenes, expectedRevision: null, clientSchemaVersion: 1 }), 5000,
+  );
+  if (anonymousCardScenesWrite.statusCode !== 401) throw new Error(`Anonymous card scenes write should be 401: ${anonymousCardScenesWrite.statusCode}`);
+  const invalidCardScenesWrite = await request(
+    'PUT', '/api/card-scenes/default', adminJson,
+    JSON.stringify({
+      data: { overrides: { kb: { cover: 'jungle' } } },
+      expectedRevision: null,
+      clientSchemaVersion: 1,
+    }), 5000,
+  );
+  if (invalidCardScenesWrite.statusCode !== 400 || JSON.parse(invalidCardScenesWrite.body).error !== 'invalid_card_scenes') {
+    throw new Error(`Malformed card scenes should be rejected: ${invalidCardScenesWrite.statusCode} ${invalidCardScenesWrite.body}`);
+  }
+  const createdCardScenes = await request(
+    'PUT', '/api/card-scenes/default', adminJson,
+    JSON.stringify({ data: syntheticCardScenes, expectedRevision: null, clientSchemaVersion: 1 }), 5000,
+  );
+  const createdCardScenesBody = JSON.parse(createdCardScenes.body);
+  if (
+    createdCardScenes.statusCode !== 201 || createdCardScenesBody.document.revision !== 0
+    || createdCardScenesBody.document.data.overrides.kb.cover !== 'filled'
+  ) throw new Error(`Card scenes create failed: ${createdCardScenes.statusCode} ${createdCardScenes.body}`);
+  const publicCardScenesRead = await get('/api/card-scenes/default');
+  if (
+    publicCardScenesRead.statusCode !== 200 || publicCardScenesRead.headers.etag !== '"card-scenes-0"'
+    || JSON.parse(publicCardScenesRead.body).document.data.overrides.kb.landmark.sourceArtId !== 'castle-ii'
+  ) throw new Error(`Public card scenes read failed: ${publicCardScenesRead.statusCode} ${publicCardScenesRead.body}`);
+  const staleCardScenesWrite = await request(
+    'PUT', '/api/card-scenes/default', adminJson,
+    JSON.stringify({ data: syntheticCardScenes, expectedRevision: 7, clientSchemaVersion: 1 }), 5000,
+  );
+  if (
+    staleCardScenesWrite.statusCode !== 409 || JSON.parse(staleCardScenesWrite.body).error !== 'card_scenes_conflict'
+    || JSON.parse(staleCardScenesWrite.body).currentRevision !== 0
+  ) throw new Error(`Stale card scenes write should conflict: ${staleCardScenesWrite.statusCode} ${staleCardScenesWrite.body}`);
+  const updatedCardScenes = await request(
+    'PUT', '/api/card-scenes/default', adminJson,
+    JSON.stringify({ data: { overrides: {} }, expectedRevision: 0, clientSchemaVersion: 1 }), 5000,
+  );
+  const updatedCardScenesBody = JSON.parse(updatedCardScenes.body);
+  if (
+    updatedCardScenes.statusCode !== 200 || updatedCardScenesBody.document.revision !== 1
+    || Object.keys(updatedCardScenesBody.document.data.overrides).length !== 0
+  ) throw new Error(`Optimistic card scenes update failed: ${updatedCardScenes.statusCode} ${updatedCardScenes.body}`);
+
   const idempotentPayload = {
     slot: 'backgrounds/smoke-idempotent.png',
     domain: 'background',

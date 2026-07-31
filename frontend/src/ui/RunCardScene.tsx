@@ -5,7 +5,7 @@ import {
   structureArtDirections,
   structureArtDirectionSprite,
 } from '@chess-tactics/board-render';
-import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactElement } from 'react';
 import { TILE_STEP_Y } from '../art/projectionContract';
 import { tileAssets } from '../art/tileset';
 import { paletteForSide } from '../core/pieces';
@@ -18,6 +18,12 @@ import {
 } from '../core/tileSockets';
 import { StudioReadOnlyBoard } from '../render/StudioReadOnlyBoard';
 import { canonicalCardId } from '../run/cardNames';
+import {
+  cardSceneOverride,
+  cardScenesStoreRevision,
+  subscribeCardScenes,
+  type CardSceneOverride,
+} from '../run/cardSceneOverrides';
 import { mixSeed, PIECE_VALUE, type PieceBundle } from '../run/model';
 import type { EditorBoard, FloatingArtworkPlacement } from './boardCode';
 
@@ -249,17 +255,24 @@ export interface RunCardScenePlan {
 
 /**
  * Turns one bundle into its deterministic battlefield vignette. The canonical card id
- * (the piece composition) is the only seed input, so the same card always shows the
- * same scene everywhere it appears — draft offer, shop bundle, Enchiridion record, art
- * capture — while live catalog art can still update.
+ * (the piece composition) plus the owner's saved override are the only inputs, so the
+ * same card always shows the same scene everywhere it appears — draft offer, shop
+ * bundle, Enchiridion record, art capture — while live catalog art can still update.
+ *
+ * `override` defaults to the hydrated live document's entry; the Studio Lab passes its
+ * unsaved draft, and `null` forces the pure generated baseline (ADR-0057 Reset).
  */
-export function runCardScenePlan(bundle: Pick<PieceBundle, 'pieces'>): RunCardScenePlan {
+export function runCardScenePlan(
+  bundle: Pick<PieceBundle, 'pieces'>,
+  override: CardSceneOverride | null | undefined = undefined,
+): RunCardScenePlan {
   const families = walkableFamilies();
   if (!families.length) {
     throw new Error('Run card scenes require at least one installed walkable terrain family.');
   }
   const sceneId = canonicalCardId(bundle);
-  const rng = createRng(mixSeed(0x9c42d5, `run-card-scene:${sceneId}`));
+  const applied = override === undefined ? cardSceneOverride(sceneId) : override;
+  const rng = createRng(mixSeed(0x9c42d5, `run-card-scene:${sceneId}`, applied?.salt ?? 0));
   const family = families[rng.int(families.length)];
 
   const cells: Record<string, string> = {};
@@ -284,9 +297,18 @@ export function runCardScenePlan(bundle: Pick<PieceBundle, 'pieces'>): RunCardSc
     free.delete(`${seat.x},${seat.y}`);
   });
 
-  const props = placeProps(rng, family.familyId, free);
-  const doodads = placeDoodads(rng, family.familyId, free);
-  const floatingArtwork = placeLandmark(rng, family.familyId);
+  // The generated pipeline always runs in full (stable RNG draw order); authored
+  // override channels then replace their generated counterpart wholesale.
+  const generatedProps = placeProps(rng, family.familyId, free);
+  const generatedDoodads = placeDoodads(rng, family.familyId, free);
+  const generatedArtwork = placeLandmark(rng, family.familyId);
+  const props = applied?.props !== undefined ? { ...applied.props } : generatedProps;
+  const doodads = applied?.doodads !== undefined ? { ...applied.doodads } : generatedDoodads;
+  const floatingArtwork = applied?.landmark !== undefined
+    ? (applied.landmark
+        ? [{ id: `card-landmark-${applied.landmark.sourceArtId}`, ...applied.landmark }]
+        : [])
+    : generatedArtwork;
 
   const grassFamily = familyForGameplayTerrain('grass');
   const cover: EditorBoard['cover'] = {};
@@ -294,8 +316,11 @@ export function runCardScenePlan(bundle: Pick<PieceBundle, 'pieces'>): RunCardSc
   if (grassFamily) {
     for (const key of Object.keys(cells)) {
       const roll = rng.int(3);
-      if (roll === 0) continue;
-      cover[key] = roll === 1 ? 'sparse' : 'filled';
+      const density = applied?.cover !== undefined
+        ? (applied.cover === 'none' ? null : applied.cover)
+        : roll === 0 ? null : roll === 1 ? 'sparse' : 'filled';
+      if (!density) continue;
+      cover[key] = density;
       coverTypes[key] = grassFamily;
     }
   }
@@ -367,6 +392,7 @@ export function RunCardScene({
   className = '',
   variant = 'live',
   camera = RUN_CARD_SCENE_CAMERA,
+  overrideDraft = undefined,
   onLayerFirstFrame,
   onFrameError,
 }: {
@@ -382,13 +408,22 @@ export function RunCardScene({
   variant?: 'live' | 'source' | 'guide';
   /** Card-window framing by default; the capture stage passes its wider framing. */
   camera?: { zoom: number; pan: { x: number; y: number } };
+  /**
+   * Studio Lab draft: an unsaved override to preview (null = the pure generated
+   * baseline). Undefined reads the hydrated live override document.
+   */
+  overrideDraft?: CardSceneOverride | null;
   /** First completed paint of each canvas layer — a staging host's readiness gate. */
   onLayerFirstFrame?: (layer: 'terrain' | 'scene') => void;
   onFrameError?: (error: unknown) => void;
 }): ReactElement {
-  // The canonical composition id is the complete plan input, so it is the memo key.
+  // The canonical composition id + the live override document are the plan inputs.
   const cardId = canonicalCardId(bundle);
-  const plan = useMemo(() => runCardScenePlan(bundle), [cardId]);
+  const overridesRevision = useSyncExternalStore(subscribeCardScenes, cardScenesStoreRevision);
+  const plan = useMemo(
+    () => runCardScenePlan(bundle, overrideDraft),
+    [cardId, overrideDraft, overridesRevision], // eslint-disable-line react-hooks/exhaustive-deps
+  );
   const artwork = variant === 'live' ? installedRunCardSceneArt(plan.sceneId) : null;
 
   // The scene window speaks the app's painted-surface protocol: it is a loading

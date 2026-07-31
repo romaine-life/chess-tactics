@@ -18486,27 +18486,25 @@ button.tileset-relationship-cell {
   position: absolute;
 }
 
-/* Card-scene workshop (/studio?cardScenes=1): fixed capture stage + deck gallery. */
-.run-card-scene-lab-panel {
-  grid-column: 1;
-  grid-row: 2;
-  inline-size: 100%;
-  margin-inline: auto;
-  max-inline-size: 1280px;
-  overflow: auto;
-}
-
-.run-card-scene-lab-panel > .le-outer-panel-content {
-  display: grid;
-  gap: var(--ds-inline);
-}
-
+/* Card-scene capture stage (the Studio Card Scenes Lab): fixed export framing. */
 .run-card-capture-stage {
   overflow: hidden;
   position: relative;
 }
 
 .run-card-capture-stage .run-card-scene-viewport {
+  inset: 0;
+  position: absolute;
+}
+
+/* Card Scenes catalog cards: a live vignette crop as the card image. */
+.card-scene-card-image {
+  block-size: 96px;
+  overflow: hidden;
+  position: relative;
+}
+
+.card-scene-card-image .run-card-scene-viewport {
   inset: 0;
   position: absolute;
 }

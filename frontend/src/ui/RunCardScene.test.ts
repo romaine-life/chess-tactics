@@ -6,6 +6,7 @@ import {
 import { TILE_STEP_Y } from '../art/projectionContract';
 import { propDef, resetPropSeats } from '../core/props';
 import { gameplayTerrainForFamily } from '../core/tileSockets';
+import { applyLiveCardScenes, resetLiveCardScenes } from '../run/cardSceneOverrides';
 import { PIECE_BUNDLE_DECK, type PieceBundle } from '../run/model';
 import { applyTestPropSeats } from '../test/livePropSeats';
 import { testGroundCoverCatalog, testStructureMediaSlots } from '../test/liveMediaCatalog';
@@ -107,6 +108,61 @@ describe('Run card scene', () => {
     expect(new Set(plans.map((plan) => plan.familyId)).size).toBeGreaterThan(1);
     expect(plans.some((plan) => Object.keys(plan.board.cover).length > 0)).toBe(true);
     expect(plans.some((plan) => Object.keys(plan.board.props).length > 0)).toBe(true);
+  });
+
+  it('applies owner overrides wholesale over the generated plan', () => {
+    const generated = runCardScenePlan(bundle('ppb', ['pawn', 'pawn', 'bishop']), null);
+    const rerolled = runCardScenePlan(bundle('ppb', ['pawn', 'pawn', 'bishop']), { salt: 3 });
+    expect(rerolled.board.cells).not.toEqual(generated.board.cells);
+    expect(Object.values(rerolled.board.units).map((unit) => unit.unitId).sort())
+      .toEqual(Object.values(generated.board.units).map((unit) => unit.unitId).sort());
+
+    const authored = runCardScenePlan(bundle('ppb', ['pawn', 'pawn', 'bishop']), {
+      landmark: null,
+      doodads: { '0,0': { doodadId: 'fern' } },
+      props: {},
+      cover: 'none',
+    });
+    expect(authored.board.floatingArtwork).toEqual([]);
+    expect(authored.board.doodads).toEqual({ '0,0': { doodadId: 'fern' } });
+    expect(authored.board.props).toEqual({});
+    expect(authored.board.cover).toEqual({});
+    // Terrain and formation stay generated when only channels are overridden.
+    expect(authored.board.cells).toEqual(generated.board.cells);
+    expect(authored.board.units).toEqual(generated.board.units);
+
+    const landmark = {
+      sourceArtId: 'castle-ii',
+      direction: 'south' as const,
+      pixelX: 12,
+      pixelY: -40,
+      scale: 0.5,
+    };
+    const withLandmark = runCardScenePlan(bundle('ppb', ['pawn', 'pawn', 'bishop']), { landmark });
+    expect(withLandmark.board.floatingArtwork).toEqual([
+      { id: 'card-landmark-castle-ii', ...landmark },
+    ]);
+  });
+
+  it('reads the hydrated live override document by default', () => {
+    const generated = runCardScenePlan(bundle('pr', ['pawn', 'rook']));
+    applyLiveCardScenes({
+      id: 'default',
+      data: { overrides: { pr: { cover: 'filled', landmark: null } } },
+      clientSchemaVersion: 1,
+      revision: 0,
+      createdAt: null,
+      updatedAt: null,
+      updatedBy: null,
+    });
+    try {
+      const overridden = runCardScenePlan(bundle('pr', ['pawn', 'rook']));
+      expect(Object.values(overridden.board.cover).every((density) => density === 'filled')).toBe(true);
+      expect(overridden.board.floatingArtwork).toEqual([]);
+      expect(overridden.board.cells).toEqual(generated.board.cells);
+    } finally {
+      resetLiveCardScenes();
+    }
   });
 
   it('resolves any carrier of one composition to the same canonical scene', () => {
