@@ -578,17 +578,6 @@ export function PlayMenu({
     }
   }, [campaigns, loading, officialAvailable, path, selection, userWorkspaceAvailable]);
 
-  // The bare Play root is the click-Play landing (ADR-0257). Once both content
-  // sources and the Run document settle, it resumes the one in-progress
-  // activity; with nothing to resume it reveals the hub with no mode selected.
-  // The forward waits for settled sources so a campaign match resumes with its
-  // campaign identity rather than a mislabeled standalone address.
-  useEffect(() => {
-    if (selection.mode !== 'hub' || loading || !runHydrated) return;
-    if (!officialAvailable || !userWorkspaceAvailable) return;
-    if (resumable) navigateApp(resumable.href, { replace: true, scroll: false });
-  }, [loading, officialAvailable, resumable, runHydrated, selection, userWorkspaceAvailable]);
-
   useEffect(() => { setSelectedLevelId(null); }, [selection]);
 
   const profileLevels = useMemo(() => skirmishProfileLevels(levels), [levels]);
@@ -622,9 +611,11 @@ export function PlayMenu({
   // failure from a previously selected list must not condemn them.
   const surfaceError = loadError
     ?? (selection.mode === 'run' || selection.mode === 'hub' ? null : thumbnailSurface.error);
-  // While the hub landing is still deciding between resume and neutral reveal,
-  // nothing may compose: a revealed hub that immediately forwards would flash.
-  const hubLandingSettled = selection.mode !== 'hub' || (runHydrated && !resumable);
+  // The bare Play root always reveals the picker (ADR-0260): a resumable
+  // activity is an offered Continue card, never an automatic redirect. Hold
+  // composition only until the Run document settles so the Continue offer and
+  // rail order don't pop in after reveal.
+  const hubLandingSettled = selection.mode !== 'hub' || runHydrated;
 
   return (
     <ThumbnailSurfaceReportContext.Provider value={reportThumbnailSurface}>
@@ -739,6 +730,19 @@ export function PlayMenu({
               <h2>Choose a mode</h2>
               <p>Pick Skirmish, Run, or Levels on the left, or open a Campaign beneath them.</p>
             </div>
+            {resumable ? (
+              <InnerChromeBox className="play-level-card play-hub-continue-card" data-testid="play-hub-continue">
+                <h3>{resumable.label}</h3>
+                <p>{resumable.detail}</p>
+                <NavButton
+                  data-chrome-unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
+                  to={resumable.href}
+                >
+                  Continue
+                </NavButton>
+              </InnerChromeBox>
+            ) : null}
           </div>
         </ActionColumn>
       ) : null}
