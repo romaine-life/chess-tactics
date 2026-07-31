@@ -16,8 +16,21 @@ const SELECTORS: Record<TitleBarPortalRegion, string> = {
 export function useTitleBarPortalTarget(region: TitleBarPortalRegion): HTMLElement | null {
   const [target, setTarget] = useState<HTMLElement | null>(null);
   useLayoutEffect(() => {
-    const next = document.querySelector<HTMLElement>(SELECTORS[region]);
-    setTarget((current) => current === next ? current : next);
+    const find = (): HTMLElement | null => document.querySelector<HTMLElement>(SELECTORS[region]);
+    const found = find();
+    setTarget((current) => current === found ? current : found);
+    if (found) return undefined;
+    // The persistent bar creates a route-owned portal host only once the destination
+    // commits, while the destination screen mounts during scene preparation. A single
+    // sample would leave the slot permanently empty, so watch until the host exists.
+    const observer = new MutationObserver(() => {
+      const next = find();
+      if (!next) return;
+      observer.disconnect();
+      setTarget(next);
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
   }, [region]);
   return target;
 }

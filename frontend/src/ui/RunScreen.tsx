@@ -67,10 +67,15 @@ import {
   type RunArmyFilters,
   type RunSellFilters,
 } from './RunArmyWorkspace';
+import { RunWorkspaceStages } from './RunWorkspaceStages';
 
 const PLAYER_BUNDLE_PALETTE = paletteForSide('player');
 const PLAYER_BUNDLE_FACING = 'south' as const;
 type RunScreenView = 'primary' | 'sell' | RunSelfInspectionView;
+// The hydration placeholder only ever exists beneath the route's own entrance gate,
+// so swapping away from it needs no in-place choreography.
+const RUN_HYDRATING_STAGE = 'run:hydrating';
+const RUN_STAGE_PLACEHOLDERS = [RUN_HYDRATING_STAGE] as const;
 
 function visibleRunRelicCount(run: RunDocument): number {
   return run.relics.filter((relicId) => Boolean(RUN_RELIC_BY_ID[relicId])).length;
@@ -312,69 +317,42 @@ function RunPhaseWorkspace({
   );
 }
 
-function DraftPanel({
-  run,
-  view,
-  onNavigate,
-  inspectionWorkspace,
-}: {
-  run: RunDocument;
-  view: RunScreenView;
-  onNavigate: (view: RunScreenView) => void;
-  inspectionWorkspace: ReactElement | null;
-}): ReactElement {
+function DraftPanel({ run }: { run: RunDocument }): ReactElement {
   const replace = useActiveRun((state) => state.replace);
   return (
-    <SkirmishShell
-      className={`run-screen${visibleRunRelicCount(run) ? ' has-relics' : ''}`}
-      testId="run-screen"
-      titleBarContent={<RunTitleBarStatus run={run} />}
-      relicIds={run.relics}
-      runSelfInspectionOpen={Boolean(inspectionWorkspace)}
-      controlsContent={<RunMetaControls run={run} view={view} onNavigate={onNavigate} />}
-      hudProps={{ enableGlobalShortcuts: false }}
+    <RunWorkspace
+      className="run-draft-workspace"
+      contentClassName="run-draft-workspace-content"
+      data-testid="run-draft-workspace"
+      aria-labelledby="run-draft-workspace-title"
     >
-      <RunPhaseWorkspace inspectionWorkspace={inspectionWorkspace}>
-        <RunWorkspace
-          className="run-draft-workspace"
-          contentClassName="run-draft-workspace-content"
-          data-testid="run-draft-workspace"
-          aria-labelledby="run-draft-workspace-title"
-        >
-          <h2 id="run-draft-workspace-title">Muster your army</h2>
-          <p>Your King and three Pawns are ready. Choose one of the two dealt six-point reinforcements.</p>
-          <div className="run-card-grid" aria-label="Opening draft">
-            {run.draftOffers.map((offer) => (
-              <RunBundleCard
-                bundle={offer}
-                mode="draft"
-                key={offer.draftId}
-                onSelect={() => replace(prepareDeployment(chooseDraft(run, offer.draftId)))}
-              />
-            ))}
-          </div>
-        </RunWorkspace>
-      </RunPhaseWorkspace>
-    </SkirmishShell>
+      <h2 id="run-draft-workspace-title">Muster your army</h2>
+      <p>Your King and three Pawns are ready. Choose one of the two dealt six-point reinforcements.</p>
+      <div className="run-card-grid" aria-label="Opening draft">
+        {run.draftOffers.map((offer) => (
+          <RunBundleCard
+            bundle={offer}
+            mode="draft"
+            key={offer.draftId}
+            onSelect={() => replace(prepareDeployment(chooseDraft(run, offer.draftId)))}
+          />
+        ))}
+      </div>
+    </RunWorkspace>
   );
 }
 
-function DeploymentPanel({
-  run,
-  view,
-  onNavigate,
-  inspectionWorkspace,
-}: {
-  run: RunDocument;
-  view: RunScreenView;
-  onNavigate: (view: RunScreenView) => void;
-  inspectionWorkspace: ReactElement | null;
-}): ReactElement {
+function DeploymentPanel({ run }: { run: RunDocument }): ReactElement {
   const replace = useActiveRun((state) => state.replace);
   const prepared = run.deployment ? run : prepareDeployment(run);
   useEffect(() => {
-    if (!run.deployment) replace(prepared);
-  }, [prepared, replace, run.deployment]);
+    if (run.deployment) return;
+    // A departing stage may keep rendering a superseded document; only repair the live one.
+    const latest = useActiveRun.getState().run;
+    if (latest?.id === run.id && latest.phase === 'deployment' && !latest.deployment) {
+      replace(prepareDeployment(latest));
+    }
+  }, [replace, run.deployment, run.id]);
   const level = prepared.war.battles[prepared.battleIndex]?.level;
   const options = useMemo(() => deploymentOptions(prepared, level), [level, prepared]);
   const layout = selectedDeploymentLayout(prepared, options);
@@ -407,127 +385,115 @@ function DeploymentPanel({
   };
 
   return (
-    <SkirmishShell
-      className={`run-screen${visibleRunRelicCount(prepared) ? ' has-relics' : ''}`}
-      testId="run-screen"
-      titleBarContent={<RunTitleBarStatus run={prepared} />}
-      relicIds={prepared.relics}
-      runSelfInspectionOpen={Boolean(inspectionWorkspace)}
-      controlsContent={<RunMetaControls run={prepared} view={view} onNavigate={onNavigate} />}
-      hudProps={{ enableGlobalShortcuts: false }}
+    <RunWorkspace
+      className="run-deployment-workspace"
+      contentClassName="run-deployment-workspace-content"
+      data-testid="run-deployment-workspace"
+      aria-labelledby="run-deployment-workspace-title"
     >
-      <RunPhaseWorkspace inspectionWorkspace={inspectionWorkspace}>
-        <RunWorkspace
-          className="run-deployment-workspace"
-          contentClassName="run-deployment-workspace-content"
-          data-testid="run-deployment-workspace"
-          aria-labelledby="run-deployment-workspace-title"
-        >
-          <section className="run-deployment-pane">
-            <h2 id="run-deployment-workspace-title">Deploy — {level.name}</h2>
-            <p>{prepared.war.description || 'An authored War Battle.'}</p>
+      <section className="run-deployment-pane">
+        <h2 id="run-deployment-workspace-title">Deploy — {level.name}</h2>
+        <p>{prepared.war.description || 'An authored War Battle.'}</p>
 
-            {options.needsBlockedChoice ? (
-              <section className="run-deployment-control">
-                <h3>Muster Roll</h3>
-                <p>Choose exactly {options.blockedChoiceCount} unit{options.blockedChoiceCount === 1 ? '' : 's'} to sit out.</p>
-                <div className="run-choice-list">
-                  {prepared.army.filter((unit) => unit.type !== 'king').map((unit) => {
-                    const selected = chosenBlocked.includes(unit.id);
-                    return (
-                      <button
-                        type="button"
-                        data-chrome-unit="inner-list-row"
-                        className={chromeUnitClassNames('inner-list-row', 'run-choice-option', selected && 'active')}
-                        aria-pressed={selected}
-                        disabled={!selected && chosenBlocked.length >= options.blockedChoiceCount}
-                        onClick={() => toggleBlocked(unit.id)}
-                        key={unit.id}
-                      >
-                        <span>{runUnitRosterLabel(unit)}</span>
-                        <small>{selected ? 'Sitting out' : 'Deploying'}</small>
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
-            ) : options.overflowCount > 0 ? (
-              <p>{options.overflowCount} excess unit{options.overflowCount === 1 ? '' : 's'} will sit out this Battle.</p>
-            ) : null}
-
-            {options.disciplineUnitIds.length > 0 ? (
-              <section className="run-deployment-control">
-                <h3>Discipline</h3>
-                <p>Place every disciplined unit before the remaining army is dealt.</p>
-                {options.disciplineUnitIds.map((unitId) => {
-                  const unit = prepared.army.find((candidate) => candidate.id === unitId);
-                  const used = new Set(Object.entries(prepared.deployment?.manualPlacements ?? {})
-                    .filter(([id]) => id !== unitId)
-                    .map(([, cell]) => cell));
-                  const squareOptions = [
-                    { value: '', label: 'Choose square…' },
-                    ...options.zoneCells
-                      .filter((cell) => !used.has(`${cell.x},${cell.y}`))
-                      .map((cell) => ({
-                        value: `${cell.x},${cell.y}`,
-                        label: `${String.fromCharCode(65 + cell.x)}${level.board.rows - cell.y}`,
-                      })),
-                  ];
-                  return (
-                    <label className="run-placement-row" key={unitId}>
-                      <span>{unit ? runUnitRosterLabel(unit) : unitId}</span>
-                      <HouseSelect
-                        value={prepared.deployment?.manualPlacements[unitId] ?? ''}
-                        options={squareOptions}
-                        onChange={(cellKey) => setManual(unitId, cellKey)}
-                        ariaLabel={`Deployment square for ${unit ? runUnitRosterLabel(unit) : unitId}`}
-                      />
-                    </label>
-                  );
-                })}
-              </section>
-            ) : null}
-
-            {hasRelic(prepared, 'surveyors-compass') ? (
-              <section className="run-deployment-control">
-                <h3>Surveyor&apos;s Compass</h3>
-                <p>Choose which valid random layout to use.</p>
-                <div className="run-inline-actions">
-                  {[0, 1].map((index) => (
-                    <button
-                      type="button"
-                      key={index}
-                      data-chrome-unit="inner-text-button"
-                      className={chromeUnitClassNames('inner-text-button', 'app-header-button', prepared.deployment?.layoutChoice === index && 'active')}
-                      onClick={() => replace(setDeploymentChoices(prepared, { layoutChoice: index as 0 | 1 }))}
-                    >
-                      Layout {index + 1}
-                    </button>
-                  ))}
-                </div>
-              </section>
-            ) : null}
-
-            <button
-              type="button"
-              data-chrome-unit="inner-text-button"
-              className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-              disabled={!deploymentReady(prepared, options)}
-              onClick={start}
-            >
-              Begin Battle
-            </button>
+        {options.needsBlockedChoice ? (
+          <section className="run-deployment-control">
+            <h3>Muster Roll</h3>
+            <p>Choose exactly {options.blockedChoiceCount} unit{options.blockedChoiceCount === 1 ? '' : 's'} to sit out.</p>
+            <div className="run-choice-list">
+              {prepared.army.filter((unit) => unit.type !== 'king').map((unit) => {
+                const selected = chosenBlocked.includes(unit.id);
+                return (
+                  <button
+                    type="button"
+                    data-chrome-unit="inner-list-row"
+                    className={chromeUnitClassNames('inner-list-row', 'run-choice-option', selected && 'active')}
+                    aria-pressed={selected}
+                    disabled={!selected && chosenBlocked.length >= options.blockedChoiceCount}
+                    onClick={() => toggleBlocked(unit.id)}
+                    key={unit.id}
+                  >
+                    <span>{runUnitRosterLabel(unit)}</span>
+                    <small>{selected ? 'Sitting out' : 'Deploying'}</small>
+                  </button>
+                );
+              })}
+            </div>
           </section>
+        ) : options.overflowCount > 0 ? (
+          <p>{options.overflowCount} excess unit{options.overflowCount === 1 ? '' : 's'} will sit out this Battle.</p>
+        ) : null}
 
-          <LevelPreviewColumn
-            level={previewLevel}
-            title={`${level.name} deployment`}
-            embedded
-            actions={<p className="run-preview-note">{Object.keys(layout.placements).length} deployed · {layout.blockedUnitIds.length} in reserve</p>}
-          />
-        </RunWorkspace>
-      </RunPhaseWorkspace>
-    </SkirmishShell>
+        {options.disciplineUnitIds.length > 0 ? (
+          <section className="run-deployment-control">
+            <h3>Discipline</h3>
+            <p>Place every disciplined unit before the remaining army is dealt.</p>
+            {options.disciplineUnitIds.map((unitId) => {
+              const unit = prepared.army.find((candidate) => candidate.id === unitId);
+              const used = new Set(Object.entries(prepared.deployment?.manualPlacements ?? {})
+                .filter(([id]) => id !== unitId)
+                .map(([, cell]) => cell));
+              const squareOptions = [
+                { value: '', label: 'Choose square…' },
+                ...options.zoneCells
+                  .filter((cell) => !used.has(`${cell.x},${cell.y}`))
+                  .map((cell) => ({
+                    value: `${cell.x},${cell.y}`,
+                    label: `${String.fromCharCode(65 + cell.x)}${level.board.rows - cell.y}`,
+                  })),
+              ];
+              return (
+                <label className="run-placement-row" key={unitId}>
+                  <span>{unit ? runUnitRosterLabel(unit) : unitId}</span>
+                  <HouseSelect
+                    value={prepared.deployment?.manualPlacements[unitId] ?? ''}
+                    options={squareOptions}
+                    onChange={(cellKey) => setManual(unitId, cellKey)}
+                    ariaLabel={`Deployment square for ${unit ? runUnitRosterLabel(unit) : unitId}`}
+                  />
+                </label>
+              );
+            })}
+          </section>
+        ) : null}
+
+        {hasRelic(prepared, 'surveyors-compass') ? (
+          <section className="run-deployment-control">
+            <h3>Surveyor&apos;s Compass</h3>
+            <p>Choose which valid random layout to use.</p>
+            <div className="run-inline-actions">
+              {[0, 1].map((index) => (
+                <button
+                  type="button"
+                  key={index}
+                  data-chrome-unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'app-header-button', prepared.deployment?.layoutChoice === index && 'active')}
+                  onClick={() => replace(setDeploymentChoices(prepared, { layoutChoice: index as 0 | 1 }))}
+                >
+                  Layout {index + 1}
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        <button
+          type="button"
+          data-chrome-unit="inner-text-button"
+          className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
+          disabled={!deploymentReady(prepared, options)}
+          onClick={start}
+        >
+          Begin Battle
+        </button>
+      </section>
+
+      <LevelPreviewColumn
+        level={previewLevel}
+        title={`${level.name} deployment`}
+        embedded
+        actions={<p className="run-preview-note">{Object.keys(layout.placements).length} deployed · {layout.blockedUnitIds.length} in reserve</p>}
+      />
+    </RunWorkspace>
   );
 }
 
@@ -585,14 +551,10 @@ function RelicOffer({
 function ShopPanel({
   run,
   view,
-  onNavigate,
-  inspectionWorkspace,
   sellWorkspace,
 }: {
   run: RunDocument;
   view: RunScreenView;
-  onNavigate: (view: RunScreenView) => void;
-  inspectionWorkspace: ReactElement | null;
   sellWorkspace: ReactElement;
 }): ReactElement {
   const replace = useActiveRun((state) => state.replace);
@@ -601,16 +563,7 @@ function ShopPanel({
     ? shop.victoryGoldTenths
     : battleVictoryGoldTenths(run.war.battles[shop.afterBattleIndex].level);
   return (
-    <SkirmishShell
-      className={`run-screen${visibleRunRelicCount(run) ? ' has-relics' : ''}`}
-      testId="run-screen"
-      titleBarContent={<RunTitleBarStatus run={run} />}
-      relicIds={run.relics}
-      runSelfInspectionOpen={Boolean(inspectionWorkspace)}
-      controlsContent={<RunMetaControls run={run} view={view} onNavigate={onNavigate} />}
-      hudProps={{ enableGlobalShortcuts: false }}
-    >
-      <RunPhaseWorkspace inspectionWorkspace={inspectionWorkspace}>
+    <>
       {view === 'sell' ? sellWorkspace : (
         <RunWorkspace
           className="run-shop-workspace"
@@ -684,63 +637,40 @@ function ShopPanel({
 
         </RunWorkspace>
       )}
-      </RunPhaseWorkspace>
-    </SkirmishShell>
+    </>
   );
 }
 
-function VictoryPanel({
-  run,
-  view,
-  onNavigate,
-  inspectionWorkspace,
-}: {
-  run: RunDocument;
-  view: RunScreenView;
-  onNavigate: (view: RunScreenView) => void;
-  inspectionWorkspace: ReactElement | null;
-}): ReactElement {
+function VictoryPanel({ run }: { run: RunDocument }): ReactElement {
   const abandon = useActiveRun((state) => state.abandon);
   return (
-    <SkirmishShell
-      className={`run-screen${visibleRunRelicCount(run) ? ' has-relics' : ''}`}
-      testId="run-screen"
-      titleBarContent={<RunTitleBarStatus run={run} />}
-      relicIds={run.relics}
-      runSelfInspectionOpen={Boolean(inspectionWorkspace)}
-      controlsContent={<RunMetaControls run={run} view={view} onNavigate={onNavigate} showAbandon={false} />}
-      hudProps={{ enableGlobalShortcuts: false }}
+    <RunWorkspace
+      className="run-victory-workspace"
+      contentClassName="run-victory-workspace-content"
+      data-testid="run-victory-workspace"
+      aria-labelledby="run-victory-workspace-title"
     >
-      <RunPhaseWorkspace inspectionWorkspace={inspectionWorkspace}>
-        <RunWorkspace
-          className="run-victory-workspace"
-          contentClassName="run-victory-workspace-content"
-          data-testid="run-victory-workspace"
-          aria-labelledby="run-victory-workspace-title"
-        >
-          <h2 id="run-victory-workspace-title">War won</h2>
-          <h2>{run.war.name}</h2>
-          <p>{run.war.description}</p>
-          <p className="run-victory-summary">
-            <span>{run.army.length} persistent units</span>
-            <span>{visibleRunRelicCount(run)} relics</span>
-            <RunGoldAmount valueTenths={run.goldTenths} />
-          </p>
-          <button
-            type="button"
-            data-chrome-unit="inner-text-button"
-            className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-            onClick={() => {
-              void abandon().then(() => {
-                navigateApp(PLAY_RUN_SELECTOR_HREF, { replace: true, scroll: false });
-              });
-            }}
-          >
-            Finish Run
-          </button>
-        </RunWorkspace>
-      </RunPhaseWorkspace>
-    </SkirmishShell>
+      <h2 id="run-victory-workspace-title">War won</h2>
+      <h2>{run.war.name}</h2>
+      <p>{run.war.description}</p>
+      <p className="run-victory-summary">
+        <span>{run.army.length} persistent units</span>
+        <span>{visibleRunRelicCount(run)} relics</span>
+        <RunGoldAmount valueTenths={run.goldTenths} />
+      </p>
+      <button
+        type="button"
+        data-chrome-unit="inner-text-button"
+        className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
+        onClick={() => {
+          void abandon().then(() => {
+            navigateApp(PLAY_RUN_SELECTOR_HREF, { replace: true, scroll: false });
+          });
+        }}
+      >
+        Finish Run
+      </button>
+    </RunWorkspace>
   );
 }
 
@@ -918,59 +848,13 @@ export function RunScreen({
     }
   }, [hydrated, routePath, routeSearch, run?.phase]);
 
-  if (!hydrated) {
-    return (
-      <SkirmishShell
-        className="run-screen"
-        testId="run-screen"
-        titleBarContent={null}
-        controlsContent={null}
-        readyToCompose={false}
-        hudProps={{ enableGlobalShortcuts: false }}
-      >
-        <RunWorkspace
-          className="run-loading-workspace"
-          contentClassName="run-status-workspace-content"
-          data-testid="run-loading-workspace"
-          role="status"
-        >
-          <p>Loading Run…</p>
-        </RunWorkspace>
-      </SkirmishShell>
-    );
-  }
-  if (!run) {
-    return (
-      <SkirmishShell
-        className="run-screen"
-        testId="run-screen"
-        titleBarContent={null}
-        controlsContent={null}
-        hudProps={{ enableGlobalShortcuts: false }}
-      >
-        <RunWorkspace
-          className="run-empty-workspace"
-          contentClassName="run-status-workspace-content"
-          data-testid="run-empty-workspace"
-          aria-labelledby="run-empty-workspace-title"
-        >
-            <h2 id="run-empty-workspace-title">No active Run</h2>
-            <p>Start a Run from Play, or direct-play one of your Wars from the War Editor.</p>
-            <NavButton
-              data-chrome-unit="inner-text-button"
-              className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-              to={PLAY_RUN_SELECTOR_HREF}
-            >
-              Back to Run
-            </NavButton>
-        </RunWorkspace>
-      </SkirmishShell>
-    );
-  }
+  // The pre-hydration document may exist from browser storage, but the screen treats
+  // the Run as absent until hydrate() has arbitrated browser and account copies.
+  const shellRun = hydrated ? run : null;
   const rawView = viewState.scope === viewScope
     ? viewState.view
     : requestedInspectionView ?? 'primary';
-  const view = run.phase !== 'shop' && rawView === 'sell' ? 'primary' : rawView;
+  const view = shellRun?.phase !== 'shop' && rawView === 'sell' ? 'primary' : rawView;
   const selectedUnitId = selectedState.scope === viewScope ? selectedState.unitId : null;
   const armyFilters = armyFilterState.scope === filterScope
     ? armyFilterState.filters
@@ -986,15 +870,16 @@ export function RunScreen({
     if (nextView !== 'army') setSelectedState({ scope: viewScope, unitId: null });
   };
   const sellUnit = (unitId: string): void => {
+    if (!shellRun) return;
     const latest = useActiveRun.getState().run;
-    if (!latest || latest.id !== run.id) return;
+    if (!latest || latest.id !== shellRun.id) return;
     const sold = sellArmyUnit(latest, unitId);
     if (sold !== latest) replace(sold);
     setSelectedState({ scope: viewScope, unitId: null });
   };
-  const armyWorkspace = (
+  const armyWorkspace = shellRun ? (
     <RunArmyWorkspace
-      run={run}
+      run={shellRun}
       filters={armyFilters}
       selectedUnitId={selectedUnitId}
       onFiltersChange={(filters) => setArmyFilterState({ scope: filterScope, filters })}
@@ -1002,31 +887,25 @@ export function RunScreen({
       onBack={() => setSelectedState({ scope: viewScope, unitId: null })}
       onSell={sellUnit}
     />
-  );
-  const relicsWorkspace = <RunRelicsWorkspace relicIds={run.relics} />;
+  ) : null;
+  const relicsWorkspace = shellRun ? <RunRelicsWorkspace relicIds={shellRun.relics} /> : null;
   const inspectionWorkspace = view === 'army'
     ? armyWorkspace
     : view === 'relics'
       ? relicsWorkspace
       : null;
-  const sellWorkspace = (
+  const sellWorkspace = shellRun ? (
     <RunSellWorkspace
-      run={run}
+      run={shellRun}
       filters={sellFilters}
       onFiltersChange={(filters) => setSellFilterState({ scope: filterScope, filters })}
       onSell={sellUnit}
     />
-  );
-  if (run.phase === 'draft') {
-    return <DraftPanel run={run} view={view} onNavigate={navigateRunView} inspectionWorkspace={inspectionWorkspace} />;
-  }
-  if (run.phase === 'deployment') {
-    return <DeploymentPanel run={run} view={view} onNavigate={navigateRunView} inspectionWorkspace={inspectionWorkspace} />;
-  }
-  if (run.phase === 'battle') {
+  ) : null;
+  if (shellRun?.phase === 'battle') {
     return (
       <BattlePanel
-        run={run}
+        run={shellRun}
         routePath={routePath}
         routeSearch={routeSearch}
         view={view}
@@ -1035,16 +914,65 @@ export function RunScreen({
       />
     );
   }
-  if (run.phase === 'shop' && run.shop) {
-    return (
-      <ShopPanel
-        run={run}
-        view={view}
-        onNavigate={navigateRunView}
-        inspectionWorkspace={inspectionWorkspace}
-        sellWorkspace={sellWorkspace}
-      />
-    );
-  }
-  return <VictoryPanel run={run} view={view} onNavigate={navigateRunView} inspectionWorkspace={inspectionWorkspace} />;
+  // Every non-Battle destination shares ONE persistent shell: title-bar status, relic
+  // strip, and the Controls rail stay mounted across phase changes, while the staged
+  // workspace host below choreographs the only part that actually changes.
+  const workspace = !hydrated
+    ? (
+      <RunWorkspace
+        className="run-loading-workspace"
+        contentClassName="run-status-workspace-content"
+        data-testid="run-loading-workspace"
+        role="status"
+      >
+        <p>Loading Run…</p>
+      </RunWorkspace>
+    )
+    : !shellRun
+      ? (
+        <RunWorkspace
+          className="run-empty-workspace"
+          contentClassName="run-status-workspace-content"
+          data-testid="run-empty-workspace"
+          aria-labelledby="run-empty-workspace-title"
+        >
+          <h2 id="run-empty-workspace-title">No active Run</h2>
+          <p>Start a Run from Play, or direct-play one of your Wars from the War Editor.</p>
+          <NavButton
+            data-chrome-unit="inner-text-button"
+            className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
+            to={PLAY_RUN_SELECTOR_HREF}
+          >
+            Back to Run
+          </NavButton>
+        </RunWorkspace>
+      )
+      : shellRun.phase === 'draft'
+        ? <DraftPanel run={shellRun} />
+        : shellRun.phase === 'deployment'
+          ? <DeploymentPanel run={shellRun} />
+          : shellRun.phase === 'shop' && shellRun.shop
+            ? <ShopPanel run={shellRun} view={view} sellWorkspace={sellWorkspace!} />
+            : <VictoryPanel run={shellRun} />;
+  const stageKey = !hydrated ? RUN_HYDRATING_STAGE : shellRun ? viewScope : 'run:none';
+  return (
+    <SkirmishShell
+      className={`run-screen${shellRun && visibleRunRelicCount(shellRun) ? ' has-relics' : ''}`}
+      testId="run-screen"
+      titleBarContent={shellRun ? <RunTitleBarStatus run={shellRun} /> : null}
+      relicIds={shellRun ? shellRun.relics : []}
+      runSelfInspectionOpen={Boolean(inspectionWorkspace)}
+      controlsContent={shellRun
+        ? <RunMetaControls run={shellRun} view={view} onNavigate={navigateRunView} showAbandon={shellRun.phase !== 'victory'} />
+        : null}
+      readyToCompose={hydrated}
+      hudProps={{ enableGlobalShortcuts: false }}
+    >
+      <RunPhaseWorkspace inspectionWorkspace={inspectionWorkspace}>
+        <RunWorkspaceStages stageKey={stageKey} placeholderKeys={RUN_STAGE_PLACEHOLDERS}>
+          {workspace}
+        </RunWorkspaceStages>
+      </RunPhaseWorkspace>
+    </SkirmishShell>
+  );
 }

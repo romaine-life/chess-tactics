@@ -18313,8 +18313,11 @@ button.tileset-relationship-cell {
 
 .run-phase-primary {
   block-size: 100%;
+  display: grid;
   grid-column: 1;
   grid-row: 1;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   min-block-size: 0;
   min-inline-size: 0;
 }
@@ -18324,7 +18327,33 @@ button.tileset-relationship-cell {
   visibility: hidden;
 }
 
-.run-phase-primary > .run-workspace {
+/* In-place Run phase choreography (RunWorkspaceStages): the departing and arriving
+   workspaces stack in the same cell. The arriving stage composes hidden over the
+   still-visible previous phase, then fades in with the shared surface reveal. */
+.run-stage {
+  block-size: 100%;
+  display: grid;
+  grid-column: 1;
+  grid-row: 1;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
+.run-stage.is-preparing {
+  visibility: hidden;
+}
+
+.run-stage.is-departing {
+  pointer-events: none;
+}
+
+.run-stage.is-arriving {
+  animation: surface-complete-reveal var(--ds-duration-fade) var(--ds-ease-standard) both;
+}
+
+.run-stage > .run-workspace {
   block-size: 100%;
   grid-column: auto;
   grid-row: auto;
