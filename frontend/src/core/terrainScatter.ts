@@ -264,3 +264,32 @@ export function scatterTerrainDetailed(opts: ScatterTerrainOptions): { terrain: 
 export function scatterTerrain(opts: ScatterTerrainOptions): TileFamilyId[] {
   return scatterTerrainDetailed(opts).terrain;
 }
+
+/**
+ * Spatially-coherent value noise in [0,1] (bilinear over a hashed lattice) — drives cover
+ * patchiness so "randomness" knobs vary coverage/density across areas instead of per-cell
+ * static. Shared by every Generate-feature consumer (the Level Editor panel and reference
+ * board dressing).
+ */
+export function coverNoise(x: number, y: number, seed: number): number {
+  const hash = (ix: number, iy: number): number => {
+    let h = (Math.imul(ix, 374761393) + Math.imul(iy, 668265263) + Math.imul(seed, 1442695041)) >>> 0;
+    h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  };
+  const f = 0.28; // ~3.5-cell features
+  const fx = x * f;
+  const fy = y * f;
+  const x0 = Math.floor(fx);
+  const y0 = Math.floor(fy);
+  const tx = fx - x0;
+  const ty = fy - y0;
+  const smooth = (t: number): number => t * t * (3 - 2 * t);
+  const a = hash(x0, y0);
+  const b = hash(x0 + 1, y0);
+  const c = hash(x0, y0 + 1);
+  const d = hash(x0 + 1, y0 + 1);
+  const top = a + (b - a) * smooth(tx);
+  const bot = c + (d - c) * smooth(tx);
+  return top + (bot - top) * smooth(ty);
+}

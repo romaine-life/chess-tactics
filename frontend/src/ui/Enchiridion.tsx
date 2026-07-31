@@ -1,7 +1,12 @@
 import { useEffect, useId, useMemo, useState, type ButtonHTMLAttributes, type ReactElement, type ReactNode } from 'react';
 import { legalMoves } from '../core/rules';
-import { PIECE_LABEL, PLAYABLE_PIECE_TYPES, paletteForSide, pieceSpritePath, type PlayablePieceType } from '../core/pieces';
+import { createBlankLevel } from '../core/level';
+import { levelToEditorBoard, unitsForGamePieces } from '../core/levelBoard';
+import { PIECE_LABEL, PLAYABLE_PIECE_TYPES, type PlayablePieceType } from '../core/pieces';
 import type { BoardSize, Piece } from '../core/types';
+import { PredrawnMoveHighlightPaint } from '../render/PredrawnMoveHighlightPaint';
+import { generateTerrainDressing } from './generatedReferenceBoard';
+import { StaticReadOnlyBoardView } from './shared/BoardViewFraming';
 import { RUN_RELICS, type RunRelicId } from '../run/model';
 import {
   loadRunRelicStatistics,
@@ -39,35 +44,49 @@ const UNIT_COPY: Record<PlayablePieceType, string> = {
   king: 'Moves one square in any direction. Authored Battles may also permit specific castling moves.',
 };
 
-const MOVEMENT_SIZE: BoardSize = { cols: 7, rows: 7 };
+// Each example board is sized to its unit's reach: short-range units get a tight board so
+// their sprite and marks stay large; sliding units keep the long board that shows their rays.
+// `seed` feeds the Generate terrain dressing — per-unit values curated so every card rolls a
+// distinct, readable landscape (rerolling a card = changing its seed).
+const MOVEMENT_EXAMPLE_LAYOUT: Record<PlayablePieceType, { size: BoardSize; at: { x: number; y: number }; seed: number }> = {
+  pawn: { size: { cols: 5, rows: 5 }, at: { x: 2, y: 3 }, seed: 101 },
+  knight: { size: { cols: 5, rows: 5 }, at: { x: 2, y: 2 }, seed: 214 },
+  bishop: { size: { cols: 7, rows: 7 }, at: { x: 3, y: 3 }, seed: 307 },
+  rook: { size: { cols: 7, rows: 7 }, at: { x: 3, y: 3 }, seed: 401 },
+  queen: { size: { cols: 7, rows: 7 }, at: { x: 3, y: 3 }, seed: 503 },
+  king: { size: { cols: 5, rows: 5 }, at: { x: 2, y: 2 }, seed: 601 },
+};
 
 function movementExample(type: PlayablePieceType): {
+  size: BoardSize;
   piece: Piece;
   pieces: Piece[];
   moves: Set<string>;
   captures: Set<string>;
 } {
+  const { size, at } = MOVEMENT_EXAMPLE_LAYOUT[type];
   const piece: Piece = {
     id: `enchiridion-${type}`,
     side: 'player',
     type,
-    x: 3,
-    y: 3,
+    x: at.x,
+    y: at.y,
     alive: true,
-    startX: 3,
-    startY: 3,
+    startX: at.x,
+    startY: at.y,
     pawnForward: 'north',
     facing: 'north',
   };
   const targets: Piece[] = type === 'pawn'
     ? [
-        { id: 'pawn-capture-left', side: 'enemy', type: 'pawn', x: 2, y: 2, alive: true, startY: 0 },
-        { id: 'pawn-capture-right', side: 'enemy', type: 'pawn', x: 4, y: 2, alive: true, startY: 0 },
+        { id: 'pawn-capture-left', side: 'enemy', type: 'pawn', x: at.x - 1, y: at.y - 1, alive: true, startY: 0 },
+        { id: 'pawn-capture-right', side: 'enemy', type: 'pawn', x: at.x + 1, y: at.y - 1, alive: true, startY: 0 },
       ]
     : [];
   const pieces = [piece, ...targets];
-  const legal = legalMoves(piece, pieces, MOVEMENT_SIZE);
+  const legal = legalMoves(piece, pieces, size);
   return {
+    size,
     piece,
     pieces,
     moves: new Set(legal.map((move) => `${move.x},${move.y}`)),
@@ -75,35 +94,55 @@ function movementExample(type: PlayablePieceType): {
   };
 }
 
+// The real Battle board at reference scale: Generate-dressed ordinary-ground terrain plus
+// the example's live pieces, drawn by the same read-only renderer every board surface uses.
+// Legal destinations and captures overlay through the game's own diamond cell paint.
 function MovementDiagram({ type }: { type: PlayablePieceType }): ReactElement {
   const example = useMemo(() => movementExample(type), [type]);
-  const cells = [];
-  for (let y = 0; y < MOVEMENT_SIZE.rows; y += 1) {
-    for (let x = 0; x < MOVEMENT_SIZE.cols; x += 1) {
-      const key = `${x},${y}`;
-      const isPiece = x === example.piece.x && y === example.piece.y;
-      const isMove = example.moves.has(key);
-      const isCapture = example.captures.has(key);
-      cells.push(
-        <span
-          className={`enchiridion-move-cell${isMove ? ' is-move' : ''}${isCapture ? ' is-capture' : ''}${isPiece ? ' is-piece' : ''}`}
-          key={key}
-          aria-hidden="true"
-        >
-          {isPiece ? (
-            <img
-              src={pieceSpritePath(type, paletteForSide('player'), 'north')}
-              alt=""
-              draggable={false}
-            />
-          ) : isCapture ? '×' : isMove ? '◆' : '·'}
-        </span>,
-      );
-    }
-  }
+  const board = useMemo(() => {
+    const level = createBlankLevel(`enchiridion-${type}`, PIECE_LABEL[type], example.size.cols, example.size.rows);
+    const dressing = generateTerrainDressing({
+      cols: example.size.cols,
+      rows: example.size.rows,
+      seed: MOVEMENT_EXAMPLE_LAYOUT[type].seed,
+      // The tactical content — marked squares and every standing piece — stays on calm
+      // default grass; the generated accents dress the board around it.
+      keepClear: new Set([
+        ...example.moves,
+        ...example.captures,
+        ...example.pieces.map((piece) => `${piece.x},${piece.y}`),
+      ]),
+    });
+    return {
+      ...levelToEditorBoard(level),
+      ...dressing,
+      units: unitsForGamePieces(example.pieces),
+    };
+  }, [example, type]);
   return (
-    <div className="enchiridion-movement-diagram" role="img" aria-label={`${PIECE_LABEL[type]} legal movement from the center of an open board`}>
-      {cells}
+    <div
+      className="enchiridion-unit-board"
+      role="img"
+      aria-label={`${PIECE_LABEL[type]} legal movement on an open board`}
+    >
+      <StaticReadOnlyBoardView
+        board={board}
+        ariaLabel={`${PIECE_LABEL[type]} movement board`}
+        renderCellOverlay={(cell) => {
+          const key = `${cell.x},${cell.y}`;
+          const isCapture = example.captures.has(key);
+          const isMove = example.moves.has(key) && !isCapture;
+          if (!isMove && !isCapture) return null;
+          return (
+            <span
+              className={`le-tactical-cell ${isCapture ? 'is-threat' : 'is-move'}`}
+              aria-hidden="true"
+            >
+              {isMove ? <PredrawnMoveHighlightPaint /> : null}
+            </span>
+          );
+        }}
+      />
     </div>
   );
 }
@@ -146,11 +185,11 @@ function UnitsSection({ framed }: { framed: boolean }): ReactElement {
       framed={framed}
       title="Units"
     >
-      <p>Each diagram is generated by the same movement engine used in Battle. Diamonds are legal destinations; crosses are captures.</p>
+      <p>Each board is drawn by the Battle renderer and its moves come from the same movement engine. Cyan squares are legal destinations; red squares are captures.</p>
       <div className="enchiridion-unit-grid">
         {PLAYABLE_PIECE_TYPES.map((type) => (
           <InnerChromeBox className="enchiridion-unit-card" key={type}>
-            <div>
+            <div className="enchiridion-unit-copy">
               <h3>{PIECE_LABEL[type]}</h3>
               <p>{UNIT_COPY[type]}</p>
             </div>
