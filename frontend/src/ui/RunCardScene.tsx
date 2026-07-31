@@ -270,6 +270,16 @@ export function RunCardScene({
   const cardId = canonicalCardId(bundle);
   const plan = useMemo(() => runCardScenePlan(bundle), [cardId]);
   const artwork = variant === 'live' ? installedRunCardSceneArt(plan.sceneId) : null;
+  // Stable per-layer callbacks: the canvas layers repaint when their callbacks change
+  // identity, so these must not be re-created by unrelated parent renders.
+  const handleTerrainFirstFrame = useMemo(
+    () => (onLayerFirstFrame ? () => onLayerFirstFrame('terrain') : undefined),
+    [onLayerFirstFrame],
+  );
+  const handleSceneFirstFrame = useMemo(
+    () => (onLayerFirstFrame ? () => onLayerFirstFrame('scene') : undefined),
+    [onLayerFirstFrame],
+  );
   const board = useMemo(() => (
     variant === 'source'
       ? { ...plan.board, units: {} }
@@ -301,16 +311,19 @@ export function RunCardScene({
           draggable={false}
         />
       ) : null}
+      {/* A card is a still: one authored frame, no sway, no repaint clock. The living
+          version of this scene belongs to gameplay boards, not to a card painting. */}
       <StudioReadOnlyBoard
         board={board}
         hidden={artwork ? { tile: true, unit: false, doodad: true } : undefined}
+        still
         boardZoom={camera.zoom}
         boardPan={camera.pan}
         coverSeed={plan.coverSeed}
         className="run-card-scene-board"
         ariaLabel=""
-        onTerrainFirstFrame={onLayerFirstFrame ? () => onLayerFirstFrame('terrain') : undefined}
-        onSceneFirstFrame={onLayerFirstFrame ? () => onLayerFirstFrame('scene') : undefined}
+        onTerrainFirstFrame={handleTerrainFirstFrame}
+        onSceneFirstFrame={handleSceneFirstFrame}
         onFrameError={onFrameError}
       />
     </span>

@@ -19637,6 +19637,21 @@ button.tileset-relationship-cell {
   min-block-size: 0;
 }
 
+/* Complete-face staging: the incoming card paints out of sight in the same cell and
+   replaces the shown face only once whole, so record swaps never assemble on screen. */
+.enchiridion-card-stage {
+  display: grid;
+}
+
+.enchiridion-card-stage-slot {
+  grid-area: 1 / 1;
+  min-inline-size: 0;
+}
+
+.enchiridion-card-stage-slot.is-preparing {
+  visibility: hidden;
+}
+
 .enchiridion-empty {
   align-content: start;
   display: grid;

@@ -176,8 +176,12 @@ describe('Run chrome hierarchy', () => {
   it('draws every bundle card as a seeded board-scene vignette with an authored name', () => {
     // The vignette musters every bundle piece with its canonical installed board
     // sprite through the shared read-only renderer (ADR-0225 continues to hold).
-    expect(runBundleCard).toContain('<RunCardScene bundle={bundle}');
+    expect(runBundleCard).toContain('<RunCardScene');
+    expect(runBundleCard).toContain('bundle={bundle}');
     expect(runCardScene).toContain('<StudioReadOnlyBoard');
+    // A card is a still painting: one authored frame, no sway clock (owner call,
+    // 2026-07-30) — and the capture pipeline depends on that determinism.
+    expect(runCardScene).toMatch(/<StudioReadOnlyBoard[\s\S]{0,200}?\bstill\b/);
     expect(runCardScene).toContain("const CARD_FACING = 'south' as const;");
     expect(runCardScene).toContain('camera = RUN_CARD_SCENE_CAMERA');
     expect(runCardScene).toContain('boardPan={camera.pan}');

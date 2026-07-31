@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { resetDrawableCatalog } from '@chess-tactics/board-render';
+import { resetDrawableCatalog, type BoardDrawOp } from '@chess-tactics/board-render';
 import { applyTestDrawableCatalog } from '../test/drawableCatalog';
 import type { EditorBoard } from '../ui/boardCode';
-import { boardSceneOcclusionMasks } from './BoardSceneLayer';
+import { boardSceneOcclusionMasks, stillBoardSceneOps } from './BoardSceneLayer';
 
 beforeAll(() => applyTestDrawableCatalog());
 afterAll(resetDrawableCatalog);
@@ -83,5 +83,30 @@ describe('BoardSceneLayer pre-drawn mode', () => {
     expect(boardSceneOcclusionMasks(board)).toEqual([]);
     expect(boardSceneOcclusionMasks(board, { predrawnBackgroundActive: true }))
       .toEqual([expect.objectContaining({ layer: 'scene' })]);
+  });
+});
+
+describe('BoardSceneLayer still mode', () => {
+  it('pins time-based sway ops to their rest frame so no repaint clock starts', () => {
+    const ops = [
+      {
+        image: 'grass-sway.png',
+        dx: 0,
+        dy: 0,
+        z: 0,
+        sx: 0,
+        sw: 24,
+        animation: { kind: 'ground-cover-sway', frameCount: 6, durationMs: 900, phase: 2 },
+      },
+      { image: 'unit.png', dx: 12, dy: 8, z: 4 },
+    ] as unknown as BoardDrawOp[];
+
+    const still = stillBoardSceneOps(ops);
+
+    expect(still.every((op) => op.animation === undefined)).toBe(true);
+    // Ops with no animation keep their identity; only sway ops are re-created.
+    expect(still[1]).toBe(ops[1]);
+    expect(still[0]).not.toBe(ops[0]);
+    expect(still[0]).toMatchObject({ image: 'grass-sway.png', sx: 0, sw: 24 });
   });
 });

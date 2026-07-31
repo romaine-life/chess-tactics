@@ -16,18 +16,28 @@ export function RunBundleCard({
   bought = false,
   disabled = false,
   onSelect,
+  onSceneLayerFirstFrame,
+  onSceneFrameError,
 }: {
   bundle: PieceBundle;
   mode: 'draft' | 'shop' | 'reference';
   bought?: boolean;
   disabled?: boolean;
   onSelect?: () => void;
+  /** First completed paint of each scene canvas layer — a staging host's readiness gate. */
+  onSceneLayerFirstFrame?: (layer: 'terrain' | 'scene') => void;
+  onSceneFrameError?: (error: unknown) => void;
 }): ReactElement {
   const label = bundleLabel(bundle);
   const name = runCardName(bundle);
   const face = (
     <>
-      <RunCardScene bundle={bundle} className="run-bundle-card-scene" />
+      <RunCardScene
+        bundle={bundle}
+        className="run-bundle-card-scene"
+        onLayerFirstFrame={onSceneLayerFirstFrame}
+        onFrameError={onSceneFrameError}
+      />
       <span className="run-bundle-card-plate" aria-hidden={mode !== 'reference'}>
         <strong className="run-bundle-card-name">{name}</strong>
         {name === label ? null : <small className="run-bundle-card-contents">{label}</small>}

@@ -51,12 +51,22 @@ function visualBoard(board: EditorBoard, hidden?: { unit: boolean; doodad: boole
   };
 }
 
+/**
+ * Pin every time-based scene op (ground-cover sway today) to its authored rest frame.
+ * A still consumer renders one complete static frame and never starts the repaint
+ * clock — the same pixels every visit, which still-card art capture also relies on.
+ */
+export function stillBoardSceneOps(ops: readonly BoardDrawOp[]): BoardDrawOp[] {
+  return ops.map((op) => (op.animation ? { ...op, animation: undefined } : op));
+}
+
 export function BoardSceneLayer({
   board,
   hidden,
   coverSeed = 1234,
   ambientCover = false,
   omitTerrain = true,
+  still = false,
   transformOps,
   maskTint,
   className,
@@ -71,6 +81,8 @@ export function BoardSceneLayer({
   ambientCover?: boolean;
   /** Terrain and road/river features are already owned by BoardTerrainLayer. */
   omitTerrain?: boolean;
+  /** Render one static rest frame — no sway, no repaint clock (see stillBoardSceneOps). */
+  still?: boolean;
   /** Review-only visual substitution applied before the one globally depth-sorted scene canvas. */
   transformOps?: BoardSceneOpsTransform;
   maskTint?: string;
@@ -95,12 +107,13 @@ export function BoardSceneLayer({
   const ops = useMemo(() => {
     const all = boardDrawOps(sourceBoard, { ambientCover, coverSeed, predrawnBackgroundActive });
     const transformed = transformOps ? transformOps(all, sourceBoard) : all;
-    return omitTerrain
+    const layered = omitTerrain
       ? withoutBoardDrawLayers(transformed, 'terrain', 'linear-feature')
       : hidden?.tile
         ? withoutBoardDrawLayers(transformed, 'terrain')
         : transformed;
-  }, [ambientCover, contentHash, coverSeed, hidden?.tile, omitTerrain, predrawnBackgroundActive, sourceBoard, transformOps]);
+    return still ? stillBoardSceneOps(layered) : layered;
+  }, [ambientCover, contentHash, coverSeed, hidden?.tile, omitTerrain, predrawnBackgroundActive, sourceBoard, still, transformOps]);
   const occlusionMasks = useMemo(
     () => boardSceneOcclusionMasks(board, {
       predrawnBackgroundActive,
