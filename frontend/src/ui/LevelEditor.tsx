@@ -2515,6 +2515,7 @@ type LayerKey = LevelEditorLayerKey;
 type BrushKind = LevelEditorBrushKind;
 const LEVEL_EDITOR_LAYER_OPTIONS: ReadonlyArray<{ id: LayerKey; label: string }> = [
   { id: 'board', label: 'Board' },
+  { id: 'card-scene', label: 'Card Scene' },
   { id: 'level-artwork', label: 'Level Artwork' },
   { id: 'tile', label: 'Tile' },
   { id: 'generate', label: 'Generate' },
@@ -2560,6 +2561,7 @@ function perimeterWallArt(placements: Record<string, WallArtId> | undefined, col
 // Workspace/rules/status/recovery pages and Generate are non-painting layers → select tool.
 const toolForLayer = (layer: LayerKey): 'select' | 'brush' => (
   layer === 'board'
+  || layer === 'card-scene'
   || layer === 'status'
   || layer === 'recovery'
   || layer === 'rules'
@@ -2569,7 +2571,7 @@ const toolForLayer = (layer: LayerKey): 'select' | 'brush' => (
 const brushKindForInitialLayer = (layer: LayerKey): BrushKind => {
   if (layer === 'paths') return 'road';
   if (layer === 'placed-art') return 'artwork';
-  if (layer === 'board' || layer === 'status' || layer === 'recovery' || layer === 'rules' || layer === 'generate' || layer === 'level-artwork') return 'tile';
+  if (layer === 'board' || layer === 'card-scene' || layer === 'status' || layer === 'recovery' || layer === 'rules' || layer === 'generate' || layer === 'level-artwork') return 'tile';
   return layer as BrushKind;
 };
 const brushKindForRouteState = (layer: LayerKey, kind: BrushKind | undefined): BrushKind => {
@@ -2643,7 +2645,8 @@ export function LevelEditor(): ReactElement {
   }, []);
   const cameFromStudio = studioArm.fromStudio;
   // An explicit ?layer= wins over ?kind= (which is really brush-arming), then the default.
-  const initialLayer: LayerKey = studioArm.layer ?? defaultLevelEditorLayer();
+  const initialLayer: LayerKey = studioArm.layer
+    ?? (new URLSearchParams(window.location.search).has('cardScene') ? 'card-scene' : defaultLevelEditorLayer());
   const initialBrushKind = brushKindForRouteState(initialLayer, studioArm.kind);
   const initialEventsOpen = initialLayer === 'rules' && studioArm.eventsEditor;
   const initialEventsTab: LevelEditorEventsTab = studioArm.eventsTab ?? 'victory';
@@ -3051,23 +3054,31 @@ export function LevelEditor(): ReactElement {
     isPlacedArtBrushKind(initialBrushKind) ? initialBrushKind : 'artwork',
   );
   const [layer, setLayer] = useState<LayerKey>(initialLayer);
-  const layerSelectOptions = useMemo(() => LEVEL_EDITOR_LAYER_SELECT_OPTIONS.map((option) => ({
-    ...option,
-    // A pre-drawn plate locks Placed Art because those pixels are already baked into the
-    // selected background. Level Artwork remains available to manage that background.
-    // Card-scene composing locks the level-only layers (rules, sessions, units…).
-    disabled: option.disabled
-      || (isPredrawnBoard && isPredrawnLockedLayer(option.id))
-      || (cardSceneMode && CARD_SCENE_LOCKED_LAYERS.has(option.id)),
-  })), [cardSceneMode, isPredrawnBoard]);
+  const layerSelectOptions = useMemo(() => LEVEL_EDITOR_LAYER_SELECT_OPTIONS
+    // The Card Scene layer exists only while composing a card; a level has none.
+    .filter((option) => option.id !== 'card-scene' || cardSceneMode)
+    .map((option) => ({
+      ...option,
+      // A pre-drawn plate locks Placed Art because those pixels are already baked into the
+      // selected background. Level Artwork remains available to manage that background.
+      // Card-scene composing locks the level-only layers (rules, sessions, units…).
+      disabled: option.disabled
+        || (isPredrawnBoard && isPredrawnLockedLayer(option.id))
+        || (cardSceneMode && CARD_SCENE_LOCKED_LAYERS.has(option.id)),
+    })), [cardSceneMode, isPredrawnBoard]);
   useEffect(() => {
     if (!isPredrawnBoard || !isPredrawnLockedLayer(layer)) return;
     setLayer('board');
     setTool('select');
   }, [isPredrawnBoard, layer]);
   useEffect(() => {
+    if (!cardSceneMode && layer === 'card-scene') {
+      setLayer('board');
+      setTool('select');
+      return;
+    }
     if (!cardSceneMode || !CARD_SCENE_LOCKED_LAYERS.has(layer)) return;
-    setLayer('board');
+    setLayer('card-scene');
     setTool('select');
   }, [cardSceneMode, layer]);
   // The card's authored viewing pane, editable on the stage and in the rail panel.
@@ -9012,17 +9023,6 @@ export function LevelEditor(): ReactElement {
         inert={!editorReady || saving}
         ariaBusy={!editorReady || saving}
       >
-        {cardSceneMode && cardSceneBundle ? (
-          <CardSceneEditorPanel
-            bundle={cardSceneBundle}
-            board={currentEditorBoard}
-            frame={cardSceneFrame}
-            frameVisible={cardSceneFrameVisible}
-            onFrame={setCardSceneFrame}
-            onFrameVisible={setCardSceneFrameVisible}
-            onLoadBoard={(board) => commitEditorBoard(cloneEditorBoard(board))}
-          />
-        ) : null}
         {layer === 'status' && me?.signed_in && editorDocument ? (
           <section
             ref={editorSessionStatusRef}
@@ -9519,6 +9519,16 @@ export function LevelEditor(): ReactElement {
               onClick={closeLevelArtworkWorkspace}
             >Back to board editing</button>
           </section>
+        ) : layer === 'card-scene' && cardSceneBundle ? (
+          <CardSceneEditorPanel
+            bundle={cardSceneBundle}
+            board={currentEditorBoard}
+            frame={cardSceneFrame}
+            frameVisible={cardSceneFrameVisible}
+            onFrame={setCardSceneFrame}
+            onFrameVisible={setCardSceneFrameVisible}
+            onLoadBoard={(board) => commitEditorBoard(cloneEditorBoard(board))}
+          />
         ) : layer === 'board' ? (
           <>
           <section className="skirmish-card">
