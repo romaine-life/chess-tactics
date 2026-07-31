@@ -19579,6 +19579,7 @@ button.tileset-relationship-cell {
 }
 
 .strategikon-content > .run-workspace,
+.strategikon-content > .run-panel-unframed,
 .strategikon-reference {
   block-size: 100%;
   box-sizing: border-box;
