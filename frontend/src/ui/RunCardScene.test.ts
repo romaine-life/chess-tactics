@@ -76,6 +76,7 @@ describe('Run card scene', () => {
         expect(familyForTile(tileId)).toBe(plan.familyId);
       }
       const unitCells = new Set(Object.keys(plan.board.units));
+      const occupied = new Set(unitCells);
       for (const [anchor, placed] of Object.entries(plan.board.props)) {
         const def = propDef(placed.propId);
         expect(def, `${deckBundle.id} placed unknown prop ${placed.propId}`).toBeDefined();
@@ -84,8 +85,19 @@ describe('Run card scene', () => {
           for (let dy = 0; dy < def!.h; dy += 1) {
             const key = `${x + dx},${y + dy}`;
             expect(unitCells.has(key), `${deckBundle.id} prop overlaps unit at ${key}`).toBe(false);
+            occupied.add(key);
           }
         }
+      }
+      for (const key of Object.keys(plan.board.doodads)) {
+        expect(occupied.has(key), `${deckBundle.id} doodad overlaps occupant at ${key}`).toBe(false);
+        occupied.add(key);
+      }
+      for (const placement of plan.board.floatingArtwork ?? []) {
+        // Landmarks are rear-apron scenery: never on the tactical stage, always
+        // resolvable in the installed structure-art library.
+        expect(placement.id.startsWith('card-landmark-'), `${deckBundle.id} foreign artwork ${placement.id}`).toBe(true);
+        expect(placement.scale).toBeGreaterThan(0);
       }
     }
   });

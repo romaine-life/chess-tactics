@@ -65,6 +65,7 @@ export function BoardSceneLayer({
   hidden,
   coverSeed = 1234,
   ambientCover = false,
+  coverScale = 1,
   omitTerrain = true,
   still = false,
   transformOps,
@@ -79,6 +80,8 @@ export function BoardSceneLayer({
   hidden?: { tile: boolean; unit: boolean; doodad: boolean };
   coverSeed?: number;
   ambientCover?: boolean;
+  /** Miniature-scene tuft scale, anchored at each tuft's planted base (default 1). */
+  coverScale?: number;
   /** Terrain and road/river features are already owned by BoardTerrainLayer. */
   omitTerrain?: boolean;
   /** Render one static rest frame — no sway, no repaint clock (see stillBoardSceneOps). */
@@ -97,15 +100,15 @@ export function BoardSceneLayer({
 }): ReactElement | null {
   const sourceBoard = useMemo(() => visualBoard(board, hidden), [board, hidden]);
   const contentHash = useMemo(
-    () => `${boardContentHash(sourceBoard)}|cover:${coverSeed}|ambient:${ambientCover ? 1 : 0}|predrawn:${predrawnBackgroundActive ? 1 : 0}`,
-    [ambientCover, coverSeed, predrawnBackgroundActive, sourceBoard],
+    () => `${boardContentHash(sourceBoard)}|cover:${coverSeed}|ambient:${ambientCover ? 1 : 0}|coverScale:${coverScale}|predrawn:${predrawnBackgroundActive ? 1 : 0}`,
+    [ambientCover, coverScale, coverSeed, predrawnBackgroundActive, sourceBoard],
   );
   const bounds = useMemo(
     () => boardBounds(sourceBoard, { ambientCover, coverSeed, predrawnBackgroundActive }),
     [ambientCover, contentHash, coverSeed, predrawnBackgroundActive, sourceBoard],
   );
   const ops = useMemo(() => {
-    const all = boardDrawOps(sourceBoard, { ambientCover, coverSeed, predrawnBackgroundActive });
+    const all = boardDrawOps(sourceBoard, { ambientCover, coverScale, coverSeed, predrawnBackgroundActive });
     const transformed = transformOps ? transformOps(all, sourceBoard) : all;
     const layered = omitTerrain
       ? withoutBoardDrawLayers(transformed, 'terrain', 'linear-feature')
@@ -113,7 +116,7 @@ export function BoardSceneLayer({
         ? withoutBoardDrawLayers(transformed, 'terrain')
         : transformed;
     return still ? stillBoardSceneOps(layered) : layered;
-  }, [ambientCover, contentHash, coverSeed, hidden?.tile, omitTerrain, predrawnBackgroundActive, sourceBoard, still, transformOps]);
+  }, [ambientCover, contentHash, coverScale, coverSeed, hidden?.tile, omitTerrain, predrawnBackgroundActive, sourceBoard, still, transformOps]);
   const occlusionMasks = useMemo(
     () => boardSceneOcclusionMasks(board, {
       predrawnBackgroundActive,

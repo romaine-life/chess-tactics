@@ -1,4 +1,9 @@
-import { drawableAssets } from '@chess-tactics/board-render';
+import {
+  boardLabCellPosition,
+  currentDoodadAssets,
+  drawableAssets,
+  structureArtDirections,
+} from '@chess-tactics/board-render';
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { TILE_STEP_Y } from '../art/projectionContract';
 import { tileAssets } from '../art/tileset';
@@ -13,7 +18,7 @@ import {
 import { StudioReadOnlyBoard } from '../render/StudioReadOnlyBoard';
 import { canonicalCardId } from '../run/cardNames';
 import { mixSeed, PIECE_VALUE, type PieceBundle } from '../run/model';
-import type { EditorBoard } from './boardCode';
+import type { EditorBoard, FloatingArtworkPlacement } from './boardCode';
 
 // A bundle card's artwork is a small battlefield vignette: the bundle's units mustered
 // on a coherent patch of live terrain, with seeded ground cover and an optional prop.
@@ -48,6 +53,9 @@ export const RUN_CARD_SCENE_CAPTURE = {
 
 const CARD_FACTION = paletteForSide('player');
 const CARD_FACING = 'south' as const;
+// Card vignettes shrink ground-cover tufts so grass reads in proportion to the
+// mustered units; gameplay boards keep native tuft scale.
+export const RUN_CARD_COVER_SCALE = 0.7;
 
 // Formation seats in placement-priority order: the highest-value piece anchors the
 // centre, flanks fill the middle rank, then the front rank, then the rear rank.
@@ -84,9 +92,94 @@ function walkableFamilies(): WalkableFamily[] {
 
 function scenePropDefs(familyId: TileFamilyId): PropDef[] {
   return PROP_DEFS
-    .filter((def) => (def.kind === 'tree' || def.kind === 'rock') && def.terrains.includes(familyId))
+    .filter((def) => (def.kind === 'tree' || def.kind === 'rock' || def.kind === 'house') && def.terrains.includes(familyId))
     .filter((def) => def.w <= RUN_CARD_SCENE_COLS && def.h <= RUN_CARD_SCENE_ROWS)
     .sort((left, right) => left.id.localeCompare(right.id));
+}
+
+// Small placed decorations (boulder, fern, flower…) from the shared doodad shelf,
+// terrain-gated exactly like the board brush.
+function placeDoodads(
+  rng: Rng,
+  familyId: TileFamilyId,
+  free: Set<string>,
+): EditorBoard['doodads'] {
+  const eligible = currentDoodadAssets()
+    .filter((doodad) => doodad.terrains.includes(familyId))
+    .sort((left, right) => left.id.localeCompare(right.id));
+  const placed: EditorBoard['doodads'] = {};
+  if (!eligible.length) return placed;
+  const wanted = rng.int(4);
+  const cells = [...free].sort();
+  for (let index = 0; index < wanted && cells.length > 0; index += 1) {
+    const key = cells.splice(rng.int(cells.length), 1)[0];
+    placed[key] = { doodadId: eligible[rng.int(eligible.length)].id };
+    free.delete(key);
+  }
+  return placed;
+}
+
+// Scenic backdrops from the shared structure-art library, mounted as gameplay-inert
+// floating artwork in the rear apron. Universal anchors suit any field; lush and
+// arid extras join by the scene's terrain. Only landmarks with installed direction
+// media are eligible, so the pool follows the live catalog like every other channel.
+const LANDMARKS_UNIVERSAL = [
+  'castle-ii',
+  'castle-chinchilla',
+  'castle-consuegra',
+  'hrusov-castle',
+  'paletas-windmill',
+  'windmill-game-ready',
+  'river-mill',
+  'waterfall-mountain-river',
+  'forest-rock-cluster',
+] as const;
+const LANDMARKS_LUSH = [
+  'broadleaf-tree',
+  'rootbound-majesty-tree',
+  'forest-tree-1',
+  'forest-tree-2',
+  'forest-tree-3',
+  'forest-tree-4',
+  'mushroom-cluster-2',
+  'mushroom-cluster-4',
+  'mushroom-cluster-6',
+] as const;
+const LANDMARKS_ARID = ['saguaro-cactus'] as const;
+const LUSH_TERRAINS = new Set(['grass', 'dirt']);
+const ARID_TERRAINS = new Set(['sand']);
+// Rear-apron seats behind the formation, inside the capture frame's upper band
+// (screen-up is smaller x+y).
+const LANDMARK_ANCHORS: ReadonlyArray<{ x: number; y: number }> = [
+  { x: 0, y: -2 },
+  { x: 1, y: -2 },
+  { x: 2, y: -2 },
+  { x: -1, y: -1 },
+  { x: -2, y: 0 },
+];
+
+function placeLandmark(rng: Rng, familyId: TileFamilyId): FloatingArtworkPlacement[] {
+  const terrain = gameplayTerrainForFamily(familyId);
+  const pool = [
+    ...LANDMARKS_UNIVERSAL,
+    ...(terrain && LUSH_TERRAINS.has(terrain) ? LANDMARKS_LUSH : []),
+    ...(terrain && ARID_TERRAINS.has(terrain) ? LANDMARKS_ARID : []),
+  ].filter((id) => structureArtDirections(id).length > 0);
+  if (!pool.length || rng.int(5) === 0) return [];
+  const sourceArtId = pool[rng.int(pool.length)];
+  const directions = structureArtDirections(sourceArtId);
+  const direction = directions[rng.int(directions.length)];
+  const anchor = LANDMARK_ANCHORS[rng.int(LANDMARK_ANCHORS.length)];
+  const seat = boardLabCellPosition(anchor);
+  const scale = 0.7 + rng.int(3) * 0.1;
+  return [{
+    id: `card-landmark-${sourceArtId}`,
+    sourceArtId,
+    pixelX: seat.left,
+    pixelY: seat.top,
+    direction,
+    scale,
+  }];
 }
 
 function placeProps(
@@ -170,6 +263,8 @@ export function runCardScenePlan(bundle: Pick<PieceBundle, 'pieces'>): RunCardSc
   });
 
   const props = placeProps(rng, family.familyId, free);
+  const doodads = placeDoodads(rng, family.familyId, free);
+  const floatingArtwork = placeLandmark(rng, family.familyId);
 
   const grassFamily = familyForGameplayTerrain('grass');
   const cover: EditorBoard['cover'] = {};
@@ -194,8 +289,9 @@ export function runCardScenePlan(bundle: Pick<PieceBundle, 'pieces'>): RunCardSc
     },
     cells,
     units,
-    doodads: {},
+    doodads,
     props,
+    floatingArtwork,
     cover,
     coverTypes,
     features: {},
@@ -320,9 +416,9 @@ export function RunCardScene({
     variant === 'source'
       ? { ...plan.board, units: {} }
       : artwork
-        // Installed artwork already contains terrain, cover, and props; the live render
+        // Installed artwork already contains the whole environment; the live render
         // contributes only the units so sprites stay crisp above the painted scene.
-        ? { ...plan.board, cover: {}, coverTypes: {}, props: {}, doodads: {} }
+        ? { ...plan.board, cover: {}, coverTypes: {}, props: {}, doodads: {}, floatingArtwork: [] }
         : plan.board
   ), [artwork, plan.board, variant]);
   return (
@@ -358,6 +454,7 @@ export function RunCardScene({
             board={board}
             hidden={artwork ? { tile: true, unit: false, doodad: true } : undefined}
             still
+            coverScale={RUN_CARD_COVER_SCALE}
             boardZoom={camera.zoom}
             boardPan={camera.pan}
             coverSeed={plan.coverSeed}
