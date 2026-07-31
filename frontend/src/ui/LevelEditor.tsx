@@ -211,7 +211,7 @@ import { wallArt, wallArtAtEdge, wallArtBadge, wallArtIdOrDefault, wallArtItems,
 import { defaultTerrainFamily, socketEdges, terrainFamiliesForRole, terrainFamilyRecords, type EdgeName, type TileFamilyId } from '../core/tileSockets';
 import { generateSocketBoard, solveSocketBoard } from '../core/tileBoardGenerator';
 import { playableBorderFenceEdges, playableBorderRoadKeys } from '../core/playableBorder';
-import { scatterTerrainDetailed } from '../core/terrainScatter';
+import { coverNoise, scatterTerrainDetailed } from '../core/terrainScatter';
 import { createRng } from '../core/rng';
 import {
   DEFAULT_MACRO_TILE_BREAKUP,
@@ -1566,30 +1566,6 @@ const defaultCoverType = (terrain: TileFamilyId): GroundCoverId | null => {
   const id = terrainFamilyRecords().find((family) => family.id === terrain)?.defaultGroundCoverId;
   return id && isGroundCoverId(id) ? id : null;
 };
-// Spatially-coherent value noise in [0,1] (bilinear over a hashed lattice) — drives cover patchiness
-// so the "randomness" knobs vary coverage/density across areas instead of per-cell static.
-function coverNoise(x: number, y: number, seed: number): number {
-  const hash = (ix: number, iy: number): number => {
-    let h = (Math.imul(ix, 374761393) + Math.imul(iy, 668265263) + Math.imul(seed, 1442695041)) >>> 0;
-    h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
-    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
-  };
-  const f = 0.28; // ~3.5-cell features
-  const fx = x * f;
-  const fy = y * f;
-  const x0 = Math.floor(fx);
-  const y0 = Math.floor(fy);
-  const tx = fx - x0;
-  const ty = fy - y0;
-  const smooth = (t: number): number => t * t * (3 - 2 * t);
-  const a = hash(x0, y0);
-  const b = hash(x0 + 1, y0);
-  const c = hash(x0, y0 + 1);
-  const d = hash(x0 + 1, y0 + 1);
-  const top = a + (b - a) * smooth(tx);
-  const bot = c + (d - c) * smooth(tx);
-  return top + (bot - top) * smooth(ty);
-}
 // Proportional (normalized) redistribution: scale the UNLOCKED rows so all rows sum to `total`
 // (locked rows fixed). Integer shares; rounding drift is absorbed by the largest unlocked row so
 // the sum is always exact.
