@@ -27,28 +27,37 @@ ADR-0058 names.
 ## Decision
 
 - The Studio gains a **Card Scenes** catalog category: every deck card's live
-  vignette as a selectable grid with search, and **Open Scene Lab** as its
-  View-Selected destination (ADR-0029 contract; ADR-0058 click-reachable by
-  construction). The standalone `?cardScenes=1` page is retired into it.
-- The **Scene Lab** is a `cardscene` Viewer kind: the fixed capture stage
-  (source / with-units / live variants) beside owner controls — landmark mode
-  (generated / none / custom with artwork, facing, X/Y/scale), scene-wide
-  ground-cover mode, per-cell doodads and props, and a re-deal salt. Deep links
-  ride the ordinary Studio URL (`vk=cardscene&card=<id>&cardVariant=<v>`), which
-  is also the `npm run shot` capture target.
+  vignette as a selectable grid with search (ADR-0029 contract; ADR-0058
+  click-reachable by construction). The standalone `?cardScenes=1` page is
+  retired into it. **Compose in Scene Editor** is the primary destination;
+  a reduced `cardscene` Viewer keeps only the fixed export capture stage
+  (`vk=cardscene&card=<id>&cardVariant=<v>`, the `npm run shot` target).
+- **Composing is the real Level Editor**, not a parallel mini-editor (ADR-0059):
+  `/editor/level?cardScene=<card-id>` opens the card's authored-or-generated
+  scene as an **ephemeral, document-free board** — no level working copy, draft,
+  or editing session is created — with the full placement interface (terrain,
+  paths, fences, walls, subterrain, wall art, placed art, cover, scenic apron).
+  Layers that do not translate are disabled, not hidden: Generate,
+  Level Artwork, Unit, Zone, Rules, Status, Recovery, and Play test. The
+  mustered units render but stay derived from the card and uneditable.
+- The mode adds the **card viewing pane**: a board-space overlay rectangle at
+  the capture aspect showing exactly what the final card renders — draggable on
+  the stage, with X/Y/width slider controls (width = final-shot zoom). The
+  live card window, the capture stage, and the installed-art plate all render
+  precisely the saved pane (cover-fit; the default pane reproduces the original
+  shared framing).
 - Authored compositions persist as **one revisioned card-scenes document**
   (`card_scene_documents`, the ADR-0089 shape): public GET hydrates runtime and
   Studio at boot, the admin optimistic PUT saves the whole document, a missing
   row or entry means the generated scene, and there is no committed fallback.
-- An override replaces its generated channel **wholesale** (landmark, doodads,
-  props, cover); terrain and the unit formation stay generated from the
-  canonical card id plus the saved salt. Every card consumer — draft, shop,
-  Enchiridion, art capture — resolves overrides through the one scene plan.
-- **Reset to generated** previews the pure baseline, derived live from the
-  generator (ADR-0057: authoritative baseline, never a copied literal); Save
-  persists, Revert discards to the saved override.
-- The Level Editor hand-off remains as a secondary affordance from the Lab
-  (board-code deep link), for edits beyond the Lab's channels.
+  An override is `{ board?, frame?, salt? }`: the board is the **whole authored
+  scene as a canonical unit-less board code** (the 3×3 tactical stage enforced),
+  replacing the generated scene wholesale; the formation is always derived from
+  the card at render time.
+- The panel's **Load generated** restores the live baseline into the editor and
+  **Delete saved** removes the override (ADR-0057: the baseline is derived from
+  the generator, never a copied literal); **Re-deal** loads a differently-dealt
+  generated scene; **Save scene** persists board + pane.
 
 ## Consequences
 

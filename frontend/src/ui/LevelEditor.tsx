@@ -131,6 +131,16 @@ import {
   readVictoryRulesParam,
 } from './playtestRoute';
 import {
+  CARD_SCENE_LOCKED_LAYERS,
+  CARD_SCENE_RETURN_HREF,
+  CardSceneEditorPanel,
+  CardSceneFrameOverlay,
+  cardSceneBundleFor,
+  cardSceneInitialBoard,
+  cardSceneSavedFrame,
+} from './levelEditorCardScene';
+import { type CardSceneFrame } from '../run/cardSceneOverrides';
+import {
   acknowledgeScopedLevelEditorRecoveryConflict,
   clearLevelEditorDraft,
   clearPreservedScopedLevelEditorRecovery,
@@ -479,6 +489,7 @@ function StudioEditableBoard({
   onTerrainFirstFrame,
   onSceneFirstFrame,
   onFrameError,
+  children,
 }: {
   cols: number;
   rows: number;
@@ -488,6 +499,8 @@ function StudioEditableBoard({
   /** Multi-cell props keyed by ANCHOR cell "x,y" -> {propId}. */
   props?: Record<string, { propId: string }>;
   floatingArtwork?: readonly FloatingArtworkPlacement[];
+  /** Extra board-space overlays (the card-scene viewing pane) rendered with the sprites. */
+  children?: ReactNode;
   /** Opaque multi-cell terrain tops that replace the covered 1x1 top sprites. */
   macroTiles?: readonly MacroTilePlacement[];
   /** Linear-feature overlays (roads + rivers) keyed by "x,y" -> {kind, material, mask}. */
@@ -1444,6 +1457,7 @@ function StudioEditableBoard({
             ? <BoardGridLayer cells={cells} />
             : null}
       {overlaySprites}
+      {children}
     </TileGrid>
   );
 }
@@ -2651,6 +2665,7 @@ export function LevelEditor(): ReactElement {
       documentRevision: Number.isSafeInteger(rawDocumentRevision) && rawDocumentRevision >= 1 ? rawDocumentRevision : undefined,
       returnTo: params.get('returnTo') ?? undefined,
       boardCode: params.get('board') ?? undefined,
+      cardSceneId: params.get('cardScene') ?? undefined,
     };
   }, []);
   // A level-only URL does not know its durable document id yet, but it still needs a page-unique
@@ -2660,9 +2675,17 @@ export function LevelEditor(): ReactElement {
     () => routeParams.documentId ?? `pending-level-editor:${routeParams.levelId ?? 'new-level'}`,
     [routeParams.documentId, routeParams.levelId],
   );
+  // Card-scene composing mode (ADR-0262): `?cardScene=<card-id>` opens a Run card's
+  // authored-or-generated scene as an ephemeral board with the level-only layers
+  // disabled; Save writes the card-scenes document rather than a level.
+  const cardSceneBundle = useMemo(() => cardSceneBundleFor(routeParams.cardSceneId), [routeParams.cardSceneId]);
+  const cardSceneMode = Boolean(cardSceneBundle);
   // Optional `?board=<code>` deep-link: decode a whole board to start from (see boardCode.ts).
   // It takes precedence over a campaign level (it's the explicit "inspect this exact board").
-  const loadedBoard = useMemo(() => readBoardParam(), []);
+  const loadedBoard = useMemo(
+    () => (cardSceneBundle ? cardSceneInitialBoard(cardSceneBundle) : readBoardParam()),
+    [cardSceneBundle],
+  );
   const urlParams = useMemo(() => new URLSearchParams(window.location.search), []);
   const [editorClientIdentity, setEditorClientIdentity] = useState<LevelEditorClientIdentity | null>(null);
   const editorClientLabel = useMemo(
@@ -3032,13 +3055,26 @@ export function LevelEditor(): ReactElement {
     ...option,
     // A pre-drawn plate locks Placed Art because those pixels are already baked into the
     // selected background. Level Artwork remains available to manage that background.
-    disabled: option.disabled || (isPredrawnBoard && isPredrawnLockedLayer(option.id)),
-  })), [isPredrawnBoard]);
+    // Card-scene composing locks the level-only layers (rules, sessions, units…).
+    disabled: option.disabled
+      || (isPredrawnBoard && isPredrawnLockedLayer(option.id))
+      || (cardSceneMode && CARD_SCENE_LOCKED_LAYERS.has(option.id)),
+  })), [cardSceneMode, isPredrawnBoard]);
   useEffect(() => {
     if (!isPredrawnBoard || !isPredrawnLockedLayer(layer)) return;
     setLayer('board');
     setTool('select');
   }, [isPredrawnBoard, layer]);
+  useEffect(() => {
+    if (!cardSceneMode || !CARD_SCENE_LOCKED_LAYERS.has(layer)) return;
+    setLayer('board');
+    setTool('select');
+  }, [cardSceneMode, layer]);
+  // The card's authored viewing pane, editable on the stage and in the rail panel.
+  const [cardSceneFrame, setCardSceneFrame] = useState<CardSceneFrame>(
+    () => (cardSceneBundle ? cardSceneSavedFrame(cardSceneBundle.id) : { x: 0, y: 27, width: 253 }),
+  );
+  const [cardSceneFrameVisible, setCardSceneFrameVisible] = useState(true);
   const [boardUnits, setBoardUnits] = useState<Record<string, BoardUnitPlacement>>((initialBoard?.units as Record<string, BoardUnitPlacement>) ?? {});
   const [boardDoodads, setBoardDoodads] = useState<Record<string, { doodadId: string }>>(initialBoard?.doodads ?? {});
   // Multi-cell props (trees/houses), keyed by ANCHOR cell. Seeded from a loaded board, else empty.
@@ -5474,6 +5510,17 @@ export function LevelEditor(): ReactElement {
         ? provisionalCurrentCandidate?.sourceIdentity ?? null
         : null;
       const claimedDraftIsProvisional = Boolean(claimedDraftSourceIdentity);
+
+      if (cardSceneMode) {
+        // Card-scene composing is document-free (ADR-0262): the board is ephemeral in
+        // this editor, no level working copy, draft, or editing session is created,
+        // and persistence is the card-scenes document via the rail panel's Save.
+        setCloudSaveState('local');
+        setCloudSaveDetail('Card scene — Save in the Card Scene panel writes the card document.');
+        setTargetBaselineResolved(true);
+        setEditorReady(true);
+        return;
+      }
 
       if (!auth.reachable) {
         setEditAuthorityState('error');
@@ -8370,6 +8417,8 @@ export function LevelEditor(): ReactElement {
   // so saving/publishing is persistence—not permission to iterate. The return link keeps the
   // durable level target while carrying this exact in-progress snapshot back to the editor.
   const testHref = useMemo(() => {
+    // A card scene is not a playable level; composing mode has no playtest.
+    if (cardSceneMode) return undefined;
     if (!playability.ok) return undefined;
     const canonicalEditorHref = levelEditorHrefWithRouteState(window.location.href, {
       layer,
@@ -8394,7 +8443,7 @@ export function LevelEditor(): ReactElement {
       editorReturnTo: routeParams.returnTo,
       layer,
     });
-  }, [levelArtworkWorkspace, brushKind, clockEnabled, clockIncrementSeconds, clockInitialSeconds, currentEditorBoard, editorDocument?.revision, eventsForSave, eventsOpen, eventsTab, layer, levelNameForSave, objective, playability.ok, routeParams.campaignId, routeParams.returnTo, surviveTurns, targetLevelId, victoryForSave, wallArtBrushId]);
+  }, [cardSceneMode, levelArtworkWorkspace, brushKind, clockEnabled, clockIncrementSeconds, clockInitialSeconds, currentEditorBoard, editorDocument?.revision, eventsForSave, eventsOpen, eventsTab, layer, levelNameForSave, objective, playability.ok, routeParams.campaignId, routeParams.returnTo, surviveTurns, targetLevelId, victoryForSave, wallArtBrushId]);
   const canUndoBoard = undoStack.length > 0 && (
     !isPredrawnBoard || preservesPredrawnBakedArt(currentEditorBoard, undoStack[undoStack.length - 1])
   );
@@ -8468,7 +8517,13 @@ export function LevelEditor(): ReactElement {
         {editorReady ? <TitleBarControlContribution
           ariaLabel="Editor navigation"
           controls={[
-            ...(cameFromStudio ? [{
+            ...(cardSceneMode ? [{
+              id: 'level-editor-card-scenes',
+              kind: 'navigation' as const,
+              label: '‹ Card Scenes',
+              destination: CARD_SCENE_RETURN_HREF,
+              title: 'Return to the Card Scenes catalog',
+            }] : cameFromStudio ? [{
               id: 'level-editor-catalog',
               kind: 'navigation' as const,
               label: '‹ Catalog',
@@ -8678,7 +8733,15 @@ export function LevelEditor(): ReactElement {
                     onTerrainFirstFrame={acknowledgeEditorTerrain}
                     onSceneFirstFrame={acknowledgeEditorScene}
                     onFrameError={failEditorFrame}
-                  />
+                  >
+                    {cardSceneMode && cardSceneFrameVisible ? (
+                      <CardSceneFrameOverlay
+                        frame={cardSceneFrame}
+                        boardZoom={viewZoom}
+                        onFrame={setCardSceneFrame}
+                      />
+                    ) : null}
+                  </StudioEditableBoard>
                 )}
                 {editorReady && !saving && !editorLoadError && layer === 'placed-art' && brushKind === 'artwork' && tool === 'brush' ? (
                   <div
@@ -8949,6 +9012,17 @@ export function LevelEditor(): ReactElement {
         inert={!editorReady || saving}
         ariaBusy={!editorReady || saving}
       >
+        {cardSceneMode && cardSceneBundle ? (
+          <CardSceneEditorPanel
+            bundle={cardSceneBundle}
+            board={currentEditorBoard}
+            frame={cardSceneFrame}
+            frameVisible={cardSceneFrameVisible}
+            onFrame={setCardSceneFrame}
+            onFrameVisible={setCardSceneFrameVisible}
+            onLoadBoard={(board) => commitEditorBoard(cloneEditorBoard(board))}
+          />
+        ) : null}
         {layer === 'status' && me?.signed_in && editorDocument ? (
           <section
             ref={editorSessionStatusRef}

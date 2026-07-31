@@ -2689,14 +2689,16 @@ async function main() {
   if (missingCardScenes.statusCode !== 404 || JSON.parse(missingCardScenes.body).error !== 'card_scenes_not_found') {
     throw new Error(`Missing card scenes should be explicit: ${missingCardScenes.statusCode} ${missingCardScenes.body}`);
   }
+  // A minimal canonical board code: base64url of the codec's compact JSON. The server
+  // treats the code as opaque and bounded; clients decode and enforce the 3×3 stage.
+  const syntheticSceneBoardCode = Buffer.from(JSON.stringify({ c: 3, r: 3 }))
+    .toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   const syntheticCardScenes = {
     overrides: {
       kb: {
         salt: 2,
-        cover: 'filled',
-        landmark: { sourceArtId: 'castle-ii', direction: 'south', pixelX: 12, pixelY: -30, scale: 0.4 },
-        doodads: { '0,0': { doodadId: 'fern' } },
-        props: {},
+        board: syntheticSceneBoardCode,
+        frame: { x: 12, y: -8, width: 240 },
       },
     },
   };
@@ -2708,7 +2710,7 @@ async function main() {
   const invalidCardScenesWrite = await request(
     'PUT', '/api/card-scenes/default', adminJson,
     JSON.stringify({
-      data: { overrides: { kb: { cover: 'jungle' } } },
+      data: { overrides: { kb: { frame: { x: 0, y: 0, width: 5 } } } },
       expectedRevision: null,
       clientSchemaVersion: 1,
     }), 5000,
@@ -2723,12 +2725,12 @@ async function main() {
   const createdCardScenesBody = JSON.parse(createdCardScenes.body);
   if (
     createdCardScenes.statusCode !== 201 || createdCardScenesBody.document.revision !== 0
-    || createdCardScenesBody.document.data.overrides.kb.cover !== 'filled'
+    || createdCardScenesBody.document.data.overrides.kb.frame.width !== 240
   ) throw new Error(`Card scenes create failed: ${createdCardScenes.statusCode} ${createdCardScenes.body}`);
   const publicCardScenesRead = await get('/api/card-scenes/default');
   if (
     publicCardScenesRead.statusCode !== 200 || publicCardScenesRead.headers.etag !== '"card-scenes-0"'
-    || JSON.parse(publicCardScenesRead.body).document.data.overrides.kb.landmark.sourceArtId !== 'castle-ii'
+    || JSON.parse(publicCardScenesRead.body).document.data.overrides.kb.board !== syntheticSceneBoardCode
   ) throw new Error(`Public card scenes read failed: ${publicCardScenesRead.statusCode} ${publicCardScenesRead.body}`);
   const staleCardScenesWrite = await request(
     'PUT', '/api/card-scenes/default', adminJson,

@@ -184,7 +184,10 @@ describe('Run chrome hierarchy', () => {
     // 2026-07-30) — and the capture pipeline depends on that determinism.
     expect(runCardScene).toMatch(/<StudioReadOnlyBoard[\s\S]{0,200}?\bstill\b/);
     expect(runCardScene).toContain("const CARD_FACING = 'south' as const;");
-    expect(runCardScene).toContain('camera = RUN_CARD_SCENE_CAMERA');
+    // The window renders the card's authored viewing pane (frame) cover-fit; the
+    // default frame reproduces the original shared framing.
+    expect(runCardScene).toContain('cardSceneCameraForView(plan.frame');
+    expect(runCardScene).toContain('export function defaultCardSceneFrame');
     expect(runCardScene).toContain('boardPan={camera.pan}');
     expect(runBundleCard).toContain('runCardName(bundle)');
     expect(runBundleCard).toContain('className="run-bundle-card-name"');

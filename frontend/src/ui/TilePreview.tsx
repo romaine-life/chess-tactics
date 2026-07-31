@@ -39,7 +39,8 @@ import { PagesLibraryStudio, PagesViewer } from './PagesLibraryStudio';
 import { ChromeLabCatalog, ChromeLabViewer, CHROME_LAB_TARGETS, defaultChromeLabTargetId } from './ChromeLab';
 import { RailLab } from './RailLab';
 import { GameLabCatalog, GameLabViewer } from './GameLab';
-import { CardSceneCatalog, CardSceneLab } from './CardSceneStudio';
+import { CardSceneCatalog, CardSceneLab, cardSceneEditorHref } from './CardSceneStudio';
+import { NavButton } from './shared/NavButton';
 import { PIECE_BUNDLE_DECK } from '../run/model';
 import { LoadingLab } from './LoadingLab';
 import { useSceneParticipant } from './shell/SceneBoundary';
@@ -1916,7 +1917,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       ),
     },
     {
-      id: 'cardscenes', label: 'Card Scenes', hint: 'The Run bundle deck’s battlefield vignettes — review every generated seed, then compose your own landmarks, doodads, props, and cover per card and save the authored scene.',
+      id: 'cardscenes', label: 'Card Scenes', hint: 'The Run bundle deck’s battlefield vignettes — review every scene, compose one in the Level Editor’s card-scene mode (terrain, doodads, props, walls, artwork, and the card’s viewing pane), and save the authored scene.',
       main: (
         <CardSceneCatalog
           search={cardSceneSearch}
@@ -1931,7 +1932,10 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             <span>Search</span>
             <input type="search" value={cardSceneSearch} onChange={(event) => setCardSceneSearch(event.target.value)} placeholder="name, pieces, terrain…" />
           </label>
-          <button type="button" className="tileset-view-action" onClick={() => openViewer('cardscene')} disabled={!selectedCardSceneId}>Open Scene Lab</button>
+          <NavButton className="tileset-view-action" to={cardSceneEditorHref(selectedCardSceneId)}>
+            Compose in Scene Editor
+          </NavButton>
+          <button type="button" className="tileset-view-action" onClick={() => openViewer('cardscene')} disabled={!selectedCardSceneId}>Open Capture Stage</button>
         </>
       ),
     },

@@ -1,38 +1,35 @@
 // Owner-authored Run card scene overrides: one revisioned, DB-authoritative document
-// (the ADR-0089 shape — like the SFX profile) holding per-card composition overrides
-// applied over the deterministic generated scene plan. Absence of the document, or of
-// a card's entry, means the generated scene: there is no committed fallback copy.
+// (the ADR-0089 shape — like the SFX profile) holding per-card authored scenes applied
+// over the deterministic generated plan. Absence of the document, or of a card's
+// entry, means the generated scene: there is no committed fallback copy.
 
-import type { Direction } from '@chess-tactics/board-render';
+import { decodeBoard } from '../ui/boardCode';
 
 export const CARD_SCENES_ID = 'default';
 export const CARD_SCENES_SCHEMA_VERSION = 1;
 
-const DIRECTIONS = new Set<Direction>([
-  'south', 'south-east', 'east', 'north-east', 'north', 'north-west', 'west', 'south-west',
-]);
-
-export interface CardSceneLandmarkOverride {
-  sourceArtId: string;
-  direction: Direction;
-  pixelX: number;
-  pixelY: number;
-  scale: number;
+/**
+ * The card's authored viewing pane in board-world pixels: (x, y) is the pane centre,
+ * width spans the pane horizontally, and height is implied by the capture aspect.
+ * Every consumer — the live card window, the capture stage, the installed-art plate —
+ * renders exactly this pane.
+ */
+export interface CardSceneFrame {
+  x: number;
+  y: number;
+  width: number;
 }
-
-export type CardSceneCoverMode = 'none' | 'sparse' | 'filled';
 
 export interface CardSceneOverride {
   /** Re-deal salt for the generated base scene (absent = the base deal). */
   salt?: number;
-  /** Wholesale landmark replacement; null = explicitly no landmark. Absent = generated. */
-  landmark?: CardSceneLandmarkOverride | null;
-  /** Wholesale doodad channel replacement keyed by tactical cell "x,y". Absent = generated. */
-  doodads?: Record<string, { doodadId: string }>;
-  /** Wholesale prop channel replacement keyed by anchor cell "x,y". Absent = generated. */
-  props?: Record<string, { propId: string }>;
-  /** Scene-wide ground-cover mode. Absent = generated per-cell rolls. */
-  cover?: CardSceneCoverMode;
+  /**
+   * The whole authored scene as a canonical board code (unit-less, 3×3 tactical
+   * stage). Present ⇒ it replaces the generated scene wholesale; the card's mustered
+   * units are always derived from the card id at render time.
+   */
+  board?: string;
+  frame?: CardSceneFrame;
 }
 
 export interface CardScenesData {
@@ -49,31 +46,36 @@ export interface CardScenesDocument {
   updatedBy: string | null;
 }
 
-const CELL_KEY = /^-?\d{1,2},-?\d{1,2}$/;
-const ART_ID = /^[A-Za-z0-9][A-Za-z0-9._:@+-]{0,127}$/;
-const COVER_MODES = new Set<CardSceneCoverMode>(['none', 'sparse', 'filled']);
+export const CARD_SCENE_FRAME_MIN_WIDTH = 80;
+export const CARD_SCENE_FRAME_MAX_WIDTH = 640;
+export const CARD_SCENE_BOARD_CODE_MAX_LENGTH = 200_000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
-function assertLandmark(value: unknown, cardId: string): asserts value is CardSceneLandmarkOverride {
-  if (!isRecord(value)) throw new Error(`card scene ${cardId} landmark is invalid`);
-  if (typeof value.sourceArtId !== 'string' || !ART_ID.test(value.sourceArtId)
-    || typeof value.direction !== 'string' || !DIRECTIONS.has(value.direction as Direction)
-    || !Number.isFinite(value.pixelX) || !Number.isFinite(value.pixelY)
-    || !Number.isFinite(value.scale) || Number(value.scale) <= 0 || Number(value.scale) > 8) {
-    throw new Error(`card scene ${cardId} landmark fields are invalid`);
+export function assertCardSceneFrame(value: unknown, cardId: string): asserts value is CardSceneFrame {
+  if (!isRecord(value)
+    || !Number.isFinite(value.x) || Math.abs(Number(value.x)) > 2000
+    || !Number.isFinite(value.y) || Math.abs(Number(value.y)) > 2000
+    || !Number.isFinite(value.width)
+    || Number(value.width) < CARD_SCENE_FRAME_MIN_WIDTH
+    || Number(value.width) > CARD_SCENE_FRAME_MAX_WIDTH) {
+    throw new Error(`card scene ${cardId} frame is invalid`);
   }
 }
 
-function assertPlacedMap(value: unknown, key: 'doodadId' | 'propId', cardId: string): void {
-  if (!isRecord(value)) throw new Error(`card scene ${cardId} ${key} map is invalid`);
-  for (const [cell, placed] of Object.entries(value)) {
-    if (!CELL_KEY.test(cell) || !isRecord(placed)
-      || typeof placed[key] !== 'string' || !ART_ID.test(String(placed[key]))) {
-      throw new Error(`card scene ${cardId} ${key} entry ${cell} is invalid`);
-    }
+function assertSceneBoardCode(value: unknown, cardId: string): asserts value is string {
+  if (typeof value !== 'string' || !value || value.length > CARD_SCENE_BOARD_CODE_MAX_LENGTH) {
+    throw new Error(`card scene ${cardId} board code is invalid`);
+  }
+  const board = decodeBoard(value);
+  if (!board) throw new Error(`card scene ${cardId} board code does not decode`);
+  if (board.cols !== 3 || board.rows !== 3) {
+    throw new Error(`card scene ${cardId} board must keep the 3×3 tactical stage`);
+  }
+  if (Object.keys(board.units).length > 0) {
+    throw new Error(`card scene ${cardId} board must not persist units — the card derives them`);
   }
 }
 
@@ -89,12 +91,8 @@ export function assertCardScenes(value: unknown): asserts value is CardScenesDat
     if (override.salt !== undefined && (!Number.isSafeInteger(override.salt) || override.salt < 0)) {
       throw new Error(`card scene ${cardId} salt is invalid`);
     }
-    if (override.landmark !== undefined && override.landmark !== null) assertLandmark(override.landmark, cardId);
-    if (override.doodads !== undefined) assertPlacedMap(override.doodads, 'doodadId', cardId);
-    if (override.props !== undefined) assertPlacedMap(override.props, 'propId', cardId);
-    if (override.cover !== undefined && !COVER_MODES.has(override.cover)) {
-      throw new Error(`card scene ${cardId} cover mode is invalid`);
-    }
+    if (override.board !== undefined) assertSceneBoardCode(override.board, cardId);
+    if (override.frame !== undefined) assertCardSceneFrame(override.frame, cardId);
   }
 }
 

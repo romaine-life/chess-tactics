@@ -22,10 +22,11 @@ import {
   cardSceneOverride,
   cardScenesStoreRevision,
   subscribeCardScenes,
+  type CardSceneFrame,
   type CardSceneOverride,
 } from '../run/cardSceneOverrides';
 import { mixSeed, PIECE_VALUE, type PieceBundle } from '../run/model';
-import type { EditorBoard, FloatingArtworkPlacement } from './boardCode';
+import { decodeBoard, type EditorBoard, type FloatingArtworkPlacement } from './boardCode';
 
 // A bundle card's artwork is a small battlefield vignette: the bundle's units mustered
 // on a coherent patch of live terrain, with seeded ground cover and an optional prop.
@@ -38,25 +39,56 @@ export const RUN_CARD_SCENE_ROWS = 3;
 // every window crop is full-bleed field instead of a floating diamond island.
 export const RUN_CARD_SCENE_APRON = 2;
 
-export const RUN_CARD_SCENE_CAMERA = {
-  zoom: 1.15,
-  // TileGrid centres the full sprite frames; the visible massing of a 3×3 scene sits
-  // one canonical half-step above that centre, mirroring the unit-profile framing.
-  pan: { x: 0, y: TILE_STEP_Y * 1.15 },
-} as const;
-
 // The enriched-art contract: every scene slot is captured (and installed) at exactly
-// this stage size and framing. The same world pan rule as the card camera keeps the
-// two framings concentric, so a card window can mount the art as a board-registered
-// plate — scaled by the zoom ratio — with the live units seated exactly on top.
+// this stage raster. The stage renders the card's authored viewing pane (its frame),
+// so a card window can mount the art as a board-registered plate — centred on the
+// same frame and scaled by the zoom ratio — with the live units seated exactly on top.
 export const RUN_CARD_SCENE_CAPTURE = {
   width: 480,
   height: 360,
-  camera: {
-    zoom: 1.9,
-    pan: { x: 0, y: TILE_STEP_Y * 1.9 },
-  },
 } as const;
+
+const boardCentre = (): { left: number; top: number } => boardLabCellPosition({
+  x: (RUN_CARD_SCENE_COLS - 1) / 2,
+  y: (RUN_CARD_SCENE_ROWS - 1) / 2,
+});
+
+/**
+ * The default viewing pane: what every card showed before frames were authorable —
+ * the massing centred one canonical half-step above the board centre at the original
+ * capture framing (480px stage at 1.9× zoom).
+ */
+export function defaultCardSceneFrame(): CardSceneFrame {
+  const centre = boardCentre();
+  return {
+    x: centre.left,
+    y: centre.top - TILE_STEP_Y,
+    width: RUN_CARD_SCENE_CAPTURE.width / 1.9,
+  };
+}
+
+export function cardSceneFrameHeight(frame: CardSceneFrame): number {
+  return frame.width * (RUN_CARD_SCENE_CAPTURE.height / RUN_CARD_SCENE_CAPTURE.width);
+}
+
+/**
+ * Map the authored frame into a viewport: cover-fit (the frame fills the window; the
+ * off-aspect axis crops symmetrically) centred on the frame. Both the live card window
+ * and the fixed capture stage use this one mapping, so the art plate registration
+ * below stays exact.
+ */
+export function cardSceneCameraForView(
+  frame: CardSceneFrame,
+  viewWidth: number,
+  viewHeight: number,
+): { zoom: number; pan: { x: number; y: number } } {
+  const zoom = Math.max(viewWidth / frame.width, viewHeight / cardSceneFrameHeight(frame));
+  const centre = boardCentre();
+  return {
+    zoom,
+    pan: { x: (centre.left - frame.x) * zoom, y: (centre.top - frame.y) * zoom },
+  };
+}
 
 const CARD_FACTION = paletteForSide('player');
 const CARD_FACING = 'south' as const;
@@ -156,20 +188,16 @@ const LANDMARKS_ARID = ['saguaro-cactus'] as const;
 const LUSH_TERRAINS = new Set(['grass', 'dirt']);
 const ARID_TERRAINS = new Set(['sand']);
 /**
- * The capture framing's visible world rectangle: the fixed stage mapped through the
- * shared camera (zoom + pan) around the centred playable board. Landmark placement is
- * solved inside this rectangle from real sprite metrics, so nothing lands off frame.
+ * The default viewing pane as a world rectangle. Generated landmark placement is
+ * solved inside this rectangle from real sprite metrics, so nothing lands off frame
+ * for an unauthored card; an authored frame simply crops the same scene differently,
+ * which the editor's frame overlay shows while composing.
  */
 function captureWorldRect(): { minX: number; maxX: number; minY: number; maxY: number } {
-  const { zoom, pan } = RUN_CARD_SCENE_CAPTURE.camera;
-  const centre = boardLabCellPosition({
-    x: (RUN_CARD_SCENE_COLS - 1) / 2,
-    y: (RUN_CARD_SCENE_ROWS - 1) / 2,
-  });
-  const halfW = RUN_CARD_SCENE_CAPTURE.width / 2 / zoom;
-  const halfH = RUN_CARD_SCENE_CAPTURE.height / 2 / zoom;
-  const centreY = centre.top - pan.y / zoom;
-  return { minX: -halfW, maxX: halfW, minY: centreY - halfH, maxY: centreY + halfH };
+  const frame = defaultCardSceneFrame();
+  const halfW = frame.width / 2;
+  const halfH = cardSceneFrameHeight(frame) / 2;
+  return { minX: frame.x - halfW, maxX: frame.x + halfW, minY: frame.y - halfH, maxY: frame.y + halfH };
 }
 
 function placeLandmark(rng: Rng, familyId: TileFamilyId): FloatingArtworkPlacement[] {
@@ -251,6 +279,33 @@ export interface RunCardScenePlan {
   familyId: TileFamilyId;
   /** Stable art-slot key for this card's scene; equals the bundle id. */
   sceneId: string;
+  /** The card's viewing pane: authored when saved, else the default framing. */
+  frame: CardSceneFrame;
+  /** True when the scene body came from the owner's authored board. */
+  authored: boolean;
+}
+
+/** The card's mustered formation — always derived from the composition, never stored. */
+export function cardSceneUnits(bundle: Pick<PieceBundle, 'pieces'>): EditorBoard['units'] {
+  // Highest-value piece takes the hero seat; ties keep the bundle's own order.
+  const mustered = bundle.pieces
+    .map((piece, index) => ({ piece, index }))
+    .sort((left, right) => (
+      (PIECE_VALUE[right.piece] ?? 0) - (PIECE_VALUE[left.piece] ?? 0) || left.index - right.index
+    ))
+    .slice(0, FORMATION_SEATS.length);
+  const units: EditorBoard['units'] = {};
+  mustered.forEach(({ piece }, seatIndex) => {
+    const seat = FORMATION_SEATS[seatIndex];
+    units[`${seat.x},${seat.y}`] = { unitId: piece, direction: CARD_FACING, faction: CARD_FACTION };
+  });
+  return units;
+}
+
+function familyOfSceneBoard(board: EditorBoard): TileFamilyId | undefined {
+  const heroTile = board.cells['1,1'] ?? Object.values(board.cells)[0];
+  const asset = heroTile ? tileAssets.find((candidate) => candidate.id === heroTile) : undefined;
+  return asset?.terrains?.[0];
 }
 
 /**
@@ -259,8 +314,10 @@ export interface RunCardScenePlan {
  * same card always shows the same scene everywhere it appears — draft offer, shop
  * bundle, Enchiridion record, art capture — while live catalog art can still update.
  *
- * `override` defaults to the hydrated live document's entry; the Studio Lab passes its
- * unsaved draft, and `null` forces the pure generated baseline (ADR-0057 Reset).
+ * An override's authored board (a canonical board code) replaces the generated scene
+ * wholesale; the mustered units are always derived from the card. `override` defaults
+ * to the hydrated live document's entry; the scene editor passes its unsaved draft,
+ * and `null` forces the pure generated baseline (ADR-0057 Reset).
  */
 export function runCardScenePlan(
   bundle: Pick<PieceBundle, 'pieces'>,
@@ -272,6 +329,25 @@ export function runCardScenePlan(
   }
   const sceneId = canonicalCardId(bundle);
   const applied = override === undefined ? cardSceneOverride(sceneId) : override;
+  const units = cardSceneUnits(bundle);
+  const coverSeed = mixSeed(mixSeed(0x9c42d5, `run-card-scene:${sceneId}`), 'run-card-scene-cover');
+  const frame = applied?.frame ?? defaultCardSceneFrame();
+
+  // A malformed persisted code never reaches here (assertCardScenes gates apply), but
+  // decode defensively: an undecodable board falls back to the generated scene.
+  const authoredBoard = applied?.board ? decodeBoard(applied.board) : null;
+  if (authoredBoard) {
+    const board: EditorBoard = { ...authoredBoard, units };
+    return {
+      board,
+      coverSeed,
+      familyId: familyOfSceneBoard(authoredBoard) ?? families[0].familyId,
+      sceneId,
+      frame,
+      authored: true,
+    };
+  }
+
   const rng = createRng(mixSeed(0x9c42d5, `run-card-scene:${sceneId}`, applied?.salt ?? 0));
   const family = families[rng.int(families.length)];
 
@@ -282,33 +358,12 @@ export function runCardScenePlan(
     }
   }
 
-  // Highest-value piece takes the hero seat; ties keep the bundle's own order.
-  const mustered = bundle.pieces
-    .map((piece, index) => ({ piece, index }))
-    .sort((left, right) => (
-      (PIECE_VALUE[right.piece] ?? 0) - (PIECE_VALUE[left.piece] ?? 0) || left.index - right.index
-    ))
-    .slice(0, FORMATION_SEATS.length);
-  const units: EditorBoard['units'] = {};
   const free = new Set(Object.keys(cells));
-  mustered.forEach(({ piece }, seatIndex) => {
-    const seat = FORMATION_SEATS[seatIndex];
-    units[`${seat.x},${seat.y}`] = { unitId: piece, direction: CARD_FACING, faction: CARD_FACTION };
-    free.delete(`${seat.x},${seat.y}`);
-  });
+  for (const key of Object.keys(units)) free.delete(key);
 
-  // The generated pipeline always runs in full (stable RNG draw order); authored
-  // override channels then replace their generated counterpart wholesale.
-  const generatedProps = placeProps(rng, family.familyId, free);
-  const generatedDoodads = placeDoodads(rng, family.familyId, free);
-  const generatedArtwork = placeLandmark(rng, family.familyId);
-  const props = applied?.props !== undefined ? { ...applied.props } : generatedProps;
-  const doodads = applied?.doodads !== undefined ? { ...applied.doodads } : generatedDoodads;
-  const floatingArtwork = applied?.landmark !== undefined
-    ? (applied.landmark
-        ? [{ id: `card-landmark-${applied.landmark.sourceArtId}`, ...applied.landmark }]
-        : [])
-    : generatedArtwork;
+  const props = placeProps(rng, family.familyId, free);
+  const doodads = placeDoodads(rng, family.familyId, free);
+  const floatingArtwork = placeLandmark(rng, family.familyId);
 
   const grassFamily = familyForGameplayTerrain('grass');
   const cover: EditorBoard['cover'] = {};
@@ -316,11 +371,8 @@ export function runCardScenePlan(
   if (grassFamily) {
     for (const key of Object.keys(cells)) {
       const roll = rng.int(3);
-      const density = applied?.cover !== undefined
-        ? (applied.cover === 'none' ? null : applied.cover)
-        : roll === 0 ? null : roll === 1 ? 'sparse' : 'filled';
-      if (!density) continue;
-      cover[key] = density;
+      if (roll === 0) continue;
+      cover[key] = roll === 1 ? 'sparse' : 'filled';
       coverTypes[key] = grassFamily;
     }
   }
@@ -347,9 +399,11 @@ export function runCardScenePlan(
   };
   return {
     board,
-    coverSeed: mixSeed(mixSeed(0x9c42d5, `run-card-scene:${sceneId}`), 'run-card-scene-cover'),
+    coverSeed,
     familyId: family.familyId,
     sceneId,
+    frame,
+    authored: false,
   };
 }
 
@@ -391,7 +445,6 @@ export function RunCardScene({
   bundle,
   className = '',
   variant = 'live',
-  camera = RUN_CARD_SCENE_CAMERA,
   overrideDraft = undefined,
   onLayerFirstFrame,
   onFrameError,
@@ -406,10 +459,8 @@ export function RunCardScene({
    * 'guide' is the full scene including units, for with-units generation trials.
    */
   variant?: 'live' | 'source' | 'guide';
-  /** Card-window framing by default; the capture stage passes its wider framing. */
-  camera?: { zoom: number; pan: { x: number; y: number } };
   /**
-   * Studio Lab draft: an unsaved override to preview (null = the pure generated
+   * Scene editor draft: an unsaved override to preview (null = the pure generated
    * baseline). Undefined reads the hydrated live override document.
    */
   overrideDraft?: CardSceneOverride | null;
@@ -425,6 +476,37 @@ export function RunCardScene({
     [cardId, overrideDraft, overridesRevision], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const artwork = variant === 'live' ? installedRunCardSceneArt(plan.sceneId) : null;
+
+  // The window renders the card's authored viewing pane (cover-fit), so the camera
+  // needs the real window size; the board mounts only once it is measured, under the
+  // painted-surface gate so nothing partial ever shows.
+  const viewportRef = useRef<HTMLSpanElement | null>(null);
+  const [viewSize, setViewSize] = useState<{ width: number; height: number } | null>(null);
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return undefined;
+    const measure = (): void => {
+      const rect = viewport.getBoundingClientRect();
+      const width = Math.round(rect.width);
+      const height = Math.round(rect.height);
+      if (width > 0 && height > 0) {
+        setViewSize((currentSize) => (
+          currentSize && currentSize.width === width && currentSize.height === height
+            ? currentSize
+            : { width, height }
+        ));
+      }
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, []);
+  const camera = useMemo(
+    () => (viewSize ? cardSceneCameraForView(plan.frame, viewSize.width, viewSize.height) : null),
+    [plan.frame, viewSize],
+  );
+  const captureZoom = RUN_CARD_SCENE_CAPTURE.width / plan.frame.width;
 
   // The scene window speaks the app's painted-surface protocol: it is a loading
   // surface until every gate below has painted (both canvas layers, plus the art
@@ -486,47 +568,54 @@ export function RunCardScene({
   ), [artwork, plan.board, variant]);
   return (
     <span
+      ref={viewportRef}
       className={`run-card-scene-viewport ${className}`.trim()}
       data-scene-art={artwork ? 'installed' : 'live'}
       aria-hidden="true"
     >
       <span className={`painted-surface run-card-scene-surface ${revealed ? 'is-ready' : 'is-loading'}`}>
         <span className="painted-surface-content">
-          {artwork ? (
-            // A board-registered plate, not a cover-fit background: both framings share
-            // one world centre and pan rule, so scaling by the zoom ratio seats the live
-            // unit sprites exactly where the captured terrain stood.
-            <img
-              className="run-card-scene-art"
-              src={artwork.src}
-              width={artwork.width}
-              height={artwork.height}
-              style={{
-                transform: `translate(-50%, -50%) scale(${camera.zoom / RUN_CARD_SCENE_CAPTURE.camera.zoom})`,
-              }}
-              alt=""
-              draggable={false}
-              ref={markArtGate}
-              onLoad={(event) => markArtGate(event.currentTarget)}
-              onError={() => handleFrameError(new Error(`Run card scene art failed: ${plan.sceneId}`))}
-            />
+          {camera ? (
+            <>
+              {artwork ? (
+                // A board-registered plate, not a cover-fit background: the art raster is
+                // the authored frame at the capture width, and the window camera centres
+                // that same frame — so scaling by the zoom ratio seats the live unit
+                // sprites exactly where the captured terrain stood.
+                <img
+                  className="run-card-scene-art"
+                  src={artwork.src}
+                  width={artwork.width}
+                  height={artwork.height}
+                  style={{
+                    transform: `translate(-50%, -50%) scale(${camera.zoom / captureZoom})`,
+                  }}
+                  alt=""
+                  draggable={false}
+                  ref={markArtGate}
+                  onLoad={(event) => markArtGate(event.currentTarget)}
+                  onError={() => handleFrameError(new Error(`Run card scene art failed: ${plan.sceneId}`))}
+                />
+              ) : null}
+              {/* A card is a still: one authored frame, no sway, no repaint clock. The
+                  living version of this scene belongs to gameplay boards, not to a card
+                  painting. */}
+              <StudioReadOnlyBoard
+                board={board}
+                hidden={artwork ? { tile: true, unit: false, doodad: true } : undefined}
+                still
+                coverScale={RUN_CARD_COVER_SCALE}
+                boardZoom={camera.zoom}
+                boardPan={camera.pan}
+                coverSeed={plan.coverSeed}
+                className="run-card-scene-board"
+                ariaLabel=""
+                onTerrainFirstFrame={handleTerrainFirstFrame}
+                onSceneFirstFrame={handleSceneFirstFrame}
+                onFrameError={handleFrameError}
+              />
+            </>
           ) : null}
-          {/* A card is a still: one authored frame, no sway, no repaint clock. The living
-              version of this scene belongs to gameplay boards, not to a card painting. */}
-          <StudioReadOnlyBoard
-            board={board}
-            hidden={artwork ? { tile: true, unit: false, doodad: true } : undefined}
-            still
-            coverScale={RUN_CARD_COVER_SCALE}
-            boardZoom={camera.zoom}
-            boardPan={camera.pan}
-            coverSeed={plan.coverSeed}
-            className="run-card-scene-board"
-            ariaLabel=""
-            onTerrainFirstFrame={handleTerrainFirstFrame}
-            onSceneFirstFrame={handleSceneFirstFrame}
-            onFrameError={handleFrameError}
-          />
         </span>
       </span>
     </span>

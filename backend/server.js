@@ -13567,23 +13567,13 @@ app.put('/api/sfx-profiles/:id', async (req, res) => {
 const CARD_SCENES_SCHEMA_VERSION = 1;
 const CARD_SCENES_ID = 'default';
 const CARD_SCENES_LOCK_KEY = 4300193003;
-const CARD_SCENE_CELL_KEY = /^-?\d{1,2},-?\d{1,2}$/;
-const CARD_SCENE_ART_ID = /^[A-Za-z0-9][A-Za-z0-9._:@+-]{0,127}$/;
-const CARD_SCENE_COVER_MODES = new Set(['none', 'sparse', 'filled']);
-const CARD_SCENE_DIRECTIONS = new Set([
-  'south', 'south-east', 'east', 'north-east', 'north', 'north-west', 'west', 'south-west',
-]);
-
-function cardScenePlacedMapIssue(value, key, cardId) {
-  if (!isObjectRecord(value)) return `override ${cardId} ${key} map is invalid`;
-  for (const [cell, placed] of Object.entries(value)) {
-    if (!CARD_SCENE_CELL_KEY.test(cell) || !isObjectRecord(placed)
-      || typeof placed[key] !== 'string' || !CARD_SCENE_ART_ID.test(placed[key])) {
-      return `override ${cardId} ${key} entry ${cell} is invalid`;
-    }
-  }
-  return null;
-}
+// The authored scene is a canonical board code (opaque URL-safe token). Deep board
+// validation (3×3 stage, no persisted units) is the client codec's job at apply time;
+// the server enforces shape, charset, and size so the document stays bounded.
+const CARD_SCENE_BOARD_CODE = /^[A-Za-z0-9_-]+$/;
+const CARD_SCENE_BOARD_CODE_MAX_LENGTH = 200000;
+const CARD_SCENE_FRAME_MIN_WIDTH = 80;
+const CARD_SCENE_FRAME_MAX_WIDTH = 640;
 
 function validateCardScenesData(data) {
   if (!isObjectRecord(data) || !isObjectRecord(data.overrides)) return 'document shape is invalid';
@@ -13592,26 +13582,23 @@ function validateCardScenesData(data) {
     if (override.salt !== undefined && (!Number.isSafeInteger(override.salt) || override.salt < 0)) {
       return `override ${cardId} salt is invalid`;
     }
-    if (override.landmark !== undefined && override.landmark !== null) {
-      const landmark = override.landmark;
-      if (!isObjectRecord(landmark)
-        || typeof landmark.sourceArtId !== 'string' || !CARD_SCENE_ART_ID.test(landmark.sourceArtId)
-        || !CARD_SCENE_DIRECTIONS.has(landmark.direction)
-        || !Number.isFinite(landmark.pixelX) || !Number.isFinite(landmark.pixelY)
-        || !Number.isFinite(landmark.scale) || landmark.scale <= 0 || landmark.scale > 8) {
-        return `override ${cardId} landmark is invalid`;
+    if (override.board !== undefined) {
+      if (typeof override.board !== 'string' || !override.board
+        || override.board.length > CARD_SCENE_BOARD_CODE_MAX_LENGTH
+        || !CARD_SCENE_BOARD_CODE.test(override.board)) {
+        return `override ${cardId} board code is invalid`;
       }
     }
-    if (override.doodads !== undefined) {
-      const issue = cardScenePlacedMapIssue(override.doodads, 'doodadId', cardId);
-      if (issue) return issue;
-    }
-    if (override.props !== undefined) {
-      const issue = cardScenePlacedMapIssue(override.props, 'propId', cardId);
-      if (issue) return issue;
-    }
-    if (override.cover !== undefined && !CARD_SCENE_COVER_MODES.has(override.cover)) {
-      return `override ${cardId} cover mode is invalid`;
+    if (override.frame !== undefined) {
+      const frame = override.frame;
+      if (!isObjectRecord(frame)
+        || !Number.isFinite(frame.x) || Math.abs(frame.x) > 2000
+        || !Number.isFinite(frame.y) || Math.abs(frame.y) > 2000
+        || !Number.isFinite(frame.width)
+        || frame.width < CARD_SCENE_FRAME_MIN_WIDTH
+        || frame.width > CARD_SCENE_FRAME_MAX_WIDTH) {
+        return `override ${cardId} frame is invalid`;
+      }
     }
   }
   return null;

@@ -11,11 +11,15 @@ import { PIECE_BUNDLE_DECK, type PieceBundle } from '../run/model';
 import { applyTestPropSeats } from '../test/livePropSeats';
 import { testGroundCoverCatalog, testStructureMediaSlots } from '../test/liveMediaCatalog';
 import {
-  RUN_CARD_SCENE_CAMERA,
+  cardSceneCameraForView,
+  cardSceneFrameHeight,
+  defaultCardSceneFrame,
+  RUN_CARD_SCENE_CAPTURE,
   RUN_CARD_SCENE_COLS,
   RUN_CARD_SCENE_ROWS,
   runCardScenePlan,
 } from './RunCardScene';
+import { encodeBoard } from './boardCode';
 import { studioFamilies } from './studioBoard';
 
 beforeAll(() => {
@@ -41,11 +45,19 @@ function familyForTile(tileId: string): string {
 }
 
 describe('Run card scene', () => {
-  it('centres the vignette from canonical projection geometry', () => {
-    expect(RUN_CARD_SCENE_CAMERA.pan).toEqual({
-      x: 0,
-      y: TILE_STEP_Y * RUN_CARD_SCENE_CAMERA.zoom,
-    });
+  it('maps the default viewing pane through the frame camera exactly as before', () => {
+    const frame = defaultCardSceneFrame();
+    // The default pane centres the massing one half-step above the board centre at the
+    // original capture framing.
+    expect(frame.x).toBe(0);
+    expect(frame.y).toBe(TILE_STEP_Y);
+    const camera = cardSceneCameraForView(frame, RUN_CARD_SCENE_CAPTURE.width, RUN_CARD_SCENE_CAPTURE.height);
+    expect(camera.zoom).toBeCloseTo(1.9, 5);
+    expect(camera.pan.x).toBeCloseTo(0, 5);
+    expect(camera.pan.y).toBeCloseTo(TILE_STEP_Y * 1.9, 5);
+    // Cover-fit: a tall window zooms by height instead.
+    const tall = cardSceneCameraForView(frame, 200, 300);
+    expect(tall.zoom).toBeCloseTo(300 / cardSceneFrameHeight(frame), 5);
   });
 
   it('derives one stable scene per bundle id', () => {
@@ -110,45 +122,43 @@ describe('Run card scene', () => {
     expect(plans.some((plan) => Object.keys(plan.board.props).length > 0)).toBe(true);
   });
 
-  it('applies owner overrides wholesale over the generated plan', () => {
+  it('applies the authored board wholesale while units and frame stay derived', () => {
     const generated = runCardScenePlan(bundle('ppb', ['pawn', 'pawn', 'bishop']), null);
     const rerolled = runCardScenePlan(bundle('ppb', ['pawn', 'pawn', 'bishop']), { salt: 3 });
     expect(rerolled.board.cells).not.toEqual(generated.board.cells);
     expect(Object.values(rerolled.board.units).map((unit) => unit.unitId).sort())
       .toEqual(Object.values(generated.board.units).map((unit) => unit.unitId).sort());
 
+    // An authored board (unit-less, as the editor saves it) replaces the scene body;
+    // the mustered formation is still derived from the card.
+    const authoredSource = { ...generated.board, units: {}, doodads: {}, props: {}, floatingArtwork: [] };
     const authored = runCardScenePlan(bundle('ppb', ['pawn', 'pawn', 'bishop']), {
-      landmark: null,
-      doodads: { '0,0': { doodadId: 'fern' } },
-      props: {},
-      cover: 'none',
+      board: encodeBoard(authoredSource),
     });
-    expect(authored.board.floatingArtwork).toEqual([]);
-    expect(authored.board.doodads).toEqual({ '0,0': { doodadId: 'fern' } });
+    expect(authored.authored).toBe(true);
+    expect(authored.board.doodads).toEqual({});
     expect(authored.board.props).toEqual({});
-    expect(authored.board.cover).toEqual({});
-    // Terrain and formation stay generated when only channels are overridden.
-    expect(authored.board.cells).toEqual(generated.board.cells);
     expect(authored.board.units).toEqual(generated.board.units);
+    expect(authored.board.cells).toEqual(generated.board.cells);
+    expect(authored.frame).toEqual(defaultCardSceneFrame());
 
-    const landmark = {
-      sourceArtId: 'castle-ii',
-      direction: 'south' as const,
-      pixelX: 12,
-      pixelY: -40,
-      scale: 0.5,
-    };
-    const withLandmark = runCardScenePlan(bundle('ppb', ['pawn', 'pawn', 'bishop']), { landmark });
-    expect(withLandmark.board.floatingArtwork).toEqual([
-      { id: 'card-landmark-castle-ii', ...landmark },
-    ]);
+    const framed = runCardScenePlan(bundle('ppb', ['pawn', 'pawn', 'bishop']), {
+      frame: { x: 20, y: 10, width: 180 },
+    });
+    expect(framed.frame).toEqual({ x: 20, y: 10, width: 180 });
+    expect(framed.board.cells).toEqual(generated.board.cells);
   });
 
   it('reads the hydrated live override document by default', () => {
     const generated = runCardScenePlan(bundle('pr', ['pawn', 'rook']));
+    const authoredSource = { ...generated.board, units: {}, doodads: {}, props: {}, floatingArtwork: [] };
     applyLiveCardScenes({
       id: 'default',
-      data: { overrides: { pr: { cover: 'filled', landmark: null } } },
+      data: {
+        overrides: {
+          pr: { board: encodeBoard(authoredSource), frame: { x: -10, y: 5, width: 200 } },
+        },
+      },
       clientSchemaVersion: 1,
       revision: 0,
       createdAt: null,
@@ -157,9 +167,10 @@ describe('Run card scene', () => {
     });
     try {
       const overridden = runCardScenePlan(bundle('pr', ['pawn', 'rook']));
-      expect(Object.values(overridden.board.cover).every((density) => density === 'filled')).toBe(true);
-      expect(overridden.board.floatingArtwork).toEqual([]);
-      expect(overridden.board.cells).toEqual(generated.board.cells);
+      expect(overridden.authored).toBe(true);
+      expect(overridden.board.doodads).toEqual({});
+      expect(overridden.frame).toEqual({ x: -10, y: 5, width: 200 });
+      expect(overridden.board.units).toEqual(generated.board.units);
     } finally {
       resetLiveCardScenes();
     }
