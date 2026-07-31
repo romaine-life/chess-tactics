@@ -15,6 +15,7 @@ const runSelfInspection = readFileSync(new URL('./RunSelfInspection.tsx', import
 const skirmish = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
 const skirmishHud = readFileSync(new URL('./SkirmishHud.tsx', import.meta.url), 'utf8');
 const chromeBox = readFileSync(new URL('./shared/ChromeBox.tsx', import.meta.url), 'utf8');
+const paintedSurfaceBoundary = readFileSync(new URL('./shell/PaintedSurfaceBoundary.tsx', import.meta.url), 'utf8');
 const styleCss = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 
 describe('Run chrome hierarchy', () => {
@@ -203,6 +204,10 @@ describe('Run chrome hierarchy', () => {
     expect(runCardScene).toContain("revealed ? 'is-ready' : 'is-loading'");
     expect(runCardScene).toContain('className="painted-surface-content"');
     expect(styleCss).toMatch(/\.run-card-scene-surface\.is-ready \.painted-surface-content > \*\s*\{[\s\S]*?animation:\s*none;/);
+    // Cold route entry holds the veil for the same rule: the shell's painted-surface
+    // boundary waits for nested loading surfaces before reporting painted.
+    expect(paintedSurfaceBoundary).toContain(".querySelector('.painted-surface.is-loading')");
+    expect(paintedSurfaceBoundary).toContain('.then(nestedSurfacesSettled)');
   });
 
   it('uses one divided Army ledger grid with readable metadata and value hierarchy', () => {
