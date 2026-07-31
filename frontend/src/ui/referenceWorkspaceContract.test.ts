@@ -32,6 +32,13 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(strategikon).toContain('title="The Lipsanotheca — Held Relics"');
   });
 
+  it('uses the canonical terrain-tile glyph instead of the creator-tools grid mark', () => {
+    expect(enchiridion).toContain("terrain: installedUiMedia('ui-kit-icons-tileset-studio-png')");
+    expect(enchiridion).toContain('iconSrc={SECTION_ICON_SRC[candidate]}');
+    expect(enchiridion).not.toContain("terrain: 'ic-grid'");
+    expect(style).not.toContain('.ic-terrain');
+  });
+
   it('uses host-owned fill composition without adding an outer box to either host', () => {
     expect(mainMenu).toMatch(/<Enchiridion[^>]*framed=\{false\}/);
     expect(enchiridion).toContain('enchiridion-panel-unframed');
@@ -151,7 +158,12 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(skirmish).toContain('aria-hidden={strategikonOpen || runWorkspace ? true : undefined}');
     expect(skirmish).toMatch(/className="strategikon-slot"[\s\S]*?sceneTransitionTargetAttributes\('gameplay-shell'\)[\s\S]*?\{strategikonOpen \? \(/);
     expect(skirmish.indexOf('className={`skirmish-field')).toBeLessThan(skirmish.indexOf('className="strategikon-slot"'));
-    expect(style).toMatch(/\.strategikon-slot\s*\{[\s\S]*?inset:\s*0[\s\S]*?position:\s*absolute/);
+    // The always-mounted slot overlays every battlefield tile. Empty, it MUST be
+    // pointer-transparent — with plain pointer-events it shields the whole board and
+    // no unit can be selected or moved (the #552 regression). Mounted workspace
+    // content takes the pointer back.
+    expect(style).toMatch(/\.strategikon-slot\s*\{[\s\S]*?inset:\s*0[\s\S]*?pointer-events:\s*none[\s\S]*?position:\s*absolute/);
+    expect(style).toMatch(/\.strategikon-slot\s*>\s*\*\s*\{[\s\S]*?pointer-events:\s*auto/);
     expect(style).toMatch(/\.strategikon-workspace-fill\s*\{[\s\S]*?inset:\s*0/);
     expect(style).not.toMatch(/\.skirmish-war-room\.has-strategikon > \.skirmish-field\s*\{[\s\S]*?visibility:\s*hidden/);
   });

@@ -20,7 +20,7 @@ import {
 } from './RunCardScene';
 import { encodeBoard, type EditorBoard } from './boardCode';
 
-// The Level Editor's card-scene composing mode (ADR-0262): the Studio Card Scenes
+// The Level Editor's card-scene composing mode (ADR-0263): the Studio Card Scenes
 // catalog opens `/editor/level?cardScene=<card-id>`, which loads the card's authored
 // or generated scene into the ordinary editor with the level-only layers disabled.
 // This module owns the mode's rail panel (save/reset/frame) and the on-stage viewing

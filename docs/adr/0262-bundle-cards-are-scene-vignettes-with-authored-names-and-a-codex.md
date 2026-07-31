@@ -10,7 +10,7 @@ refines:
   - 0256-individual-relics-are-routable-from-the-main-menu-enchiridion.md
 ---
 
-# ADR-0261: Bundle cards are scene vignettes with authored names and a codex
+# ADR-0262: Bundle cards are scene vignettes with authored names and a codex
 
 ## Context
 

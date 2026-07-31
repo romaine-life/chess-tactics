@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ComponentProps,
   type ReactElement,
 } from 'react';
 import {
@@ -132,6 +133,69 @@ export function useBoardCameraFraming({
   // Keep the hook honest about controlled zoom changes without treating safety clamping as input.
   void zoom;
   return { markViewInteraction, resetView };
+}
+
+/**
+ * Non-interactive contained board view for reference surfaces (e.g. the Enchiridion's unit
+ * cards). Same canonical renderer and framing math as FramedReadOnlyBoardView, but it owns no
+ * pan/zoom input — a stack of these must never steal the page's wheel scroll — so the camera
+ * simply re-contains the playable board whenever the host box resizes.
+ */
+export function StaticReadOnlyBoardView({
+  board,
+  ariaLabel,
+  className = '',
+  maxZoom = 1,
+  renderCellOverlay,
+}: {
+  board: EditorBoard;
+  ariaLabel: string;
+  className?: string;
+  /** Containment cap so small boards don't scale past canonical 1× art. */
+  maxZoom?: number;
+  renderCellOverlay?: ComponentProps<typeof StudioReadOnlyBoard>['renderCellOverlay'];
+}): ReactElement {
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const [viewport, setViewport] = useState<ViewPaneViewportSize | null>(null);
+
+  useLayoutEffect(() => {
+    const host = hostRef.current;
+    if (!host) return undefined;
+    const measure = () => setViewport((current) => {
+      const next = { width: host.clientWidth, height: host.clientHeight };
+      return current && current.width === next.width && current.height === next.height
+        ? current
+        : next;
+    });
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, []);
+
+  const camera = useMemo((): BoardViewCamera | null => {
+    if (!viewport) return null;
+    return cameraToContainBounds({
+      viewport,
+      bounds: centeredPlayableBoardFramingBounds(board),
+      minZoom: 0.05,
+      maxZoom,
+    });
+  }, [board.cols, board.rows, maxZoom, viewport]);
+
+  return (
+    <div ref={hostRef} className={`static-readonly-board-view ${className}`.trim()}>
+      {camera ? (
+        <StudioReadOnlyBoard
+          board={board}
+          boardZoom={camera.zoom}
+          boardPan={camera.pan}
+          ariaLabel={ariaLabel}
+          renderCellOverlay={renderCellOverlay}
+        />
+      ) : null}
+    </div>
+  );
 }
 
 /** Canonical self-contained live preview/replay surface. */

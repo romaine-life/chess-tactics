@@ -59,6 +59,7 @@ const {
 const {
   resolveDefaultOgImage,
   resolveLevelCardPresentation,
+  resolveRunRelicIcon,
 } = require(path.join(bakedBackendDir, 'thumbnailPresentation'));
 const {
   liveCatalogReadinessIssue,
@@ -18127,28 +18128,9 @@ app.put('/api/campaign-progress', async (req, res) => {
 // document here; the server owns one CAS-updated active Run per account.
 const ACTIVE_RUN_PHASES = new Set(['draft', 'deployment', 'battle', 'shop', 'victory']);
 const ACTIVE_RUN_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
-const RUN_RELIC_IDS = new Set([
-  'conscription-notice',
-  'congressional-approval',
-  'inspirational-record',
-  'training-linens',
-  'royal-decree',
-  'crenellated-rampart',
-  'ghibelline-rampart',
-  'popes-staff',
-  'popes-robes',
-  'royal-tent',
-  'royal-sceptre',
-  'mercenarys-rifle',
-  'merchants-shopkey',
-  'occult-dagger',
-  'deployment-vehicle',
-  'mercenary-boat',
-  'quartermasters-ledger',
-  'fair-scales',
-  'muster-roll',
-  'surveyors-compass',
-]);
+const RUN_RELICS = Array.isArray(serverRender?.RUN_RELICS) ? serverRender.RUN_RELICS : [];
+const RUN_RELIC_BY_ID = serverRender?.RUN_RELIC_BY_ID ?? {};
+const RUN_RELIC_IDS = new Set(RUN_RELICS.map((relic) => relic.id));
 function validateActiveRunBody(run) {
   if (!run || typeof run !== 'object' || Array.isArray(run)) return 'run must be an object';
   if (run.formatVersion !== 1 && run.formatVersion !== 2 && run.formatVersion !== 3 && run.formatVersion !== 4) return 'run.formatVersion is unsupported';
@@ -18499,13 +18481,13 @@ function makeStaticCacheHeaders(rootDir) {
   };
 }
 
-// --- Open Graph unfurl + on-demand board thumbnails -------------------------
-// A shared level link must unfurl on Discord/Slack/Twitter (crawlers fetch the URL server-side — no
-// JS, no auth). The SPA fallback injects per-level og:/twitter: tags, and og:image points at an
-// on-demand board render served here. Officials resolve from the LIVE DB; user maps from public_maps.
-// Generic pages use the branded default-image semantic slot. A targeted level
-// thumbnail never masks missing content/media with it: missing targets are 404
-// and renderer/catalog/media failures are explicit 503s.
+// --- Open Graph unfurls + on-demand board thumbnails ------------------------
+// Shared content links must unfurl on Discord/Slack/Twitter (crawlers fetch the
+// URL server-side — no JS, no auth). The SPA fallback injects route-specific
+// og:/twitter: tags. Levels point at an on-demand board render; canonical relic
+// addresses point at the exact installed live icon. Generic pages use the
+// branded default-image semantic slot. Targeted media never masks missing
+// content/media with it.
 const OG_SITE_NAME = 'Chess Tactics';
 const OG_DEFAULT_DESC = 'Tactical chess battles on a living board.';
 // Owner-facing objective labels — mirrors frontend core/objectives.ts MODE_NAME (5 stable entries).
@@ -19065,38 +19047,62 @@ async function ogTagsFor(req) {
   const levelId = typeof req.query.levelId === 'string' ? req.query.levelId : null;
   const campaignId = typeof req.query.campaignId === 'string' ? req.query.campaignId : null;
   const mapId = typeof req.query.map === 'string' && PUBLIC_ID_RE.test(req.query.map) ? req.query.map : null;
-  const target = await resolveShareTarget({ levelId, campaignId, mapId }).catch(() => null);
+  const relicMatch = /^\/enchiridion\/relics\/([a-z][a-z0-9-]*)\/?$/.exec(req.path);
+  const relic = relicMatch && Object.hasOwn(RUN_RELIC_BY_ID, relicMatch[1])
+    ? RUN_RELIC_BY_ID[relicMatch[1]]
+    : null;
+  const target = relic ? null : await resolveShareTarget({ levelId, campaignId, mapId }).catch(() => null);
 
   let title = OG_SITE_NAME;
   let description = OG_DEFAULT_DESC;
   const drawableCatalog = await dbReadDrawableCatalog();
-  const defaultOgPath = resolveDefaultOgImage(drawableCatalog);
-  let image = `${origin}${defaultOgPath}`;
-  if (target) {
-    title = target.title || OG_SITE_NAME;
-    description = target.description || target.subtitle || OG_DEFAULT_DESC;
-    if (serverRender) {
-      const key = mapId || levelId;
-      let hash = '';
-      try {
-        hash = (await prepareLevelCardThumbnail(target)).contentVersion;
-      } catch { hash = ''; }
-      const imageParams = new URLSearchParams();
-      if (hash) imageParams.set('v', hash);
-      if (campaignId && key === levelId) imageParams.set('campaignId', campaignId);
-      const qs = imageParams.toString();
-      image = `${origin}/assets/level-thumb/${encodeURIComponent(key)}.png${qs ? `?${qs}` : ''}`;
+  let image = null;
+  let imageWidth = 1200;
+  let imageHeight = 630;
+  let imageType = 'image/png';
+  let imageAlt = `${OG_SITE_NAME} preview`;
+  let twitterCard = 'summary_large_image';
+  if (relic) {
+    const icon = resolveRunRelicIcon(drawableCatalog, relic.id);
+    title = relic.name;
+    description = relic.description;
+    image = `${origin}${icon.src}`;
+    imageWidth = icon.width;
+    imageHeight = icon.height;
+    imageType = icon.mediaType;
+    imageAlt = `${relic.name} relic`;
+    twitterCard = 'summary';
+  } else {
+    const defaultOgPath = resolveDefaultOgImage(drawableCatalog);
+    image = `${origin}${defaultOgPath}`;
+    if (target) {
+      title = target.title || OG_SITE_NAME;
+      description = target.description || target.subtitle || OG_DEFAULT_DESC;
+      imageAlt = `${title} board preview`;
+      if (serverRender) {
+        const key = mapId || levelId;
+        let hash = '';
+        try {
+          hash = (await prepareLevelCardThumbnail(target)).contentVersion;
+        } catch { hash = ''; }
+        const imageParams = new URLSearchParams();
+        if (hash) imageParams.set('v', hash);
+        if (campaignId && key === levelId) imageParams.set('campaignId', campaignId);
+        const qs = imageParams.toString();
+        image = `${origin}/assets/level-thumb/${encodeURIComponent(key)}.png${qs ? `?${qs}` : ''}`;
+      }
     }
   }
   const url = `${origin}${req.originalUrl}`;
   const meta = [
     ['og:type', 'website'], ['og:site_name', OG_SITE_NAME], ['og:title', title],
     ['og:description', description], ['og:url', url], ['og:image', image],
-    ['og:image:width', '1200'], ['og:image:height', '630'],
+    ['og:image:type', imageType], ['og:image:width', imageWidth], ['og:image:height', imageHeight],
+    ['og:image:alt', imageAlt],
   ].map(([p, c]) => `<meta property="${p}" content="${htmlEscape(c)}">`);
   const tw = [
-    ['twitter:card', 'summary_large_image'], ['twitter:title', title],
-    ['twitter:description', description], ['twitter:image', image],
+    ['twitter:card', twitterCard], ['twitter:title', title],
+    ['twitter:description', description], ['twitter:image', image], ['twitter:image:alt', imageAlt],
   ].map(([n, c]) => `<meta name="${n}" content="${htmlEscape(c)}">`);
   return { title, headTags: [...meta, ...tw].join('') };
 }

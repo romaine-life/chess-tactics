@@ -7,7 +7,7 @@ import { NavButton } from './shared/NavButton';
 import { runCardScenePlan, RunCardScene, RUN_CARD_SCENE_CAPTURE } from './RunCardScene';
 import { useSyncExternalStore } from 'react';
 
-// The Card Scenes surfaces (ADR-0262): the Catalog lists every deck card's live
+// The Card Scenes surfaces (ADR-0263): the Catalog lists every deck card's live
 // vignette and opens the real Level Editor in card-scene mode for composing —
 // full placement interface, Save to the owner's scene document. The `cardscene`
 // Viewer keeps only the fixed capture stage: the exact export raster (the card's

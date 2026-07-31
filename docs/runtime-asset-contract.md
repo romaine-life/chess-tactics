@@ -324,7 +324,10 @@ an incomplete row is an availability failure.
 - UI kit: state/slice geometry and native roles. Run relic icons are exact
   native 64×64 PNGs with typed `run-relic-icon` metadata; installed
   `kind='run-relic'` drawable records, not slot filenames, bind those pixels to
-  gameplay relic ids.
+  gameplay relic ids. Exact `/enchiridion/relics/<relic-id>` social unfurls use
+  that drawable's immutable icon URL and native geometry together with the
+  canonical relic name/effect; a missing or ambiguous targeted icon never
+  substitutes the generic OG image (ADR-0261).
   The Run gold resource is likewise an exact native 64×64 PNG with typed
   `run-resource-icon` metadata; one installed `kind='run-resource'` drawable
   record binds `behavior.resourceId='gold'` to its `icon` media role.

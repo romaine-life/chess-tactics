@@ -3,7 +3,7 @@ status: accepted
 date: 2026-07-31
 deciders: owner (Nelson) + Codex
 extends:
-  - 0261-bundle-cards-are-scene-vignettes-with-authored-names-and-a-codex.md
+  - 0262-bundle-cards-are-scene-vignettes-with-authored-names-and-a-codex.md
   - 0071-the-deliverable-is-the-instrument.md
 refines:
   - 0029-catalog-category-requirements.md
@@ -11,11 +11,11 @@ refines:
   - 0089-sfx-runtime-profile-is-db-authoritative.md
 ---
 
-# ADR-0262: Card Scenes are an owner-authored Studio instrument
+# ADR-0263: Card Scenes are an owner-authored Studio instrument
 
 ## Context
 
-ADR-0261's generated card vignettes are deterministic but not owner-editable:
+ADR-0262's generated card vignettes are deterministic but not owner-editable:
 seeded landmark, doodad, and prop placement produced compositions the owner
 wanted to correct by hand, and the only editing affordance was a one-way
 board-code hand-off into the Level Editor with no way to persist the result
