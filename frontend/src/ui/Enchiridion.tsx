@@ -15,6 +15,7 @@ import {
 } from '../run/relicStatistics';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { ENCHIRIDION_SECTIONS, enchiridionSectionHref, type EnchiridionSection } from './enchiridionRoute';
+import { installedUiMedia } from './installedUiMedia';
 import { RunRelicIcon } from './RunRelics';
 import { ApparatusRailTab } from './shared/ApparatusRailTab';
 import { InnerChromeBox, OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
@@ -28,11 +29,14 @@ const SECTION_LABEL: Record<EnchiridionSection, string> = {
   abilities: 'Abilities',
 };
 
-const SECTION_ICON: Record<EnchiridionSection, string> = {
+const SECTION_ICON: Partial<Record<EnchiridionSection, string>> = {
   units: 'skirmish-tab-icon skirmish-tab-icon-unit',
-  terrain: 'ic-grid',
   relics: 'skirmish-tab-icon skirmish-tab-icon-log',
   abilities: 'skirmish-icon skirmish-icon-shield',
+};
+
+const SECTION_ICON_SRC: Partial<Record<EnchiridionSection, string>> = {
+  terrain: installedUiMedia('ui-kit-icons-tileset-studio-png'),
 };
 
 const UNIT_COPY: Record<PlayablePieceType, string> = {
@@ -511,6 +515,7 @@ export function Enchiridion({
               to={sectionHref(candidate)}
               index={index}
               active={section === candidate}
+              iconSrc={SECTION_ICON_SRC[candidate]}
               iconClassName={SECTION_ICON[candidate]}
             />
           ))}
