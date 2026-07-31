@@ -28,9 +28,12 @@ import { encodeBoard, type EditorBoard } from './boardCode';
 
 export const CARD_SCENE_RETURN_HREF = '/studio?cat=cardscenes';
 
-/** Layers that do not translate to a card scene (level semantics, sessions, units). */
+/**
+ * Layers that do not translate to a card scene (level semantics, sessions, units).
+ * Generate stays available — the terrain generator composes scene fields; it is the
+ * document-bound Level Artwork pipeline that has no card-scene meaning.
+ */
 export const CARD_SCENE_LOCKED_LAYERS: ReadonlySet<string> = new Set([
-  'generate',
   'level-artwork',
   'unit',
   'zone',
