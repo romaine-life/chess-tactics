@@ -67,7 +67,34 @@ function resolveDefaultOgImage(catalog) {
   return requiredMedia(requiredRole(catalog, 'app-ui', 'application-ui'), 'og-default');
 }
 
+function resolveRunRelicIcon(catalog, relicId) {
+  const asset = requiredDrawable(
+    catalog,
+    'run-relic',
+    `for relic ${relicId}`,
+    (candidate) => candidate.behavior?.relicId === relicId,
+  );
+  const media = asset?.media?.icon?.media;
+  if (
+    !media
+    || typeof media.immutableUrl !== 'string'
+    || !media.immutableUrl
+    || media.mediaType !== 'image/png'
+    || media.width !== 64
+    || media.height !== 64
+  ) {
+    throw new Error(`thumbnail presentation run-relic ${asset.id} has no native 64x64 PNG icon`);
+  }
+  return {
+    src: media.immutableUrl,
+    width: media.width,
+    height: media.height,
+    mediaType: media.mediaType,
+  };
+}
+
 module.exports = {
   resolveDefaultOgImage,
   resolveLevelCardPresentation,
+  resolveRunRelicIcon,
 };

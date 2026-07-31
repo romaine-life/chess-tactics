@@ -150,6 +150,7 @@ export * from './core/pieces';
 export * from './core/unitSpriteRegistry';
 export * from './core/playRoutePresentation';
 export * from './core/props';
+export * from './core/runRelics';
 export * from './core/scenicTerrain';
 export * from './core/structureArt';
 export * from './core/macroTiles';

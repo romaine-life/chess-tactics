@@ -2969,6 +2969,22 @@ async function main() {
     media: {},
   });
   const sharedPresentationSlot = 'wall-decor/test-banner-base.png';
+  const royalDecreeRelicSlot = 'ui/run/relics/royal-decree.png';
+  await seedSyntheticReadinessMedia({
+    slot: royalDecreeRelicSlot,
+    domain: 'ui-kit',
+    role: 'icon',
+    width: 64,
+    height: 64,
+  });
+  await seedSyntheticDrawable({
+    id: 'run-relic-royal-decree',
+    kind: 'run-relic',
+    label: 'Royal Decree',
+    behavior: { relicId: 'royal-decree' },
+    metadata: { artFamily: 'synthetic-run-relic-icons' },
+    media: { icon: royalDecreeRelicSlot },
+  });
   await seedSyntheticDrawable({
     id: 'test-subterrain-opaque', kind: 'subterrain', label: 'Synthetic Subterrain',
     behavior: { default: true }, media: { surface: sharedPresentationSlot },
@@ -3533,6 +3549,34 @@ async function main() {
     officialPlay.body.includes('/api/media/')
   ) {
     throw new Error(`Official play page should advertise the level thumbnail: ${officialPlay.statusCode}`);
+  }
+  const relicReference = await get('/enchiridion/relics/royal-decree');
+  const relicImageMatch = relicReference.body.match(
+    /<meta property="og:image" content="[^"]+(\/api\/media\/[0-9a-f]{64})">/,
+  );
+  if (
+    relicReference.statusCode !== 200
+    || !relicReference.body.includes('<title>Royal Decree</title>')
+    || !relicReference.body.includes('<meta property="og:title" content="Royal Decree">')
+    || !relicReference.body.includes('<meta property="og:description" content="Your King gains Positioned and prefers the back deployment row.">')
+    || !relicReference.body.includes('<meta property="og:image:width" content="64">')
+    || !relicReference.body.includes('<meta property="og:image:height" content="64">')
+    || !relicReference.body.includes('<meta name="twitter:card" content="summary">')
+    || !relicImageMatch
+  ) {
+    throw new Error(`Relic reference should advertise its icon and complete effect: ${relicReference.statusCode}`);
+  }
+  const relicImage = await get(relicImageMatch[1], undefined, 5000);
+  if (relicImage.statusCode !== 200 || relicImage.headers['content-type'] !== 'image/png') {
+    throw new Error(`Relic unfurl icon should be anonymously readable live media: ${relicImage.statusCode}`);
+  }
+  const unknownRelicReference = await get('/enchiridion/relics/constructor');
+  if (
+    unknownRelicReference.statusCode !== 200
+    || !unknownRelicReference.body.includes('<meta property="og:title" content="Chess Tactics">')
+    || unknownRelicReference.body.includes('Your King gains Positioned')
+  ) {
+    throw new Error(`Unknown relic ids should retain the generic unfurl: ${unknownRelicReference.statusCode}`);
   }
   const officialThumb = await get('/assets/level-thumb/off-l-test.png', undefined, 5000);
   if (
