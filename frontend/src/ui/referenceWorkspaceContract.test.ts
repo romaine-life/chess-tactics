@@ -43,6 +43,10 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(strategikon).toMatch(/<RelicCodex[^>]*framed=\{false\}/);
     expect(runArmy).toContain('framed = true');
     expect(runArmy).toContain('className={`${className} ${contentClassName} run-panel-unframed`}');
+    // The unframed run panels must fill the Strategikon content region: without a
+    // constrained block size the Prosopography ledger grows to its full content
+    // height and its KitScroll never becomes scrollable.
+    expect(style).toMatch(/\.strategikon-content > \.run-panel-unframed,[\s\S]{0,80}?\{[\s\S]*?block-size:\s*100%/);
   });
 
   it('opts the main-menu workspace back into pointer input', () => {

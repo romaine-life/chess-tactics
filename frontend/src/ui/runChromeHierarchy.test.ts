@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 const runScreen = readFileSync(new URL('./RunScreen.tsx', import.meta.url), 'utf8');
 const runArmyWorkspace = readFileSync(new URL('./RunArmyWorkspace.tsx', import.meta.url), 'utf8');
+const runWorkspaceStages = readFileSync(new URL('./RunWorkspaceStages.tsx', import.meta.url), 'utf8');
+const titleBarPortal = readFileSync(new URL('./shell/TitleBarPortalContext.tsx', import.meta.url), 'utf8');
 const runWorkspace = readFileSync(new URL('./RunWorkspace.tsx', import.meta.url), 'utf8');
 const runUnitInspectionScene = readFileSync(new URL('./RunUnitInspectionScene.tsx', import.meta.url), 'utf8');
 const runRelics = readFileSync(new URL('./RunRelics.tsx', import.meta.url), 'utf8');
@@ -29,9 +31,9 @@ describe('Run chrome hierarchy', () => {
     expect(sharedShell).toContain('surface="gameplay-hud"');
     expect(sharedShell).toContain('readyToCompose={readyToCompose}');
     expect(runScreen).toContain('<SkirmishShell');
-    expect(runScreen).toContain('readyToCompose={false}');
+    expect(runScreen).toContain('readyToCompose={hydrated}');
     expect(runScreen).not.toContain("classList.add('skirmish-active')");
-    expect(runScreen).toContain('controlsContent={<RunMetaControls run={run} view={view} onNavigate={onNavigate} />}');
+    expect(runScreen).toContain("<RunMetaControls run={shellRun} view={view} onNavigate={navigateRunView} showAbandon={shellRun.phase !== 'victory'} />");
     expect(metaControls).toContain('<section className="run-meta-controls" aria-label="Run controls">');
     expect(metaControls).toContain('Sell Units');
     expect(metaControls).toContain('<span className="skirmish-eyebrow">Self inspection</span>');
@@ -61,13 +63,42 @@ describe('Run chrome hierarchy', () => {
     expect(styleCss).toMatch(/\.run-phase-workspace\s*\{[\s\S]*?grid-column:\s*1;[\s\S]*?grid-row:\s*2;/);
   });
 
+  it('keeps one persistent Run shell and choreographs in-place phase changes', () => {
+    // Every non-Battle Run destination lives in a single mounted SkirmishShell; a phase
+    // change must never rebuild the shell (that blanks the screen to the world
+    // background), only swap the staged workspace beneath it.
+    expect(runScreen.match(/<SkirmishShell/g)).toHaveLength(1);
+    expect(runScreen).toContain('<RunWorkspaceStages stageKey={stageKey} placeholderKeys={RUN_STAGE_PLACEHOLDERS}>');
+    expect(runScreen).not.toContain('readyToCompose={false}');
+
+    // The staged swap keeps the previous workspace visible and inert while the incoming
+    // one composes under the shared complete-frame discipline, then fades in over it.
+    expect(runWorkspaceStages).toContain("from './shell/PaintedSurfaceBoundary'");
+    expect(runWorkspaceStages).toContain('waitForRenderedImage');
+    expect(runWorkspaceStages).toContain('renderedCssImageUrls');
+    expect(runWorkspaceStages).toContain('afterTwoPaintOpportunities');
+    expect(runWorkspaceStages).toContain(".querySelector('.painted-surface.is-loading')");
+    expect(runWorkspaceStages).toContain('className="run-stage is-departing"');
+    expect(runWorkspaceStages).toContain('inert aria-hidden="true"');
+    expect(styleCss).toMatch(/\.run-stage\s*\{[\s\S]*?grid-column:\s*1;[\s\S]*?grid-row:\s*1;/);
+    expect(styleCss).toMatch(/\.run-stage\.is-preparing\s*\{[\s\S]*?visibility:\s*hidden;/);
+    expect(styleCss).toMatch(/\.run-stage\.is-arriving\s*\{[\s\S]*?surface-complete-reveal/);
+
+    // The persistent title bar creates route-owned portal hosts only at scene commit,
+    // after a destination screen has already mounted; the slot lookup must therefore
+    // watch for the host instead of sampling once and staying empty (missing Run
+    // status chips on the muster screen).
+    expect(titleBarPortal).toContain('MutationObserver');
+    expect(titleBarPortal).toContain('observer.observe(document.body, { childList: true, subtree: true })');
+  });
+
   it('replaces the complete left shell workspace for Army and Relics while preserving the covered phase', () => {
     expect(runScreen).toContain('function RunPhaseWorkspace');
     expect(runScreen).toContain("className={`run-phase-primary${covered ? ' is-workspace-covered' : ''}`}");
     expect(runScreen).toContain('inert={covered ? true : undefined}');
     expect(runScreen).toContain('aria-hidden={covered ? true : undefined}');
     expect(runScreen).toContain("view === 'relics'");
-    expect(runScreen).toContain('<RunRelicsWorkspace relicIds={run.relics} />');
+    expect(runScreen).toContain('<RunRelicsWorkspace relicIds={shellRun.relics} />');
     expect(skirmish).toContain("className={`skirmish-field${strategikonOpen || runWorkspace ? ' is-workspace-covered' : ''}`}");
     expect(skirmish).toContain('inert={strategikonOpen || runWorkspace ? true : undefined}');
     expect(skirmish).toContain('aria-hidden={strategikonOpen || runWorkspace ? true : undefined}');
