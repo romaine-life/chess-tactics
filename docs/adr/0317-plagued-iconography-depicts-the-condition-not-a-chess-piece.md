@@ -3,18 +3,18 @@ status: accepted
 date: 2026-08-01
 deciders: owner (Nelson) + Codex
 supersedes:
-  - "[ADR-0309](0309-plagued-icon-candidates-are-reviewed-in-context.md)"
+  - "[ADR-0316](0316-plagued-icon-candidates-are-reviewed-in-context.md)"
 refines:
   - "[ADR-0085](0085-runtime-assets-are-live-storage-backed.md)"
   - "[ADR-0198](0198-run-relics-use-live-native-ui-icons.md)"
-  - "[ADR-0306](0306-enchiridion-filters-cards-and-previews-affected-types.md)"
+  - "[ADR-0313](0313-enchiridion-filters-cards-and-previews-affected-types.md)"
 ---
 
-# ADR-0310: Plagued iconography depicts the condition, not a chess piece
+# ADR-0317: Plagued iconography depicts the condition, not a chess piece
 
 ## Context
 
-ADR-0309 directed the first PixelLab family toward a cracked, poisoned pawn.
+ADR-0316 directed the first PixelLab family toward a cracked, poisoned pawn.
 All sixteen candidates therefore described the same afflicted object, while
 the Unit Ability needs to communicate the more general condition of sickness,
 poison, decay, weakness, and struggle regardless of which unit bears it.

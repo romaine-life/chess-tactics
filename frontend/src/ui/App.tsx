@@ -22,12 +22,13 @@ import { UpdateBanner } from './UpdateBanner';
 import { AppTitleBar } from './shell/AppTitleBar';
 import { useInstalledChromeCss } from './useInstalledChromeCss';
 import {
-  APP_NAVIGATION_EVENT,
   getAppNavigationUrl,
   navigateApp,
   normalizeRoutePath,
+  restoreBlockedAppLocation,
   runAppNavigationBlockers,
   shouldInterceptAppLinkClick,
+  subscribeAppLocation,
 } from './navigation';
 import { RouteLoadBoundary } from './shell/RouteLoadBoundary';
 import { levelEditorRouteIdentity } from './levelEditorRouteIdentity';
@@ -48,12 +49,15 @@ import {
   sceneManifest,
 } from './shell/sceneManifest';
 import type { ScenePath } from './shell/sceneManifest';
+import type { RunSceneSnapshot } from './shell/sceneManifest';
 import { sceneSlots } from './shell/sceneSlots';
 import { HomepageBackdrop } from './HomepageBackdrop';
 import { loadingMark } from '../diagnostics/loadingTimeline';
 import { homepageSceneMedia } from './homepageSceneMedia';
 import { loadDecodedImage } from '../render/imageResources';
 import { repaintHomepageScene } from './SceneBackdrop';
+import { useActiveRun } from '../run/store';
+import { sceneTransitionDurationMs, waitForSceneTransition } from './shell/sceneTransitionLifecycle';
 
 const Skirmish = lazy(() => importSkirmish().then((module) => ({ default: module.Skirmish })));
 const RunScreen = lazy(() => importRunScreen().then((module) => ({ default: module.RunScreen })));
@@ -67,7 +71,6 @@ const RunRelicReview = lazy(() => import('./RunRelicReview').then((module) => ({
 const RunShopArtReview = lazy(() => import('./RunShopArtReview').then((module) => ({ default: module.RunShopArtReview })));
 const PlaguedIconReview = lazy(() => import('./PlaguedIconReview').then((module) => ({ default: module.PlaguedIconReview })));
 
-const SCENE_FADE_MS = 350;
 const SCENE_LOADING_MIN_MS = 350;
 const STARTUP_STAGE_BEAT_MS = 140;
 const STARTUP_LADDER: readonly StartupLayer[] = ['background', 'title', 'controls'];
@@ -79,6 +82,12 @@ const sceneFailureCopy = (error: Error | null): string => (
       : 'Required scene data or artwork could not be reached. Check your connection and try again.'
 );
 
+const overlapsStateDrivenRunScene = (current: ScenePath, destination: ScenePath): boolean => (
+  current.snapshot.kind === 'run'
+  && destination.snapshot.kind === 'run'
+  && current.id !== destination.id
+);
+
 /**
  * ADR-0205 application spine. History accepts navigation immediately while the
  * rendered route remains the outgoing scene until its controls have faded. The
@@ -87,6 +96,9 @@ const sceneFailureCopy = (error: Error | null): string => (
  */
 export function App(): ReactElement {
   const installedChromeCss = useInstalledChromeCss();
+  const activeRun = useActiveRun((state) => state.run);
+  const activeRunHydrated = useActiveRun((state) => state.hydrated);
+  const hydrateActiveRun = useActiveRun((state) => state.hydrate);
   const initialPath = normalizeRoutePath(window.location.pathname);
   const prepareInitialScene = !isMainMenuPath(initialPath);
   const prepareStartup = isMainMenuPath(initialPath);
@@ -94,7 +106,9 @@ export function App(): ReactElement {
   const [search, setSearch] = useState(window.location.search);
   const [scene, dispatchScene] = useReducer(
     reduceScene,
-    sceneManifest(initialPath, window.location.search),
+    sceneManifest(initialPath, window.location.search, {
+      run: { hydrated: activeRunHydrated, document: activeRun },
+    }),
     (manifest) => initialSceneState(
       manifest,
       prepareInitialScene,
@@ -112,6 +126,40 @@ export function App(): ReactElement {
   );
 
   useLayoutEffect(() => { sceneRef.current = scene; }, [scene]);
+  const resolveScene = useCallback((nextPath: string, nextSearch: string): ScenePath => (
+    sceneManifest(nextPath, nextSearch, {
+      run: { hydrated: activeRunHydrated, document: activeRun },
+    })
+  ), [activeRun, activeRunHydrated]);
+  useEffect(() => {
+    const locationPath = normalizeRoutePath(window.location.pathname);
+    if (locationPath === '/run' || locationPath.startsWith('/run/strategikon/')) {
+      void hydrateActiveRun();
+    }
+  }, [hydrateActiveRun]);
+  useEffect(() => {
+    const locationPath = normalizeRoutePath(window.location.pathname);
+    if (locationPath !== '/run' && !locationPath.startsWith('/run/strategikon/')) return;
+    const destination = resolveScene(locationPath, window.location.search);
+    const latest = sceneRef.current;
+    if (
+      destination.id === latest.current.id
+      || destination.id === latest.destination?.id
+    ) {
+      dispatchScene({ type: 'refresh-source', scene: destination });
+      return;
+    }
+    loadingMark(destination.id, 'scene-source-accepted', {
+      source: 'active-run',
+      phase: destination.snapshot.kind === 'run' ? destination.snapshot.phase : null,
+      workspace: destination.snapshot.kind === 'run' ? destination.snapshot.workspace : null,
+    });
+    dispatchScene({
+      type: 'navigate',
+      destination,
+      href: `${locationPath}${window.location.search}`,
+    });
+  }, [activeRun, activeRunHydrated, resolveScene]);
   useLayoutEffect(() => {
     if (previousStartupStage.current === scene.startupStage) return;
     previousStartupStage.current = scene.startupStage;
@@ -127,7 +175,7 @@ export function App(): ReactElement {
     }
     const release = scene.phase === 'error'
       || (scene.phase === 'startup' && scene.startupStage >= 0)
-      || (!scene.startupActive && scene.phase === 'entering');
+      || (!scene.startupActive && (scene.phase === 'entering' || scene.phase === 'current'));
     if (!release) return undefined;
     if (scene.phase === 'error') {
       status.remove();
@@ -135,12 +183,11 @@ export function App(): ReactElement {
       return undefined;
     }
     status.classList.add('is-exiting');
-    const timer = window.setTimeout(() => {
+    const cancel = waitForSceneTransition(status, () => {
       status.remove();
       setBootstrapPresentationPresent(false);
-    }, SCENE_FADE_MS);
-    timers.current.push(timer);
-    return () => window.clearTimeout(timer);
+    });
+    return cancel;
   }, [
     bootstrapPresentationPresent,
     scene.phase,
@@ -206,14 +253,14 @@ export function App(): ReactElement {
     if (scene.startupStage >= STARTUP_LADDER.length - 1) {
       const timer = window.setTimeout(
         () => dispatchScene({ type: 'startup-finished', generation }),
-        SCENE_FADE_MS,
+        sceneTransitionDurationMs(),
       );
       timers.current.push(timer);
       return () => window.clearTimeout(timer);
     }
     const nextLayer = STARTUP_LADDER[scene.startupStage + 1];
     if (!scene.startupReady.includes(nextLayer)) return undefined;
-    const minimumDelay = scene.startupStage < 0 ? 0 : SCENE_FADE_MS + STARTUP_STAGE_BEAT_MS;
+    const minimumDelay = scene.startupStage < 0 ? 0 : sceneTransitionDurationMs() + STARTUP_STAGE_BEAT_MS;
     const elapsed = performance.now() - startupStageStartedAt.current;
     const timer = window.setTimeout(
       () => dispatchScene({ type: 'startup-reveal', generation, layer: nextLayer }),
@@ -242,13 +289,14 @@ export function App(): ReactElement {
         source: 'history',
         retry: () => { window.history.back(); return true; },
       })) {
-        window.history.pushState({}, '', currentHref);
+        restoreBlockedAppLocation(currentHref);
         return;
       }
-      const destination = sceneManifest(nextPath, nextSearch);
+      const destination = resolveScene(nextPath, nextSearch);
       if (destination.id === sceneRef.current.current.id && sceneRef.current.phase === 'current') {
         setPath(nextPath);
         setSearch(nextSearch);
+        dispatchScene({ type: 'refresh-source', scene: destination });
         return;
       }
       const superseded = sceneRef.current.destination;
@@ -281,19 +329,17 @@ export function App(): ReactElement {
       const url = getAppNavigationUrl(anchor.href);
       if (url) prefetchRoute(normalizeRoutePath(url.pathname));
     };
-    window.addEventListener('popstate', onNav);
-    window.addEventListener(APP_NAVIGATION_EVENT, onNav);
+    const unsubscribeLocation = subscribeAppLocation(onNav);
     document.addEventListener('click', onClick);
     document.addEventListener('pointerover', onIntent);
     document.addEventListener('focusin', onIntent);
     return () => {
-      window.removeEventListener('popstate', onNav);
-      window.removeEventListener(APP_NAVIGATION_EVENT, onNav);
+      unsubscribeLocation();
       document.removeEventListener('click', onClick);
       document.removeEventListener('pointerover', onIntent);
       document.removeEventListener('focusin', onIntent);
     };
-  }, [path, search]);
+  }, [path, resolveScene, search]);
 
   useEffect(() => {
     const active = scene.destination ?? scene.current;
@@ -317,7 +363,7 @@ export function App(): ReactElement {
     if (scene.phase !== 'exiting') return undefined;
     const generation = scene.generation;
     const destination = scene.destination;
-    const sharedRegion = destination
+    const sharedRegion = destination && !overlapsStateDrivenRunScene(scene.current, destination)
       ? deepestSharedSceneRegion(scene.current, destination)
       : null;
     if (!sharedRegion) {
@@ -334,12 +380,15 @@ export function App(): ReactElement {
       dispatchScene({ type: 'exit-finished', generation });
       return undefined;
     }
-    let timer: number | null = null;
+    let cancelTransition = (): void => {};
     // Start the director's duration after the browser has painted the exiting
     // target once. Counting from the React effect can beat the CSS transition's
     // first composed frame and remove the child while a sliver is still visible.
     const frame = window.requestAnimationFrame(() => {
-      timer = window.setTimeout(() => {
+      const target = document.querySelector<HTMLElement>(
+        '.scene-director [data-scene-transition-target][data-scene-transition-active]',
+      );
+      cancelTransition = waitForSceneTransition(target, () => {
         const latest = sceneRef.current;
         if (latest.generation !== generation || !latest.destinationHref) return;
         const url = new URL(latest.destinationHref, window.location.origin);
@@ -352,12 +401,11 @@ export function App(): ReactElement {
         }
         loadingStartedAt.current = performance.now();
         dispatchScene({ type: 'exit-finished', generation });
-      }, SCENE_FADE_MS);
-      timers.current.push(timer);
+      });
     });
     return () => {
       window.cancelAnimationFrame(frame);
-      if (timer !== null) window.clearTimeout(timer);
+      cancelTransition();
     };
   }, [scene.generation, scene.phase]);
 
@@ -387,22 +435,33 @@ export function App(): ReactElement {
   useEffect(() => {
     if (scene.phase !== 'entering') return undefined;
     const generation = scene.generation;
-    const timer = window.setTimeout(() => {
-      const latest = sceneRef.current;
-      if (
-        latest.generation === generation
-        && latest.destinationHref
-        && latest.destination
-        && !deepestSharedSceneRegion(latest.current, latest.destination)
-      ) {
-        const url = new URL(latest.destinationHref, window.location.origin);
-        setPath(normalizeRoutePath(url.pathname));
-        setSearch(url.search);
-      }
-      dispatchScene({ type: 'entrance-finished', generation });
-    }, SCENE_FADE_MS);
-    timers.current.push(timer);
-    return () => window.clearTimeout(timer);
+    let cancelTransition = (): void => {};
+    const frame = window.requestAnimationFrame(() => {
+      const target = document.querySelector<HTMLElement>(
+        '.scene-director [data-scene-transition-target][data-scene-transition-active]',
+      );
+      cancelTransition = waitForSceneTransition(target, () => {
+        const latest = sceneRef.current;
+        if (
+          latest.generation === generation
+          && latest.destinationHref
+          && latest.destination
+          && (
+            !deepestSharedSceneRegion(latest.current, latest.destination)
+            || overlapsStateDrivenRunScene(latest.current, latest.destination)
+          )
+        ) {
+          const url = new URL(latest.destinationHref, window.location.origin);
+          setPath(normalizeRoutePath(url.pathname));
+          setSearch(url.search);
+        }
+        dispatchScene({ type: 'entrance-finished', generation });
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      cancelTransition();
+    };
   }, [scene.generation, scene.phase]);
 
   const preparing = scene.phase === 'loading' || scene.phase === 'entering' || scene.phase === 'error';
@@ -410,7 +469,9 @@ export function App(): ReactElement {
   // `path` advances only when the director accepts exit-finished. Keep the
   // renderer bound to that mounted path; `manifest` may describe a pending
   // destination during exit and is preparation metadata, not visibility.
-  const mountedScene = sceneManifest(path, search);
+  const mountedScene = scene.phase === 'exiting'
+    ? scene.current
+    : scene.destination ?? scene.current;
   const transitioning = scene.phase !== 'current' && scene.phase !== 'startup';
   const showSceneFailure = scene.phase === 'error';
   const titleBarLoading = manifest.waitPresentation === 'loading' && (
@@ -418,7 +479,10 @@ export function App(): ReactElement {
   );
   const showLoadingPresentation = scene.phase === 'error'
     || (scene.phase === 'startup' && scene.startupStage < 0);
-  const preservedSceneHost = scene.destination
+  const overlapsRunScene = Boolean(
+    scene.destination && overlapsStateDrivenRunScene(scene.current, scene.destination),
+  );
+  const preservedSceneHost = scene.destination && !overlapsRunScene
     ? deepestSharedSceneRegion(scene.current, scene.destination)
     : null;
   const preservesSceneHost = preservedSceneHost !== null;
@@ -429,7 +493,7 @@ export function App(): ReactElement {
   );
   const overlapsCompleteScenes = Boolean(
     scene.destination
-    && !preservesSceneHost
+    && (!preservesSceneHost || overlapsRunScene)
     && !initialPreparation,
   );
   const destinationLocation = scene.destinationHref
@@ -439,7 +503,7 @@ export function App(): ReactElement {
   const sceneLayers = overlapsCompleteScenes
     ? [
         {
-          key: scene.current.instances[0]?.key ?? scene.current.leaf.key,
+          key: scene.current.leaf.key,
           scene: scene.current,
           manifest: scene.current,
           search,
@@ -450,7 +514,7 @@ export function App(): ReactElement {
           visualRole: 'outgoing' as const,
         },
         {
-          key: scene.destination!.instances[0]?.key ?? scene.destination!.leaf.key,
+          key: scene.destination!.leaf.key,
           scene: scene.destination!,
           manifest: scene.destination!,
           search: destinationSearch,
@@ -463,7 +527,10 @@ export function App(): ReactElement {
       ]
     : [
         {
-          key: mountedScene.instances[0]?.key ?? String(scene.generation),
+          // The destination leaf is the prepared scene instance. Preserve that exact
+          // identity when entering becomes current; changing back to a root-region key
+          // here would destroy and recreate the just-committed screen and its store.
+          key: mountedScene.leaf.key,
           scene: mountedScene,
           manifest,
           search,
@@ -515,6 +582,11 @@ export function App(): ReactElement {
               preserveHost={layer.preserveHost}
               transitionRegion={layer.transitionRegion}
               mountedKey={layer.scene.leaf.key}
+              revealing={scene.phase === 'entering' && layer.visualRole !== 'outgoing'}
+              deactivating={transitioning && (
+                layer.visualRole === 'outgoing'
+                || (layer.visualRole === 'single' && scene.phase === 'exiting')
+              )}
               visualRole={layer.visualRole}
               onPainted={destinationPainted}
               onFailed={destinationFailed}
@@ -551,8 +623,9 @@ function renderScene(scene: ScenePath, search: string): ReactElement {
   const path = scene.pathname;
   if (path === '/play') return <Skirmish routePath={path} routeSearch={search} />;
   if (path.startsWith('/play/strategikon/')) return <Skirmish routePath={path} routeSearch={search} />;
-  if (path === '/run') return <RunScreen routePath={path} routeSearch={search} />;
-  if (path.startsWith('/run/strategikon/')) return <RunScreen routePath={path} routeSearch={search} />;
+  if (path === '/run' || path.startsWith('/run/strategikon/')) {
+    return <RunScreen routePath={path} routeSearch={search} sceneSnapshot={scene.snapshot as RunSceneSnapshot} />;
+  }
   if (path === '/predrawn-reference') return <PredrawnReference />;
   if (path === '/studio' && new URLSearchParams(search).get('runShopReview') === '1') return <RunShopArtReview />;
   if (path === '/studio' && new URLSearchParams(search).get('relicReview') === '1') return <RunRelicReview />;

@@ -5,6 +5,8 @@ import {
   isEmptySlotOrigin,
   sceneManifest,
 } from './sceneManifest';
+import { createRun } from '../../run/model';
+import { createBlankLevel } from '../../core/level';
 
 describe('scene manifests', () => {
   it('resolves route intent into an authored nested scene path', () => {
@@ -60,6 +62,31 @@ describe('scene manifests', () => {
       sceneManifest('/settings/general'),
       sceneManifest('/settings/audio'),
     )).toBe('settings-shell');
+  });
+
+  it('keeps Run choices in a nested detail slot while the action column remains mounted', () => {
+    const run = sceneManifest('/play/select/run');
+    const current = sceneManifest('/play/select/run/current');
+    const next = sceneManifest('/play/select/run/new');
+
+    expect(run.instances.map((entry) => entry.definition.id)).toEqual([
+      'main-menu',
+      'play',
+      'play/run',
+    ]);
+    expect(current.leaf.definition).toMatchObject({
+      id: 'play/run/current',
+      slot: 'run-detail-content',
+      view: 'play-run-current',
+    });
+    expect(next.leaf.definition).toMatchObject({
+      id: 'play/run/new',
+      slot: 'run-detail-content',
+      view: 'play-run-new',
+    });
+    expect(deepestSharedSceneRegion(run, next)).toBe('run-detail');
+    expect(deepestSharedSceneRegion(current, next)).toBe('run-detail');
+    expect(isEmptySlotOrigin(run, next)).toBe(true);
   });
 
   it('authors every Settings panel and nested tracks view as a settings-content scene', () => {
@@ -146,10 +173,11 @@ describe('scene manifests', () => {
       paintOwner: 'gameplay-hud',
     });
     expect(playStrategikon.id).not.toBe(play.id);
-    expect(run.instances.map((entry) => entry.definition.id)).toEqual(['run']);
+    expect(run.instances.map((entry) => entry.definition.id)).toEqual(['run', 'run/phase', 'run/workspace']);
     expect(sceneManifest('/run/strategikon/lipsanotheca').instances.map((entry) => entry.definition.id)).toEqual([
       'run',
-      'run/strategikon',
+      'run/phase',
+      'run/workspace',
     ]);
     expect(runStrategikon.id).not.toBe(run.id);
     expect(deepestSharedSceneRegion(
@@ -164,14 +192,8 @@ describe('scene manifests', () => {
       playStrategikon,
       play,
     )).toBe(true);
-    expect(isEmptySlotOrigin(
-      run,
-      runStrategikon,
-    )).toBe(true);
-    expect(isEmptySlotDestination(
-      runStrategikon,
-      run,
-    )).toBe(true);
+    expect(isEmptySlotOrigin(run, runStrategikon)).toBe(false);
+    expect(isEmptySlotDestination(runStrategikon, run)).toBe(false);
     expect(sceneManifest('/enchiridion/abilities').instances.map((entry) => entry.definition.id)).toEqual([
       'main-menu',
       'enchiridion',
@@ -191,6 +213,39 @@ describe('scene manifests', () => {
       sceneManifest('/enchiridion/units'),
       sceneManifest('/enchiridion/relics'),
     )).toBe('enchiridion-shell');
+  });
+
+  it('projects active Run state into authored phase and workspace slots', () => {
+    const level = createBlankLevel('run-battle', 'Run Battle', 8, 8);
+    const draft = createRun({
+      id: 'run-war',
+      name: 'Run War',
+      description: 'A test War',
+      battles: [{ level, loot: false }],
+    }, 17, '2026-08-01T00:00:00.000Z');
+    const deployment = { ...draft, phase: 'deployment' as const };
+    const battle = { ...draft, phase: 'battle' as const };
+    const source = (document: typeof draft) => ({ run: { hydrated: true, document } });
+
+    const deploymentScene = sceneManifest('/run', '', source(deployment));
+    const battleScene = sceneManifest('/run', '', source(battle));
+    const armyScene = sceneManifest('/run', '?view=army', source(battle));
+
+    expect(deploymentScene.snapshot).toMatchObject({
+      kind: 'run',
+      phase: 'deployment',
+      workspace: 'primary',
+      run: deployment,
+    });
+    expect(deploymentScene.instances.map((entry) => entry.definition.slot)).toEqual([
+      'root',
+      'run-phase',
+      'run-workspace',
+    ]);
+    expect(battleScene.id).not.toBe(deploymentScene.id);
+    expect(armyScene.id).not.toBe(battleScene.id);
+    expect(deepestSharedSceneRegion(deploymentScene, battleScene)).toBe('gameplay-shell');
+    expect(deepestSharedSceneRegion(battleScene, armyScene)).toBe('gameplay-shell');
   });
 
   it('addresses individual relics inside the one retained relic-reference scene (ADR-0256)', () => {

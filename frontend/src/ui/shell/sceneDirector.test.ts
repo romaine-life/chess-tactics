@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { sceneManifest } from './sceneManifest';
 import { initialSceneState, reduceScene } from './sceneDirector';
+import { createRun } from '../../run/model';
+import { createBlankLevel } from '../../core/level';
 
 describe('scene director', () => {
   it('declares Play as a host nested inside the persistent menu host', () => {
@@ -60,6 +62,44 @@ describe('scene director', () => {
     expect(state.phase).toBe('entering');
     state = reduceScene(state, { type: 'entrance-finished', generation: state.generation });
     expect(state).toMatchObject({ phase: 'current', current: { id: 'gameplay' }, destination: null });
+  });
+
+  it('freezes the committed Run snapshot while a state-derived phase prepares', () => {
+    const run = createRun({
+      id: 'war',
+      name: 'War',
+      description: 'War',
+      battles: [{ level: createBlankLevel('battle', 'Battle', 8, 8), loot: false }],
+    }, 19, '2026-08-01T00:00:00.000Z');
+    const deployment = { ...run, phase: 'deployment' as const };
+    const battle = { ...run, phase: 'battle' as const };
+    const deploymentScene = sceneManifest('/run', '', {
+      run: { hydrated: true, document: deployment },
+    });
+    const battleScene = sceneManifest('/run', '', {
+      run: { hydrated: true, document: battle },
+    });
+    let state = reduceScene(initialSceneState(deploymentScene), {
+      type: 'navigate',
+      destination: battleScene,
+      href: '/run',
+    });
+
+    expect(state).toMatchObject({
+      phase: 'exiting',
+      current: { snapshot: { kind: 'run', phase: 'deployment', run: deployment } },
+      destination: { snapshot: { kind: 'run', phase: 'battle', run: battle } },
+    });
+    expect(state.current.snapshot).toBe(deploymentScene.snapshot);
+
+    state = reduceScene(state, { type: 'exit-finished', generation: state.generation });
+    state = reduceScene(state, { type: 'destination-painted', generation: state.generation });
+    state = reduceScene(state, { type: 'entrance-finished', generation: state.generation });
+    expect(state).toMatchObject({
+      phase: 'current',
+      current: { snapshot: { kind: 'run', phase: 'battle', run: battle } },
+      destination: null,
+    });
   });
 
   it('commits a removed child slot directly after exit without loading or entrance', () => {

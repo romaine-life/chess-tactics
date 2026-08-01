@@ -3,12 +3,14 @@ import { resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import { runCardArtSlot, runCardFlavor, runCardName } from '../run/cardNames';
 import {
   bundleLabel,
+  PIECE_LABEL,
   type PieceBundle,
   type PurchasablePieceType,
   type RunBundleOffer,
 } from '../run/model';
 import {
   RUN_CARD_FRAME_SLOT,
+  RUN_CARD_CONCINNOUS_FRAME_SLOT,
   RUN_CARD_PESTIFEROUS_FRAME_SLOT,
   RunCardFace,
   type RunCardFaceContent,
@@ -16,11 +18,35 @@ import {
 
 const CARD_PIECE_ORDER: readonly PurchasablePieceType[] = Object.freeze(['pawn', 'knight', 'bishop', 'rook', 'queen']);
 
-function grantsForBundle(bundle: PieceBundle): RunCardFaceContent['grants'] {
+function grantsForBundle(bundle: PieceBundle | RunBundleOffer): RunCardFaceContent['grants'] {
   return CARD_PIECE_ORDER.flatMap((unit) => {
-    const count = bundle.pieces.filter((piece) => piece === unit).length;
-    return count > 0 ? [{ unit, count }] : [];
+    const pieceIndices = bundle.pieces.flatMap((piece, index) => piece === unit ? [index] : []);
+    const plaguedPieceIndex = 'offerId' in bundle ? bundle.plaguedPieceIndex : null;
+    const plaguedIndex = plaguedPieceIndex === null ? -1 : pieceIndices.indexOf(plaguedPieceIndex);
+    return pieceIndices.length > 0
+      ? [{
+          unit,
+          count: pieceIndices.length,
+          plaguedIndices: plaguedIndex >= 0 ? [plaguedIndex] : [],
+        }]
+      : [];
   });
+}
+
+function plaguedTargetLabel(bundle: PieceBundle | RunBundleOffer): string {
+  if (!('offerId' in bundle) || bundle.plaguedPieceIndex === null) return '';
+  const target = bundle.pieces[bundle.plaguedPieceIndex];
+  return target ? ` Plagued ${target}.` : '';
+}
+
+function concinnousTargetLabel(bundle: RunBundleOffer): string {
+  const targetIndex = bundle.effectTargetIndex;
+  if (!Number.isSafeInteger(targetIndex) || targetIndex === null || !bundle.pieces[targetIndex]) return 'Target unavailable';
+  const target = bundle.pieces[targetIndex];
+  const occurrences = bundle.pieces.filter((piece) => piece === target).length;
+  if (occurrences === 1) return PIECE_LABEL[target];
+  const ordinal = bundle.pieces.slice(0, targetIndex + 1).filter((piece) => piece === target).length;
+  return `${PIECE_LABEL[target]} ${ordinal}`;
 }
 
 // One trading-card face shared by the Studio instrument, opening draft, shop, art
@@ -44,17 +70,30 @@ export function RunBundleCard({
   const artUrl = resolvedLiveMediaUrl(runCardArtSlot(bundle));
   const cardType = 'cardType' in bundle ? bundle.cardType : null;
   const frameUrl = resolvedLiveMediaUrl(
-    cardType === 'pestiferous' ? RUN_CARD_PESTIFEROUS_FRAME_SLOT : RUN_CARD_FRAME_SLOT,
+    cardType === 'pestiferous'
+      ? RUN_CARD_PESTIFEROUS_FRAME_SLOT
+      : cardType === 'concinnous'
+        ? RUN_CARD_CONCINNOUS_FRAME_SLOT
+        : RUN_CARD_FRAME_SLOT,
   );
   const cost = 'cost' in bundle ? bundle.cost : bundle.value;
+  const targetLabel = cardType === 'pestiferous'
+    ? plaguedTargetLabel(bundle)
+    : cardType === 'concinnous' && 'offerId' in bundle
+      ? ` Positioned: ${bought ? concinnousTargetLabel(bundle) : 'target hidden'}.`
+      : '';
   const card = {
     name,
     cost,
-    typeLine: cardType === 'pestiferous' ? 'Units — Pestiferous' : 'Units',
+    typeLine: cardType === 'pestiferous'
+      ? 'Units — Pestiferous'
+      : cardType === 'concinnous'
+        ? 'Units — Concinnous'
+        : 'Units',
     grants: grantsForBundle(bundle),
-    ...(cardType === 'pestiferous'
-      ? { rules: 'Each unit is Plagued. After every Battle, this card loses one random unit.' }
-      : {}),
+    properties: cardType === 'concinnous' && 'effectTargetIndex' in bundle
+      ? [{ name: 'Positioned', target: bought ? concinnousTargetLabel(bundle) : 'Target hidden' }]
+      : undefined,
     flavor: runCardFlavor(bundle),
   } satisfies RunCardFaceContent;
   const face = (
@@ -69,7 +108,7 @@ export function RunBundleCard({
     return (
       <span
         className="run-bundle-card is-reference"
-        aria-label={`${name}. ${label}. Worth ${cost} gold.`}
+        aria-label={`${name}. ${label}. Worth ${cost} gold.${targetLabel}`}
       >
         {face}
       </span>
@@ -77,7 +116,7 @@ export function RunBundleCard({
   }
   const actionLabel = mode === 'draft'
     ? `Take ${name} — ${label}`
-    : `${bought ? 'Purchased' : 'Buy'} ${name} — ${label} — for ${cost} gold`;
+    : `${bought ? 'Purchased' : 'Buy'} ${name} — ${label} — for ${cost} gold.${targetLabel}`;
   return (
     <button
       type="button"

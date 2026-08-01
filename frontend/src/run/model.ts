@@ -17,13 +17,14 @@ export {
   type RunRelicId,
 };
 
-export const RUN_FORMAT_VERSION = 5;
+export const RUN_FORMAT_VERSION = 7;
 export const GOLD_SCALE = 10;
 export const INSTALLED_ATARAXIA_MAX_TIER = 1;
 export const PESTIFEROUS_OFFER_DENOMINATOR = 8;
+export const CONCINNOUS_OFFER_DENOMINATOR = 8;
 
 export type AtaraxiaTier = 0 | 1;
-export type RunCardType = 'pestiferous';
+export type RunCardType = 'pestiferous' | 'concinnous';
 export type RunUnitModifier = 'plagued';
 
 export const ATARAXIA_BY_TIER: Readonly<Record<AtaraxiaTier, Readonly<{
@@ -36,13 +37,13 @@ export const ATARAXIA_BY_TIER: Readonly<Record<AtaraxiaTier, Readonly<{
     tier: 0,
     label: 'Ataraxia 0',
     title: 'The Untroubled Mind',
-    effect: 'Standard Run rules. Shop cards are never Pestiferous.',
+    effect: 'Standard Run rules. Shop cards may be Concinnous but are never Pestiferous.',
   }),
   1: Object.freeze({
     tier: 1,
     label: 'Ataraxia I',
     title: 'The Great Mortality',
-    effect: 'About one in eight shop cards is Pestiferous. Every owned nonempty Pestiferous card loses one random unit after each Battle.',
+    effect: 'About one in eight shop cards is Pestiferous. Its marked Plagued unit is lost after each victorious Battle, then another is marked.',
   }),
 });
 
@@ -115,6 +116,9 @@ export interface RunBundleOffer extends PieceBundle {
   cost: number;
   cardType: RunCardType | null;
   effectSeed: number;
+  plaguedPieceIndex: number | null;
+  /** Stored zero-based unit occurrence selected before a Concinnous purchase. */
+  effectTargetIndex: number | null;
 }
 
 export interface RunOwnedCard {
@@ -122,8 +126,11 @@ export interface RunOwnedCard {
   coreId: string;
   cardType: RunCardType | null;
   effectSeed: number;
+  /** Exact acquired unit enhanced by this card, or null for other card types. */
+  effectTargetUnitId: string | null;
   unitIds: string[];
   lostUnitIds: string[];
+  plaguedUnitId: string | null;
   acquiredAfterBattleIndex: number;
 }
 
@@ -321,6 +328,15 @@ const PLAGUED_DISCOUNT: Readonly<Record<PurchasablePieceType, number>> = Object.
   queen: 3,
 });
 
+function seededPestiferousTarget<T>(
+  effectSeed: number,
+  candidates: readonly T[],
+  sequence: number,
+): T | null {
+  if (!candidates.length) return null;
+  return createRng(mixSeed(effectSeed, 'pestiferous-target', sequence)).pick(candidates);
+}
+
 export function pestiferousOfferRoll(
   seed: number,
   battleIndex: number,
@@ -333,25 +349,50 @@ export function pestiferousOfferRoll(
   return createRng(rollSeed).int(denominator) === 0;
 }
 
+export function concinnousOfferRoll(
+  seed: number,
+  battleIndex: number,
+  slotIndex: number,
+  coreId: string,
+  denominator = CONCINNOUS_OFFER_DENOMINATOR,
+): boolean {
+  if (!Number.isSafeInteger(denominator) || denominator < 1) return false;
+  const rollSeed = mixSeed(seed, `concinnous:${coreId}`, battleIndex * 8 + slotIndex);
+  return createRng(rollSeed).int(denominator) === 0;
+}
+
 export function createRunBundleOffer(
   run: Pick<RunDocument, 'seed' | 'ataraxiaTier'>,
   bundle: PieceBundle,
   battleIndex: number,
   slotIndex: number,
-  denominator = PESTIFEROUS_OFFER_DENOMINATOR,
+  pestiferousDenominator = PESTIFEROUS_OFFER_DENOMINATOR,
+  concinnousDenominator = CONCINNOUS_OFFER_DENOMINATOR,
 ): RunBundleOffer {
   const pestiferous = run.ataraxiaTier >= 1
-    && pestiferousOfferRoll(run.seed, battleIndex, slotIndex, bundle.id, denominator);
-  const cost = pestiferous
-    ? bundle.pieces.reduce((sum, piece) => sum + PIECE_VALUE[piece] - PLAGUED_DISCOUNT[piece], 0)
-    : bundle.value;
+    && pestiferousOfferRoll(run.seed, battleIndex, slotIndex, bundle.id, pestiferousDenominator);
+  const effectSeed = mixSeed(run.seed, `shop-card:${bundle.id}`, battleIndex * 8 + slotIndex);
+  const concinnous = !pestiferous
+    && bundle.value + 2 <= 9
+    && concinnousOfferRoll(run.seed, battleIndex, slotIndex, bundle.id, concinnousDenominator);
+  const plaguedPieceIndex = pestiferous
+    ? seededPestiferousTarget(effectSeed, bundle.pieces.map((_, index) => index), 0)
+    : null;
+  const plaguedPiece = plaguedPieceIndex === null ? null : bundle.pieces[plaguedPieceIndex];
+  const cost = plaguedPiece
+    ? bundle.value - PLAGUED_DISCOUNT[plaguedPiece]
+    : bundle.value + (concinnous ? 2 : 0);
   return {
     ...bundle,
     pieces: [...bundle.pieces],
     offerId: `shop-${battleIndex}-${slotIndex}-${bundle.id}`,
     cost,
-    cardType: pestiferous ? 'pestiferous' : null,
-    effectSeed: mixSeed(run.seed, `shop-card:${bundle.id}`, battleIndex * 8 + slotIndex),
+    cardType: pestiferous ? 'pestiferous' : concinnous ? 'concinnous' : null,
+    effectSeed,
+    plaguedPieceIndex,
+    effectTargetIndex: concinnous
+      ? createRng(mixSeed(effectSeed, 'concinnous-target')).int(bundle.pieces.length)
+      : null,
   };
 }
 
@@ -496,6 +537,105 @@ function cloneCards(cards: readonly RunOwnedCard[]): RunOwnedCard[] {
     unitIds: [...card.unitIds],
     lostUnitIds: [...card.lostUnitIds],
   }));
+}
+
+function normalizeLegacyCards(value: unknown, seed: number): RunOwnedCard[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((candidate): RunOwnedCard[] => {
+    if (!candidate || typeof candidate !== 'object') return [];
+    const card = candidate as Partial<RunOwnedCard>;
+    if (typeof card.id !== 'string' || typeof card.coreId !== 'string') return [];
+    const cardType = card.cardType === 'pestiferous'
+      ? 'pestiferous'
+      : card.cardType === 'concinnous'
+        ? 'concinnous'
+        : null;
+    const effectSeed = Number.isSafeInteger(card.effectSeed)
+      ? Number(card.effectSeed) >>> 0
+      : mixSeed(seed, card.id);
+    const unitIds = Array.isArray(card.unitIds)
+      ? card.unitIds.filter((id): id is string => typeof id === 'string')
+      : [];
+    const lostUnitIds = Array.isArray(card.lostUnitIds)
+      ? card.lostUnitIds.filter((id): id is string => typeof id === 'string')
+      : [];
+    return [{
+      id: card.id,
+      coreId: card.coreId,
+      cardType,
+      effectSeed,
+      effectTargetUnitId: cardType === 'concinnous'
+        && typeof card.effectTargetUnitId === 'string'
+        && unitIds.includes(card.effectTargetUnitId)
+        ? card.effectTargetUnitId
+        : null,
+      unitIds,
+      lostUnitIds,
+      plaguedUnitId: cardType === 'pestiferous'
+        ? seededPestiferousTarget(effectSeed, unitIds, lostUnitIds.length)
+        : null,
+      acquiredAfterBattleIndex: Number.isSafeInteger(card.acquiredAfterBattleIndex)
+        ? Math.max(0, Number(card.acquiredAfterBattleIndex))
+        : 0,
+    }];
+  });
+}
+
+function normalizeLegacyBundleOffers(value: unknown): RunBundleOffer[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((candidate) => {
+    const offer = candidate as RunBundleOffer;
+    const cardType = offer.cardType === 'pestiferous'
+      ? 'pestiferous'
+      : offer.cardType === 'concinnous'
+        ? 'concinnous'
+        : null;
+    const plaguedPieceIndex = cardType === 'pestiferous'
+      ? seededPestiferousTarget(offer.effectSeed, offer.pieces.map((_, index) => index), 0)
+      : null;
+    const plaguedPiece = plaguedPieceIndex === null ? null : offer.pieces[plaguedPieceIndex];
+    const storedEffectTargetIndex = offer.effectTargetIndex;
+    const effectTargetIndex = cardType === 'concinnous'
+      ? Number.isSafeInteger(storedEffectTargetIndex)
+        && storedEffectTargetIndex !== null
+        && storedEffectTargetIndex >= 0
+        && storedEffectTargetIndex < offer.pieces.length
+        ? storedEffectTargetIndex
+        : createRng(mixSeed(offer.effectSeed, 'concinnous-target')).int(offer.pieces.length)
+      : null;
+    return {
+      ...offer,
+      cardType,
+      cost: plaguedPiece
+        ? offer.value - PLAGUED_DISCOUNT[plaguedPiece]
+        : offer.value + (cardType === 'concinnous' ? 2 : 0),
+      plaguedPieceIndex,
+      effectTargetIndex,
+    };
+  });
+}
+
+function synchronizePlaguedModifiers(
+  army: RunArmyUnit[],
+  cards: readonly RunOwnedCard[],
+): RunArmyUnit[] {
+  const plaguedUnitIds = new Set(cards.flatMap((card) => (
+    card.cardType === 'pestiferous' && card.plaguedUnitId ? [card.plaguedUnitId] : []
+  )));
+  let changed = false;
+  const synchronized = army.map((unit) => {
+    const shouldBePlagued = plaguedUnitIds.has(unit.id);
+    const isPlagued = unit.modifiers.includes('plagued');
+    if (shouldBePlagued === isPlagued) return unit;
+    changed = true;
+    return {
+      ...unit,
+      modifiers: shouldBePlagued
+        ? [...unit.modifiers, 'plagued' as const]
+        : unit.modifiers.filter((modifier) => modifier !== 'plagued'),
+    };
+  });
+  return changed ? synchronized : army;
 }
 
 function cloneConflictPaidRelics(
@@ -656,24 +796,7 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
   const ataraxiaTier: AtaraxiaTier = legacy.ataraxiaTier === 1 ? 1 : 0;
   const cards = Number(next.formatVersion) === RUN_FORMAT_VERSION && Array.isArray(legacy.cards)
     ? legacy.cards as RunOwnedCard[]
-    : Array.isArray(legacy.cards)
-    ? legacy.cards.flatMap((candidate): RunOwnedCard[] => {
-        if (!candidate || typeof candidate !== 'object') return [];
-        const card = candidate as Partial<RunOwnedCard>;
-        if (typeof card.id !== 'string' || typeof card.coreId !== 'string') return [];
-        return [{
-          id: card.id,
-          coreId: card.coreId,
-          cardType: card.cardType === 'pestiferous' ? 'pestiferous' : null,
-          effectSeed: Number.isSafeInteger(card.effectSeed) ? Number(card.effectSeed) >>> 0 : mixSeed(next.seed, card.id),
-          unitIds: Array.isArray(card.unitIds) ? card.unitIds.filter((id): id is string => typeof id === 'string') : [],
-          lostUnitIds: Array.isArray(card.lostUnitIds) ? card.lostUnitIds.filter((id): id is string => typeof id === 'string') : [],
-          acquiredAfterBattleIndex: Number.isSafeInteger(card.acquiredAfterBattleIndex)
-            ? Math.max(0, Number(card.acquiredAfterBattleIndex))
-            : 0,
-        }];
-      })
-      : [];
+    : normalizeLegacyCards(legacy.cards, next.seed);
   const pestiferousLosses = Array.isArray(legacy.pestiferousLosses)
     ? legacy.pestiferousLosses as RunPestiferousLoss[]
     : [];
@@ -694,6 +817,18 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
     const { bundleOfferIds: _bundleOfferIds, purchasedBundleId: _purchasedBundleId, ...currentShop } = shop;
     shop = { ...currentShop, bundleOffers, purchasedOfferId };
   }
+  if (shop && Number(next.formatVersion) < RUN_FORMAT_VERSION) {
+    shop = {
+      ...shop,
+      bundleOffers: normalizeLegacyBundleOffers(shop.bundleOffers),
+      entrySnapshot: shop.entrySnapshot
+        ? {
+            ...shop.entrySnapshot,
+            cards: normalizeLegacyCards(shop.entrySnapshot.cards, next.seed),
+          }
+        : shop.entrySnapshot,
+    };
+  }
   if (
     next.ataraxiaTier !== ataraxiaTier
     || next.cards !== cards
@@ -705,13 +840,27 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
   }
 
   const identity = normalizedArmyIdentity(next);
+  const army = synchronizePlaguedModifiers(identity.army, next.cards);
+  let identityShop = identity.shop;
+  if (identityShop?.entrySnapshot) {
+    const entryArmy = synchronizePlaguedModifiers(
+      identityShop.entrySnapshot.army,
+      identityShop.entrySnapshot.cards,
+    );
+    if (entryArmy !== identityShop.entrySnapshot.army) {
+      identityShop = {
+        ...identityShop,
+        entrySnapshot: { ...identityShop.entrySnapshot, army: entryArmy },
+      };
+    }
+  }
   const versionChanged = Number(next.formatVersion) !== RUN_FORMAT_VERSION;
-  if (identity.changed || versionChanged) {
+  if (identity.changed || versionChanged || army !== identity.army || identityShop !== identity.shop) {
     next = {
       ...next,
       formatVersion: RUN_FORMAT_VERSION,
-      army: identity.army,
-      shop: identity.shop,
+      army,
+      shop: identityShop,
       nextArmyUnitNumberByType: identity.nextArmyUnitNumberByType,
     };
   }
@@ -906,10 +1055,10 @@ export function restartBattle(run: RunDocument): RunDocument {
 export function cashOutPawn(run: RunDocument, unitId: string): RunDocument {
   const unit = run.army.find((candidate) => candidate.id === unitId);
   if (run.phase !== 'battle' || unit?.type !== 'pawn') return run;
+  const removal = removeUnitFromArmyAndCards(run, unitId);
   return touch({
     ...run,
-    army: run.army.filter((candidate) => candidate.id !== unitId),
-    cards: cardsWithoutUnit(run.cards, unitId),
+    ...removal,
     goldTenths: run.goldTenths + 2 * GOLD_SCALE,
     battleRuntime: run.battleRuntime
       ? {
@@ -1000,9 +1149,28 @@ export function grantGold(run: RunDocument, amountTenths: number): RunDocument {
 }
 
 function cardsWithoutUnit(cards: readonly RunOwnedCard[], unitId: string): RunOwnedCard[] {
-  return cards.map((card) => card.unitIds.includes(unitId)
-    ? { ...card, unitIds: card.unitIds.filter((id) => id !== unitId) }
-    : card);
+  return cards.map((card) => {
+    if (!card.unitIds.includes(unitId)) return card;
+    const unitIds = card.unitIds.filter((id) => id !== unitId);
+    const plaguedUnitId = card.cardType === 'pestiferous'
+      ? card.plaguedUnitId === unitId || !unitIds.includes(card.plaguedUnitId ?? '')
+        ? seededPestiferousTarget(card.effectSeed, unitIds, card.lostUnitIds.length)
+        : card.plaguedUnitId
+      : null;
+    return { ...card, unitIds, plaguedUnitId };
+  });
+}
+
+function removeUnitFromArmyAndCards(
+  run: Pick<RunDocument, 'army' | 'cards'>,
+  unitId: string,
+): Pick<RunDocument, 'army' | 'cards'> {
+  const cards = cardsWithoutUnit(run.cards, unitId);
+  const army = synchronizePlaguedModifiers(
+    run.army.filter((candidate) => candidate.id !== unitId),
+    cards,
+  );
+  return { army, cards };
 }
 
 export function deterioratePestiferousCards(run: RunDocument, battleIndex: number): RunDocument {
@@ -1011,23 +1179,39 @@ export function deterioratePestiferousCards(run: RunDocument, battleIndex: numbe
   const losses: RunPestiferousLoss[] = [];
   const cards = run.cards.map((card) => {
     if (card.cardType !== 'pestiferous') return card;
+    if (run.pestiferousLosses.some((loss) => loss.cardId === card.id && loss.battleIndex === battleIndex)) {
+      return card;
+    }
     const remaining = card.unitIds.filter((id) => armyById.has(id) && !removedIds.has(id));
     if (!remaining.length) return card;
-    const unitId = createRng(mixSeed(card.effectSeed, 'pestiferous-attrition', battleIndex)).pick(remaining);
+    const unitId = card.plaguedUnitId && remaining.includes(card.plaguedUnitId)
+      ? card.plaguedUnitId
+      : seededPestiferousTarget(card.effectSeed, remaining, card.lostUnitIds.length);
+    if (!unitId) return card;
     const unit = armyById.get(unitId);
     if (!unit) return card;
     removedIds.add(unitId);
-    losses.push({ battleIndex, cardId: card.id, unit: cloneArmy([unit])[0] });
+    const plaguedUnit = unit.modifiers.includes('plagued')
+      ? unit
+      : { ...unit, modifiers: [...unit.modifiers, 'plagued' as const] };
+    losses.push({ battleIndex, cardId: card.id, unit: cloneArmy([plaguedUnit])[0] });
+    const unitIds = card.unitIds.filter((id) => id !== unitId);
+    const lostUnitIds = [...card.lostUnitIds, unitId];
     return {
       ...card,
-      unitIds: card.unitIds.filter((id) => id !== unitId),
-      lostUnitIds: [...card.lostUnitIds, unitId],
+      unitIds,
+      lostUnitIds,
+      plaguedUnitId: seededPestiferousTarget(card.effectSeed, unitIds, lostUnitIds.length),
     };
   });
   if (!losses.length) return run;
+  const army = synchronizePlaguedModifiers(
+    run.army.filter((unit) => !removedIds.has(unit.id)),
+    cards,
+  );
   return {
     ...run,
-    army: run.army.filter((unit) => !removedIds.has(unit.id)),
+    army,
     cards,
     pestiferousLosses: [...run.pestiferousLosses, ...losses],
   };
@@ -1106,21 +1290,36 @@ export function buyBundle(run: RunDocument, offerId: string): RunDocument {
   if (run.phase !== 'shop' || !run.shop || run.shop.purchasedOfferId || !offer) return run;
   const cost = offer.cost * GOLD_SCALE;
   if (run.goldTenths < cost) return run;
-  const modifiers: RunUnitModifier[] = offer.cardType === 'pestiferous' ? ['plagued'] : [];
-  const { addedUnits, ...armyUpdate } = addArmyPieces(run, offer.pieces, 'shop', modifiers);
+  const { addedUnits, ...armyUpdate } = addArmyPieces(run, offer.pieces, 'shop');
+  const plaguedUnitId = offer.cardType === 'pestiferous' && offer.plaguedPieceIndex !== null
+    ? addedUnits[offer.plaguedPieceIndex]?.id ?? null
+    : null;
+  const effectTargetUnit = offer.cardType === 'concinnous'
+    && Number.isSafeInteger(offer.effectTargetIndex)
+    ? addedUnits[offer.effectTargetIndex!]
+    : undefined;
+  const abilityArmy = effectTargetUnit
+    ? armyUpdate.army.map((unit): RunArmyUnit => unit.id === effectTargetUnit.id
+      ? { ...unit, abilities: unit.abilities.includes('positioned') ? unit.abilities : [...unit.abilities, 'positioned'] }
+      : unit)
+    : armyUpdate.army;
   const card: RunOwnedCard = {
     id: `run-card-${run.nextCardSequence}`,
     coreId: offer.id,
     cardType: offer.cardType,
     effectSeed: offer.effectSeed,
+    effectTargetUnitId: effectTargetUnit?.id ?? null,
     unitIds: addedUnits.map((unit) => unit.id),
     lostUnitIds: [],
+    plaguedUnitId,
     acquiredAfterBattleIndex: run.shop.afterBattleIndex,
   };
+  const cards = [...run.cards, card];
   return touch({
     ...run,
     ...armyUpdate,
-    cards: [...run.cards, card],
+    army: synchronizePlaguedModifiers(abilityArmy, cards),
+    cards,
     nextCardSequence: run.nextCardSequence + 1,
     goldTenths: run.goldTenths - cost,
     shop: { ...run.shop, purchasedOfferId: offerId },
@@ -1133,10 +1332,10 @@ export function sellArmyUnit(run: RunDocument, unitId: string): RunDocument {
   if (!unit || unit.type === 'king') return run;
   const numerator = hasRelic(run, 'fair-scales') ? 75 : 50;
   const proceedsTenths = (PIECE_VALUE[unit.type] * GOLD_SCALE * numerator) / 100;
+  const removal = removeUnitFromArmyAndCards(run, unitId);
   return touch({
     ...run,
-    army: run.army.filter((candidate) => candidate.id !== unitId),
-    cards: cardsWithoutUnit(run.cards, unitId),
+    ...removal,
     goldTenths: run.goldTenths + proceedsTenths,
     shop: run.shop
       ? {

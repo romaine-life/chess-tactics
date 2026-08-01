@@ -2,14 +2,14 @@
 status: superseded
 date: 2026-08-01
 deciders: owner (Nelson) + Codex
-superseded_by: "[ADR-0310](0310-plagued-iconography-depicts-the-condition-not-a-chess-piece.md)"
+superseded_by: "[ADR-0317](0317-plagued-iconography-depicts-the-condition-not-a-chess-piece.md)"
 refines:
   - "[ADR-0085](0085-runtime-assets-are-live-storage-backed.md)"
   - "[ADR-0198](0198-run-relics-use-live-native-ui-icons.md)"
-  - "[ADR-0306](0306-enchiridion-filters-cards-and-previews-affected-types.md)"
+  - "[ADR-0313](0313-enchiridion-filters-cards-and-previews-affected-types.md)"
 ---
 
-# ADR-0309: Plagued icon candidates are reviewed in context
+# ADR-0316: Plagued icon candidates are reviewed in context
 
 ## Context
 

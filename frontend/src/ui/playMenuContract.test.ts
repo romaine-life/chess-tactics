@@ -10,6 +10,7 @@ const headerAccountCluster = readFileSync(new URL('./shared/HeaderAccountCluster
 const profiles = readFileSync(new URL('./skirmishProfiles.ts', import.meta.url), 'utf8');
 const livePlay = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
 const ataraxiaSelector = readFileSync(new URL('./AtaraxiaSelector.tsx', import.meta.url), 'utf8');
+const authoredSceneSlots = readFileSync(new URL('./shell/AuthoredSceneSlot.tsx', import.meta.url), 'utf8');
 
 describe('unified Play menu contract (ADR-0074)', () => {
   it('has one top-level Play entry and no retired picker destinations', () => {
@@ -87,6 +88,9 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('data-testid="run-choice-new"');
     expect(playMenu).toContain('to={PLAY_RUN_NEW_SELECTOR_HREF}');
     expect(playMenu).toContain('data-testid="run-detail-new"');
+    expect(playMenu).toContain('<RunDetailContentSceneSlot');
+    expect(authoredSceneSlots).toContain('region="run-detail" mode="contents"');
+    expect(playMenu).not.toContain("sceneTransitionTargetAttributes('run-detail'");
     expect(playMenu).toMatch(/choice === 'new'[\s\S]*?<AtaraxiaSelector/);
     expect(ataraxiaSelector).toContain('<HouseSelect');
     expect(ataraxiaSelector).toContain('disabled: locked');

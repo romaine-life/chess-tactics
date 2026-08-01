@@ -206,7 +206,7 @@ route lifecycle during the same React commit.
   content/frame/art/unit generation mounts hidden and settles its actual image consumers.
   The complete layer promotes only after paint opportunities; a later selection cancels
   every stale acknowledgement, so card text and card pixels never expose different
-  identities (ADR-0307).
+  identities (ADR-0314).
 - Persisted Campaign Editor rows consume the same immutable database-backed derivatives
   as player lists. Only a genuinely unsaved/new level without a canonical derivative may
   use the authoring-only client bake. The selected live-board preview separately waits for

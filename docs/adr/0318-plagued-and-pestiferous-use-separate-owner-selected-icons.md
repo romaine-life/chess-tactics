@@ -4,15 +4,15 @@ date: 2026-08-01
 deciders: owner (Nelson) + Codex
 refines:
   - "[ADR-0198](0198-run-relics-use-live-native-ui-icons.md)"
-  - "[ADR-0306](0306-enchiridion-filters-cards-and-previews-affected-types.md)"
-  - "[ADR-0310](0310-plagued-iconography-depicts-the-condition-not-a-chess-piece.md)"
+  - "[ADR-0313](0313-enchiridion-filters-cards-and-previews-affected-types.md)"
+  - "[ADR-0317](0317-plagued-iconography-depicts-the-condition-not-a-chess-piece.md)"
 ---
 
-# ADR-0311: Plagued and Pestiferous use separate owner-selected icons
+# ADR-0318: Plagued and Pestiferous use separate owner-selected icons
 
 ## Context
 
-The condition-first PixelLab review in ADR-0310 produced distinct symbols for
+The condition-first PixelLab review in ADR-0317 produced distinct symbols for
 the unit ability and the card property that grants it. Reusing one visual role
 for both would collapse two related but different game concepts back into an
 ambiguous generic disease glyph.

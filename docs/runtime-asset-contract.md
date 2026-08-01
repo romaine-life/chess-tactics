@@ -331,6 +331,12 @@ an incomplete row is an availability failure.
   that drawable's immutable icon URL and native geometry together with the
   canonical relic name/effect; a missing or ambiguous targeted icon never
   substitutes the generic OG image (ADR-0261).
+  The Plagued unit-state icon uses the stable semantic slot
+  `ui/run/card-status/plagued-v1.png`. Until that generated icon has an accepted
+  live pointer, the shared card face reserves its final socket with a neutral
+  DOM diamond. That owner-authorized placeholder is named temporary debt under
+  ADR-0312, not a packaged media fallback, and must be removed when the accepted
+  icon is installed.
   The Run gold resource is likewise an exact native 64×64 PNG with typed
   `run-resource-icon` metadata; one installed `kind='run-resource'` drawable
   record binds `behavior.resourceId='gold'` to its `icon` media role.

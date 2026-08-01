@@ -4,15 +4,15 @@ date: 2026-08-01
 deciders: owner (Nelson) + Codex
 refines:
   - "[ADR-0254](0254-enchiridion-content-owns-the-remaining-menu-canvas.md)"
-  - "[ADR-0306](0306-enchiridion-filters-cards-and-previews-affected-types.md)"
-  - "[ADR-0307](0307-run-card-presentations-promote-atomically.md)"
+  - "[ADR-0313](0313-enchiridion-filters-cards-and-previews-affected-types.md)"
+  - "[ADR-0314](0314-run-card-presentations-promote-atomically.md)"
 ---
 
-# ADR-0308: Card Types uses the Enchiridion master-detail columns
+# ADR-0315: Card Types uses the Enchiridion master-detail columns
 
 ## Context
 
-ADR-0306 established four affected-card records, but its first presentation
+ADR-0313 established four affected-card records, but its first presentation
 rendered all four card faces in a grid inside the Enchiridion content area. The
 rest of the main-menu reference workspace already reads as four columns: the
 main rail, Enchiridion section rail, record selector, and selected-record
@@ -32,7 +32,7 @@ language and make each card too small to serve as the reference authority.
   description card competes with it in the detail column.
 - Both the main-menu Enchiridion and Battle-hosted Strategikon use the same
   component and selection behavior.
-- Changing the selected type keeps using ADR-0307's atomic `RunCardFace`
+- Changing the selected type keeps using ADR-0314's atomic `RunCardFace`
   promotion, so a newly selected type's text, frame, art, and unit imagery
   become visible as one presentation.
 

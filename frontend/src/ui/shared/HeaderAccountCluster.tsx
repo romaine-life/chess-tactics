@@ -1,6 +1,7 @@
-import { useEffect, useState, type ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 import { requiredDrawableRole } from '@chess-tactics/board-render';
-import { fetchReachableAuthStatus, goSignIn, updateDisplayName, type AuthUser } from '../../net/auth';
+import { goSignIn, updateDisplayName, type AuthUser } from '../../net/auth';
+import { reportAuthSessionFailure, updateAuthSessionUser, useAuthSession } from '../../net/authSession';
 import { normalizeRoutePath } from '../navigation';
 import { TitleBarIconButtonPrimitive } from '../shell/TitleBarControls';
 import { AccountMenu } from './AccountMenu';
@@ -60,19 +61,10 @@ export function HeaderAccountCluster({
   const menuOpen = import.meta.env.DEV && params.get('menu') === 'open';
   const editOpen = import.meta.env.DEV && params.get('edit') === 'open';
 
-  const [me, setMe] = useState<AuthUser | null>(demo ? DEMO_USER : null);
-  const [authResolved, setAuthResolved] = useState(demo);
-
-  useEffect(() => {
-    if (demo) return; // demo stub: never hit the backend
-    const controller = new AbortController();
-    void fetchReachableAuthStatus(controller.signal).then((status) => {
-      if (!status) return;
-      setMe(status.user);
-      setAuthResolved(true);
-    });
-    return () => { controller.abort(); };
-  }, [demo]);
+  const sharedAuth = useAuthSession((session) => session.status);
+  const [demoUser, setDemoUser] = useState<AuthUser>(DEMO_USER);
+  const me = demo ? demoUser : sharedAuth?.user ?? null;
+  const authResolved = demo || sharedAuth?.reachable === true;
 
   const signedIn = Boolean(me?.signed_in);
   const accountName = signedIn ? (me!.name || me!.email || 'Player') : 'Guest';
@@ -80,11 +72,16 @@ export function HeaderAccountCluster({
 
   const renameAccount = async (next: string): Promise<void> => {
     if (demo) {
-      setMe((prev) => (prev ? { ...prev, name: next || prev.email || 'Player' } : prev));
+      setDemoUser((prev) => ({ ...prev, name: next || prev.email || 'Player' }));
       return;
     }
-    const updated = await updateDisplayName(next);
-    setMe(updated);
+    try {
+      const updated = await updateDisplayName(next);
+      updateAuthSessionUser(updated);
+    } catch (error) {
+      reportAuthSessionFailure(error);
+      throw error;
+    }
   };
 
   const signOut = async (): Promise<void> => {

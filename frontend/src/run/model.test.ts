@@ -221,7 +221,7 @@ describe('Run progression and relic offers', () => {
     } as unknown as RunDocument;
     const upgraded = normalizeRunDocument(legacy);
 
-    expect(upgraded.formatVersion).toBe(5);
+    expect(upgraded.formatVersion).toBe(7);
     expect(upgraded.id).toBe(current.id);
     expect(upgraded.army.map((unit) => unit.name)).toEqual(current.army.map((unit) => unit.name));
     expect(normalizeRunDocument(upgraded)).toBe(upgraded);
@@ -236,7 +236,7 @@ describe('Run progression and relic offers', () => {
     } as unknown as RunDocument;
     const upgraded = normalizeRunDocument(provisional);
 
-    expect(upgraded.formatVersion).toBe(5);
+    expect(upgraded.formatVersion).toBe(7);
     expect(upgraded.army.map((unit) => unit.name)).toEqual(current.army.map((unit) => unit.name));
     expect(normalizeRunDocument(upgraded)).toBe(upgraded);
   });
@@ -250,7 +250,7 @@ describe('Run progression and relic offers', () => {
     } as unknown as RunDocument;
     const upgraded = normalizeRunDocument(legacy);
 
-    expect(upgraded.formatVersion).toBe(5);
+    expect(upgraded.formatVersion).toBe(7);
     expect(upgraded.army.every((unit) => Number.isSafeInteger(unit.inspectionSeed))).toBe(true);
     expect(normalizeRunDocument(upgraded)).toBe(upgraded);
   });
@@ -316,13 +316,13 @@ describe('Ataraxia ladder identities', () => {
       tier: 0,
       label: 'Ataraxia 0',
       title: 'The Untroubled Mind',
-      effect: 'Standard Run rules. Shop cards are never Pestiferous.',
+      effect: 'Standard Run rules. Shop cards may be Concinnous but are never Pestiferous.',
     });
   });
 });
 
 describe('Ataraxia I — The Great Mortality', () => {
-  it('never marks baseline offers and deterministically realizes the tunable one-in-eight roll', () => {
+  it('never marks baseline offers Pestiferous and deterministically realizes both affected rolls', () => {
     const baseline = createRun(war(), 4217, 0);
     const ataraxia = createRun(war(), 4217, 1);
     const baselineOffers = PIECE_BUNDLE_DECK.map((bundle, index) => (
@@ -335,7 +335,8 @@ describe('Ataraxia I — The Great Mortality', () => {
       createRunBundleOffer(ataraxia, bundle, Math.floor(index / 4), index % 4)
     ));
 
-    expect(baselineOffers.every((offer) => offer.cardType === null)).toBe(true);
+    expect(baselineOffers.every((offer) => offer.cardType !== 'pestiferous')).toBe(true);
+    expect(baselineOffers.some((offer) => offer.cardType === 'concinnous')).toBe(true);
     expect(first).toEqual(second);
     expect(first.some((offer) => offer.cardType === 'pestiferous')).toBe(true);
     expect(first.filter((offer) => offer.cardType === 'pestiferous').length).toBeLessThan(PIECE_BUNDLE_DECK.length / 2);
@@ -352,20 +353,57 @@ describe('Ataraxia I — The Great Mortality', () => {
     const originalOffers = structuredClone(shop!.shop!.bundleOffers);
     const bought = buyBundle(shop!, pestiferous.offerId);
     const owned = bought.cards[0];
+    const plaguedPieceIndex = pestiferous.plaguedPieceIndex!;
+    const plaguedPiece = pestiferous.pieces[plaguedPieceIndex];
+    const discount = { pawn: 0, knight: 1, bishop: 1, rook: 2, queen: 3 }[plaguedPiece];
+    const acquiredUnits = bought.army.filter((unit) => owned.unitIds.includes(unit.id));
 
-    expect(pestiferous.cost).toBeLessThanOrEqual(pestiferous.value);
+    expect(plaguedPieceIndex).toBeGreaterThanOrEqual(0);
+    expect(pestiferous.cost).toBe(pestiferous.value - discount);
     expect(owned).toMatchObject({ coreId: pestiferous.id, cardType: 'pestiferous', effectSeed: pestiferous.effectSeed });
     expect(owned.unitIds).toHaveLength(pestiferous.pieces.length);
-    expect(bought.army.filter((unit) => owned.unitIds.includes(unit.id)).every((unit) => unit.modifiers.includes('plagued'))).toBe(true);
+    expect(owned.plaguedUnitId).toBe(acquiredUnits[plaguedPieceIndex].id);
+    expect(acquiredUnits.filter((unit) => unit.modifiers.includes('plagued')).map((unit) => unit.id))
+      .toEqual([owned.plaguedUnitId]);
     expect(resetShop(bought).shop?.bundleOffers).toEqual(originalOffers);
     expect(resetShop(bought).cards).toEqual(shop!.cards);
   });
 
-  it('removes exactly one deterministic unit from every nonempty Pestiferous card per Battle and retains empty cards', () => {
+  it('upgrades format-5 shop offers to persisted public targets and target-only pricing', () => {
+    let current: RunDocument | null = null;
+    for (let seed = 1; seed < 500 && !current; seed += 1) {
+      const candidate = openShop(deployedAtaraxiaRun(seed), []);
+      if (candidate.shop?.bundleOffers.some((offer) => offer.cardType === 'pestiferous')) current = candidate;
+    }
+    expect(current).not.toBeNull();
+    const legacy = {
+      ...current!,
+      formatVersion: 5,
+      shop: {
+        ...current!.shop!,
+        bundleOffers: current!.shop!.bundleOffers.map(({ plaguedPieceIndex: _target, ...offer }) => ({
+          ...offer,
+          cost: offer.cardType === 'pestiferous' ? 1 : offer.cost,
+        })),
+      },
+    } as unknown as RunDocument;
+    const upgraded = normalizeRunDocument(legacy);
+
+    for (const offer of upgraded.shop!.bundleOffers) {
+      const original = current!.shop!.bundleOffers.find((candidate) => candidate.offerId === offer.offerId)!;
+      expect(offer.plaguedPieceIndex).toBe(original.plaguedPieceIndex);
+      expect(offer.cost).toBe(original.cost);
+    }
+    expect(normalizeRunDocument(upgraded)).toBe(upgraded);
+  });
+
+  it('removes the revealed target, reveals one successor, and retains empty Pestiferous cards', () => {
     const base = deployedAtaraxiaRun(77, war(5));
-    const units = base.army.filter((unit) => unit.type !== 'king').slice(0, 2).map((unit) => ({
+    const units = base.army.filter((unit) => unit.type !== 'king').slice(0, 2).map((unit, index) => ({
       ...unit,
-      modifiers: ['plagued'] as RunDocument['army'][number]['modifiers'],
+      modifiers: index === 0
+        ? ['plagued'] as RunDocument['army'][number]['modifiers']
+        : [],
     }));
     const run: RunDocument = {
       ...base,
@@ -375,8 +413,10 @@ describe('Ataraxia I — The Great Mortality', () => {
         coreId: 'pp',
         cardType: 'pestiferous',
         effectSeed: 991,
+        effectTargetUnitId: null,
         unitIds: units.map((unit) => unit.id),
         lostUnitIds: [],
+        plaguedUnitId: units[0].id,
         acquiredAfterBattleIndex: 0,
       }],
       nextCardSequence: 2,
@@ -388,9 +428,153 @@ describe('Ataraxia I — The Great Mortality', () => {
 
     expect(first.army).toHaveLength(run.army.length - 1);
     expect(first.pestiferousLosses).toHaveLength(1);
+    expect(first.pestiferousLosses[0].unit.id).toBe(units[0].id);
+    expect(first.cards[0].plaguedUnitId).toBe(units[1].id);
+    expect(first.army.find((unit) => unit.id === units[1].id)?.modifiers).toEqual(['plagued']);
     expect(retry.pestiferousLosses[0].unit.id).toBe(first.pestiferousLosses[0].unit.id);
+    expect(deterioratePestiferousCards(first, 1)).toBe(first);
     expect(second.cards[0].unitIds).toEqual([]);
     expect(second.cards[0].lostUnitIds).toHaveLength(2);
+    expect(second.cards[0].plaguedUnitId).toBeNull();
     expect(empty).toBe(second);
+  });
+
+  it('immediately reveals a new target when the Plagued unit is sold', () => {
+    const base = deployedAtaraxiaRun(79, war(3));
+    const units = base.army.filter((unit) => unit.type !== 'king').slice(0, 2).map((unit, index) => ({
+      ...unit,
+      modifiers: index === 0
+        ? ['plagued'] as RunDocument['army'][number]['modifiers']
+        : [],
+    }));
+    const run: RunDocument = {
+      ...base,
+      phase: 'shop',
+      army: [base.army.find((unit) => unit.type === 'king')!, ...units],
+      cards: [{
+        id: 'run-card-1',
+        coreId: 'pp',
+        cardType: 'pestiferous',
+        effectSeed: 992,
+        effectTargetUnitId: null,
+        unitIds: units.map((unit) => unit.id),
+        lostUnitIds: [],
+        plaguedUnitId: units[0].id,
+        acquiredAfterBattleIndex: 0,
+      }],
+      shop: null,
+      nextCardSequence: 2,
+    };
+    const sold = sellArmyUnit(run, units[0].id);
+
+    expect(sold.cards[0].unitIds).toEqual([units[1].id]);
+    expect(sold.cards[0].plaguedUnitId).toBe(units[1].id);
+    expect(sold.army.find((unit) => unit.id === units[1].id)?.modifiers).toEqual(['plagued']);
+  });
+
+  it('upgrades format-5 all-unit Plagued state to one deterministic current target', () => {
+    const base = deployedAtaraxiaRun(81, war(3));
+    const units = base.army.filter((unit) => unit.type !== 'king').slice(0, 2).map((unit) => ({
+      ...unit,
+      modifiers: ['plagued'] as RunDocument['army'][number]['modifiers'],
+    }));
+    const legacy = {
+      ...base,
+      formatVersion: 5,
+      army: [base.army.find((unit) => unit.type === 'king')!, ...units],
+      cards: [{
+        id: 'run-card-1',
+        coreId: 'pp',
+        cardType: 'pestiferous',
+        effectSeed: 993,
+        unitIds: units.map((unit) => unit.id),
+        lostUnitIds: [],
+        acquiredAfterBattleIndex: 0,
+      }],
+      nextCardSequence: 2,
+    } as unknown as RunDocument;
+    const upgraded = normalizeRunDocument(legacy);
+
+    expect(upgraded.formatVersion).toBe(7);
+    expect(upgraded.cards[0].plaguedUnitId).not.toBeNull();
+    expect(upgraded.army.filter((unit) => unit.modifiers.includes('plagued')).map((unit) => unit.id))
+      .toEqual([upgraded.cards[0].plaguedUnitId]);
+    expect(normalizeRunDocument(upgraded)).toBe(upgraded);
+  });
+});
+
+describe('Concinnous cards', () => {
+  it('persist a concealed eligible target, charge two extra gold, and Position that exact unit on purchase', () => {
+    let shop: RunDocument | null = null;
+    for (let seed = 1; seed < 500 && !shop; seed += 1) {
+      const candidate = openShop({ ...deployedRun(seed), goldTenths: 100 * GOLD_SCALE }, []);
+      if (candidate.shop?.bundleOffers.some((offer) => offer.cardType === 'concinnous')) shop = candidate;
+    }
+    expect(shop).not.toBeNull();
+    const concinnous = shop!.shop!.bundleOffers.find((offer) => offer.cardType === 'concinnous')!;
+    const originalOffers = structuredClone(shop!.shop!.bundleOffers);
+    const bought = buyBundle(shop!, concinnous.offerId);
+    const owned = bought.cards[0];
+    const positioned = bought.army.filter((unit) => (
+      owned.unitIds.includes(unit.id) && unit.abilities.includes('positioned')
+    ));
+
+    expect(concinnous.cost).toBe(concinnous.value + 2);
+    expect(concinnous.cost).toBeLessThanOrEqual(9);
+    expect(concinnous.effectTargetIndex).toBeGreaterThanOrEqual(0);
+    expect(concinnous.effectTargetIndex).toBeLessThan(concinnous.pieces.length);
+    expect(owned).toMatchObject({
+      coreId: concinnous.id,
+      cardType: 'concinnous',
+      effectSeed: concinnous.effectSeed,
+      effectTargetUnitId: positioned[0].id,
+    });
+    expect(positioned).toHaveLength(1);
+    expect(owned.unitIds[concinnous.effectTargetIndex!]).toBe(positioned[0].id);
+    expect(resetShop(bought).shop?.bundleOffers).toEqual(originalOffers);
+  });
+
+  it('upgrades format-6 Concinnous targets without rerolling them', () => {
+    let shop: RunDocument | null = null;
+    for (let seed = 1; seed < 500 && !shop; seed += 1) {
+      const candidate = openShop({ ...deployedRun(seed), goldTenths: 100 * GOLD_SCALE }, []);
+      if (candidate.shop?.bundleOffers.some((offer) => offer.cardType === 'concinnous')) shop = candidate;
+    }
+    const concinnous = shop!.shop!.bundleOffers.find((offer) => offer.cardType === 'concinnous')!;
+    const bought = buyBundle(shop!, concinnous.offerId);
+    const legacy = {
+      ...bought,
+      formatVersion: 6,
+      cards: bought.cards.map(({ plaguedUnitId: _plaguedUnitId, ...card }) => card),
+      shop: bought.shop && {
+        ...bought.shop,
+        bundleOffers: bought.shop.bundleOffers.map(({ plaguedPieceIndex: _plaguedPieceIndex, ...offer }) => offer),
+        entrySnapshot: {
+          ...bought.shop.entrySnapshot,
+          cards: bought.shop.entrySnapshot.cards.map(({ plaguedUnitId: _plaguedUnitId, ...card }) => card),
+        },
+      },
+    } as unknown as RunDocument;
+    const upgraded = normalizeRunDocument(legacy);
+    const upgradedCard = upgraded.cards[0];
+    const upgradedOffer = upgraded.shop!.bundleOffers.find((offer) => offer.offerId === concinnous.offerId)!;
+
+    expect(upgraded.formatVersion).toBe(7);
+    expect(upgradedCard.effectTargetUnitId).toBe(bought.cards[0].effectTargetUnitId);
+    expect(upgradedCard.plaguedUnitId).toBeNull();
+    expect(upgradedOffer.effectTargetIndex).toBe(concinnous.effectTargetIndex);
+    expect(upgradedOffer.plaguedPieceIndex).toBeNull();
+    expect(normalizeRunDocument(upgraded)).toBe(upgraded);
+  });
+
+  it('does not qualify a card whose Positioned premium would exceed the one-digit cost ceiling', () => {
+    const baseline = createRun(war(), 4217, 0);
+    const expensive = PIECE_BUNDLE_DECK.filter((bundle) => bundle.value >= 8);
+    const offers = expensive.map((bundle, index) => (
+      createRunBundleOffer(baseline, bundle, 0, index, 8, 1)
+    ));
+
+    expect(offers.every((offer) => offer.cardType === null)).toBe(true);
+    expect(offers.every((offer) => offer.effectTargetIndex === null)).toBe(true);
   });
 });

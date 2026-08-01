@@ -10,7 +10,7 @@ describe('professional loading architecture guards', () => {
     const director = read('./ui/shell/sceneDirector.ts');
     const boundary = read('./ui/shell/SceneBoundary.tsx');
     expect(app).toContain('<SceneBoundary');
-    expect(app).toContain('sceneManifest(initialPath, window.location.search)');
+    expect(app).toContain('sceneManifest(initialPath, window.location.search, {');
     expect(app.indexOf('<AppTitleBar')).toBeLessThan(app.indexOf('<SceneBoundary'));
     expect(app).toContain('<Suspense fallback={null}>');
     expect(app).not.toMatch(/route-veil|screen-exit|screen-enter|useScreenEntrance|screenExit/);
@@ -63,7 +63,8 @@ describe('professional loading architecture guards', () => {
     const app = read('./ui/App.tsx');
     const director = read('./ui/shell/sceneDirector.ts');
     expect(app).toContain('const sceneLayers = overlapsCompleteScenes');
-    expect(app).toContain('key: scene.destination!.instances[0]?.key ?? scene.destination!.leaf.key');
+    expect(app).toContain('key: scene.current.leaf.key');
+    expect(app).toContain('key: scene.destination!.leaf.key');
     expect(app).toContain('sceneLayers.map((layer)');
     expect(app).toContain('key={layer.key}');
     expect(app).not.toContain('key={`incoming:');
@@ -74,7 +75,8 @@ describe('professional loading architecture guards', () => {
     expect(read('../scripts/shot.mjs')).toContain('painted destination was remounted instead of promoted in place');
     expect(read('../scripts/shot.mjs')).toContain('rail.getClientRects().length > 0');
     expect(read('../scripts/shot.mjs')).toContain('.main-menu-mode-tab[data-nav="/editor"]');
-    expect(app).toContain('const mountedScene = sceneManifest(path, search)');
+    expect(app).toContain("const mountedScene = scene.phase === 'exiting'");
+    expect(app).toContain('scene.destination ?? scene.current');
     expect(app).toContain('renderScene(layer.scene, layer.search)');
     expect(director).toContain('generation: state.generation + 1');
     expect(director).toContain('if (action.generation !== state.generation) return state');
@@ -102,7 +104,8 @@ describe('professional loading architecture guards', () => {
 
   it('keeps an explicit empty main-menu slot so returning home can acknowledge paint', () => {
     const menu = read('./ui/MainMenu.tsx');
-    expect(menu).toContain("sceneTransitionTargetAttributes('menu-shell')");
+    expect(menu).toContain('<MenuDestinationSceneSlot');
+    expect(read('./ui/shell/AuthoredSceneSlot.tsx')).toContain('region="menu-shell"');
     expect(menu).toContain("key={dest ?? 'home'}");
     expect(menu).toContain('<Suspense fallback={null}>');
     expect(menu.indexOf('<Suspense fallback={null}>')).toBeGreaterThan(menu.indexOf('className="menu-dest"'));
@@ -143,7 +146,7 @@ describe('professional loading architecture guards', () => {
   it('routes Settings panels through an authored nested scene slot', () => {
     const settings = read('./ui/Settings.tsx');
     const styles = read('./style.css');
-    expect(settings).toContain("sceneTransitionTargetAttributes('settings-shell')");
+    expect(settings).toContain('<SettingsContentSceneSlot');
     expect(settings).toContain('const activeTab = tabFromPath(path)');
     expect(settings).not.toContain('APP_NAVIGATION_EVENT');
     expect(settings).not.toContain('window.location.pathname');
@@ -157,7 +160,7 @@ describe('professional loading architecture guards', () => {
   it('routes Editor collections and campaigns through one authored nested scene slot', () => {
     const editor = read('./ui/CampaignEditor.tsx');
     const manifest = read('./ui/shell/sceneManifest.ts');
-    expect(editor).toContain("sceneTransitionTargetAttributes('editor-shell', 'contents')");
+    expect(editor).toContain('<EditorContentSceneSlot');
     expect(editor).toContain('const selectedCollection = editorCollectionFromLocation(path, search)');
     expect(editor).toContain("navigateApp(editorCampaignHref('/editor', campaignId))");
     expect(editor).not.toContain('setSelectedCollection');
@@ -171,6 +174,8 @@ describe('professional loading architecture guards', () => {
     const titleBar = read('./ui/shell/AppTitleBar.tsx');
     const styles = read('./style.css');
     expect(app).toContain("transitionStatus={titleBarLoading ? 'Loading…' : null}");
+    expect(app).toContain("scene.phase === 'entering' || scene.phase === 'current'");
+    expect(app).toContain('key: mountedScene.leaf.key');
     expect(titleBar).toContain('screenName={config.screenName}');
     expect(titleBar).toContain('transitionStatus={transitionStatus}');
     expect(titleBar).toContain('config.centerSlot ? <div className="app-shell-titlebar-center"');
@@ -209,7 +214,9 @@ describe('professional loading architecture guards', () => {
     const coldReveal = read('./ui/shell/startupScene.ts');
     expect(coldReveal).not.toContain('FAILSAFE_MS');
     expect(app).toContain('if (!scene.startupReady.includes(nextLayer)) return undefined');
-    expect(app).toContain('SCENE_FADE_MS + STARTUP_STAGE_BEAT_MS');
+    expect(app).toContain('sceneTransitionDurationMs() + STARTUP_STAGE_BEAT_MS');
+    expect(app).not.toContain('SCENE_FADE_MS');
+    expect(app).toContain('waitForSceneTransition(target');
     expect(read('./render/boardArtReady.ts')).not.toMatch(/FAILSAFE_MS|setTimeout/);
   });
 
@@ -290,7 +297,8 @@ describe('professional loading architecture guards', () => {
     expect(boundary).toContain('renderedCssImageUrls');
     expect(boundary).toContain('Required artwork could not be reached. Check your connection and try again.');
     expect(boundary).not.toContain('<small>{paintError?.message}</small>');
-    expect(boundary).toContain("inert={phase !== 'painted' ? true : undefined}");
+    expect(boundary).toContain("inert={ownsVisibility && phase !== 'painted' ? true : undefined}");
+    expect(boundary).toContain("data-surface-readiness={ownsVisibility ? 'atomic-frame' : 'scene-probe'}");
     expect(read('../scripts/shot.mjs')).toContain('surface exposed a partial or interactive frame');
     expect(read('../scripts/shot.mjs')).toContain("request.url().includes(String(abortRequest))");
     expect(read('../scripts/shot.mjs')).toContain('isManagedApp || readyExpr');
@@ -332,7 +340,10 @@ describe('professional loading architecture guards', () => {
     expect(skirmish).toContain('surface="gameplay-hud"');
     expect(skirmish).toContain('Preparing battlefield…');
     expect(read('../scripts/shot.mjs')).toContain('An explicit readiness contract is an assertion');
-    expect(skirmish).toContain('if (playableSurfaceReady) activateClock()');
+    expect(skirmish).toContain('if (playableSurfaceReady && sceneActivated) activateClock()');
+    expect(skirmish).toContain('reveal={playableSurfaceReady && sceneRevealed}');
+    expect(skirmish).toContain('activate={sceneActivated}');
+    expect(skirmish).toContain('interactive={sceneActivated &&');
     expect(read('./game/store.ts')).toContain('if (!opts.deferClockStart) startClock()');
   });
 

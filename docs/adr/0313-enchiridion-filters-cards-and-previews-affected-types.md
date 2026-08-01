@@ -9,7 +9,7 @@ extends:
   - 0283-run-card-face-is-one-shared-live-runtime-component.md
 ---
 
-# ADR-0306: Enchiridion filters cards and previews four affected-type slots
+# ADR-0313: Enchiridion filters cards and previews four affected-type slots
 
 ## Context
 
@@ -19,7 +19,7 @@ particular gold value, and which contain a particular kind of unit. The
 Enchiridion also has no single place where a player can compare the ways a Units
 card may be affected.
 
-Only Pestiferous and Tactical currently have accepted names and literal
+Only Pestiferous and Concinnous currently have accepted names and literal
 behavior. Two additional affected-card designs are being decided in parallel.
 Their absence must not cause this reference structure to invent mechanics or
 expand the runtime card model prematurely.
@@ -38,7 +38,7 @@ expand the runtime card model prematurely.
   Every preview reuses **The Volunteer** core card's title, live illustration,
   unit ledger, and flavor as temporary placeholder art/content; only its affected
   qualifier, literal rule, applicable price, and typed frame may vary.
-- **Pestiferous** and **Tactical** use their accepted names and effects. The
+- **Pestiferous** and **Concinnous** use their accepted names and effects. The
   remaining two entries are plainly labeled **Type III** and **Type IV**, with
   their names and effects marked pending. Those entries reserve reference
   layout only: they do not add runtime `RunCardType` values, generate card rules,

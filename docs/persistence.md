@@ -39,9 +39,14 @@ Durable document and live-content tables are created by the inline migrations in
 | `media_slots` / `media_versions` / `media_blobs` | shared live-media substrate and active pointers | `/api/asset-catalog`, `/api/media/:sha`, `/assets/:slot`, `/api/admin/media-assets` | GET public, mutations require admin |
 | `media_catalog_state` / `media_asset_events` | shared asset revision and audit history | internal | admin mutations write them |
 
-Active Run format 5 stores the selected Ataraxia tier, persisted affected shop
-offers, owned card membership, Plagued unit modifiers, and exact Pestiferous loss
-history. Format 3 stores each army unit's role-specific historical name.
+Active Run format 7 stores the selected Ataraxia tier, persisted affected shop
+offers with both their exact public Plagued piece index and concealed
+Concinnous unit target, owned card membership with the current Plagued unit id
+and revealed Concinnous target id, and exact Pestiferous loss history. Format-5
+and format-6 Runs deterministically preserve their existing card state while
+gaining one current Plagued target per nonempty Pestiferous card (ADR-0309,
+ADR-0310, ADR-0311). Format 3 stores each army unit's role-specific historical
+name.
 Format-1 unnamed documents and the provisional format-2 generated-name documents
 are deterministically normalized to format 3 from the Run seed and each piece
 type's acquisition order before the next save. Once a document is format 3, a
@@ -560,6 +565,22 @@ draft. See [ADR-0089](adr/0089-sfx-runtime-profile-is-db-authoritative.md).
 
 What is **not** in Postgres (deliberate, see "Boundaries"): the `lobbies`
 matchmaking map.
+
+## Client authentication state
+
+Per [ADR-0306](adr/0306-browser-authentication-has-one-session-owner.md), the browser has one
+auth-session owner. `GET /api/auth/me` is transported only by `frontend/src/net/auth.ts`; the
+application-level `frontend/src/net/authSession.ts` owns its probe, retry, and the shared
+`checking | unavailable | authenticated | anonymous` state. A successful contract-valid response
+is the only authority for authenticated or anonymous. Backend restart responses, malformed bodies,
+timeouts, and network failures are unavailable and may not produce a Sign In affordance.
+
+Screens consume this snapshot rather than fetching or caching identity. Any account-gated
+operation that consumes an authoritative 401 as session state reports it to the owner, while
+domain stores retain only their own connection state. In particular, the Level Editor decides
+recovery presentation from shared
+unavailability but owns no auth retry policy. The auth-session source guard makes parallel probes
+and screen-local identity caches a failing repository check.
 
 ## Request auth: reads public, writes gated
 

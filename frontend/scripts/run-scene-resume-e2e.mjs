@@ -9,7 +9,9 @@
 // 3. Hard reload /run and prove the Run Level—not that cache—owns live boardCode,
 //    enemy force, activity identity, and the rendered scenic terrain surface.
 
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import puppeteer from 'puppeteer-core';
 
 const base = process.argv[2];
@@ -24,16 +26,20 @@ const CHROMES = [
 const executablePath = CHROMES.find(existsSync);
 if (!executablePath) { console.error('No Chrome/Edge found.'); process.exit(1); }
 mkdirSync('tmp-shots', { recursive: true });
+const browserProfile = mkdtempSync(join(tmpdir(), 'ct-run-resume-'));
 
 const browser = await puppeteer.launch({
   executablePath,
+  userDataDir: browserProfile,
   headless: 'new',
-  args: ['--no-sandbox', '--disable-gpu', '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--hide-scrollbars'],
+  args: ['--no-sandbox', '--disable-gpu', '--no-first-run', '--no-default-browser-check', '--disable-extensions',
+    '--host-resolver-rules=MAP *.localhost 127.0.0.1', '--hide-scrollbars'],
 });
 
 const fail = async (step, extra) => {
   console.error(`FAIL at ${step}${extra ? ` — ${extra}` : ''}`);
   try { await browser.close(); } catch { /* already gone */ }
+  rmSync(browserProfile, { recursive: true, force: true });
   process.exit(1);
 };
 
@@ -49,13 +55,13 @@ try {
   });
 
   const poisoned = await page.evaluate(async () => {
-    const gameStore = await import('/src/game/store.ts');
+    const gameStore = await import('/src/game/SkirmishStoreContext.tsx');
     const runStore = await import('/src/run/store.ts');
     const boardCode = await import('/src/ui/boardCode.ts');
     const run = runStore.useActiveRun.getState().run;
-    const state = gameStore.useSkirmish.getState();
+    const state = gameStore.activeSkirmishStoreForDiagnostics()?.getState();
     const level = run?.war.battles[run.battleIndex]?.level;
-    if (!run || run.phase !== 'battle' || !level?.boardCode) return null;
+    if (!run || !state || run.phase !== 'battle' || !level?.boardCode) return null;
     const board = boardCode.decodeBoard(level.boardCode);
     const raw = window.localStorage.getItem('chess-tactics-active-match-v1');
     if (!board || !raw) return null;
@@ -95,14 +101,14 @@ try {
   });
 
   const restored = await page.evaluate(async () => {
-    const gameStore = await import('/src/game/store.ts');
+    const gameStore = await import('/src/game/SkirmishStoreContext.tsx');
     const runStore = await import('/src/run/store.ts');
     const runModel = await import('/src/run/model.ts');
     const run = runStore.useActiveRun.getState().run;
-    const state = gameStore.useSkirmish.getState();
+    const state = gameStore.activeSkirmishStoreForDiagnostics()?.getState();
     const level = run?.war.battles[run.battleIndex]?.level;
     const terrainCanvas = document.querySelector('[data-testid="skirmish-board"] .tileset-terrain-layer');
-    if (!run || !level) return null;
+    if (!run || !state || !level) return null;
     return {
       levelId: state.levelId,
       boardCode: state.game.boardCode ?? null,
@@ -137,8 +143,10 @@ try {
   console.log(`screenshot: ${shot}`);
   console.log('PASS — hard reload keeps the thumbnail Level authoritative for the live Run board');
   await browser.close();
+  rmSync(browserProfile, { recursive: true, force: true });
 } catch (error) {
   console.error('FAIL (unexpected):', error);
   try { await browser.close(); } catch { /* already gone */ }
+  rmSync(browserProfile, { recursive: true, force: true });
   process.exit(1);
 }

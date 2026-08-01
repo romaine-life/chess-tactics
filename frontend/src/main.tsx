@@ -21,9 +21,13 @@ import { installNineSliceCssVariables, installUiFonts, installUiMediaCssVariable
 import { applyGroundCoverCatalog, applyWallArtCatalog, applyWallDecorCatalog, assertInstalledPresentationCatalog } from '@chess-tactics/board-render';
 import { installLoadingResourceObserver, loadingError, loadingMark, loadingMeasure } from './diagnostics/loadingTimeline';
 import { composeInstalledChromeCss } from './ui/useInstalledChromeCss';
+import { startAuthSession } from './net/authSession';
 
 installLoadingResourceObserver();
 loadingMark('app', 'entry-module');
+// Authentication is application state, not screen state. Start the sole client
+// session owner once; every account-gated consumer observes or awaits this owner.
+void startAuthSession();
 
 class AppCrashBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null as Error | null };

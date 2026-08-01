@@ -17,9 +17,11 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     const abilities = enchiridion.slice(start, end);
     expect(abilities).toContain('<h3>Discipline</h3>');
     expect(abilities).toContain('<h3>Positioned</h3>');
+    expect(abilities).toContain('<h3>Concinnous</h3>');
+    expect(abilities).toContain('Skillfully and harmoniously arranged; elegantly fitted together.');
     expect(abilities).toContain('<h3>Marshalled</h3>');
     expect(abilities).toContain('<h3>Plagued</h3>');
-    expect(abilities.match(/className="enchiridion-ability-card"/g)).toHaveLength(4);
+    expect(abilities.match(/className="enchiridion-ability-card"/g)).toHaveLength(5);
     expect(abilities).toContain('discounted by 0 gold for a Pawn, 1 for a Knight or Bishop, 2 for a Rook, and 3 for a Queen');
     expect(abilities).not.toMatch(/\b(?:gain|obtain|acquir|relic|upgrade)/i);
   });
@@ -154,7 +156,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     const start = enchiridion.indexOf('const CARD_TYPE_REFERENCES');
     const end = enchiridion.indexOf('function AbilitiesSection', start);
     const cardTypes = enchiridion.slice(start, end);
-    expect(cardTypes.match(/id: '(?:pestiferous|tactical|type-iii|type-iv)'/g)).toHaveLength(4);
+    expect(cardTypes.match(/id: '(?:pestiferous|concinnous|type-iii|type-iv)'/g)).toHaveLength(4);
     expect(cardTypes).toContain("const VOLUNTEER_CARD = PIECE_BUNDLE_BY_ID.p");
     expect(cardTypes).toContain('<RunCardFace');
     expect(cardTypes).toContain('RUN_CARD_PESTIFEROUS_FRAME_SLOT');
@@ -198,7 +200,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(skirmish).toMatch(/<ShellViewportSwap[\s\S]*?className="skirmish-war-room"[\s\S]*?primaryClassName="skirmish-field"[\s\S]*?workspaceOpen=\{strategikonOpen \|\| Boolean\(runWorkspace\)\}/);
     expect(skirmish).toContain('relicIds={runBattle?.relicIds ?? []}');
     expect(skirmish).toContain('shellWorkspaceCoversRelics={Boolean(runWorkspace) || strategikonOpen}');
-    expect(skirmish).toMatch(/className="strategikon-slot"[\s\S]*?sceneTransitionTargetAttributes\('gameplay-shell'\)[\s\S]*?\{strategikonOpen \? \(/);
+    expect(skirmish).toMatch(/<GameplayWorkspaceSceneSlot[\s\S]*?className="strategikon-slot"[\s\S]*?\{strategikonOpen \? \(/);
     expect(skirmish).toMatch(/primary=\{\([\s\S]*?<div className="skirmish-board-frame">[\s\S]*?\)\}[\s\S]*?\{battleWorkspaceLayer\}/);
     // The always-mounted slot overlays every battlefield tile. Empty, it MUST be
     // pointer-transparent — with plain pointer-events it shields the whole board and

@@ -4010,7 +4010,7 @@ async function main() {
     throw new Error(`Active Run should begin empty: ${emptyRun.statusCode} ${emptyRun.body}`);
   }
   const activeRunDocument = {
-    formatVersion: 5,
+    formatVersion: 7,
     id: 'run-smoke',
     seed: 17,
     ataraxiaTier: 1,
@@ -4029,7 +4029,17 @@ async function main() {
       { id: 'run-king', name: 'David of Israel', type: 'king', inspectionSeed: 1701, abilities: [], modifiers: [], source: 'king' },
       { id: 'run-pawn-a', name: 'Stephen Botiller', type: 'pawn', inspectionSeed: 1702, abilities: ['positioned', 'marshalled'], modifiers: ['plagued'], source: 'starting' },
     ],
-    cards: [],
+    cards: [{
+      id: 'run-card-1',
+      coreId: 'p',
+      cardType: 'pestiferous',
+      effectSeed: 1703,
+      effectTargetUnitId: null,
+      unitIds: ['run-pawn-a'],
+      lostUnitIds: [],
+      plaguedUnitId: 'run-pawn-a',
+      acquiredAfterBattleIndex: 0,
+    }],
     pestiferousLosses: [],
     relics: [],
     seenRelics: [],
@@ -4040,11 +4050,28 @@ async function main() {
     ],
     chosenDraftId: null,
     nextArmyUnitSequence: 1,
-    nextCardSequence: 1,
+    nextCardSequence: 2,
     deployment: null,
     battleRuntime: null,
     shop: null,
   };
+  const invalidPlaguedTarget = await request(
+    'PUT', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      run: {
+        ...activeRunDocument,
+        cards: activeRunDocument.cards.map((card) => ({ ...card, plaguedUnitId: null })),
+      },
+      revision: 0,
+    }),
+  );
+  if (
+    invalidPlaguedTarget.statusCode !== 400
+    || JSON.parse(invalidPlaguedTarget.body).error !== 'invalid_active_run'
+  ) {
+    throw new Error(`Active Run should reject a missing Plagued target: ${invalidPlaguedTarget.statusCode} ${invalidPlaguedTarget.body}`);
+  }
   const missingRunRevision = await request(
     'PUT', '/api/active-run',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
@@ -4062,6 +4089,58 @@ async function main() {
   if (savedRun.statusCode !== 200 || savedRunBody.revision !== 1 || savedRunBody.run.id !== 'run-smoke') {
     throw new Error(`Active Run did not save: ${savedRun.statusCode} ${savedRun.body}`);
   }
+  const concinnousShopRun = {
+    ...activeRunDocument,
+    phase: 'shop',
+    updatedAt: '2026-01-01T01:00:00.000Z',
+    shop: {
+      afterBattleIndex: 0,
+      conflictIndex: 0,
+      victoryGoldTenths: 10,
+      bundleOffers: [{
+        id: 'p',
+        offerId: 'shop-0-0-p',
+        pieces: ['pawn'],
+        value: 1,
+        cost: 3,
+        cardType: 'concinnous',
+        effectSeed: 1704,
+        effectTargetIndex: 0,
+        plaguedPieceIndex: null,
+      }],
+      purchasedOfferId: null,
+      lootRelicOffers: [],
+      chosenLootRelicId: null,
+      paidRelicOffer: null,
+      paidRelicBought: false,
+      soldUnits: [],
+      entrySnapshot: {
+        goldTenths: activeRunDocument.goldTenths,
+        army: activeRunDocument.army,
+        cards: activeRunDocument.cards,
+        relics: [],
+        seenRelics: [],
+        conflictPaidRelics: {},
+        nextArmyUnitSequence: activeRunDocument.nextArmyUnitSequence,
+        nextArmyUnitNumberByType: { pawn: 1, knight: 1, bishop: 1, rook: 1, queen: 1, king: 1 },
+        nextCardSequence: activeRunDocument.nextCardSequence,
+        paidRelicBought: false,
+      },
+    },
+  };
+  const savedConcinnousShopRun = await request(
+    'PUT', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({ run: concinnousShopRun, revision: 1 }),
+  );
+  const savedConcinnousShopRunBody = JSON.parse(savedConcinnousShopRun.body);
+  if (
+    savedConcinnousShopRun.statusCode !== 200
+    || savedConcinnousShopRunBody.revision !== 2
+    || savedConcinnousShopRunBody.run.shop.bundleOffers[0].effectTargetIndex !== 0
+  ) {
+    throw new Error(`Concinnous shop Run did not save: ${savedConcinnousShopRun.statusCode} ${savedConcinnousShopRun.body}`);
+  }
   const rivalRun = await get('/api/active-run', { cookie: '__Host-chess-tactics-access=rival' });
   if (rivalRun.statusCode !== 200 || JSON.parse(rivalRun.body).run !== null) {
     throw new Error(`Active Run should be owner-scoped: ${rivalRun.statusCode} ${rivalRun.body}`);
@@ -4071,13 +4150,13 @@ async function main() {
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ run: { ...activeRunDocument, updatedAt: '2026-01-02T00:00:00.000Z' }, revision: 0 }),
   );
-  if (staleRun.statusCode !== 409 || JSON.parse(staleRun.body).revision !== 1) {
+  if (staleRun.statusCode !== 409 || JSON.parse(staleRun.body).revision !== 2) {
     throw new Error(`Stale active Run write should conflict: ${staleRun.statusCode} ${staleRun.body}`);
   }
   const deletedRun = await request(
     'DELETE', '/api/active-run',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify({ revision: 1 }),
+    JSON.stringify({ revision: 2 }),
   );
   if (deletedRun.statusCode !== 200 || JSON.parse(deletedRun.body).ok !== true) {
     throw new Error(`Active Run did not delete: ${deletedRun.statusCode} ${deletedRun.body}`);

@@ -117,9 +117,9 @@ An environment is `ready` only when all of the following are true:
 Any command that reads environment state must reconcile or freshly probe these
 conditions. A stale `"ready"` field must never override observed failure.
 
-### 2. A real supervisor
+### 2. A real top-level supervisor with one recovery owner per layer
 
-Devctl must own the complete managed process tree:
+Devctl must own OS containment of the complete managed process tree:
 
 - PowerShell launcher, if one remains necessary
 - npm
@@ -128,6 +128,18 @@ Devctl must own the complete managed process tree:
 
 Prefer a Windows Job Object or an equivalent explicit process-group mechanism.
 Track the actual serving PID and backend PID in addition to any wrapper PID.
+
+Containment ownership guarantees intentional cleanup and prevents orphans. It
+does not make devctl the recovery authority for application-owned children.
+For Chess Tactics, Vite is the sole lifecycle owner of the backend: it launches,
+observes, and recovers that child, then exits nonzero if it cannot restore the
+required service. Devctl owns the persistent top-level Vite launch and may
+restart it only after that launch exits unexpectedly (or before first readiness
+when the complete launch exceeds its startup deadline). See ADR-0308.
+
+After first readiness, a failed backend or route probe is observational. Devctl
+must mark the environment degraded and update Caddy, but it must not terminate
+a living Vite process to force component recovery.
 
 The supervisor must:
 
@@ -166,10 +178,12 @@ explicitly in the event. Do not silently omit the field.
 The supervisor should also enable or document the Windows process-auditing
 facility needed to attribute external termination where feasible.
 
-### 4. Bounded automatic recovery
+### 4. Bounded automatic recovery at the top-level boundary
 
-Unexpected exits should trigger automatic restart using bounded exponential
-backoff.
+Unexpected top-level launch exits should trigger automatic restart using
+bounded exponential backoff. An application-owned child health failure must be
+recovered by that application or make the top-level launch exit; health failure
+alone is not a devctl restart trigger after the environment has been ready.
 
 Suggested policy:
 
@@ -218,6 +232,16 @@ for example:
 
 Do not expose a generic reverse-proxy `502` that can be mistaken for a failed
 application endpoint.
+
+Route publication is a separate, short critical section driven by atomic
+supervisor state. It must not wait behind the global lifecycle registry mutex or
+freshly probe every unrelated environment: either behavior can allow a short
+backend outage to recover before Caddy ever publishes the diagnostic state.
+The atomic state must represent direct application readiness separately from
+aggregate named-route readiness. Caddy selects proxy versus diagnostic from the
+direct-readiness fact; it must not infer direct health from `ready` or
+`degraded`, because restoring the proxy is a prerequisite for the named route
+to become ready again.
 
 ### 7. Verification preflight
 
@@ -296,9 +320,13 @@ Automate at least the following scenarios:
 
 2. **Backend crash**
    - Terminate the backend while Vite remains alive.
-   - Confirm status becomes `degraded` or `restarting`.
+   - Confirm status becomes `degraded`, never devctl-owned `restarting`.
    - Confirm the backend-through-frontend probe fails clearly.
-   - Confirm recovery behavior is recorded.
+   - Confirm Vite recovers the backend and the backend PID changes while the
+     frontend and launcher PIDs remain unchanged.
+   - Confirm Caddy publishes the diagnostic route during the outage and restores
+     the reverse proxy after direct health recovers.
+   - Confirm no devctl restart event was recorded.
 
 3. **Intentional stop**
    - Run `devctl stop`.
@@ -351,6 +379,8 @@ This work is complete only when:
 - Every managed process exit has a durable lifecycle event.
 - Intentional and unexpected termination are distinguishable.
 - An unexpected single crash restarts automatically.
+- A top-level crash restarts automatically, while an app-owned backend crash
+  cannot cause a competing devctl restart of the living frontend.
 - Repeated crashes terminate in a visible, inspectable failed state.
 - A named environment cannot silently serve from a different port.
 - Caddy cannot route a healthy-looking named URL to a dead port.
@@ -384,8 +414,9 @@ Chess-tactics startup and verification integration points include:
 - `CLAUDE.md`
 
 Changes to external devctl infrastructure and repository-owned integration
-should be coordinated, tested together, and documented without making the
-application responsible for supervising its own development environment.
+must preserve ADR-0308's ownership boundary: the application owns its internal
+child lifecycle, devctl owns the persistent top-level environment lifecycle and
+OS containment, and Caddy owns routing only.
 
 ## Non-goals and cautions
 

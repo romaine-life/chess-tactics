@@ -12,10 +12,10 @@ import { TitleBarControlContribution } from './shell/TitleBarControls';
 import { SFX_SETTINGS_CHANGE_EVENT, previewTerrain } from '../sfx';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { installedUiMedia } from './installedUiMedia';
-import { fetchMe } from '../net/auth';
+import { useAuthSession } from '../net/authSession';
 import { AdminControls } from './AdminControls';
-import { sceneTransitionTargetAttributes } from './shell/sceneTransitionTarget';
 import { ChromeNavButton } from './shared/ChromeButton';
+import { SettingsContentSceneSlot } from './shell/AuthoredSceneSlot';
 
 const MUTE_KEY = 'chess-tactics-bgm-muted-v1';
 const MUTE_CHANGE_EVENT = 'chess-tactics:bgm-muted-change';
@@ -252,26 +252,15 @@ export function Settings({
   });
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [buildRemote, setBuildRemote] = useState<BuildInfoRemote | null>(null);
-  const [adminAuth, setAdminAuth] = useState<{ ready: boolean; isAdmin: boolean }>({
-    ready: false,
-    isAdmin: false,
-  });
+  const authStatus = useAuthSession((session) => session.status);
+  const adminAuth = {
+    ready: authStatus?.reachable === true,
+    isAdmin: authStatus?.reachable === true && authStatus.user.is_admin === true,
+  };
   useEffect(() => {
     const shell = document.querySelector('.shell');
     shell?.classList.add('settings-art-active');
     return () => shell?.classList.remove('settings-art-active');
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    void fetchMe()
-      .then((me) => {
-        if (active) setAdminAuth({ ready: true, isAdmin: me.is_admin === true });
-      })
-      .catch(() => {
-        if (active) setAdminAuth({ ready: true, isAdmin: false });
-      });
-    return () => { active = false; };
   }, []);
 
   useEffect(() => {
@@ -674,10 +663,9 @@ export function Settings({
         ))}
       </aside>
 
-      <main
+      <SettingsContentSceneSlot
         className={embedded ? 'menu-dest-col menu-dest-action' : 'settings-frame settings-main-frame'}
-        {...sceneTransitionTargetAttributes('settings-shell')}
-        data-scene-instance={sceneInstanceKey}
+        sceneInstance={sceneInstanceKey}
       >
         {/* Screen + section are already shown by the brand lockup and the active
             nav button; a visible panel heading just duplicated them. Keep an
@@ -719,7 +707,7 @@ export function Settings({
                 </div>
               </div>
             </KitScroll>
-      </main>
+      </SettingsContentSceneSlot>
     </>
   );
 

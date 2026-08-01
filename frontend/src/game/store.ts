@@ -2,7 +2,8 @@
 // It owns a GameState and applies intents through the pure core (intents in,
 // new state out). The renderer and HUD subscribe to it; neither mutates state.
 
-import { create } from 'zustand';
+import { useStore, type StateCreator } from 'zustand';
+import { createStore } from 'zustand/vanilla';
 import { PROMOTION_PIECE_TYPES, type GameEvent, type GameState, type Move, type Piece, type PromotionPieceType, type Side, type Winner } from '../core/types';
 import { applyMove, gameEnv, legalMoves, promotionRuleForMove, recordPosition, sideInCheck, type MoveEnv, type RuleDrawKind } from '../core/rules';
 import { settleCommittedPosition, type Adjudication } from '../core/adjudication';
@@ -95,8 +96,6 @@ function sameRelayMove(a: RelayMove, b: RelayMove): boolean {
 /** Relay hook: in a netplay match the store calls this with each LOCAL move so the
  *  netplay layer (Skirmish) can POST it to the lobby relay. Null in single-player. */
 export type NetMoveSink = (pieceId: string, move: RelayMove, expectedMoveCount: number, intentId: string) => void;
-let netMoveSink: NetMoveSink | null = null;
-export function setNetMoveSink(sink: NetMoveSink | null): void { netMoveSink = sink; }
 
 let fallbackNetIntentSequence = 0;
 function createNetIntentId(): string {
@@ -109,8 +108,6 @@ function createNetIntentId(): string {
  *  resignation to the lobby. Like moves, the game only ENDS when the server echoes the
  *  result back over the lobby channel (concludeNet) — never optimistically. */
 export type NetResignSink = () => void;
-let netResignSink: NetResignSink | null = null;
-export function setNetResignSink(sink: NetResignSink | null): void { netResignSink = sink; }
 
 /**
  * Run Battles may add an ordinarily behaving Reservist after a capture. The hook
@@ -118,10 +115,6 @@ export function setNetResignSink(sink: NetResignSink | null): void { netResignSi
  * never consulted by legal move generation, so relics cannot change piece behavior.
  */
 export type RunBattleTransformSink = (game: GameState, events: readonly GameEvent[]) => GameState;
-let runBattleTransformSink: RunBattleTransformSink | null = null;
-export function setRunBattleTransformSink(sink: RunBattleTransformSink | null): void {
-  runBattleTransformSink = sink;
-}
 
 // Turn tempo (ms). A move isn't one simultaneous swap — it's a rhythm: your move
 // lands, the board settles for a beat, the enemy "thinks", then answers. This
@@ -428,13 +421,16 @@ export interface SkirmishState {
   setTestMode: (on: boolean) => void;
   /** Set the test-board CPU-delay floor (ms); no-op outside test mode. */
   setTestMinCpuDelay: (ms: number) => void;
+  /** Install this battle instance's Run-only committed-board transform. */
+  setRunBattleTransformSink: (sink: RunBattleTransformSink | null) => void;
+  setNetMoveSink: (sink: NetMoveSink | null) => void;
+  setNetResignSink: (sink: NetResignSink | null) => void;
 }
 
 /**
  * Decide whether entering the skirmish screen should build a fresh game or
- * resume the one already in the store. The store is a module singleton that
- * survives route changes, so navigating to the menu and back must NOT restart a
- * live board. Start fresh only when there is nothing worth resuming: no game has
+ * resume the one already in this presentation instance. Start fresh only when
+ * there is nothing worth resuming: no game has
  * been started, the last one already finished, or a different level is opened.
  */
 export function shouldStartFreshSkirmish(
@@ -451,8 +447,11 @@ export function shouldStartFreshSkirmish(
 
 const INITIAL_GAME = createSkirmish({ seed: 1 });
 
-export const useSkirmish = create<SkirmishState>((set, get) => {
+const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
   let matchEpoch = 0;
+  let runBattleTransformSink: RunBattleTransformSink | null = null;
+  let netMoveSink: NetMoveSink | null = null;
+  let netResignSink: NetResignSink | null = null;
   let enemyReplyTimer: ReturnType<typeof setTimeout> | null = null;
   let premoveFireTimer: ReturnType<typeof setTimeout> | null = null;
   const sessionEffectTimers = new Set<ReturnType<typeof setTimeout>>();
@@ -462,9 +461,9 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   // live turn, pauses the moment their move applies (banking the Fischer increment),
   // and resumes when the enemy reply hands the turn back. The truth is a wall-clock
   // DEADLINE, not a decremented counter — ticks just re-derive the remainder, so a
-  // throttled background tab can't stretch the player's time. The store is a module
-  // singleton, so the ticker survives route changes exactly like the staged enemy
-  // reply does; time honestly keeps running if the player wanders off mid-turn.
+  // throttled background tab can't stretch the player's time. The ticker belongs to
+  // this battle-session store, so it lives exactly as long as the mounted authored
+  // battle scene and cannot leak into a simultaneously mounted outgoing scene.
   let clockDeadline = 0;
   let clockTicker: ReturnType<typeof setInterval> | null = null;
 
@@ -1606,5 +1605,30 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     // typo still can't hang the turn forever.
     set({ testMinCpuDelayMs: Math.max(0, Math.min(600_000, Math.round(ms))) });
   },
+  setRunBattleTransformSink: (sink) => {
+    runBattleTransformSink = sink;
+  },
+  setNetMoveSink: (sink) => {
+    netMoveSink = sink;
+  },
+  setNetResignSink: (sink) => {
+    netResignSink = sink;
+  },
   };
-});
+};
+
+export function createSkirmishStore() {
+  return createStore<SkirmishState>()(createSkirmishState);
+}
+
+export type SkirmishStore = ReturnType<typeof createSkirmishStore>;
+export const defaultSkirmishStore = createSkirmishStore();
+
+/**
+ * Legacy/default session hook for tests and non-scene instruments. Runtime scene
+ * components consume the nearest instance through SkirmishStoreContext.
+ */
+export const useSkirmish = Object.assign(
+  <T,>(selector: (state: SkirmishState) => T): T => useStore(defaultSkirmishStore, selector),
+  defaultSkirmishStore,
+);

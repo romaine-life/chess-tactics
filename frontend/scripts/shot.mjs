@@ -30,8 +30,9 @@
 //   node scripts/shot.mjs http://127.0.0.1:5199/unit-studio --select '.studio-stage' --out tmp-shots/unit.png
 //   node scripts/shot.mjs http://127.0.0.1:5199/doodad-proof/focus.html   (whole small fixture page)
 
-import { existsSync, mkdirSync, statSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import puppeteer from 'puppeteer-core';
 import {
   isLevelEditorUrl,
@@ -89,12 +90,15 @@ if (!url || url.startsWith('--')) { console.error('usage: shot <url> [--select c
 if (cold && warm) { console.error('--cold and --warm are mutually exclusive'); process.exit(2); }
 if (!executablePath) { console.error('No Chrome/Edge found. Checked:\n' + CHROMES.join('\n')); process.exit(1); }
 mkdirSync(dirname(out), { recursive: true });
+const browserProfile = mkdtempSync(join(tmpdir(), 'ct-shot-'));
 
 const browser = await puppeteer.launch({
   executablePath,
+  userDataDir: browserProfile,
   headless: 'new',
   args: ['--no-sandbox', '--disable-gpu', '--disable-software-rasterizer', '--disable-background-networking',
-    '--no-first-run', '--no-default-browser-check', '--disable-extensions', ...(showScrollbars ? [] : ['--hide-scrollbars'])],
+    '--no-first-run', '--no-default-browser-check', '--disable-extensions',
+    '--host-resolver-rules=MAP *.localhost 127.0.0.1', ...(showScrollbars ? [] : ['--hide-scrollbars'])],
 });
 try {
   const page = await browser.newPage();
@@ -1324,4 +1328,5 @@ try {
   }
 } finally {
   await browser.close();
+  rmSync(browserProfile, { recursive: true, force: true });
 }

@@ -7,7 +7,7 @@ extends:
   - 0283-run-card-face-is-one-shared-live-runtime-component.md
 ---
 
-# ADR-0307: Run card presentations promote atomically
+# ADR-0314: Run card presentations promote atomically
 
 ## Context
 
