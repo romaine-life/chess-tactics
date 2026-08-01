@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from 'react';
 import { paletteForSide, pieceSpritePath, type PlayablePieceType } from '../core/pieces';
+import {
+  RUN_CARD_FRAME_BOX_NAMES,
+  RUN_CARD_STANDARD_FRAME_GEOMETRY,
+  runCardFrameGeometryVariables,
+  type RunCardFrameGeometry,
+} from './runCardFrameGeometry';
 
 export const RUN_CARD_FRAME_SLOT = 'ui/run/card-prototypes/frame-v1.png';
 export const RUN_CARD_PESTIFEROUS_FRAME_SLOT = 'ui/run/card-prototypes/pestiferous-frame-v1.png';
@@ -103,10 +109,13 @@ export function runCardPresentationSignature(
   card: RunCardFaceContent,
   frameUrl: string,
   artUrl: string,
+  frameGeometry: RunCardFrameGeometry = RUN_CARD_STANDARD_FRAME_GEOMETRY,
 ): string {
   return JSON.stringify([
     frameUrl,
     artUrl,
+    frameGeometry.id,
+    frameGeometry.frameSha256,
     card.name,
     card.cost,
     card.typeLine,
@@ -298,6 +307,7 @@ type RunCardPresentation = Readonly<{
   card: RunCardFaceContent;
   frameUrl: string;
   artUrl: string;
+  frameGeometry: RunCardFrameGeometry;
 }>;
 
 async function acknowledgeDecodedImage(
@@ -319,16 +329,18 @@ function RunCardFaceLayer({
   presentation,
   pending,
   contentsTuning,
+  showFrameBoxes,
   onImageLoad,
   onImageError,
 }: {
   presentation: RunCardPresentation;
   pending: boolean;
   contentsTuning: RunCardContentsTuning;
+  showFrameBoxes: boolean;
   onImageLoad: (signature: string, pending: boolean, kind: RunCardImageKind) => void;
   onImageError: (signature: string, pending: boolean, kind: RunCardImageKind) => void;
 }): ReactElement {
-  const { signature, card, frameUrl, artUrl } = presentation;
+  const { signature, card, frameUrl, artUrl, frameGeometry } = presentation;
   const ledgerRows = card.grants.length <= 2
     ? card.grants.length
     : Math.ceil(card.grants.length / 2);
@@ -339,6 +351,8 @@ function RunCardFaceLayer({
     <span
       className={`run-card-face-layer${pending ? ' is-pending' : ' is-presented'}`}
       data-card-presentation={signature}
+      data-frame-geometry={frameGeometry.id}
+      style={runCardFrameGeometryVariables(frameGeometry) as CSSProperties}
       aria-hidden={pending || undefined}
     >
       <img
@@ -409,6 +423,13 @@ function RunCardFaceLayer({
         ) : null}
         <span className="run-card-prototype-flavor">{card.flavor}</span>
       </span>
+      {showFrameBoxes ? (
+        <span className="run-card-frame-box-overlay" aria-hidden="true">
+          {RUN_CARD_FRAME_BOX_NAMES.map((name) => (
+            <span className={`run-card-frame-box is-${name}`} key={name}>{name}</span>
+          ))}
+        </span>
+      ) : null}
     </span>
   );
 }
@@ -424,6 +445,8 @@ export function RunCardFace({
   width = '100%',
   tuning = RUN_CARD_APPROVED_TUNING,
   contentsTuning = RUN_CARD_DEFAULT_CONTENTS_TUNING,
+  frameGeometry = RUN_CARD_STANDARD_FRAME_GEOMETRY,
+  showFrameBoxes = false,
   onImageLoad = () => undefined,
   onImageError = () => undefined,
   ariaHidden = false,
@@ -434,11 +457,13 @@ export function RunCardFace({
   width?: string;
   tuning?: RunCardFaceTuning;
   contentsTuning?: RunCardContentsTuning;
+  frameGeometry?: RunCardFrameGeometry;
+  showFrameBoxes?: boolean;
   onImageLoad?: (kind: RunCardImageKind) => void;
   onImageError?: (kind: RunCardImageKind) => void;
   ariaHidden?: boolean;
 }): ReactElement {
-  const requestedSignature = runCardPresentationSignature(card, frameUrl, artUrl);
+  const requestedSignature = runCardPresentationSignature(card, frameUrl, artUrl, frameGeometry);
   // The signature contains every presentation field, so equal signatures are
   // equivalent even when a host recreates its card object on another render.
   const requested = useMemo<RunCardPresentation>(() => ({
@@ -446,6 +471,7 @@ export function RunCardFace({
     card,
     frameUrl,
     artUrl,
+    frameGeometry,
   }), [requestedSignature]);
   const [displayed, setDisplayed] = useState<RunCardPresentation>(requested);
   const [pending, setPending] = useState<RunCardPresentation | null>(null);
@@ -566,6 +592,7 @@ export function RunCardFace({
       } as CSSProperties}
       aria-hidden={ariaHidden || undefined}
       aria-busy={pending ? true : undefined}
+      data-frame-geometry={displayed.frameGeometry.id}
       aria-label={ariaHidden ? undefined : `${displayed.card.name}. ${displayed.card.typeLine}. Costs ${displayed.card.cost} gold. Grants ${grantsLabel(displayed.card.grants)}.${displayed.card.properties?.length ? ` ${propertiesLabel(displayed.card.properties)}.` : ''}`}
     >
       {layers.map((layer) => (
@@ -574,6 +601,7 @@ export function RunCardFace({
           presentation={layer.presentation}
           pending={layer.pending}
           contentsTuning={contentsTuning}
+          showFrameBoxes={showFrameBoxes}
           onImageLoad={handleImageLoad}
           onImageError={handleImageError}
         />

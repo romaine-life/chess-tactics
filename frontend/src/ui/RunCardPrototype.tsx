@@ -30,9 +30,13 @@ import {
   type RunCardContentsTuning,
   type RunCardImageKind,
 } from './RunCardFace';
+import {
+  RUN_CARD_STANDARD_FRAME_GEOMETRY,
+  runCardFrameGeometryForSha,
+} from './runCardFrameGeometry';
 
 const ART_SLOT = 'ui/run/card-art/pppkb/illustration.png';
-const CONCINNOUS_ART_SLOT = 'ui/run/card-art/pppk/illustration.png';
+const CONCINNOUS_ART_SLOT = 'ui/run/card-art/pp/illustration.png';
 const SHA256 = /^[0-9a-f]{64}$/;
 const REFERENCE_CARD_WIDTH = RUN_CARD_REFERENCE_WIDTH;
 const TEXT_HORIZONTAL_MIN = -3;
@@ -78,14 +82,11 @@ const STANDARD_CARD = Object.freeze({
 }) satisfies RunCardFaceContent;
 
 const CONCINNOUS_CARD = Object.freeze({
-  name: "Banneret's Retinue",
-  cost: 8,
+  name: 'Two Good Boots',
+  cost: 4,
   typeLine: 'Units — Concinnous',
-  grants: [
-    { count: 3, unit: 'pawn' },
-    { count: 1, unit: 'knight' },
-  ] as const,
-  flavor: 'The banner arrived clean. Nothing else did.',
+  grants: [{ count: 2, unit: 'pawn' }] as const,
+  flavor: 'The road kept both pairs of boots, and returned neither name.',
 }) satisfies RunCardFaceContent;
 
 export type RunCardPrototypeVariant = 'standard' | 'pestiferous' | 'concinnous';
@@ -97,6 +98,15 @@ export function runCardPrototypeVariantFromSearch(search: string): RunCardProtot
 
 export function runCardPrototypeTargetRevealedFromSearch(search: string): boolean {
   return new URLSearchParams(search).get('concinnousTarget') === 'revealed';
+}
+
+export function runCardPrototypeFrameBoxesFromSearch(search: string): boolean {
+  return new URLSearchParams(search).get('frameBoxes') === '1';
+}
+
+export function runCardPrototypeCostFromSearch(search: string): number | null {
+  const value = Number(new URLSearchParams(search).get('cardCost'));
+  return Number.isInteger(value) && value >= 1 && value <= 11 ? value : null;
 }
 
 export function runCardPrototypeContent(
@@ -116,7 +126,7 @@ export function runCardPrototypeContent(
   if (variant === 'concinnous') {
     return {
       ...CONCINNOUS_CARD,
-      properties: [{ name: 'Positioned', target: concinnousTargetRevealed ? 'Knight' : 'Target hidden' }],
+      properties: [{ name: 'Positioned', target: concinnousTargetRevealed ? 'Pawn 1' : 'Target hidden' }],
     };
   }
   return STANDARD_CARD;
@@ -278,6 +288,12 @@ export function RunCardPrototypeViewer({
   const [concinnousTargetRevealed, setConcinnousTargetRevealed] = useState(() => (
     runCardPrototypeTargetRevealedFromSearch(window.location.search)
   ));
+  const [showFrameBoxes, setShowFrameBoxes] = useState(() => (
+    runCardPrototypeFrameBoxesFromSearch(window.location.search)
+  ));
+  const [previewCost, setPreviewCost] = useState<number | null>(() => (
+    runCardPrototypeCostFromSearch(window.location.search)
+  ));
   const [contentsScale, setContentsScale] = useState(DEFAULT_CONTENTS_SCALE);
   const [costX, setCostX] = useState(DEFAULT_COST_X);
   const [costY, setCostY] = useState(DEFAULT_COST_Y);
@@ -300,6 +316,10 @@ export function RunCardPrototypeViewer({
     () => runCardPrototypeContent(cardVariant, concinnousTargetRevealed),
     [cardVariant, concinnousTargetRevealed],
   );
+  const displayedCard = useMemo(
+    () => previewCost === null ? card : { ...card, cost: previewCost },
+    [card, previewCost],
+  );
   const frameSlot = !contentsStudy
     ? cardVariant === 'pestiferous'
       ? RUN_CARD_PESTIFEROUS_FRAME_SLOT
@@ -317,8 +337,7 @@ export function RunCardPrototypeViewer({
   const realizedConcinnousCount = useMemo(() => (
     Array.from({ length: ATARAXIA_SAMPLE_DRAWS }, (_, index) => {
       const card = RUN_CARD_DECK[index % RUN_CARD_DECK.length];
-      return card.value + 2 <= 9
-        && concinnousOfferRoll(4217, Math.floor(index / 4), index % 4, card.id, concinnousDenominator);
+      return concinnousOfferRoll(4217, Math.floor(index / 4), index % 4, card.id, concinnousDenominator);
     }).filter(Boolean).length
   ), [concinnousDenominator]);
 
@@ -334,6 +353,10 @@ export function RunCardPrototypeViewer({
     () => catalog ? selectedCandidate(catalog, frameSlot, 'frameCandidate') : null,
     [catalog, frameSlot],
   );
+  const frameGeometry = useMemo(
+    () => runCardFrameGeometryForSha(frame?.media?.sha256 ?? null),
+    [frame],
+  );
   const artSlot = !contentsStudy && cardVariant === 'concinnous' ? CONCINNOUS_ART_SLOT : ART_SLOT;
   const art = useMemo(() => catalog ? selectedCandidate(catalog, artSlot, 'artCandidate') : null, [artSlot, catalog]);
   const missing = catalog && (!frame || !art) ? 'The requested frame or artwork candidate is unavailable.' : '';
@@ -343,7 +366,7 @@ export function RunCardPrototypeViewer({
     && art
     && loaded.has('frame')
     && loaded.has('art')
-    && card.grants.every((grant, cell) => (
+    && displayedCard.grants.every((grant, cell) => (
       Array.from({ length: grant.count }, (_, index) => runCardUnitImageKind(cell, grant.unit, index))
         .every((kind) => loaded.has(kind))
     )),
@@ -422,6 +445,8 @@ export function RunCardPrototypeViewer({
     setPestiferousDenominator(PESTIFEROUS_OFFER_DENOMINATOR);
     setOpeningSampleSeed(DEFAULT_OPENING_SAMPLE_SEED);
     setConcinnousDenominator(CONCINNOUS_OFFER_DENOMINATOR);
+    setPreviewCost(null);
+    setShowFrameBoxes(false);
     setTitleTypeSizeRatio(null);
     setTitleTypeHorizontalLocked(DEFAULT_TITLE_TYPE_HORIZONTAL_LOCKED);
     setHandoffCopyState('idle');
@@ -449,6 +474,29 @@ export function RunCardPrototypeViewer({
     );
     setConcinnousTargetRevealed(revealed);
   };
+  const choosePreviewCost = (next: number | null): void => {
+    const params = new URLSearchParams(window.location.search);
+    if (next === null) params.delete('cardCost');
+    else params.set('cardCost', String(next));
+    const search = params.toString();
+    navigateApp(
+      `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash}`,
+      { replace: true, scroll: false },
+    );
+    setPreviewCost(next);
+  };
+  const toggleFrameBoxes = (): void => {
+    const next = !showFrameBoxes;
+    const params = new URLSearchParams(window.location.search);
+    if (next) params.set('frameBoxes', '1');
+    else params.delete('frameBoxes');
+    const search = params.toString();
+    navigateApp(
+      `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash}`,
+      { replace: true, scroll: false },
+    );
+    setShowFrameBoxes(next);
+  };
   const chooseContentsStudy = (next: boolean): void => {
     const params = new URLSearchParams(window.location.search);
     if (next) params.set('contentsStudy', '1');
@@ -463,16 +511,18 @@ export function RunCardPrototypeViewer({
   const copyCodexHandoff = async (): Promise<void> => {
     const payload = JSON.stringify({
       kind: 'run-card-layout-tuning',
-      version: 3,
-      card: card.name,
+      version: 4,
+      card: displayedCard.name,
       cardVariant,
       referenceWidthPx: REFERENCE_CARD_WIDTH,
       units: 'percent of card width (cqw)',
       frameSha256: frame?.media?.sha256 ?? null,
+      frameGeometry,
       artworkSha256: art?.media?.sha256 ?? null,
       title: { size: titleSize, horizontal: titleX, vertical: titleY },
       type: { size: typeSize, horizontal: typeX, vertical: typeY },
       cost: { size: costSize, horizontal: costX, vertical: costY },
+      displayedCost: displayedCard.cost,
       flavor: { size: flavorSize },
       contentsStudy: contentsStudy ? {
         scale: contentsScale,
@@ -544,6 +594,8 @@ export function RunCardPrototypeViewer({
                       card={profile.card}
                       frameUrl={frame.media!.url}
                       artUrl={art.media!.url}
+                      frameGeometry={RUN_CARD_STANDARD_FRAME_GEOMETRY}
+                      showFrameBoxes={showFrameBoxes}
                       width={`${REFERENCE_CARD_WIDTH * viewerZoom}px`}
                       tuning={{ costX, costY, costSize, titleX, titleY, titleSize, typeX, typeY, typeSize, flavorSize }}
                       contentsTuning={scaledRunCardContentsTuning(profile.tuning, contentsScale)}
@@ -555,9 +607,11 @@ export function RunCardPrototypeViewer({
               </div>
             ) : (
               <RunCardFace
-                card={card}
+                card={displayedCard}
                 frameUrl={frame.media!.url}
                 artUrl={art.media!.url}
+                frameGeometry={frameGeometry}
+                showFrameBoxes={showFrameBoxes}
                 width={`${REFERENCE_CARD_WIDTH * viewerZoom}px`}
                 tuning={{ costX, costY, costSize, titleX, titleY, titleSize, typeX, typeY, typeSize, flavorSize }}
                 onImageLoad={onImageLoad}
@@ -643,10 +697,36 @@ export function RunCardPrototypeViewer({
                   className={`tileset-view-action${concinnousTargetRevealed ? ' active' : ''}`}
                   aria-pressed={concinnousTargetRevealed}
                   onClick={() => chooseConcinnousTargetState(true)}
-                >After purchase · Knight</button>
+                >After purchase · Pawn 1</button>
+              </div>
+            ) : null}
+            {!contentsStudy ? (
+              <div className="tileset-button-row" role="group" aria-label="Card cost preview">
+                <button
+                  type="button"
+                  className={`tileset-view-action${previewCost === null ? ' active' : ''}`}
+                  aria-pressed={previewCost === null}
+                  onClick={() => choosePreviewCost(null)}
+                >Actual cost</button>
+                {[10, 11].map((cost) => (
+                  <button
+                    type="button"
+                    className={`tileset-view-action${previewCost === cost ? ' active' : ''}`}
+                    aria-pressed={previewCost === cost}
+                    onClick={() => choosePreviewCost(cost)}
+                    key={cost}
+                  >Cost {cost}</button>
+                ))}
               </div>
             ) : null}
             <div className="tileset-button-row run-card-prototype-actions">
+              <button
+                type="button"
+                className={`tileset-view-action${showFrameBoxes ? ' active' : ''}`}
+                data-card-layout-action="toggle-frame-boxes"
+                aria-pressed={showFrameBoxes}
+                onClick={toggleFrameBoxes}
+              >{showFrameBoxes ? 'Hide frame boxes' : 'Show frame boxes'}</button>
               <button
                 type="button"
                 className="tileset-view-action"
@@ -713,7 +793,7 @@ export function RunCardPrototypeViewer({
               dflt={DEFAULT_OPENING_SAMPLE_SEED}
             />
             <SliderRow
-              label={<>Concinnous prevalence · 1 in {concinnousDenominator} eligible offers</>}
+              label={<>Concinnous prevalence · 1 in {concinnousDenominator} non-Pestiferous offers</>}
               value={concinnousDenominator}
               set={setConcinnousDenominator}
               min={2}
@@ -725,13 +805,14 @@ export function RunCardPrototypeViewer({
             {frame && art ? (
               <dl className="run-card-prototype-source-readout">
                 <div><dt>Frame</dt><dd>{frame.media!.sha256.slice(0, 12)} · {frame.status}</dd></div>
+                <div><dt>Geometry</dt><dd>{frameGeometry.id} · native {frameGeometry.sourceWidth}×{frameGeometry.sourceHeight}</dd></div>
                 <div><dt>Artwork</dt><dd>{art.media!.sha256.slice(0, 12)} · {art.status}</dd></div>
-                <div><dt>Card</dt><dd>{contentsStudy ? 'Contents Box density study' : card.typeLine}</dd></div>
+                <div><dt>Card</dt><dd>{contentsStudy ? 'Contents Box density study' : `${displayedCard.typeLine} · ${displayedCard.cost} gold`}</dd></div>
                 <div><dt>Ataraxia I sample</dt><dd>{realizedPestiferousCount} / {ATARAXIA_SAMPLE_DRAWS} Pestiferous · seed 4217</dd></div>
                 <div><dt>Opening budget</dt><dd>{RUN_STARTING_GOLD} gold · buy any affordable cards</dd></div>
                 <div><dt>Opening party</dt><dd>King + 2 Pawns + purchased cards</dd></div>
                 <div><dt>Opening sample</dt><dd>{openingSample.map((offer) => `${runCardName(offer)} (${offer.value})`).join(' · ')}</dd></div>
-                <div><dt>Eligible sample</dt><dd>{realizedConcinnousCount} / {ATARAXIA_SAMPLE_DRAWS} Concinnous · seed 4217</dd></div>
+                <div><dt>Offer sample</dt><dd>{realizedConcinnousCount} / {ATARAXIA_SAMPLE_DRAWS} Concinnous · seed 4217</dd></div>
               </dl>
             ) : null}
           </div>

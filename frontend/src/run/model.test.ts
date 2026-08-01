@@ -647,7 +647,6 @@ describe('Concinnous cards', () => {
     ));
 
     expect(concinnous.cost).toBe(concinnous.value + 2);
-    expect(concinnous.cost).toBeLessThanOrEqual(9);
     expect(concinnous.effectTargetIndex).toBeGreaterThanOrEqual(0);
     expect(concinnous.effectTargetIndex).toBeLessThan(concinnous.pieces.length);
     expect(owned).toMatchObject({
@@ -698,14 +697,15 @@ describe('Concinnous cards', () => {
     expect(normalizeRunDocument(upgraded)).toBe(upgraded);
   });
 
-  it('does not qualify a card whose Positioned premium would exceed the one-digit cost ceiling', () => {
+  it('qualifies cards whose Positioned premium produces a two-digit cost', () => {
     const baseline = createRun(war(), 4217, 0);
     const expensive = RUN_CARD_DECK.filter((card) => card.value >= 8);
     const offers = expensive.map((card, index) => (
       createRunCardOffer(baseline, card, 0, index, 8, 1)
     ));
 
-    expect(offers.every((offer) => offer.cardType === null)).toBe(true);
-    expect(offers.every((offer) => offer.effectTargetIndex === null)).toBe(true);
+    expect(offers.every((offer) => offer.cardType === 'concinnous')).toBe(true);
+    expect(offers.every((offer) => offer.effectTargetIndex !== null)).toBe(true);
+    expect(new Set(offers.map((offer) => offer.cost))).toEqual(new Set([10, 11]));
   });
 });

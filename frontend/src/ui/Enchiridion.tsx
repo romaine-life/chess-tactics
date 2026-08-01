@@ -4,7 +4,7 @@ import { createBlankLevel } from '../core/level';
 import { levelToEditorBoard, unitsForGamePieces } from '../core/levelBoard';
 import { PIECE_LABEL, PLAYABLE_PIECE_TYPES, type PlayablePieceType } from '../core/pieces';
 import type { BoardSize, Piece } from '../core/types';
-import { resolvedLiveMediaUrl } from '@chess-tactics/board-render';
+import { liveMediaForSlot, resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import { PredrawnMoveHighlightPaint } from '../render/PredrawnMoveHighlightPaint';
 import { runCardArtSlot, runCardFlavor, runCardName } from '../run/cardNames';
 import {
@@ -25,6 +25,7 @@ import {
   RunCardFace,
   type RunCardFaceContent,
 } from './RunCardFace';
+import { runCardFrameGeometryForSha } from './runCardFrameGeometry';
 import { StaticReadOnlyBoardView } from './shared/BoardViewFraming';
 import {
   loadRunRelicStatistics,
@@ -655,6 +656,8 @@ const CARD_TYPE_REFERENCES: readonly CardTypeReferenceDefinition[] = Object.free
 const VOLUNTEER_CARD = RUN_CARD_BY_ID.p;
 
 function CardTypeReference({ definition }: { definition: CardTypeReferenceDefinition }): ReactElement {
+  const frameSlot = definition.frameSlot ?? RUN_CARD_FRAME_SLOT;
+  const frameMedia = liveMediaForSlot(frameSlot).media;
   const card = {
     name: runCardName(VOLUNTEER_CARD),
     cost: definition.cost,
@@ -674,8 +677,9 @@ function CardTypeReference({ definition }: { definition: CardTypeReferenceDefini
     <div className="enchiridion-card-type-preview">
       <RunCardFace
         card={card}
-        frameUrl={resolvedLiveMediaUrl(definition.frameSlot ?? RUN_CARD_FRAME_SLOT)}
+        frameUrl={frameMedia.immutableUrl}
         artUrl={resolvedLiveMediaUrl(runCardArtSlot(VOLUNTEER_CARD))}
+        frameGeometry={runCardFrameGeometryForSha(frameMedia.sha256)}
       />
     </div>
   );
