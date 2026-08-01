@@ -4024,9 +4024,9 @@ async function main() {
   const activeRunStartingArmy = [activeRunKing, activeRunPawnA, activeRunPawnB];
   const activeRunNumberState = { pawn: 3, knight: 1, bishop: 1, rook: 1, queen: 1, king: 2 };
   const activeRunOffers = [
-    { id: 'p', offerId: 'opening-0-p', pieces: ['pawn'], value: 1, cost: 1, cardType: null, effectSeed: 1704, effectTargetIndex: null },
-    { id: 'k', offerId: 'opening-1-k', pieces: ['knight'], value: 3, cost: 3, cardType: null, effectSeed: 1705, effectTargetIndex: null },
-    { id: 'r', offerId: 'opening-2-r', pieces: ['rook'], value: 5, cost: 5, cardType: null, effectSeed: 1706, effectTargetIndex: null },
+    { id: 'p', offerId: 'opening-0-p', pieces: ['pawn'], value: 1, cost: 1, cardType: null, effectSeed: 1704, plaguedPieceIndex: null, effectTargetIndex: null },
+    { id: 'k', offerId: 'opening-1-k', pieces: ['knight'], value: 3, cost: 3, cardType: null, effectSeed: 1705, plaguedPieceIndex: null, effectTargetIndex: null },
+    { id: 'r', offerId: 'opening-2-r', pieces: ['rook'], value: 5, cost: 5, cardType: null, effectSeed: 1706, plaguedPieceIndex: null, effectTargetIndex: null },
   ];
   const activeRunDocument = {
     formatVersion: 10,
@@ -4081,6 +4081,33 @@ async function main() {
       },
     },
   };
+  const invalidPlaguedTarget = await request(
+    'PUT', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      run: {
+        ...activeRunDocument,
+        cards: [{
+          id: 'run-card-invalid',
+          coreId: 'p',
+          cardType: 'pestiferous',
+          effectSeed: 1703,
+          effectTargetUnitId: null,
+          unitIds: ['run-pawn-a'],
+          lostUnitIds: [],
+          plaguedUnitId: null,
+          acquiredAfterBattleIndex: 0,
+        }],
+      },
+      revision: 0,
+    }),
+  );
+  if (
+    invalidPlaguedTarget.statusCode !== 400
+    || JSON.parse(invalidPlaguedTarget.body).error !== 'invalid_active_run'
+  ) {
+    throw new Error(`Active Run should reject a missing Plagued target: ${invalidPlaguedTarget.statusCode} ${invalidPlaguedTarget.body}`);
+  }
   const missingRunRevision = await request(
     'PUT', '/api/active-run',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
@@ -4186,13 +4213,13 @@ async function main() {
       {
         id: 'run-card-1', coreId: activeRunOffers[0].id, cardType: null,
         effectSeed: activeRunOffers[0].effectSeed, effectTargetUnitId: null,
-        unitIds: [purchasedPawn.id], lostUnitIds: [],
+        unitIds: [purchasedPawn.id], lostUnitIds: [], plaguedUnitId: null,
         acquiredAfterBattleIndex: 0,
       },
       {
         id: 'run-card-2', coreId: activeRunOffers[1].id, cardType: null,
         effectSeed: activeRunOffers[1].effectSeed, effectTargetUnitId: null,
-        unitIds: [purchasedKnight.id], lostUnitIds: [],
+        unitIds: [purchasedKnight.id], lostUnitIds: [], plaguedUnitId: null,
         acquiredAfterBattleIndex: 0,
       },
     ],
@@ -4236,6 +4263,7 @@ async function main() {
         cardType: 'concinnous',
         effectSeed: 1704,
         effectTargetIndex: 0,
+        plaguedPieceIndex: null,
       }],
       purchasedCardOfferIds: [],
       lootRelicOffers: [],

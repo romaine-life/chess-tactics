@@ -3,20 +3,20 @@ status: accepted
 date: 2026-08-01
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
-  - "[ADR-0315](0315-run-shops-allow-every-affordable-card-purchase.md)'s multi-card shared Shop transaction and format-10 purchase state"
-  - "[ADR-0314](0314-run-openings-use-two-pawns-eight-gold-and-card-native-purchase-feedback.md)'s format-9 card vocabulary, two-Pawn army, eight-gold budget, and purchase feedback"
+  - "[ADR-0317](0317-run-shops-allow-every-affordable-card-purchase.md)'s multi-card shared Shop transaction and format-10 purchase state"
+  - "[ADR-0316](0316-run-openings-use-two-pawns-eight-gold-and-card-native-purchase-feedback.md)'s format-9 card vocabulary, two-Pawn army, eight-gold budget, and purchase feedback"
 partially_supersedes:
   - "[ADR-0193](0193-runs-are-persistent-wars-around-unchanged-chess-battles.md)'s separate opening-draft phase"
   - "[ADR-0237](0237-run-destinations-fill-the-shell-workspace.md)'s Opening draft destination"
-  - "[ADR-0311](0311-run-openings-spend-nine-gold-on-one-of-three-seeded-cards.md)'s opening-specific one-step purchase transaction"
-  - "[ADR-0312](0312-run-openings-begin-with-only-the-permanent-king.md)'s draft-phase normalization"
+  - "[ADR-0313](0313-run-openings-spend-nine-gold-on-one-of-three-seeded-cards.md)'s opening-specific one-step purchase transaction"
+  - "[ADR-0314](0314-run-openings-begin-with-only-the-permanent-king.md)'s draft-phase normalization"
 extends:
   - 0230-run-shops-separate-buying-army-inspection-and-selling.md
-  - 0311-run-openings-spend-nine-gold-on-one-of-three-seeded-cards.md
-  - 0312-run-openings-begin-with-only-the-permanent-king.md
+  - 0313-run-openings-spend-nine-gold-on-one-of-three-seeded-cards.md
+  - 0314-run-openings-begin-with-only-the-permanent-king.md
 ---
 
-# ADR-0313: Run opening is the normal Shop and draft is retired
+# ADR-0315: Run opening is the normal Shop and draft is retired
 
 ## Context and Problem Statement
 
@@ -48,7 +48,7 @@ separate draft phase and screen are retired.**
 - Active Run format 8 begins in phase `shop`. Its `RunShopState` is the same
   transaction used after Battles and is distinguished only by `kind: opening`.
 - The opening Shop starts with the permanent King, 9 gold, and the three seeded
-  distinct-valued standard Units offers governed by ADR-0311/0305.
+  distinct-valued standard Units offers governed by ADR-0313/0305.
 - `buyBundle` performs the opening purchase. The Shop stays mounted, marks the
   card purchased, updates Army/cards/gold, supports Sell Units and Reset Shop,
   and disables the other bundle cards exactly like a later Shop.
@@ -87,5 +87,5 @@ separate draft phase and screen are retired.**
 - [Migration policy](../migration-policy.md)
 - [Persistence](../persistence.md)
 - [ADR-0230](0230-run-shops-separate-buying-army-inspection-and-selling.md)
-- [ADR-0311](0311-run-openings-spend-nine-gold-on-one-of-three-seeded-cards.md)
-- [ADR-0312](0312-run-openings-begin-with-only-the-permanent-king.md)
+- [ADR-0313](0313-run-openings-spend-nine-gold-on-one-of-three-seeded-cards.md)
+- [ADR-0314](0314-run-openings-begin-with-only-the-permanent-king.md)

@@ -54,14 +54,18 @@ gameplay noun are unsupported. The retired `draft` phase, `draftOffers`, and
 unsupported account Run retains the signed-in account and its CAS revision while
 treating that retired document as unavailable; a fresh current-format Run can
 therefore replace it without adapting or replaying the retired transaction. See
-[ADR-0313](adr/0313-run-opening-is-the-normal-shop-and-draft-is-retired.md) and
-[ADR-0314](adr/0314-run-openings-use-two-pawns-eight-gold-and-card-native-purchase-feedback.md),
+[ADR-0315](adr/0315-run-opening-is-the-normal-shop-and-draft-is-retired.md) and
+[ADR-0316](adr/0316-run-openings-use-two-pawns-eight-gold-and-card-native-purchase-feedback.md),
 as superseded for Shop purchase cardinality by
-[ADR-0315](adr/0315-run-shops-allow-every-affordable-card-purchase.md). Format 10
-also stores the selected Ataraxia tier, persisted affected Shop
-offers, their concealed Concinnous unit target, owned card membership and exact
-revealed target id, Plagued unit modifiers, and exact Pestiferous loss history.
-Format 3 stores each army unit's role-specific historical name.
+[ADR-0317](adr/0317-run-shops-allow-every-affordable-card-purchase.md). Format 10
+also stores the selected Ataraxia tier, persisted affected Shop offers with both
+their exact public Plagued piece index and concealed Concinnous unit target,
+owned card membership with the current Plagued unit id and revealed Concinnous
+target id, and exact Pestiferous loss history. Current format-10 documents that
+predate the one-target Pestiferous rule deterministically preserve their card
+state while gaining one current Plagued target per nonempty Pestiferous card
+(ADR-0309, ADR-0310, ADR-0311). Format 3 stores each army unit's role-specific
+historical name.
 Format-1 unnamed documents and the provisional format-2 generated-name documents
 are deterministically normalized to format 3 from the Run seed and each piece
 type's acquisition order before the next save. Once a document is format 3, a

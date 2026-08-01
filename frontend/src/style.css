@@ -21723,6 +21723,30 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   position: absolute;
 }
 
+.run-card-prototype-unit-marker {
+  align-items: center;
+  block-size: 3.4cqw;
+  color: #ffe09a;
+  display: inline-flex;
+  font: 400 3.4cqw/1 var(--ds-font-display);
+  inline-size: 3.4cqw;
+  justify-content: center;
+  text-shadow:
+    0 0 .7cqw #000,
+    0 .3cqw 0 #000;
+  z-index: 3;
+}
+
+.run-card-prototype-unit-marker-seat {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+}
+
+.run-card-prototype-unit-icon-seat.is-plagued .run-card-prototype-unit-icon {
+  filter: drop-shadow(0 0 .9cqw rgba(255, 209, 119, .96));
+}
+
 .run-card-prototype-unit-icon {
   block-size: var(--run-card-unit-height, 9cqw);
   inline-size: var(--run-card-unit-canvas-width);

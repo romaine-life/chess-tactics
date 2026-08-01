@@ -19,11 +19,29 @@ import { InnerChromeBox } from './shared/ChromeBox';
 
 const CARD_PIECE_ORDER: readonly PurchasablePieceType[] = Object.freeze(['pawn', 'knight', 'bishop', 'rook', 'queen']);
 
-function grantsForCard(card: RunCoreCard): RunCardFaceContent['grants'] {
+function isCardOffer(card: RunCoreCard | RunCardOffer): card is RunCardOffer {
+  return 'offerId' in card;
+}
+
+function grantsForCard(card: RunCoreCard | RunCardOffer): RunCardFaceContent['grants'] {
   return CARD_PIECE_ORDER.flatMap((unit) => {
-    const count = card.pieces.filter((piece) => piece === unit).length;
-    return count > 0 ? [{ unit, count }] : [];
+    const pieceIndices = card.pieces.flatMap((piece, index) => piece === unit ? [index] : []);
+    const plaguedPieceIndex = isCardOffer(card) ? card.plaguedPieceIndex : null;
+    const plaguedIndex = plaguedPieceIndex === null ? -1 : pieceIndices.indexOf(plaguedPieceIndex);
+    return pieceIndices.length > 0
+      ? [{
+          unit,
+          count: pieceIndices.length,
+          plaguedIndices: plaguedIndex >= 0 ? [plaguedIndex] : [],
+        }]
+      : [];
   });
+}
+
+function plaguedTargetLabel(card: RunCoreCard | RunCardOffer): string {
+  if (!isCardOffer(card) || card.plaguedPieceIndex === null) return '';
+  const target = card.pieces[card.plaguedPieceIndex];
+  return target ? ` Plagued ${target}.` : '';
 }
 
 function concinnousTargetLabel(card: RunCardOffer): string {
@@ -55,7 +73,8 @@ export function RunCard({
   const label = cardContentsLabel(card);
   const name = runCardName(card);
   const artUrl = resolvedLiveMediaUrl(runCardArtSlot(card));
-  const cardType = 'cardType' in card ? card.cardType : null;
+  const offer = isCardOffer(card) ? card : null;
+  const cardType = offer?.cardType ?? null;
   const frameUrl = resolvedLiveMediaUrl(
     cardType === 'pestiferous'
       ? RUN_CARD_PESTIFEROUS_FRAME_SLOT
@@ -63,7 +82,12 @@ export function RunCard({
         ? RUN_CARD_CONCINNOUS_FRAME_SLOT
         : RUN_CARD_FRAME_SLOT,
   );
-  const cost = 'cost' in card ? card.cost : card.value;
+  const cost = offer?.cost ?? card.value;
+  const targetLabel = cardType === 'pestiferous'
+    ? plaguedTargetLabel(card)
+    : cardType === 'concinnous' && offer
+      ? ` Positioned: ${purchased ? concinnousTargetLabel(offer) : 'target hidden'}.`
+      : '';
   const faceContent = {
     name,
     cost,
@@ -73,8 +97,8 @@ export function RunCard({
         ? 'Units — Concinnous'
         : 'Units',
     grants: grantsForCard(card),
-    properties: cardType === 'concinnous' && 'effectTargetIndex' in card
-      ? [{ name: 'Positioned', target: purchased ? concinnousTargetLabel(card) : 'Target hidden' }]
+    properties: cardType === 'concinnous' && offer
+      ? [{ name: 'Positioned', target: purchased ? concinnousTargetLabel(offer) : 'Target hidden' }]
       : undefined,
     flavor: runCardFlavor(card),
   } satisfies RunCardFaceContent;
@@ -90,13 +114,13 @@ export function RunCard({
     return (
       <span
         className="run-card-action is-reference"
-        aria-label={`${name}. ${label}. Worth ${cost} gold.`}
+        aria-label={`${name}. ${label}. Worth ${cost} gold.${targetLabel}`}
       >
         {face}
       </span>
     );
   }
-  const actionLabel = `${purchased ? 'Purchased' : 'Buy'} ${name} — ${label} — for ${cost} gold${cardType === 'concinnous' && 'effectTargetIndex' in card ? ` — Positioned: ${purchased ? concinnousTargetLabel(card) : 'target hidden'}` : ''}`;
+  const actionLabel = `${purchased ? 'Purchased' : 'Buy'} ${name} — ${label} — for ${cost} gold.${targetLabel}`;
   return (
     <span className="run-card-offer">
       <button

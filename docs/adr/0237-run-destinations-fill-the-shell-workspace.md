@@ -3,7 +3,7 @@ status: accepted
 date: 2026-07-29
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
-  - "[ADR-0313](0313-run-opening-is-the-normal-shop-and-draft-is-retired.md)'s removal of Opening draft as a destination"
+  - "[ADR-0315](0315-run-opening-is-the-normal-shop-and-draft-is-retired.md)'s removal of Opening draft as a destination"
 ---
 
 # ADR-0237: Run destinations fill the shell workspace

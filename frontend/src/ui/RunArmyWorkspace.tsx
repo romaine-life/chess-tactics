@@ -125,7 +125,7 @@ export function runUnitTraits(run: RunDocument, unit: RunArmyUnit): RunUnitTrait
     traits.push({
       id: 'plagued',
       label: 'Plagued',
-      description: 'Belongs to a Pestiferous card and may be lost after a Battle.',
+      description: 'Will be permanently lost after the next victorious Battle.',
       source: 'The Great Mortality',
       inherited: false,
       iconClass: 'skirmish-icon-crossed-swords',

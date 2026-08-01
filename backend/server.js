@@ -18003,6 +18003,7 @@ const ACTIVE_RUN_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 
 const ACTIVE_RUN_PIECE_VALUES = Object.freeze({ pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9, king: 0 });
 const ACTIVE_RUN_ABILITIES = new Set(['discipline', 'positioned', 'marshalled']);
 const ACTIVE_RUN_MODIFIERS = new Set(['plagued']);
+const ACTIVE_RUN_PLAGUED_DISCOUNTS = Object.freeze({ pawn: 0, knight: 1, bishop: 1, rook: 2, queen: 3 });
 const ACTIVE_RUN_SHOP_FIELDS = new Set([
   'kind',
   'afterBattleIndex',
@@ -18086,6 +18087,7 @@ function validateActiveRunBody(run) {
     const cardIds = new Set();
     const cardUnitIds = new Set();
     const lostCardUnitIds = new Set();
+    const plaguedTargetUnitIds = new Set();
     for (const card of run.cards) {
       if (!isObjectRecord(card)) return 'run.cards contains an invalid card';
       const cardTypeValid = card.cardType === null
@@ -18118,6 +18120,15 @@ function validateActiveRunBody(run) {
         || card.acquiredAfterBattleIndex < 0
         || card.acquiredAfterBattleIndex >= run.war.battles.length
       ) return 'run.cards contains an invalid card';
+      if (run.formatVersion >= 7) {
+        const validPlaguedTarget = card.cardType === 'pestiferous'
+          ? card.unitIds.length > 0
+            ? typeof card.plaguedUnitId === 'string' && card.unitIds.includes(card.plaguedUnitId)
+            : card.plaguedUnitId === null
+          : card.plaguedUnitId === null;
+        if (!validPlaguedTarget) return 'run.cards contains an invalid Plagued target';
+        if (card.plaguedUnitId !== null) plaguedTargetUnitIds.add(card.plaguedUnitId);
+      }
       cardIds.add(card.id);
       for (const unitId of card.unitIds) {
         if (
@@ -18140,6 +18151,13 @@ function validateActiveRunBody(run) {
           || lostCardUnitIds.has(unitId)
         ) return 'run.cards contains invalid loss history';
         lostCardUnitIds.add(unitId);
+      }
+    }
+    if (run.formatVersion >= 7) {
+      for (const unit of run.army) {
+        if (unit.modifiers.includes('plagued') !== plaguedTargetUnitIds.has(unit.id)) {
+          return 'run.army Plagued modifiers do not match card targets';
+        }
       }
     }
     if (!Array.isArray(run.pestiferousLosses) || run.pestiferousLosses.length > 20000) {
@@ -18250,6 +18268,19 @@ function validateActiveRunBody(run) {
           || offer.effectSeed > 0xffffffff
           || offer.pieces.reduce((total, piece) => total + ACTIVE_RUN_PIECE_VALUES[piece], 0) !== offer.value
         ) return 'run.shop.cardOffers contains an invalid offer';
+        const validPlaguedTarget = offer.cardType === 'pestiferous'
+          ? isFiniteInteger(offer.plaguedPieceIndex)
+            && offer.plaguedPieceIndex >= 0
+            && offer.plaguedPieceIndex < offer.pieces.length
+          : offer.plaguedPieceIndex === null;
+        if (!validPlaguedTarget) return 'run.shop.cardOffers contains an invalid Plagued target';
+        const plaguedPiece = offer.plaguedPieceIndex === null ? null : offer.pieces[offer.plaguedPieceIndex];
+        const expectedCost = offer.cardType === 'pestiferous'
+          ? offer.value - (plaguedPiece ? ACTIVE_RUN_PLAGUED_DISCOUNTS[plaguedPiece] : 0)
+          : offer.value + (offer.cardType === 'concinnous' ? 2 : 0);
+        if (offer.cost !== expectedCost) {
+          return 'run.shop.cardOffers contains invalid affected pricing';
+        }
         offerIds.add(offer.offerId);
         offerValues.add(offer.value);
       }
@@ -18267,6 +18298,20 @@ function validateActiveRunBody(run) {
           || run.shop.entrySnapshot.nextCardSequence < 1
         )
       ) return 'run.shop.entrySnapshot card state is invalid';
+      if (
+        run.shop.entrySnapshot !== undefined
+        && run.shop.entrySnapshot.cards.some((card) => (
+          !isObjectRecord(card)
+          || !Array.isArray(card.unitIds)
+          || (
+            card.cardType === 'pestiferous'
+              ? card.unitIds.length > 0
+                ? typeof card.plaguedUnitId !== 'string' || !card.unitIds.includes(card.plaguedUnitId)
+                : card.plaguedUnitId !== null
+              : card.plaguedUnitId !== null
+          )
+        ))
+      ) return 'run.shop.entrySnapshot contains an invalid Plagued target';
       if (run.shop.entrySnapshot !== undefined) {
         const purchasedCards = run.cards.slice(run.shop.entrySnapshot.cards.length);
         if (

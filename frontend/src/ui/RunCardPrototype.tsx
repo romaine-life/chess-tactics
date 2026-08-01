@@ -103,7 +103,16 @@ export function runCardPrototypeContent(
   variant: RunCardPrototypeVariant,
   concinnousTargetRevealed = false,
 ): RunCardFaceContent {
-  if (variant === 'pestiferous') return { ...STANDARD_CARD, typeLine: 'Units — Pestiferous' };
+  if (variant === 'pestiferous') {
+    return {
+      ...STANDARD_CARD,
+      cost: 8,
+      typeLine: 'Units — Pestiferous',
+      grants: STANDARD_CARD.grants.map((grant) => (
+        grant.unit === 'bishop' ? { ...grant, plaguedIndices: [0] } : grant
+      )),
+    };
+  }
   if (variant === 'concinnous') {
     return {
       ...CONCINNOUS_CARD,

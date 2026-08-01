@@ -100,7 +100,7 @@ these.
   keeps the Shop open, shows a framed **Purchased** state beneath that card, and
   uses the same gold transaction cue as selling. Only the explicit
   Continue action enters the first Battle. **Card** is the sole current gameplay
-  noun for these deck entries and offers (ADR-0313, ADR-0314, ADR-0315).
+  noun for these deck entries and offers (ADR-0315, ADR-0316, ADR-0317).
 - Each of those 49 Units cards owns one native 400×280 PixelLab illustration
   keyed by its canonical composition id. Human unit roles and readable
   equipment control the composition; historical pressure supplies secondary
@@ -109,7 +109,9 @@ these.
   and accepted atomically, with exact or explicitly reconstructed PixelLab
   prompt provenance and no packaged fallback (ADR-0281, ADR-0282).
 - A card's affected **qualifiers** identify causal rules rather than replacing
-  its primary type. Pestiferous changes the card lifecycle and all its units.
+  its primary type. Pestiferous changes the card lifecycle and publicly marks
+  one current unit with the Plagued status icon; the card face does not spell
+  out **Plagued** beside that unit.
   **Concinnous** means skillfully and harmoniously arranged and causes exactly
   one contained unit to become Positioned upon acquisition. The type line
   declares the qualifier; detecting it does not automatically restate its
@@ -122,7 +124,7 @@ these.
   anatomy. Each otherwise ordinary eligible shop offer has a seeded one-in-eight
   chance to become Concinnous; it costs two additional gold, stays within the
   nine-gold ceiling, and cannot also be Pestiferous (ADR-0272, ADR-0276,
-  ADR-0305, ADR-0309, ADR-0310).
+  ADR-0305, ADR-0309, ADR-0310, ADR-0311).
 - Run difficulty is **Ataraxia**. The first Run uses **Ataraxia 0 — The
   Untroubled Mind**, whose literal impact is standard Run rules and no
   Pestiferous shop cards; later Runs may opt into historically named
@@ -132,14 +134,22 @@ these.
 - **Ataraxia I — The Great Mortality** initially targets Pestiferous status for
   roughly one in eight otherwise eligible shop draws. Pestiferous status is
   rolled with the rest of that affected offer, not added as another deck copy.
-  A Pestiferous card makes all its units Plagued; every owned nonempty
-  Pestiferous card loses one seeded random unit on each Battle advancement
-  whether or not it was drawn or deployed. The empty card remains as a possible
-  dead draw until an explicit effect removes it. Affected shop offers, purchases,
+  A nonempty Pestiferous card publicly marks exactly one unit Plagued. Only that
+  unit receives the piece-tier Plagued discount. The unit ledger identifies it
+  with the dedicated Plagued icon rather than a written label; until the first
+  generated icon is accepted into its live slot, a small neutral diamond
+  occupies the exact icon socket. Every owned nonempty
+  Pestiferous card loses its marked unit on each victorious-Battle advancement,
+  whether or not the card was drawn or deployed, then immediately marks one
+  remaining unit for the next advancement. Selling, cashing out, or otherwise
+  permanently removing the marked unit retargets the card while it remains
+  nonempty. The empty card remains as a possible dead draw until an explicit
+  effect removes it. Affected shop offers, their exact public target, purchases,
   card membership, and losses are persisted; the seeded draw-time roll is one in
   eight and is inspectable in Card Layout. Pestiferous cards retain the shared
   face geometry but resolve their dedicated black bubbling-crude frame slot;
-  ordinary cards keep the standard frame (ADR-0267, ADR-0269, ADR-0271, ADR-0286).
+  ordinary cards keep the standard frame (ADR-0267, ADR-0269, ADR-0271, ADR-0286,
+  ADR-0311, ADR-0312).
 - Card ledgers have no assumed row cap before live experimentation. Dense cards
   may step down row spacing, icons, and type within readable bounds, but they
   must continue to show every unit property and retain the core card's flavor
@@ -387,10 +397,10 @@ The first prototype stays deliberately minimal (pillars §3). Resolved scope:
 
 **Deferred (post-v1, not precluded):** fluid royal / win conditions; mutating or
 cursed terrain and pieces; named-tactic surfacing; a competent search-based AI.
-Player armies and Run progression are governed by ADR-0193. ADR-0313 makes the
+Player armies and Run progression are governed by ADR-0193. ADR-0315 makes the
 opening the normal Shop transaction and retires the separate draft phase and
-screen. ADR-0314 supplies the current two-Pawn, 8-gold opening and card-native
-purchase language, feedback, and sound. ADR-0315 removes the inherited
+screen. ADR-0316 supplies the current two-Pawn, 8-gold opening and card-native
+purchase language, feedback, and sound. ADR-0317 removes the inherited
 one-card-per-Shop cap so every affordable dealt card can be purchased once.
 
 ## 14. Administrator playtesting
