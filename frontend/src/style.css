@@ -17008,13 +17008,25 @@ button.tileset-relationship-cell {
   .skirmish-retry-stud-glyph { transition: none; }
 }
 
+/* The brand layout is inert and shrink-wrapped: only its shield button navigates
+   home, never the flexible grid track or remaining title-bar surface (ADR-0300). */
+.brand-lockup-layout {
+  align-items: center;
+  color: #eef8ff;
+  display: inline-grid;
+  gap: clamp(10px, calc(var(--layout-vw, 100vw) * .01), 16px);
+  grid-template-columns: clamp(40px, calc(var(--layout-vw, 100vw) * .04), 54px) minmax(0, 1fr);
+  justify-self: start;
+  min-width: 0;
+  text-align: left;
+}
+
 /* Shared brand lockup — [shield] CHESS TACTICS / screen name — the ONE top-left
    mark on every screen. The game wordmark is the persistent header (the dominant
    line); the screen name sits beneath it as the small subordinate line. Same
    mark/structure/spot everywhere; only the screen name changes. DOM order is
    brand-then-name, so no reordering is needed. Component: src/ui/shared/BrandLockup. */
 .brand-lockup {
-  align-items: center;
   /* Rendered as a <button> since ADR-0052 (the title mark is a game control, not a
      hyperlink): clear the UA button chrome AND the global `button { … }` base rule
      (min-height/radius/shadow/tracking), restoring the inheritance the anchor had. */
@@ -17023,17 +17035,13 @@ button.tileset-relationship-cell {
   border: 0;
   border-radius: 0;
   cursor: pointer;
+  display: block;
   font: inherit;
   letter-spacing: inherit;
+  line-height: 0;
   min-height: 0;
   padding: 0;
-  text-align: left;
   text-shadow: inherit;
-  color: #eef8ff;
-  display: inline-grid;
-  gap: clamp(10px, calc(var(--layout-vw, 100vw) * .01), 16px);
-  grid-template-columns: clamp(40px, calc(var(--layout-vw, 100vw) * .04), 54px) minmax(0, 1fr);
-  min-width: 0;
   text-decoration: none;
 }
 
