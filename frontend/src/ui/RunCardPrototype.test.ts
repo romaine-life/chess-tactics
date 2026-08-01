@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { RUN_CARD_APPROVED_TUNING } from './RunCardFace';
-import { runCardPrototypeContent, runCardPrototypeVariantFromSearch } from './RunCardPrototype';
+import {
+  RUN_CARD_CONTENTS_STUDY_PROFILES,
+  runCardContentsStudyFromSearch,
+  runCardPrototypeContent,
+  runCardPrototypeVariantFromSearch,
+  scaledRunCardContentsTuning,
+} from './RunCardPrototype';
 
 describe('Run Card Layout review variant', () => {
   it('addresses the Pestiferous review state in the URL', () => {
@@ -13,6 +19,7 @@ describe('Run Card Layout review variant', () => {
       name: 'Parish Militia',
       typeLine: 'Units — Pestiferous',
     });
+    expect(runCardPrototypeContent('pestiferous')).not.toHaveProperty('rules');
     expect(runCardPrototypeContent('standard').typeLine).toBe('Units');
   });
 
@@ -21,6 +28,30 @@ describe('Run Card Layout review variant', () => {
       typeSize: 5.3,
       typeX: 1.35,
       typeY: 0.65,
+    });
+  });
+
+  it('addresses the Contents Box comparison without changing the ordinary default', () => {
+    expect(runCardContentsStudyFromSearch('?mode=viewer&vk=cardlayout&contentsStudy=1')).toBe(true);
+    expect(runCardContentsStudyFromSearch('?mode=viewer&vk=cardlayout')).toBe(false);
+  });
+
+  it('shows progressively denser Contents Box specimens at the real card width', () => {
+    expect(RUN_CARD_CONTENTS_STUDY_PROFILES.map(({ id, load }) => ({ id, load }))).toEqual([
+      { id: 'roomy', load: '1 cell · 1 row' },
+      { id: 'filled', load: '2 cells · 2 rows' },
+      { id: 'packed', load: '3 cells · 2 rows' },
+      { id: 'scrunched', load: '5 cells · 3 rows' },
+    ]);
+    expect(RUN_CARD_CONTENTS_STUDY_PROFILES.map(({ tuning }) => tuning.unitHeight)).toEqual([21, 12, 11.5, 8]);
+  });
+
+  it('lets the owner magnify every part of a density treatment together', () => {
+    const roomy = RUN_CARD_CONTENTS_STUDY_PROFILES[0].tuning;
+    expect(scaledRunCardContentsTuning(roomy, 1.2)).toMatchObject({
+      unitHeight: 25.2,
+      countSize: 9.6,
+      flavorScale: 1.2,
     });
   });
 });

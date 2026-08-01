@@ -188,6 +188,8 @@ describe('Run chrome hierarchy', () => {
     expect(runBundleCard).toContain('RUN_CARD_FRAME_SLOT');
     expect(runBundleCard).toContain('RUN_CARD_PESTIFEROUS_FRAME_SLOT');
     expect(runBundleCard).toContain("cardType === 'pestiferous'");
+    expect(runBundleCard).not.toMatch(/\brules\s*:/);
+    expect(runBundleCard).not.toContain('After every Battle');
     expect(runBundleCard).toContain('<RunCardFace');
     expect(runBundleCard).not.toContain('run-bundle-card-art');
     expect(runBundleCard).not.toContain('run-bundle-card-plate');

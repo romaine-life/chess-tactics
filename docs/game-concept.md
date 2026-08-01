@@ -65,18 +65,23 @@ these.
 - Opening hands and shop piece bundles use a familiar trading-card anatomy: a
   title at upper left, one compact gold coin with a live one-through-nine digit
   at upper right, a large pane for the card's accepted PixelLab illustration, a narrow card-
-  type line, and a rules box whose flavor text remains at the bottom. The type
+  type line, and a Contents Box whose flavor text remains at the bottom. The type
   line is never empty: ordinary bundle cards say **Units**, while affected cards
   append causal qualifiers after an em dash, such as **Units — Pestiferous** or
   **Units — Tactical**. Ordinary and qualified labels use one shared optically
   centered type-line scale and baseline rather than per-label positioning.
+  Detecting an ability, modifier, or affected card type does not automatically
+  synthesize explanatory prose in the Contents Box; those definitions will use a
+  later tooltip, reference, or inspection system. The shared face still permits
+  separately authored card content.
   Future mechanically different primary families may use
   types such as **Event**. The cost
   is never decimal, fractional, zero, or two-digit, and does not use separate
   numbered coin art. Each actual unit in the ledger appears as the same
   canonical player-side sprite used on the board. Card Layout, draft, shop,
   review, and Enchiridion use the same face rather than parallel card shells
-  (ADR-0219, ADR-0225, ADR-0270, ADR-0275, ADR-0276, ADR-0283, ADR-0285).
+  (ADR-0219, ADR-0225, ADR-0270, ADR-0275, ADR-0276, ADR-0283, ADR-0285,
+  ADR-0305).
 - The bundle deck's 49 unique one-through-nine-point compositions are the
   authored **core cards**. Each keeps one title and flavor text while its
   drawn offer may give particular units more than one modifier. The 49 cores do
@@ -85,7 +90,7 @@ these.
   passed so a later shuffle may affect that core differently. Disciplined adds
   3 gold, Positioned adds 2, and Plagued discounts by piece tier—Pawn 0, minor
   1, Rook 2, Queen 3—so shop-card prices remain whole gold and a Plagued Pawn
-  still costs 1. Exact public contents and modifiers belong in the rules-area
+  still costs 1. Exact public contents and modifier markers belong in the Contents Box
   unit ledger, not generated card-name permutations; an explicitly concealed
   Tactical target appears there as hidden until purchase (ADR-0265, ADR-0271,
   ADR-0272).
@@ -99,13 +104,13 @@ these.
 - A card's affected **qualifiers** identify causal rules rather than replacing
   its primary type. Pestiferous changes the card lifecycle and all its units.
   **Tactical** instead authors a positive enhancement of one or more contained
-  units, with its rules text naming the modifier, count, and whether the exact
-  target is visible before purchase. The type line declares the qualifier; the
-  lower box still states its literal behavior alongside the unit ledger. A
+  units with a stable modifier, affected count, and visibility rule. The type
+  line declares the qualifier; detecting it does not automatically restate its
+  behavior as Contents Box prose. A
   concealed target is seeded and persisted with the offer, priced normally,
   and merely revealed—not rerolled—after purchase. A card does not become
   Tactical just because an external relic later modifies one of its units
-  (ADR-0272, ADR-0276).
+  (ADR-0272, ADR-0276, ADR-0305).
 - Run difficulty is **Ataraxia**. The first Run uses **Ataraxia 0 — The
   Untroubled Mind**, whose literal impact is standard Run rules and no
   Pestiferous shop cards; later Runs may opt into historically named
