@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type ReactElement } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from 'react';
 import { paletteForSide, pieceSpritePath, type PlayablePieceType } from '../core/pieces';
 
 export const RUN_CARD_FRAME_SLOT = 'ui/run/card-prototypes/frame-v1.png';
@@ -88,6 +88,44 @@ export const runCardUnitImageKind = (
   unit: PlayablePieceType,
   index: number,
 ): RunCardImageKind => `unit:${cell}:${unit}:${index}`;
+
+export function requiredRunCardImageKinds(card: RunCardFaceContent): readonly RunCardImageKind[] {
+  return [
+    'frame',
+    'art',
+    ...card.grants.flatMap((grant, cell) => (
+      Array.from({ length: grant.count }, (_, index) => runCardUnitImageKind(cell, grant.unit, index))
+    )),
+  ];
+}
+
+export function runCardPresentationSignature(
+  card: RunCardFaceContent,
+  frameUrl: string,
+  artUrl: string,
+): string {
+  return JSON.stringify([
+    frameUrl,
+    artUrl,
+    card.name,
+    card.cost,
+    card.typeLine,
+    card.grants.map(({ count, unit, plaguedIndices }) => [count, unit, plaguedIndices ?? []]),
+    card.properties?.map(({ name, target }) => [name, target]) ?? null,
+    card.rules ?? null,
+    card.flavor,
+  ]);
+}
+
+export function runCardPresentationCanPromote(
+  requestedSignature: string,
+  pendingSignature: string | null,
+  card: RunCardFaceContent,
+  settled: ReadonlySet<RunCardImageKind>,
+): boolean {
+  return requestedSignature === pendingSignature
+    && requiredRunCardImageKinds(card).every((kind) => settled.has(kind));
+}
 
 export function runCardUnitStackSeatLeft(
   index: number,
@@ -255,78 +293,73 @@ function propertiesLabel(properties: RunCardFaceContent['properties']): string {
   return properties?.map(({ name, target }) => `${name}: ${target}`).join('. ') ?? '';
 }
 
-/**
- * The one Run trading-card face used by both the Studio instrument and live play.
- * Hosts choose only the immutable frame/art URLs and interaction around the face.
- */
-export function RunCardFace({
-  card,
-  frameUrl,
-  artUrl,
-  width = '100%',
-  tuning = RUN_CARD_APPROVED_TUNING,
-  contentsTuning = RUN_CARD_DEFAULT_CONTENTS_TUNING,
-  onImageLoad = () => undefined,
-  onImageError = () => undefined,
-  ariaHidden = false,
-}: {
+type RunCardPresentation = Readonly<{
+  signature: string;
   card: RunCardFaceContent;
   frameUrl: string;
   artUrl: string;
-  width?: string;
-  tuning?: RunCardFaceTuning;
-  contentsTuning?: RunCardContentsTuning;
-  onImageLoad?: (kind: RunCardImageKind) => void;
-  onImageError?: (kind: RunCardImageKind) => void;
-  ariaHidden?: boolean;
+}>;
+
+async function acknowledgeDecodedImage(
+  image: HTMLImageElement,
+  kind: Extract<RunCardImageKind, 'frame' | 'art'>,
+  onReady: (kind: RunCardImageKind) => void,
+  onError: (kind: RunCardImageKind) => void,
+): Promise<void> {
+  try {
+    if (typeof image.decode === 'function') await image.decode();
+    if (image.naturalWidth <= 0 || image.naturalHeight <= 0) throw new Error(`${kind} image has no drawable pixels`);
+    onReady(kind);
+  } catch {
+    onError(kind);
+  }
+}
+
+function RunCardFaceLayer({
+  presentation,
+  pending,
+  contentsTuning,
+  onImageLoad,
+  onImageError,
+}: {
+  presentation: RunCardPresentation;
+  pending: boolean;
+  contentsTuning: RunCardContentsTuning;
+  onImageLoad: (signature: string, pending: boolean, kind: RunCardImageKind) => void;
+  onImageError: (signature: string, pending: boolean, kind: RunCardImageKind) => void;
 }): ReactElement {
+  const { signature, card, frameUrl, artUrl } = presentation;
   const ledgerRows = card.grants.length <= 2
     ? card.grants.length
     : Math.ceil(card.grants.length / 2);
+  const acknowledgeLoad = (kind: RunCardImageKind): void => onImageLoad(signature, pending, kind);
+  const acknowledgeError = (kind: RunCardImageKind): void => onImageError(signature, pending, kind);
 
   return (
     <span
-      className="run-card-prototype run-card-face"
-      style={{
-        '--run-card-prototype-width': width,
-        '--run-card-cost-x': `${tuning.costX}cqw`,
-        '--run-card-cost-y': `${tuning.costY}cqw`,
-        '--run-card-cost-size': `${tuning.costSize}cqw`,
-        '--run-card-title-x': `${tuning.titleX}cqw`,
-        '--run-card-title-y': `${tuning.titleY}cqw`,
-        '--run-card-title-size': `${tuning.titleSize}cqw`,
-        '--run-card-type-x': `${tuning.typeX}cqw`,
-        '--run-card-type-y': `${tuning.typeY}cqw`,
-        '--run-card-type-size': `${tuning.typeSize}cqw`,
-        '--run-card-flavor-size': `${(tuning.flavorSize * contentsTuning.flavorScale).toFixed(4)}cqw`,
-        '--run-card-unit-height': `${contentsTuning.unitHeight}cqw`,
-        '--run-card-ledger-count-size': `${contentsTuning.countSize}cqw`,
-        '--run-card-ledger-count-column': `${contentsTuning.countColumn}cqw`,
-        '--run-card-ledger-column-gap': `${contentsTuning.columnGap}cqw`,
-        '--run-card-ledger-row-gap': `${contentsTuning.rowGap}cqw`,
-        '--run-card-effect-size': `${contentsTuning.effectSize}cqw`,
-        '--run-card-effect-gap': `${contentsTuning.effectGap}cqw`,
-        '--run-card-contents-padding-block-start': `${contentsTuning.paddingBlockStart}cqw`,
-        '--run-card-contents-padding-block-end': `${contentsTuning.paddingBlockEnd}cqw`,
-      } as CSSProperties}
-      aria-hidden={ariaHidden || undefined}
-      aria-label={ariaHidden ? undefined : `${card.name}. ${card.typeLine}. Costs ${card.cost} gold. Grants ${grantsLabel(card.grants)}.${card.properties?.length ? ` ${propertiesLabel(card.properties)}.` : ''}`}
+      className={`run-card-face-layer${pending ? ' is-pending' : ' is-presented'}`}
+      data-card-presentation={signature}
+      aria-hidden={pending || undefined}
     >
       <img
         className="run-card-prototype-frame"
         src={frameUrl}
         alt=""
         draggable={false}
-        onLoad={() => onImageLoad('frame')}
-        onError={() => onImageError('frame')}
+        onLoad={(event) => {
+          void acknowledgeDecodedImage(event.currentTarget, 'frame', acknowledgeLoad, acknowledgeError);
+        }}
+        onError={() => acknowledgeError('frame')}
       />
       <img
         className="run-card-prototype-art"
         src={artUrl}
         alt=""
         draggable={false}
-        onLoad={() => onImageLoad('art')}
-        onError={() => onImageError('art')}
+        onLoad={(event) => {
+          void acknowledgeDecodedImage(event.currentTarget, 'art', acknowledgeLoad, acknowledgeError);
+        }}
+        onError={() => acknowledgeError('art')}
       />
       <span className="run-card-prototype-name">{card.name}</span>
       <strong className="run-card-prototype-cost" aria-label={`${card.cost} gold`}>{card.cost}</strong>
@@ -355,8 +388,8 @@ export function RunCardFace({
                     stackCount={grant.count + (grant.plaguedIndices?.length ?? 0)}
                     stackIndex={index + (grant.plaguedIndices?.filter((plaguedIndex) => plaguedIndex < index).length ?? 0)}
                     tuning={contentsTuning}
-                    onReady={onImageLoad}
-                    onError={onImageError}
+                    onReady={acknowledgeLoad}
+                    onError={acknowledgeError}
                   />
                 ))}
               </span>
@@ -376,6 +409,175 @@ export function RunCardFace({
         ) : null}
         <span className="run-card-prototype-flavor">{card.flavor}</span>
       </span>
+    </span>
+  );
+}
+
+/**
+ * The one Run trading-card face used by both the Studio instrument and live play.
+ * Hosts choose only the immutable frame/art URLs and interaction around the face.
+ */
+export function RunCardFace({
+  card,
+  frameUrl,
+  artUrl,
+  width = '100%',
+  tuning = RUN_CARD_APPROVED_TUNING,
+  contentsTuning = RUN_CARD_DEFAULT_CONTENTS_TUNING,
+  onImageLoad = () => undefined,
+  onImageError = () => undefined,
+  ariaHidden = false,
+}: {
+  card: RunCardFaceContent;
+  frameUrl: string;
+  artUrl: string;
+  width?: string;
+  tuning?: RunCardFaceTuning;
+  contentsTuning?: RunCardContentsTuning;
+  onImageLoad?: (kind: RunCardImageKind) => void;
+  onImageError?: (kind: RunCardImageKind) => void;
+  ariaHidden?: boolean;
+}): ReactElement {
+  const requestedSignature = runCardPresentationSignature(card, frameUrl, artUrl);
+  // The signature contains every presentation field, so equal signatures are
+  // equivalent even when a host recreates its card object on another render.
+  const requested = useMemo<RunCardPresentation>(() => ({
+    signature: requestedSignature,
+    card,
+    frameUrl,
+    artUrl,
+  }), [requestedSignature]);
+  const [displayed, setDisplayed] = useState<RunCardPresentation>(requested);
+  const [pending, setPending] = useState<RunCardPresentation | null>(null);
+  const [pendingSettled, setPendingSettled] = useState<ReadonlySet<RunCardImageKind>>(() => new Set());
+  const displayedRef = useRef(displayed);
+  const pendingRef = useRef(pending);
+  const promotionFramesRef = useRef<number[]>([]);
+  displayedRef.current = displayed;
+  pendingRef.current = pending;
+
+  const cancelPromotion = useCallback((): void => {
+    for (const frame of promotionFramesRef.current) cancelAnimationFrame(frame);
+    promotionFramesRef.current = [];
+  }, []);
+
+  useEffect(() => cancelPromotion, [cancelPromotion]);
+
+  useEffect(() => {
+    cancelPromotion();
+    if (requested.signature === displayed.signature) {
+      setPending(null);
+      setPendingSettled(new Set());
+      return;
+    }
+    setPending(requested);
+    setPendingSettled(new Set());
+  }, [cancelPromotion, displayed.signature, requested]);
+
+  const settlePending = useCallback((signature: string, kind: RunCardImageKind): void => {
+    if (pendingRef.current?.signature !== signature) return;
+    setPendingSettled((current) => current.has(kind) ? current : new Set([...current, kind]));
+  }, []);
+
+  const handleImageLoad = useCallback((
+    signature: string,
+    isPending: boolean,
+    kind: RunCardImageKind,
+  ): void => {
+    if (isPending) {
+      if (pendingRef.current?.signature !== signature) return;
+      onImageLoad(kind);
+      settlePending(signature, kind);
+      return;
+    }
+    if (displayedRef.current.signature === signature) onImageLoad(kind);
+  }, [onImageLoad, settlePending]);
+
+  const handleImageError = useCallback((
+    signature: string,
+    isPending: boolean,
+    kind: RunCardImageKind,
+  ): void => {
+    if (isPending) {
+      if (pendingRef.current?.signature !== signature) return;
+      onImageError(kind);
+      settlePending(signature, kind);
+      return;
+    }
+    if (displayedRef.current.signature === signature) onImageError(kind);
+  }, [onImageError, settlePending]);
+
+  useEffect(() => {
+    cancelPromotion();
+    if (!pending) return undefined;
+    if (!runCardPresentationCanPromote(
+      pending.signature,
+      pendingRef.current?.signature ?? null,
+      pending.card,
+      pendingSettled,
+    )) return undefined;
+    const signature = pending.signature;
+    const firstFrame = requestAnimationFrame(() => {
+      const secondFrame = requestAnimationFrame(() => {
+        promotionFramesRef.current = [];
+        const ready = pendingRef.current;
+        if (!ready || ready.signature !== signature) return;
+        setDisplayed(ready);
+        setPending(null);
+        setPendingSettled(new Set());
+      });
+      promotionFramesRef.current = [secondFrame];
+    });
+    promotionFramesRef.current = [firstFrame];
+    return cancelPromotion;
+  }, [cancelPromotion, pending, pendingSettled]);
+
+  const layers = pending
+    ? [
+        { presentation: displayed, pending: false },
+        { presentation: pending, pending: true },
+      ]
+    : [{ presentation: displayed, pending: false }];
+
+  return (
+    <span
+      className="run-card-prototype run-card-face"
+      style={{
+        '--run-card-prototype-width': width,
+        '--run-card-cost-x': `${tuning.costX}cqw`,
+        '--run-card-cost-y': `${tuning.costY}cqw`,
+        '--run-card-cost-size': `${tuning.costSize}cqw`,
+        '--run-card-title-x': `${tuning.titleX}cqw`,
+        '--run-card-title-y': `${tuning.titleY}cqw`,
+        '--run-card-title-size': `${tuning.titleSize}cqw`,
+        '--run-card-type-x': `${tuning.typeX}cqw`,
+        '--run-card-type-y': `${tuning.typeY}cqw`,
+        '--run-card-type-size': `${tuning.typeSize}cqw`,
+        '--run-card-flavor-size': `${(tuning.flavorSize * contentsTuning.flavorScale).toFixed(4)}cqw`,
+        '--run-card-unit-height': `${contentsTuning.unitHeight}cqw`,
+        '--run-card-ledger-count-size': `${contentsTuning.countSize}cqw`,
+        '--run-card-ledger-count-column': `${contentsTuning.countColumn}cqw`,
+        '--run-card-ledger-column-gap': `${contentsTuning.columnGap}cqw`,
+        '--run-card-ledger-row-gap': `${contentsTuning.rowGap}cqw`,
+        '--run-card-effect-size': `${contentsTuning.effectSize}cqw`,
+        '--run-card-effect-gap': `${contentsTuning.effectGap}cqw`,
+        '--run-card-contents-padding-block-start': `${contentsTuning.paddingBlockStart}cqw`,
+        '--run-card-contents-padding-block-end': `${contentsTuning.paddingBlockEnd}cqw`,
+      } as CSSProperties}
+      aria-hidden={ariaHidden || undefined}
+      aria-busy={pending ? true : undefined}
+      aria-label={ariaHidden ? undefined : `${displayed.card.name}. ${displayed.card.typeLine}. Costs ${displayed.card.cost} gold. Grants ${grantsLabel(displayed.card.grants)}.${displayed.card.properties?.length ? ` ${propertiesLabel(displayed.card.properties)}.` : ''}`}
+    >
+      {layers.map((layer) => (
+        <RunCardFaceLayer
+          key={layer.presentation.signature}
+          presentation={layer.presentation}
+          pending={layer.pending}
+          contentsTuning={contentsTuning}
+          onImageLoad={handleImageLoad}
+          onImageError={handleImageError}
+        />
+      ))}
     </span>
   );
 }

@@ -82,6 +82,9 @@ these.
   review, and Enchiridion use the same face rather than parallel card shells
   (ADR-0219, ADR-0225, ADR-0270, ADR-0275, ADR-0276, ADR-0283, ADR-0285,
   ADR-0305, ADR-0309).
+  In-place card changes retain the last complete face until the requested card's
+  actual image layer is ready, then promote art and content together; rapid newer
+  selections cancel older pending cards (ADR-0314).
 - The bundle deck's 49 unique one-through-nine-point compositions are the
   authored **core cards**. Each keeps one title and flavor text while its
   drawn offer may give particular units more than one modifier. The 49 cores do
@@ -177,7 +180,14 @@ these.
   same-offer shop visit, and continues the Run; Army inspection remains
   available in every Run phase without pausing an active Battle (ADR-0230).
 - **Enchiridion** is the player-facing reference for unit movement, terrain
-  rules, all relics, and the behavior of current unit abilities. During Battle,
+  rules, the filterable core card deck, affected card types, all relics, and the
+  behavior of the current unit abilities: Discipline, Positioned, Marshalled,
+  and Plagued. Card filters combine exact gold value with
+  contained unit type. The Card Types reference uses the third column for its
+  four affected-type names and the fourth for one selected shared card face,
+  temporarily using The Volunteer for each; Pestiferous and Concinnous state
+  their accepted effects while two pending parallel designs remain explicit
+  placeholders (ADR-0313, ADR-0315). During Battle,
   the Controls title bar opens **Strategikon** over the board without unmounting
   the fight; its Martial Prosopography and Lipsanotheca expose the persistent
   army and held relics beside the same Enchiridion (ADR-0231).

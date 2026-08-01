@@ -13,6 +13,8 @@ const {
   SFX_SAMPLE_PROOF_RENDERER,
   SFX_SAMPLE_PROOF_SCHEMA,
   liveCatalogReadinessIssue,
+  gameConditionIconMediaIssue,
+  gameConditionIconSlot,
   nativeMediaEvidenceIssue,
   predrawnBoardAlignmentIssue,
   predrawnBoardMediaIssue,
@@ -142,6 +144,56 @@ test('Run resource icon projection binds one native reviewed icon to its resourc
   assert.match(runResourceIconMediaIssue(runResourceIcon({
     metadata: { runtime: { ...row.metadata.runtime, altText: 'Gold' } },
   })), /altText/);
+});
+
+function gameConditionIcon(overrides = {}) {
+  return {
+    slot: 'ui/kit/icons/game/plagued.png',
+    domain: 'ui-kit',
+    role: 'icon',
+    media_type: 'image/png',
+    width: 64,
+    height: 64,
+    metadata: {
+      runtime: {
+        component: 'unit-ability-icon',
+        variant: 'plagued',
+        frameWidth: 64,
+        frameHeight: 64,
+        frameCount: 1,
+        nativeRole: 'unit-ability-icon',
+        altText: '',
+      },
+    },
+    ...overrides,
+  };
+}
+
+test('condition icon projection keeps Plagued ability and Pestiferous property as separate typed roles', () => {
+  const plagued = gameConditionIcon();
+  assert.deepEqual(gameConditionIconSlot(plagued.slot), { component: 'unit-ability-icon', variant: 'plagued' });
+  assert.equal(gameConditionIconMediaIssue(plagued), null);
+
+  const pestiferous = gameConditionIcon({
+    slot: 'ui/kit/icons/card-properties/pestiferous.png',
+    metadata: { runtime: {
+      ...plagued.metadata.runtime,
+      component: 'card-property-icon',
+      variant: 'pestiferous',
+      nativeRole: 'card-property-icon',
+    } },
+  });
+  assert.deepEqual(gameConditionIconSlot(pestiferous.slot), { component: 'card-property-icon', variant: 'pestiferous' });
+  assert.equal(gameConditionIconMediaIssue(pestiferous), null);
+  assert.match(gameConditionIconMediaIssue(gameConditionIcon({ role: 'media' })), /icon role/);
+  assert.match(gameConditionIconMediaIssue(gameConditionIcon({ width: 32 })), /64x64/);
+  assert.match(gameConditionIconMediaIssue(gameConditionIcon({
+    metadata: { runtime: { ...plagued.metadata.runtime, variant: 'pestiferous' } },
+  })), /variant/);
+  assert.match(gameConditionIconMediaIssue(pestiferous, {
+    ...pestiferous.metadata.runtime,
+    component: 'unit-ability-icon',
+  }), /card-property-icon/);
 });
 
 function sfxSample(overrides = {}) {

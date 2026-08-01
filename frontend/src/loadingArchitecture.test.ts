@@ -40,6 +40,7 @@ describe('professional loading architecture guards', () => {
     expect(read('./ui/DrawableCatalogLab.tsx').replace(/\r\n/g, '\n')).toContain("useSceneParticipant(\n    'studio'");
     expect(read('./ui/RunShopArtReview.tsx')).toContain("useSceneParticipant('studio'");
     expect(read('./ui/RunRelicReview.tsx')).toContain("useSceneParticipant('studio'");
+    expect(read('./ui/PlaguedIconReview.tsx')).toContain("useSceneParticipant('studio'");
   });
 
   it('keeps asynchronous deep-linked Studio viewers inside the scene gate', () => {

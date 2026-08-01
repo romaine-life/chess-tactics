@@ -247,8 +247,8 @@ bar, shared settings-twin rails, live rows, and data-backed board previews. The 
 concept renders remain direction and comparison references rather than runtime screens.
 
 The default work surfaces are `/`, `/enchiridion/units`,
-`/enchiridion/terrain`, `/enchiridion/relics`,
-`/enchiridion/abilities`, `/play/select`, `/play/select/continue/<mode>`, `/play/select/skirmish`,
+`/enchiridion/terrain`, `/enchiridion/cards`, `/enchiridion/card-types`,
+`/enchiridion/relics`, `/enchiridion/abilities`, `/play/select`, `/play/select/continue/<mode>`, `/play/select/skirmish`,
 `/play/select/levels`, `/play/select/campaign/<id>`, `/editor`,
 `/editor/level`, and exact `/play?...` for a selected live board. The main menu has
 five top-level controls — Play, Editor, Lobbies, Enchiridion, Settings — and Play owns the shared
@@ -282,7 +282,10 @@ ADR-0254 dual-view browser: a compact Rows/Grouped tab sits above the selection
 column; Rows uses corrected named list frames, while Grouped uses one containing
 inner frame around an otherwise unframed native-icon grid. Neither view opens
 relic tooltips: the selected content-sized record is the sole visible
-name/effect/history authority. In the main-menu host, the two canonical rail
+name/effect/history authority. Card Types follows that master-detail reading:
+the third column contains the four affected-type names and the fourth contains
+only the selected Volunteer-based card face; it does not compare four card
+previews simultaneously (ADR-0315). In the main-menu host, the two canonical rail
 anchors remain fixed while Enchiridion content consumes the remaining visible
 canvas; the ordinary action-column width does not cap it. The generated no-board scenic
 background remains the accepted background-only scene. Daily/news and the duplicate
