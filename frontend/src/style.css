@@ -482,6 +482,8 @@ h1 {
   display: flex;
   align-items: center;
   gap: 7px;
+  min-width: 0;
+  width: 100%;
 }
 .pages-ctl-row > input[type="range"],
 .pages-ctl-row > input[type="number"],
@@ -490,6 +492,9 @@ h1 {
   flex: 1 1 auto;
   min-width: 0;
   width: auto;
+}
+.pages-ctl-row > input[type="range"] {
+  flex-basis: 0;
 }
 .pages-mini-reset {
   appearance: none;
@@ -13954,6 +13959,16 @@ button.tileset-relationship-cell {
 
 .tileset-control-stack {
   gap: 8px;
+}
+
+/* A fixed Studio rail must be allowed to shrink every control wrapper down to
+   its grid track. Without this, SliderRow's native range input contributes its
+   129px min-content width and pushes the final Reset button under the scrollbar. */
+.tileset-control-stack > *,
+.tileset-control-stack label,
+.tileset-control-stack .pages-ctl-row {
+  max-width: 100%;
+  min-width: 0;
 }
 
 .tileset-group-label {

@@ -203,6 +203,10 @@ describe('Level Editor chrome hierarchy', () => {
     expect(increase).toBeDefined();
     expectRegisteredButton(decrease!, 'settings-chrome-button', 'inner-minus-key');
     expectRegisteredButton(increase!, 'settings-chrome-button', 'inner-plus-key');
+
+    expect(styleCss).toMatch(/\.pages-ctl-row\s*\{[\s\S]*?min-width:\s*0;[\s\S]*?width:\s*100%;/);
+    expect(styleCss).toMatch(/\.pages-ctl-row > input\[type="range"\]\s*\{[\s\S]*?flex-basis:\s*0;/);
+    expect(styleCss).toMatch(/\.tileset-control-stack > \*,[\s\S]*?\.tileset-control-stack \.pages-ctl-row\s*\{[\s\S]*?max-width:\s*100%;[\s\S]*?min-width:\s*0;/);
   });
 
   it('registers generator icon, disclosure, and add commands', () => {
