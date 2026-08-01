@@ -64,16 +64,17 @@ these.
   icon immediately explains its name and complete effect (ADR-0216, ADR-0217).
 - Opening hands and shop piece bundles use a familiar trading-card anatomy: a
   title at upper left, one compact gold coin with a live one-through-nine digit
-  at upper right, a large pane for the game's existing unit art, a narrow card-
+  at upper right, a large pane for the card's accepted PixelLab illustration, a narrow card-
   type line, and a rules box whose flavor text remains at the bottom. The type
   line is never empty: ordinary bundle cards say **Units**, while affected cards
   append causal qualifiers after an em dash, such as **Units — Pestiferous** or
   **Units — Tactical**. Future mechanically different primary families may use
   types such as **Event**. The cost
   is never decimal, fractional, zero, or two-digit, and does not use separate
-  numbered coin art. Each actual unit appears as the same canonical player-side
-  sprite used on the board, while denser contents move into the rules-area
-  ledger (ADR-0219, ADR-0225, ADR-0270, ADR-0275, ADR-0276).
+  numbered coin art. Each actual unit in the ledger appears as the same
+  canonical player-side sprite used on the board. Card Layout, draft, shop,
+  review, and Enchiridion use the same face rather than parallel card shells
+  (ADR-0219, ADR-0225, ADR-0270, ADR-0275, ADR-0276, ADR-0283).
 - The bundle deck's 49 unique one-through-nine-point compositions are the
   authored **core cards**. Each keeps one title and flavor text while its
   drawn offer may give particular units more than one modifier. The 49 cores do
@@ -86,6 +87,13 @@ these.
   unit ledger, not generated card-name permutations; an explicitly concealed
   Tactical target appears there as hidden until purchase (ADR-0265, ADR-0271,
   ADR-0272).
+- Each of those 49 Units cards owns one native 400×280 PixelLab illustration
+  keyed by its canonical composition id. Human unit roles and readable
+  equipment control the composition; historical pressure supplies secondary
+  setting and anti-story residue. Faces and eyes may appear naturally—the
+  rejected global eye-concealment rule is retired. The 49 slots are reviewed
+  and accepted atomically, with exact or explicitly reconstructed PixelLab
+  prompt provenance and no packaged fallback (ADR-0281, ADR-0282).
 - A card's affected **qualifiers** identify causal rules rather than replacing
   its primary type. Pestiferous changes the card lifecycle and all its units.
   **Tactical** instead authors a positive enhancement of one or more contained

@@ -1,14 +1,21 @@
 import type { ReactElement } from 'react';
-import { runCardName } from '../run/cardNames';
-import { GOLD_SCALE, bundleLabel, type PieceBundle } from '../run/model';
-import { chromeUnitClassNames } from './chromeUnitRegistry';
-import { RunGoldAmount } from './RunResources';
+import { resolvedLiveMediaUrl } from '@chess-tactics/board-render';
+import { runCardArtSlot, runCardFlavor, runCardName } from '../run/cardNames';
+import { bundleLabel, type PieceBundle, type PurchasablePieceType } from '../run/model';
+import { RUN_CARD_FRAME_SLOT, RunCardFace, type RunCardFaceContent } from './RunCardFace';
 
-// One bundle card face shared by the opening draft, the shop, the art-review page, and
-// the Enchiridion. Dealt cards carry no artwork for now — the owner's illustrated card
-// art arrives through the Card Layout redesign (ADR-0275/0276) — so the face is the
-// authored name, the piece contents, and the price. `mode='reference'` mounts the
-// identical face without an action for reference hosts.
+const CARD_PIECE_ORDER: readonly PurchasablePieceType[] = Object.freeze(['pawn', 'knight', 'bishop', 'rook', 'queen']);
+
+function grantsForBundle(bundle: PieceBundle): RunCardFaceContent['grants'] {
+  return CARD_PIECE_ORDER.flatMap((unit) => {
+    const count = bundle.pieces.filter((piece) => piece === unit).length;
+    return count > 0 ? [{ unit, count }] : [];
+  });
+}
+
+// One trading-card face shared by the Studio instrument, opening draft, shop, art
+// review, and Enchiridion. Runtime hosts add interaction around the approved face;
+// they do not substitute a parallel offer-box layout.
 export function RunBundleCard({
   bundle,
   mode,
@@ -24,25 +31,27 @@ export function RunBundleCard({
 }): ReactElement {
   const label = bundleLabel(bundle);
   const name = runCardName(bundle);
+  const artUrl = resolvedLiveMediaUrl(runCardArtSlot(bundle));
+  const frameUrl = resolvedLiveMediaUrl(RUN_CARD_FRAME_SLOT);
+  const card = {
+    name,
+    cost: bundle.value,
+    typeLine: 'Units',
+    grants: grantsForBundle(bundle),
+    flavor: runCardFlavor(bundle),
+  } satisfies RunCardFaceContent;
   const face = (
-    <>
-      <span className="run-bundle-card-plate" aria-hidden={mode !== 'reference'}>
-        <strong className="run-bundle-card-name">{name}</strong>
-        {name === label ? null : <small className="run-bundle-card-contents">{label}</small>}
-      </span>
-      <span className="run-bundle-card-footer" aria-hidden={mode !== 'reference'}>
-        {mode === 'draft'
-          ? <strong>Take</strong>
-          : <RunGoldAmount valueTenths={bundle.value * GOLD_SCALE} />}
-        {bought ? <strong>Purchased</strong> : null}
-      </span>
-    </>
+    <RunCardFace
+      card={card}
+      frameUrl={frameUrl}
+      artUrl={artUrl}
+      ariaHidden={mode !== 'reference'}
+    />
   );
   if (mode === 'reference') {
     return (
       <span
-        data-chrome-unit="inner-box"
-        className={chromeUnitClassNames('inner-box', 'run-bundle-card is-reference')}
+        className="run-bundle-card is-reference"
         aria-label={`${name}. ${label}. Worth ${bundle.value} gold.`}
       >
         {face}
@@ -56,8 +65,7 @@ export function RunBundleCard({
     <button
       type="button"
       data-ui-sfx={mode === 'shop' ? 'card-purchase' : undefined}
-      data-chrome-unit="inner-box"
-      className={chromeUnitClassNames('inner-box', 'run-bundle-card', bought && 'active is-purchased')}
+      className={`run-bundle-card${bought ? ' active is-purchased' : ''}`}
       aria-label={actionLabel}
       disabled={disabled}
       onClick={onSelect}
