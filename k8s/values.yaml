@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:c7890a93f5c038649a0b0ce4d6ada86d48ce1d7a28798ac387486b9b784a24f6"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:ef3e434f9739214d2debe977041cd3c3a7ee693467489f12e4cae8872b66b93d"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Make Continue the default Play resume surface"
-  prNumber: "579"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/579"
-  commit: "bf8862ea"
+  prTitle: "Keep authentication across backend restarts"
+  prNumber: "580"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/580"
+  commit: "8460a548"
 
 name: chess-tactics
 namespace: chess-tactics
