@@ -22,7 +22,7 @@ export const GOLD_SCALE = 10;
 
 export type PurchasablePieceType = 'pawn' | 'knight' | 'bishop' | 'rook' | 'queen';
 export type RunArmyPieceType = PurchasablePieceType | 'king';
-export type RunAbility = 'discipline';
+export type RunAbility = 'discipline' | 'positioned' | 'marshalled';
 
 export const PIECE_VALUE: Readonly<Record<RunArmyPieceType, number>> = Object.freeze({
   pawn: 1,
@@ -87,6 +87,20 @@ export interface DraftOffer extends PieceBundle {
   draftId: 'pawn-rook' | 'knight-bishop' | 'bishop-bishop' | 'knight-knight' | 'three-pawns-minor';
 }
 
+export interface RunRelicAbilityGrant {
+  ability: Extract<RunAbility, 'positioned' | 'marshalled'>;
+  unitType: RunArmyPieceType;
+}
+
+export const RUN_RELIC_ABILITY_GRANTS: Readonly<Partial<Record<RunRelicId, RunRelicAbilityGrant>>> = Object.freeze({
+  'training-linens': { ability: 'positioned', unitType: 'pawn' },
+  'royal-decree': { ability: 'positioned', unitType: 'king' },
+  'crenellated-rampart': { ability: 'positioned', unitType: 'rook' },
+  'popes-staff': { ability: 'positioned', unitType: 'bishop' },
+  'ghibelline-rampart': { ability: 'marshalled', unitType: 'rook' },
+  'popes-robes': { ability: 'marshalled', unitType: 'bishop' },
+  'royal-sceptre': { ability: 'marshalled', unitType: 'king' },
+});
 export interface RunWarBattleSnapshot {
   level: Level;
   loot: boolean;
@@ -555,6 +569,22 @@ export function chooseDraft(run: RunDocument, draftId: DraftOffer['draftId']): R
 
 export function hasRelic(run: RunDocument, relic: RunRelicId): boolean {
   return run.relics.includes(relic);
+}
+
+export function relicGrantingRunAbility(
+  run: RunDocument,
+  unit: RunArmyUnit,
+  ability: RunAbility,
+): RunRelicId | null {
+  for (const relicId of run.relics) {
+    const grant = RUN_RELIC_ABILITY_GRANTS[relicId];
+    if (grant?.ability === ability && grant.unitType === unit.type) return relicId;
+  }
+  return null;
+}
+
+export function hasRunAbility(run: RunDocument, unit: RunArmyUnit, ability: RunAbility): boolean {
+  return unit.abilities.includes(ability) || relicGrantingRunAbility(run, unit, ability) !== null;
 }
 
 function availableRelics(run: RunDocument): RunRelicId[] {

@@ -8,7 +8,6 @@ const runWorkspaceStages = readFileSync(new URL('./RunWorkspaceStages.tsx', impo
 const titleBarPortal = readFileSync(new URL('./shell/TitleBarPortalContext.tsx', import.meta.url), 'utf8');
 const runWorkspace = readFileSync(new URL('./RunWorkspace.tsx', import.meta.url), 'utf8');
 const runUnitInspectionScene = readFileSync(new URL('./RunUnitInspectionScene.tsx', import.meta.url), 'utf8');
-const runCardScene = readFileSync(new URL('./RunCardScene.tsx', import.meta.url), 'utf8');
 const runBundleCard = readFileSync(new URL('./RunBundleCard.tsx', import.meta.url), 'utf8');
 const runRelics = readFileSync(new URL('./RunRelics.tsx', import.meta.url), 'utf8');
 const runSelfInspection = readFileSync(new URL('./RunSelfInspection.tsx', import.meta.url), 'utf8');
@@ -174,21 +173,11 @@ describe('Run chrome hierarchy', () => {
     expect(styleCss).not.toContain('.run-screen.has-relics .run-workspace');
   });
 
-  it('draws every bundle card as a seeded board-scene vignette with an authored name', () => {
-    // The vignette musters every bundle piece with its canonical installed board
-    // sprite through the shared read-only renderer (ADR-0225 continues to hold).
-    expect(runBundleCard).toContain('<RunCardScene');
-    expect(runBundleCard).toContain('bundle={bundle}');
-    expect(runCardScene).toContain('<StudioReadOnlyBoard');
-    // A card is a still painting: one authored frame, no sway clock (owner call,
-    // 2026-07-30) — and the capture pipeline depends on that determinism.
-    expect(runCardScene).toMatch(/<StudioReadOnlyBoard[\s\S]{0,200}?\bstill\b/);
-    expect(runCardScene).toContain("const CARD_FACING = 'south' as const;");
-    // The window renders the card's authored viewing pane (frame) cover-fit; the
-    // default frame reproduces the original shared framing.
-    expect(runCardScene).toContain('cardSceneCameraForView(plan.frame');
-    expect(runCardScene).toContain('export function defaultCardSceneFrame');
-    expect(runCardScene).toContain('boardPan={camera.pan}');
+  it('draws every bundle card as an artless authored-name face until the card redesign lands', () => {
+    // Dealt cards carry no artwork right now (owner call, 2026-07-31): the face is
+    // the authored name, the piece contents, and the price. Illustrated art arrives
+    // through the Card Layout redesign (ADR-0275/0276), not a board-scene vignette.
+    expect(runBundleCard).not.toContain('RunCardScene');
     expect(runBundleCard).toContain('runCardName(bundle)');
     expect(runBundleCard).toContain('className="run-bundle-card-name"');
     expect(runBundleCard).toContain('className="run-bundle-card-contents"');
@@ -197,18 +186,8 @@ describe('Run chrome hierarchy', () => {
     expect(runBundleCard).not.toContain('pieceSpritePath');
     expect(runScreen).toContain("import { RunBundleCard } from './RunBundleCard';");
     expect(styleCss).toMatch(/\.run-bundle-card\s*\{[\s\S]*?aspect-ratio:\s*5 \/ 7;/);
-    expect(styleCss).toMatch(/\.run-card-scene-viewport\s*\{[\s\S]*?overflow:\s*hidden;/);
-
-    // The scene window speaks the painted-surface protocol, so the Run workspace
-    // stages (which wait for `.painted-surface.is-loading` to clear) reveal draft
-    // and shop hands only as complete card faces — and a card appears as one
-    // complete frame, never re-fading over the host's own choreography.
-    expect(runCardScene).toContain('painted-surface run-card-scene-surface');
-    expect(runCardScene).toContain("revealed ? 'is-ready' : 'is-loading'");
-    expect(runCardScene).toContain('className="painted-surface-content"');
-    expect(styleCss).toMatch(/\.run-card-scene-surface\.is-ready \.painted-surface-content > \*\s*\{[\s\S]*?animation:\s*none;/);
-    // Cold route entry holds the veil for the same rule: the shell's painted-surface
-    // boundary waits for nested loading surfaces before reporting painted.
+    // Cold route entry still holds the veil for any nested painted surface: the
+    // shell's painted-surface boundary waits for loading surfaces before painting.
     expect(paintedSurfaceBoundary).toContain(".querySelector('.painted-surface.is-loading')");
     expect(paintedSurfaceBoundary).toContain('.then(nestedSurfacesSettled)');
   });

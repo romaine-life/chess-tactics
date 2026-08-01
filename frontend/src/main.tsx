@@ -14,7 +14,6 @@ import { loadLiveUnitCatalog } from './net/unitAssets';
 import { loadLiveMediaCatalog } from './net/liveMedia';
 import { loadDrawableCatalog } from './net/drawableCatalog';
 import { loadLiveSfxProfile } from './net/sfxProfile';
-import { loadLiveCardScenes } from './net/cardScenes';
 import { initUnitSizeTuning } from './ui/unitSizeTuning';
 import { assertInstalledChromeSlots } from './ui/chromeCandidateSources';
 import { installNineSliceCssVariables, installUiFonts, installUiMediaCssVariables, installedUiMedia } from './ui/installedUiMedia';
@@ -144,9 +143,6 @@ if (root) {
       // Studio/runtime consumers, but keep honest silence when the row is missing
       // or temporarily unavailable. There is no committed profile fallback.
       await loadLiveSfxProfile().catch(() => false);
-      // Card scene overrides are decorative content: a missing or unreachable
-      // document means generated scenes, never a committed fallback.
-      await loadLiveCardScenes().catch(() => false);
       assertInstalledChromeSlots();
       initUnitSizeTuning();
       const { App } = await import('./ui/App');

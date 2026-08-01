@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createBlankLevel } from '../core/level';
 import { gameEnv, legalMoves } from '../core/rules';
 import { createFromLevel } from '../game/setup';
-import { RUN_RELICS } from './model';
+import { RUN_RELICS, RUN_RELIC_ABILITY_GRANTS } from './model';
 
 describe('Run relic chess invariant', () => {
   it('keeps every piece legal-move set identical when Run adjudication metadata is present', () => {
@@ -32,7 +32,39 @@ describe('Run relic chess invariant', () => {
   it('keeps the approved relic registry outside piece movement definitions', () => {
     expect(RUN_RELICS).toHaveLength(20);
     for (const relic of RUN_RELICS) {
-      expect(Object.keys(relic).every((key) => ['id', 'name', 'description', 'requires', 'immediate'].includes(key))).toBe(true);
+      expect(Object.keys(relic).every((key) => [
+        'id',
+        'name',
+        'description',
+        'flavorText',
+        'replacementArtworkPending',
+        'requires',
+        'immediate',
+      ].includes(key))).toBe(true);
+      expect(relic.flavorText.length).toBeGreaterThan(0);
     }
+  });
+
+  it('expresses placement relics only as shared unit-ability grants', () => {
+    expect(RUN_RELIC_ABILITY_GRANTS).toEqual({
+      'training-linens': { ability: 'positioned', unitType: 'pawn' },
+      'royal-decree': { ability: 'positioned', unitType: 'king' },
+      'crenellated-rampart': { ability: 'positioned', unitType: 'rook' },
+      'popes-staff': { ability: 'positioned', unitType: 'bishop' },
+      'ghibelline-rampart': { ability: 'marshalled', unitType: 'rook' },
+      'popes-robes': { ability: 'marshalled', unitType: 'bishop' },
+      'royal-sceptre': { ability: 'marshalled', unitType: 'king' },
+    });
+    expect(Object.fromEntries(
+      Object.keys(RUN_RELIC_ABILITY_GRANTS).map((id) => [id, RUN_RELICS.find((relic) => relic.id === id)?.description]),
+    )).toEqual({
+      'training-linens': 'Your Pawns gain Positioned.',
+      'royal-decree': 'Your King gains Positioned.',
+      'crenellated-rampart': 'Your Rooks gain Positioned.',
+      'popes-staff': 'Your Bishops gain Positioned.',
+      'ghibelline-rampart': 'Your Rooks gain Marshalled.',
+      'popes-robes': 'Your Bishops gain Marshalled.',
+      'royal-sceptre': 'Your King gains Marshalled.',
+    });
   });
 });

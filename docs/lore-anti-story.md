@@ -144,6 +144,44 @@ larger universe is being implied, but that promise is never fulfilled into plot,
 geography, or biography. The images may suggest that some story is happening
 somewhere, while the game refuses to deliver that story.
 
+## Relics And Written Fragments
+
+Run relics belong to the same anti-story world
+([ADR-0264](adr/0264-run-relic-identities-carry-anti-story-residue.md)). Their
+names identify physical or administrative residue: an architectural form, a
+sealed record, liturgical matter, field equipment, a measure, a route, or
+something carried away. A historically specific word may imply an institution
+or an old dispute, but the relic never explains that history into plot.
+
+Each relic pairs its name with one original flavor fragment drawn from the same
+historical pressure source. This is not a fabricated historical quotation. It
+is a small observation that widens the absence around the object. The complete
+mechanical effect remains separate, literal, and immediately readable.
+
+Modern bureaucratic labels, generic game-system nouns, and explicit
+supernatural claims break this family. When a relic's accepted identity changes,
+art made for the old identity is no longer valid: the game says **Art not
+generated** until new pixels pass the normal review and installation path.
+
+## Ataraxia And Public History
+
+Ataraxia conditions may name a real historical event, give its date, and later
+offer an opt-in factual explanation ([ADR-0266](adr/0266-ataraxia-names-optional-run-difficulty-after-real-history.md)).
+This is an intentional peek behind the historical pressure sources, not a
+solution to the anti-story. The game does not claim that its board literally
+occupies that event, explain why a chess Run is presenting it, or tell the
+player what conclusion to draw.
+
+The primary surface keeps mechanics literal and history fragmentary. A curious
+player may follow the name into a sourced account and learn more about human
+suffering and persistence; the resulting unexplained connection should deepen
+rather than close the mystery. Historical names, dates, and optional summaries
+must be factual. They are not fabricated lore made to resemble a real archive.
+
+The first such condition is **Ataraxia I — The Great Mortality**, which permits
+the Pestiferous card type. Its player-facing effect remains separate from any
+optional historical reading.
+
 ## Exclusions
 
 The following break the dream:

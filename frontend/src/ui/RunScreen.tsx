@@ -727,7 +727,7 @@ function BattlePanel({
       : undefined,
   }), [battleLevel, battleSeed, canCashOutPawn, relicIds, replace, requestAbandon, runId]);
 
-  // Subscribe to the current document so a Mercenary Boat cash-out or Reservist event
+  // Subscribe to the current document so a Paid Crossing cash-out or Reservist event
   // refreshes the hook inputs without restarting the already-live matching board.
   void currentRun;
   return (

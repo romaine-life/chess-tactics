@@ -513,82 +513,10 @@ export function CardCodex({
           ))}
         </div>
         <div className="enchiridion-card-detail">
-          <CardDetailStage bundle={selected} />
+          <RunBundleCard bundle={selected} mode="reference" />
         </div>
       </div>
     </ReferenceSectionFrame>
-  );
-}
-
-// The selected record swaps only as a complete face: the incoming card mounts hidden
-// beside the current one until both of its scene canvas layers have painted, then takes
-// the slot in a single frame — this pane's small echo of the Run stages' complete-frame
-// discipline. A still card must never assemble in front of the reader.
-function CardDetailStage({ bundle }: { bundle: PieceBundle }): ReactElement {
-  const [faces, setFaces] = useState<{ shown: PieceBundle; incoming: PieceBundle | null }>({
-    shown: bundle,
-    incoming: null,
-  });
-  const targetId = canonicalCardId(bundle);
-  useEffect(() => {
-    setFaces((current) => {
-      if (canonicalCardId(current.shown) === targetId) {
-        return current.incoming ? { shown: current.shown, incoming: null } : current;
-      }
-      if (current.incoming && canonicalCardId(current.incoming) === targetId) return current;
-      return { shown: current.shown, incoming: bundle };
-    });
-  }, [bundle, targetId]);
-  const promote = useCallback(() => {
-    setFaces((current) => (current.incoming ? { shown: current.incoming, incoming: null } : current));
-  }, []);
-  const entries = [
-    { bundle: faces.shown, id: canonicalCardId(faces.shown), preparing: false },
-    ...(faces.incoming
-      ? [{ bundle: faces.incoming, id: canonicalCardId(faces.incoming), preparing: true }]
-      : []),
-  ];
-  return (
-    <div className="enchiridion-card-stage">
-      {entries.map((entry) => (
-        <div
-          className={`enchiridion-card-stage-slot${entry.preparing ? ' is-preparing' : ''}`}
-          aria-hidden={entry.preparing ? true : undefined}
-          key={entry.id}
-        >
-          <StagedCardFace bundle={entry.bundle} onComplete={promote} />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function StagedCardFace({ bundle, onComplete }: {
-  bundle: PieceBundle;
-  onComplete: () => void;
-}): ReactElement {
-  const painted = useRef({ terrain: false, scene: false, done: false });
-  const onCompleteRef = useRef(onComplete);
-  useEffect(() => { onCompleteRef.current = onComplete; }, [onComplete]);
-  // Stable identities: a changing scene callback would restart the canvas paint effect.
-  const finish = useCallback(() => {
-    if (painted.current.done) return;
-    painted.current.done = true;
-    onCompleteRef.current();
-  }, []);
-  const handleLayer = useCallback((layer: 'terrain' | 'scene') => {
-    painted.current[layer] = true;
-    if (painted.current.terrain && painted.current.scene) finish();
-  }, [finish]);
-  // A failed frame still promotes, showing the renderer's own failure state rather
-  // than trapping the codex on the previous record.
-  return (
-    <RunBundleCard
-      bundle={bundle}
-      mode="reference"
-      onSceneLayerFirstFrame={handleLayer}
-      onSceneFrameError={finish}
-    />
   );
 }
 
@@ -612,7 +540,14 @@ function AbilitiesSection({ framed }: { framed: boolean }): ReactElement {
           <span className="skirmish-icon skirmish-icon-move" aria-hidden="true" />
           <span>
             <h3>Positioned</h3>
-            <p>The unit’s automatic deployment favors its specified legal region—such as a front row, back row, edge, or corner—before using the ordinary fallback layout.</p>
+            <p>The unit’s automatic deployment favors its piece-specific region: Pawns prefer the front row, the King and Bishops prefer the back row, and Rooks prefer outer back-row squares.</p>
+          </span>
+        </InnerChromeBox>
+        <InnerChromeBox className="enchiridion-ability-card">
+          <span className="skirmish-icon skirmish-icon-flag" aria-hidden="true" />
+          <span>
+            <h3>Marshalled</h3>
+            <p>The unit seeks its piece-specific station: the King prefers a board edge, Rooks favor their King-flank and corner formation, and Bishops prefer the opposite square color from another Bishop.</p>
           </span>
         </InnerChromeBox>
       </div>

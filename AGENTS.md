@@ -5,6 +5,14 @@ the authoritative sources below rather than copying their domain details here.
 
 ## Start from current repository truth
 
+- A checkout whose `.codex-session/environment.json` exists and names that
+  checkout in `repo_dir` is already the thread's dedicated harness worktree.
+  Continue the same thread's work there across context compaction even when the
+  worktree is dirty. Never create, switch to, or use another worktree merely to
+  isolate those changes. An additional worktree requires an explicitly separate
+  user-requested task or explicit owner direction. Read the named development
+  URL from that same environment record and do not replace it with a duplicate
+  manually started server.
 - Read [`CLAUDE.md`](CLAUDE.md) before working. Despite its name, it contains
   repository-wide operational rules for agents, including backend startup,
   worktrees, screenshots, direct URLs, and board handoffs.
@@ -102,9 +110,11 @@ contracts whenever the task vocabulary suggests one.
 - When a defect originates in a shared primitive or repeated rule, fix that
   shared source and add a regression guard when practical; do not patch only one
   screen or fixture where the symptom appeared.
-- Keep side tasks in separate worktrees when the active worktree is dirty. Stage
-  only task files, and do not rewrite shared history or force-push without
-  explicit permission.
+- Outside a harness-provided dedicated worktree, keep genuinely separate side
+  tasks in separate worktrees when the active checkout contains unrelated
+  edits. Dirty state created by the current thread is not a side task and must
+  stay in its harness worktree. Stage only task files, and do not rewrite shared
+  history or force-push without explicit permission.
 - A request to open a pull request alone does not authorize merging it. Merge
   only after required checks are green and the user has explicitly requested or
   approved that PR for merge.

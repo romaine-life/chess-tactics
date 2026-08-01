@@ -17,6 +17,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     const abilities = enchiridion.slice(start, end);
     expect(abilities).toContain('<h3>Discipline</h3>');
     expect(abilities).toContain('<h3>Positioned</h3>');
+    expect(abilities).toContain('<h3>Marshalled</h3>');
     expect(abilities).not.toMatch(/\b(?:gain|obtain|acquir|relic|upgrade)/i);
   });
 
@@ -117,13 +118,10 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     // The browser lists every deck card grouped by value; the detail is the exact
     // card face the Run deals (one selection, one description — ADR-0253's shape).
     expect(cardCodex).toContain('PIECE_BUNDLE_DECK');
-    expect(cardCodex).toContain('<CardDetailStage bundle={selected} />');
-    // Record swaps present only complete faces: the incoming card paints hidden and
-    // takes the slot once both scene layers report their first frame.
-    expect(cardCodex).toContain('function CardDetailStage');
-    expect(cardCodex).toContain('onSceneLayerFirstFrame={handleLayer}');
-    expect(cardCodex).toContain('mode="reference"');
-    expect(style).toMatch(/\.enchiridion-card-stage-slot\.is-preparing\s*\{[\s\S]*?visibility:\s*hidden/);
+    // The detail is the same synchronous artless face the Run deals — dealt cards
+    // carry no artwork until the Card Layout redesign lands its illustrated art.
+    expect(cardCodex).toContain('<RunBundleCard bundle={selected} mode="reference" />');
+    expect(cardCodex).not.toContain('CardDetailStage');
     expect(cardCodex).toContain('runCardName(bundle)');
     expect(cardCodex).toContain('bundleLabel(bundle)');
     expect(cardCodex).toMatch(/to=\{cardHref\?\.\(bundle\.id\)\}/);

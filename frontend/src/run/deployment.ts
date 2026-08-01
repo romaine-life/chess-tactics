@@ -6,6 +6,7 @@ import { propCells, propDef } from '../core/props';
 import { defaultFacingForSide } from '../core/pieces';
 import {
   hasRelic,
+  hasRunAbility,
   mixSeed,
   PIECE_VALUE,
   shuffled,
@@ -96,33 +97,34 @@ function cellScore(
   unit: RunArmyUnit,
   cell: Vec,
   placed: Record<string, Vec>,
-  bishopIndex: number,
-  rookIndex: number,
+  marshalledRookIndex: number,
   rngNoise: number,
 ): number {
   const cells = playerDeploymentCells(level);
   const minY = Math.min(...cells.map((candidate) => candidate.y));
   const maxY = Math.max(...cells.map((candidate) => candidate.y));
   let score = rngNoise;
-  if (unit.type === 'pawn' && hasRelic(run, 'training-linens')) score += cell.y === minY ? 1000 : -Math.abs(cell.y - minY) * 50;
+  if (unit.type === 'pawn' && hasRunAbility(run, unit, 'positioned')) {
+    score += cell.y === minY ? 1000 : -Math.abs(cell.y - minY) * 50;
+  }
   if (unit.type === 'king') {
-    if (hasRelic(run, 'royal-sceptre')) score += edgeDistance(cell, level) === 0 ? 5000 : -5000;
-    if (hasRelic(run, 'royal-decree')) score += cell.y === maxY ? 900 : -Math.abs(cell.y - maxY) * 40;
+    if (hasRunAbility(run, unit, 'marshalled')) score += edgeDistance(cell, level) === 0 ? 5000 : -5000;
+    if (hasRunAbility(run, unit, 'positioned')) score += cell.y === maxY ? 900 : -Math.abs(cell.y - maxY) * 40;
   }
   if (unit.type === 'rook') {
-    if (hasRelic(run, 'crenellated-rampart')) {
+    if (hasRunAbility(run, unit, 'positioned')) {
       score += cell.y === maxY ? 800 : -Math.abs(cell.y - maxY) * 30;
       score += Math.max(cell.x, level.board.cols - 1 - cell.x) * 10;
     }
-    if (hasRelic(run, 'ghibelline-rampart')) {
+    if (hasRunAbility(run, unit, 'marshalled')) {
       const king = run.army.find((candidate) => candidate.type === 'king');
       const kingCell = king ? placed[king.id] : undefined;
       const backRow = cells.filter((candidate) => candidate.y === maxY);
       const minBackX = Math.min(...backRow.map((candidate) => candidate.x));
       const maxBackX = Math.max(...backRow.map((candidate) => candidate.x));
       const corners = backRow.filter((candidate) => candidate.x === minBackX || candidate.x === maxBackX);
-      if (kingCell) {
-        if (hasRelic(run, 'royal-sceptre') && rookIndex === 0) {
+      if (king && kingCell) {
+        if (hasRunAbility(run, king, 'marshalled') && marshalledRookIndex === 0) {
           const adjacent = Math.abs(cell.x - kingCell.x) + Math.abs(cell.y - kingCell.y) === 1;
           score += adjacent ? 4000 : -Math.abs(cell.x - kingCell.x) * 80;
         } else {
@@ -133,17 +135,24 @@ function cellScore(
     }
   }
   if (unit.type === 'bishop') {
-    if (hasRelic(run, 'popes-staff')) score += cell.y === maxY ? 800 : -Math.abs(cell.y - maxY) * 30;
-    if (hasRelic(run, 'popes-robes')) {
+    if (hasRunAbility(run, unit, 'positioned')) score += cell.y === maxY ? 800 : -Math.abs(cell.y - maxY) * 30;
+    if (hasRunAbility(run, unit, 'marshalled')) {
       const extraParity = createRng(mixSeed(run.deployment?.seed ?? run.seed, 'bishop-color')).int(2);
-      const desiredParity = bishopIndex % 2 === 0 ? extraParity : 1 - extraParity;
+      const placedBishopParities = Object.entries(placed).flatMap(([unitId, placedCell]) => (
+        run.army.find((candidate) => candidate.id === unitId)?.type === 'bishop'
+          ? [(placedCell.x + placedCell.y) % 2]
+          : []
+      ));
+      const lightCount = placedBishopParities.filter((parity) => parity === 0).length;
+      const darkCount = placedBishopParities.length - lightCount;
+      const desiredParity = lightCount === darkCount ? extraParity : (lightCount < darkCount ? 0 : 1);
       score += (cell.x + cell.y) % 2 === desiredParity ? 1200 : -1200;
     }
   }
   return score;
 }
 
-function unitPlacementOrder(units: RunArmyUnit[]): RunArmyUnit[] {
+function unitPlacementOrder(run: RunDocument, units: RunArmyUnit[]): RunArmyUnit[] {
   const order: Record<RunArmyUnit['type'], number> = {
     king: 0,
     rook: 1,
@@ -152,7 +161,15 @@ function unitPlacementOrder(units: RunArmyUnit[]): RunArmyUnit[] {
     knight: 4,
     queen: 5,
   };
-  return [...units].sort((a, b) => order[a.type] - order[b.type] || a.id.localeCompare(b.id));
+  return [...units].sort((a, b) => {
+    const pieceOrder = order[a.type] - order[b.type];
+    if (pieceOrder) return pieceOrder;
+    if (a.type === 'bishop' && b.type === 'bishop') {
+      const abilityOrder = Number(hasRunAbility(run, a, 'marshalled')) - Number(hasRunAbility(run, b, 'marshalled'));
+      if (abilityOrder) return abilityOrder;
+    }
+    return a.id.localeCompare(b.id);
+  });
 }
 
 function buildLayout(run: RunDocument, level: Level, index: 0 | 1, blockedUnitIds: string[]): RunDeploymentLayout {
@@ -172,16 +189,15 @@ function buildLayout(run: RunDocument, level: Level, index: 0 | 1, blockedUnitId
     available.delete(key(manual));
   }
 
-  let bishopIndex = 0;
-  let rookIndex = 0;
-  for (const unit of unitPlacementOrder(deployed)) {
+  let marshalledRookIndex = 0;
+  for (const unit of unitPlacementOrder(run, deployed)) {
     if (placements[unit.id] || disciplined.has(unit.id)) continue;
     const candidates = [...available.values()];
     if (!candidates.length) break;
     let best = candidates[0];
     let bestScore = Number.NEGATIVE_INFINITY;
     for (const cell of candidates) {
-      const score = cellScore(run, level, unit, cell, placements, bishopIndex, rookIndex, rng.next());
+      const score = cellScore(run, level, unit, cell, placements, marshalledRookIndex, rng.next());
       if (score > bestScore) {
         best = cell;
         bestScore = score;
@@ -189,8 +205,7 @@ function buildLayout(run: RunDocument, level: Level, index: 0 | 1, blockedUnitId
     }
     placements[unit.id] = best;
     available.delete(key(best));
-    if (unit.type === 'bishop') bishopIndex += 1;
-    if (unit.type === 'rook') rookIndex += 1;
+    if (unit.type === 'rook' && hasRunAbility(run, unit, 'marshalled')) marshalledRookIndex += 1;
   }
 
   const temporaryRocks: Vec[] = [];

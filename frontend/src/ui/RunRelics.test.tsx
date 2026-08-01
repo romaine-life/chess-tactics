@@ -16,16 +16,22 @@ describe('Run relic artwork', () => {
     expect(artwork?.src).not.toContain('/assets/');
   });
 
-  it('has one installed native icon for every canonical Run relic', () => {
-    expect(RUN_RELICS.map(({ id }) => installedRunRelicArtwork(id))).toHaveLength(20);
-    expect(RUN_RELICS.every(({ id }) => installedRunRelicArtwork(id) !== null)).toBe(true);
+  it('withholds superseded pixels while renamed relic artwork is pending', () => {
+    const pending = RUN_RELICS.filter((relic) => relic.replacementArtworkPending);
+    const unchanged = RUN_RELICS.filter((relic) => !relic.replacementArtworkPending);
+    expect(pending).toHaveLength(8);
+    expect(pending.every(({ id }) => installedRunRelicArtwork(id) === null)).toBe(true);
+    expect(unchanged.every(({ id }) => installedRunRelicArtwork(id) !== null)).toBe(true);
   });
 
-  it('renders a newly approved offer icon and an honest unavailable state for an unknown legacy relic', () => {
+  it('distinguishes not-yet-generated replacement art from an unknown legacy relic', () => {
     const approved = renderToStaticMarkup(<RunRelicIcon relicId="fair-scales" />);
+    const pending = renderToStaticMarkup(<RunRelicIcon relicId="congressional-approval" />);
     const unavailable = renderToStaticMarkup(<RunRelicIcon relicId={'private-quarters' as never} />);
     expect(approved).toContain('<img');
     expect(approved).toContain('data-relic-id="fair-scales"');
+    expect(pending).toContain('Art not generated');
+    expect(pending).not.toContain('<img');
     expect(unavailable).toContain('Art unavailable');
     expect(unavailable).not.toContain('<img');
   });
@@ -41,10 +47,11 @@ describe('Run relic artwork', () => {
     expect(markup).toContain('class="run-relic-strip"');
     expect(markup).not.toContain('data-chrome-unit');
     expect(markup).toContain('Conscription Notice.');
-    expect(markup).toContain('Mercenary Boat.');
+    expect(markup).toContain('The Paid Crossing.');
+    expect(markup).toContain('Art not generated');
     expect(markup).toContain('run-relic-inventory-trigger');
     expect(markup).not.toContain('title=');
-    expect(markup.match(/<img/g)).toHaveLength(2);
+    expect(markup.match(/<img/g)).toHaveLength(1);
   });
 
   it('ignores a retired relic id in a legacy Run instead of crashing the screen', () => {
@@ -65,7 +72,8 @@ describe('Run relic artwork', () => {
     expect(markup).toContain('class="run-workspace run-self-inspection-workspace run-relics-workspace"');
     expect(markup).toContain('class="shell-workspace run-shell-workspace"');
     expect(markup).toContain('Conscription Notice');
-    expect(markup).toContain('Mercenary Boat');
+    expect(markup).toContain('The Paid Crossing');
+    expect(markup).toContain('Art not generated');
     expect(markup).not.toContain('data-chrome-consumer');
   });
 
