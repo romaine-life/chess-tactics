@@ -16,7 +16,7 @@ describe('Campaign and War Editor libraries', () => {
     expect(campaign).toContain('active={isWarsSelected}');
     expect(campaign).toContain('onSelect={selectWarsCollection}');
     expect(campaign).toContain('{isWarsSelected ? <WarEditor embedded /> : <>');
-    expect(campaign).toContain("sceneTransitionTargetAttributes('editor-shell', 'contents')");
+    expect(campaign).toContain('<EditorContentSceneSlot');
     expect(campaign).toContain("navigateApp(editorCampaignHref('/editor', campaignId))");
     expect(campaign).not.toContain('setSelectedCollection');
     expect(campaign.indexOf('<p className="campaign-rail-group">Workspace</p>')).toBeLessThan(campaign.indexOf('title="Wars"'));

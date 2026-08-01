@@ -81,7 +81,7 @@ these.
   canonical player-side sprite used on the board. Card Layout, draft, shop,
   review, and Enchiridion use the same face rather than parallel card shells
   (ADR-0219, ADR-0225, ADR-0270, ADR-0275, ADR-0276, ADR-0283, ADR-0285,
-  ADR-0305, ADR-0307).
+  ADR-0305, ADR-0309).
 - The bundle deck's 49 unique one-through-nine-point compositions are the
   authored **core cards**. Each keeps one title and flavor text while its
   drawn offer may give particular units more than one modifier. The 49 cores do
@@ -93,7 +93,7 @@ these.
   still costs 1. Exact public contents and modifier markers belong in the Contents Box
   unit ledger, not generated card-name permutations; an explicitly concealed
   Concinnous target appears there as hidden until purchase (ADR-0265, ADR-0271,
-  ADR-0272, ADR-0305, ADR-0307).
+  ADR-0272, ADR-0305, ADR-0309).
 - Each of those 49 Units cards owns one native 400×280 PixelLab illustration
   keyed by its canonical composition id. Human unit roles and readable
   equipment control the composition; historical pressure supplies secondary
@@ -115,7 +115,7 @@ these.
   anatomy. Each otherwise ordinary eligible shop offer has a seeded one-in-eight
   chance to become Concinnous; it costs two additional gold, stays within the
   nine-gold ceiling, and cannot also be Pestiferous (ADR-0272, ADR-0276,
-  ADR-0305, ADR-0307, ADR-0308).
+  ADR-0305, ADR-0309, ADR-0310).
 - Run difficulty is **Ataraxia**. The first Run uses **Ataraxia 0 — The
   Untroubled Mind**, whose literal impact is standard Run rules and no
   Pestiferous shop cards; later Runs may opt into historically named

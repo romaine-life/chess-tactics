@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
+import { navigateApp } from './navigation';
 import {
   fetchAdminLiveMediaCatalog,
   type AdminLiveMediaCatalog,
@@ -415,10 +416,9 @@ export function RunCardPrototypeViewer({
     else params.delete('cardVariant');
     params.delete('frameCandidate');
     const search = params.toString();
-    window.history.replaceState(
-      window.history.state,
-      '',
+    navigateApp(
       `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash}`,
+      { replace: true, scroll: false },
     );
     setCardVariant(next);
   };
@@ -439,10 +439,9 @@ export function RunCardPrototypeViewer({
     if (next) params.set('contentsStudy', '1');
     else params.delete('contentsStudy');
     const search = params.toString();
-    window.history.replaceState(
-      window.history.state,
-      '',
+    navigateApp(
       `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash}`,
+      { replace: true, scroll: false },
     );
     setContentsStudy(next);
   };

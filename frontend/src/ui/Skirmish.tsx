@@ -9,11 +9,14 @@ import {
 import { isPredrawnBackgroundActive } from '@chess-tactics/board-render';
 import { SkirmishBoard } from '../render/SkirmishBoard';
 import { SkirmishHud, type SkirmishHudProps } from './SkirmishHud';
-import { PaintedSurfaceBoundary } from './shell/PaintedSurfaceBoundary';
+import { SceneSurfaceReadiness } from './shell/PaintedSurfaceBoundary';
+import { useSceneActivation, useSceneReveal } from './shell/SceneBoundary';
+import { NavButton } from './shared/NavButton';
 import { RestartGlyph } from './shared/actionGlyphs';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleBarControlContribution, TitleBarStatus } from './shell/TitleBarControls';
-import { useSkirmish, shouldStartFreshSkirmish, setNetMoveSink, setNetResignSink } from '../game/store';
+import { shouldStartFreshSkirmish, type RunBattleTransformSink } from '../game/store';
+import { SkirmishStoreProvider, useSkirmish, useSkirmishStoreApi } from '../game/SkirmishStoreContext';
 import { loadMatch, persistedMatchMatchesActivity, setMatchPersistenceEnabled } from '../game/matchPersistence';
 import {
   fetchLobby,
@@ -75,7 +78,7 @@ import type { RunRelicId } from '../run/model';
 import { useActiveRun } from '../run/store';
 import { RunRelicStrip } from './RunRelics';
 import { Strategikon } from './Strategikon';
-import { sceneTransitionTargetAttributes } from './shell/sceneTransitionTarget';
+import { GameplayWorkspaceSceneSlot } from './shell/AuthoredSceneSlot';
 import type { RunSelfInspectionView } from './RunSelfInspection';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 
@@ -88,6 +91,16 @@ export interface RunBattlePresentation {
   onRestart: () => void;
   onPawnCashOut?: (unitId: string) => void;
   onAbandonRun?: () => void;
+  transformCommittedBoard?: RunBattleTransformSink;
+}
+
+export interface SkirmishProps {
+  runBattle?: RunBattlePresentation | null;
+  runWorkspace?: ReactNode;
+  routePath?: string;
+  runSelfInspectionView?: RunSelfInspectionView | null;
+  onNavigateRunView?: ((view: 'primary' | RunSelfInspectionView) => void) | null;
+  routeSearch?: string;
 }
 
 export function shouldLoadSkirmishWorldBackground(
@@ -155,7 +168,7 @@ export function SkirmishShell({
       {installedChromeCss ? <style data-skirmish-chrome-family dangerouslySetInnerHTML={{ __html: installedChromeCss }} /> : null}
       <TitleBarSlot region="center">{titleBarContent}</TitleBarSlot>
       {registerSceneSurface ? (
-        <PaintedSurfaceBoundary
+        <SceneSurfaceReadiness
           surface="gameplay-hud"
           signature={`${testId}:${paintAttempt}`}
           readyToCompose={readyToCompose}
@@ -164,27 +177,27 @@ export function SkirmishShell({
           showStatus={false}
         >
           {surface}
-        </PaintedSurfaceBoundary>
+        </SceneSurfaceReadiness>
       ) : surface}
     </div>
   );
 }
 
-export function Skirmish({
+function SkirmishSession({
   runBattle = null,
   runWorkspace = null,
   routePath = window.location.pathname,
   runSelfInspectionView = null,
   onNavigateRunView = null,
   routeSearch = window.location.search,
-}: {
-  runBattle?: RunBattlePresentation | null;
-  runWorkspace?: ReactNode;
-  routePath?: string;
-  runSelfInspectionView?: RunSelfInspectionView | null;
-  onNavigateRunView?: ((view: 'primary' | RunSelfInspectionView) => void) | null;
-  routeSearch?: string;
-} = {}) {
+}: SkirmishProps = {}) {
+  const sceneActivated = useSceneActivation();
+  const sceneRevealed = useSceneReveal();
+  const skirmishStore = useSkirmishStoreApi();
+  useEffect(() => {
+    skirmishStore.getState().setRunBattleTransformSink(runBattle?.transformCommittedBoard ?? null);
+    return () => skirmishStore.getState().setRunBattleTransformSink(null);
+  }, [runBattle?.transformCommittedBoard, skirmishStore]);
   const routeParams = useMemo(() => new URLSearchParams(routeSearch), [routeSearch]);
   const strategikonOpen = routePath.startsWith('/play/strategikon/') || routePath.startsWith('/run/strategikon/');
   const strategikonBase = runBattle ? '/run' : '/play';
@@ -386,7 +399,7 @@ export function Skirmish({
         // no tombstone to retry. Absence is authoritative completion for this exit.
         if (error instanceof HttpError && error.status === 404) {
           clearPersistedNetIntent(net.lobbyId);
-          useSkirmish.getState().leaveNetSession(net.lobbyId);
+          skirmishStore.getState().leaveNetSession(net.lobbyId);
           navigateApp('/lobbies', { replace: true });
           return;
         }
@@ -395,7 +408,7 @@ export function Skirmish({
         return;
       }
       clearPersistedNetIntent(net.lobbyId);
-      useSkirmish.getState().leaveNetSession(net.lobbyId);
+      skirmishStore.getState().leaveNetSession(net.lobbyId);
     }
     navigateApp('/lobbies', { replace: true });
   };
@@ -421,7 +434,7 @@ export function Skirmish({
       reason: result.reason,
     }).catch((error) => {
       console.warn('[netplay] deterministic result report failed', error);
-      if (active && useSkirmish.getState().net?.lobbyId === lobbyId) {
+      if (active && skirmishStore.getState().net?.lobbyId === lobbyId) {
         setNetError('Match ended, but its lobby result is waiting to reconnect…');
       }
     });
@@ -464,7 +477,7 @@ export function Skirmish({
     // the point of event-driven deployment and reads better as a fresh deploy.
     const seed = runBattle
       ? runBattle.seed
-      : spawnEventsForLevel(level).length ? Math.floor(Math.random() * 999999) + 1 : useSkirmish.getState().seed;
+      : spawnEventsForLevel(level).length ? Math.floor(Math.random() * 999999) + 1 : skirmishStore.getState().seed;
     if (runBattle) runBattle.onRestart();
     // ADR-0235: restarting healthy gameplay replaces match state in place. The
     // already-painted board and HUD remain ready, so the new clock may start
@@ -552,14 +565,14 @@ export function Skirmish({
     setMatchPersistenceEnabled(!isTestPlay && !routeBoard && !routeMap);
     // Test-board controls (the CPU-delay floor) are live only for ?mode=test; leaving test mode
     // resets the floor so real/campaign play is never slowed.
-    useSkirmish.getState().setTestMode(isTestPlay);
+    skirmishStore.getState().setTestMode(isTestPlay);
 
-    // Returning here from the menu (or any other screen) should resume, not
-    // restart: the store is a singleton that already holds the live board. Only
-    // build a fresh game when there isn't a matching in-progress one — i.e. the
+    // Re-running this setup inside the same mounted battle scene should resume, not
+    // restart: its instance-owned store already holds the live board. Only build a
+    // fresh game when there isn't a matching in-progress one — i.e. the
     // first launch, after a finished game, or when a different level is opened.
     const shouldStartFresh = (levelId: string | null, activityId: string | null = null): boolean =>
-      shouldStartFreshSkirmish(useSkirmish.getState(), levelId, activityId);
+      shouldStartFreshSkirmish(skirmishStore.getState(), levelId, activityId);
     const freshSeed = () => runBattle?.seed ?? Math.floor(Math.random() * 999999) + 1;
     // Dev A/B lever: `?ai=greedy` pits you against the legacy random-capture
     // enemy; anything else gets the objective-aware search AI.
@@ -571,7 +584,7 @@ export function Skirmish({
     // self-contained (full position), so resume needs no level document. It must match
     // both the Level and its owning activity: multiple Runs may reuse that Level.
     const startOrResume = (levelId: string, levelDoc: Level, activityId: string | null = null): void => {
-      if (!shouldStartFresh(levelId, activityId)) return; // singleton already holds this battle
+      if (!shouldStartFresh(levelId, activityId)) return; // this scene store already holds this battle
       if (!isTestPlay) {
         const saved = loadMatch();
         if (saved && persistedMatchMatchesActivity(saved, levelId, activityId)) {
@@ -672,8 +685,8 @@ export function Skirmish({
   }, [newSkirmish, resumeMatch, isTestPlay, routeBoard, routeBoardLevel, routeMap, routeCampaignId, routeLevel, routeLevelId, routeLobby, runBattle]);
 
   useEffect(() => {
-    if (playableSurfaceReady) activateClock();
-  }, [activateClock, playableSurfaceReady]);
+    if (playableSurfaceReady && sceneActivated) activateClock();
+  }, [activateClock, playableSurfaceReady, sceneActivated]);
 
   // Multiplayer entry: `/play?lobby=<id>` enters a lobby's shared board. Both clients
   // build the SAME (level, seed) game; each side's moves relay through the lobby channel
@@ -698,8 +711,8 @@ export function Skirmish({
     const freezeRelayInput = (): void => {
       relayAuthorityFrozen = true;
       setNetRelayFrozen(true);
-      setNetMoveSink(null);
-      useSkirmish.getState().freezeNetInput();
+      skirmishStore.getState().setNetMoveSink(null);
+      skirmishStore.getState().freezeNetInput();
       for (const timer of uncertainRecoveryTimers) window.clearTimeout(timer);
       uncertainRecoveryTimers.clear();
       uncertainRecoveryIntents.clear();
@@ -713,7 +726,7 @@ export function Skirmish({
     setMatchPersistenceEnabled(false);
 
     const belongsToThisMatch = (): boolean => {
-      const state = useSkirmish.getState();
+      const state = skirmishStore.getState();
       return active
         && sessionEpoch !== null
         && state.sessionEpoch === sessionEpoch
@@ -726,10 +739,10 @@ export function Skirmish({
     // idempotent, so streamed frames and backfill can race safely.
     const applyRelayMove = (m: MoveEvent): void => {
       if (!belongsToThisMatch() || relaySyncHalted) return;
-      const before = useSkirmish.getState().net?.moveCount ?? 0;
+      const before = skirmishStore.getState().net?.moveCount ?? 0;
       if (m.i === before) {
-        useSkirmish.getState().applyRemoteMove(m.pieceId, m.move, m.intentId);
-        const after = useSkirmish.getState().net?.moveCount ?? 0;
+        skirmishStore.getState().applyRemoteMove(m.pieceId, m.move, m.intentId);
+        const after = skirmishStore.getState().net?.moveCount ?? 0;
         if (after === before) {
           // The expected next move could NOT be applied (a genuine desync / version skew).
           // Do not loop re-fetching the same doomed move — halt sync and surface it, so we
@@ -766,7 +779,7 @@ export function Skirmish({
           uncertainRecoveryIntents.delete(recoveryKey);
           return;
         }
-        const pending = useSkirmish.getState().net?.pendingMove;
+        const pending = skirmishStore.getState().net?.pendingMove;
         if (
           !pending
           || pending.intentId !== intentId
@@ -800,7 +813,7 @@ export function Skirmish({
             setNetError('The relay is frozen while the match result is confirmed.');
           }
         }
-        const currentPending = useSkirmish.getState().net?.pendingMove;
+        const currentPending = skirmishStore.getState().net?.pendingMove;
         const shouldRearm = Boolean(
           belongsToThisMatch()
           && !resultAuthorityBlocked
@@ -866,14 +879,14 @@ export function Skirmish({
         }
         setNetSeatInteractive(seatLeaseHeld);
         setNetSeatFailure(seatLeaseFailure);
-        useSkirmish.getState().newNetMatch({ lobbyId: routeLobby, localSide: seat, level, seed: lobby.seed });
+        skirmishStore.getState().newNetMatch({ lobbyId: routeLobby, localSide: seat, level, seed: lobby.seed });
         if (!seatLeaseHeld || lobby.result || lobby.result_pending || lobby.result_disputed) {
-          useSkirmish.getState().freezeNetInput();
+          skirmishStore.getState().freezeNetInput();
         }
-        sessionEpoch = useSkirmish.getState().sessionEpoch;
+        sessionEpoch = skirmishStore.getState().sessionEpoch;
         // Relay this client's local moves to the lobby channel. Server-sequenced: the move
         // applies here only when it echoes back, so a failed POST is a no-op the seat retries.
-        if (seatLeaseHeld && !lobby.result && !lobby.result_pending && !lobby.result_disputed) setNetMoveSink((pieceId, move, expectedMoveCount, intentId) => {
+        if (seatLeaseHeld && !lobby.result && !lobby.result_pending && !lobby.result_disputed) skirmishStore.getState().setNetMoveSink((pieceId, move, expectedMoveCount, intentId) => {
           postMove(routeLobby, pieceId, move, expectedMoveCount, intentId)
             .then(({ move: echoed }) => {
               // The HTTP response and SSE frame race; applyRelayMove is indexed/idempotent,
@@ -891,9 +904,9 @@ export function Skirmish({
                 const recovery = await fetchMovesSince(routeLobby, expectedMoveCount);
                 if (!belongsToThisMatch()) return;
                 recovery.moves.forEach(applyRelayMove);
-                const pending = useSkirmish.getState().net?.pendingMove;
+                const pending = skirmishStore.getState().net?.pendingMove;
                 if (pending?.expectedMoveCount === expectedMoveCount && pending.intentId === intentId) {
-                  useSkirmish.getState().markNetMoveUncertain(expectedMoveCount);
+                  skirmishStore.getState().markNetMoveUncertain(expectedMoveCount);
                   if (isResultAuthorityGate(err)) {
                     freezeRelayInput();
                     setNetError('The relay is frozen while the match result is confirmed.');
@@ -909,7 +922,7 @@ export function Skirmish({
                 // echo or reconnect backfill can safely settle it later.
                 console.warn('[netplay] could not verify failed move POST', recoveryError);
                 if (belongsToThisMatch()) {
-                  useSkirmish.getState().markNetMoveUncertain(expectedMoveCount);
+                  skirmishStore.getState().markNetMoveUncertain(expectedMoveCount);
                   if (isResultAuthorityGate(err)) {
                     freezeRelayInput();
                     setNetError('The relay is frozen while the match result is confirmed.');
@@ -926,7 +939,7 @@ export function Skirmish({
           : 'Safe multiplayer control is unavailable in this browser. Update it or use a browser with Web Locks support.');
         // Relay a resignation the same way: the game ends only when the server's result
         // frame echoes back (onLobby → concludeNet), so a failed POST is a retryable no-op.
-        if (seatLeaseHeld) setNetResignSink(() => {
+        if (seatLeaseHeld) skirmishStore.getState().setNetResignSink(() => {
           resignLobby(routeLobby).catch((err) => {
             console.warn('[netplay] resign POST failed', err);
             if (active) setNetError('Couldn’t send your resignation — try again.');
@@ -940,7 +953,7 @@ export function Skirmish({
         try {
           const back = await fetchMovesSince(routeLobby, 0);
           if (active) back.moves.forEach(applyRelayMove);
-          initialSynchronized = (useSkirmish.getState().net?.moveCount ?? 0) >= lobby.move_count;
+          initialSynchronized = (skirmishStore.getState().net?.moveCount ?? 0) >= lobby.move_count;
         } catch (err) {
           console.warn('[netplay] initial backfill failed', err);
           initialSynchronized = lobby.move_count === 0;
@@ -950,14 +963,14 @@ export function Skirmish({
         // resign), the lobby snapshot carries the terminal result — end the game now. The
         // SSE connect frame re-delivers it too, but concludeNet is idempotent.
         if (lobby.result && initialSynchronized) {
-          useSkirmish.getState().concludeNet(lobby.result.winner, lobby.result.reason);
+          skirmishStore.getState().concludeNet(lobby.result.winner, lobby.result.reason);
         } else if (lobby.result) {
           setNetError('The match ended, but its final moves are still reconnecting…');
         }
         // A reload restores the durable gesture before this board is rebuilt. Once its
         // entire prefix is synchronized, resume the SAME idempotent request; never let a
         // fresh click replace an in-flight identity merely because React remounted.
-        const restoredPending = useSkirmish.getState().net?.pendingMove;
+        const restoredPending = skirmishStore.getState().net?.pendingMove;
         if (
           seatLeaseHeld
           && !lobby.result
@@ -965,7 +978,7 @@ export function Skirmish({
           && !lobby.result_disputed
           && initialSynchronized
           && restoredPending
-          && restoredPending.expectedMoveCount === useSkirmish.getState().net?.moveCount
+          && restoredPending.expectedMoveCount === skirmishStore.getState().net?.moveCount
         ) {
           setNetError('Recovering your pending move…');
           scheduleUncertainRecovery(restoredPending.expectedMoveCount, restoredPending.intentId, 100);
@@ -987,12 +1000,12 @@ export function Skirmish({
                 // Keep lifecycle/result frames alive so an explicit concession can still
                 // resolve the match; never fetch or apply another move prefix.
                 if (l.result?.reason === 'resign') {
-                  useSkirmish.getState().concludeNet(l.result.winner, l.result.reason);
+                  skirmishStore.getState().concludeNet(l.result.winner, l.result.reason);
                 }
                 return;
               }
               let synchronized = true;
-              const before = useSkirmish.getState().net?.moveCount ?? 0;
+              const before = skirmishStore.getState().net?.moveCount ?? 0;
               if (l.move_count > before) {
                 try {
                   const recovery = await fetchMovesSince(routeLobby, before);
@@ -1006,7 +1019,7 @@ export function Skirmish({
               }
 
               if (!active) return;
-              const currentNet = useSkirmish.getState().net;
+              const currentNet = skirmishStore.getState().net;
               synchronized = synchronized && !!currentNet && currentNet.moveCount >= l.move_count;
 
               // This also covers reload recovery when the initial backfill failed: the
@@ -1028,12 +1041,12 @@ export function Skirmish({
 
               // Terminal state is authoritative only with its full ordered move prefix.
               if (l.result && synchronized) {
-                useSkirmish.getState().concludeNet(l.result.winner, l.result.reason);
+                skirmishStore.getState().concludeNet(l.result.winner, l.result.reason);
               }
 
               // Retry a locally-derived result on every authoritative snapshot until the
               // server reflects it. The endpoint is exact-count + idempotent.
-              const localResult = useSkirmish.getState().net?.terminalResult;
+              const localResult = skirmishStore.getState().net?.terminalResult;
               if (!l.result && !l.result_disputed && localResult && seatLeaseHeld) {
                 reportLobbyResult(routeLobby, {
                   expectedMoveCount: localResult.expectedMoveCount,
@@ -1085,8 +1098,8 @@ export function Skirmish({
 
     return () => {
       active = false;
-      setNetMoveSink(null);
-      setNetResignSink(null);
+      skirmishStore.getState().setNetMoveSink(null);
+      skirmishStore.getState().setNetResignSink(null);
       if (unsubscribe) unsubscribe();
       for (const timer of uncertainRecoveryTimers) window.clearTimeout(timer);
       uncertainRecoveryTimers.clear();
@@ -1095,7 +1108,7 @@ export function Skirmish({
       setNetSeatFailure(null);
       releaseSeatLease?.();
       releaseSeatLease = null;
-      useSkirmish.getState().leaveNetSession(routeLobby);
+      skirmishStore.getState().leaveNetSession(routeLobby);
     };
   }, [routeLobby]);
 
@@ -1111,7 +1124,7 @@ export function Skirmish({
       } as CSSProperties
     : undefined;
   const hudContent = boardSettled && !boardSurfaceError ? (
-    <PaintedSurfaceBoundary
+    <SceneSurfaceReadiness
       surface="gameplay-hud"
       signature="gameplay-hud"
       readyToCompose={boardSurfaceReady}
@@ -1140,15 +1153,14 @@ export function Skirmish({
         runSelfInspectionView={runSelfInspectionView}
         onNavigateRunView={onNavigateRunView}
       />
-    </PaintedSurfaceBoundary>
+    </SceneSurfaceReadiness>
   ) : null;
   const battleWorkspaceLayer = (
     <>
       {runWorkspace}
-      <div
+      <GameplayWorkspaceSceneSlot
         className="strategikon-slot"
-        {...sceneTransitionTargetAttributes('gameplay-shell')}
-        data-scene-instance={strategikonOpen ? routePath : `${strategikonBase}/strategikon`}
+        sceneInstance={strategikonOpen ? routePath : `${strategikonBase}/strategikon`}
       >
         {strategikonOpen ? (
           <Strategikon
@@ -1157,7 +1169,7 @@ export function Skirmish({
             run={runBattle ? useActiveRun.getState().run : null}
           />
         ) : null}
-      </div>
+      </GameplayWorkspaceSceneSlot>
     </>
   );
   const battlePersistentOverlay = boardSettled && netError ? (
@@ -1270,10 +1282,11 @@ export function Skirmish({
                   compositor mounted so pieces return to their starting positions without
                   hiding, reacquiring, or replaying the board's first-frame lifecycle. */}
                 <SkirmishBoard
-                  interactive={!net || (netSeatInteractive && !netRelayFrozen)}
+                  interactive={sceneActivated && (!net || (netSeatInteractive && !netRelayFrozen))}
                   onSurfaceReady={setBoardSurfaceReady}
                   onSurfaceError={setBoardSurfaceError}
-                  reveal={playableSurfaceReady}
+                  reveal={playableSurfaceReady && sceneRevealed}
+                  activate={sceneActivated}
                   predrawnReview={predrawnPreview ? {
                     src: predrawnPreview,
                     registration: predrawnRegistration,
@@ -1407,5 +1420,14 @@ export function Skirmish({
         </div>
       )}
     </SkirmishShell>
+  );
+}
+
+/** Closed Battle presentation: every mount receives an isolated session store. */
+export function Skirmish(props: SkirmishProps = {}): ReactElement {
+  return (
+    <SkirmishStoreProvider>
+      <SkirmishSession {...props} />
+    </SkirmishStoreProvider>
   );
 }

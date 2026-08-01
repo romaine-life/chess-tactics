@@ -11,7 +11,7 @@ extends:
   - "[ADR-0305](0305-card-ability-properties-do-not-synthesize-description-text.md)"
 ---
 
-# ADR-0307: Concinnous names the white Positioned card qualifier
+# ADR-0309: Concinnous names the white Positioned card qualifier
 
 ## Context
 

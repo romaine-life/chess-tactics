@@ -21,6 +21,7 @@ import {
 import { useInstalledChromeCss } from './useInstalledChromeCss';
 import { ChoiceGroup } from './shared/ChoiceGroup';
 import { StudioCatalogCard } from './studio/StudioCatalogCard';
+import { navigateApp } from './navigation';
 import {
   chromeUnitById,
   chromeUnitClassPath,
@@ -204,7 +205,7 @@ function writeChromeLabRouteParam(key: string, value: string, defaultValue?: str
   if (value === defaultValue) url.searchParams.delete(key);
   else url.searchParams.set(key, value);
   const query = url.searchParams.toString();
-  window.history.replaceState({}, '', `${url.pathname}${query ? `?${query}` : ''}${url.hash}`);
+  navigateApp(`${url.pathname}${query ? `?${query}` : ''}${url.hash}`, { replace: true, scroll: false });
 }
 
 function turnFrom(value: unknown, fallback: 0 | 1 | 2 | 3): 0 | 1 | 2 | 3 {

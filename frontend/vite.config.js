@@ -321,6 +321,9 @@ function prodBackend(port) {
         fatal(`Could not prepare backend dependencies (${e.message}). Try \`npm ci\` in ${backendDir} and \`npm run build\` in ${boardRenderDir} by hand.`);
       }
 
+      // Vite is the sole lifecycle/recovery owner for this backend child (ADR-0308).
+      // Devctl observes backend health and owns only the top-level launch boundary; it must
+      // not race this loop by terminating a living Vite process after a failed child probe.
       // "Ready" = the backend logged that it's listening. Until we've seen that for a given
       // launch, an exit means it couldn't start at all (missing module, bad code, DB auth
       // reject, port already taken). Tolerate a couple of fast retries, then give up LOUDLY

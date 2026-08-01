@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { chromeUnitClassNames } from '../chromeUnitRegistry';
 import { useTitleBarPortalTarget } from './TitleBarPortalContext';
 import { ChromeButton, ChromeNavButton } from '../shared/ChromeButton';
+import { useSceneActivation } from './SceneBoundary';
 
 type TitleBarControlVariant = 'label' | 'return' | 'icon';
 
@@ -192,7 +193,8 @@ export function TitleBarControlContribution({
   controls: readonly TitleBarControlSpec[];
 }): ReactElement | null {
   const beforeDividerNode = useTitleBarPortalTarget('before-divider');
-  if (!beforeDividerNode || controls.length === 0) return null;
+  const active = useSceneActivation();
+  if (!beforeDividerNode || !active || controls.length === 0) return null;
   return createPortal(
     <div className="app-titlebar-contributed-controls" role="group" aria-label={ariaLabel}>
       {controls.map(renderContributedControl)}

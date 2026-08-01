@@ -9821,6 +9821,10 @@ body { font-size: 17px; }
 .painted-surface-content {
   display: contents;
 }
+.scene-surface-readiness,
+.scene-surface-readiness-content {
+  display: contents;
+}
 .painted-surface.is-loading .painted-surface-content > *,
 .painted-surface.is-error .painted-surface-content > * {
   visibility: hidden;
@@ -18611,6 +18615,12 @@ button.tileset-relationship-cell {
   --run-relic-strip-block-size: 64px;
 }
 
+.run-scene-slot {
+  block-size: 100%;
+  min-block-size: 0;
+  position: relative;
+}
+
 .run-workspace {
   grid-column: 1;
   grid-row: 2;
@@ -18646,36 +18656,13 @@ button.tileset-relationship-cell {
   min-inline-size: 0;
 }
 
-/* In-place Run phase choreography (RunWorkspaceStages): the departing and arriving
-   workspaces stack in the same cell. The arriving stage composes hidden over the
-   still-visible previous phase, then fades in with the shared surface reveal. */
-.run-stage {
+/* A RunWorkspace normally addresses row 2 of the outer SkirmishShell. Inside the
+   director-owned phase slot, that outer address has already been resolved: every
+   phase workspace fills the slot's one canonical cell. */
+.run-phase-primary > .run-workspace {
   block-size: 100%;
-  display: grid;
   grid-column: 1;
   grid-row: 1;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
-  min-block-size: 0;
-  min-inline-size: 0;
-}
-
-.run-stage.is-preparing {
-  visibility: hidden;
-}
-
-.run-stage.is-departing {
-  pointer-events: none;
-}
-
-.run-stage.is-arriving {
-  animation: surface-complete-reveal var(--ds-duration-fade) var(--ds-ease-standard) both;
-}
-
-.run-stage > .run-workspace {
-  block-size: 100%;
-  grid-column: auto;
-  grid-row: auto;
 }
 
 .run-phase-workspace > .run-self-inspection-workspace,

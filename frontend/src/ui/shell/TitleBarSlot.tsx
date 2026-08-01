@@ -1,6 +1,7 @@
 import { type ReactNode, type ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import { useTitleBarPortalTarget } from './TitleBarPortalContext';
+import { useSceneActivation } from './SceneBoundary';
 
 // Renders non-lane content into the persistent app-shell title bar's center or stud
 // region. Routed buttons MUST use TitleBarControlContribution instead: it accepts
@@ -11,5 +12,6 @@ import { useTitleBarPortalTarget } from './TitleBarPortalContext';
 // reads it). Use only on screens whose titleBarConfig sets centerSlot / studSlot.
 export function TitleBarSlot({ region, children }: { region: 'center' | 'stud'; children: ReactNode }): ReactElement | null {
   const target = useTitleBarPortalTarget(region);
-  return target ? createPortal(children, target) : null;
+  const active = useSceneActivation();
+  return target && active ? createPortal(children, target) : null;
 }

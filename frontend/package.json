@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/start-vite-dev.mjs",
-    "build": "node scripts/check-no-committed-media.mjs && node scripts/check-ui-surface-contract.mjs && vite build && node scripts/check-no-committed-media.mjs --built-output-only",
+    "build": "node scripts/check-no-committed-media.mjs && node scripts/check-ui-surface-contract.mjs && node scripts/check-presentation-architecture.mjs && vite build && node scripts/check-no-committed-media.mjs --built-output-only",
     "build:trainer": "vite build --config vite.trainer.config.js",
     "build:board-render": "npm --prefix ../packages/board-render run build",
     "preview": "vite preview --host 0.0.0.0",
@@ -15,6 +15,7 @@
     "predrawn:prepare": "node scripts/prepare-predrawn-generation-run.mjs",
     "e2e:lobby": "node scripts/lobby-e2e.mjs",
     "e2e:run-battle": "node scripts/run-battle-e2e.mjs",
+    "e2e:run-transition": "node scripts/run-battle-e2e.mjs --transition-only",
     "e2e:run-scene-resume": "node scripts/run-scene-resume-e2e.mjs",
     "e2e:level-editor-pan": "node scripts/level-editor-pan-e2e.mjs",
     "vendor:ambience": "node scripts/vendor-ambience.mjs",
@@ -28,10 +29,11 @@
     "cards:check-prompts": "node scripts/install-run-card-art-prompts.mjs --dry-run",
     "cards:install-art": "node scripts/install-run-card-art-prompts.mjs --install-images",
     "typecheck": "tsc --noEmit",
+    "check:presentation": "node scripts/check-presentation-architecture.mjs",
     "pretest": "npm run build:board-render",
     "test": "vitest run",
     "precheck": "npm run build:board-render",
-    "check": "node --check src/bgm.js && node scripts/check-no-committed-media.mjs && node scripts/check-ui-surface-contract.mjs && node --test scripts/check-ui-surface-contract.node-test.mjs && node scripts/check-bgm-shuffle.mjs && node scripts/check-imagegen-gate.mjs && node scripts/check-light-art-chrome.mjs && node scripts/check-titlebar-actions.mjs && node scripts/check-empty-panel-frame-overlay.mjs && node scripts/check-level-editor-chrome.mjs && node --test scripts/check-level-editor-chrome.node-test.mjs && node scripts/check-shared-primitives.mjs && node --test scripts/check-shared-primitives.node-test.mjs && node scripts/check-no-dev-data-seam.mjs && node scripts/check-auth-session-owner.mjs && node --test scripts/check-auth-session-owner.node-test.mjs && npm run cards:check-prompts && vitest run && tsc --noEmit",
+    "check": "node --check src/bgm.js && node scripts/check-no-committed-media.mjs && node scripts/check-ui-surface-contract.mjs && node scripts/check-presentation-architecture.mjs && node --test scripts/check-ui-surface-contract.node-test.mjs && node scripts/check-bgm-shuffle.mjs && node scripts/check-imagegen-gate.mjs && node scripts/check-light-art-chrome.mjs && node scripts/check-titlebar-actions.mjs && node scripts/check-empty-panel-frame-overlay.mjs && node scripts/check-level-editor-chrome.mjs && node --test scripts/check-level-editor-chrome.node-test.mjs && node scripts/check-shared-primitives.mjs && node --test scripts/check-shared-primitives.node-test.mjs && node scripts/check-no-dev-data-seam.mjs && node scripts/check-auth-session-owner.mjs && node --test scripts/check-auth-session-owner.node-test.mjs && npm run cards:check-prompts && vitest run && tsc --noEmit",
     "check:media-final": "node scripts/check-no-committed-media.mjs"
   },
   "devDependencies": {

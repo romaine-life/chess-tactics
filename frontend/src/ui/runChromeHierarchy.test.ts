@@ -4,7 +4,11 @@ import { describe, expect, it } from 'vitest';
 
 const runScreen = readFileSync(new URL('./RunScreen.tsx', import.meta.url), 'utf8');
 const runArmyWorkspace = readFileSync(new URL('./RunArmyWorkspace.tsx', import.meta.url), 'utf8');
-const runWorkspaceStages = readFileSync(new URL('./RunWorkspaceStages.tsx', import.meta.url), 'utf8');
+const app = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8');
+const sceneManifest = readFileSync(new URL('./shell/sceneManifest.ts', import.meta.url), 'utf8');
+const sceneDirector = readFileSync(new URL('./shell/sceneDirector.ts', import.meta.url), 'utf8');
+const sceneBoundary = readFileSync(new URL('./shell/SceneBoundary.tsx', import.meta.url), 'utf8');
+const titleBarSlot = readFileSync(new URL('./shell/TitleBarSlot.tsx', import.meta.url), 'utf8');
 const titleBarPortal = readFileSync(new URL('./shell/TitleBarPortalContext.tsx', import.meta.url), 'utf8');
 const runWorkspace = readFileSync(new URL('./RunWorkspace.tsx', import.meta.url), 'utf8');
 const runUnitInspectionScene = readFileSync(new URL('./RunUnitInspectionScene.tsx', import.meta.url), 'utf8');
@@ -23,13 +27,13 @@ describe('Run chrome hierarchy', () => {
       /function RunMetaControls\b[\s\S]*?\r?\n}\r?\n\r?\nfunction DraftPanel/,
     )?.[0] ?? '';
     const sharedShell = skirmish.match(
-      /export function SkirmishShell\b[\s\S]*?\r?\n}\r?\n\r?\nexport function Skirmish/,
+      /export function SkirmishShell\b[\s\S]*?\r?\n}\r?\n\r?\nfunction SkirmishSession/,
     )?.[0] ?? '';
 
     expect(skirmish).toContain('export function SkirmishShell');
     expect(skirmish).toContain('<SkirmishHud {...hudProps} controlsContent={controlsContent} />');
-    expect(skirmish).toMatch(/export function Skirmish\b[\s\S]*?return \(\s*<SkirmishShell/);
-    expect(sharedShell).toContain('<PaintedSurfaceBoundary');
+    expect(skirmish).toContain('function SkirmishSession');
+    expect(sharedShell).toContain('<SceneSurfaceReadiness');
     expect(sharedShell).toContain('surface="gameplay-hud"');
     expect(sharedShell).toContain('readyToCompose={readyToCompose}');
     expect(runScreen).toContain('<SkirmishShell');
@@ -43,8 +47,8 @@ describe('Run chrome hierarchy', () => {
     expect(runSelfInspection).toContain('Army');
     expect(runSelfInspection).toContain('Relics');
     expect(runSelfInspection).toContain("url.searchParams.set('view', view)");
-    expect(runScreen).toContain('runSelfInspectionViewFromSearch(');
-    expect(runScreen).toContain('runSelfInspectionHref(window.location.href, nextInspectionView)');
+    expect(runScreen).toContain('runWorkspaceHref(window.location.href, nextView)');
+    expect(runScreen).toContain("navigateApp(nextHref, { replace: true, scroll: false })");
     expect(metaControls).toContain('Reset Shop');
     expect(metaControls).toContain('Continue to next Battle');
     expect(metaControls).not.toContain('data-ui-sfx="gold-sell"');
@@ -65,26 +69,26 @@ describe('Run chrome hierarchy', () => {
     expect(styleCss).toMatch(/\.run-phase-workspace\s*\{[\s\S]*?grid-column:\s*1;[\s\S]*?grid-row:\s*2;/);
   });
 
-  it('keeps one persistent Run shell and choreographs in-place phase changes', () => {
-    // Every non-Battle Run destination lives in a single mounted SkirmishShell; a phase
-    // change must never rebuild the shell (that blanks the screen to the world
-    // background), only swap the staged workspace beneath it.
+  it('makes Run phase and workspace replacement a closed director-owned scene slot', () => {
     expect(runScreen.match(/<SkirmishShell/g)).toHaveLength(1);
-    expect(runScreen).toContain('<RunWorkspaceStages stageKey={stageKey} placeholderKeys={RUN_STAGE_PLACEHOLDERS}>');
-    expect(runScreen).not.toContain('readyToCompose={false}');
-
-    // The staged swap keeps the previous workspace visible and inert while the incoming
-    // one composes under the shared complete-frame discipline, then fades in over it.
-    expect(runWorkspaceStages).toContain("from './shell/PaintedSurfaceBoundary'");
-    expect(runWorkspaceStages).toContain('waitForRenderedImage');
-    expect(runWorkspaceStages).toContain('renderedCssImageUrls');
-    expect(runWorkspaceStages).toContain('afterTwoPaintOpportunities');
-    expect(runWorkspaceStages).toContain(".querySelector('.painted-surface.is-loading')");
-    expect(runWorkspaceStages).toContain('className="run-stage is-departing"');
-    expect(runWorkspaceStages).toContain('inert aria-hidden="true"');
-    expect(styleCss).toMatch(/\.run-stage\s*\{[\s\S]*?grid-column:\s*1;[\s\S]*?grid-row:\s*1;/);
-    expect(styleCss).toMatch(/\.run-stage\.is-preparing\s*\{[\s\S]*?visibility:\s*hidden;/);
-    expect(styleCss).toMatch(/\.run-stage\.is-arriving\s*\{[\s\S]*?surface-complete-reveal/);
+    expect(runScreen).toContain('sceneSnapshot: RunSceneSnapshot');
+    expect(runScreen).toContain('<RunPresentationSceneSlot');
+    expect(runScreen).not.toContain('RunWorkspaceStages');
+    expect(runScreen).not.toContain('window.history');
+    expect(runScreen).toContain('const run = sceneSnapshot.run;');
+    expect(runScreen).not.toContain('const run = useActiveRun((state) => state.run);');
+    expect(styleCss).not.toContain('.run-stage');
+    expect(sceneManifest).toContain("instance(SCENE_DEFINITIONS.runPhase, { phase: phaseIdentity })");
+    expect(sceneManifest).toContain("instance(SCENE_DEFINITIONS.runWorkspace, { phase: phaseIdentity, workspace: snapshot.workspace })");
+    expect(sceneDirector).toContain("type: 'refresh-source'");
+    expect(app).toContain("source: 'active-run'");
+    expect(app).toContain('sceneSnapshot={scene.snapshot as RunSceneSnapshot}');
+    expect(app).toContain('overlapsStateDrivenRunScene');
+    expect(app).toContain('(!preservesSceneHost || overlapsRunScene)');
+    expect(app).toContain("layer.visualRole === 'outgoing'");
+    expect(sceneBoundary).toContain('deactivating?: boolean');
+    expect(sceneBoundary).toContain('target.inert = true');
+    expect(titleBarSlot).toContain('const active = useSceneActivation()');
 
     // The persistent title bar creates route-owned portal hosts only at scene commit,
     // after a destination screen has already mounted; the slot lookup must therefore
@@ -104,6 +108,7 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('shellWorkspaceCoversRelics={Boolean(inspectionWorkspace)}');
     expect(skirmish).toContain('{runWorkspace}');
     expect(styleCss).toMatch(/\.shell-viewport-primary\[data-shell-workspace-covered\]\s*\{[\s\S]*?visibility:\s*hidden;/);
+    expect(styleCss).toMatch(/\.run-phase-primary\s*>\s*\.run-workspace\s*\{[\s\S]*?grid-row:\s*1;/);
   });
 
   it('keeps Run abandonment at the bottom of Controls and distinct from Battle resignation', () => {
