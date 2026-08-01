@@ -2693,6 +2693,16 @@ const MIGRATIONS = [
       );
     `,
   },
+  {
+    version: 48,
+    name: 'retire the Run card scene overrides table',
+    // The card-scene authoring feature was removed (ADR-0264) before any scene was
+    // authored in production; migration 47 stays in immutable applied history, so the
+    // retirement is this append-only drop rather than an edit of the shipped past.
+    sql: `
+      DROP TABLE IF EXISTS card_scene_documents;
+    `,
+  },
 ];
 
 let pool = null;
@@ -13558,162 +13568,6 @@ app.put('/api/sfx-profiles/:id', async (req, res) => {
       return;
     }
     dbUnavailable(res, 'SFX profile write failed', error, 'sfx_profile_unavailable');
-  }
-});
-
-// --- Owner-authored Run card scene overrides --------------------------------
-// One revisioned document (the sfx_profiles shape): public GET hydrates runtime
-// and Studio; the admin optimistic PUT saves the owner-operated instrument. A
-// missing row means generated scenes with no committed fallback (ADR-0089 shape).
-const CARD_SCENES_SCHEMA_VERSION = 1;
-const CARD_SCENES_ID = 'default';
-const CARD_SCENES_LOCK_KEY = 4300193003;
-// The authored scene is a canonical board code (opaque URL-safe token). Deep board
-// validation (3×3 stage, no persisted units) is the client codec's job at apply time;
-// the server enforces shape, charset, and size so the document stays bounded.
-const CARD_SCENE_BOARD_CODE = /^[A-Za-z0-9_-]+$/;
-const CARD_SCENE_BOARD_CODE_MAX_LENGTH = 200000;
-const CARD_SCENE_FRAME_MIN_WIDTH = 80;
-const CARD_SCENE_FRAME_MAX_WIDTH = 640;
-
-function validateCardScenesData(data) {
-  if (!isObjectRecord(data) || !isObjectRecord(data.overrides)) return 'document shape is invalid';
-  for (const [cardId, override] of Object.entries(data.overrides)) {
-    if (!/^[a-z]{1,9}$/.test(cardId) || !isObjectRecord(override)) return `override ${cardId} is invalid`;
-    if (override.salt !== undefined && (!Number.isSafeInteger(override.salt) || override.salt < 0)) {
-      return `override ${cardId} salt is invalid`;
-    }
-    if (override.board !== undefined) {
-      if (typeof override.board !== 'string' || !override.board
-        || override.board.length > CARD_SCENE_BOARD_CODE_MAX_LENGTH
-        || !CARD_SCENE_BOARD_CODE.test(override.board)) {
-        return `override ${cardId} board code is invalid`;
-      }
-    }
-    if (override.frame !== undefined) {
-      const frame = override.frame;
-      if (!isObjectRecord(frame)
-        || !Number.isFinite(frame.x) || Math.abs(frame.x) > 2000
-        || !Number.isFinite(frame.y) || Math.abs(frame.y) > 2000
-        || !Number.isFinite(frame.width)
-        || frame.width < CARD_SCENE_FRAME_MIN_WIDTH
-        || frame.width > CARD_SCENE_FRAME_MAX_WIDTH) {
-        return `override ${cardId} frame is invalid`;
-      }
-    }
-  }
-  return null;
-}
-
-function publicCardScenes(row) {
-  return {
-    id: CARD_SCENES_ID,
-    data: row.data,
-    clientSchemaVersion: Number(row.client_schema_version),
-    revision: Number(row.revision),
-    createdAt: nullableTimestampString(row.created_at),
-    updatedAt: nullableTimestampString(row.updated_at),
-    updatedBy: row.updated_by || null,
-  };
-}
-
-async function dbGetCardScenes() {
-  await ensureDbReady();
-  const { rows } = await pool.query(
-    `SELECT data, client_schema_version, revision, created_at, updated_at, updated_by
-       FROM card_scene_documents WHERE id = $1`,
-    [CARD_SCENES_ID],
-  );
-  return rows[0] || null;
-}
-
-async function dbSaveCardScenes(data, expectedRevision, actorEmail) {
-  await ensureDbReady();
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    await client.query('SELECT pg_advisory_xact_lock($1)', [CARD_SCENES_LOCK_KEY]);
-    const current = await client.query(
-      `SELECT revision FROM card_scene_documents WHERE id = $1 FOR UPDATE`,
-      [CARD_SCENES_ID],
-    );
-    const row = current.rows[0] || null;
-    if ((!row && expectedRevision !== null) || (row && Number(row.revision) !== expectedRevision)) {
-      const error = new Error('card_scenes_conflict');
-      error.cardScenesConflict = true;
-      error.currentRevision = row ? Number(row.revision) : null;
-      throw error;
-    }
-    let saved;
-    let created = false;
-    if (!row) {
-      created = true;
-      saved = await client.query(
-        `INSERT INTO card_scene_documents (id, data, client_schema_version, revision, updated_by)
-         VALUES ($1, $2::jsonb, $3, 0, $4)
-         RETURNING data, client_schema_version, revision, created_at, updated_at, updated_by`,
-        [CARD_SCENES_ID, JSON.stringify(data), CARD_SCENES_SCHEMA_VERSION, actorEmail],
-      );
-    } else {
-      saved = await client.query(
-        `UPDATE card_scene_documents SET data = $2::jsonb, client_schema_version = $3,
-            revision = revision + 1, updated_at = now(), updated_by = $4
-          WHERE id = $1
-        RETURNING data, client_schema_version, revision, created_at, updated_at, updated_by`,
-        [CARD_SCENES_ID, JSON.stringify(data), CARD_SCENES_SCHEMA_VERSION, actorEmail],
-      );
-    }
-    await client.query('COMMIT');
-    return { row: saved.rows[0], created };
-  } catch (error) {
-    try { await client.query('ROLLBACK'); } catch { /* preserve original error */ }
-    throw error;
-  } finally {
-    client.release();
-  }
-}
-
-app.get('/api/card-scenes/:id', async (req, res) => {
-  if (req.params.id !== CARD_SCENES_ID) { res.status(400).json({ error: 'invalid_card_scenes_id' }); return; }
-  try {
-    const row = await dbGetCardScenes();
-    if (!row) { res.setHeader('Cache-Control', 'no-store'); res.status(404).json({ error: 'card_scenes_not_found' }); return; }
-    const issue = validateCardScenesData(row.data);
-    if (issue || Number(row.client_schema_version) !== CARD_SCENES_SCHEMA_VERSION) {
-      throw new Error(`stored card scenes document is invalid: ${issue || 'client schema version mismatch'}`);
-    }
-    const etag = `"card-scenes-${Number(row.revision)}"`;
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('ETag', etag);
-    if (req.headers['if-none-match'] === etag) { res.status(304).end(); return; }
-    res.status(200).json({ document: publicCardScenes(row) });
-  } catch (error) {
-    dbUnavailable(res, 'card scenes read failed', error, 'card_scenes_unavailable');
-  }
-});
-
-app.put('/api/card-scenes/:id', async (req, res) => {
-  const user = await requireAdmin(req, res);
-  if (!user) return;
-  if (req.params.id !== CARD_SCENES_ID) { res.status(400).json({ error: 'invalid_card_scenes_id' }); return; }
-  const raw = isObjectRecord(req.body) ? req.body : {};
-  const expectedRevision = raw.expectedRevision === null
-    ? null : Number.isInteger(raw.expectedRevision) && raw.expectedRevision >= 0 ? raw.expectedRevision : undefined;
-  if (expectedRevision === undefined || raw.clientSchemaVersion !== CARD_SCENES_SCHEMA_VERSION) {
-    res.status(400).json({ error: 'invalid_card_scenes_write', details: 'expectedRevision and clientSchemaVersion are required' });
-    return;
-  }
-  const issue = validateCardScenesData(raw.data);
-  if (issue) { res.status(400).json({ error: 'invalid_card_scenes', details: issue }); return; }
-  try {
-    const saved = await dbSaveCardScenes(raw.data, expectedRevision, user.email);
-    res.status(saved.created ? 201 : 200).json({ document: publicCardScenes(saved.row) });
-  } catch (error) {
-    if (error && error.cardScenesConflict) {
-      res.status(409).json({ error: 'card_scenes_conflict', currentRevision: error.currentRevision });
-      return;
-    }
-    dbUnavailable(res, 'card scenes write failed', error, 'card_scenes_unavailable');
   }
 });
 

@@ -1,6 +1,5 @@
 export const LEVEL_EDITOR_ROUTE_LAYERS = [
   'board',
-  'card-scene',
   'level-artwork',
   'tile',
   'generate',

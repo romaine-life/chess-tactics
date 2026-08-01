@@ -5,7 +5,7 @@ import {
   structureArtDirections,
   structureArtDirectionSprite,
 } from '@chess-tactics/board-render';
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactElement } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { TILE_STEP_Y } from '../art/projectionContract';
 import { tileAssets } from '../art/tileset';
 import { paletteForSide } from '../core/pieces';
@@ -18,15 +18,15 @@ import {
 } from '../core/tileSockets';
 import { StudioReadOnlyBoard } from '../render/StudioReadOnlyBoard';
 import { canonicalCardId } from '../run/cardNames';
-import {
-  cardSceneOverride,
-  cardScenesStoreRevision,
-  subscribeCardScenes,
-  type CardSceneFrame,
-  type CardSceneOverride,
-} from '../run/cardSceneOverrides';
 import { mixSeed, PIECE_VALUE, type PieceBundle } from '../run/model';
-import { decodeBoard, type EditorBoard, type FloatingArtworkPlacement } from './boardCode';
+import { type EditorBoard, type FloatingArtworkPlacement } from './boardCode';
+
+/** A card's viewing pane in board-world space; height follows the capture ratio. */
+export interface CardSceneFrame {
+  x: number;
+  y: number;
+  width: number;
+}
 
 // A bundle card's artwork is a small battlefield vignette: the bundle's units mustered
 // on a coherent patch of live terrain, with seeded ground cover and an optional prop.
@@ -279,10 +279,8 @@ export interface RunCardScenePlan {
   familyId: TileFamilyId;
   /** Stable art-slot key for this card's scene; equals the bundle id. */
   sceneId: string;
-  /** The card's viewing pane: authored when saved, else the default framing. */
+  /** The card's viewing pane (the default framing). */
   frame: CardSceneFrame;
-  /** True when the scene body came from the owner's authored board. */
-  authored: boolean;
 }
 
 /** The card's mustered formation — always derived from the composition, never stored. */
@@ -302,53 +300,23 @@ export function cardSceneUnits(bundle: Pick<PieceBundle, 'pieces'>): EditorBoard
   return units;
 }
 
-function familyOfSceneBoard(board: EditorBoard): TileFamilyId | undefined {
-  const heroTile = board.cells['1,1'] ?? Object.values(board.cells)[0];
-  const asset = heroTile ? tileAssets.find((candidate) => candidate.id === heroTile) : undefined;
-  return asset?.terrains?.[0];
-}
-
 /**
  * Turns one bundle into its deterministic battlefield vignette. The canonical card id
- * (the piece composition) plus the owner's saved override are the only inputs, so the
- * same card always shows the same scene everywhere it appears — draft offer, shop
- * bundle, Enchiridion record, art capture — while live catalog art can still update.
- *
- * An override's authored board (a canonical board code) replaces the generated scene
- * wholesale; the mustered units are always derived from the card. `override` defaults
- * to the hydrated live document's entry; the scene editor passes its unsaved draft,
- * and `null` forces the pure generated baseline (ADR-0057 Reset).
+ * (the piece composition) is the only input, so the same card always shows the same
+ * scene everywhere it appears — draft offer, shop bundle, Enchiridion record, art
+ * capture — while live catalog art can still update.
  */
-export function runCardScenePlan(
-  bundle: Pick<PieceBundle, 'pieces'>,
-  override: CardSceneOverride | null | undefined = undefined,
-): RunCardScenePlan {
+export function runCardScenePlan(bundle: Pick<PieceBundle, 'pieces'>): RunCardScenePlan {
   const families = walkableFamilies();
   if (!families.length) {
     throw new Error('Run card scenes require at least one installed walkable terrain family.');
   }
   const sceneId = canonicalCardId(bundle);
-  const applied = override === undefined ? cardSceneOverride(sceneId) : override;
   const units = cardSceneUnits(bundle);
   const coverSeed = mixSeed(mixSeed(0x9c42d5, `run-card-scene:${sceneId}`), 'run-card-scene-cover');
-  const frame = applied?.frame ?? defaultCardSceneFrame();
+  const frame = defaultCardSceneFrame();
 
-  // A malformed persisted code never reaches here (assertCardScenes gates apply), but
-  // decode defensively: an undecodable board falls back to the generated scene.
-  const authoredBoard = applied?.board ? decodeBoard(applied.board) : null;
-  if (authoredBoard) {
-    const board: EditorBoard = { ...authoredBoard, units };
-    return {
-      board,
-      coverSeed,
-      familyId: familyOfSceneBoard(authoredBoard) ?? families[0].familyId,
-      sceneId,
-      frame,
-      authored: true,
-    };
-  }
-
-  const rng = createRng(mixSeed(0x9c42d5, `run-card-scene:${sceneId}`, applied?.salt ?? 0));
+  const rng = createRng(mixSeed(0x9c42d5, `run-card-scene:${sceneId}`, 0));
   const family = families[rng.int(families.length)];
 
   const cells: Record<string, string> = {};
@@ -403,7 +371,6 @@ export function runCardScenePlan(
     familyId: family.familyId,
     sceneId,
     frame,
-    authored: false,
   };
 }
 
@@ -445,7 +412,6 @@ export function RunCardScene({
   bundle,
   className = '',
   variant = 'live',
-  overrideDraft = undefined,
   onLayerFirstFrame,
   onFrameError,
 }: {
@@ -459,21 +425,15 @@ export function RunCardScene({
    * 'guide' is the full scene including units, for with-units generation trials.
    */
   variant?: 'live' | 'source' | 'guide';
-  /**
-   * Scene editor draft: an unsaved override to preview (null = the pure generated
-   * baseline). Undefined reads the hydrated live override document.
-   */
-  overrideDraft?: CardSceneOverride | null;
   /** First completed paint of each canvas layer — a staging host's readiness gate. */
   onLayerFirstFrame?: (layer: 'terrain' | 'scene') => void;
   onFrameError?: (error: unknown) => void;
 }): ReactElement {
-  // The canonical composition id + the live override document are the plan inputs.
+  // The canonical composition id is the sole plan input.
   const cardId = canonicalCardId(bundle);
-  const overridesRevision = useSyncExternalStore(subscribeCardScenes, cardScenesStoreRevision);
   const plan = useMemo(
-    () => runCardScenePlan(bundle, overrideDraft),
-    [cardId, overrideDraft, overridesRevision], // eslint-disable-line react-hooks/exhaustive-deps
+    () => runCardScenePlan(bundle),
+    [cardId], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const artwork = variant === 'live' ? installedRunCardSceneArt(plan.sceneId) : null;
 
