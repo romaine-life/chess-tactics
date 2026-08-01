@@ -9,6 +9,8 @@ extends:
   - 0281-units-card-art-uses-a-pixellab-pixel-art-core-set.md
 partially_supersedes:
   - 0276-run-type-lines-declare-primary-families-and-affected-qualifiers.md
+partially_superseded_by:
+  - 0283-run-card-type-lines-use-one-optically-centered-baseline.md
 ---
 
 # ADR-0282: Run card face is one shared live runtime component
