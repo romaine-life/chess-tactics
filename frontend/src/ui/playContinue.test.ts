@@ -43,7 +43,7 @@ describe('Play Continue activity', () => {
       {},
     )).toMatchObject({
       label: 'Continue Run',
-      detail: 'The Long War · Battle 1 of 1',
+      detail: 'Battle 1 of 1',
       href: PLAY_RUN_SELECTOR_HREF,
     });
   });

@@ -256,8 +256,14 @@ Continue/Skirmish/Run/Levels/Campaign selector described by ADR-0074, ADR-0232,
 ADR-0257, and ADR-0260. Clicking Play lands on the bare selector root, which
 always reveals the picker with no preselected mode; a resumable activity is
 offered as a prominent Continue card and rail entry, never an automatic redirect.
-Continue Run selects the existing Run action panel; its nested Play control alone
-enters the active Run.
+Continue Run selects the existing control-first Run action panel. That panel
+uses Campaign Levels' master-detail language: Continue Run and Start New Run are
+selectable action-column rows; the right detail column owns current-Run facts
+plus Play, or Ataraxia plus Start Run. It omits feature-pitch and authored-War
+copy, and the Ataraxia choice is the shared scrollable dropdown with unavailable
+installed tiers visible but disabled. Every tier, including **Ataraxia 0 — The
+Untroubled Mind**, presents its subtitle in the selector and its literal impact
+beneath it (ADR-0287, ADR-0288, ADR-0289).
 Enchiridion is immediately above Settings. In Battle, frameless open-codex art
 at the same visual scale as the Controls title and aligned to the Controls
 content boundary opens

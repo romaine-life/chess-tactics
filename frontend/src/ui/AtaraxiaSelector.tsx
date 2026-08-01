@@ -1,7 +1,8 @@
 import type { ReactElement } from 'react';
 import { ATARAXIA_BY_TIER, type AtaraxiaTier } from '../run/model';
-import { chromeUnitClassNames } from './chromeUnitRegistry';
-import { InnerChromeBox } from './shared/ChromeBox';
+import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
+
+const ATARAXIA_TIERS: readonly AtaraxiaTier[] = [0, 1];
 
 export function AtaraxiaSelector({
   value,
@@ -12,36 +13,35 @@ export function AtaraxiaSelector({
   highestUnlockedTier: AtaraxiaTier;
   onChange: (tier: AtaraxiaTier) => void;
 }): ReactElement {
+  const options: readonly HouseSelectOption[] = ATARAXIA_TIERS.map((tier) => {
+    const definition = ATARAXIA_BY_TIER[tier];
+    const locked = tier > highestUnlockedTier;
+    const unlockNote = locked ? 'Complete Ataraxia 0 to unlock' : null;
+    return {
+      value: String(tier),
+      disabled: locked,
+      title: unlockNote ?? undefined,
+      label: (
+        <span className="run-ataraxia-option-copy">
+          <span>{definition.label} — {definition.title}</span>
+          {unlockNote ? <small>{unlockNote}</small> : null}
+        </span>
+      ),
+    };
+  });
+
   return (
-    <InnerChromeBox className="run-ataraxia-selector" aria-labelledby="run-ataraxia-title">
-      <header>
-        <span className="play-action-kicker">Run difficulty</span>
-        <h3 id="run-ataraxia-title">Ataraxia</h3>
-      </header>
-      <div className="run-ataraxia-options" role="radiogroup" aria-label="Ataraxia tier">
-        {([0, 1] as const).map((tier) => {
-          const definition = ATARAXIA_BY_TIER[tier];
-          const locked = tier > highestUnlockedTier;
-          return (
-            <button
-              type="button"
-              role="radio"
-              aria-checked={value === tier}
-              data-chrome-unit="inner-text-button"
-              data-ataraxia-tier={tier}
-              className={chromeUnitClassNames('inner-text-button', 'app-header-button', value === tier && 'active')}
-              disabled={locked}
-              key={tier}
-              onClick={() => onChange(tier)}
-            >
-              <strong>{definition.label}</strong>
-              <span>{tier === 0 ? 'Baseline' : definition.title}</span>
-              {locked ? <small>Win a No Ataraxia Run to unlock</small> : null}
-            </button>
-          );
-        })}
-      </div>
-      <p>{ATARAXIA_BY_TIER[value].effect}</p>
-    </InnerChromeBox>
+    <section className="run-ataraxia-selector" aria-labelledby="run-ataraxia-title">
+      <h3 id="run-ataraxia-title">Ataraxia</h3>
+      <HouseSelect
+        value={String(value)}
+        options={options}
+        onChange={(next) => onChange(Number(next) as AtaraxiaTier)}
+        ariaLabel="Ataraxia"
+        className="run-ataraxia-select"
+        testId="run-ataraxia-select"
+      />
+      <p className="run-ataraxia-effect">{ATARAXIA_BY_TIER[value].effect}</p>
+    </section>
   );
 }

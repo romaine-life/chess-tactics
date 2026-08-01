@@ -106,10 +106,12 @@ these.
   and merely revealed—not rerolled—after purchase. A card does not become
   Tactical just because an external relic later modifies one of its units
   (ADR-0272, ADR-0276).
-- Run difficulty is **Ataraxia**. The first Run has **No Ataraxia**; later Runs
-  may opt into historically named conditions. Completing the highest available
-  tier unlocks exactly the next one, and the ladder stacks: selecting tier N
-  applies every condition from 1 through N (ADR-0266, ADR-0268).
+- Run difficulty is **Ataraxia**. The first Run uses **Ataraxia 0 — The
+  Untroubled Mind**, whose literal impact is standard Run rules and no
+  Pestiferous shop cards; later Runs may opt into historically named
+  conditions. Completing the highest available tier unlocks exactly the next
+  one, and the ladder stacks: selecting tier N applies every condition from 1
+  through N (ADR-0266, ADR-0268, ADR-0289).
 - **Ataraxia I — The Great Mortality** initially targets Pestiferous status for
   roughly one in eight otherwise eligible shop draws. Pestiferous status is
   rolled with the rest of that affected offer, not added as another deck copy.
@@ -161,8 +163,10 @@ these.
   army and held relics beside the same Enchiridion (ADR-0231).
 - Play leads with **Continue** whenever a Run or Battle is unresolved and names
   that exact activity before the ordinary mode choices. **Continue Run** selects
-  the Run submenu; only its nested **Play** action enters the active Run
-  (ADR-0232).
+  the Run submenu, where **Continue Run** and **Start New Run** are master-list
+  choices. The right detail column owns current-Run facts plus the nested
+  **Play** action, or Ataraxia plus the confirmed **Start Run** replacement
+  (ADR-0232, ADR-0287, ADR-0288).
 - Army and Relics are grouped as player **Self inspection** in Run Controls.
   Either replaces the complete left Play workspace through the shared
   fill-only shell surface while the current phase stays mounted underneath;
