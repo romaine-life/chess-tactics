@@ -3558,7 +3558,7 @@ async function main() {
     relicReference.statusCode !== 200
     || !relicReference.body.includes('<title>Royal Decree</title>')
     || !relicReference.body.includes('<meta property="og:title" content="Royal Decree">')
-    || !relicReference.body.includes('<meta property="og:description" content="Your King gains Positioned and prefers the back deployment row.">')
+    || !relicReference.body.includes('<meta property="og:description" content="Your King gains Positioned.">')
     || !relicReference.body.includes('<meta property="og:image:width" content="64">')
     || !relicReference.body.includes('<meta property="og:image:height" content="64">')
     || !relicReference.body.includes('<meta name="twitter:card" content="summary">')
