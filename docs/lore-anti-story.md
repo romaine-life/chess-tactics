@@ -147,7 +147,7 @@ somewhere, while the game refuses to deliver that story.
 ## Relics And Written Fragments
 
 Run relics belong to the same anti-story world
-([ADR-0261](adr/0261-run-relic-identities-carry-anti-story-residue.md)). Their
+([ADR-0264](adr/0264-run-relic-identities-carry-anti-story-residue.md)). Their
 names identify physical or administrative residue: an architectural form, a
 sealed record, liturgical matter, field equipment, a measure, a route, or
 something carried away. A historically specific word may imply an institution
@@ -166,7 +166,7 @@ generated** until new pixels pass the normal review and installation path.
 ## Ataraxia And Public History
 
 Ataraxia conditions may name a real historical event, give its date, and later
-offer an opt-in factual explanation ([ADR-0263](adr/0263-ataraxia-names-optional-run-difficulty-after-real-history.md)).
+offer an opt-in factual explanation ([ADR-0266](adr/0266-ataraxia-names-optional-run-difficulty-after-real-history.md)).
 This is an intentional peek behind the historical pressure sources, not a
 solution to the anti-story. The game does not claim that its board literally
 occupies that event, explain why a chess Run is presenting it, or tell the

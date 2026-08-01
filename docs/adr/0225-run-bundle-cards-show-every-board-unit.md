@@ -3,7 +3,7 @@ status: accepted
 date: 2026-07-29
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
-  - "[ADR-0272](0272-run-cards-use-trading-card-anatomy-and-single-digit-gold.md)'s card anatomy and upper-right cost placement"
+  - "[ADR-0275](0275-run-cards-use-trading-card-anatomy-and-single-digit-gold.md)'s card anatomy and upper-right cost placement"
 ---
 
 # ADR-0225: Run bundle cards show every board unit
@@ -27,7 +27,7 @@ drawn in play and allowed a compact grid when a bundle contains many units.
 - The unit formation scales within the existing card content area. Small
   bundles get larger sprites; larger bundles use a compact grid.
 - ADR-0219's live gold asset, accessibility, and live-media decisions remain in
-  force. ADR-0272 supersedes this ADR's inherited price placement and temporary
+  force. ADR-0275 supersedes this ADR's inherited price placement and temporary
   card-shell assumptions.
 
 ## Consequences
@@ -37,4 +37,4 @@ drawn in play and allowed a compact grid when a bundle contains many units.
 - Dense, low-value bundles use smaller board sprites, but stay inside the same
   card shell and remain identifiable as formations of chess units.
 - This ADR supersedes only ADR-0219's portrait-and-quantity representation;
-  ADR-0272 later supersedes its inherited price placement and card anatomy.
+  ADR-0275 later supersedes its inherited price placement and card anatomy.

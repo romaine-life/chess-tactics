@@ -980,7 +980,7 @@ function inlineMigrationSql(version) {
   return inlineMigrationDefinition(version).sql;
 }
 
-async function validatePrimarySparseNumericMigrationUpgrade46() {
+async function validatePrimarySparseNumericMigrationUpgrade47() {
   const history = await queryDb(
     `SELECT version, name, checksum
        FROM schema_migrations
@@ -995,7 +995,7 @@ async function validatePrimarySparseNumericMigrationUpgrade46() {
       ORDER BY column_name`,
   );
   const versions = history.rows.map((row) => Number(row.version));
-  const expectedVersions = Array.from({ length: 46 }, (_, index) => index + 1);
+  const expectedVersions = Array.from({ length: 47 }, (_, index) => index + 1);
   const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
   const expectedByVersion = new Map(
     expectedMigrations.map((migration) => [migration.version, migration]),
@@ -1010,7 +1010,7 @@ async function validatePrimarySparseNumericMigrationUpgrade46() {
   });
   const appliedMigrationVersions = [
     ...Array.from({ length: 8 }, (_, index) => index + 28),
-    ...Array.from({ length: 10 }, (_, index) => index + 37),
+    ...Array.from({ length: 11 }, (_, index) => index + 37),
   ];
   const skippedMigrationVersions = [
     ...Array.from({ length: 27 }, (_, index) => index + 1),
@@ -1378,7 +1378,7 @@ async function main() {
   await new Promise((resolve) => mockAuth.listen(authPort, '127.0.0.1', resolve));
   await new Promise((resolve) => mockBgm.listen(bgmPort, '127.0.0.1', resolve));
   await waitForServer();
-  await validatePrimarySparseNumericMigrationUpgrade46();
+  await validatePrimarySparseNumericMigrationUpgrade47();
   if (!fs.existsSync(path.join(hotBackendDir, 'server.js'))) {
     throw new Error('Supervisor did not initialize the hot backend entrypoint');
   }
@@ -2682,6 +2682,74 @@ async function main() {
     || updatedSfxBody.profile.data.arrival.firing !== 'once'
   ) throw new Error(`Optimistic SFX profile update failed: ${updatedSfxProfile.statusCode} ${updatedSfxProfile.body}`);
 
+  // Owner-authored Run card scene overrides (the sfx_profiles shape): missing is
+  // explicit generated-scenes, anonymous writes are rejected, malformed documents are
+  // rejected, and admin saves compare-and-swap the document revision.
+  const missingCardScenes = await get('/api/card-scenes/default');
+  if (missingCardScenes.statusCode !== 404 || JSON.parse(missingCardScenes.body).error !== 'card_scenes_not_found') {
+    throw new Error(`Missing card scenes should be explicit: ${missingCardScenes.statusCode} ${missingCardScenes.body}`);
+  }
+  // A minimal canonical board code: base64url of the codec's compact JSON. The server
+  // treats the code as opaque and bounded; clients decode and enforce the 3×3 stage.
+  const syntheticSceneBoardCode = Buffer.from(JSON.stringify({ c: 3, r: 3 }))
+    .toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const syntheticCardScenes = {
+    overrides: {
+      kb: {
+        salt: 2,
+        board: syntheticSceneBoardCode,
+        frame: { x: 12, y: -8, width: 240 },
+      },
+    },
+  };
+  const anonymousCardScenesWrite = await request(
+    'PUT', '/api/card-scenes/default', { 'content-type': 'application/json' },
+    JSON.stringify({ data: syntheticCardScenes, expectedRevision: null, clientSchemaVersion: 1 }), 5000,
+  );
+  if (anonymousCardScenesWrite.statusCode !== 401) throw new Error(`Anonymous card scenes write should be 401: ${anonymousCardScenesWrite.statusCode}`);
+  const invalidCardScenesWrite = await request(
+    'PUT', '/api/card-scenes/default', adminJson,
+    JSON.stringify({
+      data: { overrides: { kb: { frame: { x: 0, y: 0, width: 5 } } } },
+      expectedRevision: null,
+      clientSchemaVersion: 1,
+    }), 5000,
+  );
+  if (invalidCardScenesWrite.statusCode !== 400 || JSON.parse(invalidCardScenesWrite.body).error !== 'invalid_card_scenes') {
+    throw new Error(`Malformed card scenes should be rejected: ${invalidCardScenesWrite.statusCode} ${invalidCardScenesWrite.body}`);
+  }
+  const createdCardScenes = await request(
+    'PUT', '/api/card-scenes/default', adminJson,
+    JSON.stringify({ data: syntheticCardScenes, expectedRevision: null, clientSchemaVersion: 1 }), 5000,
+  );
+  const createdCardScenesBody = JSON.parse(createdCardScenes.body);
+  if (
+    createdCardScenes.statusCode !== 201 || createdCardScenesBody.document.revision !== 0
+    || createdCardScenesBody.document.data.overrides.kb.frame.width !== 240
+  ) throw new Error(`Card scenes create failed: ${createdCardScenes.statusCode} ${createdCardScenes.body}`);
+  const publicCardScenesRead = await get('/api/card-scenes/default');
+  if (
+    publicCardScenesRead.statusCode !== 200 || publicCardScenesRead.headers.etag !== '"card-scenes-0"'
+    || JSON.parse(publicCardScenesRead.body).document.data.overrides.kb.board !== syntheticSceneBoardCode
+  ) throw new Error(`Public card scenes read failed: ${publicCardScenesRead.statusCode} ${publicCardScenesRead.body}`);
+  const staleCardScenesWrite = await request(
+    'PUT', '/api/card-scenes/default', adminJson,
+    JSON.stringify({ data: syntheticCardScenes, expectedRevision: 7, clientSchemaVersion: 1 }), 5000,
+  );
+  if (
+    staleCardScenesWrite.statusCode !== 409 || JSON.parse(staleCardScenesWrite.body).error !== 'card_scenes_conflict'
+    || JSON.parse(staleCardScenesWrite.body).currentRevision !== 0
+  ) throw new Error(`Stale card scenes write should conflict: ${staleCardScenesWrite.statusCode} ${staleCardScenesWrite.body}`);
+  const updatedCardScenes = await request(
+    'PUT', '/api/card-scenes/default', adminJson,
+    JSON.stringify({ data: { overrides: {} }, expectedRevision: 0, clientSchemaVersion: 1 }), 5000,
+  );
+  const updatedCardScenesBody = JSON.parse(updatedCardScenes.body);
+  if (
+    updatedCardScenes.statusCode !== 200 || updatedCardScenesBody.document.revision !== 1
+    || Object.keys(updatedCardScenesBody.document.data.overrides).length !== 0
+  ) throw new Error(`Optimistic card scenes update failed: ${updatedCardScenes.statusCode} ${updatedCardScenes.body}`);
+
   const idempotentPayload = {
     slot: 'backgrounds/smoke-idempotent.png',
     domain: 'background',
@@ -2969,6 +3037,22 @@ async function main() {
     media: {},
   });
   const sharedPresentationSlot = 'wall-decor/test-banner-base.png';
+  const royalDecreeRelicSlot = 'ui/run/relics/royal-decree.png';
+  await seedSyntheticReadinessMedia({
+    slot: royalDecreeRelicSlot,
+    domain: 'ui-kit',
+    role: 'icon',
+    width: 64,
+    height: 64,
+  });
+  await seedSyntheticDrawable({
+    id: 'run-relic-royal-decree',
+    kind: 'run-relic',
+    label: 'Royal Decree',
+    behavior: { relicId: 'royal-decree' },
+    metadata: { artFamily: 'synthetic-run-relic-icons' },
+    media: { icon: royalDecreeRelicSlot },
+  });
   await seedSyntheticDrawable({
     id: 'test-subterrain-opaque', kind: 'subterrain', label: 'Synthetic Subterrain',
     behavior: { default: true }, media: { surface: sharedPresentationSlot },
@@ -3533,6 +3617,34 @@ async function main() {
     officialPlay.body.includes('/api/media/')
   ) {
     throw new Error(`Official play page should advertise the level thumbnail: ${officialPlay.statusCode}`);
+  }
+  const relicReference = await get('/enchiridion/relics/royal-decree');
+  const relicImageMatch = relicReference.body.match(
+    /<meta property="og:image" content="[^"]+(\/api\/media\/[0-9a-f]{64})">/,
+  );
+  if (
+    relicReference.statusCode !== 200
+    || !relicReference.body.includes('<title>Royal Decree</title>')
+    || !relicReference.body.includes('<meta property="og:title" content="Royal Decree">')
+    || !relicReference.body.includes('<meta property="og:description" content="Your King gains Positioned and prefers the back deployment row.">')
+    || !relicReference.body.includes('<meta property="og:image:width" content="64">')
+    || !relicReference.body.includes('<meta property="og:image:height" content="64">')
+    || !relicReference.body.includes('<meta name="twitter:card" content="summary">')
+    || !relicImageMatch
+  ) {
+    throw new Error(`Relic reference should advertise its icon and complete effect: ${relicReference.statusCode}`);
+  }
+  const relicImage = await get(relicImageMatch[1], undefined, 5000);
+  if (relicImage.statusCode !== 200 || relicImage.headers['content-type'] !== 'image/png') {
+    throw new Error(`Relic unfurl icon should be anonymously readable live media: ${relicImage.statusCode}`);
+  }
+  const unknownRelicReference = await get('/enchiridion/relics/constructor');
+  if (
+    unknownRelicReference.statusCode !== 200
+    || !unknownRelicReference.body.includes('<meta property="og:title" content="Chess Tactics">')
+    || unknownRelicReference.body.includes('Your King gains Positioned')
+  ) {
+    throw new Error(`Unknown relic ids should retain the generic unfurl: ${unknownRelicReference.statusCode}`);
   }
   const officialThumb = await get('/assets/level-thumb/off-l-test.png', undefined, 5000);
   if (

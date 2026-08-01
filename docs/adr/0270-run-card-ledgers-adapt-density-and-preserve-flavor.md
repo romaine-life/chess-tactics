@@ -3,10 +3,10 @@ status: accepted
 date: 2026-07-31
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
-  - "[ADR-0269](0269-card-types-author-effects-and-may-conceal-unit-targets.md)"
+  - "[ADR-0272](0272-card-types-author-effects-and-may-conceal-unit-targets.md)"
 ---
 
-# ADR-0267: Run card ledgers adapt density and preserve flavor
+# ADR-0270: Run card ledgers adapt density and preserve flavor
 
 ## Context and Problem Statement
 
@@ -71,4 +71,4 @@ density while retaining flavor text at the bottom.**
 - [Game concept](../game-concept.md)
 - [ADR-0071](0071-the-deliverable-is-the-instrument.md)
 - [ADR-0225](0225-run-bundle-cards-show-every-board-unit.md)
-- [ADR-0262](0262-run-cards-keep-core-identities-while-units-carry-modifiers.md)
+- [ADR-0265](0265-run-cards-keep-core-identities-while-units-carry-modifiers.md)

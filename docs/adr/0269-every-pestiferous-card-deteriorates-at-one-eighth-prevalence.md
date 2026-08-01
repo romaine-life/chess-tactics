@@ -3,16 +3,16 @@ status: accepted
 date: 2026-07-31
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
-  - "[ADR-0268](0268-core-cards-become-affected-when-drawn.md)"
+  - "[ADR-0271](0271-core-cards-become-affected-when-drawn.md)"
 partially_supersedes:
-  - "[ADR-0264](0264-pestiferous-cards-lose-units-and-persist-when-empty.md)'s deferred eligibility and frequency rules"
+  - "[ADR-0267](0267-pestiferous-cards-lose-units-and-persist-when-empty.md)'s deferred eligibility and frequency rules"
 ---
 
-# ADR-0266: Every Pestiferous card deteriorates at one-eighth prevalence
+# ADR-0269: Every Pestiferous card deteriorates at one-eighth prevalence
 
 ## Context and Problem Statement
 
-ADR-0264 left open whether plague attrition applies to every owned Pestiferous
+ADR-0267 left open whether plague attrition applies to every owned Pestiferous
 card or only one drawn or deployed in the preceding Battle. It also deferred
 how common the hostile card type should be under The Great Mortality.
 
@@ -38,7 +38,7 @@ how common the hostile card type should be under The Great Mortality.
 Chosen: **every owned nonempty Pestiferous card loses one unit on each persisted
 Battle advancement, whether or not that card was drawn or deployed.**
 
-- Each card resolves independently and uses ADR-0264's seeded, persisted random
+- Each card resolves independently and uses ADR-0267's seeded, persisted random
   choice among its remaining Plagued units.
 - Empty Pestiferous cards still resolve to no unit loss and remain in the deck
   until an explicit removal effect purges them.
@@ -66,5 +66,5 @@ Battle advancement, whether or not that card was drawn or deployed.**
 ## More Information
 
 - [Game concept](../game-concept.md)
-- [ADR-0264](0264-pestiferous-cards-lose-units-and-persist-when-empty.md)
+- [ADR-0267](0267-pestiferous-cards-lose-units-and-persist-when-empty.md)
 - [ADR-0071](0071-the-deliverable-is-the-instrument.md)

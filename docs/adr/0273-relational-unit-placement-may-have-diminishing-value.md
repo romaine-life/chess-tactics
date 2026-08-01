@@ -4,12 +4,12 @@ date: 2026-07-31
 deciders: owner (Nelson) + Codex
 extends:
   - "[ADR-0193](0193-runs-are-persistent-wars-around-unchanged-chess-battles.md)'s deployment preferences"
-  - "[ADR-0262](0262-run-cards-keep-core-identities-while-units-carry-modifiers.md)'s unit-instance modifier model"
+  - "[ADR-0265](0265-run-cards-keep-core-identities-while-units-carry-modifiers.md)'s unit-instance modifier model"
 partially_superseded_by:
-  - "[ADR-0271](0271-relics-grant-unit-owned-deployment-abilities.md)"
+  - "[ADR-0274](0274-relics-grant-unit-owned-deployment-abilities.md)"
 ---
 
-# ADR-0270: Relational unit placement may have diminishing value
+# ADR-0273: Relational unit placement may have diminishing value
 
 ## Context and Problem Statement
 
@@ -85,5 +85,5 @@ nonlinear value.**
 
 - [Game concept](../game-concept.md)
 - [ADR-0193](0193-runs-are-persistent-wars-around-unchanged-chess-battles.md)
-- [ADR-0262](0262-run-cards-keep-core-identities-while-units-carry-modifiers.md)
-- [ADR-0269](0269-card-types-author-effects-and-may-conceal-unit-targets.md)
+- [ADR-0265](0265-run-cards-keep-core-identities-while-units-carry-modifiers.md)
+- [ADR-0272](0272-card-types-author-effects-and-may-conceal-unit-targets.md)

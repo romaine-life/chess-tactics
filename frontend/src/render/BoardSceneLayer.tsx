@@ -51,12 +51,23 @@ function visualBoard(board: EditorBoard, hidden?: { unit: boolean; doodad: boole
   };
 }
 
+/**
+ * Pin every time-based scene op (ground-cover sway today) to its authored rest frame.
+ * A still consumer renders one complete static frame and never starts the repaint
+ * clock — the same pixels every visit, which still-card art capture also relies on.
+ */
+export function stillBoardSceneOps(ops: readonly BoardDrawOp[]): BoardDrawOp[] {
+  return ops.map((op) => (op.animation ? { ...op, animation: undefined } : op));
+}
+
 export function BoardSceneLayer({
   board,
   hidden,
   coverSeed = 1234,
   ambientCover = false,
+  coverScale = 1,
   omitTerrain = true,
+  still = false,
   transformOps,
   maskTint,
   className,
@@ -69,8 +80,12 @@ export function BoardSceneLayer({
   hidden?: { tile: boolean; unit: boolean; doodad: boolean };
   coverSeed?: number;
   ambientCover?: boolean;
+  /** Miniature-scene tuft scale, anchored at each tuft's planted base (default 1). */
+  coverScale?: number;
   /** Terrain and road/river features are already owned by BoardTerrainLayer. */
   omitTerrain?: boolean;
+  /** Render one static rest frame — no sway, no repaint clock (see stillBoardSceneOps). */
+  still?: boolean;
   /** Review-only visual substitution applied before the one globally depth-sorted scene canvas. */
   transformOps?: BoardSceneOpsTransform;
   maskTint?: string;
@@ -85,22 +100,23 @@ export function BoardSceneLayer({
 }): ReactElement | null {
   const sourceBoard = useMemo(() => visualBoard(board, hidden), [board, hidden]);
   const contentHash = useMemo(
-    () => `${boardContentHash(sourceBoard)}|cover:${coverSeed}|ambient:${ambientCover ? 1 : 0}|predrawn:${predrawnBackgroundActive ? 1 : 0}`,
-    [ambientCover, coverSeed, predrawnBackgroundActive, sourceBoard],
+    () => `${boardContentHash(sourceBoard)}|cover:${coverSeed}|ambient:${ambientCover ? 1 : 0}|coverScale:${coverScale}|predrawn:${predrawnBackgroundActive ? 1 : 0}`,
+    [ambientCover, coverScale, coverSeed, predrawnBackgroundActive, sourceBoard],
   );
   const bounds = useMemo(
     () => boardBounds(sourceBoard, { ambientCover, coverSeed, predrawnBackgroundActive }),
     [ambientCover, contentHash, coverSeed, predrawnBackgroundActive, sourceBoard],
   );
   const ops = useMemo(() => {
-    const all = boardDrawOps(sourceBoard, { ambientCover, coverSeed, predrawnBackgroundActive });
+    const all = boardDrawOps(sourceBoard, { ambientCover, coverScale, coverSeed, predrawnBackgroundActive });
     const transformed = transformOps ? transformOps(all, sourceBoard) : all;
-    return omitTerrain
+    const layered = omitTerrain
       ? withoutBoardDrawLayers(transformed, 'terrain', 'linear-feature')
       : hidden?.tile
         ? withoutBoardDrawLayers(transformed, 'terrain')
         : transformed;
-  }, [ambientCover, contentHash, coverSeed, hidden?.tile, omitTerrain, predrawnBackgroundActive, sourceBoard, transformOps]);
+    return still ? stillBoardSceneOps(layered) : layered;
+  }, [ambientCover, contentHash, coverScale, coverSeed, hidden?.tile, omitTerrain, predrawnBackgroundActive, sourceBoard, still, transformOps]);
   const occlusionMasks = useMemo(
     () => boardSceneOcclusionMasks(board, {
       predrawnBackgroundActive,

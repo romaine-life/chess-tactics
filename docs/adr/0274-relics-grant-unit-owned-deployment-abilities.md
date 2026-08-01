@@ -4,10 +4,10 @@ date: 2026-07-31
 deciders: owner (Nelson) + Codex
 partially_supersedes:
   - "[ADR-0193](0193-runs-are-persistent-wars-around-unchanged-chess-battles.md)'s direct ownership of seven piece-placement relic effects"
-  - "[ADR-0270](0270-relational-unit-placement-may-have-diminishing-value.md)'s deferral of the Marshalled name and relic relationship"
+  - "[ADR-0273](0273-relational-unit-placement-may-have-diminishing-value.md)'s deferral of the Marshalled name and relic relationship"
 ---
 
-# ADR-0271: Relics grant unit-owned deployment abilities
+# ADR-0274: Relics grant unit-owned deployment abilities
 
 ## Context and Problem Statement
 
@@ -64,7 +64,7 @@ The exact grants are:
 - **Marshalled** owns the current role-aware preferences: the King prefers a
   board-edge zone square, Rooks prefer the established King-flank/corner
   formation, and Bishops prefer alternating square colors. The Bishop behavior
-  retains ADR-0270's intentionally contextual and potentially diminishing
+  retains ADR-0273's intentionally contextual and potentially diminishing
   value.
 - A relic grant applies to every current and later-acquired persistent unit of
   the named piece type. The ability remains effective state derived from the
@@ -95,5 +95,5 @@ The exact grants are:
 
 - [Game concept](../game-concept.md)
 - [ADR-0193](0193-runs-are-persistent-wars-around-unchanged-chess-battles.md)
-- [ADR-0262](0262-run-cards-keep-core-identities-while-units-carry-modifiers.md)
-- [ADR-0270](0270-relational-unit-placement-may-have-diminishing-value.md)
+- [ADR-0265](0265-run-cards-keep-core-identities-while-units-carry-modifiers.md)
+- [ADR-0273](0273-relational-unit-placement-may-have-diminishing-value.md)

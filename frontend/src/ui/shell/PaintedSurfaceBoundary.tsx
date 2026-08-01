@@ -103,13 +103,27 @@ export function PaintedSurfaceBoundary({
     if (!readyToCompose || error || !contentRef.current) return undefined;
     let cancelled = false;
     const startedAt = performance.now();
-    const images = [...contentRef.current.querySelectorAll('img')];
-    const cssImages = renderedCssImageUrls(contentRef.current);
+    const root = contentRef.current;
+    const images = [...root.querySelectorAll('img')];
+    const cssImages = renderedCssImageUrls(root);
     loadingMark(surface, 'dom-compose-wait-start', { imageCount: images.length, cssImageCount: cssImages.length, signature });
+    // Nested painted surfaces (a Run card's scene window, the deployment level
+    // preview) finish their own compose before this boundary reports painted, so a
+    // route entrance reveals one complete frame — the same rule RunWorkspaceStages
+    // applies to in-place phase swaps. Every nested surface resolves to ready or
+    // error, so this scan always terminates.
+    const nestedSurfacesSettled = (): Promise<void> => new Promise((resolve) => {
+      const check = (): void => {
+        if (cancelled || !root.querySelector('.painted-surface.is-loading')) resolve();
+        else requestAnimationFrame(check);
+      };
+      check();
+    });
     void Promise.all([
       ...images.map(waitForRenderedImage),
       ...cssImages.map((url) => loadDecodedImage(url).then(() => undefined)),
     ])
+      .then(nestedSurfacesSettled)
       .then(afterTwoPaintOpportunities)
       .then(() => {
         if (cancelled) return;

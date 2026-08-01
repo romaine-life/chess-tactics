@@ -7,7 +7,7 @@ supersedes:
   - "[ADR-0198](0198-run-relic-icons-are-installed-live-art-and-persistently-visible.md) installed-art authority for renamed identities"
 ---
 
-# ADR-0261: Run relic identities carry anti-story residue
+# ADR-0264: Run relic identities carry anti-story residue
 
 ## Context and Problem Statement
 

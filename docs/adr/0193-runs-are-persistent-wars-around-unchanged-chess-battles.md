@@ -4,10 +4,10 @@ date: 2026-07-28
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
   - "[ADR-0220](0220-run-victory-gold-scales-with-enemy-force-value.md)"
-  - "[ADR-0261](0261-run-relic-identities-carry-anti-story-residue.md)"
-  - "[ADR-0262](0262-run-cards-keep-core-identities-while-units-carry-modifiers.md)"
-  - "[ADR-0264](0264-pestiferous-cards-lose-units-and-persist-when-empty.md)"
-  - "[ADR-0271](0271-relics-grant-unit-owned-deployment-abilities.md)"
+  - "[ADR-0264](0264-run-relic-identities-carry-anti-story-residue.md)"
+  - "[ADR-0265](0265-run-cards-keep-core-identities-while-units-carry-modifiers.md)"
+  - "[ADR-0267](0267-pestiferous-cards-lose-units-and-persist-when-empty.md)"
+  - "[ADR-0274](0274-relics-grant-unit-owned-deployment-abilities.md)"
 ---
 
 # ADR-0193: Runs are persistent Wars around unchanged chess Battles

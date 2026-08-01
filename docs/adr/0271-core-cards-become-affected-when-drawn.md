@@ -3,11 +3,11 @@ status: accepted
 date: 2026-07-31
 deciders: owner (Nelson) + Codex
 partially_supersedes:
-  - "[ADR-0262](0262-run-cards-keep-core-identities-while-units-carry-modifiers.md)'s unresolved relationship between core cards and modified instances"
-  - "[ADR-0266](0266-every-pestiferous-card-deteriorates-at-one-eighth-prevalence.md)'s deferred Pestiferous marking point"
+  - "[ADR-0265](0265-run-cards-keep-core-identities-while-units-carry-modifiers.md)'s unresolved relationship between core cards and modified instances"
+  - "[ADR-0269](0269-every-pestiferous-card-deteriorates-at-one-eighth-prevalence.md)'s deferred Pestiferous marking point"
 ---
 
-# ADR-0268: Core cards become affected when drawn
+# ADR-0271: Core cards become affected when drawn
 
 ## Context and Problem Statement
 
@@ -81,6 +81,5 @@ particular affected card only when it is drawn into an offer.**
 
 - [Game concept](../game-concept.md)
 - [ADR-0193](0193-runs-are-persistent-wars-around-unchanged-chess-battles.md)
-- [ADR-0262](0262-run-cards-keep-core-identities-while-units-carry-modifiers.md)
-- [ADR-0266](0266-every-pestiferous-card-deteriorates-at-one-eighth-prevalence.md)
-
+- [ADR-0265](0265-run-cards-keep-core-identities-while-units-carry-modifiers.md)
+- [ADR-0269](0269-every-pestiferous-card-deteriorates-at-one-eighth-prevalence.md)

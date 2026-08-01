@@ -6,7 +6,7 @@ import {
   type AdminLiveMediaVersion,
 } from '../net/liveMediaAdmin';
 import type { PieceBundle } from '../run/model';
-import { RunBundleCard } from './RunScreen';
+import { RunBundleCard } from './RunBundleCard';
 import { OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
 import { useSceneParticipant } from './shell/SceneBoundary';
 

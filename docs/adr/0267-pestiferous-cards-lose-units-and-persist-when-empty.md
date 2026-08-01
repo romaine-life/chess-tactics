@@ -3,12 +3,12 @@ status: accepted
 date: 2026-07-31
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
-  - "[ADR-0266](0266-every-pestiferous-card-deteriorates-at-one-eighth-prevalence.md)"
+  - "[ADR-0269](0269-every-pestiferous-card-deteriorates-at-one-eighth-prevalence.md)"
 partially_supersedes:
   - "[ADR-0193](0193-runs-are-persistent-wars-around-unchanged-chess-battles.md)'s exclusive permanent-unit-removal rule"
 ---
 
-# ADR-0264: Pestiferous cards lose units and persist when empty
+# ADR-0267: Pestiferous cards lose units and persist when empty
 
 ## Context and Problem Statement
 
@@ -43,7 +43,7 @@ Chosen: **Pestiferous is a hostile card property that causes gradual unit loss
 and survives its contents.**
 
 - A card **is Pestiferous**. Every unit instance it contains is Plagued; the
-  unit modifier remains instance state and uses ADR-0262's stepped discount.
+  unit modifier remains instance state and uses ADR-0265's stepped discount.
 - A Pestiferous card can permanently lose **at most one** remaining Plagued unit
   when one Battle's plague attrition resolves. The chosen unit is random,
   seeded, and persisted.
@@ -60,7 +60,7 @@ and survives its contents.**
   Pestiferous card on advancement or only to a card drawn or deployed for that
   Battle. That eligibility decision must be made before implementation; either
   way, no eligible card loses more than one unit per Battle advancement.
-- **The Great Mortality**, introduced by ADR-0263, is the first Ataraxia that
+- **The Great Mortality**, introduced by ADR-0266, is the first Ataraxia that
   permits this card type to appear. Offer frequency and guarantees remain
   tuning decisions.
 
@@ -81,5 +81,5 @@ and survives its contents.**
 
 - [Game concept](../game-concept.md)
 - [ADR-0193](0193-runs-are-persistent-wars-around-unchanged-chess-battles.md)
-- [ADR-0262](0262-run-cards-keep-core-identities-while-units-carry-modifiers.md)
-- [ADR-0263](0263-ataraxia-names-optional-run-difficulty-after-real-history.md)
+- [ADR-0265](0265-run-cards-keep-core-identities-while-units-carry-modifiers.md)
+- [ADR-0266](0266-ataraxia-names-optional-run-difficulty-after-real-history.md)

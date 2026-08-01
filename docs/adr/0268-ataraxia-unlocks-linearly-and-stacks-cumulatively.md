@@ -3,14 +3,14 @@ status: accepted
 date: 2026-07-31
 deciders: owner (Nelson) + Codex
 partially_supersedes:
-  - "[ADR-0263](0263-ataraxia-names-optional-run-difficulty-after-real-history.md)'s deferred unlock and stacking rules"
+  - "[ADR-0266](0266-ataraxia-names-optional-run-difficulty-after-real-history.md)'s deferred unlock and stacking rules"
 ---
 
-# ADR-0265: Ataraxia unlocks linearly and stacks cumulatively
+# ADR-0268: Ataraxia unlocks linearly and stacks cumulatively
 
 ## Context and Problem Statement
 
-ADR-0263 established No Ataraxia and the first historically named difficulty
+ADR-0266 established No Ataraxia and the first historically named difficulty
 condition, but deferred its unlock cadence and whether later conditions replace
 or accumulate with earlier ones. A difficulty ladder needs one predictable
 answer before additional historical conditions are designed.
@@ -57,4 +57,4 @@ Chosen: **Ataraxia is one linear, cumulative sequence.**
 ## More Information
 
 - [Game concept](../game-concept.md)
-- [ADR-0263](0263-ataraxia-names-optional-run-difficulty-after-real-history.md)
+- [ADR-0266](0266-ataraxia-names-optional-run-difficulty-after-real-history.md)

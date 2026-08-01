@@ -59,6 +59,7 @@ const {
 const {
   resolveDefaultOgImage,
   resolveLevelCardPresentation,
+  resolveRunRelicIcon,
 } = require(path.join(bakedBackendDir, 'thumbnailPresentation'));
 const {
   liveCatalogReadinessIssue,
@@ -2672,6 +2673,24 @@ const MIGRATIONS = [
          SET revision = revision + 1, updated_at = now()
        WHERE singleton = true
          AND EXISTS (SELECT 1 FROM logged);
+    `,
+  },
+  {
+    version: 47,
+    name: 'owner-authored Run card scene overrides',
+    // One complete, owner-editable card-scenes document (the sfx_profiles shape).
+    // The row is intentionally not seeded: absence means every card shows its
+    // deterministic generated scene, and there is no committed override fallback.
+    sql: `
+      CREATE TABLE IF NOT EXISTS card_scene_documents (
+        id                    text        PRIMARY KEY CHECK (id = 'default'),
+        data                  jsonb       NOT NULL,
+        client_schema_version integer     NOT NULL CHECK (client_schema_version = 1),
+        revision              bigint      NOT NULL DEFAULT 0 CHECK (revision >= 0),
+        created_at            timestamptz NOT NULL DEFAULT now(),
+        updated_at            timestamptz NOT NULL DEFAULT now(),
+        updated_by            text
+      );
     `,
   },
 ];
@@ -13542,6 +13561,162 @@ app.put('/api/sfx-profiles/:id', async (req, res) => {
   }
 });
 
+// --- Owner-authored Run card scene overrides --------------------------------
+// One revisioned document (the sfx_profiles shape): public GET hydrates runtime
+// and Studio; the admin optimistic PUT saves the owner-operated instrument. A
+// missing row means generated scenes with no committed fallback (ADR-0089 shape).
+const CARD_SCENES_SCHEMA_VERSION = 1;
+const CARD_SCENES_ID = 'default';
+const CARD_SCENES_LOCK_KEY = 4300193003;
+// The authored scene is a canonical board code (opaque URL-safe token). Deep board
+// validation (3×3 stage, no persisted units) is the client codec's job at apply time;
+// the server enforces shape, charset, and size so the document stays bounded.
+const CARD_SCENE_BOARD_CODE = /^[A-Za-z0-9_-]+$/;
+const CARD_SCENE_BOARD_CODE_MAX_LENGTH = 200000;
+const CARD_SCENE_FRAME_MIN_WIDTH = 80;
+const CARD_SCENE_FRAME_MAX_WIDTH = 640;
+
+function validateCardScenesData(data) {
+  if (!isObjectRecord(data) || !isObjectRecord(data.overrides)) return 'document shape is invalid';
+  for (const [cardId, override] of Object.entries(data.overrides)) {
+    if (!/^[a-z]{1,9}$/.test(cardId) || !isObjectRecord(override)) return `override ${cardId} is invalid`;
+    if (override.salt !== undefined && (!Number.isSafeInteger(override.salt) || override.salt < 0)) {
+      return `override ${cardId} salt is invalid`;
+    }
+    if (override.board !== undefined) {
+      if (typeof override.board !== 'string' || !override.board
+        || override.board.length > CARD_SCENE_BOARD_CODE_MAX_LENGTH
+        || !CARD_SCENE_BOARD_CODE.test(override.board)) {
+        return `override ${cardId} board code is invalid`;
+      }
+    }
+    if (override.frame !== undefined) {
+      const frame = override.frame;
+      if (!isObjectRecord(frame)
+        || !Number.isFinite(frame.x) || Math.abs(frame.x) > 2000
+        || !Number.isFinite(frame.y) || Math.abs(frame.y) > 2000
+        || !Number.isFinite(frame.width)
+        || frame.width < CARD_SCENE_FRAME_MIN_WIDTH
+        || frame.width > CARD_SCENE_FRAME_MAX_WIDTH) {
+        return `override ${cardId} frame is invalid`;
+      }
+    }
+  }
+  return null;
+}
+
+function publicCardScenes(row) {
+  return {
+    id: CARD_SCENES_ID,
+    data: row.data,
+    clientSchemaVersion: Number(row.client_schema_version),
+    revision: Number(row.revision),
+    createdAt: nullableTimestampString(row.created_at),
+    updatedAt: nullableTimestampString(row.updated_at),
+    updatedBy: row.updated_by || null,
+  };
+}
+
+async function dbGetCardScenes() {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    `SELECT data, client_schema_version, revision, created_at, updated_at, updated_by
+       FROM card_scene_documents WHERE id = $1`,
+    [CARD_SCENES_ID],
+  );
+  return rows[0] || null;
+}
+
+async function dbSaveCardScenes(data, expectedRevision, actorEmail) {
+  await ensureDbReady();
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('SELECT pg_advisory_xact_lock($1)', [CARD_SCENES_LOCK_KEY]);
+    const current = await client.query(
+      `SELECT revision FROM card_scene_documents WHERE id = $1 FOR UPDATE`,
+      [CARD_SCENES_ID],
+    );
+    const row = current.rows[0] || null;
+    if ((!row && expectedRevision !== null) || (row && Number(row.revision) !== expectedRevision)) {
+      const error = new Error('card_scenes_conflict');
+      error.cardScenesConflict = true;
+      error.currentRevision = row ? Number(row.revision) : null;
+      throw error;
+    }
+    let saved;
+    let created = false;
+    if (!row) {
+      created = true;
+      saved = await client.query(
+        `INSERT INTO card_scene_documents (id, data, client_schema_version, revision, updated_by)
+         VALUES ($1, $2::jsonb, $3, 0, $4)
+         RETURNING data, client_schema_version, revision, created_at, updated_at, updated_by`,
+        [CARD_SCENES_ID, JSON.stringify(data), CARD_SCENES_SCHEMA_VERSION, actorEmail],
+      );
+    } else {
+      saved = await client.query(
+        `UPDATE card_scene_documents SET data = $2::jsonb, client_schema_version = $3,
+            revision = revision + 1, updated_at = now(), updated_by = $4
+          WHERE id = $1
+        RETURNING data, client_schema_version, revision, created_at, updated_at, updated_by`,
+        [CARD_SCENES_ID, JSON.stringify(data), CARD_SCENES_SCHEMA_VERSION, actorEmail],
+      );
+    }
+    await client.query('COMMIT');
+    return { row: saved.rows[0], created };
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve original error */ }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+app.get('/api/card-scenes/:id', async (req, res) => {
+  if (req.params.id !== CARD_SCENES_ID) { res.status(400).json({ error: 'invalid_card_scenes_id' }); return; }
+  try {
+    const row = await dbGetCardScenes();
+    if (!row) { res.setHeader('Cache-Control', 'no-store'); res.status(404).json({ error: 'card_scenes_not_found' }); return; }
+    const issue = validateCardScenesData(row.data);
+    if (issue || Number(row.client_schema_version) !== CARD_SCENES_SCHEMA_VERSION) {
+      throw new Error(`stored card scenes document is invalid: ${issue || 'client schema version mismatch'}`);
+    }
+    const etag = `"card-scenes-${Number(row.revision)}"`;
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('ETag', etag);
+    if (req.headers['if-none-match'] === etag) { res.status(304).end(); return; }
+    res.status(200).json({ document: publicCardScenes(row) });
+  } catch (error) {
+    dbUnavailable(res, 'card scenes read failed', error, 'card_scenes_unavailable');
+  }
+});
+
+app.put('/api/card-scenes/:id', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  if (req.params.id !== CARD_SCENES_ID) { res.status(400).json({ error: 'invalid_card_scenes_id' }); return; }
+  const raw = isObjectRecord(req.body) ? req.body : {};
+  const expectedRevision = raw.expectedRevision === null
+    ? null : Number.isInteger(raw.expectedRevision) && raw.expectedRevision >= 0 ? raw.expectedRevision : undefined;
+  if (expectedRevision === undefined || raw.clientSchemaVersion !== CARD_SCENES_SCHEMA_VERSION) {
+    res.status(400).json({ error: 'invalid_card_scenes_write', details: 'expectedRevision and clientSchemaVersion are required' });
+    return;
+  }
+  const issue = validateCardScenesData(raw.data);
+  if (issue) { res.status(400).json({ error: 'invalid_card_scenes', details: issue }); return; }
+  try {
+    const saved = await dbSaveCardScenes(raw.data, expectedRevision, user.email);
+    res.status(saved.created ? 201 : 200).json({ document: publicCardScenes(saved.row) });
+  } catch (error) {
+    if (error && error.cardScenesConflict) {
+      res.status(409).json({ error: 'card_scenes_conflict', currentRevision: error.currentRevision });
+      return;
+    }
+    dbUnavailable(res, 'card scenes write failed', error, 'card_scenes_unavailable');
+  }
+});
+
 // --- Database-owned drawable catalog ---------------------------------------
 // A drawable is an installed content record. Its `kind` selects code-owned
 // behavior; every concrete id, label, order, configuration value, and media-role
@@ -17954,28 +18129,9 @@ app.put('/api/campaign-progress', async (req, res) => {
 const ACTIVE_RUN_PHASES = new Set(['draft', 'deployment', 'battle', 'shop', 'victory']);
 const ACTIVE_RUN_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
 const ACTIVE_RUN_ABILITIES = new Set(['discipline', 'positioned', 'marshalled']);
-const RUN_RELIC_IDS = new Set([
-  'conscription-notice',
-  'congressional-approval',
-  'inspirational-record',
-  'training-linens',
-  'royal-decree',
-  'crenellated-rampart',
-  'ghibelline-rampart',
-  'popes-staff',
-  'popes-robes',
-  'royal-tent',
-  'royal-sceptre',
-  'mercenarys-rifle',
-  'merchants-shopkey',
-  'occult-dagger',
-  'deployment-vehicle',
-  'mercenary-boat',
-  'quartermasters-ledger',
-  'fair-scales',
-  'muster-roll',
-  'surveyors-compass',
-]);
+const RUN_RELICS = Array.isArray(serverRender?.RUN_RELICS) ? serverRender.RUN_RELICS : [];
+const RUN_RELIC_BY_ID = serverRender?.RUN_RELIC_BY_ID ?? {};
+const RUN_RELIC_IDS = new Set(RUN_RELICS.map((relic) => relic.id));
 function validateActiveRunBody(run) {
   if (!run || typeof run !== 'object' || Array.isArray(run)) return 'run must be an object';
   if (run.formatVersion !== 1 && run.formatVersion !== 2 && run.formatVersion !== 3 && run.formatVersion !== 4) return 'run.formatVersion is unsupported';
@@ -18326,13 +18482,13 @@ function makeStaticCacheHeaders(rootDir) {
   };
 }
 
-// --- Open Graph unfurl + on-demand board thumbnails -------------------------
-// A shared level link must unfurl on Discord/Slack/Twitter (crawlers fetch the URL server-side — no
-// JS, no auth). The SPA fallback injects per-level og:/twitter: tags, and og:image points at an
-// on-demand board render served here. Officials resolve from the LIVE DB; user maps from public_maps.
-// Generic pages use the branded default-image semantic slot. A targeted level
-// thumbnail never masks missing content/media with it: missing targets are 404
-// and renderer/catalog/media failures are explicit 503s.
+// --- Open Graph unfurls + on-demand board thumbnails ------------------------
+// Shared content links must unfurl on Discord/Slack/Twitter (crawlers fetch the
+// URL server-side — no JS, no auth). The SPA fallback injects route-specific
+// og:/twitter: tags. Levels point at an on-demand board render; canonical relic
+// addresses point at the exact installed live icon. Generic pages use the
+// branded default-image semantic slot. Targeted media never masks missing
+// content/media with it.
 const OG_SITE_NAME = 'Chess Tactics';
 const OG_DEFAULT_DESC = 'Tactical chess battles on a living board.';
 // Owner-facing objective labels — mirrors frontend core/objectives.ts MODE_NAME (5 stable entries).
@@ -18892,38 +19048,62 @@ async function ogTagsFor(req) {
   const levelId = typeof req.query.levelId === 'string' ? req.query.levelId : null;
   const campaignId = typeof req.query.campaignId === 'string' ? req.query.campaignId : null;
   const mapId = typeof req.query.map === 'string' && PUBLIC_ID_RE.test(req.query.map) ? req.query.map : null;
-  const target = await resolveShareTarget({ levelId, campaignId, mapId }).catch(() => null);
+  const relicMatch = /^\/enchiridion\/relics\/([a-z][a-z0-9-]*)\/?$/.exec(req.path);
+  const relic = relicMatch && Object.hasOwn(RUN_RELIC_BY_ID, relicMatch[1])
+    ? RUN_RELIC_BY_ID[relicMatch[1]]
+    : null;
+  const target = relic ? null : await resolveShareTarget({ levelId, campaignId, mapId }).catch(() => null);
 
   let title = OG_SITE_NAME;
   let description = OG_DEFAULT_DESC;
   const drawableCatalog = await dbReadDrawableCatalog();
-  const defaultOgPath = resolveDefaultOgImage(drawableCatalog);
-  let image = `${origin}${defaultOgPath}`;
-  if (target) {
-    title = target.title || OG_SITE_NAME;
-    description = target.description || target.subtitle || OG_DEFAULT_DESC;
-    if (serverRender) {
-      const key = mapId || levelId;
-      let hash = '';
-      try {
-        hash = (await prepareLevelCardThumbnail(target)).contentVersion;
-      } catch { hash = ''; }
-      const imageParams = new URLSearchParams();
-      if (hash) imageParams.set('v', hash);
-      if (campaignId && key === levelId) imageParams.set('campaignId', campaignId);
-      const qs = imageParams.toString();
-      image = `${origin}/assets/level-thumb/${encodeURIComponent(key)}.png${qs ? `?${qs}` : ''}`;
+  let image = null;
+  let imageWidth = 1200;
+  let imageHeight = 630;
+  let imageType = 'image/png';
+  let imageAlt = `${OG_SITE_NAME} preview`;
+  let twitterCard = 'summary_large_image';
+  if (relic) {
+    const icon = resolveRunRelicIcon(drawableCatalog, relic.id);
+    title = relic.name;
+    description = relic.description;
+    image = `${origin}${icon.src}`;
+    imageWidth = icon.width;
+    imageHeight = icon.height;
+    imageType = icon.mediaType;
+    imageAlt = `${relic.name} relic`;
+    twitterCard = 'summary';
+  } else {
+    const defaultOgPath = resolveDefaultOgImage(drawableCatalog);
+    image = `${origin}${defaultOgPath}`;
+    if (target) {
+      title = target.title || OG_SITE_NAME;
+      description = target.description || target.subtitle || OG_DEFAULT_DESC;
+      imageAlt = `${title} board preview`;
+      if (serverRender) {
+        const key = mapId || levelId;
+        let hash = '';
+        try {
+          hash = (await prepareLevelCardThumbnail(target)).contentVersion;
+        } catch { hash = ''; }
+        const imageParams = new URLSearchParams();
+        if (hash) imageParams.set('v', hash);
+        if (campaignId && key === levelId) imageParams.set('campaignId', campaignId);
+        const qs = imageParams.toString();
+        image = `${origin}/assets/level-thumb/${encodeURIComponent(key)}.png${qs ? `?${qs}` : ''}`;
+      }
     }
   }
   const url = `${origin}${req.originalUrl}`;
   const meta = [
     ['og:type', 'website'], ['og:site_name', OG_SITE_NAME], ['og:title', title],
     ['og:description', description], ['og:url', url], ['og:image', image],
-    ['og:image:width', '1200'], ['og:image:height', '630'],
+    ['og:image:type', imageType], ['og:image:width', imageWidth], ['og:image:height', imageHeight],
+    ['og:image:alt', imageAlt],
   ].map(([p, c]) => `<meta property="${p}" content="${htmlEscape(c)}">`);
   const tw = [
-    ['twitter:card', 'summary_large_image'], ['twitter:title', title],
-    ['twitter:description', description], ['twitter:image', image],
+    ['twitter:card', twitterCard], ['twitter:title', title],
+    ['twitter:description', description], ['twitter:image', image], ['twitter:image:alt', imageAlt],
   ].map(([n, c]) => `<meta name="${n}" content="${htmlEscape(c)}">`);
   return { title, headTags: [...meta, ...tw].join('') };
 }

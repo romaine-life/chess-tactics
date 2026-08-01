@@ -3,13 +3,13 @@ status: accepted
 date: 2026-07-31
 deciders: owner (Nelson) + Codex
 partially_supersedes:
-  - "[ADR-0262](0262-run-cards-keep-core-identities-while-units-carry-modifiers.md)'s requirement to expose every exact modified unit before purchase"
-  - "[ADR-0267](0267-run-card-ledgers-adapt-density-and-preserve-flavor.md)'s requirement to show every exact modifier target at every card state"
+  - "[ADR-0265](0265-run-cards-keep-core-identities-while-units-carry-modifiers.md)'s requirement to expose every exact modified unit before purchase"
+  - "[ADR-0270](0270-run-card-ledgers-adapt-density-and-preserve-flavor.md)'s requirement to show every exact modifier target at every card state"
 partially_superseded_by:
-  - "[ADR-0273](0273-run-type-lines-declare-primary-families-and-affected-qualifiers.md)'s primary-type and affected-qualifier type-line grammar"
+  - "[ADR-0276](0276-run-type-lines-declare-primary-families-and-affected-qualifiers.md)'s primary-type and affected-qualifier type-line grammar"
 ---
 
-# ADR-0269: Card types author effects and may conceal unit targets
+# ADR-0272: Card types author effects and may conceal unit targets
 
 ## Context and Problem Statement
 
@@ -63,7 +63,7 @@ affect the same layer of a card.**
   units, and its displayed cost includes their known modifier value. Before
   purchase, the ledger marks the target as hidden; afterward it identifies the
   exact modified unit.
-- Flavor text remains present under ADR-0267. Hidden gameplay information is a
+- Flavor text remains present under ADR-0270. Hidden gameplay information is a
   deliberate rules element, not an excuse to clip or omit public card content.
 - The exact Tactical modifier catalog, appearance probability, target-selection
   distribution, and whether multiple card types may coexist on one offer remain
@@ -85,7 +85,7 @@ affect the same layer of a card.**
 ## More Information
 
 - [Game concept](../game-concept.md)
-- [ADR-0262](0262-run-cards-keep-core-identities-while-units-carry-modifiers.md)
-- [ADR-0264](0264-pestiferous-cards-lose-units-and-persist-when-empty.md)
-- [ADR-0267](0267-run-card-ledgers-adapt-density-and-preserve-flavor.md)
-- [ADR-0268](0268-core-cards-become-affected-when-drawn.md)
+- [ADR-0265](0265-run-cards-keep-core-identities-while-units-carry-modifiers.md)
+- [ADR-0267](0267-pestiferous-cards-lose-units-and-persist-when-empty.md)
+- [ADR-0270](0270-run-card-ledgers-adapt-density-and-preserve-flavor.md)
+- [ADR-0271](0271-core-cards-become-affected-when-drawn.md)

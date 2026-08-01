@@ -73,7 +73,7 @@ these.
   is never decimal, fractional, zero, or two-digit, and does not use separate
   numbered coin art. Each actual unit appears as the same canonical player-side
   sprite used on the board, while denser contents move into the rules-area
-  ledger (ADR-0219, ADR-0225, ADR-0267, ADR-0272, ADR-0273).
+  ledger (ADR-0219, ADR-0225, ADR-0270, ADR-0275, ADR-0276).
 - The bundle deck's 49 unique one-through-nine-point compositions are the
   authored **core cards**. Each keeps one title and flavor text while its
   drawn offer may give particular units more than one modifier. The 49 cores do
@@ -84,8 +84,8 @@ these.
   1, Rook 2, Queen 3—so shop-card prices remain whole gold and a Plagued Pawn
   still costs 1. Exact public contents and modifiers belong in the rules-area
   unit ledger, not generated card-name permutations; an explicitly concealed
-  Tactical target appears there as hidden until purchase (ADR-0262, ADR-0268,
-  ADR-0269).
+  Tactical target appears there as hidden until purchase (ADR-0265, ADR-0271,
+  ADR-0272).
 - A card's affected **qualifiers** identify causal rules rather than replacing
   its primary type. Pestiferous changes the card lifecycle and all its units.
   **Tactical** instead authors a positive enhancement of one or more contained
@@ -95,37 +95,37 @@ these.
   concealed target is seeded and persisted with the offer, priced normally,
   and merely revealed—not rerolled—after purchase. A card does not become
   Tactical just because an external relic later modifies one of its units
-  (ADR-0269, ADR-0273).
+  (ADR-0272, ADR-0276).
 - Run difficulty is **Ataraxia**. The first Run has **No Ataraxia**; later Runs
   may opt into historically named conditions. Completing the highest available
   tier unlocks exactly the next one, and the ladder stacks: selecting tier N
-  applies every condition from 1 through N (ADR-0263, ADR-0265).
+  applies every condition from 1 through N (ADR-0266, ADR-0268).
 - **Ataraxia I — The Great Mortality** initially targets Pestiferous status for
   roughly one in eight otherwise eligible shop draws. Pestiferous status is
   rolled with the rest of that affected offer, not added as another deck copy.
   A Pestiferous card makes all its units Plagued; every owned nonempty
   Pestiferous card loses one seeded random unit on each Battle advancement
   whether or not it was drawn or deployed. The empty card remains as a possible
-  dead draw until an explicit effect removes it (ADR-0264, ADR-0266, ADR-0268).
+  dead draw until an explicit effect removes it (ADR-0267, ADR-0269, ADR-0271).
 - Card ledgers have no assumed row cap before live experimentation. Dense cards
   may step down row spacing, icons, and type within readable bounds, but they
   must continue to show every unit property and retain the core card's flavor
   text in its bottom region. Repeated-unit grouping and a demonstrated maximum
-  row count remain open presentation decisions (ADR-0267).
+  row count remain open presentation decisions (ADR-0270).
 - Deployment modifiers may be contextual rather than linearly valuable. A
   role-aware **Marshalled** ability belongs to a particular unit but may inspect
   the surrounding formation. Its Bishop behavior is only to prefer a square
   color opposite another Bishop: an ordinary Bishop can be its reference, one
   Marshalled Bishop may have little effect alone, and a second is not owed an
   invented additional benefit. The player weighs that roster-dependent value
-  (ADR-0270, ADR-0271).
+  (ADR-0273, ADR-0274).
 - Placement relics grant shared unit abilities rather than owning bespoke
   placement rules. Field Linens grants Positioned to Pawns; Royal Decree to the
   King; Crenellated Rampart to Rooks; and Pope's Staff to Bishops. Ghibelline
   Rampart grants Marshalled to Rooks; Pope's Robes to Bishops; and Royal Sceptre
   to the King. Their rules text names only the grant, while the unit-ability
   reference owns the piece-specific behavior. Permanent and relic-granted
-  copies do not stack (ADR-0271).
+  copies do not stack (ADR-0274).
 - Every persistent Run unit receives a seeded, stored historical identity when
   it joins the army. Piece type chooses the register: recorded archers for
   Pawns, documented knights, religious leaders, real castles for Rooks, queens

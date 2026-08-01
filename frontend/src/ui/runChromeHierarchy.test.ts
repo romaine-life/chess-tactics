@@ -8,11 +8,14 @@ const runWorkspaceStages = readFileSync(new URL('./RunWorkspaceStages.tsx', impo
 const titleBarPortal = readFileSync(new URL('./shell/TitleBarPortalContext.tsx', import.meta.url), 'utf8');
 const runWorkspace = readFileSync(new URL('./RunWorkspace.tsx', import.meta.url), 'utf8');
 const runUnitInspectionScene = readFileSync(new URL('./RunUnitInspectionScene.tsx', import.meta.url), 'utf8');
+const runCardScene = readFileSync(new URL('./RunCardScene.tsx', import.meta.url), 'utf8');
+const runBundleCard = readFileSync(new URL('./RunBundleCard.tsx', import.meta.url), 'utf8');
 const runRelics = readFileSync(new URL('./RunRelics.tsx', import.meta.url), 'utf8');
 const runSelfInspection = readFileSync(new URL('./RunSelfInspection.tsx', import.meta.url), 'utf8');
 const skirmish = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
 const skirmishHud = readFileSync(new URL('./SkirmishHud.tsx', import.meta.url), 'utf8');
 const chromeBox = readFileSync(new URL('./shared/ChromeBox.tsx', import.meta.url), 'utf8');
+const paintedSurfaceBoundary = readFileSync(new URL('./shell/PaintedSurfaceBoundary.tsx', import.meta.url), 'utf8');
 const styleCss = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 
 describe('Run chrome hierarchy', () => {
@@ -120,11 +123,7 @@ describe('Run chrome hierarchy', () => {
   });
 
   it('gives shop bundle purchases one dedicated card cue without changing draft feedback', () => {
-    const bundleCard = runScreen.match(
-      /export function RunBundleCard\b[\s\S]*?\r?\n}\r?\n\r?\nfunction RunTitleBarStatus/,
-    )?.[0] ?? '';
-
-    expect(bundleCard).toContain("data-ui-sfx={mode === 'shop' ? 'card-purchase' : undefined}");
+    expect(runBundleCard).toContain("data-ui-sfx={mode === 'shop' ? 'card-purchase' : undefined}");
   });
 
   it('fills the shell-owned playfield for every non-Battle Run destination', () => {
@@ -175,17 +174,43 @@ describe('Run chrome hierarchy', () => {
     expect(styleCss).not.toContain('.run-screen.has-relics .run-workspace');
   });
 
-  it('shows every bundle unit with the same installed sprites used by the board', () => {
-    const bundleCard = runScreen.match(
-      /export function RunBundleCard\b[\s\S]*?\r?\n}\r?\n\r?\nfunction RunTitleBarStatus/,
-    )?.[0] ?? '';
+  it('draws every bundle card as a seeded board-scene vignette with an authored name', () => {
+    // The vignette musters every bundle piece with its canonical installed board
+    // sprite through the shared read-only renderer (ADR-0225 continues to hold).
+    expect(runBundleCard).toContain('<RunCardScene');
+    expect(runBundleCard).toContain('bundle={bundle}');
+    expect(runCardScene).toContain('<StudioReadOnlyBoard');
+    // A card is a still painting: one authored frame, no sway clock (owner call,
+    // 2026-07-30) — and the capture pipeline depends on that determinism.
+    expect(runCardScene).toMatch(/<StudioReadOnlyBoard[\s\S]{0,200}?\bstill\b/);
+    expect(runCardScene).toContain("const CARD_FACING = 'south' as const;");
+    // The window renders the card's authored viewing pane (frame) cover-fit; the
+    // default frame reproduces the original shared framing.
+    expect(runCardScene).toContain('cardSceneCameraForView(plan.frame');
+    expect(runCardScene).toContain('export function defaultCardSceneFrame');
+    expect(runCardScene).toContain('boardPan={camera.pan}');
+    expect(runBundleCard).toContain('runCardName(bundle)');
+    expect(runBundleCard).toContain('className="run-bundle-card-name"');
+    expect(runBundleCard).toContain('className="run-bundle-card-contents"');
+    expect(runBundleCard).not.toContain('UnitPortrait');
+    expect(runBundleCard).not.toContain('run-bundle-quantity');
+    expect(runBundleCard).not.toContain('pieceSpritePath');
+    expect(runScreen).toContain("import { RunBundleCard } from './RunBundleCard';");
+    expect(styleCss).toMatch(/\.run-bundle-card\s*\{[\s\S]*?aspect-ratio:\s*5 \/ 7;/);
+    expect(styleCss).toMatch(/\.run-card-scene-viewport\s*\{[\s\S]*?overflow:\s*hidden;/);
 
-    expect(bundleCard).toContain('bundle.pieces.map((piece, index)');
-    expect(runScreen).toContain("const PLAYER_BUNDLE_FACING = 'south' as const;");
-    expect(bundleCard).toContain('pieceSpritePath(piece, PLAYER_BUNDLE_PALETTE, PLAYER_BUNDLE_FACING)');
-    expect(bundleCard).toContain('className="run-bundle-board-piece"');
-    expect(bundleCard).not.toContain('UnitPortrait');
-    expect(bundleCard).not.toContain('run-bundle-quantity');
+    // The scene window speaks the painted-surface protocol, so the Run workspace
+    // stages (which wait for `.painted-surface.is-loading` to clear) reveal draft
+    // and shop hands only as complete card faces — and a card appears as one
+    // complete frame, never re-fading over the host's own choreography.
+    expect(runCardScene).toContain('painted-surface run-card-scene-surface');
+    expect(runCardScene).toContain("revealed ? 'is-ready' : 'is-loading'");
+    expect(runCardScene).toContain('className="painted-surface-content"');
+    expect(styleCss).toMatch(/\.run-card-scene-surface\.is-ready \.painted-surface-content > \*\s*\{[\s\S]*?animation:\s*none;/);
+    // Cold route entry holds the veil for the same rule: the shell's painted-surface
+    // boundary waits for nested loading surfaces before reporting painted.
+    expect(paintedSurfaceBoundary).toContain(".querySelector('.painted-surface.is-loading')");
+    expect(paintedSurfaceBoundary).toContain('.then(nestedSurfacesSettled)');
   });
 
   it('uses one divided Army ledger grid with readable metadata and value hierarchy', () => {

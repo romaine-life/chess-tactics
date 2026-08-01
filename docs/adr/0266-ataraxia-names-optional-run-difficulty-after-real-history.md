@@ -3,10 +3,10 @@ status: accepted
 date: 2026-07-31
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
-  - "[ADR-0265](0265-ataraxia-unlocks-linearly-and-stacks-cumulatively.md)"
+  - "[ADR-0268](0268-ataraxia-unlocks-linearly-and-stacks-cumulatively.md)"
 ---
 
-# ADR-0263: Ataraxia names optional Run difficulty after real history
+# ADR-0266: Ataraxia names optional Run difficulty after real history
 
 ## Context and Problem Statement
 
@@ -42,7 +42,7 @@ real historical event identities.**
   later Runs may opt into available Ataraxia.
 - The first condition is **Ataraxia I — The Great Mortality**. It allows
   Pestiferous cards to enter the Run card pool under
-  [ADR-0264](0264-pestiferous-cards-lose-units-and-persist-when-empty.md).
+  [ADR-0267](0267-pestiferous-cards-lose-units-and-persist-when-empty.md).
 - Future Ataraxias use documented historical names or appellations whose
   conditions resonate with their literal mechanic. They are not invented
   fantasy catastrophes disguised with real-looking dates.

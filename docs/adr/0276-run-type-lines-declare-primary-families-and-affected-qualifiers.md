@@ -3,11 +3,11 @@ status: accepted
 date: 2026-07-31
 deciders: owner (Nelson) + Codex
 partially_supersedes:
-  - "[ADR-0269](0269-card-types-author-effects-and-may-conceal-unit-targets.md)'s treatment of Pestiferous and Tactical as complete type-line identities"
-  - "[ADR-0272](0272-run-cards-use-trading-card-anatomy-and-single-digit-gold.md)'s exploratory-candidate status and underspecified type line"
+  - "[ADR-0272](0272-card-types-author-effects-and-may-conceal-unit-targets.md)'s treatment of Pestiferous and Tactical as complete type-line identities"
+  - "[ADR-0275](0275-run-cards-use-trading-card-anatomy-and-single-digit-gold.md)'s exploratory-candidate status and underspecified type line"
 ---
 
-# ADR-0273: Run type lines declare primary families and affected qualifiers
+# ADR-0276: Run type lines declare primary families and affected qualifiers
 
 ## Context and Problem Statement
 
@@ -20,7 +20,7 @@ point.
 
 The owner also selected the third frame from the three 2026-07-31 generated
 candidates as the visual direction. It is the only candidate that integrates a
-compact top-right coin into the shared title bar as required by ADR-0272.
+compact top-right coin into the shared title bar as required by ADR-0275.
 
 ## Decision Drivers
 
@@ -49,7 +49,7 @@ Chosen: **a primary card family followed by optional affected qualifiers.**
 - The lower rules box is ordered as a flexible composition rather than one prose
   paragraph: unit-ledger rows first, any card-level behavior needed for the
   offer next, and the core card's flavor text anchored at the bottom. Density
-  continues to adapt under ADR-0267.
+  continues to adapt under ADR-0270.
 
 ### Selected frame direction
 
@@ -77,6 +77,6 @@ Chosen: **a primary card family followed by optional affected qualifiers.**
 ## More Information
 
 - [Game concept](../game-concept.md)
-- [ADR-0267](0267-run-card-ledgers-adapt-density-and-preserve-flavor.md)
-- [ADR-0269](0269-card-types-author-effects-and-may-conceal-unit-targets.md)
-- [ADR-0272](0272-run-cards-use-trading-card-anatomy-and-single-digit-gold.md)
+- [ADR-0270](0270-run-card-ledgers-adapt-density-and-preserve-flavor.md)
+- [ADR-0272](0272-card-types-author-effects-and-may-conceal-unit-targets.md)
+- [ADR-0275](0275-run-cards-use-trading-card-anatomy-and-single-digit-gold.md)

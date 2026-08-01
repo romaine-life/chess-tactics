@@ -5,13 +5,13 @@ deciders: owner (Nelson) + Codex
 partially_supersedes:
   - "[ADR-0225](0225-run-bundle-cards-show-every-board-unit.md)'s inherited price placement and temporary card-shell assumptions"
 extends:
-  - "[ADR-0267](0267-run-card-ledgers-adapt-density-and-preserve-flavor.md)"
-  - "[ADR-0269](0269-card-types-author-effects-and-may-conceal-unit-targets.md)"
+  - "[ADR-0270](0270-run-card-ledgers-adapt-density-and-preserve-flavor.md)"
+  - "[ADR-0272](0272-card-types-author-effects-and-may-conceal-unit-targets.md)"
 partially_superseded_by:
-  - "[ADR-0273](0273-run-type-lines-declare-primary-families-and-affected-qualifiers.md)'s selected frame direction and nonempty type-line grammar"
+  - "[ADR-0276](0276-run-type-lines-declare-primary-families-and-affected-qualifiers.md)'s selected frame direction and nonempty type-line grammar"
 ---
 
-# ADR-0272: Run cards use trading-card anatomy and single-digit gold
+# ADR-0275: Run cards use trading-card anatomy and single-digit gold
 
 ## Context and Problem Statement
 
@@ -75,5 +75,5 @@ Chosen: **one shared trading-card frame with a compact live single-digit cost.**
 - [Game concept](../game-concept.md)
 - [ADR-0219](0219-run-piece-bundles-are-portrait-cards-with-a-live-gold-icon.md)
 - [ADR-0225](0225-run-bundle-cards-show-every-board-unit.md)
-- [ADR-0267](0267-run-card-ledgers-adapt-density-and-preserve-flavor.md)
-- [ADR-0269](0269-card-types-author-effects-and-may-conceal-unit-targets.md)
+- [ADR-0270](0270-run-card-ledgers-adapt-density-and-preserve-flavor.md)
+- [ADR-0272](0272-card-types-author-effects-and-may-conceal-unit-targets.md)

@@ -677,6 +677,8 @@ unfurls — so anonymous cold-start players and link-preview crawlers work. Writ
 require sign-in, and publishing **global** game content (officials, and future
 DB-backed tweakables such as props) additionally requires admin (`requireAdmin` /
 `ADMIN_EMAILS`, per [ADR-0038](adr/0038-campaigns-are-tiered-game-content.md)).
+Exact relic-reference unfurls likewise remain public and resolve the canonical
+relic name/effect plus its installed immutable live icon (ADR-0261).
 
 Private **per-user** documents are the exception by nature, not a contradiction:
 `levels` and `campaign_workspaces` are scoped to `owner_email`, so their reads

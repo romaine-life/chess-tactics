@@ -3,13 +3,13 @@ status: accepted
 date: 2026-07-31
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
-  - "[ADR-0268](0268-core-cards-become-affected-when-drawn.md)"
-  - "[ADR-0269](0269-card-types-author-effects-and-may-conceal-unit-targets.md)"
+  - "[ADR-0271](0271-core-cards-become-affected-when-drawn.md)"
+  - "[ADR-0272](0272-card-types-author-effects-and-may-conceal-unit-targets.md)"
 partially_supersedes:
   - "[ADR-0193](0193-runs-are-persistent-wars-around-unchanged-chess-battles.md)'s one-entry-per-composition bundle-deck identity"
 ---
 
-# ADR-0262: Run cards keep core identities while units carry modifiers
+# ADR-0265: Run cards keep core identities while units carry modifiers
 
 ## Context and Problem Statement
 
