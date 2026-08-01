@@ -303,6 +303,7 @@ export function RunCardPrototypeViewer({
   const [titleTypeSizeRatio, setTitleTypeSizeRatio] = useState<number | null>(null);
   const [titleTypeHorizontalOffset, setTitleTypeHorizontalOffset] = useState<number | null>(null);
   const [flavorSize, setFlavorSize] = useState(DEFAULT_FLAVOR_SIZE);
+  const [handoffCopyState, setHandoffCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
   const [loaded, setLoaded] = useState<ReadonlySet<CardImageKind>>(() => new Set());
 
   useEffect(() => {
@@ -397,6 +398,57 @@ export function RunCardPrototypeViewer({
     setTypeX(clampedTypeX);
     setTitleX(clampCardHorizontal(clampedTypeX - titleTypeHorizontalOffset));
   };
+  const resetAllTuning = (): void => {
+    setCostX(0);
+    setCostY(.3);
+    setCostSize(DEFAULT_COST_SIZE);
+    setTitleX(0);
+    setTitleY(0);
+    setTitleSize(DEFAULT_TITLE_SIZE);
+    setTypeX(0);
+    setTypeY(0);
+    setTypeSize(DEFAULT_TYPE_SIZE);
+    setFlavorSize(DEFAULT_FLAVOR_SIZE);
+    setTitleTypeSizeRatio(null);
+    setTitleTypeHorizontalOffset(null);
+    setHandoffCopyState('idle');
+  };
+  const copyCodexHandoff = async (): Promise<void> => {
+    const payload = JSON.stringify({
+      kind: 'run-card-layout-tuning',
+      version: 1,
+      card: CARD.name,
+      referenceWidthPx: REFERENCE_CARD_WIDTH,
+      units: 'percent of card width (cqw)',
+      frameSha256: frame?.media?.sha256 ?? null,
+      artworkSha256: art?.media?.sha256 ?? null,
+      title: { size: titleSize, horizontal: titleX, vertical: titleY },
+      type: { size: typeSize, horizontal: typeX, vertical: typeY },
+      cost: { size: costSize, horizontal: costX, vertical: costY },
+      flavor: { size: flavorSize },
+      locks: {
+        titleTypeSizeRatio,
+        titleTypeHorizontalOffset,
+      },
+    }, null, 2);
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard API unavailable');
+      await navigator.clipboard.writeText(payload);
+      setHandoffCopyState('copied');
+      window.setTimeout(() => setHandoffCopyState('idle'), 1800);
+    } catch {
+      const textarea = document.createElement('textarea');
+      textarea.value = payload;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      const copied = document.execCommand('copy');
+      textarea.remove();
+      setHandoffCopyState(copied ? 'copied' : 'error');
+    }
+  };
 
   return (
     <>
@@ -423,6 +475,22 @@ export function RunCardPrototypeViewer({
           <div className="tileset-control-stack">
             {header}
             <p className="run-card-prototype-note">Prototype instrument. The Studio Zoom control changes only the preview scale.</p>
+            <div className="tileset-button-row run-card-prototype-actions">
+              <button
+                type="button"
+                className="tileset-view-action"
+                data-card-layout-action="reset"
+                onClick={resetAllTuning}
+              >Reset all</button>
+              <button
+                type="button"
+                className="tileset-view-action"
+                data-card-layout-action="copy-handoff"
+                onClick={() => { void copyCodexHandoff(); }}
+              >
+                {handoffCopyState === 'copied' ? 'Copied handoff' : handoffCopyState === 'error' ? 'Copy failed' : 'Copy handoff'}
+              </button>
+            </div>
             <SliderRow label={<>Title size · {titleSize.toFixed(2)}%</>} value={titleSize} set={setLinkedTitleSize} min={titleSizeMin} max={titleSizeMax} step={.01} nudge={.05} dflt={DEFAULT_TITLE_SIZE} />
             <button
               type="button"
