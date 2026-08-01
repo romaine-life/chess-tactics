@@ -1,5 +1,7 @@
 import { useState, type ReactElement, type ReactNode, type CSSProperties } from 'react';
 import { SURFACE_ASSETS, defaultSurfaceAsset } from './surfaceCatalog';
+import { ChoiceGroup } from './shared/ChoiceGroup';
+import { StudioCatalogCard } from './studio/StudioCatalogCard';
 
 // Read-only catalog grid for background surfaces. Each card shows the texture *tiled* (the
 // way it renders behind panels) rather than the raw single tile, so you read it as a surface.
@@ -20,27 +22,21 @@ export function SurfaceLibraryStudio({
   return (
     <div className="tileset-studio-grid surface-grid" aria-label="Surfaces">
       {visible.map((s) => (
-        <button
+        <StudioCatalogCard
           key={s.name}
-          type="button"
-          className={`tileset-studio-card ${s.name === selected ? 'is-selected' : ''}`.trim()}
-          onClick={() => onSelect(s.name)}
-          aria-pressed={s.name === selected}
-          title={`${s.label} — tiled surface`}
-        >
-          <span className="tileset-studio-card-image" style={{ '--tile-zoom': zoom } as CSSProperties}>
+          title={s.label}
+          badge={s.material}
+          selected={s.name === selected}
+          onSelect={() => onSelect(s.name)}
+          titleText={`${s.label} — tiled surface`}
+          imageStyle={{ '--tile-zoom': zoom } as CSSProperties}
+          media={(
             <span
               className="surface-swatch"
               style={{ backgroundImage: `url("${s.file}")`, backgroundSize: `${Math.round(110 * zoom)}px` } as CSSProperties}
             />
-          </span>
-          <span className="tileset-studio-card-meta">
-            <span className="tileset-studio-card-text">
-              <strong>{s.label}</strong>
-              <em>{s.material}</em>
-            </span>
-          </span>
-        </button>
+          )}
+        />
       ))}
       {visible.length === 0 ? <p className="tileset-studio-empty">No surfaces match.</p> : null}
     </div>
@@ -76,10 +72,7 @@ export function SurfaceViewer({ name, header }: { name?: string; header?: ReactN
             {header}
             <div className="tileset-filter-field">
               <span>View</span>
-              <div className="tileset-tier-seg" aria-label="Surface preview mode">
-                <button type="button" className={view === 'panel' ? 'is-active' : ''} onClick={() => setView('panel')}>In panel</button>
-                <button type="button" className={view === 'bare' ? 'is-active' : ''} onClick={() => setView('bare')}>Bare</button>
-              </div>
+              <ChoiceGroup value={view} options={[{ value: 'panel', label: 'In panel' }, { value: 'bare', label: 'Bare' }]} onChange={setView} ariaLabel="Surface preview mode" />
             </div>
             <label className="tileset-catalog-zoom">
               <span>Zoom · {zoom.toFixed(1)}×</span>

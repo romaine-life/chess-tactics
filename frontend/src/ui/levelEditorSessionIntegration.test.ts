@@ -225,12 +225,12 @@ describe('Level Editor attributed session integration', () => {
     expect(recoveryGate).toBeGreaterThan(-1);
     expect(recoveryPanel).toBeLessThan(authoringControls);
     expect(panel).toContain('Recovery {selectedServerRecoveryIndex + 1} of {serverRecoveries.length}');
-    expect(panel).toContain('aria-label="Newer recovery copy"');
-    expect(panel).toContain('aria-label="Older recovery copy"');
+    expect(panel).toContain('previousLabel="Newer recovery copy"');
+    expect(panel).toContain('nextLabel="Older recovery copy"');
     expect(panel.match(/data-testid="le-server-recovery-entry"/g)).toHaveLength(1);
     expect(panel).not.toContain('serverRecoveries.map');
     expect(panel).toContain("'Restore this copy'");
-    expect(panel).toContain('>Delete this copy</button>');
+    expect(panel).toContain('>Delete this copy</ChromeButton>');
     expect(panel).toContain('data-testid="le-delete-all-server-recoveries"');
     expect(editor).toContain('setSelectedServerRecoveryId(recovery.recovery_id);');
     expect(bulkDelete).toContain('const recoveryIds = serverRecoveries.map((recovery) => recovery.recovery_id);');

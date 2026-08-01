@@ -29,3 +29,27 @@ export class HttpError extends Error {
     return new HttpError(action, response.status, details);
   }
 }
+
+export interface JsonRequestOptions {
+  keepalive?: boolean;
+  signal?: AbortSignal;
+}
+
+/** Canonical authenticated JSON request used by account-scoped API clients. */
+export async function requestJson<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  options: JsonRequestOptions = {},
+): Promise<T> {
+  const response = await fetch(path, {
+    method,
+    headers: { 'content-type': 'application/json' },
+    credentials: 'include',
+    body: method === 'GET' ? undefined : JSON.stringify(body ?? {}),
+    keepalive: options.keepalive,
+    signal: options.signal,
+  });
+  if (!response.ok) throw await HttpError.fromResponse(`${method} ${path}`, response);
+  return response.status === 204 ? (undefined as T) : await response.json() as T;
+}

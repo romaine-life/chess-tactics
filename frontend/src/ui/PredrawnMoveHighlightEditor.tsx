@@ -37,6 +37,7 @@ import { DirectionArrowIcon } from './shared/DirectionArrowIcon';
 import type { PredrawnBoardArtifact } from './predrawnBoardArtifacts';
 import { predrawnDirectRegistrationForBackground } from './predrawnBackgroundVersionPolicy';
 import { ViewPane } from './shared/ViewPane';
+import { ChromeButton } from './shared/ChromeButton';
 
 const MOVE_HIGHLIGHT_HISTORY_LIMIT = 100;
 const MINIMUM_EDITOR_ZOOM = 0.2;
@@ -1219,13 +1220,11 @@ export function PredrawnMoveHighlightEditor({
             visual highlight. Gameplay cells, hit targets, and selection logic stay unchanged.
           </p>
         </div>
-        <button
-          type="button"
-          data-chrome-unit="inner-text-button"
+        <ChromeButton unit="inner-text-button"
           className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
           disabled={saving}
           onClick={onClose}
-        >Close</button>
+        >Close</ChromeButton>
       </header>
 
       <div className="le-predrawn-workspace-inspector-toolbar le-predrawn-move-highlight-toolbar">
@@ -1234,15 +1233,13 @@ export function PredrawnMoveHighlightEditor({
           role="group"
           aria-label="Selected gameplay tiles"
         >
-          <button
-            type="button"
+          <ChromeButton unit="inner-text-button"
             data-testid="predrawn-move-highlight-previous-cell"
-            data-chrome-unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
             disabled={selectedCellIndex <= 0}
             onClick={() => selectCell(selectedCellIndex - 1)}
             title="Replace the selection with the previous gameplay tile."
-          >Previous tile</button>
+          >Previous tile</ChromeButton>
           <output aria-live="polite">
             {selectedCell && selectedCellKey
               ? selectedCellKeys.length > 1
@@ -1250,15 +1247,13 @@ export function PredrawnMoveHighlightEditor({
                 : `Tile ${selectedCell.x},${selectedCell.y} · ${selectedCellIndex + 1} / ${playableCells.length}`
               : 'No gameplay tiles'}
           </output>
-          <button
-            type="button"
+          <ChromeButton unit="inner-text-button"
             data-testid="predrawn-move-highlight-next-cell"
-            data-chrome-unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
             disabled={selectedCellIndex >= playableCells.length - 1}
             onClick={() => selectCell(selectedCellIndex + 1)}
             title="Replace the selection with the next gameplay tile."
-          >Next tile</button>
+          >Next tile</ChromeButton>
         </div>
 
         <div
@@ -1266,24 +1261,20 @@ export function PredrawnMoveHighlightEditor({
           role="group"
           aria-label="Visual footprint edit history"
         >
-          <button
-            type="button"
+          <ChromeButton unit="inner-text-button"
             data-testid="predrawn-move-highlight-undo"
-            data-chrome-unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
             disabled={!history.undo.length || saving}
             onClick={() => applyHistory('undo')}
             title={history.undo.length ? 'Undo the last visual-footprint change.' : 'Nothing to undo.'}
-          >Undo</button>
-          <button
-            type="button"
+          >Undo</ChromeButton>
+          <ChromeButton unit="inner-text-button"
             data-testid="predrawn-move-highlight-redo"
-            data-chrome-unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
             disabled={!history.redo.length || saving}
             onClick={() => applyHistory('redo')}
             title={history.redo.length ? 'Redo the last undone visual-footprint change.' : 'Nothing to redo.'}
-          >Redo</button>
+          >Redo</ChromeButton>
         </div>
 
         <div
@@ -1291,32 +1282,26 @@ export function PredrawnMoveHighlightEditor({
           role="group"
           aria-label="Visual footprint editor zoom"
         >
-          <button
-            type="button"
+          <ChromeButton unit="inner-text-button"
             data-testid="predrawn-move-highlight-fit"
-            data-chrome-unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
             onClick={fitView}
-          >Fit artwork</button>
-          <button
-            type="button"
-            data-chrome-unit="inner-text-button"
+          >Fit artwork</ChromeButton>
+          <ChromeButton unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
             aria-label="Zoom out"
             disabled={viewZoom <= viewMinimumZoom}
             onClick={() => changeZoom(-EDITOR_ZOOM_STEP)}
-          >−</button>
+          >−</ChromeButton>
           <output aria-label="Current visual footprint editor zoom">
             {Math.round(viewZoom * 100)}%
           </output>
-          <button
-            type="button"
-            data-chrome-unit="inner-text-button"
+          <ChromeButton unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
             aria-label="Zoom in"
             disabled={viewZoom >= MAXIMUM_EDITOR_ZOOM}
             onClick={() => changeZoom(EDITOR_ZOOM_STEP)}
-          >+</button>
+          >+</ChromeButton>
         </div>
       </div>
 
@@ -1332,11 +1317,9 @@ export function PredrawnMoveHighlightEditor({
             ['x', 'X only'],
             ['y', 'Y only'],
           ] as const).map(([constraint, label]) => (
-            <button
-              type="button"
+            <ChromeButton unit="inner-text-button"
               key={constraint}
               data-testid={`predrawn-move-highlight-axis-${constraint}`}
-              data-chrome-unit="inner-text-button"
               className={chromeUnitClassNames(
                 'inner-text-button',
                 'le-seg-btn',
@@ -1350,7 +1333,7 @@ export function PredrawnMoveHighlightEditor({
                 : constraint === 'x'
                   ? 'Move a point horizontally with its Y fixed, or shift a selected outer border along artwork X.'
                   : 'Move a point vertically with its X fixed, or shift a selected outer border along artwork Y.'}
-            >{label}</button>
+            >{label}</ChromeButton>
           ))}
         </div>
 
@@ -1364,46 +1347,38 @@ export function PredrawnMoveHighlightEditor({
               ? `Nudge ${activeTargetName} · 1 art px`
               : 'Select a point or outer border to nudge · 1 art px'}
           </output>
-          <button
-            type="button"
+          <ChromeButton unit="inner-text-button"
             data-testid="predrawn-move-highlight-nudge-left"
-            data-chrome-unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
             aria-label="Nudge selected visual-footprint point or outer border left by one artwork pixel"
             disabled={nudgeDisabled || axisConstraint === 'y'}
             onClick={() => nudgeActiveTargetByPixels(-1, 0)}
             title="Move the selected point or complete outer border left by one native artwork pixel."
-          ><DirectionArrowIcon degrees={270} /></button>
-          <button
-            type="button"
+          ><DirectionArrowIcon degrees={270} /></ChromeButton>
+          <ChromeButton unit="inner-text-button"
             data-testid="predrawn-move-highlight-nudge-up"
-            data-chrome-unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
             aria-label="Nudge selected visual-footprint point or outer border up by one artwork pixel"
             disabled={nudgeDisabled || axisConstraint === 'x'}
             onClick={() => nudgeActiveTargetByPixels(0, -1)}
             title="Move the selected point or complete outer border up by one native artwork pixel."
-          ><DirectionArrowIcon degrees={0} /></button>
-          <button
-            type="button"
+          ><DirectionArrowIcon degrees={0} /></ChromeButton>
+          <ChromeButton unit="inner-text-button"
             data-testid="predrawn-move-highlight-nudge-down"
-            data-chrome-unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
             aria-label="Nudge selected visual-footprint point or outer border down by one artwork pixel"
             disabled={nudgeDisabled || axisConstraint === 'x'}
             onClick={() => nudgeActiveTargetByPixels(0, 1)}
             title="Move the selected point or complete outer border down by one native artwork pixel."
-          ><DirectionArrowIcon degrees={180} /></button>
-          <button
-            type="button"
+          ><DirectionArrowIcon degrees={180} /></ChromeButton>
+          <ChromeButton unit="inner-text-button"
             data-testid="predrawn-move-highlight-nudge-right"
-            data-chrome-unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
             aria-label="Nudge selected visual-footprint point or outer border right by one artwork pixel"
             disabled={nudgeDisabled || axisConstraint === 'y'}
             onClick={() => nudgeActiveTargetByPixels(1, 0)}
             title="Move the selected point or complete outer border right by one native artwork pixel."
-          ><DirectionArrowIcon degrees={90} /></button>
+          ><DirectionArrowIcon degrees={90} /></ChromeButton>
         </div>
       </div>
 
@@ -1577,33 +1552,27 @@ export function PredrawnMoveHighlightEditor({
           ) : null}
         </div>
         <div className="le-predrawn-move-highlight-footer-actions">
-          <button
-            type="button"
+          <ChromeButton unit="inner-text-button"
             data-testid="predrawn-move-highlight-reset-cell"
-            data-chrome-unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
             disabled={!selectedCustomCount || saving}
             onClick={resetSelectedCells}
             title="Restore every selected tile to the complete canonical diamond as one undoable edit."
-          >{selectedCellKeys.length > 1 ? 'Reset selected' : 'Reset tile'}</button>
-          <button
-            type="button"
+          >{selectedCellKeys.length > 1 ? 'Reset selected' : 'Reset tile'}</ChromeButton>
+          <ChromeButton unit="inner-text-button"
             data-testid="predrawn-move-highlight-reset-all"
-            data-chrome-unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
             disabled={!modifiedCount || saving}
             onClick={resetAllCells}
             title="Restore every visual footprint to the complete canonical diamond."
-          >Reset all</button>
-          <button
-            type="button"
+          >Reset all</ChromeButton>
+          <ChromeButton unit="inner-text-button"
             data-testid="predrawn-move-highlight-save"
-            data-chrome-unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'active')}
             disabled={saving || Boolean(paintError)}
             onClick={() => onSave(clonePredrawnMoveHighlightCells(cellsRef.current))}
             title="Save this sparse visual-footprint calibration for the exact warped board."
-          >{saving ? 'Saving footprints…' : dirty ? 'Save highlight footprints' : 'Use these footprints'}</button>
+          >{saving ? 'Saving footprints…' : dirty ? 'Save highlight footprints' : 'Use these footprints'}</ChromeButton>
         </div>
       </footer>
       </section>

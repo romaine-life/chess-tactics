@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactElement } from 'react';
 import { chromeUnitClassNames } from '../chromeUnitRegistry';
 import { FittedTabLabel } from './FittedTabLabel';
-import { NavButton } from './NavButton';
+import { ChromeNavButton } from './ChromeButton';
 
 export interface ApparatusRailTabProps {
   label: string;
@@ -32,9 +32,8 @@ export function ApparatusRailTab({
   detail,
 }: ApparatusRailTabProps): ReactElement {
   return (
-    <NavButton
+    <ChromeNavButton unit="inner-box"
       data-testid={testId}
-      data-chrome-unit="inner-box"
       className={chromeUnitClassNames('inner-box', 'settings-tab main-menu-mode-tab', active && 'is-active')}
       to={to}
       aria-current={active ? 'page' : undefined}
@@ -50,6 +49,6 @@ export function ApparatusRailTab({
           <small>{detail}</small>
         </span>
       ) : <FittedTabLabel>{label}</FittedTabLabel>}
-    </NavButton>
+    </ChromeNavButton>
   );
 }

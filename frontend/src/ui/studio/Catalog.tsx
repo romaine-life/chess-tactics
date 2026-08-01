@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
+import { StudioCatalogCard } from './StudioCatalogCard';
 
 // One catalog, any asset type. A `CatalogType<A>` descriptor binds an asset type's
 // data + actions to the host studio; <CatalogGrid> and <CatalogControls> render it
@@ -79,13 +80,6 @@ export function catalogVisibleAssets<A extends { id: string }>(type: CatalogType
   });
 }
 
-const InspectIcon = (): ReactElement => (
-  <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
-    <rect x="1.6" y="6.4" width="12.8" height="8" rx="1.4" fill="none" stroke="currentColor" strokeWidth="1.4" />
-    <path d="M8 1.2 V5.4 M5.4 3.2 L8 5.8 L10.6 3.2" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
-
 const PlusIcon = (): ReactElement => (
   <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
     <path d="M8 2.5 V13.5 M2.5 8 H13.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
@@ -97,67 +91,29 @@ function CatalogCard<A extends { id: string }>({ type, asset }: { type: CatalogT
   const selected = asset.id === type.selectedId;
   const zoomStyle = type.zoom ? ({ [type.zoom.cssVar]: type.zoom.value } as CSSProperties) : undefined;
   const extraActions = type.cardActions?.(asset) ?? [];
-  const action = (run: () => void) => ({
-    role: 'button' as const,
-    tabIndex: 0,
-    onClick: (event: React.MouseEvent) => { event.stopPropagation(); run(); },
-    onKeyDown: (event: React.KeyboardEvent) => {
-      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); run(); }
-    },
-  });
   return (
-    <button
-      type="button"
-      className={`tileset-studio-card ${model.isUnit ? 'is-unit' : ''} ${selected ? 'is-selected' : ''}`.replace(/\s+/g, ' ').trim()}
-      onClick={() => type.onSelect(asset)}
-      title={`Select ${model.title}`}
-      aria-pressed={selected}
-    >
-      <span className={`tileset-studio-card-image ${model.isUnit ? 'unit-card-image' : ''}`.trim()} style={zoomStyle}>
-        {type.cardMedia
-          ? type.cardMedia(asset)
-          : model.img
-            ? <img src={model.img} alt="" draggable={false} loading="lazy" decoding="async" />
-            : <span className="tileset-card-missing-media">Missing media</span>}
-      </span>
-      <span className="tileset-studio-card-meta">
-        <span className="tileset-studio-card-text">
-          <strong>{model.title}</strong>
-          <em>{model.badge}</em>
-        </span>
-        <span className="tileset-card-actions">
-          {type.onArm ? (
-            <span className="tileset-card-action" title={`Use ${model.title} as the board brush`} aria-label={`Use ${model.title} as brush`} {...action(() => type.onArm!(asset))}>
-              🖌
-            </span>
-          ) : null}
-          {extraActions.map((item) => (
-            <span key={item.label} className="tileset-card-action" title={item.title} aria-label={item.label} {...action(item.run)}>
-              {item.icon}
-            </span>
-          ))}
-          <span className="tileset-card-action" title={`Inspect ${model.title}`} aria-label={`Inspect ${model.title}`} {...action(() => type.onView(asset))}>
-            <InspectIcon />
-          </span>
-        </span>
-      </span>
-    </button>
+    <StudioCatalogCard
+      title={model.title}
+      badge={model.badge}
+      image={type.cardMedia ? undefined : model.img}
+      media={type.cardMedia?.(asset)}
+      selected={selected}
+      onSelect={() => type.onSelect(asset)}
+      onInspect={() => type.onView(asset)}
+      className={model.isUnit ? 'is-unit' : ''}
+      imageClassName={model.isUnit ? 'unit-card-image' : ''}
+      imageStyle={zoomStyle}
+      actions={[
+        ...(type.onArm ? [{ id: 'arm', label: `Use ${model.title} as brush`, title: `Use ${model.title} as the board brush`, icon: '🖌', run: () => type.onArm!(asset) }] : []),
+        ...extraActions.map((item, index) => ({ ...item, id: `${item.label}-${index}` })),
+      ]}
+    />
   );
 }
 
 function CatalogCreateCard({ label, onCreate }: { label: string; onCreate: () => void }): ReactElement {
   return (
-    <button type="button" className="tileset-studio-card is-create" onClick={onCreate} title={label}>
-      <span className="tileset-studio-card-image">
-        <span className="tileset-create-glyph"><PlusIcon /></span>
-      </span>
-      <span className="tileset-studio-card-meta">
-        <span className="tileset-studio-card-text">
-          <strong>{label}</strong>
-          <em>create</em>
-        </span>
-      </span>
-    </button>
+    <StudioCatalogCard title={label} badge="create" className="is-create" titleText={label} onSelect={onCreate} media={<span className="tileset-create-glyph"><PlusIcon /></span>} />
   );
 }
 

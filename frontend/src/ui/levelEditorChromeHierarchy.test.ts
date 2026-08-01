@@ -15,13 +15,15 @@ const houseSelect = readFileSync(new URL('./shared/HouseSelect.tsx', import.meta
 const chromeBox = readFileSync(new URL('./shared/ChromeBox.tsx', import.meta.url), 'utf8');
 const confirmDialog = readFileSync(new URL('./shared/ConfirmDialog.tsx', import.meta.url), 'utf8');
 const titleBarControls = readFileSync(new URL('./shell/TitleBarControls.tsx', import.meta.url), 'utf8');
+const cyclePicker = readFileSync(new URL('./shared/CyclePicker.tsx', import.meta.url), 'utf8');
+const assetSwatchList = readFileSync(new URL('./shared/AssetSwatchList.tsx', import.meta.url), 'utf8');
 const styleCss = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const eventsWorkspaceStart = levelEditorChromeConsumers.indexOf('export function LevelEditorEventsWorkspace');
 const eventsWorkspace = eventsWorkspaceStart >= 0
   ? levelEditorChromeConsumers.slice(eventsWorkspaceStart)
   : '';
 
-const buttonBlocks = (source: string): string[] => source.match(/<button\b[\s\S]*?<\/button>/g) ?? [];
+const buttonBlocks = (source: string): string[] => source.match(/<(?:button|ChromeButton|ChromeNavButton)\b[\s\S]*?<\/(?:button|ChromeButton|ChromeNavButton)>/g) ?? [];
 
 function familyButtons(source: string, legacyClass: string): string[] {
   const matches = buttonBlocks(source).filter((block) => block.includes(legacyClass));
@@ -30,7 +32,7 @@ function familyButtons(source: string, legacyClass: string): string[] {
 }
 
 function expectChromeUnit(block: string, unit: string): void {
-  expect(block).toContain(`data-chrome-unit="${unit}"`);
+  expect(block.includes(`data-chrome-unit="${unit}"`) || block.includes(`unit="${unit}"`)).toBe(true);
   expect(block).toMatch(new RegExp(`chromeUnitClassNames\\(\\s*'${unit}'`));
 }
 
@@ -119,7 +121,7 @@ describe('Level Editor chrome hierarchy', () => {
     expect(levelEditor).toContain('const playableGridCells = cells.filter(');
     expect(levelEditor).toContain('originCells={playableGridCells}');
     expect(levelEditor).toContain('onClick={fillVisibleScenicTerrain}');
-    expect(levelEditor).toContain('>Fill visible area</button>');
+    expect(levelEditor).toContain('>Fill visible area</ChromeButton>');
     expect(levelEditor).not.toContain("(['top', 'right', 'bottom', 'left'] as const).map");
   });
 
@@ -133,10 +135,10 @@ describe('Level Editor chrome hierarchy', () => {
     expect(levelEditor).toContain('onRegionStart={selectTerrainArea}');
     expect(levelEditor).toContain('const next = paintTerrainArea(currentEditorBoardRef.current, regionSelection, brushAsset.id);');
     expect(levelEditor).toContain("onClick={() => setTool(tool === 'region' ? 'brush' : 'region')}");
-    expect(levelEditor).toContain(">{tool === 'region' ? 'Selecting…' : 'Select area'}</button>");
+    expect(levelEditor).toContain(">{tool === 'region' ? 'Selecting…' : 'Select area'}</ChromeButton>");
     expect(levelEditor).toContain('disabled={regionSelection.size === 0}');
     expect(levelEditor).toContain('onClick={fillSelectedTileArea}');
-    expect(levelEditor).toContain('>Fill selected area</button>');
+    expect(levelEditor).toContain('>Fill selected area</ChromeButton>');
     expect(levelEditor).toContain('renderCellOverlay={regionCells && regionCells.size > 0');
     expect(levelEditor).toContain('? (cell) => {');
     expect(levelEditor).toContain('const key = `${cell.x},${cell.y}`;');
@@ -170,21 +172,16 @@ describe('Level Editor chrome hierarchy', () => {
     expect(levelEditor).toContain('ariaLabel="Camera boundary interaction mode"');
     expect(levelEditor).toContain("cameraBoundaryInteractionMode === 'edit' && editorSessionCanWrite");
     expect(levelEditor).toContain('ariaLabel="Camera boundary snap preset"');
-    expect(levelEditor).toContain('>Snap</button>');
+    expect(levelEditor).toContain('>Snap</ChromeButton>');
     expect(styleCss).toMatch(/\.le-camera-boundary-handle\.is-move\s*\{[\s\S]*?height:\s*100%;[\s\S]*?inset:\s*0;[\s\S]*?width:\s*100%;/);
     expect(levelEditor).not.toContain('app-header-button');
   });
 
   it('registers every previous and next control as a concrete mirrored chevron key', () => {
-    const chevronButtons = [
-      ...buttonBlocks(levelEditorChromeConsumers),
-      ...buttonBlocks(levelEditor),
-    ].filter((block) => block.includes('stepper-chevron'));
-
-    expect(chevronButtons).toHaveLength(8);
-    for (const block of chevronButtons) expectChromeUnit(block, 'inner-chevron-key');
-    expect(chevronButtons.filter((block) => block.includes('stepper-chevron-left'))).toHaveLength(4);
-    expect(chevronButtons.filter((block) => block.includes('stepper-chevron-right'))).toHaveLength(4);
+    expect((levelEditor + levelEditorChromeConsumers).match(/<CyclePicker\b/g)).toHaveLength(4);
+    const chevronButtons = buttonBlocks(cyclePicker).filter((block) => block.includes('unit="inner-chevron-key"'));
+    expect(chevronButtons).toHaveLength(2);
+    expect(cyclePicker).toContain('className={`stepper-glyph stepper-chevron stepper-chevron-${direction === \'previous\' ? \'left\' : \'right\'}`}');
     expect(styleCss).toMatch(/\.stepper-chevron::before\s*\{[\s\S]*?inset-inline-start:\s*4px;[\s\S]*?transform:\s*rotate\(45deg\);/);
     expect(styleCss).toMatch(/\.stepper-chevron-right\s*\{[\s\S]*?transform:\s*scaleX\(-1\);/);
     expect(styleCss).not.toMatch(/\.stepper-chevron-right::before\s*\{/);
@@ -252,7 +249,7 @@ describe('Level Editor chrome hierarchy', () => {
   it('registers dropdown triggers and frames each popup as one divided inner box', () => {
     expectRegisteredFamily(paletteSelect, 'palette-select-trigger', 'inner-dropdown');
     expect(houseSelect).toMatch(/chromeUnitClassNames\(\s*'inner-dropdown',\s*'house-select',\s*'le-select-wrap',\s*'house-select-trigger',\s*className,/);
-    expect(houseSelect).toMatch(/<button\s+ref=\{buttonRef\}\s+type="button"\s+data-chrome-unit="inner-dropdown"\s+className=\{triggerClass\}/);
+    expect(houseSelect).toMatch(/<ChromeButton unit="inner-dropdown"\s+ref=\{buttonRef\}\s+className=\{triggerClass\}/);
     expect(houseSelect).not.toContain('<div ref={rootRef} data-chrome-unit="inner-dropdown"');
     expect(houseSelect).toContain('if (option.value !== value) onChange(option.value);');
     expect(houseSelect).toContain("import { KitScroll } from '../KitScroll';");
@@ -325,7 +322,9 @@ describe('Level Editor chrome hierarchy', () => {
   });
 
   it('registers every asset and material swatch under the shared inner role', () => {
-    expectRegisteredFamily(levelEditor, 'le-swatch', 'inner-asset-swatch');
+    expect(levelEditor.match(/<AssetSwatchList\b/g)).toHaveLength(13);
+    expect(assetSwatchList).toContain('unit="inner-asset-swatch"');
+    expect(assetSwatchList).toContain('className={`le-swatch ${item.className ?? \'\'}`.trim()}');
   });
 
   it('registers the shared active-brush thumbnail as a free-form inner box', () => {

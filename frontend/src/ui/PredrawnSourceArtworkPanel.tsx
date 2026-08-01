@@ -34,6 +34,7 @@ import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { copyPredrawnPngToClipboard } from './predrawnImageClipboard';
 import { predrawnGenerationReferenceLabel } from './predrawnCreationAttempts';
 import { predrawnReferencePngBlob } from './PredrawnReference';
+import { ChromeButton } from './shared/ChromeButton';
 
 type StatusTone = 'info' | 'success' | 'warning' | 'error';
 
@@ -288,14 +289,12 @@ export function PredrawnSourceArtworkPanel({
           </p>
         </div>
         <div className="le-artwork-frame-actions">
-          <button
-            type="button"
-            data-chrome-unit="inner-text-button"
+          <ChromeButton unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', previewReady && 'active')}
             disabled={!canWrite || !canonicalReady || !previewReady || Boolean(busy)}
             onClick={() => { void saveCurrentSource(); }}
             title={!canonicalReady ? 'Save or publish the current level before creating a reference.' : 'Create an immutable AI generation reference from this exact saved level picture.'}
-          >{busy === 'capture' ? 'Creating reference…' : 'Create reference from saved level'}</button>
+          >{busy === 'capture' ? 'Creating reference…' : 'Create reference from saved level'}</ChromeButton>
         </div>
         {!canonicalReady ? (
           <output className="le-predrawn-version-error" role="status">
@@ -359,11 +358,9 @@ export function PredrawnSourceArtworkPanel({
         </div>
         <div className="le-source-artwork-grid" role="list" aria-label="Saved AI generation references">
           {sources.map((source, index) => (
-            <button
-              type="button"
+            <ChromeButton unit="inner-text-button"
               role="listitem"
               key={source.id}
-              data-chrome-unit="inner-text-button"
               className={chromeUnitClassNames(
                 'inner-text-button',
                 'le-source-artwork-card',
@@ -383,7 +380,7 @@ export function PredrawnSourceArtworkPanel({
                   {createdLabel(source)}
                 </small>
               </span>
-            </button>
+            </ChromeButton>
           ))}
           {!sources.length && busy !== 'load' ? (
             <div className="le-predrawn-artifact-empty" role="status">
@@ -394,15 +391,13 @@ export function PredrawnSourceArtworkPanel({
         </div>
         {selected ? (
           <div className="le-predrawn-version-actions">
-            <button
-              type="button"
+            <ChromeButton unit="inner-text-button"
               data-testid="copy-generation-reference"
-              data-chrome-unit="inner-text-button"
               className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'active')}
               disabled={copying}
               onClick={() => { void copySelectedReference(); }}
               title="Copy the exact stored full-resolution PNG to the system clipboard for the manual Codex handoff."
-            >{copying ? 'Copying reference…' : 'Copy generation reference'}</button>
+            >{copying ? 'Copying reference…' : 'Copy generation reference'}</ChromeButton>
             <a
               className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
               data-chrome-unit="inner-text-button"
@@ -410,14 +405,12 @@ export function PredrawnSourceArtworkPanel({
               download
               title="Download the exact full-resolution reference PNG. This does not create a pipeline slot."
             >Download reference PNG</a>
-            <button
-              type="button"
-              data-chrome-unit="inner-text-button"
+            <ChromeButton unit="inner-text-button"
               className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'active')}
               disabled={!canWrite || Boolean(busy)}
               onClick={() => { void startSelectedAttempt(); }}
               title="Create a waiting pipeline slot bound to this exact reference. AI generation still happens through the manual Codex handoff."
-            >{busy === 'attempt' ? 'Starting handoff…' : 'Start manual AI handoff'}</button>
+            >{busy === 'attempt' ? 'Starting handoff…' : 'Start manual AI handoff'}</ChromeButton>
           </div>
         ) : null}
         {clipboardStatus ? (

@@ -5,7 +5,7 @@
 // per-piece viewer is the Lab's job. The roster and every displayed media fact
 // come from one hydrated backend catalog snapshot; this file owns presentation,
 // not an alternate media inventory.
-import { type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactElement, type ReactNode } from 'react';
+import { type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import {
   mediaDimensions,
   studioProductionLabel,
@@ -13,23 +13,9 @@ import {
   type StudioArtworkLibrary,
   type StudioArtworkRecord,
 } from './studioLiveMediaLibrary';
+import { StudioCatalogCard } from '../studio/StudioCatalogCard';
 
 const PORTRAIT_GROUP = 'unit-portraits';
-
-// Stop a card-action icon's click from also triggering the card's select.
-const cardAction = (run: () => void) => ({
-  role: 'button' as const,
-  tabIndex: 0,
-  onClick: (e: ReactMouseEvent) => { e.stopPropagation(); run(); },
-  onKeyDown: (e: ReactKeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); run(); } },
-});
-
-const ViewIcon = (): ReactElement => (
-  <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
-    <rect x="1.6" y="6.4" width="12.8" height="8" rx="1.4" fill="none" stroke="currentColor" strokeWidth="1.4" />
-    <path d="M8 1.2 V5.4 M5.4 3.2 L8 5.8 L10.6 3.2" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
 
 const EditIcon = (): ReactElement => (
   <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
@@ -47,29 +33,24 @@ function Card({ item, selected, onSelect, onView, onEdit }: {
 }): ReactElement {
   const dim = mediaDimensions(item);
   return (
-    <button
-      type="button"
-      className={`tileset-studio-card is-artwork ${selected ? 'is-selected' : ''}`}
-      onClick={() => onSelect(item.id)}
-      aria-pressed={selected}
-      title={`Select ${item.label}`}
-    >
-      <span className="tileset-studio-card-image"><img src={item.immutableUrl} alt="" loading="lazy" draggable={false} /></span>
-      <span className="tileset-studio-card-meta">
-        <span className="tileset-studio-card-text"><strong>{item.label}</strong><em>{[item.sub, dim].filter(Boolean).join(' · ')}</em></span>
-        <span className="tileset-card-actions">
-          <span className={`asset-prov ${item.productionEligible ? 'is-forged' : 'is-original'}`}>{studioProductionLabel(item.productionStatus)}</span>
-          {onEdit ? (
-            <span className="tileset-card-action" title={`Edit ${item.label} portrait crop`} aria-label={`Edit ${item.label} portrait crop`} {...cardAction(() => onEdit(item.id))}>
-              <EditIcon />
-            </span>
-          ) : null}
-          <span className="tileset-card-action" title={`View ${item.label}`} aria-label={`View ${item.label}`} {...cardAction(() => onView(item.id))}>
-            <ViewIcon />
-          </span>
-        </span>
-      </span>
-    </button>
+    <StudioCatalogCard
+      title={item.label}
+      badge={[item.sub, dim].filter(Boolean).join(' · ')}
+      image={item.immutableUrl}
+      className="is-artwork"
+      selected={selected}
+      onSelect={() => onSelect(item.id)}
+      onInspect={() => onView(item.id)}
+      inspectLabel={`View ${item.label}`}
+      metaExtra={<span className={`asset-prov ${item.productionEligible ? 'is-forged' : 'is-original'}`}>{studioProductionLabel(item.productionStatus)}</span>}
+      actions={onEdit ? [{
+        id: 'edit',
+        label: `Edit ${item.label} portrait crop`,
+        title: `Edit ${item.label} portrait crop`,
+        icon: <EditIcon />,
+        run: () => onEdit(item.id),
+      }] : []}
+    />
   );
 }
 

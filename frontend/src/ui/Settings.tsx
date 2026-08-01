@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactEle
 import { readDisabledUrls, writeDisabledUrls, sendBgmCommand, BGM_STATE_EVENT } from '../bgmPrefs.js';
 import { normalizeRoutePath, readValidatedReturnTo } from './navigation';
 import { KitScroll } from './KitScroll';
-import { NavButton } from './shared/NavButton';
 import { SettingsButton, SettingsRow, SettingsSection } from './shared/SettingsControls';
 import { FittedTabLabel } from './shared/FittedTabLabel';
 import { Stepper } from './shared/Stepper';
@@ -16,6 +15,7 @@ import { installedUiMedia } from './installedUiMedia';
 import { fetchMe } from '../net/auth';
 import { AdminControls } from './AdminControls';
 import { sceneTransitionTargetAttributes } from './shell/sceneTransitionTarget';
+import { ChromeNavButton } from './shared/ChromeButton';
 
 const MUTE_KEY = 'chess-tactics-bgm-muted-v1';
 const MUTE_CHANGE_EVENT = 'chess-tactics:bgm-muted-change';
@@ -656,8 +656,7 @@ export function Settings({
         aria-label="Settings sections"
       >
         {tabs.map((tab, index) => (
-          <NavButton
-            data-chrome-unit="inner-box"
+          <ChromeNavButton unit="inner-box"
             key={tab.id}
             to={withReturnTo(TAB_PATHS[tab.id])}
             className={chromeUnitClassNames('inner-box', 'settings-tab main-menu-mode-tab', tab.id === activeTab && 'is-active')}
@@ -671,7 +670,7 @@ export function Settings({
               <img src={asset(tab.icon)} alt="" />
             </span>
             <FittedTabLabel>{tab.label}</FittedTabLabel>
-          </NavButton>
+          </ChromeNavButton>
         ))}
       </aside>
 

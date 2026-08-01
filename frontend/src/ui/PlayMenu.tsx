@@ -31,7 +31,6 @@ import {
   type PlayContinueChoice,
   type PlayHubSelection,
 } from './playHubRoute';
-import { NavButton } from './shared/NavButton';
 import { playSkirmishLevelHref, skirmishMapLevels } from './skirmishMaps';
 import { skirmishProfileLevels } from './skirmishProfiles';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
@@ -57,6 +56,9 @@ import { InnerChromeBox } from './shared/ChromeBox';
 import { loadMatch, type PersistedMatch } from '../game/matchPersistence';
 import { continueInventory, type ContinueInventory } from './playContinue';
 import { AtaraxiaSelector } from './AtaraxiaSelector';
+import { ActionList } from './shared/ActionList';
+import { SettingsRow, SettingsSection } from './shared/SettingsControls';
+import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 
 type PlayIcon = 'solo-skirmish' | 'campaign-editor' | 'level-editor' | 'lobbies';
 
@@ -146,10 +148,9 @@ function ContinuePanel({
                 const available = Boolean(option.activity);
                 const selectedOption = available && choice === option.mode;
                 return (
-                  <NavButton
+                  <ChromeNavButton unit="inner-list-row"
                     key={option.mode}
                     to={playContinueSelectorHref(option.mode)}
-                    data-chrome-unit="inner-list-row"
                     className={chromeUnitClassNames('inner-list-row', 'settings-row play-choice-row', !available && 'is-disabled', selectedOption && 'active is-selected')}
                     disabled={!available}
                     aria-current={selectedOption ? 'page' : undefined}
@@ -159,7 +160,7 @@ function ContinuePanel({
                       <h4>{option.label}</h4>
                       <p>{option.activity?.summary ?? 'Nothing to continue'}</p>
                     </div>
-                  </NavButton>
+                  </ChromeNavButton>
                 );
               })}
             </div>
@@ -180,7 +181,7 @@ function ContinuePanel({
             </InnerChromeBox>
           </div>
           <div className="ce-preview-actions is-single">
-            <NavButton data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} to={selected.playHref}><span>Play</span></NavButton>
+            <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} to={selected.playHref}><span>Play</span></ChromeNavButton>
           </div>
         </aside>
       ) : null}
@@ -278,15 +279,14 @@ function RunPanel({
                   <h3>Two active Runs</h3>
                   <p>This browser has {adoptionConflict.browserRun.war.name}; your account has {adoptionConflict.accountRun.war.name}. Choose which one the account keeps.</p>
                   <div className="run-inline-actions">
-                    <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button')} onClick={keepAccountRun}>Keep account Run</button>
-                    <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} disabled={syncing} onClick={() => { void adoptBrowserRun(); }}>Adopt browser Run</button>
+                    <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button')} onClick={keepAccountRun}>Keep account Run</ChromeButton>
+                    <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} disabled={syncing} onClick={() => { void adoptBrowserRun(); }}>Adopt browser Run</ChromeButton>
                   </div>
                 </InnerChromeBox>
               ) : null}
               {run && !adoptionConflict ? (
-                <NavButton
+                <ChromeNavButton unit="inner-list-row"
                   to={PLAY_RUN_CURRENT_SELECTOR_HREF}
-                  data-chrome-unit="inner-list-row"
                   className={chromeUnitClassNames('inner-list-row', 'settings-row play-choice-row', choice === 'current' && 'active is-selected')}
                   aria-current={choice === 'current' ? 'page' : undefined}
                   data-testid="run-choice-current"
@@ -295,7 +295,7 @@ function RunPanel({
                     <h4>Current Run</h4>
                     <p>Battle {run.battleIndex + 1} of {run.war.battles.length} · {ATARAXIA_BY_TIER[run.ataraxiaTier].label}</p>
                   </div>
-                </NavButton>
+                </ChromeNavButton>
               ) : null}
               {!loading && officialAvailable && eligible.length === 0 ? (
                 <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} role="status">
@@ -313,9 +313,8 @@ function RunPanel({
                   </div>
                 </section>
               ) : null}
-              <NavButton
+              <ChromeNavButton unit="inner-list-row"
                 to={PLAY_RUN_NEW_SELECTOR_HREF}
-                data-chrome-unit="inner-list-row"
                 className={chromeUnitClassNames('inner-list-row', 'settings-row play-choice-row', newRunUnavailable && 'is-disabled', choice === 'new' && 'active is-selected')}
                 disabled={newRunUnavailable}
                 aria-current={choice === 'new' ? 'page' : undefined}
@@ -325,7 +324,7 @@ function RunPanel({
                   <h4>Start New Run</h4>
                   <p>Choose Ataraxia</p>
                 </div>
-              </NavButton>
+              </ChromeNavButton>
             </div>
           </section>
           {persistenceError ? <p className="play-content-warning" role="status">{persistenceError}</p> : null}
@@ -346,7 +345,7 @@ function RunPanel({
             </InnerChromeBox>
           </div>
           <div className="ce-preview-actions is-single">
-            <NavButton data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} to="/run"><span>Play</span></NavButton>
+            <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} to="/run"><span>Play</span></ChromeNavButton>
           </div>
         </aside>
       ) : null}
@@ -362,15 +361,13 @@ function RunPanel({
             />
           </div>
           <div className="ce-preview-actions is-single">
-            <button
-              type="button"
-              data-chrome-unit="inner-text-button"
+            <ChromeButton unit="inner-text-button"
               className={chromeUnitClassNames('inner-text-button', 'ce-link-button')}
               disabled={newRunUnavailable || starting}
               onClick={() => { void start(); }}
             >
               <span>{starting ? 'Starting…' : 'Start Run'}</span>
-            </button>
+            </ChromeButton>
           </div>
         </aside>
       ) : null}
@@ -409,61 +406,32 @@ function SkirmishProfilesPanel({
   return (
     <ActionColumn>
       <ThumbnailSurface levels={levels}><div className="settings-panel-content">
-        <section className="settings-section">
-          <h3 className="settings-section-title">Skirmish</h3>
-          <div className="settings-section-rows">
-            {!loading && !officialAvailable ? (
-              <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} role="status">
-                <div className="settings-row-copy">
-                  <h4>Official content unavailable</h4>
-                  <p>Skirmishes could not be loaded. Reopen Play to retry.</p>
-                </div>
-              </section>
-            ) : null}
-            {!loading && !userWorkspaceAvailable ? (
-              <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} role="status">
-                <div className="settings-row-copy">
-                  <h4>Your workspace is unavailable</h4>
-                  <p>Your skirmish profiles could not be loaded. Reopen Play to retry.</p>
-                </div>
-              </section>
-            ) : null}
-            {loading ? (
-              <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')}>
-                <div className="settings-row-copy"><h4>Loading skirmishes…</h4></div>
-              </section>
-            ) : null}
-            {!loading && officialAvailable && userWorkspaceAvailable && levels.length === 0 ? (
-              <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')}>
-                <div className="settings-row-copy">
-                  <h4>No skirmish profiles available</h4>
-                  <p>Skirmishes appear here when they are authored in the shared content system.</p>
-                </div>
-              </section>
-            ) : null}
-            {levels.map((level) => (
-              <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} key={level.id}>
-                <span data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row-thumb')} aria-hidden="true">
-                  <GatedLevelThumbnail level={level} width={72} alt="" />
-                </span>
-                <div className="settings-row-copy">
-                  <h4>{level.name}</h4>
-                  <p>{levelObjectiveLine(level)} · {levelForceSummary(level)} · {level.board.cols}x{level.board.rows}</p>
-                </div>
-                <div className="settings-row-control">
-                  <NavButton
-                    data-chrome-unit="inner-text-button"
-                    className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-                    to={playSkirmishLevelHref(level.id)}
-                    aria-label={`Play ${level.name}`}
-                  >
-                    Play
-                  </NavButton>
-                </div>
-              </section>
-            ))}
-          </div>
-        </section>
+        <SettingsSection title="Skirmish">
+          {!loading && !officialAvailable ? <SettingsRow role="status" title="Official content unavailable" description="Skirmishes could not be loaded. Reopen Play to retry." /> : null}
+          {!loading && !userWorkspaceAvailable ? <SettingsRow role="status" title="Your workspace is unavailable" description="Your skirmish profiles could not be loaded. Reopen Play to retry." /> : null}
+          {loading ? <SettingsRow title="Loading skirmishes…" /> : null}
+          {!loading && officialAvailable && userWorkspaceAvailable && levels.length === 0
+            ? <SettingsRow title="No skirmish profiles available" description="Skirmishes appear here when they are authored in the shared content system." />
+            : null}
+          <ActionList
+            className="play-level-list"
+            items={levels.map((level) => ({
+              id: level.id,
+              title: level.name,
+              description: <p>{levelObjectiveLine(level)} · {levelForceSummary(level)} · {level.board.cols}x{level.board.rows}</p>,
+              leading: <GatedLevelThumbnail level={level} width={72} alt="" />,
+              actions: [{
+                id: 'play',
+                label: `Play ${level.name}`,
+                text: 'Play',
+                presentation: 'text',
+                className: 'app-header-button',
+                tone: 'primary',
+                href: playSkirmishLevelHref(level.id),
+              }],
+            }))}
+          />
+        </SettingsSection>
       </div></ThumbnailSurface>
     </ActionColumn>
   );
@@ -483,68 +451,38 @@ function StandaloneLevelsPanel({
   return (
     <ActionColumn>
       <ThumbnailSurface levels={levels}><div className="settings-panel-content">
-        <section className="settings-section">
-          <h3 className="settings-section-title">Levels</h3>
-          <div className="settings-section-rows">
-            {!loading && !officialAvailable ? (
-              <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} role="status">
-                <div className="settings-row-copy">
-                  <h4>Official content unavailable</h4>
-                  <p>Public levels could not be loaded. Reopen Play to retry.</p>
-                </div>
-              </section>
-            ) : null}
-            {!loading && !userWorkspaceAvailable ? (
-              <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} role="status">
-                <div className="settings-row-copy">
-                  <h4>Your workspace is unavailable</h4>
-                  <p>Your standalone levels could not be loaded. Reopen Play to retry.</p>
-                </div>
-              </section>
-            ) : null}
-            {loading ? (
-              <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')}>
-                <div className="settings-row-copy"><h4>Loading levels…</h4></div>
-              </section>
-            ) : null}
-            {!loading && officialAvailable && userWorkspaceAvailable && levels.length === 0 ? (
-              <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')}>
-                <div className="settings-row-copy">
-                  <h4>No standalone levels</h4>
-                  <p>Save a board in the Level Editor and it appears here.</p>
-                </div>
-                <div className="settings-row-control">
-                  <NavButton data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button')} to="/editor/level">Open Editor</NavButton>
-                </div>
-              </section>
-            ) : null}
-            {levels.map((level) => {
+        <SettingsSection title="Levels">
+          {!loading && !officialAvailable ? <SettingsRow role="status" title="Official content unavailable" description="Public levels could not be loaded. Reopen Play to retry." /> : null}
+          {!loading && !userWorkspaceAvailable ? <SettingsRow role="status" title="Your workspace is unavailable" description="Your standalone levels could not be loaded. Reopen Play to retry." /> : null}
+          {loading ? <SettingsRow title="Loading levels…" /> : null}
+          {!loading && officialAvailable && userWorkspaceAvailable && levels.length === 0 ? (
+            <SettingsRow title="No standalone levels" description="Save a board in the Level Editor and it appears here.">
+              <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button')} to="/editor/level">Open Editor</ChromeNavButton>
+            </SettingsRow>
+          ) : null}
+          <ActionList
+            className="play-level-list"
+            items={levels.map((level) => {
               const playerCount = level.layers.units.filter((unit) => unit.side === 'player').length;
               const enemyCount = level.layers.units.filter((unit) => unit.side === 'enemy').length;
-              return (
-                <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} key={level.id}>
-                  <span data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row-thumb')} aria-hidden="true">
-                    <GatedLevelThumbnail level={level} width={72} alt="" />
-                  </span>
-                  <div className="settings-row-copy">
-                    <h4>{level.name}</h4>
-                    <p>{levelObjectiveLine(level)} · {playerCount}v{enemyCount} · {level.board.cols}x{level.board.rows}</p>
-                  </div>
-                  <div className="settings-row-control">
-                    <NavButton
-                      data-chrome-unit="inner-text-button"
-                      className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-                      to={playSkirmishLevelHref(level.id, PLAY_LEVELS_SELECTOR_HREF)}
-                      aria-label={`Play ${level.name}`}
-                    >
-                      Play
-                    </NavButton>
-                  </div>
-                </section>
-              );
+              return {
+                id: level.id,
+                title: level.name,
+                description: <p>{levelObjectiveLine(level)} · {playerCount}v{enemyCount} · {level.board.cols}x{level.board.rows}</p>,
+                leading: <GatedLevelThumbnail level={level} width={72} alt="" />,
+                actions: [{
+                  id: 'play',
+                  label: `Play ${level.name}`,
+                  text: 'Play',
+                  presentation: 'text' as const,
+                  className: 'app-header-button',
+                  tone: 'primary' as const,
+                  href: playSkirmishLevelHref(level.id, PLAY_LEVELS_SELECTOR_HREF),
+                }],
+              };
             })}
-          </div>
-        </section>
+          />
+        </SettingsSection>
       </div></ThumbnailSurface>
     </ActionColumn>
   );
@@ -568,18 +506,11 @@ function CampaignLevelsPanel({
   return (
     <ActionColumn>
       <ThumbnailSurface levels={thumbnailLevels}><div className="settings-panel-content">
-        <section className="settings-section">
-          <h3 className="settings-section-title">{campaign.name} — Levels</h3>
-          <div className="settings-section-rows">
-            {refs.length === 0 ? (
-              <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')}>
-                <div className="settings-row-copy">
-                  <h4>No levels yet</h4>
-                  <p>This campaign has no levels. Add some in the Editor.</p>
-                </div>
-              </section>
-            ) : null}
-            {refs.map((ref, index) => {
+        <SettingsSection title={`${campaign.name} — Levels`}>
+          {refs.length === 0 ? <SettingsRow title="No levels yet" description="This campaign has no levels. Add some in the Editor." /> : null}
+          <ActionList
+            className="campaign-level-list"
+            items={refs.map((ref, index) => {
               const level = levelDocs[ref.levelId];
               const levelProgress = progress[ref.levelId];
               const completed = Boolean(levelProgress?.completed);
@@ -596,48 +527,36 @@ function CampaignLevelsPanel({
                 )
                 : unlocked ? null : <span className="campaign-level-status is-locked">Locked</span>;
               const playHref = `/play?campaignId=${encodeURIComponent(campaign.id)}&levelId=${encodeURIComponent(ref.levelId)}`;
-              return (
-                <section
-                  data-chrome-unit="inner-box"
-                  className={chromeUnitClassNames('inner-box', 'settings-row campaign-level-row', !unlocked && 'is-disabled', ref.levelId === selectedLevelId && 'active is-selected')}
-                  key={ref.levelId}
-                  role="button"
-                  tabIndex={0}
-                  aria-current={ref.levelId === selectedLevelId ? 'true' : undefined}
-                  onClick={() => onSelectLevel(ref.levelId)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      onSelectLevel(ref.levelId);
-                    }
-                  }}
-                >
-                  <span data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row-thumb')} aria-hidden="true">
-                    {level
-                      ? <GatedLevelThumbnail level={level} width={66} alt="" />
-                      : <span className="settings-row-thumb-empty" />}
-                  </span>
-                  <div className="settings-row-copy">
-                    <h4>{index + 1}. {level?.name ?? `Level ${index + 1}`}</h4>
-                    <div className="campaign-level-meta">
-                      <p className="campaign-level-goal">{goalLine}</p>
-                      {status}
-                    </div>
-                  </div>
-                  <div className="settings-row-control" onClick={(event) => event.stopPropagation()}>
-                    {unlocked
-                      ? (
-                        <NavButton data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} to={playHref} aria-label={`Play ${level?.name ?? `level ${index + 1}`}`}>
-                          Play
-                        </NavButton>
-                      )
-                      : <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button')} disabled>Locked</button>}
-                  </div>
-                </section>
-              );
+              const name = level?.name ?? `Level ${index + 1}`;
+              return {
+                id: ref.levelId,
+                title: `${index + 1}. ${name}`,
+                description: <div className="campaign-level-meta"><p className="campaign-level-goal">{goalLine}</p>{status}</div>,
+                leading: level ? <GatedLevelThumbnail level={level} width={66} alt="" /> : <span className="settings-row-thumb-empty" />,
+                selected: ref.levelId === selectedLevelId,
+                className: `campaign-level-row ${!unlocked ? 'is-disabled' : ''}`.trim(),
+                ariaLabel: `Preview ${name}`,
+                onSelect: () => onSelectLevel(ref.levelId),
+                actions: unlocked ? [{
+                  id: 'play',
+                  label: `Play ${name}`,
+                  text: 'Play',
+                  presentation: 'text' as const,
+                  className: 'app-header-button',
+                  tone: 'primary' as const,
+                  href: playHref,
+                }] : [{
+                  id: 'locked',
+                  label: `${name} is locked`,
+                  text: 'Locked',
+                  presentation: 'text' as const,
+                  className: 'app-header-button',
+                  disabled: true,
+                }],
+              };
             })}
-          </div>
-        </section>
+          />
+        </SettingsSection>
       </div></ThumbnailSurface>
     </ActionColumn>
   );
@@ -968,8 +887,8 @@ export function PlayMenu({
           actions={
             <div className="ce-preview-actions is-single">
               {selectedUnlocked
-                ? <NavButton data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} to={selectedPlayHref}><span>Play</span></NavButton>
-                : <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} disabled><span>Locked</span></button>}
+                ? <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} to={selectedPlayHref}><span>Play</span></ChromeNavButton>
+                : <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} disabled><span>Locked</span></ChromeButton>}
             </div>
           }
         />

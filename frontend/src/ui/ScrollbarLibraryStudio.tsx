@@ -1,6 +1,7 @@
 import { type ReactElement, type ReactNode, type CSSProperties } from 'react';
 import { liveScrollbarAssets } from './scrollbarCatalog';
 import { requiredDrawableRole } from '@chess-tactics/board-render';
+import { StudioCatalogCard } from './studio/StudioCatalogCard';
 
 // Read-only live catalog grid for scrollbar grips. Each card shows the sprite centered
 // (a scrollbar grip is a single element, not a tiled surface). Reuses the shared studio card +
@@ -21,17 +22,15 @@ export function ScrollbarLibraryStudio({
   return (
     <div className="tileset-studio-grid surface-grid" aria-label="Scrollbars">
       {visible.map((s) => (
-        <button
+        <StudioCatalogCard
           key={s.name}
-          type="button"
-          className={`tileset-studio-card ${s.name === selected ? 'is-selected' : ''}`.trim()}
-          onClick={() => onSelect(s.name)}
-          aria-pressed={s.name === selected}
-          title={`${s.label} — scrollbar grip`}
-        >
-          <span className="tileset-studio-card-image" style={{ '--tile-zoom': zoom } as CSSProperties}>
-            {/* Preview AS a scrollbar: a recessed track + a thumb skinned by this entry —
-                'sprite' shows the carved shape, 'texture' fills a plain thumb with the material. */}
+          title={s.label}
+          badge={<>{s.kind} · {s.width} × {s.height}</>}
+          selected={s.name === selected}
+          onSelect={() => onSelect(s.name)}
+          titleText={`${s.label} — scrollbar grip`}
+          imageStyle={{ '--tile-zoom': zoom } as CSSProperties}
+          media={(
             <span style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: '11%' } as CSSProperties}>
               <span style={{ position: 'relative', width: '22px', height: '74%', background: '#05101c', borderRadius: '2px', border: '1px solid #16314c' } as CSSProperties}>
                 {s.kind === 'texture' ? (
@@ -41,14 +40,8 @@ export function ScrollbarLibraryStudio({
                 )}
               </span>
             </span>
-          </span>
-          <span className="tileset-studio-card-meta">
-            <span className="tileset-studio-card-text">
-              <strong>{s.label}</strong>
-              <em>{s.kind} · {s.width} × {s.height}</em>
-            </span>
-          </span>
-        </button>
+          )}
+        />
       ))}
       {visible.length === 0 ? <p className="tileset-studio-empty">No live scrollbars match.</p> : null}
     </div>

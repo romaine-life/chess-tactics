@@ -29,6 +29,7 @@ import {
   type RunSelfInspectionView,
 } from './RunSelfInspection';
 import { RUN_RELIC_BY_ID } from '../run/model';
+import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 
 const TYPE_LABEL = PIECE_LABEL;
 
@@ -366,11 +367,9 @@ export function SkirmishHud({
             data-transition-policy="immediate-local"
           >
             {HUD_TABS.map((t) => (
-              <button
+              <ChromeButton unit="inner-text-button"
                 key={t.id}
-                type="button"
                 role="tab"
-                data-chrome-unit="inner-text-button"
                 id={`skirmish-tab-${t.id}`}
                 aria-selected={tab === t.id}
                 aria-controls={`skirmish-panel-${t.id}`}
@@ -380,7 +379,7 @@ export function SkirmishHud({
                 onClick={() => setTab(t.id)}
               >
                 <span className={`skirmish-tab-icon skirmish-tab-icon-${t.id}`} aria-hidden="true" />
-              </button>
+              </ChromeButton>
             ))}
           </div>
         ) : null}
@@ -408,10 +407,8 @@ export function SkirmishHud({
               const palette = paletteForSide(promotingPiece?.side ?? localSide, promotingPiece?.palette);
               const src = pieceSpritePath(type, palette, promotingPiece?.facing);
               return (
-                <button
+                <ChromeButton unit="inner-asset-swatch"
                   key={type}
-                  type="button"
-                  data-chrome-unit="inner-asset-swatch"
                   className={chromeUnitClassNames('inner-asset-swatch', 'app-header-button', 'skirmish-promotion-option')}
                   onClick={() => choosePromotion(type)}
                   aria-label={`Promote to ${PROMOTION_LABEL[type]}`}
@@ -419,13 +416,11 @@ export function SkirmishHud({
                 >
                   <img src={src} alt="" draggable={false} />
                   <span>{PROMOTION_LABEL[type]}</span>
-                </button>
+                </ChromeButton>
               );
             })}
             {onPawnCashOut && pendingPromotion.mode === 'move' && promotingPiece?.type === 'pawn' && promotingPiece.id.startsWith('run-') ? (
-              <button
-                type="button"
-                data-chrome-unit="inner-text-button"
+              <ChromeButton unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'skirmish-promotion-option')}
                 onClick={() => {
                   onPawnCashOut(promotingPiece.id);
@@ -436,7 +431,7 @@ export function SkirmishHud({
               >
                 <span aria-hidden="true">¤</span>
                 <span>Take 2 gold</span>
-              </button>
+              </ChromeButton>
             ) : null}
           </div>
         </section>
@@ -555,30 +550,28 @@ export function SkirmishHud({
                   onDecrease={() => setZoom(zoom - 0.1)}
                   onIncrease={() => setZoom(zoom + 0.1)}
                 />
-                <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button')} onClick={resetView}>Reset</button>
+                <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button')} onClick={resetView}>Reset</ChromeButton>
               </div>
             </div>
             <div className="skirmish-view-group">
               <span className="skirmish-eyebrow">Overlays</span>
               <div className="skirmish-view-row">
-                <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', showMoves && 'active')} onClick={() => toggleOverlay('showMoves')} aria-pressed={showMoves}>Moves</button>
-                <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', showEnemyAttacks && 'active')} onClick={() => toggleOverlay('showEnemyAttacks')} aria-pressed={showEnemyAttacks}>Opp. attacks</button>
-                <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', showBlocked && 'active')} onClick={() => toggleOverlay('showBlocked')} aria-pressed={showBlocked}>Blocks</button>
-                <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', showPromotionZones && 'active')} onClick={() => toggleOverlay('showPromotionZones')} aria-pressed={showPromotionZones}>Promotion</button>
-                <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', showGrid && 'active')} onClick={() => toggleOverlay('showGrid')} aria-pressed={showGrid}>Grid</button>
+                <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', showMoves && 'active')} onClick={() => toggleOverlay('showMoves')} aria-pressed={showMoves}>Moves</ChromeButton>
+                <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', showEnemyAttacks && 'active')} onClick={() => toggleOverlay('showEnemyAttacks')} aria-pressed={showEnemyAttacks}>Opp. attacks</ChromeButton>
+                <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', showBlocked && 'active')} onClick={() => toggleOverlay('showBlocked')} aria-pressed={showBlocked}>Blocks</ChromeButton>
+                <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', showPromotionZones && 'active')} onClick={() => toggleOverlay('showPromotionZones')} aria-pressed={showPromotionZones}>Promotion</ChromeButton>
+                <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', showGrid && 'active')} onClick={() => toggleOverlay('showGrid')} aria-pressed={showGrid}>Grid</ChromeButton>
               </div>
             </div>
             {onOpenPredrawnRegistration ? (
               <div className="skirmish-view-group">
                 <span className="skirmish-eyebrow">Pre-drawn plate</span>
                 <div className="skirmish-view-row">
-                  <button
-                    type="button"
-                    data-chrome-unit="inner-text-button"
+                  <ChromeButton unit="inner-text-button"
                     className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
                     data-testid="open-predrawn-registration"
                     onClick={onOpenPredrawnRegistration}
-                  >Pick corners</button>
+                  >Pick corners</ChromeButton>
                 </div>
               </div>
             ) : null}
@@ -602,10 +595,8 @@ export function SkirmishHud({
                   const isToggle = action.kind === 'toggle';
                   const active = isToggle ? flagValue[action.flag] : false;
                   return (
-                    <button
+                    <ChromeButton unit="inner-text-button"
                       key={key}
-                      type="button"
-                      data-chrome-unit="inner-text-button"
                       data-testid={`shortcut-${key}`}
                       className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'skirmish-grid-key', active && 'active is-active')}
                       aria-pressed={isToggle ? active : undefined}
@@ -614,7 +605,7 @@ export function SkirmishHud({
                     >
                       <kbd className="skirmish-grid-cap">{key.toUpperCase()}</kbd>
                       <span className="skirmish-grid-label">{action.label}</span>
-                    </button>
+                    </ChromeButton>
                   );
                 })}
               </div>
@@ -664,9 +655,8 @@ export function SkirmishHud({
               <span className="skirmish-eyebrow">Scenario</span>
               <div className="skirmish-view-row">
                 {returnHref && !net ? (
-                  <NavButton
+                  <ChromeNavButton unit="inner-text-button"
                     className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'skirmish-return-button')}
-                    data-chrome-unit="inner-text-button"
                     data-testid="skirmish-return-scenario"
                     aria-label={returnLabel}
                     title={returnLabel}
@@ -674,12 +664,10 @@ export function SkirmishHud({
                   >
                     <BackGlyph className="skirmish-lifecycle-icon" />
                     <span>{returnLabel}</span>
-                  </NavButton>
+                  </ChromeNavButton>
                 ) : null}
                 {onRestart && !net ? (
-                  <button
-                    type="button"
-                    data-chrome-unit="inner-tool-square"
+                  <ChromeButton unit="inner-tool-square"
                     className={chromeUnitClassNames('inner-tool-square', 'app-header-button', 'skirmish-lifecycle-button')}
                     data-testid="restart-level"
                     aria-label={restartLabel}
@@ -687,14 +675,12 @@ export function SkirmishHud({
                     onClick={onRestart}
                   >
                     <RestartGlyph className="skirmish-lifecycle-icon" />
-                  </button>
+                  </ChromeButton>
                 ) : null}
                 {/* "New skirmish" reseeds the local board, which would desync a shared
                     netplay match — offer it only in single-player. */}
                 {canStartNewSkirmish && !net ? (
-                  <button
-                    type="button"
-                    data-chrome-unit="inner-tool-square"
+                  <ChromeButton unit="inner-tool-square"
                     className={chromeUnitClassNames('inner-tool-square', 'app-header-button', 'skirmish-lifecycle-button')}
                     data-testid="new-skirmish"
                     aria-label={newSkirmishLabel}
@@ -702,14 +688,12 @@ export function SkirmishHud({
                     onClick={onNewSkirmish ?? (() => newSkirmish({ seed: Date.now() & 0x7fffffff, timeControl: loadSkirmishClockPref() }))}
                   >
                     <NewGlyph className="skirmish-lifecycle-icon" />
-                  </button>
+                  </ChromeButton>
                 ) : null}
                 {/* Concede the current battle. In netplay this relays through the lobby; in
                     solo/test play it immediately ends the board as a defeat. */}
                 {!game.winner && (!net || netInteractive) ? (
-                  <button
-                    type="button"
-                    data-chrome-unit="inner-text-button"
+                  <ChromeButton unit="inner-text-button"
                     className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'skirmish-resign-button', 'danger')}
                     data-testid="resign"
                     onClick={async () => {
@@ -731,7 +715,7 @@ export function SkirmishHud({
                     }}
                   >
                     Resign
-                  </button>
+                  </ChromeButton>
                 ) : null}
               </div>
             </div>
@@ -741,16 +725,14 @@ export function SkirmishHud({
                   <div className="skirmish-view-group">
                     <span className="skirmish-eyebrow">Run view</span>
                     <div className="run-meta-navigation">
-                    <button
-                      type="button"
-                      data-chrome-unit="inner-text-button"
+                    <ChromeButton unit="inner-text-button"
                       data-testid="run-battle-view-primary"
                       className={chromeUnitClassNames('inner-text-button', 'app-header-button', !runSelfInspectionView && 'active')}
                       aria-pressed={!runSelfInspectionView}
                       onClick={() => onNavigateRunView('primary')}
                     >
                       Battle
-                    </button>
+                    </ChromeButton>
                     </div>
                   </div>
                 ) : null}
@@ -767,15 +749,13 @@ export function SkirmishHud({
                 <div className="skirmish-view-group">
                   <span className="skirmish-eyebrow">Run</span>
                   <div className="run-meta-navigation">
-                  <button
-                    type="button"
-                    data-chrome-unit="inner-text-button"
+                  <ChromeButton unit="inner-text-button"
                     className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'danger')}
                     data-testid="abandon-run"
                     onClick={onAbandonRun}
                   >
                     Abandon Run
-                  </button>
+                  </ChromeButton>
                   </div>
                 </div>
               </>
@@ -784,15 +764,13 @@ export function SkirmishHud({
               <div className="skirmish-view-group">
                 <span className="skirmish-eyebrow">Administration</span>
                 <div className="skirmish-view-row">
-                  <button
-                    type="button"
-                    data-chrome-unit="inner-text-button"
+                  <ChromeButton unit="inner-text-button"
                     className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
                     data-testid="open-battle-admin-controls"
                     onClick={() => setTab('admin')}
                   >
                     Admin Controls
-                  </button>
+                  </ChromeButton>
                 </div>
               </div>
             ) : null}
@@ -802,15 +780,13 @@ export function SkirmishHud({
           <section className="skirmish-card skirmish-admin-panel" aria-label="Administrator playtest controls">
             <div className="skirmish-admin-panel-head">
               <h2>Admin Controls</h2>
-              <button
-                type="button"
-                data-chrome-unit="inner-text-button"
+              <ChromeButton unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
                 data-testid="close-battle-admin-controls"
                 onClick={() => setTab('controls')}
               >
                 Back
-              </button>
+              </ChromeButton>
             </div>
             <AdminControls
               authReady={adminAuth.ready}

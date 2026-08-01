@@ -5,6 +5,7 @@ import {
   type AdminLiveMediaVersion,
 } from '../net/liveMediaAdmin';
 import { SliderRow } from './dressing/SliderRow';
+import { StudioCatalogCard } from './studio/StudioCatalogCard';
 import {
   PESTIFEROUS_OFFER_DENOMINATOR,
   PIECE_BUNDLE_DECK,
@@ -413,23 +414,7 @@ export function RunCardPrototypeViewer({
 export function RunCardPrototypeCatalog({ onOpen }: { onOpen: () => void }): ReactElement {
   return (
     <div className="tileset-studio-grid pages-grid" aria-label="Card layout prototypes">
-      <button
-        type="button"
-        className="tileset-studio-card is-selected"
-        onClick={onOpen}
-        aria-pressed={true}
-        title="Open the Parish Militia card layout instrument"
-      >
-        <span className="tileset-studio-card-image pages-card-image run-card-prototype-catalog-image" aria-hidden="true">
-          <span>5:7</span>
-        </span>
-        <span className="tileset-studio-card-meta">
-          <span className="tileset-studio-card-text">
-            <strong>Parish Militia</strong>
-            <em>card layout · 9 gold</em>
-          </span>
-        </span>
-      </button>
+      <StudioCatalogCard title="Parish Militia" badge="card layout · 9 gold" selected onSelect={onOpen} titleText="Open the Parish Militia card layout instrument" imageClassName="pages-card-image run-card-prototype-catalog-image" media={<span>5:7</span>} />
     </div>
   );
 }

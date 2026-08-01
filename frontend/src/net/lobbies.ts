@@ -4,7 +4,7 @@
 // EventSource streams, which send the cookie automatically). The wire shapes here
 // are the shared contract with backend/server.js — keep them in lockstep.
 
-import { HttpError } from './http';
+import { requestJson } from './http';
 import type { Level, ObjectiveType } from '../core/level';
 
 export interface LobbyUser {
@@ -74,45 +74,32 @@ export interface MoveEvent {
   move: { x: number; y: number; promotion?: 'queen' | 'rook' | 'bishop' | 'knight' };
 }
 
-// Shared request core. GET sends no body; every mutating verb posts JSON (an empty
-// object when the endpoint takes no payload), matching the backend's json() parse.
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(path, {
-    method,
-    headers: { 'content-type': 'application/json' },
-    credentials: 'include',
-    body: method === 'GET' ? undefined : JSON.stringify(body ?? {}),
-  });
-  if (!res.ok) throw await HttpError.fromResponse(`${method} ${path}`, res);
-  return res.status === 204 ? (undefined as T) : (res.json() as Promise<T>);
-}
-
 export function fetchLobbies(): Promise<LobbyList> {
-  return request<LobbyList>('GET', '/api/lobbies');
+  return requestJson<LobbyList>('GET', '/api/lobbies');
 }
 
 export function fetchLobby(id: string): Promise<{ lobby: Lobby }> {
-  return request<{ lobby: Lobby }>('GET', `/api/lobbies/${encodeURIComponent(id)}`);
+  return requestJson<{ lobby: Lobby }>('GET', `/api/lobbies/${encodeURIComponent(id)}`);
 }
 
 export function createLobby(): Promise<{ lobby: Lobby }> {
-  return request<{ lobby: Lobby }>('POST', '/api/lobbies');
+  return requestJson<{ lobby: Lobby }>('POST', '/api/lobbies');
 }
 
 export function joinLobby(id: string): Promise<{ lobby: Lobby }> {
-  return request<{ lobby: Lobby }>('POST', `/api/lobbies/${encodeURIComponent(id)}/join`);
+  return requestJson<{ lobby: Lobby }>('POST', `/api/lobbies/${encodeURIComponent(id)}/join`);
 }
 
 export function leaveLobby(id: string, completion?: ReportedLobbyResult): Promise<void> {
-  return request<void>('POST', `/api/lobbies/${encodeURIComponent(id)}/leave`, completion);
+  return requestJson<void>('POST', `/api/lobbies/${encodeURIComponent(id)}/leave`, completion);
 }
 
 export function startLobby(id: string): Promise<{ lobby: Lobby }> {
-  return request<{ lobby: Lobby }>('POST', `/api/lobbies/${encodeURIComponent(id)}/start`);
+  return requestJson<{ lobby: Lobby }>('POST', `/api/lobbies/${encodeURIComponent(id)}/start`);
 }
 
 export function setLobbyLevel(id: string, levelId: string): Promise<{ lobby: Lobby }> {
-  return request<{ lobby: Lobby }>('POST', `/api/lobbies/${encodeURIComponent(id)}/level`, { levelId });
+  return requestJson<{ lobby: Lobby }>('POST', `/api/lobbies/${encodeURIComponent(id)}/level`, { levelId });
 }
 
 export function postMove(
@@ -122,7 +109,7 @@ export function postMove(
   expectedMoveCount: number,
   intentId: string,
 ): Promise<{ move: MoveEvent }> {
-  return request<{ move: MoveEvent }>('POST', `/api/lobbies/${encodeURIComponent(id)}/moves`, {
+  return requestJson<{ move: MoveEvent }>('POST', `/api/lobbies/${encodeURIComponent(id)}/moves`, {
     pieceId,
     move,
     expectedMoveCount,
@@ -134,16 +121,16 @@ export function postMove(
 // pushes it to both clients over the lobby channel; this seat ends the game when that
 // frame arrives (see Skirmish's onLobby), not optimistically — mirroring the move relay.
 export function resignLobby(id: string): Promise<{ lobby: Lobby }> {
-  return request<{ lobby: Lobby }>('POST', `/api/lobbies/${encodeURIComponent(id)}/resign`);
+  return requestJson<{ lobby: Lobby }>('POST', `/api/lobbies/${encodeURIComponent(id)}/resign`);
 }
 
 /** Persist the deterministic result both clients derive from one committed relay. */
 export function reportLobbyResult(id: string, result: ReportedLobbyResult): Promise<{ lobby: Lobby }> {
-  return request<{ lobby: Lobby }>('POST', `/api/lobbies/${encodeURIComponent(id)}/result`, result);
+  return requestJson<{ lobby: Lobby }>('POST', `/api/lobbies/${encodeURIComponent(id)}/result`, result);
 }
 
 export function fetchMovesSince(id: string, since: number): Promise<{ moves: MoveEvent[] }> {
-  return request<{ moves: MoveEvent[] }>('GET', `/api/lobbies/${encodeURIComponent(id)}/moves?since=${since}`);
+  return requestJson<{ moves: MoveEvent[] }>('GET', `/api/lobbies/${encodeURIComponent(id)}/moves?since=${since}`);
 }
 
 // Parse one SSE frame's data payload as JSON, returning null on malformed data so a

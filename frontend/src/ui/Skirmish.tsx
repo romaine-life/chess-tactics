@@ -10,7 +10,6 @@ import { isPredrawnBackgroundActive } from '@chess-tactics/board-render';
 import { SkirmishBoard } from '../render/SkirmishBoard';
 import { SkirmishHud, type SkirmishHudProps } from './SkirmishHud';
 import { PaintedSurfaceBoundary } from './shell/PaintedSurfaceBoundary';
-import { NavButton } from './shared/NavButton';
 import { RestartGlyph } from './shared/actionGlyphs';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleBarControlContribution, TitleBarStatus } from './shell/TitleBarControls';
@@ -78,6 +77,7 @@ import { RunRelicStrip } from './RunRelics';
 import { Strategikon } from './Strategikon';
 import { sceneTransitionTargetAttributes } from './shell/sceneTransitionTarget';
 import type { RunSelfInspectionView } from './RunSelfInspection';
+import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 
 export interface RunBattlePresentation {
   level: Level;
@@ -1260,9 +1260,9 @@ export function Skirmish({
             {mapError ? (
               <InnerChromeBox className="skirmish-status-chip skirmish-turn-plate" role="alert" style={{ gap: 10 }}>
                 <strong>{mapError}</strong>
-                <NavButton data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} to={returnHref ?? PLAY_SKIRMISH_SELECTOR_HREF}>
+                <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} to={returnHref ?? PLAY_SKIRMISH_SELECTOR_HREF}>
                   {returnIsEditor ? 'Back to editor' : 'Back to Play'}
-                </NavButton>
+                </ChromeNavButton>
               </InnerChromeBox>
             ) : boardSettled ? (
               <>
@@ -1321,17 +1321,17 @@ export function Skirmish({
             <h2>{game.winner === 'player' ? 'Victory' : game.winner === 'draw' ? 'Draw' : 'Defeat'}</h2>
             <p>{routeLevel.name} — {resultDetail ?? objectiveGoal}</p>
             <div className="campaign-result-actions">
-              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button')} onClick={replayLevel}>
+              <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button')} onClick={replayLevel}>
                 {game.winner === 'player' ? 'Replay' : 'Retry'}
-              </button>
+              </ChromeButton>
               {game.winner === 'player' && nextLevel ? (
-                <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} onClick={advanceToNextLevel}>
+                <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} onClick={advanceToNextLevel}>
                   Continue
-                </button>
+                </ChromeButton>
               ) : (
-                <NavButton data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} to={playCampaignSelectorHref(routeCampaignId)}>
+                <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} to={playCampaignSelectorHref(routeCampaignId)}>
                   Back to Campaign
-                </NavButton>
+                </ChromeNavButton>
               )}
             </div>
           </div>
@@ -1345,9 +1345,7 @@ export function Skirmish({
             <p>{routeLevel.name} — {resultDetail ?? objectiveGoal}</p>
             <div className="campaign-result-actions">
               {game.winner === 'player' ? (
-                <button
-                  type="button"
-                  data-chrome-unit="inner-text-button"
+                <ChromeButton unit="inner-text-button"
                   className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
                   onClick={() => runBattle.onVictory(
                     game.pieces
@@ -1356,16 +1354,14 @@ export function Skirmish({
                   )}
                 >
                   Continue
-                </button>
+                </ChromeButton>
               ) : (
-                <button
-                  type="button"
-                  data-chrome-unit="inner-text-button"
+                <ChromeButton unit="inner-text-button"
                   className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
                   onClick={replayLevel}
                 >
                   Retry
-                </button>
+                </ChromeButton>
               )}
             </div>
           </div>
@@ -1383,12 +1379,12 @@ export function Skirmish({
               ? 'The clients disagree about this terminal position. Leaving concedes the match and closes recovery.'
               : `Multiplayer skirmish — ${resultDetail ?? objectiveGoal}`}</p>
             <div className="campaign-result-actions">
-              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button')} data-testid="netplay-view-board" onClick={() => setNetResultDismissed(true)}>
+              <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button')} data-testid="netplay-view-board" onClick={() => setNetResultDismissed(true)}>
                 View board
-              </button>
-              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} data-testid="netplay-return" onClick={returnToLobbies}>
+              </ChromeButton>
+              <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} data-testid="netplay-return" onClick={returnToLobbies}>
                 {netResultDisputed ? 'Concede and leave' : 'Return to lobbies'}
-              </button>
+              </ChromeButton>
             </div>
           </div>
         </div>
@@ -1405,9 +1401,9 @@ export function Skirmish({
             <strong>{turnLabel}</strong>
             <small>{netResultDisputed ? 'Result disputed' : 'Match complete'}</small>
           </InnerChromeBox>
-          <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} data-testid="netplay-return-persistent" onClick={returnToLobbies}>
+          <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} data-testid="netplay-return-persistent" onClick={returnToLobbies}>
             {netResultDisputed ? 'Concede and leave' : 'Return to lobbies'}
-          </button>
+          </ChromeButton>
         </div>
       )}
     </SkirmishShell>

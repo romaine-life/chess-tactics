@@ -25,6 +25,7 @@ import {
   samePredrawnGenerationFrame,
   type PredrawnGenerationFrameStatus,
 } from './predrawnGenerationFrameStatus';
+import { ChromeButton } from './shared/ChromeButton';
 
 const MIN_FRAME_WIDTH = 320;
 const MAX_FRAME_WIDTH = 8192;
@@ -215,45 +216,35 @@ export function PredrawnGenerationFramePicker({
             <h2 id="predrawn-generation-frame-title">Choose the generation frame</h2>
             <p>Drag the scene and zoom until this 16:9 crop is the exact Image 1 you want to hand off. The cyan box is required gameplay-authoritative art and must stay inside.</p>
           </div>
-          <button
-            type="button"
-            data-chrome-unit="inner-text-button"
+          <ChromeButton unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
             onClick={onClose}
-          >Close</button>
+          >Close</ChromeButton>
         </header>
 
         <div className="predrawn-generation-frame-toolbar">
           <div className="skirmish-view-row" role="group" aria-label="Generation frame zoom">
-            <button
-              type="button"
-              data-chrome-unit="inner-minus-key"
+            <ChromeButton unit="inner-minus-key"
               className={chromeUnitClassNames('inner-minus-key', 'le-seg-btn', 'le-icon-btn')}
               onClick={() => zoomBy(1.1)}
               aria-label="Show more scenery"
-            >−</button>
+            >−</ChromeButton>
             <span className="predrawn-generation-frame-readout">{frame.width} × {frame.height}</span>
-            <button
-              type="button"
-              data-chrome-unit="inner-plus-key"
+            <ChromeButton unit="inner-plus-key"
               className={chromeUnitClassNames('inner-plus-key', 'le-seg-btn', 'le-icon-btn')}
               onClick={() => zoomBy(0.9)}
               aria-label="Crop tighter"
-            >+</button>
+            >+</ChromeButton>
           </div>
           <div className="skirmish-view-row">
-            <button
-              type="button"
-              data-chrome-unit="inner-text-button"
+            <ChromeButton unit="inner-text-button"
               className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
               onClick={() => setFrame(fittedFrame)}
-            >Fit required art</button>
-            <button
-              type="button"
-              data-chrome-unit="inner-text-button"
+            >Fit required art</ChromeButton>
+            <ChromeButton unit="inner-text-button"
               className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
               onClick={() => setFrame(editorFrame)}
-            >Restore working-copy frame</button>
+            >Restore working-copy frame</ChromeButton>
           </div>
         </div>
 
@@ -307,25 +298,19 @@ export function PredrawnGenerationFramePicker({
             <span>{footerStatus.detail}</span>
           </p>
           <div className="confirm-actions">
-            <button
-              type="button"
-              data-chrome-unit="inner-text-button"
+            <ChromeButton unit="inner-text-button"
               className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
               onClick={onClose}
-            >{frameAppliedToEditor ? 'Done' : initialFrame ? 'Discard preview' : 'Cancel'}</button>
+            >{frameAppliedToEditor ? 'Done' : initialFrame ? 'Discard preview' : 'Cancel'}</ChromeButton>
             {frameAppliedToEditor ? (
-              <button
-                type="button"
+              <ChromeButton unit="inner-text-button"
                 data-testid="predrawn-generation-frame-review-save"
-                data-chrome-unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
                 onClick={onReviewSave}
-              >{reviewSaveLabel}</button>
+              >{reviewSaveLabel}</ChromeButton>
             ) : null}
-            <button
-              type="button"
+            <ChromeButton unit="inner-text-button"
               data-testid="predrawn-generation-frame-apply"
-              data-chrome-unit="inner-text-button"
               className={chromeUnitClassNames(
                 'inner-text-button',
                 'le-seg-btn',
@@ -333,7 +318,7 @@ export function PredrawnGenerationFramePicker({
               )}
               disabled={!validation.ok || !exactFramePainted || frameAppliedToEditor}
               onClick={() => { if (validation.ok && exactFramePainted) onApply(validation.frame); }}
-            >{applyLabel}</button>
+            >{applyLabel}</ChromeButton>
           </div>
         </footer>
       </div>

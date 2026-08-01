@@ -81,7 +81,7 @@ describe('Level Editor board pointer contract', () => {
 
   it('keeps the registered erase slot configurable as the Scene Art delete-selected action', () => {
     const eraseButton = levelEditorControls.match(
-      /<button\b[^>]*data-chrome-unit="inner-erase-tool"[\s\S]*?<\/button>/,
+      /<ChromeButton\b[^>]*unit="inner-erase-tool"[\s\S]*?<\/ChromeButton>/,
     )?.[0];
 
     expect(eraseButton).toBeDefined();
@@ -170,7 +170,7 @@ describe('Level Editor board pointer contract', () => {
     expect(levelEditorControls).toContain('const eraseDisabled = toolsDisabled || eraseActionDisabled;');
     for (const unit of ['inner-select-tool', 'inner-brush-tool', 'inner-move-tool']) {
       const button = levelEditorControls.match(
-        new RegExp(`<button\\b[^>]*data-chrome-unit="${unit}"[\\s\\S]*?<\\/button>`),
+        new RegExp(`<ChromeButton\\b[^>]*unit="${unit}"[\\s\\S]*?<\\/ChromeButton>`),
       )?.[0];
       expect(button).toBeDefined();
       expect(button).toContain('disabled={toolsDisabled}');

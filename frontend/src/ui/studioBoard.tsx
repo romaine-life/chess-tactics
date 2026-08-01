@@ -9,6 +9,7 @@ import {
 } from '@chess-tactics/board-render/ui/studioBoard';
 import { directionCompassCells, rookDirectionLabel, type Direction } from './unitCatalog';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
+import { ChromeButton } from './shared/ChromeButton';
 
 export {
   assetFrameSrc,
@@ -46,20 +47,16 @@ export function FacingCompass({ direction, onSelect, onRotate, available, ariaLa
     <div className="unit-facing-compass" aria-label={ariaLabel}>
       {directionCompassCells.map((cell) =>
         cell === 'center' ? (
-          <button
+          <ChromeButton unit="inner-tool-square"
             key="center"
-            type="button"
-            data-chrome-unit="inner-tool-square"
             className={chromeUnitClassNames('inner-tool-square', 'unit-facing-cell', 'unit-facing-rotate')}
             onClick={onRotate}
             title="Rotate clockwise"
             aria-label="Rotate clockwise"
-          >↻</button>
+          >↻</ChromeButton>
         ) : (
-          <button
+          <ChromeButton unit="inner-tool-square"
             key={cell}
-            type="button"
-            data-chrome-unit="inner-tool-square"
             className={chromeUnitClassNames(
               'inner-tool-square',
               'unit-facing-cell',
@@ -73,7 +70,7 @@ export function FacingCompass({ direction, onSelect, onRotate, available, ariaLa
             aria-pressed={direction === cell}
           >
             {rookDirectionLabel[cell]}
-          </button>
+          </ChromeButton>
         ),
       )}
     </div>

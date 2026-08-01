@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, ReactElement } from 'react';
 import { UNIT_PALETTE_LABELS, UNIT_PALETTES, type UnitPalette } from '../../core/pieces';
 import { chromeUnitClassNames } from '../chromeUnitRegistry';
+import { ChromeButton } from './ChromeButton';
 
 export function PaletteSelect({
   value,
@@ -67,9 +68,7 @@ export function PaletteSelect({
 
   return (
     <div ref={rootRef} className={`palette-select ${open ? 'is-open' : ''} ${className}`.trim()}>
-      <button
-        type="button"
-        data-chrome-unit="inner-dropdown"
+      <ChromeButton unit="inner-dropdown"
         className={chromeUnitClassNames('inner-dropdown', 'palette-select-trigger')}
         aria-label={ariaLabel}
         aria-expanded={open}
@@ -82,14 +81,12 @@ export function PaletteSelect({
       >
         <span className={`palette-select-swatch is-${value}`} aria-hidden="true" />
         <span className="palette-select-label">{UNIT_PALETTE_LABELS[value]}</span>
-      </button>
+      </ChromeButton>
       {open && !disabled ? (
         <div id={listId} className="palette-select-menu" role="listbox" aria-label={ariaLabel}>
           {UNIT_PALETTES.map((palette) => (
-            <button
+            <ChromeButton unit="inner-list-row"
               key={palette}
-              type="button"
-              data-chrome-unit="inner-list-row"
               className={chromeUnitClassNames('inner-list-row', 'palette-select-option', palette === value && 'is-active')}
               role="option"
               aria-selected={palette === value}
@@ -97,7 +94,7 @@ export function PaletteSelect({
             >
               <span className={`palette-select-swatch is-${palette}`} aria-hidden="true" />
               <span>{UNIT_PALETTE_LABELS[palette]}</span>
-            </button>
+            </ChromeButton>
           ))}
         </div>
       ) : null}

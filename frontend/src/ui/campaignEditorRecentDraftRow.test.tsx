@@ -32,13 +32,13 @@ describe('Campaign Editor recent draft row', () => {
     );
 
     expect(markup).not.toContain('<div role="button"');
-    expect(markup).toContain('data-chrome-unit="inner-box" class="inner-box settings-row ce-editor-level-row is-neutral"');
+    expect(markup).toContain('data-chrome-unit="inner-box" class="inner-box inner-chrome-box settings-row action-list-row ce-editor-level-row is-neutral"');
     expect(markup).not.toContain('ce-editor-draft-row');
     expect(markup).toContain('class="level-thumbnail');
     expect(markup.match(/<button/g)).toHaveLength(3);
     expect(markup.match(/aria-label="Continue editing Bridge sketch"/g)).toHaveLength(1);
-    expect(markup).toContain('class="ce-editor-level-primary"');
-    const statusId = markup.match(/<p id="([^"]+-status)"/)?.[1];
+    expect(markup).toContain('class="action-list-primary ce-editor-level-primary"');
+    const statusId = markup.match(/id="([^"]+-status)"/)?.[1];
     expect(statusId).toBeTruthy();
     expect(markup).toContain(`aria-describedby="${statusId}"`);
     expect(markup).toContain('role="group" aria-label="Actions for Bridge sketch"');

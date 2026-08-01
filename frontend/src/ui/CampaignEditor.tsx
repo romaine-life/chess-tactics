@@ -4,7 +4,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type ComponentProps,
   type ReactElement,
   type ReactNode,
 } from 'react';
@@ -21,7 +20,6 @@ import { levelThumbnailUrl } from '../net/levelThumbnails';
 import { LevelPreviewColumn } from './LevelPreviewColumn';
 import { injectStressLevels } from '../campaign/stressFixture';
 import { levelObjectiveLine } from './LevelInfoCompact';
-import { NavButton } from './shared/NavButton';
 import { useConfirm } from './shared/ConfirmDialog';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleBarControlContribution } from './shell/TitleBarControls';
@@ -63,6 +61,9 @@ import { EditorCollectionRailTab } from './shared/EditorCollectionRailTab';
 import { WarEditor } from './WarEditor';
 import { navigateApp } from './navigation';
 import { sceneTransitionTargetAttributes } from './shell/sceneTransitionTarget';
+import { ActionListRow, type ActionListAction } from './shared/ActionList';
+import { IconButton } from './shared/ChromeButton';
+import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 
 const CE_ICONS = {
   favorite: installedUiMedia('ui-kit-icons-brand-shield-png'),
@@ -233,63 +234,6 @@ function validateWorkspaceImport(ws: Partial<{ campaigns: Campaign[]; levels: Re
   return null;
 }
 
-function IconButton({
-  children,
-  danger = false,
-  selected = false,
-  className = '',
-  buttonRef,
-  onKeyDown,
-  ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  danger?: boolean;
-  selected?: boolean;
-  buttonRef?: React.Ref<HTMLButtonElement>;
-}): ReactElement {
-  return (
-    <button
-      ref={buttonRef}
-      type="button"
-      data-chrome-unit="inner-tool-square"
-      className={chromeUnitClassNames('inner-tool-square', 'ce-icon-button', danger && 'danger is-danger', selected && 'active is-selected', className)}
-      {...props}
-      onKeyDown={(event) => {
-        onKeyDown?.(event);
-        event.stopPropagation();
-      }}
-    >
-      <span aria-hidden="true">{children}</span>
-    </button>
-  );
-}
-
-function IconNavButton({
-  children,
-  selected = false,
-  className = '',
-  onClick,
-  onKeyDown,
-  ...props
-}: ComponentProps<typeof NavButton> & { selected?: boolean }): ReactElement {
-  return (
-    <NavButton
-      {...props}
-      data-chrome-unit="inner-tool-square"
-      className={chromeUnitClassNames('inner-tool-square', 'ce-icon-button', selected && 'active is-selected', className)}
-      onClick={(event) => {
-        onClick?.(event);
-        event.stopPropagation();
-      }}
-      onKeyDown={(event) => {
-        onKeyDown?.(event);
-        event.stopPropagation();
-      }}
-    >
-      <span aria-hidden="true">{children}</span>
-    </NavButton>
-  );
-}
-
 // A campaign as a settings-style rail tab — the same carved chrome the main menu's mode
 // tabs and the play-side Campaign screen use (ADR-0059), extended to a icon | name | trail
 // grid so the favorite control / padlock sits at the tab's end. Kept as a
@@ -349,15 +293,13 @@ function CampaignRailTab({
           <CeIcon icon="lock" />
         </span>
       ) : !isOfficial ? (
-        <button
-          type="button"
-          data-chrome-unit="inner-tool-square"
+        <ChromeButton unit="inner-tool-square"
           className={chromeUnitClassNames('inner-tool-square', 'ce-tab-trail ce-row-favorite', campaign.favorite && 'active is-selected')}
           aria-label={campaign.favorite ? `Unfavorite ${campaign.name}` : `Favorite ${campaign.name}`}
           onClick={onFavorite}
         >
           <CeIcon icon="favorite" />
-        </button>
+        </ChromeButton>
       ) : null}
     </div>
   );
@@ -444,9 +386,9 @@ function LevelRow({
   actionsLabel?: string;
   onSelect?: () => void;
   editHref?: string;
-  onMoveUp?: (event: React.MouseEvent<HTMLButtonElement>) => void;
-  onMoveDown?: (event: React.MouseEvent<HTMLButtonElement>) => void;
-  onDelete?: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  onDelete?: () => void;
 }): ReactElement {
   // The full level doc drives a direction-aware goal line (King Assault reads "Protect
   // your King" when the player holds the King); before it hydrates, fall back to the
@@ -454,46 +396,28 @@ function LevelRow({
   const rowName = displayName ?? level?.name ?? levelRef.levelId;
   const goalLine = description ?? (level ? levelObjectiveLine(level) : MODE_NAME[levelRef.objective ?? 'capture-all']);
   const hasDefaultActions = !readOnly && Boolean(editHref || onMoveUp || onMoveDown || onDelete);
-  const defaultActions = hasDefaultActions ? (
-    <>
-      {editHref ? (
-        <IconNavButton to={editHref} aria-label={`Edit board for ${rowName}`} title="Edit board">
-          <CeIcon icon="pencil" />
-        </IconNavButton>
-      ) : null}
-      {onMoveUp ? <IconButton onClick={onMoveUp} aria-label={`Move ${rowName} up`}><CeIcon icon="chevron-up" /></IconButton> : null}
-      {onMoveDown ? <IconButton onClick={onMoveDown} aria-label={`Move ${rowName} down`}><CeIcon icon="chevron-down" /></IconButton> : null}
-      {onDelete ? (
-        <IconButton
-          danger
-          title="Delete saved level"
-          onClick={onDelete}
-          aria-label={`Delete saved level ${rowName}`}
-        ><CeIcon icon="delete" /></IconButton>
-      ) : null}
-    </>
-  ) : null;
-  const rowActions = actions === undefined ? defaultActions : actions;
-  const hasActions = rowActions !== null && rowActions !== false;
+  const defaultActions: ActionListAction[] = hasDefaultActions ? [
+    ...(editHref ? [{ id: 'edit', href: editHref, label: `Edit board for ${rowName}`, title: 'Edit board', icon: <CeIcon icon="pencil" /> }] : []),
+    ...(onMoveUp ? [{ id: 'move-up', label: `Move ${rowName} up`, icon: <CeIcon icon="chevron-up" />, onPress: onMoveUp }] : []),
+    ...(onMoveDown ? [{ id: 'move-down', label: `Move ${rowName} down`, icon: <CeIcon icon="chevron-down" />, onPress: onMoveDown }] : []),
+    ...(onDelete ? [{ id: 'delete', label: `Delete saved level ${rowName}`, title: 'Delete saved level', icon: <CeIcon icon="delete" />, tone: 'danger' as const, onPress: onDelete }] : []),
+  ] : [];
+  const rowActions = actions === undefined ? defaultActions : undefined;
+  const actionContent = actions === undefined ? undefined : actions;
+  const hasActions = Boolean(rowActions?.length || actionContent);
   const containerIsButton = Boolean(onSelect);
   return (
-    <div
-      data-chrome-unit="inner-box"
-      role={containerIsButton ? 'button' : undefined}
-      tabIndex={containerIsButton ? 0 : undefined}
-      aria-label={containerIsButton ? ariaLabel : undefined}
-      aria-current={containerIsButton && active ? 'true' : undefined}
-      className={chromeUnitClassNames('inner-box', 'settings-row ce-editor-level-row', active && 'active is-selected', !hasActions && 'is-read-only', !containerIsButton && 'is-neutral')}
-      onClick={onSelect}
-      onKeyDown={onSelect ? (event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          onSelect();
-        }
-      } : undefined}
-    >
-      <div data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row-thumb')} aria-hidden="true">
-        {level ? (
+    <ActionListRow item={{
+      id: levelRef.levelId,
+      title: `${showOrdinal ? `${index + 1}. ` : ''}${rowName}`,
+      description: <p>{goalLine}</p>,
+      heading: (
+        <div className="ce-editor-level-heading">
+          {heading ?? <h4 id={headingId}>{showOrdinal ? `${index + 1}. ` : ''}{rowName}</h4>}
+        </div>
+      ),
+      descriptionId,
+      leading: level ? (
           <GatedLevelThumbnail
             level={level}
             width={66}
@@ -501,40 +425,25 @@ function LevelRow({
           />
         ) : (
           <span className="settings-row-thumb-empty" />
-        )}
-      </div>
-      <div className="settings-row-copy ce-editor-level-copy">
-        <div className="ce-editor-level-heading">
-          {heading ?? <h4 id={headingId}>{showOrdinal ? `${index + 1}. ` : ''}{rowName}</h4>}
-        </div>
-        <p id={descriptionId}>{goalLine}</p>
-      </div>
-      {primaryHref ? (
-        <NavButton
-          className="ce-editor-level-primary"
-          to={primaryHref}
-          aria-label={primaryAriaLabel}
-          aria-describedby={descriptionId}
-          aria-current={active ? 'true' : undefined}
-          title={primaryTitle}
-        />
-      ) : onPrimarySelect ? (
-        <button
-          type="button"
-          className="ce-editor-level-primary"
-          aria-label={primaryAriaLabel}
-          aria-describedby={descriptionId}
-          aria-current={active ? 'true' : undefined}
-          title={primaryTitle}
-          onClick={onPrimarySelect}
-        />
-      ) : null}
-      {hasActions ? (
-        <div className="settings-row-control ce-row-actions" role="group" aria-label={actionsLabel ?? `Actions for ${rowName}`}>
-          {rowActions}
-        </div>
-      ) : null}
-    </div>
+        ),
+      selected: active,
+      readOnly: !hasActions,
+      neutral: !containerIsButton,
+      className: 'ce-editor-level-row',
+      copyClassName: 'ce-editor-level-copy',
+      ariaLabel,
+      actionsLabel: actionsLabel ?? `Actions for ${rowName}`,
+      onSelect,
+      primaryAction: primaryHref || onPrimarySelect ? {
+        label: primaryAriaLabel ?? `Open ${rowName}`,
+        title: primaryTitle,
+        href: primaryHref,
+        describedBy: descriptionId,
+        onPress: onPrimarySelect,
+      } : undefined,
+      actions: rowActions,
+      actionContent,
+    }} />
   );
 }
 
@@ -575,10 +484,7 @@ export function UnassignedLevelRow({
       primaryAriaLabel={`Preview ${level.name}`}
       primaryTitle="Preview level"
       editHref={canManage ? editHref : undefined}
-      onDelete={canManage ? (event) => {
-        event.stopPropagation();
-        onDelete();
-      } : undefined}
+      onDelete={canManage ? onDelete : undefined}
     />
   );
 }
@@ -795,7 +701,7 @@ export function RecentDraftLevelRow({
             }}
           ><CeIcon icon="pencil" /></IconButton>
           <IconButton
-            danger
+            tone="danger"
             aria-label={document.never_saved ? `Delete unsaved ${name}` : `Discard changes to ${name}`}
             title={document.never_saved ? 'Delete unsaved level' : 'Discard changes'}
             disabled={busy}
@@ -1490,9 +1396,6 @@ export function CampaignEditor({
                             active={ref.levelId === selectedLevelId}
                             readOnly
                             onSelect={() => useCampaigns.getState().selectLevel(ref.levelId)}
-                            onMoveUp={(event) => { event.stopPropagation(); }}
-                            onMoveDown={(event) => { event.stopPropagation(); }}
-                            onDelete={(event) => { event.stopPropagation(); }}
                           />
                         ))}
                       </div>
@@ -1572,9 +1475,9 @@ export function CampaignEditor({
                               readOnly={readOnly}
                               onSelect={() => useCampaigns.getState().selectLevel(ref.levelId)}
                               editHref={levels[ref.levelId] ? editHrefForCampaignLevel(camp.id, ref.levelId) : undefined}
-                              onMoveUp={(event) => { event.stopPropagation(); useCampaigns.getState().moveLevel(ref.levelId, -1); }}
-                              onMoveDown={(event) => { event.stopPropagation(); useCampaigns.getState().moveLevel(ref.levelId, 1); }}
-                              onDelete={(event) => { event.stopPropagation(); if (levels[ref.levelId]) confirmDeleteLevel(levels[ref.levelId]); }}
+                              onMoveUp={() => useCampaigns.getState().moveLevel(ref.levelId, -1)}
+                              onMoveDown={() => useCampaigns.getState().moveLevel(ref.levelId, 1)}
+                              onDelete={() => { if (levels[ref.levelId]) confirmDeleteLevel(levels[ref.levelId]); }}
                             />
                           ))}
                         </div>
@@ -1631,8 +1534,8 @@ export function CampaignEditor({
               embedded={embedded}
               actions={(levelRef || isMetaCollectionSelected) ? (
                 <div className={`ce-preview-actions ${isUnassignedSelected ? 'has-assign' : ''}`.trim()}>
-                  <NavButton data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} to={editHref}><span>Edit Board</span></NavButton>
-                  <NavButton data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button ce-link-button-ghost')} to={playHref}><span>Test Play</span></NavButton>
+                  <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} to={editHref}><span>Edit Board</span></ChromeNavButton>
+                  <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button ce-link-button-ghost')} to={playHref}><span>Test Play</span></ChromeNavButton>
                   {isUnassignedSelected ? (
                     <label className="ce-assign-field">
                       <span className="sr-only">Assign to campaign</span>

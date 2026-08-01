@@ -18,6 +18,7 @@ import {
   type AdminLiveMediaCatalog,
   type AdminLiveMediaVersion,
 } from '../net/liveMediaAdmin';
+import { StudioCatalogCard } from './studio/StudioCatalogCard';
 
 const ANCHOR_LABEL: Readonly<Record<string, string>> = Object.freeze({
   'jerusalem-second-temple-70-ce': 'After the Sanctuary · 70 CE',
@@ -107,30 +108,22 @@ export function RunCardPromptCatalog({
   return (
     <div className="tileset-studio-grid pages-grid" aria-label="Run card art prompts">
       {visible.map((plan) => (
-        <button
+        <StudioCatalogCard
           key={plan.id}
-          type="button"
-          className={`tileset-studio-card ${plan.id === selected ? 'is-selected' : ''}`.trim()}
-          onClick={() => onOpen(plan.id)}
-          aria-pressed={plan.id === selected}
-          title={`Open ${plan.title} art prompt`}
-        >
-          <span className="tileset-studio-card-image pages-card-image run-card-art-catalog-image" aria-hidden="true">
-            {plan.version.media ? (
+          title={plan.title}
+          badge={`${runCardPromptComposition(plan)} · ${plan.version.media ? `PixelLab ${plan.version.status}` : 'prompt ready'}`}
+          selected={plan.id === selected}
+          onSelect={() => onOpen(plan.id)}
+          titleText={`Open ${plan.title} art prompt`}
+          imageClassName="pages-card-image run-card-art-catalog-image"
+          media={plan.version.media ? (
               <img
                 src={plan.version.media.immutableUrl ?? plan.version.media.url}
                 alt=""
                 data-run-card-art-candidate={plan.id}
               />
             ) : <span>{plan.baseCost}</span>}
-          </span>
-          <span className="tileset-studio-card-meta">
-            <span className="tileset-studio-card-text">
-              <strong>{plan.title}</strong>
-              <em>{runCardPromptComposition(plan)} · {plan.version.media ? `PixelLab ${plan.version.status}` : 'prompt ready'}</em>
-            </span>
-          </span>
-        </button>
+        />
       ))}
       {!visible.length ? <p className="tileset-studio-empty">No card prompt matches.</p> : null}
     </div>

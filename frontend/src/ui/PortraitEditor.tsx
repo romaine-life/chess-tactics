@@ -10,6 +10,7 @@ import { UNIT_PALETTES, UNIT_PALETTE_LABELS, type UnitPalette } from '../core/pi
 import { saveDrawableAssetBatch } from '../net/drawableCatalogAdmin';
 import { installedPortraitAssets, installedPortraitCrops, PORTRAIT_PIECES, type PortraitCrop, type PortraitPiece } from './portraitCrops';
 import { PORTRAIT_METHODS, defaultPortraitMethod, portraitMasterSrc, portraitMethodSupportsPalette, type PortraitMethod } from './portraitCandidates';
+import { ChoiceGroup } from './shared/ChoiceGroup';
 import { PaletteSelect } from './shared/PaletteSelect';
 import { InnerChromeBox } from './shared/ChromeBox';
 import { useSceneParticipant } from './shell/SceneBoundary';
@@ -296,11 +297,7 @@ export function PortraitLab({ header }: { header?: ReactNode }): ReactElement {
       <section className="al-lab-main" aria-label="Portrait crop editor">
         <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap', padding: 16 }}>
           <div style={{ display: 'grid', gap: 10 }}>
-            <div className="tileset-tier-seg" style={{ width: CANVAS }} aria-label="Unit">
-              {PIECES.map((p) => (
-                <button key={p} type="button" className={p === piece ? 'is-active' : ''} onClick={() => ed.setPiece(p)} style={{ textTransform: 'capitalize' }}>{p}</button>
-              ))}
-            </div>
+            <ChoiceGroup value={piece} options={PIECES.map((value) => ({ value, label: value, style: { textTransform: 'capitalize' } }))} onChange={ed.setPiece} ariaLabel="Unit" style={{ width: CANVAS }} />
             <div
               ref={ed.canvasRef}
               onPointerDown={ed.onPointerDown} onPointerMove={ed.onPointerMove} onPointerUp={ed.onPointerUp} onWheel={ed.onWheel}
@@ -345,11 +342,7 @@ export function PortraitLab({ header }: { header?: ReactNode }): ReactElement {
           <h2>Controls</h2>
           <div className="tileset-control-stack">
             {header}
-            <div className="tileset-tier-seg" aria-label="Method" style={{ flexWrap: 'wrap' }}>
-              {PORTRAIT_METHODS.map((m) => (
-                <button key={m.key} type="button" className={m.key === method ? 'is-active' : ''} onClick={() => ed.setMethod(m.key)} title={m.sub}>{m.label}</button>
-              ))}
-            </div>
+            <ChoiceGroup value={method} options={PORTRAIT_METHODS.map((entry) => ({ value: entry.key, label: entry.label, title: entry.sub }))} onChange={ed.setMethod} ariaLabel="Method" style={{ flexWrap: 'wrap' }} />
             <div>
               <span>Palette</span>
               <PaletteSelect

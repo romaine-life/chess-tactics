@@ -6,9 +6,12 @@ import { useWindowScaledPreview } from './useWindowScaledPreview';
 import { SliderRow, ctlReset } from './dressing/SliderRow';
 import { ElementSelect, type ElementOption } from './dressing/ElementSelect';
 import { useInjectedStyle } from './dressing/useInjectedStyle';
-import { ICON_TREATS, iconTreatFilter, type IconTreat } from './dressing/iconTreat';
+import { iconTreatFilter, type IconTreat } from './dressing/iconTreat';
 import { MM_LIVE } from './dressing/mmLive';
 import { drawableAssets } from '@chess-tactics/board-render';
+import { ChoiceGroup } from './shared/ChoiceGroup';
+import { HoverSlideControl, IconTreatmentControl } from './dressing/SurfaceEffectsControls';
+import { StudioCatalogCard } from './studio/StudioCatalogCard';
 
 // Read-only "Pages" catalog (ADR-0029): each app screen is a card; "View Selected" opens a
 // live Viewer. Selection is owned by the host (TilePreview). Cards reuse the shared studio
@@ -27,24 +30,16 @@ export function PagesLibraryStudio({
   return (
     <div className="tileset-studio-grid pages-grid" aria-label="Pages">
       {visible.map((p) => (
-        <button
+        <StudioCatalogCard
           key={p.name}
-          type="button"
-          className={`tileset-studio-card ${p.name === selected ? 'is-selected' : ''}`.trim()}
-          onClick={() => onSelect(p.name)}
-          aria-pressed={p.name === selected}
-          title={`${p.label} — ${p.route}`}
-        >
-          <span className="tileset-studio-card-image pages-card-image" aria-hidden="true">
-            <img src={p.thumb} alt="" loading="lazy" />
-          </span>
-          <span className="tileset-studio-card-meta">
-            <span className="tileset-studio-card-text">
-              <strong>{p.label}</strong>
-              <em>{p.status === 'functional' ? 'tunable' : 'view-only'}</em>
-            </span>
-          </span>
-        </button>
+          title={p.label}
+          badge={p.status === 'functional' ? 'tunable' : 'view-only'}
+          image={p.thumb}
+          imageClassName="pages-card-image"
+          selected={p.name === selected}
+          onSelect={() => onSelect(p.name)}
+          titleText={`${p.label} — ${p.route}`}
+        />
       ))}
       {visible.length === 0 ? <p className="tileset-studio-empty">No page matches.</p> : null}
     </div>
@@ -277,44 +272,18 @@ function MainMenuViewer({ page, header, zoom = 1 }: { page: PageEntry; header?: 
               <>
                 <SliderRow label={<>Icon size · {iconSize}px{iconSize === MM_LIVE.icon ? ' · live' : ''}</>} value={iconSize} set={setIconSize} min={24} max={96} dflt={MM_LIVE.icon} />
                 <SliderRow label={<>Icon position · {iconX > 0 ? '+' : ''}{iconX}px{iconX === 0 ? ' · centred' : ''}</>} value={iconX} set={setIconX} min={-40} max={120} dflt={0} />
-                <div className="tileset-filter-field">
-                  <span>Icon contrast</span>
-                  <div className="pages-ctl-row">
-                    <div className="tileset-tier-seg" aria-label="Icon contrast treatment">
-                      {ICON_TREATS.map((t) => (
-                        <button key={t.id} type="button" className={iconTreat === t.id ? 'is-active' : ''} onClick={() => setIconTreat(t.id)}>{t.label}</button>
-                      ))}
-                    </div>
-                    {ctlReset(() => { setIconTreat('off'); setIconLighten(1.85); })}
-                  </div>
-                </div>
-                {iconTreat === 'limestone' ? (
-                  <SliderRow label={<>Lighten · {iconLighten.toFixed(2)}×</>} value={iconLighten} set={setIconLighten} min={1} max={2.6} step={0.05} nudge={0.05} dflt={1.85} />
-                ) : null}
+                <IconTreatmentControl value={iconTreat} onChange={setIconTreat} lighten={iconLighten} onLighten={setIconLighten} />
                 <p className="tileset-catalog-note">Carved icons measure ~1–1.25:1 on the stone (readable floor 3:1). <strong>Pale stone</strong> &amp; <strong>Bevel</strong> are pure CSS over the shipped art; <strong>Bronze*</strong> is a LOOK preview — shipping it means re-forging the icon PNGs, not a filter.</p>
               </>
             ) : null}
 
             {group === 'interaction' ? (
               <>
-                <div className="tileset-filter-field">
-                  <span>Hover slide</span>
-                  <div className="pages-ctl-row">
-                    <div className="tileset-tier-seg" aria-label="Hover slide">
-                      <button type="button" className={hoverSlide === 'off' ? 'is-active' : ''} onClick={() => setHoverSlide('off')}>Off</button>
-                      <button type="button" className={hoverSlide === '6' ? 'is-active' : ''} onClick={() => setHoverSlide('6')}>6px</button>
-                      <button type="button" className={hoverSlide === '10' ? 'is-active' : ''} onClick={() => setHoverSlide('10')}>10px</button>
-                    </div>
-                    {ctlReset(() => setHoverSlide('off'))}
-                  </div>
-                </div>
+                <HoverSlideControl value={hoverSlide} onChange={setHoverSlide} />
                 <div className="tileset-filter-field">
                   <span>Preview hover state</span>
                   <div className="pages-ctl-row">
-                    <div className="tileset-tier-seg" aria-label="Preview hover state">
-                      <button type="button" className={!previewHover ? 'is-active' : ''} onClick={() => setPreviewHover(false)}>Off</button>
-                      <button type="button" className={previewHover ? 'is-active' : ''} onClick={() => setPreviewHover(true)}>On</button>
-                    </div>
+                    <ChoiceGroup value={previewHover ? 'on' : 'off'} options={[{ value: 'off', label: 'Off' }, { value: 'on', label: 'On' }]} onChange={(value) => setPreviewHover(value === 'on')} ariaLabel="Preview hover state" />
                     {ctlReset(() => setPreviewHover(false))}
                   </div>
                 </div>
@@ -557,11 +526,7 @@ function CampaignEditorViewer({ page, header, zoom = 1 }: { page: PageEntry; hea
             <SliderRow label={<>Frame thickness · {t.border}px</>} value={t.border} set={(v) => patch({ border: v })} min={2} max={28} dflt={g.border} />
             <div className="tileset-filter-field">
               <span>Background fill</span>
-              <div className="tileset-tier-seg" aria-label="Background fill">
-                <button type="button" className={t.fill === 'none' ? 'is-active' : ''} onClick={() => patch({ fill: 'none' })}>None</button>
-                <button type="button" className={t.fill === 'color' ? 'is-active' : ''} onClick={() => patch({ fill: 'color' })}>Color</button>
-                <button type="button" className={t.fill === 'surface' ? 'is-active' : ''} onClick={() => patch({ fill: 'surface' })}>Surface</button>
-              </div>
+              <ChoiceGroup value={t.fill} options={[{ value: 'none', label: 'None' }, { value: 'color', label: 'Color' }, { value: 'surface', label: 'Surface' }]} onChange={(fill) => patch({ fill })} ariaLabel="Background fill" />
             </div>
             {t.fill === 'color' ? (
               <>

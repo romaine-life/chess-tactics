@@ -1,10 +1,12 @@
 import { useEffect, useRef, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { KitScroll } from './KitScroll';
-import { NavButton } from './shared/NavButton';
 import { HouseSelect } from './shared/HouseSelect';
 import { ChromeDivider, ShellControlsPanel, ShellWorkspace } from './shared/ChromeBox';
 import type { LevelEditorLayerKey } from './levelEditorRoute';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
+import { CyclePicker } from './shared/CyclePicker';
+import { InnerTextButton, InnerTextNavButton } from './shared/ChromeButton';
+import { ChromeButton } from './shared/ChromeButton';
 
 export type LevelEditorToolKey = 'select' | 'brush' | 'erase' | 'move';
 
@@ -84,9 +86,9 @@ export function LevelEditorControlsPanel({
     if (nextLayer && nextLayer !== layer) onLayerChange(nextLayer);
   };
   const playAction = playBoardEnabled && playBoardHref ? (
-    <NavButton className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-play-board')} data-chrome-unit="inner-text-button" data-testid="le-test" to={playBoardHref} title={playTitle}>▶ Play test</NavButton>
+    <InnerTextNavButton className="le-seg-btn le-play-board" data-testid="le-test" to={playBoardHref} title={playTitle}>▶ Play test</InnerTextNavButton>
   ) : (
-    <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-play-board')} data-testid="le-test" disabled title={playTitle}>▶ Play test</button>
+    <InnerTextButton className="le-seg-btn le-play-board" data-testid="le-test" disabled title={playTitle}>▶ Play test</InnerTextButton>
   );
 
   return (
@@ -97,18 +99,16 @@ export function LevelEditorControlsPanel({
       inert={inert || undefined}
       aria-busy={ariaBusy || undefined}
       titleContent={(
-          <div className="le-layer-picker-row">
-            <button
-              type="button"
-              data-chrome-unit="inner-chevron-key"
-              className={chromeUnitClassNames('inner-chevron-key', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-layer-stepper-button')}
-              disabled={layerStepDisabled}
-              aria-label="Previous editor layer"
-              title="Previous editor layer"
-              onClick={() => stepLayer(-1)}
-            >
-              <span><span className="stepper-glyph stepper-chevron stepper-chevron-left" aria-hidden="true" /></span>
-            </button>
+          <CyclePicker
+            className="le-layer-picker-row"
+            buttonClassName="le-layer-stepper-button"
+            previousLabel="Previous editor layer"
+            nextLabel="Next editor layer"
+            previousDisabled={layerStepDisabled}
+            nextDisabled={layerStepDisabled}
+            onPrevious={() => stepLayer(-1)}
+            onNext={() => stepLayer(1)}
+          >
             <HouseSelect
               ariaLabel="Editor layer"
               value={layer}
@@ -120,47 +120,32 @@ export function LevelEditorControlsPanel({
               }))}
               onChange={onLayerChange}
             />
-            <button
-              type="button"
-              data-chrome-unit="inner-chevron-key"
-              className={chromeUnitClassNames('inner-chevron-key', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-layer-stepper-button')}
-              disabled={layerStepDisabled}
-              aria-label="Next editor layer"
-              title="Next editor layer"
-              onClick={() => stepLayer(1)}
-            >
-              <span><span className="stepper-glyph stepper-chevron stepper-chevron-right" aria-hidden="true" /></span>
-            </button>
-          </div>
+          </CyclePicker>
       )}
     >
 
         <section className="skirmish-card le-actions-dock" aria-label="Editor actions">
           <h2>Actions</h2>
           <div className="le-seg le-seg-icons le-action-toolbar" role="toolbar" aria-label="Editor tools and history">
-            <button type="button" data-chrome-unit="inner-select-tool" className={chromeUnitClassNames('inner-select-tool', 'le-seg-btn', tool === 'select' && 'active')} disabled={toolsDisabled} onClick={() => onToolChange('select')} title={toolsDisabled ? 'Board tools are unavailable in this workspace.' : 'Select'} aria-label="Select"><span className="le-ico ic-eyedropper" aria-hidden="true" /></button>
-            <button type="button" data-chrome-unit="inner-brush-tool" className={chromeUnitClassNames('inner-brush-tool', 'le-seg-btn', tool === 'brush' && 'active')} disabled={toolsDisabled} onClick={() => onToolChange('brush')} title={toolsDisabled ? 'Board tools are unavailable in this workspace.' : 'Brush'} aria-label="Brush"><span className="le-ico ic-brush" aria-hidden="true" /></button>
-            <button type="button" data-chrome-unit="inner-erase-tool" className={chromeUnitClassNames('inner-erase-tool', 'le-seg-btn', tool === 'erase' && 'active')} disabled={eraseDisabled} onClick={() => onToolChange('erase')} title={toolsDisabled ? 'Board tools are unavailable in this workspace.' : eraseLabel} aria-label={eraseLabel}><span className="le-ico ic-eraser" aria-hidden="true" /></button>
-            <button type="button" data-chrome-unit="inner-move-tool" className={chromeUnitClassNames('inner-move-tool', 'le-seg-btn', tool === 'move' && 'active')} disabled={toolsDisabled} onClick={() => onToolChange('move')} title={toolsDisabled ? 'Board tools are unavailable in this workspace.' : 'Move - drag a placed unit or prop to a new cell.'} aria-label="Move"><span className="le-ico ic-move" aria-hidden="true" /></button>
+            <ChromeButton unit="inner-select-tool" className={chromeUnitClassNames('inner-select-tool', 'le-seg-btn', tool === 'select' && 'active')} disabled={toolsDisabled} onClick={() => onToolChange('select')} title={toolsDisabled ? 'Board tools are unavailable in this workspace.' : 'Select'} aria-label="Select"><span className="le-ico ic-eyedropper" aria-hidden="true" /></ChromeButton>
+            <ChromeButton unit="inner-brush-tool" className={chromeUnitClassNames('inner-brush-tool', 'le-seg-btn', tool === 'brush' && 'active')} disabled={toolsDisabled} onClick={() => onToolChange('brush')} title={toolsDisabled ? 'Board tools are unavailable in this workspace.' : 'Brush'} aria-label="Brush"><span className="le-ico ic-brush" aria-hidden="true" /></ChromeButton>
+            <ChromeButton unit="inner-erase-tool" className={chromeUnitClassNames('inner-erase-tool', 'le-seg-btn', tool === 'erase' && 'active')} disabled={eraseDisabled} onClick={() => onToolChange('erase')} title={toolsDisabled ? 'Board tools are unavailable in this workspace.' : eraseLabel} aria-label={eraseLabel}><span className="le-ico ic-eraser" aria-hidden="true" /></ChromeButton>
+            <ChromeButton unit="inner-move-tool" className={chromeUnitClassNames('inner-move-tool', 'le-seg-btn', tool === 'move' && 'active')} disabled={toolsDisabled} onClick={() => onToolChange('move')} title={toolsDisabled ? 'Board tools are unavailable in this workspace.' : 'Move - drag a placed unit or prop to a new cell.'} aria-label="Move"><span className="le-ico ic-move" aria-hidden="true" /></ChromeButton>
             <span className="le-action-toolbar-divider" aria-hidden="true" />
-            <button
-              type="button"
-              data-chrome-unit="inner-undo-key"
+            <ChromeButton unit="inner-undo-key"
               className={chromeUnitClassNames('inner-undo-key', 'le-seg-btn', 'le-icon-btn')}
               onClick={onUndo}
               disabled={!canUndo}
               aria-label="Undo"
               title={canUndo ? 'Undo the last board edit.' : 'Nothing to undo.'}
-            ><span className="le-ico ic-undo" aria-hidden="true" /></button>
-            <button
-              type="button"
-              data-chrome-unit="inner-redo-key"
+            ><span className="le-ico ic-undo" aria-hidden="true" /></ChromeButton>
+            <ChromeButton unit="inner-redo-key"
               className={chromeUnitClassNames('inner-redo-key', 'le-seg-btn', 'le-icon-btn')}
               onClick={onRedo}
               disabled={!canRedo}
               aria-label="Redo"
               title={canRedo ? 'Redo the last undone edit.' : 'Nothing to redo.'}
-            ><span className="le-ico ic-redo" aria-hidden="true" /></button>
+            ><span className="le-ico ic-redo" aria-hidden="true" /></ChromeButton>
           </div>
           {extraActions ? <div className="le-action-primary-row">{playAction}{extraActions}</div> : playAction}
         </section>
@@ -208,11 +193,11 @@ export function LevelEditorEventsWorkspace({
         <h2 id="level-events-workspace-title">Events</h2>
         <div className="le-events-head-actions">
           <div className="le-seg le-events-tabs" role="tablist" aria-label="Event editor sections">
-            <button ref={tab === 'victory' ? initialFocusRef : undefined} type="button" data-chrome-unit="inner-text-button" role="tab" aria-selected={tab === 'victory'} className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', tab === 'victory' && 'active')} onClick={() => onTabChange('victory')}>Victory rules</button>
-            <button ref={tab === 'deployment' ? initialFocusRef : undefined} type="button" data-chrome-unit="inner-text-button" role="tab" aria-selected={tab === 'deployment'} className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', tab === 'deployment' && 'active')} onClick={() => onTabChange('deployment')}>Deployment</button>
-            <button ref={tab === 'other' ? initialFocusRef : undefined} type="button" data-chrome-unit="inner-text-button" role="tab" aria-selected={tab === 'other'} className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', tab === 'other' && 'active')} onClick={() => onTabChange('other')}>Other events</button>
+            <ChromeButton unit="inner-text-button" ref={tab === 'victory' ? initialFocusRef : undefined} role="tab" aria-selected={tab === 'victory'} className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', tab === 'victory' && 'active')} onClick={() => onTabChange('victory')}>Victory rules</ChromeButton>
+            <ChromeButton unit="inner-text-button" ref={tab === 'deployment' ? initialFocusRef : undefined} role="tab" aria-selected={tab === 'deployment'} className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', tab === 'deployment' && 'active')} onClick={() => onTabChange('deployment')}>Deployment</ChromeButton>
+            <ChromeButton unit="inner-text-button" ref={tab === 'other' ? initialFocusRef : undefined} role="tab" aria-selected={tab === 'other'} className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', tab === 'other' && 'active')} onClick={() => onTabChange('other')}>Other events</ChromeButton>
           </div>
-          <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-events-done')} onClick={onDone}>Done</button>
+          <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-events-done')} onClick={onDone}>Done</ChromeButton>
         </div>
       </div>
       {tab === 'victory' ? victoryContent : tab === 'deployment' ? deploymentContent : otherContent}

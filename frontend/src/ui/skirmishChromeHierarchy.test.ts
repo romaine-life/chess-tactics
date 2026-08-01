@@ -12,8 +12,8 @@ const styleCss = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const skirmish = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
 const portraitPreload = readFileSync(new URL('../art/preload.ts', import.meta.url), 'utf8');
 
-const buttonBlocks = (source: string): string[] => source.match(/<button\b[\s\S]*?<\/button>/g) ?? [];
-const navButtonBlocks = (source: string): string[] => source.match(/<NavButton\b[\s\S]*?<\/NavButton>/g) ?? [];
+const buttonBlocks = (source: string): string[] => source.match(/<(?:button|ChromeButton)\b[\s\S]*?<\/(?:button|ChromeButton)>/g) ?? [];
+const navButtonBlocks = (source: string): string[] => source.match(/<(?:NavButton|ChromeNavButton)\b[\s\S]*?<\/(?:NavButton|ChromeNavButton)>/g) ?? [];
 
 function buttonUsing(fragment: string): string {
   const block = buttonBlocks(skirmishHud).find((candidate) => candidate.includes(fragment));
@@ -28,7 +28,7 @@ function navButtonUsing(fragment: string): string {
 }
 
 function expectChromeUnit(block: string, unit: string): void {
-  expect(block).toContain(`data-chrome-unit="${unit}"`);
+  expect(block.includes(`data-chrome-unit="${unit}"`) || block.includes(`unit="${unit}"`)).toBe(true);
   expect(block).toMatch(new RegExp(`chromeUnitClassNames\\(\\s*'${unit}'`));
 }
 
@@ -130,9 +130,9 @@ describe('Skirmish chrome hierarchy', () => {
     expect(zoomStepper).toContain('value={Math.round(zoom * 100)}');
     expect(zoomStepper).toContain('onDecrease={() => setZoom(zoom - 0.1)}');
     expect(zoomStepper).toContain('onIncrease={() => setZoom(zoom + 0.1)}');
-    expect(stepper).toContain('data-chrome-unit="inner-minus-key"');
+    expect(stepper).toContain('unit="inner-minus-key"');
     expect(stepper).toContain("chromeUnitClassNames('inner-minus-key', 'settings-chrome-button'");
-    expect(stepper).toContain('data-chrome-unit="inner-plus-key"');
+    expect(stepper).toContain('unit="inner-plus-key"');
     expect(stepper).toContain("chromeUnitClassNames('inner-plus-key', 'settings-chrome-button'");
     expect(skirmishHud).not.toContain('skirmish-zoom-readout');
     expectChromeUnit(buttonUsing('onClick={resetView}'), 'inner-text-button');

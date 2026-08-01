@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { chromeUnitClassNames } from '../chromeUnitRegistry';
 import { KitScroll } from '../KitScroll';
 import { ChromeDivider, InnerChromeBox } from './ChromeBox';
+import { ChromeButton } from './ChromeButton';
 
 export type HouseSelectOption<TValue extends string = string> = {
   value: TValue;
@@ -281,10 +282,8 @@ export function HouseSelect<TValue extends string>({
 
   return (
     <>
-      <button
+      <ChromeButton unit="inner-dropdown"
         ref={buttonRef}
-        type="button"
-        data-chrome-unit="inner-dropdown"
         className={triggerClass}
         data-testid={testId}
         aria-label={ariaLabel}
@@ -297,7 +296,7 @@ export function HouseSelect<TValue extends string>({
         onKeyDown={handleKeyDown}
       >
         {selectedOption?.label ?? ''}
-      </button>
+      </ChromeButton>
       {menu}
     </>
   );

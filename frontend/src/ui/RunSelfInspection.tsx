@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
+import { ChromeButton } from './shared/ChromeButton';
 
 export type RunSelfInspectionView = 'army' | 'relics';
 
@@ -27,26 +28,22 @@ export function RunSelfInspectionControls({
 }): ReactElement {
   return (
     <div className="run-meta-navigation">
-      <button
-        type="button"
-        data-chrome-unit="inner-text-button"
+      <ChromeButton unit="inner-text-button"
         data-testid={`${testIdPrefix}-army`}
         className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === 'army' && 'active')}
         aria-pressed={view === 'army'}
         onClick={() => onNavigate('army')}
       >
         Army
-      </button>
-      <button
-        type="button"
-        data-chrome-unit="inner-text-button"
+      </ChromeButton>
+      <ChromeButton unit="inner-text-button"
         data-testid={`${testIdPrefix}-relics`}
         className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === 'relics' && 'active')}
         aria-pressed={view === 'relics'}
         onClick={() => onNavigate('relics')}
       >
         Relics
-      </button>
+      </ChromeButton>
     </div>
   );
 }

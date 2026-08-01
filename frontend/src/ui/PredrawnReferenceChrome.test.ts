@@ -20,7 +20,7 @@ describe('pre-drawn reference navigation', () => {
   });
 
   it('opens the reference as same-tab app navigation with an exact editor return target', () => {
-    const control = levelEditor.match(/<NavButton[\s\S]*?data-testid="open-predrawn-reference"[\s\S]*?<\/NavButton>/)?.[0] ?? '';
+    const control = levelEditor.match(/<ChromeNavButton[\s\S]*?data-testid="open-predrawn-reference"[\s\S]*?<\/ChromeNavButton>/)?.[0] ?? '';
 
     expect(control).toContain('predrawnReferenceHref(');
     expect(control).toContain('levelEditorHrefForDocument(window.location.href');

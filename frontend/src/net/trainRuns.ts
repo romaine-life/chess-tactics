@@ -2,7 +2,7 @@
 // spec and launches a k8s Job on the D8als_v7 trainer pool; the Job writes progress +
 // the champion back into the row's `body`, which GET reads. Account-scoped.
 
-import { HttpError } from './http';
+import { requestJson } from './http';
 import type { Level } from '../core/level';
 import type { SearchOptions } from '../core/ai';
 import type { OpeningBookSettings, CurationSettings } from '../game/openingBook';
@@ -44,33 +44,22 @@ export interface TrainRunDoc extends TrainRunSummary {
   job_name: string | null;
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(path, {
-    method,
-    headers: { 'content-type': 'application/json' },
-    credentials: 'include',
-    body: method === 'GET' ? undefined : JSON.stringify(body ?? {}),
-  });
-  if (!res.ok) throw new HttpError(`${method} ${path}`, res.status);
-  return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
-}
-
 /** Launch a tuning run (persists the spec + starts the cluster Job). Returns the run
  * id and status ('running' in-cluster, 'pending' in local dev without a cluster). */
 export async function launchTrainRun(spec: TrainSpec): Promise<{ id: string; status: string }> {
-  return request<{ id: string; status: string }>('POST', '/api/train-runs', spec);
+  return requestJson<{ id: string; status: string }>('POST', '/api/train-runs', spec);
 }
 
 export async function listTrainRuns(): Promise<TrainRunSummary[]> {
-  const data = await request<{ runs?: TrainRunSummary[] }>('GET', '/api/train-runs');
+  const data = await requestJson<{ runs?: TrainRunSummary[] }>('GET', '/api/train-runs');
   return Array.isArray(data.runs) ? data.runs : [];
 }
 
 export function getTrainRun(id: string): Promise<TrainRunDoc> {
-  return request<TrainRunDoc>('GET', `/api/train-runs/${encodeURIComponent(id)}`);
+  return requestJson<TrainRunDoc>('GET', `/api/train-runs/${encodeURIComponent(id)}`);
 }
 
 /** Cancel + delete a run (deletes the k8s Job, releasing the node). */
 export async function cancelTrainRun(id: string): Promise<void> {
-  await request<{ ok: boolean }>('DELETE', `/api/train-runs/${encodeURIComponent(id)}`);
+  await requestJson<{ ok: boolean }>('DELETE', `/api/train-runs/${encodeURIComponent(id)}`);
 }

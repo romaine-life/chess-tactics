@@ -74,7 +74,7 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('<h4>Current Run</h4>');
     expect(playMenu).toContain("'settings-row play-choice-row'");
     expect(playMenu).toContain('data-testid="run-detail-current"');
-    expect(playMenu).toContain('to="/run"><span>Play</span></NavButton>');
+    expect(playMenu).toContain('to="/run"><span>Play</span></ChromeNavButton>');
     expect(playMenu).not.toContain('run-current-summary');
     expect(playMenu).not.toContain('>Continue Run<');
   });

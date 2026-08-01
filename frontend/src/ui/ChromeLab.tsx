@@ -19,6 +19,8 @@ import {
   type ChromeUnitAuditInfoRenderer,
 } from './ChromeUnitAudit';
 import { useInstalledChromeCss } from './useInstalledChromeCss';
+import { ChoiceGroup } from './shared/ChoiceGroup';
+import { StudioCatalogCard } from './studio/StudioCatalogCard';
 import {
   chromeUnitById,
   chromeUnitClassPath,
@@ -925,18 +927,7 @@ function RoleChromeControls({
                 <div className="tileset-filter-field">
                   <span>Source orientation</span>
                   <div className="pages-ctl-row">
-                    <div className="tileset-tier-seg" aria-label={`${roleLabel} atom source orientation`}>
-                      {ATOM_TURNS.map((turns, index) => (
-                        <button
-                          key={turns}
-                          type="button"
-                          className={tune.atomTurns === turns ? 'is-active' : ''}
-                          onClick={() => onTune({ atomTurns: turns })}
-                        >
-                          {ATOM_TURN_LABELS[index]}
-                        </button>
-                      ))}
-                    </div>
+                    <ChoiceGroup value={tune.atomTurns} options={ATOM_TURNS.map((value, index) => ({ value, label: ATOM_TURN_LABELS[index] }))} onChange={(atomTurns) => onTune({ atomTurns })} ariaLabel={`${roleLabel} atom source orientation`} />
                     {ctlReset(() => onTune({ atomTurns: defaults.atomTurns }))}
                   </div>
                 </div>
@@ -977,10 +968,7 @@ function RoleChromeControls({
             <div className="tileset-filter-field">
               <span>Fit</span>
               <div className="pages-ctl-row">
-                <div className="tileset-tier-seg" aria-label={`${roleLabel} rail fit`}>
-                  <button type="button" className={tune.railFit === 'stretch' ? 'is-active' : ''} onClick={() => onTune({ railFit: 'stretch' })}>Stretch</button>
-                  <button type="button" className={tune.railFit === 'tile' ? 'is-active' : ''} onClick={() => onTune({ railFit: 'tile' })}>Tile</button>
-                </div>
+                <ChoiceGroup<RailFit> value={tune.railFit} options={[{ value: 'stretch', label: 'Stretch' }, { value: 'tile', label: 'Tile' }]} onChange={(railFit) => onTune({ railFit })} ariaLabel={`${roleLabel} rail fit`} />
                 {ctlReset(() => onTune({ railFit: defaults.railFit }))}
               </div>
             </div>
@@ -1079,18 +1067,7 @@ function DividerControls({
               <div className="tileset-filter-field">
                 <span>Source orientation</span>
                 <div className="pages-ctl-row">
-                  <div className="tileset-tier-seg" aria-label="Divider joint source orientation">
-                    {ATOM_TURNS.map((turns, index) => (
-                      <button
-                        key={turns}
-                        type="button"
-                        className={tune.atomTurns === turns ? 'is-active' : ''}
-                        onClick={() => onTune({ atomTurns: turns })}
-                      >
-                        {ATOM_TURN_LABELS[index]}
-                      </button>
-                    ))}
-                  </div>
+                  <ChoiceGroup value={tune.atomTurns} options={ATOM_TURNS.map((value, index) => ({ value, label: ATOM_TURN_LABELS[index] }))} onChange={(atomTurns) => onTune({ atomTurns })} ariaLabel="Divider joint source orientation" />
                   {ctlReset(() => onTune({ atomTurns: defaults.atomTurns }))}
                 </div>
               </div>
@@ -1231,10 +1208,8 @@ function ChromeLabUnitChromeControls({
 function ChromeLabUnitThumbnail({ unitId }: { unitId: ChromeUnitId }): ReactElement {
   const unit = chromeUnitById(unitId);
   return (
-    <span className={`tileset-studio-card-image chrome-unit-card-image is-${unit.id}`} aria-hidden="true">
-      <span className="chrome-unit-card-stage level-editor-screen">
-        <ChromeUnitSpecimen unit={unit} dims={chromeUnitThumbnailDims(unit)} interactive={false} />
-      </span>
+    <span className="chrome-unit-card-stage level-editor-screen">
+      <ChromeUnitSpecimen unit={unit} dims={chromeUnitThumbnailDims(unit)} interactive={false} />
     </span>
   );
 }
@@ -1299,25 +1274,17 @@ export function ChromeLabCatalog({
           const unit = target.kind === 'unit' ? chromeUnitById(target.unitId) : null;
           const classPath = unit ? chromeUnitClassPath(unit) : '';
           return (
-            <button
+            <StudioCatalogCard
               key={target.id}
-              type="button"
-              className={`tileset-studio-card ${target.id === selected ? 'is-selected' : ''}`.trim()}
-              onClick={() => { onSelect(target.id); onOpen(target.id); }}
-              aria-pressed={target.id === selected}
-              title={target.kind === 'page' ? `${target.label} - ${target.route}` : `${target.label} - ${target.badge}`}
-            >
-              {target.kind === 'page' ? (
-                <span className="tileset-studio-card-image pages-card-image" aria-hidden="true">
-                  <img src={target.thumb} alt="" loading="lazy" />
-                </span>
-              ) : (
-                <ChromeLabUnitThumbnail unitId={target.unitId} />
-              )}
-              <span className="tileset-studio-card-meta">
-                <span className="tileset-studio-card-text">
-                  <strong>{target.label}</strong>
-                  {unit ? (
+              title={target.label}
+              badge={unit ? undefined : target.badge}
+              selected={target.id === selected}
+              onSelect={() => { onSelect(target.id); onOpen(target.id); }}
+              titleText={target.kind === 'page' ? `${target.label} - ${target.route}` : `${target.label} - ${target.badge}`}
+              image={target.kind === 'page' ? target.thumb : undefined}
+              imageClassName={target.kind === 'page' ? 'pages-card-image' : `chrome-unit-card-image is-${target.unitId}`}
+              media={target.kind === 'unit' ? <ChromeLabUnitThumbnail unitId={target.unitId} /> : undefined}
+              textExtra={unit ? (
                     <span className="chrome-unit-card-hierarchy">
                       <span><b>Name</b><code>{unit.name}</code></span>
                       <span><b>Class</b><ChromeUnitPathStack path={classPath} /></span>
@@ -1330,12 +1297,8 @@ export function ChromeLabCatalog({
                         <span><b>Variants</b><code>{unit.variants.map((variant) => variant.name).join(' / ')}</code></span>
                       ) : null}
                     </span>
-                  ) : (
-                    <em>{target.badge}</em>
-                  )}
-                </span>
-              </span>
-            </button>
+                  ) : undefined}
+            />
           );
         })()
       ))}
@@ -1813,18 +1776,6 @@ function ChromeLabPageViewer({
   };
 
   const frameStyleWithMode: CSSProperties = previewMode === 'pan' ? { ...frameStyle, pointerEvents: 'none' } : frameStyle;
-  const focusButton = (id: PreviewFocus, label: string): ReactElement => (
-    <button
-      type="button"
-      className={previewFocus === id ? 'is-active' : ''}
-      onClick={() => {
-        rememberPreviewMetrics();
-        setPreviewFocus(id);
-      }}
-    >
-      {label}
-    </button>
-  );
   const tabButton = (id: ChromeLabControlTab, label: string): ReactElement => (
     <button
       type="button"
@@ -1878,11 +1829,12 @@ function ChromeLabPageViewer({
             <div className="tileset-filter-field">
               <span>Focus</span>
               <div className="pages-ctl-row">
-                <div className="tileset-tier-seg" aria-label="Preview focus">
-                  {focusButton('controls', 'Controls')}
-                  {focusButton('board', 'Board')}
-                  {focusButton('current', 'Current')}
-                </div>
+                <ChoiceGroup<PreviewFocus>
+                  value={previewFocus}
+                  options={[{ value: 'controls', label: 'Controls' }, { value: 'board', label: 'Board' }, { value: 'current', label: 'Current' }]}
+                  onChange={(value) => { rememberPreviewMetrics(); setPreviewFocus(value); }}
+                  ariaLabel="Preview focus"
+                />
                 {ctlReset(() => setPreviewFocus(chromeLabDefaultState().previewFocus))}
               </div>
             </div>
@@ -1907,10 +1859,7 @@ function ChromeLabPageViewer({
                     <div className="tileset-filter-field">
                       <span>Pointer</span>
                       <div className="pages-ctl-row">
-                        <div className="tileset-tier-seg" aria-label="Preview pointer mode">
-                          <button type="button" className={previewMode === 'interact' ? 'is-active' : ''} onClick={() => setPreviewMode('interact')}>Interact</button>
-                          <button type="button" className={previewMode === 'pan' ? 'is-active' : ''} onClick={() => setPreviewMode('pan')}>Pan</button>
-                        </div>
+                        <ChoiceGroup<PreviewMode> value={previewMode} options={[{ value: 'interact', label: 'Interact' }, { value: 'pan', label: 'Pan' }]} onChange={setPreviewMode} ariaLabel="Preview pointer mode" />
                         {ctlReset(() => setPreviewMode('interact'))}
                       </div>
                     </div>

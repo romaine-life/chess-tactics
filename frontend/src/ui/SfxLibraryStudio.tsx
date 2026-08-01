@@ -25,6 +25,7 @@ import {
   resolvePcmTrim,
 } from '../sfxTrim';
 import { sfxSampleWaveform, sfxSampleWaveformCached } from '../sfxWaveform';
+import { StudioCatalogCard } from './studio/StudioCatalogCard';
 import {
   acceptLiveMediaVersions,
   createLiveMediaVersion,
@@ -319,19 +320,16 @@ export function SfxLibraryStudio({
           : null;
         const kind = editorSource?.requireTrim === true ? 'Complete source' : 'Candidate cut';
         return (
-          <button
+          <StudioCatalogCard
             key={candidate.id}
-            type="button"
-            className={`tileset-studio-card ${candidate.id === selectedReviewId ? 'is-selected' : ''}`.trim()}
-            onClick={() => onSelectReview(candidate.id)}
-            onDoubleClick={() => onViewReview(candidate.id)}
-            aria-pressed={candidate.id === selectedReviewId}
-            aria-label={`${label}, ${kind}${durationMs === null ? '' : `, ${(durationMs / 1000).toFixed(3)} seconds`}`}
-            title={`${candidate.label} — select, then open in the trim editor`}
-          >
-            <span
-              className="tileset-studio-card-image"
-              style={{
+            title={label}
+            badge={candidate.slot}
+            selected={candidate.id === selectedReviewId}
+            onSelect={() => onSelectReview(candidate.id)}
+            onOpen={() => onViewReview(candidate.id)}
+            ariaLabel={`${label}, ${kind}${durationMs === null ? '' : `, ${(durationMs / 1000).toFixed(3)} seconds`}`}
+            titleText={`${candidate.label} — select, then open in the trim editor`}
+            imageStyle={{
                 '--tile-zoom': zoom,
                 minHeight: `${Math.round(80 * zoom)}px`,
                 display: 'grid',
@@ -339,41 +337,25 @@ export function SfxLibraryStudio({
                 gap: 4,
                 textAlign: 'center',
               } as CSSProperties}
-            >
+            media={<>
               <strong>{kind}</strong>
               <span>{durationMs === null ? 'Duration unavailable' : `${(durationMs / 1000).toFixed(3)} s`}</span>
-            </span>
-            <span className="tileset-studio-card-meta">
-              <span className="tileset-studio-card-text">
-                <strong>{label}</strong>
-                <em>{candidate.slot}</em>
-              </span>
-            </span>
-          </button>
+            </>}
+          />
         );
       })}
       {visible.map((s) => (
-        <button
+        <StudioCatalogCard
           key={s.name}
-          type="button"
-          className={`tileset-studio-card ${s.name === selected ? 'is-selected' : ''}`.trim()}
-          onClick={() => { onSelect(s.name); auditionAsset(s); }}
-          aria-pressed={s.name === selected}
-          title={`${s.label} — click to hear`}
-        >
-          <span
-            className="tileset-studio-card-image sfx-card-wave"
-            style={{ '--tile-zoom': zoom, color: 'var(--ds-accent, #7ea2ff)', height: `${Math.round(80 * zoom)}px` } as CSSProperties}
-          >
-            <SfxWaveform asset={s} />
-          </span>
-          <span className="tileset-studio-card-meta">
-            <span className="tileset-studio-card-text">
-              <strong>{s.label}</strong>
-              <em>{s.character}</em>
-            </span>
-          </span>
-        </button>
+          title={s.label}
+          badge={s.character}
+          selected={s.name === selected}
+          onSelect={() => { onSelect(s.name); auditionAsset(s); }}
+          titleText={`${s.label} — click to hear`}
+          imageClassName="sfx-card-wave"
+          imageStyle={{ '--tile-zoom': zoom, color: 'var(--ds-accent, #7ea2ff)', height: `${Math.round(80 * zoom)}px` } as CSSProperties}
+          media={<SfxWaveform asset={s} />}
+        />
       ))}
       {candidateStatus ? <p className="tileset-studio-empty" role="status">{candidateStatus}</p> : null}
       {assets.length === 0 && candidates.length === 0 && !candidateStatus

@@ -84,6 +84,7 @@ import {
   predrawnOcclusionEditorArtifactId,
   predrawnOcclusionEditorHref,
 } from './predrawnOcclusionEditorRoute';
+import { ChromeButton } from './shared/ChromeButton';
 
 type StatusTone = 'info' | 'success' | 'warning' | 'error';
 type AttemptCreationFeedback = {
@@ -2237,15 +2238,13 @@ export function PredrawnBackgroundVersionsPanel({
             ]}
           />
         </div>
-        <button
-          type="button"
+        <ChromeButton unit="inner-text-button"
           data-testid="start-attempt-from-pipeline-source"
-          data-chrome-unit="inner-text-button"
           className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'active')}
           disabled={!canWrite || !selectedNewPipelineSource || Boolean(busy)}
           onClick={() => { void createAttemptFromPipelineSource(); }}
           title="Create a separate processing attempt with this exact saved Pipeline Source already in place. No image is copied or uploaded."
-        >{busy === 'pipeline-attempt' ? 'Starting attempt…' : 'Start new attempt'}</button>
+        >{busy === 'pipeline-attempt' ? 'Starting attempt…' : 'Start new attempt'}</ChromeButton>
         {attemptCreationFeedback ? (
           <output
             className={`le-predrawn-attempt-feedback ${
@@ -2278,11 +2277,9 @@ export function PredrawnBackgroundVersionsPanel({
               : model.generated ? 'Raw source ready'
                 : 'Waiting for AI-painted board';
           return (
-            <button
-              type="button"
+            <ChromeButton unit="inner-text-button"
               role="listitem"
               key={model.attempt.id}
-              data-chrome-unit="inner-text-button"
               className={chromeUnitClassNames('inner-text-button', 'le-predrawn-attempt-tab', isSelected && 'active')}
               aria-pressed={isSelected}
               onClick={() => selectAttempt(model.attempt.id)}
@@ -2290,14 +2287,12 @@ export function PredrawnBackgroundVersionsPanel({
               <small>Slot {attemptModels.length - index}</small>
               <strong>{model.attempt.label}</strong>
               <span>{model.issue ?? stage}</span>
-            </button>
+            </ChromeButton>
           );
         })}
       </div>
       <div className="le-predrawn-version-nav" aria-label="Browse pipeline slots">
-        <button
-          type="button"
-          data-chrome-unit="inner-text-button"
+        <ChromeButton unit="inner-text-button"
           className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
           disabled={selectedAttemptIndex <= 0}
           onClick={() => {
@@ -2305,11 +2300,9 @@ export function PredrawnBackgroundVersionsPanel({
             if (attempt) selectAttempt(attempt.attempt.id);
           }}
           aria-label="Previous pipeline slot"
-        >‹</button>
+        >‹</ChromeButton>
         <span>{attemptModels.length ? `${selectedAttemptIndex + 1} / ${attemptModels.length}` : '0 / 0'}</span>
-        <button
-          type="button"
-          data-chrome-unit="inner-text-button"
+        <ChromeButton unit="inner-text-button"
           className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
           disabled={selectedAttemptIndex >= attemptModels.length - 1}
           onClick={() => {
@@ -2317,7 +2310,7 @@ export function PredrawnBackgroundVersionsPanel({
             if (attempt) selectAttempt(attempt.attempt.id);
           }}
           aria-label="Next pipeline slot"
-        >›</button>
+        >›</ChromeButton>
       </div>
       <div className="le-predrawn-artifact-browser">
         <div className="le-predrawn-artifact-track" role="list" aria-label="Selected pipeline slot stages">
@@ -2382,9 +2375,7 @@ export function PredrawnBackgroundVersionsPanel({
             return (
               <div className="le-predrawn-artifact-track-item" role="listitem" key={artifact.id}>
                 <span className="le-predrawn-artifact-connector" aria-hidden="true">→</span>
-                <button
-                  type="button"
-                  data-chrome-unit="inner-text-button"
+                <ChromeButton unit="inner-text-button"
                   className={chromeUnitClassNames('inner-text-button', 'le-predrawn-artifact-card', isSelected && 'active')}
                   aria-pressed={isSelected}
                   data-stage={artifact.stage}
@@ -2396,7 +2387,7 @@ export function PredrawnBackgroundVersionsPanel({
                     <strong>{artifact.title}</strong>
                     <span>{isWorking ? 'Working' : ''}{isWorking && isCanonical ? ' · ' : ''}{isCanonical ? canonicalStateLabel : ''}{!isWorking && !isCanonical ? createdLabel(artifact.version) : ''}</span>
                   </span>
-                </button>
+                </ChromeButton>
               </div>
             );
           })}
@@ -2409,23 +2400,19 @@ export function PredrawnBackgroundVersionsPanel({
         </div>
       </div>
       <div className="le-predrawn-version-nav" aria-label="Browse committed stages">
-        <button
-          type="button"
-          data-chrome-unit="inner-text-button"
+        <ChromeButton unit="inner-text-button"
           className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
           disabled={selectedIndex <= 0}
           onClick={() => { const artifact = artifacts[selectedIndex - 1]; if (artifact) selectArtifact(artifact); }}
           aria-label="Previous artwork version"
-        >‹</button>
+        >‹</ChromeButton>
         <span>{artifacts.length ? `${selectedIndex + 1} / ${artifacts.length}` : '0 / 0'}</span>
-        <button
-          type="button"
-          data-chrome-unit="inner-text-button"
+        <ChromeButton unit="inner-text-button"
           className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
           disabled={selectedIndex >= artifacts.length - 1}
           onClick={() => { const artifact = artifacts[selectedIndex + 1]; if (artifact) selectArtifact(artifact); }}
           aria-label="Next artwork version"
-        >›</button>
+        >›</ChromeButton>
       </div>
 
       {selectedArtifact && selectedBackground ? (
@@ -2448,10 +2435,8 @@ export function PredrawnBackgroundVersionsPanel({
                 <span className="skirmish-eyebrow">Next: fit the board grid</span>
                 <p>Adjust the grid on this untouched board, then create its separate warped version.</p>
                 <div className="le-predrawn-version-actions">
-                  <button
-                    type="button"
+                  <ChromeButton unit="inner-text-button"
                     data-testid="adjust-predrawn-grid"
-                    data-chrome-unit="inner-text-button"
                     className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
                     disabled={Boolean(adjustGridDisabledReason)}
                     onClick={adjustSelectedGrid}
@@ -2459,11 +2444,9 @@ export function PredrawnBackgroundVersionsPanel({
                       ?? 'Visually fit the board grid over this raw AI-painted source. This stages alignment; it does not change the art yet.'}
                   >
                     Adjust grid
-                  </button>
-                  <button
-                    type="button"
+                  </ChromeButton>
+                  <ChromeButton unit="inner-text-button"
                     data-testid="generate-predrawn-warp"
-                    data-chrome-unit="inner-text-button"
                     className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'active')}
                     disabled={Boolean(generateWarpDisabledReason)}
                     onClick={() => { void generateWarp(); }}
@@ -2475,7 +2458,7 @@ export function PredrawnBackgroundVersionsPanel({
                       : selectedAttempt?.warpedPending
                         ? 'Resume warped upload'
                       : 'Generate warped board'}
-                  </button>
+                  </ChromeButton>
                 </div>
                 <small className="le-predrawn-version-help">
                   {adjustGridDisabledReason
@@ -2498,18 +2481,14 @@ export function PredrawnBackgroundVersionsPanel({
                     : 'Fit every square-local highlight to its painted cell at full working size. Cyan is the editing preview; gameplay cells and click targets stay unchanged.'}
                 </p>
                 <div className="le-predrawn-version-actions">
-                  <button
-                    type="button"
+                  <ChromeButton unit="inner-text-button"
                     data-testid="inspect-predrawn-board-full-size"
-                    data-chrome-unit="inner-text-button"
                     className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
                     onClick={() => setInspectedArtifactId(selectedArtifact.id)}
                     title="Use the full pipeline workspace to inspect this exact warped board under its saved grid and live tile-highlight treatment."
-                  >Inspect full size</button>
-                  <button
-                    type="button"
+                  >Inspect full size</ChromeButton>
+                  <ChromeButton unit="inner-text-button"
                     data-testid="fit-predrawn-move-highlights"
-                    data-chrome-unit="inner-text-button"
                     className={chromeUnitClassNames(
                       'inner-text-button',
                       'le-seg-btn',
@@ -2526,21 +2505,17 @@ export function PredrawnBackgroundVersionsPanel({
                     {selectedMoveHighlightCalibrationReady
                       ? 'Edit tile highlights'
                       : 'Fit tile highlights'}
-                  </button>
-                  <button
-                    type="button"
+                  </ChromeButton>
+                  <ChromeButton unit="inner-text-button"
                     data-testid="discard-predrawn-warp"
-                    data-chrome-unit="inner-text-button"
                     className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
                     disabled={Boolean(warpDiscardDisabledReason)}
                     onClick={() => { void discardWarp('selected'); }}
                     title={warpDiscardDisabledReason
                       ?? 'Discard this warped result, preserve its grid fit, and return to grid editing in this same slot.'}
-                  >{busy === 'discard-warp' ? 'Discarding warped board…' : 'Discard & adjust grid'}</button>
-                  <button
-                    type="button"
+                  >{busy === 'discard-warp' ? 'Discarding warped board…' : 'Discard & adjust grid'}</ChromeButton>
+                  <ChromeButton unit="inner-text-button"
                     data-testid="edit-predrawn-occlusion-mask"
-                    data-chrome-unit="inner-text-button"
                     className={chromeUnitClassNames(
                       'inner-text-button',
                       'le-seg-btn',
@@ -2557,7 +2532,7 @@ export function PredrawnBackgroundVersionsPanel({
                     {selectedAttempt?.occlusionPending
                       ? 'Resume occlusion mask'
                       : 'Edit occlusion mask'}
-                  </button>
+                  </ChromeButton>
                 </div>
               </div>
             ) : null}
@@ -2567,27 +2542,21 @@ export function PredrawnBackgroundVersionsPanel({
                 <span className="skirmish-eyebrow">Mask attached</span>
                 <p>This version carries depth data for live units after it is Set on the board. Artifact previews stay unit-free.</p>
                 <div className="le-predrawn-version-actions">
-                  <button
-                    type="button"
+                  <ChromeButton unit="inner-text-button"
                     data-testid="inspect-predrawn-board-full-size"
-                    data-chrome-unit="inner-text-button"
                     className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
                     onClick={() => setInspectedArtifactId(selectedArtifact.id)}
                     title="Use the full pipeline workspace to inspect this exact board under its saved grid and live tile-highlight treatment."
-                  >Inspect full size</button>
-                  <button
-                    type="button"
-                    data-chrome-unit="inner-text-button"
+                  >Inspect full size</ChromeButton>
+                  <ChromeButton unit="inner-text-button"
                     className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
                     disabled={!selectedMaskUsable}
                     aria-pressed={inspectMask}
                     title="Inspect the attached depth data as a far-to-near heatmap."
                     onClick={() => setInspectMask((value) => !value)}
-                  >{inspectMask ? 'Hide depth inspection' : 'Inspect depth'}</button>
-                  <button
-                    type="button"
+                  >{inspectMask ? 'Hide depth inspection' : 'Inspect depth'}</ChromeButton>
+                  <ChromeButton unit="inner-text-button"
                     data-testid="discard-predrawn-occlusion"
-                    data-chrome-unit="inner-text-button"
                     className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
                     disabled={Boolean(selectedOcclusionDiscardDisabledReason)}
                     onClick={() => { void discardOcclusion('selected'); }}
@@ -2597,15 +2566,13 @@ export function PredrawnBackgroundVersionsPanel({
                     {busy === 'discard-occlusion'
                       ? 'Discarding mask…'
                       : 'Discard mask & edit again'}
-                  </button>
+                  </ChromeButton>
                 </div>
               </div>
             ) : null}
 
             <div className="le-predrawn-version-actions le-predrawn-selection-actions">
-              <button
-                type="button"
-                data-chrome-unit="inner-text-button"
+              <ChromeButton unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', active && 'active')}
                 disabled={active || Boolean(selectedSetDisabledReason)}
                 onClick={setSelected}
@@ -2623,15 +2590,13 @@ export function PredrawnBackgroundVersionsPanel({
                         ? 'Set · autosave blocked'
                         : 'Set in this tab'
                   : 'Set this board version'}
-              </button>
-              <button
-                type="button"
-                data-chrome-unit="inner-text-button"
+              </ChromeButton>
+              <ChromeButton unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
                 disabled={!active || !selectedPreviewReady || workingCopySyncState !== 'saved' || Boolean(busy)}
                 onClick={onOpenCanonicalAction}
                 title={`Open Status to review and ${canonicalActionLabel.toLowerCase()} this cloud-synced working selection.`}
-              >{canonicalActionLabel === 'Publish' ? 'Review & publish' : 'Review & save'}</button>
+              >{canonicalActionLabel === 'Publish' ? 'Review & publish' : 'Review & save'}</ChromeButton>
             </div>
             {selectedSetDisabledReason ? (
               <output
@@ -2697,31 +2662,25 @@ export function PredrawnBackgroundVersionsPanel({
           />
           {selectedAttempt?.sourceArtwork && generatedSlotResumable ? (
             <div className="le-predrawn-version-actions">
-              <button
-                type="button"
+              <ChromeButton unit="inner-text-button"
                 data-testid="copy-generation-reference"
-                data-chrome-unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
                 disabled={Boolean(handoffBusy)}
                 onClick={() => { void copyAttemptInput(); }}
                 title="Copy the exact stored full-resolution Generation Reference PNG. This is the image you hand to Codex."
               >{handoffBusy === 'copy'
                   ? 'Copying AI input…'
-                  : 'Copy generation reference'}</button>
-              <button
-                type="button"
+                  : 'Copy generation reference'}</ChromeButton>
+              <ChromeButton unit="inner-text-button"
                 data-testid="paste-generated-board"
-                data-chrome-unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'active')}
                 disabled={!canWrite || !selectedAttemptCanProcess || !generatedSlotResumable || Boolean(busy) || Boolean(handoffBusy)}
                 onClick={() => { void pastePipelineSourceFromClipboard(); }}
                 title={canWrite
                   ? 'Read one exact image/png from the system clipboard, then show it for review before committing it.'
                   : 'Take over editing from the named session before pasting a pipeline source.'}
-              >{handoffBusy === 'paste' ? 'Reading clipboard…' : 'Paste AI-painted board'}</button>
-              <button
-                type="button"
-                data-chrome-unit="inner-text-button"
+              >{handoffBusy === 'paste' ? 'Reading clipboard…' : 'Paste AI-painted board'}</ChromeButton>
+              <ChromeButton unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
                 disabled={!canWrite || !selectedAttemptCanProcess || !generatedSlotResumable || Boolean(busy) || Boolean(handoffBusy)}
                 onClick={() => uploadInputRef.current?.click()}
@@ -2732,7 +2691,7 @@ export function PredrawnBackgroundVersionsPanel({
                   ? 'Reading PNG file…'
                   : selectedAttempt?.generatedPending
                     ? 'Resume from PNG file'
-                    : 'Choose PNG file instead'}</button>
+                    : 'Choose PNG file instead'}</ChromeButton>
             </div>
           ) : null}
           {initialSourceSrc && selectedAttemptCanProcess && generatedSlotResumable ? (
@@ -2741,9 +2700,7 @@ export function PredrawnBackgroundVersionsPanel({
               <div>
                 <strong>Existing Codex-painted board</strong>
                 <span>This is already available to the editor. Use it directly as the raw pipeline source; no clipboard round trip is needed.</span>
-                <button
-                  type="button"
-                  data-chrome-unit="inner-text-button"
+                <ChromeButton unit="inner-text-button"
                   className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
                   disabled={!canWrite || Boolean(busy) || Boolean(handoffBusy)}
                   onClick={() => { void importMountedRaw(); }}
@@ -2752,7 +2709,7 @@ export function PredrawnBackgroundVersionsPanel({
                     ? 'Adding existing board…'
                     : selectedAttempt?.generatedPending
                       ? 'Resume with existing board'
-                      : 'Use existing Codex-painted board'}</button>
+                      : 'Use existing Codex-painted board'}</ChromeButton>
               </div>
             </div>
           ) : null}
@@ -2775,17 +2732,13 @@ export function PredrawnBackgroundVersionsPanel({
                   {stagedPipelineSource.originalFileName ? ` · ${stagedPipelineSource.originalFileName}` : ''}
                 </span>
                 <div className="le-predrawn-version-actions">
-                  <button
-                    type="button"
-                    data-chrome-unit="inner-text-button"
+                  <ChromeButton unit="inner-text-button"
                     className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'active')}
                     disabled={!canWrite || !selectedAttemptCanProcess || !generatedSlotResumable || Boolean(busy) || Boolean(handoffBusy)}
                     onClick={() => { void commitStagedPipelineSource(); }}
                     title="Save these exact PNG bytes as a reusable Pipeline Source for this and future attempts."
-                  >{busy === 'raw' ? 'Committing source…' : 'Use this board'}</button>
-                  <button
-                    type="button"
-                    data-chrome-unit="inner-text-button"
+                  >{busy === 'raw' ? 'Committing source…' : 'Use this board'}</ChromeButton>
+                  <ChromeButton unit="inner-text-button"
                     className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
                     disabled={Boolean(busy) || Boolean(handoffBusy)}
                     onClick={() => {
@@ -2793,7 +2746,7 @@ export function PredrawnBackgroundVersionsPanel({
                       setClipboardStatusTone('success');
                       setClipboardStatus('Image discarded. This pipeline slot is still waiting.');
                     }}
-                  >Discard image</button>
+                  >Discard image</ChromeButton>
                 </div>
               </div>
             </div>
@@ -2819,18 +2772,16 @@ export function PredrawnBackgroundVersionsPanel({
         />
       ) : null}
       <div className="le-predrawn-version-actions le-predrawn-maintenance-actions">
-        <button
-          type="button"
+        <ChromeButton unit="inner-text-button"
           data-testid="archive-pipeline-slot"
           data-state={selectedAttemptArchiveState}
-          data-chrome-unit="inner-text-button"
           className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
           disabled={!selectedAttemptArchiveAction.ready}
           onClick={() => { void archiveSelectedAttempt(); }}
           title={selectedAttemptArchiveExplanation}
         >
           {busy === 'archive' ? 'Archiving…' : 'Archive slot'}
-        </button>
+        </ChromeButton>
         <small
           className="le-predrawn-version-help"
           data-testid="archive-pipeline-slot-state"

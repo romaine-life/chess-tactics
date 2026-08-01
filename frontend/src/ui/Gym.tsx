@@ -10,6 +10,7 @@ import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { MODE_NAME } from '../core/objectives';
 import type { Level } from '../core/level';
 import { LevelThumbnail } from '../render/LevelThumbnail';
+import { StudioCatalogCard } from './studio/StudioCatalogCard';
 import { levelToEditorBoard, unitsForGamePieces } from '../core/levelBoard';
 import { FramedReadOnlyBoardView } from './shared/BoardViewFraming';
 import { InfoTip } from './shared/InfoTip';
@@ -97,24 +98,6 @@ const GYM_CSS = `
 .gym-training-label { padding:0 6px 0 8px; color:#7c8a9c; font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
 .gym-training-tabs { display:flex; gap:4px; }
 .gym-training-tabs button { min-height:30px; min-width:72px; padding:0 12px; border-radius:5px; }
-.cluster-runs { display:flex; flex-direction:column; gap:10px; }
-.cluster-runs-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-.cluster-runs-note { font-size:11px; color:#7c8a9c; max-width:420px; }
-.cluster-runs-err { color:#e2a0a0; font-size:12px; margin:0; }
-.cluster-runs-body { display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap; }
-.cluster-runs-list { list-style:none; margin:0; padding:0; min-width:220px; max-height:320px; overflow-y:auto; display:flex; flex-direction:column; gap:4px; }
-.cluster-runs-empty { color:#7c8a9c; font-size:12px; padding:6px; }
-.cluster-run-row { display:flex; gap:8px; align-items:center; width:100%; text-align:left; border:1px solid #29323f; background:#161d26; color:#c3ccd8; padding:6px 8px; border-radius:6px; font-size:12px; cursor:pointer; }
-.cluster-run-row.active { background:#212b37; color:#e7ebf0; border-color:#3a4757; }
-.cluster-run-id { font-family:monospace; color:#93a0b0; }
-.cluster-run-status { margin-left:auto; text-transform:uppercase; font-size:10px; letter-spacing:.04em; }
-.cluster-run-status.s-running, .cluster-run-status.s-pending { color:#d9b871; }
-.cluster-run-status.s-done { color:#8fce9b; }
-.cluster-run-status.s-error, .cluster-run-status.s-cancelled { color:#e2a0a0; }
-.cluster-run-time { color:#6b7888; font-size:10px; }
-.cluster-run-detail { flex:1; min-width:260px; border:1px solid #29323f; background:#12181f; border-radius:6px; padding:10px; min-height:120px; }
-.cluster-run-detail-head { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
-.cluster-run-line { font-size:12px; color:#c3ccd8; margin:4px 0; }
 .gym-bookhead,.gym-pager { display:flex; align-items:center; gap:14px; margin-bottom:10px; flex-wrap:wrap; font-size:13px; }
 .gym-bookhead label,.gym-pager label { display:inline-flex; align-items:center; gap:6px; color:#93a0b0; font-size:12px; }
 .gym-bookhead input,.gym-pager input { width:80px; background:#0c1116; color:#e7ebf0; border:1px solid #3a4657; border-radius:4px; padding:4px 7px; font:12px ui-monospace,monospace; }
@@ -363,11 +346,7 @@ export function GymCatalog({ search, selected, onSelect }: { search: string; sel
   return (
     <div className="tileset-studio-grid pages-grid" aria-label="Gym levels">
       {levels.map((o) => (
-        <button key={o.id} type="button" className={`tileset-studio-card ${o.id === selected ? 'is-selected' : ''}`.trim()}
-          onClick={() => onSelect(o.id)} aria-pressed={o.id === selected} title={`${o.label} — ${o.sub}`}>
-          <span className="tileset-studio-card-image pages-card-image"><LevelThumbnail level={o.level} width={132} alt="" authoringPreview /></span>
-          <span className="tileset-studio-card-meta"><span className="tileset-studio-card-text"><strong>{o.label}</strong><em>{o.sub}</em></span></span>
-        </button>
+        <StudioCatalogCard key={o.id} title={o.label} badge={o.sub} selected={o.id === selected} onSelect={() => onSelect(o.id)} titleText={`${o.label} — ${o.sub}`} imageClassName="pages-card-image" media={<LevelThumbnail level={o.level} width={132} alt="" authoringPreview />} />
       ))}
       {levels.length === 0 ? <p className="tileset-studio-empty">No level matches.</p> : null}
     </div>

@@ -3,28 +3,12 @@
 // (owner, level) — a whole BooksBlob {nextId, books} fetched/upserted as a unit.
 // Replaces the former per-browser localStorage store.
 
-import { HttpError } from './http';
+import { requestJson } from './http';
 import {
   emptyBlob, capSessionForStorage, migrateLevelAi, migrateTdRuns, sanitizeLevelAi, sanitizeTdRuns,
   type BooksBlob,
 } from '../lab/openingBooks';
 import type { TdLedgerRow, TdRunDoc } from '../lab/tdSession';
-
-// One fetch core (mirrors net/campaignWorkspace.ts): same credentials + JSON +
-// ok-check + HttpError in one place, so 401/retry handling is a single edit.
-// `keepalive` lets a save fired from pagehide outlive the tab (the browser caps
-// keepalive bodies at ~64KB — callers use it for flush-on-close best effort).
-async function request<T>(method: string, path: string, body?: unknown, keepalive = false): Promise<T> {
-  const res = await fetch(path, {
-    method,
-    headers: { 'content-type': 'application/json' },
-    credentials: 'include',
-    body: method === 'GET' ? undefined : JSON.stringify(body ?? {}),
-    ...(keepalive ? { keepalive: true } : {}),
-  });
-  if (!res.ok) throw new HttpError(`${method} ${path}`, res.status);
-  return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
-}
 
 /** Load a level's books for the signed-in account (empty blob if none stored).
  * The retired fields migrate here — the single-run `tdSession` into the `tdRuns`
@@ -33,7 +17,7 @@ async function request<T>(method: string, path: string, body?: unknown, keepaliv
  * so every consumer sees the one current, renderable shape.
  * Throws HttpError on non-ok (e.g. 401 signed-out) so the caller decides. */
 export async function loadOpeningBooks(levelId: string): Promise<BooksBlob> {
-  const data = await request<{ data?: Partial<BooksBlob> }>('GET', `/api/opening-books/${encodeURIComponent(levelId)}`);
+  const data = await requestJson<{ data?: Partial<BooksBlob> }>('GET', `/api/opening-books/${encodeURIComponent(levelId)}`);
   const blob = data.data;
   if (!blob || !Array.isArray(blob.books)) return emptyBlob();
   const levelAi = blob.levelAi && typeof blob.levelAi === 'object' ? sanitizeLevelAi(blob.levelAi) : undefined;
@@ -91,5 +75,5 @@ export async function saveOpeningBooks(levelId: string, blob: BooksBlob, keepali
     ...(blob.levelAi ? { levelAi: blob.levelAi } : {}),
     ...(blob.tdRuns ? { tdRuns: { ...blob.tdRuns, runs: blob.tdRuns.runs.map((r) => capTdRun(r, r.id === blob.tdRuns?.activeId)) } } : {}),
   };
-  await request<{ ok: boolean }>('PUT', `/api/opening-books/${encodeURIComponent(levelId)}`, { data: capped }, keepalive);
+  await requestJson<{ ok: boolean }>('PUT', `/api/opening-books/${encodeURIComponent(levelId)}`, { data: capped }, { keepalive });
 }

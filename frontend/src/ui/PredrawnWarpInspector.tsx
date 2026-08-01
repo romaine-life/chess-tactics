@@ -21,6 +21,7 @@ import {
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import type { PredrawnBoardArtifact } from './predrawnBoardArtifacts';
 import { ViewPane } from './shared/ViewPane';
+import { ChromeButton } from './shared/ChromeButton';
 
 const MINIMUM_INSPECTION_ZOOM = 0.2;
 const MAXIMUM_INSPECTION_ZOOM = 4;
@@ -198,12 +199,10 @@ export function PredrawnWarpInspector({
             Grid and cyan are live inspection overlays only. Cyan previews the shared tile-highlight footprint.
           </p>
         </div>
-        <button
-          type="button"
-          data-chrome-unit="inner-text-button"
+        <ChromeButton unit="inner-text-button"
           className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
           onClick={onClose}
-        >Close</button>
+        >Close</ChromeButton>
       </header>
 
       <div className="le-predrawn-workspace-inspector-toolbar">
@@ -212,10 +211,8 @@ export function PredrawnWarpInspector({
           role="group"
           aria-label="Board inspection overlays"
         >
-          <button
-            type="button"
+          <ChromeButton unit="inner-text-button"
             data-testid="predrawn-warp-inspector-grid"
-            data-chrome-unit="inner-text-button"
             className={chromeUnitClassNames(
               'inner-text-button',
               'le-seg-btn',
@@ -224,11 +221,9 @@ export function PredrawnWarpInspector({
             aria-pressed={showRegisteredGrid}
             title="Show the registered review grid using the row and column count saved by the grid-fitting step."
             onClick={() => setShowRegisteredGrid((value) => !value)}
-          >Registered grid</button>
-          <button
-            type="button"
+          >Registered grid</ChromeButton>
+          <ChromeButton unit="inner-text-button"
             data-testid="predrawn-warp-inspector-cyan"
-            data-chrome-unit="inner-text-button"
             className={chromeUnitClassNames(
               'inner-text-button',
               'le-seg-btn',
@@ -237,42 +232,36 @@ export function PredrawnWarpInspector({
             aria-pressed={showCyanPreview}
             title="Preview the exact tile-highlight footprint in cyan. Click authored playable cells to change the sample."
             onClick={() => setShowCyanPreview((value) => !value)}
-          >Cyan move preview</button>
+          >Cyan move preview</ChromeButton>
         </div>
         <div
           className="le-predrawn-workspace-inspector-zoom"
           role="group"
           aria-label="Board inspection zoom"
         >
-          <button
-            type="button"
+          <ChromeButton unit="inner-text-button"
             data-testid="predrawn-warp-inspector-fit"
-            data-chrome-unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
             title="Fit the artwork to the available workspace and reset its pan."
             onClick={fitView}
-          >Fit artwork</button>
-          <button
-            type="button"
+          >Fit artwork</ChromeButton>
+          <ChromeButton unit="inner-text-button"
             data-testid="predrawn-warp-inspector-zoom-out"
-            data-chrome-unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
             aria-label="Zoom out"
             title="Zoom out."
             disabled={viewZoom <= viewMinimumZoom}
             onClick={() => changeZoom(-INSPECTION_ZOOM_STEP)}
-          >−</button>
+          >−</ChromeButton>
           <output aria-label="Current inspection zoom">{Math.round(viewZoom * 100)}%</output>
-          <button
-            type="button"
+          <ChromeButton unit="inner-text-button"
             data-testid="predrawn-warp-inspector-zoom-in"
-            data-chrome-unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
             aria-label="Zoom in"
             title="Zoom in."
             disabled={viewZoom >= MAXIMUM_INSPECTION_ZOOM}
             onClick={() => changeZoom(INSPECTION_ZOOM_STEP)}
-          >+</button>
+          >+</ChromeButton>
         </div>
       </div>
 
@@ -384,10 +373,8 @@ export function PredrawnWarpInspector({
           <span>Drag to pan · wheel to zoom · click playable cells to move the cyan sample</span>
           {artifact.stage === 'warped' ? (
             <>
-              <button
-                type="button"
+              <ChromeButton unit="inner-text-button"
                 data-testid="predrawn-warp-inspector-fit-move-highlights"
-                data-chrome-unit="inner-text-button"
                 className={chromeUnitClassNames(
                   'inner-text-button',
                   'le-seg-btn',
@@ -402,11 +389,9 @@ export function PredrawnWarpInspector({
                 {artifact.surface.schemaVersion === 3
                   ? 'Edit tile highlights'
                   : 'Fit tile highlights'}
-              </button>
-              <button
-                type="button"
+              </ChromeButton>
+              <ChromeButton unit="inner-text-button"
                 data-testid="predrawn-warp-inspector-discard"
-                data-chrome-unit="inner-text-button"
                 className={chromeUnitClassNames(
                   'inner-text-button',
                   'le-seg-btn',
@@ -417,13 +402,11 @@ export function PredrawnWarpInspector({
                   ? 'Discard this warped result and reopen its saved grid in the same slot.'
                   : discardUnavailableReason}
                 onClick={onDiscard}
-              >{discarding ? 'Discarding warped board…' : 'Discard & adjust grid'}</button>
+              >{discarding ? 'Discarding warped board…' : 'Discard & adjust grid'}</ChromeButton>
             </>
           ) : (
-            <button
-              type="button"
+            <ChromeButton unit="inner-text-button"
               data-testid="predrawn-warp-inspector-discard-mask"
-              data-chrome-unit="inner-text-button"
               className={chromeUnitClassNames(
                 'inner-text-button',
                 'le-seg-btn',
@@ -434,7 +417,7 @@ export function PredrawnWarpInspector({
                 ? 'Remove only this mask from the slot and reopen the mask editor on the same warped board.'
                 : discardUnavailableReason}
               onClick={onDiscard}
-            >{discarding ? 'Discarding mask…' : 'Discard mask & edit again'}</button>
+            >{discarding ? 'Discarding mask…' : 'Discard mask & edit again'}</ChromeButton>
           )}
         </div>
       </footer>
