@@ -1,4 +1,5 @@
 import { HttpError } from '../net/http';
+import { reportAuthSessionFailure } from '../net/authSession';
 import type { RunDocument, RunRelicId } from './model';
 
 const STORAGE_KEY = 'chess-tactics:run-relic-stat-events:v1';
@@ -120,7 +121,7 @@ export async function syncRunRelicStatEvents(): Promise<boolean> {
   try {
     await submit(pending);
   } catch (error) {
-    if (error instanceof HttpError && error.status === 401) return false;
+    if (reportAuthSessionFailure(error)) return false;
     throw error;
   }
   const accepted = new Set(pending.map(eventKey));
@@ -152,7 +153,7 @@ export async function loadRunRelicStatistics(): Promise<{
       const pending = readRunRelicStatEvents().filter((event) => !event.synced);
       return { statistics: mergeStatistics(body.statistics ?? {}, pending), accountBacked: true };
     } catch (error) {
-      if (!(error instanceof HttpError) || error.status !== 401) {
+      if (!reportAuthSessionFailure(error)) {
         return { statistics: aggregate(readRunRelicStatEvents()), accountBacked: true };
       }
     }

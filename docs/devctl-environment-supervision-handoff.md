@@ -135,7 +135,7 @@ For Chess Tactics, Vite is the sole lifecycle owner of the backend: it launches,
 observes, and recovers that child, then exits nonzero if it cannot restore the
 required service. Devctl owns the persistent top-level Vite launch and may
 restart it only after that launch exits unexpectedly (or before first readiness
-when the complete launch exceeds its startup deadline). See ADR-0307.
+when the complete launch exceeds its startup deadline). See ADR-0308.
 
 After first readiness, a failed backend or route probe is observational. Devctl
 must mark the environment degraded and update Caddy, but it must not terminate
@@ -414,7 +414,7 @@ Chess-tactics startup and verification integration points include:
 - `CLAUDE.md`
 
 Changes to external devctl infrastructure and repository-owned integration
-must preserve ADR-0307's ownership boundary: the application owns its internal
+must preserve ADR-0308's ownership boundary: the application owns its internal
 child lifecycle, devctl owns the persistent top-level environment lifecycle and
 OS containment, and Caddy owns routing only.
 

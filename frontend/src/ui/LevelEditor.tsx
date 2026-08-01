@@ -240,7 +240,8 @@ import type { GameState, Move, Piece, Vec } from '../core/types';
 import { OBJECTIVE_LABEL } from '../core/objectives';
 import { VictoryConditionsEditor, appendRules, rulesEqual, type FactionOption } from './VictoryConditionsEditor';
 import { tierOf, mapSaveError } from '../campaign/save';
-import { fetchMeStatus, goSignIn, signInHref, type AuthUser } from '../net/auth';
+import { goSignIn, signInHref } from '../net/auth';
+import { reportAuthSessionFailure, useAuthSession } from '../net/authSession';
 import { fetchAdminLiveMediaCatalog, type AdminLiveMediaCatalog } from '../net/liveMediaAdmin';
 import {
   autosaveEditorDocument,
@@ -2677,7 +2678,12 @@ export function LevelEditor(): ReactElement {
   const [revisionHistoryDetail, setRevisionHistoryDetail] = useState<string | null>(null);
   const [revisionHistoryRefresh, setRevisionHistoryRefresh] = useState(0);
   const [revisionHistoryExpanded, setRevisionHistoryExpanded] = useState(false);
-  const [authReachable, setAuthReachable] = useState<boolean | null>(null);
+  const sharedAuthStatus = useAuthSession((session) => session.status);
+  const authResolutionKey = sharedAuthStatus
+    ? `${sharedAuthStatus.reachable}:${sharedAuthStatus.user.signed_in}:${sharedAuthStatus.user.email ?? ''}`
+    : null;
+  const me = sharedAuthStatus?.reachable ? sharedAuthStatus.user : null;
+  const authReachable = sharedAuthStatus?.reachable ?? null;
   const [documentLoadAttempt, setDocumentLoadAttempt] = useState(0);
   const [userWorkspaceHydration, setUserWorkspaceHydration] = useState<'loading' | 'ready' | 'unavailable'>('loading');
   const [officialWorkspaceHydration, setOfficialWorkspaceHydration] = useState<'loading' | 'ready' | 'unavailable'>('loading');
@@ -3196,7 +3202,6 @@ export function LevelEditor(): ReactElement {
   const [statusLog, setStatusLog] = useState<StatusLogEntry[]>([]);
   const statusLogSeq = useRef(0);
   const [saving, setSaving] = useState(false);
-  const [me, setMe] = useState<AuthUser | null>(null);
   const isAdmin = Boolean(me?.is_admin);
   const { ask, dialog: confirmDialog } = useConfirm();
   const didMountRouteSync = useRef(false);
@@ -5161,6 +5166,7 @@ export function LevelEditor(): ReactElement {
   // pasted into another account. Copying the address bar is absent from this flow and mutates
   // nothing; access remains owner/admin gated independently of possession of the URL.
   useEffect(() => {
+    if (!sharedAuthStatus) return undefined;
     let active = true;
     void (async () => {
       editSessionRef.current = null;
@@ -5183,7 +5189,6 @@ export function LevelEditor(): ReactElement {
           }
           return undefined;
         });
-      const authRequest = fetchMeStatus();
       let hydrationTimer: number | undefined;
       await Promise.race([
         hydration,
@@ -5192,11 +5197,9 @@ export function LevelEditor(): ReactElement {
         }),
       ]);
       if (hydrationTimer !== undefined) window.clearTimeout(hydrationTimer);
-      const auth = await authRequest;
+      const auth = sharedAuthStatus;
       const user = auth.user;
       if (!active) return;
-      setMe(user);
-      setAuthReachable(auth.reachable);
       if (user.signed_in) signInHandoffPendingRef.current = false;
 
       let provisionalIdentity: LevelEditorClientIdentity | null = null;
@@ -5939,7 +5942,7 @@ export function LevelEditor(): ReactElement {
     })();
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [documentLoadAttempt]);
+  }, [authResolutionKey, documentLoadAttempt]);
 
   useEffect(() => {
     if (layer !== 'history' || !revisionHistoryExpanded || !editorDocument || !me?.signed_in) return undefined;
@@ -6821,7 +6824,7 @@ export function LevelEditor(): ReactElement {
         return;
       }
       const mapped = mapSaveError(e);
-      if ('action' in mapped) { signInForEditor(); return; }
+      if ('action' in mapped) { reportAuthSessionFailure(e); signInForEditor(); return; }
       reportStatus(mapped.message, 'error');
     } finally {
       setSaving(false);

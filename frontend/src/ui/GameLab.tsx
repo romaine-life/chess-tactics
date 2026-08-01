@@ -33,7 +33,7 @@ import { levelToEditorBoard, unitsForGamePieces } from '../core/levelBoard';
 import { LevelThumbnail } from '../render/LevelThumbnail';
 import { StudioCatalogCard } from './studio/StudioCatalogCard';
 import { FramedReadOnlyBoardView } from './shared/BoardViewFraming';
-import { fetchMe } from '../net/auth';
+import { useAuthSession } from '../net/authSession';
 import type { PieceType } from '../core/types';
 import { useSceneParticipant } from './shell/SceneBoundary';
 
@@ -229,7 +229,8 @@ export function GameLabViewer({ levelId, header }: { levelId?: string; header?: 
 
   const [savedRuns, setSavedRuns] = useState<LabRunSummary[] | null>(null);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | string>('idle');
-  const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  const authStatus = useAuthSession((session) => session.status);
+  const signedIn = authStatus?.reachable ? authStatus.user.signed_in : null;
   const initialViewerError = useMemo(
     () => campaignLoadError
       ?? (campaignsSettled && levelId && !workspaceLevels[levelId]
@@ -252,7 +253,6 @@ export function GameLabViewer({ levelId, header }: { levelId?: string; header?: 
   const [outcomeFilter, setOutcomeFilter] = useState<'all' | 'player' | 'enemy' | 'draw'>('all');
 
   useEffect(() => {
-    fetchMe().then((me) => setSignedIn(Boolean(me.signed_in))).catch(() => setSignedIn(false));
     listLabRuns().then(setSavedRuns).catch(() => setSavedRuns([]));
   }, []);
 

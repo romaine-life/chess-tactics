@@ -4,7 +4,7 @@ date: 2026-08-01
 deciders: owner (Nelson) + Codex
 ---
 
-# ADR-0306: Every replaceable region is a director-owned scene slot
+# ADR-0307: Every replaceable region is a director-owned scene slot
 
 ## Context and Problem Statement
 

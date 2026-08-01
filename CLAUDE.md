@@ -16,7 +16,7 @@ required backend child. The workstation Caddy router only maps the assigned
 port to `http://<environment>.chess-tactics.localhost`. Backend health loss makes
 devctl advertise a degraded diagnostic route but does not authorize it to
 restart a living Vite process; Vite must recover the backend or exit nonzero.
-See ADR-0307. At the start
+See ADR-0308. At the start
 of work, read that exact URL from `.codex-session/environment.json`;
 `devctl list -Json` is the fallback if the record needs diagnosis. Use the named
 URL for browser testing, screenshots, and owner handoff; `localhost:<port>` is
@@ -195,7 +195,7 @@ The Studio encodes its state in the URL, so deep-link instead of clicking:
   backend-less UI that silently 500s on `/api`. Do NOT work around a dead backend — fix it.
   The one sanctioned no-backend run is the explicit `DEV_NO_BACKEND=1` (mock stack).
   Implementation: `frontend/vite.config.js` → `prodBackend`.
-- **Development recovery has one owner per layer (ADR-0307).** Vite alone
+- **Development recovery has one owner per layer (ADR-0308).** Vite alone
   launches and recovers its backend child. Devctl may restart the top-level
   `npm run dev` launch after that launch exits, but it must never kill a living
   ready-era Vite process merely because a backend health probe failed. Caddy

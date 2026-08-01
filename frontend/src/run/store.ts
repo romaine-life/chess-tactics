@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { fetchMe } from '../net/auth';
+import { reportAuthSessionFailure, startAuthSession } from '../net/authSession';
 import { deleteActiveRun, loadActiveRun, saveActiveRun } from '../net/activeRun';
 import { HttpError } from '../net/http';
 import { normalizeRunDocument, type RunDocument } from './model';
@@ -48,7 +48,8 @@ export interface ActiveRunState {
   run: RunDocument | null;
   hydrated: boolean;
   syncing: boolean;
-  signedIn: boolean;
+  /** True only after this store has successfully joined the signed-in account document. */
+  accountLinked: boolean;
   remoteRevision: number;
   persistenceError: string | null;
   adoptionConflict: RunAdoptionConflict | null;
@@ -64,7 +65,7 @@ let saveChain: Promise<void> = Promise.resolve();
 function queueRemoteSave(run: RunDocument): void {
   saveChain = saveChain.then(async () => {
     const state = useActiveRun.getState();
-    if (!state.signedIn || state.adoptionConflict) return;
+    if (!state.accountLinked || state.adoptionConflict) return;
     useActiveRun.setState({ syncing: true });
     try {
       const saved = await saveActiveRun(run, state.remoteRevision);
@@ -86,6 +87,10 @@ function queueRemoteSave(run: RunDocument): void {
           }
         } catch { /* retain the original conflict below */ }
       }
+      if (reportAuthSessionFailure(error)) {
+        useActiveRun.setState({ accountLinked: false, persistenceError: null, syncing: false });
+        return;
+      }
       useActiveRun.setState({ persistenceError: 'Run progress is saved in this browser, but cloud sync is waiting.', syncing: false });
       return;
     }
@@ -97,7 +102,7 @@ export const useActiveRun = create<ActiveRunState>((set, get) => ({
   run: readLocalRun(),
   hydrated: false,
   syncing: false,
-  signedIn: false,
+  accountLinked: false,
   remoteRevision: 0,
   persistenceError: null,
   adoptionConflict: null,
@@ -106,10 +111,10 @@ export const useActiveRun = create<ActiveRunState>((set, get) => ({
     if (get().hydrated) return;
     const browserRun = readLocalRun();
     try {
-      const me = await fetchMe();
+      const me = (await startAuthSession()).user;
       if (!me.signed_in) {
         recordCompletedRun(browserRun);
-        set({ run: browserRun, hydrated: true, signedIn: false, persistenceError: null });
+        set({ run: browserRun, hydrated: true, accountLinked: false, persistenceError: null });
         return;
       }
       const remote = await loadActiveRun();
@@ -120,7 +125,7 @@ export const useActiveRun = create<ActiveRunState>((set, get) => ({
         set({
           run: accountRun,
           hydrated: true,
-          signedIn: true,
+          accountLinked: true,
           remoteRevision: remote.revision,
           adoptionConflict: { browserRun, accountRun },
           persistenceError: 'This browser and account each have an active Run.',
@@ -138,7 +143,7 @@ export const useActiveRun = create<ActiveRunState>((set, get) => ({
       set({
         run,
         hydrated: true,
-        signedIn: true,
+        accountLinked: true,
         remoteRevision: remote.revision,
         persistenceError: null,
       });
@@ -146,11 +151,12 @@ export const useActiveRun = create<ActiveRunState>((set, get) => ({
       if ((!accountRun || browserIsNewer) && browserRun) queueRemoteSave(browserRun);
     } catch (error) {
       recordCompletedRun(browserRun);
+      const signedOut = reportAuthSessionFailure(error);
       set({
         run: browserRun,
         hydrated: true,
-        signedIn: false,
-        persistenceError: error instanceof HttpError && error.status === 401
+        accountLinked: false,
+        persistenceError: signedOut
           ? null
           : 'Run progress is available in this browser; cloud sync could not be reached.',
       });
@@ -168,7 +174,7 @@ export const useActiveRun = create<ActiveRunState>((set, get) => ({
   abandon: async () => {
     writeLocalRun(null);
     set({ run: null, adoptionConflict: null, persistenceError: null });
-    if (!get().signedIn) return;
+    if (!get().accountLinked) return;
     // Serialize abandonment behind any already-queued progress writes so a late PUT cannot
     // resurrect the Run after its DELETE.
     await saveChain;
@@ -176,7 +182,8 @@ export const useActiveRun = create<ActiveRunState>((set, get) => ({
     try {
       await deleteActiveRun(revision);
       set({ remoteRevision: 0 });
-    } catch {
+    } catch (error) {
+      reportAuthSessionFailure(error);
       set({ persistenceError: 'The browser Run was cleared, but the account copy could not be abandoned yet.' });
     }
   },
@@ -205,7 +212,8 @@ export const useActiveRun = create<ActiveRunState>((set, get) => ({
         syncing: false,
         persistenceError: null,
       });
-    } catch {
+    } catch (error) {
+      reportAuthSessionFailure(error);
       set({ syncing: false, persistenceError: 'The browser Run could not replace the account Run.' });
     }
   },

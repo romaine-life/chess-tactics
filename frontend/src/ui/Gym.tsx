@@ -42,6 +42,7 @@ import {
 import { AI_APPROACHES, MATERIAL_SEARCH, type AiApproachId } from '../game/aiApproach';
 import { loadOpeningBooks, saveOpeningBooks } from '../net/openingBooks';
 import { HttpError } from '../net/http';
+import { reportAuthSessionFailure, useAuthSession } from '../net/authSession';
 
 const GYM_CSS = `
 /* Fill the stage like every other Studio viewer (ADR-0059): the board is the item,
@@ -484,7 +485,8 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   const [loadingBooks, setLoadingBooks] = useState(false);
   const [booksSettledFor, setBooksSettledFor] = useState<string | null>(null);
   const [initialLoadError, setInitialLoadError] = useState<Error | null>(null);
-  const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  const authStatus = useAuthSession((session) => session.status);
+  const signedIn = authStatus?.reachable ? authStatus.user.signed_in : null;
   const [mode, setMode] = useState<GymMode>(initialMode ?? 'book');
   // The per-level reset effect below stomps mode to 'book' on its first run (mount).
   // A deep-linked mode (`gymtab=`) must survive exactly that first reset — consumed
@@ -558,7 +560,7 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
     setBlob(next);
     if (levelId) {
       saveOpeningBooks(levelId, next).then(() => setSaveError(null)).catch((error) => {
-        if (error instanceof HttpError && error.status === 401) setSignedIn(false);
+        if (reportAuthSessionFailure(error)) return;
         else {
           console.warn('opening-books save failed', error);
           setSaveError(`Account save FAILED (${error instanceof HttpError ? `HTTP ${error.status}` : 'network error'}) — changes since the last successful save exist only in this tab; the next change retries.`);
@@ -596,7 +598,6 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
     loadOpeningBooks(levelId)
       .then((loaded) => {
         if (cancelled) return;
-        setSignedIn(true);
         blobRef.current = loaded;
         setBlob(loaded);
         setActiveId(loaded.books[0]?.id);
@@ -633,7 +634,7 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
       })
       .catch((error) => {
         if (cancelled) return;
-        if (error instanceof HttpError && error.status === 401) setSignedIn(false);
+        if (reportAuthSessionFailure(error)) return;
         else {
           const reason = error instanceof Error ? error : new Error(String(error));
           setInitialLoadError(reason);

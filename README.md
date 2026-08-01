@@ -35,7 +35,7 @@ project lifecycle hook. See
 The responsibilities are deliberately separate: Caddy only routes, devctl
 persists and recovers the top-level Vite launch, and Vite alone owns backend
 child recovery. See
-[ADR-0307](docs/adr/0307-local-development-layers-have-one-recovery-owner.md).
+[ADR-0308](docs/adr/0308-local-development-layers-have-one-recovery-owner.md).
 
 For baked preview:
 

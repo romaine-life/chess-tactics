@@ -321,7 +321,7 @@ function prodBackend(port) {
         fatal(`Could not prepare backend dependencies (${e.message}). Try \`npm ci\` in ${backendDir} and \`npm run build\` in ${boardRenderDir} by hand.`);
       }
 
-      // Vite is the sole lifecycle/recovery owner for this backend child (ADR-0307).
+      // Vite is the sole lifecycle/recovery owner for this backend child (ADR-0308).
       // Devctl observes backend health and owns only the top-level launch boundary; it must
       // not race this loop by terminating a living Vite process after a failed child probe.
       // "Ready" = the backend logged that it's listening. Until we've seen that for a given

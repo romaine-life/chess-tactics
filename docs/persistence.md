@@ -561,6 +561,22 @@ draft. See [ADR-0089](adr/0089-sfx-runtime-profile-is-db-authoritative.md).
 What is **not** in Postgres (deliberate, see "Boundaries"): the `lobbies`
 matchmaking map.
 
+## Client authentication state
+
+Per [ADR-0306](adr/0306-browser-authentication-has-one-session-owner.md), the browser has one
+auth-session owner. `GET /api/auth/me` is transported only by `frontend/src/net/auth.ts`; the
+application-level `frontend/src/net/authSession.ts` owns its probe, retry, and the shared
+`checking | unavailable | authenticated | anonymous` state. A successful contract-valid response
+is the only authority for authenticated or anonymous. Backend restart responses, malformed bodies,
+timeouts, and network failures are unavailable and may not produce a Sign In affordance.
+
+Screens consume this snapshot rather than fetching or caching identity. Any account-gated
+operation that consumes an authoritative 401 as session state reports it to the owner, while
+domain stores retain only their own connection state. In particular, the Level Editor decides
+recovery presentation from shared
+unavailability but owns no auth retry policy. The auth-session source guard makes parallel probes
+and screen-local identity caches a failing repository check.
+
 ## Request auth: reads public, writes gated
 
 The standing rule for HTTP request auth is **game-content reads are public, only

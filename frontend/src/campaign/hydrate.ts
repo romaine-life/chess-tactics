@@ -11,7 +11,7 @@
 
 import { useCampaigns } from './store';
 import { loadOfficialCampaignsResult, loadWorkspace } from '../net/campaignWorkspace';
-import { isUnauthorized } from '../net/auth';
+import { reportAuthSessionFailure } from '../net/authSession';
 import { loadingError, loadingMark, loadingMeasure } from '../diagnostics/loadingTimeline';
 import { useWars } from '../war/store';
 
@@ -72,7 +72,7 @@ export function ensureCampaignsHydrated(): Promise<CampaignHydrationResult> {
           useWars.getState().mergeUser(workspace);
           userWorkspace = 'loaded';
         } catch (error) {
-          userWorkspace = isUnauthorized(error) ? 'signed-out' : 'unavailable';
+          userWorkspace = reportAuthSessionFailure(error) ? 'signed-out' : 'unavailable';
           if (userWorkspace === 'unavailable') loadingError('campaign-hydration', 'user-failed', error);
         }
         loadingMeasure('campaign-hydration', 'user-settled', authorityStartedAt, {

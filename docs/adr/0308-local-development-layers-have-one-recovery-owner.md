@@ -7,7 +7,7 @@ extends:
   - "[ADR-0199](0199-codex-environment-names-are-chosen-during-auth-approval.md)"
 ---
 
-# ADR-0307: Local development layers have one recovery owner
+# ADR-0308: Local development layers have one recovery owner
 
 ## Context
 

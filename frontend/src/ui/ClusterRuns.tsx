@@ -3,7 +3,7 @@
 // and adopt the champion for this level's live AI. The heavy self-play runs on the
 // cluster (auto-provisioned 8-core node, scales to zero) — never on this machine.
 
-import { useCallback, useEffect, useState, type ReactElement } from 'react';
+import { useCallback, useState, type ReactElement } from 'react';
 import type { Level } from '../core/level';
 import {
   launchTrainRun, listTrainRuns, getTrainRun, cancelTrainRun,
@@ -11,6 +11,7 @@ import {
 } from '../net/trainRuns';
 import { shipAiWeights } from '../net/aiWeights';
 import { ClusterJobPanel, useClusterJobController } from './shared/ClusterJobPanel';
+import { useAuthSession } from '../net/authSession';
 
 function verdictLabel(h: TrainRunDoc['body']['holdout']): string {
   if (!h || h.verdict === 'skipped') return 'no improvement to validate';
@@ -30,7 +31,7 @@ export function ClusterRuns({ level, levelId, onAdopt }: {
     cancelRun: cancelTrainRun,
     clearSelectionOnCancel: true,
   });
-  const [isAdmin, setIsAdmin] = useState(false);
+  const isAdmin = useAuthSession((session) => session.status?.user.is_admin === true);
   const [shipMsg, setShipMsg] = useState<string | null>(null);
 
   const launch = useCallback(() => {
@@ -42,16 +43,6 @@ export function ClusterRuns({ level, levelId, onAdopt }: {
         bookSettings: { size: 12, seedBase: 1, plies: 4, variety: 0.7 },
       }));
   }, [controller, level]);
-
-  // Whether this account may ship-to-everyone (admin). Gates the global publish button.
-  useEffect(() => {
-    let live = true;
-    void fetch('/api/auth/me', { credentials: 'include' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (live && d) setIsAdmin(!!d.is_admin); })
-      .catch(() => { /* signed out / offline */ });
-    return () => { live = false; };
-  }, []);
 
   const ship = useCallback(async (vec: number[]) => {
     if (!levelId) return;
