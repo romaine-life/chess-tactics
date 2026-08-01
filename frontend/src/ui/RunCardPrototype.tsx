@@ -427,10 +427,9 @@ export function RunCardPrototypeViewer({
     if (revealed) params.set('concinnousTarget', 'revealed');
     else params.delete('concinnousTarget');
     const search = params.toString();
-    window.history.replaceState(
-      window.history.state,
-      '',
+    navigateApp(
       `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash}`,
+      { replace: true, scroll: false },
     );
     setConcinnousTargetRevealed(revealed);
   };
