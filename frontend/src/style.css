@@ -482,6 +482,8 @@ h1 {
   display: flex;
   align-items: center;
   gap: 7px;
+  min-width: 0;
+  width: 100%;
 }
 .pages-ctl-row > input[type="range"],
 .pages-ctl-row > input[type="number"],
@@ -490,6 +492,9 @@ h1 {
   flex: 1 1 auto;
   min-width: 0;
   width: auto;
+}
+.pages-ctl-row > input[type="range"] {
+  flex-basis: 0;
 }
 .pages-mini-reset {
   appearance: none;
@@ -13920,6 +13925,16 @@ button.tileset-relationship-cell {
   gap: 8px;
 }
 
+/* A fixed Studio rail must be allowed to shrink every control wrapper down to
+   its grid track. Without this, SliderRow's native range input contributes its
+   129px min-content width and pushes the final Reset button under the scrollbar. */
+.tileset-control-stack > *,
+.tileset-control-stack label,
+.tileset-control-stack .pages-ctl-row {
+  max-width: 100%;
+  min-width: 0;
+}
+
 .tileset-group-label {
   display: flex;
   align-items: center;
@@ -21195,4 +21210,194 @@ html.predrawn-reference-capture-mode .predrawn-reference-scroll {
 
 html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   box-shadow: none;
+}
+
+/* Exploratory whole-card composition over exact private candidate pixels. This
+   is an uncommitted spacing instrument, not the runtime card implementation.
+   It occupies the canonical Studio Viewer main/Controls split (ADR-0058). */
+.run-card-prototype-main {
+  justify-items: center;
+  overflow: auto;
+}
+
+.run-card-prototype-stage {
+  align-items: start;
+  display: grid;
+  inline-size: 100%;
+  justify-items: center;
+  padding: var(--ds-space-2);
+}
+
+.run-card-prototype-note {
+  font-size: 12px !important;
+}
+
+.run-card-prototype-catalog-image {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+}
+
+.run-card-prototype-catalog-image > span {
+  align-items: center;
+  aspect-ratio: 5 / 7;
+  display: flex;
+  font: 400 22px/1 var(--ds-font-display);
+  justify-content: center;
+  inline-size: 56px;
+}
+
+.run-card-prototype-source-readout {
+  margin-block-start: var(--ds-stack) !important;
+}
+
+.run-card-prototype {
+  aspect-ratio: 5 / 7;
+  container-type: inline-size;
+  flex: none;
+  inline-size: var(--run-card-prototype-width);
+  position: relative;
+}
+
+.run-card-prototype-frame {
+  block-size: 100%;
+  inset: 0;
+  inline-size: 100%;
+  object-fit: fill;
+  position: absolute;
+  z-index: 0;
+}
+
+.run-card-prototype-art {
+  block-size: 40.3%;
+  inline-size: 80.9%;
+  inset-block-start: 14.2%;
+  inset-inline-start: 9.55%;
+  object-fit: cover;
+  object-position: 50% 55%;
+  overflow: hidden;
+  position: absolute;
+  z-index: 1;
+}
+
+.run-card-prototype-name,
+.run-card-prototype-cost,
+.run-card-prototype-type,
+.run-card-prototype-rules {
+  color: #17191b;
+  margin: 0;
+  position: absolute;
+  z-index: 2;
+}
+
+.run-card-prototype-name,
+.run-card-prototype-type {
+  align-items: center;
+  display: flex;
+  font-family: var(--ds-font-display);
+  font-weight: 400;
+  inset-inline-start: 9.3%;
+  letter-spacing: var(--ds-tracking-tight);
+  line-height: 1;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.run-card-prototype-name {
+  font-size: var(--run-card-title-size, 5cqw);
+  inset-block-start: 5.8%;
+  block-size: 6.2%;
+  inline-size: 68.4%;
+  transform: translate(var(--run-card-title-x), var(--run-card-title-y));
+}
+
+.run-card-prototype-cost {
+  align-items: center;
+  display: flex;
+  font: 400 var(--run-card-cost-size, 6.2cqw)/1 var(--ds-font-display);
+  inset-block-start: 5.1%;
+  inset-inline-start: 82.4%;
+  block-size: 7.2%;
+  inline-size: 11.1%;
+  justify-content: center;
+  text-shadow: 0 1px 0 rgba(255, 232, 161, .55);
+  transform: translate(var(--run-card-cost-x), var(--run-card-cost-y));
+}
+
+.run-card-prototype-type {
+  font-size: var(--run-card-type-size, 3.7cqw);
+  inset-block-start: 58.2%;
+  block-size: 4.65%;
+  inline-size: 80.6%;
+  transform: translate(var(--run-card-type-x), var(--run-card-type-y));
+}
+
+.run-card-prototype-rules {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  font: 400 3.05cqw/1.18 var(--ds-font-display);
+  inset-block-start: 65.2%;
+  inset-inline-start: 9.7%;
+  block-size: 28.7%;
+  inline-size: 80.6%;
+  overflow: hidden;
+  padding: 2.2cqw 2.6cqw 2.3cqw;
+}
+
+.run-card-prototype-ledger {
+  display: grid;
+  column-gap: 2cqw;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  row-gap: .8cqw;
+}
+
+.run-card-prototype-ledger:is(.is-1-cells, .is-2-cells) > .run-card-prototype-ledger-row,
+.run-card-prototype-ledger > .run-card-prototype-ledger-row:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
+.run-card-prototype-ledger-row {
+  align-items: center;
+  display: grid;
+  grid-template-columns: 4.5cqw minmax(0, 1fr);
+  min-block-size: 9cqw;
+  min-inline-size: 0;
+}
+
+.run-card-prototype-ledger-count {
+  font: 400 4cqw/1 var(--ds-font-display);
+  text-align: start;
+}
+
+.run-card-prototype-unit-stack {
+  block-size: 9cqw;
+  display: block;
+  min-inline-size: 0;
+  position: relative;
+}
+
+.run-card-prototype-unit-icon-seat {
+  block-size: 9cqw;
+  inline-size: var(--run-card-unit-seat-width);
+  inset-inline-start: var(--run-card-unit-seat-left);
+  opacity: 1;
+  position: absolute;
+}
+
+.run-card-prototype-unit-icon {
+  block-size: 9cqw;
+  inline-size: var(--run-card-unit-canvas-width);
+  inset-block-start: 0;
+  inset-inline-start: var(--run-card-unit-canvas-left);
+  image-rendering: pixelated;
+  max-inline-size: none;
+  position: absolute;
+}
+
+.run-card-prototype-flavor {
+  font: 400 var(--run-card-flavor-size, 3.15cqw)/1.2 var(--ds-font-display);
+  font-style: italic;
+  margin: auto 0 0;
+  text-wrap: wrap;
 }

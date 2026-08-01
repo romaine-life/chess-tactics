@@ -17982,6 +17982,7 @@ app.put('/api/campaign-progress', async (req, res) => {
 // document here; the server owns one CAS-updated active Run per account.
 const ACTIVE_RUN_PHASES = new Set(['draft', 'deployment', 'battle', 'shop', 'victory']);
 const ACTIVE_RUN_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
+const ACTIVE_RUN_ABILITIES = new Set(['discipline', 'positioned', 'marshalled']);
 const RUN_RELICS = Array.isArray(serverRender?.RUN_RELICS) ? serverRender.RUN_RELICS : [];
 const RUN_RELIC_BY_ID = serverRender?.RUN_RELIC_BY_ID ?? {};
 const RUN_RELIC_IDS = new Set(RUN_RELICS.map((relic) => relic.id));
@@ -18020,7 +18021,7 @@ function validateActiveRunBody(run) {
     if ((run.formatVersion >= 2 && !validName) || (unit.name !== undefined && !validName)) {
       return 'run.army contains an invalid unit name';
     }
-    if (!Array.isArray(unit.abilities) || unit.abilities.some((ability) => ability !== 'discipline')) {
+    if (!Array.isArray(unit.abilities) || unit.abilities.some((ability) => !ACTIVE_RUN_ABILITIES.has(ability))) {
       return 'run.army contains invalid abilities';
     }
     if (unit.number !== undefined && (!isFiniteInteger(unit.number) || unit.number < 1)) {

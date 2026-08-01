@@ -15,8 +15,13 @@ a small, recognizable tweak on chess — a smaller grid, a pawn that steps three
 odd squad, a strange piece, an obstacle — built to challenge a chess player the
 way **Chess960 does: without ever invalidating the chess they already know.**
 
-There is **no lore and no story.** Like chess itself, it is an abstract board
-game; the player is no one. The fun is purely in the positions.
+There is **no explained story, named hero, or player-character role.** Like
+chess itself, it is an abstract board game; the player is no one. The world
+instead follows the project's [**anti-story**](lore-anti-story.md): roles,
+material, place, and historical residue imply that something is happening,
+while the game refuses to resolve those suggestions into plot, biography, or
+exposition ([ADR-0025](adr/0025-world-scene-art-anti-story-lore.md)). The fun is
+in the positions.
 
 ## 2. The player & the promise
 
@@ -57,10 +62,70 @@ these.
   strip stays at the upper-left beneath the title bar in Battles and between-Battle
   screens, independent of the Battle Controls panel; pointing at or focusing an
   icon immediately explains its name and complete effect (ADR-0216, ADR-0217).
-- Opening hands and shop piece bundles read as chess cards rather than prose:
-  each actual unit appears as the same canonical player-side sprite used on the
-  board, dense bundles form a compact grid, and shop prices use the installed
-  gold icon with a live number (ADR-0219, ADR-0225).
+- Opening hands and shop piece bundles use a familiar trading-card anatomy: a
+  title at upper left, one compact gold coin with a live one-through-nine digit
+  at upper right, a large pane for the game's existing unit art, a narrow card-
+  type line, and a rules box whose flavor text remains at the bottom. The type
+  line is never empty: ordinary bundle cards say **Units**, while affected cards
+  append causal qualifiers after an em dash, such as **Units — Pestiferous** or
+  **Units — Tactical**. Future mechanically different primary families may use
+  types such as **Event**. The cost
+  is never decimal, fractional, zero, or two-digit, and does not use separate
+  numbered coin art. Each actual unit appears as the same canonical player-side
+  sprite used on the board, while denser contents move into the rules-area
+  ledger (ADR-0219, ADR-0225, ADR-0270, ADR-0275, ADR-0276).
+- The bundle deck's 49 unique one-through-nine-point compositions are the
+  authored **core cards**. Each keeps one title and flavor text while its
+  drawn offer may give particular units more than one modifier. The 49 cores do
+  not multiply into variant deck entries: effects are rolled and persisted when
+  a shop reveals the card, promoted unchanged if purchased, and discarded if
+  passed so a later shuffle may affect that core differently. Disciplined adds
+  3 gold, Positioned adds 2, and Plagued discounts by piece tier—Pawn 0, minor
+  1, Rook 2, Queen 3—so shop-card prices remain whole gold and a Plagued Pawn
+  still costs 1. Exact public contents and modifiers belong in the rules-area
+  unit ledger, not generated card-name permutations; an explicitly concealed
+  Tactical target appears there as hidden until purchase (ADR-0265, ADR-0271,
+  ADR-0272).
+- A card's affected **qualifiers** identify causal rules rather than replacing
+  its primary type. Pestiferous changes the card lifecycle and all its units.
+  **Tactical** instead authors a positive enhancement of one or more contained
+  units, with its rules text naming the modifier, count, and whether the exact
+  target is visible before purchase. The type line declares the qualifier; the
+  lower box still states its literal behavior alongside the unit ledger. A
+  concealed target is seeded and persisted with the offer, priced normally,
+  and merely revealed—not rerolled—after purchase. A card does not become
+  Tactical just because an external relic later modifies one of its units
+  (ADR-0272, ADR-0276).
+- Run difficulty is **Ataraxia**. The first Run has **No Ataraxia**; later Runs
+  may opt into historically named conditions. Completing the highest available
+  tier unlocks exactly the next one, and the ladder stacks: selecting tier N
+  applies every condition from 1 through N (ADR-0266, ADR-0268).
+- **Ataraxia I — The Great Mortality** initially targets Pestiferous status for
+  roughly one in eight otherwise eligible shop draws. Pestiferous status is
+  rolled with the rest of that affected offer, not added as another deck copy.
+  A Pestiferous card makes all its units Plagued; every owned nonempty
+  Pestiferous card loses one seeded random unit on each Battle advancement
+  whether or not it was drawn or deployed. The empty card remains as a possible
+  dead draw until an explicit effect removes it (ADR-0267, ADR-0269, ADR-0271).
+- Card ledgers have no assumed row cap before live experimentation. Dense cards
+  may step down row spacing, icons, and type within readable bounds, but they
+  must continue to show every unit property and retain the core card's flavor
+  text in its bottom region. Repeated-unit grouping and a demonstrated maximum
+  row count remain open presentation decisions (ADR-0270).
+- Deployment modifiers may be contextual rather than linearly valuable. A
+  role-aware **Marshalled** ability belongs to a particular unit but may inspect
+  the surrounding formation. Its Bishop behavior is only to prefer a square
+  color opposite another Bishop: an ordinary Bishop can be its reference, one
+  Marshalled Bishop may have little effect alone, and a second is not owed an
+  invented additional benefit. The player weighs that roster-dependent value
+  (ADR-0273, ADR-0274).
+- Placement relics grant shared unit abilities rather than owning bespoke
+  placement rules. Field Linens grants Positioned to Pawns; Royal Decree to the
+  King; Crenellated Rampart to Rooks; and Pope's Staff to Bishops. Ghibelline
+  Rampart grants Marshalled to Rooks; Pope's Robes to Bishops; and Royal Sceptre
+  to the King. Their rules text names only the grant, while the unit-ability
+  reference owns the piece-specific behavior. Permanent and relic-granted
+  copies do not stack (ADR-0274).
 - Every persistent Run unit receives a seeded, stored historical identity when
   it joins the army. Piece type chooses the register: recorded archers for
   Pawns, documented knights, religious leaders, real castles for Rooks, queens
@@ -228,7 +293,10 @@ discussion. This section records *direction*, not a spec.
   *visual* identity in that doc — moonlit "Dark Strategy Pixel," readable board —
   is not re-litigated here.)
 - **No** stat / RPG layer (HP / AP / CP / powers).
-- **No** story or lore (for now).
+- **No explained plot, named-character narrative, or lore exposition.**
+  Anti-story may imply events through roles and material residue, but it must
+  not resolve those implications into an authored narrative for the player
+  ([ADR-0025](adr/0025-world-scene-art-anti-story-lore.md)).
 - **No** daily challenge.
 - **No permanent account power progression.** Run continuity lasts for one active War;
   relics may reshape its surrounding ecosystem but never a chess piece's behavior.

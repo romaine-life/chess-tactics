@@ -393,7 +393,7 @@ export interface SkirmishState {
   movesForSelected: () => Move[];
   tryMoveTo: (x: number, y: number) => void;
   choosePromotion: (type: PromotionPieceType) => void;
-  /** Run-only Mercenary Boat choice: complete the pending move, then remove the Pawn. */
+  /** Run-only Paid Crossing choice: complete the pending move, then remove the Pawn. */
   cashOutPromotion: () => void;
   armAdminMode: (mode: AdminBattleMode) => boolean;
   clearAdminMode: () => void;

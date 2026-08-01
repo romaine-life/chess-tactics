@@ -12,6 +12,7 @@ export interface RunRelicArtwork {
 }
 
 export function installedRunRelicArtwork(relicId: RunRelicId): RunRelicArtwork | null {
+  if (RUN_RELIC_BY_ID[relicId]?.replacementArtworkPending) return null;
   const matches = drawableAssets('run-relic').filter((asset) => asset.behavior.relicId === relicId);
   if (matches.length > 1) {
     throw new Error(`drawable catalog has ${matches.length} installed icons for Run relic ${relicId}`);
@@ -33,6 +34,7 @@ export function RunRelicIcon({
   className?: string;
 }): ReactElement {
   const artwork = installedRunRelicArtwork(relicId);
+  const replacementArtworkPending = RUN_RELIC_BY_ID[relicId]?.replacementArtworkPending === true;
   return (
     <span
       className={`run-relic-icon${artwork ? '' : ' is-unavailable'} ${className}`.trim()}
@@ -47,7 +49,7 @@ export function RunRelicIcon({
           alt=""
           draggable={false}
         />
-      ) : <span>Art unavailable</span>}
+      ) : <span>{replacementArtworkPending ? 'Art not generated' : 'Art unavailable'}</span>}
     </span>
   );
 }

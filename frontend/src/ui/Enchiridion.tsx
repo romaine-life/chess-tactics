@@ -612,7 +612,14 @@ function AbilitiesSection({ framed }: { framed: boolean }): ReactElement {
           <span className="skirmish-icon skirmish-icon-move" aria-hidden="true" />
           <span>
             <h3>Positioned</h3>
-            <p>The unit’s automatic deployment favors its specified legal region—such as a front row, back row, edge, or corner—before using the ordinary fallback layout.</p>
+            <p>The unit’s automatic deployment favors its piece-specific region: Pawns prefer the front row, the King and Bishops prefer the back row, and Rooks prefer outer back-row squares.</p>
+          </span>
+        </InnerChromeBox>
+        <InnerChromeBox className="enchiridion-ability-card">
+          <span className="skirmish-icon skirmish-icon-flag" aria-hidden="true" />
+          <span>
+            <h3>Marshalled</h3>
+            <p>The unit seeks its piece-specific station: the King prefers a board edge, Rooks favor their King-flank and corner formation, and Bishops prefer the opposite square color from another Bishop.</p>
           </span>
         </InnerChromeBox>
       </div>

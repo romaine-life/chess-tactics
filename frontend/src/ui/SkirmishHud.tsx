@@ -28,6 +28,7 @@ import {
   RunSelfInspectionControls,
   type RunSelfInspectionView,
 } from './RunSelfInspection';
+import { RUN_RELIC_BY_ID } from '../run/model';
 
 const TYPE_LABEL = PIECE_LABEL;
 
@@ -194,7 +195,7 @@ export type SkirmishHudProps = {
   netInteractive?: boolean;
   /** Development-only owner calibration for a temporary pre-drawn plate candidate. */
   onOpenPredrawnRegistration?: (() => void) | null;
-  /** Run-only Mercenary Boat action for a persistent Pawn at promotion. */
+  /** Run-only Paid Crossing action for a persistent Pawn at promotion. */
   onPawnCashOut?: ((pieceId: string) => void) | null;
   /** Permanently end the active Run. RunScreen owns confirmation and persistence. */
   onAbandonRun?: (() => void) | null;
@@ -437,7 +438,7 @@ export function SkirmishHud({
                   cashOutPromotion();
                 }}
                 aria-label="Take 2 gold and permanently remove this Pawn"
-                title="Mercenary Boat: take 2 gold; this Pawn leaves the army permanently."
+                title={`${RUN_RELIC_BY_ID['mercenary-boat'].name}: take 2 gold; this Pawn leaves the army permanently.`}
               >
                 <span aria-hidden="true">¤</span>
                 <span>Take 2 gold</span>
