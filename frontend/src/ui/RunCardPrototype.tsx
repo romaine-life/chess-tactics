@@ -13,6 +13,8 @@ const SHA256 = /^[0-9a-f]{64}$/;
 const PLAYER_CARD_PALETTE = paletteForSide('player');
 const PLAYER_CARD_FACING = 'south';
 const REFERENCE_CARD_WIDTH = 360;
+const TEXT_HORIZONTAL_MIN = -3;
+const TEXT_HORIZONTAL_MAX = 3;
 const TITLE_SIZE_MIN = 3;
 const TITLE_SIZE_MAX = 7;
 const DEFAULT_TITLE_SIZE = 5;
@@ -27,6 +29,9 @@ const clampCardFontSize = (value: number, min: number, max: number): number => (
 );
 const roundCardFontBoundUp = (value: number): number => Math.ceil((value - 1e-9) * 100) / 100;
 const roundCardFontBoundDown = (value: number): number => Math.floor((value + 1e-9) * 100) / 100;
+const clampCardHorizontal = (value: number, min = TEXT_HORIZONTAL_MIN, max = TEXT_HORIZONTAL_MAX): number => (
+  Math.round(Math.min(max, Math.max(min, value)) * 100) / 100
+);
 
 type CardImageKind = 'frame' | 'art' | `unit:${number}:${PlayablePieceType}:${number}`;
 
@@ -296,6 +301,7 @@ export function RunCardPrototypeViewer({
   const [typeY, setTypeY] = useState(0);
   const [typeSize, setTypeSize] = useState(DEFAULT_TYPE_SIZE);
   const [titleTypeSizeRatio, setTitleTypeSizeRatio] = useState<number | null>(null);
+  const [titleTypeHorizontalOffset, setTitleTypeHorizontalOffset] = useState<number | null>(null);
   const [flavorSize, setFlavorSize] = useState(DEFAULT_FLAVOR_SIZE);
   const [loaded, setLoaded] = useState<ReadonlySet<CardImageKind>>(() => new Set());
 
@@ -360,6 +366,37 @@ export function RunCardPrototypeViewer({
     setTypeSize(clampedTypeSize);
     setTitleSize(clampCardFontSize(clampedTypeSize / titleTypeSizeRatio, TITLE_SIZE_MIN, TITLE_SIZE_MAX));
   };
+  const titleTypeHorizontalLocked = titleTypeHorizontalOffset !== null;
+  const titleHorizontalMin = titleTypeHorizontalOffset === null
+    ? TEXT_HORIZONTAL_MIN
+    : Math.max(TEXT_HORIZONTAL_MIN, TEXT_HORIZONTAL_MIN - titleTypeHorizontalOffset);
+  const titleHorizontalMax = titleTypeHorizontalOffset === null
+    ? TEXT_HORIZONTAL_MAX
+    : Math.min(TEXT_HORIZONTAL_MAX, TEXT_HORIZONTAL_MAX - titleTypeHorizontalOffset);
+  const typeHorizontalMin = titleTypeHorizontalOffset === null
+    ? TEXT_HORIZONTAL_MIN
+    : Math.max(TEXT_HORIZONTAL_MIN, TEXT_HORIZONTAL_MIN + titleTypeHorizontalOffset);
+  const typeHorizontalMax = titleTypeHorizontalOffset === null
+    ? TEXT_HORIZONTAL_MAX
+    : Math.min(TEXT_HORIZONTAL_MAX, TEXT_HORIZONTAL_MAX + titleTypeHorizontalOffset);
+  const setLinkedTitleHorizontal = (nextTitleX: number): void => {
+    if (titleTypeHorizontalOffset === null) {
+      setTitleX(nextTitleX);
+      return;
+    }
+    const clampedTitleX = clampCardHorizontal(nextTitleX, titleHorizontalMin, titleHorizontalMax);
+    setTitleX(clampedTitleX);
+    setTypeX(clampCardHorizontal(clampedTitleX + titleTypeHorizontalOffset));
+  };
+  const setLinkedTypeHorizontal = (nextTypeX: number): void => {
+    if (titleTypeHorizontalOffset === null) {
+      setTypeX(nextTypeX);
+      return;
+    }
+    const clampedTypeX = clampCardHorizontal(nextTypeX, typeHorizontalMin, typeHorizontalMax);
+    setTypeX(clampedTypeX);
+    setTitleX(clampCardHorizontal(clampedTypeX - titleTypeHorizontalOffset));
+  };
 
   return (
     <>
@@ -389,7 +426,8 @@ export function RunCardPrototypeViewer({
             <SliderRow label={<>Title size · {titleSize.toFixed(2)}%</>} value={titleSize} set={setLinkedTitleSize} min={titleSizeMin} max={titleSizeMax} step={.01} nudge={.05} dflt={DEFAULT_TITLE_SIZE} />
             <button
               type="button"
-              className={`tileset-view-action run-card-prototype-size-lock${titleTypeSizesLocked ? ' active' : ''}`}
+              data-card-pair-lock="size"
+              className={`tileset-view-action run-card-prototype-pair-lock${titleTypeSizesLocked ? ' active' : ''}`}
               aria-pressed={titleTypeSizesLocked}
               title="Keep the current title-to-type font-size proportion while either size is adjusted"
               onClick={() => setTitleTypeSizeRatio(titleTypeSizesLocked ? null : typeSize / titleSize)}
@@ -397,13 +435,23 @@ export function RunCardPrototypeViewer({
               {titleTypeSizesLocked ? 'Title/type sizes locked' : 'Lock title/type sizes'}
             </button>
             <SliderRow label={<>Type size · {typeSize.toFixed(2)}%</>} value={typeSize} set={setLinkedTypeSize} min={typeSizeMin} max={typeSizeMax} step={.01} nudge={.05} dflt={DEFAULT_TYPE_SIZE} />
-            <SliderRow label={<>Title horizontal · {titleX.toFixed(2)}%</>} value={titleX} set={setTitleX} min={-3} max={3} step={.05} nudge={.05} dflt={0} />
+            <SliderRow label={<>Title horizontal · {titleX.toFixed(2)}%</>} value={titleX} set={setLinkedTitleHorizontal} min={titleHorizontalMin} max={titleHorizontalMax} step={.05} nudge={.05} dflt={0} />
+            <button
+              type="button"
+              data-card-pair-lock="horizontal"
+              className={`tileset-view-action run-card-prototype-pair-lock${titleTypeHorizontalLocked ? ' active' : ''}`}
+              aria-pressed={titleTypeHorizontalLocked}
+              title="Keep the current title-to-type horizontal offset while either position is adjusted"
+              onClick={() => setTitleTypeHorizontalOffset(titleTypeHorizontalLocked ? null : typeX - titleX)}
+            >
+              {titleTypeHorizontalLocked ? 'Title/type horizontal locked' : 'Lock title/type horizontal'}
+            </button>
+            <SliderRow label={<>Type horizontal · {typeX.toFixed(2)}%</>} value={typeX} set={setLinkedTypeHorizontal} min={typeHorizontalMin} max={typeHorizontalMax} step={.05} nudge={.05} dflt={0} />
             <SliderRow label={<>Title vertical · {titleY.toFixed(2)}%</>} value={titleY} set={setTitleY} min={-3} max={3} step={.05} nudge={.05} dflt={0} />
+            <SliderRow label={<>Type vertical · {typeY.toFixed(2)}%</>} value={typeY} set={setTypeY} min={-3} max={3} step={.05} nudge={.05} dflt={0} />
             <SliderRow label={<>Cost size · {costSize.toFixed(2)}%</>} value={costSize} set={setCostSize} min={3} max={9} step={.05} nudge={.05} dflt={DEFAULT_COST_SIZE} />
             <SliderRow label={<>Cost horizontal · {costX.toFixed(2)}%</>} value={costX} set={setCostX} min={-3} max={3} step={.05} nudge={.05} dflt={0} />
             <SliderRow label={<>Cost vertical · {costY.toFixed(2)}%</>} value={costY} set={setCostY} min={-3} max={3} step={.05} nudge={.05} dflt={.3} />
-            <SliderRow label={<>Type horizontal · {typeX.toFixed(2)}%</>} value={typeX} set={setTypeX} min={-3} max={3} step={.05} nudge={.05} dflt={0} />
-            <SliderRow label={<>Type vertical · {typeY.toFixed(2)}%</>} value={typeY} set={setTypeY} min={-3} max={3} step={.05} nudge={.05} dflt={0} />
             <SliderRow label={<>Flavor size · {flavorSize.toFixed(2)}%</>} value={flavorSize} set={setFlavorSize} min={2.5} max={6} step={.05} nudge={.05} dflt={DEFAULT_FLAVOR_SIZE} />
             {frame && art ? (
               <dl className="run-card-prototype-source-readout">
