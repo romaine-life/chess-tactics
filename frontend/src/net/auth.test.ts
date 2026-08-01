@@ -1,6 +1,6 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { HttpError } from './http';
-import { fetchMeStatus, isUnauthorized, signInHref } from './auth';
+import { fetchMeStatus, fetchReachableAuthStatus, isUnauthorized, signInHref } from './auth';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -55,5 +55,18 @@ describe('fetchMeStatus', () => {
       user: { signed_in: false },
       reachable: true,
     });
+  });
+
+  it('retries a transient backend outage instead of turning it into a sign-out', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ signed_in: false, error: 'auth_unavailable' }), { status: 502 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ signed_in: true, email: 'player@example.com' }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchReachableAuthStatus(undefined, 0)).resolves.toEqual({
+      user: { signed_in: true, email: 'player@example.com' },
+      reachable: true,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
