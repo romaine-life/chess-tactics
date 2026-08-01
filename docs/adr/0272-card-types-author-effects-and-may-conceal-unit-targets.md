@@ -8,6 +8,7 @@ partially_supersedes:
 partially_superseded_by:
   - "[ADR-0276](0276-run-type-lines-declare-primary-families-and-affected-qualifiers.md)'s primary-type and affected-qualifier type-line grammar"
   - "[ADR-0305](0305-card-ability-properties-do-not-synthesize-description-text.md)'s removal of automatic ability-description projection"
+  - "[ADR-0309](0309-pestiferous-cards-reveal-one-plagued-unit-at-a-time.md)"
 ---
 
 # ADR-0272: Card types author effects and may conceal unit targets

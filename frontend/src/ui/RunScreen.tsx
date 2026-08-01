@@ -508,7 +508,14 @@ function ShopPanel({
             <p>These Plagued units were lost after the Battle:</p>
             <ul>
               {pestiferousLosses.map((loss) => (
-                <li key={`${loss.cardId}:${loss.unit.id}`}>{loss.unit.name} · {loss.unit.type}</li>
+                <li key={`${loss.cardId}:${loss.unit.id}`}>
+                  {loss.unit.name} · {loss.unit.type}
+                  {(() => {
+                    const card = run.cards.find((candidate) => candidate.id === loss.cardId);
+                    const next = run.army.find((unit) => unit.id === card?.plaguedUnitId);
+                    return next ? ` — ${next.name} · ${next.type} is now Plagued` : '';
+                  })()}
+                </li>
               ))}
             </ul>
           </InnerChromeBox>

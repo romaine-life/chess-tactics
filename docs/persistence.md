@@ -39,9 +39,12 @@ Durable document and live-content tables are created by the inline migrations in
 | `media_slots` / `media_versions` / `media_blobs` | shared live-media substrate and active pointers | `/api/asset-catalog`, `/api/media/:sha`, `/assets/:slot`, `/api/admin/media-assets` | GET public, mutations require admin |
 | `media_catalog_state` / `media_asset_events` | shared asset revision and audit history | internal | admin mutations write them |
 
-Active Run format 5 stores the selected Ataraxia tier, persisted affected shop
-offers, owned card membership, Plagued unit modifiers, and exact Pestiferous loss
-history. Format 3 stores each army unit's role-specific historical name.
+Active Run format 6 stores the selected Ataraxia tier, persisted affected shop
+offers with their exact public Plagued piece index, owned card membership and
+current Plagued unit id, and exact Pestiferous loss history. Format-5 Runs are
+deterministically upgraded to one current Plagued target per nonempty
+Pestiferous card while preserving membership and losses (ADR-0309). Format 3
+stores each army unit's role-specific historical name.
 Format-1 unnamed documents and the provisional format-2 generated-name documents
 are deterministically normalized to format 3 from the Run seed and each piece
 type's acquisition order before the next save. Once a document is format 3, a

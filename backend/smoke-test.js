@@ -4010,7 +4010,7 @@ async function main() {
     throw new Error(`Active Run should begin empty: ${emptyRun.statusCode} ${emptyRun.body}`);
   }
   const activeRunDocument = {
-    formatVersion: 5,
+    formatVersion: 6,
     id: 'run-smoke',
     seed: 17,
     ataraxiaTier: 1,
@@ -4029,7 +4029,16 @@ async function main() {
       { id: 'run-king', name: 'David of Israel', type: 'king', inspectionSeed: 1701, abilities: [], modifiers: [], source: 'king' },
       { id: 'run-pawn-a', name: 'Stephen Botiller', type: 'pawn', inspectionSeed: 1702, abilities: ['positioned', 'marshalled'], modifiers: ['plagued'], source: 'starting' },
     ],
-    cards: [],
+    cards: [{
+      id: 'run-card-1',
+      coreId: 'p',
+      cardType: 'pestiferous',
+      effectSeed: 1703,
+      unitIds: ['run-pawn-a'],
+      lostUnitIds: [],
+      plaguedUnitId: 'run-pawn-a',
+      acquiredAfterBattleIndex: 0,
+    }],
     pestiferousLosses: [],
     relics: [],
     seenRelics: [],
@@ -4045,6 +4054,23 @@ async function main() {
     battleRuntime: null,
     shop: null,
   };
+  const invalidPlaguedTarget = await request(
+    'PUT', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      run: {
+        ...activeRunDocument,
+        cards: activeRunDocument.cards.map((card) => ({ ...card, plaguedUnitId: null })),
+      },
+      revision: 0,
+    }),
+  );
+  if (
+    invalidPlaguedTarget.statusCode !== 400
+    || JSON.parse(invalidPlaguedTarget.body).error !== 'invalid_active_run'
+  ) {
+    throw new Error(`Active Run should reject a missing Plagued target: ${invalidPlaguedTarget.statusCode} ${invalidPlaguedTarget.body}`);
+  }
   const missingRunRevision = await request(
     'PUT', '/api/active-run',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },

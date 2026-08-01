@@ -81,7 +81,11 @@ export function runCardPrototypeContent(variant: RunCardPrototypeVariant): RunCa
   return variant === 'pestiferous'
     ? {
         ...STANDARD_CARD,
+        cost: 8,
         typeLine: 'Units — Pestiferous',
+        grants: STANDARD_CARD.grants.map((grant) => (
+          grant.unit === 'bishop' ? { ...grant, plaguedIndices: [0] } : grant
+        )),
       }
     : STANDARD_CARD;
 }

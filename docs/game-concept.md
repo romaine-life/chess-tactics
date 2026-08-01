@@ -102,7 +102,9 @@ these.
   and accepted atomically, with exact or explicitly reconstructed PixelLab
   prompt provenance and no packaged fallback (ADR-0281, ADR-0282).
 - A card's affected **qualifiers** identify causal rules rather than replacing
-  its primary type. Pestiferous changes the card lifecycle and all its units.
+  its primary type. Pestiferous changes the card lifecycle and publicly marks
+  one current unit with the Plagued status icon; the card face does not spell
+  out **Plagued** beside that unit.
   **Tactical** instead authors a positive enhancement of one or more contained
   units with a stable modifier, affected count, and visibility rule. The type
   line declares the qualifier; detecting it does not automatically restate its
@@ -120,14 +122,22 @@ these.
 - **Ataraxia I — The Great Mortality** initially targets Pestiferous status for
   roughly one in eight otherwise eligible shop draws. Pestiferous status is
   rolled with the rest of that affected offer, not added as another deck copy.
-  A Pestiferous card makes all its units Plagued; every owned nonempty
-  Pestiferous card loses one seeded random unit on each Battle advancement
-  whether or not it was drawn or deployed. The empty card remains as a possible
-  dead draw until an explicit effect removes it. Affected shop offers, purchases,
+  A nonempty Pestiferous card publicly marks exactly one unit Plagued. Only that
+  unit receives the piece-tier Plagued discount. The unit ledger identifies it
+  with the dedicated Plagued icon rather than a written label; until the first
+  generated icon is accepted into its live slot, a small neutral diamond
+  occupies the exact icon socket. Every owned nonempty
+  Pestiferous card loses its marked unit on each victorious-Battle advancement,
+  whether or not the card was drawn or deployed, then immediately marks one
+  remaining unit for the next advancement. Selling, cashing out, or otherwise
+  permanently removing the marked unit retargets the card while it remains
+  nonempty. The empty card remains as a possible dead draw until an explicit
+  effect removes it. Affected shop offers, their exact public target, purchases,
   card membership, and losses are persisted; the seeded draw-time roll is one in
   eight and is inspectable in Card Layout. Pestiferous cards retain the shared
   face geometry but resolve their dedicated black bubbling-crude frame slot;
-  ordinary cards keep the standard frame (ADR-0267, ADR-0269, ADR-0271, ADR-0286).
+  ordinary cards keep the standard frame (ADR-0267, ADR-0269, ADR-0271, ADR-0286,
+  ADR-0309, ADR-0310).
 - Card ledgers have no assumed row cap before live experimentation. Dense cards
   may step down row spacing, icons, and type within readable bounds, but they
   must continue to show every unit property and retain the core card's flavor

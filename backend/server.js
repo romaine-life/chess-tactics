@@ -18000,12 +18000,14 @@ const ACTIVE_RUN_PHASES = new Set(['draft', 'deployment', 'battle', 'shop', 'vic
 const ACTIVE_RUN_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
 const ACTIVE_RUN_ABILITIES = new Set(['discipline', 'positioned', 'marshalled']);
 const ACTIVE_RUN_MODIFIERS = new Set(['plagued']);
+const ACTIVE_RUN_PIECE_VALUES = Object.freeze({ pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9 });
+const ACTIVE_RUN_PLAGUED_DISCOUNTS = Object.freeze({ pawn: 0, knight: 1, bishop: 1, rook: 2, queen: 3 });
 const RUN_RELICS = Array.isArray(serverRender?.RUN_RELICS) ? serverRender.RUN_RELICS : [];
 const RUN_RELIC_BY_ID = serverRender?.RUN_RELIC_BY_ID ?? {};
 const RUN_RELIC_IDS = new Set(RUN_RELICS.map((relic) => relic.id));
 function validateActiveRunBody(run) {
   if (!run || typeof run !== 'object' || Array.isArray(run)) return 'run must be an object';
-  if (run.formatVersion !== 1 && run.formatVersion !== 2 && run.formatVersion !== 3 && run.formatVersion !== 4 && run.formatVersion !== 5) return 'run.formatVersion is unsupported';
+  if (run.formatVersion !== 1 && run.formatVersion !== 2 && run.formatVersion !== 3 && run.formatVersion !== 4 && run.formatVersion !== 5 && run.formatVersion !== 6) return 'run.formatVersion is unsupported';
   if (typeof run.id !== 'string' || !run.id || run.id.length > 160) return 'run.id is invalid';
   if (!isFiniteInteger(run.seed) || run.seed < 0 || run.seed > 0xffffffff) return 'run.seed is invalid';
   if (run.formatVersion >= 5 && run.ataraxiaTier !== 0 && run.ataraxiaTier !== 1) return 'run.ataraxiaTier is invalid';
@@ -18065,6 +18067,7 @@ function validateActiveRunBody(run) {
     const cardIds = new Set();
     const cardUnitIds = new Set();
     const lostCardUnitIds = new Set();
+    const plaguedTargetUnitIds = new Set();
     for (const card of run.cards) {
       if (
         !isObjectRecord(card)
@@ -18087,6 +18090,15 @@ function validateActiveRunBody(run) {
         || card.acquiredAfterBattleIndex < 0
         || card.acquiredAfterBattleIndex >= run.war.battles.length
       ) return 'run.cards contains an invalid card';
+      if (run.formatVersion >= 6) {
+        const validPlaguedTarget = card.cardType === 'pestiferous'
+          ? card.unitIds.length > 0
+            ? typeof card.plaguedUnitId === 'string' && card.unitIds.includes(card.plaguedUnitId)
+            : card.plaguedUnitId === null
+          : card.plaguedUnitId === null;
+        if (!validPlaguedTarget) return 'run.cards contains an invalid Plagued target';
+        if (card.plaguedUnitId !== null) plaguedTargetUnitIds.add(card.plaguedUnitId);
+      }
       cardIds.add(card.id);
       for (const unitId of card.unitIds) {
         if (
@@ -18109,6 +18121,13 @@ function validateActiveRunBody(run) {
           || lostCardUnitIds.has(unitId)
         ) return 'run.cards contains invalid loss history';
         lostCardUnitIds.add(unitId);
+      }
+    }
+    if (run.formatVersion >= 6) {
+      for (const unit of run.army) {
+        if (unit.modifiers.includes('plagued') !== plaguedTargetUnitIds.has(unit.id)) {
+          return 'run.army Plagued modifiers do not match card targets';
+        }
       }
     }
     if (!Array.isArray(run.pestiferousLosses) || run.pestiferousLosses.length > 20000) {
@@ -18201,6 +18220,20 @@ function validateActiveRunBody(run) {
           || offer.effectSeed < 0
           || offer.effectSeed > 0xffffffff
         ) return 'run.shop.bundleOffers contains an invalid offer';
+        if (run.formatVersion >= 6) {
+          const validPlaguedTarget = offer.cardType === 'pestiferous'
+            ? isFiniteInteger(offer.plaguedPieceIndex)
+              && offer.plaguedPieceIndex >= 0
+              && offer.plaguedPieceIndex < offer.pieces.length
+            : offer.plaguedPieceIndex === null;
+          if (!validPlaguedTarget) return 'run.shop.bundleOffers contains an invalid Plagued target';
+          const expectedValue = offer.pieces.reduce((total, piece) => total + ACTIVE_RUN_PIECE_VALUES[piece], 0);
+          const plaguedPiece = offer.plaguedPieceIndex === null ? null : offer.pieces[offer.plaguedPieceIndex];
+          const expectedCost = expectedValue - (plaguedPiece ? ACTIVE_RUN_PLAGUED_DISCOUNTS[plaguedPiece] : 0);
+          if (offer.value !== expectedValue || offer.cost !== expectedCost) {
+            return 'run.shop.bundleOffers contains invalid Plagued pricing';
+          }
+        }
         offerIds.add(offer.offerId);
       }
       if (run.shop.purchasedOfferId !== null && !offerIds.has(run.shop.purchasedOfferId)) {
@@ -18214,6 +18247,21 @@ function validateActiveRunBody(run) {
           || run.shop.entrySnapshot.nextCardSequence < 1
         )
       ) return 'run.shop.entrySnapshot card state is invalid';
+      if (
+        run.formatVersion >= 6
+        && run.shop.entrySnapshot !== undefined
+        && run.shop.entrySnapshot.cards.some((card) => (
+          !isObjectRecord(card)
+          || !Array.isArray(card.unitIds)
+          || (
+            card.cardType === 'pestiferous'
+              ? card.unitIds.length > 0
+                ? typeof card.plaguedUnitId !== 'string' || !card.unitIds.includes(card.plaguedUnitId)
+                : card.plaguedUnitId !== null
+              : card.plaguedUnitId !== null
+          )
+        ))
+      ) return 'run.shop.entrySnapshot contains an invalid Plagued target';
     }
   }
   return null;
