@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:014871beb2f78817bf697fc78248e5d1876593d04aae42e9d8d77243edae4780"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:658cee4ddc8a6b36edd8a482bfe42ca33a5b045417781882bd491c5a4a9aa063"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Fix fence depth and hide retired review art"
-  prNumber: "584"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/584"
-  commit: "13e74cd2"
+  prTitle: "Limit title bar home navigation to shield"
+  prNumber: "585"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/585"
+  commit: "2c539170"
 
 name: chess-tactics
 namespace: chess-tactics
