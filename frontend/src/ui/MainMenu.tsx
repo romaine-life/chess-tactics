@@ -1,4 +1,4 @@
-import { lazy, useEffect, type ReactElement } from 'react';
+import { lazy, Suspense, useEffect, type ReactElement } from 'react';
 import { HomepageBackdrop } from './HomepageBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { loadingMark, loadingMeasure } from '../diagnostics/loadingTimeline';
@@ -172,23 +172,27 @@ export function MainMenu({
             key={dest ?? 'home'}
             aria-label={dest ? DEST_LABEL[dest] : 'Main menu destination'}
           >
-            {dest
-              ? dest === 'settings' ? <Settings embedded path={path} search={search} sceneInstanceKey={sceneInstanceKey} />
-                : dest === 'play' ? <PlayMenu path={path} sceneInstanceKey={sceneInstanceKey} />
-                : dest === 'lobbies' ? <Lobbies embedded />
-                : dest === 'enchiridion' ? (
-                    <Enchiridion
-                      section={enchiridionSectionFromPath(path)}
-                      selectedRelicId={enchiridionRelicFromPath(path)}
-                      relicHref={enchiridionRelicHref}
-                      selectedCardId={enchiridionCardFromPath(path)}
-                      cardHref={enchiridionCardHref}
-                      sceneInstanceKey={sceneInstanceKey}
-                      framed={false}
-                    />
-                  )
-                : <CampaignEditor embedded path={path} search={search} sceneInstanceKey={sceneInstanceKey} />
-              : null}
+            {/* A destination may suspend while its code chunk loads. Keep that suspension inside
+                the replaceable menu slot so React never hides the persistent mode-button rail. */}
+            <Suspense fallback={null}>
+              {dest
+                ? dest === 'settings' ? <Settings embedded path={path} search={search} sceneInstanceKey={sceneInstanceKey} />
+                  : dest === 'play' ? <PlayMenu path={path} sceneInstanceKey={sceneInstanceKey} />
+                  : dest === 'lobbies' ? <Lobbies embedded />
+                  : dest === 'enchiridion' ? (
+                      <Enchiridion
+                        section={enchiridionSectionFromPath(path)}
+                        selectedRelicId={enchiridionRelicFromPath(path)}
+                        relicHref={enchiridionRelicHref}
+                        selectedCardId={enchiridionCardFromPath(path)}
+                        cardHref={enchiridionCardHref}
+                        sceneInstanceKey={sceneInstanceKey}
+                        framed={false}
+                      />
+                    )
+                  : <CampaignEditor embedded path={path} search={search} sceneInstanceKey={sceneInstanceKey} />
+                : null}
+            </Suspense>
           </div>
         </ArtRouteChrome>
       </div>

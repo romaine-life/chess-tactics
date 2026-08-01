@@ -259,6 +259,7 @@ try {
         settingsSeen: false,
         settingsExitFaded: false,
         settingsViolations: [],
+        editorSeen: false,
       };
       window.__ctMenuHostRail = null;
       window.__ctPlayHostRail = null;
@@ -273,6 +274,7 @@ try {
           window.__ctMenuHostContinuity.seen = true;
           const title = document.querySelector('.app-shell-titlebar');
           const railOpacity = rail ? Number.parseFloat(getComputedStyle(rail).opacity) : 0;
+          const railRendered = Boolean(rail && rail.getClientRects().length > 0);
           const titleOpacity = title ? Number.parseFloat(getComputedStyle(title).opacity) : 0;
           const railInteractive = Boolean(
             rail
@@ -283,6 +285,7 @@ try {
             !rail
             || rail !== window.__ctMenuHostRail
             || !rail.isConnected
+            || !railRendered
             || railOpacity < 0.99
             || titleOpacity < 0.99
             || !railInteractive
@@ -292,11 +295,18 @@ try {
               rail: Boolean(rail),
               sameRail: rail === window.__ctMenuHostRail,
               connected: Boolean(rail?.isConnected),
+              railRendered,
               railOpacity,
               titleOpacity,
               railInteractive,
             });
           }
+        }
+        if (
+          director?.classList.contains('is-host-preserving')
+          && director.getAttribute('data-scene-pending')?.startsWith('campaign-editor/')
+        ) {
+          window.__ctMenuHostContinuity.editorSeen = true;
         }
         if (director?.getAttribute('data-scene-pending') === 'main-menu') {
           const phase = director.getAttribute('data-scene-phase');
@@ -899,6 +909,35 @@ try {
       `document.querySelector('[data-scene-phase="current"]')?.getAttribute('data-scene-committed') === 'settings/audio'`,
       { timeout },
     );
+    await page.evaluate(() => {
+      const rail = document.querySelector('.settings-scroll > .kit-scroll-rail');
+      const rows = [...document.querySelectorAll('[data-scene-instance="settings/audio"] .settings-row')];
+      const railLeft = rail?.getBoundingClientRect().left ?? null;
+      const rowsRight = rows.length
+        ? Math.max(...rows.map((row) => row.getBoundingClientRect().right))
+        : null;
+      const rect = (selector) => {
+        const node = document.querySelector(selector);
+        const bounds = node?.getBoundingClientRect();
+        return bounds ? { left: bounds.left, right: bounds.right, width: bounds.width } : null;
+      };
+      window.__ctMenuHostContinuity.settingsGeometry = {
+        railLeft,
+        rowsRight,
+        gap: railLeft !== null && rowsRight !== null ? railLeft - rowsRight : null,
+        wrap: rect('.settings-scroll'),
+        content: rect('.settings-scroll > .kit-scroll-content'),
+        panel: rect('[data-scene-instance="settings/audio"] .settings-panel-content'),
+        firstRow: rect('[data-scene-instance="settings/audio"] .settings-row'),
+      };
+    });
+    await page.evaluate(() => {
+      document.querySelector('.main-menu-mode-tab[data-nav="/editor"]')?.click();
+    });
+    await page.waitForFunction(
+      `document.querySelector('[data-scene-phase="current"]')?.getAttribute('data-scene-committed')?.startsWith('campaign-editor/')`,
+      { timeout },
+    );
   }
   if (retrySceneError) {
     await page.waitForSelector('[data-scene-phase="error"] .scene-loading-presentation button', {
@@ -1069,7 +1108,7 @@ try {
         : null;
       return {
         ...window.__ctMenuHostContinuity,
-        settingsGeometry: {
+        settingsGeometry: window.__ctMenuHostContinuity.settingsGeometry ?? {
           railLeft,
           rowsRight,
           gap: railLeft !== null && rowsRight !== null ? railLeft - rowsRight : null,
@@ -1091,6 +1130,7 @@ try {
       || !result.settingsSeen
       || !result.settingsExitFaded
       || result.settingsViolations.length
+      || !result.editorSeen
       || result.settingsGeometry.gap === null
       || result.settingsGeometry.gap < 6
     ) {
