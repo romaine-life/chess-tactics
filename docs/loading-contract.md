@@ -208,13 +208,14 @@ route lifecycle during the same React commit.
   both terrain and scene compositor acknowledgements.
 - The complete Play selector is one DOM surface: canonical hydration, rendered image
   consumers, and computed CSS image consumers settle before its columns reveal together.
-- The top-level installed Play destination is the bare selector root `/play/select`
-  (ADR-0257 as amended by ADR-0260). Opening it from the main menu preserves the
+- The top-level installed Play destination remains the compatibility selector
+  root `/play/select` (ADR-0294). Opening it from the main menu preserves the
   already-painted homepage scene; it does not unmount the menu family or route
   through the bare `/play` battlefield while the selector loads. The root holds
-  composition until the Run document settles, then always reveals the picker with
-  no selected mode; a resumable activity appears as an offered Continue card and
-  rail entry, never as an automatic redirect.
+  composition until canonical content and the Run document settle, then composes
+  the complete Continue scene and replace-canonicalizes to the most recent
+  available `/play/select/continue/<mode>` address, or bare Continue when every
+  mode says **Nothing to continue**. This selection never launches gameplay.
 - Terrain and scene canvases share decoded image records and acknowledge their actual first
   composition to the board boundary. The board reveals only after terrain, barrier, and
   scene acknowledgements and a browser paint opportunity.

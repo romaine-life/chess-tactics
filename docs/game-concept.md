@@ -161,12 +161,13 @@ these.
   the Controls title bar opens **Strategikon** over the board without unmounting
   the fight; its Martial Prosopography and Lipsanotheca expose the persistent
   army and held relics beside the same Enchiridion (ADR-0231).
-- Play leads with **Continue** whenever a Run or Battle is unresolved and names
-  that exact activity before the ordinary mode choices. **Continue Run** selects
-  the Run submenu, where **Continue Run** and **Start New Run** are master-list
-  choices. The right detail column owns current-Run facts plus the nested
-  **Play** action, or Ataraxia plus the confirmed **Start Run** replacement
-  (ADR-0232, ADR-0289, ADR-0290).
+- Play defaults to one activity-agnostic, descriptor-free **Continue** rail
+  destination. Its fixed Campaign, Skirmish, Run, and Levels rows name the
+  resumable activity or say **Nothing to continue**; the most recent available
+  row is selected into a fourth-column detail with one final **Play** action.
+  Ordinary Run remains a separate preparation destination between Current Run
+  and **Start New Run**, with Ataraxia setup and confirmed replacement
+  (ADR-0232, ADR-0289, ADR-0290, ADR-0294).
 - Army and Relics are grouped as player **Self inspection** in Run Controls.
   Either replaces the complete left Play workspace through the shared
   fill-only shell surface while the current phase stays mounted underneath;

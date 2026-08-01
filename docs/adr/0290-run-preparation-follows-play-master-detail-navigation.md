@@ -9,6 +9,7 @@ refines:
   - "[ADR-0232](0232-continue-run-selects-run-before-play.md)"
 partially_superseded_by:
   - "[ADR-0291](0291-ataraxia-zero-is-a-named-tier-with-visible-impact.md)"
+  - "[ADR-0293](0293-continue-is-one-agnostic-resume-entry.md)"
 ---
 
 # ADR-0290: Run preparation follows Play master-detail navigation

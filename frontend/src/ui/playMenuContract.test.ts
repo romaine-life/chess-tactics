@@ -22,48 +22,61 @@ describe('unified Play menu contract (ADR-0074)', () => {
       .toContain("['play', 'Play', '/play/select']");
   });
 
-  it('lands Play on the picker with Continue as an offer, never a redirect (ADR-0260)', () => {
+  it('lands the installed Play entry on the complete Continue surface', () => {
     expect(mainMenu).toContain('play: PLAY_SELECTOR_ROOT');
-    // Canonicalization and the missing-campaign fallback return to the neutral
-    // root; nothing in the landing path manufactures a skirmish selection.
-    expect(playMenu).toContain("navigateApp(PLAY_SELECTOR_ROOT, { replace: true, scroll: false })");
+    // The installed root remains a compatibility address; settled activity
+    // authority canonicalizes it to Continue and its most recent activity.
+    expect(playMenu).toContain("navigateApp(PLAY_CONTINUE_SELECTOR_HREF, { replace: true, scroll: false })");
     expect(playMenu).not.toContain('navigateApp(PLAY_SKIRMISH_SELECTOR_HREF');
     expect(playMenu).toContain("playHubSelection(path) ?? { mode: 'hub' }");
-    // The root never auto-forwards to a resumable activity: the hub composes
-    // once the Run document settles and offers Continue as a card instead.
-    expect(playMenu).not.toContain('navigateApp(resumable.href');
-    expect(playMenu).toContain('const hubLandingSettled =');
-    expect(playMenu).toContain("selection.mode !== 'hub' || runHydrated");
-    expect(playMenu).toContain('&& hubLandingSettled');
-    expect(playMenu).toContain('play-hub-neutral');
-    expect(playMenu).toContain('data-testid="play-hub-continue"');
-    expect(playMenu).toMatch(/play-hub-continue[\s\S]{0,400}?to=\{resumable\.href\}/);
+    expect(playMenu).toContain('resumeInventory.defaultMode');
+    expect(playMenu).toContain('playContinueSelectorHref(resumeInventory.defaultMode)');
+    expect(playMenu).toContain('const continueLandingSettled =');
+    expect(playMenu).toContain('&& continueLandingSettled');
+    expect(playMenu).not.toContain('play-hub-neutral');
+    expect(style).toContain('.play-choice-row:not(.is-selected):not(.is-disabled):hover');
+    expect(style).not.toContain('.run-choice-row');
   });
 
-  it('leads with a resumable activity, then pins Skirmish, Run, and Levels above Campaigns', () => {
+  it('pins descriptor-free Continue, Skirmish, Run, and Levels above Campaigns', () => {
     const fixed = playMenu.indexOf('className="play-source-fixed"');
     const campaigns = playMenu.indexOf('className="play-campaign-region"');
     expect(fixed).toBeGreaterThan(-1);
     expect(campaigns).toBeGreaterThan(fixed);
     expect(playMenu).toContain('<KitScroll className="play-campaign-scroll">');
     expect(playMenu).toContain('testId="play-continue"');
-    expect(playMenu).toContain("label={resumable.label}");
-    expect(playMenu).toContain("detail={resumable.detail}");
+    expect(playMenu).toContain('label="Continue"');
+    expect(playMenu).not.toMatch(/label="Continue"\s+detail=/);
     expect(playMenu).toContain('index={0}');
-    expect(playMenu).toContain('index={resumable ? 1 : 0}');
-    expect(playMenu).toContain('index={resumable ? 2 : 1}');
-    expect(playMenu).toContain('index={resumable ? 3 : 2}');
-    expect(playMenu).toContain('index={index + 3 + (resumable ? 1 : 0)}');
+    expect(playMenu).toContain('index={1}');
+    expect(playMenu).toContain('index={2}');
+    expect(playMenu).toContain('index={3}');
+    expect(playMenu).toContain('index={index + 4}');
   });
 
-  it('uses the Play master-detail cadence before its nested Play action enters the active Run', () => {
-    expect(readFileSync(new URL('./playContinue.ts', import.meta.url), 'utf8'))
-      .toContain('href: PLAY_RUN_SELECTOR_HREF');
-    expect(playMenu).toContain('data-testid="run-choice-continue"');
-    expect(playMenu).toContain("onClick={() => onChoice('continue')}");
+  it('makes Continue a four-mode availability surface with a selected fourth-column Play action', () => {
+    const playContinue = readFileSync(new URL('./playContinue.ts', import.meta.url), 'utf8');
+    expect(playContinue).toContain("{ mode: 'campaign', label: 'Campaign'");
+    expect(playContinue).toContain("{ mode: 'skirmish', label: 'Skirmish'");
+    expect(playContinue).toContain("{ mode: 'run', label: 'Run'");
+    expect(playContinue).toContain("{ mode: 'levels', label: 'Levels'");
+    expect(playContinue).toContain('defaultMode: mostRecent?.mode ?? null');
+    expect(playMenu).toContain("option.activity?.summary ?? 'Nothing to continue'");
+    expect(playMenu).toContain('data-testid={`continue-choice-${option.mode}`}');
+    expect(playMenu).toContain('data-testid="continue-detail"');
+    expect(playMenu).toContain('to={selected.playHref}><span>Play</span>');
+    expect(playMenu).toContain('<ContinuePanel inventory={resumeInventory} choice={selectedContinueChoice} />');
+  });
+
+  it('keeps ordinary Run preparation separate from Continue', () => {
+    expect(playMenu).toContain('data-testid="run-choice-current"');
+    expect(playMenu).toContain('to={PLAY_RUN_CURRENT_SELECTOR_HREF}');
+    expect(playMenu).toContain('<h4>Current Run</h4>');
+    expect(playMenu).toContain("'settings-row play-choice-row'");
     expect(playMenu).toContain('data-testid="run-detail-current"');
     expect(playMenu).toContain('to="/run"><span>Play</span></NavButton>');
     expect(playMenu).not.toContain('run-current-summary');
+    expect(playMenu).not.toContain('>Continue Run<');
   });
 
   it('keeps new-Run setup in the right detail column with one scrollable Ataraxia dropdown', () => {
@@ -72,7 +85,7 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).not.toContain('<h3>{run.war.name}</h3>');
     expect(playMenu).not.toContain("run.war.description || 'Active War'");
     expect(playMenu).toContain('data-testid="run-choice-new"');
-    expect(playMenu).toContain("onChoice('new')");
+    expect(playMenu).toContain('to={PLAY_RUN_NEW_SELECTOR_HREF}');
     expect(playMenu).toContain('data-testid="run-detail-new"');
     expect(playMenu).toMatch(/choice === 'new'[\s\S]*?<AtaraxiaSelector/);
     expect(ataraxiaSelector).toContain('<HouseSelect');
