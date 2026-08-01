@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { RUN_CARD_APPROVED_TUNING } from './RunCardFace';
+import {
+  RUN_CARD_APPROVED_TUNING,
+  RUN_CARD_PLAGUED_ICON_PLACEHOLDER,
+  RUN_CARD_PLAGUED_ICON_SLOT,
+  runCardUnitStackSeatLeft,
+} from './RunCardFace';
 import {
   RUN_CARD_CONTENTS_STUDY_PROFILES,
   runCardContentsStudyFromSearch,
@@ -34,10 +39,25 @@ describe('Run Card Layout review variant', () => {
   it('uses the accepted affected-card type line without changing the card identity', () => {
     expect(runCardPrototypeContent('pestiferous')).toMatchObject({
       name: 'Parish Militia',
+      cost: 8,
       typeLine: 'Units — Pestiferous',
     });
+    expect(runCardPrototypeContent('pestiferous').grants).toContainEqual(
+      expect.objectContaining({ unit: 'bishop', plaguedIndices: [0] }),
+    );
     expect(runCardPrototypeContent('pestiferous')).not.toHaveProperty('rules');
     expect(runCardPrototypeContent('standard').typeLine).toBe('Units');
+  });
+
+  it('reserves a live icon slot without printing the Plagued name as its marker', () => {
+    expect(RUN_CARD_PLAGUED_ICON_SLOT).toBe('ui/run/card-status/plagued-v1.png');
+    expect(RUN_CARD_PLAGUED_ICON_PLACEHOLDER).toBe('◇');
+    expect(RUN_CARD_PLAGUED_ICON_PLACEHOLDER).not.toMatch(/plagued/i);
+  });
+
+  it('places the status marker in the same stack seat as a second unit', () => {
+    expect(runCardUnitStackSeatLeft(0, 2, 8, 0.8)).toBe('min(0.0000cqw, calc(0.0000% - 0.0000cqw))');
+    expect(runCardUnitStackSeatLeft(1, 2, 8, 0.8)).toBe('min(8.8000cqw, calc(100.0000% - 8.0000cqw))');
   });
 
   it('shares one optically centered type-line tuning across ordinary and qualified cards', () => {

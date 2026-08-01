@@ -4,6 +4,7 @@ date: 2026-07-31
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
   - "[ADR-0269](0269-every-pestiferous-card-deteriorates-at-one-eighth-prevalence.md)"
+  - "[ADR-0311](0311-pestiferous-cards-reveal-one-plagued-unit-at-a-time.md)"
 partially_supersedes:
   - "[ADR-0193](0193-runs-are-persistent-wars-around-unchanged-chess-battles.md)'s exclusive permanent-unit-removal rule"
 ---

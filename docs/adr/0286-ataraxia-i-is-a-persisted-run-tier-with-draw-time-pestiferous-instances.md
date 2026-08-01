@@ -2,6 +2,8 @@
 status: accepted
 date: 2026-08-01
 deciders: owner (Nelson) + Codex
+partially_superseded_by:
+  - "[ADR-0311](0311-pestiferous-cards-reveal-one-plagued-unit-at-a-time.md)"
 extends:
   - 0266-ataraxia-names-optional-run-difficulty-after-real-history.md
   - 0268-ataraxia-unlocks-linearly-and-stacks-cumulatively.md

@@ -3,6 +3,8 @@ import { paletteForSide, pieceSpritePath, type PlayablePieceType } from '../core
 
 export const RUN_CARD_FRAME_SLOT = 'ui/run/card-prototypes/frame-v1.png';
 export const RUN_CARD_PESTIFEROUS_FRAME_SLOT = 'ui/run/card-prototypes/pestiferous-frame-v1.png';
+export const RUN_CARD_PLAGUED_ICON_SLOT = 'ui/run/card-status/plagued-v1.png';
+export const RUN_CARD_PLAGUED_ICON_PLACEHOLDER = '◇';
 export const RUN_CARD_CONCINNOUS_FRAME_SLOT = 'ui/run/card-prototypes/concinnous-frame-v1.png';
 export const RUN_CARD_REFERENCE_WIDTH = 360;
 
@@ -15,7 +17,11 @@ export type RunCardFaceContent = Readonly<{
   name: string;
   cost: number;
   typeLine: string;
-  grants: readonly Readonly<{ count: number; unit: PlayablePieceType }>[];
+  grants: readonly Readonly<{
+    count: number;
+    unit: PlayablePieceType;
+    plaguedIndices?: readonly number[];
+  }>[];
   properties?: readonly Readonly<{ name: string; target: string }>[];
   rules?: string;
   flavor: string;
@@ -83,6 +89,19 @@ export const runCardUnitImageKind = (
   index: number,
 ): RunCardImageKind => `unit:${cell}:${unit}:${index}`;
 
+export function runCardUnitStackSeatLeft(
+  index: number,
+  count: number,
+  visibleWidth: number,
+  naturalGap: number,
+): string {
+  if (count <= 1) return '0cqw';
+  const endFraction = index / (count - 1);
+  const naturalLeft = index * (visibleWidth + naturalGap);
+  const fittedLeft = `calc(${(endFraction * 100).toFixed(4)}% - ${(endFraction * visibleWidth).toFixed(4)}cqw)`;
+  return `min(${naturalLeft.toFixed(4)}cqw, ${fittedLeft})`;
+}
+
 type UnitSpriteMetrics = Readonly<{
   canvasWidthPerHeight: number;
   opaqueLeftPerHeight: number;
@@ -127,7 +146,9 @@ function UnitStackSprite({
   cell,
   unit,
   index,
-  count,
+  stackIndex,
+  stackCount,
+  plagued,
   tuning,
   onReady,
   onError,
@@ -135,7 +156,9 @@ function UnitStackSprite({
   cell: number;
   unit: PlayablePieceType;
   index: number;
-  count: number;
+  stackIndex: number;
+  stackCount: number;
+  plagued: boolean;
   tuning: RunCardContentsTuning;
   onReady: (kind: RunCardImageKind) => void;
   onError: (kind: RunCardImageKind) => void;
@@ -146,45 +169,86 @@ function UnitStackSprite({
   const visibleWidth = metrics ? metrics.opaqueWidthPerHeight * tuning.unitHeight : 0;
   const canvasWidth = metrics ? metrics.canvasWidthPerHeight * tuning.unitHeight : 0;
   const canvasLeft = metrics ? -metrics.opaqueLeftPerHeight * tuning.unitHeight : 0;
-  const endFraction = count <= 1 ? 0 : index / (count - 1);
-  const naturalLeft = index * (visibleWidth + tuning.unitNaturalGap);
-  const fittedLeft = `calc(${(endFraction * 100).toFixed(4)}% - ${(endFraction * visibleWidth).toFixed(4)}cqw)`;
-  const seatLeft = count <= 1 ? '0cqw' : `min(${naturalLeft.toFixed(4)}cqw, ${fittedLeft})`;
+  const seatLeft = runCardUnitStackSeatLeft(
+    stackIndex,
+    stackCount,
+    visibleWidth,
+    tuning.unitNaturalGap,
+  );
+  const markerSeatLeft = runCardUnitStackSeatLeft(
+    stackIndex + 1,
+    stackCount,
+    visibleWidth,
+    tuning.unitNaturalGap,
+  );
 
   return (
-    <span
-      className="run-card-prototype-unit-icon-seat"
-      style={{
-        '--run-card-unit-canvas-left': `${canvasLeft.toFixed(4)}cqw`,
-        '--run-card-unit-canvas-width': `${canvasWidth.toFixed(4)}cqw`,
-        '--run-card-unit-seat-left': seatLeft,
-        '--run-card-unit-seat-width': `${visibleWidth.toFixed(4)}cqw`,
-        zIndex: index + 1,
-      } as CSSProperties}
-    >
-      <img
-        className="run-card-prototype-unit-icon"
-        data-unit-facing={PLAYER_CARD_FACING}
-        data-unit-palette={PLAYER_CARD_PALETTE}
-        src={source}
-        alt=""
-        draggable={false}
-        onLoad={(event) => {
-          try {
-            setMetrics(measureUnitSprite(event.currentTarget));
-            onReady(kind);
-          } catch {
-            onError(kind);
-          }
-        }}
-        onError={() => onError(kind)}
-      />
-    </span>
+    <>
+      <span
+        className={`run-card-prototype-unit-icon-seat${plagued ? ' is-plagued' : ''}`}
+        data-stack-index={stackIndex}
+        style={{
+          '--run-card-unit-canvas-left': `${canvasLeft.toFixed(4)}cqw`,
+          '--run-card-unit-canvas-width': `${canvasWidth.toFixed(4)}cqw`,
+          '--run-card-unit-seat-left': seatLeft,
+          '--run-card-unit-seat-width': `${visibleWidth.toFixed(4)}cqw`,
+          zIndex: stackIndex + 1,
+        } as CSSProperties}
+      >
+        <img
+          className="run-card-prototype-unit-icon"
+          data-unit-facing={PLAYER_CARD_FACING}
+          data-unit-palette={PLAYER_CARD_PALETTE}
+          src={source}
+          alt=""
+          draggable={false}
+          onLoad={(event) => {
+            try {
+              setMetrics(measureUnitSprite(event.currentTarget));
+              onReady(kind);
+            } catch {
+              onError(kind);
+            }
+          }}
+          onError={() => onError(kind)}
+        />
+      </span>
+      {plagued ? (
+        <span
+          className="run-card-prototype-unit-icon-seat run-card-prototype-unit-marker-seat"
+          data-stack-index={stackIndex + 1}
+          data-target-unit-index={index}
+          style={{
+            '--run-card-unit-seat-left': markerSeatLeft,
+            '--run-card-unit-seat-width': `${visibleWidth.toFixed(4)}cqw`,
+            zIndex: stackIndex + 2,
+          } as CSSProperties}
+        >
+          <span
+            aria-hidden="true"
+            className="run-card-prototype-unit-marker is-placeholder"
+            data-live-media-slot={RUN_CARD_PLAGUED_ICON_SLOT}
+          >
+            {RUN_CARD_PLAGUED_ICON_PLACEHOLDER}
+          </span>
+        </span>
+      ) : null}
+    </>
   );
 }
 
+function grantLabel({
+  count,
+  unit,
+  plaguedIndices = [],
+}: RunCardFaceContent['grants'][number]): string {
+  const units = `${count} ${unit}${count === 1 ? '' : 's'}`;
+  if (!plaguedIndices.length) return units;
+  return count === 1 ? `1 Plagued ${unit}` : `${units}, one Plagued`;
+}
+
 function grantsLabel(grants: RunCardFaceContent['grants']): string {
-  return grants.map(({ count, unit }) => `${count} ${unit}${count === 1 ? '' : 's'}`).join(', ');
+  return grants.map(grantLabel).join(', ');
 }
 
 function propertiesLabel(properties: RunCardFaceContent['properties']): string {
@@ -276,7 +340,7 @@ export function RunCardFace({
           {card.grants.map((grant, cell) => (
             <span
               className="run-card-prototype-ledger-row"
-              aria-label={`${grant.count} ${grant.unit}${grant.count === 1 ? '' : 's'}`}
+              aria-label={grantLabel(grant)}
               key={grant.unit}
             >
               <strong className="run-card-prototype-ledger-count" aria-hidden="true">{grant.count}</strong>
@@ -284,10 +348,12 @@ export function RunCardFace({
                 {Array.from({ length: grant.count }, (_, index) => (
                   <UnitStackSprite
                     cell={cell}
-                    count={grant.count}
                     index={index}
                     key={`${grant.unit}-${index}`}
                     unit={grant.unit}
+                    plagued={grant.plaguedIndices?.includes(index) === true}
+                    stackCount={grant.count + (grant.plaguedIndices?.length ?? 0)}
+                    stackIndex={index + (grant.plaguedIndices?.filter((plaguedIndex) => plaguedIndex < index).length ?? 0)}
                     tuning={contentsTuning}
                     onReady={onImageLoad}
                     onError={onImageError}
