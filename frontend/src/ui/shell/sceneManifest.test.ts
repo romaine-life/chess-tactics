@@ -62,6 +62,31 @@ describe('scene manifests', () => {
     )).toBe('settings-shell');
   });
 
+  it('keeps Run choices in a nested detail slot while the action column remains mounted', () => {
+    const run = sceneManifest('/play/select/run');
+    const current = sceneManifest('/play/select/run/current');
+    const next = sceneManifest('/play/select/run/new');
+
+    expect(run.instances.map((entry) => entry.definition.id)).toEqual([
+      'main-menu',
+      'play',
+      'play/run',
+    ]);
+    expect(current.leaf.definition).toMatchObject({
+      id: 'play/run/current',
+      slot: 'run-detail-content',
+      view: 'play-run-current',
+    });
+    expect(next.leaf.definition).toMatchObject({
+      id: 'play/run/new',
+      slot: 'run-detail-content',
+      view: 'play-run-new',
+    });
+    expect(deepestSharedSceneRegion(run, next)).toBe('run-detail');
+    expect(deepestSharedSceneRegion(current, next)).toBe('run-detail');
+    expect(isEmptySlotOrigin(run, next)).toBe(true);
+  });
+
   it('authors every Settings panel and nested tracks view as a settings-content scene', () => {
     expect(sceneManifest('/settings/audio').instances.map((entry) => entry.definition.id)).toEqual([
       'main-menu',

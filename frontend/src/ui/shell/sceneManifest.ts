@@ -3,14 +3,16 @@ import { normalizeRoutePath } from '../navigation';
 import { isPlaySelectorPath, playHubSelection } from '../playHubRoute';
 
 export type SceneBackground = 'homepage' | 'battlefield' | 'tool';
-export type SceneHost = 'menu-shell' | 'play-shell' | 'settings-shell' | 'editor-shell' | 'enchiridion-shell' | 'gameplay-shell' | 'standalone';
-export type SceneSlotId = 'root' | 'menu-destination' | 'play-content' | 'settings-content' | 'editor-content' | 'enchiridion-content' | 'gameplay-content';
+export type SceneHost = 'menu-shell' | 'play-shell' | 'run-detail' | 'settings-shell' | 'editor-shell' | 'enchiridion-shell' | 'gameplay-shell' | 'standalone';
+export type SceneSlotId = 'root' | 'menu-destination' | 'play-content' | 'run-detail-content' | 'settings-content' | 'editor-content' | 'enchiridion-content' | 'gameplay-content';
 export type SceneViewId =
   | 'main-menu'
   | 'play'
   | 'play-continue'
   | 'play-skirmish'
   | 'play-run'
+  | 'play-run-current'
+  | 'play-run-new'
   | 'play-levels'
   | 'play-campaign'
   | 'gameplay'
@@ -92,6 +94,8 @@ export const SCENE_DEFINITIONS = Object.freeze({
   playContinue: defineScene({ id: 'play/continue', parent: 'play', slot: 'play-content', view: 'play-continue' }),
   playSkirmish: defineScene({ id: 'play/skirmish', parent: 'play', slot: 'play-content', view: 'play-skirmish' }),
   playRun: defineScene({ id: 'play/run', parent: 'play', slot: 'play-content', view: 'play-run' }),
+  playRunCurrent: defineScene({ id: 'play/run/current', parent: 'play/run', slot: 'run-detail-content', view: 'play-run-current' }),
+  playRunNew: defineScene({ id: 'play/run/new', parent: 'play/run', slot: 'run-detail-content', view: 'play-run-new' }),
   playLevels: defineScene({ id: 'play/levels', parent: 'play', slot: 'play-content', view: 'play-levels' }),
   playCampaign: defineScene({ id: 'play/campaign', parent: 'play', slot: 'play-content', view: 'play-campaign' }),
   gameplay: defineScene({ id: 'gameplay', parent: null, slot: 'root', view: 'gameplay' }),
@@ -318,7 +322,16 @@ export function sceneManifest(pathname: string, search: string = ''): ScenePath 
       : selection?.mode === 'skirmish'
         ? instance(SCENE_DEFINITIONS.playSkirmish)
         : instance(SCENE_DEFINITIONS.playContinue);
-    instances = [root, instance(SCENE_DEFINITIONS.play), selectedInstance];
+    const runDetailInstance = selection?.mode === 'run'
+      ? selection.choice === 'current'
+        ? instance(SCENE_DEFINITIONS.playRunCurrent)
+        : selection.choice === 'new'
+          ? instance(SCENE_DEFINITIONS.playRunNew)
+          : null
+      : null;
+    instances = runDetailInstance
+      ? [root, instance(SCENE_DEFINITIONS.play), selectedInstance, runDetailInstance]
+      : [root, instance(SCENE_DEFINITIONS.play), selectedInstance];
   } else if (path === '/editor' || path === '/editor/wars' || path === '/campaigns' || path === '/campaigns-next') {
     const editorRoute = editorSceneRoute(path, search);
     const child = editorRoute.kind === 'wars'
@@ -382,6 +395,7 @@ export function sceneManifest(pathname: string, search: string = ''): ScenePath 
 const HOST_REGION_BY_DEFINITION: Readonly<Partial<Record<string, SceneHost>>> = Object.freeze({
   'main-menu': 'menu-shell',
   play: 'play-shell',
+  'play/run': 'run-detail',
   settings: 'settings-shell',
   'campaign-editor': 'editor-shell',
   enchiridion: 'enchiridion-shell',
@@ -408,6 +422,7 @@ export function deepestSharedSceneRegion(
 const DESTINATION_SLOT_BY_REGION: Readonly<Partial<Record<SceneHost, SceneSlotId>>> = Object.freeze({
   'menu-shell': 'menu-destination',
   'play-shell': 'play-content',
+  'run-detail': 'run-detail-content',
   'settings-shell': 'settings-content',
   'editor-shell': 'editor-content',
   'enchiridion-shell': 'enchiridion-content',

@@ -331,46 +331,51 @@ function RunPanel({
         </div>
       </ActionColumn>
 
-      {choice === 'current' && run ? (
-        <aside className="menu-dest-col menu-dest-preview ce-preview-col play-detail-col" aria-label="Current Run" data-testid="run-detail-current">
-          <div className="ce-selected-head"><h2>Current Run</h2></div>
-          <div className="play-detail-body">
-            <InnerChromeBox className="play-detail-facts">
-              <dl>
-                <div><dt>Battle</dt><dd>{run.battleIndex + 1} of {run.war.battles.length}</dd></div>
-                <div><dt>Army</dt><dd>{run.army.length} units</dd></div>
-                <div><dt>Gold</dt><dd>{formatGold(run.goldTenths)}</dd></div>
-                <div><dt>Ataraxia</dt><dd>{ATARAXIA_BY_TIER[run.ataraxiaTier].label}</dd></div>
-              </dl>
-            </InnerChromeBox>
-          </div>
-          <div className="ce-preview-actions is-single">
-            <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} to="/run"><span>Play</span></ChromeNavButton>
-          </div>
-        </aside>
-      ) : null}
+      <div
+        className="play-run-detail-slot"
+        {...sceneTransitionTargetAttributes('run-detail', 'contents')}
+      >
+        {choice === 'current' && run ? (
+          <aside className="menu-dest-col menu-dest-preview ce-preview-col play-detail-col" aria-label="Current Run" data-testid="run-detail-current">
+            <div className="ce-selected-head"><h2>Current Run</h2></div>
+            <div className="play-detail-body">
+              <InnerChromeBox className="play-detail-facts">
+                <dl>
+                  <div><dt>Battle</dt><dd>{run.battleIndex + 1} of {run.war.battles.length}</dd></div>
+                  <div><dt>Army</dt><dd>{run.army.length} units</dd></div>
+                  <div><dt>Gold</dt><dd>{formatGold(run.goldTenths)}</dd></div>
+                  <div><dt>Ataraxia</dt><dd>{ATARAXIA_BY_TIER[run.ataraxiaTier].label}</dd></div>
+                </dl>
+              </InnerChromeBox>
+            </div>
+            <div className="ce-preview-actions is-single">
+              <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} to="/run"><span>Play</span></ChromeNavButton>
+            </div>
+          </aside>
+        ) : null}
 
-      {choice === 'new' ? (
-        <aside className="menu-dest-col menu-dest-preview ce-preview-col play-detail-col" aria-label="Start New Run" data-testid="run-detail-new">
-          <div className="ce-selected-head"><h2>Start New Run</h2></div>
-          <div className="play-detail-body">
-            <AtaraxiaSelector
-              value={ataraxiaTier}
-              highestUnlockedTier={highestUnlockedTier}
-              onChange={setAtaraxiaTier}
-            />
-          </div>
-          <div className="ce-preview-actions is-single">
-            <ChromeButton unit="inner-text-button"
-              className={chromeUnitClassNames('inner-text-button', 'ce-link-button')}
-              disabled={newRunUnavailable || starting}
-              onClick={() => { void start(); }}
-            >
-              <span>{starting ? 'Starting…' : 'Start Run'}</span>
-            </ChromeButton>
-          </div>
-        </aside>
-      ) : null}
+        {choice === 'new' ? (
+          <aside className="menu-dest-col menu-dest-preview ce-preview-col play-detail-col" aria-label="Start New Run" data-testid="run-detail-new">
+            <div className="ce-selected-head"><h2>Start New Run</h2></div>
+            <div className="play-detail-body">
+              <AtaraxiaSelector
+                value={ataraxiaTier}
+                highestUnlockedTier={highestUnlockedTier}
+                onChange={setAtaraxiaTier}
+              />
+            </div>
+            <div className="ce-preview-actions is-single">
+              <ChromeButton unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'ce-link-button')}
+                disabled={newRunUnavailable || starting}
+                onClick={() => { void start(); }}
+              >
+                <span>{starting ? 'Starting…' : 'Start Run'}</span>
+              </ChromeButton>
+            </div>
+          </aside>
+        ) : null}
+      </div>
     </>
   );
 }

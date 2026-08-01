@@ -9891,6 +9891,15 @@ body { font-size: 17px; }
   pointer-events: none;
   transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
 }
+/* A contents-mode target may contain a narrower authored contents-mode slot. When
+   the outer region changes, carry its fade through that layout-transparent slot;
+   when only the nested slot changes, SceneBoundary activates the nested target
+   directly and leaves its stable sibling column untouched. */
+.scene-director.is-exiting [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > [data-scene-transition-target][data-scene-transition-mode="contents"] > * {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
+}
 /* PaintedSurfaceBoundary is deliberately layout-transparent (`display: contents`). When one
    is a direct child of a contents-mode scene target (the Editor/Play preview column), opacity
    on that non-box cannot fade its pixels. Carry the exact same scene transition through the
@@ -9934,6 +9943,10 @@ body { font-size: 17px; }
   opacity: 0;
   pointer-events: none;
 }
+.scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > [data-scene-transition-target][data-scene-transition-mode="contents"] > * {
+  opacity: 0;
+  pointer-events: none;
+}
 .scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > .painted-surface > .painted-surface-content > *,
 .scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > .painted-surface > .painted-surface-status {
   opacity: 0;
@@ -9947,13 +9960,18 @@ body { font-size: 17px; }
   opacity: 1;
   transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
 }
+.scene-director.is-entering [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > [data-scene-transition-target][data-scene-transition-mode="contents"] > * {
+  opacity: 1;
+  transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
+}
 .scene-director.is-entering [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > .painted-surface > .painted-surface-content > *,
 .scene-director.is-entering [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > .painted-surface > .painted-surface-status {
   opacity: 1;
   transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
 }
 
-.play-destination-content { display: contents; }
+.play-destination-content,
+.play-run-detail-slot { display: contents; }
 .editor-destination-content { display: contents; }
 .scene-loading-presentation {
   position: fixed;
