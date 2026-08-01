@@ -8,6 +8,8 @@ extends:
   - 0231-strategikon-and-enchiridion-share-one-reference-workspace-language.md
 refines:
   - 0256-individual-relics-are-routable-from-the-main-menu-enchiridion.md
+partially_superseded_by:
+  - 0280-unit-card-art-uses-dedicated-database-prompt-plans.md
 ---
 
 # ADR-0262: Bundle cards are scene vignettes with authored names and a codex

@@ -18484,20 +18484,25 @@ button.tileset-relationship-cell {
   padding: var(--ds-inset);
 }
 
-/* Portrait trading-card proportions: scene art window on top, name plate, then the
-   price/action footer. The scene is a live board render that self-centres inside the
-   overflow-hidden art window, so the vignette bleeds to the window's edges. */
+/* The host contributes interaction only. All visible anatomy comes from the same
+   approved trading-card face used by the Card Layout instrument. */
 .run-bundle-card {
+  all: unset;
   aspect-ratio: 5 / 7;
-  color: inherit;
+  box-sizing: border-box;
   cursor: pointer;
-  display: grid;
-  font: inherit;
-  gap: var(--ds-inline-tight);
-  grid-template-rows: minmax(0, 1fr) auto auto;
+  display: block;
   inline-size: 100%;
-  padding: var(--ds-inset);
-  text-align: start;
+  position: relative;
+}
+
+.run-bundle-card > .run-card-face {
+  display: block;
+}
+
+.run-bundle-card:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 3px;
 }
 
 .run-bundle-card.is-reference {
@@ -18513,21 +18518,6 @@ button.tileset-relationship-cell {
   opacity: 1;
 }
 
-.run-bundle-card-plate {
-  display: grid;
-  gap: var(--ds-space-1);
-}
-
-.run-bundle-card-name {
-  font: var(--ds-weight-bold) var(--ds-text-md)/1.15 var(--ds-font-display);
-}
-
-.run-bundle-card-contents {
-  font-size: var(--ds-text-sm);
-  opacity: .82;
-}
-
-.run-bundle-card-footer,
 .run-shop-rules,
 .run-paid-relic-price,
 .run-victory-summary {
@@ -18535,11 +18525,6 @@ button.tileset-relationship-cell {
   display: flex;
   flex-wrap: wrap;
   gap: var(--ds-inline-tight);
-}
-
-.run-bundle-card-footer {
-  justify-content: space-between;
-  min-block-size: 32px;
 }
 
 .run-shop-rules > :last-child {
@@ -21218,6 +21203,10 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   font-size: 12px !important;
 }
 
+.run-card-prototype-pair-lock {
+  inline-size: 100%;
+}
+
 .run-card-prototype-catalog-image {
   align-items: center;
   display: flex;
@@ -21237,9 +21226,80 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   margin-block-start: var(--ds-stack) !important;
 }
 
+.run-card-art-catalog-image {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.run-card-art-catalog-image > img {
+  block-size: 100%;
+  image-rendering: pixelated;
+  inline-size: 100%;
+  object-fit: cover;
+}
+
+.run-card-prompt-main {
+  align-items: flex-start;
+  justify-content: center;
+  overflow: auto;
+  padding: var(--ds-space-6);
+}
+
+.run-card-prompt-editor {
+  display: grid;
+  gap: var(--ds-stack);
+  inline-size: min(100%, 920px);
+}
+
+.run-card-prompt-heading {
+  align-items: end;
+  display: flex;
+  gap: var(--ds-stack);
+  justify-content: space-between;
+}
+
+.run-card-prompt-heading h2,
+.run-card-prompt-heading p {
+  margin: 0;
+}
+
+.run-card-prompt-candidate {
+  aspect-ratio: 10 / 7;
+  image-rendering: pixelated;
+  inline-size: min(100%, 800px);
+  object-fit: cover;
+}
+
+.run-card-prompt-field {
+  display: grid;
+  gap: var(--ds-space-2);
+}
+
+.run-card-prompt-field > span {
+  font-weight: 700;
+}
+
+.run-card-prompt-field textarea {
+  box-sizing: border-box;
+  inline-size: 100%;
+  min-block-size: 8rem;
+  resize: vertical;
+}
+
+.run-card-prompt-field.is-exact textarea {
+  min-block-size: 24rem;
+}
+
+.run-card-prompt-notice {
+  margin: 0;
+}
+
 .run-card-prototype {
   aspect-ratio: 5 / 7;
   container-type: inline-size;
+  display: block;
   flex: none;
   inline-size: var(--run-card-prototype-width);
   position: relative;
