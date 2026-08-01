@@ -21,7 +21,7 @@ import { Stepper } from './shared/Stepper';
 import { clientSide, clientSideLabel, clientSideOrder, clientSideRelation, clientTurnLabel, type PlayingSide } from '../game/clientPerspective';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { installedUiMedia } from './installedUiMedia';
-import { InnerChromeBox, OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
+import { InnerChromeBox, ShellControlsPanel } from './shared/ChromeBox';
 import { fetchMe } from '../net/auth';
 import { AdminControls } from './AdminControls';
 import {
@@ -351,20 +351,14 @@ export function SkirmishHud({
     <>
       {/* Portals to <body>; render anywhere. Only visible while a resign confirm is open. */}
       {dialog}
-      <OuterChromeBox
-        chromeConsumer="skirmish-hud"
-        titled
+      <ShellControlsPanel
         data-testid="skirmish-hud"
-        className={`skirmish-hud ${className}`.trim()}
+        className={className}
         style={style}
         aria-label="Skirmish command HUD"
-      >
-        <OuterChromeHeader
-          title="Controls"
-          actions={strategikonToggle}
-          className="skirmish-hud-titlebar"
-        >
-          {controlsContent === undefined ? (
+        titleActions={strategikonToggle}
+        titleClassName="skirmish-hud-titlebar"
+        titleContent={controlsContent === undefined ? (
           <div
             className="skirmish-hud-tabs"
             role="tablist"
@@ -389,8 +383,8 @@ export function SkirmishHud({
               </button>
             ))}
           </div>
-          ) : null}
-        </OuterChromeHeader>
+        ) : null}
+      >
 
         {controlsContent === undefined ? (
           <>
@@ -829,7 +823,7 @@ export function SkirmishHud({
       </div>
           </>
         ) : controlsContent}
-      </OuterChromeBox>
+      </ShellControlsPanel>
     </>
   );
 }

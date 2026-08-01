@@ -202,10 +202,10 @@ visual-feature tools retain their separately governed outer-scene behavior.
 Events and Level Artwork authoring are process instruments rather than board
 brushes. Events directly opens the shell-owned center workspace under
 [ADR-0144](adr/0144-level-editor-events-use-the-shell-workspace.md). Its content
-perimeter follows the main-menu responsive inset contract in
-[ADR-0279](adr/0279-main-menu-insets-govern-full-workspace-content.md): inline
-start mirrors to inline end, block start mirrors to block end, and the
-shell-owned fill remains edge-to-edge. Per
+perimeter follows the shell-owned content-lane contract in
+[ADR-0297](adr/0297-shell-workspaces-own-attached-bodies-and-inset-content-lanes.md):
+the main-menu inline start automatically mirrors to inline end, block start
+mirrors to block end, and the shell-owned fill and body remain edge-to-edge. Per
 [ADR-0165](adr/0165-ai-artwork-separates-sources-attempts-and-background-mode.md)
 as renamed and separated by
 [ADR-0176](adr/0176-placed-art-and-level-artwork-are-separate-editor-destinations.md),
@@ -450,9 +450,10 @@ workspace. Strategikon fills the complete board pane through the shared
 fill-only primitive; it does not instantiate an `OuterChromeBox`, add exterior
 rails, or leave a smaller framed island inside that pane. No child measures the
 viewport or renders into the Controls column. Its rail and content start on the
-main menu's exact responsive inline and block insets under ADR-0279, and content
-mirrors those values at the Controls and bottom edges without pulling the fill
-away from either boundary. Its entry is the divider-safe, frameless open-codex
+main menu's exact responsive inline and block insets. Under ADR-0297 its primary
+reference frame uses the semantic edge-attached content variant, so that frame
+and its drawn scroll owner meet Controls while their own subordinate content
+retains internal spacing. Its entry is the divider-safe, frameless open-codex
 art control aligned to the Controls content boundary by ADR-0250, with
 state-specific hover/focus information. Relic references use the shared
 dual-view browser from ADR-0254: a top-of-column Rows/Grouped tab switches

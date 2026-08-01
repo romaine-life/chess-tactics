@@ -106,6 +106,7 @@ describe('professional loading architecture guards', () => {
   });
 
   it('visibly fades a preserved host child before committing an empty slot', () => {
+    const app = read('./ui/App.tsx');
     const styles = read('./style.css');
     const target = read('./ui/shell/sceneTransitionTarget.ts');
     const boundary = read('./ui/shell/SceneBoundary.tsx');
@@ -124,7 +125,11 @@ describe('professional loading architecture guards', () => {
     expect(target).toContain('sceneTransitionTargetAttributes');
     expect(boundary).toContain("target.setAttribute('data-scene-transition-active', '')");
     expect(boundary).toContain('[generation, mountedKey, preserveHost, transitionRegion]');
-    expect(read('./ui/App.tsx')).toContain('mountedKey={layer.scene.leaf.key}');
+    expect(app).toContain('mountedKey={layer.scene.leaf.key}');
+    expect(app).toContain('isEmptySlotOrigin(scene.current, destination)');
+    expect(app).toContain("'scene-empty-slot-origin-committed'");
+    expect(app).toContain('const frame = window.requestAnimationFrame(() => {');
+    expect(app).toContain('window.cancelAnimationFrame(frame)');
     expect(styles).not.toContain(
       '.scene-director.is-exiting:not(.is-host-preserving) .app-shell-titlebar',
     );

@@ -2,7 +2,7 @@ import { useEffect, useRef, type CSSProperties, type ReactElement, type ReactNod
 import { KitScroll } from './KitScroll';
 import { NavButton } from './shared/NavButton';
 import { HouseSelect } from './shared/HouseSelect';
-import { ChromeDivider, OuterChromeBox, OuterChromeHeader, ShellWorkspace } from './shared/ChromeBox';
+import { ChromeDivider, ShellControlsPanel, ShellWorkspace } from './shared/ChromeBox';
 import type { LevelEditorLayerKey } from './levelEditorRoute';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 
@@ -87,16 +87,13 @@ export function LevelEditorControlsPanel({
   );
 
   return (
-    <OuterChromeBox
-      chromeConsumer="level-editor-controls"
-      titled
-      className={`skirmish-hud ${className}`.trim()}
+    <ShellControlsPanel
+      className={className}
       style={style}
       aria-label="Editor controls"
       inert={inert || undefined}
       aria-busy={ariaBusy || undefined}
-    >
-      <OuterChromeHeader title="Controls">
+      titleContent={(
           <div className="le-layer-picker-row">
             <button
               type="button"
@@ -132,7 +129,8 @@ export function LevelEditorControlsPanel({
               <span><span className="stepper-glyph stepper-chevron stepper-chevron-right" aria-hidden="true" /></span>
             </button>
           </div>
-      </OuterChromeHeader>
+      )}
+    >
 
         <section className="skirmish-card le-actions-dock" aria-label="Editor actions">
           <h2>Actions</h2>
@@ -171,7 +169,7 @@ export function LevelEditorControlsPanel({
         <KitScroll className={scrollClass}>
           {children}
         </KitScroll>
-    </OuterChromeBox>
+    </ShellControlsPanel>
   );
 }
 
@@ -199,7 +197,7 @@ export function LevelEditorEventsWorkspace({
   return (
     <ShellWorkspace
       className="le-events-workspace"
-      contentClassName="le-events-workspace-content"
+      bodyClassName="le-events-workspace-content"
       data-testid="level-events-workspace"
       aria-labelledby="level-events-workspace-title"
     >

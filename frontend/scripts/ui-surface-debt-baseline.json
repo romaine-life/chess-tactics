@@ -38,7 +38,7 @@
       "kind": "css",
       "file": "src/style.css",
       "context": "",
-      "selector": ":root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) .le-outer-panel:is([data-chrome-consumer=\"level-editor-controls\"], [data-chrome-consumer=\"skirmish-hud\"])::before",
+      "selector": ":root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) [data-shell-controls-panel]::before",
       "surfaceHash": "5b6813844f46f7cc719075af782803c0600c2417060d1073567ccd582cf71169",
       "occurrence": 1
     },

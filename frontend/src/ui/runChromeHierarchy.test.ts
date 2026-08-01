@@ -56,7 +56,7 @@ describe('Run chrome hierarchy', () => {
     expect(runArmyWorkspace).toContain('<RunWorkspace');
     expect(runArmyWorkspace).toContain('className="run-self-inspection-workspace run-army-workspace run-army-ledger"');
     expect(runRelics).toContain('className="run-self-inspection-workspace run-relics-workspace"');
-    expect(skirmishHud).toContain('chromeConsumer="skirmish-hud"');
+    expect(skirmishHud).toContain('<ShellControlsPanel');
     expect(skirmishHud).toContain('{controlsContent === undefined ? (');
     expect(runScreen).not.toContain('function RunShell');
     expect(runScreen).not.toContain('function RunControlsRail');
@@ -96,17 +96,14 @@ describe('Run chrome hierarchy', () => {
 
   it('replaces the complete left shell workspace for Army and Relics while preserving the covered phase', () => {
     expect(runScreen).toContain('function RunPhaseWorkspace');
-    expect(runScreen).toContain("className={`run-phase-primary${covered ? ' is-workspace-covered' : ''}`}");
-    expect(runScreen).toContain('inert={covered ? true : undefined}');
-    expect(runScreen).toContain('aria-hidden={covered ? true : undefined}');
+    expect(runScreen).toMatch(/<ShellViewportSwap[\s\S]*?className="run-phase-workspace"[\s\S]*?primaryClassName="run-phase-primary"[\s\S]*?primary=\{children\}/);
     expect(runScreen).toContain("view === 'relics'");
     expect(runScreen).toContain('<RunRelicsWorkspace relicIds={shellRun.relics} />');
-    expect(skirmish).toContain("className={`skirmish-field${strategikonOpen || runWorkspace ? ' is-workspace-covered' : ''}`}");
-    expect(skirmish).toContain('inert={strategikonOpen || runWorkspace ? true : undefined}');
-    expect(skirmish).toContain('aria-hidden={strategikonOpen || runWorkspace ? true : undefined}');
-    expect(skirmish).toContain('{runSelfInspectionOpen ? null : <RunRelicStrip relicIds={relicIds} />}');
-    expect(skirmish).toMatch(/className=\{`skirmish-war-room[\s\S]*?\{runWorkspace\}[\s\S]*?<\/section>/);
-    expect(styleCss).toMatch(/\.run-phase-primary\.is-workspace-covered,[\s\S]*?\.skirmish-field\.is-workspace-covered\s*\{[\s\S]*?visibility:\s*hidden;/);
+    expect(skirmish).toMatch(/<ShellViewportSwap[\s\S]*?className="skirmish-war-room"[\s\S]*?primaryClassName="skirmish-field"[\s\S]*?workspaceOpen=\{strategikonOpen \|\| Boolean\(runWorkspace\)\}/);
+    expect(skirmish).toContain('{shellWorkspaceCoversRelics ? null : <RunRelicStrip relicIds={relicIds} />}');
+    expect(runScreen).toContain('shellWorkspaceCoversRelics={Boolean(inspectionWorkspace)}');
+    expect(skirmish).toContain('{runWorkspace}');
+    expect(styleCss).toMatch(/\.shell-viewport-primary\[data-shell-workspace-covered\]\s*\{[\s\S]*?visibility:\s*hidden;/);
   });
 
   it('keeps Run abandonment at the bottom of Controls and distinct from Battle resignation', () => {
@@ -126,14 +123,16 @@ describe('Run chrome hierarchy', () => {
   });
 
   it('fills the shell-owned playfield for every non-Battle Run destination', () => {
-    const playerRunSources = `${runScreen}\n${runArmyWorkspace}`;
+    const playerRunSources = `${runScreen}\n${runArmyWorkspace}\n${runRelics}`;
     const runWorkspaceRule = styleCss.match(/\.run-workspace\s*\{([^}]*)\}/)?.[1] ?? '';
 
     expect(runWorkspace).toContain('export function RunWorkspace');
     expect(runWorkspace).toContain('<main className={`run-workspace ${className}`.trim()}>');
     expect(runWorkspace).toContain('<ShellWorkspace');
     expect(runWorkspace).toContain('className="run-shell-workspace"');
+    expect(runWorkspace).toContain('bodyClassName={`run-shell-workspace-content ${contentClassName}`.trim()}');
     expect(chromeBox).toContain('export function ShellWorkspace');
+    expect(chromeBox).not.toContain('export function ShellWorkspaceBody');
     for (const testId of [
       'run-draft-workspace',
       'run-deployment-workspace',
@@ -142,6 +141,7 @@ describe('Run chrome hierarchy', () => {
       'run-army-ledger-workspace',
       'run-army-profile-workspace',
       'run-sell-workspace',
+      'run-relics-workspace',
       'run-loading-workspace',
       'run-empty-workspace',
     ]) {
@@ -167,6 +167,13 @@ describe('Run chrome hierarchy', () => {
     expect(runArmyWorkspace).toContain('<HouseSelect');
     expect(runWorkspaceRule).toContain('position: relative');
     expect(runWorkspaceRule).not.toMatch(/\b(?:padding|gap)\s*:/);
+    expect(runScreen).toContain('className={`run-screen${shellRun && visibleRunRelicCount(shellRun)');
+    expect(styleCss).toMatch(/\.skirmish-screen\s*\{[\s\S]*?column-gap:\s*0/);
+    expect(styleCss).toMatch(/\.skirmish-screen:not\(\.level-editor-screen\) \.skirmish-war-room > \.skirmish-field\s*\{[\s\S]*?margin-inline-end:\s*var\(--skirmish-board-controls-gutter\)/);
+    expect(styleCss).not.toContain('.skirmish-screen.is-run-self-inspection-open');
+    expect(styleCss).not.toContain('.skirmish-screen.run-screen');
+    expect(styleCss).toMatch(/\.run-shell-workspace\s*\{[\s\S]*?--shell-workspace-body-inset-block:\s*var\(--ds-gutter\);[\s\S]*?--shell-workspace-body-inset-start:\s*var\(--ds-gutter\)/);
+    expect(styleCss).toMatch(/\.shell-workspace-body\s*\{[\s\S]*?padding-inline-end:\s*0/);
     expect(styleCss).toContain('.run-shell-workspace-content');
     expect(styleCss).toContain('.run-screen.has-relics .run-shell-workspace-content');
     expect(styleCss).not.toContain('.run-workspace--full');

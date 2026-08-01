@@ -70,7 +70,7 @@ import {
 } from '../render/PredrawnBoardLayer';
 import { useSkirmishView } from '../game/skirmishView';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
-import { InnerChromeBox } from './shared/ChromeBox';
+import { InnerChromeBox, ShellViewportSwap } from './shared/ChromeBox';
 import { rememberAdminBattleHref } from '../admin/battleRoute';
 import type { RunRelicId } from '../run/model';
 import { useActiveRun } from '../run/store';
@@ -102,7 +102,7 @@ export function SkirmishShell({
   testId = 'skirmish',
   titleBarContent,
   relicIds = [],
-  runSelfInspectionOpen = false,
+  shellWorkspaceCoversRelics = false,
   controlsContent,
   hudProps,
   hudContent,
@@ -115,7 +115,7 @@ export function SkirmishShell({
   testId?: string;
   titleBarContent: ReactNode;
   relicIds?: readonly RunRelicId[];
-  runSelfInspectionOpen?: boolean;
+  shellWorkspaceCoversRelics?: boolean;
   controlsContent?: ReactNode;
   hudProps?: SkirmishHudProps;
   hudContent?: ReactNode;
@@ -138,7 +138,7 @@ export function SkirmishShell({
     : screenStyle ?? undefined;
   const surface = (
     <>
-      {runSelfInspectionOpen ? null : <RunRelicStrip relicIds={relicIds} />}
+      {shellWorkspaceCoversRelics ? null : <RunRelicStrip relicIds={relicIds} />}
       {children}
       {hudContent === undefined
         ? <SkirmishHud {...hudProps} controlsContent={controlsContent} />
@@ -149,7 +149,7 @@ export function SkirmishShell({
   return (
     <div
       data-testid={testId}
-      className={`skirmish-screen${runSelfInspectionOpen ? ' is-run-self-inspection-open' : ''} ${className}`.trim()}
+      className={`skirmish-screen ${className}`.trim()}
       style={resolvedScreenStyle}
     >
       {installedChromeCss ? <style data-skirmish-chrome-family dangerouslySetInnerHTML={{ __html: installedChromeCss }} /> : null}
@@ -1142,12 +1142,36 @@ export function Skirmish({
       />
     </PaintedSurfaceBoundary>
   ) : null;
+  const battleWorkspaceLayer = (
+    <>
+      {runWorkspace}
+      <div
+        className="strategikon-slot"
+        {...sceneTransitionTargetAttributes('gameplay-shell')}
+        data-scene-instance={strategikonOpen ? routePath : `${strategikonBase}/strategikon`}
+      >
+        {strategikonOpen ? (
+          <Strategikon
+            path={routePath}
+            search={routeSearch}
+            run={runBattle ? useActiveRun.getState().run : null}
+          />
+        ) : null}
+      </div>
+    </>
+  );
+  const battlePersistentOverlay = boardSettled && netError ? (
+    <InnerChromeBox className="skirmish-status-chip skirmish-turn-plate" role="status" style={{ position: 'fixed', left: '50%', bottom: 24, transform: 'translateX(-50%)', zIndex: 40 }}>
+      <strong>{netError}</strong>
+      <small>Multiplayer</small>
+    </InnerChromeBox>
+  ) : null;
 
   return (
     <SkirmishShell
       testId="skirmish"
       className={screenPredrawnBackgroundActive ? 'is-predrawn-board' : ''}
-      runSelfInspectionOpen={Boolean(runWorkspace) || strategikonOpen}
+      shellWorkspaceCoversRelics={Boolean(runWorkspace) || strategikonOpen}
       titleBarContent={playableSurfaceReady ? (
         <div className="skirmish-topbar-status">
           {/* The battle clock is ALWAYS the middle chip on every play surface — a timed game
@@ -1223,16 +1247,15 @@ export function Skirmish({
         </TitleBarSlot>
       ) : null}
 
-      <section
-        className={`skirmish-war-room${strategikonOpen ? ' has-strategikon' : ''}`}
+      <ShellViewportSwap
+        className="skirmish-war-room"
+        primaryClassName="skirmish-field"
+        workspaceOpen={strategikonOpen || Boolean(runWorkspace)}
+        persistent={battlePersistentOverlay}
         aria-label={strategikonOpen ? 'Battle reference workspace' : 'Skirmish battlefield'}
         data-scene-instance={strategikonBase}
-      >
-        <div
-          className={`skirmish-field${strategikonOpen || runWorkspace ? ' is-workspace-covered' : ''}`}
-          inert={strategikonOpen || runWorkspace ? true : undefined}
-          aria-hidden={strategikonOpen || runWorkspace ? true : undefined}
-        >
+        primary={(
+          <>
           <div className="skirmish-board-frame">
             {mapError ? (
               <InnerChromeBox className="skirmish-status-chip skirmish-turn-plate" role="alert" style={{ gap: 10 }}>
@@ -1276,30 +1299,11 @@ export function Skirmish({
               </InnerChromeBox>
             ) : null}
           </div>
-        </div>
-        {/* Connection/authority errors stay visible even after a local verdict: result
-            consensus and acknowledged Leave are still live protocol work at that point. */}
-        {boardSettled && netError ? (
-          <InnerChromeBox className="skirmish-status-chip skirmish-turn-plate" role="status" style={{ position: 'fixed', left: '50%', bottom: 24, transform: 'translateX(-50%)', zIndex: 40 }}>
-            <strong>{netError}</strong>
-            <small>Multiplayer</small>
-          </InnerChromeBox>
-        ) : null}
-        {runWorkspace}
-        <div
-          className="strategikon-slot"
-          {...sceneTransitionTargetAttributes('gameplay-shell')}
-          data-scene-instance={strategikonOpen ? routePath : `${strategikonBase}/strategikon`}
-        >
-          {strategikonOpen ? (
-            <Strategikon
-              path={routePath}
-              search={routeSearch}
-              run={runBattle ? useActiveRun.getState().run : null}
-            />
-          ) : null}
-        </div>
-      </section>
+          </>
+        )}
+      >
+        {battleWorkspaceLayer}
+      </ShellViewportSwap>
       {predrawnPickerOpen && predrawnPreview ? (
         <PredrawnCornerPicker
           src={predrawnPreview}

@@ -72,33 +72,20 @@ type OuterPanelPreviewOption = {
   kind?: OuterPanelConsumerKind;
 };
 
-function outerPanelConsumerKind(selector: string): OuterPanelConsumerKind | null {
-  if (selector.includes('data-chrome-consumer="level-editor-controls"')) return 'level-editor-controls';
-  if (selector.includes('data-chrome-consumer="skirmish-hud"')) return 'skirmish-hud';
-  return null;
-}
-
-function outerPanelConsumerLabel(kind: OuterPanelConsumerKind, selector: string): string {
+function outerPanelConsumerLabel(kind: OuterPanelConsumerKind): string {
   if (kind === 'level-editor-controls') return 'Level Editor controls';
-  if (kind === 'skirmish-hud') return 'Skirmish HUD';
-  return selector;
+  return 'Skirmish HUD';
 }
 
 function outerPanelPreviewOptions(unit: ChromeUnitSpec): OuterPanelPreviewOption[] {
   if (unit.id !== 'outer-panel' && unit.id !== 'inner-box') return [];
-  const consumerSource = unit.id === 'outer-panel' ? unit : chromeUnitById('outer-panel');
-  const seen = new Set<OuterPanelConsumerKind>();
-  const consumers = consumerSource.selectors.flatMap((selector) => {
-    const kind = outerPanelConsumerKind(selector);
-    if (!kind || seen.has(kind)) return [];
-    seen.add(kind);
-    return [{
+  const consumers: OuterPanelPreviewOption[] = (['level-editor-controls', 'skirmish-hud'] as const)
+    .map((kind) => ({
       id: `consumer:${kind}`,
       kind,
-      selector,
-      label: outerPanelConsumerLabel(kind, selector),
-    }];
-  });
+      selector: '[data-shell-controls-panel]',
+      label: outerPanelConsumerLabel(kind),
+    }));
   return [{ id: 'template', label: unit.id === 'inner-box' ? 'Inner template' : 'Empty template' }, ...consumers];
 }
 

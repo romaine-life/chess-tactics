@@ -15,10 +15,10 @@ describe('Level Artwork controls and workspaces', () => {
     expect(editor).toContain("{ id: 'level-artwork', label: 'Level Artwork' }");
     expect(editor).toContain('const [levelArtworkWorkspace, setLevelArtworkWorkspace]');
 
-    const boardFrameStart = editor.indexOf('className={`skirmish-board-frame');
+    const boardFrameStart = editor.indexOf('className="level-editor-viewport-swap"');
     const boardFrameGate = editor.slice(boardFrameStart, boardFrameStart + 450);
     expect(boardFrameStart).toBeGreaterThan(-1);
-    expect(boardFrameGate).toContain('levelArtworkWorkspace');
+    expect(boardFrameGate).toContain('workspaceOpen={eventsOpen || Boolean(levelArtworkWorkspace)}');
     expect(boardFrameGate).not.toContain("layer === 'level-artwork'");
     expect(editor).toContain("layer === 'level-artwork' ? (");
     expect(editor).toContain('<h2>Scene Art</h2>');

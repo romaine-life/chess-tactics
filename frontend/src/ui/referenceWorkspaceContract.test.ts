@@ -44,7 +44,11 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(mainMenu).toMatch(/<Enchiridion[^>]*framed=\{false\}/);
     expect(enchiridion).toContain('enchiridion-panel-unframed');
     expect(enchiridion).toContain('if (framed)');
-    expect(strategikon).toContain('<ChromeSurfaceFill role="outer" className="strategikon-workspace-fill" />');
+    expect(strategikon).toContain('<ShellWorkspace');
+    expect(strategikon).toContain('className="strategikon-workspace"');
+    expect(strategikon).toContain('contentClassName="strategikon-workspace-layout"');
+    expect(strategikon).toContain('bodyClassName="strategikon-content"');
+    expect(strategikon).not.toContain('<ChromeSurfaceFill');
     expect(strategikon).not.toContain('OuterChromeBox');
     expect(strategikon).toMatch(/<Enchiridion[\s\S]*?framed=\{false\}/);
     expect(strategikon).toMatch(/<RunArmyWorkspace[\s\S]*?framed=\{false\}/);
@@ -135,7 +139,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
   it('opens from Controls while retaining the mounted Battle field', () => {
     expect(hud).toContain('data-testid="strategikon-toggle"');
     expect(hud).toContain('const strategikonToggle = strategikonHref ? (');
-    expect(hud).toMatch(/<OuterChromeHeader[\s\S]*?title="Controls"[\s\S]*?actions=\{strategikonToggle\}/);
+    expect(hud).toMatch(/<ShellControlsPanel[\s\S]*?titleActions=\{strategikonToggle\}/);
     expect(hud).not.toContain('skirmish-hud-header-actions');
     expect(hud).not.toContain('data-testid="strategikon-toggle"\n      data-chrome-unit=');
     expect(hud).toContain("installedUiMedia('ui-kit-icons-studio-catalog-png')");
@@ -149,26 +153,30 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(style).toMatch(/\.skirmish-hud-title-action:hover\s*\{[\s\S]*?filter:/);
     expect(style).not.toMatch(/\.skirmish-hud-title-action:is\(:hover,\s*\.active\)/);
     expect(style).toMatch(/\.skirmish-hud-title-action-glyph\s*\{[\s\S]*?block-size:\s*32px[\s\S]*?inline-size:\s*32px/);
-    expect(skirmish).toContain("className={`skirmish-war-room${strategikonOpen ? ' has-strategikon' : ''}`}");
-    expect(skirmish).toContain("className={`skirmish-field${strategikonOpen || runWorkspace ? ' is-workspace-covered' : ''}`}");
-    expect(skirmish).toContain('inert={strategikonOpen || runWorkspace ? true : undefined}');
-    expect(skirmish).toContain('aria-hidden={strategikonOpen || runWorkspace ? true : undefined}');
+    expect(skirmish).toContain('className="skirmish-war-room"');
+    expect(skirmish).toMatch(/<ShellViewportSwap[\s\S]*?className="skirmish-war-room"[\s\S]*?primaryClassName="skirmish-field"[\s\S]*?workspaceOpen=\{strategikonOpen \|\| Boolean\(runWorkspace\)\}/);
+    expect(skirmish).toContain('relicIds={runBattle?.relicIds ?? []}');
+    expect(skirmish).toContain('shellWorkspaceCoversRelics={Boolean(runWorkspace) || strategikonOpen}');
     expect(skirmish).toMatch(/className="strategikon-slot"[\s\S]*?sceneTransitionTargetAttributes\('gameplay-shell'\)[\s\S]*?\{strategikonOpen \? \(/);
-    expect(skirmish.indexOf('className={`skirmish-field')).toBeLessThan(skirmish.indexOf('className="strategikon-slot"'));
+    expect(skirmish).toMatch(/primary=\{\([\s\S]*?<div className="skirmish-board-frame">[\s\S]*?\)\}[\s\S]*?\{battleWorkspaceLayer\}/);
     // The always-mounted slot overlays every battlefield tile. Empty, it MUST be
     // pointer-transparent — with plain pointer-events it shields the whole board and
     // no unit can be selected or moved (the #552 regression). Mounted workspace
     // content takes the pointer back.
     expect(style).toMatch(/\.strategikon-slot\s*\{[\s\S]*?inset:\s*0[\s\S]*?pointer-events:\s*none[\s\S]*?position:\s*absolute/);
     expect(style).toMatch(/\.strategikon-slot\s*>\s*\*\s*\{[\s\S]*?pointer-events:\s*auto/);
-    expect(style).toMatch(/\.strategikon-workspace-fill\s*\{[\s\S]*?inset:\s*0/);
-    expect(style).toMatch(/\.skirmish-screen\.is-run-self-inspection-open\s*\{[\s\S]*?column-gap:\s*0/);
+    expect(style).toMatch(/\.shell-workspace-fill\s*\{[\s\S]*?inset:\s*0/);
+    expect(style).toMatch(/\.skirmish-screen\s*\{[\s\S]*?column-gap:\s*0/);
+    expect(style).toMatch(/\.skirmish-screen:not\(\.level-editor-screen\) \.skirmish-war-room > \.skirmish-field\s*\{[\s\S]*?margin-inline-end:\s*var\(--skirmish-board-controls-gutter\)/);
+    expect(style).not.toContain('.skirmish-screen.is-run-self-inspection-open');
     expect(style).toMatch(/--main-menu-content-inset-block:\s*calc\(var\(--main-menu-frame-inset\) \+ var\(--main-menu-rail-pad-block\)\)/);
     expect(style).toMatch(/--main-menu-content-inset-inline:\s*calc\(var\(--main-menu-frame-inset\) \+ var\(--main-menu-rail-pad-inline\)\)/);
     expect(style).toMatch(/\.main-menu-twin-screen \.settings-shell\s*\{[\s\S]*?--col-top-inset:\s*var\(--main-menu-content-inset-block\);[\s\S]*?--col-side-inset:\s*var\(--main-menu-content-inset-inline\)/);
-    expect(style).toMatch(/\.strategikon-workspace\s*\{[\s\S]*?gap:\s*0;[\s\S]*?padding:\s*0/);
-    expect(style).toMatch(/\.strategikon-rail\s*\{[\s\S]*?padding-block:\s*var\(--main-menu-content-inset-block\);[\s\S]*?padding-inline:\s*var\(--main-menu-content-inset-inline\) 0/);
-    expect(style).toMatch(/\.strategikon-content\s*\{[\s\S]*?padding-block:\s*var\(--main-menu-content-inset-block\);[\s\S]*?padding-inline:\s*var\(--main-menu-content-inset-inline\)/);
-    expect(style).not.toMatch(/\.skirmish-war-room\.has-strategikon > \.skirmish-field\s*\{[\s\S]*?visibility:\s*hidden/);
+    expect(style).toMatch(/\.strategikon-workspace-layout\s*\{[\s\S]*?display:\s*grid;[\s\S]*?gap:\s*0;[\s\S]*?grid-template-columns:\s*322px minmax\(0, 1fr\)/);
+    expect(style).toMatch(/\.strategikon-workspace\s*\{[\s\S]*?--shell-workspace-body-inset-block:\s*var\(--main-menu-content-inset-block\);[\s\S]*?--shell-workspace-body-inset-start:\s*var\(--main-menu-content-inset-inline\)/);
+    expect(style).toMatch(/\.strategikon-rail\s*\{[\s\S]*?padding-block:\s*var\(--shell-workspace-body-inset-block\);[\s\S]*?padding-inline:\s*var\(--shell-workspace-body-inset-start\) 0/);
+    expect(style).toMatch(/\.shell-workspace-body\s*\{[\s\S]*?padding-inline-end:\s*0/);
+    expect(style).not.toContain('--shell-workspace-body-inset-end');
+    expect(skirmish).not.toContain('has-strategikon');
   });
 });

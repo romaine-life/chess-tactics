@@ -105,6 +105,7 @@ describe('chrome family geometry ownership (ADR-0083)', () => {
       ...roleDefault('outer'),
       railThickness: 12,
       fillBoxLeft: 3,
+      fillBoxTop: 4,
       contentPadding: 25,
     };
     const inner = roleDefault('inner');
@@ -112,12 +113,25 @@ describe('chrome family geometry ownership (ADR-0083)', () => {
 
     expect(css).toContain('--le-chrome-outer-rail-w: 12px !important;');
     expect(css).toContain('--le-outer-fill-box-left: 3px !important;');
+    expect(css).toContain('--le-outer-fill-box-top: 4px !important;');
     expect(css).toContain('--le-outer-content-padding: 25px !important;');
     expect(css).toContain('--le-panel-title-align-extra-x: calc(-1 * var(--ds-space-3)) !important;');
     expect(css).toContain('border-image-slice: 19 !important;');
     expect(css).toContain('border-image-width: 12px !important;');
     expect(css).not.toContain('--le-chrome-outer-frame-w');
     expect(css).not.toContain('--le-control-fill-inset');
+  });
+
+  it('extends top-rail-less Controls fills beneath the shared title divider', () => {
+    const outer = { ...roleDefault('outer'), fillBoxTop: 4 };
+    const css = frameCss(outer, roleDefault('inner'), frame('outer.png', 19), frame('inner.png', 5), dividers);
+    const controlsSelector = `${CHROME_FAMILY_SURFACE_SELECTOR} [data-shell-controls-panel]`;
+    const controlsRuleStart = css.indexOf(`${controlsSelector} {`);
+    const controlsRule = css.slice(controlsRuleStart, css.indexOf('}', controlsRuleStart) + 1);
+
+    expect(controlsRuleStart).toBeGreaterThanOrEqual(0);
+    expect(controlsRule).toContain('--app-shell-divider-fill-overlap: 1px;');
+    expect(controlsRule).toContain('--le-outer-fill-box-top: calc(-1 * var(--app-shell-divider-fill-overlap)) !important;');
   });
 
   it('exports atom overhang only as paint-safe clip geometry', () => {
@@ -194,7 +208,7 @@ describe('chrome family geometry ownership (ADR-0083)', () => {
       },
     };
     const css = frameCss(outer, inner, frame('outer.png', 19), frame('inner.png', 5), dividerRenders);
-    const viewportEdgeSelector = ':root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .le-outer-panel:is([data-chrome-consumer="level-editor-controls"], [data-chrome-consumer="skirmish-hud"]) [data-chrome-divider-role="outer"]:not([data-chrome-divider-orientation="vertical"]):not([data-chrome-divider-junctions="none"])::after';
+    const viewportEdgeSelector = ':root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) [data-shell-controls-panel] [data-chrome-divider-role="outer"]:not([data-chrome-divider-orientation="vertical"]):not([data-chrome-divider-junctions="none"])::after';
     const viewportEdgeRuleStart = css.indexOf(`${viewportEdgeSelector} {`);
     const viewportEdgeRule = css.slice(viewportEdgeRuleStart, css.indexOf('}', viewportEdgeRuleStart) + 1);
 

@@ -8,7 +8,7 @@ import {
 import { Enchiridion, RelicCodex } from './Enchiridion';
 import { ENCHIRIDION_SECTIONS, type EnchiridionSection } from './enchiridionRoute';
 import { ApparatusRailTab } from './shared/ApparatusRailTab';
-import { ChromeSurfaceFill, InnerChromeBox } from './shared/ChromeBox';
+import { InnerChromeBox, ShellWorkspace } from './shared/ChromeBox';
 
 export type StrategikonSection = 'enchiridion' | 'prosopography' | 'lipsanotheca';
 
@@ -60,34 +60,41 @@ export function Strategikon({
   const withSearch = (href: string) => `${href}${search}`;
 
   return (
-    <section className="strategikon-workspace" aria-label="Strategikon" data-testid="strategikon">
-      <ChromeSurfaceFill role="outer" className="strategikon-workspace-fill" />
-      <aside className="strategikon-rail" aria-label="Strategikon sections">
-        <ApparatusRailTab
-          label="Enchiridion"
-          to={withSearch(strategikonHref(basePath, 'enchiridion', enchiridionSection))}
-          index={0}
-          active={section === 'enchiridion'}
-          iconClassName="ic-grid"
-        />
-        <ApparatusRailTab
-          label="Prosopography"
-          title="The Martial Prosopography — Current Army"
-          to={withSearch(strategikonHref(basePath, 'prosopography'))}
-          index={1}
-          active={section === 'prosopography'}
-          iconClassName="skirmish-tab-icon skirmish-tab-icon-roster"
-        />
-        <ApparatusRailTab
-          label="Lipsanotheca"
-          title="The Lipsanotheca — Held Relics"
-          to={withSearch(strategikonHref(basePath, 'lipsanotheca'))}
-          index={2}
-          active={section === 'lipsanotheca'}
-          iconClassName="skirmish-tab-icon skirmish-tab-icon-log"
-        />
-      </aside>
-      <div className="strategikon-content">
+    <ShellWorkspace
+      className="strategikon-workspace"
+      contentClassName="strategikon-workspace-layout"
+      bodyClassName="strategikon-content"
+      edgeAttached
+      rail={(
+        <aside className="strategikon-rail" aria-label="Strategikon sections">
+          <ApparatusRailTab
+            label="Enchiridion"
+            to={withSearch(strategikonHref(basePath, 'enchiridion', enchiridionSection))}
+            index={0}
+            active={section === 'enchiridion'}
+            iconClassName="ic-grid"
+          />
+          <ApparatusRailTab
+            label="Prosopography"
+            title="The Martial Prosopography — Current Army"
+            to={withSearch(strategikonHref(basePath, 'prosopography'))}
+            index={1}
+            active={section === 'prosopography'}
+            iconClassName="skirmish-tab-icon skirmish-tab-icon-roster"
+          />
+          <ApparatusRailTab
+            label="Lipsanotheca"
+            title="The Lipsanotheca — Held Relics"
+            to={withSearch(strategikonHref(basePath, 'lipsanotheca'))}
+            index={2}
+            active={section === 'lipsanotheca'}
+            iconClassName="skirmish-tab-icon skirmish-tab-icon-log"
+          />
+        </aside>
+      )}
+      aria-label="Strategikon"
+      data-testid="strategikon"
+    >
         {section === 'enchiridion' ? (
           <Enchiridion
             section={enchiridionSection}
@@ -117,7 +124,6 @@ export function Strategikon({
         ) : (
           <UnavailableRunReference title="The Lipsanotheca" copy="Held relics appear here during a Run." />
         )}
-      </div>
-    </section>
+    </ShellWorkspace>
   );
 }

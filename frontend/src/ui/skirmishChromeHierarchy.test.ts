@@ -73,7 +73,7 @@ describe('Skirmish chrome hierarchy', () => {
 
   it('registers every level-specific title-bar status box as inner chrome', () => {
     const titleStart = skirmish.indexOf('titleBarContent={playableSurfaceReady ? (');
-    const titleEnd = skirmish.indexOf('relicIds={runBattle?.relicIds', titleStart);
+    const titleEnd = skirmish.indexOf('relicIds={', titleStart);
     const titleContent = titleStart >= 0 && titleEnd > titleStart ? skirmish.slice(titleStart, titleEnd) : '';
     expect(titleContent.match(/<TitleBarStatus\b/g)).toHaveLength(3);
     expect(titleContent).not.toMatch(/<div\b[^>]*skirmish-status-chip/);
@@ -91,10 +91,13 @@ describe('Skirmish chrome hierarchy', () => {
   });
 
   it('uses the registered outer panel and explicit inner boxes', () => {
-    expect(skirmishHud).toContain('<OuterChromeBox');
-    expect(skirmishHud).toContain('chromeConsumer="skirmish-hud"');
-    expect(skirmishHud).toContain('className={`skirmish-hud ${className}`.trim()}');
-    expect(skirmishHud).toMatch(/<OuterChromeHeader[\s\S]*?title="Controls"[\s\S]*?actions=\{strategikonToggle\}/);
+    expect(skirmishHud).toContain('<ShellControlsPanel');
+    expect(skirmishHud).toContain('className={className}');
+    expect(skirmishHud).toContain('titleActions={strategikonToggle}');
+    expect(skirmishHud).not.toContain('<OuterChromeBox');
+    expect(chromeBox).toContain('chromeConsumer="shell-controls"');
+    expect(chromeBox).toContain('data-shell-controls-panel=""');
+    expect(chromeBox).toContain('title="Controls"');
     expect(skirmishHud).not.toContain('<h2>Controls</h2>');
     expect(chromeBox).toContain('data-chrome-unit="outer-panel"');
     expect(chromeBox).toContain("chromeUnitClassNames('outer-panel', 'le-outer-panel', className)");
