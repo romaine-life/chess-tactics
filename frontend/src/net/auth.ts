@@ -20,6 +20,7 @@ export interface AuthStatus {
 }
 
 const AUTH_CHECK_TIMEOUT_MS = 10_000;
+const AUTH_RETRY_DELAY_MS = 1_000;
 
 /**
  * Keep network failure distinct from a real signed-out response. Editors need this distinction:
@@ -49,6 +50,41 @@ export async function fetchMeStatus(): Promise<AuthStatus> {
   } finally {
     globalThis.clearTimeout(timeout);
   }
+}
+
+/**
+ * Resolve an authoritative auth response across a temporary backend outage.
+ *
+ * Vite can keep serving the app shell while its required backend is restarting. A
+ * single 5xx in that window is not a sign-out, so persistent chrome waits and
+ * retries until the backend can answer. A reachable signed-out response still
+ * settles immediately.
+ */
+export async function fetchReachableAuthStatus(
+  signal?: AbortSignal,
+  retryDelayMs: number = AUTH_RETRY_DELAY_MS,
+): Promise<AuthStatus | null> {
+  while (!signal?.aborted) {
+    const status = await fetchMeStatus();
+    if (signal?.aborted) return null;
+    if (status.reachable) return status;
+
+    const retry = await new Promise<boolean>((resolve) => {
+      let timer: ReturnType<typeof globalThis.setTimeout> | undefined;
+      const stop = (): void => {
+        if (timer !== undefined) globalThis.clearTimeout(timer);
+        signal?.removeEventListener('abort', stop);
+        resolve(false);
+      };
+      timer = globalThis.setTimeout(() => {
+        signal?.removeEventListener('abort', stop);
+        resolve(true);
+      }, Math.max(0, retryDelayMs));
+      signal?.addEventListener('abort', stop, { once: true });
+    });
+    if (!retry) return null;
+  }
+  return null;
 }
 
 export async function fetchMe(): Promise<AuthUser> {

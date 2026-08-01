@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import { requiredDrawableRole } from '@chess-tactics/board-render';
-import { fetchMe, goSignIn, updateDisplayName, type AuthUser } from '../../net/auth';
+import { fetchReachableAuthStatus, goSignIn, updateDisplayName, type AuthUser } from '../../net/auth';
 import { normalizeRoutePath } from '../navigation';
 import { TitleBarIconButtonPrimitive } from '../shell/TitleBarControls';
 import { AccountMenu } from './AccountMenu';
@@ -61,12 +61,17 @@ export function HeaderAccountCluster({
   const editOpen = import.meta.env.DEV && params.get('edit') === 'open';
 
   const [me, setMe] = useState<AuthUser | null>(demo ? DEMO_USER : null);
+  const [authResolved, setAuthResolved] = useState(demo);
 
   useEffect(() => {
     if (demo) return; // demo stub: never hit the backend
-    let active = true;
-    fetchMe().then((user) => { if (active) setMe(user); });
-    return () => { active = false; };
+    const controller = new AbortController();
+    void fetchReachableAuthStatus(controller.signal).then((status) => {
+      if (!status) return;
+      setMe(status.user);
+      setAuthResolved(true);
+    });
+    return () => { controller.abort(); };
   }, [demo]);
 
   const signedIn = Boolean(me?.signed_in);
@@ -104,7 +109,9 @@ export function HeaderAccountCluster({
         // just-in-time href rewrite hack (ADR-0052 retires it).
         <TitleBarIconButtonPrimitive className="cluster-icon-button" to={() => settingsHref()} label="Settings" title="Settings" iconSrc={SETTINGS_ICON} />
       ) : null}
-      {signedIn ? (
+      {!authResolved ? (
+        <span className="account-auth-pending" role="status" aria-label="Checking account" />
+      ) : signedIn ? (
         <AccountMenu
           name={accountName}
           email={accountEmail}

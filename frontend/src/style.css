@@ -17154,6 +17154,14 @@ button.tileset-relationship-cell {
   flex: 0 0 var(--titlebar-control-size, 52px);
 }
 
+/* Keep the trailing cluster stable while a restarting backend cannot yet answer
+   the authoritative account probe. No sign-in affordance is shown until a real
+   signed-out response arrives. */
+.account-auth-pending {
+  flex: 0 0 var(--titlebar-control-size, 52px);
+  inline-size: var(--titlebar-control-size, 52px);
+}
+
 /* Account menu — small kit panel-framed popover anchored under the avatar. A
    minimal one-line row: the username + the door (the door IS the sign-out, no
    text label — the bar avatar already carries identity). */
