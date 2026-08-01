@@ -1,5 +1,6 @@
 ---
 status: accepted
+partially_superseded_by: "[ADR-0304](0304-level-editor-documents-are-live-shared-working-copies.md)"
 date: 2026-07-19
 deciders: Nelson, Codex
 ---

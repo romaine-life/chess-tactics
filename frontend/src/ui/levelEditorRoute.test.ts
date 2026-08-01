@@ -262,16 +262,16 @@ describe('level editor route helpers', () => {
     })).toBe('/editor/level?layer=status');
   });
 
-  it('round-trips the dedicated Recovery layer without authoring state', () => {
+  it('round-trips History without authoring state and retires old Recovery URLs', () => {
     expect(readLevelEditorRouteState('?layer=recovery&kind=wall&brush=stone')).toMatchObject({
-      layer: 'recovery',
+      layer: 'history',
       eventsEditor: false,
     });
     expect(levelEditorHrefWithRouteState('/editor/level?layer=status&kind=wall&brush=stone', {
-      layer: 'recovery',
+      layer: 'history',
       brushKind: null,
       brush: null,
-    })).toBe('/editor/level?layer=recovery');
+    })).toBe('/editor/level?layer=history');
   });
 
   it('does not confuse the Events workspace flag with serialized gameplay events', () => {

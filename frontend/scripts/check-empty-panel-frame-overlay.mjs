@@ -488,8 +488,8 @@ const levelEditorCyclePickers = [...(levelEditor + levelEditorChromeConsumers).m
 const cyclePickerChevronButtons = [...cyclePicker.matchAll(/<ChromeButton\b[\s\S]*?<\/ChromeButton>/g)]
   .map((match) => match[0])
   .filter((block) => block.includes('unit="inner-chevron-key"'));
-if (levelEditorCyclePickers.length !== 4 || cyclePickerChevronButtons.length !== 2) {
-  failures.push('all eight previous/next Level Editor controls must use the concrete inner-chevron-key hierarchy leaf');
+if (levelEditorCyclePickers.length !== 3 || cyclePickerChevronButtons.length !== 2) {
+  failures.push('all six previous/next Level Editor controls must use the concrete inner-chevron-key hierarchy leaf');
 }
 if (!/unit\.id === 'inner-chevron-key'[\s\S]*?stepper-glyph stepper-chevron/.test(chromeUnitAudit)) {
   failures.push('Chrome Lab must render the real previous/next chevron-key specimen instead of a generic tool-square fallback');

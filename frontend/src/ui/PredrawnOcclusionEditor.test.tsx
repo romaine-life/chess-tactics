@@ -42,13 +42,13 @@ describe('PredrawnOcclusionEditor workspace contract', () => {
         imageUrl="/api/background-versions/warped-version-8/content"
         imageWidth={800}
         imageHeight={600}
-        submitDisabledReason="Take over editing before this mask can be attached."
+        submitDisabledReason="Reload an owner editing page before this mask can be attached."
         onSubmit={() => undefined}
         onClose={() => undefined}
       />,
     );
 
-    expect(markup).toContain('Take over editing before this mask can be attached.');
+    expect(markup).toContain('Reload an owner editing page before this mask can be attached.');
     expect(markup).not.toContain('No submit callback is connected');
     expect(markup).toMatch(/data-testid="predrawn-occlusion-submit"[^>]*disabled/);
     expect(markup).not.toMatch(/data-testid="predrawn-occlusion-brush-tool"[^>]*disabled/);

@@ -26,45 +26,36 @@ backend failure as the blocker.
 
 ## Level Editor persistence rule
 
-The stable `/editor/level?document=<opaque-id>&levelId=<id>` URL identifies its private editor document; `levelId` alone is account-local and is never the URL authority.
-Its owner, or an authenticated allowlisted administrator given that exact opaque URL, may read the
-existing document. Admin review does not grant cross-owner listing or mutation access, and a
-missing ID remains not found; it is presence-free and must not create an editor session, acquire or
-block a lease, heartbeat, take over, or access recovery. Hand off only a URL whose document was
-acknowledged by the backend. Authenticated owner edits occur through the attributable, single-writer
-sessions governed by [ADR-0143](docs/adr/0143-level-editor-sessions-are-attributable-single-writer-and-owner-takeoverable.md):
-the UI identifies the lease holder by authenticated name/email, tab/device relationship, and
-opened/last-seen times, while PostgreSQL owns the lease and fencing authority. An agent must not
-mistake a displayed session id or device relation for authority; page sessions use a separate
-unexposed credential whose hash is server-held and required by all session and fenced mutations.
-An agent must not silently take over the owner's editor session merely to continue work or
-verification. Only the
-owner's explicit **Take over editing** action may transfer a live or stale lease, and the displaced
-branch must be durably preserved and reachable before the new writer is reported. Authenticated
-owner-page review is lease-free until persisted authoring intent under
-[ADR-0154](docs/adr/0154-level-editor-viewing-does-not-acquire-the-writer-lease.md). Verification
-must not manufacture that intent by changing Level content, staged campaign assignment, or invoking
-**Start editing here**. Writer-only verification uses Nelson's existing Chrome session or requires
-explicit coordination; an isolated verification browser must remain a viewer. Authenticated edits
-autosave to a durable server-side working copy. **Save** promotes
-that copy to the canonical level, and **Discard changes** restores the working copy
-from canonical. Copying the browser URL must remain side-effect free: it does not
-save, publish, create another document, change permissions, rewrite the URL, or
-navigate. Gameplay and campaign/share/server thumbnails read canonical levels only.
-The sole working-copy preview exception is the signed-in owner's bounded **Continue
-editing** card list at `/editor`: it may read an existing private document to identify
-the work being resumed, without saving or publishing it (ADR-0090). Browser storage
-is a crash/offline fallback. Do not introduce another editor identity or a
-link-triggered persistence path.
-Cloud autosave errors and conflicts interrupt every editor layer. An older browser recovery
-may resume autosave only after the owner explicitly chooses **Keep recovered work** and its
-scoped revision plus cloud signature still match the document on screen; a newer server write
-must conflict again instead of being overwritten.
-Every acknowledged cloud working-copy mutation retains a restorable server revision. Restore is an
-owner-only compare-and-swap that creates a new working revision and never publishes; the current
-browser and cloud copies must remain directly downloadable from the persistence interruption.
-An untouched document load is read-only: compare the stored Level through the editor's canonical
-projection before deciding to autosave, because serialization normalization is not a user edit.
+The stable `/editor/level?document=<opaque-id>&levelId=<id>` URL identifies its private
+editor document; `levelId` alone is account-local and is never the URL authority. Its owner, or
+an authenticated allowlisted administrator given that exact opaque URL, may read the existing
+document. Admin review remains observation-only and does not grant cross-owner listing or mutation.
+
+Per [ADR-0304](docs/adr/0304-level-editor-documents-are-live-shared-working-copies.md), every
+ordinary authenticated owner page immediately edits the same durable unpublished working copy.
+Page sessions use a separate unexposed credential whose hash is server-held, but their historical
+presence or lease state is never mutation authority. Multiple tabs and devices stay writable, poll
+the acknowledged copy, and automatically merge stale local changes with newer server changes.
+There is no owner-facing Start editing, Follow latest, or Take over flow.
+
+A page close, process loss, stale heartbeat, or expired legacy lease metadata must not create a
+recovery branch or block a later page. Browser storage is only a bounded crash/offline retry buffer
+for the same working copy. It must not become a second document identity or routine cleanup queue.
+Authenticated automated verification remains an explicitly observing session and cannot write.
+
+Authenticated edits autosave to the durable working copy. **Save** promotes that copy to the
+canonical Level, and **Discard changes** restores it from canonical. Copying the browser URL remains
+side-effect free: it does not save, publish, create another document, change permissions, rewrite the
+URL, or navigate. Gameplay and campaign/share/server thumbnails read canonical levels only. The
+sole working-copy preview exception is the signed-in owner's bounded **Continue editing** card list
+at `/editor`; it may read an existing private document to identify resumed work without saving or
+publishing it (ADR-0090).
+
+Every acknowledged working-copy mutation retains a restorable private server revision. History is
+collapsed and unloaded by default; expanding it is an explicit secondary action. Restore is an
+owner-only compare-and-swap that creates a new working revision and never publishes. An untouched
+document load is read-only: compare the stored Level through the editor's canonical projection
+before deciding to autosave, because serialization normalization is not a user edit.
 
 ## Generated-art handoff rule
 
@@ -117,8 +108,8 @@ and don't tell the user screenshots are impossible. Use the helper below.
    npm run shot -- <vite-url>/unit-studio --size 1200x800
    ```
    Level Editor captures automatically use an authenticated observation-only session: the real
-   private document renders without acquiring/extending its writer lease, advancing its fence, or
-   creating a recovery. Do not replace this with a normal headless editor visit.
+   private document renders without gaining write access or changing its working copy. Do not
+   replace this with a normal headless editor visit.
    Output defaults to `frontend/tmp-shots/shot.png` (gitignored). **Default to showing the
    small PNG inline — never substitute a link + description for the pixels.**
 

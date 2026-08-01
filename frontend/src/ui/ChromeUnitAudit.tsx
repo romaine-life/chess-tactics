@@ -62,7 +62,7 @@ const CHROME_AUDIT_LAYER_OPTIONS: readonly LevelEditorLayerOption[] = [
   { id: 'zone', label: 'Zone' },
   { id: 'rules', label: 'Rules' },
   { id: 'status', label: 'Status' },
-  { id: 'recovery', label: 'Recovery' },
+  { id: 'history', label: 'History' },
 ];
 type OuterPanelConsumerKind = 'level-editor-controls' | 'skirmish-hud';
 type OuterPanelPreviewOption = {

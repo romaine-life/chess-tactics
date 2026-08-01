@@ -528,7 +528,7 @@ try {
     if (!authState?.signed_in) throw new Error('local screenshot sign-in did not establish the owner session');
   }
 
-  // Visual verification is an authenticated observer, never a synthetic writer. Patch only the
+  // Visual verification is an authenticated observer, never a synthetic editing participant. Patch only the
   // Level Editor's session-open request. The optional failure injection shares this one
   // interception handler so a Level Editor capture never tries to continue the same request twice.
   const targetIsLevelEditor = isLevelEditorUrl(url);
@@ -1259,11 +1259,8 @@ try {
     await page.screenshot({ path: out, fullPage });
   }
 
-  // A headless Level Editor page can become the writer when no owner tab currently holds the
-  // lease. Closing Chrome directly then lets that synthetic lease expire, which manufactures a
-  // recovery copy and makes visual verification pollute the recovery UI it is inspecting. Leave
-  // through the app's normal navigation blocker so it closes even an observing session (and
-  // final-autosaves a real writer) before this isolated browser exits.
+  // Leave through the app's normal navigation blocker so the attributed observing session closes
+  // cleanly before this isolated browser exits. The same path also final-autosaves an editing page.
   // Events is a nested URL-addressed workspace: its first app departure closes Events and
   // intentionally remains in the Level Editor. Repeat the same normal departure until the
   // editor route is actually released. Ordinary editor routes leave on the first attempt.
@@ -1323,7 +1320,7 @@ try {
       process.exitCode = 6;
       throw new Error('editor viewer cleanup failed');
     }
-    console.log(`editor viewer stayed lease-free and closed cleanly${viewer.activeSessionId ? ' while another writer remained active' : ''}`);
+    console.log(`editor viewer stayed read-only and closed cleanly${viewer.activeSessionId ? ' while an editing page remained active' : ''}`);
   }
 } finally {
   await browser.close();

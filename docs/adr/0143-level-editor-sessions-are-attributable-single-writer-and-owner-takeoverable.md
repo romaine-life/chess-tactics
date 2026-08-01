@@ -1,9 +1,10 @@
 ---
-status: accepted
+status: superseded by ADR-0304
 date: 2026-07-20
 deciders: Nelson, Codex
 refines: "[ADR-0090](0090-private-draft-cards-preview-and-manage-working-copies.md), [ADR-0132](0132-admins-may-direct-read-editor-documents.md), [ADR-0139](0139-persistence-failures-interrupt-editing-and-recovery-conflicts-resolve.md), and [ADR-0140](0140-working-copy-revisions-are-retained-and-owner-restorable.md)"
 partially_superseded_by: "[ADR-0154](0154-level-editor-viewing-does-not-acquire-the-writer-lease.md)"
+superseded_by: "[ADR-0304](0304-level-editor-documents-are-live-shared-working-copies.md)"
 ---
 
 # ADR-0143: Level Editor sessions are attributable, single-writer, and owner-takeoverable
