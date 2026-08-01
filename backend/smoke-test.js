@@ -980,7 +980,7 @@ function inlineMigrationSql(version) {
   return inlineMigrationDefinition(version).sql;
 }
 
-async function validatePrimarySparseNumericMigrationUpgrade48() {
+async function validatePrimarySparseNumericMigrationUpgrade49() {
   const history = await queryDb(
     `SELECT version, name, checksum
        FROM schema_migrations
@@ -995,7 +995,7 @@ async function validatePrimarySparseNumericMigrationUpgrade48() {
       ORDER BY column_name`,
   );
   const versions = history.rows.map((row) => Number(row.version));
-  const expectedVersions = Array.from({ length: 48 }, (_, index) => index + 1);
+  const expectedVersions = Array.from({ length: 49 }, (_, index) => index + 1);
   const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
   const expectedByVersion = new Map(
     expectedMigrations.map((migration) => [migration.version, migration]),
@@ -1010,7 +1010,7 @@ async function validatePrimarySparseNumericMigrationUpgrade48() {
   });
   const appliedMigrationVersions = [
     ...Array.from({ length: 8 }, (_, index) => index + 28),
-    ...Array.from({ length: 12 }, (_, index) => index + 37),
+    ...Array.from({ length: 13 }, (_, index) => index + 37),
   ];
   const skippedMigrationVersions = [
     ...Array.from({ length: 27 }, (_, index) => index + 1),
@@ -1124,7 +1124,7 @@ async function validatePrimarySparseNumericMigrationUpgrade48() {
     )
   ) {
     throw new Error(
-      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 45: `
+      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 49: `
       + `${JSON.stringify({
         history: history.rows,
         identity_columns: identityColumns.rows,
@@ -1378,7 +1378,7 @@ async function main() {
   await new Promise((resolve) => mockAuth.listen(authPort, '127.0.0.1', resolve));
   await new Promise((resolve) => mockBgm.listen(bgmPort, '127.0.0.1', resolve));
   await waitForServer();
-  await validatePrimarySparseNumericMigrationUpgrade48();
+  await validatePrimarySparseNumericMigrationUpgrade49();
   if (!fs.existsSync(path.join(hotBackendDir, 'server.js'))) {
     throw new Error('Supervisor did not initialize the hot backend entrypoint');
   }
