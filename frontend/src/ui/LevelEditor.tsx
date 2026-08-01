@@ -8548,6 +8548,7 @@ export function LevelEditor(): ReactElement {
             ) : null}
             <ViewPane
               kind="board"
+              boardViewportMode="fill"
               ariaLabel="Level editor board"
               zoom={viewZoom}
               pan={viewPan}
