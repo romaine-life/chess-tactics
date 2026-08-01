@@ -21457,7 +21457,7 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
 
 .run-card-prototype-flavor {
   font: 400 var(--run-card-flavor-size, 3.15cqw)/1.2 var(--ds-font-display);
-  font-style: normal;
+  font-style: italic;
   margin: auto 0 0;
-  text-wrap: balance;
+  text-wrap: wrap;
 }
