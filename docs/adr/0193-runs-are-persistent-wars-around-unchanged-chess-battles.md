@@ -3,10 +3,10 @@ status: accepted
 date: 2026-07-28
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
-  - "[ADR-0316](0316-run-openings-use-two-pawns-eight-gold-and-card-native-purchase-feedback.md)"
-  - "[ADR-0315](0315-run-opening-is-the-normal-shop-and-draft-is-retired.md)"
-  - "[ADR-0314](0314-run-openings-begin-with-only-the-permanent-king.md)"
-  - "[ADR-0313](0313-run-openings-spend-nine-gold-on-one-of-three-seeded-cards.md)"
+  - "[ADR-0322](0322-run-openings-use-two-pawns-eight-gold-and-card-native-purchase-feedback.md)"
+  - "[ADR-0321](0321-run-opening-is-the-normal-shop-and-draft-is-retired.md)"
+  - "[ADR-0320](0320-run-openings-begin-with-only-the-permanent-king.md)"
+  - "[ADR-0319](0319-run-openings-spend-nine-gold-on-one-of-three-seeded-cards.md)"
   - "[ADR-0220](0220-run-victory-gold-scales-with-enemy-force-value.md)"
   - "[ADR-0264](0264-run-relic-identities-carry-anti-story-residue.md)"
   - "[ADR-0265](0265-run-cards-keep-core-identities-while-units-carry-modifiers.md)"

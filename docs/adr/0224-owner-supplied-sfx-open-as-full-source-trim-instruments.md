@@ -3,7 +3,7 @@ status: accepted
 date: 2026-07-29
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
-  - "[ADR-0316](0316-run-openings-use-two-pawns-eight-gold-and-card-native-purchase-feedback.md)'s replacement of the dedicated purchase cue with the shared gold transaction cue"
+  - "[ADR-0322](0322-run-openings-use-two-pawns-eight-gold-and-card-native-purchase-feedback.md)'s replacement of the dedicated purchase cue with the shared gold transaction cue"
 ---
 
 # ADR-0224: Owner-supplied SFX open as full-source trim instruments

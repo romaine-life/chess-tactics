@@ -82,6 +82,9 @@ these.
   review, and Enchiridion use the same face rather than parallel card shells
   (ADR-0219, ADR-0225, ADR-0270, ADR-0275, ADR-0276, ADR-0283, ADR-0285,
   ADR-0305, ADR-0309).
+  In-place card changes retain the last complete face until the requested card's
+  actual image layer is ready, then promote art and content together; rapid newer
+  selections cancel older pending cards (ADR-0314).
 - The card deck's 49 unique one-through-nine-point compositions are the
   authored **core cards**. Each keeps one title and flavor text while its
   drawn offer may give particular units more than one modifier. The 49 cores do
@@ -100,7 +103,7 @@ these.
   keeps the Shop open, shows a framed **Purchased** state beneath that card, and
   uses the same gold transaction cue as selling. Only the explicit
   Continue action enters the first Battle. **Card** is the sole current gameplay
-  noun for these deck entries and offers (ADR-0315, ADR-0316, ADR-0317).
+  noun for these deck entries and offers (ADR-0321, ADR-0322, ADR-0323).
 - Each of those 49 Units cards owns one native 400×280 PixelLab illustration
   keyed by its canonical composition id. Human unit roles and readable
   equipment control the composition; historical pressure supplies secondary
@@ -184,7 +187,14 @@ these.
   same-offer shop visit, and continues the Run; Army inspection remains
   available in every Run phase without pausing an active Battle (ADR-0230).
 - **Enchiridion** is the player-facing reference for unit movement, terrain
-  rules, all relics, and the behavior of current unit abilities. During Battle,
+  rules, the filterable core card deck, affected card types, all relics, and the
+  behavior of the current unit abilities: Discipline, Positioned, Marshalled,
+  and Plagued. Card filters combine exact gold value with
+  contained unit type. The Card Types reference uses the third column for its
+  four affected-type names and the fourth for one selected shared card face,
+  temporarily using The Volunteer for each; Pestiferous and Concinnous state
+  their accepted effects while two pending parallel designs remain explicit
+  placeholders (ADR-0313, ADR-0315). During Battle,
   the Controls title bar opens **Strategikon** over the board without unmounting
   the fight; its Martial Prosopography and Lipsanotheca expose the persistent
   army and held relics beside the same Enchiridion (ADR-0231).
@@ -397,10 +407,10 @@ The first prototype stays deliberately minimal (pillars §3). Resolved scope:
 
 **Deferred (post-v1, not precluded):** fluid royal / win conditions; mutating or
 cursed terrain and pieces; named-tactic surfacing; a competent search-based AI.
-Player armies and Run progression are governed by ADR-0193. ADR-0315 makes the
+Player armies and Run progression are governed by ADR-0193. ADR-0321 makes the
 opening the normal Shop transaction and retires the separate draft phase and
-screen. ADR-0316 supplies the current two-Pawn, 8-gold opening and card-native
-purchase language, feedback, and sound. ADR-0317 removes the inherited
+screen. ADR-0322 supplies the current two-Pawn, 8-gold opening and card-native
+purchase language, feedback, and sound. ADR-0323 removes the inherited
 one-card-per-Shop cap so every affordable dealt card can be purchased once.
 
 ## 14. Administrator playtesting

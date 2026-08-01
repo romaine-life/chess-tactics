@@ -19026,8 +19026,62 @@ button.tileset-relationship-cell {
   font-weight: 700;
 }
 
+.plagued-icon-review-section {
+  display: grid;
+  gap: var(--ds-inline-tight);
+}
+
+.plagued-icon-review-section > h2 {
+  margin: 0;
+}
+
+.plagued-icon-review-selection-grid {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.plagued-icon-review-property-row {
+  cursor: default;
+  min-block-size: 72px;
+}
+
+.plagued-icon-review-property-copy {
+  display: grid;
+  gap: var(--ds-space-1);
+}
+
+.plagued-icon-review-property-copy small {
+  color: var(--skirmish-muted);
+}
+
+.plagued-icon-review-ability-grid {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.plagued-icon-review-ability-card {
+  min-block-size: 72px;
+}
+
+.plagued-icon-review-ability-card > img {
+  image-rendering: pixelated;
+  object-fit: contain;
+}
+
+.plagued-icon-review-ability-card h3,
+.plagued-icon-review-ability-card small {
+  margin: 0;
+}
+
+.plagued-icon-review-ability-card small {
+  color: var(--skirmish-muted);
+}
+
 @media (max-width: 900px) {
-  .run-relic-review-grid {
+  .run-relic-review-grid,
+  .plagued-icon-review-ability-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -19579,6 +19633,11 @@ button.tileset-relationship-cell {
   grid-template-rows: auto auto minmax(0, 1fr);
 }
 
+.enchiridion-card-panel.enchiridion-panel-unframed,
+.enchiridion-card-types-panel.enchiridion-panel-unframed {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
 .enchiridion-terrain-panel.enchiridion-panel-unframed {
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
@@ -19658,6 +19717,11 @@ button.tileset-relationship-cell {
 .enchiridion-ability-card > :first-child {
   block-size: 34px;
   inline-size: 34px;
+}
+
+.enchiridion-ability-card > img {
+  image-rendering: pixelated;
+  object-fit: contain;
 }
 
 .enchiridion-rule-exceptions {
@@ -19830,6 +19894,49 @@ button.tileset-relationship-cell {
   overflow: hidden;
 }
 
+.enchiridion-card-browser-column {
+  block-size: 100%;
+  display: grid;
+  gap: var(--ds-stack);
+  grid-template-rows: auto minmax(0, 1fr);
+  min-block-size: 0;
+  min-inline-size: 0;
+  overflow: hidden;
+}
+
+.enchiridion-card-filters {
+  align-items: end;
+  display: grid;
+  gap: var(--ds-stack);
+  grid-template-columns: repeat(2, minmax(132px, 1fr)) auto;
+  padding: var(--ds-space-2) var(--ds-inset);
+}
+
+.enchiridion-card-filter {
+  display: grid;
+  gap: 4px;
+  min-inline-size: 0;
+}
+
+.enchiridion-card-filter > span {
+  color: var(--skirmish-muted);
+  font-size: var(--ds-text-xs);
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.enchiridion-card-filter .house-select {
+  inline-size: 100%;
+}
+
+.enchiridion-card-filter-count {
+  align-self: center;
+  color: var(--skirmish-muted);
+  font-size: var(--ds-text-sm);
+  white-space: nowrap;
+}
+
 .enchiridion-card-browser {
   align-content: start;
   block-size: 100%;
@@ -19880,6 +19987,79 @@ button.tileset-relationship-cell {
   align-self: start;
   display: grid;
   min-block-size: 0;
+}
+
+.enchiridion-card-type-layout {
+  align-content: start;
+  align-items: start;
+  block-size: 100%;
+  display: grid;
+  gap: var(--ds-stack);
+  grid-template-columns: minmax(280px, 1fr) minmax(232px, 300px);
+  grid-template-rows: minmax(0, 1fr);
+  min-block-size: 0;
+  overflow: hidden;
+}
+
+.enchiridion-card-type-rows {
+  align-content: start;
+  block-size: 100%;
+  display: grid;
+  gap: var(--ds-space-2);
+  list-style: none;
+  margin: 0;
+  min-block-size: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 0 4px 0 0;
+}
+
+.enchiridion-card-type-row {
+  align-content: center;
+  cursor: pointer;
+  display: grid;
+  gap: 2px;
+  inline-size: 100%;
+  min-block-size: 52px;
+  padding: 6px 10px;
+  text-align: start;
+}
+
+.enchiridion-card-type-row-name {
+  font-size: var(--ds-text-md);
+}
+
+.enchiridion-card-type-row-identity {
+  align-items: center;
+  display: grid;
+  gap: var(--ds-inline-tight);
+  grid-template-columns: 34px minmax(0, 1fr);
+}
+
+.enchiridion-card-type-row-icon {
+  block-size: 34px;
+  image-rendering: pixelated;
+  inline-size: 34px;
+  object-fit: contain;
+}
+
+.enchiridion-card-type-row > small {
+  color: var(--skirmish-muted);
+  font-size: var(--ds-text-xs);
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.enchiridion-card-type-detail {
+  align-self: start;
+  display: grid;
+  min-block-size: 0;
+}
+
+.enchiridion-card-type-preview {
+  inline-size: 100%;
+  min-inline-size: 0;
 }
 
 .enchiridion-empty {
@@ -20049,6 +20229,14 @@ button.tileset-relationship-cell {
   .enchiridion-relic-group {
     block-size: auto;
     overflow: visible;
+  }
+
+  .enchiridion-card-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .enchiridion-card-filter-count {
+    grid-column: 1 / -1;
   }
 }
 
@@ -21595,6 +21783,17 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   flex: none;
   inline-size: var(--run-card-prototype-width);
   position: relative;
+}
+
+.run-card-face-layer {
+  display: block;
+  inset: 0;
+  position: absolute;
+}
+
+.run-card-face-layer.is-pending {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .run-card-prototype-frame {

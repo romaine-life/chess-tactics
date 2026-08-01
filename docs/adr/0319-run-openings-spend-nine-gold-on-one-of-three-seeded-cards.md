@@ -3,10 +3,10 @@ status: accepted
 date: 2026-08-01
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
-  - "[ADR-0317](0317-run-shops-allow-every-affordable-card-purchase.md)'s removal of the one-opening-card purchase cap"
-  - "[ADR-0316](0316-run-openings-use-two-pawns-eight-gold-and-card-native-purchase-feedback.md)'s eight-gold budget and 1–8 opening range"
-  - "[ADR-0315](0315-run-opening-is-the-normal-shop-and-draft-is-retired.md)'s replacement of the opening-specific transaction with the normal Shop"
-  - "[ADR-0314](0314-run-openings-begin-with-only-the-permanent-king.md)'s removal of the three free starting Pawns"
+  - "[ADR-0323](0323-run-shops-allow-every-affordable-card-purchase.md)'s removal of the one-opening-card purchase cap"
+  - "[ADR-0322](0322-run-openings-use-two-pawns-eight-gold-and-card-native-purchase-feedback.md)'s eight-gold budget and 1–8 opening range"
+  - "[ADR-0321](0321-run-opening-is-the-normal-shop-and-draft-is-retired.md)'s replacement of the opening-specific transaction with the normal Shop"
+  - "[ADR-0320](0320-run-openings-begin-with-only-the-permanent-king.md)'s removal of the three free starting Pawns"
 partially_supersedes:
   - "[ADR-0193](0193-runs-are-persistent-wars-around-unchanged-chess-battles.md)'s fixed two-choice six-point opening draft"
 extends:
@@ -15,7 +15,7 @@ extends:
   - 0283-run-card-face-is-one-shared-live-runtime-component.md
 ---
 
-# ADR-0313: Run openings spend nine gold on one of three seeded cards
+# ADR-0319: Run openings spend nine gold on one of three seeded cards
 
 ## Context and Problem Statement
 

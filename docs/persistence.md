@@ -54,10 +54,10 @@ gameplay noun are unsupported. The retired `draft` phase, `draftOffers`, and
 unsupported account Run retains the signed-in account and its CAS revision while
 treating that retired document as unavailable; a fresh current-format Run can
 therefore replace it without adapting or replaying the retired transaction. See
-[ADR-0315](adr/0315-run-opening-is-the-normal-shop-and-draft-is-retired.md) and
-[ADR-0316](adr/0316-run-openings-use-two-pawns-eight-gold-and-card-native-purchase-feedback.md),
+[ADR-0321](adr/0321-run-opening-is-the-normal-shop-and-draft-is-retired.md) and
+[ADR-0322](adr/0322-run-openings-use-two-pawns-eight-gold-and-card-native-purchase-feedback.md),
 as superseded for Shop purchase cardinality by
-[ADR-0317](adr/0317-run-shops-allow-every-affordable-card-purchase.md). Format 10
+[ADR-0323](adr/0323-run-shops-allow-every-affordable-card-purchase.md). Format 10
 also stores the selected Ataraxia tier, persisted affected Shop offers with both
 their exact public Plagued piece index and concealed Concinnous unit target,
 owned card membership with the current Plagued unit id and revealed Concinnous

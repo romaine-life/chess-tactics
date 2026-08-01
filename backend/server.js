@@ -63,6 +63,8 @@ const {
 } = require(path.join(bakedBackendDir, 'thumbnailPresentation'));
 const {
   liveCatalogReadinessIssue,
+  gameConditionIconMediaIssue,
+  gameConditionIconSlot,
   nativeMediaEvidenceIssue,
   predrawnBoardMediaIssue,
   predrawnBoardOwnerProofIssue,
@@ -15148,6 +15150,9 @@ function mediaDomainProjectionIssue(row) {
   }
   if (runResourceIconSlotId(row.slot)) {
     return runResourceIconMediaIssue(row, runtime.value);
+  }
+  if (gameConditionIconSlot(row.slot)) {
+    return gameConditionIconMediaIssue(row, runtime.value);
   }
   if (sfxSampleSlot(row.slot)) {
     return sfxSampleMediaIssue(row, runtime.value);

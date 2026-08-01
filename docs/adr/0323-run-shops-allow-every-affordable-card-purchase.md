@@ -3,15 +3,15 @@ status: accepted
 date: 2026-08-01
 deciders: owner (Nelson) + Codex
 partially_supersedes:
-  - "[ADR-0313](0313-run-openings-spend-nine-gold-on-one-of-three-seeded-cards.md)'s exactly-one opening purchase"
-  - "[ADR-0315](0315-run-opening-is-the-normal-shop-and-draft-is-retired.md)'s inherited one-card-per-visit Shop behavior"
-  - "[ADR-0316](0316-run-openings-use-two-pawns-eight-gold-and-card-native-purchase-feedback.md)'s disabled remaining cards and singular format-9 purchase field"
+  - "[ADR-0319](0319-run-openings-spend-nine-gold-on-one-of-three-seeded-cards.md)'s exactly-one opening purchase"
+  - "[ADR-0321](0321-run-opening-is-the-normal-shop-and-draft-is-retired.md)'s inherited one-card-per-visit Shop behavior"
+  - "[ADR-0322](0322-run-openings-use-two-pawns-eight-gold-and-card-native-purchase-feedback.md)'s disabled remaining cards and singular format-9 purchase field"
 extends:
   - 0230-run-shops-separate-buying-army-inspection-and-selling.md
   - 0283-run-card-face-is-one-shared-live-runtime-component.md
 ---
 
-# ADR-0317: Run Shops allow every affordable card purchase
+# ADR-0323: Run Shops allow every affordable card purchase
 
 ## Context and Problem Statement
 
@@ -66,4 +66,4 @@ enough gold. Buying one card does not disable another affordable card.**
 - [Game concept](../game-concept.md)
 - [Persistence](../persistence.md)
 - [ADR-0230](0230-run-shops-separate-buying-army-inspection-and-selling.md)
-- [ADR-0316](0316-run-openings-use-two-pawns-eight-gold-and-card-native-purchase-feedback.md)
+- [ADR-0322](0322-run-openings-use-two-pawns-eight-gold-and-card-native-purchase-feedback.md)

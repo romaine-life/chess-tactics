@@ -8,7 +8,7 @@
 
 import { RUN_CARD_BY_ID, RUN_RELICS, type RunRelicId } from '../run/model';
 
-export const ENCHIRIDION_SECTIONS = ['units', 'terrain', 'cards', 'relics', 'abilities'] as const;
+export const ENCHIRIDION_SECTIONS = ['units', 'terrain', 'cards', 'card-types', 'relics', 'abilities'] as const;
 export type EnchiridionSection = typeof ENCHIRIDION_SECTIONS[number];
 
 export function enchiridionSectionHref(section: EnchiridionSection): string {

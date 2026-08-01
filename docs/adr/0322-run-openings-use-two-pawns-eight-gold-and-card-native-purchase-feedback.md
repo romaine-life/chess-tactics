@@ -3,23 +3,23 @@ status: accepted
 date: 2026-08-01
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
-  - "[ADR-0317](0317-run-shops-allow-every-affordable-card-purchase.md)'s independently purchasable cards and format-10 purchase collection"
+  - "[ADR-0323](0323-run-shops-allow-every-affordable-card-purchase.md)'s independently purchasable cards and format-10 purchase collection"
 partially_supersedes:
   - "[ADR-0224](0224-owner-supplied-sfx-open-as-full-source-trim-instruments.md)'s dedicated card-purchase runtime cue"
-  - "[ADR-0313](0313-run-openings-spend-nine-gold-on-one-of-three-seeded-cards.md)'s nine-gold budget, 1–9 opening range, and all-core-cards-reachable outcome"
-  - "[ADR-0314](0314-run-openings-begin-with-only-the-permanent-king.md)'s King-only pre-purchase party"
-  - "[ADR-0315](0315-run-opening-is-the-normal-shop-and-draft-is-retired.md)'s current transaction vocabulary and format-8 shape"
+  - "[ADR-0319](0319-run-openings-spend-nine-gold-on-one-of-three-seeded-cards.md)'s nine-gold budget, 1–9 opening range, and all-core-cards-reachable outcome"
+  - "[ADR-0320](0320-run-openings-begin-with-only-the-permanent-king.md)'s King-only pre-purchase party"
+  - "[ADR-0321](0321-run-opening-is-the-normal-shop-and-draft-is-retired.md)'s current transaction vocabulary and format-8 shape"
 extends:
   - 0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md
   - 0230-run-shops-separate-buying-army-inspection-and-selling.md
   - 0283-run-card-face-is-one-shared-live-runtime-component.md
 ---
 
-# ADR-0316: Run openings use two Pawns, eight gold, and card-native purchase feedback
+# ADR-0322: Run openings use two Pawns, eight gold, and card-native purchase feedback
 
 ## Context and Problem Statement
 
-The normal opening Shop established by ADR-0315 made a purchase remain visible,
+The normal opening Shop established by ADR-0321 made a purchase remain visible,
 but its starting balance and completed state were not settled. A King-only party
 with 9 gold made the chosen card the entire non-royal army. The selected card was
 then identified only by a generic active-button outline, and its dedicated card
@@ -94,4 +94,4 @@ purchase completion is a textual chrome state and uses the gold cue.**
 - [Game concept](../game-concept.md)
 - [Persistence](../persistence.md)
 - [ADR-0222](0222-run-sell-clink-uses-the-owner-supplied-coins-recording.md)
-- [ADR-0315](0315-run-opening-is-the-normal-shop-and-draft-is-retired.md)
+- [ADR-0321](0321-run-opening-is-the-normal-shop-and-draft-is-retired.md)
