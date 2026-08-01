@@ -3,16 +3,16 @@ status: accepted
 date: 2026-08-01
 deciders: owner (Nelson) + Codex
 refines:
-  - "[ADR-0309](0309-pestiferous-cards-reveal-one-plagued-unit-at-a-time.md)'s direct marker presentation"
+  - "[ADR-0311](0311-pestiferous-cards-reveal-one-plagued-unit-at-a-time.md)'s direct marker presentation"
 extends:
   - "[ADR-0085](0085-runtime-assets-are-live-storage-backed.md)"
 ---
 
-# ADR-0310: Plagued targets use a live icon, not a written label
+# ADR-0312: Plagued targets use a live icon, not a written label
 
 ## Context
 
-ADR-0309 requires the next unit that a Pestiferous card will lose to be visible
+ADR-0311 requires the next unit that a Pestiferous card will lose to be visible
 on the shared card face. The first implementation printed **Plagued** below that
 unit. That word competes with the unit ledger and makes a recurring status read
 like another line of card prose. The intended status artwork is being generated
@@ -50,6 +50,6 @@ word **Plagued**.
 
 ## More Information
 
-- [ADR-0309](0309-pestiferous-cards-reveal-one-plagued-unit-at-a-time.md)
+- [ADR-0311](0311-pestiferous-cards-reveal-one-plagued-unit-at-a-time.md)
 - [Runtime asset contract](../runtime-asset-contract.md)
 - [Game concept](../game-concept.md)

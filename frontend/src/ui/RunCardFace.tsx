@@ -5,6 +5,7 @@ export const RUN_CARD_FRAME_SLOT = 'ui/run/card-prototypes/frame-v1.png';
 export const RUN_CARD_PESTIFEROUS_FRAME_SLOT = 'ui/run/card-prototypes/pestiferous-frame-v1.png';
 export const RUN_CARD_PLAGUED_ICON_SLOT = 'ui/run/card-status/plagued-v1.png';
 export const RUN_CARD_PLAGUED_ICON_PLACEHOLDER = '◇';
+export const RUN_CARD_CONCINNOUS_FRAME_SLOT = 'ui/run/card-prototypes/concinnous-frame-v1.png';
 export const RUN_CARD_REFERENCE_WIDTH = 360;
 
 const PLAYER_CARD_PALETTE = paletteForSide('player');
@@ -21,6 +22,7 @@ export type RunCardFaceContent = Readonly<{
     unit: PlayablePieceType;
     plaguedIndices?: readonly number[];
   }>[];
+  properties?: readonly Readonly<{ name: string; target: string }>[];
   rules?: string;
   flavor: string;
 }>;
@@ -249,6 +251,10 @@ function grantsLabel(grants: RunCardFaceContent['grants']): string {
   return grants.map(grantLabel).join(', ');
 }
 
+function propertiesLabel(properties: RunCardFaceContent['properties']): string {
+  return properties?.map(({ name, target }) => `${name}: ${target}`).join('. ') ?? '';
+}
+
 /**
  * The one Run trading-card face used by both the Studio instrument and live play.
  * Hosts choose only the immutable frame/art URLs and interaction around the face.
@@ -304,7 +310,7 @@ export function RunCardFace({
         '--run-card-contents-padding-block-end': `${contentsTuning.paddingBlockEnd}cqw`,
       } as CSSProperties}
       aria-hidden={ariaHidden || undefined}
-      aria-label={ariaHidden ? undefined : `${card.name}. ${card.typeLine}. Costs ${card.cost} gold. Grants ${grantsLabel(card.grants)}.`}
+      aria-label={ariaHidden ? undefined : `${card.name}. ${card.typeLine}. Costs ${card.cost} gold. Grants ${grantsLabel(card.grants)}.${card.properties?.length ? ` ${propertiesLabel(card.properties)}.` : ''}`}
     >
       <img
         className="run-card-prototype-frame"
@@ -358,6 +364,16 @@ export function RunCardFace({
           ))}
         </span>
         {card.rules ? <span className="run-card-prototype-effect">{card.rules}</span> : null}
+        {card.properties?.length ? (
+          <span className="run-card-prototype-properties" aria-label="Card properties">
+            {card.properties.map((property) => (
+              <span className="run-card-prototype-property" key={property.name}>
+                <strong>{property.name}</strong>
+                <span>{property.target}</span>
+              </span>
+            ))}
+          </span>
+        ) : null}
         <span className="run-card-prototype-flavor">{card.flavor}</span>
       </span>
     </span>

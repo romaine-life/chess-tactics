@@ -335,7 +335,7 @@ an incomplete row is an availability failure.
   `ui/run/card-status/plagued-v1.png`. Until that generated icon has an accepted
   live pointer, the shared card face reserves its final socket with a neutral
   DOM diamond. That owner-authorized placeholder is named temporary debt under
-  ADR-0310, not a packaged media fallback, and must be removed when the accepted
+  ADR-0312, not a packaged media fallback, and must be removed when the accepted
   icon is installed.
   The Run gold resource is likewise an exact native 64×64 PNG with typed
   `run-resource-icon` metadata; one installed `kind='run-resource'` drawable

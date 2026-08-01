@@ -10,7 +10,7 @@ partially_supersedes:
   - "[ADR-0286](0286-ataraxia-i-is-a-persisted-run-tier-with-draw-time-pestiferous-instances.md)'s all-acquired-units-Plagued and resolution-time target clauses"
 ---
 
-# ADR-0309: Pestiferous cards reveal one Plagued unit at a time
+# ADR-0311: Pestiferous cards reveal one Plagued unit at a time
 
 ## Context
 
@@ -51,11 +51,12 @@ at a time.
   ordinary Battle-advancement loss.
 - An empty Pestiferous card has no target and remains the same dead-draw burden
   until an explicit removal effect purges it.
-- Target selection remains seeded and persisted. Active Run format 6 stores the
+- Target selection remains seeded and persisted. Active Run format 7 stores the
   offer's exact target piece index and each owned card's exact target unit id.
-  Format-5 Runs deterministically retain their card membership and loss history,
-  choose one current target per nonempty Pestiferous card, and remove obsolete
-  Plagued modifiers from its other surviving members.
+  Format-5 and format-6 Runs deterministically retain their card membership,
+  Concinnous target state, and loss history, choose one current target per
+  nonempty Pestiferous card, and remove obsolete Plagued modifiers from its
+  other surviving members.
 - The shared card face exposes a direct Plagued marker in the unit ledger; Army
   inspection states that the marked unit will be lost after the next victorious
   Battle. This is direct state projection, not synthesized ability-description

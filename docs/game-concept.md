@@ -68,7 +68,7 @@ these.
   type line, and a Contents Box whose flavor text remains at the bottom. The type
   line is never empty: ordinary bundle cards say **Units**, while affected cards
   append causal qualifiers after an em dash, such as **Units — Pestiferous** or
-  **Units — Tactical**. Ordinary and qualified labels use one shared optically
+  **Units — Concinnous**. Ordinary and qualified labels use one shared optically
   centered type-line scale and baseline rather than per-label positioning.
   Detecting an ability, modifier, or affected card type does not automatically
   synthesize explanatory prose in the Contents Box; those definitions will use a
@@ -81,7 +81,7 @@ these.
   canonical player-side sprite used on the board. Card Layout, draft, shop,
   review, and Enchiridion use the same face rather than parallel card shells
   (ADR-0219, ADR-0225, ADR-0270, ADR-0275, ADR-0276, ADR-0283, ADR-0285,
-  ADR-0305).
+  ADR-0305, ADR-0309).
 - The bundle deck's 49 unique one-through-nine-point compositions are the
   authored **core cards**. Each keeps one title and flavor text while its
   drawn offer may give particular units more than one modifier. The 49 cores do
@@ -92,8 +92,8 @@ these.
   1, Rook 2, Queen 3—so shop-card prices remain whole gold and a Plagued Pawn
   still costs 1. Exact public contents and modifier markers belong in the Contents Box
   unit ledger, not generated card-name permutations; an explicitly concealed
-  Tactical target appears there as hidden until purchase (ADR-0265, ADR-0271,
-  ADR-0272).
+  Concinnous target appears there as hidden until purchase (ADR-0265, ADR-0271,
+  ADR-0272, ADR-0305, ADR-0309).
 - Each of those 49 Units cards owns one native 400×280 PixelLab illustration
   keyed by its canonical composition id. Human unit roles and readable
   equipment control the composition; historical pressure supplies secondary
@@ -105,14 +105,19 @@ these.
   its primary type. Pestiferous changes the card lifecycle and publicly marks
   one current unit with the Plagued status icon; the card face does not spell
   out **Plagued** beside that unit.
-  **Tactical** instead authors a positive enhancement of one or more contained
-  units with a stable modifier, affected count, and visibility rule. The type
-  line declares the qualifier; detecting it does not automatically restate its
-  behavior as Contents Box prose. A
-  concealed target is seeded and persisted with the offer, priced normally,
-  and merely revealed—not rerolled—after purchase. A card does not become
-  Tactical just because an external relic later modifies one of its units
-  (ADR-0272, ADR-0276, ADR-0305).
+  **Concinnous** means skillfully and harmoniously arranged and causes exactly
+  one contained unit to become Positioned upon acquisition. The type line
+  declares the qualifier; detecting it does not automatically restate its
+  behavior as Contents Box prose. Before purchase, direct unit-property
+  presentation marks the target as hidden. The target is seeded and persisted
+  with the offer, priced normally, and merely revealed—not rerolled—after
+  purchase. A card does not become Concinnous just because an external relic
+  later modifies one of its units. Concinnous owns a dedicated white semantic
+  frame treatment opposite Pestiferous black while retaining the shared face
+  anatomy. Each otherwise ordinary eligible shop offer has a seeded one-in-eight
+  chance to become Concinnous; it costs two additional gold, stays within the
+  nine-gold ceiling, and cannot also be Pestiferous (ADR-0272, ADR-0276,
+  ADR-0305, ADR-0309, ADR-0310, ADR-0311).
 - Run difficulty is **Ataraxia**. The first Run uses **Ataraxia 0 — The
   Untroubled Mind**, whose literal impact is standard Run rules and no
   Pestiferous shop cards; later Runs may opt into historically named
@@ -137,7 +142,7 @@ these.
   eight and is inspectable in Card Layout. Pestiferous cards retain the shared
   face geometry but resolve their dedicated black bubbling-crude frame slot;
   ordinary cards keep the standard frame (ADR-0267, ADR-0269, ADR-0271, ADR-0286,
-  ADR-0309, ADR-0310).
+  ADR-0311, ADR-0312).
 - Card ledgers have no assumed row cap before live experimentation. Dense cards
   may step down row spacing, icons, and type within readable bounds, but they
   must continue to show every unit property and retain the core card's flavor

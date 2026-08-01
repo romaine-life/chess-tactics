@@ -9,6 +9,7 @@ import {
   RUN_CARD_CONTENTS_STUDY_PROFILES,
   runCardContentsStudyFromSearch,
   runCardPrototypeContent,
+  runCardPrototypeTargetRevealedFromSearch,
   runCardPrototypeVariantFromSearch,
   scaledRunCardContentsTuning,
 } from './RunCardPrototype';
@@ -16,7 +17,23 @@ import {
 describe('Run Card Layout review variant', () => {
   it('addresses the Pestiferous review state in the URL', () => {
     expect(runCardPrototypeVariantFromSearch('?mode=viewer&cardVariant=pestiferous')).toBe('pestiferous');
+    expect(runCardPrototypeVariantFromSearch('?mode=viewer&cardVariant=concinnous')).toBe('concinnous');
     expect(runCardPrototypeVariantFromSearch('?mode=viewer&cardVariant=unknown')).toBe('standard');
+  });
+
+  it('addresses Concinnous hidden and revealed purchase states without synthesized rules prose', () => {
+    expect(runCardPrototypeTargetRevealedFromSearch('?cardVariant=concinnous')).toBe(false);
+    expect(runCardPrototypeTargetRevealedFromSearch('?cardVariant=concinnous&concinnousTarget=revealed')).toBe(true);
+    expect(runCardPrototypeContent('concinnous')).toMatchObject({
+      name: "Banneret's Retinue",
+      cost: 8,
+      typeLine: 'Units — Concinnous',
+      properties: [{ name: 'Positioned', target: 'Target hidden' }],
+    });
+    expect(runCardPrototypeContent('concinnous', true)).toMatchObject({
+      properties: [{ name: 'Positioned', target: 'Knight' }],
+    });
+    expect(runCardPrototypeContent('concinnous')).not.toHaveProperty('rules');
   });
 
   it('uses the accepted affected-card type line without changing the card identity', () => {
