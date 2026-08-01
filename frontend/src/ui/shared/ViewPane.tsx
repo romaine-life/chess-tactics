@@ -441,6 +441,20 @@ export function ViewPane({
     didDragRef.current = false;
   };
 
+  // The secondary button is viewport-owned navigation (ADR-0128). Claim it during
+  // capture so a full-surface child cannot accidentally shield panning by stopping
+  // the bubbling pointer event. Primary and middle-button behavior remains on the
+  // ordinary bubbling path so editable children can keep their tool gestures.
+  const startSecondaryPan = (event: PointerEvent<HTMLElement>) => {
+    if (event.button !== 2) return;
+    startPan(event);
+  };
+
+  const startNonSecondaryPan = (event: PointerEvent<HTMLElement>) => {
+    if (event.button === 2) return;
+    startPan(event);
+  };
+
   const movePan = (event: PointerEvent<HTMLElement>) => {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
@@ -510,11 +524,12 @@ export function ViewPane({
       aria-label={ariaLabel}
       data-min-zoom={resolvedMinZoom}
       data-max-zoom={resolvedMaxZoom}
-      onPointerDown={startPan}
+      onPointerDownCapture={startSecondaryPan}
+      onPointerDown={startNonSecondaryPan}
       onPointerMove={movePan}
       onPointerUp={endPan}
       onPointerCancel={endPan}
-      onContextMenu={(event) => event.preventDefault()}
+      onContextMenuCapture={(event) => event.preventDefault()}
       onWheel={zoomPane}
     >
       <div
@@ -526,10 +541,10 @@ export function ViewPane({
     </section>
   );
 
-  // Fixed previews and non-Play board workspaces retain the canonical 4:3 board window
-  // (ADR-0192/ADR-0259). Play's live board fills its playfield allocation — its 4:3 frame
-  // is the surrounding .skirmish-board-frame — and non-board asset viewers retain the
-  // dimensions of the asset they are inspecting.
+  // Ordinary board viewers retain the canonical 4:3 board window (ADR-0192/ADR-0259).
+  // Full-canvas owners such as Play and the Level Editor opt into `fill`: their surrounding
+  // workspace is already the authoritative measured, clipped, and interactive viewport
+  // (ADR-0201/ADR-0278). Non-board viewers retain the dimensions of their inspected asset.
   return kind === 'board' && boardViewportMode === 'canonical' ? (
     <div className="board-view-pane-seat">
       {stage}

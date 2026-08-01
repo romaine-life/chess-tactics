@@ -3,8 +3,8 @@ import { normalizeRoutePath } from '../navigation';
 import { isPlaySelectorPath, playHubSelection } from '../playHubRoute';
 
 export type SceneBackground = 'homepage' | 'battlefield' | 'tool';
-export type SceneHost = 'menu-shell' | 'play-shell' | 'settings-shell' | 'enchiridion-shell' | 'gameplay-shell' | 'standalone';
-export type SceneSlotId = 'root' | 'menu-destination' | 'play-content' | 'settings-content' | 'enchiridion-content' | 'gameplay-content';
+export type SceneHost = 'menu-shell' | 'play-shell' | 'settings-shell' | 'editor-shell' | 'enchiridion-shell' | 'gameplay-shell' | 'standalone';
+export type SceneSlotId = 'root' | 'menu-destination' | 'play-content' | 'settings-content' | 'editor-content' | 'enchiridion-content' | 'gameplay-content';
 export type SceneViewId =
   | 'main-menu'
   | 'play'
@@ -15,6 +15,10 @@ export type SceneViewId =
   | 'gameplay'
   | 'run'
   | 'campaign-editor'
+  | 'editor-campaign'
+  | 'editor-wars'
+  | 'editor-skirmish-profiles'
+  | 'editor-unassigned'
   | 'level-editor'
   | 'settings'
   | 'settings-general'
@@ -91,6 +95,10 @@ export const SCENE_DEFINITIONS = Object.freeze({
   gameplay: defineScene({ id: 'gameplay', parent: null, slot: 'root', view: 'gameplay' }),
   run: defineScene({ id: 'run', parent: null, slot: 'root', view: 'run' }),
   campaignEditor: defineScene({ id: 'campaign-editor', parent: 'main-menu', slot: 'menu-destination', view: 'campaign-editor' }),
+  editorCampaign: defineScene({ id: 'campaign-editor/campaign', parent: 'campaign-editor', slot: 'editor-content', view: 'editor-campaign' }),
+  editorWars: defineScene({ id: 'campaign-editor/wars', parent: 'campaign-editor', slot: 'editor-content', view: 'editor-wars' }),
+  editorSkirmishProfiles: defineScene({ id: 'campaign-editor/skirmish-profiles', parent: 'campaign-editor', slot: 'editor-content', view: 'editor-skirmish-profiles' }),
+  editorUnassigned: defineScene({ id: 'campaign-editor/unassigned', parent: 'campaign-editor', slot: 'editor-content', view: 'editor-unassigned' }),
   levelEditor: defineScene({ id: 'level-editor', parent: null, slot: 'root', view: 'level-editor' }),
   settings: defineScene({ id: 'settings', parent: 'main-menu', slot: 'menu-destination', view: 'settings' }),
   settingsGeneral: defineScene({ id: 'settings/general', parent: 'settings', slot: 'settings-content', view: 'settings-general' }),
@@ -138,7 +146,21 @@ const manifest = (
  * These names describe visual obligations, not media identities. Dynamic screens
  * expand them into concrete resources through SceneBoundary participants.
  */
-function leafSceneManifest(pathname: string): SceneManifest {
+type EditorSceneRoute = {
+  kind: 'campaign' | 'wars' | 'skirmish-profiles' | 'unassigned';
+  campaignId?: string;
+};
+
+function editorSceneRoute(pathname: string, search: string): EditorSceneRoute {
+  if (normalizeRoutePath(pathname) === '/editor/wars') return { kind: 'wars' };
+  const params = new URLSearchParams(search);
+  const collection = params.get('collection');
+  if (collection === 'skirmish-profiles' || collection === 'unassigned') return { kind: collection };
+  const campaignId = params.get('campaign')?.trim();
+  return campaignId ? { kind: 'campaign', campaignId } : { kind: 'campaign' };
+}
+
+function leafSceneManifest(pathname: string, search: string = ''): SceneManifest {
   const path = normalizeRoutePath(pathname);
 
   if (path === '/play' || path.startsWith('/play/strategikon/')) {
@@ -178,12 +200,13 @@ function leafSceneManifest(pathname: string): SceneManifest {
     ], ['below-fold-palette']);
   }
   if (path === '/editor' || path === '/editor/wars' || path === '/campaigns' || path === '/campaigns-next') {
-    return manifest('campaign-editor', 'homepage', 'campaign-editor', [
+    const editorRoute = editorSceneRoute(path, search);
+    return manifest(`campaign-editor:${editorRoute.kind}${editorRoute.campaignId ? `:${editorRoute.campaignId}` : ''}`, 'homepage', 'campaign-editor', [
       'homepage-background',
       'title-bar',
       'campaign-workspace',
       'visible-draft-cards',
-    ], ['below-fold-draft-cards'], 'menu-shell');
+    ], ['below-fold-draft-cards'], 'editor-shell', 'transition-only');
   }
   if (
     path.startsWith('/studio') || path === '/tileset-studio' || path === '/unit-studio'
@@ -266,9 +289,9 @@ const instance = (
  * Resolve browser intent into an authored scene path. The director commits and
  * prepares these objects; route strings are inputs, never visible-scene authority.
  */
-export function sceneManifest(pathname: string): ScenePath {
+export function sceneManifest(pathname: string, search: string = ''): ScenePath {
   const path = normalizeRoutePath(pathname);
-  const manifest = leafSceneManifest(path);
+  const manifest = leafSceneManifest(path, search);
   const root = instance(SCENE_DEFINITIONS.mainMenu);
   let instances: readonly SceneInstance[];
 
@@ -297,7 +320,15 @@ export function sceneManifest(pathname: string): ScenePath {
       ? [root, instance(SCENE_DEFINITIONS.play), selectedInstance]
       : [root, instance(SCENE_DEFINITIONS.play)];
   } else if (path === '/editor' || path === '/editor/wars' || path === '/campaigns' || path === '/campaigns-next') {
-    instances = [root, instance(SCENE_DEFINITIONS.campaignEditor)];
+    const editorRoute = editorSceneRoute(path, search);
+    const child = editorRoute.kind === 'wars'
+      ? instance(SCENE_DEFINITIONS.editorWars)
+      : editorRoute.kind === 'skirmish-profiles'
+        ? instance(SCENE_DEFINITIONS.editorSkirmishProfiles)
+        : editorRoute.kind === 'unassigned'
+          ? instance(SCENE_DEFINITIONS.editorUnassigned)
+          : instance(SCENE_DEFINITIONS.editorCampaign, editorRoute.campaignId ? { campaignId: editorRoute.campaignId } : {});
+    instances = [root, instance(SCENE_DEFINITIONS.campaignEditor), child];
   } else if (path === '/editor/level' || path === '/edit' || path === '/level-editor') {
     instances = [instance(SCENE_DEFINITIONS.levelEditor)];
   } else if (path === '/settings' || path.startsWith('/settings/')) {
@@ -352,6 +383,7 @@ const HOST_REGION_BY_DEFINITION: Readonly<Partial<Record<string, SceneHost>>> = 
   'main-menu': 'menu-shell',
   play: 'play-shell',
   settings: 'settings-shell',
+  'campaign-editor': 'editor-shell',
   enchiridion: 'enchiridion-shell',
   gameplay: 'gameplay-shell',
   run: 'gameplay-shell',
@@ -377,6 +409,7 @@ const DESTINATION_SLOT_BY_REGION: Readonly<Partial<Record<SceneHost, SceneSlotId
   'menu-shell': 'menu-destination',
   'play-shell': 'play-content',
   'settings-shell': 'settings-content',
+  'editor-shell': 'editor-content',
   'enchiridion-shell': 'enchiridion-content',
   'gameplay-shell': 'gameplay-content',
 });

@@ -1837,6 +1837,15 @@ h1 {
   --ds-space-6: 32px;
   --ds-space-7: 48px;
   --ds-space-8: 64px;
+  /* Full-page workspace perimeter (ADR-0279). The main menu is the placement
+     authority: its frame plus responsive rail padding defines the inline and
+     block insets. Workspace content mirrors those starts at the opposite edges
+     while the host-owned fill itself remains edge-to-edge. */
+  --main-menu-frame-inset: var(--ds-space-4);
+  --main-menu-rail-pad-block: clamp(8px, calc(var(--layout-vw, 100vw) * .008), 12px);
+  --main-menu-rail-pad-inline: clamp(6px, calc(var(--layout-vw, 100vw) * .006), 10px);
+  --main-menu-content-inset-block: calc(var(--main-menu-frame-inset) + var(--main-menu-rail-pad-block));
+  --main-menu-content-inset-inline: calc(var(--main-menu-frame-inset) + var(--main-menu-rail-pad-inline));
   /* Spatial-role tokens (ADR-0031) — COMFORTABLE density is the default; in-game
      surfaces override these to the tight end (see .skirmish-screen). inset = padding
      on all sides; stack = vertical gap; inline = horizontal gap; gutter = section gaps. */
@@ -4258,6 +4267,13 @@ h1 {
   column-gap: 0;
   row-gap: 0;
   z-index: 3;
+}
+
+/* Self-inspection and Strategikon replace the scenic battlefield with a complete
+   shell workspace. Its Controls-facing edge therefore meets the persistent HUD
+   divider instead of retaining the ordinary board-to-HUD scenic gutter. */
+.skirmish-screen.is-run-self-inspection-open {
+  column-gap: 0;
 }
 .level-editor-screen::before {
   background: none;
@@ -7225,6 +7241,13 @@ body.loading-bootstrap .app-startup-status {
 .level-editor-screen .shell-workspace {
   --shell-workspace-content-padding: var(--le-outer-content-padding, 0px);
 }
+.level-editor-screen .le-events-workspace {
+  /* ADR-0279: Events/Rules follows the main-menu perimeter, not the generated
+     outer-panel inset. Inline and block starts mirror to their opposite edges. */
+  --shell-workspace-content-padding:
+    var(--main-menu-content-inset-block)
+    var(--main-menu-content-inset-inline);
+}
 .le-events-head { align-items: center; border-bottom: 1px solid rgba(150, 180, 200, .18); display: flex; flex: 0 0 auto; gap: 12px; justify-content: space-between; padding: 0 2px 8px; }
 .le-events-head h2 { color: #eafaff; margin: 0; }
 .le-events-head-actions { align-items: center; display: flex; flex: 1; gap: 8px; justify-content: flex-end; min-width: 0; }
@@ -9756,6 +9779,17 @@ body { font-size: 17px; }
   pointer-events: none;
   transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
 }
+/* PaintedSurfaceBoundary is deliberately layout-transparent (`display: contents`). When one
+   is a direct child of a contents-mode scene target (the Editor/Play preview column), opacity
+   on that non-box cannot fade its pixels. Carry the exact same scene transition through the
+   transparent boundary to its real visual child; otherwise the fourth column remains painted
+   while its sibling action column fades. */
+.scene-director.is-exiting [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > .painted-surface > .painted-surface-content > *,
+.scene-director.is-exiting [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > .painted-surface > .painted-surface-status {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
+}
 .scene-boundary.is-preparing {
   opacity: 0;
   pointer-events: none;
@@ -9788,6 +9822,11 @@ body { font-size: 17px; }
   opacity: 0;
   pointer-events: none;
 }
+.scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > .painted-surface > .painted-surface-content > *,
+.scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > .painted-surface > .painted-surface-status {
+  opacity: 0;
+  pointer-events: none;
+}
 .scene-director.is-entering [data-scene-transition-target][data-scene-transition-active] {
   opacity: 1;
   transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
@@ -9796,8 +9835,14 @@ body { font-size: 17px; }
   opacity: 1;
   transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
 }
+.scene-director.is-entering [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > .painted-surface > .painted-surface-content > *,
+.scene-director.is-entering [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > .painted-surface > .painted-surface-status {
+  opacity: 1;
+  transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
+}
 
 .play-destination-content { display: contents; }
+.editor-destination-content { display: contents; }
 .scene-loading-presentation {
   position: fixed;
   inset: 0;
@@ -11213,10 +11258,10 @@ body { font-size: 17px; }
 }
 
 /*
- * Fixed previews and non-Play board workspaces use the canonical 4:3 board
- * window (ADR-0192/ADR-0259). Play's live board opts out — its own 4:3 frame
- * is the surrounding .skirmish-board-frame. The fixed seat fills the
- * surrounding allocation; the child is the largest matching pane that fits it.
+ * Ordinary board viewers use the canonical 4:3 board window (ADR-0192/ADR-0259).
+ * Full-canvas owners such as Play and the Level Editor opt out because their
+ * surrounding workspace is the viewport (ADR-0201/ADR-0278). The fixed seat
+ * fills its allocation; the child is the largest matching pane that fits it.
  */
 .board-view-pane-seat {
   container-type: size;
@@ -16484,7 +16529,7 @@ button.tileset-relationship-cell {
   /* Baked: the rail and main containers float — no frame, transparent — so the
      framed tabs/rows sit directly on the page (the dressing-room "disable box").
      The transparent border is kept only as the inset that positions their content. */
-  --settings-frame-corner: 16px;
+  --settings-frame-corner: var(--main-menu-frame-inset);
   border: var(--settings-frame-corner) solid transparent;
   box-sizing: border-box;
 }
@@ -17240,7 +17285,7 @@ button.tileset-relationship-cell {
   align-content: start;
   display: grid;
   gap: clamp(9px, calc(var(--layout-vw, 100vw) * .008), 13px);
-  padding: clamp(8px, calc(var(--layout-vw, 100vw) * .008), 12px) clamp(6px, calc(var(--layout-vw, 100vw) * .006), 10px);
+  padding: var(--main-menu-rail-pad-block) var(--main-menu-rail-pad-inline);
   /* Button-group offset — baked from the Main Menu tuner, SHARED with Settings so its rail tabs
      sit identically (the menu is the alignment reference). The X magnitude (238) is mirrored by
      the .settings-shell margin floor above — they MUST stay equal (guarded). Re-tune in the
@@ -17264,13 +17309,13 @@ button.tileset-relationship-cell {
    frame + padding + pull (which the guard keeps == MM_LIVE), so col2/col3 inherit col1's exact top
    inset and the exact leftward pull; if the rail is re-tuned, changing these one place re-aligns all. */
 .main-menu-twin-screen .settings-shell {
-  --rail-frame: 16px;
-  --rail-pad-block: clamp(8px, calc(var(--layout-vw, 100vw) * .008), 12px);
-  --rail-pad-inline: clamp(6px, calc(var(--layout-vw, 100vw) * .006), 10px);
+  --rail-frame: var(--main-menu-frame-inset);
+  --rail-pad-block: var(--main-menu-rail-pad-block);
+  --rail-pad-inline: var(--main-menu-rail-pad-inline);
   --rail-pull-x: 238px; /* mirrors .settings-rail-frame translate + the .settings-shell margin floor */
   --rail-pull-y: 21px;
-  --col-top-inset: calc(var(--rail-frame) + var(--rail-pad-block)); /* col1's button-top offset, exactly */
-  --col-side-inset: calc(var(--rail-frame) + var(--rail-pad-inline)); /* col1's button-side offset, exactly */
+  --col-top-inset: var(--main-menu-content-inset-block); /* col1's button-top offset, exactly */
+  --col-side-inset: var(--main-menu-content-inset-inline); /* col1's button-side offset, exactly */
   --col-tab-w: 322px;
   --col-action-w: 572px;
   /* Preview column (the Editor's col 4): compact by intent — a small board thumbnail, not a
@@ -19603,13 +19648,13 @@ button.tileset-relationship-cell {
   block-size: 100%;
   box-sizing: border-box;
   display: grid;
-  gap: var(--skirmish-grid-gap);
+  gap: 0;
   grid-template-columns: 322px minmax(0, 1fr);
   inset: 0;
   isolation: isolate;
   min-block-size: 0;
   min-inline-size: 0;
-  padding: var(--skirmish-grid-gap);
+  padding: 0;
   position: absolute;
 }
 
@@ -19644,7 +19689,14 @@ button.tileset-relationship-cell {
   display: grid;
   gap: clamp(9px, calc(var(--layout-vw, 100vw) * .008), 13px);
   min-block-size: 0;
-  padding: clamp(8px, calc(var(--layout-vw, 100vw) * .008), 12px) clamp(6px, calc(var(--layout-vw, 100vw) * .006), 10px);
+  padding-block: var(--main-menu-content-inset-block);
+  padding-inline: var(--main-menu-content-inset-inline) 0;
+}
+
+.strategikon-content {
+  box-sizing: border-box;
+  padding-block: var(--main-menu-content-inset-block);
+  padding-inline: var(--main-menu-content-inset-inline);
 }
 
 .strategikon-content > .enchiridion-workspace {

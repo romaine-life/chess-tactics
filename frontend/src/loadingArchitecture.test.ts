@@ -10,7 +10,7 @@ describe('professional loading architecture guards', () => {
     const director = read('./ui/shell/sceneDirector.ts');
     const boundary = read('./ui/shell/SceneBoundary.tsx');
     expect(app).toContain('<SceneBoundary');
-    expect(app).toContain('sceneManifest(initialPath)');
+    expect(app).toContain('sceneManifest(initialPath, window.location.search)');
     expect(app.indexOf('<AppTitleBar')).toBeLessThan(app.indexOf('<SceneBoundary'));
     expect(app).toContain('<Suspense fallback={null}>');
     expect(app).not.toMatch(/route-veil|screen-exit|screen-enter|useScreenEntrance|screenExit/);
@@ -71,7 +71,7 @@ describe('professional loading architecture guards', () => {
     expect(read('../scripts/shot.mjs')).toContain('assertImmediateLocalControl || backAfterClickMs !== undefined');
     expect(read('../scripts/shot.mjs')).toContain('full-scene wait did not retain the painted outgoing boundary');
     expect(read('../scripts/shot.mjs')).toContain('painted destination was remounted instead of promoted in place');
-    expect(app).toContain('const mountedScene = sceneManifest(path)');
+    expect(app).toContain('const mountedScene = sceneManifest(path, search)');
     expect(app).toContain('renderScene(layer.scene, layer.search)');
     expect(director).toContain('generation: state.generation + 1');
     expect(director).toContain('if (action.generation !== state.generation) return state');
@@ -115,6 +115,9 @@ describe('professional loading architecture guards', () => {
     expect(styles).toContain(
       '.scene-director.is-exiting [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > *',
     );
+    expect(styles).toContain(
+      '[data-scene-transition-mode="contents"] > .painted-surface > .painted-surface-content > *',
+    );
     expect(styles).not.toContain('[data-transition-region="menu-shell"] [data-scene-region="menu-shell"]');
     expect(styles).not.toContain('[data-transition-region="play-shell"] [data-scene-region="play-shell"]');
     expect(styles).not.toContain('[data-transition-region="settings-shell"] [data-scene-region="settings-shell"]');
@@ -139,6 +142,18 @@ describe('professional loading architecture guards', () => {
     expect(styles).toContain('.settings-scroll > .kit-scroll-content');
     expect(styles).toContain('inline-size: calc(100% - 24px)');
     expect(read('./ui/App.tsx')).toContain("manifest.waitPresentation === 'loading'");
+  });
+
+  it('routes Editor collections and campaigns through one authored nested scene slot', () => {
+    const editor = read('./ui/CampaignEditor.tsx');
+    const manifest = read('./ui/shell/sceneManifest.ts');
+    expect(editor).toContain("sceneTransitionTargetAttributes('editor-shell', 'contents')");
+    expect(editor).toContain('const selectedCollection = editorCollectionFromLocation(path, search)');
+    expect(editor).toContain("navigateApp(editorCampaignHref('/editor', campaignId))");
+    expect(editor).not.toContain('setSelectedCollection');
+    expect(editor).not.toContain('window.history.replaceState');
+    expect(manifest).toContain("'campaign-editor': 'editor-shell'");
+    expect(manifest).toContain("'editor-shell': 'editor-content'");
   });
 
   it('uses the persistent title bar for route loading and never invents a board background', () => {

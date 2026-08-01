@@ -9,10 +9,10 @@ extends:
 partially_supersedes:
   - 0262-bundle-cards-are-scene-vignettes-with-authored-names-and-a-codex.md
 partially_superseded_by:
-  - 0279-units-card-art-uses-a-pixellab-pixel-art-core-set.md
+  - 0282-units-card-art-uses-a-pixellab-pixel-art-core-set.md
 ---
 
-# ADR-0278: Unit-card art uses dedicated database prompt plans
+# ADR-0281: Unit-card art uses dedicated database prompt plans
 
 ## Context
 

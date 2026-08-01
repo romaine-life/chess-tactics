@@ -92,7 +92,7 @@ export function App(): ReactElement {
   const [search, setSearch] = useState(window.location.search);
   const [scene, dispatchScene] = useReducer(
     reduceScene,
-    sceneManifest(initialPath),
+    sceneManifest(initialPath, window.location.search),
     (manifest) => initialSceneState(
       manifest,
       prepareInitialScene,
@@ -243,7 +243,7 @@ export function App(): ReactElement {
         window.history.pushState({}, '', currentHref);
         return;
       }
-      const destination = sceneManifest(nextPath);
+      const destination = sceneManifest(nextPath, nextSearch);
       if (destination.id === sceneRef.current.current.id && sceneRef.current.phase === 'current') {
         setPath(nextPath);
         setSearch(nextSearch);
@@ -390,7 +390,7 @@ export function App(): ReactElement {
   // `path` advances only when the director accepts exit-finished. Keep the
   // renderer bound to that mounted path; `manifest` may describe a pending
   // destination during exit and is preparation metadata, not visibility.
-  const mountedScene = sceneManifest(path);
+  const mountedScene = sceneManifest(path, search);
   const transitioning = scene.phase !== 'current' && scene.phase !== 'startup';
   const showSceneFailure = scene.phase === 'error';
   const titleBarLoading = manifest.waitPresentation === 'loading' && (

@@ -19,8 +19,12 @@ describe('Level Editor board pointer contract', () => {
     expect(levelEditor.toLowerCase()).not.toContain('right-click');
     expect(levelEditor.toLowerCase()).not.toContain('right click');
 
-    expect(viewPane.match(/onContextMenu=/g)).toHaveLength(1);
-    expect(viewPane).toContain('onContextMenu={(event) => event.preventDefault()}');
+    expect(viewPane.match(/onContextMenuCapture=/g)).toHaveLength(1);
+    expect(viewPane).toContain('onContextMenuCapture={(event) => event.preventDefault()}');
+    expect(viewPane).toContain('onPointerDownCapture={startSecondaryPan}');
+    expect(viewPane).toContain('if (event.button !== 2) return;');
+    expect(viewPane).toContain('onPointerDown={startNonSecondaryPan}');
+    expect(viewPane).toContain('if (event.button === 2) return;');
   });
 
   it('lets only the primary button reach each editable hit target', () => {
@@ -149,5 +153,17 @@ describe('Level Editor board pointer contract', () => {
     expect(levelEditor).toContain('(event.clientY - artworkDrag.startClientY) / boardZoom');
     expect(levelEditor).not.toContain('artworkPointWithinBoard');
     expect(levelEditor).not.toContain('le-artwork-nudge');
+  });
+
+  it('keeps remembered Scene Art details inside the Scene Art destination', () => {
+    expect(levelEditor).toMatch(
+      /const selectedArtworkForDetails = layer === 'placed-art' && brushKind === 'artwork'\s+\? selectedArtwork\s+: undefined;/,
+    );
+    expect(levelEditor).toContain(
+      '(selectedArtworkForDetails || selectedUnitAsset || selectedDoodadAsset || selectedProp || selectedAsset || selectedCell)',
+    );
+    expect(levelEditor).not.toContain(
+      '(selectedArtwork || selectedUnitAsset || selectedDoodadAsset || selectedProp || selectedAsset || selectedCell)',
+    );
   });
 });

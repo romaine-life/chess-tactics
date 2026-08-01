@@ -79,6 +79,7 @@ describe('Level Editor chrome hierarchy', () => {
     expect(styleCss).toMatch(/\.shell-workspace\s*\{[\s\S]*?inset:\s*0;[\s\S]*?position:\s*absolute;/);
     expect(styleCss).toMatch(/\.level-editor-screen \.skirmish-board-frame\.is-workspace-covered\s*\{[\s\S]*?visibility:\s*hidden;/);
     expect(styleCss).toMatch(/\.shell-workspace-content\s*\{[\s\S]*?min-height:\s*0;[\s\S]*?overflow:\s*hidden;/);
+    expect(styleCss).toMatch(/\.level-editor-screen \.le-events-workspace\s*\{[\s\S]*?--shell-workspace-content-padding:\s*var\(--main-menu-content-inset-block\)\s*var\(--main-menu-content-inset-inline\)/);
     expect(styleCss).toMatch(/\.skirmish-screen\.level-editor-screen\s*\{[\s\S]*?column-gap:\s*0;[\s\S]*?row-gap:\s*0;/);
     expect(styleCss).toMatch(/@media \(max-width: 560px\)\s*\{[\s\S]*?\.shell-workspace-content\s*\{[\s\S]*?overflow-y:\s*auto;/);
     expect(styleCss).not.toContain('.le-events-overlay');

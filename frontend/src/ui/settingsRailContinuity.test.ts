@@ -45,7 +45,7 @@ describe('settings-rail stone continuity is index-driven (ADR-0063)', () => {
     // The remaining direct renderers are a stand-in that guarantees the scan actually
     // found files. MainMenu and PlayMenu intentionally delegate their rails to the
     // shared apparatus primitive instead of duplicating the registered control.
-    expect(renderers.sort()).toEqual(['CampaignEditor.tsx', 'Settings.tsx', 'WarEditor.tsx']);
+    expect(renderers.sort()).toEqual(['CampaignEditor.tsx', 'Settings.tsx']);
 
     for (const f of renderers) {
       const src = readFileSync(new URL(f, import.meta.url), 'utf8');

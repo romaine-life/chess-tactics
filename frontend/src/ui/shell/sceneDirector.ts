@@ -77,11 +77,20 @@ export function reduceScene(state: SceneState, action: SceneAction): SceneState 
   if (action.type === 'navigate') {
     if (state.startupActive) return state;
     if (action.destination.id === state.current.id && state.phase === 'current') return state;
-    if (
-      state.destination
-      && action.destination.id === state.destination.id
-      && action.href === state.destinationHref
-    ) return state;
+    if (state.destination && action.destination.id === state.destination.id) {
+      if (action.href === state.destinationHref) return state;
+      // A preparing scene may canonicalize its own address after resolving durable identity
+      // (Level Editor: levelId -> opaque document). Keep the already-faded outgoing scene and
+      // retarget acquisition in place; returning to `exiting` would visibly replay backwards.
+      return {
+        ...state,
+        phase: state.phase === 'exiting' ? 'exiting' : 'loading',
+        destination: action.destination,
+        destinationHref: action.href,
+        generation: state.generation + 1,
+        error: null,
+      };
+    }
     return {
       ...state,
       phase: 'exiting',

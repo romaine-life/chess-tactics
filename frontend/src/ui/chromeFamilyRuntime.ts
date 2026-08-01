@@ -869,8 +869,10 @@ function dividerCss(role: ChromeRole, host: RoleTune, hostFrame: FrameRender, di
   const verticalSelector = `${roleSelector}[data-chrome-divider-orientation="vertical"]`;
   const endpointSelector = `${selector}:not([data-chrome-divider-junctions="none"])`;
   const verticalEndpointSelector = `${verticalSelector}:not([data-chrome-divider-junctions="none"])`;
+  const junctionlessSelector = `${selector}[data-chrome-divider-junctions="none"]`;
+  const verticalJunctionlessSelector = `${verticalSelector}[data-chrome-divider-junctions="none"]`;
   const viewportEdgeControlsSelector = role === 'outer'
-    ? `:root:has(.app-titlebar.chrome-rails-offscreen) ${CHROME_FAMILY_SURFACE_SELECTOR} .le-outer-panel:is([data-chrome-consumer="level-editor-controls"], [data-chrome-consumer="skirmish-hud"]) [data-chrome-divider-role="outer"]:not([data-chrome-divider-orientation="vertical"])`
+    ? `:root:has(.app-titlebar.chrome-rails-offscreen) ${CHROME_FAMILY_SURFACE_SELECTOR} .le-outer-panel:is([data-chrome-consumer="level-editor-controls"], [data-chrome-consumer="skirmish-hud"]) [data-chrome-divider-role="outer"]:not([data-chrome-divider-orientation="vertical"]):not([data-chrome-divider-junctions="none"])`
     : '';
   const railWidth = divider.railHeight;
   const railTop = Math.round((divider.height - railWidth) / 2);
@@ -896,8 +898,8 @@ ${verticalSelector}::after {
     const topY = cssPx(overlay.outset + overlay.leftX);
     const bottomY = cssPx(overlay.outset + overlay.rightX);
     atomCss = `
-${selector}::after,
-${verticalSelector}::after {
+${junctionlessSelector}::after,
+${verticalJunctionlessSelector}::after {
   content: none !important;
 }
 ${endpointSelector}::after {

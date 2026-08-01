@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 const styleCss = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const appSource = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8');
 const levelThumbnailSource = readFileSync(new URL('../render/LevelThumbnail.tsx', import.meta.url), 'utf8');
+const levelEditorSource = readFileSync(new URL('./LevelEditor.tsx', import.meta.url), 'utf8');
 const skirmishBoardSource = readFileSync(new URL('../render/SkirmishBoard.tsx', import.meta.url), 'utf8');
 const skirmishSource = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
 const viewPaneSource = readFileSync(new URL('./shared/ViewPane.tsx', import.meta.url), 'utf8');
@@ -68,8 +69,9 @@ describe('board viewports speak the board\'s canonical 4:3 language (ADR-0259)',
     expect(viewPaneSource).toContain('className="board-view-pane-seat"');
   });
 
-  it('lets the Play board fill its 4:3 frame while fixed previews keep the shared seat', () => {
+  it('lets full-canvas Play and Level Editor boards fill their owning viewport while fixed previews keep the shared seat', () => {
     expect(skirmishBoardSource).toContain('boardViewportMode="fill"');
+    expect(levelEditorSource).toContain('boardViewportMode="fill"');
     expect(viewPaneSource).toContain(
       "return kind === 'board' && boardViewportMode === 'canonical' ? (",
     );

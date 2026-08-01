@@ -74,7 +74,7 @@ these.
   numbered coin art. Each actual unit in the ledger appears as the same
   canonical player-side sprite used on the board. Card Layout, draft, shop,
   review, and Enchiridion use the same face rather than parallel card shells
-  (ADR-0219, ADR-0225, ADR-0270, ADR-0275, ADR-0276, ADR-0280).
+  (ADR-0219, ADR-0225, ADR-0270, ADR-0275, ADR-0276, ADR-0283).
 - The bundle deck's 49 unique one-through-nine-point compositions are the
   authored **core cards**. Each keeps one title and flavor text while its
   drawn offer may give particular units more than one modifier. The 49 cores do
@@ -93,7 +93,7 @@ these.
   setting and anti-story residue. Faces and eyes may appear naturally—the
   rejected global eye-concealment rule is retired. The 49 slots are reviewed
   and accepted atomically, with exact or explicitly reconstructed PixelLab
-  prompt provenance and no packaged fallback (ADR-0278, ADR-0279).
+  prompt provenance and no packaged fallback (ADR-0281, ADR-0282).
 - A card's affected **qualifiers** identify causal rules rather than replacing
   its primary type. Pestiferous changes the card lifecycle and all its units.
   **Tactical** instead authors a positive enhancement of one or more contained

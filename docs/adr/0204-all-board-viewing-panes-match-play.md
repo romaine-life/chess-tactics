@@ -5,6 +5,7 @@ deciders: owner (Nelson) + Codex
 partially_superseded_by:
   - "[ADR-0226](0226-play-expands-before-ultrawide-wings.md)"
   - "[ADR-0259](0259-the-live-play-composition-is-the-authority-derived-views-conform.md)'s 4:3 canonical ratio (the one-shared-shape mechanism survives)"
+  - "[ADR-0278](0278-level-editor-board-fills-its-authoring-workspace.md)'s main Level Editor viewport exception"
 supersedes:
   - "[ADR-0203](0203-ordinary-board-previews-match-the-play-pane.md)'s ordinary-preview-only scope"
 partially_supersedes:

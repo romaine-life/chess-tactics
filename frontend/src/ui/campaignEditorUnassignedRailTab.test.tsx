@@ -1,6 +1,13 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { campaignCollectionFromSearch, campaignCollectionHref, UnassignedRailTab } from './CampaignEditor';
+import {
+  campaignCollectionFromSearch,
+  campaignCollectionHref,
+  editorCampaignHref,
+  editorCampaignIdFromSearch,
+  editorCollectionFromLocation,
+  UnassignedRailTab,
+} from './CampaignEditor';
 
 describe('UnassignedRailTab', () => {
   it('restores collection state from an Editor return URL', () => {
@@ -12,6 +19,18 @@ describe('UnassignedRailTab', () => {
       .toBe('/editor?keep=yes&collection=unassigned#section');
     expect(campaignCollectionHref('/editor?keep=yes&collection=unassigned', 'campaign'))
       .toBe('/editor?keep=yes');
+    expect(editorCollectionFromLocation('/editor/wars', '?collection=unassigned')).toBe('wars');
+    expect(editorCollectionFromLocation('/editor', '?collection=unassigned')).toBe('unassigned');
+    expect(campaignCollectionHref('/editor?keep=yes#section', 'wars'))
+      .toBe('/editor/wars?keep=yes#section');
+    expect(campaignCollectionHref('/editor/wars?keep=yes#section', 'campaign'))
+      .toBe('/editor?keep=yes#section');
+    expect(campaignCollectionHref('/editor/wars?keep=yes#section', 'skirmish-profiles'))
+      .toBe('/editor?keep=yes&collection=skirmish-profiles#section');
+    expect(editorCampaignHref('/editor?collection=unassigned&keep=yes#section', 'crown'))
+      .toBe('/editor?keep=yes&campaign=crown#section');
+    expect(editorCampaignIdFromSearch('?keep=yes&campaign=crown')).toBe('crown');
+    expect(editorCampaignIdFromSearch('?keep=yes')).toBeNull();
   });
 
   it('marks unsaved editor work without changing the canonical level count', () => {
