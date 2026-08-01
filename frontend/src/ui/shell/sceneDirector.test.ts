@@ -23,6 +23,33 @@ describe('scene director', () => {
     })).toBe(navigating);
   });
 
+  it('retargets a preparing destination without replaying the outgoing exit', () => {
+    const editor = sceneManifest('/editor/wars');
+    const levelEditor = sceneManifest('/editor/level');
+    let state = reduceScene(initialSceneState(editor), {
+      type: 'navigate',
+      destination: levelEditor,
+      href: '/editor/level?levelId=off-l-battle&warId=off-w-war',
+    });
+    state = reduceScene(state, { type: 'exit-finished', generation: state.generation });
+    expect(state.phase).toBe('loading');
+    const firstGeneration = state.generation;
+
+    state = reduceScene(state, {
+      type: 'navigate',
+      destination: levelEditor,
+      href: '/editor/level?levelId=off-l-battle&warId=off-w-war&document=doc-1',
+    });
+
+    expect(state).toMatchObject({
+      phase: 'loading',
+      current: { id: 'campaign-editor:wars' },
+      destination: { id: 'level-editor' },
+      destinationHref: '/editor/level?levelId=off-l-battle&warId=off-w-war&document=doc-1',
+      generation: firstGeneration + 1,
+    });
+  });
+
   it('permits only the canonical scene lifecycle', () => {
     let state = initialSceneState(sceneManifest('/'));
     state = reduceScene(state, { type: 'navigate', destination: sceneManifest('/play'), href: '/play' });

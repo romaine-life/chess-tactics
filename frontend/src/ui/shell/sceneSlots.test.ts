@@ -21,4 +21,18 @@ describe('authored scene slots', () => {
       }),
     ]));
   });
+
+  it('keeps Editor collection intent pending until the editor-content slot commits', () => {
+    const slots = sceneSlots(
+      sceneManifest('/editor/wars'),
+      sceneManifest('/editor', '?collection=unassigned'),
+    );
+    expect(slots).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'editor-content',
+        committed: expect.objectContaining({ key: 'campaign-editor/wars' }),
+        pending: expect.objectContaining({ key: 'campaign-editor/unassigned' }),
+      }),
+    ]));
+  });
 });

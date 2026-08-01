@@ -20,7 +20,6 @@ import { loadDecodedImage } from '../render/imageResources';
 // The Editor is heavier / code-split out of the menu bundle. App's SceneBoundary
 // keeps the destination unrevealed while its shared Suspense boundary resolves.
 const CampaignEditor = lazy(() => import('./CampaignEditor').then((m) => ({ default: m.CampaignEditor })));
-const WarEditor = lazy(() => import('./WarEditor').then((m) => ({ default: m.WarEditor })));
 import { drawableAssets, requiredDrawableRole } from '@chess-tactics/board-render';
 import { useStartupScene } from './shell/startupScene';
 import { installedUiMedia } from './installedUiMedia';
@@ -186,7 +185,7 @@ export function MainMenu({
                       framed={false}
                     />
                   )
-                : path === '/editor/wars' ? <WarEditor embedded /> : <CampaignEditor embedded />
+                : <CampaignEditor embedded path={path} search={search} sceneInstanceKey={sceneInstanceKey} />
               : null}
           </div>
         </ArtRouteChrome>
