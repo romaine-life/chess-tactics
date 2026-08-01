@@ -22,8 +22,8 @@ import { RunRelicIcon } from './RunRelics';
 import { ApparatusRailTab } from './shared/ApparatusRailTab';
 import { InnerChromeBox, OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
 import { NavButton } from './shared/NavButton';
-import { sceneTransitionTargetAttributes } from './shell/sceneTransitionTarget';
 import { ChromeButton } from './shared/ChromeButton';
+import { EnchiridionContentSceneSlot } from './shell/AuthoredSceneSlot';
 
 const SECTION_LABEL: Record<EnchiridionSection, string> = {
   units: 'Units',
@@ -609,10 +609,9 @@ export function Enchiridion({
           ))}
         </aside>
       ) : null}
-      <main
+      <EnchiridionContentSceneSlot
         className="enchiridion-content"
-        {...sceneTransitionTargetAttributes('enchiridion-shell')}
-        data-scene-instance={sceneInstanceKey}
+        sceneInstance={sceneInstanceKey}
       >
         <EnchiridionContent
           section={section}
@@ -622,7 +621,7 @@ export function Enchiridion({
           selectedCardId={selectedCardId}
           cardHref={cardHref}
         />
-      </main>
+      </EnchiridionContentSceneSlot>
     </div>
   );
 }

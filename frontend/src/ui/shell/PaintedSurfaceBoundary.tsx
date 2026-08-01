@@ -70,7 +70,7 @@ interface PaintedSurfaceBoundaryProps {
  * every rendered image consumer below it to load/decode and gives the browser two
  * paint opportunities before exposing the complete, inert-until-ready visual unit.
  */
-export function PaintedSurfaceBoundary({
+function SurfaceReadinessBoundary({
   surface,
   signature,
   readyToCompose,
@@ -81,7 +81,8 @@ export function PaintedSurfaceBoundary({
   className = '',
   showStatus = true,
   onPaintedChange,
-}: PaintedSurfaceBoundaryProps): ReactElement {
+  ownsVisibility,
+}: PaintedSurfaceBoundaryProps & { ownsVisibility: boolean }): ReactElement {
   const contentRef = useRef<HTMLDivElement | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [phase, setPhase] = useState<SurfacePhase>('loading');
@@ -107,11 +108,9 @@ export function PaintedSurfaceBoundary({
     const images = [...root.querySelectorAll('img')];
     const cssImages = renderedCssImageUrls(root);
     loadingMark(surface, 'dom-compose-wait-start', { imageCount: images.length, cssImageCount: cssImages.length, signature });
-    // Nested painted surfaces (a Run card's scene window, the deployment level
-    // preview) finish their own compose before this boundary reports painted, so a
-    // route entrance reveals one complete frame — the same rule RunWorkspaceStages
-    // applies to in-place phase swaps. Every nested surface resolves to ready or
-    // error, so this scan always terminates.
+    // Nested atomic frames (a Run card's scene window, the deployment level
+    // preview) finish their own compose before this readiness probe reports painted.
+    // Every nested surface resolves to ready or error, so this scan terminates.
     const nestedSurfacesSettled = (): Promise<void> => new Promise((resolve) => {
       const check = (): void => {
         if (cancelled || !root.querySelector('.painted-surface.is-loading')) resolve();
@@ -148,13 +147,17 @@ export function PaintedSurfaceBoundary({
   };
 
   return (
-    <div data-loading-surface={surface} className={`painted-surface ${phase === 'painted' ? 'is-ready' : phase === 'error' ? 'is-error' : 'is-loading'} ${className}`.trim()}>
+    <div
+      data-loading-surface={surface}
+      data-surface-readiness={ownsVisibility ? 'atomic-frame' : 'scene-probe'}
+      className={`${ownsVisibility ? 'painted-surface' : 'scene-surface-readiness'} ${phase === 'painted' ? 'is-ready' : phase === 'error' ? 'is-error' : 'is-loading'} ${className}`.trim()}
+    >
       <div
         ref={contentRef}
         key={`${signature}:${attempt}`}
-        className="painted-surface-content"
-        inert={phase !== 'painted' ? true : undefined}
-        aria-hidden={phase !== 'painted' || undefined}
+        className={ownsVisibility ? 'painted-surface-content' : 'scene-surface-readiness-content'}
+        inert={ownsVisibility && phase !== 'painted' ? true : undefined}
+        aria-hidden={ownsVisibility && phase !== 'painted' || undefined}
       >
         {children}
       </div>
@@ -168,4 +171,14 @@ export function PaintedSurfaceBoundary({
       ) : null}
     </div>
   );
+}
+
+/** Atomic image/frame replacement. This local primitive may hide and reveal its pixels. */
+export function PaintedSurfaceBoundary(props: PaintedSurfaceBoundaryProps): ReactElement {
+  return <SurfaceReadinessBoundary {...props} ownsVisibility />;
+}
+
+/** Scene readiness only. Visibility and activation remain exclusively director-owned. */
+export function SceneSurfaceReadiness(props: PaintedSurfaceBoundaryProps): ReactElement {
+  return <SurfaceReadinessBoundary {...props} ownsVisibility={false} />;
 }

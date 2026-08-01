@@ -32,6 +32,10 @@ for that environment identity. The auth grant, agent URL discovery, browser
 verification, screenshots, and user handoff all use the same name without a
 project lifecycle hook. See
 [ADR-0199](docs/adr/0199-codex-environment-names-are-chosen-during-auth-approval.md).
+The responsibilities are deliberately separate: Caddy only routes, devctl
+persists and recovers the top-level Vite launch, and Vite alone owns backend
+child recovery. See
+[ADR-0307](docs/adr/0307-local-development-layers-have-one-recovery-owner.md).
 
 For baked preview:
 

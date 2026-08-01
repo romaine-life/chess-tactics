@@ -75,7 +75,7 @@ import {
 } from './fenceArtReview';
 import { currentDoodadAssets, defaultDoodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import { structureSourceHalfSrc } from '../render/BoardStructure';
-import { navigateApp } from './navigation';
+import { navigateApp, subscribeAppLocation } from './navigation';
 import { STUDIO_VIEWER_KIND_OPTIONS, isViewerKind, type ViewerKind } from './studioViewerKinds';
 import { listEditorDocuments } from '../net/editorDocuments';
 import { fetchAdminLiveMediaCatalog, type AdminLiveMediaCatalog } from '../net/liveMediaAdmin';
@@ -450,7 +450,7 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
     const nextHref = catalogQuery ? `${STUDIO_PATH}?${catalogQuery}` : STUDIO_PATH;
     const currentHref = `${window.location.pathname}${window.location.search}`;
     if (nextHref !== currentHref) {
-      window.history.replaceState({}, '', nextHref);
+      navigateApp(nextHref, { replace: true, scroll: false });
     }
     return;
   }
@@ -503,7 +503,7 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
   const nextHref = `${STUDIO_PATH}?${params.toString()}`;
   const currentHref = `${window.location.pathname}${window.location.search}`;
   if (nextHref !== currentHref) {
-    window.history.replaceState({}, '', nextHref);
+    navigateApp(nextHref, { replace: true, scroll: false });
   }
 };
 
@@ -814,8 +814,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       if (route.selectedUnitId) setUnitBrushId(route.selectedUnitId);
     };
 
-    window.addEventListener('popstate', syncFromRoute);
-    return () => window.removeEventListener('popstate', syncFromRoute);
+    return subscribeAppLocation(syncFromRoute);
   }, []);
 
   useEffect(() => {

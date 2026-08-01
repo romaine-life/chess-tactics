@@ -70,7 +70,7 @@ import {
   type LevelEditorLayerKey,
   type PlacedArtBrushKind,
 } from './levelEditorRoute';
-import { APP_NAVIGATION_EVENT, navigateApp, registerAppNavigationBlocker } from './navigation';
+import { navigateApp, registerAppNavigationBlocker, replaceAppHistoryState, subscribeAppLocation } from './navigation';
 import { levelEditorWallFaceGeometry } from './levelEditorWallFace';
 import { levelEditorExitAction } from './levelEditorExit';
 import { currentDoodadAssets, defaultDoodadAsset, doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
@@ -2725,12 +2725,7 @@ export function LevelEditor(): ReactElement {
   const [predrawnReviewSearch, setPredrawnReviewSearch] = useState(() => window.location.search);
   useEffect(() => {
     const sync = (): void => setPredrawnReviewSearch(window.location.search);
-    window.addEventListener('popstate', sync);
-    window.addEventListener(APP_NAVIGATION_EVENT, sync);
-    return () => {
-      window.removeEventListener('popstate', sync);
-      window.removeEventListener(APP_NAVIGATION_EVENT, sync);
-    };
+    return subscribeAppLocation(sync);
   }, []);
   const predrawnPreview = useMemo(
     () => predrawnBoardPreviewSrc(predrawnReviewSearch, window.location.origin),
@@ -3290,12 +3285,7 @@ export function LevelEditor(): ReactElement {
         }
       }
     };
-    window.addEventListener('popstate', syncFromRoute);
-    window.addEventListener(APP_NAVIGATION_EVENT, syncFromRoute);
-    return () => {
-      window.removeEventListener('popstate', syncFromRoute);
-      window.removeEventListener(APP_NAVIGATION_EVENT, syncFromRoute);
-    };
+    return subscribeAppLocation(syncFromRoute);
   }, [fenceArtCatalog, isPredrawnBoard]);
 
   // DEV-only preview of the in-game confirm dialog, so its look can be judged live without the
@@ -5053,11 +5043,11 @@ export function LevelEditor(): ReactElement {
     const state = window.history.state && typeof window.history.state === 'object'
       ? window.history.state as Record<string, unknown>
       : {};
-    window.history.replaceState({
+    replaceAppHistoryState({
       ...state,
       levelEditorEventsEntry: true,
       levelEditorEventsBaseHref: baseHref,
-    }, '', openHref);
+    }, openHref);
     eventsOpenRef.current = true;
     setEventsTab(tab);
     setEventsOpen(true);

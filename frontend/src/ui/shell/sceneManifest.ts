@@ -1,10 +1,11 @@
 import { enchiridionSectionFromPath, enchiridionSectionPath } from '../enchiridionRoute';
 import { normalizeRoutePath } from '../navigation';
 import { isPlaySelectorPath, playHubSelection } from '../playHubRoute';
+import type { RunDocument, RunPhase } from '../../run/model';
 
 export type SceneBackground = 'homepage' | 'battlefield' | 'tool';
 export type SceneHost = 'menu-shell' | 'play-shell' | 'run-detail' | 'settings-shell' | 'editor-shell' | 'enchiridion-shell' | 'gameplay-shell' | 'standalone';
-export type SceneSlotId = 'root' | 'menu-destination' | 'play-content' | 'run-detail-content' | 'settings-content' | 'editor-content' | 'enchiridion-content' | 'gameplay-content';
+export type SceneSlotId = 'root' | 'menu-destination' | 'play-content' | 'run-detail-content' | 'settings-content' | 'editor-content' | 'enchiridion-content' | 'gameplay-content' | 'run-phase' | 'run-workspace';
 export type SceneViewId =
   | 'main-menu'
   | 'play'
@@ -17,6 +18,8 @@ export type SceneViewId =
   | 'play-campaign'
   | 'gameplay'
   | 'run'
+  | 'run-phase'
+  | 'run-workspace'
   | 'campaign-editor'
   | 'editor-campaign'
   | 'editor-wars'
@@ -83,6 +86,27 @@ export interface ScenePath extends SceneManifest {
   pathname: string;
   instances: readonly SceneInstance[];
   leaf: SceneInstance;
+  snapshot: SceneSnapshot;
+}
+
+export type RunScenePhase = 'hydrating' | 'no-active' | RunPhase;
+export type RunSceneWorkspace = 'primary' | 'army' | 'relics' | 'sell' | 'strategikon';
+
+export interface RunSceneSnapshot {
+  kind: 'run';
+  hydrated: boolean;
+  run: RunDocument | null;
+  phase: RunScenePhase;
+  workspace: RunSceneWorkspace;
+}
+
+export type SceneSnapshot = RunSceneSnapshot | { kind: 'route' };
+
+export interface SceneSources {
+  run?: {
+    hydrated: boolean;
+    document: RunDocument | null;
+  };
 }
 
 export const defineScene = (definition: SceneDefinition): SceneDefinition =>
@@ -100,6 +124,8 @@ export const SCENE_DEFINITIONS = Object.freeze({
   playCampaign: defineScene({ id: 'play/campaign', parent: 'play', slot: 'play-content', view: 'play-campaign' }),
   gameplay: defineScene({ id: 'gameplay', parent: null, slot: 'root', view: 'gameplay' }),
   run: defineScene({ id: 'run', parent: null, slot: 'root', view: 'run' }),
+  runPhase: defineScene({ id: 'run/phase', parent: 'run', slot: 'run-phase', view: 'run-phase' }),
+  runWorkspace: defineScene({ id: 'run/workspace', parent: 'run/phase', slot: 'run-workspace', view: 'run-workspace' }),
   campaignEditor: defineScene({ id: 'campaign-editor', parent: 'main-menu', slot: 'menu-destination', view: 'campaign-editor' }),
   editorCampaign: defineScene({ id: 'campaign-editor/campaign', parent: 'campaign-editor', slot: 'editor-content', view: 'editor-campaign' }),
   editorWars: defineScene({ id: 'campaign-editor/wars', parent: 'campaign-editor', slot: 'editor-content', view: 'editor-wars' }),
@@ -166,7 +192,11 @@ function editorSceneRoute(pathname: string, search: string): EditorSceneRoute {
   return campaignId ? { kind: 'campaign', campaignId } : { kind: 'campaign' };
 }
 
-function leafSceneManifest(pathname: string, search: string = ''): SceneManifest {
+function leafSceneManifest(
+  pathname: string,
+  search: string = '',
+  runSnapshot: RunSceneSnapshot | null = null,
+): SceneManifest {
   const path = normalizeRoutePath(pathname);
 
   if (path === '/play' || path.startsWith('/play/strategikon/')) {
@@ -180,7 +210,10 @@ function leafSceneManifest(pathname: string, search: string = ''): SceneManifest
     ], [], 'gameplay-shell', 'transition-only');
   }
   if (path === '/run' || path.startsWith('/run/strategikon/')) {
-    return manifest(path === '/run' ? 'run' : `run:${path}`, 'battlefield', 'gameplay-hud', [
+    const runIdentity = runSnapshot
+      ? `${runSnapshot.run?.id ?? 'none'}:${runSnapshot.phase}:${runSnapshot.workspace}`
+      : 'hydrating:primary';
+    return manifest(`run:${runIdentity}`, 'battlefield', 'gameplay-hud', [
       'battlefield-background',
       'active-run',
       'run-chrome',
@@ -291,13 +324,47 @@ const instance = (
   params: Object.freeze({ ...params }),
 });
 
+function runSceneSnapshot(
+  pathname: string,
+  search: string,
+  source: SceneSources['run'],
+): RunSceneSnapshot {
+  const path = normalizeRoutePath(pathname);
+  const phase: RunScenePhase = !source?.hydrated
+    ? 'hydrating'
+    : source.document?.phase ?? 'no-active';
+  const requestedView = new URLSearchParams(search).get('view');
+  const requestedWorkspace: RunSceneWorkspace = path.startsWith('/run/strategikon/')
+    ? 'strategikon'
+    : requestedView === 'army' || requestedView === 'relics' || requestedView === 'sell'
+      ? requestedView
+      : 'primary';
+  const workspace = requestedWorkspace === 'sell' && phase !== 'shop'
+    ? 'primary'
+    : requestedWorkspace;
+  return Object.freeze({
+    kind: 'run',
+    hydrated: source?.hydrated ?? false,
+    run: source?.document ?? null,
+    phase,
+    workspace,
+  });
+}
+
 /**
  * Resolve browser intent into an authored scene path. The director commits and
  * prepares these objects; route strings are inputs, never visible-scene authority.
  */
-export function sceneManifest(pathname: string, search: string = ''): ScenePath {
+export function sceneManifest(
+  pathname: string,
+  search: string = '',
+  sources: SceneSources = {},
+): ScenePath {
   const path = normalizeRoutePath(pathname);
-  const manifest = leafSceneManifest(path, search);
+  const runSnapshot = path === '/run' || path.startsWith('/run/strategikon/')
+    ? runSceneSnapshot(path, search, sources.run)
+    : null;
+  const manifest = leafSceneManifest(path, search, runSnapshot);
   const root = instance(SCENE_DEFINITIONS.mainMenu);
   let instances: readonly SceneInstance[];
 
@@ -306,9 +373,15 @@ export function sceneManifest(pathname: string, search: string = ''): ScenePath 
       ? [instance(SCENE_DEFINITIONS.gameplay)]
       : [instance(SCENE_DEFINITIONS.gameplay), instance(SCENE_DEFINITIONS.gameplayStrategikon, { path })];
   } else if (path === '/run' || path.startsWith('/run/strategikon/')) {
-    instances = path === '/run'
-      ? [instance(SCENE_DEFINITIONS.run)]
-      : [instance(SCENE_DEFINITIONS.run), instance(SCENE_DEFINITIONS.runStrategikon, { path })];
+    const snapshot = runSnapshot!;
+    const phaseIdentity = snapshot.run
+      ? `${snapshot.run.id}:${snapshot.phase}:${snapshot.run.battleIndex}`
+      : snapshot.phase;
+    instances = [
+      instance(SCENE_DEFINITIONS.run),
+      instance(SCENE_DEFINITIONS.runPhase, { phase: phaseIdentity }),
+      instance(SCENE_DEFINITIONS.runWorkspace, { phase: phaseIdentity, workspace: snapshot.workspace }),
+    ];
   } else if (isPlaySelectorPath(path)) {
     const selection = playHubSelection(path);
     // The installed root and malformed selector paths both resolve through the
@@ -389,6 +462,7 @@ export function sceneManifest(pathname: string, search: string = ''): ScenePath 
     pathname: path,
     instances,
     leaf: instances[instances.length - 1],
+    snapshot: runSnapshot ?? Object.freeze({ kind: 'route' as const }),
   });
 }
 

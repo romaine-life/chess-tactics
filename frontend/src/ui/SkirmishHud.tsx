@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
-import { useSkirmish } from '../game/store';
+import { useSkirmish, useSkirmishStoreApi } from '../game/SkirmishStoreContext';
+import { defaultSkirmishStore, type SkirmishStore } from '../game/store';
 import { useSkirmishView } from '../game/skirmishView';
 import { livingPieces } from '../core/rules';
 import { PIECE_LABEL, PIECE_MARK, isPlayablePieceType, paletteForSide, pieceSpritePath } from '../core/pieces';
@@ -98,7 +99,11 @@ export const SHORTCUT_BINDINGS: Record<string, GridAction> = {
 const ZOOM_STEP = 0.1;
 
 /** Run the command card action for a physical key or painted button. */
-export function runSkirmishShortcut(key: string, repeat = false): boolean {
+export function runSkirmishShortcut(
+  key: string,
+  repeat = false,
+  skirmishStore: SkirmishStore = defaultSkirmishStore,
+): boolean {
   const action = SHORTCUT_BINDINGS[key.toLowerCase()];
   if (!action || (repeat && action.kind !== 'zoom')) return false;
   if (action.kind === 'toggle') {
@@ -107,7 +112,7 @@ export function runSkirmishShortcut(key: string, repeat = false): boolean {
     const view = useSkirmishView.getState();
     view.setZoom(view.zoom + action.dir * ZOOM_STEP);
   } else if (action.kind === 'deselect') {
-    useSkirmish.getState().select(null);
+    skirmishStore.getState().select(null);
   } else {
     useSkirmishView.getState().clearOverlays();
   }
@@ -234,6 +239,7 @@ export function SkirmishHud({
   runSelfInspectionView = null,
   controlsContent,
 }: SkirmishHudProps = {}) {
+  const skirmishStore = useSkirmishStoreApi();
   const game = useSkirmish((s) => s.game);
   const selectedId = useSkirmish((s) => s.selectedId);
   const focusedId = useSkirmish((s) => s.focusedId);
@@ -308,12 +314,12 @@ export function SkirmishHud({
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const el = e.target as HTMLElement | null;
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return;
-      if (!runSkirmishShortcut(e.key, e.repeat)) return;
+      if (!runSkirmishShortcut(e.key, e.repeat, skirmishStore)) return;
       e.preventDefault();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [enableGlobalShortcuts]);
+  }, [enableGlobalShortcuts, skirmishStore]);
 
   // Status reads from THIS client's seat. Single-player: 'you' = 'player'. Netplay:
   // 'you' = the lobby seat this client controls (host='player', guest='enemy'), so the
@@ -601,7 +607,7 @@ export function SkirmishHud({
                       className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'skirmish-grid-key', active && 'active is-active')}
                       aria-pressed={isToggle ? active : undefined}
                       title={action.hint}
-                      onClick={() => { runSkirmishShortcut(key); }}
+                      onClick={() => { runSkirmishShortcut(key, false, skirmishStore); }}
                     >
                       <kbd className="skirmish-grid-cap">{key.toUpperCase()}</kbd>
                       <span className="skirmish-grid-label">{action.label}</span>
