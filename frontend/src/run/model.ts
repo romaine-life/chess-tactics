@@ -243,6 +243,12 @@ export interface RunDocument {
   shop: RunShopState | null;
 }
 
+/** Stable identity for the one playable battle inside a Run. Level ids are not
+ * sufficient: different Runs (and later Battles in one War) may reuse a Level. */
+export function runBattleActivityId(runId: string, battleIndex: number): string {
+  return `run:${encodeURIComponent(runId)}:battle:${battleIndex}`;
+}
+
 const PURCHASE_ORDER: readonly PurchasablePieceType[] = ['pawn', 'knight', 'bishop', 'rook', 'queen'];
 const ARMY_PIECE_ORDER: readonly RunArmyPieceType[] = ['king', ...PURCHASE_ORDER];
 

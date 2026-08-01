@@ -330,6 +330,9 @@ export interface SkirmishState {
   /** Level this game is testing (null = free skirmish). Lets the screen tell
    * "resume the same board" from "launch a different level". */
   levelId: string | null;
+  /** Activity owning this board. Run Battles scope this to Run + battle index so
+   * another use of the same Level can never be mistaken for the live match. */
+  activityId: string | null;
   /** Enemy decision policy for this game. 'search' is the rung-1 objective-aware
    * search AI (core/ai); 'greedy' keeps the legacy capture-else-random policy
    * reachable for A/B feel comparison via `?ai=greedy`. */
@@ -350,10 +353,10 @@ export interface SkirmishState {
   /** Multiplayer context (null = single-player). When set, the AI never fires and
    *  input is gated to `net.localSide` instead of 'player'. */
   net: NetState | null;
-  newSkirmish: (opts: SkirmishOptions & { preserveBoardPresentation?: boolean }) => void;
+  newSkirmish: (opts: SkirmishOptions & { preserveBoardPresentation?: boolean; activityId?: string | null }) => void;
   /** Reset match state on the board already being presented. This invalidates async
    *  match work without replacing, reframing, or replaying the board presentation. */
-  restartSkirmish: (opts: SkirmishOptions) => void;
+  restartSkirmish: (opts: SkirmishOptions & { activityId?: string | null }) => void;
   /** Begin a deferred player's clock once the playable surface has painted. */
   activateClock: () => void;
   /** Start a multiplayer match: build the shared (level, seed) board, record which
@@ -435,10 +438,15 @@ export interface SkirmishState {
  * been started, the last one already finished, or a different level is opened.
  */
 export function shouldStartFreshSkirmish(
-  state: Pick<SkirmishState, 'started' | 'game' | 'levelId'> & { net?: NetState | null },
+  state: Pick<SkirmishState, 'started' | 'game' | 'levelId' | 'activityId'> & { net?: NetState | null },
   requestedLevelId: string | null,
+  requestedActivityId: string | null,
 ): boolean {
-  return !!state.net || !state.started || state.game.winner !== null || state.levelId !== requestedLevelId;
+  return !!state.net
+    || !state.started
+    || state.game.winner !== null
+    || state.levelId !== requestedLevelId
+    || state.activityId !== requestedActivityId;
 }
 
 const INITIAL_GAME = createSkirmish({ seed: 1 });
@@ -1005,6 +1013,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   turnsElapsed: 0,
   started: false,
   levelId: null,
+  activityId: null,
   aiMode: 'search',
   clock: null,
   pendingPromotion: null,
@@ -1078,6 +1087,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       objective,
       started: true,
       levelId: opts.level?.id ?? null,
+      activityId: opts.activityId ?? null,
       aiMode: opts.ai ?? get().aiMode,
       clock,
       pendingPromotion: null,
@@ -1169,6 +1179,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       log,
       started: true,
       levelId: level.id,
+      activityId: null,
       clock: null, // netplay is untimed in v1 (a shared wall-clock is future work)
       pendingPromotion: null,
       adminMode: null,
@@ -1248,6 +1259,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     set({
       started: false,
       levelId: null,
+      activityId: null,
       victoryOverride: null,
       resultDetail: null,
       turnsElapsed: 0,
@@ -1361,6 +1373,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       resultDetail: adjudicationResultDetail(settled.adjudication, 'player', !!victoryOverride),
       log,
       levelId: match.levelId,
+      activityId: match.activityId ?? null,
       // Restore the enemy policy so the ?ai=greedy A/B lever survives a reload
       // (older snapshots predate the field ⇒ default to the search AI).
       aiMode: match.aiMode ?? 'search',

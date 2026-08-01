@@ -15,6 +15,7 @@
     "predrawn:prepare": "node scripts/prepare-predrawn-generation-run.mjs",
     "e2e:lobby": "node scripts/lobby-e2e.mjs",
     "e2e:run-battle": "node scripts/run-battle-e2e.mjs",
+    "e2e:run-scene-resume": "node scripts/run-scene-resume-e2e.mjs",
     "e2e:level-editor-pan": "node scripts/level-editor-pan-e2e.mjs",
     "vendor:ambience": "node scripts/vendor-ambience.mjs",
     "assets:build:macro-tiles": "python scripts/build-macro-tiles.py",
