@@ -15,6 +15,7 @@ const unit = (inspectionSeed: number): RunArmyUnit => ({
   number: inspectionSeed + 1,
   inspectionSeed,
   abilities: [],
+  modifiers: [],
   source: 'starting',
 });
 

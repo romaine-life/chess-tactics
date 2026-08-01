@@ -1,8 +1,18 @@
 import type { ReactElement } from 'react';
 import { resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import { runCardArtSlot, runCardFlavor, runCardName } from '../run/cardNames';
-import { bundleLabel, type PieceBundle, type PurchasablePieceType } from '../run/model';
-import { RUN_CARD_FRAME_SLOT, RunCardFace, type RunCardFaceContent } from './RunCardFace';
+import {
+  bundleLabel,
+  type PieceBundle,
+  type PurchasablePieceType,
+  type RunBundleOffer,
+} from '../run/model';
+import {
+  RUN_CARD_FRAME_SLOT,
+  RUN_CARD_PESTIFEROUS_FRAME_SLOT,
+  RunCardFace,
+  type RunCardFaceContent,
+} from './RunCardFace';
 
 const CARD_PIECE_ORDER: readonly PurchasablePieceType[] = Object.freeze(['pawn', 'knight', 'bishop', 'rook', 'queen']);
 
@@ -23,7 +33,7 @@ export function RunBundleCard({
   disabled = false,
   onSelect,
 }: {
-  bundle: PieceBundle;
+  bundle: PieceBundle | RunBundleOffer;
   mode: 'draft' | 'shop' | 'reference';
   bought?: boolean;
   disabled?: boolean;
@@ -32,12 +42,19 @@ export function RunBundleCard({
   const label = bundleLabel(bundle);
   const name = runCardName(bundle);
   const artUrl = resolvedLiveMediaUrl(runCardArtSlot(bundle));
-  const frameUrl = resolvedLiveMediaUrl(RUN_CARD_FRAME_SLOT);
+  const cardType = 'cardType' in bundle ? bundle.cardType : null;
+  const frameUrl = resolvedLiveMediaUrl(
+    cardType === 'pestiferous' ? RUN_CARD_PESTIFEROUS_FRAME_SLOT : RUN_CARD_FRAME_SLOT,
+  );
+  const cost = 'cost' in bundle ? bundle.cost : bundle.value;
   const card = {
     name,
-    cost: bundle.value,
-    typeLine: 'Units',
+    cost,
+    typeLine: cardType === 'pestiferous' ? 'Units — Pestiferous' : 'Units',
     grants: grantsForBundle(bundle),
+    ...(cardType === 'pestiferous'
+      ? { rules: 'Each unit is Plagued. After every Battle, this card loses one random unit.' }
+      : {}),
     flavor: runCardFlavor(bundle),
   } satisfies RunCardFaceContent;
   const face = (
@@ -52,7 +69,7 @@ export function RunBundleCard({
     return (
       <span
         className="run-bundle-card is-reference"
-        aria-label={`${name}. ${label}. Worth ${bundle.value} gold.`}
+        aria-label={`${name}. ${label}. Worth ${cost} gold.`}
       >
         {face}
       </span>
@@ -60,7 +77,7 @@ export function RunBundleCard({
   }
   const actionLabel = mode === 'draft'
     ? `Take ${name} — ${label}`
-    : `${bought ? 'Purchased' : 'Buy'} ${name} — ${label} — for ${bundle.value} gold`;
+    : `${bought ? 'Purchased' : 'Buy'} ${name} — ${label} — for ${cost} gold`;
   return (
     <button
       type="button"

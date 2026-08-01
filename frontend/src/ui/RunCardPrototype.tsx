@@ -6,8 +6,14 @@ import {
 } from '../net/liveMediaAdmin';
 import { SliderRow } from './dressing/SliderRow';
 import {
+  PESTIFEROUS_OFFER_DENOMINATOR,
+  PIECE_BUNDLE_DECK,
+  pestiferousOfferRoll,
+} from '../run/model';
+import {
   RUN_CARD_APPROVED_TUNING,
   RUN_CARD_FRAME_SLOT,
+  RUN_CARD_PESTIFEROUS_FRAME_SLOT,
   RUN_CARD_REFERENCE_WIDTH,
   RunCardFace,
   runCardUnitImageKind,
@@ -15,7 +21,6 @@ import {
   type RunCardImageKind,
 } from './RunCardFace';
 
-const FRAME_SLOT = RUN_CARD_FRAME_SLOT;
 const ART_SLOT = 'ui/run/card-art/pppkb/illustration.png';
 const SHA256 = /^[0-9a-f]{64}$/;
 const REFERENCE_CARD_WIDTH = RUN_CARD_REFERENCE_WIDTH;
@@ -36,6 +41,7 @@ const DEFAULT_TYPE_X = RUN_CARD_APPROVED_TUNING.typeX;
 const DEFAULT_TYPE_Y = RUN_CARD_APPROVED_TUNING.typeY;
 const DEFAULT_FLAVOR_SIZE = RUN_CARD_APPROVED_TUNING.flavorSize;
 const DEFAULT_TITLE_TYPE_HORIZONTAL_LOCKED = true;
+const ATARAXIA_SAMPLE_DRAWS = 64;
 
 const clampCardFontSize = (value: number, min: number, max: number): number => (
   Math.round(Math.min(max, Math.max(min, value)) * 100) / 100
@@ -46,7 +52,7 @@ const clampCardHorizontal = (value: number, min = TEXT_HORIZONTAL_MIN, max = TEX
   Math.round(Math.min(max, Math.max(min, value)) * 100) / 100
 );
 
-const CARD = Object.freeze({
+const STANDARD_CARD = Object.freeze({
   name: 'Parish Militia',
   cost: 9,
   typeLine: 'Units',
@@ -57,6 +63,24 @@ const CARD = Object.freeze({
   ] as const,
   flavor: 'The bell was gone. Five shadows gathered at the accustomed hour.',
 }) satisfies RunCardFaceContent;
+
+export type RunCardPrototypeVariant = 'standard' | 'pestiferous';
+
+export function runCardPrototypeVariantFromSearch(search: string): RunCardPrototypeVariant {
+  return new URLSearchParams(search).get('cardVariant') === 'pestiferous'
+    ? 'pestiferous'
+    : 'standard';
+}
+
+export function runCardPrototypeContent(variant: RunCardPrototypeVariant): RunCardFaceContent {
+  return variant === 'pestiferous'
+    ? {
+        ...STANDARD_CARD,
+        typeLine: 'Units — Pestiferous',
+        rules: 'Each unit is Plagued. After every Battle, this card loses one random unit.',
+      }
+    : STANDARD_CARD;
+}
 
 function selectedCandidate(
   catalog: AdminLiveMediaCatalog,
@@ -88,6 +112,9 @@ export function RunCardPrototypeViewer({
 }): ReactElement {
   const [catalog, setCatalog] = useState<AdminLiveMediaCatalog | null>(null);
   const [error, setError] = useState('');
+  const [cardVariant, setCardVariant] = useState<RunCardPrototypeVariant>(() => (
+    runCardPrototypeVariantFromSearch(window.location.search)
+  ));
   const [costX, setCostX] = useState(DEFAULT_COST_X);
   const [costY, setCostY] = useState(DEFAULT_COST_Y);
   const [costSize, setCostSize] = useState(DEFAULT_COST_SIZE);
@@ -100,8 +127,19 @@ export function RunCardPrototypeViewer({
   const [titleTypeSizeRatio, setTitleTypeSizeRatio] = useState<number | null>(null);
   const [titleTypeHorizontalLocked, setTitleTypeHorizontalLocked] = useState(DEFAULT_TITLE_TYPE_HORIZONTAL_LOCKED);
   const [flavorSize, setFlavorSize] = useState(DEFAULT_FLAVOR_SIZE);
+  const [pestiferousDenominator, setPestiferousDenominator] = useState(PESTIFEROUS_OFFER_DENOMINATOR);
   const [handoffCopyState, setHandoffCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
   const [loaded, setLoaded] = useState<ReadonlySet<RunCardImageKind>>(() => new Set());
+  const card = useMemo(() => runCardPrototypeContent(cardVariant), [cardVariant]);
+  const frameSlot = cardVariant === 'pestiferous'
+    ? RUN_CARD_PESTIFEROUS_FRAME_SLOT
+    : RUN_CARD_FRAME_SLOT;
+  const realizedPestiferousCount = useMemo(() => (
+    Array.from({ length: ATARAXIA_SAMPLE_DRAWS }, (_, index) => {
+      const bundle = PIECE_BUNDLE_DECK[index % PIECE_BUNDLE_DECK.length];
+      return pestiferousOfferRoll(4217, Math.floor(index / 4), index % 4, bundle.id, pestiferousDenominator);
+    }).filter(Boolean).length
+  ), [pestiferousDenominator]);
 
   useEffect(() => {
     let active = true;
@@ -111,7 +149,10 @@ export function RunCardPrototypeViewer({
     return () => { active = false; };
   }, []);
 
-  const frame = useMemo(() => catalog ? selectedCandidate(catalog, FRAME_SLOT, 'frameCandidate') : null, [catalog]);
+  const frame = useMemo(
+    () => catalog ? selectedCandidate(catalog, frameSlot, 'frameCandidate') : null,
+    [catalog, frameSlot],
+  );
   const art = useMemo(() => catalog ? selectedCandidate(catalog, ART_SLOT, 'artCandidate') : null, [catalog]);
   const missing = catalog && (!frame || !art) ? 'The requested frame or artwork candidate is unavailable.' : '';
   const sceneError = useMemo(() => error || missing ? new Error(error || missing) : null, [error, missing]);
@@ -120,7 +161,7 @@ export function RunCardPrototypeViewer({
     && art
     && loaded.has('frame')
     && loaded.has('art')
-    && CARD.grants.every((grant, cell) => (
+    && card.grants.every((grant, cell) => (
       Array.from({ length: grant.count }, (_, index) => runCardUnitImageKind(cell, grant.unit, index))
         .every((kind) => loaded.has(kind))
     )),
@@ -195,15 +236,30 @@ export function RunCardPrototypeViewer({
     setTypeY(DEFAULT_TYPE_Y);
     setTypeSize(DEFAULT_TYPE_SIZE);
     setFlavorSize(DEFAULT_FLAVOR_SIZE);
+    setPestiferousDenominator(PESTIFEROUS_OFFER_DENOMINATOR);
     setTitleTypeSizeRatio(null);
     setTitleTypeHorizontalLocked(DEFAULT_TITLE_TYPE_HORIZONTAL_LOCKED);
     setHandoffCopyState('idle');
+  };
+  const chooseCardVariant = (next: RunCardPrototypeVariant): void => {
+    const params = new URLSearchParams(window.location.search);
+    if (next === 'pestiferous') params.set('cardVariant', 'pestiferous');
+    else params.delete('cardVariant');
+    params.delete('frameCandidate');
+    const search = params.toString();
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash}`,
+    );
+    setCardVariant(next);
   };
   const copyCodexHandoff = async (): Promise<void> => {
     const payload = JSON.stringify({
       kind: 'run-card-layout-tuning',
       version: 2,
-      card: CARD.name,
+      card: card.name,
+      cardVariant,
       referenceWidthPx: REFERENCE_CARD_WIDTH,
       units: 'percent of card width (cqw)',
       frameSha256: frame?.media?.sha256 ?? null,
@@ -215,6 +271,12 @@ export function RunCardPrototypeViewer({
       locks: {
         titleTypeSizeRatio,
         titleTypeHorizontalLocked,
+      },
+      ataraxiaI: {
+        pestiferousDenominator,
+        sampleSeed: 4217,
+        sampleDraws: ATARAXIA_SAMPLE_DRAWS,
+        realizedPestiferousCount,
       },
     }, null, 2);
     try {
@@ -235,7 +297,6 @@ export function RunCardPrototypeViewer({
       setHandoffCopyState(copied ? 'copied' : 'error');
     }
   };
-
   return (
     <>
       <section className="al-lab-main run-card-prototype-main" aria-label="Card layout preview">
@@ -244,7 +305,7 @@ export function RunCardPrototypeViewer({
         {frame && art ? (
           <div className="run-card-prototype-stage">
             <RunCardFace
-              card={CARD}
+              card={card}
               frameUrl={frame.media!.url}
               artUrl={art.media!.url}
               width={`${REFERENCE_CARD_WIDTH * viewerZoom}px`}
@@ -262,6 +323,22 @@ export function RunCardPrototypeViewer({
           <div className="tileset-control-stack">
             {header}
             <p className="run-card-prototype-note">Prototype instrument. The Studio Zoom control changes only the preview scale.</p>
+            <div className="tileset-button-row" role="group" aria-label="Card variant">
+              <button
+                type="button"
+                className={`tileset-view-action${cardVariant === 'standard' ? ' active' : ''}`}
+                data-card-variant="standard"
+                aria-pressed={cardVariant === 'standard'}
+                onClick={() => chooseCardVariant('standard')}
+              >Standard</button>
+              <button
+                type="button"
+                className={`tileset-view-action${cardVariant === 'pestiferous' ? ' active' : ''}`}
+                data-card-variant="pestiferous"
+                aria-pressed={cardVariant === 'pestiferous'}
+                onClick={() => chooseCardVariant('pestiferous')}
+              >Pestiferous</button>
+            </div>
             <div className="tileset-button-row run-card-prototype-actions">
               <button
                 type="button"
@@ -308,10 +385,22 @@ export function RunCardPrototypeViewer({
             <SliderRow label={<>Cost horizontal · {costX.toFixed(2)}%</>} value={costX} set={setCostX} min={-3} max={3} step={.05} nudge={.05} dflt={DEFAULT_COST_X} />
             <SliderRow label={<>Cost vertical · {costY.toFixed(2)}%</>} value={costY} set={setCostY} min={-3} max={3} step={.05} nudge={.05} dflt={DEFAULT_COST_Y} />
             <SliderRow label={<>Flavor size · {flavorSize.toFixed(2)}%</>} value={flavorSize} set={setFlavorSize} min={2.5} max={6} step={.05} nudge={.05} dflt={DEFAULT_FLAVOR_SIZE} />
+            <SliderRow
+              label={<>Ataraxia I prevalence · 1 in {pestiferousDenominator}</>}
+              value={pestiferousDenominator}
+              set={setPestiferousDenominator}
+              min={2}
+              max={24}
+              step={1}
+              nudge={1}
+              dflt={PESTIFEROUS_OFFER_DENOMINATOR}
+            />
             {frame && art ? (
               <dl className="run-card-prototype-source-readout">
                 <div><dt>Frame</dt><dd>{frame.media!.sha256.slice(0, 12)} · {frame.status}</dd></div>
                 <div><dt>Artwork</dt><dd>{art.media!.sha256.slice(0, 12)} · {art.status}</dd></div>
+                <div><dt>Card</dt><dd>{cardVariant === 'pestiferous' ? 'Units — Pestiferous' : 'Units'}</dd></div>
+                <div><dt>Ataraxia I sample</dt><dd>{realizedPestiferousCount} / {ATARAXIA_SAMPLE_DRAWS} Pestiferous · seed 4217</dd></div>
               </dl>
             ) : null}
           </div>

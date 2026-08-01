@@ -2,6 +2,7 @@ import { useState, type CSSProperties, type ReactElement } from 'react';
 import { paletteForSide, pieceSpritePath, type PlayablePieceType } from '../core/pieces';
 
 export const RUN_CARD_FRAME_SLOT = 'ui/run/card-prototypes/frame-v1.png';
+export const RUN_CARD_PESTIFEROUS_FRAME_SLOT = 'ui/run/card-prototypes/pestiferous-frame-v1.png';
 export const RUN_CARD_REFERENCE_WIDTH = 360;
 
 const PLAYER_CARD_PALETTE = paletteForSide('player');
@@ -16,6 +17,7 @@ export type RunCardFaceContent = Readonly<{
   cost: number;
   typeLine: string;
   grants: readonly Readonly<{ count: number; unit: PlayablePieceType }>[];
+  rules?: string;
   flavor: string;
 }>;
 
@@ -39,7 +41,7 @@ export const RUN_CARD_APPROVED_TUNING: RunCardFaceTuning = Object.freeze({
   titleY: 0,
   typeSize: 5.3,
   typeX: 1.35,
-  typeY: .2,
+  typeY: .65,
   costSize: 6.2,
   costX: 0,
   costY: .3,
@@ -248,6 +250,7 @@ export function RunCardFace({
             </span>
           ))}
         </span>
+        {card.rules ? <span className="run-card-prototype-effect">{card.rules}</span> : null}
         <span className="run-card-prototype-flavor">{card.flavor}</span>
       </span>
     </span>

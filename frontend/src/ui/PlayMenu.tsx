@@ -41,11 +41,17 @@ import {
 import { drawableAssets } from '@chess-tactics/board-render';
 import { useWars, runEligibleOfficialWars } from '../war/store';
 import { useActiveRun } from '../run/store';
-import { createRun, formatGold, snapshotWar } from '../run/model';
+import { ATARAXIA_BY_TIER, createRun, formatGold, snapshotWar, type AtaraxiaTier } from '../run/model';
+import {
+  RUN_PROGRESSION_EVENT,
+  highestUnlockedAtaraxiaTier,
+  readRunProgression,
+} from '../run/progression';
 import { useConfirm } from './shared/ConfirmDialog';
 import { InnerChromeBox } from './shared/ChromeBox';
 import { loadMatch, type PersistedMatch } from '../game/matchPersistence';
 import { continueActivity } from './playContinue';
+import { AtaraxiaSelector } from './AtaraxiaSelector';
 
 type PlayIcon = 'solo-skirmish' | 'campaign-editor' | 'level-editor' | 'lobbies';
 
@@ -136,9 +142,20 @@ function RunPanel({
   const adoptBrowserRun = useActiveRun((state) => state.adoptBrowserRun);
   const { ask, dialog } = useConfirm();
   const [starting, setStarting] = useState(false);
+  const [progression, setProgression] = useState(readRunProgression);
+  const [ataraxiaTier, setAtaraxiaTier] = useState<AtaraxiaTier>(0);
   const eligible = useMemo(() => runEligibleOfficialWars(wars), [wars]);
+  const highestUnlockedTier = highestUnlockedAtaraxiaTier(progression);
 
   useEffect(() => { void hydrate(); }, [hydrate]);
+  useEffect(() => {
+    const sync = (): void => setProgression(readRunProgression());
+    window.addEventListener(RUN_PROGRESSION_EVENT, sync);
+    return () => window.removeEventListener(RUN_PROGRESSION_EVENT, sync);
+  }, []);
+  useEffect(() => {
+    if (ataraxiaTier > highestUnlockedTier) setAtaraxiaTier(highestUnlockedTier);
+  }, [ataraxiaTier, highestUnlockedTier]);
 
   const start = async (): Promise<void> => {
     if (starting || syncing || !eligible.length) return;
@@ -159,7 +176,7 @@ function RunPanel({
       globalThis.crypto?.getRandomValues?.(seedArray);
       const seed = seedArray[0] || (Date.now() >>> 0);
       const war = [...eligible].sort((a, b) => a.id.localeCompare(b.id))[seed % eligible.length];
-      replace(createRun(snapshotWar(war, levels), seed));
+      replace(createRun(snapshotWar(war, levels), seed, ataraxiaTier));
       navigateApp('/run');
     } finally {
       setStarting(false);
@@ -189,7 +206,7 @@ function RunPanel({
           <InnerChromeBox className="play-level-card">
             <h3>{run.war.name}</h3>
             <p>{run.war.description || 'Active War'}</p>
-            <p>Battle {run.battleIndex + 1} of {run.war.battles.length} · {run.army.length} units · {formatGold(run.goldTenths)} gold</p>
+            <p>Battle {run.battleIndex + 1} of {run.war.battles.length} · {run.army.length} units · {formatGold(run.goldTenths)} gold · {ATARAXIA_BY_TIER[run.ataraxiaTier].label}</p>
             <NavButton data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} to="/run">Play</NavButton>
           </InnerChromeBox>
         ) : null}
@@ -197,6 +214,11 @@ function RunPanel({
           <p className="play-empty">No official Wars are currently marked Eligible for Run. You can author and direct-play a private War in the War Editor.</p>
         ) : null}
         {!loading && !officialAvailable ? <p className="play-content-warning">Official Wars are unavailable. Reopen Play to retry.</p> : null}
+        <AtaraxiaSelector
+          value={ataraxiaTier}
+          highestUnlockedTier={highestUnlockedTier}
+          onChange={setAtaraxiaTier}
+        />
         <button
           type="button"
           data-chrome-unit="inner-text-button"

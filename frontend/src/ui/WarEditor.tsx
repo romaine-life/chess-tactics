@@ -2,7 +2,12 @@ import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { fetchMe, type AuthUser } from '../net/auth';
-import { createRun, snapshotWar } from '../run/model';
+import { createRun, snapshotWar, type AtaraxiaTier } from '../run/model';
+import {
+  RUN_PROGRESSION_EVENT,
+  highestUnlockedAtaraxiaTier,
+  readRunProgression,
+} from '../run/progression';
 import { useActiveRun } from '../run/store';
 import { useWars } from '../war/store';
 import { navigateApp } from './navigation';
@@ -12,6 +17,7 @@ import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { SettingsButton, SettingsRow, SettingsSection } from './shared/SettingsControls';
 import { useConfirm } from './shared/ConfirmDialog';
 import { useSceneParticipant } from './shell/SceneBoundary';
+import { AtaraxiaSelector } from './AtaraxiaSelector';
 
 function seedForNewRun(): number {
   const values = new Uint32Array(1);
@@ -30,7 +36,10 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
   const [userReady, setUserReady] = useState(false);
   const [officialReady, setOfficialReady] = useState(false);
   const [status, setStatus] = useState('');
+  const [progression, setProgression] = useState(readRunProgression);
+  const [ataraxiaTier, setAtaraxiaTier] = useState<AtaraxiaTier>(0);
   const { ask, dialog } = useConfirm();
+  const highestUnlockedTier = highestUnlockedAtaraxiaTier(progression);
 
   useSceneParticipant('war-editor-content', loaded ? 'painted' : 'loading');
 
@@ -54,6 +63,16 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
     void useActiveRun.getState().hydrate();
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    const sync = (): void => setProgression(readRunProgression());
+    window.addEventListener(RUN_PROGRESSION_EVENT, sync);
+    return () => window.removeEventListener(RUN_PROGRESSION_EVENT, sync);
+  }, []);
+
+  useEffect(() => {
+    if (ataraxiaTier > highestUnlockedTier) setAtaraxiaTier(highestUnlockedTier);
+  }, [ataraxiaTier, highestUnlockedTier]);
 
   const selectedWar = wars.find((war) => war.id === selectedWarId) ?? null;
   const orderedBattles = useMemo(
@@ -89,7 +108,7 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
     }))) return;
     if (activeRun) await useActiveRun.getState().abandon();
     try {
-      useActiveRun.getState().replace(createRun(snapshotWar(selectedWar, levels), seedForNewRun()));
+      useActiveRun.getState().replace(createRun(snapshotWar(selectedWar, levels), seedForNewRun(), ataraxiaTier));
       navigateApp('/run');
     } catch (error) {
       setStatus((error as Error).message);
@@ -200,6 +219,11 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
                         />
                       </SettingsRow>
                     ) : null}
+                    <AtaraxiaSelector
+                      value={ataraxiaTier}
+                      highestUnlockedTier={highestUnlockedTier}
+                      onChange={setAtaraxiaTier}
+                    />
                     <SettingsRow
                       title="Play this War"
                       description="Private Wars can be started directly here; only eligible official Wars enter the main pool."

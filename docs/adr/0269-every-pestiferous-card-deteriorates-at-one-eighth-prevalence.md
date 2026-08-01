@@ -4,6 +4,7 @@ date: 2026-07-31
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
   - "[ADR-0271](0271-core-cards-become-affected-when-drawn.md)"
+  - "[ADR-0286](0286-ataraxia-i-is-a-persisted-run-tier-with-draw-time-pestiferous-instances.md)"
 partially_supersedes:
   - "[ADR-0267](0267-pestiferous-cards-lose-units-and-persist-when-empty.md)'s deferred eligibility and frequency rules"
 ---

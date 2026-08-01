@@ -68,13 +68,15 @@ these.
   type line, and a rules box whose flavor text remains at the bottom. The type
   line is never empty: ordinary bundle cards say **Units**, while affected cards
   append causal qualifiers after an em dash, such as **Units — Pestiferous** or
-  **Units — Tactical**. Future mechanically different primary families may use
+  **Units — Tactical**. Ordinary and qualified labels use one shared optically
+  centered type-line scale and baseline rather than per-label positioning.
+  Future mechanically different primary families may use
   types such as **Event**. The cost
   is never decimal, fractional, zero, or two-digit, and does not use separate
   numbered coin art. Each actual unit in the ledger appears as the same
   canonical player-side sprite used on the board. Card Layout, draft, shop,
   review, and Enchiridion use the same face rather than parallel card shells
-  (ADR-0219, ADR-0225, ADR-0270, ADR-0275, ADR-0276, ADR-0283).
+  (ADR-0219, ADR-0225, ADR-0270, ADR-0275, ADR-0276, ADR-0283, ADR-0285).
 - The bundle deck's 49 unique one-through-nine-point compositions are the
   authored **core cards**. Each keeps one title and flavor text while its
   drawn offer may give particular units more than one modifier. The 49 cores do
@@ -114,7 +116,11 @@ these.
   A Pestiferous card makes all its units Plagued; every owned nonempty
   Pestiferous card loses one seeded random unit on each Battle advancement
   whether or not it was drawn or deployed. The empty card remains as a possible
-  dead draw until an explicit effect removes it (ADR-0267, ADR-0269, ADR-0271).
+  dead draw until an explicit effect removes it. Affected shop offers, purchases,
+  card membership, and losses are persisted; the seeded draw-time roll is one in
+  eight and is inspectable in Card Layout. Pestiferous cards retain the shared
+  face geometry but resolve their dedicated black bubbling-crude frame slot;
+  ordinary cards keep the standard frame (ADR-0267, ADR-0269, ADR-0271, ADR-0286).
 - Card ledgers have no assumed row cap before live experimentation. Dense cards
   may step down row spacing, icons, and type within readable bounds, but they
   must continue to show every unit property and retain the core card's flavor

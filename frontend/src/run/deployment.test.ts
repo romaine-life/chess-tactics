@@ -109,6 +109,7 @@ describe('Run deployment', () => {
       number,
       inspectionSeed: number,
       abilities,
+      modifiers: [],
       source: 'shop',
     });
     const bishops = {

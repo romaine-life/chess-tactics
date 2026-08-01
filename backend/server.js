@@ -2703,6 +2703,20 @@ const MIGRATIONS = [
       DROP TABLE IF EXISTS card_scene_documents;
     `,
   },
+  {
+    version: 49,
+    name: 'account-scoped Ataraxia progression',
+    // Ataraxia unlocks outlive the one mutable active Run. The value is monotonic:
+    // -1 means no completed Run; completing tier N records at least N.
+    sql: `
+      CREATE TABLE IF NOT EXISTS run_progression (
+        owner_email                       text        PRIMARY KEY,
+        highest_completed_ataraxia_tier  integer     NOT NULL DEFAULT -1
+          CHECK (highest_completed_ataraxia_tier >= -1),
+        updated_at                        timestamptz NOT NULL DEFAULT now()
+      );
+    `,
+  },
 ];
 
 let pool = null;
@@ -2738,6 +2752,7 @@ const REQUIRED_SCHEMA_RELATIONS = [
   'predrawn_generation_attempts',
   'predrawn_generation_attempt_events',
   'run_relic_stat_events',
+  'run_progression',
 ];
 const REQUIRED_SCHEMA_REPAIR_MIGRATIONS = new Map([
   ['level_thumbnail_derivatives', 22],
@@ -2753,6 +2768,7 @@ const REQUIRED_SCHEMA_REPAIR_MIGRATIONS = new Map([
   ['predrawn_generation_attempts', 43],
   ['predrawn_generation_attempt_events', 43],
   ['run_relic_stat_events', 45],
+  ['run_progression', 49],
 ]);
 
 function buildPool() {
@@ -14941,6 +14957,11 @@ const RUN_CARD_ART_PIECE_VALUE = Object.freeze({ pawn: 1, knight: 3, bishop: 3, 
 const RUN_CARD_ART_PIECE_INITIAL = Object.freeze({ pawn: 'p', knight: 'k', bishop: 'b', rook: 'r', queen: 'q' });
 const RUN_CARD_ART_PIECE_ORDER = Object.freeze(['pawn', 'knight', 'bishop', 'rook', 'queen']);
 const RUN_CARD_FRAME_SLOT = 'ui/run/card-prototypes/frame-v1.png';
+const RUN_CARD_PESTIFEROUS_FRAME_SLOT = 'ui/run/card-prototypes/pestiferous-frame-v1.png';
+const RUN_CARD_FRAME_VARIANT_BY_SLOT = Object.freeze({
+  [RUN_CARD_FRAME_SLOT]: 'standard',
+  [RUN_CARD_PESTIFEROUS_FRAME_SLOT]: 'pestiferous',
+});
 const RUN_CARD_FRAME_SCHEMA = 'run-card-frame-v1';
 const SOURCE_ART_TURNTABLE_SCHEMA = 'structure-source-art-turntable-v1';
 const SOURCE_ART_TURNTABLE_DIRECTIONS = Object.freeze([
@@ -15067,9 +15088,10 @@ function sourceArtTurntableOwnerProofIssue(sourceArt, proof, surfaceUrl) {
 }
 
 function runCardFrameProjection(row) {
-  const claimed = row.slot === RUN_CARD_FRAME_SLOT || row.role === 'card-frame';
+  const variant = RUN_CARD_FRAME_VARIANT_BY_SLOT[row.slot];
+  const claimed = Boolean(variant) || row.role === 'card-frame';
   if (!claimed) return { claimed: false, issue: null };
-  if (row.slot !== RUN_CARD_FRAME_SLOT) return { claimed: true, issue: 'Run card frame role is restricted to the canonical frame slot' };
+  if (!variant) return { claimed: true, issue: 'Run card frame role is restricted to the canonical semantic frame slots' };
   if (row.domain !== 'ui') return { claimed: true, issue: 'Run card frame requires the ui media domain' };
   if (row.role !== 'card-frame') return { claimed: true, issue: 'Run card frame requires the card-frame role' };
   if (row.media_type !== 'image/png') return { claimed: true, issue: 'Run card frame requires image/png' };
@@ -15084,6 +15106,10 @@ function runCardFrameProjection(row) {
     || metadata.referenceWidthPx !== 360 || slotMetadata.referenceWidthPx !== 360
     || metadata.aspectRatio !== '5:7' || slotMetadata.aspectRatio !== '5:7'
   ) return { claimed: true, issue: 'Run card frame requires its typed Card Layout projection metadata' };
+  if (
+    variant === 'pestiferous'
+    && (metadata.variant !== 'pestiferous' || slotMetadata.variant !== 'pestiferous')
+  ) return { claimed: true, issue: 'Pestiferous Run card frame requires its typed variant metadata' };
   if (mediaAcceptanceContract(row).mode !== 'standalone') {
     return { claimed: true, issue: 'Run card frame requires standalone atomic acceptance' };
   }
@@ -18127,20 +18153,83 @@ app.put('/api/campaign-progress', async (req, res) => {
   }
 });
 
+// --- Account-scoped Ataraxia progression ---------------------------------
+// Unlocks are monotonic and separate from the active Run, which is deleted when
+// finished or abandoned. Browser progression remains the offline/guest authority.
+function sanitizeRunProgression(raw) {
+  const tier = Number(raw && raw.highestCompletedAtaraxiaTier);
+  return {
+    formatVersion: 1,
+    highestCompletedAtaraxiaTier: Number.isSafeInteger(tier)
+      ? Math.max(-1, Math.min(100, tier))
+      : -1,
+  };
+}
+
+app.get('/api/run-progression', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    await ensureDbReady();
+    const { rows } = await pool.query(
+      'SELECT highest_completed_ataraxia_tier FROM run_progression WHERE owner_email = $1',
+      [user.email],
+    );
+    res.status(200).json({
+      progression: sanitizeRunProgression({
+        highestCompletedAtaraxiaTier: rows[0]?.highest_completed_ataraxia_tier ?? -1,
+      }),
+    });
+  } catch (error) {
+    dbUnavailable(res, 'Run progression read failed', error, 'run_progression_store_unavailable');
+  }
+});
+
+app.put('/api/run-progression', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const progression = sanitizeRunProgression(req.body && req.body.progression);
+  try {
+    await ensureDbReady();
+    const { rows } = await pool.query(
+      `INSERT INTO run_progression (owner_email, highest_completed_ataraxia_tier)
+       VALUES ($1, $2)
+       ON CONFLICT (owner_email) DO UPDATE
+         SET highest_completed_ataraxia_tier = GREATEST(
+               run_progression.highest_completed_ataraxia_tier,
+               EXCLUDED.highest_completed_ataraxia_tier
+             ),
+             updated_at = now()
+       RETURNING highest_completed_ataraxia_tier`,
+      [user.email, progression.highestCompletedAtaraxiaTier],
+    );
+    res.status(200).json({
+      ok: true,
+      progression: sanitizeRunProgression({
+        highestCompletedAtaraxiaTier: rows[0].highest_completed_ataraxia_tier,
+      }),
+    });
+  } catch (error) {
+    dbUnavailable(res, 'Run progression write failed', error, 'run_progression_store_unavailable');
+  }
+});
+
 // --- Account-scoped active Run (ADR-0193) ---------------------------------
 // Anonymous Runs stay in browser storage. Once signed in, the client adopts that
 // document here; the server owns one CAS-updated active Run per account.
 const ACTIVE_RUN_PHASES = new Set(['draft', 'deployment', 'battle', 'shop', 'victory']);
 const ACTIVE_RUN_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
 const ACTIVE_RUN_ABILITIES = new Set(['discipline', 'positioned', 'marshalled']);
+const ACTIVE_RUN_MODIFIERS = new Set(['plagued']);
 const RUN_RELICS = Array.isArray(serverRender?.RUN_RELICS) ? serverRender.RUN_RELICS : [];
 const RUN_RELIC_BY_ID = serverRender?.RUN_RELIC_BY_ID ?? {};
 const RUN_RELIC_IDS = new Set(RUN_RELICS.map((relic) => relic.id));
 function validateActiveRunBody(run) {
   if (!run || typeof run !== 'object' || Array.isArray(run)) return 'run must be an object';
-  if (run.formatVersion !== 1 && run.formatVersion !== 2 && run.formatVersion !== 3 && run.formatVersion !== 4) return 'run.formatVersion is unsupported';
+  if (run.formatVersion !== 1 && run.formatVersion !== 2 && run.formatVersion !== 3 && run.formatVersion !== 4 && run.formatVersion !== 5) return 'run.formatVersion is unsupported';
   if (typeof run.id !== 'string' || !run.id || run.id.length > 160) return 'run.id is invalid';
   if (!isFiniteInteger(run.seed) || run.seed < 0 || run.seed > 0xffffffff) return 'run.seed is invalid';
+  if (run.formatVersion >= 5 && run.ataraxiaTier !== 0 && run.ataraxiaTier !== 1) return 'run.ataraxiaTier is invalid';
   if (typeof run.updatedAt !== 'string' || !run.updatedAt) return 'run.updatedAt is required';
   if (!ACTIVE_RUN_PHASES.has(run.phase)) return 'run.phase is invalid';
   if (!isFiniteInteger(run.battleIndex) || run.battleIndex < 0) return 'run.battleIndex is invalid';
@@ -18174,6 +18263,10 @@ function validateActiveRunBody(run) {
     if (!Array.isArray(unit.abilities) || unit.abilities.some((ability) => !ACTIVE_RUN_ABILITIES.has(ability))) {
       return 'run.army contains invalid abilities';
     }
+    if (
+      run.formatVersion >= 5
+      && (!Array.isArray(unit.modifiers) || unit.modifiers.some((modifier) => !ACTIVE_RUN_MODIFIERS.has(modifier)))
+    ) return 'run.army contains invalid modifiers';
     if (unit.number !== undefined && (!isFiniteInteger(unit.number) || unit.number < 1)) {
       return 'run.army contains an invalid unit number';
     }
@@ -18188,6 +18281,98 @@ function validateActiveRunBody(run) {
     }
   }
   if (!run.army.some((unit) => unit.id === 'run-king' && unit.type === 'king')) return 'run.army must retain its King';
+  if (run.formatVersion >= 5) {
+    if (!Array.isArray(run.cards) || run.cards.length > 200) return 'run.cards is invalid';
+    const cardIds = new Set();
+    const cardUnitIds = new Set();
+    const lostCardUnitIds = new Set();
+    for (const card of run.cards) {
+      if (
+        !isObjectRecord(card)
+        || typeof card.id !== 'string'
+        || !card.id
+        || card.id.length > 160
+        || cardIds.has(card.id)
+        || typeof card.coreId !== 'string'
+        || !card.coreId
+        || card.coreId.length > 160
+        || (card.cardType !== null && card.cardType !== 'pestiferous')
+        || !isFiniteInteger(card.effectSeed)
+        || card.effectSeed < 0
+        || card.effectSeed > 0xffffffff
+        || !Array.isArray(card.unitIds)
+        || card.unitIds.length > 200
+        || !Array.isArray(card.lostUnitIds)
+        || card.lostUnitIds.length > 200
+        || !isFiniteInteger(card.acquiredAfterBattleIndex)
+        || card.acquiredAfterBattleIndex < 0
+        || card.acquiredAfterBattleIndex >= run.war.battles.length
+      ) return 'run.cards contains an invalid card';
+      cardIds.add(card.id);
+      for (const unitId of card.unitIds) {
+        if (
+          typeof unitId !== 'string'
+          || !unitId
+          || !unitIds.has(unitId)
+          || cardUnitIds.has(unitId)
+          || lostCardUnitIds.has(unitId)
+        ) {
+          return 'run.cards contains invalid unit membership';
+        }
+        cardUnitIds.add(unitId);
+      }
+      for (const unitId of card.lostUnitIds) {
+        if (
+          typeof unitId !== 'string'
+          || !unitId
+          || unitIds.has(unitId)
+          || cardUnitIds.has(unitId)
+          || lostCardUnitIds.has(unitId)
+        ) return 'run.cards contains invalid loss history';
+        lostCardUnitIds.add(unitId);
+      }
+    }
+    if (!Array.isArray(run.pestiferousLosses) || run.pestiferousLosses.length > 20000) {
+      return 'run.pestiferousLosses is invalid';
+    }
+    const lossKeys = new Set();
+    const lossUnitIds = new Set();
+    for (const loss of run.pestiferousLosses) {
+      const unit = loss && loss.unit;
+      const card = loss && run.cards.find((candidate) => candidate.id === loss.cardId);
+      const key = loss ? `${loss.cardId}:${loss.battleIndex}` : '';
+      if (
+        !isObjectRecord(loss)
+        || !isFiniteInteger(loss.battleIndex)
+        || loss.battleIndex < 0
+        || loss.battleIndex >= run.war.battles.length
+        || !card
+        || card.cardType !== 'pestiferous'
+        || lossKeys.has(key)
+        || !isObjectRecord(unit)
+        || typeof unit.id !== 'string'
+        || !card.lostUnitIds.includes(unit.id)
+        || lossUnitIds.has(unit.id)
+        || !ACTIVE_RUN_PIECES.has(unit.type)
+        || unit.type === 'king'
+        || typeof unit.name !== 'string'
+        || !unit.name.trim()
+        || unit.name.length > 80
+        || !Array.isArray(unit.abilities)
+        || unit.abilities.some((ability) => !ACTIVE_RUN_ABILITIES.has(ability))
+        || !Array.isArray(unit.modifiers)
+        || !unit.modifiers.includes('plagued')
+        || unit.modifiers.some((modifier) => !ACTIVE_RUN_MODIFIERS.has(modifier))
+        || !isFiniteInteger(unit.inspectionSeed)
+        || unit.inspectionSeed < 0
+        || unit.inspectionSeed > 0xffffffff
+      ) return 'run.pestiferousLosses contains an invalid loss';
+      lossKeys.add(key);
+      lossUnitIds.add(unit.id);
+    }
+    if (lossUnitIds.size !== lostCardUnitIds.size) return 'run.cards loss history is incomplete';
+    if (!isFiniteInteger(run.nextCardSequence) || run.nextCardSequence < 1) return 'run.nextCardSequence is invalid';
+  }
   for (const field of ['relics', 'seenRelics']) {
     if (!Array.isArray(run[field]) || run[field].length > 100 || run[field].some((id) => typeof id !== 'string' || !id)) {
       return `run.${field} is invalid`;
@@ -18208,6 +18393,48 @@ function validateActiveRunBody(run) {
     if (run.shop.soldUnits !== undefined && !Array.isArray(run.shop.soldUnits)) return 'run.shop.soldUnits is invalid';
     if (run.shop.entrySnapshot !== undefined && !isObjectRecord(run.shop.entrySnapshot)) {
       return 'run.shop.entrySnapshot is invalid';
+    }
+    if (run.formatVersion >= 5) {
+      if (!Array.isArray(run.shop.bundleOffers) || run.shop.bundleOffers.length < 1 || run.shop.bundleOffers.length > 10) {
+        return 'run.shop.bundleOffers is invalid';
+      }
+      const offerIds = new Set();
+      for (const offer of run.shop.bundleOffers) {
+        if (
+          !isObjectRecord(offer)
+          || typeof offer.offerId !== 'string'
+          || !offer.offerId
+          || offerIds.has(offer.offerId)
+          || typeof offer.id !== 'string'
+          || !offer.id
+          || !Array.isArray(offer.pieces)
+          || offer.pieces.length < 1
+          || offer.pieces.length > 9
+          || offer.pieces.some((piece) => !ACTIVE_RUN_PIECES.has(piece) || piece === 'king')
+          || !isFiniteInteger(offer.value)
+          || offer.value < 1
+          || offer.value > 9
+          || !isFiniteInteger(offer.cost)
+          || offer.cost < 1
+          || offer.cost > 9
+          || (offer.cardType !== null && offer.cardType !== 'pestiferous')
+          || !isFiniteInteger(offer.effectSeed)
+          || offer.effectSeed < 0
+          || offer.effectSeed > 0xffffffff
+        ) return 'run.shop.bundleOffers contains an invalid offer';
+        offerIds.add(offer.offerId);
+      }
+      if (run.shop.purchasedOfferId !== null && !offerIds.has(run.shop.purchasedOfferId)) {
+        return 'run.shop.purchasedOfferId is invalid';
+      }
+      if (
+        run.shop.entrySnapshot !== undefined
+        && (
+          !Array.isArray(run.shop.entrySnapshot.cards)
+          || !isFiniteInteger(run.shop.entrySnapshot.nextCardSequence)
+          || run.shop.entrySnapshot.nextCardSequence < 1
+        )
+      ) return 'run.shop.entrySnapshot card state is invalid';
     }
   }
   return null;

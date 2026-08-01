@@ -21469,3 +21469,57 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   margin: auto 0 0;
   text-wrap: wrap;
 }
+
+.run-card-prototype-effect {
+  font: 400 2.75cqw/1.12 var(--ds-font-display);
+  margin-block-start: .7cqw;
+  text-wrap: balance;
+}
+
+.run-ataraxia-selector {
+  display: grid;
+  gap: var(--ds-stack);
+  padding: var(--ds-gutter);
+}
+
+.run-ataraxia-selector header,
+.run-ataraxia-selector p {
+  margin: 0;
+}
+
+.run-ataraxia-selector h3 {
+  margin: var(--ds-inline-tight) 0 0;
+}
+
+.run-ataraxia-options {
+  display: grid;
+  gap: var(--ds-stack);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.run-ataraxia-options > button {
+  align-items: flex-start;
+  block-size: auto;
+  display: flex;
+  flex-direction: column;
+  min-block-size: 78px;
+  padding-block: var(--ds-stack);
+  text-align: start;
+}
+
+.run-ataraxia-options > button span,
+.run-ataraxia-options > button small {
+  white-space: normal;
+}
+
+.run-pestiferous-losses {
+  padding: var(--ds-gutter);
+}
+
+.run-pestiferous-losses :is(h3, p) {
+  margin: 0 0 var(--ds-stack);
+}
+
+.run-pestiferous-losses ul {
+  margin: 0;
+}

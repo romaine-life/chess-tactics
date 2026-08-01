@@ -11,6 +11,8 @@ import {
   cashOutPawn,
   chooseDraft,
   createRun,
+  createRunBundleOffer,
+  deterioratePestiferousCards,
   formatGold,
   grantGold,
   leaveShop,
@@ -40,6 +42,12 @@ function war(battles = 4, lootAt: number[] = []): RunWarSnapshot {
 
 function deployedRun(seed = 17, snapshot = war()): RunDocument {
   let run = createRun(snapshot, seed, '2026-01-01T00:00:00.000Z');
+  run = prepareDeployment(chooseDraft(run, run.draftOffers[0].draftId));
+  return beginBattle(run, run.army.map((unit) => unit.id), [], []);
+}
+
+function deployedAtaraxiaRun(seed = 17, snapshot = war()): RunDocument {
+  let run = createRun(snapshot, seed, 1, '2026-01-01T00:00:00.000Z');
   run = prepareDeployment(chooseDraft(run, run.draftOffers[0].draftId));
   return beginBattle(run, run.army.map((unit) => unit.id), [], []);
 }
@@ -81,7 +89,7 @@ describe('Run piece economy', () => {
     expect(drafted.army.filter((unit) => unit.source === 'draft').every((unit) => Number.isSafeInteger(unit.inspectionSeed))).toBe(true);
 
     const shop = openShop({ ...deployedRun(91), goldTenths: 100 * GOLD_SCALE }, []);
-    const bought = buyBundle(shop, shop.shop!.bundleOfferIds[0]);
+    const bought = buyBundle(shop, shop.shop!.bundleOffers[0].offerId);
     expect(bought.army.filter((unit) => unit.source === 'shop').every((unit) => unit.name.length > 0)).toBe(true);
     expect(bought.army.filter((unit) => unit.source === 'shop').every((unit) => Number.isSafeInteger(unit.inspectionSeed))).toBe(true);
     expect(new Set(bought.army.map((unit) => unit.name)).size).toBe(bought.army.length);
@@ -89,10 +97,10 @@ describe('Run piece economy', () => {
 
   it('allows at most one bundle purchase in a shop', () => {
     const shop = openShop({ ...deployedRun(), goldTenths: 100 * GOLD_SCALE }, []);
-    const [first, second] = shop.shop!.bundleOfferIds;
-    const bought = buyBundle(shop, first);
-    expect(bought.shop?.purchasedBundleId).toBe(first);
-    expect(buyBundle(bought, second)).toBe(bought);
+    const [first, second] = shop.shop!.bundleOffers;
+    const bought = buyBundle(shop, first.offerId);
+    expect(bought.shop?.purchasedOfferId).toBe(first.offerId);
+    expect(buyBundle(bought, second.offerId)).toBe(bought);
   });
 
   it('assigns stable per-type numbers to acquired units', () => {
@@ -119,17 +127,17 @@ describe('Run piece economy', () => {
 
   it('resets the complete shop transaction without rerolling its offers', () => {
     let shop = openShop({ ...deployedRun(29), goldTenths: 100 * GOLD_SCALE }, []);
-    const originalOffers = [...shop.shop!.bundleOfferIds];
+    const originalOffers = structuredClone(shop.shop!.bundleOffers);
     const originalArmy = structuredClone(shop.army);
     const originalGold = shop.goldTenths;
-    const bought = shop.shop!.bundleOfferIds[0];
+    const bought = shop.shop!.bundleOffers[0].offerId;
     shop = buyBundle(shop, bought);
     shop = sellArmyUnit(shop, shop.army.find((unit) => unit.type !== 'king')!.id);
     expect(shopHasChanges(shop)).toBe(true);
 
     const reset = resetShop(shop);
-    expect(reset.shop?.bundleOfferIds).toEqual(originalOffers);
-    expect(reset.shop?.purchasedBundleId).toBeNull();
+    expect(reset.shop?.bundleOffers).toEqual(originalOffers);
+    expect(reset.shop?.purchasedOfferId).toBeNull();
     expect(reset.shop?.soldUnits).toEqual([]);
     expect(reset.army).toEqual(originalArmy);
     expect(reset.goldTenths).toBe(originalGold);
@@ -212,7 +220,7 @@ describe('Run progression and relic offers', () => {
     } as unknown as RunDocument;
     const upgraded = normalizeRunDocument(legacy);
 
-    expect(upgraded.formatVersion).toBe(4);
+    expect(upgraded.formatVersion).toBe(5);
     expect(upgraded.id).toBe(current.id);
     expect(upgraded.army.map((unit) => unit.name)).toEqual(current.army.map((unit) => unit.name));
     expect(normalizeRunDocument(upgraded)).toBe(upgraded);
@@ -227,7 +235,7 @@ describe('Run progression and relic offers', () => {
     } as unknown as RunDocument;
     const upgraded = normalizeRunDocument(provisional);
 
-    expect(upgraded.formatVersion).toBe(4);
+    expect(upgraded.formatVersion).toBe(5);
     expect(upgraded.army.map((unit) => unit.name)).toEqual(current.army.map((unit) => unit.name));
     expect(normalizeRunDocument(upgraded)).toBe(upgraded);
   });
@@ -241,7 +249,7 @@ describe('Run progression and relic offers', () => {
     } as unknown as RunDocument;
     const upgraded = normalizeRunDocument(legacy);
 
-    expect(upgraded.formatVersion).toBe(4);
+    expect(upgraded.formatVersion).toBe(5);
     expect(upgraded.army.every((unit) => Number.isSafeInteger(unit.inspectionSeed))).toBe(true);
     expect(normalizeRunDocument(upgraded)).toBe(upgraded);
   });
@@ -298,5 +306,79 @@ describe('Run progression and relic offers', () => {
     const cashed = cashOutPawn(run, pawn.id);
     expect(cashed.army.some((unit) => unit.id === pawn.id)).toBe(false);
     expect(cashed.goldTenths - run.goldTenths).toBe(2 * GOLD_SCALE);
+  });
+});
+
+describe('Ataraxia I — The Great Mortality', () => {
+  it('never marks baseline offers and deterministically realizes the tunable one-in-eight roll', () => {
+    const baseline = createRun(war(), 4217, 0);
+    const ataraxia = createRun(war(), 4217, 1);
+    const baselineOffers = PIECE_BUNDLE_DECK.map((bundle, index) => (
+      createRunBundleOffer(baseline, bundle, Math.floor(index / 4), index % 4)
+    ));
+    const first = PIECE_BUNDLE_DECK.map((bundle, index) => (
+      createRunBundleOffer(ataraxia, bundle, Math.floor(index / 4), index % 4)
+    ));
+    const second = PIECE_BUNDLE_DECK.map((bundle, index) => (
+      createRunBundleOffer(ataraxia, bundle, Math.floor(index / 4), index % 4)
+    ));
+
+    expect(baselineOffers.every((offer) => offer.cardType === null)).toBe(true);
+    expect(first).toEqual(second);
+    expect(first.some((offer) => offer.cardType === 'pestiferous')).toBe(true);
+    expect(first.filter((offer) => offer.cardType === 'pestiferous').length).toBeLessThan(PIECE_BUNDLE_DECK.length / 2);
+  });
+
+  it('persists complete affected offers through Reset Shop and promotes the bought instance into the deck', () => {
+    let shop: RunDocument | null = null;
+    for (let seed = 1; seed < 500 && !shop; seed += 1) {
+      const candidate = openShop({ ...deployedAtaraxiaRun(seed), goldTenths: 100 * GOLD_SCALE }, []);
+      if (candidate.shop?.bundleOffers.some((offer) => offer.cardType === 'pestiferous')) shop = candidate;
+    }
+    expect(shop).not.toBeNull();
+    const pestiferous = shop!.shop!.bundleOffers.find((offer) => offer.cardType === 'pestiferous')!;
+    const originalOffers = structuredClone(shop!.shop!.bundleOffers);
+    const bought = buyBundle(shop!, pestiferous.offerId);
+    const owned = bought.cards[0];
+
+    expect(pestiferous.cost).toBeLessThanOrEqual(pestiferous.value);
+    expect(owned).toMatchObject({ coreId: pestiferous.id, cardType: 'pestiferous', effectSeed: pestiferous.effectSeed });
+    expect(owned.unitIds).toHaveLength(pestiferous.pieces.length);
+    expect(bought.army.filter((unit) => owned.unitIds.includes(unit.id)).every((unit) => unit.modifiers.includes('plagued'))).toBe(true);
+    expect(resetShop(bought).shop?.bundleOffers).toEqual(originalOffers);
+    expect(resetShop(bought).cards).toEqual(shop!.cards);
+  });
+
+  it('removes exactly one deterministic unit from every nonempty Pestiferous card per Battle and retains empty cards', () => {
+    const base = deployedAtaraxiaRun(77, war(5));
+    const units = base.army.filter((unit) => unit.type !== 'king').slice(0, 2).map((unit) => ({
+      ...unit,
+      modifiers: ['plagued'] as RunDocument['army'][number]['modifiers'],
+    }));
+    const run: RunDocument = {
+      ...base,
+      army: [base.army.find((unit) => unit.type === 'king')!, ...units],
+      cards: [{
+        id: 'run-card-1',
+        coreId: 'pp',
+        cardType: 'pestiferous',
+        effectSeed: 991,
+        unitIds: units.map((unit) => unit.id),
+        lostUnitIds: [],
+        acquiredAfterBattleIndex: 0,
+      }],
+      nextCardSequence: 2,
+    };
+    const first = deterioratePestiferousCards(run, 1);
+    const retry = deterioratePestiferousCards(run, 1);
+    const second = deterioratePestiferousCards(first, 2);
+    const empty = deterioratePestiferousCards(second, 3);
+
+    expect(first.army).toHaveLength(run.army.length - 1);
+    expect(first.pestiferousLosses).toHaveLength(1);
+    expect(retry.pestiferousLosses[0].unit.id).toBe(first.pestiferousLosses[0].unit.id);
+    expect(second.cards[0].unitIds).toEqual([]);
+    expect(second.cards[0].lostUnitIds).toHaveLength(2);
+    expect(empty).toBe(second);
   });
 });

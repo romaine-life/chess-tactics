@@ -179,6 +179,8 @@ describe('Run chrome hierarchy', () => {
     expect(runBundleCard).toContain('runCardFlavor(bundle)');
     expect(runBundleCard).toContain('runCardArtSlot(bundle)');
     expect(runBundleCard).toContain('RUN_CARD_FRAME_SLOT');
+    expect(runBundleCard).toContain('RUN_CARD_PESTIFEROUS_FRAME_SLOT');
+    expect(runBundleCard).toContain("cardType === 'pestiferous'");
     expect(runBundleCard).toContain('<RunCardFace');
     expect(runBundleCard).not.toContain('run-bundle-card-art');
     expect(runBundleCard).not.toContain('run-bundle-card-plate');
