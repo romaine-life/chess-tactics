@@ -88,7 +88,72 @@ export const RUN_CARD_NAME_BY_ID: Readonly<Record<string, string>> = Object.free
   q: 'Regal Serenity',
 });
 
+// Original anti-story fragments tied to the same four historical pressure sources as
+// the core names and illustrations. They identify a card without explaining why this
+// history has surfaced in the game.
+export const RUN_CARD_FLAVOR_BY_ID: Readonly<Record<string, string>> = Object.freeze({
+  p: 'The frost came in June. By August, the road had found him.',
+  pp: 'The road kept both pairs of boots, and returned neither name.',
+  b: 'The sanctuary was gone. The lesson continued beside the road.',
+  k: 'Every road was marked urgent. None said where it led.',
+  ppp: 'They covered the seedlings at noon and took up poles by dusk.',
+  pb: 'The pilgrim carried the lamp. The escort carried what remained.',
+  pk: 'The seal was unbroken. The stable boy had already understood.',
+  pppp: 'When the gate ceased to matter, the road filled with households.',
+  ppb: 'The abbey lost its roof. The parish borrowed the stones.',
+  ppk: 'They patrolled the road for holes; the war supplied them freely.',
+  ppppp: 'Five answered the bell. The harvest had answered nothing.',
+  r: 'From the tower, every road led away.',
+  bb: 'Matins survived the bells. Vespers survived the roof.',
+  kb: 'The blade guarded the road; the censer remembered the room.',
+  kk: 'Thunder crossed the fields long before the horses did.',
+  pppb: 'The flock found grass beneath snow that had fallen in June.',
+  pppk: 'The banner arrived clean. Nothing else did.',
+  pppppp: 'They left in ranks only because the road was narrow.',
+  pr: 'He kept the gate after the house behind it was emptied.',
+  pbb: 'The council adjourned to the road and never reconvened indoors.',
+  pkb: 'No city received them. They continued as though one might.',
+  pkk: 'The escort knew the route by the carts returning empty.',
+  ppppb: 'The blessing was brief. The frost was not.',
+  ppppk: 'The horses wore summer tack beneath a winter sky.',
+  ppppppp: 'Seven hands sowed the field. The sun withheld its witness.',
+  ppr: 'The garrison watched a border drawn by those already gone.',
+  br: 'The cloister was sold. The keep remained employed.',
+  kr: 'At dawn the castellan rode through an abbey with no brothers.',
+  ppbb: 'The chapel traveled because the wounded could not.',
+  ppkb: 'They agreed upon the road, having nowhere left to meet.',
+  ppkk: 'Four riders escorted linen farther than any standard.',
+  pppppb: 'The tithe arrived at a door whose owner had changed.',
+  pppppk: 'The levy knew the mile markers better than the cause.',
+  pppppppp: 'Eight backs bent beneath a sky that mistook June for November.',
+  pppr: 'They repaired the wall with stones from the abandoned quarter.',
+  bbb: 'Three doctrines agreed that the room could no longer hold them.',
+  kbb: 'The charger knelt where the altar had been carted away.',
+  kkb: 'He blessed the departing riders and counted the returning horses.',
+  kkk: 'They rode hard beneath snow no calendar had permitted.',
+  pbr: 'The church became stone. The castle called it repair.',
+  pkr: 'They opened the gate before dawn. The road was already awake.',
+  pppbb: 'The vessels were carried out. The feast became the carrying.',
+  pppkb: 'The bell was gone. Five shadows gathered at the accustomed hour.',
+  pppkk: 'They returned with one spare horse and no account of the fifth.',
+  ppppppb: 'They gathered beside the chapel once gathering inside became trespass.',
+  ppppppk: 'By the seventh mile, inspection and endurance were the same duty.',
+  ppppppppp: 'Nine sowed in frost. None called it winter.',
+  ppppr: 'Relief entered through the breach after the city had left.',
+  q: 'She watched the empty court until ceremony became weather.',
+});
+
 /** The card's banner name; compositions outside the authored deck read as their contents. */
 export function runCardName(bundle: Pick<PieceBundle, 'pieces'>): string {
   return RUN_CARD_NAME_BY_ID[canonicalCardId(bundle)] ?? bundleLabel(bundle);
+}
+
+/** The card's stable authored flavor; only out-of-deck diagnostic bundles fall back. */
+export function runCardFlavor(bundle: Pick<PieceBundle, 'pieces'>): string {
+  return RUN_CARD_FLAVOR_BY_ID[canonicalCardId(bundle)] ?? 'No account survives.';
+}
+
+/** Stable semantic live-media slot for one canonical core Units card. */
+export function runCardArtSlot(bundle: Pick<PieceBundle, 'pieces'>): string {
+  return `ui/run/card-art/${canonicalCardId(bundle)}/illustration.png`;
 }

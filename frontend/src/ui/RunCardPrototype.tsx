@@ -1,34 +1,40 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
-import { paletteForSide, pieceSpritePath, type PlayablePieceType } from '../core/pieces';
+import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import {
   fetchAdminLiveMediaCatalog,
   type AdminLiveMediaCatalog,
   type AdminLiveMediaVersion,
 } from '../net/liveMediaAdmin';
 import { SliderRow } from './dressing/SliderRow';
+import {
+  RUN_CARD_APPROVED_TUNING,
+  RUN_CARD_FRAME_SLOT,
+  RUN_CARD_REFERENCE_WIDTH,
+  RunCardFace,
+  runCardUnitImageKind,
+  type RunCardFaceContent,
+  type RunCardImageKind,
+} from './RunCardFace';
 
-const FRAME_SLOT = 'ui/run/card-prototypes/frame-v1.png';
-const ART_SLOT = 'ui/run/card-prototypes/pppkb-human-v1.png';
+const FRAME_SLOT = RUN_CARD_FRAME_SLOT;
+const ART_SLOT = 'ui/run/card-art/pppkb/illustration.png';
 const SHA256 = /^[0-9a-f]{64}$/;
-const PLAYER_CARD_PALETTE = paletteForSide('player');
-const PLAYER_CARD_FACING = 'south';
-const REFERENCE_CARD_WIDTH = 360;
+const REFERENCE_CARD_WIDTH = RUN_CARD_REFERENCE_WIDTH;
 const TEXT_HORIZONTAL_MIN = -3;
 const TEXT_HORIZONTAL_MAX = 3;
 const TITLE_SIZE_MIN = 3;
 const TITLE_SIZE_MAX = 7;
-const DEFAULT_TITLE_SIZE = 6.85;
-const DEFAULT_TITLE_X = 1.35;
-const DEFAULT_TITLE_Y = 0;
-const DEFAULT_COST_SIZE = 6.2;
-const DEFAULT_COST_X = 0;
-const DEFAULT_COST_Y = .3;
+const DEFAULT_TITLE_SIZE = RUN_CARD_APPROVED_TUNING.titleSize;
+const DEFAULT_TITLE_X = RUN_CARD_APPROVED_TUNING.titleX;
+const DEFAULT_TITLE_Y = RUN_CARD_APPROVED_TUNING.titleY;
+const DEFAULT_COST_SIZE = RUN_CARD_APPROVED_TUNING.costSize;
+const DEFAULT_COST_X = RUN_CARD_APPROVED_TUNING.costX;
+const DEFAULT_COST_Y = RUN_CARD_APPROVED_TUNING.costY;
 const TYPE_SIZE_MIN = 2.5;
 const TYPE_SIZE_MAX = 6;
-const DEFAULT_TYPE_SIZE = 5.3;
-const DEFAULT_TYPE_X = 1.35;
-const DEFAULT_TYPE_Y = .2;
-const DEFAULT_FLAVOR_SIZE = 5;
+const DEFAULT_TYPE_SIZE = RUN_CARD_APPROVED_TUNING.typeSize;
+const DEFAULT_TYPE_X = RUN_CARD_APPROVED_TUNING.typeX;
+const DEFAULT_TYPE_Y = RUN_CARD_APPROVED_TUNING.typeY;
+const DEFAULT_FLAVOR_SIZE = RUN_CARD_APPROVED_TUNING.flavorSize;
 const DEFAULT_TITLE_TYPE_HORIZONTAL_LOCKED = true;
 
 const clampCardFontSize = (value: number, min: number, max: number): number => (
@@ -40,67 +46,6 @@ const clampCardHorizontal = (value: number, min = TEXT_HORIZONTAL_MIN, max = TEX
   Math.round(Math.min(max, Math.max(min, value)) * 100) / 100
 );
 
-type CardImageKind = 'frame' | 'art' | `unit:${number}:${PlayablePieceType}:${number}`;
-
-const unitImageKind = (cell: number, unit: PlayablePieceType, index: number): CardImageKind => (
-  `unit:${cell}:${unit}:${index}`
-);
-
-type UnitSpriteMetrics = Readonly<{
-  canvasWidthPerHeight: number;
-  opaqueLeftPerHeight: number;
-  opaqueWidthPerHeight: number;
-}>;
-
-const UNIT_ICON_HEIGHT_CQW = 9;
-const UNIT_NATURAL_GAP_CQW = .8;
-const unitSpriteMetrics = new Map<string, UnitSpriteMetrics>();
-
-function measureUnitSprite(image: HTMLImageElement): UnitSpriteMetrics {
-  const source = image.currentSrc || image.src;
-  const cached = unitSpriteMetrics.get(source);
-  if (cached) return cached;
-  if (!image.naturalWidth || !image.naturalHeight) throw new Error('unit sprite has no native dimensions');
-
-  const canvas = document.createElement('canvas');
-  canvas.width = image.naturalWidth;
-  canvas.height = image.naturalHeight;
-  const context = canvas.getContext('2d', { willReadFrequently: true });
-  if (!context) throw new Error('unit sprite alpha measurement is unavailable');
-  context.drawImage(image, 0, 0);
-  const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
-  let minX = canvas.width;
-  let maxX = -1;
-  for (let y = 0; y < canvas.height; y += 1) {
-    for (let x = 0; x < canvas.width; x += 1) {
-      if (pixels[((y * canvas.width + x) * 4) + 3] <= 8) continue;
-      minX = Math.min(minX, x);
-      maxX = Math.max(maxX, x);
-    }
-  }
-  if (maxX < minX) throw new Error('unit sprite contains no visible pixels');
-  const measured = Object.freeze({
-    canvasWidthPerHeight: canvas.width / canvas.height,
-    opaqueLeftPerHeight: minX / canvas.height,
-    opaqueWidthPerHeight: (maxX - minX + 1) / canvas.height,
-  });
-  unitSpriteMetrics.set(source, measured);
-  return measured;
-}
-
-type PrototypeTuning = Readonly<{
-  costX: number;
-  costY: number;
-  costSize: number;
-  titleX: number;
-  titleY: number;
-  titleSize: number;
-  typeX: number;
-  typeY: number;
-  typeSize: number;
-  flavorSize: number;
-}>;
-
 const CARD = Object.freeze({
   name: 'Parish Militia',
   cost: 9,
@@ -111,13 +56,7 @@ const CARD = Object.freeze({
     { count: 1, unit: 'bishop' },
   ] as const,
   flavor: 'The bell was gone. Five shadows gathered at the accustomed hour.',
-}) satisfies {
-  name: string;
-  cost: number;
-  typeLine: string;
-  grants: readonly { count: number; unit: PlayablePieceType }[];
-  flavor: string;
-};
+}) satisfies RunCardFaceContent;
 
 function selectedCandidate(
   catalog: AdminLiveMediaCatalog,
@@ -138,155 +77,6 @@ function selectedCandidate(
   const active = activeVersionId ? eligible.find((version) => version.id === activeVersionId) : null;
   if (active) return active;
   return [...eligible].sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0] ?? null;
-}
-
-function UnitStackSprite({
-  cell,
-  unit,
-  index,
-  count,
-  onReady,
-  onError,
-}: {
-  cell: number;
-  unit: PlayablePieceType;
-  index: number;
-  count: number;
-  onReady: (kind: CardImageKind) => void;
-  onError: (kind: CardImageKind) => void;
-}): ReactElement {
-  const [metrics, setMetrics] = useState<UnitSpriteMetrics | null>(null);
-  const kind = unitImageKind(cell, unit, index);
-  const source = pieceSpritePath(unit, PLAYER_CARD_PALETTE, PLAYER_CARD_FACING);
-  const visibleWidth = metrics ? metrics.opaqueWidthPerHeight * UNIT_ICON_HEIGHT_CQW : 0;
-  const canvasWidth = metrics ? metrics.canvasWidthPerHeight * UNIT_ICON_HEIGHT_CQW : 0;
-  const canvasLeft = metrics ? -metrics.opaqueLeftPerHeight * UNIT_ICON_HEIGHT_CQW : 0;
-  const endFraction = count <= 1 ? 0 : index / (count - 1);
-  const naturalLeft = index * (visibleWidth + UNIT_NATURAL_GAP_CQW);
-  const fittedLeft = `calc(${(endFraction * 100).toFixed(4)}% - ${(endFraction * visibleWidth).toFixed(4)}cqw)`;
-  const seatLeft = count <= 1 ? '0cqw' : `min(${naturalLeft.toFixed(4)}cqw, ${fittedLeft})`;
-
-  return (
-    <span
-      className="run-card-prototype-unit-icon-seat"
-      style={{
-        '--run-card-unit-canvas-left': `${canvasLeft.toFixed(4)}cqw`,
-        '--run-card-unit-canvas-width': `${canvasWidth.toFixed(4)}cqw`,
-        '--run-card-unit-seat-left': seatLeft,
-        '--run-card-unit-seat-width': `${visibleWidth.toFixed(4)}cqw`,
-        zIndex: index + 1,
-      } as CSSProperties}
-    >
-      <img
-        className="run-card-prototype-unit-icon"
-        data-unit-facing={PLAYER_CARD_FACING}
-        data-unit-palette={PLAYER_CARD_PALETTE}
-        src={source}
-        alt=""
-        draggable={false}
-        onLoad={(event) => {
-          try {
-            setMetrics(measureUnitSprite(event.currentTarget));
-            onReady(kind);
-          } catch {
-            onError(kind);
-          }
-        }}
-        onError={() => onError(kind)}
-      />
-    </span>
-  );
-}
-
-function PrototypeCard({
-  frame,
-  art,
-  viewerZoom,
-  tuning,
-  onImageLoad,
-  onImageError,
-}: {
-  frame: AdminLiveMediaVersion;
-  art: AdminLiveMediaVersion;
-  viewerZoom: number;
-  tuning: PrototypeTuning;
-  onImageLoad: (kind: CardImageKind) => void;
-  onImageError: (kind: CardImageKind) => void;
-}): ReactElement {
-  const ledgerRows = CARD.grants.length <= 2
-    ? CARD.grants.length
-    : Math.ceil(CARD.grants.length / 2);
-
-  return (
-    <article
-      className="run-card-prototype"
-      style={{
-        '--run-card-prototype-width': `${REFERENCE_CARD_WIDTH * viewerZoom}px`,
-        '--run-card-cost-x': `${tuning.costX}cqw`,
-        '--run-card-cost-y': `${tuning.costY}cqw`,
-        '--run-card-cost-size': `${tuning.costSize}cqw`,
-        '--run-card-title-x': `${tuning.titleX}cqw`,
-        '--run-card-title-y': `${tuning.titleY}cqw`,
-        '--run-card-title-size': `${tuning.titleSize}cqw`,
-        '--run-card-type-x': `${tuning.typeX}cqw`,
-        '--run-card-type-y': `${tuning.typeY}cqw`,
-        '--run-card-type-size': `${tuning.typeSize}cqw`,
-        '--run-card-flavor-size': `${tuning.flavorSize}cqw`,
-      } as CSSProperties}
-      aria-label={`${CARD.name}. ${CARD.typeLine}. Costs ${CARD.cost} gold. Grants three Pawns, one Knight, and one Bishop.`}
-    >
-      <img
-        className="run-card-prototype-frame"
-        src={frame.media!.url}
-        alt=""
-        draggable={false}
-        onLoad={() => onImageLoad('frame')}
-        onError={() => onImageError('frame')}
-      />
-      <img
-        className="run-card-prototype-art"
-        src={art.media!.url}
-        alt=""
-        draggable={false}
-        onLoad={() => onImageLoad('art')}
-        onError={() => onImageError('art')}
-      />
-      <h2 className="run-card-prototype-name">{CARD.name}</h2>
-      <strong className="run-card-prototype-cost" aria-label={`${CARD.cost} gold`}>{CARD.cost}</strong>
-      <div className="run-card-prototype-type">{CARD.typeLine}</div>
-      <div className={`run-card-prototype-rules is-ledger-${ledgerRows}-rows`}>
-        <div
-          className={`run-card-prototype-ledger is-${CARD.grants.length}-cells`}
-          data-cell-count={CARD.grants.length}
-          aria-label="Card contents"
-        >
-          {CARD.grants.map((grant, cell) => (
-            <div
-              className="run-card-prototype-ledger-row"
-              aria-label={`${grant.count} ${grant.unit}${grant.count === 1 ? '' : 's'}`}
-              key={grant.unit}
-            >
-              <strong className="run-card-prototype-ledger-count" aria-hidden="true">{grant.count}</strong>
-              <span className="run-card-prototype-unit-stack" aria-hidden="true">
-                {Array.from({ length: grant.count }, (_, index) => (
-                  <UnitStackSprite
-                    cell={cell}
-                    count={grant.count}
-                    index={index}
-                    key={`${grant.unit}-${index}`}
-                    unit={grant.unit}
-                    onReady={onImageLoad}
-                    onError={onImageError}
-                  />
-                ))}
-              </span>
-            </div>
-          ))}
-        </div>
-        <blockquote className="run-card-prototype-flavor">{CARD.flavor}</blockquote>
-      </div>
-    </article>
-  );
 }
 
 export function RunCardPrototypeViewer({
@@ -311,7 +101,7 @@ export function RunCardPrototypeViewer({
   const [titleTypeHorizontalLocked, setTitleTypeHorizontalLocked] = useState(DEFAULT_TITLE_TYPE_HORIZONTAL_LOCKED);
   const [flavorSize, setFlavorSize] = useState(DEFAULT_FLAVOR_SIZE);
   const [handoffCopyState, setHandoffCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
-  const [loaded, setLoaded] = useState<ReadonlySet<CardImageKind>>(() => new Set());
+  const [loaded, setLoaded] = useState<ReadonlySet<RunCardImageKind>>(() => new Set());
 
   useEffect(() => {
     let active = true;
@@ -331,14 +121,14 @@ export function RunCardPrototypeViewer({
     && loaded.has('frame')
     && loaded.has('art')
     && CARD.grants.every((grant, cell) => (
-      Array.from({ length: grant.count }, (_, index) => unitImageKind(cell, grant.unit, index))
+      Array.from({ length: grant.count }, (_, index) => runCardUnitImageKind(cell, grant.unit, index))
         .every((kind) => loaded.has(kind))
     )),
   );
-  const onImageLoad = (kind: CardImageKind): void => {
+  const onImageLoad = (kind: RunCardImageKind): void => {
     setLoaded((current) => current.has(kind) ? current : new Set([...current, kind]));
   };
-  const onImageError = (kind: CardImageKind): void => setError(`${kind} image could not be decoded.`);
+  const onImageError = (kind: RunCardImageKind): void => setError(`${kind} image could not be decoded.`);
   const titleTypeSizesLocked = titleTypeSizeRatio !== null;
   const titleSizeMin = titleTypeSizeRatio === null
     ? TITLE_SIZE_MIN
@@ -453,10 +243,11 @@ export function RunCardPrototypeViewer({
         {!sceneError && !painted ? <p role="status">Loading exact candidate pixels…</p> : null}
         {frame && art ? (
           <div className="run-card-prototype-stage">
-            <PrototypeCard
-              frame={frame}
-              art={art}
-              viewerZoom={viewerZoom}
+            <RunCardFace
+              card={CARD}
+              frameUrl={frame.media!.url}
+              artUrl={art.media!.url}
+              width={`${REFERENCE_CARD_WIDTH * viewerZoom}px`}
               tuning={{ costX, costY, costSize, titleX, titleY, titleSize, typeX, typeY, typeSize, flavorSize }}
               onImageLoad={onImageLoad}
               onImageError={onImageError}

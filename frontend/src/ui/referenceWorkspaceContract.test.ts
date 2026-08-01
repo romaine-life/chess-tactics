@@ -118,8 +118,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     // The browser lists every deck card grouped by value; the detail is the exact
     // card face the Run deals (one selection, one description — ADR-0253's shape).
     expect(cardCodex).toContain('PIECE_BUNDLE_DECK');
-    // The detail is the same synchronous artless face the Run deals — dealt cards
-    // carry no artwork until the Card Layout redesign lands its illustrated art.
+    // The detail is the same live-media-backed trading-card face the Run deals.
     expect(cardCodex).toContain('<RunBundleCard bundle={selected} mode="reference" />');
     expect(cardCodex).not.toContain('CardDetailStage');
     expect(cardCodex).toContain('runCardName(bundle)');

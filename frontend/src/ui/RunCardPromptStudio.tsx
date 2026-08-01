@@ -28,14 +28,14 @@ const ANCHOR_LABEL: Readonly<Record<string, string>> = Object.freeze({
 
 interface PromptDraft {
   sceneDirection: string;
-  eyeConcealment: string;
+  unitIdentity: string;
   prompt: string;
 }
 
 function promptDraft(plan: RunCardArtPromptPlan): PromptDraft {
   return {
     sceneDirection: plan.sceneDirection,
-    eyeConcealment: plan.eyeConcealment,
+    unitIdentity: plan.unitIdentity,
     prompt: plan.prompt,
   };
 }
@@ -115,13 +115,19 @@ export function RunCardPromptCatalog({
           aria-pressed={plan.id === selected}
           title={`Open ${plan.title} art prompt`}
         >
-          <span className="tileset-studio-card-image pages-card-image run-card-prototype-catalog-image" aria-hidden="true">
-            <span>{plan.baseCost}</span>
+          <span className="tileset-studio-card-image pages-card-image run-card-art-catalog-image" aria-hidden="true">
+            {plan.version.media ? (
+              <img
+                src={plan.version.media.immutableUrl ?? plan.version.media.url}
+                alt=""
+                data-run-card-art-candidate={plan.id}
+              />
+            ) : <span>{plan.baseCost}</span>}
           </span>
           <span className="tileset-studio-card-meta">
             <span className="tileset-studio-card-text">
               <strong>{plan.title}</strong>
-              <em>{runCardPromptComposition(plan)} · {plan.generationDisposition === 'pending' ? 'prompt ready' : 'art exists'}</em>
+              <em>{runCardPromptComposition(plan)} · {plan.version.media ? `PixelLab ${plan.version.status}` : 'prompt ready'}</em>
             </span>
           </span>
         </button>
@@ -153,10 +159,10 @@ export function RunCardPromptViewer({
     setStatus('');
   }, [cardId, onCardId, selected?.id, selected?.version.rowRevision]);
 
-  const locked = Boolean(selected?.version.media) || selected?.generationDisposition === 'existing-art';
+  const locked = Boolean(selected?.version.media);
   const dirty = Boolean(selected && draft && (
     draft.sceneDirection !== selected.sceneDirection
-    || draft.eyeConcealment !== selected.eyeConcealment
+    || draft.unitIdentity !== selected.unitIdentity
     || draft.prompt !== selected.prompt
   ));
 
@@ -172,7 +178,7 @@ export function RunCardPromptViewer({
         provenance: {
           ...selected.version.provenance,
           sceneDirection: draft.sceneDirection.trim(),
-          eyeConcealment: draft.eyeConcealment.trim(),
+          unitIdentity: draft.unitIdentity.trim(),
           prompt: draft.prompt.trim(),
           promptSha256,
         },
@@ -214,10 +220,12 @@ export function RunCardPromptViewer({
               </div>
               <p>{ANCHOR_LABEL[selected.historicalAnchor] ?? selected.historicalAnchor}</p>
             </header>
-            {selected.generationDisposition === 'existing-art' ? (
-              <p className="run-card-prompt-notice" role="note">
-                Existing Parish Militia artwork is locked at {selected.existingArtSha256?.slice(0, 12)}…. This is a reconstructed provenance description, not a regeneration request.
-              </p>
+            {selected.version.media ? (
+              <img
+                className="run-card-prompt-candidate"
+                src={selected.version.media.immutableUrl ?? selected.version.media.url}
+                alt={`${selected.title} PixelLab card illustration candidate`}
+              />
             ) : null}
             <label className="run-card-prompt-field">
               <span>Scene direction</span>
@@ -228,11 +236,11 @@ export function RunCardPromptViewer({
               />
             </label>
             <label className="run-card-prompt-field">
-              <span>Eye concealment</span>
+              <span>Unit identity</span>
               <textarea
-                value={draft.eyeConcealment}
+                value={draft.unitIdentity}
                 disabled={locked}
-                onChange={(event) => setDraft({ ...draft, eyeConcealment: event.target.value })}
+                onChange={(event) => setDraft({ ...draft, unitIdentity: event.target.value })}
               />
             </label>
             <label className="run-card-prompt-field is-exact">
@@ -262,7 +270,7 @@ export function RunCardPromptViewer({
                 {plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.baseCost} · {plan.title}</option>)}
               </select>
             </label>
-            <p className="run-card-prototype-note">Live database prompt provenance. Generated candidates lock their exact prompt.</p>
+            <p className="run-card-prototype-note">Live PixelLab provenance. Generated candidates lock their exact prompt.</p>
             <button type="button" className="tileset-view-action" disabled={!draft} onClick={() => { void copy(); }}>Copy exact prompt</button>
             <button type="button" className="tileset-view-action" disabled={!dirty || locked || saving} onClick={() => { void save(); }}>
               {saving ? 'Saving…' : 'Save prompt revision'}
@@ -275,8 +283,9 @@ export function RunCardPromptViewer({
             >Reset draft</button>
             {selected ? (
               <dl className="run-card-prototype-source-readout">
-                <div><dt>State</dt><dd>{selected.generationDisposition === 'existing-art' ? 'existing art' : selected.version.media ? 'generated' : 'prompt ready'}</dd></div>
+                <div><dt>State</dt><dd>{selected.version.media ? selected.version.status : 'prompt ready'}</dd></div>
                 <div><dt>Prompt</dt><dd>{selected.promptSha256.slice(0, 12)}</dd></div>
+                <div><dt>PixelLab</dt><dd>{selected.pixelLabJobId.slice(0, 12)}</dd></div>
                 <div><dt>Revision</dt><dd>{selected.version.rowRevision}</dd></div>
               </dl>
             ) : null}

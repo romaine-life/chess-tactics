@@ -1,11 +1,9 @@
 import type { AdminLiveMediaCatalog, AdminLiveMediaVersion } from '../net/liveMediaAdmin';
 import type { PurchasablePieceType } from './model';
 
-export const RUN_CARD_ART_PROMPT_SCHEMA = 'run-card-art-prompt-v1';
-export const RUN_CARD_ART_PLAN_SCHEMA = 'run-card-art-plan-v1';
+export const RUN_CARD_ART_PROMPT_SCHEMA = 'run-card-art-prompt-v2';
+export const RUN_CARD_ART_PLAN_SCHEMA = 'run-card-art-plan-v2';
 export const RUN_CARD_ART_SLOT_PREFIX = 'ui/run/card-art/';
-
-export type RunCardArtGenerationDisposition = 'pending' | 'existing-art';
 
 export interface RunCardArtPromptPlan {
   id: string;
@@ -13,13 +11,11 @@ export interface RunCardArtPromptPlan {
   pieces: readonly PurchasablePieceType[];
   baseCost: number;
   historicalAnchor: string;
-  generationDisposition: RunCardArtGenerationDisposition;
   sceneDirection: string;
-  eyeConcealment: string;
+  unitIdentity: string;
   prompt: string;
   promptSha256: string;
-  promptExactness: 'exact-authored-plan' | 'reconstructed-description';
-  existingArtSha256: string | null;
+  pixelLabJobId: string;
   version: AdminLiveMediaVersion;
 }
 
@@ -44,28 +40,24 @@ function promptPlanFrom(version: AdminLiveMediaVersion): RunCardArtPromptPlan | 
   const title = textValue(metadata.cardTitle);
   const historicalAnchor = textValue(metadata.historicalAnchor);
   const sceneDirection = textValue(provenance.sceneDirection);
-  const eyeConcealment = textValue(provenance.eyeConcealment);
+  const unitIdentity = textValue(provenance.unitIdentity);
   const prompt = textValue(provenance.prompt);
   const promptSha256 = textValue(provenance.promptSha256);
-  const promptExactness = provenance.promptExactness;
-  const generationDisposition = metadata.generationDisposition;
+  const pixelLabJobId = textValue(provenance.pixelLabJobId);
   const baseCost = metadata.baseCost;
   const rawPieces = metadata.pieces;
   if (
-    !id || !CARD_ID.test(id) || !title || !historicalAnchor || !sceneDirection || !eyeConcealment || !prompt
-    || !promptSha256 || !SHA256.test(promptSha256)
+    !id || !CARD_ID.test(id) || version.slot !== `${RUN_CARD_ART_SLOT_PREFIX}${id}/illustration.png`
+    || !title || !historicalAnchor || !sceneDirection || !unitIdentity || !prompt
+    || !promptSha256 || !SHA256.test(promptSha256) || !pixelLabJobId
     || !Number.isSafeInteger(baseCost) || Number(baseCost) < 1 || Number(baseCost) > 9
     || !Array.isArray(rawPieces) || rawPieces.length < 1
     || rawPieces.some((piece) => typeof piece !== 'string' || !PIECES.includes(piece as PurchasablePieceType))
-    || (generationDisposition !== 'pending' && generationDisposition !== 'existing-art')
-    || (promptExactness !== 'exact-authored-plan' && promptExactness !== 'reconstructed-description')
+    || metadata.generationModel !== 'pixellab-pixflux'
+    || metadata.nativeWidth !== 400 || metadata.nativeHeight !== 280
+    || provenance.generationModel !== 'pixellab-pixflux'
   ) {
     throw new Error(`Run card art prompt candidate ${version.id} has invalid typed provenance`);
-  }
-  const existingArtSha256 = metadata.existingArtSha256 === undefined
-    ? null : textValue(metadata.existingArtSha256);
-  if (existingArtSha256 !== null && !SHA256.test(existingArtSha256)) {
-    throw new Error(`Run card art prompt candidate ${version.id} has an invalid existing-art hash`);
   }
   return {
     id,
@@ -73,13 +65,11 @@ function promptPlanFrom(version: AdminLiveMediaVersion): RunCardArtPromptPlan | 
     pieces: rawPieces as PurchasablePieceType[],
     baseCost: Number(baseCost),
     historicalAnchor,
-    generationDisposition,
     sceneDirection,
-    eyeConcealment,
+    unitIdentity,
     prompt,
     promptSha256,
-    promptExactness,
-    existingArtSha256,
+    pixelLabJobId,
     version,
   };
 }

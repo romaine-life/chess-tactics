@@ -23,7 +23,7 @@
     "visual:health": "node scripts/check-local-server.mjs",
     "verify:titlebar": "node scripts/check-titlebar-geometry.mjs",
     "cards:check-prompts": "node scripts/install-run-card-art-prompts.mjs --dry-run",
-    "cards:install-prompts": "node scripts/install-run-card-art-prompts.mjs",
+    "cards:install-art": "node scripts/install-run-card-art-prompts.mjs --install-images",
     "typecheck": "tsc --noEmit",
     "pretest": "npm run build:board-render",
     "test": "vitest run",

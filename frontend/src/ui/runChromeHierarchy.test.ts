@@ -173,17 +173,16 @@ describe('Run chrome hierarchy', () => {
     expect(styleCss).not.toContain('.run-screen.has-relics .run-workspace');
   });
 
-  it('draws every bundle card as an artless authored-name face until the card redesign lands', () => {
-    // Dealt cards carry no artwork right now (owner call, 2026-07-31): the face is
-    // the authored name, the piece contents, and the price. Illustrated art arrives
-    // through the Card Layout redesign (ADR-0275/0276), not a board-scene vignette.
+  it('draws every bundle through the approved shared trading-card face', () => {
     expect(runBundleCard).not.toContain('RunCardScene');
     expect(runBundleCard).toContain('runCardName(bundle)');
-    expect(runBundleCard).toContain('className="run-bundle-card-name"');
-    expect(runBundleCard).toContain('className="run-bundle-card-contents"');
-    expect(runBundleCard).not.toContain('UnitPortrait');
-    expect(runBundleCard).not.toContain('run-bundle-quantity');
-    expect(runBundleCard).not.toContain('pieceSpritePath');
+    expect(runBundleCard).toContain('runCardFlavor(bundle)');
+    expect(runBundleCard).toContain('runCardArtSlot(bundle)');
+    expect(runBundleCard).toContain('RUN_CARD_FRAME_SLOT');
+    expect(runBundleCard).toContain('<RunCardFace');
+    expect(runBundleCard).not.toContain('run-bundle-card-art');
+    expect(runBundleCard).not.toContain('run-bundle-card-plate');
+    expect(runBundleCard).not.toContain('RunGoldAmount');
     expect(runScreen).toContain("import { RunBundleCard } from './RunBundleCard';");
     expect(styleCss).toMatch(/\.run-bundle-card\s*\{[\s\S]*?aspect-ratio:\s*5 \/ 7;/);
     // Cold route entry still holds the veil for any nested painted surface: the

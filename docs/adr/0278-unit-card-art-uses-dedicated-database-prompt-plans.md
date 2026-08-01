@@ -8,6 +8,8 @@ extends:
   - 0277-the-card-scene-authoring-instrument-is-removed.md
 partially_supersedes:
   - 0262-bundle-cards-are-scene-vignettes-with-authored-names-and-a-codex.md
+partially_superseded_by:
+  - 0279-units-card-art-uses-a-pixellab-pixel-art-core-set.md
 ---
 
 # ADR-0278: Unit-card art uses dedicated database prompt plans
