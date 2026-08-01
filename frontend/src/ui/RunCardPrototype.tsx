@@ -13,10 +13,20 @@ const SHA256 = /^[0-9a-f]{64}$/;
 const PLAYER_CARD_PALETTE = paletteForSide('player');
 const PLAYER_CARD_FACING = 'south';
 const REFERENCE_CARD_WIDTH = 360;
+const TITLE_SIZE_MIN = 3;
+const TITLE_SIZE_MAX = 7;
 const DEFAULT_TITLE_SIZE = 5;
 const DEFAULT_COST_SIZE = 6.2;
+const TYPE_SIZE_MIN = 2.5;
+const TYPE_SIZE_MAX = 6;
 const DEFAULT_TYPE_SIZE = 3.7;
 const DEFAULT_FLAVOR_SIZE = 5;
+
+const clampCardFontSize = (value: number, min: number, max: number): number => (
+  Math.round(Math.min(max, Math.max(min, value)) * 100) / 100
+);
+const roundCardFontBoundUp = (value: number): number => Math.ceil((value - 1e-9) * 100) / 100;
+const roundCardFontBoundDown = (value: number): number => Math.floor((value + 1e-9) * 100) / 100;
 
 type CardImageKind = 'frame' | 'art' | `unit:${number}:${PlayablePieceType}:${number}`;
 
@@ -285,6 +295,7 @@ export function RunCardPrototypeViewer({
   const [typeX, setTypeX] = useState(0);
   const [typeY, setTypeY] = useState(0);
   const [typeSize, setTypeSize] = useState(DEFAULT_TYPE_SIZE);
+  const [titleTypeSizeRatio, setTitleTypeSizeRatio] = useState<number | null>(null);
   const [flavorSize, setFlavorSize] = useState(DEFAULT_FLAVOR_SIZE);
   const [loaded, setLoaded] = useState<ReadonlySet<CardImageKind>>(() => new Set());
 
@@ -314,6 +325,41 @@ export function RunCardPrototypeViewer({
     setLoaded((current) => current.has(kind) ? current : new Set([...current, kind]));
   };
   const onImageError = (kind: CardImageKind): void => setError(`${kind} image could not be decoded.`);
+  const titleTypeSizesLocked = titleTypeSizeRatio !== null;
+  const titleSizeMin = titleTypeSizeRatio === null
+    ? TITLE_SIZE_MIN
+    : roundCardFontBoundUp(Math.max(TITLE_SIZE_MIN, TYPE_SIZE_MIN / titleTypeSizeRatio));
+  const titleSizeMax = titleTypeSizeRatio === null
+    ? TITLE_SIZE_MAX
+    : roundCardFontBoundDown(Math.min(TITLE_SIZE_MAX, TYPE_SIZE_MAX / titleTypeSizeRatio));
+  const typeSizeMin = titleTypeSizeRatio === null
+    ? TYPE_SIZE_MIN
+    : roundCardFontBoundUp(Math.max(TYPE_SIZE_MIN, TITLE_SIZE_MIN * titleTypeSizeRatio));
+  const typeSizeMax = titleTypeSizeRatio === null
+    ? TYPE_SIZE_MAX
+    : roundCardFontBoundDown(Math.min(TYPE_SIZE_MAX, TITLE_SIZE_MAX * titleTypeSizeRatio));
+  const setLinkedTitleSize = (nextTitleSize: number): void => {
+    if (titleTypeSizeRatio === null) {
+      setTitleSize(nextTitleSize);
+      return;
+    }
+    const linkedTitleMin = Math.max(TITLE_SIZE_MIN, TYPE_SIZE_MIN / titleTypeSizeRatio);
+    const linkedTitleMax = Math.min(TITLE_SIZE_MAX, TYPE_SIZE_MAX / titleTypeSizeRatio);
+    const clampedTitleSize = clampCardFontSize(nextTitleSize, linkedTitleMin, linkedTitleMax);
+    setTitleSize(clampedTitleSize);
+    setTypeSize(clampCardFontSize(clampedTitleSize * titleTypeSizeRatio, TYPE_SIZE_MIN, TYPE_SIZE_MAX));
+  };
+  const setLinkedTypeSize = (nextTypeSize: number): void => {
+    if (titleTypeSizeRatio === null) {
+      setTypeSize(nextTypeSize);
+      return;
+    }
+    const linkedTypeMin = Math.max(TYPE_SIZE_MIN, TITLE_SIZE_MIN * titleTypeSizeRatio);
+    const linkedTypeMax = Math.min(TYPE_SIZE_MAX, TITLE_SIZE_MAX * titleTypeSizeRatio);
+    const clampedTypeSize = clampCardFontSize(nextTypeSize, linkedTypeMin, linkedTypeMax);
+    setTypeSize(clampedTypeSize);
+    setTitleSize(clampCardFontSize(clampedTypeSize / titleTypeSizeRatio, TITLE_SIZE_MIN, TITLE_SIZE_MAX));
+  };
 
   return (
     <>
@@ -340,13 +386,22 @@ export function RunCardPrototypeViewer({
           <div className="tileset-control-stack">
             {header}
             <p className="run-card-prototype-note">Prototype instrument. The Studio Zoom control changes only the preview scale.</p>
-            <SliderRow label={<>Title size · {titleSize.toFixed(2)}%</>} value={titleSize} set={setTitleSize} min={3} max={7} step={.05} nudge={.05} dflt={DEFAULT_TITLE_SIZE} />
+            <SliderRow label={<>Title size · {titleSize.toFixed(2)}%</>} value={titleSize} set={setLinkedTitleSize} min={titleSizeMin} max={titleSizeMax} step={.01} nudge={.05} dflt={DEFAULT_TITLE_SIZE} />
+            <button
+              type="button"
+              className={`tileset-view-action run-card-prototype-size-lock${titleTypeSizesLocked ? ' active' : ''}`}
+              aria-pressed={titleTypeSizesLocked}
+              title="Keep the current title-to-type font-size proportion while either size is adjusted"
+              onClick={() => setTitleTypeSizeRatio(titleTypeSizesLocked ? null : typeSize / titleSize)}
+            >
+              {titleTypeSizesLocked ? 'Title/type sizes locked' : 'Lock title/type sizes'}
+            </button>
+            <SliderRow label={<>Type size · {typeSize.toFixed(2)}%</>} value={typeSize} set={setLinkedTypeSize} min={typeSizeMin} max={typeSizeMax} step={.01} nudge={.05} dflt={DEFAULT_TYPE_SIZE} />
             <SliderRow label={<>Title horizontal · {titleX.toFixed(2)}%</>} value={titleX} set={setTitleX} min={-3} max={3} step={.05} nudge={.05} dflt={0} />
             <SliderRow label={<>Title vertical · {titleY.toFixed(2)}%</>} value={titleY} set={setTitleY} min={-3} max={3} step={.05} nudge={.05} dflt={0} />
             <SliderRow label={<>Cost size · {costSize.toFixed(2)}%</>} value={costSize} set={setCostSize} min={3} max={9} step={.05} nudge={.05} dflt={DEFAULT_COST_SIZE} />
             <SliderRow label={<>Cost horizontal · {costX.toFixed(2)}%</>} value={costX} set={setCostX} min={-3} max={3} step={.05} nudge={.05} dflt={0} />
             <SliderRow label={<>Cost vertical · {costY.toFixed(2)}%</>} value={costY} set={setCostY} min={-3} max={3} step={.05} nudge={.05} dflt={.3} />
-            <SliderRow label={<>Type size · {typeSize.toFixed(2)}%</>} value={typeSize} set={setTypeSize} min={2.5} max={6} step={.05} nudge={.05} dflt={DEFAULT_TYPE_SIZE} />
             <SliderRow label={<>Type horizontal · {typeX.toFixed(2)}%</>} value={typeX} set={setTypeX} min={-3} max={3} step={.05} nudge={.05} dflt={0} />
             <SliderRow label={<>Type vertical · {typeY.toFixed(2)}%</>} value={typeY} set={setTypeY} min={-3} max={3} step={.05} nudge={.05} dflt={0} />
             <SliderRow label={<>Flavor size · {flavorSize.toFixed(2)}%</>} value={flavorSize} set={setFlavorSize} min={2.5} max={6} step={.05} nudge={.05} dflt={DEFAULT_FLAVOR_SIZE} />

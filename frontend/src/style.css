@@ -21292,6 +21292,10 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   font-size: 12px !important;
 }
 
+.run-card-prototype-size-lock {
+  inline-size: 100%;
+}
+
 .run-card-prototype-catalog-image {
   align-items: center;
   display: flex;
