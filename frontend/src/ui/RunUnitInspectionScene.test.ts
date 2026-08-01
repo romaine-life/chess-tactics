@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_STEP_Y } from '../art/projectionContract';
-import { defaultFacingForSide } from '../core/pieces';
 import { gameplayTerrainForFamily } from '../core/tileSockets';
 import type { RunArmyUnit } from '../run/model';
 import {
@@ -42,7 +41,7 @@ describe('Run unit inspection scene', () => {
     expect(second).toEqual(first);
     expect(first.board.cells).toEqual({ '0,0': first.tileId });
     expect(first.board.units).toEqual({
-      '0,0': { unitId: 'pawn', direction: defaultFacingForSide('player'), faction: 'navy-blue' },
+      '0,0': { unitId: 'pawn', direction: 'south', faction: 'navy-blue' },
     });
     expect(['water', 'cliff', 'void']).not.toContain(
       gameplayTerrainForFamily(familyForTile(first.tileId)),

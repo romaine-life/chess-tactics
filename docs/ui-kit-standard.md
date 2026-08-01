@@ -166,7 +166,11 @@ installed outer role's generated material through the shared fill-only primitive
 but it paints no second frame, rails, or corner atoms; its controls continue to
 use registered inner chrome. Its open state is part of the canonical Level Editor
 address (`eventsEditor=1`, with optional `eventsTab=other`) so a review link opens
-the exact workspace state without requiring follow-up clicks.
+the exact workspace state without requiring follow-up clicks. Under
+[ADR-0279](adr/0279-main-menu-insets-govern-full-workspace-content.md), its
+content perimeter uses the main menu's responsive inline and block insets: the
+left value mirrors to the right and the top value mirrors to the bottom. The
+outer-role fill itself remains edge-to-edge.
 
 Under [ADR-0237](adr/0237-run-destinations-fill-the-shell-workspace.md), the same
 ownership test applies to every player-facing non-Battle Run destination. Draft,
