@@ -108,6 +108,7 @@ export function SkirmishShell({
   hudContent,
   screenStyle,
   registerSceneSurface = true,
+  ownsGameplaySceneTarget = false,
   readyToCompose = true,
   children,
 }: {
@@ -121,6 +122,7 @@ export function SkirmishShell({
   hudContent?: ReactNode;
   screenStyle?: CSSProperties | null;
   registerSceneSurface?: boolean;
+  ownsGameplaySceneTarget?: boolean;
   readyToCompose?: boolean;
   children: ReactNode;
 }): ReactElement {
@@ -151,6 +153,7 @@ export function SkirmishShell({
       data-testid={testId}
       className={`skirmish-screen ${className}`.trim()}
       style={resolvedScreenStyle}
+      {...(ownsGameplaySceneTarget ? sceneTransitionTargetAttributes('gameplay-shell') : {})}
     >
       {installedChromeCss ? <style data-skirmish-chrome-family dangerouslySetInnerHTML={{ __html: installedChromeCss }} /> : null}
       <TitleBarSlot region="center">{titleBarContent}</TitleBarSlot>

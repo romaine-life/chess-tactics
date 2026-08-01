@@ -1,4 +1,4 @@
-import { bundleLabel, type PieceBundle, type PurchasablePieceType } from './model';
+import { cardContentsLabel, type RunCoreCard, type PurchasablePieceType } from './model';
 
 const CARD_INITIAL: Readonly<Record<PurchasablePieceType, string>> = Object.freeze({
   pawn: 'p',
@@ -10,22 +10,22 @@ const CARD_INITIAL: Readonly<Record<PurchasablePieceType, string>> = Object.free
 const CARD_PIECE_ORDER: readonly PurchasablePieceType[] = Object.freeze(['pawn', 'knight', 'bishop', 'rook', 'queen']);
 
 /**
- * A card's identity is its piece composition, not the offer that dealt it: a draft
- * offer, a shop bundle, and an Enchiridion record with the same pieces are the same
- * card. This resolves any bundle to the deck's canonical id (piece initials in
+ * A card's identity is its piece composition, not the offer that dealt it: a shop
+ * offer and an Enchiridion record with the same pieces are the same card. This
+ * resolves any card to the deck's canonical id (piece initials in
  * purchase order), regardless of the carrier's own id or piece ordering.
  */
-export function canonicalCardId(bundle: Pick<PieceBundle, 'pieces'>): string {
-  return [...bundle.pieces]
+export function canonicalCardId(card: Pick<RunCoreCard, 'pieces'>): string {
+  return [...card.pieces]
     .sort((left, right) => CARD_PIECE_ORDER.indexOf(left) - CARD_PIECE_ORDER.indexOf(right))
     .map((piece) => CARD_INITIAL[piece])
     .join('');
 }
 
-// Every card in the generated piece-bundle deck carries an authored banner name, in the
-// same historical-medieval register as the relic names. The id scheme is the bundle's
+// Every card in the generated deck carries an authored banner name, in the same
+// historical-medieval register as the relic names. The id scheme is the card's
 // piece initials in purchase order (p/k/b/r/q — k is the Knight), so 'ppb' is two Pawns
-// and a Bishop. A bundle outside the deck (e.g. an art-review fixture) falls back to its
+// and a Bishop. A card outside the deck (e.g. an art-review fixture) falls back to its
 // prose label.
 export const RUN_CARD_NAME_BY_ID: Readonly<Record<string, string>> = Object.freeze({
   // 1 gold
@@ -144,16 +144,16 @@ export const RUN_CARD_FLAVOR_BY_ID: Readonly<Record<string, string>> = Object.fr
 });
 
 /** The card's banner name; compositions outside the authored deck read as their contents. */
-export function runCardName(bundle: Pick<PieceBundle, 'pieces'>): string {
-  return RUN_CARD_NAME_BY_ID[canonicalCardId(bundle)] ?? bundleLabel(bundle);
+export function runCardName(card: Pick<RunCoreCard, 'pieces'>): string {
+  return RUN_CARD_NAME_BY_ID[canonicalCardId(card)] ?? cardContentsLabel(card);
 }
 
-/** The card's stable authored flavor; only out-of-deck diagnostic bundles fall back. */
-export function runCardFlavor(bundle: Pick<PieceBundle, 'pieces'>): string {
-  return RUN_CARD_FLAVOR_BY_ID[canonicalCardId(bundle)] ?? 'No account survives.';
+/** The card's stable authored flavor; only out-of-deck diagnostic cards fall back. */
+export function runCardFlavor(card: Pick<RunCoreCard, 'pieces'>): string {
+  return RUN_CARD_FLAVOR_BY_ID[canonicalCardId(card)] ?? 'No account survives.';
 }
 
 /** Stable semantic live-media slot for one canonical core Units card. */
-export function runCardArtSlot(bundle: Pick<PieceBundle, 'pieces'>): string {
-  return `ui/run/card-art/${canonicalCardId(bundle)}/illustration.png`;
+export function runCardArtSlot(card: Pick<RunCoreCard, 'pieces'>): string {
+  return `ui/run/card-art/${canonicalCardId(card)}/illustration.png`;
 }

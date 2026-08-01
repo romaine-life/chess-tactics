@@ -207,7 +207,6 @@ export function runUnitRosterLabel(unit: RunArmyUnit): string {
 function unitSourceLabel(unit: RunArmyUnit): string {
   if (unit.source === 'king') return 'Run commander';
   if (unit.source === 'starting') return 'Starting army';
-  if (unit.source === 'draft') return 'Opening muster';
   return 'Shop purchase';
 }
 

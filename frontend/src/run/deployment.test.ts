@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { createBlankLevel, type Level } from '../core/level';
 import {
-  chooseDraft,
+  buyCard,
   createRun,
   hasRunAbility,
+  leaveShop,
   prepareDeployment,
   setDeploymentChoices,
   type RunArmyUnit,
@@ -33,7 +34,8 @@ function run(seed = 13): RunDocument {
     description: '',
     battles: [{ level, loot: false }],
   }, seed);
-  result = chooseDraft(result, result.draftOffers[0].draftId);
+  result = buyCard(result, result.shop!.cardOffers[0].offerId);
+  result = leaveShop(result);
   return prepareDeployment(result);
 }
 
@@ -49,7 +51,7 @@ describe('Run deployment', () => {
 
   it('never randomly blocks the permanently retained King', () => {
     const level = battle();
-    level.layers.zones[0].tiles = [[1, 3], [2, 3], [3, 3]];
+    level.layers.zones[0].tiles = [[1, 3]];
     const options = deploymentOptions(run(), level);
     expect(options.overflowCount).toBeGreaterThan(0);
     expect(options.layouts[0].blockedUnitIds).not.toContain('run-king');

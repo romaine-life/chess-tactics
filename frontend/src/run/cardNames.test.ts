@@ -7,19 +7,19 @@ import {
   runCardFlavor,
   runCardName,
 } from './cardNames';
-import { PIECE_BUNDLE_DECK, bundleLabel, type PieceBundle } from './model';
+import { RUN_CARD_DECK, cardContentsLabel, type RunCoreCard } from './model';
 
 describe('Run card names', () => {
   it('authors one name for every card in the generated deck', () => {
-    for (const bundle of PIECE_BUNDLE_DECK) {
-      expect(RUN_CARD_NAME_BY_ID[bundle.id], `deck bundle ${bundle.id} has no authored name`).toBeTruthy();
+    for (const card of RUN_CARD_DECK) {
+      expect(RUN_CARD_NAME_BY_ID[card.id], `deck card ${card.id} has no authored name`).toBeTruthy();
     }
   });
 
   it('authors no orphan names outside the deck', () => {
-    const deckIds = new Set(PIECE_BUNDLE_DECK.map((bundle) => bundle.id));
+    const deckIds = new Set(RUN_CARD_DECK.map((card) => card.id));
     for (const id of Object.keys(RUN_CARD_NAME_BY_ID)) {
-      expect(deckIds.has(id), `authored name for unknown bundle id ${id}`).toBe(true);
+      expect(deckIds.has(id), `authored name for unknown card id ${id}`).toBe(true);
     }
   });
 
@@ -34,28 +34,28 @@ describe('Run card names', () => {
   });
 
   it('authors one nonempty flavor fragment for every core card and no orphan flavor', () => {
-    const deckIds = new Set(PIECE_BUNDLE_DECK.map((bundle) => bundle.id));
-    for (const bundle of PIECE_BUNDLE_DECK) {
-      expect(RUN_CARD_FLAVOR_BY_ID[bundle.id], `deck bundle ${bundle.id} has no authored flavor`).toBeTruthy();
-      expect(runCardFlavor(bundle)).toBe(RUN_CARD_FLAVOR_BY_ID[bundle.id]);
+    const deckIds = new Set(RUN_CARD_DECK.map((card) => card.id));
+    for (const card of RUN_CARD_DECK) {
+      expect(RUN_CARD_FLAVOR_BY_ID[card.id], `deck card ${card.id} has no authored flavor`).toBeTruthy();
+      expect(runCardFlavor(card)).toBe(RUN_CARD_FLAVOR_BY_ID[card.id]);
     }
     for (const id of Object.keys(RUN_CARD_FLAVOR_BY_ID)) {
-      expect(deckIds.has(id), `authored flavor for unknown bundle id ${id}`).toBe(true);
+      expect(deckIds.has(id), `authored flavor for unknown card id ${id}`).toBe(true);
     }
   });
 
   it('resolves card identity from the composition, not the carrier id or piece order', () => {
-    expect(canonicalCardId({ pieces: ['bishop', 'knight'] as PieceBundle['pieces'] })).toBe('kb');
-    for (const bundle of PIECE_BUNDLE_DECK) {
-      expect(canonicalCardId(bundle)).toBe(bundle.id);
+    expect(canonicalCardId({ pieces: ['bishop', 'knight'] as RunCoreCard['pieces'] })).toBe('kb');
+    for (const card of RUN_CARD_DECK) {
+      expect(canonicalCardId(card)).toBe(card.id);
     }
-    // A draft offer and an art-review fixture with deck compositions read as their card.
-    expect(runCardName({ pieces: ['knight', 'bishop'] as PieceBundle['pieces'] })).toBe(RUN_CARD_NAME_BY_ID.kb);
-    expect(runCardName({ pieces: ['pawn', 'rook'] as PieceBundle['pieces'] })).toBe(RUN_CARD_NAME_BY_ID.pr);
+    // A shop offer and an art-review fixture with deck compositions read as their card.
+    expect(runCardName({ pieces: ['knight', 'bishop'] as RunCoreCard['pieces'] })).toBe(RUN_CARD_NAME_BY_ID.kb);
+    expect(runCardName({ pieces: ['pawn', 'rook'] as RunCoreCard['pieces'] })).toBe(RUN_CARD_NAME_BY_ID.pr);
   });
 
   it('reads a composition outside the deck as its contents', () => {
-    const foreign = { pieces: ['queen', 'queen'] as PieceBundle['pieces'] };
-    expect(runCardName(foreign)).toBe(bundleLabel(foreign));
+    const foreign = { pieces: ['queen', 'queen'] as RunCoreCard['pieces'] };
+    expect(runCardName(foreign)).toBe(cardContentsLabel(foreign));
   });
 });

@@ -28,6 +28,11 @@ search for before constructing a control or repeated surface.
 
 ## Studio and workflow compositions
 
+- `ui/RunCardFace.tsx` — the canonical visible Run-card anatomy shared by Card
+  Layout, Shops, review, and Enchiridion.
+- `ui/RunCard.tsx` — the canonical interactive/reference host around
+  `RunCardFace`; Shop mode owns the gold transaction cue and registered
+  **Purchased** status chrome.
 - `ui/studio/StudioCatalogCard.tsx` — every Studio catalog card, including
   media, metadata, selected state, and card actions.
 - `ui/dressing/SurfaceEffectsControls.tsx` — the shared icon-treatment and

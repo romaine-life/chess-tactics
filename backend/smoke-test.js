@@ -4031,8 +4031,27 @@ async function main() {
   if (emptyRun.statusCode !== 200 || emptyRunBody.run !== null || emptyRunBody.revision !== 0) {
     throw new Error(`Active Run should begin empty: ${emptyRun.statusCode} ${emptyRun.body}`);
   }
+  const activeRunKing = {
+    id: 'run-king', name: 'David of Israel', type: 'king', number: 1,
+    inspectionSeed: 1701, abilities: [], modifiers: [], source: 'king',
+  };
+  const activeRunPawnA = {
+    id: 'run-pawn-a', name: 'Stephen Botiller', type: 'pawn', number: 1,
+    inspectionSeed: 1702, abilities: [], modifiers: [], source: 'starting',
+  };
+  const activeRunPawnB = {
+    id: 'run-pawn-b', name: 'Godwin Harper', type: 'pawn', number: 2,
+    inspectionSeed: 1703, abilities: [], modifiers: [], source: 'starting',
+  };
+  const activeRunStartingArmy = [activeRunKing, activeRunPawnA, activeRunPawnB];
+  const activeRunNumberState = { pawn: 3, knight: 1, bishop: 1, rook: 1, queen: 1, king: 2 };
+  const activeRunOffers = [
+    { id: 'p', offerId: 'opening-0-p', pieces: ['pawn'], value: 1, cost: 1, cardType: null, effectSeed: 1704 },
+    { id: 'k', offerId: 'opening-1-k', pieces: ['knight'], value: 3, cost: 3, cardType: null, effectSeed: 1705 },
+    { id: 'r', offerId: 'opening-2-r', pieces: ['rook'], value: 5, cost: 5, cardType: null, effectSeed: 1706 },
+  ];
   const activeRunDocument = {
-    formatVersion: 5,
+    formatVersion: 10,
     id: 'run-smoke',
     seed: 17,
     ataraxiaTier: 1,
@@ -4043,29 +4062,46 @@ async function main() {
       description: 'Pinned War snapshot.',
       battles: [{ level: warBattleLevel, loot: true }],
     },
-    phase: 'draft',
+    phase: 'shop',
     battleIndex: 0,
     conflictIndex: 0,
-    goldTenths: 0,
-    army: [
-      { id: 'run-king', name: 'David of Israel', type: 'king', inspectionSeed: 1701, abilities: [], modifiers: [], source: 'king' },
-      { id: 'run-pawn-a', name: 'Stephen Botiller', type: 'pawn', inspectionSeed: 1702, abilities: ['positioned', 'marshalled'], modifiers: ['plagued'], source: 'starting' },
-    ],
+    goldTenths: 80,
+    army: activeRunStartingArmy,
     cards: [],
     pestiferousLosses: [],
     relics: [],
     seenRelics: [],
     conflictPaidRelics: {},
-    draftOffers: [
-      { id: 'draft-pawn-rook', draftId: 'pawn-rook', pieces: ['pawn', 'rook'], value: 6 },
-      { id: 'draft-knight-bishop', draftId: 'knight-bishop', pieces: ['knight', 'bishop'], value: 6 },
-    ],
-    chosenDraftId: null,
     nextArmyUnitSequence: 1,
+    nextArmyUnitNumberByType: activeRunNumberState,
     nextCardSequence: 1,
     deployment: null,
     battleRuntime: null,
-    shop: null,
+    shop: {
+      kind: 'opening',
+      afterBattleIndex: 0,
+      conflictIndex: 0,
+      victoryGoldTenths: 0,
+      cardOffers: activeRunOffers,
+      purchasedCardOfferIds: [],
+      lootRelicOffers: [],
+      chosenLootRelicId: null,
+      paidRelicOffer: null,
+      paidRelicBought: false,
+      soldUnits: [],
+      entrySnapshot: {
+        goldTenths: 80,
+        army: activeRunStartingArmy,
+        cards: [],
+        relics: [],
+        seenRelics: [],
+        conflictPaidRelics: {},
+        nextArmyUnitSequence: 1,
+        nextArmyUnitNumberByType: activeRunNumberState,
+        nextCardSequence: 1,
+        paidRelicBought: false,
+      },
+    },
   };
   const missingRunRevision = await request(
     'PUT', '/api/active-run',
@@ -4075,13 +4111,131 @@ async function main() {
   if (missingRunRevision.statusCode !== 400 || JSON.parse(missingRunRevision.body).error !== 'active_run_revision_required') {
     throw new Error(`Active Run writes must carry a revision: ${missingRunRevision.statusCode} ${missingRunRevision.body}`);
   }
+  const invalidOpeningRun = await request(
+    'PUT', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      run: {
+        ...activeRunDocument,
+        shop: { ...activeRunDocument.shop, cardOffers: activeRunDocument.shop.cardOffers.slice(0, 2) },
+      },
+      revision: 0,
+    }),
+  );
+  if (invalidOpeningRun.statusCode !== 400 || JSON.parse(invalidOpeningRun.body).error !== 'invalid_active_run') {
+    throw new Error(`Format-10 opening Shops must persist three card offers: ${invalidOpeningRun.statusCode} ${invalidOpeningRun.body}`);
+  }
+  const retiredShopFieldRun = await request(
+    'PUT', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      run: {
+        ...activeRunDocument,
+        shop: { ...activeRunDocument.shop, retiredTransactionState: [] },
+      },
+      revision: 0,
+    }),
+  );
+  if (retiredShopFieldRun.statusCode !== 400 || JSON.parse(retiredShopFieldRun.body).error !== 'invalid_active_run') {
+    throw new Error(`Format-10 Shops must reject unsupported fields: ${retiredShopFieldRun.statusCode} ${retiredShopFieldRun.body}`);
+  }
+  const duplicatePurchasedCardRun = await request(
+    'PUT', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      run: {
+        ...activeRunDocument,
+        shop: {
+          ...activeRunDocument.shop,
+          purchasedCardOfferIds: [activeRunOffers[0].offerId, activeRunOffers[0].offerId],
+        },
+      },
+      revision: 0,
+    }),
+  );
+  if (duplicatePurchasedCardRun.statusCode !== 400 || JSON.parse(duplicatePurchasedCardRun.body).error !== 'invalid_active_run') {
+    throw new Error(`Format-10 Shops must reject a duplicate card purchase: ${duplicatePurchasedCardRun.statusCode} ${duplicatePurchasedCardRun.body}`);
+  }
+  const invalidOpeningArmy = await request(
+    'PUT', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      run: {
+        ...activeRunDocument,
+        army: [
+          ...activeRunDocument.army,
+          { id: 'run-unit-1', name: 'Unexpected Pawn', type: 'pawn', number: 3, inspectionSeed: 1707, abilities: [], modifiers: [], source: 'shop' },
+        ],
+      },
+      revision: 0,
+    }),
+  );
+  if (invalidOpeningArmy.statusCode !== 400 || JSON.parse(invalidOpeningArmy.body).error !== 'invalid_active_run') {
+    throw new Error(`Unpurchased format-10 opening Shops must contain only the starting army: ${invalidOpeningArmy.statusCode} ${invalidOpeningArmy.body}`);
+  }
+  const retiredDraftRun = await request(
+    'PUT', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({ run: { ...activeRunDocument, draftOffers: [] }, revision: 0 }),
+  );
+  if (retiredDraftRun.statusCode !== 400 || JSON.parse(retiredDraftRun.body).error !== 'invalid_active_run') {
+    throw new Error(`Format-10 Runs must reject retired draft state: ${retiredDraftRun.statusCode} ${retiredDraftRun.body}`);
+  }
+  const retiredDraftSourceRun = await request(
+    'PUT', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      run: { ...activeRunDocument, army: [{ ...activeRunKing, source: 'draft' }, activeRunPawnA, activeRunPawnB] },
+      revision: 0,
+    }),
+  );
+  if (retiredDraftSourceRun.statusCode !== 400 || JSON.parse(retiredDraftSourceRun.body).error !== 'invalid_active_run') {
+    throw new Error(`Format-10 Runs must reject retired draft unit sources: ${retiredDraftSourceRun.statusCode} ${retiredDraftSourceRun.body}`);
+  }
+  const purchasedPawn = {
+    id: 'run-unit-1', name: 'Eadric Miller', type: 'pawn', number: 3,
+    inspectionSeed: 1707, abilities: [], modifiers: [], source: 'shop',
+  };
+  const purchasedKnight = {
+    id: 'run-unit-2', name: 'Richard Marshal', type: 'knight', number: 1,
+    inspectionSeed: 1708, abilities: [], modifiers: [], source: 'shop',
+  };
+  const multiPurchaseRun = {
+    ...activeRunDocument,
+    goldTenths: 40,
+    army: [...activeRunDocument.army, purchasedPawn, purchasedKnight],
+    cards: [
+      {
+        id: 'run-card-1', coreId: activeRunOffers[0].id, cardType: null,
+        effectSeed: activeRunOffers[0].effectSeed, unitIds: [purchasedPawn.id], lostUnitIds: [],
+        acquiredAfterBattleIndex: 0,
+      },
+      {
+        id: 'run-card-2', coreId: activeRunOffers[1].id, cardType: null,
+        effectSeed: activeRunOffers[1].effectSeed, unitIds: [purchasedKnight.id], lostUnitIds: [],
+        acquiredAfterBattleIndex: 0,
+      },
+    ],
+    nextArmyUnitSequence: 3,
+    nextArmyUnitNumberByType: { ...activeRunNumberState, pawn: 4, knight: 2 },
+    nextCardSequence: 3,
+    shop: {
+      ...activeRunDocument.shop,
+      purchasedCardOfferIds: [activeRunOffers[0].offerId, activeRunOffers[1].offerId],
+    },
+  };
   const savedRun = await request(
     'PUT', '/api/active-run',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify({ run: activeRunDocument, revision: 0 }),
+    JSON.stringify({ run: multiPurchaseRun, revision: 0 }),
   );
   const savedRunBody = JSON.parse(savedRun.body);
-  if (savedRun.statusCode !== 200 || savedRunBody.revision !== 1 || savedRunBody.run.id !== 'run-smoke') {
+  if (
+    savedRun.statusCode !== 200
+    || savedRunBody.revision !== 1
+    || savedRunBody.run.id !== 'run-smoke'
+    || savedRunBody.run.shop.purchasedCardOfferIds.length !== 2
+  ) {
     throw new Error(`Active Run did not save: ${savedRun.statusCode} ${savedRun.body}`);
   }
   const rivalRun = await get('/api/active-run', { cookie: '__Host-chess-tactics-access=rival' });

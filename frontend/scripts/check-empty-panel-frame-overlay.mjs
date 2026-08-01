@@ -1025,7 +1025,6 @@ if (!/<RunWorkspace[\s\S]*?contentClassName=\{contentClassName\}[\s\S]*?edgeAtta
 }
 const playerRunSources = `${runScreen}\n${runArmyWorkspace}\n${runRelics}`;
 for (const testId of [
-  'run-draft-workspace',
   'run-deployment-workspace',
   'run-shop-workspace',
   'run-victory-workspace',

@@ -1,11 +1,11 @@
 import type { ReactElement } from 'react';
 import { defaultBackgroundSet } from '../art/backgroundSets';
-import type { PieceBundle } from '../run/model';
-import { RunBundleCard } from './RunBundleCard';
+import type { RunCoreCard } from '../run/model';
+import { RunCard } from './RunCard';
 import { OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
 import { useSceneParticipant } from './shell/SceneBoundary';
 
-const REVIEW_BUNDLES: readonly PieceBundle[] = [
+const REVIEW_CARDS: readonly RunCoreCard[] = [
   { id: 'review-two-pawns-bishop', pieces: ['pawn', 'pawn', 'bishop'], value: 5 },
   { id: 'review-pawn-rook', pieces: ['pawn', 'rook'], value: 6 },
   { id: 'review-four-pawns-bishop', pieces: ['pawn', 'pawn', 'pawn', 'pawn', 'bishop'], value: 7 },
@@ -23,10 +23,10 @@ export function RunShopArtReview(): ReactElement {
         <OuterChromeHeader title="Run Card Review" />
         <p>Accepted frame and illustration pixels mounted in the shared live card face.</p>
         <div className="run-card-grid" aria-label="Trading-card examples">
-          {REVIEW_BUNDLES.map((bundle) => (
-            <RunBundleCard
-              key={bundle.id}
-              bundle={bundle}
+          {REVIEW_CARDS.map((card) => (
+            <RunCard
+              key={card.id}
+              card={card}
               mode="shop"
               onSelect={() => undefined}
             />

@@ -18,10 +18,10 @@ import {
   RUN_RELIC_BY_ID,
   battleVictoryGoldTenths,
   beginBattle,
-  buyBundle,
+  buyCard,
   buyPaidRelic,
+  canLeaveShop,
   cashOutPawn,
-  chooseDraft,
   hasRelic,
   leaveShop,
   markReservistDeployed,
@@ -65,7 +65,7 @@ import {
   type RunSellFilters,
 } from './RunArmyWorkspace';
 import { RunWorkspaceStages } from './RunWorkspaceStages';
-import { RunBundleCard } from './RunBundleCard';
+import { RunCard } from './RunCard';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 
 type RunScreenView = 'primary' | 'sell' | RunSelfInspectionView;
@@ -137,10 +137,12 @@ function RunMetaControls({
   const replace = useActiveRun((state) => state.replace);
   const { abandonDialog, abandoning, requestAbandon } = useRunAbandon(run);
   const shop = run.phase === 'shop' ? run.shop : null;
-  const canLeave = !shop || shop.lootRelicOffers.length === 0 || shop.chosenLootRelicId !== null;
-  const primaryLabel = run.phase === 'draft'
-    ? 'Muster'
-    : run.phase === 'deployment'
+  const canLeave = canLeaveShop(run);
+  const openingNeedsPurchase = shop?.kind === 'opening' && shop.purchasedCardOfferIds.length === 0;
+  const continueHint = openingNeedsPurchase
+    ? 'Buy one card before continuing.'
+    : 'Choose one Loot relic before continuing.';
+  const primaryLabel = run.phase === 'deployment'
       ? 'Deployment'
       : run.phase === 'battle'
         ? 'Battle'
@@ -200,16 +202,16 @@ function RunMetaControls({
                 className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
                 disabled={!canLeave}
                 data-testid="continue-run-shop"
-                title={canLeave ? undefined : 'Choose one Loot relic before continuing.'}
+                title={canLeave ? undefined : continueHint}
                 onClick={() => {
                   replace(prepareDeployment(leaveShop(run)));
                   onNavigate('primary');
                 }}
               >
-                Continue to next Battle
+                {shop.kind === 'opening' ? 'Continue to first Battle' : 'Continue to next Battle'}
               </ChromeButton>
             </div>
-            {!canLeave ? <p className="skirmish-grid-hint">Choose one Loot relic before continuing.</p> : null}
+            {!canLeave ? <p className="skirmish-grid-hint">{continueHint}</p> : null}
           </div>
         ) : null}
         {showAbandon ? (
@@ -248,31 +250,6 @@ function RunPhaseWorkspace({
     >
       {inspectionWorkspace}
     </ShellViewportSwap>
-  );
-}
-
-function DraftPanel({ run }: { run: RunDocument }): ReactElement {
-  const replace = useActiveRun((state) => state.replace);
-  return (
-    <RunWorkspace
-      className="run-draft-workspace"
-      contentClassName="run-draft-workspace-content"
-      data-testid="run-draft-workspace"
-      aria-labelledby="run-draft-workspace-title"
-    >
-      <h2 id="run-draft-workspace-title">Muster your army</h2>
-      <p>Your King and three Pawns are ready. Choose one of the two dealt six-point reinforcements.</p>
-      <div className="run-card-grid" aria-label="Opening draft">
-        {run.draftOffers.map((offer) => (
-          <RunBundleCard
-            bundle={offer}
-            mode="draft"
-            key={offer.draftId}
-            onSelect={() => replace(prepareDeployment(chooseDraft(run, offer.draftId)))}
-          />
-        ))}
-      </div>
-    </RunWorkspace>
   );
 }
 
@@ -485,6 +462,7 @@ function ShopPanel({
 }): ReactElement {
   const replace = useActiveRun((state) => state.replace);
   const shop = run.shop!;
+  const opening = shop.kind === 'opening';
   const victoryGoldTenths = Number.isSafeInteger(shop.victoryGoldTenths) && shop.victoryGoldTenths >= 0
     ? shop.victoryGoldTenths
     : battleVictoryGoldTenths(run.war.battles[shop.afterBattleIndex].level);
@@ -498,12 +476,21 @@ function ShopPanel({
           data-testid="run-shop-workspace"
           aria-labelledby="run-shop-workspace-title"
         >
-        <h2 id="run-shop-workspace-title">{run.war.battles[shop.afterBattleIndex]?.loot ? 'Loot Shop' : 'Shop'}</h2>
+        <h2 id="run-shop-workspace-title">{!opening && run.war.battles[shop.afterBattleIndex]?.loot ? 'Loot Shop' : 'Shop'}</h2>
         <div className="run-shop-rules">
-          <span>Victory</span>
-          <span aria-hidden="true">+</span>
-          <RunGoldAmount valueTenths={victoryGoldTenths} />
-          <span>Choose one bundle</span>
+          {opening ? (
+            <>
+              <span>Starting gold</span>
+              <RunGoldAmount valueTenths={shop.entrySnapshot.goldTenths} />
+            </>
+          ) : (
+            <>
+              <span>Victory</span>
+              <span aria-hidden="true">+</span>
+              <RunGoldAmount valueTenths={victoryGoldTenths} />
+            </>
+          )}
+          <span>Buy any cards you can afford</span>
         </div>
         {pestiferousLosses.length ? (
           <InnerChromeBox className="run-pestiferous-losses" role="status">
@@ -517,18 +504,18 @@ function ShopPanel({
           </InnerChromeBox>
         ) : null}
         <section>
-          <h3>Piece bundles</h3>
+          <h3>Cards</h3>
           <div className="run-card-grid">
-            {shop.bundleOffers.map((offer) => {
-              const bought = shop.purchasedOfferId === offer.offerId;
+            {shop.cardOffers.map((offer) => {
+              const purchased = shop.purchasedCardOfferIds.includes(offer.offerId);
               return (
-                <RunBundleCard
-                  bundle={offer}
+                <RunCard
+                  card={offer}
                   mode="shop"
-                  bought={bought}
+                  purchased={purchased}
                   key={offer.offerId}
-                  disabled={Boolean(shop.purchasedOfferId) || run.goldTenths < offer.cost * GOLD_SCALE}
-                  onSelect={() => replace(buyBundle(run, offer.offerId))}
+                  disabled={purchased || run.goldTenths < offer.cost * GOLD_SCALE}
+                  onSelect={() => replace(buyCard(run, offer.offerId))}
                 />
               );
             })}
@@ -882,9 +869,7 @@ export function RunScreen({
           </ChromeNavButton>
         </RunWorkspace>
       )
-      : shellRun.phase === 'draft'
-        ? <DraftPanel run={shellRun} />
-        : shellRun.phase === 'deployment'
+      : shellRun.phase === 'deployment'
           ? <DeploymentPanel run={shellRun} />
           : shellRun.phase === 'shop' && shellRun.shop
             ? <ShopPanel run={shellRun} view={view} sellWorkspace={sellWorkspace!} />
@@ -894,6 +879,7 @@ export function RunScreen({
     <SkirmishShell
       className={`run-screen${shellRun && visibleRunRelicCount(shellRun) ? ' has-relics' : ''}`}
       testId="run-screen"
+      ownsGameplaySceneTarget
       titleBarContent={shellRun ? <RunTitleBarStatus run={shellRun} /> : null}
       relicIds={shellRun ? shellRun.relics : []}
       shellWorkspaceCoversRelics={Boolean(inspectionWorkspace)}
