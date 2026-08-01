@@ -161,6 +161,7 @@ export * from './core/subterrain';
 export * from './core/wallDecor';
 export * from './render/boardProjection';
 export * from './render/boardFraming';
+export * from './render/boardCameraBounds';
 export * from './render/fenceOverlayDepth';
 export * from './render/mirrorReflection';
 export * from './render/predrawnBoard';

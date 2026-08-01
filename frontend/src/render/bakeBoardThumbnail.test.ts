@@ -957,9 +957,9 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     const frontPost = posts.find((post) => post.dx === ownerLeft - BAKE_GEOMETRY.TILE_STEP_X);
     expect(rightPost?.z).toBe(fencePostZIndex({ x: 2, y: 1 }));
     expect(frontPost?.z).toBe(fencePostZIndex({ x: 2, y: 2 }));
-    expect(rightPost?.z).toBe(fence!.z + 0.5);
-    expect(frontPost?.z).toBe(fence!.z + CELL_DEPTH_STRIDE + 0.5);
-    expect(ops.indexOf(fence!)).toBeLessThan(ops.indexOf(rightPost!));
+    expect(rightPost?.z).toBe(fence!.z - 0.5);
+    expect(frontPost?.z).toBe(fence!.z + CELL_DEPTH_STRIDE - 0.5);
+    expect(ops.indexOf(rightPost!)).toBeLessThan(ops.indexOf(fence!));
     expect(ops.indexOf(fence!)).toBeLessThan(ops.indexOf(frontPost!));
     expect(fence!.z).toBeLessThan(Math.min(...coverOps.map((op) => op.z)));
     expect(fence!.z).toBeLessThan(ownerUnit!.z);
@@ -969,7 +969,7 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     expect(doodadBack!.z).toBe(structureBackZIndex({ x: 1, y: 1 }));
   });
 
-  it('puts both endpoints of E- and S-rails behind their capping posts', () => {
+  it('interleaves E- and S-rails between their far and near endpoint posts', () => {
     for (const [edge, src] of [
       [roadEdgeKey(1, 1, 2, 1), fenceFrameSrc('wood', 2)],
       [roadEdgeKey(1, 1, 1, 2), fenceFrameSrc('wood', 4)],
@@ -980,14 +980,14 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
       const [rear, front] = [...posts].sort((a, b) => a.z - b.z);
 
       expect(posts).toHaveLength(2);
-      expect(rear.z).toBe(rail.z + 0.5);
-      expect(front.z).toBe(rail.z + CELL_DEPTH_STRIDE + 0.5);
-      expect(ops.indexOf(rail)).toBeLessThan(ops.indexOf(rear));
+      expect(rear.z).toBe(rail.z - 0.5);
+      expect(front.z).toBe(rail.z + CELL_DEPTH_STRIDE - 0.5);
+      expect(ops.indexOf(rear)).toBeLessThan(ops.indexOf(rail));
       expect(ops.indexOf(rail)).toBeLessThan(ops.indexOf(front));
     }
   });
 
-  it('draws one explicit junction post in front of every incident rail', () => {
+  it('interleaves one explicit junction post between farther and nearer incident rails', () => {
     const board: EditorBoard = {
       ...blank(5, 5),
       fences: {
@@ -1005,8 +1005,9 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     const incidentRails = ops.filter((op) => railSrcs.has(op.src));
 
     expect(incidentRails).toHaveLength(3);
-    expect(incidentRails.every((rail) => rail.z < post.z)).toBe(true);
-    expect(Math.max(...incidentRails.map((rail) => rail.z))).toBe(post.z - 0.5);
+    expect(incidentRails.filter((rail) => rail.z < post.z)).toHaveLength(1);
+    expect(incidentRails.filter((rail) => rail.z > post.z)).toHaveLength(2);
+    expect(Math.min(...incidentRails.map((rail) => Math.abs(rail.z - post.z)))).toBe(0.5);
   });
 
   it('draws north/west boundary fences from phantom owners and posts at canonical vertices', () => {

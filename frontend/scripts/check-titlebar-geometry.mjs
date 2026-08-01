@@ -58,6 +58,9 @@ try {
       };
     };
     const bar = document.querySelector('.app-shell-titlebar');
+    const brandHome = document.querySelector('.brand-lockup[data-nav="/"]');
+    const brandMark = document.querySelector('.brand-lockup-mark');
+    const brandCopy = document.querySelector('.brand-lockup-copy');
     const fill = document.querySelector('.app-titlebar-fill');
     const lane = document.querySelector('.app-titlebar-control-lane');
     const divider = document.querySelector('.app-titlebar-persistent-divider');
@@ -76,6 +79,9 @@ try {
     return {
       expectedGap: Number.parseFloat(barStyle.getPropertyValue('--titlebar-control-gap')),
       bar: rect(bar),
+      brandHome: rect(brandHome),
+      brandMark: rect(brandMark),
+      brandCopy: rect(brandCopy),
       fill: rect(fill),
       lane: rect(lane),
       divider: rect(divider),
@@ -101,6 +107,13 @@ try {
     }
   };
   const controls = [...geometry.contributed, ...geometry.persistent];
+  near(geometry.brandHome.top, geometry.brandMark.top, 'brand home top to shield');
+  near(geometry.brandHome.right, geometry.brandMark.right, 'brand home right to shield');
+  near(geometry.brandHome.bottom, geometry.brandMark.bottom, 'brand home bottom to shield');
+  near(geometry.brandHome.left, geometry.brandMark.left, 'brand home left to shield');
+  if (geometry.brandHome.right > geometry.brandCopy.left + tolerance) {
+    failures.push(`brand home overlaps inert title copy by ${geometry.brandHome.right - geometry.brandCopy.left}px`);
+  }
   await page.addStyleTag({
     content: `
       html,
@@ -225,6 +238,9 @@ try {
     deviceScaleFactor: scale,
     bar: geometry.bar,
     expectedGap: geometry.expectedGap,
+    brandHome: geometry.brandHome,
+    brandMark: geometry.brandMark,
+    brandCopy: geometry.brandCopy,
     buttonTop: top,
     buttonBottom: baseline,
     horizontalDividerTop: geometry.horizontalDividerTop,

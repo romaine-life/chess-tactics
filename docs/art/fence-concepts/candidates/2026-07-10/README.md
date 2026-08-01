@@ -25,27 +25,18 @@ only and does not make their high-resolution subjects native gameplay art.
 ## Review proof
 
 > Historical snapshot: this first-pass review originally exposed the two procedural
-> runtime kits beside five candidates, as recorded below. The current catalog and
-> Level Editor review cycle expose four cleaned candidates: PixelLab stone rail-only,
-> PixelLab wood, Codex wood, and Codex stone. They no longer expose `live-wood`,
-> `live-stone`, or either rejected PixelLab stone-post trial; see the
-> current realignment run and `docs/art/fence-concepts/SOURCES.md`.
-
-- Primary live Level Editor drawing document: `/editor/level?document=5d04d83f-474e-4d76-a49e-094bbe26ec0d&levelId=l6&from=studio&layer=fence&kind=fence&artReview=fence-native-candidates-2026-07-10&fenceArt=blender-stone`
-- Supplementary Studio gallery: `/studio?mode=catalog&cat=fences`
-- Historical PixelLab and Codex prompt/provenance metadata remains as text.
+> runtime kits beside five candidates. The later realignment run reduced that batch,
+> and ADR-0299 subsequently retired its dated route. Retained bridge and archive
+> records are no longer Studio or Level Editor choices. Historical PixelLab and
+> Codex prompt/provenance metadata remains as text.
 
 The deleted contact-sheet, preview-builder, and repository-output scripts are
 not supported regeneration paths. A new pass must upload candidates through the
 live-media admin workflow and mount those exact versions in the board review.
 
-The primary route is one pre-drawn private working copy served from the durable
-editor-document database and opened in the real Level Editor. Its Fence panel offers seven
-selectable artwork kits: current live wood and stone, plus Blender stone,
-PixelLab wood and stone, and Codex wood and stone. A reviewer can use the normal
-edge and vertex interactions to draw rails or posts anywhere on the board, erase
-them, and then cycle the same authored fence geometry through any of the seven
-kits. Selecting a kit also selects its wood/stone material for the next stroke.
+The retired primary route used one pre-drawn private working copy served from the
+durable editor-document database. Its Fence panel offered seven selectable artwork
+kits at the time. That dated route and its fallback cycle are no longer supported.
 
 The saved level continues to contain ordinary editable wood/stone rails and
 authored posts. The `artReview` and `fenceArt` parameters substitute only the

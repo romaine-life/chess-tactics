@@ -11,6 +11,7 @@ import { defaultTerrainFamily, familyForGameplayTerrain, familyIdForAsset, tileS
 import { useSkirmish } from '../game/store';
 import { adminMoveTargets } from '../game/adminBattle';
 import { useSkirmishView } from '../game/skirmishView';
+import { PLAYER_TECHNICAL_MINIMUM_ZOOM } from '../game/boardCameraPolicy';
 import { provisionalBoard, premoveArrows, premoveGhosts, premoveTargets, type PremoveArrow } from '../game/premoves';
 import { clientSide, opponentSide } from '../game/clientPerspective';
 import { BoardLabBoard, boardLabCellPosition, immutableBoardLabTerrainSrc } from './BoardLabBoard';
@@ -47,6 +48,7 @@ import {
   boardBounds,
   boardContentHash,
   boardDrawOps,
+  effectiveBoardCameraCoverPolygon,
   boardVisualFeatures,
   boardVisualTerrainCells,
   isPredrawnBackgroundActive,
@@ -1270,6 +1272,13 @@ export function SkirmishBoard({
     () => predrawnPlate ? predrawnBoardCoverPolygon(predrawnPlate, board.cells) : undefined,
     [board.cells, predrawnPlate],
   );
+  const cameraCoverPolygon = useMemo(
+    () => effectiveBoardCameraCoverPolygon(
+      exactBoard ?? { cols: game.size.cols, rows: game.size.rows },
+      predrawnCoverPolygon,
+    ),
+    [exactBoard, game.size.cols, game.size.rows, predrawnCoverPolygon],
+  );
   const { markViewInteraction } = useBoardCameraFraming({
     board: { cols: game.size.cols, rows: game.size.rows },
     viewKey: `${levelId ?? 'free'}:${boardViewEpoch}`,
@@ -1755,11 +1764,11 @@ export function SkirmishBoard({
         ariaLabel="Skirmish board viewport"
         zoom={boardZoom}
         pan={boardPan}
-        minZoom={0.55}
+        minZoom={PLAYER_TECHNICAL_MINIMUM_ZOOM}
         maxZoom={boardMaxZoom}
         onZoomChange={setZoom}
         onPanChange={setBoardPan}
-        coverPolygon={predrawnCoverPolygon}
+        coverPolygon={cameraCoverPolygon}
         onMinimumZoomChange={setMinZoom}
         onViewportSizeChange={setViewViewportSize}
         onViewInteraction={markViewInteraction}

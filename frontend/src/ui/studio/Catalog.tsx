@@ -62,6 +62,7 @@ export interface CatalogType<A extends { id: string }> {
   /** Short helper line under the rail controls. */
   note?: string;
   emptyLabel?: string;
+  emptyNote?: string;
   /** Optional extra controls for this category's rail (e.g. the unit facing compass). */
   extra?: ReactNode;
 }
@@ -165,7 +166,7 @@ export function CatalogGrid<A extends { id: string }>({ type }: { type: CatalogT
           {empty && !createCard ? (
             <div className="unit-catalog-empty">
               <h3>{type.emptyLabel ?? 'Nothing matches'}</h3>
-              <p>Adjust the search or filters.</p>
+              <p>{type.emptyNote ?? 'Adjust the search or filters.'}</p>
             </div>
           ) : null}
         </div>
