@@ -71,6 +71,8 @@ describe('professional loading architecture guards', () => {
     expect(read('../scripts/shot.mjs')).toContain('assertImmediateLocalControl || backAfterClickMs !== undefined');
     expect(read('../scripts/shot.mjs')).toContain('full-scene wait did not retain the painted outgoing boundary');
     expect(read('../scripts/shot.mjs')).toContain('painted destination was remounted instead of promoted in place');
+    expect(read('../scripts/shot.mjs')).toContain('rail.getClientRects().length > 0');
+    expect(read('../scripts/shot.mjs')).toContain('.main-menu-mode-tab[data-nav="/editor"]');
     expect(app).toContain('const mountedScene = sceneManifest(path, search)');
     expect(app).toContain('renderScene(layer.scene, layer.search)');
     expect(director).toContain('generation: state.generation + 1');
@@ -101,6 +103,8 @@ describe('professional loading architecture guards', () => {
     const menu = read('./ui/MainMenu.tsx');
     expect(menu).toContain("sceneTransitionTargetAttributes('menu-shell')");
     expect(menu).toContain("key={dest ?? 'home'}");
+    expect(menu).toContain('<Suspense fallback={null}>');
+    expect(menu.indexOf('<Suspense fallback={null}>')).toBeGreaterThan(menu.indexOf('className="menu-dest"'));
     expect(menu).toContain(': null}');
     expect(menu).not.toContain('{dest ? (');
   });
