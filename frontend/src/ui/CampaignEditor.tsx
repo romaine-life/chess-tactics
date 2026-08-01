@@ -15,7 +15,8 @@ import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { validateLevel, type Campaign, type CampaignLevelRef, type Level } from '../core/level';
 import { MODE_NAME } from '../core/objectives';
 import { isWorkspaceConflict } from '../net/campaignWorkspace';
-import { fetchMe, goSignIn, type AuthUser } from '../net/auth';
+import { goSignIn } from '../net/auth';
+import { reportAuthSessionFailure, useAuthSession } from '../net/authSession';
 import { levelThumbnailUrl } from '../net/levelThumbnails';
 import { LevelPreviewColumn } from './LevelPreviewColumn';
 import { injectStressLevels } from '../campaign/stressFixture';
@@ -705,7 +706,11 @@ export function CampaignEditor({
   const selectedCampaignId = useCampaigns((s) => s.selectedCampaignId);
   const selectedLevelId = useCampaigns((s) => s.selectedLevelId);
   const [status, setStatus] = useState('');
-  const [me, setMe] = useState<AuthUser | null>(null);
+  const sharedAuthStatus = useAuthSession((session) => session.status);
+  const authIdentityKey = sharedAuthStatus?.reachable
+    ? `${sharedAuthStatus.user.signed_in}:${sharedAuthStatus.user.email ?? ''}`
+    : null;
+  const me = sharedAuthStatus?.reachable ? sharedAuthStatus.user : null;
   const [recentDrafts, setRecentDrafts] = useState<EditorDocument[]>([]);
   const [draftsSettled, setDraftsSettled] = useState(false);
   // A stale whole-workspace body must never be paired with the newer revision from a 409 and
@@ -764,10 +769,10 @@ export function CampaignEditor({
   }, [embedded]);
 
   useEffect(() => {
+    if (!sharedAuthStatus?.reachable) return undefined;
     let active = true;
-    void fetchMe().then(async (user) => {
-      if (!active) return;
-      setMe(user);
+    const user = sharedAuthStatus.user;
+    void (async () => {
       if (!user.signed_in) {
         setRecentDrafts([]);
         setStatus('Official campaigns shown. Sign in to author your own.');
@@ -794,9 +799,7 @@ export function CampaignEditor({
         // Discovery is optional UI. Workspace authoring remains available when the private list
         // endpoint is temporarily unavailable, and no fallback may invent or expose documents.
       }
-    }).catch(() => {
-      if (active) setStatus('Recent drafts could not be loaded. Campaign editing remains available.');
-    }).finally(() => {
+    })().finally(() => {
       if (active) setDraftsSettled(true);
     });
     void (async () => {
@@ -835,7 +838,7 @@ export function CampaignEditor({
       resyncSavedSignatures();
     })();
     return () => { active = false; };
-  }, []);
+  }, [authIdentityKey]);
 
   useEffect(() => {
     if (!dirty) return undefined;
@@ -870,7 +873,7 @@ export function CampaignEditor({
         return;
       }
       const mapped = mapSaveError(e);
-      if ('action' in mapped) { goSignIn(); return; }
+      if ('action' in mapped) { reportAuthSessionFailure(e); goSignIn(); return; }
       setStatus(mapped.message);
     }
   };
@@ -903,7 +906,7 @@ export function CampaignEditor({
         return;
       }
       const mapped = mapSaveError(e);
-      if ('action' in mapped) { goSignIn(); return; }
+      if ('action' in mapped) { reportAuthSessionFailure(e); goSignIn(); return; }
       setStatus(mapped.message);
     }
   };

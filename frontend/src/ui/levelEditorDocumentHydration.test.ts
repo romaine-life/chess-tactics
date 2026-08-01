@@ -5,6 +5,17 @@ import { describe, expect, it } from 'vitest';
 const levelEditor = readFileSync(new URL('./LevelEditor.tsx', import.meta.url), 'utf8');
 
 describe('Level Editor document hydration', () => {
+  it('re-resolves the document from the shared auth owner without a private auth probe', () => {
+    expect(levelEditor).toContain("from '../net/authSession';");
+    expect(levelEditor).toContain('const sharedAuthStatus = useAuthSession((session) => session.status);');
+    expect(levelEditor).toContain('if (!sharedAuthStatus) return undefined;');
+    expect(levelEditor).toContain('const auth = sharedAuthStatus;');
+    expect(levelEditor).toContain('}, [authResolutionKey, documentLoadAttempt]);');
+    expect(levelEditor).not.toContain('fetchMeStatus');
+    expect(levelEditor).not.toContain('fetchReachableAuthStatus');
+    expect(levelEditor).not.toContain('setMe(');
+  });
+
   it('restores explicit Subterrain before the working copy can autosave', () => {
     const sharedHydration = levelEditor.match(
       /const applyEditorBoard = \(board: EditorBoard\): void => \{[\s\S]*?\n  \};/,

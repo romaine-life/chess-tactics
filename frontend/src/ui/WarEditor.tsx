@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
-import { fetchMe, type AuthUser } from '../net/auth';
+import { useAuthSession } from '../net/authSession';
 import { createRun, snapshotWar, type AtaraxiaTier } from '../run/model';
 import {
   RUN_PROGRESSION_EVENT,
@@ -31,7 +31,8 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
   const selectedBattleId = useWars((state) => state.selectedBattleId);
   const levels = useCampaigns((state) => state.levels);
   const activeRun = useActiveRun((state) => state.run);
-  const [me, setMe] = useState<AuthUser | null>(null);
+  const authStatus = useAuthSession((session) => session.status);
+  const me = authStatus?.reachable ? authStatus.user : null;
   const [loaded, setLoaded] = useState(wars.length > 0);
   const [userReady, setUserReady] = useState(false);
   const [officialReady, setOfficialReady] = useState(false);
@@ -45,9 +46,6 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
 
   useEffect(() => {
     let active = true;
-    void fetchMe().then((user) => {
-      if (active) setMe(user);
-    }).catch(() => undefined);
     void ensureCampaignsHydrated().then((hydration) => {
       if (!active) return;
       setUserReady(hydration.userWorkspace !== 'unavailable');
