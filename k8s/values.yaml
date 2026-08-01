@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:21d6368205ccbdc5572d4c6156f1073062fa20a6c0accccaa9cea741055f3172"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:b7144361ef9479dad58f799bc9b693f868a100ca837605c2cc98e42ffa2db451"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Unify editor section navigation and fades"
-  prNumber: "570"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/570"
-  commit: "159df36a"
+  prTitle: "Fix stale artwork details in level editor"
+  prNumber: "571"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/571"
+  commit: "6efcd71f"
 
 name: chess-tactics
 namespace: chess-tactics
