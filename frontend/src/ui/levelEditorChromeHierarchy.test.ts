@@ -237,8 +237,9 @@ describe('Level Editor chrome hierarchy', () => {
 
   it('registers dropdown triggers and frames each popup as one divided inner box', () => {
     expectRegisteredFamily(paletteSelect, 'palette-select-trigger', 'inner-dropdown');
-    expect(houseSelect).toContain("chromeUnitClassNames('inner-dropdown', 'house-select', 'le-select-wrap', className)");
-    expect(houseSelect).toMatch(/<div\s+ref=\{rootRef\}\s+data-chrome-unit="inner-dropdown"\s+className=\{rootClass\}>/);
+    expect(houseSelect).toMatch(/chromeUnitClassNames\(\s*'inner-dropdown',\s*'house-select',\s*'le-select-wrap',\s*'house-select-trigger',\s*className,/);
+    expect(houseSelect).toMatch(/<button\s+ref=\{buttonRef\}\s+type="button"\s+data-chrome-unit="inner-dropdown"\s+className=\{triggerClass\}/);
+    expect(houseSelect).not.toContain('<div ref={rootRef} data-chrome-unit="inner-dropdown"');
     expect(houseSelect).toContain('if (option.value !== value) onChange(option.value);');
     expect(houseSelect).toContain("import { KitScroll } from '../KitScroll';");
     expect(houseSelect).toMatch(/<KitScroll\s+className="house-select-menu-scroll"/);

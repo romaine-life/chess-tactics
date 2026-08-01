@@ -7,6 +7,8 @@ supersedes:
 refines:
   - "[ADR-0074](0074-one-play-entry-one-shared-selector.md)"
   - "[ADR-0193](0193-runs-are-persistent-wars-around-unchanged-chess-battles.md)"
+partially_superseded_by:
+  - "[ADR-0289](0289-run-preparation-is-control-first-and-ataraxia-uses-one-selector.md)"
 ---
 
 # ADR-0232: Continue Run selects Run before Play

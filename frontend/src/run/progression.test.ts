@@ -22,7 +22,7 @@ describe('Run Ataraxia progression', () => {
   });
   beforeEach(() => localStorage.clear());
 
-  it('allows only No Ataraxia before the first completed Run', () => {
+  it('allows only Ataraxia 0 before the first completed Run', () => {
     expect(readRunProgression()).toEqual(EMPTY_RUN_PROGRESSION);
     expect(highestUnlockedAtaraxiaTier(readRunProgression())).toBe(0);
   });

@@ -43,7 +43,7 @@ export function continueActivity(
             : 'Opening muster';
     return {
       label: 'Continue Run',
-      detail: `${run.war.name} · ${phase}`,
+      detail: phase,
       href: PLAY_RUN_SELECTOR_HREF,
       icon: 'campaign-editor',
     };

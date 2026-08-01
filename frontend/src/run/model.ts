@@ -34,9 +34,9 @@ export const ATARAXIA_BY_TIER: Readonly<Record<AtaraxiaTier, Readonly<{
 }>>> = Object.freeze({
   0: Object.freeze({
     tier: 0,
-    label: 'No Ataraxia',
-    title: 'No Ataraxia',
-    effect: 'The baseline Run. No additional historical condition is applied.',
+    label: 'Ataraxia 0',
+    title: 'The Untroubled Mind',
+    effect: 'Standard Run rules. Shop cards are never Pestiferous.',
   }),
   1: Object.freeze({
     tier: 1,

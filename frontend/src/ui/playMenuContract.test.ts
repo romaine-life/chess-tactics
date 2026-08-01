@@ -9,6 +9,7 @@ const campaignEditor = readFileSync(new URL('./CampaignEditor.tsx', import.meta.
 const headerAccountCluster = readFileSync(new URL('./shared/HeaderAccountCluster.tsx', import.meta.url), 'utf8');
 const profiles = readFileSync(new URL('./skirmishProfiles.ts', import.meta.url), 'utf8');
 const livePlay = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
+const ataraxiaSelector = readFileSync(new URL('./AtaraxiaSelector.tsx', import.meta.url), 'utf8');
 
 describe('unified Play menu contract (ADR-0074)', () => {
   it('has one top-level Play entry and no retired picker destinations', () => {
@@ -55,11 +56,31 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('index={index + 3 + (resumable ? 1 : 0)}');
   });
 
-  it('selects the Run submenu before its nested Play action enters the active Run', () => {
+  it('uses the Play master-detail cadence before its nested Play action enters the active Run', () => {
     expect(readFileSync(new URL('./playContinue.ts', import.meta.url), 'utf8'))
       .toContain('href: PLAY_RUN_SELECTOR_HREF');
-    expect(playMenu).toContain('to="/run">Play</NavButton>');
-    expect(playMenu).not.toContain('to="/run">Continue Run</NavButton>');
+    expect(playMenu).toContain('data-testid="run-choice-continue"');
+    expect(playMenu).toContain("onClick={() => onChoice('continue')}");
+    expect(playMenu).toContain('data-testid="run-detail-current"');
+    expect(playMenu).toContain('to="/run"><span>Play</span></NavButton>');
+    expect(playMenu).not.toContain('run-current-summary');
+  });
+
+  it('keeps new-Run setup in the right detail column with one scrollable Ataraxia dropdown', () => {
+    expect(playMenu).not.toContain('Roguelike chess');
+    expect(playMenu).not.toContain('Carry one persistent army');
+    expect(playMenu).not.toContain('<h3>{run.war.name}</h3>');
+    expect(playMenu).not.toContain("run.war.description || 'Active War'");
+    expect(playMenu).toContain('data-testid="run-choice-new"');
+    expect(playMenu).toContain("onChoice('new')");
+    expect(playMenu).toContain('data-testid="run-detail-new"');
+    expect(playMenu).toMatch(/choice === 'new'[\s\S]*?<AtaraxiaSelector/);
+    expect(ataraxiaSelector).toContain('<HouseSelect');
+    expect(ataraxiaSelector).toContain('disabled: locked');
+    expect(ataraxiaSelector).toContain('{definition.label} — {definition.title}');
+    expect(ataraxiaSelector).toContain('Complete Ataraxia 0 to unlock');
+    expect(ataraxiaSelector).toContain('<p className="run-ataraxia-effect">{ATARAXIA_BY_TIER[value].effect}</p>');
+    expect(ataraxiaSelector).not.toContain('role="radiogroup"');
   });
 
   it('resolves Play rail icons from installed drawable membership, not retired path-shaped app-ui roles', () => {
@@ -118,14 +139,15 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).not.toContain('&& (!selectedLevel || levelPreviewPainted)');
     expect(playMenu).not.toContain("selectedLevelId ?? '',");
     expect(playMenu).toContain('<LevelPreviewColumn');
+    expect(playMenu).toContain("hasDetailPreview ? ' has-detail-preview' : ''");
     expect(playMenu).toContain("selectedLevel ? ' has-level-preview' : ''");
-    expect(style).toContain('.play-scene-authority.has-level-preview .play-action-col');
+    expect(style).toContain('.play-scene-authority.has-detail-preview .play-action-col');
   });
 
   it('serializes replacement of an active Run before entering the Run scene', () => {
     expect(playMenu).toContain('if (starting || syncing || !eligible.length) return;');
     expect(playMenu).toContain("tone: 'danger'");
     expect(playMenu).toMatch(/await abandon\(\);[\s\S]*?replace\(createRun\([\s\S]*?navigateApp\('\/run'\)/);
-    expect(playMenu).toContain("starting ? 'Starting…' : run ? 'Start a new Run' : 'Start Run'");
+    expect(playMenu).toContain("<span>{starting ? 'Starting…' : 'Start Run'}</span>");
   });
 });

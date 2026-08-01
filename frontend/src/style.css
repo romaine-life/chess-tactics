@@ -6297,20 +6297,6 @@ body.loading-bootstrap .app-startup-status {
 }
 .le-board-warning { color: #f0bd55; font-size: var(--ds-text-sm); line-height: 1.3; margin: 0; text-shadow: 0 0 8px rgba(240, 189, 85, .22); }
 
-/* Canonical Level Editor dropdown: HouseSelect owns the shared frame and chevron. */
-.le-select-wrap {
-  border: var(--le-chrome-inner-rail-w, 10px) solid transparent;
-  border-image: var(--skirmish-chrome-inner-control-image) 24 fill / var(--le-chrome-inner-rail-w, 10px) round;
-  box-sizing: border-box;
-  min-height: var(--le-inner-field-h);
-  overflow: visible;
-  position: relative;
-  width: 100%;
-}
-.house-select.le-select-wrap {
-  display: block;
-  min-width: 0;
-}
 .house-select-trigger {
   align-items: center;
   appearance: none;
@@ -6338,13 +6324,27 @@ body.loading-bootstrap .app-startup-status {
   width: 100%;
   z-index: 1;
 }
+/* Canonical Level Editor dropdown: HouseSelect owns the shared frame and chevron. */
+.le-select-wrap {
+  border: var(--le-chrome-inner-rail-w, 10px) solid transparent;
+  border-image: var(--skirmish-chrome-inner-control-image) 24 fill / var(--le-chrome-inner-rail-w, 10px) round;
+  box-sizing: border-box;
+  min-height: var(--le-inner-field-h);
+  overflow: visible;
+  position: relative;
+  width: 100%;
+}
+.house-select.le-select-wrap {
+  display: flex;
+  min-width: 0;
+}
 .house-select-trigger:disabled {
   cursor: default;
   opacity: .55;
 }
 .house-select-trigger:focus-visible {
   outline: 2px solid rgba(101, 184, 255, .72);
-  outline-offset: calc(var(--le-chrome-inner-rail-w, 10px) + 2px);
+  outline-offset: 2px;
 }
 /* The fixed portal is only a positioning surface. One inner-box child owns the
    popup chrome; contained options are regions split by structural dividers. */
@@ -17503,7 +17503,7 @@ button.tileset-relationship-cell {
    original width instead of drawing the preview beyond the right edge. The compact list
    delegates the actual launch verb to the preview's Play control. */
 @media (max-width: 1516px) {
-  .play-scene-authority.has-level-preview .play-action-col {
+  .play-scene-authority.has-detail-preview .play-action-col {
     inline-size: calc(var(--col-action-w) - var(--col-preview-w));
   }
 
@@ -21551,38 +21551,105 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
 
 .run-ataraxia-selector {
   display: grid;
-  gap: var(--ds-stack);
-  padding: var(--ds-gutter);
+  gap: var(--ds-inline-tight);
 }
 
-.run-ataraxia-selector header,
+.run-ataraxia-selector h3,
 .run-ataraxia-selector p {
   margin: 0;
 }
 
 .run-ataraxia-selector h3 {
-  margin: var(--ds-inline-tight) 0 0;
+  padding-inline: 8px;
 }
 
-.run-ataraxia-options {
+.run-ataraxia-select {
+  inline-size: 100%;
+}
+
+.run-ataraxia-option-copy {
   display: grid;
-  gap: var(--ds-stack);
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  min-inline-size: 0;
+  inline-size: 100%;
 }
 
-.run-ataraxia-options > button {
-  align-items: flex-start;
-  block-size: auto;
-  display: flex;
-  flex-direction: column;
-  min-block-size: 78px;
-  padding-block: var(--ds-stack);
+.run-ataraxia-option-copy > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.house-select-trigger .run-ataraxia-option-copy small {
+  display: none;
+}
+
+.house-select-option .run-ataraxia-option-copy {
+  padding-block: 2px;
+}
+
+.house-select-option .run-ataraxia-option-copy small {
+  color: inherit;
+  font-size: var(--ds-text-2xs);
+  font-weight: 700;
+  white-space: normal;
+}
+
+.run-ataraxia-effect {
+  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .72));
+  font-size: var(--ds-text-xs);
+}
+
+.run-choice-row {
+  appearance: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
   text-align: start;
 }
 
-.run-ataraxia-options > button span,
-.run-ataraxia-options > button small {
-  white-space: normal;
+.run-choice-row:not(.is-selected):not(.is-disabled):hover {
+  filter: brightness(1.06);
+}
+
+.run-choice-row.is-disabled {
+  cursor: default;
+  opacity: .55;
+}
+
+.run-detail-body {
+  align-content: start;
+  display: grid;
+  flex: 1 1 auto;
+  min-block-size: 0;
+}
+
+.run-detail-facts {
+  padding: var(--ds-inset);
+}
+
+.run-detail-facts dl {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  margin: 0;
+}
+
+.run-detail-facts dl > div {
+  align-items: baseline;
+  display: flex;
+  gap: var(--ds-inline);
+  justify-content: space-between;
+}
+
+.run-detail-facts dt {
+  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .72));
+  font-size: var(--ds-text-2xs);
+  text-transform: uppercase;
+}
+
+.run-detail-facts dd {
+  margin: 0;
+  text-align: end;
 }
 
 .run-pestiferous-losses {

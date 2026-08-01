@@ -4,6 +4,7 @@ date: 2026-07-31
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
   - "[ADR-0268](0268-ataraxia-unlocks-linearly-and-stacks-cumulatively.md)"
+  - "[ADR-0291](0291-ataraxia-zero-is-a-named-tier-with-visible-impact.md)"
 ---
 
 # ADR-0266: Ataraxia names optional Run difficulty after real history

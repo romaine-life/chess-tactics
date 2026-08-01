@@ -21,6 +21,21 @@ describe('HouseSelect controlled value display', () => {
     expect(markup).toContain('>Zone B</button>');
   });
 
+  it('uses the complete framed dropdown as its native button hit target', () => {
+    const markup = renderToStaticMarkup(
+      <HouseSelect
+        value="zone-a"
+        options={options}
+        ariaLabel="Event zone"
+        onChange={() => {}}
+      />,
+    );
+
+    expect(markup).toMatch(/^<button[^>]*data-chrome-unit="inner-dropdown"/);
+    expect(markup).toMatch(/^<button[^>]*class="[^"]*house-select-trigger[^"]*"/);
+    expect(markup).not.toContain('<div data-chrome-unit="inner-dropdown"');
+  });
+
   it('stays blank when the controlled value is absent instead of claiming the first option', () => {
     const markup = renderToStaticMarkup(
       <HouseSelect
