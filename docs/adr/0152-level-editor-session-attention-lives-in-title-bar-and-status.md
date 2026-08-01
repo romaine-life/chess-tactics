@@ -1,8 +1,9 @@
 ---
-status: "accepted"
+status: "superseded by ADR-0304"
 date: 2026-07-25
 deciders: Nelson, Codex
 partially_superseded_by: "[ADR-0177](0177-level-editor-recovery-is-a-separate-side-control-destination.md)"
+superseded_by: "[ADR-0304](0304-level-editor-documents-are-live-shared-working-copies.md)"
 refines: "[ADR-0143](0143-level-editor-sessions-are-attributable-single-writer-and-owner-takeoverable.md)"
 ---
 

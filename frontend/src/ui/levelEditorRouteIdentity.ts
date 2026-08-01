@@ -3,7 +3,7 @@
  *
  * Presentation-only query changes (layer, generationFrame, crop, board snapshot) must not tear
  * down a live editor. Moving to another level/document must, because the mounted instance owns a
- * writer lease, page credential, recovery namespace, and navigation-release state for one doc.
+ * page credential, crash-retry namespace, and navigation-release state for one document.
  */
 export function levelEditorRouteIdentity(search: string): string {
   const params = new URLSearchParams(search);

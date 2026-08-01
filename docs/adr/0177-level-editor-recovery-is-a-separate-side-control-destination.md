@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by ADR-0304
 date: 2026-07-25
 deciders: Nelson, Codex
 partially_supersedes:
@@ -7,6 +7,7 @@ partially_supersedes:
   - "[ADR-0153](0153-bulk-recovery-cleanup-is-snapshot-exact-and-atomic.md)'s placement of bulk recovery cleanup in Status"
   - "[ADR-0157](0157-recovery-snapshots-browse-one-at-a-time-and-clear-atomically.md)'s placement of the recovery browser in Status"
 refines: "[ADR-0143](0143-level-editor-sessions-are-attributable-single-writer-and-owner-takeoverable.md)"
+superseded_by: "[ADR-0304](0304-level-editor-documents-are-live-shared-working-copies.md)"
 ---
 
 # ADR-0177: Level Editor Recovery is a separate side-control destination

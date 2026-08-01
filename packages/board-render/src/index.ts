@@ -142,6 +142,7 @@ export * from './core/featureAutotile';
 export * from './core/groundCover';
 export * from './core/level';
 export * from './core/levelBoard';
+export * from './core/sharedLevelMerge';
 export * from './core/predrawnLevel';
 export * from './core/predrawnGeneration';
 // Canonical persistence shape for the owner-authored Image 1 crop.

@@ -178,7 +178,9 @@ describe('Level Editor chrome hierarchy', () => {
   });
 
   it('registers every previous and next control as a concrete mirrored chevron key', () => {
-    expect((levelEditor + levelEditorChromeConsumers).match(/<CyclePicker\b/g)).toHaveLength(4);
+    // Three mirrored pairs remain: layer navigation plus the two authoring steppers.
+    // The former fourth pair browsed server recovery branches, which no longer exist.
+    expect((levelEditor + levelEditorChromeConsumers).match(/<CyclePicker\b/g)).toHaveLength(3);
     const chevronButtons = buttonBlocks(cyclePicker).filter((block) => block.includes('unit="inner-chevron-key"'));
     expect(chevronButtons).toHaveLength(2);
     expect(cyclePicker).toContain('className={`stepper-glyph stepper-chevron stepper-chevron-${direction === \'previous\' ? \'left\' : \'right\'}`}');

@@ -43,7 +43,6 @@ import {
   listEditorDocuments,
   loadEditorDocument,
   openEditorDocumentEditSession,
-  takeOverEditorDocumentEditSession,
   type EditorDocument,
   type EditorDocumentSummary,
 } from '../net/editorDocuments';
@@ -55,7 +54,7 @@ import {
 } from './campaignEditorRecentDrafts';
 import { clearScopedLevelEditorDraft, newLevelEditorClientIdentity, rebaseScopedLevelEditorDraft } from './levelEditorDraft';
 import { levelEditorLevelSignature } from './levelEditorSignature';
-import { levelEditorClientLabel, levelEditorSessionActorLabel, levelEditorSessionPresenceDetail, levelEditorSessionServerNow } from './levelEditorSessionPresentation';
+import { levelEditorClientLabel } from './levelEditorSessionPresentation';
 import { installedUiMedia } from './installedUiMedia';
 import { EditorCollectionRailTab } from './shared/EditorCollectionRailTab';
 import { WarEditor } from './WarEditor';
@@ -85,13 +84,6 @@ if (campaignMenuModes.length !== 1) {
 const CAMPAIGN_TAB_ICON = campaignMenuModes[0].media.icon?.media.immutableUrl;
 if (!CAMPAIGN_TAB_ICON) throw new Error('installed campaign menu mode has no icon');
 
-class RecentDraftEditingAuthorityError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'RecentDraftEditingAuthorityError';
-  }
-}
-
 async function withRecentDraftEditingAuthority<T>(
   document: EditorDocument,
   action: (fence: ReturnType<typeof editorDocumentEditFence>) => Promise<T>,
@@ -104,31 +96,8 @@ async function withRecentDraftEditingAuthority<T>(
     device_id: identity.deviceId,
     client_label: `Campaign Editor · ${window.location.host} · ${levelEditorClientLabel(window.navigator.userAgent)}`,
   });
-  let authority = opened;
-  if (opened.session.state !== 'active' && !opened.presence.active_editor) {
-    try {
-      authority = await takeOverEditorDocumentEditSession(
-        document.document_id,
-        opened.session.session_id,
-        identity.sessionKey,
-        opened.presence.edit_generation,
-      );
-    } catch (error) {
-      await closeEditorDocumentEditSession(document.document_id, opened.session.session_id, identity.sessionKey).catch(() => undefined);
-      throw error;
-    }
-  }
-  const activeHere = authority.session.state === 'active'
-    && authority.presence.active_editor?.session_id === authority.session.session_id;
-  if (!activeHere) {
-    await closeEditorDocumentEditSession(document.document_id, opened.session.session_id, identity.sessionKey).catch(() => undefined);
-    const active = authority.presence.active_editor;
-    throw new RecentDraftEditingAuthorityError(active
-      ? `${levelEditorSessionActorLabel(active)} currently has editing control. ${levelEditorSessionPresenceDetail(active, levelEditorSessionServerNow(authority.presence.server_time))}. Open the level and use Take over editing if you intend to move control.`
-      : 'This working copy has no attributable active writer. Open the level to re-check authority before changing it.');
-  }
   try {
-    return await action(editorDocumentEditFence(authority.session, identity.sessionKey));
+    return await action(editorDocumentEditFence(opened.session, identity.sessionKey));
   } finally {
     await closeEditorDocumentEditSession(document.document_id, opened.session.session_id, identity.sessionKey).catch(() => undefined);
   }
@@ -490,12 +459,8 @@ export function UnassignedLevelRow({
 }
 
 function recentDraftActionError(error: unknown, action: 'rename' | 'remove'): string {
-  if (error instanceof RecentDraftEditingAuthorityError) return error.message;
   if (isEditorDocumentEditSessionError(error)) {
-    const active = error.presence?.active_editor;
-    return active
-      ? `${levelEditorSessionActorLabel(active)} currently has editing control. ${levelEditorSessionPresenceDetail(active, levelEditorSessionServerNow(error.presence?.server_time))}. Open the level and use Take over editing if you intend to move control.`
-      : 'Editing control changed before this action completed. Open the level to see the current editor and take over if needed.';
+    return 'Live sync could not authenticate this action. Reopen the shared working copy and try again.';
   }
   if (isEditorDocumentConflict(error)) {
     return 'The working copy has a newer server revision. The newer draft is shown; review it and try again.';
@@ -582,6 +547,7 @@ export function RecentDraftLevelRow({
           document.document_id,
           { ...document.level, name: nextName },
           document.revision,
+          document.level,
           fence,
         ),
       );

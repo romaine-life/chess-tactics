@@ -708,7 +708,7 @@ export function PredrawnBackgroundVersionsPanel({
   const occlusionSlotResumable = !occlusionSlotOccupied || Boolean(selectedAttempt?.occlusionPending);
   const selectedMoveHighlightCalibrationReady = Boolean(selectedAttempt?.moveHighlightProfile);
   const moveHighlightCalibrationDisabledReason = !canWrite
-    ? 'Take over editing from the named session before fitting tile highlights.'
+    ? 'Reload an owner editing page before fitting tile highlights.'
     : busy
       ? 'Wait for the current pipeline action to finish.'
       : selectedArtifact?.stage !== 'warped' || !selectedAttempt?.warped
@@ -734,12 +734,12 @@ export function PredrawnBackgroundVersionsPanel({
               ? 'This exact warped board is unavailable.'
               : undefined;
   const generateOcclusionDisabledReason = !canWrite
-    ? 'Take over editing from the named session before creating a board with an occlusion mask.'
+    ? 'Reload an owner editing page before creating a board with an occlusion mask.'
     : !selectedMoveHighlightCalibrationReady
       ? 'Fit and save the tile-highlight footprints for this warped board before creating a board with an occlusion mask.'
       : openOcclusionEditorDisabledReason;
   const adjustGridDisabledReason = !canWrite
-    ? 'Take over editing from the named session before adjusting this grid.'
+    ? 'Reload an owner editing page before adjusting this grid.'
     : busy
       ? 'Wait for the current pipeline action to finish.'
       : selectedBackground?.document_id !== documentId
@@ -752,7 +752,7 @@ export function PredrawnBackgroundVersionsPanel({
               ? 'This slot already has a warped board. Inspect that board or use another slot for a different fit.'
               : undefined;
   const generateWarpDisabledReason = !canWrite
-    ? 'Take over editing from the named session before generating a warped board.'
+    ? 'Reload an owner editing page before generating a warped board.'
     : busy
       ? 'Wait for the current pipeline action to finish.'
       : !selectedAttemptCanProcess
@@ -819,7 +819,7 @@ export function PredrawnBackgroundVersionsPanel({
     ? predrawnDirectRegistrationForBackground(selectedAttempt.warped.backgroundVersion)
     : undefined;
   const warpDiscardDisabledReason = !canWrite
-    ? 'Take over editing from the named session before discarding this warped board.'
+    ? 'Reload an owner editing page before discarding this warped board.'
     : busy
       ? 'Wait for the current pipeline action to finish.'
       : !selectedAttemptCanProcess
@@ -832,7 +832,7 @@ export function PredrawnBackgroundVersionsPanel({
               ? 'This warped board does not carry its saved grid registration.'
             : selectedWarpSelectionProtection;
   const inspectedWarpDiscardDisabledReason = !canWrite
-    ? 'Take over editing from the named session before discarding this warped board.'
+    ? 'Reload an owner editing page before discarding this warped board.'
     : busy
       ? 'Wait for the current pipeline action to finish.'
       : !inspectedAttempt || !predrawnAttemptCanProcess(inspectedAttempt)
@@ -845,7 +845,7 @@ export function PredrawnBackgroundVersionsPanel({
               ? 'This warped board does not carry its saved grid registration.'
               : inspectedWarpSelectionProtection;
   const inspectedMoveHighlightCalibrationDisabledReason = !canWrite
-    ? 'Take over editing from the named session before fitting tile highlights.'
+    ? 'Reload an owner editing page before fitting tile highlights.'
     : busy
       ? 'Wait for the current pipeline action to finish.'
       : inspectedArtifact?.stage !== 'warped' || !inspectedAttempt?.warped
@@ -869,7 +869,7 @@ export function PredrawnBackgroundVersionsPanel({
     attempt: PredrawnCreationAttemptModel | undefined,
     artifact: PredrawnBoardArtifact | undefined,
   ): string | undefined => !canWrite
-    ? 'Take over editing from the named session before discarding this mask.'
+    ? 'Reload an owner editing page before discarding this mask.'
     : workingCopyOcclusionDiscardDisabledReason
       ?? (busy
         ? 'Wait for the current pipeline action to finish.'
@@ -971,7 +971,7 @@ export function PredrawnBackgroundVersionsPanel({
     });
     try {
       const fence = getEditFence();
-      if (!fence) throw new Error('Take over editing before starting a pipeline slot.');
+      if (!fence) throw new Error('Reload an owner editing page before starting a pipeline slot.');
       const intent = nextPredrawnPipelineSourceAttemptCreationIntent(
         pipelineSourceAttemptCreationIntentRef.current,
         pipelineSource.id,
@@ -1011,7 +1011,7 @@ export function PredrawnBackgroundVersionsPanel({
     } catch (cause) {
       const mutationHandled = onMutationError(cause);
       const message = mutationHandled
-        ? 'This tab no longer controls editing. Take over editing, then click Start new attempt again.'
+        ? 'Live sync disconnected. Reload the editor, then click Start new attempt again.'
         : cause instanceof Error
           ? cause.message
           : 'The new attempt could not be started with this Pipeline Source.';
@@ -1068,7 +1068,7 @@ export function PredrawnBackgroundVersionsPanel({
     ) {
       setError(
         !canWrite
-          ? 'Take over editing from the named session before saving tile highlights.'
+          ? 'Reload an owner editing page before saving tile highlights.'
           : busy
             ? 'Wait for the current pipeline action to finish.'
             : 'The exact warped board for this tile-highlight edit is no longer available.',
@@ -1079,7 +1079,7 @@ export function PredrawnBackgroundVersionsPanel({
     setError(null);
     try {
       const fence = getEditFence();
-      if (!fence) throw new Error('Take over editing before saving tile highlights.');
+      if (!fence) throw new Error('Reload an owner editing page before saving tile highlights.');
       const result = await updatePredrawnGenerationAttemptMoveHighlightProfile({
         documentId,
         attemptId: targetAttempt.attempt.id,
@@ -1109,7 +1109,7 @@ export function PredrawnBackgroundVersionsPanel({
     } catch (cause) {
       const mutationHandled = onMutationError(cause);
       const message = mutationHandled
-        ? 'This tab no longer controls editing. Take over editing, then save the tile highlights again.'
+        ? 'Live sync disconnected. Reload the editor, then save the tile highlights again.'
         : cause instanceof Error
           ? cause.message
           : 'The visual highlight calibration could not be saved.';
@@ -1156,7 +1156,7 @@ export function PredrawnBackgroundVersionsPanel({
     setWarpDiscardFeedback({ tone: 'info', message: 'Discarding this warped board…' });
     try {
       const fence = getEditFence();
-      if (!fence) throw new Error('Take over editing before discarding this warped board.');
+      if (!fence) throw new Error('Reload an owner editing page before discarding this warped board.');
       const result = await discardPredrawnGenerationAttemptWarp({
         documentId,
         attemptId: targetAttempt.attempt.id,
@@ -1188,7 +1188,7 @@ export function PredrawnBackgroundVersionsPanel({
     } catch (cause) {
       const mutationHandled = onMutationError(cause);
       const message = mutationHandled
-        ? 'This tab no longer controls editing. Take over editing, then discard the warped board again.'
+        ? 'Live sync disconnected. Reload the editor, then discard the warped board again.'
         : cause instanceof Error
           ? cause.message
           : 'The warped board could not be discarded.';
@@ -1259,7 +1259,7 @@ export function PredrawnBackgroundVersionsPanel({
     setOcclusionDiscardFeedback({ tone: 'info', message: 'Discarding this mask…' });
     try {
       const fence = getEditFence();
-      if (!fence) throw new Error('Take over editing before discarding this mask.');
+      if (!fence) throw new Error('Reload an owner editing page before discarding this mask.');
       const result = await discardPredrawnGenerationAttemptOcclusion({
         documentId,
         attemptId: current.attemptId,
@@ -1309,7 +1309,7 @@ export function PredrawnBackgroundVersionsPanel({
     } catch (cause) {
       const mutationHandled = onMutationError(cause);
       const message = mutationHandled
-        ? 'This tab no longer controls editing. Take over editing, then discard the mask again.'
+        ? 'Live sync disconnected. Reload the editor, then discard the mask again.'
         : cause instanceof Error
           ? cause.message
           : 'The mask could not be discarded.';
@@ -1341,7 +1341,7 @@ export function PredrawnBackgroundVersionsPanel({
     setError(null);
     try {
       const fence = getEditFence();
-      if (!fence) throw new Error('Take over editing before changing background versions.');
+      if (!fence) throw new Error('Reload an owner editing page before changing background versions.');
       await assertDecodablePngBlob(sourceBlob);
       const sha256 = await sha256Hex(sourceBlob);
       const pendingGenerated = selectedAttempt.generatedPending;
@@ -1655,7 +1655,7 @@ export function PredrawnBackgroundVersionsPanel({
     setError(null);
     try {
       const fence = getEditFence();
-      if (!fence) throw new Error('Take over editing before changing background versions.');
+      if (!fence) throw new Error('Reload an owner editing page before changing background versions.');
       const processing = selectedAttempt.processing;
       const pendingRegistration = selectedAttempt.warpedPending
         ? predrawnRegistrationForBackground(selectedAttempt.warpedPending, versions)
@@ -1771,7 +1771,7 @@ export function PredrawnBackgroundVersionsPanel({
     ) {
       throw new Error(
         !canWrite
-          ? 'Take over editing from the named session before creating a board with an occlusion mask.'
+          ? 'Reload an owner editing page before creating a board with an occlusion mask.'
           : 'This exact warped board can no longer accept an occlusion mask. Close the editor and refresh the pipeline.',
       );
     }
@@ -1787,7 +1787,7 @@ export function PredrawnBackgroundVersionsPanel({
     setError(null);
     try {
       const fence = getEditFence();
-      if (!fence) throw new Error('Take over editing before changing background versions.');
+      if (!fence) throw new Error('Reload an owner editing page before changing background versions.');
       const generated = await generatePredrawnRasterSelectionOcclusion({
         board: targetAttempt.processing.board,
         alpha: draft.acceptedAlpha,
@@ -2008,7 +2008,7 @@ export function PredrawnBackgroundVersionsPanel({
     setArchiveActionFeedback({ tone: 'info', message: 'Archiving this pipeline slot…' });
     try {
       const fence = getEditFence();
-      if (!fence) throw new Error('Take over editing before archiving a pipeline slot.');
+      if (!fence) throw new Error('Reload an owner editing page before archiving a pipeline slot.');
       const archived = await archivePredrawnGenerationAttempt({
         documentId,
         attemptId: current.attemptId,
@@ -2073,7 +2073,7 @@ export function PredrawnBackgroundVersionsPanel({
   const selectedSetDisabledReason = active
     ? undefined
     : !canWrite
-      ? 'Take over editing from the named session before setting this board version.'
+      ? 'Reload an owner editing page before setting this board version.'
       : busy
         ? 'Wait for the current pipeline action to finish.'
         : !selectedBackground?.content_url
@@ -2678,7 +2678,7 @@ export function PredrawnBackgroundVersionsPanel({
                 onClick={() => { void pastePipelineSourceFromClipboard(); }}
                 title={canWrite
                   ? 'Read one exact image/png from the system clipboard, then show it for review before committing it.'
-                  : 'Take over editing from the named session before pasting a pipeline source.'}
+                  : 'Reload an owner editing page before pasting a pipeline source.'}
               >{handoffBusy === 'paste' ? 'Reading clipboard…' : 'Paste AI-painted board'}</ChromeButton>
               <ChromeButton unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
