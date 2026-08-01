@@ -7,6 +7,7 @@ partially_supersedes:
   - "[ADR-0275](0275-run-cards-use-trading-card-anatomy-and-single-digit-gold.md)'s exploratory-candidate status and underspecified type line"
 partially_superseded_by:
   - "[ADR-0283](0283-run-card-face-is-one-shared-live-runtime-component.md)'s completed live-frame import and shared runtime renderer"
+  - "[ADR-0305](0305-card-ability-properties-do-not-synthesize-description-text.md)'s removal of automatic literal behavior prose"
 ---
 
 # ADR-0276: Run type lines declare primary families and affected qualifiers

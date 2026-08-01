@@ -52,9 +52,6 @@ export function RunBundleCard({
     cost,
     typeLine: cardType === 'pestiferous' ? 'Units — Pestiferous' : 'Units',
     grants: grantsForBundle(bundle),
-    ...(cardType === 'pestiferous'
-      ? { rules: 'Each unit is Plagued. After every Battle, this card loses one random unit.' }
-      : {}),
     flavor: runCardFlavor(bundle),
   } satisfies RunCardFaceContent;
   const face = (

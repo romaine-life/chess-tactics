@@ -9,6 +9,7 @@ extends:
   - "[ADR-0272](0272-card-types-author-effects-and-may-conceal-unit-targets.md)"
 partially_superseded_by:
   - "[ADR-0276](0276-run-type-lines-declare-primary-families-and-affected-qualifiers.md)'s selected frame direction and nonempty type-line grammar"
+  - "[ADR-0305](0305-card-ability-properties-do-not-synthesize-description-text.md)'s removal of automatic lower-box ability explanation"
 ---
 
 # ADR-0275: Run cards use trading-card anatomy and single-digit gold
