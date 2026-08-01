@@ -193,7 +193,7 @@ describe('chrome family geometry ownership (ADR-0083)', () => {
       },
     };
     const css = frameCss(outer, inner, frame('outer.png', 19), frame('inner.png', 5), dividerRenders);
-    const viewportEdgeSelector = ':root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .le-outer-panel:is([data-chrome-consumer="level-editor-controls"], [data-chrome-consumer="skirmish-hud"]) [data-chrome-divider-role="outer"]:not([data-chrome-divider-orientation="vertical"])::after';
+    const viewportEdgeSelector = ':root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .le-outer-panel:is([data-chrome-consumer="level-editor-controls"], [data-chrome-consumer="skirmish-hud"]) [data-chrome-divider-role="outer"]:not([data-chrome-divider-orientation="vertical"]):not([data-chrome-divider-junctions="none"])::after';
     const viewportEdgeRuleStart = css.indexOf(`${viewportEdgeSelector} {`);
     const viewportEdgeRule = css.slice(viewportEdgeRuleStart, css.indexOf('}', viewportEdgeRuleStart) + 1);
 
@@ -202,6 +202,42 @@ describe('chrome family geometry ownership (ADR-0083)', () => {
     expect(viewportEdgeRule).toContain('background-image: url("left-joint.png");');
     expect(viewportEdgeRule).not.toContain('right-joint.png');
     expect(css).toMatch(/\[data-chrome-divider-role="outer"\]:not\(\[data-chrome-divider-orientation="vertical"\]\)::before \{[\s\S]*?left: 0;[\s\S]*?right: 0;/);
+  });
+
+  it('keeps ordinary divider endpoint atoms enabled while topology rails opt out', () => {
+    const outer = roleDefault('outer');
+    const inner = roleDefault('inner');
+    const dividerRenders = {
+      ...dividers,
+      outer: {
+        ...outerDivider,
+        atomOverlay: {
+          upright: 'left-joint.png',
+          left: 'left-joint.png',
+          right: 'right-joint.png',
+          width: 24,
+          height: 24,
+          outset: 12,
+          leftX: -4,
+          rightX: -4,
+          leftY: -3,
+          rightY: -3,
+        },
+      },
+    };
+    const css = frameCss(outer, inner, frame('outer.png', 19), frame('inner.png', 5), dividerRenders);
+    const endpointSelector = `${CHROME_FAMILY_SURFACE_SELECTOR} [data-chrome-divider-role="outer"]:not([data-chrome-divider-orientation="vertical"]):not([data-chrome-divider-junctions="none"])::after`;
+    const endpointRuleStart = css.indexOf(`${endpointSelector} {`);
+    const endpointRule = css.slice(endpointRuleStart, css.indexOf('}', endpointRuleStart) + 1);
+    const junctionlessSelector = `${CHROME_FAMILY_SURFACE_SELECTOR} [data-chrome-divider-role="outer"]:not([data-chrome-divider-orientation="vertical"])[data-chrome-divider-junctions="none"]::after`;
+    const junctionlessRuleStart = css.indexOf(`${junctionlessSelector},`);
+    const junctionlessRule = css.slice(junctionlessRuleStart, css.indexOf('}', junctionlessRuleStart) + 1);
+
+    expect(endpointRuleStart).toBeGreaterThanOrEqual(0);
+    expect(endpointRule).toContain('content: "";');
+    expect(endpointRule).not.toContain('content: none');
+    expect(junctionlessRuleStart).toBeGreaterThanOrEqual(0);
+    expect(junctionlessRule).toContain('content: none !important;');
   });
 
   it('rotates a role-owned divider into a vertical rail with top and bottom joints', () => {
