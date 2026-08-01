@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:6c6d3f87a25c149db905a6db7b301b1743bcfbfc41e7e2d9cc8eac5e7bffa690"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:4d958a69e44339e75544d415d77d316840f3509fbd97669de5855ab746612401"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Centralize authored scene transitions and dev recovery"
-  prNumber: "592"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/592"
-  commit: "8e83fc60"
+  prTitle: "Add Concinnous Positioned cards"
+  prNumber: "593"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/593"
+  commit: "3b7eaa65"
 
 name: chess-tactics
 namespace: chess-tactics
