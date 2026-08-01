@@ -8377,6 +8377,17 @@ export function LevelEditor(): ReactElement {
   const canRedoBoard = redoStack.length > 0 && (
     !isPredrawnBoard || preservesPredrawnBakedArt(currentEditorBoard, redoStack[0])
   );
+  const actionToolsDisabled = tool === 'region'
+    || Boolean(levelArtworkWorkspace)
+    || layer === 'level-artwork'
+    || eventsOpen;
+  // Inactive Scene Art discovery deliberately has no pressed toolbar action, but its actions stay
+  // available so Select can activate discovery. Only process workspaces disable the tool buttons.
+  const actionToolbarTool: LevelEditorToolKey | null = tool === 'region'
+    || actionToolsDisabled
+    || (layer === 'placed-art' && brushKind === 'artwork' && tool === 'select' && !artworkSelectionActive)
+    ? null
+    : tool;
   const editorAttentionTarget: 'status' | 'recovery' | null = me?.signed_in && editorDocument
     ? editAuthorityState !== 'writer' && editPresence?.active_editor
       ? 'status'
@@ -8929,13 +8940,8 @@ export function LevelEditor(): ReactElement {
         layer={layer}
         layerOptions={layerSelectOptions}
         onLayerChange={selectLayer}
-        tool={tool === 'region'
-          || Boolean(levelArtworkWorkspace)
-          || layer === 'level-artwork'
-          || eventsOpen
-          || (layer === 'placed-art' && brushKind === 'artwork' && tool === 'select' && !artworkSelectionActive)
-          ? null
-          : tool}
+        tool={actionToolbarTool}
+        toolsDisabled={actionToolsDisabled}
         onToolChange={changeEditorTool}
         eraseLabel={layer === 'placed-art' && brushKind === 'artwork' ? 'Delete selected scene art' : 'Erase'}
         eraseDisabled={layer === 'placed-art' && brushKind === 'artwork' && !selectedArtwork}
