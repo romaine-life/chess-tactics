@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react';
 import { chromeUnitClassNames } from '../chromeUnitRegistry';
+import { ChromeButton } from './ChromeButton';
 
 // The accepted on/off control: a forged kit-frame button (button-neutral 9-slice) holding two
 // words — the active state lights up (warm = on, cool = off), the other dims. Shared chrome —
@@ -15,9 +16,7 @@ export function Toggle({
   onChange: (checked: boolean) => void;
 }): ReactElement {
   return (
-    <button
-      type="button"
-      data-chrome-unit="inner-toggle"
+    <ChromeButton unit="inner-toggle"
       className={chromeUnitClassNames('inner-toggle', 'settings-toggle', checked ? 'is-on' : 'is-off')}
       role="switch"
       aria-checked={checked}
@@ -26,6 +25,6 @@ export function Toggle({
     >
       <span className="settings-toggle-opt" data-state="off">Off</span>
       <span className="settings-toggle-opt" data-state="on">On</span>
-    </button>
+    </ChromeButton>
   );
 }

@@ -5270,22 +5270,6 @@
       "kind": "css",
       "file": "src/style.css",
       "context": "",
-      "selector": ".war-battle-row.is-selected",
-      "surfaceHash": "a66e6d9166c7087da1814672cb191c430f6f1e17046a5b1d8e8fa4537c4d9f56",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
-      "selector": ".war-battle-select",
-      "surfaceHash": "5920c8fd666db2a4e8aed382e70705565db0ae44345813864e91ab0efb56d9eb",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
       "selector": ".zone-list i",
       "surfaceHash": "f1d02055ddd200baba0c4d4dfd17b184f2a929d6c81ce974e86305676658b973",
       "occurrence": 1

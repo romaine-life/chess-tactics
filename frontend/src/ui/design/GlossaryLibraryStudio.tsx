@@ -4,25 +4,11 @@
 // *process/decision* rather than just a definition, a long-form explainer. This is
 // the reviewable in-app home for "how our chrome actually renders" — a glossary
 // TYPE, not a fake meta-asset inside an asset category.
-import { type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactElement, type ReactNode } from 'react';
+import { type ReactElement, type ReactNode } from 'react';
 import { drawableAssets, pieceSpritePath } from '@chess-tactics/board-render';
 import { defaultTerrainFamily } from '../../core/tileSockets';
 import { GLOSSARY } from './catalogData';
-
-// Stop a card-action icon's click from also triggering the card's select.
-const cardAction = (run: () => void) => ({
-  role: 'button' as const,
-  tabIndex: 0,
-  onClick: (e: ReactMouseEvent) => { e.stopPropagation(); run(); },
-  onKeyDown: (e: ReactKeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); run(); } },
-});
-
-const ViewIcon = (): ReactElement => (
-  <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
-    <rect x="1.6" y="6.4" width="12.8" height="8" rx="1.4" fill="none" stroke="currentColor" strokeWidth="1.4" />
-    <path d="M8 1.2 V5.4 M5.4 3.2 L8 5.8 L10.6 3.2" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
+import { StudioCatalogCard } from '../studio/StudioCatalogCard';
 
 const LiveKnightSprite = (): ReactElement => (
   <img src={pieceSpritePath('knight')} alt="" aria-hidden="true" />
@@ -184,27 +170,19 @@ function Card({ entry, selected, onSelect, onView }: {
 }): ReactElement {
   const hasDoc = Boolean(GLOSSARY_DETAILS[entry.term]);
   return (
-    <button
-      type="button"
-      className={`tileset-studio-card is-glossary ${selected ? 'is-selected' : ''}`}
-      onClick={() => onSelect(entry.term)}
-      aria-pressed={selected}
-      title={`Select ${entry.term}`}
-    >
-      <span className="tileset-studio-card-meta">
-        <span className="tileset-studio-card-text">
-          <strong>{entry.term}{hasDoc ? <span className="glossary-doc-dot" title="has a process doc" aria-label="has a process doc" /> : null}</strong>
-          <em>{entry.def}</em>
-          <span className="glossary-card-src">{entry.src}</span>
-        </span>
-        <span className="tileset-card-actions">
-          <GlossaryTag tag={entry.tag} />
-          <span className="tileset-card-action" title={`View ${entry.term}`} aria-label={`View ${entry.term}`} {...cardAction(() => onView(entry.term))}>
-            <ViewIcon />
-          </span>
-        </span>
-      </span>
-    </button>
+    <StudioCatalogCard
+      title={<>{entry.term}{hasDoc ? <span className="glossary-doc-dot" title="has a process doc" aria-label="has a process doc" /> : null}</>}
+      titleText={`Select ${entry.term}`}
+      badge={entry.def}
+      textExtra={<span className="glossary-card-src">{entry.src}</span>}
+      metaExtra={<GlossaryTag tag={entry.tag} />}
+      showImage={false}
+      className="is-glossary"
+      selected={selected}
+      onSelect={() => onSelect(entry.term)}
+      onInspect={() => onView(entry.term)}
+      inspectLabel={`View ${entry.term}`}
+    />
   );
 }
 

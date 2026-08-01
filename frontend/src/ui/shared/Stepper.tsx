@@ -1,5 +1,6 @@
 import { useRef, useState, type ReactElement } from 'react';
 import { chromeUnitClassNames } from '../chromeUnitRegistry';
+import { ChromeButton } from './ChromeButton';
 
 // Opt-in editable readout: pass `edit` and the value between the keys becomes a
 // typeable field (click it, type an exact value) instead of a read-only <output>.
@@ -47,27 +48,23 @@ export function Stepper({
 }): ReactElement {
   return (
     <div className="settings-stepper">
-      <button
-        type="button"
-        data-chrome-unit="inner-minus-key"
+      <ChromeButton unit="inner-minus-key"
         className={chromeUnitClassNames('inner-minus-key', 'settings-chrome-button', 'settings-chrome-button-neutral')}
         aria-label={decreaseLabel}
         onClick={onDecrease}
       >
         <span><span className="stepper-glyph stepper-minus" aria-hidden="true" /></span>
-      </button>
+      </ChromeButton>
       {edit
         ? <StepperInput edit={edit} suffix={suffix} />
         : <output>{value}{suffix}</output>}
-      <button
-        type="button"
-        data-chrome-unit="inner-plus-key"
+      <ChromeButton unit="inner-plus-key"
         className={chromeUnitClassNames('inner-plus-key', 'settings-chrome-button', 'settings-chrome-button-neutral')}
         aria-label={increaseLabel}
         onClick={onIncrease}
       >
         <span><span className="stepper-glyph stepper-plus" aria-hidden="true" /></span>
-      </button>
+      </ChromeButton>
     </div>
   );
 }

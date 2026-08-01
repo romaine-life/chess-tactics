@@ -1,5 +1,6 @@
 import { useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { defaultTileSideItem, tileSideItemById } from './tileSideCatalog';
+import { ChoiceGroup } from './shared/ChoiceGroup';
 
 // Read-only Viewer for a single tile's SIDE faces — the tile shown big on an inspection
 // backdrop with a zoom up to 8× so you can scrutinise the cliff cross-section pixel-by-pixel.
@@ -44,10 +45,7 @@ export function TileSidesViewer({ name, header }: { name?: string; header?: Reac
             {header}
             <div className="tileset-filter-field">
               <span>Backdrop</span>
-              <div className="tileset-tier-seg" aria-label="Inspection backdrop">
-                <button type="button" className={backdrop === 'void' ? 'is-active' : ''} onClick={() => setBackdrop('void')}>Void</button>
-                <button type="button" className={backdrop === 'sky' ? 'is-active' : ''} onClick={() => setBackdrop('sky')}>Sky</button>
-              </div>
+              <ChoiceGroup value={backdrop} options={[{ value: 'void', label: 'Void' }, { value: 'sky', label: 'Sky' }]} onChange={setBackdrop} ariaLabel="Inspection backdrop" />
             </div>
             <label className="tileset-catalog-zoom">
               <span>Zoom · {zoom.toFixed(1)}×</span>

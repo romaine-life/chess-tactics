@@ -10,6 +10,7 @@ import {
   type StudioAssetLibrary,
   type StudioAssetRecord,
 } from './studioLiveMediaLibrary';
+import { StudioCatalogCard } from '../studio/StudioCatalogCard';
 
 export type AssetTypeFacet = 'all' | 'settings' | 'game' | 'shields' | 'frames' | 'structure';
 export type AssetStatusFacet = 'all' | 'accepted' | 'bridge';
@@ -42,21 +43,20 @@ function Card({ item, sub, selected, onSelect }: {
   onSelect: (id: string) => void;
 }): ReactElement {
   return (
-    <button
-      type="button"
-      className={`tileset-studio-card is-asset ${selected ? 'is-selected' : ''}`}
-      onClick={() => onSelect(item.id)}
-      aria-pressed={selected}
-      title={`Select ${item.label}`}
-    >
-      <span className="tileset-studio-card-image asset-card-image"><img src={item.immutableUrl} alt="" loading="lazy" decoding="async" draggable={false} /></span>
-      <span className="tileset-studio-card-meta">
-        <span className="tileset-studio-card-text"><strong>{item.label}</strong><em>{sub}</em></span>
+    <StudioCatalogCard
+      title={item.label}
+      badge={sub}
+      image={item.immutableUrl}
+      imageClassName="asset-card-image"
+      className="is-asset"
+      selected={selected}
+      onSelect={() => onSelect(item.id)}
+      metaExtra={(
         <span className="asset-card-chips">
           <span className={`asset-prov ${item.productionEligible ? 'is-forged' : 'is-original'}`}>{studioProductionLabel(item.productionStatus)}</span>
         </span>
-      </span>
-    </button>
+      )}
+    />
   );
 }
 

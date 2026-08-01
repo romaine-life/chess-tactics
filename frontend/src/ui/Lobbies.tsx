@@ -25,6 +25,7 @@ import { OBJECTIVE_LABEL } from '../core/objectives';
 import { withNetSeatLease } from '../game/netSeatLease';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { useSceneParticipant } from './shell/SceneBoundary';
+import { ChromeButton } from './shared/ChromeButton';
 
 const utilityButtonClassNames = (tone: 'primary' | 'neutral' | 'danger'): string =>
   chromeUnitClassNames('inner-text-button', `utility-button utility-button-${tone}`, tone === 'danger' && 'danger');
@@ -108,10 +109,8 @@ function LevelPicker({ current, selectedId, onPick }: { current: Lobby; selected
       ) : (
         <div className="utility-level-grid">
           {levels.map((level) => (
-            <button
+            <ChromeButton unit="inner-box"
               key={level.id}
-              type="button"
-              data-chrome-unit="inner-box"
               className={chromeUnitClassNames('inner-box', 'utility-level-card', selectedId === level.id && 'active is-selected')}
               aria-pressed={selectedId === level.id}
               onClick={() => onPick(level.id)}
@@ -128,7 +127,7 @@ function LevelPicker({ current, selectedId, onPick }: { current: Lobby; selected
               </span>
               <strong>{level.name}</strong>
               <small>{levelObjectiveLine(level)}</small>
-            </button>
+            </ChromeButton>
           ))}
         </div>
       )}
@@ -289,19 +288,19 @@ export function Lobbies({ embedded = false }: { embedded?: boolean } = {}) {
   // The lobbies content — one utility column (host/join + the lobby list, or a sign-in prompt).
   const content = me && !me.signed_in ? (
             <section data-chrome-unit="outer-panel" className={chromeUnitClassNames('outer-panel', 'utility-panel', 'utility-empty-panel')}>
-              <button type="button" data-chrome-unit="inner-text-button" data-testid="lobbies-sign-in" className={utilityButtonClassNames('primary')} onClick={() => goSignIn()}>Sign in to host or join</button>
+              <ChromeButton unit="inner-text-button" data-testid="lobbies-sign-in" className={utilityButtonClassNames('primary')} onClick={() => goSignIn()}>Sign in to host or join</ChromeButton>
             </section>
           ) : (
             <div className="utility-stack">
               <div className="utility-toolbar">
-                <button type="button" data-chrome-unit="inner-text-button" data-testid="host-lobby" className={utilityButtonClassNames('primary')} onClick={act(() => createLobby())}>
+                <ChromeButton unit="inner-text-button" data-testid="host-lobby" className={utilityButtonClassNames('primary')} onClick={act(() => createLobby())}>
                   <span className="utility-button-icon icon-players" aria-hidden="true" />
                   Host a lobby
-                </button>
-                <button type="button" data-chrome-unit="inner-text-button" className={utilityButtonClassNames('neutral')} onClick={refresh}>
+                </ChromeButton>
+                <ChromeButton unit="inner-text-button" className={utilityButtonClassNames('neutral')} onClick={refresh}>
                   <span className="utility-button-icon icon-refresh" aria-hidden="true" />
                   Refresh
-                </button>
+                </ChromeButton>
               </div>
               {status ? <div className="utility-status">{status}</div> : null}
               {current ? (
@@ -331,31 +330,29 @@ export function Lobbies({ embedded = false }: { embedded?: boolean } = {}) {
                   ) : null}
                   <div className="utility-actions">
                     {isHost && current.phase === 'ready' ? (
-                      <button
-                        type="button"
-                        data-chrome-unit="inner-text-button"
+                      <ChromeButton unit="inner-text-button"
                         className={utilityButtonClassNames('primary')}
                         disabled={!canStart}
                         onClick={canStart ? startHere : undefined}
                       >
                         <span className="utility-button-icon icon-start" aria-hidden="true" />
                         Start
-                      </button>
+                      </ChromeButton>
                     ) : null}
                     {current.phase === 'started' ? (
-                      <button type="button" data-chrome-unit="inner-text-button" className={utilityButtonClassNames('primary')} onClick={() => openMatch(current.id)}>
+                      <ChromeButton unit="inner-text-button" className={utilityButtonClassNames('primary')} onClick={() => openMatch(current.id)}>
                         <span className="utility-button-icon icon-start" aria-hidden="true" />
                         {current.result ? 'View result' : (current.result_pending || current.result_disputed ? 'Resume recovery' : 'Resume match')}
-                      </button>
+                      </ChromeButton>
                     ) : null}
-                    <button type="button" data-chrome-unit="inner-text-button" className={utilityButtonClassNames('danger')} onClick={leaveCurrent}>
+                    <ChromeButton unit="inner-text-button" className={utilityButtonClassNames('danger')} onClick={leaveCurrent}>
                       <span className="utility-button-icon icon-leave" aria-hidden="true" />
                       {current.result_disputed
                         ? 'Concede and leave'
                         : current.phase === 'started' && !current.result
                           ? 'Resign and leave'
                           : 'Leave'}
-                    </button>
+                    </ChromeButton>
                   </div>
                 </section>
               ) : null}
@@ -377,21 +374,19 @@ export function Lobbies({ embedded = false }: { embedded?: boolean } = {}) {
                   </div>
                   <div className="utility-actions">
                     {lobby.level_id && lobby.seed !== null ? (
-                      <button type="button" data-chrome-unit="inner-text-button" className={utilityButtonClassNames('primary')} onClick={() => openMatch(lobby.id)}>
+                      <ChromeButton unit="inner-text-button" className={utilityButtonClassNames('primary')} onClick={() => openMatch(lobby.id)}>
                         <span className="utility-button-icon icon-start" aria-hidden="true" />
                         {lobby.result ? 'View result' : 'Resume recovery'}
-                      </button>
+                      </ChromeButton>
                     ) : null}
                     {lobby.result || lobby.result_pending || lobby.result_disputed || (!lobby.level_id || lobby.seed === null) ? (
-                      <button
-                        type="button"
-                        data-chrome-unit="inner-text-button"
+                      <ChromeButton unit="inner-text-button"
                         className={utilityButtonClassNames('danger')}
                         onClick={acknowledgeClosed(lobby, lobby.result_pending || lobby.result_disputed)}
                       >
                         <span className="utility-button-icon icon-leave" aria-hidden="true" />
                         {lobby.result_pending || lobby.result_disputed ? 'Concede and acknowledge' : 'Acknowledge'}
-                      </button>
+                      </ChromeButton>
                     ) : null}
                   </div>
                 </section>
@@ -405,7 +400,7 @@ export function Lobbies({ embedded = false }: { embedded?: boolean } = {}) {
                       <span>{displayName(l.host, 'host')} / {l.seats.filled}/{l.seats.total}</span>
                     </div>
                     {l.phase === 'waiting' && !l.guest ? (
-                      <button type="button" data-chrome-unit="inner-text-button" className={utilityButtonClassNames('primary')} onClick={act(() => joinLobby(l.id))}>Join</button>
+                      <ChromeButton unit="inner-text-button" className={utilityButtonClassNames('primary')} onClick={act(() => joinLobby(l.id))}>Join</ChromeButton>
                     ) : <span className="utility-phase">{l.phase}</span>}
                   </div>
                 ))}

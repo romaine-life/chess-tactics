@@ -4,8 +4,9 @@ import { useWindowScaledPreview } from './useWindowScaledPreview';
 import { SliderRow, ctlReset } from './dressing/SliderRow';
 import { ElementSelect, type ElementOption } from './dressing/ElementSelect';
 import { useInjectedStyle } from './dressing/useInjectedStyle';
-import { ICON_TREATS, iconTreatFilter, type IconTreat } from './dressing/iconTreat';
+import { iconTreatFilter, type IconTreat } from './dressing/iconTreat';
 import { requiredNineSliceRole } from './nineSliceCatalog';
+import { HoverSlideControl, IconTreatmentControl } from './dressing/SurfaceEffectsControls';
 
 // Each frame's FILL boundary (px inset from the footprint) — set by eye in the 9-slice editor,
 // stored on the installed drawable record. The surface clips to it so it stops where the frame's
@@ -352,31 +353,8 @@ export function SurfaceDressingRoom({ seed, header, zoom = 1 }: { seed?: string;
 
             {region.id === 'buttons' ? (
               <>
-                <div className="tileset-filter-field">
-                  <span>Icon contrast</span>
-                  <div className="pages-ctl-row">
-                    <div className="tileset-tier-seg" aria-label="Icon contrast treatment">
-                      {ICON_TREATS.map((t) => (
-                        <button key={t.id} type="button" className={config.fx.iconTreat === t.id ? 'is-active' : ''} onClick={() => setFx({ iconTreat: t.id })}>{t.label}</button>
-                      ))}
-                    </div>
-                    {ctlReset(() => setFx({ iconTreat: 'off', iconLighten: 1.85 }))}
-                  </div>
-                </div>
-                {config.fx.iconTreat === 'limestone' ? (
-                  <SliderRow label={<>Lighten · {config.fx.iconLighten.toFixed(2)}×</>} value={config.fx.iconLighten} set={(v) => setFx({ iconLighten: v })} min={1} max={2.6} step={0.05} nudge={0.05} dflt={1.85} />
-                ) : null}
-                <div className="tileset-filter-field">
-                  <span>Hover slide</span>
-                  <div className="pages-ctl-row">
-                    <div className="tileset-tier-seg" aria-label="Hover slide">
-                      <button type="button" className={config.fx.hoverSlide === 'off' ? 'is-active' : ''} onClick={() => setFx({ hoverSlide: 'off' })}>Off</button>
-                      <button type="button" className={config.fx.hoverSlide === '6' ? 'is-active' : ''} onClick={() => setFx({ hoverSlide: '6' })}>6px</button>
-                      <button type="button" className={config.fx.hoverSlide === '10' ? 'is-active' : ''} onClick={() => setFx({ hoverSlide: '10' })}>10px</button>
-                    </div>
-                    {ctlReset(() => setFx({ hoverSlide: 'off' }))}
-                  </div>
-                </div>
+                <IconTreatmentControl value={config.fx.iconTreat} onChange={(iconTreat) => setFx({ iconTreat })} lighten={config.fx.iconLighten} onLighten={(iconLighten) => setFx({ iconLighten })} />
+                <HoverSlideControl value={config.fx.hoverSlide} onChange={(hoverSlide) => setFx({ hoverSlide })} />
               </>
             ) : null}
 

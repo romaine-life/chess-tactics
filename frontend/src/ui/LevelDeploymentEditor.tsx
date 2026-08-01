@@ -6,6 +6,7 @@ import { authoredDeploymentForSide, replaceSideDeployment, rosterSize } from './
 import { InnerChromeBox } from './shared/ChromeBox';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
+import { ChromeButton } from './shared/ChromeButton';
 
 export interface DeploymentZoneOption {
   id: string;
@@ -100,7 +101,7 @@ function DeploymentSideCard({
               <h4>Player starting zone</h4>
               <span>The Run army may start on any usable painted square in this zone.</span>
             </div>
-            <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={() => deploymentZone ? onEditZone(deploymentZone.id) : onCreateZone(side)}>{deploymentZone ? 'Edit squares' : 'Create player starting zone'}</button>
+            <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={() => deploymentZone ? onEditZone(deploymentZone.id) : onCreateZone(side)}>{deploymentZone ? 'Edit squares' : 'Create player starting zone'}</ChromeButton>
           </div>
           {deploymentZone ? (
             <div className="le-deployment-zones">
@@ -144,7 +145,7 @@ function DeploymentSideCard({
               <h4>{sideLabel} starting zone</h4>
               <span>{deploymentZone ? `${deploymentZone.usableTileKeys.length} usable squares for ${rosterSize(deployment.roster)} randomized units` : `No zone for ${rosterSize(deployment.roster)} randomized units`}</span>
             </div>
-            <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={() => deploymentZone ? onEditZone(deploymentZone.id) : onCreateZone(side)}>{deploymentZone ? 'Edit squares' : `Create ${side === 'player' ? 'player' : 'enemy'} starting zone`}</button>
+            <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={() => deploymentZone ? onEditZone(deploymentZone.id) : onCreateZone(side)}>{deploymentZone ? 'Edit squares' : `Create ${side === 'player' ? 'player' : 'enemy'} starting zone`}</ChromeButton>
           </div>
           <p className="le-deployment-zone-help">
             Randomized {side === 'player' ? 'player' : 'enemy'} units may start on any usable square painted in this zone. Its painted shape may be connected or split across the board.
@@ -172,7 +173,7 @@ function DeploymentSideCard({
               <h4>{deploymentZone ? `Saved ${side === 'player' ? 'player' : 'enemy'} starting zone` : `No ${side === 'player' ? 'player' : 'enemy'} starting zone`}</h4>
               <span>{deploymentZone ? 'Kept for later; it does not place any units while randomization is off.' : 'A starting zone is not needed while randomization is off.'}</span>
             </div>
-            {deploymentZone ? <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={() => onEditZone(deploymentZone.id)}>Edit squares</button> : null}
+            {deploymentZone ? <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={() => onEditZone(deploymentZone.id)}>Edit squares</ChromeButton> : null}
           </div>
           {deploymentZone ? (
             <div className="le-deployment-zones">

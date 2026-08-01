@@ -23,6 +23,7 @@ import { ApparatusRailTab } from './shared/ApparatusRailTab';
 import { InnerChromeBox, OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
 import { NavButton } from './shared/NavButton';
 import { sceneTransitionTargetAttributes } from './shell/sceneTransitionTarget';
+import { ChromeButton } from './shared/ChromeButton';
 
 const SECTION_LABEL: Record<EnchiridionSection, string> = {
   units: 'Units',
@@ -348,9 +349,7 @@ export function RelicCodex({
         <div className="enchiridion-relic-layout">
           <div className="enchiridion-relic-browser">
             <div className="le-seg enchiridion-relic-view-tabs" role="tablist" aria-label="Relic browsing layout">
-              <button
-                type="button"
-                data-chrome-unit="inner-text-button"
+              <ChromeButton unit="inner-text-button"
                 data-testid="relic-view-rows"
                 role="tab"
                 aria-controls={browsePanelId}
@@ -359,10 +358,8 @@ export function RelicCodex({
                 onClick={() => setBrowseMode('rows')}
               >
                 Rows
-              </button>
-              <button
-                type="button"
-                data-chrome-unit="inner-text-button"
+              </ChromeButton>
+              <ChromeButton unit="inner-text-button"
                 data-testid="relic-view-grouped"
                 role="tab"
                 aria-controls={browsePanelId}
@@ -371,7 +368,7 @@ export function RelicCodex({
                 onClick={() => setBrowseMode('grouped')}
               >
                 Grouped
-              </button>
+              </ChromeButton>
             </div>
             <div
               id={browsePanelId}

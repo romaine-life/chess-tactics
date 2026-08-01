@@ -4,6 +4,7 @@ import { HomepageBackdrop } from './HomepageBackdrop';
 import { NavButton } from './shared/NavButton';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
+import { ChromeButton } from './shared/ChromeButton';
 
 const OPTIONS = PLAYABLE_PIECE_TYPES.filter((piece) => piece !== 'pawn');
 
@@ -39,11 +40,11 @@ export function Party() {
                 <small>Locked</small>
               </span>
               {OPTIONS.map((p) => (
-                <button key={p} type="button" data-chrome-unit="inner-box" data-testid={`party-${p}`} className={chromeUnitClassNames('inner-box', 'utility-squad-card', picks.includes(p) && 'active is-selected')} onClick={() => toggle(p)}>
+                <ChromeButton unit="inner-box" key={p} data-testid={`party-${p}`} className={chromeUnitClassNames('inner-box', 'utility-squad-card', picks.includes(p) && 'active is-selected')} onClick={() => toggle(p)}>
                   <PieceIcon type={p} />
                   <strong>{p}</strong>
                   <small>{picks.includes(p) ? 'Selected' : 'Available'}</small>
-                </button>
+                </ChromeButton>
               ))}
             </div>
           </section>

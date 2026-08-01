@@ -13,11 +13,11 @@ import { useWars } from '../war/store';
 import { navigateApp } from './navigation';
 import { LevelPreviewColumn } from './LevelPreviewColumn';
 import { KitScroll } from './KitScroll';
-import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { SettingsButton, SettingsRow, SettingsSection } from './shared/SettingsControls';
 import { useConfirm } from './shared/ConfirmDialog';
 import { useSceneParticipant } from './shell/SceneBoundary';
 import { AtaraxiaSelector } from './AtaraxiaSelector';
+import { ActionList } from './shared/ActionList';
 
 function seedForNewRun(): number {
   const values = new Uint32Array(1);
@@ -235,49 +235,45 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
                   </SettingsSection>
 
                   <SettingsSection title="Battles">
-                    <div className="war-battle-list">
-                      {!orderedBattles.length ? <p className="ce-empty">No Battles. Add one to begin.</p> : null}
-                      {orderedBattles.map((battle, index) => {
+                    <ActionList
+                      className="war-battle-list"
+                      empty={<p className="ce-empty">No Battles. Add one to begin.</p>}
+                      items={orderedBattles.map((battle, index) => {
                         const level = levels[battle.levelId];
                         const selected = battle.levelId === selectedBattle?.levelId;
-                        return (
-                          <div
-                            data-chrome-unit="inner-box"
-                            className={chromeUnitClassNames('inner-box', 'settings-row war-battle-row', selected && 'is-selected')}
-                            key={battle.levelId}
-                          >
-                            <button
-                              type="button"
-                              className="war-battle-select"
-                              onClick={() => useWars.getState().selectBattle(battle.levelId)}
-                            >
-                              <span className="war-battle-number">{index + 1}</span>
-                              <span><strong>{level?.name ?? battle.levelId}</strong><small>{index === orderedBattles.length - 1 ? 'Final Battle · War ends here' : level?.battle?.loot ? 'Loot Battle' : 'Battle'}</small></span>
-                            </button>
-                            {canEditSelected ? (
-                              <div className="war-battle-actions">
-                                <button
-                                  type="button"
-                                  data-chrome-unit="inner-tool-square"
-                                  className={chromeUnitClassNames('inner-tool-square', 'ce-icon-button')}
-                                  disabled={index === 0}
-                                  aria-label={`Move ${level?.name ?? 'Battle'} up`}
-                                  onClick={() => useWars.getState().moveBattle(selectedWar.id, battle.levelId, -1)}
-                                >↑</button>
-                                <button
-                                  type="button"
-                                  data-chrome-unit="inner-tool-square"
-                                  className={chromeUnitClassNames('inner-tool-square', 'ce-icon-button')}
-                                  disabled={index === orderedBattles.length - 1}
-                                  aria-label={`Move ${level?.name ?? 'Battle'} down`}
-                                  onClick={() => useWars.getState().moveBattle(selectedWar.id, battle.levelId, 1)}
-                                >↓</button>
-                              </div>
-                            ) : null}
-                          </div>
-                        );
+                        const name = level?.name ?? battle.levelId;
+                        return {
+                          id: battle.levelId,
+                          title: name,
+                          description: <small>{index === orderedBattles.length - 1 ? 'Final Battle · War ends here' : level?.battle?.loot ? 'Loot Battle' : 'Battle'}</small>,
+                          leading: index + 1,
+                          leadingChrome: false,
+                          leadingClassName: 'war-battle-number',
+                          selected,
+                          className: 'war-battle-row',
+                          copyClassName: 'war-battle-copy',
+                          actionsClassName: 'war-battle-actions',
+                          ariaLabel: `Select ${name}`,
+                          onSelect: () => useWars.getState().selectBattle(battle.levelId),
+                          actions: canEditSelected ? [
+                            {
+                              id: 'move-up',
+                              label: `Move ${name} up`,
+                              icon: '↑',
+                              disabled: index === 0,
+                              onPress: () => useWars.getState().moveBattle(selectedWar.id, battle.levelId, -1),
+                            },
+                            {
+                              id: 'move-down',
+                              label: `Move ${name} down`,
+                              icon: '↓',
+                              disabled: index === orderedBattles.length - 1,
+                              onPress: () => useWars.getState().moveBattle(selectedWar.id, battle.levelId, 1),
+                            },
+                          ] : undefined,
+                        };
                       })}
-                    </div>
+                    />
                     {canEditSelected ? (
                       <div className="ce-section-action">
                         <SettingsButton onClick={() => useWars.getState().addBattle(selectedWar.id)}>+ Add Battle</SettingsButton>

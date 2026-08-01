@@ -1,5 +1,6 @@
 import { useState, type ReactElement, type ReactNode, type CSSProperties } from 'react';
 import { SLIDER_ASSETS, defaultSliderAsset, type SliderAsset } from './sliderCatalog';
+import { StudioCatalogCard } from './studio/StudioCatalogCard';
 
 // Build the ::-webkit / ::-moz slider skin for one entry, scoped to a class. The filled
 // portion follows --val (a percentage) so the bar fills as the value changes — exactly the
@@ -36,16 +37,15 @@ export function SliderLibraryStudio({
   return (
     <div className="tileset-studio-grid surface-grid" aria-label="Sliders">
       {visible.map((s) => (
-        <button
+        <StudioCatalogCard
           key={s.name}
-          type="button"
-          className={`tileset-studio-card ${s.name === selected ? 'is-selected' : ''}`.trim()}
-          onClick={() => onSelect(s.name)}
-          aria-pressed={s.name === selected}
-          title={`${s.label} — slide bar`}
-        >
-          <span className="tileset-studio-card-image" style={{ '--tile-zoom': zoom } as CSSProperties}>
-            {/* A static slider mock: a stone channel, a bronze fill, and a beveled handle. */}
+          title={s.label}
+          badge={s.preferred ? `${s.material} · preferred` : s.material}
+          selected={s.name === selected}
+          onSelect={() => onSelect(s.name)}
+          titleText={`${s.label} — slide bar`}
+          imageStyle={{ '--tile-zoom': zoom } as CSSProperties}
+          media={(
             <span style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 14%' } as CSSProperties}>
               <span style={{ position: 'relative', width: '100%', height: '10px', background: s.channel, border: `1px solid ${s.edge}` } as CSSProperties}>
                 <span style={{ position: 'absolute', insetBlock: '0', left: '0', width: `${sampleFill}%`, background: s.fill } as CSSProperties} />
@@ -65,14 +65,8 @@ export function SliderLibraryStudio({
                 />
               </span>
             </span>
-          </span>
-          <span className="tileset-studio-card-meta">
-            <span className="tileset-studio-card-text">
-              <strong>{s.label}</strong>
-              <em>{s.preferred ? `${s.material} · preferred` : s.material}</em>
-            </span>
-          </span>
-        </button>
+          )}
+        />
       ))}
       {visible.length === 0 ? <p className="tileset-studio-empty">No sliders match.</p> : null}
     </div>

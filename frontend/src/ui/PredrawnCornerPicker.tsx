@@ -41,6 +41,7 @@ import {
   type PredrawnPoint,
 } from '../render/PredrawnBoardLayer';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
+import { ChromeButton } from './shared/ChromeButton';
 
 export type PredrawnCornerName = 'north' | 'east' | 'south' | 'west';
 export type PredrawnCornerPoints = Record<PredrawnCornerName, PredrawnPoint | undefined>;
@@ -1795,21 +1796,17 @@ export function PredrawnCornerPicker({
             <h2 id="predrawn-corner-picker-title">Calibrate the artwork refit grid</h2>
             <p>Fit the whole grid first, then correct individual painted tiles with shared local corners where the artwork drifts.</p>
           </div>
-          <button
-            type="button"
-            data-chrome-unit="inner-text-button"
+          <ChromeButton unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
             onClick={onClose}
-          >Close</button>
+          >Close</ChromeButton>
         </header>
 
         <div className="predrawn-corner-picker-toolbar">
           <div className="predrawn-corner-picker-toolbar-main">
             <div className="predrawn-corner-picker-mode" role="group" aria-label="Grid editing scale">
-              <button
-                type="button"
+              <ChromeButton unit="inner-text-button"
                 data-testid="predrawn-grid-edit-coarse"
-                data-chrome-unit="inner-text-button"
                 className={chromeUnitClassNames(
                   'inner-text-button',
                   'le-seg-btn',
@@ -1817,11 +1814,9 @@ export function PredrawnCornerPicker({
                 )}
                 aria-pressed={editMode === 'coarse'}
                 onClick={() => chooseEditMode('coarse')}
-              >Coarse grid</button>
-              <button
-                type="button"
+              >Coarse grid</ChromeButton>
+              <ChromeButton unit="inner-text-button"
                 data-testid="predrawn-grid-edit-local"
-                data-chrome-unit="inner-text-button"
                 className={chromeUnitClassNames(
                   'inner-text-button',
                   'le-seg-btn',
@@ -1833,39 +1828,33 @@ export function PredrawnCornerPicker({
                   ? 'Select one painted tile and adjust its shared interior corners.'
                   : 'Place a complete coarse grid before refining individual tiles.'}
                 onClick={() => chooseEditMode('local')}
-              >Local cells</button>
+              >Local cells</ChromeButton>
             </div>
             <div className="predrawn-grid-history" role="group" aria-label="Grid edit history">
-              <button
-                type="button"
+              <ChromeButton unit="inner-text-button"
                 data-testid="predrawn-grid-undo"
-                data-chrome-unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
                 disabled={!gridHistory.undo.length}
                 title={gridHistory.undo.length
                   ? 'Undo the last grid adjustment.'
                   : 'Nothing to undo.'}
                 onClick={() => applyGridHistory('undo')}
-              >Undo</button>
-              <button
-                type="button"
+              >Undo</ChromeButton>
+              <ChromeButton unit="inner-text-button"
                 data-testid="predrawn-grid-redo"
-                data-chrome-unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
                 disabled={!gridHistory.redo.length}
                 title={gridHistory.redo.length
                   ? 'Redo the last undone grid adjustment.'
                   : 'Nothing to redo.'}
                 onClick={() => applyGridHistory('redo')}
-              >Redo</button>
+              >Redo</ChromeButton>
             </div>
             {editMode === 'coarse' ? (
               <div className="predrawn-corner-picker-corners" role="group" aria-label="Corner to place">
                 {CORNERS.map((corner) => (
-                  <button
+                  <ChromeButton unit="inner-text-button"
                     key={corner}
-                    type="button"
-                    data-chrome-unit="inner-text-button"
                     className={chromeUnitClassNames(
                       'inner-text-button',
                       'le-seg-btn',
@@ -1876,7 +1865,7 @@ export function PredrawnCornerPicker({
                   >
                     <strong>{`Point ${CORNER_POINT_NUMBER[corner]}`}</strong>
                     <span>{pointLabel(points[corner])}</span>
-                  </button>
+                  </ChromeButton>
                 ))}
               </div>
             ) : (
@@ -1889,17 +1878,15 @@ export function PredrawnCornerPicker({
           </div>
           <div className="predrawn-corner-picker-zoom" role="group" aria-label="Source image zoom">
             {(['fit', ...PREDRAWN_SOURCE_ZOOM_LEVELS] as const).map((value) => (
-              <button
+              <ChromeButton unit="inner-text-button"
                 key={value}
-                type="button"
-                data-chrome-unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', zoom === value && 'active')}
                 aria-pressed={zoom === value}
                 onClick={() => {
                   viewportZoomAnchorRef.current = null;
                   setZoom(value);
                 }}
-              >{value === 'fit' ? 'Fit' : `${value * 100}%`}</button>
+              >{value === 'fit' ? 'Fit' : `${value * 100}%`}</ChromeButton>
             ))}
           </div>
         </div>
@@ -1978,80 +1965,64 @@ export function PredrawnCornerPicker({
           <div className="predrawn-grid-calibration-actions">
             {editMode === 'coarse' ? (
               <>
-                <button
-                  type="button"
+                <ChromeButton unit="inner-text-button"
                   data-testid="predrawn-boundary-pin"
-                  data-chrome-unit="inner-text-button"
                   className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
                   disabled={!complete}
                   onClick={pinBoundaryReference}
-                >{boundaryReference ? 'Update boundary' : 'Pin boundary'}</button>
-                <button
-                  type="button"
+                >{boundaryReference ? 'Update boundary' : 'Pin boundary'}</ChromeButton>
+                <ChromeButton unit="inner-text-button"
                   data-testid="predrawn-boundary-clear"
-                  data-chrome-unit="inner-text-button"
                   className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
                   disabled={!boundaryReference}
                   onClick={clearBoundaryReference}
-                >Clear boundary</button>
-                <button
-                  type="button"
+                >Clear boundary</ChromeButton>
+                <ChromeButton unit="inner-text-button"
                   data-testid="predrawn-grid-snap-ideal"
-                  data-chrome-unit="inner-text-button"
                   className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
                   disabled={!complete || coarseRebaseLocked}
                   title={coarseRebaseTitle ?? 'Snap the coarse grid to ideal board projection spacing.'}
                   onClick={snapToIdealGrid}
-                >Snap ideal grid</button>
-                <button
-                  type="button"
+                >Snap ideal grid</ChromeButton>
+                <ChromeButton unit="inner-text-button"
                   data-testid="predrawn-grid-reset-spacing"
-                  data-chrome-unit="inner-text-button"
                   className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
                   disabled={coarseRebaseLocked}
                   title={coarseRebaseTitle ?? 'Reset row and column spacing to equal intervals.'}
                   onClick={resetSpacing}
-                >Reset spacing</button>
+                >Reset spacing</ChromeButton>
                 {coarseRebaseLocked ? (
-                  <button
-                    type="button"
+                  <ChromeButton unit="inner-text-button"
                     data-testid="predrawn-grid-clear-local-from-coarse"
-                    data-chrome-unit="inner-text-button"
                     className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')}
                     title="Explicitly clear local cell refinements so coarse dimensions and spacing can be rebased."
                     onClick={resetAllLocalCells}
-                  >Clear {meshOverrides.length} local</button>
+                  >Clear {meshOverrides.length} local</ChromeButton>
                 ) : null}
               </>
             ) : (
               <>
-                <button
-                  type="button"
+                <ChromeButton unit="inner-text-button"
                   data-testid="predrawn-grid-reset-node"
-                  data-chrome-unit="inner-text-button"
                   className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
                   disabled={!activeLocalNodeOverridden}
                   title="Reset the active shared corner to the coarse grid."
                   onClick={resetActiveLocalNode}
-                >Reset corner</button>
-                <button
-                  type="button"
+                >Reset corner</ChromeButton>
+                <ChromeButton unit="inner-text-button"
                   data-testid="predrawn-grid-reset-cell"
-                  data-chrome-unit="inner-text-button"
                   className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
                   disabled={!selectedCell || selectedCellOverrideCount === 0}
                   title="Reset all adjusted corners of this tile, including corners shared with neighbors."
                   onClick={resetSelectedLocalCell}
-                >Reset tile</button>
-                <button
-                  type="button"
+                >Reset tile</ChromeButton>
+                <ChromeButton unit="inner-text-button"
                   data-testid="predrawn-grid-reset-local"
-                  data-chrome-unit="inner-text-button"
                   className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
                   disabled={!meshOverrides.length}
                   title={`Clear all ${meshOverrides.length} local adjustment${meshOverrides.length === 1 ? '' : 's'} without changing the coarse grid.`}
                   onClick={resetAllLocalCells}
-                >Clear all local</button>
+                >Clear all local</ChromeButton>
               </>
             )}
           </div>
@@ -2340,28 +2311,22 @@ export function PredrawnCornerPicker({
             {' '}Mouse wheel zooms at the cursor. Right-drag anywhere on the artwork to pan.
           </p>
           <div className="confirm-actions">
-            <button
-              type="button"
-              data-chrome-unit="inner-text-button"
+            <ChromeButton unit="inner-text-button"
               className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
               onClick={reset}
-            >Restore opening calibration</button>
-            <button
-              type="button"
+            >Restore opening calibration</ChromeButton>
+            <ChromeButton unit="inner-text-button"
               data-testid="predrawn-registration-save"
-              data-chrome-unit="inner-text-button"
               className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'active')}
               disabled={!complete || loadError}
               title={onSaveRegistration
                 ? 'Stage this grid calibration. No pixels change until you generate a warped version.'
                 : 'Save this exact grid registration.'}
               onClick={saveRegistration}
-            >{saveLabel}</button>
+            >{saveLabel}</ChromeButton>
             {showCodexHandoff ? (
-              <button
-                type="button"
+              <ChromeButton unit="inner-text-button"
                 data-testid="predrawn-registration-copy-handoff"
-                data-chrome-unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
                 disabled={saveState !== 'saved'}
                 onClick={() => { void copyCodexHandoff(); }}
@@ -2369,15 +2334,13 @@ export function PredrawnCornerPicker({
                   ? 'COPIED — PASTE IN CODEX'
                   : handoffCopyState === 'error'
                     ? 'COPY FAILED'
-                    : 'COPY CODEX HANDOFF'}</button>
+                    : 'COPY CODEX HANDOFF'}</ChromeButton>
             ) : null}
-            <button
-              type="button"
-              data-chrome-unit="inner-text-button"
+            <ChromeButton unit="inner-text-button"
               className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
               disabled={!complete || saveState === 'pending' || saveState === 'error'}
               onClick={onClose}
-            >Done</button>
+            >Done</ChromeButton>
           </div>
         </footer>
       </div>

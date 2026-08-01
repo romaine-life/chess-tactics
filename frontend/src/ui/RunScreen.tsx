@@ -3,7 +3,6 @@ import { useSkirmish, setRunBattleTransformSink } from '../game/store';
 import { defaultFacingForSide } from '../core/pieces';
 import type { GameState, Piece } from '../core/types';
 import { LevelPreviewColumn } from './LevelPreviewColumn';
-import { NavButton } from './shared/NavButton';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox, ShellViewportSwap } from './shared/ChromeBox';
 import { HouseSelect } from './shared/HouseSelect';
@@ -67,6 +66,7 @@ import {
 } from './RunArmyWorkspace';
 import { RunWorkspaceStages } from './RunWorkspaceStages';
 import { RunBundleCard } from './RunBundleCard';
+import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 
 type RunScreenView = 'primary' | 'sell' | RunSelfInspectionView;
 // The hydration placeholder only ever exists beneath the route's own entrance gate,
@@ -154,27 +154,23 @@ function RunMetaControls({
         <div className="skirmish-view-group">
           <span className="skirmish-eyebrow">{shop ? 'Shop views' : 'Run views'}</span>
           <div className="run-meta-navigation">
-            <button
-              type="button"
-              data-chrome-unit="inner-text-button"
+            <ChromeButton unit="inner-text-button"
               data-testid="run-view-primary"
               className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === 'primary' && 'active')}
               aria-pressed={view === 'primary'}
               onClick={() => onNavigate('primary')}
             >
               {primaryLabel}
-            </button>
+            </ChromeButton>
             {shop ? (
-              <button
-                type="button"
-                data-chrome-unit="inner-text-button"
+              <ChromeButton unit="inner-text-button"
                 data-testid="run-view-sell"
                 className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === 'sell' && 'active')}
                 aria-pressed={view === 'sell'}
                 onClick={() => onNavigate('sell')}
               >
                 Sell Units
-              </button>
+              </ChromeButton>
             ) : null}
           </div>
         </div>
@@ -189,9 +185,7 @@ function RunMetaControls({
           <div className="skirmish-view-group">
             <span className="skirmish-eyebrow">Shop</span>
             <div className="run-meta-navigation">
-              <button
-                type="button"
-                data-chrome-unit="inner-text-button"
+              <ChromeButton unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
                 disabled={!shopHasChanges(run)}
                 data-testid="reset-run-shop"
@@ -201,10 +195,8 @@ function RunMetaControls({
                 }}
               >
                 Reset Shop
-              </button>
-              <button
-                type="button"
-                data-chrome-unit="inner-text-button"
+              </ChromeButton>
+              <ChromeButton unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
                 disabled={!canLeave}
                 data-testid="continue-run-shop"
@@ -215,7 +207,7 @@ function RunMetaControls({
                 }}
               >
                 Continue to next Battle
-              </button>
+              </ChromeButton>
             </div>
             {!canLeave ? <p className="skirmish-grid-hint">Choose one Loot relic before continuing.</p> : null}
           </div>
@@ -224,16 +216,14 @@ function RunMetaControls({
           <div className="skirmish-view-group run-meta-abandon">
             <span className="skirmish-eyebrow">Run</span>
             <div className="skirmish-view-row">
-              <button
-                type="button"
-                data-chrome-unit="inner-text-button"
+              <ChromeButton unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'danger')}
                 data-testid="abandon-run"
                 disabled={abandoning}
                 onClick={() => { void requestAbandon(); }}
               >
                 {abandoning ? 'Abandoning…' : 'Abandon Run'}
-              </button>
+              </ChromeButton>
             </div>
           </div>
         ) : null}
@@ -347,9 +337,7 @@ function DeploymentPanel({ run }: { run: RunDocument }): ReactElement {
               {prepared.army.filter((unit) => unit.type !== 'king').map((unit) => {
                 const selected = chosenBlocked.includes(unit.id);
                 return (
-                  <button
-                    type="button"
-                    data-chrome-unit="inner-list-row"
+                  <ChromeButton unit="inner-list-row"
                     className={chromeUnitClassNames('inner-list-row', 'run-choice-option', selected && 'active')}
                     aria-pressed={selected}
                     disabled={!selected && chosenBlocked.length >= options.blockedChoiceCount}
@@ -358,7 +346,7 @@ function DeploymentPanel({ run }: { run: RunDocument }): ReactElement {
                   >
                     <span>{runUnitRosterLabel(unit)}</span>
                     <small>{selected ? 'Sitting out' : 'Deploying'}</small>
-                  </button>
+                  </ChromeButton>
                 );
               })}
             </div>
@@ -406,29 +394,25 @@ function DeploymentPanel({ run }: { run: RunDocument }): ReactElement {
             <p>Choose which valid random layout to use.</p>
             <div className="run-inline-actions">
               {[0, 1].map((index) => (
-                <button
-                  type="button"
+                <ChromeButton unit="inner-text-button"
                   key={index}
-                  data-chrome-unit="inner-text-button"
                   className={chromeUnitClassNames('inner-text-button', 'app-header-button', prepared.deployment?.layoutChoice === index && 'active')}
                   onClick={() => replace(setDeploymentChoices(prepared, { layoutChoice: index as 0 | 1 }))}
                 >
                   Layout {index + 1}
-                </button>
+                </ChromeButton>
               ))}
             </div>
           </section>
         ) : null}
 
-        <button
-          type="button"
-          data-chrome-unit="inner-text-button"
+        <ChromeButton unit="inner-text-button"
           className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
           disabled={!deploymentReady(prepared, options)}
           onClick={start}
         >
           Begin Battle
-        </button>
+        </ChromeButton>
       </section>
 
       <LevelPreviewColumn
@@ -479,15 +463,13 @@ function RelicOffer({
           ariaLabel="Discipline target"
         />
       ) : null}
-      <button
-        type="button"
-        data-chrome-unit="inner-text-button"
+      <ChromeButton unit="inner-text-button"
         className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
         disabled={disabled || (needsTarget && !target)}
         onClick={() => action(target || undefined)}
       >
         {actionLabel}
-      </button>
+      </ChromeButton>
     </InnerChromeBox>
   );
 }
@@ -613,9 +595,7 @@ function VictoryPanel({ run }: { run: RunDocument }): ReactElement {
         <span>{visibleRunRelicCount(run)} relics</span>
         <RunGoldAmount valueTenths={run.goldTenths} />
       </p>
-      <button
-        type="button"
-        data-chrome-unit="inner-text-button"
+      <ChromeButton unit="inner-text-button"
         className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
         onClick={() => {
           void abandon().then(() => {
@@ -624,7 +604,7 @@ function VictoryPanel({ run }: { run: RunDocument }): ReactElement {
         }}
       >
         Finish Run
-      </button>
+      </ChromeButton>
     </RunWorkspace>
   );
 }
@@ -894,13 +874,12 @@ export function RunScreen({
         >
           <h2 id="run-empty-workspace-title">No active Run</h2>
           <p>Start a Run from Play, or direct-play one of your Wars from the War Editor.</p>
-          <NavButton
-            data-chrome-unit="inner-text-button"
+          <ChromeNavButton unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
             to={PLAY_RUN_SELECTOR_HREF}
           >
             Back to Run
-          </NavButton>
+          </ChromeNavButton>
         </RunWorkspace>
       )
       : shellRun.phase === 'draft'

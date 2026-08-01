@@ -1,8 +1,8 @@
 import { type ButtonHTMLAttributes, type HTMLAttributes, type ReactElement, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { chromeUnitClassNames } from '../chromeUnitRegistry';
-import { NavButton } from '../shared/NavButton';
 import { useTitleBarPortalTarget } from './TitleBarPortalContext';
+import { ChromeButton, ChromeNavButton } from '../shared/ChromeButton';
 
 type TitleBarControlVariant = 'label' | 'return' | 'icon';
 
@@ -55,16 +55,16 @@ export function TitleBarButtonPrimitive({
 
   if (to) {
     return (
-      <NavButton data-chrome-unit="inner-box" className={controlClassName} to={to} replace={replace} scroll={scroll} {...props}>
+      <ChromeNavButton unit="inner-box" className={controlClassName} to={to} replace={replace} scroll={scroll} {...props}>
         {children}
-      </NavButton>
+      </ChromeNavButton>
     );
   }
 
   return (
-    <button type="button" data-chrome-unit="inner-box" className={controlClassName} {...props}>
+    <ChromeButton unit="inner-box" className={controlClassName} {...props}>
       {children}
-    </button>
+    </ChromeButton>
   );
 }
 

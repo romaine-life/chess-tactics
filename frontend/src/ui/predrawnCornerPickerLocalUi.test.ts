@@ -7,8 +7,8 @@ const style = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 
 describe('pre-drawn grid calibration instrument', () => {
   it('separates coarse fitting from selectable shared-corner cell refinement', () => {
-    expect(picker).toContain('>Coarse grid</button>');
-    expect(picker).toContain('>Local cells</button>');
+    expect(picker).toContain('>Coarse grid</ChromeButton>');
+    expect(picker).toContain('>Local cells</ChromeButton>');
     expect(picker).toContain('data-testid={`predrawn-local-cell-${cell.column}-${cell.row}`}');
     expect(picker).toContain('data-testid={`predrawn-local-node-${handle.corner}`}');
     expect(picker).toContain('onFocus={() => setActiveControl(control)}');
@@ -27,12 +27,12 @@ describe('pre-drawn grid calibration instrument', () => {
   });
 
   it('offers explicit corner, tile, and all-local resets without silently rebasing local work', () => {
-    expect(picker).toContain('>Reset corner</button>');
-    expect(picker).toContain('>Reset tile</button>');
-    expect(picker).toContain('>Clear all local</button>');
+    expect(picker).toContain('>Reset corner</ChromeButton>');
+    expect(picker).toContain('>Reset tile</ChromeButton>');
+    expect(picker).toContain('>Clear all local</ChromeButton>');
     expect(picker).toContain('disabled={coarseRebaseLocked}');
     expect(picker).toContain('disabled={!complete || coarseRebaseLocked}');
-    expect(picker).toContain('>Clear {meshOverrides.length} local</button>');
+    expect(picker).toContain('>Clear {meshOverrides.length} local</ChromeButton>');
     expect(picker).toContain('before changing grid dimensions, snapping, or resetting spacing.');
   });
 
@@ -47,8 +47,8 @@ describe('pre-drawn grid calibration instrument', () => {
     expect(undo).toBeGreaterThan(toolbar);
     expect(redo).toBeGreaterThan(undo);
     expect(redo).toBeLessThan(calibrationBar);
-    expect(picker).toContain('>Undo</button>');
-    expect(picker).toContain('>Redo</button>');
+    expect(picker).toContain('>Undo</ChromeButton>');
+    expect(picker).toContain('>Redo</ChromeButton>');
     expect(picker).toContain('aria-label="Grid edit history"');
     expect(picker).toContain('disabled={!gridHistory.undo.length}');
     expect(picker).toContain('disabled={!gridHistory.redo.length}');

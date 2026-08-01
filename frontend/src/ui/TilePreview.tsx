@@ -5,6 +5,7 @@
 // board-placeable thing is a catalogCategories entry + a focus, never a bespoke view or a
 // `category === '…'` branch.
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
+import { ChoiceGroup } from './shared/ChoiceGroup';
 import { currentLiveMediaCatalog, drawableAssets, resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import { tileFamilies, wallThumbSrc } from '../art/tileset';
 import { defaultWallMaterial, type WallMaterial } from '../core/featureAutotile';
@@ -1655,21 +1656,20 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
           </label>
           <div className="tileset-filter-field">
             <span>Type</span>
-            <div className="tileset-tier-seg" aria-label="Filter by asset type">
-              {ASSET_TYPE_FACETS.map((opt) => (
-                <button key={opt.value} type="button" className={assetFilters.type === opt.value ? 'is-active' : ''} onClick={() => setAssetFilters((s) => ({ ...s, type: opt.value }))}>{opt.label}</button>
-              ))}
-            </div>
+            <ChoiceGroup value={assetFilters.type} options={ASSET_TYPE_FACETS} onChange={(type) => setAssetFilters((state) => ({ ...state, type }))} ariaLabel="Filter by asset type" />
           </div>
           <div className="tileset-filter-field">
             <span>Status</span>
-            <div className="tileset-tier-seg" aria-label="Filter by live media status">
-              {(['all', 'accepted', 'bridge'] as const).map((option) => (
-                <button key={option} type="button" className={assetFilters.status === option ? 'is-active' : ''} onClick={() => setAssetFilters((s) => ({ ...s, status: option }))}>
-                  {option === 'all' ? 'All' : option === 'accepted' ? 'Accepted' : 'Legacy bridge'}
-                </button>
-              ))}
-            </div>
+            <ChoiceGroup
+              value={assetFilters.status}
+              options={[
+                { value: 'all', label: 'All' },
+                { value: 'accepted', label: 'Accepted' },
+                { value: 'bridge', label: 'Legacy bridge' },
+              ]}
+              onChange={(status) => setAssetFilters((state) => ({ ...state, status }))}
+              ariaLabel="Filter by live media status"
+            />
           </div>
           <button type="button" className="tileset-view-action" onClick={() => openViewer('asset')}>View Selected</button>
         </>

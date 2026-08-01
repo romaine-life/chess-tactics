@@ -126,7 +126,7 @@ describe('creation attempts', () => {
   it('gives committed derived pixels a focused full-workspace grid and cyan inspection instrument', () => {
     expect(panel).toContain('<PredrawnWarpInspector');
     expect(panel).toContain('data-testid="inspect-predrawn-board-full-size"');
-    expect(panel).toContain('>Inspect full size</button>');
+    expect(panel).toContain('>Inspect full size</ChromeButton>');
     expect(panel).toContain('className="le-predrawn-version-manager is-inspecting"');
     expect(panel).toContain('setInspectedArtifactId(version.id)');
     expect(inspector).toContain('data-testid="predrawn-warp-inspector"');

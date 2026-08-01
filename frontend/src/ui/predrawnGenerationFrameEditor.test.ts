@@ -17,7 +17,7 @@ describe('Level Editor pre-drawn generation frame handoff', () => {
       /const closePredrawnGenerationFrame = \(\): void => \{([\s\S]*?)\n  \};/,
     )?.[1] ?? '';
     const control = levelEditor.match(
-      /<button[\s\S]*?data-testid="open-predrawn-generation-frame"[\s\S]*?<\/button>/,
+      /<ChromeButton[\s\S]*?data-testid="open-predrawn-generation-frame"[\s\S]*?<\/ChromeButton>/,
     )?.[0] ?? '';
 
     expect(levelEditor).toContain("searchParams.get('generationFrame') === '1'");
@@ -65,7 +65,7 @@ describe('Level Editor pre-drawn generation frame handoff', () => {
     expect(review).toContain("setTool('select')");
     expect(review).not.toContain('saveLevel');
     expect(levelEditor).toContain('data-testid="predrawn-generation-frame-status"');
-    expect(levelEditor).toContain('>Preview current input</NavButton>');
+    expect(levelEditor).toContain('>Preview current input</ChromeNavButton>');
   });
 
   it('waits for both canonical canvas layers to paint before enabling either handoff path', () => {

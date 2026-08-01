@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { chromeUnitClassNames } from '../chromeUnitRegistry';
+import { ChromeButton } from './ChromeButton';
 
 export type ConfirmTone = 'primary' | 'danger';
 
@@ -114,21 +115,17 @@ function ConfirmDialog({
         <h2>{title}</h2>
         <div className="confirm-body">{message}</div>
         <div className="confirm-actions">
-          <button
+          <ChromeButton unit="inner-text-button"
             ref={cancelButtonRef}
-            type="button"
-            data-chrome-unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
             data-testid="confirm-cancel"
             onClick={onCancel}
-          >{cancelLabel}</button>
-          <button
-            type="button"
-            data-chrome-unit="inner-text-button"
+          >{cancelLabel}</ChromeButton>
+          <ChromeButton unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', tone === 'danger' ? 'danger' : 'active')}
             data-testid="confirm-accept"
             onClick={onConfirm}
-          >{confirmLabel}</button>
+          >{confirmLabel}</ChromeButton>
         </div>
       </div>
     </div>,

@@ -38,6 +38,7 @@ import {
   type PredrawnOcclusionPromptLabel,
 } from './predrawnOcclusionEditorState';
 import './PredrawnOcclusionEditor.css';
+import { ChromeButton } from './shared/ChromeButton';
 
 type PredrawnOcclusionTool = 'positive' | 'negative' | 'brush' | 'eraser';
 type ModelState = 'preparing' | 'ready' | 'predicting' | 'error';
@@ -745,9 +746,7 @@ export function PredrawnOcclusionEditor({
             examined. Legacy tile artwork is never loaded or consulted.
           </p>
         </div>
-        <button
-          type="button"
-          data-chrome-unit="inner-text-button"
+        <ChromeButton unit="inner-text-button"
           className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
           disabled={submitting}
           title={submitting
@@ -758,15 +757,13 @@ export function PredrawnOcclusionEditor({
             segmentAbortRef.current?.abort();
             onClose();
           }}
-        >Close</button>
+        >Close</ChromeButton>
       </header>
 
       <div className="le-predrawn-workspace-inspector-toolbar predrawn-occlusion-editor-toolbar">
         <div className="predrawn-occlusion-editor-tools" role="toolbar" aria-label="Mask tools">
-          <button
-            type="button"
+          <ChromeButton unit="inner-text-button"
             data-testid="predrawn-occlusion-positive-tool"
-            data-chrome-unit="inner-text-button"
             className={chromeUnitClassNames(
               'inner-text-button',
               'le-seg-btn',
@@ -778,11 +775,9 @@ export function PredrawnOcclusionEditor({
               ? 'Positive points become available when the local segmentation model is ready.'
               : 'Click something that should be included in the proposed mask.'}
             onClick={() => setTool('positive')}
-          >Positive point</button>
-          <button
-            type="button"
+          >Positive point</ChromeButton>
+          <ChromeButton unit="inner-text-button"
             data-testid="predrawn-occlusion-negative-tool"
-            data-chrome-unit="inner-text-button"
             className={chromeUnitClassNames(
               'inner-text-button',
               'le-seg-btn',
@@ -794,11 +789,9 @@ export function PredrawnOcclusionEditor({
               ? 'Negative points become available when the local segmentation model is ready.'
               : 'Click something that should be removed from the proposed mask.'}
             onClick={() => setTool('negative')}
-          >Negative point</button>
-          <button
-            type="button"
+          >Negative point</ChromeButton>
+          <ChromeButton unit="inner-text-button"
             data-testid="predrawn-occlusion-brush-tool"
-            data-chrome-unit="inner-text-button"
             className={chromeUnitClassNames(
               'inner-text-button',
               'le-seg-btn',
@@ -808,11 +801,9 @@ export function PredrawnOcclusionEditor({
             disabled={busy}
             title="Paint exact native-image pixels into the accepted mask."
             onClick={() => setTool('brush')}
-          >Brush</button>
-          <button
-            type="button"
+          >Brush</ChromeButton>
+          <ChromeButton unit="inner-text-button"
             data-testid="predrawn-occlusion-eraser-tool"
-            data-chrome-unit="inner-text-button"
             className={chromeUnitClassNames(
               'inner-text-button',
               'le-seg-btn',
@@ -822,7 +813,7 @@ export function PredrawnOcclusionEditor({
             disabled={busy}
             title="Erase exact native-image pixels from the accepted mask."
             onClick={() => setTool('eraser')}
-          >Eraser</button>
+          >Eraser</ChromeButton>
           <label className="predrawn-occlusion-editor-brush-size">
             <span>Brush radius</span>
             <input
@@ -840,35 +831,29 @@ export function PredrawnOcclusionEditor({
         </div>
 
         <div className="predrawn-occlusion-editor-history" role="group" aria-label="Mask history">
-          <button
-            type="button"
+          <ChromeButton unit="inner-undo-key"
             data-testid="predrawn-occlusion-undo"
-            data-chrome-unit="inner-undo-key"
             className={chromeUnitClassNames('inner-undo-key', 'le-seg-btn')}
             disabled={!history.past.length || busy}
             aria-label="Undo mask edit"
             title={history.past.length ? 'Undo the last mask edit.' : 'Nothing to undo.'}
             onClick={() => stepHistory('undo')}
-          >Undo</button>
-          <button
-            type="button"
+          >Undo</ChromeButton>
+          <ChromeButton unit="inner-redo-key"
             data-testid="predrawn-occlusion-redo"
-            data-chrome-unit="inner-redo-key"
             className={chromeUnitClassNames('inner-redo-key', 'le-seg-btn')}
             disabled={!history.future.length || busy}
             aria-label="Redo mask edit"
             title={history.future.length ? 'Redo the last undone mask edit.' : 'Nothing to redo.'}
             onClick={() => stepHistory('redo')}
-          >Redo</button>
-          <button
-            type="button"
+          >Redo</ChromeButton>
+          <ChromeButton unit="inner-text-button"
             data-testid="predrawn-occlusion-reset"
-            data-chrome-unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')}
             disabled={busy}
             title="Restore the mask and points that were present when this workspace opened."
             onClick={reset}
-          >Reset all</button>
+          >Reset all</ChromeButton>
         </div>
 
         <div
@@ -876,21 +861,17 @@ export function PredrawnOcclusionEditor({
           role="group"
           aria-label="Artwork zoom"
         >
-          <button
-            type="button"
+          <ChromeButton unit="inner-text-button"
             data-testid="predrawn-occlusion-fit"
-            data-chrome-unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
             title="Fit the complete artwork in the workspace and center it."
             onClick={() => {
               setViewZoom(fitZoom);
               setViewPan({ x: 0, y: 0 });
             }}
-          >Fit artwork</button>
-          <button
-            type="button"
+          >Fit artwork</ChromeButton>
+          <ChromeButton unit="inner-text-button"
             data-testid="predrawn-occlusion-zoom-out"
-            data-chrome-unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
             aria-label="Zoom out"
             disabled={viewZoom <= fitZoom + 0.001}
@@ -904,12 +885,10 @@ export function PredrawnOcclusionEditor({
                 viewZoom / 1.2,
               );
             }}
-          >−</button>
+          >−</ChromeButton>
           <output aria-label="Current artwork zoom">{Math.round(viewZoom * 100)}%</output>
-          <button
-            type="button"
+          <ChromeButton unit="inner-text-button"
             data-testid="predrawn-occlusion-zoom-in"
-            data-chrome-unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
             aria-label="Zoom in"
             disabled={viewZoom >= PREDRAWN_OCCLUSION_MAX_ZOOM}
@@ -923,7 +902,7 @@ export function PredrawnOcclusionEditor({
                 viewZoom * 1.2,
               );
             }}
-          >+</button>
+          >+</ChromeButton>
         </div>
       </div>
 
@@ -1037,15 +1016,13 @@ export function PredrawnOcclusionEditor({
               <progress aria-label={progress.message} />
             ) : null}
             {modelState === 'error' ? (
-              <button
-                type="button"
+              <ChromeButton unit="inner-text-button"
                 data-testid="predrawn-occlusion-retry-model"
-                data-chrome-unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
                 disabled={submitting}
                 title="Retry loading and encoding this exact warped artwork."
                 onClick={() => setPrepareAttempt((value) => value + 1)}
-              >Retry AI selection</button>
+              >Retry AI selection</ChromeButton>
             ) : null}
           </div>
           <p>
@@ -1093,10 +1070,8 @@ export function PredrawnOcclusionEditor({
             role="group"
             aria-label="AI mask candidates"
           >
-            <button
-              type="button"
+            <ChromeButton unit="inner-chevron-key"
               data-testid="predrawn-occlusion-previous-candidate"
-              data-chrome-unit="inner-chevron-key"
               className={chromeUnitClassNames(
                 'inner-chevron-key',
                 'le-seg-btn',
@@ -1109,7 +1084,7 @@ export function PredrawnOcclusionEditor({
                 historyRef.current.present,
                 historyRef.current.present.selectedCandidateIndex - 1,
               ))}
-            >Previous</button>
+            >Previous</ChromeButton>
             <output aria-live="polite" aria-label="Current AI mask candidate">
               {selectedCandidateLabel(
                 current.selectedCandidateIndex,
@@ -1117,10 +1092,8 @@ export function PredrawnOcclusionEditor({
                 selectedCandidate?.score,
               )}
             </output>
-            <button
-              type="button"
+            <ChromeButton unit="inner-chevron-key"
               data-testid="predrawn-occlusion-next-candidate"
-              data-chrome-unit="inner-chevron-key"
               className={chromeUnitClassNames(
                 'inner-chevron-key',
                 'le-seg-btn',
@@ -1135,36 +1108,30 @@ export function PredrawnOcclusionEditor({
                 historyRef.current.present,
                 historyRef.current.present.selectedCandidateIndex + 1,
               ))}
-            >Next</button>
+            >Next</ChromeButton>
           </div>
           <div className="predrawn-occlusion-editor-candidate-actions">
-            <button
-              type="button"
+            <ChromeButton unit="inner-text-button"
               data-testid="predrawn-occlusion-accept-candidate"
-              data-chrome-unit="inner-text-button"
               className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'active')}
               disabled={!selectedCandidate || busy}
               title="Add the amber candidate pixels to the accepted cyan mask, then begin another object."
               onClick={() => commitSnapshot(acceptPredrawnOcclusionCandidate(
                 historyRef.current.present,
               ))}
-            >Add candidate to mask</button>
-            <button
-              type="button"
+            >Add candidate to mask</ChromeButton>
+            <ChromeButton unit="inner-text-button"
               data-testid="predrawn-occlusion-discard-candidate"
-              data-chrome-unit="inner-text-button"
               className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
               disabled={!current.prompts.length && !current.candidates.length || busy}
               title="Remove the current AI proposal and its points without changing accepted pixels."
               onClick={() => commitSnapshot(discardPredrawnOcclusionCandidate(
                 historyRef.current.present,
               ))}
-            >Discard candidate</button>
+            >Discard candidate</ChromeButton>
           </div>
-          <button
-            type="button"
+          <ChromeButton unit="inner-text-button"
             data-testid="predrawn-occlusion-submit"
-            data-chrome-unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'active')}
             disabled={Boolean(submitDisabledReason)
               || !onSubmit
@@ -1181,7 +1148,7 @@ export function PredrawnOcclusionEditor({
                   ? 'Select or brush foreground pixels first.'
                   : `Return this exact ${imageWidth} × ${imageHeight} mask to the owning pipeline.`)}
             onClick={() => { void submit(); }}
-          >{submitting ? 'Submitting mask…' : submitLabel}</button>
+          >{submitting ? 'Submitting mask…' : submitLabel}</ChromeButton>
         </div>
       </footer>
     </section>

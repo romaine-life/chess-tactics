@@ -24,6 +24,7 @@ import { HouseSelect } from './shared/HouseSelect';
 import { ChromeDividedGridRow, DividedInnerChromeBox } from './shared/ChromeDividedGrid';
 import { Tooltip } from './shared/InfoTip';
 import { RunUnitInspectionScene } from './RunUnitInspectionScene';
+import { ChromeButton } from './shared/ChromeButton';
 
 export type RunRosterOrder = 'type' | 'value' | 'ability' | 'acquired';
 export type RunRosterTypeFilter = 'all' | RunArmyPieceType;
@@ -429,10 +430,8 @@ function ProfileSellAction({
       ? 'Units can only be sold while visiting a shop.'
       : null;
   const button = (
-    <button
-      type="button"
+    <ChromeButton unit="inner-text-button"
       data-ui-sfx={unavailableReason ? undefined : 'gold-sell'}
-      data-chrome-unit="inner-text-button"
       className={chromeUnitClassNames('inner-text-button', 'app-header-button', unavailableReason ? '' : 'danger')}
       disabled={Boolean(unavailableReason)}
       onClick={() => onSell(unit.id)}
@@ -441,7 +440,7 @@ function ProfileSellAction({
       {unit.type !== 'king' ? (
         <RunGoldAmount valueTenths={unitSaleTenths(run, unit)} className="run-gold-amount--button" />
       ) : null}
-    </button>
+    </ChromeButton>
   );
   if (!unavailableReason) return button;
   return (
@@ -536,14 +535,12 @@ export function RunArmyWorkspace({
       >
           <header className="run-self-inspection-head">
             <h2 id="run-army-workspace-title">{runUnitDisplayName(selected)}</h2>
-            <button
-              type="button"
-              data-chrome-unit="inner-text-button"
+            <ChromeButton unit="inner-text-button"
               className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
               onClick={onBack}
             >
               {backLabel}
-            </button>
+            </ChromeButton>
           </header>
           <div className="run-army-profile-body">
             <RunUnitInspectionScene unit={selected} />
@@ -683,16 +680,14 @@ export function RunSellWorkspace({
       <div className="run-sell-list" aria-label="Units available to sell">
         {rows.map(({ unit, status, proceedsTenths }) => {
           const sellButton = (
-            <button
-              type="button"
+            <ChromeButton unit="inner-text-button"
               data-ui-sfx={status === 'available' ? 'gold-sell' : undefined}
-              data-chrome-unit="inner-text-button"
               className={chromeUnitClassNames('inner-text-button', 'app-header-button', status === 'available' && 'danger')}
               disabled={status !== 'available'}
               onClick={() => onSell(unit.id)}
             >
               {status === 'available' ? 'Sell' : status === 'sold' ? 'Sold this visit' : 'Retained'}
-            </button>
+            </ChromeButton>
           );
           const sellAction = status === 'available' ? sellButton : (
             <Tooltip

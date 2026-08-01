@@ -10,12 +10,13 @@ const editor = readFileSync(new URL('./CampaignEditor.tsx', import.meta.url), 'u
 const lobbies = readFileSync(new URL('./Lobbies.tsx', import.meta.url), 'utf8');
 const settingsControls = readFileSync(new URL('./shared/SettingsControls.tsx', import.meta.url), 'utf8');
 const apparatusRailTab = readFileSync(new URL('./shared/ApparatusRailTab.tsx', import.meta.url), 'utf8');
+const actionList = readFileSync(new URL('./shared/ActionList.tsx', import.meta.url), 'utf8');
 
 function expectTaggedLegacyControls(source: string, legacyClass: string, helper = 'chromeUnitClassNames('): void {
-  const tags = source.match(new RegExp(`<(?:button|NavButton|div)\\b[\\s\\S]*?${legacyClass}[\\s\\S]*?>`, 'g')) ?? [];
+  const tags = source.match(new RegExp(`<(?:button|NavButton|ChromeButton|ChromeNavButton|div)\\b[\\s\\S]*?${legacyClass}[\\s\\S]*?>`, 'g')) ?? [];
   expect(tags.length, `expected controls using ${legacyClass}`).toBeGreaterThan(0);
   for (const tag of tags) {
-    expect(tag, `${legacyClass} bypasses registered inner chrome`).toContain('data-chrome-unit=');
+    expect(tag.includes('data-chrome-unit=') || tag.includes('unit='), `${legacyClass} bypasses registered inner chrome`).toBe(true);
     expect(tag, `${legacyClass} bypasses the chrome registry helper`).toContain(helper);
   }
 }
@@ -31,7 +32,7 @@ describe('Main Menu chrome hierarchy', () => {
     const modeTab = mainMenu.match(/function ModeTab[\s\S]*?^}/m)?.[0] ?? '';
 
     expect(modeTab).toContain('<ApparatusRailTab');
-    expect(apparatusRailTab).toContain('data-chrome-unit="inner-box"');
+    expect(apparatusRailTab).toContain('<ChromeNavButton unit="inner-box"');
     expect(apparatusRailTab).toContain("chromeUnitClassNames('inner-box', 'settings-tab main-menu-mode-tab'");
     expect(modeTab).not.toMatch(/className=\{`settings-tab main-menu-mode-tab/);
   });
@@ -59,18 +60,21 @@ describe('Main Menu chrome hierarchy', () => {
     expectTaggedLegacyControls(lobbies, 'utility-button', 'utilityButtonClassNames(');
     expect(lobbies).toMatch(/utilityButtonClassNames[\s\S]*?chromeUnitClassNames\('inner-text-button'/);
 
-    expect(settingsControls).toContain("chromeUnitClassNames('inner-text-button'");
-    expect(settingsControls.match(/data-chrome-unit="inner-text-button"/g)).toHaveLength(3);
+    expect(settingsControls.match(/<InnerText(?:Nav)?Button\b/g)).toHaveLength(3);
+    expect(settingsControls).not.toMatch(/<(?:button|NavButton)\b[^>]*settings-chrome-button/);
   });
 
   it('registers selectable levels and settings option rows as inner boxes', () => {
     expect(settingsControls).toMatch(/function SettingsRow[\s\S]*?data-chrome-unit="inner-box"[\s\S]*?chromeUnitClassNames\('inner-box', 'settings-row'/);
-    expect(playMenu).toMatch(/className=\{chromeUnitClassNames\('inner-box', 'settings-row campaign-level-row'/);
-    expect(editor).toMatch(/data-chrome-unit="inner-box"[\s\S]*?className=\{chromeUnitClassNames\('inner-box', 'settings-row ce-editor-level-row'/);
+    expect(playMenu.match(/<ActionList\b/g)).toHaveLength(3);
+    expect(playMenu).toContain('className: `campaign-level-row ${!unlocked ? \'is-disabled\' : \'\'}`.trim()');
+    expect(editor).toContain('<ActionListRow item={{');
+    expect(actionList).toContain('<InnerChromeBox');
+    expect(actionList).toContain('settings-row action-list-row');
+    expect(actionList).toContain('className={`settings-row-thumb');
     expect(playMenu).not.toContain('<section className="settings-row"');
-    expect(playMenu.match(/data-chrome-unit="inner-box" className=\{chromeUnitClassNames\('inner-box', 'settings-row'\)\}/g)?.length).toBeGreaterThan(0);
-    expect(playMenu.match(/data-chrome-unit="inner-box" className=\{chromeUnitClassNames\('inner-box', 'settings-row-thumb'\)\}/g)?.length).toBe(3);
-    expect(editor).toContain("data-chrome-unit=\"inner-box\" className={chromeUnitClassNames('inner-box', 'settings-row-thumb')}");
+    expect(playMenu).toContain('<SettingsRow title="No skirmish profiles available"');
+    expect(playMenu).not.toMatch(/\.settings-row\s*\+\s*\.settings-row/);
 
     expect(cssBlock('.settings-row')).not.toMatch(/border-image|baseline-stone-blue/);
     expect(cssBlock('.settings-row-thumb')).not.toMatch(/border-image|panel\.png/);

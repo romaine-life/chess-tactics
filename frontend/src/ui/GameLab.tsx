@@ -31,6 +31,7 @@ import {
 } from '../net/labRuns';
 import { levelToEditorBoard, unitsForGamePieces } from '../core/levelBoard';
 import { LevelThumbnail } from '../render/LevelThumbnail';
+import { StudioCatalogCard } from './studio/StudioCatalogCard';
 import { FramedReadOnlyBoardView } from './shared/BoardViewFraming';
 import { fetchMe } from '../net/auth';
 import type { PieceType } from '../core/types';
@@ -179,26 +180,16 @@ export function GameLabCatalog({
   return (
     <div className="tileset-studio-grid pages-grid" aria-label="Game Lab levels">
       {levels.map((o) => (
-        <button
+        <StudioCatalogCard
           key={o.id}
-          type="button"
-          className={`tileset-studio-card ${o.id === selected ? 'is-selected' : ''}`.trim()}
-          onClick={() => onSelect(o.id)}
-          aria-pressed={o.id === selected}
-          title={`${o.label} — ${o.sub}`}
-        >
-          <span className="tileset-studio-card-image pages-card-image">
-            {/* Baked board thumbnail — the same preview the Campaign Editor's level
-                list uses, so a level looks identical everywhere it's shown. */}
-            <LevelThumbnail level={o.level} width={132} alt="" authoringPreview />
-          </span>
-          <span className="tileset-studio-card-meta">
-            <span className="tileset-studio-card-text">
-              <strong>{o.label}</strong>
-              <em>{o.sub}</em>
-            </span>
-          </span>
-        </button>
+          title={o.label}
+          badge={o.sub}
+          selected={o.id === selected}
+          onSelect={() => onSelect(o.id)}
+          titleText={`${o.label} — ${o.sub}`}
+          imageClassName="pages-card-image"
+          media={<LevelThumbnail level={o.level} width={132} alt="" authoringPreview />}
+        />
       ))}
       {levels.length === 0 ? <p className="tileset-studio-empty">No level matches.</p> : null}
     </div>

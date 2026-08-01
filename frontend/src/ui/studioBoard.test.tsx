@@ -17,7 +17,7 @@ describe('FacingCompass', () => {
 
     expect(markup).toContain('aria-label="Artwork direction (8-way)"');
     expect(markup.match(/aria-label="Face /g)).toHaveLength(rookDirections.length);
-    expect(markup).toContain('aria-label="Face north-east" aria-pressed="true"');
+    expect(markup).toMatch(/aria-label="Face north-east"[^>]*aria-pressed="true"/);
     expect(markup.match(/aria-pressed="false"/g)).toHaveLength(rookDirections.length - 1);
     expect(markup).not.toContain('disabled=""');
   });
@@ -34,7 +34,7 @@ describe('FacingCompass', () => {
     );
 
     expect(markup.match(/disabled=""/g)).toHaveLength(rookDirections.length - 2);
-    expect(markup).toContain('aria-label="Face east" aria-pressed="false"');
-    expect(markup).toContain('aria-label="Face south" aria-pressed="true"');
+    expect(markup).toMatch(/aria-label="Face east"[^>]*aria-pressed="false"/);
+    expect(markup).toMatch(/aria-label="Face south"[^>]*aria-pressed="true"/);
   });
 });

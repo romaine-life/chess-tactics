@@ -19,6 +19,8 @@ const levelEditor = readFileSync(join(frontend, 'src/ui/LevelEditor.tsx'), 'utf8
 const levelEditorChromeConsumers = readFileSync(join(frontend, 'src/ui/LevelEditorChromeConsumers.tsx'), 'utf8');
 const houseSelect = readFileSync(join(frontend, 'src/ui/shared/HouseSelect.tsx'), 'utf8');
 const chromeBox = readFileSync(join(frontend, 'src/ui/shared/ChromeBox.tsx'), 'utf8');
+const chromeButton = readFileSync(join(frontend, 'src/ui/shared/ChromeButton.tsx'), 'utf8');
+const cyclePicker = readFileSync(join(frontend, 'src/ui/shared/CyclePicker.tsx'), 'utf8');
 const chromeDividedGrid = readFileSync(join(frontend, 'src/ui/shared/ChromeDividedGrid.tsx'), 'utf8');
 const skirmish = readFileSync(join(frontend, 'src/ui/Skirmish.tsx'), 'utf8');
 const skirmishHud = readFileSync(join(frontend, 'src/ui/SkirmishHud.tsx'), 'utf8');
@@ -259,7 +261,7 @@ if (!/gap\s*:\s*calc\(8px \+ var\(--le-inner-atom-right-overhang, 0px\)\)/.test(
   || !/overflow\s*:\s*hidden/.test(activeBrushViewportBlock)) {
   failures.push('active-brush thumbnail must keep local atom collision clearance and clip previews inside a nested viewport');
 }
-if (!/className="le-layer-picker-row"[\s\S]*?aria-label="Previous editor layer"[\s\S]*?<HouseSelect[\s\S]*?aria-label="Next editor layer"/.test(levelEditorChromeConsumers)
+if (!/<CyclePicker[\s\S]*?className="le-layer-picker-row"[\s\S]*?previousLabel="Previous editor layer"[\s\S]*?nextLabel="Next editor layer"[\s\S]*?<HouseSelect[\s\S]*?<\/CyclePicker>/.test(levelEditorChromeConsumers)
   || !/<ShellControlsPanel[\s\S]*?titleContent=/.test(levelEditorChromeConsumers)) {
   failures.push('level editor Controls header must expose registered previous/dropdown/next layer navigation');
 }
@@ -482,11 +484,11 @@ if (!/chrome-unit-slot-marker/.test(chromeUnitAudit + css) || !/PLACEHOLDER_TEXT
 if (!/--le-inner-square\s*:\s*var\(--le-inner-control-h\)\s*;/.test(css)) {
   failures.push('inner square size must derive from the locked-height rectangle height token');
 }
-const chevronButtons = [
-  ...[...levelEditor.matchAll(/<button\b[\s\S]*?<\/button>/g)].map((match) => match[0]),
-  ...[...levelEditorChromeConsumers.matchAll(/<button\b[\s\S]*?<\/button>/g)].map((match) => match[0]),
-].filter((block) => block.includes('stepper-chevron'));
-if (chevronButtons.length !== 8 || chevronButtons.some((block) => !block.includes('data-chrome-unit="inner-chevron-key"') || !/chromeUnitClassNames\(\s*'inner-chevron-key'/.test(block))) {
+const levelEditorCyclePickers = [...(levelEditor + levelEditorChromeConsumers).matchAll(/<CyclePicker\b/g)];
+const cyclePickerChevronButtons = [...cyclePicker.matchAll(/<ChromeButton\b[\s\S]*?<\/ChromeButton>/g)]
+  .map((match) => match[0])
+  .filter((block) => block.includes('unit="inner-chevron-key"'));
+if (levelEditorCyclePickers.length !== 4 || cyclePickerChevronButtons.length !== 2) {
   failures.push('all eight previous/next Level Editor controls must use the concrete inner-chevron-key hierarchy leaf');
 }
 if (!/unit\.id === 'inner-chevron-key'[\s\S]*?stepper-glyph stepper-chevron/.test(chromeUnitAudit)) {
@@ -523,8 +525,9 @@ for (const id of [
   }
   const implementationSources = id === 'outer-panel'
     ? levelEditor + levelEditorChromeConsumers + chromeBox
-    : levelEditor + levelEditorChromeConsumers;
-  if (!implementationSources.includes(`data-chrome-unit="${id}"`)) {
+    : levelEditor + levelEditorChromeConsumers + cyclePicker + chromeButton;
+  if (!implementationSources.includes(`data-chrome-unit="${id}"`)
+    && !implementationSources.includes(`unit="${id}"`)) {
     failures.push(`level editor must tag the concrete ${id} implementation with data-chrome-unit`);
   }
 }
@@ -1111,9 +1114,9 @@ for (const selector of ['.skirmish-service-record', '.unit-portrait', '.unit-por
     failures.push(`${selector} must not own frame geometry after migrating to InnerChromeBox`);
   }
 }
-if (!/data-chrome-unit="inner-asset-swatch"[\s\S]*?chromeUnitClassNames\('inner-asset-swatch',\s*'app-header-button',\s*'skirmish-promotion-option'\)/.test(skirmishHud)
-  || !/data-chrome-unit="inner-text-button"[\s\S]*?chromeUnitClassNames\('inner-text-button',\s*'skirmish-hud-tab'/.test(skirmishHud)
-  || !/data-chrome-unit="inner-text-button"[\s\S]*?chromeUnitClassNames\('inner-text-button',\s*'app-header-button',\s*'skirmish-grid-key'/.test(skirmishHud)) {
+if (!/<ChromeButton unit="inner-asset-swatch"[\s\S]*?chromeUnitClassNames\('inner-asset-swatch',\s*'app-header-button',\s*'skirmish-promotion-option'\)/.test(skirmishHud)
+  || !/<ChromeButton unit="inner-text-button"[\s\S]*?chromeUnitClassNames\('inner-text-button',\s*'skirmish-hud-tab'/.test(skirmishHud)
+  || !/<ChromeButton unit="inner-text-button"[\s\S]*?chromeUnitClassNames\('inner-text-button',\s*'app-header-button',\s*'skirmish-grid-key'/.test(skirmishHud)) {
   failures.push('Skirmish promotion, tab, and command-grid controls must inherit existing registered inner units');
 }
 for (const selector of ['.skirmish-hud-tab', '.skirmish-hud .app-header-button']) {

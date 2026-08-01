@@ -1,6 +1,6 @@
-import { type ReactElement, type ReactNode } from 'react';
-import { NavButton } from './NavButton';
+import { type AriaRole, type ReactElement, type ReactNode } from 'react';
 import { chromeUnitClassNames } from '../chromeUnitRegistry';
+import { InnerTextButton, InnerTextNavButton, type ChromeButtonTone } from './ChromeButton';
 
 // The shared settings/menu "rail + content" control primitives (ADR-0059): a section
 // (uppercase eyebrow + grouped rows), a row (copy · value · control grid), and a chrome
@@ -9,7 +9,7 @@ import { chromeUnitClassNames } from '../chromeUnitRegistry';
 // instead of forking a bespoke parallel. Styling lives on the `.settings-*` classes in
 // style.css (real 9-slice kit art, not CSS imitation).
 
-export type ButtonTone = 'neutral' | 'primary' | 'danger';
+export type ButtonTone = ChromeButtonTone;
 
 export function SettingsButton({
   children,
@@ -34,28 +34,28 @@ export function SettingsButton({
   title?: string;
   'data-testid'?: string;
 }): ReactElement {
-  const classes = chromeUnitClassNames('inner-text-button', `settings-chrome-button settings-chrome-button-${tone}`, tone === 'danger' && 'danger', className);
+  const classes = `settings-chrome-button settings-chrome-button-${tone} ${className}`.trim();
   if (href && external) {
     // External destinations still open a new tab — via a button, not an anchor
     // (ADR-0052): no hover URL leaks into the game shell; noopener guards the opener.
     return (
-      <button type="button" data-chrome-unit="inner-text-button" className={classes} aria-label={ariaLabel} title={title} disabled={disabled} data-testid={dataTestid} onClick={() => window.open(href, '_blank', 'noopener,noreferrer')}>
+      <InnerTextButton className={classes} tone={tone} aria-label={ariaLabel} title={title} disabled={disabled} data-testid={dataTestid} onClick={() => window.open(href, '_blank', 'noopener,noreferrer')}>
         <span>{children}</span>
-      </button>
+      </InnerTextButton>
     );
   }
   if (href && !disabled) {
     // Internal routes are game controls — a NavButton, not a hyperlink (ADR-0052).
     return (
-      <NavButton data-chrome-unit="inner-text-button" className={classes} to={href} aria-label={ariaLabel} title={title} data-testid={dataTestid}>
+      <InnerTextNavButton className={classes} tone={tone} to={href} aria-label={ariaLabel} title={title} data-testid={dataTestid}>
         <span>{children}</span>
-      </NavButton>
+      </InnerTextNavButton>
     );
   }
   return (
-    <button type="button" data-chrome-unit="inner-text-button" className={classes} aria-label={ariaLabel} title={title} disabled={disabled} data-testid={dataTestid} onClick={onClick}>
+    <InnerTextButton className={classes} tone={tone} aria-label={ariaLabel} title={title} disabled={disabled} data-testid={dataTestid} onClick={onClick}>
       <span>{children}</span>
-    </button>
+    </InnerTextButton>
   );
 }
 
@@ -65,6 +65,8 @@ export function SettingsRow({
   description,
   value,
   tall = false,
+  className = '',
+  role,
   children,
 }: {
   title: string;
@@ -72,12 +74,15 @@ export function SettingsRow({
   description?: string;
   value?: ReactNode;
   tall?: boolean;
+  className?: string;
+  role?: AriaRole;
   children?: ReactNode;
 }): ReactElement {
   return (
     <section
       data-chrome-unit="inner-box"
-      className={chromeUnitClassNames('inner-box', 'settings-row', tall && 'settings-row-tall')}
+      className={chromeUnitClassNames('inner-box', 'settings-row', tall && 'settings-row-tall', className)}
+      role={role}
     >
       <div className="settings-row-copy">
         {eyebrow ? <span className="settings-row-eyebrow">{eyebrow}</span> : null}

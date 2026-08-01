@@ -23,6 +23,7 @@ import { BoardSceneLayer } from '../render/BoardSceneLayer';
 import type { EditorBoard } from './boardCode';
 import { currentDoodadAssets } from './doodadCatalog';
 import { ViewPane } from './shared/ViewPane';
+import { StudioCatalogCard } from './studio/StudioCatalogCard';
 import { FacingCompass } from './studioBoard';
 import {
   candidateVersionsForSlot,
@@ -127,29 +128,19 @@ export function SourceArtTurntableCatalog({
               const candidateCount = group.requiredSlots.filter((slot) => candidateVersionsForSlot(catalog, slot).length > 0).length;
               const installed = sourceArtGroupInstalled(drawables, group);
               return (
-                <button
-                  type="button"
+                <StudioCatalogCard
                   key={group.groupId}
-                  className={`tileset-studio-card is-artwork ${selected === group.assetId ? 'is-selected' : ''}`}
-                  onClick={() => onSelect(group.assetId)}
-                  onDoubleClick={() => onView(group.assetId)}
-                  aria-pressed={selected === group.assetId}
-                  title={`Select ${group.label}`}
-                >
-                  <span className="tileset-studio-card-image source-art-card-image">
-                    {preview?.media?.url ? <img src={preview.media.url} alt="" loading="lazy" draggable={false} /> : <span>No preview</span>}
-                  </span>
-                  <span className="tileset-studio-card-meta">
-                    <span className="tileset-studio-card-text">
-                      <strong>{group.label}</strong>
-                      <em>{candidateCount}/8 candidates · {installed ? 'installed' : group.sourceOnly ? 'new landmark' : 'upgrade'}</em>
-                    </span>
-                    <span className="tileset-card-actions">
-                      <span className={`asset-prov ${installed ? 'is-forged' : 'is-original'}`}>{installed ? '8-way live' : 'review'}</span>
-                      <span className="tileset-card-action" role="button" tabIndex={0} onClick={(event) => { event.stopPropagation(); onView(group.assetId); }}>View</span>
-                    </span>
-                  </span>
-                </button>
+                  title={group.label}
+                  badge={`${candidateCount}/8 candidates · ${installed ? 'installed' : group.sourceOnly ? 'new landmark' : 'upgrade'}`}
+                  className="is-artwork"
+                  imageClassName="source-art-card-image"
+                  selected={selected === group.assetId}
+                  onSelect={() => onSelect(group.assetId)}
+                  onOpen={() => onView(group.assetId)}
+                  media={preview?.media?.url ? <img src={preview.media.url} alt="" loading="lazy" draggable={false} /> : <span>No preview</span>}
+                  actionPrefix={<span className={`asset-prov ${installed ? 'is-forged' : 'is-original'}`}>{installed ? '8-way live' : 'review'}</span>}
+                  actions={[{ id: 'view', label: `View ${group.label}`, title: `View ${group.label}`, icon: 'View', run: () => onView(group.assetId) }]}
+                />
               );
             })}
             {!groups.length ? <p className="tileset-catalog-note">No source-art turntables match the current search.</p> : null}
