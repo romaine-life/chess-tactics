@@ -18007,7 +18007,7 @@ const RUN_RELIC_BY_ID = serverRender?.RUN_RELIC_BY_ID ?? {};
 const RUN_RELIC_IDS = new Set(RUN_RELICS.map((relic) => relic.id));
 function validateActiveRunBody(run) {
   if (!run || typeof run !== 'object' || Array.isArray(run)) return 'run must be an object';
-  if (run.formatVersion !== 1 && run.formatVersion !== 2 && run.formatVersion !== 3 && run.formatVersion !== 4 && run.formatVersion !== 5) return 'run.formatVersion is unsupported';
+  if (run.formatVersion !== 1 && run.formatVersion !== 2 && run.formatVersion !== 3 && run.formatVersion !== 4 && run.formatVersion !== 5 && run.formatVersion !== 6) return 'run.formatVersion is unsupported';
   if (typeof run.id !== 'string' || !run.id || run.id.length > 160) return 'run.id is invalid';
   if (!isFiniteInteger(run.seed) || run.seed < 0 || run.seed > 0xffffffff) return 'run.seed is invalid';
   if (run.formatVersion >= 5 && run.ataraxiaTier !== 0 && run.ataraxiaTier !== 1) return 'run.ataraxiaTier is invalid';
@@ -18068,16 +18068,26 @@ function validateActiveRunBody(run) {
     const cardUnitIds = new Set();
     const lostCardUnitIds = new Set();
     for (const card of run.cards) {
+      if (!isObjectRecord(card)) return 'run.cards contains an invalid card';
+      const cardTypeValid = card.cardType === null
+        || card.cardType === 'pestiferous'
+        || (run.formatVersion >= 6 && card.cardType === 'concinnous');
+      const effectTargetValid = run.formatVersion < 6
+        || (card.cardType === 'concinnous'
+          ? typeof card.effectTargetUnitId === 'string'
+            && card.effectTargetUnitId.length > 0
+            && card.effectTargetUnitId.length <= 160
+          : card.effectTargetUnitId === null);
       if (
-        !isObjectRecord(card)
-        || typeof card.id !== 'string'
+        typeof card.id !== 'string'
         || !card.id
         || card.id.length > 160
         || cardIds.has(card.id)
         || typeof card.coreId !== 'string'
         || !card.coreId
         || card.coreId.length > 160
-        || (card.cardType !== null && card.cardType !== 'pestiferous')
+        || !cardTypeValid
+        || !effectTargetValid
         || !isFiniteInteger(card.effectSeed)
         || card.effectSeed < 0
         || card.effectSeed > 0xffffffff
@@ -18181,9 +18191,18 @@ function validateActiveRunBody(run) {
       }
       const offerIds = new Set();
       for (const offer of run.shop.bundleOffers) {
+        if (!isObjectRecord(offer)) return 'run.shop.bundleOffers contains an invalid offer';
+        const cardTypeValid = offer.cardType === null
+          || offer.cardType === 'pestiferous'
+          || (run.formatVersion >= 6 && offer.cardType === 'concinnous');
+        const effectTargetValid = run.formatVersion < 6
+          || (offer.cardType === 'concinnous'
+            ? isFiniteInteger(offer.effectTargetIndex)
+              && offer.effectTargetIndex >= 0
+              && offer.effectTargetIndex < offer.pieces?.length
+            : offer.effectTargetIndex === null);
         if (
-          !isObjectRecord(offer)
-          || typeof offer.offerId !== 'string'
+          typeof offer.offerId !== 'string'
           || !offer.offerId
           || offerIds.has(offer.offerId)
           || typeof offer.id !== 'string'
@@ -18198,7 +18217,8 @@ function validateActiveRunBody(run) {
           || !isFiniteInteger(offer.cost)
           || offer.cost < 1
           || offer.cost > 9
-          || (offer.cardType !== null && offer.cardType !== 'pestiferous')
+          || !cardTypeValid
+          || !effectTargetValid
           || !isFiniteInteger(offer.effectSeed)
           || offer.effectSeed < 0
           || offer.effectSeed > 0xffffffff
