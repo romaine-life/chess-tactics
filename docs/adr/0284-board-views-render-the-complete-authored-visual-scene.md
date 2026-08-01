@@ -12,7 +12,7 @@ refines:
   - "[ADR-0191](0191-board-opening-frame-uses-the-playable-contact-surface.md)"
 ---
 
-# ADR-0281: Board views render the complete authored visual scene
+# ADR-0284: Board views render the complete authored visual scene
 
 ## Context
 

@@ -36,16 +36,22 @@ science-fiction explanation. It is a pressure underneath the image.
 
 ## Faceless Purpose
 
-The pieces have no readable faces. That absence is not primarily sad, horrific,
-peaceful, or accusatory. It is hollow and objective-driven. A pawn with no face
-is not asking for pity; it is simply going somewhere.
+The pieces have no readable interior. That absence is not primarily sad,
+horrific, peaceful, or accusatory. It is hollow and objective-driven. A pawn
+whose eyes cannot be found is not asking for pity; it is simply going somewhere.
 
-Faces should never appear in readable form anywhere in the world art. Eyes,
-mouths, expressions, saint faces, portrait faces, masks with expression, and
-carved human faces are out. Noses may appear as the barest sculptural hint. A
-figure may be turned away, hooded, too small to read, simplified into a pawn or
-meeple, or reduced to a blank human-like silhouette. But the image should never
-give the viewer a face to read.
+Human facial structure may appear in world and card art. Figures may face front,
+three-quarter, profile, or away, but **their eyes should never become readable**:
+no clear pupils, irises, sclera, catchlights, or direct gaze. Hats, helmets,
+hoods, hair, lowered brows, weather, architecture, distance, and painterly
+omission may each break the eye line. Mouths and noses may remain as restrained
+human structure without turning the figure into an expressive named-character
+portrait. Empty sockets, mutilation, blindfold motifs, and horror are out.
+
+Turning figures away remains one available composition, not the default answer.
+Across a set, prominent figures should often face front, three-quarter, or
+profile while different material conditions withhold their eyes. The image may
+show a human face; it should not give the viewer a person to fully read.
 
 The absence of faces makes the medieval material stranger. The period evoked by
 chess, roughly 1000-1500 AD, carries hardship: no modern medicine, difficult

@@ -14883,22 +14883,26 @@ function reviewedMediaEvidenceIssue(row) {
   } else if (sourceArt.claimed && !sourceArt.issue) {
     const issue = sourceArtTurntableOwnerProofIssue(sourceArt.value, proof, evidence.surfaceUrl);
     if (issue) return issue;
-  } else if (row.domain === 'terrain') {
-    if (proof.schema !== 'terrain-surface-canonical-board-proof-v1') return 'terrain review requires the canonical board proof schema';
-    if (proof.renderer !== 'BoardLabBoard/BoardTerrainLayer') return 'terrain review proof renderer is invalid';
-    if (proof.canonicalScale !== 1 || proof.assetLocalScale !== 1 || proof.spatialResampling !== false) {
-      return 'terrain review proof must cover exact canonical 1x pixels without resampling';
-    }
-    if (proof.deterministicProof !== true || !Array.isArray(proof.selectedCandidates) || !Array.isArray(proof.slotSnapshots)) {
-      return 'terrain review proof is incomplete';
-    }
-    const selected = proof.selectedCandidates.filter((item) => isObjectRecord(item) && item.versionId === row.id);
-    if (
-      selected.length !== 1 || selected[0].slot !== row.slot
-      || mediaSha(selected[0].sha256) !== row.blob_sha256
-    ) return 'terrain review proof does not identify the reviewed version bytes';
   } else {
-    if (proof.schema === 'live-media-owner-group-proof-v1') {
+    const runCardArt = runCardArtProjection(row);
+    if (runCardArt.claimed && !runCardArt.issue) {
+      const issue = runCardArtOwnerProofIssue(runCardArt.value, proof, evidence.surfaceUrl);
+      if (issue) return issue;
+    } else if (row.domain === 'terrain') {
+      if (proof.schema !== 'terrain-surface-canonical-board-proof-v1') return 'terrain review requires the canonical board proof schema';
+      if (proof.renderer !== 'BoardLabBoard/BoardTerrainLayer') return 'terrain review proof renderer is invalid';
+      if (proof.canonicalScale !== 1 || proof.assetLocalScale !== 1 || proof.spatialResampling !== false) {
+        return 'terrain review proof must cover exact canonical 1x pixels without resampling';
+      }
+      if (proof.deterministicProof !== true || !Array.isArray(proof.selectedCandidates) || !Array.isArray(proof.slotSnapshots)) {
+        return 'terrain review proof is incomplete';
+      }
+      const selected = proof.selectedCandidates.filter((item) => isObjectRecord(item) && item.versionId === row.id);
+      if (
+        selected.length !== 1 || selected[0].slot !== row.slot
+        || mediaSha(selected[0].sha256) !== row.blob_sha256
+      ) return 'terrain review proof does not identify the reviewed version bytes';
+    } else if (proof.schema === 'live-media-owner-group-proof-v1') {
       if (proof.canonicalScale !== 1 || !runtimeSemanticText(proof.surfaceKind, 160) || !Array.isArray(proof.selectedCandidates)) {
         return 'group owner proof is incomplete';
       }
@@ -14920,8 +14924,24 @@ function reviewedMediaEvidenceIssue(row) {
 
 const VISUAL_MEDIA_DOMAINS = new Set([
   'background', 'portrait', 'prop', 'review-media', 'social-card', 'sprite-atlas',
-  'terrain', 'ui-kit', 'unit-art', 'wall-decor',
+  'run-card-art', 'terrain', 'ui-kit', 'unit-art', 'wall-decor',
 ]);
+const RUN_CARD_ART_CARD_IDS = Object.freeze([
+  'p', 'pp', 'b', 'k', 'ppp', 'pb', 'pk', 'pppp', 'ppb', 'ppk', 'ppppp', 'r',
+  'bb', 'kb', 'kk', 'pppb', 'pppk', 'pppppp', 'pr', 'pbb', 'pkb', 'pkk', 'ppppb',
+  'ppppk', 'ppppppp', 'ppr', 'br', 'kr', 'ppbb', 'ppkb', 'ppkk', 'pppppb', 'pppppk',
+  'pppppppp', 'pppr', 'bbb', 'kbb', 'kkb', 'kkk', 'pbr', 'pkr', 'pppbb', 'pppkb',
+  'pppkk', 'ppppppb', 'ppppppk', 'ppppppppp', 'ppppr', 'q',
+]);
+const RUN_CARD_ART_REQUIRED_SLOTS = Object.freeze(
+  RUN_CARD_ART_CARD_IDS.map((id) => `ui/run/card-art/${id}/illustration.png`).sort(),
+);
+const RUN_CARD_ART_GROUP_ID = 'run-card-art-core-v1';
+const RUN_CARD_ART_PIECE_VALUE = Object.freeze({ pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9 });
+const RUN_CARD_ART_PIECE_INITIAL = Object.freeze({ pawn: 'p', knight: 'k', bishop: 'b', rook: 'r', queen: 'q' });
+const RUN_CARD_ART_PIECE_ORDER = Object.freeze(['pawn', 'knight', 'bishop', 'rook', 'queen']);
+const RUN_CARD_FRAME_SLOT = 'ui/run/card-prototypes/frame-v1.png';
+const RUN_CARD_FRAME_SCHEMA = 'run-card-frame-v1';
 const SOURCE_ART_TURNTABLE_SCHEMA = 'structure-source-art-turntable-v1';
 const SOURCE_ART_TURNTABLE_DIRECTIONS = Object.freeze([
   'south', 'south-west', 'west', 'north-west', 'north', 'north-east', 'east', 'south-east',
@@ -15042,6 +15062,122 @@ function sourceArtTurntableOwnerProofIssue(sourceArt, proof, surfaceUrl) {
     }
   } catch {
     return 'structure source-art review URL is invalid';
+  }
+  return null;
+}
+
+function runCardFrameProjection(row) {
+  const claimed = row.slot === RUN_CARD_FRAME_SLOT || row.role === 'card-frame';
+  if (!claimed) return { claimed: false, issue: null };
+  if (row.slot !== RUN_CARD_FRAME_SLOT) return { claimed: true, issue: 'Run card frame role is restricted to the canonical frame slot' };
+  if (row.domain !== 'ui') return { claimed: true, issue: 'Run card frame requires the ui media domain' };
+  if (row.role !== 'card-frame') return { claimed: true, issue: 'Run card frame requires the card-frame role' };
+  if (row.media_type !== 'image/png') return { claimed: true, issue: 'Run card frame requires image/png' };
+  if (Number(row.width) !== 1060 || Number(row.height) !== 1484) {
+    return { claimed: true, issue: 'Run card frame must preserve the selected native 1060x1484 raster' };
+  }
+  const metadata = isObjectRecord(row.version_metadata) ? row.version_metadata
+    : isObjectRecord(row.metadata) ? row.metadata : {};
+  const slotMetadata = isObjectRecord(row.slot_metadata) ? row.slot_metadata : {};
+  if (
+    metadata.schema !== RUN_CARD_FRAME_SCHEMA || slotMetadata.schema !== RUN_CARD_FRAME_SCHEMA
+    || metadata.referenceWidthPx !== 360 || slotMetadata.referenceWidthPx !== 360
+    || metadata.aspectRatio !== '5:7' || slotMetadata.aspectRatio !== '5:7'
+  ) return { claimed: true, issue: 'Run card frame requires its typed Card Layout projection metadata' };
+  if (mediaAcceptanceContract(row).mode !== 'standalone') {
+    return { claimed: true, issue: 'Run card frame requires standalone atomic acceptance' };
+  }
+  return { claimed: true, issue: null };
+}
+
+function runCardArtProjection(row) {
+  const claimed = row.domain === 'run-card-art'
+    || (typeof row.slot === 'string' && row.slot.startsWith('ui/run/card-art/'));
+  if (!claimed) return { claimed: false, issue: null, value: null };
+  if (row.domain !== 'run-card-art') return { claimed: true, issue: 'Units-card art requires the run-card-art media domain', value: null };
+  if (row.role !== 'illustration') return { claimed: true, issue: 'Units-card art requires the illustration role', value: null };
+  if (row.media_type !== 'image/png') return { claimed: true, issue: 'Units-card art requires image/png', value: null };
+  if (Number(row.width) !== 400 || Number(row.height) !== 280) {
+    return { claimed: true, issue: 'Units-card art must be a native 400x280 raster', value: null };
+  }
+  const metadata = isObjectRecord(row.version_metadata) ? row.version_metadata
+    : isObjectRecord(row.metadata) ? row.metadata : {};
+  const slotMetadata = isObjectRecord(row.slot_metadata) ? row.slot_metadata : {};
+  const provenance = isObjectRecord(row.provenance) ? row.provenance : {};
+  if (metadata.schema !== 'run-card-art-plan-v2') {
+    return { claimed: true, issue: 'Units-card art requires typed v2 plan metadata', value: null };
+  }
+  if (slotMetadata.schema !== 'run-card-art-slot-v2') {
+    return { claimed: true, issue: 'Units-card art requires typed v2 slot metadata', value: null };
+  }
+  if (provenance.schema !== 'run-card-art-prompt-v2') {
+    return { claimed: true, issue: 'Units-card art requires exact v2 prompt provenance', value: null };
+  }
+  const cardId = runtimeSemanticText(metadata.cardId, 32);
+  const cardTitle = runtimeSemanticText(metadata.cardTitle, 160);
+  const historicalAnchor = runtimeSemanticText(metadata.historicalAnchor, 160);
+  const prompt = runtimeSemanticText(provenance.prompt, 8_000);
+  const promptSha256 = mediaSha(provenance.promptSha256);
+  const pixelLabJobId = mediaVersionId(provenance.pixelLabJobId);
+  const unitIdentity = runtimeSemanticText(provenance.unitIdentity, 2_000);
+  const sceneDirection = runtimeSemanticText(provenance.sceneDirection, 4_000);
+  if (
+    !cardId || !RUN_CARD_ART_CARD_IDS.includes(cardId) || !cardTitle || !historicalAnchor
+    || !prompt || !promptSha256 || !pixelLabJobId || !unitIdentity || !sceneDirection
+  ) return { claimed: true, issue: 'Units-card art provenance is incomplete', value: null };
+  if (crypto.createHash('sha256').update(prompt, 'utf8').digest('hex') !== promptSha256) {
+    return { claimed: true, issue: 'Units-card art prompt SHA-256 does not match its exact prompt', value: null };
+  }
+  if (
+    provenance.generationModel !== 'pixellab-pixflux'
+    || metadata.generationModel !== 'pixellab-pixflux'
+    || metadata.cardType !== 'Units' || slotMetadata.cardType !== 'Units'
+    || metadata.cardId !== cardId || slotMetadata.cardId !== cardId
+    || metadata.nativeWidth !== 400 || metadata.nativeHeight !== 280
+  ) return { claimed: true, issue: 'Units-card art identity or generation metadata is inconsistent', value: null };
+  if (
+    !Array.isArray(metadata.pieces) || metadata.pieces.length < 1
+    || metadata.pieces.some((piece) => !RUN_CARD_ART_PIECE_ORDER.includes(piece))
+  ) return { claimed: true, issue: 'Units-card art pieces are missing or invalid', value: null };
+  const canonicalId = [...metadata.pieces]
+    .sort((left, right) => RUN_CARD_ART_PIECE_ORDER.indexOf(left) - RUN_CARD_ART_PIECE_ORDER.indexOf(right))
+    .map((piece) => RUN_CARD_ART_PIECE_INITIAL[piece])
+    .join('');
+  const baseCost = metadata.pieces.reduce((sum, piece) => sum + RUN_CARD_ART_PIECE_VALUE[piece], 0);
+  if (canonicalId !== cardId || metadata.baseCost !== baseCost || baseCost < 1 || baseCost > 9) {
+    return { claimed: true, issue: 'Units-card art composition does not match its canonical card identity', value: null };
+  }
+  if (row.slot !== `ui/run/card-art/${cardId}/illustration.png`) {
+    return { claimed: true, issue: 'Units-card art slot does not match its canonical card identity', value: null };
+  }
+  const contract = mediaAcceptanceContract(row);
+  if (
+    contract.mode !== 'group' || contract.groupId !== RUN_CARD_ART_GROUP_ID
+    || canonicalJson(contract.requiredSlots) !== canonicalJson(RUN_CARD_ART_REQUIRED_SLOTS)
+  ) return { claimed: true, issue: 'Units-card art requires the complete atomic 49-card acceptance group', value: null };
+  return { claimed: true, issue: null, value: { cardId } };
+}
+
+function runCardArtOwnerProofIssue(runCardArt, proof, surfaceUrl) {
+  if (
+    proof.schema !== 'live-media-owner-group-proof-v1' || proof.canonicalScale !== 1
+    || proof.surfaceKind !== 'Studio Card Prompts complete Units set'
+    || proof.renderer !== 'RunCardPromptCatalog/RunCardArtCandidateGrid'
+  ) return 'Units-card art review requires the complete Studio Card Prompts proof';
+  if (
+    !isObjectRecord(proof.decodedNativeRaster)
+    || proof.decodedNativeRaster.width !== 400 || proof.decodedNativeRaster.height !== 280
+    || proof.decodedNativeRaster.scale !== 1
+    || canonicalJson(proof.mountedCardIds) !== canonicalJson([...RUN_CARD_ART_CARD_IDS].sort())
+    || !proof.mountedCardIds.includes(runCardArt.cardId)
+  ) return 'Units-card art review must mount all 49 native candidate rasters';
+  try {
+    const url = new URL(surfaceUrl);
+    if (url.pathname !== '/studio' || url.searchParams.get('cat') !== 'cardprompts') {
+      return 'Units-card art review URL must identify the Studio Card Prompts catalog';
+    }
+  } catch {
+    return 'Units-card art review URL is invalid';
   }
   return null;
 }
@@ -15209,6 +15345,10 @@ function mediaDomainProjectionIssue(row) {
   if (sfxSampleSlot(row.slot)) {
     return sfxSampleMediaIssue(row, runtime.value);
   }
+  const runCardFrame = runCardFrameProjection(row);
+  if (runCardFrame.claimed) return runCardFrame.issue;
+  const runCardArt = runCardArtProjection(row);
+  if (runCardArt.claimed) return runCardArt.issue;
   const sourceArt = sourceArtTurntableProjection(row);
   if (sourceArt.claimed) return sourceArt.issue;
   const knownDomain = VISUAL_MEDIA_DOMAINS.has(row.domain) || row.domain === 'font' || row.domain === 'sfx';
@@ -16045,6 +16185,16 @@ async function validateMediaReviewProofSnapshot(client, current, evidence, surfa
     throw mediaMutationError('invalid_media_review_proof', 409, 'this media domain requires its Studio proof surface');
   }
   if (current.domain !== 'terrain') {
+    const runCardArt = runCardArtProjection(current);
+    if (runCardArt.claimed) {
+      if (runCardArt.issue) {
+        throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: runCardArt.issue });
+      }
+      const proofIssue = runCardArtOwnerProofIssue(runCardArt.value, evidence, surfaceUrl);
+      if (proofIssue) {
+        throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: proofIssue });
+      }
+    }
     const sourceArt = sourceArtTurntableProjection(current);
     if (sourceArt.claimed) {
       if (sourceArt.issue) {

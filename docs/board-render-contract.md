@@ -424,7 +424,7 @@ not reproduce the source rectangle as a hard crop or floating-board edge.
 
 ## Composed terrain and macrotiles
 
-Per [ADR-0281](adr/0281-board-views-render-the-complete-authored-visual-scene.md),
+Per [ADR-0284](adr/0284-board-views-render-the-complete-authored-visual-scene.md),
 the runtime board renders the complete authored visual-terrain surface rather than clipping
 environment pixels to the gameplay rectangle. The same scene plan is used by War, Campaign,
 Skirmish/test play, previews, analysis viewers, and thumbnails. Off-grid visual coordinates remain
