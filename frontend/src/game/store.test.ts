@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { useSkirmish, shouldStartFreshSkirmish, setNetMoveSink, setNetResignSink, setRunBattleTransformSink } from './store';
+import { createSkirmishStore, useSkirmish, shouldStartFreshSkirmish } from './store';
 import { legalMoves, livingPieces } from '../core/rules';
 import type { MoveEnv } from '../core/rules';
 import type { GameState, Piece, PieceType, Side } from '../core/types';
@@ -17,6 +17,26 @@ import { loadPersistedNetIntent, persistNetIntent } from './netIntentPersistence
 // build-and-deploy "Test app" gate). These tests are compute-heavy by design, not hung,
 // so give the file honest headroom rather than weakening the AI or the determinism check.
 vi.setConfig({ testTimeout: 20_000 });
+
+describe('skirmish presentation instances', () => {
+  it('isolates game state and session sinks between mounted Battles', () => {
+    const first = createSkirmishStore();
+    const second = createSkirmishStore();
+    const firstTransform = vi.fn((game: GameState) => game);
+    const secondTransform = vi.fn((game: GameState) => game);
+
+    first.getState().newSkirmish({ seed: 11 });
+    first.getState().setRunBattleTransformSink(firstTransform);
+    second.getState().setRunBattleTransformSink(secondTransform);
+
+    expect(first.getState().started).toBe(true);
+    expect(first.getState().seed).toBe(11);
+    expect(second.getState().started).toBe(false);
+    expect(second.getState().seed).toBe(1);
+    expect(first.getState().setRunBattleTransformSink)
+      .not.toBe(second.getState().setRunBattleTransformSink);
+  });
+});
 
 // The enemy reply is staged on a timer (see ENEMY_REPLY_DELAY) so play reads as
 // turn-taking rather than a simultaneous swap. Fake timers (Date included) let us
@@ -45,9 +65,9 @@ afterEach(() => {
   // The store is a module singleton shared across tests; a test that sets an authored victory
   // override (ADR-0064) must not leak it into the next test's preset eval. Reset the victory state.
   useSkirmish.setState({ victoryOverride: null, resultDetail: null, pendingPromotion: null, adminMode: null });
-  setNetMoveSink(null);
-  setNetResignSink(null);
-  setRunBattleTransformSink(null);
+  useSkirmish.getState().setNetMoveSink(null);
+  useSkirmish.getState().setNetResignSink(null);
+  useSkirmish.getState().setRunBattleTransformSink(null);
   vi.unstubAllGlobals();
 });
 
@@ -118,7 +138,7 @@ describe('skirmish store', () => {
 
   it('kills any selected unit through the normal Run death transform hook', () => {
     const transform = vi.fn((game: GameState) => game);
-    setRunBattleTransformSink(transform);
+    useSkirmish.getState().setRunBattleTransformSink(transform);
     useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null });
     const target = useSkirmish.getState().game.pieces.find((candidate) => candidate.side === 'player')!;
 
@@ -1048,7 +1068,7 @@ describe('skirmish store: multiplayer session parity', () => {
       expected: number;
       intentId: string;
     }> = [];
-    setNetMoveSink((pieceId, move, expected, intentId) => { sent.push({ pieceId, move, expected, intentId }); });
+    useSkirmish.getState().setNetMoveSink((pieceId, move, expected, intentId) => { sent.push({ pieceId, move, expected, intentId }); });
     useSkirmish.getState().newNetMatch({ lobbyId: 'L1', localSide: 'player', level: playableNetLevel(), seed: 7 });
     const before = useSkirmish.getState();
     const selected = before.selectedId!;
@@ -1143,7 +1163,7 @@ describe('skirmish store: multiplayer session parity', () => {
       setItem: () => { throw new DOMException('storage denied', 'QuotaExceededError'); },
     } satisfies Storage);
     const sent = vi.fn();
-    setNetMoveSink(sent);
+    useSkirmish.getState().setNetMoveSink(sent);
     useSkirmish.getState().newNetMatch({ lobbyId: 'no-storage', localSide: 'player', level: playableNetLevel(), seed: 7 });
     const before = useSkirmish.getState();
     const move = before.movesForSelected()[0];
@@ -1157,7 +1177,7 @@ describe('skirmish store: multiplayer session parity', () => {
 
   it('drains an enemy-seat promotion premove with the chosen promotion through the relay', () => {
     const sent: Array<{ pieceId: string; move: { x: number; y: number; promotion?: 'queen' | 'rook' | 'bishop' | 'knight' }; expected: number }> = [];
-    setNetMoveSink((pieceId, move, expected) => { sent.push({ pieceId, move, expected }); });
+    useSkirmish.getState().setNetMoveSink((pieceId, move, expected) => { sent.push({ pieceId, move, expected }); });
     useSkirmish.getState().newNetMatch({ lobbyId: 'L1', localSide: 'enemy', level: playableNetLevel(), seed: 7 });
     const game: GameState = {
       size: { cols: 8, rows: 8 },
@@ -1286,12 +1306,12 @@ describe('netplay resign', () => {
   const netMatch = (localSide: PlayingSide) =>
     useSkirmish.getState().newNetMatch({ lobbyId: 'L1', localSide, level: playableNetLevel(), seed: 7 });
 
-  afterEach(() => setNetResignSink(null));
+  afterEach(() => useSkirmish.getState().setNetResignSink(null));
 
   it('relays a resignation via the sink but does NOT decide the game locally (server-sequenced)', () => {
     netMatch('player');
     let relayed = 0;
-    setNetResignSink(() => { relayed += 1; });
+    useSkirmish.getState().setNetResignSink(() => { relayed += 1; });
     useSkirmish.getState().resign();
     expect(relayed).toBe(1);
     // The winner is set only when the server's result echoes back (concludeNet) — never optimistically.
@@ -1300,7 +1320,7 @@ describe('netplay resign', () => {
 
   it('resign is a no-op in single-player and once the game is decided', () => {
     let relayed = 0;
-    setNetResignSink(() => { relayed += 1; });
+    useSkirmish.getState().setNetResignSink(() => { relayed += 1; });
     // Single-player: no net context, so nothing is relayed.
     useSkirmish.getState().newSkirmish({ seed: 5 });
     useSkirmish.getState().resign();

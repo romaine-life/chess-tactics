@@ -29,11 +29,14 @@ if ($DevctlScript) {
 }
 
 function Get-DevctlList {
-    return & $devctlCommand -Command list -Json
+    # Setup needs only its approved name. Probing every unrelated environment
+    # while holding devctl's lifecycle mutex serializes otherwise independent
+    # worktree creation behind their health timeouts.
+    return & $devctlCommand -Command list -Target ([string]$state.name) -Json
 }
 
 function Remove-DeadDevctlEntries {
-    & $devctlCommand -Command clean
+    & $devctlCommand -Command clean -Target ([string]$state.name)
 }
 
 function Start-DevctlFrontend {
@@ -55,9 +58,9 @@ if ($entry) {
         [IO.Path]::GetFullPath($frontendDir).TrimEnd('\'),
         [StringComparison]::OrdinalIgnoreCase
     )
-    if ($entry.status -eq 'running' -and $sameWorktree -and $entry.url -eq $expectedUrl) {
+    if ($entry.status -eq 'ready' -and $sameWorktree -and $entry.url -eq $expectedUrl) {
         Write-Host "Reusing named dev server $($entry.name) at $($entry.url)." -ForegroundColor Green
-    } elseif ($entry.status -eq 'dead') {
+    } elseif ($entry.status -in @('stopped', 'failed') -and -not [bool]$entry.checks.supervisor) {
         Remove-DeadDevctlEntries | Out-Host
         $entry = $null
     } else {

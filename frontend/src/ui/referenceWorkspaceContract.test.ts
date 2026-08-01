@@ -157,7 +157,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(skirmish).toMatch(/<ShellViewportSwap[\s\S]*?className="skirmish-war-room"[\s\S]*?primaryClassName="skirmish-field"[\s\S]*?workspaceOpen=\{strategikonOpen \|\| Boolean\(runWorkspace\)\}/);
     expect(skirmish).toContain('relicIds={runBattle?.relicIds ?? []}');
     expect(skirmish).toContain('shellWorkspaceCoversRelics={Boolean(runWorkspace) || strategikonOpen}');
-    expect(skirmish).toMatch(/className="strategikon-slot"[\s\S]*?sceneTransitionTargetAttributes\('gameplay-shell'\)[\s\S]*?\{strategikonOpen \? \(/);
+    expect(skirmish).toMatch(/<GameplayWorkspaceSceneSlot[\s\S]*?className="strategikon-slot"[\s\S]*?\{strategikonOpen \? \(/);
     expect(skirmish).toMatch(/primary=\{\([\s\S]*?<div className="skirmish-board-frame">[\s\S]*?\)\}[\s\S]*?\{battleWorkspaceLayer\}/);
     // The always-mounted slot overlays every battlefield tile. Empty, it MUST be
     // pointer-transparent — with plain pointer-events it shields the whole board and

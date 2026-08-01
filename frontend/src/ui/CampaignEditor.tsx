@@ -60,10 +60,9 @@ import { installedUiMedia } from './installedUiMedia';
 import { EditorCollectionRailTab } from './shared/EditorCollectionRailTab';
 import { WarEditor } from './WarEditor';
 import { navigateApp } from './navigation';
-import { sceneTransitionTargetAttributes } from './shell/sceneTransitionTarget';
 import { ActionListRow, type ActionListAction } from './shared/ActionList';
-import { IconButton } from './shared/ChromeButton';
-import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
+import { ChromeButton, ChromeNavButton, IconButton } from './shared/ChromeButton';
+import { EditorContentSceneSlot } from './shell/AuthoredSceneSlot';
 
 const CE_ICONS = {
   favorite: installedUiMedia('ui-kit-icons-brand-shield-png'),
@@ -1333,10 +1332,9 @@ export function CampaignEditor({
             </div>
           </aside>
 
-          <div
+          <EditorContentSceneSlot
             className="editor-destination-content"
-            {...sceneTransitionTargetAttributes('editor-shell', 'contents')}
-            data-scene-instance={sceneInstanceKey}
+            sceneInstance={sceneInstanceKey}
           >
           {isWarsSelected ? <WarEditor embedded /> : <>
           {/* ── CONTENT: the selected campaign — a single scrolling stack of SettingsSection
@@ -1529,7 +1527,7 @@ export function CampaignEditor({
             />
           ) : null}
           </>}
-          </div>
+          </EditorContentSceneSlot>
     </>
   );
 

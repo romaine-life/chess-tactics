@@ -1007,8 +1007,9 @@ if (!/<ShellControlsPanel[\s\S]*?className=\{className\}[\s\S]*?titleActions=\{s
   failures.push('live Skirmish HUD must supply content and actions to the one ShellControlsPanel owner');
 }
 if (!/export function SkirmishShell[\s\S]*?<SkirmishHud \{\.\.\.hudProps\} controlsContent=\{controlsContent\} \/>/.test(skirmish)
-  || !/export function Skirmish\b[\s\S]*?return \(\s*<SkirmishShell/.test(skirmish)) {
-  failures.push('Battle must render through the one SkirmishShell that owns SkirmishHud');
+  || !/function SkirmishSession\b[\s\S]*?return \([\s\S]*?<SkirmishShell/.test(skirmish)
+  || !/export function Skirmish\b[\s\S]*?<SkirmishStoreProvider>[\s\S]*?<SkirmishSession \{\.\.\.props\} \/>[\s\S]*?<\/SkirmishStoreProvider>/.test(skirmish)) {
+  failures.push('Battle must render through one instance-owned Skirmish session and the one SkirmishShell that owns SkirmishHud');
 }
 if (!/<SkirmishShell[\s\S]*?controlsContent=\{shellRun\s*\?\s*<RunMetaControls run=\{shellRun\} view=\{view\} onNavigate=\{navigateRunView\} showAbandon=\{shellRun\.phase !== 'victory'\} \/>\s*:\s*null\}/.test(runScreen)
   || !/function RunMetaControls[\s\S]*?<section className="run-meta-controls" aria-label="Run controls">/.test(runScreen)

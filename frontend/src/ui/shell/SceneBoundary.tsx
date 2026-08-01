@@ -23,6 +23,18 @@ interface SceneRegistration {
 }
 
 const SceneRegistrationContext = createContext<SceneRegistration | null>(null);
+const SceneActivationContext = createContext(true);
+const SceneRevealContext = createContext(true);
+
+/** True only after the director has committed and revealed this mounted scene. */
+export function useSceneActivation(): boolean {
+  return useContext(SceneActivationContext);
+}
+
+/** True once the director has begun the authored entrance reveal. */
+export function useSceneReveal(): boolean {
+  return useContext(SceneRevealContext);
+}
 
 export function useSceneParticipant(id: string, phase: ParticipantPhase, error: Error | null = null): void {
   const registration = useContext(SceneRegistrationContext);
@@ -79,6 +91,8 @@ interface SceneBoundaryProps {
   preserveHost: boolean;
   transitionRegion: SceneHost | null;
   mountedKey: string;
+  revealing?: boolean;
+  deactivating?: boolean;
   visualRole?: 'single' | 'outgoing' | 'incoming';
   children: ReactNode;
   onPainted: (generation: number) => void;
@@ -92,6 +106,8 @@ export function SceneBoundary({
   preserveHost,
   transitionRegion,
   mountedKey,
+  revealing = false,
+  deactivating = false,
   visualRole = 'single',
   children,
   onPainted,
@@ -145,6 +161,20 @@ export function SceneBoundary({
     };
   }, [mountedKey, preparing, preserveHost, transitionRegion]);
 
+  useLayoutEffect(() => {
+    if (!deactivating || !rootRef.current) return undefined;
+    const target = preserveHost && transitionRegion
+      ? rootRef.current.querySelector<HTMLElement>(sceneTransitionTargetSelector(transitionRegion))
+      : rootRef.current;
+    if (!target) return undefined;
+    target.inert = true;
+    target.setAttribute('aria-hidden', 'true');
+    return () => {
+      target.inert = false;
+      target.removeAttribute('aria-hidden');
+    };
+  }, [deactivating, mountedKey, preserveHost, transitionRegion]);
+
   useEffect(() => {
     if (!preparing || !rootRef.current) return undefined;
     let cancelled = false;
@@ -192,24 +222,28 @@ export function SceneBoundary({
   }, [generation, manifest, onFailed, onPainted, preparing, preserveHost, revision, transitionRegion]);
 
   return (
-    <SceneRegistrationContext.Provider value={registration}>
-      <div
-        ref={rootRef}
-        className={`scene-boundary scene-transition-target${preparing ? preserveHost ? ' is-region-preparing' : ' is-preparing' : ' is-current'}`}
-        data-scene-transition-target="scene-root"
-        data-scene-transition-mode="self"
-        data-scene-transition-active={!preserveHost && visualRole !== 'outgoing' ? '' : undefined}
-        data-scene={manifest.id}
-        data-scene-generation={generation}
-        data-scene-participants={participantSnapshot.join(',')}
-        data-scene-unresolved={unresolvedParticipants.join(',')}
-        data-transition-region={transitionRegion ?? undefined}
-        data-scene-visual-role={visualRole}
-        inert={preparing && !preserveHost ? true : undefined}
-        aria-hidden={preparing && !preserveHost || undefined}
-      >
-        {children}
-      </div>
-    </SceneRegistrationContext.Provider>
+    <SceneActivationContext.Provider value={!preparing}>
+      <SceneRevealContext.Provider value={!preparing || revealing}>
+        <SceneRegistrationContext.Provider value={registration}>
+          <div
+          ref={rootRef}
+          className={`scene-boundary scene-transition-target${preparing ? preserveHost ? ' is-region-preparing' : ' is-preparing' : ' is-current'}`}
+          data-scene-transition-target="scene-root"
+          data-scene-transition-mode="self"
+          data-scene-transition-active={!preserveHost && visualRole !== 'outgoing' ? '' : undefined}
+          data-scene={manifest.id}
+          data-scene-generation={generation}
+          data-scene-participants={participantSnapshot.join(',')}
+          data-scene-unresolved={unresolvedParticipants.join(',')}
+          data-transition-region={transitionRegion ?? undefined}
+          data-scene-visual-role={visualRole}
+          inert={preparing && !preserveHost ? true : undefined}
+          aria-hidden={preparing && !preserveHost || undefined}
+          >
+            {children}
+          </div>
+        </SceneRegistrationContext.Provider>
+      </SceneRevealContext.Provider>
+    </SceneActivationContext.Provider>
   );
 }

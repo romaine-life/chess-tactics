@@ -11,6 +11,7 @@ export interface AppNavigationAttempt {
 }
 
 export type AppNavigationBlocker = (attempt: AppNavigationAttempt) => boolean;
+export type AppLocationListener = (event: Event) => void;
 
 // Nested authoring surfaces can consume one navigation attempt (for example, Back closes the
 // full rules editor before leaving the level editor). Working drafts persist independently.
@@ -29,6 +30,32 @@ export function runAppNavigationBlockers(attempt: AppNavigationAttempt): boolean
     if (blockers[index](attempt)) return true;
   }
   return false;
+}
+
+/** The sole subscription path for browser/app location intent. */
+export function subscribeAppLocation(listener: AppLocationListener): () => void {
+  window.addEventListener('popstate', listener);
+  window.addEventListener(APP_NAVIGATION_EVENT, listener);
+  return () => {
+    window.removeEventListener('popstate', listener);
+    window.removeEventListener(APP_NAVIGATION_EVENT, listener);
+  };
+}
+
+/** Metadata-only replacement after navigateApp has already accepted the address. */
+export function replaceAppHistoryState(state: unknown, href: string): boolean {
+  const url = getAppNavigationUrl(href);
+  if (!url) return false;
+  window.history.replaceState(state, '', `${url.pathname}${url.search}${url.hash}`);
+  return true;
+}
+
+/** Restore the committed address after a browser Back attempt was blocked. */
+export function restoreBlockedAppLocation(href: string): boolean {
+  const url = getAppNavigationUrl(href);
+  if (!url) return false;
+  window.history.pushState({}, '', `${url.pathname}${url.search}${url.hash}`);
+  return true;
 }
 
 export function normalizeRoutePath(pathname: string): string {

@@ -36,7 +36,7 @@ import { skirmishProfileLevels } from './skirmishProfiles';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { installedUiMedia } from './installedUiMedia';
 import { PaintedSurfaceBoundary } from './shell/PaintedSurfaceBoundary';
-import { sceneTransitionTargetAttributes } from './shell/sceneTransitionTarget';
+import { PlayContentSceneSlot, RunDetailContentSceneSlot } from './shell/AuthoredSceneSlot';
 import {
   GatedLevelThumbnail,
   ThumbnailSurface as AtomicThumbnailSurface,
@@ -331,9 +331,9 @@ function RunPanel({
         </div>
       </ActionColumn>
 
-      <div
+      <RunDetailContentSceneSlot
         className="play-run-detail-slot"
-        {...sceneTransitionTargetAttributes('run-detail', 'contents')}
+        sceneInstance={choice ? `play/run/${choice}` : 'play/run'}
       >
         {choice === 'current' && run ? (
           <aside className="menu-dest-col menu-dest-preview ce-preview-col play-detail-col" aria-label="Current Run" data-testid="run-detail-current">
@@ -375,7 +375,7 @@ function RunPanel({
             </div>
           </aside>
         ) : null}
-      </div>
+      </RunDetailContentSceneSlot>
     </>
   );
 }
@@ -843,10 +843,9 @@ export function PlayMenu({
         className="play-surface"
         showStatus={false}
       >
-      <div
+      <PlayContentSceneSlot
         className="play-destination-content"
-        {...sceneTransitionTargetAttributes('play-shell', 'contents')}
-        data-scene-instance={sceneInstanceKey}
+        sceneInstance={sceneInstanceKey}
       >
       {selection.mode === 'hub' || selection.mode === 'continue' ? (
         <ContinuePanel inventory={resumeInventory} choice={selectedContinueChoice} />
@@ -898,7 +897,7 @@ export function PlayMenu({
           }
         />
       ) : null}
-      </div>
+      </PlayContentSceneSlot>
       </PaintedSurfaceBoundary>
       </div>
     </ThumbnailSurfaceReportContext.Provider>

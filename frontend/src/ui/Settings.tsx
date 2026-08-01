@@ -14,8 +14,8 @@ import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { installedUiMedia } from './installedUiMedia';
 import { useAuthSession } from '../net/authSession';
 import { AdminControls } from './AdminControls';
-import { sceneTransitionTargetAttributes } from './shell/sceneTransitionTarget';
 import { ChromeNavButton } from './shared/ChromeButton';
+import { SettingsContentSceneSlot } from './shell/AuthoredSceneSlot';
 
 const MUTE_KEY = 'chess-tactics-bgm-muted-v1';
 const MUTE_CHANGE_EVENT = 'chess-tactics:bgm-muted-change';
@@ -663,10 +663,9 @@ export function Settings({
         ))}
       </aside>
 
-      <main
+      <SettingsContentSceneSlot
         className={embedded ? 'menu-dest-col menu-dest-action' : 'settings-frame settings-main-frame'}
-        {...sceneTransitionTargetAttributes('settings-shell')}
-        data-scene-instance={sceneInstanceKey}
+        sceneInstance={sceneInstanceKey}
       >
         {/* Screen + section are already shown by the brand lockup and the active
             nav button; a visible panel heading just duplicated them. Keep an
@@ -708,7 +707,7 @@ export function Settings({
                 </div>
               </div>
             </KitScroll>
-      </main>
+      </SettingsContentSceneSlot>
     </>
   );
 
