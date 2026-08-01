@@ -5619,7 +5619,9 @@ function validateWorkspaceSpawnAction(action, label, triggerKind) {
   if (action.side !== 'player' && action.side !== 'enemy') return `${label}.side is invalid`;
   const rosterErr = validateWorkspaceRosterCounts(action.roster, `${label}.roster`);
   if (rosterErr) return rosterErr;
-  if (!Array.isArray(action.zoneIds) || action.zoneIds.length === 0 || action.zoneIds.some((id) => typeof id !== 'string' || !id.trim())) {
+  // Working-copy autosave accepts an incomplete deployment draft. The frontend's one
+  // playability authority blocks canonical Save until usable zone geometry exists (ADR-0287).
+  if (!Array.isArray(action.zoneIds) || action.zoneIds.some((id) => typeof id !== 'string' || !id.trim())) {
     return `${label}.zoneIds is invalid`;
   }
   return null;

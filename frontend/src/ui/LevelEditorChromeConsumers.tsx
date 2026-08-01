@@ -180,12 +180,14 @@ export function LevelEditorEventsWorkspace({
   onTabChange,
   onDone,
   victoryContent,
+  deploymentContent,
   otherContent,
 }: {
-  tab: 'victory' | 'other';
-  onTabChange: (tab: 'victory' | 'other') => void;
+  tab: 'victory' | 'deployment' | 'other';
+  onTabChange: (tab: 'victory' | 'deployment' | 'other') => void;
   onDone: () => void;
   victoryContent: ReactNode;
+  deploymentContent: ReactNode;
   otherContent: ReactNode;
 }): ReactElement {
   const initialFocusRef = useRef<HTMLButtonElement>(null);
@@ -206,12 +208,13 @@ export function LevelEditorEventsWorkspace({
         <div className="le-events-head-actions">
           <div className="le-seg le-events-tabs" role="tablist" aria-label="Event editor sections">
             <button ref={tab === 'victory' ? initialFocusRef : undefined} type="button" data-chrome-unit="inner-text-button" role="tab" aria-selected={tab === 'victory'} className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', tab === 'victory' && 'active')} onClick={() => onTabChange('victory')}>Victory rules</button>
+            <button ref={tab === 'deployment' ? initialFocusRef : undefined} type="button" data-chrome-unit="inner-text-button" role="tab" aria-selected={tab === 'deployment'} className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', tab === 'deployment' && 'active')} onClick={() => onTabChange('deployment')}>Deployment</button>
             <button ref={tab === 'other' ? initialFocusRef : undefined} type="button" data-chrome-unit="inner-text-button" role="tab" aria-selected={tab === 'other'} className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', tab === 'other' && 'active')} onClick={() => onTabChange('other')}>Other events</button>
           </div>
           <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-events-done')} onClick={onDone}>Done</button>
         </div>
       </div>
-      {tab === 'victory' ? victoryContent : otherContent}
+      {tab === 'victory' ? victoryContent : tab === 'deployment' ? deploymentContent : otherContent}
     </ShellWorkspace>
   );
 }

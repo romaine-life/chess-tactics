@@ -79,6 +79,16 @@ describe('level schema', () => {
     expect(validateLevel(lvl).ok).toBe(true);
   });
 
+  it('accepts an incomplete deployment zone selection as working-draft structure', () => {
+    const lvl = createBlankLevel('l1', 'T', 8, 8);
+    lvl.events = [{
+      name: 'Deploy enemy force',
+      trigger: { kind: 'setup' },
+      do: [{ kind: 'spawn', side: 'enemy', roster: { pawn: 1 }, zoneIds: [] }],
+    }];
+    expect(validateLevel(lvl).ok).toBe(true);
+  });
+
   it('accepts legacy setup spawn and pawn-promotion event bodies for migration', () => {
     const lvl = createBlankLevel('l1', 'T', 8, 8);
     const legacyEvents = [
@@ -102,7 +112,6 @@ describe('level schema', () => {
       [{ trigger: { kind: 'setup' }, do: [] }],
       [{ trigger: { kind: 'unit-enters-zone', unit: { type: 'pawn' }, zoneId: 'z' }, do: [{ kind: 'spawn', side: 'player', roster: { pawn: 1 }, zoneIds: ['z'] }] }],
       [{ trigger: { kind: 'setup' }, do: [{ kind: 'spawn', side: 'enemy', roster: { rock: 1 }, zoneIds: ['z'] }] }],
-      [{ trigger: { kind: 'setup' }, do: [{ kind: 'spawn', side: 'enemy', roster: { pawn: 1 }, zoneIds: [] }] }],
       [{ trigger: { kind: 'unit-enters-zone', unit: { type: 'queen' }, zoneId: 'z' }, do: [{ kind: 'promote', target: { kind: 'triggering-unit' } }] }],
       [{ trigger: { kind: 'unit-enters-zone', unit: { type: 'pawn' }, zoneId: 'z' }, do: [{ kind: 'promote', target: { kind: 'selected-unit' } }] }],
     ];

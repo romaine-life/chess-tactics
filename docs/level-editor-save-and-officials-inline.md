@@ -166,13 +166,16 @@ green with rewritten store tests. No remaining `officialMode` references.
   - `layers.decals`: `[]` (doodads ride in `boardCode`; decals mapping is Phase 4).
   - `layers.zones`: **real zones** as of ADR-0050 — `editorBoardToLevel` now
     writes one `Zone` per painted zone type (was hard-coded `[]`). Zones round-trip
-    through `boardCode`'s zones channel and drive random-placement spawn pools /
-    `reach` objective tiles.
+    through `boardCode`'s zones channel and drive explicit, side-specific Deployment,
+    implicit Run-army deployment, and `reach` objective tiles. New authoring owns one
+    flexible starting zone per side (ADR-0287/0288); legacy multi-zone arrays remain
+    readable. A deployment zone is optional geometry unless a nonzero roster references it.
   - `boardCode: encodeBoard(board)`.
   - Clamp `board.cols`/`rows` to 1–16 × 1–20 (the 4×4 floor dropped to 1×1 in
     ADR-0050 — playability rules P1–P3, not an arbitrary size floor, gate saves);
-    carry name/objective/difficulty/economy/notes from `meta` (plus the ADR-0050
-    optional keys `placement`/`roster`/`surviveTurns` when set).
+    carry name/objective/difficulty/economy/notes from `meta` (plus the legacy ADR-0050
+    optional keys `placement`/`roster` and `surviveTurns` when set). New randomized
+    deployment is authored as setup-spawn actions in `events` (ADR-0287/0288).
 
 ### 2b. Schema + vocab + backend
 

@@ -92,6 +92,10 @@ export function validatePlayability(level: Level): PlayabilityResult {
   const violations: PlayabilityViolation[] = [];
   const random = level.placement === 'random';
   const spawnEvents = spawnEventsForLevel(level);
+  // The legacy placement axis requires both sides to be roster-only. Explicit setup events are
+  // additive per side: fixed anchors remain on their authored squares and only a side that owns
+  // an event needs deployment geometry (ADR-0287).
+  const legacyRandom = random && level.events === undefined;
 
   // P1 — presence: each side fields at least one piece, whatever the mode. A side
   // with nothing on the board is an instant (or impossible) win.
@@ -133,23 +137,26 @@ export function validatePlayability(level: Level): PlayabilityResult {
   // P3 — setup spawning: zones are dumb tile groups; spawn events say which roster
   // is dealt into which zone ids. Legacy random placement expands into the same event
   // shape, preserving old levels while new editor saves make the behavior explicit.
-  if (random || spawnEvents.length > 0) {
-    if (level.layers.units.length > 0) {
+  if (legacyRandom || spawnEvents.length > 0) {
+    if (legacyRandom && level.layers.units.length > 0) {
       violations.push({
         code: 'P3_UNITS_NOT_EMPTY',
-        message: 'Setup spawn events deal pieces into zones — remove the painted units or remove the setup spawn events.',
+        message: 'Legacy random placement cannot include painted units — move the force into its roster or turn random placement off.',
       });
     }
 
     const blocked = blockedCells(level);
+    if (!legacyRandom) {
+      for (const unit of level.layers.units) blocked.add(key(unit.x, unit.y));
+    }
     const used = new Set<string>();
     const poolsByEvent = spawnEvents.map((event) => ({
       event,
       hasZone: zonesByIds(level, event.zoneIds).length > 0,
       pool: new Set(zoneCellsByIds(level, event.zoneIds).map((cell) => key(cell.x, cell.y))),
     }));
-    for (const side of SIDES) {
-      if (!spawnEvents.some((event) => event.side === side)) {
+    if (legacyRandom) {
+      for (const side of SIDES) if (!spawnEvents.some((event) => event.side === side)) {
         violations.push({
           code: 'P3_NO_SPAWN_ZONE',
           message: `${SIDE_NAME[side]} needs a setup spawn event with a painted zone.`,
@@ -288,6 +295,24 @@ export function validateWarBattlePlayability(level: Level): PlayabilityResult {
     ordinary.push({
       code: 'W1_PLAYER_EDGE_ZONE',
       message: 'Run Battle needs a usable Player Spawn zone tile on the board edge.',
+    });
+  }
+  const playerDeploymentPool = new Set(
+    level.layers.zones
+      .filter((zone) => zone.type === 'player-spawn')
+      .flatMap((zone) => zone.tiles.map(([x, y]) => key(x, y))),
+  );
+  const enemyDeploymentPool = new Set(
+    spawnEventsForLevel(level)
+      .filter((event) => event.side === 'enemy')
+      .flatMap((event) => zoneCellsByIds(level, event.zoneIds).map((cell) => key(cell.x, cell.y))),
+  );
+  let deploymentOverlap = 0;
+  for (const tile of enemyDeploymentPool) if (playerDeploymentPool.has(tile)) deploymentOverlap += 1;
+  if (deploymentOverlap > 0) {
+    ordinary.push({
+      code: 'W2_DEPLOYMENT_ZONES_OVERLAP',
+      message: `Run army and enemy deployment zones overlap on ${deploymentOverlap} tile${deploymentOverlap === 1 ? '' : 's'} — they must not share tiles.`,
     });
   }
   return { ok: ordinary.length === 0, violations: ordinary };
