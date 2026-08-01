@@ -21368,6 +21368,7 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   inset-block-start: 5.8%;
   block-size: 6.2%;
   inline-size: 68.4%;
+  transform: translate(var(--run-card-title-x), var(--run-card-title-y));
 }
 
 .run-card-prototype-cost {

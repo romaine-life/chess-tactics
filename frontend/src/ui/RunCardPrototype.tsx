@@ -70,6 +70,8 @@ type PrototypeTuning = Readonly<{
   costX: number;
   costY: number;
   costSize: number;
+  titleX: number;
+  titleY: number;
   titleSize: number;
   typeX: number;
   typeY: number;
@@ -201,6 +203,8 @@ function PrototypeCard({
         '--run-card-cost-x': `${tuning.costX}cqw`,
         '--run-card-cost-y': `${tuning.costY}cqw`,
         '--run-card-cost-size': `${tuning.costSize}cqw`,
+        '--run-card-title-x': `${tuning.titleX}cqw`,
+        '--run-card-title-y': `${tuning.titleY}cqw`,
         '--run-card-title-size': `${tuning.titleSize}cqw`,
         '--run-card-type-x': `${tuning.typeX}cqw`,
         '--run-card-type-y': `${tuning.typeY}cqw`,
@@ -275,6 +279,8 @@ export function RunCardPrototypeViewer({
   const [costX, setCostX] = useState(0);
   const [costY, setCostY] = useState(.3);
   const [costSize, setCostSize] = useState(DEFAULT_COST_SIZE);
+  const [titleX, setTitleX] = useState(0);
+  const [titleY, setTitleY] = useState(0);
   const [titleSize, setTitleSize] = useState(DEFAULT_TITLE_SIZE);
   const [typeX, setTypeX] = useState(0);
   const [typeY, setTypeY] = useState(0);
@@ -320,7 +326,7 @@ export function RunCardPrototypeViewer({
               frame={frame}
               art={art}
               viewerZoom={viewerZoom}
-              tuning={{ costX, costY, costSize, titleSize, typeX, typeY, typeSize, flavorSize }}
+              tuning={{ costX, costY, costSize, titleX, titleY, titleSize, typeX, typeY, typeSize, flavorSize }}
               onImageLoad={onImageLoad}
               onImageError={onImageError}
             />
@@ -335,6 +341,8 @@ export function RunCardPrototypeViewer({
             {header}
             <p className="run-card-prototype-note">Prototype instrument. The Studio Zoom control changes only the preview scale.</p>
             <SliderRow label={<>Title size · {titleSize.toFixed(2)}%</>} value={titleSize} set={setTitleSize} min={3} max={7} step={.05} nudge={.05} dflt={DEFAULT_TITLE_SIZE} />
+            <SliderRow label={<>Title horizontal · {titleX.toFixed(2)}%</>} value={titleX} set={setTitleX} min={-3} max={3} step={.05} nudge={.05} dflt={0} />
+            <SliderRow label={<>Title vertical · {titleY.toFixed(2)}%</>} value={titleY} set={setTitleY} min={-3} max={3} step={.05} nudge={.05} dflt={0} />
             <SliderRow label={<>Cost size · {costSize.toFixed(2)}%</>} value={costSize} set={setCostSize} min={3} max={9} step={.05} nudge={.05} dflt={DEFAULT_COST_SIZE} />
             <SliderRow label={<>Cost horizontal · {costX.toFixed(2)}%</>} value={costX} set={setCostX} min={-3} max={3} step={.05} nudge={.05} dflt={0} />
             <SliderRow label={<>Cost vertical · {costY.toFixed(2)}%</>} value={costY} set={setCostY} min={-3} max={3} step={.05} nudge={.05} dflt={.3} />
