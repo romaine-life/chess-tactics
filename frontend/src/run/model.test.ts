@@ -221,7 +221,7 @@ describe('Run progression and relic offers', () => {
     } as unknown as RunDocument;
     const upgraded = normalizeRunDocument(legacy);
 
-    expect(upgraded.formatVersion).toBe(5);
+    expect(upgraded.formatVersion).toBe(6);
     expect(upgraded.id).toBe(current.id);
     expect(upgraded.army.map((unit) => unit.name)).toEqual(current.army.map((unit) => unit.name));
     expect(normalizeRunDocument(upgraded)).toBe(upgraded);
@@ -236,7 +236,7 @@ describe('Run progression and relic offers', () => {
     } as unknown as RunDocument;
     const upgraded = normalizeRunDocument(provisional);
 
-    expect(upgraded.formatVersion).toBe(5);
+    expect(upgraded.formatVersion).toBe(6);
     expect(upgraded.army.map((unit) => unit.name)).toEqual(current.army.map((unit) => unit.name));
     expect(normalizeRunDocument(upgraded)).toBe(upgraded);
   });
@@ -250,7 +250,7 @@ describe('Run progression and relic offers', () => {
     } as unknown as RunDocument;
     const upgraded = normalizeRunDocument(legacy);
 
-    expect(upgraded.formatVersion).toBe(5);
+    expect(upgraded.formatVersion).toBe(6);
     expect(upgraded.army.every((unit) => Number.isSafeInteger(unit.inspectionSeed))).toBe(true);
     expect(normalizeRunDocument(upgraded)).toBe(upgraded);
   });
@@ -316,13 +316,13 @@ describe('Ataraxia ladder identities', () => {
       tier: 0,
       label: 'Ataraxia 0',
       title: 'The Untroubled Mind',
-      effect: 'Standard Run rules. Shop cards are never Pestiferous.',
+      effect: 'Standard Run rules. Shop cards may be Concinnous but are never Pestiferous.',
     });
   });
 });
 
 describe('Ataraxia I — The Great Mortality', () => {
-  it('never marks baseline offers and deterministically realizes the tunable one-in-eight roll', () => {
+  it('never marks baseline offers Pestiferous and deterministically realizes both affected rolls', () => {
     const baseline = createRun(war(), 4217, 0);
     const ataraxia = createRun(war(), 4217, 1);
     const baselineOffers = PIECE_BUNDLE_DECK.map((bundle, index) => (
@@ -335,7 +335,8 @@ describe('Ataraxia I — The Great Mortality', () => {
       createRunBundleOffer(ataraxia, bundle, Math.floor(index / 4), index % 4)
     ));
 
-    expect(baselineOffers.every((offer) => offer.cardType === null)).toBe(true);
+    expect(baselineOffers.every((offer) => offer.cardType !== 'pestiferous')).toBe(true);
+    expect(baselineOffers.some((offer) => offer.cardType === 'concinnous')).toBe(true);
     expect(first).toEqual(second);
     expect(first.some((offer) => offer.cardType === 'pestiferous')).toBe(true);
     expect(first.filter((offer) => offer.cardType === 'pestiferous').length).toBeLessThan(PIECE_BUNDLE_DECK.length / 2);
@@ -375,6 +376,7 @@ describe('Ataraxia I — The Great Mortality', () => {
         coreId: 'pp',
         cardType: 'pestiferous',
         effectSeed: 991,
+        effectTargetUnitId: null,
         unitIds: units.map((unit) => unit.id),
         lostUnitIds: [],
         acquiredAfterBattleIndex: 0,
@@ -392,5 +394,48 @@ describe('Ataraxia I — The Great Mortality', () => {
     expect(second.cards[0].unitIds).toEqual([]);
     expect(second.cards[0].lostUnitIds).toHaveLength(2);
     expect(empty).toBe(second);
+  });
+});
+
+describe('Concinnous cards', () => {
+  it('persist a concealed eligible target, charge two extra gold, and Position that exact unit on purchase', () => {
+    let shop: RunDocument | null = null;
+    for (let seed = 1; seed < 500 && !shop; seed += 1) {
+      const candidate = openShop({ ...deployedRun(seed), goldTenths: 100 * GOLD_SCALE }, []);
+      if (candidate.shop?.bundleOffers.some((offer) => offer.cardType === 'concinnous')) shop = candidate;
+    }
+    expect(shop).not.toBeNull();
+    const concinnous = shop!.shop!.bundleOffers.find((offer) => offer.cardType === 'concinnous')!;
+    const originalOffers = structuredClone(shop!.shop!.bundleOffers);
+    const bought = buyBundle(shop!, concinnous.offerId);
+    const owned = bought.cards[0];
+    const positioned = bought.army.filter((unit) => (
+      owned.unitIds.includes(unit.id) && unit.abilities.includes('positioned')
+    ));
+
+    expect(concinnous.cost).toBe(concinnous.value + 2);
+    expect(concinnous.cost).toBeLessThanOrEqual(9);
+    expect(concinnous.effectTargetIndex).toBeGreaterThanOrEqual(0);
+    expect(concinnous.effectTargetIndex).toBeLessThan(concinnous.pieces.length);
+    expect(owned).toMatchObject({
+      coreId: concinnous.id,
+      cardType: 'concinnous',
+      effectSeed: concinnous.effectSeed,
+      effectTargetUnitId: positioned[0].id,
+    });
+    expect(positioned).toHaveLength(1);
+    expect(owned.unitIds[concinnous.effectTargetIndex!]).toBe(positioned[0].id);
+    expect(resetShop(bought).shop?.bundleOffers).toEqual(originalOffers);
+  });
+
+  it('does not qualify a card whose Positioned premium would exceed the one-digit cost ceiling', () => {
+    const baseline = createRun(war(), 4217, 0);
+    const expensive = PIECE_BUNDLE_DECK.filter((bundle) => bundle.value >= 8);
+    const offers = expensive.map((bundle, index) => (
+      createRunBundleOffer(baseline, bundle, 0, index, 8, 1)
+    ));
+
+    expect(offers.every((offer) => offer.cardType === null)).toBe(true);
+    expect(offers.every((offer) => offer.effectTargetIndex === null)).toBe(true);
   });
 });

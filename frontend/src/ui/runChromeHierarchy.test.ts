@@ -192,7 +192,11 @@ describe('Run chrome hierarchy', () => {
     expect(runBundleCard).toContain('runCardArtSlot(bundle)');
     expect(runBundleCard).toContain('RUN_CARD_FRAME_SLOT');
     expect(runBundleCard).toContain('RUN_CARD_PESTIFEROUS_FRAME_SLOT');
+    expect(runBundleCard).toContain('RUN_CARD_CONCINNOUS_FRAME_SLOT');
     expect(runBundleCard).toContain("cardType === 'pestiferous'");
+    expect(runBundleCard).toContain("cardType === 'concinnous'");
+    expect(runBundleCard).toContain("name: 'Positioned'");
+    expect(runBundleCard).toContain("'Target hidden'");
     expect(runBundleCard).not.toMatch(/\brules\s*:/);
     expect(runBundleCard).not.toContain('After every Battle');
     expect(runBundleCard).toContain('<RunCardFace');

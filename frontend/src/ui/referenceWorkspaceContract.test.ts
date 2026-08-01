@@ -17,6 +17,8 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     const abilities = enchiridion.slice(start, end);
     expect(abilities).toContain('<h3>Discipline</h3>');
     expect(abilities).toContain('<h3>Positioned</h3>');
+    expect(abilities).toContain('<h3>Concinnous</h3>');
+    expect(abilities).toContain('Skillfully and harmoniously arranged; elegantly fitted together.');
     expect(abilities).toContain('<h3>Marshalled</h3>');
     expect(abilities).not.toMatch(/\b(?:gain|obtain|acquir|relic|upgrade)/i);
   });
