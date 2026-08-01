@@ -221,7 +221,10 @@ explicitly published selections become publicly readable. Blob bytes are never
 moved or rewritten by any of these transactions.
 Retained Generation References, Raw Pipeline Sources, creation slots, versions,
 and objects remain resolvable even when hidden from ordinary chooser views or
-archived. The
+archived. Per [ADR-0299](adr/0299-fence-review-choosers-exclude-retained-history.md),
+fence review choosers expose only complete backend candidates and current accepted
+kits; retained `legacy-bridge` and `archived` fence media remains backend history
+and cannot become a chooser entry or a fallback for an unavailable review id. The
 owner-facing Generation Reference instrument exposes the non-deterministic
 typed-reference-to-raw handoff with clipboard, exact-PNG file fallback, and
 explicitly mounted-result ingress. The **Board Art Pipeline** exposes the

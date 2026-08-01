@@ -2583,7 +2583,9 @@ export function LevelEditor(): ReactElement {
   );
   const isChromeLabPreview = useMemo(() => urlParams.get('chromeLab') === '1', [urlParams]);
   const installedChromeCss = useInstalledChromeCss(!isChromeLabPreview);
-  const fenceArtReviewEnabled = urlParams.get('artReview') === FENCE_ART_REVIEW_ID;
+  const fenceArtReviewRequested = urlParams.get('artReview') === FENCE_ART_REVIEW_ID;
+  const [fenceArtReviewDismissed, setFenceArtReviewDismissed] = useState(false);
+  const fenceArtReviewEnabled = fenceArtReviewRequested && !fenceArtReviewDismissed;
   const initialFenceArtworkId = urlParams.get('fenceArt') ?? '';
   const urlTimeControl = useMemo(() => readTimeControlParams(urlParams), [urlParams]);
   const urlEvents = useMemo(() => readLevelEventsParam(urlParams), [urlParams]);
@@ -2993,11 +2995,11 @@ export function LevelEditor(): ReactElement {
   const fenceArtCatalog = useMemo(() => projectFenceArtKits(fenceAdminCatalog), [fenceAdminCatalog]);
   const [selectedFenceArtworkId, setSelectedFenceArtworkId] = useState(initialFenceArtworkId);
   const activeFenceArtwork = fenceArtReviewEnabled
-    ? (fenceArtKit(fenceArtCatalog, selectedFenceArtworkId) ?? fenceArtCatalog[0])
+    ? fenceArtKit(fenceArtCatalog, selectedFenceArtworkId)
     : undefined;
   const activeFenceArtworkReview = activeFenceArtwork ? fenceArtworkBackendReview(activeFenceArtwork) : undefined;
   const fenceReviewCatalogMessage = fenceCatalogError
-    ?? (fenceAdminCatalog ? 'No complete E/S fence review kit exists in the backend catalog.' : 'Loading backend fence review media…');
+    ?? (fenceAdminCatalog ? 'No actionable E/S fence review kit exists in the backend catalog.' : 'Loading backend fence review media…');
   const [fenceBrushMaterial, setFenceBrushMaterial] = useState<FenceMaterial>(() => defaultFenceMaterial());
   const [fencePaintTarget, setFencePaintTarget] = useState<FencePaintTarget>('rail');
   useEffect(() => {
@@ -3020,6 +3022,14 @@ export function LevelEditor(): ReactElement {
     setFenceBrushMaterial(activeFenceArtwork.material);
     if (!activeFenceArtwork.post) setFencePaintTarget('rail');
   }, [activeFenceArtwork]);
+  useEffect(() => {
+    if (!fenceArtReviewEnabled || !fenceAdminCatalog || activeFenceArtwork) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete('artReview');
+    url.searchParams.delete('fenceArt');
+    setFenceArtReviewDismissed(true);
+    navigateApp(`${url.pathname}${url.search}${url.hash}`, { replace: true, scroll: false });
+  }, [activeFenceArtwork, fenceAdminCatalog, fenceArtReviewEnabled]);
   // Edge walls use fence-style edge keys, but the editor accepts only the map's northmost
   // and westmost perimeter edges.
   const [boardWalls, setBoardWalls] = useState<Record<string, WallMaterial>>(() =>

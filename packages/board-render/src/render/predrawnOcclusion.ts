@@ -10,8 +10,8 @@ import {
 // Fence sprites normally live in the background barrier lane so the composed renderer can paint
 // same-cell objects over them. A baked plate cannot participate in that painter order: its fence
 // pixels must instead sit on the geometric edge between the owner cell and the adjacent cell one
-// depth step forward. Move rail masks to that half-depth edge plane. Posts already carry their
-// canonical +0.5 cap bias, so moving them to the object lane needs no second half-step.
+// depth step forward. Move rail masks to that half-depth edge plane. The post delta cancels its
+// canonical interleaving offset so the mask retains the exact geometric vertex depth.
 const FENCE_RAIL_OCCLUSION_DEPTH_DELTA =
   OBJECT_DEPTH_OFFSET - FENCE_OVERLAY_DEPTH_OFFSET + CELL_DEPTH_STRIDE / 2;
 const FENCE_POST_OCCLUSION_DEPTH_DELTA =
@@ -165,7 +165,7 @@ export function predrawnOcclusionMaskOps(board: EditorBoard): BoardDrawOp[] {
     decorativeWalls: {},
   }).map((op) => ({
     ...op,
-    // Rails occupy integer bands; canonical post ops occupy half bands via
+    // Rails occupy integer bands; canonical post ops occupy interleaved half bands via
     // FENCE_POST_DEPTH_BIAS. The distinction is therefore geometry-owned, not source-owned.
     z: op.z + (Number.isInteger(op.z)
       ? FENCE_RAIL_OCCLUSION_DEPTH_DELTA

@@ -760,9 +760,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   }, [category]);
 
   useEffect(() => {
-    if (!fenceArtCatalog.length) return;
-    setSelectedFenceArtworkId((current) => fenceArtKit(fenceArtCatalog, current)?.id ?? fenceArtCatalog[0].id);
-  }, [fenceArtCatalog]);
+    if (!fenceAdminCatalog) return;
+    setSelectedFenceArtworkId((current) => fenceArtKit(fenceArtCatalog, current)?.id ?? fenceArtCatalog[0]?.id ?? '');
+  }, [fenceAdminCatalog, fenceArtCatalog]);
 
   useEffect(() => {
     const syncFromRoute = () => {
@@ -1528,9 +1528,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     ),
     sections: (visible) => [
       { id: 'candidates', label: 'Backend candidates', assets: visible.filter((artwork) => artwork.lifecycle === 'candidate') },
-      { id: 'bridges', label: 'Legacy bridges · not accepted', assets: visible.filter((artwork) => artwork.lifecycle === 'legacy-bridge') },
       { id: 'accepted', label: 'Backend accepted', assets: visible.filter((artwork) => artwork.lifecycle === 'accepted') },
-      { id: 'archived', label: 'Backend archive', assets: visible.filter((artwork) => artwork.lifecycle === 'archived') },
     ],
     query: {
       value: catalogQuery,
@@ -1549,10 +1547,17 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     onView: (artwork) => { void openFenceArtworkInEditor(artwork); },
     onArm: (artwork) => { void openFenceArtworkInEditor(artwork); },
     selectedId: selectedFenceArtworkId,
+    emptyLabel: fenceCatalogError
+      ? 'Fence artwork unavailable'
+      : fenceAdminCatalog ? 'No current fence artwork' : 'Loading fence artwork…',
+    emptyNote: fenceCatalogError
+      ?? (fenceAdminCatalog
+        ? 'No backend candidates or accepted kits are available. Retained history is not a selectable asset.'
+        : 'Checking the live catalog for candidates and accepted kits.'),
     extra: fenceEditorLaunchError || fenceCatalogError ? (
       <p className="tileset-catalog-note" role="alert">{fenceEditorLaunchError ?? fenceCatalogError}</p>
     ) : null,
-    note: 'Review membership and lifecycle come from the backend catalog. Migrated fence kits remain bridge-only until a typed fence acceptance contract is registered.',
+    note: 'Only live backend candidates and accepted kits appear here. Legacy bridges and archived records remain private history, not chooser options.',
   };
   const catalogCategories: { id: StudioCategory; label: string; hint: string; main: ReactElement; controls: ReactElement }[] = [
     {
