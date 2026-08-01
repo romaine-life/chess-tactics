@@ -2,6 +2,8 @@
 status: accepted
 date: 2026-07-30
 deciders: owner (Nelson) + Claude
+partially_superseded_by:
+  - "[ADR-0278](0278-level-editor-board-fills-its-authoring-workspace.md)'s main Level Editor viewport exception"
 supersedes:
   - "[ADR-0202](0202-play-uses-one-fixed-design-resolution.md)"
   - "[ADR-0226](0226-play-expands-before-ultrawide-wings.md)"

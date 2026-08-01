@@ -783,10 +783,14 @@ drawable viewport inside that playfield while the board art bleeds full-screen
 behind the floating chrome; that framed pane remains the measurement,
 accepted-art coverage, and input rectangle. Per
 [ADR-0204](adr/0204-all-board-viewing-panes-match-play.md) as amended by
-ADR-0259, non-Play rendered game-board panes share the same canonical 4:3
-board window: the Level Editor, selected-level and read-only previews, replay
-and solver boards, Gym and Game Lab boards, Studio board viewers, and canonical
-or unsaved-authoring thumbnails. Compact raster delivery is 288×216. Source
+ADR-0259, ordinary rendered game-board panes share the same canonical 4:3
+board window: selected-level and read-only previews, replay and solver boards,
+Gym and Game Lab boards, Studio board viewers, and canonical or
+unsaved-authoring thumbnails. Per
+[ADR-0278](adr/0278-level-editor-board-fills-its-authoring-workspace.md), the
+main Level Editor is a full-canvas authoring surface instead: its complete
+workspace allocation is the one measured, clipped, and interactive viewport,
+with no fixed-aspect seat inside it. Compact raster delivery is 288×216. Source
 media, model inputs, fixed-format exports, and social cards retain their
 required artifact dimensions because they are not application board viewports.
 Every board surface applies the same playable-contact-surface opening policy. The natural

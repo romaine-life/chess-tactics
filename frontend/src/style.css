@@ -11213,10 +11213,10 @@ body { font-size: 17px; }
 }
 
 /*
- * Fixed previews and non-Play board workspaces use the canonical 4:3 board
- * window (ADR-0192/ADR-0259). Play's live board opts out — its own 4:3 frame
- * is the surrounding .skirmish-board-frame. The fixed seat fills the
- * surrounding allocation; the child is the largest matching pane that fits it.
+ * Ordinary board viewers use the canonical 4:3 board window (ADR-0192/ADR-0259).
+ * Full-canvas owners such as Play and the Level Editor opt out because their
+ * surrounding workspace is the viewport (ADR-0201/ADR-0278). The fixed seat
+ * fills its allocation; the child is the largest matching pane that fits it.
  */
 .board-view-pane-seat {
   container-type: size;
