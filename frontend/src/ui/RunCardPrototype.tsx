@@ -17,12 +17,19 @@ const TEXT_HORIZONTAL_MIN = -3;
 const TEXT_HORIZONTAL_MAX = 3;
 const TITLE_SIZE_MIN = 3;
 const TITLE_SIZE_MAX = 7;
-const DEFAULT_TITLE_SIZE = 5;
+const DEFAULT_TITLE_SIZE = 6.85;
+const DEFAULT_TITLE_X = 1.35;
+const DEFAULT_TITLE_Y = 0;
 const DEFAULT_COST_SIZE = 6.2;
+const DEFAULT_COST_X = 0;
+const DEFAULT_COST_Y = .3;
 const TYPE_SIZE_MIN = 2.5;
 const TYPE_SIZE_MAX = 6;
-const DEFAULT_TYPE_SIZE = 3.7;
+const DEFAULT_TYPE_SIZE = 5.3;
+const DEFAULT_TYPE_X = 1.35;
+const DEFAULT_TYPE_Y = .2;
 const DEFAULT_FLAVOR_SIZE = 5;
+const DEFAULT_TITLE_TYPE_HORIZONTAL_LOCKED = true;
 
 const clampCardFontSize = (value: number, min: number, max: number): number => (
   Math.round(Math.min(max, Math.max(min, value)) * 100) / 100
@@ -291,17 +298,17 @@ export function RunCardPrototypeViewer({
 }): ReactElement {
   const [catalog, setCatalog] = useState<AdminLiveMediaCatalog | null>(null);
   const [error, setError] = useState('');
-  const [costX, setCostX] = useState(0);
-  const [costY, setCostY] = useState(.3);
+  const [costX, setCostX] = useState(DEFAULT_COST_X);
+  const [costY, setCostY] = useState(DEFAULT_COST_Y);
   const [costSize, setCostSize] = useState(DEFAULT_COST_SIZE);
-  const [titleX, setTitleX] = useState(0);
-  const [titleY, setTitleY] = useState(0);
+  const [titleX, setTitleX] = useState(DEFAULT_TITLE_X);
+  const [titleY, setTitleY] = useState(DEFAULT_TITLE_Y);
   const [titleSize, setTitleSize] = useState(DEFAULT_TITLE_SIZE);
-  const [typeX, setTypeX] = useState(0);
-  const [typeY, setTypeY] = useState(0);
+  const [typeX, setTypeX] = useState(DEFAULT_TYPE_X);
+  const [typeY, setTypeY] = useState(DEFAULT_TYPE_Y);
   const [typeSize, setTypeSize] = useState(DEFAULT_TYPE_SIZE);
   const [titleTypeSizeRatio, setTitleTypeSizeRatio] = useState<number | null>(null);
-  const [titleTypeHorizontalLocked, setTitleTypeHorizontalLocked] = useState(false);
+  const [titleTypeHorizontalLocked, setTitleTypeHorizontalLocked] = useState(DEFAULT_TITLE_TYPE_HORIZONTAL_LOCKED);
   const [flavorSize, setFlavorSize] = useState(DEFAULT_FLAVOR_SIZE);
   const [handoffCopyState, setHandoffCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
   const [loaded, setLoaded] = useState<ReadonlySet<CardImageKind>>(() => new Set());
@@ -388,18 +395,18 @@ export function RunCardPrototypeViewer({
     setTitleTypeHorizontalLocked(true);
   };
   const resetAllTuning = (): void => {
-    setCostX(0);
-    setCostY(.3);
+    setCostX(DEFAULT_COST_X);
+    setCostY(DEFAULT_COST_Y);
     setCostSize(DEFAULT_COST_SIZE);
-    setTitleX(0);
-    setTitleY(0);
+    setTitleX(DEFAULT_TITLE_X);
+    setTitleY(DEFAULT_TITLE_Y);
     setTitleSize(DEFAULT_TITLE_SIZE);
-    setTypeX(0);
-    setTypeY(0);
+    setTypeX(DEFAULT_TYPE_X);
+    setTypeY(DEFAULT_TYPE_Y);
     setTypeSize(DEFAULT_TYPE_SIZE);
     setFlavorSize(DEFAULT_FLAVOR_SIZE);
     setTitleTypeSizeRatio(null);
-    setTitleTypeHorizontalLocked(false);
+    setTitleTypeHorizontalLocked(DEFAULT_TITLE_TYPE_HORIZONTAL_LOCKED);
     setHandoffCopyState('idle');
   };
   const copyCodexHandoff = async (): Promise<void> => {
@@ -492,7 +499,7 @@ export function RunCardPrototypeViewer({
               {titleTypeSizesLocked ? 'Title/type sizes locked' : 'Lock title/type sizes'}
             </button>
             <SliderRow label={<>Type size · {typeSize.toFixed(2)}%</>} value={typeSize} set={setLinkedTypeSize} min={typeSizeMin} max={typeSizeMax} step={.01} nudge={.05} dflt={DEFAULT_TYPE_SIZE} />
-            <SliderRow label={<>Title horizontal · {titleX.toFixed(2)}%</>} value={titleX} set={setLinkedTitleHorizontal} min={TEXT_HORIZONTAL_MIN} max={TEXT_HORIZONTAL_MAX} step={.05} nudge={.05} dflt={0} />
+            <SliderRow label={<>Title horizontal · {titleX.toFixed(2)}%</>} value={titleX} set={setLinkedTitleHorizontal} min={TEXT_HORIZONTAL_MIN} max={TEXT_HORIZONTAL_MAX} step={.05} nudge={.05} dflt={DEFAULT_TITLE_X} />
             <button
               type="button"
               data-card-pair-lock="horizontal"
@@ -503,12 +510,12 @@ export function RunCardPrototypeViewer({
             >
               {titleTypeHorizontalLocked ? 'Title/type left edges locked' : 'Align & lock title/type left edges'}
             </button>
-            <SliderRow label={<>Type horizontal · {typeX.toFixed(2)}%</>} value={typeX} set={setLinkedTypeHorizontal} min={TEXT_HORIZONTAL_MIN} max={TEXT_HORIZONTAL_MAX} step={.05} nudge={.05} dflt={0} />
-            <SliderRow label={<>Title vertical · {titleY.toFixed(2)}%</>} value={titleY} set={setTitleY} min={-3} max={3} step={.05} nudge={.05} dflt={0} />
-            <SliderRow label={<>Type vertical · {typeY.toFixed(2)}%</>} value={typeY} set={setTypeY} min={-3} max={3} step={.05} nudge={.05} dflt={0} />
+            <SliderRow label={<>Type horizontal · {typeX.toFixed(2)}%</>} value={typeX} set={setLinkedTypeHorizontal} min={TEXT_HORIZONTAL_MIN} max={TEXT_HORIZONTAL_MAX} step={.05} nudge={.05} dflt={DEFAULT_TYPE_X} />
+            <SliderRow label={<>Title vertical · {titleY.toFixed(2)}%</>} value={titleY} set={setTitleY} min={-3} max={3} step={.05} nudge={.05} dflt={DEFAULT_TITLE_Y} />
+            <SliderRow label={<>Type vertical · {typeY.toFixed(2)}%</>} value={typeY} set={setTypeY} min={-3} max={3} step={.05} nudge={.05} dflt={DEFAULT_TYPE_Y} />
             <SliderRow label={<>Cost size · {costSize.toFixed(2)}%</>} value={costSize} set={setCostSize} min={3} max={9} step={.05} nudge={.05} dflt={DEFAULT_COST_SIZE} />
-            <SliderRow label={<>Cost horizontal · {costX.toFixed(2)}%</>} value={costX} set={setCostX} min={-3} max={3} step={.05} nudge={.05} dflt={0} />
-            <SliderRow label={<>Cost vertical · {costY.toFixed(2)}%</>} value={costY} set={setCostY} min={-3} max={3} step={.05} nudge={.05} dflt={.3} />
+            <SliderRow label={<>Cost horizontal · {costX.toFixed(2)}%</>} value={costX} set={setCostX} min={-3} max={3} step={.05} nudge={.05} dflt={DEFAULT_COST_X} />
+            <SliderRow label={<>Cost vertical · {costY.toFixed(2)}%</>} value={costY} set={setCostY} min={-3} max={3} step={.05} nudge={.05} dflt={DEFAULT_COST_Y} />
             <SliderRow label={<>Flavor size · {flavorSize.toFixed(2)}%</>} value={flavorSize} set={setFlavorSize} min={2.5} max={6} step={.05} nudge={.05} dflt={DEFAULT_FLAVOR_SIZE} />
             {frame && art ? (
               <dl className="run-card-prototype-source-readout">
