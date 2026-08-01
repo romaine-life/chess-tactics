@@ -21607,7 +21607,7 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   font-size: var(--ds-text-xs);
 }
 
-.run-choice-row {
+.play-choice-row {
   appearance: none;
   color: inherit;
   cursor: pointer;
@@ -21615,46 +21615,46 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   text-align: start;
 }
 
-.run-choice-row:not(.is-selected):not(.is-disabled):hover {
+.play-choice-row:not(.is-selected):not(.is-disabled):hover {
   filter: brightness(1.06);
 }
 
-.run-choice-row.is-disabled {
+.play-choice-row.is-disabled {
   cursor: default;
   opacity: .55;
 }
 
-.run-detail-body {
+.play-detail-body {
   align-content: start;
   display: grid;
   flex: 1 1 auto;
   min-block-size: 0;
 }
 
-.run-detail-facts {
+.play-detail-facts {
   padding: var(--ds-inset);
 }
 
-.run-detail-facts dl {
+.play-detail-facts dl {
   display: grid;
   gap: var(--ds-inline-tight);
   margin: 0;
 }
 
-.run-detail-facts dl > div {
+.play-detail-facts dl > div {
   align-items: baseline;
   display: flex;
   gap: var(--ds-inline);
   justify-content: space-between;
 }
 
-.run-detail-facts dt {
+.play-detail-facts dt {
   color: var(--ds-color-ink-dim, rgba(230, 225, 215, .72));
   font-size: var(--ds-text-2xs);
   text-transform: uppercase;
 }
 
-.run-detail-facts dd {
+.play-detail-facts dd {
   margin: 0;
   text-align: end;
 }

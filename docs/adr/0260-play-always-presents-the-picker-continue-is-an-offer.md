@@ -6,6 +6,9 @@ partially_supersedes:
   - "[ADR-0257](0257-play-lands-on-the-resumable-activity-or-the-neutral-hub-root.md)'s resume-forward clause (its neutral root, canonicalization, and installed-row clauses remain in force)"
 refines:
   - "[ADR-0232](0232-continue-run-selects-run-before-play.md)"
+partially_superseded_by:
+  - "[ADR-0293](0293-continue-is-one-agnostic-resume-entry.md)"
+  - "[ADR-0294](0294-play-defaults-to-a-multi-mode-continue-surface.md)"
 ---
 
 # ADR-0260: Play always presents the picker; Continue is an offer

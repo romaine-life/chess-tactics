@@ -9,6 +9,8 @@ refines:
   - "[ADR-0193](0193-runs-are-persistent-wars-around-unchanged-chess-battles.md)"
 partially_superseded_by:
   - "[ADR-0289](0289-run-preparation-is-control-first-and-ataraxia-uses-one-selector.md)"
+  - "[ADR-0293](0293-continue-is-one-agnostic-resume-entry.md)"
+  - "[ADR-0294](0294-play-defaults-to-a-multi-mode-continue-surface.md)"
 ---
 
 # ADR-0232: Continue Run selects Run before Play
