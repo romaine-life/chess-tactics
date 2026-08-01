@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   CHROME_FAMILY_SURFACE_SELECTOR,
+  chromeFillSurfaceById,
   chromeFamilyRoleSelectors,
   dividerDefault,
   frameCss,
@@ -348,5 +349,24 @@ describe('chrome family geometry ownership (ADR-0083)', () => {
     expect(css).toContain('--kit-divider-reach: 7px;');
     expect(css).toContain('height: 34px !important;');
     expect(css).toContain('height: 7px !important;');
+  });
+
+  it('lets a named registered surface override an inner frame default without forking its material', () => {
+    const outer = roleDefault('outer');
+    const inner = roleDefault('inner');
+    const selectors = chromeFamilyRoleSelectors('inner');
+    const css = frameCss(outer, inner, frame('outer.png', 19), frame('inner.png', 5), dividers);
+    const innerFrameRule = css.indexOf(`${selectors} {`);
+    const oakSurface = chromeFillSurfaceById('hybrid-wood-oak');
+    const namedFillRule = css.indexOf(`${CHROME_FAMILY_SURFACE_SELECTOR} [data-chrome-fill-surface="hybrid-wood-oak"],`);
+    const menuTabFillSelector = `${CHROME_FAMILY_SURFACE_SELECTOR} [data-chrome-tab-fill-surface="hybrid-wood-oak"] .settings-tab`;
+
+    expect(innerFrameRule).toBeGreaterThanOrEqual(0);
+    expect(namedFillRule).toBeGreaterThan(innerFrameRule);
+    expect(css).toContain(menuTabFillSelector);
+    expect(css.slice(namedFillRule, css.indexOf('}', namedFillRule) + 1))
+      .toContain(`url("${oakSurface.src}")`);
+    expect(css.slice(namedFillRule, css.indexOf('}', namedFillRule) + 1))
+      .toContain('background-position: 0 var(--chrome-surface-position-y, 0) !important;');
   });
 });

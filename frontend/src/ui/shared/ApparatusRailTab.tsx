@@ -17,7 +17,7 @@ export interface ApparatusRailTabProps {
 
 /**
  * Canonical menu-language rail tab. Main Menu, Play, and Strategikon all use
- * this one primitive so size, indentation, stone continuity, focus, and active
+ * this one primitive so size, indentation, surface continuity, focus, and active
  * state cannot drift into lookalike implementations (ADR-0059, ADR-0231).
  */
 export function ApparatusRailTab({

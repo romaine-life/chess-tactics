@@ -17355,9 +17355,10 @@ button.tileset-relationship-cell {
 }
 
 .settings-rail-frame {
+  --settings-rail-tab-gap: clamp(9px, calc(var(--layout-vw, 100vw) * .008), 13px);
   align-content: start;
   display: grid;
-  gap: clamp(9px, calc(var(--layout-vw, 100vw) * .008), 13px);
+  gap: var(--settings-rail-tab-gap);
   padding: var(--main-menu-rail-pad-block) var(--main-menu-rail-pad-inline);
   /* Button-group offset — baked from the Main Menu tuner, SHARED with Settings so its rail tabs
      sit identically (the menu is the alignment reference). The X magnitude (238) is mirrored by
@@ -17428,11 +17429,12 @@ button.tileset-relationship-cell {
 .main-menu-twin-screen .settings-rail-frame { padding-inline-end: 0; }
 .main-menu-twin-screen .settings-frame { border-inline-end-width: 0; }
 .menu-dest-tabs {
+  --settings-rail-tab-gap: clamp(9px, calc(var(--layout-vw, 100vw) * .008), 13px);
   inline-size: var(--col-tab-w);
   display: flex;
   flex-direction: column;
   align-content: start;
-  gap: clamp(9px, calc(var(--layout-vw, 100vw) * .008), 13px);
+  gap: var(--settings-rail-tab-gap);
 }
 .menu-dest-action {
   inline-size: var(--col-action-w);
@@ -17454,8 +17456,9 @@ button.tileset-relationship-cell {
 }
 
 .play-source-fixed {
+  --settings-rail-tab-gap: var(--ds-stack);
   display: grid;
-  gap: var(--ds-stack);
+  gap: var(--settings-rail-tab-gap);
 }
 
 .play-campaign-region {
@@ -17476,9 +17479,10 @@ button.tileset-relationship-cell {
 }
 
 .play-campaign-list {
+  --settings-rail-tab-gap: var(--ds-stack);
   align-content: start;
   display: grid;
-  gap: var(--ds-stack);
+  gap: var(--settings-rail-tab-gap);
   padding-inline-end: var(--ds-inline-tight);
 }
 
@@ -17596,6 +17600,8 @@ button.tileset-relationship-cell {
   padding-top: 8.5px;
   padding-bottom: 8.5px;
   --settings-tab-icon-slot: 40px;
+  --settings-tab-surface-pitch: calc(61px + var(--settings-rail-tab-gap, 37px));
+  --chrome-surface-position-y: calc(var(--tab-index, 0) * -1 * var(--settings-tab-surface-pitch));
 }
 
 /* Recover the continuous-stone flow the retired `fixed` attachment gave: each tab samples
@@ -19352,10 +19358,11 @@ button.tileset-relationship-cell {
 }
 
 .menu-dest > .enchiridion-workspace > .enchiridion-section-rail {
+  --settings-rail-tab-gap: clamp(9px, calc(var(--layout-vw, 100vw) * .008), 13px);
   align-content: start;
   display: grid;
   flex: none;
-  gap: clamp(9px, calc(var(--layout-vw, 100vw) * .008), 13px);
+  gap: var(--settings-rail-tab-gap);
   inline-size: var(--col-tab-w);
   padding-block-start: var(--col-top-inset);
   padding-inline-start: var(--col-side-inset);

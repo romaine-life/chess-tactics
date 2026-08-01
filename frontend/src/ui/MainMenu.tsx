@@ -26,10 +26,6 @@ import { installedUiMedia } from './installedUiMedia';
 import { sceneTransitionTargetAttributes } from './shell/sceneTransitionTarget';
 
 const BRAND_SHIELD = () => installedUiMedia('ui-kit-icons-brand-shield-png');
-// The heaviest button asset — the carved-stone surface behind every rail tab. The
-// buttons layer only counts as "ready" once this (plus the icons) has decoded, so the
-// rail never reveals as bare panels with the stone snapping in underneath later.
-const STONE_SURFACE = () => installedUiMedia('ui-surfaces-baseline-stone-blue-avif');
 // The title bar's wooden surface — gate the title layer on it (plus the brand shield)
 // so the bar reveals whole, not wordmark-first then wood.
 const TITLE_SURFACE = () => installedUiMedia('ui-surfaces-hybrid-wood-oak-png');
@@ -53,13 +49,14 @@ const MENU_TABS: MenuTab[] = new Proxy([], { get: (_target, property) => { const
 // "settings + user" unit.
 const SETTINGS_ICON = () => requiredDrawableRole('menu-mode', 'settings').media.icon.media.immutableUrl;
 
-// A mode entry rendered as a settings-style rail tab (shared baked-skin frame —
-// line frame over the stone surface — carved icon + label). The same chrome the
-// Settings sidebar uses, so the menu and the rest of the app read as one family
-// (retires the bespoke stone slabs). A NavButton, not an anchor (ADR-0052): game
+// A mode entry rendered as a settings-style rail tab (shared baked-skin frame,
+// shell-selected registered surface, carved icon + label). The main-menu shell
+// supplies the same oak material to every semantic tab in its first and second
+// columns, while the shared primitive keeps frame and geometry ownership. A
+// NavButton, not an anchor (ADR-0052): game
 // controls are buttons; the route is the address, not the affordance.
-// `index` is the tab's position down the rail — it drives the shared stone-continuity
-// slice (--tab-index) so this rail's stone reads as one sheet however many tabs it has
+// `index` is the tab's position down the rail — it drives the shared surface-continuity
+// slice (--tab-index) so this rail reads as one sheet however many tabs it has
 // (the menu carries five; the Settings screen four). See .settings-tab in style.css.
 // `active` lights the tab whose destination is currently open in the shell (ADR-0062 family).
 function ModeTab({ tab, index, active }: { tab: MenuTab; index: number; active?: boolean }): ReactElement {
@@ -134,8 +131,9 @@ export function MainMenu({
       startup.reportReady('title');
       loadingMeasure('menu', 'title-art-decoded', startedAt);
     }).catch(startup.reportFailed);
-    // Buttons: the carved icons + the heaviest stone rail surface.
-    const buttonArt = [SETTINGS_ICON(), STONE_SURFACE(), ...MENU_TABS.map((tab) => tab.icon)];
+    // Buttons: the carved icons + the same oak surface that fills the title bar.
+    // Keep controls gated on the shared surface too so they never reveal as bare frames.
+    const buttonArt = [SETTINGS_ICON(), TITLE_SURFACE(), ...MENU_TABS.map((tab) => tab.icon)];
     void Promise.all(buttonArt.map(loadDecodedImage)).then(() => {
       startup.reportReady('controls');
       requestAnimationFrame(() => loadingMeasure('menu', 'button-art-first-painted-frame', startedAt, { assetCount: buttonArt.length }));
@@ -155,7 +153,11 @@ export function MainMenu({
           The rail is placed by the shared .settings-shell rule alone (ADR-0062) — no
           home-only position class — so its buttons line up pixel-for-pixel with the
           Settings/Play rails at every width. */}
-      <div className={`settings-screen main-menu-twin-screen app-shell-bar-pad ${dest ? 'has-dest' : ''}`.trim()} data-dest={dest ?? undefined}>
+      <div
+        className={`settings-screen main-menu-twin-screen app-shell-bar-pad ${dest ? 'has-dest' : ''}`.trim()}
+        data-dest={dest ?? undefined}
+        data-chrome-tab-fill-surface="hybrid-wood-oak"
+      >
         <ArtRouteChrome className="settings-shell">
           <aside className="settings-frame settings-rail-frame" aria-label="Game modes">
             {/* Family membership, not string equality: the installed route may be any
