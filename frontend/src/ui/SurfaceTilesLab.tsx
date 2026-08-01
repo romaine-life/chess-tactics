@@ -4,7 +4,7 @@ import { defaultTerrainFamily } from '../core/tileSockets';
 import { tileAssets, tileFamilies, type TileAsset } from '../art/tileset';
 import { solveSocketBoard } from '../core/tileBoardGenerator';
 import { BoardLabBoard } from '../render/BoardLabBoard';
-import { isUnauthorized } from '../net/auth';
+import { reportAuthSessionFailure } from '../net/authSession';
 import { loadLiveMediaCatalog } from '../net/liveMedia';
 import {
   acceptLiveMediaVersions,
@@ -94,7 +94,7 @@ export function SurfaceTilesLab({ family, onFamily, header }: {
       setAdminError(null);
       return catalog;
     } catch (error) {
-      if (isUnauthorized(error)) {
+      if (reportAuthSessionFailure(error)) {
         setAdminCatalog(null);
         setAdminState('unauthorized');
         setAdminError(null);

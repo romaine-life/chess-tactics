@@ -3,7 +3,7 @@ import { tileAssets, tileFamilies } from '../art/tileset';
 import { defaultPropDef } from '../core/props';
 import { requiredTerrainFamilyForRole } from '../core/tileSockets';
 import { solveSocketBoard } from '../core/tileBoardGenerator';
-import { isUnauthorized } from '../net/auth';
+import { reportAuthSessionFailure } from '../net/authSession';
 import { loadDrawableCatalog } from '../net/drawableCatalog';
 import {
   fetchAdminDrawableCatalog,
@@ -74,7 +74,7 @@ function useSourceArtAdminCatalog(): {
     } catch (reason) {
       setCatalog(null);
       setDrawables(null);
-      if (isUnauthorized(reason)) {
+      if (reportAuthSessionFailure(reason)) {
         setState('unauthorized');
         setError(null);
       } else {

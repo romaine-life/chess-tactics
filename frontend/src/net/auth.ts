@@ -2,6 +2,8 @@
 // host-only HttpOnly cookies carry its app-local session, so no token reaches
 // browser JavaScript and no auth headers are needed on application requests.
 
+import { HttpError } from './http';
+
 export interface AuthUser {
   signed_in: boolean;
   email?: string;
@@ -20,12 +22,17 @@ export interface AuthStatus {
 }
 
 const AUTH_CHECK_TIMEOUT_MS = 10_000;
-const AUTH_RETRY_DELAY_MS = 1_000;
+
+function isAuthUser(value: unknown): value is AuthUser {
+  return Boolean(value)
+    && typeof value === 'object'
+    && typeof (value as { signed_in?: unknown }).signed_in === 'boolean';
+}
 
 /**
- * Keep network failure distinct from a real signed-out response. Editors need this distinction:
- * treating an offline signed-in user as anonymous strands their cloud document and can mislabel
- * recoverable work as a sign-in problem.
+ * Keep network failure distinct from a real signed-out response. The session owner needs this
+ * distinction: treating an offline signed-in user as anonymous strands cloud documents and can
+ * mislabel recoverable work as a sign-in problem.
  */
 export async function fetchMeStatus(): Promise<AuthStatus> {
   const controller = new AbortController();
@@ -38,11 +45,16 @@ export async function fetchMeStatus(): Promise<AuthStatus> {
     if (!res.ok) {
       return {
         user: { signed_in: false },
-        reachable: res.status < 500,
+        // /api/auth/me expresses an authoritative signed-out state as a 200 JSON
+        // payload. During a Vite/backend restart the proxy can briefly answer with
+        // other 4xx/5xx responses; none of them is permission to render Sign In.
+        reachable: false,
       };
     }
+    const user: unknown = await res.json();
+    if (!isAuthUser(user)) return { user: { signed_in: false }, reachable: false };
     return {
-      user: (await res.json()) as AuthUser,
+      user,
       reachable: true,
     };
   } catch {
@@ -50,45 +62,6 @@ export async function fetchMeStatus(): Promise<AuthStatus> {
   } finally {
     globalThis.clearTimeout(timeout);
   }
-}
-
-/**
- * Resolve an authoritative auth response across a temporary backend outage.
- *
- * Vite can keep serving the app shell while its required backend is restarting. A
- * single 5xx in that window is not a sign-out, so persistent chrome waits and
- * retries until the backend can answer. A reachable signed-out response still
- * settles immediately.
- */
-export async function fetchReachableAuthStatus(
-  signal?: AbortSignal,
-  retryDelayMs: number = AUTH_RETRY_DELAY_MS,
-): Promise<AuthStatus | null> {
-  while (!signal?.aborted) {
-    const status = await fetchMeStatus();
-    if (signal?.aborted) return null;
-    if (status.reachable) return status;
-
-    const retry = await new Promise<boolean>((resolve) => {
-      let timer: ReturnType<typeof globalThis.setTimeout> | undefined;
-      const stop = (): void => {
-        if (timer !== undefined) globalThis.clearTimeout(timer);
-        signal?.removeEventListener('abort', stop);
-        resolve(false);
-      };
-      timer = globalThis.setTimeout(() => {
-        signal?.removeEventListener('abort', stop);
-        resolve(true);
-      }, Math.max(0, retryDelayMs));
-      signal?.addEventListener('abort', stop, { once: true });
-    });
-    if (!retry) return null;
-  }
-  return null;
-}
-
-export async function fetchMe(): Promise<AuthUser> {
-  return (await fetchMeStatus()).user;
 }
 
 // Set (or clear, with an empty string) the signed-in user's display name — the
@@ -101,7 +74,7 @@ export async function updateDisplayName(name: string): Promise<AuthUser> {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ name }),
   });
-  if (!res.ok) throw new Error(`rename failed: ${res.status}`);
+  if (!res.ok) throw await HttpError.fromResponse('rename-account', res);
   return (await res.json()) as AuthUser;
 }
 

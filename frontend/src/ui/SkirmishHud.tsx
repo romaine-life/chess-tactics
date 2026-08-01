@@ -22,7 +22,7 @@ import { clientSide, clientSideLabel, clientSideOrder, clientSideRelation, clien
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { installedUiMedia } from './installedUiMedia';
 import { InnerChromeBox, ShellControlsPanel } from './shared/ChromeBox';
-import { fetchMe } from '../net/auth';
+import { useAuthSession } from '../net/authSession';
 import { AdminControls } from './AdminControls';
 import {
   RunSelfInspectionControls,
@@ -257,22 +257,11 @@ export function SkirmishHud({
   const { ask, dialog } = useConfirm();
 
   const [tab, setTab] = useState<HudTab>('unit');
-  const [adminAuth, setAdminAuth] = useState<{ ready: boolean; isAdmin: boolean }>({
-    ready: false,
-    isAdmin: false,
-  });
-
-  useEffect(() => {
-    let active = true;
-    void fetchMe()
-      .then((me) => {
-        if (active) setAdminAuth({ ready: true, isAdmin: me.is_admin === true });
-      })
-      .catch(() => {
-        if (active) setAdminAuth({ ready: true, isAdmin: false });
-      });
-    return () => { active = false; };
-  }, []);
+  const authStatus = useAuthSession((session) => session.status);
+  const adminAuth = {
+    ready: authStatus?.reachable === true,
+    isAdmin: authStatus?.reachable === true && authStatus.user.is_admin === true,
+  };
 
   useEffect(() => {
     if (tab === 'admin' && adminAuth.ready && !adminAuth.isAdmin) setTab('controls');
