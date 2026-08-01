@@ -767,9 +767,20 @@ function chromeFillCss(tune: RoleTune): string {
   const hasTint = tint !== 'transparent';
   return `  background-color: transparent !important;
   background-image: ${hasTint ? `linear-gradient(${tint}, ${tint}), ` : ''}url("${surface.src}") !important;
-  background-position: 0 0 !important;
+  background-position: 0 var(--chrome-surface-position-y, 0) !important;
   background-repeat: repeat !important;
   background-size: ${hasTint ? `auto, ${surfaceScale} auto` : `${surfaceScale} auto`} !important;`;
+}
+
+function namedChromeFillSurfaceCss(): string {
+  return CHROME_FILL_SURFACES.map((surface) => `${CHROME_FAMILY_SURFACE_SELECTOR} [data-chrome-fill-surface="${surface.id}"],
+${CHROME_FAMILY_SURFACE_SELECTOR} [data-chrome-tab-fill-surface="${surface.id}"] .settings-tab {
+  background-color: transparent !important;
+  background-image: url("${surface.src}") !important;
+  background-position: 0 var(--chrome-surface-position-y, 0) !important;
+  background-repeat: repeat !important;
+  background-size: 1024px auto !important;
+}`).join('\n');
 }
 
 function borderImageRepeatForTune(tune: RoleTune): string {
@@ -1295,6 +1306,10 @@ ${innerChromeFrameSelectors} {
   border-image-repeat: ${borderImageRepeatForTune(inner)} !important;
 ${chromeFillCss(inner)}
 }
+/* A named registered material is an explicit composition override. Keep these
+   selectors after role defaults so an inner-framed control can share a canonical
+   surface used elsewhere without forking or code-painting that material. */
+${namedChromeFillSurfaceCss()}
 ${familySurface} .inner-box:is(.active, .is-active, [aria-pressed="true"]) {
   border-image-source: var(--skirmish-chrome-inner-control-active-image) !important;
 }

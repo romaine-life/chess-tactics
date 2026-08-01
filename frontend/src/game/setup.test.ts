@@ -305,6 +305,26 @@ describe('createFromLevel — random placement', () => {
     expect(enemies.every((p) => ['5,0', '6,0'].includes(`${p.x},${p.y}`))).toBe(true);
   });
 
+  it('keeps fixed anchors while dealing an explicit randomized contingent around them', () => {
+    const level = createBlankLevel('ev-mixed-spawn', 'Mixed Enemy Force', 8, 8);
+    level.layers.units = [
+      { x: 4, y: 0, type: 'king', side: 'enemy' },
+      { x: 4, y: 7, type: 'king', side: 'player' },
+    ];
+    level.layers.zones = [{ id: 'enemy-camp', type: 'enemy-spawn', tiles: [[4, 0], [5, 0], [6, 0]] }];
+    level.events = [{
+      name: 'Deploy enemy force',
+      trigger: { kind: 'setup' },
+      do: [{ kind: 'spawn', side: 'enemy', roster: { pawn: 2 }, zoneIds: ['enemy-camp'] }],
+    }];
+
+    const game = createSkirmish({ seed: 7, level });
+    const enemies = livingPieces(game.pieces, 'enemy');
+    expect(enemies.map((piece) => piece.type).sort()).toEqual(['king', 'pawn', 'pawn']);
+    expect(enemies.find((piece) => piece.type === 'king')).toMatchObject({ x: 4, y: 0 });
+    expect(enemies.filter((piece) => piece.type === 'pawn').every((piece) => ['5,0', '6,0'].includes(`${piece.x},${piece.y}`))).toBe(true);
+  });
+
   it('fixed placement gives pawns their double-step from the authored starting row', () => {
     const level = createBlankLevel('fx-pawns', 'Fixed Pawns', 8, 8);
     level.layers.units = [

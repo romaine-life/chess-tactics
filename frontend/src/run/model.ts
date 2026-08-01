@@ -34,9 +34,9 @@ export const ATARAXIA_BY_TIER: Readonly<Record<AtaraxiaTier, Readonly<{
 }>>> = Object.freeze({
   0: Object.freeze({
     tier: 0,
-    label: 'No Ataraxia',
-    title: 'No Ataraxia',
-    effect: 'The baseline Run. No additional historical condition is applied.',
+    label: 'Ataraxia 0',
+    title: 'The Untroubled Mind',
+    effect: 'Standard Run rules. Shop cards are never Pestiferous.',
   }),
   1: Object.freeze({
     tier: 1,
@@ -241,6 +241,12 @@ export interface RunDocument {
   deployment: RunDeploymentState | null;
   battleRuntime: RunBattleRuntime | null;
   shop: RunShopState | null;
+}
+
+/** Stable identity for the one playable battle inside a Run. Level ids are not
+ * sufficient: different Runs (and later Battles in one War) may reuse a Level. */
+export function runBattleActivityId(runId: string, battleIndex: number): string {
+  return `run:${encodeURIComponent(runId)}:battle:${battleIndex}`;
 }
 
 const PURCHASE_ORDER: readonly PurchasablePieceType[] = ['pawn', 'knight', 'bishop', 'rook', 'queen'];

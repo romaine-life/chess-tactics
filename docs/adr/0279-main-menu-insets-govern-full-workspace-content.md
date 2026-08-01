@@ -1,8 +1,8 @@
 ---
-status: superseded by ADR-0287
+status: superseded by ADR-0295
 date: 2026-07-31
 deciders: owner (Nelson) + Codex
-superseded_by: ADR-0287
+superseded_by: ADR-0295
 refines:
   - "[ADR-0031](0031-ui-spacing-system.md)"
   - "[ADR-0144](0144-level-editor-events-use-the-shell-workspace.md)"

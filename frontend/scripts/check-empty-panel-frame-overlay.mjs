@@ -235,7 +235,7 @@ for (const selector of ['.le-md-rules', '.le-md-detail']) {
     || !/overflow-x\s*:\s*hidden/.test(block)
     || !/padding-left\s*:\s*var\(--le-inner-atom-left-overhang/.test(block)
     || !block.includes('padding-right: var(--le-inner-atom-right-overhang, 0px)')) {
-    failures.push(`${selector} must expose a compensating two-sided atom clip apron without moving the ADR-0289 content line`);
+    failures.push(`${selector} must expose a compensating two-sided atom clip apron without moving the ADR-0297 content line`);
   }
 }
 if (/--le-inner-atom-(?:left|right)-footprint|--le-visible-content-(?:left|right)-inset/.test(`${css}\n${chromeRuntime}`)) {

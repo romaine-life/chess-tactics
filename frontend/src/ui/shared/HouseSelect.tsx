@@ -68,7 +68,6 @@ export function HouseSelect<TValue extends string>({
   testId?: string;
 }): ReactElement {
   const id = useId();
-  const rootRef = useRef<HTMLDivElement | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
@@ -87,7 +86,7 @@ export function HouseSelect<TValue extends string>({
   const optionSections = useMemo(() => sectionOptions(options), [options]);
 
   const updateMenuBox = useCallback((): void => {
-    const root = rootRef.current;
+    const root = buttonRef.current;
     if (!root || typeof window === 'undefined') return;
     const rect = root.getBoundingClientRect();
     const rootStyle = window.getComputedStyle(root);
@@ -185,7 +184,7 @@ export function HouseSelect<TValue extends string>({
     const onPointerDown = (event: PointerEvent): void => {
       const target = event.target;
       if (!(target instanceof Node)) return;
-      if (rootRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      if (buttonRef.current?.contains(target) || menuRef.current?.contains(target)) return;
       closeMenu();
     };
     document.addEventListener('pointerdown', onPointerDown);
@@ -217,7 +216,13 @@ export function HouseSelect<TValue extends string>({
         '--house-select-menu-max-height': `${menuBox.maxHeight}px`,
       }
     : undefined;
-  const rootClass = chromeUnitClassNames('inner-dropdown', 'house-select', 'le-select-wrap', className);
+  const triggerClass = chromeUnitClassNames(
+    'inner-dropdown',
+    'house-select',
+    'le-select-wrap',
+    'house-select-trigger',
+    className,
+  );
 
   const menu = open && typeof document !== 'undefined'
     ? createPortal(
@@ -275,11 +280,12 @@ export function HouseSelect<TValue extends string>({
     : null;
 
   return (
-    <div ref={rootRef} data-chrome-unit="inner-dropdown" className={rootClass}>
+    <>
       <button
         ref={buttonRef}
         type="button"
-        className="house-select-trigger"
+        data-chrome-unit="inner-dropdown"
+        className={triggerClass}
         data-testid={testId}
         aria-label={ariaLabel}
         aria-haspopup="listbox"
@@ -293,6 +299,6 @@ export function HouseSelect<TValue extends string>({
         {selectedOption?.label ?? ''}
       </button>
       {menu}
-    </div>
+    </>
   );
 }

@@ -21,21 +21,25 @@ describe('scene manifests', () => {
     });
   });
 
-  it('authors the neutral Play hub root as play with no play-content child', () => {
+  it('authors the installed Play root and Continue routes as complete Continue scenes', () => {
     expect(sceneManifest('/play/select').instances.map((entry) => entry.definition.id)).toEqual([
       'main-menu',
       'play',
+      'play/continue',
     ]);
     expect(sceneManifest('/play/select')).toMatchObject({
       host: 'play-shell',
       background: 'homepage',
       paintOwner: 'play-selector',
     });
-    // A malformed selector path canonicalizes to the root; its transient
-    // manifest must not claim a skirmish selection the address never made.
+    expect(sceneManifest('/play/select/continue/run').leaf).toMatchObject({
+      definition: { id: 'play/continue', slot: 'play-content', view: 'play-continue' },
+    });
+    // A malformed selector path canonicalizes through the same complete scene.
     expect(sceneManifest('/play/select/unknown').instances.map((entry) => entry.definition.id)).toEqual([
       'main-menu',
       'play',
+      'play/continue',
     ]);
   });
 

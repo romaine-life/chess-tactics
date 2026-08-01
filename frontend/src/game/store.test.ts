@@ -233,8 +233,8 @@ describe('skirmish store', () => {
     expect(r.levelId).toBe('lvl-9');
     expect(r.game).toEqual(saved.game);
     expect(r.selectedId).not.toBeNull(); // a player piece is reselected
-    expect(shouldStartFreshSkirmish(r, 'lvl-9')).toBe(false); // gate now says "resume"
-    expect(shouldStartFreshSkirmish(r, 'other')).toBe(true); // a different level still starts fresh
+    expect(shouldStartFreshSkirmish(r, 'lvl-9', null)).toBe(false); // gate now says "resume"
+    expect(shouldStartFreshSkirmish(r, 'other', null)).toBe(true); // a different level still starts fresh
   });
 
   it('resumeMatch re-stages the enemy reply that a reload interrupts', () => {
@@ -283,38 +283,52 @@ describe('shouldStartFreshSkirmish (resume vs restart on re-entry)', () => {
   const live = (overrides: Partial<{ winner: 'player' | 'enemy' | 'draw' | null }> = {}) => ({
     started: true,
     levelId: null as string | null,
+    activityId: null as string | null,
     game: { winner: null, ...overrides } as GameState,
   });
 
   it('starts fresh on the very first entry (nothing started yet)', () => {
-    expect(shouldStartFreshSkirmish({ started: false, levelId: null, game: { winner: null } as GameState }, null)).toBe(true);
+    expect(shouldStartFreshSkirmish({ started: false, levelId: null, activityId: null, game: { winner: null } as GameState }, null, null)).toBe(true);
   });
 
   it('resumes an in-progress free skirmish (the menu → back case)', () => {
-    expect(shouldStartFreshSkirmish(live(), null)).toBe(false);
+    expect(shouldStartFreshSkirmish(live(), null, null)).toBe(false);
   });
 
   it('starts fresh after a finished game rather than re-showing the result', () => {
-    expect(shouldStartFreshSkirmish(live({ winner: 'player' }), null)).toBe(true);
-    expect(shouldStartFreshSkirmish(live({ winner: 'enemy' }), null)).toBe(true);
-    expect(shouldStartFreshSkirmish(live({ winner: 'draw' }), null)).toBe(true);
+    expect(shouldStartFreshSkirmish(live({ winner: 'player' }), null, null)).toBe(true);
+    expect(shouldStartFreshSkirmish(live({ winner: 'enemy' }), null, null)).toBe(true);
+    expect(shouldStartFreshSkirmish(live({ winner: 'draw' }), null, null)).toBe(true);
   });
 
   it('resumes the same level but rebuilds when a different level is opened', () => {
-    const onLevelA = { started: true, levelId: 'A' as string | null, game: { winner: null } as GameState };
-    expect(shouldStartFreshSkirmish(onLevelA, 'A')).toBe(false); // same level → resume
-    expect(shouldStartFreshSkirmish(onLevelA, 'B')).toBe(true); // different level → fresh
-    expect(shouldStartFreshSkirmish(onLevelA, null)).toBe(true); // level → free skirmish → fresh
+    const onLevelA = { started: true, levelId: 'A' as string | null, activityId: null, game: { winner: null } as GameState };
+    expect(shouldStartFreshSkirmish(onLevelA, 'A', null)).toBe(false); // same level → resume
+    expect(shouldStartFreshSkirmish(onLevelA, 'B', null)).toBe(true); // different level → fresh
+    expect(shouldStartFreshSkirmish(onLevelA, null, null)).toBe(true); // level → free skirmish → fresh
+  });
+
+  it('rebuilds when another activity uses the same Level id', () => {
+    const firstRun = {
+      started: true,
+      levelId: 'A',
+      activityId: 'run:first:battle:0',
+      game: { winner: null } as GameState,
+    };
+    expect(shouldStartFreshSkirmish(firstRun, 'A', 'run:first:battle:0')).toBe(false);
+    expect(shouldStartFreshSkirmish(firstRun, 'A', 'run:second:battle:0')).toBe(true);
+    expect(shouldStartFreshSkirmish(firstRun, 'A', null)).toBe(true);
   });
 
   it('always rebuilds when leaving netplay, even for the same level id', () => {
     const state = {
       started: true,
       levelId: 'A',
+      activityId: null,
       game: { winner: null } as GameState,
       net: { lobbyId: 'L1', localSide: 'player' as const, moveCount: 0, pendingMove: null, terminalResult: null },
     };
-    expect(shouldStartFreshSkirmish(state, 'A')).toBe(true);
+    expect(shouldStartFreshSkirmish(state, 'A', null)).toBe(true);
   });
 });
 

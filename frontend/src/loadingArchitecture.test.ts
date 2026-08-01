@@ -340,7 +340,7 @@ describe('professional loading architecture guards', () => {
     expect(replayEnd).toBeGreaterThan(replayStart);
     expect(replay).not.toContain('setBoardSurfaceReady(false)');
     expect(replay).not.toContain('deferClockStart: true');
-    expect(replay).toContain('restartSkirmish({ seed, level })');
+    expect(replay).toContain('restartSkirmish({ seed, level, activityId: runBattle?.activityId ?? null })');
     expect(replay).not.toContain('newSkirmish({ seed, level');
     expect(skirmish).not.toMatch(/<SkirmishBoard\s+key=/);
     expect(skirmish).not.toContain('storeSessionEpoch');

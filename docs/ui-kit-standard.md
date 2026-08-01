@@ -140,7 +140,7 @@ exterior corners. ADR-0103 supersedes that final exterior-corner clause for the
 viewport shell: title/control rails flow beyond the screen edge without visible
 corner atoms, while internal divider joints remain.
 
-Under [ADR-0289](adr/0289-shell-workspaces-own-attached-bodies-and-inset-content-lanes.md),
+Under [ADR-0297](adr/0297-shell-workspaces-own-attached-bodies-and-inset-content-lanes.md),
 `ShellControlsPanel` is the one production shell Controls rail. It creates the
 fixed Controls title, titled outer role, placement class, and semantic seam
 marker; gameplay and editor callers provide only workflow content and title
@@ -175,7 +175,7 @@ but it paints no second frame, rails, or corner atoms; its controls continue to
 use registered inner chrome. Its open state is part of the canonical Level Editor
 address (`eventsEditor=1`, with optional `eventsTab=other`) so a review link opens
 the exact workspace state without requiring follow-up clicks. Under
-[ADR-0289](adr/0289-shell-workspaces-own-attached-bodies-and-inset-content-lanes.md),
+[ADR-0297](adr/0297-shell-workspaces-own-attached-bodies-and-inset-content-lanes.md),
 `ShellWorkspace` unconditionally creates its Controls-attached body and one
 inner content container. Events supplies content and the main-menu-derived
 inline-start/block insets; the shared container automatically mirrors that start

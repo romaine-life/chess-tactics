@@ -248,16 +248,23 @@ concept renders remain direction and comparison references rather than runtime s
 
 The default work surfaces are `/`, `/enchiridion/units`,
 `/enchiridion/terrain`, `/enchiridion/relics`,
-`/enchiridion/abilities`, `/play/select`, `/play/select/skirmish`,
+`/enchiridion/abilities`, `/play/select`, `/play/select/continue/<mode>`, `/play/select/skirmish`,
 `/play/select/levels`, `/play/select/campaign/<id>`, `/editor`,
 `/editor/level`, and exact `/play?...` for a selected live board. The main menu has
 five top-level controls — Play, Editor, Lobbies, Enchiridion, Settings — and Play owns the shared
 Continue/Skirmish/Run/Levels/Campaign selector described by ADR-0074, ADR-0232,
-ADR-0257, and ADR-0260. Clicking Play lands on the bare selector root, which
-always reveals the picker with no preselected mode; a resumable activity is
-offered as a prominent Continue card and rail entry, never an automatic redirect.
-Continue Run selects the existing Run action panel; its nested Play control alone
-enters the active Run.
+and ADR-0294. Clicking Play lands on Continue after content and Run authority
+settle. Its rail control says only **Continue**. The action column always shows
+Campaign, Skirmish, Run, and Levels with either the resumable activity or
+**Nothing to continue**; the most recent available mode is selected and fills
+the right detail column with one final Play action. Ordinary Run remains a
+separate neutral preparation surface between Current Run and Start New Run.
+Run preparation uses Campaign Levels' master-detail geometry, with current-Run
+facts plus Play or Ataraxia plus Start Run in the right detail column. It omits feature-pitch and
+authored-War copy, and the Ataraxia choice is the shared scrollable dropdown
+with unavailable installed tiers visible but disabled. Every tier, including **Ataraxia 0 — The
+Untroubled Mind**, presents its subtitle in the selector and its literal impact
+beneath it (ADR-0289, ADR-0290, ADR-0291).
 Enchiridion is immediately above Settings. In Battle, frameless open-codex art
 at the same visual scale as the Controls title and aligned to the Controls
 content boundary opens

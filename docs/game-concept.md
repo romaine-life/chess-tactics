@@ -106,10 +106,12 @@ these.
   and merely revealed—not rerolled—after purchase. A card does not become
   Tactical just because an external relic later modifies one of its units
   (ADR-0272, ADR-0276).
-- Run difficulty is **Ataraxia**. The first Run has **No Ataraxia**; later Runs
-  may opt into historically named conditions. Completing the highest available
-  tier unlocks exactly the next one, and the ladder stacks: selecting tier N
-  applies every condition from 1 through N (ADR-0266, ADR-0268).
+- Run difficulty is **Ataraxia**. The first Run uses **Ataraxia 0 — The
+  Untroubled Mind**, whose literal impact is standard Run rules and no
+  Pestiferous shop cards; later Runs may opt into historically named
+  conditions. Completing the highest available tier unlocks exactly the next
+  one, and the ladder stacks: selecting tier N applies every condition from 1
+  through N (ADR-0266, ADR-0268, ADR-0291).
 - **Ataraxia I — The Great Mortality** initially targets Pestiferous status for
   roughly one in eight otherwise eligible shop draws. Pestiferous status is
   rolled with the rest of that affected offer, not added as another deck copy.
@@ -159,10 +161,13 @@ these.
   the Controls title bar opens **Strategikon** over the board without unmounting
   the fight; its Martial Prosopography and Lipsanotheca expose the persistent
   army and held relics beside the same Enchiridion (ADR-0231).
-- Play leads with **Continue** whenever a Run or Battle is unresolved and names
-  that exact activity before the ordinary mode choices. **Continue Run** selects
-  the Run submenu; only its nested **Play** action enters the active Run
-  (ADR-0232).
+- Play defaults to one activity-agnostic, descriptor-free **Continue** rail
+  destination. Its fixed Campaign, Skirmish, Run, and Levels rows name the
+  resumable activity or say **Nothing to continue**; the most recent available
+  row is selected into a fourth-column detail with one final **Play** action.
+  Ordinary Run remains a separate preparation destination between Current Run
+  and **Start New Run**, with Ataraxia setup and confirmed replacement
+  (ADR-0232, ADR-0289, ADR-0290, ADR-0294).
 - Army and Relics are grouped as player **Self inspection** in Run Controls.
   Either replaces the complete left Play workspace through the shared
   fill-only shell surface while the current phase stays mounted underneath;
@@ -334,11 +339,16 @@ useful raw material, not canon. For future contributors:
   authored 50-move/threefold draws, and one committed-position adjudicator shared
   by solo, lobby, AI, self-play and search. `applyMove` owns mechanics only; ordered
   authored/preset victory rules decide product outcomes before chess terminal rules.
-- **Shipped (ADR-0050):** authored **win-rule modes** are now real — the editor
+- **Shipped (ADR-0050/0287/0288):** authored **win-rule modes** are now real — the editor
   selects the objective (Last Man Standing / King Assault / Rival Kings / Survive /
-  Reach), an orthogonal **random-placement** toggle (roster + spawn zones) is
-  authorable, and saves gate on **playability rules** (each side has a piece; King
-  modes have the right king count; random placement has enough usable spawn tiles).
+  Reach), and the dedicated Deployment workspace authors an optional randomized roster
+  per side. Explicit deployment can combine with fixed anchors; a nonzero roster needs
+  enough usable tiles in its one automatically used starting zone, while a fixed-only
+  side needs no deployment zone. A starting zone may contain disconnected painted
+  regions, so new authoring does not need a zone selector or several pooled zones.
+  War player zones remain the implicit consumer for the active Run army rather than a
+  duplicated setup event. Saves gate on those **playability rules** as well as presence
+  and King-mode constraints.
   King-capture events remain authored win paths, while checkmate/stalemate are the
   shared chess terminal layer. Board floor dropped to 1×1.
 

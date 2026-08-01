@@ -36,6 +36,13 @@ describe('Main Menu chrome hierarchy', () => {
     expect(modeTab).not.toMatch(/className=\{`settings-tab main-menu-mode-tab/);
   });
 
+  it('uses the registered title-oak surface for every semantic tab in the main-menu shell and gates reveal on it', () => {
+    expect(mainMenu).toContain('data-chrome-tab-fill-surface="hybrid-wood-oak"');
+    expect(mainMenu).toContain("const TITLE_SURFACE = () => installedUiMedia('ui-surfaces-hybrid-wood-oak-png')");
+    expect(mainMenu).toContain('const buttonArt = [SETTINGS_ICON(), TITLE_SURFACE(), ...MENU_TABS.map((tab) => tab.icon)]');
+    expect(mainMenu).not.toContain('STONE_SURFACE');
+  });
+
   it('owns the main-menu icon footprint without changing shared settings tabs', () => {
     expect(styleCss).toMatch(/\.settings-tab\.main-menu-mode-tab\s*\{[\s\S]*?--settings-tab-icon-size:\s*44px;[\s\S]*?overflow:\s*hidden;/);
     expect(styleCss).toMatch(/\.main-menu-mode-tab \.settings-tab-icon\s*\{[\s\S]*?overflow:\s*visible;[\s\S]*?position:\s*relative;/);

@@ -1,17 +1,17 @@
 ---
-status: superseded by ADR-0289
+status: superseded by ADR-0297
 date: 2026-08-01
 deciders: owner (Nelson) + Codex
-superseded_by: ADR-0289
+superseded_by: ADR-0297
 supersedes:
-  - ADR-0287
+  - ADR-0295
 ---
 
-# ADR-0288: Shell surfaces own their invariants
+# ADR-0296: Shell surfaces own their invariants
 
 ## Context and Problem Statement
 
-ADR-0287 aligned every known shell workspace by requiring callers to compose a
+ADR-0295 aligned every known shell workspace by requiring callers to compose a
 `ShellWorkspaceBody`. The same change aligned the two known Controls rails with
 a generated selector that enumerated their consumer ids. Those results fixed
 the current inventory but left the invariant as a caller protocol: a new caller
@@ -87,7 +87,7 @@ Chosen: **make the shell objects construct every invariant part**.
 
 ## More Information
 
-- Supersedes [ADR-0287](0287-shell-workspace-bodies-dock-to-controls.md) while
+- Supersedes [ADR-0295](0295-shell-workspace-bodies-dock-to-controls.md) while
   retaining its zero Controls-facing inset and Battle-only scenic gutter.
 - Extends [ADR-0059](0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md),
   [ADR-0144](0144-level-editor-events-use-the-shell-workspace.md),

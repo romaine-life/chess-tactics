@@ -61,6 +61,7 @@ describe('Level Editor chrome hierarchy', () => {
     expect(eventsWorkspace).toContain('aria-labelledby="level-events-workspace-title"');
     expect(eventsWorkspace).toContain('initialFocusRef.current?.focus()');
     expect(eventsWorkspace).toContain("ref={tab === 'victory' ? initialFocusRef : undefined}");
+    expect(eventsWorkspace).toContain("ref={tab === 'deployment' ? initialFocusRef : undefined}");
     expect(eventsWorkspace).toContain("ref={tab === 'other' ? initialFocusRef : undefined}");
     expect(eventsWorkspace).not.toContain('<OuterChromeBox');
     expect(eventsWorkspace).not.toContain('role="dialog"');
@@ -78,7 +79,7 @@ describe('Level Editor chrome hierarchy', () => {
     expect(levelEditor).toContain("levelEditorEventsEntry: true");
     expect(levelEditor).toContain("levelEditorEventsBaseHref: baseHref");
     expect(levelEditor).toMatch(/if \(eventsOpenRef\.current\) \{\s*selectEventsTab\(tab\);\s*return;\s*\}/);
-    expect(levelEditor).toMatch(/disabled=\{eventsOpen\}[\s\S]{0,120}?onClick=\{\(\) => openEventsEditor\('victory'\)\}/);
+    expect(levelEditor).toMatch(/disabled=\{eventsOpen\}[\s\S]{0,200}?onClick=\{\(\) => openEventsEditor\(isWarBattle \? 'deployment' : 'victory'\)\}/);
     expect(levelEditor).not.toContain('window.history.state?.levelEditorRules');
     expect(styleCss).toMatch(/\.shell-workspace\s*\{[\s\S]*?inset:\s*0;[\s\S]*?position:\s*absolute;/);
     expect(styleCss).toMatch(/\.shell-viewport-primary\[data-shell-workspace-covered\]\s*\{[\s\S]*?visibility:\s*hidden;/);
@@ -241,8 +242,9 @@ describe('Level Editor chrome hierarchy', () => {
 
   it('registers dropdown triggers and frames each popup as one divided inner box', () => {
     expectRegisteredFamily(paletteSelect, 'palette-select-trigger', 'inner-dropdown');
-    expect(houseSelect).toContain("chromeUnitClassNames('inner-dropdown', 'house-select', 'le-select-wrap', className)");
-    expect(houseSelect).toMatch(/<div\s+ref=\{rootRef\}\s+data-chrome-unit="inner-dropdown"\s+className=\{rootClass\}>/);
+    expect(houseSelect).toMatch(/chromeUnitClassNames\(\s*'inner-dropdown',\s*'house-select',\s*'le-select-wrap',\s*'house-select-trigger',\s*className,/);
+    expect(houseSelect).toMatch(/<button\s+ref=\{buttonRef\}\s+type="button"\s+data-chrome-unit="inner-dropdown"\s+className=\{triggerClass\}/);
+    expect(houseSelect).not.toContain('<div ref={rootRef} data-chrome-unit="inner-dropdown"');
     expect(houseSelect).toContain('if (option.value !== value) onChange(option.value);');
     expect(houseSelect).toContain("import { KitScroll } from '../KitScroll';");
     expect(houseSelect).toMatch(/<KitScroll\s+className="house-select-menu-scroll"/);
@@ -280,8 +282,6 @@ describe('Level Editor chrome hierarchy', () => {
     for (const label of [
       'Victory template',
       'Other event template',
-      'Spawn faction',
-      'Spawn zone',
       'Promotion faction',
       'Promotion zone',
       'Selected zone',

@@ -3,14 +3,14 @@ status: accepted
 date: 2026-08-01
 deciders: owner (Nelson) + Codex
 supersedes:
-  - ADR-0288
+  - ADR-0296
 ---
 
-# ADR-0289: Shell workspaces own attached bodies and inset content lanes
+# ADR-0297: Shell workspaces own attached bodies and inset content lanes
 
 ## Context and Problem Statement
 
-ADR-0288 closed the construction paths for the shell Controls panel, workspace
+ADR-0296 closed the construction paths for the shell Controls panel, workspace
 body, and retained viewport state. Its workspace body correctly reaches the
 Controls boundary, but it left subordinate content spacing to workflow classes.
 The first migration consequently removed the Level Editor Events workspace's
@@ -62,7 +62,7 @@ content container**.
   additionally compare selected inner-control border boxes with the computed
   content line.
 - `ShellControlsPanel` and `ShellViewportSwap` retain all ownership and closed-
-  construction requirements from ADR-0288 unchanged.
+  construction requirements from ADR-0296 unchanged.
 
 ### Consequences
 
@@ -79,7 +79,7 @@ content container**.
 
 ## More Information
 
-- Supersedes [ADR-0288](0288-shell-surfaces-own-their-invariants.md) while
+- Supersedes [ADR-0296](0296-shell-surfaces-own-their-invariants.md) while
   retaining its Controls, body, and viewport ownership rules.
 - Restores ADR-0279's symmetric content-line outcome without restoring its
   retired requirement that the workspace body itself stop before Controls.

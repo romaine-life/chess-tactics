@@ -1,13 +1,13 @@
 ---
-status: superseded by ADR-0288
+status: superseded by ADR-0296
 date: 2026-08-01
 deciders: owner (Nelson) + Codex
-superseded_by: ADR-0288
+superseded_by: ADR-0296
 supersedes:
   - ADR-0279
 ---
 
-# ADR-0287: Shell workspace bodies dock to Controls
+# ADR-0295: Shell workspace bodies dock to Controls
 
 ## Context and Problem Statement
 

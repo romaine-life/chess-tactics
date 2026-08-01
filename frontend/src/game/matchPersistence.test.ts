@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { clearMatch, loadMatch, persistMatch, setMatchPersistenceEnabled } from './matchPersistence';
+import {
+  clearMatch,
+  loadMatch,
+  persistedMatchMatchesActivity,
+  persistMatch,
+  setMatchPersistenceEnabled,
+} from './matchPersistence';
 import type { SkirmishState } from './store';
 
 const KEY = 'chess-tactics-active-match-v1';
@@ -26,12 +32,14 @@ function fakeState(overrides: {
   started?: boolean;
   winner?: SkirmishState['game']['winner'];
   levelId?: string | null;
+  activityId?: string | null;
   turn?: SkirmishState['game']['turn'];
 } = {}): SkirmishState {
-  const { started = true, winner = null, levelId = 'lvl-1', turn = 'player' } = overrides;
+  const { started = true, winner = null, levelId = 'lvl-1', activityId = null, turn = 'player' } = overrides;
   return {
     started,
     levelId,
+    activityId,
     seed: 42,
     tick: 3,
     turnsElapsed: 1,
@@ -73,6 +81,7 @@ describe('match persistence', () => {
       objectiveCtx: state.objectiveCtx,
       turnsElapsed: state.turnsElapsed,
       levelId: state.levelId,
+      activityId: state.activityId,
       clock: state.clock,
       savedAt: expect.any(String),
     });
@@ -127,5 +136,26 @@ describe('match persistence', () => {
     persistMatch(fakeState());
     clearMatch();
     expect(loadMatch()).toBeNull();
+  });
+
+  it('never resumes another Run Battle that happens to use the same Level', () => {
+    persistMatch(fakeState({ activityId: 'run:first:battle:0' }));
+    const loaded = loadMatch();
+    expect(loaded).not.toBeNull();
+    expect(persistedMatchMatchesActivity(loaded!, 'lvl-1', 'run:first:battle:0')).toBe(true);
+    expect(persistedMatchMatchesActivity(loaded!, 'lvl-1', 'run:second:battle:0')).toBe(false);
+  });
+
+  it('keeps pre-identity standalone saves compatible but does not adopt them into a Run', () => {
+    const legacy = fakeState();
+    persistMatch(legacy);
+    const stored = JSON.parse(store.getItem(KEY)!) as Record<string, unknown>;
+    delete stored.activityId;
+    store.setItem(KEY, JSON.stringify(stored));
+
+    const loaded = loadMatch();
+    expect(loaded).not.toBeNull();
+    expect(persistedMatchMatchesActivity(loaded!, 'lvl-1', null)).toBe(true);
+    expect(persistedMatchMatchesActivity(loaded!, 'lvl-1', 'run:first:battle:0')).toBe(false);
   });
 });

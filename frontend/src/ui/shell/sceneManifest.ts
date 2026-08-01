@@ -8,6 +8,7 @@ export type SceneSlotId = 'root' | 'menu-destination' | 'play-content' | 'settin
 export type SceneViewId =
   | 'main-menu'
   | 'play'
+  | 'play-continue'
   | 'play-skirmish'
   | 'play-run'
   | 'play-levels'
@@ -88,6 +89,7 @@ export const defineScene = (definition: SceneDefinition): SceneDefinition =>
 export const SCENE_DEFINITIONS = Object.freeze({
   mainMenu: defineScene({ id: 'main-menu', parent: null, slot: 'root', view: 'main-menu' }),
   play: defineScene({ id: 'play', parent: 'main-menu', slot: 'menu-destination', view: 'play' }),
+  playContinue: defineScene({ id: 'play/continue', parent: 'play', slot: 'play-content', view: 'play-continue' }),
   playSkirmish: defineScene({ id: 'play/skirmish', parent: 'play', slot: 'play-content', view: 'play-skirmish' }),
   playRun: defineScene({ id: 'play/run', parent: 'play', slot: 'play-content', view: 'play-run' }),
   playLevels: defineScene({ id: 'play/levels', parent: 'play', slot: 'play-content', view: 'play-levels' }),
@@ -305,8 +307,8 @@ export function sceneManifest(pathname: string, search: string = ''): ScenePath 
       : [instance(SCENE_DEFINITIONS.run), instance(SCENE_DEFINITIONS.runStrategikon, { path })];
   } else if (isPlaySelectorPath(path)) {
     const selection = playHubSelection(path);
-    // The bare root (and any malformed selector path about to canonicalize to it)
-    // is the neutral hub: main-menu → play with no play-content child mounted.
+    // The installed root and malformed selector paths both resolve through the
+    // complete Continue scene while PlayMenu canonicalizes their addresses.
     const selectedInstance = selection?.mode === 'levels'
       ? instance(SCENE_DEFINITIONS.playLevels)
       : selection?.mode === 'run'
@@ -315,10 +317,8 @@ export function sceneManifest(pathname: string, search: string = ''): ScenePath 
         ? instance(SCENE_DEFINITIONS.playCampaign, { campaignId: selection.campaignId })
       : selection?.mode === 'skirmish'
         ? instance(SCENE_DEFINITIONS.playSkirmish)
-        : null;
-    instances = selectedInstance
-      ? [root, instance(SCENE_DEFINITIONS.play), selectedInstance]
-      : [root, instance(SCENE_DEFINITIONS.play)];
+        : instance(SCENE_DEFINITIONS.playContinue);
+    instances = [root, instance(SCENE_DEFINITIONS.play), selectedInstance];
   } else if (path === '/editor' || path === '/editor/wars' || path === '/campaigns' || path === '/campaigns-next') {
     const editorRoute = editorSceneRoute(path, search);
     const child = editorRoute.kind === 'wars'

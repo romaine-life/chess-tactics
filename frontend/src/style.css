@@ -1837,7 +1837,7 @@ h1 {
   --ds-space-6: 32px;
   --ds-space-7: 48px;
   --ds-space-8: 64px;
-  /* Full-page workspace content line (ADR-0289). The main menu is the placement
+  /* Full-page workspace content line (ADR-0297). The main menu is the placement
      authority: its frame plus responsive rail padding defines the inline and
      block insets. Workspace content mirrors those starts at the opposite edges
      while the host-owned fill itself remains edge-to-edge. */
@@ -6303,20 +6303,6 @@ body.loading-bootstrap .app-startup-status {
 }
 .le-board-warning { color: #f0bd55; font-size: var(--ds-text-sm); line-height: 1.3; margin: 0; text-shadow: 0 0 8px rgba(240, 189, 85, .22); }
 
-/* Canonical Level Editor dropdown: HouseSelect owns the shared frame and chevron. */
-.le-select-wrap {
-  border: var(--le-chrome-inner-rail-w, 10px) solid transparent;
-  border-image: var(--skirmish-chrome-inner-control-image) 24 fill / var(--le-chrome-inner-rail-w, 10px) round;
-  box-sizing: border-box;
-  min-height: var(--le-inner-field-h);
-  overflow: visible;
-  position: relative;
-  width: 100%;
-}
-.house-select.le-select-wrap {
-  display: block;
-  min-width: 0;
-}
 .house-select-trigger {
   align-items: center;
   appearance: none;
@@ -6344,13 +6330,27 @@ body.loading-bootstrap .app-startup-status {
   width: 100%;
   z-index: 1;
 }
+/* Canonical Level Editor dropdown: HouseSelect owns the shared frame and chevron. */
+.le-select-wrap {
+  border: var(--le-chrome-inner-rail-w, 10px) solid transparent;
+  border-image: var(--skirmish-chrome-inner-control-image) 24 fill / var(--le-chrome-inner-rail-w, 10px) round;
+  box-sizing: border-box;
+  min-height: var(--le-inner-field-h);
+  overflow: visible;
+  position: relative;
+  width: 100%;
+}
+.house-select.le-select-wrap {
+  display: flex;
+  min-width: 0;
+}
 .house-select-trigger:disabled {
   cursor: default;
   opacity: .55;
 }
 .house-select-trigger:focus-visible {
   outline: 2px solid rgba(101, 184, 255, .72);
-  outline-offset: calc(var(--le-chrome-inner-rail-w, 10px) + 2px);
+  outline-offset: 2px;
 }
 /* The fixed portal is only a positioning surface. One inner-box child owns the
    popup chrome; contained options are regions split by structural dividers. */
@@ -7252,7 +7252,7 @@ body.loading-bootstrap .app-startup-status {
   flex-direction: column;
   min-height: 0;
   min-width: 0;
-  /* ADR-0289: host families choose only start/block breathing room. The
+  /* ADR-0297: host families choose only start/block breathing room. The
      Controls-facing edge is one shared invariant and is never consumer-tuned. */
   padding-block: var(--shell-workspace-body-inset-block, 0px);
   padding-inline-start: var(--shell-workspace-body-inset-start, 0px);
@@ -7266,7 +7266,7 @@ body.loading-bootstrap .app-startup-status {
   gap: var(--ds-gutter);
   min-height: 0;
   min-width: 0;
-  /* ADR-0289: ordinary content automatically mirrors the shell-owned start
+  /* ADR-0297: ordinary content automatically mirrors the shell-owned start
      inset. The body still reaches Controls; callers never author an end inset. */
   padding-inline-end: var(--shell-workspace-body-inset-start, 0px);
 }
@@ -7280,7 +7280,7 @@ body.loading-bootstrap .app-startup-status {
   --shell-workspace-body-inset-start: var(--le-outer-content-padding, 0px);
 }
 .level-editor-screen .le-events-workspace {
-  /* ADR-0289 uses the main-menu start/block coordinates while the shared body
+  /* ADR-0297 uses the main-menu start/block coordinates while the shared body
      itself docks to Controls. */
   --shell-workspace-body-inset-block: var(--main-menu-content-inset-block);
   --shell-workspace-body-inset-start: var(--main-menu-content-inset-inline);
@@ -7293,9 +7293,9 @@ body.loading-bootstrap .app-startup-status {
   gap: var(--ds-space-1);
   grid-auto-columns: unset;
   grid-auto-flow: column;
-  grid-template-columns: repeat(2, minmax(92px, auto));
+  grid-template-columns: repeat(3, minmax(92px, auto));
   margin: 0;
-  max-width: min(46vw, 320px);
+  max-width: min(58vw, 460px);
   min-width: 0;
 }
 .le-events-tabs .le-seg-btn,
@@ -7401,11 +7401,84 @@ body.loading-bootstrap .app-startup-status {
 .le-zone-name-input { box-sizing: border-box; flex: 1; max-width: 220px; text-align: left; width: 100%; }
 .le-events-placeholder { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 2px; }
 
+.le-deployment-editor {
+  box-sizing: border-box;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 12px 2px 4px;
+}
+.le-deployment-intro h3,
+.le-deployment-intro p,
+.le-deployment-card h3,
+.le-deployment-card h4,
+.le-deployment-card p { margin: 0; }
+.le-deployment-intro { display: flex; flex-direction: column; gap: 4px; }
+.le-deployment-intro p { color: #b7ccd8; font-size: var(--ds-text-sm); }
+.le-deployment-columns { align-items: start; display: grid; gap: 18px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.le-deployment-card {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+}
+.le-deployment-card-head { align-items: center; display: flex; gap: 12px; justify-content: space-between; min-width: 0; }
+.le-deployment-card-head > div { min-width: 0; }
+.le-deployment-card-head p { color: #b7ccd8; font-size: var(--ds-text-xs); margin-top: 3px; }
+.le-deployment-source {
+  color: #bfeaff;
+  flex: none;
+  font-size: var(--ds-text-2xs);
+  padding: 6px 9px;
+  text-transform: uppercase;
+}
+.le-deployment-status {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 10px;
+}
+.le-deployment-status span { color: #b7ccd8; font-size: var(--ds-text-xs); }
+.le-deployment-roster { display: grid; gap: 6px; }
+.le-deployment-roster .le-ctrlrow { display: grid; grid-template-columns: minmax(82px, 118px) auto; justify-content: start; }
+.le-deployment-zone-head { align-items: end; display: flex; gap: 10px; justify-content: space-between; }
+.le-deployment-zone-head > div { display: flex; flex-direction: column; gap: 3px; }
+.le-deployment-zone-head span { color: #b7ccd8; font-size: var(--ds-text-xs); }
+.le-deployment-zone-help { color: #b7ccd8; font-size: var(--ds-text-xs); }
+.le-deployment-zone-head .le-seg-btn,
+.le-deployment-edit-zone { min-height: var(--le-inner-control-compact-h); min-width: 0; padding: 0 10px; }
+.le-deployment-zones { display: flex; flex-direction: column; gap: 5px; }
+.le-deployment-zone-row-wrap { align-items: stretch; display: grid; gap: 6px; grid-template-columns: minmax(0, 1fr) auto; }
+.le-deployment-zone-row {
+  align-items: center;
+  color: #cfe6f2;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 8px 10px;
+  text-align: left;
+}
+.le-deployment-zone-row.is-selected { color: #eafaff; }
+.le-deployment-zone-row > span:first-child { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.le-deployment-zone-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.le-deployment-zone-row small { color: #a9c0cd; font-size: var(--ds-text-2xs); }
+
 @media (max-width: 560px) {
   .shell-workspace-body-content { gap: var(--ds-space-2); overflow-x: hidden; overflow-y: auto; }
   .le-events-head { align-items: stretch; flex-direction: column; gap: var(--ds-space-2); }
   .le-events-head-actions { justify-content: stretch; }
   .le-events-tabs { flex: 1 1 auto; max-width: none; }
+  .le-deployment-columns { grid-template-columns: minmax(0, 1fr); }
+  .le-deployment-card-head,
+  .le-deployment-zone-head { align-items: stretch; flex-direction: column; }
+  .le-deployment-roster .le-ctrlrow { grid-template-columns: minmax(0, 1fr); }
   .le-md {
     display: flex;
     flex: none;
@@ -17321,9 +17394,10 @@ button.tileset-relationship-cell {
 }
 
 .settings-rail-frame {
+  --settings-rail-tab-gap: clamp(9px, calc(var(--layout-vw, 100vw) * .008), 13px);
   align-content: start;
   display: grid;
-  gap: clamp(9px, calc(var(--layout-vw, 100vw) * .008), 13px);
+  gap: var(--settings-rail-tab-gap);
   padding: var(--main-menu-rail-pad-block) var(--main-menu-rail-pad-inline);
   /* Button-group offset — baked from the Main Menu tuner, SHARED with Settings so its rail tabs
      sit identically (the menu is the alignment reference). The X magnitude (238) is mirrored by
@@ -17394,11 +17468,12 @@ button.tileset-relationship-cell {
 .main-menu-twin-screen .settings-rail-frame { padding-inline-end: 0; }
 .main-menu-twin-screen .settings-frame { border-inline-end-width: 0; }
 .menu-dest-tabs {
+  --settings-rail-tab-gap: clamp(9px, calc(var(--layout-vw, 100vw) * .008), 13px);
   inline-size: var(--col-tab-w);
   display: flex;
   flex-direction: column;
   align-content: start;
-  gap: clamp(9px, calc(var(--layout-vw, 100vw) * .008), 13px);
+  gap: var(--settings-rail-tab-gap);
 }
 .menu-dest-action {
   inline-size: var(--col-action-w);
@@ -17420,8 +17495,9 @@ button.tileset-relationship-cell {
 }
 
 .play-source-fixed {
+  --settings-rail-tab-gap: var(--ds-stack);
   display: grid;
-  gap: var(--ds-stack);
+  gap: var(--settings-rail-tab-gap);
 }
 
 .play-campaign-region {
@@ -17442,9 +17518,10 @@ button.tileset-relationship-cell {
 }
 
 .play-campaign-list {
+  --settings-rail-tab-gap: var(--ds-stack);
   align-content: start;
   display: grid;
-  gap: var(--ds-stack);
+  gap: var(--settings-rail-tab-gap);
   padding-inline-end: var(--ds-inline-tight);
 }
 
@@ -17469,7 +17546,7 @@ button.tileset-relationship-cell {
    original width instead of drawing the preview beyond the right edge. The compact list
    delegates the actual launch verb to the preview's Play control. */
 @media (max-width: 1516px) {
-  .play-scene-authority.has-level-preview .play-action-col {
+  .play-scene-authority.has-detail-preview .play-action-col {
     inline-size: calc(var(--col-action-w) - var(--col-preview-w));
   }
 
@@ -17562,6 +17639,8 @@ button.tileset-relationship-cell {
   padding-top: 8.5px;
   padding-bottom: 8.5px;
   --settings-tab-icon-slot: 40px;
+  --settings-tab-surface-pitch: calc(61px + var(--settings-rail-tab-gap, 37px));
+  --chrome-surface-position-y: calc(var(--tab-index, 0) * -1 * var(--settings-tab-surface-pitch));
 }
 
 /* Recover the continuous-stone flow the retired `fixed` attachment gave: each tab samples
@@ -19314,10 +19393,11 @@ button.tileset-relationship-cell {
 }
 
 .menu-dest > .enchiridion-workspace > .enchiridion-section-rail {
+  --settings-rail-tab-gap: clamp(9px, calc(var(--layout-vw, 100vw) * .008), 13px);
   align-content: start;
   display: grid;
   flex: none;
-  gap: clamp(9px, calc(var(--layout-vw, 100vw) * .008), 13px);
+  gap: var(--settings-rail-tab-gap);
   inline-size: var(--col-tab-w);
   padding-block-start: var(--col-top-inset);
   padding-inline-start: var(--col-side-inset);
@@ -21506,38 +21586,105 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
 
 .run-ataraxia-selector {
   display: grid;
-  gap: var(--ds-stack);
-  padding: var(--ds-gutter);
+  gap: var(--ds-inline-tight);
 }
 
-.run-ataraxia-selector header,
+.run-ataraxia-selector h3,
 .run-ataraxia-selector p {
   margin: 0;
 }
 
 .run-ataraxia-selector h3 {
-  margin: var(--ds-inline-tight) 0 0;
+  padding-inline: 8px;
 }
 
-.run-ataraxia-options {
+.run-ataraxia-select {
+  inline-size: 100%;
+}
+
+.run-ataraxia-option-copy {
   display: grid;
-  gap: var(--ds-stack);
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  min-inline-size: 0;
+  inline-size: 100%;
 }
 
-.run-ataraxia-options > button {
-  align-items: flex-start;
-  block-size: auto;
-  display: flex;
-  flex-direction: column;
-  min-block-size: 78px;
-  padding-block: var(--ds-stack);
+.run-ataraxia-option-copy > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.house-select-trigger .run-ataraxia-option-copy small {
+  display: none;
+}
+
+.house-select-option .run-ataraxia-option-copy {
+  padding-block: 2px;
+}
+
+.house-select-option .run-ataraxia-option-copy small {
+  color: inherit;
+  font-size: var(--ds-text-2xs);
+  font-weight: 700;
+  white-space: normal;
+}
+
+.run-ataraxia-effect {
+  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .72));
+  font-size: var(--ds-text-xs);
+}
+
+.play-choice-row {
+  appearance: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
   text-align: start;
 }
 
-.run-ataraxia-options > button span,
-.run-ataraxia-options > button small {
-  white-space: normal;
+.play-choice-row:not(.is-selected):not(.is-disabled):hover {
+  filter: brightness(1.06);
+}
+
+.play-choice-row.is-disabled {
+  cursor: default;
+  opacity: .55;
+}
+
+.play-detail-body {
+  align-content: start;
+  display: grid;
+  flex: 1 1 auto;
+  min-block-size: 0;
+}
+
+.play-detail-facts {
+  padding: var(--ds-inset);
+}
+
+.play-detail-facts dl {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  margin: 0;
+}
+
+.play-detail-facts dl > div {
+  align-items: baseline;
+  display: flex;
+  gap: var(--ds-inline);
+  justify-content: space-between;
+}
+
+.play-detail-facts dt {
+  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .72));
+  font-size: var(--ds-text-2xs);
+  text-transform: uppercase;
+}
+
+.play-detail-facts dd {
+  margin: 0;
+  text-align: end;
 }
 
 .run-pestiferous-losses {

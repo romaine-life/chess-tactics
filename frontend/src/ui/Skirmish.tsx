@@ -15,7 +15,7 @@ import { RestartGlyph } from './shared/actionGlyphs';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleBarControlContribution, TitleBarStatus } from './shell/TitleBarControls';
 import { useSkirmish, shouldStartFreshSkirmish, setNetMoveSink, setNetResignSink } from '../game/store';
-import { loadMatch, setMatchPersistenceEnabled } from '../game/matchPersistence';
+import { loadMatch, persistedMatchMatchesActivity, setMatchPersistenceEnabled } from '../game/matchPersistence';
 import {
   fetchLobby,
   postMove,
@@ -82,6 +82,7 @@ import type { RunSelfInspectionView } from './RunSelfInspection';
 export interface RunBattlePresentation {
   level: Level;
   seed: number;
+  activityId: string;
   relicIds: readonly RunRelicId[];
   onVictory: (survivingPersistentUnitIds: string[]) => void;
   onRestart: () => void;
@@ -468,7 +469,7 @@ export function Skirmish({
     // ADR-0235: restarting healthy gameplay replaces match state in place. The
     // already-painted board and HUD remain ready, so the new clock may start
     // immediately without routing through surface acquisition.
-    restartSkirmish({ seed, level });
+    restartSkirmish({ seed, level, activityId: runBattle?.activityId ?? null });
   };
 
   // The title-bar ornament diamond doubles as a Retry control in single-player (see the
@@ -557,8 +558,8 @@ export function Skirmish({
     // restart: the store is a singleton that already holds the live board. Only
     // build a fresh game when there isn't a matching in-progress one — i.e. the
     // first launch, after a finished game, or when a different level is opened.
-    const shouldStartFresh = (levelId: string | null): boolean =>
-      shouldStartFreshSkirmish(useSkirmish.getState(), levelId);
+    const shouldStartFresh = (levelId: string | null, activityId: string | null = null): boolean =>
+      shouldStartFreshSkirmish(useSkirmish.getState(), levelId, activityId);
     const freshSeed = () => runBattle?.seed ?? Math.floor(Math.random() * 999999) + 1;
     // Dev A/B lever: `?ai=greedy` pits you against the legacy random-capture
     // enemy; anything else gets the objective-aware search AI.
@@ -567,13 +568,13 @@ export function Skirmish({
     // Enter the board for `levelId`: keep the live in-memory match if it's the one
     // asked for (a route change, not a reload); else resume the match saved to disk
     // for this level if one survived a reload; else start fresh. The saved board is
-    // self-contained (full position), so resume needs no level document — only the
-    // levelId must match the one being entered.
-    const startOrResume = (levelId: string, levelDoc: Level): void => {
-      if (!shouldStartFresh(levelId)) return; // singleton already holds this battle
+    // self-contained (full position), so resume needs no level document. It must match
+    // both the Level and its owning activity: multiple Runs may reuse that Level.
+    const startOrResume = (levelId: string, levelDoc: Level, activityId: string | null = null): void => {
+      if (!shouldStartFresh(levelId, activityId)) return; // singleton already holds this battle
       if (!isTestPlay) {
         const saved = loadMatch();
-        if (saved && saved.levelId === levelId && saved.game.winner === null) {
+        if (saved && persistedMatchMatchesActivity(saved, levelId, activityId)) {
           resumeMatch(saved, { deferClockStart: true });
           return;
         }
@@ -581,6 +582,7 @@ export function Skirmish({
       newSkirmish({
         seed: freshSeed(),
         level: levelDoc,
+        activityId,
         ai,
         deferClockStart: true,
       });
@@ -629,7 +631,7 @@ export function Skirmish({
 
     if (runBattle) {
       setRouteLevel(runBattle.level);
-      startOrResume(runBattle.level.id, runBattle.level);
+      startOrResume(runBattle.level.id, runBattle.level, runBattle.activityId);
       setBoardSettled(true);
       return;
     }

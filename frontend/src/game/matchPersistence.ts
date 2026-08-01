@@ -25,9 +25,9 @@ export type PersistedMatch = Pick<
   SkirmishState,
   'game' | 'seed' | 'tick' | 'log' | 'objective' | 'objectiveCtx' | 'victoryOverride' | 'turnsElapsed' | 'levelId' | 'clock'
 > &
-  // Optional: snapshots written before the enemy-policy lever existed lack it, and
-  // resumeMatch defaults a missing value to the search AI.
-  Partial<Pick<SkirmishState, 'aiMode'>> & {
+  // Optional for snapshots written before these fields existed. resumeMatch defaults
+  // a missing AI mode to search and a missing activity id to standalone play.
+  Partial<Pick<SkirmishState, 'aiMode' | 'activityId'>> & {
     /** Wall-clock recency used only to order Play's resumable activities. */
     savedAt?: string;
   };
@@ -68,6 +68,7 @@ function sliceOf(state: SkirmishState): PersistedMatch {
     victoryOverride: state.victoryOverride,
     turnsElapsed: state.turnsElapsed,
     levelId: state.levelId,
+    activityId: state.activityId,
     clock: state.clock,
     aiMode: state.aiMode,
     savedAt: new Date().toISOString(),
@@ -132,4 +133,18 @@ export function loadMatch(): PersistedMatch | null {
     clearMatch();
     return null;
   }
+}
+
+/** True only when a disk snapshot belongs to the activity being entered. A Level
+ * may appear in multiple Runs, so matching the Level id alone can restore a wholly
+ * different roster and an older visual scene. Missing ids remain compatible with
+ * historical standalone/Campaign saves, whose requested activity id is null. */
+export function persistedMatchMatchesActivity(
+  match: PersistedMatch,
+  levelId: string,
+  activityId: string | null,
+): boolean {
+  return match.game.winner === null
+    && match.levelId === levelId
+    && (match.activityId ?? null) === activityId;
 }

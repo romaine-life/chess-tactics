@@ -12,7 +12,7 @@ const style = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const packageJson = readFileSync(new URL('../../package.json', import.meta.url), 'utf8');
 const geometryGate = readFileSync(new URL('../../scripts/check-workspace-geometry.mjs', import.meta.url), 'utf8');
 
-describe('shell surface ownership contract (ADR-0289)', () => {
+describe('shell surface ownership contract (ADR-0297)', () => {
   it('constructs the attached body and its content container inside ShellWorkspace for every family', () => {
     expect(chromeBox).not.toContain('export function ShellWorkspaceBody');
     expect(chromeBox).toContain('data-shell-workspace-body=""');

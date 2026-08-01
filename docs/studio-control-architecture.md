@@ -203,7 +203,7 @@ Events and Level Artwork authoring are process instruments rather than board
 brushes. Events directly opens the shell-owned center workspace under
 [ADR-0144](adr/0144-level-editor-events-use-the-shell-workspace.md). Its content
 perimeter follows the shell-owned content-lane contract in
-[ADR-0289](adr/0289-shell-workspaces-own-attached-bodies-and-inset-content-lanes.md):
+[ADR-0297](adr/0297-shell-workspaces-own-attached-bodies-and-inset-content-lanes.md):
 the main-menu inline start automatically mirrors to inline end, block start
 mirrors to block end, and the shell-owned fill and body remain edge-to-edge. Per
 [ADR-0165](adr/0165-ai-artwork-separates-sources-attempts-and-background-mode.md)
@@ -450,7 +450,7 @@ workspace. Strategikon fills the complete board pane through the shared
 fill-only primitive; it does not instantiate an `OuterChromeBox`, add exterior
 rails, or leave a smaller framed island inside that pane. No child measures the
 viewport or renders into the Controls column. Its rail and content start on the
-main menu's exact responsive inline and block insets. Under ADR-0289 its primary
+main menu's exact responsive inline and block insets. Under ADR-0297 its primary
 reference frame uses the semantic edge-attached content variant, so that frame
 and its drawn scroll owner meet Controls while their own subordinate content
 retains internal spacing. Its entry is the divider-safe, frameless open-codex

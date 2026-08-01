@@ -5,11 +5,14 @@ and the production web app. The live app has since moved to the shared DOM/9-sli
 kit governed by the current UI ADRs. The concept renders remain explicit visual
 references; they are not the production screen architecture.
 
-Current player navigation is recorded in ADR-0074, ADR-0257, and ADR-0260: one
-main-menu **Play** control opens the selector root `/play/select`, which always
-reveals the picker and offers a resumable activity as a Continue card; the
-selector's tab addresses are `/play/select/skirmish`, `/play/select/levels`, and
-`/play/select/campaign/<id>`, while exact `/play?...` remains the live board.
+Current player navigation is recorded in ADR-0074 and ADR-0294: one main-menu
+**Play** control opens the compatibility selector root `/play/select`, which
+settles into the complete descriptor-free Continue surface. Continue owns fixed
+Campaign/Skirmish/Run/Levels availability rows at `/play/select/continue/*` and
+selects the most recent resumable activity into the detail column. The ordinary
+selector tab addresses remain `/play/select/skirmish`, `/play/select/run`,
+`/play/select/levels`, and `/play/select/campaign/<id>`, while exact `/play?...`
+remains the live board.
 
 ## Contract
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createBlankLevel } from '../core/level';
 import {
+  ATARAXIA_BY_TIER,
   GOLD_SCALE,
   PIECE_BUNDLE_DECK,
   PIECE_VALUE,
@@ -306,6 +307,17 @@ describe('Run progression and relic offers', () => {
     const cashed = cashOutPawn(run, pawn.id);
     expect(cashed.army.some((unit) => unit.id === pawn.id)).toBe(false);
     expect(cashed.goldTenths - run.goldTenths).toBe(2 * GOLD_SCALE);
+  });
+});
+
+describe('Ataraxia ladder identities', () => {
+  it('gives Ataraxia 0 the same identity and literal-impact fields as later tiers', () => {
+    expect(ATARAXIA_BY_TIER[0]).toEqual({
+      tier: 0,
+      label: 'Ataraxia 0',
+      title: 'The Untroubled Mind',
+      effect: 'Standard Run rules. Shop cards are never Pestiferous.',
+    });
   });
 });
 

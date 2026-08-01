@@ -18,12 +18,17 @@ import { levelObjectiveLine } from './LevelInfoCompact';
 import { LevelPreviewColumn } from './LevelPreviewColumn';
 import {
   PLAY_LEVELS_SELECTOR_HREF,
+  PLAY_CONTINUE_SELECTOR_HREF,
+  PLAY_RUN_CURRENT_SELECTOR_HREF,
+  PLAY_RUN_NEW_SELECTOR_HREF,
   PLAY_RUN_SELECTOR_HREF,
   PLAY_SELECTOR_ROOT,
   PLAY_SKIRMISH_SELECTOR_HREF,
   isPlaySelectorPath,
   playCampaignSelectorHref,
+  playContinueSelectorHref,
   playHubSelection,
+  type PlayContinueChoice,
   type PlayHubSelection,
 } from './playHubRoute';
 import { NavButton } from './shared/NavButton';
@@ -50,7 +55,7 @@ import {
 import { useConfirm } from './shared/ConfirmDialog';
 import { InnerChromeBox } from './shared/ChromeBox';
 import { loadMatch, type PersistedMatch } from '../game/matchPersistence';
-import { continueActivity } from './playContinue';
+import { continueInventory, type ContinueInventory } from './playContinue';
 import { AtaraxiaSelector } from './AtaraxiaSelector';
 
 type PlayIcon = 'solo-skirmish' | 'campaign-editor' | 'level-editor' | 'lobbies';
@@ -120,14 +125,81 @@ function ActionColumn({ children }: { children: ReactElement }): ReactElement {
   );
 }
 
+function ContinuePanel({
+  inventory,
+  choice,
+}: {
+  inventory: ContinueInventory;
+  choice: PlayContinueChoice | null;
+}): ReactElement {
+  const selected = choice
+    ? inventory.options.find((option) => option.mode === choice)?.activity ?? null
+    : null;
+  return (
+    <>
+      <ActionColumn>
+        <div className="settings-panel-content continue-selector-panel">
+          <section className="settings-section">
+            <h3 className="settings-section-title">Continue</h3>
+            <div className="settings-section-rows">
+              {inventory.options.map((option) => {
+                const available = Boolean(option.activity);
+                const selectedOption = available && choice === option.mode;
+                return (
+                  <NavButton
+                    key={option.mode}
+                    to={playContinueSelectorHref(option.mode)}
+                    data-chrome-unit="inner-list-row"
+                    className={chromeUnitClassNames('inner-list-row', 'settings-row play-choice-row', !available && 'is-disabled', selectedOption && 'active is-selected')}
+                    disabled={!available}
+                    aria-current={selectedOption ? 'page' : undefined}
+                    data-testid={`continue-choice-${option.mode}`}
+                  >
+                    <div className="settings-row-copy">
+                      <h4>{option.label}</h4>
+                      <p>{option.activity?.summary ?? 'Nothing to continue'}</p>
+                    </div>
+                  </NavButton>
+                );
+              })}
+            </div>
+          </section>
+        </div>
+      </ActionColumn>
+
+      {selected ? (
+        <aside className="menu-dest-col menu-dest-preview ce-preview-col play-detail-col" aria-label={selected.title} data-testid="continue-detail">
+          <div className="ce-selected-head"><h2>{selected.title}</h2></div>
+          <div className="play-detail-body">
+            <InnerChromeBox className="play-detail-facts">
+              <dl>
+                {selected.facts.map((fact) => (
+                  <div key={fact.label}><dt>{fact.label}</dt><dd>{fact.value}</dd></div>
+                ))}
+              </dl>
+            </InnerChromeBox>
+          </div>
+          <div className="ce-preview-actions is-single">
+            <NavButton data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} to={selected.playHref}><span>Play</span></NavButton>
+          </div>
+        </aside>
+      ) : null}
+    </>
+  );
+}
+
+type RunChoice = 'current' | 'new' | null;
+
 function RunPanel({
   levels,
   loading,
   officialAvailable,
+  choice,
 }: {
   levels: Record<string, Level>;
   loading: boolean;
   officialAvailable: boolean;
+  choice: RunChoice;
 }): ReactElement {
   const wars = useWars((state) => state.wars);
   const run = useActiveRun((state) => state.run);
@@ -146,6 +218,11 @@ function RunPanel({
   const [ataraxiaTier, setAtaraxiaTier] = useState<AtaraxiaTier>(0);
   const eligible = useMemo(() => runEligibleOfficialWars(wars), [wars]);
   const highestUnlockedTier = highestUnlockedAtaraxiaTier(progression);
+  const newRunUnavailable = loading
+    || !hydrated
+    || syncing
+    || eligible.length === 0
+    || Boolean(adoptionConflict);
 
   useEffect(() => { void hydrate(); }, [hydrate]);
   useEffect(() => {
@@ -184,53 +261,120 @@ function RunPanel({
   };
 
   return (
-    <ActionColumn>
-      <div className="play-action-stack run-selector-panel">
-        {dialog}
-        <div className="play-action-heading">
-          <span className="play-action-kicker">Roguelike chess</span>
-          <h2>Run</h2>
-          <p>Carry one persistent army through a randomly selected eligible War. Battles remain chess; shops, deployment, and relics shape the Run around them.</p>
-        </div>
-        {!hydrated || loading ? <p className="play-empty" role="status">Loading Runs…</p> : null}
-        {adoptionConflict ? (
-          <InnerChromeBox className="play-level-card" role="alert">
-            <h3>Two active Runs</h3>
-            <p>This browser has {adoptionConflict.browserRun.war.name}; your account has {adoptionConflict.accountRun.war.name}. Choose which one the account keeps.</p>
-            <div className="run-inline-actions">
-              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button')} onClick={keepAccountRun}>Keep account Run</button>
-              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} disabled={syncing} onClick={() => { void adoptBrowserRun(); }}>Adopt browser Run</button>
+    <>
+      <ActionColumn>
+        <div className="settings-panel-content run-selector-panel">
+          {dialog}
+          <section className="settings-section">
+            <h3 className="settings-section-title">Run</h3>
+            <div className="settings-section-rows">
+              {!hydrated || loading ? (
+                <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} role="status">
+                  <div className="settings-row-copy"><h4>Loading Runs…</h4></div>
+                </section>
+              ) : null}
+              {adoptionConflict ? (
+                <InnerChromeBox className="play-level-card" role="alert">
+                  <h3>Two active Runs</h3>
+                  <p>This browser has {adoptionConflict.browserRun.war.name}; your account has {adoptionConflict.accountRun.war.name}. Choose which one the account keeps.</p>
+                  <div className="run-inline-actions">
+                    <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button')} onClick={keepAccountRun}>Keep account Run</button>
+                    <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} disabled={syncing} onClick={() => { void adoptBrowserRun(); }}>Adopt browser Run</button>
+                  </div>
+                </InnerChromeBox>
+              ) : null}
+              {run && !adoptionConflict ? (
+                <NavButton
+                  to={PLAY_RUN_CURRENT_SELECTOR_HREF}
+                  data-chrome-unit="inner-list-row"
+                  className={chromeUnitClassNames('inner-list-row', 'settings-row play-choice-row', choice === 'current' && 'active is-selected')}
+                  aria-current={choice === 'current' ? 'page' : undefined}
+                  data-testid="run-choice-current"
+                >
+                  <div className="settings-row-copy">
+                    <h4>Current Run</h4>
+                    <p>Battle {run.battleIndex + 1} of {run.war.battles.length} · {ATARAXIA_BY_TIER[run.ataraxiaTier].label}</p>
+                  </div>
+                </NavButton>
+              ) : null}
+              {!loading && officialAvailable && eligible.length === 0 ? (
+                <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} role="status">
+                  <div className="settings-row-copy">
+                    <h4>No Runs available</h4>
+                    <p>No official Wars are currently marked Eligible for Run.</p>
+                  </div>
+                </section>
+              ) : null}
+              {!loading && !officialAvailable ? (
+                <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} role="status">
+                  <div className="settings-row-copy">
+                    <h4>Runs unavailable</h4>
+                    <p>Official Wars could not be loaded. Reopen Play to retry.</p>
+                  </div>
+                </section>
+              ) : null}
+              <NavButton
+                to={PLAY_RUN_NEW_SELECTOR_HREF}
+                data-chrome-unit="inner-list-row"
+                className={chromeUnitClassNames('inner-list-row', 'settings-row play-choice-row', newRunUnavailable && 'is-disabled', choice === 'new' && 'active is-selected')}
+                disabled={newRunUnavailable}
+                aria-current={choice === 'new' ? 'page' : undefined}
+                data-testid="run-choice-new"
+              >
+                <div className="settings-row-copy">
+                  <h4>Start New Run</h4>
+                  <p>Choose Ataraxia</p>
+                </div>
+              </NavButton>
             </div>
-          </InnerChromeBox>
-        ) : run ? (
-          <InnerChromeBox className="play-level-card">
-            <h3>{run.war.name}</h3>
-            <p>{run.war.description || 'Active War'}</p>
-            <p>Battle {run.battleIndex + 1} of {run.war.battles.length} · {run.army.length} units · {formatGold(run.goldTenths)} gold · {ATARAXIA_BY_TIER[run.ataraxiaTier].label}</p>
-            <NavButton data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} to="/run">Play</NavButton>
-          </InnerChromeBox>
-        ) : null}
-        {!loading && officialAvailable && eligible.length === 0 ? (
-          <p className="play-empty">No official Wars are currently marked Eligible for Run. You can author and direct-play a private War in the War Editor.</p>
-        ) : null}
-        {!loading && !officialAvailable ? <p className="play-content-warning">Official Wars are unavailable. Reopen Play to retry.</p> : null}
-        <AtaraxiaSelector
-          value={ataraxiaTier}
-          highestUnlockedTier={highestUnlockedTier}
-          onChange={setAtaraxiaTier}
-        />
-        <button
-          type="button"
-          data-chrome-unit="inner-text-button"
-          className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-          disabled={loading || !hydrated || starting || syncing || eligible.length === 0 || Boolean(adoptionConflict)}
-          onClick={() => { void start(); }}
-        >
-          {starting ? 'Starting…' : run ? 'Start a new Run' : 'Start Run'}
-        </button>
-        {persistenceError ? <p className="play-content-warning" role="status">{persistenceError}</p> : null}
-      </div>
-    </ActionColumn>
+          </section>
+          {persistenceError ? <p className="play-content-warning" role="status">{persistenceError}</p> : null}
+        </div>
+      </ActionColumn>
+
+      {choice === 'current' && run ? (
+        <aside className="menu-dest-col menu-dest-preview ce-preview-col play-detail-col" aria-label="Current Run" data-testid="run-detail-current">
+          <div className="ce-selected-head"><h2>Current Run</h2></div>
+          <div className="play-detail-body">
+            <InnerChromeBox className="play-detail-facts">
+              <dl>
+                <div><dt>Battle</dt><dd>{run.battleIndex + 1} of {run.war.battles.length}</dd></div>
+                <div><dt>Army</dt><dd>{run.army.length} units</dd></div>
+                <div><dt>Gold</dt><dd>{formatGold(run.goldTenths)}</dd></div>
+                <div><dt>Ataraxia</dt><dd>{ATARAXIA_BY_TIER[run.ataraxiaTier].label}</dd></div>
+              </dl>
+            </InnerChromeBox>
+          </div>
+          <div className="ce-preview-actions is-single">
+            <NavButton data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} to="/run"><span>Play</span></NavButton>
+          </div>
+        </aside>
+      ) : null}
+
+      {choice === 'new' ? (
+        <aside className="menu-dest-col menu-dest-preview ce-preview-col play-detail-col" aria-label="Start New Run" data-testid="run-detail-new">
+          <div className="ce-selected-head"><h2>Start New Run</h2></div>
+          <div className="play-detail-body">
+            <AtaraxiaSelector
+              value={ataraxiaTier}
+              highestUnlockedTier={highestUnlockedTier}
+              onChange={setAtaraxiaTier}
+            />
+          </div>
+          <div className="ce-preview-actions is-single">
+            <button
+              type="button"
+              data-chrome-unit="inner-text-button"
+              className={chromeUnitClassNames('inner-text-button', 'ce-link-button')}
+              disabled={newRunUnavailable || starting}
+              onClick={() => { void start(); }}
+            >
+              <span>{starting ? 'Starting…' : 'Start Run'}</span>
+            </button>
+          </div>
+        </aside>
+      ) : null}
+    </>
   );
 }
 
@@ -525,8 +669,8 @@ export function PlayMenu({
   const [progress, setProgress] = useState<CampaignProgress>(readProgress);
   const [selectedLevelId, setSelectedLevelId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const resumable = useMemo(
-    () => continueActivity(activeRun, persistedMatch, campaigns, levels),
+  const resumeInventory = useMemo(
+    () => continueInventory(activeRun, persistedMatch, campaigns, levels),
     [activeRun, campaigns, levels, persistedMatch],
   );
   const [officialAvailable, setOfficialAvailable] = useState(false);
@@ -586,7 +730,7 @@ export function PlayMenu({
   useEffect(() => {
     if (!isPlaySelectorPath(path)) return;
     if (!playHubSelection(path)) {
-      navigateApp(PLAY_SELECTOR_ROOT, { replace: true, scroll: false });
+      navigateApp(PLAY_CONTINUE_SELECTOR_HREF, { replace: true, scroll: false });
       return;
     }
     if (
@@ -596,11 +740,38 @@ export function PlayMenu({
       && selection.mode === 'campaign'
       && !campaigns.some((campaign) => campaign.id === selection.campaignId)
     ) {
-      navigateApp(PLAY_SELECTOR_ROOT, { replace: true, scroll: false });
+      navigateApp(PLAY_CONTINUE_SELECTOR_HREF, { replace: true, scroll: false });
+      return;
     }
-  }, [campaigns, loading, officialAvailable, path, selection, userWorkspaceAvailable]);
+    if (
+      selection.mode === 'run'
+      && selection.choice === 'current'
+      && runHydrated
+      && !activeRun
+    ) {
+      navigateApp(PLAY_RUN_SELECTOR_HREF, { replace: true, scroll: false });
+      return;
+    }
+    if (!loading && runHydrated && (selection.mode === 'hub' || selection.mode === 'continue')) {
+      const selectedActivity = selection.mode === 'continue' && selection.choice
+        ? resumeInventory.options.find((option) => option.mode === selection.choice)?.activity
+        : null;
+      const canonicalHref = resumeInventory.defaultMode
+        ? playContinueSelectorHref(resumeInventory.defaultMode)
+        : PLAY_CONTINUE_SELECTOR_HREF;
+      if (
+        selection.mode === 'hub'
+        || selection.choice === null
+        || !selectedActivity
+      ) {
+        if (path !== canonicalHref) navigateApp(canonicalHref, { replace: true, scroll: false });
+      }
+    }
+  }, [activeRun, campaigns, loading, officialAvailable, path, resumeInventory, runHydrated, selection, userWorkspaceAvailable]);
 
-  useEffect(() => { setSelectedLevelId(null); }, [selection]);
+  useEffect(() => {
+    setSelectedLevelId(null);
+  }, [selection]);
 
   const profileLevels = useMemo(() => skirmishProfileLevels(levels), [levels]);
   const standaloneLevels = useMemo(() => skirmishMapLevels(campaigns, levels), [campaigns, levels]);
@@ -619,9 +790,22 @@ export function PlayMenu({
   const selectedPlayHref = activeCampaign && selectedLevelId
     ? `/play?campaignId=${encodeURIComponent(activeCampaign.id)}&levelId=${encodeURIComponent(selectedLevelId)}`
     : '/play';
+  const selectedRunChoice: RunChoice = selection.mode === 'run' ? selection.choice : null;
+  const selectedContinueChoice: PlayContinueChoice | null = selection.mode === 'continue'
+    ? selection.choice ?? resumeInventory.defaultMode
+    : selection.mode === 'hub'
+      ? resumeInventory.defaultMode
+      : null;
+  const selectedContinueActivity = selectedContinueChoice
+    ? resumeInventory.options.find((option) => option.mode === selectedContinueChoice)?.activity ?? null
+    : null;
+  const hasRunDetail = selection.mode === 'run'
+    && (selectedRunChoice === 'new' || (selectedRunChoice === 'current' && Boolean(activeRun)));
+  const hasDetailPreview = Boolean(selectedLevel || hasRunDetail || selectedContinueActivity);
   const surfaceSignature = [
     selection.mode,
     selection.mode === 'campaign' ? selection.campaignId : '',
+    selectedContinueChoice ?? '',
     ...profileLevels.map((level) => level.id),
     ...standaloneLevels.map((level) => level.id),
     ...activeRefs.map((ref) => ref.levelId),
@@ -629,57 +813,53 @@ export function PlayMenu({
   const loadError = !loading && (!officialAvailable || !userWorkspaceAvailable)
     ? new Error('Canonical Play content is unavailable.')
     : null;
-  // Run and the neutral hub mount no thumbnail surface, so a stale thumbnail
+  // Run and Continue mount no thumbnail surface, so a stale thumbnail
   // failure from a previously selected list must not condemn them.
   const surfaceError = loadError
-    ?? (selection.mode === 'run' || selection.mode === 'hub' ? null : thumbnailSurface.error);
-  // The bare Play root always reveals the picker (ADR-0260): a resumable
-  // activity is an offered Continue card, never an automatic redirect. Hold
-  // composition only until the Run document settles so the Continue offer and
-  // rail order don't pop in after reveal.
-  const hubLandingSettled = selection.mode !== 'hub' || runHydrated;
+    ?? (selection.mode === 'run' || selection.mode === 'continue' || selection.mode === 'hub' ? null : thumbnailSurface.error);
+  // The installed root and bare Continue address resolve only after both match
+  // content and the account Run settle. Their first composed frame is therefore
+  // already the complete Continue surface with its default activity selected.
+  const continueLandingSettled = selection.mode !== 'hub' && selection.mode !== 'continue' || runHydrated;
 
   return (
     <ThumbnailSurfaceReportContext.Provider value={reportThumbnailSurface}>
       <div
-        className={`play-scene-authority${selectedLevel ? ' has-level-preview' : ''}`}
+        className={`play-scene-authority${hasDetailPreview ? ' has-detail-preview' : ''}${selectedLevel ? ' has-level-preview' : ''}`}
         data-official-authority={loading ? 'loading' : officialAvailable ? 'ready' : 'error'}
         data-user-authority={loading ? 'loading' : userWorkspaceAvailable ? 'ready' : 'error'}
         data-thumbnail-authority={thumbnailSurface.error ? 'error' : thumbnailSurface.complete ? 'ready' : 'loading'}
       >
       <aside className="menu-dest-col menu-dest-tabs play-source-rail" aria-label="Play">
         <div className="play-source-fixed">
-          {resumable ? (
-            <ApparatusRailTab
-              label={resumable.label}
-              detail={resumable.detail}
-              to={resumable.href}
-              iconSrc={carvedIcon(resumable.icon)}
-              active={false}
-              index={0}
-              testId="play-continue"
-            />
-          ) : null}
+          <ApparatusRailTab
+            label="Continue"
+            to={PLAY_CONTINUE_SELECTOR_HREF}
+            iconSrc={carvedIcon('campaign-editor')}
+            active={selection.mode === 'continue' || selection.mode === 'hub'}
+            index={0}
+            testId="play-continue"
+          />
           <PlayRailTab
             label="Skirmish"
             href={PLAY_SKIRMISH_SELECTOR_HREF}
             icon="solo-skirmish"
             active={selection.mode === 'skirmish'}
-            index={resumable ? 1 : 0}
+            index={1}
           />
           <PlayRailTab
             label="Run"
             href={PLAY_RUN_SELECTOR_HREF}
             icon="campaign-editor"
             active={selection.mode === 'run'}
-            index={resumable ? 2 : 1}
+            index={2}
           />
           <PlayRailTab
             label="Levels"
             href={PLAY_LEVELS_SELECTOR_HREF}
             icon="level-editor"
             active={selection.mode === 'levels'}
-            index={resumable ? 3 : 2}
+            index={3}
           />
         </div>
 
@@ -698,7 +878,7 @@ export function PlayMenu({
                       key={campaign.id}
                       campaign={campaign}
                       active={selection.mode === 'campaign' && selection.campaignId === campaign.id}
-                      index={index + 3 + (resumable ? 1 : 0)}
+                      index={index + 4}
                     />
                   ))}
                 </>
@@ -711,7 +891,7 @@ export function PlayMenu({
                       key={campaign.id}
                       campaign={campaign}
                       active={selection.mode === 'campaign' && selection.campaignId === campaign.id}
-                      index={officialCampaigns.length + index + 3 + (resumable ? 1 : 0)}
+                      index={officialCampaigns.length + index + 4}
                     />
                   ))}
                 </>
@@ -727,8 +907,8 @@ export function PlayMenu({
         readyToCompose={
           !loading
           && !surfaceError
-          && hubLandingSettled
-          && (selection.mode === 'run' || selection.mode === 'hub' || thumbnailSurface.complete)
+          && continueLandingSettled
+          && (selection.mode === 'run' || selection.mode === 'continue' || selection.mode === 'hub' || thumbnailSurface.complete)
         }
         error={surfaceError}
         loadingLabel="Preparing Play…"
@@ -744,29 +924,8 @@ export function PlayMenu({
         {...sceneTransitionTargetAttributes('play-shell', 'contents')}
         data-scene-instance={sceneInstanceKey}
       >
-      {selection.mode === 'hub' ? (
-        <ActionColumn>
-          <div className="play-action-stack play-hub-neutral">
-            <div className="play-action-heading">
-              <span className="play-action-kicker">Play</span>
-              <h2>Choose a mode</h2>
-              <p>Pick Skirmish, Run, or Levels on the left, or open a Campaign beneath them.</p>
-            </div>
-            {resumable ? (
-              <InnerChromeBox className="play-level-card play-hub-continue-card" data-testid="play-hub-continue">
-                <h3>{resumable.label}</h3>
-                <p>{resumable.detail}</p>
-                <NavButton
-                  data-chrome-unit="inner-text-button"
-                  className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-                  to={resumable.href}
-                >
-                  Continue
-                </NavButton>
-              </InnerChromeBox>
-            ) : null}
-          </div>
-        </ActionColumn>
+      {selection.mode === 'hub' || selection.mode === 'continue' ? (
+        <ContinuePanel inventory={resumeInventory} choice={selectedContinueChoice} />
       ) : null}
       {selection.mode === 'skirmish' ? (
         <SkirmishProfilesPanel
@@ -789,6 +948,7 @@ export function PlayMenu({
           levels={levels}
           loading={loading}
           officialAvailable={officialAvailable}
+          choice={selectedRunChoice}
         />
       ) : null}
       {activeCampaign ? (
