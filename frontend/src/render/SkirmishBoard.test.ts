@@ -12,8 +12,10 @@ import {
   commitSkirmishSceneFirstFrame,
   pieceRuntimeSpriteSources,
   pieceOp,
+  sceneBoardForSkirmish,
   skirmishArmyOverlaySet,
   skirmishTileClickIntent,
+  skirmishVisualTerrainCells,
 } from './SkirmishBoard';
 
 afterEach(() => resetLiveUnitCatalog());
@@ -84,6 +86,47 @@ describe('buildSkirmishBoard', () => {
     expect(boardA.cells.find((cell) => cell.x === 1 && cell.y === 0)?.feature?.mask).toBe(4);
     expect(boardA.cells.find((cell) => cell.x === 1 && cell.y === 1)?.feature?.mask).toBe(1);
     expect(boardA.cells.every((cell) => !cell.groundCover)).toBe(true);
+  });
+
+  it('renders the complete authored visual scene without adding scenic gameplay cells', () => {
+    const painted = exactBoard();
+    const scenic: EditorBoard = {
+      ...painted,
+      decorativeApron: { top: 0, right: 1, bottom: 0, left: 0 },
+      decorativeCells: { '3,0': tileFamilies.water[5].id },
+      decorativeFeatures: { '3,0': { kind: 'road', material: 'cobble' } },
+      decorativeFences: { '3,0|3,1': 'wood' },
+      decorativeFencePosts: { '3,0': 'wood' },
+      decorativeWalls: { '3,0|4,0': 'stone' },
+      cover: { '3,0': 'sparse' },
+      coverTypes: { '3,0': 'water' },
+      doodads: { '3,0': { doodadId: 'retained-off-grid-doodad' } },
+      props: { '3,1': { propId: 'retained-off-grid-prop' } },
+    };
+    const level = editorBoardToLevel(scenic, { id: 'scenic-map', name: 'Scenic Map' });
+    const game = createSkirmish({ seed: 2, level });
+    const board = buildSkirmishBoard(game, 2);
+    const terrain = skirmishVisualTerrainCells(scenic)!;
+    const scene = sceneBoardForSkirmish(game, board, scenic);
+
+    expect(board.cells).toHaveLength(scenic.cols * scenic.rows);
+    expect(board.cells.every((cell) => cell.x < scenic.cols && cell.y < scenic.rows)).toBe(true);
+    expect(terrain).toHaveLength(scenic.cols * scenic.rows + scenic.rows);
+    expect(terrain.find((cell) => cell.x === 3 && cell.y === 0)).toEqual(expect.objectContaining({
+      topSrc: expect.stringMatching(/^\/api\/media\/[0-9a-f]{64}$/),
+      featureSrc: expect.stringMatching(/^\/api\/media\/[0-9a-f]{64}$/),
+      animate: false,
+    }));
+    expect(terrain.every((cell) => cell.animate === false)).toBe(true);
+    expect(scene.decorativeApron).toEqual(scenic.decorativeApron);
+    expect(scene.decorativeCells).toEqual(scenic.decorativeCells);
+    expect(scene.decorativeFeatures).toEqual(scenic.decorativeFeatures);
+    expect(scene.decorativeFences).toEqual(scenic.decorativeFences);
+    expect(scene.decorativeFencePosts).toEqual(scenic.decorativeFencePosts);
+    expect(scene.decorativeWalls).toEqual(scenic.decorativeWalls);
+    expect(scene.doodads).toEqual(scenic.doodads);
+    expect(scene.props?.['3,1']).toEqual(scenic.props?.['3,1']);
+    expect(scene.cover['3,0']).toBe('sparse');
   });
 });
 

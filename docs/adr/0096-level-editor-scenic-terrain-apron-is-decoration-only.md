@@ -1,8 +1,9 @@
 ---
-status: accepted; placement restrictions partially superseded by ADR-0098; synthesis and render-pass clauses partially superseded by ADR-0126
+status: accepted; placement restrictions partially superseded by ADR-0098; synthesis and render-pass clauses partially superseded by ADR-0126; gameplay and thumbnail visibility clause superseded by ADR-0284
 date: 2026-07-14
 deciders: Nelson, Codex
 superseded_by: 0098-authored-board-extends-beyond-playable-grid.md, 0126-scenic-terrain-preserves-boundary-topology-in-one-depth-pass.md
+partially_superseded_by: 0284-board-views-render-the-complete-authored-visual-scene.md
 ---
 
 # ADR-0096: The Level Editor scenic terrain apron is decoration only

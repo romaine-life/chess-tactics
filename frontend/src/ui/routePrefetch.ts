@@ -14,7 +14,6 @@ import { isPlaySelectorPath } from './playHubRoute';
 export const importSkirmish = () => import('./Skirmish');
 export const importRunScreen = () => import('./RunScreen');
 export const importCampaignEditor = () => import('./CampaignEditor');
-export const importWarEditor = () => import('./WarEditor');
 export const importTilePreview = () => import('./TilePreview');
 export const importLevelEditor = () => import('./LevelEditor');
 export const importPortraitEditor = () => import('./PortraitEditor');
@@ -28,8 +27,7 @@ function chunkForPath(path: string): (() => Promise<unknown>) | null {
   if (path === '/studio' || path === '/tileset-studio' || path === '/unit-studio' || path === '/nine-slice-editor' || path === '/prop-lab' || path === '/tile-compare' || path === '/surface-lab' || path === '/scene-anim-lab' || path === '/doodad-editor' || path === '/artwork-compare') return importTilePreview;
   if (path === '/editor/level' || path === '/edit' || path === '/level-editor') return importLevelEditor;
   if (path === '/portrait-editor') return importPortraitEditor;
-  if (path === '/editor' || path === '/campaigns-next' || path === '/campaigns') return importCampaignEditor;
-  if (path === '/editor/wars') return importWarEditor;
+  if (path === '/editor' || path === '/editor/wars' || path === '/campaigns-next' || path === '/campaigns') return importCampaignEditor;
   return null;
 }
 

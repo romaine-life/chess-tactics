@@ -8094,6 +8094,12 @@ export function LevelEditor(): ReactElement {
   const selectedArtwork = selectedArtworkId
     ? boardFloatingArtwork.find((placement) => placement.id === selectedArtworkId)
     : undefined;
+  // Scene Art keeps its explicit selection while authors visit another destination, but its
+  // transform controls belong only to Placed Art. Do not let that remembered selection leak into
+  // Zone (or any other layer) through the shared Details card.
+  const selectedArtworkForDetails = layer === 'placed-art' && brushKind === 'artwork'
+    ? selectedArtwork
+    : undefined;
   const artworkSelectionOptions = useMemo<HouseSelectOption<string>[]>(() => {
     const sourceCounts = new Map<string, number>();
     return [
@@ -10571,13 +10577,13 @@ export function LevelEditor(): ReactElement {
         </section>
         ) : null}
 
-        {layer !== 'status' && layer !== 'recovery' && (selectedArtwork || selectedUnitAsset || selectedDoodadAsset || selectedProp || selectedAsset || selectedCell) ? (
+        {layer !== 'status' && layer !== 'recovery' && (selectedArtworkForDetails || selectedUnitAsset || selectedDoodadAsset || selectedProp || selectedAsset || selectedCell) ? (
         <section className="skirmish-card le-details">
-          <h2>Details · {selectedArtwork ? 'Artwork' : selectedUnitAsset ? 'Unit' : selectedDoodadAsset ? 'Doodad' : selectedProp ? 'Prop' : selectedAsset ? 'Tile' : 'Cell'}</h2>
-          {selectedArtwork ? (
+          <h2>Details · {selectedArtworkForDetails ? 'Artwork' : selectedUnitAsset ? 'Unit' : selectedDoodadAsset ? 'Doodad' : selectedProp ? 'Prop' : selectedAsset ? 'Tile' : 'Cell'}</h2>
+          {selectedArtworkForDetails ? (
             <>
               <dl>
-                <div><dt>Source</dt><dd>{selectedArtworkAsset?.label ?? selectedArtwork.sourceArtId}</dd></div>
+                <div><dt>Source</dt><dd>{selectedArtworkAsset?.label ?? selectedArtworkForDetails.sourceArtId}</dd></div>
                 <div><dt>Role</dt><dd>Floating overlay · no tile or gameplay object</dd></div>
               </dl>
               <div className="le-artwork-transform-grid">
@@ -10589,8 +10595,8 @@ export function LevelEditor(): ReactElement {
                     min={artworkXRange.min}
                     max={artworkXRange.max}
                     step="1"
-                    value={selectedArtwork.pixelX}
-                    onChange={(event) => moveArtwork(selectedArtwork.id, { pixelX: Number(event.target.value), pixelY: selectedArtwork.pixelY })}
+                    value={selectedArtworkForDetails.pixelX}
+                    onChange={(event) => moveArtwork(selectedArtworkForDetails.id, { pixelX: Number(event.target.value), pixelY: selectedArtworkForDetails.pixelY })}
                   />
                   <input
                     className="le-text-input"
@@ -10599,8 +10605,8 @@ export function LevelEditor(): ReactElement {
                     min={-MAX_FLOATING_ARTWORK_PIXEL}
                     max={MAX_FLOATING_ARTWORK_PIXEL}
                     step="1"
-                    value={selectedArtwork.pixelX}
-                    onChange={(event) => moveArtwork(selectedArtwork.id, { pixelX: Number(event.target.value), pixelY: selectedArtwork.pixelY })}
+                    value={selectedArtworkForDetails.pixelX}
+                    onChange={(event) => moveArtwork(selectedArtworkForDetails.id, { pixelX: Number(event.target.value), pixelY: selectedArtworkForDetails.pixelY })}
                   />
                 </label>
                 <label className="le-artwork-transform-row">
@@ -10611,8 +10617,8 @@ export function LevelEditor(): ReactElement {
                     min={artworkYRange.min}
                     max={artworkYRange.max}
                     step="1"
-                    value={selectedArtwork.pixelY}
-                    onChange={(event) => moveArtwork(selectedArtwork.id, { pixelX: selectedArtwork.pixelX, pixelY: Number(event.target.value) })}
+                    value={selectedArtworkForDetails.pixelY}
+                    onChange={(event) => moveArtwork(selectedArtworkForDetails.id, { pixelX: selectedArtworkForDetails.pixelX, pixelY: Number(event.target.value) })}
                   />
                   <input
                     className="le-text-input"
@@ -10621,8 +10627,8 @@ export function LevelEditor(): ReactElement {
                     min={-MAX_FLOATING_ARTWORK_PIXEL}
                     max={MAX_FLOATING_ARTWORK_PIXEL}
                     step="1"
-                    value={selectedArtwork.pixelY}
-                    onChange={(event) => moveArtwork(selectedArtwork.id, { pixelX: selectedArtwork.pixelX, pixelY: Number(event.target.value) })}
+                    value={selectedArtworkForDetails.pixelY}
+                    onChange={(event) => moveArtwork(selectedArtworkForDetails.id, { pixelX: selectedArtworkForDetails.pixelX, pixelY: Number(event.target.value) })}
                   />
                 </label>
                 <label className="le-artwork-transform-row">
@@ -10633,8 +10639,8 @@ export function LevelEditor(): ReactElement {
                     min="0.1"
                     max="8"
                     step="0.05"
-                    value={selectedArtwork.scale}
-                    onChange={(event) => updateArtwork(selectedArtwork.id, (placement) => ({
+                    value={selectedArtworkForDetails.scale}
+                    onChange={(event) => updateArtwork(selectedArtworkForDetails.id, (placement) => ({
                       ...placement,
                       scale: Number.isFinite(Number(event.target.value))
                         ? Math.max(0.1, Math.min(8, Number(event.target.value)))
@@ -10648,8 +10654,8 @@ export function LevelEditor(): ReactElement {
                     min="0.1"
                     max="8"
                     step="0.05"
-                    value={selectedArtwork.scale}
-                    onChange={(event) => updateArtwork(selectedArtwork.id, (placement) => ({
+                    value={selectedArtworkForDetails.scale}
+                    onChange={(event) => updateArtwork(selectedArtworkForDetails.id, (placement) => ({
                       ...placement,
                       scale: Number.isFinite(Number(event.target.value))
                         ? Math.max(0.1, Math.min(8, Number(event.target.value)))
@@ -10659,8 +10665,8 @@ export function LevelEditor(): ReactElement {
                 </label>
               </div>
               <div className="le-seg le-artwork-actions">
-                <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={() => duplicateArtwork(selectedArtwork.id)}>Duplicate</button>
-                <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')} onClick={() => deleteArtwork(selectedArtwork.id)}>Delete</button>
+                <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={() => duplicateArtwork(selectedArtworkForDetails.id)}>Duplicate</button>
+                <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')} onClick={() => deleteArtwork(selectedArtworkForDetails.id)}>Delete</button>
               </div>
             </>
           ) : selectedUnitAsset && selectedUnit ? (

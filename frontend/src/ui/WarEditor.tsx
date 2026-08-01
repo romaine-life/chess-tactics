@@ -1,16 +1,7 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
-import { drawableAssets } from '@chess-tactics/board-render';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
-import {
-  mapSaveError,
-  officialWorkspaceForSave,
-  publishOfficialWorkspace,
-  saveUserWorkspace,
-  userWorkspaceForSave,
-} from '../campaign/save';
-import { fetchMe, goSignIn, type AuthUser } from '../net/auth';
-import { isWorkspaceConflict } from '../net/campaignWorkspace';
+import { fetchMe, type AuthUser } from '../net/auth';
 import { createRun, snapshotWar } from '../run/model';
 import { useActiveRun } from '../run/store';
 import { useWars } from '../war/store';
@@ -20,23 +11,7 @@ import { KitScroll } from './KitScroll';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { SettingsButton, SettingsRow, SettingsSection } from './shared/SettingsControls';
 import { useConfirm } from './shared/ConfirmDialog';
-import { TitleBarSlot } from './shell/TitleBarSlot';
-
-const campaignMenuModes = drawableAssets('menu-mode')
-  .filter((asset) => asset.behavior.value === 'campaign-editor');
-if (campaignMenuModes.length !== 1) {
-  throw new Error(`War editor requires one installed campaign editor menu mode; found ${campaignMenuModes.length}`);
-}
-const WAR_TAB_ICON = campaignMenuModes[0].media.icon?.media.immutableUrl;
-if (!WAR_TAB_ICON) throw new Error('installed campaign editor menu mode has no icon');
-
-function userSignature(): string {
-  return JSON.stringify(userWorkspaceForSave());
-}
-
-function officialSignature(): string {
-  return JSON.stringify(officialWorkspaceForSave());
-}
+import { useSceneParticipant } from './shell/SceneBoundary';
 
 function seedForNewRun(): number {
   const values = new Uint32Array(1);
@@ -49,25 +24,15 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
   const selectedWarId = useWars((state) => state.selectedWarId);
   const selectedBattleId = useWars((state) => state.selectedBattleId);
   const levels = useCampaigns((state) => state.levels);
-  const campaigns = useCampaigns((state) => state.campaigns);
   const activeRun = useActiveRun((state) => state.run);
   const [me, setMe] = useState<AuthUser | null>(null);
   const [loaded, setLoaded] = useState(wars.length > 0);
   const [userReady, setUserReady] = useState(false);
   const [officialReady, setOfficialReady] = useState(false);
   const [status, setStatus] = useState('');
-  const [userSaveConflict, setUserSaveConflict] = useState(false);
-  const [officialSaveConflict, setOfficialSaveConflict] = useState(false);
   const { ask, dialog } = useConfirm();
 
-  const workspaceSignal = useMemo(() => ({ wars, levels, campaigns }), [campaigns, levels, wars]);
-  const currentUserSig = useMemo(() => userSignature(), [workspaceSignal]);
-  const currentOfficialSig = useMemo(() => officialSignature(), [workspaceSignal]);
-  const [savedUserSig, setSavedUserSig] = useState(currentUserSig);
-  const [savedOfficialSig, setSavedOfficialSig] = useState(currentOfficialSig);
-  const userDirty = currentUserSig !== savedUserSig;
-  const officialDirty = currentOfficialSig !== savedOfficialSig;
-  const dirty = userDirty || officialDirty;
+  useSceneParticipant('war-editor-content', loaded ? 'painted' : 'loading');
 
   useEffect(() => {
     let active = true;
@@ -79,9 +44,8 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
       setUserReady(hydration.userWorkspace !== 'unavailable');
       setOfficialReady(hydration.officialAvailable);
       const state = useWars.getState();
-      if (!state.selectedWarId && state.wars[0]) state.selectWar(state.wars[0].id);
-      setSavedUserSig(userSignature());
-      setSavedOfficialSig(officialSignature());
+      const defaultWar = state.wars.find((war) => war.origin !== 'official') ?? state.wars[0];
+      if (!state.selectedWarId && defaultWar) state.selectWar(defaultWar.id);
     }).catch(() => {
       if (active) setStatus('Wars could not be loaded. Try again in a moment.');
     }).finally(() => {
@@ -90,16 +54,6 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
     void useActiveRun.getState().hydrate();
     return () => { active = false; };
   }, []);
-
-  useEffect(() => {
-    if (!dirty) return undefined;
-    const beforeUnload = (event: BeforeUnloadEvent): void => {
-      event.preventDefault();
-      event.returnValue = '';
-    };
-    window.addEventListener('beforeunload', beforeUnload);
-    return () => window.removeEventListener('beforeunload', beforeUnload);
-  }, [dirty]);
 
   const selectedWar = wars.find((war) => war.id === selectedWarId) ?? null;
   const orderedBattles = useMemo(
@@ -119,48 +73,6 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
     selectedWar
     && (selectedWar.origin !== 'official' ? userReady : isAdmin && officialReady),
   );
-
-  const saveMine = async (): Promise<void> => {
-    if (!userReady || userSaveConflict) return;
-    try {
-      await saveUserWorkspace();
-      setSavedUserSig(userSignature());
-      setStatus('Wars saved.');
-    } catch (error) {
-      if (isWorkspaceConflict(error)) {
-        setUserSaveConflict(true);
-        setStatus('Save stopped because this workspace changed elsewhere. Reload before saving again.');
-        return;
-      }
-      const mapped = mapSaveError(error);
-      if ('action' in mapped) goSignIn();
-      else setStatus(mapped.message);
-    }
-  };
-
-  const publish = async (): Promise<void> => {
-    if (!isAdmin || !officialReady || officialSaveConflict) return;
-    if (!(await ask({
-      title: 'Publish official Wars?',
-      message: 'This updates the War pool available to every player.',
-      confirmLabel: 'Publish',
-      cancelLabel: 'Cancel',
-    }))) return;
-    try {
-      const saved = await publishOfficialWorkspace();
-      setSavedOfficialSig(officialSignature());
-      setStatus(`Official Wars published (revision ${saved.revision}).`);
-    } catch (error) {
-      if (isWorkspaceConflict(error)) {
-        setOfficialSaveConflict(true);
-        setStatus('Publish stopped because official content changed elsewhere. Reload before publishing again.');
-        return;
-      }
-      const mapped = mapSaveError(error);
-      if ('action' in mapped) goSignIn();
-      else setStatus(mapped.message);
-    }
-  };
 
   const startSelectedWar = async (): Promise<void> => {
     if (!selectedWar) return;
@@ -211,85 +123,47 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
 
   const officialWars = wars.filter((war) => war.origin === 'official');
   const privateWars = wars.filter((war) => war.origin !== 'official');
-  const centerSlot = (
-    <TitleBarSlot region="center">
-      <div className="ce-topbar-stats" aria-label="War workspace state">
-        <span className={`ce-save-state ${dirty ? 'is-dirty' : ''}`.trim()}>{dirty ? 'Unsaved' : 'Saved'}</span>
-      </div>
-    </TitleBarSlot>
-  );
+  const orderedWars = [...officialWars, ...privateWars];
 
   const inner = (
     <>
-      <aside className={embedded ? 'menu-dest-col menu-dest-tabs ce-editor-rail' : 'settings-frame settings-rail-frame ce-editor-rail'} aria-label="Wars">
-        <KitScroll className="ce-rail-scroll">
-          <div className="ce-rail-list">
-            {officialWars.length ? <p className="campaign-rail-group">Official Wars</p> : null}
-            {officialWars.map((war, index) => (
-              <button
-                type="button"
-                data-chrome-unit="inner-box"
-                className={chromeUnitClassNames('inner-box', 'settings-tab ce-campaign-tab', war.id === selectedWarId && 'is-active')}
-                style={{ ['--tab-index' as string]: index }}
-                key={war.id}
-                onClick={() => useWars.getState().selectWar(war.id)}
-              >
-                <span className="settings-tab-icon" aria-hidden="true"><img src={WAR_TAB_ICON} alt="" /></span>
-                <span className="ce-campaign-tab-copy"><strong>{war.name}</strong><small>{war.battles.length} Battles</small></span>
-                <span className="ce-tab-trail">{war.eligibleForRun ? 'RUN' : 'OFFICIAL'}</span>
-              </button>
-            ))}
-            {privateWars.length ? <p className="campaign-rail-group">Your Wars</p> : null}
-            {privateWars.map((war, index) => (
-              <button
-                type="button"
-                data-chrome-unit="inner-box"
-                className={chromeUnitClassNames('inner-box', 'settings-tab ce-campaign-tab', war.id === selectedWarId && 'is-active')}
-                style={{ ['--tab-index' as string]: officialWars.length + index }}
-                key={war.id}
-                onClick={() => useWars.getState().selectWar(war.id)}
-              >
-                <span className="settings-tab-icon" aria-hidden="true"><img src={WAR_TAB_ICON} alt="" /></span>
-                <span className="ce-campaign-tab-copy"><strong>{war.name}</strong><small>{war.battles.length} Battles</small></span>
-              </button>
-            ))}
-            {!wars.length && loaded ? <p className="ce-empty">No Wars yet.</p> : null}
-          </div>
-        </KitScroll>
-        <div className="ce-rail-actions">
-          <SettingsButton href="/editor">Campaign Editor</SettingsButton>
-          <SettingsButton
-            disabled={!userReady}
-            onClick={() => useWars.getState().newWar(false)}
-          >+ New War</SettingsButton>
-          {isAdmin ? (
-            <SettingsButton
-              disabled={!officialReady}
-              onClick={() => useWars.getState().newWar(true)}
-            >+ New Official War</SettingsButton>
-          ) : null}
-          <SettingsButton
-            tone="primary"
-            disabled={!userReady || !userDirty || userSaveConflict}
-            onClick={() => void saveMine()}
-          >Save</SettingsButton>
-          {isAdmin ? (
-            <SettingsButton
-              tone="primary"
-              disabled={!officialReady || !officialDirty || officialSaveConflict}
-              onClick={() => void publish()}
-            >Publish to all players</SettingsButton>
-          ) : null}
-          {me && !me.signed_in ? <SettingsButton onClick={goSignIn}>Sign in to save</SettingsButton> : null}
-          {status ? <p className="ce-status" role="status">{status}</p> : null}
-        </div>
-      </aside>
-
       <main className={embedded ? 'menu-dest-col menu-dest-action ce-editor-main' : 'settings-frame settings-main-frame ce-editor-main'}>
         <h2 className="sr-only">{selectedWar?.name ?? 'War Editor'}</h2>
         <div className="ce-editor-body">
           <KitScroll className="settings-scroll ce-editor-scroll">
             <div className="settings-panel-content">
+              {status ? <p className="ce-status" role="status">{status}</p> : null}
+              <SettingsSection title="Wars">
+                {!orderedWars.length && loaded ? (
+                  <SettingsRow title="No Wars yet" description="Create a War to begin building its ordered Battles." />
+                ) : null}
+                {orderedWars.map((war) => {
+                  const selected = war.id === selectedWarId;
+                  return (
+                    <SettingsRow
+                      key={war.id}
+                      eyebrow={war.origin === 'official' ? 'Official' : 'Private'}
+                      title={war.name}
+                      description={`${war.battles.length} ${war.battles.length === 1 ? 'Battle' : 'Battles'}`}
+                      value={war.eligibleForRun ? <span>RUN</span> : undefined}
+                    >
+                      <SettingsButton
+                        tone={selected ? 'primary' : 'neutral'}
+                        disabled={selected}
+                        onClick={() => useWars.getState().selectWar(war.id)}
+                      >{selected ? 'Selected' : 'Select'}</SettingsButton>
+                    </SettingsRow>
+                  );
+                })}
+                <SettingsRow title="New War" description="Create another private War in this workspace.">
+                  <SettingsButton disabled={!userReady} onClick={() => useWars.getState().newWar(false)}>+ New War</SettingsButton>
+                </SettingsRow>
+                {isAdmin ? (
+                  <SettingsRow title="New official War" description="Create a War for the published Run pool.">
+                    <SettingsButton disabled={!officialReady} onClick={() => useWars.getState().newWar(true)}>+ New Official War</SettingsButton>
+                  </SettingsRow>
+                ) : null}
+              </SettingsSection>
               {selectedWar ? (
                 <>
                   <SettingsSection title="War">
@@ -423,7 +297,7 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
                 </>
               ) : (
                 <SettingsSection title="War Editor">
-                  <SettingsRow title="No War selected" description="Choose a War in the rail or create one." />
+                  <SettingsRow title="No War selected" description="Select or create a War above." />
                 </SettingsSection>
               )}
             </div>
@@ -448,6 +322,5 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
     </>
   );
 
-  if (embedded) return <>{dialog}{centerSlot}{inner}</>;
-  return <>{dialog}{centerSlot}<div className="settings-shell ce-editor-shell">{inner}</div></>;
+  return <>{dialog}{inner}</>;
 }

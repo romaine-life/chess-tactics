@@ -6,14 +6,14 @@ extends:
   - 0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md
   - 0085-runtime-assets-are-live-storage-backed.md
   - 0275-run-cards-use-trading-card-anatomy-and-single-digit-gold.md
-  - 0281-units-card-art-uses-a-pixellab-pixel-art-core-set.md
+  - 0282-units-card-art-uses-a-pixellab-pixel-art-core-set.md
 partially_supersedes:
   - 0276-run-type-lines-declare-primary-families-and-affected-qualifiers.md
 partially_superseded_by:
-  - 0283-run-card-type-lines-use-one-optically-centered-baseline.md
+  - 0285-run-card-type-lines-use-one-optically-centered-baseline.md
 ---
 
-# ADR-0282: Run card face is one shared live runtime component
+# ADR-0283: Run card face is one shared live runtime component
 
 ## Context
 
@@ -57,5 +57,5 @@ The Card Layout face is the canonical Run-card renderer.
 
 - [ADR-0275](0275-run-cards-use-trading-card-anatomy-and-single-digit-gold.md)
 - [ADR-0276](0276-run-type-lines-declare-primary-families-and-affected-qualifiers.md)
-- [ADR-0281](0281-units-card-art-uses-a-pixellab-pixel-art-core-set.md)
+- [ADR-0282](0282-units-card-art-uses-a-pixellab-pixel-art-core-set.md)
 - [Runtime asset contract](../runtime-asset-contract.md)

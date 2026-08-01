@@ -4,12 +4,12 @@ date: 2026-07-31
 deciders: owner (Nelson) + Codex
 extends:
   - 0085-runtime-assets-are-live-storage-backed.md
-  - 0280-unit-card-art-uses-dedicated-database-prompt-plans.md
+  - 0281-unit-card-art-uses-dedicated-database-prompt-plans.md
 partially_supersedes:
-  - 0280-unit-card-art-uses-dedicated-database-prompt-plans.md
+  - 0281-unit-card-art-uses-dedicated-database-prompt-plans.md
 ---
 
-# ADR-0281: Units-card art uses a PixelLab pixel-art core set
+# ADR-0282: Units-card art uses a PixelLab pixel-art core set
 
 ## Context
 
@@ -69,6 +69,6 @@ fallback or second preview-only art path.
 
 ## More Information
 
-- [ADR-0280](0280-unit-card-art-uses-dedicated-database-prompt-plans.md)
+- [ADR-0281](0281-unit-card-art-uses-dedicated-database-prompt-plans.md)
 - [Runtime asset contract](../runtime-asset-contract.md)
 - [Lore and anti-story](../lore-anti-story.md)

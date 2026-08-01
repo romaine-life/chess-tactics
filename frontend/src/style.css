@@ -9779,6 +9779,17 @@ body { font-size: 17px; }
   pointer-events: none;
   transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
 }
+/* PaintedSurfaceBoundary is deliberately layout-transparent (`display: contents`). When one
+   is a direct child of a contents-mode scene target (the Editor/Play preview column), opacity
+   on that non-box cannot fade its pixels. Carry the exact same scene transition through the
+   transparent boundary to its real visual child; otherwise the fourth column remains painted
+   while its sibling action column fades. */
+.scene-director.is-exiting [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > .painted-surface > .painted-surface-content > *,
+.scene-director.is-exiting [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > .painted-surface > .painted-surface-status {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
+}
 .scene-boundary.is-preparing {
   opacity: 0;
   pointer-events: none;
@@ -9811,6 +9822,11 @@ body { font-size: 17px; }
   opacity: 0;
   pointer-events: none;
 }
+.scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > .painted-surface > .painted-surface-content > *,
+.scene-boundary.is-region-preparing [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > .painted-surface > .painted-surface-status {
+  opacity: 0;
+  pointer-events: none;
+}
 .scene-director.is-entering [data-scene-transition-target][data-scene-transition-active] {
   opacity: 1;
   transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
@@ -9819,8 +9835,14 @@ body { font-size: 17px; }
   opacity: 1;
   transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
 }
+.scene-director.is-entering [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > .painted-surface > .painted-surface-content > *,
+.scene-director.is-entering [data-scene-transition-target][data-scene-transition-active][data-scene-transition-mode="contents"] > .painted-surface > .painted-surface-status {
+  opacity: 1;
+  transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
+}
 
 .play-destination-content { display: contents; }
+.editor-destination-content { display: contents; }
 .scene-loading-presentation {
   position: fixed;
   inset: 0;
@@ -18472,8 +18494,8 @@ button.tileset-relationship-cell {
 .run-card-grid {
   display: grid;
   gap: var(--ds-inline);
-  grid-template-columns: repeat(auto-fill, minmax(196px, 236px));
-  justify-content: start;
+  grid-template-columns: repeat(auto-fit, minmax(196px, 236px));
+  justify-content: center;
 }
 
 .run-card {
