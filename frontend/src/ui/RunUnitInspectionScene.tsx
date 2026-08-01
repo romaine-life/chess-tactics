@@ -1,7 +1,7 @@
 import { useMemo, type ReactElement } from 'react';
 import { TILE_STEP_Y } from '../art/projectionContract';
 import { tileAssets } from '../art/tileset';
-import { defaultFacingForSide, paletteForSide } from '../core/pieces';
+import { paletteForSide } from '../core/pieces';
 import { createRng } from '../core/rng';
 import {
   familyForGameplayTerrain,
@@ -20,7 +20,7 @@ export const RUN_UNIT_INSPECTION_CAMERA = {
   pan: { x: 0, y: TILE_STEP_Y * 3.5 },
 } as const;
 const PLAYER_PROFILE_FACTION = paletteForSide('player');
-const PLAYER_PROFILE_FACING = defaultFacingForSide('player');
+const PLAYER_PROFILE_FACING = 'south' as const;
 
 export interface RunUnitInspectionPlan {
   board: EditorBoard;

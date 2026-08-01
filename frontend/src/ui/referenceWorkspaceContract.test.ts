@@ -163,6 +163,13 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(style).toMatch(/\.strategikon-slot\s*\{[\s\S]*?inset:\s*0[\s\S]*?pointer-events:\s*none[\s\S]*?position:\s*absolute/);
     expect(style).toMatch(/\.strategikon-slot\s*>\s*\*\s*\{[\s\S]*?pointer-events:\s*auto/);
     expect(style).toMatch(/\.strategikon-workspace-fill\s*\{[\s\S]*?inset:\s*0/);
+    expect(style).toMatch(/\.skirmish-screen\.is-run-self-inspection-open\s*\{[\s\S]*?column-gap:\s*0/);
+    expect(style).toMatch(/--main-menu-content-inset-block:\s*calc\(var\(--main-menu-frame-inset\) \+ var\(--main-menu-rail-pad-block\)\)/);
+    expect(style).toMatch(/--main-menu-content-inset-inline:\s*calc\(var\(--main-menu-frame-inset\) \+ var\(--main-menu-rail-pad-inline\)\)/);
+    expect(style).toMatch(/\.main-menu-twin-screen \.settings-shell\s*\{[\s\S]*?--col-top-inset:\s*var\(--main-menu-content-inset-block\);[\s\S]*?--col-side-inset:\s*var\(--main-menu-content-inset-inline\)/);
+    expect(style).toMatch(/\.strategikon-workspace\s*\{[\s\S]*?gap:\s*0;[\s\S]*?padding:\s*0/);
+    expect(style).toMatch(/\.strategikon-rail\s*\{[\s\S]*?padding-block:\s*var\(--main-menu-content-inset-block\);[\s\S]*?padding-inline:\s*var\(--main-menu-content-inset-inline\) 0/);
+    expect(style).toMatch(/\.strategikon-content\s*\{[\s\S]*?padding-block:\s*var\(--main-menu-content-inset-block\);[\s\S]*?padding-inline:\s*var\(--main-menu-content-inset-inline\)/);
     expect(style).not.toMatch(/\.skirmish-war-room\.has-strategikon > \.skirmish-field\s*\{[\s\S]*?visibility:\s*hidden/);
   });
 });
