@@ -4672,7 +4672,17 @@ async function main() {
     throw new Error(`Working-copy mutation accepted no session fence: ${unfencedAutosave.statusCode} ${unfencedAutosave.body}`);
   }
 
-  const draftLevel = { ...workspaceLevel, name: 'Autosaved Draft' };
+  // Incomplete gameplay geometry remains valid working-copy structure: autosave must preserve
+  // the roster while the editor's playability gate blocks canonical Save until a zone is chosen.
+  const draftLevel = {
+    ...workspaceLevel,
+    name: 'Autosaved Draft',
+    events: [{
+      name: 'Deploy enemy force',
+      trigger: { kind: 'setup' },
+      do: [{ kind: 'spawn', side: 'enemy', roster: { pawn: 1 }, zoneIds: [] }],
+    }],
+  };
   const autosavedEditor = await request(
     'PUT', `/api/editor-documents/${smokeDocumentId}`,
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
@@ -4684,7 +4694,8 @@ async function main() {
     autosavedEditorBody.document.revision !== 2 ||
     autosavedEditorBody.document.saved_revision !== 1 ||
     autosavedEditorBody.document.dirty !== true ||
-    autosavedEditorBody.document.level.name !== 'Autosaved Draft'
+    autosavedEditorBody.document.level.name !== 'Autosaved Draft' ||
+    autosavedEditorBody.document.level.events?.[0]?.do?.[0]?.zoneIds?.length !== 0
   ) {
     throw new Error(`Unexpected editor autosave: ${autosavedEditor.statusCode} ${autosavedEditor.body}`);
   }

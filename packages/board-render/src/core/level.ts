@@ -98,7 +98,7 @@ export interface VictoryRule {
  */
 export type VictoryRules = VictoryRule[];
 
-/** Piece counts per side for random placement — playable piece types only (no rocks). */
+/** Piece counts for legacy random placement or an explicit side deployment. */
 export type Roster = Partial<Record<PieceType, number>>;
 
 export type LevelEventTrigger =
@@ -113,7 +113,7 @@ export interface SpawnEventAction {
   kind: 'spawn';
   side: ConditionSide;
   roster: Roster;
-  /** One or more dumb zone ids whose tiles form the random placement pool. */
+  /** One or more dumb zone ids whose tiles form this side's pooled deployment area. */
   zoneIds: string[];
 }
 
@@ -272,8 +272,8 @@ export interface Level {
   // 'random' is still read for old levels and editor convenience, but new behavior is authored
   // through setup spawn events in `events` so zones can stay dumb named tile groups.
   placement?: 'fixed' | 'random';
-  // Legacy/random-placement force definition, mirrored by setup spawn events on new saves.
-  // Only meaningful when placement === 'random' or when converted to explicit spawn events.
+  // Legacy random-placement force definition. New side-specific deployment is stored directly
+  // as setup spawn actions in `events` (ADR-0287).
   roster?: { player: Roster; enemy: Roster };
   // `survive` mode's authored turn target (player-turns to outlast). Absent ⇒
   // DEFAULT_SURVIVE_TURNS (core/objectives.ts) so every existing survive level keeps
@@ -492,8 +492,10 @@ function legacyEventErrors(ev: Record<string, unknown>, path: string): string[] 
     if (spawn.trigger?.kind !== 'setup') errs.push(`${path}.trigger.kind must be 'setup'`);
     if (spawn.side !== 'player' && spawn.side !== 'enemy') errs.push(`${path}.side must be 'player' or 'enemy'`);
     errs.push(...rosterCountsErrors(spawn.roster, `${path}.roster`));
-    if (!Array.isArray(spawn.zoneIds) || spawn.zoneIds.length === 0 || spawn.zoneIds.some((id) => typeof id !== 'string' || !id.trim())) {
-      errs.push(`${path}.zoneIds must be a non-empty array of zone ids`);
+    // An empty pool is a structurally valid working draft. Playability owns the requirement
+    // that an enabled roster select painted deployment geometry before canonical Save (ADR-0287).
+    if (!Array.isArray(spawn.zoneIds) || spawn.zoneIds.some((id) => typeof id !== 'string' || !id.trim())) {
+      errs.push(`${path}.zoneIds must be an array of zone ids`);
     }
   } else {
     const promo = ev as { trigger?: { kind?: unknown; unit?: unknown; zoneId?: unknown }; choices?: unknown; defaultPromotion?: unknown };
@@ -565,8 +567,10 @@ function levelEventActionErrors(action: unknown, trigger: unknown, path: string,
     if (triggerKind !== 'setup') errs.push(`${path}.kind 'spawn' requires a setup trigger`);
     if (a.side !== 'player' && a.side !== 'enemy') errs.push(`${path}.side must be 'player' or 'enemy'`);
     errs.push(...rosterCountsErrors(a.roster, `${path}.roster`));
-    if (!Array.isArray(a.zoneIds) || a.zoneIds.length === 0 || a.zoneIds.some((id) => typeof id !== 'string' || !id.trim())) {
-      errs.push(`${path}.zoneIds must be a non-empty array of zone ids`);
+    // Keep incomplete deployment authoring autosaveable; validatePlayability reports the
+    // missing selected/painted zone and gates canonical Save (ADR-0287).
+    if (!Array.isArray(a.zoneIds) || a.zoneIds.some((id) => typeof id !== 'string' || !id.trim())) {
+      errs.push(`${path}.zoneIds must be an array of zone ids`);
     }
   } else if (a.kind === 'castle') {
     if (triggerKind !== 'setup') errs.push(`${path}.kind 'castle' requires a setup trigger`);

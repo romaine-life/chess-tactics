@@ -218,6 +218,18 @@ describe('level editor route helpers', () => {
       eventsEditor: true,
       eventsTab: 'other',
     });
+
+    const deploymentHref = levelEditorHrefWithRouteState(otherHref, {
+      layer: 'rules',
+      eventsEditor: true,
+      eventsTab: 'deployment',
+    });
+    expect(deploymentHref).toBe('/editor/level?document=doc-18&layer=rules&eventsEditor=1&eventsTab=deployment');
+    expect(readLevelEditorRouteState(new URL(deploymentHref, 'https://example.test').search)).toMatchObject({
+      layer: 'rules',
+      eventsEditor: true,
+      eventsTab: 'deployment',
+    });
   });
 
   it('forces Events onto Rules and strips it when another layer is serialized', () => {

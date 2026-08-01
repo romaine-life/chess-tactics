@@ -52,4 +52,17 @@ describe('event zone cleanup', () => {
     expect(updated.find((zone) => zone.id === 'zone-b')?.tiles).toEqual(['1,0']);
     expect(updated.some((zone) => zone.id === 'zone-c')).toBe(false);
   });
+
+  it('preserves typed deployment zones when their randomized force is disabled', () => {
+    const deploymentZones: EditorZoneEntry[] = [
+      { id: 'player', name: 'Player Deployment', color: 'blue', type: 'player-spawn', tiles: ['0,1'] },
+      { id: 'enemy', name: 'Enemy Deployment', color: 'red', type: 'enemy-spawn', tiles: ['0,0'] },
+    ];
+
+    expect(removeZoneEntriesReferencedOnlyByRemovedEvents(
+      deploymentZones,
+      [spawn(['player', 'enemy'])],
+      [],
+    )).toBeNull();
+  });
 });

@@ -32,6 +32,13 @@ export function removeZoneEntriesReferencedOnlyByRemovedEvents(
   if (orphanedZoneIds.length === 0) return null;
 
   const orphaned = new Set(orphanedZoneIds);
-  const next = entries.filter((entry) => !orphaned.has(entry.id));
+  // Deployment geometry is durable author work. Turning a randomized force off removes its
+  // setup event but deliberately leaves Player/Enemy Deployment zones available and visibly
+  // unused in the dedicated Deployment editor (ADR-0287).
+  const next = entries.filter((entry) => (
+    !orphaned.has(entry.id)
+    || entry.type === 'player-spawn'
+    || entry.type === 'enemy-spawn'
+  ));
   return next.length === entries.length ? null : next;
 }

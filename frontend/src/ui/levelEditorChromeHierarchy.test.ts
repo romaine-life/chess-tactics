@@ -58,6 +58,7 @@ describe('Level Editor chrome hierarchy', () => {
     expect(eventsWorkspace).toContain('aria-labelledby="level-events-workspace-title"');
     expect(eventsWorkspace).toContain('initialFocusRef.current?.focus()');
     expect(eventsWorkspace).toContain("ref={tab === 'victory' ? initialFocusRef : undefined}");
+    expect(eventsWorkspace).toContain("ref={tab === 'deployment' ? initialFocusRef : undefined}");
     expect(eventsWorkspace).toContain("ref={tab === 'other' ? initialFocusRef : undefined}");
     expect(eventsWorkspace).not.toContain('<OuterChromeBox');
     expect(eventsWorkspace).not.toContain('role="dialog"');
@@ -74,7 +75,7 @@ describe('Level Editor chrome hierarchy', () => {
     expect(levelEditor).toContain("levelEditorEventsEntry: true");
     expect(levelEditor).toContain("levelEditorEventsBaseHref: baseHref");
     expect(levelEditor).toMatch(/if \(eventsOpenRef\.current\) \{\s*selectEventsTab\(tab\);\s*return;\s*\}/);
-    expect(levelEditor).toMatch(/disabled=\{eventsOpen\}[\s\S]{0,120}?onClick=\{\(\) => openEventsEditor\('victory'\)\}/);
+    expect(levelEditor).toMatch(/disabled=\{eventsOpen\}[\s\S]{0,200}?onClick=\{\(\) => openEventsEditor\(isWarBattle \? 'deployment' : 'victory'\)\}/);
     expect(levelEditor).not.toContain('window.history.state?.levelEditorRules');
     expect(styleCss).toMatch(/\.shell-workspace\s*\{[\s\S]*?inset:\s*0;[\s\S]*?position:\s*absolute;/);
     expect(styleCss).toMatch(/\.level-editor-screen \.skirmish-board-frame\.is-workspace-covered\s*\{[\s\S]*?visibility:\s*hidden;/);
@@ -275,8 +276,6 @@ describe('Level Editor chrome hierarchy', () => {
     for (const label of [
       'Victory template',
       'Other event template',
-      'Spawn faction',
-      'Spawn zone',
       'Promotion faction',
       'Promotion zone',
       'Selected zone',
