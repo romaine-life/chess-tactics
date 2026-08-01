@@ -1,5 +1,5 @@
 ---
-status: "accepted; mode-button frame clause superseded by ADR-0101"
+status: "accepted; mode-button frame clause superseded by ADR-0101; brand-lockup home-target clause partially superseded by ADR-0298"
 date: 2026-06-27
 deciders: Nelson, Claude
 ---

@@ -5,11 +5,11 @@ import { installedUiMedia } from '../installedUiMedia';
 // The single brand lockup in the top-left of every screen. The game wordmark is the
 // persistent header — it's the dominant line on every page — with the screen name as
 // the small line beneath it. Same mark, same structure, same spot everywhere; only
-// `screenName` changes. DOM order is brand-then-name so it reads and renders top-down
+// `screenName` changes. DOM order is mark-then-copy so it reads and renders top-down
 // without any reordering. This is the one source; do not hand-roll a per-screen brand
-// mark. Returns to the main menu — as a BUTTON, not a hyperlink (ADR-0052): this is a
-// game shell, and the title mark is a UI control like every other; probed game-first
-// web apps expose no URL on their logo/menu, and neither do we.
+// mark. Only the shield returns to the main menu (ADR-0298), as a BUTTON rather than a
+// hyperlink (ADR-0052). The title, screen name, transition status, and remaining title-
+// bar space are orientation copy, not an oversized navigation surface.
 export function BrandLockup({
   screenName,
   transitionStatus,
@@ -18,8 +18,10 @@ export function BrandLockup({
   transitionStatus?: string | null;
 }): ReactElement {
   return (
-    <NavButton className="brand-lockup" to="/" aria-label={`${screenName} — Chess Tactics home`}>
-      <img className="brand-lockup-mark" src={installedUiMedia('ui-kit-icons-brand-shield-png')} alt="" aria-hidden="true" />
+    <div className="brand-lockup-layout">
+      <NavButton className="brand-lockup" to="/" aria-label="Chess Tactics main menu">
+        <img className="brand-lockup-mark" src={installedUiMedia('ui-kit-icons-brand-shield-png')} alt="" aria-hidden="true" />
+      </NavButton>
       <span className="brand-lockup-copy">
         <span className="brand-lockup-title-line">
           <em>Chess Tactics</em>
@@ -27,6 +29,6 @@ export function BrandLockup({
         </span>
         <strong>{screenName}</strong>
       </span>
-    </NavButton>
+    </div>
   );
 }

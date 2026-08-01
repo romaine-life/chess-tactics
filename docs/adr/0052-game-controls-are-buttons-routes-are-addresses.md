@@ -1,5 +1,5 @@
 ---
-status: "accepted"
+status: "accepted; brand-lockup target scope partially superseded by ADR-0298"
 date: 2026-07-02
 deciders: Nelson, Claude
 ---
