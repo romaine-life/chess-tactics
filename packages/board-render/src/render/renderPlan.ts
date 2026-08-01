@@ -714,7 +714,7 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
     }
   }
 
-  for (const [index, placement] of (predrawn ? [] : (board.floatingArtwork ?? [])).entries()) {
+  for (const [index, placement] of (predrawnBackgroundActive ? [] : (board.floatingArtwork ?? [])).entries()) {
     const sprite = structureArtDirectionSprite(placement.sourceArtId, placement.direction);
     if (!sprite) continue;
     const scale = sprite.scale * placement.scale;

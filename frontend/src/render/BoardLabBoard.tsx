@@ -78,6 +78,11 @@ export interface BoardLabBoardProps<TAsset extends TileSocketAsset> {
   macroTiles?: readonly MacroTilePlacement[];
   /** Explicit opt-in vertical surfaces; terrain assets never provide a fallback side. */
   subterrain?: SubterrainPlacementMap;
+  /**
+   * Complete visual-terrain pass when it extends beyond the semantic SocketBoard cells.
+   * These cells paint only; TileGrid interaction and centering remain owned by `board.cells`.
+   */
+  visualTerrainCells?: readonly TerrainCanvasCell[];
   renderCellOverlay?: (context: BoardLabBoardOverlayContext<TAsset>) => ReactNode;
   /**
    * Edge fences resolved to a per-cell rail overlay (E/S mask + material), keyed by "x,y".
@@ -146,6 +151,7 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
   predrawnPlate,
   macroTiles,
   subterrain,
+  visualTerrainCells,
   renderCellOverlay,
   fenceOverlays,
   fencePosts,
@@ -168,7 +174,8 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
   const byCoordinate = new Map<string, SocketBoardCell<TAsset>>(
     sourceCells.map((cell): [string, SocketBoardCell<TAsset>] => [`${cell.x},${cell.y}`, cell]),
   );
-  const terrainCells = boardLabTerrainCanvasCells(sourceCells, assetFrameSrc, terrainSrcOverride, subterrain);
+  const terrainCells = visualTerrainCells
+    ?? boardLabTerrainCanvasCells(sourceCells, assetFrameSrc, terrainSrcOverride, subterrain);
   const cells = sourceCells.map((cell) => {
     // Terrain art is composed once in BoardTerrainLayer; the per-cell DOM stays as semantic
     // editor/game chrome (data hooks, missing labels, selections, hit targets), not tile pixels.

@@ -424,11 +424,20 @@ not reproduce the source rectangle as a hard crop or floating-board edge.
 
 ## Composed terrain and macrotiles
 
+Per [ADR-0284](adr/0284-board-views-render-the-complete-authored-visual-scene.md),
+the runtime board renders the complete authored visual-terrain surface rather than clipping
+environment pixels to the gameplay rectangle. The same scene plan is used by War, Campaign,
+Skirmish/test play, previews, analysis viewers, and thumbnails. Off-grid visual coordinates remain
+render-only: the playable rectangle still exclusively owns hit targets, units, zones, collision,
+movement, objectives, promotion, and solver state. The opening camera remains centered on the
+playable contact surface under ADR-0189 and ADR-0191, so surrounding art does not reframe play.
+
 The runtime board is one composed terrain canvas, but its source data remains layered:
 
 1. Explicitly authored Subterrain surfaces on exposed south/east faces.
-2. Exactly one terrain top for every playable cell: either its 1x1 top sprite or the clipped
-   portion of a macrotile from `EditorBoard.macroTiles` that owns the cell.
+2. Exactly one terrain top for every active visual-terrain coordinate: a playable cell uses either
+   its 1x1 top sprite or the clipped portion of a macrotile from `EditorBoard.macroTiles` that owns
+   the cell, while scenic coordinates resolve through the rectangular/sparse decorative surface.
 3. Road and river feature overlays.
 4. Optional grid, cover, doodads, props, Scene Art, units,
    and tactical overlays. Scene Art is omitted here once the

@@ -844,6 +844,7 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
       wallArt: { [westEdge]: 'test-art-mirror-keep' },
       doodads: { '2,2': { doodadId: 'boulder' } },
       props: { '0,0': { propId: 'cottage' } },
+      floatingArtwork: [{ id: 'art-1', sourceArtId: 'oak', pixelX: 120, pixelY: 80, direction: 'south', scale: 1 }],
       cover: { '1,1': 'filled' },
       units: { '1,1': UNIT },
     };
