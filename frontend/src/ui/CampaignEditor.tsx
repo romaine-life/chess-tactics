@@ -59,6 +59,10 @@ import { clearScopedLevelEditorDraft, newLevelEditorClientIdentity, rebaseScoped
 import { levelEditorLevelSignature } from './levelEditorSignature';
 import { levelEditorClientLabel, levelEditorSessionActorLabel, levelEditorSessionPresenceDetail, levelEditorSessionServerNow } from './levelEditorSessionPresentation';
 import { installedUiMedia } from './installedUiMedia';
+import { EditorCollectionRailTab } from './shared/EditorCollectionRailTab';
+import { WarEditor } from './WarEditor';
+import { navigateApp } from './navigation';
+import { sceneTransitionTargetAttributes } from './shell/sceneTransitionTarget';
 
 const CE_ICONS = {
   favorite: installedUiMedia('ui-kit-icons-brand-shield-png'),
@@ -129,7 +133,7 @@ async function withRecentDraftEditingAuthority<T>(
   }
 }
 
-export type CampaignCollection = 'campaign' | 'unassigned' | 'skirmish-profiles';
+export type CampaignCollection = 'campaign' | 'wars' | 'unassigned' | 'skirmish-profiles';
 
 export function campaignCollectionFromSearch(search: string): CampaignCollection {
   const collection = new URLSearchParams(search).get('collection');
@@ -140,10 +144,40 @@ export function campaignCollectionFromSearch(search: string): CampaignCollection
 
 export function campaignCollectionHref(href: string, collection: CampaignCollection): string {
   const url = new URL(href, 'http://localhost');
-  if (collection === 'campaign') url.searchParams.delete('collection');
-  else url.searchParams.set('collection', collection);
+  if (collection === 'wars') {
+    url.pathname = '/editor/wars';
+    url.searchParams.delete('collection');
+    url.searchParams.delete('campaign');
+  } else {
+    if (url.pathname.replace(/\/+$/, '') === '/editor/wars') url.pathname = '/editor';
+    if (collection === 'campaign') {
+      url.searchParams.delete('collection');
+    } else {
+      url.searchParams.set('collection', collection);
+      url.searchParams.delete('campaign');
+    }
+  }
   const query = url.searchParams.toString();
   return `${url.pathname}${query ? `?${query}` : ''}${url.hash}`;
+}
+
+export function editorCampaignIdFromSearch(search: string): string | null {
+  return new URLSearchParams(search).get('campaign')?.trim() || null;
+}
+
+export function editorCampaignHref(href: string, campaignId: string): string {
+  const url = new URL(href, 'http://localhost');
+  url.pathname = '/editor';
+  url.searchParams.delete('collection');
+  url.searchParams.set('campaign', campaignId);
+  const query = url.searchParams.toString();
+  return `${url.pathname}${query ? `?${query}` : ''}${url.hash}`;
+}
+
+export function editorCollectionFromLocation(pathname: string, search: string): CampaignCollection {
+  return pathname.replace(/\/+$/, '') === '/editor/wars'
+    ? 'wars'
+    : campaignCollectionFromSearch(search);
 }
 
 function workspaceSignature(ws: { campaigns: Campaign[]; levels: Record<string, Level> }): string {
@@ -347,41 +381,17 @@ export function UnassignedRailTab({
   itemName?: string;
   hasUnsavedDrafts?: boolean;
 }): ReactElement {
-  const levelCount = `${count} ${itemName}${count === 1 ? '' : 's'}`;
-  const draftLabel = 'Unsaved drafts available';
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      aria-label={`${title}, ${levelCount}${hasUnsavedDrafts ? `, ${draftLabel.toLowerCase()}` : ''}`}
-      aria-current={active ? 'page' : undefined}
-      style={{ ['--tab-index' as string]: index }}
-      data-chrome-unit="inner-box"
-      className={chromeUnitClassNames('inner-box', 'settings-tab main-menu-mode-tab ce-campaign-tab ce-campaign-tab-meta', active && 'is-active')}
-      onClick={onSelect}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          onSelect();
-        }
-      }}
-    >
-      <span className="settings-tab-icon" aria-hidden="true">
-        <img src={CAMPAIGN_TAB_ICON} alt="" />
-      </span>
-      <span className="ce-campaign-tab-copy">
-        <strong>{title}</strong>
-        <small>{levelCount}</small>
-      </span>
-      {hasUnsavedDrafts ? (
-        <span
-          className="ce-tab-trail ce-tab-draft-status"
-          data-testid="unassigned-draft-attention"
-          title={draftLabel}
-          aria-hidden="true"
-        >!</span>
-      ) : null}
-    </div>
+    <EditorCollectionRailTab
+      count={count}
+      active={active}
+      index={index}
+      onSelect={onSelect}
+      iconSrc={CAMPAIGN_TAB_ICON}
+      title={title}
+      itemName={itemName}
+      hasAttention={hasUnsavedDrafts}
+    />
   );
 }
 
@@ -806,7 +816,17 @@ export function RecentDraftLevelRow({
   );
 }
 
-export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}) {
+export function CampaignEditor({
+  embedded = false,
+  path = typeof window === 'undefined' ? '/editor' : window.location.pathname,
+  search = typeof window === 'undefined' ? '' : window.location.search,
+  sceneInstanceKey = 'campaign-editor/campaign',
+}: {
+  embedded?: boolean;
+  path?: string;
+  search?: string;
+  sceneInstanceKey?: string;
+} = {}) {
   const campaigns = useCampaigns((s) => s.campaigns);
   const levels = useCampaigns((s) => s.levels);
   const wars = useWars((s) => s.wars);
@@ -820,9 +840,11 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
   // retried. Keep the local work visible, stop that tier's writes, and require a deliberate reload.
   const [userSaveConflict, setUserSaveConflict] = useState(false);
   const [officialSaveConflict, setOfficialSaveConflict] = useState(false);
-  const [selectedCollection, setSelectedCollection] = useState<CampaignCollection>(() => (
-    campaignCollectionFromSearch(typeof window === 'undefined' ? '' : window.location.search)
-  ));
+  // The director-mounted route is the visible-content authority. Every collection and
+  // campaign selection occupies the authored editor-content slot; local state must not
+  // replace that navigable region ahead of its accepted fade.
+  const selectedCollection = editorCollectionFromLocation(path, search);
+  const routeCampaignId = editorCampaignIdFromSearch(search);
   const { ask, dialog: confirmDialog } = useConfirm();
   // Entrance readiness (ADR-0051): the shared store may already hold campaigns from a
   // /play/select visit this session — then there's real content at mount and
@@ -833,7 +855,7 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
   const [officialWorkspaceHydration, setOfficialWorkspaceHydration] = useState<'loading' | 'ready' | 'unavailable'>('loading');
   const userWorkspaceReady = userWorkspaceHydration === 'ready';
   const officialWorkspaceReady = officialWorkspaceHydration === 'ready';
-  const currentWorkspace = useMemo(() => ({ campaigns, levels }), [campaigns, levels]);
+  const currentWorkspace = useMemo(() => ({ campaigns, levels, wars }), [campaigns, levels, wars]);
   const campaignThumbnailLevels = useMemo(() => Object.values(levels), [levels]);
   // Two tier-scoped dirty signals: a private "Save" and an official "Publish" are
   // independent acts, each with its own last-saved signature.
@@ -868,13 +890,6 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
     shell?.classList.add('main-menu-active');
     return () => shell?.classList.remove('main-menu-active');
   }, [embedded]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const nextHref = campaignCollectionHref(window.location.href, selectedCollection);
-    const currentHref = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-    if (nextHref !== currentHref) window.history.replaceState(window.history.state, '', nextHref);
-  }, [selectedCollection]);
 
   useEffect(() => {
     let active = true;
@@ -1036,8 +1051,13 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
       }
       const importedCampaigns = parsed.campaigns!;
       const importedLevels = parsed.levels!;
+      const previousCampaignId = useCampaigns.getState().selectedCampaignId;
       useCampaigns.getState().importWorkspace({ campaigns: importedCampaigns, levels: importedLevels });
-      setSelectedCollection('campaign');
+      const importedCampaignId = useCampaigns.getState().selectedCampaignId;
+      if (previousCampaignId && importedCampaignId !== previousCampaignId) {
+        useCampaigns.getState().selectCampaign(previousCampaignId);
+      }
+      if (importedCampaignId) navigateApp(editorCampaignHref('/editor', importedCampaignId));
       setStatus(`Imported ${importedCampaigns.length} campaign${importedCampaigns.length === 1 ? '' : 's'}. Save to keep them.`);
     } catch (error) {
       setStatus(`Import failed: ${(error as Error).message}`);
@@ -1070,6 +1090,8 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
       tone: 'danger',
     })) {
       useCampaigns.getState().deleteCampaign(campaign.id);
+      const nextCampaignId = useCampaigns.getState().selectedCampaignId;
+      navigateApp(nextCampaignId ? editorCampaignHref('/editor', nextCampaignId) : '/editor');
       setStatus('Campaign deleted. Save to keep this change.');
     }
   };
@@ -1132,9 +1154,10 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
   };
 
   const isAdmin = Boolean(me?.is_admin);
+  const isWarsSelected = selectedCollection === 'wars';
   const isUnassignedSelected = selectedCollection === 'unassigned';
   const isSkirmishProfilesSelected = selectedCollection === 'skirmish-profiles';
-  const isMetaCollectionSelected = isUnassignedSelected || isSkirmishProfilesSelected;
+  const isMetaCollectionSelected = isWarsSelected || isUnassignedSelected || isSkirmishProfilesSelected;
   // Unassigned levels: store level docs referenced by NO campaign — typically a board authored
   // cold in the Level Editor (createUnassignedLevel) before it is filed into a campaign. They
   // live in the workspace and round-trip through campaign_workspaces just like any other level.
@@ -1156,7 +1179,12 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
     () => profileLevels.map((level, index) => ({ levelId: level.id, ordinal: index, objective: level.objective })),
     [profileLevels],
   );
-  const camp = isMetaCollectionSelected ? null : campaigns.find((c) => c.id === selectedCampaignId) ?? null;
+  const visibleCampaignId = isMetaCollectionSelected
+    ? null
+    : routeCampaignId && campaigns.some((campaign) => campaign.id === routeCampaignId)
+      ? routeCampaignId
+      : selectedCampaignId;
+  const camp = visibleCampaignId ? campaigns.find((campaign) => campaign.id === visibleCampaignId) ?? null : null;
   const campIsOfficial = camp?.origin === 'official';
   // readOnly is UI-derived, never trusted from a baked tag: an official campaign is
   // read-only for non-admins. A tier whose remote source is unavailable is also locked:
@@ -1167,7 +1195,14 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
   const userCampaigns = campaigns.filter((c) => c.origin !== 'official');
   const ownCount = userCampaigns.length;
   const orderedLevels = camp ? camp.levels.slice().sort((a, b) => a.ordinal - b.ordinal) : [];
-  const levelDoc = selectedLevelId ? levels[selectedLevelId] : null;
+  const selectedLevelBelongsToVisibleCollection = selectedLevelId ? (
+    isUnassignedSelected
+      ? unassignedLevels.some((level) => level.id === selectedLevelId)
+      : isSkirmishProfilesSelected
+        ? profileLevels.some((level) => level.id === selectedLevelId)
+        : Boolean(camp?.levels.some((ref) => ref.levelId === selectedLevelId))
+  ) : false;
+  const levelDoc = selectedLevelBelongsToVisibleCollection && selectedLevelId ? levels[selectedLevelId] : null;
   const levelRef = !isMetaCollectionSelected && camp && selectedLevelId ? camp.levels.find((r) => r.levelId === selectedLevelId) : null;
   const selectedLevelIndex = orderedLevels.findIndex((r) => r.levelId === selectedLevelId);
   const selectedUnassignedLevelIndex = unassignedLevels.findIndex((level) => level.id === selectedLevelId);
@@ -1184,7 +1219,9 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
       ? `${isSkirmishProfilesSelected ? 'Profile' : 'Level'} ${selectedVisibleLevelIndex + 1}: ${levelDoc.name}`
       : levelDoc.name
     : 'Selected Level';
-  const collectionReturnTo = campaignCollectionHref('/editor', selectedCollection);
+  const collectionReturnTo = selectedCollection === 'campaign' && camp
+    ? editorCampaignHref('/editor', camp.id)
+    : campaignCollectionHref('/editor', selectedCollection);
   const editHrefForCampaignLevel = (campaignId: string, levelId: string): string =>
     `/editor/level?campaignId=${encodeURIComponent(campaignId)}&levelId=${encodeURIComponent(levelId)}&returnTo=${encodeURIComponent(collectionReturnTo)}`;
   const editHrefForUnassigned = (levelId: string): string =>
@@ -1216,6 +1253,14 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
   );
 
   useEffect(() => {
+    if (selectedCollection !== 'campaign' || !routeCampaignId) return;
+    if (routeCampaignId === selectedCampaignId) return;
+    if (campaigns.some((campaign) => campaign.id === routeCampaignId)) {
+      useCampaigns.getState().selectCampaign(routeCampaignId);
+    }
+  }, [campaigns, routeCampaignId, selectedCampaignId, selectedCollection]);
+
+  useEffect(() => {
     if (!isUnassignedSelected) return;
     if (selectedLevelId && unassignedLevels.some((level) => level.id === selectedLevelId)) return;
     const first = unassignedLevels[0];
@@ -1232,16 +1277,15 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
   }, [isSkirmishProfilesSelected, profileLevels, selectedLevelId]);
 
   const selectCampaignCollection = (campaignId: string) => {
-    setSelectedCollection('campaign');
-    useCampaigns.getState().selectCampaign(campaignId);
+    navigateApp(editorCampaignHref('/editor', campaignId));
+  };
+
+  const selectWarsCollection = () => {
+    navigateApp(campaignCollectionHref('/editor', 'wars'));
   };
 
   const selectUnassignedCollection = () => {
-    setSelectedCollection('unassigned');
-    const selectedIsStillUnassigned = selectedLevelId && unassignedLevels.some((level) => level.id === selectedLevelId);
-    const nextLevelId = selectedIsStillUnassigned ? selectedLevelId : unassignedLevels[0]?.id;
-    if (nextLevelId) useCampaigns.getState().selectLevel(nextLevelId);
-    else useCampaigns.setState({ selectedLevelId: null });
+    navigateApp(campaignCollectionHref('/editor', 'unassigned'));
   };
 
   const selectSkirmishProfilesCollection = () => {
@@ -1249,11 +1293,7 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
       setStatus('Your workspace is unavailable. Reopen the Editor to retry.');
       return;
     }
-    setSelectedCollection('skirmish-profiles');
-    const selectedIsStillProfile = selectedLevelId && profileLevels.some((level) => level.id === selectedLevelId);
-    const nextLevelId = selectedIsStillProfile ? selectedLevelId : profileLevels[0]?.id;
-    if (nextLevelId) useCampaigns.getState().selectLevel(nextLevelId);
-    else useCampaigns.setState({ selectedLevelId: null });
+    navigateApp(campaignCollectionHref('/editor', 'skirmish-profiles'));
   };
 
   const assignSelectedUnassignedLevel = (campaignId: string) => {
@@ -1262,7 +1302,7 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
     if (!target) return;
     if (target.origin === 'official' ? !officialWorkspaceReady || !isAdmin : !userWorkspaceReady) return;
     useCampaigns.getState().attachLevelToCampaign(campaignId, levelDoc.id);
-    setSelectedCollection('campaign');
+    navigateApp(editorCampaignHref('/editor', campaignId));
     setStatus(`Attached "${levelDoc.name}" to ${target.name}. Save to keep this change.`);
   };
 
@@ -1327,18 +1367,27 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
                   </>
                 ) : null}
                 <p className="campaign-rail-group">Workspace</p>
-                {/* Continue the stone slice past the campaign tabs so the rail stays one sheet. */}
+                {/* Continue the stone slice past both content libraries and through the
+                    workspace collections; the pinned footer is reserved for verbs. */}
+                <UnassignedRailTab
+                  title="Wars"
+                  itemName="War"
+                  count={wars.length}
+                  index={campaigns.length}
+                  active={isWarsSelected}
+                  onSelect={selectWarsCollection}
+                />
                 <UnassignedRailTab
                   title="Skirmish profiles"
                   itemName="profile"
                   count={profileLevels.length}
-                  index={campaigns.length}
+                  index={campaigns.length + 1}
                   active={isSkirmishProfilesSelected}
                   onSelect={selectSkirmishProfilesCollection}
                 />
                 <UnassignedRailTab
                   count={unassignedLevels.length}
-                  index={campaigns.length + 1}
+                  index={campaigns.length + 2}
                   active={isUnassignedSelected}
                   hasUnsavedDrafts={recentDrafts.length > 0}
                   onSelect={selectUnassignedCollection}
@@ -1349,7 +1398,6 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
                 collection scope): New Level · New Campaign · Import · Save · Publish · Sign-in ·
                 status. Starting a standalone level never requires a hydrated user workspace. */}
             <div className="ce-rail-actions">
-              <SettingsButton href="/editor/wars">War Editor</SettingsButton>
               <SettingsButton
                 data-testid="new-level-shortcut"
                 href={`/editor/level?returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_UNASSIGNED_RETURN_TO)}`}
@@ -1359,8 +1407,13 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
                 disabled={!userWorkspaceReady}
                 onClick={() => {
                   if (!userWorkspaceReady) return;
+                  const previousCampaignId = useCampaigns.getState().selectedCampaignId;
                   useCampaigns.getState().newCampaign();
-                  setSelectedCollection('campaign');
+                  const createdCampaignId = useCampaigns.getState().selectedCampaignId;
+                  if (previousCampaignId && createdCampaignId !== previousCampaignId) {
+                    useCampaigns.getState().selectCampaign(previousCampaignId);
+                  }
+                  if (createdCampaignId) navigateApp(editorCampaignHref('/editor', createdCampaignId));
                 }}
               >+ New Campaign</SettingsButton>
               <SettingsButton disabled={!userWorkspaceReady} onClick={() => importInputRef.current?.click()}>Import</SettingsButton>
@@ -1405,6 +1458,12 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
             </div>
           </aside>
 
+          <div
+            className="editor-destination-content"
+            {...sceneTransitionTargetAttributes('editor-shell', 'contents')}
+            data-scene-instance={sceneInstanceKey}
+          >
+          {isWarsSelected ? <WarEditor embedded /> : <>
           {/* ── CONTENT: the selected campaign — a single scrolling stack of SettingsSection
               groups (Campaign · Levels · Actions), now the full column height. The live level
               preview used to pin above this scroll; it's its own column now (see below). ── */}
@@ -1531,8 +1590,13 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
                           <SettingsButton
                             disabled={camp.origin === 'official' || readOnly}
                             onClick={() => {
+                              const previousCampaignId = useCampaigns.getState().selectedCampaignId;
                               useCampaigns.getState().duplicateCampaign(camp.id);
-                              setSelectedCollection('campaign');
+                              const duplicatedCampaignId = useCampaigns.getState().selectedCampaignId;
+                              if (previousCampaignId && duplicatedCampaignId !== previousCampaignId) {
+                                useCampaigns.getState().selectCampaign(previousCampaignId);
+                              }
+                              if (duplicatedCampaignId) navigateApp(editorCampaignHref('/editor', duplicatedCampaignId));
                             }}
                           >Duplicate</SettingsButton>
                         </SettingsRow>
@@ -1592,6 +1656,8 @@ export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}
               ) : null}
             />
           ) : null}
+          </>}
+          </div>
     </>
   );
 

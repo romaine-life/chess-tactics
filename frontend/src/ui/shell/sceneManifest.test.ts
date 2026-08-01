@@ -71,6 +71,31 @@ describe('scene manifests', () => {
     expect(sceneManifest('/settings/audio/tracks').waitPresentation).toBe('loading');
   });
 
+  it('authors every Editor collection and campaign as transition-only editor content', () => {
+    const campaign = sceneManifest('/editor', '?campaign=crown-of-valoria');
+    const wars = sceneManifest('/editor/wars');
+    const profiles = sceneManifest('/editor', '?collection=skirmish-profiles');
+    const unassigned = sceneManifest('/editor', '?collection=unassigned');
+
+    expect(campaign.instances.map((entry) => entry.definition.id)).toEqual([
+      'main-menu',
+      'campaign-editor',
+      'campaign-editor/campaign',
+    ]);
+    expect(campaign.leaf).toMatchObject({
+      key: 'campaign-editor/campaign:campaignId=crown-of-valoria',
+      params: { campaignId: 'crown-of-valoria' },
+      definition: { slot: 'editor-content', view: 'editor-campaign' },
+    });
+    expect(wars.leaf.definition.id).toBe('campaign-editor/wars');
+    expect(profiles.leaf.definition.id).toBe('campaign-editor/skirmish-profiles');
+    expect(unassigned.leaf.definition.id).toBe('campaign-editor/unassigned');
+    expect(wars.waitPresentation).toBe('transition-only');
+    expect(deepestSharedSceneRegion(wars, profiles)).toBe('editor-shell');
+    expect(deepestSharedSceneRegion(profiles, campaign)).toBe('editor-shell');
+    expect(new Set([campaign.id, wars.id, profiles.id, unassigned.id]).size).toBe(4);
+  });
+
   it('recognizes removing a retained host child as an empty-slot destination', () => {
     expect(isEmptySlotDestination(
       sceneManifest('/play/select/levels'),
