@@ -81,7 +81,7 @@ function barrierOps({
     wallArtOps(ops, cell, wall, faceStyles.get(key));
   }
 
-  // Posts cap their incident rails at a positive half-depth bias. Insert them first only as a
+  // Posts sit between farther and nearer incident rail bands. Insert them first only as a
   // secondary deterministic tie breaker; numeric z owns the visible ordering.
   for (const post of fencePosts?.values() ?? []) {
     const { left, top: vertexCellTop } = boardLabCellPosition(post);

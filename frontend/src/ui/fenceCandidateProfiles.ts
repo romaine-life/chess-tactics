@@ -10,7 +10,7 @@ type FenceMediaComponent = 'rail-e' | 'rail-s' | 'post';
 
 export type FenceArtLifecycle = Extract<
   AdminLiveMediaVersionStatus,
-  'candidate' | 'archived' | 'accepted' | 'legacy-bridge'
+  'candidate' | 'accepted'
 >;
 
 /**
@@ -34,7 +34,7 @@ export interface FenceArtKit {
 }
 
 export interface FenceArtworkBackendReview {
-  status: 'backend-accepted' | 'backend-candidate' | 'backend-archived' | 'bridge-only' | 'unsupported-accepted';
+  status: 'backend-accepted' | 'backend-candidate' | 'unsupported-accepted';
   statusLabel: string;
   note: string;
 }
@@ -86,8 +86,12 @@ function explicitAcceptance(slot: AdminLiveMediaSlot | null): boolean {
 }
 
 function isCurrentActiveVersion(version: AdminLiveMediaVersion, slot: AdminLiveMediaSlot | null): boolean {
-  if (version.status !== 'accepted' && version.status !== 'legacy-bridge') return true;
+  if (version.status !== 'accepted') return true;
   return slot?.lifecycleState === 'active' && slot.activeVersionId === version.id;
+}
+
+function isFenceReviewLifecycle(status: AdminLiveMediaVersionStatus): status is FenceArtLifecycle {
+  return status === 'candidate' || status === 'accepted';
 }
 
 /**
@@ -144,19 +148,20 @@ function stableSuffix(value: string): string {
 }
 
 function routeIdFor(accumulator: FenceKitAccumulator): string {
-  if (accumulator.lifecycle === 'candidate' || accumulator.lifecycle === 'archived') {
+  if (accumulator.lifecycle === 'candidate') {
     return `${accumulator.kitId}@${accumulator.lifecycle}`;
   }
   return accumulator.kitId;
 }
 
 function lifecycleOrder(lifecycle: FenceArtLifecycle): number {
-  return ({ candidate: 0, 'legacy-bridge': 1, accepted: 2, archived: 3 })[lifecycle];
+  return ({ candidate: 0, accepted: 1 })[lifecycle];
 }
 
 /**
- * Project the authenticated backend catalog into complete fence review kits.
- * Incomplete E/S pairs are omitted rather than filled from a compiled registry.
+ * Project actionable backend candidates and accepted records into complete fence review kits.
+ * Legacy bridges and archives remain backend history, never chooser options. Incomplete E/S
+ * pairs are omitted rather than filled from a compiled registry.
  */
 export function fenceArtKits(catalog: AdminLiveMediaCatalog | null): FenceArtKit[] {
   if (!catalog) return [];
@@ -164,6 +169,7 @@ export function fenceArtKits(catalog: AdminLiveMediaCatalog | null): FenceArtKit
   const groups = new Map<string, FenceKitAccumulator>();
 
   for (const version of catalog.versions) {
+    if (!isFenceReviewLifecycle(version.status)) continue;
     const slot = version.slot ? slots.get(version.slot) ?? null : null;
     if (!isCurrentActiveVersion(version, slot)) continue;
     const parsed = fenceVersionComponent(version, slot);
@@ -234,26 +240,12 @@ export function fenceArtworkBackendReview(kit: FenceArtKit): FenceArtworkBackend
       note: `${componentCount}; the slots do not expose a registered fence acceptance contract.`,
     };
   }
-  if (kit.lifecycle === 'candidate') {
-    return {
-      status: 'backend-candidate',
-      statusLabel: kit.acceptanceRegistered ? 'Backend candidate' : 'Backend candidate · bridge-only',
-      note: kit.acceptanceRegistered
-        ? `${componentCount}; review state is backend-owned.`
-        : `${componentCount}; fence acceptance is not registered, so this remains review-only.`,
-    };
-  }
-  if (kit.lifecycle === 'archived') {
-    return {
-      status: 'backend-archived',
-      statusLabel: 'Backend archived',
-      note: `${componentCount}; retained as private backend history, not a production pointer.`,
-    };
-  }
   return {
-    status: 'bridge-only',
-    statusLabel: 'Backend legacy bridge · bridge-only',
-    note: `${componentCount}; these migrated bytes are active but not accepted or production-eligible.`,
+    status: 'backend-candidate',
+    statusLabel: kit.acceptanceRegistered ? 'Backend candidate' : 'Backend candidate · review-only',
+    note: kit.acceptanceRegistered
+      ? `${componentCount}; review state is backend-owned.`
+      : `${componentCount}; fence acceptance is not registered, so this remains review-only.`,
   };
 }
 
