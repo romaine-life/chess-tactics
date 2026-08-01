@@ -4,11 +4,26 @@ import { createBlankLevel } from '../core/level';
 import { levelToEditorBoard, unitsForGamePieces } from '../core/levelBoard';
 import { PIECE_LABEL, PLAYABLE_PIECE_TYPES, type PlayablePieceType } from '../core/pieces';
 import type { BoardSize, Piece } from '../core/types';
+import { resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import { PredrawnMoveHighlightPaint } from '../render/PredrawnMoveHighlightPaint';
-import { canonicalCardId, runCardName } from '../run/cardNames';
-import { PIECE_BUNDLE_DECK, RUN_RELICS, bundleLabel, type PieceBundle, type RunRelicId } from '../run/model';
+import { runCardArtSlot, runCardFlavor, runCardName } from '../run/cardNames';
+import {
+  PIECE_BUNDLE_BY_ID,
+  PIECE_BUNDLE_DECK,
+  RUN_RELICS,
+  bundleLabel,
+  type PieceBundle,
+  type PurchasablePieceType,
+  type RunRelicId,
+} from '../run/model';
 import { generateTerrainDressing } from './generatedReferenceBoard';
 import { RunBundleCard } from './RunBundleCard';
+import {
+  RUN_CARD_FRAME_SLOT,
+  RUN_CARD_PESTIFEROUS_FRAME_SLOT,
+  RunCardFace,
+  type RunCardFaceContent,
+} from './RunCardFace';
 import { StaticReadOnlyBoardView } from './shared/BoardViewFraming';
 import {
   loadRunRelicStatistics,
@@ -21,6 +36,7 @@ import { installedUiMedia } from './installedUiMedia';
 import { RunRelicIcon } from './RunRelics';
 import { ApparatusRailTab } from './shared/ApparatusRailTab';
 import { InnerChromeBox, OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
+import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
 import { NavButton } from './shared/NavButton';
 import { sceneTransitionTargetAttributes } from './shell/sceneTransitionTarget';
 import { ChromeButton } from './shared/ChromeButton';
@@ -29,6 +45,7 @@ const SECTION_LABEL: Record<EnchiridionSection, string> = {
   units: 'Units',
   terrain: 'Terrain',
   cards: 'Cards',
+  'card-types': 'Card Types',
   relics: 'Relics',
   abilities: 'Abilities',
 };
@@ -36,6 +53,7 @@ const SECTION_LABEL: Record<EnchiridionSection, string> = {
 const SECTION_ICON: Partial<Record<EnchiridionSection, string>> = {
   units: 'skirmish-tab-icon skirmish-tab-icon-unit',
   cards: 'skirmish-tab-icon skirmish-tab-icon-roster',
+  'card-types': 'skirmish-icon skirmish-icon-power',
   relics: 'skirmish-tab-icon skirmish-tab-icon-log',
   abilities: 'skirmish-icon skirmish-icon-shield',
 };
@@ -446,10 +464,38 @@ export function RelicCodex({
   );
 }
 
-// The full generated bundle deck, grouped by gold value: a browser of card records and
-// one selected card rendered as the exact face the Run deals (ADR-0253's one-selection,
-// one-description shape). A host that gives cards addresses routes selection like the
-// relic records (ADR-0256); an ephemeral host keeps plain local selection.
+export type CardGoldFilter = 'all' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9';
+export type CardUnitFilter = 'all' | PurchasablePieceType;
+
+const CARD_GOLD_FILTER_OPTIONS: readonly HouseSelectOption<CardGoldFilter>[] = Object.freeze([
+  { value: 'all', label: 'All gold' },
+  ...Array.from({ length: 9 }, (_, index) => {
+    const value = String(index + 1) as Exclude<CardGoldFilter, 'all'>;
+    return { value, label: `${value} gold` };
+  }),
+]);
+
+const CARD_UNIT_FILTER_OPTIONS: readonly HouseSelectOption<CardUnitFilter>[] = Object.freeze([
+  { value: 'all', label: 'Any unit' },
+  ...(['pawn', 'knight', 'bishop', 'rook', 'queen'] as const).map((value) => ({
+    value,
+    label: PIECE_LABEL[value],
+  })),
+]);
+
+export function cardMatchesFilters(
+  bundle: PieceBundle,
+  goldFilter: CardGoldFilter,
+  unitFilter: CardUnitFilter,
+): boolean {
+  return (goldFilter === 'all' || bundle.value === Number(goldFilter))
+    && (unitFilter === 'all' || bundle.pieces.includes(unitFilter));
+}
+
+// The full generated bundle deck, grouped by gold value: a filterable browser of card
+// records and one selected card rendered as the exact face the Run deals (ADR-0253's
+// one-selection, one-description shape). A host that gives cards addresses routes
+// selection like the relic records (ADR-0256); an ephemeral host keeps local selection.
 export function CardCodex({
   framed = true,
   selectedCardId = null,
@@ -462,16 +508,24 @@ export function CardCodex({
   cardHref?: (bundleId: string) => string;
 }): ReactElement {
   const [localSelectedId, setLocalSelectedId] = useState<string>(PIECE_BUNDLE_DECK[0].id);
+  const [goldFilter, setGoldFilter] = useState<CardGoldFilter>('all');
+  const [unitFilter, setUnitFilter] = useState<CardUnitFilter>('all');
   const selectedId = cardHref ? (selectedCardId ?? PIECE_BUNDLE_DECK[0].id) : localSelectedId;
-  const selected: PieceBundle = PIECE_BUNDLE_DECK.find((bundle) => bundle.id === selectedId)
-    ?? PIECE_BUNDLE_DECK[0];
+  const visibleBundles = useMemo(
+    () => PIECE_BUNDLE_DECK.filter((bundle) => cardMatchesFilters(bundle, goldFilter, unitFilter)),
+    [goldFilter, unitFilter],
+  );
+  const selectedCandidate = PIECE_BUNDLE_DECK.find((bundle) => bundle.id === selectedId);
+  const selected: PieceBundle | null = selectedCandidate && visibleBundles.includes(selectedCandidate)
+    ? selectedCandidate
+    : visibleBundles[0] ?? null;
   const groups = useMemo(() => {
     const byValue = new Map<number, PieceBundle[]>();
-    for (const bundle of PIECE_BUNDLE_DECK) {
+    for (const bundle of visibleBundles) {
       byValue.set(bundle.value, [...(byValue.get(bundle.value) ?? []), bundle]);
     }
     return [...byValue.entries()].sort((left, right) => left[0] - right[0]);
-  }, []);
+  }, [visibleBundles]);
   return (
     <ReferenceSectionFrame
       chromeConsumer="enchiridion-cards"
@@ -481,36 +535,189 @@ export function CardCodex({
     >
       <p>Every piece bundle the Run can deal, drawn as its card. Opening drafts and shops deal from this one deck; in a shop, a card costs its gold value.</p>
       <div className="enchiridion-card-layout">
-        <div className="enchiridion-card-browser" role="list" aria-label="The card deck by gold value">
-          {groups.map(([value, bundles]) => (
-            <section className="enchiridion-card-group" key={value}>
-              <span className="skirmish-eyebrow">{value} gold</span>
-              <ul className="enchiridion-card-rows">
-                {bundles.map((bundle) => (
-                  <li key={bundle.id}>
-                    <ReferenceTrigger
-                      to={cardHref?.(bundle.id)}
-                      onSelect={() => setLocalSelectedId(bundle.id)}
-                      data-chrome-unit="inner-list-row"
-                      className={chromeUnitClassNames(
-                        'inner-list-row',
-                        'enchiridion-card-row',
-                        selected.id === bundle.id && 'is-active',
-                      )}
-                      aria-label={`${runCardName(bundle)}. ${bundleLabel(bundle)}. Worth ${bundle.value} gold.`}
-                      aria-pressed={selected.id === bundle.id}
-                    >
-                      <span className="enchiridion-card-row-name">{runCardName(bundle)}</span>
-                      <small className="enchiridion-card-row-contents">{bundleLabel(bundle)}</small>
-                    </ReferenceTrigger>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))}
+        <div className="enchiridion-card-browser-column">
+          <InnerChromeBox className="enchiridion-card-filters" aria-label="Card filters">
+            <div className="enchiridion-card-filter">
+              <span>Gold</span>
+              <HouseSelect
+                value={goldFilter}
+                options={CARD_GOLD_FILTER_OPTIONS}
+                onChange={setGoldFilter}
+                ariaLabel="Filter cards by gold value"
+                testId="enchiridion-card-gold-filter"
+              />
+            </div>
+            <div className="enchiridion-card-filter">
+              <span>Contains</span>
+              <HouseSelect
+                value={unitFilter}
+                options={CARD_UNIT_FILTER_OPTIONS}
+                onChange={setUnitFilter}
+                ariaLabel="Filter cards by contained unit type"
+                testId="enchiridion-card-unit-filter"
+              />
+            </div>
+            <span className="enchiridion-card-filter-count" aria-live="polite">
+              {visibleBundles.length} {visibleBundles.length === 1 ? 'card' : 'cards'}
+            </span>
+          </InnerChromeBox>
+          <div className="enchiridion-card-browser" role="list" aria-label="Filtered card deck by gold value">
+            {groups.map(([value, bundles]) => (
+              <section className="enchiridion-card-group" key={value}>
+                <span className="skirmish-eyebrow">{value} gold</span>
+                <ul className="enchiridion-card-rows">
+                  {bundles.map((bundle) => (
+                    <li key={bundle.id}>
+                      <ReferenceTrigger
+                        to={cardHref?.(bundle.id)}
+                        onSelect={() => setLocalSelectedId(bundle.id)}
+                        data-chrome-unit="inner-list-row"
+                        className={chromeUnitClassNames(
+                          'inner-list-row',
+                          'enchiridion-card-row',
+                          selected?.id === bundle.id && 'is-active',
+                        )}
+                        aria-label={`${runCardName(bundle)}. ${bundleLabel(bundle)}. Worth ${bundle.value} gold.`}
+                        aria-pressed={selected?.id === bundle.id}
+                      >
+                        <span className="enchiridion-card-row-name">{runCardName(bundle)}</span>
+                        <small className="enchiridion-card-row-contents">{bundleLabel(bundle)}</small>
+                      </ReferenceTrigger>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+            {!groups.length ? (
+              <InnerChromeBox className="enchiridion-empty">
+                <h3>No matching cards</h3>
+                <p>No core card has both of the selected properties.</p>
+              </InnerChromeBox>
+            ) : null}
+          </div>
         </div>
         <div className="enchiridion-card-detail">
-          <RunBundleCard bundle={selected} mode="reference" />
+          {selected ? <RunBundleCard bundle={selected} mode="reference" /> : null}
+        </div>
+      </div>
+    </ReferenceSectionFrame>
+  );
+}
+
+type CardTypeReferenceDefinition = Readonly<{
+  id: string;
+  name: string;
+  cost: number;
+  rules: string;
+  description: string;
+  provisional?: boolean;
+  frameSlot?: string;
+  iconRole?: string;
+}>;
+
+const CARD_TYPE_REFERENCES: readonly CardTypeReferenceDefinition[] = Object.freeze([
+  {
+    id: 'pestiferous',
+    name: 'Pestiferous',
+    cost: 1,
+    rules: 'Each unit is Plagued. After every Battle, this card loses one random unit.',
+    description: 'Every contained unit is Plagued. After each Battle, an owned nonempty card permanently loses one seeded random unit and remains in the deck when empty.',
+    frameSlot: RUN_CARD_PESTIFEROUS_FRAME_SLOT,
+    iconRole: 'ui-kit-icons-card-properties-pestiferous-png',
+  },
+  {
+    id: 'tactical',
+    name: 'Tactical',
+    cost: 3,
+    rules: 'One unit on this card is Positioned. Its target may be hidden until purchase.',
+    description: 'The card’s own rule positively enhances one or more contained units. It states the modifier, affected count, and whether the exact target is visible before purchase.',
+  },
+  {
+    id: 'type-iii',
+    name: 'Type III',
+    cost: 1,
+    rules: 'Name and effect pending.',
+    description: 'This affected-card slot is reserved for the parallel card-type design work. No runtime mechanic is assigned here yet.',
+    provisional: true,
+  },
+  {
+    id: 'type-iv',
+    name: 'Type IV',
+    cost: 1,
+    rules: 'Name and effect pending.',
+    description: 'This affected-card slot is reserved for the parallel card-type design work. No runtime mechanic is assigned here yet.',
+    provisional: true,
+  },
+]);
+
+const VOLUNTEER_CARD = PIECE_BUNDLE_BY_ID.p;
+
+function CardTypeReference({ definition }: { definition: CardTypeReferenceDefinition }): ReactElement {
+  const card = {
+    name: runCardName(VOLUNTEER_CARD),
+    cost: definition.cost,
+    typeLine: `Units — ${definition.name}`,
+    grants: [{ unit: 'pawn', count: 1 }],
+    rules: definition.rules,
+    flavor: runCardFlavor(VOLUNTEER_CARD),
+  } satisfies RunCardFaceContent;
+  return (
+    <div className="enchiridion-card-type-preview">
+      <RunCardFace
+        card={card}
+        frameUrl={resolvedLiveMediaUrl(definition.frameSlot ?? RUN_CARD_FRAME_SLOT)}
+        artUrl={resolvedLiveMediaUrl(runCardArtSlot(VOLUNTEER_CARD))}
+      />
+    </div>
+  );
+}
+
+function CardTypesSection({ framed }: { framed: boolean }): ReactElement {
+  const [selectedTypeId, setSelectedTypeId] = useState('pestiferous');
+  const selected = CARD_TYPE_REFERENCES.find((definition) => definition.id === selectedTypeId)
+    ?? CARD_TYPE_REFERENCES[0];
+  return (
+    <ReferenceSectionFrame
+      chromeConsumer="enchiridion-card-types"
+      className="enchiridion-card-types-panel"
+      framed={framed}
+      title="Card Types"
+    >
+      <div className="enchiridion-card-type-layout">
+        <ul className="enchiridion-card-type-rows" aria-label="Card types">
+          {CARD_TYPE_REFERENCES.map((definition) => (
+            <li key={definition.id}>
+              <ReferenceTrigger
+                onSelect={() => setSelectedTypeId(definition.id)}
+                data-chrome-unit="inner-list-row"
+                data-testid={`enchiridion-card-type-${definition.id}`}
+                className={chromeUnitClassNames(
+                  'inner-list-row',
+                  'enchiridion-card-type-row',
+                  selected.id === definition.id && 'is-active',
+                )}
+                aria-label={`${definition.name}. ${definition.description}`}
+                aria-pressed={selected.id === definition.id}
+              >
+                <span className="enchiridion-card-type-row-identity">
+                  {definition.iconRole ? (
+                    <img
+                      className="enchiridion-card-type-row-icon"
+                      src={installedUiMedia(definition.iconRole)}
+                      alt=""
+                      aria-hidden="true"
+                      draggable={false}
+                    />
+                  ) : <span className="enchiridion-card-type-row-icon" aria-hidden="true" />}
+                  <span className="enchiridion-card-type-row-name">{definition.name}</span>
+                </span>
+                {definition.provisional ? <small>Provisional</small> : null}
+              </ReferenceTrigger>
+            </li>
+          ))}
+        </ul>
+        <div className="enchiridion-card-type-detail">
+          <CardTypeReference definition={selected} />
         </div>
       </div>
     </ReferenceSectionFrame>
@@ -547,6 +754,19 @@ function AbilitiesSection({ framed }: { framed: boolean }): ReactElement {
             <p>The unit seeks its piece-specific station: the King prefers a board edge, Rooks favor their King-flank and corner formation, and Bishops prefer the opposite square color from another Bishop.</p>
           </span>
         </InnerChromeBox>
+        <InnerChromeBox className="enchiridion-ability-card">
+          <img
+            className="enchiridion-ability-icon"
+            src={installedUiMedia('ui-kit-icons-game-plagued-png')}
+            alt=""
+            aria-hidden="true"
+            draggable={false}
+          />
+          <span>
+            <h3>Plagued</h3>
+            <p>The unit may be permanently lost after a Battle when its Pestiferous card resolves attrition. Its card-price contribution is discounted by 0 gold for a Pawn, 1 for a Knight or Bishop, 2 for a Rook, and 3 for a Queen.</p>
+          </span>
+        </InnerChromeBox>
       </div>
     </ReferenceSectionFrame>
   );
@@ -562,6 +782,7 @@ function EnchiridionContent({ section, framed, selectedRelicId, relicHref, selec
 }): ReactElement {
   if (section === 'terrain') return <TerrainSection framed={framed} />;
   if (section === 'cards') return <CardCodex framed={framed} selectedCardId={selectedCardId} cardHref={cardHref} />;
+  if (section === 'card-types') return <CardTypesSection framed={framed} />;
   if (section === 'relics') return <RelicCodex framed={framed} selectedRelicId={selectedRelicId} relicHref={relicHref} />;
   if (section === 'abilities') return <AbilitiesSection framed={framed} />;
   return <UnitsSection framed={framed} />;

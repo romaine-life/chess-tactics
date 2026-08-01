@@ -182,6 +182,11 @@ describe('scene manifests', () => {
       background: 'homepage',
       paintOwner: 'dom',
     });
+    expect(sceneManifest('/enchiridion/card-types').instances.map((entry) => entry.definition.id)).toEqual([
+      'main-menu',
+      'enchiridion',
+      'enchiridion/card-types',
+    ]);
     expect(deepestSharedSceneRegion(
       sceneManifest('/enchiridion/units'),
       sceneManifest('/enchiridion/relics'),

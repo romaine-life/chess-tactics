@@ -18,6 +18,9 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(abilities).toContain('<h3>Discipline</h3>');
     expect(abilities).toContain('<h3>Positioned</h3>');
     expect(abilities).toContain('<h3>Marshalled</h3>');
+    expect(abilities).toContain('<h3>Plagued</h3>');
+    expect(abilities.match(/className="enchiridion-ability-card"/g)).toHaveLength(4);
+    expect(abilities).toContain('discounted by 0 gold for a Pawn, 1 for a Knight or Bishop, 2 for a Rook, and 3 for a Queen');
     expect(abilities).not.toMatch(/\b(?:gain|obtain|acquir|relic|upgrade)/i);
   });
 
@@ -117,7 +120,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
 
   it('lists the full bundle deck as real card faces with routed selection', () => {
     const start = enchiridion.indexOf('export function CardCodex');
-    const end = enchiridion.indexOf('function AbilitiesSection', start);
+    const end = enchiridion.indexOf('type CardTypeReferenceDefinition', start);
     const cardCodex = enchiridion.slice(start, end);
     // The browser lists every deck card grouped by value; the detail is the exact
     // card face the Run deals (one selection, one description — ADR-0253's shape).
@@ -134,6 +137,44 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(mainMenu).toContain('cardHref={enchiridionCardHref}');
     // …and the Battle-hosted Strategikon keeps ephemeral reference selection.
     expect(strategikon).not.toContain('cardHref');
+  });
+
+  it('filters cards by intersecting gold and contained-unit choices', () => {
+    const start = enchiridion.indexOf('export function CardCodex');
+    const end = enchiridion.indexOf('type CardTypeReferenceDefinition', start);
+    const cardCodex = enchiridion.slice(start, end);
+    expect(cardCodex).toContain('cardMatchesFilters(bundle, goldFilter, unitFilter)');
+    expect(cardCodex).toContain('testId="enchiridion-card-gold-filter"');
+    expect(cardCodex).toContain('testId="enchiridion-card-unit-filter"');
+    expect(cardCodex).toContain('<h3>No matching cards</h3>');
+    expect(cardCodex).toContain('<RunBundleCard bundle={selected} mode="reference" />');
+  });
+
+  it('selects four affected-card names in column three and previews one shared Volunteer face in column four', () => {
+    const start = enchiridion.indexOf('const CARD_TYPE_REFERENCES');
+    const end = enchiridion.indexOf('function AbilitiesSection', start);
+    const cardTypes = enchiridion.slice(start, end);
+    expect(cardTypes.match(/id: '(?:pestiferous|tactical|type-iii|type-iv)'/g)).toHaveLength(4);
+    expect(cardTypes).toContain("const VOLUNTEER_CARD = PIECE_BUNDLE_BY_ID.p");
+    expect(cardTypes).toContain('<RunCardFace');
+    expect(cardTypes).toContain('RUN_CARD_PESTIFEROUS_FRAME_SLOT');
+    expect(cardTypes).toContain("iconRole: 'ui-kit-icons-card-properties-pestiferous-png'");
+    expect(cardTypes).toContain('className="enchiridion-card-type-row-icon"');
+    expect(cardTypes.match(/provisional: true/g)).toHaveLength(2);
+    expect(cardTypes).toContain("useState('pestiferous')");
+    expect(cardTypes).toContain('className="enchiridion-card-type-layout"');
+    expect(cardTypes).toContain('className="enchiridion-card-type-rows"');
+    expect(cardTypes).toContain('data-testid={`enchiridion-card-type-${definition.id}`}');
+    expect(cardTypes).toContain('<CardTypeReference definition={selected} />');
+    expect(cardTypes).not.toContain('<CardTypeReference definition={definition} key={definition.id} />');
+    expect(style).toMatch(/\.enchiridion-card-type-layout\s*\{[\s\S]*?grid-template-columns:\s*minmax\(280px,\s*1fr\) minmax\(232px,\s*300px\)/);
+    expect(enchiridion).toContain("if (section === 'card-types') return <CardTypesSection framed={framed} />;");
+  });
+
+  it('uses separate installed symbols for the Pestiferous card property and Plagued unit ability', () => {
+    expect(enchiridion).toContain("iconRole: 'ui-kit-icons-card-properties-pestiferous-png'");
+    expect(enchiridion).toContain("src={installedUiMedia('ui-kit-icons-game-plagued-png')}");
+    expect(enchiridion).toContain('className="enchiridion-ability-icon"');
   });
 
   it('opens from Controls while retaining the mounted Battle field', () => {

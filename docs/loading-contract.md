@@ -202,6 +202,11 @@ route lifecycle during the same React commit.
   board artwork.
 - Initially presented level cards are one surface: the list remains hidden and inert until
   every expected thumbnail has painted, or it presents one retryable error.
+- In-place `RunCardFace` changes retain the last complete face while the requested
+  content/frame/art/unit generation mounts hidden and settles its actual image consumers.
+  The complete layer promotes only after paint opportunities; a later selection cancels
+  every stale acknowledgement, so card text and card pixels never expose different
+  identities (ADR-0307).
 - Persisted Campaign Editor rows consume the same immutable database-backed derivatives
   as player lists. Only a genuinely unsaved/new level without a canonical derivative may
   use the authoring-only client bake. The selected live-board preview separately waits for

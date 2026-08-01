@@ -32,6 +32,7 @@ export type SceneViewId =
   | 'enchiridion-units'
   | 'enchiridion-terrain'
   | 'enchiridion-cards'
+  | 'enchiridion-card-types'
   | 'enchiridion-relics'
   | 'enchiridion-abilities'
   | 'strategikon'
@@ -113,6 +114,7 @@ export const SCENE_DEFINITIONS = Object.freeze({
   enchiridionUnits: defineScene({ id: 'enchiridion/units', parent: 'enchiridion', slot: 'enchiridion-content', view: 'enchiridion-units' }),
   enchiridionTerrain: defineScene({ id: 'enchiridion/terrain', parent: 'enchiridion', slot: 'enchiridion-content', view: 'enchiridion-terrain' }),
   enchiridionCards: defineScene({ id: 'enchiridion/cards', parent: 'enchiridion', slot: 'enchiridion-content', view: 'enchiridion-cards' }),
+  enchiridionCardTypes: defineScene({ id: 'enchiridion/card-types', parent: 'enchiridion', slot: 'enchiridion-content', view: 'enchiridion-card-types' }),
   enchiridionRelics: defineScene({ id: 'enchiridion/relics', parent: 'enchiridion', slot: 'enchiridion-content', view: 'enchiridion-relics' }),
   enchiridionAbilities: defineScene({ id: 'enchiridion/abilities', parent: 'enchiridion', slot: 'enchiridion-content', view: 'enchiridion-abilities' }),
   gameplayStrategikon: defineScene({ id: 'gameplay/strategikon', parent: 'gameplay', slot: 'gameplay-content', view: 'strategikon' }),
@@ -352,11 +354,13 @@ export function sceneManifest(pathname: string, search: string = ''): ScenePath 
       ? SCENE_DEFINITIONS.enchiridionTerrain
       : sectionId === 'cards'
         ? SCENE_DEFINITIONS.enchiridionCards
-        : sectionId === 'relics'
-          ? SCENE_DEFINITIONS.enchiridionRelics
-          : sectionId === 'abilities'
-            ? SCENE_DEFINITIONS.enchiridionAbilities
-            : SCENE_DEFINITIONS.enchiridionUnits;
+        : sectionId === 'card-types'
+          ? SCENE_DEFINITIONS.enchiridionCardTypes
+          : sectionId === 'relics'
+            ? SCENE_DEFINITIONS.enchiridionRelics
+            : sectionId === 'abilities'
+              ? SCENE_DEFINITIONS.enchiridionAbilities
+              : SCENE_DEFINITIONS.enchiridionUnits;
     instances = [root, instance(SCENE_DEFINITIONS.enchiridion), instance(section)];
   } else if (path === '/lobbies' || path.startsWith('/lobbies/')) {
     instances = [root, instance(SCENE_DEFINITIONS.lobbies)];

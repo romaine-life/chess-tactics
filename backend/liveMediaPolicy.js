@@ -11,6 +11,10 @@ const RUN_RELIC_ICON_COMPONENT = 'run-relic-icon';
 const RUN_RELIC_ICON_SLOT = /^ui\/run\/relics\/([a-z][a-z0-9-]{0,79})\.png$/;
 const RUN_RESOURCE_ICON_COMPONENT = 'run-resource-icon';
 const RUN_RESOURCE_ICON_SLOT = /^ui\/run\/resources\/([a-z][a-z0-9-]{0,79})\.png$/;
+const GAME_CONDITION_ICON_BY_SLOT = Object.freeze({
+  'ui/kit/icons/game/plagued.png': Object.freeze({ component: 'unit-ability-icon', variant: 'plagued' }),
+  'ui/kit/icons/card-properties/pestiferous.png': Object.freeze({ component: 'card-property-icon', variant: 'pestiferous' }),
+});
 const SFX_SAMPLE_COMPONENT = 'sfx-sample';
 const SFX_SAMPLE_PROOF_RENDERER = 'SfxViewer/ExactCandidateAudition';
 const SFX_SAMPLE_PROOF_SCHEMA = 'sfx-sample-exact-byte-proof-v1';
@@ -48,6 +52,10 @@ function runRelicIconSlotId(slot) {
 function runResourceIconSlotId(slot) {
   const match = RUN_RESOURCE_ICON_SLOT.exec(String(slot || ''));
   return match ? match[1] : null;
+}
+
+function gameConditionIconSlot(slot) {
+  return GAME_CONDITION_ICON_BY_SLOT[String(slot || '')] ?? null;
 }
 
 function sfxSampleSlot(slot) {
@@ -217,6 +225,47 @@ function runResourceIconMediaIssue(row, projectedRuntime = null) {
   }
   if (runtime.altText !== '') {
     return 'Run resource icon metadata.runtime.altText must be empty because the live value owns its accessible name';
+  }
+  return null;
+}
+
+/**
+ * Domain-owned runtime projection for the native icons that distinguish a
+ * unit condition from the card property that grants it. Their exact semantic
+ * slots are closed so an arbitrary ui-kit candidate cannot become runtime UI.
+ */
+function gameConditionIconMediaIssue(row, projectedRuntime = null) {
+  const contract = gameConditionIconSlot(row.slot);
+  if (!contract) return 'game condition icons require a registered semantic slot';
+  if (row.domain !== 'ui-kit') return 'game condition icons require the ui-kit domain';
+  if (row.role !== 'icon') return 'game condition icons require the icon role';
+  if (row.media_type !== 'image/png') return 'game condition icons require image/png';
+  if (Number(row.width) !== 64 || Number(row.height) !== 64) {
+    return 'game condition icons must be native 64x64 rasters';
+  }
+
+  const metadata = mediaVersionMetadata(row);
+  const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+  if (!isObjectRecord(runtime)) return 'game condition icons require metadata.runtime';
+  const allowed = new Set([
+    'component', 'variant', 'frameWidth', 'frameHeight', 'frameCount', 'altText', 'nativeRole',
+  ]);
+  const unsupported = Object.keys(runtime).filter((key) => !allowed.has(key));
+  if (unsupported.length) {
+    return `game condition icon runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
+  }
+  if (runtime.component !== contract.component) {
+    return `game condition icon metadata.runtime.component must be ${contract.component}`;
+  }
+  if (runtime.variant !== contract.variant) return 'game condition icon variant must match its semantic slot';
+  if (runtime.frameWidth !== 64 || runtime.frameHeight !== 64 || runtime.frameCount !== 1) {
+    return 'game condition icon runtime geometry must describe one native 64x64 frame';
+  }
+  if (runtime.nativeRole !== contract.component) {
+    return `game condition icon metadata.runtime.nativeRole must be ${contract.component}`;
+  }
+  if (runtime.altText !== '') {
+    return 'game condition icon metadata.runtime.altText must be empty because the adjacent label owns its accessible name';
   }
   return null;
 }
@@ -408,6 +457,8 @@ module.exports = {
   SFX_SAMPLE_PROOF_RENDERER,
   SFX_SAMPLE_PROOF_SCHEMA,
   liveCatalogReadinessIssue,
+  gameConditionIconMediaIssue,
+  gameConditionIconSlot,
   nativeMediaEvidenceIssue,
   predrawnBoardAlignmentIssue,
   predrawnBoardMediaIssue,
