@@ -18449,8 +18449,8 @@ button.tileset-relationship-cell {
 .run-card-grid {
   display: grid;
   gap: var(--ds-inline);
-  grid-template-columns: repeat(auto-fill, minmax(196px, 236px));
-  justify-content: start;
+  grid-template-columns: repeat(auto-fit, minmax(196px, 236px));
+  justify-content: center;
 }
 
 .run-card {

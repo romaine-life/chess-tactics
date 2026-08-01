@@ -185,6 +185,7 @@ describe('Run chrome hierarchy', () => {
     expect(runBundleCard).not.toContain('RunGoldAmount');
     expect(runScreen).toContain("import { RunBundleCard } from './RunBundleCard';");
     expect(styleCss).toMatch(/\.run-bundle-card\s*\{[\s\S]*?aspect-ratio:\s*5 \/ 7;/);
+    expect(styleCss).toMatch(/\.run-card-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(auto-fit,[\s\S]*?justify-content:\s*center;/);
     // Cold route entry still holds the veil for any nested painted surface: the
     // shell's painted-surface boundary waits for loading surfaces before painting.
     expect(paintedSurfaceBoundary).toContain(".querySelector('.painted-surface.is-loading')");
