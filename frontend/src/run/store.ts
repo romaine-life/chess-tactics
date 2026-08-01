@@ -3,6 +3,7 @@ import { fetchMe } from '../net/auth';
 import { deleteActiveRun, loadActiveRun, saveActiveRun } from '../net/activeRun';
 import { HttpError } from '../net/http';
 import { normalizeRunDocument, type RunDocument } from './model';
+import { recordAtaraxiaCompletion } from './progression';
 import { recordRunRelicStatEvents, relicStatEventsForRunTransition } from './relicStatistics';
 
 const LOCAL_RUN_KEY = 'chess-tactics:active-run:v1';
@@ -15,6 +16,7 @@ function readLocalRun(): RunDocument | null {
       || Number(parsed.formatVersion) === 2
       || Number(parsed.formatVersion) === 3
       || Number(parsed.formatVersion) === 4
+      || Number(parsed.formatVersion) === 5
     )
       ? normalizeRunDocument(parsed)
       : null;
@@ -31,6 +33,10 @@ function writeLocalRun(run: RunDocument | null): void {
     // The active tab remains playable. The UI exposes that cloud/browser persistence
     // is unavailable through persistenceError rather than pretending this succeeded.
   }
+}
+
+function recordCompletedRun(run: RunDocument | null): void {
+  if (run?.phase === 'victory') recordAtaraxiaCompletion(run.ataraxiaTier);
 }
 
 export interface RunAdoptionConflict {
@@ -102,12 +108,15 @@ export const useActiveRun = create<ActiveRunState>((set, get) => ({
     try {
       const me = await fetchMe();
       if (!me.signed_in) {
+        recordCompletedRun(browserRun);
         set({ run: browserRun, hydrated: true, signedIn: false, persistenceError: null });
         return;
       }
       const remote = await loadActiveRun();
       const accountRun = remote.run ? normalizeRunDocument(remote.run) : null;
       if (accountRun && browserRun && accountRun.id !== browserRun.id) {
+        recordCompletedRun(accountRun);
+        recordCompletedRun(browserRun);
         set({
           run: accountRun,
           hydrated: true,
@@ -125,6 +134,7 @@ export const useActiveRun = create<ActiveRunState>((set, get) => ({
         && Date.parse(browserRun.updatedAt) > Date.parse(accountRun.updatedAt),
       );
       const run = browserIsNewer ? browserRun : accountRun ?? browserRun;
+      recordCompletedRun(run);
       set({
         run,
         hydrated: true,
@@ -135,6 +145,7 @@ export const useActiveRun = create<ActiveRunState>((set, get) => ({
       writeLocalRun(run);
       if ((!accountRun || browserIsNewer) && browserRun) queueRemoteSave(browserRun);
     } catch (error) {
+      recordCompletedRun(browserRun);
       set({
         run: browserRun,
         hydrated: true,
@@ -148,6 +159,7 @@ export const useActiveRun = create<ActiveRunState>((set, get) => ({
 
   replace: (run) => {
     recordRunRelicStatEvents(relicStatEventsForRunTransition(get().run, run));
+    recordCompletedRun(run);
     writeLocalRun(run);
     set({ run, persistenceError: null });
     queueRemoteSave(run);
@@ -172,6 +184,7 @@ export const useActiveRun = create<ActiveRunState>((set, get) => ({
   keepAccountRun: () => {
     const conflict = get().adoptionConflict;
     if (!conflict) return;
+    recordCompletedRun(conflict.accountRun);
     writeLocalRun(conflict.accountRun);
     set({ run: conflict.accountRun, adoptionConflict: null, persistenceError: null });
   },
@@ -183,6 +196,7 @@ export const useActiveRun = create<ActiveRunState>((set, get) => ({
     try {
       await deleteActiveRun(get().remoteRevision);
       const saved = await saveActiveRun(conflict.browserRun, 0);
+      recordCompletedRun(conflict.browserRun);
       writeLocalRun(conflict.browserRun);
       set({
         run: conflict.browserRun,

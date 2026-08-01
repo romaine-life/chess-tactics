@@ -9,6 +9,7 @@ import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { initBgm } from './bgm.js';
 import { primeSfx } from './sfx';
 import { initProgressSync } from './campaign/progressSync';
+import { initRunProgressionSync } from './run/progressionSync';
 import { loadLiveSeats } from './net/propSeats';
 import { loadLiveUnitCatalog } from './net/unitAssets';
 import { loadLiveMediaCatalog } from './net/liveMedia';
@@ -170,3 +171,4 @@ if (root) {
 // you across devices (and a guest's local progress merges up on first sign-in). Fail-soft:
 // signed out / offline is a no-op, and it never blocks the render above.
 void initProgressSync();
+void initRunProgressionSync();

@@ -116,7 +116,11 @@ these.
   A Pestiferous card makes all its units Plagued; every owned nonempty
   Pestiferous card loses one seeded random unit on each Battle advancement
   whether or not it was drawn or deployed. The empty card remains as a possible
-  dead draw until an explicit effect removes it (ADR-0267, ADR-0269, ADR-0271).
+  dead draw until an explicit effect removes it. Affected shop offers, purchases,
+  card membership, and losses are persisted; the seeded draw-time roll is one in
+  eight and is inspectable in Card Layout. Pestiferous cards retain the shared
+  face geometry but resolve their dedicated black bubbling-crude frame slot;
+  ordinary cards keep the standard frame (ADR-0267, ADR-0269, ADR-0271, ADR-0286).
 - Card ledgers have no assumed row cap before live experimentation. Dense cards
   may step down row spacing, icons, and type within readable bounds, but they
   must continue to show every unit property and retain the core card's flavor

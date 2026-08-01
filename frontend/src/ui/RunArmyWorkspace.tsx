@@ -59,6 +59,7 @@ export type RunUnitTraitId =
   | 'discipline'
   | 'positioned'
   | 'marshalled'
+  | 'plagued'
   | 'royal-tent'
   | 'pawn-cash-out';
 
@@ -119,6 +120,16 @@ function deploymentAbilityTrait(
 
 export function runUnitTraits(run: RunDocument, unit: RunArmyUnit): RunUnitTrait[] {
   const traits: RunUnitTrait[] = [];
+  if (unit.modifiers.includes('plagued')) {
+    traits.push({
+      id: 'plagued',
+      label: 'Plagued',
+      description: 'Belongs to a Pestiferous card and may be lost after a Battle.',
+      source: 'The Great Mortality',
+      inherited: false,
+      iconClass: 'skirmish-icon-crossed-swords',
+    });
+  }
   if (unit.abilities.includes('discipline')) {
     traits.push({
       id: 'discipline',
@@ -333,6 +344,7 @@ function RunRosterFilters({
             { value: 'discipline', label: 'Discipline' },
             { value: 'positioned', label: 'Positioned' },
             { value: 'marshalled', label: 'Marshalled' },
+            { value: 'plagued', label: 'Plagued' },
             { value: 'royal-tent', label: 'Royal Tent' },
             { value: 'pawn-cash-out', label: 'Cash Out' },
           ]}

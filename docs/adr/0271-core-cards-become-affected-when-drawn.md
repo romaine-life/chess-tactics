@@ -5,6 +5,8 @@ deciders: owner (Nelson) + Codex
 partially_supersedes:
   - "[ADR-0265](0265-run-cards-keep-core-identities-while-units-carry-modifiers.md)'s unresolved relationship between core cards and modified instances"
   - "[ADR-0269](0269-every-pestiferous-card-deteriorates-at-one-eighth-prevalence.md)'s deferred Pestiferous marking point"
+partially_superseded_by:
+  - "[ADR-0286](0286-ataraxia-i-is-a-persisted-run-tier-with-draw-time-pestiferous-instances.md)"
 ---
 
 # ADR-0271: Core cards become affected when drawn

@@ -14,8 +14,8 @@ import { navigateApp } from './navigation';
 import { useConfirm } from './shared/ConfirmDialog';
 import { RunWorkspace } from './RunWorkspace';
 import {
+  ATARAXIA_BY_TIER,
   GOLD_SCALE,
-  PIECE_BUNDLE_BY_ID,
   RUN_RELIC_BY_ID,
   battleVictoryGoldTenths,
   beginBattle,
@@ -82,7 +82,7 @@ function RunTitleBarStatus({ run }: { run: RunDocument }): ReactElement {
     <div className="skirmish-topbar-status">
       <TitleBarStatus className="skirmish-status-chip skirmish-turn-plate">
         <strong>{run.war.name}</strong>
-        <small>Run</small>
+        <small>{ATARAXIA_BY_TIER[run.ataraxiaTier].label}</small>
       </TitleBarStatus>
       <TitleBarStatus className="skirmish-status-chip skirmish-clock">
         <RunGoldAmount valueTenths={run.goldTenths} className="run-gold-amount--title" />
@@ -508,6 +508,7 @@ function ShopPanel({
   const victoryGoldTenths = Number.isSafeInteger(shop.victoryGoldTenths) && shop.victoryGoldTenths >= 0
     ? shop.victoryGoldTenths
     : battleVictoryGoldTenths(run.war.battles[shop.afterBattleIndex].level);
+  const pestiferousLosses = run.pestiferousLosses.filter((loss) => loss.battleIndex === shop.afterBattleIndex);
   return (
     <>
       {view === 'sell' ? sellWorkspace : (
@@ -524,21 +525,30 @@ function ShopPanel({
           <RunGoldAmount valueTenths={victoryGoldTenths} />
           <span>Choose one bundle</span>
         </div>
+        {pestiferousLosses.length ? (
+          <InnerChromeBox className="run-pestiferous-losses" role="status">
+            <h3>Pestiferous attrition</h3>
+            <p>These Plagued units were lost after the Battle:</p>
+            <ul>
+              {pestiferousLosses.map((loss) => (
+                <li key={`${loss.cardId}:${loss.unit.id}`}>{loss.unit.name} · {loss.unit.type}</li>
+              ))}
+            </ul>
+          </InnerChromeBox>
+        ) : null}
         <section>
           <h3>Piece bundles</h3>
           <div className="run-card-grid">
-            {shop.bundleOfferIds.map((id) => {
-              const bundle = PIECE_BUNDLE_BY_ID[id];
-              if (!bundle) return null;
-              const bought = shop.purchasedBundleId === id;
+            {shop.bundleOffers.map((offer) => {
+              const bought = shop.purchasedOfferId === offer.offerId;
               return (
                 <RunBundleCard
-                  bundle={bundle}
+                  bundle={offer}
                   mode="shop"
                   bought={bought}
-                  key={id}
-                  disabled={Boolean(shop.purchasedBundleId) || run.goldTenths < bundle.value * GOLD_SCALE}
-                  onSelect={() => replace(buyBundle(run, id))}
+                  key={offer.offerId}
+                  disabled={Boolean(shop.purchasedOfferId) || run.goldTenths < offer.cost * GOLD_SCALE}
+                  onSelect={() => replace(buyBundle(run, offer.offerId))}
                 />
               );
             })}
@@ -598,6 +608,7 @@ function VictoryPanel({ run }: { run: RunDocument }): ReactElement {
     >
       <h2 id="run-victory-workspace-title">War won</h2>
       <h2>{run.war.name}</h2>
+      <p>{ATARAXIA_BY_TIER[run.ataraxiaTier].label} — {ATARAXIA_BY_TIER[run.ataraxiaTier].title}</p>
       <p>{run.war.description}</p>
       <p className="run-victory-summary">
         <span>{run.army.length} persistent units</span>

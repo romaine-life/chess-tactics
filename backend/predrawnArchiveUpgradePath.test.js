@@ -61,7 +61,7 @@ test('already-applied migration 36 remains the immutable drawable-media migratio
   );
 });
 
-test('the exact sparse numeric legacy history upgrades through migration 48', () => {
+test('the exact sparse numeric legacy history upgrades through migration 49', () => {
   const versions = migrationVersions();
   const appliedBeforeUpgrade = new Set(
     versions.filter((version) => version <= 27 || version === 36),
@@ -341,6 +341,17 @@ test('the exact sparse numeric legacy history upgrades through migration 48', ()
     /CREATE TABLE/i,
     'migration 48 is a pure retirement and must not smuggle in new schema',
   );
+  const migration49 = inlineMigration(49);
+  assert.equal(
+    migration49.name,
+    'account-scoped Ataraxia progression',
+    'migration 49 must own the durable cross-Run Ataraxia unlock identity',
+  );
+  assert.match(
+    migration49.sql,
+    /CREATE TABLE IF NOT EXISTS\s+run_progression[\s\S]*highest_completed_ataraxia_tier[\s\S]*CHECK \(highest_completed_ataraxia_tier >= -1\)/i,
+    'migration 49 must preserve the pre-baseline state and monotonic tier field',
+  );
 
   const migration36 = inlineMigration(36);
   const allMigrations = versions.map(inlineMigration);
@@ -367,7 +378,7 @@ test('the exact sparse numeric legacy history upgrades through migration 48', ()
   );
   assert.deepEqual(
     plan.pending.map((entry) => entry.version),
-    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48],
+    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49],
     'the bridge must fill the historical gap before applying every post-36 contract',
   );
   assert.throws(
@@ -399,7 +410,7 @@ test('the exact sparse numeric legacy history upgrades through migration 48', ()
   );
 });
 
-test('required-schema readiness and repair enforce the migrations 37 through 45 contracts', () => {
+test('required-schema readiness and repair enforce the migrations 37 through 49 contracts', () => {
   const relations = sourceSection(
     serverSource,
     'const REQUIRED_SCHEMA_RELATIONS = [',
@@ -444,6 +455,12 @@ test('required-schema readiness and repair enforce the migrations 37 through 45 
     repairs,
     /\['run_relic_stat_events',\s*45\]/,
     'Run relic-stat relation repair must replay migration 45',
+  );
+  assert.match(relations, /run_progression/, 'Ataraxia progression must be required runtime schema');
+  assert.match(
+    repairs,
+    /\['run_progression',\s*49\]/,
+    'Ataraxia progression relation repair must replay migration 49',
   );
   const relationRepair = sourceSection(
     serverSource,

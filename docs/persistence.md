@@ -17,6 +17,7 @@ Durable document and live-content tables are created by the inline migrations in
 | `levels` | per signed-in owner (`PK (owner_email, id)`) | `/api/levels`, `/api/levels/:id` | sign-in required |
 | `campaign_workspaces` | one row per signed-in owner | `/api/campaign-workspace` | sign-in required |
 | `active_runs` | one versioned, CAS-updated active Run document per signed-in owner, including persistent named army units | `/api/active-run` | sign-in required; anonymous Runs remain browser-local until adoption |
+| `run_progression` | one monotonic highest-completed Ataraxia tier per signed-in owner | `/api/run-progression` | sign-in required; anonymous/offline unlocks remain browser-local and merge by maximum on sign-in |
 | `run_relic_stat_events` | idempotent owner-scoped relic pick and Battle-win facts | `/api/run-relic-statistics`, `/api/run-relic-stat-events` | sign-in required; anonymous and unsynced facts remain browser-local |
 | `level_working_copies` | one durable working copy per signed-in owner + workspace + level | `/api/editor-documents` | sign-in required; official workspaces also require admin |
 | `level_working_copy_revisions` | retained checkpoints for each durable working copy | `/api/editor-documents/:id/revisions` | owner only; restore requires current CAS revision |
@@ -38,7 +39,9 @@ Durable document and live-content tables are created by the inline migrations in
 | `media_slots` / `media_versions` / `media_blobs` | shared live-media substrate and active pointers | `/api/asset-catalog`, `/api/media/:sha`, `/assets/:slot`, `/api/admin/media-assets` | GET public, mutations require admin |
 | `media_catalog_state` / `media_asset_events` | shared asset revision and audit history | internal | admin mutations write them |
 
-Active Run format 3 stores each army unit's role-specific historical name.
+Active Run format 5 stores the selected Ataraxia tier, persisted affected shop
+offers, owned card membership, Plagued unit modifiers, and exact Pestiferous loss
+history. Format 3 stores each army unit's role-specific historical name.
 Format-1 unnamed documents and the provisional format-2 generated-name documents
 are deterministically normalized to format 3 from the Run seed and each piece
 type's acquisition order before the next save. Once a document is format 3, a
@@ -57,7 +60,9 @@ compare-and-swap protected `active_runs` document. Per
 that document also owns each unit's stable per-piece-type number and the current
 shop's entry snapshot. Shop purchases, sales, and relic choices save normally;
 **Reset Shop** restores the snapshot while retaining the exact offers already
-dealt for that visit.
+dealt for that visit. Ataraxia unlocks are separate monotonic progression because
+finishing or abandoning deletes the active Run document; the browser copy and
+account `run_progression` row merge by their greatest completed tier.
 
 Per
 [ADR-0231](adr/0231-strategikon-and-enchiridion-share-one-reference-workspace-language.md),

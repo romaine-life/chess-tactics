@@ -3986,6 +3986,41 @@ async function main() {
     throw new Error(`Workspace should be scoped to owner: ${rivalWorkspace.statusCode} ${rivalWorkspace.body}`);
   }
 
+  // --- Run progression: owner-scoped and monotonic across completed Runs ----
+  const anonymousRunProgression = await get('/api/run-progression');
+  if (anonymousRunProgression.statusCode !== 401) {
+    throw new Error(`Anonymous Run progression should require sign-in: ${anonymousRunProgression.statusCode}`);
+  }
+  const emptyRunProgression = await get('/api/run-progression', { cookie: '__Host-chess-tactics-access=abc' });
+  if (
+    emptyRunProgression.statusCode !== 200
+    || JSON.parse(emptyRunProgression.body).progression.highestCompletedAtaraxiaTier !== -1
+  ) {
+    throw new Error(`Run progression should begin before the baseline: ${emptyRunProgression.statusCode} ${emptyRunProgression.body}`);
+  }
+  const completedBaseline = await request(
+    'PUT', '/api/run-progression',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({ progression: { formatVersion: 1, highestCompletedAtaraxiaTier: 0 } }),
+  );
+  const attemptedRegression = await request(
+    'PUT', '/api/run-progression',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({ progression: { formatVersion: 1, highestCompletedAtaraxiaTier: -1 } }),
+  );
+  if (
+    completedBaseline.statusCode !== 200
+    || JSON.parse(completedBaseline.body).progression.highestCompletedAtaraxiaTier !== 0
+    || attemptedRegression.statusCode !== 200
+    || JSON.parse(attemptedRegression.body).progression.highestCompletedAtaraxiaTier !== 0
+  ) {
+    throw new Error(`Run progression must merge monotonically: ${completedBaseline.body} / ${attemptedRegression.body}`);
+  }
+  const rivalRunProgression = await get('/api/run-progression', { cookie: '__Host-chess-tactics-access=rival' });
+  if (JSON.parse(rivalRunProgression.body).progression.highestCompletedAtaraxiaTier !== -1) {
+    throw new Error(`Run progression should be owner-scoped: ${rivalRunProgression.statusCode} ${rivalRunProgression.body}`);
+  }
+
   // --- Active Run (/api/active-run): one owner-scoped CAS document ----------
   const anonymousRun = await get('/api/active-run');
   if (anonymousRun.statusCode !== 401) {
@@ -3997,9 +4032,10 @@ async function main() {
     throw new Error(`Active Run should begin empty: ${emptyRun.statusCode} ${emptyRun.body}`);
   }
   const activeRunDocument = {
-    formatVersion: 4,
+    formatVersion: 5,
     id: 'run-smoke',
     seed: 17,
+    ataraxiaTier: 1,
     updatedAt: '2026-01-01T00:00:00.000Z',
     war: {
       id: 'war-smoke',
@@ -4012,9 +4048,11 @@ async function main() {
     conflictIndex: 0,
     goldTenths: 0,
     army: [
-      { id: 'run-king', name: 'David of Israel', type: 'king', inspectionSeed: 1701, abilities: [], source: 'king' },
-      { id: 'run-pawn-a', name: 'Stephen Botiller', type: 'pawn', inspectionSeed: 1702, abilities: ['positioned', 'marshalled'], source: 'starting' },
+      { id: 'run-king', name: 'David of Israel', type: 'king', inspectionSeed: 1701, abilities: [], modifiers: [], source: 'king' },
+      { id: 'run-pawn-a', name: 'Stephen Botiller', type: 'pawn', inspectionSeed: 1702, abilities: ['positioned', 'marshalled'], modifiers: ['plagued'], source: 'starting' },
     ],
+    cards: [],
+    pestiferousLosses: [],
     relics: [],
     seenRelics: [],
     conflictPaidRelics: {},
@@ -4024,6 +4062,7 @@ async function main() {
     ],
     chosenDraftId: null,
     nextArmyUnitSequence: 1,
+    nextCardSequence: 1,
     deployment: null,
     battleRuntime: null,
     shop: null,

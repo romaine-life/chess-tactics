@@ -11,6 +11,7 @@ partially_supersedes:
   - 0276-run-type-lines-declare-primary-families-and-affected-qualifiers.md
 partially_superseded_by:
   - 0285-run-card-type-lines-use-one-optically-centered-baseline.md
+  - 0286-ataraxia-i-is-a-persisted-run-tier-with-draw-time-pestiferous-instances.md
 ---
 
 # ADR-0283: Run card face is one shared live runtime component
