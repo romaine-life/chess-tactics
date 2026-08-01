@@ -1,6 +1,9 @@
 // @ts-nocheck -- source-structure guard; node built-ins are outside the app tsconfig.
 import { readFileSync } from 'node:fs';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { LevelEditorControlsPanel } from './LevelEditorChromeConsumers';
 
 const levelEditor = readFileSync(new URL('./LevelEditor.tsx', import.meta.url), 'utf8');
 const levelEditorControls = readFileSync(new URL('./LevelEditorChromeConsumers.tsx', import.meta.url), 'utf8');
@@ -12,6 +15,39 @@ const editableBoardEnd = levelEditor.indexOf('\n// -----------------------------
 const editableBoard = levelEditor.slice(editableBoardStart, editableBoardEnd);
 
 describe('Level Editor board pointer contract', () => {
+  it('keeps an unpressed tool state interactive while disabling genuine non-board workspaces', () => {
+    const renderToolbar = (toolsDisabled: boolean, eraseDisabled = false): string => renderToStaticMarkup(
+      createElement(LevelEditorControlsPanel, {
+        layer: 'placed-art',
+        layerOptions: [{ id: 'placed-art', label: 'Placed Art' }],
+        onLayerChange: () => {},
+        tool: null,
+        toolsDisabled,
+        onToolChange: () => {},
+        eraseDisabled,
+        canUndo: false,
+        canRedo: false,
+        onUndo: () => {},
+        onRedo: () => {},
+        children: createElement('div'),
+      }),
+    );
+    const toolButton = (markup: string, unit: string): string => markup.match(
+      new RegExp(`<button[^>]*data-chrome-unit="${unit}"[^>]*>`),
+    )?.[0] ?? '';
+
+    const inactiveSceneArt = renderToolbar(false, true);
+    expect(toolButton(inactiveSceneArt, 'inner-select-tool')).not.toContain('disabled');
+    expect(toolButton(inactiveSceneArt, 'inner-brush-tool')).not.toContain('disabled');
+    expect(toolButton(inactiveSceneArt, 'inner-erase-tool')).toContain('disabled');
+    expect(toolButton(inactiveSceneArt, 'inner-move-tool')).not.toContain('disabled');
+
+    const processWorkspace = renderToolbar(true);
+    for (const unit of ['inner-select-tool', 'inner-brush-tool', 'inner-erase-tool', 'inner-move-tool']) {
+      expect(toolButton(processWorkspace, unit)).toContain('disabled');
+    }
+  });
+
   it('reserves context menus for viewport panning instead of destructive shortcuts', () => {
     expect(editableBoardStart).toBeGreaterThanOrEqual(0);
     expect(editableBoardEnd).toBeGreaterThan(editableBoardStart);
@@ -126,6 +162,20 @@ describe('Level Editor board pointer contract', () => {
     expect(levelEditor).toContain('const [artworkSelectionActive, setArtworkSelectionActive] = useState(false);');
     expect(levelEditor).toMatch(/if \(brushKind === 'artwork' && nextTool === 'select'\) \{[\s\S]*?if \(artworkSelectionActive\) \{[\s\S]*?setArtworkSelectionActive\(false\);[\s\S]*?setSelectedArtworkId\(null\);[\s\S]*?\} else \{[\s\S]*?setArtworkSelectionActive\(true\);[\s\S]*?setTool\('select'\);/);
     expect(levelEditor).toContain("tool === 'select' && !artworkSelectionActive");
+    expect(levelEditor).toContain('const actionToolsDisabled =');
+    expect(levelEditor).toContain('const actionToolbarTool: LevelEditorToolKey | null =');
+    expect(levelEditor).toContain('tool={actionToolbarTool}');
+    expect(levelEditor).toContain('toolsDisabled={actionToolsDisabled}');
+    expect(levelEditorControls).toContain('toolsDisabled = false');
+    expect(levelEditorControls).toContain('const eraseDisabled = toolsDisabled || eraseActionDisabled;');
+    for (const unit of ['inner-select-tool', 'inner-brush-tool', 'inner-move-tool']) {
+      const button = levelEditorControls.match(
+        new RegExp(`<button\\b[^>]*data-chrome-unit="${unit}"[\\s\\S]*?<\\/button>`),
+      )?.[0];
+      expect(button).toBeDefined();
+      expect(button).toContain('disabled={toolsDisabled}');
+      expect(button).not.toContain('disabled={tool === null}');
+    }
     expect(styles).toContain('.le-floating-artwork-hit.is-selectable');
     expect(styles).toContain('outline: 2px dashed');
     expect(styles).toContain('.le-floating-artwork-hit.is-selected');
