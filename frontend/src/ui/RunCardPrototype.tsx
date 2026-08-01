@@ -46,7 +46,7 @@ const clampCardHorizontal = (value: number, min = TEXT_HORIZONTAL_MIN, max = TEX
   Math.round(Math.min(max, Math.max(min, value)) * 100) / 100
 );
 
-const CARD = Object.freeze({
+const STANDARD_CARD = Object.freeze({
   name: 'Parish Militia',
   cost: 9,
   typeLine: 'Units',
@@ -57,6 +57,20 @@ const CARD = Object.freeze({
   ] as const,
   flavor: 'The bell was gone. Five shadows gathered at the accustomed hour.',
 }) satisfies RunCardFaceContent;
+
+export type RunCardPrototypeVariant = 'standard' | 'pestiferous';
+
+export function runCardPrototypeVariantFromSearch(search: string): RunCardPrototypeVariant {
+  return new URLSearchParams(search).get('cardVariant') === 'pestiferous'
+    ? 'pestiferous'
+    : 'standard';
+}
+
+export function runCardPrototypeContent(variant: RunCardPrototypeVariant): RunCardFaceContent {
+  return variant === 'pestiferous'
+    ? { ...STANDARD_CARD, typeLine: 'Units — Pestiferous' }
+    : STANDARD_CARD;
+}
 
 function selectedCandidate(
   catalog: AdminLiveMediaCatalog,
@@ -88,6 +102,9 @@ export function RunCardPrototypeViewer({
 }): ReactElement {
   const [catalog, setCatalog] = useState<AdminLiveMediaCatalog | null>(null);
   const [error, setError] = useState('');
+  const [cardVariant, setCardVariant] = useState<RunCardPrototypeVariant>(() => (
+    runCardPrototypeVariantFromSearch(window.location.search)
+  ));
   const [costX, setCostX] = useState(DEFAULT_COST_X);
   const [costY, setCostY] = useState(DEFAULT_COST_Y);
   const [costSize, setCostSize] = useState(DEFAULT_COST_SIZE);
@@ -102,6 +119,7 @@ export function RunCardPrototypeViewer({
   const [flavorSize, setFlavorSize] = useState(DEFAULT_FLAVOR_SIZE);
   const [handoffCopyState, setHandoffCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
   const [loaded, setLoaded] = useState<ReadonlySet<RunCardImageKind>>(() => new Set());
+  const card = useMemo(() => runCardPrototypeContent(cardVariant), [cardVariant]);
 
   useEffect(() => {
     let active = true;
@@ -120,7 +138,7 @@ export function RunCardPrototypeViewer({
     && art
     && loaded.has('frame')
     && loaded.has('art')
-    && CARD.grants.every((grant, cell) => (
+    && card.grants.every((grant, cell) => (
       Array.from({ length: grant.count }, (_, index) => runCardUnitImageKind(cell, grant.unit, index))
         .every((kind) => loaded.has(kind))
     )),
@@ -199,11 +217,24 @@ export function RunCardPrototypeViewer({
     setTitleTypeHorizontalLocked(DEFAULT_TITLE_TYPE_HORIZONTAL_LOCKED);
     setHandoffCopyState('idle');
   };
+  const chooseCardVariant = (next: RunCardPrototypeVariant): void => {
+    const params = new URLSearchParams(window.location.search);
+    if (next === 'pestiferous') params.set('cardVariant', 'pestiferous');
+    else params.delete('cardVariant');
+    const search = params.toString();
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash}`,
+    );
+    setCardVariant(next);
+  };
   const copyCodexHandoff = async (): Promise<void> => {
     const payload = JSON.stringify({
       kind: 'run-card-layout-tuning',
       version: 2,
-      card: CARD.name,
+      card: card.name,
+      cardVariant,
       referenceWidthPx: REFERENCE_CARD_WIDTH,
       units: 'percent of card width (cqw)',
       frameSha256: frame?.media?.sha256 ?? null,
@@ -244,7 +275,7 @@ export function RunCardPrototypeViewer({
         {frame && art ? (
           <div className="run-card-prototype-stage">
             <RunCardFace
-              card={CARD}
+              card={card}
               frameUrl={frame.media!.url}
               artUrl={art.media!.url}
               width={`${REFERENCE_CARD_WIDTH * viewerZoom}px`}
@@ -262,6 +293,22 @@ export function RunCardPrototypeViewer({
           <div className="tileset-control-stack">
             {header}
             <p className="run-card-prototype-note">Prototype instrument. The Studio Zoom control changes only the preview scale.</p>
+            <div className="tileset-button-row" role="group" aria-label="Card variant">
+              <button
+                type="button"
+                className={`tileset-view-action${cardVariant === 'standard' ? ' active' : ''}`}
+                data-card-variant="standard"
+                aria-pressed={cardVariant === 'standard'}
+                onClick={() => chooseCardVariant('standard')}
+              >Standard</button>
+              <button
+                type="button"
+                className={`tileset-view-action${cardVariant === 'pestiferous' ? ' active' : ''}`}
+                data-card-variant="pestiferous"
+                aria-pressed={cardVariant === 'pestiferous'}
+                onClick={() => chooseCardVariant('pestiferous')}
+              >Pestiferous</button>
+            </div>
             <div className="tileset-button-row run-card-prototype-actions">
               <button
                 type="button"
@@ -312,6 +359,7 @@ export function RunCardPrototypeViewer({
               <dl className="run-card-prototype-source-readout">
                 <div><dt>Frame</dt><dd>{frame.media!.sha256.slice(0, 12)} · {frame.status}</dd></div>
                 <div><dt>Artwork</dt><dd>{art.media!.sha256.slice(0, 12)} · {art.status}</dd></div>
+                <div><dt>Card</dt><dd>{cardVariant === 'pestiferous' ? 'Units — Pestiferous' : 'Units'}</dd></div>
               </dl>
             ) : null}
           </div>
