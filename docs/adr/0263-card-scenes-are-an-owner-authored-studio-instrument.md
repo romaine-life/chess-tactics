@@ -1,5 +1,5 @@
 ---
-status: superseded by 0264-the-card-scene-authoring-instrument-is-removed.md
+status: superseded by 0277-the-card-scene-authoring-instrument-is-removed.md
 date: 2026-07-31
 deciders: owner (Nelson) + Codex
 extends:
@@ -16,7 +16,7 @@ refines:
 > **Superseded (2026-07-31):** the owner redirected card art to flavor-first
 > illustration in a parallel workstream before any scene was authored, and this
 > entire instrument was removed the same day it merged — see
-> [ADR-0264](0264-the-card-scene-authoring-instrument-is-removed.md). The text
+> [ADR-0277](0277-the-card-scene-authoring-instrument-is-removed.md). The text
 > below records the instrument as designed and shipped in PR #564.
 
 ## Context

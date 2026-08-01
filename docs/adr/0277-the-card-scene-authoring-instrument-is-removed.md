@@ -6,7 +6,7 @@ supersedes:
   - 0263-card-scenes-are-an-owner-authored-studio-instrument.md
 ---
 
-# ADR-0264: The card scene authoring instrument is removed
+# ADR-0277: The card scene authoring instrument is removed
 
 ## Context
 

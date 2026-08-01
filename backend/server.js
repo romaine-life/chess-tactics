@@ -2696,7 +2696,7 @@ const MIGRATIONS = [
   {
     version: 48,
     name: 'retire the Run card scene overrides table',
-    // The card-scene authoring feature was removed (ADR-0264) before any scene was
+    // The card-scene authoring feature was removed (ADR-0277) before any scene was
     // authored in production; migration 47 stays in immutable applied history, so the
     // retirement is this append-only drop rather than an edit of the shipped past.
     sql: `
