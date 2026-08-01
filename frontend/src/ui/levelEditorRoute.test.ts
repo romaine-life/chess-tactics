@@ -14,6 +14,19 @@ describe('level editor route helpers', () => {
     });
   });
 
+  it('round-trips the dedicated Camera page without brush state', () => {
+    const href = levelEditorHrefWithRouteState('/editor/level?document=doc-1&kind=cover&brush=grass', {
+      layer: 'camera',
+      brushKind: levelEditorRouteBrushKind('camera', 'cover'),
+      brush: null,
+    });
+    expect(href).toBe('/editor/level?document=doc-1&layer=camera');
+    expect(readLevelEditorRouteState(new URL(href, 'https://example.test').search)).toMatchObject({
+      layer: 'camera',
+      brushKind: undefined,
+    });
+  });
+
   it('round-trips the dedicated Level Artwork workspace without a brush kind', () => {
     const href = levelEditorHrefWithRouteState('/editor/level?levelId=l1&document=doc-1&kind=cover', {
       layer: 'level-artwork',
@@ -79,6 +92,7 @@ describe('level editor route helpers', () => {
   });
 
   it('keeps legacy layer names out of the canonical layer vocabulary', () => {
+    expect(isLevelEditorLayerKey('camera')).toBe(true);
     expect(isLevelEditorLayerKey('level-artwork')).toBe(true);
     expect(isLevelEditorLayerKey('placed-art')).toBe(true);
     expect(isLevelEditorLayerKey('artwork')).toBe(false);

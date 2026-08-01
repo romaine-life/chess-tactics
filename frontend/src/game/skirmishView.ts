@@ -6,9 +6,8 @@
 // the tactics-UI convention: tactical info renders on the board, controls dock).
 
 import { create } from 'zustand';
+import { PLAYER_MAXIMUM_ZOOM, PLAYER_TECHNICAL_MINIMUM_ZOOM } from './boardCameraPolicy';
 
-const MIN_ZOOM = 0.55;
-const MAX_ZOOM = 1.45;
 const DEFAULT_ZOOM = 0.9;
 const DEFAULT_PAN = { x: 0, y: -12 };
 
@@ -41,9 +40,9 @@ export interface SkirmishViewState {
   /** Draw a deliberate board grid overlay. Default off so terrain can flow naturally. */
   showGrid: boolean;
   zoom: number;
-  /** Dynamic floor reported by the live board viewport (higher for full-scene pre-drawn art). */
+  /** Level-specific floor derived from the live viewport and effective camera coverage polygon. */
   minZoom: number;
-  /** Ordinary cap, raised only when a pre-drawn scene needs a higher coverage floor. */
+  /** Human zoom-in cap, raised when camera coverage or opening geometry needs it. */
   maxZoom: number;
   pan: { x: number; y: number };
   openingZoom: number;
@@ -69,8 +68,8 @@ export const useSkirmishView = create<SkirmishViewState>((set) => ({
   showPromotionZones: false,
   showGrid: false,
   zoom: DEFAULT_ZOOM,
-  minZoom: MIN_ZOOM,
-  maxZoom: MAX_ZOOM,
+  minZoom: PLAYER_TECHNICAL_MINIMUM_ZOOM,
+  maxZoom: PLAYER_MAXIMUM_ZOOM,
   pan: DEFAULT_PAN,
   openingZoom: DEFAULT_ZOOM,
   openingPan: DEFAULT_PAN,
@@ -82,8 +81,8 @@ export const useSkirmishView = create<SkirmishViewState>((set) => ({
     zoom: Math.min(state.maxZoom, Math.max(state.minZoom, zoom)),
   })),
   setMinZoom: (zoom) => set((state) => {
-    const minZoom = Math.max(MIN_ZOOM, zoom);
-    const maxZoom = Math.max(MAX_ZOOM, minZoom, state.openingZoom);
+    const minZoom = Math.max(PLAYER_TECHNICAL_MINIMUM_ZOOM, zoom);
+    const maxZoom = Math.max(PLAYER_MAXIMUM_ZOOM, minZoom, state.openingZoom);
     return { minZoom, maxZoom, zoom: Math.min(maxZoom, Math.max(state.zoom, minZoom)) };
   }),
   setPan: (pan) => set({ pan }),
@@ -92,7 +91,7 @@ export const useSkirmishView = create<SkirmishViewState>((set) => ({
     openingPan: camera.pan,
     // Opening composition is geometry, not a suggestion subject to the ordinary control cap.
     // Raising the ceiling first lets the framing hook apply the exact camera on large viewports.
-    maxZoom: Math.max(MAX_ZOOM, state.minZoom, camera.zoom, state.zoom),
+    maxZoom: Math.max(PLAYER_MAXIMUM_ZOOM, state.minZoom, camera.zoom, state.zoom),
   })),
   clearOverlays: () => set({
     showMoves: false,

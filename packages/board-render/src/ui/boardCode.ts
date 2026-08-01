@@ -13,7 +13,7 @@
 //   rc?:[edgeKey], rx?:[edgeKey], zn?:[[zoneId,zoneType,[cell],name?,color?]], z?:{cell:zoneType},
 //   gr?:generatedRegionUnits,
 //   pd?:[semanticMediaSlot,referenceFrameWidth,referenceFrameHeight,registration?],
-//   pgf?:[version,x,y,width,height],
+//   pgf?:[version,x,y,width,height], cam?:[minX,minY,width,height],
 //   fa?:[[instanceId,sourceArtId,pixelX,pixelY,direction,scale]],
 //   da?:[top,right,bottom,left], df?:[cell], dt?:{cell:tileId}, dr?:{cell:feature},
 //   dfe?:{edgeKey:fenceMaterial}, dfp?:{vertexKey:fenceMaterial}, dwl?:{edgeKey:wallMaterial} }.
@@ -61,6 +61,10 @@ import {
   normalizePredrawnMoveHighlightProfile,
   type PredrawnMoveHighlightProfile,
 } from '../render/predrawnMoveHighlight';
+import {
+  normalizeBoardCameraBounds,
+  type BoardCameraBounds,
+} from '../render/boardCameraBounds';
 
 /**
  * One painted autotiling feature cell (road or river): which linear feature it carries and its
@@ -204,6 +208,8 @@ export interface FloatingArtworkPlacement {
 export interface EditorBoard {
   cols: number;
   rows: number;
+  /** Player-camera coverage boundary in board-centred projected world pixels. */
+  cameraBounds?: BoardCameraBounds;
   /** Level-editor/art-handoff presentation only. Extends terrain beyond the tactical bounds;
    * apron cells are never gameplay addresses and never project into Level layers. */
   decorativeApron?: { top: number; right: number; bottom: number; left: number };
@@ -789,6 +795,13 @@ export function encodeBoard(b: EditorBoard): string {
     predrawnGenerationFrame.width,
     predrawnGenerationFrame.height,
   ];
+  const cameraBounds = normalizeBoardCameraBounds(b.cameraBounds, b);
+  if (cameraBounds) wire.cam = [
+    cameraBounds.minX,
+    cameraBounds.minY,
+    cameraBounds.width,
+    cameraBounds.height,
+  ];
   if (b.decorativeApron && Object.values(b.decorativeApron).some((value) => value > 0)) {
     wire.da = [b.decorativeApron.top, b.decorativeApron.right, b.decorativeApron.bottom, b.decorativeApron.left];
   }
@@ -1074,13 +1087,21 @@ export function decodeBoard(code: string): EditorBoard | null {
         height: w.pgf[4],
       })
       : undefined;
+    const cameraBounds = Array.isArray(w.cam) && w.cam.length === 4
+      ? normalizeBoardCameraBounds({
+          minX: w.cam[0],
+          minY: w.cam[1],
+          width: w.cam[2],
+          height: w.cam[3],
+        }, { cols, rows })
+      : undefined;
     const decodedDecorativeFootprint = cleanDecorativeFootprint(w.df, cols, rows);
     const subterrain = cleanSubterrainPlacements(
       w.st,
       visualTerrainSurfaceKeys(cells, cols, rows, decorativeApron, decodedDecorativeFootprint),
     );
     return {
-      cols, rows, decorativeApron, backgroundMode, surface, predrawnGenerationFrame,
+      cols, rows, cameraBounds, decorativeApron, backgroundMode, surface, predrawnGenerationFrame,
       decorativeFootprint: decodedDecorativeFootprint,
       decorativeCells: (w.dt && typeof w.dt === 'object' && !Array.isArray(w.dt) ? w.dt : {}) as Record<string, string>,
       decorativeFeatures: (w.dr && typeof w.dr === 'object' && !Array.isArray(w.dr) ? w.dr : {}) as Record<string, FeatureCell>,

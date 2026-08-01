@@ -25,6 +25,14 @@ const emptyBoard = (over: Partial<EditorBoard> = {}): EditorBoard => ({
 });
 
 describe('boardCode round-trip', () => {
+  it('round-trips an authored camera boundary and leaves old codes on the derived default path', () => {
+    const cameraBounds = { minX: -420, minY: -260, width: 900, height: 620 };
+    const code = encodeBoard(emptyBoard({ cameraBounds }));
+    expect(decodeWire(code).cam).toEqual([-420, -260, 900, 620]);
+    expect(decodeBoard(code)?.cameraBounds).toEqual(cameraBounds);
+    expect(decodeBoard(encodeWire({ c: 6, r: 5 }))?.cameraBounds).toBeUndefined();
+  });
+
   it('preserves a mixed board of tiles, a river, a road, and edge fences', () => {
     const board = emptyBoard({
       cells: { '0,0': 'grass-surf-0', '2,2': 'water-surf-0' },

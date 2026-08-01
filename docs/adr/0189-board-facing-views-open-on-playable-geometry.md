@@ -13,6 +13,7 @@ partially_superseded_by:
   - "[ADR-0192](0192-interactive-board-viewports-share-a-four-by-three-shape.md)"
   - "[ADR-0203](0203-ordinary-board-previews-match-the-play-pane.md)"
   - "[ADR-0204](0204-all-board-viewing-panes-match-play.md)"
+  - "[ADR-0301](0301-levels-own-an-authored-camera-coverage-boundary.md)"
 ---
 
 # ADR-0189: Board-facing views open on playable geometry

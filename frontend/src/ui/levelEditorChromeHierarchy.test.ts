@@ -145,7 +145,7 @@ describe('Level Editor chrome hierarchy', () => {
     expect(styleCss).toMatch(/\.le-region-cell\s*\{[\s\S]*?top:\s*0;/);
   });
 
-  it('registers every audited Board view control under its semantic parent', () => {
+  it('keeps Camera as a dedicated dropdown page with audited controls', () => {
     const controls = [
       ['adjustZoom(-0.1)', 'inner-minus-key'],
       ['adjustZoom(0.1)', 'inner-plus-key'],
@@ -155,6 +155,7 @@ describe('Level Editor chrome hierarchy', () => {
       ['setShowBlocked', 'inner-text-button'],
       ['setShowPromotionZones', 'inner-text-button'],
       ['setGridScope', 'inner-text-button'],
+      ['snapCameraBoundary', 'inner-text-button'],
     ] as const;
     const blocks = buttonBlocks(levelEditor);
     for (const [handler, unit] of controls) {
@@ -163,6 +164,14 @@ describe('Level Editor chrome hierarchy', () => {
       expectChromeUnit(block!, unit);
     }
     expect(blocks.filter((block) => block.includes('setGridScope'))).toHaveLength(2);
+    expect(levelEditor).toContain("{ id: 'camera', label: 'Camera' }");
+    expect(levelEditor).toMatch(/\) : layer === 'camera' \? \([\s\S]*?ariaLabel="Camera boundary snap preset"[\s\S]*?\) : layer === 'generate'/);
+    expect(levelEditor).not.toContain('ariaLabel="Camera boundary display"');
+    expect(levelEditor).toContain('ariaLabel="Camera boundary interaction mode"');
+    expect(levelEditor).toContain("cameraBoundaryInteractionMode === 'edit' && editorSessionCanWrite");
+    expect(levelEditor).toContain('ariaLabel="Camera boundary snap preset"');
+    expect(levelEditor).toContain('>Snap</button>');
+    expect(styleCss).toMatch(/\.le-camera-boundary-handle\.is-move\s*\{[\s\S]*?height:\s*100%;[\s\S]*?inset:\s*0;[\s\S]*?width:\s*100%;/);
     expect(levelEditor).not.toContain('app-header-button');
   });
 
@@ -277,6 +286,8 @@ describe('Level Editor chrome hierarchy', () => {
     expect(levelEditor).toMatch(/<HouseSelect<ScenicTerrainGenerationMode>[\s\S]*?ariaLabel="Scenic terrain generation mode"/);
     expect(levelEditor).toMatch(/<HouseSelect<TileFamilyId>[\s\S]*?className="le-gen-region-select"[\s\S]*?ariaLabel=\{`Region \$\{sectionIndex \+ 1\} terrain`\}/);
     expect(levelEditor).toMatch(/<HouseSelect<GroundCoverId>[\s\S]*?className="le-gen-cover-select"[\s\S]*?ariaLabel=\{`Region \$\{sectionIndex \+ 1\} cover \$\{coverIndex \+ 1\} set`\}/);
+    expect(levelEditor).toMatch(/<HouseSelect<CameraBoundaryInteractionMode>[\s\S]*?ariaLabel="Camera boundary interaction mode"/);
+    expect(levelEditor).toMatch(/<HouseSelect<BoardCameraSnapMode>[\s\S]*?ariaLabel="Camera boundary snap preset"/);
     expect(levelEditor).toMatch(/<HouseSelect<string>[\s\S]*?options=\{campaignSelectOptions\}[\s\S]*?ariaLabel="Campaign"[\s\S]*?testId="le-campaign-select"/);
     expect(levelEditor).not.toMatch(/<select[\s\S]{0,240}?aria-label="Campaign"/);
     for (const label of [

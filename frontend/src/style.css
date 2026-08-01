@@ -15154,6 +15154,85 @@ button.tileset-relationship-cell {
   filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.16));
 }
 
+/* Persisted player-camera coverage boundary. Unlike a viewport snapshot, this world-space box is
+   stable while zoom and pan vary; Play keeps every possible view inside it. */
+.le-camera-boundary {
+  filter: drop-shadow(0 0 1px #02070b) drop-shadow(0 0 3px #02070b);
+  outline: 3px dashed rgba(111, 210, 255, 0.98);
+  outline-offset: -1px;
+  pointer-events: none;
+  position: absolute;
+  z-index: 50000;
+}
+
+.le-camera-boundary.is-editable {
+  outline-style: solid;
+}
+
+.le-camera-boundary-label {
+  color: #bcecff;
+  display: block;
+  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: 13px;
+  inset: 0 auto auto -2px;
+  line-height: 1;
+  padding: 5px 7px;
+  pointer-events: none;
+  position: absolute;
+  text-shadow: 0 1px 2px #02070b, 1px 0 1px #02070b;
+  transform: translateY(-100%) scale(var(--camera-boundary-control-scale, 1));
+  transform-origin: bottom left;
+  white-space: nowrap;
+  z-index: 3;
+}
+
+.le-camera-boundary-handle {
+  appearance: none;
+  color: #bcecff;
+  filter: drop-shadow(0 0 1px #07111a);
+  height: 12px;
+  margin: 0;
+  padding: 0;
+  pointer-events: auto;
+  position: absolute;
+  transform: translate(-50%, -50%) scale(var(--camera-boundary-control-scale, 1));
+  width: 12px;
+}
+
+.le-camera-boundary-handle:not(.is-move) {
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
+  z-index: 2;
+}
+
+.le-camera-boundary-handle:focus-visible {
+  outline: 2px solid #7fd8ff;
+  outline-offset: 2px;
+}
+
+.le-camera-boundary-handle.is-n { cursor: ns-resize; left: 50%; top: 0; }
+.le-camera-boundary-handle.is-ne { cursor: nesw-resize; left: 100%; top: 0; }
+.le-camera-boundary-handle.is-e { cursor: ew-resize; left: 100%; top: 50%; }
+.le-camera-boundary-handle.is-se { cursor: nwse-resize; left: 100%; top: 100%; }
+.le-camera-boundary-handle.is-s { cursor: ns-resize; left: 50%; top: 100%; }
+.le-camera-boundary-handle.is-sw { cursor: nesw-resize; left: 0; top: 100%; }
+.le-camera-boundary-handle.is-w { cursor: ew-resize; left: 0; top: 50%; }
+.le-camera-boundary-handle.is-nw { cursor: nwse-resize; left: 0; top: 0; }
+
+.le-camera-boundary-handle.is-move {
+  cursor: move;
+  height: 100%;
+  inset: 0;
+  transform: none;
+  width: 100%;
+  z-index: 1;
+}
+
+.le-camera-snap-select {
+  flex: 1 1 180px;
+  max-width: 100%;
+}
+
 .tileset-generated-board-tile {
   position: absolute;
   width: 96px;

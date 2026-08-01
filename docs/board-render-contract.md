@@ -780,7 +780,21 @@ preview. Pan never changes that floor: it proceeds until the
 viewport reaches the raster art edge and then stops. Zoom and resize clamp
 an existing pan back inside. Wheel, stepper, shortcut, and reset paths must not
 cross the floor. If it exceeds the ordinary gameplay cap, the cap rises to the
-floor; ordinary tiled boards retain their existing zoom range.
+floor.
+
+Per [ADR-0301](adr/0301-levels-own-an-authored-camera-coverage-boundary.md),
+every Level also resolves one rectangular camera coverage boundary in
+board-centred projected world pixels. Every possible player viewport remains
+inside that boundary, so its live dimensions derive both the level-specific
+zoom-out floor and legal pan region. Older Levels without persisted bounds use
+the deterministic Balanced default around the playable contact surface: on
+each axis, the greater of ten percent or two projected tile steps (96 world px
+horizontally and 48 vertically) per side. Proportional ten-percent and Fixed
+two-step snaps are also authorable. Scenery does not derive or expand this box.
+The old global 55% ordinary-board floor is retired; 5% remains only as a
+defensive technical floor for exceptionally large boxes. In AI mode, the
+effective coverage polygon is the convex intersection of the Level camera box
+and accepted artwork, so both authorial intent and pixel coverage hold.
 
 Per [ADR-0189](adr/0189-board-facing-views-open-on-playable-geometry.md),
 that art-derived floor is a safety boundary, not the opening composition.
@@ -791,7 +805,7 @@ that presentation is the union of playable cell contact diamonds and excludes
 fixed tile sprite relief/headroom, units, props, doodads, scenic terrain, and
 generated art. The frame expands by five percent of its own width and height on
 every side, is contained and centered in the measured viewport, and is then
-raised only when the accepted-art cover floor requires it. Gameplay, Reset, the Level Editor,
+raised only when the effective camera coverage floor requires it. Gameplay, Reset, the Level Editor,
 selected-level preview, replay/solver views, browser authoring bakes, server
 list derivatives, and social cards consume the same primitive. Per
 [ADR-0201](adr/0201-board-cameras-fit-the-actual-owning-viewport.md) and
@@ -818,10 +832,31 @@ opening fit may raise the gameplay zoom ceiling rather than being stopped by
 its ordinary human-control cap. User camera input releases automatic framing
 until a level change or Reset.
 
+Per [ADR-0302](adr/0302-camera-authoring-is-a-dedicated-level-editor-page.md),
+the main Level Editor layer dropdown owns a dedicated, routable **Camera** page;
+camera authoring does not live inside Board. Entering Camera frames and displays
+the persistent boundary. Per
+[ADR-0303](adr/0303-camera-page-preserves-explicit-view-and-edit-modes.md),
+the page preserves an explicit **View boundary / Edit boundary** selector.
+Writers default to Edit: the complete box interior is the move surface, eight
+edge/corner handles resize it, and the same controls remain keyboard-operable.
+View keeps the rectangle visible without mutation handles. A read-only session
+visibly disables Edit rather than removing the capability, and explains that an
+editor lease is required. The Camera page owns the Balanced, Proportional, and
+Fixed snap presets, the explicit Snap action, and the resolved world-space size
+readout; Snap returns a writer to Edit mode.
+Leaving Camera hides the authoring overlay. Board retains only board-owned zoom,
+tactical overlay, and grid controls. The main editor camera remains unconstrained
+so authors can work across the full canvas. There is no separate “what the
+player sees” overlay because that footprint changes continuously with runtime
+zoom and pan.
+
 Per [ADR-0190](adr/0190-accepted-art-zoom-floor-uses-the-full-feasible-pan-region.md),
-the safety floor is the smallest zoom at which the viewport can fit anywhere
-inside the accepted transformed-art polygon. It is not restricted to
-board-centred pan and there is no separate standard zoom-out size. The opening
+the accepted-pixel side of the safety floor is the smallest zoom at which the
+viewport can fit anywhere inside the accepted transformed-art polygon. It is
+not restricted to board-centred pan. ADR-0301 adds the Level-owned camera
+boundary as a second coverage authority; the intersection owns the effective
+floor and pan region. The opening
 camera remains board-centred; when a lower safe zoom makes that pan invalid,
 the camera reclamps to the nearest feasible pan. Current pan never raises the
 stable floor, and every feasible pan still keeps every viewport corner inside
