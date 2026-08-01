@@ -15,7 +15,7 @@ import { provisionalBoard, premoveArrows, premoveGhosts, premoveTargets, type Pr
 import { clientSide, opponentSide } from '../game/clientPerspective';
 import { BoardLabBoard, boardLabCellPosition, immutableBoardLabTerrainSrc } from './BoardLabBoard';
 import { PredrawnMoveHighlightPaint } from './PredrawnMoveHighlightPaint';
-import { terrainTopSrc } from './BoardTerrainLayer';
+import { terrainTopSrc, type TerrainCanvasCell } from './BoardTerrainLayer';
 import {
   drawBoardOps,
   isAnimatedGroundCoverOp,
@@ -47,6 +47,8 @@ import {
   boardBounds,
   boardContentHash,
   boardDrawOps,
+  boardVisualFeatures,
+  boardVisualTerrainCells,
   isPredrawnBackgroundActive,
   mirrorFacingPlan,
   mirrorSurfacesForPlacements,
@@ -55,11 +57,16 @@ import {
   predrawnOcclusionMaskOps,
   predrawnVisualFootprintClipStyleForCell,
   reflectedOpsForSubjects,
+  resolveTerrainSideExposure,
+  resolveTerrainSideFaces,
+  subterrainFaceKey,
+  subterrainMaterialSrc,
   unprojectBoardPoint,
   type BakeBounds,
   type BoardDrawOp,
   type MirrorReflectionSubject,
   type PredrawnOcclusionDepthMap,
+  type TerrainSideMaterials,
   withoutBoardDrawLayers,
 } from '@chess-tactics/board-render';
 
@@ -267,11 +274,10 @@ function coverMapRecordForGame(game: GameState, exactBoard: EditorBoard | null):
   return cover;
 }
 
-function sceneBoardForSkirmish(
+export function sceneBoardForSkirmish(
   game: GameState,
   board: SocketBoardResult<TileAsset>,
   exactBoard: EditorBoard | null,
-  predrawnBackgroundActive: boolean,
 ): EditorBoard {
   const cells: Record<string, string> = {};
   const coverTypes: Record<string, TileFamilyId> = {};
@@ -287,26 +293,81 @@ function sceneBoardForSkirmish(
     playerFaction: exactBoard?.playerFaction,
     factionDirections: exactBoard?.factionDirections ?? {},
     cells,
+    decorativeApron: exactBoard?.decorativeApron,
+    decorativeCells: exactBoard?.decorativeCells ?? {},
+    decorativeFootprint: exactBoard?.decorativeFootprint ?? [],
+    decorativeFeatures: exactBoard?.decorativeFeatures ?? {},
+    decorativeFences: exactBoard?.decorativeFences ?? {},
+    decorativeFencePosts: exactBoard?.decorativeFencePosts ?? {},
+    decorativeWalls: exactBoard?.decorativeWalls ?? {},
     backgroundMode: exactBoard?.backgroundMode,
     surface: exactBoard?.surface,
     macroTiles: exactBoard?.macroTiles,
     subterrain: exactBoard?.subterrain,
     units: {},
-    doodads: {},
-    props: Object.fromEntries((game.props ?? []).map((prop) => [`${prop.x},${prop.y}`, { propId: prop.propId }])),
+    doodads: exactBoard?.doodads ?? {},
+    props: {
+      ...(exactBoard?.props ?? {}),
+      ...Object.fromEntries((game.props ?? []).map((prop) => [`${prop.x},${prop.y}`, { propId: prop.propId }])),
+    },
+    floatingArtwork: exactBoard?.floatingArtwork ?? [],
     cover: coverMapRecordForGame(game, exactBoard),
     coverTypes: exactBoard?.coverTypes ?? coverTypes,
     features: exactBoard?.features ?? {},
-    fences: predrawnBackgroundActive ? {} : exactBoard?.fences ?? {},
-    fencePosts: predrawnBackgroundActive ? {} : exactBoard?.fencePosts ?? {},
-    walls: predrawnBackgroundActive ? {} : exactBoard?.walls ?? {},
-    wallArt: predrawnBackgroundActive ? {} : exactBoard?.wallArt ?? {},
+    fences: exactBoard?.fences ?? {},
+    fencePosts: exactBoard?.fencePosts ?? {},
+    walls: exactBoard?.walls ?? {},
+    wallArt: exactBoard?.wallArt ?? {},
     featureCuts: exactBoard?.featureCuts ?? {},
     featureExits: exactBoard?.featureExits ?? {},
     zoneEntries: exactBoard?.zoneEntries ?? [],
     zones: exactBoard?.zones ?? {},
     generatedRegions: exactBoard?.generatedRegions ?? [],
   };
+}
+
+/**
+ * Project the complete authored visual-terrain surface into the gameplay terrain canvas.
+ * SocketBoard cells remain the only semantic/hit-target cells; scenic coordinates contribute
+ * pixels and topology without changing TileGrid centering or gameplay authority.
+ */
+export function skirmishVisualTerrainCells(
+  exactBoard: EditorBoard | null,
+): TerrainCanvasCell[] | undefined {
+  if (!exactBoard) return undefined;
+  const visualCells = boardVisualTerrainCells(exactBoard);
+  const occupied = new Set(visualCells.filter((cell) => cell.tileId).map((cell) => cell.key));
+  const assets = tileAssetById();
+  const visualFeatures = resolveFeatureOverlays(
+    boardVisualFeatures(exactBoard, visualCells),
+    (edge) => exactBoard.featureCuts[edge] === true,
+    (edge) => exactBoard.featureExits[edge] === true,
+  );
+  const freezeTerrain = visualCells.some((cell) => cell.decorative);
+
+  return visualCells.map((cell) => {
+    const asset = cell.tileId ? assets.get(cell.tileId) : undefined;
+    const sideMaterials = Object.fromEntries((['south', 'east'] as const).flatMap((face) => {
+      const material = exactBoard.subterrain?.[subterrainFaceKey(cell.x, cell.y, face)];
+      return material ? [[face, subterrainMaterialSrc(material)]] : [];
+    })) as TerrainSideMaterials<string>;
+    const feature = visualFeatures[cell.key];
+    return {
+      key: cell.decorative ? `decorative:${cell.key}` : `${cell.x}-${cell.y}`,
+      x: cell.x,
+      y: cell.y,
+      topSrc: asset ? terrainTopSrc(tileFrameSrc(asset), asset.topAnimFrames) : undefined,
+      sideFaces: asset
+        ? resolveTerrainSideFaces(
+            resolveTerrainSideExposure(cell, (x, y) => occupied.has(`${x},${y}`)),
+            sideMaterials,
+          )
+        : undefined,
+      featureSrc: feature ? featureFrameSrc(feature.kind, feature.material, feature.mask) : undefined,
+      topAnimFrames: asset?.topAnimFrames,
+      ...(freezeTerrain ? { animate: false } : {}),
+    };
+  });
 }
 
 function sceneArtUrls(
@@ -1227,8 +1288,12 @@ export function SkirmishBoard({
   });
   const ambientSceneCover = !exactBoard;
   const sceneBoard = useMemo(
-    () => sceneBoardForSkirmish(game, board, exactBoard, predrawnBackgroundActive),
-    [board, exactBoard, game.props, game.size.cols, game.size.rows, game.terrain, predrawnBackgroundActive],
+    () => sceneBoardForSkirmish(game, board, exactBoard),
+    [board, exactBoard, game.props, game.size.cols, game.size.rows],
+  );
+  const visualTerrainCells = useMemo(
+    () => skirmishVisualTerrainCells(exactBoard),
+    [exactBoard],
   );
   // Edge fences resolve from the authored board code (each shared edge → its upper-left cell's
   // E/S rail). Keyed "x,y" to match resolveFenceOverlays; empty for a generated/fence-free board.
@@ -1704,6 +1769,7 @@ export function SkirmishBoard({
           assetFrameSrc={tileFrameSrc}
           macroTiles={exactBoard?.macroTiles}
           subterrain={exactBoard?.subterrain}
+          visualTerrainCells={visualTerrainCells}
           boardZoom={boardZoom}
           boardPan={boardPan}
           className="skirmish-board-surface"
