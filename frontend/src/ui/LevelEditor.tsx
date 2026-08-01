@@ -124,6 +124,13 @@ import {
   type PredrawnSelectionValidity,
 } from './predrawnSelectionValidity';
 import { removeZoneEntriesReferencedOnlyByRemovedEvents } from './eventZoneCleanup';
+import { LevelDeploymentEditor, type DeploymentZoneOption } from './LevelDeploymentEditor';
+import {
+  authoredDeploymentForSide,
+  eventsWithoutDeployment,
+  mergeOtherEvents,
+  replaceSideDeployment,
+} from './levelDeployment';
 import {
   currentBoardTestHref,
   readLevelEventsParam,
@@ -212,6 +219,7 @@ import { defaultTerrainFamily, socketEdges, terrainFamiliesForRole, terrainFamil
 import { generateSocketBoard, solveSocketBoard } from '../core/tileBoardGenerator';
 import { playableBorderFenceEdges, playableBorderRoadKeys } from '../core/playableBorder';
 import { coverNoise, scatterTerrainDetailed } from '../core/terrainScatter';
+import { isPassableTerrain } from '../core/terrain';
 import { createRng } from '../core/rng';
 import {
   DEFAULT_MACRO_TILE_BREAKUP,
@@ -273,12 +281,12 @@ import {
   type EditorDocumentRecovery,
 } from '../net/editorDocuments';
 import { consumeNewBuildReloadIntent } from '../net/appUpdate';
-import { OBJECTIVE_TYPES, ZONE_COLORS, type CastleEventAction, type ChessDrawsEventAction, type Level, type LevelEvent, type LevelEventAction, type LevelEvents, type ObjectiveType, type SpawnEventAction, type VictoryRules, type ZoneColor, type ZoneType } from '../core/level';
+import { OBJECTIVE_TYPES, ZONE_COLORS, type CastleEventAction, type ChessDrawsEventAction, type ConditionSide, type Level, type LevelEvent, type LevelEventAction, type LevelEvents, type ObjectiveType, type VictoryRules, type ZoneColor, type ZoneType } from '../core/level';
 import { computeCastleTemplatePairs, type CastleTemplateUnit } from './castlingTemplate';
 import { MODE_NAME, DEFAULT_SURVIVE_TURNS, victoryRulesForObjective, kingSideOf } from '../core/objectives';
 import { CLOCK_INCREMENT_SECONDS, CLOCK_INITIAL_SECONDS, DEFAULT_TIME_CONTROL, formatClockSeconds, parseClockSeconds, stepLadder } from '../core/clock';
 import { validatePlayability, validateWarBattlePlayability } from '../core/playability';
-import { PLAYABLE_PIECE_TYPES, PIECE_LABEL, type PlayablePieceType } from '../core/pieces';
+import { type PlayablePieceType } from '../core/pieces';
 import { effectiveLevelEvents, normalizeLevelEvents } from '../core/levelEvents';
 import { guardRulesSeed, levelRulesSeed, seededBaselineLevel, type AuthoredRulesField, type LevelRulesSeed } from './levelEditorRulesSeed';
 
@@ -1825,7 +1833,6 @@ type EventZoneOption = { id: string; label: string };
 const primaryEventAction = (event: LevelEvent): LevelEventAction | undefined => event.do[0];
 
 const EVENT_KIND_FALLBACK_LABEL: Record<string, string> = {
-  spawn: 'Setup spawn',
   promote: 'Pawn promotion',
   castle: 'Castling',
   'chess-draws': 'Chess draws',
@@ -1872,7 +1879,6 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
   const [sel, setSel] = useState(0);
   const selected = value.length ? Math.min(sel, value.length - 1) : -1;
   const event = selected >= 0 ? value[selected] : null;
-  const spawnAction = event?.do.find((action): action is SpawnEventAction => action.kind === 'spawn') ?? null;
   const castleAction = event?.do.find((action): action is CastleEventAction => action.kind === 'castle') ?? null;
   const chessDrawsAction = event?.do.find((action): action is ChessDrawsEventAction => action.kind === 'chess-draws') ?? null;
   const promotionTrigger = event?.trigger.kind === 'unit-enters-zone' ? event.trigger : null;
@@ -1881,18 +1887,7 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
   const zoneSelectOptions: HouseSelectOption<string>[] = zones.length > 0
     ? zones.map((zone) => ({ value: zone.id, label: zone.label }))
     : [{ value: '', label: 'No zones painted' }];
-  const defaultZoneIds = (): string[] => firstZone ? [firstZone] : [];
   const setEvent = (index: number, next: LevelEvent): void => onChange(value.map((item, i) => (i === index ? next : item)));
-  const addSpawn = (): void => {
-    const fresh: LevelEvent = {
-      id: uniqueEventId('setup-spawn', value),
-      name: uniqueEventName('Setup spawn', value),
-      trigger: { kind: 'setup' },
-      do: [{ kind: 'spawn', side: 'player', roster: { pawn: 1 }, zoneIds: defaultZoneIds() }],
-    };
-    setSel(value.length);
-    onChange([...value, fresh]);
-  };
   const addPromotion = (): void => {
     const fresh: LevelEvent = {
       id: uniqueEventId('pawn-promotion', value),
@@ -1907,13 +1902,6 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
     const removed = value[index];
     setSel(Math.max(0, index - 1));
     onChange(value.filter((_, i) => i !== index), removed ? [removed] : undefined);
-  };
-  const patchSpawnRoster = (spawn: SpawnEventAction, type: PlayablePieceType, delta: number): SpawnEventAction => {
-    const count = Math.max(0, (spawn.roster[type] ?? 0) + delta);
-    const roster = { ...spawn.roster };
-    if (count === 0) delete roster[type];
-    else roster[type] = count;
-    return { ...spawn, roster };
   };
 
   return (
@@ -1931,63 +1919,11 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
           ))}
         </div>
         <div className="le-cond-add le-rule-add">
-          <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-add-event')} onClick={addSpawn}>+ Spawn</button>
           <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-add-event')} onClick={addPromotion}>+ Promotion</button>
         </div>
       </div>
       <div className="le-md-detail">
-        {event && spawnAction ? (
-          <div className="le-rule">
-            <div className="le-ctrlrow">
-              <span className="le-ctrllabel">Event name</span>
-              <input className="le-text-input" value={event.name ?? ''} placeholder={`Event ${selected + 1}`} aria-label="Event name"
-                onChange={(e) => setEvent(selected, { ...event, name: e.target.value })} />
-            </div>
-            <div className="le-ctrlrow">
-              <span className="le-ctrllabel">Trigger</span>
-              <output className="le-event-readout" aria-label="Event trigger">Setup</output>
-            </div>
-            <div className="le-ctrlrow">
-              <span className="le-ctrllabel">Faction</span>
-              <HouseSelect<'player' | 'enemy'>
-                value={spawnAction.side}
-                options={[
-                  { value: 'player', label: 'Player' },
-                  { value: 'enemy', label: 'Enemy' },
-                ]}
-                ariaLabel="Spawn faction"
-                onChange={(side) => {
-                  const nextAction = { ...spawnAction, side, zoneIds: spawnAction.zoneIds.length ? spawnAction.zoneIds : defaultZoneIds() };
-                  setEvent(selected, replaceEventAction(event, nextAction));
-                }}
-              />
-            </div>
-            <div className="le-ctrlrow">
-              <span className="le-ctrllabel">Zone</span>
-              <HouseSelect<string>
-                value={spawnAction.zoneIds[0] ?? ''}
-                options={zoneSelectOptions}
-                ariaLabel="Spawn zone"
-                disabled={zones.length === 0}
-                onChange={(zoneId) => setEvent(selected, replaceEventAction(event, { ...spawnAction, zoneIds: zoneId ? [zoneId] : [] }))}
-              />
-            </div>
-            <h3 className="le-victory-head">Roster</h3>
-            {PLAYABLE_PIECE_TYPES.map((type) => (
-              <div className="le-ctrlrow le-roster-row" key={type}>
-                <span className="le-ctrllabel">{PIECE_LABEL[type]}</span>
-                <div className="le-roster-stepper">
-                  <Stepper value={spawnAction.roster[type] ?? 0} suffix="" decreaseLabel={`One fewer ${PIECE_LABEL[type]}`} increaseLabel={`One more ${PIECE_LABEL[type]}`}
-                    onDecrease={() => setEvent(selected, replaceEventAction(event, patchSpawnRoster(spawnAction, type, -1)))}
-                    onIncrease={() => setEvent(selected, replaceEventAction(event, patchSpawnRoster(spawnAction, type, 1)))} />
-                </div>
-              </div>
-            ))}
-            <div className="le-rule-then">
-              <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger', 'le-rule-remove')} onClick={() => removeEvent(selected)}>Remove event</button>
-            </div>
-          </div>
-        ) : event && promotionTrigger && promotesTriggeringUnit ? (
+        {event && promotionTrigger && promotesTriggeringUnit ? (
           <div className="le-rule">
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Event name</span>
@@ -2582,8 +2518,8 @@ export function LevelEditor(): ReactElement {
   // The Studio routes here with ?from=studio (show a "back to catalog" link), ?kind=<brush-kind>,
   // and optionally ?brush=<id> to pre-arm the brush you clicked in the catalog. A general
   // ?layer=<id> deep-link opens straight on any panel (rules, status, zone, ...), while
-  // ?eventsEditor=1 opens the full Events workspace on Rules (and ?eventsTab=other selects its
-  // non-default tab). All are validated by the canonical route-state parser.
+  // ?eventsEditor=1 opens the full Events workspace on Rules; ?eventsTab selects Deployment or
+  // Other Events. All are validated by the canonical route-state parser.
   // against the real layer list, ignoring unknown/disabled ids. Read once at mount; reached from
   // the main menu these are all absent and we open on the first layer.
   const studioArm = useMemo(() => {
@@ -3175,7 +3111,7 @@ export function LevelEditor(): ReactElement {
   // The template dropdown choices append event rows; Clear is the explicit page-local reset.
   const [templateChoice, setTemplateChoiceState] = useState<ObjectiveType>(objective);
   const [otherTemplateChoice, setOtherTemplateChoice] = useState<OtherEventTemplateId>('pawn-promotion');
-  // The Events workspace's tab: victory rules (win/lose events) vs other events (spawn/promotion).
+  // The Events workspace separates victory rules, initial-force deployment, and other events.
   const [eventsTab, setEventsTab] = useState<LevelEditorEventsTab>(initialEventsTab);
   // Level Artwork is a normal side-controls layer. Its two roomier instruments are explicit,
   // route-addressable center workspaces, so merely selecting the layer never hides the board.
@@ -7749,6 +7685,30 @@ export function LevelEditor(): ReactElement {
     () => boardZoneEntries.map((entry, index) => ({ id: entry.id, label: zoneDisplayName(entry, index) })),
     [boardZoneEntries],
   );
+  const otherEvents = useMemo(() => eventsWithoutDeployment(events), [events]);
+  const deploymentZoneOptions = useMemo<DeploymentZoneOption[]>(() => {
+    const blocked = new Set(candidateLevel.layers.units.map((unit) => `${unit.x},${unit.y}`));
+    for (const cell of candidateLevel.layers.terrain) {
+      if (!isPassableTerrain(cell.terrain)) blocked.add(`${cell.x},${cell.y}`);
+    }
+    for (const placed of candidateLevel.layers.props ?? []) {
+      const def = propDef(placed.propId);
+      if (!def?.blocking) continue;
+      for (const cell of propCells(placed.x, placed.y, def)) blocked.add(`${cell.x},${cell.y}`);
+    }
+    return boardZoneEntries.map((entry, index) => ({
+      id: entry.id,
+      label: zoneDisplayName(entry, index),
+      type: entry.type,
+      paintedTiles: entry.tiles.length,
+      usableTileKeys: [...new Set(entry.tiles.filter((tile) => {
+        const [x, y] = tile.split(',').map(Number);
+        return Number.isInteger(x) && Number.isInteger(y)
+          && x >= 0 && y >= 0 && x < candidateLevel.board.cols && y < candidateLevel.board.rows
+          && !blocked.has(tile);
+      }))],
+    }));
+  }, [boardZoneEntries, candidateLevel]);
   const removeZonesForRemovedEvents = (removedEvents: readonly LevelEvent[], remainingEvents: readonly LevelEvent[]): void => {
     const board = cloneEditorBoard(currentEditorBoardRef.current);
     const entries = zoneEntriesForBoard(board);
@@ -7756,12 +7716,46 @@ export function LevelEditor(): ReactElement {
     if (!updated) return;
     commitEditorBoard(withZoneEntries(board, updated), null);
   };
-  const setEventsWithZoneCleanup = (nextEvents: LevelEvents, removedEvents: readonly LevelEvent[] = []): void => {
-    const normalizedNextEvents = normalizeLevelEvents(nextEvents);
+  const setOtherEventsWithZoneCleanup = (nextOtherEvents: LevelEvents, removedEvents: readonly LevelEvent[] = []): void => {
+    const normalizedNextEvents = normalizeLevelEvents(mergeOtherEvents(events, nextOtherEvents));
     setEvents(normalizedNextEvents);
     if (removedEvents.length) removeZonesForRemovedEvents(removedEvents, normalizedNextEvents);
   };
-  const clearOtherEvents = (): void => setEventsWithZoneCleanup([], events);
+  const clearOtherEvents = (): void => setOtherEventsWithZoneCleanup([], otherEvents);
+  const createDeploymentZone = (side: ConditionSide): void => {
+    const board = cloneEditorBoard(currentEditorBoardRef.current);
+    const entries = zoneEntriesForBoard(board).map((entry) => ({ ...entry, tiles: [...entry.tiles] }));
+    const zoneType = side === 'player' ? 'player-spawn' : 'enemy-spawn';
+    const existingIndex = entries.findIndex((entry) => entry.type === zoneType);
+    if (existingIndex >= 0) {
+      setSelectedZoneIndex(existingIndex);
+      selectLayer('zone');
+      return;
+    }
+    const baseName = side === 'player' ? 'Player Deployment' : 'Enemy Deployment';
+    const id = nextZoneEntryId(entries);
+    entries.push({
+      id,
+      name: uniqueZoneEntryName(baseName, entries),
+      color: side === 'player' ? 'blue' : 'red',
+      type: zoneType,
+      tiles: [],
+    });
+    setSelectedZoneIndex(entries.length - 1);
+    commitEditorBoard(withZoneEntries(board, entries), null);
+    const deployment = authoredDeploymentForSide(events, side);
+    if (deployment.enabled && !(isWarBattle && side === 'player')) {
+      setEvents(replaceSideDeployment(events, side, {
+        roster: deployment.roster,
+        zoneIds: [id],
+      }));
+    }
+    selectLayer('zone');
+  };
+  const editDeploymentZone = (zoneId: string): void => {
+    selectZoneEntry(zoneId);
+    selectLayer('zone');
+  };
   const addPawnPromotionTemplate = (): void => {
     const board = cloneEditorBoard(currentEditorBoardRef.current);
     const entries = zoneEntriesForBoard(board).map((entry) => ({ ...entry, tiles: [...entry.tiles] }));
@@ -8861,11 +8855,23 @@ export function LevelEditor(): ReactElement {
                   )}
                 />
               )}
+              deploymentContent={(
+                <LevelDeploymentEditor
+                  events={events}
+                  zones={deploymentZoneOptions}
+                  fixedPlayerCount={candidateLevel.layers.units.filter((unit) => unit.side === 'player').length}
+                  fixedEnemyCount={candidateLevel.layers.units.filter((unit) => unit.side === 'enemy').length}
+                  isWarBattle={isWarBattle}
+                  onEventsChange={setEvents}
+                  onCreateZone={createDeploymentZone}
+                  onEditZone={editDeploymentZone}
+                />
+              )}
               otherContent={(
                 <LevelEventsEditor
-                  value={events}
+                  value={otherEvents}
                   zones={eventZoneOptions}
-                  onChange={setEventsWithZoneCleanup}
+                  onChange={setOtherEventsWithZoneCleanup}
                   templates={(
                     <div className="le-events-templates">
                       <h3 className="le-victory-head">Template</h3>
@@ -8879,7 +8885,7 @@ export function LevelEditor(): ReactElement {
                           onChange={setOtherTemplateChoice}
                         />
                         <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={addOtherEventTemplate}>Add template</button>
-                        <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')} disabled={events.length === 0} onClick={clearOtherEvents}>Clear events</button>
+                        <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')} disabled={otherEvents.length === 0} onClick={clearOtherEvents}>Clear events</button>
                       </div>
                       <p className="le-board-note">Clear affects only this events list and any zones used only by those events.</p>
                     </div>
@@ -9652,8 +9658,8 @@ export function LevelEditor(): ReactElement {
             <h2>Victory events</h2>
             {/* ADR-0144: the right rail is only the entry point. Rule authoring occupies the
                 shell-owned board workspace while this control rail stays in place. */}
-            <p className="le-board-note">How this level is won, lost, deployed, and promoted. {victory.length} victory event{victory.length === 1 ? '' : 's'} and {events.length} other event{events.length === 1 ? '' : 's'} set.</p>
-            <button ref={eventsOpenButtonRef} type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-events-open')} disabled={eventsOpen} onClick={() => openEventsEditor('victory')}>Open events editor</button>
+            <p className="le-board-note">How this level is won, lost, deployed, and promoted. {victory.length} victory event{victory.length === 1 ? '' : 's'} and {otherEvents.length} other event{otherEvents.length === 1 ? '' : 's'} set.</p>
+            <button ref={eventsOpenButtonRef} type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-events-open')} disabled={eventsOpen} onClick={() => openEventsEditor(isWarBattle ? 'deployment' : 'victory')}>Open rules editor</button>
           </section>
 
           <section className="skirmish-card">

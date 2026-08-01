@@ -37,7 +37,7 @@ export const LEVEL_EDITOR_ROUTE_BRUSH_KINDS = [
 
 export type LevelEditorBrushKind = typeof LEVEL_EDITOR_ROUTE_BRUSH_KINDS[number];
 
-export const LEVEL_EDITOR_EVENTS_TABS = ['victory', 'other'] as const;
+export const LEVEL_EDITOR_EVENTS_TABS = ['victory', 'deployment', 'other'] as const;
 
 export type LevelEditorEventsTab = typeof LEVEL_EDITOR_EVENTS_TABS[number];
 
@@ -192,15 +192,15 @@ export function levelEditorHrefWithRouteState(
   } else if ('eventsEditor' in state) {
     if (state.eventsEditor) {
       url.searchParams.set('eventsEditor', '1');
-      if (state.eventsTab === 'other') url.searchParams.set('eventsTab', 'other');
+      if (state.eventsTab && state.eventsTab !== 'victory') url.searchParams.set('eventsTab', state.eventsTab);
       else url.searchParams.delete('eventsTab');
     } else {
       url.searchParams.delete('eventsEditor');
       url.searchParams.delete('eventsTab');
     }
   } else if ('eventsTab' in state) {
-    if (url.searchParams.get('eventsEditor') === '1' && state.eventsTab === 'other') {
-      url.searchParams.set('eventsTab', 'other');
+    if (url.searchParams.get('eventsEditor') === '1' && state.eventsTab && state.eventsTab !== 'victory') {
+      url.searchParams.set('eventsTab', state.eventsTab);
     } else {
       url.searchParams.delete('eventsTab');
     }

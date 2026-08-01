@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { Campaign, Level } from '../core/level';
 import type { PersistedMatch } from '../game/matchPersistence';
-import type { RunDocument } from '../run/model';
+import { runBattleActivityId, type RunDocument } from '../run/model';
 import { continueActivity } from './playContinue';
 import { PLAY_RUN_SELECTOR_HREF } from './playHubRoute';
 
 const level = (id: string, name: string): Level => ({ id, name } as Level);
 
-const match = (levelId: string, savedAt: string): PersistedMatch => ({
+const match = (levelId: string, savedAt: string, activityId: string | null = null): PersistedMatch => ({
   levelId,
+  activityId,
   savedAt,
   game: { winner: null, pieces: [], size: { cols: 8, rows: 8 } },
   seed: 1,
@@ -38,13 +39,26 @@ describe('Play Continue activity', () => {
   it('returns to a live Run Battle even when its persisted board save is newer', () => {
     expect(continueActivity(
       run('2026-01-01T00:00:00.000Z'),
-      match('run-battle', '2026-01-02T00:00:00.000Z'),
+      match('run-battle', '2026-01-02T00:00:00.000Z', runBattleActivityId('run-1', 0)),
       [],
       {},
     )).toMatchObject({
       label: 'Continue Run',
       detail: 'Battle 1 of 1',
       href: PLAY_RUN_SELECTOR_HREF,
+    });
+  });
+
+  it('does not mistake another same-Level battle for the active Run', () => {
+    expect(continueActivity(
+      run('2026-01-01T00:00:00.000Z'),
+      match('run-battle', '2026-01-02T00:00:00.000Z', runBattleActivityId('other-run', 0)),
+      [],
+      { 'run-battle': level('run-battle', 'Standalone Battle') },
+    )).toMatchObject({
+      label: 'Continue Skirmish',
+      detail: 'Standalone Battle',
+      href: '/play?levelId=run-battle',
     });
   });
 

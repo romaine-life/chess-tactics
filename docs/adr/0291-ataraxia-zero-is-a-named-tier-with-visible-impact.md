@@ -5,11 +5,11 @@ deciders: owner (Nelson) + Codex
 partially_supersedes:
   - "[ADR-0266](0266-ataraxia-names-optional-run-difficulty-after-real-history.md)'s No Ataraxia baseline identity"
   - "[ADR-0268](0268-ataraxia-unlocks-linearly-and-stacks-cumulatively.md)'s No Ataraxia baseline label"
-  - "[ADR-0287](0287-run-preparation-is-control-first-and-ataraxia-uses-one-selector.md)'s rule that the baseline has no explanatory sentence"
-  - "[ADR-0288](0288-run-preparation-follows-play-master-detail-navigation.md)'s nonbaseline-only mechanic statement"
+  - "[ADR-0289](0289-run-preparation-is-control-first-and-ataraxia-uses-one-selector.md)'s rule that the baseline has no explanatory sentence"
+  - "[ADR-0290](0290-run-preparation-follows-play-master-detail-navigation.md)'s nonbaseline-only mechanic statement"
 ---
 
-# ADR-0289: Ataraxia zero is a named tier with visible impact
+# ADR-0291: Ataraxia zero is a named tier with visible impact
 
 ## Context
 

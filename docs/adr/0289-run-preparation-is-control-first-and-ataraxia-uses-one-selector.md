@@ -9,11 +9,11 @@ refines:
   - "[ADR-0266](0266-ataraxia-names-optional-run-difficulty-after-real-history.md)"
   - "[ADR-0286](0286-ataraxia-i-is-a-persisted-run-tier-with-draw-time-pestiferous-instances.md)"
 partially_superseded_by:
-  - "[ADR-0288](0288-run-preparation-follows-play-master-detail-navigation.md)"
-  - "[ADR-0289](0289-ataraxia-zero-is-a-named-tier-with-visible-impact.md)"
+  - "[ADR-0290](0290-run-preparation-follows-play-master-detail-navigation.md)"
+  - "[ADR-0291](0291-ataraxia-zero-is-a-named-tier-with-visible-impact.md)"
 ---
 
-# ADR-0287: Run preparation is control-first and Ataraxia uses one selector
+# ADR-0289: Run preparation is control-first and Ataraxia uses one selector
 
 ## Context
 

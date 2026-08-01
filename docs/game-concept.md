@@ -111,7 +111,7 @@ these.
   Pestiferous shop cards; later Runs may opt into historically named
   conditions. Completing the highest available tier unlocks exactly the next
   one, and the ladder stacks: selecting tier N applies every condition from 1
-  through N (ADR-0266, ADR-0268, ADR-0289).
+  through N (ADR-0266, ADR-0268, ADR-0291).
 - **Ataraxia I — The Great Mortality** initially targets Pestiferous status for
   roughly one in eight otherwise eligible shop draws. Pestiferous status is
   rolled with the rest of that affected offer, not added as another deck copy.
@@ -166,7 +166,7 @@ these.
   the Run submenu, where **Continue Run** and **Start New Run** are master-list
   choices. The right detail column owns current-Run facts plus the nested
   **Play** action, or Ataraxia plus the confirmed **Start Run** replacement
-  (ADR-0232, ADR-0287, ADR-0288).
+  (ADR-0232, ADR-0289, ADR-0290).
 - Army and Relics are grouped as player **Self inspection** in Run Controls.
   Either replaces the complete left Play workspace through the shared
   fill-only shell surface while the current phase stays mounted underneath;
@@ -338,11 +338,16 @@ useful raw material, not canon. For future contributors:
   authored 50-move/threefold draws, and one committed-position adjudicator shared
   by solo, lobby, AI, self-play and search. `applyMove` owns mechanics only; ordered
   authored/preset victory rules decide product outcomes before chess terminal rules.
-- **Shipped (ADR-0050):** authored **win-rule modes** are now real — the editor
+- **Shipped (ADR-0050/0287/0288):** authored **win-rule modes** are now real — the editor
   selects the objective (Last Man Standing / King Assault / Rival Kings / Survive /
-  Reach), an orthogonal **random-placement** toggle (roster + spawn zones) is
-  authorable, and saves gate on **playability rules** (each side has a piece; King
-  modes have the right king count; random placement has enough usable spawn tiles).
+  Reach), and the dedicated Deployment workspace authors an optional randomized roster
+  per side. Explicit deployment can combine with fixed anchors; a nonzero roster needs
+  enough usable tiles in its one automatically used starting zone, while a fixed-only
+  side needs no deployment zone. A starting zone may contain disconnected painted
+  regions, so new authoring does not need a zone selector or several pooled zones.
+  War player zones remain the implicit consumer for the active Run army rather than a
+  duplicated setup event. Saves gate on those **playability rules** as well as presence
+  and King-mode constraints.
   King-capture events remain authored win paths, while checkmate/stalemate are the
   shared chess terminal layer. Board floor dropped to 1×1.
 

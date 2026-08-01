@@ -1,6 +1,6 @@
 import type { Campaign, Level } from '../core/level';
 import type { PersistedMatch } from '../game/matchPersistence';
-import type { RunDocument } from '../run/model';
+import { runBattleActivityId, type RunDocument } from '../run/model';
 import { PLAY_RUN_SELECTOR_HREF } from './playHubRoute';
 
 export type ContinueActivityIcon = 'solo-skirmish' | 'campaign-editor';
@@ -24,8 +24,11 @@ export function continueActivity(
   campaigns: readonly Campaign[],
   levels: Record<string, Level>,
 ): ContinueActivity | null {
-  const runBattleLevelId = run?.phase === 'battle' ? run.war.battles[run.battleIndex]?.level.id : null;
-  const matchBelongsToRun = Boolean(run && match?.levelId && match.levelId === runBattleLevelId);
+  const matchBelongsToRun = Boolean(
+    run
+    && run.phase === 'battle'
+    && match?.activityId === runBattleActivityId(run.id, run.battleIndex),
+  );
   const runTime = parsedTime(run?.updatedAt);
   const matchTime = parsedTime(match?.savedAt);
   if (run && (matchBelongsToRun || !match || runTime >= matchTime)) {

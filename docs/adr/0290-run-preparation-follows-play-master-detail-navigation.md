@@ -3,19 +3,19 @@ status: accepted
 date: 2026-08-01
 deciders: owner (Nelson) + Codex
 partially_supersedes:
-  - "[ADR-0287](0287-run-preparation-is-control-first-and-ataraxia-uses-one-selector.md)'s inline current/new Run presentation and Continue Run launch label"
+  - "[ADR-0289](0289-run-preparation-is-control-first-and-ataraxia-uses-one-selector.md)'s inline current/new Run presentation and Continue Run launch label"
 refines:
   - "[ADR-0074](0074-one-play-entry-one-shared-selector.md)"
   - "[ADR-0232](0232-continue-run-selects-run-before-play.md)"
 partially_superseded_by:
-  - "[ADR-0289](0289-ataraxia-zero-is-a-named-tier-with-visible-impact.md)"
+  - "[ADR-0291](0291-ataraxia-zero-is-a-named-tier-with-visible-impact.md)"
 ---
 
-# ADR-0288: Run preparation follows Play master-detail navigation
+# ADR-0290: Run preparation follows Play master-detail navigation
 
 ## Context
 
-ADR-0287 correctly removed the Run pitch, temporary War copy, baseline filler,
+ADR-0289 correctly removed the Run pitch, temporary War copy, baseline filler,
 and side-by-side Ataraxia cards, but its first implementation still placed the
 current Run summary, Continue action, Ataraxia selector, and replacement action
 directly in Play's action column. That does not follow the established Campaign
@@ -44,7 +44,7 @@ as two launch controls rather than two items whose details could be inspected.
 - Entering the Run destination alone selects neither row. The player chooses
   which detail to reveal, as selecting a Campaign alone does not choose one of
   its Levels.
-- ADR-0287's concise copy, hidden authored-War name/description, shared
+- ADR-0289's concise copy, hidden authored-War name/description, shared
   Ataraxia dropdown, visible disabled tiers, and direct nonbaseline mechanic
   statement remain in force.
 

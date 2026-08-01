@@ -2,6 +2,9 @@
 status: "accepted"
 date: 2026-07-01
 deciders: Nelson, Claude
+partially_superseded_by:
+  - "[ADR-0287](0287-deployment-is-a-dedicated-side-specific-authoring-workspace.md)"
+  - "[ADR-0288](0288-new-deployment-authoring-uses-one-flexible-zone-per-side.md)"
 ---
 
 # ADR-0050: Game modes are authored win rules + a placement axis; saves gate on playability

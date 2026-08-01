@@ -263,7 +263,7 @@ plus Play, or Ataraxia plus Start Run. It omits feature-pitch and authored-War
 copy, and the Ataraxia choice is the shared scrollable dropdown with unavailable
 installed tiers visible but disabled. Every tier, including **Ataraxia 0 — The
 Untroubled Mind**, presents its subtitle in the selector and its literal impact
-beneath it (ADR-0287, ADR-0288, ADR-0289).
+beneath it (ADR-0289, ADR-0290, ADR-0291).
 Enchiridion is immediately above Settings. In Battle, frameless open-codex art
 at the same visual scale as the Controls title and aligned to the Controls
 content boundary opens

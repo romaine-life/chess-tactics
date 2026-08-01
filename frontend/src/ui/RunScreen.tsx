@@ -31,6 +31,7 @@ import {
   prepareDeployment,
   resetShop,
   restartBattle,
+  runBattleActivityId,
   sellArmyUnit,
   setDeploymentChoices,
   shopHasChanges,
@@ -720,6 +721,7 @@ function BattlePanel({
   const presentation = useMemo<RunBattlePresentation>(() => ({
     level: battleLevel,
     seed: battleSeed,
+    activityId: runBattleActivityId(runId, run.battleIndex),
     relicIds,
     onVictory: (survivors) => {
       const latest = useActiveRun.getState().run;
@@ -736,7 +738,7 @@ function BattlePanel({
           if (latest?.id === runId) replace(cashOutPawn(latest, unitId));
         }
       : undefined,
-  }), [battleLevel, battleSeed, canCashOutPawn, relicIds, replace, requestAbandon, runId]);
+  }), [battleLevel, battleSeed, canCashOutPawn, relicIds, replace, requestAbandon, run.battleIndex, runId]);
 
   // Subscribe to the current document so a Paid Crossing cash-out or Reservist event
   // refreshes the hook inputs without restarting the already-live matching board.

@@ -95,6 +95,41 @@ describe('War Battle playability', () => {
       expect.objectContaining({ code: 'W1_PLAYER_EDGE_ZONE' }),
     );
   });
+
+  it('accepts an enemy-only randomized roster beside the implicit Run army', () => {
+    const level = createBlankLevel('war-random-enemy', 'War Random Enemy', 6, 6);
+    level.objective = 'rival-kings';
+    level.layers.units = [unit(5, 0, 'king', 'enemy')];
+    level.layers.zones = [
+      zone('player-deploy', 'player-spawn', [[0, 5], [1, 5]]),
+      zone('enemy-deploy', 'enemy-spawn', [[0, 0], [1, 0], [2, 0]]),
+    ];
+    level.events = [{
+      name: 'Deploy enemy force',
+      trigger: { kind: 'setup' },
+      do: [{ kind: 'spawn', side: 'enemy', roster: { pawn: 2 }, zoneIds: ['enemy-deploy'] }],
+    }];
+
+    expect(validateWarBattlePlayability(level)).toEqual({ ok: true, violations: [] });
+  });
+
+  it('rejects enemy deployment geometry that overlaps the implicit Run army zone', () => {
+    const level = createBlankLevel('war-overlap', 'War Overlap', 6, 6);
+    level.layers.units = [unit(5, 0, 'pawn', 'enemy')];
+    level.layers.zones = [
+      zone('player-deploy', 'player-spawn', [[0, 5], [1, 5]]),
+      zone('enemy-deploy', 'enemy-spawn', [[1, 5], [2, 5]]),
+    ];
+    level.events = [{
+      name: 'Deploy enemy force',
+      trigger: { kind: 'setup' },
+      do: [{ kind: 'spawn', side: 'enemy', roster: { pawn: 1 }, zoneIds: ['enemy-deploy'] }],
+    }];
+
+    expect(validateWarBattlePlayability(level).violations).toContainEqual(
+      expect.objectContaining({ code: 'W2_DEPLOYMENT_ZONES_OVERLAP', message: expect.stringContaining('overlap on 1 tile') }),
+    );
+  });
 });
 
 describe('P2 — kings per mode', () => {
@@ -192,6 +227,46 @@ describe('P3 — random placement zones and capacity', () => {
 
   it('fixed placement runs no P3 checks (zones optional, units authored)', () => {
     expect(validatePlayability(fixedLevel()).ok).toBe(true);
+  });
+
+  it('explicit deployment is side-specific and permits fixed anchors', () => {
+    const level = fixedLevel((l) => {
+      l.layers.zones = [zone('enemy-deploy', 'enemy-spawn', [[0, 0], [1, 0]])];
+      l.events = [{
+        name: 'Deploy enemy force',
+        trigger: { kind: 'setup' },
+        do: [{ kind: 'spawn', side: 'enemy', roster: { knight: 2 }, zoneIds: ['enemy-deploy'] }],
+      }];
+    });
+    expect(validatePlayability(level)).toEqual({ ok: true, violations: [] });
+  });
+
+  it('keeps an empty explicit zone selection editable but blocks canonical Save', () => {
+    const level = fixedLevel((l) => {
+      l.events = [{
+        name: 'Deploy enemy force',
+        trigger: { kind: 'setup' },
+        do: [{ kind: 'spawn', side: 'enemy', roster: { pawn: 1 }, zoneIds: [] }],
+      }];
+    });
+    expect(validatePlayability(level).violations).toContainEqual(
+      expect.objectContaining({ code: 'P3_NO_SPAWN_ZONE', message: expect.stringContaining('needs at least one painted zone tile') }),
+    );
+  });
+
+  it('fixed anchors reduce the usable capacity of an explicit deployment zone', () => {
+    const level = fixedLevel((l) => {
+      l.layers.units.push(unit(0, 0, 'rook', 'enemy'));
+      l.layers.zones = [zone('enemy-deploy', 'enemy-spawn', [[0, 0], [1, 0]])];
+      l.events = [{
+        name: 'Deploy enemy force',
+        trigger: { kind: 'setup' },
+        do: [{ kind: 'spawn', side: 'enemy', roster: { knight: 2 }, zoneIds: ['enemy-deploy'] }],
+      }];
+    });
+    expect(validatePlayability(level).violations).toContainEqual(
+      expect.objectContaining({ code: 'P3_ZONE_CAPACITY', message: expect.stringContaining('1 more usable tile') }),
+    );
   });
 
   it('fails when units are painted alongside random placement', () => {
