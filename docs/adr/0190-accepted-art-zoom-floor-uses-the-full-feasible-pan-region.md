@@ -6,6 +6,8 @@ partially_supersedes:
   - "[ADR-0121](0121-predrawn-pan-stops-at-art-boundary.md)'s centered-floor clause"
 refines:
   - "[ADR-0189](0189-board-facing-views-open-on-playable-geometry.md)"
+partially_superseded_by:
+  - "[ADR-0301](0301-levels-own-an-authored-camera-coverage-boundary.md)"
 ---
 
 # ADR-0190: Accepted-art zoom floor uses the full feasible pan region

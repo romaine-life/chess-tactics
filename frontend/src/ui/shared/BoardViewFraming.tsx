@@ -8,8 +8,10 @@ import {
   type ReactElement,
 } from 'react';
 import {
+  BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM,
   cameraToContainBounds,
   centeredPlayableBoardFramingBounds,
+  effectiveBoardCameraCoverPolygon,
   isPredrawnBackgroundActive,
   viewportForMaximumOpeningAspect,
   type EditorBoard,
@@ -26,12 +28,16 @@ export interface BoardViewCamera {
   pan: { x: number; y: number };
 }
 
-/** Resolve the accepted immutable raster boundary for ordinary board-facing viewers. */
-export function acceptedBoardCoverPolygon(board: EditorBoard): { x: number; y: number }[] | undefined {
-  if (!isPredrawnBackgroundActive(board) || !board.surface) return undefined;
-  const cells = Array.from({ length: board.rows }, (_, y) =>
-    Array.from({ length: board.cols }, (__, x) => ({ x, y }))).flat();
-  return predrawnBoardCoverPolygon(runtimePredrawnBoardPlate(board.surface), cells);
+/** Resolve the level camera box, intersected with accepted immutable pixels when AI is active. */
+export function boardCameraCoverPolygon(board: EditorBoard): { x: number; y: number }[] {
+  const acceptedArtPolygon = isPredrawnBackgroundActive(board) && board.surface
+    ? predrawnBoardCoverPolygon(
+        runtimePredrawnBoardPlate(board.surface),
+        Array.from({ length: board.rows }, (_, y) =>
+          Array.from({ length: board.cols }, (__, x) => ({ x, y }))).flat(),
+      )
+    : undefined;
+  return effectiveBoardCameraCoverPolygon(board, acceptedArtPolygon);
 }
 
 /**
@@ -203,7 +209,7 @@ export function FramedReadOnlyBoardView({
   board,
   viewKey,
   ariaLabel,
-  baseMinZoom = 0.2,
+  baseMinZoom = BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM,
   maxZoom = 2,
   emphasisZoom,
   onTerrainFirstFrame,
@@ -226,8 +232,8 @@ export function FramedReadOnlyBoardView({
   const [minimumZoom, setMinimumZoom] = useState(baseMinZoom);
   const [viewport, setViewport] = useState<ViewPaneViewportSize | null>(null);
   const coverPolygon = useMemo(
-    () => acceptedBoardCoverPolygon(board),
-    [board.backgroundMode, board.cols, board.rows, board.surface],
+    () => boardCameraCoverPolygon(board),
+    [board.backgroundMode, board.cameraBounds, board.cols, board.rows, board.surface],
   );
   const { markViewInteraction } = useBoardCameraFraming({
     board,

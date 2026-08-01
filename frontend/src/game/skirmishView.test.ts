@@ -4,7 +4,7 @@ import { useSkirmishView } from './skirmishView';
 afterEach(() => {
   useSkirmishView.setState({
     zoom: 0.9,
-    minZoom: 0.55,
+    minZoom: 0.05,
     maxZoom: 1.45,
     pan: { x: 0, y: -12 },
     openingZoom: 0.9,

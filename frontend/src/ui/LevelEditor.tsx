@@ -4,7 +4,7 @@
 // imported here. Shared board core (tile families, the animation clock, the facing
 // compass, the per-frame src) comes from ./studioBoard.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react';
-import { boardBackgroundMode, boardBounds, defaultSubterrainMaterial, isVersionedPredrawnBoardSurface, MAX_FLOATING_ARTWORK_PIXEL, predrawnEnvironmentGeometryFingerprintInputV2, predrawnVisualFootprintClipStyleForCell, resolveTerrainSideExposure, resolveTerrainSideFaces, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, type BoardBackgroundMode, type PredrawnGenerationFrame, type SubterrainMaterial, type SubterrainPlacementMap, type TerrainSideMaterials, type VersionedPredrawnBoardSurface } from '@chess-tactics/board-render';
+import { BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM, boardBackgroundMode, boardBounds, cameraToContainBounds, defaultBoardCameraBounds, defaultSubterrainMaterial, isVersionedPredrawnBoardSurface, MAX_FLOATING_ARTWORK_PIXEL, normalizeBoardCameraBounds, predrawnEnvironmentGeometryFingerprintInputV2, predrawnVisualFootprintClipStyleForCell, resolvedBoardCameraBounds, resolveTerrainSideExposure, resolveTerrainSideFaces, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, type BoardBackgroundMode, type BoardCameraBounds, type BoardCameraSnapMode, type PredrawnGenerationFrame, type SubterrainMaterial, type SubterrainPlacementMap, type TerrainSideMaterials, type VersionedPredrawnBoardSurface } from '@chess-tactics/board-render';
 import { boardLabCellPosition, boardLabMetrics, immutableBoardLabTerrainSrc } from '../render/BoardLabBoard';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { FloatingArtworkSprite, PropSprite, propHalfSrc } from '../render/BoardStructure';
@@ -47,6 +47,7 @@ import {
 import { studioTerrainCanvasCell } from '../render/StudioReadOnlyBoard';
 import { ViewPane, type ViewPaneViewportSize } from './shared/ViewPane';
 import { useBoardCameraFraming } from './shared/BoardViewFraming';
+import { CameraBoundaryOverlay } from './shared/CameraBoundaryOverlay';
 import { NavButton } from './shared/NavButton';
 import { useConfirm } from './shared/ConfirmDialog';
 import { TitleBarControlContribution, type TitleBarControlSpec } from './shell/TitleBarControls';
@@ -459,6 +460,9 @@ function StudioEditableBoard({
   boardZoom,
   boardPan,
   gridScope = 'off',
+  cameraBoundary,
+  cameraBoundaryEditable = false,
+  onCameraBoundaryCommit,
   predrawnOcclusionEnabled = true,
   showPredrawnOcclusionSeed = false,
   predrawnPlate,
@@ -558,6 +562,9 @@ function StudioEditableBoard({
   boardZoom: number;
   boardPan: { x: number; y: number };
   gridScope?: 'off' | 'playable' | 'whole';
+  cameraBoundary?: BoardCameraBounds | null;
+  cameraBoundaryEditable?: boolean;
+  onCameraBoundaryCommit?: (bounds: BoardCameraBounds) => void;
   /** Before/after proof switch for the automatic plate occlusion pass. */
   predrawnOcclusionEnabled?: boolean;
   /** Review the deterministic fence/prop/wall alpha proposal over a registered plate. */
@@ -1452,6 +1459,15 @@ function StudioEditableBoard({
             ? <BoardGridLayer cells={cells} />
             : null}
       {overlaySprites}
+      {cameraBoundary ? (
+        <CameraBoundaryOverlay
+          board={{ cols, rows }}
+          bounds={cameraBoundary}
+          editorZoom={boardZoom}
+          editable={cameraBoundaryEditable}
+          onCommit={onCameraBoundaryCommit ?? (() => undefined)}
+        />
+      ) : null}
     </TileGrid>
   );
 }
@@ -2413,6 +2429,7 @@ type LayerKey = LevelEditorLayerKey;
 type BrushKind = LevelEditorBrushKind;
 const LEVEL_EDITOR_LAYER_OPTIONS: ReadonlyArray<{ id: LayerKey; label: string }> = [
   { id: 'board', label: 'Board' },
+  { id: 'camera', label: 'Camera' },
   { id: 'level-artwork', label: 'Level Artwork' },
   { id: 'tile', label: 'Tile' },
   { id: 'generate', label: 'Generate' },
@@ -2458,6 +2475,7 @@ function perimeterWallArt(placements: Record<string, WallArtId> | undefined, col
 // Workspace/rules/status/recovery pages and Generate are non-painting layers → select tool.
 const toolForLayer = (layer: LayerKey): 'select' | 'brush' => (
   layer === 'board'
+  || layer === 'camera'
   || layer === 'status'
   || layer === 'recovery'
   || layer === 'rules'
@@ -2467,7 +2485,7 @@ const toolForLayer = (layer: LayerKey): 'select' | 'brush' => (
 const brushKindForInitialLayer = (layer: LayerKey): BrushKind => {
   if (layer === 'paths') return 'road';
   if (layer === 'placed-art') return 'artwork';
-  if (layer === 'board' || layer === 'status' || layer === 'recovery' || layer === 'rules' || layer === 'generate' || layer === 'level-artwork') return 'tile';
+  if (layer === 'board' || layer === 'camera' || layer === 'status' || layer === 'recovery' || layer === 'rules' || layer === 'generate' || layer === 'level-artwork') return 'tile';
   return layer as BrushKind;
 };
 const brushKindForRouteState = (layer: LayerKey, kind: BrushKind | undefined): BrushKind => {
@@ -2788,6 +2806,7 @@ export function LevelEditor(): ReactElement {
   const [boardMacroTiles, setBoardMacroTiles] = useState<MacroTilePlacement[]>(() => initialBoard ? validMacroTilesForBoard(initialBoard) : []);
   const [boardCols, setBoardCols] = useState(initialBoard?.cols ?? LE_COLS);
   const [boardRows, setBoardRows] = useState(initialBoard?.rows ?? LE_ROWS);
+  const [boardCameraBounds, setBoardCameraBounds] = useState<BoardCameraBounds | undefined>(initialBoard?.cameraBounds);
   const [decorativeApron, setDecorativeApron] = useState<DecorativeTerrainExtents>(() =>
     initialBoard?.decorativeApron ?? { top: 0, right: 0, bottom: 0, left: 0 });
   const [decorativeCells, setDecorativeCells] = useState<Record<string, string>>(() => initialBoard?.decorativeCells ?? {});
@@ -2838,7 +2857,7 @@ export function LevelEditor(): ReactElement {
   const [scatterBuffer, setScatterBuffer] = useState(0);
   const [scatterWiggle, setScatterWiggle] = useState(0.5);
   const [viewZoom, setViewZoom] = useState(1);
-  const [viewMinZoom, setViewMinZoom] = useState(0.4);
+  const [viewMinZoom, setViewMinZoom] = useState(BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM);
   const viewMaxZoom = Math.max(4, viewMinZoom);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
   const [viewViewportSize, setViewViewportSize] = useState<ViewPaneViewportSize | null>(null);
@@ -2857,6 +2876,14 @@ export function LevelEditor(): ReactElement {
       : undefined,
     [editorPredrawnPlate, predrawnCoverCells],
   );
+  const resolvedCameraBoundary = useMemo(
+    () => resolvedBoardCameraBounds({
+      cols: boardCols,
+      rows: boardRows,
+      cameraBounds: boardCameraBounds,
+    }),
+    [boardCameraBounds, boardCols, boardRows],
+  );
   const {
     markViewInteraction: markBoardViewInteraction,
     resetView: resetFramedBoardView,
@@ -2870,6 +2897,27 @@ export function LevelEditor(): ReactElement {
     setZoom: setViewZoom,
     setPan: setViewPan,
   });
+  type CameraBoundaryInteractionMode = 'view' | 'edit';
+  const [cameraBoundaryInteractionMode, setCameraBoundaryInteractionMode] = useState<CameraBoundaryInteractionMode>('edit');
+  const [cameraSnapMode, setCameraSnapMode] = useState<BoardCameraSnapMode>('balanced');
+  const frameCameraBoundary = (bounds: BoardCameraBounds): void => {
+    if (!viewViewportSize) return;
+    const revealPadding = Math.max(bounds.width, bounds.height) * 0.025;
+    const camera = cameraToContainBounds({
+      viewport: viewViewportSize,
+      bounds: {
+        minX: bounds.minX - revealPadding,
+        minY: bounds.minY - revealPadding,
+        width: bounds.width + revealPadding * 2,
+        height: bounds.height + revealPadding * 2,
+      },
+      minZoom: viewMinZoom,
+      maxZoom: viewMaxZoom,
+    });
+    markBoardViewInteraction();
+    setViewZoom(camera.zoom);
+    setViewPan(camera.pan);
+  };
   const [gridScope, setGridScope] = useState<'off' | 'playable' | 'whole'>('off');
   const toggleRegisteredGrid = (): void => setGridScope((value) => value === 'off' ? 'whole' : 'off');
   const [predrawnOcclusionEnabled, setPredrawnOcclusionEnabled] = useState(
@@ -2942,6 +2990,24 @@ export function LevelEditor(): ReactElement {
     isPlacedArtBrushKind(initialBrushKind) ? initialBrushKind : 'artwork',
   );
   const [layer, setLayer] = useState<LayerKey>(initialLayer);
+  const cameraLayerEntryFramedRef = useRef(false);
+  useEffect(() => {
+    if (layer !== 'camera') {
+      cameraLayerEntryFramedRef.current = false;
+      return;
+    }
+    if (cameraLayerEntryFramedRef.current || !viewViewportSize) return;
+    cameraLayerEntryFramedRef.current = true;
+    frameCameraBoundary(resolvedCameraBoundary);
+  }, [
+    layer,
+    resolvedCameraBoundary.height,
+    resolvedCameraBoundary.minX,
+    resolvedCameraBoundary.minY,
+    resolvedCameraBoundary.width,
+    viewViewportSize?.height,
+    viewViewportSize?.width,
+  ]);
   const layerSelectOptions = useMemo(() => LEVEL_EDITOR_LAYER_SELECT_OPTIONS.map((option) => ({
     ...option,
     // A pre-drawn plate locks Placed Art because those pixels are already baked into the
@@ -3314,6 +3380,7 @@ export function LevelEditor(): ReactElement {
   const applyEditorBoard = (board: EditorBoard): void => {
     setBoardCols(board.cols);
     setBoardRows(board.rows);
+    setBoardCameraBounds(board.cameraBounds);
     setDecorativeApron(board.decorativeApron ?? { top: 0, right: 0, bottom: 0, left: 0 });
     setDecorativeCells(board.decorativeCells ?? {});
     setDecorativeFootprint(board.decorativeFootprint ?? []);
@@ -3364,8 +3431,8 @@ export function LevelEditor(): ReactElement {
   // The current painted board as a single EditorBoard — the one shape both the transient
   // play-test URL and the level save serialize from, so they can never describe different boards.
   const currentEditorBoard = useMemo<EditorBoard>(
-    () => ({ cols: boardCols, rows: boardRows, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, backgroundMode: boardBackgroundModeState, surface: boardSurface, predrawnGenerationFrame: boardPredrawnGenerationFrame, macroTiles: boardMacroTiles, units: boardUnits, doodads: boardDoodads, props: boardProps, floatingArtwork: boardFloatingArtwork, cover: boardCover, coverTypes: boardCoverTypes, features: boardFeatures, fences: boardFences, fencePosts: boardFencePosts, walls: boardWalls, wallArt: boardWallArt, subterrain: boardSubterrain, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions }),
-    [boardCols, boardRows, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, boardFactionDirections, boardCells, boardBackgroundModeState, boardSurface, boardPredrawnGenerationFrame, boardMacroTiles, boardUnits, boardDoodads, boardProps, boardFloatingArtwork, boardCover, boardCoverTypes, boardFeatures, boardFences, boardFencePosts, boardWalls, boardWallArt, boardSubterrain, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions],
+    () => ({ cols: boardCols, rows: boardRows, cameraBounds: boardCameraBounds, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, backgroundMode: boardBackgroundModeState, surface: boardSurface, predrawnGenerationFrame: boardPredrawnGenerationFrame, macroTiles: boardMacroTiles, units: boardUnits, doodads: boardDoodads, props: boardProps, floatingArtwork: boardFloatingArtwork, cover: boardCover, coverTypes: boardCoverTypes, features: boardFeatures, fences: boardFences, fencePosts: boardFencePosts, walls: boardWalls, wallArt: boardWallArt, subterrain: boardSubterrain, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions }),
+    [boardCols, boardRows, boardCameraBounds, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, boardFactionDirections, boardCells, boardBackgroundModeState, boardSurface, boardPredrawnGenerationFrame, boardMacroTiles, boardUnits, boardDoodads, boardProps, boardFloatingArtwork, boardCover, boardCoverTypes, boardFeatures, boardFences, boardFencePosts, boardWalls, boardWallArt, boardSubterrain, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions],
   );
   const predrawnVersionCells = useMemo(
     () => Array.from({ length: boardRows }, (_, y) => (
@@ -3476,6 +3543,35 @@ export function LevelEditor(): ReactElement {
     applyEditorBoardWithSelectionSafety(normalized);
     if (selection !== undefined) setSelectedCell(selection);
     return true;
+  };
+  const commitCameraBoundary = (bounds: BoardCameraBounds): void => {
+    if (!editorSessionCanWrite) {
+      reportStatus(
+        'Camera boundary is read-only.',
+        'warning',
+        'Take over editing from the named session before changing the level camera.',
+      );
+      return;
+    }
+    const current = currentEditorBoardRef.current;
+    const normalized = normalizeBoardCameraBounds(bounds, current);
+    if (!normalized) return;
+    if (commitEditorBoard({ ...cloneEditorBoard(current), cameraBounds: normalized })) {
+      reportStatus(
+        'Camera boundary updated.',
+        'success',
+        'Play now derives its zoom-out and pan limits from this box.',
+      );
+    }
+  };
+  const snapCameraBoundary = (): void => {
+    const bounds = defaultBoardCameraBounds(
+      { cols: boardCols, rows: boardRows },
+      cameraSnapMode,
+    );
+    commitCameraBoundary(bounds);
+    setCameraBoundaryInteractionMode('edit');
+    frameCameraBoundary(bounds);
   };
   const setPredrawnVersionSurface = (surface: VersionedPredrawnBoardSurface): void => {
     if (!editorSessionCanWrite) {
@@ -7597,6 +7693,7 @@ export function LevelEditor(): ReactElement {
     }
     if (
       nextLayer !== 'board'
+      && nextLayer !== 'camera'
       && nextLayer !== 'status'
       && nextLayer !== 'recovery'
       && nextLayer !== 'rules'
@@ -8390,6 +8487,7 @@ export function LevelEditor(): ReactElement {
   const actionToolsDisabled = tool === 'region'
     || Boolean(levelArtworkWorkspace)
     || layer === 'level-artwork'
+    || layer === 'camera'
     || eventsOpen;
   // Inactive Scene Art discovery deliberately has no pressed toolbar action, but its actions stay
   // available so Select can activate discovery. Only process workspaces disable the tool buttons.
@@ -8574,7 +8672,7 @@ export function LevelEditor(): ReactElement {
               ariaLabel="Level editor board"
               zoom={viewZoom}
               pan={viewPan}
-              minZoom={0.4}
+              minZoom={BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM}
               maxZoom={viewMaxZoom}
               onZoomChange={setViewZoom}
               onPanChange={setViewPan}
@@ -8623,6 +8721,9 @@ export function LevelEditor(): ReactElement {
                     boardZoom={viewZoom}
                     boardPan={viewPan}
                     gridScope={gridScope}
+                    cameraBoundary={layer === 'camera' ? resolvedCameraBoundary : null}
+                    cameraBoundaryEditable={layer === 'camera' && cameraBoundaryInteractionMode === 'edit' && editorSessionCanWrite}
+                    onCameraBoundaryCommit={commitCameraBoundary}
                     predrawnOcclusionEnabled={predrawnOcclusionEnabled}
                     showPredrawnOcclusionSeed={showPredrawnOcclusionSeed}
                     predrawnPlate={editorPredrawnPlate}
@@ -9568,6 +9669,69 @@ export function LevelEditor(): ReactElement {
               )}
               {needsPlayerFaction ? <p className="le-board-warning">Assign Player to one board faction before saving.</p> : null}
             </div>
+          </section>
+          </>
+        ) : layer === 'camera' ? (
+          <>
+          <section className="skirmish-card" aria-label="Camera boundary" data-testid="le-camera-controls">
+            <h2>Camera</h2>
+            <p className="le-board-note">
+              Every player viewport stays inside this persistent level boundary while zoom and pan vary within it.
+            </p>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Mode</span>
+              <HouseSelect<CameraBoundaryInteractionMode>
+                value={editorSessionCanWrite ? cameraBoundaryInteractionMode : 'view'}
+                options={[
+                  { value: 'view', label: 'View boundary' },
+                  { value: 'edit', label: 'Edit boundary', disabled: !editorSessionCanWrite },
+                ]}
+                onChange={setCameraBoundaryInteractionMode}
+                ariaLabel="Camera boundary interaction mode"
+              />
+            </div>
+            <dl className="le-settings-list">
+              <div>
+                <dt>Origin</dt>
+                <dd>{Math.round(resolvedCameraBoundary.minX)}, {Math.round(resolvedCameraBoundary.minY)}</dd>
+              </div>
+              <div>
+                <dt>Size</dt>
+                <dd>{Math.round(resolvedCameraBoundary.width)} × {Math.round(resolvedCameraBoundary.height)} world px</dd>
+              </div>
+            </dl>
+            {!editorSessionCanWrite ? (
+              <p className="le-board-note">Edit is unavailable until this session owns the editor lease.</p>
+            ) : cameraBoundaryInteractionMode === 'view' ? (
+              <p className="le-board-note">View keeps the boundary visible without exposing its mutation handles.</p>
+            ) : (
+              <p className="le-board-note">Drag anywhere inside the box to move it, or drag an edge or corner handle to resize it. Arrow keys move the focused control by 4 world pixels; hold Shift for 24.</p>
+            )}
+          </section>
+          <section className="skirmish-card skirmish-view-card" aria-label="Camera boundary snap">
+            <h2>Snap boundary</h2>
+            <div className="skirmish-view-row">
+              <HouseSelect<BoardCameraSnapMode>
+                value={cameraSnapMode}
+                options={[
+                  { value: 'balanced', label: 'Balanced · 10% + minimum', title: 'Use ten percent padding, with a two-tile-step minimum.' },
+                  { value: 'proportional', label: 'Proportional · 10%', title: 'Use ten percent of the projected level bounds on every side.' },
+                  { value: 'fixed', label: 'Fixed · 2 tile steps', title: 'Use two projected tile steps of padding on every side.' },
+                ]}
+                onChange={setCameraSnapMode}
+                ariaLabel="Camera boundary snap preset"
+                className="le-camera-snap-select"
+              />
+              <button
+                type="button"
+                data-chrome-unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                onClick={snapCameraBoundary}
+                disabled={!editorSessionCanWrite}
+                title="Replace the camera boundary with this level-derived preset."
+              >Snap</button>
+            </div>
+            <p className="le-board-note">Balanced is the default: ten percent padding with a two projected-tile-step minimum per axis.</p>
           </section>
           </>
         ) : layer === 'generate' ? (<>
@@ -10608,7 +10772,7 @@ export function LevelEditor(): ReactElement {
         </section>
         ) : null}
 
-        {layer !== 'status' && layer !== 'recovery' && (selectedArtworkForDetails || selectedUnitAsset || selectedDoodadAsset || selectedProp || selectedAsset || selectedCell) ? (
+        {layer !== 'camera' && layer !== 'status' && layer !== 'recovery' && (selectedArtworkForDetails || selectedUnitAsset || selectedDoodadAsset || selectedProp || selectedAsset || selectedCell) ? (
         <section className="skirmish-card le-details">
           <h2>Details · {selectedArtworkForDetails ? 'Artwork' : selectedUnitAsset ? 'Unit' : selectedDoodadAsset ? 'Doodad' : selectedProp ? 'Prop' : selectedAsset ? 'Tile' : 'Cell'}</h2>
           {selectedArtworkForDetails ? (
