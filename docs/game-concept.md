@@ -86,6 +86,13 @@ these.
   unit ledger, not generated card-name permutations; an explicitly concealed
   Tactical target appears there as hidden until purchase (ADR-0265, ADR-0271,
   ADR-0272).
+- Each of those 49 Units cards owns one dedicated database-backed art prompt
+  plan keyed by its canonical composition id. The shared set direction keeps
+  historical human roles, anti-story residue, and unreadable eyes coherent,
+  while every card authors its own scene, historical pressure anchor, and
+  method of concealing the eye line. The entire group must not default to
+  facing away. A generated image is uploaded to the same live-media candidate
+  that owns its exact prompt provenance (ADR-0278).
 - A card's affected **qualifiers** identify causal rules rather than replacing
   its primary type. Pestiferous changes the card lifecycle and all its units.
   **Tactical** instead authors a positive enhancement of one or more contained

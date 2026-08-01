@@ -80,6 +80,7 @@ import { listEditorDocuments } from '../net/editorDocuments';
 import { fetchAdminLiveMediaCatalog, type AdminLiveMediaCatalog } from '../net/liveMediaAdmin';
 import { TitleBarControlContribution, type TitleBarControlSpec } from './shell/TitleBarControls';
 import { RunCardPrototypeCatalog, RunCardPrototypeViewer } from './RunCardPrototype';
+import { RunCardPromptCatalog, RunCardPromptViewer } from './RunCardPromptStudio';
 import {
   activeUnitFamilies,
   familyLabels,
@@ -116,7 +117,7 @@ type StudioMode = 'catalog' | 'viewer';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
-type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'sourceart' | 'groundcover' | 'walldecor' | 'wallart' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'walls' | 'scrollbars' | 'sliders' | 'pages' | 'chromelab' | 'sfx' | 'gamelab' | 'gym' | 'solver' | 'cardlayout';
+type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'sourceart' | 'groundcover' | 'walldecor' | 'wallart' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'walls' | 'scrollbars' | 'sliders' | 'pages' | 'chromelab' | 'sfx' | 'gamelab' | 'gym' | 'solver' | 'cardlayout' | 'cardprompts';
 
 // Every prop KIND present in the catalog, in definition order — DERIVED from PROP_DEFS so a new
 // kind (e.g. 'rock') is a filter facet automatically. Hardcoding ['tree','house'] here silently
@@ -179,6 +180,7 @@ interface TilesetStudioRouteState {
   selectedGymLevelId?: string;
   selectedSolverLevelId?: string;
   selectedSfxReviewId?: string;
+  selectedRunCardPromptId?: string;
   /** Which Board Solver surface is open (Stepper / cluster Run / Help / Glossary) — the `stab=` param. */
   solverTab?: 'step' | 'run' | 'help' | 'glossary';
   selectedTileSideId?: string;
@@ -250,7 +252,7 @@ const studioFamilyById = (familyId: StudioFamilyId): StudioFamily =>
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => Boolean(value && studioFamilies.some((family) => family.id === value));
 
 const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'viewer';
-const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'sourceart' || value === 'groundcover' || value === 'walldecor' || value === 'wallart' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'walls' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'chromelab' || value === 'sfx' || value === 'gamelab' || value === 'gym' || value === 'solver' || value === 'cardlayout';
+const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'sourceart' || value === 'groundcover' || value === 'walldecor' || value === 'wallart' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'walls' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'chromelab' || value === 'sfx' || value === 'gamelab' || value === 'gym' || value === 'solver' || value === 'cardlayout' || value === 'cardprompts';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
@@ -277,6 +279,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const gymlvl = params.get('gymlvl');
   const slvl = params.get('slvl');
   const sfxReview = params.get('sfxReview');
+  const cardPrompt = params.get('cardPrompt');
   const stab = params.get('stab');
   const side = params.get('side');
   const vk = params.get('vk');
@@ -356,6 +359,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedSfxReviewId: sfxReview && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(sfxReview)
       ? sfxReview
       : undefined,
+    selectedRunCardPromptId: cardPrompt && /^[pkbrq]+$/.test(cardPrompt) ? cardPrompt : undefined,
     solverTab: stab === 'run' ? 'run' : stab === 'help' ? 'help' : stab === 'glossary' ? 'glossary' : stab === 'step' ? 'step' : undefined,
     selectedTileSideId: side || undefined,
     selectedFrameName: frame || undefined,
@@ -440,6 +444,7 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
     if (route.category === 'gym' && route.selectedGymLevelId) catalogParams.set('gymlvl', route.selectedGymLevelId);
     preserveChromeLabRouteParams(catalogParams, route);
     if (route.category === 'solver' && route.selectedSolverLevelId) catalogParams.set('slvl', route.selectedSolverLevelId);
+    if (route.category === 'cardprompts' && route.selectedRunCardPromptId) catalogParams.set('cardPrompt', route.selectedRunCardPromptId);
     const catalogQuery = catalogParams.toString();
     const nextHref = catalogQuery ? `${STUDIO_PATH}?${catalogQuery}` : STUDIO_PATH;
     const currentHref = `${window.location.pathname}${window.location.search}`;
@@ -476,6 +481,7 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
     else if (route.viewerKind === 'walldecor' && route.selectedWallDecorId) params.set('wdecor', route.selectedWallDecorId);
     else if (route.viewerKind === 'wallart' && route.selectedWallArtId) params.set('wart', route.selectedWallArtId);
     else if (route.viewerKind === 'sfx' && route.selectedSfxReviewId) params.set('sfxReview', route.selectedSfxReviewId);
+    else if (route.viewerKind === 'cardprompts' && route.selectedRunCardPromptId) params.set('cardPrompt', route.selectedRunCardPromptId);
     // The solver's open surface (Stepper is the default, so only non-default tabs are
     // written) — rides beside slvl so a solver deep link restores both the level AND the tab.
     if (route.viewerKind === 'solver' && route.solverTab && route.solverTab !== 'step') params.set('stab', route.solverTab);
@@ -564,6 +570,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [sfxSearch, setSfxSearch] = useState('');
   const [selectedSfxName, setSelectedSfxName] = useState<string | undefined>(undefined);
   const [selectedSfxReviewId, setSelectedSfxReviewId] = useState<string | undefined>(initialRoute.selectedSfxReviewId);
+  const [cardPromptSearch, setCardPromptSearch] = useState('');
+  const [selectedRunCardPromptId, setSelectedRunCardPromptId] = useState<string | undefined>(initialRoute.selectedRunCardPromptId ?? 'p');
   const [pageSearch, setPageSearch] = useState('');
   const [selectedPageName, setSelectedPageName] = useState<string | undefined>(initialRoute.selectedPageName);
   const [chromeLabSearch, setChromeLabSearch] = useState('');
@@ -780,6 +788,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       if (route.selectedGymLevelId) setSelectedGymLevelId(route.selectedGymLevelId);
       if (route.selectedSolverLevelId) setSelectedSolverLevelId(route.selectedSolverLevelId);
       setSelectedSfxReviewId(route.selectedSfxReviewId);
+      setSelectedRunCardPromptId(route.selectedRunCardPromptId ?? 'p');
       // No-param means the default Stepper tab — browser-Back from ?stab=run must actually
       // leave the Run tab, so this resets rather than only setting when present.
       setSolverTab(route.solverTab ?? 'step');
@@ -856,6 +865,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       selectedGymLevelId,
       selectedSolverLevelId,
       selectedSfxReviewId,
+      selectedRunCardPromptId,
       solverTab,
       selectedTileSideId,
       selectedFrameName,
@@ -882,7 +892,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       brushKind,
       selectedUnitId: unitBrushId,
     });
-  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedArtworkName, selectedSourceArtId, selectedChromeLabTargetId, selectedFenceArtworkId, selectedGlossaryName, selectedPageName, selectedGameLabLevelId, selectedGymLevelId, selectedSolverLevelId, selectedSfxReviewId, solverTab, selectedTileSideId, selectedFrameName, selectedDividerName, selectedRailFamilyId, selectedPropName, selectedTileCompareId, selectedGroundCoverId, selectedWallDecorId, selectedWallArtId, selectedSurfaceFamily, selectedRegionId, viewerKind, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
+  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedArtworkName, selectedSourceArtId, selectedChromeLabTargetId, selectedFenceArtworkId, selectedGlossaryName, selectedPageName, selectedGameLabLevelId, selectedGymLevelId, selectedSolverLevelId, selectedSfxReviewId, selectedRunCardPromptId, solverTab, selectedTileSideId, selectedFrameName, selectedDividerName, selectedRailFamilyId, selectedPropName, selectedTileCompareId, selectedGroundCoverId, selectedWallDecorId, selectedWallArtId, selectedSurfaceFamily, selectedRegionId, viewerKind, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
 
   // Returning to the Catalog (from the Viewer/Lab, or a deep-link) must land you on
   // the card you came from — not the top of the grid. The selection is already kept
@@ -1912,6 +1922,28 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       main: <RunCardPrototypeCatalog onOpen={() => openViewer('cardlayout')} />,
       controls: <button type="button" className="tileset-view-action" onClick={() => openViewer('cardlayout')}>Open Card Layout</button>,
     },
+    {
+      id: 'cardprompts', label: 'Card Prompts', hint: 'Review and copy the exact database prompt provenance for every core Units card.',
+      main: (
+        <RunCardPromptCatalog
+          search={cardPromptSearch}
+          selected={selectedRunCardPromptId}
+          onOpen={(id) => {
+            setSelectedRunCardPromptId(id);
+            openViewer('cardprompts');
+          }}
+        />
+      ),
+      controls: (
+        <>
+          <label className="tileset-catalog-search">
+            <span>Search</span>
+            <input type="search" value={cardPromptSearch} onChange={(event) => setCardPromptSearch(event.target.value)} placeholder="card, units, history…" />
+          </label>
+          <button type="button" className="tileset-view-action" onClick={() => openViewer('cardprompts')}>Open Selected Prompt</button>
+        </>
+      ),
+    },
   ];
   const activeCatalog = catalogCategories.find((entry) => entry.id === category) ?? catalogCategories[0];
   const catalogCategoryOptions = [...catalogCategories].sort(compareByLabel);
@@ -2111,6 +2143,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                               />
                           : viewerKind === 'sfx'
                             ? <SfxViewer header={studioViewerHeader} reviewVersionId={selectedSfxReviewId} />
+                            : viewerKind === 'cardprompts'
+                              ? <RunCardPromptViewer cardId={selectedRunCardPromptId} onCardId={setSelectedRunCardPromptId} header={studioViewerHeader} />
                             : viewerKind === 'cardlayout'
                               ? <RunCardPrototypeViewer header={studioViewerHeader} viewerZoom={viewerZoom} />
                               : <AssetLab library={studioMedia.assets} name={selectedAssetName} header={studioViewerHeader} onEditFrame={(id) => { setSelectedFrameName(id); openViewer('nineslice'); }} onOpenDivider={(id) => { setSelectedDividerName(id); openViewer('divider'); }} />
