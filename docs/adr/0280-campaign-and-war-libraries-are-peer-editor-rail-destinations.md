@@ -7,7 +7,7 @@ refines:
   - ADR-0193
 ---
 
-# ADR-0279: Wars are a sibling collection in the persistent Editor rail
+# ADR-0280: Wars are a sibling collection in the persistent Editor rail
 
 ## Context
 
