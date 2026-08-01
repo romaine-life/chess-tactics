@@ -176,7 +176,7 @@ export function PredrawnSourceArtworkPanel({
     setError(null);
     try {
       const fence = getEditFence();
-      if (!fence) throw new Error('Take over editing before saving a generation reference.');
+      if (!fence) throw new Error('Reload an owner editing page before saving a generation reference.');
       const blob = await predrawnReferencePngBlob(frameRef.current);
       await assertDecodablePngBlob(blob);
       const [sourceSha256, environmentGeometrySha256] = await Promise.all([

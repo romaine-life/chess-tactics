@@ -7,6 +7,8 @@ partially_supersedes:
   - "[ADR-0270](0270-run-card-ledgers-adapt-density-and-preserve-flavor.md)'s requirement to show every exact modifier target at every card state"
 partially_superseded_by:
   - "[ADR-0276](0276-run-type-lines-declare-primary-families-and-affected-qualifiers.md)'s primary-type and affected-qualifier type-line grammar"
+  - "[ADR-0305](0305-card-ability-properties-do-not-synthesize-description-text.md)'s removal of automatic ability-description projection"
+  - "[ADR-0309](0309-concinnous-names-the-white-positioned-card-qualifier.md)'s Concinnous name and exact one-unit Positioned scope"
 ---
 
 # ADR-0272: Card types author effects and may conceal unit targets

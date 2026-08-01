@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { readAdminBattleHref } from '../admin/battleRoute';
-import { useSkirmish, type AdminBattleMode } from '../game/store';
+import { type AdminBattleMode } from '../game/store';
+import { useSkirmish } from '../game/SkirmishStoreContext';
 import { authorizeAdminPlaytest } from '../net/adminPlaytest';
 import { acquireRelic, GOLD_SCALE, grantGold, PIECE_LABEL, RUN_RELIC_BY_ID, RUN_RELICS, type RunRelicId } from '../run/model';
 import { useActiveRun } from '../run/store';

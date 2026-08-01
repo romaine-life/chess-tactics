@@ -3,12 +3,14 @@ import { resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import { runCardArtSlot, runCardFlavor, runCardName } from '../run/cardNames';
 import {
   cardContentsLabel,
+  PIECE_LABEL,
   type PurchasablePieceType,
   type RunCardOffer,
   type RunCoreCard,
 } from '../run/model';
 import {
   RUN_CARD_FRAME_SLOT,
+  RUN_CARD_CONCINNOUS_FRAME_SLOT,
   RUN_CARD_PESTIFEROUS_FRAME_SLOT,
   RunCardFace,
   type RunCardFaceContent,
@@ -22,6 +24,16 @@ function grantsForCard(card: RunCoreCard): RunCardFaceContent['grants'] {
     const count = card.pieces.filter((piece) => piece === unit).length;
     return count > 0 ? [{ unit, count }] : [];
   });
+}
+
+function concinnousTargetLabel(card: RunCardOffer): string {
+  const targetIndex = card.effectTargetIndex;
+  if (!Number.isSafeInteger(targetIndex) || targetIndex === null || !card.pieces[targetIndex]) return 'Target unavailable';
+  const target = card.pieces[targetIndex];
+  const occurrences = card.pieces.filter((piece) => piece === target).length;
+  if (occurrences === 1) return PIECE_LABEL[target];
+  const ordinal = card.pieces.slice(0, targetIndex + 1).filter((piece) => piece === target).length;
+  return `${PIECE_LABEL[target]} ${ordinal}`;
 }
 
 // One trading-card face shared by the Studio instrument, opening shop, later shops,
@@ -45,17 +57,25 @@ export function RunCard({
   const artUrl = resolvedLiveMediaUrl(runCardArtSlot(card));
   const cardType = 'cardType' in card ? card.cardType : null;
   const frameUrl = resolvedLiveMediaUrl(
-    cardType === 'pestiferous' ? RUN_CARD_PESTIFEROUS_FRAME_SLOT : RUN_CARD_FRAME_SLOT,
+    cardType === 'pestiferous'
+      ? RUN_CARD_PESTIFEROUS_FRAME_SLOT
+      : cardType === 'concinnous'
+        ? RUN_CARD_CONCINNOUS_FRAME_SLOT
+        : RUN_CARD_FRAME_SLOT,
   );
   const cost = 'cost' in card ? card.cost : card.value;
   const faceContent = {
     name,
     cost,
-    typeLine: cardType === 'pestiferous' ? 'Units — Pestiferous' : 'Units',
+    typeLine: cardType === 'pestiferous'
+      ? 'Units — Pestiferous'
+      : cardType === 'concinnous'
+        ? 'Units — Concinnous'
+        : 'Units',
     grants: grantsForCard(card),
-    ...(cardType === 'pestiferous'
-      ? { rules: 'Each unit is Plagued. After every Battle, this card loses one random unit.' }
-      : {}),
+    properties: cardType === 'concinnous' && 'effectTargetIndex' in card
+      ? [{ name: 'Positioned', target: purchased ? concinnousTargetLabel(card) : 'Target hidden' }]
+      : undefined,
     flavor: runCardFlavor(card),
   } satisfies RunCardFaceContent;
   const face = (
@@ -76,7 +96,7 @@ export function RunCard({
       </span>
     );
   }
-  const actionLabel = `${purchased ? 'Purchased' : 'Buy'} ${name} — ${label} — for ${cost} gold`;
+  const actionLabel = `${purchased ? 'Purchased' : 'Buy'} ${name} — ${label} — for ${cost} gold${cardType === 'concinnous' && 'effectTargetIndex' in card ? ` — Positioned: ${purchased ? concinnousTargetLabel(card) : 'target hidden'}` : ''}`;
   return (
     <span className="run-card-offer">
       <button

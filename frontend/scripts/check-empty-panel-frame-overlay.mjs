@@ -488,8 +488,8 @@ const levelEditorCyclePickers = [...(levelEditor + levelEditorChromeConsumers).m
 const cyclePickerChevronButtons = [...cyclePicker.matchAll(/<ChromeButton\b[\s\S]*?<\/ChromeButton>/g)]
   .map((match) => match[0])
   .filter((block) => block.includes('unit="inner-chevron-key"'));
-if (levelEditorCyclePickers.length !== 4 || cyclePickerChevronButtons.length !== 2) {
-  failures.push('all eight previous/next Level Editor controls must use the concrete inner-chevron-key hierarchy leaf');
+if (levelEditorCyclePickers.length !== 3 || cyclePickerChevronButtons.length !== 2) {
+  failures.push('all six previous/next Level Editor controls must use the concrete inner-chevron-key hierarchy leaf');
 }
 if (!/unit\.id === 'inner-chevron-key'[\s\S]*?stepper-glyph stepper-chevron/.test(chromeUnitAudit)) {
   failures.push('Chrome Lab must render the real previous/next chevron-key specimen instead of a generic tool-square fallback');
@@ -1007,8 +1007,9 @@ if (!/<ShellControlsPanel[\s\S]*?className=\{className\}[\s\S]*?titleActions=\{s
   failures.push('live Skirmish HUD must supply content and actions to the one ShellControlsPanel owner');
 }
 if (!/export function SkirmishShell[\s\S]*?<SkirmishHud \{\.\.\.hudProps\} controlsContent=\{controlsContent\} \/>/.test(skirmish)
-  || !/export function Skirmish\b[\s\S]*?return \(\s*<SkirmishShell/.test(skirmish)) {
-  failures.push('Battle must render through the one SkirmishShell that owns SkirmishHud');
+  || !/function SkirmishSession\b[\s\S]*?return \([\s\S]*?<SkirmishShell/.test(skirmish)
+  || !/export function Skirmish\b[\s\S]*?<SkirmishStoreProvider>[\s\S]*?<SkirmishSession \{\.\.\.props\} \/>[\s\S]*?<\/SkirmishStoreProvider>/.test(skirmish)) {
+  failures.push('Battle must render through one instance-owned Skirmish session and the one SkirmishShell that owns SkirmishHud');
 }
 if (!/<SkirmishShell[\s\S]*?controlsContent=\{shellRun\s*\?\s*<RunMetaControls run=\{shellRun\} view=\{view\} onNavigate=\{navigateRunView\} showAbandon=\{shellRun\.phase !== 'victory'\} \/>\s*:\s*null\}/.test(runScreen)
   || !/function RunMetaControls[\s\S]*?<section className="run-meta-controls" aria-label="Run controls">/.test(runScreen)

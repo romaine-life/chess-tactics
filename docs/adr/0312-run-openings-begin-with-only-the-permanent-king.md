@@ -3,18 +3,18 @@ status: accepted
 date: 2026-08-01
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
-  - "[ADR-0307](0307-run-openings-use-two-pawns-eight-gold-and-card-native-purchase-feedback.md)'s restoration of two free starting Pawns"
-  - "[ADR-0306](0306-run-opening-is-the-normal-shop-and-draft-is-retired.md)'s retirement of draft-phase normalization"
+  - "[ADR-0314](0314-run-openings-use-two-pawns-eight-gold-and-card-native-purchase-feedback.md)'s restoration of two free starting Pawns"
+  - "[ADR-0313](0313-run-opening-is-the-normal-shop-and-draft-is-retired.md)'s retirement of draft-phase normalization"
 partially_supersedes:
   - "[ADR-0193](0193-runs-are-persistent-wars-around-unchanged-chess-battles.md)'s three free starting Pawns"
-  - "[ADR-0304](0304-run-openings-spend-nine-gold-on-one-of-three-seeded-cards.md)'s retained three starting Pawns"
+  - "[ADR-0311](0311-run-openings-spend-nine-gold-on-one-of-three-seeded-cards.md)'s retained three starting Pawns"
 ---
 
-# ADR-0305: Run openings begin with only the permanent King
+# ADR-0312: Run openings begin with only the permanent King
 
 ## Context and Problem Statement
 
-ADR-0304 made the opening card a real purchase, but retained the original three
+ADR-0311 made the opening card a real purchase, but retained the original three
 free Pawns. Those guaranteed units still anchor every opening to the same roster
 and blunt the variation created by the three-card deal. The owner wants the
 selected card to determine the complete non-royal starting party.
@@ -41,13 +41,13 @@ unit from the one purchased card.**
 - A fresh Run's pre-purchase army contains exactly `run-king`; it contains no
   free Pawns or other non-King units.
 - The Run still begins with 9 gold and three seeded, persisted, distinct-valued
-  card offers under ADR-0304. Buying exactly one card supplies the complete
+  card offers under ADR-0311. Buying exactly one card supplies the complete
   non-King starting party, and unspent gold still carries forward.
 - Pawn numbering begins at one when the first purchased card supplies a Pawn.
 - Active Run format 7 owns the King-only opening. When an older document is
   still at the unchosen opening, normalization removes only legacy Pawns whose
   source is `starting` and resets the next Pawn number. A format-5 opening also
-  receives ADR-0304's 9-gold deal; a format-6 opening keeps its existing budget
+  receives ADR-0311's 9-gold deal; a format-6 opening keeps its existing budget
   and deal rather than receiving the budget twice.
 - A Run that already chose its opening card keeps its complete committed army,
   including any legacy free starting Pawns.
@@ -62,12 +62,12 @@ unit from the one purchased card.**
   baseline sits outside the displayed card value.
 - Good: committed Runs remain stable across the format change.
 - Cost: a one-gold opening card can lead to a King-and-Pawn first roster, so
-  first Battles must support the full opening range promised by ADR-0304.
+  first Battles must support the full opening range promised by ADR-0311.
 - Cost: an uncommitted legacy opening loses its three free Pawns on first
   normalization.
 
 ## More Information
 
-- [ADR-0304](0304-run-openings-spend-nine-gold-on-one-of-three-seeded-cards.md)
+- [ADR-0311](0311-run-openings-spend-nine-gold-on-one-of-three-seeded-cards.md)
 - [Game concept](../game-concept.md)
 - [Persistence](../persistence.md)

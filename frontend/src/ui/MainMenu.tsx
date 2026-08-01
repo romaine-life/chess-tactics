@@ -23,7 +23,7 @@ const CampaignEditor = lazy(() => import('./CampaignEditor').then((m) => ({ defa
 import { drawableAssets, requiredDrawableRole } from '@chess-tactics/board-render';
 import { useStartupScene } from './shell/startupScene';
 import { installedUiMedia } from './installedUiMedia';
-import { sceneTransitionTargetAttributes } from './shell/sceneTransitionTarget';
+import { MenuDestinationSceneSlot } from './shell/AuthoredSceneSlot';
 
 const BRAND_SHIELD = () => installedUiMedia('ui-kit-icons-brand-shield-png');
 // The title bar's wooden surface — gate the title layer on it (plus the brand shield)
@@ -165,10 +165,9 @@ export function MainMenu({
                 skirmish tab to the hub root) and the tab must still light. */}
             {MENU_TABS.map((tab, index) => <ModeTab key={tab.slug} tab={tab} index={index} active={dest !== null && shellDest(tab.href) === dest} />)}
           </aside>
-          <div
+          <MenuDestinationSceneSlot
             className="menu-dest"
-            {...sceneTransitionTargetAttributes('menu-shell')}
-            data-scene-instance={sceneInstanceKey}
+            sceneInstance={sceneInstanceKey}
             key={dest ?? 'home'}
             aria-label={dest ? DEST_LABEL[dest] : 'Main menu destination'}
           >
@@ -193,7 +192,7 @@ export function MainMenu({
                   : <CampaignEditor embedded path={path} search={search} sceneInstanceKey={sceneInstanceKey} />
                 : null}
             </Suspense>
-          </div>
+          </MenuDestinationSceneSlot>
         </ArtRouteChrome>
       </div>
     </div>

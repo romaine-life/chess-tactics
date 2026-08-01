@@ -1034,7 +1034,7 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   const checkModeProof = sourceSection(
     smokeSource,
     'const secondaryReadyLine = secondaryOutput',
-    '\n    processClaims = await Promise.all([',
+    '\n    secondaryChild.kill();',
   );
   assert.match(
     checkModeProof,

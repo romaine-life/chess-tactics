@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { useCampaigns } from '../campaign/store';
 import type { Level } from '../core/level';
-import { fetchMe, goSignIn, isUnauthorized, type AuthUser } from '../net/auth';
+import { goSignIn } from '../net/auth';
+import { reportAuthSessionFailure, useAuthSession } from '../net/authSession';
 import {
   createLobby,
   fetchLobbies,
@@ -143,10 +144,19 @@ function LevelPicker({ current, selectedId, onPick }: { current: Lobby; selected
 // Live: a subscribeLobbies SSE stream re-runs refresh() on any lobby mutation, so
 // the host sees the guest join without hitting Refresh (the manual button stays too).
 export function Lobbies({ embedded = false }: { embedded?: boolean } = {}) {
-  const [me, setMe] = useState<AuthUser | null>(null);
+  const sharedAuthStatus = useAuthSession((session) => session.status);
+  const authIdentityKey = sharedAuthStatus?.reachable
+    ? `${sharedAuthStatus.user.signed_in}:${sharedAuthStatus.user.email ?? ''}`
+    : null;
+  const me = sharedAuthStatus?.reachable ? sharedAuthStatus.user : null;
   const [data, setData] = useState<LobbyList | null>(null);
   const [status, setStatus] = useState('');
-  const [identityError, setIdentityError] = useState<Error | null>(null);
+  const identityError = useMemo(
+    () => sharedAuthStatus?.reachable === false
+      ? new Error('Account service is temporarily unavailable.')
+      : null,
+    [sharedAuthStatus?.reachable],
+  );
   const lobbyLoadError = useMemo(
     () => identityError ?? (status.startsWith('Error:') ? new Error(status) : null),
     [identityError, status],
@@ -181,19 +191,19 @@ export function Lobbies({ embedded = false }: { embedded?: boolean } = {}) {
       setStatus('');
     } catch (e) {
       if (generation !== refreshGenerationRef.current) return;
-      if (isUnauthorized(e)) setData(null);
+      if (reportAuthSessionFailure(e)) setData(null);
       else setStatus(`Error: ${(e as Error).message}`);
     }
   };
 
   useEffect(() => {
+    if (!sharedAuthStatus?.reachable) return undefined;
     let active = true;
     let unsubscribe: (() => void) | null = null;
-    fetchMe().then((u) => {
-      if (!active) return;
-      setMe(u);
+    const u = sharedAuthStatus.user;
+    if (active) {
       if (u.signed_in) {
-        refresh();
+        void refresh();
         // Live list: refetch on every server-side lobby mutation (create/join/leave/
         // start/level) and on every (re)connect. THIS is the fix for "host doesn't see
         // the guest join".
@@ -203,11 +213,9 @@ export function Lobbies({ embedded = false }: { embedded?: boolean } = {}) {
         // otherwise the cleanup closed over a still-null ref and the stream would leak.
         if (!active) { unsubscribe(); unsubscribe = null; }
       }
-    }).catch((error: unknown) => {
-      if (active) setIdentityError(error instanceof Error ? error : new Error(String(error)));
-    });
+    }
     return () => { active = false; unsubscribe?.(); };
-  }, []);
+  }, [authIdentityKey]);
 
   // Guest auto-launch: once the host starts, the current lobby flips to phase
   // 'started'; the guest jumps to the board. Guarded to fire only once.
@@ -222,7 +230,7 @@ export function Lobbies({ embedded = false }: { embedded?: boolean } = {}) {
 
   const act = (fn: () => Promise<unknown>) => async () => {
     try { await fn(); await refresh(); }
-    catch (e) { if (isUnauthorized(e)) { goSignIn(); return; } setStatus(`Error: ${(e as Error).message}`); }
+    catch (e) { if (reportAuthSessionFailure(e)) { goSignIn(); return; } setStatus(`Error: ${(e as Error).message}`); }
   };
 
   const pickLevel = (levelId: string) => act(async () => {

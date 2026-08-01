@@ -8,7 +8,7 @@ import type { GameState, Move, Piece, Side, TerrainType, UnitFacing, Vec } from 
 import { attackedSquares, blockedCandidateSquares, enemyThreats, legalMoves, livingPieces } from '../core/rules';
 import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, UNIT_FACINGS, defaultFacingForSide, paletteForSide, pieceSpritePath, type PlayablePieceType } from '../core/pieces';
 import { defaultTerrainFamily, familyForGameplayTerrain, familyIdForAsset, tileSocketsForAsset, type TileFamilyId } from '../core/tileSockets';
-import { useSkirmish } from '../game/store';
+import { useSkirmish } from '../game/SkirmishStoreContext';
 import { adminMoveTargets } from '../game/adminBattle';
 import { useSkirmishView } from '../game/skirmishView';
 import { PLAYER_TECHNICAL_MINIMUM_ZOOM } from '../game/boardCameraPolicy';
@@ -1108,6 +1108,7 @@ export function SkirmishBoard({
   onSurfaceReady,
   onSurfaceError,
   reveal = true,
+  activate = reveal,
 }: {
   interactive?: boolean;
   predrawnReview?: {
@@ -1117,6 +1118,7 @@ export function SkirmishBoard({
   onSurfaceReady?: (ready: boolean) => void;
   onSurfaceError?: (error: Error | null) => void;
   reveal?: boolean;
+  activate?: boolean;
 } = {}) {
   // Board-view state lives in the shared view store so the HUD's "View" tab owns
   // the controls and the playfield stays clean of floating buttons.
@@ -1379,11 +1381,11 @@ export function SkirmishBoard({
   const [arrivalDone, setArrivalDone] = useState(false);
   useEffect(() => { setArrivalDone(false); }, [boardArt.signature]);
   useEffect(() => {
-    if (!boardReady || arrivalDone) return undefined;
+    if (!boardVisible || !activate || arrivalDone) return undefined;
     const done = window.setTimeout(() => setArrivalDone(true), ARRIVAL_TOTAL_MS);
     return () => window.clearTimeout(done);
-  }, [boardReady, arrivalDone]);
-  const arriving = boardReady && !arrivalDone;
+  }, [activate, boardVisible, arrivalDone]);
+  const arriving = boardVisible && activate && !arrivalDone;
   const focusPiece = useMemo(
     () => livePieces.find((piece) => piece.id === focusedId) ?? livePieces.find((piece) => piece.id === selectedId) ?? null,
     [focusedId, livePieces, selectedId],
@@ -1746,6 +1748,7 @@ export function SkirmishBoard({
     <div
       data-testid="skirmish-board"
       data-interactive={interactive ? 'true' : 'false'}
+      data-arriving={arriving ? 'true' : 'false'}
       data-painted-layers={boardFrame.paintedLayers.join(',')}
       aria-busy={!boardVisible && !boardFrame.error ? true : undefined}
       inert={!boardVisible && !boardFrame.error ? true : undefined}

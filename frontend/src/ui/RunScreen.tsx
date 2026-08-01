@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
-import { useSkirmish, setRunBattleTransformSink } from '../game/store';
+import type { RunBattleTransformSink } from '../game/store';
 import { defaultFacingForSide } from '../core/pieces';
 import type { GameState, Piece } from '../core/types';
 import { LevelPreviewColumn } from './LevelPreviewColumn';
@@ -10,6 +10,8 @@ import { TitleBarStatus } from './shell/TitleBarControls';
 import { PLAY_RUN_SELECTOR_HREF } from './playHubRoute';
 import { Skirmish, SkirmishShell, type RunBattlePresentation } from './Skirmish';
 import { navigateApp } from './navigation';
+import type { RunSceneSnapshot } from './shell/sceneManifest';
+import { RunPresentationSceneSlot } from './shell/AuthoredSceneSlot';
 import { useConfirm } from './shared/ConfirmDialog';
 import { RunWorkspace } from './RunWorkspace';
 import {
@@ -49,10 +51,10 @@ import { useActiveRun } from '../run/store';
 import { RunRelicIcon, RunRelicsWorkspace } from './RunRelics';
 import { RunGoldAmount } from './RunResources';
 import {
-  runSelfInspectionHref,
-  runSelfInspectionViewFromSearch,
+  runWorkspaceHref,
   RunSelfInspectionControls,
   type RunSelfInspectionView,
+  type RunWorkspaceView,
 } from './RunSelfInspection';
 import {
   DEFAULT_RUN_ARMY_FILTERS,
@@ -64,15 +66,10 @@ import {
   type RunArmyFilters,
   type RunSellFilters,
 } from './RunArmyWorkspace';
-import { RunWorkspaceStages } from './RunWorkspaceStages';
 import { RunCard } from './RunCard';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 
-type RunScreenView = 'primary' | 'sell' | RunSelfInspectionView;
-// The hydration placeholder only ever exists beneath the route's own entrance gate,
-// so swapping away from it needs no in-place choreography.
-const RUN_HYDRATING_STAGE = 'run:hydrating';
-const RUN_STAGE_PLACEHOLDERS = [RUN_HYDRATING_STAGE] as const;
+type RunScreenView = RunWorkspaceView;
 
 function visibleRunRelicCount(run: RunDocument): number {
   return run.relics.filter((relicId) => Boolean(RUN_RELIC_BY_ID[relicId])).length;
@@ -635,8 +632,7 @@ function BattlePanel({
   const relicIds = run.relics;
   const canCashOutPawn = hasRelic(run, 'mercenary-boat');
 
-  useEffect(() => {
-    setRunBattleTransformSink((game, _events) => {
+  const transformCommittedBoard = useCallback<RunBattleTransformSink>((game, _events) => {
       let active = useActiveRun.getState().run;
       if (!active || active.phase !== 'battle' || active.id !== run.id || !active.battleRuntime) return game;
       const observedDeadUnitIds = active.battleRuntime.observedDeadUnitIds;
@@ -678,8 +674,6 @@ function BattlePanel({
       }
       if (changed) useActiveRun.getState().replace(active);
       return transformed;
-    });
-    return () => setRunBattleTransformSink(null);
   }, [baseLevel, run.id]);
 
   const presentation = useMemo<RunBattlePresentation>(() => ({
@@ -687,6 +681,7 @@ function BattlePanel({
     seed: battleSeed,
     activityId: runBattleActivityId(runId, run.battleIndex),
     relicIds,
+    transformCommittedBoard,
     onVictory: (survivors) => {
       const latest = useActiveRun.getState().run;
       if (latest?.id === runId) replace(openShop(latest, survivors));
@@ -702,7 +697,7 @@ function BattlePanel({
           if (latest?.id === runId) replace(cashOutPawn(latest, unitId));
         }
       : undefined,
-  }), [battleLevel, battleSeed, canCashOutPawn, relicIds, replace, requestAbandon, run.battleIndex, runId]);
+  }), [battleLevel, battleSeed, canCashOutPawn, relicIds, replace, requestAbandon, run.battleIndex, runId, transformCommittedBoard]);
 
   // Subscribe to the current document so a Paid Crossing cash-out or Reservist event
   // refreshes the hook inputs without restarting the already-live matching board.
@@ -723,15 +718,16 @@ function BattlePanel({
 }
 
 export function RunScreen({
+  sceneSnapshot,
   routePath = window.location.pathname,
   routeSearch = window.location.search,
 }: {
+  sceneSnapshot: RunSceneSnapshot;
   routePath?: string;
   routeSearch?: string;
-} = {}): ReactElement {
-  const run = useActiveRun((state) => state.run);
-  const hydrated = useActiveRun((state) => state.hydrated);
-  const hydrate = useActiveRun((state) => state.hydrate);
+}): ReactElement {
+  const run = sceneSnapshot.run;
+  const hydrated = sceneSnapshot.hydrated;
   const replace = useActiveRun((state) => state.replace);
   const viewScope = run
     ? `${run.id}:${run.phase}:${run.phase === 'shop' ? run.shop?.afterBattleIndex ?? run.battleIndex : run.battleIndex}`
@@ -741,10 +737,6 @@ export function RunScreen({
     : run
       ? `${run.id}:outside-shop`
       : 'no-run';
-  const [viewState, setViewState] = useState<{ scope: string; view: RunScreenView }>({
-    scope: 'no-run',
-    view: 'primary',
-  });
   const [selectedState, setSelectedState] = useState<{ scope: string; unitId: string | null }>({
     scope: 'no-run',
     unitId: null,
@@ -757,26 +749,22 @@ export function RunScreen({
     scope: 'no-run',
     filters: { ...DEFAULT_RUN_SELL_FILTERS },
   });
-  const requestedInspectionView = runSelfInspectionViewFromSearch(
-    typeof window === 'undefined' ? '' : window.location.search,
-  );
-  useEffect(() => { void hydrate(); }, [hydrate]);
   useEffect(() => {
     if (
       hydrated
       && routePath.startsWith('/run/strategikon/')
-      && run?.phase !== 'battle'
+      && sceneSnapshot.phase !== 'battle'
     ) {
       navigateApp(`/run${routeSearch}`, { replace: true, scroll: false });
     }
-  }, [hydrated, routePath, routeSearch, run?.phase]);
+  }, [hydrated, routePath, routeSearch, sceneSnapshot.phase]);
 
   // The pre-hydration document may exist from browser storage, but the screen treats
   // the Run as absent until hydrate() has arbitrated browser and account copies.
   const shellRun = hydrated ? run : null;
-  const rawView = viewState.scope === viewScope
-    ? viewState.view
-    : requestedInspectionView ?? 'primary';
+  const rawView: RunScreenView = sceneSnapshot.workspace === 'strategikon'
+    ? 'primary'
+    : sceneSnapshot.workspace;
   const view = shellRun?.phase !== 'shop' && rawView === 'sell' ? 'primary' : rawView;
   const selectedUnitId = selectedState.scope === viewScope ? selectedState.unitId : null;
   const armyFilters = armyFilterState.scope === filterScope
@@ -786,10 +774,8 @@ export function RunScreen({
     ? sellFilterState.filters
     : { ...DEFAULT_RUN_SELL_FILTERS };
   const navigateRunView = (nextView: RunScreenView): void => {
-    const nextInspectionView = nextView === 'army' || nextView === 'relics' ? nextView : null;
-    const nextHref = runSelfInspectionHref(window.location.href, nextInspectionView);
-    window.history.replaceState(window.history.state, '', nextHref);
-    setViewState({ scope: viewScope, view: nextView });
+    const nextHref = runWorkspaceHref(window.location.href, nextView);
+    navigateApp(nextHref, { replace: true, scroll: false });
     if (nextView !== 'army') setSelectedState({ scope: viewScope, unitId: null });
   };
   const sellUnit = (unitId: string): void => {
@@ -827,19 +813,21 @@ export function RunScreen({
   ) : null;
   if (shellRun?.phase === 'battle') {
     return (
-      <BattlePanel
-        run={shellRun}
-        routePath={routePath}
-        routeSearch={routeSearch}
-        view={view}
-        onNavigate={navigateRunView}
-        inspectionWorkspace={inspectionWorkspace}
-      />
+      <RunPresentationSceneSlot
+        className="run-scene-slot"
+        sceneInstance={`${shellRun.id}:${shellRun.phase}:${shellRun.battleIndex}:${sceneSnapshot.workspace}`}
+      >
+        <BattlePanel
+          run={shellRun}
+          routePath={routePath}
+          routeSearch={routeSearch}
+          view={view}
+          onNavigate={navigateRunView}
+          inspectionWorkspace={inspectionWorkspace}
+        />
+      </RunPresentationSceneSlot>
     );
   }
-  // Every non-Battle destination shares ONE persistent shell: title-bar status, relic
-  // strip, and the Controls rail stay mounted across phase changes, while the staged
-  // workspace host below choreographs the only part that actually changes.
   const workspace = !hydrated
     ? (
       <RunWorkspace
@@ -874,26 +862,27 @@ export function RunScreen({
           : shellRun.phase === 'shop' && shellRun.shop
             ? <ShopPanel run={shellRun} view={view} sellWorkspace={sellWorkspace!} />
             : <VictoryPanel run={shellRun} />;
-  const stageKey = !hydrated ? RUN_HYDRATING_STAGE : shellRun ? viewScope : 'run:none';
   return (
-    <SkirmishShell
-      className={`run-screen${shellRun && visibleRunRelicCount(shellRun) ? ' has-relics' : ''}`}
-      testId="run-screen"
-      ownsGameplaySceneTarget
-      titleBarContent={shellRun ? <RunTitleBarStatus run={shellRun} /> : null}
-      relicIds={shellRun ? shellRun.relics : []}
-      shellWorkspaceCoversRelics={Boolean(inspectionWorkspace)}
-      controlsContent={shellRun
-        ? <RunMetaControls run={shellRun} view={view} onNavigate={navigateRunView} showAbandon={shellRun.phase !== 'victory'} />
-        : null}
-      readyToCompose={hydrated}
-      hudProps={{ enableGlobalShortcuts: false }}
+    <RunPresentationSceneSlot
+      className="run-scene-slot"
+      sceneInstance={`${shellRun?.id ?? 'none'}:${sceneSnapshot.phase}:${sceneSnapshot.workspace}`}
     >
-      <RunPhaseWorkspace inspectionWorkspace={inspectionWorkspace}>
-        <RunWorkspaceStages stageKey={stageKey} placeholderKeys={RUN_STAGE_PLACEHOLDERS}>
+      <SkirmishShell
+        className={`run-screen${shellRun && visibleRunRelicCount(shellRun) ? ' has-relics' : ''}`}
+        testId="run-screen"
+        titleBarContent={shellRun ? <RunTitleBarStatus run={shellRun} /> : null}
+        relicIds={shellRun ? shellRun.relics : []}
+        shellWorkspaceCoversRelics={Boolean(inspectionWorkspace)}
+        controlsContent={shellRun
+          ? <RunMetaControls run={shellRun} view={view} onNavigate={navigateRunView} showAbandon={shellRun.phase !== 'victory'} />
+          : null}
+        readyToCompose={hydrated}
+        hudProps={{ enableGlobalShortcuts: false }}
+      >
+        <RunPhaseWorkspace inspectionWorkspace={inspectionWorkspace}>
           {workspace}
-        </RunWorkspaceStages>
-      </RunPhaseWorkspace>
-    </SkirmishShell>
+        </RunPhaseWorkspace>
+      </SkirmishShell>
+    </RunPresentationSceneSlot>
   );
 }

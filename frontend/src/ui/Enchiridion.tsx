@@ -22,8 +22,8 @@ import { RunRelicIcon } from './RunRelics';
 import { ApparatusRailTab } from './shared/ApparatusRailTab';
 import { InnerChromeBox, OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
 import { NavButton } from './shared/NavButton';
-import { sceneTransitionTargetAttributes } from './shell/sceneTransitionTarget';
 import { ChromeButton } from './shared/ChromeButton';
+import { EnchiridionContentSceneSlot } from './shell/AuthoredSceneSlot';
 
 const SECTION_LABEL: Record<EnchiridionSection, string> = {
   units: 'Units',
@@ -523,7 +523,7 @@ function AbilitiesSection({ framed }: { framed: boolean }): ReactElement {
       chromeConsumer="enchiridion-abilities"
       className="enchiridion-abilities-panel"
       framed={framed}
-      title="Unit Abilities"
+      title="Unit Abilities & Card Qualifiers"
     >
       <div className="enchiridion-ability-list">
         <InnerChromeBox className="enchiridion-ability-card">
@@ -545,6 +545,13 @@ function AbilitiesSection({ framed }: { framed: boolean }): ReactElement {
           <span>
             <h3>Marshalled</h3>
             <p>The unit seeks its piece-specific station: the King prefers a board edge, Rooks favor their King-flank and corner formation, and Bishops prefer the opposite square color from another Bishop.</p>
+          </span>
+        </InnerChromeBox>
+        <InnerChromeBox className="enchiridion-ability-card">
+          <span className="skirmish-icon skirmish-icon-move" aria-hidden="true" />
+          <span>
+            <h3>Concinnous</h3>
+            <p>Skillfully and harmoniously arranged; elegantly fitted together. Upon acquisition, one unit on this card becomes Positioned.</p>
           </span>
         </InnerChromeBox>
       </div>
@@ -609,10 +616,9 @@ export function Enchiridion({
           ))}
         </aside>
       ) : null}
-      <main
+      <EnchiridionContentSceneSlot
         className="enchiridion-content"
-        {...sceneTransitionTargetAttributes('enchiridion-shell')}
-        data-scene-instance={sceneInstanceKey}
+        sceneInstance={sceneInstanceKey}
       >
         <EnchiridionContent
           section={section}
@@ -622,7 +628,7 @@ export function Enchiridion({
           selectedCardId={selectedCardId}
           cardHref={cardHref}
         />
-      </main>
+      </EnchiridionContentSceneSlot>
     </div>
   );
 }

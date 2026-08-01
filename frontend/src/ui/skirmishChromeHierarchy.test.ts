@@ -180,7 +180,7 @@ describe('Skirmish chrome hierarchy', () => {
   it('maps tabs, promotion choices, and command-grid cells to existing units', () => {
     const promotion = buttonUsing('choosePromotion(type)');
     const tab = buttonUsing('setTab(t.id)');
-    const commandKey = buttonUsing('runSkirmishShortcut(key)');
+    const commandKey = buttonUsing('runSkirmishShortcut(key, false, skirmishStore)');
 
     expectChromeUnit(promotion, 'inner-asset-swatch');
     expectChromeUnit(tab, 'inner-text-button');

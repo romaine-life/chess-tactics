@@ -19,6 +19,7 @@ export interface SceneState {
 
 export type SceneAction =
   | { type: 'navigate'; destination: ScenePath; href: string }
+  | { type: 'refresh-source'; scene: ScenePath }
   | { type: 'exit-finished'; generation: number }
   | { type: 'empty-slot-committed'; generation: number }
   | { type: 'destination-painted'; generation: number }
@@ -55,6 +56,15 @@ export function initialSceneState(
  * to the latest destination generation.
  */
 export function reduceScene(state: SceneState, action: SceneAction): SceneState {
+  if (action.type === 'refresh-source') {
+    if (state.phase === 'current' && action.scene.id === state.current.id) {
+      return { ...state, current: action.scene };
+    }
+    if (state.destination && action.scene.id === state.destination.id) {
+      return { ...state, destination: action.scene };
+    }
+    return state;
+  }
   if (action.type === 'startup-ready') {
     if (!state.startupActive || action.generation !== state.generation || state.startupReady.includes(action.layer)) return state;
     return { ...state, startupReady: [...state.startupReady, action.layer] };
@@ -76,9 +86,14 @@ export function reduceScene(state: SceneState, action: SceneAction): SceneState 
   }
   if (action.type === 'navigate') {
     if (state.startupActive) return state;
-    if (action.destination.id === state.current.id && state.phase === 'current') return state;
+    if (action.destination.id === state.current.id && state.phase === 'current') {
+      return { ...state, current: action.destination };
+    }
     if (state.destination && action.destination.id === state.destination.id) {
-      if (action.href === state.destinationHref) return state;
+      if (action.href === state.destinationHref) {
+        if (action.destination === state.destination) return state;
+        return { ...state, destination: action.destination };
+      }
       // A preparing scene may canonicalize its own address after resolving durable identity
       // (Level Editor: levelId -> opaque document). Keep the already-faded outgoing scene and
       // retarget acquisition in place; returning to `exiting` would visibly replay backwards.

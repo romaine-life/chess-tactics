@@ -4,7 +4,7 @@
 // imported here. Shared board core (tile families, the animation clock, the facing
 // compass, the per-frame src) comes from ./studioBoard.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react';
-import { BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM, boardBackgroundMode, boardBounds, cameraToContainBounds, defaultBoardCameraBounds, defaultSubterrainMaterial, isVersionedPredrawnBoardSurface, MAX_FLOATING_ARTWORK_PIXEL, normalizeBoardCameraBounds, predrawnEnvironmentGeometryFingerprintInputV2, predrawnVisualFootprintClipStyleForCell, resolvedBoardCameraBounds, resolveTerrainSideExposure, resolveTerrainSideFaces, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, type BoardBackgroundMode, type BoardCameraBounds, type BoardCameraSnapMode, type PredrawnGenerationFrame, type SubterrainMaterial, type SubterrainPlacementMap, type TerrainSideMaterials, type VersionedPredrawnBoardSurface } from '@chess-tactics/board-render';
+import { BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM, boardBackgroundMode, boardBounds, cameraToContainBounds, defaultBoardCameraBounds, defaultSubterrainMaterial, isVersionedPredrawnBoardSurface, MAX_FLOATING_ARTWORK_PIXEL, mergeSharedLevel, normalizeBoardCameraBounds, predrawnEnvironmentGeometryFingerprintInputV2, predrawnVisualFootprintClipStyleForCell, resolvedBoardCameraBounds, resolveTerrainSideExposure, resolveTerrainSideFaces, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, type BoardBackgroundMode, type BoardCameraBounds, type BoardCameraSnapMode, type PredrawnGenerationFrame, type SubterrainMaterial, type SubterrainPlacementMap, type TerrainSideMaterials, type VersionedPredrawnBoardSurface } from '@chess-tactics/board-render';
 import { boardLabCellPosition, boardLabMetrics, immutableBoardLabTerrainSrc } from '../render/BoardLabBoard';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { FloatingArtworkSprite, PropSprite, propHalfSrc } from '../render/BoardStructure';
@@ -70,7 +70,7 @@ import {
   type LevelEditorLayerKey,
   type PlacedArtBrushKind,
 } from './levelEditorRoute';
-import { APP_NAVIGATION_EVENT, navigateApp, registerAppNavigationBlocker } from './navigation';
+import { navigateApp, registerAppNavigationBlocker, replaceAppHistoryState, subscribeAppLocation } from './navigation';
 import { levelEditorWallFaceGeometry } from './levelEditorWallFace';
 import { levelEditorExitAction } from './levelEditorExit';
 import { currentDoodadAssets, defaultDoodadAsset, doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
@@ -164,16 +164,7 @@ import {
 } from './levelEditorDraft';
 import {
   levelEditorClientLabel,
-  levelEditorSessionActorLabel,
-  levelEditorSessionPresenceDetail,
-  levelEditorSessionServerNow,
 } from './levelEditorSessionPresentation';
-import {
-  serverRecoveryCursorAfterRemoval,
-  serverRecoveryCursorIndex,
-  serverRecoveryReasonLabel,
-  stepServerRecoveryCursor,
-} from './levelEditorRecoveryBrowser';
 import { levelEditorLevelSignature, normalizedLevelEditorSignature } from './levelEditorSignature';
 import { levelEditorRouteIdentity } from './levelEditorRouteIdentity';
 import {
@@ -249,16 +240,14 @@ import type { GameState, Move, Piece, Vec } from '../core/types';
 import { OBJECTIVE_LABEL } from '../core/objectives';
 import { VictoryConditionsEditor, appendRules, rulesEqual, type FactionOption } from './VictoryConditionsEditor';
 import { tierOf, mapSaveError } from '../campaign/save';
-import { fetchMeStatus, goSignIn, signInHref, type AuthUser } from '../net/auth';
+import { goSignIn, signInHref } from '../net/auth';
+import { reportAuthSessionFailure, useAuthSession } from '../net/authSession';
 import { fetchAdminLiveMediaCatalog, type AdminLiveMediaCatalog } from '../net/liveMediaAdmin';
 import {
   autosaveEditorDocument,
   autosaveEditorDocumentOnPageHide,
-  appendDisplacedEditorDocumentRecovery,
   closeEditorDocumentEditSession,
   createEditorDocument,
-  deleteEditorDocumentRecoveries,
-  deleteEditorDocumentRecovery,
   discardEditorDocumentChanges,
   heartbeatEditorDocumentEditSession,
   isEditorDocumentBaselineConflict,
@@ -267,20 +256,16 @@ import {
   isEditorDocumentEditSessionError,
   loadEditorDocument,
   loadEditorDocumentEditPresence,
-  listEditorDocumentRecoveries,
   openEditorDocumentEditSession,
   resolveEditorDocument,
   restoreEditorDocumentRevision,
-  restoreEditorDocumentRecovery,
   saveEditorDocument,
-  takeOverEditorDocumentEditSession,
   type EditorDocument,
   type EditorDocumentRevisionSummary,
   type EditorDocumentEditFence,
   type EditorDocumentEditPresence,
   type EditorDocumentEditSession,
   type EditorDocumentEditSessionResult,
-  type EditorDocumentRecovery,
 } from '../net/editorDocuments';
 import { consumeNewBuildReloadIntent } from '../net/appUpdate';
 import { OBJECTIVE_TYPES, ZONE_COLORS, type CastleEventAction, type ChessDrawsEventAction, type ConditionSide, type Level, type LevelEvent, type LevelEventAction, type LevelEvents, type ObjectiveType, type VictoryRules, type ZoneColor, type ZoneType } from '../core/level';
@@ -305,9 +290,9 @@ type MoveSubject =
 
 type FencePaintTarget = 'rail' | 'post';
 type FenceVertexCorner = 'back' | 'right' | 'front' | 'left';
-type LevelEditorAuthorityState = 'not-applicable' | 'checking' | 'writer' | 'follower' | 'takeover-pending' | 'displaced' | 'reviewer' | 'error';
+type LevelEditorAuthorityState = 'not-applicable' | 'checking' | 'writer' | 'follower' | 'displaced' | 'reviewer' | 'error';
 
-type LevelEditorBrowserRecoveryConflict = {
+type LevelEditorLocalFallbackSnapshot = {
   source: 'browser' | 'route';
   draft: LevelEditorDraft;
   level: Level;
@@ -320,7 +305,7 @@ type LevelEditorBrowserRecoveryConflict = {
 };
 
 const EDIT_SESSION_HEARTBEAT_MS = 20_000;
-const EDIT_SESSION_PRESENCE_POLL_MS = 10_000;
+const EDITOR_SHARED_SYNC_POLL_MS = 1_000;
 const OFFLINE_LEVEL_EDITOR_OWNER = 'offline-browser@local.invalid';
 
 const SCENIC_TERRAIN_EXTENT_BY_BOARD_EDGE = {
@@ -2442,7 +2427,7 @@ const LEVEL_EDITOR_LAYER_OPTIONS: ReadonlyArray<{ id: LayerKey; label: string }>
   { id: 'zone', label: 'Zone' },
   { id: 'rules', label: 'Rules' },
   { id: 'status', label: 'Status' },
-  { id: 'recovery', label: 'Recovery' },
+  { id: 'history', label: 'History' },
 ];
 const isLayerOptionDisabled = (_layer: LayerKey): boolean => false;
 const LEVEL_EDITOR_LAYER_SELECT_OPTIONS = LEVEL_EDITOR_LAYER_OPTIONS.map((option) => ({
@@ -2470,12 +2455,12 @@ function perimeterWallArt(placements: Record<string, WallArtId> | undefined, col
   }
   return next;
 }
-// Workspace/rules/status/recovery pages and Generate are non-painting layers → select tool.
+// Workspace/rules/status/history pages and Generate are non-painting layers → select tool.
 const toolForLayer = (layer: LayerKey): 'select' | 'brush' => (
   layer === 'board'
   || layer === 'camera'
   || layer === 'status'
-  || layer === 'recovery'
+  || layer === 'history'
   || layer === 'rules'
   || layer === 'generate'
   || layer === 'level-artwork'
@@ -2483,7 +2468,7 @@ const toolForLayer = (layer: LayerKey): 'select' | 'brush' => (
 const brushKindForInitialLayer = (layer: LayerKey): BrushKind => {
   if (layer === 'paths') return 'road';
   if (layer === 'placed-art') return 'artwork';
-  if (layer === 'board' || layer === 'camera' || layer === 'status' || layer === 'recovery' || layer === 'rules' || layer === 'generate' || layer === 'level-artwork') return 'tile';
+  if (layer === 'board' || layer === 'camera' || layer === 'status' || layer === 'history' || layer === 'rules' || layer === 'generate' || layer === 'level-artwork') return 'tile';
   return layer as BrushKind;
 };
 const brushKindForRouteState = (layer: LayerKey, kind: BrushKind | undefined): BrushKind => {
@@ -2679,18 +2664,6 @@ export function LevelEditor(): ReactElement {
   const [editAuthorityState, setEditAuthorityState] = useState<LevelEditorAuthorityState>('checking');
   const [editSession, setEditSession] = useState<EditorDocumentEditSession | null>(null);
   const [editPresence, setEditPresence] = useState<EditorDocumentEditPresence | null>(null);
-  const [serverRecoveries, setServerRecoveries] = useState<EditorDocumentRecovery[]>([]);
-  const [selectedServerRecoveryId, setSelectedServerRecoveryId] = useState<string | null>(null);
-  const [serverRecoveryBusyId, setServerRecoveryBusyId] = useState<string | null>(null);
-  const [serverRecoveryCleanupCount, setServerRecoveryCleanupCount] = useState<number | null>(null);
-  const [editorAttentionFocusRequest, setEditorAttentionFocusRequest] = useState(0);
-  const displacedRecoveryUploadRef = useRef(new Set<string>());
-  const frozenAuthorityLossRef = useRef(new Set<string>());
-  const frozenAuthorityLossCandidatesRef = useRef(new Map<string, {
-    level: Level;
-    revision: number;
-    signature: string;
-  }>());
   const followerRefreshSequenceRef = useRef(0);
   const editSessionRef = useRef<EditorDocumentEditSession | null>(null);
   const editPresenceRef = useRef<EditorDocumentEditPresence | null>(null);
@@ -2699,14 +2672,18 @@ export function LevelEditor(): ReactElement {
   const pendingDraftIdentityRef = useRef<ScopedLevelEditorDraftIdentity | null>(null);
   const [cloudSaveState, setCloudSaveState] = useState<'loading' | 'local' | 'pending' | 'saving' | 'saved' | 'error' | 'conflict'>('loading');
   const [cloudSaveDetail, setCloudSaveDetail] = useState<string | null>(null);
-  const [browserRecoveryConflict, setBrowserRecoveryConflict] = useState<LevelEditorBrowserRecoveryConflict | null>(null);
-  const browserRecoveryConflictRef = useRef<LevelEditorBrowserRecoveryConflict | null>(null);
   const [localBackupAvailable, setLocalBackupAvailable] = useState<boolean | null>(null);
   const [revisionHistory, setRevisionHistory] = useState<EditorDocumentRevisionSummary[]>([]);
   const [revisionHistoryState, setRevisionHistoryState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [revisionHistoryDetail, setRevisionHistoryDetail] = useState<string | null>(null);
   const [revisionHistoryRefresh, setRevisionHistoryRefresh] = useState(0);
-  const [authReachable, setAuthReachable] = useState<boolean | null>(null);
+  const [revisionHistoryExpanded, setRevisionHistoryExpanded] = useState(false);
+  const sharedAuthStatus = useAuthSession((session) => session.status);
+  const authResolutionKey = sharedAuthStatus
+    ? `${sharedAuthStatus.reachable}:${sharedAuthStatus.user.signed_in}:${sharedAuthStatus.user.email ?? ''}`
+    : null;
+  const me = sharedAuthStatus?.reachable ? sharedAuthStatus.user : null;
+  const authReachable = sharedAuthStatus?.reachable ?? null;
   const [documentLoadAttempt, setDocumentLoadAttempt] = useState(0);
   const [userWorkspaceHydration, setUserWorkspaceHydration] = useState<'loading' | 'ready' | 'unavailable'>('loading');
   const [officialWorkspaceHydration, setOfficialWorkspaceHydration] = useState<'loading' | 'ready' | 'unavailable'>('loading');
@@ -2754,12 +2731,7 @@ export function LevelEditor(): ReactElement {
   const [predrawnReviewSearch, setPredrawnReviewSearch] = useState(() => window.location.search);
   useEffect(() => {
     const sync = (): void => setPredrawnReviewSearch(window.location.search);
-    window.addEventListener('popstate', sync);
-    window.addEventListener(APP_NAVIGATION_EVENT, sync);
-    return () => {
-      window.removeEventListener('popstate', sync);
-      window.removeEventListener(APP_NAVIGATION_EVENT, sync);
-    };
+    return subscribeAppLocation(sync);
   }, []);
   const predrawnPreview = useMemo(
     () => predrawnBoardPreviewSrc(predrawnReviewSearch, window.location.origin),
@@ -2964,7 +2936,7 @@ export function LevelEditor(): ReactElement {
       reportStatus(
         'Viewing pane is read-only.',
         'warning',
-        'Take over editing from the named session before changing the generation frame.',
+        'This review page is read-only.',
       );
       return;
     }
@@ -3230,7 +3202,6 @@ export function LevelEditor(): ReactElement {
   const [statusLog, setStatusLog] = useState<StatusLogEntry[]>([]);
   const statusLogSeq = useRef(0);
   const [saving, setSaving] = useState(false);
-  const [me, setMe] = useState<AuthUser | null>(null);
   const isAdmin = Boolean(me?.is_admin);
   const { ask, dialog: confirmDialog } = useConfirm();
   const didMountRouteSync = useRef(false);
@@ -3247,8 +3218,6 @@ export function LevelEditor(): ReactElement {
   const eventsOpenRef = useRef(eventsOpen);
   eventsOpenRef.current = eventsOpen;
   const eventsOpenButtonRef = useRef<HTMLButtonElement>(null);
-  const editorSessionStatusRef = useRef<HTMLElement>(null);
-  const editorRecoveriesRef = useRef<HTMLDivElement>(null);
   const editorRecoveryOverviewRef = useRef<HTMLElement>(null);
   const pendingRulesExitActionRef = useRef<(() => void) | null>(null);
   const departureFlushSigRef = useRef<string | null>(null);
@@ -3321,12 +3290,7 @@ export function LevelEditor(): ReactElement {
         }
       }
     };
-    window.addEventListener('popstate', syncFromRoute);
-    window.addEventListener(APP_NAVIGATION_EVENT, syncFromRoute);
-    return () => {
-      window.removeEventListener('popstate', syncFromRoute);
-      window.removeEventListener(APP_NAVIGATION_EVENT, syncFromRoute);
-    };
+    return subscribeAppLocation(syncFromRoute);
   }, [fenceArtCatalog, isPredrawnBoard]);
 
   // DEV-only preview of the in-game confirm dialog, so its look can be judged live without the
@@ -3547,7 +3511,7 @@ export function LevelEditor(): ReactElement {
       reportStatus(
         'Camera boundary is read-only.',
         'warning',
-        'Take over editing from the named session before changing the level camera.',
+        'Reload an owner editing page to reconnect live sync.',
       );
       return;
     }
@@ -3576,7 +3540,7 @@ export function LevelEditor(): ReactElement {
       reportStatus(
         'AI artwork selection is read-only.',
         'warning',
-        'Take over editing from the named session before changing the selected artwork.',
+        'This review page is read-only.',
       );
       return;
     }
@@ -3601,7 +3565,7 @@ export function LevelEditor(): ReactElement {
       reportStatus(
         'Level background is read-only.',
         'warning',
-        'Take over editing from the named session before changing the level background.',
+        'This review page is read-only.',
       );
       return;
     }
@@ -3637,7 +3601,7 @@ export function LevelEditor(): ReactElement {
       reportStatus(
         'Viewing pane is read-only.',
         'warning',
-        'Take over editing from the named session before changing the generation frame.',
+        'This review page is read-only.',
       );
       return;
     }
@@ -4854,27 +4818,6 @@ export function LevelEditor(): ReactElement {
     : currentSig !== (standaloneBaselineSigRef.current ?? currentSig);
   const campaignAssignmentDirty = campaignAssignmentHydrated && campaignAssignmentId !== savedCampaignAssignmentId;
   const dirty = levelDirty || campaignAssignmentDirty;
-  const editorSessionCanBegin = Boolean(
-    me?.signed_in
-    && editorDocument
-    && editAuthorityState === 'follower'
-    && editSession?.state === 'waiting'
-    && editPresence
-    && !editPresence.active_editor
-    && editPresence.can_take_over
-    && !browserRecoveryConflict
-    && !editorDocument.baseline_conflict
-  );
-  const firstAuthoringMutationPending = Boolean(
-    editorSessionCanBegin
-    && (
-      campaignAssignmentDirty
-      || (
-        lastCloudSyncedSigRef.current !== null
-        && currentSig !== lastCloudSyncedSigRef.current
-      )
-    ),
-  );
   const currentSigRef = useRef(currentSig);
   currentSigRef.current = currentSig;
   const initialCandidateRef = useRef(candidateLevel);
@@ -4899,15 +4842,13 @@ export function LevelEditor(): ReactElement {
   ownerEmailRef.current = me?.email ?? '';
   const currentEditFence = (): EditorDocumentEditFence | null => {
     const session = editSessionRef.current;
-    const presence = editPresenceRef.current;
     const identity = editorClientIdentityRef.current;
     if (
       !session
       || !identity
       || identity.sessionId !== session.session_id
-      || session.state !== 'active'
-      || presence?.active_editor?.session_id !== session.session_id
-      || presence.edit_generation !== session.edit_generation
+      || session.state === 'observing'
+      || session.state === 'closed'
     ) return null;
     return {
       edit_session_id: session.session_id,
@@ -4915,118 +4856,10 @@ export function LevelEditor(): ReactElement {
       edit_generation: session.edit_generation,
     };
   };
-  const preserveAuthorityLoss = useCallback((
-    authoritySession: EditorDocumentEditSession | null | undefined,
-    serverRecovery?: EditorDocumentRecovery | null,
-  ): void => {
-    if (serverRecovery) {
-      setServerRecoveries((recoveries) => [
-        serverRecovery,
-        ...recoveries.filter((entry) => entry.recovery_id !== serverRecovery.recovery_id),
-      ]);
-    }
-    const doc = editorDocumentRef.current;
-    const identity = editorClientIdentityRef.current;
-    const ownerEmail = ownerEmailRef.current;
-    const observedRevision = documentRevisionRef.current;
-    if (!doc || !identity || !ownerEmail || observedRevision === null || !authoritySession) return;
-
-    const frozenLevel = currentCandidateRef.current;
-    const candidateSignature = currentSigRef.current;
-    const authorityCandidateKey = `${authoritySession.session_id}:${authoritySession.edit_generation}`;
-    const freezeKey = `${authoritySession.session_id}:${authoritySession.edit_generation}:${observedRevision}:${candidateSignature}`;
-    const shouldFreezeCandidate = editAuthorityStateRef.current === 'writer'
-      || (
-        editAuthorityStateRef.current === 'takeover-pending'
-        && lastCloudSyncedSigRef.current !== candidateSignature
-      );
-    if (shouldFreezeCandidate && !frozenAuthorityLossRef.current.has(freezeKey)) {
-      frozenAuthorityLossRef.current.add(freezeKey);
-      frozenAuthorityLossCandidatesRef.current.set(authorityCandidateKey, {
-        level: frozenLevel,
-        revision: observedRevision,
-        signature: candidateSignature,
-      });
-      const recoveryIdentity = {
-        documentId: doc.document_id,
-        ownerEmail,
-        clientSessionId: identity.sessionId,
-      };
-      const existingDraft = readScopedLevelEditorDraft(recoveryIdentity);
-      const frozenDraft: LevelEditorDraft = {
-        savedAt: Date.now(),
-        savedSig: existingDraft?.savedSig ?? savedSigRef.current ?? '',
-        documentId: doc.document_id,
-        ownerEmail,
-        clientSessionId: identity.sessionId,
-        documentRevision: observedRevision,
-        editGeneration: authoritySession.edit_generation,
-        cloudSignature: lastCloudSyncedSigRef.current ?? undefined,
-        recoveryConflict: true,
-        editingId: doc.level_id,
-        board: levelToEditorBoard(frozenLevel),
-        levelName: frozenLevel.name,
-        campaignId: existingDraft?.campaignId,
-        objective: frozenLevel.objective,
-        surviveTurns: frozenLevel.surviveTurns ?? DEFAULT_SURVIVE_TURNS,
-        timeControl: frozenLevel.timeControl,
-        victory: frozenLevel.victory,
-        events: frozenLevel.events,
-      };
-      writeScopedLevelEditorDraft(recoveryIdentity, frozenDraft);
-      const archived = preserveScopedLevelEditorRecovery(recoveryIdentity, frozenDraft);
-      // Keep exactly one browser fallback for this frozen candidate: the immutable archive when
-      // it succeeded, otherwise the raw scoped draft that was written immediately beforehand.
-      if (archived) clearScopedLevelEditorDraft(recoveryIdentity);
-      const frozenRecovery: LevelEditorBrowserRecoveryConflict = {
-        source: 'browser',
-        draft: archived?.draft ?? frozenDraft,
-        level: frozenLevel,
-        cloudRevision: observedRevision,
-        recoveryId: archived?.recoveryId,
-        recoveryCount: Math.max(1, listPreservedScopedLevelEditorRecoveries(recoveryIdentity).length),
-      };
-      browserRecoveryConflictRef.current = frozenRecovery;
-      setBrowserRecoveryConflict(frozenRecovery);
-    }
-
-    // Only the candidate frozen while this page was still the writer may enter its displaced
-    // recovery branch. Later follower polls remount the other writer's cloud body; treating that
-    // changing body as this tab's candidate would manufacture bogus recoveries.
-    const frozenCandidate = frozenAuthorityLossCandidatesRef.current.get(authorityCandidateKey);
-    const recoveryUploadKey = frozenCandidate
-      ? `${authorityCandidateKey}:${frozenCandidate.signature}`
-      : null;
-    if (
-      frozenCandidate
-      && recoveryUploadKey
-      && (authoritySession.state === 'displaced' || authoritySession.state === 'expired')
-      && !displacedRecoveryUploadRef.current.has(recoveryUploadKey)
-    ) {
-      displacedRecoveryUploadRef.current.add(recoveryUploadKey);
-      void appendDisplacedEditorDocumentRecovery(
-        doc.document_id,
-        authoritySession.session_id,
-        identity.sessionKey,
-        frozenCandidate.level,
-        frozenCandidate.revision,
-        authoritySession.edit_generation,
-      ).then((recoveryResult) => {
-        setServerRecoveries((recoveries) => [
-          recoveryResult.recovery,
-          ...recoveries.filter((entry) => entry.recovery_id !== recoveryResult.recovery.recovery_id),
-        ]);
-        reportStatusRef.current(
-          'Displaced tab recovery preserved.',
-          'success',
-          'This tab uploaded its latest live candidate only to recovery; it did not change the working copy.',
-        );
-      }).catch(() => {
-        displacedRecoveryUploadRef.current.delete(recoveryUploadKey);
-      });
-    }
+  const preserveAuthorityLoss = useCallback((_session?: unknown): void => {
+    // Owner pages no longer lose authority to sibling tabs. The browser draft
+    // remains the bounded retry buffer if the page session itself fails.
   }, []);
-
   const mountAcknowledgedWorkingCopy = useCallback((latest: EditorDocument): void => {
     const latestSignature = levelEditorLevelSignature(latest.level);
     // The departure flush reads refs rather than React state. Replace its candidate and signature
@@ -5072,7 +4905,7 @@ export function LevelEditor(): ReactElement {
       return true;
     }
     if (!isEditorDocumentEditSessionError(error)) return false;
-    preserveAuthorityLoss(error.session ?? editSessionRef.current, error.recovery);
+    preserveAuthorityLoss(error.session ?? editSessionRef.current);
     if (error.document) mountAcknowledgedWorkingCopy(error.document);
     if (error.session) {
       editSessionRef.current = error.session;
@@ -5083,11 +4916,11 @@ export function LevelEditor(): ReactElement {
       setEditPresence(error.presence);
     }
     setEditAuthorityState(error.code === 'editor_document_session_displaced' ? 'displaced' : 'follower');
-    setCloudSaveDetail('Background-version editing stopped because this tab no longer owns the writer lease. The named active editor is shown in Editing session.');
+    setCloudSaveDetail('Background-version editing stopped because this page session could not sync. Reload to reconnect.');
     reportStatusRef.current(
       'Background-version editing stopped.',
       'warning',
-      'This tab is now read-only; its recoverable branch was preserved before the acknowledged cloud working copy was mounted.',
+      'This page is now read-only; its local crash fallback remains available while the shared working copy reloads.',
     );
     return true;
   }, [mountAcknowledgedWorkingCopy, preserveAuthorityLoss]);
@@ -5114,11 +4947,7 @@ export function LevelEditor(): ReactElement {
     // localStorage is a crash/offline fallback only. The status UI never calls this a cloud save;
     // durable progress is acknowledged solely by the revisioned editor-document endpoint below.
     if (!editorReady || editorLoadError) return;
-    if (editorDocument && editAuthorityState !== 'writer' && !firstAuthoringMutationPending) return;
-    // A stale browser candidate is a separately reviewable branch, not the mounted editor and
-    // not evidence of a live competing writer. Do not overwrite that only copy merely because
-    // the current server document is now visible; the explicit recovery actions below resolve it.
-    if (editorDocument && browserRecoveryConflictRef.current) return;
+    if (editorDocument && editAuthorityState !== 'writer') return;
     const pendingDraftIdentity = editorDocument ? null : pendingDraftIdentityRef.current;
     const existingRecovery = editorDocument
       ? null
@@ -5187,7 +5016,7 @@ export function LevelEditor(): ReactElement {
         } satisfies EditorSignInRecoveryIntent));
       } catch { /* The browser copy still exists even if sessionStorage is unavailable. */ }
     }
-  }, [campaignAssignmentId, clockEnabled, clockIncrementSeconds, clockInitialSeconds, currentEditorBoard, draftKey, editAuthorityState, editorClientIdentity, editorDocument, editorLoadError, editorReady, eventsForSave, firstAuthoringMutationPending, levelNameForSave, me?.email, objective, savedSig, surviveTurns, targetLevelId, victoryForSave]);
+  }, [campaignAssignmentId, clockEnabled, clockIncrementSeconds, clockInitialSeconds, currentEditorBoard, draftKey, editAuthorityState, editorClientIdentity, editorDocument, editorLoadError, editorReady, eventsForSave, levelNameForSave, me?.email, objective, savedSig, surviveTurns, targetLevelId, victoryForSave]);
 
   const eventsEditorHref = (open: boolean, tab: LevelEditorEventsTab = eventsTab): string => (
     levelEditorHrefWithRouteState(window.location.href, {
@@ -5219,11 +5048,11 @@ export function LevelEditor(): ReactElement {
     const state = window.history.state && typeof window.history.state === 'object'
       ? window.history.state as Record<string, unknown>
       : {};
-    window.history.replaceState({
+    replaceAppHistoryState({
       ...state,
       levelEditorEventsEntry: true,
       levelEditorEventsBaseHref: baseHref,
-    }, '', openHref);
+    }, openHref);
     eventsOpenRef.current = true;
     setEventsTab(tab);
     setEventsOpen(true);
@@ -5274,7 +5103,7 @@ export function LevelEditor(): ReactElement {
     const fence = currentEditFence();
     if (!fence) {
       reportStatus(
-        'Take over editing before starting a pipeline slot.',
+        'This review page is read-only.',
         'warning',
         'Pipeline slots belong to the active editor session.',
       );
@@ -5337,13 +5166,13 @@ export function LevelEditor(): ReactElement {
   // pasted into another account. Copying the address bar is absent from this flow and mutates
   // nothing; access remains owner/admin gated independently of possession of the URL.
   useEffect(() => {
+    if (!sharedAuthStatus) return undefined;
     let active = true;
     void (async () => {
       editSessionRef.current = null;
       editPresenceRef.current = null;
       setEditSession(null);
       setEditPresence(null);
-      setServerRecoveries([]);
       setEditAuthorityState('checking');
       const hydration = ensureCampaignsHydrated()
         .then((result) => {
@@ -5360,7 +5189,6 @@ export function LevelEditor(): ReactElement {
           }
           return undefined;
         });
-      const authRequest = fetchMeStatus();
       let hydrationTimer: number | undefined;
       await Promise.race([
         hydration,
@@ -5369,11 +5197,9 @@ export function LevelEditor(): ReactElement {
         }),
       ]);
       if (hydrationTimer !== undefined) window.clearTimeout(hydrationTimer);
-      const auth = await authRequest;
+      const auth = sharedAuthStatus;
       const user = auth.user;
       if (!active) return;
-      setMe(user);
-      setAuthReachable(auth.reachable);
       if (user.signed_in) signInHandoffPendingRef.current = false;
 
       let provisionalIdentity: LevelEditorClientIdentity | null = null;
@@ -5631,22 +5457,14 @@ export function LevelEditor(): ReactElement {
             return;
           }
           ownerEditSession = true;
-          openedAsWriter = opened.session.state === 'active'
-            && opened.presence.active_editor?.session_id === opened.session.session_id;
+          // Every authenticated owner page edits the same cloud working copy. The page session
+          // supplies attribution and a secret, never exclusive writer ownership.
+          openedAsWriter = true;
           editSessionRef.current = opened.session;
           editPresenceRef.current = opened.presence;
           setEditSession(opened.session);
           setEditPresence(opened.presence);
-          setEditAuthorityState(
-            openedAsWriter
-              ? 'writer'
-              : opened.session.state === 'displaced'
-                ? 'displaced'
-                : 'follower',
-          );
-          const recoveryList = await listEditorDocumentRecoveries(doc.document_id).catch(() => null);
-          if (!active) return;
-          if (recoveryList) setServerRecoveries(recoveryList.recoveries);
+          setEditAuthorityState('writer');
         } catch (sessionError) {
           const status = (sessionError as { status?: number }).status;
           // ADR-0132 exact-link admin review deliberately has no session or presence. The
@@ -5822,7 +5640,7 @@ export function LevelEditor(): ReactElement {
         const routeSnapshotDiverged = Boolean(loadedBoard && initialSig !== documentSig);
         const routeSnapshotSafe = !routeParams.documentId || routeParams.documentRevision === doc.revision;
         const restoreRouteSnapshot = openedAsWriter && routeSnapshotDiverged && routeSnapshotSafe;
-        const routeSnapshotRecovery: LevelEditorBrowserRecoveryConflict | null = routeSnapshotDiverged && !restoreRouteSnapshot
+        const routeSnapshotRecovery: LevelEditorLocalFallbackSnapshot | null = routeSnapshotDiverged && !restoreRouteSnapshot
           ? (() => {
               const draft = {
                 savedAt: Date.now(),
@@ -5867,7 +5685,7 @@ export function LevelEditor(): ReactElement {
         const shouldRecover = restoreLocal || restoreRouteSnapshot;
         let unsafeLocalRecoveryPreserved = true;
         let claimedDraftHandoffReady = !claimedUnscopedDraft || shadowedClaimedDraftHandled;
-        let unsafeLocalRecovery: LevelEditorBrowserRecoveryConflict | null = null;
+        let unsafeLocalRecovery: LevelEditorLocalFallbackSnapshot | null = null;
         if (localDiverged && !restoreLocal && localLevel) {
           const unsafeDraft: LevelEditorDraft = {
             ...(recoveryDraft ?? {}),
@@ -5920,43 +5738,20 @@ export function LevelEditor(): ReactElement {
             ),
           };
         }
-        const preservedBrowserRecovery: LevelEditorBrowserRecoveryConflict | null = routeSnapshotRecovery
-          ?? unsafeLocalRecovery
-          ?? (failedProvisionalSource && failedProvisionalRecoveryLevel && failedProvisionalRecoveryDiverged
-            ? {
-                source: 'browser' as const,
-                draft: failedProvisionalSource.recovery.draft,
-                level: failedProvisionalRecoveryLevel,
-                cloudRevision: doc.revision,
-                recoveryCount: Math.max(1, provisionalPreservedRecoveries.length),
-                cleanupIdentity: failedProvisionalSource.sourceIsCurrentDraft
-                  ? undefined
-                  : failedProvisionalSource.sourceIdentity,
-                cleanupRecoveryId: failedProvisionalSource.sourceIsCurrentDraft
-                  ? undefined
-                  : failedProvisionalSource.recovery.recoveryId,
-                cleanupDraftIdentity: failedProvisionalSource.sourceIsCurrentDraft
-                  ? failedProvisionalSource.sourceIdentity
-                  : undefined,
-              }
-            : null)
-          ?? (preservedRecoveryDiverged && newestPreservedRecovery && preservedRecoveryLevel
-            ? {
-                source: 'browser' as const,
-                draft: newestPreservedRecovery.draft,
-                level: preservedRecoveryLevel,
-                cloudRevision: doc.revision,
-                recoveryId: newestPreservedRecovery.recoveryId,
-                recoveryCount: preservedScopedRecoveries.length,
-              }
-            : null);
-
         documentRevisionRef.current = doc.revision;
         lastCloudSyncedSigRef.current = documentSig;
         documentConflictRef.current = recoveryConflict;
         documentConflictKindRef.current = doc.baseline_conflict ? 'baseline' : null;
-        browserRecoveryConflictRef.current = preservedBrowserRecovery;
-        setBrowserRecoveryConflict(preservedBrowserRecovery);
+        // Old per-tab branches are not part of the shared-document model. The acknowledged cloud
+        // body opens directly; current-page crash recovery still resumes automatically above.
+        for (const recovery of preservedScopedRecoveries) {
+          clearPreservedScopedLevelEditorRecovery(scopedDraftIdentity, recovery.recoveryId);
+        }
+        for (const candidate of provisionalPreservedRecoveries) {
+          if (!candidate.sourceIsCurrentDraft) {
+            clearPreservedScopedLevelEditorRecovery(candidate.sourceIdentity, candidate.recovery.recoveryId);
+          }
+        }
         setEditorLoadError(null);
         setEditorDocument(doc);
         setEditingId(doc.level_id);
@@ -6058,33 +5853,19 @@ export function LevelEditor(): ReactElement {
         setCloudSaveState(recoveryConflict ? 'conflict' : shouldRecover ? 'pending' : 'saved');
         setCloudSaveDetail(recoveryConflict
           ? 'The saved level changed after this working copy branched. Your progress is preserved; autosave is paused until you discard or resolve it.'
-          : !provisionalPreservedHandoffReady
-            ? 'An older browser recovery could not be fully transferred. Its source copy was not deleted, this page stayed on the level link, and any transferable copy is available in Recovery. Reload this link to retry.'
-          : preservedBrowserRecovery
-            ? preservedBrowserRecovery.source === 'route'
-              ? 'The cloud working copy is open. The Test/route snapshot is preserved in Recovery; it was not applied to this board.'
-              : 'The cloud working copy is open. An older browser recovery is preserved in Recovery; it was not applied to this board.'
+          : shouldRecover
+            ? 'Recovered browser edits are syncing into the shared working copy.'
             : null);
         setEditorReady(true);
         reportStatus(
           doc.baseline_conflict
             ? 'Saved-position conflict preserved.'
-            : !provisionalPreservedHandoffReady
-              ? 'Browser recovery handoff needs attention.'
-              : preservedBrowserRecovery
-                ? 'Cloud working copy loaded.'
-                : shouldRecover
-                  ? 'Recovered newer browser edits.'
-                  : 'Working copy loaded.',
-          recoveryConflict || !provisionalPreservedHandoffReady ? 'warning' : 'success',
+            : shouldRecover
+              ? 'Recovered newer browser edits.'
+              : 'Working copy loaded.',
+          recoveryConflict ? 'warning' : 'success',
           recoveryConflict
             ? 'No cloud or canonical data was overwritten. Discard changes restores the last saved position.'
-            : !provisionalPreservedHandoffReady
-              ? 'The original browser recovery remains intact. Review Recovery when a copy is listed, or reload this level link to retry the transfer.'
-            : preservedBrowserRecovery
-            ? preservedBrowserRecovery.source === 'route'
-              ? 'The Test/route snapshot remains available in Recovery. It is not a live-session claim and did not replace the cloud board.'
-              : `Browser recovery from ${new Date(preservedBrowserRecovery.draft.savedAt).toLocaleString()} remains available in Recovery. It is not a live-session claim.`
             : shouldRecover
             ? 'They will be written to the durable working copy automatically.'
             : doc.dirty
@@ -6161,10 +5942,10 @@ export function LevelEditor(): ReactElement {
     })();
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [documentLoadAttempt]);
+  }, [authResolutionKey, documentLoadAttempt]);
 
   useEffect(() => {
-    if (layer !== 'recovery' || !editorDocument || !me?.signed_in) return undefined;
+    if (layer !== 'history' || !revisionHistoryExpanded || !editorDocument || !me?.signed_in) return undefined;
     let active = true;
     setRevisionHistoryState('loading');
     setRevisionHistoryDetail(null);
@@ -6181,11 +5962,11 @@ export function LevelEditor(): ReactElement {
         setRevisionHistoryDetail(error instanceof Error ? error.message : String(error));
       });
     return () => { active = false; };
-  }, [editorDocument?.document_id, editorDocument?.revision, layer, me?.signed_in, revisionHistoryRefresh]);
+  }, [editorDocument?.document_id, editorDocument?.revision, layer, me?.signed_in, revisionHistoryExpanded, revisionHistoryRefresh]);
 
-  // Presence polling is notification only; every mutation is still fenced by the server's
-  // session id + generation. It makes takeover/displacement legible promptly and lets followers
-  // inspect the latest acknowledged working body without ever becoming writers themselves.
+  // Every owner page edits the same cloud working copy. Polling is the cross-process notification
+  // path; stale local changes are structurally merged onto the latest acknowledged revision and
+  // immediately autosaved, while page heartbeats remain attribution only.
   useEffect(() => {
     if (!editorDocument || !me?.signed_in || !editSession || !editorClientIdentity) return undefined;
     if (editAuthorityState === 'reviewer' || editAuthorityState === 'error' || editSession.state === 'observing') return undefined;
@@ -6193,78 +5974,62 @@ export function LevelEditor(): ReactElement {
     const sessionId = editSession.session_id;
     const sessionKey = editorClientIdentity.sessionKey;
     let live = true;
+    let lastHeartbeatAt = 0;
     const refresh = async (): Promise<void> => {
       const refreshSequence = ++followerRefreshSequenceRef.current;
       try {
-        const result = await heartbeatEditorDocumentEditSession(
-          documentId,
-          sessionId,
-          sessionKey,
-        );
+        const heartbeat = Date.now() - lastHeartbeatAt >= EDIT_SESSION_HEARTBEAT_MS
+          ? heartbeatEditorDocumentEditSession(documentId, sessionId, sessionKey)
+          : null;
+        if (heartbeat) lastHeartbeatAt = Date.now();
+        const [result, latest] = await Promise.all([
+          heartbeat,
+          loadEditorDocument(documentId),
+        ]);
         if (!live || refreshSequence !== followerRefreshSequenceRef.current) return;
-        const writerHere = result.session.state === 'active'
-          && result.presence.active_editor?.session_id === result.session.session_id;
-        const displaced = result.session.state === 'displaced'
-          || (editAuthorityStateRef.current === 'writer' && !writerHere);
-        // Fetch the body before publishing new session objects. Otherwise those state updates can
-        // restart this effect, cancel the in-flight GET, and strand a follower on an older board.
-        const latest = writerHere ? null : await loadEditorDocument(documentId);
-        // Focus and interval polling can overlap. Only the newest-started refresh may publish;
-        // otherwise a delayed older response can roll attribution and the mounted board backward.
-        if (!live || refreshSequence !== followerRefreshSequenceRef.current) return;
-        editSessionRef.current = result.session;
-        editPresenceRef.current = result.presence;
-        setEditSession(result.session);
-        setEditPresence(result.presence);
-        if (displaced) {
-          if (autosaveTimerRef.current !== null) {
-            window.clearTimeout(autosaveTimerRef.current);
-            autosaveTimerRef.current = null;
-          }
-          setCloudSaveDetail('Editing authority moved to the session identified above. This tab is read-only; its browser recovery remains separate.');
-          preserveAuthorityLoss(result.session, result.recovery);
+        if (result) {
+          editSessionRef.current = result.session;
+          editPresenceRef.current = result.presence;
+          setEditSession(result.session);
+          setEditPresence(result.presence);
         }
-        setEditAuthorityState(writerHere ? 'writer' : displaced ? 'displaced' : 'follower');
-        if (latest) {
-          // Always remount the acknowledged body after losing authority, even if its numeric
-          // revision did not move. A stale browser/Test snapshot must never remain visible as if
-          // it were the cloud document (notably when that stale snapshot omitted Subterrain).
+        setEditAuthorityState('writer');
+
+        const base = editorDocumentRef.current;
+        const observedRevision = documentRevisionRef.current;
+        if (!base || observedRevision === null || latest.revision <= observedRevision) return;
+        const local = currentCandidateRef.current;
+        const baseSignature = normalizedLevelEditorSignature(base.level);
+        const localChanged = currentSigRef.current !== baseSignature;
+        if (!localChanged) {
           mountAcknowledgedWorkingCopy(latest);
-        }
-      } catch (error) {
-        if (!live || refreshSequence !== followerRefreshSequenceRef.current) return;
-        if (isEditorDocumentEditSessionError(error)) {
-          const authoritySession = error.session ?? editSessionRef.current;
-          preserveAuthorityLoss(authoritySession, error.recovery);
-          if (error.session) {
-            editSessionRef.current = error.session;
-            setEditSession(error.session);
-          }
-          if (error.presence) {
-            editPresenceRef.current = error.presence;
-            setEditPresence(error.presence);
-          }
-          setEditAuthorityState(error.code === 'editor_document_session_displaced' ? 'displaced' : 'follower');
-          setCloudSaveDetail('This tab no longer has editing authority. Its browser recovery was preserved; use Take over editing only after reviewing the named session.');
-          try {
-            const latest = error.document ?? await loadEditorDocument(documentId);
-            if (live && refreshSequence === followerRefreshSequenceRef.current) mountAcknowledgedWorkingCopy(latest);
-          } catch { /* Keep the frozen browser recovery and retry the cloud read next poll. */ }
           return;
         }
-        // A transient presence failure cannot grant or revoke authority locally. Keep the last
-        // known state, stop writes if its lease cannot be proven, and retry on the next poll.
-        if (editSessionRef.current?.lease_expires_at
-          && Date.parse(editSessionRef.current.lease_expires_at) <= Date.now()) {
-          preserveAuthorityLoss({ ...editSessionRef.current, state: 'expired' });
-          setEditAuthorityState('follower');
-        }
+
+        const merged = mergeSharedLevel(base.level, local, latest.level);
+        const mergedSignature = normalizedLevelEditorSignature(merged);
+        const latestSignature = normalizedLevelEditorSignature(latest.level);
+        currentCandidateRef.current = merged;
+        currentSigRef.current = mergedSignature;
+        currentEditorBoardRef.current = levelToEditorBoard(merged);
+        documentRevisionRef.current = latest.revision;
+        lastCloudSyncedSigRef.current = latestSignature;
+        documentConflictRef.current = latest.baseline_conflict;
+        documentConflictKindRef.current = latest.baseline_conflict ? 'baseline' : null;
+        editorDocumentRef.current = latest;
+        setEditorDocument(latest);
+        applyLevelDocumentRef.current(merged, { editingId: latest.level_id, clean: false });
+        setCloudSaveState(latest.baseline_conflict ? 'conflict' : 'pending');
+        setCloudSaveDetail(latest.baseline_conflict
+          ? 'The canonical saved level changed. The shared unpublished working copy remains intact.'
+          : 'Changes from another open editor were merged here. Syncing the combined working copy…');
+      } catch (error) {
+        if (!live || refreshSequence !== followerRefreshSequenceRef.current) return;
+        setCloudSaveDetail('Live sync is reconnecting. This editor remains open and will retry automatically.');
       }
     };
-    const intervalMs = editAuthorityState === 'writer'
-      ? EDIT_SESSION_HEARTBEAT_MS
-      : EDIT_SESSION_PRESENCE_POLL_MS;
-    const timer = window.setInterval(() => { void refresh(); }, intervalMs);
+    void refresh();
+    const timer = window.setInterval(() => { void refresh(); }, EDITOR_SHARED_SYNC_POLL_MS);
     const onFocus = (): void => { void refresh(); };
     window.addEventListener('focus', onFocus);
     return () => {
@@ -6272,111 +6037,12 @@ export function LevelEditor(): ReactElement {
       window.clearInterval(timer);
       window.removeEventListener('focus', onFocus);
     };
-  }, [editAuthorityState, editSession?.session_id, editorClientIdentity?.sessionKey, editorDocument?.document_id, me?.signed_in, mountAcknowledgedWorkingCopy, preserveAuthorityLoss]);
-
-  // A displaced page can upload a later in-memory checkpoint just after takeover. Refreshing the
-  // owner recovery index when Recovery opens (and while it remains open) makes that branch reachable
-  // without a reload; heartbeat time and recovery body checkpoints remain distinct facts.
-  useEffect(() => {
-    if (!editorDocument || !me?.signed_in || !editSession || editAuthorityState === 'reviewer') return undefined;
-    let live = true;
-    const refreshRecoveries = async (): Promise<void> => {
-      try {
-        const result = await listEditorDocumentRecoveries(editorDocument.document_id);
-        if (live) setServerRecoveries(result.recoveries);
-      } catch { /* The session rail stays usable with its last known recovery index. */ }
-    };
-    void refreshRecoveries();
-    const timer = layer === 'recovery'
-      ? window.setInterval(() => { void refreshRecoveries(); }, EDIT_SESSION_PRESENCE_POLL_MS)
-      : null;
-    const onFocus = (): void => { void refreshRecoveries(); };
-    window.addEventListener('focus', onFocus);
-    return () => {
-      live = false;
-      if (timer !== null) window.clearInterval(timer);
-      window.removeEventListener('focus', onFocus);
-    };
-  }, [editAuthorityState, editSession, editorDocument, layer, me?.signed_in]);
-
-  useEffect(() => {
-    if ((layer !== 'status' && layer !== 'recovery') || editorAttentionFocusRequest === 0) return undefined;
-    const frame = window.requestAnimationFrame(() => {
-      const target = layer === 'recovery'
-        ? serverRecoveries.length
-          ? editorRecoveriesRef.current
-          : editorRecoveryOverviewRef.current
-        : editorSessionStatusRef.current;
-      target?.scrollIntoView({ block: 'start' });
-      target?.focus({ preventScroll: true });
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [editorAttentionFocusRequest, layer, serverRecoveries.length]);
+  }, [editAuthorityState, editSession?.session_id, editorClientIdentity?.sessionKey, editorDocument?.document_id, me?.signed_in, mountAcknowledgedWorkingCopy]);
 
   const editorSessionCanWrite = !me?.signed_in
     || !editorDocument
     || editAuthorityState === 'writer';
-  const selectedServerRecoveryIndex = serverRecoveryCursorIndex(serverRecoveries, selectedServerRecoveryId);
-  const selectedServerRecovery = selectedServerRecoveryIndex >= 0
-    ? serverRecoveries[selectedServerRecoveryIndex]
-    : null;
-  const editorSessionCanAuthor = editorSessionCanWrite || editorSessionCanBegin;
-  const serverRecoveryActionBusy = serverRecoveryBusyId !== null || serverRecoveryCleanupCount !== null;
-
-  const revalidateRecoveryDialogWriter = async (
-    expectedRecovery: LevelEditorBrowserRecoveryConflict,
-  ): Promise<boolean> => {
-    if (browserRecoveryConflictRef.current !== expectedRecovery) {
-      reportStatus('Recovery action stopped.', 'warning', 'The recovery changed while the confirmation was open. The newer recovery remains available in Recovery.');
-      return false;
-    }
-    const doc = editorDocumentRef.current;
-    const session = editSessionRef.current;
-    const identity = editorClientIdentityRef.current;
-    if (!me?.signed_in || !doc) return true;
-    if (!session || !identity) return false;
-    try {
-      const authority = await loadEditorDocumentEditPresence(doc.document_id, {
-        session_id: session.session_id,
-        session_key: identity.sessionKey,
-        device_id: identity.deviceId,
-      });
-      if (authority.session) {
-        editSessionRef.current = authority.session;
-        setEditSession(authority.session);
-      }
-      editPresenceRef.current = authority.presence;
-      setEditPresence(authority.presence);
-      const writerHere = Boolean(
-        authority.session
-        && authority.session.state === 'active'
-        && authority.presence.active_editor?.session_id === authority.session.session_id
-        && authority.presence.edit_generation === authority.session.edit_generation,
-      );
-      if (!writerHere) {
-        preserveAuthorityLoss(authority.session ?? session, authority.recovery);
-        setEditAuthorityState(authority.session?.state === 'displaced' ? 'displaced' : 'follower');
-        try { mountAcknowledgedWorkingCopy(await loadEditorDocument(doc.document_id)); } catch { /* Retry on the next poll. */ }
-        reportStatus('Recovery action stopped.', 'warning', 'Editing control changed while the confirmation was open. The named session and acknowledged cloud board are shown now.');
-        return false;
-      }
-      if (browserRecoveryConflictRef.current !== expectedRecovery) {
-        reportStatus('Recovery action stopped.', 'warning', 'A newer recovery was preserved while the confirmation was open. It remains available in Recovery.');
-        return false;
-      }
-      return true;
-    } catch (error) {
-      if (isEditorDocumentEditSessionError(error)) {
-        preserveAuthorityLoss(error.session ?? session, error.recovery);
-        if (error.session) { editSessionRef.current = error.session; setEditSession(error.session); }
-        if (error.presence) { editPresenceRef.current = error.presence; setEditPresence(error.presence); }
-        setEditAuthorityState(error.code === 'editor_document_session_displaced' ? 'displaced' : 'follower');
-        try { mountAcknowledgedWorkingCopy(error.document ?? await loadEditorDocument(doc.document_id)); } catch { /* Retry on the next poll. */ }
-      }
-      reportStatus('Recovery action stopped.', 'warning', 'Editing authority could not be revalidated after the confirmation. Nothing was loaded or removed.');
-      return false;
-    }
-  };
+  const editorSessionCanAuthor = editorSessionCanWrite;
 
   const retryCloudDocument = (): void => {
     if (editorDocument && editAuthorityState === 'error') {
@@ -6407,7 +6073,7 @@ export function LevelEditor(): ReactElement {
     if (!editorSessionCanWrite || !currentEditFence()) {
       preserveAuthorityLoss(editSessionRef.current);
       setEditAuthorityState('follower');
-      reportStatus('This tab is read-only.', 'warning', 'Take over editing from the named session before selecting recovered work for autosave.');
+      reportStatus('This page is read-only.', 'warning', 'Reload an owner editing page to reconnect live sync.');
       return;
     }
     const ownerEmail = me?.email?.trim().toLowerCase() ?? '';
@@ -6481,7 +6147,7 @@ export function LevelEditor(): ReactElement {
   const restoreWorkingCopyRevision = async (target: EditorDocumentRevisionSummary): Promise<void> => {
     if (!editorDocument || !me?.signed_in || saving) return;
     if (!editorSessionCanWrite) {
-      reportStatus('This tab is read-only.', 'warning', 'Take over editing from the named session before restoring revision history.');
+      reportStatus('This page is read-only.', 'warning', 'Reload an owner editing page to reconnect live sync.');
       return;
     }
     if (documentConflictRef.current || cloudSaveState === 'error') {
@@ -6525,6 +6191,7 @@ export function LevelEditor(): ReactElement {
           editorDocument.document_id,
           currentCandidateRef.current,
           revision,
+          editorDocumentRef.current?.level ?? editorDocument.level,
           fence,
         );
         revision = synced.revision;
@@ -6565,7 +6232,7 @@ export function LevelEditor(): ReactElement {
       );
     } catch (error) {
       if (isEditorDocumentEditSessionError(error)) {
-        preserveAuthorityLoss(error.session ?? editSessionRef.current, error.recovery);
+        preserveAuthorityLoss(error.session ?? editSessionRef.current);
         if (error.session) { editSessionRef.current = error.session; setEditSession(error.session); }
         if (error.presence) { editPresenceRef.current = error.presence; setEditPresence(error.presence); }
         setEditAuthorityState(error.code === 'editor_document_session_displaced' ? 'displaced' : 'follower');
@@ -6586,450 +6253,6 @@ export function LevelEditor(): ReactElement {
       reportStatus('Revision restore failed.', 'error', error instanceof Error ? error.message : String(error));
     } finally {
       setSaving(false);
-    }
-  };
-
-  const retireRouteRecoverySnapshot = (): void => {
-    const doc = editorDocumentRef.current;
-    if (!doc) return;
-    navigateApp(levelEditorHrefForDocument(window.location.href, {
-      levelId: doc.level_id,
-      documentId: doc.document_id,
-    }), { replace: true, scroll: false });
-  };
-
-  const keepCloudWorkingCopy = async (): Promise<void> => {
-    const recovery = browserRecoveryConflictRef.current;
-    if (!recovery) return;
-    if (!(await ask({
-      title: 'Keep the cloud working copy?',
-      message: recovery.source === 'route'
-        ? `This removes the separate Test/route snapshot. The board currently shown—the cloud working copy at revision ${recovery.cloudRevision}—stays unchanged.`
-        : `This removes the separate browser recovery saved ${new Date(recovery.draft.savedAt).toLocaleString()}. The board currently shown—the cloud working copy at revision ${recovery.cloudRevision}—stays unchanged.`,
-      confirmLabel: 'Keep cloud copy',
-      cancelLabel: 'Keep recovery',
-    }))) return;
-    if (!(await revalidateRecoveryDialogWriter(recovery))) return;
-    const cleared = recovery.cleanupIdentity && recovery.cleanupRecoveryId
-      ? clearPreservedScopedLevelEditorRecovery(recovery.cleanupIdentity, recovery.cleanupRecoveryId)
-      : recovery.cleanupDraftIdentity
-        ? (clearScopedLevelEditorDraft(recovery.cleanupDraftIdentity), true)
-        : recovery.recoveryId && editorDocument && me?.email && editorClientIdentity
-          ? clearPreservedScopedLevelEditorRecovery({
-              documentId: editorDocument.document_id,
-              ownerEmail: me.email,
-              clientSessionId: editorClientIdentity.sessionId,
-            }, recovery.recoveryId)
-          : true;
-    if (!cleared) {
-      reportStatus('Browser recovery could not be removed.', 'error', 'Browser storage rejected the cleanup. The cloud working copy remains visible and unchanged.');
-      return;
-    }
-    const nextRecovery = editorDocument && me?.email && editorClientIdentity
-      ? listPreservedScopedLevelEditorRecoveries({
-          documentId: editorDocument.document_id,
-          ownerEmail: me.email,
-          clientSessionId: editorClientIdentity.sessionId,
-        })
-          .filter((entry) => !entry.draft.editingId || entry.draft.editingId === editorDocument.level_id)
-          .sort((left, right) => right.draft.savedAt - left.draft.savedAt)
-          .map((entry) => ({ entry, level: levelFromDraft(entry.draft, editorDocument.level) }))
-          .filter(({ level }) => levelEditorLevelSignature(level) !== levelEditorLevelSignature(editorDocument.level))
-          .map(({ entry, level }) => ({
-            source: 'browser' as const,
-            draft: entry.draft,
-            level,
-            cloudRevision: editorDocument.revision,
-            recoveryId: entry.recoveryId,
-            recoveryCount: listPreservedScopedLevelEditorRecoveries({
-              documentId: editorDocument.document_id,
-              ownerEmail: me.email,
-              clientSessionId: editorClientIdentity.sessionId,
-            }).length,
-          } satisfies LevelEditorBrowserRecoveryConflict))[0] ?? null
-      : null;
-    browserRecoveryConflictRef.current = nextRecovery;
-    setBrowserRecoveryConflict(nextRecovery);
-    if (recovery.source === 'route') retireRouteRecoverySnapshot();
-    setCloudSaveDetail(nextRecovery
-      ? 'The cloud working copy is still open. Another divergent browser recovery is ready for review below.'
-      : null);
-    reportStatus(
-      'Cloud working copy kept.',
-      'success',
-      `${recovery.source === 'route' ? 'The route snapshot' : 'The older browser recovery'} was removed; the visible board did not change.${nextRecovery ? ' The next browser recovery is now shown.' : ''}`,
-    );
-  };
-
-  const loadBrowserRecovery = async (): Promise<void> => {
-    const recovery = browserRecoveryConflictRef.current;
-    if (!recovery || !editorDocument) return;
-    if (!editorSessionCanWrite) {
-      reportStatus('This tab is read-only.', 'warning', 'Take over editing from the named session before loading a browser recovery into the working copy.');
-      return;
-    }
-    if (documentConflictRef.current) {
-      reportStatus('Browser recovery cannot be loaded yet.', 'warning', 'Resolve the saved-position conflict first.');
-      return;
-    }
-    if (!(await ask({
-      title: recovery.source === 'route' ? 'Load this Test/route snapshot?' : 'Load this browser recovery?',
-      message: recovery.source === 'route'
-        ? `This replaces the visible cloud working copy with the separate Test/route snapshot from revision ${recovery.draft.documentRevision ?? 'unknown'}. It will autosave as a new working-copy revision; nothing is published until Save.`
-        : `This replaces the visible cloud working copy with the browser copy saved ${new Date(recovery.draft.savedAt).toLocaleString()} from revision ${recovery.draft.documentRevision ?? 'unknown'}. It will autosave as a new working-copy revision; nothing is published until Save.`,
-      confirmLabel: 'Load recovery',
-      cancelLabel: 'Keep cloud copy',
-    }))) return;
-    if (!(await revalidateRecoveryDialogWriter(recovery))) return;
-    browserRecoveryConflictRef.current = null;
-    setBrowserRecoveryConflict(null);
-    applyLevelDocument(recovery.level, { editingId: editorDocument.level_id, clean: false });
-    setCloudSaveState('pending');
-    setCloudSaveDetail('Browser recovery loaded explicitly. Saving it to the working copy…');
-    reportStatus('Browser recovery loaded.', 'success', 'It is now the visible working copy and will autosave; the canonical saved level is unchanged.');
-  };
-
-  const followLatestWorkingCopy = async (): Promise<void> => {
-    const doc = editorDocumentRef.current;
-    const session = editSessionRef.current;
-    if (!doc || !session || !editorClientIdentity) return;
-    // Participate in the same take-latest sequence as background polling. A manual refresh must
-    // invalidate an older poll, while a poll started afterward may supersede this request.
-    const refreshSequence = ++followerRefreshSequenceRef.current;
-    try {
-      const [authority, latest] = await Promise.all([
-        loadEditorDocumentEditPresence(doc.document_id, {
-          session_id: session.session_id,
-          session_key: editorClientIdentity.sessionKey,
-          device_id: editorClientIdentity.deviceId,
-        }),
-        loadEditorDocument(doc.document_id),
-      ]);
-      if (refreshSequence !== followerRefreshSequenceRef.current) return;
-      if (authority.session) {
-        editSessionRef.current = authority.session;
-        setEditSession(authority.session);
-      }
-      editPresenceRef.current = authority.presence;
-      setEditPresence(authority.presence);
-      const writerHere = authority.session?.state === 'active'
-        && authority.presence.active_editor?.session_id === authority.session.session_id;
-      setEditAuthorityState(writerHere ? 'writer' : authority.session?.state === 'displaced' ? 'displaced' : 'follower');
-      documentRevisionRef.current = latest.revision;
-      lastCloudSyncedSigRef.current = normalizedLevelEditorSignature(latest.level);
-      setEditorDocument(latest);
-      if (!writerHere) applyLevelDocument(latest.level, { editingId: latest.level_id, clean: false });
-      setCloudSaveState(latest.baseline_conflict ? 'conflict' : 'saved');
-      reportStatus('Latest working copy loaded.', 'success', `Cloud revision ${latest.revision}; editing authority was checked separately.`);
-    } catch (error) {
-      if (refreshSequence !== followerRefreshSequenceRef.current) return;
-      reportStatus('Could not refresh the working copy.', 'warning', error instanceof Error ? error.message : String(error));
-    }
-  };
-
-  const takeOverEditing = async (
-    options: { firstAuthoringMutation?: boolean } = {},
-  ): Promise<void> => {
-    const firstAuthoringMutation = options.firstAuthoringMutation === true;
-    const doc = editorDocumentRef.current;
-    const session = editSessionRef.current;
-    const presence = editPresenceRef.current;
-    if (!doc || !session || !presence || !editorClientIdentity || editAuthorityStateRef.current === 'takeover-pending') return;
-    const activeEditor = presence.active_editor;
-    if (firstAuthoringMutation && activeEditor) return;
-    const attributedEditor = activeEditor ?? presence.last_editor;
-    const actor = attributedEditor
-      ? levelEditorSessionActorLabel(attributedEditor)
-      : 'the previous editor session';
-    const takeoverActionLabel = activeEditor ? 'Take over editing' : 'Start editing here';
-    if (!firstAuthoringMutation && !(await ask({
-      title: activeEditor ? `Take over from ${actor}?` : 'Start editing in this tab?',
-      message: (
-        <>
-          <p>{activeEditor
-            ? levelEditorSessionPresenceDetail({ ...activeEditor, relationship: activeEditor.relationship as 'this_tab' | 'same_device' | 'other_device' }, levelEditorSessionServerNow(presence.server_time))
-            : presence.last_editor
-              ? `No live heartbeat. Most recent authority: ${levelEditorSessionPresenceDetail({ ...presence.last_editor, relationship: presence.last_editor.relationship as 'this_tab' | 'same_device' | 'other_device' }, levelEditorSessionServerNow(presence.server_time))} · session ${presence.last_editor.state}.`
-              : 'No live heartbeat or attributed prior authority is currently available.'}</p>
-          <p>{activeEditor
-            ? 'The latest server-known copy from that session will be preserved before this tab gets autosave and Save control. That editor becomes read-only. Any browser recovery in this tab stays separate and is not applied automatically.'
-            : 'Viewing alone holds no writer lease. Starting now reserves autosave and Save control for this tab before the first level change. Any browser recovery stays separate and is not applied automatically.'}</p>
-        </>
-      ),
-      confirmLabel: takeoverActionLabel,
-      cancelLabel: 'Keep following',
-    }))) return;
-    editAuthorityStateRef.current = 'takeover-pending';
-    setEditAuthorityState('takeover-pending');
-    try {
-      const taken = await takeOverEditorDocumentEditSession(
-        doc.document_id,
-        session.session_id,
-        editorClientIdentity.sessionKey,
-        presence.edit_generation,
-      );
-      const latest = await loadEditorDocument(doc.document_id);
-      const verified = await loadEditorDocumentEditPresence(doc.document_id, {
-        session_id: session.session_id,
-        session_key: editorClientIdentity.sessionKey,
-        device_id: editorClientIdentity.deviceId,
-      });
-      if (taken.recovery) {
-        setServerRecoveries((recoveries) => [
-          taken.recovery!,
-          ...recoveries.filter((entry) => entry.recovery_id !== taken.recovery!.recovery_id),
-        ]);
-      }
-      const verifiedSession = verified.session;
-      const stillWriter = Boolean(
-        verifiedSession
-        && verifiedSession.session_id === taken.session.session_id
-        && verifiedSession.state === 'active'
-        && verified.presence.active_editor?.session_id === verifiedSession.session_id
-        && verifiedSession.edit_generation === taken.session.edit_generation
-        && verified.presence.edit_generation === taken.session.edit_generation
-        && latest.edit_generation === taken.session.edit_generation,
-      );
-      editSessionRef.current = verifiedSession ?? taken.session;
-      editPresenceRef.current = verified.presence;
-      setEditSession(verifiedSession ?? taken.session);
-      setEditPresence(verified.presence);
-      documentRevisionRef.current = latest.revision;
-      lastCloudSyncedSigRef.current = normalizedLevelEditorSignature(latest.level);
-      documentConflictRef.current = latest.baseline_conflict;
-      documentConflictKindRef.current = latest.baseline_conflict ? 'baseline' : null;
-      setEditorDocument(latest);
-      if (!stillWriter) {
-        if (firstAuthoringMutation) preserveAuthorityLoss(verifiedSession ?? taken.session, taken.recovery);
-        applyLevelDocument(latest.level, { editingId: latest.level_id, clean: false });
-        setEditAuthorityState(verifiedSession?.state === 'displaced' ? 'displaced' : 'follower');
-        setCloudSaveState(latest.baseline_conflict ? 'conflict' : 'saved');
-        setCloudSaveDetail('Editing control moved again before this tab finished re-checking it. The current editor is identified above; this tab remained read-only.');
-        reportStatus(
-          firstAuthoringMutation ? 'Your first change was preserved separately.' : 'Takeover did not remain active.',
-          'warning',
-          firstAuthoringMutation
-            ? 'Another tab began editing first. This tab returned to the acknowledged cloud board without overwriting either version.'
-            : 'The active editor changed during the handoff. Review the updated name, tab/device, and last-seen time before trying again.',
-        );
-        return;
-      }
-      if (!firstAuthoringMutation) {
-        applyLevelDocument(latest.level, { editingId: latest.level_id, clean: false });
-      }
-      setEditAuthorityState('writer');
-      setCloudSaveState(latest.baseline_conflict ? 'conflict' : firstAuthoringMutation ? 'pending' : 'saved');
-      setCloudSaveDetail(latest.baseline_conflict
-        ? 'Editing control moved here. The separate saved-position conflict still needs review.'
-        : firstAuthoringMutation
-          ? 'Editing started with your first change. Autosave is writing it now.'
-          : 'Editing control moved to this tab. Autosave and Save now belong here.');
-      reportStatus(
-        firstAuthoringMutation ? 'Editing started here.' : 'Editing control moved to this tab.',
-        'success',
-        firstAuthoringMutation
-          ? 'The viewer session became the writer before any cloud mutation was sent.'
-          : taken.recovery
-          ? `The displaced server-known branch is preserved as recovery ${taken.recovery.recovery_id}.`
-          : 'The displaced server-known branch was preserved before control moved.',
-      );
-    } catch (error) {
-      if (isEditorDocumentEditSessionError(error)) {
-        if (firstAuthoringMutation) preserveAuthorityLoss(error.session ?? session, error.recovery);
-        if (error.session) { editSessionRef.current = error.session; setEditSession(error.session); }
-        if (error.presence) { editPresenceRef.current = error.presence; setEditPresence(error.presence); }
-        setEditAuthorityState(error.code === 'editor_document_session_displaced' ? 'displaced' : 'follower');
-        if (firstAuthoringMutation) {
-          try {
-            mountAcknowledgedWorkingCopy(error.document ?? await loadEditorDocument(doc.document_id));
-          } catch { /* The synchronous browser recovery remains available while cloud reload retries. */ }
-        }
-        reportStatus(
-          firstAuthoringMutation ? 'Your first change was preserved separately.' : `${takeoverActionLabel} did not happen.`,
-          'warning',
-          firstAuthoringMutation
-            ? 'Another tab began editing first. Nothing was overwritten; review the active editor in Status.'
-            : 'The editing-session state changed while you were confirming. Review the updated identity and try again.',
-        );
-        return;
-      }
-      try {
-        if (editorClientIdentity) {
-          const refreshed = await loadEditorDocumentEditPresence(doc.document_id, {
-            session_id: session.session_id,
-            session_key: editorClientIdentity.sessionKey,
-            device_id: editorClientIdentity.deviceId,
-          });
-          if (refreshed.session) { editSessionRef.current = refreshed.session; setEditSession(refreshed.session); }
-          editPresenceRef.current = refreshed.presence;
-          setEditPresence(refreshed.presence);
-        }
-      } catch { /* Keep the last attributed state visible; the next poll retries. */ }
-      setEditAuthorityState('follower');
-      reportStatus(`${takeoverActionLabel} failed.`, 'error', error instanceof Error ? error.message : String(error));
-    }
-  };
-
-  useEffect(() => {
-    if (!firstAuthoringMutationPending) return;
-    void takeOverEditing({ firstAuthoringMutation: true });
-  }, [firstAuthoringMutationPending]);
-
-  const restoreServerRecovery = async (recovery: EditorDocumentRecovery): Promise<void> => {
-    const doc = editorDocumentRef.current;
-    const revision = documentRevisionRef.current;
-    const fence = currentEditFence();
-    if (!doc || revision === null || !fence || serverRecoveryActionBusy) {
-      reportStatus('Recovery restore is read-only in this tab.', 'warning', 'Take over editing before restoring a server recovery.');
-      return;
-    }
-    const actor = levelEditorSessionActorLabel(recovery.source_editor);
-    if (!(await ask({
-      title: `Restore ${actor}'s recovery?`,
-      message: `This non-live recovery captured ${recovery.capture_source === 'displaced-client-upload' ? 'a branch uploaded by the displaced tab' : 'the last server-acknowledged body'} at ${recovery.body_checkpoint_at ? new Date(recovery.body_checkpoint_at).toLocaleString() : 'an unavailable checkpoint time'}. The current working branch will be preserved first, then this becomes a new working-copy revision. Nothing is published until Save.`,
-      confirmLabel: 'Restore recovery',
-      cancelLabel: 'Keep current copy',
-    }))) return;
-    setServerRecoveryBusyId(recovery.recovery_id);
-    try {
-      const restored = await restoreEditorDocumentRecovery(
-        doc.document_id,
-        recovery.recovery_id,
-        revision,
-        fence,
-      );
-      const latest = restored.document;
-      documentRevisionRef.current = latest.revision;
-      lastCloudSyncedSigRef.current = normalizedLevelEditorSignature(latest.level);
-      documentConflictRef.current = latest.baseline_conflict;
-      documentConflictKindRef.current = latest.baseline_conflict ? 'baseline' : null;
-      setEditorDocument(latest);
-      applyLevelDocument(latest.level, { editingId: latest.level_id, clean: false });
-      setCloudSaveState(latest.baseline_conflict ? 'conflict' : 'saved');
-      setCloudSaveDetail('A recovery was restored as a new working-copy revision. The prior working branch was preserved separately.');
-      const refreshed = await listEditorDocumentRecoveries(doc.document_id);
-      setSelectedServerRecoveryId(recovery.recovery_id);
-      setServerRecoveries(refreshed.recoveries);
-      reportStatus('Recovery restored.', 'success', `Cloud working revision ${latest.revision}; the canonical saved level is unchanged.`);
-    } catch (error) {
-      if (isEditorDocumentEditSessionError(error)) {
-        preserveAuthorityLoss(error.session ?? editSessionRef.current, error.recovery);
-        if (error.session) { editSessionRef.current = error.session; setEditSession(error.session); }
-        if (error.presence) { editPresenceRef.current = error.presence; setEditPresence(error.presence); }
-        setEditAuthorityState(error.code === 'editor_document_session_displaced' ? 'displaced' : 'follower');
-        try {
-          mountAcknowledgedWorkingCopy(error.document ?? await loadEditorDocument(doc.document_id));
-        } catch { /* The frozen branch stays available while cloud reload retries. */ }
-      }
-      reportStatus('Recovery was not restored.', 'error', error instanceof Error ? error.message : String(error));
-    } finally {
-      setServerRecoveryBusyId(null);
-    }
-  };
-
-  const removeServerRecovery = async (recovery: EditorDocumentRecovery): Promise<void> => {
-    const doc = editorDocumentRef.current;
-    if (!doc || serverRecoveryActionBusy) return;
-    const actor = levelEditorSessionActorLabel(recovery.source_editor);
-    if (!(await ask({
-      title: 'Delete this recovery?',
-      message: `Permanently remove the recovery from ${actor}, captured ${recovery.body_checkpoint_at ? new Date(recovery.body_checkpoint_at).toLocaleString() : 'at an unavailable checkpoint time'}? The current working copy and saved level do not change.`,
-      confirmLabel: 'Delete recovery',
-      cancelLabel: 'Keep recovery',
-      tone: 'danger',
-    }))) return;
-    const fence = currentEditFence();
-    if (!fence) {
-      preserveAuthorityLoss(editSessionRef.current);
-      setEditAuthorityState('follower');
-      reportStatus('Recovery was not deleted.', 'warning', 'Editing control changed while the confirmation was open. Review the named session; the recovery remains intact.');
-      return;
-    }
-    setServerRecoveryBusyId(recovery.recovery_id);
-    try {
-      await deleteEditorDocumentRecovery(doc.document_id, recovery.recovery_id, fence);
-      setSelectedServerRecoveryId((selectedId) => serverRecoveryCursorAfterRemoval(
-        serverRecoveries,
-        selectedId,
-        recovery.recovery_id,
-      ));
-      setServerRecoveries((recoveries) => recoveries.filter((entry) => entry.recovery_id !== recovery.recovery_id));
-      reportStatus('Recovery deleted.', 'success', 'The current working copy and canonical saved level were unchanged.');
-    } catch (error) {
-      if (isEditorDocumentEditSessionError(error)) {
-        preserveAuthorityLoss(error.session ?? editSessionRef.current, error.recovery);
-        if (error.session) { editSessionRef.current = error.session; setEditSession(error.session); }
-        if (error.presence) { editPresenceRef.current = error.presence; setEditPresence(error.presence); }
-        setEditAuthorityState(error.code === 'editor_document_session_displaced' ? 'displaced' : 'follower');
-        try {
-          mountAcknowledgedWorkingCopy(error.document ?? await loadEditorDocument(doc.document_id));
-        } catch { /* The frozen branch stays available while cloud reload retries. */ }
-      }
-      reportStatus('Recovery could not be deleted.', 'error', error instanceof Error ? error.message : String(error));
-    } finally {
-      setServerRecoveryBusyId(null);
-    }
-  };
-
-  const removeAllServerRecoveries = async (): Promise<void> => {
-    const doc = editorDocumentRef.current;
-    const recoveryIds = serverRecoveries.map((recovery) => recovery.recovery_id);
-    if (!doc || !recoveryIds.length || serverRecoveryActionBusy) return;
-    if (!editorSessionCanWrite) {
-      reportStatus('Recovery cleanup is read-only in this tab.', 'warning', 'Take over editing before deleting recovery copies.');
-      return;
-    }
-    const countLabel = `${recoveryIds.length} recovery ${recoveryIds.length === 1 ? 'copy' : 'copies'}`;
-    if (!(await ask({
-      title: `Delete all ${countLabel}?`,
-      message: `This permanently removes the ${countLabel} currently listed for ${levelNameForSave}. Your current working copy, saved level, working-copy history, and browser backup will not change. Any new recovery created after this confirmation remains available. This cannot be undone.`,
-      confirmLabel: `Delete all ${recoveryIds.length}`,
-      cancelLabel: 'Keep copies',
-      tone: 'danger',
-    }))) return;
-    const fence = currentEditFence();
-    if (!fence) {
-      preserveAuthorityLoss(editSessionRef.current);
-      setEditAuthorityState('follower');
-      reportStatus('Recovery cleanup did not run.', 'warning', 'Editing control changed while the confirmation was open. Every recovery remains intact.');
-      return;
-    }
-    setServerRecoveryCleanupCount(recoveryIds.length);
-    try {
-      const deleted = await deleteEditorDocumentRecoveries(doc.document_id, recoveryIds, fence);
-      const deletedIds = new Set(deleted.recovery_ids);
-      setServerRecoveries((recoveries) => recoveries.filter((recovery) => !deletedIds.has(recovery.recovery_id)));
-      setSelectedServerRecoveryId(null);
-      try {
-        const refreshed = await listEditorDocumentRecoveries(doc.document_id);
-        setServerRecoveries(refreshed.recoveries);
-      } catch { /* The acknowledged ids stay removed locally; the next poll retries the index. */ }
-      reportStatus(
-        `${deleted.deleted_count} recovery ${deleted.deleted_count === 1 ? 'copy' : 'copies'} deleted.`,
-        'success',
-        'Your current working copy, saved level, working-copy history, and browser backup were unchanged.',
-      );
-    } catch (error) {
-      if (isEditorDocumentEditSessionError(error)) {
-        preserveAuthorityLoss(error.session ?? editSessionRef.current, error.recovery);
-        if (error.session) { editSessionRef.current = error.session; setEditSession(error.session); }
-        if (error.presence) { editPresenceRef.current = error.presence; setEditPresence(error.presence); }
-        setEditAuthorityState(error.code === 'editor_document_session_displaced' ? 'displaced' : 'follower');
-        try {
-          mountAcknowledgedWorkingCopy(error.document ?? await loadEditorDocument(doc.document_id));
-        } catch { /* Recovery deletion failed atomically; the frozen branch stays available. */ }
-      }
-      try {
-        const refreshed = await listEditorDocumentRecoveries(doc.document_id);
-        setServerRecoveries(refreshed.recoveries);
-      } catch { /* Keep the last known list visible so the owner can retry. */ }
-      reportStatus(
-        'Recovery cleanup could not be confirmed.',
-        'error',
-        `The recovery list was refreshed when possible. ${error instanceof Error ? error.message : String(error)}`,
-      );
-    } finally {
-      setServerRecoveryCleanupCount(null);
     }
   };
 
@@ -7059,21 +6282,37 @@ export function LevelEditor(): ReactElement {
       }
       const signatureAtSave = currentSig;
       const levelAtSave = candidateLevel;
+      const baseAtSave = editorDocumentRef.current?.level ?? editorDocument.level;
       autosaveInFlightRef.current = true;
       setCloudSaveState('saving');
       const request = autosaveEditorDocument(
         editorDocument.document_id,
         levelAtSave,
         revision,
+        baseAtSave,
         fence,
       )
         .then((doc) => {
+          const acknowledgedSignature = normalizedLevelEditorSignature(doc.level);
           documentRevisionRef.current = doc.revision;
-          lastCloudSyncedSigRef.current = signatureAtSave;
+          lastCloudSyncedSigRef.current = acknowledgedSignature;
+          editorDocumentRef.current = doc;
+          setEditorDocument(doc);
+          if (currentSigRef.current === signatureAtSave) {
+            currentCandidateRef.current = doc.level;
+            currentSigRef.current = acknowledgedSignature;
+            currentEditorBoardRef.current = levelToEditorBoard(doc.level);
+            applyLevelDocumentRef.current(doc.level, { editingId: doc.level_id, clean: false });
+          } else {
+            const merged = mergeSharedLevel(levelAtSave, currentCandidateRef.current, doc.level);
+            currentCandidateRef.current = merged;
+            currentSigRef.current = normalizedLevelEditorSignature(merged);
+            currentEditorBoardRef.current = levelToEditorBoard(merged);
+            applyLevelDocumentRef.current(merged, { editingId: doc.level_id, clean: false });
+          }
           if (doc.baseline_conflict) {
             documentConflictRef.current = true;
             documentConflictKindRef.current = 'baseline';
-            setEditorDocument(doc);
             setCloudSaveState('conflict');
             setCloudSaveDetail('The saved level changed outside this working copy. Your current progress was preserved and autosave is paused.');
             reportStatus(
@@ -7085,20 +6324,11 @@ export function LevelEditor(): ReactElement {
           }
           documentConflictRef.current = false;
           documentConflictKindRef.current = null;
-          setEditorDocument(doc);
           setCloudSaveDetail(null);
-          setCloudSaveState(currentSigRef.current === signatureAtSave ? 'saved' : 'pending');
+          setCloudSaveState(currentSigRef.current === acknowledgedSignature ? 'saved' : 'pending');
         })
         .catch((error: unknown) => {
           if (isEditorDocumentEditSessionError(error)) {
-            preserveAuthorityLoss(error.session ?? editSessionRef.current, error.recovery);
-            if (error.document) {
-              mountAcknowledgedWorkingCopy(error.document);
-            } else {
-              void loadEditorDocument(editorDocument.document_id)
-                .then(mountAcknowledgedWorkingCopy)
-                .catch(() => undefined);
-            }
             if (error.session) {
               editSessionRef.current = error.session;
               setEditSession(error.session);
@@ -7107,25 +6337,27 @@ export function LevelEditor(): ReactElement {
               editPresenceRef.current = error.presence;
               setEditPresence(error.presence);
             }
-            setEditAuthorityState(error.code === 'editor_document_session_displaced' ? 'displaced' : 'follower');
-            setCloudSaveDetail('Autosave stopped because this tab no longer owns the writer lease. The active editor is identified in Status.');
-            reportStatus('This tab became read-only.', 'warning', 'Its browser recovery remains separate; no newer server work was overwritten.');
+            setCloudSaveState('error');
+            setCloudSaveDetail('This page session could not sync. Reloading reconnects it to the shared working copy.');
             return;
           }
           if (isEditorDocumentConflict(error)) {
-            documentRevisionRef.current = error.document.revision;
-            documentConflictRef.current = true;
-            documentConflictKindRef.current = isEditorDocumentBaselineConflict(error) ? 'baseline' : 'revision';
-            setEditorDocument(error.document);
-            setCloudSaveState('conflict');
-            setCloudSaveDetail(isEditorDocumentBaselineConflict(error)
-              ? 'The saved level changed outside this working copy. Your current progress was not overwritten.'
-              : 'The server returned an unexpected newer working-copy revision. No editor identity was inferred from that revision; the current editor was not overwritten.');
-            reportStatus(
-              isEditorDocumentBaselineConflict(error) ? 'Autosave paused because the saved position changed.' : 'Autosave paused for a revision conflict.',
-              'warning',
-              'Your current editor remains open; Discard changes restores the latest saved position.',
-            );
+            const latest = error.document;
+            const merged = mergeSharedLevel(baseAtSave, currentCandidateRef.current, latest.level);
+            documentRevisionRef.current = latest.revision;
+            lastCloudSyncedSigRef.current = normalizedLevelEditorSignature(latest.level);
+            editorDocumentRef.current = latest;
+            setEditorDocument(latest);
+            currentCandidateRef.current = merged;
+            currentSigRef.current = normalizedLevelEditorSignature(merged);
+            currentEditorBoardRef.current = levelToEditorBoard(merged);
+            applyLevelDocumentRef.current(merged, { editingId: latest.level_id, clean: false });
+            documentConflictRef.current = latest.baseline_conflict;
+            documentConflictKindRef.current = latest.baseline_conflict ? 'baseline' : null;
+            setCloudSaveState(latest.baseline_conflict ? 'conflict' : 'pending');
+            setCloudSaveDetail(latest.baseline_conflict
+              ? 'The canonical saved level changed. The shared unpublished working copy remains intact.'
+              : 'Changes from another editor were merged. Syncing the combined working copy…');
             return;
           }
           setCloudSaveState('error');
@@ -7145,10 +6377,9 @@ export function LevelEditor(): ReactElement {
     };
   }, [candidateLevel, cloudSaveState, currentSig, editorDocument, editorReady, editorSessionCanWrite, me?.signed_in, mountAcknowledgedWorkingCopy, preserveAuthorityLoss, saving]);
 
-  // Ordinary same-tab SPA navigation must release the lease before the destination mounts. Without
-  // this handshake, Back to Campaign Editor immediately self-blocks behind this now-unmounted page
-  // and falsely looks like another tab. Final autosave is acknowledged first; the closed credential
-  // is then retired so a Test return opens a fresh session instead of reusing a terminal one.
+  // Ordinary same-tab SPA navigation closes its attributed page session before the destination
+  // mounts. Final autosave is acknowledged first, then a later Test return gets a fresh page
+  // identity instead of reusing a terminal one.
   useEffect(() => registerAppNavigationBlocker((attempt) => {
     if (eventsOpenRef.current) return false;
     const targetUrl = new URL(attempt.href, window.location.href);
@@ -7185,18 +6416,17 @@ export function LevelEditor(): ReactElement {
         const identity = editorClientIdentityRef.current;
         const revision = documentRevisionRef.current;
         const signature = currentSigRef.current;
-        const activeHere = Boolean(
+        const writablePageHere = Boolean(
           doc
           && session
           && identity
           && revision !== null
           && session.session_id === identity.sessionId
-          && session.state === 'active'
-          && editPresenceRef.current?.active_editor?.session_id === session.session_id
-          && editPresenceRef.current.edit_generation === session.edit_generation,
+          && session.state !== 'observing'
+          && session.state !== 'closed',
         );
         if (
-          activeHere
+          writablePageHere
           && doc
           && session
           && identity
@@ -7210,6 +6440,7 @@ export function LevelEditor(): ReactElement {
               doc.document_id,
               currentCandidateRef.current,
               revision,
+              doc.level,
               {
                 edit_session_id: session.session_id,
                 edit_session_key: identity.sessionKey,
@@ -7220,7 +6451,7 @@ export function LevelEditor(): ReactElement {
             lastCloudSyncedSigRef.current = normalizedLevelEditorSignature(acknowledged.level);
             editorDocumentRef.current = acknowledged;
           } catch {
-            // The synchronous session-scoped browser draft remains the recovery if final CAS fails.
+            // The synchronous page-scoped browser draft remains a crash fallback if final CAS fails.
           }
         }
 
@@ -7237,7 +6468,8 @@ export function LevelEditor(): ReactElement {
             editSessionRef.current = closed.session;
             editPresenceRef.current = closed.presence;
           } catch {
-            // Navigation remains recoverable through browser storage; a failed close expires by lease.
+            // Navigation remains recoverable through browser storage; the abandoned page session
+            // is harmless because sessions no longer own exclusive editing authority.
             editSessionRef.current = null;
             editPresenceRef.current = null;
           }
@@ -7293,9 +6525,9 @@ export function LevelEditor(): ReactElement {
       ) return;
       departureFlushSigRef.current = signature;
       if (pageHiding) {
-        autosaveEditorDocumentOnPageHide(doc.document_id, currentCandidateRef.current, revision, fence);
+        autosaveEditorDocumentOnPageHide(doc.document_id, currentCandidateRef.current, revision, doc.level, fence);
       } else {
-        void autosaveEditorDocument(doc.document_id, currentCandidateRef.current, revision, fence).catch(() => undefined);
+        void autosaveEditorDocument(doc.document_id, currentCandidateRef.current, revision, doc.level, fence).catch(() => undefined);
       }
     };
     const flushAfterCurrentWrite = (pageHiding: boolean): void => {
@@ -7371,7 +6603,6 @@ export function LevelEditor(): ReactElement {
   // over a newer cloud revision.
   useEffect(() => {
     if (!editorDocument || cloudSaveState !== 'saved' || lastCloudSyncedSigRef.current !== currentSig) return;
-    if (browserRecoveryConflictRef.current?.source === 'route' && !browserRecoveryConflictRef.current.recoveryId) return;
     if (!isLevelEditorRoutePath(window.location.pathname)) return;
     const params = new URLSearchParams(window.location.search);
     if (!params.has('board')) return;
@@ -7528,7 +6759,7 @@ export function LevelEditor(): ReactElement {
       if (!fence) {
         preserveAuthorityLoss(editSessionRef.current);
         setEditAuthorityState('follower');
-        reportStatus('This tab is read-only.', 'warning', 'Take over editing from the named session before saving.');
+        reportStatus('This page is read-only.', 'warning', 'Reload an owner editing page to reconnect live sync.');
         return;
       }
       const saved = await saveEditorDocument(
@@ -7566,7 +6797,7 @@ export function LevelEditor(): ReactElement {
       reportStatus(official ? 'Published.' : 'Saved.', 'success', 'The thumbnail and campaign play now use this position.');
     } catch (e) {
       if (isEditorDocumentEditSessionError(e)) {
-        preserveAuthorityLoss(e.session ?? editSessionRef.current, e.recovery);
+        preserveAuthorityLoss(e.session ?? editSessionRef.current);
         if (e.session) { editSessionRef.current = e.session; setEditSession(e.session); }
         if (e.presence) { editPresenceRef.current = e.presence; setEditPresence(e.presence); }
         setEditAuthorityState(e.code === 'editor_document_session_displaced' ? 'displaced' : 'follower');
@@ -7593,7 +6824,7 @@ export function LevelEditor(): ReactElement {
         return;
       }
       const mapped = mapSaveError(e);
-      if ('action' in mapped) { signInForEditor(); return; }
+      if ('action' in mapped) { reportAuthSessionFailure(e); signInForEditor(); return; }
       reportStatus(mapped.message, 'error');
     } finally {
       setSaving(false);
@@ -7625,7 +6856,7 @@ export function LevelEditor(): ReactElement {
       if (!fence) {
         preserveAuthorityLoss(editSessionRef.current);
         setEditAuthorityState('follower');
-        reportStatus('This tab is read-only.', 'warning', 'Take over editing from the named session before discarding.');
+        reportStatus('This page is read-only.', 'warning', 'Reload an owner editing page to reconnect live sync.');
         return;
       }
       const doc = await discardEditorDocumentChanges(
@@ -7649,7 +6880,7 @@ export function LevelEditor(): ReactElement {
       reportStatus('Changes discarded.', 'success', 'The editor again matches the saved thumbnail and campaign position.');
     } catch (error) {
       if (isEditorDocumentEditSessionError(error)) {
-        preserveAuthorityLoss(error.session ?? editSessionRef.current, error.recovery);
+        preserveAuthorityLoss(error.session ?? editSessionRef.current);
         if (error.session) { editSessionRef.current = error.session; setEditSession(error.session); }
         if (error.presence) { editPresenceRef.current = error.presence; setEditPresence(error.presence); }
         setEditAuthorityState(error.code === 'editor_document_session_displaced' ? 'displaced' : 'follower');
@@ -7693,7 +6924,7 @@ export function LevelEditor(): ReactElement {
       nextLayer !== 'board'
       && nextLayer !== 'camera'
       && nextLayer !== 'status'
-      && nextLayer !== 'recovery'
+      && nextLayer !== 'history'
       && nextLayer !== 'rules'
       && nextLayer !== 'generate'
       && nextLayer !== 'level-artwork'
@@ -8341,9 +7572,7 @@ export function LevelEditor(): ReactElement {
     : me?.signed_in && editorDocument && !editorSessionCanWrite
     ? editAuthorityState === 'reviewer'
       ? 'This document is open for administrator review only.'
-      : editorSessionCanBegin
-        ? 'This page is viewing the level; editing starts with the first level change.'
-      : 'This tab is read-only while the editor session identified above has control.'
+      : 'Live sync is reconnecting before this page can save.'
     : !me?.signed_in && authReachable === false
     ? 'Reconnect to save this level.'
     : !me?.signed_in
@@ -8370,9 +7599,7 @@ export function LevelEditor(): ReactElement {
     : me?.signed_in && editorDocument && !editorSessionCanWrite
     ? editAuthorityState === 'reviewer'
       ? 'Cross-owner review does not create presence or grant mutation authority.'
-      : editorSessionCanBegin
-        ? 'Make a level change to acquire the currently free writer lease. Merely opening this page does not hold it.'
-      : 'Use Take over editing if you intend to move autosave and Save control to this tab.'
+      : 'Every owner tab shares one working copy; this page will resume automatically when sync reconnects.'
     : !me?.signed_in && authReachable === false
     ? browserRecoverySafetyDetail
     : !me?.signed_in
@@ -8416,7 +7643,7 @@ export function LevelEditor(): ReactElement {
     : cloudSaveState === 'conflict'
     ? 'Autosave paused'
     : 'Cloud autosave interrupted';
-  const recoveryConflictVisible = cloudSaveState === 'conflict' && documentConflictKindRef.current === 'recovery';
+  const recoveryConflictVisible = false;
   const persistenceEmergencyVisible = cloudSaveState === 'conflict' || cloudSaveState === 'error';
   const hasDiscardableChanges = Boolean(
     editorSessionCanWrite
@@ -8494,24 +7721,6 @@ export function LevelEditor(): ReactElement {
     || (layer === 'placed-art' && brushKind === 'artwork' && tool === 'select' && !artworkSelectionActive)
     ? null
     : tool;
-  const editorAttentionTarget: 'status' | 'recovery' | null = me?.signed_in && editorDocument
-    ? editAuthorityState !== 'writer' && editPresence?.active_editor
-      ? 'status'
-      : serverRecoveries.length || browserRecoveryConflict || recoveryConflictVisible
-        ? 'recovery'
-        : null
-    : null;
-  const editorSessionAttentionLabel = editorAttentionTarget === 'status'
-    ? 'Editor status'
-    : editorAttentionTarget === 'recovery'
-      ? serverRecoveries.length
-        ? `${serverRecoveries.length} recover${serverRecoveries.length === 1 ? 'y' : 'ies'}`
-        : 'Recovery'
-      : null;
-  const openEditorAttention = (): void => {
-    selectLayer(editorAttentionTarget ?? 'status');
-    setEditorAttentionFocusRequest((request) => request + 1);
-  };
 
   return (
     // The level editor is a homepage-family surface: it shows the ONE shared HomepageBackdrop
@@ -8556,8 +7765,7 @@ export function LevelEditor(): ReactElement {
             reviewSaveLabel={isOfficialTarget ? 'Review & publish' : 'Review & save'}
           />
         ) : null}
-        {/* Ordinary editor status stays in Status and preserved copies stay in Recovery. The
-            title bar contributes one control only when either destination needs attention. */}
+        {/* Ordinary editor status stays in Status. Optional version history has its own layer. */}
         {editorReady ? <TitleBarControlContribution
           ariaLabel="Editor navigation"
           controls={[
@@ -8575,17 +7783,6 @@ export function LevelEditor(): ReactElement {
               label: '‹ Back',
               destination: routeParams.returnTo,
               title: 'Return to the campaign editor',
-            }] : []),
-            ...(editorSessionAttentionLabel ? [{
-              id: 'level-editor-session-status',
-              kind: 'action' as const,
-              label: editorSessionAttentionLabel,
-              title: editorAttentionTarget === 'recovery'
-                ? 'Open recovery information'
-                : 'Open editing-session information in Status',
-              active: true,
-              testId: 'le-editor-session-attention',
-              onActivate: openEditorAttention,
             }] : []),
           ] satisfies TitleBarControlSpec[]}
         /> : null}
@@ -8632,7 +7829,7 @@ export function LevelEditor(): ReactElement {
                 >Download cloud copy</ChromeButton>
                 <ChromeButton unit="inner-text-button"
                   className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                  onClick={() => selectLayer(recoveryConflictVisible ? 'recovery' : 'status')}
+                  onClick={() => selectLayer(recoveryConflictVisible ? 'history' : 'status')}
                 >{recoveryConflictVisible ? 'Review recovery' : 'Review status'}</ChromeButton>
               </div>
             </section>
@@ -8837,7 +8034,7 @@ export function LevelEditor(): ReactElement {
                             disabled={!editorSessionCanWrite}
                             title={editorSessionCanWrite
                               ? 'Choose the exact 16:9 scene crop saved as an AI generation reference.'
-                              : 'Take over editing from the named session before changing the viewing pane.'}
+                              : 'This review page is read-only.'}
                             onClick={openPredrawnGenerationFrame}
                           >{currentEditorBoard.predrawnGenerationFrame ? 'Edit viewing pane' : 'Choose viewing pane'}</ChromeButton>
                           <ChromeNavButton unit="inner-text-button"
@@ -9045,248 +8242,31 @@ export function LevelEditor(): ReactElement {
         inert={!editorReady || saving}
         ariaBusy={!editorReady || saving}
       >
-        {layer === 'status' && me?.signed_in && editorDocument ? (
-          <section
-            ref={editorSessionStatusRef}
-            tabIndex={-1}
-            className="skirmish-card le-status-card le-session-status"
-            aria-live="polite"
-            data-testid="le-editor-session-status"
-            data-state={editAuthorityState}
-          >
-            <h2>Editing session</h2>
-            <div className={`le-status-current ${editAuthorityState === 'writer' || editorSessionCanBegin ? 'is-ready' : 'is-blocked'}`}>
-              <strong>
-                {editAuthorityState === 'writer' && editSession
-                  ? `Editing as ${levelEditorSessionActorLabel(editSession)}`
-                  : editAuthorityState === 'reviewer'
-                    ? 'Administrator review only'
-                    : editAuthorityState === 'checking'
-                      ? 'Checking editing session…'
-                      : editPresence?.active_editor
-                        ? `${levelEditorSessionActorLabel(editPresence.active_editor)} has editing control`
-                        : editorSessionCanBegin
-                          ? 'Viewing — editing has not started'
-                        : editPresence?.last_editor
-                          ? `${levelEditorSessionActorLabel(editPresence.last_editor)} most recently had editing control`
-                        : editAuthorityState === 'error'
-                          ? 'Editing authority unavailable'
-                          : 'No active writer heartbeat'}
-              </strong>
-              <span>
-                {editAuthorityState === 'writer' && editSession
-                  ? levelEditorSessionPresenceDetail({ ...editSession, relationship: 'this_tab' }, levelEditorSessionServerNow(editPresence?.server_time))
-                  : editAuthorityState === 'reviewer'
-                    ? 'Read-only; this review does not create presence or block the owner.'
-                    : editPresence?.active_editor
-                      ? levelEditorSessionPresenceDetail({
-                          ...editPresence.active_editor,
-                          relationship: editPresence.active_editor.relationship as 'this_tab' | 'same_device' | 'other_device',
-                        }, levelEditorSessionServerNow(editPresence.server_time))
-                      : editorSessionCanBegin
-                        ? 'This page holds no writer lease. Your first level change will acquire editing control before autosave begins.'
-                      : editPresence?.last_editor
-                        ? `No live heartbeat · ${levelEditorSessionPresenceDetail({
-                            ...editPresence.last_editor,
-                            relationship: editPresence.last_editor.relationship as 'this_tab' | 'same_device' | 'other_device',
-                          }, levelEditorSessionServerNow(editPresence.server_time))} · session ${editPresence.last_editor.state}`
-                      : editAuthorityState === 'checking'
-                        ? 'The editor stays read-only until the server identifies the writer.'
-                        : 'This tab is read-only until editing authority can be verified.'}
-              </span>
-              {!editorSessionCanWrite && editAuthorityState !== 'reviewer' && editAuthorityState !== 'checking' ? (
-                <div className="le-board-actions le-session-actions">
-                  {editPresence?.active_editor ? (
-                    <ChromeButton unit="inner-text-button"
-                      className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                      onClick={() => { void followLatestWorkingCopy(); }}
-                    >Follow latest</ChromeButton>
-                  ) : null}
-                  <ChromeButton unit="inner-text-button"
-                    className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'active')}
-                    data-testid="le-take-over-editing-status"
-                    disabled={editAuthorityState === 'takeover-pending' || saving || editPresence?.can_take_over === false}
-                    title={editPresence?.active_editor
-                      ? `Take control after preserving ${levelEditorSessionActorLabel(editPresence.active_editor)}'s server-known branch.`
-                      : editPresence?.last_editor
-                        ? `Start editing after preserving the most recent branch from ${levelEditorSessionActorLabel(editPresence.last_editor)}; that session is ${editPresence.last_editor.state}, not live.`
-                        : 'Re-check authority, preserve the prior server-known branch, and move editing control here.'}
-                    onClick={() => { void takeOverEditing(); }}
-                  >{editAuthorityState === 'takeover-pending'
-                    ? editPresence?.active_editor ? 'Taking over…' : 'Starting editing…'
-                    : editPresence?.active_editor ? 'Take over editing' : 'Start editing here'}</ChromeButton>
-                </div>
-              ) : null}
-            </div>
-          </section>
-        ) : null}
-        {layer === 'recovery' && me?.signed_in && editorDocument ? (
-          <section className="skirmish-card le-status-card le-server-recovery-card" aria-labelledby="le-server-recoveries-title">
-            <h2 id="le-server-recoveries-title">Recovery copies</h2>
-            <div
-              ref={editorRecoveriesRef}
-              tabIndex={-1}
-              className="le-status-current le-server-recoveries"
-              data-testid="le-server-recoveries"
-              aria-busy={serverRecoveryActionBusy || undefined}
-            >
-              {selectedServerRecovery ? (
-              <>
-              <span>Newest first. These safety copies do not affect the level unless you restore one.</span>
-              <CyclePicker
-                className="le-recovery-browser-nav"
-                ariaLabel="Browse recovery copies"
-                buttonClassName="le-recovery-stepper-button"
-                previousLabel="Newer recovery copy"
-                nextLabel="Older recovery copy"
-                previousTestId="le-newer-server-recovery"
-                nextTestId="le-older-server-recovery"
-                previousDisabled={serverRecoveryActionBusy || selectedServerRecoveryIndex <= 0}
-                nextDisabled={serverRecoveryActionBusy || selectedServerRecoveryIndex >= serverRecoveries.length - 1}
-                onPrevious={() => setSelectedServerRecoveryId(stepServerRecoveryCursor(serverRecoveries, selectedServerRecoveryId, -1))}
-                onNext={() => setSelectedServerRecoveryId(stepServerRecoveryCursor(serverRecoveries, selectedServerRecoveryId, 1))}
-              >
-                <strong data-testid="le-server-recovery-position" aria-live="polite" aria-atomic="true">
-                  Recovery {selectedServerRecoveryIndex + 1} of {serverRecoveries.length}
-                </strong>
-              </CyclePicker>
-              <article
-                className="le-recovery-entry"
-                key={selectedServerRecovery.recovery_id}
-                data-testid="le-server-recovery-entry"
-                data-resolved={selectedServerRecovery.resolved_at ? 'true' : 'false'}
-              >
-                <div>
-                  <b>{levelEditorSessionActorLabel(selectedServerRecovery.source_editor)}</b>
-                  <span>{selectedServerRecovery.source_editor.client_label || 'Browser/device label unavailable'}</span>
-                  <span>
-                    {serverRecoveryReasonLabel(selectedServerRecovery)} · saved{' '}
-                    {selectedServerRecovery.body_checkpoint_at
-                      ? new Date(selectedServerRecovery.body_checkpoint_at).toLocaleString()
-                      : 'at an unavailable time'}
-                  </span>
-                  <span>
-                    Working revision {selectedServerRecovery.document_revision}
-                    {selectedServerRecovery.resolved_at
-                      ? ` · restored ${new Date(selectedServerRecovery.resolved_at).toLocaleString()}`
-                      : ' · not restored'}
-                  </span>
-                </div>
-                <div className="le-board-actions le-recovery-actions">
-                  <ChromeButton unit="inner-text-button"
-                    className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                    disabled={!editorSessionCanWrite || serverRecoveryActionBusy}
-                    title={!editorSessionCanWrite
-                      ? 'Take over editing before restoring a recovery copy.'
-                      : 'Preserve the current working branch, then restore this copy as a new unpublished working revision.'}
-                    onClick={() => { void restoreServerRecovery(selectedServerRecovery); }}
-                  >{serverRecoveryBusyId === selectedServerRecovery.recovery_id ? 'Working…' : 'Restore this copy'}</ChromeButton>
-                  <ChromeButton unit="inner-text-button"
-                    className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')}
-                    disabled={!editorSessionCanWrite || serverRecoveryActionBusy}
-                    title={!editorSessionCanWrite
-                      ? 'Take over editing before deleting a recovery copy.'
-                      : 'Permanently remove only this recovery copy.'}
-                    onClick={() => { void removeServerRecovery(selectedServerRecovery); }}
-                  >Delete this copy</ChromeButton>
-                </div>
-              </article>
-              <div className="le-recovery-cleanup">
-                <span>Finished reviewing? Delete all {serverRecoveries.length} copies at once.</span>
-                <ChromeButton unit="inner-text-button"
-                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')}
-                  data-testid="le-delete-all-server-recoveries"
-                  disabled={!editorSessionCanWrite || serverRecoveryActionBusy}
-                  title={!editorSessionCanWrite
-                    ? 'Take over editing before deleting recovery copies.'
-                    : `Permanently delete the ${serverRecoveries.length} recovery copies currently listed. Your level does not change.`}
-                  onClick={() => { void removeAllServerRecoveries(); }}
-                >{serverRecoveryCleanupCount === null
-                    ? `Delete all ${serverRecoveries.length} ${serverRecoveries.length === 1 ? 'copy' : 'copies'}…`
-                    : `Deleting ${serverRecoveryCleanupCount} ${serverRecoveryCleanupCount === 1 ? 'copy' : 'copies'}…`}</ChromeButton>
-              </div>
-              </>
-              ) : (
-                <span className="le-recovery-empty" role="status">No recovery copies to review. Your working copy and saved level are unchanged.</span>
-              )}
-            </div>
-          </section>
-        ) : null}
         <div className="le-editor-authoring-controls" inert={!editorSessionCanAuthor ? true : undefined}>
-        {layer === 'recovery' ? (
+        {layer === 'history' ? (
           <>
             <section
               ref={editorRecoveryOverviewRef}
               tabIndex={-1}
               className="skirmish-card le-status-card le-recovery-overview"
               aria-live="polite"
-              data-testid="le-recovery-overview"
+              data-testid="le-history-overview"
             >
-              <h2>Browser and cloud copies</h2>
-              {browserRecoveryConflict ? (
-                <div className="le-status-current is-blocked" data-testid="le-browser-recovery" role="status">
-                  <strong>{browserRecoveryConflict.source === 'route' ? 'Test/route snapshot preserved — this is not another editor' : 'Browser recovery preserved — this is not another editor'}</strong>
-                  <span>
-                    {browserRecoveryConflict.source === 'route'
-                      ? 'Separate snapshot'
-                      : `Saved ${new Date(browserRecoveryConflict.draft.savedAt).toLocaleString()}`} from working revision{' '}
-                    {browserRecoveryConflict.draft.documentRevision ?? 'unknown'}. The board now shown is cloud revision{' '}
-                    {browserRecoveryConflict.cloudRevision}; the older copy was not applied.
-                    {browserRecoveryConflict.recoveryCount > 1
-                      ? ` ${browserRecoveryConflict.recoveryCount} session-scoped browser recoveries are preserved; this is the newest.`
-                      : ''}
-                  </span>
-                  <div className="le-board-actions le-recovery-actions">
-                    <ChromeButton unit="inner-text-button"
-                      className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                      data-testid="le-load-browser-recovery"
-                      disabled={saving || !editorSessionCanWrite}
-                      title="Load this browser copy into the visible working board; it remains unpublished until Save."
-                      onClick={() => { void loadBrowserRecovery(); }}
-                    >{browserRecoveryConflict.source === 'route' ? 'Load route snapshot' : 'Load browser recovery'}</ChromeButton>
-                    <ChromeButton unit="inner-text-button"
-                      className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                      data-testid="le-keep-cloud-working-copy"
-                      disabled={saving}
-                      title="Keep the cloud revision currently shown and remove only the older browser recovery."
-                      onClick={() => { void keepCloudWorkingCopy(); }}
-                    >Keep cloud copy</ChromeButton>
-                  </div>
-                </div>
-              ) : (
-                <div className="le-status-current is-ready">
-                  <strong>No browser recovery needs a decision</strong>
-                  <span>The board shown is the current working copy. Downloads below do not change it.</span>
-                </div>
-              )}
-              <div className="le-board-actions le-recovery-actions">
-                {recoveryConflictVisible ? (
+              <h2>Shared working copy</h2>
+              <div className="le-status-current is-ready">
+                <strong>{cloudSaveState === 'saved' ? 'Synced' : 'Shared editing is active'}</strong>
+                <span>Every open editor uses this working copy. Changes made in another tab appear here automatically.</span>
+              </div>
+              {recoveryConflictVisible ? (
+                <div className="le-board-actions le-recovery-actions">
                   <ChromeButton unit="inner-text-button"
                     className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'active')}
                     data-testid="le-keep-recovered-work-recovery"
                     disabled={saving}
                     onClick={keepRecoveredWorkingCopy}
                   >Keep recovered work</ChromeButton>
-                ) : null}
-                {editorDocument ? (
-                  <ChromeButton unit="inner-text-button"
-                    className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                    data-testid="le-download-browser-recovery"
-                    disabled={saving}
-                    title="Download the exact recovery copy stored by this browser."
-                    onClick={downloadBrowserRecovery}
-                  >Download browser copy</ChromeButton>
-                ) : null}
-                {editorDocument ? (
-                  <ChromeButton unit="inner-text-button"
-                    className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                    data-testid="le-download-cloud-copy"
-                    disabled={saving}
-                    title="Download the current server working copy without changing the level."
-                    onClick={downloadCloudWorkingCopy}
-                  >Download cloud copy</ChromeButton>
-                ) : null}
-              </div>
+                </div>
+              ) : null}
             </section>
             {editorDocument ? (
               <section className="skirmish-card le-status-card">
@@ -9294,14 +8274,25 @@ export function LevelEditor(): ReactElement {
                   <div className="le-revision-history-head">
                     <div>
                       <h3 id="le-revision-history-title">Working-copy history</h3>
-                      <span>Restore creates a new private working revision. It never publishes.</span>
+                      <span>Optional version history. Restore never publishes.</span>
                     </div>
-                    <ChromeButton unit="inner-text-button"
-                      className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                      disabled={revisionHistoryState === 'loading' || saving}
-                      onClick={() => setRevisionHistoryRefresh((value) => value + 1)}
-                    >Refresh</ChromeButton>
+                    <div className="le-board-actions">
+                      {revisionHistoryExpanded ? (
+                        <ChromeButton unit="inner-text-button"
+                          className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                          disabled={revisionHistoryState === 'loading' || saving}
+                          onClick={() => setRevisionHistoryRefresh((value) => value + 1)}
+                        >Refresh</ChromeButton>
+                      ) : null}
+                      <ChromeButton unit="inner-text-button"
+                        className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                        aria-expanded={revisionHistoryExpanded}
+                        aria-controls="le-revision-history-content"
+                        onClick={() => setRevisionHistoryExpanded((expanded) => !expanded)}
+                      >{revisionHistoryExpanded ? 'Hide history' : 'Show history'}</ChromeButton>
+                    </div>
                   </div>
+                  {revisionHistoryExpanded ? <div id="le-revision-history-content">
                   {revisionHistoryState === 'loading' || revisionHistoryState === 'idle' ? (
                     <p className="le-board-note">Loading retained revisions…</p>
                   ) : revisionHistoryState === 'error' ? (
@@ -9332,7 +8323,7 @@ export function LevelEditor(): ReactElement {
                                 isCurrentRevision
                                   ? 'This is the current cloud working revision.'
                                   : !editorSessionCanWrite
-                                  ? 'Take over editing from the named session before restoring history.'
+                                  ? 'Live sync must reconnect before restoring history.'
                                   : documentConflictRef.current || cloudSaveState === 'error'
                                   ? 'Resolve the persistence interruption before restoring history.'
                                   : `Restore revision ${entry.revision} as a new working copy revision.`
@@ -9346,6 +8337,7 @@ export function LevelEditor(): ReactElement {
                   ) : (
                     <p className="le-board-note">No retained revisions are available yet.</p>
                   )}
+                  </div> : null}
                 </div>
               </section>
             ) : null}
@@ -9852,7 +8844,7 @@ export function LevelEditor(): ReactElement {
                 aria-pressed={boardBackgroundModeState === 'ai'}
                 disabled={!editorSessionCanWrite || predrawnSelectionValidation.kind !== 'valid'}
                 title={!editorSessionCanWrite
-                  ? 'Take over editing from the named session before changing the level background.'
+                  ? 'This review page is read-only.'
                   : predrawnSelectionValidation.kind === 'valid'
                     ? 'Use the remembered AI artwork as this level background.'
                     : predrawnSelectionValidation.kind === 'stale'
@@ -10682,7 +9674,7 @@ export function LevelEditor(): ReactElement {
         </section>
         ) : null}
 
-        {layer !== 'camera' && layer !== 'status' && layer !== 'recovery' && (selectedArtworkForDetails || selectedUnitAsset || selectedDoodadAsset || selectedProp || selectedAsset || selectedCell) ? (
+        {layer !== 'camera' && layer !== 'status' && layer !== 'history' && (selectedArtworkForDetails || selectedUnitAsset || selectedDoodadAsset || selectedProp || selectedAsset || selectedCell) ? (
         <section className="skirmish-card le-details">
           <h2>Details · {selectedArtworkForDetails ? 'Artwork' : selectedUnitAsset ? 'Unit' : selectedDoodadAsset ? 'Doodad' : selectedProp ? 'Prop' : selectedAsset ? 'Tile' : 'Cell'}</h2>
           {selectedArtworkForDetails ? (

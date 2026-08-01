@@ -6,12 +6,12 @@ const source = readFileSync(new URL('./LevelEditor.tsx', import.meta.url), 'utf8
 const editorDocumentSource = readFileSync(new URL('../net/editorDocuments.ts', import.meta.url), 'utf8');
 
 describe('level editor persistence safety UI', () => {
-  it('surfaces a persistence emergency outside the Status and Recovery layer bodies', () => {
+  it('surfaces a persistence emergency outside the Status and History layer bodies', () => {
     const banner = source.indexOf('data-testid="le-persistence-emergency"');
-    const recoveryBody = source.indexOf("{layer === 'recovery' ? (");
-    const statusBody = source.indexOf(") : layer === 'status' ? (", recoveryBody);
+    const historyBody = source.indexOf("{layer === 'history' ? (");
+    const statusBody = source.indexOf(") : layer === 'status' ? (", historyBody);
     expect(banner).toBeGreaterThan(0);
-    expect(recoveryBody).toBeGreaterThan(banner);
+    expect(historyBody).toBeGreaterThan(banner);
     expect(statusBody).toBeGreaterThan(banner);
   });
 
@@ -36,18 +36,16 @@ describe('level editor persistence safety UI', () => {
     expect(source).toContain('editorDocument?.document_id, editorDocument?.revision, layer');
   });
 
-  it('keeps recovery controls in Recovery and out of Status', () => {
-    const recoveryBody = source.indexOf("{layer === 'recovery' ? (");
-    const statusBody = source.indexOf(") : layer === 'status' ? (", recoveryBody);
+  it('keeps working-copy history in History and out of Status', () => {
+    const historyBody = source.indexOf("{layer === 'history' ? (");
+    const statusBody = source.indexOf(") : layer === 'status' ? (", historyBody);
     const statusEnd = source.indexOf(') : levelArtworkWorkspace ? (', statusBody);
-    const recovery = source.slice(recoveryBody, statusBody);
+    const history = source.slice(historyBody, statusBody);
     const status = source.slice(statusBody, statusEnd);
 
-    expect(recovery).toContain('data-testid="le-recovery-overview"');
-    expect(recovery).toContain('data-testid="le-download-browser-recovery"');
-    expect(recovery).toContain('Working-copy history');
+    expect(history).toContain('data-testid="le-history-overview"');
+    expect(history).toContain('Working-copy history');
     expect(status).not.toContain('data-testid="le-browser-recovery"');
-    expect(status).not.toContain('data-testid="le-download-browser-recovery"');
     expect(status).not.toContain('Working-copy history');
     expect(status).toContain('data-testid="le-save"');
   });

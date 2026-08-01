@@ -15,7 +15,8 @@ import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { validateLevel, type Campaign, type CampaignLevelRef, type Level } from '../core/level';
 import { MODE_NAME } from '../core/objectives';
 import { isWorkspaceConflict } from '../net/campaignWorkspace';
-import { fetchMe, goSignIn, type AuthUser } from '../net/auth';
+import { goSignIn } from '../net/auth';
+import { reportAuthSessionFailure, useAuthSession } from '../net/authSession';
 import { levelThumbnailUrl } from '../net/levelThumbnails';
 import { LevelPreviewColumn } from './LevelPreviewColumn';
 import { injectStressLevels } from '../campaign/stressFixture';
@@ -43,7 +44,6 @@ import {
   listEditorDocuments,
   loadEditorDocument,
   openEditorDocumentEditSession,
-  takeOverEditorDocumentEditSession,
   type EditorDocument,
   type EditorDocumentSummary,
 } from '../net/editorDocuments';
@@ -55,15 +55,14 @@ import {
 } from './campaignEditorRecentDrafts';
 import { clearScopedLevelEditorDraft, newLevelEditorClientIdentity, rebaseScopedLevelEditorDraft } from './levelEditorDraft';
 import { levelEditorLevelSignature } from './levelEditorSignature';
-import { levelEditorClientLabel, levelEditorSessionActorLabel, levelEditorSessionPresenceDetail, levelEditorSessionServerNow } from './levelEditorSessionPresentation';
+import { levelEditorClientLabel } from './levelEditorSessionPresentation';
 import { installedUiMedia } from './installedUiMedia';
 import { EditorCollectionRailTab } from './shared/EditorCollectionRailTab';
 import { WarEditor } from './WarEditor';
 import { navigateApp } from './navigation';
-import { sceneTransitionTargetAttributes } from './shell/sceneTransitionTarget';
 import { ActionListRow, type ActionListAction } from './shared/ActionList';
-import { IconButton } from './shared/ChromeButton';
-import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
+import { ChromeButton, ChromeNavButton, IconButton } from './shared/ChromeButton';
+import { EditorContentSceneSlot } from './shell/AuthoredSceneSlot';
 
 const CE_ICONS = {
   favorite: installedUiMedia('ui-kit-icons-brand-shield-png'),
@@ -85,13 +84,6 @@ if (campaignMenuModes.length !== 1) {
 const CAMPAIGN_TAB_ICON = campaignMenuModes[0].media.icon?.media.immutableUrl;
 if (!CAMPAIGN_TAB_ICON) throw new Error('installed campaign menu mode has no icon');
 
-class RecentDraftEditingAuthorityError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'RecentDraftEditingAuthorityError';
-  }
-}
-
 async function withRecentDraftEditingAuthority<T>(
   document: EditorDocument,
   action: (fence: ReturnType<typeof editorDocumentEditFence>) => Promise<T>,
@@ -104,31 +96,8 @@ async function withRecentDraftEditingAuthority<T>(
     device_id: identity.deviceId,
     client_label: `Campaign Editor · ${window.location.host} · ${levelEditorClientLabel(window.navigator.userAgent)}`,
   });
-  let authority = opened;
-  if (opened.session.state !== 'active' && !opened.presence.active_editor) {
-    try {
-      authority = await takeOverEditorDocumentEditSession(
-        document.document_id,
-        opened.session.session_id,
-        identity.sessionKey,
-        opened.presence.edit_generation,
-      );
-    } catch (error) {
-      await closeEditorDocumentEditSession(document.document_id, opened.session.session_id, identity.sessionKey).catch(() => undefined);
-      throw error;
-    }
-  }
-  const activeHere = authority.session.state === 'active'
-    && authority.presence.active_editor?.session_id === authority.session.session_id;
-  if (!activeHere) {
-    await closeEditorDocumentEditSession(document.document_id, opened.session.session_id, identity.sessionKey).catch(() => undefined);
-    const active = authority.presence.active_editor;
-    throw new RecentDraftEditingAuthorityError(active
-      ? `${levelEditorSessionActorLabel(active)} currently has editing control. ${levelEditorSessionPresenceDetail(active, levelEditorSessionServerNow(authority.presence.server_time))}. Open the level and use Take over editing if you intend to move control.`
-      : 'This working copy has no attributable active writer. Open the level to re-check authority before changing it.');
-  }
   try {
-    return await action(editorDocumentEditFence(authority.session, identity.sessionKey));
+    return await action(editorDocumentEditFence(opened.session, identity.sessionKey));
   } finally {
     await closeEditorDocumentEditSession(document.document_id, opened.session.session_id, identity.sessionKey).catch(() => undefined);
   }
@@ -490,12 +459,8 @@ export function UnassignedLevelRow({
 }
 
 function recentDraftActionError(error: unknown, action: 'rename' | 'remove'): string {
-  if (error instanceof RecentDraftEditingAuthorityError) return error.message;
   if (isEditorDocumentEditSessionError(error)) {
-    const active = error.presence?.active_editor;
-    return active
-      ? `${levelEditorSessionActorLabel(active)} currently has editing control. ${levelEditorSessionPresenceDetail(active, levelEditorSessionServerNow(error.presence?.server_time))}. Open the level and use Take over editing if you intend to move control.`
-      : 'Editing control changed before this action completed. Open the level to see the current editor and take over if needed.';
+    return 'Live sync could not authenticate this action. Reopen the shared working copy and try again.';
   }
   if (isEditorDocumentConflict(error)) {
     return 'The working copy has a newer server revision. The newer draft is shown; review it and try again.';
@@ -582,6 +547,7 @@ export function RecentDraftLevelRow({
           document.document_id,
           { ...document.level, name: nextName },
           document.revision,
+          document.level,
           fence,
         ),
       );
@@ -739,7 +705,11 @@ export function CampaignEditor({
   const selectedCampaignId = useCampaigns((s) => s.selectedCampaignId);
   const selectedLevelId = useCampaigns((s) => s.selectedLevelId);
   const [status, setStatus] = useState('');
-  const [me, setMe] = useState<AuthUser | null>(null);
+  const sharedAuthStatus = useAuthSession((session) => session.status);
+  const authIdentityKey = sharedAuthStatus?.reachable
+    ? `${sharedAuthStatus.user.signed_in}:${sharedAuthStatus.user.email ?? ''}`
+    : null;
+  const me = sharedAuthStatus?.reachable ? sharedAuthStatus.user : null;
   const [recentDrafts, setRecentDrafts] = useState<EditorDocument[]>([]);
   const [draftsSettled, setDraftsSettled] = useState(false);
   // A stale whole-workspace body must never be paired with the newer revision from a 409 and
@@ -798,10 +768,10 @@ export function CampaignEditor({
   }, [embedded]);
 
   useEffect(() => {
+    if (!sharedAuthStatus?.reachable) return undefined;
     let active = true;
-    void fetchMe().then(async (user) => {
-      if (!active) return;
-      setMe(user);
+    const user = sharedAuthStatus.user;
+    void (async () => {
       if (!user.signed_in) {
         setRecentDrafts([]);
         setStatus('Official campaigns shown. Sign in to author your own.');
@@ -828,9 +798,7 @@ export function CampaignEditor({
         // Discovery is optional UI. Workspace authoring remains available when the private list
         // endpoint is temporarily unavailable, and no fallback may invent or expose documents.
       }
-    }).catch(() => {
-      if (active) setStatus('Recent drafts could not be loaded. Campaign editing remains available.');
-    }).finally(() => {
+    })().finally(() => {
       if (active) setDraftsSettled(true);
     });
     void (async () => {
@@ -869,7 +837,7 @@ export function CampaignEditor({
       resyncSavedSignatures();
     })();
     return () => { active = false; };
-  }, []);
+  }, [authIdentityKey]);
 
   useEffect(() => {
     if (!dirty) return undefined;
@@ -904,7 +872,7 @@ export function CampaignEditor({
         return;
       }
       const mapped = mapSaveError(e);
-      if ('action' in mapped) { goSignIn(); return; }
+      if ('action' in mapped) { reportAuthSessionFailure(e); goSignIn(); return; }
       setStatus(mapped.message);
     }
   };
@@ -937,7 +905,7 @@ export function CampaignEditor({
         return;
       }
       const mapped = mapSaveError(e);
-      if ('action' in mapped) { goSignIn(); return; }
+      if ('action' in mapped) { reportAuthSessionFailure(e); goSignIn(); return; }
       setStatus(mapped.message);
     }
   };
@@ -1364,10 +1332,9 @@ export function CampaignEditor({
             </div>
           </aside>
 
-          <div
+          <EditorContentSceneSlot
             className="editor-destination-content"
-            {...sceneTransitionTargetAttributes('editor-shell', 'contents')}
-            data-scene-instance={sceneInstanceKey}
+            sceneInstance={sceneInstanceKey}
           >
           {isWarsSelected ? <WarEditor embedded /> : <>
           {/* ── CONTENT: the selected campaign — a single scrolling stack of SettingsSection
@@ -1560,7 +1527,7 @@ export function CampaignEditor({
             />
           ) : null}
           </>}
-          </div>
+          </EditorContentSceneSlot>
     </>
   );
 

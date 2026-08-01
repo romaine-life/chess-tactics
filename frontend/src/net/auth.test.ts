@@ -1,6 +1,6 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { HttpError } from './http';
-import { fetchMeStatus, fetchReachableAuthStatus, isUnauthorized, signInHref } from './auth';
+import { fetchMeStatus, isUnauthorized, signInHref, updateDisplayName } from './auth';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -57,16 +57,31 @@ describe('fetchMeStatus', () => {
     });
   });
 
-  it('retries a transient backend outage instead of turning it into a sign-out', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ signed_in: false, error: 'auth_unavailable' }), { status: 502 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ signed_in: true, email: 'player@example.com' }), { status: 200 }));
-    vi.stubGlobal('fetch', fetchMock);
-
-    await expect(fetchReachableAuthStatus(undefined, 0)).resolves.toEqual({
-      user: { signed_in: true, email: 'player@example.com' },
-      reachable: true,
+  it('does not treat a restart-time non-2xx response as a sign-out', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('backend is starting', { status: 404 })));
+    await expect(fetchMeStatus()).resolves.toEqual({
+      user: { signed_in: false },
+      reachable: false,
     });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('requires the successful response to carry the auth contract', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({}), { status: 200 })));
+    await expect(fetchMeStatus()).resolves.toEqual({
+      user: { signed_in: false },
+      reachable: false,
+    });
+  });
+
+});
+
+describe('updateDisplayName', () => {
+  it('preserves an authoritative 401 for the shared session owner', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ error: 'sign_in_required' }),
+      { status: 401, headers: { 'content-type': 'application/json' } },
+    )));
+
+    await expect(updateDisplayName('Renamed')).rejects.toMatchObject({ status: 401 });
   });
 });

@@ -1,8 +1,9 @@
 ---
-status: accepted
+status: superseded by ADR-0304
 date: 2026-07-25
 deciders: Nelson, Codex
 partially_supersedes: "[ADR-0143](0143-level-editor-sessions-are-attributable-single-writer-and-owner-takeoverable.md)"
+superseded_by: "[ADR-0304](0304-level-editor-documents-are-live-shared-working-copies.md)"
 ---
 
 # ADR-0154: Level Editor viewing does not acquire the writer lease

@@ -15,7 +15,7 @@ export const LEVEL_EDITOR_ROUTE_LAYERS = [
   'zone',
   'rules',
   'status',
-  'recovery',
+  'history',
 ] as const;
 
 export type LevelEditorLayerKey = typeof LEVEL_EDITOR_ROUTE_LAYERS[number];
@@ -123,6 +123,11 @@ export function readLevelEditorRouteState(search: string): LevelEditorRouteState
       requestedLayer = 'placed-art';
       brushKind = 'artwork';
     }
+  } else if (rawLayer === 'recovery') {
+    // Retired URLs named this destination after the old branching-copy workflow.
+    // Keep the links usable without carrying that vocabulary into current URLs.
+    requestedLayer = 'history';
+    brushKind = undefined;
   } else {
     requestedLayer = isLevelEditorLayerKey(rawLayer)
       ? rawLayer

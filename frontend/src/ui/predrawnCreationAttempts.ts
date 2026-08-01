@@ -171,7 +171,7 @@ export function predrawnAttemptArchiveAction(input: {
   const explanation = state === 'no-slot'
     ? 'Select a pipeline slot to archive.'
     : state === 'read-only'
-      ? 'Take over editing before archiving a pipeline slot.'
+      ? 'Reload an owner editing page before archiving a pipeline slot.'
       : state === 'cloud-sync'
         ? 'Wait for cloud autosave to finish before archiving.'
         : state === 'busy'

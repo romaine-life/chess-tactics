@@ -14,6 +14,8 @@ const ALL_SLOTS: readonly SceneSlotId[] = [
   'editor-content',
   'enchiridion-content',
   'gameplay-content',
+  'run-phase',
+  'run-workspace',
 ];
 
 function instanceForSlot(path: ScenePath | null, id: SceneSlotId): SceneInstance | null {

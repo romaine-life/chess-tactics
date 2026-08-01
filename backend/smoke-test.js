@@ -332,18 +332,19 @@ function startSecondaryBackend() {
   return secondaryChild;
 }
 
-async function waitForSecondaryBackend() {
+async function waitForSecondarySchemaCheck() {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     if (!secondaryChild || secondaryChild.exitCode !== null) {
-      throw new Error(`Secondary backend exited before readiness\n${secondaryOutput}`);
+      throw new Error(`Secondary backend exited before its schema check\n${secondaryOutput}`);
     }
-    try {
-      const response = await requestOnPort(secondaryPort, 'GET', '/ready', {}, null, 1000);
-      if (response.statusCode === 200) return;
-    } catch { /* retry while the second process initializes */ }
+    if (
+      secondaryOutput
+        .split(/\r?\n/)
+        .some((line) => line.includes('postgres ready') && line.includes('schema=check'))
+    ) return;
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error(`Secondary backend did not become ready\n${secondaryOutput}`);
+  throw new Error(`Secondary backend did not finish its schema check\n${secondaryOutput}`);
 }
 
 function waitForProcessExit(proc, timeoutMs = 5000) {
@@ -424,7 +425,7 @@ async function openEditorEditSession(documentId, {
   remember = true,
   targetPort = port,
 } = {}) {
-  let response = await requestOnPort(
+  const response = await requestOnPort(
     targetPort,
     'POST',
     `/api/editor-documents/${documentId}/edit-sessions`,
@@ -437,31 +438,14 @@ async function openEditorEditSession(documentId, {
       ...(intent ? { intent } : {}),
     }),
   );
-  let body = response.body ? JSON.parse(response.body) : {};
-  if (
-    response.statusCode === 200
-    && activate
-    && intent !== 'observe'
-    && body.session?.state !== 'active'
-    && !body.presence?.active_editor
-  ) {
-    response = await requestOnPort(
-      targetPort,
-      'POST',
-      `/api/editor-documents/${documentId}/edit-sessions/${sessionId}/takeover`,
-      { cookie, 'content-type': 'application/json' },
-      JSON.stringify({
-        session_key: sessionKey,
-        expected_generation: body.presence.edit_generation,
-      }),
-    );
-    body = response.body ? JSON.parse(response.body) : {};
-  }
+  const body = response.body ? JSON.parse(response.body) : {};
+  void activate;
   if (
     response.statusCode === 200
     && remember
-    && body.session?.state === 'active'
-    && body.presence?.active_editor?.session_id === body.session.session_id
+    && intent !== 'observe'
+    && body.session?.state !== 'observing'
+    && body.session?.state !== 'closed'
   ) {
     editorAuthorities.set(editorAuthorityKey(documentId, cookie), {
       session_id: body.session.session_id,
@@ -478,6 +462,7 @@ function editorMutationBody(documentId, cookie, body, authority = null) {
   const current = authority || editorAuthorities.get(editorAuthorityKey(documentId, cookie));
   return {
     ...body,
+    ...(body.level && !body.base_level ? { base_level: body.level } : {}),
     ...(current ? {
       edit_session_id: current.session_id,
       edit_session_key: current.edit_session_key,
@@ -492,34 +477,6 @@ function closeEditorEditSessionRequest(documentId, sessionId, sessionKey, cookie
     targetPort,
     'DELETE',
     `/api/editor-documents/${documentId}/edit-sessions/${sessionId}`,
-    {
-      cookie,
-      'content-type': 'application/json',
-      'content-length': Buffer.byteLength(body),
-    },
-    body,
-  );
-}
-
-function deleteEditorRecoveryRequest(documentId, recoveryId, authorityBody, cookie = '__Host-chess-tactics-access=abc') {
-  const body = JSON.stringify(authorityBody);
-  return request(
-    'DELETE',
-    `/api/editor-documents/${documentId}/recoveries/${recoveryId}`,
-    {
-      cookie,
-      'content-type': 'application/json',
-      'content-length': Buffer.byteLength(body),
-    },
-    body,
-  );
-}
-
-function deleteEditorRecoveriesRequest(documentId, recoveryIds, authorityBody, cookie = '__Host-chess-tactics-access=abc') {
-  const body = JSON.stringify({ recovery_ids: recoveryIds, ...authorityBody });
-  return request(
-    'DELETE',
-    `/api/editor-documents/${documentId}/recoveries`,
     {
       cookie,
       'content-type': 'application/json',
@@ -1379,6 +1336,27 @@ async function main() {
   await new Promise((resolve) => mockBgm.listen(bgmPort, '127.0.0.1', resolve));
   await waitForServer();
   await validatePrimarySparseNumericMigrationUpgrade49();
+  const databaseRuntime = await queryDb('SELECT version() AS version');
+  const isPgliteRuntime = /\bPGlite\b/i.test(String(databaseRuntime.rows[0]?.version || ''));
+  if (!isPgliteRuntime) {
+    startSecondaryBackend();
+    await waitForSecondarySchemaCheck();
+    const secondaryReadyLine = secondaryOutput
+      .split(/\r?\n/)
+      .find((line) => line.includes('postgres ready') && line.includes('schema=check'));
+    if (
+      !secondaryReadyLine
+      || !secondaryReadyLine.includes('schema migrations applied: none')
+      || !secondaryReadyLine.includes('pending: none')
+    ) {
+      throw new Error(
+        `Check-mode backend did not verify the sealed upgraded migration history:\n${secondaryOutput}`,
+      );
+    }
+    secondaryChild.kill();
+    await waitForProcessExit(secondaryChild);
+    secondaryChild = null;
+  }
   if (!fs.existsSync(path.join(hotBackendDir, 'server.js'))) {
     throw new Error('Supervisor did not initialize the hot backend entrypoint');
   }
@@ -4046,9 +4024,9 @@ async function main() {
   const activeRunStartingArmy = [activeRunKing, activeRunPawnA, activeRunPawnB];
   const activeRunNumberState = { pawn: 3, knight: 1, bishop: 1, rook: 1, queen: 1, king: 2 };
   const activeRunOffers = [
-    { id: 'p', offerId: 'opening-0-p', pieces: ['pawn'], value: 1, cost: 1, cardType: null, effectSeed: 1704 },
-    { id: 'k', offerId: 'opening-1-k', pieces: ['knight'], value: 3, cost: 3, cardType: null, effectSeed: 1705 },
-    { id: 'r', offerId: 'opening-2-r', pieces: ['rook'], value: 5, cost: 5, cardType: null, effectSeed: 1706 },
+    { id: 'p', offerId: 'opening-0-p', pieces: ['pawn'], value: 1, cost: 1, cardType: null, effectSeed: 1704, effectTargetIndex: null },
+    { id: 'k', offerId: 'opening-1-k', pieces: ['knight'], value: 3, cost: 3, cardType: null, effectSeed: 1705, effectTargetIndex: null },
+    { id: 'r', offerId: 'opening-2-r', pieces: ['rook'], value: 5, cost: 5, cardType: null, effectSeed: 1706, effectTargetIndex: null },
   ];
   const activeRunDocument = {
     formatVersion: 10,
@@ -4207,12 +4185,14 @@ async function main() {
     cards: [
       {
         id: 'run-card-1', coreId: activeRunOffers[0].id, cardType: null,
-        effectSeed: activeRunOffers[0].effectSeed, unitIds: [purchasedPawn.id], lostUnitIds: [],
+        effectSeed: activeRunOffers[0].effectSeed, effectTargetUnitId: null,
+        unitIds: [purchasedPawn.id], lostUnitIds: [],
         acquiredAfterBattleIndex: 0,
       },
       {
         id: 'run-card-2', coreId: activeRunOffers[1].id, cardType: null,
-        effectSeed: activeRunOffers[1].effectSeed, unitIds: [purchasedKnight.id], lostUnitIds: [],
+        effectSeed: activeRunOffers[1].effectSeed, effectTargetUnitId: null,
+        unitIds: [purchasedKnight.id], lostUnitIds: [],
         acquiredAfterBattleIndex: 0,
       },
     ],
@@ -4238,6 +4218,58 @@ async function main() {
   ) {
     throw new Error(`Active Run did not save: ${savedRun.statusCode} ${savedRun.body}`);
   }
+  const concinnousShopRun = {
+    ...activeRunDocument,
+    phase: 'shop',
+    updatedAt: '2026-01-01T01:00:00.000Z',
+    shop: {
+      kind: 'post-battle',
+      afterBattleIndex: 0,
+      conflictIndex: 0,
+      victoryGoldTenths: 10,
+      cardOffers: [{
+        id: 'p',
+        offerId: 'shop-0-0-p',
+        pieces: ['pawn'],
+        value: 1,
+        cost: 3,
+        cardType: 'concinnous',
+        effectSeed: 1704,
+        effectTargetIndex: 0,
+      }],
+      purchasedCardOfferIds: [],
+      lootRelicOffers: [],
+      chosenLootRelicId: null,
+      paidRelicOffer: null,
+      paidRelicBought: false,
+      soldUnits: [],
+      entrySnapshot: {
+        goldTenths: activeRunDocument.goldTenths,
+        army: activeRunDocument.army,
+        cards: activeRunDocument.cards,
+        relics: [],
+        seenRelics: [],
+        conflictPaidRelics: {},
+        nextArmyUnitSequence: activeRunDocument.nextArmyUnitSequence,
+        nextArmyUnitNumberByType: activeRunNumberState,
+        nextCardSequence: activeRunDocument.nextCardSequence,
+        paidRelicBought: false,
+      },
+    },
+  };
+  const savedConcinnousShopRun = await request(
+    'PUT', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({ run: concinnousShopRun, revision: 1 }),
+  );
+  const savedConcinnousShopRunBody = JSON.parse(savedConcinnousShopRun.body);
+  if (
+    savedConcinnousShopRun.statusCode !== 200
+    || savedConcinnousShopRunBody.revision !== 2
+    || savedConcinnousShopRunBody.run.shop.cardOffers[0].effectTargetIndex !== 0
+  ) {
+    throw new Error(`Concinnous shop Run did not save: ${savedConcinnousShopRun.statusCode} ${savedConcinnousShopRun.body}`);
+  }
   const rivalRun = await get('/api/active-run', { cookie: '__Host-chess-tactics-access=rival' });
   if (rivalRun.statusCode !== 200 || JSON.parse(rivalRun.body).run !== null) {
     throw new Error(`Active Run should be owner-scoped: ${rivalRun.statusCode} ${rivalRun.body}`);
@@ -4247,13 +4279,13 @@ async function main() {
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ run: { ...activeRunDocument, updatedAt: '2026-01-02T00:00:00.000Z' }, revision: 0 }),
   );
-  if (staleRun.statusCode !== 409 || JSON.parse(staleRun.body).revision !== 1) {
+  if (staleRun.statusCode !== 409 || JSON.parse(staleRun.body).revision !== 2) {
     throw new Error(`Stale active Run write should conflict: ${staleRun.statusCode} ${staleRun.body}`);
   }
   const deletedRun = await request(
     'DELETE', '/api/active-run',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify({ revision: 1 }),
+    JSON.stringify({ revision: 2 }),
   );
   if (deletedRun.statusCode !== 200 || JSON.parse(deletedRun.body).ok !== true) {
     throw new Error(`Active Run did not delete: ${deletedRun.statusCode} ${deletedRun.body}`);
@@ -4503,7 +4535,7 @@ async function main() {
     throw new Error(`Canonical-backed migrated draft lost its Discard target: ${loadedCanonicalBackedLegacy.statusCode} ${loadedCanonicalBackedLegacy.body}`);
   }
   const legacyEditSession = await openEditorEditSession('legacy-kmnpqrst');
-  if (legacyEditSession.response.statusCode !== 200 || legacyEditSession.body.session.state !== 'active') {
+  if (legacyEditSession.response.statusCode !== 200 || !['active', 'waiting'].includes(legacyEditSession.body.session.state)) {
     throw new Error(`Could not acquire migrated draft edit authority: ${legacyEditSession.response.statusCode} ${legacyEditSession.response.body}`);
   }
   const discardCanonicalBackedLegacy = await request(
@@ -4551,47 +4583,8 @@ async function main() {
     throw new Error(`Unexpected editor resolve: ${resolvedEditor.statusCode} ${resolvedEditor.body}`);
   }
 
-  const passiveViewer = await openEditorEditSession(smokeDocumentId, {
-    deviceId: 'smoke-passive-viewer-device',
-    clientLabel: 'Untouched Level Editor viewer',
-    activate: false,
-    remember: false,
-  });
-  const passiveViewerAuthority = await queryDb(
-    `SELECT
-       (SELECT count(*)::integer FROM editor_document_edit_sessions WHERE document_id = $1 AND state = 'active') AS active_count,
-       (SELECT count(*)::integer FROM editor_document_recoveries WHERE document_id = $1) AS recovery_count,
-       edit_generation,
-       revision
-     FROM level_working_copies
-     WHERE document_id = $1`,
-    [smokeDocumentId],
-  );
-  if (
-    passiveViewer.response.statusCode !== 200
-    || passiveViewer.body.session?.state !== 'waiting'
-    || passiveViewer.body.session?.lease_expires_at !== null
-    || passiveViewer.body.presence?.active_editor !== null
-    || passiveViewer.body.presence?.can_take_over !== true
-    || passiveViewerAuthority.rows[0]?.active_count !== 0
-    || passiveViewerAuthority.rows[0]?.recovery_count !== 0
-    || Number(passiveViewerAuthority.rows[0]?.edit_generation) !== resolvedEditorBody.document.edit_generation
-    || Number(passiveViewerAuthority.rows[0]?.revision) !== resolvedEditorBody.document.revision
-  ) {
-    throw new Error(`Untouched Level Editor viewer acquired or mutated authority: ${passiveViewer.response.statusCode} ${passiveViewer.response.body} / ${JSON.stringify(passiveViewerAuthority.rows[0])}`);
-  }
-  const closedPassiveViewer = await closeEditorEditSessionRequest(
-    smokeDocumentId,
-    passiveViewer.sessionId,
-    passiveViewer.sessionKey,
-  );
-  if (
-    closedPassiveViewer.statusCode !== 200
-    || JSON.parse(closedPassiveViewer.body).session?.state !== 'closed'
-  ) {
-    throw new Error(`Passive viewer session did not close cleanly: ${closedPassiveViewer.statusCode} ${closedPassiveViewer.body}`);
-  }
-
+  // Every owner page targets the same editable working copy. Page sessions
+  // authenticate and attribute writes; lease state is not mutation authority.
   const primaryOpen = await openEditorEditSession(smokeDocumentId, {
     deviceId: 'smoke-primary-device',
     clientLabel: 'Chrome on primary smoke device',
@@ -4601,1489 +4594,187 @@ async function main() {
     edit_session_key: primaryOpen.sessionKey,
     edit_generation: primaryOpen.body.session?.edit_generation,
   };
+  const secondOpen = await openEditorEditSession(smokeDocumentId, {
+    deviceId: 'smoke-second-device',
+    clientLabel: 'Second browser tab',
+    activate: false,
+    remember: false,
+  });
+  const secondAuthority = {
+    session_id: secondOpen.body.session?.session_id,
+    edit_session_key: secondOpen.sessionKey,
+    edit_generation: secondOpen.body.session?.edit_generation,
+  };
   if (
-    primaryOpen.response.statusCode !== 200 ||
-    primaryOpen.body.session.state !== 'active' ||
-    primaryOpen.body.session.name !== 'Tactics Player' ||
-    primaryOpen.body.session.email !== 'player@example.com' ||
-    primaryOpen.body.presence.active_editor.relationship !== 'this_tab' ||
-    JSON.stringify(primaryOpen.body).includes(primaryOpen.sessionKey)
+    primaryOpen.response.statusCode !== 200
+    || !['active', 'waiting'].includes(primaryOpen.body.session?.state)
+    || secondOpen.response.statusCode !== 200
+    || secondOpen.body.session?.state !== 'waiting'
+    || JSON.stringify(primaryOpen.body).includes(primaryOpen.sessionKey)
+    || JSON.stringify(secondOpen.body).includes(secondOpen.sessionKey)
   ) {
-    throw new Error(`Primary edit session was not attributable and active: ${primaryOpen.response.statusCode} ${primaryOpen.response.body}`);
-  }
-  const storedPrimaryIdentity = await queryDb(
-    'SELECT actor_name, owner_email, device_hash, session_key_hash, lease_expires_at > clock_timestamp() AS lease_live FROM editor_document_edit_sessions WHERE session_id = $1',
-    [primaryAuthority.session_id],
-  );
-  if (
-    storedPrimaryIdentity.rows[0].actor_name !== 'Tactics Player' ||
-    storedPrimaryIdentity.rows[0].owner_email !== 'player@example.com' ||
-    storedPrimaryIdentity.rows[0].lease_live !== true ||
-    !/^[0-9a-f]{64}$/.test(storedPrimaryIdentity.rows[0].device_hash) ||
-    storedPrimaryIdentity.rows[0].device_hash === 'smoke-primary-device' ||
-    !/^[0-9a-f]{64}$/.test(storedPrimaryIdentity.rows[0].session_key_hash) ||
-    storedPrimaryIdentity.rows[0].session_key_hash === primaryOpen.sessionKey
-  ) {
-    throw new Error(`Edit-session attribution/device privacy was not durable: ${JSON.stringify(storedPrimaryIdentity.rows[0])}`);
+    throw new Error(`Owner pages did not join the shared working copy: ${primaryOpen.response.statusCode} ${primaryOpen.response.body} / ${secondOpen.response.statusCode} ${secondOpen.response.body}`);
   }
 
-  // Make the established writer eligible for normal expiry maintenance. Every
-  // observer operation must leave that authority untouched, even when a write-
-  // intent request would expire it and preserve a recovery.
-  await queryDb(
-    `UPDATE editor_document_edit_sessions
-        SET lease_expires_at = clock_timestamp() - interval '1 second'
-      WHERE session_id = $1 AND state = 'active'`,
-    [primaryAuthority.session_id],
-  );
-  const observerBefore = await queryDb(
-    `SELECT working.edit_generation,
-            working.revision,
-            working.body::text AS body_json,
-            writer.state AS writer_state,
-            writer.edit_generation AS writer_edit_generation,
-            writer.document_revision AS writer_document_revision,
-            writer.draft_body::text AS writer_draft_body_json,
-            writer.lease_expires_at::text AS writer_lease_expires_at,
-            writer.displaced_at,
-            (SELECT count(*)::integer
-               FROM editor_document_edit_sessions
-              WHERE document_id = $1 AND state = 'active') AS active_count,
-            (SELECT count(*)::integer
-               FROM editor_document_recoveries
-              WHERE document_id = $1) AS recovery_count
-       FROM level_working_copies AS working
-       JOIN editor_document_edit_sessions AS writer
-         ON writer.session_id = $2 AND writer.document_id = working.document_id
-      WHERE working.document_id = $1`,
-    [smokeDocumentId, primaryAuthority.session_id],
-  );
+  const originalSharedLevel = resolvedEditorBody.document.level;
   const observer = await openEditorEditSession(smokeDocumentId, {
     deviceId: 'smoke-observer-device',
     clientLabel: 'Automated visual verification',
     intent: 'observe',
     remember: false,
   });
-  const observerPresence = await request(
-    'POST', `/api/editor-documents/${smokeDocumentId}/edit-presence`,
-    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify({ session_id: observer.sessionId, session_key: observer.sessionKey, device_id: observer.deviceId }),
-  );
-  const observerHeartbeat = await request(
-    'POST', `/api/editor-documents/${smokeDocumentId}/edit-sessions/${observer.sessionId}/heartbeat`,
-    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify({ session_key: observer.sessionKey }),
-  );
-  const observerTakeover = await request(
-    'POST', `/api/editor-documents/${smokeDocumentId}/edit-sessions/${observer.sessionId}/takeover`,
-    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify({ session_key: observer.sessionKey, expected_generation: Number(observerBefore.rows[0].edit_generation) }),
-  );
   const observerWrite = await request(
     'PUT', `/api/editor-documents/${smokeDocumentId}`,
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({
-      revision: Number(observerBefore.rows[0].revision),
-      level: { ...workspaceLevel, name: 'Observer must not write' },
+      revision: 1,
+      base_level: originalSharedLevel,
+      level: { ...originalSharedLevel, name: 'Observer must not write' },
       edit_session_id: observer.sessionId,
       edit_session_key: observer.sessionKey,
-      edit_generation: Number(observerBefore.rows[0].edit_generation),
+      edit_generation: resolvedEditorBody.document.edit_generation,
     }),
   );
-  const observerRecoveryUpload = await request(
-    'POST',
-    `/api/editor-documents/${smokeDocumentId}/edit-sessions/${observer.sessionId}/recoveries`,
-    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify({
-      revision: Number(observerBefore.rows[0].revision),
-      edit_generation: Number(observerBefore.rows[0].edit_generation),
-      session_key: observer.sessionKey,
-      level: { ...workspaceLevel, name: 'Observer recovery must not write' },
-    }),
-  );
-  const observerClose = await closeEditorEditSessionRequest(smokeDocumentId, observer.sessionId, observer.sessionKey);
-  const observerAfter = await queryDb(
-    `SELECT working.edit_generation,
-            working.revision,
-            working.body::text AS body_json,
-            writer.state AS writer_state,
-            writer.edit_generation AS writer_edit_generation,
-            writer.document_revision AS writer_document_revision,
-            writer.draft_body::text AS writer_draft_body_json,
-            writer.lease_expires_at::text AS writer_lease_expires_at,
-            writer.displaced_at,
-            (SELECT count(*)::integer
-               FROM editor_document_edit_sessions
-              WHERE document_id = $1 AND state = 'active') AS active_count,
-            (SELECT count(*)::integer
-               FROM editor_document_recoveries
-              WHERE document_id = $1) AS recovery_count
-       FROM level_working_copies AS working
-       JOIN editor_document_edit_sessions AS writer
-         ON writer.session_id = $2 AND writer.document_id = working.document_id
-      WHERE working.document_id = $1`,
-    [smokeDocumentId, primaryAuthority.session_id],
-  );
-  const observerPresenceBody = JSON.parse(observerPresence.body);
-  const observerHeartbeatBody = JSON.parse(observerHeartbeat.body);
-  const observerTakeoverBody = JSON.parse(observerTakeover.body);
-  const observerWriteBody = JSON.parse(observerWrite.body);
-  const observerRecoveryUploadBody = JSON.parse(observerRecoveryUpload.body);
-  const observerCloseBody = JSON.parse(observerClose.body);
-  const observerBeforeRow = observerBefore.rows[0];
-  const observerAfterRow = observerAfter.rows[0];
   if (
-    observer.response.statusCode !== 200 || observer.body.session?.state !== 'observing' ||
-    observer.body.presence?.active_editor?.session_id !== primaryAuthority.session_id ||
-    observer.body.presence?.can_take_over !== false ||
-    observerPresence.statusCode !== 200 || observerPresenceBody.session?.state !== 'observing' ||
-    observerPresenceBody.presence?.active_editor?.session_id !== primaryAuthority.session_id ||
-    observerPresenceBody.presence?.can_take_over !== false ||
-    observerHeartbeat.statusCode !== 409 || observerHeartbeatBody.error !== 'editor_document_session_observe_only' ||
-    observerTakeover.statusCode !== 409 || observerTakeoverBody.error !== 'editor_document_session_observe_only' ||
-    observerWrite.statusCode !== 409 || observerWriteBody.error !== 'editor_document_session_observe_only' ||
-    observerRecoveryUpload.statusCode !== 409 || observerRecoveryUploadBody.error !== 'editor_document_session_observe_only' ||
-    observerClose.statusCode !== 200 || observerCloseBody.session?.state !== 'closed' ||
-    observerCloseBody.presence?.active_editor?.session_id !== primaryAuthority.session_id ||
-    observerBeforeRow?.writer_state !== 'active' || observerAfterRow?.writer_state !== 'active' ||
-    Number(observerBeforeRow?.active_count) !== 1 || Number(observerAfterRow?.active_count) !== 1 ||
-    observerBeforeRow?.displaced_at !== null || observerAfterRow?.displaced_at !== null ||
-    Number(observerBeforeRow?.edit_generation) !== Number(primaryAuthority.edit_generation) ||
-    Number(observerBeforeRow?.writer_edit_generation) !== Number(primaryAuthority.edit_generation) ||
-    Number(observerBeforeRow?.writer_document_revision) !== Number(observerBeforeRow?.revision) ||
-    Number(observerAfterRow?.edit_generation) !== Number(observerBeforeRow?.edit_generation) ||
-    Number(observerAfterRow?.revision) !== Number(observerBeforeRow?.revision) ||
-    observerAfterRow?.body_json !== observerBeforeRow?.body_json ||
-    Number(observerAfterRow?.writer_edit_generation) !== Number(observerBeforeRow?.writer_edit_generation) ||
-    Number(observerAfterRow?.writer_document_revision) !== Number(observerBeforeRow?.writer_document_revision) ||
-    observerAfterRow?.writer_draft_body_json !== observerBeforeRow?.writer_draft_body_json ||
-    observerAfterRow?.writer_lease_expires_at !== observerBeforeRow?.writer_lease_expires_at ||
-    Number(observerAfterRow?.recovery_count) !== Number(observerBeforeRow?.recovery_count)
+    observer.response.statusCode !== 200
+    || observer.body.session?.state !== 'observing'
+    || observerWrite.statusCode !== 409
+    || JSON.parse(observerWrite.body).error !== 'editor_document_session_observe_only'
   ) {
-    throw new Error(`Observation-only editor session changed the established writer, working copy, or recovery set: ${JSON.stringify({ observer: observer.body, observerPresence: observerPresenceBody, observerHeartbeat: observerHeartbeatBody, observerTakeover: observerTakeoverBody, observerWrite: observerWriteBody, observerRecoveryUpload: observerRecoveryUploadBody, observerClose: observerCloseBody, before: observerBeforeRow, after: observerAfterRow })}`);
-  }
-  const restoredPrimaryLease = await queryDb(
-    `UPDATE editor_document_edit_sessions
-        SET lease_expires_at = clock_timestamp() + interval '5 minutes'
-      WHERE session_id = $1 AND state = 'active'
-      RETURNING state`,
-    [primaryAuthority.session_id],
-  );
-  if (restoredPrimaryLease.rows[0]?.state !== 'active') {
-    throw new Error(`Observation-only regression could not restore its primary writer fixture: ${JSON.stringify(restoredPrimaryLease.rows)}`);
-  }
-  const primaryHeartbeat = await request(
-    'POST',
-    `/api/editor-documents/${smokeDocumentId}/edit-sessions/${primaryAuthority.session_id}/heartbeat`,
-    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify({ session_key: primaryOpen.sessionKey }),
-  );
-  if (primaryHeartbeat.statusCode !== 200 || JSON.parse(primaryHeartbeat.body).session.state !== 'active') {
-    throw new Error(`Active edit-session heartbeat failed: ${primaryHeartbeat.statusCode} ${primaryHeartbeat.body}`);
-  }
-  const LeaseClockClient = require('pg').Client;
-  const leaseClockLock = new LeaseClockClient({ connectionString: process.env.DATABASE_URL });
-  await leaseClockLock.connect();
-  let delayedHeartbeat;
-  try {
-    await leaseClockLock.query('BEGIN');
-    await leaseClockLock.query(
-      'SELECT document_id FROM level_working_copies WHERE document_id = $1 FOR UPDATE',
-      [smokeDocumentId],
-    );
-    const delayedHeartbeatPromise = request(
-      'POST',
-      `/api/editor-documents/${smokeDocumentId}/edit-sessions/${primaryAuthority.session_id}/heartbeat`,
-      { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-      JSON.stringify({ session_key: primaryOpen.sessionKey }),
-      5000,
-    );
-    await new Promise((resolve) => setTimeout(resolve, 2500));
-    await leaseClockLock.query('COMMIT');
-    delayedHeartbeat = await delayedHeartbeatPromise;
-  } finally {
-    await leaseClockLock.query('ROLLBACK').catch(() => {});
-    await leaseClockLock.end();
-  }
-  const delayedLease = await queryDb(
-    `SELECT extract(epoch FROM (lease_expires_at - clock_timestamp()))::double precision AS seconds_remaining
-       FROM editor_document_edit_sessions
-      WHERE session_id = $1`,
-    [primaryAuthority.session_id],
-  );
-  if (
-    delayedHeartbeat.statusCode !== 200 ||
-    Number(delayedLease.rows[0]?.seconds_remaining) < 58.5
-  ) {
-    throw new Error(`Heartbeat extended from a stale transaction-start clock after lock wait: ${delayedHeartbeat.statusCode} ${delayedHeartbeat.body} / ${JSON.stringify(delayedLease.rows[0])}`);
-  }
-  const unfencedAutosave = await request(
-    'PUT', `/api/editor-documents/${smokeDocumentId}`,
-    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify({ revision: 1, level: { ...workspaceLevel, name: 'Must Require Edit Authority' } }),
-  );
-  if (unfencedAutosave.statusCode !== 400 || JSON.parse(unfencedAutosave.body).error !== 'editor_document_edit_session_required') {
-    throw new Error(`Working-copy mutation accepted no session fence: ${unfencedAutosave.statusCode} ${unfencedAutosave.body}`);
+    throw new Error(`Observation-only verification gained edit access: ${observer.response.statusCode} ${observer.response.body} / ${observerWrite.statusCode} ${observerWrite.body}`);
   }
 
-  // Incomplete gameplay geometry remains valid working-copy structure: autosave must preserve
-  // the roster while the editor's playability gate blocks canonical Save until a zone is chosen.
-  const draftLevel = {
-    ...workspaceLevel,
-    name: 'Autosaved Draft',
-    events: [{
-      name: 'Deploy enemy force',
-      trigger: { kind: 'setup' },
-      do: [{ kind: 'spawn', side: 'enemy', roster: { pawn: 1 }, zoneIds: [] }],
-    }],
-  };
-  const autosavedEditor = await request(
-    'PUT', `/api/editor-documents/${smokeDocumentId}`,
-    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(smokeDocumentId, '__Host-chess-tactics-access=abc', { revision: 1, level: draftLevel })),
-  );
-  const autosavedEditorBody = JSON.parse(autosavedEditor.body);
-  if (
-    autosavedEditor.statusCode !== 200 ||
-    autosavedEditorBody.document.revision !== 2 ||
-    autosavedEditorBody.document.saved_revision !== 1 ||
-    autosavedEditorBody.document.dirty !== true ||
-    autosavedEditorBody.document.level.name !== 'Autosaved Draft' ||
-    autosavedEditorBody.document.level.events?.[0]?.do?.[0]?.zoneIds?.length !== 0
-  ) {
-    throw new Error(`Unexpected editor autosave: ${autosavedEditor.statusCode} ${autosavedEditor.body}`);
-  }
-
-  // Autosave changes only the private working copy. Canonical workspace reads
-  // (and therefore thumbnails/gameplay) still see the last explicit Save.
-  const canonicalBeforeSave = await get('/api/campaign-workspace', { cookie: '__Host-chess-tactics-access=abc' });
-  if (JSON.parse(canonicalBeforeSave.body).levels['smoke-1'].name !== 'Smoke Level') {
-    throw new Error(`Editor autosave must not mutate the canonical workspace: ${canonicalBeforeSave.body}`);
-  }
-
-  const followerB = await openEditorEditSession(smokeDocumentId, {
-    sessionId: crypto.randomUUID(),
-    deviceId: 'smoke-follower-device-b',
-    clientLabel: 'Firefox on follower device B',
-    remember: false,
-  });
-  const followerC = await openEditorEditSession(smokeDocumentId, {
-    sessionId: crypto.randomUUID(),
-    deviceId: 'smoke-primary-device',
-    clientLabel: 'Second tab on primary smoke device',
-    remember: false,
-  });
-  if (
-    followerB.response.statusCode !== 200 || followerB.body.session.state !== 'waiting' ||
-    followerB.body.presence.active_editor.name !== 'Tactics Player' ||
-    followerB.body.presence.active_editor.email !== 'player@example.com' ||
-    followerB.body.presence.active_editor.client_label !== 'Chrome on primary smoke device' ||
-    followerB.body.presence.active_editor.relationship !== 'other_device' ||
-    followerC.body.presence.active_editor.relationship !== 'same_device' ||
-    followerB.body.presence.can_take_over !== true ||
-    !followerB.body.presence.active_editor.opened_at ||
-    !followerB.body.presence.active_editor.last_seen_at ||
-    !followerB.body.presence.active_editor.last_edit_at
-  ) {
-    throw new Error(`Follower did not receive attributable active-editor presence: ${followerB.response.statusCode} ${followerB.response.body}`);
-  }
-  const forgedClose = await closeEditorEditSessionRequest(
-    smokeDocumentId,
-    primaryAuthority.session_id,
-    followerB.sessionKey,
-  );
-  if (forgedClose.statusCode !== 403 || JSON.parse(forgedClose.body).error !== 'editor_document_edit_session_key_invalid') {
-    throw new Error(`Follower session key closed the active writer: ${forgedClose.statusCode} ${forgedClose.body}`);
-  }
-  const forgedFenceWrite = await request(
-    'PUT',
-    `/api/editor-documents/${smokeDocumentId}`,
-    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify({
-      revision: 2,
-      level: { ...workspaceLevel, name: 'Forged Active Fence' },
-      edit_session_id: primaryAuthority.session_id,
-      edit_session_key: followerB.sessionKey,
-      edit_generation: primaryAuthority.edit_generation,
-    }),
-  );
-  if (forgedFenceWrite.statusCode !== 403 || JSON.parse(forgedFenceWrite.body).error !== 'editor_document_edit_session_key_invalid') {
-    throw new Error(`Follower session key impersonated the active mutation fence: ${forgedFenceWrite.statusCode} ${forgedFenceWrite.body}`);
-  }
-  const followerPresence = await request(
-    'POST',
-    `/api/editor-documents/${smokeDocumentId}/edit-presence`,
-    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify({
-      session_id: followerB.sessionId,
-      session_key: followerB.sessionKey,
-      device_id: followerB.deviceId,
-    }),
-  );
-  const followerPresenceBody = JSON.parse(followerPresence.body);
-  if (
-    followerPresence.statusCode !== 200 ||
-    followerPresenceBody.session.state !== 'waiting' ||
-    followerPresenceBody.presence.active_editor.relationship !== 'other_device' ||
-    followerPresenceBody.presence.can_take_over !== true
-  ) {
-    throw new Error(`Owner presence polling lost session relationship: ${followerPresence.statusCode} ${followerPresence.body}`);
-  }
-  const forgedFollowerPresence = await request(
-    'POST',
-    `/api/editor-documents/${smokeDocumentId}/edit-presence`,
-    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify({
-      session_id: followerB.sessionId,
-      session_key: followerC.sessionKey,
-      device_id: followerB.deviceId,
-    }),
-  );
-  const mismatchedDevicePresence = await request(
-    'POST',
-    `/api/editor-documents/${smokeDocumentId}/edit-presence`,
-    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify({
-      session_id: followerB.sessionId,
-      session_key: followerB.sessionKey,
-      device_id: followerC.deviceId,
-    }),
-  );
-  if (
-    forgedFollowerPresence.statusCode !== 403 ||
-    JSON.parse(forgedFollowerPresence.body).error !== 'editor_document_edit_session_key_invalid' ||
-    mismatchedDevicePresence.statusCode !== 409 ||
-    JSON.parse(mismatchedDevicePresence.body).error !== 'editor_document_edit_session_id_conflict'
-  ) {
-    throw new Error(`Presence accepted forged session identity: ${forgedFollowerPresence.statusCode} ${forgedFollowerPresence.body} / ${mismatchedDevicePresence.statusCode} ${mismatchedDevicePresence.body}`);
-  }
-  await queryDb(
-    `UPDATE editor_document_edit_sessions
-        SET body_checkpoint_at = clock_timestamp() - interval '1 day'
-      WHERE session_id = ANY($1::uuid[])`,
-    [[followerB.sessionId, followerC.sessionId]],
-  );
-  const takeoverAttempt = (follower) => request(
-    'POST',
-    `/api/editor-documents/${smokeDocumentId}/edit-sessions/${follower.sessionId}/takeover`,
-    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify({
-      session_key: follower.sessionKey,
-      expected_generation: primaryAuthority.edit_generation,
-    }),
-    5000,
-  );
-  const oldAuthorityWriteAttempt = () => request(
-    'PUT',
-    `/api/editor-documents/${smokeDocumentId}`,
-    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(
-      smokeDocumentId,
-      '__Host-chess-tactics-access=abc',
-      { revision: 2, level: { ...workspaceLevel, name: 'In-Flight Displaced Writer' } },
-      primaryAuthority,
-    )),
-    5000,
-  );
-  const databaseRuntime = await queryDb('SELECT version() AS version');
-  const isPgliteRuntime = /\bPGlite\b/i.test(String(databaseRuntime.rows[0]?.version || ''));
-  let takeoverResponses;
-  let inFlightOldWrite;
-  if (isPgliteRuntime) {
-    // PGlite's compatibility listener hides a row from a concurrent plain SELECT
-    // while another connection holds SELECT ... FOR UPDATE, unlike PostgreSQL
-    // MVCC. Keep the real-Postgres queued in-flight assertion below; here we can
-    // still exercise the database-serialized double takeover and old fence.
-    takeoverResponses = await Promise.all([takeoverAttempt(followerB), takeoverAttempt(followerC)]);
-    inFlightOldWrite = await oldAuthorityWriteAttempt();
-  } else {
-    const { Client } = require('pg');
-    const takeoverLockClient = new Client({ connectionString: process.env.DATABASE_URL });
-    await takeoverLockClient.connect();
-    try {
-      await takeoverLockClient.query('BEGIN');
-      await takeoverLockClient.query(
-        'SELECT document_id FROM level_working_copies WHERE document_id = $1 FOR UPDATE',
-        [smokeDocumentId],
-      );
-      const takeoverResponsesPromise = Promise.all([takeoverAttempt(followerB), takeoverAttempt(followerC)]);
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      const inFlightOldWritePromise = oldAuthorityWriteAttempt();
-      await new Promise((resolve) => setTimeout(resolve, 150));
-      await takeoverLockClient.query('COMMIT');
-      [takeoverResponses, inFlightOldWrite] = await Promise.all([
-        takeoverResponsesPromise,
-        inFlightOldWritePromise,
-      ]);
-    } finally {
-      await takeoverLockClient.query('ROLLBACK').catch(() => {});
-      await takeoverLockClient.end();
-    }
-  }
-  const takeoverWinners = takeoverResponses.filter((response) => response.statusCode === 200);
-  const takeoverLosers = takeoverResponses.filter((response) => response.statusCode === 409);
-  if (
-    takeoverWinners.length !== 1 ||
-    takeoverLosers.length !== 1 ||
-    JSON.parse(takeoverLosers[0].body).error !== 'editor_document_takeover_conflict'
-  ) {
-    throw new Error(`Concurrent takeover did not choose exactly one writer: ${takeoverResponses.map((response) => `${response.statusCode} ${response.body}`).join(' / ')}`);
-  }
-  const takeoverBody = JSON.parse(takeoverWinners[0].body);
-  const takeoverWinner = takeoverBody.session.session_id === followerB.sessionId ? followerB : followerC;
-  const inFlightOldWriteBody = JSON.parse(inFlightOldWrite.body);
-  if (
-    inFlightOldWrite.statusCode !== 409 ||
-    inFlightOldWriteBody.error !== 'editor_document_session_displaced' ||
-    inFlightOldWriteBody.document.revision !== 2
-  ) {
-    throw new Error(`Old writer already in flight was not fenced after takeover: ${inFlightOldWrite.statusCode} ${inFlightOldWrite.body}`);
-  }
-  if (
-    takeoverBody.session.state !== 'active' ||
-    takeoverBody.session.edit_generation !== primaryAuthority.edit_generation + 1 ||
-    takeoverBody.presence.active_editor.relationship !== 'this_tab' ||
-    takeoverBody.recovery.capture_source !== 'server-acknowledged' ||
-    takeoverBody.recovery.reason !== 'takeover' ||
-    takeoverBody.recovery.level.name !== 'Autosaved Draft' ||
-    !takeoverBody.recovery.body_checkpoint_at
-  ) {
-    throw new Error(`Takeover did not preserve and return the displaced branch: ${takeoverWinners[0].body}`);
-  }
-  const takeoverCheckpoint = await queryDb(
-    `SELECT body_checkpoint_at > clock_timestamp() - interval '1 minute' AS checkpoint_is_fresh
-       FROM editor_document_edit_sessions
-      WHERE session_id = $1`,
-    [takeoverBody.session.session_id],
-  );
-  if (takeoverCheckpoint.rows[0]?.checkpoint_is_fresh !== true) {
-    throw new Error(`Takeover reused the waiting session's stale checkpoint time: ${JSON.stringify(takeoverCheckpoint.rows[0])}`);
-  }
-  editorAuthorities.set(editorAuthorityKey(smokeDocumentId, '__Host-chess-tactics-access=abc'), {
-    session_id: takeoverBody.session.session_id,
-    edit_session_key: takeoverWinner.sessionKey,
-    edit_generation: takeoverBody.session.edit_generation,
-  });
-  const afterTakeover = await get(`/api/editor-documents/${smokeDocumentId}`, { cookie: '__Host-chess-tactics-access=abc' });
-  const afterTakeoverBody = JSON.parse(afterTakeover.body);
-  if (
-    afterTakeover.statusCode !== 200 ||
-    afterTakeoverBody.document.revision !== 2 ||
-    afterTakeoverBody.document.level.name !== 'Autosaved Draft' ||
-    afterTakeoverBody.document.edit_generation !== takeoverBody.session.edit_generation
-  ) {
-    throw new Error(`Takeover changed content instead of only fencing authority: ${afterTakeover.statusCode} ${afterTakeover.body}`);
-  }
-  const displacedWrite = await request(
+  const autosaveFrom = (authority, revision, baseLevel, level) => request(
     'PUT', `/api/editor-documents/${smokeDocumentId}`,
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify(editorMutationBody(
       smokeDocumentId,
       '__Host-chess-tactics-access=abc',
-      { revision: 2, level: { ...workspaceLevel, name: 'Displaced Writer Must Be Fenced' } },
-      primaryAuthority,
+      { revision, base_level: baseLevel, level },
+      authority,
     )),
   );
-  const displacedWriteBody = JSON.parse(displacedWrite.body);
-  if (
-    displacedWrite.statusCode !== 409 ||
-    displacedWriteBody.error !== 'editor_document_session_displaced' ||
-    displacedWriteBody.document.revision !== 2 ||
-    displacedWriteBody.presence.active_editor.session_id !== takeoverBody.session.session_id ||
-    displacedWriteBody.recovery.level.name !== 'Autosaved Draft'
-  ) {
-    throw new Error(`Prior writer was not generation-fenced with recoverable context: ${displacedWrite.statusCode} ${displacedWrite.body}`);
-  }
-  const appendedLocalRecovery = await request(
-    'POST',
-    `/api/editor-documents/${smokeDocumentId}/edit-sessions/${primaryAuthority.session_id}/recoveries`,
-    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify({
-      revision: 2,
-      edit_generation: primaryAuthority.edit_generation,
-      session_key: primaryAuthority.edit_session_key,
-      level: { ...workspaceLevel, name: 'Displaced Local Candidate' },
-    }),
+  const firstTabAutosave = await autosaveFrom(
+    primaryAuthority,
+    1,
+    originalSharedLevel,
+    { ...originalSharedLevel, name: 'Shared title from tab A' },
   );
-  const appendedLocalRecoveryBody = JSON.parse(appendedLocalRecovery.body);
-  if (
-    appendedLocalRecovery.statusCode !== 201 ||
-    appendedLocalRecoveryBody.recovery.capture_source !== 'displaced-client-upload' ||
-    appendedLocalRecoveryBody.recovery.level.name !== 'Displaced Local Candidate' ||
-    appendedLocalRecoveryBody.recovery.resolved_at !== null ||
-    !appendedLocalRecoveryBody.recovery.body_checkpoint_at
-  ) {
-    throw new Error(`Displaced session could not append its local recovery: ${appendedLocalRecovery.statusCode} ${appendedLocalRecovery.body}`);
-  }
-  const recoveryList = await get(`/api/editor-documents/${smokeDocumentId}/recoveries`, { cookie: '__Host-chess-tactics-access=abc' });
-  const recoveryListBody = JSON.parse(recoveryList.body);
-  if (
-    recoveryList.statusCode !== 200 ||
-    !recoveryListBody.recoveries.some((entry) => entry.capture_source === 'server-acknowledged' && entry.level.name === 'Autosaved Draft') ||
-    !recoveryListBody.recoveries.some((entry) => entry.capture_source === 'displaced-client-upload' && entry.level.name === 'Displaced Local Candidate') ||
-    recoveryListBody.recoveries.some((entry) => !entry.body_checkpoint_at || !entry.created_at || !entry.source_editor?.email)
-  ) {
-    throw new Error(`Owner recovery list lost source/checkpoint provenance: ${recoveryList.statusCode} ${recoveryList.body}`);
+  const firstTabAutosaveBody = JSON.parse(firstTabAutosave.body);
+  if (firstTabAutosave.statusCode !== 200 || firstTabAutosaveBody.document.revision !== 2) {
+    throw new Error(`First shared-tab autosave failed: ${firstTabAutosave.statusCode} ${firstTabAutosave.body}`);
   }
 
-  // A previously displaced session can legally reacquire after a later writer
-  // expires. Its own older recovery must not hide that immediately preceding
-  // writer's newer expiry checkpoint in the acquisition response.
-  await queryDb(
-    `UPDATE editor_document_edit_sessions
-        SET lease_expires_at = clock_timestamp() - interval '1 second',
-            body_checkpoint_at = '2002-03-04T05:06:07Z'::timestamptz
-      WHERE session_id = $1`,
-    [takeoverBody.session.session_id],
+  // Tab B began from revision 1. Its independent edit merges into Tab A's
+  // newer title instead of creating a branch or asking for a takeover.
+  const secondTabAutosave = await autosaveFrom(
+    secondAuthority,
+    1,
+    originalSharedLevel,
+    { ...originalSharedLevel, notes: 'Shared notes from tab B' },
   );
-  const expiredTakeoverWinnerHeartbeat = await request(
-    'POST',
-    `/api/editor-documents/${smokeDocumentId}/edit-sessions/${takeoverBody.session.session_id}/heartbeat`,
-    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify({ session_key: takeoverWinner.sessionKey }),
-  );
+  const secondTabAutosaveBody = JSON.parse(secondTabAutosave.body);
   if (
-    expiredTakeoverWinnerHeartbeat.statusCode !== 409 ||
-    JSON.parse(expiredTakeoverWinnerHeartbeat.body).recovery?.reason !== 'lease-expired'
+    secondTabAutosave.statusCode !== 200
+    || secondTabAutosaveBody.document.revision !== 3
+    || secondTabAutosaveBody.document.level.name !== 'Shared title from tab A'
+    || secondTabAutosaveBody.document.level.notes !== 'Shared notes from tab B'
   ) {
-    throw new Error(`Could not durably expire the takeover winner: ${expiredTakeoverWinnerHeartbeat.statusCode} ${expiredTakeoverWinnerHeartbeat.body}`);
-  }
-  const reacquiredPrimarySession = await openEditorEditSession(smokeDocumentId, {
-    sessionId: primaryOpen.sessionId,
-    sessionKey: primaryOpen.sessionKey,
-    deviceId: primaryOpen.deviceId,
-    clientLabel: 'Chrome primary session reacquired',
-    remember: false,
-  });
-  if (
-    reacquiredPrimarySession.response.statusCode !== 200 ||
-    reacquiredPrimarySession.body.session?.state !== 'active' ||
-    reacquiredPrimarySession.body.session?.edit_generation !== takeoverBody.session.edit_generation + 1 ||
-    reacquiredPrimarySession.body.recovery?.source_session_id !== takeoverBody.session.session_id ||
-    reacquiredPrimarySession.body.recovery?.reason !== 'lease-expired' ||
-    !String(reacquiredPrimarySession.body.recovery?.body_checkpoint_at || '').startsWith('2002-03-04T05:06:07')
-  ) {
-    throw new Error(`Reacquiring session returned its stale recovery instead of the immediate expired predecessor: ${reacquiredPrimarySession.response.statusCode} ${reacquiredPrimarySession.response.body}`);
-  }
-  editorAuthorities.set(editorAuthorityKey(smokeDocumentId, '__Host-chess-tactics-access=abc'), {
-    session_id: reacquiredPrimarySession.body.session.session_id,
-    edit_session_key: primaryOpen.sessionKey,
-    edit_generation: reacquiredPrimarySession.body.session.edit_generation,
-  });
-
-  const staleAutosave = await request(
-    'PUT', `/api/editor-documents/${smokeDocumentId}`,
-    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(smokeDocumentId, '__Host-chess-tactics-access=abc', { revision: 1, level: { ...workspaceLevel, name: 'Stale Tab' } })),
-  );
-  const staleAutosaveBody = JSON.parse(staleAutosave.body);
-  if (
-    staleAutosave.statusCode !== 409 ||
-    staleAutosaveBody.error !== 'editor_document_revision_conflict' ||
-    staleAutosaveBody.document.revision !== 2 ||
-    staleAutosaveBody.document.level.name !== 'Autosaved Draft'
-  ) {
-    throw new Error(`Stale editor autosave should return the current document: ${staleAutosave.statusCode} ${staleAutosave.body}`);
+    throw new Error(`Stale shared-tab autosave did not merge: ${secondTabAutosave.statusCode} ${secondTabAutosave.body}`);
   }
 
-  const rivalEditorRead = await get(`/api/editor-documents/${smokeDocumentId}`, { cookie: '__Host-chess-tactics-access=rival' });
-  if (rivalEditorRead.statusCode !== 404) {
-    throw new Error(`Editor documents must be account-scoped: ${rivalEditorRead.statusCode} ${rivalEditorRead.body}`);
-  }
-  // Per-owner level ids can collide. Give the rival their own `smoke-1` and
-  // prove that an opaque id selects the exact row while ordinary access stays
-  // owner-only and admin review does not become discovery or mutation access.
-  const rivalCollisionWorkspace = await request(
-    'PUT', '/api/campaign-workspace',
-    { cookie: '__Host-chess-tactics-access=rival', 'content-type': 'application/json' },
-    JSON.stringify({ campaigns: [], levels: { 'smoke-1': workspaceLevel }, revision: rivalWorkspaceBody.revision }),
+  // Same-field edits use server arrival order while retaining unrelated work.
+  const lastArrivalAutosave = await autosaveFrom(
+    primaryAuthority,
+    1,
+    originalSharedLevel,
+    { ...originalSharedLevel, name: 'Last shared arrival' },
   );
-  if (rivalCollisionWorkspace.statusCode !== 200) {
-    throw new Error(`Could not create rival collision workspace: ${rivalCollisionWorkspace.statusCode} ${rivalCollisionWorkspace.body}`);
-  }
-  const rivalResolvedEditor = await request(
-    'POST', '/api/editor-documents/resolve',
-    { cookie: '__Host-chess-tactics-access=rival', 'content-type': 'application/json' },
-    JSON.stringify({ level_id: 'smoke-1' }),
-  );
-  const rivalResolvedEditorBody = JSON.parse(rivalResolvedEditor.body);
-  const rivalDocumentId = rivalResolvedEditorBody.document && rivalResolvedEditorBody.document.document_id;
+  const lastArrivalBody = JSON.parse(lastArrivalAutosave.body);
   if (
-    rivalResolvedEditor.statusCode !== 201 ||
-    rivalResolvedEditorBody.document.level_id !== 'smoke-1' ||
-    typeof rivalDocumentId !== 'string' || !rivalDocumentId || rivalDocumentId === smokeDocumentId
+    lastArrivalAutosave.statusCode !== 200
+    || lastArrivalBody.document.revision !== 4
+    || lastArrivalBody.document.level.name !== 'Last shared arrival'
+    || lastArrivalBody.document.level.notes !== 'Shared notes from tab B'
   ) {
-    throw new Error(`Colliding owner level ids must receive distinct document ids: ${rivalResolvedEditor.statusCode} ${rivalResolvedEditor.body}`);
-  }
-  const playerReadsRivalDocument = await get(`/api/editor-documents/${rivalDocumentId}`, { cookie: '__Host-chess-tactics-access=abc' });
-  const playerReadsRivalDocumentBody = JSON.parse(playerReadsRivalDocument.body);
-  if (
-    playerReadsRivalDocument.statusCode !== 200 ||
-    playerReadsRivalDocumentBody.document.document_id !== rivalDocumentId ||
-    playerReadsRivalDocumentBody.document.level.name !== 'Smoke Level'
-  ) {
-    throw new Error(`Admin could not open an existing editor document by opaque id: ${playerReadsRivalDocument.statusCode} ${playerReadsRivalDocument.body}`);
-  }
-  const adminDocumentListAfterRivalResolve = await get('/api/editor-documents', { cookie: '__Host-chess-tactics-access=abc' });
-  if (
-    adminDocumentListAfterRivalResolve.statusCode !== 200 ||
-    JSON.parse(adminDocumentListAfterRivalResolve.body).documents.some((entry) => entry.document_id === rivalDocumentId)
-  ) {
-    throw new Error(`Admin document discovery leaked another owner's work: ${adminDocumentListAfterRivalResolve.statusCode} ${adminDocumentListAfterRivalResolve.body}`);
-  }
-  const adminReadsRivalHistory = await get(
-    `/api/editor-documents/${rivalDocumentId}/revisions`,
-    { cookie: '__Host-chess-tactics-access=abc' },
-  );
-  if (adminReadsRivalHistory.statusCode !== 404) {
-    throw new Error(`Admin review access leaked another owner's revision history: ${adminReadsRivalHistory.statusCode} ${adminReadsRivalHistory.body}`);
-  }
-  const adminMutationRequests = [
-    await request(
-      'PUT', `/api/editor-documents/${rivalDocumentId}`,
-      { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-      JSON.stringify({ revision: 1, level: { ...workspaceLevel, name: 'Admin Must Not Autosave' } }),
-    ),
-    await request(
-      'POST', `/api/editor-documents/${rivalDocumentId}/save`,
-      { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-      JSON.stringify({ revision: 1 }),
-    ),
-    await request(
-      'POST', `/api/editor-documents/${rivalDocumentId}/discard`,
-      { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-      JSON.stringify({ revision: 1 }),
-    ),
-    await request(
-      'POST', `/api/editor-documents/${rivalDocumentId}/revisions/restore`,
-      { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-      JSON.stringify({ revision: 1, target_revision: 1 }),
-    ),
-    await deleteEditorRecoveriesRequest(
-      rivalDocumentId,
-      [crypto.randomUUID()],
-      {},
-      '__Host-chess-tactics-access=abc',
-    ),
-    await deleteEditorDocumentRequest(rivalDocumentId, 1, '__Host-chess-tactics-access=abc'),
-  ];
-  if (adminMutationRequests.some((response) => response.statusCode !== 404)) {
-    throw new Error(`Admin review access must not grant cross-owner mutation: ${adminMutationRequests.map((response) => `${response.statusCode} ${response.body}`).join(' / ')}`);
-  }
-  const adminSessionAttempt = await openEditorEditSession(rivalDocumentId, {
-    cookie: '__Host-chess-tactics-access=abc',
-    sessionId: crypto.randomUUID(),
-    deviceId: 'admin-must-not-own-rival-session',
-    remember: false,
-  });
-  const adminRecoveryAttempt = await get(
-    `/api/editor-documents/${rivalDocumentId}/recoveries`,
-    { cookie: '__Host-chess-tactics-access=abc' },
-  );
-  const fabricatedRivalRecoveryId = crypto.randomUUID();
-  const adminForeignSessionRequests = [
-    await request(
-      'POST',
-      `/api/editor-documents/${rivalDocumentId}/edit-sessions/${adminSessionAttempt.sessionId}/heartbeat`,
-      { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-      JSON.stringify({ session_key: adminSessionAttempt.sessionKey }),
-    ),
-    await request(
-      'POST',
-      `/api/editor-documents/${rivalDocumentId}/edit-sessions/${adminSessionAttempt.sessionId}/takeover`,
-      { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-      JSON.stringify({ session_key: adminSessionAttempt.sessionKey, expected_generation: 0 }),
-    ),
-    await request(
-      'POST',
-      `/api/editor-documents/${rivalDocumentId}/edit-sessions/${adminSessionAttempt.sessionId}/recoveries`,
-      { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-      JSON.stringify({
-        session_key: adminSessionAttempt.sessionKey,
-        revision: 1,
-        edit_generation: 0,
-        level: workspaceLevel,
-      }),
-    ),
-    await request(
-      'POST',
-      `/api/editor-documents/${rivalDocumentId}/recoveries/${fabricatedRivalRecoveryId}/restore`,
-      { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-      JSON.stringify({
-        revision: 1,
-        edit_session_id: adminSessionAttempt.sessionId,
-        edit_session_key: adminSessionAttempt.sessionKey,
-        edit_generation: 0,
-      }),
-    ),
-    await request(
-      'DELETE',
-      `/api/editor-documents/${rivalDocumentId}/recoveries/${fabricatedRivalRecoveryId}`,
-      { cookie: '__Host-chess-tactics-access=abc' },
-    ),
-  ];
-  const rivalSessionCount = await queryDb(
-    'SELECT count(*)::integer AS count FROM editor_document_edit_sessions WHERE document_id = $1',
-    [rivalDocumentId],
-  );
-  if (
-    adminSessionAttempt.response.statusCode !== 404 ||
-    adminRecoveryAttempt.statusCode !== 404 ||
-    adminForeignSessionRequests.some((response) => response.statusCode !== 404) ||
-    rivalSessionCount.rows[0].count !== 0
-  ) {
-    throw new Error(`Admin review created or accessed cross-owner session state: ${adminSessionAttempt.response.statusCode} ${adminSessionAttempt.response.body} / ${adminRecoveryAttempt.statusCode} ${adminRecoveryAttempt.body} / ${adminForeignSessionRequests.map((response) => `${response.statusCode} ${response.body}`).join(' / ')}`);
+    throw new Error(`Shared arrival policy lost work: ${lastArrivalAutosave.statusCode} ${lastArrivalAutosave.body}`);
   }
 
-  let processClaims;
-  if (isPgliteRuntime) {
-    // PGlite's listener resets connections when two backend pools share it.
-    // Preserve the concurrent durable-claim assertion here while real Postgres
-    // (including CI) continues through the two-process path below.
-    processClaims = await Promise.all([
-      openEditorEditSession(rivalDocumentId, {
-        cookie: '__Host-chess-tactics-access=rival',
-        deviceId: 'rival-primary-process-device',
-        clientLabel: 'Primary backend claimant',
-        remember: false,
-      }),
-      openEditorEditSession(rivalDocumentId, {
-        cookie: '__Host-chess-tactics-access=rival',
-        deviceId: 'rival-secondary-claim-device',
-        clientLabel: 'Concurrent backend claimant',
-        remember: false,
-      }),
-    ]);
-  } else {
-    startSecondaryBackend();
-    await waitForSecondaryBackend();
-    const secondaryReadyLine = secondaryOutput
-      .split(/\r?\n/)
-      .find((line) => line.includes('postgres ready') && line.includes('schema=check'));
-    if (
-      !secondaryReadyLine
-      || !secondaryReadyLine.includes('schema migrations applied: none')
-      || !secondaryReadyLine.includes('pending: none')
-    ) {
-      throw new Error(
-        `Check-mode backend did not verify the sealed upgraded migration history:\n${secondaryOutput}`,
-      );
-    }
-    processClaims = await Promise.all([
-      openEditorEditSession(rivalDocumentId, {
-        cookie: '__Host-chess-tactics-access=rival',
-        deviceId: 'rival-primary-process-device',
-        clientLabel: 'Primary backend claimant',
-        remember: false,
-        targetPort: port,
-      }),
-      openEditorEditSession(rivalDocumentId, {
-        cookie: '__Host-chess-tactics-access=rival',
-        deviceId: 'rival-secondary-process-device',
-        clientLabel: 'Secondary backend claimant',
-        remember: false,
-        targetPort: secondaryPort,
-      }),
-    ]);
-  }
-  const activeProcessClaims = processClaims.filter((claim) => claim.response.statusCode === 200 && claim.body.session?.state === 'active');
-  const waitingProcessClaims = processClaims.filter((claim) => claim.response.statusCode === 200 && claim.body.session?.state === 'waiting');
-  const durableActiveCount = await queryDb(
-    `SELECT count(*)::integer AS count
-       FROM editor_document_edit_sessions
-      WHERE document_id = $1 AND state = 'active' AND lease_expires_at > clock_timestamp()`,
-    [rivalDocumentId],
-  );
-  if (
-    activeProcessClaims.length !== 1 ||
-    waitingProcessClaims.length !== 1 ||
-    durableActiveCount.rows[0].count !== 1
-  ) {
-    throw new Error(`Two backend processes did not resolve one durable writer: ${processClaims.map((claim) => `${claim.response.statusCode} ${claim.response.body}`).join(' / ')} / count=${durableActiveCount.rows[0].count}\nsecondary:\n${secondaryOutput}`);
-  }
-  for (const claim of processClaims) {
-    const closedClaim = await closeEditorEditSessionRequest(
-      rivalDocumentId,
-      claim.sessionId,
-      claim.sessionKey,
-      '__Host-chess-tactics-access=rival',
-      claim.targetPort,
-    );
-    if (closedClaim.statusCode !== 200 || JSON.parse(closedClaim.body).session.state !== 'closed') {
-      throw new Error(`Cross-process claimant did not close cleanly: ${closedClaim.statusCode} ${closedClaim.body}`);
-    }
-  }
-  if (secondaryChild) {
-    secondaryChild.kill();
-    await waitForProcessExit(secondaryChild);
-    secondaryChild = null;
-  }
-
-  const rivalManagementSession = await openEditorEditSession(rivalDocumentId, {
-    cookie: '__Host-chess-tactics-access=rival',
-    deviceId: 'rival-management-device',
-    clientLabel: 'Campaign management',
-    remember: false,
-  });
-  if (
-    rivalManagementSession.response.statusCode !== 200 ||
-    rivalManagementSession.body.session.state !== 'active'
-  ) {
-    throw new Error(`Owner management session did not acquire edit authority: ${rivalManagementSession.response.statusCode} ${rivalManagementSession.response.body}`);
-  }
-  const adminCloseRivalSession = await closeEditorEditSessionRequest(
-    rivalDocumentId,
-    rivalManagementSession.sessionId,
-    rivalManagementSession.sessionKey,
-    '__Host-chess-tactics-access=abc',
-  );
-  if (adminCloseRivalSession.statusCode !== 404) {
-    throw new Error(`Admin review closed another owner's edit session: ${adminCloseRivalSession.statusCode} ${adminCloseRivalSession.body}`);
-  }
-  const closedRivalManagementSession = await closeEditorEditSessionRequest(
-    rivalDocumentId,
-    rivalManagementSession.sessionId,
-    rivalManagementSession.sessionKey,
-    '__Host-chess-tactics-access=rival',
-  );
-  const closedRivalManagementBody = JSON.parse(closedRivalManagementSession.body);
-  if (
-    closedRivalManagementSession.statusCode !== 200 ||
-    closedRivalManagementBody.session.state !== 'closed' ||
-    closedRivalManagementBody.session.lease_expires_at !== null ||
-    closedRivalManagementBody.presence.active_editor !== null ||
-    closedRivalManagementBody.presence.last_editor?.session_id !== rivalManagementSession.sessionId ||
-    closedRivalManagementBody.presence.last_editor?.state !== 'closed' ||
-    closedRivalManagementBody.presence.last_editor?.live !== false ||
-    closedRivalManagementBody.presence.last_editor?.relationship !== 'this_tab' ||
-    closedRivalManagementBody.presence.can_take_over !== false ||
-    closedRivalManagementBody.presence.edit_generation !== rivalManagementSession.body.session.edit_generation
-  ) {
-    throw new Error(`Closing an owner session did not release its lease without advancing authority: ${closedRivalManagementSession.statusCode} ${closedRivalManagementSession.body}`);
-  }
-  const repeatedRivalManagementClose = await closeEditorEditSessionRequest(
-    rivalDocumentId,
-    rivalManagementSession.sessionId,
-    rivalManagementSession.sessionKey,
-    '__Host-chess-tactics-access=rival',
-  );
-  if (
-    repeatedRivalManagementClose.statusCode !== 200 ||
-    JSON.parse(repeatedRivalManagementClose.body).session.state !== 'closed'
-  ) {
-    throw new Error(`Session close was not idempotent: ${repeatedRivalManagementClose.statusCode} ${repeatedRivalManagementClose.body}`);
-  }
-  const rivalAfterClose = await get(`/api/editor-documents/${rivalDocumentId}`, { cookie: '__Host-chess-tactics-access=rival' });
-  const rivalAfterCloseBody = JSON.parse(rivalAfterClose.body);
-  if (
-    rivalAfterClose.statusCode !== 200 ||
-    rivalAfterCloseBody.document.revision !== 1 ||
-    rivalAfterCloseBody.document.level.name !== 'Smoke Level' ||
-    rivalAfterCloseBody.document.edit_generation !== rivalManagementSession.body.session.edit_generation
-  ) {
-    throw new Error(`Closing an edit session mutated its document: ${rivalAfterClose.statusCode} ${rivalAfterClose.body}`);
-  }
-  const reopenedClosedManagementSession = await openEditorEditSession(rivalDocumentId, {
-    cookie: '__Host-chess-tactics-access=rival',
-    sessionId: rivalManagementSession.sessionId,
-    sessionKey: rivalManagementSession.sessionKey,
-    deviceId: rivalManagementSession.deviceId,
-    clientLabel: 'Closed campaign management retry',
-    remember: false,
-  });
-  if (
-    reopenedClosedManagementSession.response.statusCode !== 409 ||
-    reopenedClosedManagementSession.body.error !== 'editor_document_session_not_active' ||
-    reopenedClosedManagementSession.body.session?.state !== 'closed'
-  ) {
-    throw new Error(`Closed session id was not terminal on reopen: ${reopenedClosedManagementSession.response.statusCode} ${reopenedClosedManagementSession.response.body}`);
-  }
-  const rivalReplacementSession = await openEditorEditSession(rivalDocumentId, {
-    cookie: '__Host-chess-tactics-access=rival',
-    deviceId: 'rival-replacement-device',
-    clientLabel: 'Campaign management replacement',
-    remember: false,
-  });
-  if (
-    rivalReplacementSession.response.statusCode !== 200 ||
-    rivalReplacementSession.body.session.state !== 'active' ||
-    rivalReplacementSession.body.session.edit_generation !== rivalManagementSession.body.session.edit_generation + 1
-  ) {
-    throw new Error(`A closed management session blocked immediate replacement authority: ${rivalReplacementSession.response.statusCode} ${rivalReplacementSession.response.body}`);
-  }
-  const closedSessionTakeover = await request(
-    'POST',
-    `/api/editor-documents/${rivalDocumentId}/edit-sessions/${rivalManagementSession.sessionId}/takeover`,
-    { cookie: '__Host-chess-tactics-access=rival', 'content-type': 'application/json' },
-    JSON.stringify({
-      session_key: rivalManagementSession.sessionKey,
-      expected_generation: rivalReplacementSession.body.session.edit_generation,
-    }),
-  );
-  if (closedSessionTakeover.statusCode !== 409 || JSON.parse(closedSessionTakeover.body).error !== 'editor_document_session_not_active') {
-    throw new Error(`Closed session took over a replacement writer: ${closedSessionTakeover.statusCode} ${closedSessionTakeover.body}`);
-  }
-  const forgedReplacementClose = await closeEditorEditSessionRequest(
-    rivalDocumentId,
-    rivalReplacementSession.sessionId,
-    rivalManagementSession.sessionKey,
-    '__Host-chess-tactics-access=rival',
-  );
-  if (forgedReplacementClose.statusCode !== 403 || JSON.parse(forgedReplacementClose.body).error !== 'editor_document_edit_session_key_invalid') {
-    throw new Error(`Closed session key released a replacement writer: ${forgedReplacementClose.statusCode} ${forgedReplacementClose.body}`);
-  }
-  const closedRivalReplacementSession = await closeEditorEditSessionRequest(
-    rivalDocumentId,
-    rivalReplacementSession.sessionId,
-    rivalReplacementSession.sessionKey,
-    '__Host-chess-tactics-access=rival',
-  );
-  if (closedRivalReplacementSession.statusCode !== 200 || JSON.parse(closedRivalReplacementSession.body).session.state !== 'closed') {
-    throw new Error(`Replacement management session did not release cleanly: ${closedRivalReplacementSession.statusCode} ${closedRivalReplacementSession.body}`);
-  }
-
-  const expiringRivalSession = await openEditorEditSession(rivalDocumentId, {
-    cookie: '__Host-chess-tactics-access=rival',
-    deviceId: 'rival-expiring-device',
-    clientLabel: 'Expiring rival editor',
-    remember: false,
-  });
-  if (expiringRivalSession.response.statusCode !== 200 || expiringRivalSession.body.session.state !== 'active') {
-    throw new Error(`Could not acquire expiry-test session: ${expiringRivalSession.response.statusCode} ${expiringRivalSession.response.body}`);
-  }
-  const expiryFollowerSession = await openEditorEditSession(rivalDocumentId, {
-    cookie: '__Host-chess-tactics-access=rival',
-    deviceId: 'rival-expiry-follower-device',
-    clientLabel: 'Expiry follower editor',
-    remember: false,
-  });
-  if (
-    expiryFollowerSession.response.statusCode !== 200 ||
-    expiryFollowerSession.body.session.state !== 'waiting'
-  ) {
-    throw new Error(`Could not establish expiry-test follower: ${expiryFollowerSession.response.statusCode} ${expiryFollowerSession.response.body}`);
-  }
-  await queryDb(
-    `UPDATE editor_document_edit_sessions
-        SET lease_expires_at = clock_timestamp() - interval '1 second',
-            body_checkpoint_at = '2001-02-03T04:05:06Z'::timestamptz
-      WHERE session_id = $1`,
-    [expiringRivalSession.sessionId],
-  );
-  const expiredRivalHeartbeat = await request(
-    'POST',
-    `/api/editor-documents/${rivalDocumentId}/edit-sessions/${expiringRivalSession.sessionId}/heartbeat`,
-    { cookie: '__Host-chess-tactics-access=rival', 'content-type': 'application/json' },
-    JSON.stringify({ session_key: expiringRivalSession.sessionKey }),
-  );
-  const expiredRivalHeartbeatBody = JSON.parse(expiredRivalHeartbeat.body);
-  if (
-    expiredRivalHeartbeat.statusCode !== 409 ||
-    expiredRivalHeartbeatBody.error !== 'editor_document_session_expired' ||
-    expiredRivalHeartbeatBody.presence?.active_editor !== null ||
-    expiredRivalHeartbeatBody.presence?.last_editor?.session_id !== expiringRivalSession.sessionId ||
-    expiredRivalHeartbeatBody.presence?.last_editor?.relationship !== 'this_tab' ||
-    expiredRivalHeartbeatBody.presence?.last_editor?.state !== 'expired' ||
-    expiredRivalHeartbeatBody.presence?.last_editor?.live !== false ||
-    expiredRivalHeartbeatBody.recovery?.reason !== 'lease-expired'
-  ) {
-    throw new Error(`Expired writer did not receive precise attributable recovery context: ${expiredRivalHeartbeat.statusCode} ${expiredRivalHeartbeat.body}`);
-  }
-  const durableExpiredHeartbeat = await queryDb(
-    `SELECT session.state,
-            recovery.recovery_id,
-            recovery.reason
-       FROM editor_document_edit_sessions AS session
-       LEFT JOIN editor_document_recoveries AS recovery
-         ON recovery.document_id = session.document_id
-        AND recovery.source_session_id = session.session_id
-      WHERE session.session_id = $1
-      ORDER BY recovery.created_at DESC, recovery.recovery_id DESC
-      LIMIT 1`,
-    [expiringRivalSession.sessionId],
-  );
-  if (
-    durableExpiredHeartbeat.rows[0]?.state !== 'expired' ||
-    durableExpiredHeartbeat.rows[0]?.recovery_id !== expiredRivalHeartbeatBody.recovery?.recovery_id ||
-    durableExpiredHeartbeat.rows[0]?.reason !== 'lease-expired'
-  ) {
-    throw new Error(`Expired heartbeat response referenced rolled-back authority state: ${JSON.stringify(durableExpiredHeartbeat.rows[0])}`);
-  }
-  const followerExpiryHeartbeat = await request(
-    'POST',
-    `/api/editor-documents/${rivalDocumentId}/edit-sessions/${expiryFollowerSession.sessionId}/heartbeat`,
-    { cookie: '__Host-chess-tactics-access=rival', 'content-type': 'application/json' },
-    JSON.stringify({ session_key: expiryFollowerSession.sessionKey }),
-  );
-  const followerExpiryHeartbeatBody = JSON.parse(followerExpiryHeartbeat.body);
-  const expiredLastEditor = followerExpiryHeartbeatBody.presence?.last_editor;
-  if (
-    followerExpiryHeartbeat.statusCode !== 200 ||
-    followerExpiryHeartbeatBody.session?.state !== 'waiting' ||
-    followerExpiryHeartbeatBody.presence?.active_editor !== null ||
-    expiredLastEditor?.session_id !== expiringRivalSession.sessionId ||
-    expiredLastEditor?.name !== 'Lobby Rival' ||
-    expiredLastEditor?.email !== 'rival@example.com' ||
-    expiredLastEditor?.client_label !== 'Expiring rival editor' ||
-    expiredLastEditor?.opened_at !== expiringRivalSession.body.session.opened_at ||
-    expiredLastEditor?.last_seen_at !== expiringRivalSession.body.session.last_seen_at ||
-    expiredLastEditor?.relationship !== 'other_device' ||
-    expiredLastEditor?.state !== 'expired' ||
-    expiredLastEditor?.live !== false ||
-    followerExpiryHeartbeatBody.recovery?.reason !== 'lease-expired' ||
-    followerExpiryHeartbeatBody.recovery?.source_session_id !== expiringRivalSession.sessionId
-  ) {
-    throw new Error(`Follower heartbeat dropped expired-editor attribution or recovery: ${followerExpiryHeartbeat.statusCode} ${followerExpiryHeartbeat.body}`);
-  }
-  const followerPostExpiryPresence = await request(
-    'POST',
-    `/api/editor-documents/${rivalDocumentId}/edit-presence`,
-    { cookie: '__Host-chess-tactics-access=rival', 'content-type': 'application/json' },
-    JSON.stringify({
-      session_id: expiryFollowerSession.sessionId,
-      session_key: expiryFollowerSession.sessionKey,
-      device_id: expiryFollowerSession.deviceId,
-    }),
-  );
-  const followerPostExpiryPresenceBody = JSON.parse(followerPostExpiryPresence.body);
-  if (
-    followerPostExpiryPresence.statusCode !== 200 ||
-    followerPostExpiryPresenceBody.presence?.active_editor !== null ||
-    followerPostExpiryPresenceBody.presence?.last_editor?.session_id !== expiringRivalSession.sessionId ||
-    followerPostExpiryPresenceBody.presence?.last_editor?.state !== 'expired' ||
-    followerPostExpiryPresenceBody.presence?.last_editor?.live !== false ||
-    followerPostExpiryPresenceBody.recovery?.reason !== 'lease-expired' ||
-    followerPostExpiryPresenceBody.recovery?.source_session_id !== expiringRivalSession.sessionId
-  ) {
-    throw new Error(`Presence polling dropped durable expired-editor context: ${followerPostExpiryPresence.statusCode} ${followerPostExpiryPresence.body}`);
-  }
-  const closedExpiryFollower = await closeEditorEditSessionRequest(
-    rivalDocumentId,
-    expiryFollowerSession.sessionId,
-    expiryFollowerSession.sessionKey,
-    '__Host-chess-tactics-access=rival',
-  );
-  const closedExpiryFollowerBody = JSON.parse(closedExpiryFollower.body);
-  if (
-    closedExpiryFollower.statusCode !== 200 ||
-    closedExpiryFollowerBody.presence?.active_editor !== null ||
-    closedExpiryFollowerBody.presence?.last_editor?.session_id !== expiringRivalSession.sessionId ||
-    closedExpiryFollowerBody.presence?.last_editor?.state !== 'expired'
-  ) {
-    throw new Error(`Never-authoritative waiting session replaced last-editor attribution: ${closedExpiryFollower.statusCode} ${closedExpiryFollower.body}`);
-  }
-  const postExpiryRivalSession = await openEditorEditSession(rivalDocumentId, {
-    cookie: '__Host-chess-tactics-access=rival',
-    deviceId: 'rival-post-expiry-device',
-    clientLabel: 'Post-expiry rival editor',
-    remember: false,
-  });
-  if (
-    postExpiryRivalSession.response.statusCode !== 200 ||
-    postExpiryRivalSession.body.session.state !== 'active' ||
-    postExpiryRivalSession.body.session.edit_generation !== expiringRivalSession.body.session.edit_generation + 1 ||
-    postExpiryRivalSession.body.recovery?.reason !== 'lease-expired' ||
-    postExpiryRivalSession.body.recovery?.capture_source !== 'server-acknowledged' ||
-    postExpiryRivalSession.body.recovery?.source_session_id !== expiringRivalSession.sessionId ||
-    !String(postExpiryRivalSession.body.recovery?.body_checkpoint_at || '').startsWith('2001-02-03T04:05:06') ||
-    postExpiryRivalSession.body.recovery?.level.name !== 'Smoke Level'
-  ) {
-    throw new Error(`Lease expiry did not preserve the prior checkpoint before reassignment: ${postExpiryRivalSession.response.statusCode} ${postExpiryRivalSession.response.body}`);
-  }
-  const closedPostExpiryRivalSession = await closeEditorEditSessionRequest(
-    rivalDocumentId,
-    postExpiryRivalSession.sessionId,
-    postExpiryRivalSession.sessionKey,
-    '__Host-chess-tactics-access=rival',
-  );
-  if (closedPostExpiryRivalSession.statusCode !== 200) {
-    throw new Error(`Post-expiry replacement session did not close: ${closedPostExpiryRivalSession.statusCode} ${closedPostExpiryRivalSession.body}`);
-  }
-
-  const discardedEditor = await request(
-    'POST', `/api/editor-documents/${smokeDocumentId}/discard`,
-    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(smokeDocumentId, '__Host-chess-tactics-access=abc', { revision: 2 })),
-  );
-  const discardedEditorBody = JSON.parse(discardedEditor.body);
-  if (
-    discardedEditor.statusCode !== 200 ||
-    discardedEditorBody.document.revision !== 3 ||
-    discardedEditorBody.document.saved_revision !== 3 ||
-    discardedEditorBody.document.dirty !== false ||
-    discardedEditorBody.document.level.name !== 'Smoke Level'
-  ) {
-    throw new Error(`Discard should restore the canonical saved Level: ${discardedEditor.statusCode} ${discardedEditor.body}`);
-  }
-
-  const autosavedAgain = await request(
-    'PUT', `/api/editor-documents/${smokeDocumentId}`,
-    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(smokeDocumentId, '__Host-chess-tactics-access=abc', { revision: 3, level: { ...workspaceLevel, name: 'Debounced Version' } })),
-  );
-  if (autosavedAgain.statusCode !== 200 || JSON.parse(autosavedAgain.body).document.revision !== 4) {
-    throw new Error(`Second autosave failed: ${autosavedAgain.statusCode} ${autosavedAgain.body}`);
-  }
-
-  // Save may carry the exact current in-memory Level. The server promotes it in
-  // the same transaction as the working-copy CAS, so a pending debounce cannot win.
-  const exactSaveLevel = { ...workspaceLevel, name: 'Exact Save Click' };
-  const savedEditor = await request(
-    'POST', `/api/editor-documents/${smokeDocumentId}/save`,
-    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(smokeDocumentId, '__Host-chess-tactics-access=abc', { revision: 4, level: exactSaveLevel, campaign_id: null })),
-  );
-  const savedEditorBody = JSON.parse(savedEditor.body);
-  if (
-    savedEditor.statusCode !== 200 ||
-    savedEditorBody.document.revision !== 5 ||
-    savedEditorBody.document.saved_revision !== 5 ||
-    savedEditorBody.workspace_revision !== 2 ||
-    savedEditorBody.document.level.name !== 'Exact Save Click'
-  ) {
-    throw new Error(`Editor Save should promote the exact supplied Level: ${savedEditor.statusCode} ${savedEditor.body}`);
-  }
-  const canonicalAfterSave = await get('/api/campaign-workspace', { cookie: '__Host-chess-tactics-access=abc' });
-  const canonicalAfterSaveBody = JSON.parse(canonicalAfterSave.body);
-  if (
-    canonicalAfterSaveBody.levels['smoke-1'].name !== 'Exact Save Click' ||
-    canonicalAfterSaveBody.revision !== 2 ||
-    canonicalAfterSaveBody.campaigns[0].levels.some((ref) => ref.levelId === 'smoke-1')
-  ) {
-    throw new Error(`Editor Save did not promote to canonical workspace: ${canonicalAfterSave.body}`);
-  }
-  const staleWholeWorkspaceSave = await request(
-    'PUT', '/api/campaign-workspace',
-    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify({ ...workspaceDoc, revision: loadedWorkspaceBody.revision }),
-  );
-  const staleWholeWorkspaceSaveBody = JSON.parse(staleWholeWorkspaceSave.body);
-  if (
-    staleWholeWorkspaceSave.statusCode !== 409 ||
-    staleWholeWorkspaceSaveBody.error !== 'workspace_revision_conflict' ||
-    staleWholeWorkspaceSaveBody.workspace.revision !== 2 ||
-    staleWholeWorkspaceSaveBody.workspace.levels['smoke-1'].name !== 'Exact Save Click'
-  ) {
-    throw new Error(`Stale whole-workspace Save could revert the canonical Level: ${staleWholeWorkspaceSave.statusCode} ${staleWholeWorkspaceSave.body}`);
-  }
-  const restoreDisplacedRecovery = await request(
-    'POST',
-    `/api/editor-documents/${smokeDocumentId}/recoveries/${appendedLocalRecoveryBody.recovery.recovery_id}/restore`,
-    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(smokeDocumentId, '__Host-chess-tactics-access=abc', { revision: 5 })),
-  );
-  const restoreDisplacedRecoveryBody = JSON.parse(restoreDisplacedRecovery.body);
-  if (
-    restoreDisplacedRecovery.statusCode !== 200 ||
-    restoreDisplacedRecoveryBody.document.revision !== 6 ||
-    restoreDisplacedRecoveryBody.document.level.name !== 'Displaced Local Candidate' ||
-    !restoreDisplacedRecoveryBody.recovery.resolved_at ||
-    restoreDisplacedRecoveryBody.preserved_current_recovery.reason !== 'pre-restore' ||
-    restoreDisplacedRecoveryBody.preserved_current_recovery.capture_source !== 'server-acknowledged' ||
-    restoreDisplacedRecoveryBody.preserved_current_recovery.level.name !== 'Exact Save Click' ||
-    restoreDisplacedRecoveryBody.preserved_current_recovery.resolved_at !== null ||
-    !restoreDisplacedRecoveryBody.preserved_current_recovery.body_checkpoint_at
-  ) {
-    throw new Error(`Recovery restore did not checkpoint current work before a fenced revision: ${restoreDisplacedRecovery.statusCode} ${restoreDisplacedRecovery.body}`);
-  }
-  const canonicalAfterRecoveryRestore = await get('/api/campaign-workspace', { cookie: '__Host-chess-tactics-access=abc' });
-  if (JSON.parse(canonicalAfterRecoveryRestore.body).levels['smoke-1'].name !== 'Exact Save Click') {
-    throw new Error(`Recovery restore crossed the canonical Save boundary: ${canonicalAfterRecoveryRestore.body}`);
-  }
-  const recoveriesAfterRestore = await get(`/api/editor-documents/${smokeDocumentId}/recoveries`, { cookie: '__Host-chess-tactics-access=abc' });
-  const resolvedRecoveryAfterRestore = JSON.parse(recoveriesAfterRestore.body).recoveries?.find(
-    (entry) => entry.recovery_id === appendedLocalRecoveryBody.recovery.recovery_id,
-  );
-  if (
-    recoveriesAfterRestore.statusCode !== 200 ||
-    !resolvedRecoveryAfterRestore ||
-    !resolvedRecoveryAfterRestore.resolved_at ||
-    resolvedRecoveryAfterRestore.level.name !== 'Displaced Local Candidate'
-  ) {
-    throw new Error(`Resolved recovery did not remain owner-visible with its immutable branch: ${recoveriesAfterRestore.statusCode} ${recoveriesAfterRestore.body}`);
-  }
-  const unfencedRecoveryDelete = await deleteEditorRecoveryRequest(
-    smokeDocumentId,
-    appendedLocalRecoveryBody.recovery.recovery_id,
-    {},
-  );
-  if (
-    unfencedRecoveryDelete.statusCode !== 400 ||
-    JSON.parse(unfencedRecoveryDelete.body).error !== 'editor_document_edit_session_required'
-  ) {
-    throw new Error(`Owner-only recovery delete bypassed writer authority: ${unfencedRecoveryDelete.statusCode} ${unfencedRecoveryDelete.body}`);
-  }
-  const recoveryDeleteOldAuthority = editorAuthorities.get(editorAuthorityKey(smokeDocumentId, '__Host-chess-tactics-access=abc'));
-  if (!recoveryDeleteOldAuthority) throw new Error('Recovery delete test lost the active editor authority');
-  const recoveryDeleteChallenger = await openEditorEditSession(smokeDocumentId, {
-    deviceId: 'recovery-delete-takeover-device',
-    clientLabel: 'Recovery delete takeover tab',
-    remember: false,
-  });
-  if (
-    recoveryDeleteChallenger.response.statusCode !== 200 ||
-    recoveryDeleteChallenger.body.session.state !== 'waiting'
-  ) {
-    throw new Error(`Could not establish recovery-delete challenger: ${recoveryDeleteChallenger.response.statusCode} ${recoveryDeleteChallenger.response.body}`);
-  }
-  const recoveryDeleteTakeover = await request(
-    'POST',
-    `/api/editor-documents/${smokeDocumentId}/edit-sessions/${recoveryDeleteChallenger.sessionId}/takeover`,
-    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify({
-      session_key: recoveryDeleteChallenger.sessionKey,
-      expected_generation: recoveryDeleteOldAuthority.edit_generation,
-    }),
-  );
-  const recoveryDeleteTakeoverBody = JSON.parse(recoveryDeleteTakeover.body);
-  if (
-    recoveryDeleteTakeover.statusCode !== 200 ||
-    recoveryDeleteTakeoverBody.session?.state !== 'active' ||
-    recoveryDeleteTakeoverBody.session?.edit_generation !== recoveryDeleteOldAuthority.edit_generation + 1
-  ) {
-    throw new Error(`Could not transfer authority during recovery-delete confirmation: ${recoveryDeleteTakeover.statusCode} ${recoveryDeleteTakeover.body}`);
-  }
-  const recoveryDeleteNewAuthority = {
-    session_id: recoveryDeleteChallenger.sessionId,
-    edit_session_key: recoveryDeleteChallenger.sessionKey,
-    edit_generation: recoveryDeleteTakeoverBody.session.edit_generation,
-  };
-  editorAuthorities.set(
-    editorAuthorityKey(smokeDocumentId, '__Host-chess-tactics-access=abc'),
-    recoveryDeleteNewAuthority,
-  );
-  const staleRecoveryDelete = await deleteEditorRecoveryRequest(
-    smokeDocumentId,
-    appendedLocalRecoveryBody.recovery.recovery_id,
-    editorMutationBody(
-      smokeDocumentId,
-      '__Host-chess-tactics-access=abc',
-      {},
-      recoveryDeleteOldAuthority,
-    ),
-  );
-  const staleRecoveryDeleteBody = JSON.parse(staleRecoveryDelete.body);
-  const recoveriesAfterStaleDelete = await get(`/api/editor-documents/${smokeDocumentId}/recoveries`, { cookie: '__Host-chess-tactics-access=abc' });
-  if (
-    staleRecoveryDelete.statusCode !== 409 ||
-    staleRecoveryDeleteBody.error !== 'editor_document_session_displaced' ||
-    !JSON.parse(recoveriesAfterStaleDelete.body).recoveries?.some(
-      (entry) => entry.recovery_id === appendedLocalRecoveryBody.recovery.recovery_id,
-    )
-  ) {
-    throw new Error(`Displaced confirmation deleted recovery data: ${staleRecoveryDelete.statusCode} ${staleRecoveryDelete.body} / ${recoveriesAfterStaleDelete.body}`);
-  }
-  const deletedRecovery = await deleteEditorRecoveryRequest(
-    smokeDocumentId,
-    appendedLocalRecoveryBody.recovery.recovery_id,
-    editorMutationBody(
-      smokeDocumentId,
-      '__Host-chess-tactics-access=abc',
-      {},
-      recoveryDeleteNewAuthority,
-    ),
-  );
-  if (deletedRecovery.statusCode !== 200 || JSON.parse(deletedRecovery.body).recovery.recovery_id !== appendedLocalRecoveryBody.recovery.recovery_id) {
-    throw new Error(`Explicit recovery deletion failed: ${deletedRecovery.statusCode} ${deletedRecovery.body}`);
-  }
-  const recoveriesBeforeExpiryDelete = await get(`/api/editor-documents/${smokeDocumentId}/recoveries`, { cookie: '__Host-chess-tactics-access=abc' });
-  const expiryDeleteCandidate = JSON.parse(recoveriesBeforeExpiryDelete.body).recoveries?.[0];
-  if (recoveriesBeforeExpiryDelete.statusCode !== 200 || !expiryDeleteCandidate?.recovery_id) {
-    throw new Error(`Recovery delete expiry test had no durable candidate: ${recoveriesBeforeExpiryDelete.statusCode} ${recoveriesBeforeExpiryDelete.body}`);
-  }
+  // Stale lease metadata neither blocks editing nor manufactures recovery.
   await queryDb(
     `UPDATE editor_document_edit_sessions
         SET lease_expires_at = clock_timestamp() - interval '1 second'
       WHERE session_id = $1`,
-    [recoveryDeleteNewAuthority.session_id],
+    [secondAuthority.session_id],
   );
-  const expiredFenceRecoveryDelete = await deleteEditorRecoveryRequest(
-    smokeDocumentId,
-    expiryDeleteCandidate.recovery_id,
-    editorMutationBody(
-      smokeDocumentId,
-      '__Host-chess-tactics-access=abc',
-      {},
-      recoveryDeleteNewAuthority,
-    ),
+  const finalAutosave = await autosaveFrom(
+    secondAuthority,
+    4,
+    lastArrivalBody.document.level,
+    { ...lastArrivalBody.document.level, notes: 'Still shared after stale presence metadata' },
   );
-  const expiredFenceRecoveryDeleteBody = JSON.parse(expiredFenceRecoveryDelete.body);
-  if (
-    expiredFenceRecoveryDelete.statusCode !== 409 ||
-    expiredFenceRecoveryDeleteBody.error !== 'editor_document_session_expired' ||
-    expiredFenceRecoveryDeleteBody.session?.state !== 'expired' ||
-    expiredFenceRecoveryDeleteBody.recovery?.reason !== 'lease-expired'
-  ) {
-    throw new Error(`Expired writer fence did not reject recovery deletion precisely: ${expiredFenceRecoveryDelete.statusCode} ${expiredFenceRecoveryDelete.body}`);
-  }
-  const durableExpiredRecoveryDelete = await queryDb(
-    `SELECT session.state,
-            EXISTS (
-              SELECT 1 FROM editor_document_recoveries WHERE recovery_id = $2
-            ) AS expiry_recovery_is_durable,
-            EXISTS (
-              SELECT 1 FROM editor_document_recoveries WHERE recovery_id = $3
-            ) AS delete_candidate_still_exists
-       FROM editor_document_edit_sessions AS session
-      WHERE session.session_id = $1`,
-    [
-      recoveryDeleteNewAuthority.session_id,
-      expiredFenceRecoveryDeleteBody.recovery.recovery_id,
-      expiryDeleteCandidate.recovery_id,
-    ],
-  );
-  if (
-    durableExpiredRecoveryDelete.rows[0]?.state !== 'expired' ||
-    durableExpiredRecoveryDelete.rows[0]?.expiry_recovery_is_durable !== true ||
-    durableExpiredRecoveryDelete.rows[0]?.delete_candidate_still_exists !== true
-  ) {
-    throw new Error(`Expired recovery-delete rejection rolled back or removed data: ${JSON.stringify(durableExpiredRecoveryDelete.rows[0])}`);
+  const finalAutosaveBody = JSON.parse(finalAutosave.body);
+  if (finalAutosave.statusCode !== 200 || finalAutosaveBody.document.revision !== 5) {
+    throw new Error(`Stale presence metadata blocked shared editing: ${finalAutosave.statusCode} ${finalAutosave.body}`);
   }
 
-  const bulkRecoverySnapshot = await get(`/api/editor-documents/${smokeDocumentId}/recoveries`, { cookie: '__Host-chess-tactics-access=abc' });
-  const bulkRecoverySnapshotBody = JSON.parse(bulkRecoverySnapshot.body);
-  if (
-    bulkRecoverySnapshot.statusCode !== 200 ||
-    !Array.isArray(bulkRecoverySnapshotBody.recoveries) ||
-    bulkRecoverySnapshotBody.recoveries.length < 3
-  ) {
-    throw new Error(`Bulk recovery delete test needs at least three recoveries: ${bulkRecoverySnapshot.statusCode} ${bulkRecoverySnapshot.body}`);
-  }
-  const bulkRecoveryIds = bulkRecoverySnapshotBody.recoveries.slice(0, 2).map((entry) => entry.recovery_id);
-  const unsubmittedRecoveryId = bulkRecoverySnapshotBody.recoveries[2].recovery_id;
-
-  const unfencedBulkRecoveryDelete = await deleteEditorRecoveriesRequest(smokeDocumentId, bulkRecoveryIds, {});
-  if (
-    unfencedBulkRecoveryDelete.statusCode !== 400 ||
-    JSON.parse(unfencedBulkRecoveryDelete.body).error !== 'editor_document_edit_session_required'
-  ) {
-    throw new Error(`Bulk recovery delete bypassed writer authority: ${unfencedBulkRecoveryDelete.statusCode} ${unfencedBulkRecoveryDelete.body}`);
-  }
-  const expiredFenceBulkRecoveryDelete = await deleteEditorRecoveriesRequest(
-    smokeDocumentId,
-    bulkRecoveryIds,
-    editorMutationBody(
-      smokeDocumentId,
-      '__Host-chess-tactics-access=abc',
-      {},
-      recoveryDeleteNewAuthority,
-    ),
-  );
-  if (
-    expiredFenceBulkRecoveryDelete.statusCode !== 409 ||
-    JSON.parse(expiredFenceBulkRecoveryDelete.body).error !== 'editor_document_session_expired'
-  ) {
-    throw new Error(`Expired writer fence did not reject bulk recovery deletion: ${expiredFenceBulkRecoveryDelete.statusCode} ${expiredFenceBulkRecoveryDelete.body}`);
-  }
-
-  const bulkRecoveryDeleteSession = await openEditorEditSession(smokeDocumentId, {
-    deviceId: 'bulk-recovery-delete-device',
-    clientLabel: 'Bulk recovery delete tab',
-  });
-  if (
-    bulkRecoveryDeleteSession.response.statusCode !== 200 ||
-    bulkRecoveryDeleteSession.body.session?.state !== 'active'
-  ) {
-    throw new Error(`Could not acquire bulk recovery-delete authority: ${bulkRecoveryDeleteSession.response.statusCode} ${bulkRecoveryDeleteSession.response.body}`);
-  }
-  const activeBulkAuthority = editorAuthorities.get(editorAuthorityKey(smokeDocumentId, '__Host-chess-tactics-access=abc'));
-  if (!activeBulkAuthority) throw new Error('Bulk recovery delete test lost active editor authority');
-
-  const missingRecoveryId = crypto.randomUUID();
-  const conflictingBulkRecoveryDelete = await deleteEditorRecoveriesRequest(
-    smokeDocumentId,
-    [bulkRecoveryIds[0], missingRecoveryId],
-    editorMutationBody(smokeDocumentId, '__Host-chess-tactics-access=abc', {}, activeBulkAuthority),
-  );
-  const recoveriesAfterConflictingBulkDelete = await get(`/api/editor-documents/${smokeDocumentId}/recoveries`, { cookie: '__Host-chess-tactics-access=abc' });
-  if (
-    conflictingBulkRecoveryDelete.statusCode !== 409 ||
-    JSON.parse(conflictingBulkRecoveryDelete.body).error !== 'editor_document_recovery_snapshot_conflict' ||
-    !JSON.parse(recoveriesAfterConflictingBulkDelete.body).recoveries?.some((entry) => entry.recovery_id === bulkRecoveryIds[0])
-  ) {
-    throw new Error(`Changed bulk recovery snapshot was not rejected atomically: ${conflictingBulkRecoveryDelete.statusCode} ${conflictingBulkRecoveryDelete.body} / ${recoveriesAfterConflictingBulkDelete.body}`);
-  }
-
-  const wrongDocumentRecoverySnapshot = await get(`/api/editor-documents/${rivalDocumentId}/recoveries`, { cookie: '__Host-chess-tactics-access=rival' });
-  const wrongDocumentRecoveryId = JSON.parse(wrongDocumentRecoverySnapshot.body).recoveries?.[0]?.recovery_id;
-  if (wrongDocumentRecoverySnapshot.statusCode !== 200 || !wrongDocumentRecoveryId) {
-    throw new Error(`Wrong-document bulk delete test needs a rival recovery: ${wrongDocumentRecoverySnapshot.statusCode} ${wrongDocumentRecoverySnapshot.body}`);
-  }
-  const wrongDocumentBulkRecoveryDelete = await deleteEditorRecoveriesRequest(
-    smokeDocumentId,
-    [bulkRecoveryIds[0], wrongDocumentRecoveryId],
-    editorMutationBody(smokeDocumentId, '__Host-chess-tactics-access=abc', {}, activeBulkAuthority),
-  );
-  const recoveriesAfterWrongDocumentBulkDelete = await get(`/api/editor-documents/${smokeDocumentId}/recoveries`, { cookie: '__Host-chess-tactics-access=abc' });
-  if (
-    wrongDocumentBulkRecoveryDelete.statusCode !== 409 ||
-    JSON.parse(wrongDocumentBulkRecoveryDelete.body).error !== 'editor_document_recovery_snapshot_conflict' ||
-    !JSON.parse(recoveriesAfterWrongDocumentBulkDelete.body).recoveries?.some((entry) => entry.recovery_id === bulkRecoveryIds[0])
-  ) {
-    throw new Error(`Wrong-document recovery id was not rejected atomically: ${wrongDocumentBulkRecoveryDelete.statusCode} ${wrongDocumentBulkRecoveryDelete.body} / ${recoveriesAfterWrongDocumentBulkDelete.body}`);
-  }
-
-  const documentBeforeBulkRecoveryDelete = await get(`/api/editor-documents/${smokeDocumentId}`, { cookie: '__Host-chess-tactics-access=abc' });
-  const documentBeforeBulkRecoveryDeleteBody = JSON.parse(documentBeforeBulkRecoveryDelete.body);
-  const historyBeforeBulkRecoveryDelete = await get(`/api/editor-documents/${smokeDocumentId}/revisions?limit=100`, { cookie: '__Host-chess-tactics-access=abc' });
-  const historyBeforeBulkRecoveryDeleteBody = JSON.parse(historyBeforeBulkRecoveryDelete.body);
-  const bulkRecoveryDelete = await deleteEditorRecoveriesRequest(
-    smokeDocumentId,
-    bulkRecoveryIds,
-    editorMutationBody(smokeDocumentId, '__Host-chess-tactics-access=abc', {}, activeBulkAuthority),
-  );
-  const bulkRecoveryDeleteBody = JSON.parse(bulkRecoveryDelete.body);
-  const recoveriesAfterBulkDelete = await get(`/api/editor-documents/${smokeDocumentId}/recoveries`, { cookie: '__Host-chess-tactics-access=abc' });
-  const recoveriesAfterBulkDeleteBody = JSON.parse(recoveriesAfterBulkDelete.body);
-  const documentAfterBulkRecoveryDelete = await get(`/api/editor-documents/${smokeDocumentId}`, { cookie: '__Host-chess-tactics-access=abc' });
-  const documentAfterBulkRecoveryDeleteBody = JSON.parse(documentAfterBulkRecoveryDelete.body);
-  const historyAfterBulkRecoveryDelete = await get(`/api/editor-documents/${smokeDocumentId}/revisions?limit=100`, { cookie: '__Host-chess-tactics-access=abc' });
-  const historyAfterBulkRecoveryDeleteBody = JSON.parse(historyAfterBulkRecoveryDelete.body);
-  const canonicalAfterBulkRecoveryDelete = await get('/api/campaign-workspace', { cookie: '__Host-chess-tactics-access=abc' });
-  const canonicalAfterBulkRecoveryDeleteBody = JSON.parse(canonicalAfterBulkRecoveryDelete.body);
-  if (
-    bulkRecoveryDelete.statusCode !== 200 ||
-    bulkRecoveryDeleteBody.deleted_count !== bulkRecoveryIds.length ||
-    bulkRecoveryDeleteBody.recovery_ids?.join(',') !== bulkRecoveryIds.join(',') ||
-    recoveriesAfterBulkDeleteBody.recoveries?.some((entry) => bulkRecoveryIds.includes(entry.recovery_id)) ||
-    !recoveriesAfterBulkDeleteBody.recoveries?.some((entry) => entry.recovery_id === unsubmittedRecoveryId) ||
-    documentAfterBulkRecoveryDeleteBody.document?.revision !== documentBeforeBulkRecoveryDeleteBody.document?.revision ||
-    JSON.stringify(documentAfterBulkRecoveryDeleteBody.document?.level) !== JSON.stringify(documentBeforeBulkRecoveryDeleteBody.document?.level) ||
-    historyBeforeBulkRecoveryDelete.statusCode !== 200 ||
-    historyAfterBulkRecoveryDelete.statusCode !== 200 ||
-    JSON.stringify(historyAfterBulkRecoveryDeleteBody) !== JSON.stringify(historyBeforeBulkRecoveryDeleteBody) ||
-    canonicalAfterBulkRecoveryDeleteBody.levels['smoke-1'].name !== 'Exact Save Click'
-  ) {
-    throw new Error(`Atomic bulk recovery deletion changed unrelated state or missed its exact snapshot: ${bulkRecoveryDelete.statusCode} ${bulkRecoveryDelete.body} / ${recoveriesAfterBulkDelete.body} / ${documentAfterBulkRecoveryDelete.body}`);
-  }
-  const closedBulkRecoveryDeleteSession = await closeEditorEditSessionRequest(
-    smokeDocumentId,
-    bulkRecoveryDeleteSession.sessionId,
-    bulkRecoveryDeleteSession.sessionKey,
-  );
-  if (closedBulkRecoveryDeleteSession.statusCode !== 200) {
-    throw new Error(`Bulk recovery-delete session did not release cleanly: ${closedBulkRecoveryDeleteSession.statusCode} ${closedBulkRecoveryDeleteSession.body}`);
-  }
-
-  const editorEvents = await queryDb(
-    `SELECT action, actor_email, actor_name, details
-       FROM editor_document_edit_events
-      WHERE document_id = $1`,
+  const closedPrimary = await closeEditorEditSessionRequest(smokeDocumentId, primaryOpen.sessionId, primaryOpen.sessionKey);
+  const closedSecond = await closeEditorEditSessionRequest(smokeDocumentId, secondOpen.sessionId, secondOpen.sessionKey);
+  const closedObserver = await closeEditorEditSessionRequest(smokeDocumentId, observer.sessionId, observer.sessionKey);
+  const recoveriesAfterClose = await queryDb(
+    'SELECT count(*)::integer AS count FROM editor_document_recoveries WHERE document_id = $1',
     [smokeDocumentId],
   );
-  const aggregateBulkDeleteEvents = editorEvents.rows.filter((event) => event.action === 'recoveries_deleted');
   if (
-    !editorEvents.rows.some((event) => event.action === 'document_autosaved' && event.actor_email === 'player@example.com' && event.actor_name === 'Tactics Player') ||
-    !editorEvents.rows.some((event) => event.action === 'session_takeover' && event.actor_email === 'player@example.com' && event.actor_name === 'Tactics Player') ||
-    !editorEvents.rows.some((event) => event.action === 'recovery_restored' && event.actor_email === 'player@example.com' && event.actor_name === 'Tactics Player') ||
-    !editorEvents.rows.some((event) => event.action === 'recovery_deleted' && event.actor_email === 'player@example.com' && event.actor_name === 'Tactics Player') ||
-    aggregateBulkDeleteEvents.length !== 1 ||
-    aggregateBulkDeleteEvents[0].actor_email !== 'player@example.com' ||
-    aggregateBulkDeleteEvents[0].actor_name !== 'Tactics Player' ||
-    aggregateBulkDeleteEvents[0].details?.recovery_count !== bulkRecoveryIds.length ||
-    aggregateBulkDeleteEvents[0].details?.recovery_ids?.join(',') !== bulkRecoveryIds.join(',')
+    closedPrimary.statusCode !== 200
+    || closedSecond.statusCode !== 200
+    || closedObserver.statusCode !== 200
+    || recoveriesAfterClose.rows[0]?.count !== 0
   ) {
-    throw new Error(`Editor event attribution is incomplete: ${JSON.stringify(editorEvents.rows)}`);
+    throw new Error(`Closing shared pages created recovery cleanup: ${JSON.stringify(recoveriesAfterClose.rows[0])}`);
+  }
+
+  const saveSession = await openEditorEditSession(smokeDocumentId, {
+    deviceId: 'smoke-save-device',
+    clientLabel: 'Save browser tab',
+  });
+  const savedEditor = await request(
+    'POST', `/api/editor-documents/${smokeDocumentId}/save`,
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(smokeDocumentId, '__Host-chess-tactics-access=abc', {
+      revision: 5,
+      level: finalAutosaveBody.document.level,
+      campaign_id: null,
+    })),
+  );
+  const savedEditorBody = JSON.parse(savedEditor.body);
+  if (
+    saveSession.response.statusCode !== 200
+    || savedEditor.statusCode !== 200
+    || savedEditorBody.document.revision !== 6
+    || savedEditorBody.document.saved_revision !== 6
+    || savedEditorBody.document.dirty !== false
+  ) {
+    throw new Error(`Shared working-copy Save failed: ${savedEditor.statusCode} ${savedEditor.body}`);
+  }
+
+  const canonicalAfterSave = await get('/api/campaign-workspace', { cookie: '__Host-chess-tactics-access=abc' });
+  const canonicalAfterSaveBody = JSON.parse(canonicalAfterSave.body);
+  if (
+    canonicalAfterSave.statusCode !== 200
+    || canonicalAfterSaveBody.levels['smoke-1'].name !== 'Last shared arrival'
+    || canonicalAfterSaveBody.levels['smoke-1'].notes !== 'Still shared after stale presence metadata'
+    || canonicalAfterSaveBody.revision !== 2
+  ) {
+    throw new Error(`Shared copy did not promote exactly on Save: ${canonicalAfterSave.statusCode} ${canonicalAfterSave.body}`);
+  }
+
+  const rivalEditorRead = await get(
+    `/api/editor-documents/${smokeDocumentId}`,
+    { cookie: '__Host-chess-tactics-access=rival' },
+  );
+  if (rivalEditorRead.statusCode !== 404) {
+    throw new Error(`Shared working copy leaked to another owner: ${rivalEditorRead.statusCode} ${rivalEditorRead.body}`);
   }
 
   const firstHistoryPage = await get(
@@ -6092,118 +4783,66 @@ async function main() {
   );
   const firstHistoryPageBody = JSON.parse(firstHistoryPage.body);
   if (
-    firstHistoryPage.statusCode !== 200 ||
-    firstHistoryPageBody.revisions.length !== 2 ||
-    firstHistoryPageBody.revisions[0].revision !== 6 ||
-    firstHistoryPageBody.revisions[0].reason !== 'restore' ||
-    firstHistoryPageBody.revisions[1].revision !== 5 ||
-    firstHistoryPageBody.revisions[1].reason !== 'save' ||
-    firstHistoryPageBody.next_before !== 5 ||
-    Object.hasOwn(firstHistoryPageBody.revisions[0], 'level') ||
-    typeof firstHistoryPageBody.revisions[0].body_hash !== 'string' ||
-    firstHistoryPageBody.revisions[0].body_bytes < 1
+    firstHistoryPage.statusCode !== 200
+    || firstHistoryPageBody.revisions.map((entry) => entry.revision).join(',') !== '6,5'
+    || firstHistoryPageBody.revisions[0].reason !== 'save'
+    || Object.hasOwn(firstHistoryPageBody.revisions[0], 'level')
   ) {
-    throw new Error(`Working-copy history did not return bounded body-free summaries: ${firstHistoryPage.statusCode} ${firstHistoryPage.body}`);
-  }
-  const secondHistoryPage = await get(
-    `/api/editor-documents/${smokeDocumentId}/revisions?limit=2&before=5`,
-    { cookie: '__Host-chess-tactics-access=abc' },
-  );
-  const secondHistoryPageBody = JSON.parse(secondHistoryPage.body);
-  if (
-    secondHistoryPage.statusCode !== 200 ||
-    secondHistoryPageBody.revisions.map((entry) => entry.revision).join(',') !== '4,3'
-  ) {
-    throw new Error(`Working-copy history pagination skipped revisions: ${secondHistoryPage.statusCode} ${secondHistoryPage.body}`);
-  }
-  const rivalHistoryRead = await get(
-    `/api/editor-documents/${smokeDocumentId}/revisions`,
-    { cookie: '__Host-chess-tactics-access=rival' },
-  );
-  if (rivalHistoryRead.statusCode !== 404) {
-    throw new Error(`Working-copy history must remain owner-scoped: ${rivalHistoryRead.statusCode} ${rivalHistoryRead.body}`);
-  }
-
-  const unfencedHistoricalRestore = await request(
-    'POST', `/api/editor-documents/${smokeDocumentId}/revisions/restore`,
-    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify({ revision: 6, target_revision: 2 }),
-  );
-  if (
-    unfencedHistoricalRestore.statusCode !== 400 ||
-    JSON.parse(unfencedHistoricalRestore.body).error !== 'editor_document_edit_session_required'
-  ) {
-    throw new Error(`Historical restore bypassed writer authority: ${unfencedHistoricalRestore.statusCode} ${unfencedHistoricalRestore.body}`);
-  }
-  const historyEditorSession = await openEditorEditSession(smokeDocumentId, {
-    deviceId: 'history-restore-device',
-    clientLabel: 'History restore tab',
-  });
-  if (
-    historyEditorSession.response.statusCode !== 200 ||
-    historyEditorSession.body.session?.state !== 'active'
-  ) {
-    throw new Error(`Could not acquire history-restore authority: ${historyEditorSession.response.statusCode} ${historyEditorSession.response.body}`);
+    throw new Error(`Working-copy history summaries regressed: ${firstHistoryPage.statusCode} ${firstHistoryPage.body}`);
   }
 
   const restoredAutosave = await request(
     'POST', `/api/editor-documents/${smokeDocumentId}/revisions/restore`,
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(smokeDocumentId, '__Host-chess-tactics-access=abc', { revision: 6, target_revision: 2 })),
+    JSON.stringify(editorMutationBody(smokeDocumentId, '__Host-chess-tactics-access=abc', {
+      revision: 6,
+      target_revision: 2,
+    })),
   );
   const restoredAutosaveBody = JSON.parse(restoredAutosave.body);
   if (
-    restoredAutosave.statusCode !== 200 ||
-    restoredAutosaveBody.document.revision !== 7 ||
-    restoredAutosaveBody.document.saved_revision !== 5 ||
-    restoredAutosaveBody.document.dirty !== true ||
-    restoredAutosaveBody.document.level.name !== 'Autosaved Draft'
+    restoredAutosave.statusCode !== 200
+    || restoredAutosaveBody.document.revision !== 7
+    || restoredAutosaveBody.document.level.name !== 'Shared title from tab A'
   ) {
-    throw new Error(`Historical restore did not create a new dirty working revision: ${restoredAutosave.statusCode} ${restoredAutosave.body}`);
-  }
-  const staleHistoricalRestore = await request(
-    'POST', `/api/editor-documents/${smokeDocumentId}/revisions/restore`,
-    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(smokeDocumentId, '__Host-chess-tactics-access=abc', { revision: 6, target_revision: 1 })),
-  );
-  const staleHistoricalRestoreBody = JSON.parse(staleHistoricalRestore.body);
-  if (
-    staleHistoricalRestore.statusCode !== 409 ||
-    staleHistoricalRestoreBody.error !== 'editor_document_revision_conflict' ||
-    staleHistoricalRestoreBody.document.revision !== 7
-  ) {
-    throw new Error(`Stale historical restore should preserve the newer working copy: ${staleHistoricalRestore.statusCode} ${staleHistoricalRestore.body}`);
+    throw new Error(`History restore failed: ${restoredAutosave.statusCode} ${restoredAutosave.body}`);
   }
   const restoredSavedRevision = await request(
     'POST', `/api/editor-documents/${smokeDocumentId}/revisions/restore`,
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify(editorMutationBody(smokeDocumentId, '__Host-chess-tactics-access=abc', { revision: 7, target_revision: 5 })),
+    JSON.stringify(editorMutationBody(smokeDocumentId, '__Host-chess-tactics-access=abc', {
+      revision: 7,
+      target_revision: 6,
+    })),
   );
-  const restoredSavedRevisionBody = JSON.parse(restoredSavedRevision.body);
+  const restoredSavedBody = JSON.parse(restoredSavedRevision.body);
   if (
-    restoredSavedRevision.statusCode !== 200 ||
-    restoredSavedRevisionBody.document.revision !== 8 ||
-    restoredSavedRevisionBody.document.saved_revision !== 8 ||
-    restoredSavedRevisionBody.document.dirty !== false ||
-    restoredSavedRevisionBody.document.level.name !== 'Exact Save Click'
+    restoredSavedRevision.statusCode !== 200
+    || restoredSavedBody.document.revision !== 8
+    || restoredSavedBody.document.saved_revision !== 8
+    || restoredSavedBody.document.dirty !== false
   ) {
-    throw new Error(`Restoring saved content should create a new clean working revision: ${restoredSavedRevision.statusCode} ${restoredSavedRevision.body}`);
-  }
-  const restoredHistory = await get(
-    `/api/editor-documents/${smokeDocumentId}/revisions?limit=2`,
-    { cookie: '__Host-chess-tactics-access=abc' },
-  );
-  const restoredHistoryBody = JSON.parse(restoredHistory.body);
-  if (
-    restoredHistory.statusCode !== 200 ||
-    restoredHistoryBody.revisions[0].revision !== 8 ||
-    restoredHistoryBody.revisions[0].reason !== 'restore' ||
-    restoredHistoryBody.revisions[0].restored_from_revision !== 5 ||
-    restoredHistoryBody.revisions[1].restored_from_revision !== 2
-  ) {
-    throw new Error(`Historical restore provenance was not retained: ${restoredHistory.statusCode} ${restoredHistory.body}`);
+    throw new Error(`Saved history restore failed: ${restoredSavedRevision.statusCode} ${restoredSavedRevision.body}`);
   }
 
+  const editorEvents = await queryDb(
+    'SELECT action, actor_email, actor_name FROM editor_document_edit_events WHERE document_id = $1',
+    [smokeDocumentId],
+  );
+  if (
+    !editorEvents.rows.some((event) => (
+      event.action === 'document_autosaved'
+      && event.actor_email === 'player@example.com'
+      && event.actor_name === 'Tactics Player'
+    ))
+    || editorEvents.rows.some((event) => (
+      event.action === 'session_takeover'
+      || event.action === 'recovery_restored'
+      || event.action === 'recovery_deleted'
+    ))
+  ) {
+    throw new Error(`Shared-document events contain retired branch actions: ${JSON.stringify(editorEvents.rows)}`);
+  }
   // Canonical workspaces still have other legitimate writers. Existing editor
   // documents are read-only on load/resolve and report divergence; only an
   // explicit fenced Discard adopts the newer canonical Level.
@@ -6238,7 +4877,7 @@ async function main() {
     deviceId: 'smoke-baseline-device',
     clientLabel: 'Baseline smoke editor',
   });
-  if (baselineEditSession.response.statusCode !== 200 || baselineEditSession.body.session.state !== 'active') {
+  if (baselineEditSession.response.statusCode !== 200 || !['active', 'waiting'].includes(baselineEditSession.body.session.state)) {
     throw new Error(`Could not acquire baseline document edit authority: ${baselineEditSession.response.statusCode} ${baselineEditSession.response.body}`);
   }
 
@@ -6418,7 +5057,7 @@ async function main() {
     deviceId: 'smoke-new-document-device',
     clientLabel: 'New document smoke editor',
   });
-  if (newDocumentEditSession.response.statusCode !== 200 || newDocumentEditSession.body.session.state !== 'active') {
+  if (newDocumentEditSession.response.statusCode !== 200 || !['active', 'waiting'].includes(newDocumentEditSession.body.session.state)) {
     throw new Error(`Could not acquire new document edit authority: ${newDocumentEditSession.response.statusCode} ${newDocumentEditSession.response.body}`);
   }
   const recentAfterNewDocument = await get('/api/editor-documents', { cookie: '__Host-chess-tactics-access=abc' });
@@ -6456,7 +5095,7 @@ async function main() {
     deviceId: 'smoke-delete-candidate-device',
     clientLabel: 'Delete candidate smoke editor',
   });
-  if (deleteCandidateEditSession.response.statusCode !== 200 || deleteCandidateEditSession.body.session.state !== 'active') {
+  if (deleteCandidateEditSession.response.statusCode !== 200 || !['active', 'waiting'].includes(deleteCandidateEditSession.body.session.state)) {
     throw new Error(`Could not acquire delete candidate edit authority: ${deleteCandidateEditSession.response.statusCode} ${deleteCandidateEditSession.response.body}`);
   }
   const advancedDeleteCandidate = await request(
@@ -8867,7 +7506,7 @@ async function main() {
     deviceId: 'smoke-legacy-geometry-device',
     clientLabel: 'Legacy geometry migration smoke editor',
   });
-  if (legacyGeometryEditSession.response.statusCode !== 200 || legacyGeometryEditSession.body.session.state !== 'active') {
+  if (legacyGeometryEditSession.response.statusCode !== 200 || !['active', 'waiting'].includes(legacyGeometryEditSession.body.session.state)) {
     throw new Error(`Could not acquire legacy-geometry edit authority: ${legacyGeometryEditSession.response.statusCode} ${legacyGeometryEditSession.response.body}`);
   }
   const initialLegacyCover = { '0,0': 'filled' };
@@ -9407,7 +8046,7 @@ async function main() {
     deviceId: 'smoke-official-device',
     clientLabel: 'Official smoke editor',
   });
-  if (officialEditSession.response.statusCode !== 200 || officialEditSession.body.session.state !== 'active') {
+  if (officialEditSession.response.statusCode !== 200 || !['active', 'waiting'].includes(officialEditSession.body.session.state)) {
     throw new Error(`Could not acquire official edit authority: ${officialEditSession.response.statusCode} ${officialEditSession.response.body}`);
   }
   const officialWorldBounds = backgroundWorldBounds;
@@ -9640,7 +8279,7 @@ async function main() {
     deviceId: 'smoke-second-admin-device',
     clientLabel: 'Second official admin',
   });
-  if (secondAdminSession.response.statusCode !== 200 || secondAdminSession.body.session.state !== 'active') {
+  if (secondAdminSession.response.statusCode !== 200 || !['active', 'waiting'].includes(secondAdminSession.body.session.state)) {
     throw new Error(`Second admin could not acquire official edit authority: ${secondAdminSession.response.statusCode} ${secondAdminSession.response.body}`);
   }
   const secondAdminVersions = await get(
