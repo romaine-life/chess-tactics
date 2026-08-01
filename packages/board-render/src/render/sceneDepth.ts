@@ -20,9 +20,11 @@ export const GROUND_COVER_FRONT_DEPTH_OFFSET = OBJECT_DEPTH_OFFSET + 1;
 // scene their occlusion masks move to the exact half-depth edge plane; do not flatten living
 // ground cover behind this lane, because its rear/front groups must still bracket units.
 export const FENCE_OVERLAY_DEPTH_OFFSET = OBJECT_DEPTH_OFFSET - 2;
-// A post caps every rail that terminates at its vertex. Keep it half a band in front of the
-// nearest incident rail so the rail sprite's own terminal upright cannot paint through the post.
-export const FENCE_POST_DEPTH_BIAS = 0.5;
+// A post sits between the farther and nearer rail-owner bands at its vertex. The negative
+// half-band offset lets a rail cross its far post (the north-east/right post of an E rail) while
+// its near post still caps the rail, matching the fixed isometric projection instead of forcing
+// every post in front of every incident rail.
+export const FENCE_POST_DEPTH_BIAS = -0.5;
 
 // Perimeter walls sit on the back edges of their owner cells. Keep the entire wall below
 // same-cell structure art; otherwise a split prop/doodad is painted back-half, wall, front-half
@@ -57,9 +59,9 @@ export function fenceOverlayZIndex(cell: { x: number; y: number }): number {
 }
 
 /**
- * A fence vertex's projected base is one depth step above `cellDepth(vertex)`. The positive
- * half-band bias puts the post in front of both possible incident rail-owner bands, so a post
- * consistently caps its rail endpoints without entering the object band.
+ * A fence vertex's projected base is one depth step above `cellDepth(vertex)`. The negative
+ * half-band offset seats the post between the two possible incident rail-owner bands. A rail
+ * therefore overlaps its far endpoint post and remains behind its near endpoint post.
  */
 export function fencePostZIndex(vertex: { x: number; y: number }): number {
   return cellDepth(vertex) - CELL_DEPTH_STRIDE + FENCE_OVERLAY_DEPTH_OFFSET + FENCE_POST_DEPTH_BIAS;

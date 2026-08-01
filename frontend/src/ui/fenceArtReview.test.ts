@@ -20,7 +20,6 @@ import {
   fenceArtKit,
   fenceArtKits,
   fenceArtworkBackendReview,
-  type FenceArtKit,
 } from './fenceCandidateProfiles';
 
 const sha = (value: string): string => value.padEnd(64, value).slice(0, 64);
@@ -100,12 +99,12 @@ function catalog(slots: AdminLiveMediaSlot[], versions: AdminLiveMediaVersion[])
 
 function suffixKitCatalog({
   id = 'dynamic-wood',
-  lifecycle = 'legacy-bridge',
+  lifecycle = 'candidate',
   post = true,
   acceptance = false,
 }: {
   id?: string;
-  lifecycle?: FenceArtKit['lifecycle'];
+  lifecycle?: AdminLiveMediaVersionStatus;
   post?: boolean;
   acceptance?: boolean;
 } = {}): AdminLiveMediaCatalog {
@@ -205,28 +204,13 @@ describe('fence art review', () => {
 
     expect(findFenceArtReviewDocument([summary({ name: `${FENCE_ART_REVIEW_LEVEL_NAME} ` }), document])).toBe(document);
     expect(fenceArtReviewEditorHref(document, 'oak-v3@candidate')).toBe(
-      '/editor/level?document=doc%2Fa+b&levelId=level+7&from=studio&layer=fence&kind=fence&artReview=fence-native-candidates-2026-07-10&fenceArt=oak-v3%40candidate',
+      '/editor/level?document=doc%2Fa+b&levelId=level+7&from=studio&layer=fence&kind=fence&artReview=fence-art-candidates&fenceArt=oak-v3%40candidate',
     );
   });
 
-  it('derives complete review membership and bridge lifecycle from explicit backend metadata', () => {
-    const kits = fenceArtKits(suffixKitCatalog());
-
-    expect(kits).toHaveLength(1);
-    expect(kits[0]).toMatchObject({
-      id: 'dynamic-wood',
-      label: 'Dynamic Wood',
-      material: 'wood',
-      lifecycle: 'legacy-bridge',
-      acceptanceRegistered: false,
-      productionEligible: false,
-    });
-    expect(kits[0].railE).toMatch(/^\/api\/media\//);
-    expect(kits[0].post).toMatch(/^\/api\/media\//);
-    expect(fenceArtworkBackendReview(kits[0])).toMatchObject({
-      status: 'bridge-only',
-      statusLabel: 'Backend legacy bridge · bridge-only',
-    });
+  it('keeps legacy bridges and archives out of the user-visible review catalog', () => {
+    expect(fenceArtKits(suffixKitCatalog({ lifecycle: 'legacy-bridge' }))).toEqual([]);
+    expect(fenceArtKits(suffixKitCatalog({ lifecycle: 'archived' }))).toEqual([]);
   });
 
   it('uses backend metadata to group private candidates whose slots have no filename taxonomy', () => {
@@ -241,7 +225,7 @@ describe('fence art review', () => {
     });
     expect(kits[0].post).toBeUndefined();
     expect(kits[0].railE).toMatch(/^\/api\/admin\/media\//);
-    expect(fenceArtworkBackendReview(kits[0]).statusLabel).toBe('Backend candidate · bridge-only');
+    expect(fenceArtworkBackendReview(kits[0]).statusLabel).toBe('Backend candidate · review-only');
   });
 
   it('does not manufacture review kits from semantic-slot filenames', () => {
@@ -250,11 +234,7 @@ describe('fence art review', () => {
     expect(fenceArtKits(filenameOnly)).toEqual([]);
   });
 
-  it('derives archived and accepted lifecycle from backend records and exposes missing acceptance registration', () => {
-    const archived = fenceArtKits(suffixKitCatalog({ lifecycle: 'archived' }))[0];
-    expect(archived.id).toBe('dynamic-wood@archived');
-    expect(fenceArtworkBackendReview(archived).status).toBe('backend-archived');
-
+  it('derives accepted lifecycle from backend records and exposes missing acceptance registration', () => {
     const unsupported = fenceArtKits(suffixKitCatalog({ lifecycle: 'accepted' }))[0];
     expect(fenceArtworkBackendReview(unsupported).status).toBe('unsupported-accepted');
 
@@ -262,24 +242,17 @@ describe('fence art review', () => {
     expect(fenceArtworkBackendReview(registered).status).toBe('backend-accepted');
   });
 
-  it('omits incomplete kits and stale active-version history instead of filling from Git', () => {
+  it('omits incomplete kits and stale accepted-version history instead of filling from Git', () => {
     const incomplete = suffixKitCatalog({ post: false });
     incomplete.versions = incomplete.versions.filter((item) => !item.slot?.includes('rail-s'));
     expect(fenceArtKits(incomplete)).toEqual([]);
 
-    const stale = suffixKitCatalog();
-    stale.versions.push(version({
+    const stale = suffixKitCatalog({ lifecycle: 'accepted', acceptance: true });
+    stale.versions.push({
+      ...stale.versions[0],
       id: 'stale-wood-rail-e-version',
-      slot: 'review/fences/stale-wood-rail-e.png',
-      status: 'legacy-bridge',
-    }));
-    stale.versions.push(version({
-      id: 'stale-wood-rail-s-version',
-      slot: 'review/fences/stale-wood-rail-s.png',
-      status: 'legacy-bridge',
-    }));
-    stale.slots.push(slot('review/fences/stale-wood-rail-e.png', 'another-version', 'legacy-bridge'));
-    stale.slots.push(slot('review/fences/stale-wood-rail-s.png', 'another-version', 'legacy-bridge'));
+      updatedAt: '2026-07-12T00:00:00.000Z',
+    });
     expect(fenceArtKits(stale).map((kit) => kit.id)).toEqual(['dynamic-wood']);
   });
 
@@ -288,9 +261,9 @@ describe('fence art review', () => {
     const second = fenceArtKits(suffixKitCatalog({ id: 'granite-stone' }))[0];
     const kits = [first, second];
 
-    expect(fenceArtKit(kits, 'oak-wood')).toBe(first);
-    expect(cycleFenceArtKit(kits, 'oak-wood', 1)).toBe(second);
-    expect(cycleFenceArtKit(kits, 'oak-wood', -1)).toBe(second);
+    expect(fenceArtKit(kits, 'oak-wood@candidate')).toBe(first);
+    expect(cycleFenceArtKit(kits, 'oak-wood@candidate', 1)).toBe(second);
+    expect(cycleFenceArtKit(kits, 'oak-wood@candidate', -1)).toBe(second);
     expect(cycleFenceArtKit([], 'oak-wood', 1)).toBeUndefined();
   });
 
@@ -309,7 +282,7 @@ describe('fence art review', () => {
     expect(transformed).toContain(retainedSceneOp);
   });
 
-  it('draws backend-member posts in front of both endpoints of E and S rails', () => {
+  it('interleaves backend-member rails between their far and near endpoint posts', () => {
     const kit = fenceArtKits(suffixKitCatalog())[0];
     for (const [edge, railSrc] of [
       [roadEdgeKey(1, 1, 2, 1), kit.railE],
@@ -322,10 +295,10 @@ describe('fence art review', () => {
       const ordered = [...transformed].sort((a, b) => a.z - b.z);
 
       expect(posts.map((post) => post.z)).toEqual([
-        rail.z + 0.5,
-        rail.z + CELL_DEPTH_STRIDE + 0.5,
+        rail.z - 0.5,
+        rail.z + CELL_DEPTH_STRIDE - 0.5,
       ]);
-      expect(ordered.indexOf(rail)).toBeLessThan(ordered.indexOf(posts[0]));
+      expect(ordered.indexOf(posts[0])).toBeLessThan(ordered.indexOf(rail));
       expect(ordered.indexOf(rail)).toBeLessThan(ordered.indexOf(posts[1]));
     }
   });

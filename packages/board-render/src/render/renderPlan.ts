@@ -624,7 +624,7 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
     }
   }
 
-  // Posts cap their incident rails at a positive half-depth bias. Keep insertion order only as a
+  // Posts sit between farther and nearer incident rail bands. Keep insertion order only as a
   // secondary deterministic tie breaker; numeric z owns the visible ordering.
   for (const post of fencePosts.values()) pushFencePostDrawOp(ops, post);
   // Fence owners can be off-board phantom cells for north/west boundary rails. Iterating the

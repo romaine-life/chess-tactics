@@ -13,6 +13,17 @@ from the only angle the player will ever see, at zero runtime cost.
 If the camera ever needs to move, this contract is void and the board must become a
 real-time 3D scene (and the units re-authored as meshes).
 
+## Fence rail and post depth
+
+Fence rails and posts share one continuous fixed-isometric depth model. A post is seated halfway
+between the farther and nearer incident rail-owner bands at its canonical vertex. Consequently, a
+rail overlaps its far endpoint post (the north-east/right endpoint of an E rail), while its near
+endpoint post overlaps the rail. Junction posts use that same vertex depth: farther incident rails
+remain behind the post and nearer incident rails cross in front of it. No renderer may give posts
+an unconditional foreground cap over every incident rail, and gameplay, the Level Editor, Studio,
+live previews, pre-drawn occlusion geometry, and thumbnails must consume the shared depth function. See
+[ADR-0298](adr/0298-fence-posts-interleave-with-incident-rails-by-depth.md).
+
 ## Perimeter wall geometry
 
 Every north and west perimeter wall uses the canonical full-height generated wall

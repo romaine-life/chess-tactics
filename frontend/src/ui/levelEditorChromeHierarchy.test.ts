@@ -301,6 +301,12 @@ describe('Level Editor chrome hierarchy', () => {
     expect(levelEditor).toContain('<div className="le-faction-fields">');
   });
 
+  it('does not substitute another fence kit for a retired or unknown review id', () => {
+    expect(levelEditor).not.toMatch(/fenceArtKit\(fenceArtCatalog, selectedFenceArtworkId\)\s*\?\?\s*fenceArtCatalog\[0\]/);
+    expect(levelEditor).toContain("url.searchParams.delete('artReview')");
+    expect(levelEditor).toContain("url.searchParams.delete('fenceArt')");
+  });
+
   it('registers toggles and both event-list implementations', () => {
     expectRegisteredFamily(toggle, 'settings-toggle', 'inner-toggle');
     expectRegisteredFamily(levelEditor, 'le-md-item', 'inner-list-row');

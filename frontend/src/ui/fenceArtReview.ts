@@ -7,7 +7,7 @@ import type { EditorDocumentSummary } from '../net/editorDocuments';
 import type { EditorBoard } from './boardCode';
 import type { FenceArtKit } from './fenceCandidateProfiles';
 
-export const FENCE_ART_REVIEW_ID = 'fence-native-candidates-2026-07-10';
+export const FENCE_ART_REVIEW_ID = 'fence-art-candidates';
 export const FENCE_ART_REVIEW_LEVEL_NAME = 'Fence candidate live-board review';
 
 const FRAME_WIDTH = TILE_STEP_X * 2;
@@ -54,7 +54,7 @@ export function transformFenceArtReviewOps(
   )));
   const transformed = ops.filter((op) => !installedFenceSources.has(op.src));
 
-  // Posts cap their incident rails at a positive half-depth bias. Inserting them first is only a
+  // Posts sit between farther and nearer incident rail bands. Inserting them first is only a
   // deterministic tie breaker; fencePostZIndex owns the visible ordering.
   if (kit.post) {
     for (const post of resolveFencePosts(board.fences ?? {}, board.fencePosts ?? {}).values()) {
