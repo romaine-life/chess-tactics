@@ -61,7 +61,7 @@ test('already-applied migration 36 remains the immutable drawable-media migratio
   );
 });
 
-test('the exact sparse numeric legacy history upgrades through migration 47', () => {
+test('the exact sparse numeric legacy history upgrades through migration 48', () => {
   const versions = migrationVersions();
   const appliedBeforeUpgrade = new Set(
     versions.filter((version) => version <= 27 || version === 36),
@@ -106,7 +106,11 @@ test('the exact sparse numeric legacy history upgrades through migration 47', ()
   );
   assert.ok(
     pending.includes(47),
-    'owner-authored Run card scene overrides must have their own pending migration 47',
+    'the applied card-scenes table creation must stay in history as pending migration 47',
+  );
+  assert.ok(
+    pending.includes(48),
+    'the card-scenes retirement must be its own append-only pending migration 48',
   );
 
   const migration37 = inlineMigration(37);
@@ -315,6 +319,29 @@ test('the exact sparse numeric legacy history upgrades through migration 47', ()
     'migration 46 must audit the route change and bump the catalog revision only when a row changed',
   );
 
+  const migration47 = inlineMigration(47);
+  assert.equal(
+    migration47.name,
+    'owner-authored Run card scene overrides',
+    'migration 47 was applied under this identity and must never be repurposed after the feature removal',
+  );
+  assert.equal(
+    migrationChecksum(migration47),
+    'e6299b756983cfd73be8da6433812f021f5db75c197bd50f52ee0b398670a172',
+    'migration 47 must match the identity already recorded in the shared development ledger',
+  );
+  const migration48 = inlineMigration(48);
+  assert.match(
+    migration48.sql,
+    /DROP TABLE IF EXISTS\s+card_scene_documents/i,
+    'migration 48 must retire the card-scenes table append-only instead of editing applied migration 47',
+  );
+  assert.doesNotMatch(
+    migration48.sql,
+    /CREATE TABLE/i,
+    'migration 48 is a pure retirement and must not smuggle in new schema',
+  );
+
   const migration36 = inlineMigration(36);
   const allMigrations = versions.map(inlineMigration);
   const sealedManifest = allMigrations.map((migration) => ({
@@ -340,7 +367,7 @@ test('the exact sparse numeric legacy history upgrades through migration 47', ()
   );
   assert.deepEqual(
     plan.pending.map((entry) => entry.version),
-    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47],
+    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48],
     'the bridge must fill the historical gap before applying every post-36 contract',
   );
   assert.throws(
@@ -855,13 +882,13 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
 
   const primaryUpgradeProof = sourceSection(
     smokeSource,
-    'async function validatePrimarySparseNumericMigrationUpgrade47()',
+    'async function validatePrimarySparseNumericMigrationUpgrade48()',
     '\nasync function validateEditorMigration16Preservation()',
   );
   assert.match(
     primaryUpgradeProof,
-    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*47\s*\}/,
-    'the production upgrade proof must require a complete 1-47 history',
+    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*48\s*\}/,
+    'the production upgrade proof must require a complete 1-48 history',
   );
   assert.match(
     primaryUpgradeProof,
@@ -875,8 +902,8 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   );
   assert.match(
     primaryUpgradeProof,
-    /length:\s*11[\s\S]*index\s*\+\s*37/,
-    'the production report must include every post-36 migration through 47',
+    /length:\s*12[\s\S]*index\s*\+\s*37/,
+    'the production report must include every post-36 migration through 48',
   );
   assert.match(
     primaryUpgradeProof,

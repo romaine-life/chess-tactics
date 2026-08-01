@@ -2,42 +2,30 @@ import type { ReactElement } from 'react';
 import { runCardName } from '../run/cardNames';
 import { GOLD_SCALE, bundleLabel, type PieceBundle } from '../run/model';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
-import { RunCardScene } from './RunCardScene';
 import { RunGoldAmount } from './RunResources';
 
 // One bundle card face shared by the opening draft, the shop, the art-review page, and
-// the Enchiridion. The artwork is the card's seeded battlefield vignette: every bundle
-// piece mustered with its canonical installed board sprite (ADR-0225) inside the shared
-// read-only board renderer. `mode='reference'` mounts the identical face without an
-// action for reference hosts.
+// the Enchiridion. Dealt cards carry no artwork for now — the owner's illustrated card
+// art arrives through the Card Layout redesign (ADR-0275/0276) — so the face is the
+// authored name, the piece contents, and the price. `mode='reference'` mounts the
+// identical face without an action for reference hosts.
 export function RunBundleCard({
   bundle,
   mode,
   bought = false,
   disabled = false,
   onSelect,
-  onSceneLayerFirstFrame,
-  onSceneFrameError,
 }: {
   bundle: PieceBundle;
   mode: 'draft' | 'shop' | 'reference';
   bought?: boolean;
   disabled?: boolean;
   onSelect?: () => void;
-  /** First completed paint of each scene canvas layer — a staging host's readiness gate. */
-  onSceneLayerFirstFrame?: (layer: 'terrain' | 'scene') => void;
-  onSceneFrameError?: (error: unknown) => void;
 }): ReactElement {
   const label = bundleLabel(bundle);
   const name = runCardName(bundle);
   const face = (
     <>
-      <RunCardScene
-        bundle={bundle}
-        className="run-bundle-card-scene"
-        onLayerFirstFrame={onSceneLayerFirstFrame}
-        onFrameError={onSceneFrameError}
-      />
       <span className="run-bundle-card-plate" aria-hidden={mode !== 'reference'}>
         <strong className="run-bundle-card-name">{name}</strong>
         {name === label ? null : <small className="run-bundle-card-contents">{label}</small>}

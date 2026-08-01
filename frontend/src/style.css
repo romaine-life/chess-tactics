@@ -6670,42 +6670,6 @@ body.loading-bootstrap .app-startup-status {
   opacity: 1;
 }
 
-/* The card viewing pane in the Level Editor's card-scene mode (ADR-0263): a
-   board-space rectangle showing exactly what the final card renders. Tool marquee
-   only — outline-drawn, never a painted surface (ADR-0032 gate). */
-.le-card-scene-frame {
-  cursor: grab;
-  outline: 2px dashed rgba(56, 215, 255, .85);
-  outline-offset: 1px;
-  position: absolute;
-  touch-action: none;
-  z-index: 2000;
-}
-
-.le-card-scene-frame:active {
-  cursor: grabbing;
-}
-
-.le-card-scene-frame-label {
-  color: #38d7ff;
-  font-size: 10px;
-  inset-block-start: 2px;
-  inset-inline-start: 2px;
-  letter-spacing: .08em;
-  padding: 1px 4px;
-  position: absolute;
-  text-shadow: 0 1px 2px rgba(7, 19, 29, .95), 0 0 4px rgba(7, 19, 29, .9);
-  text-transform: uppercase;
-}
-
-.le-card-scene-panel .le-card-scene-actions {
-  flex-wrap: wrap;
-}
-
-.le-card-scene-panel .le-card-scene-error {
-  color: #ff9d7a;
-}
-
 /* Marquee selection highlight for the Generate/Tile scope. TileGrid's flat overlay cell is
    already seated at the top edge of the surface diamond, so this begins at 0 rather than applying
    the terrain-frame equator offset again. Keeping it in that 10k overlay band makes north/west
@@ -18526,59 +18490,6 @@ button.tileset-relationship-cell {
   opacity: 1;
 }
 
-.run-card-scene-viewport {
-  display: block;
-  min-block-size: 0;
-  overflow: hidden;
-  position: relative;
-}
-
-.run-card-scene-viewport .tileset-generated-board {
-  pointer-events: none;
-}
-
-/* The scene window is a painted surface (its loading state holds the Run stage
-   scan), but a still card appears as one complete frame — no per-card fade on
-   top of the host's own reveal choreography. */
-.run-card-scene-surface.is-ready .painted-surface-content > * {
-  animation: none;
-}
-
-/* Accepted enriched scene artwork sits under the live unit sprites as a
-   board-registered plate: centred on the shared world origin and scaled by the
-   camera-zoom ratio (inline transform), never cover-fit. */
-.run-card-scene-art {
-  image-rendering: pixelated;
-  inset-block-start: 50%;
-  inset-inline-start: 50%;
-  max-inline-size: none;
-  position: absolute;
-}
-
-/* Card-scene capture stage (the Studio Card Scenes Lab): fixed export framing. */
-.run-card-capture-stage {
-  overflow: hidden;
-  position: relative;
-}
-
-.run-card-capture-stage .run-card-scene-viewport {
-  inset: 0;
-  position: absolute;
-}
-
-/* Card Scenes catalog cards: a live vignette crop as the card image. */
-.card-scene-card-image {
-  block-size: 96px;
-  overflow: hidden;
-  position: relative;
-}
-
-.card-scene-card-image .run-card-scene-viewport {
-  inset: 0;
-  position: absolute;
-}
-
-
 .run-bundle-card-plate {
   display: grid;
   gap: var(--ds-space-1);
@@ -19694,21 +19605,6 @@ button.tileset-relationship-cell {
   align-self: start;
   display: grid;
   min-block-size: 0;
-}
-
-/* Complete-face staging: the incoming card paints out of sight in the same cell and
-   replaces the shown face only once whole, so record swaps never assemble on screen. */
-.enchiridion-card-stage {
-  display: grid;
-}
-
-.enchiridion-card-stage-slot {
-  grid-area: 1 / 1;
-  min-inline-size: 0;
-}
-
-.enchiridion-card-stage-slot.is-preparing {
-  visibility: hidden;
 }
 
 .enchiridion-empty {

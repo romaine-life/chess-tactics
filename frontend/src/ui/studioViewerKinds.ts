@@ -28,7 +28,6 @@ export const STUDIO_VIEWER_KIND_LABELS = {
   solver: 'Board Solver',
   cardlayout: 'Card Layout',
   loading: 'Loading Lab',
-  cardscene: 'Card Scene',
 } as const;
 
 export type ViewerKind = keyof typeof STUDIO_VIEWER_KIND_LABELS;
