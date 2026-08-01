@@ -14737,9 +14737,11 @@ const RUN_CARD_ART_PIECE_INITIAL = Object.freeze({ pawn: 'p', knight: 'k', bisho
 const RUN_CARD_ART_PIECE_ORDER = Object.freeze(['pawn', 'knight', 'bishop', 'rook', 'queen']);
 const RUN_CARD_FRAME_SLOT = 'ui/run/card-prototypes/frame-v1.png';
 const RUN_CARD_PESTIFEROUS_FRAME_SLOT = 'ui/run/card-prototypes/pestiferous-frame-v1.png';
+const RUN_CARD_CONCINNOUS_FRAME_SLOT = 'ui/run/card-prototypes/concinnous-frame-v1.png';
 const RUN_CARD_FRAME_VARIANT_BY_SLOT = Object.freeze({
   [RUN_CARD_FRAME_SLOT]: 'standard',
   [RUN_CARD_PESTIFEROUS_FRAME_SLOT]: 'pestiferous',
+  [RUN_CARD_CONCINNOUS_FRAME_SLOT]: 'concinnous',
 });
 const RUN_CARD_FRAME_SCHEMA = 'run-card-frame-v1';
 const SOURCE_ART_TURNTABLE_SCHEMA = 'structure-source-art-turntable-v1';
@@ -14886,9 +14888,9 @@ function runCardFrameProjection(row) {
     || metadata.aspectRatio !== '5:7' || slotMetadata.aspectRatio !== '5:7'
   ) return { claimed: true, issue: 'Run card frame requires its typed Card Layout projection metadata' };
   if (
-    variant === 'pestiferous'
-    && (metadata.variant !== 'pestiferous' || slotMetadata.variant !== 'pestiferous')
-  ) return { claimed: true, issue: 'Pestiferous Run card frame requires its typed variant metadata' };
+    variant !== 'standard'
+    && (metadata.variant !== variant || slotMetadata.variant !== variant)
+  ) return { claimed: true, issue: `${variant} Run card frame requires its typed variant metadata` };
   if (mediaAcceptanceContract(row).mode !== 'standalone') {
     return { claimed: true, issue: 'Run card frame requires standalone atomic acceptance' };
   }

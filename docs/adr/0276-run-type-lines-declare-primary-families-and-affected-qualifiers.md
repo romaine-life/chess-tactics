@@ -8,6 +8,7 @@ partially_supersedes:
 partially_superseded_by:
   - "[ADR-0283](0283-run-card-face-is-one-shared-live-runtime-component.md)'s completed live-frame import and shared runtime renderer"
   - "[ADR-0305](0305-card-ability-properties-do-not-synthesize-description-text.md)'s removal of automatic literal behavior prose"
+  - "[ADR-0307](0307-concinnous-names-the-white-positioned-card-qualifier.md)'s replacement of the Tactical qualifier with Concinnous"
 ---
 
 # ADR-0276: Run type lines declare primary families and affected qualifiers

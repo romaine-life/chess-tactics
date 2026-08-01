@@ -7,13 +7,16 @@ import {
 import { SliderRow } from './dressing/SliderRow';
 import { StudioCatalogCard } from './studio/StudioCatalogCard';
 import {
+  CONCINNOUS_OFFER_DENOMINATOR,
   PESTIFEROUS_OFFER_DENOMINATOR,
   PIECE_BUNDLE_DECK,
+  concinnousOfferRoll,
   pestiferousOfferRoll,
 } from '../run/model';
 import {
   RUN_CARD_APPROVED_TUNING,
   RUN_CARD_DEFAULT_CONTENTS_TUNING,
+  RUN_CARD_CONCINNOUS_FRAME_SLOT,
   RUN_CARD_FRAME_SLOT,
   RUN_CARD_PESTIFEROUS_FRAME_SLOT,
   RUN_CARD_REFERENCE_WIDTH,
@@ -25,6 +28,7 @@ import {
 } from './RunCardFace';
 
 const ART_SLOT = 'ui/run/card-art/pppkb/illustration.png';
+const CONCINNOUS_ART_SLOT = 'ui/run/card-art/pppk/illustration.png';
 const SHA256 = /^[0-9a-f]{64}$/;
 const REFERENCE_CARD_WIDTH = RUN_CARD_REFERENCE_WIDTH;
 const TEXT_HORIZONTAL_MIN = -3;
@@ -68,21 +72,40 @@ const STANDARD_CARD = Object.freeze({
   flavor: 'The bell was gone. Five shadows gathered at the accustomed hour.',
 }) satisfies RunCardFaceContent;
 
-export type RunCardPrototypeVariant = 'standard' | 'pestiferous';
+const CONCINNOUS_CARD = Object.freeze({
+  name: "Banneret's Retinue",
+  cost: 8,
+  typeLine: 'Units — Concinnous',
+  grants: [
+    { count: 3, unit: 'pawn' },
+    { count: 1, unit: 'knight' },
+  ] as const,
+  flavor: 'The banner arrived clean. Nothing else did.',
+}) satisfies RunCardFaceContent;
+
+export type RunCardPrototypeVariant = 'standard' | 'pestiferous' | 'concinnous';
 
 export function runCardPrototypeVariantFromSearch(search: string): RunCardPrototypeVariant {
-  return new URLSearchParams(search).get('cardVariant') === 'pestiferous'
-    ? 'pestiferous'
-    : 'standard';
+  const variant = new URLSearchParams(search).get('cardVariant');
+  return variant === 'pestiferous' || variant === 'concinnous' ? variant : 'standard';
 }
 
-export function runCardPrototypeContent(variant: RunCardPrototypeVariant): RunCardFaceContent {
-  return variant === 'pestiferous'
-    ? {
-        ...STANDARD_CARD,
-        typeLine: 'Units — Pestiferous',
-      }
-    : STANDARD_CARD;
+export function runCardPrototypeTargetRevealedFromSearch(search: string): boolean {
+  return new URLSearchParams(search).get('concinnousTarget') === 'revealed';
+}
+
+export function runCardPrototypeContent(
+  variant: RunCardPrototypeVariant,
+  concinnousTargetRevealed = false,
+): RunCardFaceContent {
+  if (variant === 'pestiferous') return { ...STANDARD_CARD, typeLine: 'Units — Pestiferous' };
+  if (variant === 'concinnous') {
+    return {
+      ...CONCINNOUS_CARD,
+      properties: [{ name: 'Positioned', target: concinnousTargetRevealed ? 'Knight' : 'Target hidden' }],
+    };
+  }
+  return STANDARD_CARD;
 }
 
 export function runCardContentsStudyFromSearch(search: string): boolean {
@@ -144,7 +167,7 @@ export const RUN_CARD_CONTENTS_STUDY_PROFILES: readonly RunCardContentsStudyProf
     load: '3 cells · 2 rows',
     card: {
       ...STANDARD_CARD,
-      typeLine: 'Units — Tactical',
+      typeLine: 'Units — Concinnous',
     },
     tuning: {
       ...RUN_CARD_DEFAULT_CONTENTS_TUNING,
@@ -163,7 +186,7 @@ export const RUN_CARD_CONTENTS_STUDY_PROFILES: readonly RunCardContentsStudyProf
     load: '5 cells · 3 rows',
     card: {
       ...STANDARD_CARD,
-      typeLine: 'Units — Tactical',
+      typeLine: 'Units — Concinnous',
       grants: [
         { count: 3, unit: 'pawn' },
         { count: 1, unit: 'knight' },
@@ -238,6 +261,9 @@ export function RunCardPrototypeViewer({
     runCardPrototypeVariantFromSearch(window.location.search)
   ));
   const [contentsStudy, setContentsStudy] = useState(() => runCardContentsStudyFromSearch(window.location.search));
+  const [concinnousTargetRevealed, setConcinnousTargetRevealed] = useState(() => (
+    runCardPrototypeTargetRevealedFromSearch(window.location.search)
+  ));
   const [contentsScale, setContentsScale] = useState(DEFAULT_CONTENTS_SCALE);
   const [costX, setCostX] = useState(DEFAULT_COST_X);
   const [costY, setCostY] = useState(DEFAULT_COST_Y);
@@ -252,11 +278,19 @@ export function RunCardPrototypeViewer({
   const [titleTypeHorizontalLocked, setTitleTypeHorizontalLocked] = useState(DEFAULT_TITLE_TYPE_HORIZONTAL_LOCKED);
   const [flavorSize, setFlavorSize] = useState(DEFAULT_FLAVOR_SIZE);
   const [pestiferousDenominator, setPestiferousDenominator] = useState(PESTIFEROUS_OFFER_DENOMINATOR);
+  const [concinnousDenominator, setConcinnousDenominator] = useState(CONCINNOUS_OFFER_DENOMINATOR);
   const [handoffCopyState, setHandoffCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
   const [loaded, setLoaded] = useState<ReadonlySet<RunCardImageKind>>(() => new Set());
-  const card = useMemo(() => runCardPrototypeContent(cardVariant), [cardVariant]);
-  const frameSlot = !contentsStudy && cardVariant === 'pestiferous'
-    ? RUN_CARD_PESTIFEROUS_FRAME_SLOT
+  const card = useMemo(
+    () => runCardPrototypeContent(cardVariant, concinnousTargetRevealed),
+    [cardVariant, concinnousTargetRevealed],
+  );
+  const frameSlot = !contentsStudy
+    ? cardVariant === 'pestiferous'
+      ? RUN_CARD_PESTIFEROUS_FRAME_SLOT
+      : cardVariant === 'concinnous'
+        ? RUN_CARD_CONCINNOUS_FRAME_SLOT
+        : RUN_CARD_FRAME_SLOT
     : RUN_CARD_FRAME_SLOT;
   const realizedPestiferousCount = useMemo(() => (
     Array.from({ length: ATARAXIA_SAMPLE_DRAWS }, (_, index) => {
@@ -264,6 +298,13 @@ export function RunCardPrototypeViewer({
       return pestiferousOfferRoll(4217, Math.floor(index / 4), index % 4, bundle.id, pestiferousDenominator);
     }).filter(Boolean).length
   ), [pestiferousDenominator]);
+  const realizedConcinnousCount = useMemo(() => (
+    Array.from({ length: ATARAXIA_SAMPLE_DRAWS }, (_, index) => {
+      const bundle = PIECE_BUNDLE_DECK[index % PIECE_BUNDLE_DECK.length];
+      return bundle.value + 2 <= 9
+        && concinnousOfferRoll(4217, Math.floor(index / 4), index % 4, bundle.id, concinnousDenominator);
+    }).filter(Boolean).length
+  ), [concinnousDenominator]);
 
   useEffect(() => {
     let active = true;
@@ -277,7 +318,8 @@ export function RunCardPrototypeViewer({
     () => catalog ? selectedCandidate(catalog, frameSlot, 'frameCandidate') : null,
     [catalog, frameSlot],
   );
-  const art = useMemo(() => catalog ? selectedCandidate(catalog, ART_SLOT, 'artCandidate') : null, [catalog]);
+  const artSlot = !contentsStudy && cardVariant === 'concinnous' ? CONCINNOUS_ART_SLOT : ART_SLOT;
+  const art = useMemo(() => catalog ? selectedCandidate(catalog, artSlot, 'artCandidate') : null, [artSlot, catalog]);
   const missing = catalog && (!frame || !art) ? 'The requested frame or artwork candidate is unavailable.' : '';
   const sceneError = useMemo(() => error || missing ? new Error(error || missing) : null, [error, missing]);
   const painted = Boolean(
@@ -362,13 +404,14 @@ export function RunCardPrototypeViewer({
     setFlavorSize(DEFAULT_FLAVOR_SIZE);
     setContentsScale(DEFAULT_CONTENTS_SCALE);
     setPestiferousDenominator(PESTIFEROUS_OFFER_DENOMINATOR);
+    setConcinnousDenominator(CONCINNOUS_OFFER_DENOMINATOR);
     setTitleTypeSizeRatio(null);
     setTitleTypeHorizontalLocked(DEFAULT_TITLE_TYPE_HORIZONTAL_LOCKED);
     setHandoffCopyState('idle');
   };
   const chooseCardVariant = (next: RunCardPrototypeVariant): void => {
     const params = new URLSearchParams(window.location.search);
-    if (next === 'pestiferous') params.set('cardVariant', 'pestiferous');
+    if (next !== 'standard') params.set('cardVariant', next);
     else params.delete('cardVariant');
     params.delete('frameCandidate');
     const search = params.toString();
@@ -378,6 +421,18 @@ export function RunCardPrototypeViewer({
       `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash}`,
     );
     setCardVariant(next);
+  };
+  const chooseConcinnousTargetState = (revealed: boolean): void => {
+    const params = new URLSearchParams(window.location.search);
+    if (revealed) params.set('concinnousTarget', 'revealed');
+    else params.delete('concinnousTarget');
+    const search = params.toString();
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash}`,
+    );
+    setConcinnousTargetRevealed(revealed);
   };
   const chooseContentsStudy = (next: boolean): void => {
     const params = new URLSearchParams(window.location.search);
@@ -418,6 +473,13 @@ export function RunCardPrototypeViewer({
         sampleSeed: 4217,
         sampleDraws: ATARAXIA_SAMPLE_DRAWS,
         realizedPestiferousCount,
+      },
+      concinnous: {
+        denominator: concinnousDenominator,
+        sampleSeed: 4217,
+        sampleDraws: ATARAXIA_SAMPLE_DRAWS,
+        realizedCount: realizedConcinnousCount,
+        target: concinnousTargetRevealed ? 'revealed' : 'hidden',
       },
     }, null, 2);
     try {
@@ -534,8 +596,31 @@ export function RunCardPrototypeViewer({
                   aria-pressed={cardVariant === 'pestiferous'}
                   onClick={() => chooseCardVariant('pestiferous')}
                 >Pestiferous</button>
+                <button
+                  type="button"
+                  className={`tileset-view-action${cardVariant === 'concinnous' ? ' active' : ''}`}
+                  data-card-variant="concinnous"
+                  aria-pressed={cardVariant === 'concinnous'}
+                  onClick={() => chooseCardVariant('concinnous')}
+                >Concinnous</button>
               </div>
             )}
+            {!contentsStudy && cardVariant === 'concinnous' ? (
+              <div className="tileset-button-row" role="group" aria-label="Concinnous target visibility">
+                <button
+                  type="button"
+                  className={`tileset-view-action${!concinnousTargetRevealed ? ' active' : ''}`}
+                  aria-pressed={!concinnousTargetRevealed}
+                  onClick={() => chooseConcinnousTargetState(false)}
+                >Before purchase · hidden</button>
+                <button
+                  type="button"
+                  className={`tileset-view-action${concinnousTargetRevealed ? ' active' : ''}`}
+                  aria-pressed={concinnousTargetRevealed}
+                  onClick={() => chooseConcinnousTargetState(true)}
+                >After purchase · Knight</button>
+              </div>
+            ) : null}
             <div className="tileset-button-row run-card-prototype-actions">
               <button
                 type="button"
@@ -592,12 +677,23 @@ export function RunCardPrototypeViewer({
               nudge={1}
               dflt={PESTIFEROUS_OFFER_DENOMINATOR}
             />
+            <SliderRow
+              label={<>Concinnous prevalence · 1 in {concinnousDenominator} eligible offers</>}
+              value={concinnousDenominator}
+              set={setConcinnousDenominator}
+              min={2}
+              max={24}
+              step={1}
+              nudge={1}
+              dflt={CONCINNOUS_OFFER_DENOMINATOR}
+            />
             {frame && art ? (
               <dl className="run-card-prototype-source-readout">
                 <div><dt>Frame</dt><dd>{frame.media!.sha256.slice(0, 12)} · {frame.status}</dd></div>
                 <div><dt>Artwork</dt><dd>{art.media!.sha256.slice(0, 12)} · {art.status}</dd></div>
-                <div><dt>Card</dt><dd>{contentsStudy ? 'Contents Box density study' : cardVariant === 'pestiferous' ? 'Units — Pestiferous' : 'Units'}</dd></div>
+                <div><dt>Card</dt><dd>{contentsStudy ? 'Contents Box density study' : card.typeLine}</dd></div>
                 <div><dt>Ataraxia I sample</dt><dd>{realizedPestiferousCount} / {ATARAXIA_SAMPLE_DRAWS} Pestiferous · seed 4217</dd></div>
+                <div><dt>Eligible sample</dt><dd>{realizedConcinnousCount} / {ATARAXIA_SAMPLE_DRAWS} Concinnous · seed 4217</dd></div>
               </dl>
             ) : null}
           </div>

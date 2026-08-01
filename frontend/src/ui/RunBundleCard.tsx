@@ -3,12 +3,14 @@ import { resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import { runCardArtSlot, runCardFlavor, runCardName } from '../run/cardNames';
 import {
   bundleLabel,
+  PIECE_LABEL,
   type PieceBundle,
   type PurchasablePieceType,
   type RunBundleOffer,
 } from '../run/model';
 import {
   RUN_CARD_FRAME_SLOT,
+  RUN_CARD_CONCINNOUS_FRAME_SLOT,
   RUN_CARD_PESTIFEROUS_FRAME_SLOT,
   RunCardFace,
   type RunCardFaceContent,
@@ -21,6 +23,16 @@ function grantsForBundle(bundle: PieceBundle): RunCardFaceContent['grants'] {
     const count = bundle.pieces.filter((piece) => piece === unit).length;
     return count > 0 ? [{ unit, count }] : [];
   });
+}
+
+function concinnousTargetLabel(bundle: RunBundleOffer): string {
+  const targetIndex = bundle.effectTargetIndex;
+  if (!Number.isSafeInteger(targetIndex) || targetIndex === null || !bundle.pieces[targetIndex]) return 'Target unavailable';
+  const target = bundle.pieces[targetIndex];
+  const occurrences = bundle.pieces.filter((piece) => piece === target).length;
+  if (occurrences === 1) return PIECE_LABEL[target];
+  const ordinal = bundle.pieces.slice(0, targetIndex + 1).filter((piece) => piece === target).length;
+  return `${PIECE_LABEL[target]} ${ordinal}`;
 }
 
 // One trading-card face shared by the Studio instrument, opening draft, shop, art
@@ -44,14 +56,25 @@ export function RunBundleCard({
   const artUrl = resolvedLiveMediaUrl(runCardArtSlot(bundle));
   const cardType = 'cardType' in bundle ? bundle.cardType : null;
   const frameUrl = resolvedLiveMediaUrl(
-    cardType === 'pestiferous' ? RUN_CARD_PESTIFEROUS_FRAME_SLOT : RUN_CARD_FRAME_SLOT,
+    cardType === 'pestiferous'
+      ? RUN_CARD_PESTIFEROUS_FRAME_SLOT
+      : cardType === 'concinnous'
+        ? RUN_CARD_CONCINNOUS_FRAME_SLOT
+        : RUN_CARD_FRAME_SLOT,
   );
   const cost = 'cost' in bundle ? bundle.cost : bundle.value;
   const card = {
     name,
     cost,
-    typeLine: cardType === 'pestiferous' ? 'Units — Pestiferous' : 'Units',
+    typeLine: cardType === 'pestiferous'
+      ? 'Units — Pestiferous'
+      : cardType === 'concinnous'
+        ? 'Units — Concinnous'
+        : 'Units',
     grants: grantsForBundle(bundle),
+    properties: cardType === 'concinnous' && 'effectTargetIndex' in bundle
+      ? [{ name: 'Positioned', target: bought ? concinnousTargetLabel(bundle) : 'Target hidden' }]
+      : undefined,
     flavor: runCardFlavor(bundle),
   } satisfies RunCardFaceContent;
   const face = (
@@ -74,7 +97,7 @@ export function RunBundleCard({
   }
   const actionLabel = mode === 'draft'
     ? `Take ${name} — ${label}`
-    : `${bought ? 'Purchased' : 'Buy'} ${name} — ${label} — for ${cost} gold`;
+    : `${bought ? 'Purchased' : 'Buy'} ${name} — ${label} — for ${cost} gold${cardType === 'concinnous' ? ` — Positioned: ${bought ? concinnousTargetLabel(bundle as RunBundleOffer) : 'target hidden'}` : ''}`;
   return (
     <button
       type="button"

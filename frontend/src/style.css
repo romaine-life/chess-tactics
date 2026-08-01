@@ -21743,6 +21743,23 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   text-wrap: balance;
 }
 
+.run-card-prototype-properties {
+  display: grid;
+  font: 400 var(--run-card-effect-size, 2.75cqw)/1.12 var(--ds-font-display);
+  gap: var(--run-card-effect-gap, .7cqw);
+  margin-block-start: var(--run-card-effect-gap, .7cqw);
+}
+
+.run-card-prototype-property {
+  display: flex;
+  gap: 1.4cqw;
+  justify-content: space-between;
+}
+
+.run-card-prototype-property strong {
+  font-weight: 700;
+}
+
 .run-ataraxia-selector {
   display: grid;
   gap: var(--ds-inline-tight);

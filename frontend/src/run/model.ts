@@ -17,13 +17,14 @@ export {
   type RunRelicId,
 };
 
-export const RUN_FORMAT_VERSION = 5;
+export const RUN_FORMAT_VERSION = 6;
 export const GOLD_SCALE = 10;
 export const INSTALLED_ATARAXIA_MAX_TIER = 1;
 export const PESTIFEROUS_OFFER_DENOMINATOR = 8;
+export const CONCINNOUS_OFFER_DENOMINATOR = 8;
 
 export type AtaraxiaTier = 0 | 1;
-export type RunCardType = 'pestiferous';
+export type RunCardType = 'pestiferous' | 'concinnous';
 export type RunUnitModifier = 'plagued';
 
 export const ATARAXIA_BY_TIER: Readonly<Record<AtaraxiaTier, Readonly<{
@@ -36,7 +37,7 @@ export const ATARAXIA_BY_TIER: Readonly<Record<AtaraxiaTier, Readonly<{
     tier: 0,
     label: 'Ataraxia 0',
     title: 'The Untroubled Mind',
-    effect: 'Standard Run rules. Shop cards are never Pestiferous.',
+    effect: 'Standard Run rules. Shop cards may be Concinnous but are never Pestiferous.',
   }),
   1: Object.freeze({
     tier: 1,
@@ -115,6 +116,8 @@ export interface RunBundleOffer extends PieceBundle {
   cost: number;
   cardType: RunCardType | null;
   effectSeed: number;
+  /** Stored zero-based unit occurrence selected before a Concinnous purchase. */
+  effectTargetIndex: number | null;
 }
 
 export interface RunOwnedCard {
@@ -122,6 +125,8 @@ export interface RunOwnedCard {
   coreId: string;
   cardType: RunCardType | null;
   effectSeed: number;
+  /** Exact acquired unit enhanced by this card, or null for other card types. */
+  effectTargetUnitId: string | null;
   unitIds: string[];
   lostUnitIds: string[];
   acquiredAfterBattleIndex: number;
@@ -333,25 +338,45 @@ export function pestiferousOfferRoll(
   return createRng(rollSeed).int(denominator) === 0;
 }
 
+export function concinnousOfferRoll(
+  seed: number,
+  battleIndex: number,
+  slotIndex: number,
+  coreId: string,
+  denominator = CONCINNOUS_OFFER_DENOMINATOR,
+): boolean {
+  if (!Number.isSafeInteger(denominator) || denominator < 1) return false;
+  const rollSeed = mixSeed(seed, `concinnous:${coreId}`, battleIndex * 8 + slotIndex);
+  return createRng(rollSeed).int(denominator) === 0;
+}
+
 export function createRunBundleOffer(
   run: Pick<RunDocument, 'seed' | 'ataraxiaTier'>,
   bundle: PieceBundle,
   battleIndex: number,
   slotIndex: number,
-  denominator = PESTIFEROUS_OFFER_DENOMINATOR,
+  pestiferousDenominator = PESTIFEROUS_OFFER_DENOMINATOR,
+  concinnousDenominator = CONCINNOUS_OFFER_DENOMINATOR,
 ): RunBundleOffer {
   const pestiferous = run.ataraxiaTier >= 1
-    && pestiferousOfferRoll(run.seed, battleIndex, slotIndex, bundle.id, denominator);
+    && pestiferousOfferRoll(run.seed, battleIndex, slotIndex, bundle.id, pestiferousDenominator);
+  const effectSeed = mixSeed(run.seed, `shop-card:${bundle.id}`, battleIndex * 8 + slotIndex);
+  const concinnous = !pestiferous
+    && bundle.value + 2 <= 9
+    && concinnousOfferRoll(run.seed, battleIndex, slotIndex, bundle.id, concinnousDenominator);
   const cost = pestiferous
     ? bundle.pieces.reduce((sum, piece) => sum + PIECE_VALUE[piece] - PLAGUED_DISCOUNT[piece], 0)
-    : bundle.value;
+    : bundle.value + (concinnous ? 2 : 0);
   return {
     ...bundle,
     pieces: [...bundle.pieces],
     offerId: `shop-${battleIndex}-${slotIndex}-${bundle.id}`,
     cost,
-    cardType: pestiferous ? 'pestiferous' : null,
-    effectSeed: mixSeed(run.seed, `shop-card:${bundle.id}`, battleIndex * 8 + slotIndex),
+    cardType: pestiferous ? 'pestiferous' : concinnous ? 'concinnous' : null,
+    effectSeed,
+    effectTargetIndex: concinnous
+      ? createRng(mixSeed(effectSeed, 'concinnous-target')).int(bundle.pieces.length)
+      : null,
   };
 }
 
@@ -666,6 +691,7 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
           coreId: card.coreId,
           cardType: card.cardType === 'pestiferous' ? 'pestiferous' : null,
           effectSeed: Number.isSafeInteger(card.effectSeed) ? Number(card.effectSeed) >>> 0 : mixSeed(next.seed, card.id),
+          effectTargetUnitId: null,
           unitIds: Array.isArray(card.unitIds) ? card.unitIds.filter((id): id is string => typeof id === 'string') : [],
           lostUnitIds: Array.isArray(card.lostUnitIds) ? card.lostUnitIds.filter((id): id is string => typeof id === 'string') : [],
           acquiredAfterBattleIndex: Number.isSafeInteger(card.acquiredAfterBattleIndex)
@@ -693,6 +719,16 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
       : null;
     const { bundleOfferIds: _bundleOfferIds, purchasedBundleId: _purchasedBundleId, ...currentShop } = shop;
     shop = { ...currentShop, bundleOffers, purchasedOfferId };
+  }
+  if (shop && Array.isArray(shop.bundleOffers) && Number(next.formatVersion) < RUN_FORMAT_VERSION) {
+    shop = {
+      ...shop,
+      bundleOffers: shop.bundleOffers.map((offer) => ({
+        ...offer,
+        cardType: offer.cardType === 'pestiferous' ? 'pestiferous' : null,
+        effectTargetIndex: null,
+      })),
+    };
   }
   if (
     next.ataraxiaTier !== ataraxiaTier
@@ -1108,11 +1144,21 @@ export function buyBundle(run: RunDocument, offerId: string): RunDocument {
   if (run.goldTenths < cost) return run;
   const modifiers: RunUnitModifier[] = offer.cardType === 'pestiferous' ? ['plagued'] : [];
   const { addedUnits, ...armyUpdate } = addArmyPieces(run, offer.pieces, 'shop', modifiers);
+  const effectTargetUnit = offer.cardType === 'concinnous'
+    && Number.isSafeInteger(offer.effectTargetIndex)
+    ? addedUnits[offer.effectTargetIndex!]
+    : undefined;
+  const army = effectTargetUnit
+    ? armyUpdate.army.map((unit): RunArmyUnit => unit.id === effectTargetUnit.id
+      ? { ...unit, abilities: unit.abilities.includes('positioned') ? unit.abilities : [...unit.abilities, 'positioned'] }
+      : unit)
+    : armyUpdate.army;
   const card: RunOwnedCard = {
     id: `run-card-${run.nextCardSequence}`,
     coreId: offer.id,
     cardType: offer.cardType,
     effectSeed: offer.effectSeed,
+    effectTargetUnitId: effectTargetUnit?.id ?? null,
     unitIds: addedUnits.map((unit) => unit.id),
     lostUnitIds: [],
     acquiredAfterBattleIndex: run.shop.afterBattleIndex,
@@ -1120,6 +1166,7 @@ export function buyBundle(run: RunDocument, offerId: string): RunDocument {
   return touch({
     ...run,
     ...armyUpdate,
+    army,
     cards: [...run.cards, card],
     nextCardSequence: run.nextCardSequence + 1,
     goldTenths: run.goldTenths - cost,

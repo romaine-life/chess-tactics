@@ -4010,7 +4010,7 @@ async function main() {
     throw new Error(`Active Run should begin empty: ${emptyRun.statusCode} ${emptyRun.body}`);
   }
   const activeRunDocument = {
-    formatVersion: 5,
+    formatVersion: 6,
     id: 'run-smoke',
     seed: 17,
     ataraxiaTier: 1,
