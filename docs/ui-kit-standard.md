@@ -140,6 +140,14 @@ exterior corners. ADR-0103 supersedes that final exterior-corner clause for the
 viewport shell: title/control rails flow beyond the screen edge without visible
 corner atoms, while internal divider joints remain.
 
+Under [ADR-0289](adr/0289-shell-workspaces-own-attached-bodies-and-inset-content-lanes.md),
+`ShellControlsPanel` is the one production shell Controls rail. It creates the
+fixed Controls title, titled outer role, placement class, and semantic seam
+marker; gameplay and editor callers provide only workflow content and title
+actions. Generated chrome targets that component-owned marker rather than a
+list of consumer ids. Production code does not rebuild a panel titled Controls
+from `OuterChromeBox` and `OuterChromeHeader`.
+
 Under [ADR-0101](adr/0101-title-bar-buttons-use-the-inner-box-role.md), every
 button inside that persistent title bar consumes the registered `inner-box`
 role. The inner role owns its frame and state art; the title-control primitive
@@ -167,17 +175,25 @@ but it paints no second frame, rails, or corner atoms; its controls continue to
 use registered inner chrome. Its open state is part of the canonical Level Editor
 address (`eventsEditor=1`, with optional `eventsTab=other`) so a review link opens
 the exact workspace state without requiring follow-up clicks. Under
-[ADR-0279](adr/0279-main-menu-insets-govern-full-workspace-content.md), its
-content perimeter uses the main menu's responsive inline and block insets: the
-left value mirrors to the right and the top value mirrors to the bottom. The
-outer-role fill itself remains edge-to-edge.
+[ADR-0289](adr/0289-shell-workspaces-own-attached-bodies-and-inset-content-lanes.md),
+`ShellWorkspace` unconditionally creates its Controls-attached body and one
+inner content container. Events supplies content and the main-menu-derived
+inline-start/block insets; the shared container automatically mirrors that start
+inset at inline end. The outer-role fill and body still reach Controls, while
+header actions and rule controls share the inner content line. Events cannot
+omit either layer or provide an inline-end value.
 
 Under [ADR-0237](adr/0237-run-destinations-fill-the-shell-workspace.md), the same
 ownership test applies to every player-facing non-Battle Run destination. Draft,
 Deployment and its preview, Shop/Loot, Victory, Army ledger and profile, Sell
 Units, loading, and empty states fill the shell-owned playfield through the
-shared `RunWorkspace`/`ShellWorkspace` composition. Content gutters and relic
-reservation live inside that continuous surface. Destinations do not add an
+shared `RunWorkspace`/`ShellWorkspace` composition. `RunWorkspace` supplies the
+workflow content; `ShellWorkspace` itself supplies the same Controls-attached
+body and default inset content container for every destination. Content gutters
+and relic reservation live inside that continuous body without creating an
+inline-end shell gap. A primary frame or drawn scroll owner uses the shared
+edge-attached content variant rather than authoring an end-padding exception.
+Destinations do not add an
 `OuterChromeBox`, outer-panel consumer, or duplicate title frame merely to
 acquire a background; subordinate controls remain registered inner chrome.
 
@@ -190,7 +206,14 @@ workspace while title and Controls remain fixed; `/run?view=army` and
 `/run?view=relics` open those exact workspaces. A shell workspace consumes the
 installed outer-role fill but is never an `outer-panel` consumer: it owns no
 exterior rails, corner atoms, viewport offsets, or second frame. Covered content
-stays mounted, hidden, inert, and inaccessible until the workspace closes.
+is passed through `ShellViewportSwap`, which owns the retained primary wrapper
+and keeps it mounted, hidden, inert, and inaccessible until the workspace
+closes. Hosts provide the open state instead of rebuilding those mechanics.
+The body border box and edge-attached primary frames or drawn scroll rails meet
+the Controls boundary. Ordinary inner controls instead share the content line
+computed by the shell from the host's start inset. A source-level wrapper check
+is not sufficient; live geometry verification compares both kinds of boundary
+on the rendered route.
 
 Under [ADR-0102](adr/0102-runtime-buttons-use-registered-inner-chrome.md), that
 ownership rule applies to runtime controls throughout the application. The old

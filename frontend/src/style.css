@@ -1837,7 +1837,7 @@ h1 {
   --ds-space-6: 32px;
   --ds-space-7: 48px;
   --ds-space-8: 64px;
-  /* Full-page workspace perimeter (ADR-0279). The main menu is the placement
+  /* Full-page workspace content line (ADR-0289). The main menu is the placement
      authority: its frame plus responsive rail padding defines the inline and
      block insets. Workspace content mirrors those starts at the opposite edges
      while the host-owned fill itself remains edge-to-edge. */
@@ -4162,12 +4162,16 @@ h1 {
   --ds-inline: var(--ds-space-2);
   --ds-inline-tight: var(--ds-space-1);
   --ds-gutter: var(--ds-space-3);
-  --skirmish-grid-gap: var(--ds-space-3);
+  --skirmish-content-gap: var(--ds-space-3);
+  --skirmish-board-controls-gutter: var(--ds-space-3);
   align-items: stretch;
   color: var(--skirmish-ink);
   display: grid;
   font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
-  column-gap: var(--skirmish-grid-gap);
+  /* The shell-owned left workspace reaches the Controls divider. The ordinary
+     battlefield creates its scenic gutter inside that stable host; replacement
+     workspaces therefore never change grid geometry or rebuild this boundary. */
+  column-gap: 0;
   row-gap: 0;
   grid-template-columns: minmax(0, 1fr) var(--skirmish-rail-w);
   /* Row-first: a full-bleed title bar spanning both columns on top (ADR-0004),
@@ -4269,12 +4273,6 @@ h1 {
   z-index: 3;
 }
 
-/* Self-inspection and Strategikon replace the scenic battlefield with a complete
-   shell workspace. Its Controls-facing edge therefore meets the persistent HUD
-   divider instead of retaining the ordinary board-to-HUD scenic gutter. */
-.skirmish-screen.is-run-self-inspection-open {
-  column-gap: 0;
-}
 .level-editor-screen::before {
   background: none;
 }
@@ -4535,6 +4533,14 @@ h1 {
   padding: 0;
   place-items: center;
   position: relative;
+}
+
+/* The shell workspace owns the complete left region through the Controls divider.
+   Only the scenic Battle field opts into the visual breathing room that used to be
+   a parent grid gap, so covering workspaces can fill the host without resizing the
+   mounted board or changing its camera fit. */
+.skirmish-screen:not(.level-editor-screen) .skirmish-war-room > .skirmish-field {
+  margin-inline-end: var(--skirmish-board-controls-gutter);
 }
 
 /* No board box: the board (game art) floats on the screen's night-sky background,
@@ -7205,8 +7211,11 @@ body.loading-bootstrap .app-startup-status {
    parent already owns the exact title/control boundaries, so every workflow fills that parent
    without recreating viewport, rail, frame, or outer-atom geometry. */
 .le-events-open { width: 100%; }
-.level-editor-screen .skirmish-board-frame.is-workspace-covered {
+.shell-viewport-primary[data-shell-workspace-covered] {
   visibility: hidden;
+}
+.level-editor-viewport-swap {
+  display: contents;
 }
 .shell-workspace {
   box-sizing: border-box;
@@ -7230,30 +7239,58 @@ body.loading-bootstrap .app-startup-status {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: var(--ds-gutter);
   min-height: 0;
   min-width: 0;
   overflow: hidden;
-  padding: var(--shell-workspace-content-padding, 0px);
   position: relative;
   z-index: 1;
 }
+.shell-workspace-body {
+  box-sizing: border-box;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  /* ADR-0289: host families choose only start/block breathing room. The
+     Controls-facing edge is one shared invariant and is never consumer-tuned. */
+  padding-block: var(--shell-workspace-body-inset-block, 0px);
+  padding-inline-start: var(--shell-workspace-body-inset-start, 0px);
+  padding-inline-end: 0;
+}
+.shell-workspace-body-content {
+  box-sizing: border-box;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--ds-gutter);
+  min-height: 0;
+  min-width: 0;
+  /* ADR-0289: ordinary content automatically mirrors the shell-owned start
+     inset. The body still reaches Controls; callers never author an end inset. */
+  padding-inline-end: var(--shell-workspace-body-inset-start, 0px);
+}
+.shell-workspace-body-content[data-shell-workspace-content-edge] {
+  /* Primary frames and drawn scroll owners attach to the body boundary and
+     provide their own semantic internal spacing. */
+  padding-inline-end: 0;
+}
 .level-editor-screen .shell-workspace {
-  --shell-workspace-content-padding: var(--le-outer-content-padding, 0px);
+  --shell-workspace-body-inset-block: var(--le-outer-content-padding, 0px);
+  --shell-workspace-body-inset-start: var(--le-outer-content-padding, 0px);
 }
 .level-editor-screen .le-events-workspace {
-  /* ADR-0279: Events/Rules follows the main-menu perimeter, not the generated
-     outer-panel inset. Inline and block starts mirror to their opposite edges. */
-  --shell-workspace-content-padding:
-    var(--main-menu-content-inset-block)
-    var(--main-menu-content-inset-inline);
+  /* ADR-0289 uses the main-menu start/block coordinates while the shared body
+     itself docks to Controls. */
+  --shell-workspace-body-inset-block: var(--main-menu-content-inset-block);
+  --shell-workspace-body-inset-start: var(--main-menu-content-inset-inline);
 }
-.le-events-head { align-items: center; border-bottom: 1px solid rgba(150, 180, 200, .18); display: flex; flex: 0 0 auto; gap: 12px; justify-content: space-between; padding: 0 2px 8px; }
+.le-events-head { align-items: center; border-bottom: 1px solid rgba(150, 180, 200, .18); display: flex; flex: 0 0 auto; gap: var(--ds-space-3); justify-content: space-between; padding-block: 0 var(--ds-space-2); padding-inline: 0; }
 .le-events-head h2 { color: #eafaff; margin: 0; }
 .le-events-head-actions { align-items: center; display: flex; flex: 1; gap: 8px; justify-content: flex-end; min-width: 0; }
 .le-events-tabs {
   flex: 0 1 auto;
-  gap: 4px;
+  gap: var(--ds-space-1);
   grid-auto-columns: unset;
   grid-auto-flow: column;
   grid-template-columns: repeat(2, minmax(92px, auto));
@@ -7274,14 +7311,14 @@ body.loading-bootstrap .app-startup-status {
   white-space: nowrap;
 }
 /* Master-detail: a scrollable NAMED rule list (left) + the selected rule's editor (right). */
-.le-md { display: grid; flex: 1; gap: 20px; grid-template-columns: minmax(230px, 300px) minmax(0, 1fr); min-height: 0; padding: 12px 2px 4px; }
-.le-md-list { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.le-md { display: grid; flex: 1; gap: var(--ds-gutter); grid-template-columns: minmax(230px, 300px) minmax(0, 1fr); min-height: 0; padding-block: var(--ds-space-3) var(--ds-space-1); padding-inline: 0; }
+.le-md-list { display: flex; flex-direction: column; gap: var(--ds-space-2); min-height: 0; }
 .le-md-rules {
   box-sizing: border-box;
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--ds-space-1);
   margin-inline:
     calc(-1 * var(--le-inner-atom-left-overhang, 0px))
     calc(-1 * var(--le-inner-atom-right-overhang, 0px));
@@ -7289,7 +7326,7 @@ body.loading-bootstrap .app-startup-status {
   overflow-x: hidden;
   overflow-y: auto;
   padding-left: var(--le-inner-atom-left-overhang, 0px);
-  padding-right: calc(4px + var(--le-inner-atom-right-overhang, 0px));
+  padding-right: var(--le-inner-atom-right-overhang, 0px);
 }
 .le-md-item { align-items: center; color: #cfe6f2; cursor: pointer; display: flex; gap: 8px; justify-content: space-between; padding: 7px 10px; text-align: left; }
 .le-md-item.active { color: #eafaff; }
@@ -7306,7 +7343,7 @@ body.loading-bootstrap .app-startup-status {
   overflow-x: hidden;
   overflow-y: auto;
   padding-left: var(--le-inner-atom-left-overhang, 0px);
-  padding-right: calc(6px + var(--le-inner-atom-right-overhang, 0px));
+  padding-right: var(--le-inner-atom-right-overhang, 0px);
 }
 .le-md-detail .le-rule { border: 0; margin-top: 0; padding: 0; }
 .le-events-other .le-rule > .le-ctrlrow {
@@ -7365,16 +7402,16 @@ body.loading-bootstrap .app-startup-status {
 .le-events-placeholder { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 2px; }
 
 @media (max-width: 560px) {
-  .shell-workspace-content { gap: 8px; overflow-x: hidden; overflow-y: auto; }
-  .le-events-head { align-items: stretch; flex-direction: column; gap: 8px; }
+  .shell-workspace-body-content { gap: var(--ds-space-2); overflow-x: hidden; overflow-y: auto; }
+  .le-events-head { align-items: stretch; flex-direction: column; gap: var(--ds-space-2); }
   .le-events-head-actions { justify-content: stretch; }
   .le-events-tabs { flex: 1 1 auto; max-width: none; }
   .le-md {
     display: flex;
     flex: none;
     flex-direction: column;
-    gap: 10px;
-    padding-top: 8px;
+    gap: var(--ds-space-3);
+    padding-top: var(--ds-space-2);
   }
   .le-md-list { flex: none; }
   .le-md-rules { flex: none; max-height: 180px; }
@@ -7476,11 +7513,12 @@ body.loading-bootstrap .app-startup-status {
   border-bottom: 1px solid rgba(150, 180, 200, .18);
   display: flex;
   flex: 0 0 auto;
-  gap: 18px;
+  gap: var(--ds-space-4);
   justify-content: space-between;
-  padding: 0 2px 12px;
+  padding-block: 0 var(--ds-space-3);
+  padding-inline: 0;
 }
-.le-artwork-workspace-head > div { display: grid; gap: 3px; }
+.le-artwork-workspace-head > div { display: grid; gap: var(--ds-space-1); }
 .le-artwork-workspace-head h2,
 .le-artwork-frame-copy h3,
 .le-predrawn-version-meta h3 { color: #eafaff; margin: 0; }
@@ -7490,11 +7528,12 @@ body.loading-bootstrap .app-startup-status {
 .le-artwork-workspace-scroll {
   display: grid;
   flex: 1 1 auto;
-  gap: 20px;
+  gap: var(--ds-gutter);
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  padding: 16px 6px 24px 2px;
+  padding-block: var(--ds-space-4) var(--ds-space-5);
+  padding-inline: 0;
 }
 .le-artwork-frame-card {
   align-items: start;
@@ -8281,7 +8320,7 @@ body.loading-bootstrap .app-startup-status {
 @media (max-width: 560px) {
   .le-artwork-workspace-head { align-items: stretch; flex-direction: column; }
   .le-artwork-workspace-head > .le-seg-btn { align-self: flex-start; }
-  .le-artwork-workspace-scroll { overflow: visible; padding-top: 10px; }
+  .le-artwork-workspace-scroll { overflow: visible; padding-top: var(--ds-space-3); }
   .le-predrawn-artifact-card.le-predrawn-artifact-card { width: 176px; }
   .le-predrawn-workspace-inspector-head { align-items: start; }
   .le-predrawn-workspace-inspector-head p { display: none; }
@@ -16616,7 +16655,7 @@ button.tileset-relationship-cell {
 /* Viewport-edge rails terminate beyond the visible canvas without exterior corner
    atoms. Internal divider joints remain installed at real rail intersections. */
 :root:has(.app-titlebar.chrome-rails-offscreen) .app-titlebar::after,
-:root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) .le-outer-panel:is([data-chrome-consumer="level-editor-controls"], [data-chrome-consumer="skirmish-hud"])::after {
+:root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) [data-shell-controls-panel]::after {
   content: none !important;
 }
 
@@ -16624,7 +16663,7 @@ button.tileset-relationship-cell {
   content: none !important;
 }
 
-:root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) .le-outer-panel:is([data-chrome-consumer="level-editor-controls"], [data-chrome-consumer="skirmish-hud"])::before {
+:root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) [data-shell-controls-panel]::before {
   border-width: 0 0 0 var(--le-chrome-outer-rail-w) !important;
   border-image-width: 0 0 0 var(--le-chrome-outer-rail-w) !important;
 }
@@ -18375,7 +18414,8 @@ button.tileset-relationship-cell {
 }
 
 .run-shell-workspace {
-  --shell-workspace-content-padding: var(--ds-gutter);
+  --shell-workspace-body-inset-block: var(--ds-gutter);
+  --shell-workspace-body-inset-start: var(--ds-gutter);
 }
 
 .run-phase-workspace {
@@ -18398,11 +18438,6 @@ button.tileset-relationship-cell {
   grid-template-rows: minmax(0, 1fr);
   min-block-size: 0;
   min-inline-size: 0;
-}
-
-.run-phase-primary.is-workspace-covered,
-.skirmish-field.is-workspace-covered {
-  visibility: hidden;
 }
 
 /* In-place Run phase choreography (RunWorkspaceStages): the departing and arriving
@@ -19645,17 +19680,8 @@ button.tileset-relationship-cell {
 }
 
 .strategikon-workspace {
-  block-size: 100%;
-  box-sizing: border-box;
-  display: grid;
-  gap: 0;
-  grid-template-columns: 322px minmax(0, 1fr);
-  inset: 0;
-  isolation: isolate;
-  min-block-size: 0;
-  min-inline-size: 0;
-  padding: 0;
-  position: absolute;
+  --shell-workspace-body-inset-block: var(--main-menu-content-inset-block);
+  --shell-workspace-body-inset-start: var(--main-menu-content-inset-inline);
 }
 
 .strategikon-slot {
@@ -19674,8 +19700,10 @@ button.tileset-relationship-cell {
   pointer-events: auto;
 }
 
-.strategikon-workspace-fill {
-  inset: 0;
+.strategikon-workspace-layout {
+  display: grid;
+  gap: 0;
+  grid-template-columns: 322px minmax(0, 1fr);
 }
 
 .strategikon-rail,
@@ -19689,20 +19717,20 @@ button.tileset-relationship-cell {
   display: grid;
   gap: clamp(9px, calc(var(--layout-vw, 100vw) * .008), 13px);
   min-block-size: 0;
-  padding-block: var(--main-menu-content-inset-block);
-  padding-inline: var(--main-menu-content-inset-inline) 0;
+  padding-block: var(--shell-workspace-body-inset-block);
+  padding-inline: var(--shell-workspace-body-inset-start) 0;
 }
 
 .strategikon-content {
+  /* ShellWorkspace's internal body owns block/start insets and the zero Controls-facing
+     inset. Workflow content must not recreate that perimeter. */
   box-sizing: border-box;
-  padding-block: var(--main-menu-content-inset-block);
-  padding-inline: var(--main-menu-content-inset-inline);
 }
 
 .strategikon-content > .enchiridion-workspace {
   block-size: 100%;
   display: grid;
-  gap: var(--skirmish-grid-gap);
+  gap: var(--skirmish-content-gap);
   grid-template-columns: 270px minmax(0, 1fr);
   min-block-size: 0;
 }

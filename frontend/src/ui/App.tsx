@@ -44,6 +44,7 @@ import { initialSceneState, reduceScene } from './shell/sceneDirector';
 import {
   deepestSharedSceneRegion,
   isEmptySlotDestination,
+  isEmptySlotOrigin,
   sceneManifest,
 } from './shell/sceneManifest';
 import type { ScenePath } from './shell/sceneManifest';
@@ -323,22 +324,40 @@ export function App(): ReactElement {
       dispatchScene({ type: 'exit-finished', generation });
       return undefined;
     }
-    const timer = window.setTimeout(() => {
-      const latest = sceneRef.current;
-      if (latest.generation !== generation || !latest.destinationHref) return;
-      const url = new URL(latest.destinationHref, window.location.origin);
+    if (destination && scene.destinationHref && isEmptySlotOrigin(scene.current, destination)) {
+      const url = new URL(scene.destinationHref, window.location.origin);
       setPath(normalizeRoutePath(url.pathname));
       setSearch(url.search);
-      if (latest.destination && isEmptySlotDestination(latest.current, latest.destination)) {
-        loadingMark(latest.destination.id, 'scene-empty-slot-committed', { generation });
-        dispatchScene({ type: 'empty-slot-committed', generation });
-        return;
-      }
       loadingStartedAt.current = performance.now();
+      loadingMark(destination.id, 'scene-empty-slot-origin-committed', { generation });
       dispatchScene({ type: 'exit-finished', generation });
-    }, SCENE_FADE_MS);
-    timers.current.push(timer);
-    return () => window.clearTimeout(timer);
+      return undefined;
+    }
+    let timer: number | null = null;
+    // Start the director's duration after the browser has painted the exiting
+    // target once. Counting from the React effect can beat the CSS transition's
+    // first composed frame and remove the child while a sliver is still visible.
+    const frame = window.requestAnimationFrame(() => {
+      timer = window.setTimeout(() => {
+        const latest = sceneRef.current;
+        if (latest.generation !== generation || !latest.destinationHref) return;
+        const url = new URL(latest.destinationHref, window.location.origin);
+        setPath(normalizeRoutePath(url.pathname));
+        setSearch(url.search);
+        if (latest.destination && isEmptySlotDestination(latest.current, latest.destination)) {
+          loadingMark(latest.destination.id, 'scene-empty-slot-committed', { generation });
+          dispatchScene({ type: 'empty-slot-committed', generation });
+          return;
+        }
+        loadingStartedAt.current = performance.now();
+        dispatchScene({ type: 'exit-finished', generation });
+      }, SCENE_FADE_MS);
+      timers.current.push(timer);
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      if (timer !== null) window.clearTimeout(timer);
+    };
   }, [scene.generation, scene.phase]);
 
   const destinationPainted = useCallback((generation: number): void => {

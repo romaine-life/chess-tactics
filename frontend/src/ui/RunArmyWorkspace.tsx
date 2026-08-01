@@ -474,6 +474,7 @@ function RunArmyWorkspaceHost({
       <RunWorkspace
         className={className}
         contentClassName={contentClassName}
+        edgeAttached
         data-testid={dataTestId}
         aria-labelledby="run-army-workspace-title"
       >

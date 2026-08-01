@@ -164,7 +164,7 @@ function leafSceneManifest(pathname: string, search: string = ''): SceneManifest
   const path = normalizeRoutePath(pathname);
 
   if (path === '/play' || path.startsWith('/play/strategikon/')) {
-    return manifest('gameplay', 'battlefield', 'gameplay-hud', [
+    return manifest(path === '/play' ? 'gameplay' : `gameplay:${path}`, 'battlefield', 'gameplay-hud', [
       'battlefield-background',
       'level-snapshot',
       'board-compositors',
@@ -174,7 +174,7 @@ function leafSceneManifest(pathname: string, search: string = ''): SceneManifest
     ], [], 'gameplay-shell', 'transition-only');
   }
   if (path === '/run' || path.startsWith('/run/strategikon/')) {
-    return manifest('run', 'battlefield', 'gameplay-hud', [
+    return manifest(path === '/run' ? 'run' : `run:${path}`, 'battlefield', 'gameplay-hud', [
       'battlefield-background',
       'active-run',
       'run-chrome',
@@ -413,6 +413,19 @@ const DESTINATION_SLOT_BY_REGION: Readonly<Partial<Record<SceneHost, SceneSlotId
   'enchiridion-shell': 'enchiridion-content',
   'gameplay-shell': 'gameplay-content',
 });
+
+/** True when a retained host is transitioning from its empty child slot into content. */
+export function isEmptySlotOrigin(
+  current: ScenePath,
+  destination: ScenePath,
+): boolean {
+  const region = deepestSharedSceneRegion(current, destination);
+  if (!region) return false;
+  const slot = DESTINATION_SLOT_BY_REGION[region];
+  return Boolean(slot)
+    && !current.instances.some((entry) => entry.definition.slot === slot)
+    && destination.instances.some((entry) => entry.definition.slot === slot);
+}
 
 /** True when a retained host is transitioning by removing its current child slot. */
 export function isEmptySlotDestination(

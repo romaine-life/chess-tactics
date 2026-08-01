@@ -5,7 +5,7 @@ import type { GameState, Piece } from '../core/types';
 import { LevelPreviewColumn } from './LevelPreviewColumn';
 import { NavButton } from './shared/NavButton';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
-import { InnerChromeBox } from './shared/ChromeBox';
+import { InnerChromeBox, ShellViewportSwap } from './shared/ChromeBox';
 import { HouseSelect } from './shared/HouseSelect';
 import { TitleBarStatus } from './shell/TitleBarControls';
 import { PLAY_RUN_SELECTOR_HREF } from './playHubRoute';
@@ -248,18 +248,15 @@ function RunPhaseWorkspace({
   inspectionWorkspace: ReactElement | null;
   children: ReactElement;
 }): ReactElement {
-  const covered = Boolean(inspectionWorkspace);
   return (
-    <section className="run-phase-workspace" aria-label="Run workspace">
-      <div
-        className={`run-phase-primary${covered ? ' is-workspace-covered' : ''}`}
-        inert={covered ? true : undefined}
-        aria-hidden={covered ? true : undefined}
-      >
-        {children}
-      </div>
+    <ShellViewportSwap
+      className="run-phase-workspace"
+      primaryClassName="run-phase-primary"
+      primary={children}
+      aria-label="Run workspace"
+    >
       {inspectionWorkspace}
-    </section>
+    </ShellViewportSwap>
   );
 }
 
@@ -918,7 +915,7 @@ export function RunScreen({
       testId="run-screen"
       titleBarContent={shellRun ? <RunTitleBarStatus run={shellRun} /> : null}
       relicIds={shellRun ? shellRun.relics : []}
-      runSelfInspectionOpen={Boolean(inspectionWorkspace)}
+      shellWorkspaceCoversRelics={Boolean(inspectionWorkspace)}
       controlsContent={shellRun
         ? <RunMetaControls run={shellRun} view={view} onNavigate={navigateRunView} showAbandon={shellRun.phase !== 'victory'} />
         : null}

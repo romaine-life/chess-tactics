@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   deepestSharedSceneRegion,
   isEmptySlotDestination,
+  isEmptySlotOrigin,
   sceneManifest,
 } from './sceneManifest';
 
@@ -128,19 +129,45 @@ describe('scene manifests', () => {
   });
 
   it('retains Battle and the main-menu Enchiridion while their reference children change', () => {
-    expect(sceneManifest('/play/strategikon/enchiridion/units')).toMatchObject({
+    const play = sceneManifest('/play');
+    const playStrategikon = sceneManifest('/play/strategikon/enchiridion/units');
+    const run = sceneManifest('/run');
+    const runStrategikon = sceneManifest('/run/strategikon/prosopography');
+
+    expect(play.instances.map((entry) => entry.definition.id)).toEqual(['gameplay']);
+    expect(playStrategikon).toMatchObject({
+      id: 'gameplay:/play/strategikon/enchiridion/units',
       host: 'gameplay-shell',
       background: 'battlefield',
       paintOwner: 'gameplay-hud',
     });
+    expect(playStrategikon.id).not.toBe(play.id);
+    expect(run.instances.map((entry) => entry.definition.id)).toEqual(['run']);
     expect(sceneManifest('/run/strategikon/lipsanotheca').instances.map((entry) => entry.definition.id)).toEqual([
       'run',
       'run/strategikon',
     ]);
+    expect(runStrategikon.id).not.toBe(run.id);
     expect(deepestSharedSceneRegion(
-      sceneManifest('/run'),
-      sceneManifest('/run/strategikon/prosopography'),
+      run,
+      runStrategikon,
     )).toBe('gameplay-shell');
+    expect(isEmptySlotOrigin(
+      play,
+      playStrategikon,
+    )).toBe(true);
+    expect(isEmptySlotDestination(
+      playStrategikon,
+      play,
+    )).toBe(true);
+    expect(isEmptySlotOrigin(
+      run,
+      runStrategikon,
+    )).toBe(true);
+    expect(isEmptySlotDestination(
+      runStrategikon,
+      run,
+    )).toBe(true);
     expect(sceneManifest('/enchiridion/abilities').instances.map((entry) => entry.definition.id)).toEqual([
       'main-menu',
       'enchiridion',

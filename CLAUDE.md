@@ -132,6 +132,20 @@ and don't tell the user screenshots are impossible. Use the helper below.
    top/bottom coordinate, clear the horizontal divider, and use the same tokenized
    gaps at both sides of the persistent divider and the viewport edge.
 
+   Shell-replacement workspace changes additionally verify the body and its
+   primary visible frame or scroll rail against the live Controls boundary:
+   ```
+   npm run verify:workspace -- '<live-strategikon-url>' --size 1440x900 --dock '.strategikon-content > .enchiridion-workspace'
+   npm run verify:workspace -- '<live-run-army-url>' --size 1440x900 --dock '.run-army-ledger-grid'
+   npm run verify:workspace -- '<live-events-url>' --size 1440x900 --align '.le-events-done, .le-cond-remove, .le-rule-remove'
+   ```
+   The default dock target is the shared `[data-shell-workspace-body]`; pass the
+   visible primary frame/scroll owner when the workspace contains one. Pass the
+   visible right-aligned inner controls for an inset content lane; the gate
+   compares their border boxes with the shell-computed content line rather than
+   decorative atom overhang. A source check that merely finds `ShellWorkspace`
+   does not satisfy this geometry gate.
+
 This works on ANY live route by selector — no per-target fixture, so there's no "new
 screen ⇒ flail" cliff. `frontend/scripts/shot.mjs` is the implementation.
 

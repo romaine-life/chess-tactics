@@ -21,17 +21,77 @@ export function ChromeSurfaceFill({
 export function ShellWorkspace({
   className = '',
   contentClassName = '',
+  bodyClassName = '',
+  edgeAttached = false,
+  rail = null,
   children,
   ...props
 }: HTMLAttributes<HTMLElement> & {
   contentClassName?: string;
+  bodyClassName?: string;
+  edgeAttached?: boolean;
+  rail?: ReactNode;
 }): ReactElement {
   return (
     <section {...props} className={`shell-workspace ${className}`.trim()}>
       <ChromeSurfaceFill role="outer" className="shell-workspace-fill" />
       <div className={`shell-workspace-content ${contentClassName}`.trim()}>
-        {children}
+        {rail}
+        <div
+          data-shell-workspace-body=""
+          className="shell-workspace-body"
+        >
+          <div
+            data-shell-workspace-content=""
+            data-shell-workspace-content-edge={edgeAttached ? '' : undefined}
+            className={`shell-workspace-body-content ${bodyClassName}`.trim()}
+          >
+            {children}
+          </div>
+        </div>
       </div>
+    </section>
+  );
+}
+
+/**
+ * One retained viewport and its optional replacement workspace. Callers choose
+ * only the content and whether the replacement is open; this object owns the
+ * hidden/inert/accessible state of the retained primary surface.
+ */
+export function ShellViewportSwap({
+  className = '',
+  primaryClassName = '',
+  primary,
+  workspaceOpen,
+  persistent = null,
+  children,
+  ...props
+}: HTMLAttributes<HTMLElement> & {
+  primaryClassName?: string;
+  primary: ReactNode;
+  workspaceOpen?: boolean;
+  persistent?: ReactNode;
+}): ReactElement {
+  const covered = workspaceOpen ?? Boolean(children);
+  return (
+    <section
+      {...props}
+      data-shell-viewport-swap=""
+      data-shell-workspace-open={covered ? '' : undefined}
+      className={`shell-viewport-swap ${className}`.trim()}
+    >
+      <div
+        data-shell-viewport-primary=""
+        data-shell-workspace-covered={covered ? '' : undefined}
+        className={`shell-viewport-primary ${primaryClassName}`.trim()}
+        inert={covered ? true : undefined}
+        aria-hidden={covered ? true : undefined}
+      >
+        {primary}
+      </div>
+      {persistent}
+      {children}
     </section>
   );
 }
@@ -94,6 +154,43 @@ export function OuterChromeHeader({
       {actions ? <div className="outer-chrome-header-title-actions">{actions}</div> : null}
       {children}
     </section>
+  );
+}
+
+/**
+ * The one application-shell Controls rail. The title, outer role, placement
+ * class, and shell-divider seam marker are invariants supplied here rather than
+ * facts each workflow must redeclare.
+ */
+export function ShellControlsPanel({
+  className = '',
+  titleActions,
+  titleClassName = '',
+  titleContent = null,
+  children,
+  ...props
+}: ComponentPropsWithoutRef<'aside'> & {
+  titleActions?: ReactNode;
+  titleClassName?: string;
+  titleContent?: ReactNode;
+}): ReactElement {
+  return (
+    <OuterChromeBox
+      {...props}
+      chromeConsumer="shell-controls"
+      titled
+      data-shell-controls-panel=""
+      className={`shell-controls-panel skirmish-hud ${className}`.trim()}
+    >
+      <OuterChromeHeader
+        title="Controls"
+        actions={titleActions}
+        className={titleClassName}
+      >
+        {titleContent}
+      </OuterChromeHeader>
+      {children}
+    </OuterChromeBox>
   );
 }
 

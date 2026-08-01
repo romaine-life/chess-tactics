@@ -5,7 +5,7 @@
 // of local frame paths and widths. Media bytes and candidate-source validation
 // belong to the live backend; this repository guard inspects code-owned geometry
 // and consumer wiring only.
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -22,14 +22,29 @@ const chromeBox = readFileSync(join(frontend, 'src/ui/shared/ChromeBox.tsx'), 'u
 const chromeDividedGrid = readFileSync(join(frontend, 'src/ui/shared/ChromeDividedGrid.tsx'), 'utf8');
 const skirmish = readFileSync(join(frontend, 'src/ui/Skirmish.tsx'), 'utf8');
 const skirmishHud = readFileSync(join(frontend, 'src/ui/SkirmishHud.tsx'), 'utf8');
+const strategikon = readFileSync(join(frontend, 'src/ui/Strategikon.tsx'), 'utf8');
 const runScreen = readFileSync(join(frontend, 'src/ui/RunScreen.tsx'), 'utf8');
 const runArmyWorkspace = readFileSync(join(frontend, 'src/ui/RunArmyWorkspace.tsx'), 'utf8');
+const runRelics = readFileSync(join(frontend, 'src/ui/RunRelics.tsx'), 'utf8');
 const runWorkspace = readFileSync(join(frontend, 'src/ui/RunWorkspace.tsx'), 'utf8');
 const portraitEditor = readFileSync(join(frontend, 'src/ui/PortraitEditor.tsx'), 'utf8');
 const installedChromeCss = readFileSync(join(frontend, 'src/ui/useInstalledChromeCss.ts'), 'utf8');
 const victoryConditionsEditor = readFileSync(join(frontend, 'src/ui/VictoryConditionsEditor.tsx'), 'utf8');
 const confirmDialog = readFileSync(join(frontend, 'src/ui/shared/ConfirmDialog.tsx'), 'utf8');
 const failures = [];
+
+function sourceFilesUnder(directory) {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const absolute = join(directory, entry.name);
+    if (entry.isDirectory()) return sourceFilesUnder(absolute);
+    return entry.isFile() && entry.name.endsWith('.tsx') ? [absolute] : [];
+  });
+}
+
+const shellOwnerPath = join(frontend, 'src/ui/shared/ChromeBox.tsx');
+const shellCallerSources = sourceFilesUnder(join(frontend, 'src/ui'))
+  .filter((path) => path !== shellOwnerPath)
+  .map((path) => ({ path, source: readFileSync(path, 'utf8') }));
 
 function blockFor(selector) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -212,15 +227,15 @@ if (!/margin-inline\s*:/.test(hudScrollBlock)
   || !/padding-right\s*:\s*calc\(18px \+ var\(--le-inner-atom-right-overhang/.test(hudScrollContentBlock)) {
   failures.push('the Level Editor scrollport must expand a two-sided atom clip apron without moving its rail-aligned content');
 }
-for (const [selector, rightReserve] of [['.le-md-rules', '4px'], ['.le-md-detail', '6px']]) {
+for (const selector of ['.le-md-rules', '.le-md-detail']) {
   const block = blockFor(selector);
   if (!/margin-inline\s*:/.test(block)
     || !block.includes('--le-inner-atom-left-overhang')
     || !block.includes('--le-inner-atom-right-overhang')
     || !/overflow-x\s*:\s*hidden/.test(block)
     || !/padding-left\s*:\s*var\(--le-inner-atom-left-overhang/.test(block)
-    || !block.includes(`padding-right: calc(${rightReserve} + var(--le-inner-atom-right-overhang, 0px))`)) {
-    failures.push(`${selector} must expose a two-sided atom clip apron while preserving its ${rightReserve} right reserve`);
+    || !block.includes('padding-right: var(--le-inner-atom-right-overhang, 0px)')) {
+    failures.push(`${selector} must expose a compensating two-sided atom clip apron without moving the ADR-0289 content line`);
   }
 }
 if (/--le-inner-atom-(?:left|right)-footprint|--le-visible-content-(?:left|right)-inset/.test(`${css}\n${chromeRuntime}`)) {
@@ -245,7 +260,7 @@ if (!/gap\s*:\s*calc\(8px \+ var\(--le-inner-atom-right-overhang, 0px\)\)/.test(
   failures.push('active-brush thumbnail must keep local atom collision clearance and clip previews inside a nested viewport');
 }
 if (!/className="le-layer-picker-row"[\s\S]*?aria-label="Previous editor layer"[\s\S]*?<HouseSelect[\s\S]*?aria-label="Next editor layer"/.test(levelEditorChromeConsumers)
-  || !/<OuterChromeHeader title="Controls">/.test(levelEditorChromeConsumers)) {
+  || !/<ShellControlsPanel[\s\S]*?titleContent=/.test(levelEditorChromeConsumers)) {
   failures.push('level editor Controls header must expose registered previous/dropdown/next layer navigation');
 }
 
@@ -540,8 +555,7 @@ for (const [label, text] of [
 for (const selector of [
   '[data-chrome-unit="outer-panel"]',
   '.level-editor-screen .le-outer-panel',
-  '[data-chrome-consumer="level-editor-controls"]',
-  '[data-chrome-consumer="skirmish-hud"]',
+  '[data-shell-controls-panel]',
   '.le-icon-btn',
   '.le-action-toolbar .le-seg-btn',
   '.le-seg-icons .le-seg-btn',
@@ -691,6 +705,9 @@ if (!/function\s+chromeFillCss/.test(chromeRuntime)
   || !/\$\{chromeFillCss\(inner\)\}/.test(chromeRuntime)) {
   failures.push('Chrome Lab must apply role fill as explicit CSS background declarations on outer/inner roles');
 }
+if (!/\$\{familySurface\} \[data-shell-controls-panel\] \{[\s\S]*?--app-shell-divider-fill-overlap:\s*1px;[\s\S]*?--le-outer-fill-box-top:\s*calc\(-1 \* var\(--app-shell-divider-fill-overlap\)\)\s*!important;/.test(chromeRuntime)) {
+  failures.push('top-rail-less Controls fills must overlap the shared title divider without exposing a raster seam');
+}
 if (!/fillMode:\s*fillModeFrom/.test(chromeLab)
   || !/Fill is role-owned/.test(chromeLab)
   || !/chrome-lab-fill-preview/.test(chromeLab + css)
@@ -781,7 +798,7 @@ if (!shellWorkspace) {
     || !/overflow\s*:\s*hidden\s*;/.test(shellWorkspace)) {
     failures.push('shared shell workspaces must fill and clip to their positioned center-workspace parent');
   }
-  if (shellWorkspaceRules.some((block) => /position\s*:\s*fixed|\b(?:100)?v[wh]\b|--app-header-h|--skirmish-rail-w|--skirmish-grid-gap|--le-outer-atom-outset/.test(block))) {
+  if (shellWorkspaceRules.some((block) => /position\s*:\s*fixed|\b(?:100)?v[wh]\b|--app-header-h|--skirmish-rail-w|--skirmish-board-controls-gutter|--le-outer-atom-outset/.test(block))) {
     failures.push('shared shell workspaces must not duplicate viewport, rail, or outer-atom geometry');
   }
   if (shellWorkspaceRules.some((block) => /border(?:-image)?\s*:/.test(block))) {
@@ -798,12 +815,33 @@ if (!shellWorkspaceContent
   || !/min-height\s*:\s*0\s*;/.test(shellWorkspaceContent)
   || !/min-width\s*:\s*0\s*;/.test(shellWorkspaceContent)
   || !/overflow\s*:\s*hidden\s*;/.test(shellWorkspaceContent)
-  || !/padding\s*:\s*var\(--shell-workspace-content-padding,\s*0px\)\s*;/.test(shellWorkspaceContent)) {
-  failures.push('shared shell workspaces must own one bounded, content-padded composition layer');
+  || /\bpadding(?:-[\w-]+)?\s*:/.test(shellWorkspaceContent)) {
+  failures.push('shared shell workspaces must own one bounded layout layer without consumer perimeter padding');
+}
+const shellWorkspaceBody = blockFor('.shell-workspace-body');
+if (!shellWorkspaceBody
+  || !/display\s*:\s*flex\s*;/.test(shellWorkspaceBody)
+  || !/min-height\s*:\s*0\s*;/.test(shellWorkspaceBody)
+  || !/min-width\s*:\s*0\s*;/.test(shellWorkspaceBody)
+  || !/padding-block\s*:\s*var\(--shell-workspace-body-inset-block,\s*0px\)\s*;/.test(shellWorkspaceBody)
+  || !/padding-inline-start\s*:\s*var\(--shell-workspace-body-inset-start,\s*0px\)\s*;/.test(shellWorkspaceBody)
+  || !/padding-inline-end\s*:\s*0\s*;/.test(shellWorkspaceBody)
+  || css.includes('--shell-workspace-body-inset-end')
+  || css.includes('--shell-workspace-content-padding')) {
+  failures.push('ShellWorkspace internal body must own shared block/start insets and stay attached to Controls');
 }
 const shellWorkspaceFill = blockFor('.shell-workspace-fill');
 if (!shellWorkspaceFill || !/inset\s*:\s*0\s*;/.test(shellWorkspaceFill)) {
   failures.push('shared shell workspaces must paint the outer-role fill edge-to-edge');
+}
+const playShellGrid = blockFor('.skirmish-screen');
+const battleFieldGutter = blockFor('.skirmish-screen:not(.level-editor-screen) .skirmish-war-room > .skirmish-field');
+if (!playShellGrid
+  || !/column-gap\s*:\s*0\s*;/.test(playShellGrid)
+  || !battleFieldGutter
+  || !/margin-inline-end\s*:\s*var\(--skirmish-board-controls-gutter\)\s*;/.test(battleFieldGutter)
+  || css.includes('.skirmish-screen.is-run-self-inspection-open')) {
+  failures.push('Play shell workspaces must always meet Controls while only the scenic battlefield owns the internal gutter');
 }
 const levelEditorShellGrid = blockFor('.skirmish-screen.level-editor-screen');
 if (!levelEditorShellGrid
@@ -855,11 +893,8 @@ const rawLevelEditorControlAside = [...levelEditor.matchAll(/<aside\b[^>]*>/g)]
 if (rawLevelEditorControlAside) {
   failures.push('live Level Editor must not restore a raw parallel skirmish-hud controls aside; render LevelEditorControlsPanel');
 }
-if (!/className=\{`skirmish-board-frame\$\{eventsOpen \|\| levelArtworkWorkspace \? ' is-workspace-covered' : ''\}`\}[\s\S]*?inert=\{eventsOpen \|\| levelArtworkWorkspace \? true : undefined\}[\s\S]*?aria-hidden=\{eventsOpen \|\| levelArtworkWorkspace \? true : undefined\}/.test(levelEditor)) {
-  failures.push('open shell workspace must keep the board mounted but visually and interactively covered');
-}
-if (/eventsOpen \|\| layer === 'level-artwork' \? ' is-workspace-covered'/.test(levelEditor)) {
-  failures.push('the base Level Artwork controls page must leave the board visible; only an explicit artwork workspace covers it');
+if (!/<ShellViewportSwap[\s\S]*?className="level-editor-viewport-swap"[\s\S]*?primaryClassName="skirmish-board-frame"[\s\S]*?workspaceOpen=\{eventsOpen \|\| Boolean\(levelArtworkWorkspace\)\}/.test(levelEditor)) {
+  failures.push('Level Editor board and replacement workspaces must use the shared viewport-swap owner');
 }
 if (!/eventsEditor:\s*routeState\.eventsEditor/.test(levelEditor)
   || !/levelEditorEventsEntry:\s*true/.test(levelEditor)
@@ -867,9 +902,9 @@ if (!/eventsEditor:\s*routeState\.eventsEditor/.test(levelEditor)
   || /window\.history\.state\?\.levelEditorRules/.test(levelEditor)) {
   failures.push('Events visibility must be URL-addressed; history state may mark only app-created return provenance');
 }
-const coveredBoard = blockFor('.level-editor-screen .skirmish-board-frame.is-workspace-covered');
-if (!coveredBoard || !/visibility\s*:\s*hidden\s*;/.test(coveredBoard)) {
-  failures.push('open shell workspace must visually suppress the covered board');
+const coveredPrimary = blockFor('.shell-viewport-primary[data-shell-workspace-covered]');
+if (!coveredPrimary || !/visibility\s*:\s*hidden\s*;/.test(coveredPrimary)) {
+  failures.push('ShellViewportSwap must visually suppress every covered primary surface');
 }
 if (/LevelEditorEventsOverlay|le-events-overlay|chromeConsumer="events-overlay"/.test(levelEditor)) {
   failures.push('live Level Editor must not restore the retired fixed Events overlay path');
@@ -882,24 +917,77 @@ const levelEditorControlsPanel = levelEditorControlsPanelStart >= 0 && levelEdit
   : '';
 if (!levelEditorControlsPanel) {
   failures.push('missing shared LevelEditorControlsPanel implementation');
-} else if (!/<OuterChromeBox[\s\S]*?chromeConsumer="level-editor-controls"[\s\S]*?titled[\s\S]*?className=\{`skirmish-hud \$\{className\}`\.trim\(\)\}/.test(levelEditorControlsPanel)
-  || !/<OuterChromeHeader title="Controls">/.test(levelEditorControlsPanel)) {
-  failures.push('LevelEditorControlsPanel must compose the shared titled OuterChromeBox and Controls header');
+} else if (!/<ShellControlsPanel[\s\S]*?className=\{className\}[\s\S]*?titleContent=/.test(levelEditorControlsPanel)
+  || /<OuterChromeBox\b|<OuterChromeHeader\b|chromeConsumer=/.test(levelEditorControlsPanel)) {
+  failures.push('LevelEditorControlsPanel must supply content to the one ShellControlsPanel owner');
 }
 
 const sharedShellWorkspace = exportedFunctionSource(chromeBox, 'ShellWorkspace');
 if (!sharedShellWorkspace
   || !/<section \{\.\.\.props\} className=\{`shell-workspace \$\{className\}`\.trim\(\)\}>/.test(sharedShellWorkspace)
   || !/<ChromeSurfaceFill role="outer" className="shell-workspace-fill"\s*\/>/.test(sharedShellWorkspace)
-  || !/className=\{`shell-workspace-content \$\{contentClassName\}`\.trim\(\)\}/.test(sharedShellWorkspace)) {
+  || !/className=\{`shell-workspace-content \$\{contentClassName\}`\.trim\(\)\}/.test(sharedShellWorkspace)
+  || !/data-shell-workspace-body=""/.test(sharedShellWorkspace)
+  || !/className="shell-workspace-body"/.test(sharedShellWorkspace)
+  || !/data-shell-workspace-content=""/.test(sharedShellWorkspace)
+  || !/data-shell-workspace-content-edge=\{edgeAttached \? '' : undefined\}/.test(sharedShellWorkspace)
+  || !/className=\{`shell-workspace-body-content \$\{bodyClassName\}`\.trim\(\)\}/.test(sharedShellWorkspace)) {
   failures.push('ShellWorkspace must own the reusable fill-only center-workspace composition');
 } else if (/<OuterChromeBox\b|role="dialog"|events-overlay/.test(sharedShellWorkspace)) {
   failures.push('ShellWorkspace must remain workflow-neutral and free of outer-panel/dialog semantics');
+}
+if (/export function ShellWorkspaceBody/.test(chromeBox)) {
+  failures.push('ShellWorkspace body must remain an internal invariant, not an exported caller protocol');
+}
+const sharedShellViewportSwap = exportedFunctionSource(chromeBox, 'ShellViewportSwap');
+if (!sharedShellViewportSwap
+  || !/data-shell-viewport-swap=""/.test(sharedShellViewportSwap)
+  || !/data-shell-viewport-primary=""/.test(sharedShellViewportSwap)
+  || !/data-shell-workspace-covered=\{covered \? '' : undefined\}/.test(sharedShellViewportSwap)
+  || !/inert=\{covered \? true : undefined\}/.test(sharedShellViewportSwap)
+  || !/aria-hidden=\{covered \? true : undefined\}/.test(sharedShellViewportSwap)) {
+  failures.push('ShellViewportSwap must own retained-primary visibility and accessibility state');
+}
+const sharedShellControlsPanel = exportedFunctionSource(chromeBox, 'ShellControlsPanel');
+if (!sharedShellControlsPanel
+  || !/chromeConsumer="shell-controls"/.test(sharedShellControlsPanel)
+  || !/data-shell-controls-panel=""/.test(sharedShellControlsPanel)
+  || !/className=\{`shell-controls-panel skirmish-hud \$\{className\}`\.trim\(\)\}/.test(sharedShellControlsPanel)
+  || !/<OuterChromeHeader[\s\S]*?title="Controls"/.test(sharedShellControlsPanel)) {
+  failures.push('ShellControlsPanel must own the fixed Controls title, chrome role, placement, and seam marker');
+}
+for (const { path, source } of shellCallerSources) {
+  const relativePath = path.slice(frontend.length + 1).replaceAll('\\', '/');
+  if (/ShellWorkspaceBody/.test(source)) {
+    failures.push(`${relativePath} must not construct or name the internal workspace body`);
+  }
+  if (/chromeConsumer="(?:level-editor-controls|skirmish-hud|shell-controls)"/.test(source)
+    || /data-shell-controls-panel=/.test(source)
+    || /<OuterChromeHeader\b[^>]*title="Controls"/.test(source)) {
+    failures.push(`${relativePath} must not reconstruct or impersonate the shared Controls panel`);
+  }
+  if (/is-workspace-covered|data-shell-workspace-covered=/.test(source)) {
+    failures.push(`${relativePath} must not reconstruct or impersonate covered-viewport state`);
+  }
+  if (/data-shell-workspace-(?:body|content)(?:=|-edge=)/.test(source)) {
+    failures.push(`${relativePath} must not reconstruct the ShellWorkspace body or content lane`);
+  }
+}
+if (!/<ShellViewportSwap[\s\S]*?className="run-phase-workspace"[\s\S]*?primaryClassName="run-phase-primary"[\s\S]*?primary=\{children\}/.test(runScreen)
+  || !/<ShellViewportSwap[\s\S]*?className="skirmish-war-room"[\s\S]*?primaryClassName="skirmish-field"[\s\S]*?workspaceOpen=\{strategikonOpen \|\| Boolean\(runWorkspace\)\}/.test(skirmish)) {
+  failures.push('Run and Battle replacement modes must use the shared viewport-swap owner');
+}
+if (!/<ShellWorkspace[\s\S]*?className="strategikon-workspace"[\s\S]*?contentClassName="strategikon-workspace-layout"/.test(strategikon)
+  || !/bodyClassName="strategikon-content"/.test(strategikon)
+  || !/bodyClassName="strategikon-content"[\s\S]*?edgeAttached/.test(strategikon)
+  || /<ChromeSurfaceFill\b|<OuterChromeBox\b/.test(strategikon)) {
+  failures.push('Strategikon must compose the shared ShellWorkspace and Controls-attached body instead of a bespoke surface');
 }
 
 const levelEditorEventsWorkspace = exportedFunctionSource(levelEditorChromeConsumers, 'LevelEditorEventsWorkspace');
 if (!levelEditorEventsWorkspace
   || !/<ShellWorkspace[\s\S]*?className="le-events-workspace"/.test(levelEditorEventsWorkspace)
+  || !/bodyClassName="le-events-workspace-content"/.test(levelEditorEventsWorkspace)
   || !/data-testid="level-events-workspace"/.test(levelEditorEventsWorkspace)
   || !/aria-labelledby="level-events-workspace-title"/.test(levelEditorEventsWorkspace)
   || !/initialFocusRef\.current\?\.focus\(\)/.test(levelEditorEventsWorkspace)) {
@@ -907,10 +995,13 @@ if (!levelEditorEventsWorkspace
 } else if (/<OuterChromeBox\b|role="dialog"|events-overlay/.test(levelEditorEventsWorkspace)) {
   failures.push('Events workspace must not restore outer-panel or dialog semantics');
 }
-if (!/<OuterChromeBox[\s\S]*?chromeConsumer="skirmish-hud"[\s\S]*?titled[\s\S]*?className=\{`skirmish-hud \$\{className\}`\.trim\(\)\}/.test(skirmishHud)
-  || !/<OuterChromeHeader[\s\S]*?title="Controls"[\s\S]*?actions=\{strategikonToggle\}[\s\S]*?>/.test(skirmishHud)
+if (!/<ShellWorkspace[\s\S]*?className="le-artwork-workspace"[\s\S]*?bodyClassName="le-artwork-workspace-content"/.test(levelEditor)) {
+  failures.push('Level Artwork must provide content to the body-owning ShellWorkspace');
+}
+if (!/<ShellControlsPanel[\s\S]*?className=\{className\}[\s\S]*?titleActions=\{strategikonToggle\}[\s\S]*?titleClassName="skirmish-hud-titlebar"/.test(skirmishHud)
+  || /<OuterChromeBox\b|<OuterChromeHeader\b|chromeConsumer=/.test(skirmishHud)
   || /<h2>Controls<\/h2>/.test(skirmishHud)) {
-  failures.push('live Skirmish HUD must own the titled OuterChromeBox and Controls header with the Strategikon title action');
+  failures.push('live Skirmish HUD must supply content and actions to the one ShellControlsPanel owner');
 }
 if (!/export function SkirmishShell[\s\S]*?<SkirmishHud \{\.\.\.hudProps\} controlsContent=\{controlsContent\} \/>/.test(skirmish)
   || !/export function Skirmish\b[\s\S]*?return \(\s*<SkirmishShell/.test(skirmish)) {
@@ -923,10 +1014,13 @@ if (!/<SkirmishShell[\s\S]*?controlsContent=\{shellRun\s*\?\s*<RunMetaControls r
 }
 if (!/export function RunWorkspace/.test(runWorkspace)
   || !/<main className=\{`run-workspace \$\{className\}`\.trim\(\)\}>/.test(runWorkspace)
-  || !/<ShellWorkspace[\s\S]*?className="run-shell-workspace"[\s\S]*?contentClassName=\{`run-shell-workspace-content \$\{contentClassName\}`\.trim\(\)\}/.test(runWorkspace)) {
-  failures.push('RunWorkspace must be the shared full-playfield composition over ShellWorkspace');
+  || !/<ShellWorkspace[\s\S]*?className="run-shell-workspace"[\s\S]*?bodyClassName=\{`run-shell-workspace-content \$\{contentClassName\}`\.trim\(\)\}[\s\S]*?edgeAttached=\{edgeAttached\}/.test(runWorkspace)) {
+  failures.push('RunWorkspace must supply content to the body-owning ShellWorkspace');
 }
-const playerRunSources = `${runScreen}\n${runArmyWorkspace}`;
+if (!/<RunWorkspace[\s\S]*?contentClassName=\{contentClassName\}[\s\S]*?edgeAttached[\s\S]*?data-testid=\{dataTestId\}/.test(runArmyWorkspace)) {
+  failures.push('framed Run Army workspaces must use the shared edge-attached content variant');
+}
+const playerRunSources = `${runScreen}\n${runArmyWorkspace}\n${runRelics}`;
 for (const testId of [
   'run-draft-workspace',
   'run-deployment-workspace',
@@ -935,6 +1029,7 @@ for (const testId of [
   'run-army-ledger-workspace',
   'run-army-profile-workspace',
   'run-sell-workspace',
+  'run-relics-workspace',
   'run-loading-workspace',
   'run-empty-workspace',
 ]) {
@@ -954,6 +1049,9 @@ if (!runWorkspaceCss
   || /\b(?:padding|gap)\s*:/.test(runWorkspaceCss)) {
   failures.push('RunWorkspace must position the shared fill without an exposed parent gutter');
 }
+if (blockFor('.skirmish-screen.run-screen')) {
+  failures.push('Run must inherit the shared zero-gap shell; a route-specific shell-gap override is forbidden');
+}
 if (!blockFor('.run-shell-workspace-content')
   || !blockFor('.run-screen.has-relics .run-shell-workspace-content')
   || blockFor('.run-workspace--full')
@@ -972,9 +1070,10 @@ const rawRelicSpacing = runRelicRules.filter((block) => /(?:margin|padding|(?:ro
 if (rawRelicSpacing.length > 0) {
   failures.push('Run relic overlay spacing must use ADR-0031 tokens at every responsive width');
 }
-if (!/\{runSelfInspectionOpen \? null : <RunRelicStrip relicIds=\{relicIds\} \/>\}/.test(skirmish)
-  || !/runSelfInspectionOpen=\{Boolean\(inspectionWorkspace\)\}/.test(runScreen)) {
-  failures.push('Run self-inspection must explicitly suppress the covered relic strip and expose Relics as its replacement');
+if (!/\{shellWorkspaceCoversRelics \? null : <RunRelicStrip relicIds=\{relicIds\} \/>\}/.test(skirmish)
+  || !/shellWorkspaceCoversRelics=\{Boolean\(inspectionWorkspace\)\}/.test(runScreen)
+  || !/shellWorkspaceCoversRelics=\{Boolean\(runWorkspace\) \|\| strategikonOpen\}/.test(skirmish)) {
+  failures.push('Shell-covering workspaces must suppress the covered relic strip without changing shell geometry');
 }
 if (!/import\s+\{\s*SkirmishHud\s*\}/.test(chromeUnitAudit)
   || !/preview\.kind === 'skirmish-hud'/.test(chromeUnitAudit)

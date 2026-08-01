@@ -182,7 +182,7 @@ import {
   LevelEditorEventsWorkspace,
   type LevelEditorToolKey,
 } from './LevelEditorChromeConsumers';
-import { OuterChromeBox, OuterChromeHeader, ShellWorkspace } from './shared/ChromeBox';
+import { ShellControlsPanel, ShellViewportSwap, ShellWorkspace } from './shared/ChromeBox';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import {
   directionCompassCells,
@@ -8536,11 +8536,12 @@ export function LevelEditor(): ReactElement {
               </div>
             </section>
           ) : null}
-          <div
-            className={`skirmish-board-frame${eventsOpen || levelArtworkWorkspace ? ' is-workspace-covered' : ''}`}
-            inert={eventsOpen || levelArtworkWorkspace ? true : undefined}
-            aria-hidden={eventsOpen || levelArtworkWorkspace ? true : undefined}
-          >
+          <ShellViewportSwap
+            className="level-editor-viewport-swap"
+            primaryClassName="skirmish-board-frame"
+            workspaceOpen={eventsOpen || Boolean(levelArtworkWorkspace)}
+            primary={(
+              <>
             {activeFenceArtwork ? (
               <div className="le-fence-review-banner" data-testid="fence-candidate-editor-review">
                 <strong>Fence artwork drawing · {activeFenceArtwork.label}</strong>
@@ -8686,11 +8687,13 @@ export function LevelEditor(): ReactElement {
                 ) : null}
               </div>
             </ViewPane>
-          </div>
+              </>
+            )}
+          >
           {layer === 'level-artwork' && levelArtworkWorkspace && !eventsOpen ? (
             <ShellWorkspace
               className="le-artwork-workspace"
-              contentClassName="le-artwork-workspace-content"
+              bodyClassName="le-artwork-workspace-content"
               data-testid="level-artwork-workspace"
               aria-labelledby="level-artwork-workspace-title"
               data-artwork-workspace={levelArtworkWorkspace}
@@ -8888,14 +8891,19 @@ export function LevelEditor(): ReactElement {
               )}
             />
           ) : null}
+          </ShellViewportSwap>
         </div>
 
       {/* The real editor and Chrome Audit consume this one canonical outer-panel hierarchy.
           The editor supplies live state and content; the shared component owns chrome,
           title/actions structure, divider, and the sole scroll boundary. */}
       {editorLoadError ? (
-      <OuterChromeBox chromeConsumer="level-editor-controls" titled className="skirmish-hud" aria-label="Editor document access" inert={!editorReady || saving ? true : undefined}>
-        <OuterChromeHeader title="Controls" className="le-status-card">
+      <ShellControlsPanel
+        aria-label="Editor document access"
+        inert={!editorReady || saving ? true : undefined}
+        titleClassName="le-status-card"
+        titleContent={(
+          <>
           <h2>Document</h2>
           <div className="le-status-current is-blocked">
             <strong>{editorLoadError.title}</strong>
@@ -8907,8 +8915,9 @@ export function LevelEditor(): ReactElement {
           {editorLoadError.retry ? (
             <button type="button" data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} style={{ width: '100%' }} onClick={retryCloudDocument}>Retry</button>
           ) : null}
-        </OuterChromeHeader>
-      </OuterChromeBox>
+          </>
+        )}
+      />
       ) : (
       <LevelEditorControlsPanel
         layer={layer}

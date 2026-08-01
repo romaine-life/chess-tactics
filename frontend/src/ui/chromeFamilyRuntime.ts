@@ -872,7 +872,7 @@ function dividerCss(role: ChromeRole, host: RoleTune, hostFrame: FrameRender, di
   const junctionlessSelector = `${selector}[data-chrome-divider-junctions="none"]`;
   const verticalJunctionlessSelector = `${verticalSelector}[data-chrome-divider-junctions="none"]`;
   const viewportEdgeControlsSelector = role === 'outer'
-    ? `:root:has(.app-titlebar.chrome-rails-offscreen) ${CHROME_FAMILY_SURFACE_SELECTOR} .le-outer-panel:is([data-chrome-consumer="level-editor-controls"], [data-chrome-consumer="skirmish-hud"]) [data-chrome-divider-role="outer"]:not([data-chrome-divider-orientation="vertical"]):not([data-chrome-divider-junctions="none"])`
+    ? `:root:has(.app-titlebar.chrome-rails-offscreen) ${CHROME_FAMILY_SURFACE_SELECTOR} [data-shell-controls-panel] [data-chrome-divider-role="outer"]:not([data-chrome-divider-orientation="vertical"]):not([data-chrome-divider-junctions="none"])`
     : '';
   const railWidth = divider.railHeight;
   const railTop = Math.round((divider.height - railWidth) / 2);
@@ -1083,7 +1083,7 @@ export function frameCss(
   const outerAtomOverlayOutset = outerFrame.atomOverlay?.outset ?? 0;
   const dividerOverlayOutset = titlebarJoint?.outset ?? 0;
   const controlSeamAtomCss = outerFrame.atomOverlay && titlebarJoint ? `
-${familySurface} .le-outer-panel:is([data-chrome-consumer="level-editor-controls"], [data-chrome-consumer="skirmish-hud"])::after {
+${familySurface} [data-shell-controls-panel]::after {
   background-image:
     url("${outerFrame.atomOverlay.bl}"), url("${outerFrame.atomOverlay.br}");
   background-position:
@@ -1236,7 +1236,16 @@ ${chromeFillCss(outer)}
 ${familySurface} [data-chrome-fill-role="inner"] {
 ${chromeFillCss(inner)}
 }
-${familySurface} .le-outer-panel:is([data-chrome-consumer="level-editor-controls"], [data-chrome-consumer="skirmish-hud"])::before {
+/* ADR-0100 replaces these panels' top frame rail with the app-shell divider.
+   The role's ordinary top fill inset exists to clear that retired rail. Extend
+   the branched fill one pixel beneath the divider as a paint apron: the divider
+   and grid row can meet on a fractional device row, and a merely zeroed inset
+   otherwise exposes one raster row of the scene between them. */
+${familySurface} [data-shell-controls-panel] {
+  --app-shell-divider-fill-overlap: 1px;
+  --le-outer-fill-box-top: calc(-1 * var(--app-shell-divider-fill-overlap)) !important;
+}
+${familySurface} [data-shell-controls-panel]::before {
   border-width: 0 ${outerRailWidth}px ${outerRailWidth}px ${outerRailWidth}px !important;
   border-image-width: 0 ${outerRailWidth}px ${outerRailWidth}px ${outerRailWidth}px !important;
 }

@@ -116,8 +116,7 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     selectors: [
       '[data-chrome-unit="outer-panel"]',
       '.level-editor-screen .le-outer-panel',
-      '[data-chrome-consumer="level-editor-controls"]',
-      '[data-chrome-consumer="skirmish-hud"]',
+      '[data-shell-controls-panel]',
     ],
     usage: [
       'Level Editor control rail',
