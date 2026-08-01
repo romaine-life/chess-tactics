@@ -7,7 +7,7 @@ partially_supersedes:
   - ADR-0052
 ---
 
-# ADR-0298: Only the brand mark navigates home
+# ADR-0300: Only the brand mark navigates home
 
 ## Context and Problem Statement
 

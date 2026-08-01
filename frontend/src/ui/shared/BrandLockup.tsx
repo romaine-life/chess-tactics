@@ -7,7 +7,7 @@ import { installedUiMedia } from '../installedUiMedia';
 // the small line beneath it. Same mark, same structure, same spot everywhere; only
 // `screenName` changes. DOM order is mark-then-copy so it reads and renders top-down
 // without any reordering. This is the one source; do not hand-roll a per-screen brand
-// mark. Only the shield returns to the main menu (ADR-0298), as a BUTTON rather than a
+// mark. Only the shield returns to the main menu (ADR-0300), as a BUTTON rather than a
 // hyperlink (ADR-0052). The title, screen name, transition status, and remaining title-
 // bar space are orientation copy, not an oversized navigation surface.
 export function BrandLockup({

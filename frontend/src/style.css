@@ -17009,7 +17009,7 @@ button.tileset-relationship-cell {
 }
 
 /* The brand layout is inert and shrink-wrapped: only its shield button navigates
-   home, never the flexible grid track or remaining title-bar surface (ADR-0298). */
+   home, never the flexible grid track or remaining title-bar surface (ADR-0300). */
 .brand-lockup-layout {
   align-items: center;
   color: #eef8ff;

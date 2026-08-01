@@ -165,7 +165,7 @@ Any title-bar control change must verify the rendered lane on a real route with
 `npm run verify:titlebar -- <live-url> --size <width>x<height>` in addition to the
 static contract checks.
 
-Under [ADR-0298](adr/0298-only-the-brand-mark-navigates-home.md), only the visible
+Under [ADR-0300](adr/0300-only-the-brand-mark-navigates-home.md), only the visible
 Chess Tactics shield in the leading brand lockup is a main-menu `NavButton`. The
 title, screen name, route-transition status, and unused title-bar material are
 inert orientation chrome. The lockup layout cannot stretch the navigation target;
