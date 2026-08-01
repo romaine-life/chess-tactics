@@ -87,6 +87,7 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('data-testid="run-choice-new"');
     expect(playMenu).toContain('to={PLAY_RUN_NEW_SELECTOR_HREF}');
     expect(playMenu).toContain('data-testid="run-detail-new"');
+    expect(playMenu).toContain("sceneTransitionTargetAttributes('run-detail', 'contents')");
     expect(playMenu).toMatch(/choice === 'new'[\s\S]*?<AtaraxiaSelector/);
     expect(ataraxiaSelector).toContain('<HouseSelect');
     expect(ataraxiaSelector).toContain('disabled: locked');
