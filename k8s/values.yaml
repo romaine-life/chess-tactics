@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:1cce95019ef47c1d9badd26f9ac7304128fbfb6b9f34e0255aa29933d8c73764"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:31b751a28516a025c2883e5249364aab6db432c5d504913baf2f40891e8a5676"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Remove the card scene authoring instrument"
-  prNumber: "565"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/565"
-  commit: "cb8820f3"
+  prTitle: "Let the level editor fill its board viewport"
+  prNumber: "566"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/566"
+  commit: "314c030d"
 
 name: chess-tactics
 namespace: chess-tactics
