@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:daf32e92cd590ff57ce717aae6e0832a77833becd393898e7744003834e78e46"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:6a605da07f184ab1c8008e40b1ab618db2f51cdcd524d4aa1c6c5126c37bd153"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Add Run card icon fitting workflow"
-  prNumber: "617"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/617"
-  commit: "86f81cd4"
+  prTitle: "Full-screen Shop scene: selection and Loot Shop fixes"
+  prNumber: "615"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/615"
+  commit: "c9a10789"
 
 name: chess-tactics
 namespace: chess-tactics
