@@ -16,33 +16,25 @@ Use this closeout workflow for `D:\repos\chess-tactics` after code changes are c
 5. Commit with a concise message that reflects the user-facing change.
 6. Push the feature branch.
 7. Create a pull request against `main` using the repository's usual tool, normally `gh pr create` when available.
-8. **Confirm the PR is mergeable before watching anything.** A conflicting PR produces no CI at
-   all, so watching one is an infinite wait. Poll until the status resolves:
+8. Gate the PR with `node bin/pr-gate.mjs` from the repo root. It checks mergeability, then
+   waits out CI, and prints one verdict. **Do not hand-write a `gh pr view` / `gh pr checks`
+   polling loop — this tool exists so you never have to.**
 
-   ```
-   gh pr view --json mergeable,mergeStateStatus
-   ```
+   | Verdict | Exit | What to do |
+   | --- | --- | --- |
+   | `READY` | 0 | Proceed to merge. |
+   | `CONFLICT` | 2 | Branch conflicts with base. Resolve, push, re-run the gate. |
+   | `BEHIND` | 3 | Update from base, push, re-run the gate. |
+   | `NO_CHECKS` | 4 | Read the printed diagnosis; it says whether CI is unconfigured or configured-but-not-triggered. |
+   | `CI_FAILED` | 5 | Open the printed job link, fix, rerun local validation, push, re-run the gate. |
+   | `TIMEOUT` | 6 | Checks never finished; report the wait rather than merging. |
+   | `ERROR` | 1 | Read the message — usually no PR for the branch, or `gh` unavailable. |
 
-   GitHub computes this lazily, so the first read right after `gh pr create` is normally
-   `UNKNOWN`. Re-read every few seconds until it is not `UNKNOWN` — do not accept `UNKNOWN` as
-   a pass. Then:
-   - `CLEAN` / `UNSTABLE` / `BLOCKED` — proceed to the CI watch.
-   - `DIRTY` — the branch conflicts with `main`. Resolve the conflict, push, and repeat this
-     step. Do not arm a CI watch first; no workflow can run until the conflict is gone.
-   - `BEHIND` — update the branch from `main` and repeat this step.
-   Report a `DIRTY` or `BEHIND` result to the user as soon as it is known, before starting any
-   long wait.
-9. Watch CI until it reaches a terminal state.
-   - Bound the wait on checks *appearing*. If `gh pr checks` still reports no checks after about
-     90 seconds, stop watching and diagnose — re-read `mergeStateStatus` and confirm a workflow
-     actually triggers on `pull_request` for this branch. Zero reported checks is never a
-     terminal state and must never be waited on indefinitely.
-   - "No checks reported" does not mean CI is not configured. Verify against
-     `.github/workflows/` before making that claim.
-   - If CI fails, inspect the failing job, fix the issue, rerun validation, push another commit, and continue watching.
-   - Do not merge while CI is pending, skipped unexpectedly, or failing.
-10. Merge the PR after CI is green. Use the repository's normal merge method when discoverable; otherwise prefer squash merge for a clean project history. When using `gh pr merge`, do **not** pass `--delete-branch`: it also attempts local branch cleanup/checkouts and can fail when `main` is checked out in another worktree. Merge without that flag and do not manually delete branches as part of the normal flow; remote branch deletion is handled automatically by repository settings.
-11. Report the PR URL, merge result, final commit, and dev-server shutdown status.
+   Report `CONFLICT`, `BEHIND`, and `NO_CHECKS` to the user as soon as the gate returns them.
+   Each means the long wait is over before it started, not that it should be restarted blindly.
+   Use `--no-wait` for a one-shot status read while troubleshooting.
+9. Merge the PR after the gate returns `READY`. Use the repository's normal merge method when discoverable; otherwise prefer squash merge for a clean project history. When using `gh pr merge`, do **not** pass `--delete-branch`: it also attempts local branch cleanup/checkouts and can fail when `main` is checked out in another worktree. Merge without that flag and do not manually delete branches as part of the normal flow; remote branch deletion is handled automatically by repository settings.
+10. Report the PR URL, merge result, final commit, and dev-server shutdown status.
 
 ## Notes
 
