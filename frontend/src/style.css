@@ -19181,9 +19181,18 @@ button.tileset-relationship-cell {
   z-index: 0;
 }
 
+/* Never clip: a Loot Shop adds relic offers below the card row, and hiding
+   overflow would cut their Take relic buttons in half. The scene is painted
+   behind whatever the phase actually contains. */
 .run-shop-workspace-content:has(.run-shop-scene-host) {
-  overflow: hidden;
+  gap: var(--ds-inline-tight);
   position: relative;
+}
+
+/* Every section shares the scene, so none of them may claim intrinsic height
+   the workspace cannot give — otherwise a Loot Shop reintroduces a scrollbar. */
+.run-shop-workspace-content:has(.run-shop-scene-host) > section {
+  min-block-size: 0;
 }
 
 /* The heading and gold line read over the scene rather than above it. */

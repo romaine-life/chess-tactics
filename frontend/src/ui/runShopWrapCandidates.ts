@@ -309,13 +309,21 @@ export function runShopWrapRuntimeCandidate(
     const active = catalog.versions.find((version) => version.id === slot.activeVersionId);
     return active ? [[slot.slot, active.createdAt] as const] : [];
   }));
+  const screenKind = (version: AdminLiveMediaVersion): boolean => (
+    object(object(version.metadata)?.runtime)?.kind === 'screen'
+  );
   const pending = [...catalog.versions]
     .filter((version) => (
       version.slot?.startsWith(RUN_SHOP_WRAP_RUNTIME_PREFIX)
       && version.status === 'candidate'
       && version.createdAt > (activeCreatedAt.get(version.slot) ?? '')
     ))
-    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+    // A full-screen scene supersedes a card-row wrap, so offer it first;
+    // otherwise the newest candidate wins.
+    .sort((left, right) => (
+      Number(screenKind(right)) - Number(screenKind(left))
+      || right.createdAt.localeCompare(left.createdAt)
+    ))[0];
   if (!pending?.media) return null;
   const metadata = object(pending.metadata);
   const runtime = object(metadata?.runtime);
@@ -351,6 +359,7 @@ export function installedRunShopWrap(): RunShopWrapCandidate | null {
   } catch {
     return null;
   }
+  const installed: RunShopWrapCandidate[] = [];
   for (const slot of slots) {
     const runtime = object(slot.versionMetadata?.runtime) ?? object(slot.metadata?.runtime);
     const window = rect(runtime?.window);
@@ -359,7 +368,7 @@ export function installedRunShopWrap(): RunShopWrapCandidate | null {
     const canvasWidth = runtime?.canvasWidth;
     const canvasHeight = runtime?.canvasHeight;
     if (!window || !kind || !variant || typeof canvasWidth !== 'number' || typeof canvasHeight !== 'number') continue;
-    return {
+    installed.push({
       id: variant,
       label: variant,
       engine: 'codex',
@@ -367,9 +376,12 @@ export function installedRunShopWrap(): RunShopWrapCandidate | null {
       src: slot.media.immutableUrl,
       canvas: { w: canvasWidth, h: canvasHeight },
       window,
-    };
+    });
   }
-  return null;
+  // A full-screen scene paints the whole Shop, so it supersedes any wrap that
+  // only frames the card row. Without this, two active slots would resolve by
+  // slot name — which is arbitrary, not a decision.
+  return installed.find((candidate) => candidate.kind === 'screen') ?? installed[0] ?? null;
 }
 
 /** Latest wrap candidate per review slot, ordered seat → band → slots for review. */
