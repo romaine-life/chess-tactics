@@ -22,8 +22,8 @@ import {
 import { runCardName } from '../run/cardNames';
 import {
   RUN_CARD_APPROVED_TUNING,
+  RUN_CARD_CONTENTS_DENSITY_LADDER,
   RUN_CARD_COST_COIN_SOURCE_SLOT,
-  RUN_CARD_DEFAULT_CONTENTS_TUNING,
   RUN_CARD_CONCINNOUS_FRAME_SLOT,
   RUN_CARD_FRAME_SLOT,
   RUN_CARD_PESTIFEROUS_FRAME_SLOT,
@@ -31,6 +31,7 @@ import {
   RUN_CARD_TACTICAL_FRAME_SLOT,
   RunCardFace,
   runCardUnitImageKind,
+  type RunCardContentsDensity,
   type RunCardFaceContent,
   type RunCardContentsTuning,
   type RunCardImageKind,
@@ -175,7 +176,12 @@ export type RunCardContentsStudyProfile = Readonly<{
   tuning: RunCardContentsTuning;
 }>;
 
-// Uncommitted comparison specimens for the owner-visible Contents Box study. They
+const CONTENTS_STUDY_TUNING_BY_DENSITY = Object.fromEntries(
+  RUN_CARD_CONTENTS_DENSITY_LADDER.map(({ density, tuning }) => [density, tuning]),
+) as Readonly<Record<RunCardContentsDensity, RunCardContentsTuning>>;
+
+// Comparison specimens for the owner-visible Contents Box study, pinned to the
+// accepted density ladder the live face now derives per card load. They
 // deliberately keep one card identity and illustration so density is the variable.
 export const RUN_CARD_CONTENTS_STUDY_PROFILES: readonly RunCardContentsStudyProfile[] = Object.freeze([
   {
@@ -183,16 +189,7 @@ export const RUN_CARD_CONTENTS_STUDY_PROFILES: readonly RunCardContentsStudyProf
     label: 'Roomy',
     load: '1 cell · 1 row',
     card: { ...STANDARD_CARD, grants: [{ count: 1, unit: 'queen' }] },
-    tuning: {
-      ...RUN_CARD_DEFAULT_CONTENTS_TUNING,
-      unitHeight: 21,
-      unitNaturalGap: 1.2,
-      countSize: 8,
-      countColumn: 8.5,
-      rowGap: 1,
-      paddingBlockStart: 1.5,
-      paddingBlockEnd: 1.5,
-    },
+    tuning: CONTENTS_STUDY_TUNING_BY_DENSITY.roomy,
   },
   {
     id: 'filled',
@@ -205,16 +202,7 @@ export const RUN_CARD_CONTENTS_STUDY_PROFILES: readonly RunCardContentsStudyProf
         { count: 1, unit: 'bishop' },
       ],
     },
-    tuning: {
-      ...RUN_CARD_DEFAULT_CONTENTS_TUNING,
-      unitHeight: 12,
-      unitNaturalGap: .9,
-      countSize: 5.4,
-      countColumn: 5.9,
-      rowGap: .65,
-      paddingBlockStart: 1.7,
-      paddingBlockEnd: 1.7,
-    },
+    tuning: CONTENTS_STUDY_TUNING_BY_DENSITY.filled,
   },
   {
     id: 'packed',
@@ -224,16 +212,7 @@ export const RUN_CARD_CONTENTS_STUDY_PROFILES: readonly RunCardContentsStudyProf
       ...STANDARD_CARD,
       typeLine: 'Units — Concinnous',
     },
-    tuning: {
-      ...RUN_CARD_DEFAULT_CONTENTS_TUNING,
-      unitHeight: 11.5,
-      unitNaturalGap: .85,
-      countSize: 4.9,
-      countColumn: 5.4,
-      rowGap: .6,
-      paddingBlockStart: 1.5,
-      paddingBlockEnd: 1.5,
-    },
+    tuning: CONTENTS_STUDY_TUNING_BY_DENSITY.packed,
   },
   {
     id: 'scrunched',
@@ -250,18 +229,7 @@ export const RUN_CARD_CONTENTS_STUDY_PROFILES: readonly RunCardContentsStudyProf
         { count: 1, unit: 'queen' },
       ],
     },
-    tuning: {
-      ...RUN_CARD_DEFAULT_CONTENTS_TUNING,
-      unitHeight: 8,
-      unitNaturalGap: .6,
-      countSize: 3.8,
-      countColumn: 4.3,
-      columnGap: 1.5,
-      rowGap: .45,
-      flavorScale: .96,
-      paddingBlockStart: 1.35,
-      paddingBlockEnd: 1.35,
-    },
+    tuning: CONTENTS_STUDY_TUNING_BY_DENSITY.scrunched,
   },
 ]);
 

@@ -80,7 +80,7 @@ export const RUN_CARD_APPROVED_TUNING: RunCardFaceTuning = Object.freeze({
   flavorSize: 5,
 });
 
-/** The accepted fixed Contents Box treatment. Experiments opt in through the Studio only. */
+/** The Contents Box base values every density step overrides. Hosts get the load-derived ladder below. */
 export const RUN_CARD_DEFAULT_CONTENTS_TUNING: RunCardContentsTuning = Object.freeze({
   unitHeight: 9,
   unitNaturalGap: .8,
@@ -94,6 +94,138 @@ export const RUN_CARD_DEFAULT_CONTENTS_TUNING: RunCardContentsTuning = Object.fr
   paddingBlockStart: 2.2,
   paddingBlockEnd: 2.3,
 });
+
+export type RunCardContentsDensity = 'roomy' | 'filled' | 'packed' | 'scrunched';
+
+export type RunCardContentsDensityStep = Readonly<{
+  density: RunCardContentsDensity;
+  tuning: RunCardContentsTuning;
+}>;
+
+/**
+ * The reviewed Contents Box density steps (ADR-0270), most spacious first.
+ * Each step was hand-tuned against its anchor load at the real card size:
+ * roomy 1 cell, filled 2 cells, packed 3-4 cells over 2 rows, scrunched 5 cells.
+ */
+export const RUN_CARD_CONTENTS_DENSITY_LADDER: readonly RunCardContentsDensityStep[] = Object.freeze([
+  {
+    density: 'roomy',
+    tuning: Object.freeze({
+      ...RUN_CARD_DEFAULT_CONTENTS_TUNING,
+      unitHeight: 21,
+      unitNaturalGap: 1.2,
+      countSize: 8,
+      countColumn: 8.5,
+      rowGap: 1,
+      paddingBlockStart: 1.5,
+      paddingBlockEnd: 1.5,
+    }),
+  },
+  {
+    density: 'filled',
+    tuning: Object.freeze({
+      ...RUN_CARD_DEFAULT_CONTENTS_TUNING,
+      unitHeight: 12,
+      unitNaturalGap: .9,
+      countSize: 5.4,
+      countColumn: 5.9,
+      rowGap: .65,
+      paddingBlockStart: 1.7,
+      paddingBlockEnd: 1.7,
+    }),
+  },
+  {
+    density: 'packed',
+    tuning: Object.freeze({
+      ...RUN_CARD_DEFAULT_CONTENTS_TUNING,
+      unitHeight: 11.5,
+      unitNaturalGap: .85,
+      countSize: 4.9,
+      countColumn: 5.4,
+      rowGap: .6,
+      paddingBlockStart: 1.5,
+      paddingBlockEnd: 1.5,
+    }),
+  },
+  {
+    density: 'scrunched',
+    tuning: Object.freeze({
+      ...RUN_CARD_DEFAULT_CONTENTS_TUNING,
+      unitHeight: 8,
+      unitNaturalGap: .6,
+      countSize: 3.8,
+      countColumn: 4.3,
+      columnGap: 1.5,
+      rowGap: .45,
+      flavorScale: .96,
+      paddingBlockStart: 1.35,
+      paddingBlockEnd: 1.35,
+    }),
+  },
+]);
+
+/** Mirrors the ledger's 2-column grid: 1-2 cells span full rows, denser cells pair up. */
+export function runCardLedgerRows(cellCount: number): number {
+  return cellCount <= 2 ? cellCount : Math.ceil(cellCount / 2);
+}
+
+// Fit-estimate constants mirroring the Contents Box CSS (style.css). The glyph
+// advance is deliberately conservative so estimated line counts round up before
+// a bigger density step could clip the bottom-anchored flavor.
+const CONTENTS_INLINE_PADDING_CQW = 5.2;
+const CONTENTS_TEXT_ADVANCE_EM = .34;
+const FLAVOR_LINE_HEIGHT = 1.2;
+const EFFECT_LINE_HEIGHT = 1.12;
+
+function estimatedLineCount(text: string, fontSizeCqw: number, lineWidthCqw: number): number {
+  const perLine = Math.max(1, Math.floor(lineWidthCqw / (fontSizeCqw * CONTENTS_TEXT_ADVANCE_EM)));
+  return Math.max(1, Math.ceil(text.length / perLine));
+}
+
+function estimatedContentsHeightCqw(
+  card: RunCardFaceContent,
+  tuning: RunCardContentsTuning,
+  flavorSizeCqw: number,
+  lineWidthCqw: number,
+): number {
+  const rows = runCardLedgerRows(card.grants.length);
+  const ledger = rows * tuning.unitHeight + Math.max(0, rows - 1) * tuning.rowGap;
+  const effectLine = tuning.effectSize * EFFECT_LINE_HEIGHT;
+  const rules = card.rules
+    ? tuning.effectGap + estimatedLineCount(card.rules, tuning.effectSize, lineWidthCqw) * effectLine
+    : 0;
+  const propertyCount = card.properties?.length ?? 0;
+  const properties = propertyCount
+    ? tuning.effectGap * propertyCount + propertyCount * effectLine
+    : 0;
+  const flavorSize = flavorSizeCqw * tuning.flavorScale;
+  const flavor = estimatedLineCount(card.flavor, flavorSize, lineWidthCqw) * flavorSize * FLAVOR_LINE_HEIGHT;
+  return tuning.paddingBlockStart + ledger + rules + properties + flavor + tuning.paddingBlockEnd;
+}
+
+/**
+ * ADR-0270: sparse cards use the room available. The card's cell/row load picks
+ * its reviewed anchor step; the step only moves denser when this frame's actual
+ * Contents Box could not hold the estimated stack (properties, rules, long
+ * flavor), because clipped flavor is worse than a denser reviewed layout.
+ */
+export function runCardContentsDensityStepForCard(
+  card: RunCardFaceContent,
+  frameGeometry: RunCardFrameGeometry = RUN_CARD_STANDARD_FRAME_GEOMETRY,
+  flavorSizeCqw: number = RUN_CARD_APPROVED_TUNING.flavorSize,
+): RunCardContentsDensityStep {
+  const cells = card.grants.length;
+  const rows = runCardLedgerRows(cells);
+  const anchor = cells <= 1 ? 0 : cells === 2 ? 1 : rows <= 2 ? 2 : 3;
+  const contentsBox = frameGeometry.boxes.contents;
+  const boxHeight = (contentsBox.height / frameGeometry.sourceWidth) * 100;
+  const lineWidth = (contentsBox.width / frameGeometry.sourceWidth) * 100 - CONTENTS_INLINE_PADDING_CQW;
+  for (let index = anchor; index < RUN_CARD_CONTENTS_DENSITY_LADDER.length - 1; index += 1) {
+    const step = RUN_CARD_CONTENTS_DENSITY_LADDER[index];
+    if (estimatedContentsHeightCqw(card, step.tuning, flavorSizeCqw, lineWidth) <= boxHeight) return step;
+  }
+  return RUN_CARD_CONTENTS_DENSITY_LADDER[RUN_CARD_CONTENTS_DENSITY_LADDER.length - 1];
+}
 
 export const runCardUnitImageKind = (
   cell: number,
@@ -341,22 +473,28 @@ async function acknowledgeDecodedImage(
 function RunCardFaceLayer({
   presentation,
   pending,
-  contentsTuning,
+  explicitContentsTuning,
+  faceTuning,
   showFrameBoxes,
   onImageLoad,
   onImageError,
 }: {
   presentation: RunCardPresentation;
   pending: boolean;
-  contentsTuning: RunCardContentsTuning;
+  explicitContentsTuning: RunCardContentsTuning | null;
+  faceTuning: RunCardFaceTuning;
   showFrameBoxes: boolean;
   onImageLoad: (signature: string, pending: boolean, kind: RunCardImageKind) => void;
   onImageError: (signature: string, pending: boolean, kind: RunCardImageKind) => void;
 }): ReactElement {
   const { signature, card, frameUrl, coinSourceUrl, artUrl, frameGeometry } = presentation;
-  const ledgerRows = card.grants.length <= 2
-    ? card.grants.length
-    : Math.ceil(card.grants.length / 2);
+  const ledgerRows = runCardLedgerRows(card.grants.length);
+  // Density belongs to this layer's card so a crossfade never restyles the
+  // outgoing face with the incoming card's step.
+  const densityStep = explicitContentsTuning === null
+    ? runCardContentsDensityStepForCard(card, frameGeometry, faceTuning.flavorSize)
+    : null;
+  const contentsTuning = explicitContentsTuning ?? densityStep!.tuning;
   const acknowledgeLoad = (kind: RunCardImageKind): void => onImageLoad(signature, pending, kind);
   const acknowledgeError = (kind: RunCardImageKind): void => onImageError(signature, pending, kind);
 
@@ -365,7 +503,20 @@ function RunCardFaceLayer({
       className={`run-card-face-layer${pending ? ' is-pending' : ' is-presented'}`}
       data-card-presentation={signature}
       data-frame-geometry={frameGeometry.id}
-      style={runCardFrameGeometryVariables(frameGeometry) as CSSProperties}
+      data-contents-density={densityStep?.density ?? 'explicit'}
+      style={{
+        ...runCardFrameGeometryVariables(frameGeometry),
+        '--run-card-flavor-size': `${(faceTuning.flavorSize * contentsTuning.flavorScale).toFixed(4)}cqw`,
+        '--run-card-unit-height': `${contentsTuning.unitHeight}cqw`,
+        '--run-card-ledger-count-size': `${contentsTuning.countSize}cqw`,
+        '--run-card-ledger-count-column': `${contentsTuning.countColumn}cqw`,
+        '--run-card-ledger-column-gap': `${contentsTuning.columnGap}cqw`,
+        '--run-card-ledger-row-gap': `${contentsTuning.rowGap}cqw`,
+        '--run-card-effect-size': `${contentsTuning.effectSize}cqw`,
+        '--run-card-effect-gap': `${contentsTuning.effectGap}cqw`,
+        '--run-card-contents-padding-block-start': `${contentsTuning.paddingBlockStart}cqw`,
+        '--run-card-contents-padding-block-end': `${contentsTuning.paddingBlockEnd}cqw`,
+      } as CSSProperties}
       aria-hidden={pending || undefined}
     >
       <img
@@ -463,6 +614,8 @@ function RunCardFaceLayer({
 /**
  * The one Run trading-card face used by both the Studio instrument and live play.
  * Hosts choose only the immutable frame/art URLs and interaction around the face.
+ * Without an explicit contentsTuning, each card derives its reviewed density
+ * step from its own load (ADR-0270); only Studio experiments pass one.
  */
 export function RunCardFace({
   card,
@@ -471,7 +624,7 @@ export function RunCardFace({
   coinSourceUrl = resolvedLiveMediaUrl(RUN_CARD_COST_COIN_SOURCE_SLOT),
   width = '100%',
   tuning = RUN_CARD_APPROVED_TUNING,
-  contentsTuning = RUN_CARD_DEFAULT_CONTENTS_TUNING,
+  contentsTuning = null,
   frameGeometry = RUN_CARD_STANDARD_FRAME_GEOMETRY,
   showFrameBoxes = false,
   onImageLoad = () => undefined,
@@ -484,7 +637,7 @@ export function RunCardFace({
   coinSourceUrl?: string;
   width?: string;
   tuning?: RunCardFaceTuning;
-  contentsTuning?: RunCardContentsTuning;
+  contentsTuning?: RunCardContentsTuning | null;
   frameGeometry?: RunCardFrameGeometry;
   showFrameBoxes?: boolean;
   onImageLoad?: (kind: RunCardImageKind) => void;
@@ -608,16 +761,6 @@ export function RunCardFace({
         '--run-card-type-x': `${tuning.typeX}cqw`,
         '--run-card-type-y': `${tuning.typeY}cqw`,
         '--run-card-type-size': `${tuning.typeSize}cqw`,
-        '--run-card-flavor-size': `${(tuning.flavorSize * contentsTuning.flavorScale).toFixed(4)}cqw`,
-        '--run-card-unit-height': `${contentsTuning.unitHeight}cqw`,
-        '--run-card-ledger-count-size': `${contentsTuning.countSize}cqw`,
-        '--run-card-ledger-count-column': `${contentsTuning.countColumn}cqw`,
-        '--run-card-ledger-column-gap': `${contentsTuning.columnGap}cqw`,
-        '--run-card-ledger-row-gap': `${contentsTuning.rowGap}cqw`,
-        '--run-card-effect-size': `${contentsTuning.effectSize}cqw`,
-        '--run-card-effect-gap': `${contentsTuning.effectGap}cqw`,
-        '--run-card-contents-padding-block-start': `${contentsTuning.paddingBlockStart}cqw`,
-        '--run-card-contents-padding-block-end': `${contentsTuning.paddingBlockEnd}cqw`,
       } as CSSProperties}
       aria-hidden={ariaHidden || undefined}
       aria-busy={pending ? true : undefined}
@@ -629,7 +772,8 @@ export function RunCardFace({
           key={layer.presentation.signature}
           presentation={layer.presentation}
           pending={layer.pending}
-          contentsTuning={contentsTuning}
+          explicitContentsTuning={contentsTuning}
+          faceTuning={tuning}
           showFrameBoxes={showFrameBoxes}
           onImageLoad={handleImageLoad}
           onImageError={handleImageError}
