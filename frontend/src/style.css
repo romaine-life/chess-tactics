@@ -18791,12 +18791,10 @@ button.tileset-relationship-cell {
   cursor: default;
 }
 
+/* A card is printed art, never a faded control: an unaffordable or already-purchased
+   offer stays fully opaque. Overrides the global `button:disabled` fade. */
 .run-card-action:disabled {
   cursor: not-allowed;
-  opacity: .72;
-}
-
-.run-card-action.is-purchased {
   opacity: 1;
 }
 
