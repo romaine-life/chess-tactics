@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:3ff365412d38b255aa8d4896c32eee12f453d79e82d34c52d945e3b7ffd1b2d2"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:479df5b87f14ae453f180fb7721957a7014c0633815443ecb3420415289f6915"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Keep the Controls title bar out of the Run workspace crossfade"
-  prNumber: "622"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/622"
-  commit: "40362861"
+  prTitle: "Remove standing explanatory text from the Shop screen"
+  prNumber: "623"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/623"
+  commit: "548f86a1"
 
 name: chess-tactics
 namespace: chess-tactics
