@@ -13,6 +13,11 @@ partially_superseded_by:
   - 0285-run-card-type-lines-use-one-optically-centered-baseline.md
   - 0286-ataraxia-i-is-a-persisted-run-tier-with-draw-time-pestiferous-instances.md
   - 0325-concinnous-applies-to-every-non-pestiferous-offer.md
+  - 0309-concinnous-names-the-white-positioned-card-qualifier.md
+  - 0327-tactical-cards-roll-one-in-eight-and-may-cost-twelve.md
+  - 0328-tactical-targets-are-chosen-at-acquisition-and-use-the-discipline-icon.md
+  - 0329-concinnous-and-tactical-use-distinct-frames-and-one-shared-coin.md
+  - 0330-run-card-type-lines-use-the-lower-optical-baseline.md
 ---
 
 # ADR-0283: Run card face is one shared live runtime component

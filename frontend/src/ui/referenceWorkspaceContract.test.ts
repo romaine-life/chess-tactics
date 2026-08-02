@@ -11,7 +11,7 @@ const hud = readFileSync(new URL('./SkirmishHud.tsx', import.meta.url), 'utf8');
 const runArmy = readFileSync(new URL('./RunArmyWorkspace.tsx', import.meta.url), 'utf8');
 
 describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
-  it('describes abilities without explaining how they are obtained', () => {
+  it('describes abilities and the Concinnous card qualifier in the shared reference', () => {
     const start = enchiridion.indexOf('function AbilitiesSection');
     const end = enchiridion.indexOf('function EnchiridionContent', start);
     const abilities = enchiridion.slice(start, end);
@@ -21,9 +21,11 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(abilities).toContain('Skillfully and harmoniously arranged; elegantly fitted together.');
     expect(abilities).toContain('<h3>Marshalled</h3>');
     expect(abilities).toContain('<h3>Plagued</h3>');
-    expect(abilities.match(/className="enchiridion-ability-card"/g)).toHaveLength(5);
+    expect(abilities).toContain('<h3>Tactical</h3>');
+    expect(abilities.match(/className="enchiridion-ability-card"/g)).toHaveLength(6);
     expect(abilities).toContain('discounted by 0 gold for a Pawn, 1 for a Knight or Bishop, 2 for a Rook, and 3 for a Queen');
-    expect(abilities).not.toMatch(/\b(?:gain|obtain|acquir|relic|upgrade)/i);
+    expect(abilities).toContain('Upon acquisition, one unit on this card becomes Positioned.');
+    expect(abilities).toContain('Upon acquisition, one randomly chosen unit on this card gains Discipline.');
   });
 
   it('keeps the exact knight and bishop terrain exceptions in the shared reference', () => {
@@ -156,13 +158,14 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     const start = enchiridion.indexOf('const CARD_TYPE_REFERENCES');
     const end = enchiridion.indexOf('function AbilitiesSection', start);
     const cardTypes = enchiridion.slice(start, end);
-    expect(cardTypes.match(/id: '(?:pestiferous|concinnous|type-iii|type-iv)'/g)).toHaveLength(4);
+    expect(cardTypes.match(/id: '(?:pestiferous|concinnous|tactical|type-iv)'/g)).toHaveLength(4);
     expect(cardTypes).toContain("const VOLUNTEER_CARD = RUN_CARD_BY_ID.p");
     expect(cardTypes).toContain('<RunCardFace');
     expect(cardTypes).toContain('RUN_CARD_PESTIFEROUS_FRAME_SLOT');
+    expect(cardTypes).toContain('RUN_CARD_TACTICAL_FRAME_SLOT');
     expect(cardTypes).toContain("iconRole: 'ui-kit-icons-card-properties-pestiferous-png'");
     expect(cardTypes).toContain('className="enchiridion-card-type-row-icon"');
-    expect(cardTypes.match(/provisional: true/g)).toHaveLength(2);
+    expect(cardTypes.match(/provisional: true/g)).toHaveLength(1);
     expect(cardTypes).toContain("useState('pestiferous')");
     expect(cardTypes).toContain('className="enchiridion-card-type-layout"');
     expect(cardTypes).toContain('className="enchiridion-card-type-rows"');

@@ -21805,6 +21805,17 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   z-index: 0;
 }
 
+.run-card-prototype-cost-coin-source {
+  block-size: 100%;
+  clip-path: circle(5.4cqw at 88% 8.65%);
+  inset: 0;
+  inline-size: 100%;
+  object-fit: fill;
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
+}
+
 .run-card-prototype-art {
   block-size: var(--run-card-art-height, 40.3%);
   inline-size: var(--run-card-art-width, 80.9%);
@@ -21824,7 +21835,7 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   color: #17191b;
   margin: 0;
   position: absolute;
-  z-index: 2;
+  z-index: 3;
 }
 
 .run-card-prototype-name,
@@ -21956,6 +21967,21 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   grid-template-columns: var(--run-card-ledger-count-column, 4.5cqw) minmax(0, 1fr);
   min-block-size: var(--run-card-unit-height, 9cqw);
   min-inline-size: 0;
+  position: relative;
+}
+
+.run-card-prototype-ledger-row.has-ability .run-card-prototype-unit-stack {
+  margin-inline-end: 8cqw;
+}
+
+.run-card-prototype-ledger-ability {
+  block-size: 7cqw;
+  filter: drop-shadow(0 .35cqw .35cqw rgba(1, 29, 45, .4));
+  inset-block-start: 50%;
+  inset-inline-end: 0;
+  inline-size: 7cqw;
+  position: absolute;
+  transform: translateY(-50%);
 }
 
 .run-card-prototype-ledger-count {
@@ -22033,13 +22059,18 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
 }
 
 .run-card-prototype-property {
+  align-items: center;
   display: flex;
-  gap: 1.4cqw;
-  justify-content: space-between;
+  gap: .8cqw;
 }
 
 .run-card-prototype-property strong {
   font-weight: 700;
+}
+
+.run-card-prototype-property strong::after {
+  content: '·';
+  margin-inline-start: .8cqw;
 }
 
 .run-ataraxia-selector {

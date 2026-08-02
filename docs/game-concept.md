@@ -67,8 +67,8 @@ these.
   at upper right, a large pane for the card's accepted PixelLab illustration, a narrow card-
   type line, and a Contents Box whose flavor text remains at the bottom. The type
   line is never empty: ordinary cards say **Units**, while affected cards
-  append causal qualifiers after an em dash, such as **Units — Pestiferous** or
-  **Units — Concinnous**. Ordinary and qualified labels use one shared optically
+  append causal qualifiers after an em dash, such as **Units — Pestiferous**,
+  **Units — Tactical**, or **Units — Concinnous**. Ordinary and qualified labels use one shared optically
   centered type-line scale and baseline rather than per-label positioning.
   Detecting an ability, modifier, or affected card type does not automatically
   synthesize explanatory prose in the Contents Box; those definitions will use a
@@ -76,7 +76,8 @@ these.
   separately authored card content.
   Future mechanically different primary families may use
   types such as **Event**. Ordinary costs remain from one through nine;
-  Concinnous's two-gold premium may produce a live 10 or 11 in the same coin.
+  Concinnous's two-gold premium may produce a live 10 or 11 and Tactical's
+  three-gold premium may produce a live 10 through 12 in the same coin.
   Cost is never decimal, fractional, or zero and never uses separate numbered
   coin art. Each actual unit in the ledger appears as the same
   canonical player-side sprite used on the board. Card Layout, shop,
@@ -86,7 +87,7 @@ these.
   frame SHA-256, projected through one shared responsive formula, and reviewable
   as an overlay in Card Layout; unmatched pixels use the Standard profile
   (ADR-0219, ADR-0225, ADR-0270, ADR-0275, ADR-0276, ADR-0283, ADR-0285,
-  ADR-0305, ADR-0309, ADR-0324, ADR-0325).
+  ADR-0305, ADR-0309, ADR-0324, ADR-0325, ADR-0327, ADR-0329, ADR-0330).
   In-place card changes retain the last complete face until the requested card's
   actual image layer is ready, then promote content, art, frame, and frame
   geometry together; rapid newer selections cancel older pending cards
@@ -122,6 +123,14 @@ these.
   its primary type. Pestiferous changes the card lifecycle and publicly marks
   one current unit with the Plagued status icon; the card face does not spell
   out **Plagued** beside that unit.
+  **Tactical** causes exactly one unit to gain Discipline when the card is
+  acquired. Every ordinary post-Battle shop-card draw has a seeded one-in-eight
+  Tactical chance; opening Shop cards remain standard. Tactical resolves before
+  the other qualifiers and adds three gold even when the resulting price reaches
+  ten through twelve. The unit is chosen only at acquisition. Multi-unit offers
+  therefore conceal the outcome, while a one-unit offer shows the shared
+  forged-shield Discipline icon because the result is forced. Tactical uses the
+  dedicated blue-water frame.
   **Concinnous** means skillfully and harmoniously arranged and causes exactly
   one contained unit to become Positioned upon acquisition. The type line
   declares the qualifier; detecting it does not automatically restate its
@@ -131,10 +140,12 @@ these.
   purchase. A card does not become Concinnous just because an external relic
   later modifies one of its units. Concinnous owns a dedicated forged-steel
   semantic frame treatment opposite Pestiferous black while retaining the
-  shared face anatomy. Every non-Pestiferous shop offer has a seeded one-in-eight
-  chance to become Concinnous. It costs two additional gold even when that makes
-  the live coin read 10 or 11, and cannot also be Pestiferous (ADR-0272,
-  ADR-0276, ADR-0305, ADR-0309, ADR-0310, ADR-0311, ADR-0324, ADR-0325).
+  anatomy. After Tactical and Pestiferous precedence, every remaining shop
+  offer—regardless of core value—has a seeded one-in-eight Concinnous roll. It
+  costs two additional gold, may reach eleven, and cannot carry another
+  qualifier. Every frame uses one shared accepted gold-coin source with its live
+  price overlaid (ADR-0272, ADR-0276, ADR-0305, ADR-0309, ADR-0310, ADR-0311,
+  ADR-0324, ADR-0325, ADR-0327, ADR-0328, ADR-0329).
 - Run difficulty is **Ataraxia**. The first Run uses **Ataraxia 0 — The
   Untroubled Mind**, whose literal impact is standard Run rules and no
   Pestiferous shop cards; later Runs may opt into historically named
@@ -199,9 +210,9 @@ these.
   and Plagued. Card filters combine exact gold value with
   contained unit type. The Card Types reference uses the third column for its
   four affected-type names and the fourth for one selected shared card face,
-  temporarily using The Volunteer for each; Pestiferous and Concinnous state
-  their accepted effects while two pending parallel designs remain explicit
-  placeholders (ADR-0313, ADR-0315). During Battle,
+  temporarily using The Volunteer for each; Pestiferous, Concinnous, and
+  Tactical state their accepted effects while the fourth design remains an
+  explicit placeholder (ADR-0313, ADR-0315, ADR-0329). During Battle,
   the Controls title bar opens **Strategikon** over the board without unmounting
   the fight; its Martial Prosopography and Lipsanotheca expose the persistent
   army and held relics beside the same Enchiridion (ADR-0231).

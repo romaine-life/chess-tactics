@@ -337,6 +337,17 @@ an incomplete row is an availability failure.
   DOM diamond. That owner-authorized placeholder is named temporary debt under
   ADR-0312, not a packaged media fallback, and must be removed when the accepted
   icon is installed.
+  Run-card frame variants use typed standalone native 1060×1484 PNG slots:
+  `ui/run/card-prototypes/frame-v1.png`,
+  `ui/run/card-prototypes/pestiferous-frame-v1.png`,
+  `ui/run/card-prototypes/tactical-discipline-frame-v1.png`, and
+  `ui/run/card-prototypes/concinnous-frame-v1.png`. The shared face selects the
+  semantic slot from the persisted qualifier; no frame owns live title, art,
+  price, type, ledger, property, or flavor pixels. Every variant clips the same
+  accepted gold-coin pixels from
+  `ui/run/card-prototypes/cost-coin-source-v1.png` and overlays the live integer,
+    so a frame cannot silently introduce a private coin treatment (ADR-0283,
+    ADR-0329).
   The Run gold resource is likewise an exact native 64×64 PNG with typed
   `run-resource-icon` metadata; one installed `kind='run-resource'` drawable
   record binds `behavior.resourceId='gold'` to its `icon` media role.

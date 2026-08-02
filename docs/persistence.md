@@ -39,15 +39,16 @@ Durable document and live-content tables are created by the inline migrations in
 | `media_slots` / `media_versions` / `media_blobs` | shared live-media substrate and active pointers | `/api/asset-catalog`, `/api/media/:sha`, `/assets/:slot`, `/api/admin/media-assets` | GET public, mutations require admin |
 | `media_catalog_state` / `media_asset_events` | shared asset revision and audit history | internal | admin mutations write them |
 
-Active Run format 10 starts in the normal `shop` phase with Shop kind `opening`,
+Active Run format 11 starts in the normal `shop` phase with Shop kind `opening`,
 the permanent King plus two starting Pawns, a seeded three-card deal, and an
 8-gold budget. The opening cards have three distinct values sampled from 1–8.
 Buying stays in that same Shop transaction; its purchased state, Army and Sell
 views, Reset Shop, and explicit Continue reuse the post-Battle Shop model. The
 opening kind carries zero victory gold and no Loot, paid-relic, or Ataraxia card
-effects. Each dealt card may be purchased once while sufficient gold remains;
+effects; all opening offers remain standard rather than Tactical, Pestiferous,
+or Concinnous. Each dealt card may be purchased once while sufficient gold remains;
 Continue requires at least one card purchase and enters Deployment at Battle
-index 0. Format 10 names the transaction `cardOffers`,
+index 0. Format 11 names the transaction `cardOffers`,
 `purchasedCardOfferIds`, and `buyCard`; current Shop documents using the former
 gameplay noun are unsupported. The retired `draft` phase, `draftOffers`, and
 `chosenDraftId` are absent and rejected on current writes. Hydrating an
@@ -57,15 +58,15 @@ therefore replace it without adapting or replaying the retired transaction. See
 [ADR-0321](adr/0321-run-opening-is-the-normal-shop-and-draft-is-retired.md) and
 [ADR-0322](adr/0322-run-openings-use-two-pawns-eight-gold-and-card-native-purchase-feedback.md),
 as superseded for Shop purchase cardinality by
-[ADR-0323](adr/0323-run-shops-allow-every-affordable-card-purchase.md). Format 10
-also stores the selected Ataraxia tier, persisted affected Shop offers with both
-their exact public Plagued piece index and concealed Concinnous unit target,
-owned card membership with the current Plagued unit id and revealed Concinnous
-target id, and exact Pestiferous loss history. Current format-10 documents that
-predate the one-target Pestiferous rule deterministically preserve their card
-state while gaining one current Plagued target per nonempty Pestiferous card
-(ADR-0309, ADR-0310, ADR-0311). Format 3 stores each army unit's role-specific
-historical name.
+[ADR-0323](adr/0323-run-shops-allow-every-affordable-card-purchase.md). Format 11
+also stores the selected Ataraxia tier and each persisted affected Shop offer.
+Pestiferous offers store their public Plagued piece index;
+Concinnous offers store their concealed Positioned target index; Tactical
+offers deliberately store no target index because purchase chooses the unit.
+Owned Concinnous and Tactical cards store the exact affected unit id, while
+owned Pestiferous cards store the current Plagued unit id and exact loss
+history (ADR-0309, ADR-0310, ADR-0311, ADR-0325, ADR-0327, ADR-0328).
+Format 3 stores each army unit's role-specific historical name.
 Format-1 unnamed documents and the provisional format-2 generated-name documents
 are deterministically normalized to format 3 from the Run seed and each piece
 type's acquisition order before the next save. Once a document is format 3, a

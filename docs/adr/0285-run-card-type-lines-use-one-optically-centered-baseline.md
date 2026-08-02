@@ -6,6 +6,7 @@ partially_supersedes:
   - 0283-run-card-face-is-one-shared-live-runtime-component.md
 partially_superseded_by:
   - "[ADR-0309](0309-concinnous-names-the-white-positioned-card-qualifier.md)'s replacement of the named Tactical label example with Concinnous"
+  - "[ADR-0330](0330-run-card-type-lines-use-the-lower-optical-baseline.md)'s exact 1.2cqw vertical offset"
 ---
 
 # ADR-0285: Run card type lines use one optically centered baseline

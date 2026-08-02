@@ -6,6 +6,8 @@ partially_superseded_by:
   - "[ADR-0271](0271-core-cards-become-affected-when-drawn.md)"
   - "[ADR-0272](0272-card-types-author-effects-and-may-conceal-unit-targets.md)"
   - "[ADR-0311](0311-pestiferous-cards-reveal-one-plagued-unit-at-a-time.md)"
+  - "[ADR-0327](0327-tactical-cards-roll-one-in-eight-and-may-cost-twelve.md)'s all-value Discipline pricing"
+  - "[ADR-0328](0328-tactical-targets-are-chosen-at-acquisition-and-use-the-discipline-icon.md)'s Tactical target timing"
 partially_supersedes:
   - "[ADR-0193](0193-runs-are-persistent-wars-around-unchanged-chess-battles.md)'s one-entry-per-composition bundle-deck identity"
 ---

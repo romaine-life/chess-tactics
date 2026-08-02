@@ -2,12 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { createBlankLevel } from '../core/level';
 import {
   ATARAXIA_BY_TIER,
+  CONCINNOUS_OFFER_DENOMINATOR,
+  DISCIPLINE_COST,
   GOLD_SCALE,
   RUN_CARD_DECK,
   PIECE_VALUE,
+  POSITIONED_COST,
   RUN_FORMAT_VERSION,
   RUN_OPENING_OFFER_COUNT,
   RUN_STARTING_GOLD_TENTHS,
+  TACTICAL_DISCIPLINE_OFFER_DENOMINATOR,
   acquireRelic,
   battleVictoryGoldTenths,
   beginBattle,
@@ -28,6 +32,7 @@ import {
   sellArmyUnit,
   shopHasChanges,
   takeLootRelic,
+  tacticalDisciplineAcquisitionTarget,
   type RunDocument,
   type RunWarSnapshot,
 } from './model';
@@ -431,7 +436,7 @@ describe('Ataraxia ladder identities', () => {
       tier: 0,
       label: 'Ataraxia 0',
       title: 'The Untroubled Mind',
-      effect: 'Standard Run rules. Shop cards may be Concinnous but are never Pestiferous.',
+      effect: 'Standard Run rules. Shop cards may be Tactical or Concinnous but are never Pestiferous.',
     });
   });
 });
@@ -646,7 +651,7 @@ describe('Concinnous cards', () => {
       owned.unitIds.includes(unit.id) && unit.abilities.includes('positioned')
     ));
 
-    expect(concinnous.cost).toBe(concinnous.value + 2);
+    expect(concinnous.cost).toBe(concinnous.value + POSITIONED_COST);
     expect(concinnous.effectTargetIndex).toBeGreaterThanOrEqual(0);
     expect(concinnous.effectTargetIndex).toBeLessThan(concinnous.pieces.length);
     expect(owned).toMatchObject({
@@ -701,11 +706,54 @@ describe('Concinnous cards', () => {
     const baseline = createRun(war(), 4217, 0);
     const expensive = RUN_CARD_DECK.filter((card) => card.value >= 8);
     const offers = expensive.map((card, index) => (
-      createRunCardOffer(baseline, card, 0, index, 8, 1)
+      createRunCardOffer(baseline, card, 0, index, 8, 1, 0)
     ));
 
+    expect(CONCINNOUS_OFFER_DENOMINATOR).toBe(8);
     expect(offers.every((offer) => offer.cardType === 'concinnous')).toBe(true);
+    expect(offers.every((offer) => offer.cost === offer.value + POSITIONED_COST)).toBe(true);
     expect(offers.every((offer) => offer.effectTargetIndex !== null)).toBe(true);
     expect(new Set(offers.map((offer) => offer.cost))).toEqual(new Set([10, 11]));
+  });
+});
+
+describe('Tactical Discipline cards', () => {
+  it('rolls every core card at one in eight and permits the Discipline premium through twelve gold', () => {
+    const baseline = createRun(war(), 4217, 0);
+    const forced = RUN_CARD_DECK.map((card, index) => (
+      createRunCardOffer(baseline, card, Math.floor(index / 4), index % 4, 8, 8, 1)
+    ));
+
+    expect(TACTICAL_DISCIPLINE_OFFER_DENOMINATOR).toBe(8);
+    expect(forced.every((offer) => offer.cardType === 'tactical')).toBe(true);
+    expect(forced.every((offer) => offer.cost === offer.value + DISCIPLINE_COST)).toBe(true);
+    expect(forced.every((offer) => offer.effectTargetIndex === null)).toBe(true);
+    expect(Math.max(...forced.map((offer) => offer.cost))).toBe(12);
+  });
+
+  it('chooses and persists exactly one Disciplined unit only when the card is acquired', () => {
+    let shop: RunDocument | null = null;
+    for (let seed = 1; seed < 500 && !shop; seed += 1) {
+      const candidate = openShop({ ...deployedRun(seed), goldTenths: 100 * GOLD_SCALE }, []);
+      if (candidate.shop?.cardOffers.some((offer) => offer.cardType === 'tactical')) shop = candidate;
+    }
+    expect(shop).not.toBeNull();
+    const tactical = shop!.shop!.cardOffers.find((offer) => offer.cardType === 'tactical')!;
+    expect(tactical.effectTargetIndex).toBeNull();
+
+    const bought = buyCard(shop!, tactical.offerId);
+    const owned = bought.cards.find((card) => (
+      card.coreId === tactical.id && card.effectSeed === tactical.effectSeed
+    ))!;
+    const disciplined = bought.army.filter((unit) => (
+      owned.unitIds.includes(unit.id) && unit.abilities.includes('discipline')
+    ));
+
+    expect(owned.cardType).toBe('tactical');
+    expect(disciplined).toHaveLength(1);
+    expect(owned.effectTargetUnitId).toBe(disciplined[0].id);
+    expect(owned.unitIds.indexOf(disciplined[0].id)).toBe(
+      tacticalDisciplineAcquisitionTarget(tactical.effectSeed, tactical.pieces.length),
+    );
   });
 });

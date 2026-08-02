@@ -13,6 +13,7 @@ const titleBarPortal = readFileSync(new URL('./shell/TitleBarPortalContext.tsx',
 const runWorkspace = readFileSync(new URL('./RunWorkspace.tsx', import.meta.url), 'utf8');
 const runUnitInspectionScene = readFileSync(new URL('./RunUnitInspectionScene.tsx', import.meta.url), 'utf8');
 const runCard = readFileSync(new URL('./RunCard.tsx', import.meta.url), 'utf8');
+const runCardFace = readFileSync(new URL('./RunCardFace.tsx', import.meta.url), 'utf8');
 const runRelics = readFileSync(new URL('./RunRelics.tsx', import.meta.url), 'utf8');
 const runSelfInspection = readFileSync(new URL('./RunSelfInspection.tsx', import.meta.url), 'utf8');
 const skirmish = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
@@ -202,11 +203,16 @@ describe('Run chrome hierarchy', () => {
     expect(runCard).toContain('runCardArtSlot(card)');
     expect(runCard).toContain('RUN_CARD_FRAME_SLOT');
     expect(runCard).toContain('RUN_CARD_PESTIFEROUS_FRAME_SLOT');
+    expect(runCard).toContain('RUN_CARD_TACTICAL_FRAME_SLOT');
     expect(runCard).toContain('RUN_CARD_CONCINNOUS_FRAME_SLOT');
     expect(runCard).toContain("cardType === 'pestiferous'");
+    expect(runCard).toContain("cardType === 'tactical'");
     expect(runCard).toContain("cardType === 'concinnous'");
+    expect(runCard).toContain("ability: 'discipline'");
     expect(runCard).toContain("name: 'Positioned'");
     expect(runCard).toContain("'Target hidden'");
+    expect(runCardFace).toContain('RUN_CARD_COST_COIN_SOURCE_SLOT');
+    expect(runCardFace).toContain('run-card-prototype-cost-coin-source');
     expect(runCard).not.toMatch(/\brules\s*:/);
     expect(runCard).not.toContain('After every Battle');
     expect(runCard).toContain('<RunCardFace');

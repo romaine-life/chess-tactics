@@ -6,6 +6,8 @@ extends:
   - "[ADR-0271](0271-core-cards-become-affected-when-drawn.md)"
   - "[ADR-0286](0286-ataraxia-i-is-a-persisted-run-tier-with-draw-time-pestiferous-instances.md)"
   - "[ADR-0309](0309-concinnous-names-the-white-positioned-card-qualifier.md)"
+partially_superseded_by:
+  - "[ADR-0325](0325-concinnous-applies-to-every-non-pestiferous-offer.md)'s all-value eligibility and two-digit affected prices"
 ---
 
 # ADR-0310: Concinnous offers use a seeded one-in-eight eligible roll

@@ -10,22 +10,26 @@ import {
   runCardContentsStudyFromSearch,
   runCardPrototypeCostFromSearch,
   runCardPrototypeFrameBoxesFromSearch,
+  runCardConcinnousTargetRevealedFromSearch,
   runCardPrototypeContent,
-  runCardPrototypeTargetRevealedFromSearch,
   runCardPrototypeVariantFromSearch,
+  runCardTacticalSpecimenFromSearch,
   scaledRunCardContentsTuning,
 } from './RunCardPrototype';
 
 describe('Run Card Layout review variant', () => {
-  it('addresses the Pestiferous review state in the URL', () => {
+  it('addresses each affected-card review state in the URL', () => {
     expect(runCardPrototypeVariantFromSearch('?mode=viewer&cardVariant=pestiferous')).toBe('pestiferous');
+    expect(runCardPrototypeVariantFromSearch('?mode=viewer&cardVariant=tactical')).toBe('tactical');
     expect(runCardPrototypeVariantFromSearch('?mode=viewer&cardVariant=concinnous')).toBe('concinnous');
     expect(runCardPrototypeVariantFromSearch('?mode=viewer&cardVariant=unknown')).toBe('standard');
+    expect(runCardTacticalSpecimenFromSearch('?cardVariant=tactical&tacticalSpecimen=multi')).toBe('multi');
+    expect(runCardTacticalSpecimenFromSearch('?cardVariant=tactical')).toBe('single');
   });
 
   it('addresses Concinnous hidden and revealed purchase states without synthesized rules prose', () => {
-    expect(runCardPrototypeTargetRevealedFromSearch('?cardVariant=concinnous')).toBe(false);
-    expect(runCardPrototypeTargetRevealedFromSearch('?cardVariant=concinnous&concinnousTarget=revealed')).toBe(true);
+    expect(runCardConcinnousTargetRevealedFromSearch('?cardVariant=concinnous')).toBe(false);
+    expect(runCardConcinnousTargetRevealedFromSearch('?cardVariant=concinnous&concinnousTarget=revealed')).toBe(true);
     expect(runCardPrototypeContent('concinnous')).toMatchObject({
       name: 'Two Good Boots',
       cost: 4,
@@ -33,10 +37,24 @@ describe('Run Card Layout review variant', () => {
       grants: [{ count: 2, unit: 'pawn' }],
       properties: [{ name: 'Positioned', target: 'Target hidden' }],
     });
-    expect(runCardPrototypeContent('concinnous', true)).toMatchObject({
+    expect(runCardPrototypeContent('concinnous', 'single', true)).toMatchObject({
       properties: [{ name: 'Positioned', target: 'Pawn 1' }],
     });
     expect(runCardPrototypeContent('concinnous')).not.toHaveProperty('rules');
+  });
+
+  it('shows Discipline only when one Tactical unit makes the random target certain', () => {
+    expect(runCardPrototypeContent('tactical')).toMatchObject({
+      name: 'Regal Serenity',
+      cost: 12,
+      typeLine: 'Units — Tactical',
+      grants: [{ count: 1, unit: 'queen', ability: 'discipline' }],
+    });
+    expect(runCardPrototypeContent('tactical', 'multi')).toMatchObject({
+      cost: 12,
+      typeLine: 'Units — Tactical',
+    });
+    expect(runCardPrototypeContent('tactical', 'multi').grants.every((grant) => !grant.ability)).toBe(true);
   });
 
   it('uses the accepted affected-card type line without changing the card identity', () => {
@@ -67,7 +85,7 @@ describe('Run Card Layout review variant', () => {
     expect(RUN_CARD_APPROVED_TUNING).toMatchObject({
       typeSize: 5.3,
       typeX: 1.35,
-      typeY: 0.65,
+      typeY: 1.2,
     });
   });
 
@@ -84,7 +102,8 @@ describe('Run Card Layout review variant', () => {
   it('addresses two-digit coin-cost previews without changing the actual default', () => {
     expect(runCardPrototypeCostFromSearch('?cardCost=10')).toBe(10);
     expect(runCardPrototypeCostFromSearch('?cardCost=11')).toBe(11);
-    expect(runCardPrototypeCostFromSearch('?cardCost=12')).toBeNull();
+    expect(runCardPrototypeCostFromSearch('?cardCost=12')).toBe(12);
+    expect(runCardPrototypeCostFromSearch('?cardCost=13')).toBeNull();
     expect(runCardPrototypeCostFromSearch('')).toBeNull();
   });
 

@@ -9,21 +9,26 @@ import { SliderRow } from './dressing/SliderRow';
 import { StudioCatalogCard } from './studio/StudioCatalogCard';
 import {
   CONCINNOUS_OFFER_DENOMINATOR,
+  DISCIPLINE_COST,
   PESTIFEROUS_OFFER_DENOMINATOR,
   RUN_CARD_DECK,
   RUN_STARTING_GOLD,
+  TACTICAL_DISCIPLINE_OFFER_DENOMINATOR,
   concinnousOfferRoll,
   openingShopOffers,
   pestiferousOfferRoll,
+  tacticalDisciplineOfferRoll,
 } from '../run/model';
 import { runCardName } from '../run/cardNames';
 import {
   RUN_CARD_APPROVED_TUNING,
+  RUN_CARD_COST_COIN_SOURCE_SLOT,
   RUN_CARD_DEFAULT_CONTENTS_TUNING,
   RUN_CARD_CONCINNOUS_FRAME_SLOT,
   RUN_CARD_FRAME_SLOT,
   RUN_CARD_PESTIFEROUS_FRAME_SLOT,
   RUN_CARD_REFERENCE_WIDTH,
+  RUN_CARD_TACTICAL_FRAME_SLOT,
   RunCardFace,
   runCardUnitImageKind,
   type RunCardFaceContent,
@@ -35,7 +40,8 @@ import {
   runCardFrameGeometryForSha,
 } from './runCardFrameGeometry';
 
-const ART_SLOT = 'ui/run/card-art/pppkb/illustration.png';
+const STANDARD_ART_SLOT = 'ui/run/card-art/pppkb/illustration.png';
+const TACTICAL_ART_SLOT = 'ui/run/card-art/q/illustration.png';
 const CONCINNOUS_ART_SLOT = 'ui/run/card-art/pp/illustration.png';
 const SHA256 = /^[0-9a-f]{64}$/;
 const REFERENCE_CARD_WIDTH = RUN_CARD_REFERENCE_WIDTH;
@@ -56,7 +62,7 @@ const DEFAULT_TYPE_X = RUN_CARD_APPROVED_TUNING.typeX;
 const DEFAULT_TYPE_Y = RUN_CARD_APPROVED_TUNING.typeY;
 const DEFAULT_FLAVOR_SIZE = RUN_CARD_APPROVED_TUNING.flavorSize;
 const DEFAULT_TITLE_TYPE_HORIZONTAL_LOCKED = true;
-const ATARAXIA_SAMPLE_DRAWS = 64;
+const RUN_CARD_SAMPLE_DRAWS = 64;
 const DEFAULT_OPENING_SAMPLE_SEED = 4217;
 const DEFAULT_CONTENTS_SCALE = 1;
 
@@ -89,14 +95,35 @@ const CONCINNOUS_CARD = Object.freeze({
   flavor: 'The road kept both pairs of boots, and returned neither name.',
 }) satisfies RunCardFaceContent;
 
-export type RunCardPrototypeVariant = 'standard' | 'pestiferous' | 'concinnous';
+const TACTICAL_SINGLE_CARD = Object.freeze({
+  name: 'Regal Serenity',
+  cost: 9 + DISCIPLINE_COST,
+  typeLine: 'Units — Tactical',
+  grants: [{ count: 1, unit: 'queen', ability: 'discipline' }] as const,
+  flavor: 'She watched the empty court until ceremony became weather.',
+}) satisfies RunCardFaceContent;
+
+const TACTICAL_MULTI_CARD = Object.freeze({
+  ...STANDARD_CARD,
+  cost: 9 + DISCIPLINE_COST,
+  typeLine: 'Units — Tactical',
+}) satisfies RunCardFaceContent;
+
+export type RunCardPrototypeVariant = 'standard' | 'pestiferous' | 'tactical' | 'concinnous';
+export type RunCardTacticalSpecimen = 'single' | 'multi';
 
 export function runCardPrototypeVariantFromSearch(search: string): RunCardPrototypeVariant {
   const variant = new URLSearchParams(search).get('cardVariant');
-  return variant === 'pestiferous' || variant === 'concinnous' ? variant : 'standard';
+  return variant === 'pestiferous' || variant === 'tactical' || variant === 'concinnous'
+    ? variant
+    : 'standard';
 }
 
-export function runCardPrototypeTargetRevealedFromSearch(search: string): boolean {
+export function runCardTacticalSpecimenFromSearch(search: string): RunCardTacticalSpecimen {
+  return new URLSearchParams(search).get('tacticalSpecimen') === 'multi' ? 'multi' : 'single';
+}
+
+export function runCardConcinnousTargetRevealedFromSearch(search: string): boolean {
   return new URLSearchParams(search).get('concinnousTarget') === 'revealed';
 }
 
@@ -106,11 +133,12 @@ export function runCardPrototypeFrameBoxesFromSearch(search: string): boolean {
 
 export function runCardPrototypeCostFromSearch(search: string): number | null {
   const value = Number(new URLSearchParams(search).get('cardCost'));
-  return Number.isInteger(value) && value >= 1 && value <= 11 ? value : null;
+  return Number.isInteger(value) && value >= 1 && value <= 12 ? value : null;
 }
 
 export function runCardPrototypeContent(
   variant: RunCardPrototypeVariant,
+  tacticalSpecimen: RunCardTacticalSpecimen = 'single',
   concinnousTargetRevealed = false,
 ): RunCardFaceContent {
   if (variant === 'pestiferous') {
@@ -122,6 +150,9 @@ export function runCardPrototypeContent(
         grant.unit === 'bishop' ? { ...grant, plaguedIndices: [0] } : grant
       )),
     };
+  }
+  if (variant === 'tactical') {
+    return tacticalSpecimen === 'multi' ? TACTICAL_MULTI_CARD : TACTICAL_SINGLE_CARD;
   }
   if (variant === 'concinnous') {
     return {
@@ -284,9 +315,12 @@ export function RunCardPrototypeViewer({
   const [cardVariant, setCardVariant] = useState<RunCardPrototypeVariant>(() => (
     runCardPrototypeVariantFromSearch(window.location.search)
   ));
+  const [tacticalSpecimen, setTacticalSpecimen] = useState<RunCardTacticalSpecimen>(() => (
+    runCardTacticalSpecimenFromSearch(window.location.search)
+  ));
   const [contentsStudy, setContentsStudy] = useState(() => runCardContentsStudyFromSearch(window.location.search));
   const [concinnousTargetRevealed, setConcinnousTargetRevealed] = useState(() => (
-    runCardPrototypeTargetRevealedFromSearch(window.location.search)
+    runCardConcinnousTargetRevealedFromSearch(window.location.search)
   ));
   const [showFrameBoxes, setShowFrameBoxes] = useState(() => (
     runCardPrototypeFrameBoxesFromSearch(window.location.search)
@@ -309,33 +343,48 @@ export function RunCardPrototypeViewer({
   const [flavorSize, setFlavorSize] = useState(DEFAULT_FLAVOR_SIZE);
   const [pestiferousDenominator, setPestiferousDenominator] = useState(PESTIFEROUS_OFFER_DENOMINATOR);
   const [openingSampleSeed, setOpeningSampleSeed] = useState(DEFAULT_OPENING_SAMPLE_SEED);
+  const [tacticalDenominator, setTacticalDenominator] = useState(TACTICAL_DISCIPLINE_OFFER_DENOMINATOR);
   const [concinnousDenominator, setConcinnousDenominator] = useState(CONCINNOUS_OFFER_DENOMINATOR);
   const [handoffCopyState, setHandoffCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
   const [loaded, setLoaded] = useState<ReadonlySet<RunCardImageKind>>(() => new Set());
   const card = useMemo(
-    () => runCardPrototypeContent(cardVariant, concinnousTargetRevealed),
-    [cardVariant, concinnousTargetRevealed],
+    () => runCardPrototypeContent(cardVariant, tacticalSpecimen, concinnousTargetRevealed),
+    [cardVariant, tacticalSpecimen, concinnousTargetRevealed],
   );
   const displayedCard = useMemo(
     () => previewCost === null ? card : { ...card, cost: previewCost },
     [card, previewCost],
   );
-  const frameSlot = !contentsStudy
-    ? cardVariant === 'pestiferous'
+  const frameSlot = contentsStudy
+    ? RUN_CARD_FRAME_SLOT
+    : cardVariant === 'pestiferous'
       ? RUN_CARD_PESTIFEROUS_FRAME_SLOT
-      : cardVariant === 'concinnous'
-        ? RUN_CARD_CONCINNOUS_FRAME_SLOT
-        : RUN_CARD_FRAME_SLOT
-    : RUN_CARD_FRAME_SLOT;
+      : cardVariant === 'tactical'
+        ? RUN_CARD_TACTICAL_FRAME_SLOT
+        : cardVariant === 'concinnous'
+          ? RUN_CARD_CONCINNOUS_FRAME_SLOT
+          : RUN_CARD_FRAME_SLOT;
   const realizedPestiferousCount = useMemo(() => (
-    Array.from({ length: ATARAXIA_SAMPLE_DRAWS }, (_, index) => {
+    Array.from({ length: RUN_CARD_SAMPLE_DRAWS }, (_, index) => {
       const card = RUN_CARD_DECK[index % RUN_CARD_DECK.length];
       return pestiferousOfferRoll(4217, Math.floor(index / 4), index % 4, card.id, pestiferousDenominator);
     }).filter(Boolean).length
   ), [pestiferousDenominator]);
   const openingSample = useMemo(() => openingShopOffers(openingSampleSeed), [openingSampleSeed]);
+  const realizedTacticalCount = useMemo(() => (
+    Array.from({ length: RUN_CARD_SAMPLE_DRAWS }, (_, index) => {
+      const card = RUN_CARD_DECK[index % RUN_CARD_DECK.length];
+      return tacticalDisciplineOfferRoll(
+        4217,
+        Math.floor(index / 4),
+        index % 4,
+        card.id,
+        tacticalDenominator,
+      );
+    }).filter(Boolean).length
+  ), [tacticalDenominator]);
   const realizedConcinnousCount = useMemo(() => (
-    Array.from({ length: ATARAXIA_SAMPLE_DRAWS }, (_, index) => {
+    Array.from({ length: RUN_CARD_SAMPLE_DRAWS }, (_, index) => {
       const card = RUN_CARD_DECK[index % RUN_CARD_DECK.length];
       return concinnousOfferRoll(4217, Math.floor(index / 4), index % 4, card.id, concinnousDenominator);
     }).filter(Boolean).length
@@ -357,14 +406,25 @@ export function RunCardPrototypeViewer({
     () => runCardFrameGeometryForSha(frame?.media?.sha256 ?? null),
     [frame],
   );
-  const artSlot = !contentsStudy && cardVariant === 'concinnous' ? CONCINNOUS_ART_SLOT : ART_SLOT;
+  const artSlot = !contentsStudy && cardVariant === 'tactical' && tacticalSpecimen === 'single'
+    ? TACTICAL_ART_SLOT
+    : !contentsStudy && cardVariant === 'concinnous'
+      ? CONCINNOUS_ART_SLOT
+      : STANDARD_ART_SLOT;
   const art = useMemo(() => catalog ? selectedCandidate(catalog, artSlot, 'artCandidate') : null, [artSlot, catalog]);
-  const missing = catalog && (!frame || !art) ? 'The requested frame or artwork candidate is unavailable.' : '';
+  const coinSource = useMemo(
+    () => catalog ? selectedCandidate(catalog, RUN_CARD_COST_COIN_SOURCE_SLOT, 'coinCandidate') : null,
+    [catalog],
+  );
+  const missing = catalog && (!frame || !art || !coinSource)
+    ? 'The requested frame, coin source, or artwork candidate is unavailable.'
+    : '';
   const sceneError = useMemo(() => error || missing ? new Error(error || missing) : null, [error, missing]);
   const painted = Boolean(
     frame
     && art
     && loaded.has('frame')
+    && loaded.has('coin')
     && loaded.has('art')
     && displayedCard.grants.every((grant, cell) => (
       Array.from({ length: grant.count }, (_, index) => runCardUnitImageKind(cell, grant.unit, index))
@@ -444,6 +504,7 @@ export function RunCardPrototypeViewer({
     setContentsScale(DEFAULT_CONTENTS_SCALE);
     setPestiferousDenominator(PESTIFEROUS_OFFER_DENOMINATOR);
     setOpeningSampleSeed(DEFAULT_OPENING_SAMPLE_SEED);
+    setTacticalDenominator(TACTICAL_DISCIPLINE_OFFER_DENOMINATOR);
     setConcinnousDenominator(CONCINNOUS_OFFER_DENOMINATOR);
     setPreviewCost(null);
     setShowFrameBoxes(false);
@@ -462,6 +523,18 @@ export function RunCardPrototypeViewer({
       { replace: true, scroll: false },
     );
     setCardVariant(next);
+  };
+  const chooseTacticalSpecimen = (next: RunCardTacticalSpecimen): void => {
+    const params = new URLSearchParams(window.location.search);
+    if (next === 'multi') params.set('tacticalSpecimen', next);
+    else params.delete('tacticalSpecimen');
+    params.delete('artCandidate');
+    const search = params.toString();
+    navigateApp(
+      `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash}`,
+      { replace: true, scroll: false },
+    );
+    setTacticalSpecimen(next);
   };
   const chooseConcinnousTargetState = (revealed: boolean): void => {
     const params = new URLSearchParams(window.location.search);
@@ -519,6 +592,7 @@ export function RunCardPrototypeViewer({
       frameSha256: frame?.media?.sha256 ?? null,
       frameGeometry,
       artworkSha256: art?.media?.sha256 ?? null,
+      coinSourceSha256: coinSource?.media?.sha256 ?? null,
       title: { size: titleSize, horizontal: titleX, vertical: titleY },
       type: { size: typeSize, horizontal: typeX, vertical: typeY },
       cost: { size: costSize, horizontal: costX, vertical: costY },
@@ -535,7 +609,7 @@ export function RunCardPrototypeViewer({
       ataraxiaI: {
         pestiferousDenominator,
         sampleSeed: 4217,
-        sampleDraws: ATARAXIA_SAMPLE_DRAWS,
+        sampleDraws: RUN_CARD_SAMPLE_DRAWS,
         realizedPestiferousCount,
       },
       opening: {
@@ -549,10 +623,17 @@ export function RunCardPrototypeViewer({
           pieces: offer.pieces,
         })),
       },
+      tactical: {
+        denominator: tacticalDenominator,
+        sampleSeed: 4217,
+        sampleDraws: RUN_CARD_SAMPLE_DRAWS,
+        realizedCount: realizedTacticalCount,
+        target: tacticalSpecimen === 'single' ? 'forced-and-visible' : 'chosen-at-acquisition',
+      },
       concinnous: {
         denominator: concinnousDenominator,
         sampleSeed: 4217,
-        sampleDraws: ATARAXIA_SAMPLE_DRAWS,
+        sampleDraws: RUN_CARD_SAMPLE_DRAWS,
         realizedCount: realizedConcinnousCount,
         target: concinnousTargetRevealed ? 'revealed' : 'hidden',
       },
@@ -580,7 +661,7 @@ export function RunCardPrototypeViewer({
       <section className="al-lab-main run-card-prototype-main" aria-label="Card layout preview">
         {sceneError ? <p role="alert">{sceneError.message}</p> : null}
         {!sceneError && !painted ? <p role="status">Loading exact candidate pixels…</p> : null}
-        {frame && art ? (
+        {frame && art && coinSource ? (
           <div className={`run-card-prototype-stage${contentsStudy ? ' is-contents-study' : ''}`}>
             {contentsStudy ? (
               <div className="run-card-contents-study" aria-label="Contents Box density comparison">
@@ -594,6 +675,7 @@ export function RunCardPrototypeViewer({
                       card={profile.card}
                       frameUrl={frame.media!.url}
                       artUrl={art.media!.url}
+                      coinSourceUrl={coinSource.media!.url}
                       frameGeometry={RUN_CARD_STANDARD_FRAME_GEOMETRY}
                       showFrameBoxes={showFrameBoxes}
                       width={`${REFERENCE_CARD_WIDTH * viewerZoom}px`}
@@ -610,6 +692,7 @@ export function RunCardPrototypeViewer({
                 card={displayedCard}
                 frameUrl={frame.media!.url}
                 artUrl={art.media!.url}
+                coinSourceUrl={coinSource.media!.url}
                 frameGeometry={frameGeometry}
                 showFrameBoxes={showFrameBoxes}
                 width={`${REFERENCE_CARD_WIDTH * viewerZoom}px`}
@@ -677,6 +760,13 @@ export function RunCardPrototypeViewer({
                 >Pestiferous</button>
                 <button
                   type="button"
+                  className={`tileset-view-action${cardVariant === 'tactical' ? ' active' : ''}`}
+                  data-card-variant="tactical"
+                  aria-pressed={cardVariant === 'tactical'}
+                  onClick={() => chooseCardVariant('tactical')}
+                >Tactical</button>
+                <button
+                  type="button"
                   className={`tileset-view-action${cardVariant === 'concinnous' ? ' active' : ''}`}
                   data-card-variant="concinnous"
                   aria-pressed={cardVariant === 'concinnous'}
@@ -684,6 +774,24 @@ export function RunCardPrototypeViewer({
                 >Concinnous</button>
               </div>
             )}
+            {!contentsStudy && cardVariant === 'tactical' ? (
+              <div className="tileset-button-row" role="group" aria-label="Tactical contents">
+                <button
+                  type="button"
+                  className={`tileset-view-action${tacticalSpecimen === 'single' ? ' active' : ''}`}
+                  data-tactical-specimen="single"
+                  aria-pressed={tacticalSpecimen === 'single'}
+                  onClick={() => chooseTacticalSpecimen('single')}
+                >One unit · forced icon</button>
+                <button
+                  type="button"
+                  className={`tileset-view-action${tacticalSpecimen === 'multi' ? ' active' : ''}`}
+                  data-tactical-specimen="multi"
+                  aria-pressed={tacticalSpecimen === 'multi'}
+                  onClick={() => chooseTacticalSpecimen('multi')}
+                >Many units · chosen later</button>
+              </div>
+            ) : null}
             {!contentsStudy && cardVariant === 'concinnous' ? (
               <div className="tileset-button-row" role="group" aria-label="Concinnous target visibility">
                 <button
@@ -793,6 +901,16 @@ export function RunCardPrototypeViewer({
               dflt={DEFAULT_OPENING_SAMPLE_SEED}
             />
             <SliderRow
+              label={<>Tactical prevalence · 1 in {tacticalDenominator} drawn cards</>}
+              value={tacticalDenominator}
+              set={setTacticalDenominator}
+              min={1}
+              max={12}
+              step={1}
+              nudge={1}
+              dflt={TACTICAL_DISCIPLINE_OFFER_DENOMINATOR}
+            />
+            <SliderRow
               label={<>Concinnous prevalence · 1 in {concinnousDenominator} non-Pestiferous offers</>}
               value={concinnousDenominator}
               set={setConcinnousDenominator}
@@ -802,17 +920,20 @@ export function RunCardPrototypeViewer({
               nudge={1}
               dflt={CONCINNOUS_OFFER_DENOMINATOR}
             />
-            {frame && art ? (
+            {frame && art && coinSource ? (
               <dl className="run-card-prototype-source-readout">
                 <div><dt>Frame</dt><dd>{frame.media!.sha256.slice(0, 12)} · {frame.status}</dd></div>
                 <div><dt>Geometry</dt><dd>{frameGeometry.id} · native {frameGeometry.sourceWidth}×{frameGeometry.sourceHeight}</dd></div>
+                <div><dt>Coin source</dt><dd>{coinSource.media!.sha256.slice(0, 12)} · {coinSource.status}</dd></div>
                 <div><dt>Artwork</dt><dd>{art.media!.sha256.slice(0, 12)} · {art.status}</dd></div>
                 <div><dt>Card</dt><dd>{contentsStudy ? 'Contents Box density study' : `${displayedCard.typeLine} · ${displayedCard.cost} gold`}</dd></div>
-                <div><dt>Ataraxia I sample</dt><dd>{realizedPestiferousCount} / {ATARAXIA_SAMPLE_DRAWS} Pestiferous · seed 4217</dd></div>
+                {cardVariant === 'tactical' ? <div><dt>Discipline target</dt><dd>{tacticalSpecimen === 'single' ? 'Forced and shown by icon' : 'Chosen at acquisition'}</dd></div> : null}
+                <div><dt>Ataraxia I sample</dt><dd>{realizedPestiferousCount} / {RUN_CARD_SAMPLE_DRAWS} Pestiferous · seed 4217</dd></div>
                 <div><dt>Opening budget</dt><dd>{RUN_STARTING_GOLD} gold · buy any affordable cards</dd></div>
                 <div><dt>Opening party</dt><dd>King + 2 Pawns + purchased cards</dd></div>
                 <div><dt>Opening sample</dt><dd>{openingSample.map((offer) => `${runCardName(offer)} (${offer.value})`).join(' · ')}</dd></div>
-                <div><dt>Offer sample</dt><dd>{realizedConcinnousCount} / {ATARAXIA_SAMPLE_DRAWS} Concinnous · seed 4217</dd></div>
+                <div><dt>Tactical sample</dt><dd>{realizedTacticalCount} / {RUN_CARD_SAMPLE_DRAWS} draws · seed 4217</dd></div>
+                <div><dt>Concinnous sample</dt><dd>{realizedConcinnousCount} / {RUN_CARD_SAMPLE_DRAWS} non-Tactical draws · seed 4217 · all card values eligible</dd></div>
               </dl>
             ) : null}
           </div>

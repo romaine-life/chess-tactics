@@ -9,6 +9,8 @@ partially_supersedes:
   - "[ADR-0285](0285-run-card-type-lines-use-one-optically-centered-baseline.md)'s named Tactical label example"
 extends:
   - "[ADR-0305](0305-card-ability-properties-do-not-synthesize-description-text.md)"
+partially_superseded_by:
+  - "[ADR-0329](0329-concinnous-and-tactical-use-distinct-frames-and-one-shared-coin.md)'s restoration of Tactical as the separate Discipline qualifier"
 ---
 
 # ADR-0309: Concinnous names the white Positioned card qualifier
