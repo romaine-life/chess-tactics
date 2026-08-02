@@ -7,7 +7,7 @@ refines:
   - "[ADR-0250](0250-strategikon-book-aligns-to-the-controls-content-boundary.md)"
 ---
 
-# ADR-0334: The Strategikon is a Run-wide reference, not a Battle-only workspace
+# ADR-0335: The Strategikon is a Run-wide reference, not a Battle-only workspace
 
 ## Context
 

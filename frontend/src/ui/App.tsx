@@ -46,6 +46,7 @@ import {
   deepestSharedSceneRegion,
   isEmptySlotDestination,
   isEmptySlotOrigin,
+  sceneLayerKey,
   sceneManifest,
 } from './shell/sceneManifest';
 import type { ScenePath } from './shell/sceneManifest';
@@ -524,7 +525,7 @@ export function App(): ReactElement {
   const sceneLayers = overlapsCompleteScenes
     ? [
         {
-          key: scene.current.leaf.key,
+          key: sceneLayerKey(scene.current),
           scene: scene.current,
           manifest: scene.current,
           search,
@@ -535,7 +536,7 @@ export function App(): ReactElement {
           visualRole: 'outgoing' as const,
         },
         {
-          key: scene.destination!.leaf.key,
+          key: sceneLayerKey(scene.destination!),
           scene: scene.destination!,
           manifest: scene.destination!,
           search: destinationSearch,
@@ -548,10 +549,12 @@ export function App(): ReactElement {
       ]
     : [
         {
-          // The destination leaf is the prepared scene instance. Preserve that exact
+          // The layer key is the prepared scene's mount identity. Preserve that exact
           // identity when entering becomes current; changing back to a root-region key
           // here would destroy and recreate the just-committed screen and its store.
-          key: mountedScene.leaf.key,
+          // A nested detail leaf shares its host's key (sceneLayerKey) so selecting a
+          // Run choice re-renders the retained action column instead of remounting it.
+          key: sceneLayerKey(mountedScene),
           scene: mountedScene,
           manifest,
           search,

@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { ensureCampaignsHydrated, isUserWorkspaceAvailable } from '../campaign/hydrate';
 import {
   CAMPAIGN_PROGRESS_EVENT,
@@ -51,7 +51,6 @@ import {
   highestUnlockedAtaraxiaTier,
   readRunProgression,
 } from '../run/progression';
-import { useConfirm } from './shared/ConfirmDialog';
 import { InnerChromeBox } from './shared/ChromeBox';
 import { loadMatch, type PersistedMatch } from '../game/matchPersistence';
 import { continueInventory, type ContinueInventory } from './playContinue';
@@ -213,8 +212,11 @@ function RunPanel({
   const abandon = useActiveRun((state) => state.abandon);
   const keepAccountRun = useActiveRun((state) => state.keepAccountRun);
   const adoptBrowserRun = useActiveRun((state) => state.adoptBrowserRun);
-  const { ask, dialog } = useConfirm();
   const [starting, setStarting] = useState(false);
+  // Replacing an active Run is confirmed inline: the first Start Run click arms the
+  // decision and the actions row swaps to an explicit Keep Run / Abandon and Start pair.
+  const [armed, setArmed] = useState(false);
+  const keepRunButtonRef = useRef<HTMLButtonElement>(null);
   const [progression, setProgression] = useState(readRunProgression);
   const [ataraxiaTier, setAtaraxiaTier] = useState<AtaraxiaTier>(0);
   const eligible = useMemo(() => runEligibleOfficialWars(wars), [wars]);
@@ -234,22 +236,23 @@ function RunPanel({
   useEffect(() => {
     if (ataraxiaTier > highestUnlockedTier) setAtaraxiaTier(highestUnlockedTier);
   }, [ataraxiaTier, highestUnlockedTier]);
+  useEffect(() => { setArmed(false); }, [choice, run]);
+  useEffect(() => {
+    if (!armed) return;
+    // Mirror the danger-dialog convention: focus lands on the safe choice, Escape keeps the Run.
+    keepRunButtonRef.current?.focus();
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') { event.preventDefault(); setArmed(false); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [armed]);
 
   const start = async (): Promise<void> => {
     if (starting || syncing || !eligible.length) return;
     setStarting(true);
     try {
-      if (run) {
-        const confirmed = await ask({
-          title: 'Abandon the active Run?',
-          message: `${run.war.name} will be replaced. This cannot be undone.`,
-          confirmLabel: 'Abandon and start',
-          cancelLabel: 'Keep Run',
-          tone: 'danger',
-        });
-        if (!confirmed) return;
-        await abandon();
-      }
+      if (run) await abandon();
       const seedArray = new Uint32Array(1);
       globalThis.crypto?.getRandomValues?.(seedArray);
       const seed = seedArray[0] || (Date.now() >>> 0);
@@ -265,7 +268,6 @@ function RunPanel({
     <>
       <ActionColumn>
         <div className="settings-panel-content run-selector-panel">
-          {dialog}
           <section className="settings-section">
             <h3 className="settings-section-title">Run</h3>
             <div className="settings-section-rows">
@@ -284,16 +286,24 @@ function RunPanel({
                   </div>
                 </InnerChromeBox>
               ) : null}
-              {run && !adoptionConflict ? (
+              {/* The row keeps its place when no Run exists — disabled like the Continue
+                  rows ("Nothing to continue") and the locked Ataraxia tiers, so the
+                  resume point stays learnable where it will appear (ADR-0289's
+                  visible-but-disabled language). It only leaves the list while the
+                  adoption conflict card speaks for the current Run instead. */}
+              {!adoptionConflict && (run || (hydrated && !loading)) ? (
                 <ChromeNavButton unit="inner-list-row"
                   to={PLAY_RUN_CURRENT_SELECTOR_HREF}
-                  className={chromeUnitClassNames('inner-list-row', 'settings-row play-choice-row', choice === 'current' && 'active is-selected')}
+                  className={chromeUnitClassNames('inner-list-row', 'settings-row play-choice-row', !run && 'is-disabled', choice === 'current' && 'active is-selected')}
+                  disabled={!run}
                   aria-current={choice === 'current' ? 'page' : undefined}
                   data-testid="run-choice-current"
                 >
                   <div className="settings-row-copy">
                     <h4>Current Run</h4>
-                    <p>Battle {run.battleIndex + 1} of {run.war.battles.length} · {ATARAXIA_BY_TIER[run.ataraxiaTier].label}</p>
+                    <p>{run
+                      ? `Battle ${run.battleIndex + 1} of ${run.war.battles.length} · ${ATARAXIA_BY_TIER[run.ataraxiaTier].label}`
+                      : 'No active Run'}</p>
                   </div>
                 </ChromeNavButton>
               ) : null}
@@ -361,18 +371,46 @@ function RunPanel({
               <AtaraxiaSelector
                 value={ataraxiaTier}
                 highestUnlockedTier={highestUnlockedTier}
-                onChange={setAtaraxiaTier}
+                onChange={(tier) => { setArmed(false); setAtaraxiaTier(tier); }}
               />
             </div>
-            <div className="ce-preview-actions is-single">
-              <ChromeButton unit="inner-text-button"
-                className={chromeUnitClassNames('inner-text-button', 'ce-link-button')}
-                disabled={newRunUnavailable || starting}
-                onClick={() => { void start(); }}
-              >
-                <span>{starting ? 'Starting…' : 'Start Run'}</span>
-              </ChromeButton>
-            </div>
+            {run ? (
+              <InnerChromeBox className="run-replace-note" role="note" data-testid="run-replace-warning">
+                <h3>Replaces your current Run</h3>
+                <p>Starting a new Run abandons {run.war.name} — Battle {run.battleIndex + 1} of {run.war.battles.length} · {formatGold(run.goldTenths)} gold. This cannot be undone.</p>
+              </InnerChromeBox>
+            ) : null}
+            {run && armed ? (
+              <div className="ce-preview-actions run-replace-decision">
+                <ChromeButton unit="inner-text-button"
+                  ref={keepRunButtonRef}
+                  className={chromeUnitClassNames('inner-text-button', 'ce-link-button')}
+                  data-testid="run-keep"
+                  disabled={starting}
+                  onClick={() => setArmed(false)}
+                >
+                  <span>Keep Run</span>
+                </ChromeButton>
+                <ChromeButton unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'ce-asset-button', 'is-danger')}
+                  data-testid="run-abandon-and-start"
+                  disabled={starting}
+                  onClick={() => { void start(); }}
+                >
+                  <span>{starting ? 'Starting…' : 'Abandon and Start'}</span>
+                </ChromeButton>
+              </div>
+            ) : (
+              <div className="ce-preview-actions is-single">
+                <ChromeButton unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'ce-link-button')}
+                  disabled={newRunUnavailable || starting}
+                  onClick={() => { if (run) { setArmed(true); return; } void start(); }}
+                >
+                  <span>{starting ? 'Starting…' : 'Start Run'}</span>
+                </ChromeButton>
+              </div>
+            )}
           </aside>
         ) : null}
       </RunDetailContentSceneSlot>
