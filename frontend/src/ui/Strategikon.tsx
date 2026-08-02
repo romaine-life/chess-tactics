@@ -9,6 +9,7 @@ import { Enchiridion, RelicCodex } from './Enchiridion';
 import { ENCHIRIDION_SECTIONS, type EnchiridionSection } from './enchiridionRoute';
 import { ApparatusRailTab } from './shared/ApparatusRailTab';
 import { InnerChromeBox, ShellWorkspace } from './shared/ChromeBox';
+import { installedUiMedia } from './installedUiMedia';
 
 export type StrategikonSection = 'enchiridion' | 'prosopography' | 'lipsanotheca';
 
@@ -64,6 +65,14 @@ export function Strategikon({
       className="strategikon-workspace"
       contentClassName="strategikon-workspace-layout"
       bodyClassName="strategikon-content"
+      backgroundArtwork={(
+        <img
+          className="strategikon-background-artwork"
+          src={installedUiMedia('ui-workspaces-strategikon-background-png')}
+          alt=""
+          draggable={false}
+        />
+      )}
       edgeAttached
       rail={(
         <aside className="strategikon-rail" aria-label="Strategikon sections">

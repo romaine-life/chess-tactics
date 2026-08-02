@@ -274,9 +274,15 @@ inset, and stone-continuity language but replaces the board only. The right Cont
 column remains present and is outside the Strategikon content rectangle. Its
 fill occupies that complete board pane without adding an outer frame, and its
 route transition leaves the current level scene mounted; only main-menu
-Enchiridion uses the homepage scene. Under ADR-0279, Strategikon's content uses
-the main menu's exact responsive left and top insets and mirrors them at the
-right and bottom; the full-pane fill still reaches every shell edge. In both
+Enchiridion uses the homepage scene. Under ADR-0297, Strategikon's shell-owned
+body reaches the Controls boundary while its edge-attached content retains the
+shared responsive start and block insets; workflow CSS does not recreate a
+mirrored end perimeter. Per ADR-0335, every Strategikon route mounts the exact
+accepted command-archive pixels from the required DB-owned application-UI role
+between that fill and the real content. The shared shell clips the decorative
+layer and applies the closed owner-approved cover, pixelated, 0.68-opacity
+treatment; no candidate/admin lookup or repository fallback participates.
+In both
 hosts, relic references use the
 ADR-0254 dual-view browser: a compact Rows/Grouped tab sits above the selection
 column; Rows uses corrected named list frames, while Grouped uses one containing
