@@ -128,7 +128,7 @@ export interface RunShopWrapSlotMount {
  */
 export function runShopWrapSlotMount(
   candidate: RunShopWrapCandidate,
-  targetCardWidth = 180,
+  targetCardWidth = 145,
 ): RunShopWrapSlotMount {
   const slots = candidate.slots ?? [];
   if (!slots.length) throw new Error(`wrap candidate ${candidate.id} has no measured slots`);
@@ -175,6 +175,15 @@ export const RUN_SHOP_WRAP_CANDIDATES: readonly RunShopWrapCandidate[] = [
     window: { x: 78, y: 81, w: 504, h: 153 },
     bandCards: 4,
     bandCardWidth: 170,
+  },
+  {
+    id: 'codex-seat',
+    label: 'Timber display stand',
+    engine: 'codex',
+    kind: 'seat',
+    src: new URL('../art/run-shop-wrap/codex-seat.png', import.meta.url).href,
+    canvas: { w: 778, h: 1145 },
+    window: { x: 66, y: 74, w: 648, h: 971 },
   },
   {
     id: 'pixellab-slots-inside',
