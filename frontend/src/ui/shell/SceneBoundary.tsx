@@ -25,10 +25,38 @@ interface SceneRegistration {
 const SceneRegistrationContext = createContext<SceneRegistration | null>(null);
 const SceneActivationContext = createContext(true);
 const SceneRevealContext = createContext(true);
+const ScenePreparingRegionContext = createContext<SceneHost | null>(null);
 
 /** True only after the director has committed and revealed this mounted scene. */
 export function useSceneActivation(): boolean {
   return useContext(SceneActivationContext);
+}
+
+/**
+ * Deactivates exactly the region the director is replacing.
+ *
+ * Activation gates gameplay and everything a screen contributes to the persistent
+ * title bar. A layer preparing a WHOLE new scene is hidden and inert, so nothing in
+ * it may contribute. But a host-preserving transition replaces only one named
+ * region: the chrome around it is committed and on screen the entire time. Reading
+ * activation off the layer suppressed that retained chrome too, which is why the
+ * Battle title bar dropped its turn, clock, and objective chips for the length of
+ * every navigation while the board behind them never moved (ADR-0213 keeps the bar
+ * itself; this keeps what the retained host puts in it).
+ *
+ * Every authored scene slot wraps its children in this, so the preparing region is
+ * still the one thing that cannot contribute.
+ */
+export function SceneSlotActivation({ region, children }: { region: SceneHost; children: ReactNode }): ReactElement {
+  const preparingRegion = useContext(ScenePreparingRegionContext);
+  if (preparingRegion !== region) return <>{children}</>;
+  return (
+    <SceneActivationContext.Provider value={false}>
+      <SceneRevealContext.Provider value={false}>
+        {children}
+      </SceneRevealContext.Provider>
+    </SceneActivationContext.Provider>
+  );
 }
 
 /** True once the director has begun the authored entrance reveal. */
@@ -225,8 +253,11 @@ export function SceneBoundary({
   }, [generation, manifest, onFailed, onPainted, preparing, preserveHost, revision, transitionRegion]);
 
   return (
-    <SceneActivationContext.Provider value={!preparing}>
-      <SceneRevealContext.Provider value={!preparing || revealing}>
+    // A host-preserving layer keeps its retained chrome activated and revealed; only
+    // the region named below stands down, through SceneSlotActivation.
+    <SceneActivationContext.Provider value={!preparing || preserveHost}>
+      <SceneRevealContext.Provider value={!preparing || preserveHost || revealing}>
+        <ScenePreparingRegionContext.Provider value={preparing && preserveHost ? transitionRegion : null}>
         <SceneRegistrationContext.Provider value={registration}>
           <div
           ref={rootRef}
@@ -247,6 +278,7 @@ export function SceneBoundary({
             {children}
           </div>
         </SceneRegistrationContext.Provider>
+        </ScenePreparingRegionContext.Provider>
       </SceneRevealContext.Provider>
     </SceneActivationContext.Provider>
   );

@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 const enchiridion = readFileSync(new URL('./Enchiridion.tsx', import.meta.url), 'utf8');
 const strategikon = readFileSync(new URL('./Strategikon.tsx', import.meta.url), 'utf8');
 const mainMenu = readFileSync(new URL('./MainMenu.tsx', import.meta.url), 'utf8');
+const apparatusRailTab = readFileSync(new URL('./shared/ApparatusRailTab.tsx', import.meta.url), 'utf8');
 const style = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const skirmish = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
 const hud = readFileSync(new URL('./SkirmishHud.tsx', import.meta.url), 'utf8');
@@ -13,7 +14,7 @@ const runArmy = readFileSync(new URL('./RunArmyWorkspace.tsx', import.meta.url),
 describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
   it('describes exactly the four unit abilities without card qualifiers', () => {
     const start = enchiridion.indexOf('const UNIT_STATE_REFERENCES');
-    const end = enchiridion.indexOf('function EnchiridionContent', start);
+    const end = enchiridion.indexOf('export function EnchiridionReference', start);
     const abilities = enchiridion.slice(start, end);
     expect(abilities.match(/state: '(?:discipline|positioned|marshalled|plagued)'/g)).toHaveLength(4);
     expect(abilities).toContain("name: 'Discipline'");
@@ -54,17 +55,43 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(style).not.toContain('.ic-terrain');
   });
 
+  it('gives one destination one mark across every rail that offers it', () => {
+    // A rail tab carries an installed media URL and nothing else. The removed
+    // `iconClassName` escape hatch painted a CSS background instead of the shared
+    // <img>, and the two paths sized the SAME installed icon differently — which is
+    // how the Strategikon's Enchiridion tab showed a 30px crop of the 64px mark the
+    // main menu drew whole. Requiring the URL makes that divergence unexpressible.
+    expect(apparatusRailTab).toContain('iconSrc: string;');
+    expect(apparatusRailTab).toContain('<img src={iconSrc} alt="" />');
+    expect(apparatusRailTab).not.toContain('iconClassName');
+    expect(style).not.toContain('.settings-tab-icon > :is(.skirmish-tab-icon');
+    for (const source of [enchiridion, strategikon, mainMenu]) {
+      expect(source).not.toContain('iconClassName');
+    }
+    // The Enchiridion destination resolves through ONE lookup for both rails.
+    expect(strategikon).toContain("iconSrc={menuModeIcon('enchiridion')}");
+    expect(mainMenu).toContain('icon: menuModeIcon(slug)');
+    expect(mainMenu).not.toContain('asset.media.icon');
+    // Every section of the shared section rail resolves to installed media.
+    expect(enchiridion).toContain('const SECTION_ICON_SRC: Record<EnchiridionSection, string>');
+    expect(enchiridion).not.toContain('const SECTION_ICON:');
+  });
+
   it('uses host-owned fill composition without adding an outer box to either host', () => {
     expect(mainMenu).toMatch(/<Enchiridion[^>]*framed=\{false\}/);
     expect(enchiridion).toContain('enchiridion-panel-unframed');
     expect(enchiridion).toContain('if (framed)');
     expect(strategikon).toContain('<ShellWorkspace');
     expect(strategikon).toContain('className="strategikon-workspace"');
-    expect(strategikon).toContain('contentClassName={`strategikon-workspace-layout');
+    expect(strategikon).toContain('contentClassName="strategikon-workspace-layout"');
     expect(strategikon).toContain('bodyClassName="strategikon-content"');
     expect(strategikon).not.toContain('<ChromeSurfaceFill');
     expect(strategikon).not.toContain('OuterChromeBox');
-    expect(strategikon).toMatch(/<Enchiridion[\s\S]*?framed=\{false\}/);
+    // The reference body mounts WITHOUT the Enchiridion's own workspace and scene
+    // slot: nesting that host inside the Strategikon's would give one visual pane two
+    // competing director-owned transition targets.
+    expect(strategikon).toMatch(/<EnchiridionReference[\s\S]*?framed=\{false\}/);
+    expect(strategikon).not.toContain('<Enchiridion\n');
     expect(strategikon).toMatch(/<RunArmyWorkspace[\s\S]*?framed=\{false\}/);
     expect(strategikon).toMatch(/<RelicCodex[^>]*framed=\{false\}/);
     expect(runArmy).toContain('framed = true');
@@ -72,7 +99,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     // The unframed run panels must fill the Strategikon content region: without a
     // constrained block size the Prosopography ledger grows to its full content
     // height and its KitScroll never becomes scrollable.
-    expect(style).toMatch(/\.strategikon-content > \.run-panel-unframed,[\s\S]{0,80}?\{[\s\S]*?block-size:\s*100%/);
+    expect(style).toMatch(/\.strategikon-pane > \.run-panel-unframed,[\s\S]{0,120}?\{[\s\S]*?block-size:\s*100%/);
   });
 
   it('opts the main-menu workspace back into pointer input', () => {
@@ -252,9 +279,14 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(style).toMatch(/\.apparatus-rail-column\s*\{[\s\S]*?--settings-rail-tab-gap:\s*var\(--main-menu-tab-column-gap\);[\s\S]*?gap:\s*var\(--settings-rail-tab-gap\)/);
     expect(style).toMatch(/\.apparatus-rail-column\[data-apparatus-rail-placement="open"\]\s*\{[\s\S]*?inline-size:\s*var\(--main-menu-tab-column-w\);[\s\S]*?padding-block:\s*var\(--main-menu-content-inset-block\) 0;[\s\S]*?padding-inline:\s*var\(--main-menu-content-inset-inline\) 0/);
     expect(style).toMatch(/\.strategikon-workspace-layout\s*\{[\s\S]*?display:\s*grid;[\s\S]*?gap:\s*0;[\s\S]*?grid-template-columns:\s*var\(--main-menu-tab-column-w\) minmax\(0, 1fr\)/);
-    expect(style).toMatch(/\.strategikon-workspace-layout\.has-secondary-rail\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2, var\(--main-menu-tab-column-w\)\) minmax\(0, 1fr\)/);
+    // The Enchiridion reference rail is a column of the REPLACEABLE pane, not of the
+    // workspace. It belongs to the Enchiridion section and must leave with it when the
+    // section rail changes, while paging through records keeps it anchored — the same
+    // retained-rail rule Settings and the main-menu Enchiridion follow.
+    expect(style).toMatch(/\.strategikon-pane\.has-secondary-rail\s*\{[\s\S]*?grid-template-columns:\s*var\(--main-menu-tab-column-w\) minmax\(0, 1fr\)/);
+    expect(strategikon).toMatch(/<StrategikonContentSceneSlot[\s\S]*?has-secondary-rail/);
+    expect(strategikon).toMatch(/<EnchiridionSectionRail[\s\S]*?<StrategikonReferenceSceneSlot/);
     expect(style).toMatch(/\.strategikon-workspace\s*\{[\s\S]*?--shell-workspace-body-inset-block:\s*var\(--main-menu-content-inset-block\);[\s\S]*?--shell-workspace-body-inset-start:\s*var\(--main-menu-content-inset-inline\)/);
-    expect(strategikon).toContain('showSectionRail={false}');
     expect(style).not.toContain('grid-template-columns: 270px minmax(0, 1fr)');
     expect(style).not.toContain('.strategikon-content .enchiridion-section-rail');
     expect(style).toMatch(/\.shell-workspace-body\s*\{[\s\S]*?padding-inline-end:\s*0/);

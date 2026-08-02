@@ -8,8 +8,15 @@ export interface ApparatusRailTabProps {
   to: string;
   index: number;
   active?: boolean;
-  iconSrc?: string;
-  iconClassName?: string;
+  /**
+   * The installed media URL of this tab's mark — REQUIRED, and the only way a rail tab
+   * can carry one. A class-name escape hatch used to sit beside it, and every tab that
+   * took it painted a CSS background under different sizing rules than the shared <img>:
+   * the Strategikon's Enchiridion tab drew the SAME installed icon as the main menu's,
+   * cropped to a 30px window of its 64px source, which is how one destination ended up
+   * with two marks. Resolve the URL at the call site (menuModeIcon, installedUiMedia).
+   */
+  iconSrc: string;
   title?: string;
   testId?: string;
   detail?: string;
@@ -68,7 +75,6 @@ export function ApparatusRailTab({
   index,
   active = false,
   iconSrc,
-  iconClassName,
   title,
   testId,
   detail,
@@ -83,7 +89,7 @@ export function ApparatusRailTab({
       style={{ ['--tab-index' as string]: index } as CSSProperties}
     >
       <span className="settings-tab-icon" aria-hidden="true">
-        {iconSrc ? <img src={iconSrc} alt="" /> : <span className={iconClassName} />}
+        <img src={iconSrc} alt="" />
       </span>
       {detail ? (
         <span className="apparatus-tab-copy">

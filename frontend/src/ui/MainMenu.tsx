@@ -23,6 +23,7 @@ const CampaignEditor = lazy(() => import('./CampaignEditor').then((m) => ({ defa
 import { drawableAssets, requiredDrawableRole } from '@chess-tactics/board-render';
 import { useStartupScene } from './shell/startupScene';
 import { installedUiMedia } from './installedUiMedia';
+import { menuModeIcon } from './menuModeIcon';
 import { MenuDestinationSceneSlot } from './shell/AuthoredSceneSlot';
 
 const BRAND_SHIELD = () => installedUiMedia('ui-kit-icons-brand-shield-png');
@@ -38,9 +39,10 @@ interface MenuTab { slug: string; label: string; href: string; icon: string }
 const currentMenuTabs = (): MenuTab[] => drawableAssets('menu-mode').map((asset) => {
   const slug = String(asset.behavior.value ?? '');
   const href = String(asset.behavior.route ?? '');
-  const icon = asset.media.icon?.media.immutableUrl;
-  if (!slug || !href || !icon) throw new Error(`menu mode ${asset.id} is incomplete`);
-  return { slug, label: asset.label, href, icon };
+  if (!slug || !href) throw new Error(`menu mode ${asset.id} is incomplete`);
+  // Through the shared resolver, not asset.media directly: the Strategikon rail offers
+  // the same Enchiridion destination and must read the identical mark (menuModeIcon).
+  return { slug, label: asset.label, href, icon: menuModeIcon(slug) };
 });
 const MENU_TABS: MenuTab[] = new Proxy([], { get: (_target, property) => { const values = currentMenuTabs(); const value = Reflect.get(values, property); return typeof value === 'function' ? value.bind(values) : value; } });
 

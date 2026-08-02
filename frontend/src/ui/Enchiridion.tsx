@@ -67,16 +67,19 @@ const SECTION_LABEL: Record<EnchiridionSection, string> = {
   abilities: 'Abilities',
 };
 
-const SECTION_ICON: Partial<Record<EnchiridionSection, string>> = {
-  units: 'skirmish-tab-icon skirmish-tab-icon-unit',
-  cards: 'skirmish-tab-icon skirmish-tab-icon-roster',
-  'card-types': 'skirmish-icon skirmish-icon-power',
-  relics: 'skirmish-tab-icon skirmish-tab-icon-log',
-  abilities: 'skirmish-icon skirmish-icon-shield',
-};
-
-const SECTION_ICON_SRC: Partial<Record<EnchiridionSection, string>> = {
+/**
+ * Every section's mark, resolved to installed media. These are the same kit icons the
+ * rail used to name as Skirmish-HUD glyph classes; as classes they painted a CSS
+ * background under the HUD's sizing rules instead of the rail's, so Terrain (the one
+ * section already on installed media) sat a third larger than its five neighbours.
+ */
+const SECTION_ICON_SRC: Record<EnchiridionSection, string> = {
+  units: installedUiMedia('ui-kit-icons-unit-studio-png'),
   terrain: installedUiMedia('ui-kit-icons-tileset-studio-png'),
+  cards: installedUiMedia('ui-kit-icons-players-png'),
+  'card-types': installedUiMedia('ui-kit-icons-game-power-png'),
+  relics: installedUiMedia('ui-kit-icons-info-png'),
+  abilities: installedUiMedia('ui-kit-icons-game-defend-png'),
 };
 
 const UNIT_COPY: Record<PlayablePieceType, string> = {
@@ -862,14 +865,28 @@ function AbilitiesSection({ framed }: { framed: boolean }): ReactElement {
   );
 }
 
-function EnchiridionContent({ section, framed, selectedRelicId, relicHref, selectedCardId, cardHref, cardTypeTextureBatch }: {
+/**
+ * The reference body for one section, with no rail and no scene slot of its own.
+ * The Strategikon mounts this directly inside ITS reference slot: embedding the
+ * whole `Enchiridion` would nest a second `enchiridion-shell` region inside the
+ * Strategikon's, giving one visual pane two competing director-owned targets.
+ */
+export function EnchiridionReference({
+  section,
+  framed,
+  selectedRelicId,
+  relicHref,
+  selectedCardId,
+  cardHref,
+  cardTypeTextureBatch = null,
+}: {
   section: EnchiridionSection;
   framed: boolean;
   selectedRelicId: RunRelicId | null;
   relicHref?: (relicId: RunRelicId) => string;
   selectedCardId: string | null;
   cardHref?: (cardId: string) => string;
-  cardTypeTextureBatch: string | null;
+  cardTypeTextureBatch?: string | null;
 }): ReactElement {
   if (section === 'terrain') return <TerrainSection framed={framed} />;
   if (section === 'cards') return <CardCodex framed={framed} selectedCardId={selectedCardId} cardHref={cardHref} />;
@@ -914,7 +931,7 @@ export function Enchiridion({
         className="enchiridion-content"
         sceneInstance={sceneInstanceKey}
       >
-        <EnchiridionContent
+        <EnchiridionReference
           section={section}
           framed={framed}
           selectedRelicId={selectedRelicId}
@@ -945,7 +962,6 @@ export function EnchiridionSectionRail({
           index={index}
           active={section === candidate}
           iconSrc={SECTION_ICON_SRC[candidate]}
-          iconClassName={SECTION_ICON[candidate]}
         />
       ))}
     </ApparatusRailColumn>
