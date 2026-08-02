@@ -650,11 +650,10 @@ const CARD_TYPE_REFERENCES: readonly CardTypeReferenceDefinition[] = Object.free
   {
     id: 'hieratic',
     name: 'Hieratic',
-    cost: 1,
-    rules: `Paired with ${AGMINATE_DISPLAY_NAME}. Run mechanics pending.`,
-    description: `Priestly, highly formal, and rigidly stylized. This steel-armored property is paired with ${AGMINATE_DISPLAY_NAME}, while its price, prevalence, target rule, and acquisition behavior remain undecided.`,
+    cost: 4,
+    rules: `Upon acquisition, one randomly chosen unit on this card gains ${AGMINATE_DISPLAY_NAME}.`,
+    description: `Priestly, highly formal, and rigidly stylized. One contained unit gains ${AGMINATE_DISPLAY_NAME} when purchased and deploys into its role's formation seat rather than a rank. The target is hidden on multi-unit offers; this one-unit Volunteer shows the state because its target is forced.`,
     frameSlot: RUN_CARD_HIERATIC_FRAME_SLOT,
-    provisional: true,
   },
 ]);
 
@@ -672,6 +671,7 @@ function CardTypeReference({ definition }: { definition: CardTypeReferenceDefini
       count: 1,
       ...(definition.id === 'pestiferous' ? { plaguedIndices: [0] } : {}),
       ...(definition.id === 'tactical' ? { ability: 'discipline' as const } : {}),
+      ...(definition.id === 'hieratic' ? { ability: 'marshalled' as const } : {}),
     }],
     properties: definition.id === 'concinnous'
       ? [{ name: 'Positioned', target: 'Pawn' }]

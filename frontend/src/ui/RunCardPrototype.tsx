@@ -8,13 +8,17 @@ import {
 import { SliderRow } from './dressing/SliderRow';
 import { StudioCatalogCard } from './studio/StudioCatalogCard';
 import {
+  AGMINATE_COST,
+  AGMINATE_DISPLAY_NAME,
   CONCINNOUS_OFFER_DENOMINATOR,
   DISCIPLINE_COST,
+  HIERATIC_AGMINATE_OFFER_DENOMINATOR,
   PESTIFEROUS_OFFER_DENOMINATOR,
   RUN_CARD_DECK,
   RUN_STARTING_GOLD,
   TACTICAL_DISCIPLINE_OFFER_DENOMINATOR,
   concinnousOfferRoll,
+  hieraticAgminateOfferRoll,
   openingShopOffers,
   pestiferousOfferRoll,
   tacticalDisciplineOfferRoll,
@@ -26,6 +30,7 @@ import {
   RUN_CARD_COST_COIN_SOURCE_SLOT,
   RUN_CARD_CONCINNOUS_FRAME_SLOT,
   RUN_CARD_FRAME_SLOT,
+  RUN_CARD_HIERATIC_FRAME_SLOT,
   RUN_CARD_PESTIFEROUS_FRAME_SLOT,
   RUN_CARD_REFERENCE_WIDTH,
   RUN_CARD_TACTICAL_FRAME_SLOT,
@@ -110,12 +115,22 @@ const TACTICAL_MULTI_CARD = Object.freeze({
   typeLine: 'Units — Tactical',
 }) satisfies RunCardFaceContent;
 
-export type RunCardPrototypeVariant = 'standard' | 'pestiferous' | 'tactical' | 'concinnous';
+const HIERATIC_CARD = Object.freeze({
+  ...STANDARD_CARD,
+  cost: 9 + AGMINATE_COST,
+  typeLine: 'Units — Hieratic',
+  properties: [{ name: AGMINATE_DISPLAY_NAME, target: 'Chosen on purchase' }] as const,
+}) satisfies RunCardFaceContent;
+
+export type RunCardPrototypeVariant = 'standard' | 'pestiferous' | 'tactical' | 'concinnous' | 'hieratic';
 export type RunCardTacticalSpecimen = 'single' | 'multi';
 
 export function runCardPrototypeVariantFromSearch(search: string): RunCardPrototypeVariant {
   const variant = new URLSearchParams(search).get('cardVariant');
-  return variant === 'pestiferous' || variant === 'tactical' || variant === 'concinnous'
+  return variant === 'pestiferous'
+    || variant === 'tactical'
+    || variant === 'concinnous'
+    || variant === 'hieratic'
     ? variant
     : 'standard';
 }
@@ -161,6 +176,7 @@ export function runCardPrototypeContent(
       properties: [{ name: 'Positioned', target: concinnousTargetRevealed ? 'Pawn 1' : 'Target hidden' }],
     };
   }
+  if (variant === 'hieratic') return HIERATIC_CARD;
   return STANDARD_CARD;
 }
 
@@ -313,6 +329,7 @@ export function RunCardPrototypeViewer({
   const [openingSampleSeed, setOpeningSampleSeed] = useState(DEFAULT_OPENING_SAMPLE_SEED);
   const [tacticalDenominator, setTacticalDenominator] = useState(TACTICAL_DISCIPLINE_OFFER_DENOMINATOR);
   const [concinnousDenominator, setConcinnousDenominator] = useState(CONCINNOUS_OFFER_DENOMINATOR);
+  const [hieraticDenominator, setHieraticDenominator] = useState(HIERATIC_AGMINATE_OFFER_DENOMINATOR);
   const [handoffCopyState, setHandoffCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
   const [loaded, setLoaded] = useState<ReadonlySet<RunCardImageKind>>(() => new Set());
   const card = useMemo(
@@ -331,7 +348,9 @@ export function RunCardPrototypeViewer({
         ? RUN_CARD_TACTICAL_FRAME_SLOT
         : cardVariant === 'concinnous'
           ? RUN_CARD_CONCINNOUS_FRAME_SLOT
-          : RUN_CARD_FRAME_SLOT;
+          : cardVariant === 'hieratic'
+            ? RUN_CARD_HIERATIC_FRAME_SLOT
+            : RUN_CARD_FRAME_SLOT;
   const realizedPestiferousCount = useMemo(() => (
     Array.from({ length: RUN_CARD_SAMPLE_DRAWS }, (_, index) => {
       const card = RUN_CARD_DECK[index % RUN_CARD_DECK.length];
@@ -357,6 +376,12 @@ export function RunCardPrototypeViewer({
       return concinnousOfferRoll(4217, Math.floor(index / 4), index % 4, card.id, concinnousDenominator);
     }).filter(Boolean).length
   ), [concinnousDenominator]);
+  const realizedHieraticCount = useMemo(() => (
+    Array.from({ length: RUN_CARD_SAMPLE_DRAWS }, (_, index) => {
+      const card = RUN_CARD_DECK[index % RUN_CARD_DECK.length];
+      return hieraticAgminateOfferRoll(4217, Math.floor(index / 4), index % 4, card.id, hieraticDenominator);
+    }).filter(Boolean).length
+  ), [hieraticDenominator]);
 
   useEffect(() => {
     let active = true;
@@ -474,6 +499,7 @@ export function RunCardPrototypeViewer({
     setOpeningSampleSeed(DEFAULT_OPENING_SAMPLE_SEED);
     setTacticalDenominator(TACTICAL_DISCIPLINE_OFFER_DENOMINATOR);
     setConcinnousDenominator(CONCINNOUS_OFFER_DENOMINATOR);
+    setHieraticDenominator(HIERATIC_AGMINATE_OFFER_DENOMINATOR);
     setPreviewCost(null);
     setShowFrameBoxes(false);
     setTitleTypeSizeRatio(null);
@@ -588,6 +614,8 @@ export function RunCardPrototypeViewer({
           id: offer.id,
           name: runCardName(offer),
           value: offer.value,
+          cost: offer.cost,
+          cardType: offer.cardType,
           pieces: offer.pieces,
         })),
       },
@@ -604,6 +632,14 @@ export function RunCardPrototypeViewer({
         sampleDraws: RUN_CARD_SAMPLE_DRAWS,
         realizedCount: realizedConcinnousCount,
         target: concinnousTargetRevealed ? 'revealed' : 'hidden',
+      },
+      hieratic: {
+        denominator: hieraticDenominator,
+        sampleSeed: 4217,
+        sampleDraws: RUN_CARD_SAMPLE_DRAWS,
+        realizedCount: realizedHieraticCount,
+        cost: AGMINATE_COST,
+        target: 'chosen-at-acquisition',
       },
     }, null, 2);
     try {
@@ -740,6 +776,13 @@ export function RunCardPrototypeViewer({
                   aria-pressed={cardVariant === 'concinnous'}
                   onClick={() => chooseCardVariant('concinnous')}
                 >Concinnous</button>
+                <button
+                  type="button"
+                  className={`tileset-view-action${cardVariant === 'hieratic' ? ' active' : ''}`}
+                  data-card-variant="hieratic"
+                  aria-pressed={cardVariant === 'hieratic'}
+                  onClick={() => chooseCardVariant('hieratic')}
+                >Hieratic</button>
               </div>
             )}
             {!contentsStudy && cardVariant === 'tactical' ? (
@@ -888,6 +931,16 @@ export function RunCardPrototypeViewer({
               nudge={1}
               dflt={CONCINNOUS_OFFER_DENOMINATOR}
             />
+            <SliderRow
+              label={<>Hieratic prevalence · 1 in {hieraticDenominator} non-Concinnous offers</>}
+              value={hieraticDenominator}
+              set={setHieraticDenominator}
+              min={2}
+              max={24}
+              step={1}
+              nudge={1}
+              dflt={HIERATIC_AGMINATE_OFFER_DENOMINATOR}
+            />
             {frame && art && coinSource ? (
               <dl className="run-card-prototype-source-readout">
                 <div><dt>Frame</dt><dd>{frame.media!.sha256.slice(0, 12)} · {frame.status}</dd></div>
@@ -899,9 +952,11 @@ export function RunCardPrototypeViewer({
                 <div><dt>Ataraxia I sample</dt><dd>{realizedPestiferousCount} / {RUN_CARD_SAMPLE_DRAWS} Pestiferous · seed 4217</dd></div>
                 <div><dt>Opening budget</dt><dd>{RUN_STARTING_GOLD} gold · buy any affordable cards</dd></div>
                 <div><dt>Opening party</dt><dd>King + 2 Pawns + purchased cards</dd></div>
-                <div><dt>Opening sample</dt><dd>{openingSample.map((offer) => `${runCardName(offer)} (${offer.value})`).join(' · ')}</dd></div>
+                <div><dt>Opening sample</dt><dd>{openingSample.map((offer) => `${runCardName(offer)} (${offer.cost}${offer.cardType ? ` · ${offer.cardType}` : ''})`).join(' · ')}</dd></div>
+                <div><dt>Opening qualifiers</dt><dd>rolled as usual at every value; a card priced over {RUN_STARTING_GOLD} gold is offered out of reach</dd></div>
                 <div><dt>Tactical sample</dt><dd>{realizedTacticalCount} / {RUN_CARD_SAMPLE_DRAWS} draws · seed 4217</dd></div>
                 <div><dt>Concinnous sample</dt><dd>{realizedConcinnousCount} / {RUN_CARD_SAMPLE_DRAWS} non-Tactical draws · seed 4217 · all card values eligible</dd></div>
+                <div><dt>Hieratic sample</dt><dd>{realizedHieraticCount} / {RUN_CARD_SAMPLE_DRAWS} non-Concinnous draws · seed 4217 · {AGMINATE_DISPLAY_NAME} adds {AGMINATE_COST} gold</dd></div>
               </dl>
             ) : null}
           </div>

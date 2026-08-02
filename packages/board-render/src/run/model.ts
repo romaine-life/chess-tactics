@@ -17,7 +17,7 @@ export {
   type RunRelicId,
 };
 
-export const RUN_FORMAT_VERSION = 11;
+export const RUN_FORMAT_VERSION = 12;
 export const GOLD_SCALE = 10;
 export const RUN_STARTING_GOLD = 8;
 export const RUN_STARTING_GOLD_TENTHS = RUN_STARTING_GOLD * GOLD_SCALE;
@@ -26,11 +26,16 @@ export const INSTALLED_ATARAXIA_MAX_TIER = 1;
 export const PESTIFEROUS_OFFER_DENOMINATOR = 8;
 export const CONCINNOUS_OFFER_DENOMINATOR = 8;
 export const TACTICAL_DISCIPLINE_OFFER_DENOMINATOR = 8;
+export const HIERATIC_AGMINATE_OFFER_DENOMINATOR = 8;
 export const POSITIONED_COST = 2;
 export const DISCIPLINE_COST = 3;
+/** Agminate seats a unit in its role's formation instead of a rank, and its King,
+ * Rook and Bishop rules interlock, so it carries Discipline's price rather than
+ * Positioned's. */
+export const AGMINATE_COST = 3;
 
 export type AtaraxiaTier = 0 | 1;
-export type RunCardType = 'pestiferous' | 'concinnous' | 'tactical';
+export type RunCardType = 'pestiferous' | 'concinnous' | 'tactical' | 'hieratic';
 export type RunUnitModifier = 'plagued';
 export const CACOCHYMIC_DISPLAY_NAME = 'Cacochymic';
 
@@ -44,7 +49,7 @@ export const ATARAXIA_BY_TIER: Readonly<Record<AtaraxiaTier, Readonly<{
     tier: 0,
     label: 'Ataraxia 0',
     title: 'The Untroubled Mind',
-    effect: 'Standard Run rules. Shop cards may be Tactical or Concinnous but are never Pestiferous.',
+    effect: 'Standard Run rules. Shop cards may be Tactical, Concinnous or Hieratic but are never Pestiferous.',
   }),
   1: Object.freeze({
     tier: 1,
@@ -382,12 +387,35 @@ export function tacticalDisciplineOfferRoll(
   return createRng(rollSeed).int(denominator) === 0;
 }
 
+export function hieraticAgminateOfferRoll(
+  seed: number,
+  battleIndex: number,
+  slotIndex: number,
+  coreId: string,
+  denominator = HIERATIC_AGMINATE_OFFER_DENOMINATOR,
+): boolean {
+  if (!Number.isSafeInteger(denominator) || denominator < 1) return false;
+  const rollSeed = mixSeed(seed, `hieratic:agminate:${coreId}`, battleIndex * 8 + slotIndex);
+  return createRng(rollSeed).int(denominator) === 0;
+}
+
+function acquisitionTarget(effectSeed: number, pieceCount: number, label: string): number | null {
+  if (!Number.isSafeInteger(pieceCount) || pieceCount < 1) return null;
+  return createRng(mixSeed(effectSeed, label)).int(pieceCount);
+}
+
 export function tacticalDisciplineAcquisitionTarget(
   effectSeed: number,
   pieceCount: number,
 ): number | null {
-  if (!Number.isSafeInteger(pieceCount) || pieceCount < 1) return null;
-  return createRng(mixSeed(effectSeed, 'tactical-discipline-acquisition-target')).int(pieceCount);
+  return acquisitionTarget(effectSeed, pieceCount, 'tactical-discipline-acquisition-target');
+}
+
+export function hieraticAgminateAcquisitionTarget(
+  effectSeed: number,
+  pieceCount: number,
+): number | null {
+  return acquisitionTarget(effectSeed, pieceCount, 'hieratic-agminate-acquisition-target');
 }
 
 export function createRunCardOffer(
@@ -398,6 +426,7 @@ export function createRunCardOffer(
   pestiferousDenominator = PESTIFEROUS_OFFER_DENOMINATOR,
   concinnousDenominator = CONCINNOUS_OFFER_DENOMINATOR,
   tacticalDenominator = TACTICAL_DISCIPLINE_OFFER_DENOMINATOR,
+  hieraticDenominator = HIERATIC_AGMINATE_OFFER_DENOMINATOR,
 ): RunCardOffer {
   const tactical = tacticalDisciplineOfferRoll(
     run.seed,
@@ -412,19 +441,31 @@ export function createRunCardOffer(
   const concinnous = !tactical
     && !pestiferous
     && concinnousOfferRoll(run.seed, battleIndex, slotIndex, card.id, concinnousDenominator);
+  const hieratic = !tactical
+    && !pestiferous
+    && !concinnous
+    && hieraticAgminateOfferRoll(run.seed, battleIndex, slotIndex, card.id, hieraticDenominator);
   const plaguedPieceIndex = pestiferous
     ? seededPestiferousTarget(effectSeed, card.pieces.map((_, index) => index), 0)
     : null;
   const plaguedPiece = plaguedPieceIndex === null ? null : card.pieces[plaguedPieceIndex];
   const cost = plaguedPiece
     ? card.value - PLAGUED_DISCOUNT[plaguedPiece]
-    : card.value + (tactical ? DISCIPLINE_COST : concinnous ? POSITIONED_COST : 0);
+    : card.value + (tactical ? DISCIPLINE_COST : concinnous ? POSITIONED_COST : hieratic ? AGMINATE_COST : 0);
   return {
     ...card,
     pieces: [...card.pieces],
     offerId: `shop-${battleIndex}-${slotIndex}-${card.id}`,
     cost,
-    cardType: pestiferous ? 'pestiferous' : tactical ? 'tactical' : concinnous ? 'concinnous' : null,
+    cardType: pestiferous
+      ? 'pestiferous'
+      : tactical
+        ? 'tactical'
+        : concinnous
+          ? 'concinnous'
+          : hieratic
+            ? 'hieratic'
+            : null,
     effectSeed,
     plaguedPieceIndex,
     effectTargetIndex: concinnous
@@ -437,30 +478,46 @@ const OPENING_SHOP_VALUES: readonly number[] = Object.freeze(
   Array.from({ length: RUN_STARTING_GOLD }, (_, index) => index + 1),
 );
 
+/** Opening draws roll in their own index space so a core identity offered in the
+ * opening and again in the Shop after Battle 1 — which is also `battleIndex` 0 —
+ * rolls its qualifier independently. */
+export const OPENING_SHOP_ROLL_BATTLE_INDEX = -1;
+
 /** Deal three distinct uniformly sampled values, then one seeded core card at
  * each value. Sampling values first prevents dense high-value ranks in the
- * 49-card deck from crowding low-value openings out of the Run. */
-export function openingShopOffers(seed: number): RunCardOffer[] {
+ * 49-card deck from crowding low-value openings out of the Run.
+ *
+ * Opening draws roll qualifiers exactly like every later Shop draw, at every core
+ * value: a Tactical surcharge may price an opening card past the starting gold and
+ * out of reach. The one repair is the degenerate deal — ADR-0323 requires a
+ * purchase before Continue, so if no offer is affordable the cheapest one drops its
+ * qualifier and is offered standard, which no other opening card ever does. */
+export function openingShopOffers(seed: number, ataraxiaTier: AtaraxiaTier = 0): RunCardOffer[] {
   const values = shuffled(OPENING_SHOP_VALUES, mixSeed(seed, 'opening-shop-values'))
     .slice(0, RUN_OPENING_OFFER_COUNT);
-  return values.map((value, slotIndex) => {
+  const offers = values.map((value, slotIndex) => {
     const candidates = RUN_CARD_DECK.filter((card) => card.value === value);
     const card = shuffled(
       candidates,
       mixSeed(seed, `opening-shop-card:${value}`, slotIndex),
     )[0];
     if (!card) throw new Error(`Opening Shop has no core card worth ${value} gold.`);
-    return {
-      ...card,
-      pieces: [...card.pieces],
-      offerId: `opening-${slotIndex}-${card.id}`,
-      cost: card.value,
-      cardType: null,
-      effectSeed: mixSeed(seed, `opening-card:${card.id}`, slotIndex),
-      plaguedPieceIndex: null,
-      effectTargetIndex: null,
-    };
+    const rolled = createRunCardOffer(
+      { seed, ataraxiaTier },
+      card,
+      OPENING_SHOP_ROLL_BATTLE_INDEX,
+      slotIndex,
+    );
+    return { ...rolled, offerId: `opening-${slotIndex}-${card.id}` };
   });
+  if (offers.some((offer) => offer.cost <= RUN_STARTING_GOLD)) return offers;
+  const cheapest = offers.reduce(
+    (best, offer) => (offer.cost < best.cost ? offer : best),
+    offers[0],
+  );
+  return offers.map((offer) => (offer === cheapest
+    ? { ...offer, cost: offer.value, cardType: null, plaguedPieceIndex: null, effectTargetIndex: null }
+    : offer));
 }
 
 function freshRunId(): string {
@@ -558,7 +615,7 @@ export function createRun(
       afterBattleIndex: 0,
       conflictIndex: 0,
       victoryGoldTenths: 0,
-      cardOffers: openingShopOffers(seed),
+      cardOffers: openingShopOffers(seed, ataraxiaTier),
       purchasedCardOfferIds: [],
       lootRelicOffers: [],
       chosenLootRelicId: null,
@@ -604,6 +661,8 @@ function normalizeLegacyCards(value: unknown, seed: number): RunOwnedCard[] {
         ? 'concinnous'
         : card.cardType === 'tactical'
           ? 'tactical'
+          : card.cardType === 'hieratic'
+            ? 'hieratic'
         : null;
     const effectSeed = Number.isSafeInteger(card.effectSeed)
       ? Number(card.effectSeed) >>> 0
@@ -624,7 +683,7 @@ function normalizeLegacyCards(value: unknown, seed: number): RunOwnedCard[] {
       coreId: card.coreId,
       cardType,
       effectSeed,
-      effectTargetUnitId: (cardType === 'concinnous' || cardType === 'tactical')
+      effectTargetUnitId: (cardType === 'concinnous' || cardType === 'tactical' || cardType === 'hieratic')
         && storedEffectTargetUnitId !== null
         && unitIds.includes(storedEffectTargetUnitId)
         ? storedEffectTargetUnitId
@@ -655,6 +714,8 @@ function normalizeCardOffers(value: unknown): RunCardOffer[] {
         ? 'concinnous'
         : offer.cardType === 'tactical'
           ? 'tactical'
+          : offer.cardType === 'hieratic'
+            ? 'hieratic'
         : null;
     const plaguedPieceIndex = cardType === 'pestiferous'
       ? Number.isSafeInteger(offer.plaguedPieceIndex)
@@ -687,7 +748,9 @@ function normalizeCardOffers(value: unknown): RunCardOffer[] {
           ? DISCIPLINE_COST
           : cardType === 'concinnous'
             ? POSITIONED_COST
-            : 0),
+            : cardType === 'hieratic'
+              ? AGMINATE_COST
+              : 0),
       plaguedPieceIndex,
       effectTargetIndex,
     };
@@ -702,7 +765,7 @@ function cardsNeedTargetNormalization(cards: readonly RunOwnedCard[]): boolean {
         : card.plaguedUnitId !== null
       : card.plaguedUnitId !== null
   )) || cards.some((card) => (
-    (card.cardType === 'concinnous' || card.cardType === 'tactical')
+    (card.cardType === 'concinnous' || card.cardType === 'tactical' || card.cardType === 'hieratic')
       ? typeof card.effectTargetUnitId !== 'string' || card.effectTargetUnitId.length === 0
       : card.effectTargetUnitId !== null
   ));
@@ -1413,12 +1476,16 @@ export function buyCard(run: RunDocument, offerId: string): RunDocument {
     ? addedUnits[offer.effectTargetIndex!]
     : offer.cardType === 'tactical'
       ? addedUnits[tacticalDisciplineAcquisitionTarget(offer.effectSeed, addedUnits.length) ?? -1]
-      : undefined;
-  const grantedAbility: Extract<RunAbility, 'discipline' | 'positioned'> | null = offer.cardType === 'tactical'
+      : offer.cardType === 'hieratic'
+        ? addedUnits[hieraticAgminateAcquisitionTarget(offer.effectSeed, addedUnits.length) ?? -1]
+        : undefined;
+  const grantedAbility: RunAbility | null = offer.cardType === 'tactical'
     ? 'discipline'
     : offer.cardType === 'concinnous'
       ? 'positioned'
-      : null;
+      : offer.cardType === 'hieratic'
+        ? 'marshalled'
+        : null;
   const abilityArmy = effectTargetUnit
     ? armyUpdate.army.map((unit): RunArmyUnit => unit.id === effectTargetUnit.id
       ? {
