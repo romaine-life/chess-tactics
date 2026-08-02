@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createBlankLevel } from '../core/level';
 import {
+  AGMINATE_COST,
   DISCIPLINE_COST,
   GOLD_SCALE,
   PIECE_VALUE,
@@ -175,14 +176,17 @@ describe('crafted Run documents', () => {
   });
 
   it('offers exactly the cards the link asks for, priced the way the game prices them', () => {
-    const run = craft('?craft=shop&battle=2&offers=rook,pawn+pawn:concinnous,knight:tactical');
+    const run = craft('?craft=shop&battle=2&offers=rook,pawn+pawn:concinnous,knight:tactical,bishop:hieratic');
     const offers = run.shop?.cardOffers ?? [];
-    expect(offers.map((offer) => offer.pieces)).toEqual([['rook'], ['pawn', 'pawn'], ['knight']]);
+    expect(offers.map((offer) => offer.pieces)).toEqual([['rook'], ['pawn', 'pawn'], ['knight'], ['bishop']]);
     expect(offers[0].cost).toBe(PIECE_VALUE.rook);
     expect(offers[0].cardType).toBeNull();
     expect(offers[1].cost).toBe(2 * PIECE_VALUE.pawn + POSITIONED_COST);
     expect(offers[1].effectTargetIndex).toBeGreaterThanOrEqual(0);
     expect(offers[2].cost).toBe(PIECE_VALUE.knight + DISCIPLINE_COST);
+    expect(offers[3].cardType).toBe('hieratic');
+    expect(offers[3].cost).toBe(PIECE_VALUE.bishop + AGMINATE_COST);
+    expect(offers[3].effectTargetIndex).toBeNull();
     expect(run.shop?.purchasedCardOfferIds).toEqual([]);
   });
 

@@ -18174,7 +18174,7 @@ const RUN_RELIC_BY_ID = serverRender?.RUN_RELIC_BY_ID ?? {};
 const RUN_RELIC_IDS = new Set(RUN_RELICS.map((relic) => relic.id));
 function validateActiveRunBody(run) {
   if (!run || typeof run !== 'object' || Array.isArray(run)) return 'run must be an object';
-  if (run.formatVersion !== 11) return 'run.formatVersion is unsupported';
+  if (run.formatVersion !== 12) return 'run.formatVersion is unsupported';
   if (typeof run.id !== 'string' || !run.id || run.id.length > 160) return 'run.id is invalid';
   if (!isFiniteInteger(run.seed) || run.seed < 0 || run.seed > 0xffffffff) return 'run.seed is invalid';
   if (run.formatVersion >= 5 && run.ataraxiaTier !== 0 && run.ataraxiaTier !== 1) return 'run.ataraxiaTier is invalid';
@@ -18244,11 +18244,20 @@ function validateActiveRunBody(run) {
       const cardTypeValid = card.cardType === null
         || card.cardType === 'pestiferous'
         || (run.formatVersion >= 6 && card.cardType === 'concinnous')
-        || (run.formatVersion >= 8 && card.cardType === 'tactical');
+        || (run.formatVersion >= 8 && card.cardType === 'tactical')
+        || (run.formatVersion >= 12 && card.cardType === 'hieratic');
       const directEffectTarget = card.effectTargetUnitId;
       const legacyEffectTarget = isObjectRecord(card.effect) ? card.effect.targetUnitId : null;
       const effectTarget = typeof directEffectTarget === 'string' ? directEffectTarget : legacyEffectTarget;
-      const affectedCard = card.cardType === 'concinnous' || card.cardType === 'tactical';
+      const affectedCard = card.cardType === 'concinnous'
+        || card.cardType === 'tactical'
+        || card.cardType === 'hieratic';
+      // Each acquisition qualifier grants exactly one ability to its recorded target unit.
+      const expectedGrantedAbility = card.cardType === 'tactical'
+        ? 'discipline'
+        : card.cardType === 'hieratic'
+          ? 'marshalled'
+          : 'positioned';
       const effectTargetValid = run.formatVersion < 6 || (
         affectedCard
           ? typeof effectTarget === 'string'
@@ -18279,16 +18288,14 @@ function validateActiveRunBody(run) {
         || card.acquiredAfterBattleIndex >= run.war.battles.length
       ) return 'run.cards contains an invalid card';
       if (run.formatVersion === 8 && affectedCard) {
-        const expectedAbility = card.cardType === 'tactical' ? 'discipline' : 'positioned';
         if (
           isObjectRecord(card.effect)
-          && (card.effect.kind !== 'grant-ability' || card.effect.ability !== expectedAbility)
+          && (card.effect.kind !== 'grant-ability' || card.effect.ability !== expectedGrantedAbility)
         ) return 'run.cards contains an invalid legacy card effect';
       }
       if (affectedCard) {
-        const expectedAbility = card.cardType === 'tactical' ? 'discipline' : 'positioned';
         const targetUnit = run.army.find((unit) => unit.id === effectTarget);
-        if (!targetUnit?.abilities.includes(expectedAbility)) return 'run.cards contains an invalid ability target';
+        if (!targetUnit?.abilities.includes(expectedGrantedAbility)) return 'run.cards contains an invalid ability target';
       }
       if (run.formatVersion >= 7) {
         const validPlaguedTarget = card.cardType === 'pestiferous'
@@ -18410,7 +18417,8 @@ function validateActiveRunBody(run) {
         const cardTypeValid = offer.cardType === null
           || offer.cardType === 'pestiferous'
           || offer.cardType === 'concinnous'
-          || offer.cardType === 'tactical';
+          || offer.cardType === 'tactical'
+          || offer.cardType === 'hieratic';
         const effectTargetValid = offer.cardType === 'concinnous'
           ? isFiniteInteger(offer.effectTargetIndex)
             && offer.effectTargetIndex >= 0
@@ -18449,7 +18457,11 @@ function validateActiveRunBody(run) {
         const plaguedPiece = offer.plaguedPieceIndex === null ? null : offer.pieces[offer.plaguedPieceIndex];
         const expectedCost = offer.cardType === 'pestiferous'
           ? offer.value - (plaguedPiece ? ACTIVE_RUN_PLAGUED_DISCOUNTS[plaguedPiece] : 0)
-          : offer.value + (offer.cardType === 'tactical' ? 3 : offer.cardType === 'concinnous' ? 2 : 0);
+          : offer.value + (
+            offer.cardType === 'tactical' || offer.cardType === 'hieratic'
+              ? 3
+              : offer.cardType === 'concinnous' ? 2 : 0
+          );
         if (offer.cost !== expectedCost) {
           return 'run.shop.cardOffers contains invalid affected pricing';
         }

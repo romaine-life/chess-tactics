@@ -153,11 +153,14 @@ these.
   price overlaid (ADR-0272, ADR-0276, ADR-0305, ADR-0309, ADR-0310, ADR-0311,
   ADR-0324, ADR-0325, ADR-0327, ADR-0328, ADR-0329, ADR-0339, ADR-0341).
   **Hieratic** is the deliberately formal fourth card-property name paired with
-  **Agminate**. It replaces the Enchiridion Type IV placeholder, but its Run
-  prevalence, price, target selection, and acquisition rule remain undecided.
-  Its reference face uses the dedicated accepted steel-armor frame; no Hieratic
-  offer enters gameplay until those mechanics receive a separate decision
-  (ADR-0339).
+  **Agminate**, and it draws in every Shop. It resolves last, after Tactical,
+  Pestiferous and Concinnous, at the same seeded one-in-eight chance on the draws
+  that remain. Exactly one contained unit gains Agminate at acquisition, chosen
+  the way a Tactical target is: drawn on purchase, concealed by a multi-unit
+  offer, and shown as the forced result on a one-unit offer. Agminate seats a
+  unit in its role's formation rather than a rank and its King, Rook and Bishop
+  rules interlock, so it carries Discipline's three-gold price. Hieratic owns the
+  dedicated steel-armor frame (ADR-0339, ADR-0345).
 - Run difficulty is **Ataraxia**. The first Run uses **Ataraxia 0 — The
   Untroubled Mind**, whose literal impact is standard Run rules and no
   Pestiferous shop cards; later Runs may opt into historically named
@@ -220,10 +223,9 @@ these.
   and Cacochymic. Card filters combine exact gold value with
   contained unit type. The Card Types reference uses the third column for its
   four affected-type names and the fourth for one selected shared card face,
-  temporarily using The Volunteer for each; Pestiferous, Concinnous, and
-  Tactical state their accepted effects. Hieratic names the fourth property and
-  pairs with Agminate while its Run mechanics remain explicitly pending
-  (ADR-0313, ADR-0315, ADR-0329, ADR-0339, ADR-0341). During Battle,
+  temporarily using The Volunteer for each; Pestiferous, Concinnous, Tactical
+  and Hieratic all state their accepted effects, and none remains provisional
+  (ADR-0313, ADR-0315, ADR-0329, ADR-0339, ADR-0341, ADR-0345). During Battle,
   the Controls title bar opens **Strategikon** over the board without unmounting
   the fight; its Martial Prosopography and Lipsanotheca expose the persistent
   army and held relics beside the same Enchiridion (ADR-0231).

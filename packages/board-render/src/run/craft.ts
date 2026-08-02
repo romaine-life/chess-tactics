@@ -17,6 +17,7 @@
 import type { Level, War } from '../core/level';
 import { createRng } from '../core/rng';
 import {
+  AGMINATE_COST,
   DISCIPLINE_COST,
   GOLD_SCALE,
   PIECE_VALUE,
@@ -135,6 +136,8 @@ const CARD_TYPES: Readonly<Record<string, RunCardType | null>> = Object.freeze({
   positioned: 'concinnous',
   pestiferous: 'pestiferous',
   plagued: 'pestiferous',
+  hieratic: 'hieratic',
+  agminate: 'hieratic',
 });
 
 const CRAFT_PHASES: readonly RunCraftPhase[] = ['shop', 'deployment', 'battle', 'victory'];
@@ -184,7 +187,7 @@ function cardSpec(raw: string): RunCraftCard {
   const key = typePart.toLowerCase();
   if (!(key in CARD_TYPES)) {
     throw new RunCraftError(
-      `craft offers: "${typePart}" is not a card type. Use tactical, concinnous, pestiferous or plain.`,
+      `craft offers: "${typePart}" is not a card type. Use tactical, concinnous, pestiferous, hieratic or plain.`,
     );
   }
   return { pieces, cardType: CARD_TYPES[key] };
@@ -564,7 +567,9 @@ function craftOffer(
       ? core.value - PLAGUED_DISCOUNT[plaguedPiece]
       : core.value + (card.cardType === 'tactical'
         ? DISCIPLINE_COST
-        : card.cardType === 'concinnous' ? POSITIONED_COST : 0),
+        : card.cardType === 'hieratic'
+          ? AGMINATE_COST
+          : card.cardType === 'concinnous' ? POSITIONED_COST : 0),
     cardType: card.cardType,
     effectSeed,
     plaguedPieceIndex,

@@ -228,10 +228,13 @@ describe('Run chrome hierarchy', () => {
     expect(runCard).toContain('RUN_CARD_PESTIFEROUS_FRAME_SLOT');
     expect(runCard).toContain('RUN_CARD_TACTICAL_FRAME_SLOT');
     expect(runCard).toContain('RUN_CARD_CONCINNOUS_FRAME_SLOT');
+    expect(runCard).toContain('RUN_CARD_HIERATIC_FRAME_SLOT');
     expect(runCard).toContain("cardType === 'pestiferous'");
     expect(runCard).toContain("cardType === 'tactical'");
     expect(runCard).toContain("cardType === 'concinnous'");
-    expect(runCard).toContain("ability: 'discipline'");
+    expect(runCard).toContain("cardType === 'hieratic'");
+    expect(runCard).toContain("'discipline' as const");
+    expect(runCard).toContain("'marshalled' as const");
     expect(runCard).toContain("name: 'Positioned'");
     expect(runCard).toContain("'Target hidden'");
     expect(runCardFace).toContain('RUN_CARD_COST_COIN_SOURCE_SLOT');

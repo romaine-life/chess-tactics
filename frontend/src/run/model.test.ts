@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { createBlankLevel } from '../core/level';
 import {
   ATARAXIA_BY_TIER,
+  AGMINATE_COST,
   AGMINATE_DISPLAY_NAME,
   CONCINNOUS_OFFER_DENOMINATOR,
   DISCIPLINE_COST,
   GOLD_SCALE,
+  HIERATIC_AGMINATE_OFFER_DENOMINATOR,
   RUN_CARD_DECK,
   PIECE_VALUE,
   POSITIONED_COST,
@@ -25,6 +27,7 @@ import {
   deterioratePestiferousCards,
   formatGold,
   grantGold,
+  hieraticAgminateAcquisitionTarget,
   leaveShop,
   normalizeRunDocument,
   OPENING_SHOP_ROLL_BATTLE_INDEX,
@@ -54,16 +57,22 @@ function war(battles = 4, lootAt: number[] = []): RunWarSnapshot {
   };
 }
 
+function cheapestOpeningOffer(run: RunDocument) {
+  return [...run.shop!.cardOffers].sort((left, right) => left.cost - right.cost)[0];
+}
+
 function deployedRun(seed = 17, snapshot = war()): RunDocument {
   let run = createRun(snapshot, seed, '2026-01-01T00:00:00.000Z');
-  run = buyCard(run, run.shop!.cardOffers[0].offerId);
+  // A qualifier can price an opening offer past the starting gold, so open with the
+  // cheapest card rather than whichever one landed in slot 0.
+  run = buyCard(run, cheapestOpeningOffer(run).offerId);
   run = prepareDeployment(leaveShop(run));
   return beginBattle(run, run.army.map((unit) => unit.id), [], []);
 }
 
 function deployedAtaraxiaRun(seed = 17, snapshot = war()): RunDocument {
   let run = createRun(snapshot, seed, 1, '2026-01-01T00:00:00.000Z');
-  run = buyCard(run, run.shop!.cardOffers[0].offerId);
+  run = buyCard(run, cheapestOpeningOffer(run).offerId);
   run = prepareDeployment(leaveShop(run));
   return beginBattle(run, run.army.map((unit) => unit.id), [], []);
 }
@@ -125,7 +134,7 @@ describe('Run piece economy', () => {
 
   it('buys the opening card in place and waits for explicit Continue before deployment', () => {
     const fresh = createRun(war(), 91);
-    const offer = fresh.shop!.cardOffers[0];
+    const offer = cheapestOpeningOffer(fresh);
     const bought = buyCard(fresh, offer.offerId);
     const card = bought.cards[0];
 
@@ -152,7 +161,7 @@ describe('Run piece economy', () => {
     expect(continued.battleIndex).toBe(0);
   });
 
-  it('rolls opening qualifiers like any other draw, dropping one the starting budget cannot buy', () => {
+  it('rolls opening qualifiers at every core value, out of reach included', () => {
     const offers = openingShopOffers(91);
     expect(offers.map((offer) => offer.cardType)).toEqual(['tactical', 'concinnous', null]);
     expect(offers.map((offer) => offer.cost)).toEqual([
@@ -172,9 +181,11 @@ describe('Run piece economy', () => {
         expect(offer.cost).toBe(
           offer.cardType === 'tactical'
             ? offer.value + DISCIPLINE_COST
-            : offer.cardType === 'concinnous'
-              ? offer.value + POSITIONED_COST
-              : offer.value,
+            : offer.cardType === 'hieratic'
+              ? offer.value + AGMINATE_COST
+              : offer.cardType === 'concinnous'
+                ? offer.value + POSITIONED_COST
+                : offer.value,
         );
         if (offer.cost > RUN_STARTING_GOLD) outOfReach += 1;
         if (offer.cardType !== null) {
@@ -255,7 +266,7 @@ describe('Run piece economy', () => {
 
   it('names opening and later Shop units in the same transaction that adds them to the army', () => {
     const fresh = createRun(war(), 91);
-    const openingPurchase = buyCard(fresh, fresh.shop!.cardOffers[0].offerId);
+    const openingPurchase = buyCard(fresh, cheapestOpeningOffer(fresh).offerId);
     expect(openingPurchase.army.filter((unit) => unit.source === 'shop').every((unit) => unit.name.length > 0)).toBe(true);
     expect(openingPurchase.army.filter((unit) => unit.source === 'shop').every((unit) => Number.isSafeInteger(unit.inspectionSeed))).toBe(true);
 
@@ -402,7 +413,7 @@ describe('Run progression and relic offers', () => {
 
   it('deterministically upgrades unnamed format-1 army units without resetting the Run', () => {
     const opening = createRun(war(), 73);
-    const current = leaveShop(buyCard(opening, opening.shop!.cardOffers[0].offerId));
+    const current = leaveShop(buyCard(opening, cheapestOpeningOffer(opening).offerId));
     const legacy = {
       ...current,
       formatVersion: 1,
@@ -418,7 +429,7 @@ describe('Run progression and relic offers', () => {
 
   it('replaces the provisional format-2 fantasy names with role-appropriate historical identities', () => {
     const opening = createRun(war(), 73);
-    const current = leaveShop(buyCard(opening, opening.shop!.cardOffers[0].offerId));
+    const current = leaveShop(buyCard(opening, cheapestOpeningOffer(opening).offerId));
     const provisional = {
       ...current,
       formatVersion: 2,
@@ -433,7 +444,7 @@ describe('Run progression and relic offers', () => {
 
   it('assigns persistent inspection-scene seeds when upgrading format-3 units', () => {
     const opening = createRun(war(), 73);
-    const current = leaveShop(buyCard(opening, opening.shop!.cardOffers[0].offerId));
+    const current = leaveShop(buyCard(opening, cheapestOpeningOffer(opening).offerId));
     const legacy = {
       ...current,
       formatVersion: 3,
@@ -478,7 +489,7 @@ describe('Run progression and relic offers', () => {
       chosenDraftId: null,
     } as unknown as RunDocument)).toThrow('retired Run draft phase');
 
-    const committed = leaveShop(buyCard(current, current.shop!.cardOffers[0].offerId));
+    const committed = leaveShop(buyCard(current, cheapestOpeningOffer(current).offerId));
     const polluted = {
       ...committed,
       formatVersion: 7,
@@ -539,7 +550,7 @@ describe('Ataraxia ladder identities', () => {
       tier: 0,
       label: 'Ataraxia 0',
       title: 'The Untroubled Mind',
-      effect: 'Standard Run rules. Shop cards may be Tactical or Concinnous but are never Pestiferous.',
+      effect: 'Standard Run rules. Shop cards may be Tactical, Concinnous or Hieratic but are never Pestiferous.',
     });
   });
 });
@@ -858,5 +869,77 @@ describe('Tactical Discipline cards', () => {
     expect(owned.unitIds.indexOf(disciplined[0].id)).toBe(
       tacticalDisciplineAcquisitionTarget(tactical.effectSeed, tactical.pieces.length),
     );
+  });
+});
+
+describe('Hieratic Agminate cards', () => {
+  const baseline = { seed: 4217, ataraxiaTier: 0 } as const;
+
+  it('rolls one in eight after the other qualifiers and adds the Agminate price', () => {
+    const forced = RUN_CARD_DECK.map((card, index) => (
+      // Denominators: Pestiferous, Concinnous, Tactical, Hieratic. Only Hieratic can roll.
+      createRunCardOffer(baseline, card, Math.floor(index / 4), index % 4, 8, 0, 0, 1)
+    ));
+
+    expect(HIERATIC_AGMINATE_OFFER_DENOMINATOR).toBe(8);
+    expect(AGMINATE_COST).toBe(DISCIPLINE_COST);
+    expect(forced.every((offer) => offer.cardType === 'hieratic')).toBe(true);
+    expect(forced.every((offer) => offer.cost === offer.value + AGMINATE_COST)).toBe(true);
+    // The target is drawn at acquisition, so the offer carries no seeded index.
+    expect(forced.every((offer) => offer.effectTargetIndex === null)).toBe(true);
+    expect(forced.every((offer) => offer.plaguedPieceIndex === null)).toBe(true);
+
+    // Tactical, Pestiferous and Concinnous all resolve first: a card carries one qualifier.
+    const outranked = RUN_CARD_DECK.map((card, index) => (
+      createRunCardOffer({ seed: 4217, ataraxiaTier: 1 }, card, Math.floor(index / 4), index % 4, 1, 1, 1, 1)
+    ));
+    expect(outranked.every((offer) => offer.cardType === 'tactical')).toBe(true);
+  });
+
+  it('chooses and persists exactly one Agminate unit only when the card is acquired', () => {
+    let shop: RunDocument | null = null;
+    for (let seed = 1; seed < 500 && !shop; seed += 1) {
+      const candidate = openShop({ ...deployedRun(seed), goldTenths: 100 * GOLD_SCALE }, []);
+      if (candidate.shop?.cardOffers.some((offer) => offer.cardType === 'hieratic')) shop = candidate;
+    }
+    expect(shop).not.toBeNull();
+    const hieratic = shop!.shop!.cardOffers.find((offer) => offer.cardType === 'hieratic')!;
+    expect(hieratic.effectTargetIndex).toBeNull();
+
+    const bought = buyCard(shop!, hieratic.offerId);
+    const owned = bought.cards.find((card) => (
+      card.coreId === hieratic.id && card.effectSeed === hieratic.effectSeed
+    ))!;
+    const agminate = bought.army.filter((unit) => (
+      owned.unitIds.includes(unit.id) && unit.abilities.includes('marshalled')
+    ));
+
+    expect(owned.cardType).toBe('hieratic');
+    expect(agminate).toHaveLength(1);
+    expect(owned.effectTargetUnitId).toBe(agminate[0].id);
+    expect(owned.unitIds.indexOf(agminate[0].id)).toBe(
+      hieraticAgminateAcquisitionTarget(hieratic.effectSeed, hieratic.pieces.length),
+    );
+    expect(bought.goldTenths).toBe(shop!.goldTenths - (hieratic.value + AGMINATE_COST) * GOLD_SCALE);
+    // The Agminate draw is its own; it does not mirror the Tactical one.
+    expect(hieraticAgminateAcquisitionTarget(hieratic.effectSeed, 8))
+      .not.toBe(tacticalDisciplineAcquisitionTarget(hieratic.effectSeed, 8));
+  });
+
+  it('survives a document round trip with its acquisition target intact', () => {
+    let shop: RunDocument | null = null;
+    for (let seed = 1; seed < 500 && !shop; seed += 1) {
+      const candidate = openShop({ ...deployedRun(seed), goldTenths: 100 * GOLD_SCALE }, []);
+      if (candidate.shop?.cardOffers.some((offer) => offer.cardType === 'hieratic')) shop = candidate;
+    }
+    const hieratic = shop!.shop!.cardOffers.find((offer) => offer.cardType === 'hieratic')!;
+    const bought = buyCard(shop!, hieratic.offerId);
+    const normalized = normalizeRunDocument(structuredClone(bought));
+
+    expect(normalized.formatVersion).toBe(RUN_FORMAT_VERSION);
+    expect(normalized.cards.map((card) => card.cardType)).toEqual(bought.cards.map((card) => card.cardType));
+    expect(normalized.cards.map((card) => card.effectTargetUnitId))
+      .toEqual(bought.cards.map((card) => card.effectTargetUnitId));
+    expect(normalized.shop?.cardOffers).toEqual(bought.shop?.cardOffers);
   });
 });

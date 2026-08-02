@@ -169,7 +169,8 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(cardTypes).toContain('RUN_CARD_HIERATIC_FRAME_SLOT');
     expect(cardTypes).toContain("iconRole: 'ui-kit-icons-card-properties-pestiferous-png'");
     expect(cardTypes).toContain('className="enchiridion-card-type-row-icon"');
-    expect(cardTypes.match(/provisional: true/g)).toHaveLength(1);
+    // Every named card property now has installed Run mechanics, so none is provisional.
+    expect(cardTypes).not.toContain('provisional: true');
     expect(cardTypes).toContain("useState('pestiferous')");
     expect(cardTypes).toContain('className="enchiridion-card-type-layout"');
     expect(cardTypes).toContain('className="enchiridion-card-type-rows"');
