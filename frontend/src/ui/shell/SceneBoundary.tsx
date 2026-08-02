@@ -13,7 +13,7 @@ import {
 import { loadingError, loadingMark } from '../../diagnostics/loadingTimeline';
 import { loadDecodedImage } from '../../render/imageResources';
 import type { SceneManifest } from './sceneManifest';
-import type { SceneHost } from './sceneManifest';
+import type { SceneHost, SceneOverlapScope } from './sceneManifest';
 import { sceneTransitionTargetSelector } from './sceneTransitionTarget';
 
 type ParticipantPhase = 'loading' | 'painted' | 'error';
@@ -94,6 +94,8 @@ interface SceneBoundaryProps {
   revealing?: boolean;
   deactivating?: boolean;
   visualRole?: 'single' | 'outgoing' | 'incoming';
+  /** How much of this layer the director's overlap transition may fade. */
+  overlapScope?: SceneOverlapScope;
   children: ReactNode;
   onPainted: (generation: number) => void;
   onFailed: (generation: number, error: Error) => void;
@@ -109,6 +111,7 @@ export function SceneBoundary({
   revealing = false,
   deactivating = false,
   visualRole = 'single',
+  overlapScope = 'scene',
   children,
   onPainted,
   onFailed,
@@ -237,6 +240,7 @@ export function SceneBoundary({
           data-scene-unresolved={unresolvedParticipants.join(',')}
           data-transition-region={transitionRegion ?? undefined}
           data-scene-visual-role={visualRole}
+          data-scene-overlap-scope={overlapScope === 'scene' ? undefined : overlapScope}
           inert={preparing && !preserveHost ? true : undefined}
           aria-hidden={preparing && !preserveHost || undefined}
           >
