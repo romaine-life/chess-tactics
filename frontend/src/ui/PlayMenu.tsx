@@ -284,16 +284,24 @@ function RunPanel({
                   </div>
                 </InnerChromeBox>
               ) : null}
-              {run && !adoptionConflict ? (
+              {/* The row keeps its place when no Run exists — disabled like the Continue
+                  rows ("Nothing to continue") and the locked Ataraxia tiers, so the
+                  resume point stays learnable where it will appear (ADR-0289's
+                  visible-but-disabled language). It only leaves the list while the
+                  adoption conflict card speaks for the current Run instead. */}
+              {!adoptionConflict && (run || (hydrated && !loading)) ? (
                 <ChromeNavButton unit="inner-list-row"
                   to={PLAY_RUN_CURRENT_SELECTOR_HREF}
-                  className={chromeUnitClassNames('inner-list-row', 'settings-row play-choice-row', choice === 'current' && 'active is-selected')}
+                  className={chromeUnitClassNames('inner-list-row', 'settings-row play-choice-row', !run && 'is-disabled', choice === 'current' && 'active is-selected')}
+                  disabled={!run}
                   aria-current={choice === 'current' ? 'page' : undefined}
                   data-testid="run-choice-current"
                 >
                   <div className="settings-row-copy">
                     <h4>Current Run</h4>
-                    <p>Battle {run.battleIndex + 1} of {run.war.battles.length} · {ATARAXIA_BY_TIER[run.ataraxiaTier].label}</p>
+                    <p>{run
+                      ? `Battle ${run.battleIndex + 1} of ${run.war.battles.length} · ${ATARAXIA_BY_TIER[run.ataraxiaTier].label}`
+                      : 'No active Run'}</p>
                   </div>
                 </ChromeNavButton>
               ) : null}
