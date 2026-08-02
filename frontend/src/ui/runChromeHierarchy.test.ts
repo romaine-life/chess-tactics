@@ -50,7 +50,8 @@ describe('Run chrome hierarchy', () => {
     expect(runSelfInspection).toContain('Army');
     expect(runSelfInspection).toContain('Relics');
     expect(runSelfInspection).toContain("url.searchParams.set('view', view)");
-    expect(runScreen).toContain('runWorkspaceHref(window.location.href, nextView)');
+    expect(runScreen).toContain("current.pathname = '/run';");
+    expect(runScreen).toContain('runWorkspaceHref(current.toString(), nextView)');
     expect(runScreen).toContain("navigateApp(nextHref, { replace: true, scroll: false })");
     expect(metaControls).toContain('Reset Shop');
     expect(metaControls).toContain('Continue to first Battle');
@@ -109,10 +110,28 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('<RunRelicsWorkspace relicIds={shellRun.relics} />');
     expect(skirmish).toMatch(/<ShellViewportSwap[\s\S]*?className="skirmish-war-room"[\s\S]*?primaryClassName="skirmish-field"[\s\S]*?workspaceOpen=\{strategikonOpen \|\| Boolean\(runWorkspace\)\}/);
     expect(skirmish).toContain('{shellWorkspaceCoversRelics ? null : <RunRelicStrip relicIds={relicIds} />}');
-    expect(runScreen).toContain('shellWorkspaceCoversRelics={Boolean(inspectionWorkspace)}');
+    expect(runScreen).toContain('shellWorkspaceCoversRelics={strategikonOpen || Boolean(inspectionWorkspace)}');
     expect(skirmish).toContain('{runWorkspace}');
     expect(styleCss).toMatch(/\.shell-viewport-primary\[data-shell-workspace-covered\]\s*\{[\s\S]*?visibility:\s*hidden;/);
     expect(styleCss).toMatch(/\.run-phase-primary\s*>\s*\.run-workspace\s*\{[\s\S]*?grid-row:\s*1;/);
+  });
+
+  it('offers the Strategikon from the Controls title mark in every Run phase, not only Battle', () => {
+    // Deployment, Shop, and Victory are still the same Run: the reference workspace must
+    // open from the same title mark Battle uses. Only an absent Run repairs the address.
+    expect(runScreen).toContain("const strategikonOpen = sceneSnapshot.workspace === 'strategikon';");
+    expect(runScreen).toContain("? `/run${routeSearch}`");
+    expect(runScreen).toContain(': `/run/strategikon/enchiridion/units${routeSearch}`');
+    expect(runScreen).toContain('strategikonHref: shellRun ? strategikonHref : null,');
+    expect(runScreen).toContain('strategikonOpen,');
+    expect(runScreen).toContain('className="strategikon-slot"');
+    expect(runScreen).toContain('<Strategikon path={routePath} search={routeSearch} run={shellRun} />');
+    expect(runScreen).toContain("routePath.startsWith('/run/strategikon/') && !run");
+    expect(runScreen).not.toContain("sceneSnapshot.phase !== 'battle'");
+    expect(skirmishHud).toContain('data-testid="strategikon-toggle"');
+    expect(skirmishHud).toContain('titleActions={strategikonToggle}');
+    expect(styleCss).toMatch(/\.strategikon-slot\s*\{[\s\S]*?position:\s*absolute;/);
+    expect(styleCss).toMatch(/\.run-phase-workspace\s*\{[\s\S]*?position:\s*relative;/);
   });
 
   it('keeps Run abandonment at the bottom of Controls and distinct from Battle resignation', () => {
