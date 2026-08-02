@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
+import { Children, useCallback, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import type { RunBattleTransformSink } from '../game/store';
 import { defaultFacingForSide } from '../core/pieces';
 import type { GameState, Piece } from '../core/types';
@@ -10,6 +10,7 @@ import { TitleBarStatus } from './shell/TitleBarControls';
 import { PLAY_RUN_SELECTOR_HREF } from './playHubRoute';
 import { Skirmish, SkirmishShell, type RunBattlePresentation } from './Skirmish';
 import { navigateApp } from './navigation';
+import { installedRunShopWrap, runShopWrapLiveMount } from './runShopWrapCandidates';
 import type { RunSceneSnapshot } from './shell/sceneManifest';
 import { GameplayWorkspaceSceneSlot, RunPresentationSceneSlot } from './shell/AuthoredSceneSlot';
 import { useConfirm } from './shared/ConfirmDialog';
@@ -455,6 +456,69 @@ function RelicOffer({
   );
 }
 
+/**
+ * The shop's card row. When the owner has installed a wrap, the same row is
+ * mounted inside its painted stall; otherwise it is the plain grid. The wrap is
+ * decoration around the real cards — it never changes what is purchasable.
+ */
+function ShopCardRow({ children }: { children: ReactNode }): ReactElement {
+  const wrap = useMemo(() => installedRunShopWrap(), []);
+  const [box, setBox] = useState({ width: 0, height: 0 });
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const cardCount = Children.count(children);
+
+  // The host fills the space the Shop allots it and the stall is drawn inside
+  // that box, so the wrap can never push the screen into scrolling.
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!wrap || !host || typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(([entry]) => {
+      setBox({
+        width: Math.max(0, Math.floor(entry.contentRect.width)),
+        height: Math.max(0, Math.floor(entry.contentRect.height)),
+      });
+    });
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, [wrap]);
+
+  if (!wrap || wrap.kind !== 'band' || cardCount < 1) {
+    return <div className="run-card-grid">{children}</div>;
+  }
+  const mount = box.width > 0 && box.height > 0
+    ? runShopWrapLiveMount(wrap, cardCount, box.width, box.height)
+    : null;
+  return (
+    <div className="run-shop-wrap-host" ref={hostRef} data-testid="run-shop-wrap">
+      {mount ? (
+        <div
+          className="run-shop-wrap-frame"
+          style={{
+            insetInlineStart: `${mount.frame.left}px`,
+            insetBlockStart: `${mount.frame.top}px`,
+            inlineSize: `${mount.frame.width}px`,
+            blockSize: `${mount.frame.height}px`,
+          }}
+        >
+          <img className="run-shop-wrap-art" src={wrap.src} alt="" draggable={false} />
+          <div
+            className="run-shop-wrap-cards"
+            style={{
+              insetInlineStart: `${mount.cards.left}px`,
+              insetBlockStart: `${mount.cards.top}px`,
+              inlineSize: `${mount.cards.width}px`,
+              gridTemplateColumns: `repeat(${cardCount}, ${mount.cardWidth}px)`,
+              gap: `${mount.cards.gap}px`,
+            }}
+          >
+            {children}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function ShopPanel({
   run,
   view,
@@ -514,9 +578,9 @@ function ShopPanel({
             </ul>
           </InnerChromeBox>
         ) : null}
-        <section>
+        <section className="run-shop-cards-section">
           <h3>Cards</h3>
-          <div className="run-card-grid">
+          <ShopCardRow>
             {shop.cardOffers.map((offer) => {
               const purchased = shop.purchasedCardOfferIds.includes(offer.offerId);
               return (
@@ -530,7 +594,7 @@ function ShopPanel({
                 />
               );
             })}
-          </div>
+          </ShopCardRow>
         </section>
 
         {shop.lootRelicOffers.length > 0 ? (
