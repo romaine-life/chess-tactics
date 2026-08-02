@@ -530,6 +530,28 @@ const DESTINATION_SLOT_BY_REGION: Readonly<Partial<Record<SceneHost, SceneSlotId
   'gameplay-shell': 'gameplay-content',
 });
 
+/**
+ * React mount identity for a rendered scene layer.
+ *
+ * A leaf in a nested detail slot (the Play Run choice detail) refines scene identity
+ * and drives its region's transition choreography, but the retained shell around that
+ * slot — the Run action column and its painted-surface state — must stay mounted
+ * while only the detail changes. Keying the layer by the deepest non-detail instance
+ * keeps one React tree across `run ↔ run/current ↔ run/new`, so selecting a choice
+ * never unmounts, blanks, and re-reveals the stable sibling column. The state-driven
+ * run/phase and run/workspace slots stay leaf-keyed on purpose: their scenes overlap
+ * as two complete layers, which requires distinct keys.
+ */
+const NESTED_DETAIL_SLOTS: ReadonlySet<SceneSlotId> = new Set(['run-detail-content']);
+
+export function sceneLayerKey(scene: ScenePath): string {
+  for (let index = scene.instances.length - 1; index >= 0; index -= 1) {
+    const entry = scene.instances[index];
+    if (!NESTED_DETAIL_SLOTS.has(entry.definition.slot)) return entry.key;
+  }
+  return scene.leaf.key;
+}
+
 /** True when a retained host is transitioning from its empty child slot into content. */
 export function isEmptySlotOrigin(
   current: ScenePath,

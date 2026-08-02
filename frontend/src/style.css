@@ -22197,6 +22197,23 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   text-align: end;
 }
 
+/* Replacement disclosure seated above Start Run — the popup-free abandon confirm.
+   Sits between the detail body and the actions row, so the column's own gap spaces it. */
+.run-replace-note {
+  padding: var(--ds-inset);
+}
+
+.run-replace-note h3 {
+  font-size: var(--ds-text-2xs);
+  margin: 0 0 var(--ds-inline-tight);
+  text-transform: uppercase;
+}
+
+.run-replace-note p {
+  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .72));
+  margin: 0;
+}
+
 .run-pestiferous-losses {
   padding: var(--ds-gutter);
 }

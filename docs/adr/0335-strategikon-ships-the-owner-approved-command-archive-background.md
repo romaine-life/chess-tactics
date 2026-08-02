@@ -2,8 +2,6 @@
 status: accepted
 date: 2026-08-01
 deciders: owner (Nelson) + Codex
-supersedes:
-  - "[ADR-0334](0334-strategikon-background-art-is-reviewed-in-the-live-workspace.md)"
 refines:
   - "[ADR-0076](0076-scaling-is-calibration-production-art-is-native-1x.md)"
   - "[ADR-0085](0085-runtime-assets-are-live-storage-backed.md)"
@@ -15,10 +13,10 @@ refines:
 
 ## Context and Problem Statement
 
-ADR-0334 placed a private 688x384 PixelLab command-archive candidate behind the
-real Strategikon at a 1440x900 review viewport. The owner approved that exact
-view and requested immediate installation. Its successful composition depends
-on `object-fit: cover`, so production use cannot be described as native 1:1
+A private 688x384 PixelLab command-archive candidate was placed behind the real
+Strategikon at a 1440x900 review viewport. The owner approved that exact view
+and requested immediate installation. Its successful composition depends on
+`object-fit: cover`, so production use cannot be described as native 1:1
 presentation under ADR-0076 even though the stored source PNG itself remains
 unresampled.
 
@@ -42,8 +40,8 @@ exception**.
   that immutable accepted URL; they never fetch a candidate or admin catalog.
 - `ShellWorkspace` still owns clipping and layer geometry. Strategikon supplies
   only the installed decorative image and cannot recreate shell attachment.
-- The ADR-0334 query-gated review component and its candidate slot are retired
-  from runtime code. The earlier candidate remains private audit history.
+- The query-gated candidate component and its review slot are retired from
+  runtime code. The earlier candidate remains private audit history.
 - This is a closed exception to ADR-0076 for one exact presentation and hash. It
   does not authorize cover scaling, resizing, or non-native acceptance for any
   replacement or other asset.
