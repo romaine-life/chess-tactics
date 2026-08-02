@@ -807,7 +807,8 @@ export function RunScreen({
   const run = sceneSnapshot.run;
   const hydrated = sceneSnapshot.hydrated;
   const replace = useActiveRun((state) => state.replace);
-  // A ?craft= address builds its Run before the screen reads one (development only).
+  // A craft address sets the account's Run to the state it names before the screen reads one,
+  // every time it is opened, then lands here without its craft parameters (ADR-0346).
   const craft = useRunCraft(routePath, routeSearch);
   const viewScope = run
     ? `${run.id}:${run.phase}:${run.phase === 'shop' ? run.shop?.afterBattleIndex ?? run.battleIndex : run.battleIndex}`

@@ -60,6 +60,7 @@ import {
  * Run screen keeps its own params (view) and a reload does not craft a second Run. */
 export const RUN_CRAFT_PARAMS: readonly string[] = Object.freeze([
   'craft',
+  'spec',
   'battle',
   'war',
   'seed',
@@ -211,6 +212,11 @@ function integer(raw: string, label: string, min: number, max: number): number {
 /** Read a craft spec out of a Run address. Returns null when the address asks for no crafting. */
 export function parseRunCraftSpec(search: string): RunCraftSpec | null {
   const params = new URLSearchParams(search);
+  const encoded = params.get('spec');
+  // An encoded spec is the same JSON spec the endpoint takes, carried in an address so that
+  // every craft — including the units-with-abilities ones the readable grammar cannot spell —
+  // is expressible as a link that re-crafts.
+  if (encoded) return runCraftSpecFromJson(decodeRunCraftSpec(encoded));
   const phase = params.get('craft');
   if (!phase) return null;
   if (!CRAFT_PHASES.includes(phase as RunCraftPhase)) {
@@ -342,7 +348,90 @@ export function searchWithoutCraftParams(search: string): string {
 }
 
 export function hasRunCraftRequest(search: string): boolean {
-  return new URLSearchParams(search).has('craft');
+  const params = new URLSearchParams(search);
+  return params.has('craft') || params.has('spec');
+}
+
+/**
+ * Write a normalized spec back out in the grammar the parsers read. Round-tripping matters
+ * because it is what makes a crafted Run reproducible: the reply to a craft carries the link
+ * that crafts it again, so the spec has to survive the trip out and back unchanged.
+ */
+export function runCraftSpecToJson(spec: RunCraftSpec): Record<string, unknown> {
+  const unit = (entry: RunCraftUnit) => (entry.abilities.length ? { type: entry.type, abilities: [...entry.abilities] } : entry.type);
+  const json: Record<string, unknown> = { phase: spec.phase, battle: spec.battle, seed: spec.seed, tier: spec.ataraxiaTier };
+  if (spec.warId !== null) json.war = spec.warId;
+  if (spec.goldTenths !== null) json.gold = spec.goldTenths / GOLD_SCALE;
+  if (spec.army) json.army = spec.army.map(unit);
+  if (spec.add) json.add = spec.add.map(unit);
+  if (spec.offers) json.offers = spec.offers.map((card) => ({ pieces: [...card.pieces], type: card.cardType }));
+  if (spec.loot) json.loot = [...spec.loot];
+  if (spec.paidRelic !== null) json.paid = spec.paidRelic;
+  if (spec.relics) json.relics = [...spec.relics];
+  return json;
+}
+
+function base64Url(text: string): string {
+  const bytes = new TextEncoder().encode(text);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function fromBase64Url(encoded: string): string {
+  const padded = encoded.replace(/-/g, '+').replace(/_/g, '/');
+  const binary = atob(padded.padEnd(Math.ceil(padded.length / 4) * 4, '='));
+  return new TextDecoder().decode(Uint8Array.from(binary, (character) => character.charCodeAt(0)));
+}
+
+function decodeRunCraftSpec(encoded: string): unknown {
+  try {
+    return JSON.parse(fromBase64Url(encoded));
+  } catch {
+    throw new RunCraftError('craft spec: this link’s encoded spec could not be read. Copy the whole link, or use the readable ?craft= grammar.');
+  }
+}
+
+/** True when the readable grammar can spell this spec exactly. Only unit abilities cannot be
+ * written as an address; everything else has a parameter. */
+function craftAddressExpressible(spec: RunCraftSpec): boolean {
+  return [...(spec.army ?? []), ...(spec.add ?? [])].every((entry) => entry.abilities.length === 0);
+}
+
+function craftAddressParams(spec: RunCraftSpec): URLSearchParams {
+  const params = new URLSearchParams();
+  params.set('craft', spec.phase);
+  params.set('battle', String(spec.battle));
+  if (spec.warId !== null) params.set('war', spec.warId);
+  if (spec.seed !== DEFAULT_CRAFT_SEED) params.set('seed', String(spec.seed));
+  if (spec.ataraxiaTier !== 0) params.set('tier', String(spec.ataraxiaTier));
+  if (spec.goldTenths !== null) params.set('gold', String(spec.goldTenths / GOLD_SCALE));
+  if (spec.army) params.set('army', spec.army.map((entry) => entry.type).join(','));
+  if (spec.add) params.set('add', spec.add.map((entry) => entry.type).join(','));
+  if (spec.offers) {
+    params.set('offers', spec.offers
+      .map((card) => card.pieces.join('+') + (card.cardType ? `:${card.cardType}` : ''))
+      .join(','));
+  }
+  if (spec.loot) params.set('loot', spec.loot.join(','));
+  if (spec.paidRelic !== null) params.set('paid', spec.paidRelic);
+  if (spec.relics) params.set('relics', spec.relics.join(','));
+  return params;
+}
+
+/**
+ * The link that crafts this Run. Opening it sets the account's active Run to the crafted state
+ * and lands on the Run screen, every time — so the same link is both "go and look at this" and
+ * the restart button for the bug found there.
+ *
+ * Readable whenever the address grammar can spell the spec, so it can be read and tweaked by
+ * hand; an opaque `?spec=` otherwise, so no craft is ever unlinkable.
+ */
+export function runCraftLink(spec: RunCraftSpec, path = '/run'): string {
+  const params = craftAddressExpressible(spec)
+    ? craftAddressParams(spec)
+    : new URLSearchParams({ spec: base64Url(JSON.stringify(runCraftSpecToJson(spec))) });
+  return `${path}?${params.toString()}`;
 }
 
 /**

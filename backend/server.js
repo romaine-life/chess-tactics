@@ -18668,6 +18668,19 @@ app.delete('/api/active-run', async (req, res) => {
   }
 });
 
+// Read a craft spec out of a Run address. The Run screen forwards the very address a craft link
+// was opened at, so an address that turns out to name no craft is a defect in that link rather
+// than a state to write.
+function craftSpecFromAddress(address) {
+  const spec = serverRender.parseRunCraftSpec(address);
+  if (!spec) {
+    const error = new Error('craft: this address asks for no Run state. A craft link carries ?craft=<phase> or ?spec=.');
+    error.name = 'RunCraftError';
+    throw error;
+  }
+  return spec;
+}
+
 // POST /api/active-run/craft — ADMIN: set the caller's OWN active Run to a named state (ADR-0338).
 //
 // Debugging and feature work need a Run parked at an exact Shop, deployment, Battle or victory.
@@ -18675,8 +18688,9 @@ app.delete('/api/active-run', async (req, res) => {
 // documents this endpoint's own validator would reject; crafting composes the state out of the
 // game's real transitions instead, so what lands in the row is a Run the game could have played.
 // The spec is a request body rather than a query string precisely so it can carry more than an
-// address comfortably holds. The reply is the Run plus the address to open — the link says WHERE
-// you are, never what the Run contains.
+// address comfortably holds — but the reply is the link that CRAFTS the Run again (ADR-0346),
+// not merely one that names it, so a state handed over can always be returned to. The Run screen
+// posts its own craft address here, so a craft link works the same in a built app as in dev.
 app.post('/api/active-run/craft', async (req, res) => {
   const user = await requireAdmin(req, res);
   if (!user) return;
@@ -18685,9 +18699,13 @@ app.post('/api/active-run/craft', async (req, res) => {
     return;
   }
   let run = null;
+  let craftLink = null;
   try {
     const body = req.body && typeof req.body === 'object' ? req.body : {};
-    const spec = serverRender.runCraftSpecFromJson(body.spec === undefined ? body : body.spec);
+    const spec = typeof body.address === 'string'
+      ? craftSpecFromAddress(body.address)
+      : serverRender.runCraftSpecFromJson(body.spec === undefined ? body : body.spec);
+    craftLink = serverRender.runCraftLink(spec);
     const document = await dbGetOfficialCampaigns('default');
     const data = (document && document.data) || {};
     // Origin is a client-side tag; every War in the official workspace is official by definition.
@@ -18740,9 +18758,12 @@ app.post('/api/active-run/craft', async (req, res) => {
     });
     res.status(200).json({
       ...publicActiveRun(result),
-      // The address carries the crafted Run's identity so opening it signed out, or as someone
-      // else, says so instead of quietly rendering a different Run.
-      url: serverRender.runLinkForRun(run.id),
+      // The address to hand over: opening it crafts this state again and lands on the Run screen,
+      // so it is both "go and look at this" and the way back after the Run has been played on.
+      url: craftLink,
+      // The identity address, which asserts this exact Run instead of rebuilding it. Useful only
+      // for pointing at a Run already in hand: it cannot restore one that has moved on.
+      runUrl: serverRender.runLinkForRun(run.id),
       runId: run.id,
       summary: {
         war: run.war.name,

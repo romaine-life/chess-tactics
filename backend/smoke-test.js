@@ -4451,6 +4451,30 @@ async function main() {
   if (unknownPhaseCraft.statusCode !== 400 || JSON.parse(unknownPhaseCraft.body).error !== 'invalid_run_craft_spec') {
     throw new Error(`A craft spec must name a real Run phase: ${unknownPhaseCraft.statusCode} ${unknownPhaseCraft.body}`);
   }
+  // A craft link posts the address it was opened at (ADR-0346). An address carrying no craft
+  // request must be named as such, not treated as an empty spec that writes a default Run.
+  const emptyAddressCraft = await request(
+    'POST', '/api/active-run/craft',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({ address: '?view=army' }),
+  );
+  if (
+    emptyAddressCraft.statusCode !== 400
+    || JSON.parse(emptyAddressCraft.body).error !== 'invalid_run_craft_spec'
+  ) {
+    throw new Error(`A craft address with no craft request must be refused: ${emptyAddressCraft.statusCode} ${emptyAddressCraft.body}`);
+  }
+  const badAddressCraft = await request(
+    'POST', '/api/active-run/craft',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({ address: '?craft=shop&battle=3&army=horse' }),
+  );
+  if (
+    badAddressCraft.statusCode !== 400
+    || !JSON.parse(badAddressCraft.body).details.includes('horse')
+  ) {
+    throw new Error(`A craft address must be read with the same grammar the link uses: ${badAddressCraft.statusCode} ${badAddressCraft.body}`);
+  }
   const craftedRunAfterRefusals = await get('/api/active-run', { cookie: '__Host-chess-tactics-access=abc' });
   if (craftedRunAfterRefusals.statusCode !== 200 || JSON.parse(craftedRunAfterRefusals.body).run !== null) {
     throw new Error(`A refused craft must write nothing: ${craftedRunAfterRefusals.statusCode} ${craftedRunAfterRefusals.body}`);

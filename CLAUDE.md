@@ -180,16 +180,26 @@ The Studio encodes its state in the URL, so deep-link instead of clicking:
 - `view=board`, `family=<id>`, `collection=<id>`, `asset=<id>`, `unit=<id>`, `seed=<n>`
 - `/unit-studio` is an alias for the Studio with the Units shelf preselected.
 
-#### Crafting a Run state to link to (ADR-0338)
+#### Crafting a Run state to link to (ADR-0338, ADR-0346)
 
 Run screens need an active Run, so `/run` alone lands wherever the account already is. Craft the
-state first, then hand over a plain app link — the link says *where* in the Run you are, never
-what the Run contains. Never hand-author a Run document or edit `active_runs`: the server
-validator cross-checks army/card membership, Plagued targets and offer pricing, and a crafted
-document passes because the game built it.
+state first, then hand over the craft link. Never hand-author a Run document or edit
+`active_runs`: the server validator cross-checks army/card membership, Plagued targets and offer
+pricing, and a crafted document passes because the game built it.
+
+**Every Run state you put Nelson on is handed over as a link that CRAFTS it.** Opening the link
+sets his active Run to that state and lands on the Run screen — every time, from whatever the Run
+has since become. That is what makes it a restart button: he finds a bug on the state you sent,
+presses the same link, and is back at it without asking you. Handing over `/run?run=<id>`, a
+board-code, a click path, or "craft it again and I'll send a new link" for a state you crafted is
+a defect — those cannot reproduce what they show.
+
+This is not only for the end of a task. **While troubleshooting, lead with a craft link**: the
+fastest way to move a Run question forward is to put him on the exact state and let him press it
+as often as he needs.
 
 **`POST /api/active-run/craft`** (admin, works anywhere) sets your own active Run from a JSON
-spec and answers with the Run plus the address to open:
+spec and answers with the Run plus the link to hand over:
 
 ```
 curl -X POST <url>/api/active-run/craft -H 'content-type: application/json' -d '{
@@ -202,12 +212,16 @@ curl -X POST <url>/api/active-run/craft -H 'content-type: application/json' -d '
 Same fields as the address grammar below, plus what an address cannot carry: units as objects
 with `abilities`, offers as objects. An unknown field is refused, not ignored.
 
-The `url` it answers with carries the crafted Run's id (`/run?run=<id>`). That is identity, not
-contents: opened signed out, or on an account that has moved on, the screen says the link is for
-a different Run instead of quietly rendering whatever Run that browser holds.
+**The `url` it answers with is the link to hand over.** It re-crafts on every open, so it stays
+valid after he plays past it. It is readable (`/run?craft=shop&battle=4&gold=33.5&…`) whenever the
+grammar can spell the spec, and an opaque `/run?spec=<encoded>` when it cannot — so hand it over
+as-is rather than rebuilding it by hand. (`runUrl` is the old identity address, `/run?run=<id>`;
+it only asserts a Run already in hand and cannot restore one that has moved on.)
 
-The address form below does the same thing client-side in a **dev build only**, for quick
-one-offs: it builds the state, adopts it, then drops its parameters from the address.
+You can also write the address yourself and hand that over — it is the same mechanism, and the
+Run screen posts it to the endpoint above. Opening it crafts the state and lands on a clean
+`/run`, so playing and reloading from there never re-craft; only returning to the link does.
+It needs the backend and an admin sign-in, and says so on the screen if either is missing.
 
 ```
 /run?craft=shop&battle=3&gold=25&army=knight,rook&offers=queen,pawn+pawn:concinnous,rook:tactical
@@ -227,6 +241,8 @@ one-offs: it builds the state, adopts it, then drops its parameters from the add
   names, chess letters, or a bare deck id (`pawn,pawn,knight` = `p,p,n` = `ppk`).
 - `war=<id>` picks the War (default: the first Run-eligible official one), `seed=<n>` and
   `tier=0|1` fix the roll. `view=army|relics|sell` still applies and survives the craft.
+- `spec=<encoded>` replaces all of the above with the JSON spec, for the crafts the readable
+  grammar cannot spell (units with abilities). The endpoint emits it; do not hand-write it.
 
 A refused spec prints the reason on the Run screen and writes nothing. Crafting **replaces
 the account's active Run** — there is one per account. Overwrite it freely; see below.

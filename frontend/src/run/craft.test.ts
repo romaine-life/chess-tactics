@@ -12,8 +12,11 @@ import {
 import {
   RunCraftError,
   craftRunDocument,
+  hasRunCraftRequest,
   parseRunCraftSpec,
+  runCraftLink,
   runCraftSpecFromJson,
+  runCraftSpecToJson,
   runLinkForRun,
   runLinkTargetMismatch,
   searchWithoutCraftParams,
@@ -292,5 +295,52 @@ describe('crafted Run links', () => {
   it('leaves an address that asserts nothing alone', () => {
     expect(runLinkTargetMismatch('?view=army', null)).toBe(false);
     expect(runLinkTargetMismatch('', 'run-7')).toBe(false);
+  });
+});
+
+describe('links that craft the Run they open', () => {
+  const roundTrip = (search: string) => parseRunCraftSpec(runCraftLink(spec(search)).split('?')[1]);
+
+  it('writes a readable address a person can read and edit', () => {
+    expect(runCraftLink(spec('?craft=shop&battle=4&gold=33.5&army=rook,knight')))
+      .toBe('/run?craft=shop&battle=4&gold=33.5&army=rook%2Cknight');
+  });
+
+  it('carries every field of the address grammar back unchanged', () => {
+    const search = '?craft=shop&battle=3&war=off-w-craft&seed=99&tier=1&gold=12.5'
+      + '&army=rook,pawn&add=knight&offers=queen,pawn+pawn:concinnous&loot=fair-scales'
+      + '&paid=quartermasters-ledger&relics=surveyors-compass';
+    expect(roundTrip(search)).toEqual(spec(search));
+  });
+
+  it('encodes a spec the address grammar cannot spell, rather than dropping what it holds', () => {
+    const rich = runCraftSpecFromJson({
+      phase: 'shop',
+      battle: 4,
+      army: [{ type: 'rook', abilities: ['marshalled'] }, 'knight'],
+    });
+    const link = runCraftLink(rich);
+    expect(link.startsWith('/run?spec=')).toBe(true);
+    expect(parseRunCraftSpec(link.split('?')[1])).toEqual(rich);
+  });
+
+  it('is recognised as a craft request in either form', () => {
+    expect(hasRunCraftRequest('?craft=shop&battle=2')).toBe(true);
+    expect(hasRunCraftRequest(runCraftLink(runCraftSpecFromJson({ phase: 'shop', battle: 2, army: [{ type: 'rook', abilities: ['marshalled'] }] })).split('?')[1])).toBe(true);
+    expect(hasRunCraftRequest('?view=army')).toBe(false);
+  });
+
+  it('is spent once applied, so the Run screen keeps only its own parameters', () => {
+    const encoded = runCraftLink(runCraftSpecFromJson({ phase: 'shop', battle: 2, army: [{ type: 'rook', abilities: ['marshalled'] }] }));
+    expect(searchWithoutCraftParams(`${encoded.split('?')[1]}&view=army`)).toBe('?view=army');
+  });
+
+  it('says so when an encoded spec has been truncated instead of crafting something else', () => {
+    expect(() => parseRunCraftSpec('?spec=not-a-spec')).toThrow(RunCraftError);
+  });
+
+  it('writes the same JSON the request body grammar reads', () => {
+    const source = spec('?craft=shop&battle=3&gold=12.5&offers=pawn+pawn:pestiferous&relics=fair-scales');
+    expect(runCraftSpecFromJson(runCraftSpecToJson(source))).toEqual(source);
   });
 });

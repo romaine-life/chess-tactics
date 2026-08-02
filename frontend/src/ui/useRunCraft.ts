@@ -1,21 +1,18 @@
-// Apply a ?craft= request on the Run screen: build the named Run state, adopt it as the active
-// Run, then drop the craft parameters from the address so the screen keeps only its own.
+// Apply a craft request carried on the Run address: set the account's active Run to the state
+// the link names, then land on a clean /run.
 //
-// Development only. A crafted Run is a debugging instrument — an owner or an agent hands over a
-// link to the exact Shop, deployment, Battle or victory a change needs to be looked at — and the
-// built app must never let an address rewrite a Run that was actually played.
+// The link is the whole point (ADR-0346). Finding a bug on a crafted Run and being unable to get
+// back to it is the failure this exists to prevent, so a craft link is re-runnable by design:
+// opening it again re-crafts and drops you back at the same state. It is the restart button.
+//
+// The crafting itself happens on the server, through the admin-gated endpoint that composes the
+// state out of the game's real transitions. That is what lets the link work in a built app: the
+// gate is "you are an administrator", not "this is a development build", so nobody else's Run can
+// be rewritten by an address.
 
 import { useEffect, useState } from 'react';
-import { useCampaigns } from '../campaign/store';
-import { ensureCampaignsHydrated } from '../campaign/hydrate';
-import { useWars } from '../war/store';
-import {
-  craftRunDocument,
-  hasRunCraftRequest,
-  parseRunCraftSpec,
-  searchWithoutCraftParams,
-  selectCraftWar,
-} from '../run/craft';
+import { hasRunCraftRequest, searchWithoutCraftParams } from '../run/craft';
+import { craftActiveRun } from '../net/activeRun';
 import { useActiveRun } from '../run/store';
 import { navigateApp } from './navigation';
 
@@ -26,23 +23,16 @@ export interface RunCraftStatus {
 
 const IDLE: RunCraftStatus = { crafting: false, error: null };
 
-export function runCraftAvailable(): boolean {
-  return import.meta.env.DEV;
-}
-
 /** Resolves to the refusal message, or null once the crafted Run has been adopted. Never rejects:
  * the outcome is the screen's copy, not an unhandled failure. */
 async function applyCraft(routePath: string, routeSearch: string): Promise<string | null> {
   try {
-    const spec = parseRunCraftSpec(routeSearch);
-    if (!spec) return null;
-    // Wars and Levels are the real ones the account loads; a crafted Run plays authored content.
-    await ensureCampaignsHydrated();
-    // Adopt the account/browser arbitration first so replacing the Run writes over the same
-    // document the screen would otherwise have shown.
+    // Adopt the account/browser arbitration first so the crafted Run replaces the same document
+    // the screen would otherwise have shown.
     await useActiveRun.getState().hydrate();
-    const war = selectCraftWar(spec, useWars.getState().wars, useCampaigns.getState().levels);
-    useActiveRun.getState().replace(craftRunDocument(spec, war));
+    const crafted = await craftActiveRun(routeSearch);
+    if (!crafted.run) return 'The Run was crafted, but the server did not return it.';
+    useActiveRun.getState().adoptCraftedRun(crafted.run, crafted.revision);
     navigateApp(`${routePath}${searchWithoutCraftParams(routeSearch)}`, { replace: true, scroll: false });
     return null;
   } catch (error) {
@@ -50,13 +40,15 @@ async function applyCraft(routePath: string, routeSearch: string): Promise<strin
   }
 }
 
-/** One craft per address, shared by every mount of it. The scene director remounts the Run screen
- * as the crafted Run arrives, so the work — and its outcome — has to outlive a single mount: an
- * effect that owned its own attempt would leave a remounted screen crafting forever. */
+/** One craft per visit to a craft address, shared by every mount of it. The scene director
+ * remounts the Run screen as the crafted Run arrives, so the work — and its outcome — has to
+ * outlive a single mount: an effect that owned its own attempt would leave a remounted screen
+ * crafting forever. Cleared once the address is craft-free again, so coming back to the link
+ * crafts again rather than replaying the first answer. */
 let pending: { address: string; task: Promise<string | null> } | null = null;
 
 export function useRunCraft(routePath: string, routeSearch: string): RunCraftStatus {
-  const requested = runCraftAvailable() && hasRunCraftRequest(routeSearch);
+  const requested = hasRunCraftRequest(routeSearch);
   const [status, setStatus] = useState<RunCraftStatus>(() => (requested ? { crafting: true, error: null } : IDLE));
 
   useEffect(() => {
