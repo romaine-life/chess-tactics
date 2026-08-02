@@ -23,7 +23,7 @@ import {
   RUN_CARD_CONTENTS_STUDY_PROFILES,
   runCardContentsStudyFromSearch,
   runCardPrototypeCostFromSearch,
-  runCardPrototypeFrameBoxesFromSearch,
+  runCardFrameBoxStyleFromSearch,
   runCardConcinnousTargetRevealedFromSearch,
   runCardPrototypeContent,
   runCardPrototypeVariantFromSearch,
@@ -123,9 +123,12 @@ describe('Run Card Layout review variant', () => {
     expect(runCardContentsStudyFromSearch('?mode=viewer&vk=cardlayout')).toBe(false);
   });
 
-  it('addresses the measured frame-box overlay in the review URL', () => {
-    expect(runCardPrototypeFrameBoxesFromSearch('?mode=viewer&frameBoxes=1')).toBe(true);
-    expect(runCardPrototypeFrameBoxesFromSearch('?mode=viewer')).toBe(false);
+  it('addresses each frame-box line style, so an alignment pass can see the plate', () => {
+    expect(runCardFrameBoxStyleFromSearch('?mode=viewer&frameBoxes=1')).toBe('solid');
+    expect(runCardFrameBoxStyleFromSearch('?mode=viewer&frameBoxes=solid')).toBe('solid');
+    expect(runCardFrameBoxStyleFromSearch('?mode=viewer&frameBoxes=dotted')).toBe('dotted');
+    expect(runCardFrameBoxStyleFromSearch('?mode=viewer&frameBoxes=nonsense')).toBe('off');
+    expect(runCardFrameBoxStyleFromSearch('?mode=viewer')).toBe('off');
   });
 
   it('addresses two-digit coin-cost previews without changing the actual default', () => {

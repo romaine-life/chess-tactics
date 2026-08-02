@@ -27,6 +27,17 @@ export const RUN_CARD_FRAME_BOX_NAMES: readonly RunCardFrameBoxName[] = Object.f
   'title', 'cost', 'art', 'type', 'contents',
 ]);
 
+/**
+ * How the tuning overlay draws the boxes. Aligning a box to a plate edge painted
+ * in the frame means seeing that edge, so the lines can thin to a dotted hint or
+ * disappear entirely while the sliders keep moving the box underneath.
+ */
+export type RunCardFrameBoxStyle = 'off' | 'dotted' | 'solid';
+
+export const RUN_CARD_FRAME_BOX_STYLES: readonly RunCardFrameBoxStyle[] = Object.freeze([
+  'off', 'dotted', 'solid',
+]);
+
 export const RUN_CARD_FRAME_BOX_LABELS: Readonly<Record<RunCardFrameBoxName, string>> = Object.freeze({
   title: 'Title',
   cost: 'Coin',

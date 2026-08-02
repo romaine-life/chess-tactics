@@ -44,6 +44,7 @@ import {
 import {
   RUN_CARD_FRAME_BOX_LABELS,
   RUN_CARD_FRAME_BOX_NAMES,
+  RUN_CARD_FRAME_BOX_STYLES,
   RUN_CARD_FRAME_GEOMETRY_BY_VARIANT,
   RUN_CARD_FRAME_NATIVE_HEIGHT,
   RUN_CARD_FRAME_NATIVE_WIDTH,
@@ -54,6 +55,7 @@ import {
   runCardFrameGeometryMatchesPixels,
   runCardFrameGeometryWithBoxes,
   type RunCardFrameBoxName,
+  type RunCardFrameBoxStyle,
   type RunCardFrameBoxes,
   type RunCardFrameRect,
   type RunCardFrameVariant,
@@ -186,8 +188,14 @@ export function runCardConcinnousTargetRevealedFromSearch(search: string): boole
   return new URLSearchParams(search).get('concinnousTarget') === 'revealed';
 }
 
-export function runCardPrototypeFrameBoxesFromSearch(search: string): boolean {
-  return new URLSearchParams(search).get('frameBoxes') === '1';
+/**
+ * `frameBoxes=1` is the original solid overlay; `dotted` is the alignment pass,
+ * where a hairline hint leaves the frame's own painted plate edge readable.
+ */
+export function runCardFrameBoxStyleFromSearch(search: string): RunCardFrameBoxStyle {
+  const value = new URLSearchParams(search).get('frameBoxes');
+  if (value === '1' || value === 'solid') return 'solid';
+  return value === 'dotted' ? 'dotted' : 'off';
 }
 
 export function runCardPrototypeCostFromSearch(search: string): number | null {
@@ -358,8 +366,8 @@ export function RunCardPrototypeViewer({
   const [concinnousTargetRevealed, setConcinnousTargetRevealed] = useState(() => (
     runCardConcinnousTargetRevealedFromSearch(window.location.search)
   ));
-  const [showFrameBoxes, setShowFrameBoxes] = useState(() => (
-    runCardPrototypeFrameBoxesFromSearch(window.location.search)
+  const [frameBoxStyle, setFrameBoxStyle] = useState<RunCardFrameBoxStyle>(() => (
+    runCardFrameBoxStyleFromSearch(window.location.search)
   ));
   const [previewCost, setPreviewCost] = useState<number | null>(() => (
     runCardPrototypeCostFromSearch(window.location.search)
@@ -544,7 +552,7 @@ export function RunCardPrototypeViewer({
     setConcinnousDenominator(CONCINNOUS_OFFER_DENOMINATOR);
     setHieraticDenominator(HIERATIC_AGMINATE_OFFER_DENOMINATOR);
     setPreviewCost(null);
-    setShowFrameBoxes(false);
+    setFrameBoxStyle('off');
     setTitleTypeSizeRatio(null);
     setHandoffCopyState('idle');
   };
@@ -594,17 +602,16 @@ export function RunCardPrototypeViewer({
     );
     setPreviewCost(next);
   };
-  const toggleFrameBoxes = (): void => {
-    const next = !showFrameBoxes;
+  const chooseFrameBoxStyle = (next: RunCardFrameBoxStyle): void => {
     const params = new URLSearchParams(window.location.search);
-    if (next) params.set('frameBoxes', '1');
-    else params.delete('frameBoxes');
+    if (next === 'off') params.delete('frameBoxes');
+    else params.set('frameBoxes', next === 'solid' ? '1' : next);
     const search = params.toString();
     navigateApp(
       `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash}`,
       { replace: true, scroll: false },
     );
-    setShowFrameBoxes(next);
+    setFrameBoxStyle(next);
   };
   const chooseContentsStudy = (next: boolean): void => {
     const params = new URLSearchParams(window.location.search);
@@ -735,8 +742,8 @@ export function RunCardPrototypeViewer({
                       artUrl={art.media!.url}
                       coinSourceUrl={coinSource.media!.url}
                       frameGeometry={frameGeometry}
-                      showFrameBoxes={showFrameBoxes}
-                      selectedFrameBox={showFrameBoxes ? selectedFrameBox : null}
+                      frameBoxStyle={frameBoxStyle}
+                      selectedFrameBox={selectedFrameBox}
                       width={`${REFERENCE_CARD_WIDTH * viewerZoom}px`}
                       tuning={{ costSize, titleSize, typeSize, flavorSize, textInset, textOptical }}
                       contentsTuning={scaledRunCardContentsTuning(profile.tuning, contentsScale)}
@@ -753,8 +760,8 @@ export function RunCardPrototypeViewer({
                 artUrl={art.media!.url}
                 coinSourceUrl={coinSource.media!.url}
                 frameGeometry={frameGeometry}
-                showFrameBoxes={showFrameBoxes}
-                selectedFrameBox={showFrameBoxes ? selectedFrameBox : null}
+                frameBoxStyle={frameBoxStyle}
+                selectedFrameBox={selectedFrameBox}
                 width={`${REFERENCE_CARD_WIDTH * viewerZoom}px`}
                 tuning={{ costSize, titleSize, typeSize, flavorSize, textInset, textOptical }}
                 onImageLoad={onImageLoad}
@@ -897,13 +904,6 @@ export function RunCardPrototypeViewer({
             <div className="tileset-button-row run-card-prototype-actions">
               <button
                 type="button"
-                className={`tileset-view-action${showFrameBoxes ? ' active' : ''}`}
-                data-card-layout-action="toggle-frame-boxes"
-                aria-pressed={showFrameBoxes}
-                onClick={toggleFrameBoxes}
-              >{showFrameBoxes ? 'Hide frame boxes' : 'Show frame boxes'}</button>
-              <button
-                type="button"
                 className="tileset-view-action"
                 data-card-layout-action="reset"
                 onClick={resetAllTuning}
@@ -921,6 +921,23 @@ export function RunCardPrototypeViewer({
               <p className="run-card-prototype-note">
                 {`Where text sits is the frame's box, not the text. Place ${cardVariant} frame boxes by eye here; every line stays centered in the box you leave it in.`}
               </p>
+              <div className="tileset-button-row" role="group" aria-label="Frame box lines">
+                {RUN_CARD_FRAME_BOX_STYLES.map((style) => (
+                  <button
+                    type="button"
+                    className={`tileset-view-action${frameBoxStyle === style ? ' active' : ''}`}
+                    data-frame-box-style={style}
+                    aria-pressed={frameBoxStyle === style}
+                    title={style === 'off'
+                      ? 'Hide the lines entirely and judge the text alone'
+                      : style === 'dotted'
+                        ? 'Hairline dotted lines, so the frame’s own painted edge stays readable underneath'
+                        : 'Solid lines'}
+                    onClick={() => chooseFrameBoxStyle(style)}
+                    key={style}
+                  >{style === 'off' ? 'No lines' : style === 'dotted' ? 'Dotted' : 'Solid'}</button>
+                ))}
+              </div>
               <div className="tileset-button-row" role="group" aria-label="Frame box">
                 {RUN_CARD_FRAME_BOX_NAMES.map((name) => (
                   <button
@@ -930,7 +947,7 @@ export function RunCardPrototypeViewer({
                     aria-pressed={selectedFrameBox === name}
                     onClick={() => {
                       setSelectedFrameBox(name);
-                      if (!showFrameBoxes) toggleFrameBoxes();
+                      if (frameBoxStyle === 'off') chooseFrameBoxStyle('dotted');
                     }}
                     key={name}
                   >{RUN_CARD_FRAME_BOX_LABELS[name]}</button>

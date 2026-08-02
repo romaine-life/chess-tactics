@@ -22267,6 +22267,11 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   gap: 8px;
 }
 
+/* Short labels wrap the row, never the word: "Type" split as "Typ/e" reads broken. */
+.run-card-frame-box-tuner .tileset-button-row > button {
+  white-space: nowrap;
+}
+
 .run-card-frame-box-tuner > [data-card-layout-action="reset-frame-boxes"] {
   inline-size: 100%;
   text-transform: capitalize;
@@ -22567,6 +22572,28 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   outline-color: rgba(255, 176, 64, .95);
   outline-width: max(2px, .34cqw);
   z-index: 1;
+}
+
+/* Aligning a box to a plate edge painted into the frame means seeing that edge:
+   the dotted pass thins every line to a hairline and drops the unselected boxes
+   to a hint, so what is underneath stays readable. */
+.run-card-frame-box-overlay.is-dotted .run-card-frame-box {
+  outline-style: dotted;
+  outline-width: 1px;
+  outline-offset: -1px;
+}
+
+.run-card-frame-box-overlay.is-dotted .run-card-frame-box:not(.is-selected) {
+  color: rgba(216, 248, 255, .3);
+  outline-color: rgba(88, 224, 255, .3);
+}
+
+.run-card-frame-box-overlay.is-dotted .run-card-frame-box.is-selected {
+  outline-color: rgba(255, 190, 96, .9);
+}
+
+.run-card-frame-box-overlay.is-dotted .run-card-frame-box-tag {
+  opacity: .7;
 }
 
 .run-card-frame-box.is-title {

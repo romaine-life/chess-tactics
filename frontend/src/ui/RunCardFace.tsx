@@ -8,6 +8,7 @@ import {
   RUN_CARD_TEXT_PLACEMENT,
   runCardFrameGeometryVariables,
   type RunCardFrameBoxName,
+  type RunCardFrameBoxStyle,
   type RunCardFrameGeometry,
 } from './runCardFrameGeometry';
 import { RunAbilityIcon } from './shared/RunAbilityIcon';
@@ -635,7 +636,7 @@ function RunCardFaceLayer({
   pending,
   explicitContentsTuning,
   faceTuning,
-  showFrameBoxes,
+  frameBoxStyle,
   selectedFrameBox,
   propertyTooltipFocusable,
   onImageLoad,
@@ -645,7 +646,7 @@ function RunCardFaceLayer({
   pending: boolean;
   explicitContentsTuning: RunCardContentsTuning | null;
   faceTuning: RunCardFaceTuning;
-  showFrameBoxes: boolean;
+  frameBoxStyle: RunCardFrameBoxStyle;
   selectedFrameBox: RunCardFrameBoxName | null;
   propertyTooltipFocusable: boolean;
   onImageLoad: (signature: string, pending: boolean, kind: RunCardImageKind) => void;
@@ -797,8 +798,8 @@ function RunCardFaceLayer({
         ) : null}
         <span className="run-card-prototype-flavor">{card.flavor}</span>
       </span>
-      {showFrameBoxes ? (
-        <span className="run-card-frame-box-overlay" aria-hidden="true">
+      {frameBoxStyle !== 'off' ? (
+        <span className={`run-card-frame-box-overlay is-${frameBoxStyle}`} aria-hidden="true">
           {RUN_CARD_FRAME_BOX_NAMES.map((name) => (
             <span
               className={`run-card-frame-box is-${name}${selectedFrameBox === name ? ' is-selected' : ''}`}
@@ -831,7 +832,7 @@ export function RunCardFace({
   tuning = RUN_CARD_APPROVED_TUNING,
   contentsTuning = null,
   frameGeometry = RUN_CARD_STANDARD_FRAME_GEOMETRY,
-  showFrameBoxes = false,
+  frameBoxStyle = 'off',
   selectedFrameBox = null,
   onImageLoad = () => undefined,
   onImageError = () => undefined,
@@ -848,7 +849,7 @@ export function RunCardFace({
   tuning?: RunCardFaceTuning;
   contentsTuning?: RunCardContentsTuning | null;
   frameGeometry?: RunCardFrameGeometry;
-  showFrameBoxes?: boolean;
+  frameBoxStyle?: RunCardFrameBoxStyle;
   selectedFrameBox?: RunCardFrameBoxName | null;
   onImageLoad?: (kind: RunCardImageKind) => void;
   onImageError?: (kind: RunCardImageKind) => void;
@@ -994,7 +995,7 @@ export function RunCardFace({
           pending={layer.pending}
           explicitContentsTuning={contentsTuning}
           faceTuning={tuning}
-          showFrameBoxes={showFrameBoxes}
+          frameBoxStyle={frameBoxStyle}
           selectedFrameBox={selectedFrameBox}
           propertyTooltipFocusable={propertyTooltipFocusable}
           onImageLoad={handleImageLoad}
