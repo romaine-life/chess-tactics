@@ -26,7 +26,6 @@ import { InnerChromeBox, ShellControlsPanel } from './shared/ChromeBox';
 import { useAuthSession } from '../net/authSession';
 import { AdminControls } from './AdminControls';
 import {
-  RunSelfInspectionControls,
   type RunSelfInspectionView,
 } from './RunSelfInspection';
 import { RUN_RELIC_BY_ID } from '../run/model';
@@ -729,16 +728,6 @@ export function SkirmishHud({
                       Battle
                     </ChromeButton>
                     </div>
-                  </div>
-                ) : null}
-                {onNavigateRunView ? (
-                  <div className="skirmish-view-group">
-                    <span className="skirmish-eyebrow">Self inspection</span>
-                    <RunSelfInspectionControls
-                      view={runSelfInspectionView}
-                      onNavigate={onNavigateRunView}
-                      testIdPrefix="run-battle-view"
-                    />
                   </div>
                 ) : null}
                 <div className="skirmish-view-group">

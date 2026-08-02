@@ -50,8 +50,9 @@ describe('Run chrome hierarchy', () => {
     // codex, so a second entry point to them was a duplicate. The battle HUD keeps its own.
     expect(metaControls).not.toContain('Self inspection');
     expect(metaControls).not.toContain('<RunSelfInspectionControls');
-    expect(runSelfInspection).toContain('Army');
-    expect(runSelfInspection).toContain('Relics');
+    // The module keeps the view/address helpers; its button pair is gone with the rail
+    // group and the battle-HUD group, so nothing renders Army/Relics entries any more.
+    expect(runSelfInspection).not.toContain('ChromeButton');
     expect(runSelfInspection).toContain("url.searchParams.set('view', view)");
     expect(runScreen).toContain("current.pathname = '/run';");
     expect(runScreen).toContain('runWorkspaceHref(current.toString(), nextView)');
