@@ -937,7 +937,7 @@ function inlineMigrationSql(version) {
   return inlineMigrationDefinition(version).sql;
 }
 
-async function validatePrimarySparseNumericMigrationUpgrade49() {
+async function validatePrimarySparseNumericMigrationUpgrade50() {
   const history = await queryDb(
     `SELECT version, name, checksum
        FROM schema_migrations
@@ -952,7 +952,7 @@ async function validatePrimarySparseNumericMigrationUpgrade49() {
       ORDER BY column_name`,
   );
   const versions = history.rows.map((row) => Number(row.version));
-  const expectedVersions = Array.from({ length: 49 }, (_, index) => index + 1);
+  const expectedVersions = Array.from({ length: 50 }, (_, index) => index + 1);
   const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
   const expectedByVersion = new Map(
     expectedMigrations.map((migration) => [migration.version, migration]),
@@ -967,7 +967,7 @@ async function validatePrimarySparseNumericMigrationUpgrade49() {
   });
   const appliedMigrationVersions = [
     ...Array.from({ length: 8 }, (_, index) => index + 28),
-    ...Array.from({ length: 13 }, (_, index) => index + 37),
+    ...Array.from({ length: 14 }, (_, index) => index + 37),
   ];
   const skippedMigrationVersions = [
     ...Array.from({ length: 27 }, (_, index) => index + 1),
@@ -1335,7 +1335,7 @@ async function main() {
   await new Promise((resolve) => mockAuth.listen(authPort, '127.0.0.1', resolve));
   await new Promise((resolve) => mockBgm.listen(bgmPort, '127.0.0.1', resolve));
   await waitForServer();
-  await validatePrimarySparseNumericMigrationUpgrade49();
+  await validatePrimarySparseNumericMigrationUpgrade50();
   const databaseRuntime = await queryDb('SELECT version() AS version');
   const isPgliteRuntime = /\bPGlite\b/i.test(String(databaseRuntime.rows[0]?.version || ''));
   if (!isPgliteRuntime) {
@@ -4450,6 +4450,68 @@ async function main() {
   );
   if (unknownPhaseCraft.statusCode !== 400 || JSON.parse(unknownPhaseCraft.body).error !== 'invalid_run_craft_spec') {
     throw new Error(`A craft spec must name a real Run phase: ${unknownPhaseCraft.statusCode} ${unknownPhaseCraft.body}`);
+  }
+  // A crafted state is handed over as a minted id (ADR-0354). Minting is admin-only, is
+  // content-addressed so the same state always answers with the same link, and an id this
+  // server never minted must be reported rather than crafting something else.
+  const anonymousMint = await request(
+    'POST', '/api/run-craft-links',
+    { 'content-type': 'application/json' },
+    JSON.stringify({ phase: 'shop' }),
+  );
+  if (anonymousMint.statusCode !== 401 && anonymousMint.statusCode !== 403) {
+    throw new Error(`Minting a craft link must require an administrator: ${anonymousMint.statusCode} ${anonymousMint.body}`);
+  }
+  const mintOnce = await request(
+    'POST', '/api/run-craft-links',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({ phase: 'shop', battle: 3, gold: 25, army: 'knight,rook' }),
+  );
+  if (mintOnce.statusCode !== 200) {
+    throw new Error(`Minting a craft link failed: ${mintOnce.statusCode} ${mintOnce.body}`);
+  }
+  const minted = JSON.parse(mintOnce.body);
+  if (typeof minted.id !== 'string' || minted.url !== `/run/craft/${minted.id}`) {
+    throw new Error(`A minted craft link must be its id: ${mintOnce.body}`);
+  }
+  // The same state written the other way round must land on the same address.
+  const mintAgain = await request(
+    'POST', '/api/run-craft-links',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({ address: '?craft=shop&battle=3&army=knight,rook&gold=25' }),
+  );
+  if (mintAgain.statusCode !== 200 || JSON.parse(mintAgain.body).id !== minted.id) {
+    throw new Error(`The same crafted state must mint the same link: ${mintOnce.body} vs ${mintAgain.body}`);
+  }
+  const emptyAddressMint = await request(
+    'POST', '/api/run-craft-links',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({ address: '?view=army' }),
+  );
+  if (
+    emptyAddressMint.statusCode !== 400
+    || JSON.parse(emptyAddressMint.body).error !== 'invalid_run_craft_spec'
+  ) {
+    throw new Error(`An address with no craft request must be refused: ${emptyAddressMint.statusCode} ${emptyAddressMint.body}`);
+  }
+  const unknownLinkCraft = await request(
+    'POST', '/api/active-run/craft/0123456789abcdef',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    '{}',
+  );
+  if (
+    unknownLinkCraft.statusCode !== 400
+    || JSON.parse(unknownLinkCraft.body).error !== 'invalid_run_craft_spec'
+  ) {
+    throw new Error(`A craft link this server never minted must be reported: ${unknownLinkCraft.statusCode} ${unknownLinkCraft.body}`);
+  }
+  const malformedLinkCraft = await request(
+    'POST', '/api/active-run/craft/not-an-id',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    '{}',
+  );
+  if (malformedLinkCraft.statusCode !== 400) {
+    throw new Error(`A malformed craft id must be refused: ${malformedLinkCraft.statusCode} ${malformedLinkCraft.body}`);
   }
   const craftedRunAfterRefusals = await get('/api/active-run', { cookie: '__Host-chess-tactics-access=abc' });
   if (craftedRunAfterRefusals.statusCode !== 200 || JSON.parse(craftedRunAfterRefusals.body).run !== null) {

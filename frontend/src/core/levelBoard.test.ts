@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { editorBoardToLevel, levelToEditorBoard } from './levelBoard';
+import { editorBoardToLevel, levelToEditorBoard, unitsForLevelUnits } from './levelBoard';
 import type { EditorBoard } from '../ui/boardCode';
 import type { TerrainCell } from './types';
 import { roadEdgeKey } from './featureAutotile';
@@ -136,6 +136,18 @@ describe('editorBoardToLevel — INV7 round-trip / data-loss guards', () => {
 });
 
 describe('levelToEditorBoard — legacy (no boardCode) derive path', () => {
+  it('projects runtime layer units independently of an authored boardCode snapshot', () => {
+    const units = unitsForLevelUnits([
+      { x: 1, y: 2, type: 'king', side: 'player', facing: 'north-west' },
+      { x: 3, y: 0, type: 'rook', side: 'enemy', facing: 'south-east' },
+    ]);
+
+    expect(units).toEqual({
+      '1,2': { unitId: 'king', direction: 'north-west', faction: 'navy-blue' },
+      '3,0': { unitId: 'rook', direction: 'south-east', faction: 'crimson' },
+    });
+  });
+
   it('surfaces legacy `road` terrain as a road feature overlay, round-tripping through layers', () => {
     // Save a board with a road overlay, then drop boardCode to force the layers-derive path —
     // the road must come back as a feature, not vanish into grass (the reported bug).

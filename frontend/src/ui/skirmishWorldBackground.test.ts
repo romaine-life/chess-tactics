@@ -13,7 +13,7 @@ describe('Skirmish world background ownership', () => {
   it('does not request ordinary ambience behind a complete pre-drawn board', () => {
     expect(shouldLoadSkirmishWorldBackground(true, true)).toBe(false);
     expect(skirmishSource).toContain(
-      "className={screenPredrawnBackgroundActive ? 'is-predrawn-board' : ''}",
+      "className={runDeployment?.screenClassName ?? (screenPredrawnBackgroundActive ? 'is-predrawn-board' : '')}",
     );
     expect(skirmishSource).toContain(
       'className={`skirmish-screen ${className}`.trim()}',

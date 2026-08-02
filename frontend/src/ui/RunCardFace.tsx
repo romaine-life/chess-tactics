@@ -8,13 +8,12 @@ import {
   runCardFrameGeometryVariables,
   type RunCardFrameGeometry,
 } from './runCardFrameGeometry';
-import { RunAbilityIcon } from './shared/RunAbilityIcon';
+import { RunAbilityIcon, runUnitStateIconUrl, type RunUnitState } from './shared/RunAbilityIcon';
+import { installedUiMedia } from './installedUiMedia';
 import { Tooltip } from './shared/InfoTip';
 
 export const RUN_CARD_FRAME_SLOT = 'ui/run/card-prototypes/frame-v1.png';
 export const RUN_CARD_PESTIFEROUS_FRAME_SLOT = 'ui/run/card-prototypes/pestiferous-frame-v1.png';
-export const RUN_CARD_PLAGUED_ICON_SLOT = 'ui/run/card-status/plagued-v1.png';
-export const RUN_CARD_PLAGUED_ICON_PLACEHOLDER = '◇';
 export const RUN_CARD_CONCINNOUS_FRAME_SLOT = 'ui/run/card-prototypes/concinnous-frame-v1.png';
 export const RUN_CARD_TACTICAL_FRAME_SLOT = 'ui/run/card-prototypes/tactical-discipline-frame-v1.png';
 export const RUN_CARD_HIERATIC_FRAME_SLOT = 'ui/run/card-prototypes/hieratic-frame-v1.png';
@@ -25,7 +24,23 @@ const PLAYER_CARD_PALETTE = paletteForSide('player');
 const PLAYER_CARD_FACING = 'south';
 
 export type RunCardProperty = 'pestiferous' | 'concinnous' | 'tactical' | 'hieratic';
-export type RunUnitState = RunAbility | 'plagued';
+export type { RunUnitState };
+
+/**
+ * Each causal card property owns its own typed `card-property-icon` role, distinct from
+ * the unit state it bestows. Runtime code resolves the role and never substitutes text,
+ * a glyph, or the paired unit-state icon (ADR-0339).
+ */
+const RUN_CARD_PROPERTY_MEDIA_ROLE: Readonly<Record<RunCardProperty, string>> = Object.freeze({
+  pestiferous: 'ui-kit-icons-card-properties-pestiferous-png',
+  concinnous: 'ui-kit-icons-card-properties-concinnous-png',
+  tactical: 'ui-kit-icons-card-properties-tactical-png',
+  hieratic: 'ui-kit-icons-card-properties-hieratic-png',
+});
+
+export function runCardPropertyIconUrl(property: RunCardProperty): string {
+  return installedUiMedia(RUN_CARD_PROPERTY_MEDIA_ROLE[property]);
+}
 
 export type RunCardIconMedia = Readonly<{
   propertyUrl?: string;
@@ -51,10 +66,37 @@ export const RUN_CARD_ICON_PLACEMENT_BASELINE: RunCardIconPlacement = Object.fre
   scale: 1,
 });
 
+/**
+ * The committed Card Icon Fitting result (ADR-0340): one placement per card property in
+ * its type-strip symbol seat, and one placement shared by every unit-state marker. These
+ * are the Reset-to-committed baseline the Studio instrument compares its draft against
+ * (ADR-0057), not a zeroed-out placement.
+ */
+export const RUN_CARD_COMMITTED_PROPERTY_PLACEMENTS: Readonly<Record<RunCardProperty, RunCardIconPlacement>> = Object.freeze({
+  pestiferous: Object.freeze({ x: -1.35, y: -1.05, scale: 2 }),
+  concinnous: Object.freeze({ x: -0.6, y: 0.3, scale: 1 }),
+  tactical: Object.freeze({ x: -4, y: -0.95, scale: 2.75 }),
+  hieratic: Object.freeze({ x: -4, y: -3.45, scale: 1.8 }),
+});
+
+export const RUN_CARD_COMMITTED_UNIT_STATE_PLACEMENT: RunCardIconPlacement = Object.freeze({
+  x: 2.2,
+  y: -0.95,
+  scale: 5,
+});
+
 export const RUN_CARD_ICON_TUNING_BASELINE: RunCardIconTuning = Object.freeze({
   property: RUN_CARD_ICON_PLACEMENT_BASELINE,
   unitState: RUN_CARD_ICON_PLACEMENT_BASELINE,
 });
+
+/** The committed fitting for one card, selected by the property it carries. */
+export function runCardCommittedIconTuning(property?: RunCardProperty): RunCardIconTuning {
+  return {
+    property: property ? RUN_CARD_COMMITTED_PROPERTY_PLACEMENTS[property] : RUN_CARD_ICON_PLACEMENT_BASELINE,
+    unitState: RUN_CARD_COMMITTED_UNIT_STATE_PLACEMENT,
+  };
+}
 
 export type RunCardImageKind =
   | 'frame'
@@ -319,20 +361,21 @@ const runCardUnitStateImageKind = (
   state: RunUnitState,
 ): Extract<RunCardImageKind, `unit-state:${RunUnitState}`> => `unit-state:${state}`;
 
-export function requiredRunCardImageKinds(
-  card: RunCardFaceContent,
-  iconMedia: RunCardIconMedia = EMPTY_RUN_CARD_ICON_MEDIA,
-): readonly RunCardImageKind[] {
+/**
+ * Every declared property and unit state resolves an accepted role, so the card owes its
+ * icons unconditionally and cannot promote a face that is still missing one.
+ */
+export function requiredRunCardImageKinds(card: RunCardFaceContent): readonly RunCardImageKind[] {
   const stateKinds = new Set<RunCardImageKind>();
   for (const grant of card.grants) {
-    if (grant.ability && iconMedia.unitStateUrls?.[grant.ability]) stateKinds.add(`unit-state:${grant.ability}`);
-    if (grant.plaguedIndices?.length && iconMedia.unitStateUrls?.plagued) stateKinds.add('unit-state:plagued');
+    if (grant.ability) stateKinds.add(`unit-state:${grant.ability}`);
+    if (grant.plaguedIndices?.length) stateKinds.add('unit-state:plagued');
   }
   return [
     'frame',
     'coin',
     'art',
-    ...(card.cardProperty && iconMedia.propertyUrl ? ['property-icon' as const] : []),
+    ...(card.cardProperty ? ['property-icon' as const] : []),
     ...stateKinds,
     ...card.grants.flatMap((grant, cell) => (
       Array.from({ length: grant.count }, (_, index) => runCardUnitImageKind(cell, grant.unit, index))
@@ -353,7 +396,7 @@ export function runCardPresentationSignature(
     coinSourceUrl,
     artUrl,
     frameGeometry.id,
-    frameGeometry.frameSha256,
+    frameGeometry.frameSha256s,
     card.name,
     card.cost,
     card.typeLine,
@@ -372,10 +415,9 @@ export function runCardPresentationCanPromote(
   pendingSignature: string | null,
   card: RunCardFaceContent,
   settled: ReadonlySet<RunCardImageKind>,
-  iconMedia: RunCardIconMedia = EMPTY_RUN_CARD_ICON_MEDIA,
 ): boolean {
   return requestedSignature === pendingSignature
-    && requiredRunCardImageKinds(card, iconMedia).every((kind) => settled.has(kind));
+    && requiredRunCardImageKinds(card).every((kind) => settled.has(kind));
 }
 
 export function runCardUnitStackSeatLeft(
@@ -529,25 +571,20 @@ function UnitStackSprite({
             zIndex: stackIndex + 2,
           } as CSSProperties}
         >
-          {plaguedIconUrl ? (
-            <img
-              aria-hidden="true"
-              className="run-card-prototype-unit-marker"
-              src={plaguedIconUrl}
-              alt=""
-              draggable={false}
-              onLoad={() => onReady('unit-state:plagued')}
-              onError={() => onError('unit-state:plagued')}
-            />
-          ) : (
-            <span
-              aria-hidden="true"
-              className="run-card-prototype-unit-marker is-placeholder"
-              data-live-media-slot={RUN_CARD_PLAGUED_ICON_SLOT}
-            >
-              {RUN_CARD_PLAGUED_ICON_PLACEHOLDER}
-            </span>
-          )}
+          <RunAbilityIcon
+            ability="plagued"
+            className="run-card-prototype-unit-marker"
+            src={plaguedIconUrl}
+            onLoad={(event) => {
+              void acknowledgeDecodedImage(
+                event.currentTarget,
+                'unit-state:plagued',
+                onReady,
+                onError,
+              );
+            }}
+            onError={() => onError('unit-state:plagued')}
+          />
         </span>
       ) : null}
       {ability && abilitySeatLeft !== null && abilityStackIndex !== undefined ? (
@@ -632,6 +669,7 @@ function RunCardFaceLayer({
   pending,
   explicitContentsTuning,
   faceTuning,
+  explicitIconTuning,
   showFrameBoxes,
   propertyTooltipFocusable,
   onImageLoad,
@@ -641,6 +679,7 @@ function RunCardFaceLayer({
   pending: boolean;
   explicitContentsTuning: RunCardContentsTuning | null;
   faceTuning: RunCardFaceTuning;
+  explicitIconTuning: RunCardIconTuning | null;
   showFrameBoxes: boolean;
   propertyTooltipFocusable: boolean;
   onImageLoad: (signature: string, pending: boolean, kind: RunCardImageKind) => void;
@@ -654,6 +693,9 @@ function RunCardFaceLayer({
     ? runCardContentsDensityStepForCard(card, frameGeometry, faceTuning.flavorSize)
     : null;
   const contentsTuning = explicitContentsTuning ?? densityStep!.tuning;
+  // Placement follows this layer's own property, so a crossfade never fits the outgoing
+  // symbol with the incoming card's seat.
+  const iconTuning = explicitIconTuning ?? runCardCommittedIconTuning(card.cardProperty?.id);
   const acknowledgeLoad = (kind: RunCardImageKind): void => onImageLoad(signature, pending, kind);
   const acknowledgeError = (kind: RunCardImageKind): void => onImageError(signature, pending, kind);
 
@@ -675,6 +717,12 @@ function RunCardFaceLayer({
         '--run-card-effect-gap': `${contentsTuning.effectGap}cqw`,
         '--run-card-contents-padding-block-start': `${contentsTuning.paddingBlockStart}cqw`,
         '--run-card-contents-padding-block-end': `${contentsTuning.paddingBlockEnd}cqw`,
+        '--run-card-property-icon-x': `${iconTuning.property.x}cqw`,
+        '--run-card-property-icon-y': `${iconTuning.property.y}cqw`,
+        '--run-card-property-icon-scale': iconTuning.property.scale,
+        '--run-card-unit-state-icon-x': `${iconTuning.unitState.x}cqw`,
+        '--run-card-unit-state-icon-y': `${iconTuning.unitState.y}cqw`,
+        '--run-card-unit-state-icon-scale': iconTuning.unitState.scale,
       } as CSSProperties}
       aria-hidden={pending || undefined}
     >
@@ -712,7 +760,7 @@ function RunCardFaceLayer({
       <strong className="run-card-prototype-cost" aria-label={`${card.cost} gold`}>{card.cost}</strong>
       <span className="run-card-prototype-type">
         <span className="run-card-prototype-type-label">{card.typeLine}</span>
-        {card.cardProperty && iconMedia.propertyUrl ? (
+        {card.cardProperty ? (
           <Tooltip
             className="run-card-prototype-property-tooltip"
             triggerClassName="run-card-prototype-property-trigger"
@@ -722,7 +770,7 @@ function RunCardFaceLayer({
             trigger={(
               <img
                 className="run-card-prototype-property-icon"
-                src={iconMedia.propertyUrl}
+                src={iconMedia.propertyUrl ?? runCardPropertyIconUrl(card.cardProperty.id)}
                 alt=""
                 draggable={false}
                 onLoad={(event) => {
@@ -815,7 +863,7 @@ export function RunCardFace({
   artUrl,
   coinSourceUrl = resolvedLiveMediaUrl(RUN_CARD_COST_COIN_SOURCE_SLOT),
   iconMedia = EMPTY_RUN_CARD_ICON_MEDIA,
-  iconTuning = RUN_CARD_ICON_TUNING_BASELINE,
+  iconTuning = null,
   width = '100%',
   tuning = RUN_CARD_APPROVED_TUNING,
   contentsTuning = null,
@@ -831,7 +879,8 @@ export function RunCardFace({
   artUrl: string;
   coinSourceUrl?: string;
   iconMedia?: RunCardIconMedia;
-  iconTuning?: RunCardIconTuning;
+  /** Only the Studio fitting instrument overrides the committed placements. */
+  iconTuning?: RunCardIconTuning | null;
   width?: string;
   tuning?: RunCardFaceTuning;
   contentsTuning?: RunCardContentsTuning | null;
@@ -922,7 +971,6 @@ export function RunCardFace({
       pendingRef.current?.signature ?? null,
       pending.card,
       pendingSettled,
-      pending.iconMedia,
     )) return undefined;
     const signature = pending.signature;
     const firstFrame = requestAnimationFrame(() => {
@@ -961,12 +1009,6 @@ export function RunCardFace({
         '--run-card-type-x': `${tuning.typeX}cqw`,
         '--run-card-type-y': `${tuning.typeY}cqw`,
         '--run-card-type-size': `${tuning.typeSize}cqw`,
-        '--run-card-property-icon-x': `${iconTuning.property.x}cqw`,
-        '--run-card-property-icon-y': `${iconTuning.property.y}cqw`,
-        '--run-card-property-icon-scale': iconTuning.property.scale,
-        '--run-card-unit-state-icon-x': `${iconTuning.unitState.x}cqw`,
-        '--run-card-unit-state-icon-y': `${iconTuning.unitState.y}cqw`,
-        '--run-card-unit-state-icon-scale': iconTuning.unitState.scale,
       } as CSSProperties}
       aria-hidden={ariaHidden || undefined}
       aria-busy={pending ? true : undefined}
@@ -980,6 +1022,7 @@ export function RunCardFace({
           pending={layer.pending}
           explicitContentsTuning={contentsTuning}
           faceTuning={tuning}
+          explicitIconTuning={iconTuning}
           showFrameBoxes={showFrameBoxes}
           propertyTooltipFocusable={propertyTooltipFocusable}
           onImageLoad={handleImageLoad}

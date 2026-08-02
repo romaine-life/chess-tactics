@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   RUN_CARD_APPROVED_TUNING,
   RUN_CARD_CONTENTS_DENSITY_LADDER,
-  RUN_CARD_PLAGUED_ICON_PLACEHOLDER,
-  RUN_CARD_PLAGUED_ICON_SLOT,
+  RUN_CARD_COMMITTED_PROPERTY_PLACEMENTS,
+  RUN_CARD_COMMITTED_UNIT_STATE_PLACEMENT,
+  requiredRunCardImageKinds,
+  runCardCommittedIconTuning,
   runCardContentsDensityStepForCard,
   runCardLedgerRows,
   runCardUnitStackSeatLeft,
@@ -41,7 +43,8 @@ describe('Run Card Layout review variant', () => {
     expect(runCardPrototypeContent('concinnous')).toMatchObject({
       name: 'Two Good Boots',
       cost: 4,
-      typeLine: 'Units — Concinnous',
+      typeLine: 'Units',
+      cardProperty: { id: 'concinnous', name: 'Concinnous' },
       grants: [{ count: 2, unit: 'pawn' }],
       properties: [{ name: 'Positioned', target: 'Target hidden' }],
     });
@@ -55,33 +58,53 @@ describe('Run Card Layout review variant', () => {
     expect(runCardPrototypeContent('tactical')).toMatchObject({
       name: 'Regal Serenity',
       cost: 12,
-      typeLine: 'Units — Tactical',
+      typeLine: 'Units',
+      cardProperty: { id: 'tactical', name: 'Tactical' },
       grants: [{ count: 1, unit: 'queen', ability: 'discipline' }],
     });
     expect(runCardPrototypeContent('tactical', 'multi')).toMatchObject({
       cost: 12,
-      typeLine: 'Units — Tactical',
+      typeLine: 'Units',
+      cardProperty: { id: 'tactical' },
     });
     expect(runCardPrototypeContent('tactical', 'multi').grants.every((grant) => !grant.ability)).toBe(true);
   });
 
-  it('uses the accepted affected-card type line without changing the card identity', () => {
+  it('keeps the primary type line and carries the qualifier as a symbol', () => {
     expect(runCardPrototypeContent('pestiferous')).toMatchObject({
       name: 'Parish Militia',
       cost: 8,
-      typeLine: 'Units — Pestiferous',
+      typeLine: 'Units',
+      cardProperty: { id: 'pestiferous', name: 'Pestiferous' },
     });
     expect(runCardPrototypeContent('pestiferous').grants).toContainEqual(
       expect.objectContaining({ unit: 'bishop', plaguedIndices: [0] }),
     );
     expect(runCardPrototypeContent('pestiferous')).not.toHaveProperty('rules');
     expect(runCardPrototypeContent('standard').typeLine).toBe('Units');
+    expect(runCardPrototypeContent('standard')).not.toHaveProperty('cardProperty');
+    // No affected card spells its qualifier out after an em dash any more (ADR-0339).
+    for (const variant of ['standard', 'pestiferous', 'tactical', 'concinnous', 'hieratic'] as const) {
+      expect(runCardPrototypeContent(variant).typeLine).toBe('Units');
+    }
   });
 
-  it('reserves a live icon slot without printing the Cacochymic name as its marker', () => {
-    expect(RUN_CARD_PLAGUED_ICON_SLOT).toBe('ui/run/card-status/plagued-v1.png');
-    expect(RUN_CARD_PLAGUED_ICON_PLACEHOLDER).toBe('◇');
-    expect(RUN_CARD_PLAGUED_ICON_PLACEHOLDER).not.toMatch(/plagued/i);
+  it('owes every declared property and unit-state icon before a face may promote', () => {
+    const tactical = runCardPrototypeContent('tactical');
+    expect(requiredRunCardImageKinds(tactical)).toContain('property-icon');
+    expect(requiredRunCardImageKinds(tactical)).toContain('unit-state:discipline');
+    expect(requiredRunCardImageKinds(runCardPrototypeContent('pestiferous'))).toContain('unit-state:plagued');
+    expect(requiredRunCardImageKinds(runCardPrototypeContent('standard'))).not.toContain('property-icon');
+  });
+
+  it('fits each property in its own committed seat and shares one unit-state seat', () => {
+    expect(RUN_CARD_COMMITTED_PROPERTY_PLACEMENTS.tactical).toEqual({ x: -4, y: -0.95, scale: 2.75 });
+    expect(RUN_CARD_COMMITTED_UNIT_STATE_PLACEMENT).toEqual({ x: 2.2, y: -0.95, scale: 5 });
+    expect(runCardCommittedIconTuning('hieratic')).toEqual({
+      property: RUN_CARD_COMMITTED_PROPERTY_PLACEMENTS.hieratic,
+      unitState: RUN_CARD_COMMITTED_UNIT_STATE_PLACEMENT,
+    });
+    expect(runCardCommittedIconTuning().property).toEqual({ x: 0, y: 0, scale: 1 });
   });
 
   it('places the status marker in the same stack seat as a second unit', () => {
@@ -184,7 +207,8 @@ describe('Run Card Layout review variant', () => {
     const concinnousPair: RunCardFaceContent = {
       name: 'Two Good Boots',
       cost: 4,
-      typeLine: 'Units — Concinnous',
+      typeLine: 'Units',
+      cardProperty: { id: 'concinnous', name: 'Concinnous', effect: 'Makes one contained unit Positioned when the card is acquired.' },
       grants: [{ count: 2, unit: 'pawn' }],
       properties: [{ name: 'Positioned', target: 'Target hidden' }],
       flavor: 'The road kept both pairs of boots, and returned neither name.',

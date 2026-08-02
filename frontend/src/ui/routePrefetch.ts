@@ -6,6 +6,7 @@
 
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { isPlaySelectorPath } from './playHubRoute';
+import { isRunRoutePath } from './runRoute';
 
 // The Pixi-heavy / larger surfaces are code-split so the menu, lobbies, etc. don't
 // pull the renderer bundle (preserving app.js's lazy-mount behaviour). The raw
@@ -23,7 +24,7 @@ export const importPortraitEditor = () => import('./PortraitEditor');
 // bundle, nothing to warm.
 function chunkForPath(path: string): (() => Promise<unknown>) | null {
   if (path === '/play' || path.startsWith('/play/strategikon/')) return importSkirmish;
-  if (path === '/run' || path.startsWith('/run/strategikon/')) return importRunScreen;
+  if (isRunRoutePath(path)) return importRunScreen;
   if (path === '/studio' || path === '/tileset-studio' || path === '/unit-studio' || path === '/nine-slice-editor' || path === '/prop-lab' || path === '/tile-compare' || path === '/surface-lab' || path === '/scene-anim-lab' || path === '/doodad-editor' || path === '/artwork-compare') return importTilePreview;
   if (path === '/editor/level' || path === '/edit' || path === '/level-editor') return importLevelEditor;
   if (path === '/portrait-editor') return importPortraitEditor;

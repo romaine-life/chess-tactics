@@ -26,6 +26,28 @@ try {
   if (error.code !== 'ENOENT') throw error;
 }
 
+// Codex runs setup once when it creates an environment. Claude Code has no such
+// event: its SessionStart hook runs setup on every session, so an unconditional
+// device grant would demand a browser approval every time. The stored grant is
+// the environment's identity for its lifetime — reuse it while it is valid, and
+// only fall through to the browser when it is missing, expired, or nearly so.
+const GRANT_REFRESH_MARGIN_MS = 60 * 60 * 1000;
+let credential = null;
+try {
+  credential = JSON.parse(await readFile(credentialPath, 'utf8'));
+} catch (error) {
+  if (error.code !== 'ENOENT') throw error;
+}
+const grantExpiresAt = Date.parse(credential?.expires_at ?? '');
+if (
+  credential?.token && environment?.name
+  && Number.isFinite(grantExpiresAt) && grantExpiresAt - Date.now() > GRANT_REFRESH_MARGIN_MS
+) {
+  console.log(`Reusing the stored grant for "${environment.name}" (expires ${credential.expires_at}).`);
+  console.log(`Local URL: ${environment.url}`);
+  process.exit(0);
+}
+
 const explicitEnvironmentName = process.platform === 'win32'
   ? process.env.CODEX_ENVIRONMENT_NAME || ''
   : '';

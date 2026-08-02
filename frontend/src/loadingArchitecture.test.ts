@@ -378,15 +378,33 @@ describe('professional loading architecture guards', () => {
   it('does not expose gameplay HUD chrome before the board surface is ready', () => {
     const skirmish = read('./ui/Skirmish.tsx');
     const board = read('./render/SkirmishBoard.tsx');
-    expect(board).toContain('onSurfaceReady?.(boardReady)');
-    expect(skirmish).toContain('titleBarContent={playableSurfaceReady ? (');
+    const storeContext = read('./game/SkirmishStoreContext.tsx');
+    const viewContext = read('./game/SkirmishViewStoreContext.tsx');
+    const viewState = read('./game/skirmishView.ts');
+    expect(board).toContain('const completePreparedFrame = boardReady && cameraReady');
+    expect(board).toContain('onSurfaceReady?.(surfaceReady)');
+    expect(skirmish).toContain('titleBarContent={runDeployment ? runDeployment.titleBarContent : playableSurfaceReady ? (');
     expect(skirmish).toContain('surface="gameplay-hud"');
     expect(skirmish).toContain('Preparing battlefield…');
     expect(read('../scripts/shot.mjs')).toContain('An explicit readiness contract is an assertion');
-    expect(skirmish).toContain('if (playableSurfaceReady && sceneActivated) activateClock()');
+    expect(skirmish).toContain('if (!runDeployment && playableSurfaceReady && sceneActivated) activateClock()');
     expect(skirmish).toContain('reveal={playableSurfaceReady && sceneRevealed}');
-    expect(skirmish).toContain('activate={sceneActivated}');
-    expect(skirmish).toContain('interactive={sceneActivated &&');
+    expect(skirmish).toContain('activate={!runDeployment && sceneActivated}');
+    expect(skirmish).toContain('interactive={!runDeployment && sceneActivated &&');
+    expect(skirmish).not.toContain('cameraActive=');
+    expect(board).toContain('onZoomChange={setZoom}');
+    expect(board).toContain('onPanChange={setBoardPan}');
+    expect(board).toContain('onMinimumZoomChange={setMinZoom}');
+    expect(board).not.toContain('IGNORE_CAMERA');
+    expect(storeContext).toContain('<SkirmishViewStoreProvider>');
+    expect(read('./ui/RunScreen.tsx')).toContain('<SkirmishViewStoreProvider>');
+    expect(viewContext).toContain("if (!store) throw new Error('Skirmish view state requires a SkirmishViewStoreProvider.')");
+    expect(viewState).toContain('createStore<SkirmishViewState>');
+    expect(viewState).not.toContain('create<SkirmishViewState>');
+    const runE2e = read('../scripts/run-battle-e2e.mjs');
+    expect(runE2e).toContain('transition.cameraSamples.length !== 1');
+    expect(runE2e).toContain('sameViewStore: viewStore === probe.viewStore');
+    expect(runE2e).toContain("deploymentResult.initialCamera !== deploymentResult.finalCamera");
     expect(read('./game/store.ts')).toContain('if (!opts.deferClockStart) startClock()');
   });
 
@@ -404,6 +422,7 @@ describe('professional loading architecture guards', () => {
     expect(skirmish).not.toMatch(/<SkirmishBoard\s+key=/);
     expect(skirmish).not.toContain('storeSessionEpoch');
     expect(skirmish).toContain('signature="gameplay-hud"');
-    expect(read('./render/SkirmishBoard.tsx')).toContain("viewKey: `${levelId ?? 'free'}:${boardViewEpoch}`");
+    expect(read('./render/SkirmishBoard.tsx')).toContain('const boardViewKey = surfaceState?.viewKey');
+    expect(read('./render/SkirmishBoard.tsx')).toContain('?? storedActivityId');
   });
 });

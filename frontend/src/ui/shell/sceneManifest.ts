@@ -1,4 +1,5 @@
 import { normalizeRoutePath } from '../navigation';
+import { isRunRoutePath, isRunStrategikonPath } from '../runRoute';
 import { isStrategikonPath, strategikonBase, strategikonSectionPath } from '../strategikonRoute';
 import {
   SCENE_DEFINITIONS,
@@ -42,7 +43,7 @@ function runSceneSnapshot(
     ? 'hydrating' as const
     : source.document?.phase ?? 'no-active' as const;
   const requestedView = new URLSearchParams(search).get('view');
-  const requestedWorkspace: RunSceneWorkspace = path.startsWith('/run/strategikon/')
+  const requestedWorkspace: RunSceneWorkspace = isRunStrategikonPath(path)
     ? 'strategikon'
     : requestedView === 'army' || requestedView === 'relics' || requestedView === 'sell'
       ? requestedView
@@ -70,11 +71,21 @@ const isLevelEditorPath = (path: string): boolean => (
   path === '/editor/level' || path === '/edit' || path === '/level-editor'
 );
 
+/**
+ * Deployment and its Battle are one continuous battlefield phase (ADR-0354), so they
+ * deliberately resolve to the same phase identity; every other phase change keeps its
+ * own and takes a complete-scene transition.
+ */
+const runPhaseIdentity = (snapshot: RunSceneSnapshot): string => (
+  snapshot.phase === 'deployment' || snapshot.phase === 'battle' ? 'battlefield' : snapshot.phase
+);
+
 /** The Run instances the director keys from persisted state rather than the address. */
 function runStateInstances(snapshot: RunSceneSnapshot): readonly SceneInstance[] {
+  const phase = runPhaseIdentity(snapshot);
   const phaseIdentity = snapshot.run
-    ? `${snapshot.run.id}:${snapshot.phase}:${snapshot.run.battleIndex}`
-    : snapshot.phase;
+    ? `${snapshot.run.id}:${phase}:${snapshot.run.battleIndex}`
+    : phase;
   return [
     instance(SCENE_DEFINITIONS.run),
     instance(SCENE_DEFINITIONS.runPhase, { phase: phaseIdentity }),
@@ -107,10 +118,11 @@ export function sceneManifest(
   const base = strategikon ? strategikonBase(path) : null;
 
   // --- Run: state-driven phase and workspace slots, optionally hosting the Strategikon.
-  if (path === '/run' || (strategikon && base === '/run')) {
+  // `isRunRoutePath` also covers craft links, which craft and then land on the Run.
+  if (isRunRoutePath(path)) {
     const snapshot = runSceneSnapshot(path, search, sources.run);
     const instances = runStateInstances(snapshot);
-    const runIdentity = `run:${snapshot.run?.id ?? 'none'}:${snapshot.phase}:${snapshot.workspace}`;
+    const runIdentity = `run:${snapshot.run?.id ?? 'none'}:${runPhaseIdentity(snapshot)}:${snapshot.workspace}`;
     const fields = manifest(runIdentity, 'battlefield', 'gameplay-hud', [
       'battlefield-background',
       'active-run',
@@ -286,8 +298,10 @@ export function sceneOverlapScope(
  * those slots keeps one React tree across the change, so selecting a Play Run choice
  * never unmounts and re-reveals its sibling action column, and opening or paging
  * through the Strategikon never tears down the Battle board behind it. The
- * state-driven run/phase and run/workspace slots stay leaf-keyed on purpose: their
- * scenes overlap as two complete layers, which requires distinct keys.
+ * state-driven Run phase and workspace slots stay leaf-keyed on purpose: their
+ * scenes overlap as two complete layers, which requires distinct keys. Deployment and
+ * its Battle are one continuous battlefield phase and so deliberately share a leaf key
+ * (ADR-0354); other Run phase changes still receive distinct keys.
  */
 const IDENTITY_ONLY_SLOTS: ReadonlySet<SceneSlotId> = new Set([
   'run-detail-content',
