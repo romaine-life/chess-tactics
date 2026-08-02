@@ -1030,14 +1030,6 @@
       "kind": "css",
       "file": "src/style.css",
       "context": "",
-      "selector": ".ic-brush",
-      "surfaceHash": "e2a2630469412e0a925ee67a7f112665f4c84a2dfacbdbb1db7a6e0cb03bb7ba",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
       "selector": ".ic-down",
       "surfaceHash": "f08eec54dde7f688565b553fdcabf27d6cd0ebf688508394b65dce4c7c18716c",
       "occurrence": 1

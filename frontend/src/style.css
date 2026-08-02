@@ -8595,7 +8595,6 @@ body.loading-bootstrap .app-startup-status {
 
 /* editor rail icons */
 .le-ico { background-position: center; background-repeat: no-repeat; background-size: contain; display: inline-block; flex: none; height: 18px; image-rendering: pixelated; width: 18px; }
-.ic-brush { background-image: var(--media-ui-kit-icons-pencil-png); }
 .ic-eraser { background-image: var(--media-ui-kit-icons-delete-png); }
 .ic-move { background-image: var(--media-ui-kit-icons-game-move-png); }
 .ic-eyedropper { background-image: var(--media-ui-kit-icons-wrench-png); }
@@ -19042,6 +19041,123 @@ button.tileset-relationship-cell {
   color: var(--skirmish-muted);
 }
 
+/* Shop wrap-art candidate rows: generated art is review-mounted around the
+   live card faces; the negative insets come from each candidate's measured
+   card window, so the window lands exactly under the card. */
+.run-wrap-candidate {
+  display: grid;
+  gap: var(--ds-inline-tight);
+}
+
+.run-wrap-candidate > h3 {
+  margin: 0;
+}
+
+.run-wrap-candidate small {
+  color: var(--skirmish-muted);
+}
+
+.run-wrap-grid {
+  column-gap: var(--ds-inline);
+  row-gap: var(--ds-inline);
+}
+
+.run-wrap-seat {
+  box-sizing: border-box;
+  display: block;
+  padding: var(--wrap-pad-top) var(--wrap-pad-right) var(--wrap-pad-bottom) var(--wrap-pad-left);
+  position: relative;
+}
+
+.run-wrap-seat > .run-card-offer,
+.run-wrap-band-shell > .run-card-grid {
+  position: relative;
+  z-index: 1;
+}
+
+.run-wrap-art {
+  pointer-events: none;
+  position: absolute;
+}
+
+.run-wrap-seat-art {
+  block-size: 100%;
+  inline-size: 100%;
+  inset: 0;
+}
+
+.run-wrap-band-shell {
+  position: relative;
+}
+
+.run-wrap-slot-frame {
+  margin-inline: auto;
+  position: relative;
+}
+
+.run-wrap-install {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  justify-items: start;
+}
+
+.run-wrap-install > :is(h3, p) {
+  margin: 0;
+}
+
+/* Live Shop: the installed wrap frames the real card row. The Shop is one
+   screen — the stall is contained in the space left over, never the other way
+   round, so installing a wrap can never introduce a scrollbar. */
+.run-shop-workspace-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-stack);
+  min-block-size: 0;
+}
+
+/* Flex the whole chain down to the host: a grid row would size itself to its
+   content, which leaves the stall nothing definite to fill. */
+.run-shop-workspace-content > .run-shop-cards-section {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--ds-inline-tight);
+  min-block-size: 0;
+}
+
+.run-shop-cards-section > .run-shop-wrap-host {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  position: relative;
+}
+
+.run-shop-wrap-host {
+  inline-size: 100%;
+}
+
+.run-shop-wrap-frame {
+  position: absolute;
+}
+
+.run-shop-wrap-art {
+  inset: 0;
+  block-size: 100%;
+  inline-size: 100%;
+  pointer-events: none;
+  position: absolute;
+}
+
+.run-shop-wrap-cards {
+  display: grid;
+  position: absolute;
+  z-index: 1;
+}
+
+.run-wrap-slot-card {
+  position: absolute;
+  z-index: 1;
+}
+
 .run-relic-reference-art {
   display: grid;
   gap: var(--ds-inline);
@@ -19105,10 +19221,101 @@ button.tileset-relationship-cell {
   color: var(--skirmish-muted);
 }
 
+.brush-icon-review-section {
+  display: grid;
+  gap: var(--ds-inline-tight);
+}
+
+.brush-icon-review-section > h2 {
+  margin: 0;
+}
+
+.brush-icon-review-toolbar-comparison {
+  align-items: start;
+  display: grid;
+  gap: var(--ds-inline-tight);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.brush-icon-review-toolbar-card {
+  min-block-size: 88px;
+}
+
+.brush-icon-review-choice-grid {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.brush-icon-review-choice {
+  align-items: center;
+  display: grid;
+  gap: var(--ds-inline-tight);
+  grid-template-columns: var(--le-inner-square) minmax(0, 1fr);
+  min-block-size: 72px;
+  padding: var(--ds-inset);
+}
+
+.brush-icon-review-choice > span {
+  display: grid;
+  gap: var(--ds-space-1);
+  min-inline-size: 0;
+}
+
+.brush-icon-review-choice small {
+  color: var(--skirmish-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brush-icon-review-glyph {
+  image-rendering: pixelated;
+}
+
+.brush-icon-review-production-actions {
+  align-items: center;
+  display: grid;
+  gap: var(--ds-inline);
+  grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
+}
+
+.brush-icon-review-production-actions figure {
+  align-items: center;
+  display: grid;
+  gap: var(--ds-inline-tight);
+  grid-template-columns: 144px minmax(0, 1fr);
+  margin: 0;
+}
+
+.brush-icon-review-production-actions img {
+  block-size: 144px;
+  image-rendering: pixelated;
+  inline-size: 144px;
+}
+
+.brush-icon-review-production-actions figcaption {
+  display: grid;
+  gap: var(--ds-space-1);
+}
+
+.brush-icon-review-production-actions small {
+  color: var(--skirmish-muted);
+}
+
 @media (max-width: 900px) {
   .run-relic-review-grid,
-  .plagued-icon-review-ability-grid {
+  .plagued-icon-review-ability-grid,
+  .brush-icon-review-choice-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .brush-icon-review-toolbar-comparison {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .brush-icon-review-production-actions {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

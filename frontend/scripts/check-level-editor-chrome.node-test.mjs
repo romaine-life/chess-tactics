@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { checkCss, checkTsx } from './check-level-editor-chrome.mjs';
+import { checkBrushIconContract, checkCss, checkTsx } from './check-level-editor-chrome.mjs';
 
 test('rejects the raw board-side dropdown regression', () => {
   const failures = checkTsx('src/ui/shared/BoardSizePanel.tsx', '<select aria-label="Width resize side"><option>Left</option></select>');
@@ -27,4 +27,12 @@ test('rejects every retired native-select debt label without an allowlist', () =
     const failures = checkTsx('src/ui/LevelEditor.tsx', `<select aria-label="${label}" />`);
     assert.match(failures.join('\n'), /use HouseSelect/);
   }
+});
+
+test('rejects a Pencil fallback or a mis-audited Brush glyph box', () => {
+  const validConsumer = "const brushIconUrl = liveMediaForSlot(LEVEL_EDITOR_BRUSH_ICON_SLOT).media.immutableUrl;";
+  const validCss = '.le-seg-icons .le-seg-btn .le-ico { width: 20px; height: 20px; }';
+  assert.deepEqual(checkBrushIconContract(validConsumer, validCss), []);
+  assert.match(checkBrushIconContract(`${validConsumer} ic-brush`, validCss).join('\n'), /Pencil fallback/);
+  assert.match(checkBrushIconContract(validConsumer, '.le-ico { width: 18px; height: 18px; }').join('\n'), /20x20/);
 });
