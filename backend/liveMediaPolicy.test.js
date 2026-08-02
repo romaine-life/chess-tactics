@@ -287,7 +287,7 @@ function strategikonBackgroundProof(row = strategikonBackground()) {
   return {
     schema: STRATEGIKON_BACKGROUND_PROOF_SCHEMA,
     renderer: STRATEGIKON_BACKGROUND_PROOF_RENDERER,
-    decision: 'ADR-0335',
+    decision: 'ADR-0336',
     surfaceUrl,
     coverScalingApproved: true,
     objectFit: 'cover',
@@ -305,7 +305,7 @@ function strategikonBackgroundProof(row = strategikonBackground()) {
   };
 }
 
-test('Strategikon background projection is closed to the exact ADR-0335 pixels and presentation', () => {
+test('Strategikon background projection is closed to the exact ADR-0336 pixels and presentation', () => {
   const row = strategikonBackground();
   assert.equal(strategikonBackgroundSlot(row.slot), true);
   assert.equal(strategikonBackgroundMediaIssue(row), null);

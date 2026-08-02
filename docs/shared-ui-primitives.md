@@ -15,7 +15,7 @@ search for before constructing a control or repeated surface.
   structural chrome composition. `ShellWorkspace` alone layers optional
   decorative background artwork between its installed fill and live content;
   callers supply installed media content, not attachment or clipping geometry
-  (ADR-0335).
+  (ADR-0336).
 - `ui/shared/ActionList.tsx` — data-driven selectable/action rows. War battles,
   Campaign Editor levels, and Play level lists use this instead of constructing
   first/middle/last rows independently.

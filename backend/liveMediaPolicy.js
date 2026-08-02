@@ -325,7 +325,7 @@ function sfxSampleMediaIssue(row, projectedRuntime = null) {
 
 /**
  * Closed production projection for the exact command-archive artwork approved
- * under ADR-0335. The source PNG remains native and unresampled; the named
+ * under ADR-0336. The source PNG remains native and unresampled; the named
  * exception is the ShellWorkspace cover presentation, not rewritten pixels.
  */
 function strategikonBackgroundMediaIssue(row, projectedRuntime = null) {
@@ -337,7 +337,7 @@ function strategikonBackgroundMediaIssue(row, projectedRuntime = null) {
     return 'Strategikon background must retain its approved 688x384 source raster';
   }
   if (normalizedSha(row.blob_sha256) !== STRATEGIKON_BACKGROUND_SHA256) {
-    return 'ADR-0335 authorizes only the exact owner-approved Strategikon background bytes';
+    return 'ADR-0336 authorizes only the exact owner-approved Strategikon background bytes';
   }
 
   const metadata = mediaVersionMetadata(row);
@@ -372,7 +372,7 @@ function strategikonBackgroundOwnerProofIssue(row, proof, surfaceUrl = null) {
   }
   if (
     proof.renderer !== STRATEGIKON_BACKGROUND_PROOF_RENDERER
-    || proof.decision !== 'ADR-0335'
+    || proof.decision !== 'ADR-0336'
     || proof.coverScalingApproved !== true
     || proof.objectFit !== 'cover'
     || proof.imageRendering !== 'pixelated'

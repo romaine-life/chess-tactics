@@ -277,7 +277,7 @@ route transition leaves the current level scene mounted; only main-menu
 Enchiridion uses the homepage scene. Under ADR-0297, Strategikon's shell-owned
 body reaches the Controls boundary while its edge-attached content retains the
 shared responsive start and block insets; workflow CSS does not recreate a
-mirrored end perimeter. Per ADR-0335, every Strategikon route mounts the exact
+mirrored end perimeter. Per ADR-0336, every Strategikon route mounts the exact
 accepted command-archive pixels from the required DB-owned application-UI role
 between that fill and the real content. The shared shell clips the decorative
 layer and applies the closed owner-approved cover, pixelated, 0.68-opacity

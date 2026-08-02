@@ -9,7 +9,7 @@ refines:
   - "[ADR-0297](0297-shell-workspaces-own-attached-bodies-and-inset-content-lanes.md)"
 ---
 
-# ADR-0335: Strategikon ships the owner-approved command-archive background
+# ADR-0336: Strategikon ships the owner-approved command-archive background
 
 ## Context and Problem Statement
 
