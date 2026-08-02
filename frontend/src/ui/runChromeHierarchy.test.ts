@@ -17,6 +17,7 @@ const runCardFace = readFileSync(new URL('./RunCardFace.tsx', import.meta.url), 
 const runRelics = readFileSync(new URL('./RunRelics.tsx', import.meta.url), 'utf8');
 const runSelfInspection = readFileSync(new URL('./RunSelfInspection.tsx', import.meta.url), 'utf8');
 const skirmish = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
+const skirmishBoard = readFileSync(new URL('../render/SkirmishBoard.tsx', import.meta.url), 'utf8');
 const skirmishHud = readFileSync(new URL('./SkirmishHud.tsx', import.meta.url), 'utf8');
 const chromeBox = readFileSync(new URL('./shared/ChromeBox.tsx', import.meta.url), 'utf8');
 const paintedSurfaceBoundary = readFileSync(new URL('./shell/PaintedSurfaceBoundary.tsx', import.meta.url), 'utf8');
@@ -56,6 +57,8 @@ describe('Run chrome hierarchy', () => {
     expect(metaControls).toContain('Reset Shop');
     expect(metaControls).toContain('Continue to first Battle');
     expect(metaControls).toContain('Continue to next Battle');
+    expect(metaControls).not.toContain('openingNeedsPurchase');
+    expect(metaControls).not.toContain('Buy one card before continuing.');
     expect(metaControls).not.toContain('data-ui-sfx="gold-sell"');
     expect(metaControls).not.toContain('<OuterChromeBox');
     expect(metaControls).not.toContain('data-chrome-unit="outer-panel"');
@@ -78,6 +81,16 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen.match(/<SkirmishShell/g)).toHaveLength(1);
     expect(runScreen).toContain('sceneSnapshot: RunSceneSnapshot');
     expect(runScreen).toContain('<RunPresentationSceneSlot');
+    expect(runScreen).toContain("shellRun?.phase === 'deployment' || shellRun?.phase === 'battle'");
+    expect(runScreen).toContain('sceneInstance={`${shellRun.id}:battlefield:${shellRun.battleIndex}:${sceneSnapshot.workspace}`}');
+    expect(runScreen).toContain('<RunBattlefieldPanel');
+    expect(skirmish).toContain('presentedDeploymentSurface');
+    expect(skirmish).toContain('preserveBoardPresentation: true');
+    expect(skirmish).toContain('unitArrivalsActive={sceneActivated}');
+    expect(skirmish).toContain('onArrivingUnitIdsChange={runDeployment?.onArrivingUnitIdsChange}');
+    expect(skirmishBoard).toContain('newlyVisibleArrivalPieces(visibleUnitIdsRef.current, livePieces)');
+    expect(runScreen).toContain('pendingPlacementArrivalUnitIdRef.current = activeDisciplineUnitId');
+    expect(runScreen).toContain('onArrivingUnitIdsChange: handleArrivingUnitIdsChange');
     expect(runScreen).not.toContain('RunWorkspaceStages');
     expect(runScreen).not.toContain('window.history');
     expect(runScreen).toContain('const run = sceneSnapshot.run;');
@@ -155,7 +168,7 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('disabled={purchased || run.goldTenths < offer.cost * GOLD_SCALE}');
   });
 
-  it('fills the shell-owned playfield for every non-Battle Run destination', () => {
+  it('fills shell-owned Run destinations while Deployment uses the battlefield', () => {
     const playerRunSources = `${runScreen}\n${runArmyWorkspace}\n${runRelics}`;
     const runWorkspaceRule = styleCss.match(/\.run-workspace\s*\{([^}]*)\}/)?.[1] ?? '';
 
@@ -167,7 +180,6 @@ describe('Run chrome hierarchy', () => {
     expect(chromeBox).toContain('export function ShellWorkspace');
     expect(chromeBox).not.toContain('export function ShellWorkspaceBody');
     for (const testId of [
-      'run-deployment-workspace',
       'run-shop-workspace',
       'run-victory-workspace',
       'run-army-ledger-workspace',
@@ -213,6 +225,41 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).not.toContain('DraftPanel');
     expect(runScreen).not.toContain("phase === 'draft'");
     expect(runCard).not.toContain("'draft'");
+    expect(skirmish).toContain("testId={runDeployment ? 'run-deployment' : 'skirmish'}");
+    expect(skirmish).toContain('className="skirmish-war-room"');
+    expect(skirmish).toContain('primaryClassName="skirmish-field"');
+    expect(runScreen).toContain('className="run-meta-controls run-deployment-controls"');
+    expect(skirmish).toContain('<SkirmishBoard');
+    expect(skirmish).toContain('surfaceState={presentedDeploymentSurface}');
+    expect(skirmish).not.toContain('cameraActive=');
+    expect(runScreen).toContain('viewKey: runBattleActivityId(prepared.id, prepared.battleIndex)');
+    expect(runScreen).toContain('gameForRunDeployment(prepared, level, layout)');
+    expect(runScreen).toContain('renderCellOverlay: ({ cell, visualFootprintStyle }) => {');
+    expect(runScreen).not.toContain('FramedReadOnlyBoardView');
+    expect(runScreen).not.toContain('levelToEditorBoard');
+    expect(runScreen).toContain("isLegalPlacement ? 'is-move' : 'is-deployment-blocked'");
+    expect(runScreen).toContain("!isLegalPlacement && hoveredCellKey === cellKey ? ' is-threat' : ''");
+    expect(runScreen).toContain("isLegalPlacement ? 'deployment-cell' : 'deployment-blocked-cell'");
+    expect(runScreen).toContain('aria-disabled={!isLegalPlacement}');
+    expect(runScreen).toContain('onClick={isLegalPlacement ? () => placeDisciplineUnit(cellKey) : undefined}');
+    expect(runScreen).toContain('boardLabCellPosition(hoveredPlacementCell)');
+    expect(runScreen).toContain('left: hoveredPlacementSeat.left');
+    expect(runScreen).toContain('zIndex: objectBaseZIndex(hoveredPlacementCell)');
+    expect(runScreen).toContain('data-testid="deployment-placement-ghost"');
+    expect(runScreen).not.toContain('const showGhost = hoveredCellKey === cellKey');
+    expect(runScreen).toContain('gameForRunDeployment(prepared, level, layout)');
+    expect(runScreen).toContain('disciplinePending ? `${placedDisciplineCount} fixed`');
+    expect(runScreen).toContain('advanceAutomaticDeployment(deployment, level)');
+    expect(runScreen).toContain('advanceReadyDeployment(');
+    expect(runScreen).not.toContain('data-testid="begin-run-battle"');
+    expect(runScreen).not.toContain('onBeginBattle');
+    expect(runScreen).toContain('isGeneratedRunBattleName(levelName) ? phase');
+    expect(runScreen).not.toContain('run-deployment-workspace');
+    expect(runScreen).not.toContain('<LevelPreviewColumn');
+    expect(runScreen).not.toContain('Choose square…');
+    expect(styleCss).toContain('.run-deployment-board');
+    expect(styleCss).toContain('.skirmish-board-cell-hit.is-threat::before');
+    expect(styleCss).not.toContain('.run-deployment-cell.is-deployment-blocked:hover::before');
   });
 
   it('draws every card through the approved shared trading-card face', () => {

@@ -10,6 +10,8 @@ import type { PredrawnOcclusionDepthMap } from '@chess-tactics/board-render';
 import {
   buildSkirmishBoard,
   commitSkirmishSceneFirstFrame,
+  computeArrivalDelays,
+  newlyVisibleArrivalPieces,
   pieceRuntimeSpriteSources,
   pieceOp,
   sceneBoardForSkirmish,
@@ -19,6 +21,32 @@ import {
 } from './SkirmishBoard';
 
 afterEach(() => resetLiveUnitCatalog());
+
+describe('retained-board unit arrivals', () => {
+  const pieces: Piece[] = [
+    { id: 'placed-king', side: 'player', type: 'king', x: 0, y: 4, startY: 4, alive: true },
+    { id: 'new-pawn', side: 'player', type: 'pawn', x: 1, y: 4, startY: 4, alive: true },
+    { id: 'new-enemy', side: 'enemy', type: 'rook', x: 4, y: 0, startY: 0, alive: true },
+    { id: 'scenery', side: 'neutral', type: 'rock', x: 2, y: 2, startY: 2, alive: true },
+  ];
+
+  it('animates only units newly introduced to an already-visible battlefield', () => {
+    const additions = newlyVisibleArrivalPieces(new Set(['placed-king']), pieces);
+
+    expect(additions.map((piece) => piece.id)).toEqual(['new-pawn', 'new-enemy']);
+    expect([...computeArrivalDelays(additions, 0)]).toEqual([
+      ['new-pawn', 0],
+      ['new-enemy', 240],
+    ]);
+  });
+
+  it('treats a removed and later reintroduced unit as a new arrival', () => {
+    const visible = new Set(['placed-king', 'new-pawn']);
+    visible.delete('new-pawn');
+
+    expect(newlyVisibleArrivalPieces(visible, [pieces[1]]).map((piece) => piece.id)).toEqual(['new-pawn']);
+  });
+});
 
 const exactBoard = (): EditorBoard => {
   const grass0 = tileFamilies.grass[0].id;

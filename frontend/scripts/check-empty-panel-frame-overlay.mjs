@@ -1026,7 +1026,6 @@ if (!/<RunWorkspace[\s\S]*?contentClassName=\{contentClassName\}[\s\S]*?edgeAtta
 }
 const playerRunSources = `${runScreen}\n${runArmyWorkspace}\n${runRelics}`;
 for (const testId of [
-  'run-deployment-workspace',
   'run-shop-workspace',
   'run-victory-workspace',
   'run-army-ledger-workspace',
@@ -1039,6 +1038,16 @@ for (const testId of [
   if (!playerRunSources.includes(`data-testid="${testId}"`)) {
     failures.push(`player-facing Run destination ${testId} must use RunWorkspace`);
   }
+}
+const runBattlefieldSources = `${runScreen}\n${skirmish}`;
+if (!/testId=\{runDeployment \? 'run-deployment' : 'skirmish'\}/.test(skirmish)
+  || !/className="skirmish-war-room"/.test(skirmish)
+  || !/primaryClassName="skirmish-field"/.test(skirmish)
+  || !/className="run-meta-controls run-deployment-controls"/.test(runScreen)
+  || !/renderCellOverlay:/.test(runScreen)
+  || !/surfaceState=\{presentedDeploymentSurface\}/.test(skirmish)
+  || /run-deployment-workspace|<LevelPreviewColumn|Choose square…/.test(runBattlefieldSources)) {
+  failures.push('Run Deployment must use the battlefield and phase-specific Controls instead of a RunWorkspace level manifest');
 }
 if (/<OuterChromeBox\b|<OuterChromeHeader\b|chromeConsumer="run-(?:draft|deployment|shop|victory|army-ledger|army-profile|sell-units|empty)"/.test(playerRunSources)) {
   failures.push('player-facing Run destinations must not restore top-level outer panels');

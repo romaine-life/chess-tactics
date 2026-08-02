@@ -332,7 +332,10 @@ describe('scene manifests', () => {
       'run-phase',
       'run-workspace',
     ]);
-    expect(battleScene.id).not.toBe(deploymentScene.id);
+    // Deployment is a state of this Battle's already-mounted battlefield, not a scene
+    // before it. Phase promotion must therefore preserve both director and React keys.
+    expect(battleScene.id).toBe(deploymentScene.id);
+    expect(sceneLayerKey(battleScene)).toBe(sceneLayerKey(deploymentScene));
     expect(armyScene.id).not.toBe(battleScene.id);
     expect(deepestSharedSceneRegion(deploymentScene, battleScene)).toBe('gameplay-shell');
     expect(deepestSharedSceneRegion(battleScene, armyScene)).toBe('gameplay-shell');

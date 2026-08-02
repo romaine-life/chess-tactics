@@ -3,6 +3,7 @@ status: accepted
 date: 2026-08-01
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
+  - "[ADR-0339](0339-opening-shop-purchases-are-optional.md)'s removal of the mandatory opening purchase before Continue"
   - "[ADR-0323](0323-run-shops-allow-every-affordable-card-purchase.md)'s multi-card shared Shop transaction and format-10 purchase state"
   - "[ADR-0322](0322-run-openings-use-two-pawns-eight-gold-and-card-native-purchase-feedback.md)'s format-9 card vocabulary, two-Pawn army, eight-gold budget, and purchase feedback"
 partially_supersedes:

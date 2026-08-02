@@ -110,8 +110,9 @@ these.
   Each card may be bought once while the player can afford it. Every bought card
   keeps the Shop open, shows a framed **Purchased** state beneath that card, and
   uses the same gold transaction cue as selling. Only the explicit
-  Continue action enters the first Battle. **Card** is the sole current gameplay
-  noun for these deck entries and offers (ADR-0321, ADR-0322, ADR-0323).
+  Continue action enters the first Battle, and it is available without requiring
+  a purchase. **Card** is the sole current gameplay noun for these deck entries
+  and offers (ADR-0321, ADR-0322, ADR-0323, ADR-0339).
 - Each of those 49 Units cards owns one native 400×280 PixelLab illustration
   keyed by its canonical composition id. Human unit roles and readable
   equipment control the composition; historical pressure supplies secondary
@@ -183,6 +184,25 @@ these.
   Marshalled Bishop may have little effect alone, and a second is not owed an
   invented additional benefit. The player weighs that roster-dependent value
   (ADR-0273, ADR-0274).
+- Run Deployment is a battlefield state, not a level-summary destination. The
+  full board remains primary while Controls owns any Muster Roll, Discipline,
+  or Surveyor's Compass decision. Discipline places its named unit directly on
+  highlighted legal player-zone squares before ordinary deployment. While any
+  Discipline placement remains, the battlefield shows only committed
+  Disciplined units. The final required Discipline, Muster Roll, or Surveyor's
+  Compass choice is first persisted and shown on that mounted board, then commits
+  directly to Battle without a separate confirmation. The same scene, session
+  store, board compositor, unit identities, and camera remain mounted: the
+  deterministic friendly formation and unresolved opponents join the position.
+  Each Disciplined placement and each remaining unit first introduced at Battle
+  start uses the canonical entry animation. The final Disciplined unit completes
+  its own arrival before automatic deployment begins as a separate wave;
+  already-visible units neither move nor replay arrival, and the terrain is not
+  reacquired or redrawn. Combat input,
+  clocks, and opponent behavior open
+  only after the persisted phase becomes Battle. When no meaningful player
+  choice exists, Shop Continue commits the deterministic formation directly
+  into Battle (ADR-0338, ADR-0340, ADR-0341, ADR-0342, ADR-0343, ADR-0344).
 - Placement relics grant shared unit abilities rather than owning bespoke
   placement rules. Field Linens grants Positioned to Pawns; Royal Decree to the
   King; Crenellated Rampart to Rooks; and Pope's Staff to Bishops. Ghibelline
@@ -430,6 +450,8 @@ opening the normal Shop transaction and retires the separate draft phase and
 screen. ADR-0322 supplies the current two-Pawn, 8-gold opening and card-native
 purchase language, feedback, and sound. ADR-0323 removes the inherited
 one-card-per-Shop cap so every affordable dealt card can be purchased once.
+ADR-0339 removes the remaining mandatory opening purchase, making card commerce
+optional in every Shop.
 
 ## 14. Administrator playtesting
 

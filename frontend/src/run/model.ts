@@ -1510,7 +1510,6 @@ export function shopHasChanges(run: RunDocument): boolean {
 
 export function canLeaveShop(run: RunDocument): boolean {
   if (run.phase !== 'shop' || !run.shop) return false;
-  if (run.shop.kind === 'opening' && run.shop.purchasedCardOfferIds.length === 0) return false;
   if (run.shop.lootRelicOffers.length > 0 && !run.shop.chosenLootRelicId) return false;
   return true;
 }

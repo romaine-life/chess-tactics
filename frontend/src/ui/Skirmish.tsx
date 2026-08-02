@@ -3,11 +3,17 @@ import {
   type ReactElement,
   type ReactNode,
   useEffect,
+  useLayoutEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { isPredrawnBackgroundActive } from '@chess-tactics/board-render';
-import { SkirmishBoard } from '../render/SkirmishBoard';
+import {
+  SkirmishBoard,
+  type SkirmishBoardCellOverlayContext,
+  type SkirmishBoardSurfaceState,
+} from '../render/SkirmishBoard';
 import { SkirmishHud, type SkirmishHudProps } from './SkirmishHud';
 import { SceneSurfaceReadiness } from './shell/PaintedSurfaceBoundary';
 import { useSceneActivation, useSceneReveal } from './shell/SceneBoundary';
@@ -70,7 +76,7 @@ import {
   storedPredrawnBoardRegistration,
   type PredrawnBoardCornerRegistration,
 } from '../render/PredrawnBoardLayer';
-import { useSkirmishView } from '../game/skirmishView';
+import { useSkirmishViewStoreApi } from '../game/SkirmishViewStoreContext';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox, ShellViewportSwap } from './shared/ChromeBox';
 import { rememberAdminBattleHref } from '../admin/battleRoute';
@@ -94,8 +100,23 @@ export interface RunBattlePresentation {
   transformCommittedBoard?: RunBattleTransformSink;
 }
 
+/** Deployment chrome and interaction projected onto the Battle compositor already on screen. */
+export interface RunDeploymentPresentation {
+  surfaceState: SkirmishBoardSurfaceState;
+  titleBarContent: ReactNode;
+  relicIds: readonly RunRelicId[];
+  controlsContent: ReactNode;
+  renderCellOverlay: (context: SkirmishBoardCellOverlayContext) => ReactNode;
+  boardOverlay: ReactNode;
+  screenClassName?: string;
+  boardClassName?: string;
+  boardAriaLabel: string;
+  onArrivingUnitIdsChange: (unitIds: readonly string[]) => void;
+}
+
 export interface SkirmishProps {
   runBattle?: RunBattlePresentation | null;
+  runDeployment?: RunDeploymentPresentation | null;
   runWorkspace?: ReactNode;
   routePath?: string;
   runSelfInspectionView?: RunSelfInspectionView | null;
@@ -121,6 +142,7 @@ export function SkirmishShell({
   hudContent,
   screenStyle,
   registerSceneSurface = true,
+  surfaceSignature,
   readyToCompose = true,
   children,
 }: {
@@ -134,6 +156,8 @@ export function SkirmishShell({
   hudContent?: ReactNode;
   screenStyle?: CSSProperties | null;
   registerSceneSurface?: boolean;
+  /** Stable mounted-surface identity when chrome state changes within one battlefield. */
+  surfaceSignature?: string;
   readyToCompose?: boolean;
   children: ReactNode;
 }): ReactElement {
@@ -170,7 +194,7 @@ export function SkirmishShell({
       {registerSceneSurface ? (
         <SceneSurfaceReadiness
           surface="gameplay-hud"
-          signature={`${testId}:${paintAttempt}`}
+          signature={`${surfaceSignature ?? testId}:${paintAttempt}`}
           readyToCompose={readyToCompose}
           loadingLabel="Preparing Run…"
           onRetry={() => setPaintAttempt((value) => value + 1)}
@@ -185,6 +209,7 @@ export function SkirmishShell({
 
 function SkirmishSession({
   runBattle = null,
+  runDeployment = null,
   runWorkspace = null,
   routePath = window.location.pathname,
   runSelfInspectionView = null,
@@ -194,6 +219,21 @@ function SkirmishSession({
   const sceneActivated = useSceneActivation();
   const sceneRevealed = useSceneReveal();
   const skirmishStore = useSkirmishStoreApi();
+  const skirmishViewStore = useSkirmishViewStoreApi();
+  const lastDeploymentSurfaceRef = useRef<SkirmishBoardSurfaceState | null>(null);
+  const continuedFromDeploymentRef = useRef(false);
+  const [stagedBattleActivityId, setStagedBattleActivityId] = useState<string | null>(null);
+  if (runDeployment) {
+    lastDeploymentSurfaceRef.current = runDeployment.surfaceState;
+    continuedFromDeploymentRef.current = true;
+  }
+  const retainedDeploymentSurface = !runDeployment
+    && runBattle
+    && continuedFromDeploymentRef.current
+    && stagedBattleActivityId !== runBattle.activityId
+      ? lastDeploymentSurfaceRef.current
+      : null;
+  const presentedDeploymentSurface = runDeployment?.surfaceState ?? retainedDeploymentSurface ?? undefined;
   useEffect(() => {
     skirmishStore.getState().setRunBattleTransformSink(runBattle?.transformCommittedBoard ?? null);
     return () => skirmishStore.getState().setRunBattleTransformSink(null);
@@ -323,10 +363,31 @@ function SkirmishSession({
   const restartSkirmish = useSkirmish((s) => s.restartSkirmish);
   const resumeMatch = useSkirmish((s) => s.resumeMatch);
   const activateClock = useSkirmish((s) => s.activateClock);
-  const playableSurfaceReady = boardSurfaceReady && hudSurfaceReady;
+  const playableSurfaceReady = boardSurfaceReady && (runBattle ? true : hudSurfaceReady);
   const game = useSkirmish((s) => s.game);
   const adminMode = useSkirmish((s) => s.adminMode);
   const adminWinBattle = useSkirmish((s) => s.adminWinBattle);
+  // A Run Battle is promoted in place from its already-painted Deployment board. Keep the
+  // final Deployment position as the board source for the transition render, build the live
+  // match into this same session store before paint, then release that temporary source. The
+  // compositor never unmounts: incumbent units stay seated while its unit-identity ledger gives
+  // only the newly introduced formation members the canonical arrival treatment.
+  useLayoutEffect(() => {
+    if (runDeployment || !runBattle || !continuedFromDeploymentRef.current) return;
+    if (stagedBattleActivityId === runBattle.activityId) return;
+    const ai = new URLSearchParams(window.location.search).get('ai') === 'greedy' ? 'greedy' as const : 'search' as const;
+    newSkirmish({
+      seed: runBattle.seed,
+      level: runBattle.level,
+      activityId: runBattle.activityId,
+      ai,
+      deferClockStart: true,
+      preserveBoardPresentation: true,
+    });
+    setRouteLevel(runBattle.level);
+    setBoardSettled(true);
+    setStagedBattleActivityId(runBattle.activityId);
+  }, [newSkirmish, runBattle, runDeployment, stagedBattleActivityId]);
   const screenBoard = useMemo(
     () => game.boardCode ? decodeBoard(game.boardCode) : null,
     [game.boardCode],
@@ -416,7 +477,7 @@ function SkirmishSession({
   const savePredrawnRegistration = (registration: PredrawnBoardCornerRegistration): void => {
     const url = new URL(window.location.href);
     url.searchParams.set('predrawnCorners', serializePredrawnBoardPreviewRegistration(registration));
-    if (!useSkirmishView.getState().showGrid) useSkirmishView.getState().toggle('showGrid');
+    if (!skirmishViewStore.getState().showGrid) skirmishViewStore.getState().toggle('showGrid');
     navigateApp(`${url.pathname}${url.search}${url.hash}`, { replace: true, scroll: false });
   };
 
@@ -566,6 +627,14 @@ function SkirmishSession({
     // Test-board controls (the CPU-delay floor) are live only for ?mode=test; leaving test mode
     // resets the floor so real/campaign play is never slowed.
     skirmishStore.getState().setTestMode(isTestPlay);
+    // Deployment owns the visible position until its final choice has painted. It deliberately
+    // does not initialize or persist a live match yet; the layout effect above promotes that
+    // exact mounted presentation when the Run document advances to Battle.
+    if (runDeployment && runBattle) {
+      setRouteLevel(runBattle.level);
+      setBoardSettled(true);
+      return;
+    }
 
     // Re-running this setup inside the same mounted battle scene should resume, not
     // restart: its instance-owned store already holds the live board. Only build a
@@ -682,11 +751,11 @@ function SkirmishSession({
         setBoardSettled(true);
       });
     return () => { active = false; };
-  }, [newSkirmish, resumeMatch, isTestPlay, routeBoard, routeBoardLevel, routeMap, routeCampaignId, routeLevel, routeLevelId, routeLobby, runBattle]);
+  }, [newSkirmish, resumeMatch, isTestPlay, routeBoard, routeBoardLevel, routeMap, routeCampaignId, routeLevel, routeLevelId, routeLobby, runBattle, runDeployment]);
 
   useEffect(() => {
-    if (playableSurfaceReady && sceneActivated) activateClock();
-  }, [activateClock, playableSurfaceReady, sceneActivated]);
+    if (!runDeployment && playableSurfaceReady && sceneActivated) activateClock();
+  }, [activateClock, playableSurfaceReady, runDeployment, sceneActivated]);
 
   // Multiplayer entry: `/play?lobby=<id>` enters a lobby's shared board. Both clients
   // build the SAME (level, seed) game; each side's moves relay through the lobby channel
@@ -1123,7 +1192,31 @@ function SkirmishSession({
         '--skirmish-world-bg': `url("${defaultBackgroundSet().world}")`,
       } as CSSProperties
     : undefined;
-  const hudContent = boardSettled && !boardSurfaceError ? (
+  const battleHud = boardSettled && !boardSurfaceError ? (
+    <SkirmishHud
+      canStartNewSkirmish={Boolean(activeLevel) && !isCampaignPlay && !isRunPlay}
+      onRestart={showRetryStud ? retrySkirmish : null}
+      restartLabel={activeLevel ? (isRunPlay ? 'Restart Battle' : isCampaignPlay ? 'Restart level' : 'Restart board') : 'Restart skirmish'}
+      onNewSkirmish={startNewScenario}
+      newSkirmishLabel={newScenarioLabel}
+      showClockControl={!isCampaignPlay}
+      clockControlValue={activeLevel ? scenarioTimeControl : undefined}
+      onClockControlChange={activeLevel ? setScenarioTimeControl : undefined}
+      returnHref={returnHref}
+      returnLabel={returnIsEditor ? 'Back to editor' : 'Back'}
+      netInteractive={netSeatInteractive}
+      onOpenPredrawnRegistration={predrawnPreview ? () => setPredrawnPickerOpen(true) : null}
+      onPawnCashOut={runBattle?.onPawnCashOut ?? null}
+      onAbandonRun={runBattle?.onAbandonRun ?? null}
+      strategikonHref={strategikonHref}
+      strategikonOpen={strategikonOpen}
+      runSelfInspectionView={runSelfInspectionView}
+      onNavigateRunView={onNavigateRunView}
+    />
+  ) : null;
+  // The continuous Run scene registers one stable outer gameplay surface across Deployment and
+  // Battle. Other play modes keep their existing HUD-owned readiness boundary.
+  const hudContent = runBattle ? battleHud : battleHud ? (
     <SceneSurfaceReadiness
       surface="gameplay-hud"
       signature="gameplay-hud"
@@ -1133,26 +1226,7 @@ function SkirmishSession({
       onPaintedChange={setHudSurfaceReady}
       showStatus={false}
     >
-      <SkirmishHud
-        canStartNewSkirmish={Boolean(activeLevel) && !isCampaignPlay && !isRunPlay}
-        onRestart={showRetryStud ? retrySkirmish : null}
-        restartLabel={activeLevel ? (isRunPlay ? 'Restart Battle' : isCampaignPlay ? 'Restart level' : 'Restart board') : 'Restart skirmish'}
-        onNewSkirmish={startNewScenario}
-        newSkirmishLabel={newScenarioLabel}
-        showClockControl={!isCampaignPlay}
-        clockControlValue={activeLevel ? scenarioTimeControl : undefined}
-        onClockControlChange={activeLevel ? setScenarioTimeControl : undefined}
-        returnHref={returnHref}
-        returnLabel={returnIsEditor ? 'Back to editor' : 'Back'}
-        netInteractive={netSeatInteractive}
-        onOpenPredrawnRegistration={predrawnPreview ? () => setPredrawnPickerOpen(true) : null}
-        onPawnCashOut={runBattle?.onPawnCashOut ?? null}
-        onAbandonRun={runBattle?.onAbandonRun ?? null}
-        strategikonHref={strategikonHref}
-        strategikonOpen={strategikonOpen}
-        runSelfInspectionView={runSelfInspectionView}
-        onNavigateRunView={onNavigateRunView}
-      />
+      {battleHud}
     </SceneSurfaceReadiness>
   ) : null;
   const battleWorkspaceLayer = (
@@ -1181,10 +1255,10 @@ function SkirmishSession({
 
   return (
     <SkirmishShell
-      testId="skirmish"
-      className={screenPredrawnBackgroundActive ? 'is-predrawn-board' : ''}
+      testId={runDeployment ? 'run-deployment' : 'skirmish'}
+      className={runDeployment?.screenClassName ?? (screenPredrawnBackgroundActive ? 'is-predrawn-board' : '')}
       shellWorkspaceCoversRelics={Boolean(runWorkspace) || strategikonOpen}
-      titleBarContent={playableSurfaceReady ? (
+      titleBarContent={runDeployment ? runDeployment.titleBarContent : playableSurfaceReady ? (
         <div className="skirmish-topbar-status">
           {/* The battle clock is ALWAYS the middle chip on every play surface — a timed game
             counts down and an authored untimed level reads "∞ / No limit". Keeping the
@@ -1217,10 +1291,14 @@ function SkirmishSession({
           </TitleBarStatus>
         </div>
       ) : null}
-      relicIds={runBattle?.relicIds ?? []}
-      screenStyle={screenStyle ?? null}
-      registerSceneSurface={false}
-      hudContent={hudContent}
+      relicIds={runDeployment?.relicIds ?? runBattle?.relicIds ?? []}
+      controlsContent={runDeployment?.controlsContent}
+      hudProps={runDeployment ? { enableGlobalShortcuts: false } : undefined}
+      screenStyle={runDeployment ? undefined : screenStyle ?? null}
+      registerSceneSurface={Boolean(runBattle)}
+      surfaceSignature={runBattle?.activityId}
+      readyToCompose={playableSurfaceReady}
+      hudContent={runDeployment ? undefined : hudContent}
     >
 
       {/* Test play is an authoring loop, so its return is a persistent title-bar action rather
@@ -1244,7 +1322,7 @@ function SkirmishSession({
       {/* The bottom-centre ornament diamond becomes a Retry button in single-player: one
           click restarts the current battle. Portals into the shell bar's stud slot (ADR-0042)
           so it sits exactly on the decorative nailhead without disturbing any other bar track. */}
-      {showRetryStud && playableSurfaceReady ? (
+      {!runDeployment && showRetryStud && playableSurfaceReady ? (
         <TitleBarSlot region="stud">
           <button
             type="button"
@@ -1264,7 +1342,7 @@ function SkirmishSession({
         primaryClassName="skirmish-field"
         workspaceOpen={strategikonOpen || Boolean(runWorkspace)}
         persistent={battlePersistentOverlay}
-        aria-label={strategikonOpen ? 'Battle reference workspace' : 'Skirmish battlefield'}
+        aria-label={runDeployment ? 'Run deployment battlefield' : strategikonOpen ? 'Battle reference workspace' : 'Skirmish battlefield'}
         data-scene-instance={strategikonBase}
         primary={(
           <>
@@ -1282,11 +1360,18 @@ function SkirmishSession({
                   compositor mounted so pieces return to their starting positions without
                   hiding, reacquiring, or replaying the board's first-frame lifecycle. */}
                 <SkirmishBoard
-                  interactive={sceneActivated && (!net || (netSeatInteractive && !netRelayFrozen))}
+                  interactive={!runDeployment && sceneActivated && (!net || (netSeatInteractive && !netRelayFrozen))}
+                  surfaceState={presentedDeploymentSurface}
+                  renderCellOverlay={runDeployment?.renderCellOverlay}
+                  boardOverlay={runDeployment?.boardOverlay}
+                  className={runDeployment?.boardClassName}
+                  ariaLabel={runDeployment?.boardAriaLabel}
                   onSurfaceReady={setBoardSurfaceReady}
                   onSurfaceError={setBoardSurfaceError}
+                  onArrivingUnitIdsChange={runDeployment?.onArrivingUnitIdsChange}
                   reveal={playableSurfaceReady && sceneRevealed}
-                  activate={sceneActivated}
+                  activate={!runDeployment && sceneActivated}
+                  unitArrivalsActive={sceneActivated}
                   predrawnReview={predrawnPreview ? {
                     src: predrawnPreview,
                     registration: predrawnRegistration,
@@ -1351,7 +1436,7 @@ function SkirmishSession({
         </div>
       )}
 
-      {isRunPlay && runBattle && routeLevel && game.winner && (
+      {!runDeployment && isRunPlay && runBattle && routeLevel && game.winner && (
         <div className="campaign-result" role="dialog" aria-modal="true" aria-label="Run Battle result" data-testid="run-battle-result">
           <div className="settings-frame campaign-result-panel">
             <h2>{game.winner === 'player' ? 'Victory' : game.winner === 'draw' ? 'Draw' : 'Defeat'}</h2>
@@ -1423,7 +1508,7 @@ function SkirmishSession({
   );
 }
 
-/** Closed Battle presentation: every mount receives an isolated session store. */
+/** Closed battlefield activity: every mount receives one isolated session store. */
 export function Skirmish(props: SkirmishProps = {}): ReactElement {
   return (
     <SkirmishStoreProvider>

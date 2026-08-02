@@ -47,8 +47,10 @@ views, Reset Shop, and explicit Continue reuse the post-Battle Shop model. The
 opening kind carries zero victory gold and no Loot, paid-relic, or Ataraxia card
 effects; all opening offers remain standard rather than Tactical, Pestiferous,
 or Concinnous. Each dealt card may be purchased once while sufficient gold remains;
-Continue requires at least one card purchase and enters Deployment at Battle
-index 0. Format 11 names the transaction `cardOffers`,
+Continue permits zero card purchases and enters Deployment at Battle index 0
+(ADR-0339). Deployment remains durable when it owns a player choice; when the
+formation has no meaningful choice, Continue prepares it and commits directly
+to Battle without exposing an intermediate destination (ADR-0338). Format 11 names the transaction `cardOffers`,
 `purchasedCardOfferIds`, and `buyCard`; current Shop documents using the former
 gameplay noun are unsupported. The retired `draft` phase, `draftOffers`, and
 `chosenDraftId` are absent and rejected on current writes. Hydrating an
@@ -58,7 +60,9 @@ therefore replace it without adapting or replaying the retired transaction. See
 [ADR-0321](adr/0321-run-opening-is-the-normal-shop-and-draft-is-retired.md) and
 [ADR-0322](adr/0322-run-openings-use-two-pawns-eight-gold-and-card-native-purchase-feedback.md),
 as superseded for Shop purchase cardinality by
-[ADR-0323](adr/0323-run-shops-allow-every-affordable-card-purchase.md). Format 11
+[ADR-0323](adr/0323-run-shops-allow-every-affordable-card-purchase.md) and for
+opening purchase optionality by
+[ADR-0339](adr/0339-opening-shop-purchases-are-optional.md). Format 11
 also stores the selected Ataraxia tier and each persisted affected Shop offer.
 Pestiferous offers store their public Plagued piece index;
 Concinnous offers store their concealed Positioned target index; Tactical

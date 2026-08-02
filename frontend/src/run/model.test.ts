@@ -89,7 +89,7 @@ describe('Run piece economy', () => {
     }
   });
 
-  it('starts with the permanent King, two Pawns, eight gold, and three deterministic cards at distinct values', () => {
+  it('starts with the permanent King, two Pawns, eight gold, and an optional three-card deal', () => {
     const run = createRun(war(), 91);
     expect(run.army.map((unit) => unit.type)).toEqual(['king', 'pawn', 'pawn']);
     expect(run.army.every((unit) => unit.name.length > 0)).toBe(true);
@@ -109,8 +109,13 @@ describe('Run piece economy', () => {
     expect(run.shop?.cardOffers.every((offer) => offer.cost === offer.value)).toBe(true);
     expect(openingShopOffers(91)).toEqual(run.shop?.cardOffers);
     expect(createRun(war(), 91).shop?.cardOffers).toEqual(run.shop?.cardOffers);
-    expect(canLeaveShop(run)).toBe(false);
-    expect(leaveShop(run)).toBe(run);
+    expect(canLeaveShop(run)).toBe(true);
+    const continued = leaveShop(run);
+    expect(continued.phase).toBe('deployment');
+    expect(continued.battleIndex).toBe(0);
+    expect(continued.cards).toEqual([]);
+    expect(continued.army.map((unit) => unit.type)).toEqual(['king', 'pawn', 'pawn']);
+    expect(continued.goldTenths).toBe(RUN_STARTING_GOLD_TENTHS);
   });
 
   it('buys the opening card in place and waits for explicit Continue before deployment', () => {
@@ -136,7 +141,7 @@ describe('Run piece economy', () => {
     expect(reset.army.map((unit) => unit.type)).toEqual(['king', 'pawn', 'pawn']);
     expect(reset.cards).toEqual([]);
     expect(reset.goldTenths).toBe(RUN_STARTING_GOLD_TENTHS);
-    expect(canLeaveShop(reset)).toBe(false);
+    expect(canLeaveShop(reset)).toBe(true);
     const continued = leaveShop(bought);
     expect(continued.phase).toBe('deployment');
     expect(continued.battleIndex).toBe(0);

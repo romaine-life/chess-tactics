@@ -9,7 +9,7 @@
 //
 // Usage:
 //   node scripts/shot.mjs <url> [--select <css>] [--out <path>] [--size <WxH>] [--ready <jsExpr>]
-//     [--timeout <ms>] [--throttle slow-4g|slow-3g] [--cold|--warm] [--assert-menu-atomic]
+//     [--timeout <ms>] [--throttle slow-4g|slow-3g] [--cold|--warm] [--anonymous] [--assert-menu-atomic]
 //     [--assert-board-atomic] [--assert-shell-font-atomic] [--assert-surface-atomic <name>]
 //     [--assert-bootstrap-priority]
 //     [--assert-menu-host-continuity]
@@ -17,7 +17,7 @@
 //     [--assert-editor-viewer]
 //     [--abort-request <url-substring>] [--abort-request-once <url-substring>]
 //     [--abort-request-until-retry <url-substring>] [--retry-scene-error]
-//     [--click <selector>] [--click-ready <jsExpr>] [--assert-backdrop-continuity]
+//     [--click <selector>] [--click-ready <jsExpr>] [--hover <selector>] [--assert-backdrop-continuity]
 //     [--assert-full-scene-exit]
 //     [--transition-out <path>]
 //     [--assert-immediate-local-control]
@@ -55,6 +55,7 @@ const timeout = Math.max(1_000, Number(flag('timeout', 30_000)) || 30_000);
 const throttle = flag('throttle');
 const cold = has('cold');
 const warm = has('warm');
+const anonymous = has('anonymous');
 const assertMenuAtomic = has('assert-menu-atomic');
 const assertBoardAtomic = has('assert-board-atomic');
 const assertShellFontAtomic = has('assert-shell-font-atomic');
@@ -68,6 +69,7 @@ const retrySceneError = has('retry-scene-error');
 const allowSceneError = has('allow-scene-error');
 const click = flag('click');
 const clickReady = flag('click-ready');
+const hover = flag('hover');
 const backAfterClickMs = flag('back-after-click-ms');
 const assertBackdropContinuity = has('assert-backdrop-continuity');
 const assertFullSceneExit = has('assert-full-scene-exit');
@@ -86,7 +88,7 @@ const CHROMES = [
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
 ];
 const executablePath = CHROMES.find(existsSync);
-if (!url || url.startsWith('--')) { console.error('usage: shot <url> [--select css] [--out path] [--size WxH] [--scale n] [--ready jsExpr] [--timeout ms] [--throttle slow-4g|slow-3g] [--cold|--warm] [--full] [--allow-motion] [--assert-editor-viewer]'); process.exit(2); }
+if (!url || url.startsWith('--')) { console.error('usage: shot <url> [--select css] [--out path] [--size WxH] [--scale n] [--ready jsExpr] [--timeout ms] [--throttle slow-4g|slow-3g] [--cold|--warm] [--anonymous] [--full] [--allow-motion] [--assert-editor-viewer]'); process.exit(2); }
 if (cold && warm) { console.error('--cold and --warm are mutually exclusive'); process.exit(2); }
 if (!executablePath) { console.error('No Chrome/Edge found. Checked:\n' + CHROMES.join('\n')); process.exit(1); }
 mkdirSync(dirname(out), { recursive: true });
@@ -519,8 +521,11 @@ try {
   // for a non-loopback target.
   const target = new URL(url);
   if (
-    ['127.0.0.1', 'localhost', '[::1]'].includes(target.hostname)
-    || target.hostname.endsWith('.localhost')
+    !anonymous
+    && (
+      ['127.0.0.1', 'localhost', '[::1]'].includes(target.hostname)
+      || target.hostname.endsWith('.localhost')
+    )
   ) {
     const signIn = new URL('/api/auth/sign-in', target);
     signIn.searchParams.set('returnTo', '/api/auth/me');
@@ -537,10 +542,19 @@ try {
   // interception handler so a Level Editor capture never tries to continue the same request twice.
   const targetIsLevelEditor = isLevelEditorUrl(url);
   let retryFailureReleased = false;
-  if (targetIsLevelEditor || abortRequest || abortRequestOnce || abortRequestUntilRetry) {
+  if (anonymous || targetIsLevelEditor || abortRequest || abortRequestOnce || abortRequestUntilRetry) {
     let abortedOnce = false;
     await page.setRequestInterception(true);
     page.on('request', (request) => {
+      const requestUrl = new URL(request.url());
+      if (anonymous && request.method() === 'GET' && requestUrl.pathname === '/api/auth/me') {
+        void request.respond({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ signed_in: false }),
+        });
+        return;
+      }
       const abortAlways = abortRequest && request.url().includes(String(abortRequest));
       const abortFirst = !abortedOnce
         && abortRequestOnce
@@ -1058,6 +1072,13 @@ try {
     await page.addStyleTag({ content: `*,*::before,*::after{animation:none!important;transition:none!important;animation-duration:0s!important;caret-color:transparent!important;scroll-behavior:auto!important}` });
   }
   await new Promise((r) => setTimeout(r, 200));
+  if (hover) {
+    await page.waitForSelector(String(hover), { visible: true, timeout });
+    await page.hover(String(hover));
+    await page.evaluate(() => new Promise((resolveFrame) => {
+      window.requestAnimationFrame(() => window.requestAnimationFrame(resolveFrame));
+    }));
+  }
 
   if (assertMenuAtomic) {
     const violations = await page.evaluate(() => window.__ctMenuAtomicViolations || []);

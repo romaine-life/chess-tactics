@@ -1,17 +1,15 @@
-// Skirmish VIEW state (Zustand) — board-view preferences only, kept OUT of the
-// game store (which is the single source of truth for game state, per store.ts).
-// Both the board renderer and the HUD subscribe to this: the board reads it to
-// render overlays / drive zoom+pan; the HUD's "View" tab is where the controls
-// live, so the playfield itself stays free of floating buttons (ADR-0006 lean +
-// the tactics-UI convention: tactical info renders on the board, controls dock).
+// Skirmish VIEW state — one instance per mounted battlefield presentation. It stays
+// separate from the game store because it is visual state, but it follows the same
+// provider lifetime: overlapping outgoing/incoming scenes must never share zoom, pan,
+// opening framing, or overlays (ADR-0307/ADR-0345).
 
-import { create } from 'zustand';
+import { createStore, type StoreApi } from 'zustand/vanilla';
 import { PLAYER_MAXIMUM_ZOOM, PLAYER_TECHNICAL_MINIMUM_ZOOM } from './boardCameraPolicy';
 
 const DEFAULT_ZOOM = 0.9;
 const DEFAULT_PAN = { x: 0, y: -12 };
 
-type OverlayKey =
+export type OverlayKey =
   | 'showMoves'
   | 'showEnemyAttacks'
   | 'showBlocked'
@@ -58,54 +56,59 @@ export interface SkirmishViewState {
   resetView: () => void;
 }
 
-export const useSkirmishView = create<SkirmishViewState>((set) => ({
-  showMoves: true,
-  showEnemyAttacks: true,
-  showBlocked: false,
-  showEnemyMoves: false,
-  showPlayerAttacks: false,
-  showPlayerMoves: false,
-  showPromotionZones: false,
-  showGrid: false,
-  zoom: DEFAULT_ZOOM,
-  minZoom: PLAYER_TECHNICAL_MINIMUM_ZOOM,
-  maxZoom: PLAYER_MAXIMUM_ZOOM,
-  pan: DEFAULT_PAN,
-  openingZoom: DEFAULT_ZOOM,
-  openingPan: DEFAULT_PAN,
-  cameraResetRevision: 0,
-  toggle: (key) => set((s) => ({ [key]: !s[key] })),
-  setZoom: (zoom) => set((state) => ({
-    // Inputs may arrive on human-friendly increments, but a geometry-derived art floor can sit
-    // between them. Preserve that exact clamp so gameplay cannot round back below accepted art.
-    zoom: Math.min(state.maxZoom, Math.max(state.minZoom, zoom)),
-  })),
-  setMinZoom: (zoom) => set((state) => {
-    const minZoom = Math.max(PLAYER_TECHNICAL_MINIMUM_ZOOM, zoom);
-    const maxZoom = Math.max(PLAYER_MAXIMUM_ZOOM, minZoom, state.openingZoom);
-    return { minZoom, maxZoom, zoom: Math.min(maxZoom, Math.max(state.zoom, minZoom)) };
-  }),
-  setPan: (pan) => set({ pan }),
-  setOpeningView: (camera) => set((state) => ({
-    openingZoom: camera.zoom,
-    openingPan: camera.pan,
-    // Opening composition is geometry, not a suggestion subject to the ordinary control cap.
-    // Raising the ceiling first lets the framing hook apply the exact camera on large viewports.
-    maxZoom: Math.max(PLAYER_MAXIMUM_ZOOM, state.minZoom, camera.zoom, state.zoom),
-  })),
-  clearOverlays: () => set({
-    showMoves: false,
-    showEnemyAttacks: false,
+export type SkirmishViewStore = StoreApi<SkirmishViewState>;
+
+/** Construct the closed view state for one mounted battlefield activity. */
+export function createSkirmishViewStore(): SkirmishViewStore {
+  return createStore<SkirmishViewState>((set) => ({
+    showMoves: true,
+    showEnemyAttacks: true,
     showBlocked: false,
     showEnemyMoves: false,
     showPlayerAttacks: false,
     showPlayerMoves: false,
     showPromotionZones: false,
     showGrid: false,
-  }),
-  resetView: () => set((state) => ({
-    zoom: Math.min(state.maxZoom, Math.max(state.openingZoom, state.minZoom)),
-    pan: state.openingPan,
-    cameraResetRevision: state.cameraResetRevision + 1,
-  })),
-}));
+    zoom: DEFAULT_ZOOM,
+    minZoom: PLAYER_TECHNICAL_MINIMUM_ZOOM,
+    maxZoom: PLAYER_MAXIMUM_ZOOM,
+    pan: DEFAULT_PAN,
+    openingZoom: DEFAULT_ZOOM,
+    openingPan: DEFAULT_PAN,
+    cameraResetRevision: 0,
+    toggle: (key) => set((s) => ({ [key]: !s[key] })),
+    setZoom: (zoom) => set((state) => ({
+      // Inputs may arrive on human-friendly increments, but a geometry-derived art floor can sit
+      // between them. Preserve that exact clamp so gameplay cannot round back below accepted art.
+      zoom: Math.min(state.maxZoom, Math.max(state.minZoom, zoom)),
+    })),
+    setMinZoom: (zoom) => set((state) => {
+      const minZoom = Math.max(PLAYER_TECHNICAL_MINIMUM_ZOOM, zoom);
+      const maxZoom = Math.max(PLAYER_MAXIMUM_ZOOM, minZoom, state.openingZoom);
+      return { minZoom, maxZoom, zoom: Math.min(maxZoom, Math.max(state.zoom, minZoom)) };
+    }),
+    setPan: (pan) => set({ pan }),
+    setOpeningView: (camera) => set((state) => ({
+      openingZoom: camera.zoom,
+      openingPan: camera.pan,
+      // Opening composition is geometry, not a suggestion subject to the ordinary control cap.
+      // Raising the ceiling first lets the framing hook apply the exact camera on large viewports.
+      maxZoom: Math.max(PLAYER_MAXIMUM_ZOOM, state.minZoom, camera.zoom, state.zoom),
+    })),
+    clearOverlays: () => set({
+      showMoves: false,
+      showEnemyAttacks: false,
+      showBlocked: false,
+      showEnemyMoves: false,
+      showPlayerAttacks: false,
+      showPlayerMoves: false,
+      showPromotionZones: false,
+      showGrid: false,
+    }),
+    resetView: () => set((state) => ({
+      zoom: Math.min(state.maxZoom, Math.max(state.openingZoom, state.minZoom)),
+      pan: state.openingPan,
+      cameraResetRevision: state.cameraResetRevision + 1,
+    })),
+  }));
+}

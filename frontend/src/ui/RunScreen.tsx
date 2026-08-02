@@ -1,14 +1,18 @@
 import { Children, useCallback, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import type { RunBattleTransformSink } from '../game/store';
-import { defaultFacingForSide } from '../core/pieces';
+import { defaultFacingForSide, paletteForSide, pieceSpritePath } from '../core/pieces';
 import type { GameState, Piece } from '../core/types';
-import { LevelPreviewColumn } from './LevelPreviewColumn';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox, ShellViewportSwap } from './shared/ChromeBox';
 import { HouseSelect } from './shared/HouseSelect';
 import { TitleBarStatus } from './shell/TitleBarControls';
 import { PLAY_RUN_SELECTOR_HREF } from './playHubRoute';
-import { Skirmish, SkirmishShell, type RunBattlePresentation } from './Skirmish';
+import {
+  Skirmish,
+  SkirmishShell,
+  type RunBattlePresentation,
+  type RunDeploymentPresentation,
+} from './Skirmish';
 import { navigateApp } from './navigation';
 import { installedRunShopWrap, runShopWrapLiveMount } from './runShopWrapCandidates';
 import type { RunSceneSnapshot } from './shell/sceneManifest';
@@ -20,7 +24,6 @@ import {
   GOLD_SCALE,
   RUN_RELIC_BY_ID,
   battleVictoryGoldTenths,
-  beginBattle,
   buyCard,
   buyPaidRelic,
   canLeaveShop,
@@ -42,13 +45,18 @@ import {
   type RunRelicId,
 } from '../run/model';
 import {
+  advanceAutomaticDeployment,
+  advanceReadyDeployment,
   deploymentOptions,
-  deploymentReady,
+  disciplinePlacementCells,
+  gameForRunDeployment,
   levelWithRunDeployment,
   normalReservistCell,
+  resolveForcedDeploymentChoices,
   selectedDeploymentLayout,
 } from '../run/deployment';
 import { useActiveRun } from '../run/store';
+import { SkirmishViewStoreProvider } from '../game/SkirmishViewStoreContext';
 import { RunRelicIcon, RunRelicsWorkspace } from './RunRelics';
 import { RunGoldAmount } from './RunResources';
 import {
@@ -70,6 +78,10 @@ import {
 import { RunCard } from './RunCard';
 import { Strategikon } from './Strategikon';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
+import { PredrawnMoveHighlightPaint } from '../render/PredrawnMoveHighlightPaint';
+import type { SkirmishBoardSurfaceState } from '../render/SkirmishBoard';
+import { boardLabCellPosition } from '../render/boardProjection';
+import { objectBaseZIndex } from '../render/sceneDepth';
 
 type RunScreenView = RunWorkspaceView;
 
@@ -77,9 +89,44 @@ function visibleRunRelicCount(run: RunDocument): number {
   return run.relics.filter((relicId) => Boolean(RUN_RELIC_BY_ID[relicId])).length;
 }
 
+function runBattleProgress(run: RunDocument): {
+  conflict: number;
+  battle: number;
+  battlesInConflict: number;
+} {
+  let conflictStart = 0;
+  let conflict = 1;
+  for (let index = 0; index < run.battleIndex; index += 1) {
+    if (!run.war.battles[index]?.loot) continue;
+    conflict += 1;
+    conflictStart = index + 1;
+  }
+  let conflictEnd = run.war.battles.length - 1;
+  for (let index = run.battleIndex; index < run.war.battles.length; index += 1) {
+    if (!run.war.battles[index]?.loot) continue;
+    conflictEnd = index;
+    break;
+  }
+  return {
+    conflict,
+    battle: run.battleIndex - conflictStart + 1,
+    battlesInConflict: conflictEnd - conflictStart + 1,
+  };
+}
+
+function isGeneratedRunBattleName(name: string): boolean {
+  return /^(?:conflict\s+(?:\d+|[ivxlcdm]+)\s*[—–-]\s*)?battle\s+\d+$/i.test(name.trim().replace(/\s+/g, ' '));
+}
+
 function RunTitleBarStatus({ run }: { run: RunDocument }): ReactElement {
+  const progress = runBattleProgress(run);
+  const levelName = run.war.battles[run.battleIndex]?.level.name ?? 'Battle';
+  const phase = run.phase === 'victory'
+    ? 'War won'
+    : `${run.phase.charAt(0).toUpperCase()}${run.phase.slice(1)}`;
+  const detail = isGeneratedRunBattleName(levelName) ? phase : `${levelName} · ${phase}`;
   return (
-    <div className="skirmish-topbar-status">
+    <div className="skirmish-topbar-status run-topbar-status">
       <TitleBarStatus className="skirmish-status-chip skirmish-turn-plate">
         <strong>{run.war.name}</strong>
         <small>{ATARAXIA_BY_TIER[run.ataraxiaTier].label}</small>
@@ -89,8 +136,8 @@ function RunTitleBarStatus({ run }: { run: RunDocument }): ReactElement {
       </TitleBarStatus>
       <TitleBarStatus className="skirmish-status-chip skirmish-objective">
         <span>
-          <strong>Battle {Math.min(run.battleIndex + 1, run.war.battles.length)} / {run.war.battles.length}</strong>
-          <small>{run.phase === 'shop' ? 'Shop' : run.phase === 'victory' ? 'War won' : run.phase}</small>
+          <strong>Conflict {progress.conflict} · Battle {progress.battle}/{progress.battlesInConflict}</strong>
+          <small>{detail}</small>
         </span>
       </TitleBarStatus>
     </div>
@@ -137,10 +184,7 @@ function RunMetaControls({
   const { abandonDialog, abandoning, requestAbandon } = useRunAbandon(run);
   const shop = run.phase === 'shop' ? run.shop : null;
   const canLeave = canLeaveShop(run);
-  const openingNeedsPurchase = shop?.kind === 'opening' && shop.purchasedCardOfferIds.length === 0;
-  const continueHint = openingNeedsPurchase
-    ? 'Buy one card before continuing.'
-    : 'Choose one Loot relic before continuing.';
+  const continueHint = 'Choose one Loot relic before continuing.';
   const primaryLabel = run.phase === 'deployment'
       ? 'Deployment'
       : run.phase === 'battle'
@@ -203,7 +247,9 @@ function RunMetaControls({
                 data-testid="continue-run-shop"
                 title={canLeave ? undefined : continueHint}
                 onClick={() => {
-                  replace(prepareDeployment(leaveShop(run)));
+                  const deployment = prepareDeployment(leaveShop(run));
+                  const level = deployment.war.battles[deployment.battleIndex]?.level;
+                  replace(level ? advanceAutomaticDeployment(deployment, level) : deployment);
                   onNavigate('primary');
                 }}
               >
@@ -258,153 +304,336 @@ function RunPhaseWorkspace({
   );
 }
 
-function DeploymentPanel({ run }: { run: RunDocument }): ReactElement {
-  const replace = useActiveRun((state) => state.replace);
-  const prepared = run.deployment ? run : prepareDeployment(run);
-  useEffect(() => {
-    if (run.deployment) return;
-    // A departing stage may keep rendering a superseded document; only repair the live one.
-    const latest = useActiveRun.getState().run;
-    if (latest?.id === run.id && latest.phase === 'deployment' && !latest.deployment) {
-      replace(prepareDeployment(latest));
-    }
-  }, [replace, run.deployment, run.id]);
-  const level = prepared.war.battles[prepared.battleIndex]?.level;
-  const options = useMemo(() => deploymentOptions(prepared, level), [level, prepared]);
-  const layout = selectedDeploymentLayout(prepared, options);
-  const previewLevel = useMemo(() => levelWithRunDeployment(prepared, level, layout), [layout, level, prepared]);
-  const chosenBlocked = prepared.deployment?.chosenBlockedUnitIds ?? [];
+function deploymentSquareLabel(cellKey: string | undefined, rows: number): string | null {
+  const match = cellKey ? /^(\d+),(\d+)$/.exec(cellKey) : null;
+  if (!match) return null;
+  return `${String.fromCharCode(65 + Number(match[1]))}${rows - Number(match[2])}`;
+}
 
-  const toggleBlocked = (unitId: string): void => {
-    const next = chosenBlocked.includes(unitId)
-      ? chosenBlocked.filter((id) => id !== unitId)
-      : chosenBlocked.length < options.blockedChoiceCount ? [...chosenBlocked, unitId] : chosenBlocked;
-    replace(setDeploymentChoices(prepared, { chosenBlockedUnitIds: next }));
-  };
-
-  const setManual = (unitId: string, cellKey: string): void => {
-    const manualPlacements = { ...(prepared.deployment?.manualPlacements ?? {}) };
-    if (cellKey) manualPlacements[unitId] = cellKey;
-    else delete manualPlacements[unitId];
-    replace(setDeploymentChoices(prepared, { manualPlacements }));
-  };
-
-  const start = (): void => {
-    if (!deploymentReady(prepared, options)) return;
-    const selected = selectedDeploymentLayout(prepared, options);
-    replace(beginBattle(
-      prepared,
-      Object.keys(selected.placements),
-      selected.reserveUnitIds,
-      selected.blockedUnitIds,
-    ));
-  };
-
+function DeploymentControls({
+  run,
+  view,
+  options,
+  activeDisciplineUnitId,
+  onNavigate,
+  onSelectDisciplineUnit,
+  onToggleBlocked,
+  onSelectLayout,
+}: {
+  run: RunDocument;
+  view: RunScreenView;
+  options: ReturnType<typeof deploymentOptions>;
+  activeDisciplineUnitId: string | null;
+  onNavigate: (view: RunScreenView) => void;
+  onSelectDisciplineUnit: (unitId: string) => void;
+  onToggleBlocked: (unitId: string) => void;
+  onSelectLayout: (layout: 0 | 1) => void;
+}): ReactElement {
+  const { abandonDialog, abandoning, requestAbandon } = useRunAbandon(run);
+  const chosenBlocked = run.deployment?.chosenBlockedUnitIds ?? [];
+  const placedDisciplineCount = options.disciplineUnitIds.filter(
+    (unitId) => Boolean(run.deployment?.manualPlacements[unitId]),
+  ).length;
+  const disciplinePending = placedDisciplineCount < options.disciplineUnitIds.length;
+  const layout = selectedDeploymentLayout(run, options);
   return (
-    <RunWorkspace
-      className="run-deployment-workspace"
-      contentClassName="run-deployment-workspace-content"
-      data-testid="run-deployment-workspace"
-      aria-labelledby="run-deployment-workspace-title"
-    >
-      <section className="run-deployment-pane">
-        <h2 id="run-deployment-workspace-title">Deploy — {level.name}</h2>
-        <p>{prepared.war.description || 'An authored War Battle.'}</p>
+    <>
+      {abandonDialog}
+      <section className="run-meta-controls run-deployment-controls" aria-label="Deployment controls">
+        <div className="skirmish-score-panel run-deployment-summary" aria-label="Deployment summary">
+          <div>
+            <span className="skirmish-eyebrow">Deployment</span>
+            <strong>{disciplinePending ? `${placedDisciplineCount} fixed` : `${Object.keys(layout.placements).length} ready`}</strong>
+          </div>
+          <div>
+            <span className="skirmish-eyebrow">Reserve</span>
+            <strong>{layout.blockedUnitIds.length}</strong>
+          </div>
+        </div>
 
-        {options.needsBlockedChoice ? (
-          <section className="run-deployment-control">
-            <h3>Muster Roll</h3>
-            <p>Choose exactly {options.blockedChoiceCount} unit{options.blockedChoiceCount === 1 ? '' : 's'} to sit out.</p>
+        {options.hasBlockedChoice ? (
+          <div className="skirmish-view-group run-deployment-control">
+            <span className="skirmish-eyebrow">Muster Roll</span>
+            <p>Choose {options.blockedChoiceCount} unit{options.blockedChoiceCount === 1 ? '' : 's'} to hold in reserve.</p>
             <div className="run-choice-list">
-              {prepared.army.filter((unit) => unit.type !== 'king').map((unit) => {
+              {run.army.filter((unit) => unit.type !== 'king').map((unit) => {
                 const selected = chosenBlocked.includes(unit.id);
                 return (
                   <ChromeButton unit="inner-list-row"
                     className={chromeUnitClassNames('inner-list-row', 'run-choice-option', selected && 'active')}
                     aria-pressed={selected}
                     disabled={!selected && chosenBlocked.length >= options.blockedChoiceCount}
-                    onClick={() => toggleBlocked(unit.id)}
+                    onClick={() => onToggleBlocked(unit.id)}
                     key={unit.id}
                   >
                     <span>{runUnitRosterLabel(unit)}</span>
-                    <small>{selected ? 'Sitting out' : 'Deploying'}</small>
+                    <small>{selected ? 'In reserve' : 'Deploying'}</small>
                   </ChromeButton>
                 );
               })}
             </div>
-          </section>
+          </div>
         ) : options.overflowCount > 0 ? (
-          <p>{options.overflowCount} excess unit{options.overflowCount === 1 ? '' : 's'} will sit out this Battle.</p>
+          <p className="skirmish-grid-hint">{options.overflowCount} excess unit{options.overflowCount === 1 ? '' : 's'} will remain in reserve.</p>
         ) : null}
 
         {options.disciplineUnitIds.length > 0 ? (
-          <section className="run-deployment-control">
-            <h3>Discipline</h3>
-            <p>Place every disciplined unit before the remaining army is dealt.</p>
-            {options.disciplineUnitIds.map((unitId) => {
-              const unit = prepared.army.find((candidate) => candidate.id === unitId);
-              const used = new Set(Object.entries(prepared.deployment?.manualPlacements ?? {})
-                .filter(([id]) => id !== unitId)
-                .map(([, cell]) => cell));
-              const squareOptions = [
-                { value: '', label: 'Choose square…' },
-                ...options.zoneCells
-                  .filter((cell) => !used.has(`${cell.x},${cell.y}`))
-                  .map((cell) => ({
-                    value: `${cell.x},${cell.y}`,
-                    label: `${String.fromCharCode(65 + cell.x)}${level.board.rows - cell.y}`,
-                  })),
-              ];
-              return (
-                <label className="run-placement-row" key={unitId}>
-                  <span>{unit ? runUnitRosterLabel(unit) : unitId}</span>
-                  <HouseSelect
-                    value={prepared.deployment?.manualPlacements[unitId] ?? ''}
-                    options={squareOptions}
-                    onChange={(cellKey) => setManual(unitId, cellKey)}
-                    ariaLabel={`Deployment square for ${unit ? runUnitRosterLabel(unit) : unitId}`}
-                  />
-                </label>
-              );
-            })}
-          </section>
+          <div className="skirmish-view-group run-deployment-control">
+            <span className="skirmish-eyebrow">Discipline · {placedDisciplineCount}/{options.disciplineUnitIds.length}</span>
+            <p>Select a Disciplined unit, then choose one of its highlighted battlefield squares.</p>
+            <div className="run-choice-list">
+              {options.disciplineUnitIds.map((unitId) => {
+                const unit = run.army.find((candidate) => candidate.id === unitId);
+                const square = deploymentSquareLabel(run.deployment?.manualPlacements[unitId], run.war.battles[run.battleIndex].level.board.rows);
+                return (
+                  <ChromeButton unit="inner-list-row"
+                    className={chromeUnitClassNames('inner-list-row', 'run-choice-option', activeDisciplineUnitId === unitId && 'active')}
+                    aria-pressed={activeDisciplineUnitId === unitId}
+                    onClick={() => onSelectDisciplineUnit(unitId)}
+                    key={unitId}
+                  >
+                    <span>{unit ? runUnitRosterLabel(unit) : unitId}</span>
+                    <small>{square ? `Placed · ${square}` : 'Choose on battlefield'}</small>
+                  </ChromeButton>
+                );
+              })}
+            </div>
+          </div>
         ) : null}
 
-        {hasRelic(prepared, 'surveyors-compass') ? (
-          <section className="run-deployment-control">
-            <h3>Surveyor&apos;s Compass</h3>
-            <p>Choose which valid random layout to use.</p>
+        {hasRelic(run, 'surveyors-compass') ? (
+          <div className="skirmish-view-group run-deployment-control">
+            <span className="skirmish-eyebrow">Surveyor&apos;s Compass</span>
+            <p>Preview and choose the remaining formation.</p>
             <div className="run-inline-actions">
               {[0, 1].map((index) => (
                 <ChromeButton unit="inner-text-button"
                   key={index}
-                  className={chromeUnitClassNames('inner-text-button', 'app-header-button', prepared.deployment?.layoutChoice === index && 'active')}
-                  onClick={() => replace(setDeploymentChoices(prepared, { layoutChoice: index as 0 | 1 }))}
+                  className={chromeUnitClassNames('inner-text-button', 'app-header-button', run.deployment?.layoutChoice === index && 'active')}
+                  aria-pressed={run.deployment?.layoutChoice === index}
+                  onClick={() => onSelectLayout(index as 0 | 1)}
                 >
-                  Layout {index + 1}
+                  Formation {index + 1}
                 </ChromeButton>
               ))}
             </div>
-          </section>
+          </div>
         ) : null}
 
-        <ChromeButton unit="inner-text-button"
-          className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-          disabled={!deploymentReady(prepared, options)}
-          onClick={start}
-        >
-          Begin Battle
-        </ChromeButton>
+        <div className="skirmish-view-group">
+          <span className="skirmish-eyebrow">Run view</span>
+          <ChromeButton unit="inner-text-button"
+            data-testid="run-view-primary"
+            className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === 'primary' && 'active')}
+            aria-pressed={view === 'primary'}
+            onClick={() => onNavigate('primary')}
+          >
+            Deployment
+          </ChromeButton>
+        </div>
+        <div className="skirmish-view-group">
+          <span className="skirmish-eyebrow">Self inspection</span>
+          <RunSelfInspectionControls
+            view={view === 'army' || view === 'relics' ? view : null}
+            onNavigate={onNavigate}
+          />
+        </div>
+        <div className="skirmish-view-group run-meta-abandon">
+          <span className="skirmish-eyebrow">Run</span>
+          <ChromeButton unit="inner-text-button"
+            className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'danger')}
+            data-testid="abandon-run"
+            disabled={abandoning}
+            onClick={() => { void requestAbandon(); }}
+          >
+            {abandoning ? 'Abandoning…' : 'Abandon Run'}
+          </ChromeButton>
+        </div>
       </section>
-
-      <LevelPreviewColumn
-        level={previewLevel}
-        title={`${level.name} deployment`}
-        embedded
-        actions={<p className="run-preview-note">{Object.keys(layout.placements).length} deployed · {layout.blockedUnitIds.length} in reserve</p>}
-      />
-    </RunWorkspace>
+    </>
   );
+}
+
+function useRunDeploymentPresentation({
+  run,
+  view,
+  onNavigate,
+}: {
+  run: RunDocument;
+  view: RunScreenView;
+  onNavigate: (view: RunScreenView) => void;
+}): RunDeploymentPresentation | null {
+  const replace = useActiveRun((state) => state.replace);
+  const level = run.war.battles[run.battleIndex].level;
+  const prepared = useMemo(
+    () => resolveForcedDeploymentChoices(run.deployment ? run : prepareDeployment(run), level),
+    [level, run],
+  );
+  const options = useMemo(() => deploymentOptions(prepared, level), [level, prepared]);
+  const layout = selectedDeploymentLayout(prepared, options);
+  const [selectedDisciplineUnitId, setSelectedDisciplineUnitId] = useState<string | null>(null);
+  const [hoveredCellKey, setHoveredCellKey] = useState<string | null>(null);
+  const firstUnplacedDisciplineUnitId = options.disciplineUnitIds.find(
+    (unitId) => !prepared.deployment?.manualPlacements[unitId],
+  ) ?? null;
+  const activeDisciplineUnitId = selectedDisciplineUnitId && options.disciplineUnitIds.includes(selectedDisciplineUnitId)
+    ? selectedDisciplineUnitId
+    : firstUnplacedDisciplineUnitId ?? options.disciplineUnitIds[0] ?? null;
+  const activeDisciplineUnit = prepared.army.find((unit) => unit.id === activeDisciplineUnitId) ?? null;
+  const legalCells = useMemo(
+    () => activeDisciplineUnitId ? disciplinePlacementCells(prepared, options, activeDisciplineUnitId) : [],
+    [activeDisciplineUnitId, options, prepared],
+  );
+  const legalCellKeys = useMemo(() => new Set(legalCells.map((cell) => `${cell.x},${cell.y}`)), [legalCells]);
+  const activeCellKey = activeDisciplineUnitId
+    ? prepared.deployment?.manualPlacements[activeDisciplineUnitId] ?? null
+    : null;
+  const hoveredPlacementCell = hoveredCellKey && hoveredCellKey !== activeCellKey
+    ? legalCells.find((cell) => `${cell.x},${cell.y}` === hoveredCellKey) ?? null
+    : null;
+  const hoveredPlacementSeat = hoveredPlacementCell
+    ? boardLabCellPosition(hoveredPlacementCell)
+    : null;
+  const deploymentGame = useMemo(
+    () => gameForRunDeployment(prepared, level, layout),
+    [layout, level, prepared],
+  );
+  const deploymentSeed = prepared.deployment?.seed ?? prepared.seed;
+  const deploymentSurfaceState = useMemo<SkirmishBoardSurfaceState>(() => ({
+    game: deploymentGame,
+    seed: deploymentSeed,
+    viewKey: runBattleActivityId(prepared.id, prepared.battleIndex),
+  }), [deploymentGame, deploymentSeed, prepared.battleIndex, prepared.id]);
+  const pendingPlacementArrivalUnitIdRef = useRef<string | null>(null);
+  const pendingPlacementArrivalObservedRef = useRef(false);
+
+  const advanceIfReady = useCallback(() => {
+    const latest = useActiveRun.getState().run;
+    if (!latest || latest.id !== run.id || latest.phase !== 'deployment') return;
+    const latestLevel = latest.war.battles[latest.battleIndex]?.level;
+    if (!latestLevel) return;
+    const staged = latest.deployment ? latest : prepareDeployment(latest);
+    const advanced = advanceReadyDeployment(staged, latestLevel);
+    if (advanced !== latest) replace(advanced);
+  }, [replace, run.id]);
+
+  useEffect(() => {
+    // Non-placement choices still commit as soon as they are ready. A placement click owns a
+    // compositor-reported arrival cycle, so its pending id keeps this generic path from folding
+    // the final manual drop into the automatic Battle wave.
+    if (!pendingPlacementArrivalUnitIdRef.current) advanceIfReady();
+  }, [advanceIfReady, run]);
+
+  const handleArrivingUnitIdsChange = useCallback((unitIds: readonly string[]) => {
+    const pendingUnitId = pendingPlacementArrivalUnitIdRef.current;
+    if (!pendingUnitId) return;
+    if (unitIds.includes(pendingUnitId)) {
+      pendingPlacementArrivalObservedRef.current = true;
+      return;
+    }
+    if (!pendingPlacementArrivalObservedRef.current || unitIds.length > 0) return;
+    pendingPlacementArrivalUnitIdRef.current = null;
+    pendingPlacementArrivalObservedRef.current = false;
+    advanceIfReady();
+  }, [advanceIfReady]);
+
+  useEffect(() => {
+    setHoveredCellKey(null);
+  }, [activeDisciplineUnitId]);
+
+  const toggleBlocked = (unitId: string): void => {
+    const chosenBlocked = prepared.deployment?.chosenBlockedUnitIds ?? [];
+    const next = chosenBlocked.includes(unitId)
+      ? chosenBlocked.filter((id) => id !== unitId)
+      : chosenBlocked.length < options.blockedChoiceCount ? [...chosenBlocked, unitId] : chosenBlocked;
+    replace(setDeploymentChoices(prepared, { chosenBlockedUnitIds: next }));
+  };
+
+  const placeDisciplineUnit = (cellKey: string): void => {
+    if (!activeDisciplineUnitId || !legalCellKeys.has(cellKey)) return;
+    const manualPlacements = { ...(prepared.deployment?.manualPlacements ?? {}) };
+    manualPlacements[activeDisciplineUnitId] = cellKey;
+    // Persist and paint the exact placement while Deployment still owns the board. Promotion
+    // waits for this unit's compositor-owned arrival to settle, then introduces the automatic
+    // formation as its own subsequent wave on the same mounted battlefield.
+    pendingPlacementArrivalUnitIdRef.current = activeDisciplineUnitId;
+    pendingPlacementArrivalObservedRef.current = false;
+    replace(setDeploymentChoices(prepared, { manualPlacements }));
+    const nextUnplaced = options.disciplineUnitIds.find(
+      (unitId) => unitId !== activeDisciplineUnitId && !manualPlacements[unitId],
+    );
+    if (nextUnplaced) setSelectedDisciplineUnitId(nextUnplaced);
+  };
+
+  if (run.phase !== 'deployment') return null;
+  return {
+    surfaceState: deploymentSurfaceState,
+    titleBarContent: <RunTitleBarStatus run={prepared} />,
+    relicIds: prepared.relics,
+    screenClassName: `run-screen run-deployment-screen${visibleRunRelicCount(prepared) ? ' has-relics' : ''}`,
+    boardClassName: 'run-deployment-board',
+    boardAriaLabel: `${level.name} deployment battlefield`,
+    onArrivingUnitIdsChange: handleArrivingUnitIdsChange,
+    controlsContent: (
+      <DeploymentControls
+        run={prepared}
+        view={view}
+        options={options}
+        activeDisciplineUnitId={activeDisciplineUnitId}
+        onNavigate={onNavigate}
+        onSelectDisciplineUnit={setSelectedDisciplineUnitId}
+        onToggleBlocked={toggleBlocked}
+        onSelectLayout={(layoutChoice) => replace(setDeploymentChoices(prepared, { layoutChoice }))}
+      />
+    ),
+    renderCellOverlay: ({ cell, visualFootprintStyle }) => {
+      const cellKey = `${cell.x},${cell.y}`;
+      if (!activeDisciplineUnit) return null;
+      const isLegalPlacement = legalCellKeys.has(cellKey);
+      const squareLabel = deploymentSquareLabel(cellKey, level.board.rows);
+      return (
+        <button
+          type="button"
+          className={`skirmish-board-cell-hit run-deployment-cell ${isLegalPlacement ? 'is-move' : 'is-deployment-blocked'}${!isLegalPlacement && hoveredCellKey === cellKey ? ' is-threat' : ''}${activeCellKey === cellKey ? ' is-selected' : ''}`}
+          aria-label={isLegalPlacement
+            ? `Place ${runUnitRosterLabel(activeDisciplineUnit)} on ${squareLabel}`
+            : `${squareLabel} is unavailable for ${runUnitRosterLabel(activeDisciplineUnit)}`}
+          aria-pressed={isLegalPlacement ? activeCellKey === cellKey : undefined}
+          aria-disabled={!isLegalPlacement}
+          data-cx={cell.x}
+          data-cy={cell.y}
+          data-testid={`${isLegalPlacement ? 'deployment-cell' : 'deployment-blocked-cell'}-${cell.x}-${cell.y}`}
+          style={visualFootprintStyle}
+          onPointerDown={(event) => { if (event.button === 0) event.stopPropagation(); }}
+          onPointerEnter={() => setHoveredCellKey(cellKey)}
+          onPointerLeave={() => setHoveredCellKey((current) => current === cellKey ? null : current)}
+          onFocus={() => setHoveredCellKey(cellKey)}
+          onBlur={() => setHoveredCellKey((current) => current === cellKey ? null : current)}
+          onClick={isLegalPlacement ? () => placeDisciplineUnit(cellKey) : undefined}
+        >
+          <PredrawnMoveHighlightPaint />
+        </button>
+      );
+    },
+    boardOverlay: activeDisciplineUnit && hoveredPlacementCell && hoveredPlacementSeat ? (
+      <span
+        className={`board-unit-seat is-${activeDisciplineUnit.type} run-deployment-placement-ghost`}
+        style={{
+          left: hoveredPlacementSeat.left,
+          top: hoveredPlacementSeat.top,
+          zIndex: objectBaseZIndex(hoveredPlacementCell),
+        }}
+        data-testid="deployment-placement-ghost"
+        aria-hidden="true"
+      >
+        <img
+          src={pieceSpritePath(activeDisciplineUnit.type, paletteForSide('player'), defaultFacingForSide('player'))}
+          alt=""
+          draggable={false}
+        />
+      </span>
+    ) : null,
+  };
 }
 
 function relicTargetRequired(relic: RunRelicId | null): boolean {
@@ -671,7 +900,7 @@ function VictoryPanel({ run }: { run: RunDocument }): ReactElement {
   );
 }
 
-function BattlePanel({
+function RunBattlefieldPanel({
   run,
   routePath,
   routeSearch,
@@ -689,6 +918,7 @@ function BattlePanel({
   const replace = useActiveRun((state) => state.replace);
   const currentRun = useActiveRun((state) => state.run);
   const { abandonDialog, requestAbandon } = useRunAbandon(run);
+  const deploymentPresentation = useRunDeploymentPresentation({ run, view, onNavigate });
   const baseLevel = run.war.battles[run.battleIndex].level;
   // Battle-runtime writes (including Restart) do not change deployment. Keep the
   // projected board document referentially stable across those persistence updates,
@@ -782,9 +1012,10 @@ function BattlePanel({
   void currentRun;
   return (
     <>
-      {abandonDialog}
+      {run.phase === 'battle' ? abandonDialog : null}
       <Skirmish
         runBattle={presentation}
+        runDeployment={deploymentPresentation}
         routePath={routePath}
         routeSearch={routeSearch}
         runWorkspace={inspectionWorkspace}
@@ -897,13 +1128,13 @@ export function RunScreen({
       onSell={sellUnit}
     />
   ) : null;
-  if (shellRun?.phase === 'battle') {
+  if (shellRun?.phase === 'deployment' || shellRun?.phase === 'battle') {
     return (
       <RunPresentationSceneSlot
         className="run-scene-slot"
-        sceneInstance={`${shellRun.id}:${shellRun.phase}:${shellRun.battleIndex}:${sceneSnapshot.workspace}`}
+        sceneInstance={`${shellRun.id}:battlefield:${shellRun.battleIndex}:${sceneSnapshot.workspace}`}
       >
-        <BattlePanel
+        <RunBattlefieldPanel
           run={shellRun}
           routePath={routePath}
           routeSearch={routeSearch}
@@ -943,9 +1174,7 @@ export function RunScreen({
           </ChromeNavButton>
         </RunWorkspace>
       )
-      : shellRun.phase === 'deployment'
-          ? <DeploymentPanel run={shellRun} />
-          : shellRun.phase === 'shop' && shellRun.shop
+      : shellRun.phase === 'shop' && shellRun.shop
             ? <ShopPanel run={shellRun} view={view} sellWorkspace={sellWorkspace!} />
             : <VictoryPanel run={shellRun} />;
   return (
@@ -953,37 +1182,42 @@ export function RunScreen({
       className="run-scene-slot"
       sceneInstance={`${shellRun?.id ?? 'none'}:${sceneSnapshot.phase}:${sceneSnapshot.workspace}`}
     >
-      <SkirmishShell
-        className={`run-screen${shellRun && visibleRunRelicCount(shellRun) ? ' has-relics' : ''}`}
-        testId="run-screen"
-        titleBarContent={shellRun ? <RunTitleBarStatus run={shellRun} /> : null}
-        relicIds={shellRun ? shellRun.relics : []}
-        shellWorkspaceCoversRelics={strategikonOpen || Boolean(inspectionWorkspace)}
-        controlsContent={shellRun
-          ? <RunMetaControls run={shellRun} view={view} onNavigate={navigateRunView} showAbandon={shellRun.phase !== 'victory'} />
-          : null}
-        readyToCompose={hydrated}
-        hudProps={{
-          enableGlobalShortcuts: false,
-          strategikonHref: shellRun ? strategikonHref : null,
-          strategikonOpen,
-        }}
-      >
-        <RunPhaseWorkspace
-          inspectionWorkspace={inspectionWorkspace}
-          strategikonOpen={strategikonOpen}
-          strategikonWorkspace={(
-            <GameplayWorkspaceSceneSlot
-              className="strategikon-slot"
-              sceneInstance={strategikonOpen ? routePath : '/run/strategikon'}
-            >
-              {strategikonOpen ? <Strategikon path={routePath} search={routeSearch} run={shellRun} /> : null}
-            </GameplayWorkspaceSceneSlot>
-          )}
+      {/* Shop/victory use the shared HUD without mounting a battlefield. Their replaceable
+          presentation scene still owns its HUD view state explicitly; it must not borrow an
+          outgoing or incoming battlefield's camera/overlay store during director overlap. */}
+      <SkirmishViewStoreProvider>
+        <SkirmishShell
+          className={`run-screen${shellRun && visibleRunRelicCount(shellRun) ? ' has-relics' : ''}`}
+          testId="run-screen"
+          titleBarContent={shellRun ? <RunTitleBarStatus run={shellRun} /> : null}
+          relicIds={shellRun ? shellRun.relics : []}
+          shellWorkspaceCoversRelics={strategikonOpen || Boolean(inspectionWorkspace)}
+          controlsContent={shellRun
+            ? <RunMetaControls run={shellRun} view={view} onNavigate={navigateRunView} showAbandon={shellRun.phase !== 'victory'} />
+            : null}
+          readyToCompose={hydrated}
+          hudProps={{
+            enableGlobalShortcuts: false,
+            strategikonHref: shellRun ? strategikonHref : null,
+            strategikonOpen,
+          }}
         >
-          {workspace}
-        </RunPhaseWorkspace>
-      </SkirmishShell>
+          <RunPhaseWorkspace
+            inspectionWorkspace={inspectionWorkspace}
+            strategikonOpen={strategikonOpen}
+            strategikonWorkspace={(
+              <GameplayWorkspaceSceneSlot
+                className="strategikon-slot"
+                sceneInstance={strategikonOpen ? routePath : '/run/strategikon'}
+              >
+                {strategikonOpen ? <Strategikon path={routePath} search={routeSearch} run={shellRun} /> : null}
+              </GameplayWorkspaceSceneSlot>
+            )}
+          >
+            {workspace}
+          </RunPhaseWorkspace>
+        </SkirmishShell>
+      </SkirmishViewStoreProvider>
     </RunPresentationSceneSlot>
   );
 }
