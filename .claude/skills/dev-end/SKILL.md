@@ -11,7 +11,18 @@ Use this closeout workflow for `D:\repos\chess-tactics` after code changes are c
 
 1. Stop the dev server started during the session. If the server was started outside the session or ownership is unclear, identify it and ask before killing it.
 2. Inspect `git status --short --branch` and review the diff. Keep unrelated user changes out of the commit.
-3. Run the relevant local validation before committing. If validation cannot run, explain why before continuing.
+3. Run the **exact command CI runs**, not a subset of it. Bare `vitest` is not the gate and
+   passes while CI fails: `npm run check` also runs `tsc --noEmit` and every
+   `frontend/scripts/check-*.mjs` guard, several of which pin exact JSX literals and break on
+   any shell or chrome refactor.
+   - Touched `frontend/` — `cd frontend && npm run check`
+   - Touched `backend/`, `bin/`, or `packages/` — `cd backend && npm run test:backend`. Its
+     tail (`smoke-test.js`) needs Postgres, which this Windows box does not have. When it
+     cannot run, say so plainly and name what did: `node netplay-smoke-test.js` covers all
+     lobby/netplay behaviour DB-free, and a narrow change can run just its own script (for
+     example `npm run test:pr-gate`).
+   If validation cannot run, explain why before continuing. Do not proceed to a PR on a
+   subset run and describe it as green.
 4. Stage only files that belong to the completed task.
 5. Commit with a concise message that reflects the user-facing change.
 6. Push the feature branch.

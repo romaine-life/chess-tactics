@@ -121,9 +121,23 @@ test('--no-wait returns immediately instead of polling', () => {
 
 test('readChecks maps gh output onto checks, none, or unreadable', () => {
   assert.deepEqual(readChecks({ ok: true, stdout: '[{"name":"a"}]', stderr: '' }), [{ name: 'a' }])
-  // gh exits 1 with this on stderr; it means zero checks, not a failure to read.
-  assert.deepEqual(readChecks({ ok: false, stdout: '', stderr: 'no checks reported on the "x" branch' }), [])
   assert.deepEqual(readChecks({ ok: true, stdout: '', stderr: '' }), [])
   assert.equal(readChecks({ ok: false, stdout: '', stderr: 'gh: something broke' }), null)
   assert.equal(readChecks({ ok: true, stdout: 'not json', stderr: '' }), null)
+  // A JSON object is not a check list; treat it as unreadable rather than iterating it.
+  assert.equal(readChecks({ ok: true, stdout: '{"message":"x"}', stderr: '' }), null)
+})
+
+test('readChecks reads "no checks" from EITHER stream, at ANY exit code', () => {
+  // Observed both ways in the wild. Keying off the exit code, or scanning only one stream,
+  // turns the sentence into a parse failure and the wait goes silent — the original bug.
+  const onStdoutExitZero = { ok: true, stdout: 'no checks reported on the "topic" branch', stderr: '' }
+  const onStderrExitOne = { ok: false, stdout: '', stderr: 'no checks reported on the "topic" branch' }
+  assert.deepEqual(readChecks(onStdoutExitZero), [])
+  assert.deepEqual(readChecks(onStderrExitOne), [])
+})
+
+test('readChecks prefers real JSON even when a stream carries chatter', () => {
+  const res = { ok: false, stdout: '[{"name":"a","bucket":"pending"}]', stderr: 'some gh warning' }
+  assert.deepEqual(readChecks(res), [{ name: 'a', bucket: 'pending' }])
 })

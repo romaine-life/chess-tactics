@@ -187,15 +187,31 @@ export function checksVerdict({
   return null
 }
 
-/** Parse `gh pr checks --json` output. Returns [] for "none reported", null if unreadable. */
+/**
+ * Parse `gh pr checks --json` output. Returns [] for "none reported", null if unreadable.
+ *
+ * Deliberately parse-first and exit-code-last. When no checks are registered yet, gh does
+ * NOT emit `[]` — it prints a plain-English sentence, sometimes to stdout with exit 0 and
+ * sometimes to stderr with exit 1. Keying off the exit code, or scanning only one stream,
+ * turns that sentence into a parse failure and the wait goes quiet. Never parse this with
+ * a `| jq` pipe either: jq is not installed on every dev box, and a missing binary exits
+ * 127 into the void, which is how three separate CI monitors died silently.
+ */
 export function readChecks(res) {
-  if (/no checks reported/i.test(res.stderr || res.stdout)) return []
-  if (!res.stdout.trim()) return res.ok ? [] : null
-  try {
-    return JSON.parse(res.stdout)
-  } catch {
-    return null
+  const stdout = (res.stdout ?? '').trim()
+  const stderr = (res.stderr ?? '').trim()
+
+  if (stdout.startsWith('[') || stdout.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(stdout)
+      return Array.isArray(parsed) ? parsed : null
+    } catch {
+      return null
+    }
   }
+  if (/no checks/i.test(`${stdout}\n${stderr}`)) return []
+  if (!stdout && !stderr) return []
+  return null
 }
 
 // ---------------------------------------------------------------- side effects below
@@ -292,6 +308,15 @@ async function main() {
       notes,
     })
     if (verdict) emit(verdict)
+
+    // Speak on every poll, not only on the happy path. A watch that is silent while
+    // working looks exactly like a watch that has died, which is the whole reason this
+    // tool exists. stderr so it never contaminates the parsed verdict on stdout.
+    const pending = checks.filter((c) => c.bucket === 'pending').length
+    const elapsed = Math.round((Date.now() - started) / 1000)
+    process.stderr.write(
+      `[pr-gate] ${elapsed}s — ${checks.length ? `${pending} pending of ${checks.length}` : 'no checks yet'}\n`,
+    )
 
     await sleep(CHECK_POLL_MS)
   }
