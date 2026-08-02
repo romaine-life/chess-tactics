@@ -58,6 +58,69 @@ describe('scene manifests', () => {
     expect(sceneManifest('/play/select/campaign/a').id).not.toBe(sceneManifest('/play/select/campaign/b').id);
   });
 
+  it('identifies the settings root and unknown sections as the General scene', () => {
+    const generalId = sceneManifest('/settings/general').id;
+    expect(sceneManifest('/settings').id).toBe(generalId);
+    expect(sceneManifest('/settings/unknown').id).toBe(generalId);
+    expect(sceneManifest('/settings/audio').id).not.toBe(generalId);
+    expect(sceneManifest('/party').id).not.toBe(generalId);
+  });
+
+  it('gives addresses that author identical scene trees identical identities', () => {
+    // Chain-equal ⇒ id-equal. An id may stay COARSER than its instance chain (a Run
+    // battle advance re-keys its slots without a scene transition; /play board
+    // addresses share one gameplay identity across search strings), but an id FINER
+    // than the chain re-runs the full lifecycle for an unchanged committed tree —
+    // the double-exit bug class (play hub canonicalization, bare /settings).
+    // Add every new route family and its canonicalizing address variants here.
+    const run = createRun({
+      id: 'war',
+      name: 'War',
+      description: 'War',
+      battles: [{ level: createBlankLevel('battle', 'Battle', 8, 8), loot: false }],
+    }, 19, '2026-08-01T00:00:00.000Z');
+    const addresses: ReadonlyArray<[string, string?, Parameters<typeof sceneManifest>[2]?]> = [
+      ['/'], ['/menu-next'], ['/main-menu'], ['/unknown-route'],
+      ['/play'], ['/play', '?campaignId=a&levelId=b'], ['/play/strategikon/units'],
+      ['/run'], ['/run', '', { run: { hydrated: false, document: null } }],
+      ['/run', '', { run: { hydrated: true, document: null } }],
+      ['/run', '', { run: { hydrated: true, document: run } }],
+      ['/run', '?view=army', { run: { hydrated: true, document: run } }],
+      ['/run', '?view=sell', { run: { hydrated: true, document: run } }],
+      ['/play/select'], ['/play/select/continue'], ['/play/select/continue/campaign'],
+      ['/play/select/continue/skirmish'], ['/play/select/continue/run'], ['/play/select/continue/levels'],
+      ['/play/select/unknown'], ['/play/select/skirmish'], ['/play/select/levels'],
+      ['/play/select/run'], ['/play/select/run/current'], ['/play/select/run/new'],
+      ['/play/select/campaign/a'], ['/play/select/campaign/b'],
+      ['/settings'], ['/settings/general'], ['/settings/unknown'], ['/settings/audio'],
+      ['/settings/audio/tracks'], ['/settings/gameplay'], ['/settings/creator-tools'],
+      ['/settings/admin'], ['/party'],
+      ['/enchiridion'], ['/enchiridion/units'], ['/enchiridion/terrain'], ['/enchiridion/cards'],
+      ['/enchiridion/card-types'], ['/enchiridion/relics'], ['/enchiridion/relics/some-relic'],
+      ['/enchiridion/abilities'], ['/enchiridion/unknown'],
+      ['/lobbies'], ['/lobbies/room-1'],
+      ['/editor'], ['/campaigns'], ['/campaigns-next'], ['/editor/wars'],
+      ['/editor', '?campaign=camp-a'], ['/editor', '?campaign=camp-b'],
+      ['/editor', '?collection=skirmish-profiles'], ['/editor', '?collection=unassigned'],
+      ['/editor/level'], ['/editor/level', '?document=doc-1'], ['/edit'], ['/level-editor'],
+      ['/studio'], ['/studio', '?relicReview=1'], ['/studio/drawables'], ['/unit-studio'],
+      ['/prop-lab'], ['/surface-lab'],
+      ['/predrawn-reference'], ['/portrait-editor'],
+    ];
+    const scenes = addresses.map(([pathname, search, sources]) => ({
+      address: `${pathname}${search ?? ''}`,
+      scene: sceneManifest(pathname, search ?? '', sources ?? {}),
+    }));
+    for (const left of scenes) {
+      for (const right of scenes) {
+        const chain = left.scene.instances.map((entry) => entry.key).join(' > ');
+        if (chain !== right.scene.instances.map((entry) => entry.key).join(' > ')) continue;
+        expect({ addresses: [left.address, right.address], chain, id: left.scene.id })
+          .toEqual({ addresses: [left.address, right.address], chain, id: right.scene.id });
+      }
+    }
+  });
+
   it('derives retained regions from authored ancestry', () => {
     expect(deepestSharedSceneRegion(
       sceneManifest('/play/select/skirmish'),

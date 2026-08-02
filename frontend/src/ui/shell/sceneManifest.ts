@@ -277,7 +277,25 @@ function leafSceneManifest(
     path === '/settings' || path.startsWith('/settings/')
     || path === '/party'
   ) {
-    return manifest(`settings:${path}`, 'homepage', 'dom', [
+    // The manifest id is the RESOLVED SECTION address (enchiridion precedent): the
+    // bare /settings root and unknown subpaths render the General section, so they
+    // share its identity — an address-only difference must never re-run the scene
+    // lifecycle for the same committed section. Keep this mapping aligned with the
+    // instance selection below; the identity invariant test enforces the pairing.
+    const settingsSectionPath = path === '/party'
+      ? '/party'
+      : path === '/settings/audio'
+        ? '/settings/audio'
+        : path === '/settings/audio/tracks'
+          ? '/settings/audio/tracks'
+          : path === '/settings/gameplay'
+            ? '/settings/gameplay'
+            : path === '/settings/creator-tools'
+              ? '/settings/creator-tools'
+              : path === '/settings/admin'
+                ? '/settings/admin'
+                : '/settings/general';
+    return manifest(`settings:${settingsSectionPath}`, 'homepage', 'dom', [
       'homepage-background',
       'title-bar',
       'visible-controls',
