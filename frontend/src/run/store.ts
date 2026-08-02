@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { reportAuthSessionFailure, startAuthSession } from '../net/authSession';
 import { deleteActiveRun, loadActiveRun, saveActiveRun } from '../net/activeRun';
 import { HttpError } from '../net/http';
-import { normalizeRunDocument, type RunDocument } from './model';
+import { RUN_FORMAT_VERSION, normalizeRunDocument, type RunDocument } from './model';
 import { recordAtaraxiaCompletion } from './progression';
 import { recordRunRelicStatEvents, relicStatEventsForRunTransition } from './relicStatistics';
 
@@ -11,13 +11,8 @@ const LOCAL_RUN_KEY = 'chess-tactics:active-run:v1';
 function readLocalRun(): RunDocument | null {
   try {
     const parsed = JSON.parse(localStorage.getItem(LOCAL_RUN_KEY) ?? 'null') as RunDocument | null;
-    return parsed && (
-      Number(parsed.formatVersion) === 1
-      || Number(parsed.formatVersion) === 2
-      || Number(parsed.formatVersion) === 3
-      || Number(parsed.formatVersion) === 4
-      || Number(parsed.formatVersion) === 5
-    )
+    const formatVersion = Number(parsed?.formatVersion);
+    return parsed && Number.isSafeInteger(formatVersion) && formatVersion >= 1 && formatVersion <= RUN_FORMAT_VERSION
       ? normalizeRunDocument(parsed)
       : null;
   } catch {
@@ -62,6 +57,13 @@ export interface ActiveRunState {
 
 let saveChain: Promise<void> = Promise.resolve();
 
+function isUnsupportedRunDocument(error: unknown): boolean {
+  return error instanceof Error && (
+    error.message === 'Older Run Shop documents are unsupported.'
+    || error.message === 'The retired Run draft phase is unsupported.'
+  );
+}
+
 function queueRemoteSave(run: RunDocument): void {
   saveChain = saveChain.then(async () => {
     const state = useActiveRun.getState();
@@ -77,9 +79,10 @@ function queueRemoteSave(run: RunDocument): void {
         try {
           const remote = await loadActiveRun();
           const browserRun = useActiveRun.getState().run;
-          if (remote.run && browserRun && remote.run.id !== browserRun.id) {
+          const accountRun = remote.run ? normalizeRunDocument(remote.run) : null;
+          if (accountRun && browserRun && accountRun.id !== browserRun.id) {
             useActiveRun.setState({
-              adoptionConflict: { browserRun, accountRun: remote.run },
+              adoptionConflict: { browserRun, accountRun },
               remoteRevision: remote.revision,
               persistenceError: 'Choose which active Run this account should keep.',
             });
@@ -118,7 +121,32 @@ export const useActiveRun = create<ActiveRunState>((set, get) => ({
         return;
       }
       const remote = await loadActiveRun();
-      const accountRun = remote.run ? normalizeRunDocument(remote.run) : null;
+      let accountRun: RunDocument | null = null;
+      let accountRunUnsupported = false;
+      if (remote.run) {
+        try {
+          accountRun = normalizeRunDocument(remote.run);
+        } catch (error) {
+          if (!isUnsupportedRunDocument(error)) throw error;
+          accountRunUnsupported = true;
+        }
+      }
+      if (accountRunUnsupported) {
+        recordCompletedRun(browserRun);
+        set({
+          run: browserRun,
+          hydrated: true,
+          accountLinked: true,
+          remoteRevision: remote.revision,
+          adoptionConflict: null,
+          persistenceError: browserRun
+            ? 'Replacing the account’s retired Run with this current Run.'
+            : 'The account’s previous Run used a retired format. Start a new Run to replace it.',
+        });
+        writeLocalRun(browserRun);
+        if (browserRun) queueRemoteSave(browserRun);
+        return;
+      }
       if (accountRun && browserRun && accountRun.id !== browserRun.id) {
         recordCompletedRun(accountRun);
         recordCompletedRun(browserRun);

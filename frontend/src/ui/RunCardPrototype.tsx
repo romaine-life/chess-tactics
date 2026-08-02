@@ -10,10 +10,13 @@ import { StudioCatalogCard } from './studio/StudioCatalogCard';
 import {
   CONCINNOUS_OFFER_DENOMINATOR,
   PESTIFEROUS_OFFER_DENOMINATOR,
-  PIECE_BUNDLE_DECK,
+  RUN_CARD_DECK,
+  RUN_STARTING_GOLD,
   concinnousOfferRoll,
+  openingShopOffers,
   pestiferousOfferRoll,
 } from '../run/model';
+import { runCardName } from '../run/cardNames';
 import {
   RUN_CARD_APPROVED_TUNING,
   RUN_CARD_DEFAULT_CONTENTS_TUNING,
@@ -50,6 +53,7 @@ const DEFAULT_TYPE_Y = RUN_CARD_APPROVED_TUNING.typeY;
 const DEFAULT_FLAVOR_SIZE = RUN_CARD_APPROVED_TUNING.flavorSize;
 const DEFAULT_TITLE_TYPE_HORIZONTAL_LOCKED = true;
 const ATARAXIA_SAMPLE_DRAWS = 64;
+const DEFAULT_OPENING_SAMPLE_SEED = 4217;
 const DEFAULT_CONTENTS_SCALE = 1;
 
 const clampCardFontSize = (value: number, min: number, max: number): number => (
@@ -288,6 +292,7 @@ export function RunCardPrototypeViewer({
   const [titleTypeHorizontalLocked, setTitleTypeHorizontalLocked] = useState(DEFAULT_TITLE_TYPE_HORIZONTAL_LOCKED);
   const [flavorSize, setFlavorSize] = useState(DEFAULT_FLAVOR_SIZE);
   const [pestiferousDenominator, setPestiferousDenominator] = useState(PESTIFEROUS_OFFER_DENOMINATOR);
+  const [openingSampleSeed, setOpeningSampleSeed] = useState(DEFAULT_OPENING_SAMPLE_SEED);
   const [concinnousDenominator, setConcinnousDenominator] = useState(CONCINNOUS_OFFER_DENOMINATOR);
   const [handoffCopyState, setHandoffCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
   const [loaded, setLoaded] = useState<ReadonlySet<RunCardImageKind>>(() => new Set());
@@ -304,15 +309,16 @@ export function RunCardPrototypeViewer({
     : RUN_CARD_FRAME_SLOT;
   const realizedPestiferousCount = useMemo(() => (
     Array.from({ length: ATARAXIA_SAMPLE_DRAWS }, (_, index) => {
-      const bundle = PIECE_BUNDLE_DECK[index % PIECE_BUNDLE_DECK.length];
-      return pestiferousOfferRoll(4217, Math.floor(index / 4), index % 4, bundle.id, pestiferousDenominator);
+      const card = RUN_CARD_DECK[index % RUN_CARD_DECK.length];
+      return pestiferousOfferRoll(4217, Math.floor(index / 4), index % 4, card.id, pestiferousDenominator);
     }).filter(Boolean).length
   ), [pestiferousDenominator]);
+  const openingSample = useMemo(() => openingShopOffers(openingSampleSeed), [openingSampleSeed]);
   const realizedConcinnousCount = useMemo(() => (
     Array.from({ length: ATARAXIA_SAMPLE_DRAWS }, (_, index) => {
-      const bundle = PIECE_BUNDLE_DECK[index % PIECE_BUNDLE_DECK.length];
-      return bundle.value + 2 <= 9
-        && concinnousOfferRoll(4217, Math.floor(index / 4), index % 4, bundle.id, concinnousDenominator);
+      const card = RUN_CARD_DECK[index % RUN_CARD_DECK.length];
+      return card.value + 2 <= 9
+        && concinnousOfferRoll(4217, Math.floor(index / 4), index % 4, card.id, concinnousDenominator);
     }).filter(Boolean).length
   ), [concinnousDenominator]);
 
@@ -414,6 +420,7 @@ export function RunCardPrototypeViewer({
     setFlavorSize(DEFAULT_FLAVOR_SIZE);
     setContentsScale(DEFAULT_CONTENTS_SCALE);
     setPestiferousDenominator(PESTIFEROUS_OFFER_DENOMINATOR);
+    setOpeningSampleSeed(DEFAULT_OPENING_SAMPLE_SEED);
     setConcinnousDenominator(CONCINNOUS_OFFER_DENOMINATOR);
     setTitleTypeSizeRatio(null);
     setTitleTypeHorizontalLocked(DEFAULT_TITLE_TYPE_HORIZONTAL_LOCKED);
@@ -480,6 +487,17 @@ export function RunCardPrototypeViewer({
         sampleSeed: 4217,
         sampleDraws: ATARAXIA_SAMPLE_DRAWS,
         realizedPestiferousCount,
+      },
+      opening: {
+        seed: openingSampleSeed,
+        startingGold: RUN_STARTING_GOLD,
+        startingArmy: ['king', 'pawn', 'pawn'],
+        offers: openingSample.map((offer) => ({
+          id: offer.id,
+          name: runCardName(offer),
+          value: offer.value,
+          pieces: offer.pieces,
+        })),
       },
       concinnous: {
         denominator: concinnousDenominator,
@@ -685,6 +703,16 @@ export function RunCardPrototypeViewer({
               dflt={PESTIFEROUS_OFFER_DENOMINATOR}
             />
             <SliderRow
+              label={<>Opening sample seed · {openingSampleSeed}</>}
+              value={openingSampleSeed}
+              set={setOpeningSampleSeed}
+              min={1}
+              max={9999}
+              step={1}
+              nudge={1}
+              dflt={DEFAULT_OPENING_SAMPLE_SEED}
+            />
+            <SliderRow
               label={<>Concinnous prevalence · 1 in {concinnousDenominator} eligible offers</>}
               value={concinnousDenominator}
               set={setConcinnousDenominator}
@@ -700,6 +728,9 @@ export function RunCardPrototypeViewer({
                 <div><dt>Artwork</dt><dd>{art.media!.sha256.slice(0, 12)} · {art.status}</dd></div>
                 <div><dt>Card</dt><dd>{contentsStudy ? 'Contents Box density study' : card.typeLine}</dd></div>
                 <div><dt>Ataraxia I sample</dt><dd>{realizedPestiferousCount} / {ATARAXIA_SAMPLE_DRAWS} Pestiferous · seed 4217</dd></div>
+                <div><dt>Opening budget</dt><dd>{RUN_STARTING_GOLD} gold · buy any affordable cards</dd></div>
+                <div><dt>Opening party</dt><dd>King + 2 Pawns + purchased cards</dd></div>
+                <div><dt>Opening sample</dt><dd>{openingSample.map((offer) => `${runCardName(offer)} (${offer.value})`).join(' · ')}</dd></div>
                 <div><dt>Eligible sample</dt><dd>{realizedConcinnousCount} / {ATARAXIA_SAMPLE_DRAWS} Concinnous · seed 4217</dd></div>
               </dl>
             ) : null}

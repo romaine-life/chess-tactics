@@ -4,7 +4,7 @@
 // not the pointer path — an invisible overlay shielding the board passes every unit
 // test while making the game unplayable; see the strategikon-slot regression, #552).
 //
-// Drives a FRESH anonymous profile end-to-end: start run → take draft → begin battle
+// Drives a FRESH anonymous profile end-to-end: start run → buy an opening card → begin battle
 // → click a unit's tile → click a legal destination → assert the move commits, the
 // enemy replies, and the open Strategikon still takes the pointer. Fails loudly at
 // the exact step where a click is swallowed.
@@ -260,13 +260,16 @@ try {
 
   await page.waitForFunction(() => [...document.querySelectorAll('button')].some((b) => (b.textContent || '').trim() === 'Start Run'));
   if (!await clickButton('Start Run')) await fail('start-run', JSON.stringify(await buttonDiagnostics('Start Run')));
-  await waitPhase('draft', 'start-run');
+  await waitPhase('shop', 'start-run');
 
-  if (!await clickElement('button.run-bundle-card:not([disabled])')) {
-    await page.screenshot({ path: 'tmp-shots/run-draft-hit-failure.png' });
-    await fail('draft-take', JSON.stringify(await elementDiagnostics('button.run-bundle-card:not([disabled])')));
+  if (!await clickElement('button.run-card-action:not([disabled])')) {
+    await page.screenshot({ path: 'tmp-shots/run-opening-card-hit-failure.png' });
+    await fail('opening-card-purchase', JSON.stringify(await elementDiagnostics('button.run-card-action:not([disabled])')));
   }
-  await waitPhase('deployment', 'draft-take');
+  if (!await clickButton('Continue to first Battle')) {
+    await fail('opening-continue', JSON.stringify(await buttonDiagnostics('Continue to first Battle')));
+  }
+  await waitPhase('deployment', 'opening-continue');
 
   await page.evaluate(() => {
     const outgoing = document.querySelector('.run-scene-slot');

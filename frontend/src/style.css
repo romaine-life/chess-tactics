@@ -18736,7 +18736,14 @@ button.tileset-relationship-cell {
 
 /* The host contributes interaction only. All visible anatomy comes from the same
    approved trading-card face used by the Card Layout instrument. */
-.run-bundle-card {
+.run-card-offer {
+  align-content: start;
+  display: grid;
+  gap: var(--ds-inline-tight);
+  min-inline-size: 0;
+}
+
+.run-card-action {
   all: unset;
   aspect-ratio: 5 / 7;
   box-sizing: border-box;
@@ -18746,26 +18753,35 @@ button.tileset-relationship-cell {
   position: relative;
 }
 
-.run-bundle-card > .run-card-face {
+.run-card-action > .run-card-face {
   display: block;
 }
 
-.run-bundle-card:focus-visible {
+.run-card-action:focus-visible {
   outline: 2px solid rgba(101, 184, 255, .72);
   outline-offset: 3px;
 }
 
-.run-bundle-card.is-reference {
+.run-card-action.is-reference {
   cursor: default;
 }
 
-.run-bundle-card:disabled {
+.run-card-action:disabled {
   cursor: not-allowed;
   opacity: .72;
 }
 
-.run-bundle-card.is-purchased {
+.run-card-action.is-purchased {
   opacity: 1;
+}
+
+.run-card-purchased-indicator {
+  display: block;
+  font: var(--ds-weight-bold) var(--ds-text-sm)/1 var(--ds-font-display);
+  letter-spacing: .08em;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  text-align: center;
+  text-transform: uppercase;
 }
 
 .run-shop-rules,
@@ -19864,8 +19880,8 @@ button.tileset-relationship-cell {
   margin: 0;
 }
 
-/* Cards codex: a value-grouped browser of the full bundle deck beside one selected
-   card rendered as its real face (the same RunBundleCard the Run deals). */
+/* Cards codex: a value-grouped browser of the full card deck beside one selected
+   card rendered as its real face (the same RunCard the Run deals). */
 .enchiridion-card-layout {
   align-content: start;
   align-items: start;

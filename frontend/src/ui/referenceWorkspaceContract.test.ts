@@ -120,19 +120,19 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(strategikon).not.toContain('relicHref');
   });
 
-  it('lists the full bundle deck as real card faces with routed selection', () => {
+  it('lists the full card deck as real card faces with routed selection', () => {
     const start = enchiridion.indexOf('export function CardCodex');
     const end = enchiridion.indexOf('type CardTypeReferenceDefinition', start);
     const cardCodex = enchiridion.slice(start, end);
     // The browser lists every deck card grouped by value; the detail is the exact
     // card face the Run deals (one selection, one description — ADR-0253's shape).
-    expect(cardCodex).toContain('PIECE_BUNDLE_DECK');
+    expect(cardCodex).toContain('RUN_CARD_DECK');
     // The detail is the same live-media-backed trading-card face the Run deals.
-    expect(cardCodex).toContain('<RunBundleCard bundle={selected} mode="reference" />');
+    expect(cardCodex).toContain('<RunCard card={selected} mode="reference" />');
     expect(cardCodex).not.toContain('CardDetailStage');
-    expect(cardCodex).toContain('runCardName(bundle)');
-    expect(cardCodex).toContain('bundleLabel(bundle)');
-    expect(cardCodex).toMatch(/to=\{cardHref\?\.\(bundle\.id\)\}/);
+    expect(cardCodex).toContain('runCardName(card)');
+    expect(cardCodex).toContain('cardContentsLabel(card)');
+    expect(cardCodex).toMatch(/to=\{cardHref\?\.\(card\.id\)\}/);
     expect(cardCodex.match(/<ReferenceTrigger/g)).toHaveLength(1);
     // The main menu addresses individual cards like relic records…
     expect(mainMenu).toContain('selectedCardId={enchiridionCardFromPath(path)}');
@@ -145,11 +145,11 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     const start = enchiridion.indexOf('export function CardCodex');
     const end = enchiridion.indexOf('type CardTypeReferenceDefinition', start);
     const cardCodex = enchiridion.slice(start, end);
-    expect(cardCodex).toContain('cardMatchesFilters(bundle, goldFilter, unitFilter)');
+    expect(cardCodex).toContain('cardMatchesFilters(card, goldFilter, unitFilter)');
     expect(cardCodex).toContain('testId="enchiridion-card-gold-filter"');
     expect(cardCodex).toContain('testId="enchiridion-card-unit-filter"');
     expect(cardCodex).toContain('<h3>No matching cards</h3>');
-    expect(cardCodex).toContain('<RunBundleCard bundle={selected} mode="reference" />');
+    expect(cardCodex).toContain('<RunCard card={selected} mode="reference" />');
   });
 
   it('selects four affected-card names in column three and previews one shared Volunteer face in column four', () => {
@@ -157,7 +157,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     const end = enchiridion.indexOf('function AbilitiesSection', start);
     const cardTypes = enchiridion.slice(start, end);
     expect(cardTypes.match(/id: '(?:pestiferous|concinnous|type-iii|type-iv)'/g)).toHaveLength(4);
-    expect(cardTypes).toContain("const VOLUNTEER_CARD = PIECE_BUNDLE_BY_ID.p");
+    expect(cardTypes).toContain("const VOLUNTEER_CARD = RUN_CARD_BY_ID.p");
     expect(cardTypes).toContain('<RunCardFace');
     expect(cardTypes).toContain('RUN_CARD_PESTIFEROUS_FRAME_SLOT');
     expect(cardTypes).toContain("iconRole: 'ui-kit-icons-card-properties-pestiferous-png'");

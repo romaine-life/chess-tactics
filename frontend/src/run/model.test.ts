@@ -3,21 +3,25 @@ import { createBlankLevel } from '../core/level';
 import {
   ATARAXIA_BY_TIER,
   GOLD_SCALE,
-  PIECE_BUNDLE_DECK,
+  RUN_CARD_DECK,
   PIECE_VALUE,
+  RUN_FORMAT_VERSION,
+  RUN_OPENING_OFFER_COUNT,
+  RUN_STARTING_GOLD_TENTHS,
   acquireRelic,
   battleVictoryGoldTenths,
   beginBattle,
-  buyBundle,
+  buyCard,
+  canLeaveShop,
   cashOutPawn,
-  chooseDraft,
   createRun,
-  createRunBundleOffer,
+  createRunCardOffer,
   deterioratePestiferousCards,
   formatGold,
   grantGold,
   leaveShop,
   normalizeRunDocument,
+  openingShopOffers,
   openShop,
   prepareDeployment,
   resetShop,
@@ -43,80 +47,154 @@ function war(battles = 4, lootAt: number[] = []): RunWarSnapshot {
 
 function deployedRun(seed = 17, snapshot = war()): RunDocument {
   let run = createRun(snapshot, seed, '2026-01-01T00:00:00.000Z');
-  run = prepareDeployment(chooseDraft(run, run.draftOffers[0].draftId));
+  run = buyCard(run, run.shop!.cardOffers[0].offerId);
+  run = prepareDeployment(leaveShop(run));
   return beginBattle(run, run.army.map((unit) => unit.id), [], []);
 }
 
 function deployedAtaraxiaRun(seed = 17, snapshot = war()): RunDocument {
   let run = createRun(snapshot, seed, 1, '2026-01-01T00:00:00.000Z');
-  run = prepareDeployment(chooseDraft(run, run.draftOffers[0].draftId));
+  run = buyCard(run, run.shop!.cardOffers[0].offerId);
+  run = prepareDeployment(leaveShop(run));
+  return beginBattle(run, run.army.map((unit) => unit.id), [], []);
+}
+
+function openingShopRunWithPawn(snapshot = war()): RunDocument {
+  for (let seed = 1; seed <= 10_000; seed += 1) {
+    const run = createRun(snapshot, seed, '2026-01-01T00:00:00.000Z');
+    const offer = run.shop!.cardOffers.find((candidate) => candidate.pieces.includes('pawn'));
+    if (offer) return buyCard(run, offer.offerId);
+  }
+  throw new Error('Expected a seeded opening card containing a Pawn.');
+}
+
+function deployedRunWithPawn(snapshot = war()): RunDocument {
+  const run = prepareDeployment(leaveShop(openingShopRunWithPawn(snapshot)));
   return beginBattle(run, run.army.map((unit) => unit.id), [], []);
 }
 
 describe('Run piece economy', () => {
   it('enumerates every unique multiset worth 1–9 points exactly once', () => {
-    expect(PIECE_BUNDLE_DECK).toHaveLength(49);
-    expect(new Set(PIECE_BUNDLE_DECK.map((bundle) => bundle.id)).size).toBe(49);
-    for (const bundle of PIECE_BUNDLE_DECK) {
-      expect(bundle.value).toBeGreaterThanOrEqual(1);
-      expect(bundle.value).toBeLessThanOrEqual(9);
-      expect(bundle.pieces.reduce((sum, piece) => sum + PIECE_VALUE[piece], 0)).toBe(bundle.value);
+    expect(RUN_CARD_DECK).toHaveLength(49);
+    expect(new Set(RUN_CARD_DECK.map((card) => card.id)).size).toBe(49);
+    for (const card of RUN_CARD_DECK) {
+      expect(card.value).toBeGreaterThanOrEqual(1);
+      expect(card.value).toBeLessThanOrEqual(9);
+      expect(card.pieces.reduce((sum, piece) => sum + PIECE_VALUE[piece], 0)).toBe(card.value);
     }
   });
 
-  it('deals two different six-point opening hands from the approved five', () => {
+  it('starts with the permanent King, two Pawns, eight gold, and three deterministic cards at distinct values', () => {
     const run = createRun(war(), 91);
-    expect(run.army.map((unit) => unit.type)).toEqual(['king', 'pawn', 'pawn', 'pawn']);
+    expect(run.army.map((unit) => unit.type)).toEqual(['king', 'pawn', 'pawn']);
     expect(run.army.every((unit) => unit.name.length > 0)).toBe(true);
     expect(new Set(run.army.map((unit) => unit.name)).size).toBe(run.army.length);
     expect(run.army.every((unit) => Number.isSafeInteger(unit.inspectionSeed))).toBe(true);
     expect(createRun(war(), 91).army.map((unit) => unit.inspectionSeed))
       .toEqual(run.army.map((unit) => unit.inspectionSeed));
-    expect(run.army.map((unit) => [unit.type, unit.number])).toEqual([
-      ['king', 1],
-      ['pawn', 1],
-      ['pawn', 2],
-      ['pawn', 3],
-    ]);
-    expect(run.draftOffers).toHaveLength(2);
-    expect(new Set(run.draftOffers.map((offer) => offer.draftId)).size).toBe(2);
-    expect(run.draftOffers.every((offer) => offer.value === 6)).toBe(true);
+    expect(run.army.map((unit) => [unit.type, unit.number])).toEqual([['king', 1], ['pawn', 1], ['pawn', 2]]);
+    expect(run.nextArmyUnitNumberByType.pawn).toBe(3);
+    expect(run.goldTenths).toBe(RUN_STARTING_GOLD_TENTHS);
+    expect(run.phase).toBe('shop');
+    expect(run.shop?.kind).toBe('opening');
+    expect(run.shop?.cardOffers).toHaveLength(RUN_OPENING_OFFER_COUNT);
+    expect(new Set(run.shop?.cardOffers.map((offer) => offer.offerId)).size).toBe(RUN_OPENING_OFFER_COUNT);
+    expect(new Set(run.shop?.cardOffers.map((offer) => offer.value)).size).toBe(RUN_OPENING_OFFER_COUNT);
+    expect(run.shop?.cardOffers.every((offer) => offer.value >= 1 && offer.value <= 8)).toBe(true);
+    expect(run.shop?.cardOffers.every((offer) => offer.cost === offer.value)).toBe(true);
+    expect(openingShopOffers(91)).toEqual(run.shop?.cardOffers);
+    expect(createRun(war(), 91).shop?.cardOffers).toEqual(run.shop?.cardOffers);
+    expect(canLeaveShop(run)).toBe(false);
+    expect(leaveShop(run)).toBe(run);
   });
 
-  it('names draft and shop units in the same transaction that adds them to the army', () => {
+  it('buys the opening card in place and waits for explicit Continue before deployment', () => {
     const fresh = createRun(war(), 91);
-    const drafted = chooseDraft(fresh, fresh.draftOffers[0].draftId);
-    expect(drafted.army.filter((unit) => unit.source === 'draft').every((unit) => unit.name.length > 0)).toBe(true);
-    expect(drafted.army.filter((unit) => unit.source === 'draft').every((unit) => Number.isSafeInteger(unit.inspectionSeed))).toBe(true);
+    const offer = fresh.shop!.cardOffers[0];
+    const bought = buyCard(fresh, offer.offerId);
+    const card = bought.cards[0];
+
+    expect(bought.phase).toBe('shop');
+    expect(bought.shop?.kind).toBe('opening');
+    expect(bought.shop?.purchasedCardOfferIds).toEqual([offer.offerId]);
+    expect(bought.goldTenths).toBe(RUN_STARTING_GOLD_TENTHS - offer.value * GOLD_SCALE);
+    expect(card).toMatchObject({ coreId: offer.id, cardType: null, acquiredAfterBattleIndex: 0 });
+    expect(card.unitIds).toHaveLength(offer.pieces.length);
+    expect(bought.army.filter((unit) => card.unitIds.includes(unit.id)).map((unit) => unit.type)).toEqual(offer.pieces);
+    expect(bought.nextCardSequence).toBe(2);
+    expect(canLeaveShop(bought)).toBe(true);
+    const reset = resetShop(bought);
+    expect(reset.phase).toBe('shop');
+    expect(reset.shop?.kind).toBe('opening');
+    expect(reset.shop?.purchasedCardOfferIds).toEqual([]);
+    expect(reset.shop?.cardOffers).toEqual(fresh.shop?.cardOffers);
+    expect(reset.army.map((unit) => unit.type)).toEqual(['king', 'pawn', 'pawn']);
+    expect(reset.cards).toEqual([]);
+    expect(reset.goldTenths).toBe(RUN_STARTING_GOLD_TENTHS);
+    expect(canLeaveShop(reset)).toBe(false);
+    const continued = leaveShop(bought);
+    expect(continued.phase).toBe('deployment');
+    expect(continued.battleIndex).toBe(0);
+  });
+
+  it('keeps every affordable core Units card reachable from seeded openings', () => {
+    const observed = new Set<string>();
+    for (let seed = 1; seed <= 10_000; seed += 1) {
+      for (const offer of openingShopOffers(seed)) observed.add(offer.id);
+    }
+    expect(observed).toEqual(new Set(RUN_CARD_DECK.filter((card) => card.value <= 8).map((card) => card.id)));
+  });
+
+  it('names opening and later Shop units in the same transaction that adds them to the army', () => {
+    const fresh = createRun(war(), 91);
+    const openingPurchase = buyCard(fresh, fresh.shop!.cardOffers[0].offerId);
+    expect(openingPurchase.army.filter((unit) => unit.source === 'shop').every((unit) => unit.name.length > 0)).toBe(true);
+    expect(openingPurchase.army.filter((unit) => unit.source === 'shop').every((unit) => Number.isSafeInteger(unit.inspectionSeed))).toBe(true);
 
     const shop = openShop({ ...deployedRun(91), goldTenths: 100 * GOLD_SCALE }, []);
-    const bought = buyBundle(shop, shop.shop!.bundleOffers[0].offerId);
+    const bought = buyCard(shop, shop.shop!.cardOffers[0].offerId);
     expect(bought.army.filter((unit) => unit.source === 'shop').every((unit) => unit.name.length > 0)).toBe(true);
     expect(bought.army.filter((unit) => unit.source === 'shop').every((unit) => Number.isSafeInteger(unit.inspectionSeed))).toBe(true);
     expect(new Set(bought.army.map((unit) => unit.name)).size).toBe(bought.army.length);
   });
 
-  it('allows at most one bundle purchase in a shop', () => {
+  it('allows multiple distinct card purchases in the same shop while gold remains', () => {
     const shop = openShop({ ...deployedRun(), goldTenths: 100 * GOLD_SCALE }, []);
-    const [first, second] = shop.shop!.bundleOffers;
-    const bought = buyBundle(shop, first.offerId);
-    expect(bought.shop?.purchasedOfferId).toBe(first.offerId);
-    expect(buyBundle(bought, second.offerId)).toBe(bought);
+    const [first, second] = shop.shop!.cardOffers;
+    const boughtFirst = buyCard(shop, first.offerId);
+    const boughtSecond = buyCard(boughtFirst, second.offerId);
+    expect(boughtSecond.shop?.purchasedCardOfferIds).toEqual([first.offerId, second.offerId]);
+    expect(boughtSecond.cards).toHaveLength(shop.cards.length + 2);
+    expect(buyCard(boughtSecond, first.offerId)).toBe(boughtSecond);
+  });
+
+  it('leaves each unpurchased card available independently when another card is bought', () => {
+    const seed = Array.from({ length: 100 }, (_, index) => index + 1).find((candidate) => {
+      const cheapest = [...openingShopOffers(candidate)]
+        .sort((left, right) => left.cost - right.cost)
+        .slice(0, 2);
+      return cheapest.reduce((total, offer) => total + offer.cost * GOLD_SCALE, 0) <= RUN_STARTING_GOLD_TENTHS;
+    });
+    expect(seed).toBeDefined();
+    const opening = createRun(war(), seed!);
+    const affordable = [...opening.shop!.cardOffers]
+      .sort((left, right) => left.cost - right.cost)
+      .slice(0, 2);
+
+    const boughtFirst = buyCard(opening, affordable[0].offerId);
+    const boughtSecond = buyCard(boughtFirst, affordable[1].offerId);
+    expect(boughtSecond.shop?.purchasedCardOfferIds).toEqual(affordable.map((offer) => offer.offerId));
   });
 
   it('assigns stable per-type numbers to acquired units', () => {
-    let run = createRun(war(), 91);
-    const offer = run.draftOffers.find((candidate) => (
-      candidate.pieces.filter((piece) => piece === 'pawn').length >= 1
-    )) ?? run.draftOffers[0];
-    run = chooseDraft(run, offer.draftId);
+    const run = openingShopRunWithPawn();
     const pawnNumbers = run.army.filter((unit) => unit.type === 'pawn').map((unit) => unit.number);
     expect(new Set(pawnNumbers).size).toBe(pawnNumbers.length);
-    expect(pawnNumbers.slice(0, 3)).toEqual([1, 2, 3]);
+    expect(pawnNumbers).toEqual(Array.from({ length: pawnNumbers.length }, (_, index) => index + 1));
   });
 
   it('sells every non-King and formats Fair Scales quarter-gold exactly', () => {
-    let shop = openShop(deployedRun(), []);
+    let shop = openShop(deployedRunWithPawn(), []);
     shop = acquireRelic(shop, 'fair-scales');
     const pawn = shop.army.find((unit) => unit.type === 'pawn')!;
     const sold = sellArmyUnit(shop, pawn.id);
@@ -128,17 +206,17 @@ describe('Run piece economy', () => {
 
   it('resets the complete shop transaction without rerolling its offers', () => {
     let shop = openShop({ ...deployedRun(29), goldTenths: 100 * GOLD_SCALE }, []);
-    const originalOffers = structuredClone(shop.shop!.bundleOffers);
+    const originalOffers = structuredClone(shop.shop!.cardOffers);
     const originalArmy = structuredClone(shop.army);
     const originalGold = shop.goldTenths;
-    const bought = shop.shop!.bundleOffers[0].offerId;
-    shop = buyBundle(shop, bought);
+    const bought = shop.shop!.cardOffers[0].offerId;
+    shop = buyCard(shop, bought);
     shop = sellArmyUnit(shop, shop.army.find((unit) => unit.type !== 'king')!.id);
     expect(shopHasChanges(shop)).toBe(true);
 
     const reset = resetShop(shop);
-    expect(reset.shop?.bundleOffers).toEqual(originalOffers);
-    expect(reset.shop?.purchasedOfferId).toBeNull();
+    expect(reset.shop?.cardOffers).toEqual(originalOffers);
+    expect(reset.shop?.purchasedCardOfferIds).toEqual([]);
     expect(reset.shop?.soldUnits).toEqual([]);
     expect(reset.army).toEqual(originalArmy);
     expect(reset.goldTenths).toBe(originalGold);
@@ -155,9 +233,10 @@ describe('Run progression and relic offers', () => {
   });
 
   it('opens a shop with strength-scaled gold after non-final victories and skips the shop after the final boss', () => {
-    const afterFirst = openShop(deployedRun(12, war(2)), []);
+    const firstBattle = deployedRun(12, war(2));
+    const afterFirst = openShop(firstBattle, []);
     expect(afterFirst.phase).toBe('shop');
-    expect(afterFirst.goldTenths).toBe(GOLD_SCALE);
+    expect(afterFirst.goldTenths).toBe(firstBattle.goldTenths + GOLD_SCALE);
     expect(afterFirst.shop?.victoryGoldTenths).toBe(GOLD_SCALE);
 
     const finalBattle = beginBattle(prepareDeployment(leaveShop(afterFirst)), [], [], []);
@@ -190,8 +269,9 @@ describe('Run progression and relic offers', () => {
     }];
 
     expect(battleVictoryGoldTenths(level)).toBe(160);
-    const shop = openShop(deployedRun(12, snapshot), []);
-    expect(shop.goldTenths).toBe(160);
+    const battle = deployedRun(12, snapshot);
+    const shop = openShop(battle, []);
+    expect(shop.goldTenths).toBe(battle.goldTenths + 160);
     expect(shop.shop?.victoryGoldTenths).toBe(160);
   });
 
@@ -213,7 +293,8 @@ describe('Run progression and relic offers', () => {
   });
 
   it('deterministically upgrades unnamed format-1 army units without resetting the Run', () => {
-    const current = createRun(war(), 73);
+    const opening = createRun(war(), 73);
+    const current = leaveShop(buyCard(opening, opening.shop!.cardOffers[0].offerId));
     const legacy = {
       ...current,
       formatVersion: 1,
@@ -221,14 +302,15 @@ describe('Run progression and relic offers', () => {
     } as unknown as RunDocument;
     const upgraded = normalizeRunDocument(legacy);
 
-    expect(upgraded.formatVersion).toBe(7);
+    expect(upgraded.formatVersion).toBe(RUN_FORMAT_VERSION);
     expect(upgraded.id).toBe(current.id);
     expect(upgraded.army.map((unit) => unit.name)).toEqual(current.army.map((unit) => unit.name));
     expect(normalizeRunDocument(upgraded)).toBe(upgraded);
   });
 
   it('replaces the provisional format-2 fantasy names with role-appropriate historical identities', () => {
-    const current = createRun(war(), 73);
+    const opening = createRun(war(), 73);
+    const current = leaveShop(buyCard(opening, opening.shop!.cardOffers[0].offerId));
     const provisional = {
       ...current,
       formatVersion: 2,
@@ -236,13 +318,14 @@ describe('Run progression and relic offers', () => {
     } as unknown as RunDocument;
     const upgraded = normalizeRunDocument(provisional);
 
-    expect(upgraded.formatVersion).toBe(7);
+    expect(upgraded.formatVersion).toBe(RUN_FORMAT_VERSION);
     expect(upgraded.army.map((unit) => unit.name)).toEqual(current.army.map((unit) => unit.name));
     expect(normalizeRunDocument(upgraded)).toBe(upgraded);
   });
 
   it('assigns persistent inspection-scene seeds when upgrading format-3 units', () => {
-    const current = createRun(war(), 73);
+    const opening = createRun(war(), 73);
+    const current = leaveShop(buyCard(opening, opening.shop!.cardOffers[0].offerId));
     const legacy = {
       ...current,
       formatVersion: 3,
@@ -250,7 +333,7 @@ describe('Run progression and relic offers', () => {
     } as unknown as RunDocument;
     const upgraded = normalizeRunDocument(legacy);
 
-    expect(upgraded.formatVersion).toBe(7);
+    expect(upgraded.formatVersion).toBe(RUN_FORMAT_VERSION);
     expect(upgraded.army.every((unit) => Number.isSafeInteger(unit.inspectionSeed))).toBe(true);
     expect(normalizeRunDocument(upgraded)).toBe(upgraded);
   });
@@ -278,6 +361,38 @@ describe('Run progression and relic offers', () => {
     expect(normalizeRunDocument(upgraded)).toBe(upgraded);
   });
 
+  it('rejects the retired draft phase and removes its fields from committed Runs', () => {
+    const current = createRun(war(), 73);
+    expect(() => normalizeRunDocument({
+      ...current,
+      phase: 'draft',
+      draftOffers: [],
+      chosenDraftId: null,
+    } as unknown as RunDocument)).toThrow('retired Run draft phase');
+
+    const committed = leaveShop(buyCard(current, current.shop!.cardOffers[0].offerId));
+    const polluted = {
+      ...committed,
+      formatVersion: 7,
+      army: committed.army.map((unit) => unit.type === 'king' ? unit : { ...unit, source: 'draft' }),
+      draftOffers: [{ id: 'retired', draftId: 'retired', pieces: ['pawn'], value: 1 }],
+      chosenDraftId: 'retired',
+    } as unknown as RunDocument;
+    const normalized = normalizeRunDocument(polluted);
+    expect(normalized.formatVersion).toBe(RUN_FORMAT_VERSION);
+    expect('draftOffers' in normalized).toBe(false);
+    expect('chosenDraftId' in normalized).toBe(false);
+    expect(normalized.army.every((unit) => String(unit.source) !== 'draft')).toBe(true);
+  });
+
+  it('rejects older Shop documents instead of adapting a retired transaction shape', () => {
+    const current = createRun(war(), 73);
+    expect(() => normalizeRunDocument({
+      ...current,
+      formatVersion: 9,
+    } as unknown as RunDocument)).toThrow('Older Run Shop documents are unsupported.');
+  });
+
   it('burns all three seen Loot offers, including the two not chosen', () => {
     const firstShop = openShop(deployedRun(44, war(3, [0, 1])), []);
     const firstOffers = firstShop.shop!.lootRelicOffers;
@@ -302,7 +417,7 @@ describe('Run progression and relic offers', () => {
   });
 
   it('permanently removes a cashed-out Pawn and grants two gold', () => {
-    let run = acquireRelic(deployedRun(), 'mercenary-boat');
+    let run = acquireRelic(deployedRunWithPawn(), 'mercenary-boat');
     const pawn = run.army.find((unit) => unit.type === 'pawn')!;
     const cashed = cashOutPawn(run, pawn.id);
     expect(cashed.army.some((unit) => unit.id === pawn.id)).toBe(false);
@@ -325,34 +440,36 @@ describe('Ataraxia I — The Great Mortality', () => {
   it('never marks baseline offers Pestiferous and deterministically realizes both affected rolls', () => {
     const baseline = createRun(war(), 4217, 0);
     const ataraxia = createRun(war(), 4217, 1);
-    const baselineOffers = PIECE_BUNDLE_DECK.map((bundle, index) => (
-      createRunBundleOffer(baseline, bundle, Math.floor(index / 4), index % 4)
+    const baselineOffers = RUN_CARD_DECK.map((card, index) => (
+      createRunCardOffer(baseline, card, Math.floor(index / 4), index % 4)
     ));
-    const first = PIECE_BUNDLE_DECK.map((bundle, index) => (
-      createRunBundleOffer(ataraxia, bundle, Math.floor(index / 4), index % 4)
+    const first = RUN_CARD_DECK.map((card, index) => (
+      createRunCardOffer(ataraxia, card, Math.floor(index / 4), index % 4)
     ));
-    const second = PIECE_BUNDLE_DECK.map((bundle, index) => (
-      createRunBundleOffer(ataraxia, bundle, Math.floor(index / 4), index % 4)
+    const second = RUN_CARD_DECK.map((card, index) => (
+      createRunCardOffer(ataraxia, card, Math.floor(index / 4), index % 4)
     ));
 
     expect(baselineOffers.every((offer) => offer.cardType !== 'pestiferous')).toBe(true);
     expect(baselineOffers.some((offer) => offer.cardType === 'concinnous')).toBe(true);
     expect(first).toEqual(second);
     expect(first.some((offer) => offer.cardType === 'pestiferous')).toBe(true);
-    expect(first.filter((offer) => offer.cardType === 'pestiferous').length).toBeLessThan(PIECE_BUNDLE_DECK.length / 2);
+    expect(first.filter((offer) => offer.cardType === 'pestiferous').length).toBeLessThan(RUN_CARD_DECK.length / 2);
   });
 
   it('persists complete affected offers through Reset Shop and promotes the bought instance into the deck', () => {
     let shop: RunDocument | null = null;
     for (let seed = 1; seed < 500 && !shop; seed += 1) {
       const candidate = openShop({ ...deployedAtaraxiaRun(seed), goldTenths: 100 * GOLD_SCALE }, []);
-      if (candidate.shop?.bundleOffers.some((offer) => offer.cardType === 'pestiferous')) shop = candidate;
+      if (candidate.shop?.cardOffers.some((offer) => offer.cardType === 'pestiferous')) shop = candidate;
     }
     expect(shop).not.toBeNull();
-    const pestiferous = shop!.shop!.bundleOffers.find((offer) => offer.cardType === 'pestiferous')!;
-    const originalOffers = structuredClone(shop!.shop!.bundleOffers);
-    const bought = buyBundle(shop!, pestiferous.offerId);
-    const owned = bought.cards[0];
+    const pestiferous = shop!.shop!.cardOffers.find((offer) => offer.cardType === 'pestiferous')!;
+    const originalOffers = structuredClone(shop!.shop!.cardOffers);
+    const bought = buyCard(shop!, pestiferous.offerId);
+    const owned = bought.cards.find((card) => (
+      card.coreId === pestiferous.id && card.effectSeed === pestiferous.effectSeed
+    ))!;
     const plaguedPieceIndex = pestiferous.plaguedPieceIndex!;
     const plaguedPiece = pestiferous.pieces[plaguedPieceIndex];
     const discount = { pawn: 0, knight: 1, bishop: 1, rook: 2, queen: 3 }[plaguedPiece];
@@ -365,23 +482,22 @@ describe('Ataraxia I — The Great Mortality', () => {
     expect(owned.plaguedUnitId).toBe(acquiredUnits[plaguedPieceIndex].id);
     expect(acquiredUnits.filter((unit) => unit.modifiers.includes('plagued')).map((unit) => unit.id))
       .toEqual([owned.plaguedUnitId]);
-    expect(resetShop(bought).shop?.bundleOffers).toEqual(originalOffers);
+    expect(resetShop(bought).shop?.cardOffers).toEqual(originalOffers);
     expect(resetShop(bought).cards).toEqual(shop!.cards);
   });
 
-  it('upgrades format-5 shop offers to persisted public targets and target-only pricing', () => {
+  it('fills missing current-format offer targets and target-only pricing', () => {
     let current: RunDocument | null = null;
     for (let seed = 1; seed < 500 && !current; seed += 1) {
       const candidate = openShop(deployedAtaraxiaRun(seed), []);
-      if (candidate.shop?.bundleOffers.some((offer) => offer.cardType === 'pestiferous')) current = candidate;
+      if (candidate.shop?.cardOffers.some((offer) => offer.cardType === 'pestiferous')) current = candidate;
     }
     expect(current).not.toBeNull();
     const legacy = {
       ...current!,
-      formatVersion: 5,
       shop: {
         ...current!.shop!,
-        bundleOffers: current!.shop!.bundleOffers.map(({ plaguedPieceIndex: _target, ...offer }) => ({
+        cardOffers: current!.shop!.cardOffers.map(({ plaguedPieceIndex: _target, ...offer }) => ({
           ...offer,
           cost: offer.cardType === 'pestiferous' ? 1 : offer.cost,
         })),
@@ -389,8 +505,8 @@ describe('Ataraxia I — The Great Mortality', () => {
     } as unknown as RunDocument;
     const upgraded = normalizeRunDocument(legacy);
 
-    for (const offer of upgraded.shop!.bundleOffers) {
-      const original = current!.shop!.bundleOffers.find((candidate) => candidate.offerId === offer.offerId)!;
+    for (const offer of upgraded.shop!.cardOffers) {
+      const original = current!.shop!.cardOffers.find((candidate) => candidate.offerId === offer.offerId)!;
       expect(offer.plaguedPieceIndex).toBe(original.plaguedPieceIndex);
       expect(offer.cost).toBe(original.cost);
     }
@@ -495,11 +611,20 @@ describe('Ataraxia I — The Great Mortality', () => {
     } as unknown as RunDocument;
     const upgraded = normalizeRunDocument(legacy);
 
-    expect(upgraded.formatVersion).toBe(7);
+    expect(upgraded.formatVersion).toBe(RUN_FORMAT_VERSION);
     expect(upgraded.cards[0].plaguedUnitId).not.toBeNull();
     expect(upgraded.army.filter((unit) => unit.modifiers.includes('plagued')).map((unit) => unit.id))
       .toEqual([upgraded.cards[0].plaguedUnitId]);
     expect(normalizeRunDocument(upgraded)).toBe(upgraded);
+
+    const missingCurrentTarget = {
+      ...upgraded,
+      cards: upgraded.cards.map((card) => ({ ...card, plaguedUnitId: null })),
+    };
+    const repaired = normalizeRunDocument(missingCurrentTarget);
+    expect(repaired.cards[0].plaguedUnitId).not.toBeNull();
+    expect(repaired.army.filter((unit) => unit.modifiers.includes('plagued')).map((unit) => unit.id))
+      .toEqual([repaired.cards[0].plaguedUnitId]);
   });
 });
 
@@ -508,13 +633,15 @@ describe('Concinnous cards', () => {
     let shop: RunDocument | null = null;
     for (let seed = 1; seed < 500 && !shop; seed += 1) {
       const candidate = openShop({ ...deployedRun(seed), goldTenths: 100 * GOLD_SCALE }, []);
-      if (candidate.shop?.bundleOffers.some((offer) => offer.cardType === 'concinnous')) shop = candidate;
+      if (candidate.shop?.cardOffers.some((offer) => offer.cardType === 'concinnous')) shop = candidate;
     }
     expect(shop).not.toBeNull();
-    const concinnous = shop!.shop!.bundleOffers.find((offer) => offer.cardType === 'concinnous')!;
-    const originalOffers = structuredClone(shop!.shop!.bundleOffers);
-    const bought = buyBundle(shop!, concinnous.offerId);
-    const owned = bought.cards[0];
+    const concinnous = shop!.shop!.cardOffers.find((offer) => offer.cardType === 'concinnous')!;
+    const originalOffers = structuredClone(shop!.shop!.cardOffers);
+    const bought = buyCard(shop!, concinnous.offerId);
+    const owned = bought.cards.find((card) => (
+      card.coreId === concinnous.id && card.effectSeed === concinnous.effectSeed
+    ))!;
     const positioned = bought.army.filter((unit) => (
       owned.unitIds.includes(unit.id) && unit.abilities.includes('positioned')
     ));
@@ -531,24 +658,23 @@ describe('Concinnous cards', () => {
     });
     expect(positioned).toHaveLength(1);
     expect(owned.unitIds[concinnous.effectTargetIndex!]).toBe(positioned[0].id);
-    expect(resetShop(bought).shop?.bundleOffers).toEqual(originalOffers);
+    expect(resetShop(bought).shop?.cardOffers).toEqual(originalOffers);
   });
 
-  it('upgrades format-6 Concinnous targets without rerolling them', () => {
+  it('fills missing current-format Pestiferous fields without rerolling Concinnous targets', () => {
     let shop: RunDocument | null = null;
     for (let seed = 1; seed < 500 && !shop; seed += 1) {
       const candidate = openShop({ ...deployedRun(seed), goldTenths: 100 * GOLD_SCALE }, []);
-      if (candidate.shop?.bundleOffers.some((offer) => offer.cardType === 'concinnous')) shop = candidate;
+      if (candidate.shop?.cardOffers.some((offer) => offer.cardType === 'concinnous')) shop = candidate;
     }
-    const concinnous = shop!.shop!.bundleOffers.find((offer) => offer.cardType === 'concinnous')!;
-    const bought = buyBundle(shop!, concinnous.offerId);
+    const concinnous = shop!.shop!.cardOffers.find((offer) => offer.cardType === 'concinnous')!;
+    const bought = buyCard(shop!, concinnous.offerId);
     const legacy = {
       ...bought,
-      formatVersion: 6,
       cards: bought.cards.map(({ plaguedUnitId: _plaguedUnitId, ...card }) => card),
       shop: bought.shop && {
         ...bought.shop,
-        bundleOffers: bought.shop.bundleOffers.map(({ plaguedPieceIndex: _plaguedPieceIndex, ...offer }) => offer),
+        cardOffers: bought.shop.cardOffers.map(({ plaguedPieceIndex: _plaguedPieceIndex, ...offer }) => offer),
         entrySnapshot: {
           ...bought.shop.entrySnapshot,
           cards: bought.shop.entrySnapshot.cards.map(({ plaguedUnitId: _plaguedUnitId, ...card }) => card),
@@ -556,11 +682,16 @@ describe('Concinnous cards', () => {
       },
     } as unknown as RunDocument;
     const upgraded = normalizeRunDocument(legacy);
-    const upgradedCard = upgraded.cards[0];
-    const upgradedOffer = upgraded.shop!.bundleOffers.find((offer) => offer.offerId === concinnous.offerId)!;
+    const upgradedCard = upgraded.cards.find((card) => (
+      card.coreId === concinnous.id && card.effectSeed === concinnous.effectSeed
+    ))!;
+    const boughtCard = bought.cards.find((card) => (
+      card.coreId === concinnous.id && card.effectSeed === concinnous.effectSeed
+    ))!;
+    const upgradedOffer = upgraded.shop!.cardOffers.find((offer) => offer.offerId === concinnous.offerId)!;
 
-    expect(upgraded.formatVersion).toBe(7);
-    expect(upgradedCard.effectTargetUnitId).toBe(bought.cards[0].effectTargetUnitId);
+    expect(upgraded.formatVersion).toBe(RUN_FORMAT_VERSION);
+    expect(upgradedCard.effectTargetUnitId).toBe(boughtCard.effectTargetUnitId);
     expect(upgradedCard.plaguedUnitId).toBeNull();
     expect(upgradedOffer.effectTargetIndex).toBe(concinnous.effectTargetIndex);
     expect(upgradedOffer.plaguedPieceIndex).toBeNull();
@@ -569,9 +700,9 @@ describe('Concinnous cards', () => {
 
   it('does not qualify a card whose Positioned premium would exceed the one-digit cost ceiling', () => {
     const baseline = createRun(war(), 4217, 0);
-    const expensive = PIECE_BUNDLE_DECK.filter((bundle) => bundle.value >= 8);
-    const offers = expensive.map((bundle, index) => (
-      createRunBundleOffer(baseline, bundle, 0, index, 8, 1)
+    const expensive = RUN_CARD_DECK.filter((card) => card.value >= 8);
+    const offers = expensive.map((card, index) => (
+      createRunCardOffer(baseline, card, 0, index, 8, 1)
     ));
 
     expect(offers.every((offer) => offer.cardType === null)).toBe(true);

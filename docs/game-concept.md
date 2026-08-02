@@ -62,11 +62,11 @@ these.
   strip stays at the upper-left beneath the title bar in Battles and between-Battle
   screens, independent of the Battle Controls panel; pointing at or focusing an
   icon immediately explains its name and complete effect (ADR-0216, ADR-0217).
-- Opening hands and shop piece bundles use a familiar trading-card anatomy: a
+- Run cards use a familiar trading-card anatomy: a
   title at upper left, one compact gold coin with a live one-through-nine digit
   at upper right, a large pane for the card's accepted PixelLab illustration, a narrow card-
   type line, and a Contents Box whose flavor text remains at the bottom. The type
-  line is never empty: ordinary bundle cards say **Units**, while affected cards
+  line is never empty: ordinary cards say **Units**, while affected cards
   append causal qualifiers after an em dash, such as **Units — Pestiferous** or
   **Units — Concinnous**. Ordinary and qualified labels use one shared optically
   centered type-line scale and baseline rather than per-label positioning.
@@ -78,14 +78,14 @@ these.
   types such as **Event**. The cost
   is never decimal, fractional, zero, or two-digit, and does not use separate
   numbered coin art. Each actual unit in the ledger appears as the same
-  canonical player-side sprite used on the board. Card Layout, draft, shop,
+  canonical player-side sprite used on the board. Card Layout, shop,
   review, and Enchiridion use the same face rather than parallel card shells
   (ADR-0219, ADR-0225, ADR-0270, ADR-0275, ADR-0276, ADR-0283, ADR-0285,
   ADR-0305, ADR-0309).
   In-place card changes retain the last complete face until the requested card's
   actual image layer is ready, then promote art and content together; rapid newer
   selections cancel older pending cards (ADR-0314).
-- The bundle deck's 49 unique one-through-nine-point compositions are the
+- The card deck's 49 unique one-through-nine-point compositions are the
   authored **core cards**. Each keeps one title and flavor text while its
   drawn offer may give particular units more than one modifier. The 49 cores do
   not multiply into variant deck entries: effects are rolled and persisted when
@@ -97,6 +97,13 @@ these.
   unit ledger, not generated card-name permutations; an explicitly concealed
   Concinnous target appears there as hidden until purchase (ADR-0265, ADR-0271,
   ADR-0272, ADR-0305, ADR-0309).
+- A fresh Run opens in the normal Shop with the permanent King, two free Pawns,
+  8 gold, and three seeded standard cards at distinct values from 1 through 8.
+  Each card may be bought once while the player can afford it. Every bought card
+  keeps the Shop open, shows a framed **Purchased** state beneath that card, and
+  uses the same gold transaction cue as selling. Only the explicit
+  Continue action enters the first Battle. **Card** is the sole current gameplay
+  noun for these deck entries and offers (ADR-0321, ADR-0322, ADR-0323).
 - Each of those 49 Units cards owns one native 400×280 PixelLab illustration
   keyed by its canonical composition id. Human unit roles and readable
   equipment control the composition; historical pressure supplies secondary
@@ -391,7 +398,7 @@ The first prototype stays deliberately minimal (pillars §3). Resolved scope:
 2. **Win condition:** standard **king checkmate only.** The fluid-royal variants
    (two kings, queen-as-king, king-with-lives, …) are a later expansion.
 3. **Squads:** ordinary boards remain authored per board. Run Battles combine authored
-   allies with the player's persistent drafted army through authored placement zones.
+   allies with the player's persistent army through authored placement zones.
 4. **Tactics:** **not surfaced** to the player and not a near-term concern — no
    motif hints or teaching in v1.
 5. **Solo Skirmish:** **mostly fixed boards, with a random-setup option.**
@@ -400,7 +407,11 @@ The first prototype stays deliberately minimal (pillars §3). Resolved scope:
 
 **Deferred (post-v1, not precluded):** fluid royal / win conditions; mutating or
 cursed terrain and pieces; named-tactic surfacing; a competent search-based AI.
-Player-drafted squads and Run progression are now governed by ADR-0193.
+Player armies and Run progression are governed by ADR-0193. ADR-0321 makes the
+opening the normal Shop transaction and retires the separate draft phase and
+screen. ADR-0322 supplies the current two-Pawn, 8-gold opening and card-native
+purchase language, feedback, and sound. ADR-0323 removes the inherited
+one-card-per-Shop cap so every affordable dealt card can be purchased once.
 
 ## 14. Administrator playtesting
 

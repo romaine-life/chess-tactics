@@ -12,7 +12,7 @@ const titleBarSlot = readFileSync(new URL('./shell/TitleBarSlot.tsx', import.met
 const titleBarPortal = readFileSync(new URL('./shell/TitleBarPortalContext.tsx', import.meta.url), 'utf8');
 const runWorkspace = readFileSync(new URL('./RunWorkspace.tsx', import.meta.url), 'utf8');
 const runUnitInspectionScene = readFileSync(new URL('./RunUnitInspectionScene.tsx', import.meta.url), 'utf8');
-const runBundleCard = readFileSync(new URL('./RunBundleCard.tsx', import.meta.url), 'utf8');
+const runCard = readFileSync(new URL('./RunCard.tsx', import.meta.url), 'utf8');
 const runRelics = readFileSync(new URL('./RunRelics.tsx', import.meta.url), 'utf8');
 const runSelfInspection = readFileSync(new URL('./RunSelfInspection.tsx', import.meta.url), 'utf8');
 const skirmish = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
@@ -24,7 +24,7 @@ const styleCss = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 describe('Run chrome hierarchy', () => {
   it('uses the Battle-owned shell and HUD while replacing only Controls contents', () => {
     const metaControls = runScreen.match(
-      /function RunMetaControls\b[\s\S]*?\r?\n}\r?\n\r?\nfunction DraftPanel/,
+      /function RunMetaControls\b[\s\S]*?\r?\n}\r?\n\r?\nfunction RunPhaseWorkspace/,
     )?.[0] ?? '';
     const sharedShell = skirmish.match(
       /export function SkirmishShell\b[\s\S]*?\r?\n}\r?\n\r?\nfunction SkirmishSession/,
@@ -33,6 +33,8 @@ describe('Run chrome hierarchy', () => {
     expect(skirmish).toContain('export function SkirmishShell');
     expect(skirmish).toContain('<SkirmishHud {...hudProps} controlsContent={controlsContent} />');
     expect(skirmish).toContain('function SkirmishSession');
+    expect(skirmish).toMatch(/function SkirmishSession\b[\s\S]*?return \(\s*<SkirmishShell/);
+    expect(skirmish).toMatch(/export function Skirmish\b[\s\S]*?<SkirmishStoreProvider>/);
     expect(sharedShell).toContain('<SceneSurfaceReadiness');
     expect(sharedShell).toContain('surface="gameplay-hud"');
     expect(sharedShell).toContain('readyToCompose={readyToCompose}');
@@ -50,6 +52,7 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('runWorkspaceHref(window.location.href, nextView)');
     expect(runScreen).toContain("navigateApp(nextHref, { replace: true, scroll: false })");
     expect(metaControls).toContain('Reset Shop');
+    expect(metaControls).toContain('Continue to first Battle');
     expect(metaControls).toContain('Continue to next Battle');
     expect(metaControls).not.toContain('data-ui-sfx="gold-sell"');
     expect(metaControls).not.toContain('<OuterChromeBox');
@@ -123,8 +126,13 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).not.toContain('TitleBarControlContribution');
   });
 
-  it('gives shop bundle purchases one dedicated card cue without changing draft feedback', () => {
-    expect(runBundleCard).toContain("data-ui-sfx={mode === 'shop' ? 'card-purchase' : undefined}");
+  it('uses the gold transaction cue for card purchases and shows a textual completion state', () => {
+    expect(runCard).toContain('data-ui-sfx="gold-sell"');
+    expect(runCard).toContain('className="run-card-purchased-indicator" role="status"');
+    expect(runCard).toContain('Purchased');
+    expect(runCard).not.toContain("' active is-purchased'");
+    expect(runScreen).toContain('const purchased = shop.purchasedCardOfferIds.includes(offer.offerId);');
+    expect(runScreen).toContain('disabled={purchased || run.goldTenths < offer.cost * GOLD_SCALE}');
   });
 
   it('fills the shell-owned playfield for every non-Battle Run destination', () => {
@@ -139,7 +147,6 @@ describe('Run chrome hierarchy', () => {
     expect(chromeBox).toContain('export function ShellWorkspace');
     expect(chromeBox).not.toContain('export function ShellWorkspaceBody');
     for (const testId of [
-      'run-draft-workspace',
       'run-deployment-workspace',
       'run-shop-workspace',
       'run-victory-workspace',
@@ -183,28 +190,32 @@ describe('Run chrome hierarchy', () => {
     expect(styleCss).toContain('.run-screen.has-relics .run-shell-workspace-content');
     expect(styleCss).not.toContain('.run-workspace--full');
     expect(styleCss).not.toContain('.run-screen.has-relics .run-workspace');
+    expect(runScreen).not.toContain('DraftPanel');
+    expect(runScreen).not.toContain("phase === 'draft'");
+    expect(runCard).not.toContain("'draft'");
   });
 
-  it('draws every bundle through the approved shared trading-card face', () => {
-    expect(runBundleCard).not.toContain('RunCardScene');
-    expect(runBundleCard).toContain('runCardName(bundle)');
-    expect(runBundleCard).toContain('runCardFlavor(bundle)');
-    expect(runBundleCard).toContain('runCardArtSlot(bundle)');
-    expect(runBundleCard).toContain('RUN_CARD_FRAME_SLOT');
-    expect(runBundleCard).toContain('RUN_CARD_PESTIFEROUS_FRAME_SLOT');
-    expect(runBundleCard).toContain('RUN_CARD_CONCINNOUS_FRAME_SLOT');
-    expect(runBundleCard).toContain("cardType === 'pestiferous'");
-    expect(runBundleCard).toContain("cardType === 'concinnous'");
-    expect(runBundleCard).toContain("name: 'Positioned'");
-    expect(runBundleCard).toContain("'Target hidden'");
-    expect(runBundleCard).not.toMatch(/\brules\s*:/);
-    expect(runBundleCard).not.toContain('After every Battle');
-    expect(runBundleCard).toContain('<RunCardFace');
-    expect(runBundleCard).not.toContain('run-bundle-card-art');
-    expect(runBundleCard).not.toContain('run-bundle-card-plate');
-    expect(runBundleCard).not.toContain('RunGoldAmount');
-    expect(runScreen).toContain("import { RunBundleCard } from './RunBundleCard';");
-    expect(styleCss).toMatch(/\.run-bundle-card\s*\{[\s\S]*?aspect-ratio:\s*5 \/ 7;/);
+  it('draws every card through the approved shared trading-card face', () => {
+    expect(runCard).not.toContain('RunCardScene');
+    expect(runCard).toContain('runCardName(card)');
+    expect(runCard).toContain('runCardFlavor(card)');
+    expect(runCard).toContain('runCardArtSlot(card)');
+    expect(runCard).toContain('RUN_CARD_FRAME_SLOT');
+    expect(runCard).toContain('RUN_CARD_PESTIFEROUS_FRAME_SLOT');
+    expect(runCard).toContain('RUN_CARD_CONCINNOUS_FRAME_SLOT');
+    expect(runCard).toContain("cardType === 'pestiferous'");
+    expect(runCard).toContain("cardType === 'concinnous'");
+    expect(runCard).toContain("name: 'Positioned'");
+    expect(runCard).toContain("'Target hidden'");
+    expect(runCard).not.toMatch(/\brules\s*:/);
+    expect(runCard).not.toContain('After every Battle');
+    expect(runCard).toContain('<RunCardFace');
+    expect(runCard).not.toContain('RunCardScene');
+    expect(runCard).not.toContain('run-bundle-card-art');
+    expect(runCard).not.toContain('run-bundle-card-plate');
+    expect(runCard).not.toContain('RunGoldAmount');
+    expect(runScreen).toContain("import { RunCard } from './RunCard';");
+    expect(styleCss).toMatch(/\.run-card-action\s*\{[\s\S]*?aspect-ratio:\s*5 \/ 7;/);
     expect(styleCss).toMatch(/\.run-card-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(auto-fit,[\s\S]*?justify-content:\s*center;/);
     // Cold route entry still holds the veil for any nested painted surface: the
     // shell's painted-surface boundary waits for loading surfaces before painting.

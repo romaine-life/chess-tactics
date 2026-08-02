@@ -8,16 +8,16 @@ import { resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import { PredrawnMoveHighlightPaint } from '../render/PredrawnMoveHighlightPaint';
 import { runCardArtSlot, runCardFlavor, runCardName } from '../run/cardNames';
 import {
-  PIECE_BUNDLE_BY_ID,
-  PIECE_BUNDLE_DECK,
+  RUN_CARD_BY_ID,
+  RUN_CARD_DECK,
   RUN_RELICS,
-  bundleLabel,
-  type PieceBundle,
+  cardContentsLabel,
   type PurchasablePieceType,
+  type RunCoreCard,
   type RunRelicId,
 } from '../run/model';
 import { generateTerrainDressing } from './generatedReferenceBoard';
-import { RunBundleCard } from './RunBundleCard';
+import { RunCard } from './RunCard';
 import {
   RUN_CARD_FRAME_SLOT,
   RUN_CARD_CONCINNOUS_FRAME_SLOT,
@@ -485,15 +485,15 @@ const CARD_UNIT_FILTER_OPTIONS: readonly HouseSelectOption<CardUnitFilter>[] = O
 ]);
 
 export function cardMatchesFilters(
-  bundle: PieceBundle,
+  card: RunCoreCard,
   goldFilter: CardGoldFilter,
   unitFilter: CardUnitFilter,
 ): boolean {
-  return (goldFilter === 'all' || bundle.value === Number(goldFilter))
-    && (unitFilter === 'all' || bundle.pieces.includes(unitFilter));
+  return (goldFilter === 'all' || card.value === Number(goldFilter))
+    && (unitFilter === 'all' || card.pieces.includes(unitFilter));
 }
 
-// The full generated bundle deck, grouped by gold value: a filterable browser of card
+// The full generated card deck, grouped by gold value: a filterable browser of card
 // records and one selected card rendered as the exact face the Run deals (ADR-0253's
 // one-selection, one-description shape). A host that gives cards addresses routes
 // selection like the relic records (ADR-0256); an ephemeral host keeps local selection.
@@ -506,27 +506,27 @@ export function CardCodex({
   /** The route-addressed card; read only when cardHref makes selection navigational. */
   selectedCardId?: string | null;
   /** When present, card selection navigates to this address instead of setting local state. */
-  cardHref?: (bundleId: string) => string;
+  cardHref?: (cardId: string) => string;
 }): ReactElement {
-  const [localSelectedId, setLocalSelectedId] = useState<string>(PIECE_BUNDLE_DECK[0].id);
+  const [localSelectedId, setLocalSelectedId] = useState<string>(RUN_CARD_DECK[0].id);
   const [goldFilter, setGoldFilter] = useState<CardGoldFilter>('all');
   const [unitFilter, setUnitFilter] = useState<CardUnitFilter>('all');
-  const selectedId = cardHref ? (selectedCardId ?? PIECE_BUNDLE_DECK[0].id) : localSelectedId;
-  const visibleBundles = useMemo(
-    () => PIECE_BUNDLE_DECK.filter((bundle) => cardMatchesFilters(bundle, goldFilter, unitFilter)),
+  const selectedId = cardHref ? (selectedCardId ?? RUN_CARD_DECK[0].id) : localSelectedId;
+  const visibleCards = useMemo(
+    () => RUN_CARD_DECK.filter((card) => cardMatchesFilters(card, goldFilter, unitFilter)),
     [goldFilter, unitFilter],
   );
-  const selectedCandidate = PIECE_BUNDLE_DECK.find((bundle) => bundle.id === selectedId);
-  const selected: PieceBundle | null = selectedCandidate && visibleBundles.includes(selectedCandidate)
+  const selectedCandidate = RUN_CARD_DECK.find((card) => card.id === selectedId);
+  const selected: RunCoreCard | null = selectedCandidate && visibleCards.includes(selectedCandidate)
     ? selectedCandidate
-    : visibleBundles[0] ?? null;
+    : visibleCards[0] ?? null;
   const groups = useMemo(() => {
-    const byValue = new Map<number, PieceBundle[]>();
-    for (const bundle of visibleBundles) {
-      byValue.set(bundle.value, [...(byValue.get(bundle.value) ?? []), bundle]);
+    const byValue = new Map<number, RunCoreCard[]>();
+    for (const card of visibleCards) {
+      byValue.set(card.value, [...(byValue.get(card.value) ?? []), card]);
     }
     return [...byValue.entries()].sort((left, right) => left[0] - right[0]);
-  }, [visibleBundles]);
+  }, [visibleCards]);
   return (
     <ReferenceSectionFrame
       chromeConsumer="enchiridion-cards"
@@ -534,7 +534,7 @@ export function CardCodex({
       framed={framed}
       title="Cards"
     >
-      <p>Every piece bundle the Run can deal, drawn as its card. Opening drafts and shops deal from this one deck; in a shop, a card costs its gold value.</p>
+      <p>Every card the Run can deal. The opening Shop and later Shops use this one deck; a card costs its gold value.</p>
       <div className="enchiridion-card-layout">
         <div className="enchiridion-card-browser-column">
           <InnerChromeBox className="enchiridion-card-filters" aria-label="Card filters">
@@ -559,30 +559,30 @@ export function CardCodex({
               />
             </div>
             <span className="enchiridion-card-filter-count" aria-live="polite">
-              {visibleBundles.length} {visibleBundles.length === 1 ? 'card' : 'cards'}
+              {visibleCards.length} {visibleCards.length === 1 ? 'card' : 'cards'}
             </span>
           </InnerChromeBox>
           <div className="enchiridion-card-browser" role="list" aria-label="Filtered card deck by gold value">
-            {groups.map(([value, bundles]) => (
+            {groups.map(([value, cards]) => (
               <section className="enchiridion-card-group" key={value}>
                 <span className="skirmish-eyebrow">{value} gold</span>
                 <ul className="enchiridion-card-rows">
-                  {bundles.map((bundle) => (
-                    <li key={bundle.id}>
+                  {cards.map((card) => (
+                    <li key={card.id}>
                       <ReferenceTrigger
-                        to={cardHref?.(bundle.id)}
-                        onSelect={() => setLocalSelectedId(bundle.id)}
+                        to={cardHref?.(card.id)}
+                        onSelect={() => setLocalSelectedId(card.id)}
                         data-chrome-unit="inner-list-row"
                         className={chromeUnitClassNames(
                           'inner-list-row',
                           'enchiridion-card-row',
-                          selected?.id === bundle.id && 'is-active',
+                          selected?.id === card.id && 'is-active',
                         )}
-                        aria-label={`${runCardName(bundle)}. ${bundleLabel(bundle)}. Worth ${bundle.value} gold.`}
-                        aria-pressed={selected?.id === bundle.id}
+                        aria-label={`${runCardName(card)}. ${cardContentsLabel(card)}. Worth ${card.value} gold.`}
+                        aria-pressed={selected?.id === card.id}
                       >
-                        <span className="enchiridion-card-row-name">{runCardName(bundle)}</span>
-                        <small className="enchiridion-card-row-contents">{bundleLabel(bundle)}</small>
+                        <span className="enchiridion-card-row-name">{runCardName(card)}</span>
+                        <small className="enchiridion-card-row-contents">{cardContentsLabel(card)}</small>
                       </ReferenceTrigger>
                     </li>
                   ))}
@@ -598,7 +598,7 @@ export function CardCodex({
           </div>
         </div>
         <div className="enchiridion-card-detail">
-          {selected ? <RunBundleCard bundle={selected} mode="reference" /> : null}
+          {selected ? <RunCard card={selected} mode="reference" /> : null}
         </div>
       </div>
     </ReferenceSectionFrame>
@@ -652,7 +652,7 @@ const CARD_TYPE_REFERENCES: readonly CardTypeReferenceDefinition[] = Object.free
   },
 ]);
 
-const VOLUNTEER_CARD = PIECE_BUNDLE_BY_ID.p;
+const VOLUNTEER_CARD = RUN_CARD_BY_ID.p;
 
 function CardTypeReference({ definition }: { definition: CardTypeReferenceDefinition }): ReactElement {
   const card = {
@@ -794,7 +794,7 @@ function EnchiridionContent({ section, framed, selectedRelicId, relicHref, selec
   selectedRelicId: RunRelicId | null;
   relicHref?: (relicId: RunRelicId) => string;
   selectedCardId: string | null;
-  cardHref?: (bundleId: string) => string;
+  cardHref?: (cardId: string) => string;
 }): ReactElement {
   if (section === 'terrain') return <TerrainSection framed={framed} />;
   if (section === 'cards') return <CardCodex framed={framed} selectedCardId={selectedCardId} cardHref={cardHref} />;
@@ -824,7 +824,7 @@ export function Enchiridion({
   /** The route-addressed card for the cards section; see CardCodex. */
   selectedCardId?: string | null;
   /** When present, card selection in the cards section navigates to this address. */
-  cardHref?: (bundleId: string) => string;
+  cardHref?: (cardId: string) => string;
   showSectionRail?: boolean;
   sceneInstanceKey?: string;
   framed?: boolean;

@@ -190,7 +190,7 @@ header actions and rule controls share the inner content line. Events cannot
 omit either layer or provide an inline-end value.
 
 Under [ADR-0237](adr/0237-run-destinations-fill-the-shell-workspace.md), the same
-ownership test applies to every player-facing non-Battle Run destination. Draft,
+ownership test applies to every player-facing non-Battle Run destination.
 Deployment and its preview, Shop/Loot, Victory, Army ledger and profile, Sell
 Units, loading, and empty states fill the shell-owned playfield through the
 shared `RunWorkspace`/`ShellWorkspace` composition. `RunWorkspace` supplies the

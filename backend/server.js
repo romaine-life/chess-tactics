@@ -18003,23 +18003,38 @@ app.put('/api/run-progression', async (req, res) => {
 // --- Account-scoped active Run (ADR-0193) ---------------------------------
 // Anonymous Runs stay in browser storage. Once signed in, the client adopts that
 // document here; the server owns one CAS-updated active Run per account.
-const ACTIVE_RUN_PHASES = new Set(['draft', 'deployment', 'battle', 'shop', 'victory']);
+const ACTIVE_RUN_PHASES = new Set(['deployment', 'battle', 'shop', 'victory']);
 const ACTIVE_RUN_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
+const ACTIVE_RUN_PIECE_VALUES = Object.freeze({ pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9, king: 0 });
 const ACTIVE_RUN_ABILITIES = new Set(['discipline', 'positioned', 'marshalled']);
 const ACTIVE_RUN_MODIFIERS = new Set(['plagued']);
-const ACTIVE_RUN_PIECE_VALUES = Object.freeze({ pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9 });
 const ACTIVE_RUN_PLAGUED_DISCOUNTS = Object.freeze({ pawn: 0, knight: 1, bishop: 1, rook: 2, queen: 3 });
+const ACTIVE_RUN_SHOP_FIELDS = new Set([
+  'kind',
+  'afterBattleIndex',
+  'conflictIndex',
+  'victoryGoldTenths',
+  'cardOffers',
+  'purchasedCardOfferIds',
+  'lootRelicOffers',
+  'chosenLootRelicId',
+  'paidRelicOffer',
+  'paidRelicBought',
+  'soldUnits',
+  'entrySnapshot',
+]);
 const RUN_RELICS = Array.isArray(serverRender?.RUN_RELICS) ? serverRender.RUN_RELICS : [];
 const RUN_RELIC_BY_ID = serverRender?.RUN_RELIC_BY_ID ?? {};
 const RUN_RELIC_IDS = new Set(RUN_RELICS.map((relic) => relic.id));
 function validateActiveRunBody(run) {
   if (!run || typeof run !== 'object' || Array.isArray(run)) return 'run must be an object';
-  if (run.formatVersion !== 1 && run.formatVersion !== 2 && run.formatVersion !== 3 && run.formatVersion !== 4 && run.formatVersion !== 5 && run.formatVersion !== 6 && run.formatVersion !== 7) return 'run.formatVersion is unsupported';
+  if (run.formatVersion !== 10) return 'run.formatVersion is unsupported';
   if (typeof run.id !== 'string' || !run.id || run.id.length > 160) return 'run.id is invalid';
   if (!isFiniteInteger(run.seed) || run.seed < 0 || run.seed > 0xffffffff) return 'run.seed is invalid';
   if (run.formatVersion >= 5 && run.ataraxiaTier !== 0 && run.ataraxiaTier !== 1) return 'run.ataraxiaTier is invalid';
   if (typeof run.updatedAt !== 'string' || !run.updatedAt) return 'run.updatedAt is required';
   if (!ACTIVE_RUN_PHASES.has(run.phase)) return 'run.phase is invalid';
+  if (run.formatVersion >= 8 && ('draftOffers' in run || 'chosenDraftId' in run)) return 'run contains retired draft state';
   if (!isFiniteInteger(run.battleIndex) || run.battleIndex < 0) return 'run.battleIndex is invalid';
   if (!isFiniteInteger(run.conflictIndex) || run.conflictIndex < 0) return 'run.conflictIndex is invalid';
   if (typeof run.goldTenths !== 'number' || !Number.isFinite(run.goldTenths) || run.goldTenths < 0) return 'run.goldTenths is invalid';
@@ -18042,6 +18057,9 @@ function validateActiveRunBody(run) {
   for (const unit of run.army) {
     if (!unit || typeof unit.id !== 'string' || !unit.id || unitIds.has(unit.id) || !ACTIVE_RUN_PIECES.has(unit.type)) {
       return 'run.army contains an invalid unit';
+    }
+    if (run.formatVersion >= 8 && !['king', 'starting', 'shop'].includes(unit.source)) {
+      return 'run.army contains an invalid source';
     }
     unitIds.add(unit.id);
     const validName = typeof unit.name === 'string' && unit.name.trim().length > 0 && unit.name.length <= 80;
@@ -18193,7 +18211,6 @@ function validateActiveRunBody(run) {
       return `run.${field} is invalid`;
     }
   }
-  if (!Array.isArray(run.draftOffers) || run.draftOffers.length !== 2) return 'run.draftOffers is invalid';
   if (!isFiniteInteger(run.nextArmyUnitSequence) || run.nextArmyUnitSequence < 1) return 'run.nextArmyUnitSequence is invalid';
   if (run.nextArmyUnitNumberByType !== undefined) {
     if (!isObjectRecord(run.nextArmyUnitNumberByType)) return 'run.nextArmyUnitNumberByType is invalid';
@@ -18203,28 +18220,36 @@ function validateActiveRunBody(run) {
       }
     }
   }
+  if (run.formatVersion >= 8 && run.phase === 'shop' && !isObjectRecord(run.shop)) return 'run.shop is required';
+  if (run.formatVersion >= 8 && run.phase !== 'shop' && run.shop !== null) return 'run.shop is invalid outside the shop phase';
   if (run.shop !== null && run.shop !== undefined) {
     if (!isObjectRecord(run.shop)) return 'run.shop is invalid';
+    if (Object.keys(run.shop).some((field) => !ACTIVE_RUN_SHOP_FIELDS.has(field))) {
+      return 'run.shop contains an unsupported field';
+    }
+    if (run.formatVersion >= 8 && run.shop.kind !== 'opening' && run.shop.kind !== 'post-battle') {
+      return 'run.shop.kind is invalid';
+    }
     if (run.shop.soldUnits !== undefined && !Array.isArray(run.shop.soldUnits)) return 'run.shop.soldUnits is invalid';
     if (run.shop.entrySnapshot !== undefined && !isObjectRecord(run.shop.entrySnapshot)) {
       return 'run.shop.entrySnapshot is invalid';
     }
     if (run.formatVersion >= 5) {
-      if (!Array.isArray(run.shop.bundleOffers) || run.shop.bundleOffers.length < 1 || run.shop.bundleOffers.length > 10) {
-        return 'run.shop.bundleOffers is invalid';
+      if (!Array.isArray(run.shop.cardOffers) || run.shop.cardOffers.length < 1 || run.shop.cardOffers.length > 10) {
+        return 'run.shop.cardOffers is invalid';
       }
       const offerIds = new Set();
-      for (const offer of run.shop.bundleOffers) {
-        if (!isObjectRecord(offer)) return 'run.shop.bundleOffers contains an invalid offer';
+      const offerValues = new Set();
+      for (const offer of run.shop.cardOffers) {
+        if (!isObjectRecord(offer)) return 'run.shop.cardOffers contains an invalid offer';
         const cardTypeValid = offer.cardType === null
           || offer.cardType === 'pestiferous'
-          || (run.formatVersion >= 6 && offer.cardType === 'concinnous');
-        const effectTargetValid = run.formatVersion < 6
-          || (offer.cardType === 'concinnous'
+          || offer.cardType === 'concinnous';
+        const effectTargetValid = offer.cardType === 'concinnous'
             ? isFiniteInteger(offer.effectTargetIndex)
               && offer.effectTargetIndex >= 0
               && offer.effectTargetIndex < offer.pieces?.length
-            : offer.effectTargetIndex === null);
+            : offer.effectTargetIndex === null;
         if (
           typeof offer.offerId !== 'string'
           || !offer.offerId
@@ -18246,28 +18271,30 @@ function validateActiveRunBody(run) {
           || !isFiniteInteger(offer.effectSeed)
           || offer.effectSeed < 0
           || offer.effectSeed > 0xffffffff
-        ) return 'run.shop.bundleOffers contains an invalid offer';
-        if (run.formatVersion >= 7) {
-          const validPlaguedTarget = offer.cardType === 'pestiferous'
-            ? isFiniteInteger(offer.plaguedPieceIndex)
-              && offer.plaguedPieceIndex >= 0
-              && offer.plaguedPieceIndex < offer.pieces.length
-            : offer.plaguedPieceIndex === null;
-          if (!validPlaguedTarget) return 'run.shop.bundleOffers contains an invalid Plagued target';
-          const expectedValue = offer.pieces.reduce((total, piece) => total + ACTIVE_RUN_PIECE_VALUES[piece], 0);
-          const plaguedPiece = offer.plaguedPieceIndex === null ? null : offer.pieces[offer.plaguedPieceIndex];
-          const expectedCost = offer.cardType === 'pestiferous'
-            ? expectedValue - (plaguedPiece ? ACTIVE_RUN_PLAGUED_DISCOUNTS[plaguedPiece] : 0)
-            : expectedValue + (offer.cardType === 'concinnous' ? 2 : 0);
-          if (offer.value !== expectedValue || offer.cost !== expectedCost) {
-            return 'run.shop.bundleOffers contains invalid Plagued pricing';
-          }
+          || offer.pieces.reduce((total, piece) => total + ACTIVE_RUN_PIECE_VALUES[piece], 0) !== offer.value
+        ) return 'run.shop.cardOffers contains an invalid offer';
+        const validPlaguedTarget = offer.cardType === 'pestiferous'
+          ? isFiniteInteger(offer.plaguedPieceIndex)
+            && offer.plaguedPieceIndex >= 0
+            && offer.plaguedPieceIndex < offer.pieces.length
+          : offer.plaguedPieceIndex === null;
+        if (!validPlaguedTarget) return 'run.shop.cardOffers contains an invalid Plagued target';
+        const plaguedPiece = offer.plaguedPieceIndex === null ? null : offer.pieces[offer.plaguedPieceIndex];
+        const expectedCost = offer.cardType === 'pestiferous'
+          ? offer.value - (plaguedPiece ? ACTIVE_RUN_PLAGUED_DISCOUNTS[plaguedPiece] : 0)
+          : offer.value + (offer.cardType === 'concinnous' ? 2 : 0);
+        if (offer.cost !== expectedCost) {
+          return 'run.shop.cardOffers contains invalid affected pricing';
         }
         offerIds.add(offer.offerId);
+        offerValues.add(offer.value);
       }
-      if (run.shop.purchasedOfferId !== null && !offerIds.has(run.shop.purchasedOfferId)) {
-        return 'run.shop.purchasedOfferId is invalid';
-      }
+      if (
+        !Array.isArray(run.shop.purchasedCardOfferIds)
+        || run.shop.purchasedCardOfferIds.length > run.shop.cardOffers.length
+        || new Set(run.shop.purchasedCardOfferIds).size !== run.shop.purchasedCardOfferIds.length
+        || run.shop.purchasedCardOfferIds.some((offerId) => !offerIds.has(offerId))
+      ) return 'run.shop.purchasedCardOfferIds is invalid';
       if (
         run.shop.entrySnapshot !== undefined
         && (
@@ -18277,8 +18304,7 @@ function validateActiveRunBody(run) {
         )
       ) return 'run.shop.entrySnapshot card state is invalid';
       if (
-        run.formatVersion >= 7
-        && run.shop.entrySnapshot !== undefined
+        run.shop.entrySnapshot !== undefined
         && run.shop.entrySnapshot.cards.some((card) => (
           !isObjectRecord(card)
           || !Array.isArray(card.unitIds)
@@ -18291,6 +18317,61 @@ function validateActiveRunBody(run) {
           )
         ))
       ) return 'run.shop.entrySnapshot contains an invalid Plagued target';
+      if (run.shop.entrySnapshot !== undefined) {
+        const purchasedCards = run.cards.slice(run.shop.entrySnapshot.cards.length);
+        if (
+          run.cards.length !== run.shop.entrySnapshot.cards.length + run.shop.purchasedCardOfferIds.length
+          || purchasedCards.some((card, index) => {
+            const offer = run.shop.cardOffers.find(
+              (candidate) => candidate.offerId === run.shop.purchasedCardOfferIds[index],
+            );
+            return !offer
+              || card.coreId !== offer.id
+              || card.cardType !== offer.cardType
+              || card.effectSeed !== offer.effectSeed;
+          })
+        ) return 'run.shop purchased card state is invalid';
+      }
+      if (run.formatVersion >= 8 && run.shop.kind === 'opening') {
+        if (
+          run.phase !== 'shop'
+          || run.battleIndex !== 0
+          || run.conflictIndex !== 0
+          || run.shop.afterBattleIndex !== 0
+          || run.shop.conflictIndex !== 0
+          || run.shop.victoryGoldTenths !== 0
+          || run.shop.cardOffers.length !== 3
+          || offerValues.size !== 3
+          || run.shop.cardOffers.some((offer) => offer.value > 8 || offer.cost !== offer.value || offer.cardType !== null)
+          || !Array.isArray(run.shop.lootRelicOffers)
+          || run.shop.lootRelicOffers.length !== 0
+          || run.shop.chosenLootRelicId !== null
+          || run.shop.paidRelicOffer !== null
+          || run.shop.paidRelicBought !== false
+          || !isObjectRecord(run.shop.entrySnapshot)
+          || run.shop.entrySnapshot.goldTenths !== 80
+          || !Array.isArray(run.shop.entrySnapshot.army)
+          || run.shop.entrySnapshot.army.length !== 3
+          || run.shop.entrySnapshot.army[0]?.id !== 'run-king'
+          || run.shop.entrySnapshot.army[1]?.id !== 'run-pawn-a'
+          || run.shop.entrySnapshot.army[1]?.type !== 'pawn'
+          || run.shop.entrySnapshot.army[1]?.source !== 'starting'
+          || run.shop.entrySnapshot.army[2]?.id !== 'run-pawn-b'
+          || run.shop.entrySnapshot.army[2]?.type !== 'pawn'
+          || run.shop.entrySnapshot.army[2]?.source !== 'starting'
+          || !Array.isArray(run.shop.entrySnapshot.cards)
+          || run.shop.entrySnapshot.cards.length !== 0
+        ) return 'run opening Shop is invalid';
+        const openingUnitIds = new Set([
+          'run-king',
+          'run-pawn-a',
+          'run-pawn-b',
+          ...run.cards.flatMap((card) => card.unitIds),
+        ]);
+        if (run.army.some((unit) => !openingUnitIds.has(unit.id))) {
+          return 'run opening Shop purchase state is invalid';
+        }
+      }
     }
   }
   return null;

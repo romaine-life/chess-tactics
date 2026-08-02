@@ -17,8 +17,11 @@ export {
   type RunRelicId,
 };
 
-export const RUN_FORMAT_VERSION = 7;
+export const RUN_FORMAT_VERSION = 10;
 export const GOLD_SCALE = 10;
+export const RUN_STARTING_GOLD = 8;
+export const RUN_STARTING_GOLD_TENTHS = RUN_STARTING_GOLD * GOLD_SCALE;
+export const RUN_OPENING_OFFER_COUNT = 3;
 export const INSTALLED_ATARAXIA_MAX_TIER = 1;
 export const PESTIFEROUS_OFFER_DENOMINATOR = 8;
 export const CONCINNOUS_OFFER_DENOMINATOR = 8;
@@ -100,18 +103,18 @@ export interface RunArmyUnit {
   inspectionSeed: number;
   abilities: RunAbility[];
   modifiers: RunUnitModifier[];
-  source: 'king' | 'starting' | 'draft' | 'shop';
+  source: 'king' | 'starting' | 'shop';
 }
 
 export type RunArmyNumberState = Record<RunArmyPieceType, number>;
 
-export interface PieceBundle {
+export interface RunCoreCard {
   id: string;
   pieces: PurchasablePieceType[];
   value: number;
 }
 
-export interface RunBundleOffer extends PieceBundle {
+export interface RunCardOffer extends RunCoreCard {
   offerId: string;
   cost: number;
   cardType: RunCardType | null;
@@ -140,10 +143,6 @@ export interface RunPestiferousLoss {
   unit: RunArmyUnit;
 }
 
-export interface DraftOffer extends PieceBundle {
-  draftId: 'pawn-rook' | 'knight-bishop' | 'bishop-bishop' | 'knight-knight' | 'three-pawns-minor';
-}
-
 export interface RunRelicAbilityGrant {
   ability: Extract<RunAbility, 'positioned' | 'marshalled'>;
   unitType: RunArmyPieceType;
@@ -170,7 +169,7 @@ export interface RunWarSnapshot {
   battles: RunWarBattleSnapshot[];
 }
 
-export type RunPhase = 'draft' | 'deployment' | 'battle' | 'shop' | 'victory';
+export type RunPhase = 'deployment' | 'battle' | 'shop' | 'victory';
 
 export interface RunDeploymentState {
   battleIndex: number;
@@ -194,11 +193,12 @@ export interface RunBattleRuntime {
 }
 
 export interface RunShopState {
+  kind: 'opening' | 'post-battle';
   afterBattleIndex: number;
   conflictIndex: number;
   victoryGoldTenths: number;
-  bundleOffers: RunBundleOffer[];
-  purchasedOfferId: string | null;
+  cardOffers: RunCardOffer[];
+  purchasedCardOfferIds: string[];
   lootRelicOffers: RunRelicId[];
   chosenLootRelicId: RunRelicId | null;
   paidRelicOffer: RunRelicId | null;
@@ -240,8 +240,6 @@ export interface RunDocument {
   relics: RunRelicId[];
   seenRelics: RunRelicId[];
   conflictPaidRelics: Record<string, { relicId: RunRelicId; bought: boolean }>;
-  draftOffers: DraftOffer[];
-  chosenDraftId: DraftOffer['draftId'] | null;
   nextArmyUnitSequence: number;
   nextArmyUnitNumberByType: RunArmyNumberState;
   nextCardSequence: number;
@@ -270,16 +268,16 @@ function initialArmyNumberState(): RunArmyNumberState {
   };
 }
 
-function bundleId(pieces: readonly PurchasablePieceType[]): string {
+function cardId(pieces: readonly PurchasablePieceType[]): string {
   return pieces.map((piece) => piece[0]).join('');
 }
 
-export function allPieceBundles(): PieceBundle[] {
-  const bundles: PieceBundle[] = [];
+export function allRunCards(): RunCoreCard[] {
+  const cards: RunCoreCard[] = [];
   const visit = (typeIndex: number, remaining: number, pieces: PurchasablePieceType[]): void => {
     if (remaining === 0) {
       const value = pieces.reduce((sum, piece) => sum + PIECE_VALUE[piece], 0);
-      if (value >= 1 && value <= 9) bundles.push({ id: bundleId(pieces), pieces: [...pieces], value });
+      if (value >= 1 && value <= 9) cards.push({ id: cardId(pieces), pieces: [...pieces], value });
       return;
     }
     if (typeIndex >= PURCHASE_ORDER.length) return;
@@ -293,12 +291,12 @@ export function allPieceBundles(): PieceBundle[] {
     }
   };
   for (let total = 1; total <= 9; total += 1) visit(0, total, []);
-  return bundles.sort((a, b) => a.value - b.value || a.id.localeCompare(b.id));
+  return cards.sort((a, b) => a.value - b.value || a.id.localeCompare(b.id));
 }
 
-export const PIECE_BUNDLE_DECK: readonly PieceBundle[] = Object.freeze(allPieceBundles());
-export const PIECE_BUNDLE_BY_ID: Readonly<Record<string, PieceBundle>> = Object.freeze(
-  Object.fromEntries(PIECE_BUNDLE_DECK.map((bundle) => [bundle.id, bundle])),
+export const RUN_CARD_DECK: readonly RunCoreCard[] = Object.freeze(allRunCards());
+export const RUN_CARD_BY_ID: Readonly<Record<string, RunCoreCard>> = Object.freeze(
+  Object.fromEntries(RUN_CARD_DECK.map((card) => [card.id, card])),
 );
 
 export function mixSeed(seed: number, label: string, index = 0): number {
@@ -361,59 +359,69 @@ export function concinnousOfferRoll(
   return createRng(rollSeed).int(denominator) === 0;
 }
 
-export function createRunBundleOffer(
+export function createRunCardOffer(
   run: Pick<RunDocument, 'seed' | 'ataraxiaTier'>,
-  bundle: PieceBundle,
+  card: RunCoreCard,
   battleIndex: number,
   slotIndex: number,
   pestiferousDenominator = PESTIFEROUS_OFFER_DENOMINATOR,
   concinnousDenominator = CONCINNOUS_OFFER_DENOMINATOR,
-): RunBundleOffer {
+): RunCardOffer {
   const pestiferous = run.ataraxiaTier >= 1
-    && pestiferousOfferRoll(run.seed, battleIndex, slotIndex, bundle.id, pestiferousDenominator);
-  const effectSeed = mixSeed(run.seed, `shop-card:${bundle.id}`, battleIndex * 8 + slotIndex);
+    && pestiferousOfferRoll(run.seed, battleIndex, slotIndex, card.id, pestiferousDenominator);
+  const effectSeed = mixSeed(run.seed, `shop-card:${card.id}`, battleIndex * 8 + slotIndex);
   const concinnous = !pestiferous
-    && bundle.value + 2 <= 9
-    && concinnousOfferRoll(run.seed, battleIndex, slotIndex, bundle.id, concinnousDenominator);
+    && card.value + 2 <= 9
+    && concinnousOfferRoll(run.seed, battleIndex, slotIndex, card.id, concinnousDenominator);
   const plaguedPieceIndex = pestiferous
-    ? seededPestiferousTarget(effectSeed, bundle.pieces.map((_, index) => index), 0)
+    ? seededPestiferousTarget(effectSeed, card.pieces.map((_, index) => index), 0)
     : null;
-  const plaguedPiece = plaguedPieceIndex === null ? null : bundle.pieces[plaguedPieceIndex];
+  const plaguedPiece = plaguedPieceIndex === null ? null : card.pieces[plaguedPieceIndex];
   const cost = plaguedPiece
-    ? bundle.value - PLAGUED_DISCOUNT[plaguedPiece]
-    : bundle.value + (concinnous ? 2 : 0);
+    ? card.value - PLAGUED_DISCOUNT[plaguedPiece]
+    : card.value + (concinnous ? 2 : 0);
   return {
-    ...bundle,
-    pieces: [...bundle.pieces],
-    offerId: `shop-${battleIndex}-${slotIndex}-${bundle.id}`,
+    ...card,
+    pieces: [...card.pieces],
+    offerId: `shop-${battleIndex}-${slotIndex}-${card.id}`,
     cost,
     cardType: pestiferous ? 'pestiferous' : concinnous ? 'concinnous' : null,
     effectSeed,
     plaguedPieceIndex,
     effectTargetIndex: concinnous
-      ? createRng(mixSeed(effectSeed, 'concinnous-target')).int(bundle.pieces.length)
+      ? createRng(mixSeed(effectSeed, 'concinnous-target')).int(card.pieces.length)
       : null,
   };
 }
 
-function openingDraftPool(seed: number): DraftOffer[] {
-  const minor = createRng(mixSeed(seed, 'draft-minor')).pick(['knight', 'bishop'] as const);
-  const offer = (
-    draftId: DraftOffer['draftId'],
-    pieces: PurchasablePieceType[],
-  ): DraftOffer => ({
-    draftId,
-    pieces,
-    id: `draft-${draftId}-${pieces.join('-')}`,
-    value: pieces.reduce((sum, piece) => sum + PIECE_VALUE[piece], 0),
+const OPENING_SHOP_VALUES: readonly number[] = Object.freeze(
+  Array.from({ length: RUN_STARTING_GOLD }, (_, index) => index + 1),
+);
+
+/** Deal three distinct uniformly sampled values, then one seeded core card at
+ * each value. Sampling values first prevents dense high-value ranks in the
+ * 49-card deck from crowding low-value openings out of the Run. */
+export function openingShopOffers(seed: number): RunCardOffer[] {
+  const values = shuffled(OPENING_SHOP_VALUES, mixSeed(seed, 'opening-shop-values'))
+    .slice(0, RUN_OPENING_OFFER_COUNT);
+  return values.map((value, slotIndex) => {
+    const candidates = RUN_CARD_DECK.filter((card) => card.value === value);
+    const card = shuffled(
+      candidates,
+      mixSeed(seed, `opening-shop-card:${value}`, slotIndex),
+    )[0];
+    if (!card) throw new Error(`Opening Shop has no core card worth ${value} gold.`);
+    return {
+      ...card,
+      pieces: [...card.pieces],
+      offerId: `opening-${slotIndex}-${card.id}`,
+      cost: card.value,
+      cardType: null,
+      effectSeed: mixSeed(seed, `opening-card:${card.id}`, slotIndex),
+      plaguedPieceIndex: null,
+      effectTargetIndex: null,
+    };
   });
-  return [
-    offer('pawn-rook', ['pawn', 'rook']),
-    offer('knight-bishop', ['knight', 'bishop']),
-    offer('bishop-bishop', ['bishop', 'bishop']),
-    offer('knight-knight', ['knight', 'knight']),
-    offer('three-pawns-minor', ['pawn', 'pawn', 'pawn', minor]),
-  ];
 }
 
 function freshRunId(): string {
@@ -465,16 +473,6 @@ function initialArmy(seed: number): RunArmyUnit[] {
       modifiers: [],
       source: 'starting',
     },
-    {
-      id: 'run-pawn-c',
-      name: runUnitName(seed, 'pawn', 2),
-      type: 'pawn',
-      number: 3,
-      inspectionSeed: mixSeed(seed, 'run-unit-inspection:run-pawn-c'),
-      abilities: [],
-      modifiers: [],
-      source: 'starting',
-    },
   ];
 }
 
@@ -486,36 +484,50 @@ export function createRun(
 ): RunDocument {
   const ataraxiaTier = typeof ataraxiaTierOrNow === 'number' ? ataraxiaTierOrNow : 0;
   const createdAt = typeof ataraxiaTierOrNow === 'string' ? ataraxiaTierOrNow : now;
-  const offers = shuffled(openingDraftPool(seed), mixSeed(seed, 'draft-offers')).slice(0, 2);
-  return {
+  const run: RunDocument = {
     formatVersion: RUN_FORMAT_VERSION,
     id: freshRunId(),
     seed: seed >>> 0,
     ataraxiaTier,
     updatedAt: createdAt,
     war,
-    phase: 'draft',
+    phase: 'shop',
     battleIndex: 0,
     conflictIndex: 0,
-    goldTenths: 0,
+    goldTenths: RUN_STARTING_GOLD_TENTHS,
     army: initialArmy(seed),
     cards: [],
     pestiferousLosses: [],
     relics: [],
     seenRelics: [],
     conflictPaidRelics: {},
-    draftOffers: offers,
-    chosenDraftId: null,
     nextArmyUnitSequence: 1,
     nextArmyUnitNumberByType: {
       ...initialArmyNumberState(),
-      pawn: 4,
+      pawn: 3,
       king: 2,
     },
     nextCardSequence: 1,
     deployment: null,
     battleRuntime: null,
     shop: null,
+  };
+  return {
+    ...run,
+    shop: {
+      kind: 'opening',
+      afterBattleIndex: 0,
+      conflictIndex: 0,
+      victoryGoldTenths: 0,
+      cardOffers: openingShopOffers(seed),
+      purchasedCardOfferIds: [],
+      lootRelicOffers: [],
+      chosenLootRelicId: null,
+      paidRelicOffer: null,
+      paidRelicBought: false,
+      soldUnits: [],
+      entrySnapshot: createShopEntrySnapshot(run, false),
+    },
   };
 }
 
@@ -566,13 +578,15 @@ function normalizeLegacyCards(value: unknown, seed: number): RunOwnedCard[] {
       effectSeed,
       effectTargetUnitId: cardType === 'concinnous'
         && typeof card.effectTargetUnitId === 'string'
-        && unitIds.includes(card.effectTargetUnitId)
+        && card.effectTargetUnitId.length > 0
         ? card.effectTargetUnitId
         : null,
       unitIds,
       lostUnitIds,
       plaguedUnitId: cardType === 'pestiferous'
-        ? seededPestiferousTarget(effectSeed, unitIds, lostUnitIds.length)
+        ? typeof card.plaguedUnitId === 'string' && unitIds.includes(card.plaguedUnitId)
+          ? card.plaguedUnitId
+          : seededPestiferousTarget(effectSeed, unitIds, lostUnitIds.length)
         : null,
       acquiredAfterBattleIndex: Number.isSafeInteger(card.acquiredAfterBattleIndex)
         ? Math.max(0, Number(card.acquiredAfterBattleIndex))
@@ -581,17 +595,22 @@ function normalizeLegacyCards(value: unknown, seed: number): RunOwnedCard[] {
   });
 }
 
-function normalizeLegacyBundleOffers(value: unknown): RunBundleOffer[] {
+function normalizeCardOffers(value: unknown): RunCardOffer[] {
   if (!Array.isArray(value)) return [];
   return value.map((candidate) => {
-    const offer = candidate as RunBundleOffer;
+    const offer = candidate as RunCardOffer;
     const cardType = offer.cardType === 'pestiferous'
       ? 'pestiferous'
       : offer.cardType === 'concinnous'
         ? 'concinnous'
         : null;
     const plaguedPieceIndex = cardType === 'pestiferous'
-      ? seededPestiferousTarget(offer.effectSeed, offer.pieces.map((_, index) => index), 0)
+      ? Number.isSafeInteger(offer.plaguedPieceIndex)
+        && offer.plaguedPieceIndex !== null
+        && offer.plaguedPieceIndex >= 0
+        && offer.plaguedPieceIndex < offer.pieces.length
+        ? offer.plaguedPieceIndex
+        : seededPestiferousTarget(offer.effectSeed, offer.pieces.map((_, index) => index), 0)
       : null;
     const plaguedPiece = plaguedPieceIndex === null ? null : offer.pieces[plaguedPieceIndex];
     const storedEffectTargetIndex = offer.effectTargetIndex;
@@ -613,6 +632,38 @@ function normalizeLegacyBundleOffers(value: unknown): RunBundleOffer[] {
       effectTargetIndex,
     };
   });
+}
+
+function cardsNeedTargetNormalization(cards: readonly RunOwnedCard[]): boolean {
+  return cards.some((card) => (
+    card.cardType === 'pestiferous'
+      ? card.unitIds.length > 0
+        ? typeof card.plaguedUnitId !== 'string' || !card.unitIds.includes(card.plaguedUnitId)
+        : card.plaguedUnitId !== null
+      : card.plaguedUnitId !== null
+  )) || cards.some((card) => (
+    card.cardType === 'concinnous'
+      ? typeof card.effectTargetUnitId !== 'string' || card.effectTargetUnitId.length === 0
+      : card.effectTargetUnitId !== null
+  ));
+}
+
+function offersNeedTargetNormalization(offers: readonly RunCardOffer[]): boolean {
+  return offers.some((offer) => (
+    offer.cardType === 'pestiferous'
+      ? !Number.isSafeInteger(offer.plaguedPieceIndex)
+        || offer.plaguedPieceIndex === null
+        || offer.plaguedPieceIndex < 0
+        || offer.plaguedPieceIndex >= offer.pieces.length
+      : offer.plaguedPieceIndex !== null
+  )) || offers.some((offer) => (
+    offer.cardType === 'concinnous'
+      ? !Number.isSafeInteger(offer.effectTargetIndex)
+        || offer.effectTargetIndex === null
+        || offer.effectTargetIndex < 0
+        || offer.effectTargetIndex >= offer.pieces.length
+      : offer.effectTargetIndex !== null
+  ));
 }
 
 function synchronizePlaguedModifiers(
@@ -721,15 +772,17 @@ function normalizedArmyIdentity(run: RunDocument): {
     const modifiers = Array.isArray(unit.modifiers)
       ? unit.modifiers.filter((modifier): modifier is RunUnitModifier => modifier === 'plagued')
       : [];
+    const source = String(unit.source) === 'draft' ? 'shop' : unit.source;
     if (
       unit.number === number
       && unit.name === name
       && unit.inspectionSeed === inspectionSeed
       && Array.isArray(unit.modifiers)
       && modifiers.length === unit.modifiers.length
+      && unit.source === source
     ) return unit;
     changed = true;
-    return { ...unit, name, number, inspectionSeed, modifiers };
+    return { ...unit, name, number, inspectionSeed, modifiers, source };
   });
   const army = rewriteArmy(run.army);
   let shop = run.shop;
@@ -764,21 +817,36 @@ function normalizedArmyIdentity(run: RunDocument): {
 }
 
 export function normalizeRunDocument(run: RunDocument): RunDocument {
+  const raw = run as Omit<RunDocument, 'phase'> & {
+    phase: RunPhase | 'draft';
+    draftOffers?: unknown;
+    chosenDraftId?: unknown;
+  };
+  if (raw.phase === 'draft') throw new Error('The retired Run draft phase is unsupported.');
+  if (raw.phase === 'shop' && Number(raw.formatVersion) !== RUN_FORMAT_VERSION) {
+    throw new Error('Older Run Shop documents are unsupported.');
+  }
   let next = run;
+  if ('draftOffers' in raw || 'chosenDraftId' in raw) {
+    const withoutDraft = { ...raw } as Record<string, unknown>;
+    delete withoutDraft.draftOffers;
+    delete withoutDraft.chosenDraftId;
+    next = withoutDraft as unknown as RunDocument;
+  }
   if (
-    run.phase !== 'shop'
-    || !run.shop
-    || (Number.isSafeInteger(run.shop.victoryGoldTenths) && run.shop.victoryGoldTenths >= 0)
+    next.phase !== 'shop'
+    || !next.shop
+    || (Number.isSafeInteger(next.shop.victoryGoldTenths) && next.shop.victoryGoldTenths >= 0)
   ) {
     // Current documents already carry the exact reward.
   } else {
-    const battle = run.war.battles[run.shop.afterBattleIndex];
+    const battle = next.war.battles[next.shop.afterBattleIndex];
     if (battle) {
       const reward = battleVictoryGoldTenths(battle.level);
       next = {
-        ...run,
-        goldTenths: Math.max(0, run.goldTenths + reward - GOLD_SCALE),
-        shop: { ...run.shop, victoryGoldTenths: reward },
+        ...next,
+        goldTenths: Math.max(0, next.goldTenths + reward - GOLD_SCALE),
+        shop: { ...next.shop, victoryGoldTenths: reward },
       };
     }
   }
@@ -788,14 +856,12 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
     cards?: unknown;
     pestiferousLosses?: unknown;
     nextCardSequence?: unknown;
-    shop: (RunShopState & {
-      bundleOfferIds?: string[];
-      purchasedBundleId?: string | null;
-    }) | null;
   };
   const ataraxiaTier: AtaraxiaTier = legacy.ataraxiaTier === 1 ? 1 : 0;
-  const cards = Number(next.formatVersion) === RUN_FORMAT_VERSION && Array.isArray(legacy.cards)
-    ? legacy.cards as RunOwnedCard[]
+  const storedCards = Array.isArray(legacy.cards) ? legacy.cards as RunOwnedCard[] : [];
+  const cards = Number(next.formatVersion) === RUN_FORMAT_VERSION
+    && !cardsNeedTargetNormalization(storedCards)
+    ? storedCards
     : normalizeLegacyCards(legacy.cards, next.seed);
   const pestiferousLosses = Array.isArray(legacy.pestiferousLosses)
     ? legacy.pestiferousLosses as RunPestiferousLoss[]
@@ -804,29 +870,24 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
     ? Number(legacy.nextCardSequence)
     : cards.length + 1;
   let shop = legacy.shop;
-  if (shop && !Array.isArray(shop.bundleOffers)) {
-    const bundleOffers = (shop.bundleOfferIds ?? []).flatMap((coreId, slotIndex) => {
-      const bundle = PIECE_BUNDLE_BY_ID[coreId];
-      return bundle
-        ? [createRunBundleOffer({ seed: next.seed, ataraxiaTier: 0 }, bundle, shop!.afterBattleIndex, slotIndex)]
-        : [];
-    });
-    const purchasedOfferId = shop.purchasedBundleId
-      ? bundleOffers.find((offer) => offer.id === shop!.purchasedBundleId)?.offerId ?? null
-      : null;
-    const { bundleOfferIds: _bundleOfferIds, purchasedBundleId: _purchasedBundleId, ...currentShop } = shop;
-    shop = { ...currentShop, bundleOffers, purchasedOfferId };
+  if (shop && shop.kind !== 'opening' && shop.kind !== 'post-battle') {
+    shop = { ...shop, kind: 'post-battle' };
   }
-  if (shop && Number(next.formatVersion) < RUN_FORMAT_VERSION) {
+  if (shop && (
+    offersNeedTargetNormalization(shop.cardOffers)
+    || (shop.entrySnapshot && cardsNeedTargetNormalization(shop.entrySnapshot.cards))
+  )) {
     shop = {
       ...shop,
-      bundleOffers: normalizeLegacyBundleOffers(shop.bundleOffers),
-      entrySnapshot: shop.entrySnapshot
+      cardOffers: normalizeCardOffers(shop.cardOffers),
+      ...(shop.entrySnapshot
         ? {
-            ...shop.entrySnapshot,
-            cards: normalizeLegacyCards(shop.entrySnapshot.cards, next.seed),
+            entrySnapshot: {
+              ...shop.entrySnapshot,
+              cards: normalizeLegacyCards(shop.entrySnapshot.cards, next.seed),
+            },
           }
-        : shop.entrySnapshot,
+        : {}),
     };
   }
   if (
@@ -929,19 +990,6 @@ function addArmyPieces(
     nextArmyUnitNumberByType,
     addedUnits: added,
   };
-}
-
-export function chooseDraft(run: RunDocument, draftId: DraftOffer['draftId']): RunDocument {
-  if (run.phase !== 'draft') return run;
-  const offer = run.draftOffers.find((candidate) => candidate.draftId === draftId);
-  if (!offer) return run;
-  const { addedUnits: _addedUnits, ...armyUpdate } = addArmyPieces(run, offer.pieces, 'draft');
-  return touch({
-    ...run,
-    ...armyUpdate,
-    chosenDraftId: draftId,
-    phase: 'deployment',
-  });
 }
 
 export function hasRelic(run: RunDocument, relic: RunRelicId): boolean {
@@ -1237,10 +1285,10 @@ export function openShop(run: RunDocument, survivingUnitIds: readonly string[]):
     deployment: null,
     battleRuntime: null,
   };
-  const bundleCount = hasRelic(next, 'quartermasters-ledger') ? 4 : 3;
-  const bundleOffers = shuffled(PIECE_BUNDLE_DECK, mixSeed(next.seed, 'shop-bundles', next.battleIndex))
-    .slice(0, bundleCount)
-    .map((bundle, slotIndex) => createRunBundleOffer(next, bundle, next.battleIndex, slotIndex));
+  const cardCount = hasRelic(next, 'quartermasters-ledger') ? 4 : 3;
+  const cardOffers = shuffled(RUN_CARD_DECK, mixSeed(next.seed, 'shop-cards', next.battleIndex))
+    .slice(0, cardCount)
+    .map((card, slotIndex) => createRunCardOffer(next, card, next.battleIndex, slotIndex));
   const loot = next.war.battles[next.battleIndex]?.loot === true;
   const lootReveal = loot ? revealRelics(next, 3, 'loot-relics', next.battleIndex) : { offers: [], seenRelics: next.seenRelics };
   next = { ...next, seenRelics: lootReveal.seenRelics };
@@ -1270,11 +1318,12 @@ export function openShop(run: RunDocument, survivingUnitIds: readonly string[]):
   return touch({
     ...next,
     shop: {
+      kind: 'post-battle',
       afterBattleIndex: next.battleIndex,
       conflictIndex: next.conflictIndex,
       victoryGoldTenths,
-      bundleOffers,
-      purchasedOfferId: null,
+      cardOffers,
+      purchasedCardOfferIds: [],
       lootRelicOffers: lootReveal.offers,
       chosenLootRelicId: null,
       paidRelicOffer,
@@ -1285,9 +1334,14 @@ export function openShop(run: RunDocument, survivingUnitIds: readonly string[]):
   });
 }
 
-export function buyBundle(run: RunDocument, offerId: string): RunDocument {
-  const offer = run.shop?.bundleOffers.find((candidate) => candidate.offerId === offerId);
-  if (run.phase !== 'shop' || !run.shop || run.shop.purchasedOfferId || !offer) return run;
+export function buyCard(run: RunDocument, offerId: string): RunDocument {
+  const offer = run.shop?.cardOffers.find((candidate) => candidate.offerId === offerId);
+  if (
+    run.phase !== 'shop'
+    || !run.shop
+    || run.shop.purchasedCardOfferIds.includes(offerId)
+    || !offer
+  ) return run;
   const cost = offer.cost * GOLD_SCALE;
   if (run.goldTenths < cost) return run;
   const { addedUnits, ...armyUpdate } = addArmyPieces(run, offer.pieces, 'shop');
@@ -1322,7 +1376,10 @@ export function buyBundle(run: RunDocument, offerId: string): RunDocument {
     cards,
     nextCardSequence: run.nextCardSequence + 1,
     goldTenths: run.goldTenths - cost,
-    shop: { ...run.shop, purchasedOfferId: offerId },
+    shop: {
+      ...run.shop,
+      purchasedCardOfferIds: [...run.shop.purchasedCardOfferIds, offerId],
+    },
   });
 }
 
@@ -1362,7 +1419,7 @@ export function resetShop(run: RunDocument): RunDocument {
     nextCardSequence: snapshot.nextCardSequence,
     shop: {
       ...run.shop,
-      purchasedOfferId: null,
+      purchasedCardOfferIds: [],
       chosenLootRelicId: null,
       paidRelicBought: snapshot.paidRelicBought,
       soldUnits: [],
@@ -1376,7 +1433,7 @@ export function shopHasChanges(run: RunDocument): boolean {
   return (
     run.goldTenths !== snapshot.goldTenths
     || run.nextArmyUnitSequence !== snapshot.nextArmyUnitSequence
-    || run.shop.purchasedOfferId !== null
+    || run.shop.purchasedCardOfferIds.length > 0
     || run.shop.chosenLootRelicId !== null
     || run.shop.paidRelicBought !== snapshot.paidRelicBought
     || run.shop.soldUnits.length > 0
@@ -1385,6 +1442,13 @@ export function shopHasChanges(run: RunDocument): boolean {
     || JSON.stringify(run.relics) !== JSON.stringify(snapshot.relics)
     || JSON.stringify(run.conflictPaidRelics) !== JSON.stringify(snapshot.conflictPaidRelics)
   );
+}
+
+export function canLeaveShop(run: RunDocument): boolean {
+  if (run.phase !== 'shop' || !run.shop) return false;
+  if (run.shop.kind === 'opening' && run.shop.purchasedCardOfferIds.length === 0) return false;
+  if (run.shop.lootRelicOffers.length > 0 && !run.shop.chosenLootRelicId) return false;
+  return true;
 }
 
 export function takeLootRelic(run: RunDocument, relic: RunRelicId, targetUnitId?: string): RunDocument {
@@ -1410,14 +1474,14 @@ export function buyPaidRelic(run: RunDocument, targetUnitId?: string): RunDocume
 }
 
 export function leaveShop(run: RunDocument): RunDocument {
-  if (run.phase !== 'shop' || !run.shop) return run;
-  if (run.shop.lootRelicOffers.length > 0 && !run.shop.chosenLootRelicId) return run;
+  if (!canLeaveShop(run) || !run.shop) return run;
+  const opening = run.shop.kind === 'opening';
   const endedConflict = run.war.battles[run.shop.afterBattleIndex]?.loot === true;
   return touch({
     ...run,
     phase: 'deployment',
-    battleIndex: run.battleIndex + 1,
-    conflictIndex: run.conflictIndex + (endedConflict ? 1 : 0),
+    battleIndex: opening ? run.battleIndex : run.battleIndex + 1,
+    conflictIndex: run.conflictIndex + (!opening && endedConflict ? 1 : 0),
     deployment: null,
     battleRuntime: null,
     shop: null,
@@ -1429,9 +1493,9 @@ export function formatGold(goldTenths: number): string {
   return gold.toFixed(Number.isInteger(gold) ? 0 : Number.isInteger(gold * 10) ? 1 : 2);
 }
 
-export function bundleLabel(bundle: Pick<PieceBundle, 'pieces'>): string {
+export function cardContentsLabel(card: Pick<RunCoreCard, 'pieces'>): string {
   const counts = new Map<PurchasablePieceType, number>();
-  for (const piece of bundle.pieces) counts.set(piece, (counts.get(piece) ?? 0) + 1);
+  for (const piece of card.pieces) counts.set(piece, (counts.get(piece) ?? 0) + 1);
   return PURCHASE_ORDER
     .filter((piece) => counts.has(piece))
     .map((piece) => `${counts.get(piece)! > 1 ? `${counts.get(piece)} ` : ''}${PIECE_LABEL[piece]}${counts.get(piece)! > 1 ? 's' : ''}`)

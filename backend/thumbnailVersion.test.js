@@ -67,7 +67,7 @@ test('only semantic media consumed by the render plan affects the thumbnail vers
       availabilityPolicy: 'critical',
       media: { sha256: 'a'.repeat(64) },
     }, {
-      slot: 'sfx/card-purchase/v0.wav',
+      slot: 'sfx/gold-sell/v0.wav',
       availabilityPolicy: 'decorative',
       media: { sha256: 'b'.repeat(64) },
     }],
