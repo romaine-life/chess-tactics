@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactElement } from 'react';
+import type { CSSProperties, HTMLAttributes, ReactElement, ReactNode } from 'react';
 import { chromeUnitClassNames } from '../chromeUnitRegistry';
 import { FittedTabLabel } from './FittedTabLabel';
 import { ChromeNavButton } from './ChromeButton';
@@ -13,6 +13,34 @@ export interface ApparatusRailTabProps {
   title?: string;
   testId?: string;
   detail?: string;
+}
+
+export interface ApparatusRailColumnProps extends HTMLAttributes<HTMLElement> {
+  children: ReactNode;
+  placement?: 'open' | 'framed';
+}
+
+/**
+ * Canonical menu-language rail column. The component owns the fixed column
+ * width, button-stack gap, and the placement-specific main-menu perimeter;
+ * consumers only provide the ordered buttons and a semantic host class.
+ */
+export function ApparatusRailColumn({
+  children,
+  className = '',
+  placement = 'open',
+  ...props
+}: ApparatusRailColumnProps): ReactElement {
+  return (
+    <aside
+      {...props}
+      data-apparatus-rail-column=""
+      data-apparatus-rail-placement={placement}
+      className={`apparatus-rail-column ${className}`.trim()}
+    >
+      {children}
+    </aside>
+  );
 }
 
 /**

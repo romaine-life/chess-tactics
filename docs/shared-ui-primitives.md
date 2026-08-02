@@ -24,7 +24,9 @@ search for before constructing a control or repeated surface.
   owns the registered swatch button and selected state for every item.
 - `ui/shared/SettingsControls.tsx` — settings sections, settings rows, and the
   standard text action button.
-- `ui/shared/ApparatusRailTab.tsx` — menu-language navigation rail tabs.
+- `ui/shared/ApparatusRailTab.tsx` — menu-language navigation rail columns and
+  tabs. `ApparatusRailColumn` owns the main-menu column width, stack gap, and
+  framed/open perimeter; `ApparatusRailTab` owns each button.
 
 ## Studio and workflow compositions
 

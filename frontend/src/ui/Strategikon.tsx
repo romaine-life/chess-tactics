@@ -5,9 +5,9 @@ import {
   RunArmyWorkspace,
   type RunArmyFilters,
 } from './RunArmyWorkspace';
-import { Enchiridion, RelicCodex } from './Enchiridion';
+import { Enchiridion, EnchiridionSectionRail, RelicCodex } from './Enchiridion';
 import { ENCHIRIDION_SECTIONS, type EnchiridionSection } from './enchiridionRoute';
-import { ApparatusRailTab } from './shared/ApparatusRailTab';
+import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
 import { InnerChromeBox, ShellWorkspace } from './shared/ChromeBox';
 
 export type StrategikonSection = 'enchiridion' | 'prosopography' | 'lipsanotheca';
@@ -62,35 +62,43 @@ export function Strategikon({
   return (
     <ShellWorkspace
       className="strategikon-workspace"
-      contentClassName="strategikon-workspace-layout"
+      contentClassName={`strategikon-workspace-layout${section === 'enchiridion' ? ' has-secondary-rail' : ''}`}
       bodyClassName="strategikon-content"
       edgeAttached
       rail={(
-        <aside className="strategikon-rail" aria-label="Strategikon sections">
-          <ApparatusRailTab
-            label="Enchiridion"
-            to={withSearch(strategikonHref(basePath, 'enchiridion', enchiridionSection))}
-            index={0}
-            active={section === 'enchiridion'}
-            iconClassName="ic-grid"
-          />
-          <ApparatusRailTab
-            label="Prosopography"
-            title="The Martial Prosopography — Current Army"
-            to={withSearch(strategikonHref(basePath, 'prosopography'))}
-            index={1}
-            active={section === 'prosopography'}
-            iconClassName="skirmish-tab-icon skirmish-tab-icon-roster"
-          />
-          <ApparatusRailTab
-            label="Lipsanotheca"
-            title="The Lipsanotheca — Held Relics"
-            to={withSearch(strategikonHref(basePath, 'lipsanotheca'))}
-            index={2}
-            active={section === 'lipsanotheca'}
-            iconClassName="skirmish-tab-icon skirmish-tab-icon-log"
-          />
-        </aside>
+        <>
+          <ApparatusRailColumn className="strategikon-rail" aria-label="Strategikon sections">
+            <ApparatusRailTab
+              label="Enchiridion"
+              to={withSearch(strategikonHref(basePath, 'enchiridion', enchiridionSection))}
+              index={0}
+              active={section === 'enchiridion'}
+              iconClassName="ic-grid"
+            />
+            <ApparatusRailTab
+              label="Prosopography"
+              title="The Martial Prosopography — Current Army"
+              to={withSearch(strategikonHref(basePath, 'prosopography'))}
+              index={1}
+              active={section === 'prosopography'}
+              iconClassName="skirmish-tab-icon skirmish-tab-icon-roster"
+            />
+            <ApparatusRailTab
+              label="Lipsanotheca"
+              title="The Lipsanotheca — Held Relics"
+              to={withSearch(strategikonHref(basePath, 'lipsanotheca'))}
+              index={2}
+              active={section === 'lipsanotheca'}
+              iconClassName="skirmish-tab-icon skirmish-tab-icon-log"
+            />
+          </ApparatusRailColumn>
+          {section === 'enchiridion' ? (
+            <EnchiridionSectionRail
+              section={enchiridionSection}
+              sectionHref={(next) => withSearch(strategikonHref(basePath, 'enchiridion', next))}
+            />
+          ) : null}
+        </>
       )}
       aria-label="Strategikon"
       data-testid="strategikon"
@@ -99,6 +107,7 @@ export function Strategikon({
           <Enchiridion
             section={enchiridionSection}
             sectionHref={(next) => withSearch(strategikonHref(basePath, 'enchiridion', next))}
+            showSectionRail={false}
             sceneInstanceKey={`strategikon/enchiridion/${enchiridionSection}`}
             framed={false}
           />
