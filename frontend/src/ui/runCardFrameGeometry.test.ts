@@ -14,7 +14,10 @@ describe('Run card frame geometry', () => {
     expect(runCardFrameGeometryVariables(RUN_CARD_STANDARD_FRAME_GEOMETRY)).toMatchObject({
       '--run-card-title-left': '9.3000%',
       '--run-card-title-top': '5.8000%',
-      '--run-card-cost-left': '82.4000%',
+      // The cost box centers on the measured coin socket (932.5, 130.5)
+      // shared by the standard, pestiferous, and tactical frames.
+      '--run-card-cost-left': '82.4217%',
+      '--run-card-cost-top': '5.2008%',
       '--run-card-art-top': '14.2000%',
       '--run-card-type-top': '58.2000%',
       '--run-card-contents-top': '65.2000%',
