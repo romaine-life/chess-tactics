@@ -13,8 +13,11 @@ export interface RunShopWrapCandidate {
   id: string;
   label: string;
   engine: 'pixellab' | 'codex';
-  /** seat = wraps each displayed card; band = wraps the whole card row. */
-  kind: 'seat' | 'band';
+  /**
+   * seat = wraps each displayed card; band = wraps the whole card row;
+   * slots = one structure with a painted opening per card.
+   */
+  kind: 'seat' | 'band' | 'slots';
   src: string;
   canvas: { w: number; h: number };
   /** Where the live card (seat) or card row (band) sits inside the canvas, in pixels. */
@@ -22,6 +25,8 @@ export interface RunShopWrapCandidate {
   /** Band review row: how many cards, at what width, sit inside the window. */
   bandCards?: number;
   bandCardWidth?: number;
+  /** slots kind: one measured opening per card, left to right. */
+  slots?: readonly RunShopWrapRect[];
 }
 
 /** Fraction of the window tucked under the live card so ragged paint edges never peek out. */
@@ -112,6 +117,35 @@ export function runShopWrapSeatTrack(candidate: RunShopWrapCandidate): string {
   return `${(CARD_MAX_WIDTH * (candidate.canvas.w / win.w)).toFixed(1)}px`;
 }
 
+export interface RunShopWrapSlotMount {
+  frame: { width: number; height: number };
+  cards: readonly { left: number; top: number; width: number; height: number }[];
+}
+
+/**
+ * Slots mounting: scale the whole painted structure so each opening reaches the
+ * target card width, then seat one card in each measured opening.
+ */
+export function runShopWrapSlotMount(
+  candidate: RunShopWrapCandidate,
+  targetCardWidth = 180,
+): RunShopWrapSlotMount {
+  const slots = candidate.slots ?? [];
+  if (!slots.length) throw new Error(`wrap candidate ${candidate.id} has no measured slots`);
+  const averageSlotWidth = slots.reduce((total, slot) => total + slot.w, 0) / slots.length;
+  const s = targetCardWidth / averageSlotWidth;
+  const bleed = RUN_SHOP_WRAP_BLEED;
+  return {
+    frame: { width: candidate.canvas.w * s, height: candidate.canvas.h * s },
+    cards: slots.map((slot) => ({
+      left: (slot.x + bleed * slot.w) * s,
+      top: (slot.y + bleed * slot.h) * s,
+      width: slot.w * (1 - 2 * bleed) * s,
+      height: slot.h * (1 - 2 * bleed) * s,
+    })),
+  };
+}
+
 export const RUN_SHOP_WRAP_CANDIDATES: readonly RunShopWrapCandidate[] = [
   {
     id: 'pixellab-alcove',
@@ -141,5 +175,19 @@ export const RUN_SHOP_WRAP_CANDIDATES: readonly RunShopWrapCandidate[] = [
     window: { x: 78, y: 81, w: 504, h: 153 },
     bandCards: 4,
     bandCardWidth: 170,
+  },
+  {
+    id: 'pixellab-slots-inside',
+    label: 'Three-slot stall',
+    engine: 'pixellab',
+    kind: 'slots',
+    src: new URL('../art/run-shop-wrap/pixellab-slots-inside.png', import.meta.url).href,
+    canvas: { w: 688, h: 384 },
+    window: { x: 86, y: 130, w: 516, h: 139 },
+    slots: [
+      { x: 86, y: 130, w: 100, h: 139 },
+      { x: 292, y: 130, w: 103, h: 139 },
+      { x: 501, y: 130, w: 101, h: 139 },
+    ],
   },
 ];

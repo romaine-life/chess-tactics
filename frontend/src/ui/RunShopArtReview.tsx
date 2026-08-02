@@ -7,6 +7,7 @@ import {
   runShopWrapBandMount,
   runShopWrapSeatPadding,
   runShopWrapSeatTrack,
+  runShopWrapSlotMount,
   type RunShopWrapCandidate,
 } from './runShopWrapCandidates';
 import { OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
@@ -23,9 +24,40 @@ function WrapCandidateRow({ candidate }: { candidate: RunShopWrapCandidate }): R
     <section className="run-wrap-candidate" aria-label={candidate.label}>
       <h3>
         {candidate.label}
-        <small> — {candidate.engine} · {candidate.kind === 'seat' ? 'wraps each card' : 'wraps the card row'}</small>
+        <small>
+          {' — '}{candidate.engine}{' · '}
+          {candidate.kind === 'seat' ? 'wraps each card'
+            : candidate.kind === 'slots' ? 'one stall, a slot per card'
+            : 'wraps the card row'}
+        </small>
       </h3>
-      {candidate.kind === 'seat' ? (
+      {candidate.kind === 'slots' ? (
+        (() => {
+          const mount = runShopWrapSlotMount(candidate);
+          const slotCards = [...REVIEW_CARDS, ...REVIEW_CARDS].slice(0, mount.cards.length);
+          return (
+            <div
+              className="run-wrap-slot-frame"
+              style={{ inlineSize: `${mount.frame.width}px`, blockSize: `${mount.frame.height}px` }}
+            >
+              <img className="run-wrap-art run-wrap-seat-art" src={candidate.src} alt="" draggable={false} />
+              {slotCards.map((card, index) => (
+                <span
+                  className="run-wrap-slot-card"
+                  key={`${candidate.id}:${card.id}:${index}`}
+                  style={{
+                    insetInlineStart: `${mount.cards[index].left}px`,
+                    insetBlockStart: `${mount.cards[index].top}px`,
+                    inlineSize: `${mount.cards[index].width}px`,
+                  }}
+                >
+                  <RunCard card={card} mode="shop" onSelect={() => undefined} />
+                </span>
+              ))}
+            </div>
+          );
+        })()
+      ) : candidate.kind === 'seat' ? (
         <div
           className="run-card-grid run-wrap-grid"
           style={{ gridTemplateColumns: `repeat(auto-fit, minmax(0, ${runShopWrapSeatTrack(candidate)}))` }}

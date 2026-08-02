@@ -19065,6 +19065,16 @@ button.tileset-relationship-cell {
   position: relative;
 }
 
+.run-wrap-slot-frame {
+  margin-inline: auto;
+  position: relative;
+}
+
+.run-wrap-slot-card {
+  position: absolute;
+  z-index: 1;
+}
+
 .run-relic-reference-art {
   display: grid;
   gap: var(--ds-inline);
