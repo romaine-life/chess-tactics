@@ -48,6 +48,7 @@ import {
   isEmptySlotOrigin,
   sceneLayerKey,
   sceneManifest,
+  sceneOverlapScope,
 } from './shell/sceneManifest';
 import type { ScenePath } from './shell/sceneManifest';
 import type { RunSceneSnapshot } from './shell/sceneManifest';
@@ -523,6 +524,12 @@ export function App(): ReactElement {
     ? new URL(scene.destinationHref, window.location.origin)
     : null;
   const destinationSearch = destinationLocation?.search ?? search;
+  // Overlapping layers still retain everything outside the replaced slot. Naming the
+  // scope keeps that retained chrome out of the crossfade instead of blending it
+  // toward the backdrop at the midpoint.
+  const overlapScope = overlapsCompleteScenes
+    ? sceneOverlapScope(scene.current, scene.destination!)
+    : 'scene';
   const sceneLayers = overlapsCompleteScenes
     ? [
         {
@@ -534,6 +541,7 @@ export function App(): ReactElement {
           preparing: false,
           preserveHost: false,
           transitionRegion: null,
+          overlapScope,
           visualRole: 'outgoing' as const,
         },
         {
@@ -545,6 +553,7 @@ export function App(): ReactElement {
           preparing,
           preserveHost: false,
           transitionRegion: null,
+          overlapScope,
           visualRole: 'incoming' as const,
         },
       ]
@@ -563,6 +572,7 @@ export function App(): ReactElement {
           preparing,
           preserveHost: preservesSceneHost,
           transitionRegion: preservedSceneHost,
+          overlapScope: 'scene' as const,
           visualRole: 'single' as const,
         },
       ];
@@ -613,6 +623,7 @@ export function App(): ReactElement {
                 || (layer.visualRole === 'single' && scene.phase === 'exiting')
               )}
               visualRole={layer.visualRole}
+              overlapScope={layer.overlapScope}
               onPainted={destinationPainted}
               onFailed={destinationFailed}
             >

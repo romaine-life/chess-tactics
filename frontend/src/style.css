@@ -9938,6 +9938,32 @@ body { font-size: 17px; }
   opacity: 0;
   transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
 }
+/* Same-shell overlap (a Run workspace swap): both layers paint an identical Controls
+   panel, relic rail, and shell fill, so fading the boundary would blend that retained
+   chrome 25% toward the backdrop at the crossfade midpoint — the visible dimming of the
+   Controls title plank on every Shop/Sell Units switch. The layers still overlap so the
+   outgoing snapshot stays frozen; only the shell's replaceable viewport carries the
+   fade. See sceneOverlapScope (a phase change keeps the whole-scene crossfade). */
+.scene-boundary[data-scene-overlap-scope="shell-viewport"].is-preparing [data-scene-overlap-region] {
+  opacity: 0;
+}
+.scene-director.is-entering .scene-boundary[data-scene-overlap-scope="shell-viewport"][data-scene-visual-role="outgoing"] {
+  opacity: 1;
+  transition: none;
+}
+.scene-director.is-entering .scene-boundary[data-scene-overlap-scope="shell-viewport"][data-scene-visual-role="outgoing"] [data-scene-overlap-region] {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
+}
+.scene-director.is-entering .scene-boundary[data-scene-overlap-scope="shell-viewport"][data-scene-transition-active] {
+  opacity: 1;
+  transition: none;
+}
+.scene-director.is-entering .scene-boundary[data-scene-overlap-scope="shell-viewport"][data-scene-transition-active] [data-scene-overlap-region] {
+  opacity: 1;
+  transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
+}
 .scene-boundary.is-region-preparing {
   opacity: 1;
 }
