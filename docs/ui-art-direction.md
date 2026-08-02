@@ -255,10 +255,10 @@ five top-level controls — Play, Editor, Lobbies, Enchiridion, Settings — and
 Continue/Skirmish/Run/Levels/Campaign selector described by ADR-0074, ADR-0232,
 ADR-0294, and ADR-0356. Clicking Play lands on Continue after content and Run
 authority settle. Its rail control says only **Continue**. The action column is
-the resume surface itself and mounts no detail column: it shows the most
-recently updated resumable activity's title, facts, and one final Play action,
-lists any second unfinished activity beneath it under **Also unfinished**, and
-states **Nothing to continue** once when there is none. Ordinary Run remains a
+the resume surface itself and mounts no detail column: it shows exactly one
+activity — the most recently updated resumable one, as its title, facts, and one
+final Play action — offering no mode list and no second activity, and states
+**Nothing to continue** once when there is none. Ordinary Run remains a
 separate neutral preparation surface between Current Run and Start New Run.
 Run preparation uses Campaign Levels' master-detail geometry, with current-Run
 facts plus Play or Ataraxia plus Start Run in the right detail column. It omits feature-pitch and

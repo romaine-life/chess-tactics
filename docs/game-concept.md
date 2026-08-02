@@ -250,10 +250,11 @@ these.
   the fight; its Martial Prosopography and Lipsanotheca expose the persistent
   army and held relics beside the same Enchiridion (ADR-0231).
 - Play defaults to one activity-agnostic, descriptor-free **Continue** rail
-  destination. Its column resumes in place: the most recently updated resumable
-  activity is shown there with its facts and one final **Play** action, any
-  second unfinished activity is offered below it under **Also unfinished**, and
-  an empty Continue says **Nothing to continue** once. Ordinary Run remains a
+  destination. Its column resumes in place and shows exactly one activity: the
+  most recently updated resumable one, with its facts and one final **Play**
+  action. Any other unfinished activity is reached through its own rail
+  destination, and an empty Continue says **Nothing to continue** once.
+  Ordinary Run remains a
   separate preparation destination between Current Run and **Start New Run**,
   with Ataraxia setup and confirmed replacement (ADR-0232, ADR-0289, ADR-0290,
   ADR-0294, ADR-0356).

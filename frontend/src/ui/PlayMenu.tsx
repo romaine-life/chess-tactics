@@ -126,20 +126,11 @@ function ActionColumn({ children }: { children: ReactElement }): ReactElement {
   );
 }
 
-function ContinuePanel({
-  inventory,
-  choice,
-}: {
-  inventory: ContinueInventory;
-  choice: PlayContinueChoice | null;
-}): ReactElement {
-  const selected = choice
-    ? inventory.activities.find((activity) => activity.mode === choice) ?? null
-    : null;
-  // The rail one column left already offers Campaign, Skirmish, Run, and Levels. Continue
-  // therefore resumes instead of re-listing them: the most recent unfinished activity IS
-  // this column, and only a genuinely resumable second activity earns a row (ADR-0356).
-  const others = inventory.activities.filter((activity) => activity.mode !== selected?.mode);
+function ContinuePanel({ inventory }: { inventory: ContinueInventory }): ReactElement {
+  // Continue shows the one most recent unfinished activity and nothing else (ADR-0356):
+  // no list, no second offer, no choice. Every mode keeps its ordinary rail destination
+  // one column left, and re-entering an activity there resumes its saved board.
+  const selected = inventory.activities[0] ?? null;
   return (
     <ActionColumn>
       <div className="settings-panel-content continue-selector-panel">
@@ -170,26 +161,6 @@ function ContinuePanel({
             </div>
           )}
         </section>
-        {others.length > 0 ? (
-          <section className="settings-section">
-            <h3 className="settings-section-title">Also unfinished</h3>
-            <div className="settings-section-rows">
-              {others.map((activity) => (
-                <ChromeNavButton unit="inner-list-row"
-                  key={activity.mode}
-                  to={playContinueSelectorHref(activity.mode)}
-                  className={chromeUnitClassNames('inner-list-row', 'settings-row play-choice-row')}
-                  data-testid={`continue-choice-${activity.mode}`}
-                >
-                  <div className="settings-row-copy">
-                    <h4>{activity.modeLabel}</h4>
-                    <p>{activity.summary}</p>
-                  </div>
-                </ChromeNavButton>
-              ))}
-            </div>
-          </section>
-        ) : null}
       </div>
     </ActionColumn>
   );
@@ -722,19 +693,12 @@ export function PlayMenu({
       return;
     }
     if (!loading && runHydrated && (selection.mode === 'hub' || selection.mode === 'continue')) {
-      const selectedActivity = selection.mode === 'continue' && selection.choice
-        ? resumeInventory.activities.find((activity) => activity.mode === selection.choice)
-        : null;
+      // Continue names exactly one activity — the most recent one — so any other Continue
+      // address is stale by construction and canonicalizes onto it (ADR-0356).
       const canonicalHref = resumeInventory.defaultMode
         ? playContinueSelectorHref(resumeInventory.defaultMode)
         : PLAY_CONTINUE_SELECTOR_HREF;
-      if (
-        selection.mode === 'hub'
-        || selection.choice === null
-        || !selectedActivity
-      ) {
-        if (path !== canonicalHref) navigateApp(canonicalHref, { replace: true, scroll: false });
-      }
+      if (path !== canonicalHref) navigateApp(canonicalHref, { replace: true, scroll: false });
     }
   }, [activeRun, campaigns, loading, officialAvailable, path, resumeInventory, runHydrated, selection, userWorkspaceAvailable]);
 
@@ -892,7 +856,7 @@ export function PlayMenu({
         sceneInstance={sceneInstanceKey}
       >
       {selection.mode === 'hub' || selection.mode === 'continue' ? (
-        <ContinuePanel inventory={resumeInventory} choice={selectedContinueChoice} />
+        <ContinuePanel inventory={resumeInventory} />
       ) : null}
       {selection.mode === 'skirmish' ? (
         <SkirmishProfilesPanel

@@ -32,16 +32,19 @@ disabled rows.
 
 ## Decision
 
-- Continue's action column **is** the resume surface. The most recently updated
-  resumable activity is presented directly in it: the activity title, its
+- Continue's action column **is** the resume surface, and it presents **exactly
+  one** activity: the most recently updated resumable one, as its title, its
   identifying facts, and one **Play** action. Continue mounts no fourth column.
-- The inventory carries only genuinely resumable activities, ordered most
-  recently updated first. A mode with nothing to resume contributes no row: the
-  rail one column left is where those modes are offered.
-- A second resumable activity is listed below the resume card under **Also
-  unfinished**, naming its mode and its activity. Selecting it addresses
-  `/play/select/continue/<mode>` and promotes it into the same resume card,
-  which moves the previously selected activity into that list.
+- Continue offers nothing else. No mode inventory, no second activity, no
+  choice: it is the answer to "what was I doing", not a place to pick between
+  activities. Resumable candidates are collected only to decide which single
+  activity that is.
+- Another unfinished activity is not lost. Every mode keeps its ordinary rail
+  destination one column left, and re-entering an activity there resumes its
+  saved board.
+- Continue therefore names one address. `/play/select/continue/<mode>` remains
+  the canonical address of the shown activity, and any other Continue address is
+  stale by construction: it replace-canonicalizes onto the current one.
 - With nothing to resume, the column states **Nothing to continue** once and
   names the rail's modes as the way to start something.
 - Everything else in ADR-0294 stands: Continue remains the permanent, descriptor
@@ -60,9 +63,11 @@ disabled rows.
 ## Consequences
 
 - Continue answers its own question in one column: the player sees what they
-  were last doing and presses Play, with no intermediate list.
-- Nothing is unreachable. The at-most-one other unfinished activity keeps a row,
-  and every mode keeps its ordinary rail destination.
+  were last doing and presses Play, with no intermediate list and no second
+  thing competing for the same attention.
+- A second unfinished activity is reached the ordinary way — through its own
+  rail destination — rather than through a Continue that would then be a picker
+  again.
 - The Play surface no longer narrows its action column for a Continue detail
   column that no longer exists.
 - Continue's empty state is one honest statement instead of four disabled rows.

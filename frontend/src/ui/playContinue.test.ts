@@ -38,10 +38,9 @@ const run = (updatedAt: string, battleLevelId = 'run-battle'): RunDocument => ({
 } as unknown as RunDocument);
 
 describe('Play Continue inventory', () => {
-  it('lists only resumable activities, most recent first', () => {
+  it('collects only resumable activities', () => {
     const inventory = continueInventory(run('2026-01-01T00:00:00.000Z'), null, [], {});
-    expect(inventory.activities.map(({ mode, modeLabel }) => ({ mode, modeLabel })))
-      .toEqual([{ mode: 'run', modeLabel: 'Run' }]);
+    expect(inventory.activities.map((activity) => activity.mode)).toEqual(['run']);
     expect(inventory.defaultMode).toBe('run');
   });
 

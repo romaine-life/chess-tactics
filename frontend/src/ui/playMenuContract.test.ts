@@ -55,7 +55,7 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('index={index + 4}');
   });
 
-  it('resumes the most recent activity inside Continue’s own column (ADR-0356)', () => {
+  it('resumes exactly one activity — the most recent — inside Continue’s own column (ADR-0356)', () => {
     const playContinue = readFileSync(new URL('./playContinue.ts', import.meta.url), 'utf8');
     // The inventory carries resumable work only — never a placeholder row per mode.
     expect(playContinue).toContain('activities: readonly ContinueActivity[]');
@@ -64,17 +64,21 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).not.toContain("?? 'Nothing to continue'");
     expect(playMenu).not.toContain('inventory.options');
     // Continue's action column is the resume card itself: facts plus one Play verb.
+    expect(playMenu).toContain('const selected = inventory.activities[0] ?? null;');
     expect(playMenu).toContain('data-testid="continue-detail"');
     expect(playMenu).toContain('className="play-detail-facts"');
     expect(playMenu).toContain('to={selected.playHref}><span>Play</span>');
-    expect(playMenu).toContain('<ContinuePanel inventory={resumeInventory} choice={selectedContinueChoice} />');
+    expect(playMenu).toContain('<ContinuePanel inventory={resumeInventory} />');
     expect(style).toContain('.continue-resume {');
     // No fourth column for Continue, so the action column must not narrow for one.
     expect(playMenu).toContain('const hasDetailPreview = Boolean(selectedLevel || hasRunDetail);');
     expect(playMenu).not.toContain('selectedContinueActivity');
-    // A second unfinished activity stays reachable; an empty Continue says so once.
-    expect(playMenu).toContain('data-testid={`continue-choice-${activity.mode}`}');
-    expect(playMenu).toContain('<h3 className="settings-section-title">Also unfinished</h3>');
+    // Nothing else is offered here: no second activity, no mode list, no choice rows.
+    expect(playMenu).not.toContain('continue-choice-');
+    expect(playMenu).not.toContain('Also unfinished');
+    // Any other Continue address is stale by construction and canonicalizes onto the one.
+    expect(playMenu).toContain('if (path !== canonicalHref) navigateApp(canonicalHref, { replace: true, scroll: false });');
+    // An empty Continue says so once instead of listing modes.
     expect(playMenu).toContain('data-testid="continue-empty"');
     expect(playMenu).toContain('<h4>Nothing to continue</h4>');
   });

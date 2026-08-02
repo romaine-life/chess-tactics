@@ -22797,12 +22797,7 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
 
 /* Continue resumes in place (ADR-0356): the resume card owns the action column, so it
    stacks the head, facts, and the single Play verb instead of handing them to a fourth
-   column. The panel gap matches the shared inter-section spacing, since the plain panel
-   grid carries none of its own and Continue can stack a second unfinished offer below. */
-.continue-selector-panel {
-  gap: clamp(14px, calc(var(--layout-vw, 100vw) * .013), 22px);
-}
-
+   column. */
 .continue-resume {
   display: grid;
   gap: var(--ds-stack);

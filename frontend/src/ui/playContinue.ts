@@ -7,8 +7,6 @@ import { isSkirmishProfileLevel } from './skirmishProfiles';
 
 export interface ContinueActivity {
   mode: PlayContinueChoice;
-  /** The activity's mode name, used when Continue lists a second unfinished activity. */
-  modeLabel: string;
   summary: string;
   title: string;
   playHref: string;
@@ -16,9 +14,8 @@ export interface ContinueActivity {
   facts: readonly { label: string; value: string }[];
 }
 
-/** Only genuinely resumable activities, most recently updated first. Continue resumes
- * work; the modes with nothing to resume are the Play rail's business, not a row here
- * (ADR-0356). */
+/** Resumable activities, most recently updated first. Continue shows only the first —
+ * candidates are collected solely to decide which one that is (ADR-0356). */
 export interface ContinueInventory {
   activities: readonly ContinueActivity[];
   defaultMode: PlayContinueChoice | null;
@@ -61,7 +58,6 @@ export function continueInventory(
     const phase = runPhase(run);
     activities.set('run', {
       mode: 'run',
-      modeLabel: 'Run',
       summary: `${run.war.name} · ${phase}`,
       title: 'Current Run',
       playHref: '/run',
@@ -82,7 +78,6 @@ export function continueInventory(
     if (level && campaign) {
       activities.set('campaign', {
         mode: 'campaign',
-        modeLabel: 'Campaign',
         summary: `${campaign.name} · ${level.name}`,
         title: campaign.name,
         playHref: `/play?campaignId=${encodeURIComponent(campaign.id)}&levelId=${encodeURIComponent(match.levelId)}`,
@@ -96,7 +91,6 @@ export function continueInventory(
       const mode: PlayContinueChoice = isSkirmishProfileLevel(level) ? 'skirmish' : 'levels';
       activities.set(mode, {
         mode,
-        modeLabel: mode === 'skirmish' ? 'Skirmish' : 'Levels',
         summary: level.name,
         title: level.name,
         playHref: playSkirmishLevelHref(match.levelId, playContinueSelectorHref(mode)),
@@ -109,8 +103,8 @@ export function continueInventory(
     }
   }
 
-  // Recency is the whole order: Continue's default is the last thing the player touched,
-  // and any other unfinished activity follows it as a secondary offer.
+  // Recency is the whole order: Continue resumes the last thing the player touched, and
+  // any other unfinished activity is left to its own rail destination.
   const ordered = [...activities.values()].sort((left, right) => right.updatedAt - left.updatedAt);
   return { activities: ordered, defaultMode: ordered[0]?.mode ?? null };
 }
