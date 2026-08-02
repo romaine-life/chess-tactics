@@ -61,7 +61,7 @@ test('already-applied migration 36 remains the immutable drawable-media migratio
   );
 });
 
-test('the exact sparse numeric legacy history upgrades through migration 49', () => {
+test('the exact sparse numeric legacy history upgrades through migration 50', () => {
   const versions = migrationVersions();
   const appliedBeforeUpgrade = new Set(
     versions.filter((version) => version <= 27 || version === 36),
@@ -352,6 +352,22 @@ test('the exact sparse numeric legacy history upgrades through migration 49', ()
     /CREATE TABLE IF NOT EXISTS\s+run_progression[\s\S]*highest_completed_ataraxia_tier[\s\S]*CHECK \(highest_completed_ataraxia_tier >= -1\)/i,
     'migration 49 must preserve the pre-baseline state and monotonic tier field',
   );
+  const migration50 = inlineMigration(50);
+  assert.equal(
+    migration50.name,
+    'content-addressed Run craft links',
+    'migration 50 must own the craft-link store identity',
+  );
+  assert.match(
+    migration50.sql,
+    /CREATE TABLE IF NOT EXISTS\s+run_craft_links[\s\S]*id\s+text\s+PRIMARY KEY[\s\S]*spec\s+jsonb\s+NOT NULL/i,
+    'migration 50 must key the stored craft spec by its own content-addressed id',
+  );
+  assert.doesNotMatch(
+    migration50.sql,
+    /DROP|ALTER/i,
+    'migration 50 is a pure addition and must not touch already-applied schema',
+  );
 
   const migration36 = inlineMigration(36);
   const allMigrations = versions.map(inlineMigration);
@@ -378,7 +394,7 @@ test('the exact sparse numeric legacy history upgrades through migration 49', ()
   );
   assert.deepEqual(
     plan.pending.map((entry) => entry.version),
-    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49],
+    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50],
     'the bridge must fill the historical gap before applying every post-36 contract',
   );
   assert.throws(
@@ -410,7 +426,7 @@ test('the exact sparse numeric legacy history upgrades through migration 49', ()
   );
 });
 
-test('required-schema readiness and repair enforce the migrations 37 through 49 contracts', () => {
+test('required-schema readiness and repair enforce the migrations 37 through 50 contracts', () => {
   const relations = sourceSection(
     serverSource,
     'const REQUIRED_SCHEMA_RELATIONS = [',
@@ -461,6 +477,19 @@ test('required-schema readiness and repair enforce the migrations 37 through 49 
     repairs,
     /\['run_progression',\s*49\]/,
     'Ataraxia progression relation repair must replay migration 49',
+  );
+  // Craft links (migration 50) are a debugging instrument, not schema the app needs to serve a
+  // route. Requiring the relation would take every route down on a database missing only that
+  // table; auto-repairing it would recreate it silently under an operator who dropped it.
+  assert.doesNotMatch(
+    relations,
+    /^\s*'run_craft_links'/m,
+    'the craft-link store must not gate readiness for every other route',
+  );
+  assert.doesNotMatch(
+    repairs,
+    /\['run_craft_links'/,
+    'the craft-link store must not be auto-repaired behind an operator',
   );
   const relationRepair = sourceSection(
     serverSource,
@@ -899,13 +928,13 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
 
   const primaryUpgradeProof = sourceSection(
     smokeSource,
-    'async function validatePrimarySparseNumericMigrationUpgrade49()',
+    'async function validatePrimarySparseNumericMigrationUpgrade50()',
     '\nasync function validateEditorMigration16Preservation()',
   );
   assert.match(
     primaryUpgradeProof,
-    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*49\s*\}/,
-    'the production upgrade proof must require a complete 1-49 history',
+    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*50\s*\}/,
+    'the production upgrade proof must require a complete 1-50 history',
   );
   assert.match(
     primaryUpgradeProof,
@@ -919,8 +948,8 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   );
   assert.match(
     primaryUpgradeProof,
-    /length:\s*13[\s\S]*index\s*\+\s*37/,
-    'the production report must include every post-36 migration through 49',
+    /length:\s*14[\s\S]*index\s*\+\s*37/,
+    'the production report must include every post-36 migration through 50',
   );
   assert.match(
     primaryUpgradeProof,

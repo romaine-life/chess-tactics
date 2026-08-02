@@ -31,6 +31,7 @@ import {
   subscribeAppLocation,
 } from './navigation';
 import { RouteLoadBoundary } from './shell/RouteLoadBoundary';
+import { isRunRoutePath } from './runRoute';
 import { levelEditorRouteIdentity } from './levelEditorRouteIdentity';
 import {
   importLevelEditor,
@@ -146,13 +147,13 @@ export function App(): ReactElement {
   useLayoutEffect(() => { resolveSceneRef.current = resolveScene; }, [resolveScene]);
   useEffect(() => {
     const locationPath = normalizeRoutePath(window.location.pathname);
-    if (locationPath === '/run' || locationPath.startsWith('/run/strategikon/')) {
+    if (isRunRoutePath(locationPath)) {
       void hydrateActiveRun();
     }
   }, [hydrateActiveRun]);
   useEffect(() => {
     const locationPath = normalizeRoutePath(window.location.pathname);
-    if (locationPath !== '/run' && !locationPath.startsWith('/run/strategikon/')) return;
+    if (!isRunRoutePath(locationPath)) return;
     const destination = resolveScene(locationPath, window.location.search);
     const latest = sceneRef.current;
     if (
@@ -659,7 +660,7 @@ function renderScene(scene: ScenePath, search: string): ReactElement {
   const path = scene.pathname;
   if (path === '/play') return <Skirmish routePath={path} routeSearch={search} />;
   if (path.startsWith('/play/strategikon/')) return <Skirmish routePath={path} routeSearch={search} />;
-  if (path === '/run' || path.startsWith('/run/strategikon/')) {
+  if (isRunRoutePath(path)) {
     return <RunScreen routePath={path} routeSearch={search} sceneSnapshot={scene.snapshot as RunSceneSnapshot} />;
   }
   if (path === '/predrawn-reference') return <PredrawnReference />;

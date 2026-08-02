@@ -346,6 +346,97 @@ export function hasRunCraftRequest(search: string): boolean {
 }
 
 /**
+ * The address of a crafted Run state (ADR-0354). The id IS the link: the spec lives on the
+ * server, so the address stays short and opaque no matter how much the spec grows, survives
+ * copy-paste and chat linkifiers intact, and has no grammar to outgrow. It is derived from the
+ * spec's own content, so the same state always mints the same address.
+ */
+export const RUN_CRAFT_LINK_PREFIX = '/run/craft/';
+
+/** A minted craft id: lowercase hex, long enough not to be guessed at from a neighbouring one. */
+const RUN_CRAFT_LINK_ID = /^[0-9a-f]{12,64}$/;
+
+export function runCraftLinkForId(id: string): string {
+  return `${RUN_CRAFT_LINK_PREFIX}${id}`;
+}
+
+/** The craft id an address carries, or null when the address is not a craft link. */
+export function runCraftLinkId(pathname: string): string | null {
+  if (!pathname.startsWith(RUN_CRAFT_LINK_PREFIX)) return null;
+  const id = pathname.slice(RUN_CRAFT_LINK_PREFIX.length).replace(/\/+$/, '').toLowerCase();
+  return RUN_CRAFT_LINK_ID.test(id) ? id : null;
+}
+
+/** True for any address under the craft-link prefix — including a malformed id, which has to
+ * reach the Run screen to be reported rather than falling through to some other route. */
+export function isRunCraftLinkPath(pathname: string): boolean {
+  return pathname === RUN_CRAFT_LINK_PREFIX.replace(/\/$/, '') || pathname.startsWith(RUN_CRAFT_LINK_PREFIX);
+}
+
+/**
+ * Write a normalized spec back out in the grammar the parsers read. It is what gets stored
+ * behind a craft id, and what the id is derived from, so it has to survive the trip out and
+ * back unchanged: a spec that did not round-trip would craft something other than what its
+ * link was minted for.
+ */
+export function runCraftSpecToJson(spec: RunCraftSpec): Record<string, unknown> {
+  const unit = (entry: RunCraftUnit) => (entry.abilities.length ? { type: entry.type, abilities: [...entry.abilities] } : entry.type);
+  const json: Record<string, unknown> = { phase: spec.phase, battle: spec.battle, seed: spec.seed, tier: spec.ataraxiaTier };
+  if (spec.warId !== null) json.war = spec.warId;
+  if (spec.goldTenths !== null) json.gold = spec.goldTenths / GOLD_SCALE;
+  if (spec.army) json.army = spec.army.map(unit);
+  if (spec.add) json.add = spec.add.map(unit);
+  if (spec.offers) json.offers = spec.offers.map((card) => ({ pieces: [...card.pieces], type: card.cardType }));
+  if (spec.loot) json.loot = [...spec.loot];
+  if (spec.paidRelic !== null) json.paid = spec.paidRelic;
+  if (spec.relics) json.relics = [...spec.relics];
+  return json;
+}
+
+/**
+ * The canonical text a craft id is derived from. Key order is fixed by runCraftSpecToJson, so
+ * the same requested state always produces the same bytes — and therefore the same link, in
+ * this session and in one a month from now. Hashing happens where the id is minted (the
+ * server); this is the agreed input to it.
+ */
+export function runCraftSpecFingerprint(spec: RunCraftSpec): string {
+  return JSON.stringify(runCraftSpecToJson(spec));
+}
+
+/** The readable address grammar, for writing a spec by hand. It is a way to SAY a spec, not the
+ * link a crafted state is handed over as — that is always the id (runCraftLinkForId). */
+export function runCraftAddressParams(spec: RunCraftSpec): URLSearchParams {
+  // An address cannot say "this Rook carries Agminate". Refusing beats writing a shorter spec
+  // than the one asked for: the craft id has no such limit, so nothing needs this to lie.
+  if ([...(spec.army ?? []), ...(spec.add ?? [])].some((entry) => entry.abilities.length)) {
+    throw new RunCraftError('craft: units carrying abilities cannot be written as an address. Mint a craft link for them.');
+  }
+  const params = new URLSearchParams();
+  params.set('craft', spec.phase);
+  params.set('battle', String(spec.battle));
+  if (spec.warId !== null) params.set('war', spec.warId);
+  if (spec.seed !== DEFAULT_CRAFT_SEED) params.set('seed', String(spec.seed));
+  if (spec.ataraxiaTier !== 0) params.set('tier', String(spec.ataraxiaTier));
+  if (spec.goldTenths !== null) params.set('gold', String(spec.goldTenths / GOLD_SCALE));
+  if (spec.army) params.set('army', spec.army.map((entry) => entry.type).join(','));
+  if (spec.add) params.set('add', spec.add.map((entry) => entry.type).join(','));
+  if (spec.offers) {
+    params.set('offers', spec.offers
+      .map((card) => card.pieces.join('+') + (card.cardType ? `:${card.cardType}` : ''))
+      .join(','));
+  }
+  if (spec.loot) params.set('loot', spec.loot.join(','));
+  if (spec.paidRelic !== null) params.set('paid', spec.paidRelic);
+  if (spec.relics) params.set('relics', spec.relics.join(','));
+  return params;
+}
+
+/** The hand-authored address for a spec, for typing a one-off into the browser. */
+export function runCraftAddress(spec: RunCraftSpec, path = '/run'): string {
+  return `${path}?${runCraftAddressParams(spec).toString()}`;
+}
+
+/**
  * A crafted link carries the id of the Run it was made for — identity, never contents. Opened by
  * anyone else, or by the same person signed out, `/run` would otherwise render whatever Run that
  * browser happens to hold and look like it worked. Comparing the assertion catches that silently

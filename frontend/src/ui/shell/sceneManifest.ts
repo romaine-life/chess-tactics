@@ -1,6 +1,7 @@
 import { enchiridionSectionFromPath, enchiridionSectionPath } from '../enchiridionRoute';
 import { normalizeRoutePath } from '../navigation';
 import { isPlaySelectorPath, playHubSectionPath, playHubSelection } from '../playHubRoute';
+import { isRunRoutePath, isRunStrategikonPath } from '../runRoute';
 import type { RunDocument, RunPhase } from '../../run/model';
 
 export type SceneBackground = 'homepage' | 'battlefield' | 'tool';
@@ -211,7 +212,7 @@ function leafSceneManifest(
       'title-controls',
     ], [], 'gameplay-shell', 'transition-only');
   }
-  if (path === '/run' || path.startsWith('/run/strategikon/')) {
+  if (isRunRoutePath(path)) {
     const runPhaseIdentity = runSnapshot?.phase === 'deployment' || runSnapshot?.phase === 'battle'
       ? `battlefield-${runSnapshot.run?.battleIndex ?? 0}`
       : runSnapshot?.phase ?? 'hydrating';
@@ -362,7 +363,7 @@ function runSceneSnapshot(
     ? 'hydrating'
     : source.document?.phase ?? 'no-active';
   const requestedView = new URLSearchParams(search).get('view');
-  const requestedWorkspace: RunSceneWorkspace = path.startsWith('/run/strategikon/')
+  const requestedWorkspace: RunSceneWorkspace = isRunStrategikonPath(path)
     ? 'strategikon'
     : requestedView === 'army' || requestedView === 'relics' || requestedView === 'sell'
       ? requestedView
@@ -389,7 +390,7 @@ export function sceneManifest(
   sources: SceneSources = {},
 ): ScenePath {
   const path = normalizeRoutePath(pathname);
-  const runSnapshot = path === '/run' || path.startsWith('/run/strategikon/')
+  const runSnapshot = isRunRoutePath(path)
     ? runSceneSnapshot(path, search, sources.run)
     : null;
   const manifest = leafSceneManifest(path, search, runSnapshot);
@@ -400,7 +401,7 @@ export function sceneManifest(
     instances = path === '/play'
       ? [instance(SCENE_DEFINITIONS.gameplay)]
       : [instance(SCENE_DEFINITIONS.gameplay), instance(SCENE_DEFINITIONS.gameplayStrategikon, { path })];
-  } else if (path === '/run' || path.startsWith('/run/strategikon/')) {
+  } else if (isRunRoutePath(path)) {
     const snapshot = runSnapshot!;
     const phase = snapshot.phase === 'deployment' || snapshot.phase === 'battle'
       ? 'battlefield'
