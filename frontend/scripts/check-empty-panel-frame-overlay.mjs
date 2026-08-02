@@ -1074,7 +1074,7 @@ if (rawRelicSpacing.length > 0) {
   failures.push('Run relic overlay spacing must use ADR-0031 tokens at every responsive width');
 }
 if (!/\{shellWorkspaceCoversRelics \? null : <RunRelicStrip relicIds=\{relicIds\} \/>\}/.test(skirmish)
-  || !/shellWorkspaceCoversRelics=\{Boolean\(inspectionWorkspace\)\}/.test(runScreen)
+  || !/shellWorkspaceCoversRelics=\{strategikonOpen \|\| Boolean\(inspectionWorkspace\)\}/.test(runScreen)
   || !/shellWorkspaceCoversRelics=\{Boolean\(runWorkspace\) \|\| strategikonOpen\}/.test(skirmish)) {
   failures.push('Shell-covering workspaces must suppress the covered relic strip without changing shell geometry');
 }

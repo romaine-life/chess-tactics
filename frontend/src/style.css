@@ -7236,6 +7236,13 @@ body.loading-bootstrap .app-startup-status {
 .shell-workspace-fill {
   inset: 0;
 }
+.shell-workspace-background-artwork {
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+  z-index: 0;
+}
 .shell-workspace-content {
   box-sizing: border-box;
   display: flex;
@@ -20093,6 +20100,15 @@ button.tileset-relationship-cell {
   --shell-workspace-body-inset-start: var(--main-menu-content-inset-inline);
 }
 
+.strategikon-background-artwork {
+  block-size: 100%;
+  display: block;
+  inline-size: 100%;
+  image-rendering: pixelated;
+  object-fit: cover;
+  opacity: .68;
+}
+
 .strategikon-slot {
   inset: 0;
   min-block-size: 0;
@@ -22190,6 +22206,23 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
 .play-detail-facts dd {
   margin: 0;
   text-align: end;
+}
+
+/* Replacement disclosure seated above Start Run — the popup-free abandon confirm.
+   Sits between the detail body and the actions row, so the column's own gap spaces it. */
+.run-replace-note {
+  padding: var(--ds-inset);
+}
+
+.run-replace-note h3 {
+  font-size: var(--ds-text-2xs);
+  margin: 0 0 var(--ds-inline-tight);
+  text-transform: uppercase;
+}
+
+.run-replace-note p {
+  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .72));
+  margin: 0;
 }
 
 .run-pestiferous-losses {

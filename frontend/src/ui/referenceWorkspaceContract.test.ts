@@ -234,4 +234,11 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(style).not.toContain('--shell-workspace-body-inset-end');
     expect(skirmish).not.toContain('has-strategikon');
   });
+
+  it('renders the accepted command archive through the installed application UI role', () => {
+    expect(strategikon).toContain("installedUiMedia('ui-workspaces-strategikon-background-png')");
+    expect(strategikon).toContain('className="strategikon-background-artwork"');
+    expect(strategikon).not.toContain('strategikonBackgroundReview');
+    expect(style).toMatch(/\.strategikon-background-artwork\s*\{[\s\S]*?image-rendering:\s*pixelated;[\s\S]*?object-fit:\s*cover;[\s\S]*?opacity:\s*\.68/);
+  });
 });

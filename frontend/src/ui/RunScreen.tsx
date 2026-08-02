@@ -11,7 +11,7 @@ import { PLAY_RUN_SELECTOR_HREF } from './playHubRoute';
 import { Skirmish, SkirmishShell, type RunBattlePresentation } from './Skirmish';
 import { navigateApp } from './navigation';
 import type { RunSceneSnapshot } from './shell/sceneManifest';
-import { RunPresentationSceneSlot } from './shell/AuthoredSceneSlot';
+import { GameplayWorkspaceSceneSlot, RunPresentationSceneSlot } from './shell/AuthoredSceneSlot';
 import { useConfirm } from './shared/ConfirmDialog';
 import { RunWorkspace } from './RunWorkspace';
 import {
@@ -67,6 +67,7 @@ import {
   type RunSellFilters,
 } from './RunArmyWorkspace';
 import { RunCard } from './RunCard';
+import { Strategikon } from './Strategikon';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 
 type RunScreenView = RunWorkspaceView;
@@ -233,9 +234,13 @@ function RunMetaControls({
 
 function RunPhaseWorkspace({
   inspectionWorkspace,
+  strategikonWorkspace = null,
+  strategikonOpen = false,
   children,
 }: {
   inspectionWorkspace: ReactElement | null;
+  strategikonWorkspace?: ReactNode;
+  strategikonOpen?: boolean;
   children: ReactElement;
 }): ReactElement {
   return (
@@ -243,9 +248,11 @@ function RunPhaseWorkspace({
       className="run-phase-workspace"
       primaryClassName="run-phase-primary"
       primary={children}
+      workspaceOpen={strategikonOpen || Boolean(inspectionWorkspace)}
       aria-label="Run workspace"
     >
       {inspectionWorkspace}
+      {strategikonWorkspace}
     </ShellViewportSwap>
   );
 }
@@ -756,15 +763,14 @@ export function RunScreen({
     scope: 'no-run',
     filters: { ...DEFAULT_RUN_SELL_FILTERS },
   });
+  // The Strategikon is the Run's reference workspace in EVERY phase, not just Battle —
+  // deployment, shop, and victory all open it from the same Controls title mark. Only an
+  // absent Run has nothing to reference, so that is the sole address the screen repairs.
   useEffect(() => {
-    if (
-      hydrated
-      && routePath.startsWith('/run/strategikon/')
-      && sceneSnapshot.phase !== 'battle'
-    ) {
+    if (hydrated && routePath.startsWith('/run/strategikon/') && !run) {
       navigateApp(`/run${routeSearch}`, { replace: true, scroll: false });
     }
-  }, [hydrated, routePath, routeSearch, sceneSnapshot.phase]);
+  }, [hydrated, routePath, routeSearch, run]);
 
   // The pre-hydration document may exist from browser storage, but the screen treats
   // the Run as absent until hydrate() has arbitrated browser and account copies.
@@ -773,6 +779,10 @@ export function RunScreen({
     ? 'primary'
     : sceneSnapshot.workspace;
   const view = shellRun?.phase !== 'shop' && rawView === 'sell' ? 'primary' : rawView;
+  const strategikonOpen = sceneSnapshot.workspace === 'strategikon';
+  const strategikonHref = strategikonOpen
+    ? `/run${routeSearch}`
+    : `/run/strategikon/enchiridion/units${routeSearch}`;
   const selectedUnitId = selectedState.scope === viewScope ? selectedState.unitId : null;
   const armyFilters = armyFilterState.scope === filterScope
     ? armyFilterState.filters
@@ -780,8 +790,13 @@ export function RunScreen({
   const sellFilters = sellFilterState.scope === filterScope
     ? sellFilterState.filters
     : { ...DEFAULT_RUN_SELL_FILTERS };
+  // Army, Relics, and Sell are workspaces of the Run screen itself, so they always
+  // address the Run root. Dropping any open Strategikon address keeps these Controls
+  // live instead of navigating to a path the reference workspace still covers.
   const navigateRunView = (nextView: RunScreenView): void => {
-    const nextHref = runWorkspaceHref(window.location.href, nextView);
+    const current = new URL(window.location.href);
+    current.pathname = '/run';
+    const nextHref = runWorkspaceHref(current.toString(), nextView);
     navigateApp(nextHref, { replace: true, scroll: false });
     if (nextView !== 'army') setSelectedState({ scope: viewScope, unitId: null });
   };
@@ -879,14 +894,29 @@ export function RunScreen({
         testId="run-screen"
         titleBarContent={shellRun ? <RunTitleBarStatus run={shellRun} /> : null}
         relicIds={shellRun ? shellRun.relics : []}
-        shellWorkspaceCoversRelics={Boolean(inspectionWorkspace)}
+        shellWorkspaceCoversRelics={strategikonOpen || Boolean(inspectionWorkspace)}
         controlsContent={shellRun
           ? <RunMetaControls run={shellRun} view={view} onNavigate={navigateRunView} showAbandon={shellRun.phase !== 'victory'} />
           : null}
         readyToCompose={hydrated}
-        hudProps={{ enableGlobalShortcuts: false }}
+        hudProps={{
+          enableGlobalShortcuts: false,
+          strategikonHref: shellRun ? strategikonHref : null,
+          strategikonOpen,
+        }}
       >
-        <RunPhaseWorkspace inspectionWorkspace={inspectionWorkspace}>
+        <RunPhaseWorkspace
+          inspectionWorkspace={inspectionWorkspace}
+          strategikonOpen={strategikonOpen}
+          strategikonWorkspace={(
+            <GameplayWorkspaceSceneSlot
+              className="strategikon-slot"
+              sceneInstance={strategikonOpen ? routePath : '/run/strategikon'}
+            >
+              {strategikonOpen ? <Strategikon path={routePath} search={routeSearch} run={shellRun} /> : null}
+            </GameplayWorkspaceSceneSlot>
+          )}
+        >
           {workspace}
         </RunPhaseWorkspace>
       </SkirmishShell>
