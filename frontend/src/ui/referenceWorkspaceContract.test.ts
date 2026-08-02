@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 const enchiridion = readFileSync(new URL('./Enchiridion.tsx', import.meta.url), 'utf8');
 const strategikon = readFileSync(new URL('./Strategikon.tsx', import.meta.url), 'utf8');
 const mainMenu = readFileSync(new URL('./MainMenu.tsx', import.meta.url), 'utf8');
+const apparatusRailTab = readFileSync(new URL('./shared/ApparatusRailTab.tsx', import.meta.url), 'utf8');
 const style = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const skirmish = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
 const hud = readFileSync(new URL('./SkirmishHud.tsx', import.meta.url), 'utf8');
@@ -52,6 +53,28 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(enchiridion).toContain('iconSrc={SECTION_ICON_SRC[candidate]}');
     expect(enchiridion).not.toContain("terrain: 'ic-grid'");
     expect(style).not.toContain('.ic-terrain');
+  });
+
+  it('gives one destination one mark across every rail that offers it', () => {
+    // A rail tab carries an installed media URL and nothing else. The removed
+    // `iconClassName` escape hatch painted a CSS background instead of the shared
+    // <img>, and the two paths sized the SAME installed icon differently — which is
+    // how the Strategikon's Enchiridion tab showed a 30px crop of the 64px mark the
+    // main menu drew whole. Requiring the URL makes that divergence unexpressible.
+    expect(apparatusRailTab).toContain('iconSrc: string;');
+    expect(apparatusRailTab).toContain('<img src={iconSrc} alt="" />');
+    expect(apparatusRailTab).not.toContain('iconClassName');
+    expect(style).not.toContain('.settings-tab-icon > :is(.skirmish-tab-icon');
+    for (const source of [enchiridion, strategikon, mainMenu]) {
+      expect(source).not.toContain('iconClassName');
+    }
+    // The Enchiridion destination resolves through ONE lookup for both rails.
+    expect(strategikon).toContain("iconSrc={menuModeIcon('enchiridion')}");
+    expect(mainMenu).toContain('icon: menuModeIcon(slug)');
+    expect(mainMenu).not.toContain('asset.media.icon');
+    // Every section of the shared section rail resolves to installed media.
+    expect(enchiridion).toContain('const SECTION_ICON_SRC: Record<EnchiridionSection, string>');
+    expect(enchiridion).not.toContain('const SECTION_ICON:');
   });
 
   it('uses host-owned fill composition without adding an outer box to either host', () => {

@@ -10,6 +10,7 @@ import { ENCHIRIDION_SECTIONS, type EnchiridionSection } from './enchiridionRout
 import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
 import { InnerChromeBox, ShellWorkspace } from './shared/ChromeBox';
 import { installedUiMedia } from './installedUiMedia';
+import { menuModeIcon } from './menuModeIcon';
 
 export type StrategikonSection = 'enchiridion' | 'prosopography' | 'lipsanotheca';
 
@@ -82,7 +83,9 @@ export function Strategikon({
               to={withSearch(strategikonHref(basePath, 'enchiridion', enchiridionSection))}
               index={0}
               active={section === 'enchiridion'}
-              iconClassName="ic-grid"
+              // The main menu's Enchiridion destination and this one are the same
+              // destination, so they read the same installed mark (menuModeIcon).
+              iconSrc={menuModeIcon('enchiridion')}
             />
             <ApparatusRailTab
               label="Prosopography"
@@ -90,7 +93,7 @@ export function Strategikon({
               to={withSearch(strategikonHref(basePath, 'prosopography'))}
               index={1}
               active={section === 'prosopography'}
-              iconClassName="skirmish-tab-icon skirmish-tab-icon-roster"
+              iconSrc={installedUiMedia('ui-kit-icons-players-png')}
             />
             <ApparatusRailTab
               label="Lipsanotheca"
@@ -98,7 +101,7 @@ export function Strategikon({
               to={withSearch(strategikonHref(basePath, 'lipsanotheca'))}
               index={2}
               active={section === 'lipsanotheca'}
-              iconClassName="skirmish-tab-icon skirmish-tab-icon-log"
+              iconSrc={installedUiMedia('ui-kit-icons-info-png')}
             />
           </ApparatusRailColumn>
           {section === 'enchiridion' ? (
