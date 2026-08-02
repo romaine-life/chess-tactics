@@ -35,9 +35,11 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import puppeteer from 'puppeteer-core';
 import {
+  assertObservationPatchConsumed,
+  installObservationSessionPatch,
   isLevelEditorUrl,
   isObservationSessionState,
-  observationOpenPostData,
+  watchEditSessionOpens,
 } from './shot-editor-session.mjs';
 
 const argv = process.argv.slice(2);
@@ -532,12 +534,23 @@ try {
     if (!authState?.signed_in) throw new Error('local screenshot sign-in did not establish the owner session');
   }
 
-  // Visual verification is an authenticated observer, never a synthetic editing participant. Patch only the
-  // Level Editor's session-open request. The optional failure injection shares this one
-  // interception handler so a Level Editor capture never tries to continue the same request twice.
+  // Visual verification is an authenticated observer, never a synthetic editing participant. Rewrite
+  // the Level Editor's session-open INSIDE the page rather than through CDP request interception:
+  // every editor capture loads the board's lazily-imported modules, and interception wedges exactly
+  // those Vite dev-server module requests indefinitely (see installObservationSessionPatch). Watching
+  // requests to prove the rewrite was consumed needs no interception at all.
   const targetIsLevelEditor = isLevelEditorUrl(url);
+  const editSessionOpens = targetIsLevelEditor ? watchEditSessionOpens(page) : null;
+  if (targetIsLevelEditor) await installObservationSessionPatch(page);
+
+  // CDP interception is genuinely REQUIRED here, and this is the only place in this script that
+  // still uses it: --abort-request* injects real transport failures on an arbitrary url substring,
+  // which must be able to kill stylesheets, images, module scripts and EventSource streams — none
+  // of which a window.fetch patch can reach. It stays behind those explicitly-passed operator
+  // flags, so an ordinary capture (including every Level Editor capture) never pays the
+  // module-wedge risk that interception carries against the Vite dev server.
   let retryFailureReleased = false;
-  if (targetIsLevelEditor || abortRequest || abortRequestOnce || abortRequestUntilRetry) {
+  if (abortRequest || abortRequestOnce || abortRequestUntilRetry) {
     let abortedOnce = false;
     await page.setRequestInterception(true);
     page.on('request', (request) => {
@@ -553,16 +566,7 @@ try {
         void request.abort('failed');
         return;
       }
-      const postData = observationOpenPostData({
-        targetIsLevelEditor,
-        method: request.method(),
-        requestUrl: request.url(),
-        postData: request.postData(),
-      });
-      if (!postData) { void request.continue(); return; }
-      const headers = { ...request.headers() };
-      delete headers['content-length'];
-      void request.continue({ headers, postData });
+      void request.continue();
     });
   }
 
@@ -1286,6 +1290,17 @@ try {
   }
   if (isLevelEditorUrl(page.url())) {
     throw new Error(`Level Editor observer session did not release after nested-workspace cleanup: ${page.url()}`);
+  }
+  // Every Level Editor capture must prove it observed, not just --assert-editor-viewer runs: an
+  // open that reached the network without the observe rewrite would have joined the owner's live
+  // working copy as an editing participant, and a written screenshot is not worth that.
+  if (targetIsLevelEditor) {
+    try {
+      await assertObservationPatchConsumed(page, editSessionOpens);
+    } catch (error) {
+      process.exitCode = 6;
+      throw error;
+    }
   }
   const { size } = statSync(out);
   console.log(`wrote ${out} (${(size / 1024).toFixed(1)} KB)`);

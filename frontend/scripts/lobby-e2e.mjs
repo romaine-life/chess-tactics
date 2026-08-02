@@ -23,7 +23,8 @@
 
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
+import { crc32, deflateSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import puppeteer from 'puppeteer-core';
@@ -129,7 +130,38 @@ const UNIT_CATALOG = {
     acceptanceBlockReason: null,
   })),
 };
-const UNIT_SPRITE_PATH = resolve(distDir, 'assets/units/rook/portrait/white.png');
+// Runtime art moved behind the live backend (#479) and the build guard now asserts dist/ carries
+// no packaged media, so this suite can no longer read a sprite out of the build — it hard-failed
+// on a file that cannot exist any more, which made it unrunnable. The bytes only need to be a
+// valid PNG at the size UNIT_SPRITES declares; this fixture proves lobby and netplay relay, not
+// art. Synthesize one so the suite stays self-contained and runnable anywhere, which is its point.
+function solidPng(width, height, [red, green, blue, alpha]) {
+  const chunk = (type, body) => {
+    const head = Buffer.alloc(8);
+    head.writeUInt32BE(body.length, 0);
+    head.write(type, 4, 'ascii');
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(Buffer.concat([head.subarray(4), body])), 0);
+    return Buffer.concat([head, body, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr.writeUInt8(8, 8); // bit depth
+  ihdr.writeUInt8(6, 9); // colour type: RGBA
+  const row = Buffer.concat([
+    Buffer.from([0]), // filter: none
+    Buffer.alloc(width * 4).fill(Buffer.from([red, green, blue, alpha])),
+  ]);
+  const raw = Buffer.concat(Array.from({ length: height }, () => row));
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', ihdr),
+    chunk('IDAT', deflateSync(raw)),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+const UNIT_SPRITE_BYTES = solidPng(512, 512, [92, 112, 164, 255]);
 
 const CHROMES = [
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
@@ -146,11 +178,6 @@ if (!existsSync(resolve(distDir, 'index.html'))) {
   console.error(`No built frontend at ${distDir}. Build it first:  npm run build`);
   process.exit(1);
 }
-if (!existsSync(UNIT_SPRITE_PATH)) {
-  console.error(`Built frontend is missing the E2E unit sprite at ${UNIT_SPRITE_PATH}. Rebuild it first:  npm run build`);
-  process.exit(1);
-}
-const UNIT_SPRITE_BYTES = readFileSync(UNIT_SPRITE_PATH);
 if (!executablePath) {
   console.error('No Chrome/Edge found. Checked:\n' + CHROMES.join('\n'));
   process.exit(1);
@@ -195,6 +222,25 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+// CDP request interception is genuinely REQUIRED here, unlike the fetch-only stubs elsewhere in
+// scripts/ that were moved into the page (see shot-editor-session.installObservationSessionPatch).
+// Two of these fixtures are out of reach of a `window.fetch` patch:
+//   - the unit sprite is fetched by the renderer's `new Image()` loader (render/imageResources.ts),
+//     a transport a fetch patch cannot see at all;
+//   - the reload-recovery proof HOLDS a move POST in flight and then aborts it, which needs the
+//     request paused at the network layer while the page keeps running.
+// The hang this pattern caused in run-battle-e2e (commit af37db63) was a Vite DEV-SERVER pathology:
+// interception routed on-demand module transforms through the test process and left the AI worker's
+// module graph paused forever. That mechanism cannot arise here — this suite has no Vite in it. It
+// spawns backend/server.js with FRONTEND_DIR pointed at the built dist, so every module is a
+// finished static file with no per-request transform to stall on.
+//
+// NOT confirmed by repeated runs, because this suite cannot currently complete one: the app's
+// startup now hard-requires the live media catalog (main.tsx -> loadLiveMediaCatalog), and the
+// deliberately DB-free backend answers /api/asset-catalog and /api/drawable-catalog with
+// database_not_configured, so every seat stops at "Live assets unavailable". Restoring it means
+// extending the content fixture below to cover those two reads. Until then the no-hang claim here
+// rests on the structural argument above, not on measurement.
 async function installContentFixture(page) {
   const control = {
     holdNextMove: false,
