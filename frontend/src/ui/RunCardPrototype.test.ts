@@ -199,20 +199,22 @@ describe('Run Card Layout review variant', () => {
     const roomy = runCardContentsDensityStepForCard(cardWithGrants([{ count: 1, unit: 'pawn' }]));
     expect(roomy.density).toBe('roomy');
     expect(roomy.tuning.flavorScale).toBe(1.3);
-    // A full Filled box has no leftover room, so its step object stays the ladder's own.
+    // Standard's measured panel leaves a little room under a two-cell stack, so
+    // the flavor grows into it — the step it grew inside is still Filled.
     const filled = runCardContentsDensityStepForCard(cardWithGrants([
       { count: 1, unit: 'pawn' },
       { count: 1, unit: 'knight' },
     ]));
-    expect(filled.tuning).toBe(RUN_CARD_CONTENTS_DENSITY_LADDER[1].tuning);
-    expect(filled.tuning.flavorScale).toBe(1);
+    expect(filled.density).toBe('filled');
+    expect(filled.tuning.flavorScale).toBe(1.05);
+    expect(RUN_CARD_CONTENTS_DENSITY_LADDER[1].tuning.flavorScale).toBe(1);
     const packed = runCardContentsDensityStepForCard(cardWithGrants([
       { count: 3, unit: 'pawn' },
       { count: 1, unit: 'knight' },
       { count: 1, unit: 'bishop' },
     ]));
     expect(packed.density).toBe('packed');
-    expect(packed.tuning.flavorScale).toBe(1.1);
+    expect(packed.tuning.flavorScale).toBe(1.15);
     const scrunched = runCardContentsDensityStepForCard(cardWithGrants([
       { count: 3, unit: 'pawn' },
       { count: 1, unit: 'knight' },
@@ -221,7 +223,7 @@ describe('Run Card Layout review variant', () => {
       { count: 1, unit: 'queen' },
     ]));
     expect(scrunched.density).toBe('scrunched');
-    expect(scrunched.tuning.flavorScale).toBe(1.01);
+    expect(scrunched.tuning.flavorScale).toBe(1.06);
     // Growth derives copies; the reviewed ladder itself is never rewritten.
     expect(RUN_CARD_CONTENTS_DENSITY_LADDER[0].tuning.flavorScale).toBe(1);
     expect(RUN_CARD_CONTENTS_DENSITY_LADDER[3].tuning.flavorScale).toBe(.96);

@@ -163,27 +163,22 @@ function defineGeometry(
 }
 
 /**
- * The illustration window and contents panel each frame shared before the boxes
- * were separable. Both are carried forward untouched: the reviewed Contents Box
- * density ladder (ADR-0270) was tuned against these exact numbers, and neither
- * box was among the drifting text the by-eye pass addressed.
- */
-const CARRIED_PAINTED_PANELS = Object.freeze({
-  art: { x: 101.23, y: 210.728, width: 857.54, height: 598.052 },
-  contents: { x: 102.82, y: 967.568, width: 854.36, height: 425.908 },
-});
-
-/**
- * Every title and type box below is the painted plate's whole opening, read off
- * that frame's own pixels on all four edges — including the rounded ends no text
- * will ever reach, because the opening is the visual unit the text is padded
- * against. The cost box is centered on the socket the frame draws.
+ * Every box below is the opening that frame paints, read off its own pixels on
+ * all four edges — including the rounded ends and corner studs no text will ever
+ * reach, because the opening is the visual unit the text is padded against. The
+ * cost box is centered on the socket the frame draws.
+ *
+ * The illustration windows and contents panels were measured the same way. They
+ * are not identical between frames, so the reviewed density ladder (ADR-0270)
+ * now answers to each frame's real panel: Pestiferous, whose panel is 15px
+ * shorter than the borrowed one, takes a two-cell card one step denser.
  */
 export const RUN_CARD_STANDARD_FRAME_GEOMETRY = defineGeometry({
   variant: 'standard',
   frameSha256s: ['73710874141ec1c904416860d55a0be69d4dc7f5104db7eeecbfc756ca02dfe1'],
   boxes: {
-    ...CARRIED_PAINTED_PANELS,
+    art: { x: 94, y: 207, width: 870, height: 611 },
+    contents: { x: 88, y: 959, width: 884, height: 433 },
     title: { x: 94, y: 86, width: 762, height: 85 },
     cost: { x: 873.17, y: 73.58, width: 117.66, height: 106.848 },
     type: { x: 89, y: 864, width: 882, height: 69 },
@@ -194,7 +189,8 @@ export const RUN_CARD_PESTIFEROUS_FRAME_GEOMETRY = defineGeometry({
   variant: 'pestiferous',
   frameSha256s: ['1a403e5e9adad96c0bed9673acae3e26abc750d978130e9bc8e92bbca8947e9d'],
   boxes: {
-    ...CARRIED_PAINTED_PANELS,
+    art: { x: 108, y: 221, width: 844, height: 590 },
+    contents: { x: 107, y: 976, width: 855, height: 411 },
     title: { x: 94, y: 90, width: 758, height: 86 },
     cost: { x: 871.17, y: 79.58, width: 117.66, height: 106.848 },
     type: { x: 94, y: 872, width: 869, height: 70 },
@@ -205,7 +201,8 @@ export const RUN_CARD_CONCINNOUS_FRAME_GEOMETRY = defineGeometry({
   variant: 'concinnous',
   frameSha256s: ['38b1290df1067dfa3562b874478b29c3f47341d8a065c90d426cec2cdaa32cc7'],
   boxes: {
-    ...CARRIED_PAINTED_PANELS,
+    art: { x: 103, y: 218, width: 853, height: 611 },
+    contents: { x: 91, y: 972, width: 879, height: 437 },
     title: { x: 92, y: 86, width: 767, height: 94 },
     cost: { x: 874.17, y: 79.58, width: 117.66, height: 106.848 },
     // This frame's plates cast a thicker bottom shadow than they do a top
@@ -218,7 +215,8 @@ export const RUN_CARD_TACTICAL_FRAME_GEOMETRY = defineGeometry({
   variant: 'tactical',
   frameSha256s: ['6c54a0a6dc48f56a3cf21c83d57d08cfbf11a501ae90f820b527c07cf40d3140'],
   boxes: {
-    ...CARRIED_PAINTED_PANELS,
+    art: { x: 97, y: 209, width: 865, height: 608 },
+    contents: { x: 90, y: 965, width: 881, height: 429 },
     title: { x: 93, y: 86, width: 764, height: 87 },
     cost: { x: 872.17, y: 78.58, width: 117.66, height: 106.848 },
     type: { x: 90, y: 866, width: 878, height: 68 },
@@ -242,9 +240,9 @@ export const RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY = defineGeometry({
   boxes: {
     title: { x: 98, y: 94, width: 751, height: 88 },
     cost: { x: 867.17, y: 78.58, width: 117.66, height: 106.848 },
-    art: { x: 106, y: 219, width: 848, height: 637 },
+    art: { x: 105, y: 214, width: 851, height: 641 },
     type: { x: 99, y: 896, width: 862, height: 72 },
-    contents: { x: 102, y: 994, width: 856, height: 407 },
+    contents: { x: 103, y: 1004, width: 853, height: 391 },
   },
 });
 

@@ -38,10 +38,10 @@ describe('Run card frame geometry', () => {
       '--run-card-title-top': '5.7951%',
       '--run-card-cost-left': '82.3745%',
       '--run-card-cost-top': '4.9582%',
-      '--run-card-art-top': '14.2000%',
+      '--run-card-art-top': '13.9488%',
       '--run-card-type-top': '58.2210%',
-      '--run-card-contents-top': '65.2000%',
-      '--run-card-contents-height': '28.7000%',
+      '--run-card-contents-top': '64.6226%',
+      '--run-card-contents-height': '29.1779%',
     });
     const cost = RUN_CARD_STANDARD_FRAME_GEOMETRY.boxes.cost;
     expect(cost.x + cost.width / 2).toBeCloseTo(932, 2);
