@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createBlankLevel } from '../core/level';
 import {
   ATARAXIA_BY_TIER,
+  AGMINATE_DISPLAY_NAME,
   CONCINNOUS_OFFER_DENOMINATOR,
   DISCIPLINE_COST,
   GOLD_SCALE,
@@ -29,6 +30,7 @@ import {
   openShop,
   prepareDeployment,
   resetShop,
+  runAbilityDisplayName,
   sellArmyUnit,
   shopHasChanges,
   takeLootRelic,
@@ -79,6 +81,12 @@ function deployedRunWithPawn(snapshot = war()): RunDocument {
 }
 
 describe('Run piece economy', () => {
+  it('presents the legacy marshalled storage ability as Agminate', () => {
+    expect(AGMINATE_DISPLAY_NAME).toBe('Agminate');
+    expect(runAbilityDisplayName('marshalled')).toBe('Agminate');
+    expect(runAbilityDisplayName('positioned')).toBe('Positioned');
+  });
+
   it('enumerates every unique multiset worth 1–9 points exactly once', () => {
     expect(RUN_CARD_DECK).toHaveLength(49);
     expect(new Set(RUN_CARD_DECK.map((card) => card.id)).size).toBe(49);
@@ -560,7 +568,7 @@ describe('Ataraxia I — The Great Mortality', () => {
     expect(empty).toBe(second);
   });
 
-  it('immediately reveals a new target when the Plagued unit is sold', () => {
+  it('immediately reveals a new target when the Cacochymic unit is sold', () => {
     const base = deployedAtaraxiaRun(79, war(3));
     const units = base.army.filter((unit) => unit.type !== 'king').slice(0, 2).map((unit, index) => ({
       ...unit,
@@ -593,7 +601,7 @@ describe('Ataraxia I — The Great Mortality', () => {
     expect(sold.army.find((unit) => unit.id === units[1].id)?.modifiers).toEqual(['plagued']);
   });
 
-  it('upgrades format-5 all-unit Plagued state to one deterministic current target', () => {
+  it('upgrades format-5 all-unit Cacochymic state to one deterministic current target', () => {
     const base = deployedAtaraxiaRun(81, war(3));
     const units = base.army.filter((unit) => unit.type !== 'king').slice(0, 2).map((unit) => ({
       ...unit,

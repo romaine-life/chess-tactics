@@ -15,7 +15,7 @@ export type RunCardFrameRect = Readonly<{
 }>;
 
 export type RunCardFrameGeometry = Readonly<{
-  id: 'standard-v1' | 'concinnous-steel-v1';
+  id: 'standard-v1' | 'hieratic-steel-v1';
   sourceWidth: typeof RUN_CARD_FRAME_NATIVE_WIDTH;
   sourceHeight: typeof RUN_CARD_FRAME_NATIVE_HEIGHT;
   frameSha256: string;
@@ -64,13 +64,13 @@ export const RUN_CARD_STANDARD_FRAME_GEOMETRY = defineGeometry({
 });
 
 /**
- * Measured safe boxes for the preferred generated forged-steel frame. Its
+ * Measured safe boxes for the owner-selected Hieratic forged-steel frame. Its
  * panels are lower than Standard, but the shared renderer still owns every
  * inset, font rule, density treatment, and optical tuning inside these boxes.
  */
-export const RUN_CARD_CONCINNOUS_STEEL_FRAME_GEOMETRY = defineGeometry({
-  id: 'concinnous-steel-v1',
-  frameSha256: '0069be656caaebd00c0dd47e7e7a21d5c4f8978d170ecea1cbd11647767e75f3',
+export const RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY = defineGeometry({
+  id: 'hieratic-steel-v1',
+  frameSha256: 'cdd9a3e017881f69c49c343f6cc9e721320f3681a1a3787b2a3166ec7ea26cdf',
   boxes: {
     title: { x: 98.58, y: 95, width: 725.04, height: 86 },
     cost: { x: 865.42, y: 82.076, width: 117.66, height: 106.848 },
@@ -81,8 +81,8 @@ export const RUN_CARD_CONCINNOUS_STEEL_FRAME_GEOMETRY = defineGeometry({
 });
 
 export function runCardFrameGeometryForSha(frameSha256: string | null): RunCardFrameGeometry {
-  return frameSha256 === RUN_CARD_CONCINNOUS_STEEL_FRAME_GEOMETRY.frameSha256
-    ? RUN_CARD_CONCINNOUS_STEEL_FRAME_GEOMETRY
+  return frameSha256 === RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY.frameSha256
+    ? RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY
     : RUN_CARD_STANDARD_FRAME_GEOMETRY;
 }
 

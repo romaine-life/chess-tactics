@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  RUN_CARD_CONCINNOUS_STEEL_FRAME_GEOMETRY,
+  RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY,
   RUN_CARD_FRAME_BOX_NAMES,
   RUN_CARD_FRAME_NATIVE_HEIGHT,
   RUN_CARD_FRAME_NATIVE_WIDTH,
@@ -25,26 +25,26 @@ describe('Run card frame geometry', () => {
     });
   });
 
-  it('binds Concinnous to the preferred generated steel frame and its measured lower panels', () => {
-    expect(runCardFrameGeometryForSha(RUN_CARD_CONCINNOUS_STEEL_FRAME_GEOMETRY.frameSha256)).toBe(
-      RUN_CARD_CONCINNOUS_STEEL_FRAME_GEOMETRY,
+  it('binds Hieratic to the owner-selected steel frame and its measured lower panels', () => {
+    expect(runCardFrameGeometryForSha(RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY.frameSha256)).toBe(
+      RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY,
     );
-    expect(RUN_CARD_CONCINNOUS_STEEL_FRAME_GEOMETRY.frameSha256).toBe(
-      '0069be656caaebd00c0dd47e7e7a21d5c4f8978d170ecea1cbd11647767e75f3',
+    expect(RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY.frameSha256).toBe(
+      'cdd9a3e017881f69c49c343f6cc9e721320f3681a1a3787b2a3166ec7ea26cdf',
     );
-    expect(RUN_CARD_CONCINNOUS_STEEL_FRAME_GEOMETRY.boxes.type.y).toBeGreaterThan(
+    expect(RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY.boxes.type.y).toBeGreaterThan(
       RUN_CARD_STANDARD_FRAME_GEOMETRY.boxes.type.y,
     );
-    expect(RUN_CARD_CONCINNOUS_STEEL_FRAME_GEOMETRY.boxes.contents.y).toBeGreaterThan(
+    expect(RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY.boxes.contents.y).toBeGreaterThan(
       RUN_CARD_STANDARD_FRAME_GEOMETRY.boxes.contents.y,
     );
-    const steelCost = RUN_CARD_CONCINNOUS_STEEL_FRAME_GEOMETRY.boxes.cost;
+    const steelCost = RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY.boxes.cost;
     expect(steelCost.x + steelCost.width / 2).toBeCloseTo(924.25, 2);
     expect(steelCost.y + steelCost.height / 2).toBeCloseTo(135.5, 2);
   });
 
   it('keeps every declared box inside the native source image', () => {
-    for (const geometry of [RUN_CARD_STANDARD_FRAME_GEOMETRY, RUN_CARD_CONCINNOUS_STEEL_FRAME_GEOMETRY]) {
+    for (const geometry of [RUN_CARD_STANDARD_FRAME_GEOMETRY, RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY]) {
       expect(Object.keys(geometry.boxes)).toEqual(RUN_CARD_FRAME_BOX_NAMES);
       for (const box of Object.values(geometry.boxes)) {
         expect(box.x).toBeGreaterThanOrEqual(0);

@@ -10,7 +10,7 @@ import {
   type RunCardFaceContent,
 } from './RunCardFace';
 import {
-  RUN_CARD_CONCINNOUS_STEEL_FRAME_GEOMETRY,
+  RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY,
   RUN_CARD_STANDARD_FRAME_GEOMETRY,
 } from './runCardFrameGeometry';
 import {
@@ -78,7 +78,7 @@ describe('Run Card Layout review variant', () => {
     expect(runCardPrototypeContent('standard').typeLine).toBe('Units');
   });
 
-  it('reserves a live icon slot without printing the Plagued name as its marker', () => {
+  it('reserves a live icon slot without printing the Cacochymic name as its marker', () => {
     expect(RUN_CARD_PLAGUED_ICON_SLOT).toBe('ui/run/card-status/plagued-v1.png');
     expect(RUN_CARD_PLAGUED_ICON_PLACEHOLDER).toBe('◇');
     expect(RUN_CARD_PLAGUED_ICON_PLACEHOLDER).not.toMatch(/plagued/i);
@@ -191,7 +191,7 @@ describe('Run Card Layout review variant', () => {
     };
     expect(runCardContentsDensityStepForCard(
       concinnousPair,
-      RUN_CARD_CONCINNOUS_STEEL_FRAME_GEOMETRY,
+      RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY,
     ).density).toBe('filled');
     expect(runCardContentsDensityStepForCard(
       { ...concinnousPair, typeLine: 'Units', properties: undefined },

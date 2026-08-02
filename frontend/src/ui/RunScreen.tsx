@@ -17,6 +17,7 @@ import { useConfirm } from './shared/ConfirmDialog';
 import { RunWorkspace } from './RunWorkspace';
 import {
   ATARAXIA_BY_TIER,
+  CACOCHYMIC_DISPLAY_NAME,
   GOLD_SCALE,
   RUN_RELIC_BY_ID,
   battleVictoryGoldTenths,
@@ -613,7 +614,7 @@ function ShopPanel({
         {pestiferousLosses.length ? (
           <InnerChromeBox className="run-pestiferous-losses" role="status">
             <h3>Pestiferous attrition</h3>
-            <p>These Plagued units were lost after the Battle:</p>
+            <p>These {CACOCHYMIC_DISPLAY_NAME} units were lost after the Battle:</p>
             <ul>
               {pestiferousLosses.map((loss) => (
                 <li key={`${loss.cardId}:${loss.unit.id}`}>
@@ -621,7 +622,7 @@ function ShopPanel({
                   {(() => {
                     const card = run.cards.find((candidate) => candidate.id === loss.cardId);
                     const next = run.army.find((unit) => unit.id === card?.plaguedUnitId);
-                    return next ? ` — ${next.name} · ${next.type} is now Plagued` : '';
+                    return next ? ` — ${next.name} · ${next.type} is now ${CACOCHYMIC_DISPLAY_NAME}` : '';
                   })()}
                 </li>
               ))}

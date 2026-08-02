@@ -2,6 +2,8 @@
 status: "accepted"
 date: 2026-07-03
 deciders: Nelson, Claude
+refined_by:
+  - "[ADR-0342](0342-studio-viewers-are-entered-through-catalog-and-own-only-local-controls.md)'s focused Viewer control rails"
 ---
 
 # ADR-0058: A dev surface is a Studio category, reachable by clicking — never a URL-only route

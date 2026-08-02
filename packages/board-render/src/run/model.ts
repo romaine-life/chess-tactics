@@ -32,6 +32,7 @@ export const DISCIPLINE_COST = 3;
 export type AtaraxiaTier = 0 | 1;
 export type RunCardType = 'pestiferous' | 'concinnous' | 'tactical';
 export type RunUnitModifier = 'plagued';
+export const CACOCHYMIC_DISPLAY_NAME = 'Cacochymic';
 
 export const ATARAXIA_BY_TIER: Readonly<Record<AtaraxiaTier, Readonly<{
   tier: AtaraxiaTier;
@@ -49,13 +50,20 @@ export const ATARAXIA_BY_TIER: Readonly<Record<AtaraxiaTier, Readonly<{
     tier: 1,
     label: 'Ataraxia I',
     title: 'The Great Mortality',
-    effect: 'About one in eight shop cards is Pestiferous. Its marked Plagued unit is lost after each victorious Battle, then another is marked.',
+    effect: `About one in eight shop cards is Pestiferous. Its marked ${CACOCHYMIC_DISPLAY_NAME} unit is lost after each victorious Battle, then another is marked.`,
   }),
 });
 
 export type PurchasablePieceType = 'pawn' | 'knight' | 'bishop' | 'rook' | 'queen';
 export type RunArmyPieceType = PurchasablePieceType | 'king';
 export type RunAbility = 'discipline' | 'positioned' | 'marshalled';
+
+export const AGMINATE_DISPLAY_NAME = 'Agminate';
+
+export function runAbilityDisplayName(ability: RunAbility): string {
+  if (ability === 'marshalled') return AGMINATE_DISPLAY_NAME;
+  return `${ability.slice(0, 1).toUpperCase()}${ability.slice(1)}`;
+}
 
 export const PIECE_VALUE: Readonly<Record<RunArmyPieceType, number>> = Object.freeze({
   pawn: 1,

@@ -23,7 +23,7 @@ export function SliderRow({ label, value, set, min, max, step = 1, nudge = 1, df
       <span>{label}</span>
       <div className="pages-ctl-row">
         <ChromeButton unit="inner-minus-key" className={chromeUnitClassNames('inner-minus-key', 'pages-step')} aria-label="Decrease" onClick={(e) => { e.preventDefault(); set(clamp(value - nudge)); }}>−</ChromeButton>
-        <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => set(Number(e.target.value))} />
+        <input type="range" min={min} max={max} step={step} value={value} onInput={(event) => set(Number(event.currentTarget.value))} />
         <ChromeButton unit="inner-plus-key" className={chromeUnitClassNames('inner-plus-key', 'pages-step')} aria-label="Increase" onClick={(e) => { e.preventDefault(); set(clamp(value + nudge)); }}>+</ChromeButton>
         <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'pages-mini-reset')} title="Reset to default" aria-label="Reset to default" onClick={(e) => { e.preventDefault(); set(dflt); }}>↺</ChromeButton>
       </div>

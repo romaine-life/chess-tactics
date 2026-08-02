@@ -210,6 +210,7 @@ describe('Level Editor chrome hierarchy', () => {
       expectRegisteredButton(block, 'pages-step', unit);
     }
     expectRegisteredFamily(sliderRow, 'pages-mini-reset', 'inner-text-button');
+    expect(sliderRow).toMatch(/<input type="range"[\s\S]*?onInput=\{\(event\) => set\(Number\(event\.currentTarget\.value\)\)\}/);
 
     const stepperButtons = buttonBlocks(stepper);
     const decrease = stepperButtons.find((block) => block.includes('aria-label={decreaseLabel}'));

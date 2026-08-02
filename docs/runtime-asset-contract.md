@@ -335,23 +335,47 @@ an incomplete row is an availability failure.
   to native generation: their accepted evidence truthfully records the archived
   1254×1254 source and exact nearest-neighbor 64×64 transform. They still render
   1:1 from the accepted 64×64 output and cannot authorize different bytes.
-  The Plagued unit-state icon uses the stable semantic slot
+  The Cacochymic unit-state icon currently uses the pre-cutover source slot
   `ui/run/card-status/plagued-v1.png`. Until that generated icon has an accepted
   live pointer, the shared card face reserves its final socket with a neutral
   DOM diamond. That owner-authorized placeholder is named temporary debt under
   ADR-0312, not a packaged media fallback, and must be removed when the accepted
   icon is installed.
+  Run affected-card properties and their granted unit states use paired native
+  64×64 transparent PNG roles. Property roles use component
+  `card-property-icon` under `ui/kit/icons/card-properties/<property>.png`;
+  state roles use component `unit-ability-icon` under
+  `ui/kit/icons/game/<state>.png`. The closed pairs are
+  Pestiferous/Cacochymic, Concinnous/Positioned, Tactical/Discipline, and
+  Hieratic/Agminate. The installed Cacochymic source and Pestiferous roles occupy
+  `ui/kit/icons/game/plagued.png` and
+  `ui/kit/icons/card-properties/pestiferous.png`. Runtime code cannot infer a
+  role from a slot path or substitute CSS, text, a generic glyph, or the other
+  member of a pair. Agminate's owner-saved candidate and fitting remain under
+  the pre-cutover source slot `ui/kit/icons/game/marshalled.png`; that locator
+  and the persisted `marshalled` value are non-presentational storage identities
+  until the coordinated paired-icon cutover (ADR-0343). The remaining pair cutover occurs atomically only after
+  every required role has an accepted pointer and has been reviewed at its real
+  card and unit-state sizes. Card Icon Fitting performs that review inside the
+  canonical Studio Viewer: it selects exact candidate versions, owns
+  per-property placement plus one shared unit-state placement, and saves only a
+  non-publishing design draft until the owner explicitly approves the completed
+  fit (ADR-0318, ADR-0339, ADR-0340, ADR-0341).
   Run-card frame variants use typed standalone native 1060×1484 PNG slots:
   `ui/run/card-prototypes/frame-v1.png`,
   `ui/run/card-prototypes/pestiferous-frame-v1.png`,
   `ui/run/card-prototypes/tactical-discipline-frame-v1.png`, and
-  `ui/run/card-prototypes/concinnous-frame-v1.png`. The shared face selects the
+  `ui/run/card-prototypes/concinnous-frame-v1.png`, and
+  `ui/run/card-prototypes/hieratic-frame-v1.png`. The shared face selects the
   semantic slot from the persisted qualifier; no frame owns live title, art,
   price, type, ledger, property, or flavor pixels. Every variant clips the same
   accepted gold-coin pixels from
   `ui/run/card-prototypes/cost-coin-source-v1.png` and overlays the live integer,
     so a frame cannot silently introduce a private coin treatment (ADR-0283,
     ADR-0329).
+  Concinnous resolves its accepted white frame. Hieratic resolves its distinct
+  steel-armor frame and SHA-bound measured geometry while its gameplay mechanics
+  remain deferred (ADR-0339); the two material identities never alias.
   The Run gold resource is likewise an exact native 64×64 PNG with typed
   `run-resource-icon` metadata; one installed `kind='run-resource'` drawable
   record binds `behavior.resourceId='gold'` to its `icon` media role.

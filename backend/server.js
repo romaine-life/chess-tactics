@@ -14755,12 +14755,14 @@ const RUN_CARD_FRAME_SLOT = 'ui/run/card-prototypes/frame-v1.png';
 const RUN_CARD_PESTIFEROUS_FRAME_SLOT = 'ui/run/card-prototypes/pestiferous-frame-v1.png';
 const RUN_CARD_CONCINNOUS_FRAME_SLOT = 'ui/run/card-prototypes/concinnous-frame-v1.png';
 const RUN_CARD_TACTICAL_FRAME_SLOT = 'ui/run/card-prototypes/tactical-discipline-frame-v1.png';
+const RUN_CARD_HIERATIC_FRAME_SLOT = 'ui/run/card-prototypes/hieratic-frame-v1.png';
 const RUN_CARD_COST_COIN_SOURCE_SLOT = 'ui/run/card-prototypes/cost-coin-source-v1.png';
 const RUN_CARD_FRAME_VARIANT_BY_SLOT = Object.freeze({
   [RUN_CARD_FRAME_SLOT]: 'standard',
   [RUN_CARD_PESTIFEROUS_FRAME_SLOT]: 'pestiferous',
   [RUN_CARD_CONCINNOUS_FRAME_SLOT]: 'concinnous',
   [RUN_CARD_TACTICAL_FRAME_SLOT]: 'tactical',
+  [RUN_CARD_HIERATIC_FRAME_SLOT]: 'hieratic',
   [RUN_CARD_COST_COIN_SOURCE_SLOT]: 'cost-coin-source',
 });
 const RUN_CARD_FRAME_SCHEMA = 'run-card-frame-v1';
@@ -18289,7 +18291,7 @@ function validateActiveRunBody(run) {
             ? typeof card.plaguedUnitId === 'string' && card.unitIds.includes(card.plaguedUnitId)
             : card.plaguedUnitId === null
           : card.plaguedUnitId === null;
-        if (!validPlaguedTarget) return 'run.cards contains an invalid Plagued target';
+        if (!validPlaguedTarget) return 'run.cards contains an invalid Cacochymic target';
         if (card.plaguedUnitId !== null) plaguedTargetUnitIds.add(card.plaguedUnitId);
       }
       cardIds.add(card.id);
@@ -18319,7 +18321,7 @@ function validateActiveRunBody(run) {
     if (run.formatVersion >= 7) {
       for (const unit of run.army) {
         if (unit.modifiers.includes('plagued') !== plaguedTargetUnitIds.has(unit.id)) {
-          return 'run.army Plagued modifiers do not match card targets';
+          return 'run.army Cacochymic modifiers do not match card targets';
         }
       }
     }
@@ -18438,7 +18440,7 @@ function validateActiveRunBody(run) {
             && offer.plaguedPieceIndex >= 0
             && offer.plaguedPieceIndex < offer.pieces.length
           : offer.plaguedPieceIndex === null;
-        if (!validPlaguedTarget) return 'run.shop.cardOffers contains an invalid Plagued target';
+        if (!validPlaguedTarget) return 'run.shop.cardOffers contains an invalid Cacochymic target';
         const plaguedPiece = offer.plaguedPieceIndex === null ? null : offer.pieces[offer.plaguedPieceIndex];
         const expectedCost = offer.cardType === 'pestiferous'
           ? offer.value - (plaguedPiece ? ACTIVE_RUN_PLAGUED_DISCOUNTS[plaguedPiece] : 0)
@@ -18476,7 +18478,7 @@ function validateActiveRunBody(run) {
               : card.plaguedUnitId !== null
           )
         ))
-      ) return 'run.shop.entrySnapshot contains an invalid Plagued target';
+      ) return 'run.shop.entrySnapshot contains an invalid Cacochymic target';
       if (run.shop.entrySnapshot !== undefined) {
         const purchasedCards = run.cards.slice(run.shop.entrySnapshot.cards.length);
         if (
