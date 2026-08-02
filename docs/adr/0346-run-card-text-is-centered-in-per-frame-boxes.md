@@ -40,6 +40,15 @@ addressed by the live-media slot the frame is served from rather than by the
 pixels currently published there. A regenerated frame keeps its own boxes instead
 of inheriting Standard's.
 
+**A box is the drawn opening, on all four edges.** A text box is the whole
+opening the frame paints — including the rounded ends and corner studs no text
+will ever reach — because that opening is the visual unit the reader sees the
+text sitting inside. It is not the rectangle the text happens to occupy. Padding
+is then expressed against that unit: the shared inset measures from the plate's
+real edge, so one value reads the same on a thin painted border and on Hieratic's
+thicker steel one, instead of every frame sharing a column that belongs to none
+of them.
+
 **Text placement is derived, not authored.** A line is centered vertically in its
 box. Title and type text is inset from both plate edges by one shared value; the
 coin reading is centered on both axes. Two shared numbers — `insetInline` and

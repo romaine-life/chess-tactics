@@ -88,7 +88,9 @@ export type RunCardTextPlacement = Readonly<{
 }>;
 
 export const RUN_CARD_TEXT_PLACEMENT: RunCardTextPlacement = Object.freeze({
-  insetInline: 1.35,
+  // Measured from the plate opening's real edge, so the same padding now reads
+  // the same on a thin painted border and on Hieratic's thicker steel one.
+  insetInline: 2.25,
   opticalBlock: 0,
 });
 
@@ -135,19 +137,19 @@ const CARRIED_PAINTED_PANELS = Object.freeze({
 });
 
 /**
- * Title and type rows below are the painted plate's opening, read keyline to
- * keyline off each frame's own pixels; the cost box is centered on the socket
- * that frame draws. Horizontal title/type edges stay at the approved inset,
- * which sits comfortably inside every painted plate.
+ * Every title and type box below is the painted plate's whole opening, read off
+ * that frame's own pixels on all four edges — including the rounded ends no text
+ * will ever reach, because the opening is the visual unit the text is padded
+ * against. The cost box is centered on the socket the frame draws.
  */
 export const RUN_CARD_STANDARD_FRAME_GEOMETRY = defineGeometry({
   variant: 'standard',
   measuredSha256: '73710874141ec1c904416860d55a0be69d4dc7f5104db7eeecbfc756ca02dfe1',
   boxes: {
     ...CARRIED_PAINTED_PANELS,
-    title: { x: 98.58, y: 86, width: 725.04, height: 85 },
+    title: { x: 94, y: 86, width: 762, height: 85 },
     cost: { x: 873.17, y: 73.58, width: 117.66, height: 106.848 },
-    type: { x: 98.58, y: 864, width: 854.36, height: 69 },
+    type: { x: 89, y: 864, width: 882, height: 69 },
   },
 });
 
@@ -156,9 +158,9 @@ export const RUN_CARD_PESTIFEROUS_FRAME_GEOMETRY = defineGeometry({
   measuredSha256: '1a403e5e9adad96c0bed9673acae3e26abc750d978130e9bc8e92bbca8947e9d',
   boxes: {
     ...CARRIED_PAINTED_PANELS,
-    title: { x: 98.58, y: 90, width: 725.04, height: 86 },
+    title: { x: 94, y: 90, width: 758, height: 86 },
     cost: { x: 871.17, y: 79.58, width: 117.66, height: 106.848 },
-    type: { x: 98.58, y: 872, width: 854.36, height: 70 },
+    type: { x: 94, y: 872, width: 869, height: 70 },
   },
 });
 
@@ -167,11 +169,11 @@ export const RUN_CARD_CONCINNOUS_FRAME_GEOMETRY = defineGeometry({
   measuredSha256: '38b1290df1067dfa3562b874478b29c3f47341d8a065c90d426cec2cdaa32cc7',
   boxes: {
     ...CARRIED_PAINTED_PANELS,
-    title: { x: 98.58, y: 86, width: 725.04, height: 94 },
+    title: { x: 92, y: 86, width: 767, height: 94 },
     cost: { x: 874.17, y: 79.58, width: 117.66, height: 106.848 },
     // This frame's plates cast a thicker bottom shadow than they do a top
     // bevel, so the opening is read to the flat face rather than to the lip.
-    type: { x: 98.58, y: 877, width: 854.36, height: 67 },
+    type: { x: 91, y: 877, width: 879, height: 67 },
   },
 });
 
@@ -180,9 +182,9 @@ export const RUN_CARD_TACTICAL_FRAME_GEOMETRY = defineGeometry({
   measuredSha256: '6c54a0a6dc48f56a3cf21c83d57d08cfbf11a501ae90f820b527c07cf40d3140',
   boxes: {
     ...CARRIED_PAINTED_PANELS,
-    title: { x: 98.58, y: 86, width: 725.04, height: 87 },
+    title: { x: 93, y: 86, width: 764, height: 87 },
     cost: { x: 872.17, y: 78.58, width: 117.66, height: 106.848 },
-    type: { x: 98.58, y: 866, width: 854.36, height: 68 },
+    type: { x: 90, y: 866, width: 878, height: 68 },
   },
 });
 
@@ -195,10 +197,10 @@ export const RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY = defineGeometry({
   variant: 'hieratic',
   measuredSha256: '7ae3b1945da8fefa46a264b696b0fc5695454c80c7256f879fd465a06a2d1152',
   boxes: {
-    title: { x: 118, y: 94, width: 705, height: 86 },
+    title: { x: 106, y: 94, width: 741, height: 86 },
     cost: { x: 867.17, y: 78.58, width: 117.66, height: 106.848 },
     art: { x: 106, y: 219, width: 848, height: 637 },
-    type: { x: 118, y: 896, width: 834, height: 72 },
+    type: { x: 110, y: 896, width: 843, height: 72 },
     contents: { x: 102, y: 994, width: 856, height: 407 },
   },
 });

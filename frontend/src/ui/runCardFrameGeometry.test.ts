@@ -31,9 +31,9 @@ describe('Run card frame geometry', () => {
 
   it('places the Standard boxes on the painted plates that frame draws', () => {
     expect(runCardFrameGeometryVariables(RUN_CARD_STANDARD_FRAME_GEOMETRY)).toMatchObject({
-      '--run-card-title-left': '9.3000%',
-      // Title and type rows are the plate opening read keyline to keyline off
-      // the frame's pixels; the cost box is centered on the socket it draws.
+      // All four edges of the title and type boxes are the plate opening read
+      // off the frame's pixels; the cost box is centered on the socket it draws.
+      '--run-card-title-left': '8.8679%',
       '--run-card-title-top': '5.7951%',
       '--run-card-cost-left': '82.3745%',
       '--run-card-cost-top': '4.9582%',
@@ -62,9 +62,21 @@ describe('Run card frame geometry', () => {
     expect(new Set(RUN_CARD_FRAME_VARIANTS.map(typeMid)).size).toBe(RUN_CARD_FRAME_VARIANTS.length);
   });
 
+  it('pads text against each frame’s own opening, not one shared column', () => {
+    // A thicker border means a plate that opens further in, and the shared inset
+    // then puts the text further in with it instead of against the steel.
+    const textLeft = (v: RunCardFrameVariant): number => (
+      RUN_CARD_FRAME_GEOMETRY_BY_VARIANT[v].boxes.type.x
+      + RUN_CARD_TEXT_PLACEMENT.insetInline * RUN_CARD_FRAME_NATIVE_WIDTH / 100
+    );
+    expect(textLeft('standard')).toBeCloseTo(112.85, 1);
+    expect(textLeft('hieratic')).toBeCloseTo(133.85, 1);
+    expect(textLeft('hieratic')).toBeGreaterThan(textLeft('standard'));
+  });
+
   it('states the entire text-placement rule as two shared values', () => {
     expect(Object.keys(RUN_CARD_TEXT_PLACEMENT).sort()).toEqual(['insetInline', 'opticalBlock']);
-    expect(RUN_CARD_TEXT_PLACEMENT.insetInline).toBe(1.35);
+    expect(RUN_CARD_TEXT_PLACEMENT.insetInline).toBe(2.25);
     expect(RUN_CARD_TEXT_PLACEMENT.opticalBlock).toBe(0);
   });
 
