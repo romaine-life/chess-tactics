@@ -1,5 +1,5 @@
 import { useEffect, useRef, type CSSProperties, type ReactElement, type ReactNode } from 'react';
-import { liveMediaForSlot } from '@chess-tactics/board-render';
+import { currentLiveMediaCatalog, liveMediaForSlot } from '@chess-tactics/board-render';
 import { KitScroll } from './KitScroll';
 import { HouseSelect } from './shared/HouseSelect';
 import { ChromeDivider, ShellControlsPanel, ShellWorkspace } from './shared/ChromeBox';
@@ -36,7 +36,9 @@ export function LevelEditorControlsPanel({
   onLayerChange,
   tool,
   toolsDisabled = false,
-  brushIconUrl = liveMediaForSlot(LEVEL_EDITOR_BRUSH_ICON_SLOT).media.immutableUrl,
+  brushIconUrl = currentLiveMediaCatalog()
+    ? liveMediaForSlot(LEVEL_EDITOR_BRUSH_ICON_SLOT).media.immutableUrl
+    : undefined,
   brushIconReviewStatus,
   onToolChange,
   eraseLabel = 'Erase',
@@ -135,7 +137,7 @@ export function LevelEditorControlsPanel({
           <h2>Actions</h2>
           <div className="le-seg le-seg-icons le-action-toolbar" role="toolbar" aria-label="Editor tools and history">
             <ChromeButton unit="inner-select-tool" className={chromeUnitClassNames('inner-select-tool', 'le-seg-btn', tool === 'select' && 'active')} disabled={toolsDisabled} onClick={() => onToolChange('select')} title={toolsDisabled ? 'Board tools are unavailable in this workspace.' : 'Select'} aria-label="Select"><span className="le-ico ic-eyedropper" aria-hidden="true" /></ChromeButton>
-            <ChromeButton unit="inner-brush-tool" className={chromeUnitClassNames('inner-brush-tool', 'le-seg-btn', tool === 'brush' && 'active')} disabled={toolsDisabled} onClick={() => onToolChange('brush')} title={toolsDisabled ? 'Board tools are unavailable in this workspace.' : 'Brush'} aria-label="Brush"><img className="le-ico live-media-brush-icon" src={brushIconUrl} data-brush-icon-review={brushIconReviewStatus && brushIconUrl ? 'candidate' : undefined} alt="" draggable={false} /></ChromeButton>
+            <ChromeButton unit="inner-brush-tool" className={chromeUnitClassNames('inner-brush-tool', 'le-seg-btn', tool === 'brush' && 'active')} disabled={toolsDisabled} onClick={() => onToolChange('brush')} title={toolsDisabled ? 'Board tools are unavailable in this workspace.' : 'Brush'} aria-label="Brush">{brushIconUrl ? <img className="le-ico live-media-brush-icon" src={brushIconUrl} data-brush-icon-review={brushIconReviewStatus ? 'candidate' : undefined} alt="" draggable={false} /> : <span className="le-ico live-media-brush-icon" aria-hidden="true" />}</ChromeButton>
             <ChromeButton unit="inner-erase-tool" className={chromeUnitClassNames('inner-erase-tool', 'le-seg-btn', tool === 'erase' && 'active')} disabled={eraseDisabled} onClick={() => onToolChange('erase')} title={toolsDisabled ? 'Board tools are unavailable in this workspace.' : eraseLabel} aria-label={eraseLabel}><span className="le-ico ic-eraser" aria-hidden="true" /></ChromeButton>
             <ChromeButton unit="inner-move-tool" className={chromeUnitClassNames('inner-move-tool', 'le-seg-btn', tool === 'move' && 'active')} disabled={toolsDisabled} onClick={() => onToolChange('move')} title={toolsDisabled ? 'Board tools are unavailable in this workspace.' : 'Move - drag a placed unit or prop to a new cell.'} aria-label="Move"><span className="le-ico ic-move" aria-hidden="true" /></ChromeButton>
             <span className="le-action-toolbar-divider" aria-hidden="true" />
