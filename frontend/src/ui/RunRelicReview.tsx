@@ -63,11 +63,9 @@ function RunRelicReviewGrid({
           <figcaption>
             <strong>{RUN_RELIC_BY_ID[relicId].name}</strong>
             <small>
-              native 64×64 · {version.status === 'candidate'
+              64×64 · {version.status === 'candidate'
                 ? 'new candidate · not installed'
-                : RUN_RELIC_BY_ID[relicId].replacementArtworkPending
-                  ? 'superseded reference · replacement not generated'
-                  : `installed reference · ${version.status} r${version.rowRevision}`}
+                : `installed reference · ${version.status} r${version.rowRevision}`}
             </small>
           </figcaption>
         </figure>
@@ -101,7 +99,7 @@ export function RunRelicReview(): ReactElement {
     >
       <OuterChromeBox chromeConsumer="run-relic-review" titled className="run-relic-review-panel">
         <OuterChromeHeader title="Run Relic Art Review" />
-        <p>Exact candidate or installed bytes at native 64×64. This surface does not install or substitute artwork.</p>
+        <p>Exact candidate or installed bytes at 64×64. This surface does not install or substitute artwork.</p>
         {error ? <p role="alert">{error}</p> : null}
         {!catalog && !error ? <p role="status">Loading candidates…</p> : null}
         {catalog ? (
