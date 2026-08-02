@@ -11,21 +11,20 @@ const hud = readFileSync(new URL('./SkirmishHud.tsx', import.meta.url), 'utf8');
 const runArmy = readFileSync(new URL('./RunArmyWorkspace.tsx', import.meta.url), 'utf8');
 
 describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
-  it('describes abilities and the Concinnous card qualifier in the shared reference', () => {
+  it('describes exactly the four unit abilities without card qualifiers', () => {
     const start = enchiridion.indexOf('function AbilitiesSection');
     const end = enchiridion.indexOf('function EnchiridionContent', start);
     const abilities = enchiridion.slice(start, end);
     expect(abilities).toContain('<h3>Discipline</h3>');
     expect(abilities).toContain('<h3>Positioned</h3>');
-    expect(abilities).toContain('<h3>Concinnous</h3>');
-    expect(abilities).toContain('Skillfully and harmoniously arranged; elegantly fitted together.');
     expect(abilities).toContain('<h3>Marshalled</h3>');
     expect(abilities).toContain('<h3>Plagued</h3>');
-    expect(abilities).toContain('<h3>Tactical</h3>');
-    expect(abilities.match(/className="enchiridion-ability-card"/g)).toHaveLength(6);
+    expect(abilities).not.toContain('<h3>Concinnous</h3>');
+    expect(abilities).not.toContain('<h3>Tactical</h3>');
+    expect(abilities.match(/className="enchiridion-ability-card"/g)).toHaveLength(4);
     expect(abilities).toContain('discounted by 0 gold for a Pawn, 1 for a Knight or Bishop, 2 for a Rook, and 3 for a Queen');
-    expect(abilities).toContain('Upon acquisition, one unit on this card becomes Positioned.');
-    expect(abilities).toContain('Upon acquisition, one randomly chosen unit on this card gains Discipline.');
+    expect(abilities).not.toContain('Upon acquisition, one unit on this card becomes Positioned.');
+    expect(abilities).not.toContain('Upon acquisition, one randomly chosen unit on this card gains Discipline.');
   });
 
   it('keeps the exact knight and bishop terrain exceptions in the shared reference', () => {

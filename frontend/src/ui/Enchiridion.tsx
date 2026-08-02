@@ -739,41 +739,6 @@ function CardTypesSection({ framed }: { framed: boolean }): ReactElement {
   );
 }
 
-type UnitAbilityReferenceDefinition = Readonly<{
-  id: string;
-  name: string;
-  description: string;
-  iconClassName?: string;
-  iconMediaRole?: string;
-}>;
-
-export const UNIT_ABILITY_REFERENCES: readonly UnitAbilityReferenceDefinition[] = Object.freeze([
-  {
-    id: 'discipline',
-    name: 'Discipline',
-    description: 'The unit may be deliberately placed on a legal square in the player deployment zone before the remainder of the army is deployed.',
-    iconClassName: 'skirmish-icon skirmish-icon-shield',
-  },
-  {
-    id: 'positioned',
-    name: 'Positioned',
-    description: 'The unit\u2019s automatic deployment favors its piece-specific region: Pawns prefer the front row, the King and Bishops prefer the back row, and Rooks prefer outer back-row squares.',
-    iconClassName: 'skirmish-icon skirmish-icon-move',
-  },
-  {
-    id: 'marshalled',
-    name: 'Marshalled',
-    description: 'The unit seeks its piece-specific station: the King prefers a board edge, Rooks favor their King-flank and corner formation, and Bishops prefer the opposite square color from another Bishop.',
-    iconClassName: 'skirmish-icon skirmish-icon-flag',
-  },
-  {
-    id: 'plagued',
-    name: 'Plagued',
-    description: 'The unit may be permanently lost after a Battle when its Pestiferous card resolves attrition. Its card-price contribution is discounted by 0 gold for a Pawn, 1 for a Knight or Bishop, 2 for a Rook, and 3 for a Queen.',
-    iconMediaRole: 'ui-kit-icons-game-plagued-png',
-  },
-]);
-
 function AbilitiesSection({ framed }: { framed: boolean }): ReactElement {
   return (
     <ReferenceSectionFrame
@@ -783,25 +748,40 @@ function AbilitiesSection({ framed }: { framed: boolean }): ReactElement {
       title="Abilities"
     >
       <div className="enchiridion-ability-list">
-        {UNIT_ABILITY_REFERENCES.map((ability) => (
-          <InnerChromeBox className="enchiridion-ability-card" key={ability.id}>
-            {ability.iconMediaRole ? (
-              <img
-                className="enchiridion-ability-icon"
-                src={installedUiMedia(ability.iconMediaRole)}
-                alt=""
-                aria-hidden="true"
-                draggable={false}
-              />
-            ) : (
-              <span className={ability.iconClassName} aria-hidden="true" />
-            )}
-            <span>
-              <h3>{ability.name}</h3>
-              <p>{ability.description}</p>
-            </span>
-          </InnerChromeBox>
-        ))}
+        <InnerChromeBox className="enchiridion-ability-card">
+          <span className="skirmish-icon skirmish-icon-shield" aria-hidden="true" />
+          <span>
+            <h3>Discipline</h3>
+            <p>The unit may be deliberately placed on a legal square in the player deployment zone before the remainder of the army is deployed.</p>
+          </span>
+        </InnerChromeBox>
+        <InnerChromeBox className="enchiridion-ability-card">
+          <span className="skirmish-icon skirmish-icon-move" aria-hidden="true" />
+          <span>
+            <h3>Positioned</h3>
+            <p>The unit’s automatic deployment favors its piece-specific region: Pawns prefer the front row, the King and Bishops prefer the back row, and Rooks prefer outer back-row squares.</p>
+          </span>
+        </InnerChromeBox>
+        <InnerChromeBox className="enchiridion-ability-card">
+          <span className="skirmish-icon skirmish-icon-flag" aria-hidden="true" />
+          <span>
+            <h3>Marshalled</h3>
+            <p>The unit seeks its piece-specific station: the King prefers a board edge, Rooks favor their King-flank and corner formation, and Bishops prefer the opposite square color from another Bishop.</p>
+          </span>
+        </InnerChromeBox>
+        <InnerChromeBox className="enchiridion-ability-card">
+          <img
+            className="enchiridion-ability-icon"
+            src={installedUiMedia('ui-kit-icons-game-plagued-png')}
+            alt=""
+            aria-hidden="true"
+            draggable={false}
+          />
+          <span>
+            <h3>Plagued</h3>
+            <p>The unit may be permanently lost after a Battle when its Pestiferous card resolves attrition. Its card-price contribution is discounted by 0 gold for a Pawn, 1 for a Knight or Bishop, 2 for a Rook, and 3 for a Queen.</p>
+          </span>
+        </InnerChromeBox>
       </div>
     </ReferenceSectionFrame>
   );
