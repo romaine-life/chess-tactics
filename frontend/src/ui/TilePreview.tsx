@@ -37,7 +37,7 @@ import { TileSidesViewer } from './TileSidesViewer';
 import { TILE_SIDE_ITEMS, type TileSideItem } from './tileSideCatalog';
 import { ScrollbarLibraryStudio, ScrollbarViewer } from './ScrollbarLibraryStudio';
 import { PagesLibraryStudio, PagesViewer } from './PagesLibraryStudio';
-import { ScreenArtReviewStudio, useScreenArtCatalog } from './ScreenArtReviewStudio';
+import { ScreenArtCatalog, ScreenArtViewer, useScreenArtCatalog } from './ScreenArtReviewStudio';
 import { ChromeLabCatalog, ChromeLabViewer, CHROME_LAB_TARGETS, defaultChromeLabTargetId } from './ChromeLab';
 import { RailLab } from './RailLab';
 import { GameLabCatalog, GameLabViewer } from './GameLab';
@@ -176,6 +176,7 @@ interface TilesetStudioRouteState {
   selectedArtworkName?: string;
   selectedSourceArtId?: string;
   selectedGlossaryName?: string;
+  selectedScreenArtId?: string;
   selectedPageName?: string;
   selectedChromeLabTargetId?: string;
   selectedGameLabLevelId?: string;
@@ -275,6 +276,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const art = params.get('art');
   const sourceArt = params.get('sourceArt');
   const gloss = params.get('gloss');
+  const screenArt = params.get('screenArt');
   const page = params.get('page');
   const chrome = params.get('chrome');
   const glvl = params.get('glvl');
@@ -353,6 +355,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedArtworkName: art || undefined,
     selectedSourceArtId: sourceArt || undefined,
     selectedGlossaryName: gloss || undefined,
+    selectedScreenArtId: screenArt || undefined,
     selectedPageName: page || undefined,
     selectedChromeLabTargetId: chrome || undefined,
     selectedGameLabLevelId: glvl || undefined,
@@ -436,6 +439,7 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
     if (route.category === 'artwork' && route.selectedArtworkName) catalogParams.set('art', route.selectedArtworkName);
     if (route.category === 'sourceart' && route.selectedSourceArtId) catalogParams.set('sourceArt', route.selectedSourceArtId);
     if (route.category === 'glossary' && route.selectedGlossaryName) catalogParams.set('gloss', route.selectedGlossaryName);
+    if (route.category === 'screenart' && route.selectedScreenArtId) catalogParams.set('screenArt', route.selectedScreenArtId);
     if (route.category === 'chromelab' && route.selectedChromeLabTargetId) catalogParams.set('chrome', route.selectedChromeLabTargetId);
     if (route.category === 'tilesides' && route.selectedTileSideId) catalogParams.set('side', route.selectedTileSideId);
   if (route.category === 'groundcover' && route.selectedGroundCoverId) catalogParams.set('cover', route.selectedGroundCoverId);
@@ -467,6 +471,7 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
     else if (route.viewerKind === 'artwork' && route.selectedArtworkName) params.set('art', route.selectedArtworkName);
     else if (route.viewerKind === 'sourceart' && route.selectedSourceArtId) params.set('sourceArt', route.selectedSourceArtId);
     else if (route.viewerKind === 'glossary' && route.selectedGlossaryName) params.set('gloss', route.selectedGlossaryName);
+    else if (route.viewerKind === 'screenart' && route.selectedScreenArtId) params.set('screenArt', route.selectedScreenArtId);
     else if (route.viewerKind === 'page' && route.selectedPageName) params.set('page', route.selectedPageName);
     else if (route.viewerKind === 'chromelab' && route.selectedChromeLabTargetId) params.set('chrome', route.selectedChromeLabTargetId);
     else if (route.viewerKind === 'gamelab' && route.selectedGameLabLevelId) params.set('glvl', route.selectedGameLabLevelId);
@@ -560,8 +565,10 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [selectedPortraitPieces, setSelectedPortraitPieces] = useState<PortraitPiece[]>([...PORTRAIT_PIECES]);
   const [selectedPortraitMethods, setSelectedPortraitMethods] = useState<PortraitMethod[]>(PORTRAIT_METHODS.map((m) => m.key));
   const [selectedPortraitId, setSelectedPortraitId] = useState<string | undefined>(undefined);
-  const [screenArtGenerator, setScreenArtGenerator] = useState('codex');
-  const [screenArtScreen, setScreenArtScreen] = useState('');
+  // Each read-only Viewer kind owns its own selection state so one kind's id can never
+  // leak into another's stage (studio-control-architecture.md).
+  const [selectedScreenArtId, setSelectedScreenArtId] = useState(initialRoute.selectedScreenArtId ?? '');
+  const [screenArtSearch, setScreenArtSearch] = useState('');
   const screenArt = useScreenArtCatalog();
   const [surfaceSearch, setSurfaceSearch] = useState('');
   const [scrollbarSearch, setScrollbarSearch] = useState('');
@@ -781,6 +788,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       if (route.selectedArtworkName) setSelectedArtworkName(route.selectedArtworkName);
       if (route.selectedSourceArtId) setSelectedSourceArtId(route.selectedSourceArtId);
       if (route.selectedGlossaryName) setSelectedGlossaryName(route.selectedGlossaryName);
+      if (route.selectedScreenArtId) setSelectedScreenArtId(route.selectedScreenArtId);
       if (route.selectedTileSideId) setSelectedTileSideId(route.selectedTileSideId);
       if (route.selectedGroundCoverId) setSelectedGroundCoverId(groundCoverAsset(route.selectedGroundCoverId).id);
       if (route.selectedWallDecorId) {
@@ -863,6 +871,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       selectedArtworkName,
       selectedSourceArtId,
       selectedGlossaryName,
+      selectedScreenArtId,
       selectedPageName,
       selectedChromeLabTargetId,
       selectedGameLabLevelId,
@@ -896,7 +905,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       brushKind,
       selectedUnitId: unitBrushId,
     });
-  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedArtworkName, selectedSourceArtId, selectedChromeLabTargetId, selectedFenceArtworkId, selectedGlossaryName, selectedPageName, selectedGameLabLevelId, selectedGymLevelId, selectedSolverLevelId, selectedSfxReviewId, selectedRunCardPromptId, solverTab, selectedTileSideId, selectedFrameName, selectedDividerName, selectedRailFamilyId, selectedPropName, selectedTileCompareId, selectedGroundCoverId, selectedWallDecorId, selectedWallArtId, selectedSurfaceFamily, selectedRegionId, viewerKind, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
+  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedArtworkName, selectedSourceArtId, selectedChromeLabTargetId, selectedFenceArtworkId, selectedGlossaryName, selectedScreenArtId, selectedPageName, selectedGameLabLevelId, selectedGymLevelId, selectedSolverLevelId, selectedSfxReviewId, selectedRunCardPromptId, solverTab, selectedTileSideId, selectedFrameName, selectedDividerName, selectedRailFamilyId, selectedPropName, selectedTileCompareId, selectedGroundCoverId, selectedWallDecorId, selectedWallArtId, selectedSurfaceFamily, selectedRegionId, viewerKind, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
 
   // Returning to the Catalog (from the Viewer/Lab, or a deep-link) must land you on
   // the card you came from — not the top of the grid. The selection is already kept
@@ -1684,45 +1693,30 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       ),
     },
     {
-      id: 'screenart', label: 'Screen Art', hint: 'Candidate backdrops for the full-screen workspace pages, one at a time and as large as the pane allows. Review only — nothing here is installed.',
+      id: 'screenart', label: 'Screen Art', hint: 'Browse candidate backdrops for the full-screen workspace pages; View Selected opens one big. Review only — nothing here is installed.',
       main: (
-        <ScreenArtReviewStudio
-          groups={screenArt.groups}
+        <ScreenArtCatalog
+          items={screenArt.items}
           loading={screenArt.loading}
           error={screenArt.error}
-          screen={screenArtScreen || screenArt.groups[0]?.screen || ''}
-          generator={screenArtGenerator}
+          search={screenArtSearch}
+          zoom={zoom}
+          selected={selectedScreenArtId || screenArt.items[0]?.id || ''}
+          onSelect={setSelectedScreenArtId}
+          onView={(id) => { setSelectedScreenArtId(id); openViewer('screenart'); }}
         />
       ),
       controls: (
         <>
-          {/* Six screen names do not fit as side-by-side chips in the 260px rail — they
-              truncate to "Dept…"/"Vict…". A select keeps every name readable and matches
-              the Category control directly above it. */}
           <label className="tileset-catalog-search">
-            <span>Screen</span>
-            <select
-              value={screenArtScreen || screenArt.groups[0]?.screen || ''}
-              onChange={(event) => setScreenArtScreen(event.target.value)}
-              aria-label="Choose which screen's backdrop to review"
-            >
-              {screenArt.groups.map((group) => (
-                <option key={group.screen} value={group.screen}>{group.label}</option>
-              ))}
-            </select>
+            <span>Search</span>
+            <input type="search" value={screenArtSearch} onChange={(event) => setScreenArtSearch(event.target.value)} placeholder="screen or generator…" />
           </label>
-          <div className="tileset-filter-field">
-            <span>Generator</span>
-            <ChoiceGroup
-              value={screenArtGenerator}
-              options={[
-                { value: 'codex', label: 'Codex' },
-                { value: 'pixellab', label: 'PixelLab' },
-              ]}
-              onChange={setScreenArtGenerator}
-              ariaLabel="Choose which generator's candidate to show"
-            />
-          </div>
+          <label className="tileset-catalog-zoom">
+            <span>Zoom</span>
+            <input type="range" min="0.75" max="2" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
+          </label>
+          <button type="button" className="tileset-view-action" onClick={() => openViewer('screenart')}>View Selected</button>
         </>
       ),
     },
@@ -2158,6 +2152,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             ? <ArtworkCompareLab header={studioViewerHeader} />
             : viewerKind === 'sourceart'
             ? <SourceArtTurntableLab assetId={selectedSourceArtId} onAssetId={setSelectedSourceArtId} header={viewerKindSelect} />
+            : viewerKind === 'screenart'
+            ? <ScreenArtViewer items={screenArt.items} id={selectedScreenArtId || screenArt.items[0]?.id || ''} header={studioViewerHeader} />
             : viewerKind === 'artwork'
               ? <ArtworkLab library={studioMedia.artwork} name={selectedArtworkName} header={studioViewerHeader} />
               : viewerKind === 'glossary'

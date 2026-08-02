@@ -19012,35 +19012,35 @@ button.tileset-relationship-cell {
 
 /* Screen-art candidates are wide 640x360 plates meant to be read at 4x, so they get a
    flowing row per screen rather than the relic grid's fixed icon columns. */
-/* One candidate at a time, filling the pane: art is judged at size, so the plate takes
-   the whole width and the caption rides underneath. The pane owns its own scroll, so the
-   stage never needs the shared card-wall grid. */
+/* Two classes → out-specifies the base card-image checkerboard, same reason the Pages
+   cards do it: a backdrop plate is fully opaque, so a transparency checker behind it is a
+   lie about the art. 16:9 full-bleed, nearest-neighbour to keep the authored pixels. */
+.tileset-studio-card-image.screen-art-card-image {
+  aspect-ratio: 16 / 9;
+  background: linear-gradient(180deg, #16243a, #0b1422);
+  min-height: 0;
+}
+
+.tileset-studio-card-image.screen-art-card-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+
+/* Viewer stage for a screen backdrop: the shared .al-stage frame, but claiming the whole
+   flex row — a backdrop is judged at size, and content-width would pin it to its authored
+   640px. Scaled nearest-neighbour so the authored pixels stay crisp (these ship at 4x). */
 .screen-art-stage {
-  display: grid;
-  gap: var(--ds-stack);
-  grid-template-rows: minmax(0, 1fr) auto;
-  block-size: 100%;
-  min-block-size: 0;
+  flex: 1 1 100%;
+  min-inline-size: 0;
 }
 
 .screen-art-stage img {
   image-rendering: pixelated;
   inline-size: 100%;
-  block-size: 100%;
-  min-block-size: 0;
-  object-fit: contain;
-  object-position: center top;
-}
-
-.screen-art-stage figcaption {
-  align-items: baseline;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--ds-inline-tight);
-}
-
-.screen-art-stage figcaption small {
-  color: var(--skirmish-muted);
+  block-size: auto;
 }
 
 .run-relic-review-grid {
