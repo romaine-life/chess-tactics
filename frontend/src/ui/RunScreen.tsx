@@ -10,7 +10,7 @@ import { TitleBarStatus } from './shell/TitleBarControls';
 import { PLAY_RUN_SELECTOR_HREF } from './playHubRoute';
 import { Skirmish, SkirmishShell, type RunBattlePresentation } from './Skirmish';
 import { navigateApp } from './navigation';
-import { installedRunShopWrap, runShopWrapLiveMount, runShopWrapScreenMount } from './runShopWrapCandidates';
+import { installedRunShopWrap, runShopWrapLiveMount } from './runShopWrapCandidates';
 import type { RunSceneSnapshot } from './shell/sceneManifest';
 import { GameplayWorkspaceSceneSlot, RunPresentationSceneSlot } from './shell/AuthoredSceneSlot';
 import { useConfirm } from './shared/ConfirmDialog';
@@ -466,62 +466,22 @@ function ShopCardRow({ children }: { children: ReactNode }): ReactElement {
   const [box, setBox] = useState({ width: 0, height: 0 });
   const hostRef = useRef<HTMLDivElement | null>(null);
   const cardCount = Children.count(children);
-  // A screen scene fills the whole Shop workspace, so it is measured against
-  // the workspace box; a band only owns the space left for the card row.
-  const measureTarget = wrap?.kind === 'screen' ? '.run-shop-workspace' : null;
 
-  // The host fills the space the Shop allots it and the wrap is drawn inside
-  // that box, so it can never push the screen into scrolling.
+  // Only a band wrap measures anything: it is a frame around the row, so the
+  // row has to fit inside it. A screen scene is a background and never
+  // participates — the cards lay out normally and the art sits behind them.
   useEffect(() => {
     const host = hostRef.current;
-    if (!wrap || !host || typeof ResizeObserver === 'undefined') return undefined;
-    const target = measureTarget ? host.closest(measureTarget) ?? host : host;
+    if (wrap?.kind !== 'band' || !host || typeof ResizeObserver === 'undefined') return undefined;
     const observer = new ResizeObserver(([entry]) => {
-      // Border box, not content box: the scene is positioned from the
-      // workspace's outer corner, and the workspace carries top padding for the
-      // relic strip. Measuring the content box leaves that padding unpainted.
-      const element = entry.target as HTMLElement;
-      const useBorderBox = element !== host;
       setBox({
-        width: Math.max(0, Math.floor(useBorderBox ? element.offsetWidth : entry.contentRect.width)),
-        height: Math.max(0, Math.floor(useBorderBox ? element.offsetHeight : entry.contentRect.height)),
+        width: Math.max(0, Math.floor(entry.contentRect.width)),
+        height: Math.max(0, Math.floor(entry.contentRect.height)),
       });
     });
-    observer.observe(target);
+    observer.observe(host);
     return () => observer.disconnect();
-  }, [wrap, measureTarget]);
-
-  if (wrap?.kind === 'screen' && cardCount >= 1) {
-    const mount = box.width > 0 && box.height > 0
-      ? runShopWrapScreenMount(wrap, cardCount, box.width, box.height)
-      : null;
-    const hostRect = hostRef.current?.getBoundingClientRect();
-    const workspaceRect = hostRef.current?.closest('.run-shop-workspace')?.getBoundingClientRect();
-    // The scene is painted on the workspace; the row is placed in workspace
-    // coordinates, then rebased into this host's own box.
-    const offsetX = hostRect && workspaceRect ? workspaceRect.left - hostRect.left : 0;
-    const offsetY = hostRect && workspaceRect ? workspaceRect.top - hostRect.top : 0;
-    // The scene itself is painted on the workspace element (see ShopPanel), so
-    // it covers the shell padding too; only the card row lives in here.
-    return (
-      <div className="run-shop-scene-host" ref={hostRef} data-testid="run-shop-wrap">
-        {mount ? (
-          <div
-            className="run-shop-wrap-cards"
-            style={{
-              insetInlineStart: `${offsetX + mount.cards.left}px`,
-              insetBlockStart: `${offsetY + mount.cards.top}px`,
-              inlineSize: `${mount.cards.width}px`,
-              gridTemplateColumns: `repeat(${cardCount}, ${mount.cardWidth}px)`,
-              gap: `${mount.cards.gap}px`,
-            }}
-          >
-            {children}
-          </div>
-        ) : null}
-      </div>
-    );
-  }
+  }, [wrap]);
 
   if (!wrap || wrap.kind !== 'band' || cardCount < 1) {
     return <div className="run-card-grid">{children}</div>;
