@@ -15,6 +15,7 @@ import type { RunSceneSnapshot } from './shell/sceneManifest';
 import { GameplayWorkspaceSceneSlot, RunPresentationSceneSlot } from './shell/AuthoredSceneSlot';
 import { useConfirm } from './shared/ConfirmDialog';
 import { RunWorkspace } from './RunWorkspace';
+import { workspaceBackgroundArtwork } from './workspaceBackgrounds';
 import {
   ATARAXIA_BY_TIER,
   GOLD_SCALE,
@@ -689,6 +690,7 @@ function VictoryPanel({ run }: { run: RunDocument }): ReactElement {
       contentClassName="run-victory-workspace-content"
       data-testid="run-victory-workspace"
       aria-labelledby="run-victory-workspace-title"
+      backgroundArtwork={workspaceBackgroundArtwork('run-victory')}
     >
       <h2 id="run-victory-workspace-title">War won</h2>
       <h2>{run.war.name}</h2>

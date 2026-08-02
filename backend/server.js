@@ -78,6 +78,8 @@ const {
   runResourceIconMediaIssue,
   runResourceIconSlotId,
   runShopWrapMediaIssue,
+  workspaceBackgroundSlotId,
+  workspaceBackgroundMediaIssue,
   runShopWrapSlotId,
   sfxSampleMediaIssue,
   sfxSampleOwnerProofIssue,
@@ -15228,6 +15230,9 @@ function mediaDomainProjectionIssue(row) {
   }
   if (strategikonBackgroundSlot(row.slot)) {
     return strategikonBackgroundMediaIssue(row, runtime.value);
+  }
+  if (workspaceBackgroundSlotId(row.slot)) {
+    return workspaceBackgroundMediaIssue(row, runtime.value);
   }
   const runCardFrame = runCardFrameProjection(row);
   if (runCardFrame.claimed) return runCardFrame.issue;

@@ -2153,7 +2153,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             : viewerKind === 'sourceart'
             ? <SourceArtTurntableLab assetId={selectedSourceArtId} onAssetId={setSelectedSourceArtId} header={viewerKindSelect} />
             : viewerKind === 'screenart'
-            ? <ScreenArtViewer items={screenArt.items} id={selectedScreenArtId || screenArt.items[0]?.id || ''} header={studioViewerHeader} />
+            ? <ScreenArtViewer items={screenArt.items} id={selectedScreenArtId || screenArt.items[0]?.id || ''} header={studioViewerHeader} catalog={screenArt.catalog} onInstalled={screenArt.refresh} />
             : viewerKind === 'artwork'
               ? <ArtworkLab library={studioMedia.artwork} name={selectedArtworkName} header={studioViewerHeader} />
               : viewerKind === 'glossary'
