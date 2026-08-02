@@ -937,7 +937,7 @@ function inlineMigrationSql(version) {
   return inlineMigrationDefinition(version).sql;
 }
 
-async function validatePrimarySparseNumericMigrationUpgrade49() {
+async function validatePrimarySparseNumericMigrationUpgrade50() {
   const history = await queryDb(
     `SELECT version, name, checksum
        FROM schema_migrations
@@ -952,7 +952,7 @@ async function validatePrimarySparseNumericMigrationUpgrade49() {
       ORDER BY column_name`,
   );
   const versions = history.rows.map((row) => Number(row.version));
-  const expectedVersions = Array.from({ length: 49 }, (_, index) => index + 1);
+  const expectedVersions = Array.from({ length: 50 }, (_, index) => index + 1);
   const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
   const expectedByVersion = new Map(
     expectedMigrations.map((migration) => [migration.version, migration]),
@@ -967,7 +967,7 @@ async function validatePrimarySparseNumericMigrationUpgrade49() {
   });
   const appliedMigrationVersions = [
     ...Array.from({ length: 8 }, (_, index) => index + 28),
-    ...Array.from({ length: 13 }, (_, index) => index + 37),
+    ...Array.from({ length: 14 }, (_, index) => index + 37),
   ];
   const skippedMigrationVersions = [
     ...Array.from({ length: 27 }, (_, index) => index + 1),
@@ -1335,7 +1335,7 @@ async function main() {
   await new Promise((resolve) => mockAuth.listen(authPort, '127.0.0.1', resolve));
   await new Promise((resolve) => mockBgm.listen(bgmPort, '127.0.0.1', resolve));
   await waitForServer();
-  await validatePrimarySparseNumericMigrationUpgrade49();
+  await validatePrimarySparseNumericMigrationUpgrade50();
   const databaseRuntime = await queryDb('SELECT version() AS version');
   const isPgliteRuntime = /\bPGlite\b/i.test(String(databaseRuntime.rows[0]?.version || ''));
   if (!isPgliteRuntime) {
