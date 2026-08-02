@@ -60,16 +60,19 @@ const SECTION_LABEL: Record<EnchiridionSection, string> = {
   abilities: 'Abilities',
 };
 
-const SECTION_ICON: Partial<Record<EnchiridionSection, string>> = {
-  units: 'skirmish-tab-icon skirmish-tab-icon-unit',
-  cards: 'skirmish-tab-icon skirmish-tab-icon-roster',
-  'card-types': 'skirmish-icon skirmish-icon-power',
-  relics: 'skirmish-tab-icon skirmish-tab-icon-log',
-  abilities: 'skirmish-icon skirmish-icon-shield',
-};
-
-const SECTION_ICON_SRC: Partial<Record<EnchiridionSection, string>> = {
+/**
+ * Every section's mark, resolved to installed media. These are the same kit icons the
+ * rail used to name as Skirmish-HUD glyph classes; as classes they painted a CSS
+ * background under the HUD's sizing rules instead of the rail's, so Terrain (the one
+ * section already on installed media) sat a third larger than its five neighbours.
+ */
+const SECTION_ICON_SRC: Record<EnchiridionSection, string> = {
+  units: installedUiMedia('ui-kit-icons-unit-studio-png'),
   terrain: installedUiMedia('ui-kit-icons-tileset-studio-png'),
+  cards: installedUiMedia('ui-kit-icons-players-png'),
+  'card-types': installedUiMedia('ui-kit-icons-game-power-png'),
+  relics: installedUiMedia('ui-kit-icons-info-png'),
+  abilities: installedUiMedia('ui-kit-icons-game-defend-png'),
 };
 
 const UNIT_COPY: Record<PlayablePieceType, string> = {
@@ -892,7 +895,6 @@ export function EnchiridionSectionRail({
           index={index}
           active={section === candidate}
           iconSrc={SECTION_ICON_SRC[candidate]}
-          iconClassName={SECTION_ICON[candidate]}
         />
       ))}
     </ApparatusRailColumn>

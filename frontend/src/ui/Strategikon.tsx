@@ -15,6 +15,7 @@ import {
 import type { EnchiridionSection } from './enchiridionRoute';
 import { strategikonAddress, strategikonHref, type StrategikonSection } from './strategikonRoute';
 import { installedUiMedia } from './installedUiMedia';
+import { menuModeIcon } from './menuModeIcon';
 
 function UnavailableRunReference({ title, copy }: { title: string; copy: string }): ReactElement {
   return (
@@ -78,7 +79,9 @@ export function Strategikon({
             to={href('enchiridion', reference)}
             index={0}
             active={section === 'enchiridion'}
-            iconClassName="ic-grid"
+            // The main menu's Enchiridion destination and this one are the same
+            // destination, so they read the same installed mark (menuModeIcon).
+            iconSrc={menuModeIcon('enchiridion')}
           />
           <ApparatusRailTab
             label="Prosopography"
@@ -86,7 +89,7 @@ export function Strategikon({
             to={href('prosopography')}
             index={1}
             active={section === 'prosopography'}
-            iconClassName="skirmish-tab-icon skirmish-tab-icon-roster"
+            iconSrc={installedUiMedia('ui-kit-icons-players-png')}
           />
           <ApparatusRailTab
             label="Lipsanotheca"
@@ -94,7 +97,7 @@ export function Strategikon({
             to={href('lipsanotheca')}
             index={2}
             active={section === 'lipsanotheca'}
-            iconClassName="skirmish-tab-icon skirmish-tab-icon-log"
+            iconSrc={installedUiMedia('ui-kit-icons-info-png')}
           />
         </ApparatusRailColumn>
       )}

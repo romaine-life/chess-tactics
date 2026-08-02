@@ -17291,11 +17291,6 @@ button.tileset-relationship-cell {
   text-transform: none;
 }
 
-.settings-tab-icon > :is(.skirmish-tab-icon, .skirmish-icon, [class^="ic-"]) {
-  block-size: 30px;
-  inline-size: 30px;
-}
-
 .settings-row p,
 .settings-row-value {
   color: #9fc4d5;
