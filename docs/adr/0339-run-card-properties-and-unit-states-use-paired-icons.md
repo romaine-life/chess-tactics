@@ -3,8 +3,8 @@ status: accepted
 date: 2026-08-01
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
-  - "[ADR-0340](0340-cacochymic-replaces-plagued-as-the-pestiferous-unit-state-name.md)'s Pestiferous/Cacochymic pair name"
-  - "[ADR-0342](0342-agminate-replaces-marshalled-as-the-formation-ability-name.md)'s Hieratic/Agminate pair name"
+  - "[ADR-0341](0341-cacochymic-replaces-plagued-as-the-pestiferous-unit-state-name.md)'s Pestiferous/Cacochymic pair name"
+  - "[ADR-0343](0343-agminate-replaces-marshalled-as-the-formation-ability-name.md)'s Hieratic/Agminate pair name"
 partially_supersedes:
   - "[ADR-0276](0276-run-type-lines-declare-primary-families-and-affected-qualifiers.md)'s visible em-dash qualifier suffix"
   - "[ADR-0309](0309-concinnous-names-the-white-positioned-card-qualifier.md)'s visible Concinnous type-line suffix"
@@ -20,7 +20,7 @@ extends:
   - "[ADR-0330](0330-run-card-type-lines-use-the-lower-optical-baseline.md)"
 ---
 
-# ADR-0338: Run-card properties and unit states use paired icons
+# ADR-0339: Run-card properties and unit states use paired icons
 
 ## Context
 

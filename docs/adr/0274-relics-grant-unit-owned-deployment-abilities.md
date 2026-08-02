@@ -3,7 +3,7 @@ status: accepted
 date: 2026-07-31
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
-  - "[ADR-0342](0342-agminate-replaces-marshalled-as-the-formation-ability-name.md)'s Agminate ability name"
+  - "[ADR-0343](0343-agminate-replaces-marshalled-as-the-formation-ability-name.md)'s Agminate ability name"
 partially_supersedes:
   - "[ADR-0193](0193-runs-are-persistent-wars-around-unchanged-chess-battles.md)'s direct ownership of seven piece-placement relic effects"
   - "[ADR-0273](0273-relational-unit-placement-may-have-diminishing-value.md)'s deferral of the Marshalled name and relic relationship"

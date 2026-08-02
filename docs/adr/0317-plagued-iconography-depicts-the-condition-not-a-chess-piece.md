@@ -3,7 +3,7 @@ status: accepted
 date: 2026-08-01
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
-  - "[ADR-0340](0340-cacochymic-replaces-plagued-as-the-pestiferous-unit-state-name.md)'s Cacochymic icon-family name"
+  - "[ADR-0341](0341-cacochymic-replaces-plagued-as-the-pestiferous-unit-state-name.md)'s Cacochymic icon-family name"
 supersedes:
   - "[ADR-0316](0316-plagued-icon-candidates-are-reviewed-in-context.md)"
 refines:

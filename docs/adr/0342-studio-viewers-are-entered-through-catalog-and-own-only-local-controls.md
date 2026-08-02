@@ -6,10 +6,10 @@ partially_supersedes:
   - "[ADR-0029](0029-catalog-category-requirements.md)'s visible Viewer-kind selector requirement"
 refines:
   - "[ADR-0058](0058-every-route-is-click-reachable.md)"
-  - "[ADR-0339](0339-run-card-icon-fitting-is-an-owner-operated-studio-instrument.md)"
+  - "[ADR-0340](0340-run-card-icon-fitting-is-an-owner-operated-studio-instrument.md)"
 ---
 
-# ADR-0341: Studio Viewers are entered through Catalog and own only local controls
+# ADR-0342: Studio Viewers are entered through Catalog and own only local controls
 
 ## Context
 

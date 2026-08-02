@@ -7,7 +7,7 @@ extends:
   - "[ADR-0265](0265-run-cards-keep-core-identities-while-units-carry-modifiers.md)'s unit-instance modifier model"
 partially_superseded_by:
   - "[ADR-0274](0274-relics-grant-unit-owned-deployment-abilities.md)"
-  - "[ADR-0342](0342-agminate-replaces-marshalled-as-the-formation-ability-name.md)'s Agminate name"
+  - "[ADR-0343](0343-agminate-replaces-marshalled-as-the-formation-ability-name.md)'s Agminate name"
 ---
 
 # ADR-0273: Relational unit placement may have diminishing value

@@ -3,7 +3,7 @@ status: accepted
 date: 2026-08-01
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
-  - "[ADR-0340](0340-cacochymic-replaces-plagued-as-the-pestiferous-unit-state-name.md)'s Cacochymic player-facing terminology"
+  - "[ADR-0341](0341-cacochymic-replaces-plagued-as-the-pestiferous-unit-state-name.md)'s Cacochymic player-facing terminology"
 partially_supersedes:
   - "[ADR-0265](0265-run-cards-keep-core-identities-while-units-carry-modifiers.md)'s whole-card Plagued pricing"
   - "[ADR-0267](0267-pestiferous-cards-lose-units-and-persist-when-empty.md)'s all-units-Plagued and resolution-time target clauses"

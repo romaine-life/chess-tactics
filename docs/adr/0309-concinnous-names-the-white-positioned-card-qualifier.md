@@ -11,7 +11,7 @@ extends:
   - "[ADR-0305](0305-card-ability-properties-do-not-synthesize-description-text.md)"
 partially_superseded_by:
   - "[ADR-0329](0329-concinnous-and-tactical-use-distinct-frames-and-one-shared-coin.md)'s restoration of Tactical as the separate Discipline qualifier"
-  - "[ADR-0338](0338-run-card-properties-and-unit-states-use-paired-icons.md)'s replacement of the visible Concinnous suffix with a property icon"
+  - "[ADR-0339](0339-run-card-properties-and-unit-states-use-paired-icons.md)'s replacement of the visible Concinnous suffix with a property icon"
 ---
 
 # ADR-0309: Concinnous names the white Positioned card qualifier

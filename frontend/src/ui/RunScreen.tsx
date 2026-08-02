@@ -10,7 +10,7 @@ import { TitleBarStatus } from './shell/TitleBarControls';
 import { PLAY_RUN_SELECTOR_HREF } from './playHubRoute';
 import { Skirmish, SkirmishShell, type RunBattlePresentation } from './Skirmish';
 import { navigateApp } from './navigation';
-import { installedRunShopWrap, runShopWrapLiveMount } from './runShopWrapCandidates';
+import { installedRunShopWrap, runShopWrapLiveMount, runShopWrapScreenMount } from './runShopWrapCandidates';
 import type { RunSceneSnapshot } from './shell/sceneManifest';
 import { GameplayWorkspaceSceneSlot, RunPresentationSceneSlot } from './shell/AuthoredSceneSlot';
 import { useConfirm } from './shared/ConfirmDialog';
@@ -50,6 +50,8 @@ import {
   selectedDeploymentLayout,
 } from '../run/deployment';
 import { useActiveRun } from '../run/store';
+import { runLinkTargetMismatch } from '../run/craft';
+import { useRunCraft } from './useRunCraft';
 import { RunRelicIcon, RunRelicsWorkspace } from './RunRelics';
 import { RunGoldAmount } from './RunResources';
 import {
@@ -467,21 +469,69 @@ function ShopCardRow({ children }: { children: ReactNode }): ReactElement {
   const [box, setBox] = useState({ width: 0, height: 0 });
   const hostRef = useRef<HTMLDivElement | null>(null);
   const cardCount = Children.count(children);
+  // A screen scene fills the whole Shop workspace, so it is measured against
+  // the workspace box; a band only owns the space left for the card row.
+  const measureTarget = wrap?.kind === 'screen' ? '.run-shop-workspace-content' : null;
 
-  // The host fills the space the Shop allots it and the stall is drawn inside
-  // that box, so the wrap can never push the screen into scrolling.
+  // The host fills the space the Shop allots it and the wrap is drawn inside
+  // that box, so it can never push the screen into scrolling.
   useEffect(() => {
     const host = hostRef.current;
     if (!wrap || !host || typeof ResizeObserver === 'undefined') return undefined;
+    const target = measureTarget ? host.closest(measureTarget) ?? host : host;
     const observer = new ResizeObserver(([entry]) => {
       setBox({
         width: Math.max(0, Math.floor(entry.contentRect.width)),
         height: Math.max(0, Math.floor(entry.contentRect.height)),
       });
     });
-    observer.observe(host);
+    observer.observe(target);
     return () => observer.disconnect();
-  }, [wrap]);
+  }, [wrap, measureTarget]);
+
+  if (wrap?.kind === 'screen' && cardCount >= 1) {
+    const mount = box.width > 0 && box.height > 0
+      ? runShopWrapScreenMount(wrap, cardCount, box.width, box.height)
+      : null;
+    const hostRect = hostRef.current?.getBoundingClientRect();
+    const workspaceRect = hostRef.current?.closest('.run-shop-workspace-content')?.getBoundingClientRect();
+    // The scene is painted on the workspace; the row is placed in workspace
+    // coordinates, then rebased into this host's own box.
+    const offsetX = hostRect && workspaceRect ? workspaceRect.left - hostRect.left : 0;
+    const offsetY = hostRect && workspaceRect ? workspaceRect.top - hostRect.top : 0;
+    return (
+      <div className="run-shop-scene-host" ref={hostRef} data-testid="run-shop-wrap">
+        {mount ? (
+          <>
+            <img
+              className="run-shop-scene-art"
+              src={wrap.src}
+              alt=""
+              draggable={false}
+              style={{
+                insetInlineStart: `${offsetX + mount.frame.left}px`,
+                insetBlockStart: `${offsetY + mount.frame.top}px`,
+                inlineSize: `${mount.frame.width}px`,
+                blockSize: `${mount.frame.height}px`,
+              }}
+            />
+            <div
+              className="run-shop-wrap-cards"
+              style={{
+                insetInlineStart: `${offsetX + mount.cards.left}px`,
+                insetBlockStart: `${offsetY + mount.cards.top}px`,
+                inlineSize: `${mount.cards.width}px`,
+                gridTemplateColumns: `repeat(${cardCount}, ${mount.cardWidth}px)`,
+                gap: `${mount.cards.gap}px`,
+              }}
+            >
+              {children}
+            </div>
+          </>
+        ) : null}
+      </div>
+    );
+  }
 
   if (!wrap || wrap.kind !== 'band' || cardCount < 1) {
     return <div className="run-card-grid">{children}</div>;
@@ -808,6 +858,8 @@ export function RunScreen({
   const run = sceneSnapshot.run;
   const hydrated = sceneSnapshot.hydrated;
   const replace = useActiveRun((state) => state.replace);
+  // A ?craft= address builds its Run before the screen reads one (development only).
+  const craft = useRunCraft(routePath, routeSearch);
   const viewScope = run
     ? `${run.id}:${run.phase}:${run.phase === 'shop' ? run.shop?.afterBattleIndex ?? run.battleIndex : run.battleIndex}`
     : 'no-run';
@@ -898,7 +950,61 @@ export function RunScreen({
       onSell={sellUnit}
     />
   ) : null;
-  if (shellRun?.phase === 'battle') {
+  // A craft request speaks for the whole screen while it runs: the Run it is about to replace must
+  // not flash its own phase first, and a refused spec has to say why instead of silently doing
+  // nothing.
+  // A link made for a specific Run says so. Rendering someone else's Run — or this browser's
+  // signed-out copy — under that link is the failure worth catching: it looks like it worked.
+  const linkMismatch = hydrated && runLinkTargetMismatch(routeSearch, run?.id ?? null);
+  const craftWorkspace = craft.crafting
+    ? (
+      <RunWorkspace
+        className="run-loading-workspace"
+        contentClassName="run-status-workspace-content"
+        data-testid="run-craft-workspace"
+        role="status"
+      >
+        <p>Crafting Run…</p>
+      </RunWorkspace>
+    )
+    : craft.error
+      ? (
+        <RunWorkspace
+          className="run-empty-workspace"
+          contentClassName="run-status-workspace-content"
+          data-testid="run-craft-error-workspace"
+          role="alert"
+          aria-labelledby="run-craft-error-title"
+        >
+          <h2 id="run-craft-error-title">This Run could not be crafted</h2>
+          <p>{craft.error}</p>
+        </RunWorkspace>
+      )
+      : linkMismatch
+        ? (
+          <RunWorkspace
+            className="run-empty-workspace"
+            contentClassName="run-status-workspace-content"
+            data-testid="run-link-mismatch-workspace"
+            role="status"
+            aria-labelledby="run-link-mismatch-title"
+          >
+            <h2 id="run-link-mismatch-title">This link is for a different Run</h2>
+            <p>
+              {run
+                ? 'It was made for a Run this account is not on any more. The Run below is the one you have now.'
+                : 'Sign in to the account it was made for, or open the Run this browser has.'}
+            </p>
+            <ChromeNavButton unit="inner-text-button"
+              className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
+              to="/run"
+            >
+              Open my Run
+            </ChromeNavButton>
+          </RunWorkspace>
+        )
+        : null;
+  if (!craftWorkspace && shellRun?.phase === 'battle') {
     return (
       <RunPresentationSceneSlot
         className="run-scene-slot"
@@ -915,7 +1021,7 @@ export function RunScreen({
       </RunPresentationSceneSlot>
     );
   }
-  const workspace = !hydrated
+  const workspace = craftWorkspace ?? (!hydrated
     ? (
       <RunWorkspace
         className="run-loading-workspace"
@@ -948,7 +1054,7 @@ export function RunScreen({
           ? <DeploymentPanel run={shellRun} />
           : shellRun.phase === 'shop' && shellRun.shop
             ? <ShopPanel run={shellRun} view={view} sellWorkspace={sellWorkspace!} />
-            : <VictoryPanel run={shellRun} />;
+            : <VictoryPanel run={shellRun} />);
   return (
     <RunPresentationSceneSlot
       className="run-scene-slot"

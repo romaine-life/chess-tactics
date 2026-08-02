@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "if (Test-Path \"$env:CLAUDE_PROJECT_DIR/.codex-session/environment.json\") { & \"$env:CLAUDE_PROJECT_DIR/bin/codex-environment-start.ps1\" }",
+            "statusMessage": "Starting the named dev environment",
+            "timeout": 180
+          }
+        ]
+      }
+    ]
+  }
+}

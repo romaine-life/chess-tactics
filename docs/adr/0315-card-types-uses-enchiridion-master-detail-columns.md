@@ -3,7 +3,7 @@ status: accepted
 date: 2026-08-01
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
-  - "[ADR-0338](0338-run-card-properties-and-unit-states-use-paired-icons.md)'s replacement of Type IV with Hieratic"
+  - "[ADR-0339](0339-run-card-properties-and-unit-states-use-paired-icons.md)'s replacement of Type IV with Hieratic"
 refines:
   - "[ADR-0254](0254-enchiridion-content-owns-the-remaining-menu-canvas.md)"
   - "[ADR-0313](0313-enchiridion-filters-cards-and-previews-affected-types.md)"

@@ -3,7 +3,7 @@ status: "accepted"
 date: 2026-06-27
 deciders: Nelson, Claude
 partially_superseded_by:
-  - "[ADR-0341](0341-studio-viewers-are-entered-through-catalog-and-own-only-local-controls.md)'s Catalog-owned cross-kind navigation"
+  - "[ADR-0342](0342-studio-viewers-are-entered-through-catalog-and-own-only-local-controls.md)'s Catalog-owned cross-kind navigation"
 ---
 
 # ADR-0029: Every Studio catalog category meets one requirements contract

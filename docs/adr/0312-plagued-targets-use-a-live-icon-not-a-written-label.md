@@ -3,7 +3,7 @@ status: accepted
 date: 2026-08-01
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
-  - "[ADR-0340](0340-cacochymic-replaces-plagued-as-the-pestiferous-unit-state-name.md)'s Cacochymic accessibility and explanatory terminology"
+  - "[ADR-0341](0341-cacochymic-replaces-plagued-as-the-pestiferous-unit-state-name.md)'s Cacochymic accessibility and explanatory terminology"
 refines:
   - "[ADR-0311](0311-pestiferous-cards-reveal-one-plagued-unit-at-a-time.md)'s direct marker presentation"
 extends:

@@ -5,7 +5,7 @@ deciders: owner (Nelson) + Codex
 supersedes:
   - "[ADR-0327](0327-tactical-cards-roll-one-in-eight-and-may-cost-twelve.md)'s offer-time target"
 partially_superseded_by:
-  - "[ADR-0338](0338-run-card-properties-and-unit-states-use-paired-icons.md)'s dedicated Discipline icon"
+  - "[ADR-0339](0339-run-card-properties-and-unit-states-use-paired-icons.md)'s dedicated Discipline icon"
 extends:
   - "[ADR-0305](0305-card-ability-properties-do-not-synthesize-description-text.md)"
 ---

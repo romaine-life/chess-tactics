@@ -3,18 +3,18 @@ status: accepted
 date: 2026-08-01
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
-  - "[ADR-0340](0340-cacochymic-replaces-plagued-as-the-pestiferous-unit-state-name.md)'s Cacochymic fitting label"
-  - "[ADR-0342](0342-agminate-replaces-marshalled-as-the-formation-ability-name.md)'s Agminate fitting label"
+  - "[ADR-0341](0341-cacochymic-replaces-plagued-as-the-pestiferous-unit-state-name.md)'s Cacochymic fitting label"
+  - "[ADR-0343](0343-agminate-replaces-marshalled-as-the-formation-ability-name.md)'s Agminate fitting label"
 refined_by:
-  - "[ADR-0341](0341-studio-viewers-are-entered-through-catalog-and-own-only-local-controls.md)'s focused Viewer control rail"
+  - "[ADR-0342](0342-studio-viewers-are-entered-through-catalog-and-own-only-local-controls.md)'s focused Viewer control rail"
 extends:
   - "[ADR-0057](0057-studio-tuning-surfaces-reset-to-authoritative-baseline.md)"
   - "[ADR-0071](0071-the-deliverable-is-the-instrument.md)"
   - "[ADR-0283](0283-run-card-face-is-one-shared-live-runtime-component.md)"
-  - "[ADR-0338](0338-run-card-properties-and-unit-states-use-paired-icons.md)"
+  - "[ADR-0339](0339-run-card-properties-and-unit-states-use-paired-icons.md)"
 ---
 
-# ADR-0339: Run-card icon fitting is an owner-operated Studio instrument
+# ADR-0340: Run-card icon fitting is an owner-operated Studio instrument
 
 ## Context
 

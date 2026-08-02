@@ -12,11 +12,11 @@ partially_supersedes:
   - "[ADR-0312](0312-plagued-targets-use-a-live-icon-not-a-written-label.md)'s Plagued accessibility and explanatory terminology"
   - "[ADR-0317](0317-plagued-iconography-depicts-the-condition-not-a-chess-piece.md)'s Plagued icon-family name"
   - "[ADR-0318](0318-plagued-and-pestiferous-use-separate-owner-selected-icons.md)'s Plagued Unit Ability name"
-  - "[ADR-0338](0338-run-card-properties-and-unit-states-use-paired-icons.md)'s Pestiferous/Plagued pair name"
-  - "[ADR-0339](0339-run-card-icon-fitting-is-an-owner-operated-studio-instrument.md)'s Plagued fitting label"
+  - "[ADR-0339](0339-run-card-properties-and-unit-states-use-paired-icons.md)'s Pestiferous/Plagued pair name"
+  - "[ADR-0340](0340-run-card-icon-fitting-is-an-owner-operated-studio-instrument.md)'s Plagued fitting label"
 ---
 
-# ADR-0340: Cacochymic replaces Plagued as the Pestiferous unit-state name
+# ADR-0341: Cacochymic replaces Plagued as the Pestiferous unit-state name
 
 ## Context
 
@@ -39,7 +39,7 @@ selection without completing the paired-icon production cutover.
 - The existing icon pixels and owner-saved fitting remain selected. This is a
   vocabulary decision, not a request to regenerate or replace the poison icon.
 - Current persisted field names, runtime enum values, and live-media source
-  slots remain non-presentational storage identities until ADR-0338's deferred
+  slots remain non-presentational storage identities until ADR-0339's deferred
   atomic paired-icon production cutover. That transaction must migrate them
   together with installed runtime configuration; no UI may expose the retired
   word in the interim.

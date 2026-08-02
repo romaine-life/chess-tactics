@@ -89,7 +89,7 @@ these.
   as an overlay in Card Layout; unmatched pixels use the Standard profile
   (ADR-0219, ADR-0225, ADR-0270, ADR-0275, ADR-0276, ADR-0283, ADR-0285,
   ADR-0305, ADR-0309, ADR-0324, ADR-0325, ADR-0327, ADR-0329, ADR-0330,
-  ADR-0338).
+  ADR-0339).
   In-place card changes retain the last complete face until the requested card's
   actual image layer is ready, then promote content, art, frame, and frame
   geometry together; rapid newer selections cancel older pending cards
@@ -148,13 +148,13 @@ these.
   costs two additional gold, may reach eleven, and cannot carry another
   qualifier. Every frame uses one shared accepted gold-coin source with its live
   price overlaid (ADR-0272, ADR-0276, ADR-0305, ADR-0309, ADR-0310, ADR-0311,
-  ADR-0324, ADR-0325, ADR-0327, ADR-0328, ADR-0329, ADR-0338, ADR-0340).
+  ADR-0324, ADR-0325, ADR-0327, ADR-0328, ADR-0329, ADR-0339, ADR-0341).
   **Hieratic** is the deliberately formal fourth card-property name paired with
   **Agminate**. It replaces the Enchiridion Type IV placeholder, but its Run
   prevalence, price, target selection, and acquisition rule remain undecided.
   Its reference face uses the dedicated accepted steel-armor frame; no Hieratic
   offer enters gameplay until those mechanics receive a separate decision
-  (ADR-0338).
+  (ADR-0339).
 - Run difficulty is **Ataraxia**. The first Run uses **Ataraxia 0 — The
   Untroubled Mind**, whose literal impact is standard Run rules and no
   Pestiferous shop cards; later Runs may opt into historically named
@@ -220,7 +220,7 @@ these.
   temporarily using The Volunteer for each; Pestiferous, Concinnous, and
   Tactical state their accepted effects. Hieratic names the fourth property and
   pairs with Agminate while its Run mechanics remain explicitly pending
-  (ADR-0313, ADR-0315, ADR-0329, ADR-0338, ADR-0340). During Battle,
+  (ADR-0313, ADR-0315, ADR-0329, ADR-0339, ADR-0341). During Battle,
   the Controls title bar opens **Strategikon** over the board without unmounting
   the fight; its Martial Prosopography and Lipsanotheca expose the persistent
   army and held relics beside the same Enchiridion (ADR-0231).

@@ -24,6 +24,7 @@
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import { existsSync, readFileSync } from 'node:fs';
+import { crc32, deflateSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import puppeteer from 'puppeteer-core';
@@ -129,7 +130,88 @@ const UNIT_CATALOG = {
     acceptanceBlockReason: null,
   })),
 };
-const UNIT_SPRITE_PATH = resolve(distDir, 'assets/units/rook/portrait/white.png');
+// Runtime art moved behind the live backend (#479) and the build guard now asserts dist/ carries
+// no packaged media, so this suite can no longer read a sprite out of the build — it hard-failed
+// on a file that cannot exist any more, which made it unrunnable. The bytes only need to be a
+// valid PNG at the size UNIT_SPRITES declares; this fixture proves lobby and netplay relay, not
+// art. Synthesize one so the suite stays self-contained and runnable anywhere, which is its point.
+function solidPng(width, height, [red, green, blue, alpha]) {
+  const chunk = (type, body) => {
+    const head = Buffer.alloc(8);
+    head.writeUInt32BE(body.length, 0);
+    head.write(type, 4, 'ascii');
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(Buffer.concat([head.subarray(4), body])), 0);
+    return Buffer.concat([head, body, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr.writeUInt8(8, 8); // bit depth
+  ihdr.writeUInt8(6, 9); // colour type: RGBA
+  const row = Buffer.concat([
+    Buffer.from([0]), // filter: none
+    Buffer.alloc(width * 4).fill(Buffer.from([red, green, blue, alpha])),
+  ]);
+  const raw = Buffer.concat(Array.from({ length: height }, () => row));
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', ihdr),
+    chunk('IDAT', deflateSync(raw)),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+const UNIT_SPRITE_BYTES = solidPng(512, 512, [92, 112, 164, 255]);
+
+// App startup is fail-closed on the two live art catalogs (main.tsx -> loadLiveMediaCatalog), and
+// this backend runs without Postgres on purpose, so it answers both with database_not_configured
+// and every seat stops at "Live assets unavailable".
+//
+// Serve the SAME fixtures the unit tests use rather than a second copy authored here. The app
+// boots against a 31-kind art contract (ground cover, chrome families, nine-slices, fonts...); a
+// parallel fixture in this file would drift out of that contract silently, which is the failure
+// mode that left this suite dead for three weeks. They are TypeScript, so load them through
+// vite's own module graph — the same resolver the app is built with, and no new dependency.
+async function canonicalArtCatalogs() {
+  const { createServer } = await import('vite');
+  const server = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' });
+  try {
+    const drawable = await server.ssrLoadModule('/src/test/drawableCatalog.ts');
+    const media = await server.ssrLoadModule('/src/test/liveMediaCatalog.ts');
+    const seats = await server.ssrLoadModule('/src/test/livePropSeats.ts');
+    return {
+      drawableCatalog: drawable.testDrawableCatalog(),
+      mediaCatalog: media.testGroundCoverCatalog([
+        ...media.testStructureMediaSlots(),
+        ...media.testInstalledChromeMediaSlots(),
+        ...media.testWallDecorMediaSlots(),
+      ]),
+      propSeats: { portfolio: { data: seats.TEST_PROP_SEATS, revision: 1, updated_at: null } },
+    };
+  } finally {
+    await server.close();
+  }
+}
+const {
+  drawableCatalog: DRAWABLE_CATALOG,
+  mediaCatalog: MEDIA_CATALOG,
+  propSeats: PROP_SEATS,
+} = await canonicalArtCatalogs();
+
+// Startup also fails closed on the interface font (main.tsx loadCriticalFonts asserts
+// document.fonts.check), and that .otf lives in blob storage behind the live backend like the rest
+// of the art. The family name comes from the app's own @font-face rule, not from anything inside
+// the file, so ANY valid font registers under it — this suite proves lobby relay, not typography.
+// Borrow a system font, discovered the same way Chrome is above.
+const SYSTEM_FONTS = [
+  'C:/Windows/Fonts/arial.ttf',
+  'C:/Windows/Fonts/segoeui.ttf',
+  '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+  '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+  '/usr/share/fonts/TTF/DejaVuSans.ttf',
+  '/System/Library/Fonts/Helvetica.ttc',
+];
+const systemFontPath = SYSTEM_FONTS.find(existsSync);
 
 const CHROMES = [
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
@@ -146,15 +228,15 @@ if (!existsSync(resolve(distDir, 'index.html'))) {
   console.error(`No built frontend at ${distDir}. Build it first:  npm run build`);
   process.exit(1);
 }
-if (!existsSync(UNIT_SPRITE_PATH)) {
-  console.error(`Built frontend is missing the E2E unit sprite at ${UNIT_SPRITE_PATH}. Rebuild it first:  npm run build`);
-  process.exit(1);
-}
-const UNIT_SPRITE_BYTES = readFileSync(UNIT_SPRITE_PATH);
 if (!executablePath) {
   console.error('No Chrome/Edge found. Checked:\n' + CHROMES.join('\n'));
   process.exit(1);
 }
+if (!systemFontPath) {
+  console.error('No system font found to stand in for the interface font. Checked:\n' + SYSTEM_FONTS.join('\n'));
+  process.exit(1);
+}
+const SYSTEM_FONT_BYTES = readFileSync(systemFontPath);
 
 const mockAuthIssuer = `http://127.0.0.1:${AUTH_PORT}`;
 
@@ -195,12 +277,45 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+// CDP request interception is genuinely REQUIRED here, unlike the fetch-only stubs elsewhere in
+// scripts/ that were moved into the page (see shot-editor-session.installObservationSessionPatch).
+// Two of these fixtures are out of reach of a `window.fetch` patch:
+//   - the unit sprite is fetched by the renderer's `new Image()` loader (render/imageResources.ts),
+//     a transport a fetch patch cannot see at all;
+//   - the reload-recovery proof HOLDS a move POST in flight and then aborts it, which needs the
+//     request paused at the network layer while the page keeps running.
+// The hang this pattern caused in run-battle-e2e (commit af37db63) was a Vite DEV-SERVER pathology:
+// interception routed on-demand module transforms through the test process and left the AI worker's
+// module graph paused forever. That mechanism cannot arise here — this suite has no Vite in it. It
+// spawns backend/server.js with FRONTEND_DIR pointed at the built dist, so every module is a
+// finished static file with no per-request transform to stall on.
+//
+// Measured across repeated full runs: the interception here reaches PASS 4/6 every time, which
+// includes the hold-then-abort reload proof that exercises the paused-request path directly. It
+// has never stalled. The suite still stops at checkpoint 5/6 on a gameplay-coordinate assertion
+// (see the comment at that step) — a drifted expectation, not a hang.
 async function installContentFixture(page) {
   const control = {
     holdNextMove: false,
     heldMove: null,
     observedMoveIntentIds: [],
+    consoleErrors: [],
+    failedResponses: [],
   };
+  // A startup that fails closed says only "Live assets unavailable" on screen; the reason it
+  // rejected is in the browser console. Capture it so a fixture that has drifted out of a catalog
+  // contract names itself instead of presenting as a mystery selector timeout.
+  page.on('console', (message) => {
+    if (message.type() === 'error') control.consoleErrors.push(message.text().slice(0, 400));
+  });
+  page.on('pageerror', (error) => control.consoleErrors.push(`pageerror: ${String(error).slice(0, 400)}`));
+  // "Failed to load resource: 503" never says WHICH resource, and a fixture gap looks exactly like
+  // a broken app from the page text alone. Name the failing reads.
+  page.on('response', (response) => {
+    if (response.status() < 400) return;
+    const failed = `${response.status()} ${new URL(response.url()).pathname}`;
+    if (!control.failedResponses.includes(failed)) control.failedResponses.push(failed);
+  });
   await page.setRequestInterception(true);
   page.on('request', (request) => {
     const url = new URL(request.url());
@@ -218,7 +333,26 @@ async function installContentFixture(page) {
       void request.respond({ status: 200, contentType: 'application/json', body: JSON.stringify(UNIT_CATALOG) });
       return;
     }
-    if (url.origin === BASE && url.pathname === UNIT_SPRITE_URL) {
+    if (url.origin === BASE && url.pathname === '/api/asset-catalog') {
+      void request.respond({ status: 200, contentType: 'application/json', body: JSON.stringify(MEDIA_CATALOG) });
+      return;
+    }
+    if (url.origin === BASE && url.pathname === '/api/drawable-catalog') {
+      void request.respond({ status: 200, contentType: 'application/json', body: JSON.stringify(DRAWABLE_CATALOG) });
+      return;
+    }
+    if (url.origin === BASE && url.pathname === '/api/prop-seats/default') {
+      void request.respond({ status: 200, contentType: 'application/json', body: JSON.stringify(PROP_SEATS) });
+      return;
+    }
+    // Every catalog above addresses its art by content hash under /api/media/<sha>. The bytes are
+    // never inspected here — this suite proves relay, not art — so answer them all with the same
+    // valid PNG instead of teaching the fixture about each individual asset.
+    if (url.origin === BASE && url.pathname.startsWith('/assets/fonts/')) {
+      void request.respond({ status: 200, contentType: 'font/ttf', body: SYSTEM_FONT_BYTES });
+      return;
+    }
+    if (url.origin === BASE && (url.pathname === UNIT_SPRITE_URL || url.pathname.startsWith('/api/media/'))) {
       void request.respond({ status: 200, contentType: 'image/png', body: UNIT_SPRITE_BYTES });
       return;
     }
@@ -290,6 +424,9 @@ async function waitForHealth() {
 let backend = null;
 let browser = null;
 let backendLog = '';
+// Every seat's fixture, so a failure anywhere in the run can report the browser-side reasons —
+// not just the two waits inside openSeat that happen to have a local handler.
+const seatFixtures = [];
 
 async function cleanup() {
   if (browser) { try { await browser.close(); } catch { /* ignore */ } }
@@ -329,7 +466,13 @@ async function main() {
   const openSeat = async (session) => {
     const ctx = await browser.createBrowserContext();
     const page = await ctx.newPage();
+    // Pin a viewport the shell actually fits in. Puppeteer's default is 800x600, and the lobby
+    // layout has since outgrown it: "Host a lobby" lands at x=-102, off the left edge, so
+    // page.click aimed outside the viewport and silently never issued the request. Every other
+    // browser script in scripts/ pins 1280x800; this one was relying on a default it outgrew.
+    await page.setViewport({ width: 1280, height: 800 });
     const fixture = await installContentFixture(page);
+    seatFixtures.push(fixture);
     await page.setCookie({
       url: BASE,
       name: '__Host-chess-tactics-access',
@@ -358,9 +501,23 @@ async function main() {
     // Signed-in state renders the "Host a lobby" toolbar; wait for it (not the sign-in gate).
     try {
       await page.waitForSelector('[data-testid=host-lobby]', { timeout: 10000 });
+      // Present is not the same as clickable. The scene director holds the incoming region inert
+      // behind `.scene-boundary` until the transition settles, so a click issued while the phase
+      // is still `entering` is swallowed with no request and no error — the lobby simply never
+      // appears. Wait for the settled phase, as every other browser script here does.
+      await page.waitForFunction(
+        () => document.querySelector('[data-scene-phase]')?.getAttribute('data-scene-phase') === 'current'
+          && !document.querySelector('[data-testid=host-lobby]')?.closest('[inert]'),
+        { timeout: 15000 },
+      );
     } catch (error) {
       const bodyText = await page.$eval('body', (body) => body.innerText.slice(0, 1200));
-      throw new Error(`${error.message}\n--- page text ---\n${bodyText}`);
+      throw new Error([
+        error.message,
+        '--- page text ---', bodyText,
+        '--- browser console ---', fixture.consoleErrors.slice(0, 10).join('\n') || '(none)',
+        '--- failed reads ---', fixture.failedResponses.slice(0, 20).join('\n') || '(none)',
+      ].join('\n'));
     }
     return { page, fixture };
   };
@@ -415,6 +572,13 @@ async function main() {
   ]);
   await waitForText(hostPage, '[data-testid="turn-label"]', 'Your turn');
   await waitForText(guestPage, '[data-testid="turn-label"]', 'Opponent turn');
+  // The title-bar chips are gated on `playableSurfaceReady` (board AND hud surfaces), which
+  // settles strictly after the board stops reporting is-board-loading. Reading them straight off
+  // the board wait above races that second gate and fails on a chip that is about to be correct.
+  await Promise.all([
+    hostPage.waitForSelector('.skirmish-objective small', { timeout: 20000 }),
+    guestPage.waitForSelector('.skirmish-objective small', { timeout: 20000 }),
+  ]);
   const hostObjective = await hostPage.$eval('.skirmish-objective small', (node) => node.textContent?.trim());
   const guestObjective = await guestPage.$eval('.skirmish-objective small', (node) => node.textContent?.trim());
   assert(hostObjective === 'Reach the objective with a pawn; protect your force', `unexpected host objective: ${hostObjective}`);
@@ -489,6 +653,12 @@ async function main() {
   await sleep(700);
   await clickCell(guestPage, 2, 3);
   await waitForCellClass(guestPage, 2, 3, 'is-focused-piece');
+  // KNOWN FAILURE — this suite currently stops here, reaching PASS 4/6. Everything above is
+  // restored and green; the coordinates below no longer describe the board this fixture level
+  // actually reaches, so selecting (5,3) never lands on a piece. The board is canvas-drawn and the
+  // production bundle exposes no store import, so the true post-relay position cannot be read out
+  // of the DOM — deciding what these two moves SHOULD assert is a gameplay judgement, not a
+  // mechanical repair. Do not wire this suite into a blocking CI job until it is settled.
   await playMove(guestPage, { x: 5, y: 3 }, { x: 5, y: 4 });
   await waitForText(hostPage, '[data-testid="turn-label"]', 'Your turn');
   await sleep(700);
@@ -519,7 +689,14 @@ async function main() {
 main()
   .then(async () => { await cleanup(); process.exit(0); })
   .catch(async (err) => {
-    console.error('\nlobby-e2e FAILED:', err.message);
+    // Print the stack, not just the message: a bare "Waiting failed: 10000ms exceeded" from any of
+    // the dozen waits in this suite names neither the step nor the seat it stalled on.
+    console.error('\nlobby-e2e FAILED:', err.stack || err.message);
+    for (const [index, fixture] of seatFixtures.entries()) {
+      const console_ = fixture.consoleErrors.slice(0, 8).join('\n') || '(none)';
+      const reads = fixture.failedResponses.slice(0, 15).join('\n') || '(none)';
+      console.error(`--- seat ${index} console ---\n${console_}\n--- seat ${index} failed reads ---\n${reads}`);
+    }
     if (backendLog) console.error('--- backend log ---\n' + backendLog.slice(-2000));
     await cleanup();
     process.exit(1);
