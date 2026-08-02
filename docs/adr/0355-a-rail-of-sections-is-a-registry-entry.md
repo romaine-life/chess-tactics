@@ -7,7 +7,7 @@ refines:
   - ADR-0307
 ---
 
-# ADR-0346: A rail of sections is a registry entry, not a hand-written mapping
+# ADR-0355: A rail of sections is a registry entry, not a hand-written mapping
 
 ## Context and Problem Statement
 
