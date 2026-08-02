@@ -146,6 +146,14 @@ and don't tell the user screenshots are impossible. Use the helper below.
    decorative atom overhang. A source check that merely finds `ShellWorkspace`
    does not satisfy this geometry gate.
 
+   Scene-director / navigation-lifecycle changes additionally run the live
+   transition gate (menu → Play with a mid-transition address canonicalization):
+   ```
+   npm run verify:play-transition -- '<vite-url>'
+   ```
+   It fails on more than one exit per navigation, a lost canonicalization
+   navigation, or an uncanonicalized final address — the double-fade bug class.
+
 This works on ANY live route by selector — no per-target fixture, so there's no "new
 screen ⇒ flail" cliff. `frontend/scripts/shot.mjs` is the implementation.
 
