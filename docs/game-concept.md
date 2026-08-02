@@ -250,12 +250,13 @@ these.
   the fight; its Martial Prosopography and Lipsanotheca expose the persistent
   army and held relics beside the same Enchiridion (ADR-0231).
 - Play defaults to one activity-agnostic, descriptor-free **Continue** rail
-  destination. Its fixed Campaign, Skirmish, Run, and Levels rows name the
-  resumable activity or say **Nothing to continue**; the most recent available
-  row is selected into a fourth-column detail with one final **Play** action.
-  Ordinary Run remains a separate preparation destination between Current Run
-  and **Start New Run**, with Ataraxia setup and confirmed replacement
-  (ADR-0232, ADR-0289, ADR-0290, ADR-0294).
+  destination. Its column resumes in place: the most recently updated resumable
+  activity is shown there with its facts and one final **Play** action, any
+  second unfinished activity is offered below it under **Also unfinished**, and
+  an empty Continue says **Nothing to continue** once. Ordinary Run remains a
+  separate preparation destination between Current Run and **Start New Run**,
+  with Ataraxia setup and confirmed replacement (ADR-0232, ADR-0289, ADR-0290,
+  ADR-0294, ADR-0356).
 - Army and Relics are grouped as player **Self inspection** in Run Controls.
   Either replaces the complete left Play workspace through the shared
   fill-only shell surface while the current phase stays mounted underneath;

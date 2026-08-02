@@ -55,18 +55,28 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('index={index + 4}');
   });
 
-  it('makes Continue a four-mode availability surface with a selected fourth-column Play action', () => {
+  it('resumes the most recent activity inside Continue’s own column (ADR-0356)', () => {
     const playContinue = readFileSync(new URL('./playContinue.ts', import.meta.url), 'utf8');
-    expect(playContinue).toContain("{ mode: 'campaign', label: 'Campaign'");
-    expect(playContinue).toContain("{ mode: 'skirmish', label: 'Skirmish'");
-    expect(playContinue).toContain("{ mode: 'run', label: 'Run'");
-    expect(playContinue).toContain("{ mode: 'levels', label: 'Levels'");
-    expect(playContinue).toContain('defaultMode: mostRecent?.mode ?? null');
-    expect(playMenu).toContain("option.activity?.summary ?? 'Nothing to continue'");
-    expect(playMenu).toContain('data-testid={`continue-choice-${option.mode}`}');
+    // The inventory carries resumable work only — never a placeholder row per mode.
+    expect(playContinue).toContain('activities: readonly ContinueActivity[]');
+    expect(playContinue).toContain('defaultMode: ordered[0]?.mode ?? null');
+    expect(playContinue).not.toContain('ContinueOption');
+    expect(playMenu).not.toContain("?? 'Nothing to continue'");
+    expect(playMenu).not.toContain('inventory.options');
+    // Continue's action column is the resume card itself: facts plus one Play verb.
     expect(playMenu).toContain('data-testid="continue-detail"');
+    expect(playMenu).toContain('className="play-detail-facts"');
     expect(playMenu).toContain('to={selected.playHref}><span>Play</span>');
     expect(playMenu).toContain('<ContinuePanel inventory={resumeInventory} choice={selectedContinueChoice} />');
+    expect(style).toContain('.continue-resume {');
+    // No fourth column for Continue, so the action column must not narrow for one.
+    expect(playMenu).toContain('const hasDetailPreview = Boolean(selectedLevel || hasRunDetail);');
+    expect(playMenu).not.toContain('selectedContinueActivity');
+    // A second unfinished activity stays reachable; an empty Continue says so once.
+    expect(playMenu).toContain('data-testid={`continue-choice-${activity.mode}`}');
+    expect(playMenu).toContain('<h3 className="settings-section-title">Also unfinished</h3>');
+    expect(playMenu).toContain('data-testid="continue-empty"');
+    expect(playMenu).toContain('<h4>Nothing to continue</h4>');
   });
 
   it('keeps ordinary Run preparation separate from Continue', () => {

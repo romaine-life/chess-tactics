@@ -7,6 +7,8 @@ import { isSkirmishProfileLevel } from './skirmishProfiles';
 
 export interface ContinueActivity {
   mode: PlayContinueChoice;
+  /** The activity's mode name, used when Continue lists a second unfinished activity. */
+  modeLabel: string;
   summary: string;
   title: string;
   playHref: string;
@@ -14,14 +16,11 @@ export interface ContinueActivity {
   facts: readonly { label: string; value: string }[];
 }
 
-export interface ContinueOption {
-  mode: PlayContinueChoice;
-  label: string;
-  activity: ContinueActivity | null;
-}
-
+/** Only genuinely resumable activities, most recently updated first. Continue resumes
+ * work; the modes with nothing to resume are the Play rail's business, not a row here
+ * (ADR-0356). */
 export interface ContinueInventory {
-  options: readonly ContinueOption[];
+  activities: readonly ContinueActivity[];
   defaultMode: PlayContinueChoice | null;
 }
 
@@ -62,6 +61,7 @@ export function continueInventory(
     const phase = runPhase(run);
     activities.set('run', {
       mode: 'run',
+      modeLabel: 'Run',
       summary: `${run.war.name} · ${phase}`,
       title: 'Current Run',
       playHref: '/run',
@@ -82,6 +82,7 @@ export function continueInventory(
     if (level && campaign) {
       activities.set('campaign', {
         mode: 'campaign',
+        modeLabel: 'Campaign',
         summary: `${campaign.name} · ${level.name}`,
         title: campaign.name,
         playHref: `/play?campaignId=${encodeURIComponent(campaign.id)}&levelId=${encodeURIComponent(match.levelId)}`,
@@ -95,6 +96,7 @@ export function continueInventory(
       const mode: PlayContinueChoice = isSkirmishProfileLevel(level) ? 'skirmish' : 'levels';
       activities.set(mode, {
         mode,
+        modeLabel: mode === 'skirmish' ? 'Skirmish' : 'Levels',
         summary: level.name,
         title: level.name,
         playHref: playSkirmishLevelHref(match.levelId, playContinueSelectorHref(mode)),
@@ -107,14 +109,8 @@ export function continueInventory(
     }
   }
 
-  const options: ContinueOption[] = [
-    { mode: 'campaign', label: 'Campaign', activity: activities.get('campaign') ?? null },
-    { mode: 'skirmish', label: 'Skirmish', activity: activities.get('skirmish') ?? null },
-    { mode: 'run', label: 'Run', activity: activities.get('run') ?? null },
-    { mode: 'levels', label: 'Levels', activity: activities.get('levels') ?? null },
-  ];
-  const mostRecent = options
-    .filter((option): option is ContinueOption & { activity: ContinueActivity } => Boolean(option.activity))
-    .sort((left, right) => right.activity.updatedAt - left.activity.updatedAt)[0];
-  return { options, defaultMode: mostRecent?.mode ?? null };
+  // Recency is the whole order: Continue's default is the last thing the player touched,
+  // and any other unfinished activity follows it as a secondary offer.
+  const ordered = [...activities.values()].sort((left, right) => right.updatedAt - left.updatedAt);
+  return { activities: ordered, defaultMode: ordered[0]?.mode ?? null };
 }

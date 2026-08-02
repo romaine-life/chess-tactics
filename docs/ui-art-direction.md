@@ -253,11 +253,12 @@ The default work surfaces are `/`, `/enchiridion/units`,
 `/editor/level`, and exact `/play?...` for a selected live board. The main menu has
 five top-level controls — Play, Editor, Lobbies, Enchiridion, Settings — and Play owns the shared
 Continue/Skirmish/Run/Levels/Campaign selector described by ADR-0074, ADR-0232,
-and ADR-0294. Clicking Play lands on Continue after content and Run authority
-settle. Its rail control says only **Continue**. The action column always shows
-Campaign, Skirmish, Run, and Levels with either the resumable activity or
-**Nothing to continue**; the most recent available mode is selected and fills
-the right detail column with one final Play action. Ordinary Run remains a
+ADR-0294, and ADR-0356. Clicking Play lands on Continue after content and Run
+authority settle. Its rail control says only **Continue**. The action column is
+the resume surface itself and mounts no detail column: it shows the most
+recently updated resumable activity's title, facts, and one final Play action,
+lists any second unfinished activity beneath it under **Also unfinished**, and
+states **Nothing to continue** once when there is none. Ordinary Run remains a
 separate neutral preparation surface between Current Run and Start New Run.
 Run preparation uses Campaign Levels' master-detail geometry, with current-Run
 facts plus Play or Ataraxia plus Start Run in the right detail column. It omits feature-pitch and
