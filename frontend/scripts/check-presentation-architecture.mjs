@@ -87,7 +87,10 @@ for (const required of [
   'surfaceSignature={runBattle?.activityId}',
   'surfaceState={presentedDeploymentSurface}',
   'preserveBoardPresentation: true',
-  'unitArrivalsActive={sceneActivated}',
+  // Activation releases the entrance; it does not decide whether there is one. A battlefield
+  // that has not been activated is still staging the units it is about to introduce, so its
+  // reveal — which happens during the scene entrance — never shows them seated early.
+  "unitArrivals={sceneActivated ? 'active' : 'pending'}",
   'onArrivingUnitIdsChange={runDeployment?.onArrivingUnitIdsChange}',
 ]) {
   if (!skirmish.includes(required)) fail(skirmishPath, `missing commit-gated Battle invariant: ${required}`);

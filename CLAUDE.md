@@ -154,6 +154,16 @@ and don't tell the user screenshots are impossible. Use the helper below.
    It fails on more than one exit per navigation, a lost canonicalization
    navigation, or an uncanonicalized final address — the double-fade bug class.
 
+   Board reveal / unit-entrance changes additionally run the live entrance gate,
+   which records the real transition and reads its pixels:
+   ```
+   npm run verify:unit-arrival -- '<vite-url>/play/select/campaign/off-c-crown-valoria' --click '.campaign-level-row [aria-label^="Play "]'
+   npm run verify:unit-arrival -- '<vite-url>/play/select/continue/run' --click 'a[href^="/run"], [data-nav^="/run"]'
+   ```
+   It fails when a battlefield is revealed with units still to arrive standing at
+   their seats, and when a board that has already resolved disagrees with its own
+   settled composition — the seen-then-vanished-then-placed bug class (ADR-0357).
+
 This works on ANY live route by selector — no per-target fixture, so there's no "new
 screen ⇒ flail" cliff. `frontend/scripts/shot.mjs` is the implementation.
 

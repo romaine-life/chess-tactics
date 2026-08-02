@@ -90,7 +90,7 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('<RunBattlefieldPanel');
     expect(skirmish).toContain('presentedDeploymentSurface');
     expect(skirmish).toContain('preserveBoardPresentation: true');
-    expect(skirmish).toContain('unitArrivalsActive={sceneActivated}');
+    expect(skirmish).toContain("unitArrivals={sceneActivated ? 'active' : 'pending'}");
     expect(skirmish).toContain('onArrivingUnitIdsChange={runDeployment?.onArrivingUnitIdsChange}');
     expect(skirmishBoard).toContain('newlyVisibleArrivalPieces(visibleUnitIdsRef.current, livePieces)');
     expect(runScreen).toContain('pendingPlacementArrivalUnitIdRef.current = activeDisciplineUnitId');
