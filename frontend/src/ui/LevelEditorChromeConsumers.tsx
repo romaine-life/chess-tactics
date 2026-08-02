@@ -1,4 +1,5 @@
 import { useEffect, useRef, type CSSProperties, type ReactElement, type ReactNode } from 'react';
+import { liveMediaForSlot } from '@chess-tactics/board-render';
 import { KitScroll } from './KitScroll';
 import { HouseSelect } from './shared/HouseSelect';
 import { ChromeDivider, ShellControlsPanel, ShellWorkspace } from './shared/ChromeBox';
@@ -7,6 +8,7 @@ import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { CyclePicker } from './shared/CyclePicker';
 import { InnerTextButton, InnerTextNavButton } from './shared/ChromeButton';
 import { ChromeButton } from './shared/ChromeButton';
+import { LEVEL_EDITOR_BRUSH_ICON_SLOT } from './brushIconLiveMedia';
 
 export type LevelEditorToolKey = 'select' | 'brush' | 'erase' | 'move';
 
@@ -34,6 +36,8 @@ export function LevelEditorControlsPanel({
   onLayerChange,
   tool,
   toolsDisabled = false,
+  brushIconUrl = liveMediaForSlot(LEVEL_EDITOR_BRUSH_ICON_SLOT).media.immutableUrl,
+  brushIconReviewStatus,
   onToolChange,
   eraseLabel = 'Erase',
   eraseDisabled: eraseActionDisabled = false,
@@ -57,6 +61,9 @@ export function LevelEditorControlsPanel({
   /** Whether this destination has no board-tool interaction at all. A null tool only means none appears active. */
   toolsDisabled?: boolean;
   tool: LevelEditorToolKey | null;
+  /** Private exact-byte review override; production normally resolves the accepted semantic slot. */
+  brushIconUrl?: string;
+  brushIconReviewStatus?: string;
   onToolChange: (tool: LevelEditorToolKey) => void;
   /** Artwork uses this registered slot as an immediate delete-selected action, not an erase mode. */
   eraseLabel?: string;
@@ -128,7 +135,7 @@ export function LevelEditorControlsPanel({
           <h2>Actions</h2>
           <div className="le-seg le-seg-icons le-action-toolbar" role="toolbar" aria-label="Editor tools and history">
             <ChromeButton unit="inner-select-tool" className={chromeUnitClassNames('inner-select-tool', 'le-seg-btn', tool === 'select' && 'active')} disabled={toolsDisabled} onClick={() => onToolChange('select')} title={toolsDisabled ? 'Board tools are unavailable in this workspace.' : 'Select'} aria-label="Select"><span className="le-ico ic-eyedropper" aria-hidden="true" /></ChromeButton>
-            <ChromeButton unit="inner-brush-tool" className={chromeUnitClassNames('inner-brush-tool', 'le-seg-btn', tool === 'brush' && 'active')} disabled={toolsDisabled} onClick={() => onToolChange('brush')} title={toolsDisabled ? 'Board tools are unavailable in this workspace.' : 'Brush'} aria-label="Brush"><span className="le-ico ic-brush" aria-hidden="true" /></ChromeButton>
+            <ChromeButton unit="inner-brush-tool" className={chromeUnitClassNames('inner-brush-tool', 'le-seg-btn', tool === 'brush' && 'active')} disabled={toolsDisabled} onClick={() => onToolChange('brush')} title={toolsDisabled ? 'Board tools are unavailable in this workspace.' : 'Brush'} aria-label="Brush"><img className="le-ico live-media-brush-icon" src={brushIconUrl} data-brush-icon-review={brushIconReviewStatus && brushIconUrl ? 'candidate' : undefined} alt="" draggable={false} /></ChromeButton>
             <ChromeButton unit="inner-erase-tool" className={chromeUnitClassNames('inner-erase-tool', 'le-seg-btn', tool === 'erase' && 'active')} disabled={eraseDisabled} onClick={() => onToolChange('erase')} title={toolsDisabled ? 'Board tools are unavailable in this workspace.' : eraseLabel} aria-label={eraseLabel}><span className="le-ico ic-eraser" aria-hidden="true" /></ChromeButton>
             <ChromeButton unit="inner-move-tool" className={chromeUnitClassNames('inner-move-tool', 'le-seg-btn', tool === 'move' && 'active')} disabled={toolsDisabled} onClick={() => onToolChange('move')} title={toolsDisabled ? 'Board tools are unavailable in this workspace.' : 'Move - drag a placed unit or prop to a new cell.'} aria-label="Move"><span className="le-ico ic-move" aria-hidden="true" /></ChromeButton>
             <span className="le-action-toolbar-divider" aria-hidden="true" />
@@ -147,6 +154,7 @@ export function LevelEditorControlsPanel({
               title={canRedo ? 'Redo the last undone edit.' : 'Nothing to redo.'}
             ><span className="le-ico ic-redo" aria-hidden="true" /></ChromeButton>
           </div>
+          {brushIconReviewStatus ? <div className="le-statusline" role="status">{brushIconReviewStatus}</div> : null}
           {extraActions ? <div className="le-action-primary-row">{playAction}{extraActions}</div> : playAction}
         </section>
 

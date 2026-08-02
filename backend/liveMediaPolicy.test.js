@@ -7,6 +7,10 @@ const {
   PREDRAWN_BOARD_COMPONENT,
   PREDRAWN_BOARD_PROOF_RENDERER,
   PREDRAWN_BOARD_PROOF_SCHEMA,
+  LEVEL_EDITOR_BRUSH_ICON_COMPONENT,
+  LEVEL_EDITOR_BRUSH_ICON_PROOF_RENDERER,
+  LEVEL_EDITOR_BRUSH_ICON_PROOF_SCHEMA,
+  LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_EXCEPTION_SCHEMA,
   RUN_RELIC_ICON_COMPONENT,
   RUN_RELIC_RESIZED_PRODUCTION_EXCEPTION_SCHEMA,
   RUN_RESOURCE_ICON_COMPONENT,
@@ -16,6 +20,9 @@ const {
   liveCatalogReadinessIssue,
   gameConditionIconMediaIssue,
   gameConditionIconSlot,
+  levelEditorBrushIconMediaIssue,
+  levelEditorBrushIconOwnerProofIssue,
+  levelEditorBrushIconSlot,
   nativeMediaEvidenceIssue,
   predrawnBoardAlignmentIssue,
   predrawnBoardMediaIssue,
@@ -246,6 +253,148 @@ test('condition icon projection keeps Plagued ability and Pestiferous property a
     ...pestiferous.metadata.runtime,
     component: 'unit-ability-icon',
   }), /card-property-icon/);
+});
+
+function levelEditorBrushIcon(overrides = {}) {
+  const opaqueBounds = { x: 2, y: 2, width: 14, height: 14 };
+  return {
+    id: '33333333-3333-4333-8333-333333333333',
+    slot: 'ui/kit/icons/brush.png',
+    domain: 'ui-kit',
+    role: 'icon',
+    media_type: 'image/png',
+    blob_sha256: originalSha,
+    width: 18,
+    height: 18,
+    metadata: {
+      runtime: {
+        component: LEVEL_EDITOR_BRUSH_ICON_COMPONENT,
+        variant: 'brush',
+        frameWidth: 18,
+        frameHeight: 18,
+        frameCount: 1,
+        nativeRole: LEVEL_EDITOR_BRUSH_ICON_COMPONENT,
+        altText: '',
+      },
+    },
+    native_evidence: {
+      schema: 'level-editor-brush-icon-native-v1',
+      native1x: true,
+      spatialResampling: false,
+      sourceWidth: 18,
+      sourceHeight: 18,
+      sourceSha256: originalSha,
+      productionRole: 'inner-brush-tool',
+      drawWidth: 18,
+      drawHeight: 18,
+      generatorOutputWidth: 32,
+      generatorOutputHeight: 32,
+      transform: 'center-crop-18x18-no-spatial-resampling',
+      opaqueBounds,
+      opaquePixelCount: 120,
+      edgeAlphaMax: 0,
+    },
+    ...overrides,
+  };
+}
+
+test('Level Editor Brush projection defaults to one exact native 18px tool role', () => {
+  const row = levelEditorBrushIcon();
+  assert.equal(levelEditorBrushIconSlot(row.slot), true);
+  assert.equal(levelEditorBrushIconSlot('ui/kit/icons/pencil.png'), false);
+  assert.equal(levelEditorBrushIconMediaIssue(row), null);
+  assert.match(levelEditorBrushIconMediaIssue(levelEditorBrushIcon({ width: 64 })), /18x18/);
+  assert.match(levelEditorBrushIconMediaIssue(levelEditorBrushIcon({ role: 'media' })), /icon role/);
+  assert.match(levelEditorBrushIconMediaIssue(levelEditorBrushIcon({
+    metadata: { runtime: { ...row.metadata.runtime, variant: 'pencil' } },
+  })), /variant must be brush/);
+  assert.match(levelEditorBrushIconMediaIssue(levelEditorBrushIcon({
+    native_evidence: { ...row.native_evidence, opaqueBounds: { x: 1, y: 2, width: 14, height: 14 } },
+  })), /two-pixel transparent gutter/);
+});
+
+test('Level Editor Brush projection admits only the exact owner-selected Option 01 scaling exception', () => {
+  const option01Sha = 'abaf1ab5e8f34531864e4e9e9d52cb15a0e7b944e84a79dea98939013267074a';
+  const row = levelEditorBrushIcon({
+    blob_sha256: option01Sha,
+    width: 64,
+    height: 64,
+    metadata: {
+      runtime: {
+        component: LEVEL_EDITOR_BRUSH_ICON_COMPONENT,
+        variant: 'brush',
+        frameWidth: 64,
+        frameHeight: 64,
+        frameCount: 1,
+        nativeRole: LEVEL_EDITOR_BRUSH_ICON_COMPONENT,
+        altText: '',
+      },
+    },
+    native_evidence: {
+      schema: LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_EXCEPTION_SCHEMA,
+      decision: 'ADR-0337',
+      status: 'owner-approved-production-exception',
+      native1x: false,
+      spatialResampling: true,
+      sourceWidth: 64,
+      sourceHeight: 64,
+      sourceSha256: option01Sha,
+      drawWidth: 20,
+      drawHeight: 20,
+      transform: 'css-background-size-contain-64-to-20',
+      opaqueBounds: { x: 4, y: 3, width: 56, height: 58 },
+    },
+  });
+  assert.equal(nativeMediaEvidenceIssue(row), null);
+  assert.equal(levelEditorBrushIconMediaIssue(row), null);
+  assert.match(levelEditorBrushIconMediaIssue({ ...row, blob_sha256: originalSha }), /exact owner-selected/);
+  const surfaceUrl = `http://brush.chess-tactics.localhost/editor/level?brushIconReviewVersion=${row.id}`;
+  const proof = {
+    schema: LEVEL_EDITOR_BRUSH_ICON_PROOF_SCHEMA,
+    renderer: LEVEL_EDITOR_BRUSH_ICON_PROOF_RENDERER,
+    surfaceUrl,
+    canonicalScale: 1,
+    assetLocalScale: 0.3125,
+    spatialResampling: true,
+    frameWidth: 64,
+    frameHeight: 64,
+    drawWidth: 20,
+    drawHeight: 20,
+    opaqueBounds: row.native_evidence.opaqueBounds,
+    selectedCandidates: [{ slot: row.slot, versionId: row.id, sha256: row.blob_sha256, rowRevision: 1 }],
+    slotSnapshots: [{ slot: row.slot, rowRevision: 0, activeVersionId: null }],
+  };
+  assert.equal(levelEditorBrushIconOwnerProofIssue(row, proof, surfaceUrl), null);
+});
+
+test('Level Editor Brush owner proof binds exact candidate bytes to the exact reviewed editor seat', () => {
+  const row = levelEditorBrushIcon();
+  const surfaceUrl = `http://brush.chess-tactics.localhost/editor/level?brushIconReviewVersion=${row.id}`;
+  const proof = {
+    schema: LEVEL_EDITOR_BRUSH_ICON_PROOF_SCHEMA,
+    renderer: LEVEL_EDITOR_BRUSH_ICON_PROOF_RENDERER,
+    surfaceUrl,
+    canonicalScale: 1,
+    assetLocalScale: 1,
+    spatialResampling: false,
+    frameWidth: 18,
+    frameHeight: 18,
+    drawWidth: 18,
+    drawHeight: 18,
+    opaqueBounds: row.native_evidence.opaqueBounds,
+    selectedCandidates: [{ slot: row.slot, versionId: row.id, sha256: row.blob_sha256, rowRevision: 1 }],
+    slotSnapshots: [{ slot: row.slot, rowRevision: 0, activeVersionId: null }],
+  };
+  assert.equal(levelEditorBrushIconOwnerProofIssue(row, proof, surfaceUrl), null);
+  assert.match(levelEditorBrushIconOwnerProofIssue(row, { ...proof, drawWidth: 17 }, surfaceUrl), /exact reviewed tool renderer/);
+  assert.match(levelEditorBrushIconOwnerProofIssue(row, {
+    ...proof,
+    selectedCandidates: [{ ...proof.selectedCandidates[0], sha256: replacementSha }],
+  }, surfaceUrl), /candidate bytes/);
+  assert.match(levelEditorBrushIconOwnerProofIssue(row, {
+    ...proof,
+    surfaceUrl: `http://brush.chess-tactics.localhost/studio?brushIconReview=1`,
+  }, `http://brush.chess-tactics.localhost/studio?brushIconReview=1`), /real Level Editor/);
 });
 
 function sfxSample(overrides = {}) {

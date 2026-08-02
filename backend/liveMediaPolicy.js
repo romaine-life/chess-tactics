@@ -26,6 +26,12 @@ const GAME_CONDITION_ICON_BY_SLOT = Object.freeze({
   'ui/kit/icons/game/plagued.png': Object.freeze({ component: 'unit-ability-icon', variant: 'plagued' }),
   'ui/kit/icons/card-properties/pestiferous.png': Object.freeze({ component: 'card-property-icon', variant: 'pestiferous' }),
 });
+const LEVEL_EDITOR_BRUSH_ICON_SLOT = 'ui/kit/icons/brush.png';
+const LEVEL_EDITOR_BRUSH_ICON_COMPONENT = 'level-editor-tool-icon';
+const LEVEL_EDITOR_BRUSH_ICON_PROOF_SCHEMA = 'level-editor-brush-icon-exact-byte-proof-v1';
+const LEVEL_EDITOR_BRUSH_ICON_PROOF_RENDERER = 'LevelEditorControlsPanel/inner-brush-tool';
+const LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_EXCEPTION_SCHEMA = 'level-editor-brush-option-01-scaled-production-exception-v1';
+const LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_EXCEPTION_SHA256 = 'abaf1ab5e8f34531864e4e9e9d52cb15a0e7b944e84a79dea98939013267074a';
 const SFX_SAMPLE_COMPONENT = 'sfx-sample';
 const SFX_SAMPLE_PROOF_RENDERER = 'SfxViewer/ExactCandidateAudition';
 const SFX_SAMPLE_PROOF_SCHEMA = 'sfx-sample-exact-byte-proof-v1';
@@ -67,6 +73,10 @@ function runResourceIconSlotId(slot) {
 
 function gameConditionIconSlot(slot) {
   return GAME_CONDITION_ICON_BY_SLOT[String(slot || '')] ?? null;
+}
+
+function levelEditorBrushIconSlot(slot) {
+  return String(slot || '') === LEVEL_EDITOR_BRUSH_ICON_SLOT;
 }
 
 function sfxSampleSlot(slot) {
@@ -281,6 +291,136 @@ function gameConditionIconMediaIssue(row, projectedRuntime = null) {
   return null;
 }
 
+/** Closed production contract for the Level Editor's actual 20px Brush seat. */
+function levelEditorBrushIconMediaIssue(row, projectedRuntime = null) {
+  if (!levelEditorBrushIconSlot(row.slot)) return 'Level Editor brush icons require their registered semantic slot';
+  if (row.domain !== 'ui-kit') return 'Level Editor brush icons require the ui-kit domain';
+  if (row.role !== 'icon') return 'Level Editor brush icons require the icon role';
+  if (row.media_type !== 'image/png') return 'Level Editor brush icons require image/png';
+  const evidence = isObjectRecord(row.native_evidence) ? row.native_evidence : {};
+  const scaledOption01 = evidence.schema === LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_EXCEPTION_SCHEMA;
+  if (scaledOption01) {
+    if (
+      normalizedSha(row.blob_sha256) !== LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_EXCEPTION_SHA256
+      || Number(row.width) !== 64 || Number(row.height) !== 64
+    ) return 'The ADR-0337 Brush exception is restricted to the exact owner-selected 64px Option 01 bytes';
+  } else if (Number(row.width) !== 18 || Number(row.height) !== 18) {
+    return 'Level Editor brush icons must be native 18x18 rasters unless they are the exact ADR-0337 Option 01 exception';
+  }
+
+  const metadata = mediaVersionMetadata(row);
+  const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+  if (!isObjectRecord(runtime)) return 'Level Editor brush icons require metadata.runtime';
+  const allowed = new Set([
+    'component', 'variant', 'frameWidth', 'frameHeight', 'frameCount', 'altText', 'nativeRole',
+  ]);
+  const unsupported = Object.keys(runtime).filter((key) => !allowed.has(key));
+  if (unsupported.length) {
+    return `Level Editor brush runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
+  }
+  if (runtime.component !== LEVEL_EDITOR_BRUSH_ICON_COMPONENT) {
+    return `Level Editor brush metadata.runtime.component must be ${LEVEL_EDITOR_BRUSH_ICON_COMPONENT}`;
+  }
+  if (runtime.variant !== 'brush') return 'Level Editor brush runtime variant must be brush';
+  const expectedFrame = scaledOption01 ? 64 : 18;
+  if (runtime.frameWidth !== expectedFrame || runtime.frameHeight !== expectedFrame || runtime.frameCount !== 1) {
+    return `Level Editor brush runtime geometry must describe one ${expectedFrame}x${expectedFrame} frame`;
+  }
+  if (runtime.nativeRole !== LEVEL_EDITOR_BRUSH_ICON_COMPONENT) {
+    return `Level Editor brush metadata.runtime.nativeRole must be ${LEVEL_EDITOR_BRUSH_ICON_COMPONENT}`;
+  }
+  if (runtime.altText !== '') {
+    return 'Level Editor brush metadata.runtime.altText must be empty because the tool button owns its accessible name';
+  }
+
+  if (scaledOption01) {
+    if (
+      evidence.decision !== 'ADR-0337'
+      || evidence.status !== 'owner-approved-production-exception'
+      || evidence.native1x !== false || evidence.spatialResampling !== true
+      || Number(evidence.sourceWidth) !== 64 || Number(evidence.sourceHeight) !== 64
+      || normalizedSha(evidence.sourceSha256) !== LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_EXCEPTION_SHA256
+      || Number(evidence.drawWidth) !== 20 || Number(evidence.drawHeight) !== 20
+      || evidence.transform !== 'css-background-size-contain-64-to-20'
+    ) return 'The ADR-0337 Brush exception evidence is incomplete';
+    return null;
+  }
+  if (evidence.schema !== 'level-editor-brush-icon-native-v1') {
+    return 'Level Editor brush native evidence requires level-editor-brush-icon-native-v1';
+  }
+  if (
+    evidence.productionRole !== 'inner-brush-tool'
+    || Number(evidence.drawWidth) !== 18 || Number(evidence.drawHeight) !== 18
+    || Number(evidence.generatorOutputWidth) !== 32 || Number(evidence.generatorOutputHeight) !== 32
+    || evidence.transform !== 'center-crop-18x18-no-spatial-resampling'
+  ) return 'Level Editor brush native evidence does not match its exact 18px production role';
+  const bounds = evidence.opaqueBounds;
+  if (
+    !isObjectRecord(bounds)
+    || !Number.isSafeInteger(bounds.x) || !Number.isSafeInteger(bounds.y)
+    || !Number.isSafeInteger(bounds.width) || !Number.isSafeInteger(bounds.height)
+    || bounds.x < 2 || bounds.y < 2 || bounds.width < 1 || bounds.height < 1
+    || bounds.x + bounds.width > 16 || bounds.y + bounds.height > 16
+  ) return 'Level Editor brush opaque bounds must preserve a two-pixel transparent gutter on every edge';
+  if (
+    evidence.edgeAlphaMax !== 0 || !Number.isSafeInteger(evidence.opaquePixelCount)
+    || evidence.opaquePixelCount < 16 || evidence.opaquePixelCount > 256
+  ) return 'Level Editor brush alpha evidence is incomplete or implausible';
+  return null;
+}
+
+function levelEditorBrushIconOwnerProofIssue(row, proof, surfaceUrl = null) {
+  if (!levelEditorBrushIconSlot(row.slot)) return 'Level Editor brush proof requires the registered semantic slot';
+  if (!isObjectRecord(proof) || proof.schema !== LEVEL_EDITOR_BRUSH_ICON_PROOF_SCHEMA) {
+    return `Level Editor brush review requires ${LEVEL_EDITOR_BRUSH_ICON_PROOF_SCHEMA}`;
+  }
+  const scaledOption01 = row.native_evidence?.schema === LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_EXCEPTION_SCHEMA;
+  const expected = scaledOption01
+    ? { assetLocalScale: 0.3125, spatialResampling: true, frame: 64, draw: 20 }
+    : { assetLocalScale: 1, spatialResampling: false, frame: 18, draw: 18 };
+  if (
+    proof.renderer !== LEVEL_EDITOR_BRUSH_ICON_PROOF_RENDERER
+    || proof.canonicalScale !== 1 || proof.assetLocalScale !== expected.assetLocalScale
+    || proof.spatialResampling !== expected.spatialResampling
+    || proof.frameWidth !== expected.frame || proof.frameHeight !== expected.frame
+    || proof.drawWidth !== expected.draw || proof.drawHeight !== expected.draw
+  ) return 'Level Editor brush proof does not match the exact reviewed tool renderer';
+  if (surfaceUrl !== null && proof.surfaceUrl !== surfaceUrl) {
+    return 'Level Editor brush proof surfaceUrl does not match the reviewed surface';
+  }
+  let parsedSurface;
+  try { parsedSurface = new URL(proof.surfaceUrl); } catch { return 'Level Editor brush proof surfaceUrl is invalid'; }
+  if (
+    parsedSurface.pathname !== '/editor/level'
+    || parsedSurface.searchParams.get('brushIconReviewVersion') !== String(row.id)
+  ) return 'Level Editor brush proof must identify its exact candidate in the real Level Editor';
+  const candidateSha256 = normalizedSha(row.blob_sha256);
+  if (!candidateSha256 || !Array.isArray(proof.selectedCandidates) || proof.selectedCandidates.length !== 1) {
+    return 'Level Editor brush proof must identify exactly one candidate';
+  }
+  const selected = proof.selectedCandidates[0];
+  if (
+    !isObjectRecord(selected) || selected.slot !== row.slot || selected.versionId !== String(row.id)
+    || normalizedSha(selected.sha256) !== candidateSha256
+  ) return 'Level Editor brush proof does not identify the reviewed candidate bytes';
+  if (!Array.isArray(proof.slotSnapshots) || proof.slotSnapshots.length !== 1) {
+    return 'Level Editor brush proof must snapshot exactly one semantic slot';
+  }
+  const snapshot = proof.slotSnapshots[0];
+  if (!isObjectRecord(snapshot) || snapshot.slot !== row.slot) {
+    return 'Level Editor brush proof slot snapshot is invalid';
+  }
+  const bounds = row.native_evidence?.opaqueBounds;
+  if (
+    !isObjectRecord(bounds) || !isObjectRecord(proof.opaqueBounds)
+    || proof.opaqueBounds.x !== bounds.x || proof.opaqueBounds.y !== bounds.y
+    || proof.opaqueBounds.width !== bounds.width || proof.opaqueBounds.height !== bounds.height
+  ) {
+    return 'Level Editor brush proof opaque bounds do not match the validated candidate evidence';
+  }
+  return null;
+}
+
 /**
  * Domain-owned runtime projection for one authored one-shot take. Sound-set
  * labels, gains, and assignments remain in the DB-owned SFX profile.
@@ -424,6 +564,23 @@ function nativeMediaEvidenceIssue(row) {
   const isRaster = String(row.media_type || '').startsWith('image/') && row.media_type !== 'image/svg+xml';
   if (!isRaster) return null;
   const evidence = isObjectRecord(row.native_evidence) ? row.native_evidence : {};
+  if (evidence.schema === LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_EXCEPTION_SCHEMA) {
+    if (
+      String(row.slot || '') !== LEVEL_EDITOR_BRUSH_ICON_SLOT
+      || normalizedSha(row.blob_sha256) !== LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_EXCEPTION_SHA256
+      || normalizedSha(evidence.sourceSha256) !== LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_EXCEPTION_SHA256
+    ) return 'ADR-0337 scaled Brush evidence is restricted to the exact owner-selected Option 01 bytes';
+    if (
+      evidence.decision !== 'ADR-0337'
+      || evidence.status !== 'owner-approved-production-exception'
+      || evidence.native1x !== false || evidence.spatialResampling !== true
+      || Number(row.width) !== 64 || Number(row.height) !== 64
+      || Number(evidence.sourceWidth) !== 64 || Number(evidence.sourceHeight) !== 64
+      || Number(evidence.drawWidth) !== 20 || Number(evidence.drawHeight) !== 20
+      || evidence.transform !== 'css-background-size-contain-64-to-20'
+    ) return 'ADR-0337 scaled Brush evidence is incomplete';
+    return null;
+  }
   if (evidence.schema === RUN_RELIC_RESIZED_PRODUCTION_EXCEPTION_SCHEMA) {
     const expectedSha256 = RUN_RELIC_RESIZED_PRODUCTION_EXCEPTION_SHA_BY_SLOT[String(row.slot || '')];
     if (!expectedSha256) return 'ADR-0332 resized production evidence is restricted to its eight Run relic slots';
@@ -486,6 +643,10 @@ module.exports = {
   PREDRAWN_BOARD_COMPONENT,
   PREDRAWN_BOARD_PROOF_RENDERER,
   PREDRAWN_BOARD_PROOF_SCHEMA,
+  LEVEL_EDITOR_BRUSH_ICON_COMPONENT,
+  LEVEL_EDITOR_BRUSH_ICON_PROOF_RENDERER,
+  LEVEL_EDITOR_BRUSH_ICON_PROOF_SCHEMA,
+  LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_EXCEPTION_SCHEMA,
   RUN_RELIC_ICON_COMPONENT,
   RUN_RELIC_RESIZED_PRODUCTION_EXCEPTION_SCHEMA,
   RUN_RESOURCE_ICON_COMPONENT,
@@ -495,6 +656,9 @@ module.exports = {
   liveCatalogReadinessIssue,
   gameConditionIconMediaIssue,
   gameConditionIconSlot,
+  levelEditorBrushIconMediaIssue,
+  levelEditorBrushIconOwnerProofIssue,
+  levelEditorBrushIconSlot,
   nativeMediaEvidenceIssue,
   predrawnBoardAlignmentIssue,
   predrawnBoardMediaIssue,
