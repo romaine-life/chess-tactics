@@ -12,16 +12,20 @@ const runArmy = readFileSync(new URL('./RunArmyWorkspace.tsx', import.meta.url),
 
 describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
   it('describes exactly the four unit abilities without card qualifiers', () => {
-    const start = enchiridion.indexOf('function AbilitiesSection');
+    const start = enchiridion.indexOf('const UNIT_STATE_REFERENCES');
     const end = enchiridion.indexOf('function EnchiridionContent', start);
     const abilities = enchiridion.slice(start, end);
-    expect(abilities).toContain('<h3>Discipline</h3>');
-    expect(abilities).toContain('<h3>Positioned</h3>');
-    expect(abilities).toContain('<h3>{AGMINATE_DISPLAY_NAME}</h3>');
-    expect(abilities).toContain('<h3>{CACOCHYMIC_DISPLAY_NAME}</h3>');
-    expect(abilities).not.toContain('<h3>Concinnous</h3>');
-    expect(abilities).not.toContain('<h3>Tactical</h3>');
-    expect(abilities.match(/className="enchiridion-ability-card"/g)).toHaveLength(4);
+    expect(abilities.match(/state: '(?:discipline|positioned|marshalled|plagued)'/g)).toHaveLength(4);
+    expect(abilities).toContain("name: 'Discipline'");
+    expect(abilities).toContain("name: 'Positioned'");
+    expect(abilities).toContain('name: AGMINATE_DISPLAY_NAME');
+    expect(abilities).toContain('name: CACOCHYMIC_DISPLAY_NAME');
+    expect(abilities).not.toContain("name: 'Concinnous'");
+    expect(abilities).not.toContain("name: 'Tactical'");
+    expect(abilities).toContain('className="enchiridion-ability-card"');
+    // Every glossary entry draws its own accepted unit-state icon, never a stand-in glyph.
+    expect(abilities).toContain('src={runUnitStateIconUrl(state)}');
+    expect(abilities).not.toMatch(/skirmish-icon-(?:shield|move|flag)/);
     expect(abilities).toContain('discounted by 0 gold for a Pawn, 1 for a Knight or Bishop, 2 for a Rook, and 3 for a Queen');
     expect(abilities).not.toContain('Upon acquisition, one unit on this card becomes Positioned.');
     expect(abilities).not.toContain('Upon acquisition, one randomly chosen unit on this card gains Discipline.');
@@ -159,7 +163,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
 
   it('selects four affected-card names in column three and previews one shared Volunteer face in column four', () => {
     const start = enchiridion.indexOf('const CARD_TYPE_REFERENCES');
-    const end = enchiridion.indexOf('function AbilitiesSection', start);
+    const end = enchiridion.indexOf('const UNIT_STATE_REFERENCES', start);
     const cardTypes = enchiridion.slice(start, end);
     expect(cardTypes.match(/id: '(?:pestiferous|concinnous|tactical|hieratic)'/g)).toHaveLength(4);
     expect(cardTypes).toContain("const VOLUNTEER_CARD = RUN_CARD_BY_ID.p");
@@ -167,8 +171,12 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(cardTypes).toContain('RUN_CARD_PESTIFEROUS_FRAME_SLOT');
     expect(cardTypes).toContain('RUN_CARD_TACTICAL_FRAME_SLOT');
     expect(cardTypes).toContain('RUN_CARD_HIERATIC_FRAME_SLOT');
-    expect(cardTypes).toContain("iconRole: 'ui-kit-icons-card-properties-pestiferous-png'");
+    // Every named property row carries its own accepted symbol, not just Pestiferous.
+    expect(cardTypes).toContain('src={runCardPropertyIconUrl(definition.id)}');
     expect(cardTypes).toContain('className="enchiridion-card-type-row-icon"');
+    // The preview face carries the qualifier as its symbol instead of an em-dash suffix.
+    expect(cardTypes).toContain("typeLine: 'Units',");
+    expect(cardTypes).not.toContain('typeLine: `Units — ${definition.name}`');
     // Every named card property now has installed Run mechanics, so none is provisional.
     expect(cardTypes).not.toContain('provisional: true');
     expect(cardTypes).toContain("useState('pestiferous')");
@@ -181,10 +189,13 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(enchiridion).toContain("if (section === 'card-types') return <CardTypesSection framed={framed} />;");
   });
 
-  it('uses separate installed symbols for the Pestiferous card property and Cacochymic unit ability', () => {
-    expect(enchiridion).toContain("iconRole: 'ui-kit-icons-card-properties-pestiferous-png'");
-    expect(enchiridion).toContain("src={installedUiMedia('ui-kit-icons-game-plagued-png')}");
+  it('uses separate installed symbols for a card property and the unit state it bestows', () => {
+    expect(enchiridion).toContain('src={runCardPropertyIconUrl(definition.id)}');
+    expect(enchiridion).toContain('src={runUnitStateIconUrl(state)}');
     expect(enchiridion).toContain('className="enchiridion-ability-icon"');
+    // The property and state resolvers are distinct roles, never one reused for both.
+    expect(enchiridion).not.toContain('runCardPropertyIconUrl(state)');
+    expect(enchiridion).not.toContain('runUnitStateIconUrl(definition.id)');
   });
 
   it('opens from Controls while retaining the mounted Battle field', () => {
@@ -206,7 +217,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(style).toMatch(/\.skirmish-hud-title-action-glyph\s*\{[\s\S]*?block-size:\s*32px[\s\S]*?inline-size:\s*32px/);
     expect(skirmish).toContain('className="skirmish-war-room"');
     expect(skirmish).toMatch(/<ShellViewportSwap[\s\S]*?className="skirmish-war-room"[\s\S]*?primaryClassName="skirmish-field"[\s\S]*?workspaceOpen=\{strategikonOpen \|\| Boolean\(runWorkspace\)\}/);
-    expect(skirmish).toContain('relicIds={runBattle?.relicIds ?? []}');
+    expect(skirmish).toContain('relicIds={runDeployment?.relicIds ?? runBattle?.relicIds ?? []}');
     expect(skirmish).toContain('shellWorkspaceCoversRelics={Boolean(runWorkspace) || strategikonOpen}');
     expect(skirmish).toMatch(/<GameplayWorkspaceSceneSlot[\s\S]*?className="strategikon-slot"[\s\S]*?\{strategikonOpen \? \(/);
     expect(skirmish).toMatch(/primary=\{\([\s\S]*?<div className="skirmish-board-frame">[\s\S]*?\)\}[\s\S]*?\{battleWorkspaceLayer\}/);

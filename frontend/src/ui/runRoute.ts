@@ -9,7 +9,7 @@ export const RUN_ROOT = '/run';
 export const RUN_STRATEGIKON_PREFIX = '/run/strategikon/';
 
 /** Every address that presents the Run screen: the Run itself, its Strategikon workspace, and a
- * craft link, which crafts and then lands on the Run (ADR-0346). */
+ * craft link, which crafts and then lands on the Run (ADR-0354). */
 export function isRunRoutePath(pathname: string): boolean {
   const path = normalizeRoutePath(pathname);
   return path === RUN_ROOT || path.startsWith(RUN_STRATEGIKON_PREFIX) || isRunCraftLinkPath(path);

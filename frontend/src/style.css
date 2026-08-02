@@ -8947,6 +8947,18 @@ body.loading-bootstrap .app-startup-status {
     display: none;
   }
 
+  /* A Run's Conflict/Battle/level/phase orientation remains title-bar information
+     at compact widths (ADR-0346). Keep that one chip and shed War identity + gold. */
+  .app-shell-titlebar .run-topbar-status .skirmish-turn-plate,
+  .app-shell-titlebar .run-topbar-status .skirmish-clock {
+    display: none;
+  }
+
+  .app-shell-titlebar .run-topbar-status .skirmish-objective {
+    display: flex;
+    min-inline-size: 150px;
+  }
+
 }
 
 @media (max-width: 860px) {
@@ -9023,9 +9035,14 @@ body.loading-bootstrap .app-startup-status {
     grid-column: 1 / -1;
   }
 
-  /* Stacked mobile bar: brand left, counts on the right; hide the center status group. */
+  /* Stacked mobile Battle bars put their summary in Controls. Runs retain their
+     compact progress chip because Deployment orientation belongs in the title bar. */
   .skirmish-topbar-status {
     display: none;
+  }
+
+  .run-topbar-status {
+    display: flex;
   }
 }
 
@@ -18738,20 +18755,6 @@ button.tileset-relationship-cell {
   margin: 0;
 }
 
-.run-deployment-workspace-content {
-  grid-template-columns: minmax(0, 1fr) minmax(250px, 320px);
-  overflow: hidden;
-}
-
-.run-deployment-pane {
-  align-content: start;
-  display: grid;
-  gap: var(--ds-stack);
-  min-block-size: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-}
-
 .run-shop-workspace-content > section {
   display: grid;
   gap: var(--ds-inline-tight);
@@ -19178,7 +19181,6 @@ button.tileset-relationship-cell {
 .run-wrap-screen-cards > .run-card-offer {
   inline-size: 200px;
 }
-
 .run-wrap-install {
   display: grid;
   gap: var(--ds-inline-tight);
@@ -19251,7 +19253,6 @@ button.tileset-relationship-cell {
 .run-sell-workspace.has-scene .run-sell-workspace-content > :is(h2, p) {
   text-shadow: 0 2px 6px rgba(2, 7, 12, .85);
 }
-
 .run-wrap-slot-card {
   position: absolute;
   z-index: 1;
@@ -19703,18 +19704,47 @@ button.tileset-relationship-cell {
   gap: var(--ds-inline-tight);
 }
 
-.run-placement-row .house-select {
-  min-inline-size: min(240px, 50%);
+.run-deployment-board {
+  block-size: 100%;
+  display: grid;
+  inline-size: 100%;
+  min-block-size: 0;
+  min-inline-size: 0;
+  position: relative;
+}
+
+.run-deployment-board > .board-view-pane-seat {
+  block-size: 100%;
+  inline-size: 100%;
+}
+
+.run-deployment-cell {
+  cursor: crosshair;
+}
+
+.run-deployment-cell.is-deployment-blocked {
+  cursor: not-allowed;
+}
+
+.run-deployment-placement-ghost {
+  filter: drop-shadow(0 2px 8px rgba(71, 222, 255, .8));
+  opacity: .68;
+  pointer-events: none;
+  z-index: 8;
+}
+
+.run-deployment-summary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.run-deployment-summary > div {
+  min-inline-size: 0;
 }
 
 .run-inline-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--ds-inline-tight);
-}
-
-.run-preview-note {
-  margin: 0;
 }
 
 .run-meta-controls {
@@ -20814,11 +20844,6 @@ button.tileset-relationship-cell {
 }
 
 @media (max-width: 960px) {
-  .run-deployment-workspace-content {
-    grid-template-columns: minmax(0, 1fr);
-    overflow: auto;
-  }
-
   .run-army-profile-body {
     grid-template-columns: minmax(0, 1fr);
     overflow-x: hidden;
@@ -22612,14 +22637,9 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
 .run-card-prototype-unit-marker {
   align-items: center;
   block-size: 3.4cqw;
-  color: #ffe09a;
   display: inline-flex;
-  font: 400 3.4cqw/1 var(--ds-font-display);
   inline-size: 3.4cqw;
   justify-content: center;
-  text-shadow:
-    0 0 .7cqw #000,
-    0 .3cqw 0 #000;
   z-index: 3;
   image-rendering: pixelated;
   object-fit: contain;

@@ -2732,7 +2732,7 @@ const MIGRATIONS = [
   {
     version: 50,
     name: 'content-addressed Run craft links',
-    // ADR-0346: a crafted Run state is handed over as /run/craft/<id>. The spec lives here so
+    // ADR-0354: a crafted Run state is handed over as /run/craft/<id>. The spec lives here so
     // the address stays short and opaque however large the spec grows, and the id is the
     // fingerprint of the spec's own canonical text — so the same requested state always mints
     // the same link, and re-minting it is an insert that does nothing.
@@ -18696,7 +18696,7 @@ function runCraftError(message) {
 
 // Read a craft spec out of a request. Two ways to say the same thing: the JSON grammar, and the
 // readable address grammar for a spec typed by hand. Neither is the LINK — a crafted state is
-// handed over as its id (ADR-0346), and both of these are ways to mint one.
+// handed over as its id (ADR-0354), and both of these are ways to mint one.
 function runCraftSpecFromRequest(body) {
   if (typeof body.address === 'string') {
     const spec = serverRender.parseRunCraftSpec(body.address);
@@ -18872,7 +18872,7 @@ app.post('/api/active-run/craft/:id', async (req, res) => {
 // documents this endpoint's own validator would reject; crafting composes the state out of the
 // game's real transitions instead, so what lands in the row is a Run the game could have played.
 // This is the one call an agent makes: it mints the link, sets the Run, and answers with both.
-// The reply's `url` is the link to hand over — an id that CRAFTS the state again (ADR-0346),
+// The reply's `url` is the link to hand over — an id that CRAFTS the state again (ADR-0354),
 // not merely one that names it, so a state handed over can always be returned to.
 app.post('/api/active-run/craft', async (req, res) => {
   const user = await requireAdmin(req, res);

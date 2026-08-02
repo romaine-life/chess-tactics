@@ -39,7 +39,7 @@ export async function saveActiveRun(run: RunDocument, revision: number): Promise
 }
 
 /**
- * Craft the account's active Run from a minted craft link (ADR-0346). The id is all the address
+ * Craft the account's active Run from a minted craft link (ADR-0354). The id is all the address
  * carries; the server holds the spec it stands for and composes the state out of the game's real
  * transitions. Opening the same link again crafts it again — that is the restart button.
  */

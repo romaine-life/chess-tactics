@@ -6,6 +6,7 @@ import {
   CACOCHYMIC_DISPLAY_NAME,
   cardContentsLabel,
   PIECE_LABEL,
+  RUN_CARD_TYPE_REFERENCE,
   type PurchasablePieceType,
   type RunCardOffer,
   type RunCoreCard,
@@ -115,15 +116,16 @@ export function RunCard({
   const faceContent = {
     name,
     cost,
-    typeLine: cardType === 'pestiferous'
-      ? 'Units — Pestiferous'
-      : cardType === 'tactical'
-        ? 'Units — Tactical'
-      : cardType === 'concinnous'
-        ? 'Units — Concinnous'
-      : cardType === 'hieratic'
-        ? 'Units — Hieratic'
-        : 'Units',
+    // The type strip prints the primary type and carries the qualifier as its right-side
+    // symbol; it no longer spells the qualifier out after an em dash (ADR-0339).
+    typeLine: 'Units',
+    ...(cardType ? {
+      cardProperty: {
+        id: cardType,
+        name: RUN_CARD_TYPE_REFERENCE[cardType].name,
+        effect: RUN_CARD_TYPE_REFERENCE[cardType].effect,
+      },
+    } : {}),
     grants: runCardGrants(card),
     properties: cardType === 'concinnous' && offer
       ? [{ name: 'Positioned', target: purchased ? concinnousTargetLabel(offer) : 'Target hidden' }]

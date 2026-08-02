@@ -13,6 +13,7 @@ import {
   type SkirmishState,
   type SkirmishStore,
 } from './store';
+import { SkirmishViewStoreProvider } from './SkirmishViewStoreContext';
 
 const SkirmishStoreContext = createContext<SkirmishStore | null>(null);
 const diagnosticsGlobal = globalThis as typeof globalThis & {
@@ -23,7 +24,7 @@ const diagnosticsGlobal = globalThis as typeof globalThis & {
 // module generations even though the actual contextual store remains healthy.
 const mountedSkirmishStores = diagnosticsGlobal.__ctMountedSkirmishStores ??= [];
 
-/** One game-session store per mounted Battle presentation. */
+/** One game-session store per mounted battlefield activity (Deployment may promote it to Battle). */
 export function SkirmishStoreProvider({ children }: { children: ReactNode }): ReactElement {
   const [store] = useState(createSkirmishStore);
   useEffect(() => {
@@ -35,7 +36,9 @@ export function SkirmishStoreProvider({ children }: { children: ReactNode }): Re
   }, [store]);
   return (
     <SkirmishStoreContext.Provider value={store}>
-      {children}
+      <SkirmishViewStoreProvider>
+        {children}
+      </SkirmishViewStoreProvider>
     </SkirmishStoreContext.Provider>
   );
 }

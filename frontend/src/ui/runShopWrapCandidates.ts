@@ -180,7 +180,6 @@ export function runShopWrapSeatTrack(candidate: RunShopWrapCandidate): string {
 /* A screen scene is a locked background: it only paints, and nothing positions
    itself against it, so it needs no mount. Only a band wrap — which genuinely
    frames the card row — measures anything. */
-
 export interface RunShopWrapSlotMount {
   frame: { width: number; height: number };
   cards: readonly { left: number; top: number; width: number; height: number }[];

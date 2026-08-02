@@ -114,6 +114,15 @@ dependencies. A genuinely different board, level, installed-art identity, or vis
 contract is a board replacement or new-Battle operation and follows the painted-frame
 acquisition lifecycle; it is not a restart.
 
+A battlefield's opening camera is prepared state, not an activation effect. Each mounted
+battlefield owns its own view store, measures its real viewport while hidden, and withholds
+surface readiness until both the compositors and the canonical opening camera are ready.
+Activation gates gameplay input, clocks, AI, and arrival motion only. Consequently an
+incoming battlefield can prepare beside a retained outgoing battlefield without changing
+the outgoing camera, and its first revealed frame already has its settled composition.
+Run Deployment promotes that same mounted battlefield and view-store instance into Battle;
+the promotion neither remounts nor reapplies the camera (ADR-0353).
+
 The URL is intent, not visible authority. Each scene slot exposes its last committed
 instance and its pending instance separately. Views render from the director-mounted
 path and may not subscribe to history/navigation events to change visible selection.

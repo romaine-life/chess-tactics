@@ -346,7 +346,7 @@ export function hasRunCraftRequest(search: string): boolean {
 }
 
 /**
- * The address of a crafted Run state (ADR-0346). The id IS the link: the spec lives on the
+ * The address of a crafted Run state (ADR-0354). The id IS the link: the spec lives on the
  * server, so the address stays short and opaque no matter how much the spec grows, survives
  * copy-paste and chat linkifiers intact, and has no grammar to outgrow. It is derived from the
  * spec's own content, so the same state always mints the same address.

@@ -180,7 +180,7 @@ The Studio encodes its state in the URL, so deep-link instead of clicking:
 - `view=board`, `family=<id>`, `collection=<id>`, `asset=<id>`, `unit=<id>`, `seed=<n>`
 - `/unit-studio` is an alias for the Studio with the Units shelf preselected.
 
-#### Crafting a Run state to link to (ADR-0338, ADR-0346)
+#### Crafting a Run state to link to (ADR-0338, ADR-0354)
 
 Run screens need an active Run, so `/run` alone lands wherever the account already is. Craft the
 state first, then hand over the craft link. Never hand-author a Run document or edit

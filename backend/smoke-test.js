@@ -4451,7 +4451,7 @@ async function main() {
   if (unknownPhaseCraft.statusCode !== 400 || JSON.parse(unknownPhaseCraft.body).error !== 'invalid_run_craft_spec') {
     throw new Error(`A craft spec must name a real Run phase: ${unknownPhaseCraft.statusCode} ${unknownPhaseCraft.body}`);
   }
-  // A crafted state is handed over as a minted id (ADR-0346). Minting is admin-only, is
+  // A crafted state is handed over as a minted id (ADR-0354). Minting is admin-only, is
   // content-addressed so the same state always answers with the same link, and an id this
   // server never minted must be reported rather than crafting something else.
   const anonymousMint = await request(

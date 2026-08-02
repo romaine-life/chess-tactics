@@ -213,8 +213,11 @@ function leafSceneManifest(
     ], [], 'gameplay-shell', 'transition-only');
   }
   if (isRunRoutePath(path)) {
+    const runPhaseIdentity = runSnapshot?.phase === 'deployment' || runSnapshot?.phase === 'battle'
+      ? `battlefield-${runSnapshot.run?.battleIndex ?? 0}`
+      : runSnapshot?.phase ?? 'hydrating';
     const runIdentity = runSnapshot
-      ? `${runSnapshot.run?.id ?? 'none'}:${runSnapshot.phase}:${runSnapshot.workspace}`
+      ? `${runSnapshot.run?.id ?? 'none'}:${runPhaseIdentity}:${runSnapshot.workspace}`
       : 'hydrating:primary';
     return manifest(`run:${runIdentity}`, 'battlefield', 'gameplay-hud', [
       'battlefield-background',
@@ -400,9 +403,12 @@ export function sceneManifest(
       : [instance(SCENE_DEFINITIONS.gameplay), instance(SCENE_DEFINITIONS.gameplayStrategikon, { path })];
   } else if (isRunRoutePath(path)) {
     const snapshot = runSnapshot!;
-    const phaseIdentity = snapshot.run
-      ? `${snapshot.run.id}:${snapshot.phase}:${snapshot.run.battleIndex}`
+    const phase = snapshot.phase === 'deployment' || snapshot.phase === 'battle'
+      ? 'battlefield'
       : snapshot.phase;
+    const phaseIdentity = snapshot.run
+      ? `${snapshot.run.id}:${phase}:${snapshot.run.battleIndex}`
+      : phase;
     instances = [
       instance(SCENE_DEFINITIONS.run),
       instance(SCENE_DEFINITIONS.runPhase, { phase: phaseIdentity }),
@@ -571,8 +577,9 @@ const DESTINATION_SLOT_BY_REGION: Readonly<Partial<Record<SceneHost, SceneSlotId
  * while only the detail changes. Keying the layer by the deepest non-detail instance
  * keeps one React tree across `run ↔ run/current ↔ run/new`, so selecting a choice
  * never unmounts, blanks, and re-reveals the stable sibling column. The state-driven
- * run/phase and run/workspace slots stay leaf-keyed on purpose: their scenes overlap
- * as two complete layers, which requires distinct keys.
+ * Run phase/workspace slots stay leaf-keyed on purpose. Deployment and its Battle are
+ * one continuous battlefield phase and therefore deliberately resolve to the same leaf key;
+ * other Run phase changes still receive distinct keys and complete-scene transitions.
  */
 const NESTED_DETAIL_SLOTS: ReadonlySet<SceneSlotId> = new Set(['run-detail-content']);
 

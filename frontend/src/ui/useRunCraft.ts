@@ -1,7 +1,7 @@
 // Apply a craft link: set the account's active Run to the state the id stands for, then land on
 // a clean /run.
 //
-// The link is the whole point (ADR-0346). Finding a bug on a crafted Run and being unable to get
+// The link is the whole point (ADR-0354). Finding a bug on a crafted Run and being unable to get
 // back to it is the failure this exists to prevent, so `/run/craft/<id>` is re-runnable by
 // design: opening it again re-crafts and drops you back at the same state. It is the restart
 // button.

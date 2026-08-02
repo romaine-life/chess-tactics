@@ -179,6 +179,27 @@ export function unitsForGamePieces(pieces: readonly Piece[]): EditorBoard['units
   return units;
 }
 
+/**
+ * Project the durable level-unit channel onto the editor board without reopening boardCode.
+ * Runtime previews use this to retain authored terrain/chrome from boardCode while replacing
+ * its authored unit snapshot with the current battlefield projection.
+ */
+export function unitsForLevelUnits(units: readonly LevelUnit[]): EditorBoard['units'] {
+  const projected: EditorBoard['units'] = {};
+  for (const unit of units) {
+    const unitId = unitIdForType(unit.type);
+    if (!unitId) continue;
+    projected[`${unit.x},${unit.y}`] = {
+      unitId,
+      direction: unit.facing ?? 'south',
+      faction: isFaction(unit.palette)
+        ? unit.palette
+        : SIDE_TO_FACTION[unit.side === 'enemy' ? 'enemy' : 'player'],
+    };
+  }
+  return projected;
+}
+
 // Re-seed the editor from a saved level. The lossless `boardCode` is preferred (it carries
 // doodads, ground cover, roads/rivers and exact unit facing); otherwise we derive a board
 // from `layers`, which only knows terrain materials + unit placements.
@@ -220,17 +241,9 @@ export function levelToEditorBoard(level: Level): EditorBoard {
     if (!(key in cells) && !voidCells.has(key)) cells[key] = fallbackTile;
   }
 
-  const units: EditorBoard['units'] = {};
-  for (const unit of level.layers.units) {
-    if (unit.x < 0 || unit.x >= cols || unit.y < 0 || unit.y >= rows) continue;
-    const unitId = unitIdForType(unit.type);
-    if (!unitId) continue;
-    units[`${unit.x},${unit.y}`] = {
-      unitId,
-      direction: unit.facing ?? 'south',
-      faction: isFaction(unit.palette) ? unit.palette : SIDE_TO_FACTION[unit.side === 'enemy' ? 'enemy' : 'player'],
-    };
-  }
+  const units = unitsForLevelUnits(level.layers.units.filter(
+    (unit) => unit.x >= 0 && unit.x < cols && unit.y >= 0 && unit.y < rows,
+  ));
 
   // Legacy fallback: a level with no boardCode still carries props in layers.props (the durable
   // game channel), so re-derive the editor's anchor-keyed props map from it.

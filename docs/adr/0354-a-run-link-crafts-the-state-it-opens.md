@@ -6,7 +6,7 @@ refines:
   - "[ADR-0338](0338-a-crafted-run-is-composed-from-real-transitions-not-authored-state.md)"
 ---
 
-# ADR-0346: A Run link crafts the state it opens
+# ADR-0354: A Run link crafts the state it opens
 
 ## Context
 
