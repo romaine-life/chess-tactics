@@ -8,6 +8,8 @@ import {
 import {
   RUN_CARD_CONTENTS_STUDY_PROFILES,
   runCardContentsStudyFromSearch,
+  runCardPrototypeCostFromSearch,
+  runCardPrototypeFrameBoxesFromSearch,
   runCardPrototypeContent,
   runCardPrototypeTargetRevealedFromSearch,
   runCardPrototypeVariantFromSearch,
@@ -25,13 +27,14 @@ describe('Run Card Layout review variant', () => {
     expect(runCardPrototypeTargetRevealedFromSearch('?cardVariant=concinnous')).toBe(false);
     expect(runCardPrototypeTargetRevealedFromSearch('?cardVariant=concinnous&concinnousTarget=revealed')).toBe(true);
     expect(runCardPrototypeContent('concinnous')).toMatchObject({
-      name: "Banneret's Retinue",
-      cost: 8,
+      name: 'Two Good Boots',
+      cost: 4,
       typeLine: 'Units — Concinnous',
+      grants: [{ count: 2, unit: 'pawn' }],
       properties: [{ name: 'Positioned', target: 'Target hidden' }],
     });
     expect(runCardPrototypeContent('concinnous', true)).toMatchObject({
-      properties: [{ name: 'Positioned', target: 'Knight' }],
+      properties: [{ name: 'Positioned', target: 'Pawn 1' }],
     });
     expect(runCardPrototypeContent('concinnous')).not.toHaveProperty('rules');
   });
@@ -71,6 +74,18 @@ describe('Run Card Layout review variant', () => {
   it('addresses the Contents Box comparison without changing the ordinary default', () => {
     expect(runCardContentsStudyFromSearch('?mode=viewer&vk=cardlayout&contentsStudy=1')).toBe(true);
     expect(runCardContentsStudyFromSearch('?mode=viewer&vk=cardlayout')).toBe(false);
+  });
+
+  it('addresses the measured frame-box overlay in the review URL', () => {
+    expect(runCardPrototypeFrameBoxesFromSearch('?mode=viewer&frameBoxes=1')).toBe(true);
+    expect(runCardPrototypeFrameBoxesFromSearch('?mode=viewer')).toBe(false);
+  });
+
+  it('addresses two-digit coin-cost previews without changing the actual default', () => {
+    expect(runCardPrototypeCostFromSearch('?cardCost=10')).toBe(10);
+    expect(runCardPrototypeCostFromSearch('?cardCost=11')).toBe(11);
+    expect(runCardPrototypeCostFromSearch('?cardCost=12')).toBeNull();
+    expect(runCardPrototypeCostFromSearch('')).toBeNull();
   });
 
   it('shows progressively denser Contents Box specimens at the real card width', () => {

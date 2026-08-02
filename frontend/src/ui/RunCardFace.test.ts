@@ -8,6 +8,10 @@ import {
   type RunCardFaceContent,
   type RunCardImageKind,
 } from './RunCardFace';
+import {
+  RUN_CARD_CONCINNOUS_STEEL_FRAME_GEOMETRY,
+  RUN_CARD_STANDARD_FRAME_GEOMETRY,
+} from './runCardFrameGeometry';
 
 const card: RunCardFaceContent = Object.freeze({
   name: 'The Volunteer',
@@ -26,6 +30,17 @@ describe('Run card atomic presentation', () => {
       .not.toBe(signature);
     expect(runCardPresentationSignature(card, '/frame-b.png', '/art-a.png')).not.toBe(signature);
     expect(runCardPresentationSignature(card, '/frame-a.png', '/art-b.png')).not.toBe(signature);
+    expect(runCardPresentationSignature(
+      card,
+      '/frame-a.png',
+      '/art-a.png',
+      RUN_CARD_CONCINNOUS_STEEL_FRAME_GEOMETRY,
+    )).not.toBe(runCardPresentationSignature(
+      card,
+      '/frame-a.png',
+      '/art-a.png',
+      RUN_CARD_STANDARD_FRAME_GEOMETRY,
+    ));
   });
 
   it('requires the actual frame, art, and every unit consumer before promotion', () => {

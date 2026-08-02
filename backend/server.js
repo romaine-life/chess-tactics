@@ -18250,6 +18250,11 @@ function validateActiveRunBody(run) {
               && offer.effectTargetIndex >= 0
               && offer.effectTargetIndex < offer.pieces?.length
             : offer.effectTargetIndex === null;
+        const costValid = isFiniteInteger(offer.cost)
+          && offer.cost >= 1
+          && (offer.cardType === 'concinnous'
+            ? offer.cost === offer.value + 2 && offer.cost <= 11
+            : offer.cost <= 9);
         if (
           typeof offer.offerId !== 'string'
           || !offer.offerId
@@ -18263,9 +18268,7 @@ function validateActiveRunBody(run) {
           || !isFiniteInteger(offer.value)
           || offer.value < 1
           || offer.value > 9
-          || !isFiniteInteger(offer.cost)
-          || offer.cost < 1
-          || offer.cost > 9
+          || !costValid
           || !cardTypeValid
           || !effectTargetValid
           || !isFiniteInteger(offer.effectSeed)

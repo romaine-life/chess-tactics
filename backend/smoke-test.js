@@ -4255,11 +4255,11 @@ async function main() {
       conflictIndex: 0,
       victoryGoldTenths: 10,
       cardOffers: [{
-        id: 'p',
-        offerId: 'shop-0-0-p',
-        pieces: ['pawn'],
-        value: 1,
-        cost: 3,
+        id: 'q',
+        offerId: 'shop-0-0-q',
+        pieces: ['queen'],
+        value: 9,
+        cost: 11,
         cardType: 'concinnous',
         effectSeed: 1704,
         effectTargetIndex: 0,
@@ -4295,6 +4295,7 @@ async function main() {
     savedConcinnousShopRun.statusCode !== 200
     || savedConcinnousShopRunBody.revision !== 2
     || savedConcinnousShopRunBody.run.shop.cardOffers[0].effectTargetIndex !== 0
+    || savedConcinnousShopRunBody.run.shop.cardOffers[0].cost !== 11
   ) {
     throw new Error(`Concinnous shop Run did not save: ${savedConcinnousShopRun.statusCode} ${savedConcinnousShopRun.body}`);
   }

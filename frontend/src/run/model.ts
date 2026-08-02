@@ -371,7 +371,6 @@ export function createRunCardOffer(
     && pestiferousOfferRoll(run.seed, battleIndex, slotIndex, card.id, pestiferousDenominator);
   const effectSeed = mixSeed(run.seed, `shop-card:${card.id}`, battleIndex * 8 + slotIndex);
   const concinnous = !pestiferous
-    && card.value + 2 <= 9
     && concinnousOfferRoll(run.seed, battleIndex, slotIndex, card.id, concinnousDenominator);
   const plaguedPieceIndex = pestiferous
     ? seededPestiferousTarget(effectSeed, card.pieces.map((_, index) => index), 0)

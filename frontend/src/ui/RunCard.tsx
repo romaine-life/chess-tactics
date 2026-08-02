@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import { resolvedLiveMediaUrl } from '@chess-tactics/board-render';
+import { liveMediaForSlot, resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import { runCardArtSlot, runCardFlavor, runCardName } from '../run/cardNames';
 import {
   cardContentsLabel,
@@ -15,6 +15,7 @@ import {
   RunCardFace,
   type RunCardFaceContent,
 } from './RunCardFace';
+import { runCardFrameGeometryForSha } from './runCardFrameGeometry';
 import { InnerChromeBox } from './shared/ChromeBox';
 
 const CARD_PIECE_ORDER: readonly PurchasablePieceType[] = Object.freeze(['pawn', 'knight', 'bishop', 'rook', 'queen']);
@@ -75,13 +76,13 @@ export function RunCard({
   const artUrl = resolvedLiveMediaUrl(runCardArtSlot(card));
   const offer = isCardOffer(card) ? card : null;
   const cardType = offer?.cardType ?? null;
-  const frameUrl = resolvedLiveMediaUrl(
-    cardType === 'pestiferous'
-      ? RUN_CARD_PESTIFEROUS_FRAME_SLOT
-      : cardType === 'concinnous'
-        ? RUN_CARD_CONCINNOUS_FRAME_SLOT
-        : RUN_CARD_FRAME_SLOT,
-  );
+  const frameSlot = cardType === 'pestiferous'
+    ? RUN_CARD_PESTIFEROUS_FRAME_SLOT
+    : cardType === 'concinnous'
+      ? RUN_CARD_CONCINNOUS_FRAME_SLOT
+      : RUN_CARD_FRAME_SLOT;
+  const frameMedia = liveMediaForSlot(frameSlot).media;
+  const frameUrl = frameMedia.immutableUrl;
   const cost = offer?.cost ?? card.value;
   const targetLabel = cardType === 'pestiferous'
     ? plaguedTargetLabel(card)
@@ -107,6 +108,7 @@ export function RunCard({
       card={faceContent}
       frameUrl={frameUrl}
       artUrl={artUrl}
+      frameGeometry={runCardFrameGeometryForSha(frameMedia.sha256)}
       ariaHidden={mode !== 'reference'}
     />
   );
