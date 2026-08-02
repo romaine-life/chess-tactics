@@ -34,11 +34,23 @@ export const EXIT = {
   TIMEOUT: 6,
 }
 
+export const USAGE = `pr-gate — is this PR actually ready to merge?
+
+  node bin/pr-gate.mjs [<pr>] [--no-wait] [--appear <s>] [--timeout <s>]
+
+  <pr>          PR number or URL. Defaults to the current branch's PR.
+  --no-wait     Report the current state and exit instead of waiting.
+  --appear <s>  How long to wait for any check to appear (default 90).
+  --timeout <s> How long to wait for checks to finish (default 1800).
+
+Exit codes: 0 READY · 1 ERROR · 2 CONFLICT · 3 BEHIND · 4 NO_CHECKS · 5 CI_FAILED · 6 TIMEOUT`
+
 export function parseArgs(argv) {
-  const opts = { pr: null, wait: true, appear: 90, timeout: 1800 }
+  const opts = { pr: null, wait: true, appear: 90, timeout: 1800, help: false }
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]
-    if (arg === '--no-wait') opts.wait = false
+    if (arg === '--help' || arg === '-h') opts.help = true
+    else if (arg === '--no-wait') opts.wait = false
     else if (arg === '--appear') opts.appear = Number(argv[++i])
     else if (arg === '--timeout') opts.timeout = Number(argv[++i])
     else if (!arg.startsWith('-')) opts.pr = arg
@@ -275,6 +287,10 @@ async function settleMergeState(prArg) {
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2))
+  if (opts.help) {
+    console.log(USAGE)
+    process.exit(EXIT.READY)
+  }
   const pr = await settleMergeState(opts.pr)
 
   const blocked = mergeStateVerdict(pr)
