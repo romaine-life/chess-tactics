@@ -14740,10 +14740,14 @@ const RUN_CARD_ART_PIECE_ORDER = Object.freeze(['pawn', 'knight', 'bishop', 'roo
 const RUN_CARD_FRAME_SLOT = 'ui/run/card-prototypes/frame-v1.png';
 const RUN_CARD_PESTIFEROUS_FRAME_SLOT = 'ui/run/card-prototypes/pestiferous-frame-v1.png';
 const RUN_CARD_CONCINNOUS_FRAME_SLOT = 'ui/run/card-prototypes/concinnous-frame-v1.png';
+const RUN_CARD_TACTICAL_FRAME_SLOT = 'ui/run/card-prototypes/tactical-discipline-frame-v1.png';
+const RUN_CARD_COST_COIN_SOURCE_SLOT = 'ui/run/card-prototypes/cost-coin-source-v1.png';
 const RUN_CARD_FRAME_VARIANT_BY_SLOT = Object.freeze({
   [RUN_CARD_FRAME_SLOT]: 'standard',
   [RUN_CARD_PESTIFEROUS_FRAME_SLOT]: 'pestiferous',
   [RUN_CARD_CONCINNOUS_FRAME_SLOT]: 'concinnous',
+  [RUN_CARD_TACTICAL_FRAME_SLOT]: 'tactical',
+  [RUN_CARD_COST_COIN_SOURCE_SLOT]: 'cost-coin-source',
 });
 const RUN_CARD_FRAME_SCHEMA = 'run-card-frame-v1';
 const SOURCE_ART_TURNTABLE_SCHEMA = 'structure-source-art-turntable-v1';
@@ -18028,7 +18032,7 @@ const RUN_RELIC_BY_ID = serverRender?.RUN_RELIC_BY_ID ?? {};
 const RUN_RELIC_IDS = new Set(RUN_RELICS.map((relic) => relic.id));
 function validateActiveRunBody(run) {
   if (!run || typeof run !== 'object' || Array.isArray(run)) return 'run must be an object';
-  if (run.formatVersion !== 10) return 'run.formatVersion is unsupported';
+  if (run.formatVersion !== 11) return 'run.formatVersion is unsupported';
   if (typeof run.id !== 'string' || !run.id || run.id.length > 160) return 'run.id is invalid';
   if (!isFiniteInteger(run.seed) || run.seed < 0 || run.seed > 0xffffffff) return 'run.seed is invalid';
   if (run.formatVersion >= 5 && run.ataraxiaTier !== 0 && run.ataraxiaTier !== 1) return 'run.ataraxiaTier is invalid';
@@ -18097,13 +18101,20 @@ function validateActiveRunBody(run) {
       if (!isObjectRecord(card)) return 'run.cards contains an invalid card';
       const cardTypeValid = card.cardType === null
         || card.cardType === 'pestiferous'
-        || (run.formatVersion >= 6 && card.cardType === 'concinnous');
-      const effectTargetValid = run.formatVersion < 6
-        || (card.cardType === 'concinnous'
-          ? typeof card.effectTargetUnitId === 'string'
-            && card.effectTargetUnitId.length > 0
-            && card.effectTargetUnitId.length <= 160
-          : card.effectTargetUnitId === null);
+        || (run.formatVersion >= 6 && card.cardType === 'concinnous')
+        || (run.formatVersion >= 8 && card.cardType === 'tactical');
+      const directEffectTarget = card.effectTargetUnitId;
+      const legacyEffectTarget = isObjectRecord(card.effect) ? card.effect.targetUnitId : null;
+      const effectTarget = typeof directEffectTarget === 'string' ? directEffectTarget : legacyEffectTarget;
+      const affectedCard = card.cardType === 'concinnous' || card.cardType === 'tactical';
+      const effectTargetValid = run.formatVersion < 6 || (
+        affectedCard
+          ? typeof effectTarget === 'string'
+            && effectTarget.length > 0
+            && effectTarget.length <= 160
+            && card.unitIds?.includes(effectTarget)
+          : directEffectTarget === null
+      );
       if (
         typeof card.id !== 'string'
         || !card.id
@@ -18125,6 +18136,18 @@ function validateActiveRunBody(run) {
         || card.acquiredAfterBattleIndex < 0
         || card.acquiredAfterBattleIndex >= run.war.battles.length
       ) return 'run.cards contains an invalid card';
+      if (run.formatVersion === 8 && affectedCard) {
+        const expectedAbility = card.cardType === 'tactical' ? 'discipline' : 'positioned';
+        if (
+          isObjectRecord(card.effect)
+          && (card.effect.kind !== 'grant-ability' || card.effect.ability !== expectedAbility)
+        ) return 'run.cards contains an invalid legacy card effect';
+      }
+      if (affectedCard) {
+        const expectedAbility = card.cardType === 'tactical' ? 'discipline' : 'positioned';
+        const targetUnit = run.army.find((unit) => unit.id === effectTarget);
+        if (!targetUnit?.abilities.includes(expectedAbility)) return 'run.cards contains an invalid ability target';
+      }
       if (run.formatVersion >= 7) {
         const validPlaguedTarget = card.cardType === 'pestiferous'
           ? card.unitIds.length > 0
@@ -18244,17 +18267,16 @@ function validateActiveRunBody(run) {
         if (!isObjectRecord(offer)) return 'run.shop.cardOffers contains an invalid offer';
         const cardTypeValid = offer.cardType === null
           || offer.cardType === 'pestiferous'
-          || offer.cardType === 'concinnous';
+          || offer.cardType === 'concinnous'
+          || offer.cardType === 'tactical';
         const effectTargetValid = offer.cardType === 'concinnous'
-            ? isFiniteInteger(offer.effectTargetIndex)
-              && offer.effectTargetIndex >= 0
-              && offer.effectTargetIndex < offer.pieces?.length
-            : offer.effectTargetIndex === null;
+          ? isFiniteInteger(offer.effectTargetIndex)
+            && offer.effectTargetIndex >= 0
+            && offer.effectTargetIndex < offer.pieces?.length
+          : offer.effectTargetIndex === null;
         const costValid = isFiniteInteger(offer.cost)
           && offer.cost >= 1
-          && (offer.cardType === 'concinnous'
-            ? offer.cost === offer.value + 2 && offer.cost <= 11
-            : offer.cost <= 9);
+          && offer.cost <= 12;
         if (
           typeof offer.offerId !== 'string'
           || !offer.offerId
@@ -18285,7 +18307,7 @@ function validateActiveRunBody(run) {
         const plaguedPiece = offer.plaguedPieceIndex === null ? null : offer.pieces[offer.plaguedPieceIndex];
         const expectedCost = offer.cardType === 'pestiferous'
           ? offer.value - (plaguedPiece ? ACTIVE_RUN_PLAGUED_DISCOUNTS[plaguedPiece] : 0)
-          : offer.value + (offer.cardType === 'concinnous' ? 2 : 0);
+          : offer.value + (offer.cardType === 'tactical' ? 3 : offer.cardType === 'concinnous' ? 2 : 0);
         if (offer.cost !== expectedCost) {
           return 'run.shop.cardOffers contains invalid affected pricing';
         }

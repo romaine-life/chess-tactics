@@ -22,6 +22,7 @@ import {
   RUN_CARD_FRAME_SLOT,
   RUN_CARD_CONCINNOUS_FRAME_SLOT,
   RUN_CARD_PESTIFEROUS_FRAME_SLOT,
+  RUN_CARD_TACTICAL_FRAME_SLOT,
   RunCardFace,
   type RunCardFaceContent,
 } from './RunCardFace';
@@ -636,12 +637,12 @@ const CARD_TYPE_REFERENCES: readonly CardTypeReferenceDefinition[] = Object.free
     frameSlot: RUN_CARD_CONCINNOUS_FRAME_SLOT,
   },
   {
-    id: 'type-iii',
-    name: 'Type III',
-    cost: 1,
-    rules: 'Name and effect pending.',
-    description: 'This affected-card slot is reserved for the parallel card-type design work. No runtime mechanic is assigned here yet.',
-    provisional: true,
+    id: 'tactical',
+    name: 'Tactical',
+    cost: 4,
+    rules: 'Upon acquisition, one randomly chosen unit on this card gains Discipline.',
+    description: 'One contained unit gains Discipline when purchased. The target is hidden on multi-unit offers; this one-unit Volunteer shows the shield because its target is forced.',
+    frameSlot: RUN_CARD_TACTICAL_FRAME_SLOT,
   },
   {
     id: 'type-iv',
@@ -666,6 +667,7 @@ function CardTypeReference({ definition }: { definition: CardTypeReferenceDefini
       unit: 'pawn',
       count: 1,
       ...(definition.id === 'pestiferous' ? { plaguedIndices: [0] } : {}),
+      ...(definition.id === 'tactical' ? { ability: 'discipline' as const } : {}),
     }],
     properties: definition.id === 'concinnous'
       ? [{ name: 'Positioned', target: 'Pawn' }]
@@ -785,6 +787,13 @@ function AbilitiesSection({ framed }: { framed: boolean }): ReactElement {
           <span>
             <h3>Concinnous</h3>
             <p>Skillfully and harmoniously arranged; elegantly fitted together. Upon acquisition, one unit on this card becomes Positioned.</p>
+          </span>
+        </InnerChromeBox>
+        <InnerChromeBox className="enchiridion-ability-card">
+          <span className="skirmish-icon skirmish-icon-shield" aria-hidden="true" />
+          <span>
+            <h3>Tactical</h3>
+            <p>Upon acquisition, one randomly chosen unit on this card gains Discipline. A one-unit card shows the Discipline shield because that result is certain.</p>
           </span>
         </InnerChromeBox>
       </div>

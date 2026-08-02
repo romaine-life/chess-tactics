@@ -12,6 +12,7 @@ import {
   RUN_CARD_FRAME_SLOT,
   RUN_CARD_CONCINNOUS_FRAME_SLOT,
   RUN_CARD_PESTIFEROUS_FRAME_SLOT,
+  RUN_CARD_TACTICAL_FRAME_SLOT,
   RunCardFace,
   type RunCardFaceContent,
 } from './RunCardFace';
@@ -24,7 +25,10 @@ function isCardOffer(card: RunCoreCard | RunCardOffer): card is RunCardOffer {
   return 'offerId' in card;
 }
 
-function grantsForCard(card: RunCoreCard | RunCardOffer): RunCardFaceContent['grants'] {
+export function runCardGrants(card: RunCoreCard | RunCardOffer): RunCardFaceContent['grants'] {
+  const showForcedDiscipline = isCardOffer(card)
+    && card.cardType === 'tactical'
+    && card.pieces.length === 1;
   return CARD_PIECE_ORDER.flatMap((unit) => {
     const pieceIndices = card.pieces.flatMap((piece, index) => piece === unit ? [index] : []);
     const plaguedPieceIndex = isCardOffer(card) ? card.plaguedPieceIndex : null;
@@ -34,6 +38,7 @@ function grantsForCard(card: RunCoreCard | RunCardOffer): RunCardFaceContent['gr
           unit,
           count: pieceIndices.length,
           plaguedIndices: plaguedIndex >= 0 ? [plaguedIndex] : [],
+          ...(showForcedDiscipline && pieceIndices.length === 1 ? { ability: 'discipline' as const } : {}),
         }]
       : [];
   });
@@ -45,7 +50,7 @@ function plaguedTargetLabel(card: RunCoreCard | RunCardOffer): string {
   return target ? ` Plagued ${target}.` : '';
 }
 
-function concinnousTargetLabel(card: RunCardOffer): string {
+export function concinnousTargetLabel(card: RunCardOffer): string {
   const targetIndex = card.effectTargetIndex;
   if (!Number.isSafeInteger(targetIndex) || targetIndex === null || !card.pieces[targetIndex]) return 'Target unavailable';
   const target = card.pieces[targetIndex];
@@ -78,6 +83,8 @@ export function RunCard({
   const cardType = offer?.cardType ?? null;
   const frameSlot = cardType === 'pestiferous'
     ? RUN_CARD_PESTIFEROUS_FRAME_SLOT
+    : cardType === 'tactical'
+      ? RUN_CARD_TACTICAL_FRAME_SLOT
     : cardType === 'concinnous'
       ? RUN_CARD_CONCINNOUS_FRAME_SLOT
       : RUN_CARD_FRAME_SLOT;
@@ -94,10 +101,12 @@ export function RunCard({
     cost,
     typeLine: cardType === 'pestiferous'
       ? 'Units — Pestiferous'
+      : cardType === 'tactical'
+        ? 'Units — Tactical'
       : cardType === 'concinnous'
         ? 'Units — Concinnous'
         : 'Units',
-    grants: grantsForCard(card),
+    grants: runCardGrants(card),
     properties: cardType === 'concinnous' && offer
       ? [{ name: 'Positioned', target: purchased ? concinnousTargetLabel(offer) : 'Target hidden' }]
       : undefined,

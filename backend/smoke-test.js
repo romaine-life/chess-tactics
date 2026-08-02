@@ -4029,7 +4029,7 @@ async function main() {
     { id: 'r', offerId: 'opening-2-r', pieces: ['rook'], value: 5, cost: 5, cardType: null, effectSeed: 1706, plaguedPieceIndex: null, effectTargetIndex: null },
   ];
   const activeRunDocument = {
-    formatVersion: 10,
+    formatVersion: 11,
     id: 'run-smoke',
     seed: 17,
     ataraxiaTier: 1,
@@ -4128,7 +4128,7 @@ async function main() {
     }),
   );
   if (invalidOpeningRun.statusCode !== 400 || JSON.parse(invalidOpeningRun.body).error !== 'invalid_active_run') {
-    throw new Error(`Format-10 opening Shops must persist three card offers: ${invalidOpeningRun.statusCode} ${invalidOpeningRun.body}`);
+    throw new Error(`Format-11 opening Shops must persist three card offers: ${invalidOpeningRun.statusCode} ${invalidOpeningRun.body}`);
   }
   const retiredShopFieldRun = await request(
     'PUT', '/api/active-run',
@@ -4142,7 +4142,7 @@ async function main() {
     }),
   );
   if (retiredShopFieldRun.statusCode !== 400 || JSON.parse(retiredShopFieldRun.body).error !== 'invalid_active_run') {
-    throw new Error(`Format-10 Shops must reject unsupported fields: ${retiredShopFieldRun.statusCode} ${retiredShopFieldRun.body}`);
+    throw new Error(`Format-11 Shops must reject unsupported fields: ${retiredShopFieldRun.statusCode} ${retiredShopFieldRun.body}`);
   }
   const duplicatePurchasedCardRun = await request(
     'PUT', '/api/active-run',
@@ -4159,7 +4159,7 @@ async function main() {
     }),
   );
   if (duplicatePurchasedCardRun.statusCode !== 400 || JSON.parse(duplicatePurchasedCardRun.body).error !== 'invalid_active_run') {
-    throw new Error(`Format-10 Shops must reject a duplicate card purchase: ${duplicatePurchasedCardRun.statusCode} ${duplicatePurchasedCardRun.body}`);
+    throw new Error(`Format-11 Shops must reject a duplicate card purchase: ${duplicatePurchasedCardRun.statusCode} ${duplicatePurchasedCardRun.body}`);
   }
   const invalidOpeningArmy = await request(
     'PUT', '/api/active-run',
@@ -4176,7 +4176,7 @@ async function main() {
     }),
   );
   if (invalidOpeningArmy.statusCode !== 400 || JSON.parse(invalidOpeningArmy.body).error !== 'invalid_active_run') {
-    throw new Error(`Unpurchased format-10 opening Shops must contain only the starting army: ${invalidOpeningArmy.statusCode} ${invalidOpeningArmy.body}`);
+    throw new Error(`Unpurchased format-11 opening Shops must contain only the starting army: ${invalidOpeningArmy.statusCode} ${invalidOpeningArmy.body}`);
   }
   const retiredDraftRun = await request(
     'PUT', '/api/active-run',
@@ -4184,7 +4184,7 @@ async function main() {
     JSON.stringify({ run: { ...activeRunDocument, draftOffers: [] }, revision: 0 }),
   );
   if (retiredDraftRun.statusCode !== 400 || JSON.parse(retiredDraftRun.body).error !== 'invalid_active_run') {
-    throw new Error(`Format-10 Runs must reject retired draft state: ${retiredDraftRun.statusCode} ${retiredDraftRun.body}`);
+    throw new Error(`Format-11 Runs must reject retired draft state: ${retiredDraftRun.statusCode} ${retiredDraftRun.body}`);
   }
   const retiredDraftSourceRun = await request(
     'PUT', '/api/active-run',
@@ -4195,7 +4195,7 @@ async function main() {
     }),
   );
   if (retiredDraftSourceRun.statusCode !== 400 || JSON.parse(retiredDraftSourceRun.body).error !== 'invalid_active_run') {
-    throw new Error(`Format-10 Runs must reject retired draft unit sources: ${retiredDraftSourceRun.statusCode} ${retiredDraftSourceRun.body}`);
+    throw new Error(`Format-11 Runs must reject retired draft unit sources: ${retiredDraftSourceRun.statusCode} ${retiredDraftSourceRun.body}`);
   }
   const purchasedPawn = {
     id: 'run-unit-1', name: 'Eadric Miller', type: 'pawn', number: 3,
@@ -4261,8 +4261,18 @@ async function main() {
         value: 9,
         cost: 11,
         cardType: 'concinnous',
-        effectSeed: 1704,
+        effectSeed: 1706,
         effectTargetIndex: 0,
+        plaguedPieceIndex: null,
+      }, {
+        id: 'q',
+        offerId: 'shop-0-1-q',
+        pieces: ['queen'],
+        value: 9,
+        cost: 12,
+        cardType: 'tactical',
+        effectSeed: 1707,
+        effectTargetIndex: null,
         plaguedPieceIndex: null,
       }],
       purchasedCardOfferIds: [],
@@ -4296,6 +4306,7 @@ async function main() {
     || savedConcinnousShopRunBody.revision !== 2
     || savedConcinnousShopRunBody.run.shop.cardOffers[0].effectTargetIndex !== 0
     || savedConcinnousShopRunBody.run.shop.cardOffers[0].cost !== 11
+    || savedConcinnousShopRunBody.run.shop.cardOffers[1].cost !== 12
   ) {
     throw new Error(`Concinnous shop Run did not save: ${savedConcinnousShopRun.statusCode} ${savedConcinnousShopRun.body}`);
   }

@@ -17,7 +17,7 @@ export {
   type RunRelicId,
 };
 
-export const RUN_FORMAT_VERSION = 10;
+export const RUN_FORMAT_VERSION = 11;
 export const GOLD_SCALE = 10;
 export const RUN_STARTING_GOLD = 8;
 export const RUN_STARTING_GOLD_TENTHS = RUN_STARTING_GOLD * GOLD_SCALE;
@@ -25,9 +25,12 @@ export const RUN_OPENING_OFFER_COUNT = 3;
 export const INSTALLED_ATARAXIA_MAX_TIER = 1;
 export const PESTIFEROUS_OFFER_DENOMINATOR = 8;
 export const CONCINNOUS_OFFER_DENOMINATOR = 8;
+export const TACTICAL_DISCIPLINE_OFFER_DENOMINATOR = 8;
+export const POSITIONED_COST = 2;
+export const DISCIPLINE_COST = 3;
 
 export type AtaraxiaTier = 0 | 1;
-export type RunCardType = 'pestiferous' | 'concinnous';
+export type RunCardType = 'pestiferous' | 'concinnous' | 'tactical';
 export type RunUnitModifier = 'plagued';
 
 export const ATARAXIA_BY_TIER: Readonly<Record<AtaraxiaTier, Readonly<{
@@ -40,7 +43,7 @@ export const ATARAXIA_BY_TIER: Readonly<Record<AtaraxiaTier, Readonly<{
     tier: 0,
     label: 'Ataraxia 0',
     title: 'The Untroubled Mind',
-    effect: 'Standard Run rules. Shop cards may be Concinnous but are never Pestiferous.',
+    effect: 'Standard Run rules. Shop cards may be Tactical or Concinnous but are never Pestiferous.',
   }),
   1: Object.freeze({
     tier: 1,
@@ -359,6 +362,26 @@ export function concinnousOfferRoll(
   return createRng(rollSeed).int(denominator) === 0;
 }
 
+export function tacticalDisciplineOfferRoll(
+  seed: number,
+  battleIndex: number,
+  slotIndex: number,
+  coreId: string,
+  denominator = TACTICAL_DISCIPLINE_OFFER_DENOMINATOR,
+): boolean {
+  if (!Number.isSafeInteger(denominator) || denominator < 1) return false;
+  const rollSeed = mixSeed(seed, `tactical:discipline:${coreId}`, battleIndex * 8 + slotIndex);
+  return createRng(rollSeed).int(denominator) === 0;
+}
+
+export function tacticalDisciplineAcquisitionTarget(
+  effectSeed: number,
+  pieceCount: number,
+): number | null {
+  if (!Number.isSafeInteger(pieceCount) || pieceCount < 1) return null;
+  return createRng(mixSeed(effectSeed, 'tactical-discipline-acquisition-target')).int(pieceCount);
+}
+
 export function createRunCardOffer(
   run: Pick<RunDocument, 'seed' | 'ataraxiaTier'>,
   card: RunCoreCard,
@@ -366,11 +389,20 @@ export function createRunCardOffer(
   slotIndex: number,
   pestiferousDenominator = PESTIFEROUS_OFFER_DENOMINATOR,
   concinnousDenominator = CONCINNOUS_OFFER_DENOMINATOR,
+  tacticalDenominator = TACTICAL_DISCIPLINE_OFFER_DENOMINATOR,
 ): RunCardOffer {
-  const pestiferous = run.ataraxiaTier >= 1
+  const tactical = tacticalDisciplineOfferRoll(
+    run.seed,
+    battleIndex,
+    slotIndex,
+    card.id,
+    tacticalDenominator,
+  );
+  const pestiferous = !tactical && run.ataraxiaTier >= 1
     && pestiferousOfferRoll(run.seed, battleIndex, slotIndex, card.id, pestiferousDenominator);
   const effectSeed = mixSeed(run.seed, `shop-card:${card.id}`, battleIndex * 8 + slotIndex);
-  const concinnous = !pestiferous
+  const concinnous = !tactical
+    && !pestiferous
     && concinnousOfferRoll(run.seed, battleIndex, slotIndex, card.id, concinnousDenominator);
   const plaguedPieceIndex = pestiferous
     ? seededPestiferousTarget(effectSeed, card.pieces.map((_, index) => index), 0)
@@ -378,13 +410,13 @@ export function createRunCardOffer(
   const plaguedPiece = plaguedPieceIndex === null ? null : card.pieces[plaguedPieceIndex];
   const cost = plaguedPiece
     ? card.value - PLAGUED_DISCOUNT[plaguedPiece]
-    : card.value + (concinnous ? 2 : 0);
+    : card.value + (tactical ? DISCIPLINE_COST : concinnous ? POSITIONED_COST : 0);
   return {
     ...card,
     pieces: [...card.pieces],
     offerId: `shop-${battleIndex}-${slotIndex}-${card.id}`,
     cost,
-    cardType: pestiferous ? 'pestiferous' : concinnous ? 'concinnous' : null,
+    cardType: pestiferous ? 'pestiferous' : tactical ? 'tactical' : concinnous ? 'concinnous' : null,
     effectSeed,
     plaguedPieceIndex,
     effectTargetIndex: concinnous
@@ -554,12 +586,16 @@ function normalizeLegacyCards(value: unknown, seed: number): RunOwnedCard[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((candidate): RunOwnedCard[] => {
     if (!candidate || typeof candidate !== 'object') return [];
-    const card = candidate as Partial<RunOwnedCard>;
+    const card = candidate as Partial<RunOwnedCard> & {
+      effect?: { ability?: unknown; targetUnitId?: unknown } | null;
+    };
     if (typeof card.id !== 'string' || typeof card.coreId !== 'string') return [];
     const cardType = card.cardType === 'pestiferous'
       ? 'pestiferous'
       : card.cardType === 'concinnous'
         ? 'concinnous'
+        : card.cardType === 'tactical'
+          ? 'tactical'
         : null;
     const effectSeed = Number.isSafeInteger(card.effectSeed)
       ? Number(card.effectSeed) >>> 0
@@ -570,15 +606,20 @@ function normalizeLegacyCards(value: unknown, seed: number): RunOwnedCard[] {
     const lostUnitIds = Array.isArray(card.lostUnitIds)
       ? card.lostUnitIds.filter((id): id is string => typeof id === 'string')
       : [];
+    const storedEffectTargetUnitId = typeof card.effectTargetUnitId === 'string'
+      ? card.effectTargetUnitId
+      : typeof card.effect?.targetUnitId === 'string'
+        ? card.effect.targetUnitId
+        : null;
     return [{
       id: card.id,
       coreId: card.coreId,
       cardType,
       effectSeed,
-      effectTargetUnitId: cardType === 'concinnous'
-        && typeof card.effectTargetUnitId === 'string'
-        && card.effectTargetUnitId.length > 0
-        ? card.effectTargetUnitId
+      effectTargetUnitId: (cardType === 'concinnous' || cardType === 'tactical')
+        && storedEffectTargetUnitId !== null
+        && unitIds.includes(storedEffectTargetUnitId)
+        ? storedEffectTargetUnitId
         : null,
       unitIds,
       lostUnitIds,
@@ -597,11 +638,15 @@ function normalizeLegacyCards(value: unknown, seed: number): RunOwnedCard[] {
 function normalizeCardOffers(value: unknown): RunCardOffer[] {
   if (!Array.isArray(value)) return [];
   return value.map((candidate) => {
-    const offer = candidate as RunCardOffer;
+    const offer = candidate as RunCardOffer & {
+      effect?: { ability?: unknown; targetPieceIndex?: unknown } | null;
+    };
     const cardType = offer.cardType === 'pestiferous'
       ? 'pestiferous'
       : offer.cardType === 'concinnous'
         ? 'concinnous'
+        : offer.cardType === 'tactical'
+          ? 'tactical'
         : null;
     const plaguedPieceIndex = cardType === 'pestiferous'
       ? Number.isSafeInteger(offer.plaguedPieceIndex)
@@ -612,7 +657,11 @@ function normalizeCardOffers(value: unknown): RunCardOffer[] {
         : seededPestiferousTarget(offer.effectSeed, offer.pieces.map((_, index) => index), 0)
       : null;
     const plaguedPiece = plaguedPieceIndex === null ? null : offer.pieces[plaguedPieceIndex];
-    const storedEffectTargetIndex = offer.effectTargetIndex;
+    const storedEffectTargetIndex = Number.isSafeInteger(offer.effectTargetIndex)
+      ? offer.effectTargetIndex
+      : Number.isSafeInteger(offer.effect?.targetPieceIndex)
+        ? Number(offer.effect?.targetPieceIndex)
+        : null;
     const effectTargetIndex = cardType === 'concinnous'
       ? Number.isSafeInteger(storedEffectTargetIndex)
         && storedEffectTargetIndex !== null
@@ -626,7 +675,11 @@ function normalizeCardOffers(value: unknown): RunCardOffer[] {
       cardType,
       cost: plaguedPiece
         ? offer.value - PLAGUED_DISCOUNT[plaguedPiece]
-        : offer.value + (cardType === 'concinnous' ? 2 : 0),
+        : offer.value + (cardType === 'tactical'
+          ? DISCIPLINE_COST
+          : cardType === 'concinnous'
+            ? POSITIONED_COST
+            : 0),
       plaguedPieceIndex,
       effectTargetIndex,
     };
@@ -641,7 +694,7 @@ function cardsNeedTargetNormalization(cards: readonly RunOwnedCard[]): boolean {
         : card.plaguedUnitId !== null
       : card.plaguedUnitId !== null
   )) || cards.some((card) => (
-    card.cardType === 'concinnous'
+    (card.cardType === 'concinnous' || card.cardType === 'tactical')
       ? typeof card.effectTargetUnitId !== 'string' || card.effectTargetUnitId.length === 0
       : card.effectTargetUnitId !== null
   ));
@@ -1350,10 +1403,22 @@ export function buyCard(run: RunDocument, offerId: string): RunDocument {
   const effectTargetUnit = offer.cardType === 'concinnous'
     && Number.isSafeInteger(offer.effectTargetIndex)
     ? addedUnits[offer.effectTargetIndex!]
-    : undefined;
+    : offer.cardType === 'tactical'
+      ? addedUnits[tacticalDisciplineAcquisitionTarget(offer.effectSeed, addedUnits.length) ?? -1]
+      : undefined;
+  const grantedAbility: Extract<RunAbility, 'discipline' | 'positioned'> | null = offer.cardType === 'tactical'
+    ? 'discipline'
+    : offer.cardType === 'concinnous'
+      ? 'positioned'
+      : null;
   const abilityArmy = effectTargetUnit
     ? armyUpdate.army.map((unit): RunArmyUnit => unit.id === effectTargetUnit.id
-      ? { ...unit, abilities: unit.abilities.includes('positioned') ? unit.abilities : [...unit.abilities, 'positioned'] }
+      ? {
+          ...unit,
+          abilities: grantedAbility && !unit.abilities.includes(grantedAbility)
+            ? [...unit.abilities, grantedAbility]
+            : unit.abilities,
+        }
       : unit)
     : armyUpdate.army;
   const card: RunOwnedCard = {

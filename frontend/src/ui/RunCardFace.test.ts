@@ -41,11 +41,23 @@ describe('Run card atomic presentation', () => {
       '/art-a.png',
       RUN_CARD_STANDARD_FRAME_GEOMETRY,
     ));
+    expect(runCardPresentationSignature(
+      card,
+      '/frame-a.png',
+      '/art-a.png',
+      RUN_CARD_STANDARD_FRAME_GEOMETRY,
+      '/coin-b.png',
+    )).not.toBe(signature);
+    expect(runCardPresentationSignature({
+      ...card,
+      grants: [{ ...card.grants[0], ability: 'discipline' }, card.grants[1]],
+    }, '/frame-a.png', '/art-a.png')).not.toBe(signature);
   });
 
   it('requires the actual frame, art, and every unit consumer before promotion', () => {
     expect(requiredRunCardImageKinds(card)).toEqual([
       'frame',
+      'coin',
       'art',
       'unit:0:pawn:0',
       'unit:0:pawn:1',

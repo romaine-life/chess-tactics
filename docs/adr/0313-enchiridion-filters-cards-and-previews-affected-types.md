@@ -7,6 +7,8 @@ extends:
   - 0272-card-types-author-effects-and-may-conceal-unit-targets.md
   - 0276-run-type-lines-declare-primary-families-and-affected-qualifiers.md
   - 0283-run-card-face-is-one-shared-live-runtime-component.md
+partially_superseded_by:
+  - "[ADR-0329](0329-concinnous-and-tactical-use-distinct-frames-and-one-shared-coin.md)'s replacement of Type III with Tactical"
 ---
 
 # ADR-0313: Enchiridion filters cards and previews four affected-type slots

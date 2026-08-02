@@ -1,23 +1,28 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from 'react';
+import { resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import { paletteForSide, pieceSpritePath, type PlayablePieceType } from '../core/pieces';
+import type { RunAbility } from '../run/model';
 import {
   RUN_CARD_FRAME_BOX_NAMES,
   RUN_CARD_STANDARD_FRAME_GEOMETRY,
   runCardFrameGeometryVariables,
   type RunCardFrameGeometry,
 } from './runCardFrameGeometry';
+import { RunAbilityIcon } from './shared/RunAbilityIcon';
 
 export const RUN_CARD_FRAME_SLOT = 'ui/run/card-prototypes/frame-v1.png';
 export const RUN_CARD_PESTIFEROUS_FRAME_SLOT = 'ui/run/card-prototypes/pestiferous-frame-v1.png';
 export const RUN_CARD_PLAGUED_ICON_SLOT = 'ui/run/card-status/plagued-v1.png';
 export const RUN_CARD_PLAGUED_ICON_PLACEHOLDER = '◇';
 export const RUN_CARD_CONCINNOUS_FRAME_SLOT = 'ui/run/card-prototypes/concinnous-frame-v1.png';
+export const RUN_CARD_TACTICAL_FRAME_SLOT = 'ui/run/card-prototypes/tactical-discipline-frame-v1.png';
+export const RUN_CARD_COST_COIN_SOURCE_SLOT = 'ui/run/card-prototypes/cost-coin-source-v1.png';
 export const RUN_CARD_REFERENCE_WIDTH = 360;
 
 const PLAYER_CARD_PALETTE = paletteForSide('player');
 const PLAYER_CARD_FACING = 'south';
 
-export type RunCardImageKind = 'frame' | 'art' | `unit:${number}:${PlayablePieceType}:${number}`;
+export type RunCardImageKind = 'frame' | 'coin' | 'art' | `unit:${number}:${PlayablePieceType}:${number}`;
 
 export type RunCardFaceContent = Readonly<{
   name: string;
@@ -27,6 +32,7 @@ export type RunCardFaceContent = Readonly<{
     count: number;
     unit: PlayablePieceType;
     plaguedIndices?: readonly number[];
+    ability?: RunAbility;
   }>[];
   properties?: readonly Readonly<{ name: string; target: string }>[];
   rules?: string;
@@ -67,7 +73,7 @@ export const RUN_CARD_APPROVED_TUNING: RunCardFaceTuning = Object.freeze({
   titleY: 0,
   typeSize: 5.3,
   typeX: 1.35,
-  typeY: .65,
+  typeY: 1.2,
   costSize: 6.2,
   costX: 0,
   costY: .3,
@@ -98,6 +104,7 @@ export const runCardUnitImageKind = (
 export function requiredRunCardImageKinds(card: RunCardFaceContent): readonly RunCardImageKind[] {
   return [
     'frame',
+    'coin',
     'art',
     ...card.grants.flatMap((grant, cell) => (
       Array.from({ length: grant.count }, (_, index) => runCardUnitImageKind(cell, grant.unit, index))
@@ -110,16 +117,18 @@ export function runCardPresentationSignature(
   frameUrl: string,
   artUrl: string,
   frameGeometry: RunCardFrameGeometry = RUN_CARD_STANDARD_FRAME_GEOMETRY,
+  coinSourceUrl = RUN_CARD_COST_COIN_SOURCE_SLOT,
 ): string {
   return JSON.stringify([
     frameUrl,
+    coinSourceUrl,
     artUrl,
     frameGeometry.id,
     frameGeometry.frameSha256,
     card.name,
     card.cost,
     card.typeLine,
-    card.grants.map(({ count, unit, plaguedIndices }) => [count, unit, plaguedIndices ?? []]),
+    card.grants.map(({ count, unit, plaguedIndices, ability }) => [count, unit, plaguedIndices ?? [], ability ?? null]),
     card.properties?.map(({ name, target }) => [name, target]) ?? null,
     card.rules ?? null,
     card.flavor,
@@ -288,10 +297,13 @@ function grantLabel({
   count,
   unit,
   plaguedIndices = [],
+  ability,
 }: RunCardFaceContent['grants'][number]): string {
   const units = `${count} ${unit}${count === 1 ? '' : 's'}`;
-  if (!plaguedIndices.length) return units;
-  return count === 1 ? `1 Plagued ${unit}` : `${units}, one Plagued`;
+  const plagued = plaguedIndices.length
+    ? count === 1 ? `1 Plagued ${unit}` : `${units}, one Plagued`
+    : units;
+  return ability ? `${plagued} with ${ability}` : plagued;
 }
 
 function grantsLabel(grants: RunCardFaceContent['grants']): string {
@@ -306,13 +318,14 @@ type RunCardPresentation = Readonly<{
   signature: string;
   card: RunCardFaceContent;
   frameUrl: string;
+  coinSourceUrl: string;
   artUrl: string;
   frameGeometry: RunCardFrameGeometry;
 }>;
 
 async function acknowledgeDecodedImage(
   image: HTMLImageElement,
-  kind: Extract<RunCardImageKind, 'frame' | 'art'>,
+  kind: Extract<RunCardImageKind, 'frame' | 'coin' | 'art'>,
   onReady: (kind: RunCardImageKind) => void,
   onError: (kind: RunCardImageKind) => void,
 ): Promise<void> {
@@ -340,7 +353,7 @@ function RunCardFaceLayer({
   onImageLoad: (signature: string, pending: boolean, kind: RunCardImageKind) => void;
   onImageError: (signature: string, pending: boolean, kind: RunCardImageKind) => void;
 }): ReactElement {
-  const { signature, card, frameUrl, artUrl, frameGeometry } = presentation;
+  const { signature, card, frameUrl, coinSourceUrl, artUrl, frameGeometry } = presentation;
   const ledgerRows = card.grants.length <= 2
     ? card.grants.length
     : Math.ceil(card.grants.length / 2);
@@ -366,6 +379,16 @@ function RunCardFaceLayer({
         onError={() => acknowledgeError('frame')}
       />
       <img
+        className="run-card-prototype-cost-coin-source"
+        src={coinSourceUrl}
+        alt=""
+        draggable={false}
+        onLoad={(event) => {
+          void acknowledgeDecodedImage(event.currentTarget, 'coin', acknowledgeLoad, acknowledgeError);
+        }}
+        onError={() => acknowledgeError('coin')}
+      />
+      <img
         className="run-card-prototype-art"
         src={artUrl}
         alt=""
@@ -386,7 +409,7 @@ function RunCardFaceLayer({
         >
           {card.grants.map((grant, cell) => (
             <span
-              className="run-card-prototype-ledger-row"
+              className={`run-card-prototype-ledger-row${grant.ability ? ' has-ability' : ''}`}
               aria-label={grantLabel(grant)}
               key={grant.unit}
             >
@@ -407,6 +430,9 @@ function RunCardFaceLayer({
                   />
                 ))}
               </span>
+              {grant.ability ? (
+                <RunAbilityIcon ability={grant.ability} className="run-card-prototype-ledger-ability" />
+              ) : null}
             </span>
           ))}
         </span>
@@ -442,6 +468,7 @@ export function RunCardFace({
   card,
   frameUrl,
   artUrl,
+  coinSourceUrl = resolvedLiveMediaUrl(RUN_CARD_COST_COIN_SOURCE_SLOT),
   width = '100%',
   tuning = RUN_CARD_APPROVED_TUNING,
   contentsTuning = RUN_CARD_DEFAULT_CONTENTS_TUNING,
@@ -454,6 +481,7 @@ export function RunCardFace({
   card: RunCardFaceContent;
   frameUrl: string;
   artUrl: string;
+  coinSourceUrl?: string;
   width?: string;
   tuning?: RunCardFaceTuning;
   contentsTuning?: RunCardContentsTuning;
@@ -463,13 +491,14 @@ export function RunCardFace({
   onImageError?: (kind: RunCardImageKind) => void;
   ariaHidden?: boolean;
 }): ReactElement {
-  const requestedSignature = runCardPresentationSignature(card, frameUrl, artUrl, frameGeometry);
+  const requestedSignature = runCardPresentationSignature(card, frameUrl, artUrl, frameGeometry, coinSourceUrl);
   // The signature contains every presentation field, so equal signatures are
   // equivalent even when a host recreates its card object on another render.
   const requested = useMemo<RunCardPresentation>(() => ({
     signature: requestedSignature,
     card,
     frameUrl,
+    coinSourceUrl,
     artUrl,
     frameGeometry,
   }), [requestedSignature]);

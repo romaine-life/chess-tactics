@@ -25,6 +25,7 @@ import { ChromeDividedGridRow, DividedInnerChromeBox } from './shared/ChromeDivi
 import { Tooltip } from './shared/InfoTip';
 import { RunUnitInspectionScene } from './RunUnitInspectionScene';
 import { ChromeButton } from './shared/ChromeButton';
+import { runAbilityIconClass } from './shared/RunAbilityIcon';
 
 export type RunRosterOrder = 'type' | 'value' | 'ability' | 'acquired';
 export type RunRosterTypeFilter = 'all' | RunArmyPieceType;
@@ -102,7 +103,7 @@ function deploymentAbilityTrait(
   ability: Extract<RunAbility, 'positioned' | 'marshalled'>,
 ): RunUnitTrait | null {
   const label = ability === 'positioned' ? 'Positioned' : 'Marshalled';
-  const iconClass = ability === 'positioned' ? 'skirmish-icon-move' : 'skirmish-icon-flag';
+  const iconClass = runAbilityIconClass(ability);
   if (unit.abilities.includes(ability)) {
     return {
       id: ability,
@@ -138,7 +139,7 @@ export function runUnitTraits(run: RunDocument, unit: RunArmyUnit): RunUnitTrait
       description: 'May be deliberately placed in the player zone before random deployment.',
       source: 'Permanent unit ability',
       inherited: false,
-      iconClass: 'skirmish-icon-shield',
+      iconClass: runAbilityIconClass('discipline'),
     });
   } else if (run.deployment?.temporaryDisciplineUnitId === unit.id) {
     traits.push(inheritedTrait(
@@ -146,7 +147,7 @@ export function runUnitTraits(run: RunDocument, unit: RunArmyUnit): RunUnitTrait
       'Discipline',
       'May be deliberately placed in the player zone for this Battle.',
       RUN_RELIC_BY_ID['inspirational-record'].name,
-      'skirmish-icon-shield',
+      runAbilityIconClass('discipline'),
     ));
   }
 
@@ -289,7 +290,7 @@ function RunUnitTraitList({
               {trait.inherited ? `Inherited from ${trait.source}` : trait.source}
             </small>
           </Tooltip>
-          <span>{trait.label}</span>
+          {compact ? null : <span>{trait.label}</span>}
         </span>
       ))}
     </span>
