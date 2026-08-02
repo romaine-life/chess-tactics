@@ -15,6 +15,7 @@ import { installedUiMedia } from './installedUiMedia';
 import { useAuthSession } from '../net/authSession';
 import { AdminControls } from './AdminControls';
 import { ChromeNavButton } from './shared/ChromeButton';
+import { ApparatusRailColumn } from './shared/ApparatusRailTab';
 import { SettingsContentSceneSlot } from './shell/AuthoredSceneSlot';
 
 const MUTE_KEY = 'chess-tactics-bgm-muted-v1';
@@ -640,8 +641,9 @@ export function Settings({
   // standalone route AND the embedded-in-shell render, so both stay identical.
   const inner = (
     <>
-      <aside
+      <ApparatusRailColumn
         className={embedded ? 'menu-dest-col menu-dest-tabs' : 'settings-frame settings-rail-frame'}
+        placement={embedded ? 'open' : 'framed'}
         aria-label="Settings sections"
       >
         {tabs.map((tab, index) => (
@@ -661,7 +663,7 @@ export function Settings({
             <FittedTabLabel>{tab.label}</FittedTabLabel>
           </ChromeNavButton>
         ))}
-      </aside>
+      </ApparatusRailColumn>
 
       <SettingsContentSceneSlot
         className={embedded ? 'menu-dest-col menu-dest-action' : 'settings-frame settings-main-frame'}

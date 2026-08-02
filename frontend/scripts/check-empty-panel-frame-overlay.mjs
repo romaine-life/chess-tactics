@@ -980,7 +980,7 @@ if (!/<ShellViewportSwap[\s\S]*?className="run-phase-workspace"[\s\S]*?primaryCl
   || !/<ShellViewportSwap[\s\S]*?className="skirmish-war-room"[\s\S]*?primaryClassName="skirmish-field"[\s\S]*?workspaceOpen=\{strategikonOpen \|\| Boolean\(runWorkspace\)\}/.test(skirmish)) {
   failures.push('Run and Battle replacement modes must use the shared viewport-swap owner');
 }
-if (!/<ShellWorkspace[\s\S]*?className="strategikon-workspace"[\s\S]*?contentClassName="strategikon-workspace-layout"/.test(strategikon)
+if (!/<ShellWorkspace[\s\S]*?className="strategikon-workspace"[\s\S]*?contentClassName=\{`strategikon-workspace-layout/.test(strategikon)
   || !/bodyClassName="strategikon-content"/.test(strategikon)
   || !/bodyClassName="strategikon-content"[\s\S]*?edgeAttached/.test(strategikon)
   || /<ChromeSurfaceFill\b|<OuterChromeBox\b/.test(strategikon)) {
@@ -1127,7 +1127,7 @@ for (const selector of ['.skirmish-hud-tab', '.skirmish-hud .app-header-button']
 }
 
 const focusedStart = css.indexOf('.skirmish-hud {');
-const focusedEnd = css.indexOf('.ic-brush {', focusedStart);
+const focusedEnd = css.indexOf('.ic-eraser {', focusedStart);
 const focused = focusedStart >= 0 && focusedEnd > focusedStart ? css.slice(focusedStart, focusedEnd) : '';
 if (!focused) {
   failures.push('missing focused skirmish/editor control-panel CSS range for chrome guard');

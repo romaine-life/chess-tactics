@@ -7,15 +7,28 @@ const {
   PREDRAWN_BOARD_COMPONENT,
   PREDRAWN_BOARD_PROOF_RENDERER,
   PREDRAWN_BOARD_PROOF_SCHEMA,
+  LEVEL_EDITOR_BRUSH_ICON_COMPONENT,
+  LEVEL_EDITOR_BRUSH_ICON_PROOF_RENDERER,
+  LEVEL_EDITOR_BRUSH_ICON_PROOF_SCHEMA,
+  LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_EXCEPTION_SCHEMA,
   RUN_RELIC_ICON_COMPONENT,
   RUN_RELIC_RESIZED_PRODUCTION_EXCEPTION_SCHEMA,
   RUN_RESOURCE_ICON_COMPONENT,
+  RUN_SHOP_WRAP_COMPONENT,
   SFX_SAMPLE_COMPONENT,
   SFX_SAMPLE_PROOF_RENDERER,
   SFX_SAMPLE_PROOF_SCHEMA,
+  STRATEGIKON_BACKGROUND_COMPONENT,
+  STRATEGIKON_BACKGROUND_PROOF_RENDERER,
+  STRATEGIKON_BACKGROUND_PROOF_SCHEMA,
+  STRATEGIKON_BACKGROUND_SHA256,
+  STRATEGIKON_BACKGROUND_SLOT,
   liveCatalogReadinessIssue,
   gameConditionIconMediaIssue,
   gameConditionIconSlot,
+  levelEditorBrushIconMediaIssue,
+  levelEditorBrushIconOwnerProofIssue,
+  levelEditorBrushIconSlot,
   nativeMediaEvidenceIssue,
   predrawnBoardAlignmentIssue,
   predrawnBoardMediaIssue,
@@ -26,9 +39,14 @@ const {
   runRelicIconSlotId,
   runResourceIconMediaIssue,
   runResourceIconSlotId,
+  runShopWrapMediaIssue,
+  runShopWrapSlotId,
   sfxSampleMediaIssue,
   sfxSampleOwnerProofIssue,
   sfxSampleSlot,
+  strategikonBackgroundMediaIssue,
+  strategikonBackgroundOwnerProofIssue,
+  strategikonBackgroundSlot,
 } = require('./liveMediaPolicy');
 
 const originalSha = 'a'.repeat(64);
@@ -145,6 +163,79 @@ function runRelicIcon(overrides = {}) {
   };
 }
 
+function runShopWrap(overrides = {}, runtimeOverrides = {}) {
+  return {
+    slot: 'ui/run/shop-wrap/lantern-market-stall.png',
+    domain: 'ui-kit',
+    role: 'shop-wrap',
+    media_type: 'image/png',
+    width: 1471,
+    height: 937,
+    metadata: {
+      runtime: {
+        component: RUN_SHOP_WRAP_COMPONENT,
+        nativeRole: RUN_SHOP_WRAP_COMPONENT,
+        variant: 'lantern-market-stall',
+        kind: 'band',
+        canvasWidth: 1471,
+        canvasHeight: 937,
+        window: { x: 147, y: 153, w: 1206, h: 544 },
+        altText: '',
+        ...runtimeOverrides,
+      },
+    },
+    ...overrides,
+  };
+}
+
+test('Run shop wrap projection binds a card window to the exact uploaded canvas', () => {
+  const row = runShopWrap();
+  assert.equal(runShopWrapSlotId(row.slot), 'lantern-market-stall');
+  assert.equal(runShopWrapMediaIssue(row), null);
+  assert.match(runShopWrapMediaIssue(runShopWrap({ domain: 'review-media' })), /ui-kit domain/);
+  assert.match(runShopWrapMediaIssue(runShopWrap({ role: 'icon' })), /shop-wrap role/);
+  assert.match(runShopWrapMediaIssue(runShopWrap({ media_type: 'image/webp' })), /image\/png/);
+  // The canvas is the contract against the raster: a re-crop must not silently
+  // move every measured window.
+  assert.match(runShopWrapMediaIssue(runShopWrap({ width: 1470 })), /canvas metadata must match/);
+  assert.match(runShopWrapMediaIssue(runShopWrap({}, { variant: 'other' })), /variant must match/);
+  assert.match(runShopWrapMediaIssue(runShopWrap({}, { kind: 'mural' })), /kind must be one of/);
+  assert.match(runShopWrapMediaIssue(runShopWrap({}, { altText: 'Shop stall' })), /altText must be empty/);
+  assert.match(runShopWrapMediaIssue(runShopWrap({}, { extra: 1 })), /unsupported keys: extra/);
+});
+
+test('Run shop wrap windows and slot openings must stay inside the painted canvas', () => {
+  const outside = { x: 147, y: 153, w: 1400, h: 544 };
+  assert.match(runShopWrapMediaIssue(runShopWrap({}, { window: outside })), /whole-pixel rect inside the canvas/);
+  assert.match(
+    runShopWrapMediaIssue(runShopWrap({}, { window: { x: 1, y: 1, w: 10.5, h: 10 } })),
+    /whole-pixel rect inside the canvas/,
+  );
+  // Slot openings only describe a multi-opening structure.
+  assert.match(
+    runShopWrapMediaIssue(runShopWrap({}, { slots: [{ x: 0, y: 0, w: 10, h: 10 }] })),
+    /only meaningful for the slots kind/,
+  );
+  assert.match(
+    runShopWrapMediaIssue(runShopWrap({}, { kind: 'slots', slots: [{ x: 0, y: 0, w: 10, h: 10 }] })),
+    /at least two measured card openings/,
+  );
+  assert.equal(
+    runShopWrapMediaIssue(runShopWrap({}, {
+      kind: 'slots',
+      slots: [{ x: 0, y: 0, w: 10, h: 10 }, { x: 20, y: 0, w: 10, h: 10 }],
+    })),
+    null,
+  );
+  assert.match(
+    runShopWrapMediaIssue(runShopWrap({}, {
+      kind: 'slots',
+      slots: [{ x: 0, y: 0, w: 10, h: 10 }, { x: 20, y: 900, w: 10, h: 100 }],
+    })),
+    /slots must all be whole-pixel rects inside the canvas/,
+  );
+});
+
 test('Run relic icon projection binds one native reviewed icon to its exact relic id', () => {
   const row = runRelicIcon();
   assert.equal(runRelicIconSlotId(row.slot), 'conscription-notice');
@@ -246,6 +337,229 @@ test('condition icon projection keeps Plagued ability and Pestiferous property a
     ...pestiferous.metadata.runtime,
     component: 'unit-ability-icon',
   }), /card-property-icon/);
+});
+
+function levelEditorBrushIcon(overrides = {}) {
+  const opaqueBounds = { x: 2, y: 2, width: 14, height: 14 };
+  return {
+    id: '33333333-3333-4333-8333-333333333333',
+    slot: 'ui/kit/icons/brush.png',
+    domain: 'ui-kit',
+    role: 'icon',
+    media_type: 'image/png',
+    blob_sha256: originalSha,
+    width: 18,
+    height: 18,
+    metadata: {
+      runtime: {
+        component: LEVEL_EDITOR_BRUSH_ICON_COMPONENT,
+        variant: 'brush',
+        frameWidth: 18,
+        frameHeight: 18,
+        frameCount: 1,
+        nativeRole: LEVEL_EDITOR_BRUSH_ICON_COMPONENT,
+        altText: '',
+      },
+    },
+    native_evidence: {
+      schema: 'level-editor-brush-icon-native-v1',
+      native1x: true,
+      spatialResampling: false,
+      sourceWidth: 18,
+      sourceHeight: 18,
+      sourceSha256: originalSha,
+      productionRole: 'inner-brush-tool',
+      drawWidth: 18,
+      drawHeight: 18,
+      generatorOutputWidth: 32,
+      generatorOutputHeight: 32,
+      transform: 'center-crop-18x18-no-spatial-resampling',
+      opaqueBounds,
+      opaquePixelCount: 120,
+      edgeAlphaMax: 0,
+    },
+    ...overrides,
+  };
+}
+
+function strategikonBackground(overrides = {}) {
+  return {
+    id: '22222222-2222-4222-8222-222222222222',
+    slot: STRATEGIKON_BACKGROUND_SLOT,
+    domain: 'ui-kit',
+    role: 'background',
+    media_type: 'image/png',
+    blob_sha256: STRATEGIKON_BACKGROUND_SHA256,
+    width: 688,
+    height: 384,
+    metadata: {
+      runtime: {
+        component: STRATEGIKON_BACKGROUND_COMPONENT,
+        variant: 'command-archive',
+        state: 'owner-approved-cover-scaling-exception',
+        frameWidth: 688,
+        frameHeight: 384,
+        frameCount: 1,
+        nativeRole: STRATEGIKON_BACKGROUND_COMPONENT,
+        altText: '',
+      },
+    },
+    ...overrides,
+  };
+}
+
+test('Level Editor Brush projection defaults to one exact native 18px tool role', () => {
+  const row = levelEditorBrushIcon();
+  assert.equal(levelEditorBrushIconSlot(row.slot), true);
+  assert.equal(levelEditorBrushIconSlot('ui/kit/icons/pencil.png'), false);
+  assert.equal(levelEditorBrushIconMediaIssue(row), null);
+  assert.match(levelEditorBrushIconMediaIssue(levelEditorBrushIcon({ width: 64 })), /18x18/);
+  assert.match(levelEditorBrushIconMediaIssue(levelEditorBrushIcon({ role: 'media' })), /icon role/);
+  assert.match(levelEditorBrushIconMediaIssue(levelEditorBrushIcon({
+    metadata: { runtime: { ...row.metadata.runtime, variant: 'pencil' } },
+  })), /variant must be brush/);
+  assert.match(levelEditorBrushIconMediaIssue(levelEditorBrushIcon({
+    native_evidence: { ...row.native_evidence, opaqueBounds: { x: 1, y: 2, width: 14, height: 14 } },
+  })), /two-pixel transparent gutter/);
+});
+
+test('Level Editor Brush projection admits only the exact owner-selected Option 01 scaling exception', () => {
+  const option01Sha = 'abaf1ab5e8f34531864e4e9e9d52cb15a0e7b944e84a79dea98939013267074a';
+  const row = levelEditorBrushIcon({
+    blob_sha256: option01Sha,
+    width: 64,
+    height: 64,
+    metadata: {
+      runtime: {
+        component: LEVEL_EDITOR_BRUSH_ICON_COMPONENT,
+        variant: 'brush',
+        frameWidth: 64,
+        frameHeight: 64,
+        frameCount: 1,
+        nativeRole: LEVEL_EDITOR_BRUSH_ICON_COMPONENT,
+        altText: '',
+      },
+    },
+    native_evidence: {
+      schema: LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_EXCEPTION_SCHEMA,
+      decision: 'ADR-0337',
+      status: 'owner-approved-production-exception',
+      native1x: false,
+      spatialResampling: true,
+      sourceWidth: 64,
+      sourceHeight: 64,
+      sourceSha256: option01Sha,
+      drawWidth: 20,
+      drawHeight: 20,
+      transform: 'css-background-size-contain-64-to-20',
+      opaqueBounds: { x: 4, y: 3, width: 56, height: 58 },
+    },
+  });
+  assert.equal(nativeMediaEvidenceIssue(row), null);
+  assert.equal(levelEditorBrushIconMediaIssue(row), null);
+  assert.match(levelEditorBrushIconMediaIssue({ ...row, blob_sha256: originalSha }), /exact owner-selected/);
+  const surfaceUrl = `http://brush.chess-tactics.localhost/editor/level?brushIconReviewVersion=${row.id}`;
+  const proof = {
+    schema: LEVEL_EDITOR_BRUSH_ICON_PROOF_SCHEMA,
+    renderer: LEVEL_EDITOR_BRUSH_ICON_PROOF_RENDERER,
+    surfaceUrl,
+    canonicalScale: 1,
+    assetLocalScale: 0.3125,
+    spatialResampling: true,
+    frameWidth: 64,
+    frameHeight: 64,
+    drawWidth: 20,
+    drawHeight: 20,
+    opaqueBounds: row.native_evidence.opaqueBounds,
+    selectedCandidates: [{ slot: row.slot, versionId: row.id, sha256: row.blob_sha256, rowRevision: 1 }],
+    slotSnapshots: [{ slot: row.slot, rowRevision: 0, activeVersionId: null }],
+  };
+  assert.equal(levelEditorBrushIconOwnerProofIssue(row, proof, surfaceUrl), null);
+});
+
+test('Level Editor Brush owner proof binds exact candidate bytes to the exact reviewed editor seat', () => {
+  const row = levelEditorBrushIcon();
+  const surfaceUrl = `http://brush.chess-tactics.localhost/editor/level?brushIconReviewVersion=${row.id}`;
+  const proof = {
+    schema: LEVEL_EDITOR_BRUSH_ICON_PROOF_SCHEMA,
+    renderer: LEVEL_EDITOR_BRUSH_ICON_PROOF_RENDERER,
+    surfaceUrl,
+    canonicalScale: 1,
+    assetLocalScale: 1,
+    spatialResampling: false,
+    frameWidth: 18,
+    frameHeight: 18,
+    drawWidth: 18,
+    drawHeight: 18,
+    opaqueBounds: row.native_evidence.opaqueBounds,
+    selectedCandidates: [{ slot: row.slot, versionId: row.id, sha256: row.blob_sha256, rowRevision: 1 }],
+    slotSnapshots: [{ slot: row.slot, rowRevision: 0, activeVersionId: null }],
+  };
+  assert.equal(levelEditorBrushIconOwnerProofIssue(row, proof, surfaceUrl), null);
+  assert.match(levelEditorBrushIconOwnerProofIssue(row, { ...proof, drawWidth: 17 }, surfaceUrl), /exact reviewed tool renderer/);
+  assert.match(levelEditorBrushIconOwnerProofIssue(row, {
+    ...proof,
+    selectedCandidates: [{ ...proof.selectedCandidates[0], sha256: replacementSha }],
+  }, surfaceUrl), /candidate bytes/);
+  assert.match(levelEditorBrushIconOwnerProofIssue(row, {
+    ...proof,
+    surfaceUrl: `http://brush.chess-tactics.localhost/studio?brushIconReview=1`,
+  }, `http://brush.chess-tactics.localhost/studio?brushIconReview=1`), /real Level Editor/);
+});
+
+function strategikonBackgroundProof(row = strategikonBackground()) {
+  const surfaceUrl = 'http://sg-bg.chess-tactics.localhost/play/strategikon/enchiridion/units?campaignId=off-c-crown-valoria&levelId=off-l-hold-bridge&strategikonBackgroundReview=1';
+  return {
+    schema: STRATEGIKON_BACKGROUND_PROOF_SCHEMA,
+    renderer: STRATEGIKON_BACKGROUND_PROOF_RENDERER,
+    decision: 'ADR-0336',
+    surfaceUrl,
+    coverScalingApproved: true,
+    objectFit: 'cover',
+    imageRendering: 'pixelated',
+    opacity: 0.68,
+    sourceRaster: { width: 688, height: 384, sha256: row.blob_sha256 },
+    reviewViewport: { width: 1440, height: 900 },
+    selectedCandidates: [{
+      slot: row.slot,
+      versionId: row.id,
+      sha256: row.blob_sha256,
+      rowRevision: 1,
+    }],
+    slotSnapshots: [{ slot: row.slot, rowRevision: 0, activeVersionId: null }],
+  };
+}
+
+test('Strategikon background projection is closed to the exact ADR-0336 pixels and presentation', () => {
+  const row = strategikonBackground();
+  assert.equal(strategikonBackgroundSlot(row.slot), true);
+  assert.equal(strategikonBackgroundMediaIssue(row), null);
+  assert.match(strategikonBackgroundMediaIssue(strategikonBackground({
+    blob_sha256: replacementSha,
+  })), /exact owner-approved/);
+  assert.match(strategikonBackgroundMediaIssue(strategikonBackground({ role: 'media' })), /background role/);
+  assert.match(strategikonBackgroundMediaIssue(strategikonBackground({ width: 689 })), /688x384/);
+  assert.match(strategikonBackgroundMediaIssue(strategikonBackground({
+    metadata: { runtime: { ...row.metadata.runtime, state: 'native' } },
+  })), /cover-scaling exception/);
+});
+
+test('Strategikon background proof pins the exact approved route, viewport, candidate, and cover treatment', () => {
+  const row = strategikonBackground();
+  const proof = strategikonBackgroundProof(row);
+  assert.equal(strategikonBackgroundOwnerProofIssue(row, proof, proof.surfaceUrl), null);
+  assert.match(strategikonBackgroundOwnerProofIssue(row, {
+    ...proof,
+    coverScalingApproved: false,
+  }, proof.surfaceUrl), /cover presentation/);
+  assert.match(strategikonBackgroundOwnerProofIssue(row, {
+    ...proof,
+    reviewViewport: { width: 1280, height: 720 },
+  }, proof.surfaceUrl), /1440x900/);
+  assert.match(strategikonBackgroundOwnerProofIssue(row, {
+    ...proof,
+    selectedCandidates: [{ ...proof.selectedCandidates[0], sha256: replacementSha }],
+  }, proof.surfaceUrl), /candidate bytes/);
 });
 
 function sfxSample(overrides = {}) {

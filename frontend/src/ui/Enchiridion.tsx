@@ -37,7 +37,7 @@ import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { ENCHIRIDION_SECTIONS, enchiridionSectionHref, type EnchiridionSection } from './enchiridionRoute';
 import { installedUiMedia } from './installedUiMedia';
 import { RunRelicIcon } from './RunRelics';
-import { ApparatusRailTab } from './shared/ApparatusRailTab';
+import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
 import { InnerChromeBox, OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
 import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
 import { NavButton } from './shared/NavButton';
@@ -830,21 +830,7 @@ export function Enchiridion({
 }): ReactElement {
   return (
     <div className={`enchiridion-workspace${showSectionRail ? ' has-section-rail' : ''}`}>
-      {showSectionRail ? (
-        <aside className="enchiridion-section-rail" aria-label="Enchiridion sections">
-          {ENCHIRIDION_SECTIONS.map((candidate, index) => (
-            <ApparatusRailTab
-              key={candidate}
-              label={SECTION_LABEL[candidate]}
-              to={sectionHref(candidate)}
-              index={index}
-              active={section === candidate}
-              iconSrc={SECTION_ICON_SRC[candidate]}
-              iconClassName={SECTION_ICON[candidate]}
-            />
-          ))}
-        </aside>
-      ) : null}
+      {showSectionRail ? <EnchiridionSectionRail section={section} sectionHref={sectionHref} /> : null}
       <EnchiridionContentSceneSlot
         className="enchiridion-content"
         sceneInstance={sceneInstanceKey}
@@ -859,5 +845,29 @@ export function Enchiridion({
         />
       </EnchiridionContentSceneSlot>
     </div>
+  );
+}
+
+export function EnchiridionSectionRail({
+  section,
+  sectionHref,
+}: {
+  section: EnchiridionSection;
+  sectionHref: (section: EnchiridionSection) => string;
+}): ReactElement {
+  return (
+    <ApparatusRailColumn className="enchiridion-section-rail" aria-label="Enchiridion sections">
+      {ENCHIRIDION_SECTIONS.map((candidate, index) => (
+        <ApparatusRailTab
+          key={candidate}
+          label={SECTION_LABEL[candidate]}
+          to={sectionHref(candidate)}
+          index={index}
+          active={section === candidate}
+          iconSrc={SECTION_ICON_SRC[candidate]}
+          iconClassName={SECTION_ICON[candidate]}
+        />
+      ))}
+    </ApparatusRailColumn>
   );
 }

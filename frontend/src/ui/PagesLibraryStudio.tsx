@@ -152,13 +152,15 @@ function MainMenuViewer({ page, header, zoom = 1 }: { page: PageEntry; header?: 
   // instead of re-centring), so widen the cap to fit the chosen width — max() keeps the default
   // cap for narrow widths (no surprise re-centre) and grows the body, centred, up to the full
   // window for wide ones. Bakes onto the SHARED .settings-shell (not the menu-only scope) so the
-  // Settings rail width stays faithful to the menu's buttons.
+  // Settings rail width stays faithful to the menu's buttons. The canonical
+  // column token travels with the bake so Strategikon and every menu-language
+  // destination column inherit the same retune.
   add(railW !== MM_LIVE.railW,
-    `.pages-menu-tweak .settings-shell { grid-template-columns: ${railW}px minmax(0, 1fr) !important; --settings-shell-w: max(clamp(900px, calc(var(--layout-vw, 100vw) * .88), 1240px), ${railW}px) !important; }`,
-    `.settings-shell {\n  grid-template-columns: ${railW}px minmax(0, 1fr);\n  --settings-shell-w: max(clamp(900px, calc(var(--layout-vw, 100vw) * .88), 1240px), ${railW}px);\n}`);
+    `.pages-menu-tweak .main-menu-twin-screen { --main-menu-tab-column-w: ${railW}px !important; }\n.pages-menu-tweak .settings-shell { grid-template-columns: ${railW}px minmax(0, 1fr) !important; --settings-shell-w: max(clamp(900px, calc(var(--layout-vw, 100vw) * .88), 1240px), ${railW}px) !important; }`,
+    `:root {\n  --main-menu-tab-column-w: ${railW}px;\n}\n.settings-shell {\n  grid-template-columns: ${railW}px minmax(0, 1fr);\n  --settings-shell-w: max(clamp(900px, calc(var(--layout-vw, 100vw) * .88), 1240px), ${railW}px);\n}`);
   add(tabGap !== MM_LIVE.gap,
-    `.pages-menu-tweak .settings-rail-frame { gap: ${tabGap}px !important; }`,
-    `.main-menu-twin-screen .settings-rail-frame {\n  gap: ${tabGap}px;\n}`);
+    `.pages-menu-tweak .main-menu-twin-screen { --main-menu-tab-column-gap: ${tabGap}px !important; }\n.pages-menu-tweak .settings-rail-frame { gap: ${tabGap}px !important; }`,
+    `:root {\n  --main-menu-tab-column-gap: ${tabGap}px;\n}\n.settings-rail-frame {\n  gap: ${tabGap}px;\n}`);
   // Move the WHOLE button group: transform the rail frame (not the tabs) so it nudges without
   // reflow. X = left/right, Y = up/down; composes with the hover-slide (which transforms the tabs,
   // a different element). The rail lives inside .settings-shell, which ships overflow:hidden — so a

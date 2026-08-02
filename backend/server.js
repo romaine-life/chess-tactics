@@ -65,6 +65,9 @@ const {
   liveCatalogReadinessIssue,
   gameConditionIconMediaIssue,
   gameConditionIconSlot,
+  levelEditorBrushIconMediaIssue,
+  levelEditorBrushIconOwnerProofIssue,
+  levelEditorBrushIconSlot,
   nativeMediaEvidenceIssue,
   predrawnBoardMediaIssue,
   predrawnBoardOwnerProofIssue,
@@ -74,9 +77,14 @@ const {
   runRelicIconSlotId,
   runResourceIconMediaIssue,
   runResourceIconSlotId,
+  runShopWrapMediaIssue,
+  runShopWrapSlotId,
   sfxSampleMediaIssue,
   sfxSampleOwnerProofIssue,
   sfxSampleSlot,
+  strategikonBackgroundMediaIssue,
+  strategikonBackgroundOwnerProofIssue,
+  strategikonBackgroundSlot,
 } = require(path.join(bakedBackendDir, 'liveMediaPolicy'));
 const {
   ATTEMPT_PIPELINE_SOURCE_REQUEST_SCHEMA,
@@ -14677,6 +14685,12 @@ function reviewedMediaEvidenceIssue(row) {
   } else if (sfxSampleSlot(row.slot)) {
     const issue = sfxSampleOwnerProofIssue(row, proof, evidence.surfaceUrl);
     if (issue) return issue;
+  } else if (levelEditorBrushIconSlot(row.slot)) {
+    const issue = levelEditorBrushIconOwnerProofIssue(row, proof, evidence.surfaceUrl);
+    if (issue) return issue;
+  } else if (strategikonBackgroundSlot(row.slot)) {
+    const issue = strategikonBackgroundOwnerProofIssue(row, proof, evidence.surfaceUrl);
+    if (issue) return issue;
   } else if (sourceArt.claimed && !sourceArt.issue) {
     const issue = sourceArtTurntableOwnerProofIssue(sourceArt.value, proof, evidence.surfaceUrl);
     if (issue) return issue;
@@ -15013,6 +15027,12 @@ function runtimeMetadataProjection(row) {
   if (row.domain === 'ui-kit') {
     for (const key of ['nativeRole', 'slice']) allowed.add(key);
   }
+  // Shop wraps frame live cards, so their runtime contract is the measured card
+  // window on the painted canvas rather than a sprite frame.
+  const shopWrap = runShopWrapSlotId(row.slot) !== null;
+  if (shopWrap) {
+    for (const key of ['kind', 'canvasWidth', 'canvasHeight', 'window', 'slots']) allowed.add(key);
+  }
   const unknown = Object.keys(raw).filter((key) => !allowed.has(key));
   if (unknown.length) return { error: `metadata.runtime contains unsupported keys: ${unknown.sort().join(', ')}` };
 
@@ -15044,6 +15064,45 @@ function runtimeMetadataProjection(row) {
   if (raw.loop !== undefined) {
     if (typeof raw.loop !== 'boolean') return { error: 'metadata.runtime.loop must be boolean' };
     value.loop = raw.loop;
+  }
+  if (shopWrap) {
+    if (raw.kind !== undefined) {
+      const normalized = runtimeSemanticText(raw.kind, 32);
+      if (!normalized) return { error: 'metadata.runtime.kind must be a non-empty string' };
+      value.kind = normalized;
+    }
+    for (const key of ['canvasWidth', 'canvasHeight']) {
+      if (raw[key] === undefined) continue;
+      const normalized = runtimeInteger(raw[key], { min: 1, max: 32768 });
+      if (normalized === null) return { error: `metadata.runtime.${key} must be a positive bounded integer` };
+      value[key] = normalized;
+    }
+    const readRect = (input, label) => {
+      if (!isObjectRecord(input)) return { error: `metadata.runtime.${label} must be an object` };
+      const rect = {};
+      for (const key of ['x', 'y', 'w', 'h']) {
+        const normalized = runtimeInteger(input[key], { min: 0, max: 32768 });
+        if (normalized === null) return { error: `metadata.runtime.${label}.${key} must be a bounded whole pixel` };
+        rect[key] = normalized;
+      }
+      return { rect };
+    };
+    if (raw.window !== undefined) {
+      const read = readRect(raw.window, 'window');
+      if (read.error) return { error: read.error };
+      value.window = read.rect;
+    }
+    if (raw.slots !== undefined) {
+      if (!Array.isArray(raw.slots)) return { error: 'metadata.runtime.slots must be an array' };
+      if (raw.slots.length > 16) return { error: 'metadata.runtime.slots may not exceed 16 openings' };
+      const slots = [];
+      for (const [index, entry] of raw.slots.entries()) {
+        const read = readRect(entry, `slots[${index}]`);
+        if (read.error) return { error: read.error };
+        slots.push(read.rect);
+      }
+      value.slots = slots;
+    }
   }
   if (raw.groundCover !== undefined) {
     if (row.domain !== 'terrain') {
@@ -15155,11 +15214,20 @@ function mediaDomainProjectionIssue(row) {
   if (runResourceIconSlotId(row.slot)) {
     return runResourceIconMediaIssue(row, runtime.value);
   }
+  if (runShopWrapSlotId(row.slot)) {
+    return runShopWrapMediaIssue(row, runtime.value);
+  }
   if (gameConditionIconSlot(row.slot)) {
     return gameConditionIconMediaIssue(row, runtime.value);
   }
+  if (levelEditorBrushIconSlot(row.slot)) {
+    return levelEditorBrushIconMediaIssue(row, runtime.value);
+  }
   if (sfxSampleSlot(row.slot)) {
     return sfxSampleMediaIssue(row, runtime.value);
+  }
+  if (strategikonBackgroundSlot(row.slot)) {
+    return strategikonBackgroundMediaIssue(row, runtime.value);
   }
   const runCardFrame = runCardFrameProjection(row);
   if (runCardFrame.claimed) return runCardFrame.issue;
@@ -15938,7 +16006,8 @@ function gameOwnedReviewSurfaceUrl(req, raw) {
     const sameOrigin = requestOrigin
       ? url.origin === requestOrigin
       : url.host.toLowerCase() === String(req.get('host') || '').toLowerCase();
-    const gameOwnedPath = url.pathname === '/studio' || url.pathname === '/editor/level';
+    const gameOwnedPath = url.pathname === '/studio' || url.pathname === '/editor/level'
+      || url.pathname === '/play/strategikon/enchiridion/units';
     if (!sameOrigin || (url.protocol !== 'http:' && url.protocol !== 'https:') || !gameOwnedPath || url.hash) return null;
     return url.toString();
   } catch {
@@ -15995,6 +16064,34 @@ async function validateMediaReviewProofSnapshot(client, current, evidence, surfa
     if (
       current.status !== 'candidate' || Number(selected.rowRevision) !== Number(current.row_revision)
     ) throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: 'candidate snapshot mismatch' });
+    return;
+  }
+  if (levelEditorBrushIconSlot(current.slot) || strategikonBackgroundSlot(current.slot)) {
+    const projectionIssue = mediaDomainProjectionIssue(current);
+    if (projectionIssue) {
+      throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: projectionIssue });
+    }
+    const proofIssue = levelEditorBrushIconSlot(current.slot)
+      ? levelEditorBrushIconOwnerProofIssue(current, evidence, surfaceUrl)
+      : strategikonBackgroundOwnerProofIssue(current, evidence, surfaceUrl);
+    if (proofIssue) {
+      throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: proofIssue });
+    }
+    const selected = evidence.selectedCandidates[0];
+    const snapshot = evidence.slotSnapshots[0];
+    const slotResult = await client.query(
+      'SELECT slot, active_version_id, row_revision FROM media_slots WHERE slot = $1',
+      [current.slot],
+    );
+    const slotRow = slotResult.rows[0];
+    if (!slotRow) throw mediaMutationError('media_slot_not_found', 404);
+    if (
+      Number(snapshot.rowRevision) !== Number(slotRow.row_revision)
+      || (snapshot.activeVersionId ?? null) !== (slotRow.active_version_id ? String(slotRow.active_version_id) : null)
+    ) throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: 'slot snapshot mismatch' });
+    if (current.status !== 'candidate' || Number(selected.rowRevision) !== Number(current.row_revision)) {
+      throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: 'candidate snapshot mismatch' });
+    }
     return;
   }
   if (new URL(surfaceUrl).pathname !== '/studio') {
@@ -16304,6 +16401,42 @@ function assertSfxSampleAcceptanceProof(row, slot) {
   ) throw mediaMutationError('media_review_slot_snapshot_stale', 409, { slot: row.slot });
 }
 
+function assertLevelEditorBrushIconAcceptanceProof(row, slot) {
+  if (!levelEditorBrushIconSlot(row.slot)) return;
+  if (mediaAcceptanceContract(row).mode !== 'standalone') {
+    throw mediaMutationError('media_group_contract_mismatch', 409, { slot: row.slot });
+  }
+  const review = isObjectRecord(row.review_evidence) ? row.review_evidence : {};
+  const proof = isObjectRecord(review.evidence) ? review.evidence : {};
+  const issue = levelEditorBrushIconOwnerProofIssue(row, proof, review.surfaceUrl);
+  if (issue) throw mediaMutationError('media_owner_review_required', 409, { slot: row.slot, reason: issue });
+  const selected = proof.selectedCandidates[0];
+  const snapshot = proof.slotSnapshots[0];
+  if (
+    Number(selected.rowRevision) + 1 !== Number(row.row_revision)
+    || !slot || Number(snapshot.rowRevision) !== Number(slot.row_revision)
+    || (snapshot.activeVersionId ?? null) !== (slot.active_version_id ? String(slot.active_version_id) : null)
+  ) throw mediaMutationError('media_review_slot_snapshot_stale', 409, { slot: row.slot });
+}
+
+function assertStrategikonBackgroundAcceptanceProof(row, slot) {
+  if (!strategikonBackgroundSlot(row.slot)) return;
+  if (mediaAcceptanceContract(row).mode !== 'standalone') {
+    throw mediaMutationError('media_group_contract_mismatch', 409, { slot: row.slot });
+  }
+  const review = isObjectRecord(row.review_evidence) ? row.review_evidence : {};
+  const proof = isObjectRecord(review.evidence) ? review.evidence : {};
+  const issue = strategikonBackgroundOwnerProofIssue(row, proof, review.surfaceUrl);
+  if (issue) throw mediaMutationError('media_owner_review_required', 409, { slot: row.slot, reason: issue });
+  const selected = proof.selectedCandidates[0];
+  const snapshot = proof.slotSnapshots[0];
+  if (
+    Number(selected.rowRevision) + 1 !== Number(row.row_revision)
+    || !slot || Number(snapshot.rowRevision) !== Number(slot.row_revision)
+    || (snapshot.activeVersionId ?? null) !== (slot.active_version_id ? String(slot.active_version_id) : null)
+  ) throw mediaMutationError('media_review_slot_snapshot_stale', 409, { slot: row.slot });
+}
+
 function assertTerrainAcceptanceProof(rows, slotById, contract = null) {
   if (!rows.length || rows.some((row) => row.domain !== 'terrain')) return;
   const expectedSlots = contract?.mode === 'group' ? contract.requiredSlots : rows.map((row) => row.slot).sort();
@@ -16522,6 +16655,8 @@ async function acceptMediaVersionBatch(items, actorEmail) {
       }
       assertPredrawnBoardAcceptanceProof(row, slotById.get(row.slot));
       assertSfxSampleAcceptanceProof(row, slotById.get(row.slot));
+      assertLevelEditorBrushIconAcceptanceProof(row, slotById.get(row.slot));
+      assertStrategikonBackgroundAcceptanceProof(row, slotById.get(row.slot));
     }
 
     const bySlot = new Map(rows.map((row) => [row.slot, row]));

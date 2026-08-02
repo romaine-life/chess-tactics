@@ -22,6 +22,7 @@ export function ShellWorkspace({
   className = '',
   contentClassName = '',
   bodyClassName = '',
+  backgroundArtwork = null,
   edgeAttached = false,
   rail = null,
   children,
@@ -29,12 +30,18 @@ export function ShellWorkspace({
 }: HTMLAttributes<HTMLElement> & {
   contentClassName?: string;
   bodyClassName?: string;
+  backgroundArtwork?: ReactNode;
   edgeAttached?: boolean;
   rail?: ReactNode;
 }): ReactElement {
   return (
     <section {...props} className={`shell-workspace ${className}`.trim()}>
       <ChromeSurfaceFill role="outer" className="shell-workspace-fill" />
+      {backgroundArtwork ? (
+        <div className="shell-workspace-background-artwork" aria-hidden="true">
+          {backgroundArtwork}
+        </div>
+      ) : null}
       <div className={`shell-workspace-content ${contentClassName}`.trim()}>
         {rail}
         <div
