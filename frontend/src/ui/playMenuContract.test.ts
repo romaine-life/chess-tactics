@@ -78,6 +78,11 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('to="/run"><span>Play</span></ChromeNavButton>');
     expect(playMenu).not.toContain('run-current-summary');
     expect(playMenu).not.toContain('>Continue Run<');
+    // The Current Run row is an availability surface, not an existence surface: with
+    // no active Run it stays in place disabled (like Continue's "Nothing to continue"
+    // rows), keeping the resume point spatially learnable.
+    expect(playMenu).toContain('disabled={!run}');
+    expect(playMenu).toContain("'No active Run'");
   });
 
   it('keeps new-Run setup in the right detail column with one scrollable Ataraxia dropdown', () => {
