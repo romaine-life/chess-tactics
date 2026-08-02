@@ -17,8 +17,19 @@ import type { ObjectiveType, VictoryRules } from '../core/level';
 import type { ObjectiveContext } from '../core/objectives';
 
 // Live-play search budget: bounded by NODES + DEPTH, never wall-clock, so the reply is
-// deterministic — the same (game, seed, tick) yields the same move on any machine. ~40k nodes
-// lands well under a perceptible think on skirmish boards (see aibench); maxDepth caps the ceiling.
+// deterministic — the same (game, seed, tick) yields the same move on any machine.
+//
+// MEASURED COST (scripts/bench-live-search.mjs). On a real skirmish or Run board the search
+// ALWAYS exhausts the node budget rather than the depth one: it spends all 40k nodes and
+// completes only depth 3-5 of the requested 6. So this is a fixed ~40k-node tree per reply,
+// and the think is a straight function of per-node cost — not "well under a perceptible
+// think", which is what this comment used to claim. It is a real, visible pause; that is why
+// the module runs in a worker (see the header) so the board stays live through it.
+//
+// Because the bound is NODES, per-node optimisation is behaviour-preserving: the same 40k
+// nodes are expanded in the same order and the same move is chosen, just sooner. Raising or
+// lowering maxNodes is the opposite — it changes how strong the opponent plays and breaks the
+// determinism contract above, so it is an AI-strength decision, not a performance lever.
 export const LIVE_SEARCH = { maxDepth: 6, maxNodes: 40_000 };
 
 /** Everything needed to answer ONE player move, all structured-cloneable so it can cross the
