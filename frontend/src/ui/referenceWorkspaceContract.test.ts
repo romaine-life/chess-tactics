@@ -33,7 +33,11 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
   });
 
   it('uses the canonical rail language for both reference layers', () => {
+    expect(mainMenu).toContain('<ApparatusRailColumn');
     expect(enchiridion).toContain('<ApparatusRailTab');
+    expect(enchiridion).toContain('<ApparatusRailColumn className="enchiridion-section-rail"');
+    expect(strategikon).toContain('<ApparatusRailColumn className="strategikon-rail"');
+    expect(strategikon).toContain('<EnchiridionSectionRail');
     expect(strategikon.match(/<ApparatusRailTab/g)).toHaveLength(3);
     expect(strategikon).toContain('title="The Martial Prosopography — Current Army"');
     expect(strategikon).toContain('title="The Lipsanotheca — Held Relics"');
@@ -52,7 +56,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(enchiridion).toContain('if (framed)');
     expect(strategikon).toContain('<ShellWorkspace');
     expect(strategikon).toContain('className="strategikon-workspace"');
-    expect(strategikon).toContain('contentClassName="strategikon-workspace-layout"');
+    expect(strategikon).toContain('contentClassName={`strategikon-workspace-layout');
     expect(strategikon).toContain('bodyClassName="strategikon-content"');
     expect(strategikon).not.toContain('<ChromeSurfaceFill');
     expect(strategikon).not.toContain('OuterChromeBox');
@@ -217,11 +221,24 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(style).toMatch(/--main-menu-content-inset-block:\s*calc\(var\(--main-menu-frame-inset\) \+ var\(--main-menu-rail-pad-block\)\)/);
     expect(style).toMatch(/--main-menu-content-inset-inline:\s*calc\(var\(--main-menu-frame-inset\) \+ var\(--main-menu-rail-pad-inline\)\)/);
     expect(style).toMatch(/\.main-menu-twin-screen \.settings-shell\s*\{[\s\S]*?--col-top-inset:\s*var\(--main-menu-content-inset-block\);[\s\S]*?--col-side-inset:\s*var\(--main-menu-content-inset-inline\)/);
-    expect(style).toMatch(/\.strategikon-workspace-layout\s*\{[\s\S]*?display:\s*grid;[\s\S]*?gap:\s*0;[\s\S]*?grid-template-columns:\s*322px minmax\(0, 1fr\)/);
+    expect(style).toMatch(/--main-menu-tab-column-w:\s*322px/);
+    expect(style).toMatch(/\.apparatus-rail-column\s*\{[\s\S]*?--settings-rail-tab-gap:\s*var\(--main-menu-tab-column-gap\);[\s\S]*?gap:\s*var\(--settings-rail-tab-gap\)/);
+    expect(style).toMatch(/\.apparatus-rail-column\[data-apparatus-rail-placement="open"\]\s*\{[\s\S]*?inline-size:\s*var\(--main-menu-tab-column-w\);[\s\S]*?padding-block:\s*var\(--main-menu-content-inset-block\) 0;[\s\S]*?padding-inline:\s*var\(--main-menu-content-inset-inline\) 0/);
+    expect(style).toMatch(/\.strategikon-workspace-layout\s*\{[\s\S]*?display:\s*grid;[\s\S]*?gap:\s*0;[\s\S]*?grid-template-columns:\s*var\(--main-menu-tab-column-w\) minmax\(0, 1fr\)/);
+    expect(style).toMatch(/\.strategikon-workspace-layout\.has-secondary-rail\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2, var\(--main-menu-tab-column-w\)\) minmax\(0, 1fr\)/);
     expect(style).toMatch(/\.strategikon-workspace\s*\{[\s\S]*?--shell-workspace-body-inset-block:\s*var\(--main-menu-content-inset-block\);[\s\S]*?--shell-workspace-body-inset-start:\s*var\(--main-menu-content-inset-inline\)/);
-    expect(style).toMatch(/\.strategikon-rail\s*\{[\s\S]*?padding-block:\s*var\(--shell-workspace-body-inset-block\);[\s\S]*?padding-inline:\s*var\(--shell-workspace-body-inset-start\) 0/);
+    expect(strategikon).toContain('showSectionRail={false}');
+    expect(style).not.toContain('grid-template-columns: 270px minmax(0, 1fr)');
+    expect(style).not.toContain('.strategikon-content .enchiridion-section-rail');
     expect(style).toMatch(/\.shell-workspace-body\s*\{[\s\S]*?padding-inline-end:\s*0/);
     expect(style).not.toContain('--shell-workspace-body-inset-end');
     expect(skirmish).not.toContain('has-strategikon');
+  });
+
+  it('renders the accepted command archive through the installed application UI role', () => {
+    expect(strategikon).toContain("installedUiMedia('ui-workspaces-strategikon-background-png')");
+    expect(strategikon).toContain('className="strategikon-background-artwork"');
+    expect(strategikon).not.toContain('strategikonBackgroundReview');
+    expect(style).toMatch(/\.strategikon-background-artwork\s*\{[\s\S]*?image-rendering:\s*pixelated;[\s\S]*?object-fit:\s*cover;[\s\S]*?opacity:\s*\.68/);
   });
 });

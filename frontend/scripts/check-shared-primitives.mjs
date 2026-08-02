@@ -9,6 +9,8 @@ const RAW_CHROME_BUTTON_EXCEPTIONS = new Set([
 ]);
 const STUDIO_CARD_EXCEPTION = 'src/ui/studio/StudioCatalogCard.tsx';
 const CHOICE_GROUP_EXCEPTION = 'src/ui/shared/ChoiceGroup.tsx';
+const APPARATUS_RAIL_COLUMN_EXCEPTION = 'src/ui/shared/ApparatusRailTab.tsx';
+const APPARATUS_RAIL_COLUMN_CLASSES = /\b(?:settings-rail-frame|menu-dest-tabs|strategikon-rail|enchiridion-section-rail)\b/;
 
 function attr(opening, name) {
   return opening.attributes.properties.find((candidate) =>
@@ -33,6 +35,11 @@ export function checkTsx(relativePath, source) {
       }
       if (text.includes('tileset-tier-seg') && relativePath !== CHOICE_GROUP_EXCEPTION) {
         failures.push(`${relativePath}:${line}: segmented choices must use ChoiceGroup.`);
+      }
+      if (tag === 'aside'
+        && APPARATUS_RAIL_COLUMN_CLASSES.test(text)
+        && relativePath !== APPARATUS_RAIL_COLUMN_EXCEPTION) {
+        failures.push(`${relativePath}:${line}: menu-language rail columns must use ApparatusRailColumn.`);
       }
     }
     ts.forEachChild(node, visit);

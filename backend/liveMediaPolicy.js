@@ -46,6 +46,11 @@ const SFX_MEDIA_TYPE_BY_EXTENSION = Object.freeze({
   wav: 'audio/wav',
   webm: 'audio/webm',
 });
+const STRATEGIKON_BACKGROUND_COMPONENT = 'strategikon-background';
+const STRATEGIKON_BACKGROUND_PROOF_RENDERER = 'ShellWorkspace/StrategikonBackgroundArtwork';
+const STRATEGIKON_BACKGROUND_PROOF_SCHEMA = 'strategikon-background-cover-exception-v1';
+const STRATEGIKON_BACKGROUND_SLOT = 'ui/workspaces/strategikon/background.png';
+const STRATEGIKON_BACKGROUND_SHA256 = '8084f009cae79d3eaaa64bb2c0f5df6e26fc8dfe7d9f0547f24135102d41ffe7';
 
 function isObjectRecord(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -85,6 +90,10 @@ function sfxSampleSlot(slot) {
   const variantIndex = Number(match[2]);
   if (!Number.isSafeInteger(variantIndex) || variantIndex < 0 || variantIndex > 9999) return null;
   return { soundSetKey: match[1], variantIndex, extension: match[3] };
+}
+
+function strategikonBackgroundSlot(slot) {
+  return String(slot || '') === STRATEGIKON_BACKGROUND_SLOT;
 }
 
 function mediaVersionMetadata(row) {
@@ -454,6 +463,101 @@ function sfxSampleMediaIssue(row, projectedRuntime = null) {
   return null;
 }
 
+/**
+ * Closed production projection for the exact command-archive artwork approved
+ * under ADR-0336. The source PNG remains native and unresampled; the named
+ * exception is the ShellWorkspace cover presentation, not rewritten pixels.
+ */
+function strategikonBackgroundMediaIssue(row, projectedRuntime = null) {
+  if (!strategikonBackgroundSlot(row.slot)) return 'Strategikon background requires its canonical semantic slot';
+  if (row.domain !== 'ui-kit') return 'Strategikon background requires the ui-kit domain';
+  if (row.role !== 'background') return 'Strategikon background requires the background role';
+  if (row.media_type !== 'image/png') return 'Strategikon background requires image/png';
+  if (Number(row.width) !== 688 || Number(row.height) !== 384) {
+    return 'Strategikon background must retain its approved 688x384 source raster';
+  }
+  if (normalizedSha(row.blob_sha256) !== STRATEGIKON_BACKGROUND_SHA256) {
+    return 'ADR-0336 authorizes only the exact owner-approved Strategikon background bytes';
+  }
+
+  const metadata = mediaVersionMetadata(row);
+  const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+  if (!isObjectRecord(runtime)) return 'Strategikon background requires metadata.runtime';
+  const allowed = new Set(['component', 'variant', 'state', 'frameWidth', 'frameHeight', 'frameCount', 'altText', 'nativeRole']);
+  const unsupported = Object.keys(runtime).filter((key) => !allowed.has(key));
+  if (unsupported.length) {
+    return `Strategikon background runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
+  }
+  if (runtime.component !== STRATEGIKON_BACKGROUND_COMPONENT) {
+    return `Strategikon background metadata.runtime.component must be ${STRATEGIKON_BACKGROUND_COMPONENT}`;
+  }
+  if (runtime.variant !== 'command-archive') return 'Strategikon background runtime variant must be command-archive';
+  if (runtime.state !== 'owner-approved-cover-scaling-exception') {
+    return 'Strategikon background runtime state must name the owner-approved cover-scaling exception';
+  }
+  if (runtime.frameWidth !== 688 || runtime.frameHeight !== 384 || runtime.frameCount !== 1) {
+    return 'Strategikon background runtime frame geometry must match the approved PNG';
+  }
+  if (runtime.nativeRole !== STRATEGIKON_BACKGROUND_COMPONENT) {
+    return `Strategikon background nativeRole must be ${STRATEGIKON_BACKGROUND_COMPONENT}`;
+  }
+  if (runtime.altText !== '') return 'decorative Strategikon background runtime altText must be empty';
+  return null;
+}
+
+function strategikonBackgroundOwnerProofIssue(row, proof, surfaceUrl = null) {
+  if (!strategikonBackgroundSlot(row.slot)) return 'Strategikon background proof requires its canonical semantic slot';
+  if (!isObjectRecord(proof) || proof.schema !== STRATEGIKON_BACKGROUND_PROOF_SCHEMA) {
+    return `Strategikon background review requires ${STRATEGIKON_BACKGROUND_PROOF_SCHEMA}`;
+  }
+  if (
+    proof.renderer !== STRATEGIKON_BACKGROUND_PROOF_RENDERER
+    || proof.decision !== 'ADR-0336'
+    || proof.coverScalingApproved !== true
+    || proof.objectFit !== 'cover'
+    || proof.imageRendering !== 'pixelated'
+    || proof.opacity !== 0.68
+  ) return 'Strategikon background proof must record the exact owner-approved cover presentation';
+  if (
+    !isObjectRecord(proof.sourceRaster)
+    || proof.sourceRaster.width !== 688 || proof.sourceRaster.height !== 384
+    || normalizedSha(proof.sourceRaster.sha256) !== STRATEGIKON_BACKGROUND_SHA256
+  ) return 'Strategikon background proof does not identify the approved source raster';
+  if (
+    !isObjectRecord(proof.reviewViewport)
+    || proof.reviewViewport.width !== 1440 || proof.reviewViewport.height !== 900
+  ) return 'Strategikon background proof must record the approved 1440x900 review viewport';
+  if (surfaceUrl !== null && proof.surfaceUrl !== surfaceUrl) {
+    return 'Strategikon background proof surfaceUrl does not match the reviewed surface';
+  }
+  let parsedSurface;
+  try { parsedSurface = new URL(proof.surfaceUrl); } catch { return 'Strategikon background proof surfaceUrl is invalid'; }
+  if (
+    parsedSurface.pathname !== '/play/strategikon/enchiridion/units'
+    || parsedSurface.searchParams.get('strategikonBackgroundReview') !== '1'
+    || parsedSurface.searchParams.get('campaignId') !== 'off-c-crown-valoria'
+    || parsedSurface.searchParams.get('levelId') !== 'off-l-hold-bridge'
+  ) return 'Strategikon background proof must identify the exact reviewed gameplay surface';
+
+  const candidateSha256 = normalizedSha(row.blob_sha256);
+  if (!candidateSha256 || !Array.isArray(proof.selectedCandidates) || proof.selectedCandidates.length !== 1) {
+    return 'Strategikon background proof must identify exactly one candidate';
+  }
+  const selected = proof.selectedCandidates[0];
+  if (
+    !isObjectRecord(selected) || selected.slot !== row.slot || selected.versionId !== String(row.id)
+    || normalizedSha(selected.sha256) !== candidateSha256
+  ) return 'Strategikon background proof does not identify the reviewed candidate bytes';
+  if (!Array.isArray(proof.slotSnapshots) || proof.slotSnapshots.length !== 1) {
+    return 'Strategikon background proof must snapshot exactly one semantic slot';
+  }
+  const snapshot = proof.slotSnapshots[0];
+  if (!isObjectRecord(snapshot) || snapshot.slot !== row.slot) {
+    return 'Strategikon background proof slot snapshot is invalid';
+  }
+  return null;
+}
+
 function sfxSampleOwnerProofIssue(row, proof, surfaceUrl = null) {
   const slot = sfxSampleSlot(row.slot);
   if (!slot) return 'SFX sample proof requires a typed SFX sample slot';
@@ -653,6 +757,11 @@ module.exports = {
   SFX_SAMPLE_COMPONENT,
   SFX_SAMPLE_PROOF_RENDERER,
   SFX_SAMPLE_PROOF_SCHEMA,
+  STRATEGIKON_BACKGROUND_COMPONENT,
+  STRATEGIKON_BACKGROUND_PROOF_RENDERER,
+  STRATEGIKON_BACKGROUND_PROOF_SCHEMA,
+  STRATEGIKON_BACKGROUND_SHA256,
+  STRATEGIKON_BACKGROUND_SLOT,
   liveCatalogReadinessIssue,
   gameConditionIconMediaIssue,
   gameConditionIconSlot,
@@ -672,4 +781,7 @@ module.exports = {
   sfxSampleMediaIssue,
   sfxSampleOwnerProofIssue,
   sfxSampleSlot,
+  strategikonBackgroundMediaIssue,
+  strategikonBackgroundOwnerProofIssue,
+  strategikonBackgroundSlot,
 };
