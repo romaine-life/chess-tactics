@@ -19175,10 +19175,13 @@ button.tileset-relationship-cell {
   position: relative;
 }
 
-.run-shop-scene-art {
-  pointer-events: none;
-  position: absolute;
-  z-index: 0;
+/* The scene rides the shell's registered background-artwork slot, so it spans
+   the whole workspace box — the shell padding included — instead of stopping at
+   the scroller and letting the backdrop show around the art. */
+.run-shop-scene-artwork {
+  block-size: 100%;
+  inline-size: 100%;
+  object-fit: cover;
 }
 
 /* Never clip: a Loot Shop adds relic offers below the card row, and hiding

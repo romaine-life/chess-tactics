@@ -468,7 +468,7 @@ function ShopCardRow({ children }: { children: ReactNode }): ReactElement {
   const cardCount = Children.count(children);
   // A screen scene fills the whole Shop workspace, so it is measured against
   // the workspace box; a band only owns the space left for the card row.
-  const measureTarget = wrap?.kind === 'screen' ? '.run-shop-workspace-content' : null;
+  const measureTarget = wrap?.kind === 'screen' ? '.run-shop-workspace' : null;
 
   // The host fills the space the Shop allots it and the wrap is drawn inside
   // that box, so it can never push the screen into scrolling.
@@ -496,40 +496,28 @@ function ShopCardRow({ children }: { children: ReactNode }): ReactElement {
       ? runShopWrapScreenMount(wrap, cardCount, box.width, box.height)
       : null;
     const hostRect = hostRef.current?.getBoundingClientRect();
-    const workspaceRect = hostRef.current?.closest('.run-shop-workspace-content')?.getBoundingClientRect();
+    const workspaceRect = hostRef.current?.closest('.run-shop-workspace')?.getBoundingClientRect();
     // The scene is painted on the workspace; the row is placed in workspace
     // coordinates, then rebased into this host's own box.
     const offsetX = hostRect && workspaceRect ? workspaceRect.left - hostRect.left : 0;
     const offsetY = hostRect && workspaceRect ? workspaceRect.top - hostRect.top : 0;
+    // The scene itself is painted on the workspace element (see ShopPanel), so
+    // it covers the shell padding too; only the card row lives in here.
     return (
       <div className="run-shop-scene-host" ref={hostRef} data-testid="run-shop-wrap">
         {mount ? (
-          <>
-            <img
-              className="run-shop-scene-art"
-              src={wrap.src}
-              alt=""
-              draggable={false}
-              style={{
-                insetInlineStart: `${offsetX + mount.frame.left}px`,
-                insetBlockStart: `${offsetY + mount.frame.top}px`,
-                inlineSize: `${mount.frame.width}px`,
-                blockSize: `${mount.frame.height}px`,
-              }}
-            />
-            <div
-              className="run-shop-wrap-cards"
-              style={{
-                insetInlineStart: `${offsetX + mount.cards.left}px`,
-                insetBlockStart: `${offsetY + mount.cards.top}px`,
-                inlineSize: `${mount.cards.width}px`,
-                gridTemplateColumns: `repeat(${cardCount}, ${mount.cardWidth}px)`,
-                gap: `${mount.cards.gap}px`,
-              }}
-            >
-              {children}
-            </div>
-          </>
+          <div
+            className="run-shop-wrap-cards"
+            style={{
+              insetInlineStart: `${offsetX + mount.cards.left}px`,
+              insetBlockStart: `${offsetY + mount.cards.top}px`,
+              inlineSize: `${mount.cards.width}px`,
+              gridTemplateColumns: `repeat(${cardCount}, ${mount.cardWidth}px)`,
+              gap: `${mount.cards.gap}px`,
+            }}
+          >
+            {children}
+          </div>
         ) : null}
       </div>
     );
@@ -588,14 +576,23 @@ function ShopPanel({
     ? shop.victoryGoldTenths
     : battleVictoryGoldTenths(run.war.battles[shop.afterBattleIndex].level);
   const pestiferousLosses = run.pestiferousLosses.filter((loss) => loss.battleIndex === shop.afterBattleIndex);
+  // Painted on the workspace element so it reaches the shell padding; an inner
+  // layer stops at the scroller and leaves the old backdrop showing.
+  const shopScene = useMemo(() => {
+    const installed = installedRunShopWrap();
+    return installed?.kind === 'screen' ? installed : null;
+  }, []);
   return (
     <>
       {view === 'sell' ? sellWorkspace : (
         <RunWorkspace
-          className="run-shop-workspace"
+          className={`run-shop-workspace${shopScene ? ' has-scene' : ''}`}
           contentClassName="run-shop-workspace-content"
           data-testid="run-shop-workspace"
           aria-labelledby="run-shop-workspace-title"
+          backgroundArtwork={shopScene ? (
+            <img className="run-shop-scene-artwork" src={shopScene.src} alt="" draggable={false} />
+          ) : null}
         >
         <h2 id="run-shop-workspace-title">{!opening && run.war.battles[shop.afterBattleIndex]?.loot ? 'Loot Shop' : 'Shop'}</h2>
         <div className="run-shop-rules">
