@@ -45,6 +45,19 @@ describe('scene manifests', () => {
     ]);
   });
 
+  it('identifies every Continue-presenting address as one committed scene', () => {
+    // PlayMenu canonicalizes these addresses in place (ADR-0260); one shared id keeps
+    // that canonicalization a retarget, never a second exit of the outgoing scene.
+    const continueId = sceneManifest('/play/select/continue').id;
+    expect(sceneManifest('/play/select').id).toBe(continueId);
+    expect(sceneManifest('/play/select/continue/skirmish').id).toBe(continueId);
+    expect(sceneManifest('/play/select/unknown').id).toBe(continueId);
+    // Distinct selector scenes keep distinct identities so tab travel still transitions.
+    expect(sceneManifest('/play/select/skirmish').id).not.toBe(continueId);
+    expect(sceneManifest('/play/select/run').id).not.toBe(sceneManifest('/play/select/run/current').id);
+    expect(sceneManifest('/play/select/campaign/a').id).not.toBe(sceneManifest('/play/select/campaign/b').id);
+  });
+
   it('derives retained regions from authored ancestry', () => {
     expect(deepestSharedSceneRegion(
       sceneManifest('/play/select/skirmish'),

@@ -1,6 +1,6 @@
 import { enchiridionSectionFromPath, enchiridionSectionPath } from '../enchiridionRoute';
 import { normalizeRoutePath } from '../navigation';
-import { isPlaySelectorPath, playHubSelection } from '../playHubRoute';
+import { isPlaySelectorPath, playHubSectionPath, playHubSelection } from '../playHubRoute';
 import type { RunDocument, RunPhase } from '../../run/model';
 
 export type SceneBackground = 'homepage' | 'battlefield' | 'tool';
@@ -222,8 +222,13 @@ function leafSceneManifest(
       'visible-relics',
     ], [], 'gameplay-shell', 'transition-only');
   }
+  // The manifest id is the RESOLVED SECTION address, not the raw path (the
+  // enchiridion precedent below): the hub root, the agnostic Continue address, its
+  // choices, and malformed selector paths all present one committed Continue scene,
+  // so PlayMenu's ADR-0260 address canonicalization retargets the in-flight
+  // preparation in place — never a second exit of the scene the player just left.
   if (isPlaySelectorPath(path)) {
-    return manifest(`play-selector:${path}`, 'homepage', 'play-selector', [
+    return manifest(`play-selector:${playHubSectionPath(path)}`, 'homepage', 'play-selector', [
       'homepage-background',
       'title-bar',
       'selector-chrome',

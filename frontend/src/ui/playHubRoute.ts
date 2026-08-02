@@ -32,6 +32,30 @@ export function isPlaySelectorPath(pathname: string): boolean {
   return path === PLAY_SELECTOR_ROOT || path.startsWith(`${PLAY_SELECTOR_ROOT}/`);
 }
 
+/**
+ * The resolved SECTION address behind a selector path. The bare hub root, the
+ * agnostic Continue address, every Continue choice, and malformed selector paths
+ * all present the one committed Continue scene — choice selection is address-only
+ * detail state, and PlayMenu canonicalizes those addresses without changing what
+ * is on screen (ADR-0260). Scene identity must therefore resolve them to one
+ * section so an in-flight canonicalization retargets in place instead of reading
+ * as a navigation to a different scene.
+ */
+export function playHubSectionPath(pathname: string): string {
+  const selection = playHubSelection(pathname);
+  if (!selection || selection.mode === 'hub' || selection.mode === 'continue') {
+    return PLAY_CONTINUE_SELECTOR_HREF;
+  }
+  if (selection.mode === 'skirmish') return PLAY_SKIRMISH_SELECTOR_HREF;
+  if (selection.mode === 'levels') return PLAY_LEVELS_SELECTOR_HREF;
+  if (selection.mode === 'run') {
+    if (selection.choice === 'current') return PLAY_RUN_CURRENT_SELECTOR_HREF;
+    if (selection.choice === 'new') return PLAY_RUN_NEW_SELECTOR_HREF;
+    return PLAY_RUN_SELECTOR_HREF;
+  }
+  return playCampaignSelectorHref(selection.campaignId);
+}
+
 export function playHubSelection(pathname: string): PlayHubSelection | null {
   const path = normalizeRoutePath(pathname);
   // The installed bare root is a compatibility entry address. Once resume
