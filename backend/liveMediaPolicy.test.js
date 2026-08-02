@@ -13,6 +13,11 @@ const {
   SFX_SAMPLE_COMPONENT,
   SFX_SAMPLE_PROOF_RENDERER,
   SFX_SAMPLE_PROOF_SCHEMA,
+  STRATEGIKON_BACKGROUND_COMPONENT,
+  STRATEGIKON_BACKGROUND_PROOF_RENDERER,
+  STRATEGIKON_BACKGROUND_PROOF_SCHEMA,
+  STRATEGIKON_BACKGROUND_SHA256,
+  STRATEGIKON_BACKGROUND_SLOT,
   liveCatalogReadinessIssue,
   gameConditionIconMediaIssue,
   gameConditionIconSlot,
@@ -29,6 +34,9 @@ const {
   sfxSampleMediaIssue,
   sfxSampleOwnerProofIssue,
   sfxSampleSlot,
+  strategikonBackgroundMediaIssue,
+  strategikonBackgroundOwnerProofIssue,
+  strategikonBackgroundSlot,
 } = require('./liveMediaPolicy');
 
 const originalSha = 'a'.repeat(64);
@@ -246,6 +254,87 @@ test('condition icon projection keeps Plagued ability and Pestiferous property a
     ...pestiferous.metadata.runtime,
     component: 'unit-ability-icon',
   }), /card-property-icon/);
+});
+
+function strategikonBackground(overrides = {}) {
+  return {
+    id: '22222222-2222-4222-8222-222222222222',
+    slot: STRATEGIKON_BACKGROUND_SLOT,
+    domain: 'ui-kit',
+    role: 'background',
+    media_type: 'image/png',
+    blob_sha256: STRATEGIKON_BACKGROUND_SHA256,
+    width: 688,
+    height: 384,
+    metadata: {
+      runtime: {
+        component: STRATEGIKON_BACKGROUND_COMPONENT,
+        variant: 'command-archive',
+        state: 'owner-approved-cover-scaling-exception',
+        frameWidth: 688,
+        frameHeight: 384,
+        frameCount: 1,
+        nativeRole: STRATEGIKON_BACKGROUND_COMPONENT,
+        altText: '',
+      },
+    },
+    ...overrides,
+  };
+}
+
+function strategikonBackgroundProof(row = strategikonBackground()) {
+  const surfaceUrl = 'http://sg-bg.chess-tactics.localhost/play/strategikon/enchiridion/units?campaignId=off-c-crown-valoria&levelId=off-l-hold-bridge&strategikonBackgroundReview=1';
+  return {
+    schema: STRATEGIKON_BACKGROUND_PROOF_SCHEMA,
+    renderer: STRATEGIKON_BACKGROUND_PROOF_RENDERER,
+    decision: 'ADR-0336',
+    surfaceUrl,
+    coverScalingApproved: true,
+    objectFit: 'cover',
+    imageRendering: 'pixelated',
+    opacity: 0.68,
+    sourceRaster: { width: 688, height: 384, sha256: row.blob_sha256 },
+    reviewViewport: { width: 1440, height: 900 },
+    selectedCandidates: [{
+      slot: row.slot,
+      versionId: row.id,
+      sha256: row.blob_sha256,
+      rowRevision: 1,
+    }],
+    slotSnapshots: [{ slot: row.slot, rowRevision: 0, activeVersionId: null }],
+  };
+}
+
+test('Strategikon background projection is closed to the exact ADR-0336 pixels and presentation', () => {
+  const row = strategikonBackground();
+  assert.equal(strategikonBackgroundSlot(row.slot), true);
+  assert.equal(strategikonBackgroundMediaIssue(row), null);
+  assert.match(strategikonBackgroundMediaIssue(strategikonBackground({
+    blob_sha256: replacementSha,
+  })), /exact owner-approved/);
+  assert.match(strategikonBackgroundMediaIssue(strategikonBackground({ role: 'media' })), /background role/);
+  assert.match(strategikonBackgroundMediaIssue(strategikonBackground({ width: 689 })), /688x384/);
+  assert.match(strategikonBackgroundMediaIssue(strategikonBackground({
+    metadata: { runtime: { ...row.metadata.runtime, state: 'native' } },
+  })), /cover-scaling exception/);
+});
+
+test('Strategikon background proof pins the exact approved route, viewport, candidate, and cover treatment', () => {
+  const row = strategikonBackground();
+  const proof = strategikonBackgroundProof(row);
+  assert.equal(strategikonBackgroundOwnerProofIssue(row, proof, proof.surfaceUrl), null);
+  assert.match(strategikonBackgroundOwnerProofIssue(row, {
+    ...proof,
+    coverScalingApproved: false,
+  }, proof.surfaceUrl), /cover presentation/);
+  assert.match(strategikonBackgroundOwnerProofIssue(row, {
+    ...proof,
+    reviewViewport: { width: 1280, height: 720 },
+  }, proof.surfaceUrl), /1440x900/);
+  assert.match(strategikonBackgroundOwnerProofIssue(row, {
+    ...proof,
+    selectedCandidates: [{ ...proof.selectedCandidates[0], sha256: replacementSha }],
+  }, proof.surfaceUrl), /candidate bytes/);
 });
 
 function sfxSample(overrides = {}) {

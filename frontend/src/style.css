@@ -7234,6 +7234,13 @@ body.loading-bootstrap .app-startup-status {
 .shell-workspace-fill {
   inset: 0;
 }
+.shell-workspace-background-artwork {
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+  z-index: 0;
+}
 .shell-workspace-content {
   box-sizing: border-box;
   display: flex;
@@ -20072,6 +20079,15 @@ button.tileset-relationship-cell {
 .strategikon-workspace {
   --shell-workspace-body-inset-block: var(--main-menu-content-inset-block);
   --shell-workspace-body-inset-start: var(--main-menu-content-inset-inline);
+}
+
+.strategikon-background-artwork {
+  block-size: 100%;
+  display: block;
+  inline-size: 100%;
+  image-rendering: pixelated;
+  object-fit: cover;
+  opacity: .68;
 }
 
 .strategikon-slot {
