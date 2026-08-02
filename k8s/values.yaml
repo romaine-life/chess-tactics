@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:e05a68ce65537bd9bb5f3cae63201d357e7c1ad61f7edaabf8883a3c35ca6115"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:e75e36fd095e250d5bcae520711e2321da3489ab9c334f31c0a80970713c46ab"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Fix Enchiridion unit abilities"
-  prNumber: "600"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/600"
-  commit: "83d5ec18"
+  prTitle: "Seat the card cost coin in each frame's drawn socket"
+  prNumber: "602"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/602"
+  commit: "2f533174"
 
 name: chess-tactics
 namespace: chess-tactics
