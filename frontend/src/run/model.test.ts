@@ -27,6 +27,7 @@ import {
   grantGold,
   leaveShop,
   normalizeRunDocument,
+  OPENING_SHOP_ROLL_BATTLE_INDEX,
   openingShopOffers,
   openShop,
   prepareDeployment,
@@ -115,7 +116,7 @@ describe('Run piece economy', () => {
     expect(new Set(run.shop?.cardOffers.map((offer) => offer.offerId)).size).toBe(RUN_OPENING_OFFER_COUNT);
     expect(new Set(run.shop?.cardOffers.map((offer) => offer.value)).size).toBe(RUN_OPENING_OFFER_COUNT);
     expect(run.shop?.cardOffers.every((offer) => offer.value >= 1 && offer.value <= 8)).toBe(true);
-    expect(run.shop?.cardOffers.every((offer) => offer.cost <= RUN_STARTING_GOLD)).toBe(true);
+    expect(run.shop?.cardOffers.some((offer) => offer.cost <= RUN_STARTING_GOLD)).toBe(true);
     expect(openingShopOffers(91)).toEqual(run.shop?.cardOffers);
     expect(createRun(war(), 91).shop?.cardOffers).toEqual(run.shop?.cardOffers);
     expect(canLeaveShop(run)).toBe(false);
@@ -161,12 +162,13 @@ describe('Run piece economy', () => {
     ]);
     expect(offers[1].effectTargetIndex).not.toBeNull();
 
-    let qualified = 0;
-    for (let seed = 1; seed <= 3_000; seed += 1) {
-      for (const offer of openingShopOffers(seed)) {
-        // Every opening offer stays buyable with the starting gold, so the opening can
-        // always satisfy its required purchase.
-        expect(offer.cost).toBeLessThanOrEqual(RUN_STARTING_GOLD);
+    const qualifiedByValue = new Map<number, number>();
+    let outOfReach = 0;
+    for (let seed = 1; seed <= 5_000; seed += 1) {
+      const opening = openingShopOffers(seed);
+      // ADR-0323 requires an opening purchase, so at least one offer always stays buyable.
+      expect(opening.some((offer) => offer.cost <= RUN_STARTING_GOLD)).toBe(true);
+      for (const offer of opening) {
         expect(offer.cost).toBe(
           offer.cardType === 'tactical'
             ? offer.value + DISCIPLINE_COST
@@ -174,12 +176,48 @@ describe('Run piece economy', () => {
               ? offer.value + POSITIONED_COST
               : offer.value,
         );
-        // A qualifier the budget cannot carry is dropped rather than repriced.
-        if (offer.cardType === null) expect(offer.value).toBeLessThanOrEqual(RUN_STARTING_GOLD);
-        if (offer.cardType !== null) qualified += 1;
+        if (offer.cost > RUN_STARTING_GOLD) outOfReach += 1;
+        if (offer.cardType !== null) {
+          qualifiedByValue.set(offer.value, (qualifiedByValue.get(offer.value) ?? 0) + 1);
+        }
       }
     }
-    expect(qualified).toBeGreaterThan(0);
+    // No core value is excluded from qualifying: a Tactical card at value 6 or above
+    // costs more than the opening budget and is offered anyway.
+    expect([...qualifiedByValue.keys()].sort((left, right) => left - right))
+      .toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(outOfReach).toBeGreaterThan(0);
+  });
+
+  it('drops the qualifier on the cheapest opening offer only when the deal has nothing affordable', () => {
+    // Values 6, 7 and 8 all rolling a surcharge is the one deal the starting gold cannot
+    // buy; that opening repairs its cheapest card rather than blocking Continue.
+    const rolledOpening = (seed: number) => openingShopOffers(seed).map((offer, slotIndex) => ({
+      emitted: offer,
+      rolled: createRunCardOffer(
+        { seed, ataraxiaTier: 0 },
+        RUN_CARD_DECK.find((card) => card.id === offer.id)!,
+        OPENING_SHOP_ROLL_BATTLE_INDEX,
+        slotIndex,
+      ),
+    }));
+    const degenerate = Array.from({ length: 40_000 }, (_, index) => index + 1).find((seed) => (
+      rolledOpening(seed).some((slot) => slot.emitted.cardType !== slot.rolled.cardType)
+    ));
+    expect(degenerate).toBeDefined();
+
+    const slots = rolledOpening(degenerate!);
+    const repaired = slots.filter((slot) => slot.emitted.cardType !== slot.rolled.cardType);
+    expect(repaired).toHaveLength(1);
+    expect(repaired[0].rolled.cardType).not.toBeNull();
+    expect(repaired[0].emitted.cardType).toBeNull();
+    expect(repaired[0].emitted.cost).toBe(repaired[0].emitted.value);
+    expect(repaired[0].emitted.cost).toBe(
+      Math.min(...slots.map((slot) => slot.emitted.cost)),
+    );
+    // It is the only affordable card, and it was repaired because nothing else was.
+    expect(slots.filter((slot) => slot.emitted.cost <= RUN_STARTING_GOLD)).toHaveLength(1);
+    expect(slots.every((slot) => slot.rolled.cost > RUN_STARTING_GOLD)).toBe(true);
   });
 
   it('keeps opening Pestiferous draws to Ataraxia I', () => {

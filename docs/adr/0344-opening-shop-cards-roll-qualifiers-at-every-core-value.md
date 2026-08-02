@@ -12,7 +12,7 @@ extends:
   - 0329-concinnous-and-tactical-use-distinct-frames-and-one-shared-coin.md
 ---
 
-# ADR-0344: Opening Shop cards roll qualifiers inside the starting budget
+# ADR-0344: Opening Shop cards roll qualifiers at every core value
 
 ## Context
 
@@ -24,11 +24,13 @@ the only draws in the game that could never be Tactical, Concinnous or
 Pestiferous. The owner requires the opening to draw like every other Shop.
 
 The opening is also the one Shop with a fixed budget and a required purchase:
-ADR-0322 trimmed the opening value pool to 1–8 gold precisely so every offered
-card is buyable with the starting eight gold, and ADR-0323 disables Continue
-until a card is bought. A three-gold Discipline surcharge applied blindly could
-therefore produce an opening whose every offer is unaffordable, which is a
-soft-locked Run rather than a hard choice.
+ADR-0322 trimmed the opening value pool to 1–8 gold so every offered card was
+buyable with the starting eight gold, and ADR-0323 disables Continue until a card
+is bought. A qualifier's surcharge can push an opening card past that budget.
+Suppressing the qualifier whenever it does would exclude the top of the value
+pool from ever qualifying, which is the same defect as a standard-only opening;
+the owner rejected it. An opening card the Run cannot yet afford is a real
+choice. An opening in which *nothing* is affordable is not a choice at all.
 
 ## Decision
 
@@ -42,17 +44,22 @@ soft-locked Run rather than a hard choice.
   than `0`, because the Shop after Battle 1 is also `battleIndex` 0; without a
   separate space a core identity offered in both places would mirror its own
   qualifier.
-- **A qualifier the starting budget cannot carry is dropped.** If the qualified
-  price would exceed `RUN_STARTING_GOLD`, the offer keeps its core identity and
-  is offered standard at its core value. The qualifier is dropped, never
-  repriced, and never cascades to a cheaper qualifier. Pestiferous discounts, so
-  it is never dropped. Every opening offer therefore stays buyable and the
-  required opening purchase is always reachable.
+- **Every core value can qualify, including out of reach.** A qualifier is never
+  suppressed for its price. A Tactical card at core value 6, 7 or 8 costs 9, 10
+  or 11 gold and is offered anyway, unbuyable with the starting eight, exactly as
+  a later Shop offers cards the Run cannot yet afford.
+- **One repair, for the deal with nothing affordable.** If no opening offer is
+  buyable with the starting gold, the cheapest offer — and only that one — drops
+  its qualifier and is offered standard at its core value. This is the sole
+  suppression in the opening and it fires on roughly one seeded opening in nine
+  thousand. It keeps ADR-0323's required purchase reachable without touching any
+  deal that already has something to buy.
 - **The server validates the opening as a Shop, not as a fixed list.** The
   opening contract keeps its pins on phase, indices, offer count, distinct
   values, empty Loot/paid-relic state and starting army, but its offers are now
   checked by the same shared qualifier and affected-pricing rules as every other
-  Shop, plus the requirement that every opening offer cost at most eight gold.
+  Shop, plus the requirement that at least one opening offer cost at most eight
+  gold.
 - **No active-Run format bump.** The document shape is unchanged and only the set
   of legal values widens, while a bump would make every in-progress Shop document
   unsupported.
@@ -64,13 +71,15 @@ soft-locked Run rather than a hard choice.
 - Good: the Run's first decision now carries the same texture as every later
   Shop, and an opening Tactical or Concinnous card can shape the army from
   Battle 1.
+- Good: the rate is flat across the whole value pool. Measured over 200,000
+  seeded openings at No Ataraxia, 12.5% of offers are Tactical and 10.9%
+  Concinnous — the later-Shop rates — and 23.2–23.8% of offers qualify at every
+  core value from 1 to 8.
 - Good: no seed can produce an opening that cannot satisfy its own required
   purchase.
-- Cost: the qualifier rate is not flat across the opening value pool. Tactical
-  cannot appear at core values 6–8 and Concinnous cannot appear at 7–8, so
-  measured over 20,000 seeded openings at No Ataraxia 7.8% of offers are Tactical
-  and 8.0% Concinnous — below the 12.5% and 10.9% seen in later Shops — and about
-  41% of openings contain at least one qualified card.
+- Cost: about 7.5% of opening offers now cost more than the starting gold and
+  cannot be bought at all. The opening can present a card the player can only
+  look at.
 - Cost: opening offers are no longer derivable as "cost equals value", so a
   reader of a stored Run must consult `cardType` to explain an opening price.
 

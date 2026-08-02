@@ -902,7 +902,7 @@ export function RunCardPrototypeViewer({
                 <div><dt>Opening budget</dt><dd>{RUN_STARTING_GOLD} gold · buy any affordable cards</dd></div>
                 <div><dt>Opening party</dt><dd>King + 2 Pawns + purchased cards</dd></div>
                 <div><dt>Opening sample</dt><dd>{openingSample.map((offer) => `${runCardName(offer)} (${offer.cost}${offer.cardType ? ` · ${offer.cardType}` : ''})`).join(' · ')}</dd></div>
-                <div><dt>Opening qualifiers</dt><dd>rolled as usual; one priced over {RUN_STARTING_GOLD} gold is dropped</dd></div>
+                <div><dt>Opening qualifiers</dt><dd>rolled as usual at every value; a card priced over {RUN_STARTING_GOLD} gold is offered out of reach</dd></div>
                 <div><dt>Tactical sample</dt><dd>{realizedTacticalCount} / {RUN_CARD_SAMPLE_DRAWS} draws · seed 4217</dd></div>
                 <div><dt>Concinnous sample</dt><dd>{realizedConcinnousCount} / {RUN_CARD_SAMPLE_DRAWS} non-Tactical draws · seed 4217 · all card values eligible</dd></div>
               </dl>

@@ -18510,9 +18510,11 @@ function validateActiveRunBody(run) {
           || run.shop.cardOffers.length !== 3
           || offerValues.size !== 3
           // Opening offers carry the same qualifiers as any other draw and are priced by the
-          // shared affected-pricing rule checked above, but every one of them must stay buyable
-          // with the starting eight gold.
-          || run.shop.cardOffers.some((offer) => offer.value > 8 || offer.cost > 8)
+          // shared affected-pricing rule checked above, so a qualifier may price one past the
+          // starting gold. At least one of them must stay buyable with that gold, because the
+          // opening cannot be left without a purchase.
+          || run.shop.cardOffers.some((offer) => offer.value > 8)
+          || !run.shop.cardOffers.some((offer) => offer.cost <= 8)
           || !Array.isArray(run.shop.lootRelicOffers)
           || run.shop.lootRelicOffers.length !== 0
           || run.shop.chosenLootRelicId !== null

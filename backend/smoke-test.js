@@ -4026,9 +4026,10 @@ async function main() {
   const activeRunOffers = [
     { id: 'p', offerId: 'opening-0-p', pieces: ['pawn'], value: 1, cost: 1, cardType: null, effectSeed: 1704, plaguedPieceIndex: null, effectTargetIndex: null },
     { id: 'k', offerId: 'opening-1-k', pieces: ['knight'], value: 3, cost: 3, cardType: null, effectSeed: 1705, plaguedPieceIndex: null, effectTargetIndex: null },
-    // Opening offers roll qualifiers like any other draw; this one is Concinnous at the
-    // shared Positioned price, still inside the eight-gold opening budget.
-    { id: 'r', offerId: 'opening-2-r', pieces: ['rook'], value: 5, cost: 7, cardType: 'concinnous', effectSeed: 1706, plaguedPieceIndex: null, effectTargetIndex: 0 },
+    // Opening offers roll qualifiers like any other draw, at the shared affected price and
+    // at any core value — this Concinnous card costs more than the whole opening budget,
+    // which is legal as long as the deal keeps something affordable.
+    { id: 'rpp', offerId: 'opening-2-rpp', pieces: ['rook', 'pawn', 'pawn'], value: 7, cost: 9, cardType: 'concinnous', effectSeed: 1706, plaguedPieceIndex: null, effectTargetIndex: 0 },
   ];
   const activeRunDocument = {
     formatVersion: 11,
@@ -4153,7 +4154,7 @@ async function main() {
   if (unaffordableOpeningRun.statusCode !== 400 || JSON.parse(unaffordableOpeningRun.body).error !== 'invalid_active_run') {
     throw new Error(`Opening offers must carry the shared affected price: ${unaffordableOpeningRun.statusCode} ${unaffordableOpeningRun.body}`);
   }
-  const overBudgetOpeningRun = await request(
+  const unbuyableOpeningRun = await request(
     'PUT', '/api/active-run',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({
@@ -4161,22 +4162,20 @@ async function main() {
         ...activeRunDocument,
         shop: {
           ...activeRunDocument.shop,
+          // A qualifier may price a single opening card past the starting gold, but a deal
+          // in which every card is out of reach cannot satisfy the required purchase.
           cardOffers: [
-            activeRunOffers[0],
-            activeRunOffers[1],
-            {
-              ...activeRunOffers[2],
-              id: 'rn', pieces: ['rook', 'knight'], value: 8,
-              cardType: 'tactical', cost: 11, effectTargetIndex: null,
-            },
+            { ...activeRunOffers[0], id: 'rp', pieces: ['rook', 'pawn'], value: 6, cost: 9, cardType: 'tactical', effectTargetIndex: null },
+            { ...activeRunOffers[1], id: 'rpp', pieces: ['rook', 'pawn', 'pawn'], value: 7, cost: 10, cardType: 'tactical', effectTargetIndex: null },
+            { ...activeRunOffers[2], id: 'rn', pieces: ['rook', 'knight'], value: 8, cost: 11, cardType: 'tactical', effectTargetIndex: null },
           ],
         },
       },
       revision: 0,
     }),
   );
-  if (overBudgetOpeningRun.statusCode !== 400 || JSON.parse(overBudgetOpeningRun.body).error !== 'invalid_active_run') {
-    throw new Error(`Opening offers must stay inside the eight-gold budget: ${overBudgetOpeningRun.statusCode} ${overBudgetOpeningRun.body}`);
+  if (unbuyableOpeningRun.statusCode !== 400 || JSON.parse(unbuyableOpeningRun.body).error !== 'invalid_active_run') {
+    throw new Error(`Opening Shops must keep one affordable offer: ${unbuyableOpeningRun.statusCode} ${unbuyableOpeningRun.body}`);
   }
   const retiredShopFieldRun = await request(
     'PUT', '/api/active-run',

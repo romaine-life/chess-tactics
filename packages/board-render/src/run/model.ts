@@ -440,21 +440,21 @@ const OPENING_SHOP_VALUES: readonly number[] = Object.freeze(
 /** Opening draws roll in their own index space so a core identity offered in the
  * opening and again in the Shop after Battle 1 — which is also `battleIndex` 0 —
  * rolls its qualifier independently. */
-const OPENING_SHOP_ROLL_BATTLE_INDEX = -1;
+export const OPENING_SHOP_ROLL_BATTLE_INDEX = -1;
 
 /** Deal three distinct uniformly sampled values, then one seeded core card at
  * each value. Sampling values first prevents dense high-value ranks in the
  * 49-card deck from crowding low-value openings out of the Run.
  *
- * Opening draws roll qualifiers exactly like every later Shop draw, except that a
- * qualifier priced above the starting budget is dropped and the card stays
- * standard: ADR-0322 trimmed the opening value pool so every offered card is
- * buyable with the starting gold, and a surcharge must not reintroduce an offer
- * the opening cannot buy. Pestiferous discounts, so it is never dropped. */
+ * Opening draws roll qualifiers exactly like every later Shop draw, at every core
+ * value: a Tactical surcharge may price an opening card past the starting gold and
+ * out of reach. The one repair is the degenerate deal — ADR-0323 requires a
+ * purchase before Continue, so if no offer is affordable the cheapest one drops its
+ * qualifier and is offered standard, which no other opening card ever does. */
 export function openingShopOffers(seed: number, ataraxiaTier: AtaraxiaTier = 0): RunCardOffer[] {
   const values = shuffled(OPENING_SHOP_VALUES, mixSeed(seed, 'opening-shop-values'))
     .slice(0, RUN_OPENING_OFFER_COUNT);
-  return values.map((value, slotIndex) => {
+  const offers = values.map((value, slotIndex) => {
     const candidates = RUN_CARD_DECK.filter((card) => card.value === value);
     const card = shuffled(
       candidates,
@@ -467,17 +467,16 @@ export function openingShopOffers(seed: number, ataraxiaTier: AtaraxiaTier = 0):
       OPENING_SHOP_ROLL_BATTLE_INDEX,
       slotIndex,
     );
-    const affordable = rolled.cost <= RUN_STARTING_GOLD
-      ? rolled
-      : {
-          ...rolled,
-          cost: card.value,
-          cardType: null,
-          plaguedPieceIndex: null,
-          effectTargetIndex: null,
-        };
-    return { ...affordable, offerId: `opening-${slotIndex}-${card.id}` };
+    return { ...rolled, offerId: `opening-${slotIndex}-${card.id}` };
   });
+  if (offers.some((offer) => offer.cost <= RUN_STARTING_GOLD)) return offers;
+  const cheapest = offers.reduce(
+    (best, offer) => (offer.cost < best.cost ? offer : best),
+    offers[0],
+  );
+  return offers.map((offer) => (offer === cheapest
+    ? { ...offer, cost: offer.value, cardType: null, plaguedPieceIndex: null, effectTargetIndex: null }
+    : offer));
 }
 
 function freshRunId(): string {
