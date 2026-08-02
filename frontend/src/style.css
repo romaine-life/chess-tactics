@@ -8595,7 +8595,6 @@ body.loading-bootstrap .app-startup-status {
 
 /* editor rail icons */
 .le-ico { background-position: center; background-repeat: no-repeat; background-size: contain; display: inline-block; flex: none; height: 18px; image-rendering: pixelated; width: 18px; }
-.ic-brush { background-image: var(--media-ui-kit-icons-pencil-png); }
 .ic-eraser { background-image: var(--media-ui-kit-icons-delete-png); }
 .ic-move { background-image: var(--media-ui-kit-icons-game-move-png); }
 .ic-eyedropper { background-image: var(--media-ui-kit-icons-wrench-png); }
@@ -19105,10 +19104,101 @@ button.tileset-relationship-cell {
   color: var(--skirmish-muted);
 }
 
+.brush-icon-review-section {
+  display: grid;
+  gap: var(--ds-inline-tight);
+}
+
+.brush-icon-review-section > h2 {
+  margin: 0;
+}
+
+.brush-icon-review-toolbar-comparison {
+  align-items: start;
+  display: grid;
+  gap: var(--ds-inline-tight);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.brush-icon-review-toolbar-card {
+  min-block-size: 88px;
+}
+
+.brush-icon-review-choice-grid {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.brush-icon-review-choice {
+  align-items: center;
+  display: grid;
+  gap: var(--ds-inline-tight);
+  grid-template-columns: var(--le-inner-square) minmax(0, 1fr);
+  min-block-size: 72px;
+  padding: var(--ds-inset);
+}
+
+.brush-icon-review-choice > span {
+  display: grid;
+  gap: var(--ds-space-1);
+  min-inline-size: 0;
+}
+
+.brush-icon-review-choice small {
+  color: var(--skirmish-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brush-icon-review-glyph {
+  image-rendering: pixelated;
+}
+
+.brush-icon-review-production-actions {
+  align-items: center;
+  display: grid;
+  gap: var(--ds-inline);
+  grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
+}
+
+.brush-icon-review-production-actions figure {
+  align-items: center;
+  display: grid;
+  gap: var(--ds-inline-tight);
+  grid-template-columns: 144px minmax(0, 1fr);
+  margin: 0;
+}
+
+.brush-icon-review-production-actions img {
+  block-size: 144px;
+  image-rendering: pixelated;
+  inline-size: 144px;
+}
+
+.brush-icon-review-production-actions figcaption {
+  display: grid;
+  gap: var(--ds-space-1);
+}
+
+.brush-icon-review-production-actions small {
+  color: var(--skirmish-muted);
+}
+
 @media (max-width: 900px) {
   .run-relic-review-grid,
-  .plagued-icon-review-ability-grid {
+  .plagued-icon-review-ability-grid,
+  .brush-icon-review-choice-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .brush-icon-review-toolbar-comparison {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .brush-icon-review-production-actions {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

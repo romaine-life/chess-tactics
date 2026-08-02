@@ -1127,7 +1127,7 @@ for (const selector of ['.skirmish-hud-tab', '.skirmish-hud .app-header-button']
 }
 
 const focusedStart = css.indexOf('.skirmish-hud {');
-const focusedEnd = css.indexOf('.ic-brush {', focusedStart);
+const focusedEnd = css.indexOf('.ic-eraser {', focusedStart);
 const focused = focusedStart >= 0 && focusedEnd > focusedStart ? css.slice(focusedStart, focusedEnd) : '';
 if (!focused) {
   failures.push('missing focused skirmish/editor control-panel CSS range for chrome guard');
