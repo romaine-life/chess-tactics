@@ -42,6 +42,10 @@ the reviewed study tunings are the single accepted ladder.**
   rows plus rules, properties, and flavor lines against the card's actual
   frame-geometry Contents Box — says the stack would not fit. Clipped flavor
   is never accepted; the densest step is the floor.
+- After the step is fixed, the flavor text is dynamic too: it grows in small
+  increments into whatever estimated box room remains, capped at 1.3× its
+  base scale. Units always win the step first — flavor growth never
+  influences step selection and never grows past the clip check.
 - Density resolves per crossfade layer from that layer's own card, so an
   outgoing face keeps its own step while the incoming card loads.
 - An explicit `contentsTuning` remains a Studio-only experiment override and

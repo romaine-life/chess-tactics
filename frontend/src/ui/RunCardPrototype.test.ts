@@ -115,14 +115,15 @@ describe('Run Card Layout review variant', () => {
     expect(runCardPrototypeCostFromSearch('')).toBeNull();
   });
 
+  const cardWithGrants = (grants: RunCardFaceContent['grants']): RunCardFaceContent => ({
+    name: 'Specimen',
+    cost: 3,
+    typeLine: 'Units',
+    grants,
+    flavor: 'The frost came in June. By August, the road had found him.',
+  });
+
   it('derives each live card face density step from its own cell load', () => {
-    const cardWithGrants = (grants: RunCardFaceContent['grants']): RunCardFaceContent => ({
-      name: 'Specimen',
-      cost: 3,
-      typeLine: 'Units',
-      grants,
-      flavor: 'The frost came in June. By August, the road had found him.',
-    });
     expect(runCardLedgerRows(1)).toBe(1);
     expect(runCardLedgerRows(2)).toBe(2);
     expect(runCardLedgerRows(4)).toBe(2);
@@ -145,6 +146,38 @@ describe('Run Card Layout review variant', () => {
       { count: 1, unit: 'rook' },
       { count: 1, unit: 'queen' },
     ])).density).toBe('scrunched');
+  });
+
+  it('grows flavor into leftover Contents room without changing the chosen step', () => {
+    const roomy = runCardContentsDensityStepForCard(cardWithGrants([{ count: 1, unit: 'pawn' }]));
+    expect(roomy.density).toBe('roomy');
+    expect(roomy.tuning.flavorScale).toBe(1.3);
+    // A full Filled box has no leftover room, so its step object stays the ladder's own.
+    const filled = runCardContentsDensityStepForCard(cardWithGrants([
+      { count: 1, unit: 'pawn' },
+      { count: 1, unit: 'knight' },
+    ]));
+    expect(filled.tuning).toBe(RUN_CARD_CONTENTS_DENSITY_LADDER[1].tuning);
+    expect(filled.tuning.flavorScale).toBe(1);
+    const packed = runCardContentsDensityStepForCard(cardWithGrants([
+      { count: 3, unit: 'pawn' },
+      { count: 1, unit: 'knight' },
+      { count: 1, unit: 'bishop' },
+    ]));
+    expect(packed.density).toBe('packed');
+    expect(packed.tuning.flavorScale).toBe(1.1);
+    const scrunched = runCardContentsDensityStepForCard(cardWithGrants([
+      { count: 3, unit: 'pawn' },
+      { count: 1, unit: 'knight' },
+      { count: 1, unit: 'bishop' },
+      { count: 1, unit: 'rook' },
+      { count: 1, unit: 'queen' },
+    ]));
+    expect(scrunched.density).toBe('scrunched');
+    expect(scrunched.tuning.flavorScale).toBe(1.01);
+    // Growth derives copies; the reviewed ladder itself is never rewritten.
+    expect(RUN_CARD_CONTENTS_DENSITY_LADDER[0].tuning.flavorScale).toBe(1);
+    expect(RUN_CARD_CONTENTS_DENSITY_LADDER[3].tuning.flavorScale).toBe(.96);
   });
 
   it('steps a sparse card denser only when extras would overflow its actual Contents Box', () => {

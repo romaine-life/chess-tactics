@@ -203,11 +203,41 @@ function estimatedContentsHeightCqw(
   return tuning.paddingBlockStart + ledger + rules + properties + flavor + tuning.paddingBlockEnd;
 }
 
+// Flavor may grow into verified leftover box room in these increments, but it
+// stays flavor: it never exceeds the cap and never influences the step choice.
+const FLAVOR_GROWTH_INCREMENT = .05;
+const FLAVOR_SCALE_CAP = 1.3;
+
+function grownFlavorScale(
+  card: RunCardFaceContent,
+  tuning: RunCardContentsTuning,
+  flavorSizeCqw: number,
+  lineWidthCqw: number,
+  boxHeightCqw: number,
+): number {
+  let grown = tuning.flavorScale;
+  for (let increment = 1; ; increment += 1) {
+    const candidate = Math.round((tuning.flavorScale + increment * FLAVOR_GROWTH_INCREMENT) * 100) / 100;
+    if (candidate > FLAVOR_SCALE_CAP) return grown;
+    const height = estimatedContentsHeightCqw(
+      card,
+      { ...tuning, flavorScale: candidate },
+      flavorSizeCqw,
+      lineWidthCqw,
+    );
+    // Estimated height is monotone in flavor size, so the first miss is final.
+    if (height > boxHeightCqw) return grown;
+    grown = candidate;
+  }
+}
+
 /**
  * ADR-0270: sparse cards use the room available. The card's cell/row load picks
  * its reviewed anchor step; the step only moves denser when this frame's actual
  * Contents Box could not hold the estimated stack (properties, rules, long
  * flavor), because clipped flavor is worse than a denser reviewed layout.
+ * After the step is fixed, the flavor text grows into any leftover box room —
+ * units always win the step first, and growth is capped and clip-checked.
  */
 export function runCardContentsDensityStepForCard(
   card: RunCardFaceContent,
@@ -220,11 +250,18 @@ export function runCardContentsDensityStepForCard(
   const contentsBox = frameGeometry.boxes.contents;
   const boxHeight = (contentsBox.height / frameGeometry.sourceWidth) * 100;
   const lineWidth = (contentsBox.width / frameGeometry.sourceWidth) * 100 - CONTENTS_INLINE_PADDING_CQW;
+  let selected = RUN_CARD_CONTENTS_DENSITY_LADDER[RUN_CARD_CONTENTS_DENSITY_LADDER.length - 1];
   for (let index = anchor; index < RUN_CARD_CONTENTS_DENSITY_LADDER.length - 1; index += 1) {
     const step = RUN_CARD_CONTENTS_DENSITY_LADDER[index];
-    if (estimatedContentsHeightCqw(card, step.tuning, flavorSizeCqw, lineWidth) <= boxHeight) return step;
+    if (estimatedContentsHeightCqw(card, step.tuning, flavorSizeCqw, lineWidth) <= boxHeight) {
+      selected = step;
+      break;
+    }
   }
-  return RUN_CARD_CONTENTS_DENSITY_LADDER[RUN_CARD_CONTENTS_DENSITY_LADDER.length - 1];
+  const flavorScale = grownFlavorScale(card, selected.tuning, flavorSizeCqw, lineWidth, boxHeight);
+  return flavorScale === selected.tuning.flavorScale
+    ? selected
+    : { density: selected.density, tuning: { ...selected.tuning, flavorScale } };
 }
 
 export const runCardUnitImageKind = (
