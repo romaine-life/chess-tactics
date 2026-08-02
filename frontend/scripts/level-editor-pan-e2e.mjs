@@ -9,9 +9,11 @@
 import { existsSync } from 'node:fs';
 import puppeteer from 'puppeteer-core';
 import {
+  assertObservationPatchConsumed,
+  installObservationSessionPatch,
   isLevelEditorUrl,
   isObservationSessionState,
-  observationOpenPostData,
+  watchEditSessionOpens,
 } from './shot-editor-session.mjs';
 
 const url = process.argv[2];
@@ -94,7 +96,10 @@ try {
     }
   });
 
-  await page.setRequestInterception(true);
+  // Watching requests needs no CDP interception, and deliberately does not use it: interception
+  // routes the page's whole module graph through this process and wedges Vite dev-server module
+  // requests indefinitely (see installObservationSessionPatch). This proof loads the editor board's
+  // lazily-imported modules, so it carried that hang risk for nothing.
   page.on('request', (request) => {
     const requestUrl = new URL(request.url());
     const isEditorDocument = /\/api\/editor-documents\/[^/]+/.test(requestUrl.pathname);
@@ -104,20 +109,9 @@ try {
     if (isEditorDocument && (isTakeover || isWorkingMutation)) {
       forbiddenRequests.push(`${request.method()} ${requestUrl.pathname}`);
     }
-    const postData = observationOpenPostData({
-      targetIsLevelEditor: true,
-      method: request.method(),
-      requestUrl: request.url(),
-      postData: request.postData(),
-    });
-    if (!postData) {
-      void request.continue();
-      return;
-    }
-    const headers = { ...request.headers() };
-    delete headers['content-length'];
-    void request.continue({ headers, postData });
   });
+  const editSessionOpens = watchEditSessionOpens(page);
+  await installObservationSessionPatch(page);
 
   await page.goto(url, { waitUntil: 'domcontentloaded' });
   try {
@@ -149,7 +143,7 @@ try {
 
   // The canonical observation-only session intentionally makes the authoring
   // field inert. Lift that browser-local input lock only for this navigation
-  // gesture; request interception below still fails the run on any content PUT
+  // gesture; the request watcher above still fails the run on any content PUT
   // or takeover, so the verification cannot become an authoring session.
   await page.evaluate(() => {
     const stage = document.querySelector('.tileset-view-stage[aria-label="Level editor board"]');
@@ -237,6 +231,9 @@ try {
   ) {
     throw new Error(`editor verification was not observation-only: ${JSON.stringify({ viewer, forbiddenRequests })}`);
   }
+  // The server's 'observing' state above proves the session it answered was rewritten. This proves
+  // no OTHER open slipped past the page-side patch and registered as an editing participant.
+  await assertObservationPatchConsumed(page, editSessionOpens);
 
   // Leave through the application so the observing session closes cleanly.
   await page.evaluate(() => {
