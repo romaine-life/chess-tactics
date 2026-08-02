@@ -437,10 +437,21 @@ const OPENING_SHOP_VALUES: readonly number[] = Object.freeze(
   Array.from({ length: RUN_STARTING_GOLD }, (_, index) => index + 1),
 );
 
+/** Opening draws roll in their own index space so a core identity offered in the
+ * opening and again in the Shop after Battle 1 — which is also `battleIndex` 0 —
+ * rolls its qualifier independently. */
+const OPENING_SHOP_ROLL_BATTLE_INDEX = -1;
+
 /** Deal three distinct uniformly sampled values, then one seeded core card at
  * each value. Sampling values first prevents dense high-value ranks in the
- * 49-card deck from crowding low-value openings out of the Run. */
-export function openingShopOffers(seed: number): RunCardOffer[] {
+ * 49-card deck from crowding low-value openings out of the Run.
+ *
+ * Opening draws roll qualifiers exactly like every later Shop draw, except that a
+ * qualifier priced above the starting budget is dropped and the card stays
+ * standard: ADR-0322 trimmed the opening value pool so every offered card is
+ * buyable with the starting gold, and a surcharge must not reintroduce an offer
+ * the opening cannot buy. Pestiferous discounts, so it is never dropped. */
+export function openingShopOffers(seed: number, ataraxiaTier: AtaraxiaTier = 0): RunCardOffer[] {
   const values = shuffled(OPENING_SHOP_VALUES, mixSeed(seed, 'opening-shop-values'))
     .slice(0, RUN_OPENING_OFFER_COUNT);
   return values.map((value, slotIndex) => {
@@ -450,16 +461,22 @@ export function openingShopOffers(seed: number): RunCardOffer[] {
       mixSeed(seed, `opening-shop-card:${value}`, slotIndex),
     )[0];
     if (!card) throw new Error(`Opening Shop has no core card worth ${value} gold.`);
-    return {
-      ...card,
-      pieces: [...card.pieces],
-      offerId: `opening-${slotIndex}-${card.id}`,
-      cost: card.value,
-      cardType: null,
-      effectSeed: mixSeed(seed, `opening-card:${card.id}`, slotIndex),
-      plaguedPieceIndex: null,
-      effectTargetIndex: null,
-    };
+    const rolled = createRunCardOffer(
+      { seed, ataraxiaTier },
+      card,
+      OPENING_SHOP_ROLL_BATTLE_INDEX,
+      slotIndex,
+    );
+    const affordable = rolled.cost <= RUN_STARTING_GOLD
+      ? rolled
+      : {
+          ...rolled,
+          cost: card.value,
+          cardType: null,
+          plaguedPieceIndex: null,
+          effectTargetIndex: null,
+        };
+    return { ...affordable, offerId: `opening-${slotIndex}-${card.id}` };
   });
 }
 
@@ -558,7 +575,7 @@ export function createRun(
       afterBattleIndex: 0,
       conflictIndex: 0,
       victoryGoldTenths: 0,
-      cardOffers: openingShopOffers(seed),
+      cardOffers: openingShopOffers(seed, ataraxiaTier),
       purchasedCardOfferIds: [],
       lootRelicOffers: [],
       chosenLootRelicId: null,

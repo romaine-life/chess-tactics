@@ -11,6 +11,7 @@ import {
   POSITIONED_COST,
   RUN_FORMAT_VERSION,
   RUN_OPENING_OFFER_COUNT,
+  RUN_STARTING_GOLD,
   RUN_STARTING_GOLD_TENTHS,
   TACTICAL_DISCIPLINE_OFFER_DENOMINATOR,
   acquireRelic,
@@ -114,7 +115,7 @@ describe('Run piece economy', () => {
     expect(new Set(run.shop?.cardOffers.map((offer) => offer.offerId)).size).toBe(RUN_OPENING_OFFER_COUNT);
     expect(new Set(run.shop?.cardOffers.map((offer) => offer.value)).size).toBe(RUN_OPENING_OFFER_COUNT);
     expect(run.shop?.cardOffers.every((offer) => offer.value >= 1 && offer.value <= 8)).toBe(true);
-    expect(run.shop?.cardOffers.every((offer) => offer.cost === offer.value)).toBe(true);
+    expect(run.shop?.cardOffers.every((offer) => offer.cost <= RUN_STARTING_GOLD)).toBe(true);
     expect(openingShopOffers(91)).toEqual(run.shop?.cardOffers);
     expect(createRun(war(), 91).shop?.cardOffers).toEqual(run.shop?.cardOffers);
     expect(canLeaveShop(run)).toBe(false);
@@ -130,8 +131,8 @@ describe('Run piece economy', () => {
     expect(bought.phase).toBe('shop');
     expect(bought.shop?.kind).toBe('opening');
     expect(bought.shop?.purchasedCardOfferIds).toEqual([offer.offerId]);
-    expect(bought.goldTenths).toBe(RUN_STARTING_GOLD_TENTHS - offer.value * GOLD_SCALE);
-    expect(card).toMatchObject({ coreId: offer.id, cardType: null, acquiredAfterBattleIndex: 0 });
+    expect(bought.goldTenths).toBe(RUN_STARTING_GOLD_TENTHS - offer.cost * GOLD_SCALE);
+    expect(card).toMatchObject({ coreId: offer.id, cardType: offer.cardType, acquiredAfterBattleIndex: 0 });
     expect(card.unitIds).toHaveLength(offer.pieces.length);
     expect(bought.army.filter((unit) => card.unitIds.includes(unit.id)).map((unit) => unit.type)).toEqual(offer.pieces);
     expect(bought.nextCardSequence).toBe(2);
@@ -148,6 +149,62 @@ describe('Run piece economy', () => {
     const continued = leaveShop(bought);
     expect(continued.phase).toBe('deployment');
     expect(continued.battleIndex).toBe(0);
+  });
+
+  it('rolls opening qualifiers like any other draw, dropping one the starting budget cannot buy', () => {
+    const offers = openingShopOffers(91);
+    expect(offers.map((offer) => offer.cardType)).toEqual(['tactical', 'concinnous', null]);
+    expect(offers.map((offer) => offer.cost)).toEqual([
+      offers[0].value + DISCIPLINE_COST,
+      offers[1].value + POSITIONED_COST,
+      offers[2].value,
+    ]);
+    expect(offers[1].effectTargetIndex).not.toBeNull();
+
+    let qualified = 0;
+    for (let seed = 1; seed <= 3_000; seed += 1) {
+      for (const offer of openingShopOffers(seed)) {
+        // Every opening offer stays buyable with the starting gold, so the opening can
+        // always satisfy its required purchase.
+        expect(offer.cost).toBeLessThanOrEqual(RUN_STARTING_GOLD);
+        expect(offer.cost).toBe(
+          offer.cardType === 'tactical'
+            ? offer.value + DISCIPLINE_COST
+            : offer.cardType === 'concinnous'
+              ? offer.value + POSITIONED_COST
+              : offer.value,
+        );
+        // A qualifier the budget cannot carry is dropped rather than repriced.
+        if (offer.cardType === null) expect(offer.value).toBeLessThanOrEqual(RUN_STARTING_GOLD);
+        if (offer.cardType !== null) qualified += 1;
+      }
+    }
+    expect(qualified).toBeGreaterThan(0);
+  });
+
+  it('keeps opening Pestiferous draws to Ataraxia I', () => {
+    const baseline = new Set<string | null>();
+    const ataraxia = new Set<string | null>();
+    for (let seed = 1; seed <= 3_000; seed += 1) {
+      for (const offer of openingShopOffers(seed)) baseline.add(offer.cardType);
+      for (const offer of openingShopOffers(seed, 1)) ataraxia.add(offer.cardType);
+    }
+    expect(baseline.has('pestiferous')).toBe(false);
+    expect(ataraxia.has('pestiferous')).toBe(true);
+    expect(createRun(war(), 91, 1).shop?.cardOffers).toEqual(openingShopOffers(91, 1));
+  });
+
+  it('rolls the opening independently of the Shop after Battle 1, which shares battleIndex 0', () => {
+    // Both draws would otherwise seed from (seed, battleIndex 0, slot, coreId) and mirror
+    // each other whenever the same core identity is offered twice.
+    const differing = Array.from({ length: 200 }, (_, index) => index + 1).filter((seed) => (
+      openingShopOffers(seed).some((offer, slotIndex) => {
+        const core = RUN_CARD_DECK.find((card) => card.id === offer.id)!;
+        const postBattle = createRunCardOffer({ seed, ataraxiaTier: 0 }, core, 0, slotIndex);
+        return offer.effectSeed !== postBattle.effectSeed;
+      })
+    ));
+    expect(differing).toHaveLength(200);
   });
 
   it('keeps every affordable core Units card reachable from seeded openings', () => {

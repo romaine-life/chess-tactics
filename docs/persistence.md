@@ -51,9 +51,11 @@ the permanent King plus two starting Pawns, a seeded three-card deal, and an
 8-gold budget. The opening cards have three distinct values sampled from 1–8.
 Buying stays in that same Shop transaction; its purchased state, Army and Sell
 views, Reset Shop, and explicit Continue reuse the post-Battle Shop model. The
-opening kind carries zero victory gold and no Loot, paid-relic, or Ataraxia card
-effects; all opening offers remain standard rather than Tactical, Pestiferous,
-or Concinnous. Each dealt card may be purchased once while sufficient gold remains;
+opening kind carries zero victory gold and no Loot or paid-relic offers. Opening
+offers roll Tactical, Concinnous, and — under Ataraxia I — Pestiferous through the
+same draw and affected pricing as any later Shop, except that a qualifier priced
+above the 8-gold budget is dropped and that card is offered standard, so every
+opening offer stays buyable (ADR-0344). Each dealt card may be purchased once while sufficient gold remains;
 Continue requires at least one card purchase and enters Deployment at Battle
 index 0. Format 11 names the transaction `cardOffers`,
 `purchasedCardOfferIds`, and `buyCard`; current Shop documents using the former

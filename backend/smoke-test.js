@@ -4026,7 +4026,9 @@ async function main() {
   const activeRunOffers = [
     { id: 'p', offerId: 'opening-0-p', pieces: ['pawn'], value: 1, cost: 1, cardType: null, effectSeed: 1704, plaguedPieceIndex: null, effectTargetIndex: null },
     { id: 'k', offerId: 'opening-1-k', pieces: ['knight'], value: 3, cost: 3, cardType: null, effectSeed: 1705, plaguedPieceIndex: null, effectTargetIndex: null },
-    { id: 'r', offerId: 'opening-2-r', pieces: ['rook'], value: 5, cost: 5, cardType: null, effectSeed: 1706, plaguedPieceIndex: null, effectTargetIndex: null },
+    // Opening offers roll qualifiers like any other draw; this one is Concinnous at the
+    // shared Positioned price, still inside the eight-gold opening budget.
+    { id: 'r', offerId: 'opening-2-r', pieces: ['rook'], value: 5, cost: 7, cardType: 'concinnous', effectSeed: 1706, plaguedPieceIndex: null, effectTargetIndex: 0 },
   ];
   const activeRunDocument = {
     formatVersion: 11,
@@ -4129,6 +4131,52 @@ async function main() {
   );
   if (invalidOpeningRun.statusCode !== 400 || JSON.parse(invalidOpeningRun.body).error !== 'invalid_active_run') {
     throw new Error(`Format-11 opening Shops must persist three card offers: ${invalidOpeningRun.statusCode} ${invalidOpeningRun.body}`);
+  }
+  const unaffordableOpeningRun = await request(
+    'PUT', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      run: {
+        ...activeRunDocument,
+        shop: {
+          ...activeRunDocument.shop,
+          cardOffers: [
+            activeRunOffers[0],
+            activeRunOffers[1],
+            { ...activeRunOffers[2], cardType: 'tactical', cost: 5, effectTargetIndex: null },
+          ],
+        },
+      },
+      revision: 0,
+    }),
+  );
+  if (unaffordableOpeningRun.statusCode !== 400 || JSON.parse(unaffordableOpeningRun.body).error !== 'invalid_active_run') {
+    throw new Error(`Opening offers must carry the shared affected price: ${unaffordableOpeningRun.statusCode} ${unaffordableOpeningRun.body}`);
+  }
+  const overBudgetOpeningRun = await request(
+    'PUT', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      run: {
+        ...activeRunDocument,
+        shop: {
+          ...activeRunDocument.shop,
+          cardOffers: [
+            activeRunOffers[0],
+            activeRunOffers[1],
+            {
+              ...activeRunOffers[2],
+              id: 'rn', pieces: ['rook', 'knight'], value: 8,
+              cardType: 'tactical', cost: 11, effectTargetIndex: null,
+            },
+          ],
+        },
+      },
+      revision: 0,
+    }),
+  );
+  if (overBudgetOpeningRun.statusCode !== 400 || JSON.parse(overBudgetOpeningRun.body).error !== 'invalid_active_run') {
+    throw new Error(`Opening offers must stay inside the eight-gold budget: ${overBudgetOpeningRun.statusCode} ${overBudgetOpeningRun.body}`);
   }
   const retiredShopFieldRun = await request(
     'PUT', '/api/active-run',

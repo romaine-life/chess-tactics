@@ -127,8 +127,10 @@ these.
   out **Pestiferous** in the type strip or **Cacochymic** beside that unit. Its
   right-side Pestiferous property icon is distinct from the Cacochymic state icon.
   **Tactical** causes exactly one unit to gain Discipline when the card is
-  acquired. Every ordinary post-Battle shop-card draw has a seeded one-in-eight
-  Tactical chance; opening Shop cards remain standard. Tactical resolves before
+  acquired. Every shop-card draw has a seeded one-in-eight Tactical chance,
+  including the opening Shop, whose only exception is that a qualifier priced
+  above the starting eight gold is dropped so the card stays affordable and
+  standard (ADR-0342). Tactical resolves before
   the other qualifiers and adds three gold even when the resulting price reaches
   ten through twelve. The unit is chosen only at acquisition. Multi-unit offers
   therefore conceal the outcome, while a one-unit offer shows the dedicated
