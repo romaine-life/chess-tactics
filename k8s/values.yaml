@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:37b593dd8c5fe6cd2db3567fddc5ce32b80e509f14cb5c09ef0057e86239fd53"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:29b513e85dbaf1af7a20735f18958a2370a8f2333333f44c25a75f54d2edeb6b"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Open the Strategikon from Controls in every Run phase (ADR-0334)"
-  prNumber: "605"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/605"
-  commit: "d999632a"
+  prTitle: "Install the approved Strategikon command archive background"
+  prNumber: "608"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/608"
+  commit: "316a79ef"
 
 name: chess-tactics
 namespace: chess-tactics
