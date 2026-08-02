@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:df4ee96975590b7f50bd76fd933f9c229332de395ac50cd4e8a1865482c40956"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:4b493a62c100e53c2e1aaa11d7291e8423bffac482ae2930c1f2eceb7de7df9d"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Unify Strategikon rail placement"
-  prNumber: "609"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/609"
-  commit: "7da61730"
+  prTitle: "Use selected brush icon in level editor"
+  prNumber: "610"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/610"
+  commit: "09e5fff4"
 
 name: chess-tactics
 namespace: chess-tactics
