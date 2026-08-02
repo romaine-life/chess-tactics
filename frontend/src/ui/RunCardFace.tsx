@@ -353,7 +353,7 @@ export function runCardPresentationSignature(
     coinSourceUrl,
     artUrl,
     frameGeometry.id,
-    frameGeometry.frameSha256,
+    frameGeometry.frameSha256s,
     card.name,
     card.cost,
     card.typeLine,
