@@ -42,12 +42,24 @@ export function inBounds(x: number, y: number, size: BoardSize): boolean {
   return x >= 0 && x < size.cols && y >= 0 && y < size.rows;
 }
 
+// Indexed loops rather than `find`/`filter`: both sit in the search's innermost path
+// (`pieceAt` runs on every ray step of every generated move), where the per-call
+// closure and the generic callback cost more than the scan itself.
 export function pieceAt(pieces: readonly Piece[], x: number, y: number): Piece | null {
-  return pieces.find((p) => p.alive && p.x === x && p.y === y) ?? null;
+  for (let i = 0; i < pieces.length; i += 1) {
+    const p = pieces[i];
+    if (p.alive && p.x === x && p.y === y) return p;
+  }
+  return null;
 }
 
 export function livingPieces(pieces: readonly Piece[], side: Side): Piece[] {
-  return pieces.filter((p) => p.side === side && p.alive);
+  const out: Piece[] = [];
+  for (let i = 0; i < pieces.length; i += 1) {
+    const p = pieces[i];
+    if (p.side === side && p.alive) out.push(p);
+  }
+  return out;
 }
 
 /** A target is capturable iff it's a non-obstacle, non-neutral opposing piece. */
@@ -311,7 +323,13 @@ export function blockedCandidateSquares(piece: Piece, pieces: readonly Piece[], 
  */
 function boardAfterMove(mover: Piece, move: Move, pieces: readonly Piece[]): Piece[] {
   const capturedId = move.capture ?? pieceAt(pieces, move.x, move.y)?.id;
-  const captured = capturedId ? pieces.find((p) => p.id === capturedId) : undefined;
+  // Indexed lookup: this runs once per candidate move inside the king-safety filter.
+  let captured: Piece | undefined;
+  if (capturedId) {
+    for (let i = 0; i < pieces.length; i += 1) {
+      if (pieces[i].id === capturedId) { captured = pieces[i]; break; }
+    }
+  }
   const captures = !!captured && isEnemy(mover, captured);
   const after: Piece[] = [];
   const landX = move.castle?.kingTo.x ?? move.x;
@@ -429,12 +447,64 @@ function castleMoves(king: Piece, pieces: readonly Piece[], size: BoardSize, env
 function sideKingAttacked(board: readonly Piece[], side: Side, size: BoardSize, env?: MoveEnv): boolean {
   for (const king of board) {
     if (!king.alive || king.type !== 'king' || king.side !== side) continue;
-    for (const p of board) {
-      if (!p.alive || isObstacle(p) || p.side === side || p.side === 'neutral') continue;
-      for (const a of attackedSquares(p, board, size, env)) {
-        if (a.x === king.x && a.y === king.y) return true;
-      }
+    if (squareAttackedByOpponentOf(king.x, king.y, side, board, size, env)) return true;
+  }
+  return false;
+}
+
+/** A piece that could give check to `side`: living, opposing, and not an obstacle. */
+function isHostileTo(p: Piece | null, side: Side): p is Piece {
+  return !!p && p.side !== side && p.side !== 'neutral' && !isObstacle(p);
+}
+
+/**
+ * Is (kx, ky) attacked by a piece hostile to `side`?
+ *
+ * Asked once per CANDIDATE MOVE by `legalMoves`, so it is the engine's hottest
+ * question. Answering it by walking every hostile piece's threats is O(pieces ×
+ * ray length); this instead scans OUTWARD from the square to collect a small
+ * candidate set, then verifies each candidate with the exact forward predicate.
+ *
+ * Completeness argument (why the candidate set can't miss an attacker):
+ *  - Only three attack shapes exist. Pawns and kings strike adjacent squares, which
+ *    lie on the eight rays. Sliders strike along those same rays. Knights hop, and
+ *    get their own explicit sweep of the eight knight offsets.
+ *  - A slider cannot reach through an occupied square (`scanAttacks` breaks its ray
+ *    at the first occupant), and "first occupant along this line" is the SAME square
+ *    viewed from either end. So on each ray only the first occupied square can be an
+ *    attacker, and stopping there loses nothing.
+ *
+ * The outward scan deliberately ignores terrain, elevation and fences. Those only
+ * ever REMOVE attacks, never create them, so skipping them yields a superset of the
+ * true attackers — and every candidate is then confirmed by `attacksSquare`, which
+ * applies them exactly. Over-approximate cheaply, confirm precisely: the answer is
+ * identical to testing every piece, which `sideInCheck` equivalence tests pin.
+ */
+function squareAttackedByOpponentOf(
+  kx: number,
+  ky: number,
+  side: Side,
+  board: readonly Piece[],
+  size: BoardSize,
+  env?: MoveEnv,
+): boolean {
+  for (const [dx, dy] of ALL8) {
+    for (let step = 1; ; step += 1) {
+      const x = kx + dx * step;
+      const y = ky + dy * step;
+      if (!inBounds(x, y, size)) break;
+      const occ = pieceAt(board, x, y);
+      if (!occ) continue;
+      if (isHostileTo(occ, side) && attacksSquare(occ, board, size, env, kx, ky)) return true;
+      break; // the first occupant blocks everything behind it, friend or foe
     }
+  }
+  for (const [dx, dy] of KNIGHT) {
+    const x = kx + dx;
+    const y = ky + dy;
+    if (!inBounds(x, y, size)) continue;
+    const occ = pieceAt(board, x, y);
+    if (isHostileTo(occ, side) && attacksSquare(occ, board, size, env, kx, ky)) return true;
   }
   return false;
 }
@@ -471,9 +541,32 @@ export function legalMoves(piece: Piece, pieces: readonly Piece[], size: BoardSi
     case 'king': moves = [...stepMoves(piece, pieces, size, ALL8, env, originElev), ...castleMoves(piece, pieces, size, env, originElev)]; break;
     default: return [];
   }
-  const guardsKing = pieces.some((p) => p.alive && p.type === 'king' && p.side === piece.side);
-  if (!guardsKing) return moves;
-  return moves.filter((m) => !sideKingAttacked(boardAfterMove(piece, m, pieces), piece.side, size, env));
+  // King safety. The friendly kings are located ONCE here rather than re-derived from
+  // the post-move board for every candidate: a move relocates exactly one piece, so
+  // each king either stands where it already stood, or — when the mover IS that king —
+  // on the move's landing square (a castle lands on castle.kingTo, matching
+  // boardAfterMove). Scanning the whole board per candidate move to find a piece whose
+  // square we already know was pure overhead.
+  const kings: Piece[] = [];
+  for (let i = 0; i < pieces.length; i += 1) {
+    const p = pieces[i];
+    if (p.alive && p.type === 'king' && p.side === piece.side) kings.push(p);
+  }
+  if (!kings.length) return moves; // a kingless side is unconstrained
+  const safe: Move[] = [];
+  for (const m of moves) {
+    const after = boardAfterMove(piece, m, pieces);
+    const landX = m.castle?.kingTo.x ?? m.x;
+    const landY = m.castle?.kingTo.y ?? m.y;
+    let exposed = false;
+    for (const k of kings) {
+      const kx = k.id === piece.id ? landX : k.x;
+      const ky = k.id === piece.id ? landY : k.y;
+      if (squareAttackedByOpponentOf(kx, ky, piece.side, after, size, env)) { exposed = true; break; }
+    }
+    if (!exposed) safe.push(m);
+  }
+  return safe;
 }
 
 /**
@@ -487,26 +580,83 @@ export function legalMoves(piece: Piece, pieces: readonly Piece[], size: BoardSi
  */
 export function attackedSquares(piece: Piece, pieces: readonly Piece[], size: BoardSize, env?: MoveEnv): Vec[] {
   if (!piece || !piece.alive || isObstacle(piece)) return [];
+  const out: Vec[] = [];
+  scanAttacks(piece, pieces, size, env, out, null, -1, -1);
+  return out;
+}
+
+/**
+ * THE description of what a piece threatens — one geometry, three ways to consume it.
+ * Exactly one sink is active per call:
+ *
+ *   `out`   — collect every threatened square (what `attackedSquares` returns).
+ *   `mark`  — set `mark[y * size.cols + x] = 1` per threatened square; a board-sized
+ *             bitmap, for callers building a danger map over the whole board.
+ *   neither — early-exit predicate: return true the moment (findX, findY) is
+ *             threatened, touching no memory at all.
+ *
+ * The predicate form exists because check detection asks a yes/no question, and
+ * answering it by materialising a full Vec[] per attacker (then linear-scanning it)
+ * was ~40% of search cost: `legalMoves` runs a king-safety test for EVERY candidate
+ * move. Keeping all three modes in one function is deliberate — a separate
+ * hand-written predicate would be free to drift from the enumeration it must agree
+ * with, and `core/attackGeometry.test.ts` pins that agreement.
+ */
+function scanAttacks(
+  piece: Piece,
+  pieces: readonly Piece[],
+  size: BoardSize,
+  env: MoveEnv | undefined,
+  out: Vec[] | null,
+  mark: Uint8Array | null,
+  findX: number,
+  findY: number,
+): boolean {
   const originElev = env?.terrain ? elevationAt(env.terrain, piece.x, piece.y) : 0;
+
   if (piece.type === 'pawn') {
-    const out: Vec[] = [];
     for (const [dx, dy] of pawnCaptureVectors(piece)) {
       const x = piece.x + dx;
       const y = piece.y + dy;
-      if (inBounds(x, y, size) && !fenceBlocks(env, piece.x, piece.y, x, y) && !blockedByTerrain(env, originElev, x, y)) out.push({ x, y });
+      if (!inBounds(x, y, size)) continue;
+      if (fenceBlocks(env, piece.x, piece.y, x, y)) continue;
+      if (blockedByTerrain(env, originElev, x, y)) continue;
+      if (out) out.push({ x, y });
+      else if (mark) mark[y * size.cols + x] = 1;
+      else if (x === findX && y === findY) return true;
     }
-    return out;
+    return false;
   }
+
   if (piece.type === 'knight') {
-    return KNIGHT.map(([dx, dy]) => ({ x: piece.x + dx, y: piece.y + dy }))
-      .filter((p) => inBounds(p.x, p.y, size) && !blockedByTerrain(env, originElev, p.x, p.y));
+    // Knights hop: terrain at the landing square matters, edge barriers never do.
+    for (const [dx, dy] of KNIGHT) {
+      const x = piece.x + dx;
+      const y = piece.y + dy;
+      if (!inBounds(x, y, size)) continue;
+      if (blockedByTerrain(env, originElev, x, y)) continue;
+      if (out) out.push({ x, y });
+      else if (mark) mark[y * size.cols + x] = 1;
+      else if (x === findX && y === findY) return true;
+    }
+    return false;
   }
+
   if (piece.type === 'king') {
-    return ALL8.map(([dx, dy]) => ({ x: piece.x + dx, y: piece.y + dy }))
-      .filter((p) => inBounds(p.x, p.y, size) && !blockedByTerrain(env, originElev, p.x, p.y) && !fenceBlocks(env, piece.x, piece.y, p.x, p.y));
+    for (const [dx, dy] of ALL8) {
+      const x = piece.x + dx;
+      const y = piece.y + dy;
+      if (!inBounds(x, y, size)) continue;
+      if (blockedByTerrain(env, originElev, x, y)) continue;
+      if (fenceBlocks(env, piece.x, piece.y, x, y)) continue;
+      if (out) out.push({ x, y });
+      else if (mark) mark[y * size.cols + x] = 1;
+      else if (x === findX && y === findY) return true;
+    }
+    return false;
   }
+
   const dirs = piece.type === 'bishop' ? DIAG : piece.type === 'rook' ? ORTHO : ALL8;
-  const out: Vec[] = [];
   for (const [dx, dy] of dirs) {
     for (let step = 1; ; step += 1) {
       const x = piece.x + dx * step;
@@ -514,21 +664,44 @@ export function attackedSquares(piece: Piece, pieces: readonly Piece[], size: Bo
       if (!inBounds(x, y, size)) break;
       if (fenceBlocks(env, x - dx, y - dy, x, y)) break; // an edge barrier closes this threat step
       if (blockedByTerrain(env, originElev, x, y)) break; // a terrain wall ends the threat ray
-      out.push({ x, y });
+      // The first occupied square IS threatened (that piece is under attack); the ray
+      // stops after it. Order matters: emit, then test occupancy.
+      if (out) out.push({ x, y });
+      else if (mark) mark[y * size.cols + x] = 1;
+      else if (x === findX && y === findY) return true;
       if (pieceAt(pieces, x, y)) break;
       if (haltsTravelAt(env, x, y)) break; // water: threatened itself, nothing beyond
     }
   }
-  return out;
+  return false;
+}
+
+/**
+ * Whether `piece` threatens (x, y). The allocation-free equivalent of
+ * `attackedSquares(piece, ...).some((s) => s.x === x && s.y === y)`, sharing its
+ * exact geometry via `scanAttacks`.
+ */
+export function attacksSquare(piece: Piece, pieces: readonly Piece[], size: BoardSize, env: MoveEnv | undefined, x: number, y: number): boolean {
+  if (!piece || !piece.alive || isObstacle(piece)) return false;
+  return scanAttacks(piece, pieces, size, env, null, null, x, y);
+}
+
+/**
+ * Mark every square `side` threatens into a board-sized bitmap (`y * size.cols + x`),
+ * allocation-free. The evaluation's danger map; exported for core/ai.
+ */
+export function markAttackedSquares(pieces: readonly Piece[], side: Side, size: BoardSize, env: MoveEnv | undefined, mark: Uint8Array): void {
+  for (const p of pieces) {
+    if (!p.alive || p.side !== side || isObstacle(p)) continue;
+    scanAttacks(p, pieces, size, env, null, mark, -1, -1);
+  }
 }
 
 /** True when any living `bySide` piece attacks the square `sq` on this board. */
 function squareAttackedBy(sq: Vec, bySide: Side, pieces: readonly Piece[], size: BoardSize, env?: MoveEnv): boolean {
   for (const p of pieces) {
     if (!p.alive || p.side !== bySide || isObstacle(p)) continue;
-    for (const a of attackedSquares(p, pieces, size, env)) {
-      if (a.x === sq.x && a.y === sq.y) return true;
-    }
+    if (attacksSquare(p, pieces, size, env, sq.x, sq.y)) return true;
   }
   return false;
 }
@@ -557,8 +730,31 @@ export interface ApplyResult {
   events: GameEvent[];
 }
 
+/** Shared empty set for the no-stats path, so a skipped snapshot allocates nothing. */
+const EMPTY_ID_SET: ReadonlySet<string> = new Set<string>();
+
 export interface ApplyOptions {
   promotion?: PromotionPieceType;
+  /**
+   * Maintain the per-piece service record (timesUsed / squaresTraveled / escapes /
+   * threatsMade / enemiesKilled). Defaults TRUE, so every committed-move caller is
+   * unchanged.
+   *
+   * Pass `false` from a HYPOTHETICAL apply whose result is scored and thrown away —
+   * the AI search. Those counters are only meaningful for a committed move (see the
+   * bookkeeping block below), and computing them costs a terrain-index rebuild plus
+   * three full-board attack scans PER CALL, which at one call per search node was
+   * the single largest avoidable cost in the engine. Nothing the search reads —
+   * evaluation, position keys, move generation, adjudication — looks at these
+   * fields, so omitting them cannot change which move it picks.
+   */
+  stats?: boolean;
+  /**
+   * Pre-built static movement env (terrain + fences), reused instead of rebuilding
+   * one per call. Only consulted when the service record is being maintained. Its
+   * `lastMove` is irrelevant here (threat geometry never reads it).
+   */
+  env?: MoveEnv;
 }
 
 export function promotionRuleForMove(state: GameState, piece: Piece, to: Vec): PawnPromotionRule | null {
@@ -601,15 +797,18 @@ export function applyMove(state: GameState, pieceId: string, move: Move, options
   // from this (committed) move. Snapshot the threat picture BEFORE the move while
   // the piece still sits on `from`. Threats respect terrain AND fences so escapes/
   // threats are counted against the same board movement uses.
-  const statEnv: MoveEnv = gameEnv(state);
-  const tracksStats = piece.side === 'player' || piece.side === 'enemy';
+  //
+  // All of it is skipped when `options.stats === false` (search) — including the
+  // env build, which is why `statEnv` is resolved lazily here rather than up front.
+  const tracksStats = (options.stats ?? true) && (piece.side === 'player' || piece.side === 'enemy');
+  const statEnv: MoveEnv | null = tracksStats ? options.env ?? gameEnv(state) : null;
   const opponentSide: Side | null = piece.side === 'player' ? 'enemy' : piece.side === 'enemy' ? 'player' : null;
   const escapedThreat = tracksStats && opponentSide
-    ? squareAttackedBy(from, opponentSide, state.pieces, state.size, statEnv)
+    ? squareAttackedBy(from, opponentSide, state.pieces, state.size, statEnv!)
     : false;
   const threatenedBefore = tracksStats
-    ? opponentsUnderAttackBy(piece, state.pieces, state.size, statEnv)
-    : new Set<string>();
+    ? opponentsUnderAttackBy(piece, state.pieces, state.size, statEnv!)
+    : EMPTY_ID_SET;
 
   // A castle's (x, y) is the gesture square (chess.com range: two-out through the rook's
   // square); the king's REAL landing square is castle.kingTo. Everything below — facing,
@@ -669,7 +868,7 @@ export function applyMove(state: GameState, pieceId: string, move: Move, options
     piece.squaresTraveled = (piece.squaresTraveled ?? 0) + diagonal * 1.5 + straight;
     if (escapedThreat) piece.escapes = (piece.escapes ?? 0) + 1;
     // Opponents this piece newly placed under attack (in its post-move position).
-    const threatenedAfter = opponentsUnderAttackBy(piece, pieces, state.size, statEnv);
+    const threatenedAfter = opponentsUnderAttackBy(piece, pieces, state.size, statEnv!);
     let newlyThreatened = 0;
     for (const id of threatenedAfter) if (!threatenedBefore.has(id)) newlyThreatened += 1;
     if (newlyThreatened > 0) piece.threatsMade = (piece.threatsMade ?? 0) + newlyThreatened;

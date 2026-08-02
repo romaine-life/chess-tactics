@@ -15,8 +15,8 @@
 // an eval term. Keep terms cheap: eval runs at every leaf.
 
 import type { GameState, Move, Piece, PieceType, Side, Vec, Winner } from './types';
-import type { MoveEnv } from './rules';
-import { applyMove, attackedSquares, legalMoves, livingPieces, positionKey } from './rules';
+import type { ApplyOptions, MoveEnv } from './rules';
+import { applyMove, legalMoves, livingPieces, markAttackedSquares, positionKey } from './rules';
 import { ruleOutcome, type ObjectiveContext } from './objectives';
 import type { ObjectiveType, VictoryRules } from './level';
 import type { Rng } from './rng';
@@ -106,6 +106,16 @@ export interface SearchOptions {
   weights?: EvalWeights;
 }
 
+/**
+ * Every apply inside the search is HYPOTHETICAL — its state is scored and dropped —
+ * so it skips the per-piece service record. That bookkeeping rebuilds the terrain
+ * index and runs three full-board attack scans per call, and at one call per node it
+ * dominated the engine's cost. The search reads none of the fields it produces, so
+ * the tree, its ordering, and the chosen move are all unchanged. Shared constant so
+ * the option object itself isn't reallocated per node.
+ */
+export const SEARCH_APPLY: ApplyOptions = { stats: false };
+
 const DEFAULT_MAX_DEPTH = 6;
 // Quiescence search SHARES this budget — q-nodes count against it — so at the
 // default the main search completes a slightly shallower depth than pre-q but plays
@@ -150,15 +160,19 @@ const cheb = (a: Vec, b: Vec): number => {
 
 const isCombatant = (p: Piece): boolean => p.alive && (p.side === 'player' || p.side === 'enemy');
 
-/** Union of squares a side attacks, keyed "x,y" — the eval's danger map.
- * Terrain-aware when `env` is given (a slider's threat stops at walls/water). */
-function attackMap(pieces: readonly Piece[], side: Side, size: GameState['size'], env?: MoveEnv): Set<string> {
-  const map = new Set<string>();
-  for (const p of pieces) {
-    if (!p.alive || p.side !== side || p.type === 'rock' || p.type === 'random-rock') continue;
-    for (const sq of attackedSquares(p, pieces, size, env)) map.add(`${sq.x},${sq.y}`);
-  }
-  return map;
+/**
+ * Union of squares a side attacks, as a board-sized bitmap indexed `y * cols + x` —
+ * the eval's danger map. Terrain-aware when `env` is given (a slider's threat stops
+ * at walls/water).
+ *
+ * A bitmap rather than the `Set<"x,y">` this used to be: the eval runs at every leaf
+ * and builds TWO of these, so the per-square template string was ~11% of all search
+ * time. Same squares, same order, no strings.
+ */
+function attackMap(pieces: readonly Piece[], side: Side, size: GameState['size'], env?: MoveEnv): Uint8Array {
+  const mark = new Uint8Array(size.cols * size.rows);
+  markAttackedSquares(pieces, side, size, env, mark);
+  return mark;
 }
 
 function nearestDistance(from: Piece, targets: readonly Piece[]): number {
@@ -194,16 +208,19 @@ export function evaluateGameState(state: GameState, sctx: SearchContext, weights
 
   // Safety: a piece parked on an attacked square bleeds a fraction of its value —
   // the term that stops horizon-blind piece gifts at the leaves.
+  const cols = state.size.cols;
   const playerAttacks = attackMap(state.pieces, 'player', state.size, env);
   const enemyAttacks = attackMap(state.pieces, 'enemy', state.size, env);
   for (const p of players) {
-    if (!enemyAttacks.has(`${p.x},${p.y}`)) continue;
-    const defended = playerAttacks.has(`${p.x},${p.y}`);
+    const at = p.y * cols + p.x;
+    if (!enemyAttacks[at]) continue;
+    const defended = playerAttacks[at] !== 0;
     score -= values[p.type] * (defended ? weights.hangingDefended : weights.hangingUndefended);
   }
   for (const e of enemies) {
-    if (!playerAttacks.has(`${e.x},${e.y}`)) continue;
-    const defended = enemyAttacks.has(`${e.x},${e.y}`);
+    const at = e.y * cols + e.x;
+    if (!playerAttacks[at]) continue;
+    const defended = enemyAttacks[at] !== 0;
     score += values[e.type] * (defended ? weights.hangingDefended : weights.hangingUndefended);
   }
 
@@ -341,8 +358,12 @@ export function terminalScore(winner: Winner, ply: number): number {
 
 export function captureValue(move: Move, pieces: readonly Piece[], values: Record<PieceType, number>): number {
   if (!move.capture) return -1;
-  const target = pieces.find((p) => p.id === move.capture);
-  return target ? values[target.type] : -1;
+  // Indexed loop, not `find`: this is the move-ordering key, evaluated for every
+  // generated move at every node.
+  for (let i = 0; i < pieces.length; i += 1) {
+    if (pieces[i].id === move.capture) return values[pieces[i].type];
+  }
+  return -1;
 }
 
 /** The canonical committed-position oracle, adapted to search's cached frame. */
@@ -404,29 +425,27 @@ export function quiesce(
   // en-passant for free) and keep only capturing moves. The wasted non-capture
   // generation is the measured perf cost; a captures-only generator is the Phase-2
   // lever if the benchmark warrants it.
-  const caps: { piece: Piece; move: Move }[] = [];
+  // `order` is the MVV key, computed ONCE per move here instead of twice per sort
+  // comparison (it scans the piece list, so recomputing it inside the comparator cost
+  // O(m log m) lookups per node). Sorting precomputed numbers is the identical order.
+  const caps: { piece: Piece; move: Move; order: number }[] = [];
   for (const piece of livingPieces(state.pieces, side)) {
     for (const move of legalMoves(piece, state.pieces, state.size, env)) {
-      if (move.capture != null) caps.push({ piece, move });
+      if (move.capture != null) caps.push({ piece, move, order: captureValue(move, state.pieces, s.weights.pieceValues) });
     }
   }
   if (!caps.length) return standPat; // quiet node — the recursion's base case
 
-  caps.sort(
-    (a, b) => captureValue(b.move, state.pieces, s.weights.pieceValues) - captureValue(a.move, state.pieces, s.weights.pieceValues),
-  );
+  caps.sort((a, b) => b.order - a.order);
 
   // Delta pruning: skip a capture that can't lift alpha even if the victim were
   // free — but never inside a forced-mate line (standPat already a mate score).
   const notMate = Math.abs(standPat) < WIN_SCORE - 1000;
   const deltaMargin = s.weights.pieceValues.pawn * 2;
   for (const cap of caps) {
-    if (notMate) {
-      const gain = captureValue(cap.move, state.pieces, s.weights.pieceValues);
-      if (standPat + gain + deltaMargin < alpha) continue;
-    }
+    if (notMate && standPat + cap.order + deltaMargin < alpha) continue; // `order` IS this capture's value
     s.nodes += 1;
-    const res = applyMove(state, cap.piece.id, cap.move);
+    const res = applyMove(state, cap.piece.id, cap.move, SEARCH_APPLY);
     const roundDone = state.turn === 'enemy' && res.state.turn === 'player';
     const v = -quiesce(s, res.state, res.state.lastMove, ply + 1, -beta, -alpha, turnsElapsed + (roundDone ? 1 : 0), qDepth - 1);
     if (s.aborted) return 0;
@@ -475,23 +494,25 @@ function negamax(
   }
   if (depth === 0) return quiesce(s, state, lastMove, ply, alpha, beta, turnsElapsed, QUIESCE_MAX_PLY);
 
-  const entries: { piece: Piece; move: Move }[] = [];
+  // `order` is the MVV key, computed once per move rather than twice per comparison
+  // (see quiesce). Same ordering, far fewer piece-list scans.
+  const entries: { piece: Piece; move: Move; order: number }[] = [];
   for (const piece of livingPieces(state.pieces, side)) {
-    for (const move of legalMoves(piece, state.pieces, state.size, env)) entries.push({ piece, move });
+    for (const move of legalMoves(piece, state.pieces, state.size, env)) {
+      entries.push({ piece, move, order: captureValue(move, state.pieces, s.weights.pieceValues) });
+    }
   }
   // The canonical adjudicator above already resolved checkmate/stalemate, so a
   // live node always has an action. Keep a defensive draw return for malformed
   // custom states rather than recursing an empty list.
   if (!entries.length) return 0;
-  entries.sort(
-    (a, b) => captureValue(b.move, state.pieces, s.weights.pieceValues) - captureValue(a.move, state.pieces, s.weights.pieceValues),
-  );
+  entries.sort((a, b) => b.order - a.order);
 
   let best = -Infinity;
   if (nodeKey !== null) s.path.push(nodeKey);
   for (const entry of entries) {
     s.nodes += 1;
-    const res = applyMove(state, entry.piece.id, entry.move);
+    const res = applyMove(state, entry.piece.id, entry.move, SEARCH_APPLY);
     const roundDone = state.turn === 'enemy' && res.state.turn === 'player';
     const v = -negamax(s, res.state, res.state.lastMove, depth - 1, ply + 1, -beta, -alpha, turnsElapsed + (roundDone ? 1 : 0));
     if (s.aborted) { if (nodeKey !== null) s.path.pop(); return 0; }
@@ -548,7 +569,7 @@ export function searchBestAction(
     for (const root of roots) {
       s.nodes += 1;
       s.path.length = 0; // fresh line per root move (an abort can leave keys behind)
-      const res = applyMove(state, root.piece.id, root.move);
+      const res = applyMove(state, root.piece.id, root.move, SEARCH_APPLY);
       const roundDone = state.turn === 'enemy' && res.state.turn === 'player';
       const v = -negamax(s, res.state, res.state.lastMove, depth - 1, 1, -Infinity, Infinity, sctx.turnsElapsed + (roundDone ? 1 : 0));
       if (s.aborted) break;
