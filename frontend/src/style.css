@@ -22850,6 +22850,14 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   min-block-size: 0;
 }
 
+/* Continue resumes in place (ADR-0356): the resume card owns the action column, so it
+   stacks the head, facts, and the single Play verb instead of handing them to a fourth
+   column. */
+.continue-resume {
+  display: grid;
+  gap: var(--ds-stack);
+}
+
 .play-detail-facts {
   padding: var(--ds-inset);
 }

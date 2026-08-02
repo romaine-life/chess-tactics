@@ -228,8 +228,8 @@ route lifecycle during the same React commit.
   through the bare `/play` battlefield while the selector loads. The root holds
   composition until canonical content and the Run document settle, then composes
   the complete Continue scene and replace-canonicalizes to the most recent
-  available `/play/select/continue/<mode>` address, or bare Continue when every
-  mode says **Nothing to continue**. This selection never launches gameplay.
+  available `/play/select/continue/<mode>` address, or bare Continue when there
+  is **Nothing to continue**. This selection never launches gameplay.
 - Terrain and scene canvases share decoded image records and acknowledge their actual first
   composition to the board boundary. The board reveals only after terrain, barrier, and
   scene acknowledgements and a browser paint opportunity.

@@ -9,7 +9,7 @@ refines:
   - "[ADR-0351](0351-unit-arrival-choreography-follows-newly-visible-unit-identity.md)"
 ---
 
-# ADR-0356: A unit awaiting its entrance is staged off the board
+# ADR-0357: A unit awaiting its entrance is staged off the board
 
 ## Context and Problem Statement
 

@@ -38,14 +38,20 @@ const run = (updatedAt: string, battleLevelId = 'run-battle'): RunDocument => ({
 } as unknown as RunDocument);
 
 describe('Play Continue inventory', () => {
-  it('always exposes the fixed mode inventory with honest availability', () => {
+  it('collects only resumable activities', () => {
     const inventory = continueInventory(run('2026-01-01T00:00:00.000Z'), null, [], {});
-    expect(inventory.options.map(({ mode, label, activity }) => ({ mode, label, available: Boolean(activity) }))).toEqual([
-      { mode: 'campaign', label: 'Campaign', available: false },
-      { mode: 'skirmish', label: 'Skirmish', available: false },
-      { mode: 'run', label: 'Run', available: true },
-      { mode: 'levels', label: 'Levels', available: false },
-    ]);
+    expect(inventory.activities.map((activity) => activity.mode)).toEqual(['run']);
+    expect(inventory.defaultMode).toBe('run');
+  });
+
+  it('orders a second unfinished activity behind the most recent one', () => {
+    const inventory = continueInventory(
+      run('2026-01-03T00:00:00.000Z'),
+      match('level-1', '2026-01-02T00:00:00.000Z'),
+      [],
+      { 'level-1': level('level-1', 'Classic Battle') },
+    );
+    expect(inventory.activities.map((activity) => activity.mode)).toEqual(['run', 'levels']);
     expect(inventory.defaultMode).toBe('run');
   });
 
@@ -56,11 +62,11 @@ describe('Play Continue inventory', () => {
       [],
       {},
     );
-    expect(inventory.options.find((option) => option.mode === 'run')?.activity).toMatchObject({
+    expect(inventory.activities.find((activity) => activity.mode === 'run')).toMatchObject({
       summary: 'The Long War · Battle 1 of 1',
       playHref: '/run',
     });
-    expect(inventory.options.find((option) => option.mode === 'levels')?.activity).toBeNull();
+    expect(inventory.activities.some((activity) => activity.mode === 'levels')).toBe(false);
   });
 
   it('does not mistake another same-Level battle for the active Run', () => {
@@ -71,7 +77,7 @@ describe('Play Continue inventory', () => {
       { 'run-battle': level('run-battle', 'Standalone Battle') },
     );
     expect(inventory.defaultMode).toBe('levels');
-    expect(inventory.options.find((option) => option.mode === 'levels')?.activity).toMatchObject({
+    expect(inventory.activities.find((activity) => activity.mode === 'levels')).toMatchObject({
       summary: 'Standalone Battle',
       playHref: expect.stringContaining('/play?levelId=run-battle'),
     });
@@ -100,7 +106,7 @@ describe('Play Continue inventory', () => {
       { 'campaign-battle': level('campaign-battle', 'Hold the Bridge') },
     );
     expect(inventory.defaultMode).toBe('campaign');
-    expect(inventory.options.find((option) => option.mode === 'campaign')?.activity).toMatchObject({
+    expect(inventory.activities.find((activity) => activity.mode === 'campaign')).toMatchObject({
       summary: 'Crown of Valoria · Hold the Bridge',
       playHref: '/play?campaignId=campaign-1&levelId=campaign-battle',
     });
@@ -110,13 +116,12 @@ describe('Play Continue inventory', () => {
     const id = 'skirmish-profile-classic';
     const inventory = continueInventory(null, match(id, '2026-01-02T00:00:00.000Z'), [], { [id]: level(id, 'Classic Skirmish') });
     expect(inventory.defaultMode).toBe('skirmish');
-    expect(inventory.options.find((option) => option.mode === 'skirmish')?.activity?.facts[0]).toEqual({ label: 'Mode', value: 'Skirmish' });
+    expect(inventory.activities.find((activity) => activity.mode === 'skirmish')?.facts[0]).toEqual({ label: 'Mode', value: 'Skirmish' });
   });
 
-  it('marks every mode unavailable when there is nothing to continue', () => {
+  it('is empty when there is nothing to continue', () => {
     const inventory = continueInventory(null, null, [], {});
     expect(inventory.defaultMode).toBeNull();
-    expect(inventory.options).toHaveLength(4);
-    expect(inventory.options.every((option) => option.activity === null)).toBe(true);
+    expect(inventory.activities).toHaveLength(0);
   });
 });

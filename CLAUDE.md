@@ -162,7 +162,7 @@ and don't tell the user screenshots are impossible. Use the helper below.
    ```
    It fails when a battlefield is revealed with units still to arrive standing at
    their seats, and when a board that has already resolved disagrees with its own
-   settled composition — the seen-then-vanished-then-placed bug class (ADR-0356).
+   settled composition — the seen-then-vanished-then-placed bug class (ADR-0357).
 
 This works on ANY live route by selector — no per-target fixture, so there's no "new
 screen ⇒ flail" cliff. `frontend/scripts/shot.mjs` is the implementation.

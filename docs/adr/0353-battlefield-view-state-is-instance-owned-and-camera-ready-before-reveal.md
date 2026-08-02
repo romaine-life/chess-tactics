@@ -5,7 +5,7 @@ deciders: owner (Nelson) + Codex
 supersedes:
   - "[ADR-0349](0349-the-final-deployment-choice-commits-and-camera-authority-follows-the-active-scene.md)'s activated-scene-only shared-camera publication rule"
 partially_superseded_by:
-  - "[ADR-0356](0356-a-unit-awaiting-its-entrance-is-staged-off-the-board.md)'s split of unit-arrival staging from unit-arrival motion: activation still gates the motion, but a revealed-and-unactivated battlefield stages its arrivals rather than seating them"
+  - "[ADR-0357](0357-a-unit-awaiting-its-entrance-is-staged-off-the-board.md)'s split of unit-arrival staging from unit-arrival motion: activation still gates the motion, but a revealed-and-unactivated battlefield stages its arrivals rather than seating them"
 refines:
   - "[ADR-0136](0136-loading-is-manifest-driven-and-frame-acknowledged.md)"
   - "[ADR-0189](0189-board-facing-views-open-on-playable-geometry.md)"
