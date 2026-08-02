@@ -554,7 +554,9 @@ function ShopPanel({
             <img className="run-shop-scene-artwork" src={shopScene.src} alt="" draggable={false} />
           ) : null}
         >
-        <h2 id="run-shop-workspace-title">{!opening && run.war.battles[shop.afterBattleIndex]?.loot ? 'Loot Shop' : 'Shop'}</h2>
+        {/* Always the Shop. Loot is a section that sometimes appears in it, not
+            a different place, so the heading never renames the screen. */}
+        <h2 id="run-shop-workspace-title">Shop</h2>
         <div className="run-shop-rules">
           {opening ? (
             <>
