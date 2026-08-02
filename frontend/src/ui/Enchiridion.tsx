@@ -811,7 +811,13 @@ function AbilitiesSection({ framed }: { framed: boolean }): ReactElement {
   );
 }
 
-function EnchiridionContent({ section, framed, selectedRelicId, relicHref, selectedCardId, cardHref }: {
+/**
+ * The reference body for one section, with no rail and no scene slot of its own.
+ * The Strategikon mounts this directly inside ITS reference slot: embedding the
+ * whole `Enchiridion` would nest a second `enchiridion-shell` region inside the
+ * Strategikon's, giving one visual pane two competing director-owned targets.
+ */
+export function EnchiridionReference({ section, framed, selectedRelicId, relicHref, selectedCardId, cardHref }: {
   section: EnchiridionSection;
   framed: boolean;
   selectedRelicId: RunRelicId | null;
@@ -859,7 +865,7 @@ export function Enchiridion({
         className="enchiridion-content"
         sceneInstance={sceneInstanceKey}
       >
-        <EnchiridionContent
+        <EnchiridionReference
           section={section}
           framed={framed}
           selectedRelicId={selectedRelicId}

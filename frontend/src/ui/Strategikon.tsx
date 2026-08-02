@@ -5,31 +5,17 @@ import {
   RunArmyWorkspace,
   type RunArmyFilters,
 } from './RunArmyWorkspace';
-import { Enchiridion, EnchiridionSectionRail, RelicCodex } from './Enchiridion';
-import { ENCHIRIDION_SECTIONS, type EnchiridionSection } from './enchiridionRoute';
+import { EnchiridionReference, EnchiridionSectionRail, RelicCodex } from './Enchiridion';
 import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
 import { InnerChromeBox, ShellWorkspace } from './shared/ChromeBox';
+import {
+  StrategikonContentSceneSlot,
+  StrategikonReferenceSceneSlot,
+} from './shell/AuthoredSceneSlot';
+import type { EnchiridionSection } from './enchiridionRoute';
+import { strategikonAddress, strategikonHref, type StrategikonSection } from './strategikonRoute';
 import { installedUiMedia } from './installedUiMedia';
 import { menuModeIcon } from './menuModeIcon';
-
-export type StrategikonSection = 'enchiridion' | 'prosopography' | 'lipsanotheca';
-
-function sectionFromPath(path: string): StrategikonSection {
-  if (path.includes('/prosopography')) return 'prosopography';
-  if (path.includes('/lipsanotheca')) return 'lipsanotheca';
-  return 'enchiridion';
-}
-
-function enchiridionSectionFromPath(path: string): EnchiridionSection {
-  const found = ENCHIRIDION_SECTIONS.find((section) => path.endsWith(`/${section}`));
-  return found ?? 'units';
-}
-
-function strategikonHref(basePath: '/play' | '/run', section: StrategikonSection, enchiridionSection = 'units'): string {
-  return section === 'enchiridion'
-    ? `${basePath}/strategikon/enchiridion/${enchiridionSection}`
-    : `${basePath}/strategikon/${section}`;
-}
 
 function UnavailableRunReference({ title, copy }: { title: string; copy: string }): ReactElement {
   return (
@@ -45,6 +31,17 @@ function UnavailableRunReference({ title, copy }: { title: string; copy: string 
   );
 }
 
+/**
+ * The Battle-hosted reference workspace.
+ *
+ * Its two rails are director-owned scene slots, exactly like Settings' and the
+ * main-menu Enchiridion's, so section travel transitions instead of swapping. The
+ * section rail is retained outside `StrategikonContentSceneSlot`; the Enchiridion
+ * reference rail sits INSIDE that slot (it belongs to the Enchiridion section and
+ * leaves with it) but outside `StrategikonReferenceSceneSlot`, so paging through
+ * records keeps both rails anchored. Addresses come from `strategikonRoute` — the
+ * one grammar the scene manifest also reads.
+ */
 export function Strategikon({
   path,
   search,
@@ -54,17 +51,17 @@ export function Strategikon({
   search: string;
   run?: RunDocument | null;
 }): ReactElement {
-  const basePath: '/play' | '/run' = path.startsWith('/run') ? '/run' : '/play';
-  const section = sectionFromPath(path);
-  const enchiridionSection = enchiridionSectionFromPath(path);
+  const { base, section, reference } = strategikonAddress(path);
   const [filters, setFilters] = useState<RunArmyFilters>({ ...DEFAULT_RUN_ARMY_FILTERS });
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
-  const withSearch = (href: string) => `${href}${search}`;
+  const href = (next: StrategikonSection, nextReference: EnchiridionSection = 'units'): string => (
+    `${strategikonHref(base, next, nextReference)}${search}`
+  );
 
   return (
     <ShellWorkspace
       className="strategikon-workspace"
-      contentClassName={`strategikon-workspace-layout${section === 'enchiridion' ? ' has-secondary-rail' : ''}`}
+      contentClassName="strategikon-workspace-layout"
       bodyClassName="strategikon-content"
       backgroundArtwork={(
         <img
@@ -76,53 +73,59 @@ export function Strategikon({
       )}
       edgeAttached
       rail={(
-        <>
-          <ApparatusRailColumn className="strategikon-rail" aria-label="Strategikon sections">
-            <ApparatusRailTab
-              label="Enchiridion"
-              to={withSearch(strategikonHref(basePath, 'enchiridion', enchiridionSection))}
-              index={0}
-              active={section === 'enchiridion'}
-              // The main menu's Enchiridion destination and this one are the same
-              // destination, so they read the same installed mark (menuModeIcon).
-              iconSrc={menuModeIcon('enchiridion')}
-            />
-            <ApparatusRailTab
-              label="Prosopography"
-              title="The Martial Prosopography — Current Army"
-              to={withSearch(strategikonHref(basePath, 'prosopography'))}
-              index={1}
-              active={section === 'prosopography'}
-              iconSrc={installedUiMedia('ui-kit-icons-players-png')}
-            />
-            <ApparatusRailTab
-              label="Lipsanotheca"
-              title="The Lipsanotheca — Held Relics"
-              to={withSearch(strategikonHref(basePath, 'lipsanotheca'))}
-              index={2}
-              active={section === 'lipsanotheca'}
-              iconSrc={installedUiMedia('ui-kit-icons-info-png')}
-            />
-          </ApparatusRailColumn>
-          {section === 'enchiridion' ? (
-            <EnchiridionSectionRail
-              section={enchiridionSection}
-              sectionHref={(next) => withSearch(strategikonHref(basePath, 'enchiridion', next))}
-            />
-          ) : null}
-        </>
+        <ApparatusRailColumn className="strategikon-rail" aria-label="Strategikon sections">
+          <ApparatusRailTab
+            label="Enchiridion"
+            to={href('enchiridion', reference)}
+            index={0}
+            active={section === 'enchiridion'}
+            // The main menu's Enchiridion destination and this one are the same
+            // destination, so they read the same installed mark (menuModeIcon).
+            iconSrc={menuModeIcon('enchiridion')}
+          />
+          <ApparatusRailTab
+            label="Prosopography"
+            title="The Martial Prosopography — Current Army"
+            to={href('prosopography')}
+            index={1}
+            active={section === 'prosopography'}
+            iconSrc={installedUiMedia('ui-kit-icons-players-png')}
+          />
+          <ApparatusRailTab
+            label="Lipsanotheca"
+            title="The Lipsanotheca — Held Relics"
+            to={href('lipsanotheca')}
+            index={2}
+            active={section === 'lipsanotheca'}
+            iconSrc={installedUiMedia('ui-kit-icons-info-png')}
+          />
+        </ApparatusRailColumn>
       )}
       aria-label="Strategikon"
       data-testid="strategikon"
     >
+      <StrategikonContentSceneSlot
+        className={`strategikon-pane${section === 'enchiridion' ? ' has-secondary-rail' : ''}`}
+        sceneInstance={`strategikon/${section}`}
+      >
         {section === 'enchiridion' ? (
-          <Enchiridion
-            section={enchiridionSection}
-            sectionHref={(next) => withSearch(strategikonHref(basePath, 'enchiridion', next))}
-            showSectionRail={false}
-            sceneInstanceKey={`strategikon/enchiridion/${enchiridionSection}`}
-            framed={false}
-          />
+          <>
+            <EnchiridionSectionRail
+              section={reference}
+              sectionHref={(next) => href('enchiridion', next)}
+            />
+            <StrategikonReferenceSceneSlot
+              className="strategikon-reference-pane"
+              sceneInstance={`strategikon/enchiridion/${reference}`}
+            >
+              <EnchiridionReference
+                section={reference}
+                framed={false}
+                selectedRelicId={null}
+                selectedCardId={null}
+              />
+            </StrategikonReferenceSceneSlot>
+          </>
         ) : section === 'prosopography' ? (
           run ? (
             <RunArmyWorkspace
@@ -145,6 +148,7 @@ export function Strategikon({
         ) : (
           <UnavailableRunReference title="The Lipsanotheca" copy="Held relics appear here during a Run." />
         )}
+      </StrategikonContentSceneSlot>
     </ShellWorkspace>
   );
 }

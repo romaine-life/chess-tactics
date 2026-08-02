@@ -1,3 +1,4 @@
+import { SCENE_SLOT_IDS } from './sceneManifest';
 import type { SceneInstance, ScenePath, SceneSlotId } from './sceneManifest';
 
 export interface SceneSlotState {
@@ -6,17 +7,10 @@ export interface SceneSlotState {
   pending: SceneInstance | null;
 }
 
-const ALL_SLOTS: readonly SceneSlotId[] = [
-  'root',
-  'menu-destination',
-  'play-content',
-  'settings-content',
-  'editor-content',
-  'enchiridion-content',
-  'gameplay-content',
-  'run-phase',
-  'run-workspace',
-];
+// Derived from the scene graph rather than retyped: the hand-maintained copy had
+// already drifted (it was missing `run-detail-content`), so the projection silently
+// omitted a mounted slot.
+const ALL_SLOTS: readonly SceneSlotId[] = SCENE_SLOT_IDS;
 
 function instanceForSlot(path: ScenePath | null, id: SceneSlotId): SceneInstance | null {
   return path?.instances.find((candidate) => candidate.definition.slot === id) ?? null;
