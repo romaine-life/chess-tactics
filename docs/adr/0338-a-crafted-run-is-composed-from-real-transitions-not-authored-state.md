@@ -37,11 +37,21 @@ validator can still be a state the game itself could never produce.
   and a card outside that range is refused with the reason.
 - The **opening Shop takes no overrides**. Its offers, army and 8 starting gold are pinned
   value by value by the Run contract; it is craftable only as itself.
-- The address is the interface: `/run?craft=<phase>&…`, applied on the Run screen and then
-  dropped from the address. `battle=N` is the Battle you are at — for a Shop, the Shop you
-  leave into Battle N. A refused spec **says why on the screen** and writes nothing.
-- Crafting is **development-only**. A built app must never let an address rewrite a Run that
-  was actually played.
+- The crafter is **shared code**. The Run model, its deployment solver and the crafter live in
+  `@chess-tactics/board-render`, which the backend already depends on, so the server composes a
+  Run with the very functions the client plays rather than a second implementation of pricing
+  and rosters that can drift.
+- **`POST /api/active-run/craft` is the interface.** It is admin-gated, takes a JSON spec, and
+  sets the caller's own active Run. A request body has room the address does not, so the spec
+  carries structured units with abilities, card objects, and whatever it grows next. The reply
+  is the Run plus the address to open: **the link says where you are, never what the Run
+  contains.** This grants no capability that database access did not already have — it only
+  makes the result a document the game could have produced.
+- The address form `/run?craft=<phase>&…` remains for one-off tweaks, applied on the Run screen
+  and then dropped from the address. It is development-only, because in a built app an address
+  must not rewrite a Run that was actually played. `battle=N` is the Battle you are at — for a
+  Shop, the Shop you leave into Battle N. A refused spec **says why on the screen** and writes
+  nothing.
 
 ## Consequences
 
@@ -57,3 +67,6 @@ validator can still be a state the game itself could never produce.
 - Model internals the crafter composes with (`addArmyPieces`, `removeUnitFromArmyAndCards`,
   the Plagued discount table, the seeded Plagued target) are exported rather than copied, so
   there is no second implementation of Run pricing or roster identity to drift.
+- Moving the Run model out of `frontend/src/run/` follows the convention the core model already
+  set: the frontend keeps one-line re-export stubs (as `core/level.ts` and `core/pieces.ts`
+  already do), so every existing import path and test still resolves.

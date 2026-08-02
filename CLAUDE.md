@@ -180,13 +180,30 @@ The Studio encodes its state in the URL, so deep-link instead of clicking:
 - `view=board`, `family=<id>`, `collection=<id>`, `asset=<id>`, `unit=<id>`, `seed=<n>`
 - `/unit-studio` is an alias for the Studio with the Units shelf preselected.
 
-#### Crafting a Run state to link to (dev only, ADR-0338)
+#### Crafting a Run state to link to (ADR-0338)
 
-Run screens need an active Run, so `/run` alone lands wherever the account already is.
-`?craft=` builds the named state out of the game's own transitions, adopts it as the active
-Run, then drops its parameters from the address. Never hand-author a Run document or edit
-`active_runs` — the server validator cross-checks army/card membership, Plagued targets and
-offer pricing, and a crafted document passes because the game built it.
+Run screens need an active Run, so `/run` alone lands wherever the account already is. Craft the
+state first, then hand over a plain app link — the link says *where* in the Run you are, never
+what the Run contains. Never hand-author a Run document or edit `active_runs`: the server
+validator cross-checks army/card membership, Plagued targets and offer pricing, and a crafted
+document passes because the game built it.
+
+**`POST /api/active-run/craft`** (admin, works anywhere) sets your own active Run from a JSON
+spec and answers with the Run plus the address to open:
+
+```
+curl -X POST <url>/api/active-run/craft -H 'content-type: application/json' -d '{
+  "phase": "shop", "battle": 4, "gold": 33.5,
+  "army": [{ "type": "rook", "abilities": ["marshalled"] }, "knight", "pawn"],
+  "offers": [{ "pieces": ["queen"] }, { "pieces": ["pawn","pawn"], "type": "concinnous" }],
+  "loot": ["fair-scales"], "relics": ["quartermasters-ledger"] }'
+```
+
+Same fields as the address grammar below, plus what an address cannot carry: units as objects
+with `abilities`, offers as objects. An unknown field is refused, not ignored.
+
+The address form below does the same thing client-side in a **dev build only**, for quick
+one-offs: it builds the state, adopts it, then drops its parameters from the address.
 
 ```
 /run?craft=shop&battle=3&gold=25&army=knight,rook&offers=queen,pawn+pawn:concinnous,rook:tactical

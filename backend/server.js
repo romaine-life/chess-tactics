@@ -18644,6 +18644,94 @@ app.delete('/api/active-run', async (req, res) => {
   }
 });
 
+// POST /api/active-run/craft — ADMIN: set the caller's OWN active Run to a named state (ADR-0338).
+//
+// Debugging and feature work need a Run parked at an exact Shop, deployment, Battle or victory.
+// Writing active_runs by hand is already possible for anyone with database access and produces
+// documents this endpoint's own validator would reject; crafting composes the state out of the
+// game's real transitions instead, so what lands in the row is a Run the game could have played.
+// The spec is a request body rather than a query string precisely so it can carry more than an
+// address comfortably holds. The reply is the Run plus the address to open — the link says WHERE
+// you are, never what the Run contains.
+app.post('/api/active-run/craft', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  if (typeof serverRender?.runCraftSpecFromJson !== 'function') {
+    res.status(503).json({ error: 'run_crafter_unavailable' });
+    return;
+  }
+  let run = null;
+  try {
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const spec = serverRender.runCraftSpecFromJson(body.spec === undefined ? body : body.spec);
+    const document = await dbGetOfficialCampaigns('default');
+    const data = (document && document.data) || {};
+    // Origin is a client-side tag; every War in the official workspace is official by definition.
+    const wars = (Array.isArray(data.wars) ? data.wars : []).map((war) => ({ ...war, origin: 'official' }));
+    const levels = data.levels && typeof data.levels === 'object' ? data.levels : {};
+    const war = serverRender.selectCraftWar(spec, wars, levels);
+    run = serverRender.craftRunDocument(spec, war);
+  } catch (error) {
+    if (error && error.name === 'RunCraftError') {
+      res.status(400).json({ error: 'invalid_run_craft_spec', details: error.message });
+      return;
+    }
+    dbUnavailable(res, 'Run craft failed', error, 'active_run_store_unavailable');
+    return;
+  }
+  // The crafter composes with the game's transitions, so a rejection here is a defect in this
+  // server's own contract rather than bad input — report it as one instead of a 400.
+  const validation = validateActiveRunBody(run);
+  if (validation) {
+    res.status(500).json({ error: 'crafted_run_invalid', details: validation });
+    return;
+  }
+  try {
+    await ensureDbReady();
+    const result = await withEditorDocumentTransaction(async (client) => {
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`active-run:${user.email}`]);
+      const currentResult = await client.query(
+        'SELECT revision FROM active_runs WHERE owner_email = $1 FOR UPDATE',
+        [user.email],
+      );
+      // Crafting deliberately replaces whatever Run is there: it is the caller asking for this
+      // account to be at that state, so there is no revision to agree with first.
+      if (!currentResult.rows[0]) {
+        const { rows } = await client.query(
+          `INSERT INTO active_runs (owner_email, body, revision)
+           VALUES ($1, $2::jsonb, 1)
+           RETURNING body, revision, updated_at`,
+          [user.email, JSON.stringify(run)],
+        );
+        return rows[0];
+      }
+      const { rows } = await client.query(
+        `UPDATE active_runs
+            SET body = $2::jsonb, revision = revision + 1, updated_at = now()
+          WHERE owner_email = $1
+          RETURNING body, revision, updated_at`,
+        [user.email, JSON.stringify(run)],
+      );
+      return rows[0];
+    });
+    res.status(200).json({
+      ...publicActiveRun(result),
+      url: '/run',
+      summary: {
+        war: run.war.name,
+        phase: run.phase,
+        battle: `${run.battleIndex + 1}/${run.war.battles.length}`,
+        gold: run.goldTenths / 10,
+        army: run.army.map((unit) => unit.type),
+        offers: run.shop ? run.shop.cardOffers.map((offer) => `${offer.pieces.join('+')}@${offer.cost}`) : null,
+        relics: run.relics,
+      },
+    });
+  } catch (error) {
+    dbUnavailable(res, 'Run craft write failed', error, 'active_run_store_unavailable');
+  }
+});
+
 // --- Account-scoped Run relic history (ADR-0231) --------------------------
 // The mutable active Run cannot answer lifetime questions after completion or
 // abandonment. Clients submit deterministic facts; the composite key makes

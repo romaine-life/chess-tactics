@@ -12,6 +12,7 @@ import {
   RunCraftError,
   craftRunDocument,
   parseRunCraftSpec,
+  runCraftSpecFromJson,
   searchWithoutCraftParams,
 } from './craft';
 
@@ -54,9 +55,14 @@ describe('run craft spec parsing', () => {
   });
 
   it('accepts piece names, chess letters and bare deck ids alike', () => {
-    expect(spec('?craft=battle&army=pawn,pawn,knight').army).toEqual(['pawn', 'pawn', 'knight']);
-    expect(spec('?craft=battle&army=p,p,n').army).toEqual(['pawn', 'pawn', 'knight']);
-    expect(spec('?craft=battle&army=ppk').army).toEqual(['pawn', 'pawn', 'knight']);
+    const units = [
+      { type: 'pawn', abilities: [] },
+      { type: 'pawn', abilities: [] },
+      { type: 'knight', abilities: [] },
+    ];
+    expect(spec('?craft=battle&army=pawn,pawn,knight').army).toEqual(units);
+    expect(spec('?craft=battle&army=p,p,n').army).toEqual(units);
+    expect(spec('?craft=battle&army=ppk').army).toEqual(units);
   });
 
   it('names the bad token when a piece is not a piece', () => {
@@ -80,6 +86,47 @@ describe('run craft spec parsing', () => {
   it('keeps the Run screen own parameters when the craft request is spent', () => {
     expect(searchWithoutCraftParams('?craft=shop&battle=3&gold=25&view=sell')).toBe('?view=sell');
     expect(searchWithoutCraftParams('?craft=shop')).toBe('');
+  });
+});
+
+describe('run craft specs from a request body', () => {
+  it('reads the same spec the address grammar reads', () => {
+    expect(runCraftSpecFromJson({ phase: 'shop', battle: 3, gold: 25, army: 'knight,rook' }))
+      .toEqual(spec('?craft=shop&battle=3&gold=25&army=knight,rook'));
+  });
+
+  it('takes structured units, abilities and card objects the address cannot carry', () => {
+    const parsed = runCraftSpecFromJson({
+      phase: 'shop',
+      battle: 2,
+      army: [{ type: 'rook', abilities: ['marshalled'] }, 'pawn'],
+      offers: [{ pieces: ['pawn', 'pawn'], type: 'concinnous' }],
+      relics: ['fair-scales'],
+    });
+    expect(parsed.army).toEqual([
+      { type: 'rook', abilities: ['marshalled'] },
+      { type: 'pawn', abilities: [] },
+    ]);
+    expect(parsed.offers).toEqual([{ pieces: ['pawn', 'pawn'], cardType: 'concinnous' }]);
+    expect(parsed.relics).toEqual(['fair-scales']);
+  });
+
+  it('refuses a field it does not understand rather than crafting the wrong Run', () => {
+    expect(() => runCraftSpecFromJson({ phase: 'shop', goldd: 40 })).toThrow(/unknown field "goldd"/);
+  });
+
+  it('refuses an ability that is not an ability', () => {
+    expect(() => runCraftSpecFromJson({ phase: 'shop', army: [{ type: 'rook', abilities: ['flying'] }] }))
+      .toThrow(/"flying" is not an ability/);
+  });
+
+  it('grants crafted abilities to the units it adds', () => {
+    const run = craftRunDocument(
+      runCraftSpecFromJson({ phase: 'shop', battle: 2, army: [{ type: 'rook', abilities: ['marshalled'] }, 'pawn'] }),
+      war(),
+    );
+    expect(run.army.map((unit) => `${unit.type}:${unit.abilities.join('+') || 'none'}`))
+      .toEqual(['king:none', 'rook:marshalled', 'pawn:none']);
   });
 });
 
