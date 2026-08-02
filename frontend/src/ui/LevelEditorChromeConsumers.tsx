@@ -3,6 +3,7 @@ import { currentLiveMediaCatalog, liveMediaForSlot } from '@chess-tactics/board-
 import { KitScroll } from './KitScroll';
 import { HouseSelect } from './shared/HouseSelect';
 import { ChromeDivider, ShellControlsPanel, ShellWorkspace } from './shared/ChromeBox';
+import { workspaceBackgroundArtwork } from './workspaceBackgrounds';
 import type { LevelEditorLayerKey } from './levelEditorRoute';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { CyclePicker } from './shared/CyclePicker';
@@ -198,6 +199,7 @@ export function LevelEditorEventsWorkspace({
       bodyClassName="le-events-workspace-content"
       data-testid="level-events-workspace"
       aria-labelledby="level-events-workspace-title"
+      backgroundArtwork={workspaceBackgroundArtwork('level-editor-events')}
     >
       <div className="le-events-head">
         <h2 id="level-events-workspace-title">Events</h2>

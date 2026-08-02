@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, unlinkSync, watch } from 'node:fs';
 import { createServer as createNetServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
@@ -254,6 +254,7 @@ function prodBackend(port) {
   const pidFile = join(tmpdir(), `chess-dev-backend-${createHash('md5').update(backendDir).digest('hex').slice(0, 8)}.pid`);
   let child = null;
   let stopping = false;
+  let restarting = false;
   // A fresh worktree ships with NO backend/node_modules, so `node server.js` throws
   // `Cannot find module 'express'` and the exit handler below relaunches it every 1s
   // FOREVER — the recurring fresh-worktree papercut. `vite` is meant to bootstrap the
@@ -295,7 +296,14 @@ function prodBackend(port) {
       // serving a frontend that silently 500s on every /api call. Nobody — human or agent —
       // should be able to skate past a dead backend without noticing. The ONLY sanctioned way
       // to run without it is the explicit DEV_NO_BACKEND=1 opt-in, which never reaches here.
-      const stop = () => { stopping = true; if (child) { child.kill(); child = null; } try { unlinkSync(pidFile); } catch { /* */ } };
+      let watchers = [];
+      const stop = () => {
+        stopping = true;
+        for (const watcher of watchers) { try { watcher.close(); } catch { /* already closed */ } }
+        watchers = [];
+        if (child) { child.kill(); child = null; }
+        try { unlinkSync(pidFile); } catch { /* */ }
+      };
       const fatal = (why) => {
         const bar = '━'.repeat(74);
         log.error(`\n${bar}`);
@@ -407,6 +415,9 @@ function prodBackend(port) {
           child = null;
           clearTimeout(watchdog);
           if (stopping) return;
+          // A restart we asked for, not a failure: relaunch at once and do not let it
+          // count toward the boot-failure streak.
+          if (restarting) { restarting = false; start(); return; }
           if (!ready) {
             // Died before it ever served a request — it could not start.
             bootFails += 1;
@@ -422,6 +433,52 @@ function prodBackend(port) {
         });
       };
       start();
+
+      // Backend code changes must reach the running backend. Vite hot-reloads the frontend
+      // module graph, but this backend is a SEPARATE node process: without a watcher it keeps
+      // serving whatever it was spawned with, so an edit — or a merge, or a branch switch —
+      // leaves stale code running with nothing on screen to say so. That failure is especially
+      // nasty when the shared dev DB has moved ahead of the running process: /api answers 503
+      // and the app just reports "Live assets unavailable", which reads like a dead server
+      // rather than an out-of-date one. Vite is the sole lifecycle owner of this child
+      // (ADR-0308), so the restart belongs here, not in devctl or a second watcher process.
+      const WATCHED_SOURCE = /\.(?:js|mjs|cjs|json)$/i;
+      const IGNORED_PATH = /(?:^|[\\/])(?:node_modules|\.git|coverage|dist-test|tmp|tmp-shots|\.codex-session)(?:[\\/]|$)/;
+      let restartTimer = null;
+      const restartForChange = (reason) => {
+        if (stopping) return;
+        clearTimeout(restartTimer);
+        // Debounce: a merge, an npm install or a branch switch rewrites many files at once,
+        // and each would otherwise queue its own restart.
+        restartTimer = setTimeout(() => {
+          if (stopping) return;
+          log.info(`[backend] ${reason} — restarting`);
+          bootFails = 0; // a source change is a fresh attempt, not a continuing crash streak
+          if (child) { restarting = true; child.kill(); } else start();
+        }, 300);
+        if (restartTimer.unref) restartTimer.unref();
+      };
+
+      // The backend's own sources, plus the built board-render bundle it imports (so a
+      // rebuild of the shared package also takes effect without a manual bounce).
+      for (const [dir, label] of [[backendDir, 'backend'], [join(boardRenderDir, 'dist'), 'board-render']]) {
+        if (!existsSync(dir)) continue;
+        try {
+          const watcher = watch(dir, { recursive: true }, (_event, name) => {
+            const relative = String(name || '').replace(/\\/g, '/');
+            if (!relative || IGNORED_PATH.test(relative) || !WATCHED_SOURCE.test(relative)) return;
+            restartForChange(`${label}/${relative} changed`);
+          });
+          watcher.on('error', (error) => log.warn(`[backend] watch error on ${dir}: ${error.message}`));
+          if (watcher.unref) watcher.unref();
+          watchers.push(watcher);
+        } catch (error) {
+          // Never fatal: a dev server that cannot watch is still usable, it just needs a
+          // manual restart after backend edits. Say so rather than failing silently.
+          log.warn(`[backend] could not watch ${dir} (${error.message}); backend edits will need a manual restart.`);
+        }
+      }
+
       server.httpServer?.once('close', stop);
       process.once('exit', stop);
       for (const sig of ['SIGINT', 'SIGTERM']) process.once(sig, () => { stop(); process.exit(0); });

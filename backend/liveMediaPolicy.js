@@ -62,6 +62,12 @@ const STRATEGIKON_BACKGROUND_PROOF_RENDERER = 'ShellWorkspace/StrategikonBackgro
 const STRATEGIKON_BACKGROUND_PROOF_SCHEMA = 'strategikon-background-cover-exception-v1';
 const STRATEGIKON_BACKGROUND_SLOT = 'ui/workspaces/strategikon/background.png';
 const STRATEGIKON_BACKGROUND_SHA256 = '8084f009cae79d3eaaa64bb2c0f5df6e26fc8dfe7d9f0547f24135102d41ffe7';
+// Full-screen artwork behind one workspace. The Strategikon keeps its own stricter,
+// byte-pinned projection (ADR-0336) and is dispatched before this one; these are the
+// screens whose backdrop is chosen from generated candidates in Studio > Screen Art.
+const WORKSPACE_BACKGROUND_COMPONENT = 'workspace-background';
+const WORKSPACE_BACKGROUND_SLOT = /^ui\/workspaces\/([a-z][a-z0-9-]{0,63})\/background\.png$/;
+const WORKSPACE_BACKGROUND_IDS = Object.freeze(['run-victory', 'level-editor-events']);
 
 function isObjectRecord(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -120,6 +126,13 @@ function sfxSampleSlot(slot) {
 
 function strategikonBackgroundSlot(slot) {
   return String(slot || '') === STRATEGIKON_BACKGROUND_SLOT;
+}
+
+/** The workspace id a `ui/workspaces/<id>/background.png` slot names, or null. */
+function workspaceBackgroundSlotId(slot) {
+  const match = WORKSPACE_BACKGROUND_SLOT.exec(String(slot || ''));
+  const id = match ? match[1] : null;
+  return id && WORKSPACE_BACKGROUND_IDS.includes(id) ? id : null;
 }
 
 function mediaVersionMetadata(row) {
@@ -594,6 +607,48 @@ function strategikonBackgroundMediaIssue(row, projectedRuntime = null) {
   return null;
 }
 
+/**
+ * Domain-owned runtime projection for one workspace's full-screen backdrop. The art is
+ * decorative — it sits behind the workspace's own panels and carries no text — so the
+ * contract is the registered workspace id plus frame geometry that matches the uploaded
+ * raster, which stops a re-crop from silently changing what the screen paints.
+ */
+function workspaceBackgroundMediaIssue(row, projectedRuntime = null) {
+  const workspaceId = workspaceBackgroundSlotId(row.slot);
+  if (!workspaceId) {
+    return `workspace backgrounds must match ui/workspaces/<workspace-id>/background.png for a registered workspace (${WORKSPACE_BACKGROUND_IDS.join(', ')})`;
+  }
+  if (row.domain !== 'ui-kit') return 'workspace backgrounds require the ui-kit domain';
+  if (row.role !== 'background') return 'workspace backgrounds require the background role';
+  if (row.media_type !== 'image/png') return 'workspace backgrounds require image/png';
+  const width = Number(row.width);
+  const height = Number(row.height);
+  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 1 || height < 1) {
+    return 'workspace backgrounds require decoded raster dimensions';
+  }
+
+  const metadata = mediaVersionMetadata(row);
+  const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+  if (!isObjectRecord(runtime)) return 'workspace backgrounds require metadata.runtime';
+  const allowed = new Set(['component', 'variant', 'frameWidth', 'frameHeight', 'frameCount', 'altText', 'nativeRole']);
+  const unsupported = Object.keys(runtime).filter((key) => !allowed.has(key));
+  if (unsupported.length) {
+    return `workspace background runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
+  }
+  if (runtime.component !== WORKSPACE_BACKGROUND_COMPONENT) {
+    return `workspace background metadata.runtime.component must be ${WORKSPACE_BACKGROUND_COMPONENT}`;
+  }
+  if (runtime.nativeRole !== WORKSPACE_BACKGROUND_COMPONENT) {
+    return `workspace background metadata.runtime.nativeRole must be ${WORKSPACE_BACKGROUND_COMPONENT}`;
+  }
+  if (runtime.variant !== workspaceId) return 'workspace background runtime variant must match its semantic slot id';
+  if (runtime.frameWidth !== width || runtime.frameHeight !== height || runtime.frameCount !== 1) {
+    return 'workspace background runtime frame geometry must match the uploaded raster';
+  }
+  if (runtime.altText !== '') return 'decorative workspace background runtime altText must be empty';
+  return null;
+}
+
 function strategikonBackgroundOwnerProofIssue(row, proof, surfaceUrl = null) {
   if (!strategikonBackgroundSlot(row.slot)) return 'Strategikon background proof requires its canonical semantic slot';
   if (!isObjectRecord(proof) || proof.schema !== STRATEGIKON_BACKGROUND_PROOF_SCHEMA) {
@@ -869,6 +924,9 @@ module.exports = {
   runResourceIconMediaIssue,
   runResourceIconSlotId,
   runShopWrapMediaIssue,
+  workspaceBackgroundSlotId,
+  workspaceBackgroundMediaIssue,
+  WORKSPACE_BACKGROUND_IDS,
   runShopWrapSlotId,
   sfxSampleMediaIssue,
   sfxSampleOwnerProofIssue,

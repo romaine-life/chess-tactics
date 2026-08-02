@@ -19010,6 +19010,38 @@ button.tileset-relationship-cell {
   gap: var(--ds-inline);
 }
 
+/* Screen-art candidates are wide 640x360 plates meant to be read at 4x, so they get a
+   flowing row per screen rather than the relic grid's fixed icon columns. */
+/* A backdrop plate is opaque and object-fit:cover fills the whole box, so the base
+   card-image checkerboard never shows through and this rule paints nothing of its own —
+   it only sets the 16:9 shape the plates are authored in. */
+.tileset-studio-card-image.screen-art-card-image {
+  aspect-ratio: 16 / 9;
+  min-height: 0;
+}
+
+.tileset-studio-card-image.screen-art-card-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+
+/* Viewer stage for a screen backdrop: the shared .al-stage frame, but claiming the whole
+   flex row — a backdrop is judged at size, and content-width would pin it to its authored
+   640px. Scaled nearest-neighbour so the authored pixels stay crisp (these ship at 4x). */
+.screen-art-stage {
+  flex: 1 1 100%;
+  min-inline-size: 0;
+}
+
+.screen-art-stage img {
+  image-rendering: pixelated;
+  inline-size: 100%;
+  block-size: auto;
+}
+
 .run-relic-review-grid {
   display: grid;
   gap: var(--ds-inline-tight);
@@ -20581,6 +20613,18 @@ button.tileset-relationship-cell {
 }
 
 .strategikon-background-artwork {
+  block-size: 100%;
+  display: block;
+  inline-size: 100%;
+  image-rendering: pixelated;
+  object-fit: cover;
+  opacity: .68;
+}
+
+/* Installed full-screen artwork behind a workspace, on the same terms the Strategikon
+   background already established: cover-scaled, nearest-neighbour so the authored pixels
+   survive the upscale, and held back so the workspace's own panels and text stay first. */
+.workspace-background-artwork {
   block-size: 100%;
   display: block;
   inline-size: 100%;
@@ -22749,4 +22793,21 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
 
 .run-pestiferous-losses ul {
   margin: 0;
+}
+
+/* The owner's install decision, inside the Screen Art viewer's Details column. Separated
+   by space rather than a rule: raw border paint outside registered chrome is exactly what
+   the UI surface contract forbids. */
+.screen-art-install {
+  display: grid;
+  gap: var(--ds-space-1);
+  margin-block-start: var(--ds-gutter);
+}
+
+.screen-art-install h3 {
+  margin: 0;
+}
+
+.screen-art-install code {
+  word-break: break-all;
 }

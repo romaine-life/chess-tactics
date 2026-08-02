@@ -15,6 +15,7 @@ import type { RunSceneSnapshot } from './shell/sceneManifest';
 import { GameplayWorkspaceSceneSlot, RunPresentationSceneSlot } from './shell/AuthoredSceneSlot';
 import { useConfirm } from './shared/ConfirmDialog';
 import { RunWorkspace } from './RunWorkspace';
+import { workspaceBackgroundArtwork } from './workspaceBackgrounds';
 import {
   ATARAXIA_BY_TIER,
   CACOCHYMIC_DISPLAY_NAME,
@@ -56,7 +57,6 @@ import { RunRelicIcon, RunRelicsWorkspace } from './RunRelics';
 import { RunGoldAmount } from './RunResources';
 import {
   runWorkspaceHref,
-  RunSelfInspectionControls,
   type RunSelfInspectionView,
   type RunWorkspaceView,
 } from './RunSelfInspection';
@@ -177,13 +177,6 @@ function RunMetaControls({
               </ChromeButton>
             ) : null}
           </div>
-        </div>
-        <div className="skirmish-view-group">
-          <span className="skirmish-eyebrow">Self inspection</span>
-          <RunSelfInspectionControls
-            view={view === 'army' || view === 'relics' ? view : null}
-            onNavigate={onNavigate}
-          />
         </div>
         {shop ? (
           <div className="skirmish-view-group">
@@ -661,6 +654,7 @@ function VictoryPanel({ run }: { run: RunDocument }): ReactElement {
       contentClassName="run-victory-workspace-content"
       data-testid="run-victory-workspace"
       aria-labelledby="run-victory-workspace-title"
+      backgroundArtwork={workspaceBackgroundArtwork('run-victory')}
     >
       <h2 id="run-victory-workspace-title">War won</h2>
       <h2>{run.war.name}</h2>
@@ -802,8 +796,6 @@ function BattlePanel({
         routePath={routePath}
         routeSearch={routeSearch}
         runWorkspace={inspectionWorkspace}
-        runSelfInspectionView={view === 'army' || view === 'relics' ? view : null}
-        onNavigateRunView={onNavigate}
       />
     </>
   );
