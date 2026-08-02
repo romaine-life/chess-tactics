@@ -22612,14 +22612,9 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
 .run-card-prototype-unit-marker {
   align-items: center;
   block-size: 3.4cqw;
-  color: #ffe09a;
   display: inline-flex;
-  font: 400 3.4cqw/1 var(--ds-font-display);
   inline-size: 3.4cqw;
   justify-content: center;
-  text-shadow:
-    0 0 .7cqw #000,
-    0 .3cqw 0 #000;
   z-index: 3;
   image-rendering: pixelated;
   object-fit: contain;
