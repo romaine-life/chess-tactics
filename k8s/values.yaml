@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:1474466dff129c64d44469e97763240035bd206ec0adc4dc58a29b1be47b7e0d"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:4d3f9ae0274c8469c7d44cd9d2d4a7c4d45802b1f6eb0d5c055296333889af5d"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Install owner-chosen full-screen art behind Victory and the Events editor"
-  prNumber: "618"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/618"
-  commit: "78edebf1"
+  prTitle: "Stand Sell Units in the Shop's scene"
+  prNumber: "619"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/619"
+  commit: "e4fda426"
 
 name: chess-tactics
 namespace: chess-tactics
