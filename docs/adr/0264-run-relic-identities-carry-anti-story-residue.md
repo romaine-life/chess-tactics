@@ -5,6 +5,8 @@ deciders: owner (Nelson) + Codex
 supersedes:
   - "[ADR-0193](0193-runs-are-persistent-wars-around-unchanged-chess-battles.md) relic display identities"
   - "[ADR-0198](0198-run-relic-icons-are-installed-live-art-and-persistently-visible.md) installed-art authority for renamed identities"
+partially_superseded_by:
+  - "[ADR-0332](0332-eight-run-relic-icons-ship-the-approved-resized-pixels.md)"
 ---
 
 # ADR-0264: Run relic identities carry anti-story residue
