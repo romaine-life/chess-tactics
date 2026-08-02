@@ -1,10 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
   RUN_CARD_APPROVED_TUNING,
+  RUN_CARD_CONTENTS_DENSITY_LADDER,
   RUN_CARD_PLAGUED_ICON_PLACEHOLDER,
   RUN_CARD_PLAGUED_ICON_SLOT,
+  runCardContentsDensityStepForCard,
+  runCardLedgerRows,
   runCardUnitStackSeatLeft,
+  type RunCardFaceContent,
 } from './RunCardFace';
+import {
+  RUN_CARD_CONCINNOUS_STEEL_FRAME_GEOMETRY,
+  RUN_CARD_STANDARD_FRAME_GEOMETRY,
+} from './runCardFrameGeometry';
 import {
   RUN_CARD_CONTENTS_STUDY_PROFILES,
   runCardContentsStudyFromSearch,
@@ -107,6 +115,90 @@ describe('Run Card Layout review variant', () => {
     expect(runCardPrototypeCostFromSearch('')).toBeNull();
   });
 
+  const cardWithGrants = (grants: RunCardFaceContent['grants']): RunCardFaceContent => ({
+    name: 'Specimen',
+    cost: 3,
+    typeLine: 'Units',
+    grants,
+    flavor: 'The frost came in June. By August, the road had found him.',
+  });
+
+  it('derives each live card face density step from its own cell load', () => {
+    expect(runCardLedgerRows(1)).toBe(1);
+    expect(runCardLedgerRows(2)).toBe(2);
+    expect(runCardLedgerRows(4)).toBe(2);
+    expect(runCardLedgerRows(5)).toBe(3);
+    expect(runCardContentsDensityStepForCard(cardWithGrants([{ count: 1, unit: 'pawn' }])).density).toBe('roomy');
+    expect(runCardContentsDensityStepForCard(cardWithGrants([{ count: 2, unit: 'pawn' }])).density).toBe('roomy');
+    expect(runCardContentsDensityStepForCard(cardWithGrants([
+      { count: 1, unit: 'pawn' },
+      { count: 1, unit: 'knight' },
+    ])).density).toBe('filled');
+    expect(runCardContentsDensityStepForCard(cardWithGrants([
+      { count: 3, unit: 'pawn' },
+      { count: 1, unit: 'knight' },
+      { count: 1, unit: 'bishop' },
+    ])).density).toBe('packed');
+    expect(runCardContentsDensityStepForCard(cardWithGrants([
+      { count: 3, unit: 'pawn' },
+      { count: 1, unit: 'knight' },
+      { count: 1, unit: 'bishop' },
+      { count: 1, unit: 'rook' },
+      { count: 1, unit: 'queen' },
+    ])).density).toBe('scrunched');
+  });
+
+  it('grows flavor into leftover Contents room without changing the chosen step', () => {
+    const roomy = runCardContentsDensityStepForCard(cardWithGrants([{ count: 1, unit: 'pawn' }]));
+    expect(roomy.density).toBe('roomy');
+    expect(roomy.tuning.flavorScale).toBe(1.3);
+    // A full Filled box has no leftover room, so its step object stays the ladder's own.
+    const filled = runCardContentsDensityStepForCard(cardWithGrants([
+      { count: 1, unit: 'pawn' },
+      { count: 1, unit: 'knight' },
+    ]));
+    expect(filled.tuning).toBe(RUN_CARD_CONTENTS_DENSITY_LADDER[1].tuning);
+    expect(filled.tuning.flavorScale).toBe(1);
+    const packed = runCardContentsDensityStepForCard(cardWithGrants([
+      { count: 3, unit: 'pawn' },
+      { count: 1, unit: 'knight' },
+      { count: 1, unit: 'bishop' },
+    ]));
+    expect(packed.density).toBe('packed');
+    expect(packed.tuning.flavorScale).toBe(1.1);
+    const scrunched = runCardContentsDensityStepForCard(cardWithGrants([
+      { count: 3, unit: 'pawn' },
+      { count: 1, unit: 'knight' },
+      { count: 1, unit: 'bishop' },
+      { count: 1, unit: 'rook' },
+      { count: 1, unit: 'queen' },
+    ]));
+    expect(scrunched.density).toBe('scrunched');
+    expect(scrunched.tuning.flavorScale).toBe(1.01);
+    // Growth derives copies; the reviewed ladder itself is never rewritten.
+    expect(RUN_CARD_CONTENTS_DENSITY_LADDER[0].tuning.flavorScale).toBe(1);
+    expect(RUN_CARD_CONTENTS_DENSITY_LADDER[3].tuning.flavorScale).toBe(.96);
+  });
+
+  it('steps a sparse card denser only when extras would overflow its actual Contents Box', () => {
+    const concinnousPair: RunCardFaceContent = {
+      name: 'Two Good Boots',
+      cost: 4,
+      typeLine: 'Units — Concinnous',
+      grants: [{ count: 2, unit: 'pawn' }],
+      properties: [{ name: 'Positioned', target: 'Target hidden' }],
+      flavor: 'The road kept both pairs of boots, and returned neither name.',
+    };
+    expect(runCardContentsDensityStepForCard(
+      concinnousPair,
+      RUN_CARD_CONCINNOUS_STEEL_FRAME_GEOMETRY,
+    ).density).toBe('filled');
+    expect(runCardContentsDensityStepForCard(
+      { ...concinnousPair, typeLine: 'Units', properties: undefined },
+      RUN_CARD_STANDARD_FRAME_GEOMETRY,
+    ).density).toBe('roomy');
+  });
+
   it('shows progressively denser Contents Box specimens at the real card width', () => {
     expect(RUN_CARD_CONTENTS_STUDY_PROFILES.map(({ id, load }) => ({ id, load }))).toEqual([
       { id: 'roomy', load: '1 cell · 1 row' },
@@ -115,6 +207,11 @@ describe('Run Card Layout review variant', () => {
       { id: 'scrunched', load: '5 cells · 3 rows' },
     ]);
     expect(RUN_CARD_CONTENTS_STUDY_PROFILES.map(({ tuning }) => tuning.unitHeight)).toEqual([21, 12, 11.5, 8]);
+    // The study renders the same ladder objects the live face derives from.
+    RUN_CARD_CONTENTS_STUDY_PROFILES.forEach((profile, index) => {
+      expect(profile.id).toBe(RUN_CARD_CONTENTS_DENSITY_LADDER[index].density);
+      expect(profile.tuning).toBe(RUN_CARD_CONTENTS_DENSITY_LADDER[index].tuning);
+    });
   });
 
   it('lets the owner magnify every part of a density treatment together', () => {
