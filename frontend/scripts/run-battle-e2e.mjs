@@ -4,7 +4,7 @@
 // not the pointer path — an invisible overlay shielding the board passes every unit
 // test while making the game unplayable; see the strategikon-slot regression, #552).
 //
-// Drives a FRESH anonymous profile end-to-end: start run → buy an opening card → begin battle
+// Drives a FRESH anonymous profile end-to-end: start run → leave the opening Shop without buying → begin battle
 // → click a unit's tile → click a legal destination → assert the move commits, the
 // enemy replies, and the open Strategikon still takes the pointer. Fails loudly at
 // the exact step where a click is swallowed.
@@ -20,6 +20,7 @@ import puppeteer from 'puppeteer-core';
 const base = process.argv.slice(2).find((argument) => !argument.startsWith('--'));
 if (!base) { console.error('usage: npm run e2e:run-battle -- <base-url>'); process.exit(2); }
 const transitionOnly = process.argv.includes('--transition-only');
+const deploymentOnly = process.argv.includes('--deployment-only');
 
 const CHROMES = [
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
@@ -51,6 +52,7 @@ try {
   const page = await browser.newPage();
   await page.setViewport({ width: 1280, height: 800 });
   page.setDefaultTimeout(30_000);
+  page.on('pageerror', (error) => console.error(`page error: ${error.message}`));
   // The named development backend carries the owner's verified grant for every
   // loopback request. This proof explicitly owns a disposable anonymous Run, so
   // answer only the read-only auth projection as signed out and leave all game,
@@ -104,10 +106,6 @@ try {
     await fail('app boot', `HTTP ${navigationResponse?.status() ?? 'none'}; ${JSON.stringify(bootState)}`);
   }
 
-  const runPhase = () => page.evaluate(
-    () => import('/src/run/store.ts').then((m) => m.useActiveRun.getState().run?.phase ?? null),
-  );
-
   // Click a button by exact visible label via REAL mouse coordinates (hit-tested).
   // Waits until the button exists, has geometry, and is not inside an inert subtree
   // (scene transitions mark preparing regions inert — clicks there are void by design).
@@ -116,14 +114,17 @@ try {
       await page.waitForFunction((text) => {
         const btn = [...document.querySelectorAll('button')]
           .find((b) => (b.textContent || '').trim() === text && b.getBoundingClientRect().width > 0);
-        return !!btn && !btn.closest('[inert]');
+        return !!btn && !btn.disabled && !btn.closest('[inert]');
       }, { timeout: 15_000 }, label);
     } catch {
       return false;
     }
     const point = await page.evaluate((text) => {
       const btn = [...document.querySelectorAll('button')]
-        .find((b) => (b.textContent || '').trim() === text && b.getBoundingClientRect().width > 0 && !b.closest('[inert]'));
+        .find((b) => (b.textContent || '').trim() === text
+          && b.getBoundingClientRect().width > 0
+          && !b.disabled
+          && !b.closest('[inert]'));
       if (!btn) return null;
       btn.scrollIntoView({ block: 'nearest' });
       // Aim like a user: pick a sample point inside the button that ACTUALLY hit-tests
@@ -138,39 +139,6 @@ try {
       }
       return null;
     }, label);
-    if (!point) return false;
-    await page.mouse.click(point.x, point.y);
-    return true;
-  };
-
-  const clickElement = async (selector) => {
-    try {
-      await page.waitForFunction((query) => {
-        const element = document.querySelector(query);
-        if (!(element instanceof HTMLElement)
-          || element.getBoundingClientRect().width <= 0
-          || element.closest('[inert]')
-          || (element instanceof HTMLButtonElement && element.disabled)) return false;
-        element.scrollIntoView({ block: 'center' });
-        const rect = element.getBoundingClientRect();
-        const x = (Math.max(0, rect.left) + Math.min(window.innerWidth, rect.right)) / 2;
-        const y = (Math.max(0, rect.top) + Math.min(window.innerHeight, rect.bottom)) / 2;
-        const hit = document.elementFromPoint(x, y);
-        return Boolean(hit && (hit === element || element.contains(hit)));
-      }, { timeout: 15_000 }, selector);
-    } catch {
-      return false;
-    }
-    const point = await page.evaluate((query) => {
-      const element = document.querySelector(query);
-      if (!(element instanceof HTMLElement) || element.closest('[inert]')) return null;
-      element.scrollIntoView({ block: 'center' });
-      const rect = element.getBoundingClientRect();
-      const x = (Math.max(0, rect.left) + Math.min(window.innerWidth, rect.right)) / 2;
-      const y = (Math.max(0, rect.top) + Math.min(window.innerHeight, rect.bottom)) / 2;
-      const hit = document.elementFromPoint(x, y);
-      return hit && (hit === element || element.contains(hit)) ? { x, y } : null;
-    }, selector);
     if (!point) return false;
     await page.mouse.click(point.x, point.y);
     return true;
@@ -192,7 +160,7 @@ try {
       disabled: button.disabled,
       inert: Boolean(button.closest('[inert]')),
       rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
-      hit: hit ? { tag: hit.tagName, className: hit.className, text: hit.textContent?.trim() } : null,
+      hit: hit ? { tag: hit.tagName, className: hit.className, text: hit.textContent?.trim().slice(0, 120) } : null,
       director: director ? {
         phase: director.getAttribute('data-scene-phase'),
         committed: director.getAttribute('data-scene-committed'),
@@ -206,55 +174,42 @@ try {
     };
   }, label);
 
-  const elementDiagnostics = (selector) => page.evaluate((query) => {
-    const element = document.querySelector(query);
-    if (!(element instanceof HTMLElement)) return { found: false };
-    element.scrollIntoView({ block: 'center' });
-    const rect = element.getBoundingClientRect();
-    const x = (Math.max(0, rect.left) + Math.min(window.innerWidth, rect.right)) / 2;
-    const y = (Math.max(0, rect.top) + Math.min(window.innerHeight, rect.bottom)) / 2;
-    const hit = document.elementFromPoint(x, y);
+  const sceneDiagnostics = () => page.evaluate(async () => {
+    const timeline = await import('/src/diagnostics/loadingTimeline.ts');
+    const director = document.querySelector('.scene-director');
     return {
-      found: true,
-      disabled: element instanceof HTMLButtonElement ? element.disabled : null,
-      inert: Boolean(element.closest('[inert]')),
-      pointerEvents: getComputedStyle(element).pointerEvents,
-      visibility: getComputedStyle(element).visibility,
-      opacity: getComputedStyle(element).opacity,
-      rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
-      hit: hit ? { tag: hit.tagName, className: hit.className, text: hit.textContent?.trim().slice(0, 120) } : null,
-      director: document.querySelector('.scene-director')?.getAttribute('data-scene-phase') ?? null,
+      director: director ? {
+        phase: director.getAttribute('data-scene-phase'),
+        committed: director.getAttribute('data-scene-committed'),
+        pending: director.getAttribute('data-scene-pending'),
+      } : null,
       boundaries: [...document.querySelectorAll('.scene-boundary')].map((boundary) => ({
         scene: boundary.getAttribute('data-scene'),
         role: boundary.getAttribute('data-scene-visual-role'),
+        participants: boundary.getAttribute('data-scene-participants'),
+        unresolved: boundary.getAttribute('data-scene-unresolved'),
         inert: boundary.hasAttribute('inert'),
+        text: boundary.textContent?.replace(/\s+/g, ' ').trim().slice(0, 300),
       })),
-      ancestors: [...function* ancestors() {
-        let current = element.parentElement;
-        for (let index = 0; current && index < 8; index += 1, current = current.parentElement) {
-          const style = getComputedStyle(current);
-          yield {
-            tag: current.tagName,
-            className: current.className,
-            covered: current.hasAttribute('data-shell-workspace-covered'),
-            pointerEvents: style.pointerEvents,
-            visibility: style.visibility,
-            opacity: style.opacity,
-          };
-        }
-      }()],
+      loading: timeline.loadingEvents().slice(-20),
     };
-  }, selector);
+  });
 
   const waitPhase = async (phase, step) => {
     try {
       await page.waitForFunction(
-        (want) => import('/src/run/store.ts').then((m) => (m.useActiveRun.getState().run?.phase ?? null) === want),
-        { timeout: 15_000 },
+        (want) => {
+          const director = document.querySelector('.scene-director');
+          const scenePhase = want === 'battle' || want === 'deployment' ? 'battlefield' : want;
+          return director?.getAttribute('data-scene-phase') === 'current'
+            && (director.getAttribute('data-scene-committed') ?? '').includes(`:${scenePhase}:`)
+            && !director.getAttribute('data-scene-pending');
+        },
+        { timeout: 45_000 },
         phase,
       );
     } catch {
-      await fail(step, `run phase never became "${phase}" (now "${await runPhase()}")`);
+      await fail(step, `committed Run scene never became "${phase}"; ${JSON.stringify(await sceneDiagnostics())}`);
     }
   };
 
@@ -262,14 +217,23 @@ try {
   if (!await clickButton('Start Run')) await fail('start-run', JSON.stringify(await buttonDiagnostics('Start Run')));
   await waitPhase('shop', 'start-run');
 
-  if (!await clickElement('button.run-card-action:not([disabled])')) {
-    await page.screenshot({ path: 'tmp-shots/run-opening-card-hit-failure.png' });
-    await fail('opening-card-purchase', JSON.stringify(await elementDiagnostics('button.run-card-action:not([disabled])')));
+  if (deploymentOnly) {
+    const prepared = await page.evaluate(async () => {
+      const { useActiveRun } = await import('/src/run/store.ts');
+      const run = useActiveRun.getState().run;
+      if (!run || run.phase !== 'shop' || run.army.length < 2) return null;
+      const army = run.army.map((unit, index) => ({
+        ...unit,
+        abilities: [
+          ...unit.abilities.filter((ability) => ability !== 'discipline'),
+          ...(index < 2 ? ['discipline'] : []),
+        ],
+      }));
+      useActiveRun.getState().replace({ ...run, army, updatedAt: new Date().toISOString() });
+      return army.filter((unit) => unit.abilities.includes('discipline')).map((unit) => unit.id);
+    });
+    if (prepared?.length !== 2) await fail('prepare-deployment-fixture', JSON.stringify(prepared));
   }
-  if (!await clickButton('Continue to first Battle')) {
-    await fail('opening-continue', JSON.stringify(await buttonDiagnostics('Continue to first Battle')));
-  }
-  await waitPhase('deployment', 'opening-continue');
 
   await page.evaluate(() => {
     const outgoing = document.querySelector('.run-scene-slot');
@@ -284,6 +248,9 @@ try {
       blankFrame: false,
       interactiveBeforeCommit: false,
       arrivalBeforeCommit: false,
+      cameraSamples: [],
+      visibleCameraFrames: 0,
+      visibleEnteringCameraFrames: 0,
     };
     window.__ctRunTransitionProbe = probe;
     const tick = () => {
@@ -292,21 +259,42 @@ try {
       const pending = director?.getAttribute('data-scene-pending') ?? '';
       const boundaries = [...document.querySelectorAll('.scene-boundary')];
       const transitioning = phase !== 'current' && phase !== 'startup';
-      probe.sawPending ||= pending.includes(':battle:');
+      probe.sawPending ||= pending.includes(':battlefield:');
       probe.sawOverlap ||= boundaries.some((entry) => entry.getAttribute('data-scene-visual-role') === 'outgoing')
         && boundaries.some((entry) => entry.getAttribute('data-scene-visual-role') === 'incoming');
       probe.sawEntering ||= phase === 'entering';
       probe.retainedOutgoing ||= transitioning && Boolean(probe.outgoing?.isConnected);
       probe.inertOutgoing ||= transitioning && Boolean(probe.outgoing?.closest('[inert]'));
+      const incomingBoundary = boundaries
+        .find((entry) => entry.getAttribute('data-scene-visual-role') === 'incoming');
+      const incomingBoard = incomingBoundary?.querySelector('[data-testid="skirmish-board"]');
+      const incomingOpacity = incomingBoundary
+        ? Number.parseFloat(getComputedStyle(incomingBoundary).opacity)
+        : 0;
+      if (incomingBoard
+        && !incomingBoard.classList.contains('is-board-loading')
+        && incomingOpacity > 0.01) {
+        const artLayer = incomingBoard.querySelector('.tileset-view-art-layer');
+        if (artLayer) {
+          const camera = [
+            artLayer.style.getPropertyValue('--view-zoom'),
+            artLayer.style.getPropertyValue('--view-pan-x'),
+            artLayer.style.getPropertyValue('--view-pan-y'),
+          ].join('|');
+          probe.visibleCameraFrames += 1;
+          if (phase === 'entering') probe.visibleEnteringCameraFrames += 1;
+          if (probe.cameraSamples.at(-1)?.camera !== camera) {
+            probe.cameraSamples.push({ phase, camera, opacity: incomingOpacity });
+          }
+        }
+      }
       if (transitioning) {
         const visibleBoundary = boundaries.some((entry) => {
           const rect = entry.getBoundingClientRect();
           return rect.width > 0 && rect.height > 0 && Number.parseFloat(getComputedStyle(entry).opacity) > 0.01;
         });
         if (!visibleBoundary) probe.blankFrame = true;
-        const pendingBoard = boundaries
-          .find((entry) => entry.getAttribute('data-scene-visual-role') === 'incoming')
-          ?.querySelector('[data-testid="skirmish-board"]');
+        const pendingBoard = incomingBoard;
         if (pendingBoard?.getAttribute('data-interactive') === 'true') probe.interactiveBeforeCommit = true;
         if (pendingBoard?.getAttribute('data-arriving') === 'true') probe.arrivalBeforeCommit = true;
       }
@@ -315,14 +303,14 @@ try {
     probe.frame = requestAnimationFrame(tick);
   });
 
-  if (!await clickElement('.run-deployment-pane > button[data-chrome-unit="inner-text-button"]:not([disabled])')) {
-    await fail('begin-battle', JSON.stringify(await elementDiagnostics('.run-deployment-pane > button[data-chrome-unit="inner-text-button"]')));
+  if (!await clickButton('Continue to first Battle')) {
+    await fail('opening-continue-without-purchase', JSON.stringify(await buttonDiagnostics('Continue to first Battle')));
   }
-  await waitPhase('battle', 'begin-battle');
+  await waitPhase(deploymentOnly ? 'deployment' : 'battle', 'opening-continue-without-purchase');
   await page.waitForFunction(() => {
-    const director = document.querySelector('.scene-director');
-    return director?.getAttribute('data-scene-phase') === 'current'
-      && (director.getAttribute('data-scene-committed') ?? '').includes(':battle:')
+      const director = document.querySelector('.scene-director');
+      return director?.getAttribute('data-scene-phase') === 'current'
+      && (director.getAttribute('data-scene-committed') ?? '').includes(':battlefield:')
       && !director.getAttribute('data-scene-pending');
   });
 
@@ -332,11 +320,21 @@ try {
     return lab && !lab.classList.contains('is-board-loading')
       && document.querySelectorAll('button.skirmish-board-cell-hit').length > 0;
   });
+  if (deploymentOnly) {
+    await page.waitForFunction(() => document.querySelector('[data-testid="run-deployment"]')
+      && !document.querySelector('[data-testid="run-deployment"]')?.closest('[inert]'));
+  }
 
   const transition = await page.evaluate(() => {
     const probe = window.__ctRunTransitionProbe;
     cancelAnimationFrame(probe.frame);
     const director = document.querySelector('.scene-director');
+    const finalArtLayer = document.querySelector('[data-testid="skirmish-board"] .tileset-view-art-layer');
+    const finalCamera = finalArtLayer ? [
+      finalArtLayer.style.getPropertyValue('--view-zoom'),
+      finalArtLayer.style.getPropertyValue('--view-pan-x'),
+      finalArtLayer.style.getPropertyValue('--view-pan-y'),
+    ].join('|') : null;
     return {
       sawPending: probe.sawPending,
       sawOverlap: probe.sawOverlap,
@@ -346,6 +344,10 @@ try {
       blankFrame: probe.blankFrame,
       interactiveBeforeCommit: probe.interactiveBeforeCommit,
       arrivalBeforeCommit: probe.arrivalBeforeCommit,
+      cameraSamples: probe.cameraSamples,
+      visibleCameraFrames: probe.visibleCameraFrames,
+      visibleEnteringCameraFrames: probe.visibleEnteringCameraFrames,
+      finalCamera,
       finalPhase: director?.getAttribute('data-scene-phase') ?? null,
       finalCommitted: director?.getAttribute('data-scene-committed') ?? null,
       finalPending: director?.getAttribute('data-scene-pending') ?? null,
@@ -360,23 +362,226 @@ try {
     || transition.blankFrame
     || transition.interactiveBeforeCommit
     || transition.arrivalBeforeCommit
+    || transition.visibleCameraFrames === 0
+    || transition.visibleEnteringCameraFrames === 0
+    || transition.cameraSamples.length !== 1
+    || transition.cameraSamples[0]?.camera !== transition.finalCamera
     || transition.finalPhase !== 'current'
-    || !transition.finalCommitted?.includes(':battle:')
+    || !transition.finalCommitted?.includes(':battlefield:')
     || transition.finalPending
   ) {
     await fail('begin-battle-transition', JSON.stringify(transition));
   }
-  console.log('director-owned Deployment → Battle transition: OK');
+  console.log(`director-owned opening Shop → ${deploymentOnly ? 'Deployment' : 'Battle'} transition: OK`);
 
   await page.waitForFunction(() => document.querySelector('[data-testid="skirmish-board"]')
     ?.getAttribute('data-arriving') === 'false');
-  const transitionShot = 'tmp-shots/run-deployment-battle-transition.png';
+  const transitionShot = 'tmp-shots/run-opening-shop-battle-transition.png';
   const transitionBoard = await page.$('.skirmish-war-room');
   if (!transitionBoard) await fail('transition-screenshot', 'Battle workspace unavailable after commit');
   await transitionBoard.screenshot({ path: transitionShot });
   console.log('transition screenshot:', transitionShot);
+  if (deploymentOnly) {
+    const deploymentState = await page.evaluate(async () => {
+      const { useActiveRun } = await import('/src/run/store.ts');
+      const { activeSkirmishStoreForDiagnostics } = await import('/src/game/SkirmishStoreContext.tsx');
+      const { activeSkirmishViewStoreForDiagnostics } = await import('/src/game/SkirmishViewStoreContext.tsx');
+      const run = useActiveRun.getState().run;
+      const board = document.querySelector('[data-testid="skirmish-board"]');
+      const cameraLayer = board?.querySelector('.tileset-view-art-layer');
+      const camera = () => cameraLayer ? [
+        cameraLayer.style.getPropertyValue('--view-zoom'),
+        cameraLayer.style.getPropertyValue('--view-pan-x'),
+        cameraLayer.style.getPropertyValue('--view-pan-y'),
+      ].join('|') : null;
+      window.__ctDeploymentProbe = {
+        board,
+        boundary: board?.closest('.scene-boundary'),
+        viewPane: board?.querySelector('.tileset-view-stage'),
+        canvases: [...(board?.querySelectorAll('canvas') ?? [])],
+        gameStore: activeSkirmishStoreForDiagnostics(),
+        viewStore: activeSkirmishViewStoreForDiagnostics(),
+        initialCamera: camera(),
+        cameraSamples: [],
+        lifecycleViolations: [],
+        frame: 0,
+      };
+      const tick = () => {
+        const probe = window.__ctDeploymentProbe;
+        const currentBoard = document.querySelector('[data-testid="skirmish-board"]');
+        const director = document.querySelector('.scene-director');
+        const layer = currentBoard?.querySelector('.tileset-view-art-layer');
+        const signature = layer ? [
+          layer.style.getPropertyValue('--view-zoom'),
+          layer.style.getPropertyValue('--view-pan-x'),
+          layer.style.getPropertyValue('--view-pan-y'),
+        ].join('|') : null;
+        if (signature && probe.cameraSamples.at(-1) !== signature) probe.cameraSamples.push(signature);
+        if (
+          director?.getAttribute('data-scene-phase') !== 'current'
+          || director.getAttribute('data-scene-pending')
+          || currentBoard?.classList.contains('is-board-loading')
+        ) {
+          probe.lifecycleViolations.push({
+            phase: director?.getAttribute('data-scene-phase') ?? null,
+            pending: director?.getAttribute('data-scene-pending') ?? null,
+            loading: currentBoard?.classList.contains('is-board-loading') ?? null,
+          });
+        }
+        probe.frame = requestAnimationFrame(tick);
+      };
+      window.__ctDeploymentProbe.frame = requestAnimationFrame(tick);
+      return {
+        phase: run?.phase,
+        disciplineIds: run?.army.filter((unit) => unit.abilities.includes('discipline')).map((unit) => unit.id) ?? [],
+        placements: run?.deployment?.manualPlacements ?? {},
+      };
+    });
+    if (deploymentState.phase !== 'deployment' || deploymentState.disciplineIds.length !== 2) {
+      await fail('deployment-fixture', JSON.stringify(deploymentState));
+    }
+
+    const clickFirstDeploymentCell = async () => {
+      const cell = await page.$('[data-testid^="deployment-cell-"]');
+      if (!cell) await fail('deployment-placement', 'no legal cell');
+      await cell.click();
+    };
+
+    await clickFirstDeploymentCell();
+    await page.waitForFunction(() => {
+      const board = document.querySelector('[data-testid="skirmish-board"]');
+      return board?.getAttribute('data-arriving') === 'true'
+        && (board.getAttribute('data-arriving-unit-ids') ?? '').split(',').filter(Boolean).length === 1;
+    });
+    const firstArrival = await page.evaluate(async () => {
+      const { useActiveRun } = await import('/src/run/store.ts');
+      const run = useActiveRun.getState().run;
+      return {
+        phase: run?.phase,
+        ids: document.querySelector('[data-testid="skirmish-board"]')?.getAttribute('data-arriving-unit-ids') ?? '',
+        placedIds: Object.keys(run?.deployment?.manualPlacements ?? {}),
+      };
+    });
+    await page.waitForFunction(() => document.querySelector('[data-testid="skirmish-board"]')
+      ?.getAttribute('data-arriving') === 'false');
+    const secondDisciplineId = deploymentState.disciplineIds.find((unitId) => unitId !== firstArrival.placedIds[0]);
+    if (firstArrival.phase !== 'deployment'
+      || firstArrival.placedIds.length !== 1
+      || firstArrival.ids !== firstArrival.placedIds[0]
+      || !secondDisciplineId) {
+      await fail('first-discipline-arrival', JSON.stringify({ firstArrival, secondDisciplineId }));
+    }
+
+    const finalPlacementStartedAt = Date.now();
+    await clickFirstDeploymentCell();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const finalManualArrival = await page.evaluate(async () => {
+      const { useActiveRun } = await import('/src/run/store.ts');
+      return {
+        phase: useActiveRun.getState().run?.phase,
+        ids: document.querySelector('[data-testid="skirmish-board"]')?.getAttribute('data-arriving-unit-ids') ?? '',
+      };
+    });
+    if (finalManualArrival.phase !== 'deployment' || finalManualArrival.ids !== secondDisciplineId) {
+      await fail('final-discipline-arrival', JSON.stringify({ finalManualArrival, secondDisciplineId }));
+    }
+    await page.waitForFunction((disciplineIds) => {
+      const ids = (document.querySelector('[data-testid="skirmish-board"]')
+        ?.getAttribute('data-arriving-unit-ids') ?? '').split(',').filter(Boolean);
+      return document.querySelector('[data-testid="skirmish"]')
+        && ids.length > 0
+        && ids.every((id) => !disciplineIds.includes(id));
+    }, {}, deploymentState.disciplineIds);
+    const automaticWaveStartedMs = Date.now() - finalPlacementStartedAt;
+    const automaticWave = await page.evaluate(() => ({
+      ids: (document.querySelector('[data-testid="skirmish-board"]')
+        ?.getAttribute('data-arriving-unit-ids') ?? '').split(',').filter(Boolean),
+    }));
+    await page.waitForFunction(() => document.querySelector('[data-testid="skirmish-board"]')
+      ?.getAttribute('data-arriving') === 'false');
+
+    const deploymentResult = await page.evaluate(async (disciplineIds) => {
+      const { useActiveRun } = await import('/src/run/store.ts');
+      const { activeSkirmishStoreForDiagnostics } = await import('/src/game/SkirmishStoreContext.tsx');
+      const { activeSkirmishViewStoreForDiagnostics } = await import('/src/game/SkirmishViewStoreContext.tsx');
+      const probe = window.__ctDeploymentProbe;
+      cancelAnimationFrame(probe.frame);
+      const run = useActiveRun.getState().run;
+      const board = document.querySelector('[data-testid="skirmish-board"]');
+      const gameStore = activeSkirmishStoreForDiagnostics();
+      const viewStore = activeSkirmishViewStoreForDiagnostics();
+      const placements = run?.deployment?.manualPlacements ?? {};
+      const livePlacementByUnit = Object.fromEntries(disciplineIds.map((unitId) => {
+        const piece = gameStore?.getState().game.pieces.find((candidate) => candidate.id === unitId);
+        return [unitId, piece ? `${piece.x},${piece.y}` : null];
+      }));
+      const currentCanvases = [...(board?.querySelectorAll('canvas') ?? [])];
+      const finalLayer = board?.querySelector('.tileset-view-art-layer');
+      const finalCamera = finalLayer ? [
+        finalLayer.style.getPropertyValue('--view-zoom'),
+        finalLayer.style.getPropertyValue('--view-pan-x'),
+        finalLayer.style.getPropertyValue('--view-pan-y'),
+      ].join('|') : null;
+      return {
+        phase: run?.phase,
+        placements,
+        livePlacementByUnit,
+        sameBoard: board === probe.board,
+        sameBoundary: board?.closest('.scene-boundary') === probe.boundary,
+        sameViewPane: board?.querySelector('.tileset-view-stage') === probe.viewPane,
+        sameCanvases: currentCanvases.length === probe.canvases.length
+          && currentCanvases.every((canvas, index) => canvas === probe.canvases[index]),
+        sameGameStore: gameStore === probe.gameStore,
+        sameViewStore: viewStore === probe.viewStore,
+        initialCamera: probe.initialCamera,
+        finalCamera,
+        cameraSamples: probe.cameraSamples,
+        lifecycleViolations: probe.lifecycleViolations,
+        mountedGameStores: window.__ctMountedSkirmishStores?.length ?? 0,
+        mountedViewStores: window.__ctMountedSkirmishViewStores?.length ?? 0,
+      };
+    }, deploymentState.disciplineIds);
+    const deploymentShot = 'tmp-shots/run-deployment-battle-continuity.png';
+    await transitionBoard.screenshot({ path: deploymentShot });
+    const placementMismatch = deploymentState.disciplineIds.find(
+      (unitId) => deploymentResult.livePlacementByUnit[unitId] !== deploymentResult.placements[unitId],
+    );
+    if (
+      deploymentResult.phase !== 'battle'
+      || automaticWaveStartedMs < 560
+      || automaticWave.ids.length === 0
+      || automaticWave.ids.some((id) => deploymentState.disciplineIds.includes(id))
+      || !deploymentResult.sameBoard
+      || !deploymentResult.sameBoundary
+      || !deploymentResult.sameViewPane
+      || !deploymentResult.sameCanvases
+      || !deploymentResult.sameGameStore
+      || !deploymentResult.sameViewStore
+      || deploymentResult.initialCamera !== deploymentResult.finalCamera
+      || deploymentResult.cameraSamples.some((camera) => camera !== deploymentResult.initialCamera)
+      || deploymentResult.lifecycleViolations.length > 0
+      || deploymentResult.mountedGameStores !== 1
+      || deploymentResult.mountedViewStores !== 1
+      || placementMismatch
+    ) {
+      await fail('deployment-battle-continuity', JSON.stringify({
+        firstArrival,
+        finalManualArrival,
+        automaticWave,
+        automaticWaveStartedMs,
+        placementMismatch,
+        deploymentResult,
+      }));
+    }
+    console.log('Deployment → Battle provider, DOM, canvas, camera, placement, and arrival continuity: OK');
+    console.log('deployment screenshot:', deploymentShot);
+    console.log('PASS — cold Deployment is camera-ready before reveal and promotes in place');
+    await browser.close();
+    rmSync(browserProfile, { recursive: true, force: true });
+    process.exit(0);
+  }
   if (transitionOnly) {
-    console.log('PASS — director owns the complete Deployment → Battle lifecycle');
+    console.log('PASS — opening Shop Continue is optional-commerce and director-owned through Battle');
     await browser.close();
     rmSync(browserProfile, { recursive: true, force: true });
     process.exit(0);

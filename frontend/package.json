@@ -16,6 +16,7 @@
     "e2e:lobby": "node scripts/lobby-e2e.mjs",
     "e2e:run-battle": "node scripts/run-battle-e2e.mjs",
     "e2e:run-transition": "node scripts/run-battle-e2e.mjs --transition-only",
+    "e2e:run-deployment": "node scripts/run-battle-e2e.mjs --deployment-only",
     "e2e:run-scene-resume": "node scripts/run-scene-resume-e2e.mjs",
     "e2e:level-editor-pan": "node scripts/level-editor-pan-e2e.mjs",
     "vendor:ambience": "node scripts/vendor-ambience.mjs",

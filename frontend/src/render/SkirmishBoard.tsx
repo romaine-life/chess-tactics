@@ -1,18 +1,18 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { drawableAssets } from '@chess-tactics/board-render';
 import { tileFrameSrc, tileAssets, tileFamilies, type TileAsset } from '../art/tileset';
 import { countIllegalEdges, solveSocketBoard, type SocketBoardCell, type SocketBoardResult } from '../core/tileBoardGenerator';
 import { densityFieldAt, resolveGroundCover } from '../core/groundCover';
 import type { GameState, Move, Piece, Side, TerrainType, UnitFacing, Vec } from '../core/types';
-import { attackedSquares, blockedCandidateSquares, enemyThreats, legalMoves, livingPieces } from '../core/rules';
+import { attackedSquares, blockedCandidateSquares, enemyThreats, gameEnv, legalMoves, livingPieces } from '../core/rules';
 import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, UNIT_FACINGS, defaultFacingForSide, paletteForSide, pieceSpritePath, type PlayablePieceType } from '../core/pieces';
 import { defaultTerrainFamily, familyForGameplayTerrain, familyIdForAsset, tileSocketsForAsset, type TileFamilyId } from '../core/tileSockets';
 import { useSkirmish } from '../game/SkirmishStoreContext';
 import { adminMoveTargets } from '../game/adminBattle';
-import { useSkirmishView } from '../game/skirmishView';
+import { useSkirmishView } from '../game/SkirmishViewStoreContext';
 import { PLAYER_TECHNICAL_MINIMUM_ZOOM } from '../game/boardCameraPolicy';
-import { provisionalBoard, premoveArrows, premoveGhosts, premoveTargets, type PremoveArrow } from '../game/premoves';
+import { provisionalBoard, premoveArrows, premoveGhosts, premoveTargets, type PremoveArrow, type PremoveStep } from '../game/premoves';
 import { clientSide, opponentSide } from '../game/clientPerspective';
 import { BoardLabBoard, boardLabCellPosition, immutableBoardLabTerrainSrc } from './BoardLabBoard';
 import { PredrawnMoveHighlightPaint } from './PredrawnMoveHighlightPaint';
@@ -25,7 +25,7 @@ import {
   sizeCanvasForBounds,
 } from './BoardCanvasLayer';
 import { objectBaseZIndex } from './sceneDepth';
-import { ViewPane, type ViewPaneViewportSize } from '../ui/shared/ViewPane';
+import { ViewPane, minimumZoomToCoverViewport, type ViewPaneViewportSize } from '../ui/shared/ViewPane';
 import { useBoardCameraFraming } from '../ui/shared/BoardViewFraming';
 import { useBoardFrameReveal } from './boardArtReady';
 import { loadingMark } from '../diagnostics/loadingTimeline';
@@ -517,10 +517,6 @@ function collectBoardArt(
 const ARRIVAL_BASE_MS = 400; // first unit lands AFTER the board reveal (veil/board fade) has finished
 const ARRIVAL_WAVE_GAP_MS = 240; // the enemy wave answers this long after the player wave starts
 const ARRIVAL_STEP_MS = 50; // per-unit stagger within a wave
-// The spawn→drop keyframe (unit-arrival) is ~620ms; the land impact is at ~85% of it —
-// that fraction is where the per-unit sound cue + landing effect will hook in (see style.css).
-export const ARRIVAL_TOTAL_MS = 1700; // upper bound: hold `is-arriving` at least this long
-
 // Drag-to-move tuning. The threshold keeps a small wobble on a tap from becoming a drag, so
 // click-select → click-move is untouched; the ghost defaults are only a fallback size for when
 // the on-screen sprite can't be measured at pick-up.
@@ -530,7 +526,10 @@ const DEFAULT_GHOST_H = 86;
 
 const isRoyal = (type: Piece['type']): boolean => type === 'king' || type === 'queen';
 
-function computeArrivalDelays(pieces: readonly Piece[]): Map<string, number> {
+export function computeArrivalDelays(
+  pieces: readonly Piece[],
+  baseDelayMs = ARRIVAL_BASE_MS,
+): Map<string, number> {
   const delays = new Map<string, number>();
   (['player', 'enemy'] as const).forEach((side, wave) => {
     const group = pieces.filter((p) => p.side === side && p.type !== 'rock' && p.type !== 'random-rock');
@@ -541,10 +540,24 @@ function computeArrivalDelays(pieces: readonly Piece[]): Map<string, number> {
       const db = Math.abs(b.y - (b.startY ?? b.y));
       return da !== db ? da - db : a.x - b.x;
     });
-    const waveBase = ARRIVAL_BASE_MS + wave * ARRIVAL_WAVE_GAP_MS;
+    const waveBase = baseDelayMs + wave * ARRIVAL_WAVE_GAP_MS;
     group.forEach((p, i) => delays.set(p.id, waveBase + i * ARRIVAL_STEP_MS));
   });
   return delays;
+}
+
+/** Return only units which have newly joined the visible position. A retained battlefield uses
+ * this identity boundary to animate arrivals without replaying the units already standing there. */
+export function newlyVisibleArrivalPieces(
+  previouslyVisibleIds: ReadonlySet<string>,
+  pieces: readonly Piece[],
+): Piece[] {
+  return pieces.filter((piece) => (
+    piece.side !== 'neutral'
+    && piece.type !== 'rock'
+    && piece.type !== 'random-rock'
+    && !previouslyVisibleIds.has(piece.id)
+  ));
 }
 
 // The queued premove chain, drawn chess.com-style: one arrow per step, from the piece's
@@ -761,8 +774,8 @@ function SkirmishSceneLayer({
   seed,
   ambientCover,
   livePieces,
-  arriving,
-  arrivalDelays,
+  unitArrivalsActive,
+  onArrivingUnitIdsChange,
   draggingId,
   noHopId,
   premovedIds,
@@ -777,8 +790,8 @@ function SkirmishSceneLayer({
   seed: number;
   ambientCover: boolean;
   livePieces: readonly Piece[];
-  arriving: boolean;
-  arrivalDelays: ReadonlyMap<string, number>;
+  unitArrivalsActive: boolean;
+  onArrivingUnitIdsChange: (unitIds: readonly string[]) => void;
   draggingId: string | null;
   noHopId: string | null;
   premovedIds: ReadonlySet<string>;
@@ -791,8 +804,10 @@ function SkirmishSceneLayer({
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const motionRef = useRef<Map<string, PieceMotion>>(new Map());
-  const arrivalStartRef = useRef<number | null>(null);
-  const arrivalWasActiveRef = useRef(false);
+  const visibleUnitIdsRef = useRef<Set<string>>(new Set());
+  const arrivalPlansRef = useRef<Map<string, { startMs: number; delayMs: number }>>(new Map());
+  const arrivalLifecycleStartedRef = useRef(false);
+  const reportedArrivalIdsRef = useRef('');
   const imagesRef = useRef<Map<string, HTMLImageElement>>(new Map());
   const animationFrameRef = useRef<number | null>(null);
   const acknowledgementFrameRef = useRef<number | null>(null);
@@ -852,8 +867,6 @@ function SkirmishSceneLayer({
     mirrorSurfaces,
     bounds,
     livePieces,
-    arriving,
-    arrivalDelays,
     draggingId,
     premovedIds,
     afterGhosts,
@@ -874,14 +887,20 @@ function SkirmishSceneLayer({
     });
   }, []);
 
+  const reportArrivingUnits = useCallback(() => {
+    const ids = [...arrivalPlansRef.current.keys()].sort();
+    const key = ids.join(',');
+    if (key === reportedArrivalIdsRef.current) return;
+    reportedArrivalIdsRef.current = key;
+    onArrivingUnitIdsChange(ids);
+  }, [onArrivingUnitIdsChange]);
+
   useLayoutEffect(() => {
     frameStateRef.current = {
       staticOps,
       mirrorSurfaces,
       bounds,
       livePieces,
-      arriving,
-      arrivalDelays,
       draggingId,
       premovedIds,
       afterGhosts,
@@ -897,12 +916,33 @@ function SkirmishSceneLayer({
       window.cancelAnimationFrame(acknowledgementFrameRef.current);
       acknowledgementFrameRef.current = null;
     }
-    if (arriving && !arrivalWasActiveRef.current) arrivalStartRef.current = performance.now();
-    if (!arriving) arrivalStartRef.current = null;
-    arrivalWasActiveRef.current = arriving;
-
     const now = performance.now();
     const nextIds = new Set(livePieces.map((piece) => piece.id));
+    for (const id of visibleUnitIdsRef.current) {
+      if (!nextIds.has(id)) visibleUnitIdsRef.current.delete(id);
+    }
+    for (const id of arrivalPlansRef.current.keys()) {
+      if (!nextIds.has(id)) arrivalPlansRef.current.delete(id);
+    }
+    if (unitArrivalsActive) {
+      const additions = newlyVisibleArrivalPieces(visibleUnitIdsRef.current, livePieces);
+      // A cold board keeps ADR-0045's reveal beat. Once this mounted battlefield is visible,
+      // later additions begin immediately: a Discipline click and Battle promotion are already
+      // the event that communicates why those pieces are entering.
+      const delays = computeArrivalDelays(
+        additions,
+        arrivalLifecycleStartedRef.current ? 0 : ARRIVAL_BASE_MS,
+      );
+      for (const piece of livePieces) visibleUnitIdsRef.current.add(piece.id);
+      arrivalLifecycleStartedRef.current = true;
+      for (const piece of additions) {
+        arrivalPlansRef.current.set(piece.id, {
+          startMs: now,
+          delayMs: delays.get(piece.id) ?? 0,
+        });
+      }
+      if (additions.length > 0) reportArrivingUnits();
+    }
     for (const piece of livePieces) {
       const target = boardLabCellPosition(piece);
       const existing = motionRef.current.get(piece.id);
@@ -939,8 +979,6 @@ function SkirmishSceneLayer({
     if (requiredSources.every((src) => imagesRef.current.has(src))) requestSceneFrame();
   }, [
     afterGhosts,
-    arrivalDelays,
-    arriving,
     bounds,
     draggingId,
     frameKey,
@@ -950,11 +988,13 @@ function SkirmishSceneLayer({
     occlusionDepthMap,
     occlusionMasks,
     onFirstFrame,
+    reportArrivingUnits,
     onFrameError,
     premovedIds,
     requestSceneFrame,
     requiredSourceKey,
     staticOps,
+    unitArrivalsActive,
   ]);
 
   useLayoutEffect(() => {
@@ -981,7 +1021,8 @@ function SkirmishSceneLayer({
             duration: 0,
           };
           const seat = motionSeat(motion, timeMs);
-          const arrival = arrivalOffset(timeMs, arrivalStartRef.current, state.arrivalDelays.get(piece.id));
+          const arrivalPlan = arrivalPlansRef.current.get(piece.id);
+          const arrival = arrivalOffset(timeMs, arrivalPlan?.startMs ?? null, arrivalPlan?.delayMs);
           const baseOpacity = state.draggingId === piece.id ? 0.3 : state.premovedIds.has(piece.id) ? 0.4 : 1;
           const op = pieceOp(piece, seat, {
             dy: moveHopOffset(seat.progress, piece.side) + arrival.dy,
@@ -1047,9 +1088,18 @@ function SkirmishSceneLayer({
           break;
         }
       }
-      if (state.hasAnimatedGroundCover || state.arriving || hasActiveMotion) requestSceneFrame();
+      let hasActiveArrivals = false;
+      for (const [pieceId, plan] of arrivalPlansRef.current) {
+        if (timeMs < plan.startMs + plan.delayMs + ARRIVAL_ANIM_MS) {
+          hasActiveArrivals = true;
+        } else {
+          arrivalPlansRef.current.delete(pieceId);
+        }
+      }
+      reportArrivingUnits();
+      if (state.hasAnimatedGroundCover || hasActiveArrivals || hasActiveMotion) requestSceneFrame();
     };
-  }, [requestSceneFrame]);
+  }, [reportArrivingUnits, requestSceneFrame]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -1102,33 +1152,79 @@ function SkirmishSceneLayer({
   );
 }
 
+const EMPTY_PREMOVES: readonly PremoveStep[] = [];
+export interface SkirmishBoardSurfaceState {
+  /** A passive position projected through the live Battle compositor without starting a match. */
+  game: GameState;
+  seed: number;
+  /** Stable camera identity for the owning non-Battle phase. */
+  viewKey: string;
+}
+
+export interface SkirmishBoardCellOverlayContext {
+  cell: SocketBoardCell<TileAsset>;
+  left: number;
+  top: number;
+  visualFootprintStyle?: CSSProperties;
+}
+
 export function SkirmishBoard({
   interactive = true,
+  surfaceState,
+  renderCellOverlay,
+  boardOverlay,
+  className = '',
+  ariaLabel = 'Skirmish board',
   predrawnReview,
   onSurfaceReady,
   onSurfaceError,
+  onArrivingUnitIdsChange,
   reveal = true,
   activate = reveal,
+  unitArrivalsActive = activate,
 }: {
   interactive?: boolean;
+  /**
+   * Non-combat phases use this adapter to render their position through the exact live Battle
+   * surface. It deliberately bypasses match initialization, persistence, clocks, premoves,
+   * selections, and combat overlays while retaining the canonical camera and compositors.
+   */
+  surfaceState?: SkirmishBoardSurfaceState;
+  renderCellOverlay?: (context: SkirmishBoardCellOverlayContext) => ReactNode;
+  /** Board-space content, such as a placement ghost, seated in the canonical scene. */
+  boardOverlay?: ReactNode;
+  className?: string;
+  ariaLabel?: string;
   predrawnReview?: {
     src: string;
     registration?: PredrawnBoardCornerRegistration;
   };
   onSurfaceReady?: (ready: boolean) => void;
   onSurfaceError?: (error: Error | null) => void;
+  /** Reports the compositor-owned arrival cycle without transferring animation timing upward. */
+  onArrivingUnitIdsChange?: (unitIds: readonly string[]) => void;
   reveal?: boolean;
   activate?: boolean;
+  /** Unit-entry presentation is independent from combat input/clock activation. */
+  unitArrivalsActive?: boolean;
 } = {}) {
+  const interactionEnabled = interactive && !surfaceState;
   // Board-view state lives in the shared view store so the HUD's "View" tab owns
   // the controls and the playfield stays clean of floating buttons.
-  const showMoves = useSkirmishView((s) => s.showMoves);
-  const showEnemyAttacks = useSkirmishView((s) => s.showEnemyAttacks);
-  const showBlocked = useSkirmishView((s) => s.showBlocked);
-  const showEnemyMoves = useSkirmishView((s) => s.showEnemyMoves);
-  const showPlayerAttacks = useSkirmishView((s) => s.showPlayerAttacks);
-  const showPlayerMoves = useSkirmishView((s) => s.showPlayerMoves);
-  const showPromotionZones = useSkirmishView((s) => s.showPromotionZones);
+  const storedShowMoves = useSkirmishView((s) => s.showMoves);
+  const storedShowEnemyAttacks = useSkirmishView((s) => s.showEnemyAttacks);
+  const storedShowBlocked = useSkirmishView((s) => s.showBlocked);
+  const storedShowEnemyMoves = useSkirmishView((s) => s.showEnemyMoves);
+  const storedShowPlayerAttacks = useSkirmishView((s) => s.showPlayerAttacks);
+  const storedShowPlayerMoves = useSkirmishView((s) => s.showPlayerMoves);
+  const storedShowPromotionZones = useSkirmishView((s) => s.showPromotionZones);
+  const showMoves = surfaceState ? false : storedShowMoves;
+  const showEnemyAttacks = surfaceState ? false : storedShowEnemyAttacks;
+  const showBlocked = surfaceState ? false : storedShowBlocked;
+  const showEnemyMoves = surfaceState ? false : storedShowEnemyMoves;
+  const showPlayerAttacks = surfaceState ? false : storedShowPlayerAttacks;
+  const showPlayerMoves = surfaceState ? false : storedShowPlayerMoves;
+  const showPromotionZones = surfaceState ? false : storedShowPromotionZones;
   const showGrid = useSkirmishView((s) => s.showGrid);
   const boardZoom = useSkirmishView((s) => s.zoom);
   const boardMinZoom = useSkirmishView((s) => s.minZoom);
@@ -1140,28 +1236,42 @@ export function SkirmishBoard({
   const setBoardPan = useSkirmishView((s) => s.setPan);
   const setOpeningView = useSkirmishView((s) => s.setOpeningView);
   const [viewViewportSize, setViewViewportSize] = useState<ViewPaneViewportSize | null>(null);
-  const game = useSkirmish((s) => s.game);
-  const levelId = useSkirmish((s) => s.levelId);
-  const boardViewEpoch = useSkirmish((s) => s.boardViewEpoch);
-  const env = useSkirmish((s) => s.env);
-  const selectedId = useSkirmish((s) => s.selectedId);
-  const focusedId = useSkirmish((s) => s.focusedId);
-  const pendingPromotion = useSkirmish((s) => s.pendingPromotion);
-  const seed = useSkirmish((s) => s.seed);
+  const storedGame = useSkirmish((s) => s.game);
+  const storedLevelId = useSkirmish((s) => s.levelId);
+  const storedActivityId = useSkirmish((s) => s.activityId);
+  const storedBoardViewEpoch = useSkirmish((s) => s.boardViewEpoch);
+  const storedEnv = useSkirmish((s) => s.env);
+  const storedSelectedId = useSkirmish((s) => s.selectedId);
+  const storedFocusedId = useSkirmish((s) => s.focusedId);
+  const storedPendingPromotion = useSkirmish((s) => s.pendingPromotion);
+  const storedSeed = useSkirmish((s) => s.seed);
+  const game = surfaceState?.game ?? storedGame;
+  const env = useMemo(
+    () => surfaceState ? { ...gameEnv(game), lastMove: game.lastMove } : storedEnv,
+    [game, storedEnv, surfaceState],
+  );
+  const selectedId = surfaceState ? null : storedSelectedId;
+  const focusedId = surfaceState ? null : storedFocusedId;
+  const pendingPromotion = surfaceState ? null : storedPendingPromotion;
+  const seed = surfaceState?.seed ?? storedSeed;
   const select = useSkirmish((s) => s.select);
   const focus = useSkirmish((s) => s.focus);
   const tryMoveTo = useSkirmish((s) => s.tryMoveTo);
-  const adminMode = useSkirmish((s) => s.adminMode);
+  const storedAdminMode = useSkirmish((s) => s.adminMode);
+  const adminMode = surfaceState ? null : storedAdminMode;
   const adminKillUnit = useSkirmish((s) => s.adminKillUnit);
-  const premoves = useSkirmish((s) => s.premoves);
-  const premoveInputOpen = useSkirmish((s) => s.premoveInputOpen);
+  const storedPremoves = useSkirmish((s) => s.premoves);
+  const premoves = surfaceState ? EMPTY_PREMOVES : storedPremoves;
+  const storedPremoveInputOpen = useSkirmish((s) => s.premoveInputOpen);
+  const premoveInputOpen = surfaceState ? false : storedPremoveInputOpen;
   const queueMove = useSkirmish((s) => s.queueMove);
   const clearPremoves = useSkirmish((s) => s.clearPremoves);
   // Premove building: which provisional-board piece the player is queueing from. This stays
   // component-local because queued pieces can be rendered at ghost destinations, but clicks also
   // mirror into the store selection so the chosen unit survives the async enemy-reply boundary.
   const [premoveSelectedId, setPremoveSelectedId] = useState<string | null>(null);
-  const net = useSkirmish((s) => s.net);
+  const storedNet = useSkirmish((s) => s.net);
+  const net = surfaceState ? null : storedNet;
   // The side THIS client controls: 'player' in single-player, or its lobby seat in
   // netplay (host='player', guest='enemy'). Interaction (selecting, move highlights,
   // committing) is gated to this side, not the literal 'player'.
@@ -1203,13 +1313,13 @@ export function SkirmishBoard({
   const [dropHoverKey, setDropHoverKey] = useState<string | null>(null);
   const [dropAimKey, setDropAimKey] = useState<string | null>(null);
   useEffect(() => {
-    if (interactive) return;
+    if (interactionEnabled) return;
     dragRef.current = null;
     setDrag(null);
     setDropAimKey(null);
     setDropHoverKey(null);
     setPremoveSelectedId(null);
-  }, [interactive]);
+  }, [interactionEnabled]);
   const [noHopId, setNoHopId] = useState<string | null>(null);
   // Premove input is open while the opposing seat owns the turn and for the short
   // post-reply landing beat before live control resumes. This is client input in both
@@ -1281,11 +1391,22 @@ export function SkirmishBoard({
     ),
     [exactBoard, game.size.cols, game.size.rows, predrawnCoverPolygon],
   );
-  const { markViewInteraction } = useBoardCameraFraming({
+  const boardViewKey = surfaceState?.viewKey
+    ?? storedActivityId
+    ?? `${storedLevelId ?? 'free'}:${storedBoardViewEpoch}`;
+  const preparedMinimumZoom = useMemo(() => viewViewportSize
+    ? minimumZoomToCoverViewport({
+        viewport: viewViewportSize,
+        polygon: cameraCoverPolygon,
+        minZoom: PLAYER_TECHNICAL_MINIMUM_ZOOM,
+        maxZoom: 16,
+      })
+    : boardMinZoom, [boardMinZoom, cameraCoverPolygon, viewViewportSize]);
+  const { markViewInteraction, cameraReady } = useBoardCameraFraming({
     board: { cols: game.size.cols, rows: game.size.rows },
-    viewKey: `${levelId ?? 'free'}:${boardViewEpoch}`,
+    viewKey: boardViewKey,
     viewport: viewViewportSize,
-    minimumZoom: boardMinZoom,
+    minimumZoom: preparedMinimumZoom,
     // The canonical opening fit owns its zoom. setOpeningView raises the interactive ceiling
     // before applyOpening calls setZoom, so the old human-control cap cannot undershoot it.
     maximumZoom: 16,
@@ -1353,11 +1474,18 @@ export function SkirmishBoard({
   );
   const boardFrame = useBoardFrameReveal(boardArt.signature);
   const boardReady = boardFrame.ready;
-  const boardVisible = boardReady && reveal;
+  const surfaceReadinessKey = `${boardViewKey}:${boardArt.signature}:${boardFrame.retryKey}`;
+  const [readySurfaceKey, setReadySurfaceKey] = useState<string | null>(null);
+  const completePreparedFrame = boardReady && cameraReady;
+  useLayoutEffect(() => {
+    if (completePreparedFrame) setReadySurfaceKey(surfaceReadinessKey);
+  }, [completePreparedFrame, surfaceReadinessKey]);
+  const surfaceReady = completePreparedFrame || readySurfaceKey === surfaceReadinessKey;
+  const boardVisible = surfaceReady && reveal;
   useEffect(() => {
-    onSurfaceReady?.(boardReady);
+    onSurfaceReady?.(surfaceReady);
     return () => onSurfaceReady?.(false);
-  }, [boardReady, onSurfaceReady]);
+  }, [onSurfaceReady, surfaceReady]);
   useEffect(() => {
     onSurfaceError?.(boardFrame.error);
     return () => onSurfaceError?.(null);
@@ -1370,22 +1498,15 @@ export function SkirmishBoard({
     const frame = requestAnimationFrame(() => loadingMark('board', 'container-first-revealed-frame', { assetCount: boardArt.urls.length }));
     return () => cancelAnimationFrame(frame);
   }, [boardArt.urls.length, boardReady]);
-  // Deploy arrival: once the board reveals, play the staggered drop ONCE per board. Keyed off
-  // the tile signature so a new skirmish/replay re-arms it, but moves (signature stable) don't.
-  const arrivalDelays = useMemo(() => computeArrivalDelays(livePieces), [livePieces]);
-  // `arriving` is derived DURING render (not pushed from an effect) so `is-arriving` lands in
-  // the SAME commit the board first reveals. If it lagged a commit, there'd be one painted
-  // frame where units sit at their seats (the old "just appear" look) before the drop's
-  // fill-mode hides them — reading as units appearing, vanishing, then dropping in. A timer
-  // flips arrivalDone when the whole wave is done so the class comes off for normal play.
-  const [arrivalDone, setArrivalDone] = useState(false);
-  useEffect(() => { setArrivalDone(false); }, [boardArt.signature]);
-  useEffect(() => {
-    if (!boardVisible || !activate || arrivalDone) return undefined;
-    const done = window.setTimeout(() => setArrivalDone(true), ARRIVAL_TOTAL_MS);
-    return () => window.clearTimeout(done);
-  }, [activate, boardVisible, arrivalDone]);
-  const arriving = boardVisible && activate && !arrivalDone;
+  // The scene layer owns an identity ledger for arrivals. Unlike the old one-shot board flag,
+  // it can introduce units into an already-mounted compositor without reanimating incumbents.
+  const [arrivingUnitIds, setArrivingUnitIds] = useState<readonly string[]>([]);
+  const arriving = arrivingUnitIds.length > 0;
+  const arrivalsActive = boardVisible && unitArrivalsActive;
+  const handleArrivingUnitIdsChange = useCallback((unitIds: readonly string[]) => {
+    setArrivingUnitIds(unitIds);
+    onArrivingUnitIdsChange?.(unitIds);
+  }, [onArrivingUnitIdsChange]);
   const focusPiece = useMemo(
     () => livePieces.find((piece) => piece.id === focusedId) ?? livePieces.find((piece) => piece.id === selectedId) ?? null,
     [focusedId, livePieces, selectedId],
@@ -1495,7 +1616,7 @@ export function SkirmishBoard({
   );
 
   const handleTile = (x: number, y: number) => {
-    if (!interactive) {
+    if (!interactionEnabled) {
       // A secondary same-seat tab remains useful for inspection, but cannot build a
       // selection, drag, premove, promotion, or move gesture.
       const inspected = game.pieces.find((piece) => piece.alive && piece.x === x && piece.y === y);
@@ -1594,7 +1715,7 @@ export function SkirmishBoard({
   const onCellPointerDown = (cx: number, cy: number, event: ReactPointerEvent<HTMLButtonElement>) => {
     // Right-click-and-hold always pans the board (ViewPane) — never swallow it, even on a unit.
     if (event.button === 2) return;
-    if (!interactive) return;
+    if (!interactionEnabled) return;
     // Left press stays on the cell: stop it bubbling so ViewPane doesn't start a pan.
     event.stopPropagation();
     // One drag at a time: while a gesture is armed, ignore any second concurrent pointer (a
@@ -1747,12 +1868,13 @@ export function SkirmishBoard({
   return (
     <div
       data-testid="skirmish-board"
-      data-interactive={interactive ? 'true' : 'false'}
+      data-interactive={interactionEnabled ? 'true' : 'false'}
       data-arriving={arriving ? 'true' : 'false'}
+      data-arriving-unit-ids={arrivingUnitIds.join(',')}
       data-painted-layers={boardFrame.paintedLayers.join(',')}
       aria-busy={!boardVisible && !boardFrame.error ? true : undefined}
       inert={!boardVisible && !boardFrame.error ? true : undefined}
-      className={`skirmish-board-lab ${boardVisible ? '' : 'is-board-loading'} ${boardFrame.error ? 'is-board-error' : ''} ${drag ? 'is-dragging' : ''} ${interactive ? '' : 'is-read-only'}`.trim()}
+      className={`skirmish-board-lab ${className} ${boardVisible ? '' : 'is-board-loading'} ${boardFrame.error ? 'is-board-error' : ''} ${drag ? 'is-dragging' : ''} ${interactionEnabled ? '' : 'is-read-only'}`.trim()}
     >
       {boardFrame.error ? (
         <div className="board-load-error" role="alert">
@@ -1764,7 +1886,7 @@ export function SkirmishBoard({
         key={`${boardArt.signature}:${boardFrame.retryKey}`}
         kind="board"
         boardViewportMode="fill"
-        ariaLabel="Skirmish board viewport"
+        ariaLabel={`${ariaLabel} viewport`}
         zoom={boardZoom}
         pan={boardPan}
         minZoom={PLAYER_TECHNICAL_MINIMUM_ZOOM}
@@ -1785,7 +1907,7 @@ export function SkirmishBoard({
           boardZoom={boardZoom}
           boardPan={boardPan}
           className="skirmish-board-surface"
-          ariaLabel="Skirmish board"
+          ariaLabel={ariaLabel}
           showGrid={showGrid}
           predrawnPlate={predrawnPlate}
           onTerrainFirstFrame={acknowledgeTerrain}
@@ -1797,8 +1919,8 @@ export function SkirmishBoard({
               seed={seed}
               ambientCover={ambientSceneCover}
               livePieces={livePieces}
-              arriving={arriving}
-              arrivalDelays={arrivalDelays}
+              unitArrivalsActive={arrivalsActive}
+              onArrivingUnitIdsChange={handleArrivingUnitIdsChange}
               draggingId={drag?.pieceId ?? null}
               noHopId={noHopId}
               premovedIds={premovedIds}
@@ -1810,12 +1932,20 @@ export function SkirmishBoard({
               onFrameError={boardFrame.fail}
             />
           )}
-          renderCellOverlay={({ cell }) => {
+          renderCellOverlay={({ cell, left, top }) => {
             if (!cell.asset && !cell.missing) return null;
             const key = `${cell.x},${cell.y}`;
             const visualFootprintStyle = predrawnBackgroundActive
               ? predrawnVisualFootprintClipStyleForCell(exactBoard?.surface, key)
               : undefined;
+            if (renderCellOverlay) {
+              return renderCellOverlay({
+                cell,
+                left,
+                top,
+                visualFootprintStyle: visualFootprintStyle as CSSProperties | undefined,
+              });
+            }
             const state = [
               localMoveSet.has(key) ? 'is-player-move' : '',
               promotionZoneSet.has(key) ? 'is-promotion-zone' : '',
@@ -1857,7 +1987,7 @@ export function SkirmishBoard({
             );
           }}
         >
-          <PremoveArrowLayer arrows={premoveChain} />
+          {surfaceState ? boardOverlay : <PremoveArrowLayer arrows={premoveChain} />}
         </BoardLabBoard>
       </ViewPane>
       {/* The picked-up piece rides the cursor in screen space. Portaled to <body> so the board's

@@ -55,6 +55,8 @@ for (const required of [
   'const run = sceneSnapshot.run;',
   '<RunPresentationSceneSlot',
   'navigateApp(nextHref, { replace: true, scroll: false })',
+  'pendingPlacementArrivalUnitIdRef.current = activeDisciplineUnitId',
+  'onArrivingUnitIdsChange: handleArrivingUnitIdsChange',
 ]) {
   if (!runScreen.includes(required)) fail(runScreenPath, `missing closed Run scene-source invariant: ${required}`);
 }
@@ -78,12 +80,26 @@ const skirmish = readFileSync(skirmishPath, 'utf8');
 for (const required of [
   '<SkirmishStoreProvider>',
   '<SceneSurfaceReadiness',
-  'if (playableSurfaceReady && sceneActivated) activateClock()',
+  'if (!runDeployment && playableSurfaceReady && sceneActivated) activateClock()',
   'reveal={playableSurfaceReady && sceneRevealed}',
-  'activate={sceneActivated}',
-  'interactive={sceneActivated &&',
+  'activate={!runDeployment && sceneActivated}',
+  'interactive={!runDeployment && sceneActivated &&',
+  'surfaceSignature={runBattle?.activityId}',
+  'surfaceState={presentedDeploymentSurface}',
+  'preserveBoardPresentation: true',
+  'unitArrivalsActive={sceneActivated}',
+  'onArrivingUnitIdsChange={runDeployment?.onArrivingUnitIdsChange}',
 ]) {
   if (!skirmish.includes(required)) fail(skirmishPath, `missing commit-gated Battle invariant: ${required}`);
+}
+
+const skirmishBoardPath = resolve(src, 'render/SkirmishBoard.tsx');
+const skirmishBoard = readFileSync(skirmishBoardPath, 'utf8');
+for (const required of [
+  'newlyVisibleArrivalPieces(visibleUnitIdsRef.current, livePieces)',
+  'data-arriving-unit-ids={arrivingUnitIds.join(\',\')}',
+]) {
+  if (!skirmishBoard.includes(required)) fail(skirmishBoardPath, `missing retained-board per-unit arrival invariant: ${required}`);
 }
 
 if (failures.length) {

@@ -69,11 +69,17 @@ export function useBoardCameraFraming({
   /** Wider live panes reveal peripheral world without changing the canonical opening zoom. */
   openingViewportAspectCap?: number;
   resetRevision?: number;
-}): { markViewInteraction: () => void; resetView: () => void } {
+}): {
+  markViewInteraction: () => void;
+  resetView: () => void;
+  /** True after this exact board/viewport/opening-camera signature has been applied. */
+  cameraReady: boolean;
+} {
   const userAdjustedRef = useRef(false);
   const lastViewKeyRef = useRef(viewKey);
   const appliedSignatureRef = useRef('');
   const lastResetRevisionRef = useRef(resetRevision);
+  const [preparedSignature, setPreparedSignature] = useState('');
 
   const openingCamera = useMemo((): BoardViewCamera | null => {
     if (!viewport) return null;
@@ -94,38 +100,46 @@ export function useBoardCameraFraming({
     viewport,
   ]);
 
-  const applyOpening = useCallback(() => {
-    if (!openingCamera) return;
-    setZoom(openingCamera.zoom);
-    setPan(openingCamera.pan);
-  }, [openingCamera, setPan, setZoom]);
-
-  useLayoutEffect(() => {
-    if (lastViewKeyRef.current !== viewKey) {
-      lastViewKeyRef.current = viewKey;
-      userAdjustedRef.current = false;
-      appliedSignatureRef.current = '';
-    }
-    if (lastResetRevisionRef.current !== resetRevision) {
-      lastResetRevisionRef.current = resetRevision;
-      userAdjustedRef.current = false;
-      appliedSignatureRef.current = '';
-    }
-    if (!openingCamera || !viewport) return;
-    onOpeningCameraChange?.(openingCamera);
-    const signature = [
+  const openingSignature = useMemo(() => {
+    if (!openingCamera || !viewport) return '';
+    return [
       viewKey,
+      resetRevision,
       viewport.width,
       viewport.height,
       openingCamera.zoom,
       openingCamera.pan.x,
       openingCamera.pan.y,
     ].join(':');
-    if (!userAdjustedRef.current && appliedSignatureRef.current !== signature) {
-      appliedSignatureRef.current = signature;
+  }, [openingCamera, resetRevision, viewKey, viewport]);
+
+  const applyOpening = useCallback(() => {
+    if (!openingCamera || !openingSignature) return;
+    setZoom(openingCamera.zoom);
+    setPan(openingCamera.pan);
+    appliedSignatureRef.current = openingSignature;
+    setPreparedSignature(openingSignature);
+  }, [openingCamera, openingSignature, setPan, setZoom]);
+
+  useLayoutEffect(() => {
+    if (lastViewKeyRef.current !== viewKey) {
+      lastViewKeyRef.current = viewKey;
+      userAdjustedRef.current = false;
+      appliedSignatureRef.current = '';
+      setPreparedSignature('');
+    }
+    if (lastResetRevisionRef.current !== resetRevision) {
+      lastResetRevisionRef.current = resetRevision;
+      userAdjustedRef.current = false;
+      appliedSignatureRef.current = '';
+      setPreparedSignature('');
+    }
+    if (!openingCamera || !viewport || !openingSignature) return;
+    onOpeningCameraChange?.(openingCamera);
+    if (!userAdjustedRef.current && appliedSignatureRef.current !== openingSignature) {
       applyOpening();
     }
-  }, [applyOpening, onOpeningCameraChange, openingCamera, resetRevision, viewKey, viewport]);
+  }, [applyOpening, onOpeningCameraChange, openingCamera, openingSignature, resetRevision, viewKey, viewport]);
 
   const markViewInteraction = useCallback(() => {
     userAdjustedRef.current = true;
@@ -138,7 +152,11 @@ export function useBoardCameraFraming({
 
   // Keep the hook honest about controlled zoom changes without treating safety clamping as input.
   void zoom;
-  return { markViewInteraction, resetView };
+  return {
+    markViewInteraction,
+    resetView,
+    cameraReady: openingSignature !== '' && preparedSignature === openingSignature,
+  };
 }
 
 /**

@@ -57,8 +57,11 @@ same draw and affected pricing as any later Shop, at every core value, so a
 surcharge may price an opening card past the 8-gold budget. At least one opening
 offer is always affordable: a deal in which none is repairs its cheapest card to
 standard (ADR-0344). Each dealt card may be purchased once while sufficient gold remains;
-Continue requires at least one card purchase and enters Deployment at Battle
-index 0. Format 12 names the transaction `cardOffers`,
+Continue permits zero card purchases and enters Deployment at Battle index 0
+(ADR-0347). Deployment remains durable when it owns a player choice; when the
+formation has no meaningful choice, Continue prepares it and commits directly
+to Battle without exposing an intermediate destination (ADR-0346). Format 12
+names the transaction `cardOffers`,
 `purchasedCardOfferIds`, and `buyCard`; current Shop documents using the former
 gameplay noun are unsupported. The retired `draft` phase, `draftOffers`, and
 `chosenDraftId` are absent and rejected on current writes. Hydrating an
@@ -68,7 +71,9 @@ therefore replace it without adapting or replaying the retired transaction. See
 [ADR-0321](adr/0321-run-opening-is-the-normal-shop-and-draft-is-retired.md) and
 [ADR-0322](adr/0322-run-openings-use-two-pawns-eight-gold-and-card-native-purchase-feedback.md),
 as superseded for Shop purchase cardinality by
-[ADR-0323](adr/0323-run-shops-allow-every-affordable-card-purchase.md). Format 12
+[ADR-0323](adr/0323-run-shops-allow-every-affordable-card-purchase.md) and for
+opening purchase optionality by
+[ADR-0347](adr/0347-opening-shop-purchases-are-optional.md). Format 12
 also stores the selected Ataraxia tier and each persisted affected Shop offer.
 Pestiferous offers store their public Cacochymic piece index under the current
 format's non-presentational `plaguedPieceIndex` storage identifier;
