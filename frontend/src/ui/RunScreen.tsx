@@ -150,10 +150,8 @@ function RunMetaControls({
   const { abandonDialog, abandoning, requestAbandon } = useRunAbandon(run);
   const shop = run.phase === 'shop' ? run.shop : null;
   const canLeave = canLeaveShop(run);
-  const openingNeedsPurchase = shop?.kind === 'opening' && shop.purchasedCardOfferIds.length === 0;
-  const continueHint = openingNeedsPurchase
-    ? 'Buy one card before continuing.'
-    : 'Choose one Loot relic before continuing.';
+  const needsLootChoice = Boolean(shop && shop.lootRelicOffers.length > 0 && !shop.chosenLootRelicId);
+  const continueHint = needsLootChoice ? 'Choose one Loot relic before continuing.' : null;
   const primaryLabel = run.phase === 'deployment'
       ? 'Deployment'
       : run.phase === 'battle'
@@ -207,7 +205,7 @@ function RunMetaControls({
                 className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
                 disabled={!canLeave}
                 data-testid="continue-run-shop"
-                title={canLeave ? undefined : continueHint}
+                title={!canLeave && continueHint ? continueHint : undefined}
                 onClick={() => {
                   replace(prepareDeployment(leaveShop(run)));
                   onNavigate('primary');
@@ -216,7 +214,7 @@ function RunMetaControls({
                 {shop.kind === 'opening' ? 'Continue to first Battle' : 'Continue to next Battle'}
               </ChromeButton>
             </div>
-            {!canLeave ? <p className="skirmish-grid-hint">{continueHint}</p> : null}
+            {!canLeave && continueHint ? <p className="skirmish-grid-hint">{continueHint}</p> : null}
           </div>
         ) : null}
         {showAbandon ? (
@@ -557,21 +555,13 @@ function ShopPanel({
         {/* Always the Shop. Loot is a section that sometimes appears in it, not
             a different place, so the heading never renames the screen. */}
         <h2 id="run-shop-workspace-title">Shop</h2>
-        <div className="run-shop-rules">
-          {opening ? (
-            <>
-              <span>Starting gold</span>
-              <RunGoldAmount valueTenths={shop.entrySnapshot.goldTenths} />
-            </>
-          ) : (
-            <>
-              <span>Victory</span>
-              <span aria-hidden="true">+</span>
-              <RunGoldAmount valueTenths={victoryGoldTenths} />
-            </>
-          )}
-          <span>Buy any cards you can afford</span>
-        </div>
+        {opening ? null : (
+          <div className="run-shop-rules">
+            <span>Victory</span>
+            <span aria-hidden="true">+</span>
+            <RunGoldAmount valueTenths={victoryGoldTenths} />
+          </div>
+        )}
         {pestiferousLosses.length ? (
           <InnerChromeBox className="run-pestiferous-losses" role="status">
             <h3>Pestiferous attrition</h3>
@@ -590,8 +580,7 @@ function ShopPanel({
             </ul>
           </InnerChromeBox>
         ) : null}
-        <section className="run-shop-cards-section">
-          <h3>Cards</h3>
+        <section className="run-shop-cards-section" aria-label="Cards">
           <ShopCardRow>
             {shop.cardOffers.map((offer) => {
               const purchased = shop.purchasedCardOfferIds.includes(offer.offerId);
