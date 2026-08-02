@@ -186,6 +186,17 @@ export const RUN_SHOP_WRAP_CANDIDATES: readonly RunShopWrapCandidate[] = [
     window: { x: 66, y: 74, w: 648, h: 971 },
   },
   {
+    id: 'codex-band',
+    label: 'Lantern market stall',
+    engine: 'codex',
+    kind: 'band',
+    src: new URL('../art/run-shop-wrap/codex-band.png', import.meta.url).href,
+    canvas: { w: 1471, h: 937 },
+    window: { x: 147, y: 153, w: 1206, h: 544 },
+    bandCards: 3,
+    bandCardWidth: 200,
+  },
+  {
     id: 'pixellab-slots-inside',
     label: 'Three-slot stall',
     engine: 'pixellab',
