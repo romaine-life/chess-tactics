@@ -19,6 +19,9 @@ export interface RunShopWrapCandidate {
   canvas: { w: number; h: number };
   /** Where the live card (seat) or card row (band) sits inside the canvas, in pixels. */
   window: RunShopWrapRect;
+  /** Band review row: how many cards, at what width, sit inside the window. */
+  bandCards?: number;
+  bandCardWidth?: number;
 }
 
 /** Fraction of the window tucked under the live card so ragged paint edges never peek out. */
@@ -36,19 +39,52 @@ function bledWindow({ window: raw }: RunShopWrapCandidate): RunShopWrapRect {
   };
 }
 
+export interface RunShopWrapBandMount {
+  shell: { width: number; height: number; margin: string };
+  art: { left: number; top: number; width: number; height: number };
+  grid: { columns: string; gap: number };
+  cardWidth: number;
+  cards: number;
+}
+
+// (Band mounting is pixel-exact; there is deliberately no percentage-inset path.)
+
+/** Share of vertical overflow that rides up over the awning; the rest lands on the counter. */
+const BAND_OVERFLOW_TOP_SHARE = 0.25;
+const BAND_GAP = 16;
+
 /**
- * Band mounting: the art hangs around the card grid via negative insets,
- * percentages of the grid box per CSS absolute-offset rules.
+ * Band mounting: width-fit the card row to the window, split any vertical
+ * overflow between the top and bottom structure, and reserve layout space for
+ * the full art overhang via margins. All in px for exactness.
  */
-export function runShopWrapInsets(candidate: RunShopWrapCandidate): Record<string, string> {
+export function runShopWrapBandMount(candidate: RunShopWrapCandidate): RunShopWrapBandMount {
   const { canvas } = candidate;
   const win = bledWindow(candidate);
-  const percent = (value: number): string => `${(-value * 100).toFixed(3)}%`;
+  const cards = candidate.bandCards ?? 3;
+  const cardWidth = candidate.bandCardWidth ?? 236;
+  const gridW = cards * cardWidth + (cards - 1) * BAND_GAP;
+  const gridH = (cardWidth * 7) / 5;
+  const s = gridW / win.w;
+  const overflow = Math.max(0, gridH - win.h * s);
+  const topOverhang = Math.max(0, win.y * s - overflow * BAND_OVERFLOW_TOP_SHARE);
+  const bottomOverhang = Math.max(0, (canvas.h - win.y - win.h) * s - overflow * (1 - BAND_OVERFLOW_TOP_SHARE));
+  const sideOverhang = win.x * s;
   return {
-    '--wrap-left': percent(win.x / win.w),
-    '--wrap-right': percent((canvas.w - win.x - win.w) / win.w),
-    '--wrap-top': percent(win.y / win.h),
-    '--wrap-bottom': percent((canvas.h - win.y - win.h) / win.h),
+    shell: {
+      width: gridW,
+      height: gridH,
+      margin: `${topOverhang.toFixed(1)}px auto ${bottomOverhang.toFixed(1)}px`,
+    },
+    art: {
+      left: -sideOverhang,
+      top: -topOverhang,
+      width: canvas.w * s,
+      height: canvas.h * s,
+    },
+    grid: { columns: `repeat(${cards}, ${cardWidth}px)`, gap: BAND_GAP },
+    cardWidth,
+    cards,
   };
 }
 
@@ -94,5 +130,16 @@ export const RUN_SHOP_WRAP_CANDIDATES: readonly RunShopWrapCandidate[] = [
     src: new URL('../art/run-shop-wrap/pixellab-awning.png', import.meta.url).href,
     canvas: { w: 404, h: 524 },
     window: { x: 42, y: 48, w: 320, h: 448 },
+  },
+  {
+    id: 'pixellab-band',
+    label: 'Merchant counter',
+    engine: 'pixellab',
+    kind: 'band',
+    src: new URL('../art/run-shop-wrap/pixellab-band.png', import.meta.url).href,
+    canvas: { w: 659, h: 327 },
+    window: { x: 78, y: 81, w: 504, h: 153 },
+    bandCards: 4,
+    bandCardWidth: 170,
   },
 ];

@@ -4,7 +4,7 @@ import type { RunCoreCard } from '../run/model';
 import { RunCard } from './RunCard';
 import {
   RUN_SHOP_WRAP_CANDIDATES,
-  runShopWrapInsets,
+  runShopWrapBandMount,
   runShopWrapSeatPadding,
   runShopWrapSeatTrack,
   type RunShopWrapCandidate,
@@ -42,14 +42,41 @@ function WrapCandidateRow({ candidate }: { candidate: RunShopWrapCandidate }): R
           ))}
         </div>
       ) : (
-        <div className="run-wrap-band-shell" style={runShopWrapInsets(candidate) as CSSProperties}>
-          <img className="run-wrap-art" src={candidate.src} alt="" draggable={false} />
-          <div className="run-card-grid">
-            {REVIEW_CARDS.map((card) => (
-              <RunCard key={`${candidate.id}:${card.id}`} card={card} mode="shop" onSelect={() => undefined} />
-            ))}
-          </div>
-        </div>
+        (() => {
+          const mount = runShopWrapBandMount(candidate);
+          const bandCards = [...REVIEW_CARDS, ...REVIEW_CARDS].slice(0, mount.cards);
+          return (
+            <div
+              className="run-wrap-band-shell"
+              style={{
+                inlineSize: `${mount.shell.width}px`,
+                blockSize: `${mount.shell.height}px`,
+                margin: mount.shell.margin,
+              }}
+            >
+              <img
+                className="run-wrap-art"
+                src={candidate.src}
+                alt=""
+                draggable={false}
+                style={{
+                  insetInlineStart: `${mount.art.left}px`,
+                  insetBlockStart: `${mount.art.top}px`,
+                  inlineSize: `${mount.art.width}px`,
+                  blockSize: `${mount.art.height}px`,
+                }}
+              />
+              <div
+                className="run-card-grid"
+                style={{ gridTemplateColumns: mount.grid.columns, gap: `${mount.grid.gap}px`, justifyContent: 'center' }}
+              >
+                {bandCards.map((card, index) => (
+                  <RunCard key={`${candidate.id}:${card.id}:${index}`} card={card} mode="shop" onSelect={() => undefined} />
+                ))}
+              </div>
+            </div>
+          );
+        })()
       )}
     </section>
   );

@@ -19051,7 +19051,6 @@ button.tileset-relationship-cell {
 }
 
 .run-wrap-art {
-  inset: var(--wrap-top) var(--wrap-right) var(--wrap-bottom) var(--wrap-left);
   pointer-events: none;
   position: absolute;
 }
@@ -19063,9 +19062,6 @@ button.tileset-relationship-cell {
 }
 
 .run-wrap-band-shell {
-  margin-block: calc(var(--ds-inline) * 3) calc(var(--ds-inline) * 4);
-  margin-inline: auto;
-  max-inline-size: 800px;
   position: relative;
 }
 
