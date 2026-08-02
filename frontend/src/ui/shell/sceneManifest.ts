@@ -1,6 +1,6 @@
 import { enchiridionSectionFromPath, enchiridionSectionPath } from '../enchiridionRoute';
 import { normalizeRoutePath } from '../navigation';
-import { isPlaySelectorPath, playHubSelection } from '../playHubRoute';
+import { isPlaySelectorPath, playHubSectionPath, playHubSelection } from '../playHubRoute';
 import type { RunDocument, RunPhase } from '../../run/model';
 
 export type SceneBackground = 'homepage' | 'battlefield' | 'tool';
@@ -222,8 +222,13 @@ function leafSceneManifest(
       'visible-relics',
     ], [], 'gameplay-shell', 'transition-only');
   }
+  // The manifest id is the RESOLVED SECTION address, not the raw path (the
+  // enchiridion precedent below): the hub root, the agnostic Continue address, its
+  // choices, and malformed selector paths all present one committed Continue scene,
+  // so PlayMenu's ADR-0260 address canonicalization retargets the in-flight
+  // preparation in place — never a second exit of the scene the player just left.
   if (isPlaySelectorPath(path)) {
-    return manifest(`play-selector:${path}`, 'homepage', 'play-selector', [
+    return manifest(`play-selector:${playHubSectionPath(path)}`, 'homepage', 'play-selector', [
       'homepage-background',
       'title-bar',
       'selector-chrome',
@@ -272,7 +277,25 @@ function leafSceneManifest(
     path === '/settings' || path.startsWith('/settings/')
     || path === '/party'
   ) {
-    return manifest(`settings:${path}`, 'homepage', 'dom', [
+    // The manifest id is the RESOLVED SECTION address (enchiridion precedent): the
+    // bare /settings root and unknown subpaths render the General section, so they
+    // share its identity — an address-only difference must never re-run the scene
+    // lifecycle for the same committed section. Keep this mapping aligned with the
+    // instance selection below; the identity invariant test enforces the pairing.
+    const settingsSectionPath = path === '/party'
+      ? '/party'
+      : path === '/settings/audio'
+        ? '/settings/audio'
+        : path === '/settings/audio/tracks'
+          ? '/settings/audio/tracks'
+          : path === '/settings/gameplay'
+            ? '/settings/gameplay'
+            : path === '/settings/creator-tools'
+              ? '/settings/creator-tools'
+              : path === '/settings/admin'
+                ? '/settings/admin'
+                : '/settings/general';
+    return manifest(`settings:${settingsSectionPath}`, 'homepage', 'dom', [
       'homepage-background',
       'title-bar',
       'visible-controls',

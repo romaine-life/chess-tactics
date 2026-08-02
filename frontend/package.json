@@ -26,6 +26,7 @@
     "visual:health": "node scripts/check-local-server.mjs",
     "verify:titlebar": "node scripts/check-titlebar-geometry.mjs",
     "verify:workspace": "node scripts/check-workspace-geometry.mjs",
+    "verify:play-transition": "node scripts/check-play-transition.mjs",
     "cards:check-prompts": "node scripts/install-run-card-art-prompts.mjs --dry-run",
     "cards:install-art": "node scripts/install-run-card-art-prompts.mjs --install-images",
     "typecheck": "tsc --noEmit",

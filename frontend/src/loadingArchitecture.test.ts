@@ -85,6 +85,21 @@ describe('professional loading architecture guards', () => {
     expect(app).toContain('A required level preview could not be prepared.');
   });
 
+  it('delivers navigation events through one lifetime location subscription', () => {
+    const app = read('./ui/App.tsx');
+    expect(app).toContain('const unsubscribeLocation = subscribeAppLocation(onNav)');
+    expect(app).toContain('committedLocationRef.current');
+    expect(app).toContain('resolveSceneRef.current(nextPath, nextSearch)');
+    // Re-subscribing per dependency change opens a flush-wide gap (cleanups run
+    // before child setups) where a screen's canonicalization navigation dispatched
+    // from its own effect is silently lost between removal and re-add.
+    expect(app).not.toMatch(/\}, \[path, resolveScene, search\]\);/);
+    // A retargeted preparation adopts its canonical address; a same-scene address
+    // change is observable in the loading timeline rather than silent.
+    expect(app).toContain("destination.id === pending.id && sceneRef.current.phase !== 'exiting'");
+    expect(app).toContain("'scene-address-refreshed'");
+  });
+
   it('keeps authored committed and pending scene instances separate from browser intent', () => {
     const app = read('./ui/App.tsx');
     const play = read('./ui/PlayMenu.tsx');

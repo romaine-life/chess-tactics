@@ -52,6 +52,41 @@ describe('scene director', () => {
     });
   });
 
+  it('retargets Play hub canonicalization without replaying the outgoing menu exit', () => {
+    const settings = sceneManifest('/settings/general');
+    let state = reduceScene(initialSceneState(settings), {
+      type: 'navigate',
+      destination: sceneManifest('/play/select'),
+      href: '/play/select',
+    });
+    expect(state.phase).toBe('exiting');
+    state = reduceScene(state, { type: 'exit-finished', generation: state.generation });
+    expect(state.phase).toBe('loading');
+    const firstGeneration = state.generation;
+
+    // PlayMenu resolves resume authority and canonicalizes the hub root to the
+    // most recent Continue choice (ADR-0260) while the destination still prepares.
+    state = reduceScene(state, {
+      type: 'navigate',
+      destination: sceneManifest('/play/select/continue/skirmish'),
+      href: '/play/select/continue/skirmish',
+    });
+    expect(state).toMatchObject({
+      phase: 'loading',
+      current: { id: 'settings:/settings/general' },
+      destinationHref: '/play/select/continue/skirmish',
+      generation: firstGeneration + 1,
+    });
+
+    state = reduceScene(state, { type: 'destination-painted', generation: state.generation });
+    state = reduceScene(state, { type: 'entrance-finished', generation: state.generation });
+    expect(state).toMatchObject({
+      phase: 'current',
+      current: { pathname: '/play/select/continue/skirmish' },
+      destination: null,
+    });
+  });
+
   it('permits only the canonical scene lifecycle', () => {
     let state = initialSceneState(sceneManifest('/'));
     state = reduceScene(state, { type: 'navigate', destination: sceneManifest('/play'), href: '/play' });
