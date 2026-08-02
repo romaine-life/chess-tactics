@@ -26,7 +26,7 @@ const RUN_SHOP_WRAP_COMPONENT = 'run-shop-wrap';
 const RUN_SHOP_WRAP_SLOT = /^ui\/run\/shop-wrap\/([a-z][a-z0-9-]{0,79})\.png$/;
 // A wrap frames live cards rather than replacing them, so the only geometry the
 // runtime needs is where the card row sits inside the painted canvas.
-const RUN_SHOP_WRAP_KINDS = Object.freeze(['seat', 'band', 'slots']);
+const RUN_SHOP_WRAP_KINDS = Object.freeze(['seat', 'band', 'slots', 'screen']);
 const GAME_CONDITION_ICON_BY_SLOT = Object.freeze({
   'ui/kit/icons/game/plagued.png': Object.freeze({ component: 'unit-ability-icon', variant: 'plagued' }),
   'ui/kit/icons/card-properties/pestiferous.png': Object.freeze({ component: 'card-property-icon', variant: 'pestiferous' }),

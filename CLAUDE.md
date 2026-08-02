@@ -180,6 +180,58 @@ The Studio encodes its state in the URL, so deep-link instead of clicking:
 - `view=board`, `family=<id>`, `collection=<id>`, `asset=<id>`, `unit=<id>`, `seed=<n>`
 - `/unit-studio` is an alias for the Studio with the Units shelf preselected.
 
+#### Crafting a Run state to link to (ADR-0338)
+
+Run screens need an active Run, so `/run` alone lands wherever the account already is. Craft the
+state first, then hand over a plain app link — the link says *where* in the Run you are, never
+what the Run contains. Never hand-author a Run document or edit `active_runs`: the server
+validator cross-checks army/card membership, Plagued targets and offer pricing, and a crafted
+document passes because the game built it.
+
+**`POST /api/active-run/craft`** (admin, works anywhere) sets your own active Run from a JSON
+spec and answers with the Run plus the address to open:
+
+```
+curl -X POST <url>/api/active-run/craft -H 'content-type: application/json' -d '{
+  "phase": "shop", "battle": 4, "gold": 33.5,
+  "army": [{ "type": "rook", "abilities": ["marshalled"] }, "knight", "pawn"],
+  "offers": [{ "pieces": ["queen"] }, { "pieces": ["pawn","pawn"], "type": "concinnous" }],
+  "loot": ["fair-scales"], "relics": ["quartermasters-ledger"] }'
+```
+
+Same fields as the address grammar below, plus what an address cannot carry: units as objects
+with `abilities`, offers as objects. An unknown field is refused, not ignored.
+
+The `url` it answers with carries the crafted Run's id (`/run?run=<id>`). That is identity, not
+contents: opened signed out, or on an account that has moved on, the screen says the link is for
+a different Run instead of quietly rendering whatever Run that browser holds.
+
+The address form below does the same thing client-side in a **dev build only**, for quick
+one-offs: it builds the state, adopts it, then drops its parameters from the address.
+
+```
+/run?craft=shop&battle=3&gold=25&army=knight,rook&offers=queen,pawn+pawn:concinnous,rook:tactical
+/run?craft=deployment&battle=2&army=rook,rook,bishop,pawn&gold=12
+/run?craft=battle&battle=4&relics=fair-scales
+/run?craft=victory&gold=40
+```
+
+- `craft=shop|deployment|battle|victory` — the phase to land on.
+- `battle=N` — the Battle you are at, 1-based. For a Shop that is the Shop you leave into
+  Battle N, so `battle=1` is the opening Shop (which takes no overrides — the Run contract
+  pins its offers, army and 8 gold).
+- `gold=25` (decimals fine), `army=knight,rook` (the exact non-King army; `add=queen`
+  appends instead), `relics=<id,id>`.
+- Shop only: `offers=<card>[,<card>]` where a card is its pieces joined by `+` with an
+  optional `:tactical|:concinnous|:pestiferous`; `loot=<id,id>`; `paid=<id>`. Pieces accept
+  names, chess letters, or a bare deck id (`pawn,pawn,knight` = `p,p,n` = `ppk`).
+- `war=<id>` picks the War (default: the first Run-eligible official one), `seed=<n>` and
+  `tier=0|1` fix the roll. `view=army|relics|sell` still applies and survives the craft.
+
+A refused spec prints the reason on the Run screen and writes nothing. Crafting **replaces
+the account's active Run** — there is one per account — so do not craft over a Run the owner
+is playing without saying so.
+
 ## Dev environment gotchas (git worktrees)
 
 - A fresh worktree's `backend/node_modules` is expected to be missing. That is
