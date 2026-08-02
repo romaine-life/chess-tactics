@@ -177,9 +177,9 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('if (run) { setArmed(true); return; }');
     expect(playMenu).toContain('data-testid="run-keep"');
     expect(playMenu).toContain('data-testid="run-abandon-and-start"');
-    expect(playMenu).toContain("'ce-link-button', 'danger'");
+    // Danger tone rides the ce-family's registered variant — no new surface paint.
+    expect(playMenu).toContain("'ce-asset-button', 'is-danger'");
     expect(playMenu).toContain('keepRunButtonRef.current?.focus();');
-    expect(style).toContain('.ce-link-button.danger');
     expect(style).toContain('.run-replace-note');
   });
 });

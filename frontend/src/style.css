@@ -10342,10 +10342,6 @@ body { font-size: 17px; }
   min-width: 0;
 }
 
-/* Destructive verb in a preview/detail actions row (e.g. Abandon and Start) — same
-   frame swap the segmented editor buttons use for their danger tone. */
-.ce-link-button.danger { border-image-source: var(--skirmish-chrome-inner-control-danger-image); }
-
 .ce-preview-actions.has-assign .ce-assign-field {
   grid-column: 1 / -1;
 }

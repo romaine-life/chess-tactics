@@ -384,7 +384,7 @@ function RunPanel({
                   <span>Keep Run</span>
                 </ChromeButton>
                 <ChromeButton unit="inner-text-button"
-                  className={chromeUnitClassNames('inner-text-button', 'ce-link-button', 'danger')}
+                  className={chromeUnitClassNames('inner-text-button', 'ce-asset-button', 'is-danger')}
                   data-testid="run-abandon-and-start"
                   disabled={starting}
                   onClick={() => { void start(); }}
