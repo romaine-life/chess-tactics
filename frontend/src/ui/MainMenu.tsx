@@ -156,7 +156,6 @@ export function MainMenu({
       <div
         className={`settings-screen main-menu-twin-screen app-shell-bar-pad ${dest ? 'has-dest' : ''}`.trim()}
         data-dest={dest ?? undefined}
-        data-chrome-tab-fill-surface="hybrid-wood-oak"
       >
         <ArtRouteChrome className="settings-shell">
           <ApparatusRailColumn
