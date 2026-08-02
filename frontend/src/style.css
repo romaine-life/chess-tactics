@@ -22700,11 +22700,15 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   position: absolute;
 }
 
+/* The marker rides the unit it marks: the density ladder resizes the sprite per
+   card, so a fixed card fraction would leave the icon half again the unit's
+   height on a busy card. .162 x the committed x5 unit-state fit is the 0.81 of
+   unit height that fitting approved on the roomy step. */
 .run-card-prototype-unit-marker {
   align-items: center;
-  block-size: 3.4cqw;
+  block-size: calc(var(--run-card-unit-height, 9cqw) * .162);
   display: inline-flex;
-  inline-size: 3.4cqw;
+  inline-size: calc(var(--run-card-unit-height, 9cqw) * .162);
   justify-content: center;
   z-index: 3;
   image-rendering: pixelated;
