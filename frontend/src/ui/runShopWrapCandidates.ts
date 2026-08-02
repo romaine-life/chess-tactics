@@ -1,6 +1,11 @@
-// Review-only manifest of generated shop wrap-art candidates mounted by
-// RunShopArtReview. Review mounting does not promote a candidate; an accepted
-// candidate moves to the live-media pipeline with provenance.
+// Review-only shop wrap-art candidates mounted by RunShopArtReview. The bytes
+// and the measured geometry both live in live media (ADR-0085) — candidate
+// pixels are never committed — so this module reads them back off the admin
+// catalog. Review mounting does not promote a candidate.
+import type { AdminLiveMediaCatalog, AdminLiveMediaVersion } from '../net/liveMediaAdmin';
+
+export const RUN_SHOP_WRAP_SCHEMA = 'run-shop-wrap-candidate-v1';
+export const RUN_SHOP_WRAP_SLOT_PREFIX = 'review/run-shop-wrap/';
 
 export interface RunShopWrapRect {
   x: number;
@@ -146,68 +151,61 @@ export function runShopWrapSlotMount(
   };
 }
 
-export const RUN_SHOP_WRAP_CANDIDATES: readonly RunShopWrapCandidate[] = [
-  {
-    id: 'pixellab-alcove',
-    label: 'Alcove niche',
-    engine: 'pixellab',
-    kind: 'seat',
-    src: new URL('../art/run-shop-wrap/pixellab-alcove.png', import.meta.url).href,
-    canvas: { w: 349, h: 454 },
-    window: { x: 74, y: 83, w: 206, h: 294 },
-  },
-  {
-    id: 'pixellab-awning',
-    label: 'Awning stall',
-    engine: 'pixellab',
-    kind: 'seat',
-    src: new URL('../art/run-shop-wrap/pixellab-awning.png', import.meta.url).href,
-    canvas: { w: 404, h: 524 },
-    window: { x: 42, y: 48, w: 320, h: 448 },
-  },
-  {
-    id: 'pixellab-band',
-    label: 'Merchant counter',
-    engine: 'pixellab',
-    kind: 'band',
-    src: new URL('../art/run-shop-wrap/pixellab-band.png', import.meta.url).href,
-    canvas: { w: 659, h: 327 },
-    window: { x: 78, y: 81, w: 504, h: 153 },
-    bandCards: 4,
-    bandCardWidth: 170,
-  },
-  {
-    id: 'codex-seat',
-    label: 'Timber display stand',
-    engine: 'codex',
-    kind: 'seat',
-    src: new URL('../art/run-shop-wrap/codex-seat.png', import.meta.url).href,
-    canvas: { w: 778, h: 1145 },
-    window: { x: 66, y: 74, w: 648, h: 971 },
-  },
-  {
-    id: 'codex-band',
-    label: 'Lantern market stall',
-    engine: 'codex',
-    kind: 'band',
-    src: new URL('../art/run-shop-wrap/codex-band.png', import.meta.url).href,
-    canvas: { w: 1471, h: 937 },
-    window: { x: 147, y: 153, w: 1206, h: 544 },
-    bandCards: 3,
-    bandCardWidth: 200,
-  },
-  {
-    id: 'pixellab-slots-inside',
-    label: 'Three-slot stall',
-    engine: 'pixellab',
-    kind: 'slots',
-    src: new URL('../art/run-shop-wrap/pixellab-slots-inside.png', import.meta.url).href,
-    canvas: { w: 688, h: 384 },
-    window: { x: 86, y: 130, w: 516, h: 139 },
-    slots: [
-      { x: 86, y: 130, w: 100, h: 139 },
-      { x: 292, y: 130, w: 103, h: 139 },
-      { x: 501, y: 130, w: 101, h: 139 },
-    ],
-  },
-];
+const KINDS: readonly RunShopWrapCandidate['kind'][] = ['seat', 'band', 'slots'];
+const ENGINES: readonly RunShopWrapCandidate['engine'][] = ['pixellab', 'codex'];
+
+function object(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function rect(value: unknown): RunShopWrapRect | null {
+  const raw = object(value);
+  if (!raw) return null;
+  const { x, y, w, h } = raw;
+  return [x, y, w, h].every((n) => typeof n === 'number' && Number.isFinite(n)) && (w as number) > 0 && (h as number) > 0
+    ? { x: x as number, y: y as number, w: w as number, h: h as number }
+    : null;
+}
+
+function candidateFrom(version: AdminLiveMediaVersion): RunShopWrapCandidate | null {
+  if (!version.slot?.startsWith(RUN_SHOP_WRAP_SLOT_PREFIX) || !version.media) return null;
+  const metadata = object(version.metadata);
+  if (metadata?.schema !== RUN_SHOP_WRAP_SCHEMA) return null;
+  const canvas = rect({ x: 0, y: 0, ...object(metadata.canvas) });
+  const window = rect(metadata.window);
+  const id = typeof metadata.id === 'string' ? metadata.id : null;
+  const label = typeof metadata.label === 'string' ? metadata.label : null;
+  const kind = KINDS.find((value) => value === metadata.kind);
+  const engine = ENGINES.find((value) => value === metadata.engine);
+  if (!id || !label || !kind || !engine || !canvas || !window) return null;
+  const slots = Array.isArray(metadata.slots)
+    ? metadata.slots.map(rect).filter((value): value is RunShopWrapRect => value !== null)
+    : [];
+  if (kind === 'slots' && !slots.length) return null;
+  return {
+    id,
+    label,
+    engine,
+    kind,
+    src: version.media.url,
+    canvas: { w: canvas.w, h: canvas.h },
+    window,
+    ...(typeof metadata.bandCards === 'number' ? { bandCards: metadata.bandCards } : {}),
+    ...(typeof metadata.bandCardWidth === 'number' ? { bandCardWidth: metadata.bandCardWidth } : {}),
+    ...(slots.length ? { slots } : {}),
+  };
+}
+
+/** Latest wrap candidate per review slot, ordered seat → band → slots for review. */
+export function runShopWrapCandidates(catalog: AdminLiveMediaCatalog): readonly RunShopWrapCandidate[] {
+  const latestBySlot = new Map<string, RunShopWrapCandidate>();
+  [...catalog.versions]
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+    .forEach((version) => {
+      const candidate = candidateFrom(version);
+      if (candidate && version.slot) latestBySlot.set(version.slot, candidate);
+    });
+  return [...latestBySlot.values()].sort((left, right) => (
+    KINDS.indexOf(left.kind) - KINDS.indexOf(right.kind) || left.id.localeCompare(right.id)
+  ));
+}

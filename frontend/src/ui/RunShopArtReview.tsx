@@ -1,10 +1,11 @@
-import type { CSSProperties, ReactElement } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties, type ReactElement } from 'react';
 import { defaultBackgroundSet } from '../art/backgroundSets';
+import { fetchAdminLiveMediaCatalog, type AdminLiveMediaCatalog } from '../net/liveMediaAdmin';
 import type { RunCoreCard } from '../run/model';
 import { RunCard } from './RunCard';
 import {
-  RUN_SHOP_WRAP_CANDIDATES,
   runShopWrapBandMount,
+  runShopWrapCandidates,
   runShopWrapSeatPadding,
   runShopWrapSeatTrack,
   runShopWrapSlotMount,
@@ -115,7 +116,18 @@ function WrapCandidateRow({ candidate }: { candidate: RunShopWrapCandidate }): R
 }
 
 export function RunShopArtReview(): ReactElement {
-  useSceneParticipant('studio', 'painted');
+  const [catalog, setCatalog] = useState<AdminLiveMediaCatalog | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let active = true;
+    void fetchAdminLiveMediaCatalog()
+      .then((next) => { if (active) setCatalog(next); })
+      .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : String(reason)); });
+    return () => { active = false; };
+  }, []);
+  const wraps = useMemo(() => catalog ? runShopWrapCandidates(catalog) : [], [catalog]);
+  const sceneError = useMemo(() => error ? new Error(error) : null, [error]);
+  useSceneParticipant('studio', sceneError ? 'error' : catalog ? 'painted' : 'loading', sceneError);
 
   return (
     <main
@@ -135,7 +147,7 @@ export function RunShopArtReview(): ReactElement {
             />
           ))}
         </div>
-        {RUN_SHOP_WRAP_CANDIDATES.map((candidate) => (
+        {wraps.map((candidate) => (
           <WrapCandidateRow key={candidate.id} candidate={candidate} />
         ))}
       </OuterChromeBox>
