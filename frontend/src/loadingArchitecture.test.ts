@@ -63,8 +63,8 @@ describe('professional loading architecture guards', () => {
     const app = read('./ui/App.tsx');
     const director = read('./ui/shell/sceneDirector.ts');
     expect(app).toContain('const sceneLayers = overlapsCompleteScenes');
-    expect(app).toContain('key: scene.current.leaf.key');
-    expect(app).toContain('key: scene.destination!.leaf.key');
+    expect(app).toContain('key: sceneLayerKey(scene.current)');
+    expect(app).toContain('key: sceneLayerKey(scene.destination!)');
     expect(app).toContain('sceneLayers.map((layer)');
     expect(app).toContain('key={layer.key}');
     expect(app).not.toContain('key={`incoming:');
@@ -190,7 +190,7 @@ describe('professional loading architecture guards', () => {
     const styles = read('./style.css');
     expect(app).toContain("transitionStatus={titleBarLoading ? 'Loading…' : null}");
     expect(app).toContain("scene.phase === 'entering' || scene.phase === 'current'");
-    expect(app).toContain('key: mountedScene.leaf.key');
+    expect(app).toContain('key: sceneLayerKey(mountedScene)');
     expect(titleBar).toContain('screenName={config.screenName}');
     expect(titleBar).toContain('transitionStatus={transitionStatus}');
     expect(titleBar).toContain('config.centerSlot ? <div className="app-shell-titlebar-center"');
