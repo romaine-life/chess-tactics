@@ -20610,26 +20610,76 @@ button.tileset-relationship-cell {
   display: grid;
   gap: 2px;
   inline-size: 100%;
+  isolation: isolate;
   min-block-size: 52px;
   padding: 6px 10px;
+  position: relative;
   text-align: start;
 }
 
+.enchiridion-card-type-row-material {
+  display: flex;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+  z-index: 0;
+}
+
+.enchiridion-card-type-row-material > img {
+  block-size: 100%;
+  flex: 0 0 128px;
+  image-rendering: pixelated;
+  inline-size: 128px;
+  max-inline-size: none;
+  object-fit: fill;
+}
+
+.enchiridion-card-type-row-material[data-card-type-texture='concinnous'] > img {
+  flex-basis: 512px;
+  inline-size: 512px;
+}
+
 .enchiridion-card-type-row-name {
+  align-self: center;
   font-size: var(--ds-text-md);
+  justify-self: start;
+  line-height: 1;
+}
+
+[data-testid='enchiridion-card-type-concinnous'] .enchiridion-card-type-row-name {
+  color: #21190f;
+  text-shadow: 0 1px 0 rgb(255 255 255 / 55%);
 }
 
 .enchiridion-card-type-row-identity {
   align-items: center;
   display: grid;
-  gap: var(--ds-inline-tight);
+  column-gap: var(--ds-space-2);
   grid-template-columns: 34px minmax(0, 1fr);
+  position: relative;
+  z-index: 1;
 }
 
 .enchiridion-card-type-row-icon {
   block-size: 34px;
-  image-rendering: pixelated;
   inline-size: 34px;
+  overflow: visible;
+  position: relative;
+}
+
+.enchiridion-card-type-row-icon .alpha-bound-icon-image {
+  image-rendering: pixelated;
+  max-block-size: none;
+  max-inline-size: none;
+  object-fit: fill;
+  position: absolute;
+}
+
+.enchiridion-card-type-row-icon[data-alpha-fit="pending"] .alpha-bound-icon-image {
+  block-size: 100%;
+  inline-size: 100%;
+  inset: 0;
   object-fit: contain;
 }
 
@@ -20643,12 +20693,17 @@ button.tileset-relationship-cell {
 
 .enchiridion-card-type-detail {
   align-self: start;
+  container-type: inline-size;
   display: grid;
   min-block-size: 0;
 }
 
 .enchiridion-card-type-preview {
   inline-size: 100%;
+  /* Every 1060px Run frame carries a roughly 42px transparent/art apron before
+     its painted top rail. Align that rail, rather than the raster box, with the
+     selected row's top rail at every responsive card width. */
+  margin-block-start: -4cqw;
   min-inline-size: 0;
 }
 

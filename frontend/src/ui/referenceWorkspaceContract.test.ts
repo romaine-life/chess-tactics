@@ -173,6 +173,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(cardTypes).toContain('RUN_CARD_HIERATIC_FRAME_SLOT');
     // Every named property row carries its own accepted symbol, not just Pestiferous.
     expect(cardTypes).toContain('src={runCardPropertyIconUrl(definition.id)}');
+    expect(cardTypes).toContain('<AlphaBoundIcon');
     expect(cardTypes).toContain('className="enchiridion-card-type-row-icon"');
     // The preview face carries the qualifier as its symbol instead of an em-dash suffix.
     expect(cardTypes).toContain("typeLine: 'Units',");
@@ -186,7 +187,20 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(cardTypes).toContain('<CardTypeReference definition={selected} />');
     expect(cardTypes).not.toContain('<CardTypeReference definition={definition} key={definition.id} />');
     expect(style).toMatch(/\.enchiridion-card-type-layout\s*\{[\s\S]*?grid-template-columns:\s*minmax\(280px,\s*1fr\) minmax\(232px,\s*300px\)/);
-    expect(enchiridion).toContain("if (section === 'card-types') return <CardTypesSection framed={framed} />;");
+    expect(style).toMatch(/\.enchiridion-card-type-detail\s*\{[\s\S]*?container-type:\s*inline-size/);
+    expect(style).toMatch(/\.enchiridion-card-type-preview\s*\{[\s\S]*?margin-block-start:\s*-4cqw/);
+    expect(style).toMatch(/\.enchiridion-card-type-row-name\s*\{[\s\S]*?line-height:\s*1/);
+    expect(enchiridion).toContain("if (section === 'card-types') return <CardTypesSection framed={framed} textureBatch={cardTypeTextureBatch} />;");
+    // Generated materials remain private and opt-in: only the exact query-addressed
+    // batch is projected into a labeled candidate review; the normal screen is unchanged.
+    expect(mainMenu).toContain("cardTypeTextureBatch={new URLSearchParams(search).get('cardTypeTextureBatch')}");
+    expect(cardTypes).toContain("title={textureBatch ? 'Card Types · PixelLab candidates' : 'Card Types'}");
+    expect(cardTypes).toContain('data-card-type-texture-review={textureReviewStatus}');
+    expect(cardTypes).toContain('className="enchiridion-card-type-row-material"');
+    expect(style).toMatch(/\.enchiridion-card-type-row-material\s*\{[\s\S]*?display:\s*flex;[\s\S]*?inset:\s*0/);
+    expect(style).not.toMatch(/\.enchiridion-card-type-row-material\s*\{[^}]*\bfilter\s*:/);
+    expect(style).toMatch(/\.enchiridion-card-type-row-material > img\s*\{[\s\S]*?flex:\s*0 0 128px;[\s\S]*?inline-size:\s*128px/);
+    expect(style).toMatch(/\[data-card-type-texture='concinnous'\] > img\s*\{[\s\S]*?flex-basis:\s*512px;[\s\S]*?inline-size:\s*512px/);
   });
 
   it('uses separate installed symbols for a card property and the unit state it bestows', () => {

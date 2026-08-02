@@ -184,6 +184,7 @@ export function MainMenu({
                   : dest === 'enchiridion' ? (
                       <Enchiridion
                         section={enchiridionSectionFromPath(path)}
+                        cardTypeTextureBatch={new URLSearchParams(search).get('cardTypeTextureBatch')}
                         selectedRelicId={enchiridionRelicFromPath(path)}
                         relicHref={enchiridionRelicHref}
                         selectedCardId={enchiridionCardFromPath(path)}
