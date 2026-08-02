@@ -8,6 +8,7 @@ import { testLiveUnitCatalog } from '../test/liveUnitCatalog';
 import { applyLiveUnitCatalog, resetLiveUnitCatalog } from '../ui/unitCatalog';
 import type { PredrawnOcclusionDepthMap } from '@chess-tactics/board-render';
 import {
+  arrivalOffset,
   buildSkirmishBoard,
   commitSkirmishSceneFirstFrame,
   computeArrivalDelays,
@@ -45,6 +46,26 @@ describe('retained-board unit arrivals', () => {
     visible.delete('new-pawn');
 
     expect(newlyVisibleArrivalPieces(visible, [pieces[1]]).map((piece) => piece.id)).toEqual(['new-pawn']);
+  });
+
+  // A battlefield is revealed during its scene entrance but activated only when that entrance
+  // completes. A unit staged for arrival must therefore already be OFF the board while it waits,
+  // or the reveal shows the whole army seated and the entrance then takes it away again.
+  it('holds a staged unit off the board until its entrance is released', () => {
+    expect(arrivalOffset(1_000, { startMs: null, delayMs: 400 })).toEqual({ dy: -60, opacity: 0 });
+  });
+
+  it('seats a unit that has no entrance to play', () => {
+    expect(arrivalOffset(1_000, undefined)).toEqual({ dy: 0, opacity: 1 });
+  });
+
+  it('runs a released entrance from off the board down to its seat', () => {
+    const plan = { startMs: 1_000, delayMs: 400 };
+
+    expect(arrivalOffset(1_200, plan)).toEqual({ dy: -60, opacity: 0 });
+    expect(arrivalOffset(1_400, plan).opacity).toBe(0);
+    expect(arrivalOffset(1_650, plan)).toEqual({ dy: -60, opacity: 1 });
+    expect(arrivalOffset(2_400, plan)).toEqual({ dy: 0, opacity: 1 });
   });
 });
 

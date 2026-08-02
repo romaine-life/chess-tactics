@@ -296,7 +296,10 @@ try {
         if (!visibleBoundary) probe.blankFrame = true;
         const pendingBoard = incomingBoard;
         if (pendingBoard?.getAttribute('data-interactive') === 'true') probe.interactiveBeforeCommit = true;
-        if (pendingBoard?.getAttribute('data-arriving') === 'true') probe.arrivalBeforeCommit = true;
+        // Staged arrivals BEFORE commit are required, not forbidden: the destination is revealed
+        // during this transition, and units that have not arrived must already be off the board
+        // by then. What must not happen before commit is the entrance actually playing.
+        if (pendingBoard?.getAttribute('data-arrival-state') === 'entering') probe.arrivalBeforeCommit = true;
       }
       probe.frame = requestAnimationFrame(tick);
     };
