@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+  USAGE,
   EXIT,
   checksVerdict,
   detectPullRequestWorkflows,
@@ -23,11 +24,20 @@ const base = {
 }
 
 test('parseArgs takes a PR number, flags, and rejects junk', () => {
-  assert.deepEqual(parseArgs([]), { pr: null, wait: true, appear: 90, timeout: 1800 })
-  assert.deepEqual(parseArgs(['631', '--no-wait']), { pr: '631', wait: false, appear: 90, timeout: 1800 })
+  assert.deepEqual(parseArgs([]), { pr: null, wait: true, appear: 90, timeout: 1800, help: false })
+  assert.equal(parseArgs(['631', '--no-wait']).pr, '631')
+  assert.equal(parseArgs(['631', '--no-wait']).wait, false)
   assert.equal(parseArgs(['--appear', '5', '--timeout', '60']).appear, 5)
+  assert.equal(parseArgs(['--help']).help, true)
+  assert.equal(parseArgs(['-h']).help, true)
   assert.throws(() => parseArgs(['--bogus']), /unknown flag/)
   assert.throws(() => parseArgs(['--appear', 'soon']), /take seconds/)
+})
+
+test('USAGE documents every exit code the tool can return', () => {
+  for (const [word, code] of Object.entries(EXIT)) {
+    assert.match(USAGE, new RegExp(`${code} ${word}`), `${word} missing from --help`)
+  }
 })
 
 test('detectPullRequestWorkflows reads only the on: block', () => {
