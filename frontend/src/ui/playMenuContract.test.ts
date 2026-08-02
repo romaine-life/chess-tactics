@@ -163,8 +163,23 @@ describe('unified Play menu contract (ADR-0074)', () => {
 
   it('serializes replacement of an active Run before entering the Run scene', () => {
     expect(playMenu).toContain('if (starting || syncing || !eligible.length) return;');
-    expect(playMenu).toContain("tone: 'danger'");
+    expect(playMenu).toContain('if (run) await abandon();');
     expect(playMenu).toMatch(/await abandon\(\);[\s\S]*?replace\(createRun\([\s\S]*?navigateApp\('\/run'\)/);
     expect(playMenu).toContain("<span>{starting ? 'Starting…' : 'Start Run'}</span>");
+  });
+
+  it('confirms Run replacement inline in the detail column instead of a popup', () => {
+    // The disclosure card states the stakes before any click; the first Start Run click
+    // arms an explicit Keep Run / Abandon and Start pair in the same actions row.
+    expect(playMenu).not.toContain('useConfirm');
+    expect(playMenu).toContain('data-testid="run-replace-warning"');
+    expect(playMenu).toContain('This cannot be undone.');
+    expect(playMenu).toContain('if (run) { setArmed(true); return; }');
+    expect(playMenu).toContain('data-testid="run-keep"');
+    expect(playMenu).toContain('data-testid="run-abandon-and-start"');
+    // Danger tone rides the ce-family's registered variant — no new surface paint.
+    expect(playMenu).toContain("'ce-asset-button', 'is-danger'");
+    expect(playMenu).toContain('keepRunButtonRef.current?.focus();');
+    expect(style).toContain('.run-replace-note');
   });
 });
