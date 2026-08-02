@@ -92,7 +92,10 @@ export function ScreenArtReviewStudio({
   if (!groups.length) return <p role="status">No screen-art candidates uploaded.</p>;
 
   return (
-    <div className="screen-art-review" data-testid="screen-art-review">
+    // `tileset-studio-grid` is what the catalog shell scrolls
+    // (.tileset-studio-shell.is-catalog > .tileset-studio-grid); without it this pane is
+    // clipped at the fold with no scrollbar. Same opt-in the Pages/Asset libraries use.
+    <div className="tileset-studio-grid screen-art-review" data-testid="screen-art-review">
       {groups.map((group) => {
         const shown = group.candidates.filter((c) => generator === 'all' || c.generator === generator);
         if (!shown.length) return null;

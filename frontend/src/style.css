@@ -19014,6 +19014,9 @@ button.tileset-relationship-cell {
    flowing row per screen rather than the relic grid's fixed icon columns. */
 .screen-art-review {
   display: grid;
+  /* Overrides the shared grid's auto-fill card columns: these are wide 16:9 plates
+     stacked one screen per row, not a card wall. */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--ds-gutter);
 }
 
