@@ -3,6 +3,7 @@ import {
   deepestSharedSceneRegion,
   isEmptySlotDestination,
   isEmptySlotOrigin,
+  overlapsStateDrivenRunScene,
   sceneLayerKey,
   sceneManifest,
   sceneOverlapScope,
@@ -83,7 +84,19 @@ describe('scene manifests', () => {
     }, 19, '2026-08-01T00:00:00.000Z');
     const addresses: ReadonlyArray<[string, string?, Parameters<typeof sceneManifest>[2]?]> = [
       ['/'], ['/menu-next'], ['/main-menu'], ['/unknown-route'],
-      ['/play'], ['/play', '?campaignId=a&levelId=b'], ['/play/strategikon/units'],
+      ['/play'], ['/play', '?campaignId=a&levelId=b'],
+      // Every Strategikon address, on BOTH hosts. The old list carried one — and a
+      // malformed one at that — so no pair of its sections was ever compared, which
+      // is why the family could resolve every section to one identity unnoticed.
+      ['/play/strategikon/enchiridion/units'], ['/play/strategikon/enchiridion/terrain'],
+      ['/play/strategikon/enchiridion/cards'], ['/play/strategikon/enchiridion/card-types'],
+      ['/play/strategikon/enchiridion/relics'], ['/play/strategikon/enchiridion/abilities'],
+      ['/play/strategikon/prosopography'], ['/play/strategikon/lipsanotheca'],
+      ['/play/strategikon/unknown'], ['/play/strategikon/enchiridion/unknown'],
+      ['/run/strategikon/enchiridion/units', '', { run: { hydrated: true, document: run } }],
+      ['/run/strategikon/enchiridion/relics', '', { run: { hydrated: true, document: run } }],
+      ['/run/strategikon/prosopography', '', { run: { hydrated: true, document: run } }],
+      ['/run/strategikon/lipsanotheca', '', { run: { hydrated: true, document: run } }],
       ['/run'], ['/run', '', { run: { hydrated: false, document: null } }],
       ['/run', '', { run: { hydrated: true, document: null } }],
       ['/run', '', { run: { hydrated: true, document: run } }],
@@ -265,10 +278,24 @@ describe('scene manifests', () => {
     });
     expect(playStrategikon.id).not.toBe(play.id);
     expect(run.instances.map((entry) => entry.definition.id)).toEqual(['run', 'run/phase', 'run/workspace']);
+    // The Strategikon is an authored shell with its own sections in their own slot,
+    // on BOTH hosts. Its sections were previously invisible to the scene graph —
+    // collapsed onto one workspace value under /run and keyed on the raw pathname
+    // under /play — so its rail navigated without a director transition at all.
     expect(sceneManifest('/run/strategikon/lipsanotheca').instances.map((entry) => entry.definition.id)).toEqual([
       'run',
       'run/phase',
       'run/workspace',
+      'strategikon',
+      'strategikon/lipsanotheca',
+    ]);
+    expect(sceneManifest('/run/strategikon/enchiridion/terrain').instances.map((entry) => entry.definition.id)).toEqual([
+      'run',
+      'run/phase',
+      'run/workspace',
+      'strategikon',
+      'strategikon/enchiridion',
+      'strategikon/enchiridion/terrain',
     ]);
     expect(runStrategikon.id).not.toBe(run.id);
     expect(deepestSharedSceneRegion(
@@ -283,8 +310,22 @@ describe('scene manifests', () => {
       playStrategikon,
       play,
     )).toBe(true);
-    expect(isEmptySlotOrigin(run, runStrategikon)).toBe(false);
-    expect(isEmptySlotDestination(runStrategikon, run)).toBe(false);
+    // Opening the Strategikon fills the same empty gameplay slot on the Run host,
+    // but App never consults that: the Run workspace value itself changes, so the
+    // pair takes the state-driven overlap path and its narrowed viewport scope
+    // instead — the Controls plank must not ride a whole-screen crossfade.
+    expect(isEmptySlotOrigin(run, runStrategikon)).toBe(true);
+    expect(isEmptySlotDestination(runStrategikon, run)).toBe(true);
+    expect(overlapsStateDrivenRunScene(run, runStrategikon)).toBe(true);
+    expect(sceneOverlapScope(run, runStrategikon)).toBe('shell-viewport');
+    // Travel BETWEEN Strategikon sections leaves the Run's own state identity
+    // untouched, so it takes the ordinary region-preserving path and fades only the
+    // pane its rail replaces.
+    const runReference = sceneManifest('/run/strategikon/enchiridion/units');
+    const runReferenceOther = sceneManifest('/run/strategikon/enchiridion/relics');
+    expect(overlapsStateDrivenRunScene(runStrategikon, runReference)).toBe(false);
+    expect(deepestSharedSceneRegion(runStrategikon, runReference)).toBe('strategikon-shell');
+    expect(deepestSharedSceneRegion(runReference, runReferenceOther)).toBe('strategikon-reference-shell');
     expect(sceneManifest('/enchiridion/abilities').instances.map((entry) => entry.definition.id)).toEqual([
       'main-menu',
       'enchiridion',

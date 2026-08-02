@@ -20707,8 +20707,37 @@ button.tileset-relationship-cell {
   grid-template-columns: var(--main-menu-tab-column-w) minmax(0, 1fr);
 }
 
-.strategikon-workspace-layout.has-secondary-rail {
-  grid-template-columns: repeat(2, var(--main-menu-tab-column-w)) minmax(0, 1fr);
+/* The Enchiridion reference rail is a column of the REPLACEABLE pane, not of the
+   workspace: it belongs to the Enchiridion section and leaves with it, while the
+   Strategikon's own section rail is retained outside the slot. The body's start
+   inset is removed for this lane so the two rails still read as adjacent columns
+   of one sheet (ADR-0063) exactly as they did when both were workspace columns. */
+.strategikon-pane {
+  block-size: 100%;
+  min-block-size: 0;
+}
+
+.strategikon-pane.has-secondary-rail {
+  display: grid;
+  gap: 0;
+  grid-template-columns: var(--main-menu-tab-column-w) minmax(0, 1fr);
+}
+
+/* A rail is chrome, not body content: it carries its own ADR-0062 placement inset
+   and docks to the workspace edge, exactly as it did when it was a workspace
+   column. Inside the pane it would otherwise sit on the shell's body inset AND its
+   own, landing a tab column-width off the section rail beside it. Stepping this one
+   lane back out is the whole exemption — the shell keeps owning the body perimeter
+   for the record pane and for the sections that have no rail (ADR-0297). */
+.strategikon-pane > .enchiridion-section-rail {
+  margin-block: calc(-1 * var(--shell-workspace-body-inset-block, 0px));
+  margin-inline-start: calc(-1 * var(--shell-workspace-body-inset-start, 0px));
+}
+
+.strategikon-reference-pane {
+  block-size: 100%;
+  min-block-size: 0;
+  min-inline-size: 0;
 }
 
 .strategikon-rail,
@@ -20727,18 +20756,9 @@ button.tileset-relationship-cell {
   box-sizing: border-box;
 }
 
-.strategikon-content > .enchiridion-workspace {
-  block-size: 100%;
-  display: block;
-  min-block-size: 0;
-}
-
-.strategikon-content > .enchiridion-workspace > .enchiridion-content {
-  block-size: 100%;
-}
-
-.strategikon-content > .run-workspace,
-.strategikon-content > .run-panel-unframed,
+.strategikon-pane > .run-workspace,
+.strategikon-pane > .run-panel-unframed,
+.strategikon-reference-pane > .enchiridion-panel,
 .strategikon-reference {
   block-size: 100%;
   box-sizing: border-box;
