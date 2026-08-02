@@ -12,7 +12,6 @@ export interface RunRelicArtwork {
 }
 
 export function installedRunRelicArtwork(relicId: RunRelicId): RunRelicArtwork | null {
-  if (RUN_RELIC_BY_ID[relicId]?.replacementArtworkPending) return null;
   const matches = drawableAssets('run-relic').filter((asset) => asset.behavior.relicId === relicId);
   if (matches.length > 1) {
     throw new Error(`drawable catalog has ${matches.length} installed icons for Run relic ${relicId}`);
@@ -21,7 +20,7 @@ export function installedRunRelicArtwork(relicId: RunRelicId): RunRelicArtwork |
   if (!asset) return null;
   const icon = asset.media.icon?.media;
   if (!icon || icon.mediaType !== 'image/png' || icon.width !== 64 || icon.height !== 64) {
-    throw new Error(`installed Run relic ${relicId} does not have one native 64x64 PNG icon`);
+    throw new Error(`installed Run relic ${relicId} does not have one 64x64 PNG icon`);
   }
   return { src: icon.immutableUrl, width: icon.width, height: icon.height };
 }
@@ -34,7 +33,6 @@ export function RunRelicIcon({
   className?: string;
 }): ReactElement {
   const artwork = installedRunRelicArtwork(relicId);
-  const replacementArtworkPending = RUN_RELIC_BY_ID[relicId]?.replacementArtworkPending === true;
   return (
     <span
       className={`run-relic-icon${artwork ? '' : ' is-unavailable'} ${className}`.trim()}
@@ -49,7 +47,7 @@ export function RunRelicIcon({
           alt=""
           draggable={false}
         />
-      ) : <span>{replacementArtworkPending ? 'Art not generated' : 'Art unavailable'}</span>}
+      ) : <span>Art unavailable</span>}
     </span>
   );
 }

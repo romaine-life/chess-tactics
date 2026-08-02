@@ -4,7 +4,7 @@ date: 2026-08-01
 deciders: owner (Nelson) + Claude
 ---
 
-# ADR-0331: Live card faces derive their density step from card load
+# ADR-0333: Live card faces derive their density step from card load
 
 ## Context and Problem Statement
 
