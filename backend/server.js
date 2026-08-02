@@ -74,6 +74,8 @@ const {
   runRelicIconSlotId,
   runResourceIconMediaIssue,
   runResourceIconSlotId,
+  runShopWrapMediaIssue,
+  runShopWrapSlotId,
   sfxSampleMediaIssue,
   sfxSampleOwnerProofIssue,
   sfxSampleSlot,
@@ -15013,6 +15015,12 @@ function runtimeMetadataProjection(row) {
   if (row.domain === 'ui-kit') {
     for (const key of ['nativeRole', 'slice']) allowed.add(key);
   }
+  // Shop wraps frame live cards, so their runtime contract is the measured card
+  // window on the painted canvas rather than a sprite frame.
+  const shopWrap = runShopWrapSlotId(row.slot) !== null;
+  if (shopWrap) {
+    for (const key of ['kind', 'canvasWidth', 'canvasHeight', 'window', 'slots']) allowed.add(key);
+  }
   const unknown = Object.keys(raw).filter((key) => !allowed.has(key));
   if (unknown.length) return { error: `metadata.runtime contains unsupported keys: ${unknown.sort().join(', ')}` };
 
@@ -15044,6 +15052,45 @@ function runtimeMetadataProjection(row) {
   if (raw.loop !== undefined) {
     if (typeof raw.loop !== 'boolean') return { error: 'metadata.runtime.loop must be boolean' };
     value.loop = raw.loop;
+  }
+  if (shopWrap) {
+    if (raw.kind !== undefined) {
+      const normalized = runtimeSemanticText(raw.kind, 32);
+      if (!normalized) return { error: 'metadata.runtime.kind must be a non-empty string' };
+      value.kind = normalized;
+    }
+    for (const key of ['canvasWidth', 'canvasHeight']) {
+      if (raw[key] === undefined) continue;
+      const normalized = runtimeInteger(raw[key], { min: 1, max: 32768 });
+      if (normalized === null) return { error: `metadata.runtime.${key} must be a positive bounded integer` };
+      value[key] = normalized;
+    }
+    const readRect = (input, label) => {
+      if (!isObjectRecord(input)) return { error: `metadata.runtime.${label} must be an object` };
+      const rect = {};
+      for (const key of ['x', 'y', 'w', 'h']) {
+        const normalized = runtimeInteger(input[key], { min: 0, max: 32768 });
+        if (normalized === null) return { error: `metadata.runtime.${label}.${key} must be a bounded whole pixel` };
+        rect[key] = normalized;
+      }
+      return { rect };
+    };
+    if (raw.window !== undefined) {
+      const read = readRect(raw.window, 'window');
+      if (read.error) return { error: read.error };
+      value.window = read.rect;
+    }
+    if (raw.slots !== undefined) {
+      if (!Array.isArray(raw.slots)) return { error: 'metadata.runtime.slots must be an array' };
+      if (raw.slots.length > 16) return { error: 'metadata.runtime.slots may not exceed 16 openings' };
+      const slots = [];
+      for (const [index, entry] of raw.slots.entries()) {
+        const read = readRect(entry, `slots[${index}]`);
+        if (read.error) return { error: read.error };
+        slots.push(read.rect);
+      }
+      value.slots = slots;
+    }
   }
   if (raw.groundCover !== undefined) {
     if (row.domain !== 'terrain') {
@@ -15154,6 +15201,9 @@ function mediaDomainProjectionIssue(row) {
   }
   if (runResourceIconSlotId(row.slot)) {
     return runResourceIconMediaIssue(row, runtime.value);
+  }
+  if (runShopWrapSlotId(row.slot)) {
+    return runShopWrapMediaIssue(row, runtime.value);
   }
   if (gameConditionIconSlot(row.slot)) {
     return gameConditionIconMediaIssue(row, runtime.value);

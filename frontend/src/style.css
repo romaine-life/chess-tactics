@@ -19070,6 +19070,40 @@ button.tileset-relationship-cell {
   position: relative;
 }
 
+.run-wrap-install {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  justify-items: start;
+}
+
+.run-wrap-install > :is(h3, p) {
+  margin: 0;
+}
+
+/* Live Shop: the installed wrap frames the real card row. */
+.run-shop-wrap-host {
+  inline-size: 100%;
+}
+
+.run-shop-wrap-frame {
+  margin-inline: auto;
+  position: relative;
+}
+
+.run-shop-wrap-art {
+  inset: 0;
+  block-size: 100%;
+  inline-size: 100%;
+  pointer-events: none;
+  position: absolute;
+}
+
+.run-shop-wrap-cards {
+  display: grid;
+  position: absolute;
+  z-index: 1;
+}
+
 .run-wrap-slot-card {
   position: absolute;
   z-index: 1;

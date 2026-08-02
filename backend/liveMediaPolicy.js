@@ -11,6 +11,11 @@ const RUN_RELIC_ICON_COMPONENT = 'run-relic-icon';
 const RUN_RELIC_ICON_SLOT = /^ui\/run\/relics\/([a-z][a-z0-9-]{0,79})\.png$/;
 const RUN_RESOURCE_ICON_COMPONENT = 'run-resource-icon';
 const RUN_RESOURCE_ICON_SLOT = /^ui\/run\/resources\/([a-z][a-z0-9-]{0,79})\.png$/;
+const RUN_SHOP_WRAP_COMPONENT = 'run-shop-wrap';
+const RUN_SHOP_WRAP_SLOT = /^ui\/run\/shop-wrap\/([a-z][a-z0-9-]{0,79})\.png$/;
+// A wrap frames live cards rather than replacing them, so the only geometry the
+// runtime needs is where the card row sits inside the painted canvas.
+const RUN_SHOP_WRAP_KINDS = Object.freeze(['seat', 'band', 'slots']);
 const GAME_CONDITION_ICON_BY_SLOT = Object.freeze({
   'ui/kit/icons/game/plagued.png': Object.freeze({ component: 'unit-ability-icon', variant: 'plagued' }),
   'ui/kit/icons/card-properties/pestiferous.png': Object.freeze({ component: 'card-property-icon', variant: 'pestiferous' }),
@@ -52,6 +57,21 @@ function runRelicIconSlotId(slot) {
 function runResourceIconSlotId(slot) {
   const match = RUN_RESOURCE_ICON_SLOT.exec(String(slot || ''));
   return match ? match[1] : null;
+}
+
+function runShopWrapSlotId(slot) {
+  const match = RUN_SHOP_WRAP_SLOT.exec(String(slot || ''));
+  return match ? match[1] : null;
+}
+
+/** A whole-pixel rectangle that must lie inside the painted canvas. */
+function containedRect(value, canvasWidth, canvasHeight) {
+  if (!isObjectRecord(value)) return null;
+  const { x, y, w, h } = value;
+  const whole = [x, y, w, h].every((entry) => Number.isSafeInteger(entry));
+  if (!whole || w <= 0 || h <= 0 || x < 0 || y < 0) return null;
+  if (x + w > canvasWidth || y + h > canvasHeight) return null;
+  return { x, y, w, h };
 }
 
 function gameConditionIconSlot(slot) {
@@ -185,6 +205,69 @@ function runRelicIconMediaIssue(row, projectedRuntime = null) {
   }
   if (runtime.altText !== '') {
     return 'Run relic icon metadata.runtime.altText must be empty because the relic label owns its accessible name';
+  }
+  return null;
+}
+
+/**
+ * Domain-owned runtime projection for one Run shop wrap: generated art that
+ * frames the live shop's card row. The wrap is decorative chrome around real
+ * cards, so it never carries text and never supplies an accessible name; the
+ * runtime contract is purely the card window measured on the painted canvas.
+ */
+function runShopWrapMediaIssue(row, projectedRuntime = null) {
+  const wrapId = runShopWrapSlotId(row.slot);
+  if (!wrapId) return 'Run shop wrap slots must match ui/run/shop-wrap/<wrap-id>.png';
+  if (row.domain !== 'ui-kit') return 'Run shop wraps require the ui-kit domain';
+  if (row.role !== 'shop-wrap') return 'Run shop wraps require the shop-wrap role';
+  if (row.media_type !== 'image/png') return 'Run shop wraps require image/png';
+  const width = Number(row.width);
+  const height = Number(row.height);
+  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 1 || height < 1) {
+    return 'Run shop wraps require decoded raster dimensions';
+  }
+
+  const metadata = mediaVersionMetadata(row);
+  const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+  if (!isObjectRecord(runtime)) return 'Run shop wraps require metadata.runtime';
+  const allowed = new Set([
+    'component', 'variant', 'kind', 'canvasWidth', 'canvasHeight', 'window', 'slots', 'altText', 'nativeRole',
+  ]);
+  const unsupported = Object.keys(runtime).filter((key) => !allowed.has(key));
+  if (unsupported.length) {
+    return `Run shop wrap runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
+  }
+  if (runtime.component !== RUN_SHOP_WRAP_COMPONENT) {
+    return `Run shop wrap metadata.runtime.component must be ${RUN_SHOP_WRAP_COMPONENT}`;
+  }
+  if (runtime.nativeRole !== RUN_SHOP_WRAP_COMPONENT) {
+    return `Run shop wrap metadata.runtime.nativeRole must be ${RUN_SHOP_WRAP_COMPONENT}`;
+  }
+  if (runtime.variant !== wrapId) return 'Run shop wrap variant must match its semantic slot id';
+  if (!RUN_SHOP_WRAP_KINDS.includes(runtime.kind)) {
+    return `Run shop wrap kind must be one of ${RUN_SHOP_WRAP_KINDS.join(', ')}`;
+  }
+  // The canvas is the acceptance-time contract against the uploaded raster, so a
+  // re-crop can never silently move every measured window.
+  if (runtime.canvasWidth !== width || runtime.canvasHeight !== height) {
+    return 'Run shop wrap canvas metadata must match the uploaded raster dimensions';
+  }
+  const window = containedRect(runtime.window, width, height);
+  if (!window) return 'Run shop wrap metadata.runtime.window must be a whole-pixel rect inside the canvas';
+  const slots = Array.isArray(runtime.slots)
+    ? runtime.slots.map((entry) => containedRect(entry, width, height))
+    : [];
+  if (slots.some((entry) => entry === null)) {
+    return 'Run shop wrap metadata.runtime.slots must all be whole-pixel rects inside the canvas';
+  }
+  if (runtime.kind === 'slots' && slots.length < 2) {
+    return 'Run shop wrap slots kind requires at least two measured card openings';
+  }
+  if (runtime.kind !== 'slots' && slots.length) {
+    return 'Run shop wrap slots are only meaningful for the slots kind';
+  }
+  if (runtime.altText !== '') {
+    return 'Run shop wrap metadata.runtime.altText must be empty because the live cards own the accessible content';
   }
   return null;
 }
@@ -453,6 +536,7 @@ module.exports = {
   PREDRAWN_BOARD_PROOF_SCHEMA,
   RUN_RELIC_ICON_COMPONENT,
   RUN_RESOURCE_ICON_COMPONENT,
+  RUN_SHOP_WRAP_COMPONENT,
   SFX_SAMPLE_COMPONENT,
   SFX_SAMPLE_PROOF_RENDERER,
   SFX_SAMPLE_PROOF_SCHEMA,
@@ -469,6 +553,8 @@ module.exports = {
   runRelicIconSlotId,
   runResourceIconMediaIssue,
   runResourceIconSlotId,
+  runShopWrapMediaIssue,
+  runShopWrapSlotId,
   sfxSampleMediaIssue,
   sfxSampleOwnerProofIssue,
   sfxSampleSlot,

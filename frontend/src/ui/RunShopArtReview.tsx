@@ -1,16 +1,23 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactElement } from 'react';
 import { defaultBackgroundSet } from '../art/backgroundSets';
-import { fetchAdminLiveMediaCatalog, type AdminLiveMediaCatalog } from '../net/liveMediaAdmin';
+import {
+  acceptLiveMediaVersions,
+  fetchAdminLiveMediaCatalog,
+  reviewLiveMediaVersion,
+  type AdminLiveMediaCatalog,
+} from '../net/liveMediaAdmin';
 import type { RunCoreCard } from '../run/model';
 import { RunCard } from './RunCard';
 import {
   runShopWrapBandMount,
   runShopWrapCandidates,
+  runShopWrapRuntimeCandidate,
   runShopWrapSeatPadding,
   runShopWrapSeatTrack,
   runShopWrapSlotMount,
   type RunShopWrapCandidate,
 } from './runShopWrapCandidates';
+import { ChromeButton } from './shared/ChromeButton';
 import { OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
 import { useSceneParticipant } from './shell/SceneBoundary';
 
@@ -115,16 +122,101 @@ function WrapCandidateRow({ candidate }: { candidate: RunShopWrapCandidate }): R
   );
 }
 
+/**
+ * The owner's install decision. Acceptance records his approval of these exact
+ * bytes from this exact surface, so the control lives beside the mounted proof
+ * rather than in a script.
+ */
+function WrapInstallControl({
+  catalog,
+  onInstalled,
+}: {
+  catalog: AdminLiveMediaCatalog;
+  onInstalled: () => void;
+}): ReactElement | null {
+  const [status, setStatus] = useState('');
+  const [busy, setBusy] = useState(false);
+  const pending = useMemo(() => runShopWrapRuntimeCandidate(catalog), [catalog]);
+  // Installing clears the pending candidate, so keep the outcome on screen
+  // instead of letting the whole control vanish the moment it succeeds.
+  if (!pending) {
+    return status ? (
+      <section className="run-wrap-install" aria-label="Install wrap in the live Shop">
+        <h3>Install in the live Shop</h3>
+        <p role="status">{status}</p>
+      </section>
+    ) : null;
+  }
+  const { version, candidate } = pending;
+  const slot = catalog.slots.find((entry) => entry.slot === version.slot) ?? null;
+
+  const install = async (): Promise<void> => {
+    if (busy || !version.media || !version.slot) return;
+    setBusy(true);
+    setStatus('Recording approval for these exact wrap bytes…');
+    try {
+      const surfaceUrl = window.location.href;
+      const reviewed = await reviewLiveMediaVersion({
+        id: version.id,
+        expectedRevision: version.rowRevision,
+        notes: `Approved run shop wrap ${candidate.id} from the mounted card-row proof.`,
+        surfaceUrl,
+        evidence: {
+          schema: 'live-media-owner-proof-v1',
+          versionId: version.id,
+          contentSha256: version.media.sha256,
+          slot: version.slot,
+          canonicalScale: 1,
+          surfaceKind: 'Run shop wrap mounted around live card faces',
+        },
+      });
+      setStatus('Installing the approved wrap…');
+      await acceptLiveMediaVersions([{
+        id: reviewed.id,
+        expectedRevision: reviewed.rowRevision,
+        expectedSlotRevision: slot?.rowRevision ?? 0,
+        expectedActiveVersionId: slot?.activeVersionId ?? null,
+      }]);
+      setStatus(`${candidate.label} is installed. The live Shop now wraps its card row.`);
+      onInstalled();
+    } catch (reason) {
+      setStatus(reason instanceof Error ? `Install failed: ${reason.message}` : 'Install failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="run-wrap-install" aria-label="Install wrap in the live Shop">
+      <h3>Install in the live Shop</h3>
+      <p>
+        {candidate.label} is uploaded to <code>{version.slot}</code> and waiting on your approval.
+        Installing records that decision and makes the live Shop wrap its card row with it.
+      </p>
+      <ChromeButton
+        unit="inner-text-button"
+        disabled={busy}
+        data-testid="install-run-shop-wrap"
+        onClick={() => { void install(); }}
+      >
+        {busy ? 'Installing…' : `Use ${candidate.label} in the Shop`}
+      </ChromeButton>
+      {status ? <p role="status">{status}</p> : null}
+    </section>
+  );
+}
+
 export function RunShopArtReview(): ReactElement {
   const [catalog, setCatalog] = useState<AdminLiveMediaCatalog | null>(null);
   const [error, setError] = useState('');
+  const [reloadToken, setReloadToken] = useState(0);
   useEffect(() => {
     let active = true;
     void fetchAdminLiveMediaCatalog()
       .then((next) => { if (active) setCatalog(next); })
       .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : String(reason)); });
     return () => { active = false; };
-  }, []);
+  }, [reloadToken]);
   const wraps = useMemo(() => catalog ? runShopWrapCandidates(catalog) : [], [catalog]);
   const sceneError = useMemo(() => error ? new Error(error) : null, [error]);
   useSceneParticipant('studio', sceneError ? 'error' : catalog ? 'painted' : 'loading', sceneError);
@@ -147,6 +239,9 @@ export function RunShopArtReview(): ReactElement {
             />
           ))}
         </div>
+        {catalog ? (
+          <WrapInstallControl catalog={catalog} onInstalled={() => setReloadToken((token) => token + 1)} />
+        ) : null}
         {wraps.map((candidate) => (
           <WrapCandidateRow key={candidate.id} candidate={candidate} />
         ))}

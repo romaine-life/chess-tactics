@@ -2,10 +2,14 @@
 // and the measured geometry both live in live media (ADR-0085) — candidate
 // pixels are never committed — so this module reads them back off the admin
 // catalog. Review mounting does not promote a candidate.
+import { liveMediaSlotsWithPrefix } from '@chess-tactics/board-render';
 import type { AdminLiveMediaCatalog, AdminLiveMediaVersion } from '../net/liveMediaAdmin';
 
 export const RUN_SHOP_WRAP_SCHEMA = 'run-shop-wrap-candidate-v1';
 export const RUN_SHOP_WRAP_SLOT_PREFIX = 'review/run-shop-wrap/';
+/** Runtime home for an installed wrap; the live Shop reads this prefix. */
+export const RUN_SHOP_WRAP_RUNTIME_PREFIX = 'ui/run/shop-wrap/';
+export const RUN_SHOP_WRAP_RUNTIME_SCHEMA = 'run-shop-wrap-runtime-v1';
 
 export interface RunShopWrapRect {
   x: number;
@@ -95,6 +99,44 @@ export function runShopWrapBandMount(candidate: RunShopWrapCandidate): RunShopWr
     grid: { columns: `repeat(${cards}, ${cardWidth}px)`, gap: BAND_GAP },
     cardWidth,
     cards,
+  };
+}
+
+export interface RunShopWrapLiveMount {
+  frame: { width: number; height: number };
+  cards: { left: number; top: number; width: number; gap: number };
+  cardWidth: number;
+}
+
+/**
+ * Live Shop mounting for a band wrap. The stall is laid out at a chosen
+ * on-screen width and the card row is *contained* inside its measured window,
+ * so a 3-card shop and a 4-card quartermaster shop both seat cleanly instead of
+ * overflowing the awning.
+ */
+export function runShopWrapLiveMount(
+  candidate: RunShopWrapCandidate,
+  cardCount: number,
+  frameWidth: number,
+): RunShopWrapLiveMount {
+  const win = bledWindow(candidate);
+  const s = frameWidth / candidate.canvas.w;
+  const windowWidth = win.w * s;
+  const windowHeight = win.h * s;
+  const gap = BAND_GAP;
+  const widthLimited = (windowWidth - (cardCount - 1) * gap) / cardCount;
+  const heightLimited = (windowHeight * 5) / 7;
+  const cardWidth = Math.max(0, Math.min(widthLimited, heightLimited));
+  const rowWidth = cardCount * cardWidth + (cardCount - 1) * gap;
+  return {
+    frame: { width: frameWidth, height: candidate.canvas.h * s },
+    cards: {
+      left: win.x * s + (windowWidth - rowWidth) / 2,
+      top: win.y * s + (windowHeight - (cardWidth * 7) / 5) / 2,
+      width: rowWidth,
+      gap,
+    },
+    cardWidth,
   };
 }
 
@@ -194,6 +236,83 @@ function candidateFrom(version: AdminLiveMediaVersion): RunShopWrapCandidate | n
     ...(typeof metadata.bandCardWidth === 'number' ? { bandCardWidth: metadata.bandCardWidth } : {}),
     ...(slots.length ? { slots } : {}),
   };
+}
+
+/**
+ * Runtime wrap candidates awaiting the owner's install decision, read off the
+ * same admin catalog. Typed runtime metadata is the geometry authority, so the
+ * live Shop and this review surface measure the identical window.
+ */
+export function runShopWrapRuntimeCandidate(
+  catalog: AdminLiveMediaCatalog,
+): { candidate: RunShopWrapCandidate; version: AdminLiveMediaVersion } | null {
+  // A candidate older than its slot's active version is superseded: offering it
+  // would only produce a compare-and-swap conflict, so never surface it.
+  const activeCreatedAt = new Map(catalog.slots.flatMap((slot) => {
+    const active = catalog.versions.find((version) => version.id === slot.activeVersionId);
+    return active ? [[slot.slot, active.createdAt] as const] : [];
+  }));
+  const pending = [...catalog.versions]
+    .filter((version) => (
+      version.slot?.startsWith(RUN_SHOP_WRAP_RUNTIME_PREFIX)
+      && version.status === 'candidate'
+      && version.createdAt > (activeCreatedAt.get(version.slot) ?? '')
+    ))
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+  if (!pending?.media) return null;
+  const metadata = object(pending.metadata);
+  const runtime = object(metadata?.runtime);
+  const window = rect(runtime?.window);
+  const kind = KINDS.find((value) => value === runtime?.kind);
+  const canvasWidth = runtime?.canvasWidth;
+  const canvasHeight = runtime?.canvasHeight;
+  const variant = typeof runtime?.variant === 'string' ? runtime.variant : null;
+  if (!window || !kind || !variant || typeof canvasWidth !== 'number' || typeof canvasHeight !== 'number') return null;
+  return {
+    version: pending,
+    candidate: {
+      id: variant,
+      label: typeof pending.label === 'string' ? pending.label : variant,
+      engine: 'codex',
+      kind,
+      src: pending.media.url,
+      canvas: { w: canvasWidth, h: canvasHeight },
+      window,
+    },
+  };
+}
+
+/**
+ * The installed wrap the live Shop should render, or null when none is active.
+ * Geometry comes from the accepted slot's typed runtime metadata, which the
+ * backend validated against the uploaded raster at acceptance time.
+ */
+export function installedRunShopWrap(): RunShopWrapCandidate | null {
+  let slots;
+  try {
+    slots = liveMediaSlotsWithPrefix(RUN_SHOP_WRAP_RUNTIME_PREFIX);
+  } catch {
+    return null;
+  }
+  for (const slot of slots) {
+    const runtime = object(slot.versionMetadata?.runtime) ?? object(slot.metadata?.runtime);
+    const window = rect(runtime?.window);
+    const kind = KINDS.find((value) => value === runtime?.kind);
+    const variant = typeof runtime?.variant === 'string' ? runtime.variant : null;
+    const canvasWidth = runtime?.canvasWidth;
+    const canvasHeight = runtime?.canvasHeight;
+    if (!window || !kind || !variant || typeof canvasWidth !== 'number' || typeof canvasHeight !== 'number') continue;
+    return {
+      id: variant,
+      label: variant,
+      engine: 'codex',
+      kind,
+      src: slot.media.immutableUrl,
+      canvas: { w: canvasWidth, h: canvasHeight },
+      window,
+    };
+  }
+  return null;
 }
 
 /** Latest wrap candidate per review slot, ordered seat → band → slots for review. */
