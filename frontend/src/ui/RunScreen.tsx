@@ -477,9 +477,14 @@ function ShopCardRow({ children }: { children: ReactNode }): ReactElement {
     if (!wrap || !host || typeof ResizeObserver === 'undefined') return undefined;
     const target = measureTarget ? host.closest(measureTarget) ?? host : host;
     const observer = new ResizeObserver(([entry]) => {
+      // Border box, not content box: the scene is positioned from the
+      // workspace's outer corner, and the workspace carries top padding for the
+      // relic strip. Measuring the content box leaves that padding unpainted.
+      const element = entry.target as HTMLElement;
+      const useBorderBox = element !== host;
       setBox({
-        width: Math.max(0, Math.floor(entry.contentRect.width)),
-        height: Math.max(0, Math.floor(entry.contentRect.height)),
+        width: Math.max(0, Math.floor(useBorderBox ? element.offsetWidth : entry.contentRect.width)),
+        height: Math.max(0, Math.floor(useBorderBox ? element.offsetHeight : entry.contentRect.height)),
       });
     });
     observer.observe(target);
