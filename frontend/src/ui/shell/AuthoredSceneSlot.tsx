@@ -4,6 +4,7 @@ import {
   sceneTransitionTargetAttributes,
   type SceneTransitionTargetMode,
 } from './sceneTransitionTarget';
+import { SceneSlotActivation } from './SceneBoundary';
 import type { SceneHost } from './sceneManifest';
 
 /**
@@ -20,6 +21,7 @@ function DivSceneSlot({
   sceneInstance,
   region,
   mode = 'self',
+  children,
   ...props
 }: DivSlotProps & { region: SceneHost; mode?: SceneTransitionTargetMode }): ReactElement {
   return (
@@ -27,13 +29,16 @@ function DivSceneSlot({
       {...props}
       {...sceneTransitionTargetAttributes(region, mode)}
       data-scene-instance={sceneInstance}
-    />
+    >
+      <SceneSlotActivation region={region}>{children}</SceneSlotActivation>
+    </div>
   );
 }
 
 function MainSceneSlot({
   sceneInstance,
   region,
+  children,
   ...props
 }: MainSlotProps & { region: SceneHost }): ReactElement {
   return (
@@ -41,7 +46,9 @@ function MainSceneSlot({
       {...props}
       {...sceneTransitionTargetAttributes(region)}
       data-scene-instance={sceneInstance}
-    />
+    >
+      <SceneSlotActivation region={region}>{children}</SceneSlotActivation>
+    </main>
   );
 }
 

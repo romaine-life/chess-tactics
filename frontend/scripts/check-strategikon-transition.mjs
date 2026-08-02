@@ -13,7 +13,11 @@
 //   - exactly one exiting -> loading/entering -> current cycle per click;
 //   - the element the director marked active is the shell's OWN region target, so
 //     the rail beside the pane is retained rather than dragged through the fade;
-//   - the Battle board mounted behind the workspace is never torn down.
+//   - the Battle board mounted behind the workspace is never torn down;
+//   - the persistent title bar keeps what the RETAINED host contributes. Activation
+//     used to be read off the whole layer, so a host-preserving transition stood down
+//     retained chrome as well as the region being replaced, and the Battle bar lost
+//     its turn, clock, and objective chips for the length of every navigation.
 //
 // Usage: npm run verify:strategikon -- '<base-url>'
 
@@ -99,7 +103,15 @@ try {
         active: [...document.querySelectorAll('.scene-director [data-scene-transition-target][data-scene-transition-active]')]
           .map((node) => node.getAttribute('data-scene-transition-target')),
       });
-      window.__strategikon = { phases: [snap()] };
+      // Sample the bar on a timer, not on director mutations: the chips blanked
+      // BETWEEN phase changes, so an attribute-driven sample would step right over it.
+      const titleBar = () => (document.querySelector('.app-shell-titlebar')?.innerText ?? '')
+        .replace(/\s+/g, ' ')
+        // The battle clock ticks during the transition; compare structure, not time.
+        .replace(/\d+:\d\d/g, 'M:SS')
+        .trim();
+      window.__strategikon = { phases: [snap()], titleBar: [titleBar()] };
+      window.__strategikonTimer = setInterval(() => { window.__strategikon.titleBar.push(titleBar()); }, 25);
       new MutationObserver(() => { window.__strategikon.phases.push(snap()); })
         .observe(director, { attributes: true, attributeFilter: ['data-scene-phase'] });
     });
@@ -123,10 +135,14 @@ try {
     );
     await new Promise((resolve) => { setTimeout(resolve, 400); });
 
-    const observed = await page.evaluate(() => ({
-      phases: window.__strategikon.phases,
-      boardWitness: document.querySelector('.skirmish-board-frame')?.dataset.ctBoardWitness ?? 'missing',
-    }));
+    const observed = await page.evaluate(() => {
+      clearInterval(window.__strategikonTimer);
+      return {
+        phases: window.__strategikon.phases,
+        titleBar: window.__strategikon.titleBar,
+        boardWitness: document.querySelector('.skirmish-board-frame')?.dataset.ctBoardWitness ?? 'missing',
+      };
+    });
 
     const sequence = [];
     for (const entry of observed.phases) {
@@ -151,6 +167,13 @@ try {
     if (wider.length) violations.push(`fade also ran on retained chrome: ${JSON.stringify(wider)}`);
     if (observed.boardWitness !== 'original') {
       violations.push(`Battle board was remounted behind the workspace (${observed.boardWitness})`);
+    }
+    // The Strategikon replaces a region INSIDE the Battle shell, so the shell's own
+    // title-bar contributions belong to retained chrome and may never drop out.
+    const barAtRest = observed.titleBar[0];
+    const barLost = observed.titleBar.find((entry) => !entry.startsWith(barAtRest));
+    if (barLost !== undefined) {
+      violations.push(`title bar lost retained content mid-transition: "${barLost}" (was "${barAtRest}")`);
     }
 
     results.push({ ...step, violations, phases, activeDuringTransition });
