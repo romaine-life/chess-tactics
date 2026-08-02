@@ -103,24 +103,30 @@ export function runShopWrapBandMount(candidate: RunShopWrapCandidate): RunShopWr
 }
 
 export interface RunShopWrapLiveMount {
-  frame: { width: number; height: number };
+  frame: { left: number; top: number; width: number; height: number };
   cards: { left: number; top: number; width: number; gap: number };
   cardWidth: number;
 }
 
 /**
- * Live Shop mounting for a band wrap. The stall is laid out at a chosen
- * on-screen width and the card row is *contained* inside its measured window,
- * so a 3-card shop and a 4-card quartermaster shop both seat cleanly instead of
- * overflowing the awning.
+ * Live Shop mounting for a band wrap. The Shop is a single screen, never a
+ * scrolling page, so the stall is *contained* in the box it is given — width
+ * and height both — and then centred in it. The card row is likewise contained
+ * inside the stall's measured window, so a 3-card shop and a 4-card
+ * quartermaster shop both seat cleanly instead of overflowing the awning.
  */
 export function runShopWrapLiveMount(
   candidate: RunShopWrapCandidate,
   cardCount: number,
-  frameWidth: number,
+  availableWidth: number,
+  availableHeight: number,
 ): RunShopWrapLiveMount {
   const win = bledWindow(candidate);
-  const s = frameWidth / candidate.canvas.w;
+  const { canvas } = candidate;
+  // Contain: the binding dimension decides the scale.
+  const s = Math.max(0, Math.min(availableWidth / canvas.w, availableHeight / canvas.h));
+  const frameWidth = Math.floor(canvas.w * s);
+  const frameHeight = Math.floor(canvas.h * s);
   const windowWidth = win.w * s;
   const windowHeight = win.h * s;
   const gap = BAND_GAP;
@@ -128,12 +134,18 @@ export function runShopWrapLiveMount(
   const heightLimited = (windowHeight * 5) / 7;
   const cardWidth = Math.max(0, Math.min(widthLimited, heightLimited));
   const rowWidth = cardCount * cardWidth + (cardCount - 1) * gap;
+  // Whole-pixel offsets keep the pixel art from landing on a half pixel.
   return {
-    frame: { width: frameWidth, height: candidate.canvas.h * s },
+    frame: {
+      left: Math.round((availableWidth - frameWidth) / 2),
+      top: Math.round((availableHeight - frameHeight) / 2),
+      width: frameWidth,
+      height: frameHeight,
+    },
     cards: {
-      left: win.x * s + (windowWidth - rowWidth) / 2,
-      top: win.y * s + (windowHeight - (cardWidth * 7) / 5) / 2,
-      width: rowWidth,
+      left: Math.round(win.x * s + (windowWidth - rowWidth) / 2),
+      top: Math.round(win.y * s + (windowHeight - (cardWidth * 7) / 5) / 2),
+      width: Math.round(rowWidth),
       gap,
     },
     cardWidth,

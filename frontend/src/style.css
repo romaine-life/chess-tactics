@@ -19080,14 +19080,38 @@ button.tileset-relationship-cell {
   margin: 0;
 }
 
-/* Live Shop: the installed wrap frames the real card row. */
+/* Live Shop: the installed wrap frames the real card row. The Shop is one
+   screen — the stall is contained in the space left over, never the other way
+   round, so installing a wrap can never introduce a scrollbar. */
+.run-shop-workspace-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-stack);
+  min-block-size: 0;
+}
+
+/* Flex the whole chain down to the host: a grid row would size itself to its
+   content, which leaves the stall nothing definite to fill. */
+.run-shop-workspace-content > .run-shop-cards-section {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--ds-inline-tight);
+  min-block-size: 0;
+}
+
+.run-shop-cards-section > .run-shop-wrap-host {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  position: relative;
+}
+
 .run-shop-wrap-host {
   inline-size: 100%;
 }
 
 .run-shop-wrap-frame {
-  margin-inline: auto;
-  position: relative;
+  position: absolute;
 }
 
 .run-shop-wrap-art {

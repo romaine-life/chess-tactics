@@ -456,15 +456,20 @@ function RelicOffer({
  */
 function ShopCardRow({ children }: { children: ReactNode }): ReactElement {
   const wrap = useMemo(() => installedRunShopWrap(), []);
-  const [frameWidth, setFrameWidth] = useState(0);
+  const [box, setBox] = useState({ width: 0, height: 0 });
   const hostRef = useRef<HTMLDivElement | null>(null);
   const cardCount = Children.count(children);
 
+  // The host fills the space the Shop allots it and the stall is drawn inside
+  // that box, so the wrap can never push the screen into scrolling.
   useEffect(() => {
     const host = hostRef.current;
     if (!wrap || !host || typeof ResizeObserver === 'undefined') return undefined;
     const observer = new ResizeObserver(([entry]) => {
-      setFrameWidth(Math.max(0, Math.floor(entry.contentRect.width)));
+      setBox({
+        width: Math.max(0, Math.floor(entry.contentRect.width)),
+        height: Math.max(0, Math.floor(entry.contentRect.height)),
+      });
     });
     observer.observe(host);
     return () => observer.disconnect();
@@ -473,13 +478,20 @@ function ShopCardRow({ children }: { children: ReactNode }): ReactElement {
   if (!wrap || wrap.kind !== 'band' || cardCount < 1) {
     return <div className="run-card-grid">{children}</div>;
   }
-  const mount = frameWidth > 0 ? runShopWrapLiveMount(wrap, cardCount, frameWidth) : null;
+  const mount = box.width > 0 && box.height > 0
+    ? runShopWrapLiveMount(wrap, cardCount, box.width, box.height)
+    : null;
   return (
     <div className="run-shop-wrap-host" ref={hostRef} data-testid="run-shop-wrap">
       {mount ? (
         <div
           className="run-shop-wrap-frame"
-          style={{ inlineSize: `${mount.frame.width}px`, blockSize: `${mount.frame.height}px` }}
+          style={{
+            insetInlineStart: `${mount.frame.left}px`,
+            insetBlockStart: `${mount.frame.top}px`,
+            inlineSize: `${mount.frame.width}px`,
+            blockSize: `${mount.frame.height}px`,
+          }}
         >
           <img className="run-shop-wrap-art" src={wrap.src} alt="" draggable={false} />
           <div
@@ -559,7 +571,7 @@ function ShopPanel({
             </ul>
           </InnerChromeBox>
         ) : null}
-        <section>
+        <section className="run-shop-cards-section">
           <h3>Cards</h3>
           <ShopCardRow>
             {shop.cardOffers.map((offer) => {
