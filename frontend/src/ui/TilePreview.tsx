@@ -37,6 +37,7 @@ import { TileSidesViewer } from './TileSidesViewer';
 import { TILE_SIDE_ITEMS, type TileSideItem } from './tileSideCatalog';
 import { ScrollbarLibraryStudio, ScrollbarViewer } from './ScrollbarLibraryStudio';
 import { PagesLibraryStudio, PagesViewer } from './PagesLibraryStudio';
+import { ScreenArtReviewStudio } from './ScreenArtReviewStudio';
 import { ChromeLabCatalog, ChromeLabViewer, CHROME_LAB_TARGETS, defaultChromeLabTargetId } from './ChromeLab';
 import { RailLab } from './RailLab';
 import { GameLabCatalog, GameLabViewer } from './GameLab';
@@ -118,7 +119,7 @@ type StudioMode = 'catalog' | 'viewer';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
-type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'sourceart' | 'groundcover' | 'walldecor' | 'wallart' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'walls' | 'scrollbars' | 'sliders' | 'pages' | 'chromelab' | 'sfx' | 'gamelab' | 'gym' | 'solver' | 'cardlayout' | 'cardprompts';
+type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'sourceart' | 'groundcover' | 'walldecor' | 'wallart' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'walls' | 'scrollbars' | 'sliders' | 'pages' | 'chromelab' | 'sfx' | 'gamelab' | 'gym' | 'solver' | 'cardlayout' | 'cardprompts' | 'screenart';
 
 // Every prop KIND present in the catalog, in definition order — DERIVED from PROP_DEFS so a new
 // kind (e.g. 'rock') is a filter facet automatically. Hardcoding ['tree','house'] here silently
@@ -559,6 +560,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [selectedPortraitPieces, setSelectedPortraitPieces] = useState<PortraitPiece[]>([...PORTRAIT_PIECES]);
   const [selectedPortraitMethods, setSelectedPortraitMethods] = useState<PortraitMethod[]>(PORTRAIT_METHODS.map((m) => m.key));
   const [selectedPortraitId, setSelectedPortraitId] = useState<string | undefined>(undefined);
+  const [screenArtGenerator, setScreenArtGenerator] = useState('all');
+  const [screenArtWidth, setScreenArtWidth] = useState(640);
   const [surfaceSearch, setSurfaceSearch] = useState('');
   const [scrollbarSearch, setScrollbarSearch] = useState('');
   const [selectedScrollbarName, setSelectedScrollbarName] = useState<string | undefined>(undefined);
@@ -1676,6 +1679,38 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             />
           </div>
           <button type="button" className="tileset-view-action" onClick={() => openViewer('asset')}>View Selected</button>
+        </>
+      ),
+    },
+    {
+      id: 'screenart', label: 'Screen Art', hint: 'Compare candidate backdrops for the full-overlay workspace screens. Review only — nothing here is installed.',
+      main: <ScreenArtReviewStudio generator={screenArtGenerator} width={screenArtWidth} />,
+      controls: (
+        <>
+          <div className="tileset-filter-field">
+            <span>Generator</span>
+            <ChoiceGroup
+              value={screenArtGenerator}
+              options={[
+                { value: 'all', label: 'Both' },
+                { value: 'codex', label: 'Codex' },
+                { value: 'pixellab', label: 'PixelLab' },
+              ]}
+              onChange={setScreenArtGenerator}
+              ariaLabel="Filter by generator"
+            />
+          </div>
+          <label className="tileset-catalog-zoom">
+            <span>Plate width</span>
+            <input
+              type="range"
+              min="320"
+              max="1280"
+              step="160"
+              value={screenArtWidth}
+              onChange={(event) => setScreenArtWidth(Number(event.target.value))}
+            />
+          </label>
         </>
       ),
     },

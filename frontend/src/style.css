@@ -18985,6 +18985,44 @@ button.tileset-relationship-cell {
   gap: var(--ds-inline);
 }
 
+/* Screen-art candidates are wide 640x360 plates meant to be read at 4x, so they get a
+   flowing row per screen rather than the relic grid's fixed icon columns. */
+.screen-art-review {
+  display: grid;
+  gap: var(--ds-gutter);
+}
+
+.screen-art-row h3 {
+  margin: 0 0 var(--ds-stack);
+}
+
+.screen-art-plates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-gutter);
+}
+
+.screen-art-plates figure {
+  display: grid;
+  gap: var(--ds-space-1);
+  margin: 0;
+}
+
+.screen-art-plates img {
+  block-size: auto;
+  image-rendering: pixelated;
+  max-inline-size: 100%;
+}
+
+.screen-art-plates figcaption {
+  display: grid;
+  gap: var(--ds-space-1);
+}
+
+.screen-art-plates small {
+  color: var(--skirmish-muted);
+}
+
 .run-relic-review-grid {
   display: grid;
   gap: var(--ds-inline-tight);
