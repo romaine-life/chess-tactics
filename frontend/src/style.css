@@ -19016,6 +19016,59 @@ button.tileset-relationship-cell {
   color: var(--skirmish-muted);
 }
 
+/* Shop wrap-art candidate rows: generated art is review-mounted around the
+   live card faces; the negative insets come from each candidate's measured
+   card window, so the window lands exactly under the card. */
+.run-wrap-candidate {
+  display: grid;
+  gap: var(--ds-inline-tight);
+}
+
+.run-wrap-candidate > h3 {
+  margin: 0;
+}
+
+.run-wrap-candidate small {
+  color: var(--skirmish-muted);
+}
+
+.run-wrap-grid {
+  column-gap: var(--ds-inline);
+  row-gap: var(--ds-inline);
+}
+
+.run-wrap-seat {
+  box-sizing: border-box;
+  display: block;
+  padding: var(--wrap-pad-top) var(--wrap-pad-right) var(--wrap-pad-bottom) var(--wrap-pad-left);
+  position: relative;
+}
+
+.run-wrap-seat > .run-card-offer,
+.run-wrap-band-shell > .run-card-grid {
+  position: relative;
+  z-index: 1;
+}
+
+.run-wrap-art {
+  inset: var(--wrap-top) var(--wrap-right) var(--wrap-bottom) var(--wrap-left);
+  pointer-events: none;
+  position: absolute;
+}
+
+.run-wrap-seat-art {
+  block-size: 100%;
+  inline-size: 100%;
+  inset: 0;
+}
+
+.run-wrap-band-shell {
+  margin-block: calc(var(--ds-inline) * 3) calc(var(--ds-inline) * 4);
+  margin-inline: auto;
+  max-inline-size: 800px;
+  position: relative;
+}
+
 .run-relic-reference-art {
   display: grid;
   gap: var(--ds-inline);
