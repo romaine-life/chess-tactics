@@ -107,6 +107,25 @@ describe('Run chrome hierarchy', () => {
     expect(titleBarPortal).toContain('observer.observe(document.body, { childList: true, subtree: true })');
   });
 
+  it('keeps the retained Controls panel out of an overlapping Run workspace fade', () => {
+    // Shop <-> Sell Units overlaps two complete Run layers so the outgoing snapshot stays
+    // frozen. Both layers paint the same Controls panel, so fading the boundary blended
+    // its title plank toward the backdrop mid-transition. Only the shell's replaceable
+    // viewport may carry that fade; the panel is a sibling of it and must not.
+    expect(chromeBox).toContain('{...shellViewportOverlapRegion()}');
+    expect(chromeBox).toMatch(/<section[\s\S]*?\{\.\.\.shellViewportOverlapRegion\(\)\}[\s\S]*?data-shell-viewport-swap=""/);
+    expect(app).toContain('sceneOverlapScope(scene.current, scene.destination!)');
+    expect(app).toContain('overlapScope={layer.overlapScope}');
+    expect(sceneBoundary).toContain("data-scene-overlap-scope={overlapScope === 'scene' ? undefined : overlapScope}");
+    expect(styleCss).toMatch(/\.scene-director\.is-entering \.scene-boundary\[data-scene-overlap-scope="shell-viewport"\]\[data-scene-visual-role="outgoing"\]\s*\{[\s\S]*?opacity:\s*1;[\s\S]*?transition:\s*none;/);
+    expect(styleCss).toMatch(/\.scene-director\.is-entering \.scene-boundary\[data-scene-overlap-scope="shell-viewport"\]\[data-scene-transition-active\]\s*\{[\s\S]*?opacity:\s*1;[\s\S]*?transition:\s*none;/);
+    expect(styleCss).toMatch(/\.scene-director\.is-entering \.scene-boundary\[data-scene-overlap-scope="shell-viewport"\]\[data-scene-visual-role="outgoing"\] \[data-scene-overlap-region\]\s*\{[\s\S]*?opacity:\s*0;/);
+    expect(styleCss).toMatch(/\.scene-director\.is-entering \.scene-boundary\[data-scene-overlap-scope="shell-viewport"\]\[data-scene-transition-active\] \[data-scene-overlap-region\]\s*\{[\s\S]*?opacity:\s*1;/);
+    // The panel is rendered beside the swap, never inside it.
+    expect(skirmish).toMatch(/\{shellWorkspaceCoversRelics \? null : <RunRelicStrip relicIds=\{relicIds\} \/>\}\s*\{children\}/);
+    expect(skirmishHud).toContain('<ShellControlsPanel');
+  });
+
   it('replaces the complete left shell workspace for Army and Relics while preserving the covered phase', () => {
     expect(runScreen).toContain('function RunPhaseWorkspace');
     expect(runScreen).toMatch(/<ShellViewportSwap[\s\S]*?className="run-phase-workspace"[\s\S]*?primaryClassName="run-phase-primary"[\s\S]*?primary=\{children\}/);

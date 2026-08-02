@@ -9938,6 +9938,32 @@ body { font-size: 17px; }
   opacity: 0;
   transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
 }
+/* Same-shell overlap (a Run workspace swap): both layers paint an identical Controls
+   panel, relic rail, and shell fill, so fading the boundary would blend that retained
+   chrome 25% toward the backdrop at the crossfade midpoint — the visible dimming of the
+   Controls title plank on every Shop/Sell Units switch. The layers still overlap so the
+   outgoing snapshot stays frozen; only the shell's replaceable viewport carries the
+   fade. See sceneOverlapScope (a phase change keeps the whole-scene crossfade). */
+.scene-boundary[data-scene-overlap-scope="shell-viewport"].is-preparing [data-scene-overlap-region] {
+  opacity: 0;
+}
+.scene-director.is-entering .scene-boundary[data-scene-overlap-scope="shell-viewport"][data-scene-visual-role="outgoing"] {
+  opacity: 1;
+  transition: none;
+}
+.scene-director.is-entering .scene-boundary[data-scene-overlap-scope="shell-viewport"][data-scene-visual-role="outgoing"] [data-scene-overlap-region] {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
+}
+.scene-director.is-entering .scene-boundary[data-scene-overlap-scope="shell-viewport"][data-scene-transition-active] {
+  opacity: 1;
+  transition: none;
+}
+.scene-director.is-entering .scene-boundary[data-scene-overlap-scope="shell-viewport"][data-scene-transition-active] [data-scene-overlap-region] {
+  opacity: 1;
+  transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
+}
 .scene-boundary.is-region-preparing {
   opacity: 1;
 }
@@ -18791,12 +18817,10 @@ button.tileset-relationship-cell {
   cursor: default;
 }
 
+/* A card is printed art, never a faded control: an unaffordable or already-purchased
+   offer stays fully opaque. Overrides the global `button:disabled` fade. */
 .run-card-action:disabled {
   cursor: not-allowed;
-  opacity: .72;
-}
-
-.run-card-action.is-purchased {
   opacity: 1;
 }
 
@@ -18816,10 +18840,6 @@ button.tileset-relationship-cell {
   display: flex;
   flex-wrap: wrap;
   gap: var(--ds-inline-tight);
-}
-
-.run-shop-rules > :last-child {
-  margin-inline-start: auto;
 }
 
 .run-gold-amount {
@@ -19225,8 +19245,10 @@ button.tileset-relationship-cell {
   object-fit: cover;
 }
 
-/* The heading and gold line read over the scene rather than above it. */
-.run-shop-workspace.has-scene .run-shop-workspace-content > :is(h2, .run-shop-rules) {
+/* The heading and gold line read over the scene rather than above it. Selling is a Shop
+   activity and stands in the same scene, so its heading gets the same treatment. */
+.run-shop-workspace.has-scene .run-shop-workspace-content > :is(h2, .run-shop-rules),
+.run-sell-workspace.has-scene .run-sell-workspace-content > :is(h2, p) {
   text-shadow: 0 2px 6px rgba(2, 7, 12, .85);
 }
 

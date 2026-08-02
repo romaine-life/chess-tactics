@@ -1,6 +1,17 @@
 import type { ComponentPropsWithoutRef, ReactElement } from 'react';
-import { sceneTransitionTargetAttributes, type SceneTransitionTargetMode } from './sceneTransitionTarget';
+import {
+  sceneOverlapRegionAttributes,
+  sceneTransitionTargetAttributes,
+  type SceneTransitionTargetMode,
+} from './sceneTransitionTarget';
 import type { SceneHost } from './sceneManifest';
+
+/**
+ * Declares the shell's replaceable viewport, the only region an overlapping
+ * same-shell scene pair may fade. Everything outside it is retained chrome that
+ * both layers paint identically, so it must never ride the transition.
+ */
+export const shellViewportOverlapRegion = sceneOverlapRegionAttributes;
 
 type DivSlotProps = ComponentPropsWithoutRef<'div'> & { sceneInstance: string };
 type MainSlotProps = ComponentPropsWithoutRef<'main'> & { sceneInstance: string };
