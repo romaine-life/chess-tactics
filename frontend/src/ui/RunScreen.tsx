@@ -53,7 +53,6 @@ import { RunRelicIcon, RunRelicsWorkspace } from './RunRelics';
 import { RunGoldAmount } from './RunResources';
 import {
   runWorkspaceHref,
-  RunSelfInspectionControls,
   type RunSelfInspectionView,
   type RunWorkspaceView,
 } from './RunSelfInspection';
@@ -174,13 +173,6 @@ function RunMetaControls({
               </ChromeButton>
             ) : null}
           </div>
-        </div>
-        <div className="skirmish-view-group">
-          <span className="skirmish-eyebrow">Self inspection</span>
-          <RunSelfInspectionControls
-            view={view === 'army' || view === 'relics' ? view : null}
-            onNavigate={onNavigate}
-          />
         </div>
         {shop ? (
           <div className="skirmish-view-group">

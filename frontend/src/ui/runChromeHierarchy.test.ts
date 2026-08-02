@@ -45,8 +45,11 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain("<RunMetaControls run={shellRun} view={view} onNavigate={navigateRunView} showAbandon={shellRun.phase !== 'victory'} />");
     expect(metaControls).toContain('<section className="run-meta-controls" aria-label="Run controls">');
     expect(metaControls).toContain('Sell Units');
-    expect(metaControls).toContain('<span className="skirmish-eyebrow">Self inspection</span>');
-    expect(metaControls).toContain('<RunSelfInspectionControls');
+    // The Run rail no longer carries Army/Relics: the Strategikon is Run-wide (ADR-0335)
+    // and its Prosopography/Lipsanotheca render the same RunArmyWorkspace and held-relic
+    // codex, so a second entry point to them was a duplicate. The battle HUD keeps its own.
+    expect(metaControls).not.toContain('Self inspection');
+    expect(metaControls).not.toContain('<RunSelfInspectionControls');
     expect(runSelfInspection).toContain('Army');
     expect(runSelfInspection).toContain('Relics');
     expect(runSelfInspection).toContain("url.searchParams.set('view', view)");
