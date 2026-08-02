@@ -76,11 +76,12 @@ import {
 import { currentDoodadAssets, defaultDoodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import { structureSourceHalfSrc } from '../render/BoardStructure';
 import { navigateApp, subscribeAppLocation } from './navigation';
-import { STUDIO_VIEWER_KIND_OPTIONS, isViewerKind, type ViewerKind } from './studioViewerKinds';
+import { isViewerKind, type ViewerKind } from './studioViewerKinds';
 import { listEditorDocuments } from '../net/editorDocuments';
 import { fetchAdminLiveMediaCatalog, type AdminLiveMediaCatalog } from '../net/liveMediaAdmin';
 import { TitleBarControlContribution, type TitleBarControlSpec } from './shell/TitleBarControls';
 import { RunCardPrototypeCatalog, RunCardPrototypeViewer } from './RunCardPrototype';
+import { RunCardIconFittingCatalog, RunCardIconFittingViewer } from './RunIconPairReview';
 import { RunCardPromptCatalog, RunCardPromptViewer } from './RunCardPromptStudio';
 import {
   activeUnitFamilies,
@@ -118,7 +119,7 @@ type StudioMode = 'catalog' | 'viewer';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
-type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'sourceart' | 'groundcover' | 'walldecor' | 'wallart' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'walls' | 'scrollbars' | 'sliders' | 'pages' | 'chromelab' | 'sfx' | 'gamelab' | 'gym' | 'solver' | 'cardlayout' | 'cardprompts';
+type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'sourceart' | 'groundcover' | 'walldecor' | 'wallart' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'walls' | 'scrollbars' | 'sliders' | 'pages' | 'chromelab' | 'sfx' | 'gamelab' | 'gym' | 'solver' | 'cardlayout' | 'cardicons' | 'cardprompts';
 
 // Every prop KIND present in the catalog, in definition order — DERIVED from PROP_DEFS so a new
 // kind (e.g. 'rock') is a filter facet automatically. Hardcoding ['tree','house'] here silently
@@ -253,7 +254,7 @@ const studioFamilyById = (familyId: StudioFamilyId): StudioFamily =>
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => Boolean(value && studioFamilies.some((family) => family.id === value));
 
 const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'viewer';
-const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'sourceart' || value === 'groundcover' || value === 'walldecor' || value === 'wallart' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'walls' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'chromelab' || value === 'sfx' || value === 'gamelab' || value === 'gym' || value === 'solver' || value === 'cardlayout' || value === 'cardprompts';
+const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'sourceart' || value === 'groundcover' || value === 'walldecor' || value === 'wallart' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'walls' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'chromelab' || value === 'sfx' || value === 'gamelab' || value === 'gym' || value === 'solver' || value === 'cardlayout' || value === 'cardicons' || value === 'cardprompts';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
@@ -285,6 +286,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const side = params.get('side');
   const vk = params.get('vk');
   const normalizedVk = vk === 'wallasset' ? 'wallart' : vk;
+  const isCardIconReviewAlias = params.get('runIconPairReview') === '1';
   const lab = params.get('lab');
   const view = params.get('view');
   const collection = params.get('collection');
@@ -330,8 +332,8 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const rail = params.get('rail');
   // Destination is decoupled from category — any mode is valid with any category,
   // so the URL is taken at face value (no normalization).
-  const studioMode = isUnitStudioAlias || isNineSliceAlias || isPropLabAlias || isTileCompareAlias || isSurfaceLabAlias || isSceneAnimAlias || isDoodadEditorAlias || isArtworkCompareAlias ? 'viewer' : isStudioMode(mode) ? mode : defaults.studioMode;
-  const routeCategory = isUnitStudioAlias ? 'units' : isNineSliceAlias ? 'assets' : isPropLabAlias ? 'props' : isTileCompareAlias ? 'tilecompare' : isSurfaceLabAlias ? 'surfacetiles' : isSceneAnimAlias ? 'sceneanim' : isDoodadEditorAlias ? 'doodads' : isArtworkCompareAlias ? 'pages' : isStudioCategory(normalizedCat) ? normalizedCat : undefined;
+  const studioMode = isCardIconReviewAlias || isUnitStudioAlias || isNineSliceAlias || isPropLabAlias || isTileCompareAlias || isSurfaceLabAlias || isSceneAnimAlias || isDoodadEditorAlias || isArtworkCompareAlias ? 'viewer' : isStudioMode(mode) ? mode : defaults.studioMode;
+  const routeCategory = isCardIconReviewAlias ? 'cardicons' : isUnitStudioAlias ? 'units' : isNineSliceAlias ? 'assets' : isPropLabAlias ? 'props' : isTileCompareAlias ? 'tilecompare' : isSurfaceLabAlias ? 'surfacetiles' : isSceneAnimAlias ? 'sceneanim' : isDoodadEditorAlias ? 'doodads' : isArtworkCompareAlias ? 'pages' : isStudioCategory(normalizedCat) ? normalizedCat : undefined;
   const routeTileFilter = view === 'board' ? 'board' : isTileFilter(collection) ? collection : defaults.tileFilter;
   const explicitLabMode = isLabMode(lab) ? lab : undefined;
   const brushParam = params.get('brush');
@@ -376,7 +378,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedFenceArtworkId: fenceArt || undefined,
     selectedSurfaceFamily: sfamily || undefined,
     selectedRegionId: regionParam || undefined,
-    viewerKind: isUnitStudioAlias ? 'unitart' : isNineSliceAlias ? 'nineslice' : isPropLabAlias || isDoodadEditorAlias ? 'propseat' : isTileCompareAlias ? 'tilecompare' : isSurfaceLabAlias ? 'surfacetiles' : isSceneAnimAlias ? 'sceneanim' : isArtworkCompareAlias ? 'artworkcompare'
+    viewerKind: isCardIconReviewAlias ? 'cardicons' : isUnitStudioAlias ? 'unitart' : isNineSliceAlias ? 'nineslice' : isPropLabAlias || isDoodadEditorAlias ? 'propseat' : isTileCompareAlias ? 'tilecompare' : isSurfaceLabAlias ? 'surfacetiles' : isSceneAnimAlias ? 'sceneanim' : isArtworkCompareAlias ? 'artworkcompare'
       : isViewerKind(normalizedVk) ? normalizedVk : undefined,
     labMode: routeLabMode,
     tileFilter: effectiveTileFilter,
@@ -1927,6 +1929,11 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       controls: <button type="button" className="tileset-view-action" onClick={() => openViewer('cardlayout')}>Open Card Layout</button>,
     },
     {
+      id: 'cardicons', label: 'Card Icon Fitting', hint: 'Select and fit every card-property and unit-state icon on the canonical Run card face.',
+      main: <RunCardIconFittingCatalog onOpen={() => openViewer('cardicons')} />,
+      controls: <button type="button" className="tileset-view-action" onClick={() => openViewer('cardicons')}>Open Card Icon Fitting</button>,
+    },
+    {
       id: 'cardprompts', label: 'Card Prompts', hint: 'Review and copy the exact database prompt provenance for every core Units card.',
       main: (
         <RunCardPromptCatalog
@@ -1951,21 +1958,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   ];
   const activeCatalog = catalogCategories.find((entry) => entry.id === category) ?? catalogCategories[0];
   const catalogCategoryOptions = [...catalogCategories].sort(compareByLabel);
-
-  // The Viewer's kind selector — which item type the Viewer shows. A dropdown, not a button
-  // strip: eight kinds can't fit the 260px controls rail without clipping each label to its
-  // initials, and a <select> mirrors the Catalog's category control. Injected as each Viewer
-  // surface's header.
-  const viewerKindSelect = (
-    <label className="tileset-category-select" title="Which kind of item the Viewer shows.">
-      <span>Viewer</span>
-      <select value={viewerKind} onChange={(event) => setViewerKind(event.target.value as ViewerKind)} aria-label="Viewer kind">
-        {STUDIO_VIEWER_KIND_OPTIONS.map((option) => (
-          <option key={option.id} value={option.id}>{option.label}</option>
-        ))}
-      </select>
-    </label>
-  );
 
   // The studio workspace switcher (Catalog / Lab / Viewer) contributes typed controls
   // before the persistent divider. It moved OFF the control rail so switching workspaces no longer
@@ -2023,10 +2015,10 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       onActivate: () => setStudioMode('viewer'),
     },
   ];
-  // Viewer labs render their controls through a `header` slot: the preview-kind select plus the
-  // viewer-wide Zoom meta-control. Zoom scales the WHOLE preview (100% = full size; scroll the panel
-  // to roam it) — it rides the header so it shows for every Viewer kind; individual viewers opt in
-  // by accepting `viewerZoom`. The workspace switcher moved out of the rail onto the title bar (above).
+  // Viewer surfaces render shared preview controls through a `header` slot. Catalog is the
+  // cross-kind directory; an entered Viewer owns only its local controls and never repeats the
+  // complete Viewer registry as another dropdown. Zoom scales the WHOLE preview (100% = full size;
+  // scroll the panel to roam it). Individual viewers opt in by accepting `viewerZoom`.
   const studioViewerZoomControl = (
     <SliderRow
       label={<>Zoom · {Math.round(viewerZoom * 100)}%{viewerZoom === 1 ? ' · full size' : ''}</>}
@@ -2039,12 +2031,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       dflt={1}
     />
   );
-  const studioViewerHeader = (
-    <>
-      {viewerKindSelect}
-      {studioViewerZoomControl}
-    </>
-  );
+  const studioViewerHeader = studioViewerZoomControl;
 
   return (
     <main className="tileset-studio-page app-shell-bar-pad">
@@ -2090,7 +2077,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             ? <RailLab
                 familyId={selectedRailFamilyId}
                 onFamilyId={setSelectedRailFamilyId}
-                header={viewerKindSelect}
                 zoomControl={studioViewerZoomControl}
                 zoom={viewerZoom}
                 onZoomChange={setViewerZoom}
@@ -2110,7 +2096,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             : viewerKind === 'artworkcompare'
             ? <ArtworkCompareLab header={studioViewerHeader} />
             : viewerKind === 'sourceart'
-            ? <SourceArtTurntableLab assetId={selectedSourceArtId} onAssetId={setSelectedSourceArtId} header={viewerKindSelect} />
+            ? <SourceArtTurntableLab assetId={selectedSourceArtId} onAssetId={setSelectedSourceArtId} />
             : viewerKind === 'artwork'
               ? <ArtworkLab library={studioMedia.artwork} name={selectedArtworkName} header={studioViewerHeader} />
               : viewerKind === 'glossary'
@@ -2124,7 +2110,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                       : viewerKind === 'page'
                         ? <PagesViewer name={selectedPageName} header={studioViewerHeader} zoom={viewerZoom} />
                         : viewerKind === 'chromelab'
-                        ? <ChromeLabViewer targetId={selectedChromeLabTargetId} onTargetId={setSelectedChromeLabTargetId} header={viewerKindSelect} zoomControl={studioViewerZoomControl} zoom={viewerZoom} />
+                        ? <ChromeLabViewer targetId={selectedChromeLabTargetId} onTargetId={setSelectedChromeLabTargetId} zoomControl={studioViewerZoomControl} zoom={viewerZoom} />
                         : viewerKind === 'gamelab'
                         ? <GameLabViewer levelId={selectedGameLabLevelId} header={studioViewerHeader} />
                         : viewerKind === 'gym'
@@ -2151,6 +2137,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                               ? <RunCardPromptViewer cardId={selectedRunCardPromptId} onCardId={setSelectedRunCardPromptId} header={studioViewerHeader} />
                             : viewerKind === 'cardlayout'
                               ? <RunCardPrototypeViewer header={studioViewerHeader} viewerZoom={viewerZoom} />
+                              : viewerKind === 'cardicons'
+                                ? <RunCardIconFittingViewer header={studioViewerHeader} viewerZoom={viewerZoom} />
                               : <AssetLab library={studioMedia.assets} name={selectedAssetName} header={studioViewerHeader} onEditFrame={(id) => { setSelectedFrameName(id); openViewer('nineslice'); }} onOpenDivider={(id) => { setSelectedDividerName(id); openViewer('divider'); }} />
         ) : null}
       </section>

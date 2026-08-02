@@ -12,6 +12,7 @@ partially_superseded_by:
   - "[ADR-0311](0311-pestiferous-cards-reveal-one-plagued-unit-at-a-time.md)"
   - "[ADR-0328](0328-tactical-targets-are-chosen-at-acquisition-and-use-the-discipline-icon.md)'s exact Tactical Discipline effect and acquisition-time target"
   - "[ADR-0329](0329-concinnous-and-tactical-use-distinct-frames-and-one-shared-coin.md)'s distinct qualifier identities"
+  - "[ADR-0341](0341-cacochymic-replaces-plagued-as-the-pestiferous-unit-state-name.md)'s Cacochymic unit-state name"
 ---
 
 # ADR-0272: Card types author effects and may conceal unit targets

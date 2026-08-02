@@ -24,7 +24,7 @@ import { DirectionArrowIcon } from './shared/DirectionArrowIcon';
 
 // The prop-seat editor as an embedded Studio Viewer kind (docs/studio-control-architecture.md,
 // ADR-0058): it renders into the shared studio shell — the board in `.al-lab-main`, EVERY
-// control in the one `.tileset-view-controls` panel, the workspace tabs + kind selector in the
+// control in the one `.tileset-view-controls` panel, and shared preview controls in the
 // `header` slot — exactly like NineSliceLab / PortraitLab. It is reached from the Props catalog
 // category's Inspect affordance, never a standalone route. It tunes how a multi-cell prop
 // (tree/house) SITS on its tiles through the real PropSprite path, then Saves the seat map LIVE to

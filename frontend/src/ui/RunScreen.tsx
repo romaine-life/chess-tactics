@@ -17,6 +17,7 @@ import { useConfirm } from './shared/ConfirmDialog';
 import { RunWorkspace } from './RunWorkspace';
 import {
   ATARAXIA_BY_TIER,
+  CACOCHYMIC_DISPLAY_NAME,
   GOLD_SCALE,
   RUN_RELIC_BY_ID,
   battleVictoryGoldTenths,
@@ -49,6 +50,8 @@ import {
   selectedDeploymentLayout,
 } from '../run/deployment';
 import { useActiveRun } from '../run/store';
+import { runLinkTargetMismatch } from '../run/craft';
+import { useRunCraft } from './useRunCraft';
 import { RunRelicIcon, RunRelicsWorkspace } from './RunRelics';
 import { RunGoldAmount } from './RunResources';
 import {
@@ -466,7 +469,6 @@ function ShopCardRow({ children }: { children: ReactNode }): ReactElement {
   const [box, setBox] = useState({ width: 0, height: 0 });
   const hostRef = useRef<HTMLDivElement | null>(null);
   const cardCount = Children.count(children);
-
   // Only a band wrap measures anything: it is a frame around the row, so the
   // row has to fit inside it. A screen scene is a background and never
   // participates — the cards lay out normally and the art sits behind them.
@@ -575,7 +577,7 @@ function ShopPanel({
         {pestiferousLosses.length ? (
           <InnerChromeBox className="run-pestiferous-losses" role="status">
             <h3>Pestiferous attrition</h3>
-            <p>These Plagued units were lost after the Battle:</p>
+            <p>These {CACOCHYMIC_DISPLAY_NAME} units were lost after the Battle:</p>
             <ul>
               {pestiferousLosses.map((loss) => (
                 <li key={`${loss.cardId}:${loss.unit.id}`}>
@@ -583,7 +585,7 @@ function ShopPanel({
                   {(() => {
                     const card = run.cards.find((candidate) => candidate.id === loss.cardId);
                     const next = run.army.find((unit) => unit.id === card?.plaguedUnitId);
-                    return next ? ` — ${next.name} · ${next.type} is now Plagued` : '';
+                    return next ? ` — ${next.name} · ${next.type} is now ${CACOCHYMIC_DISPLAY_NAME}` : '';
                   })()}
                 </li>
               ))}
@@ -819,6 +821,8 @@ export function RunScreen({
   const run = sceneSnapshot.run;
   const hydrated = sceneSnapshot.hydrated;
   const replace = useActiveRun((state) => state.replace);
+  // A ?craft= address builds its Run before the screen reads one (development only).
+  const craft = useRunCraft(routePath, routeSearch);
   const viewScope = run
     ? `${run.id}:${run.phase}:${run.phase === 'shop' ? run.shop?.afterBattleIndex ?? run.battleIndex : run.battleIndex}`
     : 'no-run';
@@ -909,7 +913,61 @@ export function RunScreen({
       onSell={sellUnit}
     />
   ) : null;
-  if (shellRun?.phase === 'battle') {
+  // A craft request speaks for the whole screen while it runs: the Run it is about to replace must
+  // not flash its own phase first, and a refused spec has to say why instead of silently doing
+  // nothing.
+  // A link made for a specific Run says so. Rendering someone else's Run — or this browser's
+  // signed-out copy — under that link is the failure worth catching: it looks like it worked.
+  const linkMismatch = hydrated && runLinkTargetMismatch(routeSearch, run?.id ?? null);
+  const craftWorkspace = craft.crafting
+    ? (
+      <RunWorkspace
+        className="run-loading-workspace"
+        contentClassName="run-status-workspace-content"
+        data-testid="run-craft-workspace"
+        role="status"
+      >
+        <p>Crafting Run…</p>
+      </RunWorkspace>
+    )
+    : craft.error
+      ? (
+        <RunWorkspace
+          className="run-empty-workspace"
+          contentClassName="run-status-workspace-content"
+          data-testid="run-craft-error-workspace"
+          role="alert"
+          aria-labelledby="run-craft-error-title"
+        >
+          <h2 id="run-craft-error-title">This Run could not be crafted</h2>
+          <p>{craft.error}</p>
+        </RunWorkspace>
+      )
+      : linkMismatch
+        ? (
+          <RunWorkspace
+            className="run-empty-workspace"
+            contentClassName="run-status-workspace-content"
+            data-testid="run-link-mismatch-workspace"
+            role="status"
+            aria-labelledby="run-link-mismatch-title"
+          >
+            <h2 id="run-link-mismatch-title">This link is for a different Run</h2>
+            <p>
+              {run
+                ? 'It was made for a Run this account is not on any more. The Run below is the one you have now.'
+                : 'Sign in to the account it was made for, or open the Run this browser has.'}
+            </p>
+            <ChromeNavButton unit="inner-text-button"
+              className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
+              to="/run"
+            >
+              Open my Run
+            </ChromeNavButton>
+          </RunWorkspace>
+        )
+        : null;
+  if (!craftWorkspace && shellRun?.phase === 'battle') {
     return (
       <RunPresentationSceneSlot
         className="run-scene-slot"
@@ -926,7 +984,7 @@ export function RunScreen({
       </RunPresentationSceneSlot>
     );
   }
-  const workspace = !hydrated
+  const workspace = craftWorkspace ?? (!hydrated
     ? (
       <RunWorkspace
         className="run-loading-workspace"
@@ -959,7 +1017,7 @@ export function RunScreen({
           ? <DeploymentPanel run={shellRun} />
           : shellRun.phase === 'shop' && shellRun.shop
             ? <ShopPanel run={shellRun} view={view} sellWorkspace={sellWorkspace!} />
-            : <VictoryPanel run={shellRun} />;
+            : <VictoryPanel run={shellRun} />);
   return (
     <RunPresentationSceneSlot
       className="run-scene-slot"

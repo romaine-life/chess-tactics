@@ -17,9 +17,11 @@ npm-debug.log
 
 # Local Claude Code tooling: worktrees, launch config, and a scratch dir used
 # for headless screenshot capture (Playwright + Chromium). Never committed —
-# except checked-in skills under .claude/skills/, which ship with the repo.
+# except checked-in skills under .claude/skills/ and the session hook in
+# .claude/settings.json, which ship with the repo.
 .claude/*
 !.claude/skills/
+!.claude/settings.json
 .pwshot/
 frontend/.codex-vite-*.log
 frontend/.chrome-campaign-proof/

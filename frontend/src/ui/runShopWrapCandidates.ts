@@ -177,49 +177,9 @@ export function runShopWrapSeatTrack(candidate: RunShopWrapCandidate): string {
   return `${(CARD_MAX_WIDTH * (candidate.canvas.w / win.w)).toFixed(1)}px`;
 }
 
-/**
- * Screen mounting: the scene covers the whole Shop screen, so the card window
- * travels with the cover crop rather than sitting at a fixed offset. Everything
- * is expressed against the covered box the caller measures.
- */
-export function runShopWrapScreenMount(
-  candidate: RunShopWrapCandidate,
-  cardCount: number,
-  screenWidth: number,
-  screenHeight: number,
-): RunShopWrapLiveMount {
-  const { canvas } = candidate;
-  const win = bledWindow(candidate);
-  // COVER: the scene fills the screen and overflows on the long axis.
-  const s = Math.max(screenWidth / canvas.w, screenHeight / canvas.h);
-  const sceneWidth = canvas.w * s;
-  const sceneHeight = canvas.h * s;
-  const originX = (screenWidth - sceneWidth) / 2;
-  const originY = (screenHeight - sceneHeight) / 2;
-  const windowWidth = win.w * s;
-  const windowHeight = win.h * s;
-  const gap = BAND_GAP;
-  const cardWidth = Math.max(0, Math.min(
-    (windowWidth - (cardCount - 1) * gap) / cardCount,
-    (windowHeight * 5) / 7,
-  ));
-  const rowWidth = cardCount * cardWidth + (cardCount - 1) * gap;
-  return {
-    frame: {
-      left: Math.round(originX),
-      top: Math.round(originY),
-      width: Math.round(sceneWidth),
-      height: Math.round(sceneHeight),
-    },
-    cards: {
-      left: Math.round(originX + win.x * s + (windowWidth - rowWidth) / 2),
-      top: Math.round(originY + win.y * s + (windowHeight - (cardWidth * 7) / 5) / 2),
-      width: Math.round(rowWidth),
-      gap,
-    },
-    cardWidth,
-  };
-}
+/* A screen scene is a locked background: it only paints, and nothing positions
+   itself against it, so it needs no mount. Only a band wrap — which genuinely
+   frames the card row — measures anything. */
 
 export interface RunShopWrapSlotMount {
   frame: { width: number; height: number };

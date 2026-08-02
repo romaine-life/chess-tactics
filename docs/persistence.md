@@ -39,6 +39,13 @@ Durable document and live-content tables are created by the inline migrations in
 | `media_slots` / `media_versions` / `media_blobs` | shared live-media substrate and active pointers | `/api/asset-catalog`, `/api/media/:sha`, `/assets/:slot`, `/api/admin/media-assets` | GET public, mutations require admin |
 | `media_catalog_state` / `media_asset_events` | shared asset revision and audit history | internal | admin mutations write them |
 
+The `run-card-icon-fitting-v1` design portfolio is the Studio Card Icon
+Fitting draft. It records exact candidate ids/hashes, independent property
+placements, and the shared unit-state placement so an owner can resume visual
+fitting. Like every design portfolio, it is not an accepted media pointer or
+installed runtime-configuration authority; publishing remains a separate admin
+transaction (ADR-0340).
+
 Active Run format 11 starts in the normal `shop` phase with Shop kind `opening`,
 the permanent King plus two starting Pawns, a seeded three-card deal, and an
 8-gold budget. The opening cards have three distinct values sampled from 1–8.
@@ -60,12 +67,14 @@ therefore replace it without adapting or replaying the retired transaction. See
 as superseded for Shop purchase cardinality by
 [ADR-0323](adr/0323-run-shops-allow-every-affordable-card-purchase.md). Format 11
 also stores the selected Ataraxia tier and each persisted affected Shop offer.
-Pestiferous offers store their public Plagued piece index;
+Pestiferous offers store their public Cacochymic piece index under the current
+format's non-presentational `plaguedPieceIndex` storage identifier;
 Concinnous offers store their concealed Positioned target index; Tactical
 offers deliberately store no target index because purchase chooses the unit.
 Owned Concinnous and Tactical cards store the exact affected unit id, while
-owned Pestiferous cards store the current Plagued unit id and exact loss
-history (ADR-0309, ADR-0310, ADR-0311, ADR-0325, ADR-0327, ADR-0328).
+owned Pestiferous cards store the current Cacochymic unit id under
+`plaguedUnitId` and the exact loss history (ADR-0309, ADR-0310, ADR-0311,
+ADR-0325, ADR-0327, ADR-0328, ADR-0341).
 Format 3 stores each army unit's role-specific historical name.
 Format-1 unnamed documents and the provisional format-2 generated-name documents
 are deterministically normalized to format 3 from the Run seed and each piece

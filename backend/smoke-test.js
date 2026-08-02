@@ -4106,7 +4106,7 @@ async function main() {
     invalidPlaguedTarget.statusCode !== 400
     || JSON.parse(invalidPlaguedTarget.body).error !== 'invalid_active_run'
   ) {
-    throw new Error(`Active Run should reject a missing Plagued target: ${invalidPlaguedTarget.statusCode} ${invalidPlaguedTarget.body}`);
+    throw new Error(`Active Run should reject a missing Cacochymic target: ${invalidPlaguedTarget.statusCode} ${invalidPlaguedTarget.body}`);
   }
   const missingRunRevision = await request(
     'PUT', '/api/active-run',
@@ -4329,6 +4329,51 @@ async function main() {
   );
   if (deletedRun.statusCode !== 200 || JSON.parse(deletedRun.body).ok !== true) {
     throw new Error(`Active Run did not delete: ${deletedRun.statusCode} ${deletedRun.body}`);
+  }
+
+  // --- Crafted active Runs (ADR-0338): admin-only, and refused before any write ---
+  // The composition itself is covered by the shared crafter's own tests; what has to hold here is
+  // that only an administrator can reach it and that a spec it cannot honour is reported rather
+  // than half-applied.
+  const anonymousCraft = await request(
+    'POST', '/api/active-run/craft',
+    { 'content-type': 'application/json' },
+    JSON.stringify({ phase: 'shop' }),
+  );
+  if (anonymousCraft.statusCode !== 401) {
+    throw new Error(`Crafting a Run must require sign-in: ${anonymousCraft.statusCode} ${anonymousCraft.body}`);
+  }
+  const rivalCraft = await request(
+    'POST', '/api/active-run/craft',
+    { cookie: '__Host-chess-tactics-access=rival', 'content-type': 'application/json' },
+    JSON.stringify({ phase: 'shop' }),
+  );
+  if (rivalCraft.statusCode !== 403 || JSON.parse(rivalCraft.body).error !== 'admin_required') {
+    throw new Error(`Crafting a Run must require an administrator: ${rivalCraft.statusCode} ${rivalCraft.body}`);
+  }
+  const unknownFieldCraft = await request(
+    'POST', '/api/active-run/craft',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({ phase: 'shop', goldd: 40 }),
+  );
+  if (
+    unknownFieldCraft.statusCode !== 400
+    || JSON.parse(unknownFieldCraft.body).error !== 'invalid_run_craft_spec'
+    || !JSON.parse(unknownFieldCraft.body).details.includes('goldd')
+  ) {
+    throw new Error(`A craft spec typo must be named, not ignored: ${unknownFieldCraft.statusCode} ${unknownFieldCraft.body}`);
+  }
+  const unknownPhaseCraft = await request(
+    'POST', '/api/active-run/craft',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({ phase: 'inventory' }),
+  );
+  if (unknownPhaseCraft.statusCode !== 400 || JSON.parse(unknownPhaseCraft.body).error !== 'invalid_run_craft_spec') {
+    throw new Error(`A craft spec must name a real Run phase: ${unknownPhaseCraft.statusCode} ${unknownPhaseCraft.body}`);
+  }
+  const craftedRunAfterRefusals = await get('/api/active-run', { cookie: '__Host-chess-tactics-access=abc' });
+  if (craftedRunAfterRefusals.statusCode !== 200 || JSON.parse(craftedRunAfterRefusals.body).run !== null) {
+    throw new Error(`A refused craft must write nothing: ${craftedRunAfterRefusals.statusCode} ${craftedRunAfterRefusals.body}`);
   }
 
   // --- Run relic statistics: owner-scoped, append-only, retry-idempotent ----
