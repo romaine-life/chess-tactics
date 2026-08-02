@@ -19095,18 +19095,36 @@ button.tileset-relationship-cell {
   position: relative;
 }
 
-/* A full-screen scene is judged at real screen proportions, cover-cropped. */
+/* A full-screen scene is judged at real screen proportions, cover-cropped —
+   with the card row laid out exactly as the live Shop lays it out. */
 .run-wrap-screen-stage {
-  margin-inline: auto;
-  max-inline-size: 100%;
+  aspect-ratio: 16 / 10;
+  display: grid;
+  inline-size: 100%;
   overflow: hidden;
+  place-items: center;
   position: relative;
+}
+
+.run-wrap-screen-art {
+  block-size: 100%;
+  inline-size: 100%;
+  inset: 0;
+  object-fit: cover;
+  position: absolute;
 }
 
 .run-wrap-screen-cards {
   display: grid;
-  position: absolute;
+  gap: var(--ds-inline);
+  grid-auto-flow: column;
+  padding: var(--ds-inset);
+  position: relative;
   z-index: 1;
+}
+
+.run-wrap-screen-cards > .run-card-offer {
+  inline-size: 200px;
 }
 
 .run-wrap-install {
@@ -19119,19 +19137,17 @@ button.tileset-relationship-cell {
   margin: 0;
 }
 
-/* Live Shop: the installed wrap frames the real card row. The Shop is one
-   screen — the stall is contained in the space left over, never the other way
-   round, so installing a wrap can never introduce a scrollbar. */
-.run-shop-workspace-content {
+/* A band wrap frames the card row, so it — and only it — needs the Shop's
+   leftover height measured. Scoped to that case: a background scene must never
+   make the page's layout depend on the artwork. */
+.run-shop-workspace-content:has(.run-shop-wrap-host) {
   display: flex;
   flex-direction: column;
   gap: var(--ds-stack);
   min-block-size: 0;
 }
 
-/* Flex the whole chain down to the host: a grid row would size itself to its
-   content, which leaves the stall nothing definite to fill. */
-.run-shop-workspace-content > .run-shop-cards-section {
+.run-shop-workspace-content:has(.run-shop-wrap-host) > .run-shop-cards-section {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
@@ -19167,30 +19183,19 @@ button.tileset-relationship-cell {
   z-index: 1;
 }
 
-/* A full-screen scene paints the whole Shop workspace edge to edge: no tiled
-   backdrop shows through, and the card row is seated in the painted stall. */
-.run-shop-scene-host {
+/* The scene rides the shell's registered background-artwork slot, so it spans
+   the whole workspace box — the shell padding included — instead of stopping at
+   the scroller and letting the backdrop show around the art. It is a background:
+   it takes no part in layout and nothing positions itself against it. */
+.run-shop-scene-artwork {
+  block-size: 100%;
   inline-size: 100%;
-  min-block-size: 0;
-  position: relative;
-}
-
-.run-shop-scene-art {
-  pointer-events: none;
-  position: absolute;
-  z-index: 0;
-}
-
-.run-shop-workspace-content:has(.run-shop-scene-host) {
-  overflow: hidden;
-  position: relative;
+  object-fit: cover;
 }
 
 /* The heading and gold line read over the scene rather than above it. */
-.run-shop-workspace-content:has(.run-shop-scene-host) > :is(h2, .run-shop-rules) {
-  position: relative;
+.run-shop-workspace.has-scene .run-shop-workspace-content > :is(h2, .run-shop-rules) {
   text-shadow: 0 2px 6px rgba(2, 7, 12, .85);
-  z-index: 2;
 }
 
 .run-wrap-slot-card {

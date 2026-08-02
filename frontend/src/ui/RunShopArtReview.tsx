@@ -12,7 +12,7 @@ import {
   runShopWrapBandMount,
   runShopWrapCandidates,
   runShopWrapRuntimeCandidate,
-  runShopWrapScreenMount,
+
   runShopWrapSeatPadding,
   runShopWrapSeatTrack,
   runShopWrapSlotMount,
@@ -41,46 +41,17 @@ function WrapCandidateRow({ candidate }: { candidate: RunShopWrapCandidate }): R
         </small>
       </h3>
       {candidate.kind === 'screen' ? (
-        (() => {
-          // Judge a full-screen scene at real screen proportions, cover-cropped
-          // exactly as the Shop would crop it.
-          // 16:10, sized to fit the review panel so the whole screen is visible.
-          const SCREEN = { w: 992, h: 620 };
-          const mount = runShopWrapScreenMount(candidate, 3, SCREEN.w, SCREEN.h);
-          return (
-            <div
-              className="run-wrap-screen-stage"
-              style={{ inlineSize: `${SCREEN.w}px`, blockSize: `${SCREEN.h}px` }}
-            >
-              <img
-                className="run-wrap-art"
-                src={candidate.src}
-                alt=""
-                draggable={false}
-                style={{
-                  insetInlineStart: `${mount.frame.left}px`,
-                  insetBlockStart: `${mount.frame.top}px`,
-                  inlineSize: `${mount.frame.width}px`,
-                  blockSize: `${mount.frame.height}px`,
-                }}
-              />
-              <div
-                className="run-wrap-screen-cards"
-                style={{
-                  insetInlineStart: `${mount.cards.left}px`,
-                  insetBlockStart: `${mount.cards.top}px`,
-                  inlineSize: `${mount.cards.width}px`,
-                  gridTemplateColumns: `repeat(3, ${mount.cardWidth}px)`,
-                  gap: `${mount.cards.gap}px`,
-                }}
-              >
-                {REVIEW_CARDS.map((card) => (
-                  <RunCard key={`${candidate.id}:${card.id}`} card={card} mode="shop" onSelect={() => undefined} />
-                ))}
-              </div>
-            </div>
-          );
-        })()
+        // Shown exactly as the Shop renders it: the scene is a cover-cropped
+        // background and the card row lays out normally on top of it. The
+        // review must not seat cards more precisely than the real screen does.
+        <div className="run-wrap-screen-stage">
+          <img className="run-wrap-screen-art" src={candidate.src} alt="" draggable={false} />
+          <div className="run-wrap-screen-cards">
+            {REVIEW_CARDS.map((card) => (
+              <RunCard key={`${candidate.id}:${card.id}`} card={card} mode="shop" onSelect={() => undefined} />
+            ))}
+          </div>
+        </div>
       ) : candidate.kind === 'slots' ? (
         (() => {
           const mount = runShopWrapSlotMount(candidate);
