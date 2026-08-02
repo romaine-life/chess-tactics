@@ -12,9 +12,11 @@ import {
   CACOCHYMIC_DISPLAY_NAME,
   RUN_CARD_BY_ID,
   RUN_CARD_DECK,
+  RUN_CARD_TYPE_REFERENCE,
   RUN_RELICS,
   cardContentsLabel,
   type PurchasablePieceType,
+  type RunCardType,
   type RunCoreCard,
   type RunRelicId,
 } from '../run/model';
@@ -27,8 +29,10 @@ import {
   RUN_CARD_PESTIFEROUS_FRAME_SLOT,
   RUN_CARD_TACTICAL_FRAME_SLOT,
   RunCardFace,
+  runCardPropertyIconUrl,
   type RunCardFaceContent,
 } from './RunCardFace';
+import { runUnitStateIconUrl, type RunUnitState } from './shared/RunAbilityIcon';
 import { runCardFrameGeometryForSlot } from './runCardFrameGeometry';
 import { StaticReadOnlyBoardView } from './shared/BoardViewFraming';
 import {
@@ -611,14 +615,13 @@ export function CardCodex({
 }
 
 type CardTypeReferenceDefinition = Readonly<{
-  id: string;
+  id: RunCardType;
   name: string;
   cost: number;
   rules: string;
   description: string;
   provisional?: boolean;
   frameSlot?: string;
-  iconRole?: string;
 }>;
 
 const CARD_TYPE_REFERENCES: readonly CardTypeReferenceDefinition[] = Object.freeze([
@@ -629,7 +632,6 @@ const CARD_TYPE_REFERENCES: readonly CardTypeReferenceDefinition[] = Object.free
     rules: `One unit on this card is ${CACOCHYMIC_DISPLAY_NAME}. After each victorious Battle, lose that unit, then mark another unit on this card ${CACOCHYMIC_DISPLAY_NAME}.`,
     description: `One public unit is ${CACOCHYMIC_DISPLAY_NAME} and receives the tier discount. A victorious Battle loses that unit, then marks one remaining unit; the empty card remains in the deck.`,
     frameSlot: RUN_CARD_PESTIFEROUS_FRAME_SLOT,
-    iconRole: 'ui-kit-icons-card-properties-pestiferous-png',
   },
   {
     id: 'concinnous',
@@ -644,7 +646,7 @@ const CARD_TYPE_REFERENCES: readonly CardTypeReferenceDefinition[] = Object.free
     name: 'Tactical',
     cost: 4,
     rules: 'Upon acquisition, one randomly chosen unit on this card gains Discipline.',
-    description: 'One contained unit gains Discipline when purchased. The target is hidden on multi-unit offers; this one-unit Volunteer shows the shield because its target is forced.',
+    description: 'One contained unit gains Discipline when purchased. The target is hidden on multi-unit offers; this one-unit Volunteer shows the state because its target is forced.',
     frameSlot: RUN_CARD_TACTICAL_FRAME_SLOT,
   },
   {
@@ -665,7 +667,12 @@ function CardTypeReference({ definition }: { definition: CardTypeReferenceDefini
   const card = {
     name: runCardName(VOLUNTEER_CARD),
     cost: definition.cost,
-    typeLine: `Units — ${definition.name}`,
+    typeLine: 'Units',
+    cardProperty: {
+      id: definition.id,
+      name: definition.name,
+      effect: RUN_CARD_TYPE_REFERENCE[definition.id].effect,
+    },
     grants: [{
       unit: 'pawn',
       count: 1,
@@ -719,15 +726,13 @@ function CardTypesSection({ framed }: { framed: boolean }): ReactElement {
                 aria-pressed={selected.id === definition.id}
               >
                 <span className="enchiridion-card-type-row-identity">
-                  {definition.iconRole ? (
-                    <img
-                      className="enchiridion-card-type-row-icon"
-                      src={installedUiMedia(definition.iconRole)}
-                      alt=""
-                      aria-hidden="true"
-                      draggable={false}
-                    />
-                  ) : <span className="enchiridion-card-type-row-icon" aria-hidden="true" />}
+                  <img
+                    className="enchiridion-card-type-row-icon"
+                    src={runCardPropertyIconUrl(definition.id)}
+                    alt=""
+                    aria-hidden="true"
+                    draggable={false}
+                  />
                   <span className="enchiridion-card-type-row-name">{definition.name}</span>
                 </span>
                 {definition.provisional ? <small>Provisional</small> : null}
@@ -743,6 +748,37 @@ function CardTypesSection({ framed }: { framed: boolean }): ReactElement {
   );
 }
 
+/**
+ * The unit states a card property bestows. Each entry names its own accepted
+ * `unit-ability-icon` role; the glossary never draws a stand-in glyph (ADR-0339).
+ */
+const UNIT_STATE_REFERENCES: readonly Readonly<{
+  state: RunUnitState;
+  name: string;
+  description: string;
+}>[] = Object.freeze([
+  {
+    state: 'discipline',
+    name: 'Discipline',
+    description: 'The unit may be deliberately placed on a legal square in the player deployment zone before the remainder of the army is deployed.',
+  },
+  {
+    state: 'positioned',
+    name: 'Positioned',
+    description: 'The unit’s automatic deployment favors its piece-specific region: Pawns prefer the front row, the King and Bishops prefer the back row, and Rooks prefer outer back-row squares.',
+  },
+  {
+    state: 'marshalled',
+    name: AGMINATE_DISPLAY_NAME,
+    description: 'The unit seeks its piece-specific station: the King prefers a board edge, Rooks favor their King-flank and corner formation, and Bishops prefer the opposite square color from another Bishop.',
+  },
+  {
+    state: 'plagued',
+    name: CACOCHYMIC_DISPLAY_NAME,
+    description: 'The unit may be permanently lost after a Battle when its Pestiferous card resolves attrition. Its card-price contribution is discounted by 0 gold for a Pawn, 1 for a Knight or Bishop, 2 for a Rook, and 3 for a Queen.',
+  },
+]);
+
 function AbilitiesSection({ framed }: { framed: boolean }): ReactElement {
   return (
     <ReferenceSectionFrame
@@ -752,40 +788,21 @@ function AbilitiesSection({ framed }: { framed: boolean }): ReactElement {
       title="Abilities"
     >
       <div className="enchiridion-ability-list">
-        <InnerChromeBox className="enchiridion-ability-card">
-          <span className="skirmish-icon skirmish-icon-shield" aria-hidden="true" />
-          <span>
-            <h3>Discipline</h3>
-            <p>The unit may be deliberately placed on a legal square in the player deployment zone before the remainder of the army is deployed.</p>
-          </span>
-        </InnerChromeBox>
-        <InnerChromeBox className="enchiridion-ability-card">
-          <span className="skirmish-icon skirmish-icon-move" aria-hidden="true" />
-          <span>
-            <h3>Positioned</h3>
-            <p>The unit’s automatic deployment favors its piece-specific region: Pawns prefer the front row, the King and Bishops prefer the back row, and Rooks prefer outer back-row squares.</p>
-          </span>
-        </InnerChromeBox>
-        <InnerChromeBox className="enchiridion-ability-card">
-          <span className="skirmish-icon skirmish-icon-flag" aria-hidden="true" />
-          <span>
-            <h3>{AGMINATE_DISPLAY_NAME}</h3>
-            <p>The unit seeks its piece-specific station: the King prefers a board edge, Rooks favor their King-flank and corner formation, and Bishops prefer the opposite square color from another Bishop.</p>
-          </span>
-        </InnerChromeBox>
-        <InnerChromeBox className="enchiridion-ability-card">
-          <img
-            className="enchiridion-ability-icon"
-            src={installedUiMedia('ui-kit-icons-game-plagued-png')}
-            alt=""
-            aria-hidden="true"
-            draggable={false}
-          />
-          <span>
-            <h3>{CACOCHYMIC_DISPLAY_NAME}</h3>
-            <p>The unit may be permanently lost after a Battle when its Pestiferous card resolves attrition. Its card-price contribution is discounted by 0 gold for a Pawn, 1 for a Knight or Bishop, 2 for a Rook, and 3 for a Queen.</p>
-          </span>
-        </InnerChromeBox>
+        {UNIT_STATE_REFERENCES.map(({ state, name, description }) => (
+          <InnerChromeBox className="enchiridion-ability-card" key={state}>
+            <img
+              className="enchiridion-ability-icon"
+              src={runUnitStateIconUrl(state)}
+              alt=""
+              aria-hidden="true"
+              draggable={false}
+            />
+            <span>
+              <h3>{name}</h3>
+              <p>{description}</p>
+            </span>
+          </InnerChromeBox>
+        ))}
       </div>
     </ReferenceSectionFrame>
   );

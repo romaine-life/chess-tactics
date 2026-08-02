@@ -99,7 +99,7 @@ describe('scene director', () => {
     expect(state).toMatchObject({ phase: 'current', current: { id: 'gameplay' }, destination: null });
   });
 
-  it('freezes the committed Run snapshot while a state-derived phase prepares', () => {
+  it('refreshes Deployment into Battle inside one committed battlefield scene', () => {
     const run = createRun({
       id: 'war',
       name: 'War',
@@ -121,20 +121,12 @@ describe('scene director', () => {
     });
 
     expect(state).toMatchObject({
-      phase: 'exiting',
-      current: { snapshot: { kind: 'run', phase: 'deployment', run: deployment } },
-      destination: { snapshot: { kind: 'run', phase: 'battle', run: battle } },
-    });
-    expect(state.current.snapshot).toBe(deploymentScene.snapshot);
-
-    state = reduceScene(state, { type: 'exit-finished', generation: state.generation });
-    state = reduceScene(state, { type: 'destination-painted', generation: state.generation });
-    state = reduceScene(state, { type: 'entrance-finished', generation: state.generation });
-    expect(state).toMatchObject({
       phase: 'current',
       current: { snapshot: { kind: 'run', phase: 'battle', run: battle } },
       destination: null,
     });
+    expect(state.current.snapshot).toBe(battleScene.snapshot);
+    expect(state.current.id).toBe(deploymentScene.id);
   });
 
   it('commits a removed child slot directly after exit without loading or entrance', () => {

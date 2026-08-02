@@ -42,8 +42,10 @@ search for before constructing a control or repeated surface.
 - `ui/RunIconPairReview.tsx` — the embedded Studio Card Icon Fitting Viewer;
   exact property/state candidate selection, per-property fitting, and the one
   shared unit-state fitting draft all render through `RunCardFace`.
-- `ui/shared/RunAbilityIcon.tsx` — the shared compact unit-state icon consumer;
-  accepted live rasters and review-only exact candidate URLs use the same seat.
+- `ui/shared/RunAbilityIcon.tsx` — the shared compact unit-state icon consumer and
+  the one `runUnitStateIconUrl` role resolver. Card faces, the army roster and the
+  Enchiridion glossary all draw the accepted raster from here; only the review
+  instrument passes an exact candidate URL into the same seat.
 - `ui/shared/InfoTip.tsx#Tooltip` — immediate hover/focus explanations for an
   existing visual trigger; its popup portals to the nearest screen host so
   component containment cannot clip fixed chrome.

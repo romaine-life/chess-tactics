@@ -10,6 +10,28 @@ flat PNG** at the one true-isometric angle, then laid out isometrically in the D
 here, not a compromise — they capture full 3D (relief, self-shadow, protruding geometry)
 from the only angle the player will ever see, at zero runtime cost.
 
+Run Deployment and its Battle are one lifetime of that compositor. Per
+[ADR-0350](adr/0350-run-deployment-promotes-the-mounted-battlefield-in-place.md),
+changing the persisted phase cannot re-key the scene, readiness content, session
+provider, board, `ViewPane`, or camera. The live Battle position is promoted into
+the already-mounted board; already-visible pieces preserve identity and position.
+Per [ADR-0351](adr/0351-unit-arrival-choreography-follows-newly-visible-unit-identity.md),
+arrival is tracked per unit rather than per scene: Disciplined placements and the
+remaining formation animate when first introduced, while incumbent unit ids do
+not replay their entrance. The final Disciplined arrival completes before phase
+promotion introduces the remaining formation as a separate wave; the compositor's
+own active-id ledger supplies that boundary rather than a screen-owned timer
+([ADR-0352](adr/0352-final-discipline-arrival-precedes-the-automatic-deployment-wave.md)).
+
+Per
+[ADR-0353](adr/0353-battlefield-view-state-is-instance-owned-and-camera-ready-before-reveal.md),
+each mounted battlefield owns its view and camera state. A hidden destination measures the actual
+owning `ViewPane`, resolves its effective coverage floor and canonical opening camera, and paints
+with that transform before it can report ready or begin its entrance. Scene activation gates
+gameplay behavior, never camera preparation. Retained Deployment-to-Battle promotion keeps the same
+view-store instance; independently mounted outgoing and incoming battlefields never share mutable
+zoom, pan, limits, opening-camera, reset, or overlay state.
+
 If the camera ever needs to move, this contract is void and the board must become a
 real-time 3D scene (and the units re-authored as meshes).
 

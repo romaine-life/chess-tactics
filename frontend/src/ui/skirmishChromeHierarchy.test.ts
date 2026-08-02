@@ -72,7 +72,7 @@ describe('Skirmish chrome hierarchy', () => {
   });
 
   it('registers every level-specific title-bar status box as inner chrome', () => {
-    const titleStart = skirmish.indexOf('titleBarContent={playableSurfaceReady ? (');
+    const titleStart = skirmish.indexOf('titleBarContent={runDeployment ? runDeployment.titleBarContent : playableSurfaceReady ? (');
     const titleEnd = skirmish.indexOf('relicIds={', titleStart);
     const titleContent = titleStart >= 0 && titleEnd > titleStart ? skirmish.slice(titleStart, titleEnd) : '';
     expect(titleContent.match(/<TitleBarStatus\b/g)).toHaveLength(3);
@@ -180,7 +180,7 @@ describe('Skirmish chrome hierarchy', () => {
   it('maps tabs, promotion choices, and command-grid cells to existing units', () => {
     const promotion = buttonUsing('choosePromotion(type)');
     const tab = buttonUsing('setTab(t.id)');
-    const commandKey = buttonUsing('runSkirmishShortcut(key, false, skirmishStore)');
+    const commandKey = buttonUsing('runSkirmishShortcut(key, false, skirmishViewStore, skirmishStore)');
 
     expectChromeUnit(promotion, 'inner-asset-swatch');
     expectChromeUnit(tab, 'inner-text-button');

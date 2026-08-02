@@ -5,10 +5,12 @@ import { isPassableTerrain } from '../core/terrain';
 import { propCells, propDef } from '../core/props';
 import { defaultFacingForSide } from '../core/pieces';
 import {
+  beginBattle,
   hasRelic,
   hasRunAbility,
   mixSeed,
   PIECE_VALUE,
+  setDeploymentChoices,
   shuffled,
   type RunArmyUnit,
   type RunDocument,
@@ -26,6 +28,7 @@ export interface RunDeploymentOptions {
   zoneCells: Vec[];
   disciplineUnitIds: string[];
   overflowCount: number;
+  hasBlockedChoice: boolean;
   needsBlockedChoice: boolean;
   blockedChoiceCount: number;
   layouts: [RunDeploymentLayout, RunDeploymentLayout];
@@ -247,17 +250,127 @@ export function deploymentOptions(run: RunDocument, level: Level): RunDeployment
   const overflowCount = Math.max(0, run.army.length - capacity);
   const blockedUnitIds = chosenBlocked(run, capacity);
   const chosenCount = run.deployment?.chosenBlockedUnitIds?.filter((id) => run.army.some((unit) => unit.id === id && unit.type !== 'king')).length ?? 0;
+  const hasBlockedChoice = hasRelic(run, 'muster-roll')
+    && overflowCount > 0
+    && overflowCount < run.army.filter((unit) => unit.type !== 'king').length;
   return {
     zoneCells,
     disciplineUnitIds: disciplineIds(run).filter((id) => !blockedUnitIds.includes(id)),
     overflowCount,
-    needsBlockedChoice: hasRelic(run, 'muster-roll') && overflowCount > 0 && chosenCount !== overflowCount,
+    hasBlockedChoice,
+    needsBlockedChoice: hasBlockedChoice && chosenCount !== overflowCount,
     blockedChoiceCount: overflowCount,
     layouts: [
       buildLayout(run, level, 0, blockedUnitIds),
       buildLayout(run, level, 1, blockedUnitIds),
     ],
   };
+}
+
+export function disciplinePlacementCells(
+  run: RunDocument,
+  options: RunDeploymentOptions,
+  unitId: string,
+): Vec[] {
+  if (!options.disciplineUnitIds.includes(unitId)) return [];
+  const used = new Set(Object.entries(run.deployment?.manualPlacements ?? {})
+    .filter(([id]) => id !== unitId)
+    .map(([, cell]) => cell));
+  return options.zoneCells.filter((cell) => !used.has(key(cell)));
+}
+
+function layoutsDiffer([first, second]: RunDeploymentOptions['layouts']): boolean {
+  const placementKeys = new Set([...Object.keys(first.placements), ...Object.keys(second.placements)]);
+  for (const unitId of placementKeys) {
+    if (key(first.placements[unitId] ?? { x: -1, y: -1 }) !== key(second.placements[unitId] ?? { x: -1, y: -1 })) {
+      return true;
+    }
+  }
+  if (first.blockedUnitIds.join('|') !== second.blockedUnitIds.join('|')) return true;
+  return first.temporaryRocks.some((cell, index) => key(cell) !== key(second.temporaryRocks[index] ?? { x: -1, y: -1 }))
+    || first.temporaryRocks.length !== second.temporaryRocks.length;
+}
+
+/**
+ * Resolve choices whose legal result is singular. This is idempotent: callers may run it on
+ * Shop Continue and again while hydrating a persisted Deployment without creating new state.
+ */
+export function resolveForcedDeploymentChoices(run: RunDocument, level: Level): RunDocument {
+  if (run.phase !== 'deployment' || !run.deployment) return run;
+  let next = run;
+  let options = deploymentOptions(next, level);
+  const eligibleBlocked = next.army.filter((unit) => unit.type !== 'king').map((unit) => unit.id);
+
+  if (
+    hasRelic(next, 'muster-roll')
+    && options.overflowCount > 0
+    && options.overflowCount === eligibleBlocked.length
+    && next.deployment!.chosenBlockedUnitIds?.join('|') !== eligibleBlocked.join('|')
+  ) {
+    next = setDeploymentChoices(next, { chosenBlockedUnitIds: eligibleBlocked });
+    options = deploymentOptions(next, level);
+  }
+
+  if (!options.needsBlockedChoice) {
+    const manualPlacements = { ...next.deployment!.manualPlacements };
+    let changed = false;
+    for (const unitId of options.disciplineUnitIds) {
+      if (manualPlacements[unitId]) continue;
+      const candidates = disciplinePlacementCells(
+        { ...next, deployment: { ...next.deployment!, manualPlacements } },
+        options,
+        unitId,
+      );
+      if (candidates.length !== 1) continue;
+      manualPlacements[unitId] = key(candidates[0]);
+      changed = true;
+    }
+    if (changed) {
+      next = setDeploymentChoices(next, { manualPlacements });
+      options = deploymentOptions(next, level);
+    }
+  }
+
+  if (
+    hasRelic(next, 'surveyors-compass')
+    && !layoutsDiffer(options.layouts)
+    && next.deployment!.layoutChoice !== 0
+  ) {
+    next = setDeploymentChoices(next, { layoutChoice: 0 });
+  }
+  return next;
+}
+
+export function deploymentHasMeaningfulChoice(run: RunDocument, options: RunDeploymentOptions): boolean {
+  if (options.hasBlockedChoice) return true;
+  if (options.disciplineUnitIds.some((unitId) => disciplinePlacementCells(run, options, unitId).length > 1)) return true;
+  return hasRelic(run, 'surveyors-compass') && layoutsDiffer(options.layouts);
+}
+
+/** Commit a deterministic Deployment only when the player has nothing meaningful to decide. */
+export function advanceAutomaticDeployment(run: RunDocument, level: Level): RunDocument {
+  const resolved = resolveForcedDeploymentChoices(run, level);
+  const options = deploymentOptions(resolved, level);
+  if (deploymentHasMeaningfulChoice(resolved, options) || !deploymentReady(resolved, options)) return resolved;
+  return commitReadyDeployment(resolved, options);
+}
+
+/** Commit Deployment as soon as its final required player choice has been resolved. */
+export function advanceReadyDeployment(run: RunDocument, level: Level): RunDocument {
+  const resolved = resolveForcedDeploymentChoices(run, level);
+  const options = deploymentOptions(resolved, level);
+  if (!deploymentReady(resolved, options)) return resolved;
+  return commitReadyDeployment(resolved, options);
+}
+
+function commitReadyDeployment(run: RunDocument, options: RunDeploymentOptions): RunDocument {
+  const layout = selectedDeploymentLayout(run, options);
+  return beginBattle(
+    run,
+    Object.keys(layout.placements),
+    layout.reserveUnitIds,
+    layout.blockedUnitIds,
+  );
 }
 
 export function deploymentReady(run: RunDocument, options: RunDeploymentOptions): boolean {
@@ -298,6 +411,29 @@ export function levelWithRunDeployment(run: RunDocument, level: Level, layout: R
     layers: {
       ...level.layers,
       units: [...level.layers.units, ...runUnits, ...rocks],
+    },
+  };
+}
+
+/** Discipline resolves before the automatic formation. Deployment paints only committed
+ * Disciplined units, including after the final exact square is persisted, so that unit can finish
+ * its own arrival before Battle introduces every automatically resolved piece (ADR-0352). */
+export function levelForRunDeployment(run: RunDocument, level: Level, layout: RunDeploymentLayout): Level {
+  const projected = levelWithRunDeployment(run, level, layout);
+  const options = deploymentOptions(run, level);
+  const committedDisciplineUnitIds = new Set(
+    options.disciplineUnitIds.filter((unitId) => Boolean(layout.placements[unitId])),
+  );
+  return {
+    ...projected,
+    layers: {
+      ...projected.layers,
+      units: projected.layers.units.filter((unit) => {
+        if (unit.side === 'enemy') return false;
+        if (unit.runUnitId?.startsWith('run-tent-rock-')) return false;
+        if (unit.side !== 'player') return true;
+        return Boolean(unit.runUnitId && committedDisciplineUnitIds.has(unit.runUnitId));
+      }),
     },
   };
 }

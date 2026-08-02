@@ -9,6 +9,10 @@ import {
   runIconPairReviewFrameVersion,
   runIconPairReviewVersions,
 } from './RunIconPairReview';
+import {
+  RUN_CARD_COMMITTED_PROPERTY_PLACEMENTS,
+  RUN_CARD_COMMITTED_UNIT_STATE_PLACEMENT,
+} from './RunCardFace';
 
 function version(overrides: Partial<AdminLiveMediaVersion>): AdminLiveMediaVersion {
   return {
@@ -109,9 +113,11 @@ describe('Run icon pair review', () => {
       slots: [],
       versions,
     } satisfies AdminLiveMediaCatalog;
+    // Reset restores the committed fit the live cards ship, not a zeroed placement.
     const baseline = defaultRunCardIconFittingDraft(catalog);
-    expect(baseline.propertyPlacements.hieratic).toEqual({ x: 0, y: 0, scale: 1 });
-    expect(baseline.unitStatePlacement).toEqual({ x: 0, y: 0, scale: 1 });
+    expect(baseline.propertyPlacements.hieratic).toEqual(RUN_CARD_COMMITTED_PROPERTY_PLACEMENTS.hieratic);
+    expect(baseline.unitStatePlacement).toEqual(RUN_CARD_COMMITTED_UNIT_STATE_PLACEMENT);
+    expect(baseline.unitStatePlacement).not.toEqual({ x: 0, y: 0, scale: 1 });
 
     const normalized = normalizeRunCardIconFittingDraft({
       active_property: 'hieratic',

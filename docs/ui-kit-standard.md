@@ -190,10 +190,10 @@ header actions and rule controls share the inner content line. Events cannot
 omit either layer or provide an inline-end value.
 
 Under [ADR-0237](adr/0237-run-destinations-fill-the-shell-workspace.md), the same
-ownership test applies to every player-facing non-Battle Run destination.
-Deployment and its preview, Shop/Loot, Victory, Army ledger and profile, Sell
-Units, loading, and empty states fill the shell-owned playfield through the
-shared `RunWorkspace`/`ShellWorkspace` composition. `RunWorkspace` supplies the
+ownership test applies to player-facing non-Battle Run destinations. Shop/Loot,
+Victory, Army ledger and profile, Sell Units, loading, and empty states fill the
+shell-owned playfield through the shared `RunWorkspace`/`ShellWorkspace`
+composition. `RunWorkspace` supplies the
 workflow content; `ShellWorkspace` itself supplies the same Controls-attached
 body and default inset content container for every destination. Content gutters
 and relic reservation live inside that continuous body without creating an
@@ -202,6 +202,29 @@ edge-attached content variant rather than authoring an end-padding exception.
 Destinations do not add an
 `OuterChromeBox`, outer-panel consumer, or duplicate title frame merely to
 acquire a background; subordinate controls remain registered inner chrome.
+
+[ADR-0346](adr/0346-run-deployment-is-a-battlefield-state-with-conditional-input.md)
+removes Deployment from that destination inventory. Deployment is a persisted
+gameplay phase presented on the full canonical battlefield; its phase-specific
+workflow replaces the contents of the shared `ShellControlsPanel`. It does not
+instantiate `RunWorkspace`, `LevelPreviewColumn`, a second board frame, or a
+level-manifest heading. Army/Relics workspaces may still cover the retained
+Deployment battlefield through `ShellViewportSwap` exactly as they cover an
+active Battle.
+
+Per [ADR-0350](adr/0350-run-deployment-promotes-the-mounted-battlefield-in-place.md),
+"retained" means the same mounted presentation, not a reconstructed Battle that
+resembles Deployment. One Run Battle activity owns one director key, readiness
+signature, session provider, `SkirmishBoard`, compositor tree, and camera across
+both persisted phases. Phase-specific Controls may replace their contents, but
+they cannot re-key that battlefield. Promotion to Battle adds the remaining
+position in place. Arrival eligibility follows mounted unit identity per
+[ADR-0351](adr/0351-unit-arrival-choreography-follows-newly-visible-unit-identity.md):
+newly placed or newly introduced units animate, while units already presented
+during Deployment remain seated. The final manual arrival settles before the Run
+promotes to Battle and begins the remaining formation's distinct automatic wave
+([ADR-0352](adr/0352-final-discipline-arrival-precedes-the-automatic-deployment-wave.md));
+the transition remains automatic and adds no confirmation control.
 
 Under [ADR-0240](adr/0240-run-self-inspection-owns-the-left-shell-workspace.md)
 and [ADR-0244](adr/0244-run-self-inspection-views-are-deep-linkable.md),

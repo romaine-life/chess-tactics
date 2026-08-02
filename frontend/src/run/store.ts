@@ -50,6 +50,7 @@ export interface ActiveRunState {
   adoptionConflict: RunAdoptionConflict | null;
   hydrate: () => Promise<void>;
   replace: (run: RunDocument) => void;
+  adoptCraftedRun: (run: RunDocument, revision: number) => void;
   abandon: () => Promise<void>;
   keepAccountRun: () => void;
   adoptBrowserRun: () => Promise<void>;
@@ -197,6 +198,24 @@ export const useActiveRun = create<ActiveRunState>((set, get) => ({
     writeLocalRun(run);
     set({ run, persistenceError: null });
     queueRemoteSave(run);
+  },
+
+  // A crafted Run is already the account's Run: the server composed it and wrote the row it
+  // reports the revision of. Adopting it therefore takes the acknowledged revision rather than
+  // saving it back — a PUT here would race the craft's own write and could only lose to it. Any
+  // browser/account adoption conflict is settled by the craft too: this IS the answer.
+  adoptCraftedRun: (run, revision) => {
+    recordRunRelicStatEvents(relicStatEventsForRunTransition(get().run, run));
+    recordCompletedRun(run);
+    writeLocalRun(run);
+    set({
+      run,
+      hydrated: true,
+      accountLinked: true,
+      remoteRevision: revision,
+      adoptionConflict: null,
+      persistenceError: null,
+    });
   },
 
   abandon: async () => {

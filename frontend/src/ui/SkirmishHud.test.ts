@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { useSkirmish } from '../game/store';
-import { useSkirmishView } from '../game/skirmishView';
+import { createSkirmishViewStore } from '../game/skirmishView';
 import { runSkirmishShortcut, SHORTCUT_BINDINGS, skirmishRosterAction, skirmishUnitOwnerLabel } from './SkirmishHud';
+
+const viewStore = createSkirmishViewStore();
 
 afterEach(() => {
   useSkirmish.setState({ selectedId: null, focusedId: null, premoves: [] });
-  useSkirmishView.setState({
+  viewStore.setState({
     showMoves: true,
     showEnemyAttacks: true,
     showBlocked: false,
@@ -33,7 +35,7 @@ describe('Skirmish HUD shortcuts', () => {
       premoves: [{ pieceId: 'player-piece', x: 2, y: 3 }],
     });
 
-    expect(runSkirmishShortcut('R')).toBe(true);
+    expect(runSkirmishShortcut('R', false, viewStore)).toBe(true);
     expect(useSkirmish.getState().selectedId).toBeNull();
     expect(useSkirmish.getState().focusedId).toBeNull();
     expect(useSkirmish.getState().premoves).toEqual([{ pieceId: 'player-piece', x: 2, y: 3 }]);
@@ -48,7 +50,7 @@ describe('Skirmish HUD shortcuts', () => {
         { pieceId: 'player-piece', x: 3, y: 3 },
       ],
     });
-    useSkirmishView.setState({
+    viewStore.setState({
       showMoves: true,
       showEnemyAttacks: true,
       showBlocked: true,
@@ -64,14 +66,14 @@ describe('Skirmish HUD shortcuts', () => {
       label: 'Clear all',
       hint: 'Turn off all board overlays',
     });
-    expect(runSkirmishShortcut('T')).toBe(true);
+    expect(runSkirmishShortcut('T', false, viewStore)).toBe(true);
     expect(useSkirmish.getState().premoves).toEqual([
       { pieceId: 'player-piece', x: 2, y: 3 },
       { pieceId: 'player-piece', x: 3, y: 3 },
     ]);
     expect(useSkirmish.getState().selectedId).toBe('player-piece');
     expect(useSkirmish.getState().focusedId).toBe('player-piece');
-    expect(useSkirmishView.getState()).toMatchObject({
+    expect(viewStore.getState()).toMatchObject({
       showMoves: false,
       showEnemyAttacks: false,
       showBlocked: false,
@@ -86,7 +88,7 @@ describe('Skirmish HUD shortcuts', () => {
   it('does not repeatedly execute Deselect all while R is held', () => {
     useSkirmish.setState({ selectedId: 'player-piece', focusedId: 'player-piece' });
 
-    expect(runSkirmishShortcut('r', true)).toBe(false);
+    expect(runSkirmishShortcut('r', true, viewStore)).toBe(false);
     expect(useSkirmish.getState().selectedId).toBe('player-piece');
   });
 
@@ -104,13 +106,13 @@ describe('Skirmish HUD shortcuts', () => {
   });
 
   it('toggles pawn promotion zones from the Controls command card', () => {
-    expect(useSkirmishView.getState().showPromotionZones).toBe(false);
+    expect(viewStore.getState().showPromotionZones).toBe(false);
 
-    expect(runSkirmishShortcut('D')).toBe(true);
-    expect(useSkirmishView.getState().showPromotionZones).toBe(true);
+    expect(runSkirmishShortcut('D', false, viewStore)).toBe(true);
+    expect(viewStore.getState().showPromotionZones).toBe(true);
 
-    expect(runSkirmishShortcut('d')).toBe(true);
-    expect(useSkirmishView.getState().showPromotionZones).toBe(false);
+    expect(runSkirmishShortcut('d', false, viewStore)).toBe(true);
+    expect(viewStore.getState().showPromotionZones).toBe(false);
   });
 });
 

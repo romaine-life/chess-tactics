@@ -10,7 +10,7 @@ import {
   RUN_CARD_STANDARD_FRAME_GEOMETRY,
   RUN_CARD_TEXT_PLACEMENT,
   runCardFrameGeometryForSlot,
-  runCardFrameGeometryMatchesPixels,
+  runCardFrameGeometryKnowsPixels,
   runCardFrameGeometryVariables,
   runCardFrameGeometryWithBoxes,
   type RunCardFrameVariant,
@@ -49,7 +49,7 @@ describe('Run card frame geometry', () => {
 
   it('gives each frame the plate height its own art draws', () => {
     // The four painted frames sit at four different type-plate heights; that
-    // spread is exactly what one shared box used to flatten (ADR-0346).
+    // spread is exactly what one shared box used to flatten (ADR-0355).
     const typeMid = (v: RunCardFrameVariant): number => {
       const box = RUN_CARD_FRAME_GEOMETRY_BY_VARIANT[v].boxes.type;
       return box.y + box.height / 2;
@@ -95,18 +95,23 @@ describe('Run card frame geometry', () => {
     expect(steelCost.y + steelCost.height / 2).toBeCloseTo(132, 2);
   });
 
-  it('names the exact frame pixels each set of boxes was measured against', () => {
+  it('names every frame byte-identity its boxes were measured against', () => {
     const seen = new Set();
     for (const variant of RUN_CARD_FRAME_VARIANTS) {
       const geometry = RUN_CARD_FRAME_GEOMETRY_BY_VARIANT[variant];
-      expect(geometry.measuredSha256).toMatch(/^[0-9a-f]{64}$/);
-      seen.add(geometry.measuredSha256);
-      expect(runCardFrameGeometryMatchesPixels(geometry, geometry.measuredSha256)).toBe(true);
-      // Re-generated frame art invalidates the measurement rather than inheriting it.
-      expect(runCardFrameGeometryMatchesPixels(geometry, 'a'.repeat(64))).toBe(false);
-      expect(runCardFrameGeometryMatchesPixels(geometry, null)).toBe(false);
+      expect(geometry.frameSha256s.length).toBeGreaterThan(0);
+      for (const sha of geometry.frameSha256s) {
+        expect(sha).toMatch(/^[0-9a-f]{64}$/);
+        seen.add(sha);
+        expect(runCardFrameGeometryKnowsPixels(geometry, sha)).toBe(true);
+      }
+      expect(runCardFrameGeometryKnowsPixels(geometry, 'a'.repeat(64))).toBe(false);
+      expect(runCardFrameGeometryKnowsPixels(geometry, null)).toBe(false);
     }
-    expect(seen.size).toBe(RUN_CARD_FRAME_VARIANTS.length);
+    // Cutting Hieratic's painted backdrop changed its bytes, not its plates, so
+    // that frame answers to two identities with one set of boxes.
+    expect(RUN_CARD_FRAME_GEOMETRY_BY_VARIANT.hieratic.frameSha256s).toHaveLength(2);
+    expect(seen.size).toBe(RUN_CARD_FRAME_VARIANTS.length + 1);
   });
 
   it('keeps every declared box inside the native source image', () => {

@@ -9,7 +9,7 @@ extends:
   - "[ADR-0329](0329-concinnous-and-tactical-use-distinct-frames-and-one-shared-coin.md)"
 ---
 
-# ADR-0346: Run-card text is centered in per-frame boxes, never nudged per card
+# ADR-0355: Run-card text is centered in per-frame boxes, never nudged per card
 
 ## Context
 

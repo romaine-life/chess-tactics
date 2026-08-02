@@ -182,7 +182,7 @@ export * from './ui/unitCatalog';
 
 // The Run model. It lives here — not in the frontend — because the server crafts Runs with the
 // same transitions the game plays, so there is one implementation of pricing, rosters and
-// deployment rather than two that can drift (ADR-0338).
+// deployment rather than two that can drift (ADR-0346).
 // Only the crafter is exported here: the model and deployment modules keep names that already
 // belong to core/pieces (PIECE_LABEL), and consumers of those reach them by subpath.
 export * from './run/craft';

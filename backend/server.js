@@ -2729,6 +2729,22 @@ const MIGRATIONS = [
       );
     `,
   },
+  {
+    version: 50,
+    name: 'content-addressed Run craft links',
+    // ADR-0354: a crafted Run state is handed over as /run/craft/<id>. The spec lives here so
+    // the address stays short and opaque however large the spec grows, and the id is the
+    // fingerprint of the spec's own canonical text — so the same requested state always mints
+    // the same link, and re-minting it is an insert that does nothing.
+    sql: `
+      CREATE TABLE IF NOT EXISTS run_craft_links (
+        id         text        PRIMARY KEY,
+        spec       jsonb       NOT NULL,
+        created_by text        NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT now()
+      );
+    `,
+  },
 ];
 
 let pool = null;
@@ -2765,6 +2781,10 @@ const REQUIRED_SCHEMA_RELATIONS = [
   'predrawn_generation_attempt_events',
   'run_relic_stat_events',
   'run_progression',
+  // run_craft_links (migration 50) is deliberately absent. This list drives auto-repair of
+  // relations the app cannot serve a single route without; craft links are a debugging
+  // instrument, so a database missing that one table fails craft links alone with a message
+  // naming the migration, rather than being repaired out from under an operator.
 ];
 const REQUIRED_SCHEMA_REPAIR_MIGRATIONS = new Map([
   ['level_thumbnail_derivatives', 22],
@@ -18668,39 +18688,205 @@ app.delete('/api/active-run', async (req, res) => {
   }
 });
 
+function runCraftError(message) {
+  const error = new Error(message);
+  error.name = 'RunCraftError';
+  return error;
+}
+
+// Read a craft spec out of a request. Two ways to say the same thing: the JSON grammar, and the
+// readable address grammar for a spec typed by hand. Neither is the LINK — a crafted state is
+// handed over as its id (ADR-0354), and both of these are ways to mint one.
+function runCraftSpecFromRequest(body) {
+  if (typeof body.address === 'string') {
+    const spec = serverRender.parseRunCraftSpec(body.address);
+    if (!spec) throw runCraftError('craft: this address asks for no Run state. A craft address carries ?craft=<phase>.');
+    return spec;
+  }
+  return serverRender.runCraftSpecFromJson(body.spec === undefined ? body : body.spec);
+}
+
+// Mint the craft link for a spec, or return the one it already has. The id is the fingerprint of
+// the spec's own canonical text, so asking for the same state twice — in this session or one a
+// month from now — yields the same address, and re-minting writes nothing new.
+async function mintRunCraftLink(spec, ownerEmail) {
+  const canonical = serverRender.runCraftSpecFingerprint(spec);
+  const id = crypto.createHash('sha256').update(canonical).digest('hex').slice(0, 16);
+  await ensureDbReady();
+  await pool.query(
+    `INSERT INTO run_craft_links (id, spec, created_by)
+     VALUES ($1, $2::jsonb, $3)
+     ON CONFLICT (id) DO NOTHING`,
+    [id, canonical, ownerEmail],
+  );
+  return { id, url: serverRender.runCraftLinkForId(id) };
+}
+
+// The spec a craft link stands for. A link that resolves to nothing is reported as such: the id
+// is all the address carries, so a wrong or truncated one has no other way to be noticed.
+async function runCraftLinkSpec(id) {
+  await ensureDbReady();
+  const { rows } = await pool.query('SELECT spec FROM run_craft_links WHERE id = $1', [id]);
+  if (!rows[0]) throw runCraftError('This craft link is not one this server minted. Check the whole link was copied.');
+  return serverRender.runCraftSpecFromJson(rows[0].spec);
+}
+
+// Compose the crafted Run for a spec, against the official Wars this server serves.
+async function craftedRunForSpec(spec) {
+  const document = await dbGetOfficialCampaigns('default');
+  const data = (document && document.data) || {};
+  // Origin is a client-side tag; every War in the official workspace is official by definition.
+  const wars = (Array.isArray(data.wars) ? data.wars : []).map((war) => ({ ...war, origin: 'official' }));
+  const levels = data.levels && typeof data.levels === 'object' ? data.levels : {};
+  return serverRender.craftRunDocument(spec, serverRender.selectCraftWar(spec, wars, levels));
+}
+
+// Replace the caller's active Run with a crafted document. Crafting deliberately overwrites
+// whatever Run is there: it is the caller asking for this account to be at that state, so there
+// is no revision to agree with first.
+async function writeCraftedActiveRun(run, ownerEmail) {
+  await ensureDbReady();
+  return withEditorDocumentTransaction(async (client) => {
+    await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`active-run:${ownerEmail}`]);
+    const currentResult = await client.query(
+      'SELECT revision FROM active_runs WHERE owner_email = $1 FOR UPDATE',
+      [ownerEmail],
+    );
+    if (!currentResult.rows[0]) {
+      const { rows } = await client.query(
+        `INSERT INTO active_runs (owner_email, body, revision)
+         VALUES ($1, $2::jsonb, 1)
+         RETURNING body, revision, updated_at`,
+        [ownerEmail, JSON.stringify(run)],
+      );
+      return rows[0];
+    }
+    const { rows } = await client.query(
+      `UPDATE active_runs
+          SET body = $2::jsonb, revision = revision + 1, updated_at = now()
+        WHERE owner_email = $1
+        RETURNING body, revision, updated_at`,
+      [ownerEmail, JSON.stringify(run)],
+    );
+    return rows[0];
+  });
+}
+
+function craftedRunSummary(run) {
+  return {
+    war: run.war.name,
+    phase: run.phase,
+    battle: `${run.battleIndex + 1}/${run.war.battles.length}`,
+    gold: run.goldTenths / 10,
+    army: run.army.map((unit) => unit.type),
+    offers: run.shop ? run.shop.cardOffers.map((offer) => `${offer.pieces.join('+')}@${offer.cost}`) : null,
+    relics: run.relics,
+  };
+}
+
+function craftRouteUnavailable(res) {
+  if (typeof serverRender?.runCraftSpecFromJson === 'function') return false;
+  res.status(503).json({ error: 'run_crafter_unavailable' });
+  return true;
+}
+
+function reportCraftFailure(res, error, message) {
+  if (error && error.name === 'RunCraftError') {
+    res.status(400).json({ error: 'invalid_run_craft_spec', details: error.message });
+    return;
+  }
+  // Craft links are a debugging instrument, so their table is not a readiness requirement: a
+  // database that has not been advanced to migration 50 loses craft links and nothing else, and
+  // says which rather than reporting the Run store as broken.
+  if (error && error.code === '42P01') {
+    res.status(503).json({
+      error: 'run_craft_links_unavailable',
+      details: 'This server’s database has no craft-link store yet. Apply schema migration 50.',
+    });
+    return;
+  }
+  dbUnavailable(res, message, error, 'active_run_store_unavailable');
+}
+
+// POST /api/run-craft-links — ADMIN: mint the link for a Run state without crafting it.
+//
+// The Run screen uses this to turn a hand-typed ?craft= address into its permanent id address,
+// so the readable grammar stays a way to WRITE a spec while the id remains the only thing a
+// crafted state is ever handed over as.
+app.post('/api/run-craft-links', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  if (craftRouteUnavailable(res)) return;
+  try {
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const spec = runCraftSpecFromRequest(body);
+    res.status(200).json({ ...(await mintRunCraftLink(spec, user.email)), spec: serverRender.runCraftSpecToJson(spec) });
+  } catch (error) {
+    reportCraftFailure(res, error, 'Run craft link mint failed');
+  }
+});
+
+// POST /api/active-run/craft/:id — ADMIN: set the caller's OWN active Run from a minted link.
+//
+// This is what a craft link does when it is opened, and it is why the link is a restart button:
+// the id resolves to the stored spec and the Run is composed from it again, whatever the account
+// has since played.
+app.post('/api/active-run/craft/:id', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  if (craftRouteUnavailable(res)) return;
+  const id = String(req.params.id || '').toLowerCase();
+  let run = null;
+  try {
+    if (!serverRender.runCraftLinkId(serverRender.runCraftLinkForId(id))) {
+      throw runCraftError('This is not a craft link id. Check the whole link was copied.');
+    }
+    run = await craftedRunForSpec(await runCraftLinkSpec(id));
+  } catch (error) {
+    reportCraftFailure(res, error, 'Run craft from link failed');
+    return;
+  }
+  const validation = validateActiveRunBody(run);
+  if (validation) {
+    res.status(500).json({ error: 'crafted_run_invalid', details: validation });
+    return;
+  }
+  try {
+    const result = await writeCraftedActiveRun(run, user.email);
+    res.status(200).json({
+      ...publicActiveRun(result),
+      url: serverRender.runCraftLinkForId(id),
+      runUrl: serverRender.runLinkForRun(run.id),
+      runId: run.id,
+      summary: craftedRunSummary(run),
+    });
+  } catch (error) {
+    dbUnavailable(res, 'Run craft write failed', error, 'active_run_store_unavailable');
+  }
+});
+
 // POST /api/active-run/craft — ADMIN: set the caller's OWN active Run to a named state (ADR-0338).
 //
 // Debugging and feature work need a Run parked at an exact Shop, deployment, Battle or victory.
 // Writing active_runs by hand is already possible for anyone with database access and produces
 // documents this endpoint's own validator would reject; crafting composes the state out of the
 // game's real transitions instead, so what lands in the row is a Run the game could have played.
-// The spec is a request body rather than a query string precisely so it can carry more than an
-// address comfortably holds. The reply is the Run plus the address to open — the link says WHERE
-// you are, never what the Run contains.
+// This is the one call an agent makes: it mints the link, sets the Run, and answers with both.
+// The reply's `url` is the link to hand over — an id that CRAFTS the state again (ADR-0354),
+// not merely one that names it, so a state handed over can always be returned to.
 app.post('/api/active-run/craft', async (req, res) => {
   const user = await requireAdmin(req, res);
   if (!user) return;
-  if (typeof serverRender?.runCraftSpecFromJson !== 'function') {
-    res.status(503).json({ error: 'run_crafter_unavailable' });
-    return;
-  }
+  if (craftRouteUnavailable(res)) return;
   let run = null;
+  let link = null;
   try {
     const body = req.body && typeof req.body === 'object' ? req.body : {};
-    const spec = serverRender.runCraftSpecFromJson(body.spec === undefined ? body : body.spec);
-    const document = await dbGetOfficialCampaigns('default');
-    const data = (document && document.data) || {};
-    // Origin is a client-side tag; every War in the official workspace is official by definition.
-    const wars = (Array.isArray(data.wars) ? data.wars : []).map((war) => ({ ...war, origin: 'official' }));
-    const levels = data.levels && typeof data.levels === 'object' ? data.levels : {};
-    const war = serverRender.selectCraftWar(spec, wars, levels);
-    run = serverRender.craftRunDocument(spec, war);
+    const spec = runCraftSpecFromRequest(body);
+    link = await mintRunCraftLink(spec, user.email);
+    run = await craftedRunForSpec(spec);
   } catch (error) {
-    if (error && error.name === 'RunCraftError') {
-      res.status(400).json({ error: 'invalid_run_craft_spec', details: error.message });
-      return;
-    }
-    dbUnavailable(res, 'Run craft failed', error, 'active_run_store_unavailable');
+    reportCraftFailure(res, error, 'Run craft failed');
     return;
   }
   // The crafter composes with the game's transitions, so a rejection here is a defect in this
@@ -18711,48 +18897,18 @@ app.post('/api/active-run/craft', async (req, res) => {
     return;
   }
   try {
-    await ensureDbReady();
-    const result = await withEditorDocumentTransaction(async (client) => {
-      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`active-run:${user.email}`]);
-      const currentResult = await client.query(
-        'SELECT revision FROM active_runs WHERE owner_email = $1 FOR UPDATE',
-        [user.email],
-      );
-      // Crafting deliberately replaces whatever Run is there: it is the caller asking for this
-      // account to be at that state, so there is no revision to agree with first.
-      if (!currentResult.rows[0]) {
-        const { rows } = await client.query(
-          `INSERT INTO active_runs (owner_email, body, revision)
-           VALUES ($1, $2::jsonb, 1)
-           RETURNING body, revision, updated_at`,
-          [user.email, JSON.stringify(run)],
-        );
-        return rows[0];
-      }
-      const { rows } = await client.query(
-        `UPDATE active_runs
-            SET body = $2::jsonb, revision = revision + 1, updated_at = now()
-          WHERE owner_email = $1
-          RETURNING body, revision, updated_at`,
-        [user.email, JSON.stringify(run)],
-      );
-      return rows[0];
-    });
+    const result = await writeCraftedActiveRun(run, user.email);
     res.status(200).json({
       ...publicActiveRun(result),
-      // The address carries the crafted Run's identity so opening it signed out, or as someone
-      // else, says so instead of quietly rendering a different Run.
-      url: serverRender.runLinkForRun(run.id),
+      // The address to hand over: opening it crafts this state again and lands on the Run screen,
+      // so it is both "go and look at this" and the way back after the Run has been played on.
+      url: link.url,
+      craftId: link.id,
+      // The identity address, which asserts this exact Run instead of rebuilding it. Useful only
+      // for pointing at a Run already in hand: it cannot restore one that has moved on.
+      runUrl: serverRender.runLinkForRun(run.id),
       runId: run.id,
-      summary: {
-        war: run.war.name,
-        phase: run.phase,
-        battle: `${run.battleIndex + 1}/${run.war.battles.length}`,
-        gold: run.goldTenths / 10,
-        army: run.army.map((unit) => unit.type),
-        offers: run.shop ? run.shop.cardOffers.map((offer) => `${offer.pieces.join('+')}@${offer.cost}`) : null,
-        relics: run.relics,
-      },
+      summary: craftedRunSummary(run),
     });
   } catch (error) {
     dbUnavailable(res, 'Run craft write failed', error, 'active_run_store_unavailable');

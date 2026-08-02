@@ -10,7 +10,17 @@ import {
   type RunArmyUnit,
   type RunDocument,
 } from './model';
-import { deploymentOptions, levelWithRunDeployment, playerDeploymentCells } from './deployment';
+import {
+  advanceAutomaticDeployment,
+  advanceReadyDeployment,
+  deploymentHasMeaningfulChoice,
+  deploymentOptions,
+  gameForRunDeployment,
+  levelForRunDeployment,
+  levelWithRunDeployment,
+  playerDeploymentCells,
+  resolveForcedDeploymentChoices,
+} from './deployment';
 
 function battle(): Level {
   const level = createBlankLevel('run-deploy', 'Deployment', 4, 4);
@@ -72,6 +82,45 @@ describe('Run deployment', () => {
     disciplined = setDeploymentChoices(disciplined, { manualPlacements: { 'run-king': '1,3' } });
     options = deploymentOptions(disciplined, level);
     expect(options.layouts[0].placements['run-king']).toEqual({ x: 1, y: 3 });
+  });
+
+  it('commits directly to Battle when Deployment has no player choice', () => {
+    const current = run();
+    const options = deploymentOptions(current, battle());
+    expect(deploymentHasMeaningfulChoice(current, options)).toBe(false);
+    expect(advanceAutomaticDeployment(current, battle()).phase).toBe('battle');
+  });
+
+  it('keeps an unresolved Discipline choice on the battlefield and commits its final placement', () => {
+    const level = battle();
+    const current = run();
+    const disciplined = {
+      ...current,
+      army: current.army.map((unit) => unit.id === 'run-king'
+        ? { ...unit, abilities: ['discipline'] as RunArmyUnit['abilities'] }
+        : unit),
+    };
+    expect(deploymentHasMeaningfulChoice(disciplined, deploymentOptions(disciplined, level))).toBe(true);
+    expect(advanceAutomaticDeployment(disciplined, level).phase).toBe('deployment');
+
+    const placed = setDeploymentChoices(disciplined, { manualPlacements: { 'run-king': '1,3' } });
+    expect(advanceAutomaticDeployment(placed, level).phase).toBe('deployment');
+    expect(advanceReadyDeployment(placed, level).phase).toBe('battle');
+  });
+
+  it('automatically resolves a Disciplined unit with only one legal square', () => {
+    const level = battle();
+    level.layers.zones[0].tiles = [[1, 3]];
+    const current = run();
+    const disciplined = {
+      ...current,
+      army: current.army.map((unit) => unit.id === 'run-king'
+        ? { ...unit, abilities: ['discipline'] as RunArmyUnit['abilities'] }
+        : unit),
+    };
+    const resolved = resolveForcedDeploymentChoices(disciplined, level);
+    expect(resolved.deployment?.manualPlacements['run-king']).toBe('1,3');
+    expect(advanceAutomaticDeployment(disciplined, level).phase).toBe('battle');
   });
 
   it('keeps Royal Sceptre Kings on a board-edge square and Royal Decree Kings on the back row', () => {
@@ -138,5 +187,74 @@ describe('Run deployment', () => {
     for (const unit of persistentUnits) {
       expect(unit.runUnitName).toBe(current.army.find((candidate) => candidate.id === unit.runUnitId)?.name);
     }
+  });
+
+  it('keeps opponent pieces unresolved on the Deployment battlefield', () => {
+    const level = battle();
+    const current = run();
+    const layout = deploymentOptions(current, level).layouts[0];
+    const preview = levelForRunDeployment(current, level, layout);
+    expect(preview.layers.units.some((unit) => unit.side === 'enemy')).toBe(false);
+    expect(preview.layers.units.some((unit) => unit.side === 'player')).toBe(false);
+  });
+
+  it('feeds the live board compositor a passive position without resolving Battle spawns', () => {
+    const level = battle();
+    level.layers.zones.push({
+      id: 'enemy-zone',
+      type: 'enemy-spawn',
+      tiles: [[0, 0], [1, 0]],
+    });
+    level.events = [{
+      name: 'Enemy deployment',
+      trigger: { kind: 'setup' },
+      do: [{ kind: 'spawn', side: 'enemy', roster: { pawn: 1 }, zoneIds: ['enemy-zone'] }],
+    }];
+    const current = run();
+    const layout = deploymentOptions(current, level).layouts[0];
+    const game = gameForRunDeployment(current, level, layout);
+
+    expect(game.pieces.some((piece) => piece.side === 'enemy')).toBe(false);
+    expect(game.pieces.some((piece) => piece.id.startsWith('spawn-'))).toBe(false);
+    expect(game.pieces.some((piece) => piece.id.startsWith('run-'))).toBe(false);
+  });
+
+  it('places committed Disciplined units before revealing the automatic formation', () => {
+    const level = battle();
+    const current = run();
+    const king = current.army.find((unit) => unit.type === 'king')!;
+    const other = current.army.find((unit) => unit.id !== king.id)!;
+    const disciplined = {
+      ...current,
+      army: current.army.map((unit) => ({
+        ...unit,
+        abilities: [king.id, other.id].includes(unit.id)
+          ? ['discipline'] as RunArmyUnit['abilities']
+          : unit.abilities.filter((ability) => ability !== 'discipline'),
+      })),
+    };
+
+    let options = deploymentOptions(disciplined, level);
+    let preview = levelForRunDeployment(disciplined, level, options.layouts[0]);
+    expect(preview.layers.units.filter((unit) => unit.runUnitId)).toEqual([]);
+    expect(preview.layers.units.some((unit) => unit.side === 'enemy')).toBe(false);
+
+    const firstPlaced = setDeploymentChoices(disciplined, {
+      manualPlacements: { [king.id]: '1,3' },
+    });
+    options = deploymentOptions(firstPlaced, level);
+    preview = levelForRunDeployment(firstPlaced, level, options.layouts[0]);
+    expect(preview.layers.units.filter((unit) => unit.runUnitId).map((unit) => unit.runUnitId)).toEqual([king.id]);
+    expect(preview.layers.units.find((unit) => unit.runUnitId === king.id)).toMatchObject({ x: 1, y: 3 });
+
+    const allPlaced = setDeploymentChoices(firstPlaced, {
+      manualPlacements: { [king.id]: '1,3', [other.id]: '2,3' },
+    });
+    options = deploymentOptions(allPlaced, level);
+    preview = levelForRunDeployment(allPlaced, level, options.layouts[0]);
+    const visibleRunUnits = preview.layers.units.filter((unit) => unit.runUnitId && !unit.runUnitId.startsWith('run-tent-rock-'));
+    expect(visibleRunUnits.map((unit) => unit.runUnitId)).toEqual([king.id, other.id]);
+    expect(visibleRunUnits.find((unit) => unit.runUnitId === king.id)).toMatchObject({ x: 1, y: 3 });
+    expect(visibleRunUnits.find((unit) => unit.runUnitId === other.id)).toMatchObject({ x: 2, y: 3 });
   });
 });

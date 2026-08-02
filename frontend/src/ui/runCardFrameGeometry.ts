@@ -62,11 +62,12 @@ export type RunCardFrameGeometry = Readonly<{
   sourceWidth: typeof RUN_CARD_FRAME_NATIVE_WIDTH;
   sourceHeight: typeof RUN_CARD_FRAME_NATIVE_HEIGHT;
   /**
-   * The exact frame pixels these boxes were tuned against, or null while the
-   * boxes are only inherited seeds. A live frame whose SHA-256 differs from a
-   * recorded one is showing text inside boxes measured on other pixels.
+   * Every frame byte-identity these boxes were measured against, newest first.
+   * Cutting a generated frame's flat backdrop to transparent changes its bytes
+   * without moving a drawn pixel, so both identities keep the same measured
+   * boxes and a live media promotion never has to land with a code deploy.
    */
-  measuredSha256: string | null;
+  frameSha256s: readonly string[];
   boxes: RunCardFrameBoxes;
 }>;
 
@@ -75,7 +76,7 @@ export type RunCardFrameGeometry = Readonly<{
  *
  * Vertical: a box's text is centered in the box. No card, frame, or type line
  * carries its own vertical offset — a line that sits wrong means its box is
- * wrong, and the box is what gets tuned (ADR-0346).
+ * wrong, and the box is what gets tuned (ADR-0355).
  *
  * Horizontal: title and type text is inset from both plate edges by one shared
  * value; the cost reading is centered in its coin box. `opticalBlock` is the
@@ -99,8 +100,9 @@ const SHA256 = /^[0-9a-f]{64}$/;
 function defineGeometry(
   geometry: Omit<RunCardFrameGeometry, 'id' | 'slot' | 'sourceWidth' | 'sourceHeight'>,
 ): RunCardFrameGeometry {
-  if (geometry.measuredSha256 !== null && !SHA256.test(geometry.measuredSha256)) {
-    throw new Error(`${geometry.variant} frame SHA-256 is invalid`);
+  if (!geometry.frameSha256s.length) throw new Error(`${geometry.variant} declares no frame SHA-256`);
+  for (const sha256 of geometry.frameSha256s) {
+    if (!SHA256.test(sha256)) throw new Error(`${geometry.variant} frame SHA-256 is invalid`);
   }
   for (const [name, box] of Object.entries(geometry.boxes)) {
     if (
@@ -117,6 +119,7 @@ function defineGeometry(
     slot: RUN_CARD_FRAME_SLOT_BY_VARIANT[geometry.variant],
     sourceWidth: RUN_CARD_FRAME_NATIVE_WIDTH,
     sourceHeight: RUN_CARD_FRAME_NATIVE_HEIGHT,
+    frameSha256s: Object.freeze([...geometry.frameSha256s]),
     // Declared in one order regardless of how a frame's literal groups its boxes,
     // so every geometry enumerates identically.
     boxes: Object.freeze(Object.fromEntries(
@@ -144,7 +147,7 @@ const CARRIED_PAINTED_PANELS = Object.freeze({
  */
 export const RUN_CARD_STANDARD_FRAME_GEOMETRY = defineGeometry({
   variant: 'standard',
-  measuredSha256: '73710874141ec1c904416860d55a0be69d4dc7f5104db7eeecbfc756ca02dfe1',
+  frameSha256s: ['73710874141ec1c904416860d55a0be69d4dc7f5104db7eeecbfc756ca02dfe1'],
   boxes: {
     ...CARRIED_PAINTED_PANELS,
     title: { x: 94, y: 86, width: 762, height: 85 },
@@ -155,7 +158,7 @@ export const RUN_CARD_STANDARD_FRAME_GEOMETRY = defineGeometry({
 
 export const RUN_CARD_PESTIFEROUS_FRAME_GEOMETRY = defineGeometry({
   variant: 'pestiferous',
-  measuredSha256: '1a403e5e9adad96c0bed9673acae3e26abc750d978130e9bc8e92bbca8947e9d',
+  frameSha256s: ['1a403e5e9adad96c0bed9673acae3e26abc750d978130e9bc8e92bbca8947e9d'],
   boxes: {
     ...CARRIED_PAINTED_PANELS,
     title: { x: 94, y: 90, width: 758, height: 86 },
@@ -166,7 +169,7 @@ export const RUN_CARD_PESTIFEROUS_FRAME_GEOMETRY = defineGeometry({
 
 export const RUN_CARD_CONCINNOUS_FRAME_GEOMETRY = defineGeometry({
   variant: 'concinnous',
-  measuredSha256: '38b1290df1067dfa3562b874478b29c3f47341d8a065c90d426cec2cdaa32cc7',
+  frameSha256s: ['38b1290df1067dfa3562b874478b29c3f47341d8a065c90d426cec2cdaa32cc7'],
   boxes: {
     ...CARRIED_PAINTED_PANELS,
     title: { x: 92, y: 86, width: 767, height: 94 },
@@ -179,7 +182,7 @@ export const RUN_CARD_CONCINNOUS_FRAME_GEOMETRY = defineGeometry({
 
 export const RUN_CARD_TACTICAL_FRAME_GEOMETRY = defineGeometry({
   variant: 'tactical',
-  measuredSha256: '6c54a0a6dc48f56a3cf21c83d57d08cfbf11a501ae90f820b527c07cf40d3140',
+  frameSha256s: ['6c54a0a6dc48f56a3cf21c83d57d08cfbf11a501ae90f820b527c07cf40d3140'],
   boxes: {
     ...CARRIED_PAINTED_PANELS,
     title: { x: 93, y: 86, width: 764, height: 87 },
@@ -196,7 +199,12 @@ export const RUN_CARD_TACTICAL_FRAME_GEOMETRY = defineGeometry({
  */
 export const RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY = defineGeometry({
   variant: 'hieratic',
-  measuredSha256: '7ae3b1945da8fefa46a264b696b0fc5695454c80c7256f879fd465a06a2d1152',
+  frameSha256s: [
+    // Backdrop cut to transparent by scripts/cut-card-frame-backdrop.mjs.
+    '7ae3b1945da8fefa46a264b696b0fc5695454c80c7256f879fd465a06a2d1152',
+    // The generated frame as delivered, with its flat backdrop still painted.
+    'cdd9a3e017881f69c49c343f6cc9e721320f3681a1a3787b2a3166ec7ea26cdf',
+  ],
   boxes: {
     title: { x: 98, y: 94, width: 751, height: 88 },
     cost: { x: 867.17, y: 78.58, width: 117.66, height: 106.848 },
@@ -231,12 +239,12 @@ export function runCardFrameGeometryForSlot(slot: string | null | undefined): Ru
   return (slot ? GEOMETRY_BY_SLOT.get(slot) : undefined) ?? RUN_CARD_STANDARD_FRAME_GEOMETRY;
 }
 
-/** False while a frame's boxes are seeds, or were tuned against other pixels. */
-export function runCardFrameGeometryMatchesPixels(
+/** Whether the pixels a frame slot is serving are ones these boxes were measured on. */
+export function runCardFrameGeometryKnowsPixels(
   geometry: RunCardFrameGeometry,
   frameSha256: string | null | undefined,
 ): boolean {
-  return geometry.measuredSha256 !== null && geometry.measuredSha256 === frameSha256;
+  return typeof frameSha256 === 'string' && geometry.frameSha256s.includes(frameSha256);
 }
 
 function percentage(value: number, total: number): string {

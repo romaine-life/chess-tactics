@@ -10,10 +10,12 @@ import {
   saveRunCardIconFittingPortfolio,
 } from '../net/runCardIconFitting';
 import { runCardArtSlot, runCardFlavor, runCardName } from '../run/cardNames';
-import { AGMINATE_DISPLAY_NAME, RUN_CARD_BY_ID, type RunAbility } from '../run/model';
+import { AGMINATE_DISPLAY_NAME, RUN_CARD_BY_ID, RUN_CARD_TYPE_REFERENCE, type RunAbility } from '../run/model';
 import {
   RUN_CARD_CONCINNOUS_FRAME_SLOT,
   RUN_CARD_HIERATIC_FRAME_SLOT,
+  RUN_CARD_COMMITTED_PROPERTY_PLACEMENTS,
+  RUN_CARD_COMMITTED_UNIT_STATE_PLACEMENT,
   RUN_CARD_ICON_PLACEMENT_BASELINE,
   RUN_CARD_PESTIFEROUS_FRAME_SLOT,
   RUN_CARD_TACTICAL_FRAME_SLOT,
@@ -47,7 +49,7 @@ export const RUN_CARD_ICON_PAIRS: readonly PairDefinition[] = Object.freeze([
   {
     property: 'pestiferous',
     propertySlot: 'ui/kit/icons/card-properties/pestiferous.png',
-    propertyEffect: 'Marks one unit Cacochymic and advances that attrition after a victorious Battle.',
+    propertyEffect: RUN_CARD_TYPE_REFERENCE.pestiferous.effect,
     state: 'plagued',
     stateSlot: 'ui/kit/icons/game/plagued.png',
     stateEffect: 'The marked unit receives its tier discount and is next to be lost.',
@@ -57,32 +59,32 @@ export const RUN_CARD_ICON_PAIRS: readonly PairDefinition[] = Object.freeze([
   {
     property: 'concinnous',
     propertySlot: 'ui/kit/icons/card-properties/concinnous.png',
-    propertyEffect: 'Causes one contained unit to become Positioned on acquisition.',
+    propertyEffect: RUN_CARD_TYPE_REFERENCE.concinnous.effect,
     state: 'positioned',
     stateSlot: 'ui/kit/icons/game/positioned.png',
     stateEffect: 'The unit favors its piece-specific region during automatic deployment.',
     frameSlot: RUN_CARD_CONCINNOUS_FRAME_SLOT,
-    source: 'review',
+    source: 'accepted',
   },
   {
     property: 'tactical',
     propertySlot: 'ui/kit/icons/card-properties/tactical.png',
-    propertyEffect: 'Causes one unit to gain Discipline when the card is acquired.',
+    propertyEffect: RUN_CARD_TYPE_REFERENCE.tactical.effect,
     state: 'discipline',
     stateSlot: 'ui/kit/icons/game/discipline.png',
     stateEffect: 'The unit may be deliberately placed before automatic deployment.',
     frameSlot: RUN_CARD_TACTICAL_FRAME_SLOT,
-    source: 'owner-selected',
+    source: 'accepted',
   },
   {
     property: 'hieratic',
     propertySlot: 'ui/kit/icons/card-properties/hieratic.png',
-    propertyEffect: `The formal fourth property paired with ${AGMINATE_DISPLAY_NAME}; Run mechanics remain pending.`,
+    propertyEffect: RUN_CARD_TYPE_REFERENCE.hieratic.effect,
     state: 'marshalled',
     stateSlot: 'ui/kit/icons/game/marshalled.png',
     stateEffect: 'The unit seeks its piece-specific station within the surrounding formation.',
     frameSlot: RUN_CARD_HIERATIC_FRAME_SLOT,
-    source: 'review',
+    source: 'accepted',
   },
 ]);
 
@@ -188,15 +190,17 @@ export function defaultRunCardIconFittingDraft(catalog: AdminLiveMediaCatalog): 
     propertyVersionId: firstVersionId(catalog, pair.propertySlot),
     stateVersionId: firstVersionId(catalog, pair.stateSlot),
   }])) as Record<RunCardProperty, PairSelection>;
+  // Reset returns to the committed fit the live cards ship, not to a zeroed-out
+  // placement that no surface has ever used (ADR-0057).
   const propertyPlacements = Object.fromEntries(RUN_CARD_ICON_PAIRS.map((pair) => [
     pair.property,
-    { ...RUN_CARD_ICON_PLACEMENT_BASELINE },
+    { ...RUN_CARD_COMMITTED_PROPERTY_PLACEMENTS[pair.property] },
   ])) as Record<RunCardProperty, RunCardIconPlacement>;
   return {
     activeProperty: 'pestiferous',
     selections,
     propertyPlacements,
-    unitStatePlacement: { ...RUN_CARD_ICON_PLACEMENT_BASELINE },
+    unitStatePlacement: { ...RUN_CARD_COMMITTED_UNIT_STATE_PLACEMENT },
   };
 }
 
@@ -466,8 +470,9 @@ export function RunCardIconFittingViewer({
     }
   };
 
-  const propertyPlacement = draft?.propertyPlacements[pair.property] ?? RUN_CARD_ICON_PLACEMENT_BASELINE;
-  const unitStatePlacement = draft?.unitStatePlacement ?? RUN_CARD_ICON_PLACEMENT_BASELINE;
+  const committedProperty = RUN_CARD_COMMITTED_PROPERTY_PLACEMENTS[pair.property];
+  const propertyPlacement = draft?.propertyPlacements[pair.property] ?? committedProperty;
+  const unitStatePlacement = draft?.unitStatePlacement ?? RUN_CARD_COMMITTED_UNIT_STATE_PLACEMENT;
 
   return (
     <>
@@ -558,9 +563,9 @@ export function RunCardIconFittingViewer({
                       {ctlReset(() => chooseVersion('property', defaultRunCardIconFittingDraft(catalog).selections[pair.property].propertyVersionId))}
                     </div>
                   </label>
-                  <SliderRow label={<>Horizontal · {propertyPlacement.x.toFixed(2)}</>} value={propertyPlacement.x} set={(value) => changePropertyPlacement('x', value)} min={-4} max={4} step={.05} nudge={.1} dflt={RUN_CARD_ICON_PLACEMENT_BASELINE.x} />
-                  <SliderRow label={<>Vertical · {propertyPlacement.y.toFixed(2)}</>} value={propertyPlacement.y} set={(value) => changePropertyPlacement('y', value)} min={-4} max={4} step={.05} nudge={.1} dflt={RUN_CARD_ICON_PLACEMENT_BASELINE.y} />
-                  <SliderRow label={<>Scale · {Math.round(propertyPlacement.scale * 100)}%</>} value={propertyPlacement.scale} set={(value) => changePropertyPlacement('scale', value)} min={.4} max={RUN_CARD_ICON_FITTING_SCALE_MAX} step={.05} nudge={.1} dflt={RUN_CARD_ICON_PLACEMENT_BASELINE.scale} />
+                  <SliderRow label={<>Horizontal · {propertyPlacement.x.toFixed(2)}</>} value={propertyPlacement.x} set={(value) => changePropertyPlacement('x', value)} min={-4} max={4} step={.05} nudge={.1} dflt={committedProperty.x} />
+                  <SliderRow label={<>Vertical · {propertyPlacement.y.toFixed(2)}</>} value={propertyPlacement.y} set={(value) => changePropertyPlacement('y', value)} min={-4} max={4} step={.05} nudge={.1} dflt={committedProperty.y} />
+                  <SliderRow label={<>Scale · {Math.round(propertyPlacement.scale * 100)}%</>} value={propertyPlacement.scale} set={(value) => changePropertyPlacement('scale', value)} min={.4} max={RUN_CARD_ICON_FITTING_SCALE_MAX} step={.05} nudge={.1} dflt={committedProperty.scale} />
                   <button type="button" className="tileset-view-action" onClick={resetProperty}>Reset {displayName(pair.property)}</button>
                 </div>
 
@@ -584,9 +589,9 @@ export function RunCardIconFittingViewer({
                       {ctlReset(() => chooseVersion('state', defaultRunCardIconFittingDraft(catalog).selections[pair.property].stateVersionId))}
                     </div>
                   </label>
-                  <SliderRow label={<>Horizontal · {unitStatePlacement.x.toFixed(2)}</>} value={unitStatePlacement.x} set={(value) => changeUnitStatePlacement('x', value)} min={-6} max={6} step={.05} nudge={.1} dflt={RUN_CARD_ICON_PLACEMENT_BASELINE.x} />
-                  <SliderRow label={<>Vertical · {unitStatePlacement.y.toFixed(2)}</>} value={unitStatePlacement.y} set={(value) => changeUnitStatePlacement('y', value)} min={-6} max={6} step={.05} nudge={.1} dflt={RUN_CARD_ICON_PLACEMENT_BASELINE.y} />
-                  <SliderRow label={<>Scale · {Math.round(unitStatePlacement.scale * 100)}%</>} value={unitStatePlacement.scale} set={(value) => changeUnitStatePlacement('scale', value)} min={.4} max={RUN_CARD_ICON_FITTING_SCALE_MAX} step={.05} nudge={.1} dflt={RUN_CARD_ICON_PLACEMENT_BASELINE.scale} />
+                  <SliderRow label={<>Horizontal · {unitStatePlacement.x.toFixed(2)}</>} value={unitStatePlacement.x} set={(value) => changeUnitStatePlacement('x', value)} min={-6} max={6} step={.05} nudge={.1} dflt={RUN_CARD_COMMITTED_UNIT_STATE_PLACEMENT.x} />
+                  <SliderRow label={<>Vertical · {unitStatePlacement.y.toFixed(2)}</>} value={unitStatePlacement.y} set={(value) => changeUnitStatePlacement('y', value)} min={-6} max={6} step={.05} nudge={.1} dflt={RUN_CARD_COMMITTED_UNIT_STATE_PLACEMENT.y} />
+                  <SliderRow label={<>Scale · {Math.round(unitStatePlacement.scale * 100)}%</>} value={unitStatePlacement.scale} set={(value) => changeUnitStatePlacement('scale', value)} min={.4} max={RUN_CARD_ICON_FITTING_SCALE_MAX} step={.05} nudge={.1} dflt={RUN_CARD_COMMITTED_UNIT_STATE_PLACEMENT.scale} />
                   <button type="button" className="tileset-view-action" onClick={resetState}>Reset shared state seat</button>
                 </div>
 

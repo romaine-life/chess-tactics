@@ -15,6 +15,7 @@ import { ChromeDividedGridRow, DividedInnerChromeBox } from './shared/ChromeDivi
 import { Toggle } from './shared/Toggle';
 import { LevelEditorControlsPanel, type LevelEditorLayerOption } from './LevelEditorChromeConsumers';
 import { SkirmishHud } from './SkirmishHud';
+import { SkirmishStoreProvider } from '../game/SkirmishStoreContext';
 
 export type ChromeUnitAuditDims = {
   width: number;
@@ -213,13 +214,15 @@ function LevelEditorControlsConsumer({ dims }: { dims: ChromeUnitAuditDims }): R
 
 function SkirmishHudConsumer({ dims }: { dims: ChromeUnitAuditDims }): ReactElement {
   return (
-    <SkirmishHud
-      className="chrome-unit-outer-panel chrome-unit-consumer-panel chrome-unit-skirmish-hud"
-      style={{ width: `${dims.width}px`, height: `${dims.height}px` }}
-      canStartNewSkirmish={false}
-      showClockControl={false}
-      enableGlobalShortcuts={false}
-    />
+    <SkirmishStoreProvider>
+      <SkirmishHud
+        className="chrome-unit-outer-panel chrome-unit-consumer-panel chrome-unit-skirmish-hud"
+        style={{ width: `${dims.width}px`, height: `${dims.height}px` }}
+        canStartNewSkirmish={false}
+        showClockControl={false}
+        enableGlobalShortcuts={false}
+      />
+    </SkirmishStoreProvider>
   );
 }
 

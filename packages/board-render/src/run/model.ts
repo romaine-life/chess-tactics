@@ -70,6 +70,38 @@ export function runAbilityDisplayName(ability: RunAbility): string {
   return `${ability.slice(0, 1).toUpperCase()}${ability.slice(1)}`;
 }
 
+/**
+ * The four causal card properties and the unit state each one bestows (ADR-0339). Card
+ * faces, the Enchiridion and the Studio fitting instrument all name a property from here
+ * so cause and result stay one paired vocabulary instead of lookalike copies.
+ */
+export const RUN_CARD_TYPE_REFERENCE: Readonly<Record<RunCardType, Readonly<{
+  name: string;
+  grants: RunAbility | RunUnitModifier;
+  effect: string;
+}>>> = Object.freeze({
+  pestiferous: Object.freeze({
+    name: 'Pestiferous',
+    grants: 'plagued',
+    effect: `Marks one contained unit ${CACOCHYMIC_DISPLAY_NAME}; each victorious Battle loses it and marks another.`,
+  }),
+  concinnous: Object.freeze({
+    name: 'Concinnous',
+    grants: 'positioned',
+    effect: 'Makes one contained unit Positioned when the card is acquired.',
+  }),
+  tactical: Object.freeze({
+    name: 'Tactical',
+    grants: 'discipline',
+    effect: 'Grants Discipline to one contained unit when the card is acquired.',
+  }),
+  hieratic: Object.freeze({
+    name: 'Hieratic',
+    grants: 'marshalled',
+    effect: `Grants ${AGMINATE_DISPLAY_NAME} to one contained unit when the card is acquired.`,
+  }),
+});
+
 export const PIECE_VALUE: Readonly<Record<RunArmyPieceType, number>> = Object.freeze({
   pawn: 1,
   knight: 3,
@@ -1585,7 +1617,6 @@ export function shopHasChanges(run: RunDocument): boolean {
 
 export function canLeaveShop(run: RunDocument): boolean {
   if (run.phase !== 'shop' || !run.shop) return false;
-  if (run.shop.kind === 'opening' && run.shop.purchasedCardOfferIds.length === 0) return false;
   if (run.shop.lootRelicOffers.length > 0 && !run.shop.chosenLootRelicId) return false;
   return true;
 }

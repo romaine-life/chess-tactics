@@ -8,6 +8,7 @@
 // the shared bar; there is no opt-out set, and the function never returns null.
 import { playRouteScreenName } from '@chess-tactics/board-render';
 import { isPlaySelectorPath } from '../playHubRoute';
+import { isRunRoutePath } from '../runRoute';
 
 export interface TitleBarConfig {
   screenName: string;
@@ -44,8 +45,7 @@ export function titleBarConfig(path: string, search = ''): TitleBarConfig | null
     };
   }
 
-  if (path === '/play' || path.startsWith('/play/strategikon/')
-    || path === '/run' || path.startsWith('/run/strategikon/')) {
+  if (path === '/play' || path.startsWith('/play/strategikon/') || isRunRoutePath(path)) {
     // studSlot lets a single-player battle turn the ornament diamond into a Retry button
     // (the Skirmish screen portals it in, netplay omitted).
     return {

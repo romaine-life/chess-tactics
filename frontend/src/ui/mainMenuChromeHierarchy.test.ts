@@ -38,7 +38,12 @@ describe('Main Menu chrome hierarchy', () => {
   });
 
   it('uses the registered title-oak surface for every semantic tab in the main-menu shell and gates reveal on it', () => {
-    expect(mainMenu).toContain('data-chrome-tab-fill-surface="hybrid-wood-oak"');
+    // The surface is declared ONCE on the shared rail primitive, so every menu-language
+    // rail (Main Menu, Settings, Editor, Play, Enchiridion, Strategikon) is painted from
+    // the same source and a re-skin is a single edit. A per-screen literal is the drift.
+    expect(apparatusRailTab).toContain("export const APPARATUS_RAIL_FILL_SURFACE = 'hybrid-wood-oak'");
+    expect(apparatusRailTab).toContain('data-chrome-tab-fill-surface={APPARATUS_RAIL_FILL_SURFACE}');
+    expect(mainMenu).not.toContain('data-chrome-tab-fill-surface=');
     expect(mainMenu).toContain("const TITLE_SURFACE = () => installedUiMedia('ui-surfaces-hybrid-wood-oak-png')");
     expect(mainMenu).toContain('const buttonArt = [SETTINGS_ICON(), TITLE_SURFACE(), ...MENU_TABS.map((tab) => tab.icon)]');
     expect(mainMenu).not.toContain('STONE_SURFACE');

@@ -15,6 +15,7 @@ import {
   HIERATIC_AGMINATE_OFFER_DENOMINATOR,
   PESTIFEROUS_OFFER_DENOMINATOR,
   RUN_CARD_DECK,
+  RUN_CARD_TYPE_REFERENCE,
   RUN_STARTING_GOLD,
   TACTICAL_DISCIPLINE_OFFER_DENOMINATOR,
   concinnousOfferRoll,
@@ -52,7 +53,6 @@ import {
   RUN_CARD_STANDARD_FRAME_GEOMETRY,
   RUN_CARD_TEXT_PLACEMENT,
   runCardFrameGeometryForSlot,
-  runCardFrameGeometryMatchesPixels,
   runCardFrameGeometryWithBoxes,
   type RunCardFrameBoxName,
   type RunCardFrameBoxStyle,
@@ -138,10 +138,20 @@ const STANDARD_CARD = Object.freeze({
   flavor: 'The bell was gone. Five shadows gathered at the accustomed hour.',
 }) satisfies RunCardFaceContent;
 
+/** The type strip carries the qualifier as its right-side symbol, not as text (ADR-0339). */
+function specimenCardProperty(property: keyof typeof RUN_CARD_TYPE_REFERENCE): RunCardFaceContent['cardProperty'] {
+  return {
+    id: property,
+    name: RUN_CARD_TYPE_REFERENCE[property].name,
+    effect: RUN_CARD_TYPE_REFERENCE[property].effect,
+  };
+}
+
 const CONCINNOUS_CARD = Object.freeze({
   name: 'Two Good Boots',
   cost: 4,
-  typeLine: 'Units — Concinnous',
+  typeLine: 'Units',
+  cardProperty: specimenCardProperty('concinnous'),
   grants: [{ count: 2, unit: 'pawn' }] as const,
   flavor: 'The road kept both pairs of boots, and returned neither name.',
 }) satisfies RunCardFaceContent;
@@ -149,7 +159,8 @@ const CONCINNOUS_CARD = Object.freeze({
 const TACTICAL_SINGLE_CARD = Object.freeze({
   name: 'Regal Serenity',
   cost: 9 + DISCIPLINE_COST,
-  typeLine: 'Units — Tactical',
+  typeLine: 'Units',
+  cardProperty: specimenCardProperty('tactical'),
   grants: [{ count: 1, unit: 'queen', ability: 'discipline' }] as const,
   flavor: 'She watched the empty court until ceremony became weather.',
 }) satisfies RunCardFaceContent;
@@ -157,13 +168,13 @@ const TACTICAL_SINGLE_CARD = Object.freeze({
 const TACTICAL_MULTI_CARD = Object.freeze({
   ...STANDARD_CARD,
   cost: 9 + DISCIPLINE_COST,
-  typeLine: 'Units — Tactical',
+  cardProperty: specimenCardProperty('tactical'),
 }) satisfies RunCardFaceContent;
 
 const HIERATIC_CARD = Object.freeze({
   ...STANDARD_CARD,
   cost: 9 + AGMINATE_COST,
-  typeLine: 'Units — Hieratic',
+  cardProperty: specimenCardProperty('hieratic'),
   properties: [{ name: AGMINATE_DISPLAY_NAME, target: 'Chosen on purchase' }] as const,
 }) satisfies RunCardFaceContent;
 
@@ -212,7 +223,7 @@ export function runCardPrototypeContent(
     return {
       ...STANDARD_CARD,
       cost: 8,
-      typeLine: 'Units — Pestiferous',
+      cardProperty: specimenCardProperty('pestiferous'),
       grants: STANDARD_CARD.grants.map((grant) => (
         grant.unit === 'bishop' ? { ...grant, plaguedIndices: [0] } : grant
       )),
@@ -277,7 +288,7 @@ export const RUN_CARD_CONTENTS_STUDY_PROFILES: readonly RunCardContentsStudyProf
     load: '3 cells · 2 rows',
     card: {
       ...STANDARD_CARD,
-      typeLine: 'Units — Concinnous',
+      cardProperty: specimenCardProperty('concinnous'),
     },
     tuning: CONTENTS_STUDY_TUNING_BY_DENSITY.packed,
   },
@@ -287,7 +298,7 @@ export const RUN_CARD_CONTENTS_STUDY_PROFILES: readonly RunCardContentsStudyProf
     load: '5 cells · 3 rows',
     card: {
       ...STANDARD_CARD,
-      typeLine: 'Units — Concinnous',
+      cardProperty: specimenCardProperty('concinnous'),
       grants: [
         { count: 3, unit: 'pawn' },
         { count: 1, unit: 'knight' },
@@ -460,7 +471,6 @@ export function RunCardPrototypeViewer({
     () => runCardFrameGeometryWithBoxes(committedGeometry, draftBoxes),
     [committedGeometry, draftBoxes],
   );
-  const framePixelsMeasured = runCardFrameGeometryMatchesPixels(committedGeometry, frame?.media?.sha256);
   const selectedRect = draftBoxes[selectedFrameBox];
   const setSelectedBoxEdge = (edge: keyof RunCardFrameRect) => (value: number): void => {
     setFrameBoxDrafts((current) => (
@@ -1093,9 +1103,7 @@ export function RunCardPrototypeViewer({
                   <dd>
                     {runCardFrameBoxDraftsAreTuned(frameBoxDrafts)
                       ? 'Tuned in this session — copy the handoff to commit'
-                      : framePixelsMeasured
-                        ? 'Committed against these exact frame pixels'
-                        : 'Seeded, not yet tuned against these frame pixels'}
+                      : 'Committed'}
                   </dd>
                 </div>
                 <div><dt>Coin source</dt><dd>{coinSource.media!.sha256.slice(0, 12)} · {coinSource.status}</dd></div>
