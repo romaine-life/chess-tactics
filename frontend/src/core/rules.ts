@@ -452,51 +452,85 @@ function sideKingAttacked(board: readonly Piece[], side: Side, size: BoardSize, 
   return false;
 }
 
-/** A piece that could give check to `side`: living, opposing, and not an obstacle. */
-function isHostileTo(p: Piece | null, side: Side): p is Piece {
-  return !!p && p.side !== side && p.side !== 'neutral' && !isObstacle(p);
+/** A piece that could give check to `side`: opposing, and not a neutral obstacle. */
+function isHostileTo(p: Piece, side: Side): boolean {
+  return p.side !== side && p.side !== 'neutral' && !isObstacle(p);
+}
+
+/** Whether a slider of `type` strikes along the ray direction (dx, dy) at all. Only
+ * sliders can be un-blocked by a piece stepping aside; steppers reach a fixed square
+ * set that occupancy never changes. */
+function sliderAttacksAlong(type: PieceType, dx: number, dy: number): boolean {
+  if (type === 'queen') return true;
+  const diagonal = dx !== 0 && dy !== 0;
+  return type === 'rook' ? !diagonal : type === 'bishop' ? diagonal : false;
 }
 
 /**
- * Is (kx, ky) attacked by a piece hostile to `side`?
+ * Is (kx, ky) attacked by a piece hostile to `side` — and, optionally, which friendly
+ * pieces are shielding it?
  *
- * Asked once per CANDIDATE MOVE by `legalMoves`, so it is the engine's hottest
- * question. Answering it by walking every hostile piece's threats is O(pieces ×
- * ray length); this instead scans OUTWARD from the square to collect a small
- * candidate set, then verifies each candidate with the exact forward predicate.
+ * Both questions are answered by the SAME outward sweep of the eight rays plus the
+ * knight offsets, because they are the same walk: the check test wants the first
+ * occupant, the pin test wants what stands directly behind it. Running them as two
+ * passes walked every ray twice.
  *
- * Completeness argument (why the candidate set can't miss an attacker):
+ * Asked once per candidate move (or, via the pin pre-pass, once per piece), so it is
+ * the engine's hottest question. Walking every hostile piece's threats instead is
+ * O(pieces × ray length); this scans outward to gather a small candidate set, then
+ * confirms each candidate with the exact forward predicate.
+ *
+ * Completeness (why the candidate set cannot miss an attacker):
  *  - Only three attack shapes exist. Pawns and kings strike adjacent squares, which
- *    lie on the eight rays. Sliders strike along those same rays. Knights hop, and
- *    get their own explicit sweep of the eight knight offsets.
- *  - A slider cannot reach through an occupied square (`scanAttacks` breaks its ray
- *    at the first occupant), and "first occupant along this line" is the SAME square
- *    viewed from either end. So on each ray only the first occupied square can be an
- *    attacker, and stopping there loses nothing.
+ *    lie on the eight rays. Sliders strike along those same rays. Knights hop, and get
+ *    their own explicit sweep of the eight knight offsets.
+ *  - A slider cannot reach through an occupied square (`scanAttacks` breaks its ray at
+ *    the first occupant), and "first occupant along this line" is the SAME square from
+ *    either end. So on each ray only the first occupied square can be an attacker.
  *
- * The outward scan deliberately ignores terrain, elevation and fences. Those only
- * ever REMOVE attacks, never create them, so skipping them yields a superset of the
- * true attackers — and every candidate is then confirmed by `attacksSquare`, which
- * applies them exactly. Over-approximate cheaply, confirm precisely: the answer is
- * identical to testing every piece, which `sideInCheck` equivalence tests pin.
+ * The sweep deliberately ignores terrain, elevation and fences. Those only ever REMOVE
+ * attacks, never create them, so skipping them yields a superset of the true attackers
+ * (and of the true pins) — every attacker candidate is then confirmed by
+ * `attacksSquare`, which applies them exactly, and every over-reported pin merely
+ * falls through to the exact per-move test. Over-approximate cheaply, confirm
+ * precisely; `core/attackGeometry.test.ts` pins the result against brute force.
+ *
+ * `pinSink`, when given, collects the ids of `side`'s pieces that stand between the
+ * square and a hostile slider aimed along that ray. A `true` return makes its contents
+ * meaningless — an already-attacked king sends every move down the exact path anyway.
  */
-function squareAttackedByOpponentOf(
+function scanKingThreats(
   kx: number,
   ky: number,
   side: Side,
   board: readonly Piece[],
   size: BoardSize,
-  env?: MoveEnv,
+  env: MoveEnv | undefined,
+  pinSink: string[] | null,
 ): boolean {
   for (const [dx, dy] of ALL8) {
+    let shield: Piece | null = null;
     for (let step = 1; ; step += 1) {
       const x = kx + dx * step;
       const y = ky + dy * step;
       if (!inBounds(x, y, size)) break;
       const occ = pieceAt(board, x, y);
       if (!occ) continue;
-      if (isHostileTo(occ, side) && attacksSquare(occ, board, size, env, kx, ky)) return true;
-      break; // the first occupant blocks everything behind it, friend or foe
+      if (!shield) {
+        if (isHostileTo(occ, side)) {
+          if (attacksSquare(occ, board, size, env, kx, ky)) return true;
+          break; // still an occupant: it blocks the line, and we cannot move it away
+        }
+        // Neutral obstacle: an immovable blocker, so nothing behind it is reachable.
+        if (occ.side !== side) break;
+        if (!pinSink) break; // check-only caller: a friendly blocker ends the ray
+        shield = occ;
+        continue;
+      }
+      // Directly behind a friendly shield: only a hostile slider aimed along this ray
+      // turns that shield into a pin.
+      if (pinSink && isHostileTo(occ, side) && sliderAttacksAlong(occ.type, dx, dy)) pinSink.push(shield.id);
+      break;
     }
   }
   for (const [dx, dy] of KNIGHT) {
@@ -504,9 +538,14 @@ function squareAttackedByOpponentOf(
     const y = ky + dy;
     if (!inBounds(x, y, size)) continue;
     const occ = pieceAt(board, x, y);
-    if (isHostileTo(occ, side) && attacksSquare(occ, board, size, env, kx, ky)) return true;
+    if (occ && isHostileTo(occ, side) && attacksSquare(occ, board, size, env, kx, ky)) return true;
   }
   return false;
+}
+
+/** Is (kx, ky) attacked by a piece hostile to `side`? See `scanKingThreats`. */
+function squareAttackedByOpponentOf(kx: number, ky: number, side: Side, board: readonly Piece[], size: BoardSize, env?: MoveEnv): boolean {
+  return scanKingThreats(kx, ky, side, board, size, env, null);
 }
 
 /** True while `side` fields a king that a hostile piece currently attacks (in check). */
@@ -553,6 +592,34 @@ export function legalMoves(piece: Piece, pieces: readonly Piece[], size: BoardSi
     if (p.alive && p.type === 'king' && p.side === piece.side) kings.push(p);
   }
   if (!kings.length) return moves; // a kingless side is unconstrained
+
+  // PIN PRE-PASS. The exact test below rebuilds the board and re-scans for check once
+  // per candidate move. For most pieces that work is provably wasted, and whether it
+  // is can be decided ONCE for the whole piece rather than per move:
+  //
+  //   A non-king move changes occupancy only by vacating its origin square (its
+  //   destination gains a piece, and a normal capture's victim stood on that same
+  //   destination). Pawn, knight and king attack sets ignore occupancy entirely, so
+  //   they cannot be un-blocked. Only a slider can newly reach the king, and only if
+  //   the vacated square was the SOLE blocker on its line — which makes the mover the
+  //   first occupant out from the king with that slider immediately behind it. That is
+  //   exactly what `pinnedCandidates` collects.
+  //
+  // So when the side is not already in check, the mover is not a king, and the mover
+  // is not a pin candidate, no move it makes can expose the king. Two exceptions keep
+  // the exact path: en passant removes a piece that is NOT on the destination square
+  // (so it can open a second line), and a castle relocates the rook as well.
+  const enPassantOrCastle = moves.some((m) => m.enPassant || m.castle);
+  if (piece.type !== 'king' && !enPassantOrCastle) {
+    // One sweep per king answers both halves: already in check, and who is shielding.
+    const pins: string[] = [];
+    let mustTest = false;
+    for (const k of kings) {
+      if (scanKingThreats(k.x, k.y, piece.side, pieces, size, env, pins)) { mustTest = true; break; }
+    }
+    if (!mustTest && !pins.includes(piece.id)) return moves;
+  }
+
   const safe: Move[] = [];
   for (const m of moves) {
     const after = boardAfterMove(piece, m, pieces);
