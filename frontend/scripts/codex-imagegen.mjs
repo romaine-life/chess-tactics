@@ -88,8 +88,17 @@ export function findRollout(threadId) {
   return null;
 }
 
-// METHOD GATE. Returns { ok, reason, roll, tid }. ok=true iff the run's ROLLOUT contains an
-// image_generation_call event — proof codex used the real image model, not a code-drawer.
+// The rollout markers that prove the image MODEL ran. A code-drawn turn reaches the
+// PNG through exec/patch items only and emits none of these, so matching any one of
+// them is still definitive proof of method — this widens schema coverage, not the gate.
+// `image_generation_call` was the only marker older codex builds wrote; current builds
+// can record just `image_generation_end` for the same genuine generation, which made
+// the single-marker check reject real art (12 straight false "code-drawn" rejections,
+// 2026-08-01 — the same false-negative class as the retired stdout gate).
+const IMAGE_GEN_MARKERS = ['image_generation_call', 'image_generation_end'];
+
+// METHOD GATE. Returns { ok, reason, roll, tid }. ok=true iff the run's ROLLOUT contains
+// an image-generation marker — proof codex used the real image model, not a code-drawer.
 export function imageGenVerdict(stdout) {
   const tid = threadIdOf(stdout);
   if (!tid) return { ok: false, reason: 'no thread_id on stdout (cannot locate rollout)' };
@@ -99,17 +108,22 @@ export function imageGenVerdict(stdout) {
   for (const l of text.split('\n')) {
     let j; try { j = JSON.parse(l); } catch { continue; }
     const cands = [j.type, j.payload && j.payload.type, j.item && j.item.type, j.response && j.response.type];
-    if (cands.includes('image_generation_call')) return { ok: true, reason: 'image_generation_call in rollout', roll, tid };
+    const hit = IMAGE_GEN_MARKERS.find((marker) => cands.includes(marker));
+    if (hit) return { ok: true, reason: `${hit} in rollout`, roll, tid };
   }
-  return { ok: false, reason: 'rollout present but no image_generation_call (code-drawn)', roll, tid };
+  return { ok: false, reason: 'rollout present but no image-generation marker (code-drawn)', roll, tid };
 }
 
-// RACE-FREE shipping source: the newest ig_*.png in the session's OWN output dir. Returns
-// the path or null. (Use this instead of codex's workspace copy — see header.)
+// RACE-FREE shipping source: the newest generated PNG in the session's OWN output dir.
+// Returns the path or null. (Use this instead of codex's workspace copy — see header.)
+// Codex has written both `ig_<id>.png` and `exec-<uuid>.png` names for model output;
+// the dir is keyed by thread_id, so everything in it belongs to this run either way.
+const GENERATED_IMAGE_NAME = /^(ig_|exec-).*\.png$/i;
+
 export function sessionImage(threadId) {
   const dir = join(GEN_IMAGES, threadId);
   let entries; try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return null; }
-  const igs = entries.filter((e) => e.isFile() && /^ig_.*\.png$/i.test(e.name))
+  const igs = entries.filter((e) => e.isFile() && GENERATED_IMAGE_NAME.test(e.name))
     .map((e) => ({ p: join(dir, e.name), m: statSync(join(dir, e.name)).mtimeMs }))
     .sort((a, b) => b.m - a.m);
   return igs.length ? igs[0].p : null;

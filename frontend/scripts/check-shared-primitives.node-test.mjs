@@ -8,8 +8,13 @@ test('rejects raw registered chrome buttons outside the canonical renderer', () 
 });
 
 test('accepts canonical shared control construction', () => {
-  const source = '<><ChromeButton unit="inner-text-button">Go</ChromeButton><ChoiceGroup value="a" options={[]} onChange={() => {}} ariaLabel="Pick" /><StudioCatalogCard title="A" onSelect={() => {}} /></>';
+  const source = '<><ChromeButton unit="inner-text-button">Go</ChromeButton><ChoiceGroup value="a" options={[]} onChange={() => {}} ariaLabel="Pick" /><StudioCatalogCard title="A" onSelect={() => {}} /><ApparatusRailColumn className="strategikon-rail">Tabs</ApparatusRailColumn></>';
   assert.deepEqual(checkTsx('src/ui/Feature.tsx', source), []);
+});
+
+test('rejects raw menu-language rail columns outside the canonical renderer', () => {
+  const failures = checkTsx('src/ui/Feature.tsx', '<aside className="strategikon-rail">Tabs</aside>');
+  assert.equal(failures.length, 1);
 });
 
 test('rejects positional row geometry and copied request helpers', () => {

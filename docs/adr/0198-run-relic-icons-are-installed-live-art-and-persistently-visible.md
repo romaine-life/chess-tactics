@@ -5,6 +5,7 @@ deciders: owner (Nelson) + Codex
 partially_superseded_by:
   - "[ADR-0216](0216-run-relics-live-in-a-playfield-overlay-beneath-the-title-bar.md)"
   - "[ADR-0264](0264-run-relic-identities-carry-anti-story-residue.md)"
+  - "[ADR-0332](0332-eight-run-relic-icons-ship-the-approved-resized-pixels.md)"
 ---
 
 # ADR-0198: Run relic icons are installed live art and persistently visible

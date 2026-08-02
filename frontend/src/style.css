@@ -1846,6 +1846,8 @@ h1 {
   --main-menu-rail-pad-inline: clamp(6px, calc(var(--layout-vw, 100vw) * .006), 10px);
   --main-menu-content-inset-block: calc(var(--main-menu-frame-inset) + var(--main-menu-rail-pad-block));
   --main-menu-content-inset-inline: calc(var(--main-menu-frame-inset) + var(--main-menu-rail-pad-inline));
+  --main-menu-tab-column-w: 322px;
+  --main-menu-tab-column-gap: clamp(9px, calc(var(--layout-vw, 100vw) * .008), 13px);
   /* Spatial-role tokens (ADR-0031) — COMFORTABLE density is the default; in-game
      surfaces override these to the tight end (see .skirmish-screen). inset = padding
      on all sides; stack = vertical gap; inline = horizontal gap; gutter = section gaps. */
@@ -7234,6 +7236,13 @@ body.loading-bootstrap .app-startup-status {
 .shell-workspace-fill {
   inset: 0;
 }
+.shell-workspace-background-artwork {
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+  z-index: 0;
+}
 .shell-workspace-content {
   box-sizing: border-box;
   display: flex;
@@ -8586,7 +8595,6 @@ body.loading-bootstrap .app-startup-status {
 
 /* editor rail icons */
 .le-ico { background-position: center; background-repeat: no-repeat; background-size: contain; display: inline-block; flex: none; height: 18px; image-rendering: pixelated; width: 18px; }
-.ic-brush { background-image: var(--media-ui-kit-icons-pencil-png); }
 .ic-eraser { background-image: var(--media-ui-kit-icons-delete-png); }
 .ic-move { background-image: var(--media-ui-kit-icons-game-move-png); }
 .ic-eyedropper { background-image: var(--media-ui-kit-icons-wrench-png); }
@@ -17510,12 +17518,29 @@ button.tileset-relationship-cell {
   overflow: hidden;
 }
 
-.settings-rail-frame {
-  --settings-rail-tab-gap: clamp(9px, calc(var(--layout-vw, 100vw) * .008), 13px);
+.apparatus-rail-column {
+  --settings-rail-tab-gap: var(--main-menu-tab-column-gap);
   align-content: start;
+  box-sizing: border-box;
   display: grid;
   gap: var(--settings-rail-tab-gap);
-  padding: var(--main-menu-rail-pad-block) var(--main-menu-rail-pad-inline);
+  min-block-size: 0;
+}
+
+.apparatus-rail-column[data-apparatus-rail-placement="open"] {
+  flex: none;
+  inline-size: var(--main-menu-tab-column-w);
+  padding-block: var(--main-menu-content-inset-block) 0;
+  padding-inline: var(--main-menu-content-inset-inline) 0;
+}
+
+.apparatus-rail-column[data-apparatus-rail-placement="framed"] {
+  padding-block: var(--main-menu-rail-pad-block);
+  padding-inline: var(--main-menu-rail-pad-inline) 0;
+}
+
+.settings-rail-frame {
+  gap: clamp(9px, calc(var(--layout-vw, 100vw) * .008), 13px);
   /* Button-group offset — baked from the Main Menu tuner, SHARED with Settings so its rail tabs
      sit identically (the menu is the alignment reference). The X magnitude (238) is mirrored by
      the .settings-shell margin floor above — they MUST stay equal (guarded). Re-tune in the
@@ -17546,7 +17571,7 @@ button.tileset-relationship-cell {
   --rail-pull-y: 21px;
   --col-top-inset: var(--main-menu-content-inset-block); /* col1's button-top offset, exactly */
   --col-side-inset: var(--main-menu-content-inset-inline); /* col1's button-side offset, exactly */
-  --col-tab-w: 322px;
+  --col-tab-w: var(--main-menu-tab-column-w);
   --col-action-w: 572px;
   /* Preview column (the Editor's col 4): compact by intent — a small board thumbnail, not a
      third full panel. Narrower than a tab column so the row stays inside the body cap on wide
@@ -17585,7 +17610,7 @@ button.tileset-relationship-cell {
 .main-menu-twin-screen .settings-rail-frame { padding-inline-end: 0; }
 .main-menu-twin-screen .settings-frame { border-inline-end-width: 0; }
 .menu-dest-tabs {
-  --settings-rail-tab-gap: clamp(9px, calc(var(--layout-vw, 100vw) * .008), 13px);
+  --settings-rail-tab-gap: var(--main-menu-tab-column-gap);
   inline-size: var(--col-tab-w);
   display: flex;
   flex-direction: column;
@@ -19054,6 +19079,123 @@ button.tileset-relationship-cell {
   color: var(--skirmish-muted);
 }
 
+/* Shop wrap-art candidate rows: generated art is review-mounted around the
+   live card faces; the negative insets come from each candidate's measured
+   card window, so the window lands exactly under the card. */
+.run-wrap-candidate {
+  display: grid;
+  gap: var(--ds-inline-tight);
+}
+
+.run-wrap-candidate > h3 {
+  margin: 0;
+}
+
+.run-wrap-candidate small {
+  color: var(--skirmish-muted);
+}
+
+.run-wrap-grid {
+  column-gap: var(--ds-inline);
+  row-gap: var(--ds-inline);
+}
+
+.run-wrap-seat {
+  box-sizing: border-box;
+  display: block;
+  padding: var(--wrap-pad-top) var(--wrap-pad-right) var(--wrap-pad-bottom) var(--wrap-pad-left);
+  position: relative;
+}
+
+.run-wrap-seat > .run-card-offer,
+.run-wrap-band-shell > .run-card-grid {
+  position: relative;
+  z-index: 1;
+}
+
+.run-wrap-art {
+  pointer-events: none;
+  position: absolute;
+}
+
+.run-wrap-seat-art {
+  block-size: 100%;
+  inline-size: 100%;
+  inset: 0;
+}
+
+.run-wrap-band-shell {
+  position: relative;
+}
+
+.run-wrap-slot-frame {
+  margin-inline: auto;
+  position: relative;
+}
+
+.run-wrap-install {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  justify-items: start;
+}
+
+.run-wrap-install > :is(h3, p) {
+  margin: 0;
+}
+
+/* Live Shop: the installed wrap frames the real card row. The Shop is one
+   screen — the stall is contained in the space left over, never the other way
+   round, so installing a wrap can never introduce a scrollbar. */
+.run-shop-workspace-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-stack);
+  min-block-size: 0;
+}
+
+/* Flex the whole chain down to the host: a grid row would size itself to its
+   content, which leaves the stall nothing definite to fill. */
+.run-shop-workspace-content > .run-shop-cards-section {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--ds-inline-tight);
+  min-block-size: 0;
+}
+
+.run-shop-cards-section > .run-shop-wrap-host {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  position: relative;
+}
+
+.run-shop-wrap-host {
+  inline-size: 100%;
+}
+
+.run-shop-wrap-frame {
+  position: absolute;
+}
+
+.run-shop-wrap-art {
+  inset: 0;
+  block-size: 100%;
+  inline-size: 100%;
+  pointer-events: none;
+  position: absolute;
+}
+
+.run-shop-wrap-cards {
+  display: grid;
+  position: absolute;
+  z-index: 1;
+}
+
+.run-wrap-slot-card {
+  position: absolute;
+  z-index: 1;
+}
+
 .run-relic-reference-art {
   display: grid;
   gap: var(--ds-inline);
@@ -19117,10 +19259,101 @@ button.tileset-relationship-cell {
   color: var(--skirmish-muted);
 }
 
+.brush-icon-review-section {
+  display: grid;
+  gap: var(--ds-inline-tight);
+}
+
+.brush-icon-review-section > h2 {
+  margin: 0;
+}
+
+.brush-icon-review-toolbar-comparison {
+  align-items: start;
+  display: grid;
+  gap: var(--ds-inline-tight);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.brush-icon-review-toolbar-card {
+  min-block-size: 88px;
+}
+
+.brush-icon-review-choice-grid {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.brush-icon-review-choice {
+  align-items: center;
+  display: grid;
+  gap: var(--ds-inline-tight);
+  grid-template-columns: var(--le-inner-square) minmax(0, 1fr);
+  min-block-size: 72px;
+  padding: var(--ds-inset);
+}
+
+.brush-icon-review-choice > span {
+  display: grid;
+  gap: var(--ds-space-1);
+  min-inline-size: 0;
+}
+
+.brush-icon-review-choice small {
+  color: var(--skirmish-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brush-icon-review-glyph {
+  image-rendering: pixelated;
+}
+
+.brush-icon-review-production-actions {
+  align-items: center;
+  display: grid;
+  gap: var(--ds-inline);
+  grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
+}
+
+.brush-icon-review-production-actions figure {
+  align-items: center;
+  display: grid;
+  gap: var(--ds-inline-tight);
+  grid-template-columns: 144px minmax(0, 1fr);
+  margin: 0;
+}
+
+.brush-icon-review-production-actions img {
+  block-size: 144px;
+  image-rendering: pixelated;
+  inline-size: 144px;
+}
+
+.brush-icon-review-production-actions figcaption {
+  display: grid;
+  gap: var(--ds-space-1);
+}
+
+.brush-icon-review-production-actions small {
+  color: var(--skirmish-muted);
+}
+
 @media (max-width: 900px) {
   .run-relic-review-grid,
-  .plagued-icon-review-ability-grid {
+  .plagued-icon-review-ability-grid,
+  .brush-icon-review-choice-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .brush-icon-review-toolbar-comparison {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .brush-icon-review-production-actions {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -19615,7 +19848,7 @@ button.tileset-relationship-cell {
 }
 
 .menu-dest > .enchiridion-workspace > .enchiridion-section-rail {
-  --settings-rail-tab-gap: clamp(9px, calc(var(--layout-vw, 100vw) * .008), 13px);
+  --settings-rail-tab-gap: var(--main-menu-tab-column-gap);
   align-content: start;
   display: grid;
   flex: none;
@@ -20112,6 +20345,15 @@ button.tileset-relationship-cell {
   --shell-workspace-body-inset-start: var(--main-menu-content-inset-inline);
 }
 
+.strategikon-background-artwork {
+  block-size: 100%;
+  display: block;
+  inline-size: 100%;
+  image-rendering: pixelated;
+  object-fit: cover;
+  opacity: .68;
+}
+
 .strategikon-slot {
   inset: 0;
   min-block-size: 0;
@@ -20131,7 +20373,11 @@ button.tileset-relationship-cell {
 .strategikon-workspace-layout {
   display: grid;
   gap: 0;
-  grid-template-columns: 322px minmax(0, 1fr);
+  grid-template-columns: var(--main-menu-tab-column-w) minmax(0, 1fr);
+}
+
+.strategikon-workspace-layout.has-secondary-rail {
+  grid-template-columns: repeat(2, var(--main-menu-tab-column-w)) minmax(0, 1fr);
 }
 
 .strategikon-rail,
@@ -20141,12 +20387,7 @@ button.tileset-relationship-cell {
 }
 
 .strategikon-rail {
-  align-content: start;
-  display: grid;
-  gap: clamp(9px, calc(var(--layout-vw, 100vw) * .008), 13px);
-  min-block-size: 0;
-  padding-block: var(--shell-workspace-body-inset-block);
-  padding-inline: var(--shell-workspace-body-inset-start) 0;
+  z-index: 1;
 }
 
 .strategikon-content {
@@ -20157,18 +20398,12 @@ button.tileset-relationship-cell {
 
 .strategikon-content > .enchiridion-workspace {
   block-size: 100%;
-  display: grid;
-  gap: var(--skirmish-content-gap);
-  grid-template-columns: 270px minmax(0, 1fr);
+  display: block;
   min-block-size: 0;
 }
 
-.strategikon-content .enchiridion-section-rail {
-  align-content: start;
-  display: grid;
-  gap: clamp(9px, calc(var(--layout-vw, 100vw) * .008), 13px);
-  min-block-size: 0;
-  padding: clamp(8px, calc(var(--layout-vw, 100vw) * .008), 12px) clamp(6px, calc(var(--layout-vw, 100vw) * .006), 10px);
+.strategikon-content > .enchiridion-workspace > .enchiridion-content {
+  block-size: 100%;
 }
 
 .strategikon-content > .run-workspace,
@@ -20243,8 +20478,7 @@ button.tileset-relationship-cell {
     min-block-size: 180px;
   }
 
-  .enchiridion-relic-layout,
-  .strategikon-content > .enchiridion-workspace {
+  .enchiridion-relic-layout {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -22217,6 +22451,23 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
 .play-detail-facts dd {
   margin: 0;
   text-align: end;
+}
+
+/* Replacement disclosure seated above Start Run — the popup-free abandon confirm.
+   Sits between the detail body and the actions row, so the column's own gap spaces it. */
+.run-replace-note {
+  padding: var(--ds-inset);
+}
+
+.run-replace-note h3 {
+  font-size: var(--ds-text-2xs);
+  margin: 0 0 var(--ds-inline-tight);
+  text-transform: uppercase;
+}
+
+.run-replace-note p {
+  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .72));
+  margin: 0;
 }
 
 .run-pestiferous-losses {

@@ -30,10 +30,10 @@ function rendersSettingsTab(src: string): boolean {
 describe('settings-rail stone continuity is index-driven (ADR-0063)', () => {
   it('the .settings-tab continuity rule is keyed to --tab-index, not nth-child', () => {
     expect(css).toContain('.settings-tab { background-position-y: calc(var(--tab-index, 0) * -98px); }');
-    expect(css).toMatch(/\.settings-rail-frame\s*\{[\s\S]*?--settings-rail-tab-gap:\s*clamp\([\s\S]*?gap:\s*var\(--settings-rail-tab-gap\);/);
+    expect(css).toMatch(/\.settings-rail-frame\s*\{[\s\S]*?gap:\s*clamp\(/);
     expect(css).toMatch(/\.main-menu-mode-tab\s*\{[\s\S]*?block-size:\s*61px;[\s\S]*?--settings-tab-surface-pitch:\s*calc\(61px \+ var\(--settings-rail-tab-gap, 37px\)\);[\s\S]*?--chrome-surface-position-y:\s*calc\(var\(--tab-index, 0\) \* -1 \* var\(--settings-tab-surface-pitch\)\);/);
     expect(css).toMatch(/\.play-source-fixed\s*\{[\s\S]*?--settings-rail-tab-gap:\s*var\(--ds-stack\);[\s\S]*?gap:\s*var\(--settings-rail-tab-gap\);/);
-    expect(css).toMatch(/\.menu-dest > \.enchiridion-workspace > \.enchiridion-section-rail\s*\{[\s\S]*?--settings-rail-tab-gap:\s*clamp\([\s\S]*?gap:\s*var\(--settings-rail-tab-gap\);/);
+    expect(css).toMatch(/\.apparatus-rail-column\s*\{[\s\S]*?--settings-rail-tab-gap:\s*var\(--main-menu-tab-column-gap\);[\s\S]*?gap:\s*var\(--settings-rail-tab-gap\);/);
     // The retired fragile ladder must never return: a per-position nth-child rule can't stay
     // continuous across rail lengths, which is the whole bug this ADR closes.
     expect(css).not.toMatch(/\.settings-tab:nth-child\(\d+\)\s*\{\s*background-position-y/);

@@ -457,7 +457,7 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     badge: 'brush tool',
     token: '--le-inner-square',
     parentId: 'inner-tool-square',
-    iconClass: 'ic-brush',
+    iconClass: 'live-media-brush-icon',
     selectors: [
       '.le-action-toolbar .le-seg-btn',
       '[data-chrome-unit="inner-brush-tool"]',

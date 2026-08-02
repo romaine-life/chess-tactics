@@ -57,9 +57,26 @@ export function checkCss(source) {
   return failures;
 }
 
+export function checkBrushIconContract(consumerSource, cssSource) {
+  const failures = [];
+  if (/\bic-brush\b|ui-kit-icons-pencil-png/.test(consumerSource)) {
+    failures.push('src/ui/LevelEditorChromeConsumers.tsx: Brush must not retain the Pencil fallback class or source.');
+  }
+  if (!consumerSource.includes("liveMediaForSlot(LEVEL_EDITOR_BRUSH_ICON_SLOT).media.immutableUrl")) {
+    failures.push('src/ui/LevelEditorChromeConsumers.tsx: Brush must resolve its accepted semantic live-media slot.');
+  }
+  if (!/\.le-seg-icons\s+\.le-seg-btn\s+\.le-ico\s*\{[^}]*\bwidth:\s*20px;[^}]*\bheight:\s*20px;/s.test(cssSource)) {
+    failures.push('src/style.css: the registered toolbar glyph box must remain explicitly 20x20.');
+  }
+  return failures;
+}
+
 export function run(root = new URL('../', import.meta.url)) {
-  const failures = CONSUMERS.flatMap((path) => checkTsx(path, readFileSync(new URL(path, root), 'utf8')));
-  failures.push(...checkCss(readFileSync(new URL('src/style.css', root), 'utf8')));
+  const sources = new Map(CONSUMERS.map((path) => [path, readFileSync(new URL(path, root), 'utf8')]));
+  const cssSource = readFileSync(new URL('src/style.css', root), 'utf8');
+  const failures = CONSUMERS.flatMap((path) => checkTsx(path, sources.get(path)));
+  failures.push(...checkCss(cssSource));
+  failures.push(...checkBrushIconContract(sources.get('src/ui/LevelEditorChromeConsumers.tsx'), cssSource));
   return failures;
 }
 

@@ -182,6 +182,10 @@ import {
   LevelEditorEventsWorkspace,
   type LevelEditorToolKey,
 } from './LevelEditorChromeConsumers';
+import {
+  brushIconProductionCandidate,
+  LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_STAGE,
+} from './brushIconLiveMedia';
 import { ShellControlsPanel, ShellViewportSwap, ShellWorkspace } from './shared/ChromeBox';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import {
@@ -2585,6 +2589,7 @@ export function LevelEditor(): ReactElement {
   const isChromeLabPreview = useMemo(() => urlParams.get('chromeLab') === '1', [urlParams]);
   const installedChromeCss = useInstalledChromeCss(!isChromeLabPreview);
   const fenceArtReviewRequested = urlParams.get('artReview') === FENCE_ART_REVIEW_ID;
+  const brushIconReviewVersionId = urlParams.get('brushIconReviewVersion')?.trim() ?? '';
   const [fenceArtReviewDismissed, setFenceArtReviewDismissed] = useState(false);
   const fenceArtReviewEnabled = fenceArtReviewRequested && !fenceArtReviewDismissed;
   const initialFenceArtworkId = urlParams.get('fenceArt') ?? '';
@@ -3026,6 +3031,39 @@ export function LevelEditor(): ReactElement {
   // Positive authored posts live at logical grid vertices. Automatic degree-one open-end posts are
   // still derived from the rails; these entries only add/override posts and may stand alone.
   const [boardFencePosts, setBoardFencePosts] = useState<Record<string, FenceMaterial>>(initialBoard?.fencePosts ?? {});
+  const [brushIconReviewCatalog, setBrushIconReviewCatalog] = useState<AdminLiveMediaCatalog | null>(null);
+  const [brushIconReviewError, setBrushIconReviewError] = useState<string | null>(null);
+  const brushIconReviewCandidate = useMemo(
+    () => brushIconReviewCatalog && brushIconReviewVersionId
+      ? brushIconProductionCandidate(brushIconReviewCatalog, brushIconReviewVersionId)
+      : null,
+    [brushIconReviewCatalog, brushIconReviewVersionId],
+  );
+  const brushIconReviewStatus = brushIconReviewVersionId
+    ? brushIconReviewError
+      ? `Brush icon review unavailable: ${brushIconReviewError}`
+      : brushIconReviewCandidate
+        ? brushIconReviewCandidate.metadata.productionStage === LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_STAGE
+          ? 'The exact owner-selected Option 01 pixels are mounted in the Brush tool with no added padding or crop.'
+          : 'Exact private 18×18 Option 01 production pixels are mounted in the Brush tool.'
+        : brushIconReviewCatalog
+          ? 'The requested native Brush candidate is unavailable.'
+          : 'Loading the private native Brush candidate…'
+    : undefined;
+  useEffect(() => {
+    if (!brushIconReviewVersionId) return undefined;
+    let cancelled = false;
+    void fetchAdminLiveMediaCatalog().then((catalog) => {
+      if (cancelled) return;
+      setBrushIconReviewCatalog(catalog);
+      setBrushIconReviewError(null);
+    }).catch((error: unknown) => {
+      if (cancelled) return;
+      setBrushIconReviewCatalog(null);
+      setBrushIconReviewError(error instanceof Error ? error.message : String(error));
+    });
+    return () => { cancelled = true; };
+  }, [brushIconReviewVersionId]);
   const [fenceAdminCatalog, setFenceAdminCatalog] = useState<AdminLiveMediaCatalog | null>(null);
   const [fenceCatalogError, setFenceCatalogError] = useState<string | null>(null);
   const fenceArtCatalog = useMemo(() => projectFenceArtKits(fenceAdminCatalog), [fenceAdminCatalog]);
@@ -8231,6 +8269,8 @@ export function LevelEditor(): ReactElement {
         onLayerChange={selectLayer}
         tool={actionToolbarTool}
         toolsDisabled={actionToolsDisabled}
+        brushIconUrl={brushIconReviewCandidate?.media?.url}
+        brushIconReviewStatus={brushIconReviewStatus}
         onToolChange={changeEditorTool}
         eraseLabel={layer === 'placed-art' && brushKind === 'artwork' ? 'Delete selected scene art' : 'Erase'}
         eraseDisabled={layer === 'placed-art' && brushKind === 'artwork' && !selectedArtwork}

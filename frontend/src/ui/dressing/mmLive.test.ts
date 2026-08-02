@@ -35,6 +35,7 @@ describe('MM_LIVE mirrors the baked menu/settings-rail chrome in style.css', () 
 
   it('railW: the .settings-shell rail column', () => {
     expect(firstBlock('.settings-shell')).toContain(`grid-template-columns: ${MM_LIVE.railW}px minmax(0, 1fr)`);
+    expect(css).toContain(`--main-menu-tab-column-w: ${MM_LIVE.railW}px`);
   });
 
   it('menu-shell column pull mirrors MM_LIVE.btnX/btnY from one source', () => {
@@ -71,6 +72,7 @@ describe('MM_LIVE mirrors the baked menu/settings-rail chrome in style.css', () 
     expect(m, '.settings-rail-frame gap should be clamp(<min>px, …, <max>px)').toBeTruthy();
     expect(MM_LIVE.gap).toBeGreaterThanOrEqual(Number(m![1]));
     expect(MM_LIVE.gap).toBeLessThanOrEqual(Number(m![2]));
+    expect(css).toContain('--main-menu-tab-column-gap: clamp(');
   });
 });
 

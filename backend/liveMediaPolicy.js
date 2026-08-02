@@ -9,12 +9,34 @@ const PREDRAWN_BOARD_PROOF_SCHEMA = 'predrawn-board-canonical-level-proof-v1';
 const PREDRAWN_BOARD_PROOF_RENDERER = 'LevelEditor/PredrawnBoardLayer';
 const RUN_RELIC_ICON_COMPONENT = 'run-relic-icon';
 const RUN_RELIC_ICON_SLOT = /^ui\/run\/relics\/([a-z][a-z0-9-]{0,79})\.png$/;
+const RUN_RELIC_RESIZED_PRODUCTION_EXCEPTION_SCHEMA = 'run-relic-resized-production-exception-v1';
+const RUN_RELIC_RESIZED_PRODUCTION_EXCEPTION_SHA_BY_SLOT = Object.freeze({
+  'ui/run/relics/congressional-approval.png': '928f9ceb7a5612ff0d2216b70422b972b04492a4c9ed277e5122721b390c52d0',
+  'ui/run/relics/deployment-vehicle.png': 'd004c0f5be36094ebc137a9cdbebfe69d847636a7c8ddaff50bac8b687aac0bc',
+  'ui/run/relics/inspirational-record.png': 'b6d18510fcff3e374a1899421b2928fb16cd79c0108ad00179059cca539e309d',
+  'ui/run/relics/mercenary-boat.png': '9e5945cc9c200d1e3818e10f3f6e3494150ce83f30aa95c7e499daa4462ae1e8',
+  'ui/run/relics/mercenarys-rifle.png': 'afe1a1f718a4406a60ae85adb002af846ef4a9c6000c20b97d67a0b57c06fa60',
+  'ui/run/relics/merchants-shopkey.png': 'c8e0e45f9b863e42401c8e72cf0c42364a3c70c0c8dfb7362978b79e9b5adfa0',
+  'ui/run/relics/occult-dagger.png': 'bc7984ccbabf45e39e672957d7ed1e2716c7e82e14b671fcbed38a7f82b9208d',
+  'ui/run/relics/training-linens.png': 'e1349bd32f7bcaccbd706dbc55a6f97df8a0dd96533f309d1e2c0ea38aabf461',
+});
 const RUN_RESOURCE_ICON_COMPONENT = 'run-resource-icon';
 const RUN_RESOURCE_ICON_SLOT = /^ui\/run\/resources\/([a-z][a-z0-9-]{0,79})\.png$/;
+const RUN_SHOP_WRAP_COMPONENT = 'run-shop-wrap';
+const RUN_SHOP_WRAP_SLOT = /^ui\/run\/shop-wrap\/([a-z][a-z0-9-]{0,79})\.png$/;
+// A wrap frames live cards rather than replacing them, so the only geometry the
+// runtime needs is where the card row sits inside the painted canvas.
+const RUN_SHOP_WRAP_KINDS = Object.freeze(['seat', 'band', 'slots']);
 const GAME_CONDITION_ICON_BY_SLOT = Object.freeze({
   'ui/kit/icons/game/plagued.png': Object.freeze({ component: 'unit-ability-icon', variant: 'plagued' }),
   'ui/kit/icons/card-properties/pestiferous.png': Object.freeze({ component: 'card-property-icon', variant: 'pestiferous' }),
 });
+const LEVEL_EDITOR_BRUSH_ICON_SLOT = 'ui/kit/icons/brush.png';
+const LEVEL_EDITOR_BRUSH_ICON_COMPONENT = 'level-editor-tool-icon';
+const LEVEL_EDITOR_BRUSH_ICON_PROOF_SCHEMA = 'level-editor-brush-icon-exact-byte-proof-v1';
+const LEVEL_EDITOR_BRUSH_ICON_PROOF_RENDERER = 'LevelEditorControlsPanel/inner-brush-tool';
+const LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_EXCEPTION_SCHEMA = 'level-editor-brush-option-01-scaled-production-exception-v1';
+const LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_EXCEPTION_SHA256 = 'abaf1ab5e8f34531864e4e9e9d52cb15a0e7b944e84a79dea98939013267074a';
 const SFX_SAMPLE_COMPONENT = 'sfx-sample';
 const SFX_SAMPLE_PROOF_RENDERER = 'SfxViewer/ExactCandidateAudition';
 const SFX_SAMPLE_PROOF_SCHEMA = 'sfx-sample-exact-byte-proof-v1';
@@ -29,6 +51,11 @@ const SFX_MEDIA_TYPE_BY_EXTENSION = Object.freeze({
   wav: 'audio/wav',
   webm: 'audio/webm',
 });
+const STRATEGIKON_BACKGROUND_COMPONENT = 'strategikon-background';
+const STRATEGIKON_BACKGROUND_PROOF_RENDERER = 'ShellWorkspace/StrategikonBackgroundArtwork';
+const STRATEGIKON_BACKGROUND_PROOF_SCHEMA = 'strategikon-background-cover-exception-v1';
+const STRATEGIKON_BACKGROUND_SLOT = 'ui/workspaces/strategikon/background.png';
+const STRATEGIKON_BACKGROUND_SHA256 = '8084f009cae79d3eaaa64bb2c0f5df6e26fc8dfe7d9f0547f24135102d41ffe7';
 
 function isObjectRecord(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -54,8 +81,27 @@ function runResourceIconSlotId(slot) {
   return match ? match[1] : null;
 }
 
+function runShopWrapSlotId(slot) {
+  const match = RUN_SHOP_WRAP_SLOT.exec(String(slot || ''));
+  return match ? match[1] : null;
+}
+
+/** A whole-pixel rectangle that must lie inside the painted canvas. */
+function containedRect(value, canvasWidth, canvasHeight) {
+  if (!isObjectRecord(value)) return null;
+  const { x, y, w, h } = value;
+  const whole = [x, y, w, h].every((entry) => Number.isSafeInteger(entry));
+  if (!whole || w <= 0 || h <= 0 || x < 0 || y < 0) return null;
+  if (x + w > canvasWidth || y + h > canvasHeight) return null;
+  return { x, y, w, h };
+}
+
 function gameConditionIconSlot(slot) {
   return GAME_CONDITION_ICON_BY_SLOT[String(slot || '')] ?? null;
+}
+
+function levelEditorBrushIconSlot(slot) {
+  return String(slot || '') === LEVEL_EDITOR_BRUSH_ICON_SLOT;
 }
 
 function sfxSampleSlot(slot) {
@@ -64,6 +110,10 @@ function sfxSampleSlot(slot) {
   const variantIndex = Number(match[2]);
   if (!Number.isSafeInteger(variantIndex) || variantIndex < 0 || variantIndex > 9999) return null;
   return { soundSetKey: match[1], variantIndex, extension: match[3] };
+}
+
+function strategikonBackgroundSlot(slot) {
+  return String(slot || '') === STRATEGIKON_BACKGROUND_SLOT;
 }
 
 function mediaVersionMetadata(row) {
@@ -190,6 +240,69 @@ function runRelicIconMediaIssue(row, projectedRuntime = null) {
 }
 
 /**
+ * Domain-owned runtime projection for one Run shop wrap: generated art that
+ * frames the live shop's card row. The wrap is decorative chrome around real
+ * cards, so it never carries text and never supplies an accessible name; the
+ * runtime contract is purely the card window measured on the painted canvas.
+ */
+function runShopWrapMediaIssue(row, projectedRuntime = null) {
+  const wrapId = runShopWrapSlotId(row.slot);
+  if (!wrapId) return 'Run shop wrap slots must match ui/run/shop-wrap/<wrap-id>.png';
+  if (row.domain !== 'ui-kit') return 'Run shop wraps require the ui-kit domain';
+  if (row.role !== 'shop-wrap') return 'Run shop wraps require the shop-wrap role';
+  if (row.media_type !== 'image/png') return 'Run shop wraps require image/png';
+  const width = Number(row.width);
+  const height = Number(row.height);
+  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 1 || height < 1) {
+    return 'Run shop wraps require decoded raster dimensions';
+  }
+
+  const metadata = mediaVersionMetadata(row);
+  const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+  if (!isObjectRecord(runtime)) return 'Run shop wraps require metadata.runtime';
+  const allowed = new Set([
+    'component', 'variant', 'kind', 'canvasWidth', 'canvasHeight', 'window', 'slots', 'altText', 'nativeRole',
+  ]);
+  const unsupported = Object.keys(runtime).filter((key) => !allowed.has(key));
+  if (unsupported.length) {
+    return `Run shop wrap runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
+  }
+  if (runtime.component !== RUN_SHOP_WRAP_COMPONENT) {
+    return `Run shop wrap metadata.runtime.component must be ${RUN_SHOP_WRAP_COMPONENT}`;
+  }
+  if (runtime.nativeRole !== RUN_SHOP_WRAP_COMPONENT) {
+    return `Run shop wrap metadata.runtime.nativeRole must be ${RUN_SHOP_WRAP_COMPONENT}`;
+  }
+  if (runtime.variant !== wrapId) return 'Run shop wrap variant must match its semantic slot id';
+  if (!RUN_SHOP_WRAP_KINDS.includes(runtime.kind)) {
+    return `Run shop wrap kind must be one of ${RUN_SHOP_WRAP_KINDS.join(', ')}`;
+  }
+  // The canvas is the acceptance-time contract against the uploaded raster, so a
+  // re-crop can never silently move every measured window.
+  if (runtime.canvasWidth !== width || runtime.canvasHeight !== height) {
+    return 'Run shop wrap canvas metadata must match the uploaded raster dimensions';
+  }
+  const window = containedRect(runtime.window, width, height);
+  if (!window) return 'Run shop wrap metadata.runtime.window must be a whole-pixel rect inside the canvas';
+  const slots = Array.isArray(runtime.slots)
+    ? runtime.slots.map((entry) => containedRect(entry, width, height))
+    : [];
+  if (slots.some((entry) => entry === null)) {
+    return 'Run shop wrap metadata.runtime.slots must all be whole-pixel rects inside the canvas';
+  }
+  if (runtime.kind === 'slots' && slots.length < 2) {
+    return 'Run shop wrap slots kind requires at least two measured card openings';
+  }
+  if (runtime.kind !== 'slots' && slots.length) {
+    return 'Run shop wrap slots are only meaningful for the slots kind';
+  }
+  if (runtime.altText !== '') {
+    return 'Run shop wrap metadata.runtime.altText must be empty because the live cards own the accessible content';
+  }
+  return null;
+}
+
+/**
  * Domain-owned runtime projection for one native Run resource icon. The
  * surrounding live number owns the accessible currency value.
  */
@@ -270,6 +383,136 @@ function gameConditionIconMediaIssue(row, projectedRuntime = null) {
   return null;
 }
 
+/** Closed production contract for the Level Editor's actual 20px Brush seat. */
+function levelEditorBrushIconMediaIssue(row, projectedRuntime = null) {
+  if (!levelEditorBrushIconSlot(row.slot)) return 'Level Editor brush icons require their registered semantic slot';
+  if (row.domain !== 'ui-kit') return 'Level Editor brush icons require the ui-kit domain';
+  if (row.role !== 'icon') return 'Level Editor brush icons require the icon role';
+  if (row.media_type !== 'image/png') return 'Level Editor brush icons require image/png';
+  const evidence = isObjectRecord(row.native_evidence) ? row.native_evidence : {};
+  const scaledOption01 = evidence.schema === LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_EXCEPTION_SCHEMA;
+  if (scaledOption01) {
+    if (
+      normalizedSha(row.blob_sha256) !== LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_EXCEPTION_SHA256
+      || Number(row.width) !== 64 || Number(row.height) !== 64
+    ) return 'The ADR-0337 Brush exception is restricted to the exact owner-selected 64px Option 01 bytes';
+  } else if (Number(row.width) !== 18 || Number(row.height) !== 18) {
+    return 'Level Editor brush icons must be native 18x18 rasters unless they are the exact ADR-0337 Option 01 exception';
+  }
+
+  const metadata = mediaVersionMetadata(row);
+  const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+  if (!isObjectRecord(runtime)) return 'Level Editor brush icons require metadata.runtime';
+  const allowed = new Set([
+    'component', 'variant', 'frameWidth', 'frameHeight', 'frameCount', 'altText', 'nativeRole',
+  ]);
+  const unsupported = Object.keys(runtime).filter((key) => !allowed.has(key));
+  if (unsupported.length) {
+    return `Level Editor brush runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
+  }
+  if (runtime.component !== LEVEL_EDITOR_BRUSH_ICON_COMPONENT) {
+    return `Level Editor brush metadata.runtime.component must be ${LEVEL_EDITOR_BRUSH_ICON_COMPONENT}`;
+  }
+  if (runtime.variant !== 'brush') return 'Level Editor brush runtime variant must be brush';
+  const expectedFrame = scaledOption01 ? 64 : 18;
+  if (runtime.frameWidth !== expectedFrame || runtime.frameHeight !== expectedFrame || runtime.frameCount !== 1) {
+    return `Level Editor brush runtime geometry must describe one ${expectedFrame}x${expectedFrame} frame`;
+  }
+  if (runtime.nativeRole !== LEVEL_EDITOR_BRUSH_ICON_COMPONENT) {
+    return `Level Editor brush metadata.runtime.nativeRole must be ${LEVEL_EDITOR_BRUSH_ICON_COMPONENT}`;
+  }
+  if (runtime.altText !== '') {
+    return 'Level Editor brush metadata.runtime.altText must be empty because the tool button owns its accessible name';
+  }
+
+  if (scaledOption01) {
+    if (
+      evidence.decision !== 'ADR-0337'
+      || evidence.status !== 'owner-approved-production-exception'
+      || evidence.native1x !== false || evidence.spatialResampling !== true
+      || Number(evidence.sourceWidth) !== 64 || Number(evidence.sourceHeight) !== 64
+      || normalizedSha(evidence.sourceSha256) !== LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_EXCEPTION_SHA256
+      || Number(evidence.drawWidth) !== 20 || Number(evidence.drawHeight) !== 20
+      || evidence.transform !== 'css-background-size-contain-64-to-20'
+    ) return 'The ADR-0337 Brush exception evidence is incomplete';
+    return null;
+  }
+  if (evidence.schema !== 'level-editor-brush-icon-native-v1') {
+    return 'Level Editor brush native evidence requires level-editor-brush-icon-native-v1';
+  }
+  if (
+    evidence.productionRole !== 'inner-brush-tool'
+    || Number(evidence.drawWidth) !== 18 || Number(evidence.drawHeight) !== 18
+    || Number(evidence.generatorOutputWidth) !== 32 || Number(evidence.generatorOutputHeight) !== 32
+    || evidence.transform !== 'center-crop-18x18-no-spatial-resampling'
+  ) return 'Level Editor brush native evidence does not match its exact 18px production role';
+  const bounds = evidence.opaqueBounds;
+  if (
+    !isObjectRecord(bounds)
+    || !Number.isSafeInteger(bounds.x) || !Number.isSafeInteger(bounds.y)
+    || !Number.isSafeInteger(bounds.width) || !Number.isSafeInteger(bounds.height)
+    || bounds.x < 2 || bounds.y < 2 || bounds.width < 1 || bounds.height < 1
+    || bounds.x + bounds.width > 16 || bounds.y + bounds.height > 16
+  ) return 'Level Editor brush opaque bounds must preserve a two-pixel transparent gutter on every edge';
+  if (
+    evidence.edgeAlphaMax !== 0 || !Number.isSafeInteger(evidence.opaquePixelCount)
+    || evidence.opaquePixelCount < 16 || evidence.opaquePixelCount > 256
+  ) return 'Level Editor brush alpha evidence is incomplete or implausible';
+  return null;
+}
+
+function levelEditorBrushIconOwnerProofIssue(row, proof, surfaceUrl = null) {
+  if (!levelEditorBrushIconSlot(row.slot)) return 'Level Editor brush proof requires the registered semantic slot';
+  if (!isObjectRecord(proof) || proof.schema !== LEVEL_EDITOR_BRUSH_ICON_PROOF_SCHEMA) {
+    return `Level Editor brush review requires ${LEVEL_EDITOR_BRUSH_ICON_PROOF_SCHEMA}`;
+  }
+  const scaledOption01 = row.native_evidence?.schema === LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_EXCEPTION_SCHEMA;
+  const expected = scaledOption01
+    ? { assetLocalScale: 0.3125, spatialResampling: true, frame: 64, draw: 20 }
+    : { assetLocalScale: 1, spatialResampling: false, frame: 18, draw: 18 };
+  if (
+    proof.renderer !== LEVEL_EDITOR_BRUSH_ICON_PROOF_RENDERER
+    || proof.canonicalScale !== 1 || proof.assetLocalScale !== expected.assetLocalScale
+    || proof.spatialResampling !== expected.spatialResampling
+    || proof.frameWidth !== expected.frame || proof.frameHeight !== expected.frame
+    || proof.drawWidth !== expected.draw || proof.drawHeight !== expected.draw
+  ) return 'Level Editor brush proof does not match the exact reviewed tool renderer';
+  if (surfaceUrl !== null && proof.surfaceUrl !== surfaceUrl) {
+    return 'Level Editor brush proof surfaceUrl does not match the reviewed surface';
+  }
+  let parsedSurface;
+  try { parsedSurface = new URL(proof.surfaceUrl); } catch { return 'Level Editor brush proof surfaceUrl is invalid'; }
+  if (
+    parsedSurface.pathname !== '/editor/level'
+    || parsedSurface.searchParams.get('brushIconReviewVersion') !== String(row.id)
+  ) return 'Level Editor brush proof must identify its exact candidate in the real Level Editor';
+  const candidateSha256 = normalizedSha(row.blob_sha256);
+  if (!candidateSha256 || !Array.isArray(proof.selectedCandidates) || proof.selectedCandidates.length !== 1) {
+    return 'Level Editor brush proof must identify exactly one candidate';
+  }
+  const selected = proof.selectedCandidates[0];
+  if (
+    !isObjectRecord(selected) || selected.slot !== row.slot || selected.versionId !== String(row.id)
+    || normalizedSha(selected.sha256) !== candidateSha256
+  ) return 'Level Editor brush proof does not identify the reviewed candidate bytes';
+  if (!Array.isArray(proof.slotSnapshots) || proof.slotSnapshots.length !== 1) {
+    return 'Level Editor brush proof must snapshot exactly one semantic slot';
+  }
+  const snapshot = proof.slotSnapshots[0];
+  if (!isObjectRecord(snapshot) || snapshot.slot !== row.slot) {
+    return 'Level Editor brush proof slot snapshot is invalid';
+  }
+  const bounds = row.native_evidence?.opaqueBounds;
+  if (
+    !isObjectRecord(bounds) || !isObjectRecord(proof.opaqueBounds)
+    || proof.opaqueBounds.x !== bounds.x || proof.opaqueBounds.y !== bounds.y
+    || proof.opaqueBounds.width !== bounds.width || proof.opaqueBounds.height !== bounds.height
+  ) {
+    return 'Level Editor brush proof opaque bounds do not match the validated candidate evidence';
+  }
+  return null;
+}
+
 /**
  * Domain-owned runtime projection for one authored one-shot take. Sound-set
  * labels, gains, and assignments remain in the DB-owned SFX profile.
@@ -300,6 +543,101 @@ function sfxSampleMediaIssue(row, projectedRuntime = null) {
     return 'SFX sample runtime durationMs must be a positive bounded integer';
   }
   if (runtime.loop !== false) return 'SFX one-shot runtime loop must be false';
+  return null;
+}
+
+/**
+ * Closed production projection for the exact command-archive artwork approved
+ * under ADR-0336. The source PNG remains native and unresampled; the named
+ * exception is the ShellWorkspace cover presentation, not rewritten pixels.
+ */
+function strategikonBackgroundMediaIssue(row, projectedRuntime = null) {
+  if (!strategikonBackgroundSlot(row.slot)) return 'Strategikon background requires its canonical semantic slot';
+  if (row.domain !== 'ui-kit') return 'Strategikon background requires the ui-kit domain';
+  if (row.role !== 'background') return 'Strategikon background requires the background role';
+  if (row.media_type !== 'image/png') return 'Strategikon background requires image/png';
+  if (Number(row.width) !== 688 || Number(row.height) !== 384) {
+    return 'Strategikon background must retain its approved 688x384 source raster';
+  }
+  if (normalizedSha(row.blob_sha256) !== STRATEGIKON_BACKGROUND_SHA256) {
+    return 'ADR-0336 authorizes only the exact owner-approved Strategikon background bytes';
+  }
+
+  const metadata = mediaVersionMetadata(row);
+  const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+  if (!isObjectRecord(runtime)) return 'Strategikon background requires metadata.runtime';
+  const allowed = new Set(['component', 'variant', 'state', 'frameWidth', 'frameHeight', 'frameCount', 'altText', 'nativeRole']);
+  const unsupported = Object.keys(runtime).filter((key) => !allowed.has(key));
+  if (unsupported.length) {
+    return `Strategikon background runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
+  }
+  if (runtime.component !== STRATEGIKON_BACKGROUND_COMPONENT) {
+    return `Strategikon background metadata.runtime.component must be ${STRATEGIKON_BACKGROUND_COMPONENT}`;
+  }
+  if (runtime.variant !== 'command-archive') return 'Strategikon background runtime variant must be command-archive';
+  if (runtime.state !== 'owner-approved-cover-scaling-exception') {
+    return 'Strategikon background runtime state must name the owner-approved cover-scaling exception';
+  }
+  if (runtime.frameWidth !== 688 || runtime.frameHeight !== 384 || runtime.frameCount !== 1) {
+    return 'Strategikon background runtime frame geometry must match the approved PNG';
+  }
+  if (runtime.nativeRole !== STRATEGIKON_BACKGROUND_COMPONENT) {
+    return `Strategikon background nativeRole must be ${STRATEGIKON_BACKGROUND_COMPONENT}`;
+  }
+  if (runtime.altText !== '') return 'decorative Strategikon background runtime altText must be empty';
+  return null;
+}
+
+function strategikonBackgroundOwnerProofIssue(row, proof, surfaceUrl = null) {
+  if (!strategikonBackgroundSlot(row.slot)) return 'Strategikon background proof requires its canonical semantic slot';
+  if (!isObjectRecord(proof) || proof.schema !== STRATEGIKON_BACKGROUND_PROOF_SCHEMA) {
+    return `Strategikon background review requires ${STRATEGIKON_BACKGROUND_PROOF_SCHEMA}`;
+  }
+  if (
+    proof.renderer !== STRATEGIKON_BACKGROUND_PROOF_RENDERER
+    || proof.decision !== 'ADR-0336'
+    || proof.coverScalingApproved !== true
+    || proof.objectFit !== 'cover'
+    || proof.imageRendering !== 'pixelated'
+    || proof.opacity !== 0.68
+  ) return 'Strategikon background proof must record the exact owner-approved cover presentation';
+  if (
+    !isObjectRecord(proof.sourceRaster)
+    || proof.sourceRaster.width !== 688 || proof.sourceRaster.height !== 384
+    || normalizedSha(proof.sourceRaster.sha256) !== STRATEGIKON_BACKGROUND_SHA256
+  ) return 'Strategikon background proof does not identify the approved source raster';
+  if (
+    !isObjectRecord(proof.reviewViewport)
+    || proof.reviewViewport.width !== 1440 || proof.reviewViewport.height !== 900
+  ) return 'Strategikon background proof must record the approved 1440x900 review viewport';
+  if (surfaceUrl !== null && proof.surfaceUrl !== surfaceUrl) {
+    return 'Strategikon background proof surfaceUrl does not match the reviewed surface';
+  }
+  let parsedSurface;
+  try { parsedSurface = new URL(proof.surfaceUrl); } catch { return 'Strategikon background proof surfaceUrl is invalid'; }
+  if (
+    parsedSurface.pathname !== '/play/strategikon/enchiridion/units'
+    || parsedSurface.searchParams.get('strategikonBackgroundReview') !== '1'
+    || parsedSurface.searchParams.get('campaignId') !== 'off-c-crown-valoria'
+    || parsedSurface.searchParams.get('levelId') !== 'off-l-hold-bridge'
+  ) return 'Strategikon background proof must identify the exact reviewed gameplay surface';
+
+  const candidateSha256 = normalizedSha(row.blob_sha256);
+  if (!candidateSha256 || !Array.isArray(proof.selectedCandidates) || proof.selectedCandidates.length !== 1) {
+    return 'Strategikon background proof must identify exactly one candidate';
+  }
+  const selected = proof.selectedCandidates[0];
+  if (
+    !isObjectRecord(selected) || selected.slot !== row.slot || selected.versionId !== String(row.id)
+    || normalizedSha(selected.sha256) !== candidateSha256
+  ) return 'Strategikon background proof does not identify the reviewed candidate bytes';
+  if (!Array.isArray(proof.slotSnapshots) || proof.slotSnapshots.length !== 1) {
+    return 'Strategikon background proof must snapshot exactly one semantic slot';
+  }
+  const snapshot = proof.slotSnapshots[0];
+  if (!isObjectRecord(snapshot) || snapshot.slot !== row.slot) {
+    return 'Strategikon background proof slot snapshot is invalid';
+  }
   return null;
 }
 
@@ -413,6 +751,47 @@ function nativeMediaEvidenceIssue(row) {
   const isRaster = String(row.media_type || '').startsWith('image/') && row.media_type !== 'image/svg+xml';
   if (!isRaster) return null;
   const evidence = isObjectRecord(row.native_evidence) ? row.native_evidence : {};
+  if (evidence.schema === LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_EXCEPTION_SCHEMA) {
+    if (
+      String(row.slot || '') !== LEVEL_EDITOR_BRUSH_ICON_SLOT
+      || normalizedSha(row.blob_sha256) !== LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_EXCEPTION_SHA256
+      || normalizedSha(evidence.sourceSha256) !== LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_EXCEPTION_SHA256
+    ) return 'ADR-0337 scaled Brush evidence is restricted to the exact owner-selected Option 01 bytes';
+    if (
+      evidence.decision !== 'ADR-0337'
+      || evidence.status !== 'owner-approved-production-exception'
+      || evidence.native1x !== false || evidence.spatialResampling !== true
+      || Number(row.width) !== 64 || Number(row.height) !== 64
+      || Number(evidence.sourceWidth) !== 64 || Number(evidence.sourceHeight) !== 64
+      || Number(evidence.drawWidth) !== 20 || Number(evidence.drawHeight) !== 20
+      || evidence.transform !== 'css-background-size-contain-64-to-20'
+    ) return 'ADR-0337 scaled Brush evidence is incomplete';
+    return null;
+  }
+  if (evidence.schema === RUN_RELIC_RESIZED_PRODUCTION_EXCEPTION_SCHEMA) {
+    const expectedSha256 = RUN_RELIC_RESIZED_PRODUCTION_EXCEPTION_SHA_BY_SLOT[String(row.slot || '')];
+    if (!expectedSha256) return 'ADR-0332 resized production evidence is restricted to its eight Run relic slots';
+    if (normalizedSha(row.blob_sha256) !== expectedSha256 || normalizedSha(evidence.outputSha256) !== expectedSha256) {
+      return 'ADR-0332 resized production evidence does not authorize these uploaded bytes';
+    }
+    if (
+      evidence.decision !== 'ADR-0332'
+      || evidence.status !== 'owner-approved-production-exception'
+      || evidence.native1x !== false
+      || evidence.spatialResampling !== true
+    ) return 'ADR-0332 resized production evidence is incomplete';
+    if (
+      Number(row.width) !== 64 || Number(row.height) !== 64
+      || Number(evidence.outputWidth) !== 64 || Number(evidence.outputHeight) !== 64
+      || Number(evidence.sourceWidth) !== 1254 || Number(evidence.sourceHeight) !== 1254
+    ) return 'ADR-0332 resized production evidence has invalid source or output dimensions';
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(evidence.sourceVersionId || ''))
+      || !normalizedSha(evidence.sourceSha256)
+      || evidence.transform !== 'chroma-key-crop-nearest-neighbor-fit-52-alpha-threshold-96'
+    ) return 'ADR-0332 resized production evidence is missing its archived source or exact transform';
+    return null;
+  }
   if (evidence.native1x !== true) return 'nativeEvidence.native1x must be true';
   if (evidence.spatialResampling !== false) return 'nativeEvidence.spatialResampling must be false';
   if (row.width !== null || row.height !== null) {
@@ -451,14 +830,28 @@ module.exports = {
   PREDRAWN_BOARD_COMPONENT,
   PREDRAWN_BOARD_PROOF_RENDERER,
   PREDRAWN_BOARD_PROOF_SCHEMA,
+  LEVEL_EDITOR_BRUSH_ICON_COMPONENT,
+  LEVEL_EDITOR_BRUSH_ICON_PROOF_RENDERER,
+  LEVEL_EDITOR_BRUSH_ICON_PROOF_SCHEMA,
+  LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_EXCEPTION_SCHEMA,
   RUN_RELIC_ICON_COMPONENT,
+  RUN_RELIC_RESIZED_PRODUCTION_EXCEPTION_SCHEMA,
   RUN_RESOURCE_ICON_COMPONENT,
+  RUN_SHOP_WRAP_COMPONENT,
   SFX_SAMPLE_COMPONENT,
   SFX_SAMPLE_PROOF_RENDERER,
   SFX_SAMPLE_PROOF_SCHEMA,
+  STRATEGIKON_BACKGROUND_COMPONENT,
+  STRATEGIKON_BACKGROUND_PROOF_RENDERER,
+  STRATEGIKON_BACKGROUND_PROOF_SCHEMA,
+  STRATEGIKON_BACKGROUND_SHA256,
+  STRATEGIKON_BACKGROUND_SLOT,
   liveCatalogReadinessIssue,
   gameConditionIconMediaIssue,
   gameConditionIconSlot,
+  levelEditorBrushIconMediaIssue,
+  levelEditorBrushIconOwnerProofIssue,
+  levelEditorBrushIconSlot,
   nativeMediaEvidenceIssue,
   predrawnBoardAlignmentIssue,
   predrawnBoardMediaIssue,
@@ -469,7 +862,12 @@ module.exports = {
   runRelicIconSlotId,
   runResourceIconMediaIssue,
   runResourceIconSlotId,
+  runShopWrapMediaIssue,
+  runShopWrapSlotId,
   sfxSampleMediaIssue,
   sfxSampleOwnerProofIssue,
   sfxSampleSlot,
+  strategikonBackgroundMediaIssue,
+  strategikonBackgroundOwnerProofIssue,
+  strategikonBackgroundSlot,
 };

@@ -13,7 +13,7 @@ import {
   enchiridionRelicHref,
   enchiridionSectionFromPath,
 } from './enchiridionRoute';
-import { ApparatusRailTab } from './shared/ApparatusRailTab';
+import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
 import { isPlaySelectorPath, PLAY_SELECTOR_ROOT } from './playHubRoute';
 import { loadDecodedImage } from '../render/imageResources';
 
@@ -159,12 +159,16 @@ export function MainMenu({
         data-chrome-tab-fill-surface="hybrid-wood-oak"
       >
         <ArtRouteChrome className="settings-shell">
-          <aside className="settings-frame settings-rail-frame" aria-label="Game modes">
+          <ApparatusRailColumn
+            className="settings-frame settings-rail-frame"
+            placement="framed"
+            aria-label="Game modes"
+          >
             {/* Family membership, not string equality: the installed route may be any
                 address within the destination (e.g. the Play record migrating from the
                 skirmish tab to the hub root) and the tab must still light. */}
             {MENU_TABS.map((tab, index) => <ModeTab key={tab.slug} tab={tab} index={index} active={dest !== null && shellDest(tab.href) === dest} />)}
-          </aside>
+          </ApparatusRailColumn>
           <MenuDestinationSceneSlot
             className="menu-dest"
             sceneInstance={sceneInstanceKey}
