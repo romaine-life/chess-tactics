@@ -8,6 +8,7 @@ partially_superseded_by:
   - "[ADR-0311](0311-pestiferous-cards-reveal-one-plagued-unit-at-a-time.md)"
   - "[ADR-0327](0327-tactical-cards-roll-one-in-eight-and-may-cost-twelve.md)'s all-value Discipline pricing"
   - "[ADR-0328](0328-tactical-targets-are-chosen-at-acquisition-and-use-the-discipline-icon.md)'s Tactical target timing"
+  - "[ADR-0340](0340-cacochymic-replaces-plagued-as-the-pestiferous-unit-state-name.md)'s replacement of the Plagued state name"
 partially_supersedes:
   - "[ADR-0193](0193-runs-are-persistent-wars-around-unchanged-chess-battles.md)'s one-entry-per-composition bundle-deck identity"
 ---

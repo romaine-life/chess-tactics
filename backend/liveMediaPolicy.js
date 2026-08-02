@@ -29,7 +29,13 @@ const RUN_SHOP_WRAP_SLOT = /^ui\/run\/shop-wrap\/([a-z][a-z0-9-]{0,79})\.png$/;
 const RUN_SHOP_WRAP_KINDS = Object.freeze(['seat', 'band', 'slots']);
 const GAME_CONDITION_ICON_BY_SLOT = Object.freeze({
   'ui/kit/icons/game/plagued.png': Object.freeze({ component: 'unit-ability-icon', variant: 'plagued' }),
+  'ui/kit/icons/game/positioned.png': Object.freeze({ component: 'unit-ability-icon', variant: 'positioned' }),
+  'ui/kit/icons/game/discipline.png': Object.freeze({ component: 'unit-ability-icon', variant: 'discipline' }),
+  'ui/kit/icons/game/marshalled.png': Object.freeze({ component: 'unit-ability-icon', variant: 'marshalled' }),
   'ui/kit/icons/card-properties/pestiferous.png': Object.freeze({ component: 'card-property-icon', variant: 'pestiferous' }),
+  'ui/kit/icons/card-properties/concinnous.png': Object.freeze({ component: 'card-property-icon', variant: 'concinnous' }),
+  'ui/kit/icons/card-properties/tactical.png': Object.freeze({ component: 'card-property-icon', variant: 'tactical' }),
+  'ui/kit/icons/card-properties/hieratic.png': Object.freeze({ component: 'card-property-icon', variant: 'hieratic' }),
 });
 const LEVEL_EDITOR_BRUSH_ICON_SLOT = 'ui/kit/icons/brush.png';
 const LEVEL_EDITOR_BRUSH_ICON_COMPONENT = 'level-editor-tool-icon';

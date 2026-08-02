@@ -66,10 +66,11 @@ these.
   title at upper left, one compact gold coin with a live positive whole-number cost
   at upper right, a large pane for the card's accepted PixelLab illustration, a narrow card-
   type line, and a Contents Box whose flavor text remains at the bottom. The type
-  line is never empty: ordinary cards say **Units**, while affected cards
-  append causal qualifiers after an em dash, such as **Units — Pestiferous**,
-  **Units — Tactical**, or **Units — Concinnous**. Ordinary and qualified labels use one shared optically
-  centered type-line scale and baseline rather than per-label positioning.
+  line is never empty: ordinary and affected unit cards say **Units** at left.
+  An affected card uses the strip's right-side symbol seat for its causal
+  card-property icon instead of appending a written qualifier. Ordinary cards
+  leave that seat empty. The primary label uses one shared optically centered
+  scale and baseline rather than per-property positioning.
   Detecting an ability, modifier, or affected card type does not automatically
   synthesize explanatory prose in the Contents Box; those definitions will use a
   later tooltip, reference, or inspection system. The shared face still permits
@@ -87,7 +88,8 @@ these.
   frame SHA-256, projected through one shared responsive formula, and reviewable
   as an overlay in Card Layout; unmatched pixels use the Standard profile
   (ADR-0219, ADR-0225, ADR-0270, ADR-0275, ADR-0276, ADR-0283, ADR-0285,
-  ADR-0305, ADR-0309, ADR-0324, ADR-0325, ADR-0327, ADR-0329, ADR-0330).
+  ADR-0305, ADR-0309, ADR-0324, ADR-0325, ADR-0327, ADR-0329, ADR-0330,
+  ADR-0338).
   In-place card changes retain the last complete face until the requested card's
   actual image layer is ready, then promote content, art, frame, and frame
   geometry together; rapid newer selections cancel older pending cards
@@ -99,8 +101,8 @@ these.
   a shop reveals the card, promoted unchanged if purchased, and discarded if
   passed so a later shuffle may affect that core differently. Disciplined adds
   3 gold, Positioned adds 2 (and can raise Concinnous cards to 10 or 11), and
-  Plagued discounts by piece tier—Pawn 0, minor
-  1, Rook 2, Queen 3—so shop-card prices remain whole gold and a Plagued Pawn
+  Cacochymic discounts by piece tier—Pawn 0, minor
+  1, Rook 2, Queen 3—so shop-card prices remain whole gold and a Cacochymic Pawn
   still costs 1. Exact public contents and modifier markers belong in the Contents Box
   unit ledger, not generated card-name permutations; an explicitly concealed
   Concinnous target appears there as hidden until purchase (ADR-0265, ADR-0271,
@@ -121,31 +123,38 @@ these.
   prompt provenance and no packaged fallback (ADR-0281, ADR-0282).
 - A card's affected **qualifiers** identify causal rules rather than replacing
   its primary type. Pestiferous changes the card lifecycle and publicly marks
-  one current unit with the Plagued status icon; the card face does not spell
-  out **Plagued** beside that unit.
+  one current unit with the Cacochymic status icon; the card face does not spell
+  out **Pestiferous** in the type strip or **Cacochymic** beside that unit. Its
+  right-side Pestiferous property icon is distinct from the Cacochymic state icon.
   **Tactical** causes exactly one unit to gain Discipline when the card is
   acquired. Every ordinary post-Battle shop-card draw has a seeded one-in-eight
   Tactical chance; opening Shop cards remain standard. Tactical resolves before
   the other qualifiers and adds three gold even when the resulting price reaches
   ten through twelve. The unit is chosen only at acquisition. Multi-unit offers
-  therefore conceal the outcome, while a one-unit offer shows the shared
-  forged-shield Discipline icon because the result is forced. Tactical uses the
-  dedicated blue-water frame.
+  therefore conceal the outcome, while a one-unit offer shows the dedicated
+  Discipline icon because the result is forced. The Tactical property icon in
+  the type strip is a separate symbol. Tactical uses the dedicated blue-water
+  frame.
   **Concinnous** means skillfully and harmoniously arranged and causes exactly
-  one contained unit to become Positioned upon acquisition. The type line
-  declares the qualifier; detecting it does not automatically restate its
+  one contained unit to become Positioned upon acquisition. The right-side
+  Concinnous icon declares the property; detecting it does not automatically restate its
   behavior as Contents Box prose. Before purchase, direct unit-property
   presentation marks the target as hidden. The target is seeded and persisted
   with the offer, priced normally, and merely revealed—not rerolled—after
   purchase. A card does not become Concinnous just because an external relic
-  later modifies one of its units. Concinnous owns a dedicated forged-steel
-  semantic frame treatment opposite Pestiferous black while retaining the
-  anatomy. After Tactical and Pestiferous precedence, every remaining shop
+  later modifies one of its units. Concinnous owns its dedicated white frame
+  treatment while retaining the shared anatomy. After Tactical and Pestiferous precedence, every remaining shop
   offer—regardless of core value—has a seeded one-in-eight Concinnous roll. It
   costs two additional gold, may reach eleven, and cannot carry another
   qualifier. Every frame uses one shared accepted gold-coin source with its live
   price overlaid (ADR-0272, ADR-0276, ADR-0305, ADR-0309, ADR-0310, ADR-0311,
-  ADR-0324, ADR-0325, ADR-0327, ADR-0328, ADR-0329).
+  ADR-0324, ADR-0325, ADR-0327, ADR-0328, ADR-0329, ADR-0338, ADR-0340).
+  **Hieratic** is the deliberately formal fourth card-property name paired with
+  **Agminate**. It replaces the Enchiridion Type IV placeholder, but its Run
+  prevalence, price, target selection, and acquisition rule remain undecided.
+  Its reference face uses the dedicated accepted steel-armor frame; no Hieratic
+  offer enters gameplay until those mechanics receive a separate decision
+  (ADR-0338).
 - Run difficulty is **Ataraxia**. The first Run uses **Ataraxia 0 — The
   Untroubled Mind**, whose literal impact is standard Run rules and no
   Pestiferous shop cards; later Runs may opt into historically named
@@ -155,11 +164,9 @@ these.
 - **Ataraxia I — The Great Mortality** initially targets Pestiferous status for
   roughly one in eight otherwise eligible shop draws. Pestiferous status is
   rolled with the rest of that affected offer, not added as another deck copy.
-  A nonempty Pestiferous card publicly marks exactly one unit Plagued. Only that
-  unit receives the piece-tier Plagued discount. The unit ledger identifies it
-  with the dedicated Plagued icon rather than a written label; until the first
-  generated icon is accepted into its live slot, a small neutral diamond
-  occupies the exact icon socket. Every owned nonempty
+  A nonempty Pestiferous card publicly marks exactly one unit Cacochymic. Only that
+  unit receives the piece-tier Cacochymic discount. The unit ledger identifies it
+  with the dedicated Cacochymic icon rather than a written label. Every owned nonempty
   Pestiferous card loses its marked unit on each victorious-Battle advancement,
   whether or not the card was drawn or deployed, then immediately marks one
   remaining unit for the next advancement. Selling, cashing out, or otherwise
@@ -177,16 +184,16 @@ these.
   text in its bottom region. Repeated-unit grouping and a demonstrated maximum
   row count remain open presentation decisions (ADR-0270).
 - Deployment modifiers may be contextual rather than linearly valuable. A
-  role-aware **Marshalled** ability belongs to a particular unit but may inspect
+  role-aware **Agminate** ability belongs to a particular unit but may inspect
   the surrounding formation. Its Bishop behavior is only to prefer a square
   color opposite another Bishop: an ordinary Bishop can be its reference, one
-  Marshalled Bishop may have little effect alone, and a second is not owed an
+  Agminate Bishop may have little effect alone, and a second is not owed an
   invented additional benefit. The player weighs that roster-dependent value
   (ADR-0273, ADR-0274).
 - Placement relics grant shared unit abilities rather than owning bespoke
   placement rules. Field Linens grants Positioned to Pawns; Royal Decree to the
   King; Crenellated Rampart to Rooks; and Pope's Staff to Bishops. Ghibelline
-  Rampart grants Marshalled to Rooks; Pope's Robes to Bishops; and Royal Sceptre
+  Rampart grants Agminate to Rooks; Pope's Robes to Bishops; and Royal Sceptre
   to the King. Their rules text names only the grant, while the unit-ability
   reference owns the piece-specific behavior. Permanent and relic-granted
   copies do not stack (ADR-0274).
@@ -206,13 +213,14 @@ these.
   available in every Run phase without pausing an active Battle (ADR-0230).
 - **Enchiridion** is the player-facing reference for unit movement, terrain
   rules, the filterable core card deck, affected card types, all relics, and the
-  behavior of the current unit abilities: Discipline, Positioned, Marshalled,
-  and Plagued. Card filters combine exact gold value with
+  behavior of the current unit abilities: Discipline, Positioned, Agminate,
+  and Cacochymic. Card filters combine exact gold value with
   contained unit type. The Card Types reference uses the third column for its
   four affected-type names and the fourth for one selected shared card face,
   temporarily using The Volunteer for each; Pestiferous, Concinnous, and
-  Tactical state their accepted effects while the fourth design remains an
-  explicit placeholder (ADR-0313, ADR-0315, ADR-0329). During Battle,
+  Tactical state their accepted effects. Hieratic names the fourth property and
+  pairs with Agminate while its Run mechanics remain explicitly pending
+  (ADR-0313, ADR-0315, ADR-0329, ADR-0338, ADR-0340). During Battle,
   the Controls title bar opens **Strategikon** over the board without unmounting
   the fight; its Martial Prosopography and Lipsanotheca expose the persistent
   army and held relics beside the same Enchiridion (ADR-0231).

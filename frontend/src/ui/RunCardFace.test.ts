@@ -9,7 +9,7 @@ import {
   type RunCardImageKind,
 } from './RunCardFace';
 import {
-  RUN_CARD_CONCINNOUS_STEEL_FRAME_GEOMETRY,
+  RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY,
   RUN_CARD_STANDARD_FRAME_GEOMETRY,
 } from './runCardFrameGeometry';
 
@@ -34,7 +34,7 @@ describe('Run card atomic presentation', () => {
       card,
       '/frame-a.png',
       '/art-a.png',
-      RUN_CARD_CONCINNOUS_STEEL_FRAME_GEOMETRY,
+      RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY,
     )).not.toBe(runCardPresentationSignature(
       card,
       '/frame-a.png',
@@ -70,6 +70,40 @@ describe('Run card atomic presentation', () => {
     expect(runCardPresentationCanPromote(signature, signature, card, complete)).toBe(true);
   });
 
+  it('holds a paired property/state face until both exact icon consumers settle', () => {
+    const paired = {
+      ...card,
+      cardProperty: {
+        id: 'tactical' as const,
+        name: 'Tactical',
+        effect: 'One unit gains Discipline.',
+      },
+      grants: [
+        { ...card.grants[0], ability: 'discipline' as const },
+        { ...card.grants[1], plaguedIndices: [0] },
+      ],
+    } satisfies RunCardFaceContent;
+    const iconMedia = {
+      propertyUrl: '/tactical.png',
+      unitStateUrls: { discipline: '/discipline.png', plagued: '/plagued.png' },
+    } as const;
+    const kinds = requiredRunCardImageKinds(paired, iconMedia);
+    expect(kinds).toContain('property-icon');
+    expect(kinds).toContain('unit-state:discipline');
+    expect(kinds).toContain('unit-state:plagued');
+    const signature = runCardPresentationSignature(
+      paired,
+      '/frame.png',
+      '/art.png',
+      RUN_CARD_STANDARD_FRAME_GEOMETRY,
+      '/coin.png',
+      iconMedia,
+    );
+    const incomplete = new Set<RunCardImageKind>(kinds.filter((kind) => kind !== 'unit-state:discipline'));
+    expect(runCardPresentationCanPromote(signature, signature, paired, incomplete, iconMedia)).toBe(false);
+    expect(runCardPresentationCanPromote(signature, signature, paired, new Set(kinds), iconMedia)).toBe(true);
+  });
+
   it('rejects a fully loaded generation after a newer selection supersedes it', () => {
     const stale = runCardPresentationSignature(card, '/frame.png', '/stale.png');
     const current = runCardPresentationSignature({ ...card, name: 'Current' }, '/frame.png', '/current.png');
@@ -85,5 +119,16 @@ describe('Run card atomic presentation', () => {
     expect(source).toContain('if (!ready || ready.signature !== signature) return;');
     expect(source).toContain('aria-busy={pending ? true : undefined}');
     expect(style).toMatch(/\.run-card-face-layer\.is-pending\s*\{[\s\S]*?opacity:\s*0/);
+  });
+
+  it('projects per-property fitting and one shared unit-state fitting into both state seats', () => {
+    const source = readFileSync(new URL('./RunCardFace.tsx', import.meta.url), 'utf8');
+    const style = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+    expect(source).toContain("'--run-card-property-icon-scale': iconTuning.property.scale");
+    expect(source).toContain("'--run-card-unit-state-icon-scale': iconTuning.unitState.scale");
+    expect(source).toContain('className="run-card-prototype-unit-marker is-ability"');
+    expect(source).not.toContain('run-card-prototype-ledger-ability');
+    expect(style.match(/--run-card-unit-state-icon-scale/g)).toHaveLength(1);
+    expect(style).toMatch(/\.run-card-prototype-property-icon\s*\{[\s\S]*?--run-card-property-icon-x/);
   });
 });

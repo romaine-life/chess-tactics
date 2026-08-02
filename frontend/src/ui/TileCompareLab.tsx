@@ -3,7 +3,7 @@ import { drawableAssets, requiredDrawableDefault } from '@chess-tactics/board-re
 
 // Before/after inspector for the PixelLab tile pipeline, as an embedded Studio Viewer kind
 // (ADR-0058): board/panes in `.al-lab-main`, controls in the one `.tileset-view-controls`
-// panel, workspace tabs + kind selector in the `header` slot — reached from the "Tile
+// panel, shared preview controls in the `header` slot — reached from the "Tile
 // Pipeline" catalog category's Inspect. Left = the RAW PixelLab tile (native ~33°, crisp);
 // right = what correct-iso-tile-angle.py produces (snapped to our ~29° grid). Pure inspector
 // (no committed baseline is edited — ADR-0057 does not apply).

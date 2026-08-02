@@ -61,9 +61,9 @@ describe('Run relic chess invariant', () => {
       'royal-decree': 'Your King gains Positioned.',
       'crenellated-rampart': 'Your Rooks gain Positioned.',
       'popes-staff': 'Your Bishops gain Positioned.',
-      'ghibelline-rampart': 'Your Rooks gain Marshalled.',
-      'popes-robes': 'Your Bishops gain Marshalled.',
-      'royal-sceptre': 'Your King gains Marshalled.',
+      'ghibelline-rampart': 'Your Rooks gain Agminate.',
+      'popes-robes': 'Your Bishops gain Agminate.',
+      'royal-sceptre': 'Your King gains Agminate.',
     });
   });
 });

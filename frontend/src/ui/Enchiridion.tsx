@@ -8,6 +8,8 @@ import { liveMediaForSlot, resolvedLiveMediaUrl } from '@chess-tactics/board-ren
 import { PredrawnMoveHighlightPaint } from '../render/PredrawnMoveHighlightPaint';
 import { runCardArtSlot, runCardFlavor, runCardName } from '../run/cardNames';
 import {
+  AGMINATE_DISPLAY_NAME,
+  CACOCHYMIC_DISPLAY_NAME,
   RUN_CARD_BY_ID,
   RUN_CARD_DECK,
   RUN_RELICS,
@@ -21,6 +23,7 @@ import { RunCard } from './RunCard';
 import {
   RUN_CARD_FRAME_SLOT,
   RUN_CARD_CONCINNOUS_FRAME_SLOT,
+  RUN_CARD_HIERATIC_FRAME_SLOT,
   RUN_CARD_PESTIFEROUS_FRAME_SLOT,
   RUN_CARD_TACTICAL_FRAME_SLOT,
   RunCardFace,
@@ -623,8 +626,8 @@ const CARD_TYPE_REFERENCES: readonly CardTypeReferenceDefinition[] = Object.free
     id: 'pestiferous',
     name: 'Pestiferous',
     cost: 1,
-    rules: 'One unit on this card is Plagued. After each victorious Battle, lose that unit, then Plague another unit on this card.',
-    description: 'One public unit is Plagued and receives the tier discount. A victorious Battle loses that unit, then marks one remaining unit; the empty card remains in the deck.',
+    rules: `One unit on this card is ${CACOCHYMIC_DISPLAY_NAME}. After each victorious Battle, lose that unit, then mark another unit on this card ${CACOCHYMIC_DISPLAY_NAME}.`,
+    description: `One public unit is ${CACOCHYMIC_DISPLAY_NAME} and receives the tier discount. A victorious Battle loses that unit, then marks one remaining unit; the empty card remains in the deck.`,
     frameSlot: RUN_CARD_PESTIFEROUS_FRAME_SLOT,
     iconRole: 'ui-kit-icons-card-properties-pestiferous-png',
   },
@@ -645,11 +648,12 @@ const CARD_TYPE_REFERENCES: readonly CardTypeReferenceDefinition[] = Object.free
     frameSlot: RUN_CARD_TACTICAL_FRAME_SLOT,
   },
   {
-    id: 'type-iv',
-    name: 'Type IV',
+    id: 'hieratic',
+    name: 'Hieratic',
     cost: 1,
-    rules: 'Name and effect pending.',
-    description: 'This affected-card slot is reserved for the parallel card-type design work. No runtime mechanic is assigned here yet.',
+    rules: `Paired with ${AGMINATE_DISPLAY_NAME}. Run mechanics pending.`,
+    description: `Priestly, highly formal, and rigidly stylized. This steel-armored property is paired with ${AGMINATE_DISPLAY_NAME}, while its price, prevalence, target rule, and acquisition behavior remain undecided.`,
+    frameSlot: RUN_CARD_HIERATIC_FRAME_SLOT,
     provisional: true,
   },
 ]);
@@ -765,7 +769,7 @@ function AbilitiesSection({ framed }: { framed: boolean }): ReactElement {
         <InnerChromeBox className="enchiridion-ability-card">
           <span className="skirmish-icon skirmish-icon-flag" aria-hidden="true" />
           <span>
-            <h3>Marshalled</h3>
+            <h3>{AGMINATE_DISPLAY_NAME}</h3>
             <p>The unit seeks its piece-specific station: the King prefers a board edge, Rooks favor their King-flank and corner formation, and Bishops prefer the opposite square color from another Bishop.</p>
           </span>
         </InnerChromeBox>
@@ -778,7 +782,7 @@ function AbilitiesSection({ framed }: { framed: boolean }): ReactElement {
             draggable={false}
           />
           <span>
-            <h3>Plagued</h3>
+            <h3>{CACOCHYMIC_DISPLAY_NAME}</h3>
             <p>The unit may be permanently lost after a Battle when its Pestiferous card resolves attrition. Its card-price contribution is discounted by 0 gold for a Pawn, 1 for a Knight or Bishop, 2 for a Rook, and 3 for a Queen.</p>
           </span>
         </InnerChromeBox>

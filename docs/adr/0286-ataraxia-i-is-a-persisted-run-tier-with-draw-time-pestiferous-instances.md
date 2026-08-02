@@ -4,6 +4,7 @@ date: 2026-08-01
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
   - "[ADR-0311](0311-pestiferous-cards-reveal-one-plagued-unit-at-a-time.md)"
+  - "[ADR-0340](0340-cacochymic-replaces-plagued-as-the-pestiferous-unit-state-name.md)'s Cacochymic unit-state name"
 extends:
   - 0266-ataraxia-names-optional-run-difficulty-after-real-history.md
   - 0268-ataraxia-unlocks-linearly-and-stacks-cumulatively.md

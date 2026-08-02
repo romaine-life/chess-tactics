@@ -2,6 +2,8 @@
 status: accepted
 date: 2026-08-01
 deciders: owner (Nelson) + Codex
+partially_superseded_by:
+  - "[ADR-0338](0338-run-card-properties-and-unit-states-use-paired-icons.md)'s replacement of visible qualifier suffixes with right-side property icons and reassignment of forged steel from white Concinnous to Hieratic"
 partially_supersedes:
   - "[ADR-0309](0309-concinnous-names-the-white-positioned-card-qualifier.md)'s retirement of Tactical"
   - "[ADR-0313](0313-enchiridion-filters-cards-and-previews-affected-types.md)'s Type III placeholder"
