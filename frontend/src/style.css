@@ -19095,6 +19095,20 @@ button.tileset-relationship-cell {
   position: relative;
 }
 
+/* A full-screen scene is judged at real screen proportions, cover-cropped. */
+.run-wrap-screen-stage {
+  margin-inline: auto;
+  max-inline-size: 100%;
+  overflow: hidden;
+  position: relative;
+}
+
+.run-wrap-screen-cards {
+  display: grid;
+  position: absolute;
+  z-index: 1;
+}
+
 .run-wrap-install {
   display: grid;
   gap: var(--ds-inline-tight);
