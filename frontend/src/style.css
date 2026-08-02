@@ -21807,8 +21807,13 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
 
 .run-card-prototype-cost-coin-source {
   block-size: 100%;
-  clip-path: circle(5.4cqw at 88% 8.65%);
-  inset: 0;
+  /* (87.92%, 8.96%) is the gold coin's center in cost-coin-source-v1 and
+     4.95cqw hugs its rim; the insets re-seat that exact point onto the center
+     of the active frame geometry's cost box, so the coin lands in each frame's
+     drawn socket instead of at the coin's position inside the source mockup. */
+  clip-path: circle(4.95cqw at 87.92% 8.96%);
+  inset-block-start: calc(var(--run-card-cost-top, 5.1%) + var(--run-card-cost-height, 7.2%) / 2 - 8.96%);
+  inset-inline-start: calc(var(--run-card-cost-left, 82.4%) + var(--run-card-cost-width, 11.1%) / 2 - 87.92%);
   inline-size: 100%;
   object-fit: fill;
   pointer-events: none;
