@@ -23,7 +23,7 @@ import {
   type RunCardProperty,
   type RunUnitState,
 } from './RunCardFace';
-import { runCardFrameGeometryForSha } from './runCardFrameGeometry';
+import { runCardFrameGeometryForSlot } from './runCardFrameGeometry';
 import { SliderRow, ctlReset } from './dressing/SliderRow';
 import { AssetSwatchList } from './shared/AssetSwatchList';
 import { ChoiceGroup } from './shared/ChoiceGroup';
@@ -481,7 +481,7 @@ export function RunCardIconFittingViewer({
                 card={specimenCard(pair)}
                 frameUrl={frame.media!.url}
                 artUrl={resolvedLiveMediaUrl(runCardArtSlot(RUN_CARD_BY_ID.p))}
-                frameGeometry={runCardFrameGeometryForSha(frame.media!.sha256)}
+                frameGeometry={runCardFrameGeometryForSlot(pair.frameSlot)}
                 iconMedia={{
                   propertyUrl: propertyVersion.media!.url,
                   unitStateUrls: { [pair.state]: stateVersion.media!.url },

@@ -42,8 +42,21 @@ import {
   type RunCardImageKind,
 } from './RunCardFace';
 import {
+  RUN_CARD_FRAME_BOX_LABELS,
+  RUN_CARD_FRAME_BOX_NAMES,
+  RUN_CARD_FRAME_GEOMETRY_BY_VARIANT,
+  RUN_CARD_FRAME_NATIVE_HEIGHT,
+  RUN_CARD_FRAME_NATIVE_WIDTH,
+  RUN_CARD_FRAME_VARIANTS,
   RUN_CARD_STANDARD_FRAME_GEOMETRY,
-  runCardFrameGeometryForSha,
+  RUN_CARD_TEXT_PLACEMENT,
+  runCardFrameGeometryForSlot,
+  runCardFrameGeometryMatchesPixels,
+  runCardFrameGeometryWithBoxes,
+  type RunCardFrameBoxName,
+  type RunCardFrameBoxes,
+  type RunCardFrameRect,
+  type RunCardFrameVariant,
 } from './runCardFrameGeometry';
 
 const STANDARD_ART_SLOT = 'ui/run/card-art/pppkb/illustration.png';
@@ -51,23 +64,16 @@ const TACTICAL_ART_SLOT = 'ui/run/card-art/q/illustration.png';
 const CONCINNOUS_ART_SLOT = 'ui/run/card-art/pp/illustration.png';
 const SHA256 = /^[0-9a-f]{64}$/;
 const REFERENCE_CARD_WIDTH = RUN_CARD_REFERENCE_WIDTH;
-const TEXT_HORIZONTAL_MIN = -3;
-const TEXT_HORIZONTAL_MAX = 3;
 const TITLE_SIZE_MIN = 3;
 const TITLE_SIZE_MAX = 7;
 const DEFAULT_TITLE_SIZE = RUN_CARD_APPROVED_TUNING.titleSize;
-const DEFAULT_TITLE_X = RUN_CARD_APPROVED_TUNING.titleX;
-const DEFAULT_TITLE_Y = RUN_CARD_APPROVED_TUNING.titleY;
 const DEFAULT_COST_SIZE = RUN_CARD_APPROVED_TUNING.costSize;
-const DEFAULT_COST_X = RUN_CARD_APPROVED_TUNING.costX;
-const DEFAULT_COST_Y = RUN_CARD_APPROVED_TUNING.costY;
 const TYPE_SIZE_MIN = 2.5;
 const TYPE_SIZE_MAX = 6;
 const DEFAULT_TYPE_SIZE = RUN_CARD_APPROVED_TUNING.typeSize;
-const DEFAULT_TYPE_X = RUN_CARD_APPROVED_TUNING.typeX;
-const DEFAULT_TYPE_Y = RUN_CARD_APPROVED_TUNING.typeY;
 const DEFAULT_FLAVOR_SIZE = RUN_CARD_APPROVED_TUNING.flavorSize;
-const DEFAULT_TITLE_TYPE_HORIZONTAL_LOCKED = true;
+const DEFAULT_TEXT_INSET = RUN_CARD_APPROVED_TUNING.textInset;
+const DEFAULT_TEXT_OPTICAL = RUN_CARD_APPROVED_TUNING.textOptical;
 const RUN_CARD_SAMPLE_DRAWS = 64;
 const DEFAULT_OPENING_SAMPLE_SEED = 4217;
 const DEFAULT_CONTENTS_SCALE = 1;
@@ -77,8 +83,45 @@ const clampCardFontSize = (value: number, min: number, max: number): number => (
 );
 const roundCardFontBoundUp = (value: number): number => Math.ceil((value - 1e-9) * 100) / 100;
 const roundCardFontBoundDown = (value: number): number => Math.floor((value + 1e-9) * 100) / 100;
-const clampCardHorizontal = (value: number, min = TEXT_HORIZONTAL_MIN, max = TEXT_HORIZONTAL_MAX): number => (
-  Math.round(Math.min(max, Math.max(min, value)) * 100) / 100
+
+/** The owner's by-eye box tuning, one draft per frame, seeded from what shipped. */
+export type RunCardFrameBoxDrafts = Readonly<Record<RunCardFrameVariant, RunCardFrameBoxes>>;
+
+export function committedRunCardFrameBoxDrafts(): RunCardFrameBoxDrafts {
+  return Object.fromEntries(RUN_CARD_FRAME_VARIANTS.map((variant) => [
+    variant,
+    { ...RUN_CARD_FRAME_GEOMETRY_BY_VARIANT[variant].boxes },
+  ])) as RunCardFrameBoxDrafts;
+}
+
+export function runCardFrameBoxDraftsWithEdge(
+  drafts: RunCardFrameBoxDrafts,
+  variant: RunCardFrameVariant,
+  box: RunCardFrameBoxName,
+  edge: keyof RunCardFrameRect,
+  value: number,
+): RunCardFrameBoxDrafts {
+  return {
+    ...drafts,
+    [variant]: {
+      ...drafts[variant],
+      [box]: { ...drafts[variant][box], [edge]: Math.round(value * 100) / 100 },
+    },
+  };
+}
+
+/** True once any frame's boxes differ from what is committed in the geometry table. */
+export function runCardFrameBoxDraftsAreTuned(drafts: RunCardFrameBoxDrafts): boolean {
+  return RUN_CARD_FRAME_VARIANTS.some((variant) => RUN_CARD_FRAME_BOX_NAMES.some((box) => {
+    const committed = RUN_CARD_FRAME_GEOMETRY_BY_VARIANT[variant].boxes[box];
+    const draft = drafts[variant][box];
+    return committed.x !== draft.x || committed.y !== draft.y
+      || committed.width !== draft.width || committed.height !== draft.height;
+  }));
+}
+
+const boxEdgeReadout = (value: number, total: number): string => (
+  `${Math.round(value)} px · ${((value / total) * 100).toFixed(2)}%`
 );
 
 const STANDARD_CARD = Object.freeze({
@@ -122,7 +165,7 @@ const HIERATIC_CARD = Object.freeze({
   properties: [{ name: AGMINATE_DISPLAY_NAME, target: 'Chosen on purchase' }] as const,
 }) satisfies RunCardFaceContent;
 
-export type RunCardPrototypeVariant = 'standard' | 'pestiferous' | 'tactical' | 'concinnous' | 'hieratic';
+export type RunCardPrototypeVariant = RunCardFrameVariant;
 export type RunCardTacticalSpecimen = 'single' | 'multi';
 
 export function runCardPrototypeVariantFromSearch(search: string): RunCardPrototypeVariant {
@@ -266,25 +309,34 @@ export function scaledRunCardContentsTuning(
   };
 }
 
+function activeCandidate(catalog: AdminLiveMediaCatalog, slot: string): AdminLiveMediaVersion | null {
+  const eligible = catalog.versions.filter((version) => (
+    version.slot === slot
+    && Boolean(version.media?.url)
+    && (version.status === 'candidate' || version.status === 'accepted')
+  ));
+  const activeVersionId = catalog.slots.find((entry) => entry.slot === slot)?.activeVersionId;
+  const active = activeVersionId ? eligible.find((version) => version.id === activeVersionId) : null;
+  if (active) return active;
+  return [...eligible].sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0] ?? null;
+}
+
 function selectedCandidate(
   catalog: AdminLiveMediaCatalog,
   slot: string,
   queryName: string,
 ): AdminLiveMediaVersion | null {
   const requested = new URLSearchParams(window.location.search).get(queryName)?.trim().toLowerCase();
-  const eligible = catalog.versions.filter((version) => (
-    version.slot === slot
-    && Boolean(version.media?.url)
-    && (version.status === 'candidate' || version.status === 'accepted')
-  ));
   if (requested) {
     if (!SHA256.test(requested)) return null;
-    return eligible.find((version) => version.media?.sha256 === requested) ?? null;
+    return catalog.versions.find((version) => (
+      version.slot === slot
+      && Boolean(version.media?.url)
+      && (version.status === 'candidate' || version.status === 'accepted')
+      && version.media?.sha256 === requested
+    )) ?? null;
   }
-  const activeVersionId = catalog.slots.find((entry) => entry.slot === slot)?.activeVersionId;
-  const active = activeVersionId ? eligible.find((version) => version.id === activeVersionId) : null;
-  if (active) return active;
-  return [...eligible].sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0] ?? null;
+  return activeCandidate(catalog, slot);
 }
 
 export function RunCardPrototypeViewer({
@@ -313,18 +365,15 @@ export function RunCardPrototypeViewer({
     runCardPrototypeCostFromSearch(window.location.search)
   ));
   const [contentsScale, setContentsScale] = useState(DEFAULT_CONTENTS_SCALE);
-  const [costX, setCostX] = useState(DEFAULT_COST_X);
-  const [costY, setCostY] = useState(DEFAULT_COST_Y);
   const [costSize, setCostSize] = useState(DEFAULT_COST_SIZE);
-  const [titleX, setTitleX] = useState(DEFAULT_TITLE_X);
-  const [titleY, setTitleY] = useState(DEFAULT_TITLE_Y);
   const [titleSize, setTitleSize] = useState(DEFAULT_TITLE_SIZE);
-  const [typeX, setTypeX] = useState(DEFAULT_TYPE_X);
-  const [typeY, setTypeY] = useState(DEFAULT_TYPE_Y);
   const [typeSize, setTypeSize] = useState(DEFAULT_TYPE_SIZE);
   const [titleTypeSizeRatio, setTitleTypeSizeRatio] = useState<number | null>(null);
-  const [titleTypeHorizontalLocked, setTitleTypeHorizontalLocked] = useState(DEFAULT_TITLE_TYPE_HORIZONTAL_LOCKED);
   const [flavorSize, setFlavorSize] = useState(DEFAULT_FLAVOR_SIZE);
+  const [textInset, setTextInset] = useState(DEFAULT_TEXT_INSET);
+  const [textOptical, setTextOptical] = useState(DEFAULT_TEXT_OPTICAL);
+  const [frameBoxDrafts, setFrameBoxDrafts] = useState<RunCardFrameBoxDrafts>(committedRunCardFrameBoxDrafts);
+  const [selectedFrameBox, setSelectedFrameBox] = useState<RunCardFrameBoxName>('type');
   const [pestiferousDenominator, setPestiferousDenominator] = useState(PESTIFEROUS_OFFER_DENOMINATOR);
   const [openingSampleSeed, setOpeningSampleSeed] = useState(DEFAULT_OPENING_SAMPLE_SEED);
   const [tacticalDenominator, setTacticalDenominator] = useState(TACTICAL_DISCIPLINE_OFFER_DENOMINATOR);
@@ -395,10 +444,27 @@ export function RunCardPrototypeViewer({
     () => catalog ? selectedCandidate(catalog, frameSlot, 'frameCandidate') : null,
     [catalog, frameSlot],
   );
+  // Contents study always draws the Standard frame, so it tunes Standard's boxes.
+  const geometryVariant: RunCardFrameVariant = contentsStudy ? 'standard' : cardVariant;
+  const committedGeometry = runCardFrameGeometryForSlot(frameSlot);
+  const draftBoxes = frameBoxDrafts[geometryVariant];
   const frameGeometry = useMemo(
-    () => runCardFrameGeometryForSha(frame?.media?.sha256 ?? null),
-    [frame],
+    () => runCardFrameGeometryWithBoxes(committedGeometry, draftBoxes),
+    [committedGeometry, draftBoxes],
   );
+  const framePixelsMeasured = runCardFrameGeometryMatchesPixels(committedGeometry, frame?.media?.sha256);
+  const selectedRect = draftBoxes[selectedFrameBox];
+  const setSelectedBoxEdge = (edge: keyof RunCardFrameRect) => (value: number): void => {
+    setFrameBoxDrafts((current) => (
+      runCardFrameBoxDraftsWithEdge(current, geometryVariant, selectedFrameBox, edge, value)
+    ));
+  };
+  const resetFrameBoxes = (): void => {
+    setFrameBoxDrafts((current) => ({
+      ...current,
+      [geometryVariant]: { ...RUN_CARD_FRAME_GEOMETRY_BY_VARIANT[geometryVariant].boxes },
+    }));
+  };
   const artSlot = !contentsStudy && cardVariant === 'tactical' && tacticalSpecimen === 'single'
     ? TACTICAL_ART_SLOT
     : !contentsStudy && cardVariant === 'concinnous'
@@ -463,37 +529,14 @@ export function RunCardPrototypeViewer({
     setTypeSize(clampedTypeSize);
     setTitleSize(clampCardFontSize(clampedTypeSize / titleTypeSizeRatio, TITLE_SIZE_MIN, TITLE_SIZE_MAX));
   };
-  const setLinkedTitleHorizontal = (nextTitleX: number): void => {
-    const clampedTitleX = clampCardHorizontal(nextTitleX);
-    setTitleX(clampedTitleX);
-    if (titleTypeHorizontalLocked) setTypeX(clampedTitleX);
-  };
-  const setLinkedTypeHorizontal = (nextTypeX: number): void => {
-    const clampedTypeX = clampCardHorizontal(nextTypeX);
-    setTypeX(clampedTypeX);
-    if (titleTypeHorizontalLocked) setTitleX(clampedTypeX);
-  };
-  const toggleTitleTypeHorizontalLock = (): void => {
-    if (titleTypeHorizontalLocked) {
-      setTitleTypeHorizontalLocked(false);
-      return;
-    }
-    const alignedHorizontal = clampCardHorizontal(titleX);
-    setTitleX(alignedHorizontal);
-    setTypeX(alignedHorizontal);
-    setTitleTypeHorizontalLocked(true);
-  };
   const resetAllTuning = (): void => {
-    setCostX(DEFAULT_COST_X);
-    setCostY(DEFAULT_COST_Y);
     setCostSize(DEFAULT_COST_SIZE);
-    setTitleX(DEFAULT_TITLE_X);
-    setTitleY(DEFAULT_TITLE_Y);
     setTitleSize(DEFAULT_TITLE_SIZE);
-    setTypeX(DEFAULT_TYPE_X);
-    setTypeY(DEFAULT_TYPE_Y);
     setTypeSize(DEFAULT_TYPE_SIZE);
     setFlavorSize(DEFAULT_FLAVOR_SIZE);
+    setTextInset(DEFAULT_TEXT_INSET);
+    setTextOptical(DEFAULT_TEXT_OPTICAL);
+    setFrameBoxDrafts(committedRunCardFrameBoxDrafts());
     setContentsScale(DEFAULT_CONTENTS_SCALE);
     setPestiferousDenominator(PESTIFEROUS_OFFER_DENOMINATOR);
     setOpeningSampleSeed(DEFAULT_OPENING_SAMPLE_SEED);
@@ -503,7 +546,6 @@ export function RunCardPrototypeViewer({
     setPreviewCost(null);
     setShowFrameBoxes(false);
     setTitleTypeSizeRatio(null);
-    setTitleTypeHorizontalLocked(DEFAULT_TITLE_TYPE_HORIZONTAL_LOCKED);
     setHandoffCopyState('idle');
   };
   const chooseCardVariant = (next: RunCardPrototypeVariant): void => {
@@ -578,28 +620,40 @@ export function RunCardPrototypeViewer({
   const copyCodexHandoff = async (): Promise<void> => {
     const payload = JSON.stringify({
       kind: 'run-card-layout-tuning',
-      version: 4,
+      version: 5,
       card: displayedCard.name,
       cardVariant,
       referenceWidthPx: REFERENCE_CARD_WIDTH,
       units: 'percent of card width (cqw)',
-      frameSha256: frame?.media?.sha256 ?? null,
-      frameGeometry,
       artworkSha256: art?.media?.sha256 ?? null,
       coinSourceSha256: coinSource?.media?.sha256 ?? null,
-      title: { size: titleSize, horizontal: titleX, vertical: titleY },
-      type: { size: typeSize, horizontal: typeX, vertical: typeY },
-      cost: { size: costSize, horizontal: costX, vertical: costY },
+      // Every frame's hand-tuned boxes, in native 1060x1484 frame pixels, each
+      // paired with the exact frame pixels they were tuned against.
+      frameBoxes: {
+        nativeWidth: RUN_CARD_FRAME_NATIVE_WIDTH,
+        nativeHeight: RUN_CARD_FRAME_NATIVE_HEIGHT,
+        tuned: runCardFrameBoxDraftsAreTuned(frameBoxDrafts),
+        frames: RUN_CARD_FRAME_VARIANTS.map((variant) => ({
+          variant,
+          slot: RUN_CARD_FRAME_GEOMETRY_BY_VARIANT[variant].slot,
+          measuredSha256: catalog
+            ? activeCandidate(catalog, RUN_CARD_FRAME_GEOMETRY_BY_VARIANT[variant].slot)?.media?.sha256 ?? null
+            : null,
+          boxes: frameBoxDrafts[variant],
+        })),
+      },
+      // The whole placement rule: centered in the box, plus these two shared values.
+      textPlacement: { insetInline: textInset, opticalBlock: textOptical },
+      title: { size: titleSize },
+      type: { size: typeSize },
+      cost: { size: costSize },
       displayedCost: displayedCard.cost,
       flavor: { size: flavorSize },
       contentsStudy: contentsStudy ? {
         scale: contentsScale,
         profiles: RUN_CARD_CONTENTS_STUDY_PROFILES.map(({ id, load, tuning: contents }) => ({ id, load, contents })),
       } : null,
-      locks: {
-        titleTypeSizeRatio,
-        titleTypeHorizontalLocked,
-      },
+      locks: { titleTypeSizeRatio },
       ataraxiaI: {
         pestiferousDenominator,
         sampleSeed: 4217,
@@ -680,10 +734,11 @@ export function RunCardPrototypeViewer({
                       frameUrl={frame.media!.url}
                       artUrl={art.media!.url}
                       coinSourceUrl={coinSource.media!.url}
-                      frameGeometry={RUN_CARD_STANDARD_FRAME_GEOMETRY}
+                      frameGeometry={frameGeometry}
                       showFrameBoxes={showFrameBoxes}
+                      selectedFrameBox={showFrameBoxes ? selectedFrameBox : null}
                       width={`${REFERENCE_CARD_WIDTH * viewerZoom}px`}
-                      tuning={{ costX, costY, costSize, titleX, titleY, titleSize, typeX, typeY, typeSize, flavorSize }}
+                      tuning={{ costSize, titleSize, typeSize, flavorSize, textInset, textOptical }}
                       contentsTuning={scaledRunCardContentsTuning(profile.tuning, contentsScale)}
                       onImageLoad={onImageLoad}
                       onImageError={onImageError}
@@ -699,8 +754,9 @@ export function RunCardPrototypeViewer({
                 coinSourceUrl={coinSource.media!.url}
                 frameGeometry={frameGeometry}
                 showFrameBoxes={showFrameBoxes}
+                selectedFrameBox={showFrameBoxes ? selectedFrameBox : null}
                 width={`${REFERENCE_CARD_WIDTH * viewerZoom}px`}
-                tuning={{ costX, costY, costSize, titleX, titleY, titleSize, typeX, typeY, typeSize, flavorSize }}
+                tuning={{ costSize, titleSize, typeSize, flavorSize, textInset, textOptical }}
                 onImageLoad={onImageLoad}
                 onImageError={onImageError}
               />
@@ -861,6 +917,92 @@ export function RunCardPrototypeViewer({
                 {handoffCopyState === 'copied' ? 'Copied handoff' : handoffCopyState === 'error' ? 'Copy failed' : 'Copy handoff'}
               </button>
             </div>
+            <div className="run-card-frame-box-tuner">
+              <p className="run-card-prototype-note">
+                {`Where text sits is the frame's box, not the text. Place ${cardVariant} frame boxes by eye here; every line stays centered in the box you leave it in.`}
+              </p>
+              <div className="tileset-button-row" role="group" aria-label="Frame box">
+                {RUN_CARD_FRAME_BOX_NAMES.map((name) => (
+                  <button
+                    type="button"
+                    className={`tileset-view-action${selectedFrameBox === name ? ' active' : ''}`}
+                    data-frame-box={name}
+                    aria-pressed={selectedFrameBox === name}
+                    onClick={() => {
+                      setSelectedFrameBox(name);
+                      if (!showFrameBoxes) toggleFrameBoxes();
+                    }}
+                    key={name}
+                  >{RUN_CARD_FRAME_BOX_LABELS[name]}</button>
+                ))}
+              </div>
+              <SliderRow
+                label={<>{RUN_CARD_FRAME_BOX_LABELS[selectedFrameBox]} box top · {boxEdgeReadout(selectedRect.y, RUN_CARD_FRAME_NATIVE_HEIGHT)}</>}
+                value={selectedRect.y}
+                set={setSelectedBoxEdge('y')}
+                min={0}
+                max={RUN_CARD_FRAME_NATIVE_HEIGHT - selectedRect.height}
+                step={1}
+                nudge={1}
+                dflt={RUN_CARD_FRAME_GEOMETRY_BY_VARIANT[geometryVariant].boxes[selectedFrameBox].y}
+              />
+              <SliderRow
+                label={<>{RUN_CARD_FRAME_BOX_LABELS[selectedFrameBox]} box height · {boxEdgeReadout(selectedRect.height, RUN_CARD_FRAME_NATIVE_HEIGHT)}</>}
+                value={selectedRect.height}
+                set={setSelectedBoxEdge('height')}
+                min={8}
+                max={RUN_CARD_FRAME_NATIVE_HEIGHT - selectedRect.y}
+                step={1}
+                nudge={1}
+                dflt={RUN_CARD_FRAME_GEOMETRY_BY_VARIANT[geometryVariant].boxes[selectedFrameBox].height}
+              />
+              <SliderRow
+                label={<>{RUN_CARD_FRAME_BOX_LABELS[selectedFrameBox]} box left · {boxEdgeReadout(selectedRect.x, RUN_CARD_FRAME_NATIVE_WIDTH)}</>}
+                value={selectedRect.x}
+                set={setSelectedBoxEdge('x')}
+                min={0}
+                max={RUN_CARD_FRAME_NATIVE_WIDTH - selectedRect.width}
+                step={1}
+                nudge={1}
+                dflt={RUN_CARD_FRAME_GEOMETRY_BY_VARIANT[geometryVariant].boxes[selectedFrameBox].x}
+              />
+              <SliderRow
+                label={<>{RUN_CARD_FRAME_BOX_LABELS[selectedFrameBox]} box width · {boxEdgeReadout(selectedRect.width, RUN_CARD_FRAME_NATIVE_WIDTH)}</>}
+                value={selectedRect.width}
+                set={setSelectedBoxEdge('width')}
+                min={8}
+                max={RUN_CARD_FRAME_NATIVE_WIDTH - selectedRect.x}
+                step={1}
+                nudge={1}
+                dflt={RUN_CARD_FRAME_GEOMETRY_BY_VARIANT[geometryVariant].boxes[selectedFrameBox].width}
+              />
+              <button
+                type="button"
+                className="tileset-view-action"
+                data-card-layout-action="reset-frame-boxes"
+                onClick={resetFrameBoxes}
+              >Reset {geometryVariant} boxes</button>
+            </div>
+            <SliderRow
+              label={<>Text inset · {textInset.toFixed(2)}% (every plate, both edges)</>}
+              value={textInset}
+              set={setTextInset}
+              min={0}
+              max={6}
+              step={.05}
+              nudge={.05}
+              dflt={DEFAULT_TEXT_INSET}
+            />
+            <SliderRow
+              label={<>Optical baseline · {textOptical.toFixed(2)}% (every line, every frame)</>}
+              value={textOptical}
+              set={setTextOptical}
+              min={-2}
+              max={2}
+              step={.05}
+              nudge={.05}
+              dflt={DEFAULT_TEXT_OPTICAL}
+            />
             <SliderRow label={<>Title size · {titleSize.toFixed(2)}%</>} value={titleSize} set={setLinkedTitleSize} min={titleSizeMin} max={titleSizeMax} step={.01} nudge={.05} dflt={DEFAULT_TITLE_SIZE} />
             <button
               type="button"
@@ -873,23 +1015,7 @@ export function RunCardPrototypeViewer({
               {titleTypeSizesLocked ? 'Title/type sizes locked' : 'Lock title/type sizes'}
             </button>
             <SliderRow label={<>Type size · {typeSize.toFixed(2)}%</>} value={typeSize} set={setLinkedTypeSize} min={typeSizeMin} max={typeSizeMax} step={.01} nudge={.05} dflt={DEFAULT_TYPE_SIZE} />
-            <SliderRow label={<>Title horizontal · {titleX.toFixed(2)}%</>} value={titleX} set={setLinkedTitleHorizontal} min={TEXT_HORIZONTAL_MIN} max={TEXT_HORIZONTAL_MAX} step={.05} nudge={.05} dflt={DEFAULT_TITLE_X} />
-            <button
-              type="button"
-              data-card-pair-lock="horizontal"
-              className={`tileset-view-action run-card-prototype-pair-lock${titleTypeHorizontalLocked ? ' active' : ''}`}
-              aria-pressed={titleTypeHorizontalLocked}
-              title="Align the type left edge to the title, then move both together"
-              onClick={toggleTitleTypeHorizontalLock}
-            >
-              {titleTypeHorizontalLocked ? 'Title/type left edges locked' : 'Align & lock title/type left edges'}
-            </button>
-            <SliderRow label={<>Type horizontal · {typeX.toFixed(2)}%</>} value={typeX} set={setLinkedTypeHorizontal} min={TEXT_HORIZONTAL_MIN} max={TEXT_HORIZONTAL_MAX} step={.05} nudge={.05} dflt={DEFAULT_TYPE_X} />
-            <SliderRow label={<>Title vertical · {titleY.toFixed(2)}%</>} value={titleY} set={setTitleY} min={-3} max={3} step={.05} nudge={.05} dflt={DEFAULT_TITLE_Y} />
-            <SliderRow label={<>Type vertical · {typeY.toFixed(2)}%</>} value={typeY} set={setTypeY} min={-3} max={3} step={.05} nudge={.05} dflt={DEFAULT_TYPE_Y} />
             <SliderRow label={<>Cost size · {costSize.toFixed(2)}%</>} value={costSize} set={setCostSize} min={3} max={9} step={.05} nudge={.05} dflt={DEFAULT_COST_SIZE} />
-            <SliderRow label={<>Cost horizontal · {costX.toFixed(2)}%</>} value={costX} set={setCostX} min={-3} max={3} step={.05} nudge={.05} dflt={DEFAULT_COST_X} />
-            <SliderRow label={<>Cost vertical · {costY.toFixed(2)}%</>} value={costY} set={setCostY} min={-3} max={3} step={.05} nudge={.05} dflt={DEFAULT_COST_Y} />
             <SliderRow label={<>Flavor size · {flavorSize.toFixed(2)}%</>} value={flavorSize} set={setFlavorSize} min={2.5} max={6} step={.05} nudge={.05} dflt={DEFAULT_FLAVOR_SIZE} />
             <SliderRow
               label={<>Ataraxia I prevalence · 1 in {pestiferousDenominator}</>}
@@ -945,6 +1071,16 @@ export function RunCardPrototypeViewer({
               <dl className="run-card-prototype-source-readout">
                 <div><dt>Frame</dt><dd>{frame.media!.sha256.slice(0, 12)} · {frame.status}</dd></div>
                 <div><dt>Geometry</dt><dd>{frameGeometry.id} · native {frameGeometry.sourceWidth}×{frameGeometry.sourceHeight}</dd></div>
+                <div>
+                  <dt>Boxes</dt>
+                  <dd>
+                    {runCardFrameBoxDraftsAreTuned(frameBoxDrafts)
+                      ? 'Tuned in this session — copy the handoff to commit'
+                      : framePixelsMeasured
+                        ? 'Committed against these exact frame pixels'
+                        : 'Seeded, not yet tuned against these frame pixels'}
+                  </dd>
+                </div>
                 <div><dt>Coin source</dt><dd>{coinSource.media!.sha256.slice(0, 12)} · {coinSource.status}</dd></div>
                 <div><dt>Artwork</dt><dd>{art.media!.sha256.slice(0, 12)} · {art.status}</dd></div>
                 <div><dt>Card</dt><dd>{contentsStudy ? 'Contents Box density study' : `${displayedCard.typeLine} · ${displayedCard.cost} gold`}</dd></div>

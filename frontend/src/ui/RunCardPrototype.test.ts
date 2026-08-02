@@ -10,10 +10,16 @@ import {
   type RunCardFaceContent,
 } from './RunCardFace';
 import {
+  RUN_CARD_FRAME_GEOMETRY_BY_VARIANT,
+  RUN_CARD_FRAME_VARIANTS,
   RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY,
   RUN_CARD_STANDARD_FRAME_GEOMETRY,
+  RUN_CARD_TEXT_PLACEMENT,
 } from './runCardFrameGeometry';
 import {
+  committedRunCardFrameBoxDrafts,
+  runCardFrameBoxDraftsAreTuned,
+  runCardFrameBoxDraftsWithEdge,
   RUN_CARD_CONTENTS_STUDY_PROFILES,
   runCardContentsStudyFromSearch,
   runCardPrototypeCostFromSearch,
@@ -89,12 +95,27 @@ describe('Run Card Layout review variant', () => {
     expect(runCardUnitStackSeatLeft(1, 2, 8, 0.8)).toBe('min(8.8000cqw, calc(100.0000% - 8.0000cqw))');
   });
 
-  it('shares one optically centered type-line tuning across ordinary and qualified cards', () => {
-    expect(RUN_CARD_APPROVED_TUNING).toMatchObject({
-      typeSize: 5.3,
-      typeX: 1.35,
-      typeY: 1.2,
-    });
+  it('lets a host choose text size and the two shared placement values, never a position', () => {
+    expect(Object.keys(RUN_CARD_APPROVED_TUNING).sort()).toEqual([
+      'costSize', 'flavorSize', 'textInset', 'textOptical', 'titleSize', 'typeSize',
+    ]);
+    expect(RUN_CARD_APPROVED_TUNING.typeSize).toBe(5.3);
+    expect(RUN_CARD_APPROVED_TUNING.textInset).toBe(RUN_CARD_TEXT_PLACEMENT.insetInline);
+    expect(RUN_CARD_APPROVED_TUNING.textOptical).toBe(RUN_CARD_TEXT_PLACEMENT.opticalBlock);
+  });
+
+  it('hands the owner one draft per frame, seeded from what is committed', () => {
+    const drafts = committedRunCardFrameBoxDrafts();
+    expect(Object.keys(drafts).sort()).toEqual([...RUN_CARD_FRAME_VARIANTS].sort());
+    expect(drafts.pestiferous.type).toEqual(RUN_CARD_FRAME_GEOMETRY_BY_VARIANT.pestiferous.boxes.type);
+    expect(runCardFrameBoxDraftsAreTuned(drafts)).toBe(false);
+
+    const moved = runCardFrameBoxDraftsWithEdge(drafts, 'pestiferous', 'type', 'y', 888.25);
+    expect(moved.pestiferous.type.y).toBe(888.25);
+    expect(runCardFrameBoxDraftsAreTuned(moved)).toBe(true);
+    // One frame's by-eye pass never disturbs another frame's boxes.
+    expect(moved.standard).toEqual(drafts.standard);
+    expect(moved.pestiferous.title).toEqual(drafts.pestiferous.title);
   });
 
   it('addresses the Contents Box comparison without changing the ordinary default', () => {

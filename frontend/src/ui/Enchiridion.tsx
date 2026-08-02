@@ -29,7 +29,7 @@ import {
   RunCardFace,
   type RunCardFaceContent,
 } from './RunCardFace';
-import { runCardFrameGeometryForSha } from './runCardFrameGeometry';
+import { runCardFrameGeometryForSlot } from './runCardFrameGeometry';
 import { StaticReadOnlyBoardView } from './shared/BoardViewFraming';
 import {
   loadRunRelicStatistics,
@@ -685,7 +685,7 @@ function CardTypeReference({ definition }: { definition: CardTypeReferenceDefini
         card={card}
         frameUrl={frameMedia.immutableUrl}
         artUrl={resolvedLiveMediaUrl(runCardArtSlot(VOLUNTEER_CARD))}
-        frameGeometry={runCardFrameGeometryForSha(frameMedia.sha256)}
+        frameGeometry={runCardFrameGeometryForSlot(frameSlot)}
       />
     </div>
   );
