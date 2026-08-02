@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 import {
+  isEditSessionOpenRequest,
   isLevelEditorUrl,
   isObservationSessionState,
   observationOpenPostData,
@@ -35,6 +36,19 @@ test('adds observe intent only to the Level Editor session-open request', () => 
     requestUrl: 'http://127.0.0.1:5178/api/editor-documents/doc/edit-sessions/session/takeover',
     postData,
   }), null);
+});
+
+// The page-side rewrite and the node-side tally that proves it was consumed must agree on exactly
+// which request is the session-open, or a run could report a clean observation while an unrewritten
+// open reached the network.
+test('identifies the session-open request the same way for the patch and the tally', () => {
+  const open = 'http://127.0.0.1:5178/api/editor-documents/legacy-j5kip7ztaipw/edit-sessions';
+  assert.equal(isEditSessionOpenRequest('POST', open), true);
+  assert.equal(isEditSessionOpenRequest('GET', open), false);
+  assert.equal(isEditSessionOpenRequest('POST', `${open}/session-a/heartbeat`), false);
+  assert.equal(isEditSessionOpenRequest('POST', `${open}/session-a/takeover`), false);
+  assert.equal(isEditSessionOpenRequest('PUT', 'http://127.0.0.1:5178/api/editor-documents/doc'), false);
+  assert.equal(isEditSessionOpenRequest('POST', '/api/editor-documents/doc/edit-sessions'), false);
 });
 
 test('accepts only the server observation state as proof of a lease-free viewer', () => {

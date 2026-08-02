@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 import { existsSync } from 'node:fs';
 import puppeteer from 'puppeteer-core';
-import { isLevelEditorUrl, observationOpenPostData } from './shot-editor-session.mjs';
+import {
+  assertObservationPatchConsumed,
+  installObservationSessionPatch,
+  isLevelEditorUrl,
+  watchEditSessionOpens,
+} from './shot-editor-session.mjs';
 
 const args = process.argv.slice(2);
 const url = args[0];
@@ -56,22 +61,15 @@ try {
     });
     if (!authState?.signed_in) throw new Error('local geometry sign-in did not establish the owner session');
   }
+  // Geometry verification is an authenticated OBSERVER of the owner's live document, never a
+  // synthetic editing participant. Rewrite the session-open inside the page instead of through
+  // CDP request interception: this gate waits on `.skirmish-hud`, a live board whose modules load
+  // lazily, and interception wedges exactly those Vite dev-server module requests (see
+  // installObservationSessionPatch). `watchEditSessionOpens` needs no interception and proves the
+  // rewrite covered every open the browser actually made.
   const targetIsLevelEditor = isLevelEditorUrl(url);
-  if (targetIsLevelEditor) {
-    await page.setRequestInterception(true);
-    page.on('request', (request) => {
-      const postData = observationOpenPostData({
-        targetIsLevelEditor,
-        method: request.method(),
-        requestUrl: request.url(),
-        postData: request.postData(),
-      });
-      if (!postData) { void request.continue(); return; }
-      const headers = { ...request.headers() };
-      delete headers['content-length'];
-      void request.continue({ headers, postData });
-    });
-  }
+  const editSessionOpens = targetIsLevelEditor ? watchEditSessionOpens(page) : null;
+  if (targetIsLevelEditor) await installObservationSessionPatch(page);
   await page.goto(url, { waitUntil: 'networkidle0', timeout: 8000 })
     .catch(() => page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 }));
   await page.waitForSelector('.skirmish-hud', { timeout: 15000 });
@@ -224,6 +222,9 @@ try {
   if (targetIsLevelEditor && isLevelEditorUrl(page.url())) {
     await page.goto(new URL('/editor', target).href, { waitUntil: 'domcontentloaded', timeout: 5000 }).catch(() => {});
   }
+  // Identity is not negotiable, so this outranks the geometry verdict above: an open that reached
+  // the network without the observe rewrite means this run edited the owner's live working copy.
+  if (targetIsLevelEditor) await assertObservationPatchConsumed(page, editSessionOpens);
 } finally {
   await browser.close();
 }
