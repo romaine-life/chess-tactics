@@ -6,13 +6,30 @@ repo_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 printf 'chess-tactics Codex worktree setup: %s\n' "$repo_dir"
 printf 'requesting authenticated Codex session grant\n'
 node "$repo_dir/bin/codex-auth-grant.mjs"
-printf 'installing frontend dependencies\n'
-npm --prefix "$repo_dir/frontend" ci
+# Claude Code has no environment-creation event: its SessionStart hook runs this
+# script on every session, and those hooks are documented to stay fast. Each step
+# is skipped once its own output is current. npm writes
+# node_modules/.package-lock.json on install, so a lockfile newer than that copy
+# is the exact "dependencies are stale" signal.
+is_stale() {
+  [ -e "$2" ] && [ ! "$1" -nt "$2" ] && return 1
+  return 0
+}
 
-printf 'installing backend dependencies\n'
-npm --prefix "$repo_dir/backend" ci
+for workspace in frontend backend; do
+  if is_stale "$repo_dir/$workspace/package-lock.json" "$repo_dir/$workspace/node_modules/.package-lock.json"; then
+    printf 'installing %s dependencies\n' "$workspace"
+    npm --prefix "$repo_dir/$workspace" ci
+  else
+    printf '%s dependencies are current\n' "$workspace"
+  fi
+done
 
-printf 'building frontend for backend preview\n'
-npm --prefix "$repo_dir/frontend" run build
+if is_stale "$repo_dir/frontend/package-lock.json" "$repo_dir/frontend/dist/index.html"; then
+  printf 'building frontend for backend preview\n'
+  npm --prefix "$repo_dir/frontend" run build
+else
+  printf 'frontend preview build is current\n'
+fi
 
 printf 'chess-tactics Codex worktree setup complete\n'
