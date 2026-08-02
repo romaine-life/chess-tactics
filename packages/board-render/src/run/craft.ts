@@ -60,7 +60,6 @@ import {
  * Run screen keeps its own params (view) and a reload does not craft a second Run. */
 export const RUN_CRAFT_PARAMS: readonly string[] = Object.freeze([
   'craft',
-  'spec',
   'battle',
   'war',
   'seed',
@@ -212,11 +211,6 @@ function integer(raw: string, label: string, min: number, max: number): number {
 /** Read a craft spec out of a Run address. Returns null when the address asks for no crafting. */
 export function parseRunCraftSpec(search: string): RunCraftSpec | null {
   const params = new URLSearchParams(search);
-  const encoded = params.get('spec');
-  // An encoded spec is the same JSON spec the endpoint takes, carried in an address so that
-  // every craft — including the units-with-abilities ones the readable grammar cannot spell —
-  // is expressible as a link that re-crafts.
-  if (encoded) return runCraftSpecFromJson(decodeRunCraftSpec(encoded));
   const phase = params.get('craft');
   if (!phase) return null;
   if (!CRAFT_PHASES.includes(phase as RunCraftPhase)) {
@@ -348,14 +342,42 @@ export function searchWithoutCraftParams(search: string): string {
 }
 
 export function hasRunCraftRequest(search: string): boolean {
-  const params = new URLSearchParams(search);
-  return params.has('craft') || params.has('spec');
+  return new URLSearchParams(search).has('craft');
 }
 
 /**
- * Write a normalized spec back out in the grammar the parsers read. Round-tripping matters
- * because it is what makes a crafted Run reproducible: the reply to a craft carries the link
- * that crafts it again, so the spec has to survive the trip out and back unchanged.
+ * The address of a crafted Run state (ADR-0346). The id IS the link: the spec lives on the
+ * server, so the address stays short and opaque no matter how much the spec grows, survives
+ * copy-paste and chat linkifiers intact, and has no grammar to outgrow. It is derived from the
+ * spec's own content, so the same state always mints the same address.
+ */
+export const RUN_CRAFT_LINK_PREFIX = '/run/craft/';
+
+/** A minted craft id: lowercase hex, long enough not to be guessed at from a neighbouring one. */
+const RUN_CRAFT_LINK_ID = /^[0-9a-f]{12,64}$/;
+
+export function runCraftLinkForId(id: string): string {
+  return `${RUN_CRAFT_LINK_PREFIX}${id}`;
+}
+
+/** The craft id an address carries, or null when the address is not a craft link. */
+export function runCraftLinkId(pathname: string): string | null {
+  if (!pathname.startsWith(RUN_CRAFT_LINK_PREFIX)) return null;
+  const id = pathname.slice(RUN_CRAFT_LINK_PREFIX.length).replace(/\/+$/, '').toLowerCase();
+  return RUN_CRAFT_LINK_ID.test(id) ? id : null;
+}
+
+/** True for any address under the craft-link prefix — including a malformed id, which has to
+ * reach the Run screen to be reported rather than falling through to some other route. */
+export function isRunCraftLinkPath(pathname: string): boolean {
+  return pathname === RUN_CRAFT_LINK_PREFIX.replace(/\/$/, '') || pathname.startsWith(RUN_CRAFT_LINK_PREFIX);
+}
+
+/**
+ * Write a normalized spec back out in the grammar the parsers read. It is what gets stored
+ * behind a craft id, and what the id is derived from, so it has to survive the trip out and
+ * back unchanged: a spec that did not round-trip would craft something other than what its
+ * link was minted for.
  */
 export function runCraftSpecToJson(spec: RunCraftSpec): Record<string, unknown> {
   const unit = (entry: RunCraftUnit) => (entry.abilities.length ? { type: entry.type, abilities: [...entry.abilities] } : entry.type);
@@ -371,34 +393,24 @@ export function runCraftSpecToJson(spec: RunCraftSpec): Record<string, unknown> 
   return json;
 }
 
-function base64Url(text: string): string {
-  const bytes = new TextEncoder().encode(text);
-  let binary = '';
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+/**
+ * The canonical text a craft id is derived from. Key order is fixed by runCraftSpecToJson, so
+ * the same requested state always produces the same bytes — and therefore the same link, in
+ * this session and in one a month from now. Hashing happens where the id is minted (the
+ * server); this is the agreed input to it.
+ */
+export function runCraftSpecFingerprint(spec: RunCraftSpec): string {
+  return JSON.stringify(runCraftSpecToJson(spec));
 }
 
-function fromBase64Url(encoded: string): string {
-  const padded = encoded.replace(/-/g, '+').replace(/_/g, '/');
-  const binary = atob(padded.padEnd(Math.ceil(padded.length / 4) * 4, '='));
-  return new TextDecoder().decode(Uint8Array.from(binary, (character) => character.charCodeAt(0)));
-}
-
-function decodeRunCraftSpec(encoded: string): unknown {
-  try {
-    return JSON.parse(fromBase64Url(encoded));
-  } catch {
-    throw new RunCraftError('craft spec: this link’s encoded spec could not be read. Copy the whole link, or use the readable ?craft= grammar.');
+/** The readable address grammar, for writing a spec by hand. It is a way to SAY a spec, not the
+ * link a crafted state is handed over as — that is always the id (runCraftLinkForId). */
+export function runCraftAddressParams(spec: RunCraftSpec): URLSearchParams {
+  // An address cannot say "this Rook carries Agminate". Refusing beats writing a shorter spec
+  // than the one asked for: the craft id has no such limit, so nothing needs this to lie.
+  if ([...(spec.army ?? []), ...(spec.add ?? [])].some((entry) => entry.abilities.length)) {
+    throw new RunCraftError('craft: units carrying abilities cannot be written as an address. Mint a craft link for them.');
   }
-}
-
-/** True when the readable grammar can spell this spec exactly. Only unit abilities cannot be
- * written as an address; everything else has a parameter. */
-function craftAddressExpressible(spec: RunCraftSpec): boolean {
-  return [...(spec.army ?? []), ...(spec.add ?? [])].every((entry) => entry.abilities.length === 0);
-}
-
-function craftAddressParams(spec: RunCraftSpec): URLSearchParams {
   const params = new URLSearchParams();
   params.set('craft', spec.phase);
   params.set('battle', String(spec.battle));
@@ -419,19 +431,9 @@ function craftAddressParams(spec: RunCraftSpec): URLSearchParams {
   return params;
 }
 
-/**
- * The link that crafts this Run. Opening it sets the account's active Run to the crafted state
- * and lands on the Run screen, every time — so the same link is both "go and look at this" and
- * the restart button for the bug found there.
- *
- * Readable whenever the address grammar can spell the spec, so it can be read and tweaked by
- * hand; an opaque `?spec=` otherwise, so no craft is ever unlinkable.
- */
-export function runCraftLink(spec: RunCraftSpec, path = '/run'): string {
-  const params = craftAddressExpressible(spec)
-    ? craftAddressParams(spec)
-    : new URLSearchParams({ spec: base64Url(JSON.stringify(runCraftSpecToJson(spec))) });
-  return `${path}?${params.toString()}`;
+/** The hand-authored address for a spec, for typing a one-off into the browser. */
+export function runCraftAddress(spec: RunCraftSpec, path = '/run'): string {
+  return `${path}?${runCraftAddressParams(spec).toString()}`;
 }
 
 /**

@@ -198,8 +198,8 @@ This is not only for the end of a task. **While troubleshooting, lead with a cra
 fastest way to move a Run question forward is to put him on the exact state and let him press it
 as often as he needs.
 
-**`POST /api/active-run/craft`** (admin, works anywhere) sets your own active Run from a JSON
-spec and answers with the Run plus the link to hand over:
+**`POST /api/active-run/craft`** (admin, works anywhere) mints the link, sets your own active
+Run to that state, and answers with both:
 
 ```
 curl -X POST <url>/api/active-run/craft -H 'content-type: application/json' -d '{
@@ -212,16 +212,16 @@ curl -X POST <url>/api/active-run/craft -H 'content-type: application/json' -d '
 Same fields as the address grammar below, plus what an address cannot carry: units as objects
 with `abilities`, offers as objects. An unknown field is refused, not ignored.
 
-**The `url` it answers with is the link to hand over.** It re-crafts on every open, so it stays
-valid after he plays past it. It is readable (`/run?craft=shop&battle=4&gold=33.5&…`) whenever the
-grammar can spell the spec, and an opaque `/run?spec=<encoded>` when it cannot — so hand it over
-as-is rather than rebuilding it by hand. (`runUrl` is the old identity address, `/run?run=<id>`;
-it only asserts a Run already in hand and cannot restore one that has moved on.)
+**The `url` it answers with — `/run/craft/<id>` — is the link to hand over, exactly as given.**
+The id is all it carries; the spec lives on the server, so the address stays short however large
+the spec grows, survives copy-paste intact, and re-crafts on every open. The id is the
+fingerprint of the spec itself, so the same state always mints the same link. (`runUrl` is the
+identity address, `/run?run=<id>`; it only asserts a Run already in hand and cannot restore one
+that has moved on. `POST /api/run-craft-links` mints without crafting.)
 
-You can also write the address yourself and hand that over — it is the same mechanism, and the
-Run screen posts it to the endpoint above. Opening it crafts the state and lands on a clean
-`/run`, so playing and reloading from there never re-craft; only returning to the link does.
-It needs the backend and an admin sign-in, and says so on the screen if either is missing.
+The `?craft=` grammar below is how a spec is **written**, not a kind of link. Type one into the
+browser and it is minted into its `/run/craft/<id>` address before anything is crafted, so a
+hand-authored one-off leaves a durable link behind:
 
 ```
 /run?craft=shop&battle=3&gold=25&army=knight,rook&offers=queen,pawn+pawn:concinnous,rook:tactical
@@ -241,8 +241,8 @@ It needs the backend and an admin sign-in, and says so on the screen if either i
   names, chess letters, or a bare deck id (`pawn,pawn,knight` = `p,p,n` = `ppk`).
 - `war=<id>` picks the War (default: the first Run-eligible official one), `seed=<n>` and
   `tier=0|1` fix the roll. `view=army|relics|sell` still applies and survives the craft.
-- `spec=<encoded>` replaces all of the above with the JSON spec, for the crafts the readable
-  grammar cannot spell (units with abilities). The endpoint emits it; do not hand-write it.
+- Units carrying abilities cannot be written as an address — use the JSON spec above, which has
+  no such limit because the link is an id either way.
 
 A refused spec prints the reason on the Run screen and writes nothing. Crafting **replaces
 the account's active Run** — there is one per account. Overwrite it freely; see below.

@@ -25,26 +25,37 @@ and the identity link was.
 
 ## Decision
 
-- **A crafted Run is handed over as a link that crafts it.** Opening a craft address sets the
-  account's active Run to the state the address names and lands on the Run screen. Opening it
-  again does the same thing, from whatever the Run has since become: the link is the restart
-  button for the state, not a bookmark for one instance of it. The reply to
-  `POST /api/active-run/craft` returns that link as `url`; the identity address survives as
-  `runUrl` for pointing at a Run already in hand.
-- **The craft happens on the server, through the same admin-gated endpoint**, which is what lets
-  the link work in a built app. The gate that protects a played Run is "the caller is an
-  administrator", not "this is a development build" — a stronger guarantee than the build check
-  it replaces, and one an address cannot forge. The Run screen posts the address it was opened
-  at, so there is one crafter, one grammar and one set of refusal messages.
-- **The craft parameters are spent on arrival.** The screen lands on a clean `/run`, so playing,
+- **A crafted Run is handed over as a link that crafts it.** Opening a craft link sets the
+  account's active Run to the state it stands for and lands on the Run screen. Opening it again
+  does the same thing, from whatever the Run has since become: the link is the restart button for
+  the state, not a bookmark for one instance of it.
+- **The link is an id — `/run/craft/<id>` — and the spec lives on the server** (`run_craft_links`,
+  migration 50). An address that spells the spec out has to grow a parameter for every field the
+  spec grows, and there is always a spec it cannot spell; an id has neither problem, stays intact
+  through copy-paste and chat linkifiers, and reads as an address rather than a payload.
+- **The id is the fingerprint of the spec's own canonical text.** The same requested state always
+  mints the same link — in this session and in one a month from now — and re-minting is an insert
+  that does nothing. There is no id allocator, no expiry, and no way for two links to disagree
+  about what one state means.
+- **The craft happens on the server, through admin-gated endpoints**, which is what lets the link
+  work in a built app. The gate that protects a played Run is "the caller is an administrator",
+  not "this is a development build" — a stronger guarantee than the build check it replaces, and
+  one an address cannot forge. `POST /api/run-craft-links` mints; `POST /api/active-run/craft/:id`
+  crafts from a minted link; `POST /api/active-run/craft` does both and is the one call an agent
+  makes, answering with `url` (the craft link) and `runUrl` (the identity address, for pointing
+  at a Run already in hand).
+- **The readable `?craft=` grammar stays a way to WRITE a spec, never the link.** Typed into the
+  browser it is minted into its permanent id and the address becomes that id, so a hand-authored
+  one-off leaves a durable link behind instead of a spec in the address bar. There is exactly one
+  thing a crafted state is handed over as.
+- **The craft address is spent on arrival.** The screen lands on a clean `/run`, so playing,
   reloading and navigating from there never re-craft; only returning to the link does. That
   separation is what makes the link safe to keep and safe to press.
-- **Every craft is expressible as a link.** The readable grammar covers what it can spell, so a
-  link can be read and edited by hand. A spec it cannot spell — today, units carrying abilities —
-  is carried as an opaque `?spec=`, the same JSON the endpoint takes. A craft with no link would
-  be a state that cannot be returned to, which is the failure this ADR is about.
 - **The crafted Run is adopted at the revision the server acknowledged**, not saved back from the
   browser. The server wrote the row; a second write could only race its own craft.
+- **`run_craft_links` is not a schema-readiness requirement.** Craft links are a debugging
+  instrument: a database not yet advanced to migration 50 loses craft links and says so, rather
+  than failing the gate that stands in front of every other route.
 
 ## Consequences
 
@@ -56,6 +67,12 @@ and the identity link was.
   in the address bar where a reload would spend it.
 - Crafting now needs the backend and an administrator sign-in, where the address form previously
   needed neither. A refusal says which, on the screen, and writes nothing.
-- The link is a spec, so it says what the Run contains. ADR-0338's "the link says where you are,
-  never what the Run contains" held only for the identity address; for the crafting address the
-  contents *are* the address, which is precisely what makes it reproducible.
+- A craft link is meaningless to a server whose database was not the one that minted it. That is
+  the cost of holding the spec server-side, and it is the right trade: the alternative is an
+  address that must carry every field forever.
+- ADR-0338's "the link says where you are, never what the Run contains" now holds in a stronger
+  form than it did: the address carries an id and nothing else. What it stands for is a stored
+  spec, which is why it can rebuild the state instead of merely naming it.
+- "Is this the Run screen?" is asked by scene resolution, route prefetch, the title bar and the
+  hydration effect. Adding a Run address that only some of them recognised would render the scene
+  under the wrong shell, so the predicate is now one shared `isRunRoutePath`.

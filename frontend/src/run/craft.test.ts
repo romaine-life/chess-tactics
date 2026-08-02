@@ -13,8 +13,12 @@ import {
   RunCraftError,
   craftRunDocument,
   hasRunCraftRequest,
+  isRunCraftLinkPath,
   parseRunCraftSpec,
-  runCraftLink,
+  runCraftAddress,
+  runCraftLinkForId,
+  runCraftLinkId,
+  runCraftSpecFingerprint,
   runCraftSpecFromJson,
   runCraftSpecToJson,
   runLinkForRun,
@@ -299,10 +303,39 @@ describe('crafted Run links', () => {
 });
 
 describe('links that craft the Run they open', () => {
-  const roundTrip = (search: string) => parseRunCraftSpec(runCraftLink(spec(search)).split('?')[1]);
+  const roundTrip = (search: string) => parseRunCraftSpec(runCraftAddress(spec(search)).split('?')[1]);
 
-  it('writes a readable address a person can read and edit', () => {
-    expect(runCraftLink(spec('?craft=shop&battle=4&gold=33.5&army=rook,knight')))
+  it('is an id, not a spec spelled out in the address', () => {
+    expect(runCraftLinkForId('a1b2c3d4e5f6')).toBe('/run/craft/a1b2c3d4e5f6');
+    expect(runCraftLinkId('/run/craft/a1b2c3d4e5f6')).toBe('a1b2c3d4e5f6');
+    expect(isRunCraftLinkPath('/run/craft/a1b2c3d4e5f6')).toBe(true);
+  });
+
+  it('leaves every other Run address alone', () => {
+    expect(runCraftLinkId('/run')).toBeNull();
+    expect(isRunCraftLinkPath('/run')).toBe(false);
+    expect(isRunCraftLinkPath('/run/strategikon/army')).toBe(false);
+  });
+
+  it('reaches the screen with a malformed id so it can be reported, not routed elsewhere', () => {
+    expect(isRunCraftLinkPath('/run/craft/not-an-id')).toBe(true);
+    expect(runCraftLinkId('/run/craft/not-an-id')).toBeNull();
+    expect(runCraftLinkId('/run/craft/')).toBeNull();
+  });
+
+  it('fingerprints the same requested state to the same text, whatever order it was written in', () => {
+    const fromAddress = spec('?craft=shop&battle=3&gold=12.5&army=rook,pawn');
+    const fromJson = runCraftSpecFromJson({ army: 'rook,pawn', gold: 12.5, battle: 3, phase: 'shop' });
+    expect(runCraftSpecFingerprint(fromJson)).toBe(runCraftSpecFingerprint(fromAddress));
+  });
+
+  it('fingerprints a different state differently', () => {
+    expect(runCraftSpecFingerprint(spec('?craft=shop&battle=3&gold=12.5')))
+      .not.toBe(runCraftSpecFingerprint(spec('?craft=shop&battle=3&gold=25')));
+  });
+
+  it('keeps the readable grammar as a way to write a spec by hand', () => {
+    expect(runCraftAddress(spec('?craft=shop&battle=4&gold=33.5&army=rook,knight')))
       .toBe('/run?craft=shop&battle=4&gold=33.5&army=rook%2Cknight');
   });
 
@@ -313,33 +346,21 @@ describe('links that craft the Run they open', () => {
     expect(roundTrip(search)).toEqual(spec(search));
   });
 
-  it('encodes a spec the address grammar cannot spell, rather than dropping what it holds', () => {
-    const rich = runCraftSpecFromJson({
-      phase: 'shop',
-      battle: 4,
-      army: [{ type: 'rook', abilities: ['marshalled'] }, 'knight'],
-    });
-    const link = runCraftLink(rich);
-    expect(link.startsWith('/run?spec=')).toBe(true);
-    expect(parseRunCraftSpec(link.split('?')[1])).toEqual(rich);
+  it('refuses to write an address for a spec it would have to shorten', () => {
+    const rich = runCraftSpecFromJson({ phase: 'shop', battle: 4, army: [{ type: 'rook', abilities: ['marshalled'] }] });
+    expect(() => runCraftAddress(rich)).toThrow(/cannot be written as an address/);
   });
 
-  it('is recognised as a craft request in either form', () => {
+  it('recognises a hand-written address as a craft request', () => {
     expect(hasRunCraftRequest('?craft=shop&battle=2')).toBe(true);
-    expect(hasRunCraftRequest(runCraftLink(runCraftSpecFromJson({ phase: 'shop', battle: 2, army: [{ type: 'rook', abilities: ['marshalled'] }] })).split('?')[1])).toBe(true);
     expect(hasRunCraftRequest('?view=army')).toBe(false);
   });
 
-  it('is spent once applied, so the Run screen keeps only its own parameters', () => {
-    const encoded = runCraftLink(runCraftSpecFromJson({ phase: 'shop', battle: 2, army: [{ type: 'rook', abilities: ['marshalled'] }] }));
-    expect(searchWithoutCraftParams(`${encoded.split('?')[1]}&view=army`)).toBe('?view=army');
+  it('is spent once minted, so the Run screen keeps only its own parameters', () => {
+    expect(searchWithoutCraftParams('?craft=shop&battle=3&gold=25&view=army')).toBe('?view=army');
   });
 
-  it('says so when an encoded spec has been truncated instead of crafting something else', () => {
-    expect(() => parseRunCraftSpec('?spec=not-a-spec')).toThrow(RunCraftError);
-  });
-
-  it('writes the same JSON the request body grammar reads', () => {
+  it('writes the same JSON the request body grammar reads, so an id always means one spec', () => {
     const source = spec('?craft=shop&battle=3&gold=12.5&offers=pawn+pawn:pestiferous&relics=fair-scales');
     expect(runCraftSpecFromJson(runCraftSpecToJson(source))).toEqual(source);
   });

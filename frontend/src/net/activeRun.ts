@@ -39,20 +39,37 @@ export async function saveActiveRun(run: RunDocument, revision: number): Promise
 }
 
 /**
- * Craft the account's active Run from a link's own address (ADR-0346). The server composes the
- * state out of the game's real transitions and writes it, so the address is sent as-is rather
- * than pre-parsed: one crafter, one set of refusal messages, and the built app gets the same
- * link behaviour a development build has.
+ * Craft the account's active Run from a minted craft link (ADR-0346). The id is all the address
+ * carries; the server holds the spec it stands for and composes the state out of the game's real
+ * transitions. Opening the same link again crafts it again — that is the restart button.
  */
-export async function craftActiveRun(address: string): Promise<RevisionedActiveRun> {
-  const response = await fetch('/api/active-run/craft', {
+export async function craftActiveRunFromLink(id: string): Promise<RevisionedActiveRun> {
+  const response = await fetch(`/api/active-run/craft/${encodeURIComponent(id)}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    credentials: 'include',
+    body: '{}',
+  });
+  if (response.ok) return parsedActiveRun(await response.json());
+  throw new Error(await craftRefusal(response));
+}
+
+/**
+ * Mint the permanent craft link for a hand-written `?craft=` address, without crafting it. The
+ * readable grammar stays a way to WRITE a spec; the link a state is handed over as is always the
+ * id, so a typed address is turned into one before anything is crafted.
+ */
+export async function mintRunCraftLink(address: string): Promise<string> {
+  const response = await fetch('/api/run-craft-links', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     credentials: 'include',
     body: JSON.stringify({ address }),
   });
-  if (response.ok) return parsedActiveRun(await response.json());
-  throw new Error(await craftRefusal(response));
+  if (!response.ok) throw new Error(await craftRefusal(response));
+  const body = await response.json() as { url?: unknown };
+  if (typeof body.url !== 'string') throw new Error('The craft link could not be minted.');
+  return body.url;
 }
 
 /** The refusal a person reads on the Run screen, not a status code. The crafter writes its own
