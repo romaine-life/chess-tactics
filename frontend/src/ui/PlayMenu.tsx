@@ -126,65 +126,43 @@ function ActionColumn({ children }: { children: ReactElement }): ReactElement {
   );
 }
 
-function ContinuePanel({
-  inventory,
-  choice,
-}: {
-  inventory: ContinueInventory;
-  choice: PlayContinueChoice | null;
-}): ReactElement {
-  const selected = choice
-    ? inventory.options.find((option) => option.mode === choice)?.activity ?? null
-    : null;
+function ContinuePanel({ inventory }: { inventory: ContinueInventory }): ReactElement {
+  // Continue shows the one most recent unfinished activity and nothing else (ADR-0356):
+  // no list, no second offer, no choice. Every mode keeps its ordinary rail destination
+  // one column left, and re-entering an activity there resumes its saved board.
+  const selected = inventory.activities[0] ?? null;
   return (
-    <>
-      <ActionColumn>
-        <div className="settings-panel-content continue-selector-panel">
-          <section className="settings-section">
-            <h3 className="settings-section-title">Continue</h3>
-            <div className="settings-section-rows">
-              {inventory.options.map((option) => {
-                const available = Boolean(option.activity);
-                const selectedOption = available && choice === option.mode;
-                return (
-                  <ChromeNavButton unit="inner-list-row"
-                    key={option.mode}
-                    to={playContinueSelectorHref(option.mode)}
-                    className={chromeUnitClassNames('inner-list-row', 'settings-row play-choice-row', !available && 'is-disabled', selectedOption && 'active is-selected')}
-                    disabled={!available}
-                    aria-current={selectedOption ? 'page' : undefined}
-                    data-testid={`continue-choice-${option.mode}`}
-                  >
-                    <div className="settings-row-copy">
-                      <h4>{option.label}</h4>
-                      <p>{option.activity?.summary ?? 'Nothing to continue'}</p>
-                    </div>
-                  </ChromeNavButton>
-                );
-              })}
+    <ActionColumn>
+      <div className="settings-panel-content continue-selector-panel">
+        <section className="settings-section">
+          <h3 className="settings-section-title">Continue</h3>
+          {selected ? (
+            <div className="continue-resume" data-testid="continue-detail" aria-label={selected.title}>
+              <div className="ce-selected-head"><h2>{selected.title}</h2></div>
+              <InnerChromeBox className="play-detail-facts">
+                <dl>
+                  {selected.facts.map((fact) => (
+                    <div key={fact.label}><dt>{fact.label}</dt><dd>{fact.value}</dd></div>
+                  ))}
+                </dl>
+              </InnerChromeBox>
+              <div className="ce-preview-actions is-single">
+                <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} to={selected.playHref}><span>Play</span></ChromeNavButton>
+              </div>
             </div>
-          </section>
-        </div>
-      </ActionColumn>
-
-      {selected ? (
-        <aside className="menu-dest-col menu-dest-preview ce-preview-col play-detail-col" aria-label={selected.title} data-testid="continue-detail">
-          <div className="ce-selected-head"><h2>{selected.title}</h2></div>
-          <div className="play-detail-body">
-            <InnerChromeBox className="play-detail-facts">
-              <dl>
-                {selected.facts.map((fact) => (
-                  <div key={fact.label}><dt>{fact.label}</dt><dd>{fact.value}</dd></div>
-                ))}
-              </dl>
-            </InnerChromeBox>
-          </div>
-          <div className="ce-preview-actions is-single">
-            <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} to={selected.playHref}><span>Play</span></ChromeNavButton>
-          </div>
-        </aside>
-      ) : null}
-    </>
+          ) : (
+            <div className="settings-section-rows">
+              <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} role="status" data-testid="continue-empty">
+                <div className="settings-row-copy">
+                  <h4>Nothing to continue</h4>
+                  <p>Choose Campaign, Skirmish, Run, or Levels to start something.</p>
+                </div>
+              </section>
+            </div>
+          )}
+        </section>
+      </div>
+    </ActionColumn>
   );
 }
 
@@ -715,19 +693,12 @@ export function PlayMenu({
       return;
     }
     if (!loading && runHydrated && (selection.mode === 'hub' || selection.mode === 'continue')) {
-      const selectedActivity = selection.mode === 'continue' && selection.choice
-        ? resumeInventory.options.find((option) => option.mode === selection.choice)?.activity
-        : null;
+      // Continue names exactly one activity — the most recent one — so any other Continue
+      // address is stale by construction and canonicalizes onto it (ADR-0356).
       const canonicalHref = resumeInventory.defaultMode
         ? playContinueSelectorHref(resumeInventory.defaultMode)
         : PLAY_CONTINUE_SELECTOR_HREF;
-      if (
-        selection.mode === 'hub'
-        || selection.choice === null
-        || !selectedActivity
-      ) {
-        if (path !== canonicalHref) navigateApp(canonicalHref, { replace: true, scroll: false });
-      }
+      if (path !== canonicalHref) navigateApp(canonicalHref, { replace: true, scroll: false });
     }
   }, [activeRun, campaigns, loading, officialAvailable, path, resumeInventory, runHydrated, selection, userWorkspaceAvailable]);
 
@@ -758,12 +729,11 @@ export function PlayMenu({
     : selection.mode === 'hub'
       ? resumeInventory.defaultMode
       : null;
-  const selectedContinueActivity = selectedContinueChoice
-    ? resumeInventory.options.find((option) => option.mode === selectedContinueChoice)?.activity ?? null
-    : null;
   const hasRunDetail = selection.mode === 'run'
     && (selectedRunChoice === 'new' || (selectedRunChoice === 'current' && Boolean(activeRun)));
-  const hasDetailPreview = Boolean(selectedLevel || hasRunDetail || selectedContinueActivity);
+  // Continue mounts no preview column: its resume card IS the action column (ADR-0356),
+  // so the surface must not narrow that column for a detail neighbour that never arrives.
+  const hasDetailPreview = Boolean(selectedLevel || hasRunDetail);
   const surfaceSignature = [
     selection.mode,
     selection.mode === 'campaign' ? selection.campaignId : '',
@@ -886,7 +856,7 @@ export function PlayMenu({
         sceneInstance={sceneInstanceKey}
       >
       {selection.mode === 'hub' || selection.mode === 'continue' ? (
-        <ContinuePanel inventory={resumeInventory} choice={selectedContinueChoice} />
+        <ContinuePanel inventory={resumeInventory} />
       ) : null}
       {selection.mode === 'skirmish' ? (
         <SkirmishProfilesPanel

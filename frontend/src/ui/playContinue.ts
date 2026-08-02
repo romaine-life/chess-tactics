@@ -14,14 +14,10 @@ export interface ContinueActivity {
   facts: readonly { label: string; value: string }[];
 }
 
-export interface ContinueOption {
-  mode: PlayContinueChoice;
-  label: string;
-  activity: ContinueActivity | null;
-}
-
+/** Resumable activities, most recently updated first. Continue shows only the first —
+ * candidates are collected solely to decide which one that is (ADR-0356). */
 export interface ContinueInventory {
-  options: readonly ContinueOption[];
+  activities: readonly ContinueActivity[];
   defaultMode: PlayContinueChoice | null;
 }
 
@@ -107,14 +103,8 @@ export function continueInventory(
     }
   }
 
-  const options: ContinueOption[] = [
-    { mode: 'campaign', label: 'Campaign', activity: activities.get('campaign') ?? null },
-    { mode: 'skirmish', label: 'Skirmish', activity: activities.get('skirmish') ?? null },
-    { mode: 'run', label: 'Run', activity: activities.get('run') ?? null },
-    { mode: 'levels', label: 'Levels', activity: activities.get('levels') ?? null },
-  ];
-  const mostRecent = options
-    .filter((option): option is ContinueOption & { activity: ContinueActivity } => Boolean(option.activity))
-    .sort((left, right) => right.activity.updatedAt - left.activity.updatedAt)[0];
-  return { options, defaultMode: mostRecent?.mode ?? null };
+  // Recency is the whole order: Continue resumes the last thing the player touched, and
+  // any other unfinished activity is left to its own rail destination.
+  const ordered = [...activities.values()].sort((left, right) => right.updatedAt - left.updatedAt);
+  return { activities: ordered, defaultMode: ordered[0]?.mode ?? null };
 }
