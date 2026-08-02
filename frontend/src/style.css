@@ -22740,12 +22740,6 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   text-wrap: wrap;
 }
 
-.run-card-prototype-effect {
-  font: 400 var(--run-card-effect-size, 2.75cqw)/1.12 var(--ds-font-display);
-  margin-block-start: var(--run-card-effect-gap, .7cqw);
-  text-wrap: balance;
-}
-
 .run-card-prototype-properties {
   display: grid;
   font: 400 var(--run-card-effect-size, 2.75cqw)/1.12 var(--ds-font-display);

@@ -129,7 +129,6 @@ export type RunCardFaceContent = Readonly<{
     ability?: RunAbility;
   }>[];
   properties?: readonly Readonly<{ name: string; target: string }>[];
-  rules?: string;
   flavor: string;
 }>;
 
@@ -282,16 +281,13 @@ function estimatedContentsHeightCqw(
   const rows = runCardLedgerRows(card.grants.length);
   const ledger = rows * tuning.unitHeight + Math.max(0, rows - 1) * tuning.rowGap;
   const effectLine = tuning.effectSize * EFFECT_LINE_HEIGHT;
-  const rules = card.rules
-    ? tuning.effectGap + estimatedLineCount(card.rules, tuning.effectSize, lineWidthCqw) * effectLine
-    : 0;
   const propertyCount = card.properties?.length ?? 0;
   const properties = propertyCount
     ? tuning.effectGap * propertyCount + propertyCount * effectLine
     : 0;
   const flavorSize = flavorSizeCqw * tuning.flavorScale;
   const flavor = estimatedLineCount(card.flavor, flavorSize, lineWidthCqw) * flavorSize * FLAVOR_LINE_HEIGHT;
-  return tuning.paddingBlockStart + ledger + rules + properties + flavor + tuning.paddingBlockEnd;
+  return tuning.paddingBlockStart + ledger + properties + flavor + tuning.paddingBlockEnd;
 }
 
 // Flavor may grow into verified leftover box room in these increments, but it
@@ -409,7 +405,6 @@ export function runCardPresentationSignature(
     iconMedia.unitStateUrls ?? null,
     card.grants.map(({ count, unit, plaguedIndices, ability }) => [count, unit, plaguedIndices ?? [], ability ?? null]),
     card.properties?.map(({ name, target }) => [name, target]) ?? null,
-    card.rules ?? null,
     card.flavor,
   ]);
 }
@@ -833,7 +828,6 @@ function RunCardFaceLayer({
             );
           })}
         </span>
-        {card.rules ? <span className="run-card-prototype-effect">{card.rules}</span> : null}
         {card.properties?.length ? (
           <span className="run-card-prototype-properties" aria-label="Card properties">
             {card.properties.map((property) => (
