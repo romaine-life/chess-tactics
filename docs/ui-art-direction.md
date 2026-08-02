@@ -269,8 +269,11 @@ Enchiridion is immediately above Settings. In Battle, frameless open-codex art
 at the same visual scale as the Controls title and aligned to the Controls
 content boundary opens
 Strategikon; its hover/focus information names the unfamiliar destination and
-summarizes its references, army, and relic contents under ADR-0250. Strategikon's rail reuses the exact menu-tab size,
-inset, and stone-continuity language but replaces the board only. The right Controls
+summarizes its references, army, and relic contents under ADR-0250. Strategikon's
+rails are canonical main-menu rail columns: every destination added to either
+column inherits the exact menu-tab width, stack gap, inset, and stone-continuity
+language rather than defining host-local geometry. Strategikon replaces the board
+only. The right Controls
 column remains present and is outside the Strategikon content rectangle. Its
 fill occupies that complete board pane without adding an outer frame, and its
 route transition leaves the current level scene mounted; only main-menu

@@ -30,6 +30,7 @@ import { useSceneParticipant } from './shell/SceneBoundary';
 import { GatedLevelThumbnail, ThumbnailSurface } from './shell/ThumbnailSurface';
 import { KitScroll } from './KitScroll';
 import { SettingsButton, SettingsRow, SettingsSection } from './shared/SettingsControls';
+import { ApparatusRailColumn } from './shared/ApparatusRailTab';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { LEVEL_NAME_MAX, normalizeLevelName } from './shared/levelNamePolicy';
 import { editSkirmishProfileHref, isSkirmishProfileLevel, skirmishProfileLevels } from './skirmishProfiles';
@@ -1193,7 +1194,11 @@ export function CampaignEditor({
   const inner = (
     <>
       {/* ── RAIL: the campaigns navigator (fold 1 of the old 3-panel layout) ── */}
-      <aside className={embedded ? 'menu-dest-col menu-dest-tabs ce-editor-rail' : 'settings-frame settings-rail-frame ce-editor-rail'} aria-label="Campaigns">
+      <ApparatusRailColumn
+        className={embedded ? 'menu-dest-col menu-dest-tabs ce-editor-rail' : 'settings-frame settings-rail-frame ce-editor-rail'}
+        placement={embedded ? 'open' : 'framed'}
+        aria-label="Campaigns"
+      >
             <KitScroll className="ce-rail-scroll">
               <div className="ce-rail-list">
                 {campaigns.length === 0 ? <p className="ce-empty">No campaigns yet.</p> : null}
@@ -1330,7 +1335,7 @@ export function CampaignEditor({
                 }}
               />
             </div>
-          </aside>
+          </ApparatusRailColumn>
 
           <EditorContentSceneSlot
             className="editor-destination-content"

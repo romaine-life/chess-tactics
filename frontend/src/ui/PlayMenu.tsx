@@ -12,7 +12,7 @@ import type { Campaign as CampaignDoc, Level } from '../core/level';
 import { spawnEventsForLevel } from '../core/levelEvents';
 import { MODE_NAME } from '../core/objectives';
 import { navigateApp } from './navigation';
-import { ApparatusRailTab } from './shared/ApparatusRailTab';
+import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
 import { KitScroll } from './KitScroll';
 import { levelObjectiveLine } from './LevelInfoCompact';
 import { LevelPreviewColumn } from './LevelPreviewColumn';
@@ -792,7 +792,7 @@ export function PlayMenu({
         data-user-authority={loading ? 'loading' : userWorkspaceAvailable ? 'ready' : 'error'}
         data-thumbnail-authority={thumbnailSurface.error ? 'error' : thumbnailSurface.complete ? 'ready' : 'loading'}
       >
-      <aside className="menu-dest-col menu-dest-tabs play-source-rail" aria-label="Play">
+      <ApparatusRailColumn className="menu-dest-col menu-dest-tabs play-source-rail" aria-label="Play">
         <div className="play-source-fixed">
           <ApparatusRailTab
             label="Continue"
@@ -861,7 +861,7 @@ export function PlayMenu({
             </div>
           </KitScroll>
         </section>
-      </aside>
+      </ApparatusRailColumn>
 
       <PaintedSurfaceBoundary
         surface="play-selector"

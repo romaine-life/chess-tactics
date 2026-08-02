@@ -980,7 +980,7 @@ if (!/<ShellViewportSwap[\s\S]*?className="run-phase-workspace"[\s\S]*?primaryCl
   || !/<ShellViewportSwap[\s\S]*?className="skirmish-war-room"[\s\S]*?primaryClassName="skirmish-field"[\s\S]*?workspaceOpen=\{strategikonOpen \|\| Boolean\(runWorkspace\)\}/.test(skirmish)) {
   failures.push('Run and Battle replacement modes must use the shared viewport-swap owner');
 }
-if (!/<ShellWorkspace[\s\S]*?className="strategikon-workspace"[\s\S]*?contentClassName="strategikon-workspace-layout"/.test(strategikon)
+if (!/<ShellWorkspace[\s\S]*?className="strategikon-workspace"[\s\S]*?contentClassName=\{`strategikon-workspace-layout/.test(strategikon)
   || !/bodyClassName="strategikon-content"/.test(strategikon)
   || !/bodyClassName="strategikon-content"[\s\S]*?edgeAttached/.test(strategikon)
   || /<ChromeSurfaceFill\b|<OuterChromeBox\b/.test(strategikon)) {
