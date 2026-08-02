@@ -342,6 +342,23 @@ export function hasRunCraftRequest(search: string): boolean {
   return new URLSearchParams(search).has('craft');
 }
 
+/**
+ * A crafted link carries the id of the Run it was made for — identity, never contents. Opened by
+ * anyone else, or by the same person signed out, `/run` would otherwise render whatever Run that
+ * browser happens to hold and look like it worked. Comparing the assertion catches that silently
+ * wrong case; an address with no assertion always means "whatever Run is mine".
+ */
+export function runLinkTargetMismatch(search: string, activeRunId: string | null): boolean {
+  const target = new URLSearchParams(search).get('run');
+  if (!target) return false;
+  return target !== activeRunId;
+}
+
+/** The address that opens a crafted Run and proves it is the one that was crafted. */
+export function runLinkForRun(runId: string, path = '/run'): string {
+  return `${path}?run=${encodeURIComponent(runId)}`;
+}
+
 /** Pick the War a craft link names, falling back to the first Run-eligible official War so a bare
  * ?craft=shop link works with no War id in it. */
 export function selectCraftWar(

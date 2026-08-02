@@ -202,6 +202,10 @@ curl -X POST <url>/api/active-run/craft -H 'content-type: application/json' -d '
 Same fields as the address grammar below, plus what an address cannot carry: units as objects
 with `abilities`, offers as objects. An unknown field is refused, not ignored.
 
+The `url` it answers with carries the crafted Run's id (`/run?run=<id>`). That is identity, not
+contents: opened signed out, or on an account that has moved on, the screen says the link is for
+a different Run instead of quietly rendering whatever Run that browser holds.
+
 The address form below does the same thing client-side in a **dev build only**, for quick
 one-offs: it builds the state, adopts it, then drops its parameters from the address.
 

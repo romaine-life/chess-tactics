@@ -13,6 +13,8 @@ import {
   craftRunDocument,
   parseRunCraftSpec,
   runCraftSpecFromJson,
+  runLinkForRun,
+  runLinkTargetMismatch,
   searchWithoutCraftParams,
 } from './craft';
 
@@ -269,5 +271,22 @@ describe('crafted Run documents', () => {
       const normalized = normalizeRunDocument(structuredClone(run));
       expect(normalized).toEqual(run);
     }
+  });
+});
+
+describe('crafted Run links', () => {
+  it('asserts the Run it was made for, and passes when that Run is the active one', () => {
+    expect(runLinkForRun('run-7')).toBe('/run?run=run-7');
+    expect(runLinkTargetMismatch('?run=run-7', 'run-7')).toBe(false);
+  });
+
+  it('catches the link opened against another Run, or none at all', () => {
+    expect(runLinkTargetMismatch('?run=run-7', 'run-8')).toBe(true);
+    expect(runLinkTargetMismatch('?run=run-7', null)).toBe(true);
+  });
+
+  it('leaves an address that asserts nothing alone', () => {
+    expect(runLinkTargetMismatch('?view=army', null)).toBe(false);
+    expect(runLinkTargetMismatch('', 'run-7')).toBe(false);
   });
 });

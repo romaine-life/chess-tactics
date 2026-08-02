@@ -18716,7 +18716,10 @@ app.post('/api/active-run/craft', async (req, res) => {
     });
     res.status(200).json({
       ...publicActiveRun(result),
-      url: '/run',
+      // The address carries the crafted Run's identity so opening it signed out, or as someone
+      // else, says so instead of quietly rendering a different Run.
+      url: serverRender.runLinkForRun(run.id),
+      runId: run.id,
       summary: {
         war: run.war.name,
         phase: run.phase,

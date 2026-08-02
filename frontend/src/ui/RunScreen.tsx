@@ -49,6 +49,7 @@ import {
   selectedDeploymentLayout,
 } from '../run/deployment';
 import { useActiveRun } from '../run/store';
+import { runLinkTargetMismatch } from '../run/craft';
 import { useRunCraft } from './useRunCraft';
 import { RunRelicIcon, RunRelicsWorkspace } from './RunRelics';
 import { RunGoldAmount } from './RunResources';
@@ -903,6 +904,9 @@ export function RunScreen({
   // A craft request speaks for the whole screen while it runs: the Run it is about to replace must
   // not flash its own phase first, and a refused spec has to say why instead of silently doing
   // nothing.
+  // A link made for a specific Run says so. Rendering someone else's Run — or this browser's
+  // signed-out copy — under that link is the failure worth catching: it looks like it worked.
+  const linkMismatch = hydrated && runLinkTargetMismatch(routeSearch, run?.id ?? null);
   const craftWorkspace = craft.crafting
     ? (
       <RunWorkspace
@@ -927,7 +931,30 @@ export function RunScreen({
           <p>{craft.error}</p>
         </RunWorkspace>
       )
-      : null;
+      : linkMismatch
+        ? (
+          <RunWorkspace
+            className="run-empty-workspace"
+            contentClassName="run-status-workspace-content"
+            data-testid="run-link-mismatch-workspace"
+            role="status"
+            aria-labelledby="run-link-mismatch-title"
+          >
+            <h2 id="run-link-mismatch-title">This link is for a different Run</h2>
+            <p>
+              {run
+                ? 'It was made for a Run this account is not on any more. The Run below is the one you have now.'
+                : 'Sign in to the account it was made for, or open the Run this browser has.'}
+            </p>
+            <ChromeNavButton unit="inner-text-button"
+              className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
+              to="/run"
+            >
+              Open my Run
+            </ChromeNavButton>
+          </RunWorkspace>
+        )
+        : null;
   if (!craftWorkspace && shellRun?.phase === 'battle') {
     return (
       <RunPresentationSceneSlot
