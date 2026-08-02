@@ -321,7 +321,7 @@ export function shuffled<T>(values: readonly T[], seed: number): T[] {
   return result;
 }
 
-const PLAGUED_DISCOUNT: Readonly<Record<PurchasablePieceType, number>> = Object.freeze({
+export const PLAGUED_DISCOUNT: Readonly<Record<PurchasablePieceType, number>> = Object.freeze({
   pawn: 0,
   knight: 1,
   bishop: 1,
@@ -329,7 +329,7 @@ const PLAGUED_DISCOUNT: Readonly<Record<PurchasablePieceType, number>> = Object.
   queen: 3,
 });
 
-function seededPestiferousTarget<T>(
+export function seededPestiferousTarget<T>(
   effectSeed: number,
   candidates: readonly T[],
   sequence: number,
@@ -1010,7 +1010,7 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
   return next;
 }
 
-function addArmyPieces(
+export function addArmyPieces(
   run: RunDocument,
   pieces: readonly PurchasablePieceType[],
   source: RunArmyUnit['source'],
@@ -1261,7 +1261,7 @@ function cardsWithoutUnit(cards: readonly RunOwnedCard[], unitId: string): RunOw
   });
 }
 
-function removeUnitFromArmyAndCards(
+export function removeUnitFromArmyAndCards(
   run: Pick<RunDocument, 'army' | 'cards'>,
   unitId: string,
 ): Pick<RunDocument, 'army' | 'cards'> {

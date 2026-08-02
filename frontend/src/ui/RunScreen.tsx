@@ -48,6 +48,7 @@ import {
   selectedDeploymentLayout,
 } from '../run/deployment';
 import { useActiveRun } from '../run/store';
+import { useRunCraft } from './useRunCraft';
 import { RunRelicIcon, RunRelicsWorkspace } from './RunRelics';
 import { RunGoldAmount } from './RunResources';
 import {
@@ -743,6 +744,8 @@ export function RunScreen({
   const run = sceneSnapshot.run;
   const hydrated = sceneSnapshot.hydrated;
   const replace = useActiveRun((state) => state.replace);
+  // A ?craft= address builds its Run before the screen reads one (development only).
+  const craft = useRunCraft(routePath, routeSearch);
   const viewScope = run
     ? `${run.id}:${run.phase}:${run.phase === 'shop' ? run.shop?.afterBattleIndex ?? run.battleIndex : run.battleIndex}`
     : 'no-run';
@@ -833,7 +836,35 @@ export function RunScreen({
       onSell={sellUnit}
     />
   ) : null;
-  if (shellRun?.phase === 'battle') {
+  // A craft request speaks for the whole screen while it runs: the Run it is about to replace must
+  // not flash its own phase first, and a refused spec has to say why instead of silently doing
+  // nothing.
+  const craftWorkspace = craft.crafting
+    ? (
+      <RunWorkspace
+        className="run-loading-workspace"
+        contentClassName="run-status-workspace-content"
+        data-testid="run-craft-workspace"
+        role="status"
+      >
+        <p>Crafting Run…</p>
+      </RunWorkspace>
+    )
+    : craft.error
+      ? (
+        <RunWorkspace
+          className="run-empty-workspace"
+          contentClassName="run-status-workspace-content"
+          data-testid="run-craft-error-workspace"
+          role="alert"
+          aria-labelledby="run-craft-error-title"
+        >
+          <h2 id="run-craft-error-title">This Run could not be crafted</h2>
+          <p>{craft.error}</p>
+        </RunWorkspace>
+      )
+      : null;
+  if (!craftWorkspace && shellRun?.phase === 'battle') {
     return (
       <RunPresentationSceneSlot
         className="run-scene-slot"
@@ -850,7 +881,7 @@ export function RunScreen({
       </RunPresentationSceneSlot>
     );
   }
-  const workspace = !hydrated
+  const workspace = craftWorkspace ?? (!hydrated
     ? (
       <RunWorkspace
         className="run-loading-workspace"
@@ -883,7 +914,7 @@ export function RunScreen({
           ? <DeploymentPanel run={shellRun} />
           : shellRun.phase === 'shop' && shellRun.shop
             ? <ShopPanel run={shellRun} view={view} sellWorkspace={sellWorkspace!} />
-            : <VictoryPanel run={shellRun} />;
+            : <VictoryPanel run={shellRun} />);
   return (
     <RunPresentationSceneSlot
       className="run-scene-slot"

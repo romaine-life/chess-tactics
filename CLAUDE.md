@@ -180,6 +180,37 @@ The Studio encodes its state in the URL, so deep-link instead of clicking:
 - `view=board`, `family=<id>`, `collection=<id>`, `asset=<id>`, `unit=<id>`, `seed=<n>`
 - `/unit-studio` is an alias for the Studio with the Units shelf preselected.
 
+#### Crafting a Run state to link to (dev only, ADR-0338)
+
+Run screens need an active Run, so `/run` alone lands wherever the account already is.
+`?craft=` builds the named state out of the game's own transitions, adopts it as the active
+Run, then drops its parameters from the address. Never hand-author a Run document or edit
+`active_runs` — the server validator cross-checks army/card membership, Plagued targets and
+offer pricing, and a crafted document passes because the game built it.
+
+```
+/run?craft=shop&battle=3&gold=25&army=knight,rook&offers=queen,pawn+pawn:concinnous,rook:tactical
+/run?craft=deployment&battle=2&army=rook,rook,bishop,pawn&gold=12
+/run?craft=battle&battle=4&relics=fair-scales
+/run?craft=victory&gold=40
+```
+
+- `craft=shop|deployment|battle|victory` — the phase to land on.
+- `battle=N` — the Battle you are at, 1-based. For a Shop that is the Shop you leave into
+  Battle N, so `battle=1` is the opening Shop (which takes no overrides — the Run contract
+  pins its offers, army and 8 gold).
+- `gold=25` (decimals fine), `army=knight,rook` (the exact non-King army; `add=queen`
+  appends instead), `relics=<id,id>`.
+- Shop only: `offers=<card>[,<card>]` where a card is its pieces joined by `+` with an
+  optional `:tactical|:concinnous|:pestiferous`; `loot=<id,id>`; `paid=<id>`. Pieces accept
+  names, chess letters, or a bare deck id (`pawn,pawn,knight` = `p,p,n` = `ppk`).
+- `war=<id>` picks the War (default: the first Run-eligible official one), `seed=<n>` and
+  `tier=0|1` fix the roll. `view=army|relics|sell` still applies and survives the craft.
+
+A refused spec prints the reason on the Run screen and writes nothing. Crafting **replaces
+the account's active Run** — there is one per account — so do not craft over a Run the owner
+is playing without saying so.
+
 ## Dev environment gotchas (git worktrees)
 
 - A fresh worktree's `backend/node_modules` is expected to be missing. That is
