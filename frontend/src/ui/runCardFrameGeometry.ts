@@ -74,26 +74,60 @@ export type RunCardFrameGeometry = Readonly<{
 /**
  * The whole text-placement rule, shared by every frame and every card.
  *
- * Vertical: a box's text is centered in the box. No card, frame, or type line
- * carries its own vertical offset — a line that sits wrong means its box is
- * wrong, and the box is what gets tuned (ADR-0355).
+ * Vertical: a box's text is centered in the box — centered on the INK, not on
+ * the line box, which reserves descender room these numerals and caps never use
+ * and would leave every line floating high. No card, frame, or type line carries
+ * an offset of its own; a line that sits wrong means its box is wrong, and the
+ * box is what gets tuned (ADR-0355).
  *
  * Horizontal: title and type text is inset from both plate edges by one shared
- * value; the cost reading is centered in its coin box. `opticalBlock` is the
- * single display-face correction available when centered caps read high or low,
- * and it applies to every box on every frame at once.
+ * value; the cost reading is centered in its coin box.
  */
 export type RunCardTextPlacement = Readonly<{
   insetInline: number;
-  opticalBlock: number;
+  /**
+   * How far the display face's ink centre sits above its line-box centre, in em.
+   * Measured off the font itself and constant at every size, so one number
+   * re-centres the title, type and cost lines against their own sizes.
+   */
+  inkCentreEm: number;
 }>;
 
 export const RUN_CARD_TEXT_PLACEMENT: RunCardTextPlacement = Object.freeze({
   // Measured from the plate opening's real edge, so the same padding now reads
   // the same on a thin painted border and on Hieratic's thicker steel one.
   insetInline: 2.25,
-  opticalBlock: 0,
+  inkCentreEm: .0667,
 });
+
+/**
+ * The coin's flat striking face, measured across the middle of the drawn coin
+ * (63.8 native px of the 105px coin). The cost numeral is sized to sit inside
+ * it rather than crowding the rim.
+ */
+export const RUN_CARD_COIN_FACE_CQW = 6.01;
+
+/** The share of that face the widest numeral of a given length may occupy. */
+export const RUN_CARD_COIN_FACE_FILL = .72;
+
+/**
+ * The display face's widest numeral at each length, in em. Digits are not equal
+ * width — "1" is narrower than "0" — so a two-digit reading is measured as a
+ * pair rather than assumed to be twice one digit.
+ */
+const NUMERAL_EM_WIDTH: readonly number[] = Object.freeze([0, .4375, .8125]);
+
+/**
+ * The cost numeral's size: the approved size, reduced only as far as it takes to
+ * keep the reading inside the coin's face. One digit never reaches the cap, so
+ * the common card is unchanged and two digits stop touching the rim.
+ */
+export function runCardCostSizeCqw(cost: number, approvedSizeCqw: number): number {
+  const digits = Math.abs(Math.trunc(cost)).toString().length;
+  const emWidth = NUMERAL_EM_WIDTH[digits] ?? NUMERAL_EM_WIDTH[NUMERAL_EM_WIDTH.length - 1] * digits / 2;
+  const fits = (RUN_CARD_COIN_FACE_CQW * RUN_CARD_COIN_FACE_FILL) / emWidth;
+  return Math.round(Math.min(approvedSizeCqw, fits) * 100) / 100;
+}
 
 const SHA256 = /^[0-9a-f]{64}$/;
 

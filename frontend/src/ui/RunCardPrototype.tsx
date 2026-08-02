@@ -75,7 +75,7 @@ const TYPE_SIZE_MAX = 6;
 const DEFAULT_TYPE_SIZE = RUN_CARD_APPROVED_TUNING.typeSize;
 const DEFAULT_FLAVOR_SIZE = RUN_CARD_APPROVED_TUNING.flavorSize;
 const DEFAULT_TEXT_INSET = RUN_CARD_APPROVED_TUNING.textInset;
-const DEFAULT_TEXT_OPTICAL = RUN_CARD_APPROVED_TUNING.textOptical;
+const DEFAULT_TEXT_INK_CENTRE = RUN_CARD_APPROVED_TUNING.textInkCentre;
 const RUN_CARD_SAMPLE_DRAWS = 64;
 const DEFAULT_OPENING_SAMPLE_SEED = 4217;
 const DEFAULT_CONTENTS_SCALE = 1;
@@ -390,7 +390,7 @@ export function RunCardPrototypeViewer({
   const [titleTypeSizeRatio, setTitleTypeSizeRatio] = useState<number | null>(null);
   const [flavorSize, setFlavorSize] = useState(DEFAULT_FLAVOR_SIZE);
   const [textInset, setTextInset] = useState(DEFAULT_TEXT_INSET);
-  const [textOptical, setTextOptical] = useState(DEFAULT_TEXT_OPTICAL);
+  const [textInkCentre, setTextInkCentre] = useState(DEFAULT_TEXT_INK_CENTRE);
   const [frameBoxDrafts, setFrameBoxDrafts] = useState<RunCardFrameBoxDrafts>(committedRunCardFrameBoxDrafts);
   const [selectedFrameBox, setSelectedFrameBox] = useState<RunCardFrameBoxName>('type');
   const [pestiferousDenominator, setPestiferousDenominator] = useState(PESTIFEROUS_OFFER_DENOMINATOR);
@@ -553,7 +553,7 @@ export function RunCardPrototypeViewer({
     setTypeSize(DEFAULT_TYPE_SIZE);
     setFlavorSize(DEFAULT_FLAVOR_SIZE);
     setTextInset(DEFAULT_TEXT_INSET);
-    setTextOptical(DEFAULT_TEXT_OPTICAL);
+    setTextInkCentre(DEFAULT_TEXT_INK_CENTRE);
     setFrameBoxDrafts(committedRunCardFrameBoxDrafts());
     setContentsScale(DEFAULT_CONTENTS_SCALE);
     setPestiferousDenominator(PESTIFEROUS_OFFER_DENOMINATOR);
@@ -660,7 +660,7 @@ export function RunCardPrototypeViewer({
         })),
       },
       // The whole placement rule: centered in the box, plus these two shared values.
-      textPlacement: { insetInline: textInset, opticalBlock: textOptical },
+      textPlacement: { insetInline: textInset, inkCentreEm: textInkCentre },
       title: { size: titleSize },
       type: { size: typeSize },
       cost: { size: costSize },
@@ -755,7 +755,7 @@ export function RunCardPrototypeViewer({
                       frameBoxStyle={frameBoxStyle}
                       selectedFrameBox={selectedFrameBox}
                       width={`${REFERENCE_CARD_WIDTH * viewerZoom}px`}
-                      tuning={{ costSize, titleSize, typeSize, flavorSize, textInset, textOptical }}
+                      tuning={{ costSize, titleSize, typeSize, flavorSize, textInset, textInkCentre }}
                       contentsTuning={scaledRunCardContentsTuning(profile.tuning, contentsScale)}
                       onImageLoad={onImageLoad}
                       onImageError={onImageError}
@@ -773,7 +773,7 @@ export function RunCardPrototypeViewer({
                 frameBoxStyle={frameBoxStyle}
                 selectedFrameBox={selectedFrameBox}
                 width={`${REFERENCE_CARD_WIDTH * viewerZoom}px`}
-                tuning={{ costSize, titleSize, typeSize, flavorSize, textInset, textOptical }}
+                tuning={{ costSize, titleSize, typeSize, flavorSize, textInset, textInkCentre }}
                 onImageLoad={onImageLoad}
                 onImageError={onImageError}
               />
@@ -1021,14 +1021,14 @@ export function RunCardPrototypeViewer({
               dflt={DEFAULT_TEXT_INSET}
             />
             <SliderRow
-              label={<>Optical baseline · {textOptical.toFixed(2)}% (every line, every frame)</>}
-              value={textOptical}
-              set={setTextOptical}
-              min={-2}
-              max={2}
-              step={.05}
-              nudge={.05}
-              dflt={DEFAULT_TEXT_OPTICAL}
+              label={<>Ink centring · {textInkCentre.toFixed(3)}em (every line, every frame)</>}
+              value={textInkCentre}
+              set={setTextInkCentre}
+              min={-.15}
+              max={.15}
+              step={.001}
+              nudge={.005}
+              dflt={DEFAULT_TEXT_INK_CENTRE}
             />
             <SliderRow label={<>Title size · {titleSize.toFixed(2)}%</>} value={titleSize} set={setLinkedTitleSize} min={titleSizeMin} max={titleSizeMax} step={.01} nudge={.05} dflt={DEFAULT_TITLE_SIZE} />
             <button

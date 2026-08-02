@@ -6,6 +6,7 @@ import {
   RUN_CARD_FRAME_BOX_NAMES,
   RUN_CARD_STANDARD_FRAME_GEOMETRY,
   RUN_CARD_TEXT_PLACEMENT,
+  runCardCostSizeCqw,
   runCardFrameGeometryVariables,
   type RunCardFrameBoxName,
   type RunCardFrameBoxStyle,
@@ -143,7 +144,7 @@ export type RunCardFaceTuning = Readonly<{
   typeSize: number;
   flavorSize: number;
   textInset: number;
-  textOptical: number;
+  textInkCentre: number;
 }>;
 
 export type RunCardContentsTuning = Readonly<{
@@ -167,7 +168,7 @@ export const RUN_CARD_APPROVED_TUNING: RunCardFaceTuning = Object.freeze({
   costSize: 6.2,
   flavorSize: 5,
   textInset: RUN_CARD_TEXT_PLACEMENT.insetInline,
-  textOptical: RUN_CARD_TEXT_PLACEMENT.opticalBlock,
+  textInkCentre: RUN_CARD_TEXT_PLACEMENT.inkCentreEm,
 });
 
 /** The Contents Box base values every density step overrides. Hosts get the load-derived ladder below. */
@@ -1013,11 +1014,13 @@ export function RunCardFace({
       className="run-card-prototype run-card-face"
       style={{
         '--run-card-prototype-width': width,
-        '--run-card-cost-size': `${tuning.costSize}cqw`,
+        // The reading is sized to the coin's face, so a two-digit cost stops
+        // crowding the rim while a one-digit cost keeps the approved size.
+        '--run-card-cost-size': `${runCardCostSizeCqw(displayed.card.cost, tuning.costSize)}cqw`,
         '--run-card-title-size': `${tuning.titleSize}cqw`,
         '--run-card-type-size': `${tuning.typeSize}cqw`,
         '--run-card-text-inset': `${tuning.textInset}cqw`,
-        '--run-card-text-optical': `${tuning.textOptical}cqw`,
+        '--run-card-text-ink-centre': tuning.textInkCentre,
       } as CSSProperties}
       aria-hidden={ariaHidden || undefined}
       aria-busy={pending ? true : undefined}

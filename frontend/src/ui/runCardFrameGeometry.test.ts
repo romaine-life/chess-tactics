@@ -11,6 +11,7 @@ import {
   RUN_CARD_TEXT_PLACEMENT,
   runCardFrameGeometryForSlot,
   runCardFrameGeometryKnowsPixels,
+  runCardCostSizeCqw,
   runCardFrameGeometryVariables,
   runCardFrameGeometryWithBoxes,
   type RunCardFrameVariant,
@@ -74,10 +75,19 @@ describe('Run card frame geometry', () => {
     expect(textLeft('hieratic')).toBeGreaterThan(textLeft('standard'));
   });
 
+  it('sizes the cost reading to the coin face instead of letting it crowd the rim', () => {
+    // A one-digit reading never reaches the cap, so the common card is untouched.
+    for (const cost of [1, 4, 9]) expect(runCardCostSizeCqw(cost, 6.2)).toBe(6.2);
+    // Two digits are measured as a pair — "1" is narrower than "0" — and shrink
+    // only as far as it takes to sit inside the face.
+    for (const cost of [10, 11, 12]) expect(runCardCostSizeCqw(cost, 6.2)).toBe(5.33);
+    expect(runCardCostSizeCqw(12, 4)).toBe(4);
+  });
+
   it('states the entire text-placement rule as two shared values', () => {
-    expect(Object.keys(RUN_CARD_TEXT_PLACEMENT).sort()).toEqual(['insetInline', 'opticalBlock']);
+    expect(Object.keys(RUN_CARD_TEXT_PLACEMENT).sort()).toEqual(['inkCentreEm', 'insetInline']);
     expect(RUN_CARD_TEXT_PLACEMENT.insetInline).toBe(2.25);
-    expect(RUN_CARD_TEXT_PLACEMENT.opticalBlock).toBe(0);
+    expect(RUN_CARD_TEXT_PLACEMENT.inkCentreEm).toBe(.0667);
   });
 
   it('binds Hieratic to the forged-steel frame and its lower panels', () => {

@@ -22472,7 +22472,9 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   line-height: 1;
   overflow: hidden;
   padding-inline: var(--run-card-text-inset, 1.35cqw);
-  transform: translateY(var(--run-card-text-optical, 0cqw));
+  /* Centre the ink, not the line box: the face reserves descender room these
+     lines never use, which otherwise leaves every one of them sitting high. */
+  transform: translateY(calc(var(--run-card-text-ink-centre, .0667) * 1em));
   white-space: nowrap;
 }
 
@@ -22496,6 +22498,7 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   inline-size: var(--run-card-cost-width, 11.1%);
   justify-content: center;
   text-shadow: 0 1px 0 rgba(255, 232, 161, .55);
+  transform: translateY(calc(var(--run-card-text-ink-centre, .0667) * 1em));
 }
 
 .run-card-prototype-type {

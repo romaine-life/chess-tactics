@@ -120,11 +120,11 @@ describe('Run Card Layout review variant', () => {
 
   it('lets a host choose text size and the two shared placement values, never a position', () => {
     expect(Object.keys(RUN_CARD_APPROVED_TUNING).sort()).toEqual([
-      'costSize', 'flavorSize', 'textInset', 'textOptical', 'titleSize', 'typeSize',
+      'costSize', 'flavorSize', 'textInkCentre', 'textInset', 'titleSize', 'typeSize',
     ]);
     expect(RUN_CARD_APPROVED_TUNING.typeSize).toBe(5.3);
     expect(RUN_CARD_APPROVED_TUNING.textInset).toBe(RUN_CARD_TEXT_PLACEMENT.insetInline);
-    expect(RUN_CARD_APPROVED_TUNING.textOptical).toBe(RUN_CARD_TEXT_PLACEMENT.opticalBlock);
+    expect(RUN_CARD_APPROVED_TUNING.textInkCentre).toBe(RUN_CARD_TEXT_PLACEMENT.inkCentreEm);
   });
 
   it('hands the owner one draft per frame, seeded from what is committed', () => {
