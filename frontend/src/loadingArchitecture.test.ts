@@ -103,11 +103,14 @@ describe('professional loading architecture guards', () => {
   it('keeps authored committed and pending scene instances separate from browser intent', () => {
     const app = read('./ui/App.tsx');
     const play = read('./ui/PlayMenu.tsx');
-    const manifest = read('./ui/shell/sceneManifest.ts');
+    const graph = read('./ui/shell/sceneGraph.ts');
     const slots = read('./ui/shell/sceneSlots.ts');
-    expect(manifest).toContain('export interface SceneDefinition');
-    expect(manifest).toContain('export interface SceneInstance');
-    expect(manifest).toContain('export interface ScenePath');
+    expect(graph).toContain('export interface SceneDefinition');
+    expect(graph).toContain('export interface SceneInstance');
+    expect(graph).toContain('export interface ScenePath');
+    // The slot projection is derived from the scene graph, never retyped: the
+    // hand-maintained copy had already lost `run-detail-content`.
+    expect(slots).toContain('const ALL_SLOTS: readonly SceneSlotId[] = SCENE_SLOT_IDS');
     expect(slots).toContain('committed: SceneInstance | null');
     expect(slots).toContain('pending: SceneInstance | null');
     expect(app).toContain('data-scene-committed={scene.current.leaf.key}');
@@ -174,14 +177,39 @@ describe('professional loading architecture guards', () => {
 
   it('routes Editor collections and campaigns through one authored nested scene slot', () => {
     const editor = read('./ui/CampaignEditor.tsx');
-    const manifest = read('./ui/shell/sceneManifest.ts');
     expect(editor).toContain('<EditorContentSceneSlot');
     expect(editor).toContain('const selectedCollection = editorCollectionFromLocation(path, search)');
     expect(editor).toContain("navigateApp(editorCampaignHref('/editor', campaignId))");
     expect(editor).not.toContain('setSelectedCollection');
     expect(editor).not.toContain('window.history.replaceState');
-    expect(manifest).toContain("'campaign-editor': 'editor-shell'");
-    expect(manifest).toContain("'editor-shell': 'editor-content'");
+  });
+
+  it('derives every rail-of-sections family from the one sectioned-shell registry', () => {
+    const manifest = read('./ui/shell/sceneManifest.ts');
+    const registry = read('./ui/shell/sectionedShells.ts');
+    // A family that presents a rail inside a retained shell is an ENTRY, never a
+    // hand-written branch: whether its rail fades is decided by scene identity, and
+    // a family that writes its own mapping can forget to (the Strategikon did, on
+    // both of its hosts, in opposite directions). See sectionedShells.test.ts for
+    // the structural rule this arrangement makes enforceable.
+    for (const entry of ['main-menu', 'settings', 'enchiridion', 'campaign-editor', 'play', 'strategikon']) {
+      expect(registry, `registry entry "${entry}"`).toContain(`id: '${entry}'`);
+    }
+    // The region and slot maps are generated from those entries, so a new rail
+    // cannot land in one map and be forgotten in the other.
+    expect(registry).toContain('export const SECTIONED_SHELL_REGION_BY_DEFINITION');
+    expect(registry).toContain('export const SECTIONED_SHELL_SLOT_BY_REGION');
+    expect(manifest).toContain('...SECTIONED_SHELL_REGION_BY_DEFINITION');
+    expect(manifest).toContain('...SECTIONED_SHELL_SLOT_BY_REGION');
+    expect(manifest).toContain("resolveSectionedShellScene('main-menu', path, search)");
+    expect(manifest).toContain("resolveSectionedShellScene('strategikon', path, search, instances)");
+    // The Strategikon's route grammar is shared with the manifest, not re-parsed
+    // privately: two disagreeing copies is how its sections stayed invisible.
+    expect(read('./ui/Strategikon.tsx')).toContain("from './strategikonRoute'");
+    expect(read('./ui/Strategikon.tsx')).not.toContain('function sectionFromPath');
+    expect(read('./ui/Strategikon.tsx')).not.toContain('function enchiridionSectionFromPath');
+    expect(read('./ui/Strategikon.tsx')).toContain('<StrategikonContentSceneSlot');
+    expect(read('./ui/Strategikon.tsx')).toContain('<StrategikonReferenceSceneSlot');
   });
 
   it('uses the persistent title bar for route loading and never invents a board background', () => {

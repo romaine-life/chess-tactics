@@ -46,6 +46,7 @@ import {
   deepestSharedSceneRegion,
   isEmptySlotDestination,
   isEmptySlotOrigin,
+  overlapsStateDrivenRunScene,
   sceneLayerKey,
   sceneManifest,
   sceneOverlapScope,
@@ -83,12 +84,6 @@ const sceneFailureCopy = (error: Error | null): string => (
     : error?.message.includes('Canonical Play content')
       ? 'Play content could not be reached. Check your connection and try again.'
       : 'Required scene data or artwork could not be reached. Check your connection and try again.'
-);
-
-const overlapsStateDrivenRunScene = (current: ScenePath, destination: ScenePath): boolean => (
-  current.snapshot.kind === 'run'
-  && destination.snapshot.kind === 'run'
-  && current.id !== destination.id
 );
 
 /**
