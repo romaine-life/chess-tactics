@@ -18818,10 +18818,6 @@ button.tileset-relationship-cell {
   gap: var(--ds-inline-tight);
 }
 
-.run-shop-rules > :last-child {
-  margin-inline-start: auto;
-}
-
 .run-gold-amount {
   align-items: center;
   display: inline-flex;
