@@ -52,15 +52,35 @@ async function runScenario({ label, delayCampaignsMs }) {
     if (delayCampaignsMs) {
       // Land PlayMenu's canonicalization in its own quiet flush, after run hydration
       // settles, so the replace navigation is always dispatched mid-transition.
-      await page.setRequestInterception(true);
-      page.on('request', (request) => {
-        const url = request.url();
-        if (url.includes('/api/official-campaigns') || url.includes('/api/campaign-workspace')) {
-          setTimeout(() => { void request.continue(); }, delayCampaignsMs);
-          return;
-        }
-        void request.continue();
-      });
+      //
+      // Hold the campaign reads INSIDE the page rather than through CDP request interception
+      // (page.setRequestInterception). Interception routes every request in the page through this
+      // process, and against the Vite dev server it wedges module requests: run-battle-e2e measured
+      // 6/6 runs hung with a lazily-imported module graph paused in flight forever, versus 6/6
+      // clean runs with interception removed (commit af37db63). A paused request raises no error
+      // event, so nothing times out — this scenario would simply never reach its assertions. Both
+      // campaign reads go through `fetch` (net/campaignWorkspace.ts), so patching `window.fetch`
+      // delays exactly the same requests. The tally lives in sessionStorage so the count survives
+      // every navigation this scenario makes.
+      await page.evaluateOnNewDocument((delayMs) => {
+        const KEY = '__ctDelayedCampaignReads';
+        const read = () => Number(sessionStorage.getItem(KEY) ?? '0') || 0;
+        const bump = () => {
+          const next = read() + 1;
+          window[KEY] = next;
+          try { sessionStorage.setItem(KEY, String(next)); } catch { /* window copy still stands */ }
+        };
+        window[KEY] = read();
+        const nativeFetch = window.fetch.bind(window);
+        window.fetch = async (input, init) => {
+          const href = typeof input === 'string' ? input : (input?.url ?? '');
+          if (href.includes('/api/official-campaigns') || href.includes('/api/campaign-workspace')) {
+            bump();
+            await new Promise((resolve) => { setTimeout(resolve, delayMs); });
+          }
+          return nativeFetch(input, init);
+        };
+      }, delayCampaignsMs);
     }
 
     // The isolated browser has no owner cookies; establish the loopback dev session
@@ -118,6 +138,7 @@ async function runScenario({ label, delayCampaignsMs }) {
       finalPhase: document.querySelector('[data-scene-phase]')?.getAttribute('data-scene-phase') ?? null,
       phases: window.__playNav.phases,
       marks: window.__playNavMarks(),
+      delayedCampaignReads: Number(sessionStorage.getItem('__ctDelayedCampaignReads') ?? '0') || 0,
     }));
 
     const phaseRuns = [];
@@ -133,6 +154,11 @@ async function runScenario({ label, delayCampaignsMs }) {
       : acceptedCount >= 2 || refreshedCount >= 1;
 
     const violations = [];
+    // A forced-timing scenario that silently stopped forcing anything is not a passing run — it is
+    // the natural-timing scenario wearing its name, and it would report OK while proving nothing.
+    if (delayCampaignsMs && result.delayedCampaignReads === 0) {
+      violations.push('campaign reads were never held, so this scenario never forced a mid-transition canonicalization');
+    }
     if (exitingCount !== 1) violations.push(`expected exactly one exit, saw ${exitingCount}`);
     if (result.finalPhase !== 'current') violations.push(`scene did not settle: ${result.finalPhase}`);
     if (!result.finalPath.startsWith(CANONICAL_PREFIX)) {

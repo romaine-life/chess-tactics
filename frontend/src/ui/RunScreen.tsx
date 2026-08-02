@@ -19,8 +19,10 @@ import type { RunSceneSnapshot } from './shell/sceneManifest';
 import { GameplayWorkspaceSceneSlot, RunPresentationSceneSlot } from './shell/AuthoredSceneSlot';
 import { useConfirm } from './shared/ConfirmDialog';
 import { RunWorkspace } from './RunWorkspace';
+import { workspaceBackgroundArtwork } from './workspaceBackgrounds';
 import {
   ATARAXIA_BY_TIER,
+  CACOCHYMIC_DISPLAY_NAME,
   GOLD_SCALE,
   RUN_RELIC_BY_ID,
   battleVictoryGoldTenths,
@@ -57,11 +59,12 @@ import {
 } from '../run/deployment';
 import { useActiveRun } from '../run/store';
 import { SkirmishViewStoreProvider } from '../game/SkirmishViewStoreContext';
+import { runLinkTargetMismatch } from '../run/craft';
+import { useRunCraft } from './useRunCraft';
 import { RunRelicIcon, RunRelicsWorkspace } from './RunRelics';
 import { RunGoldAmount } from './RunResources';
 import {
   runWorkspaceHref,
-  RunSelfInspectionControls,
   type RunSelfInspectionView,
   type RunWorkspaceView,
 } from './RunSelfInspection';
@@ -169,6 +172,16 @@ function useRunAbandon(run: RunDocument): {
   return { abandonDialog: dialog, abandoning, requestAbandon };
 }
 
+/** The installed full-screen Shop scene, or null when the Shop has no scene art. */
+function useInstalledShopScene(): ReactElement | null {
+  return useMemo(() => {
+    const installed = installedRunShopWrap();
+    return installed?.kind === 'screen'
+      ? <img className="run-shop-scene-artwork" src={installed.src} alt="" draggable={false} />
+      : null;
+  }, []);
+}
+
 function RunMetaControls({
   run,
   view,
@@ -184,7 +197,8 @@ function RunMetaControls({
   const { abandonDialog, abandoning, requestAbandon } = useRunAbandon(run);
   const shop = run.phase === 'shop' ? run.shop : null;
   const canLeave = canLeaveShop(run);
-  const continueHint = 'Choose one Loot relic before continuing.';
+  const needsLootChoice = Boolean(shop && shop.lootRelicOffers.length > 0 && !shop.chosenLootRelicId);
+  const continueHint = needsLootChoice ? 'Choose one Loot relic before continuing.' : null;
   const primaryLabel = run.phase === 'deployment'
       ? 'Deployment'
       : run.phase === 'battle'
@@ -219,13 +233,6 @@ function RunMetaControls({
             ) : null}
           </div>
         </div>
-        <div className="skirmish-view-group">
-          <span className="skirmish-eyebrow">Self inspection</span>
-          <RunSelfInspectionControls
-            view={view === 'army' || view === 'relics' ? view : null}
-            onNavigate={onNavigate}
-          />
-        </div>
         {shop ? (
           <div className="skirmish-view-group">
             <span className="skirmish-eyebrow">Shop</span>
@@ -245,7 +252,7 @@ function RunMetaControls({
                 className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
                 disabled={!canLeave}
                 data-testid="continue-run-shop"
-                title={canLeave ? undefined : continueHint}
+                title={!canLeave && continueHint ? continueHint : undefined}
                 onClick={() => {
                   const deployment = prepareDeployment(leaveShop(run));
                   const level = deployment.war.battles[deployment.battleIndex]?.level;
@@ -256,7 +263,7 @@ function RunMetaControls({
                 {shop.kind === 'opening' ? 'Continue to first Battle' : 'Continue to next Battle'}
               </ChromeButton>
             </div>
-            {!canLeave ? <p className="skirmish-grid-hint">{continueHint}</p> : null}
+            {!canLeave && continueHint ? <p className="skirmish-grid-hint">{continueHint}</p> : null}
           </div>
         ) : null}
         {showAbandon ? (
@@ -430,13 +437,6 @@ function DeploymentControls({
           >
             Deployment
           </ChromeButton>
-        </div>
-        <div className="skirmish-view-group">
-          <span className="skirmish-eyebrow">Self inspection</span>
-          <RunSelfInspectionControls
-            view={view === 'army' || view === 'relics' ? view : null}
-            onNavigate={onNavigate}
-          />
         </div>
         <div className="skirmish-view-group run-meta-abandon">
           <span className="skirmish-eyebrow">Run</span>
@@ -695,12 +695,12 @@ function ShopCardRow({ children }: { children: ReactNode }): ReactElement {
   const [box, setBox] = useState({ width: 0, height: 0 });
   const hostRef = useRef<HTMLDivElement | null>(null);
   const cardCount = Children.count(children);
-
-  // The host fills the space the Shop allots it and the stall is drawn inside
-  // that box, so the wrap can never push the screen into scrolling.
+  // Only a band wrap measures anything: it is a frame around the row, so the
+  // row has to fit inside it. A screen scene is a background and never
+  // participates — the cards lay out normally and the art sits behind them.
   useEffect(() => {
     const host = hostRef.current;
-    if (!wrap || !host || typeof ResizeObserver === 'undefined') return undefined;
+    if (wrap?.kind !== 'band' || !host || typeof ResizeObserver === 'undefined') return undefined;
     const observer = new ResizeObserver(([entry]) => {
       setBox({
         width: Math.max(0, Math.floor(entry.contentRect.width)),
@@ -764,35 +764,33 @@ function ShopPanel({
     ? shop.victoryGoldTenths
     : battleVictoryGoldTenths(run.war.battles[shop.afterBattleIndex].level);
   const pestiferousLosses = run.pestiferousLosses.filter((loss) => loss.battleIndex === shop.afterBattleIndex);
+  // Painted on the workspace element so it reaches the shell padding; an inner
+  // layer stops at the scroller and leaves the old backdrop showing.
+  const shopScene = useInstalledShopScene();
   return (
     <>
       {view === 'sell' ? sellWorkspace : (
         <RunWorkspace
-          className="run-shop-workspace"
+          className={`run-shop-workspace${shopScene ? ' has-scene' : ''}`}
           contentClassName="run-shop-workspace-content"
           data-testid="run-shop-workspace"
           aria-labelledby="run-shop-workspace-title"
+          backgroundArtwork={shopScene}
         >
-        <h2 id="run-shop-workspace-title">{!opening && run.war.battles[shop.afterBattleIndex]?.loot ? 'Loot Shop' : 'Shop'}</h2>
-        <div className="run-shop-rules">
-          {opening ? (
-            <>
-              <span>Starting gold</span>
-              <RunGoldAmount valueTenths={shop.entrySnapshot.goldTenths} />
-            </>
-          ) : (
-            <>
-              <span>Victory</span>
-              <span aria-hidden="true">+</span>
-              <RunGoldAmount valueTenths={victoryGoldTenths} />
-            </>
-          )}
-          <span>Buy any cards you can afford</span>
-        </div>
+        {/* Always the Shop. Loot is a section that sometimes appears in it, not
+            a different place, so the heading never renames the screen. */}
+        <h2 id="run-shop-workspace-title">Shop</h2>
+        {opening ? null : (
+          <div className="run-shop-rules">
+            <span>Victory</span>
+            <span aria-hidden="true">+</span>
+            <RunGoldAmount valueTenths={victoryGoldTenths} />
+          </div>
+        )}
         {pestiferousLosses.length ? (
           <InnerChromeBox className="run-pestiferous-losses" role="status">
             <h3>Pestiferous attrition</h3>
-            <p>These Plagued units were lost after the Battle:</p>
+            <p>These {CACOCHYMIC_DISPLAY_NAME} units were lost after the Battle:</p>
             <ul>
               {pestiferousLosses.map((loss) => (
                 <li key={`${loss.cardId}:${loss.unit.id}`}>
@@ -800,15 +798,14 @@ function ShopPanel({
                   {(() => {
                     const card = run.cards.find((candidate) => candidate.id === loss.cardId);
                     const next = run.army.find((unit) => unit.id === card?.plaguedUnitId);
-                    return next ? ` — ${next.name} · ${next.type} is now Plagued` : '';
+                    return next ? ` — ${next.name} · ${next.type} is now ${CACOCHYMIC_DISPLAY_NAME}` : '';
                   })()}
                 </li>
               ))}
             </ul>
           </InnerChromeBox>
         ) : null}
-        <section className="run-shop-cards-section">
-          <h3>Cards</h3>
+        <section className="run-shop-cards-section" aria-label="Cards">
           <ShopCardRow>
             {shop.cardOffers.map((offer) => {
               const purchased = shop.purchasedCardOfferIds.includes(offer.offerId);
@@ -876,6 +873,7 @@ function VictoryPanel({ run }: { run: RunDocument }): ReactElement {
       contentClassName="run-victory-workspace-content"
       data-testid="run-victory-workspace"
       aria-labelledby="run-victory-workspace-title"
+      backgroundArtwork={workspaceBackgroundArtwork('run-victory')}
     >
       <h2 id="run-victory-workspace-title">War won</h2>
       <h2>{run.war.name}</h2>
@@ -1019,8 +1017,6 @@ function RunBattlefieldPanel({
         routePath={routePath}
         routeSearch={routeSearch}
         runWorkspace={inspectionWorkspace}
-        runSelfInspectionView={view === 'army' || view === 'relics' ? view : null}
-        onNavigateRunView={onNavigate}
       />
     </>
   );
@@ -1038,6 +1034,8 @@ export function RunScreen({
   const run = sceneSnapshot.run;
   const hydrated = sceneSnapshot.hydrated;
   const replace = useActiveRun((state) => state.replace);
+  // A ?craft= address builds its Run before the screen reads one (development only).
+  const craft = useRunCraft(routePath, routeSearch);
   const viewScope = run
     ? `${run.id}:${run.phase}:${run.phase === 'shop' ? run.shop?.afterBattleIndex ?? run.battleIndex : run.battleIndex}`
     : 'no-run';
@@ -1120,15 +1118,71 @@ export function RunScreen({
     : view === 'relics'
       ? relicsWorkspace
       : null;
+  const shopScene = useInstalledShopScene();
   const sellWorkspace = shellRun ? (
     <RunSellWorkspace
       run={shellRun}
       filters={sellFilters}
       onFiltersChange={(filters) => setSellFilterState({ scope: filterScope, filters })}
       onSell={sellUnit}
+      backgroundArtwork={shopScene}
     />
   ) : null;
-  if (shellRun?.phase === 'deployment' || shellRun?.phase === 'battle') {
+  // A craft request speaks for the whole screen while it runs: the Run it is about to replace must
+  // not flash its own phase first, and a refused spec has to say why instead of silently doing
+  // nothing.
+  // A link made for a specific Run says so. Rendering someone else's Run — or this browser's
+  // signed-out copy — under that link is the failure worth catching: it looks like it worked.
+  const linkMismatch = hydrated && runLinkTargetMismatch(routeSearch, run?.id ?? null);
+  const craftWorkspace = craft.crafting
+    ? (
+      <RunWorkspace
+        className="run-loading-workspace"
+        contentClassName="run-status-workspace-content"
+        data-testid="run-craft-workspace"
+        role="status"
+      >
+        <p>Crafting Run…</p>
+      </RunWorkspace>
+    )
+    : craft.error
+      ? (
+        <RunWorkspace
+          className="run-empty-workspace"
+          contentClassName="run-status-workspace-content"
+          data-testid="run-craft-error-workspace"
+          role="alert"
+          aria-labelledby="run-craft-error-title"
+        >
+          <h2 id="run-craft-error-title">This Run could not be crafted</h2>
+          <p>{craft.error}</p>
+        </RunWorkspace>
+      )
+      : linkMismatch
+        ? (
+          <RunWorkspace
+            className="run-empty-workspace"
+            contentClassName="run-status-workspace-content"
+            data-testid="run-link-mismatch-workspace"
+            role="status"
+            aria-labelledby="run-link-mismatch-title"
+          >
+            <h2 id="run-link-mismatch-title">This link is for a different Run</h2>
+            <p>
+              {run
+                ? 'It was made for a Run this account is not on any more. The Run below is the one you have now.'
+                : 'Sign in to the account it was made for, or open the Run this browser has.'}
+            </p>
+            <ChromeNavButton unit="inner-text-button"
+              className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
+              to="/run"
+            >
+              Open my Run
+            </ChromeNavButton>
+          </RunWorkspace>
+        )
+        : null;
+  if (!craftWorkspace && (shellRun?.phase === 'deployment' || shellRun?.phase === 'battle')) {
     return (
       <RunPresentationSceneSlot
         className="run-scene-slot"
@@ -1145,7 +1199,7 @@ export function RunScreen({
       </RunPresentationSceneSlot>
     );
   }
-  const workspace = !hydrated
+  const workspace = craftWorkspace ?? (!hydrated
     ? (
       <RunWorkspace
         className="run-loading-workspace"
@@ -1176,7 +1230,7 @@ export function RunScreen({
       )
       : shellRun.phase === 'shop' && shellRun.shop
             ? <ShopPanel run={shellRun} view={view} sellWorkspace={sellWorkspace!} />
-            : <VictoryPanel run={shellRun} />;
+            : <VictoryPanel run={shellRun} />);
   return (
     <RunPresentationSceneSlot
       className="run-scene-slot"

@@ -1,6 +1,7 @@
 import type { ComponentPropsWithoutRef, HTMLAttributes, ReactElement, ReactNode } from 'react';
 import type { ChromeRole } from '../chromeCandidateSources';
 import { chromeUnitClassNames } from '../chromeUnitRegistry';
+import { shellViewportOverlapRegion } from '../shell/AuthoredSceneSlot';
 
 export function ChromeSurfaceFill({
   role,
@@ -84,6 +85,7 @@ export function ShellViewportSwap({
   return (
     <section
       {...props}
+      {...shellViewportOverlapRegion()}
       data-shell-viewport-swap=""
       data-shell-workspace-open={covered ? '' : undefined}
       className={`shell-viewport-swap ${className}`.trim()}

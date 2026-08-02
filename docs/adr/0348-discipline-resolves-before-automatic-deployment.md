@@ -3,17 +3,17 @@ status: accepted
 date: 2026-08-02
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
-  - "[ADR-0342](0342-run-deployment-promotes-the-mounted-battlefield-in-place.md)'s in-place completed-formation presentation"
-  - "[ADR-0341](0341-the-final-deployment-choice-commits-and-camera-authority-follows-the-active-scene.md)'s immediate Battle commit after the final required placement"
+  - "[ADR-0350](0350-run-deployment-promotes-the-mounted-battlefield-in-place.md)'s in-place completed-formation presentation"
+  - "[ADR-0349](0349-the-final-deployment-choice-commits-and-camera-authority-follows-the-active-scene.md)'s immediate Battle commit after the final required placement"
 partially_supersedes:
-  - "[ADR-0338](0338-run-deployment-is-a-battlefield-state-with-conditional-input.md)'s provisional formation recomputation during incomplete Discipline"
+  - "[ADR-0346](0346-run-deployment-is-a-battlefield-state-with-conditional-input.md)'s provisional formation recomputation during incomplete Discipline"
 ---
 
-# ADR-0340: Discipline resolves before automatic deployment
+# ADR-0348: Discipline resolves before automatic deployment
 
 ## Context and Problem Statement
 
-ADR-0338 made Discipline a direct battlefield choice but projected the complete
+ADR-0346 made Discipline a direct battlefield choice but projected the complete
 automatic friendly formation before that choice was finished. Every committed
 Disciplined square then reran the deterministic formation around it. Ordinary
 units consequently appeared to move when the player placed the first
@@ -45,7 +45,7 @@ Deployment battlefield shows only committed Disciplined Run units.**
   formation resolves around all committed squares and the remaining friendly
   units appear.
 - Authored neutral battlefield obstacles remain visible. Opponents remain
-  unresolved until Battle activation under ADR-0338.
+  unresolved until Battle activation under ADR-0346.
 - Deployment Controls report the count fixed during incomplete Discipline
   rather than counting hidden provisional placements as ready.
 
@@ -61,5 +61,5 @@ Deployment battlefield shows only committed Disciplined Run units.**
 
 ## More Information
 
-- [ADR-0338](0338-run-deployment-is-a-battlefield-state-with-conditional-input.md)
+- [ADR-0346](0346-run-deployment-is-a-battlefield-state-with-conditional-input.md)
 - [Game concept](../game-concept.md)

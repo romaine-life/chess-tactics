@@ -85,7 +85,6 @@ import { useActiveRun } from '../run/store';
 import { RunRelicStrip } from './RunRelics';
 import { Strategikon } from './Strategikon';
 import { GameplayWorkspaceSceneSlot } from './shell/AuthoredSceneSlot';
-import type { RunSelfInspectionView } from './RunSelfInspection';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 
 export interface RunBattlePresentation {
@@ -119,8 +118,6 @@ export interface SkirmishProps {
   runDeployment?: RunDeploymentPresentation | null;
   runWorkspace?: ReactNode;
   routePath?: string;
-  runSelfInspectionView?: RunSelfInspectionView | null;
-  onNavigateRunView?: ((view: 'primary' | RunSelfInspectionView) => void) | null;
   routeSearch?: string;
 }
 
@@ -212,8 +209,6 @@ function SkirmishSession({
   runDeployment = null,
   runWorkspace = null,
   routePath = window.location.pathname,
-  runSelfInspectionView = null,
-  onNavigateRunView = null,
   routeSearch = window.location.search,
 }: SkirmishProps = {}) {
   const sceneActivated = useSceneActivation();
@@ -1210,8 +1205,6 @@ function SkirmishSession({
       onAbandonRun={runBattle?.onAbandonRun ?? null}
       strategikonHref={strategikonHref}
       strategikonOpen={strategikonOpen}
-      runSelfInspectionView={runSelfInspectionView}
-      onNavigateRunView={onNavigateRunView}
     />
   ) : null;
   // The continuous Run scene registers one stable outer gameplay surface across Deployment and

@@ -3,11 +3,11 @@ status: accepted
 date: 2026-08-02
 deciders: owner (Nelson) + Codex
 partially_supersedes:
-  - "[ADR-0341](0341-the-final-deployment-choice-commits-and-camera-authority-follows-the-active-scene.md)'s immediate phase commit before the final placement presentation settles"
-  - "[ADR-0343](0343-unit-arrival-choreography-follows-newly-visible-unit-identity.md)'s allowance for a final Discipline arrival and Battle additions to overlap"
+  - "[ADR-0349](0349-the-final-deployment-choice-commits-and-camera-authority-follows-the-active-scene.md)'s immediate phase commit before the final placement presentation settles"
+  - "[ADR-0351](0351-unit-arrival-choreography-follows-newly-visible-unit-identity.md)'s allowance for a final Discipline arrival and Battle additions to overlap"
 ---
 
-# ADR-0344: Final Discipline arrival precedes the automatic deployment wave
+# ADR-0352: Final Discipline arrival precedes the automatic deployment wave
 
 ## Context and Problem Statement
 
@@ -57,6 +57,6 @@ requires Battle activation to follow the final manual landing rather than overla
 ## More Information
 
 - [ADR-0045](0045-units-deploy-with-a-staggered-drop-in.md)
-- [ADR-0342](0342-run-deployment-promotes-the-mounted-battlefield-in-place.md)
-- [ADR-0343](0343-unit-arrival-choreography-follows-newly-visible-unit-identity.md)
+- [ADR-0350](0350-run-deployment-promotes-the-mounted-battlefield-in-place.md)
+- [ADR-0351](0351-unit-arrival-choreography-follows-newly-visible-unit-identity.md)
 - [Game concept](../game-concept.md)

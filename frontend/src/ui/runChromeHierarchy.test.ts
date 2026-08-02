@@ -46,10 +46,14 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain("<RunMetaControls run={shellRun} view={view} onNavigate={navigateRunView} showAbandon={shellRun.phase !== 'victory'} />");
     expect(metaControls).toContain('<section className="run-meta-controls" aria-label="Run controls">');
     expect(metaControls).toContain('Sell Units');
-    expect(metaControls).toContain('<span className="skirmish-eyebrow">Self inspection</span>');
-    expect(metaControls).toContain('<RunSelfInspectionControls');
-    expect(runSelfInspection).toContain('Army');
-    expect(runSelfInspection).toContain('Relics');
+    // The Run rail no longer carries Army/Relics: the Strategikon is Run-wide (ADR-0335)
+    // and its Prosopography/Lipsanotheca render the same RunArmyWorkspace and held-relic
+    // codex, so a second entry point to them was a duplicate. The battle HUD keeps its own.
+    expect(metaControls).not.toContain('Self inspection');
+    expect(metaControls).not.toContain('<RunSelfInspectionControls');
+    // The module keeps the view/address helpers; its button pair is gone with the rail
+    // group and the battle-HUD group, so nothing renders Army/Relics entries any more.
+    expect(runSelfInspection).not.toContain('ChromeButton');
     expect(runSelfInspection).toContain("url.searchParams.set('view', view)");
     expect(runScreen).toContain("current.pathname = '/run';");
     expect(runScreen).toContain('runWorkspaceHref(current.toString(), nextView)');
@@ -114,6 +118,25 @@ describe('Run chrome hierarchy', () => {
     // status chips on the muster screen).
     expect(titleBarPortal).toContain('MutationObserver');
     expect(titleBarPortal).toContain('observer.observe(document.body, { childList: true, subtree: true })');
+  });
+
+  it('keeps the retained Controls panel out of an overlapping Run workspace fade', () => {
+    // Shop <-> Sell Units overlaps two complete Run layers so the outgoing snapshot stays
+    // frozen. Both layers paint the same Controls panel, so fading the boundary blended
+    // its title plank toward the backdrop mid-transition. Only the shell's replaceable
+    // viewport may carry that fade; the panel is a sibling of it and must not.
+    expect(chromeBox).toContain('{...shellViewportOverlapRegion()}');
+    expect(chromeBox).toMatch(/<section[\s\S]*?\{\.\.\.shellViewportOverlapRegion\(\)\}[\s\S]*?data-shell-viewport-swap=""/);
+    expect(app).toContain('sceneOverlapScope(scene.current, scene.destination!)');
+    expect(app).toContain('overlapScope={layer.overlapScope}');
+    expect(sceneBoundary).toContain("data-scene-overlap-scope={overlapScope === 'scene' ? undefined : overlapScope}");
+    expect(styleCss).toMatch(/\.scene-director\.is-entering \.scene-boundary\[data-scene-overlap-scope="shell-viewport"\]\[data-scene-visual-role="outgoing"\]\s*\{[\s\S]*?opacity:\s*1;[\s\S]*?transition:\s*none;/);
+    expect(styleCss).toMatch(/\.scene-director\.is-entering \.scene-boundary\[data-scene-overlap-scope="shell-viewport"\]\[data-scene-transition-active\]\s*\{[\s\S]*?opacity:\s*1;[\s\S]*?transition:\s*none;/);
+    expect(styleCss).toMatch(/\.scene-director\.is-entering \.scene-boundary\[data-scene-overlap-scope="shell-viewport"\]\[data-scene-visual-role="outgoing"\] \[data-scene-overlap-region\]\s*\{[\s\S]*?opacity:\s*0;/);
+    expect(styleCss).toMatch(/\.scene-director\.is-entering \.scene-boundary\[data-scene-overlap-scope="shell-viewport"\]\[data-scene-transition-active\] \[data-scene-overlap-region\]\s*\{[\s\S]*?opacity:\s*1;/);
+    // The panel is rendered beside the swap, never inside it.
+    expect(skirmish).toMatch(/\{shellWorkspaceCoversRelics \? null : <RunRelicStrip relicIds=\{relicIds\} \/>\}\s*\{children\}/);
+    expect(skirmishHud).toContain('<ShellControlsPanel');
   });
 
   it('replaces the complete left shell workspace for Army and Relics while preserving the covered phase', () => {
@@ -271,10 +294,13 @@ describe('Run chrome hierarchy', () => {
     expect(runCard).toContain('RUN_CARD_PESTIFEROUS_FRAME_SLOT');
     expect(runCard).toContain('RUN_CARD_TACTICAL_FRAME_SLOT');
     expect(runCard).toContain('RUN_CARD_CONCINNOUS_FRAME_SLOT');
+    expect(runCard).toContain('RUN_CARD_HIERATIC_FRAME_SLOT');
     expect(runCard).toContain("cardType === 'pestiferous'");
     expect(runCard).toContain("cardType === 'tactical'");
     expect(runCard).toContain("cardType === 'concinnous'");
-    expect(runCard).toContain("ability: 'discipline'");
+    expect(runCard).toContain("cardType === 'hieratic'");
+    expect(runCard).toContain("'discipline' as const");
+    expect(runCard).toContain("'marshalled' as const");
     expect(runCard).toContain("name: 'Positioned'");
     expect(runCard).toContain("'Target hidden'");
     expect(runCardFace).toContain('RUN_CARD_COST_COIN_SOURCE_SLOT');

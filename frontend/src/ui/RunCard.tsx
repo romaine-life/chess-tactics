@@ -2,6 +2,8 @@ import type { ReactElement } from 'react';
 import { liveMediaForSlot, resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import { runCardArtSlot, runCardFlavor, runCardName } from '../run/cardNames';
 import {
+  AGMINATE_DISPLAY_NAME,
+  CACOCHYMIC_DISPLAY_NAME,
   cardContentsLabel,
   PIECE_LABEL,
   type PurchasablePieceType,
@@ -11,6 +13,7 @@ import {
 import {
   RUN_CARD_FRAME_SLOT,
   RUN_CARD_CONCINNOUS_FRAME_SLOT,
+  RUN_CARD_HIERATIC_FRAME_SLOT,
   RUN_CARD_PESTIFEROUS_FRAME_SLOT,
   RUN_CARD_TACTICAL_FRAME_SLOT,
   RunCardFace,
@@ -26,9 +29,15 @@ function isCardOffer(card: RunCoreCard | RunCardOffer): card is RunCardOffer {
 }
 
 export function runCardGrants(card: RunCoreCard | RunCardOffer): RunCardFaceContent['grants'] {
-  const showForcedDiscipline = isCardOffer(card)
-    && card.cardType === 'tactical'
-    && card.pieces.length === 1;
+  // A one-unit acquisition-target offer has no hidden outcome, so its face shows the
+  // granted state on the unit itself.
+  const forcedAbility = isCardOffer(card) && card.pieces.length === 1
+    ? card.cardType === 'tactical'
+      ? 'discipline' as const
+      : card.cardType === 'hieratic'
+        ? 'marshalled' as const
+        : null
+    : null;
   return CARD_PIECE_ORDER.flatMap((unit) => {
     const pieceIndices = card.pieces.flatMap((piece, index) => piece === unit ? [index] : []);
     const plaguedPieceIndex = isCardOffer(card) ? card.plaguedPieceIndex : null;
@@ -38,7 +47,7 @@ export function runCardGrants(card: RunCoreCard | RunCardOffer): RunCardFaceCont
           unit,
           count: pieceIndices.length,
           plaguedIndices: plaguedIndex >= 0 ? [plaguedIndex] : [],
-          ...(showForcedDiscipline && pieceIndices.length === 1 ? { ability: 'discipline' as const } : {}),
+          ...(forcedAbility && pieceIndices.length === 1 ? { ability: forcedAbility } : {}),
         }]
       : [];
   });
@@ -47,7 +56,7 @@ export function runCardGrants(card: RunCoreCard | RunCardOffer): RunCardFaceCont
 function plaguedTargetLabel(card: RunCoreCard | RunCardOffer): string {
   if (!isCardOffer(card) || card.plaguedPieceIndex === null) return '';
   const target = card.pieces[card.plaguedPieceIndex];
-  return target ? ` Plagued ${target}.` : '';
+  return target ? ` ${CACOCHYMIC_DISPLAY_NAME} ${target}.` : '';
 }
 
 export function concinnousTargetLabel(card: RunCardOffer): string {
@@ -87,15 +96,22 @@ export function RunCard({
       ? RUN_CARD_TACTICAL_FRAME_SLOT
     : cardType === 'concinnous'
       ? RUN_CARD_CONCINNOUS_FRAME_SLOT
+    : cardType === 'hieratic'
+      ? RUN_CARD_HIERATIC_FRAME_SLOT
       : RUN_CARD_FRAME_SLOT;
   const frameMedia = liveMediaForSlot(frameSlot).media;
   const frameUrl = frameMedia.immutableUrl;
   const cost = offer?.cost ?? card.value;
+  // A Hieratic target is drawn at acquisition, like a Tactical one, so a multi-unit offer
+  // cannot name it before purchase and a one-unit offer needs no label at all.
+  const hieraticTargetHidden = cardType === 'hieratic' && card.pieces.length > 1;
   const targetLabel = cardType === 'pestiferous'
     ? plaguedTargetLabel(card)
     : cardType === 'concinnous' && offer
       ? ` Positioned: ${purchased ? concinnousTargetLabel(offer) : 'target hidden'}.`
-      : '';
+      : hieraticTargetHidden
+        ? ` ${AGMINATE_DISPLAY_NAME}: one contained unit, chosen on purchase.`
+        : '';
   const faceContent = {
     name,
     cost,
@@ -105,11 +121,15 @@ export function RunCard({
         ? 'Units — Tactical'
       : cardType === 'concinnous'
         ? 'Units — Concinnous'
+      : cardType === 'hieratic'
+        ? 'Units — Hieratic'
         : 'Units',
     grants: runCardGrants(card),
     properties: cardType === 'concinnous' && offer
       ? [{ name: 'Positioned', target: purchased ? concinnousTargetLabel(offer) : 'Target hidden' }]
-      : undefined,
+      : hieraticTargetHidden
+        ? [{ name: AGMINATE_DISPLAY_NAME, target: 'Chosen on purchase' }]
+        : undefined,
     flavor: runCardFlavor(card),
   } satisfies RunCardFaceContent;
   const face = (

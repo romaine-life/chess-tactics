@@ -1,7 +1,7 @@
 // Skirmish VIEW state — one instance per mounted battlefield presentation. It stays
 // separate from the game store because it is visual state, but it follows the same
 // provider lifetime: overlapping outgoing/incoming scenes must never share zoom, pan,
-// opening framing, or overlays (ADR-0307/ADR-0345).
+// opening framing, or overlays (ADR-0307/ADR-0353).
 
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import { PLAYER_MAXIMUM_ZOOM, PLAYER_TECHNICAL_MINIMUM_ZOOM } from './boardCameraPolicy';

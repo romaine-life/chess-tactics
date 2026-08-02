@@ -576,6 +576,11 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
   const finishPremoveInputBeat = (gameRef: GameState, epoch: number) => {
     const s = get();
     if (s.sessionEpoch !== epoch || s.game !== gameRef || s.game.winner || !s.premoveInputOpen) return;
+    // An open promotion picker is an unfinished input gesture, not idle time. Closing the beat
+    // underneath it would strand the player's choice as a queued premove that only fires a whole
+    // round later — "I picked Queen and it turned into a premove". Hold the beat (and the clock)
+    // until choosePromotion resolves it.
+    if (s.pendingPromotion) { schedulePremoveInputBeat(gameRef); return; }
     premoveFireTimer = null;
     if (s.premoves.length > 0) {
       const fired = drainPremove();
@@ -855,6 +860,24 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     if (get().game.winner) set({ premoves: [], premoveInputOpen: false });
     return true;
   }
+
+  // Close out a promotion choice that was made while the picker held the premove input beat open.
+  // The picker is deliberation time, so control can already have returned to this client by the
+  // time the piece is picked: a step whose turn has arrived fires NOW rather than waiting for the
+  // next drain a full round later. Still the opponent's turn → it stays queued, as intended.
+  const resolvePremoveAfterPromotion = () => {
+    const s = get();
+    const side = s.net ? s.net.localSide : 'player';
+    if (s.game.winner || s.game.turn !== side || s.net?.pendingMove) return;
+    if (premoveFireTimer !== null) { clearTimeout(premoveFireTimer); premoveFireTimer = null; }
+    if (drainPremove()) return;
+    // Nothing to fire (the step went stale): release the held beat so live control resumes.
+    if (get().premoveInputOpen) {
+      set({ premoveInputOpen: false });
+      startClock();
+      persistMatch(get());
+    }
+  };
 
   // Apply ONE ordered move to a netplay board. Netplay is SERVER-SEQUENCED: the local
   // player's own move comes back through the server echo like any other, so this is the
@@ -1523,12 +1546,14 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
         .find((move) => move.x === pending.move.x && move.y === pending.move.y);
       if (!p || !mv || !movePromotesPawn(projected, p, mv)) {
         set({ pendingPromotion: null });
+        resolvePremoveAfterPromotion();
         return;
       }
       set({
         pendingPromotion: null,
         premoves: [...s.premoves, { pieceId: p.id, x: mv.x, y: mv.y, promotion: type }],
       });
+      resolvePremoveAfterPromotion();
       return;
     }
 

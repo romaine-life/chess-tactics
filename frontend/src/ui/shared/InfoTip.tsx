@@ -1,5 +1,6 @@
 import { useCallback, useId, useRef, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { InnerChromeBox } from './ChromeBox';
 
 interface TooltipPosition {
@@ -46,15 +47,17 @@ function TooltipPopup({
   id,
   maxInlineSize = 256,
   pos,
+  portalHost,
 }: {
   children: ReactNode;
   className?: string;
   id: string;
   maxInlineSize?: number;
   pos: TooltipPosition | null;
+  portalHost: Element | null;
 }): ReactElement | null {
-  if (!pos) return null;
-  return (
+  if (!pos || typeof document === 'undefined') return null;
+  return createPortal((
     <span
       className="tooltip-pop-positioner"
       style={{ left: pos.left, maxInlineSize, top: pos.top }}
@@ -68,7 +71,7 @@ function TooltipPopup({
         {children}
       </InnerChromeBox>
     </span>
-  );
+  ), portalHost ?? document.body);
 }
 
 // Canonical tooltip for an existing visual trigger. It appears immediately on
@@ -82,6 +85,7 @@ export function Tooltip({
   popupMaxInlineSize = 256,
   popupClassName = '',
   triggerClassName = '',
+  focusable = true,
 }: {
   trigger: ReactNode;
   children: ReactNode;
@@ -90,6 +94,7 @@ export function Tooltip({
   popupMaxInlineSize?: number;
   popupClassName?: string;
   triggerClassName?: string;
+  focusable?: boolean;
 }): ReactElement {
   const id = useId();
   const {
@@ -101,6 +106,7 @@ export function Tooltip({
     onMouseEnter,
     onMouseLeave,
   } = useTooltipPosition<HTMLSpanElement>();
+  const portalHost = typeof document === 'undefined' ? null : ref.current?.closest('main') ?? document.body;
 
   return (
     <span
@@ -111,9 +117,10 @@ export function Tooltip({
       <span
         ref={ref}
         className={`tooltip-trigger ${triggerClassName}`.trim()}
-        tabIndex={0}
-        aria-label={label}
-        aria-describedby={pos ? id : undefined}
+        tabIndex={focusable ? 0 : undefined}
+        aria-label={focusable ? label : undefined}
+        aria-hidden={focusable ? undefined : 'true'}
+        aria-describedby={focusable && pos ? id : undefined}
         onFocus={onFocus}
         onBlur={onBlur}
         onKeyDown={(event) => {
@@ -122,7 +129,13 @@ export function Tooltip({
       >
         {trigger}
       </span>
-      <TooltipPopup id={id} pos={pos} className={popupClassName} maxInlineSize={popupMaxInlineSize}>
+      <TooltipPopup
+        id={id}
+        pos={pos}
+        portalHost={portalHost}
+        className={popupClassName}
+        maxInlineSize={popupMaxInlineSize}
+      >
         {children}
       </TooltipPopup>
     </span>
@@ -144,6 +157,7 @@ export function InfoTip({ children, label = 'More info' }: { children: ReactNode
     onMouseEnter,
     onMouseLeave,
   } = useTooltipPosition<HTMLButtonElement>();
+  const portalHost = typeof document === 'undefined' ? null : ref.current?.closest('main') ?? document.body;
 
   return (
     <span className="infotip" onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
@@ -159,7 +173,7 @@ export function InfoTip({ children, label = 'More info' }: { children: ReactNode
       >
         i
       </button>
-      <TooltipPopup id={id} pos={pos}>{children}</TooltipPopup>
+      <TooltipPopup id={id} pos={pos} portalHost={portalHost}>{children}</TooltipPopup>
     </span>
   );
 }

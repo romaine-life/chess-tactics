@@ -78,6 +78,8 @@ const {
   runResourceIconMediaIssue,
   runResourceIconSlotId,
   runShopWrapMediaIssue,
+  workspaceBackgroundSlotId,
+  workspaceBackgroundMediaIssue,
   runShopWrapSlotId,
   sfxSampleMediaIssue,
   sfxSampleOwnerProofIssue,
@@ -14755,12 +14757,14 @@ const RUN_CARD_FRAME_SLOT = 'ui/run/card-prototypes/frame-v1.png';
 const RUN_CARD_PESTIFEROUS_FRAME_SLOT = 'ui/run/card-prototypes/pestiferous-frame-v1.png';
 const RUN_CARD_CONCINNOUS_FRAME_SLOT = 'ui/run/card-prototypes/concinnous-frame-v1.png';
 const RUN_CARD_TACTICAL_FRAME_SLOT = 'ui/run/card-prototypes/tactical-discipline-frame-v1.png';
+const RUN_CARD_HIERATIC_FRAME_SLOT = 'ui/run/card-prototypes/hieratic-frame-v1.png';
 const RUN_CARD_COST_COIN_SOURCE_SLOT = 'ui/run/card-prototypes/cost-coin-source-v1.png';
 const RUN_CARD_FRAME_VARIANT_BY_SLOT = Object.freeze({
   [RUN_CARD_FRAME_SLOT]: 'standard',
   [RUN_CARD_PESTIFEROUS_FRAME_SLOT]: 'pestiferous',
   [RUN_CARD_CONCINNOUS_FRAME_SLOT]: 'concinnous',
   [RUN_CARD_TACTICAL_FRAME_SLOT]: 'tactical',
+  [RUN_CARD_HIERATIC_FRAME_SLOT]: 'hieratic',
   [RUN_CARD_COST_COIN_SOURCE_SLOT]: 'cost-coin-source',
 });
 const RUN_CARD_FRAME_SCHEMA = 'run-card-frame-v1';
@@ -15228,6 +15232,9 @@ function mediaDomainProjectionIssue(row) {
   }
   if (strategikonBackgroundSlot(row.slot)) {
     return strategikonBackgroundMediaIssue(row, runtime.value);
+  }
+  if (workspaceBackgroundSlotId(row.slot)) {
+    return workspaceBackgroundMediaIssue(row, runtime.value);
   }
   const runCardFrame = runCardFrameProjection(row);
   if (runCardFrame.claimed) return runCardFrame.issue;
@@ -18167,7 +18174,7 @@ const RUN_RELIC_BY_ID = serverRender?.RUN_RELIC_BY_ID ?? {};
 const RUN_RELIC_IDS = new Set(RUN_RELICS.map((relic) => relic.id));
 function validateActiveRunBody(run) {
   if (!run || typeof run !== 'object' || Array.isArray(run)) return 'run must be an object';
-  if (run.formatVersion !== 11) return 'run.formatVersion is unsupported';
+  if (run.formatVersion !== 12) return 'run.formatVersion is unsupported';
   if (typeof run.id !== 'string' || !run.id || run.id.length > 160) return 'run.id is invalid';
   if (!isFiniteInteger(run.seed) || run.seed < 0 || run.seed > 0xffffffff) return 'run.seed is invalid';
   if (run.formatVersion >= 5 && run.ataraxiaTier !== 0 && run.ataraxiaTier !== 1) return 'run.ataraxiaTier is invalid';
@@ -18237,11 +18244,20 @@ function validateActiveRunBody(run) {
       const cardTypeValid = card.cardType === null
         || card.cardType === 'pestiferous'
         || (run.formatVersion >= 6 && card.cardType === 'concinnous')
-        || (run.formatVersion >= 8 && card.cardType === 'tactical');
+        || (run.formatVersion >= 8 && card.cardType === 'tactical')
+        || (run.formatVersion >= 12 && card.cardType === 'hieratic');
       const directEffectTarget = card.effectTargetUnitId;
       const legacyEffectTarget = isObjectRecord(card.effect) ? card.effect.targetUnitId : null;
       const effectTarget = typeof directEffectTarget === 'string' ? directEffectTarget : legacyEffectTarget;
-      const affectedCard = card.cardType === 'concinnous' || card.cardType === 'tactical';
+      const affectedCard = card.cardType === 'concinnous'
+        || card.cardType === 'tactical'
+        || card.cardType === 'hieratic';
+      // Each acquisition qualifier grants exactly one ability to its recorded target unit.
+      const expectedGrantedAbility = card.cardType === 'tactical'
+        ? 'discipline'
+        : card.cardType === 'hieratic'
+          ? 'marshalled'
+          : 'positioned';
       const effectTargetValid = run.formatVersion < 6 || (
         affectedCard
           ? typeof effectTarget === 'string'
@@ -18272,16 +18288,14 @@ function validateActiveRunBody(run) {
         || card.acquiredAfterBattleIndex >= run.war.battles.length
       ) return 'run.cards contains an invalid card';
       if (run.formatVersion === 8 && affectedCard) {
-        const expectedAbility = card.cardType === 'tactical' ? 'discipline' : 'positioned';
         if (
           isObjectRecord(card.effect)
-          && (card.effect.kind !== 'grant-ability' || card.effect.ability !== expectedAbility)
+          && (card.effect.kind !== 'grant-ability' || card.effect.ability !== expectedGrantedAbility)
         ) return 'run.cards contains an invalid legacy card effect';
       }
       if (affectedCard) {
-        const expectedAbility = card.cardType === 'tactical' ? 'discipline' : 'positioned';
         const targetUnit = run.army.find((unit) => unit.id === effectTarget);
-        if (!targetUnit?.abilities.includes(expectedAbility)) return 'run.cards contains an invalid ability target';
+        if (!targetUnit?.abilities.includes(expectedGrantedAbility)) return 'run.cards contains an invalid ability target';
       }
       if (run.formatVersion >= 7) {
         const validPlaguedTarget = card.cardType === 'pestiferous'
@@ -18289,7 +18303,7 @@ function validateActiveRunBody(run) {
             ? typeof card.plaguedUnitId === 'string' && card.unitIds.includes(card.plaguedUnitId)
             : card.plaguedUnitId === null
           : card.plaguedUnitId === null;
-        if (!validPlaguedTarget) return 'run.cards contains an invalid Plagued target';
+        if (!validPlaguedTarget) return 'run.cards contains an invalid Cacochymic target';
         if (card.plaguedUnitId !== null) plaguedTargetUnitIds.add(card.plaguedUnitId);
       }
       cardIds.add(card.id);
@@ -18319,7 +18333,7 @@ function validateActiveRunBody(run) {
     if (run.formatVersion >= 7) {
       for (const unit of run.army) {
         if (unit.modifiers.includes('plagued') !== plaguedTargetUnitIds.has(unit.id)) {
-          return 'run.army Plagued modifiers do not match card targets';
+          return 'run.army Cacochymic modifiers do not match card targets';
         }
       }
     }
@@ -18403,7 +18417,8 @@ function validateActiveRunBody(run) {
         const cardTypeValid = offer.cardType === null
           || offer.cardType === 'pestiferous'
           || offer.cardType === 'concinnous'
-          || offer.cardType === 'tactical';
+          || offer.cardType === 'tactical'
+          || offer.cardType === 'hieratic';
         const effectTargetValid = offer.cardType === 'concinnous'
           ? isFiniteInteger(offer.effectTargetIndex)
             && offer.effectTargetIndex >= 0
@@ -18438,11 +18453,15 @@ function validateActiveRunBody(run) {
             && offer.plaguedPieceIndex >= 0
             && offer.plaguedPieceIndex < offer.pieces.length
           : offer.plaguedPieceIndex === null;
-        if (!validPlaguedTarget) return 'run.shop.cardOffers contains an invalid Plagued target';
+        if (!validPlaguedTarget) return 'run.shop.cardOffers contains an invalid Cacochymic target';
         const plaguedPiece = offer.plaguedPieceIndex === null ? null : offer.pieces[offer.plaguedPieceIndex];
         const expectedCost = offer.cardType === 'pestiferous'
           ? offer.value - (plaguedPiece ? ACTIVE_RUN_PLAGUED_DISCOUNTS[plaguedPiece] : 0)
-          : offer.value + (offer.cardType === 'tactical' ? 3 : offer.cardType === 'concinnous' ? 2 : 0);
+          : offer.value + (
+            offer.cardType === 'tactical' || offer.cardType === 'hieratic'
+              ? 3
+              : offer.cardType === 'concinnous' ? 2 : 0
+          );
         if (offer.cost !== expectedCost) {
           return 'run.shop.cardOffers contains invalid affected pricing';
         }
@@ -18476,7 +18495,7 @@ function validateActiveRunBody(run) {
               : card.plaguedUnitId !== null
           )
         ))
-      ) return 'run.shop.entrySnapshot contains an invalid Plagued target';
+      ) return 'run.shop.entrySnapshot contains an invalid Cacochymic target';
       if (run.shop.entrySnapshot !== undefined) {
         const purchasedCards = run.cards.slice(run.shop.entrySnapshot.cards.length);
         if (
@@ -18502,7 +18521,12 @@ function validateActiveRunBody(run) {
           || run.shop.victoryGoldTenths !== 0
           || run.shop.cardOffers.length !== 3
           || offerValues.size !== 3
-          || run.shop.cardOffers.some((offer) => offer.value > 8 || offer.cost !== offer.value || offer.cardType !== null)
+          // Opening offers carry the same qualifiers as any other draw and are priced by the
+          // shared affected-pricing rule checked above, so a qualifier may price one past the
+          // starting gold. At least one of them must stay buyable with that gold, because the
+          // opening cannot be left without a purchase.
+          || run.shop.cardOffers.some((offer) => offer.value > 8)
+          || !run.shop.cardOffers.some((offer) => offer.cost <= 8)
           || !Array.isArray(run.shop.lootRelicOffers)
           || run.shop.lootRelicOffers.length !== 0
           || run.shop.chosenLootRelicId !== null
@@ -18641,6 +18665,97 @@ app.delete('/api/active-run', async (req, res) => {
     res.status(200).json({ ok: true, revision: 0 });
   } catch (error) {
     dbUnavailable(res, 'active Run delete failed', error, 'active_run_store_unavailable');
+  }
+});
+
+// POST /api/active-run/craft — ADMIN: set the caller's OWN active Run to a named state (ADR-0338).
+//
+// Debugging and feature work need a Run parked at an exact Shop, deployment, Battle or victory.
+// Writing active_runs by hand is already possible for anyone with database access and produces
+// documents this endpoint's own validator would reject; crafting composes the state out of the
+// game's real transitions instead, so what lands in the row is a Run the game could have played.
+// The spec is a request body rather than a query string precisely so it can carry more than an
+// address comfortably holds. The reply is the Run plus the address to open — the link says WHERE
+// you are, never what the Run contains.
+app.post('/api/active-run/craft', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  if (typeof serverRender?.runCraftSpecFromJson !== 'function') {
+    res.status(503).json({ error: 'run_crafter_unavailable' });
+    return;
+  }
+  let run = null;
+  try {
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const spec = serverRender.runCraftSpecFromJson(body.spec === undefined ? body : body.spec);
+    const document = await dbGetOfficialCampaigns('default');
+    const data = (document && document.data) || {};
+    // Origin is a client-side tag; every War in the official workspace is official by definition.
+    const wars = (Array.isArray(data.wars) ? data.wars : []).map((war) => ({ ...war, origin: 'official' }));
+    const levels = data.levels && typeof data.levels === 'object' ? data.levels : {};
+    const war = serverRender.selectCraftWar(spec, wars, levels);
+    run = serverRender.craftRunDocument(spec, war);
+  } catch (error) {
+    if (error && error.name === 'RunCraftError') {
+      res.status(400).json({ error: 'invalid_run_craft_spec', details: error.message });
+      return;
+    }
+    dbUnavailable(res, 'Run craft failed', error, 'active_run_store_unavailable');
+    return;
+  }
+  // The crafter composes with the game's transitions, so a rejection here is a defect in this
+  // server's own contract rather than bad input — report it as one instead of a 400.
+  const validation = validateActiveRunBody(run);
+  if (validation) {
+    res.status(500).json({ error: 'crafted_run_invalid', details: validation });
+    return;
+  }
+  try {
+    await ensureDbReady();
+    const result = await withEditorDocumentTransaction(async (client) => {
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`active-run:${user.email}`]);
+      const currentResult = await client.query(
+        'SELECT revision FROM active_runs WHERE owner_email = $1 FOR UPDATE',
+        [user.email],
+      );
+      // Crafting deliberately replaces whatever Run is there: it is the caller asking for this
+      // account to be at that state, so there is no revision to agree with first.
+      if (!currentResult.rows[0]) {
+        const { rows } = await client.query(
+          `INSERT INTO active_runs (owner_email, body, revision)
+           VALUES ($1, $2::jsonb, 1)
+           RETURNING body, revision, updated_at`,
+          [user.email, JSON.stringify(run)],
+        );
+        return rows[0];
+      }
+      const { rows } = await client.query(
+        `UPDATE active_runs
+            SET body = $2::jsonb, revision = revision + 1, updated_at = now()
+          WHERE owner_email = $1
+          RETURNING body, revision, updated_at`,
+        [user.email, JSON.stringify(run)],
+      );
+      return rows[0];
+    });
+    res.status(200).json({
+      ...publicActiveRun(result),
+      // The address carries the crafted Run's identity so opening it signed out, or as someone
+      // else, says so instead of quietly rendering a different Run.
+      url: serverRender.runLinkForRun(run.id),
+      runId: run.id,
+      summary: {
+        war: run.war.name,
+        phase: run.phase,
+        battle: `${run.battleIndex + 1}/${run.war.battles.length}`,
+        gold: run.goldTenths / 10,
+        army: run.army.map((unit) => unit.type),
+        offers: run.shop ? run.shop.cardOffers.map((offer) => `${offer.pieces.join('+')}@${offer.cost}`) : null,
+        relics: run.relics,
+      },
+    });
+  } catch (error) {
+    dbUnavailable(res, 'Run craft write failed', error, 'active_run_store_unavailable');
   }
 });
 

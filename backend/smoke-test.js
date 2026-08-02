@@ -4026,10 +4026,13 @@ async function main() {
   const activeRunOffers = [
     { id: 'p', offerId: 'opening-0-p', pieces: ['pawn'], value: 1, cost: 1, cardType: null, effectSeed: 1704, plaguedPieceIndex: null, effectTargetIndex: null },
     { id: 'k', offerId: 'opening-1-k', pieces: ['knight'], value: 3, cost: 3, cardType: null, effectSeed: 1705, plaguedPieceIndex: null, effectTargetIndex: null },
-    { id: 'r', offerId: 'opening-2-r', pieces: ['rook'], value: 5, cost: 5, cardType: null, effectSeed: 1706, plaguedPieceIndex: null, effectTargetIndex: null },
+    // Opening offers roll qualifiers like any other draw, at the shared affected price and
+    // at any core value — this Concinnous card costs more than the whole opening budget,
+    // which is legal as long as the deal keeps something affordable.
+    { id: 'rpp', offerId: 'opening-2-rpp', pieces: ['rook', 'pawn', 'pawn'], value: 7, cost: 9, cardType: 'concinnous', effectSeed: 1706, plaguedPieceIndex: null, effectTargetIndex: 0 },
   ];
   const activeRunDocument = {
-    formatVersion: 11,
+    formatVersion: 12,
     id: 'run-smoke',
     seed: 17,
     ataraxiaTier: 1,
@@ -4106,7 +4109,7 @@ async function main() {
     invalidPlaguedTarget.statusCode !== 400
     || JSON.parse(invalidPlaguedTarget.body).error !== 'invalid_active_run'
   ) {
-    throw new Error(`Active Run should reject a missing Plagued target: ${invalidPlaguedTarget.statusCode} ${invalidPlaguedTarget.body}`);
+    throw new Error(`Active Run should reject a missing Cacochymic target: ${invalidPlaguedTarget.statusCode} ${invalidPlaguedTarget.body}`);
   }
   const missingRunRevision = await request(
     'PUT', '/api/active-run',
@@ -4128,7 +4131,51 @@ async function main() {
     }),
   );
   if (invalidOpeningRun.statusCode !== 400 || JSON.parse(invalidOpeningRun.body).error !== 'invalid_active_run') {
-    throw new Error(`Format-11 opening Shops must persist three card offers: ${invalidOpeningRun.statusCode} ${invalidOpeningRun.body}`);
+    throw new Error(`Format-12 opening Shops must persist three card offers: ${invalidOpeningRun.statusCode} ${invalidOpeningRun.body}`);
+  }
+  const unaffordableOpeningRun = await request(
+    'PUT', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      run: {
+        ...activeRunDocument,
+        shop: {
+          ...activeRunDocument.shop,
+          cardOffers: [
+            activeRunOffers[0],
+            activeRunOffers[1],
+            { ...activeRunOffers[2], cardType: 'tactical', cost: 5, effectTargetIndex: null },
+          ],
+        },
+      },
+      revision: 0,
+    }),
+  );
+  if (unaffordableOpeningRun.statusCode !== 400 || JSON.parse(unaffordableOpeningRun.body).error !== 'invalid_active_run') {
+    throw new Error(`Opening offers must carry the shared affected price: ${unaffordableOpeningRun.statusCode} ${unaffordableOpeningRun.body}`);
+  }
+  const unbuyableOpeningRun = await request(
+    'PUT', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      run: {
+        ...activeRunDocument,
+        shop: {
+          ...activeRunDocument.shop,
+          // A qualifier may price a single opening card past the starting gold, but a deal
+          // in which every card is out of reach cannot satisfy the required purchase.
+          cardOffers: [
+            { ...activeRunOffers[0], id: 'rp', pieces: ['rook', 'pawn'], value: 6, cost: 9, cardType: 'tactical', effectTargetIndex: null },
+            { ...activeRunOffers[1], id: 'rpp', pieces: ['rook', 'pawn', 'pawn'], value: 7, cost: 10, cardType: 'tactical', effectTargetIndex: null },
+            { ...activeRunOffers[2], id: 'rn', pieces: ['rook', 'knight'], value: 8, cost: 11, cardType: 'tactical', effectTargetIndex: null },
+          ],
+        },
+      },
+      revision: 0,
+    }),
+  );
+  if (unbuyableOpeningRun.statusCode !== 400 || JSON.parse(unbuyableOpeningRun.body).error !== 'invalid_active_run') {
+    throw new Error(`Opening Shops must keep one affordable offer: ${unbuyableOpeningRun.statusCode} ${unbuyableOpeningRun.body}`);
   }
   const retiredShopFieldRun = await request(
     'PUT', '/api/active-run',
@@ -4142,7 +4189,7 @@ async function main() {
     }),
   );
   if (retiredShopFieldRun.statusCode !== 400 || JSON.parse(retiredShopFieldRun.body).error !== 'invalid_active_run') {
-    throw new Error(`Format-11 Shops must reject unsupported fields: ${retiredShopFieldRun.statusCode} ${retiredShopFieldRun.body}`);
+    throw new Error(`Format-12 Shops must reject unsupported fields: ${retiredShopFieldRun.statusCode} ${retiredShopFieldRun.body}`);
   }
   const duplicatePurchasedCardRun = await request(
     'PUT', '/api/active-run',
@@ -4159,7 +4206,7 @@ async function main() {
     }),
   );
   if (duplicatePurchasedCardRun.statusCode !== 400 || JSON.parse(duplicatePurchasedCardRun.body).error !== 'invalid_active_run') {
-    throw new Error(`Format-11 Shops must reject a duplicate card purchase: ${duplicatePurchasedCardRun.statusCode} ${duplicatePurchasedCardRun.body}`);
+    throw new Error(`Format-12 Shops must reject a duplicate card purchase: ${duplicatePurchasedCardRun.statusCode} ${duplicatePurchasedCardRun.body}`);
   }
   const invalidOpeningArmy = await request(
     'PUT', '/api/active-run',
@@ -4176,7 +4223,7 @@ async function main() {
     }),
   );
   if (invalidOpeningArmy.statusCode !== 400 || JSON.parse(invalidOpeningArmy.body).error !== 'invalid_active_run') {
-    throw new Error(`Unpurchased format-11 opening Shops must contain only the starting army: ${invalidOpeningArmy.statusCode} ${invalidOpeningArmy.body}`);
+    throw new Error(`Unpurchased format-12 opening Shops must contain only the starting army: ${invalidOpeningArmy.statusCode} ${invalidOpeningArmy.body}`);
   }
   const retiredDraftRun = await request(
     'PUT', '/api/active-run',
@@ -4184,7 +4231,7 @@ async function main() {
     JSON.stringify({ run: { ...activeRunDocument, draftOffers: [] }, revision: 0 }),
   );
   if (retiredDraftRun.statusCode !== 400 || JSON.parse(retiredDraftRun.body).error !== 'invalid_active_run') {
-    throw new Error(`Format-11 Runs must reject retired draft state: ${retiredDraftRun.statusCode} ${retiredDraftRun.body}`);
+    throw new Error(`Format-12 Runs must reject retired draft state: ${retiredDraftRun.statusCode} ${retiredDraftRun.body}`);
   }
   const retiredDraftSourceRun = await request(
     'PUT', '/api/active-run',
@@ -4195,7 +4242,7 @@ async function main() {
     }),
   );
   if (retiredDraftSourceRun.statusCode !== 400 || JSON.parse(retiredDraftSourceRun.body).error !== 'invalid_active_run') {
-    throw new Error(`Format-11 Runs must reject retired draft unit sources: ${retiredDraftSourceRun.statusCode} ${retiredDraftSourceRun.body}`);
+    throw new Error(`Format-12 Runs must reject retired draft unit sources: ${retiredDraftSourceRun.statusCode} ${retiredDraftSourceRun.body}`);
   }
   const purchasedPawn = {
     id: 'run-unit-1', name: 'Eadric Miller', type: 'pawn', number: 3,
@@ -4274,6 +4321,18 @@ async function main() {
         effectSeed: 1707,
         effectTargetIndex: null,
         plaguedPieceIndex: null,
+      }, {
+        // Hieratic prices Agminate exactly like Discipline and carries no seeded target,
+        // because its unit is drawn when the card is acquired.
+        id: 'q',
+        offerId: 'shop-0-2-q',
+        pieces: ['queen'],
+        value: 9,
+        cost: 12,
+        cardType: 'hieratic',
+        effectSeed: 1708,
+        effectTargetIndex: null,
+        plaguedPieceIndex: null,
       }],
       purchasedCardOfferIds: [],
       lootRelicOffers: [],
@@ -4307,8 +4366,29 @@ async function main() {
     || savedConcinnousShopRunBody.run.shop.cardOffers[0].effectTargetIndex !== 0
     || savedConcinnousShopRunBody.run.shop.cardOffers[0].cost !== 11
     || savedConcinnousShopRunBody.run.shop.cardOffers[1].cost !== 12
+    || savedConcinnousShopRunBody.run.shop.cardOffers[2].cardType !== 'hieratic'
+    || savedConcinnousShopRunBody.run.shop.cardOffers[2].cost !== 12
   ) {
     throw new Error(`Concinnous shop Run did not save: ${savedConcinnousShopRun.statusCode} ${savedConcinnousShopRun.body}`);
+  }
+  const mispricedHieraticRun = await request(
+    'PUT', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      run: {
+        ...concinnousShopRun,
+        shop: {
+          ...concinnousShopRun.shop,
+          cardOffers: concinnousShopRun.shop.cardOffers.map((offer) => (
+            offer.cardType === 'hieratic' ? { ...offer, cost: 11 } : offer
+          )),
+        },
+      },
+      revision: 2,
+    }),
+  );
+  if (mispricedHieraticRun.statusCode !== 400 || JSON.parse(mispricedHieraticRun.body).error !== 'invalid_active_run') {
+    throw new Error(`Hieratic offers must carry the Agminate price: ${mispricedHieraticRun.statusCode} ${mispricedHieraticRun.body}`);
   }
   const rivalRun = await get('/api/active-run', { cookie: '__Host-chess-tactics-access=rival' });
   if (rivalRun.statusCode !== 200 || JSON.parse(rivalRun.body).run !== null) {
@@ -4329,6 +4409,51 @@ async function main() {
   );
   if (deletedRun.statusCode !== 200 || JSON.parse(deletedRun.body).ok !== true) {
     throw new Error(`Active Run did not delete: ${deletedRun.statusCode} ${deletedRun.body}`);
+  }
+
+  // --- Crafted active Runs (ADR-0338): admin-only, and refused before any write ---
+  // The composition itself is covered by the shared crafter's own tests; what has to hold here is
+  // that only an administrator can reach it and that a spec it cannot honour is reported rather
+  // than half-applied.
+  const anonymousCraft = await request(
+    'POST', '/api/active-run/craft',
+    { 'content-type': 'application/json' },
+    JSON.stringify({ phase: 'shop' }),
+  );
+  if (anonymousCraft.statusCode !== 401) {
+    throw new Error(`Crafting a Run must require sign-in: ${anonymousCraft.statusCode} ${anonymousCraft.body}`);
+  }
+  const rivalCraft = await request(
+    'POST', '/api/active-run/craft',
+    { cookie: '__Host-chess-tactics-access=rival', 'content-type': 'application/json' },
+    JSON.stringify({ phase: 'shop' }),
+  );
+  if (rivalCraft.statusCode !== 403 || JSON.parse(rivalCraft.body).error !== 'admin_required') {
+    throw new Error(`Crafting a Run must require an administrator: ${rivalCraft.statusCode} ${rivalCraft.body}`);
+  }
+  const unknownFieldCraft = await request(
+    'POST', '/api/active-run/craft',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({ phase: 'shop', goldd: 40 }),
+  );
+  if (
+    unknownFieldCraft.statusCode !== 400
+    || JSON.parse(unknownFieldCraft.body).error !== 'invalid_run_craft_spec'
+    || !JSON.parse(unknownFieldCraft.body).details.includes('goldd')
+  ) {
+    throw new Error(`A craft spec typo must be named, not ignored: ${unknownFieldCraft.statusCode} ${unknownFieldCraft.body}`);
+  }
+  const unknownPhaseCraft = await request(
+    'POST', '/api/active-run/craft',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({ phase: 'inventory' }),
+  );
+  if (unknownPhaseCraft.statusCode !== 400 || JSON.parse(unknownPhaseCraft.body).error !== 'invalid_run_craft_spec') {
+    throw new Error(`A craft spec must name a real Run phase: ${unknownPhaseCraft.statusCode} ${unknownPhaseCraft.body}`);
+  }
+  const craftedRunAfterRefusals = await get('/api/active-run', { cookie: '__Host-chess-tactics-access=abc' });
+  if (craftedRunAfterRefusals.statusCode !== 200 || JSON.parse(craftedRunAfterRefusals.body).run !== null) {
+    throw new Error(`A refused craft must write nothing: ${craftedRunAfterRefusals.statusCode} ${craftedRunAfterRefusals.body}`);
   }
 
   // --- Run relic statistics: owner-scoped, append-only, retry-idempotent ----

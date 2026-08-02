@@ -26,18 +26,14 @@ export const STUDIO_VIEWER_KIND_LABELS = {
   gamelab: 'Game Lab',
   gym: 'Training Gym',
   solver: 'Board Solver',
+  screenart: 'Screen Art',
   cardlayout: 'Card Layout',
+  cardicons: 'Card Icon Fitting',
   cardprompts: 'Card Prompts',
   loading: 'Loading Lab',
 } as const;
 
 export type ViewerKind = keyof typeof STUDIO_VIEWER_KIND_LABELS;
-
-export const STUDIO_VIEWER_KIND_OPTIONS = (
-  Object.entries(STUDIO_VIEWER_KIND_LABELS) as Array<[ViewerKind, string]>
-)
-  .map(([id, label]) => ({ id, label }))
-  .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
 
 export function isViewerKind(value: string | null | undefined): value is ViewerKind {
   return typeof value === 'string'

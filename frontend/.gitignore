@@ -2,6 +2,10 @@
 # Local headless-screenshot output (frontend/scripts/shot.mjs)
 tmp-shots/
 
+# Local search-benchmark output: timing JSON and V8 CPU profiles
+# (frontend/scripts/bench-live-search.mjs)
+tmp-bench/
+
 # Local generation scratch: badge review output, codex method-gate evidence, desc files
 tmp-badges/
 tmp-forge-evidence/

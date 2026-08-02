@@ -26,10 +26,6 @@ import { installedUiMedia } from './installedUiMedia';
 import { InnerChromeBox, ShellControlsPanel } from './shared/ChromeBox';
 import { useAuthSession } from '../net/authSession';
 import { AdminControls } from './AdminControls';
-import {
-  RunSelfInspectionControls,
-  type RunSelfInspectionView,
-} from './RunSelfInspection';
 import { RUN_RELIC_BY_ID } from '../run/model';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 
@@ -211,8 +207,6 @@ export type SkirmishHudProps = {
   strategikonHref?: string | null;
   strategikonOpen?: boolean;
   /** Switches the Run's primary Battle and self-inspection workspaces without unmounting Battle. */
-  onNavigateRunView?: ((view: 'primary' | RunSelfInspectionView) => void) | null;
-  runSelfInspectionView?: RunSelfInspectionView | null;
   /** Between-Battle phases replace only the existing panel's contents. */
   controlsContent?: ReactNode;
 };
@@ -237,8 +231,6 @@ export function SkirmishHud({
   onAbandonRun = null,
   strategikonHref = null,
   strategikonOpen = false,
-  onNavigateRunView = null,
-  runSelfInspectionView = null,
   controlsContent,
 }: SkirmishHudProps = {}) {
   const skirmishStore = useSkirmishStoreApi();
@@ -719,31 +711,6 @@ export function SkirmishHud({
             </div>
             {onAbandonRun && !net ? (
               <>
-                {onNavigateRunView ? (
-                  <div className="skirmish-view-group">
-                    <span className="skirmish-eyebrow">Run view</span>
-                    <div className="run-meta-navigation">
-                    <ChromeButton unit="inner-text-button"
-                      data-testid="run-battle-view-primary"
-                      className={chromeUnitClassNames('inner-text-button', 'app-header-button', !runSelfInspectionView && 'active')}
-                      aria-pressed={!runSelfInspectionView}
-                      onClick={() => onNavigateRunView('primary')}
-                    >
-                      Battle
-                    </ChromeButton>
-                    </div>
-                  </div>
-                ) : null}
-                {onNavigateRunView ? (
-                  <div className="skirmish-view-group">
-                    <span className="skirmish-eyebrow">Self inspection</span>
-                    <RunSelfInspectionControls
-                      view={runSelfInspectionView}
-                      onNavigate={onNavigateRunView}
-                      testIdPrefix="run-battle-view"
-                    />
-                  </div>
-                ) : null}
                 <div className="skirmish-view-group">
                   <span className="skirmish-eyebrow">Run</span>
                   <div className="run-meta-navigation">

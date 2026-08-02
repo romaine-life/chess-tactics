@@ -7,7 +7,7 @@ partially_supersedes:
   - "[ADR-0323](0323-run-shops-allow-every-affordable-card-purchase.md)'s retained mandatory opening purchase"
 ---
 
-# ADR-0339: Opening Shop purchases are optional
+# ADR-0347: Opening Shop purchases are optional
 
 ## Context and Problem Statement
 
@@ -61,6 +61,6 @@ post-Battle Shops.**
 
 - [ADR-0321](0321-run-opening-is-the-normal-shop-and-draft-is-retired.md)
 - [ADR-0323](0323-run-shops-allow-every-affordable-card-purchase.md)
-- [ADR-0338](0338-run-deployment-is-a-battlefield-state-with-conditional-input.md)
+- [ADR-0346](0346-run-deployment-is-a-battlefield-state-with-conditional-input.md)
 - [Game concept](../game-concept.md)
 - [Persistence](../persistence.md)

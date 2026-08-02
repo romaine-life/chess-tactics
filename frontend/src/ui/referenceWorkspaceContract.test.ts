@@ -17,8 +17,8 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     const abilities = enchiridion.slice(start, end);
     expect(abilities).toContain('<h3>Discipline</h3>');
     expect(abilities).toContain('<h3>Positioned</h3>');
-    expect(abilities).toContain('<h3>Marshalled</h3>');
-    expect(abilities).toContain('<h3>Plagued</h3>');
+    expect(abilities).toContain('<h3>{AGMINATE_DISPLAY_NAME}</h3>');
+    expect(abilities).toContain('<h3>{CACOCHYMIC_DISPLAY_NAME}</h3>');
     expect(abilities).not.toContain('<h3>Concinnous</h3>');
     expect(abilities).not.toContain('<h3>Tactical</h3>');
     expect(abilities.match(/className="enchiridion-ability-card"/g)).toHaveLength(4);
@@ -161,14 +161,16 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     const start = enchiridion.indexOf('const CARD_TYPE_REFERENCES');
     const end = enchiridion.indexOf('function AbilitiesSection', start);
     const cardTypes = enchiridion.slice(start, end);
-    expect(cardTypes.match(/id: '(?:pestiferous|concinnous|tactical|type-iv)'/g)).toHaveLength(4);
+    expect(cardTypes.match(/id: '(?:pestiferous|concinnous|tactical|hieratic)'/g)).toHaveLength(4);
     expect(cardTypes).toContain("const VOLUNTEER_CARD = RUN_CARD_BY_ID.p");
     expect(cardTypes).toContain('<RunCardFace');
     expect(cardTypes).toContain('RUN_CARD_PESTIFEROUS_FRAME_SLOT');
     expect(cardTypes).toContain('RUN_CARD_TACTICAL_FRAME_SLOT');
+    expect(cardTypes).toContain('RUN_CARD_HIERATIC_FRAME_SLOT');
     expect(cardTypes).toContain("iconRole: 'ui-kit-icons-card-properties-pestiferous-png'");
     expect(cardTypes).toContain('className="enchiridion-card-type-row-icon"');
-    expect(cardTypes.match(/provisional: true/g)).toHaveLength(1);
+    // Every named card property now has installed Run mechanics, so none is provisional.
+    expect(cardTypes).not.toContain('provisional: true');
     expect(cardTypes).toContain("useState('pestiferous')");
     expect(cardTypes).toContain('className="enchiridion-card-type-layout"');
     expect(cardTypes).toContain('className="enchiridion-card-type-rows"');
@@ -179,7 +181,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(enchiridion).toContain("if (section === 'card-types') return <CardTypesSection framed={framed} />;");
   });
 
-  it('uses separate installed symbols for the Pestiferous card property and Plagued unit ability', () => {
+  it('uses separate installed symbols for the Pestiferous card property and Cacochymic unit ability', () => {
     expect(enchiridion).toContain("iconRole: 'ui-kit-icons-card-properties-pestiferous-png'");
     expect(enchiridion).toContain("src={installedUiMedia('ui-kit-icons-game-plagued-png')}");
     expect(enchiridion).toContain('className="enchiridion-ability-icon"');

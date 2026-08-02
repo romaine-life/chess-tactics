@@ -5,6 +5,7 @@ import {
   isEmptySlotOrigin,
   sceneLayerKey,
   sceneManifest,
+  sceneOverlapScope,
 } from './sceneManifest';
 import { createRun } from '../../run/model';
 import { createBlankLevel } from '../../core/level';
@@ -380,5 +381,41 @@ describe('scene manifests', () => {
   it('makes synchronous and unmatched routes explicit rather than optional', () => {
     expect(sceneManifest('/settings/general').critical).toContain('visible-controls');
     expect(sceneManifest('/unknown')).toMatchObject({ id: 'main-menu', host: 'menu-shell', paintOwner: 'dom' });
+  });
+
+  it('narrows an overlapping fade to the shell viewport when only the Run workspace changes', () => {
+    // Overlapping layers both paint the retained Run shell — the Controls panel and its
+    // title plank, the relic rail, the shell fill. Fading the whole boundary blends that
+    // retained chrome toward the backdrop at the crossfade midpoint, which is what made
+    // the Controls title bar visibly dim on every Shop/Sell Units switch.
+    const war = {
+      id: 'war',
+      name: 'War',
+      description: 'War',
+      battles: [{ level: createBlankLevel('battle', 'Battle', 8, 8), loot: false }],
+    };
+    const document = createRun(war, 19, '2026-08-01T00:00:00.000Z');
+    const source = { run: { hydrated: true, document } };
+    const shop = sceneManifest('/run', '', source);
+    const sell = sceneManifest('/run', '?view=sell', source);
+    const army = sceneManifest('/run', '?view=army', source);
+    const strategikon = sceneManifest('/run/strategikon/prosopography', '', source);
+
+    expect(sceneOverlapScope(shop, sell)).toBe('shell-viewport');
+    expect(sceneOverlapScope(sell, shop)).toBe('shell-viewport');
+    expect(sceneOverlapScope(shop, army)).toBe('shell-viewport');
+    expect(sceneOverlapScope(shop, strategikon)).toBe('shell-viewport');
+    expect(sceneOverlapScope(strategikon, shop)).toBe('shell-viewport');
+
+    // A phase change replaces the Controls contents too, so it keeps the whole-scene
+    // crossfade, and so does any pair that is not one authored slot apart.
+    const battle = sceneManifest('/run', '', {
+      run: { hydrated: true, document: { ...document, phase: 'battle' } },
+    });
+    expect(sceneOverlapScope(shop, battle)).toBe('scene');
+    expect(sceneOverlapScope(shop, sceneManifest('/run', '', { run: { hydrated: false, document: null } })))
+      .toBe('scene');
+    expect(sceneOverlapScope(shop, sceneManifest('/play/select/run'))).toBe('scene');
+    expect(sceneOverlapScope(shop, shop)).toBe('scene');
   });
 });

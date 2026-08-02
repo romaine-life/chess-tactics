@@ -3,14 +3,14 @@ status: accepted
 date: 2026-08-02
 deciders: owner (Nelson) + Codex
 partially_supersedes:
-  - "[ADR-0338](0338-run-deployment-is-a-battlefield-state-with-conditional-input.md)'s separate authored Deployment and Battle scene lifecycle"
-  - "[ADR-0340](0340-discipline-resolves-before-automatic-deployment.md)'s placement of the completed formation only in an incoming Battle presentation"
-  - "[ADR-0341](0341-the-final-deployment-choice-commits-and-camera-authority-follows-the-active-scene.md)'s overlapping Deployment/Battle scenes and activation-owned arrival motion"
+  - "[ADR-0346](0346-run-deployment-is-a-battlefield-state-with-conditional-input.md)'s separate authored Deployment and Battle scene lifecycle"
+  - "[ADR-0348](0348-discipline-resolves-before-automatic-deployment.md)'s placement of the completed formation only in an incoming Battle presentation"
+  - "[ADR-0349](0349-the-final-deployment-choice-commits-and-camera-authority-follows-the-active-scene.md)'s overlapping Deployment/Battle scenes and activation-owned arrival motion"
 partially_superseded_by:
-  - "[ADR-0343](0343-unit-arrival-choreography-follows-newly-visible-unit-identity.md)'s per-new-unit arrival rule"
+  - "[ADR-0351](0351-unit-arrival-choreography-follows-newly-visible-unit-identity.md)'s per-new-unit arrival rule"
 ---
 
-# ADR-0342: Run Deployment promotes the mounted battlefield in place
+# ADR-0350: Run Deployment promotes the mounted battlefield in place
 
 ## Context and Problem Statement
 
@@ -97,6 +97,6 @@ continuity requires identity continuity, not two reconstructions tuned to look s
 - [Game concept](../game-concept.md)
 - [UI Kit Standard](../ui-kit-standard.md)
 - [Board render contract](../board-render-contract.md)
-- [ADR-0338](0338-run-deployment-is-a-battlefield-state-with-conditional-input.md)
-- [ADR-0340](0340-discipline-resolves-before-automatic-deployment.md)
-- [ADR-0341](0341-the-final-deployment-choice-commits-and-camera-authority-follows-the-active-scene.md)
+- [ADR-0346](0346-run-deployment-is-a-battlefield-state-with-conditional-input.md)
+- [ADR-0348](0348-discipline-resolves-before-automatic-deployment.md)
+- [ADR-0349](0349-the-final-deployment-choice-commits-and-camera-authority-follows-the-active-scene.md)

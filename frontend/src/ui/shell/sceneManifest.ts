@@ -526,6 +526,37 @@ export function deepestSharedSceneRegion(
   return shared;
 }
 
+export type SceneOverlapScope = 'scene' | 'shell-viewport';
+
+/**
+ * How much of an overlapping scene pair the director is allowed to fade.
+ *
+ * State-driven Run scenes overlap as two complete layers so the outgoing snapshot
+ * stays frozen while the destination prepares. When the only authored difference is
+ * the `run-workspace` slot — Shop to Sell Units, Army, Relics, or the Strategikon —
+ * the Run shell around that slot is retained, and both layers paint an identical
+ * Controls panel and relic rail. Crossfading the whole boundary blends that retained
+ * chrome toward the backdrop at the midpoint, which is the Controls title plank
+ * dimming on every workspace switch. Report the narrower scope so only the shell's
+ * replaceable viewport carries the transition. A phase change (Shop to Battle)
+ * replaces the Controls contents too and keeps the whole-scene crossfade.
+ */
+export function sceneOverlapScope(
+  current: ScenePath,
+  destination: ScenePath,
+): SceneOverlapScope {
+  if (current.instances.length !== destination.instances.length) return 'scene';
+  let changed: SceneInstance | null = null;
+  for (let index = 0; index < current.instances.length; index += 1) {
+    const currentInstance = current.instances[index];
+    const destinationInstance = destination.instances[index];
+    if (currentInstance.key === destinationInstance.key) continue;
+    if (changed || currentInstance.definition.id !== destinationInstance.definition.id) return 'scene';
+    changed = currentInstance;
+  }
+  return changed?.definition.slot === 'run-workspace' ? 'shell-viewport' : 'scene';
+}
+
 const DESTINATION_SLOT_BY_REGION: Readonly<Partial<Record<SceneHost, SceneSlotId>>> = Object.freeze({
   'menu-shell': 'menu-destination',
   'play-shell': 'play-content',

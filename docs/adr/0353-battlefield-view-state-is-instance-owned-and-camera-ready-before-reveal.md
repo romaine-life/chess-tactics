@@ -3,16 +3,16 @@ status: accepted
 date: 2026-08-02
 deciders: owner (Nelson) + Codex
 supersedes:
-  - "[ADR-0341](0341-the-final-deployment-choice-commits-and-camera-authority-follows-the-active-scene.md)'s activated-scene-only shared-camera publication rule"
+  - "[ADR-0349](0349-the-final-deployment-choice-commits-and-camera-authority-follows-the-active-scene.md)'s activated-scene-only shared-camera publication rule"
 refines:
   - "[ADR-0136](0136-loading-is-manifest-driven-and-frame-acknowledged.md)"
   - "[ADR-0189](0189-board-facing-views-open-on-playable-geometry.md)"
   - "[ADR-0205](0205-navigation-loads-atomic-scenes-through-one-director.md)"
   - "[ADR-0307](0307-every-replaceable-region-is-a-director-owned-scene-slot.md)"
-  - "[ADR-0342](0342-run-deployment-promotes-the-mounted-battlefield-in-place.md)"
+  - "[ADR-0350](0350-run-deployment-promotes-the-mounted-battlefield-in-place.md)"
 ---
 
-# ADR-0345: Battlefield view state is instance-owned and camera-ready before reveal
+# ADR-0353: Battlefield view state is instance-owned and camera-ready before reveal
 
 ## Context and Problem Statement
 
@@ -56,7 +56,7 @@ camera is a required preparation result before the battlefield may report surfac
 - An outgoing and incoming battlefield may prepare simultaneously because their stores are
   isolated. Neither can change the other's visible camera.
 - Run Deployment and its Battle retain the same `Skirmish`, view store, `ViewPane`, and camera under
-  ADR-0342. Phase promotion introduces state and behavior; it does not create or reset a camera.
+  ADR-0350. Phase promotion introduces state and behavior; it does not create or reset a camera.
 - No Deployment-specific camera branch, copied camera calculation, delay, or reveal-time correction
   is permitted. Gameplay surfaces use the same contextual store, `ViewPane`, and shared framing
   primitive.

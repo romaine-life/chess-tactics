@@ -2,6 +2,8 @@ import { useLayoutEffect, useMemo, useRef, type ReactElement, type ReactNode } f
 import { defaultBackgroundSet } from '../art/backgroundSets';
 import { defaultFacingForSide, paletteForSide, pieceSpritePath } from '../core/pieces';
 import {
+  AGMINATE_DISPLAY_NAME,
+  CACOCHYMIC_DISPLAY_NAME,
   GOLD_SCALE,
   PIECE_LABEL,
   PIECE_VALUE,
@@ -102,7 +104,7 @@ function deploymentAbilityTrait(
   unit: RunArmyUnit,
   ability: Extract<RunAbility, 'positioned' | 'marshalled'>,
 ): RunUnitTrait | null {
-  const label = ability === 'positioned' ? 'Positioned' : 'Marshalled';
+  const label = ability === 'positioned' ? 'Positioned' : AGMINATE_DISPLAY_NAME;
   const iconClass = runAbilityIconClass(ability);
   if (unit.abilities.includes(ability)) {
     return {
@@ -125,7 +127,7 @@ export function runUnitTraits(run: RunDocument, unit: RunArmyUnit): RunUnitTrait
   if (unit.modifiers.includes('plagued')) {
     traits.push({
       id: 'plagued',
-      label: 'Plagued',
+      label: CACOCHYMIC_DISPLAY_NAME,
       description: 'Will be permanently lost after the next victorious Battle.',
       source: 'The Great Mortality',
       inherited: false,
@@ -344,8 +346,8 @@ function RunRosterFilters({
             { value: 'all', label: 'All abilities' },
             { value: 'discipline', label: 'Discipline' },
             { value: 'positioned', label: 'Positioned' },
-            { value: 'marshalled', label: 'Marshalled' },
-            { value: 'plagued', label: 'Plagued' },
+            { value: 'marshalled', label: AGMINATE_DISPLAY_NAME },
+            { value: 'plagued', label: CACOCHYMIC_DISPLAY_NAME },
             { value: 'royal-tent', label: 'Royal Tent' },
             { value: 'pawn-cash-out', label: 'Cash Out' },
           ]}
@@ -649,11 +651,15 @@ export function RunSellWorkspace({
   filters,
   onFiltersChange,
   onSell,
+  backgroundArtwork = null,
 }: {
   run: RunDocument;
   filters: RunSellFilters;
   onFiltersChange: (filters: RunSellFilters) => void;
   onSell: (unitId: string) => void;
+  /** Selling is a Shop activity, so it stands in the Shop's own scene when one is
+   *  installed rather than dropping back to the shared tiled surface. */
+  backgroundArtwork?: ReactNode;
 }): ReactElement {
   const rows = useMemo(() => {
     const byId = new Map(sellRows(run).map((row) => [row.unit.id, row]));
@@ -664,10 +670,11 @@ export function RunSellWorkspace({
 
   return (
     <RunWorkspace
-      className="run-sell-workspace"
+      className={`run-sell-workspace${backgroundArtwork ? ' has-scene' : ''}`}
       contentClassName="run-sell-workspace-content"
       data-testid="run-sell-workspace"
       aria-labelledby="run-sell-workspace-title"
+      backgroundArtwork={backgroundArtwork}
     >
       <h2 id="run-sell-workspace-title">Sell Units</h2>
       <p>Sales apply immediately. Reset Shop restores every transaction from this visit.</p>

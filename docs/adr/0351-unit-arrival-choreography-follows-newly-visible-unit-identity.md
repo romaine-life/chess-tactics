@@ -3,16 +3,16 @@ status: accepted
 date: 2026-08-02
 deciders: owner (Nelson) + Codex
 partially_supersedes:
-  - "[ADR-0342](0342-run-deployment-promotes-the-mounted-battlefield-in-place.md)'s blanket suppression of arrival choreography during Deployment-to-Battle continuation"
+  - "[ADR-0350](0350-run-deployment-promotes-the-mounted-battlefield-in-place.md)'s blanket suppression of arrival choreography during Deployment-to-Battle continuation"
 partially_superseded_by:
-  - "[ADR-0344](0344-final-discipline-arrival-precedes-the-automatic-deployment-wave.md)'s sequential final-manual-then-automatic arrival rule"
+  - "[ADR-0352](0352-final-discipline-arrival-precedes-the-automatic-deployment-wave.md)'s sequential final-manual-then-automatic arrival rule"
 ---
 
-# ADR-0343: Unit arrival choreography follows newly visible unit identity
+# ADR-0351: Unit arrival choreography follows newly visible unit identity
 
 ## Context and Problem Statement
 
-ADR-0342 correctly retained one mounted battlefield across Run Deployment and Battle, but its
+ADR-0350 correctly retained one mounted battlefield across Run Deployment and Battle, but its
 implementation represented continuity with a board-wide `skipInitialArrival` switch. That switch
 also disabled the established entry animation for a Disciplined unit when the player placed it and
 for the unresolved formation when those units first joined the board at Battle start. The board no
@@ -60,6 +60,6 @@ arrival choreography only to newly visible identities.**
 ## More Information
 
 - [ADR-0045](0045-units-deploy-with-a-staggered-drop-in.md)
-- [ADR-0342](0342-run-deployment-promotes-the-mounted-battlefield-in-place.md)
+- [ADR-0350](0350-run-deployment-promotes-the-mounted-battlefield-in-place.md)
 - [Game concept](../game-concept.md)
 - [Board render contract](../board-render-contract.md)

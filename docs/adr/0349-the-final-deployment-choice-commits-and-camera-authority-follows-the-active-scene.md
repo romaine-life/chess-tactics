@@ -3,15 +3,15 @@ status: accepted
 date: 2026-08-02
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
-  - "[ADR-0342](0342-run-deployment-promotes-the-mounted-battlefield-in-place.md)'s one mounted scene/store/compositor and phase-gated Battle activation"
-  - "[ADR-0344](0344-final-discipline-arrival-precedes-the-automatic-deployment-wave.md)'s final-arrival settlement boundary before automatic phase promotion"
-  - "[ADR-0345](0345-battlefield-view-state-is-instance-owned-and-camera-ready-before-reveal.md)'s instance-local camera and pre-reveal preparation rule"
+  - "[ADR-0350](0350-run-deployment-promotes-the-mounted-battlefield-in-place.md)'s one mounted scene/store/compositor and phase-gated Battle activation"
+  - "[ADR-0352](0352-final-discipline-arrival-precedes-the-automatic-deployment-wave.md)'s final-arrival settlement boundary before automatic phase promotion"
+  - "[ADR-0353](0353-battlefield-view-state-is-instance-owned-and-camera-ready-before-reveal.md)'s instance-local camera and pre-reveal preparation rule"
 partially_supersedes:
-  - "[ADR-0338](0338-run-deployment-is-a-battlefield-state-with-conditional-input.md)'s explicit Begin Battle confirmation after meaningful choices"
-  - "[ADR-0340](0340-discipline-resolves-before-automatic-deployment.md)'s implication that the completed automatic formation pauses in Deployment"
+  - "[ADR-0346](0346-run-deployment-is-a-battlefield-state-with-conditional-input.md)'s explicit Begin Battle confirmation after meaningful choices"
+  - "[ADR-0348](0348-discipline-resolves-before-automatic-deployment.md)'s implication that the completed automatic formation pauses in Deployment"
 ---
 
-# ADR-0341: The final Deployment choice commits and camera authority follows the active scene
+# ADR-0349: The final Deployment choice commits and camera authority follows the active scene
 
 ## Context and Problem Statement
 
@@ -50,7 +50,7 @@ battlefield scene may publish shared camera state.**
   scene is activated. The outgoing Deployment surface releases that authority as soon as the Run
   phase changes; the incoming Battle receives it only at director activation.
 - Battle clocks, combat input, opponent pieces, and arrival motion remain inactive until the
-  director activates Battle under ADR-0338.
+  director activates Battle under ADR-0346.
 
 ## Consequences
 
@@ -63,6 +63,6 @@ battlefield scene may publish shared camera state.**
 
 ## More Information
 
-- [ADR-0338](0338-run-deployment-is-a-battlefield-state-with-conditional-input.md)
-- [ADR-0340](0340-discipline-resolves-before-automatic-deployment.md)
+- [ADR-0346](0346-run-deployment-is-a-battlefield-state-with-conditional-input.md)
+- [ADR-0348](0348-discipline-resolves-before-automatic-deployment.md)
 - [ADR-0307](0307-every-replaceable-region-is-a-director-owned-scene-slot.md)

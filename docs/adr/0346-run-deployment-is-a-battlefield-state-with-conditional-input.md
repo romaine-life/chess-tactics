@@ -5,12 +5,12 @@ deciders: owner (Nelson) + Codex
 partially_supersedes:
   - "[ADR-0237](0237-run-destinations-fill-the-shell-workspace.md)'s classification of Deployment as a non-Battle Run workspace"
 partially_superseded_by:
-  - "[ADR-0340](0340-discipline-resolves-before-automatic-deployment.md)'s Discipline-before-formation projection order"
-  - "[ADR-0341](0341-the-final-deployment-choice-commits-and-camera-authority-follows-the-active-scene.md)'s final-choice commit and active-scene camera ownership"
-  - "[ADR-0342](0342-run-deployment-promotes-the-mounted-battlefield-in-place.md)'s continuous mounted battlefield lifecycle"
+  - "[ADR-0348](0348-discipline-resolves-before-automatic-deployment.md)'s Discipline-before-formation projection order"
+  - "[ADR-0349](0349-the-final-deployment-choice-commits-and-camera-authority-follows-the-active-scene.md)'s final-choice commit and active-scene camera ownership"
+  - "[ADR-0350](0350-run-deployment-promotes-the-mounted-battlefield-in-place.md)'s continuous mounted battlefield lifecycle"
 ---
 
-# ADR-0338: Run deployment is a battlefield state with conditional input
+# ADR-0346: Run deployment is a battlefield state with conditional input
 
 ## Context and Problem Statement
 

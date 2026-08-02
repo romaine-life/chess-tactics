@@ -203,7 +203,7 @@ Destinations do not add an
 `OuterChromeBox`, outer-panel consumer, or duplicate title frame merely to
 acquire a background; subordinate controls remain registered inner chrome.
 
-[ADR-0338](adr/0338-run-deployment-is-a-battlefield-state-with-conditional-input.md)
+[ADR-0346](adr/0346-run-deployment-is-a-battlefield-state-with-conditional-input.md)
 removes Deployment from that destination inventory. Deployment is a persisted
 gameplay phase presented on the full canonical battlefield; its phase-specific
 workflow replaces the contents of the shared `ShellControlsPanel`. It does not
@@ -212,18 +212,18 @@ level-manifest heading. Army/Relics workspaces may still cover the retained
 Deployment battlefield through `ShellViewportSwap` exactly as they cover an
 active Battle.
 
-Per [ADR-0342](adr/0342-run-deployment-promotes-the-mounted-battlefield-in-place.md),
+Per [ADR-0350](adr/0350-run-deployment-promotes-the-mounted-battlefield-in-place.md),
 "retained" means the same mounted presentation, not a reconstructed Battle that
 resembles Deployment. One Run Battle activity owns one director key, readiness
 signature, session provider, `SkirmishBoard`, compositor tree, and camera across
 both persisted phases. Phase-specific Controls may replace their contents, but
 they cannot re-key that battlefield. Promotion to Battle adds the remaining
 position in place. Arrival eligibility follows mounted unit identity per
-[ADR-0343](adr/0343-unit-arrival-choreography-follows-newly-visible-unit-identity.md):
+[ADR-0351](adr/0351-unit-arrival-choreography-follows-newly-visible-unit-identity.md):
 newly placed or newly introduced units animate, while units already presented
 during Deployment remain seated. The final manual arrival settles before the Run
 promotes to Battle and begins the remaining formation's distinct automatic wave
-([ADR-0344](adr/0344-final-discipline-arrival-precedes-the-automatic-deployment-wave.md));
+([ADR-0352](adr/0352-final-discipline-arrival-precedes-the-automatic-deployment-wave.md));
 the transition remains automatic and adds no confirmation control.
 
 Under [ADR-0240](adr/0240-run-self-inspection-owns-the-left-shell-workspace.md)

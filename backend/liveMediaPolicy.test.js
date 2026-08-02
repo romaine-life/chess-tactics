@@ -312,7 +312,7 @@ function gameConditionIcon(overrides = {}) {
   };
 }
 
-test('condition icon projection keeps Plagued ability and Pestiferous property as separate typed roles', () => {
+test('condition icon projection keeps all four card properties and granted states as separate typed roles', () => {
   const plagued = gameConditionIcon();
   assert.deepEqual(gameConditionIconSlot(plagued.slot), { component: 'unit-ability-icon', variant: 'plagued' });
   assert.equal(gameConditionIconMediaIssue(plagued), null);
@@ -328,6 +328,27 @@ test('condition icon projection keeps Plagued ability and Pestiferous property a
   });
   assert.deepEqual(gameConditionIconSlot(pestiferous.slot), { component: 'card-property-icon', variant: 'pestiferous' });
   assert.equal(gameConditionIconMediaIssue(pestiferous), null);
+  for (const variant of ['positioned', 'discipline', 'marshalled']) {
+    const state = gameConditionIcon({
+      slot: `ui/kit/icons/game/${variant}.png`,
+      metadata: { runtime: { ...plagued.metadata.runtime, variant } },
+    });
+    assert.deepEqual(gameConditionIconSlot(state.slot), { component: 'unit-ability-icon', variant });
+    assert.equal(gameConditionIconMediaIssue(state), null);
+  }
+  for (const variant of ['concinnous', 'tactical', 'hieratic']) {
+    const property = gameConditionIcon({
+      slot: `ui/kit/icons/card-properties/${variant}.png`,
+      metadata: { runtime: {
+        ...plagued.metadata.runtime,
+        component: 'card-property-icon',
+        variant,
+        nativeRole: 'card-property-icon',
+      } },
+    });
+    assert.deepEqual(gameConditionIconSlot(property.slot), { component: 'card-property-icon', variant });
+    assert.equal(gameConditionIconMediaIssue(property), null);
+  }
   assert.match(gameConditionIconMediaIssue(gameConditionIcon({ role: 'media' })), /icon role/);
   assert.match(gameConditionIconMediaIssue(gameConditionIcon({ width: 32 })), /64x64/);
   assert.match(gameConditionIconMediaIssue(gameConditionIcon({

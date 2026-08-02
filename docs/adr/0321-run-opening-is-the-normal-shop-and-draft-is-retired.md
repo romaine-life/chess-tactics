@@ -3,7 +3,7 @@ status: accepted
 date: 2026-08-01
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
-  - "[ADR-0339](0339-opening-shop-purchases-are-optional.md)'s removal of the mandatory opening purchase before Continue"
+  - "[ADR-0347](0347-opening-shop-purchases-are-optional.md)'s removal of the mandatory opening purchase before Continue"
   - "[ADR-0323](0323-run-shops-allow-every-affordable-card-purchase.md)'s multi-card shared Shop transaction and format-10 purchase state"
   - "[ADR-0322](0322-run-openings-use-two-pawns-eight-gold-and-card-native-purchase-feedback.md)'s format-9 card vocabulary, two-Pawn army, eight-gold budget, and purchase feedback"
 partially_supersedes:
@@ -58,8 +58,8 @@ separate draft phase and screen are retired.**
   incrementing `battleIndex`; later Shops retain **Continue to next Battle** and
   their existing increment behavior.
 - Opening Shop offers never receive Ataraxia shop effects, victory gold, Loot,
-  or paid-relic offers. Its displayed context is Starting gold rather than a
-  fake Victory reward.
+  or paid-relic offers. It therefore shows no context row at all rather than a
+  fake Victory reward (amended 2026-08-02; see **Amendments**).
 - `DraftPanel`, the `draft` Run phase, `DraftOffer`, `draftOffers`,
   `chosenDraftId`, `chooseDraft`, draft-mode card behavior, and their UI/test
   inventory are deleted. Historical committed units tagged with source `draft`
@@ -70,6 +70,31 @@ separate draft phase and screen are retired.**
   Runs already in Deployment, Battle, post-Battle Shop, or Victory may still
   normalize their unrelated historical fields to the current format; retired
   draft fields are removed from those committed documents.
+
+### Amendments
+
+**2026-08-02 — the Shop explains itself with its own controls, not instructions.**
+Owner decision. The Shop screen no longer prints standing explanatory text:
+
+- The opening Shop's **Starting gold** label and its coin amount are removed, and
+  with them the whole context row on the opening (that pair was its only content).
+  Later Shops keep `Victory + <gold>`; the gold the player holds is already in the
+  title bar. The row's `:last-child { margin-inline-start: auto }` rule went with
+  the removal, so the remaining label and amount read as one pair.
+- The **Buy any cards you can afford** line is removed. Affordability is legible
+  from the card prices against the title-bar gold, and ADR-0323 already makes
+  buying every affordable card the plain behavior.
+- The **Cards** section heading is removed; the section keeps the name as an
+  `aria-label` only. Cards are the Shop's subject, so the heading named the
+  obvious.
+- Continue's blocked-state hint no longer explains an unbought opening card
+  (**Buy one card before continuing.**); the disabled Continue is the whole
+  signal. The Loot hint still fires, and now keys off unchosen Loot directly
+  rather than off "not the opening", so it can no longer mislabel a blocked
+  opening Shop.
+
+Continue remains disabled until an opening card is bought — this changed what the
+screen says, never what it permits.
 
 ### Consequences
 

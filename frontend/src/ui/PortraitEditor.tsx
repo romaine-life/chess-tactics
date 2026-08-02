@@ -286,7 +286,7 @@ const overlayStyle = (crop: Crop): CSSProperties => ({
 const checkerBg = 'repeating-conic-gradient(#15202b 0% 25%, #0e161e 0% 50%) 50% / 28px 28px';
 
 // In-studio Viewer surface — the same crop editor in the studio's [main][aside]
-// frame. `header` carries the Viewer's Asset|Artwork|Portrait kind selector.
+// frame. `header` carries shared preview controls supplied by Studio.
 export function PortraitLab({ header }: { header?: ReactNode }): ReactElement {
   const ed = usePortraitEditor();
   const { crops, piece, palette, method, crop } = ed;
