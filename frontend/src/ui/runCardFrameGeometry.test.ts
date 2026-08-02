@@ -70,7 +70,7 @@ describe('Run card frame geometry', () => {
       + RUN_CARD_TEXT_PLACEMENT.insetInline * RUN_CARD_FRAME_NATIVE_WIDTH / 100
     );
     expect(textLeft('standard')).toBeCloseTo(112.85, 1);
-    expect(textLeft('hieratic')).toBeCloseTo(133.85, 1);
+    expect(textLeft('hieratic')).toBeCloseTo(122.85, 1);
     expect(textLeft('hieratic')).toBeGreaterThan(textLeft('standard'));
   });
 

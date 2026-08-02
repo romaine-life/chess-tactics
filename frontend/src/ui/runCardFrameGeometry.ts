@@ -190,17 +190,18 @@ export const RUN_CARD_TACTICAL_FRAME_GEOMETRY = defineGeometry({
 
 /**
  * The owner-selected Hieratic forged-steel frame. Its plates sit lower than the
- * painted frames and its border is thicker, so the title and type rows also move
- * their left edge inside the steel while keeping the shared right edge.
+ * painted frames, and each is bounded by a raised lip with a recessed channel
+ * inside it: the opening is the diamond-plate face past that channel (x 99 on
+ * the type plate), not the channel's inner shadow.
  */
 export const RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY = defineGeometry({
   variant: 'hieratic',
   measuredSha256: '7ae3b1945da8fefa46a264b696b0fc5695454c80c7256f879fd465a06a2d1152',
   boxes: {
-    title: { x: 106, y: 94, width: 741, height: 86 },
+    title: { x: 98, y: 94, width: 751, height: 88 },
     cost: { x: 867.17, y: 78.58, width: 117.66, height: 106.848 },
     art: { x: 106, y: 219, width: 848, height: 637 },
-    type: { x: 110, y: 896, width: 843, height: 72 },
+    type: { x: 99, y: 896, width: 862, height: 72 },
     contents: { x: 102, y: 994, width: 856, height: 407 },
   },
 });
