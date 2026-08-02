@@ -27,7 +27,7 @@ import { ChromeDividedGridRow, DividedInnerChromeBox } from './shared/ChromeDivi
 import { Tooltip } from './shared/InfoTip';
 import { RunUnitInspectionScene } from './RunUnitInspectionScene';
 import { ChromeButton } from './shared/ChromeButton';
-import { runAbilityIconClass } from './shared/RunAbilityIcon';
+import { RunAbilityIcon, type RunUnitState } from './shared/RunAbilityIcon';
 
 export type RunRosterOrder = 'type' | 'value' | 'ability' | 'acquired';
 export type RunRosterTypeFilter = 'all' | RunArmyPieceType;
@@ -67,13 +67,21 @@ export type RunUnitTraitId =
   | 'royal-tent'
   | 'pawn-cash-out';
 
+/**
+ * A paired unit state draws its own accepted icon; a relic-derived trait is not one of
+ * the four states and keeps a kit glyph (ADR-0339).
+ */
+export type RunUnitTraitIcon =
+  | Readonly<{ state: RunUnitState }>
+  | Readonly<{ glyphClass: string }>;
+
 export interface RunUnitTrait {
   id: RunUnitTraitId;
   label: string;
   description: string;
   source: string;
   inherited: boolean;
-  iconClass: string;
+  icon: RunUnitTraitIcon;
 }
 
 function inheritedTrait(
@@ -81,9 +89,9 @@ function inheritedTrait(
   label: string,
   description: string,
   source: string,
-  iconClass: string,
+  icon: RunUnitTraitIcon,
 ): RunUnitTrait {
-  return { id, label, description, source, inherited: true, iconClass };
+  return { id, label, description, source, inherited: true, icon };
 }
 
 function abilityDescription(unit: RunArmyUnit, ability: Extract<RunAbility, 'positioned' | 'marshalled'>): string {
@@ -105,7 +113,7 @@ function deploymentAbilityTrait(
   ability: Extract<RunAbility, 'positioned' | 'marshalled'>,
 ): RunUnitTrait | null {
   const label = ability === 'positioned' ? 'Positioned' : AGMINATE_DISPLAY_NAME;
-  const iconClass = runAbilityIconClass(ability);
+  const icon = { state: ability } as const;
   if (unit.abilities.includes(ability)) {
     return {
       id: ability,
@@ -113,12 +121,12 @@ function deploymentAbilityTrait(
       description: abilityDescription(unit, ability),
       source: 'Permanent unit ability',
       inherited: false,
-      iconClass,
+      icon,
     };
   }
   const relicId = relicGrantingRunAbility(run, unit, ability);
   return relicId
-    ? inheritedTrait(ability, label, abilityDescription(unit, ability), RUN_RELIC_BY_ID[relicId].name, iconClass)
+    ? inheritedTrait(ability, label, abilityDescription(unit, ability), RUN_RELIC_BY_ID[relicId].name, icon)
     : null;
 }
 
@@ -131,7 +139,7 @@ export function runUnitTraits(run: RunDocument, unit: RunArmyUnit): RunUnitTrait
       description: 'Will be permanently lost after the next victorious Battle.',
       source: 'The Great Mortality',
       inherited: false,
-      iconClass: 'skirmish-icon-crossed-swords',
+      icon: { state: 'plagued' },
     });
   }
   if (unit.abilities.includes('discipline')) {
@@ -141,7 +149,7 @@ export function runUnitTraits(run: RunDocument, unit: RunArmyUnit): RunUnitTrait
       description: 'May be deliberately placed in the player zone before random deployment.',
       source: 'Permanent unit ability',
       inherited: false,
-      iconClass: runAbilityIconClass('discipline'),
+      icon: { state: 'discipline' },
     });
   } else if (run.deployment?.temporaryDisciplineUnitId === unit.id) {
     traits.push(inheritedTrait(
@@ -149,7 +157,7 @@ export function runUnitTraits(run: RunDocument, unit: RunArmyUnit): RunUnitTrait
       'Discipline',
       'May be deliberately placed in the player zone for this Battle.',
       RUN_RELIC_BY_ID['inspirational-record'].name,
-      runAbilityIconClass('discipline'),
+      { state: 'discipline' },
     ));
   }
 
@@ -163,7 +171,7 @@ export function runUnitTraits(run: RunDocument, unit: RunArmyUnit): RunUnitTrait
       'Royal Tent',
       'Places up to three temporary rocks in front of the King.',
       RUN_RELIC_BY_ID['royal-tent'].name,
-      'skirmish-icon-shield',
+      { glyphClass: 'skirmish-icon-shield' },
     ));
   }
   if (unit.type === 'pawn' && hasRelic(run, 'mercenary-boat')) {
@@ -172,7 +180,7 @@ export function runUnitTraits(run: RunDocument, unit: RunArmyUnit): RunUnitTrait
       'Cash Out',
       'May leave the army for two gold instead of promoting.',
       RUN_RELIC_BY_ID['mercenary-boat'].name,
-      'skirmish-icon-crossed-swords',
+      { glyphClass: 'skirmish-icon-crossed-swords' },
     ));
   }
   return traits;
@@ -279,9 +287,11 @@ function RunUnitTraitList({
             popupClassName="run-relic-tooltip-pop"
             popupMaxInlineSize={300}
             label={`${trait.label}. ${trait.description} ${trait.inherited ? `Inherited from ${trait.source}.` : trait.source}.`}
-            trigger={(
+            trigger={'state' in trait.icon ? (
+              <RunAbilityIcon ability={trait.icon.state} className="run-unit-trait-icon" />
+            ) : (
               <span
-                className={`run-unit-trait-icon skirmish-icon ${trait.iconClass}`}
+                className={`run-unit-trait-icon skirmish-icon ${trait.icon.glyphClass}`}
                 aria-hidden="true"
               />
             )}
