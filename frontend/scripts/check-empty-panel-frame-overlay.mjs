@@ -980,7 +980,12 @@ if (!/<ShellViewportSwap[\s\S]*?className="run-phase-workspace"[\s\S]*?primaryCl
   || !/<ShellViewportSwap[\s\S]*?className="skirmish-war-room"[\s\S]*?primaryClassName="skirmish-field"[\s\S]*?workspaceOpen=\{strategikonOpen \|\| Boolean\(runWorkspace\)\}/.test(skirmish)) {
   failures.push('Run and Battle replacement modes must use the shared viewport-swap owner');
 }
-if (!/<ShellWorkspace[\s\S]*?className="strategikon-workspace"[\s\S]*?contentClassName=\{`strategikon-workspace-layout/.test(strategikon)
+// The layout class may be a plain string or a template literal: the Enchiridion
+// reference rail's `has-secondary-rail` modifier moved from the workspace grid to the
+// replaceable pane, because that rail belongs to the section and must leave with it
+// (ADR-0355). What this guard is about is that the Strategikon COMPOSES the shared
+// workspace rather than building its own surface, which is unchanged.
+if (!/<ShellWorkspace[\s\S]*?className="strategikon-workspace"[\s\S]*?contentClassName=(?:"strategikon-workspace-layout"|\{`strategikon-workspace-layout)/.test(strategikon)
   || !/bodyClassName="strategikon-content"/.test(strategikon)
   || !/bodyClassName="strategikon-content"[\s\S]*?edgeAttached/.test(strategikon)
   || /<ChromeSurfaceFill\b|<OuterChromeBox\b/.test(strategikon)) {
