@@ -13,6 +13,7 @@ import {
   runCardFrameGeometryMatchesPixels,
   runCardFrameGeometryVariables,
   runCardFrameGeometryWithBoxes,
+  type RunCardFrameVariant,
 } from './runCardFrameGeometry';
 
 describe('Run card frame geometry', () => {
@@ -28,21 +29,37 @@ describe('Run card frame geometry', () => {
       .toBe(RUN_CARD_FRAME_VARIANTS.length);
   });
 
-  it('preserves the approved Standard face pixels through boxes alone', () => {
+  it('places the Standard boxes on the painted plates that frame draws', () => {
     expect(runCardFrameGeometryVariables(RUN_CARD_STANDARD_FRAME_GEOMETRY)).toMatchObject({
       '--run-card-title-left': '9.3000%',
-      '--run-card-title-top': '5.8000%',
-      // The cost box centers on the measured coin socket (932.5, 130.5)
-      // shared by the standard, pestiferous, and tactical frames.
-      '--run-card-cost-left': '82.4217%',
-      '--run-card-cost-top': '5.2008%',
+      // Title and type rows are the plate opening read keyline to keyline off
+      // the frame's pixels; the cost box is centered on the socket it draws.
+      '--run-card-title-top': '5.7951%',
+      '--run-card-cost-left': '82.3745%',
+      '--run-card-cost-top': '4.9582%',
       '--run-card-art-top': '14.2000%',
-      // 58.2% plus the 1.2cqw type offset the face used to add on top of every
-      // frame: the box now holds the whole vertical answer (ADR-0346).
-      '--run-card-type-top': '59.0571%',
+      '--run-card-type-top': '58.2210%',
       '--run-card-contents-top': '65.2000%',
       '--run-card-contents-height': '28.7000%',
     });
+    const cost = RUN_CARD_STANDARD_FRAME_GEOMETRY.boxes.cost;
+    expect(cost.x + cost.width / 2).toBeCloseTo(932, 2);
+    expect(cost.y + cost.height / 2).toBeCloseTo(127, 2);
+  });
+
+  it('gives each frame the plate height its own art draws', () => {
+    // The four painted frames sit at four different type-plate heights; that
+    // spread is exactly what one shared box used to flatten (ADR-0346).
+    const typeMid = (v: RunCardFrameVariant): number => {
+      const box = RUN_CARD_FRAME_GEOMETRY_BY_VARIANT[v].boxes.type;
+      return box.y + box.height / 2;
+    };
+    expect(typeMid('standard')).toBeCloseTo(898.5, 1);
+    expect(typeMid('tactical')).toBeCloseTo(900, 1);
+    expect(typeMid('pestiferous')).toBeCloseTo(907, 1);
+    expect(typeMid('concinnous')).toBeCloseTo(910.5, 1);
+    expect(typeMid('hieratic')).toBeCloseTo(932, 1);
+    expect(new Set(RUN_CARD_FRAME_VARIANTS.map(typeMid)).size).toBe(RUN_CARD_FRAME_VARIANTS.length);
   });
 
   it('states the entire text-placement rule as two shared values', () => {
@@ -62,18 +79,22 @@ describe('Run card frame geometry', () => {
       RUN_CARD_STANDARD_FRAME_GEOMETRY.boxes.contents.y,
     );
     const steelCost = RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY.boxes.cost;
-    expect(steelCost.x + steelCost.width / 2).toBeCloseTo(924.25, 2);
-    expect(steelCost.y + steelCost.height / 2).toBeCloseTo(135.5, 2);
+    expect(steelCost.x + steelCost.width / 2).toBeCloseTo(926, 2);
+    expect(steelCost.y + steelCost.height / 2).toBeCloseTo(132, 2);
   });
 
-  it('reports boxes as unmeasured until they are tuned against the served pixels', () => {
+  it('names the exact frame pixels each set of boxes was measured against', () => {
+    const seen = new Set();
     for (const variant of RUN_CARD_FRAME_VARIANTS) {
       const geometry = RUN_CARD_FRAME_GEOMETRY_BY_VARIANT[variant];
-      expect(runCardFrameGeometryMatchesPixels(geometry, 'a'.repeat(64))).toBe(
-        geometry.measuredSha256 === 'a'.repeat(64),
-      );
+      expect(geometry.measuredSha256).toMatch(/^[0-9a-f]{64}$/);
+      seen.add(geometry.measuredSha256);
+      expect(runCardFrameGeometryMatchesPixels(geometry, geometry.measuredSha256)).toBe(true);
+      // Re-generated frame art invalidates the measurement rather than inheriting it.
+      expect(runCardFrameGeometryMatchesPixels(geometry, 'a'.repeat(64))).toBe(false);
       expect(runCardFrameGeometryMatchesPixels(geometry, null)).toBe(false);
     }
+    expect(seen.size).toBe(RUN_CARD_FRAME_VARIANTS.length);
   });
 
   it('keeps every declared box inside the native source image', () => {

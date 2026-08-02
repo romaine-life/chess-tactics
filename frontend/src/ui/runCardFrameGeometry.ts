@@ -115,62 +115,90 @@ function defineGeometry(
     slot: RUN_CARD_FRAME_SLOT_BY_VARIANT[geometry.variant],
     sourceWidth: RUN_CARD_FRAME_NATIVE_WIDTH,
     sourceHeight: RUN_CARD_FRAME_NATIVE_HEIGHT,
-    boxes: Object.freeze(geometry.boxes),
+    // Declared in one order regardless of how a frame's literal groups its boxes,
+    // so every geometry enumerates identically.
+    boxes: Object.freeze(Object.fromEntries(
+      RUN_CARD_FRAME_BOX_NAMES.map((name) => [name, geometry.boxes[name]]),
+    ) as RunCardFrameBoxes),
   });
 }
 
 /**
- * The boxes the four painted-frame variants shared before they were separable,
- * expressed in their native 1060x1484 pixels. The title and type rows carry the
- * text offsets that used to be applied globally on top of them, so day-one
- * pixels are unchanged while the box became the single authority.
+ * The illustration window and contents panel each frame shared before the boxes
+ * were separable. Both are carried forward untouched: the reviewed Contents Box
+ * density ladder (ADR-0270) was tuned against these exact numbers, and neither
+ * box was among the drifting text the by-eye pass addressed.
  */
-const SEEDED_PAINTED_BOXES: RunCardFrameBoxes = Object.freeze({
-  title: { x: 98.58, y: 86.072, width: 725.04, height: 92.008 },
-  // Centered on the drawn coin socket shared by the standard, pestiferous,
-  // and tactical frames (measured seat center ~(932.5, 130.5)).
-  cost: { x: 873.67, y: 77.18, width: 117.66, height: 106.848 },
+const CARRIED_PAINTED_PANELS = Object.freeze({
   art: { x: 101.23, y: 210.728, width: 857.54, height: 598.052 },
-  type: { x: 98.58, y: 876.408, width: 854.36, height: 69.006 },
   contents: { x: 102.82, y: 967.568, width: 854.36, height: 425.908 },
 });
 
+/**
+ * Title and type rows below are the painted plate's opening, read keyline to
+ * keyline off each frame's own pixels; the cost box is centered on the socket
+ * that frame draws. Horizontal title/type edges stay at the approved inset,
+ * which sits comfortably inside every painted plate.
+ */
 export const RUN_CARD_STANDARD_FRAME_GEOMETRY = defineGeometry({
   variant: 'standard',
-  measuredSha256: null,
-  boxes: { ...SEEDED_PAINTED_BOXES },
+  measuredSha256: '73710874141ec1c904416860d55a0be69d4dc7f5104db7eeecbfc756ca02dfe1',
+  boxes: {
+    ...CARRIED_PAINTED_PANELS,
+    title: { x: 98.58, y: 86, width: 725.04, height: 85 },
+    cost: { x: 873.17, y: 73.58, width: 117.66, height: 106.848 },
+    type: { x: 98.58, y: 864, width: 854.36, height: 69 },
+  },
 });
 
 export const RUN_CARD_PESTIFEROUS_FRAME_GEOMETRY = defineGeometry({
   variant: 'pestiferous',
-  measuredSha256: null,
-  boxes: { ...SEEDED_PAINTED_BOXES },
+  measuredSha256: '1a403e5e9adad96c0bed9673acae3e26abc750d978130e9bc8e92bbca8947e9d',
+  boxes: {
+    ...CARRIED_PAINTED_PANELS,
+    title: { x: 98.58, y: 90, width: 725.04, height: 86 },
+    cost: { x: 871.17, y: 79.58, width: 117.66, height: 106.848 },
+    type: { x: 98.58, y: 872, width: 854.36, height: 70 },
+  },
 });
 
 export const RUN_CARD_CONCINNOUS_FRAME_GEOMETRY = defineGeometry({
   variant: 'concinnous',
-  measuredSha256: null,
-  boxes: { ...SEEDED_PAINTED_BOXES },
+  measuredSha256: '38b1290df1067dfa3562b874478b29c3f47341d8a065c90d426cec2cdaa32cc7',
+  boxes: {
+    ...CARRIED_PAINTED_PANELS,
+    title: { x: 98.58, y: 86, width: 725.04, height: 94 },
+    cost: { x: 874.17, y: 79.58, width: 117.66, height: 106.848 },
+    // This frame's plates cast a thicker bottom shadow than they do a top
+    // bevel, so the opening is read to the flat face rather than to the lip.
+    type: { x: 98.58, y: 877, width: 854.36, height: 67 },
+  },
 });
 
 export const RUN_CARD_TACTICAL_FRAME_GEOMETRY = defineGeometry({
   variant: 'tactical',
-  measuredSha256: null,
-  boxes: { ...SEEDED_PAINTED_BOXES },
+  measuredSha256: '6c54a0a6dc48f56a3cf21c83d57d08cfbf11a501ae90f820b527c07cf40d3140',
+  boxes: {
+    ...CARRIED_PAINTED_PANELS,
+    title: { x: 98.58, y: 86, width: 725.04, height: 87 },
+    cost: { x: 872.17, y: 78.58, width: 117.66, height: 106.848 },
+    type: { x: 98.58, y: 866, width: 854.36, height: 68 },
+  },
 });
 
 /**
- * The owner-selected Hieratic forged-steel frame. Its panels are lower than the
- * painted frames, so it was the first variant to need boxes of its own.
+ * The owner-selected Hieratic forged-steel frame. Its plates sit lower than the
+ * painted frames and its border is thicker, so the title and type rows also move
+ * their left edge inside the steel while keeping the shared right edge.
  */
 export const RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY = defineGeometry({
   variant: 'hieratic',
-  measuredSha256: null,
+  measuredSha256: '7ae3b1945da8fefa46a264b696b0fc5695454c80c7256f879fd465a06a2d1152',
   boxes: {
-    title: { x: 98.58, y: 95, width: 725.04, height: 86 },
-    cost: { x: 865.42, y: 82.076, width: 117.66, height: 106.848 },
+    title: { x: 118, y: 94, width: 705, height: 86 },
+    cost: { x: 867.17, y: 78.58, width: 117.66, height: 106.848 },
     art: { x: 106, y: 219, width: 848, height: 637 },
-    type: { x: 98.58, y: 908.72, width: 854.36, height: 72 },
+    type: { x: 118, y: 896, width: 834, height: 72 },
     contents: { x: 102, y: 994, width: 856, height: 407 },
   },
 });
