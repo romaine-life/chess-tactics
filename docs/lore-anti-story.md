@@ -169,6 +169,17 @@ supernatural claims break this family. When a relic's accepted identity changes,
 art made for the old identity is no longer valid: the game says **Art not
 generated** until new pixels pass the normal review and installation path.
 
+The eight replacement directions selected and installed through the closed
+resized-pixel exception in
+[ADR-0332](adr/0332-eight-run-relic-icons-ship-the-approved-resized-pixels.md)
+keep that residue concrete: Sealed Valuation uses an appraisal parchment and
+vessel weights; Dawn Register an open departure ledger; Field Linens a tied
+linen bundle; Returned Rifle an unloaded tagged rifle; After-Hours Key a worn
+tagged key; Unclaimed Dagger a plain tagged utility blade; The Waiting Cart an
+empty handcart; and The Paid Crossing an empty toll skiff. These are approved
+material motifs and exact reviewed pixels, not a general license to resize
+other production art.
+
 ## Ataraxia And Public History
 
 Ataraxia conditions may name a real historical event, give its date, and later

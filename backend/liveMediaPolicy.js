@@ -9,6 +9,17 @@ const PREDRAWN_BOARD_PROOF_SCHEMA = 'predrawn-board-canonical-level-proof-v1';
 const PREDRAWN_BOARD_PROOF_RENDERER = 'LevelEditor/PredrawnBoardLayer';
 const RUN_RELIC_ICON_COMPONENT = 'run-relic-icon';
 const RUN_RELIC_ICON_SLOT = /^ui\/run\/relics\/([a-z][a-z0-9-]{0,79})\.png$/;
+const RUN_RELIC_RESIZED_PRODUCTION_EXCEPTION_SCHEMA = 'run-relic-resized-production-exception-v1';
+const RUN_RELIC_RESIZED_PRODUCTION_EXCEPTION_SHA_BY_SLOT = Object.freeze({
+  'ui/run/relics/congressional-approval.png': '928f9ceb7a5612ff0d2216b70422b972b04492a4c9ed277e5122721b390c52d0',
+  'ui/run/relics/deployment-vehicle.png': 'd004c0f5be36094ebc137a9cdbebfe69d847636a7c8ddaff50bac8b687aac0bc',
+  'ui/run/relics/inspirational-record.png': 'b6d18510fcff3e374a1899421b2928fb16cd79c0108ad00179059cca539e309d',
+  'ui/run/relics/mercenary-boat.png': '9e5945cc9c200d1e3818e10f3f6e3494150ce83f30aa95c7e499daa4462ae1e8',
+  'ui/run/relics/mercenarys-rifle.png': 'afe1a1f718a4406a60ae85adb002af846ef4a9c6000c20b97d67a0b57c06fa60',
+  'ui/run/relics/merchants-shopkey.png': 'c8e0e45f9b863e42401c8e72cf0c42364a3c70c0c8dfb7362978b79e9b5adfa0',
+  'ui/run/relics/occult-dagger.png': 'bc7984ccbabf45e39e672957d7ed1e2716c7e82e14b671fcbed38a7f82b9208d',
+  'ui/run/relics/training-linens.png': 'e1349bd32f7bcaccbd706dbc55a6f97df8a0dd96533f309d1e2c0ea38aabf461',
+});
 const RUN_RESOURCE_ICON_COMPONENT = 'run-resource-icon';
 const RUN_RESOURCE_ICON_SLOT = /^ui\/run\/resources\/([a-z][a-z0-9-]{0,79})\.png$/;
 const GAME_CONDITION_ICON_BY_SLOT = Object.freeze({
@@ -413,6 +424,30 @@ function nativeMediaEvidenceIssue(row) {
   const isRaster = String(row.media_type || '').startsWith('image/') && row.media_type !== 'image/svg+xml';
   if (!isRaster) return null;
   const evidence = isObjectRecord(row.native_evidence) ? row.native_evidence : {};
+  if (evidence.schema === RUN_RELIC_RESIZED_PRODUCTION_EXCEPTION_SCHEMA) {
+    const expectedSha256 = RUN_RELIC_RESIZED_PRODUCTION_EXCEPTION_SHA_BY_SLOT[String(row.slot || '')];
+    if (!expectedSha256) return 'ADR-0332 resized production evidence is restricted to its eight Run relic slots';
+    if (normalizedSha(row.blob_sha256) !== expectedSha256 || normalizedSha(evidence.outputSha256) !== expectedSha256) {
+      return 'ADR-0332 resized production evidence does not authorize these uploaded bytes';
+    }
+    if (
+      evidence.decision !== 'ADR-0332'
+      || evidence.status !== 'owner-approved-production-exception'
+      || evidence.native1x !== false
+      || evidence.spatialResampling !== true
+    ) return 'ADR-0332 resized production evidence is incomplete';
+    if (
+      Number(row.width) !== 64 || Number(row.height) !== 64
+      || Number(evidence.outputWidth) !== 64 || Number(evidence.outputHeight) !== 64
+      || Number(evidence.sourceWidth) !== 1254 || Number(evidence.sourceHeight) !== 1254
+    ) return 'ADR-0332 resized production evidence has invalid source or output dimensions';
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(evidence.sourceVersionId || ''))
+      || !normalizedSha(evidence.sourceSha256)
+      || evidence.transform !== 'chroma-key-crop-nearest-neighbor-fit-52-alpha-threshold-96'
+    ) return 'ADR-0332 resized production evidence is missing its archived source or exact transform';
+    return null;
+  }
   if (evidence.native1x !== true) return 'nativeEvidence.native1x must be true';
   if (evidence.spatialResampling !== false) return 'nativeEvidence.spatialResampling must be false';
   if (row.width !== null || row.height !== null) {
@@ -452,6 +487,7 @@ module.exports = {
   PREDRAWN_BOARD_PROOF_RENDERER,
   PREDRAWN_BOARD_PROOF_SCHEMA,
   RUN_RELIC_ICON_COMPONENT,
+  RUN_RELIC_RESIZED_PRODUCTION_EXCEPTION_SCHEMA,
   RUN_RESOURCE_ICON_COMPONENT,
   SFX_SAMPLE_COMPONENT,
   SFX_SAMPLE_PROOF_RENDERER,

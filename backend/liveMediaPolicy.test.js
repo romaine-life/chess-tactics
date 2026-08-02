@@ -8,6 +8,7 @@ const {
   PREDRAWN_BOARD_PROOF_RENDERER,
   PREDRAWN_BOARD_PROOF_SCHEMA,
   RUN_RELIC_ICON_COMPONENT,
+  RUN_RELIC_RESIZED_PRODUCTION_EXCEPTION_SCHEMA,
   RUN_RESOURCE_ICON_COMPONENT,
   SFX_SAMPLE_COMPONENT,
   SFX_SAMPLE_PROOF_RENDERER,
@@ -68,6 +69,57 @@ test('same-dimension replacement bytes clear stale native evidence', () => {
     width: 96,
     height: 180,
   }), true);
+});
+
+test('only the eight exact ADR-0332 resized Run relic outputs pass the production evidence gate', () => {
+  const outputSha256 = '928f9ceb7a5612ff0d2216b70422b972b04492a4c9ed277e5122721b390c52d0';
+  const evidence = {
+    schema: RUN_RELIC_RESIZED_PRODUCTION_EXCEPTION_SCHEMA,
+    decision: 'ADR-0332',
+    status: 'owner-approved-production-exception',
+    native1x: false,
+    spatialResampling: true,
+    sourceWidth: 1254,
+    sourceHeight: 1254,
+    outputWidth: 64,
+    outputHeight: 64,
+    sourceVersionId: '4da37b19-21ec-4bbd-9e9d-d66d15326075',
+    sourceSha256: '0ca350bc34522afa1d2c8e276c1e6f8c845f132c3011b24101bbf6a3f623fc07',
+    outputSha256,
+    transform: 'chroma-key-crop-nearest-neighbor-fit-52-alpha-threshold-96',
+  };
+  const approved = raster({
+    slot: 'ui/run/relics/congressional-approval.png',
+    blob_sha256: outputSha256,
+    width: 64,
+    height: 64,
+    native_evidence: evidence,
+  });
+  assert.equal(nativeMediaEvidenceIssue(approved), null);
+  assert.equal(preservesNativeEvidenceForUpload(approved, {
+    sha256: outputSha256,
+    mediaType: 'image/png',
+    width: 64,
+    height: 64,
+  }), true);
+  assert.match(nativeMediaEvidenceIssue({
+    ...approved,
+    slot: 'ui/run/relics/conscription-notice.png',
+  }), /restricted to its eight Run relic slots/);
+  assert.match(nativeMediaEvidenceIssue({
+    ...approved,
+    blob_sha256: replacementSha,
+  }), /does not authorize these uploaded bytes/);
+  assert.match(nativeMediaEvidenceIssue({
+    ...approved,
+    native_evidence: { ...evidence, transform: 'lanczos' },
+  }), /exact transform/);
+  assert.match(nativeMediaEvidenceIssue(raster({
+    slot: 'ui/run/relics/congressional-approval.png',
+    width: 64,
+    height: 64,
+    native_evidence: { native1x: false, spatialResampling: true },
+  })), /native1x must be true/);
 });
 
 function runRelicIcon(overrides = {}) {
