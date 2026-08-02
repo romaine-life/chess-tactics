@@ -35,6 +35,7 @@ import {
 import { runUnitStateIconUrl, type RunUnitState } from './shared/RunAbilityIcon';
 import { runCardFrameGeometryForSha } from './runCardFrameGeometry';
 import { StaticReadOnlyBoardView } from './shared/BoardViewFraming';
+import { AlphaBoundIcon } from './shared/AlphaBoundIcon';
 import {
   loadRunRelicStatistics,
   RUN_RELIC_STATISTICS_EVENT,
@@ -50,6 +51,12 @@ import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
 import { NavButton } from './shared/NavButton';
 import { ChromeButton } from './shared/ChromeButton';
 import { EnchiridionContentSceneSlot } from './shell/AuthoredSceneSlot';
+import { fetchAdminLiveMediaCatalog } from '../net/liveMediaAdmin';
+import {
+  cardTypeTextureUrls,
+  hasCompleteCardTypeTextureSet,
+  type CardTypeTextureUrls,
+} from './cardTypeTextureReview';
 
 const SECTION_LABEL: Record<EnchiridionSection, string> = {
   units: 'Units',
@@ -663,6 +670,7 @@ const CARD_TYPE_REFERENCES: readonly CardTypeReferenceDefinition[] = Object.free
 ]);
 
 const VOLUNTEER_CARD = RUN_CARD_BY_ID.p;
+const CARD_TYPE_TEXTURE_TILE_COUNT = 24;
 
 function CardTypeReference({ definition }: { definition: CardTypeReferenceDefinition }): ReactElement {
   const frameSlot = definition.frameSlot ?? RUN_CARD_FRAME_SLOT;
@@ -701,18 +709,50 @@ function CardTypeReference({ definition }: { definition: CardTypeReferenceDefini
   );
 }
 
-function CardTypesSection({ framed }: { framed: boolean }): ReactElement {
+function CardTypesSection({ framed, textureBatch }: { framed: boolean; textureBatch: string | null }): ReactElement {
   const [selectedTypeId, setSelectedTypeId] = useState('pestiferous');
+  const [loadedTextureBatch, setLoadedTextureBatch] = useState<string | null>(null);
+  const [textureUrls, setTextureUrls] = useState<CardTypeTextureUrls>({});
+  const [textureLoadFailed, setTextureLoadFailed] = useState(false);
   const selected = CARD_TYPE_REFERENCES.find((definition) => definition.id === selectedTypeId)
     ?? CARD_TYPE_REFERENCES[0];
+  const textureReviewStatus = textureBatch
+    ? loadedTextureBatch !== textureBatch
+      ? 'loading'
+      : textureLoadFailed || !hasCompleteCardTypeTextureSet(textureUrls) ? 'error' : 'ready'
+    : undefined;
+
+  useEffect(() => {
+    if (!textureBatch) return undefined;
+    let active = true;
+    void fetchAdminLiveMediaCatalog()
+      .then((catalog) => {
+        if (!active) return;
+        const nextUrls = cardTypeTextureUrls(catalog, textureBatch);
+        setTextureUrls(nextUrls);
+        setTextureLoadFailed(!hasCompleteCardTypeTextureSet(nextUrls));
+        setLoadedTextureBatch(textureBatch);
+      })
+      .catch(() => {
+        if (!active) return;
+        setTextureUrls({});
+        setTextureLoadFailed(true);
+        setLoadedTextureBatch(textureBatch);
+      });
+    return () => { active = false; };
+  }, [textureBatch]);
+
   return (
     <ReferenceSectionFrame
       chromeConsumer="enchiridion-card-types"
       className="enchiridion-card-types-panel"
       framed={framed}
-      title="Card Types"
+      title={textureBatch ? 'Card Types · PixelLab candidates' : 'Card Types'}
     >
-      <div className="enchiridion-card-type-layout">
+      <div
+        className="enchiridion-card-type-layout"
+        data-card-type-texture-review={textureReviewStatus}
+      >
         <ul className="enchiridion-card-type-rows" aria-label="Card types">
           {CARD_TYPE_REFERENCES.map((definition) => (
             <li key={definition.id}>
@@ -728,12 +768,26 @@ function CardTypesSection({ framed }: { framed: boolean }): ReactElement {
                 aria-label={`${definition.name}. ${definition.description}`}
                 aria-pressed={selected.id === definition.id}
               >
+                {textureUrls[definition.id] ? (
+                  <span
+                    aria-hidden="true"
+                    className="enchiridion-card-type-row-material"
+                    data-card-type-texture={definition.id}
+                  >
+                    {Array.from({ length: CARD_TYPE_TEXTURE_TILE_COUNT }, (_, index) => (
+                      <img
+                        alt=""
+                        draggable={false}
+                        key={index}
+                        src={textureUrls[definition.id]}
+                      />
+                    ))}
+                  </span>
+                ) : null}
                 <span className="enchiridion-card-type-row-identity">
-                  <img
+                  <AlphaBoundIcon
                     className="enchiridion-card-type-row-icon"
                     src={runCardPropertyIconUrl(definition.id)}
-                    alt=""
-                    aria-hidden="true"
                     draggable={false}
                   />
                   <span className="enchiridion-card-type-row-name">{definition.name}</span>
@@ -817,17 +871,26 @@ function AbilitiesSection({ framed }: { framed: boolean }): ReactElement {
  * whole `Enchiridion` would nest a second `enchiridion-shell` region inside the
  * Strategikon's, giving one visual pane two competing director-owned targets.
  */
-export function EnchiridionReference({ section, framed, selectedRelicId, relicHref, selectedCardId, cardHref }: {
+export function EnchiridionReference({
+  section,
+  framed,
+  selectedRelicId,
+  relicHref,
+  selectedCardId,
+  cardHref,
+  cardTypeTextureBatch = null,
+}: {
   section: EnchiridionSection;
   framed: boolean;
   selectedRelicId: RunRelicId | null;
   relicHref?: (relicId: RunRelicId) => string;
   selectedCardId: string | null;
   cardHref?: (cardId: string) => string;
+  cardTypeTextureBatch?: string | null;
 }): ReactElement {
   if (section === 'terrain') return <TerrainSection framed={framed} />;
   if (section === 'cards') return <CardCodex framed={framed} selectedCardId={selectedCardId} cardHref={cardHref} />;
-  if (section === 'card-types') return <CardTypesSection framed={framed} />;
+  if (section === 'card-types') return <CardTypesSection framed={framed} textureBatch={cardTypeTextureBatch} />;
   if (section === 'relics') return <RelicCodex framed={framed} selectedRelicId={selectedRelicId} relicHref={relicHref} />;
   if (section === 'abilities') return <AbilitiesSection framed={framed} />;
   return <UnitsSection framed={framed} />;
@@ -843,6 +906,7 @@ export function Enchiridion({
   showSectionRail = true,
   sceneInstanceKey = `enchiridion/${section}`,
   framed = true,
+  cardTypeTextureBatch = null,
 }: {
   section?: EnchiridionSection;
   sectionHref?: (section: EnchiridionSection) => string;
@@ -857,6 +921,8 @@ export function Enchiridion({
   showSectionRail?: boolean;
   sceneInstanceKey?: string;
   framed?: boolean;
+  /** Exact private PixelLab batch mounted only for an explicit Card Types review URL. */
+  cardTypeTextureBatch?: string | null;
 }): ReactElement {
   return (
     <div className={`enchiridion-workspace${showSectionRail ? ' has-section-rail' : ''}`}>
@@ -872,6 +938,7 @@ export function Enchiridion({
           relicHref={relicHref}
           selectedCardId={selectedCardId}
           cardHref={cardHref}
+          cardTypeTextureBatch={cardTypeTextureBatch}
         />
       </EnchiridionContentSceneSlot>
     </div>
