@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:b76f6273ddbbf6d6ce5097b629746e9a905d3287c207892891eb58a106d62d8b"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:e2e1703426b49289dd87b0f18fd538c0efb45536462319ead22f5e0676bf493b"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Keep shop cards opaque when they cannot be bought"
-  prNumber: "620"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/620"
-  commit: "3a91ad37"
+  prTitle: "Promote on the choice instead of parking it as a premove"
+  prNumber: "621"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/621"
+  commit: "acb71661"
 
 name: chess-tactics
 namespace: chess-tactics
