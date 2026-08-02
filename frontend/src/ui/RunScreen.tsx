@@ -125,6 +125,16 @@ function useRunAbandon(run: RunDocument): {
   return { abandonDialog: dialog, abandoning, requestAbandon };
 }
 
+/** The installed full-screen Shop scene, or null when the Shop has no scene art. */
+function useInstalledShopScene(): ReactElement | null {
+  return useMemo(() => {
+    const installed = installedRunShopWrap();
+    return installed?.kind === 'screen'
+      ? <img className="run-shop-scene-artwork" src={installed.src} alt="" draggable={false} />
+      : null;
+  }, []);
+}
+
 function RunMetaControls({
   run,
   view,
@@ -533,10 +543,7 @@ function ShopPanel({
   const pestiferousLosses = run.pestiferousLosses.filter((loss) => loss.battleIndex === shop.afterBattleIndex);
   // Painted on the workspace element so it reaches the shell padding; an inner
   // layer stops at the scroller and leaves the old backdrop showing.
-  const shopScene = useMemo(() => {
-    const installed = installedRunShopWrap();
-    return installed?.kind === 'screen' ? installed : null;
-  }, []);
+  const shopScene = useInstalledShopScene();
   return (
     <>
       {view === 'sell' ? sellWorkspace : (
@@ -545,9 +552,7 @@ function ShopPanel({
           contentClassName="run-shop-workspace-content"
           data-testid="run-shop-workspace"
           aria-labelledby="run-shop-workspace-title"
-          backgroundArtwork={shopScene ? (
-            <img className="run-shop-scene-artwork" src={shopScene.src} alt="" draggable={false} />
-          ) : null}
+          backgroundArtwork={shopScene}
         >
         {/* Always the Shop. Loot is a section that sometimes appears in it, not
             a different place, so the heading never renames the screen. */}
@@ -897,12 +902,14 @@ export function RunScreen({
     : view === 'relics'
       ? relicsWorkspace
       : null;
+  const shopScene = useInstalledShopScene();
   const sellWorkspace = shellRun ? (
     <RunSellWorkspace
       run={shellRun}
       filters={sellFilters}
       onFiltersChange={(filters) => setSellFilterState({ scope: filterScope, filters })}
       onSell={sellUnit}
+      backgroundArtwork={shopScene}
     />
   ) : null;
   // A craft request speaks for the whole screen while it runs: the Run it is about to replace must
