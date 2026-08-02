@@ -325,12 +325,16 @@ an incomplete row is an availability failure.
   from its path. Installed identity and media membership come only from the
   drawable row and its named role assignment.
 - UI kit: state/slice geometry and native roles. Run relic icons are exact
-  native 64×64 PNGs with typed `run-relic-icon` metadata; installed
+  64×64 PNGs with typed `run-relic-icon` metadata; installed
   `kind='run-relic'` drawable records, not slot filenames, bind those pixels to
   gameplay relic ids. Exact `/enchiridion/relics/<relic-id>` social unfurls use
   that drawable's immutable icon URL and native geometry together with the
   canonical relic name/effect; a missing or ambiguous targeted icon never
   substitutes the generic OG image (ADR-0261).
+  The eight closed slot/hash pairs in ADR-0332 are the sole Run relic exception
+  to native generation: their accepted evidence truthfully records the archived
+  1254×1254 source and exact nearest-neighbor 64×64 transform. They still render
+  1:1 from the accepted 64×64 output and cannot authorize different bytes.
   The Plagued unit-state icon uses the stable semantic slot
   `ui/run/card-status/plagued-v1.png`. Until that generated icon has an accepted
   live pointer, the shared card face reserves its final socket with a neutral
@@ -351,6 +355,10 @@ an incomplete row is an availability failure.
   The Run gold resource is likewise an exact native 64×64 PNG with typed
   `run-resource-icon` metadata; one installed `kind='run-resource'` drawable
   record binds `behavior.resourceId='gold'` to its `icon` media role.
+  Strategikon's command-archive background is the exact closed hash named by
+  ADR-0336. Its typed validator and owner proof record the 688×384 source plus
+  approved cover presentation, while the required `app-ui` drawable role owns
+  installed membership and normal routes resolve only its immutable URL.
 - Props, walls, backgrounds, portraits, fonts, and OG media: their declared
   component and availability contracts.
 - Structure source artwork: one drawable record owns installed membership and
@@ -404,6 +412,7 @@ exact-byte review instrument exist:
 | Board Unit Art | Unit Art Postgres catalog + private Blob | Unit Art APIs | Complete; atomic family acceptance after palette, direction, geometry, and native-pixel checks |
 | Terrain surface tops | Shared live-media catalog + private Blob | Shared single/batch APIs | Complete; database-declared groups are reviewed on the canonical board and accepted atomically |
 | Structure source-art turntables | Structure drawable catalog + shared live-media catalog/private Blob | Outside-repository batch manifest + canonical source archive client; one archived pack may supply multiple exact object-allowlisted Artwork groups | Complete; Studio validates all eight native 512×512 rasters, requires each exact direction to mount in the interactive board placement proof, records the typed owner group proof, accepts atomically, then installs the drawable record |
+| Strategikon command-archive background | `app-ui` drawable + shared live-media catalog/private Blob | Shared candidate API under the exact typed semantic slot | Complete; the live Strategikon surface records the closed ADR-0336 cover exception and exact candidate/slot proof, acceptance swaps the pointer atomically, and the drawable installs the required runtime role |
 | Authored SFX one-shots | Shared live-media catalog/private Blob + revisioned `sfx_profiles/default` | Shared candidate API under typed `sfx/<sound-set>/v<n>.<format>` slots | Complete; the SFX Viewer mounts a complete private source waveform, lets the owner trim and audition an exact range, saves an immutable hash-verified derived candidate with frame/time provenance, then exact-byte auditions, atomically accepts, and declares that set in the live profile |
 | Other terrain and generic media domains | Shared live-media catalog + private Blob | Shared single/batch APIs | Deliberately blocked until that projection has a typed completeness validator, domain-owned exact-byte review instrument, backend proof validation, and atomic acceptance/rollback tests |
 | BGM | Backend-listed private Blob container; app-owned discovery/playback routes; per-Blob user-delegation SAS | Blob administration | Range-streamed by Azure after a bounded no-store redirect; intentionally not the generic candidate lifecycle (ADR-0200) |

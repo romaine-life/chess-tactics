@@ -675,6 +675,12 @@ its final visible footprint. Nearest-neighbor scaling and
 zoom, DPR-specific exports, and declared 9-slice/tiled regions are the narrow
 compositor exceptions defined by ADR-0076.
 
+ADR-0332 adds one closed production exception: eight named Run relic slots may
+accept only their owner-approved 64×64 output hashes derived from archived
+1254×1254 sources by the recorded chroma-key, crop, nearest-neighbor fit, and
+alpha-threshold transform. Their evidence remains explicitly resampled. This
+does not authorize another hash, another relic icon, or another asset family.
+
 ## Acceptance Checks
 
 Before an asset family is wired into production routes, require:
@@ -682,6 +688,8 @@ Before an asset family is wired into production routes, require:
 - a declared canonical 1× frame, opaque subject footprint, anchor, and draw rect
 - native generation/render/export dimensions matching that contract
 - no spatial resampling in the accepted path and asset-local baseline scale `1`
+- or, only for the eight exact ADR-0332 Run relic slot/hash pairs, the validated
+  resized-production exception evidence and transform
 - a family-specific machine gate for dimensions, provenance, and any permitted
   crop/pad-only pixel identity
 - transparent runtime PNGs with no keyed background color remaining
@@ -708,7 +716,8 @@ visual accuracy faster than a production asset kit can. They should remain expli
 references or temporary composition layers, not a reason to avoid building real
 assets for reusable game systems. Likewise, a scaled candidate may remain live only
 as an explicitly labeled calibration/legacy bridge; it is not accepted production
-work until it is regenerated and passes the native-pixel gate.
+work until it is regenerated and passes the native-pixel gate, except for the
+eight exact owner-approved outputs closed by ADR-0332.
 
 The desired end state is a game made of disciplined pixel assets that matches
 the generated art's mood, palette, silhouette language, and tactical clarity.

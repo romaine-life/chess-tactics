@@ -46,6 +46,7 @@ import {
   deepestSharedSceneRegion,
   isEmptySlotDestination,
   isEmptySlotOrigin,
+  sceneLayerKey,
   sceneManifest,
 } from './shell/sceneManifest';
 import type { ScenePath } from './shell/sceneManifest';
@@ -70,6 +71,7 @@ const DrawableCatalogLab = lazy(() => import('./DrawableCatalogLab').then((modul
 const RunRelicReview = lazy(() => import('./RunRelicReview').then((module) => ({ default: module.RunRelicReview })));
 const RunShopArtReview = lazy(() => import('./RunShopArtReview').then((module) => ({ default: module.RunShopArtReview })));
 const PlaguedIconReview = lazy(() => import('./PlaguedIconReview').then((module) => ({ default: module.PlaguedIconReview })));
+const BrushIconReview = lazy(() => import('./BrushIconReview').then((module) => ({ default: module.BrushIconReview })));
 
 const SCENE_LOADING_MIN_MS = 350;
 const STARTUP_STAGE_BEAT_MS = 140;
@@ -524,7 +526,7 @@ export function App(): ReactElement {
   const sceneLayers = overlapsCompleteScenes
     ? [
         {
-          key: scene.current.leaf.key,
+          key: sceneLayerKey(scene.current),
           scene: scene.current,
           manifest: scene.current,
           search,
@@ -535,7 +537,7 @@ export function App(): ReactElement {
           visualRole: 'outgoing' as const,
         },
         {
-          key: scene.destination!.leaf.key,
+          key: sceneLayerKey(scene.destination!),
           scene: scene.destination!,
           manifest: scene.destination!,
           search: destinationSearch,
@@ -548,10 +550,12 @@ export function App(): ReactElement {
       ]
     : [
         {
-          // The destination leaf is the prepared scene instance. Preserve that exact
+          // The layer key is the prepared scene's mount identity. Preserve that exact
           // identity when entering becomes current; changing back to a root-region key
           // here would destroy and recreate the just-committed screen and its store.
-          key: mountedScene.leaf.key,
+          // A nested detail leaf shares its host's key (sceneLayerKey) so selecting a
+          // Run choice re-renders the retained action column instead of remounting it.
+          key: sceneLayerKey(mountedScene),
           scene: mountedScene,
           manifest,
           search,
@@ -651,6 +655,7 @@ function renderScene(scene: ScenePath, search: string): ReactElement {
   if (path === '/studio' && new URLSearchParams(search).get('runShopReview') === '1') return <RunShopArtReview />;
   if (path === '/studio' && new URLSearchParams(search).get('relicReview') === '1') return <RunRelicReview />;
   if (path === '/studio' && new URLSearchParams(search).get('plaguedIconReview') === '1') return <PlaguedIconReview />;
+  if (path === '/studio' && new URLSearchParams(search).get('brushIconReview') === '1') return <BrushIconReview />;
   if (path === '/studio' || path === '/tileset-studio') return <TilesetStudio />;
   if (path === '/studio/wall-candidates') return <WallCandidateReview />;
   if (path === '/studio/drawables') return <DrawableCatalogLab />;

@@ -3,6 +3,7 @@ import {
   deepestSharedSceneRegion,
   isEmptySlotDestination,
   isEmptySlotOrigin,
+  sceneLayerKey,
   sceneManifest,
 } from './sceneManifest';
 import { createRun } from '../../run/model';
@@ -163,6 +164,19 @@ describe('scene manifests', () => {
     expect(deepestSharedSceneRegion(run, next)).toBe('run-detail');
     expect(deepestSharedSceneRegion(current, next)).toBe('run-detail');
     expect(isEmptySlotOrigin(run, next)).toBe(true);
+
+    // One React mount identity across choice selection: the scene layer key ignores
+    // the nested detail leaf, so App re-renders the retained action column instead of
+    // remounting PlayMenu (a remount re-veils the painted surface — the row flicker).
+    expect(sceneLayerKey(run)).toBe('play/run');
+    expect(sceneLayerKey(current)).toBe('play/run');
+    expect(sceneLayerKey(next)).toBe('play/run');
+    // Everything outside a nested detail slot keeps its leaf identity.
+    expect(sceneLayerKey(sceneManifest('/play/select/skirmish'))).toBe('play/skirmish');
+    expect(sceneLayerKey(sceneManifest('/play/select/campaign/crown-of-valoria')))
+      .toBe('play/campaign:campaignId=crown-of-valoria');
+    expect(sceneLayerKey(sceneManifest('/settings/audio'))).toBe('settings/audio');
+    expect(sceneLayerKey(sceneManifest('/'))).toBe('main-menu');
   });
 
   it('authors every Settings panel and nested tracks view as a settings-content scene', () => {

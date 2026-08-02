@@ -37,7 +37,6 @@ describe('Run relic chess invariant', () => {
         'name',
         'description',
         'flavorText',
-        'replacementArtworkPending',
         'requires',
         'immediate',
       ].includes(key))).toBe(true);

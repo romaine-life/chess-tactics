@@ -12,7 +12,10 @@ search for before constructing a control or repeated surface.
   the component owns the semantic element, registered unit, tone, selected
   state, and pressed state. `ChromeUnitAudit` is the sole raw-markup specimen.
 - `ui/shared/ChromeBox.tsx` — inner/outer framed boxes, shell workspaces, and
-  structural chrome composition.
+  structural chrome composition. `ShellWorkspace` alone layers optional
+  decorative background artwork between its installed fill and live content;
+  callers supply installed media content, not attachment or clipping geometry
+  (ADR-0336).
 - `ui/shared/ActionList.tsx` — data-driven selectable/action rows. War battles,
   Campaign Editor levels, and Play level lists use this instead of constructing
   first/middle/last rows independently.
@@ -24,7 +27,9 @@ search for before constructing a control or repeated surface.
   owns the registered swatch button and selected state for every item.
 - `ui/shared/SettingsControls.tsx` — settings sections, settings rows, and the
   standard text action button.
-- `ui/shared/ApparatusRailTab.tsx` — menu-language navigation rail tabs.
+- `ui/shared/ApparatusRailTab.tsx` — menu-language navigation rail columns and
+  tabs. `ApparatusRailColumn` owns the main-menu column width, stack gap, and
+  framed/open perimeter; `ApparatusRailTab` owns each button.
 
 ## Studio and workflow compositions
 
