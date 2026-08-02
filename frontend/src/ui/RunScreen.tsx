@@ -830,8 +830,6 @@ function BattlePanel({
         routePath={routePath}
         routeSearch={routeSearch}
         runWorkspace={inspectionWorkspace}
-        runSelfInspectionView={view === 'army' || view === 'relics' ? view : null}
-        onNavigateRunView={onNavigate}
       />
     </>
   );
