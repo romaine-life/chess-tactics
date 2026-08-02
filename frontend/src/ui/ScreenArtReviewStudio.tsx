@@ -7,11 +7,12 @@ import {
 
 /**
  * Candidate backdrops for the full-overlay workspace screens, read straight from the
- * live-media catalog. Every plate is authored at 640x360 and displayed at exactly 4x
- * (2560x1440) with nearest-neighbour scaling, so this surface previews them at integer
- * fractions of that to keep the texels honest.
+ * live-media catalog. Shows ONE plate as large as the pane allows — these are judged on
+ * how the art reads, which a wall of thumbnails cannot answer. Screen and generator are
+ * picked in Controls, so switching sources is a single click on identical framing.
  *
- * Review only: this never accepts, installs, or substitutes artwork.
+ * Plates are authored at 640x360 and ship at 4x (2560x1440) with nearest-neighbour
+ * scaling. Review only: this never accepts, installs, or substitutes artwork.
  */
 const SCREEN_ART_SLOT = /^review\/run-screen-art\/([a-z][a-z0-9-]*)\/([a-z][a-z0-9-]*)\.png$/;
 
@@ -67,16 +68,13 @@ export function screenArtGroups(catalog: AdminLiveMediaCatalog): ScreenArtGroup[
     .sort((left, right) => left.label.localeCompare(right.label));
 }
 
-export function ScreenArtReviewStudio({
-  generator,
-  width,
-}: {
-  generator: string;
-  width: number;
-}): ReactElement {
+export function useScreenArtCatalog(): {
+  groups: ScreenArtGroup[];
+  loading: boolean;
+  error: string;
+} {
   const [catalog, setCatalog] = useState<AdminLiveMediaCatalog | null>(null);
   const [error, setError] = useState('');
-
   useEffect(() => {
     let active = true;
     void fetchAdminLiveMediaCatalog()
@@ -84,46 +82,51 @@ export function ScreenArtReviewStudio({
       .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : String(reason)); });
     return () => { active = false; };
   }, []);
-
   const groups = useMemo(() => catalog ? screenArtGroups(catalog) : [], [catalog]);
+  return { groups, loading: !catalog && !error, error };
+}
 
+export function ScreenArtReviewStudio({
+  groups,
+  loading,
+  error,
+  screen,
+  generator,
+}: {
+  groups: ScreenArtGroup[];
+  loading: boolean;
+  error: string;
+  screen: string;
+  generator: string;
+}): ReactElement {
   if (error) return <p role="alert">{error}</p>;
-  if (!catalog) return <p role="status">Loading screen-art candidates…</p>;
+  if (loading) return <p role="status">Loading screen-art candidates…</p>;
   if (!groups.length) return <p role="status">No screen-art candidates uploaded.</p>;
 
+  const group = groups.find((entry) => entry.screen === screen) ?? groups[0];
+  const candidate = group.candidates.find((entry) => entry.generator === generator)
+    ?? group.candidates[0];
+  if (!candidate) return <p role="status">No candidate for this screen.</p>;
+
+  const { version } = candidate;
   return (
-    // `tileset-studio-grid` is what the catalog shell scrolls
-    // (.tileset-studio-shell.is-catalog > .tileset-studio-grid); without it this pane is
-    // clipped at the fold with no scrollbar. Same opt-in the Pages/Asset libraries use.
-    <div className="tileset-studio-grid screen-art-review" data-testid="screen-art-review">
-      {groups.map((group) => {
-        const shown = group.candidates.filter((c) => generator === 'all' || c.generator === generator);
-        if (!shown.length) return null;
-        return (
-          <section className="screen-art-row" key={group.screen}>
-            <h3>{group.label}</h3>
-            <div className="screen-art-plates">
-              {shown.map(({ generator: source, version }) => (
-                <figure key={version.id} data-version-id={version.id} data-slot={version.slot ?? undefined}>
-                  <img
-                    src={version.media!.url}
-                    alt={`${group.label} backdrop by ${GENERATOR_LABELS[source] ?? source}`}
-                    style={{ width: `${width}px` }}
-                    draggable={false}
-                  />
-                  <figcaption>
-                    <strong>{GENERATOR_LABELS[source] ?? source}</strong>
-                    <small>
-                      {version.media!.width ?? '?'}×{version.media!.height ?? '?'} native · shows at 4× ·{' '}
-                      {version.status === 'candidate' ? 'candidate · not installed' : version.status}
-                    </small>
-                  </figcaption>
-                </figure>
-              ))}
-            </div>
-          </section>
-        );
-      })}
+    <div className="screen-art-stage" data-testid="screen-art-review" data-screen={group.screen} data-generator={candidate.generator}>
+      <img
+        key={version.id}
+        src={version.media!.url}
+        alt={`${group.label} backdrop by ${GENERATOR_LABELS[candidate.generator] ?? candidate.generator}`}
+        data-version-id={version.id}
+        data-slot={version.slot ?? undefined}
+        draggable={false}
+      />
+      <figcaption>
+        <strong>{group.label}</strong>
+        <span>{GENERATOR_LABELS[candidate.generator] ?? candidate.generator}</span>
+        <small>
+          {version.media!.width ?? '?'}×{version.media!.height ?? '?'} native · ships at 4× ·{' '}
+          {version.status === 'candidate' ? 'candidate · not installed' : version.status}
+        </small>
+      </figcaption>
     </div>
   );
 }

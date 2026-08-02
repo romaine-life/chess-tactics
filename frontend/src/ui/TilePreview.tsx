@@ -37,7 +37,7 @@ import { TileSidesViewer } from './TileSidesViewer';
 import { TILE_SIDE_ITEMS, type TileSideItem } from './tileSideCatalog';
 import { ScrollbarLibraryStudio, ScrollbarViewer } from './ScrollbarLibraryStudio';
 import { PagesLibraryStudio, PagesViewer } from './PagesLibraryStudio';
-import { ScreenArtReviewStudio } from './ScreenArtReviewStudio';
+import { ScreenArtReviewStudio, useScreenArtCatalog } from './ScreenArtReviewStudio';
 import { ChromeLabCatalog, ChromeLabViewer, CHROME_LAB_TARGETS, defaultChromeLabTargetId } from './ChromeLab';
 import { RailLab } from './RailLab';
 import { GameLabCatalog, GameLabViewer } from './GameLab';
@@ -560,8 +560,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [selectedPortraitPieces, setSelectedPortraitPieces] = useState<PortraitPiece[]>([...PORTRAIT_PIECES]);
   const [selectedPortraitMethods, setSelectedPortraitMethods] = useState<PortraitMethod[]>(PORTRAIT_METHODS.map((m) => m.key));
   const [selectedPortraitId, setSelectedPortraitId] = useState<string | undefined>(undefined);
-  const [screenArtGenerator, setScreenArtGenerator] = useState('all');
-  const [screenArtWidth, setScreenArtWidth] = useState(640);
+  const [screenArtGenerator, setScreenArtGenerator] = useState('codex');
+  const [screenArtScreen, setScreenArtScreen] = useState('');
+  const screenArt = useScreenArtCatalog();
   const [surfaceSearch, setSurfaceSearch] = useState('');
   const [scrollbarSearch, setScrollbarSearch] = useState('');
   const [selectedScrollbarName, setSelectedScrollbarName] = useState<string | undefined>(undefined);
@@ -1683,34 +1684,45 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       ),
     },
     {
-      id: 'screenart', label: 'Screen Art', hint: 'Compare candidate backdrops for the full-overlay workspace screens. Review only — nothing here is installed.',
-      main: <ScreenArtReviewStudio generator={screenArtGenerator} width={screenArtWidth} />,
+      id: 'screenart', label: 'Screen Art', hint: 'Candidate backdrops for the full-screen workspace pages, one at a time and as large as the pane allows. Review only — nothing here is installed.',
+      main: (
+        <ScreenArtReviewStudio
+          groups={screenArt.groups}
+          loading={screenArt.loading}
+          error={screenArt.error}
+          screen={screenArtScreen || screenArt.groups[0]?.screen || ''}
+          generator={screenArtGenerator}
+        />
+      ),
       controls: (
         <>
+          {/* Six screen names do not fit as side-by-side chips in the 260px rail — they
+              truncate to "Dept…"/"Vict…". A select keeps every name readable and matches
+              the Category control directly above it. */}
+          <label className="tileset-catalog-search">
+            <span>Screen</span>
+            <select
+              value={screenArtScreen || screenArt.groups[0]?.screen || ''}
+              onChange={(event) => setScreenArtScreen(event.target.value)}
+              aria-label="Choose which screen's backdrop to review"
+            >
+              {screenArt.groups.map((group) => (
+                <option key={group.screen} value={group.screen}>{group.label}</option>
+              ))}
+            </select>
+          </label>
           <div className="tileset-filter-field">
             <span>Generator</span>
             <ChoiceGroup
               value={screenArtGenerator}
               options={[
-                { value: 'all', label: 'Both' },
                 { value: 'codex', label: 'Codex' },
                 { value: 'pixellab', label: 'PixelLab' },
               ]}
               onChange={setScreenArtGenerator}
-              ariaLabel="Filter by generator"
+              ariaLabel="Choose which generator's candidate to show"
             />
           </div>
-          <label className="tileset-catalog-zoom">
-            <span>Plate width</span>
-            <input
-              type="range"
-              min="320"
-              max="1280"
-              step="160"
-              value={screenArtWidth}
-              onChange={(event) => setScreenArtWidth(Number(event.target.value))}
-            />
-          </label>
         </>
       ),
     },
