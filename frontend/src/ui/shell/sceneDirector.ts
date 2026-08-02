@@ -95,8 +95,9 @@ export function reduceScene(state: SceneState, action: SceneAction): SceneState 
         return { ...state, destination: action.destination };
       }
       // A preparing scene may canonicalize its own address after resolving durable identity
-      // (Level Editor: levelId -> opaque document). Keep the already-faded outgoing scene and
-      // retarget acquisition in place; returning to `exiting` would visibly replay backwards.
+      // (Level Editor: levelId -> opaque document; PlayMenu: hub root -> resumable Continue
+      // choice). Keep the already-faded outgoing scene and retarget acquisition in place;
+      // returning to `exiting` would visibly replay backwards.
       return {
         ...state,
         phase: state.phase === 'exiting' ? 'exiting' : 'loading',

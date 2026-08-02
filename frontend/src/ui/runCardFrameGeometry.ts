@@ -54,7 +54,9 @@ export const RUN_CARD_STANDARD_FRAME_GEOMETRY = defineGeometry({
   frameSha256: '73710874141ec1c904416860d55a0be69d4dc7f5104db7eeecbfc756ca02dfe1',
   boxes: {
     title: { x: 98.58, y: 86.072, width: 725.04, height: 92.008 },
-    cost: { x: 873.44, y: 75.684, width: 117.66, height: 106.848 },
+    // Centered on the drawn coin socket shared by the standard, pestiferous,
+    // and tactical frames (measured seat center ~(932.5, 130.5)).
+    cost: { x: 873.67, y: 77.18, width: 117.66, height: 106.848 },
     art: { x: 101.23, y: 210.728, width: 857.54, height: 598.052 },
     type: { x: 98.58, y: 863.688, width: 854.36, height: 69.006 },
     contents: { x: 102.82, y: 967.568, width: 854.36, height: 425.908 },

@@ -76,7 +76,7 @@ export const RUN_CARD_APPROVED_TUNING: RunCardFaceTuning = Object.freeze({
   typeY: 1.2,
   costSize: 6.2,
   costX: 0,
-  costY: .3,
+  costY: 0,
   flavorSize: 5,
 });
 

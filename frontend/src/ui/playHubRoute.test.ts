@@ -10,6 +10,7 @@ import {
   isPlaySelectorPath,
   playCampaignSelectorHref,
   playContinueSelectorHref,
+  playHubSectionPath,
   playHubSelection,
 } from './playHubRoute';
 
@@ -49,6 +50,26 @@ describe('Play selector routes', () => {
   it('keeps the installed bare root as the Continue canonicalization entry', () => {
     expect(playHubSelection(PLAY_SELECTOR_ROOT)).toEqual({ mode: 'hub' });
     expect(playHubSelection('/play/select/')).toEqual({ mode: 'hub' });
+  });
+
+  it('resolves every Continue-presenting address to the one Continue section', () => {
+    expect(playHubSectionPath(PLAY_SELECTOR_ROOT)).toBe(PLAY_CONTINUE_SELECTOR_HREF);
+    expect(playHubSectionPath(PLAY_CONTINUE_SELECTOR_HREF)).toBe(PLAY_CONTINUE_SELECTOR_HREF);
+    for (const choice of ['campaign', 'skirmish', 'run', 'levels'] as const) {
+      expect(playHubSectionPath(playContinueSelectorHref(choice))).toBe(PLAY_CONTINUE_SELECTOR_HREF);
+    }
+    // Malformed addresses render that same scene while PlayMenu canonicalizes them.
+    expect(playHubSectionPath('/play/select/unknown')).toBe(PLAY_CONTINUE_SELECTOR_HREF);
+  });
+
+  it('keeps every distinct selector scene on its own section address', () => {
+    expect(playHubSectionPath(PLAY_SKIRMISH_SELECTOR_HREF)).toBe(PLAY_SKIRMISH_SELECTOR_HREF);
+    expect(playHubSectionPath(PLAY_RUN_SELECTOR_HREF)).toBe(PLAY_RUN_SELECTOR_HREF);
+    expect(playHubSectionPath(PLAY_RUN_CURRENT_SELECTOR_HREF)).toBe(PLAY_RUN_CURRENT_SELECTOR_HREF);
+    expect(playHubSectionPath(PLAY_RUN_NEW_SELECTOR_HREF)).toBe(PLAY_RUN_NEW_SELECTOR_HREF);
+    expect(playHubSectionPath(PLAY_LEVELS_SELECTOR_HREF)).toBe(PLAY_LEVELS_SELECTOR_HREF);
+    const campaignHref = playCampaignSelectorHref('campaign / one');
+    expect(playHubSectionPath(campaignHref)).toBe(campaignHref);
   });
 
   it('rejects selector states that the Play rail cannot produce', () => {

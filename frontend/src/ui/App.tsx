@@ -131,6 +131,16 @@ export function App(): ReactElement {
       run: { hydrated: activeRunHydrated, document: activeRun },
     })
   ), [activeRun, activeRunHydrated]);
+  // Navigation events may fire from any React flush — a screen canonicalizing its
+  // address in a mount or hydration effect dispatches while sibling effects are
+  // still settling. The location subscription therefore stays attached for the
+  // component's lifetime and reads current values through refs: tearing it down
+  // per dependency change opens a flush-wide window (cleanup runs before child
+  // setups) where a dispatched navigation is silently lost.
+  const committedLocationRef = useRef({ path: initialPath, search: window.location.search });
+  useLayoutEffect(() => { committedLocationRef.current = { path, search }; }, [path, search]);
+  const resolveSceneRef = useRef(resolveScene);
+  useLayoutEffect(() => { resolveSceneRef.current = resolveScene; }, [resolveScene]);
   useEffect(() => {
     const locationPath = normalizeRoutePath(window.location.pathname);
     if (locationPath === '/run' || locationPath.startsWith('/run/strategikon/')) {
@@ -281,7 +291,8 @@ export function App(): ReactElement {
       const nextPath = normalizeRoutePath(window.location.pathname);
       const nextSearch = window.location.search;
       const nextHref = `${window.location.pathname}${nextSearch}${window.location.hash}`;
-      const currentHref = `${path}${search}`;
+      const committed = committedLocationRef.current;
+      const currentHref = `${committed.path}${committed.search}`;
       if (event.type === 'popstate' && nextHref !== currentHref && runAppNavigationBlockers({
         href: nextHref,
         path: nextPath,
@@ -292,12 +303,22 @@ export function App(): ReactElement {
         restoreBlockedAppLocation(currentHref);
         return;
       }
-      const destination = resolveScene(nextPath, nextSearch);
+      const destination = resolveSceneRef.current(nextPath, nextSearch);
       if (destination.id === sceneRef.current.current.id && sceneRef.current.phase === 'current') {
         setPath(nextPath);
         setSearch(nextSearch);
+        loadingMark(destination.id, 'scene-address-refreshed', { href: `${nextPath}${nextSearch}` });
         dispatchScene({ type: 'refresh-source', scene: destination });
         return;
+      }
+      const pending = sceneRef.current.destination;
+      if (pending && destination.id === pending.id && sceneRef.current.phase !== 'exiting') {
+        // In-place retarget of a preparing destination (address canonicalization).
+        // The outgoing scene is already unmounted, and exit-finished — which
+        // normally carries the destination address into `path` — has already run,
+        // so adopt the canonical address here.
+        setPath(nextPath);
+        setSearch(nextSearch);
       }
       const superseded = sceneRef.current.destination;
       if (superseded && sceneRef.current.phase !== 'current') {
@@ -339,7 +360,7 @@ export function App(): ReactElement {
       document.removeEventListener('pointerover', onIntent);
       document.removeEventListener('focusin', onIntent);
     };
-  }, [path, resolveScene, search]);
+  }, []);
 
   useEffect(() => {
     const active = scene.destination ?? scene.current;
