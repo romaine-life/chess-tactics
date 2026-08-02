@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 import { liveMediaForSlot, resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import { runCardArtSlot, runCardFlavor, runCardName } from '../run/cardNames';
 import {
+  CACOCHYMIC_DISPLAY_NAME,
   cardContentsLabel,
   PIECE_LABEL,
   type PurchasablePieceType,
@@ -47,7 +48,7 @@ export function runCardGrants(card: RunCoreCard | RunCardOffer): RunCardFaceCont
 function plaguedTargetLabel(card: RunCoreCard | RunCardOffer): string {
   if (!isCardOffer(card) || card.plaguedPieceIndex === null) return '';
   const target = card.pieces[card.plaguedPieceIndex];
-  return target ? ` Plagued ${target}.` : '';
+  return target ? ` ${CACOCHYMIC_DISPLAY_NAME} ${target}.` : '';
 }
 
 export function concinnousTargetLabel(card: RunCardOffer): string {

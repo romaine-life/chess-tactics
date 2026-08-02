@@ -5,6 +5,7 @@ deciders: owner (Nelson) + Codex
 partially_superseded_by:
   - "[ADR-0269](0269-every-pestiferous-card-deteriorates-at-one-eighth-prevalence.md)"
   - "[ADR-0311](0311-pestiferous-cards-reveal-one-plagued-unit-at-a-time.md)"
+  - "[ADR-0341](0341-cacochymic-replaces-plagued-as-the-pestiferous-unit-state-name.md)'s Cacochymic unit-state name"
 partially_supersedes:
   - "[ADR-0193](0193-runs-are-persistent-wars-around-unchanged-chess-battles.md)'s exclusive permanent-unit-removal rule"
 ---

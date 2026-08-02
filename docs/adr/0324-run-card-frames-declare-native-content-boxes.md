@@ -8,6 +8,8 @@ extends:
   - "[ADR-0285](0285-run-card-type-lines-use-one-optically-centered-baseline.md)"
   - "[ADR-0309](0309-concinnous-names-the-white-positioned-card-qualifier.md)"
   - "[ADR-0314](0314-run-card-presentations-promote-atomically.md)"
+partially_superseded_by:
+  - "[ADR-0339](0339-run-card-properties-and-unit-states-use-paired-icons.md)'s reassignment of the measured steel geometry from Concinnous to Hieratic"
 ---
 
 # ADR-0324: Run card frames declare native content boxes

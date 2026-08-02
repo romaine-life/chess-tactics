@@ -211,8 +211,8 @@ function buildCss(config: DressingConfig, base: Record<RegionId, GeomBase>): str
   return blocks.join('\n');
 }
 
-// `header` (optional) is the Studio Viewer's kind-selector strip, injected when this is mounted as
-// the Settings page's viewer (Pages catalog) so it matches the sibling page viewers.
+// `header` (optional) carries Studio-wide preview controls when this is mounted as the Settings
+// page's Viewer (Pages catalog), so it matches the sibling page viewers.
 export function SurfaceDressingRoom({ seed, header, zoom = 1 }: { seed?: string; header?: ReactNode; zoom?: number }): ReactElement {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   // Full-size, scrollable preview scaled by the Viewer zoom: /settings centres its body under a

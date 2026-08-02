@@ -4106,7 +4106,7 @@ async function main() {
     invalidPlaguedTarget.statusCode !== 400
     || JSON.parse(invalidPlaguedTarget.body).error !== 'invalid_active_run'
   ) {
-    throw new Error(`Active Run should reject a missing Plagued target: ${invalidPlaguedTarget.statusCode} ${invalidPlaguedTarget.body}`);
+    throw new Error(`Active Run should reject a missing Cacochymic target: ${invalidPlaguedTarget.statusCode} ${invalidPlaguedTarget.body}`);
   }
   const missingRunRevision = await request(
     'PUT', '/api/active-run',

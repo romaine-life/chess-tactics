@@ -5,6 +5,8 @@ export function RunWorkspace({
   className = '',
   contentClassName = '',
   edgeAttached = false,
+  // The shell's registered slot for workspace artwork; it spans the whole
+  // workspace box, including padding an inner layer cannot reach.
   backgroundArtwork = null,
   children,
   ...props
@@ -19,8 +21,8 @@ export function RunWorkspace({
         {...props}
         className="run-shell-workspace"
         bodyClassName={`run-shell-workspace-content ${contentClassName}`.trim()}
-        edgeAttached={edgeAttached}
         backgroundArtwork={backgroundArtwork}
+        edgeAttached={edgeAttached}
       >
         {children}
       </ShellWorkspace>

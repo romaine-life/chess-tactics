@@ -114,8 +114,7 @@ function findArtwork(library: StudioArtworkLibrary, id: string): { group: Studio
 // The Artwork viewer surface — one big contained preview of the selected piece on a
 // checker stage, plus a metadata readout (group, dimensions, served path). Renders
 // [main][aside] straight into the shell so the frame matches every other mode. The
-// `header` slot carries the Viewer's Asset|Artwork kind selector (the Viewer's tier
-// control), supplied by the host so both Viewer surfaces share one selector.
+// `header` slot carries shared preview controls supplied by the Studio host.
 function runtimeValue(value: unknown): string {
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value);
   return JSON.stringify(value);

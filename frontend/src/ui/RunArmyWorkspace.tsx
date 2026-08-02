@@ -2,6 +2,8 @@ import { useLayoutEffect, useMemo, useRef, type ReactElement, type ReactNode } f
 import { defaultBackgroundSet } from '../art/backgroundSets';
 import { defaultFacingForSide, paletteForSide, pieceSpritePath } from '../core/pieces';
 import {
+  AGMINATE_DISPLAY_NAME,
+  CACOCHYMIC_DISPLAY_NAME,
   GOLD_SCALE,
   PIECE_LABEL,
   PIECE_VALUE,
@@ -102,7 +104,7 @@ function deploymentAbilityTrait(
   unit: RunArmyUnit,
   ability: Extract<RunAbility, 'positioned' | 'marshalled'>,
 ): RunUnitTrait | null {
-  const label = ability === 'positioned' ? 'Positioned' : 'Marshalled';
+  const label = ability === 'positioned' ? 'Positioned' : AGMINATE_DISPLAY_NAME;
   const iconClass = runAbilityIconClass(ability);
   if (unit.abilities.includes(ability)) {
     return {
@@ -125,7 +127,7 @@ export function runUnitTraits(run: RunDocument, unit: RunArmyUnit): RunUnitTrait
   if (unit.modifiers.includes('plagued')) {
     traits.push({
       id: 'plagued',
-      label: 'Plagued',
+      label: CACOCHYMIC_DISPLAY_NAME,
       description: 'Will be permanently lost after the next victorious Battle.',
       source: 'The Great Mortality',
       inherited: false,
@@ -344,8 +346,8 @@ function RunRosterFilters({
             { value: 'all', label: 'All abilities' },
             { value: 'discipline', label: 'Discipline' },
             { value: 'positioned', label: 'Positioned' },
-            { value: 'marshalled', label: 'Marshalled' },
-            { value: 'plagued', label: 'Plagued' },
+            { value: 'marshalled', label: AGMINATE_DISPLAY_NAME },
+            { value: 'plagued', label: CACOCHYMIC_DISPLAY_NAME },
             { value: 'royal-tent', label: 'Royal Tent' },
             { value: 'pawn-cash-out', label: 'Cash Out' },
           ]}

@@ -5,6 +5,7 @@ import {
   type AdminLiveMediaVersion,
 } from '../net/liveMediaAdmin';
 import { defaultBackgroundSet } from '../art/backgroundSets';
+import { CACOCHYMIC_DISPLAY_NAME } from '../run/model';
 import { InnerChromeBox, OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
 import { useSceneParticipant } from './shell/SceneBoundary';
 
@@ -45,7 +46,7 @@ function optionLabel(version: AdminLiveMediaVersion): string {
 }
 
 function conceptLabel(version: AdminLiveMediaVersion): string {
-  return typeof version.metadata.concept === 'string' ? version.metadata.concept : 'Plagued condition';
+  return typeof version.metadata.concept === 'string' ? version.metadata.concept : `${CACOCHYMIC_DISPLAY_NAME} condition`;
 }
 
 export function PlaguedIconReview(): ReactElement {
@@ -71,7 +72,7 @@ export function PlaguedIconReview(): ReactElement {
       style={{ ['--skirmish-world-bg' as string]: `url("${defaultBackgroundSet().world}")` }}
     >
       <OuterChromeBox chromeConsumer="plagued-icon-review" titled className="run-relic-review-panel plagued-icon-review-panel">
-        <OuterChromeHeader title="Plagued Ability Icon Review" />
+        <OuterChromeHeader title={`${CACOCHYMIC_DISPLAY_NAME} Ability Icon Review`} />
         <p>
           {selectionsInstalled
             ? 'The owner-selected PixelLab icons are installed in their distinct Enchiridion seats.'
@@ -88,7 +89,7 @@ export function PlaguedIconReview(): ReactElement {
                   <InnerChromeBox className="enchiridion-ability-card" data-version-id={selectedPlagued.id}>
                     <img src={selectedPlagued.media!.url} width="34" height="34" alt="" draggable={false} />
                     <span>
-                      <h3>Plagued</h3>
+                      <h3>{CACOCHYMIC_DISPLAY_NAME}</h3>
                       <small>Unit Ability · Option 03</small>
                     </span>
                   </InnerChromeBox>
@@ -120,7 +121,7 @@ export function PlaguedIconReview(): ReactElement {
                       >
                         <img src={version.media!.url} width="34" height="34" alt="" draggable={false} />
                         <span>
-                          <h3>Plagued</h3>
+                          <h3>{CACOCHYMIC_DISPLAY_NAME}</h3>
                           <small>{optionLabel(version)}</small>
                         </span>
                       </InnerChromeBox>

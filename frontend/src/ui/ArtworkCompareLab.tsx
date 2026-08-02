@@ -3,8 +3,8 @@ import { drawableAssets } from '@chess-tactics/board-render';
 
 // Art-vs-live fidelity compare as an embedded Studio Viewer kind (ADR-0058; supersedes the
 // standalone-route decision of ADR-0005). Two comparison stages in `.al-lab-main`; both source
-// pickers + the speculative-CSS editors in the one `.tileset-view-controls` panel; workspace tabs
-// + kind selector in the `header` slot. Reached from the Pages catalog's "Compare to art"
+// pickers + the speculative-CSS editors in the one `.tileset-view-controls` panel; shared preview
+// controls arrive through the `header` slot. Reached from the Pages catalog's "Compare to art"
 // affordance. Each pane picks an option that is an ACCEPTED ART image (`art:<id>`), a LIVE app
 // route in a same-origin iframe (`live:<route>`), or an arbitrary asset (`img:<url>`); for live
 // panes you can type speculative CSS injected into the iframe (a proposed change shown live,

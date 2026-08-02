@@ -6,39 +6,36 @@ this shape rather than inventing their own. This is the spec; the UI must match 
 
 ## Intent (the why everything else serves)
 
-The studio is a **continuous, direct-manipulation workspace**, not a set of
-screens you toggle. A **surface** is the persistent thing you work on (the board).
-**Focus** is what you're currently attending to within that surface — and the
-**controls follow your focus**, they come to *you*. Clicking a tile on the board
-focuses you on tiles and brings up the tile controls; the board never goes away.
-You never jump between disjoint views:
+Studio has two in-place states with different jobs:
 
-> **Navigation (mode → surface) decides *where you are*. Focus and its controls
-> flow from *what you touch* there.**
+- **Catalog** is the one cross-kind directory. It browses categories, selects an
+  item or instrument, and owns the Open/Inspect affordance that enters it.
+- **Viewer** is the focused destination for the one thing Catalog opened. A
+  Viewer may be a live read-only specimen or an owner-operated definition and
+  tuning instrument. In either case, its stage and rail stay about that one
+  Viewer; it is not another catalog.
 
-So "does picking a focus change the view or the controls?" is the wrong question —
-the surface stays put, and the controls are simply what follows focus. Every rule
-below serves this: one Controls panel that reflows to your focus, a persistent
-surface, and no sub-headers or mode-jumps to break the continuity.
+Board authoring belongs to the canonical Level Editor. The **Lab** affordance in
+Studio's title bar navigates there; Lab is no longer a third in-place Studio
+state. Place/Use actions may also open the Level Editor with the selected brush,
+while Inspect/Edit actions enter the relevant Viewer.
 
-**Not everything is manipulated.** Some catalog categories hold *finished,
-read-only* things — UI-kit assets, authored artwork — that you inspect but never
-edit. They have no workbench, so they don't belong in the Lab. They get the
-**Viewer**: a read-only destination that shows one item big, with a Details
-readout instead of a Controls cascade. The Lab is for things you *change*; the
-Viewer is for things you *look at and test but don't edit* — read-only means
-non-editable, not lifeless: the Viewer stage presents the asset at **optimal
-interactivity** (you scroll a real scrollbar; a surface tiles in context), never a
-dead still image. (This corrects an earlier draft that
-called the asset stage a "surface you work on" and parked it in the Lab — assets
-fail the direct-manipulation test exactly as artwork does.)
+> **Catalog chooses the destination. Viewer operates or inspects it. The
+> Controls rail follows the current destination instead of repeating global
+> navigation.**
+
+The typed `viewerKind` registry remains the route and state identity behind each
+Viewer. It is not a visible directory. Existing deep links and contextual
+transitions between directly related Viewers remain addressable without putting
+every unrelated kind in every control rail.
 
 ## Stability — the frame never moves
 
 The topbar, the Controls panel, and the main pane are **fixed structural
-regions**. Switching mode / category / surface / focus changes what is *inside*
-those regions — never their position, size, or whether they exist. The
-"Controls" heading sits at the **same place** in Catalog and in Lab. Nothing
+regions**. Switching between Catalog and Viewer, changing category, or changing
+Viewer focus changes what is *inside* those regions — never their position,
+size, or whether they exist. The "Controls" heading sits at the **same place**
+in Catalog and every Viewer. Nothing
 slides down; nothing appears in one mode that displaces what's below it in
 another. The cascade reflows the *contents* of the Controls panel **in place**;
 the panel itself is anchored.
@@ -49,31 +46,22 @@ clearest tell of an amateur UI. A serious instrument holds still: you operate it
 it does not rearrange itself under you. **If the layout jumps when you change
 modes, it is wrong**, no matter how correct the contents are.
 
-## Layout — the same in every mode
+## Layout — the same in every Studio state
 
-- **Topbar:** brand · **breadcrumb** (where you are) · the **mode** toggle. The mode
-  toggle is a typed contribution to the persistent title bar's one control lane,
+- **Topbar:** brand · **breadcrumb** (where you are) · the **workspace**
+  controls. They are a typed contribution to the persistent title bar's one control lane,
   before its structural divider and invariant controls — so it costs the Controls
   panel no vertical space and cannot choose its own placement.
-- The mode toggle is **three fixed icon tabs** — **open book** (Catalog) ·
-  **beaker** (Lab) · **magnifier** (Viewer). They are **persistent destinations**,
-  always present and always live — never disabled, never reordered. They are **decoupled from the category**: the
-  category only governs what the Catalog shows; Lab and Viewer are standing
-  workspaces you can jump to at any time. Each tab **remembers its own last
-  state** (the Lab keeps its board; the Viewer keeps the last item it opened), so
-  a tab is always a safe place to land — clicking it shows the sensible last/default
-  thing, it never says "you can't do that here."
-- **One right-hand panel** (fixed width), headed **Controls** in every mode. It
-  is the cascading control unit: in Catalog its tier selector is the category;
-  in Lab, the Board/Tile/Unit focus; in the Viewer, the **kind** selector
-  (Asset, Artwork, Source Art, Portrait, 9-Slice, …). Asset/Artwork are read-only
-  (a Details readout); **Source Art**, **Unit Art**, **Portrait**, and
-  **9-Slice** are embedded editing kinds — structure-source group review,
-  board-unit art/size editing, unit-portrait crop editing, and kit 9-slice frame
-  editing — reached from their catalog's Inspect/Edit affordance, never hosted
-  in Catalog and never given a separate layout. The heading and panel never
-  move.
-- **Main pane:** content only. The catalog grid, the lab surface, or the Viewer
+- The workspace controls are three fixed icon affordances — **open book**
+  (Catalog) · **beaker** (Lab) · **magnifier** (Viewer). They are always present,
+  live, and never reordered. Catalog and Viewer switch the in-place Studio state
+  and remember their last state. Lab navigates to the canonical Level Editor.
+- **One right-hand panel** (fixed width), headed **Controls** in Catalog and
+  every Viewer. In Catalog its first control is the category selector. In a
+  Viewer it contains only shared preview controls, when applicable, followed by
+  controls or details owned by that Viewer. It never contains a global
+  Viewer-kind or Catalog-category selector.
+- **Main pane:** content only. It holds the catalog grid or the current Viewer
   stage.
 - **No sub-headers, no per-pane titles, no "Back" button.** The breadcrumb
   conveys location; the Catalog tab *is* back. A sub-header is always a bug here.
@@ -81,15 +69,15 @@ modes, it is wrong**, no matter how correct the contents are.
 ## The control system is a namespaced cascade
 
 Every control is **owned by exactly one node** in the tree below. The Controls
-panel renders only the controls along the **active path**. Nothing is a sibling
-of the mode toggle except itself, so no control can leak or duplicate across
-modes. Depth varies per branch — that's fine; namespacing, not symmetry, is the
-rule.
+panel renders only the controls along the **active path**. Cross-kind navigation
+belongs to Catalog, and Viewer controls belong to the active Viewer, so neither
+can leak or duplicate into the other state.
 
 ```
-mode  (Catalog · Lab · Viewer)                 ← topbar · tier-1 · 3 persistent tabs
-│                                                 (always present, decoupled from category)
-├─ Catalog
+workspace controls (Catalog · Lab · Viewer)    ← topbar · always present
+│                                                Catalog/Viewer switch in place;
+│                                                Lab navigates to Level Editor
+├─ Catalog                                      ← cross-kind directory
 │   └─ category (Tiles | Units | Assets | Artwork | Source Art)  ← tier-2 · top of Controls
 │       ├─ Tiles   → search · family/collection filters · zoom
 │       ├─ Units   → search
@@ -97,62 +85,44 @@ mode  (Catalog · Lab · Viewer)                 ← topbar · tier-1 · 3 persi
 │       ├─ Artwork → search · zoom
 │       └─ Source Art → search · zoom · View Selected
 │
-├─ Lab   (the board workbench — holds its last board)
-│   └─ surface (Board)                         ← the only workbench
-│       └─ focus (Board | Tile | Unit)         ← tier-3 · each focus = a control set
-│           ├─ Board focus → board-level controls (tools, layers, zoom)
-│           ├─ Tile focus  → tile controls (brush, picker, …)
-│           └─ Unit focus  → unit controls (brush, facing, …)
-│
-└─ Viewer  (single-item stage — holds the last item it opened)
-    └─ kind (Asset | Artwork | Source Art | Unit Art | Portrait | 9-Slice | …)  ← tier-2 · top of Controls
+└─ Viewer                                       ← one focused destination
+    └─ current viewerKind (route/state identity; no global selector)
         ├─ Asset    → preview-in-context stage + gate/provenance details (read-only)
         ├─ Artwork  → full-art preview stage + group/size/path details (read-only)
-        ├─ Source Art → interactive board placement/scale/eight-way candidate review + atomic install
+        ├─ Source Art → placement/scale/eight-way candidate review + atomic install
         ├─ Unit Art → board-context unit art/size editor (live publish + candidates)
         ├─ Portrait → embedded unit-portrait crop editor (pan/zoom, per-piece)
-        └─ 9-Slice  → embedded kit 9-slice frame editor (nudge/align, dev-save)
+        ├─ 9-Slice  → embedded kit 9-slice frame editor (nudge/align, dev-save)
+        └─ Card Icon Fitting → paired icon selection and placement draft
 
-"View Selected" in the Catalog routes BY ITEM TYPE — a tile/unit opens in the Lab,
-an asset/artwork opens in the Viewer. The tabs themselves never route by type;
-they are standing destinations.
+Open/Inspect in Catalog enters a Viewer by item type. Place/Use opens the Level
+Editor where applicable. The title-bar Catalog affordance returns to the one
+cross-kind directory.
 ```
 
 ## The concepts, named
 
-- **Mode** — the tier-1 destination, in the topbar. Three exist and **all three
-  show as fixed tabs**: **Catalog** (browse many), **Lab** (work on the board),
-  **Viewer** (look at one finished thing, read-only). They are persistent
-  workspaces, decoupled from the category — each remembers its last state, so any
-  tab is always a valid place to land.
+- **Studio state** — one of the two in-place destinations: **Catalog** (browse
+  many) or **Viewer** (inspect or operate one). Each remembers its last state.
+- **Lab affordance** — the fixed title-bar navigation to the canonical Level
+  Editor. It is not an in-place Studio state.
 - **Category** — the *kind of thing* you're browsing in Catalog (Tiles, Units,
   Assets, Artwork, Source Art). It governs **only the Catalog grid**. It does
-  *not* gate the tabs. What it does decide is where **"View Selected" sends a
-  chosen item**: a tile/unit lands in the Lab (you place it), while an asset,
-  artwork, or source-art group lands in the Viewer.
-- **Surface** — the *workbench* in the Lab. There is one: the **Board** (tiles and
-  units are placed on it). Surfaces group by workbench, **not by category** — and
-  read-only categories have no workbench, so they have no surface.
-- **Focus** — *within a surface*, a set of controls scoped to one thing. The Board
-  surface has three focuses — **Board / Tile / Unit** — each its own control set
-  on the same board. They are **not** surfaces and **not** separate views; they
-  are control sets that share the surface.
-- **Viewer** — the single-item destination for finished things with no board
-  workbench. Its panel carries one tier selector — the **kind** (Asset, Artwork,
-  Source Art, Portrait, 9-Slice, …). Asset and Artwork are read-only (a Details
-  readout); **Source Art**, **Unit Art**, **Portrait**, and **9-Slice** are
-  embedded editing kinds — structure-source group review and installation, unit
-  art and size, unit-portrait crops, and kit frame calibration. This is light,
-  single-item definition work rather than board authoring, so it lives here
-  instead of in the Lab. Source Art still uses the shared game board inside the
-  Viewer to prove each candidate's real placement, scale, and eight-way
-  direction before atomic acceptance under
+  not gate Viewer routes. Its Open/Inspect action chooses the Viewer destination;
+  its Place/Use action may instead open the Level Editor.
+- **Viewer kind** — the typed route/state identity for a focused Viewer. It is
+  selected by Catalog, a deep link, or a contextual transition from a directly
+  related Viewer; it is not exposed as a global selector. Asset and Artwork are
+  read-only; **Source Art**, **Unit Art**, **Portrait**, **9-Slice**, and other
+  owner instruments are embedded editing kinds. This is single-item definition
+  work rather than board authoring. Source Art still uses the shared game board
+  inside the Viewer to prove each candidate's real placement, scale, and
+  eight-way direction before atomic acceptance under
   [ADR-0173](adr/0173-structure-source-art-turntables-are-complete-source-only-live-groups.md).
-  A placeable item's **Use** action still opens the Lab/Level Editor; its
+  A placeable item's **Use** action opens the Level Editor; its
   **Inspect/Edit** action may open its embedded Viewer editor. The Catalog
-  itself remains browse-only. These editors switch the Viewer kind in place and
-  are **never** separate routes or pages; legacy deep links only enter this
-  Viewer state.
+  itself remains browse-only. Viewers are **never** separate layouts or pages;
+  legacy deep links only enter the corresponding Viewer state.
 
 ## Editable board input
 
@@ -477,9 +447,9 @@ the surface it serves, it's wrong.
 ## Adding to the studio
 
 A new thing (e.g. portraits) is: a new **category** in Catalog, plus its
-non-catalog destination — a **Lab surface** with focuses **if it's
-board-placeable**, or nothing extra **if it's read-only** (it inherits the
-shared **Viewer** for free). It inherits the topbar, breadcrumb, right panel, and
+non-catalog destination: a registered **Viewer kind** for inspection or
+single-item operation, and/or a Place/Use action into the canonical Level Editor
+when it is board-placeable. It inherits the topbar, breadcrumb, right panel, and
 content-only main automatically. If adding it requires a new layout, the
 architecture (not the new thing) is wrong.
 
@@ -497,14 +467,13 @@ category cannot ship missing from the selector. If you find yourself writing
 `category === '…'` in the catalog controls, that's the regression this registry
 exists to prevent.
 
-A **read-only** category needs nothing in the Lab: it sets no surface, and its
-catalog "View Selected" calls `openViewer(kind)` — it sets the Viewer's `viewerKind`
-and enters `studioMode === 'viewer'`. The Viewer's read-only Details panel is shared
-across all read-only categories, and it renders by **`viewerKind`, not the catalog
-category** — that's what makes the Viewer tab a standing destination you can reach
-even while browsing Tiles. Each read-only kind owns its **own** selection state
-(`selectedAssetName` vs `selectedArtworkName`) — never one shared field, or a stale
-id from one leaks into the other's stage.
+A category's Open/Inspect action calls `openViewer(kind)` — it sets the typed
+`viewerKind` and enters `studioMode === 'viewer'`. The route registry selects the
+Viewer implementation; it is not rendered as another selector in the rail. Each
+kind owns its **own** selection state (`selectedAssetName` vs
+`selectedArtworkName`) — never one shared field, or a stale id from one leaks
+into the other's stage. Read-only Viewers provide live Details; operated Viewers
+provide only their shared preview controls and local instrument controls.
 
 ## Sound Effects candidate editing
 
