@@ -16,16 +16,12 @@ function useTooltipPosition<T extends HTMLElement>() {
   const hovered = useRef(false);
 
   const show = useCallback(() => {
-    const trigger = ref.current;
-    const r = trigger?.getBoundingClientRect();
-    if (!trigger || !r) return;
-    // Below the trigger, clamped so a wide tip never runs off the viewport. A
-    // trigger inside the persistent title bar clears the whole bar instead: the
-    // bar is taller than the mark it frames and paints over anything under it,
-    // so "below the trigger" would put the tip's first line behind the chrome.
-    const bar = trigger.closest('.app-shell-titlebar');
-    const below = (bar ?? trigger).getBoundingClientRect().bottom + 6;
-    setPos({ left: Math.max(8, Math.min(r.left, window.innerWidth - 300)), top: below });
+    const r = ref.current?.getBoundingClientRect();
+    if (!r) return;
+    // Below the trigger, clamped so a wide tip never runs off the viewport. Every
+    // trigger measures the same way, including one in the persistent title bar: a
+    // tip sits the same distance from the thing it explains wherever that thing is.
+    setPos({ left: Math.max(8, Math.min(r.left, window.innerWidth - 300)), top: r.bottom + 6 });
   }, []);
   const hide = useCallback(() => setPos(null), []);
   const onMouseEnter = useCallback(() => {

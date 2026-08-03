@@ -112,10 +112,18 @@ and both are general:
   units only paint inside a chrome-family scope, and a popup that escapes to
   `<body>` — as any title-bar tooltip must, the bar living outside every screen's
   `<main>` — was rendering as unframed floating text.
-- A trigger inside the persistent title bar anchors its popup below the WHOLE BAR
-  rather than below itself. The bar is taller than the mark it frames and paints
-  over what sits under it, so "below the trigger" put the tip's first line behind
-  the chrome.
+- A portalled overlay is excluded from the title bar's `position: relative`
+  stacking rule. The bar makes every grid child relative; a tooltip re-homed into
+  the header to reach the chrome scope is not one of those, and being forced
+  relative dropped it at its flow position instead of beside its mark. Every
+  trigger now measures the same way, so a tip sits the same distance from the
+  thing it explains wherever that thing is.
+- The pop beds on an installed opaque surface under the role's tint. The role's
+  fill alone is translucent — right on a panel that has a surface behind it, wrong
+  for chrome floating over live artwork, where the backdrop tinted the type and
+  made one tooltip treatment read as two.
+- The pop's body is always an element. Callers pass a plain string, and a bare
+  text node cannot be lifted above the tip's own fills.
 
 **A seat is reserved before its icon decision exists.** `installedUiMediaIfPresent`
 returns null instead of failing closed, and the seat keeps its geometry, so
