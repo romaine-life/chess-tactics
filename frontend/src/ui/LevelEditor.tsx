@@ -9892,18 +9892,21 @@ export function LevelEditor(): ReactElement {
               <h2 className="le-card-subhead">Sections</h2>
               <p className="le-board-note">Each section takes a share of the town and brings its own buildings and its own size range — a row of large houses and a quarter of small ones are two sections of one town, not two towns.</p>
               {selectedTown.sections.map((section, index) => (
-                <div className="le-town-section" key={section.id}>
-                  <div className="le-ctrlrow">
-                    <span className="le-ctrllabel">Section {index + 1}</span>
+                <div className="le-town-section le-gen-region-group" key={section.id}>
+                  <div className="le-ctrlrow le-town-section-head">
+                    <h2 className="le-card-subhead le-town-section-title">Section {index + 1}</h2>
                     {selectedTown.sections.length > 1 ? (
-                      <ChromeButton unit="inner-text-button"
-                        className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                      <ChromeButton unit="inner-tool-square"
+                        className={chromeUnitClassNames('inner-tool-square', 'le-gen-icon', 'danger')}
                         onClick={() => updateTown(selectedTown.id, {
                           sections: selectedTown.sections.filter((entry) => entry.id !== section.id),
                         })}
-                      >Remove</ChromeButton>
+                        title={`Remove section ${index + 1}`}
+                        aria-label={`Remove section ${index + 1}`}
+                      >×</ChromeButton>
                     ) : null}
                   </div>
+                  <span className="le-pal-grouplabel">Buildings</span>
                   {/* Buildings are entries you add, exactly like the Generate panel's cover sets:
                       each names itself in a dropdown and carries its own weight. A swatch grid
                       hid which buildings were in, because the only signal was a selected border. */}
@@ -10005,7 +10008,10 @@ export function LevelEditor(): ReactElement {
                       </div>
                     ) : null}
                   </div>
-                  <SliderRow label={`Share · ${section.share.toFixed(1)}`} value={section.share} set={(value) => updateTownSection(selectedTown.id, section.id, { share: value })} min={0} max={5} step={0.1} nudge={0.1} dflt={1} />
+                  {/* These belong to the SECTION, not to a building. Without a label of their own
+                      they read as more knobs on the last building entry. */}
+                  <span className="le-pal-grouplabel">This section</span>
+                  <SliderRow label={`Share of the town · ${section.share.toFixed(1)}`} value={section.share} set={(value) => updateTownSection(selectedTown.id, section.id, { share: value })} min={0} max={5} step={0.1} nudge={0.1} dflt={1} />
                   <SliderRow label={`Average building · ${section.scaleMean.toFixed(2)}×`} value={section.scaleMean} set={(value) => updateTownSection(selectedTown.id, section.id, { scaleMean: value })} min={0.3} max={2.5} step={0.05} nudge={0.05} dflt={1} />
                   <SliderRow label={`Smallest · ${section.scaleMin.toFixed(2)}×`} value={section.scaleMin} set={(value) => updateTownSection(selectedTown.id, section.id, { scaleMin: value })} min={0.2} max={2.5} step={0.05} nudge={0.05} dflt={0.75} />
                   <SliderRow label={`Largest · ${section.scaleMax.toFixed(2)}×`} value={section.scaleMax} set={(value) => updateTownSection(selectedTown.id, section.id, { scaleMax: value })} min={0.2} max={3} step={0.05} nudge={0.05} dflt={1.35} />

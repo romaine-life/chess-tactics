@@ -6843,6 +6843,22 @@ body.loading-bootstrap .app-startup-status {
   margin: 2px 0 4px 16px;
 }
 /* An entry showing its own art: thumbnail beside the name, so you choose by sight. */
+/* One section of a town: its own block, separated from the next, with its buildings indented
+   under it by the shared entry-list rail. Layout only — no surface paint. */
+.le-town-section {
+  margin: 10px 0 2px;
+}
+.le-town-section + .le-town-section {
+  margin-top: 16px;
+}
+.le-town-section-head {
+  align-items: baseline;
+}
+.le-town-section-title {
+  flex: 1 1 auto;
+  margin: 0;
+}
+
 .le-town-building-pick {
   flex: 1 1 auto;
   min-width: 0;
