@@ -96,17 +96,30 @@ export function runAbilityDisplayName(ability: RunAbility): string {
  */
 export function runAbilityDescription(ability: RunAbility, unit: RunArmyPieceType): string {
   if (ability === 'discipline') {
-    return 'May be deliberately placed in the player zone before random deployment.';
+    return runAbilityGeneralDescription('discipline');
   }
   if (ability === 'positioned') {
     if (unit === 'pawn') return 'Prefers the front row during automatic deployment.';
     if (unit === 'rook') return 'Prefers an outer back-row square during automatic deployment.';
     if (unit === 'bishop' || unit === 'king') return 'Prefers the back row during automatic deployment.';
-    return 'Prefers its piece-specific region during automatic deployment.';
+    return runAbilityGeneralDescription('positioned');
   }
   if (unit === 'king') return 'Prefers a board-edge square in the player placement zone.';
   if (unit === 'rook') return 'Prefers the established King-flank and corner formation.';
   if (unit === 'bishop') return 'Prefers a square color opposite another Bishop when possible.';
+  return runAbilityGeneralDescription('marshalled');
+}
+
+/**
+ * The same rule with no unit in hand — what the keyword means before it is attached to a
+ * piece (ADR-0370). `runAbilityDescription` states the piece-specific case and falls back
+ * to this one, so the glossary and the per-unit tip cannot drift apart.
+ */
+export function runAbilityGeneralDescription(ability: RunAbility): string {
+  if (ability === 'discipline') {
+    return 'May be deliberately placed in the player zone before random deployment.';
+  }
+  if (ability === 'positioned') return 'Prefers its piece-specific region during automatic deployment.';
   return 'Prefers its piece-specific station during automatic deployment.';
 }
 

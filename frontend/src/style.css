@@ -22347,7 +22347,16 @@ button.tileset-relationship-cell {
 .infotip-dot:focus-visible { outline: 2px solid rgba(101, 184, 255, .72); outline-offset: 2px; }
 .tooltip { position: relative; display: inline-flex; }
 .tooltip-trigger { display: inline-flex; }
+/* The positioner holds the tip AND a definition pop for every mechanic the tip names
+   (ADR-0370), so it is a column, not a single slot. `align-items: stretch` squares the
+   stack to its widest pane: ragged pane widths read as unrelated popups rather than one
+   explanation. The gap is the pop's own inner gap, so the distance BETWEEN panes matches
+   the distance between a pane's parts. */
 .tooltip-pop-positioner {
+  align-items: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
   inline-size: max-content;
   pointer-events: none;
   position: fixed;
@@ -22406,6 +22415,20 @@ button.tileset-relationship-cell {
   color: #9fe7ff;
   font: var(--ds-weight-regular) var(--ds-text-lg)/1.15 var(--ds-font-display);
   letter-spacing: var(--ds-tracking-tight);
+}
+/* A named mechanic inside explanatory prose. It takes the title's own color because the
+   pane directly below it is headed by that same word in that same color — the term IS
+   the reference, so it needs no icon, underline, second control, or paint of its own.
+   <b> and not <mark>: this is a name being drawn to the eye, not a search hit, and
+   <mark>'s user-agent highlight would have to be painted back out. */
+.tooltip-keyword {
+  color: #9fe7ff;
+  font-weight: var(--ds-weight-medium);
+}
+/* A definition is subordinate to the tip that raised it: same treatment, quieter title,
+   so the stack reads as one explanation with a heading rather than as equal popups. */
+.tooltip-keyword-pop > .tooltip-title {
+  font-size: var(--ds-text-md);
 }
 .le-fence-review-banner {
   align-items: center;
