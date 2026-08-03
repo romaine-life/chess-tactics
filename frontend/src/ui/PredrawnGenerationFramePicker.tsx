@@ -34,8 +34,12 @@ import { Stepper } from './shared/Stepper';
 
 const MIN_FRAME_WIDTH = 320;
 const MAX_FRAME_WIDTH = 8192;
-/** Total slack the stage leaves inside its clipping slot so its 1px frame line survives on all four sides. */
-const FRAME_LINE_ROOM = 4;
+/**
+ * Slack the crop leaves inside its clipping slot. Enough for its own frame line to survive on all
+ * four sides, and enough of a gutter that the crop reads as a bounded picture sitting in the dialog
+ * rather than as the dialog's own background — which is what a flush edge looked like.
+ */
+const FRAME_LINE_ROOM = 28;
 /** Scene around the player's farthest view, as a multiple of it. Roomy is the default. */
 const SNUG_ROOM = 1;
 const ROOMY_ROOM = 1.5;
@@ -412,6 +416,11 @@ export function PredrawnGenerationFramePicker({
               style={requiredOutline}
               aria-hidden="true"
             ><span className="predrawn-generation-frame-outline-label">The level itself — must be in shot</span></div>
+            {/* The crop is the field these two boxes sit in, so it needs naming most of all: with
+                only an edge line to go on it reads as the dialog's background, not as the picture. */}
+            <span className="predrawn-generation-frame-crop-label" aria-hidden="true">
+              This whole area is the picture
+            </span>
             {!exactFramePainted ? (
               <p className={`predrawn-generation-frame-loading${paintError ? ' is-error' : ''}`} role="status">
                 {paintError ? `Could not paint this frame: ${paintError}` : 'Painting the exact frame…'}

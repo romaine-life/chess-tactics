@@ -1685,6 +1685,14 @@ h1 {
   inset: 0 -2px auto auto;
   text-align: right;
 }
+/* The crop names itself on the one corner the two inner boxes never reach. Stage-scoped so it beats
+   the shared label rule's top-left placement, which is defined later in this file. */
+.predrawn-generation-frame-stage .predrawn-generation-frame-crop-label {
+  inset: auto auto 1px 3px;
+  pointer-events: none;
+  transform: none;
+  z-index: 40002;
+}
 .predrawn-generation-frame-footer p.is-error {
   color: #ffad9d;
 }
@@ -15284,7 +15292,8 @@ button.tileset-relationship-cell {
 /* Every reference rectangle drawn over a board names itself in the same voice, so a second box is
    never an unexplained shape the owner has to guess at. */
 .le-camera-boundary-label,
-.predrawn-generation-frame-outline-label {
+.predrawn-generation-frame-outline-label,
+.predrawn-generation-frame-crop-label {
   color: #bcecff;
   display: block;
   font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
