@@ -64,10 +64,10 @@ describe('Run chrome hierarchy', () => {
     expect(metaControls).toContain('Continue to next Battle');
     expect(metaControls).not.toContain('openingNeedsPurchase');
     expect(metaControls).not.toContain('Buy one card before continuing.');
-    expect(metaControls).not.toContain('data-ui-sfx="gold-sell"');
+    expect(metaControls).not.toContain('data-ui-sfx="gold"');
     expect(metaControls).not.toContain('<OuterChromeBox');
     expect(metaControls).not.toContain('data-chrome-unit="outer-panel"');
-    expect(runArmyWorkspace).toContain('data-ui-sfx={status === \'available\' ? \'gold-sell\' : undefined}');
+    expect(runArmyWorkspace).toContain('data-ui-sfx={status === \'available\' ? \'gold\' : undefined}');
     expect(runArmyWorkspace).not.toContain('chromeConsumer="run-army-ledger"');
     expect(runArmyWorkspace).not.toContain('chromeConsumer="run-army-profile"');
     expect(runArmyWorkspace).toContain('<RunWorkspace');
@@ -184,7 +184,7 @@ describe('Run chrome hierarchy', () => {
   });
 
   it('uses the gold transaction cue for card purchases and shows a textual completion state', () => {
-    expect(runCard).toContain('data-ui-sfx="gold-sell"');
+    expect(runCard).toContain('data-ui-sfx="gold"');
     expect(runCard).toContain('className="run-card-purchased-indicator" role="status"');
     expect(runCard).toContain('Purchased');
     expect(runCard).not.toContain("' active is-purchased'");

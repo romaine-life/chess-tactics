@@ -98,7 +98,7 @@ export function RunCard({
     <span className="run-card-offer">
       <button
         type="button"
-        data-ui-sfx="gold-sell"
+        data-ui-sfx="gold"
         className={`run-card-action${purchased ? ' is-purchased' : ''}`}
         aria-label={actionLabel}
         disabled={disabled}

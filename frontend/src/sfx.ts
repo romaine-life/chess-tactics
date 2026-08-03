@@ -25,7 +25,12 @@
 
 import { liveMediaSlotsWithPrefix } from '@chess-tactics/board-render';
 import type { TerrainType } from './core/types';
-import { currentLiveSfxProfile, type AssignableSfxTerrain } from './core/sfxProfile';
+import {
+  INTERFACE_SFX_CUES,
+  currentLiveSfxProfile,
+  type AssignableSfxTerrain,
+  type InterfaceSfxCue,
+} from './core/sfxProfile';
 
 // ---- settings contract (shared with Settings.tsx) --------------------------
 // The Settings screen persists a JSON blob under this key; we read the fields that gate
@@ -204,11 +209,16 @@ function disarmGesture(): void {
   for (const evt of ARM_EVENTS) w.removeEventListener(evt, onGesture);
 }
 
-// ---- interface feedback (UI click) -----------------------------------------
-// One delegated click listener plays the UI click on activation of any real control, so
+// ---- interface feedback (UI cues) ------------------------------------------
+// One delegated click listener plays the assigned cue on activation of any real control, so
 // every current + future button/link/switch is covered from a single hook — no per-component
 // wiring. Scoped by selector so clicks on the Pixi board canvas, plain text, panels, etc.
 // never match and gameplay stays silent. The toggle/volume gating lives in playInterface().
+//
+// `data-ui-sfx` names the interface CUE ('card', 'gold') — what kind of thing just happened —
+// never a recording. The DB-owned profile maps each cue to a sound set or to silence, so which
+// sound a surface makes is an owner edit in the SFX Studio, not a commit (ADR-0071 rule 2/3).
+// A control that declares nothing is the 'activate' cue.
 const UI_CONTROL_SELECTOR = 'button, a[href], [role="button"], [role="switch"], [role="tab"], summary';
 const UI_SFX_ATTRIBUTE = 'data-ui-sfx';
 
@@ -220,9 +230,10 @@ function onUiClick(event: Event): void {
   // A disabled control doesn't act, so it shouldn't click either.
   if (control instanceof HTMLButtonElement && control.disabled) return;
   if (control.getAttribute('aria-disabled') === 'true') return;
-  const requestedSample = control.getAttribute(UI_SFX_ATTRIBUTE);
-  if (requestedSample === 'none') return;
-  playInterface(requestedSample ? { sample: requestedSample } : undefined);
+  const declared = control.getAttribute(UI_SFX_ATTRIBUTE);
+  const cue = declared ?? 'activate';
+  if (!(INTERFACE_SFX_CUES as readonly string[]).includes(cue)) return;
+  playInterface({ cue: cue as InterfaceSfxCue });
 }
 
 let uiClickListenerAttached = false;
@@ -475,16 +486,21 @@ export function playArrival(opts?: { unitIndex?: number }): void {
 }
 
 /**
- * Play the interface feedback click (authored 'click' set) on a control activation.
+ * Play the sound the live profile assigns to one interface cue.
+ *
+ * The cue is the semantic event ('activate', 'card', 'gold'); the profile's
+ * `interfaceAssignments` decides which authored set that plays, or `null` for deliberate
+ * silence. Nothing here names a recording — that mapping is the owner's, editable in the
+ * SFX Studio against the running app (ADR-0071, ADR-0089).
  *
  * Gated on the Interface Sounds toggle FIRST (so turning it off is instant + free), then on
  * master audio / effects volume like every other effect — UI feedback rides the same effects
- * bus. No-op — silently kicking off a load — until the 'click' set is decoded; a repo with no
- * authored recording is simply silent, exactly like an unvoiced terrain.
+ * bus. No-op — silently kicking off a load — until the assigned set is decoded; an unassigned
+ * cue is simply silent, exactly like an unvoiced terrain.
  *
  * @param opts.gain optional per-call multiplier (0..1+) layered onto the voice.
  */
-export function playInterface(opts?: { gain?: number; sample?: SampleKey }): void {
+export function playInterface(opts?: { gain?: number; cue?: InterfaceSfxCue }): void {
   const settings = effectsSettings();
   if (!settings.interfaceSounds) return; // toggle off → no UI feedback at all
   const context = ensureContext();
@@ -493,9 +509,10 @@ export function playInterface(opts?: { gain?: number; sample?: SampleKey }): voi
     void context.resume().catch(() => { /* may need a real gesture first */ });
   }
   if (masterGainFor(settings) <= 0) return;
-  const requestedSample = opts?.sample ?? 'click';
-  const interfaceSample = Object.hasOwn(currentLiveSfxProfile()?.soundSets ?? {}, requestedSample)
-    ? requestedSample
+  const profile = currentLiveSfxProfile();
+  const assigned = profile?.interfaceAssignments[opts?.cue ?? 'activate'] ?? null;
+  const interfaceSample = assigned && Object.hasOwn(profile?.soundSets ?? {}, assigned)
+    ? assigned
     : null;
   if (!interfaceSample) return;
   const gain = normGain(opts?.gain);

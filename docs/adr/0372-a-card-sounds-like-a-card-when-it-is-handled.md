@@ -2,6 +2,8 @@
 status: accepted
 date: 2026-08-03
 deciders: owner (Nelson) + Claude
+partially_superseded_by:
+  - "[ADR-0374](0374-the-profile-owns-what-an-interface-cue-sounds-like.md)'s owner-assigned cue mapping, which also withdraws this record's asserted Cards/Relics asymmetry as never having been an owner decision"
 partially_supersedes:
   - "[ADR-0322](0322-run-openings-use-two-pawns-eight-gold-and-card-native-purchase-feedback.md)'s retirement of the `card-purchase` runtime assignment"
 refines:

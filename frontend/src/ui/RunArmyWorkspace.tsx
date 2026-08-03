@@ -433,7 +433,7 @@ function ProfileSellAction({
       : null;
   const button = (
     <ChromeButton unit="inner-text-button"
-      data-ui-sfx={unavailableReason ? undefined : 'gold-sell'}
+      data-ui-sfx={unavailableReason ? undefined : 'gold'}
       className={chromeUnitClassNames('inner-text-button', 'app-header-button', unavailableReason ? '' : 'danger')}
       disabled={Boolean(unavailableReason)}
       onClick={() => onSell(unit.id)}
@@ -687,7 +687,7 @@ export function RunSellWorkspace({
         {rows.map(({ unit, status, proceedsTenths }) => {
           const sellButton = (
             <ChromeButton unit="inner-text-button"
-              data-ui-sfx={status === 'available' ? 'gold-sell' : undefined}
+              data-ui-sfx={status === 'available' ? 'gold' : undefined}
               className={chromeUnitClassNames('inner-text-button', 'app-header-button', status === 'available' && 'danger')}
               disabled={status !== 'available'}
               onClick={() => onSell(unit.id)}

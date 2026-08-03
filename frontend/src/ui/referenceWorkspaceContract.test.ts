@@ -245,8 +245,9 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(cardCodex).toContain('cardContentsLabel(card)');
     expect(cardCodex).toMatch(/to=\{cardHref\?\.\(card\.id\)\}/);
     expect(cardCodex.match(/<ReferenceTrigger/g)).toHaveLength(1);
-    // Handling a card sounds like a card, not like a control (ADR-0372).
-    expect(cardCodex).toContain('data-ui-sfx="card-purchase"');
+    // Handling a card sounds like a card, not like a control. The control names the CUE;
+    // the DB-owned profile decides what it plays (ADR-0374).
+    expect(cardCodex).toContain('data-ui-sfx="card"');
     // The main menu addresses individual cards like relic records…
     expect(mainMenu).toContain('selectedCardId={enchiridionCardFromPath(path)}');
     expect(mainMenu).toContain('cardHref={enchiridionCardHref}');
@@ -310,8 +311,8 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(cardTypes).toContain('className="enchiridion-card-type-layout"');
     expect(cardTypes).toContain('className="enchiridion-card-type-rows"');
     expect(cardTypes).toContain('data-testid={`enchiridion-card-type-${definition.id}`}');
-    // The property rows are card faces too, so they carry the card cue (ADR-0372).
-    expect(cardTypes).toContain('data-ui-sfx="card-purchase"');
+    // The property rows are card faces too, so they carry the card cue (ADR-0374).
+    expect(cardTypes).toContain('data-ui-sfx="card"');
     // Every property row is a real address, so a reviewer can be linked straight to one
     // instead of being told which row to click.
     expect(cardTypes).toContain('to={cardTypeHref?.(definition.id)}');
@@ -428,5 +429,47 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(strategikon).toContain('className="strategikon-background-artwork"');
     expect(strategikon).not.toContain('strategikonBackgroundReview');
     expect(style).toMatch(/\.strategikon-background-artwork\s*\{[\s\S]*?image-rendering:\s*pixelated;[\s\S]*?object-fit:\s*cover;[\s\S]*?opacity:\s*\.68/);
+  });
+});
+
+describe('interface cues are owner-assigned, not committed (ADR-0071, ADR-0374)', () => {
+  const sfx = readFileSync(new URL('../sfx.ts', import.meta.url), 'utf8');
+  const studio = readFileSync(new URL('./SfxLibraryStudio.tsx', import.meta.url), 'utf8');
+  const profile = readFileSync(new URL('../core/sfxProfile.ts', import.meta.url), 'utf8');
+
+  it('lets a control declare a cue and never a recording', () => {
+    // A sound-set key in a component is the ADR-0071 violation this replaced: it makes the
+    // owner ask for a commit to change what a surface sounds like. Every declaration in the
+    // tree is listed here, so a new one naming a recording fails this test.
+    const runCard = readFileSync(new URL('./RunCard.tsx', import.meta.url), 'utf8');
+    expect(enchiridion.match(/data-ui-sfx="card"/g)).toHaveLength(2);
+    expect(runCard).toContain('data-ui-sfx="gold"');
+    expect(runArmy).toContain("data-ui-sfx={unavailableReason ? undefined : 'gold'}");
+    expect(runArmy).toContain("data-ui-sfx={status === 'available' ? 'gold' : undefined}");
+    for (const source of [enchiridion, runArmy, runCard]) {
+      // Sound-set keys, not the unrelated `run-card-purchased-indicator` class beside them.
+      expect(source).not.toContain('data-ui-sfx="card-purchase"');
+      expect(source).not.toContain('data-ui-sfx="gold-sell"');
+      expect(source).not.toContain("'gold-sell'");
+    }
+  });
+
+  it('resolves the declared cue through the DB-owned profile', () => {
+    expect(profile).toContain("export const INTERFACE_SFX_CUES = ['activate', 'card', 'gold']");
+    expect(profile).toContain('interfaceAssignments: Record<InterfaceSfxCue, string | null>');
+    expect(profile).toContain('SFX_PROFILE_SCHEMA_VERSION = 2');
+    // The runtime reads the assignment; it never falls back to a compiled sound-set name.
+    expect(sfx).toContain("profile?.interfaceAssignments[opts?.cue ?? 'activate']");
+    expect(sfx).not.toMatch(/opts\?\.sample \?\? 'click'/);
+  });
+
+  it('ships the assignment instrument with per-row reset (ADR-0057 rule 4)', () => {
+    expect(studio).toContain('<h2 style={heading}>Interface cues</h2>');
+    expect(studio).toContain('INTERFACE_SFX_CUES.map((cue)');
+    expect(studio).toContain('setCue(cue, e.target.value)');
+    expect(studio).toContain('<option value="">— silent —</option>');
+    // Preview and a per-row ↺ back to the live value, like every terrain row beside it.
+    expect(studio).toContain('aria-label={`Play the sound assigned to ${INTERFACE_SFX_CUE_LABELS[cue]}`}');
+    expect(studio).toContain('() => setCue(cue, document.data.interfaceAssignments[cue] ?? \'\')');
   });
 });
