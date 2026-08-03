@@ -244,6 +244,13 @@ export interface EditorBoard {
   /** Floating, gameplay-inert source artwork used by the pre-drawn generation reference. */
   floatingArtwork?: FloatingArtworkPlacement[];
   cover: Record<string, GroundCoverDensity>;
+  /**
+   * The seed each painted cover cell was rolled with, baked at paint time. Absent for every board
+   * authored before cover was baked; those cells fall back to LEGACY_GROUND_COVER_SEED and so keep
+   * rendering exactly as they always have. Baking is what stops the cover brush's seed control
+   * from re-styling grass that is already down.
+   */
+  coverSeeds?: Record<string, number>;
   /** Per-cell cover-set OVERRIDE (cell "x,y" -> cover family), decoupling ground cover from the
    * tile's terrain (e.g. grass tufts on a stone region). A cell absent here falls back to its own
    * tile terrain (the classic behaviour). Optional + back-compat (like `zones`). */
@@ -603,6 +610,25 @@ function cleanFloatingArtwork(value: unknown): FloatingArtworkPlacement[] {
   return out;
 }
 
+/**
+ * Baked cover seeds, kept only for cells that actually carry cover. A seed without cover is dead
+ * weight in the code and would resurrect if that cell were ever painted again.
+ */
+function cleanCoverSeeds(
+  value: unknown,
+  cover: Record<string, unknown> | undefined,
+): Record<string, number> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const out: Record<string, number> = {};
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (!cover || cover[key] === undefined) continue;
+    const seed = Number(raw);
+    if (!Number.isSafeInteger(seed) || seed < 0 || seed > 0xffffffff) continue;
+    out[key] = seed;
+  }
+  return out;
+}
+
 function cleanMacroTiles(value: unknown, cols: number, rows: number): MacroTilePlacement[] {
   if (!Array.isArray(value)) return [];
   const out: MacroTilePlacement[] = [];
@@ -840,6 +866,10 @@ export function encodeBoard(b: EditorBoard): string {
   // Cover-set overrides ride a separate channel, emitted only when non-empty so a board that never
   // decouples cover from terrain encodes byte-identically to a pre-override code.
   if (b.coverTypes && nonEmpty(b.coverTypes)) wire.ct = b.coverTypes;
+  // Baked cover seeds ride their own channel, emitted only when present so a board authored
+  // before baking encodes byte-identically to its old code.
+  const coverSeeds = cleanCoverSeeds(b.coverSeeds, b.cover);
+  if (nonEmpty(coverSeeds)) wire.vs = coverSeeds;
   // Split the autotiling ribbon features by kind so each map's values are bare materials
   // (rd=roads, rv=rivers). Fences ride separately in `fe` (edge-keyed), below.
   const rd: Record<string, RoadMaterial> = {};
@@ -1111,6 +1141,7 @@ export function decodeBoard(code: string): EditorBoard | null {
       playerFaction: typeof w.pf === 'string' ? w.pf : undefined, factionDirections, cells, macroTiles, units, doodads, props, floatingArtwork,
       cover: (w.v ?? {}) as Record<string, GroundCoverDensity>,
       coverTypes: (w.ct ?? {}) as Record<string, TileFamilyId>,
+      coverSeeds: cleanCoverSeeds(w.vs, (w.v ?? {}) as Record<string, GroundCoverDensity>),
       features,
       fences,
       fencePosts,

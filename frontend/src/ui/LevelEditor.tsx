@@ -257,7 +257,7 @@ import {
 } from '../core/macroTiles';
 import { SliderRow, ctlReset } from './dressing/SliderRow';
 import { objectBaseZIndex, structureFrontZIndex } from '../render/sceneDepth';
-import { groundCoverSet, type GroundCoverDensity } from '../core/groundCover';
+import { groundCoverSet, LEGACY_GROUND_COVER_SEED, type GroundCoverDensity } from '../core/groundCover';
 import { UNIT_PALETTE_LABELS, UNIT_PALETTES, isUnitPalette, type UnitPalette } from '../core/pieces';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
@@ -3128,11 +3128,18 @@ export function LevelEditor(): ReactElement {
   // Per-cell cover-set overrides (decoupling cover from terrain — e.g. grass tufts on stone). A cell
   // absent here uses its own tile terrain's cover.
   const [boardCoverTypes, setBoardCoverTypes] = useState<Record<string, TileFamilyId>>(initialBoard?.coverTypes ?? {});
+  /** The seed each painted cover cell was rolled with, baked when it was painted. */
+  const [boardCoverSeeds, setBoardCoverSeeds] = useState<Record<string, number>>(initialBoard?.coverSeeds ?? {});
   const [coverBrushDensity, setCoverBrushDensity] = useState<GroundCoverDensity>('sparse');
   const [coverBrushType, setCoverBrushType] = useState<GroundCoverId>(() => studioArm.kind === 'cover'
     ? groundCoverAsset(studioArm.brush).id
     : defaultGroundCoverAsset().id);
-  const [coverSeed, setCoverSeed] = useState(1234);
+  // The seed NEW cover is painted with. Starts random like the other generators. It is baked into
+  // each cell as it is painted, so changing it never touches cover already on the board.
+  const [coverBrushSeed, setCoverBrushSeed] = useState(randomGeneratorSeed);
+  // Render fallback for cells with no baked seed — every board authored before baking. Fixed, so
+  // those boards keep rendering exactly as they always did.
+  const coverSeed = LEGACY_GROUND_COVER_SEED;
   // Roads and rivers are LINEAR features (ribbons you draw), not per-cell terrain materials:
   // store each painted cell's {kind, material}, then derive its connection mask from its
   // SAME-KIND neighbours so the renderer picks straight/corner/T/cross. One unified layer —
@@ -3511,6 +3518,7 @@ export function LevelEditor(): ReactElement {
     setBoardProps(board.props);
     setBoardFloatingArtwork(board.floatingArtwork ?? []);
     setBoardCover(board.cover);
+    setBoardCoverSeeds(board.coverSeeds ?? {});
     setBoardCoverTypes(board.coverTypes ?? {});
     setBoardFeatures(board.features);
     setBoardFences(board.fences ?? {});
@@ -3544,8 +3552,8 @@ export function LevelEditor(): ReactElement {
   // The current painted board as a single EditorBoard — the one shape both the transient
   // play-test URL and the level save serialize from, so they can never describe different boards.
   const currentEditorBoard = useMemo<EditorBoard>(
-    () => ({ cols: boardCols, rows: boardRows, cameraBounds: boardCameraBounds, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, backgroundMode: boardBackgroundModeState, surface: boardSurface, predrawnGenerationFrame: boardPredrawnGenerationFrame, macroTiles: boardMacroTiles, units: boardUnits, doodads: boardDoodads, props: boardProps, floatingArtwork: boardFloatingArtwork, cover: boardCover, coverTypes: boardCoverTypes, features: boardFeatures, fences: boardFences, fencePosts: boardFencePosts, walls: boardWalls, wallArt: boardWallArt, subterrain: boardSubterrain, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions }),
-    [boardCols, boardRows, boardCameraBounds, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, boardFactionDirections, boardCells, boardBackgroundModeState, boardSurface, boardPredrawnGenerationFrame, boardMacroTiles, boardUnits, boardDoodads, boardProps, boardFloatingArtwork, boardCover, boardCoverTypes, boardFeatures, boardFences, boardFencePosts, boardWalls, boardWallArt, boardSubterrain, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions],
+    () => ({ cols: boardCols, rows: boardRows, cameraBounds: boardCameraBounds, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, backgroundMode: boardBackgroundModeState, surface: boardSurface, predrawnGenerationFrame: boardPredrawnGenerationFrame, macroTiles: boardMacroTiles, units: boardUnits, doodads: boardDoodads, props: boardProps, floatingArtwork: boardFloatingArtwork, cover: boardCover, coverTypes: boardCoverTypes, coverSeeds: boardCoverSeeds, features: boardFeatures, fences: boardFences, fencePosts: boardFencePosts, walls: boardWalls, wallArt: boardWallArt, subterrain: boardSubterrain, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions }),
+    [boardCols, boardRows, boardCameraBounds, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, boardFactionDirections, boardCells, boardBackgroundModeState, boardSurface, boardPredrawnGenerationFrame, boardMacroTiles, boardUnits, boardDoodads, boardProps, boardFloatingArtwork, boardCover, boardCoverTypes, boardCoverSeeds, boardFeatures, boardFences, boardFencePosts, boardWalls, boardWallArt, boardSubterrain, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions],
   );
   const predrawnVersionCells = useMemo(
     () => Array.from({ length: boardRows }, (_, y) => (
@@ -4335,6 +4343,9 @@ export function LevelEditor(): ReactElement {
       if (!tileId || !groundCoverSet(coverBrushType)) return;
       const terrain = leFamilyOfTile(tileId)?.id;
       next.cover[key] = coverBrushDensity;
+      // Bake the roll into the cell. The brush seed shapes what is painted NEXT; it never
+      // restyles grass that is already down, and the game renders exactly what is authored here.
+      next.coverSeeds = { ...(next.coverSeeds ?? {}), [key]: coverBrushSeed };
       if (coverBrushType === terrain) delete next.coverTypes?.[key];
       else next.coverTypes = { ...(next.coverTypes ?? {}), [key]: coverBrushType };
       commitEditorBoard(next);
@@ -4409,7 +4420,13 @@ export function LevelEditor(): ReactElement {
       return;
     }
     if (brushKind === 'artwork') return;
-    if (brushKind === 'cover') { delete next.cover[key]; if (next.coverTypes) delete next.coverTypes[key]; commitEditorBoard(next); return; }
+    if (brushKind === 'cover') {
+      delete next.cover[key];
+      if (next.coverTypes) delete next.coverTypes[key];
+      if (next.coverSeeds) delete next.coverSeeds[key];
+      commitEditorBoard(next);
+      return;
+    }
     if (brushKind === 'zone') {
       const entries = zoneEntriesForBoard(next);
       const target = entries[selectedZoneIndex];
@@ -4967,10 +4984,15 @@ export function LevelEditor(): ReactElement {
         const filledChance = clamp01(c.knobs.density + (coverNoise(cell.x, cell.y, (seed ^ 0x2545f491 ^ c.id) >>> 0) - 0.5) * 2 * c.knobs.densityRandom);
         next.cover[key] = coverRng.next() < filledChance ? 'filled' : 'sparse';
         next.coverTypes[key] = c.type;
+        next.coverSeeds = { ...(next.coverSeeds ?? {}), [key]: seed >>> 0 };
         placed = true;
         break;
       }
-      if (!placed) { delete next.cover[key]; delete next.coverTypes[key]; }
+      if (!placed) {
+        delete next.cover[key];
+        delete next.coverTypes[key];
+        if (next.coverSeeds) delete next.coverSeeds[key];
+      }
     }
     commitEditorBoard(next, null);
     if (savedRegion) {
@@ -9519,7 +9541,24 @@ export function LevelEditor(): ReactElement {
               <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', coverBrushDensity === 'filled' && 'active')} onClick={() => setCoverBrushDensity('filled')}>Filled</ChromeButton>
             </div>
             <p className="le-board-note">Brush paints {coverBrushDensity} {coverBrushAsset.label} on any tile; Erase clears a tile. The cover scatters from the density.</p>
-            <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} style={{ width: '100%', marginTop: 8 }} onClick={() => setCoverSeed((s) => s + 1)}>Re-roll scatter</ChromeButton>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Scatter seed</span>
+              <ChromeButton unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                onClick={() => setCoverBrushSeed(randomGeneratorSeed())}
+              >Random</ChromeButton>
+            </div>
+            <SliderRow
+              label={`Seed · ${coverBrushSeed}`}
+              value={coverBrushSeed}
+              set={(value) => setCoverBrushSeed(Math.round(value))}
+              min={1}
+              max={MAX_GENERATOR_SEED}
+              step={1}
+              nudge={1}
+              dflt={LEGACY_GROUND_COVER_SEED}
+            />
+            <p className="le-board-note">The seed shapes cover painted from now on. Cover already on the board keeps the arrangement it was painted with, and the game renders exactly that.</p>
             <p className="le-board-note">{coverCount} tile{coverCount === 1 ? '' : 's'} with cover.</p>
           </section>
         ) : null}

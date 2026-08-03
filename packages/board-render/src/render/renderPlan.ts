@@ -36,7 +36,7 @@ import {
   structureArtDirectionSplitMode,
   structureArtDirectionSprite,
 } from '../core/structureArt';
-import { densityFieldAt, groundCoverSet, resolveGroundCover, type GroundCover } from '../core/groundCover';
+import { densityFieldAt, groundCoverSet, LEGACY_GROUND_COVER_SEED, resolveGroundCover, type GroundCover } from '../core/groundCover';
 import { familyOfTile } from '../core/levelBoard';
 import type { TileFamilyId } from '../core/tileSockets';
 import {
@@ -737,7 +737,8 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
     );
   }
 
-  const COVER_SEED = options.coverSeed ?? 1234;
+  // Ambient/legacy fallback only. A painted cell uses the seed baked into it at paint time.
+  const COVER_SEED = options.coverSeed ?? LEGACY_GROUND_COVER_SEED;
   const coverCells: Array<{ x: number; y: number; terrain: TileFamilyId; groundCover?: GroundCover }> = [];
   for (const visualCell of visualTerrainCells) {
     const tileTerrain = visualCell.tileId ? familyOfTile(visualCell.tileId) : undefined;
@@ -749,7 +750,7 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
   // into ambient fallback explicitly while they are being adapted for the shared renderer.
   const hasPaintedCover = Object.keys(board.cover ?? {}).length > 0;
   const ambientCover = options.ambientCover ?? false;
-  resolveGroundCover(coverCells, COVER_SEED, (cell) =>
+  resolveGroundCover(coverCells, (cell) => board.coverSeeds?.[`${cell.x},${cell.y}`] ?? COVER_SEED, (cell) =>
     board.cover?.[`${cell.x},${cell.y}`] ?? (hasPaintedCover || !ambientCover ? null : densityFieldAt(cell.x, cell.y, COVER_SEED)));
   const coverScale = options.coverScale ?? 1;
   for (const cell of coverCells) {
