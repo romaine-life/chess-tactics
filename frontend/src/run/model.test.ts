@@ -99,7 +99,7 @@ function deployedRunWithPawn(snapshot = war()): RunDocument {
 }
 
 describe('Run piece economy', () => {
-  it('stores every ability under the exact word the game says (ADR-0369)', () => {
+  it('stores every ability under the exact word the game says (ADR-0374)', () => {
     expect(AGMINATE_DISPLAY_NAME).toBe('Agminate');
     expect(runAbilityDisplayName('agminate')).toBe('Agminate');
     expect(runAbilityDisplayName('eutactic')).toBe('Eutactic');

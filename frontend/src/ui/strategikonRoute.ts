@@ -12,10 +12,11 @@ import { normalizeRoutePath } from './navigation';
 export type StrategikonBase = '/play' | '/run';
 export const STRATEGIKON_BASES: readonly StrategikonBase[] = ['/play', '/run'];
 
-export type StrategikonSection = 'enchiridion' | 'prosopography' | 'lipsanotheca';
+export type StrategikonSection = 'enchiridion' | 'prosopography' | 'chartulary' | 'lipsanotheca';
 export const STRATEGIKON_SECTIONS: readonly StrategikonSection[] = [
   'enchiridion',
   'prosopography',
+  'chartulary',
   'lipsanotheca',
 ];
 
@@ -56,6 +57,7 @@ export function strategikonAddress(pathname: string): StrategikonAddress {
   const base = strategikonBase(path);
   const rest = path.slice(`${base}/strategikon`.length);
   if (rest === '/prosopography') return { base, section: 'prosopography', reference: 'units' };
+  if (rest === '/chartulary') return { base, section: 'chartulary', reference: 'units' };
   if (rest === '/lipsanotheca') return { base, section: 'lipsanotheca', reference: 'units' };
   const reference = ENCHIRIDION_SECTIONS.find((section) => rest === `/enchiridion/${section}`) ?? 'units';
   return { base, section: 'enchiridion', reference };

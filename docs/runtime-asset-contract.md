@@ -352,10 +352,10 @@ an incomplete row is an availability failure.
   `ui/kit/icons/game/{cacochymic,eutactic,adlected,agminate}.png` and
   `ui/kit/icons/card-properties/{pestiferous,concinnous,legatine,hieratic}.png` — as are
   `ui/surfaces/card-type-legatine.png` and
-  `ui/run/card-prototypes/legatine-adlected-frame-v1.png`. ADR-0369 completed this
+  `ui/run/card-prototypes/legatine-adlected-frame-v1.png`. ADR-0374 completed this
   cutover by re-pointing the seven coined-word slots onto byte-identical successors and
   retiring the originals, so a slot path, a persisted value, a drawable role and the word
-  a player reads are now one vocabulary (ADR-0341, ADR-0343, ADR-0369).
+  a player reads are now one vocabulary (ADR-0341, ADR-0343, ADR-0374).
   `RUN_CARD_COMMITTED_PROPERTY_PLACEMENTS` and
   `RUN_CARD_COMMITTED_UNIT_STATE_PLACEMENT` in `ui/RunCardFace.tsx` are the
   committed fit — one seat per property plus one shared unit-state seat — and

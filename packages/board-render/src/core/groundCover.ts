@@ -169,6 +169,9 @@ function mulberry(seed: number): () => number {
 
 const MIN_DIST: Record<GroundCoverDensity, number> = { sparse: 17, filled: 11 };
 
+/** The seed a cell falls back to when it carries no baked one (every pre-bake board). */
+export const LEGACY_GROUND_COVER_SEED = 1234;
+
 /** Roll the tufts for one cell. Deterministic from (terrain, x, y, seed, density). */
 export function rollGroundCover(
   terrain: TileFamilyId,
@@ -228,7 +231,7 @@ export function densityFieldAt(x: number, y: number, seed: number): GroundCoverD
 }
 
 /** A board cell carrying terrain + position, the minimum `resolveGroundCover` needs. */
-interface CoverCell {
+export interface CoverCell {
   x: number;
   y: number;
   terrain: TileFamilyId;
@@ -240,9 +243,17 @@ interface CoverCell {
  * supplies the per-cell density (painted level value, or the density field for a
  * generated board); return null to leave a cell bare.
  */
+/**
+ * Roll cover for a set of cells.
+ *
+ * `seedFor` is per cell, not global, because a cover roll is BAKED when the cell is painted. A
+ * single shared seed made the brush's seed control re-style grass that had already been placed,
+ * and — since that seed was never persisted — showed the author an arrangement the game would
+ * never render. A cell keeps the seed it was painted with.
+ */
 export function resolveGroundCover<T extends CoverCell>(
   cells: T[],
-  seed: number,
+  seedFor: (cell: T) => number,
   densityFor: (cell: T) => GroundCoverDensity | null,
 ): void {
   const terrainAt = new Map(cells.map((c) => [`${c.x},${c.y}`, c.terrain]));
@@ -258,6 +269,9 @@ export function resolveGroundCover<T extends CoverCell>(
     if (set.edgeOnly && !bordersOther(cell)) { cell.groundCover = undefined; continue; }
     const density = densityFor(cell);
     if (!density) { cell.groundCover = undefined; continue; }
-    cell.groundCover = { density, tufts: rollGroundCover(cell.terrain, cell.x, cell.y, seed, density) };
+    cell.groundCover = {
+      density,
+      tufts: rollGroundCover(cell.terrain, cell.x, cell.y, seedFor(cell), density),
+    };
   }
 }

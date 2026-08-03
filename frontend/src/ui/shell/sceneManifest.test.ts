@@ -92,11 +92,13 @@ describe('scene manifests', () => {
       ['/play/strategikon/enchiridion/cards'], ['/play/strategikon/enchiridion/card-types'],
       ['/play/strategikon/enchiridion/relics'], ['/play/strategikon/enchiridion/abilities'],
       ['/play/strategikon/enchiridion/ataraxia'],
-      ['/play/strategikon/prosopography'], ['/play/strategikon/lipsanotheca'],
+      ['/play/strategikon/prosopography'], ['/play/strategikon/chartulary'],
+      ['/play/strategikon/lipsanotheca'],
       ['/play/strategikon/unknown'], ['/play/strategikon/enchiridion/unknown'],
       ['/run/strategikon/enchiridion/units', '', { run: { hydrated: true, document: run } }],
       ['/run/strategikon/enchiridion/relics', '', { run: { hydrated: true, document: run } }],
       ['/run/strategikon/prosopography', '', { run: { hydrated: true, document: run } }],
+      ['/run/strategikon/chartulary', '', { run: { hydrated: true, document: run } }],
       ['/run/strategikon/lipsanotheca', '', { run: { hydrated: true, document: run } }],
       ['/run'], ['/run', '', { run: { hydrated: false, document: null } }],
       ['/run', '', { run: { hydrated: true, document: null } }],
@@ -253,14 +255,14 @@ describe('scene manifests', () => {
       host: 'play-shell',
       background: 'homepage',
       paintOwner: 'play-selector',
-      critical: expect.arrayContaining(['selector-chrome', 'visible-level-thumbnails']),
+      critical: ['play-selector'],
       opportunistic: ['below-fold-level-thumbnails'],
     });
     expect(sceneManifest('/play')).toMatchObject({
       host: 'gameplay-shell',
       background: 'battlefield',
       paintOwner: 'gameplay-hud',
-      critical: expect.arrayContaining(['board-compositors', 'gameplay-hud', 'title-controls']),
+      critical: ['gameplay-hud'],
     });
   });
 
@@ -405,24 +407,58 @@ describe('scene manifests', () => {
 
   it('addresses individual cards inside the one retained card-reference scene', () => {
     const base = sceneManifest('/enchiridion/cards');
-    const addressed = sceneManifest('/enchiridion/cards/ppb');
+    const addressed = sceneManifest('/enchiridion/cards/country-parish');
     expect(addressed.id).toBe(base.id);
     expect(addressed.instances.map((entry) => entry.key)).toEqual(base.instances.map((entry) => entry.key));
     expect(addressed.leaf.definition.id).toBe('enchiridion/cards');
     expect(sceneManifest('/enchiridion/units').id).not.toBe(base.id);
   });
 
-  it('requires declarations for expensive editor and Studio first viewports', () => {
-    expect(sceneManifest('/editor/level').critical).toContain('visible-palette-slice');
+  it('addresses individual card properties inside the one retained card-types scene', () => {
+    const base = sceneManifest('/enchiridion/card-types');
+    const addressed = sceneManifest('/enchiridion/card-types/hieratic');
+    expect(addressed.id).toBe(base.id);
+    expect(addressed.instances.map((entry) => entry.key)).toEqual(base.instances.map((entry) => entry.key));
+    expect(addressed.leaf.definition.id).toBe('enchiridion/card-types');
+    expect(sceneManifest('/enchiridion/units').id).not.toBe(base.id);
+  });
+
+  it('decomposes the editor into the authorities it actually registers', () => {
+    // Not one collapsed participant, and not a vocabulary nothing registers: these are the
+    // ids LevelEditor reports separately, so each can fail on its own (ADR-0369).
+    expect(sceneManifest('/editor/level').critical).toEqual([
+      'chrome:skirmish-screen level-editor-screen',
+      'document',
+      'board-compositors',
+      'visible-editor-chrome',
+      'level-editor',
+    ]);
     expect(sceneManifest('/studio')).toMatchObject({
       paintOwner: 'studio',
+      critical: ['studio'],
       opportunistic: ['below-fold-catalog'],
     });
   });
 
   it('makes synchronous and unmatched routes explicit rather than optional', () => {
-    expect(sceneManifest('/settings/general').critical).toContain('visible-controls');
+    expect(sceneManifest('/settings/general').critical).toEqual(['chrome:settings-shell']);
     expect(sceneManifest('/unknown')).toMatchObject({ id: 'main-menu', host: 'menu-shell', paintOwner: 'dom' });
+  });
+
+  it('never declares the shell as a scene participant', () => {
+    // The persistent bar and the shared backdrop are rendered OUTSIDE every boundary, so
+    // they could never register there. They are the director's first two ladder rungs now;
+    // naming them here is how six declared ids decayed into comments (ADR-0369).
+    const routes = [
+      '/', '/unknown', '/settings/general', '/settings/audio/tracks', '/enchiridion/units',
+      '/play/select/skirmish', '/play', '/editor', '/editor/level', '/studio', '/lobbies',
+      '/party', '/portrait-editor', '/predrawn-reference', '/run',
+    ];
+    for (const route of routes) {
+      const { critical } = sceneManifest(route);
+      expect(critical, route).not.toContain('title-bar');
+      expect(critical, route).not.toContain('homepage-background');
+    }
   });
 
   it('narrows an overlapping fade to the shell viewport when only the Run workspace changes', () => {

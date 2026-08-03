@@ -26,6 +26,8 @@ export const LEVEL_EDITOR_ROUTE_BRUSH_KINDS = [
   'doodad',
   'prop',
   'artwork',
+  'forest',
+  'town',
   'cover',
   'road',
   'river',
@@ -46,7 +48,7 @@ export const LEVEL_ARTWORK_WORKSPACES = ['source', 'pipeline'] as const;
 
 export type LevelArtworkWorkspace = typeof LEVEL_ARTWORK_WORKSPACES[number];
 
-export const PLACED_ART_BRUSH_KINDS = ['artwork', 'doodad', 'prop'] as const;
+export const PLACED_ART_BRUSH_KINDS = ['artwork', 'forest', 'town', 'doodad', 'prop'] as const;
 
 export type PlacedArtBrushKind = typeof PLACED_ART_BRUSH_KINDS[number];
 

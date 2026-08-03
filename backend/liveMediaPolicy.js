@@ -49,7 +49,7 @@ const RUN_SHOP_WRAP_SLOT = /^ui\/run\/shop-wrap\/([a-z][a-z0-9-]{0,79})\.png$/;
 // runtime needs is where the card row sits inside the painted canvas.
 const RUN_SHOP_WRAP_KINDS = Object.freeze(['seat', 'band', 'slots', 'screen']);
 const RUN_PROGRESS_ICON_COMPONENT = 'run-progress-icon';
-// Each state and property is registered under the word the game says (ADR-0369): the slot,
+// Each state and property is registered under the word the game says (ADR-0374): the slot,
 // the stored value and the name a player reads are one vocabulary.
 const GAME_CONDITION_ICON_BY_SLOT = Object.freeze({
   'ui/kit/icons/game/cacochymic.png': Object.freeze({ component: 'unit-ability-icon', variant: 'cacochymic' }),

@@ -71,6 +71,7 @@ export type SceneViewId =
   | 'strategikon'
   | 'strategikon-enchiridion'
   | 'strategikon-prosopography'
+  | 'strategikon-chartulary'
   | 'strategikon-lipsanotheca'
   | 'strategikon-reference'
   | 'lobbies'
@@ -187,6 +188,7 @@ export const SCENE_DEFINITIONS = Object.freeze({
   strategikon: defineScene({ id: 'strategikon', parent: null, slot: 'gameplay-content', view: 'strategikon' }),
   strategikonEnchiridion: defineScene({ id: 'strategikon/enchiridion', parent: 'strategikon', slot: 'strategikon-content', view: 'strategikon-enchiridion' }),
   strategikonProsopography: defineScene({ id: 'strategikon/prosopography', parent: 'strategikon', slot: 'strategikon-content', view: 'strategikon-prosopography' }),
+  strategikonChartulary: defineScene({ id: 'strategikon/chartulary', parent: 'strategikon', slot: 'strategikon-content', view: 'strategikon-chartulary' }),
   strategikonLipsanotheca: defineScene({ id: 'strategikon/lipsanotheca', parent: 'strategikon', slot: 'strategikon-content', view: 'strategikon-lipsanotheca' }),
   strategikonReferenceUnits: defineScene({ id: 'strategikon/enchiridion/units', parent: 'strategikon/enchiridion', slot: 'strategikon-reference-content', view: 'strategikon-reference' }),
   strategikonReferenceTerrain: defineScene({ id: 'strategikon/enchiridion/terrain', parent: 'strategikon/enchiridion', slot: 'strategikon-reference-content', view: 'strategikon-reference' }),

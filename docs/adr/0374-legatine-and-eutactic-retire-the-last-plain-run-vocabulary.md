@@ -12,7 +12,7 @@ extends:
   - "[ADR-0343](0343-agminate-replaces-marshalled-as-the-formation-ability-name.md)"
 ---
 
-# ADR-0369: Legatine and Eutactic retire the last plain Run vocabulary
+# ADR-0374: Legatine and Eutactic retire the last plain Run vocabulary
 
 ## Context
 

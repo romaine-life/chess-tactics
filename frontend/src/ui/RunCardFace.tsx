@@ -7,7 +7,9 @@ import {
   runAbilityDescription,
   runAbilityDisplayName,
   type RunAbility,
+  type RunCardType,
 } from '../run/model';
+import type { RunCardFaceContent, RunCardGrant } from './runCardFaceContent';
 import {
   RUN_CARD_FRAME_BOX_NAMES,
   RUN_CARD_STANDARD_FRAME_GEOMETRY,
@@ -37,14 +39,14 @@ export const RUN_CARD_REFERENCE_WIDTH = 360;
 const PLAYER_CARD_PALETTE = paletteForSide('player');
 const PLAYER_CARD_FACING = 'south';
 
-export type RunCardProperty = 'pestiferous' | 'concinnous' | 'legatine' | 'hieratic';
+/** The card properties are the model's, not a lookalike list maintained beside it. */
+export type RunCardProperty = RunCardType;
 export type { RunUnitState };
 
 /**
  * Each causal card property owns its own typed `card-property-icon` role, distinct from
  * the unit state it bestows. Runtime code resolves the role and never substitutes text,
- * a glyph, or the paired unit-state icon (ADR-0339). Each locator is the property's own
- * word since ADR-0369.
+ * a glyph, or the paired unit-state icon (ADR-0339).
  */
 const RUN_CARD_PROPERTY_MEDIA_ROLE: Readonly<Record<RunCardProperty, string>> = Object.freeze({
   pestiferous: 'ui-kit-icons-card-properties-pestiferous-png',
@@ -121,24 +123,12 @@ export type RunCardImageKind =
   | `unit-state:${RunUnitState}`
   | `unit:${number}:${PlayablePieceType}:${number}`;
 
-export type RunCardFaceContent = Readonly<{
-  name: string;
-  cost: number;
-  typeLine: string;
-  cardProperty?: Readonly<{
-    id: RunCardProperty;
-    name: string;
-    effect: string;
-  }>;
-  grants: readonly Readonly<{
-    count: number;
-    unit: PlayablePieceType;
-    cacochymicIndices?: readonly number[];
-    ability?: RunAbility;
-  }>[];
-  properties?: readonly Readonly<{ name: string; target: string }>[];
-  flavor: string;
-}>;
+/**
+ * The face renders only what `runCardFaceContent` projects from a real card. The type is
+ * branded there so a host cannot hand-author one, and it carries no free-text slot to
+ * fill (ADR-0305, ADR-0339).
+ */
+export type { RunCardFaceContent, RunCardGrant } from './runCardFaceContent';
 
 /**
  * What a host may still choose about the face's text: how big it is, and the two
@@ -161,8 +151,6 @@ export type RunCardContentsTuning = Readonly<{
   countColumn: number;
   columnGap: number;
   rowGap: number;
-  effectSize: number;
-  effectGap: number;
   flavorScale: number;
   paddingBlockStart: number;
   paddingBlockEnd: number;
@@ -186,8 +174,6 @@ export const RUN_CARD_DEFAULT_CONTENTS_TUNING: RunCardContentsTuning = Object.fr
   countColumn: 4.5,
   columnGap: 2,
   rowGap: .8,
-  effectSize: 2.75,
-  effectGap: .7,
   flavorScale: 1,
   paddingBlockStart: 2.2,
   paddingBlockEnd: 2.3,
@@ -273,7 +259,6 @@ export function runCardLedgerRows(cellCount: number): number {
 const CONTENTS_INLINE_PADDING_CQW = 5.2;
 const CONTENTS_TEXT_ADVANCE_EM = .34;
 const FLAVOR_LINE_HEIGHT = 1.2;
-const EFFECT_LINE_HEIGHT = 1.12;
 
 function estimatedLineCount(text: string, fontSizeCqw: number, lineWidthCqw: number): number {
   const perLine = Math.max(1, Math.floor(lineWidthCqw / (fontSizeCqw * CONTENTS_TEXT_ADVANCE_EM)));
@@ -288,14 +273,9 @@ function estimatedContentsHeightCqw(
 ): number {
   const rows = runCardLedgerRows(card.grants.length);
   const ledger = rows * tuning.unitHeight + Math.max(0, rows - 1) * tuning.rowGap;
-  const effectLine = tuning.effectSize * EFFECT_LINE_HEIGHT;
-  const propertyCount = card.properties?.length ?? 0;
-  const properties = propertyCount
-    ? tuning.effectGap * propertyCount + propertyCount * effectLine
-    : 0;
   const flavorSize = flavorSizeCqw * tuning.flavorScale;
   const flavor = estimatedLineCount(card.flavor, flavorSize, lineWidthCqw) * flavorSize * FLAVOR_LINE_HEIGHT;
-  return tuning.paddingBlockStart + ledger + properties + flavor + tuning.paddingBlockEnd;
+  return tuning.paddingBlockStart + ledger + flavor + tuning.paddingBlockEnd;
 }
 
 // Flavor may grow into verified leftover box room in these increments, but it
@@ -376,7 +356,7 @@ const runCardUnitStateImageKind = (
 export function requiredRunCardImageKinds(card: RunCardFaceContent): readonly RunCardImageKind[] {
   const stateKinds = new Set<RunCardImageKind>();
   for (const grant of card.grants) {
-    if (grant.ability) stateKinds.add(`unit-state:${grant.ability}`);
+    if (grant.ability) stateKinds.add(`unit-state:${grant.ability.state}`);
     if (grant.cacochymicIndices?.length) stateKinds.add('unit-state:cacochymic');
   }
   return [
@@ -411,8 +391,9 @@ export function runCardPresentationSignature(
     card.cardProperty ? [card.cardProperty.id, card.cardProperty.name, card.cardProperty.effect] : null,
     iconMedia.propertyUrl ?? null,
     iconMedia.unitStateUrls ?? null,
-    card.grants.map(({ count, unit, cacochymicIndices, ability }) => [count, unit, cacochymicIndices ?? [], ability ?? null]),
-    card.properties?.map(({ name, target }) => [name, target]) ?? null,
+    card.grants.map(({ count, unit, cacochymicIndices, ability }) => (
+      [count, unit, cacochymicIndices ?? [], ability ? [ability.state, ability.index] : null]
+    )),
     card.flavor,
   ]);
 }
@@ -647,25 +628,16 @@ function UnitStackSprite({
   );
 }
 
-function grantLabel({
-  count,
-  unit,
-  cacochymicIndices = [],
-  ability,
-}: RunCardFaceContent['grants'][number]): string {
+function grantLabel({ count, unit, cacochymicIndices = [], ability }: RunCardGrant): string {
   const units = `${count} ${unit}${count === 1 ? '' : 's'}`;
   const plagued = cacochymicIndices.length
     ? count === 1 ? `1 ${CACOCHYMIC_DISPLAY_NAME} ${unit}` : `${units}, one ${CACOCHYMIC_DISPLAY_NAME}`
     : units;
-  return ability ? `${plagued} with ${runAbilityDisplayName(ability)}` : plagued;
+  return ability ? `${plagued} with ${runAbilityDisplayName(ability.state)}` : plagued;
 }
 
-function grantsLabel(grants: RunCardFaceContent['grants']): string {
+function grantsLabel(grants: readonly RunCardGrant[]): string {
   return grants.map(grantLabel).join(', ');
-}
-
-function propertiesLabel(properties: RunCardFaceContent['properties']): string {
-  return properties?.map(({ name, target }) => `${name}: ${target}`).join('. ') ?? '';
 }
 
 type RunCardPresentation = Readonly<{
@@ -744,8 +716,6 @@ function RunCardFaceLayer({
         '--run-card-ledger-count-column': `${contentsTuning.countColumn}cqw`,
         '--run-card-ledger-column-gap': `${contentsTuning.columnGap}cqw`,
         '--run-card-ledger-row-gap': `${contentsTuning.rowGap}cqw`,
-        '--run-card-effect-size': `${contentsTuning.effectSize}cqw`,
-        '--run-card-effect-gap': `${contentsTuning.effectGap}cqw`,
         '--run-card-contents-padding-block-start': `${contentsTuning.paddingBlockStart}cqw`,
         '--run-card-contents-padding-block-end': `${contentsTuning.paddingBlockEnd}cqw`,
         '--run-card-property-icon-x': `${iconTuning.property.x}cqw`,
@@ -825,7 +795,14 @@ function RunCardFaceLayer({
           {card.grants.map((grant, cell) => {
             const cacochymicIndices = grant.cacochymicIndices ?? [];
             const stackCount = grant.count + cacochymicIndices.length + (grant.ability ? 1 : 0);
-            const abilityStackIndex = grant.ability ? stackCount - 1 : undefined;
+            // The marker seats immediately after the unit that actually carries the state,
+            // so a revealed target on a multi-unit card is marked where it stands.
+            const abilityUnitIndex = grant.ability?.index ?? -1;
+            const abilityStackIndex = grant.ability
+              ? abilityUnitIndex
+                + cacochymicIndices.filter((plaguedIndex) => plaguedIndex <= abilityUnitIndex).length
+                + 1
+              : undefined;
             return (
               <span
                 className="run-card-prototype-ledger-row"
@@ -836,11 +813,11 @@ function RunCardFaceLayer({
                 <span className="run-card-prototype-unit-stack" aria-hidden="true">
                   {Array.from({ length: grant.count }, (_, index) => (
                     <UnitStackSprite
-                      ability={index === grant.count - 1 ? grant.ability : undefined}
-                      abilityIconUrl={index === grant.count - 1 && grant.ability
-                        ? iconMedia.unitStateUrls?.[grant.ability]
+                      ability={index === abilityUnitIndex ? grant.ability?.state : undefined}
+                      abilityIconUrl={index === abilityUnitIndex && grant.ability
+                        ? iconMedia.unitStateUrls?.[grant.ability.state]
                         : undefined}
-                      abilityStackIndex={index === grant.count - 1 ? abilityStackIndex : undefined}
+                      abilityStackIndex={index === abilityUnitIndex ? abilityStackIndex : undefined}
                       cell={cell}
                       index={index}
                       key={`${grant.unit}-${index}`}
@@ -859,16 +836,6 @@ function RunCardFaceLayer({
             );
           })}
         </span>
-        {card.properties?.length ? (
-          <span className="run-card-prototype-properties" aria-label="Card properties">
-            {card.properties.map((property) => (
-              <span className="run-card-prototype-property" key={property.name}>
-                <strong>{property.name}</strong>
-                <span>{property.target}</span>
-              </span>
-            ))}
-          </span>
-        ) : null}
         <span className="run-card-prototype-flavor">{card.flavor}</span>
       </span>
       {frameBoxStyle !== 'off' ? (
@@ -1055,7 +1022,7 @@ export function RunCardFace({
       aria-hidden={ariaHidden || undefined}
       aria-busy={pending ? true : undefined}
       data-frame-geometry={displayed.frameGeometry.id}
-      aria-label={ariaHidden ? undefined : `${displayed.card.name}. ${displayed.card.typeLine}${displayed.card.cardProperty ? `, ${displayed.card.cardProperty.name}: ${displayed.card.cardProperty.effect}` : ''}. Costs ${displayed.card.cost} gold. Grants ${grantsLabel(displayed.card.grants)}.${displayed.card.properties?.length ? ` ${propertiesLabel(displayed.card.properties)}.` : ''}`}
+      aria-label={ariaHidden ? undefined : `${displayed.card.name}. ${displayed.card.typeLine}${displayed.card.cardProperty ? `, ${displayed.card.cardProperty.name}: ${displayed.card.cardProperty.effect}` : ''}. Costs ${displayed.card.cost} gold. Grants ${grantsLabel(displayed.card.grants)}.`}
     >
       {layers.map((layer) => (
         <RunCardFaceLayer

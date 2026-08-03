@@ -10,7 +10,7 @@ import {
   resolvedLiveMediaUrl,
 } from '@chess-tactics/board-render';
 import { PredrawnMoveHighlightPaint } from '../render/PredrawnMoveHighlightPaint';
-import { runCardArtSlot, runCardFlavor, runCardName } from '../run/cardNames';
+import { runCardArtSlot, runCardName } from '../run/cardNames';
 import {
   ADLECTED_DISPLAY_NAME,
   AGMINATE_DISPLAY_NAME,
@@ -38,16 +38,8 @@ import {
 } from '../run/progression';
 import { generateTerrainDressing } from './generatedReferenceBoard';
 import { RunCard } from './RunCard';
-import {
-  RUN_CARD_FRAME_SLOT,
-  RUN_CARD_CONCINNOUS_FRAME_SLOT,
-  RUN_CARD_HIERATIC_FRAME_SLOT,
-  RUN_CARD_PESTIFEROUS_FRAME_SLOT,
-  RUN_CARD_LEGATINE_FRAME_SLOT,
-  RunCardFace,
-  runCardPropertyIconUrl,
-  type RunCardFaceContent,
-} from './RunCardFace';
+import { RunCardFace, runCardPropertyIconUrl } from './RunCardFace';
+import { runCardFaceContent, runCardFrameSlot, runCardSpecimen } from './runCardFaceContent';
 import { runUnitStateIconUrl, type RunUnitState } from './shared/RunAbilityIcon';
 import { runCardFrameGeometryForSlot } from './runCardFrameGeometry';
 import { StaticReadOnlyBoardView } from './shared/BoardViewFraming';
@@ -69,6 +61,7 @@ import { NavButton } from './shared/NavButton';
 import { ChromeButton } from './shared/ChromeButton';
 import { PieceTypeIcon } from './shared/PieceTypeIcon';
 import { RunCardCostCoin } from './shared/RunCardCostCoin';
+import { RUN_PROGRESS_MEDIA_ROLE } from './shared/RunProgressIcon';
 import { KitScroll } from './KitScroll';
 import { EnchiridionContentSceneSlot } from './shell/AuthoredSceneSlot';
 import { fetchAdminLiveMediaCatalog } from '../net/liveMediaAdmin';
@@ -94,6 +87,11 @@ const SECTION_LABEL: Record<EnchiridionSection, string> = {
  * rail used to name as Skirmish-HUD glyph classes; as classes they painted a CSS
  * background under the HUD's sizing rules instead of the rail's, so Terrain (the one
  * section already on installed media) sat a third larger than its five neighbours.
+ *
+ * Ataraxia is the one section whose idea already owns a mark elsewhere, so it resolves
+ * the Run title bar's emblem role rather than naming media of its own. It used to take
+ * the shared kit objective flag, which Start, zones and the Skirmish HUD also paint —
+ * a second symbol for a ladder that already has one (ADR-0059, ADR-0363).
  */
 const SECTION_ICON_SRC: Record<EnchiridionSection, string> = {
   units: installedUiMedia('ui-kit-icons-unit-studio-png'),
@@ -102,7 +100,7 @@ const SECTION_ICON_SRC: Record<EnchiridionSection, string> = {
   'card-types': installedUiMedia('ui-kit-icons-game-power-png'),
   relics: installedUiMedia('ui-kit-icons-info-png'),
   abilities: installedUiMedia('ui-kit-icons-game-defend-png'),
-  ataraxia: installedUiMedia('ui-kit-icons-game-objective-png'),
+  ataraxia: installedUiMedia(RUN_PROGRESS_MEDIA_ROLE.ataraxia),
 };
 
 const UNIT_COPY: Record<PlayablePieceType, string> = {
@@ -217,7 +215,11 @@ function MovementDiagram({ type }: { type: PlayablePieceType }): ReactElement {
   );
 }
 
-function ReferenceSectionFrame({
+// The one section frame every reference panel wears, in both transports: framed as its
+// own titled chrome box on a host that owns no header, unframed under a host that does.
+// Exported because the Strategikon's Run-fed sections (the Chartulary) are the same kind
+// of panel and must not grow a lookalike frame (ADR-0059).
+export function ReferenceSectionFrame({
   children,
   chromeConsumer,
   className = '',
@@ -543,6 +545,66 @@ export function cardMatchesFilters(
     && (unitFilter === 'all' || card.pieces.includes(unitFilter));
 }
 
+// The card gallery's filter row, shared by the whole-deck reference and the Run's held
+// Chartulary. One control row governs both, so the two galleries cannot drift into
+// lookalike filters with different options or different compact amounts (ADR-0059).
+export function CardGalleryFilters({
+  goldFilter,
+  unitFilter,
+  onGoldFilterChange,
+  onUnitFilterChange,
+  count,
+  testIdPrefix,
+}: {
+  goldFilter: CardGoldFilter;
+  unitFilter: CardUnitFilter;
+  onGoldFilterChange: (filter: CardGoldFilter) => void;
+  onUnitFilterChange: (filter: CardUnitFilter) => void;
+  count: number;
+  testIdPrefix: string;
+}): ReactElement {
+  return (
+    <InnerChromeBox className="enchiridion-card-filters" aria-label="Card filters">
+      <div className="enchiridion-card-filter">
+        <span>Gold</span>
+        <HouseSelect
+          value={goldFilter}
+          options={CARD_GOLD_FILTER_OPTIONS}
+          onChange={onGoldFilterChange}
+          ariaLabel="Filter cards by gold value"
+          testId={`${testIdPrefix}-gold-filter`}
+        />
+      </div>
+      <div className="enchiridion-card-filter">
+        <span>Contains</span>
+        <HouseSelect
+          value={unitFilter}
+          options={CARD_UNIT_FILTER_OPTIONS}
+          onChange={onUnitFilterChange}
+          ariaLabel="Filter cards by contained unit type"
+          testId={`${testIdPrefix}-unit-filter`}
+        />
+      </div>
+      <span className="enchiridion-card-filter-count" aria-live="polite">
+        {count} {count === 1 ? 'card' : 'cards'}
+      </span>
+    </InnerChromeBox>
+  );
+}
+
+/** Cards grouped by gold value, ascending — the gallery's one authored ordering. */
+export function cardsByGoldValue<T>(
+  entries: readonly T[],
+  coreOf: (entry: T) => RunCoreCard,
+): Array<[number, T[]]> {
+  const byValue = new Map<number, T[]>();
+  for (const entry of entries) {
+    const value = coreOf(entry).value;
+    byValue.set(value, [...(byValue.get(value) ?? []), entry]);
+  }
+  return [...byValue.entries()].sort((left, right) => left[0] - right[0]);
+}
+
 // Cards is the terminal third-column browser: the two rail predecessors retain
 // their canonical widths and every remaining pixel belongs to a gallery of the
 // real faces themselves. Routes focus a face in that gallery; they never create
@@ -567,13 +629,7 @@ export function CardCodex({
     () => RUN_CARD_DECK.filter((card) => cardMatchesFilters(card, goldFilter, unitFilter)),
     [goldFilter, unitFilter],
   );
-  const groups = useMemo(() => {
-    const byValue = new Map<number, RunCoreCard[]>();
-    for (const card of visibleCards) {
-      byValue.set(card.value, [...(byValue.get(card.value) ?? []), card]);
-    }
-    return [...byValue.entries()].sort((left, right) => left[0] - right[0]);
-  }, [visibleCards]);
+  const groups = useMemo(() => cardsByGoldValue(visibleCards, (card) => card), [visibleCards]);
   useEffect(() => {
     if (!focusedCardId) return;
     const card = galleryRef.current?.querySelector<HTMLElement>(`[data-card-id="${focusedCardId}"]`);
@@ -590,31 +646,14 @@ export function CardCodex({
     >
       <p>Every card the Run can deal. The opening Shop and later Shops use this one deck; a card costs its gold value.</p>
       <div className="enchiridion-card-gallery-layout">
-        <InnerChromeBox className="enchiridion-card-filters" aria-label="Card filters">
-          <div className="enchiridion-card-filter">
-            <span>Gold</span>
-            <HouseSelect
-              value={goldFilter}
-              options={CARD_GOLD_FILTER_OPTIONS}
-              onChange={setGoldFilter}
-              ariaLabel="Filter cards by gold value"
-              testId="enchiridion-card-gold-filter"
-            />
-          </div>
-          <div className="enchiridion-card-filter">
-            <span>Contains</span>
-            <HouseSelect
-              value={unitFilter}
-              options={CARD_UNIT_FILTER_OPTIONS}
-              onChange={setUnitFilter}
-              ariaLabel="Filter cards by contained unit type"
-              testId="enchiridion-card-unit-filter"
-            />
-          </div>
-          <span className="enchiridion-card-filter-count" aria-live="polite">
-            {visibleCards.length} {visibleCards.length === 1 ? 'card' : 'cards'}
-          </span>
-        </InnerChromeBox>
+        <CardGalleryFilters
+          goldFilter={goldFilter}
+          unitFilter={unitFilter}
+          onGoldFilterChange={setGoldFilter}
+          onUnitFilterChange={setUnitFilter}
+          count={visibleCards.length}
+          testIdPrefix="enchiridion-card"
+        />
         <KitScroll className="enchiridion-card-gallery-scroll">
           <div
             ref={galleryRef}
@@ -635,7 +674,8 @@ export function CardCodex({
                         <ReferenceTrigger
                           to={cardHref?.(card.id)}
                           onSelect={() => setLocalSelectedId(card.id)}
-                          className={`enchiridion-card-gallery-trigger${focused ? ' is-addressed' : ''}`}
+                          data-ui-sfx="card-purchase"
+                          className="enchiridion-card-gallery-trigger"
                           aria-label={`${runCardName(card)}. ${cardContentsLabel(card)}. Worth ${card.value} gold.`}
                           aria-pressed={focused}
                           aria-current={focused ? 'true' : undefined}
@@ -661,87 +701,93 @@ export function CardCodex({
   );
 }
 
+/**
+ * The reference adds only what the model does not already carry: the specimen's printed
+ * cost and the longer authored gloss. Its name and frame are read from the card type
+ * itself, never restated here.
+ */
 type CardTypeReferenceDefinition = Readonly<{
   id: RunCardType;
-  name: string;
   cost: number;
   description: string;
   provisional?: boolean;
-  frameSlot?: string;
 }>;
 
 const CARD_TYPE_REFERENCES: readonly CardTypeReferenceDefinition[] = Object.freeze([
   {
     id: 'pestiferous',
-    name: 'Pestiferous',
     cost: 1,
     description: `One public unit is ${CACOCHYMIC_DISPLAY_NAME} and receives the tier discount. A victorious Battle loses that unit, then marks one remaining unit; the empty card remains in the deck.`,
-    frameSlot: RUN_CARD_PESTIFEROUS_FRAME_SLOT,
   },
   {
     id: 'concinnous',
-    name: 'Concinnous',
     cost: 3,
     description: `Skillfully and harmoniously arranged. One persisted contained unit becomes ${EUTACTIC_DISPLAY_NAME} on purchase; its target may remain hidden until then.`,
-    frameSlot: RUN_CARD_CONCINNOUS_FRAME_SLOT,
   },
   {
     id: 'legatine',
-    name: 'Legatine',
     cost: 4,
     description: `Of a legate, a commander's deputy entrusted with a detached force. One contained unit gains ${ADLECTED_DISPLAY_NAME} when purchased. The target is hidden on multi-unit offers; this one-unit Volunteer shows the state because its target is forced.`,
-    frameSlot: RUN_CARD_LEGATINE_FRAME_SLOT,
   },
   {
     id: 'hieratic',
-    name: 'Hieratic',
     cost: 4,
     description: `Priestly, highly formal, and rigidly stylized. One contained unit gains ${AGMINATE_DISPLAY_NAME} when purchased and deploys into its role's formation seat rather than a rank. The target is hidden on multi-unit offers; this one-unit Volunteer shows the state because its target is forced.`,
-    frameSlot: RUN_CARD_HIERATIC_FRAME_SLOT,
   },
 ]);
+
+const cardTypeName = (definition: CardTypeReferenceDefinition): string => (
+  RUN_CARD_TYPE_REFERENCE[definition.id].name
+);
 
 const VOLUNTEER_CARD = RUN_CARD_BY_ID.p;
 const CARD_TYPE_TEXTURE_TILE_COUNT = 24;
 
+/**
+ * The reference draws a real one-unit Volunteer offer of each type and projects it like
+ * every other host, so the glossary cannot show a card the Shop could never deal. Its
+ * target is forced by the single unit, which is why each state is public here.
+ */
 function CardTypeReference({ definition }: { definition: CardTypeReferenceDefinition }): ReactElement {
-  const frameSlot = definition.frameSlot ?? RUN_CARD_FRAME_SLOT;
-  const frameMedia = liveMediaForSlot(frameSlot).media;
-  const card = {
-    name: runCardName(VOLUNTEER_CARD),
+  const specimen = runCardSpecimen({
+    pieces: VOLUNTEER_CARD.pieces,
+    cardType: definition.id,
     cost: definition.cost,
-    typeLine: 'Units',
-    cardProperty: {
-      id: definition.id,
-      name: definition.name,
-      effect: RUN_CARD_TYPE_REFERENCE[definition.id].effect,
-    },
-    grants: [{
-      unit: 'pawn',
-      count: 1,
-      ...(definition.id === 'pestiferous' ? { cacochymicIndices: [0] } : {}),
-      ...(definition.id === 'legatine' ? { ability: 'adlected' as const } : {}),
-      ...(definition.id === 'hieratic' ? { ability: 'agminate' as const } : {}),
-    }],
-    properties: definition.id === 'concinnous'
-      ? [{ name: EUTACTIC_DISPLAY_NAME, target: 'Pawn' }]
-      : undefined,
-    flavor: runCardFlavor(VOLUNTEER_CARD),
-  } satisfies RunCardFaceContent;
+    cacochymicPieceIndex: definition.id === 'pestiferous' ? 0 : null,
+    effectTargetIndex: definition.id === 'concinnous' ? 0 : null,
+  });
+  const frameSlot = runCardFrameSlot(specimen);
   return (
     <div className="enchiridion-card-type-preview">
       <RunCardFace
-        card={card}
-        frameUrl={frameMedia.immutableUrl}
-        artUrl={resolvedLiveMediaUrl(runCardArtSlot(VOLUNTEER_CARD))}
+        card={runCardFaceContent(specimen, { purchased: true })}
+        frameUrl={liveMediaForSlot(frameSlot).media.immutableUrl}
+        artUrl={resolvedLiveMediaUrl(runCardArtSlot(specimen))}
         frameGeometry={runCardFrameGeometryForSlot(frameSlot)}
       />
     </div>
   );
 }
 
-function CardTypesSection({ framed, textureBatch }: { framed: boolean; textureBatch: string | null }): ReactElement {
-  const [selectedTypeId, setSelectedTypeId] = useState('pestiferous');
+function CardTypesSection({
+  framed,
+  textureBatch,
+  selectedCardTypeId = null,
+  cardTypeHref,
+}: {
+  framed: boolean;
+  textureBatch: string | null;
+  /** The route-addressed property; read only when cardTypeHref makes selection navigational. */
+  selectedCardTypeId?: RunCardType | null;
+  /** When present, selecting a property navigates to this address instead of setting local state. */
+  cardTypeHref?: (cardType: RunCardType) => string;
+}): ReactElement {
+  const [localSelectedTypeId, setLocalSelectedTypeId] = useState<RunCardType>('pestiferous');
+  // Routed hosts derive the selection from the address every render; an unknown or absent
+  // card-type address falls back to the first property without rewriting the URL.
+  const selectedTypeId = cardTypeHref
+    ? selectedCardTypeId ?? CARD_TYPE_REFERENCES[0].id
+    : localSelectedTypeId;
   const [loadedTextureBatch, setLoadedTextureBatch] = useState<string | null>(null);
   const [textureUrls, setTextureUrls] = useState<CardTypeTextureUrls>({});
   const [textureLoadFailed, setTextureLoadFailed] = useState(false);
@@ -790,7 +836,9 @@ function CardTypesSection({ framed, textureBatch }: { framed: boolean; textureBa
           {CARD_TYPE_REFERENCES.map((definition) => (
             <li key={definition.id}>
               <ReferenceTrigger
-                onSelect={() => setSelectedTypeId(definition.id)}
+                to={cardTypeHref?.(definition.id)}
+                onSelect={() => setLocalSelectedTypeId(definition.id)}
+                data-ui-sfx="card-purchase"
                 data-chrome-unit="inner-list-row"
                 data-testid={`enchiridion-card-type-${definition.id}`}
                 className={chromeUnitClassNames(
@@ -798,7 +846,7 @@ function CardTypesSection({ framed, textureBatch }: { framed: boolean; textureBa
                   'enchiridion-card-type-row',
                   selected.id === definition.id && 'is-active',
                 )}
-                aria-label={`${definition.name}. ${definition.description}`}
+                aria-label={`${cardTypeName(definition)}. ${definition.description}`}
                 aria-pressed={selected.id === definition.id}
               >
                 {displayedTextureUrls[definition.id] ? (
@@ -823,7 +871,7 @@ function CardTypesSection({ framed, textureBatch }: { framed: boolean; textureBa
                     src={runCardPropertyIconUrl(definition.id)}
                     draggable={false}
                   />
-                  <span className="enchiridion-card-type-row-name">{definition.name}</span>
+                  <span className="enchiridion-card-type-row-name">{cardTypeName(definition)}</span>
                 </span>
                 {definition.provisional ? <small>Provisional</small> : null}
               </ReferenceTrigger>
@@ -987,6 +1035,8 @@ export function EnchiridionReference({
   relicHref,
   selectedCardId,
   cardHref,
+  selectedCardTypeId,
+  cardTypeHref,
   cardTypeTextureBatch = null,
 }: {
   section: EnchiridionSection;
@@ -995,11 +1045,22 @@ export function EnchiridionReference({
   relicHref?: (relicId: RunRelicId) => string;
   selectedCardId: string | null;
   cardHref?: (cardId: string) => string;
+  selectedCardTypeId: RunCardType | null;
+  cardTypeHref?: (cardType: RunCardType) => string;
   cardTypeTextureBatch?: string | null;
 }): ReactElement {
   if (section === 'terrain') return <TerrainSection framed={framed} />;
   if (section === 'cards') return <CardCodex framed={framed} selectedCardId={selectedCardId} cardHref={cardHref} />;
-  if (section === 'card-types') return <CardTypesSection framed={framed} textureBatch={cardTypeTextureBatch} />;
+  if (section === 'card-types') {
+    return (
+      <CardTypesSection
+        framed={framed}
+        textureBatch={cardTypeTextureBatch}
+        selectedCardTypeId={selectedCardTypeId}
+        cardTypeHref={cardTypeHref}
+      />
+    );
+  }
   if (section === 'relics') return <RelicCodex framed={framed} selectedRelicId={selectedRelicId} relicHref={relicHref} />;
   if (section === 'abilities') return <AbilitiesSection framed={framed} />;
   if (section === 'ataraxia') return <AtaraxiaSection framed={framed} />;
@@ -1013,6 +1074,8 @@ export function Enchiridion({
   relicHref,
   selectedCardId = null,
   cardHref,
+  selectedCardTypeId = null,
+  cardTypeHref,
   showSectionRail = true,
   sceneInstanceKey = `enchiridion/${section}`,
   framed = true,
@@ -1028,6 +1091,10 @@ export function Enchiridion({
   selectedCardId?: string | null;
   /** When present, card focus in the cards section navigates to this address. */
   cardHref?: (cardId: string) => string;
+  /** The route-addressed property for the card-types section; see CardTypesSection. */
+  selectedCardTypeId?: RunCardType | null;
+  /** When present, property selection in the card-types section navigates to this address. */
+  cardTypeHref?: (cardType: RunCardType) => string;
   showSectionRail?: boolean;
   sceneInstanceKey?: string;
   framed?: boolean;
@@ -1048,6 +1115,8 @@ export function Enchiridion({
           relicHref={relicHref}
           selectedCardId={selectedCardId}
           cardHref={cardHref}
+          selectedCardTypeId={selectedCardTypeId}
+          cardTypeHref={cardTypeHref}
           cardTypeTextureBatch={cardTypeTextureBatch}
         />
       </EnchiridionContentSceneSlot>
@@ -1072,6 +1141,7 @@ export function EnchiridionSectionRail({
           index={index}
           active={section === candidate}
           iconSrc={SECTION_ICON_SRC[candidate]}
+          markCanvas={candidate === 'ataraxia' ? 'bleed' : 'inset'}
         />
       ))}
     </ApparatusRailColumn>

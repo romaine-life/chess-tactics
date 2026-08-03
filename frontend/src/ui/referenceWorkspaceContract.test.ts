@@ -23,14 +23,14 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(abilities).toContain('name: AGMINATE_DISPLAY_NAME');
     expect(abilities).toContain('name: CACOCHYMIC_DISPLAY_NAME');
     expect(abilities).not.toContain("name: 'Concinnous'");
-    expect(abilities).not.toContain("name: 'Tactical'");
+    expect(abilities).not.toContain("name: 'Legatine'");
     expect(abilities).toContain('className="enchiridion-ability-card"');
     // Every glossary entry draws its own accepted unit-state icon, never a stand-in glyph.
     expect(abilities).toContain('src={runUnitStateIconUrl(state)}');
     expect(abilities).not.toMatch(/skirmish-icon-(?:shield|move|flag)/);
     expect(abilities).toContain('discounted by 0 gold for a Pawn, 1 for a Knight or Bishop, 2 for a Rook, and 3 for a Queen');
-    expect(abilities).not.toContain('Upon acquisition, one unit on this card becomes Eutactic.');
-    expect(abilities).not.toContain('Upon acquisition, one randomly chosen unit on this card gains Adlected.');
+    expect(abilities).not.toContain('Upon acquisition, one unit on this card becomes Positioned.');
+    expect(abilities).not.toContain('Upon acquisition, one randomly chosen unit on this card gains Discipline.');
   });
 
   it('reads the Ataraxia ladder from the Run model instead of restating it', () => {
@@ -61,7 +61,12 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(enchiridion).not.toContain('ATARAXIA_LOCKED_ICON_SRC');
     expect(style).toMatch(/\.enchiridion-ataraxia-card\s*\{[\s\S]*?grid-template-columns:\s*minmax\(56px, auto\) minmax\(0, 1fr\)/);
     expect(enchiridion).toContain("if (section === 'ataraxia') return <AtaraxiaSection framed={framed} />;");
-    expect(enchiridion).toContain("ataraxia: installedUiMedia('ui-kit-icons-game-objective-png')");
+    // The ladder's rail mark IS the title bar's Ataraxia emblem, resolved from the one
+    // record that owns that decision. Naming the shared kit objective flag here gave the
+    // reference a different symbol than the bar for the same idea (ADR-0059, ADR-0363).
+    expect(enchiridion).toContain('ataraxia: installedUiMedia(RUN_PROGRESS_MEDIA_ROLE.ataraxia)');
+    expect(enchiridion).toContain("import { RUN_PROGRESS_MEDIA_ROLE } from './shared/RunProgressIcon'");
+    expect(enchiridion).not.toContain('ui-kit-icons-game-objective-png');
   });
 
   it('reads the forged rung marks by prefix so an uninstalled set degrades to type', () => {
@@ -104,9 +109,14 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(enchiridion).toContain('<ApparatusRailColumn className="enchiridion-section-rail"');
     expect(strategikon).toContain('<ApparatusRailColumn className="strategikon-rail"');
     expect(strategikon).toContain('<EnchiridionSectionRail');
-    expect(strategikon.match(/<ApparatusRailTab/g)).toHaveLength(3);
+    expect(strategikon.match(/<ApparatusRailTab/g)).toHaveLength(4);
     expect(strategikon).toContain('title="The Martial Prosopography — Current Army"');
+    expect(strategikon).toContain('title="The Chartulary — Held Cards"');
     expect(strategikon).toContain('title="The Lipsanotheca — Held Relics"');
+    // Adjacent Run registers never share one mark: the army takes the Units reference's
+    // mark and the Chartulary takes the Cards reference's.
+    expect(strategikon).toContain("iconSrc={installedUiMedia('ui-kit-icons-unit-studio-png')}");
+    expect(strategikon).toContain("iconSrc={installedUiMedia('ui-kit-icons-players-png')}");
   });
 
   it('uses the canonical terrain-tile glyph instead of the creator-tools grid mark', () => {
@@ -235,6 +245,8 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(cardCodex).toContain('cardContentsLabel(card)');
     expect(cardCodex).toMatch(/to=\{cardHref\?\.\(card\.id\)\}/);
     expect(cardCodex.match(/<ReferenceTrigger/g)).toHaveLength(1);
+    // Handling a card sounds like a card, not like a control (ADR-0372).
+    expect(cardCodex).toContain('data-ui-sfx="card-purchase"');
     // The main menu addresses individual cards like relic records…
     expect(mainMenu).toContain('selectedCardId={enchiridionCardFromPath(path)}');
     expect(mainMenu).toContain('cardHref={enchiridionCardHref}');
@@ -247,8 +259,10 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     const end = enchiridion.indexOf('type CardTypeReferenceDefinition', start);
     const cardCodex = enchiridion.slice(start, end);
     expect(cardCodex).toContain('cardMatchesFilters(card, goldFilter, unitFilter)');
-    expect(cardCodex).toContain('testId="enchiridion-card-gold-filter"');
-    expect(cardCodex).toContain('testId="enchiridion-card-unit-filter"');
+    // ONE filter row governs both card galleries; each host names its own test ids.
+    expect(cardCodex).toContain('testId={`${testIdPrefix}-gold-filter`}');
+    expect(cardCodex).toContain('testId={`${testIdPrefix}-unit-filter`}');
+    expect(cardCodex).toContain('testIdPrefix="enchiridion-card"');
     expect(cardCodex).toContain('<h3>No matching cards</h3>');
     expect(cardCodex).toContain('<RunCard card={card} mode="reference" />');
     // Compact amounts reuse the exact numbered coin from the card face. The
@@ -273,29 +287,45 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(cardTypes.match(/id: '(?:pestiferous|concinnous|legatine|hieratic)'/g)).toHaveLength(4);
     expect(cardTypes).toContain("const VOLUNTEER_CARD = RUN_CARD_BY_ID.p");
     expect(cardTypes).toContain('<RunCardFace');
-    expect(cardTypes).toContain('RUN_CARD_PESTIFEROUS_FRAME_SLOT');
-    expect(cardTypes).toContain('RUN_CARD_LEGATINE_FRAME_SLOT');
-    expect(cardTypes).toContain('RUN_CARD_HIERATIC_FRAME_SLOT');
+    // The glossary previews a real projected offer, so it neither picks its own frame
+    // nor assembles its own face — both come from the single card projection.
+    expect(cardTypes).toContain('runCardSpecimen({');
+    expect(cardTypes).toContain('runCardFaceContent(specimen, { purchased: true })');
+    expect(cardTypes).toContain('runCardFrameSlot(specimen)');
+    expect(cardTypes).not.toContain('RUN_CARD_PESTIFEROUS_FRAME_SLOT');
+    expect(cardTypes).not.toContain('RUN_CARD_LEGATINE_FRAME_SLOT');
+    expect(cardTypes).not.toContain('RUN_CARD_HIERATIC_FRAME_SLOT');
     // Every named property row carries its own accepted symbol, not just Pestiferous.
     expect(cardTypes).toContain('src={runCardPropertyIconUrl(definition.id)}');
     expect(cardTypes).toContain('<AlphaBoundIcon');
     expect(cardTypes).toContain('className="enchiridion-card-type-row-icon"');
-    // The preview face carries the qualifier as its symbol instead of an em-dash suffix.
-    expect(cardTypes).toContain("typeLine: 'Units',");
-    expect(cardTypes).not.toContain('typeLine: `Units — ${definition.name}`');
+    // The preview face carries the qualifier as its symbol instead of an em-dash suffix,
+    // and the reference no longer restates a card property's own name.
+    expect(cardTypes).not.toContain('typeLine:');
+    expect(cardTypes).not.toContain("name: 'Pestiferous'");
+    expect(cardTypes).toContain('RUN_CARD_TYPE_REFERENCE[definition.id].name');
     // Every named card property now has installed Run mechanics, so none is provisional.
     expect(cardTypes).not.toContain('provisional: true');
-    expect(cardTypes).toContain("useState('pestiferous')");
+    expect(cardTypes).toContain("useState<RunCardType>('pestiferous')");
     expect(cardTypes).toContain('className="enchiridion-card-type-layout"');
     expect(cardTypes).toContain('className="enchiridion-card-type-rows"');
     expect(cardTypes).toContain('data-testid={`enchiridion-card-type-${definition.id}`}');
+    // The property rows are card faces too, so they carry the card cue (ADR-0372).
+    expect(cardTypes).toContain('data-ui-sfx="card-purchase"');
+    // Every property row is a real address, so a reviewer can be linked straight to one
+    // instead of being told which row to click.
+    expect(cardTypes).toContain('to={cardTypeHref?.(definition.id)}');
+    expect(mainMenu).toContain('selectedCardTypeId={enchiridionCardTypeFromPath(path)}');
+    expect(mainMenu).toContain('cardTypeHref={enchiridionCardTypeHref}');
     expect(cardTypes).toContain('<CardTypeReference definition={selected} />');
     expect(cardTypes).not.toContain('<CardTypeReference definition={definition} key={definition.id} />');
     expect(style).toMatch(/\.enchiridion-card-type-layout\s*\{[\s\S]*?grid-template-columns:\s*minmax\(280px,\s*1fr\) minmax\(232px,\s*300px\)/);
     expect(style).toMatch(/\.enchiridion-card-type-detail\s*\{[\s\S]*?container-type:\s*inline-size/);
     expect(style).toMatch(/\.enchiridion-card-type-preview\s*\{[\s\S]*?margin-block-start:\s*-4cqw/);
     expect(style).toMatch(/\.enchiridion-card-type-row-name\s*\{[\s\S]*?line-height:\s*1/);
-    expect(enchiridion).toContain("if (section === 'card-types') return <CardTypesSection framed={framed} textureBatch={cardTypeTextureBatch} />;");
+    expect(enchiridion).toContain("if (section === 'card-types') {");
+    expect(enchiridion).toContain('<CardTypesSection');
+    expect(enchiridion).toContain('textureBatch={cardTypeTextureBatch}');
     // The normal screen resolves accepted public slots. An exact query-addressed
     // candidate batch remains an explicitly labeled private review override.
     expect(cardTypes).toContain('acceptedCardTypeTextureUrls(currentLiveMediaCatalog())');
@@ -327,7 +357,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(hud).not.toContain('data-testid="strategikon-toggle"\n      data-chrome-unit=');
     expect(hud).toContain("installedUiMedia('ui-kit-icons-studio-catalog-png')");
     expect(hud).toContain("strategikonOpen ? 'Return to Battle' : 'Open Strategikon'");
-    expect(hud).toContain('Strategikon — inspect battle references, the current army, and held relics.');
+    expect(hud).toContain('Strategikon — inspect battle references, the current army, and held cards and relics.');
     expect(hud).toContain('Return to Battle — close Strategikon without leaving this fight.');
     expect(hud).toMatch(/data-testid="strategikon-toggle"[\s\S]*?<img[\s\S]*?<\/NavButton>/);
     expect(style).toMatch(/\.skirmish-screen \.skirmish-hud-titlebar > \.outer-chrome-header-title-actions\s*\{[\s\S]*?inset-inline-end:\s*calc\(var\(--le-control-content-inset\)\s*-\s*5px\)/);

@@ -30,8 +30,8 @@ export const HIERATIC_AGMINATE_OFFER_DENOMINATOR = 8;
 export const EUTACTIC_COST = 2;
 export const ADLECTED_COST = 3;
 /** Agminate seats a unit in its role's formation instead of a rank, and its King,
- * Rook and Bishop rules interlock, so it carries Adlected's price rather than
- * Eutactic's. */
+ * Rook and Bishop rules interlock, so it carries Discipline's price rather than
+ * Positioned's. */
 export const AGMINATE_COST = 3;
 
 export type AtaraxiaTier = 0 | 1;
@@ -86,9 +86,10 @@ export const EUTACTIC_DISPLAY_NAME = 'Eutactic';
 export const ADLECTED_DISPLAY_NAME = 'Adlected';
 
 /**
- * Every unit state's player-facing name (ADR-0369). No state's stored value is its own
- * name any longer, so this resolves a complete table rather than capitalizing the storage
- * identity: a fallback would surface a retired word the moment a state was left out.
+ * Every unit state's player-facing name (ADR-0374). Since the vocabulary cutover a stored
+ * value and its name are the same word, so this resolves a complete table rather than
+ * capitalizing the storage identity: a fallback would surface whatever a state was
+ * spelled as the moment one was left out.
  */
 const RUN_ABILITY_DISPLAY_NAME: Readonly<Record<RunAbility, string>> = Object.freeze({
   adlected: ADLECTED_DISPLAY_NAME,
@@ -108,17 +109,30 @@ export function runAbilityDisplayName(ability: RunAbility): string {
  */
 export function runAbilityDescription(ability: RunAbility, unit: RunArmyPieceType): string {
   if (ability === 'adlected') {
-    return 'May be deliberately placed in the player zone before random deployment.';
+    return runAbilityGeneralDescription('adlected');
   }
   if (ability === 'eutactic') {
     if (unit === 'pawn') return 'Prefers the front row during automatic deployment.';
     if (unit === 'rook') return 'Prefers an outer back-row square during automatic deployment.';
     if (unit === 'bishop' || unit === 'king') return 'Prefers the back row during automatic deployment.';
-    return 'Prefers its piece-specific region during automatic deployment.';
+    return runAbilityGeneralDescription('eutactic');
   }
   if (unit === 'king') return 'Prefers a board-edge square in the player placement zone.';
   if (unit === 'rook') return 'Prefers the established King-flank and corner formation.';
   if (unit === 'bishop') return 'Prefers a square color opposite another Bishop when possible.';
+  return runAbilityGeneralDescription('agminate');
+}
+
+/**
+ * The same rule with no unit in hand — what the keyword means before it is attached to a
+ * piece (ADR-0370). `runAbilityDescription` states the piece-specific case and falls back
+ * to this one, so the glossary and the per-unit tip cannot drift apart.
+ */
+export function runAbilityGeneralDescription(ability: RunAbility): string {
+  if (ability === 'adlected') {
+    return 'May be deliberately placed in the player zone before random deployment.';
+  }
+  if (ability === 'eutactic') return 'Prefers its piece-specific region during automatic deployment.';
   return 'Prefers its piece-specific station during automatic deployment.';
 }
 
@@ -447,6 +461,24 @@ export const CACOCHYMIC_DISCOUNT: Readonly<Record<PurchasablePieceType, number>>
   queen: 3,
 });
 
+/**
+ * What a card's qualifier does to its price: Pestiferous discounts by the marked piece,
+ * every other property charges its state's surcharge. Offer creation, stored-offer
+ * normalization and review specimens all price through here, so a card cannot cost one
+ * thing in the Shop and another wherever else it is shown.
+ */
+export function runCardOfferCost(
+  value: number,
+  cardType: RunCardType | null,
+  plaguedPiece: PurchasablePieceType | null,
+): number {
+  if (plaguedPiece) return value - CACOCHYMIC_DISCOUNT[plaguedPiece];
+  if (cardType === 'legatine') return value + ADLECTED_COST;
+  if (cardType === 'concinnous') return value + EUTACTIC_COST;
+  if (cardType === 'hieratic') return value + AGMINATE_COST;
+  return value;
+}
+
 export function seededPestiferousTarget<T>(
   effectSeed: number,
   candidates: readonly T[],
@@ -480,9 +512,6 @@ export function concinnousOfferRoll(
   return createRng(rollSeed).int(denominator) === 0;
 }
 
-/** The seed labels here and in `legatineAdlectedAcquisitionTarget` keep the retired
- * `tactical:discipline` wording deliberately: they are RNG inputs, not names, and
- * rewording one would deal different cards at every existing seed (ADR-0369). */
 export function legatineAdlectedOfferRoll(
   seed: number,
   battleIndex: number,
@@ -557,9 +586,11 @@ export function createRunCardOffer(
     ? seededPestiferousTarget(effectSeed, card.pieces.map((_, index) => index), 0)
     : null;
   const plaguedPiece = cacochymicPieceIndex === null ? null : card.pieces[cacochymicPieceIndex];
-  const cost = plaguedPiece
-    ? card.value - CACOCHYMIC_DISCOUNT[plaguedPiece]
-    : card.value + (tactical ? ADLECTED_COST : concinnous ? EUTACTIC_COST : hieratic ? AGMINATE_COST : 0);
+  const cost = runCardOfferCost(
+    card.value,
+    pestiferous ? 'pestiferous' : tactical ? 'legatine' : concinnous ? 'concinnous' : hieratic ? 'hieratic' : null,
+    plaguedPiece,
+  );
   return {
     ...card,
     pieces: [...card.pieces],
@@ -596,7 +627,7 @@ export const OPENING_SHOP_ROLL_BATTLE_INDEX = -1;
  * 49-card deck from crowding low-value openings out of the Run.
  *
  * Opening draws roll qualifiers exactly like every later Shop draw, at every core
- * value: a Legatine surcharge may price an opening card past the starting gold and
+ * value: a Tactical surcharge may price an opening card past the starting gold and
  * out of reach. The one repair is the degenerate deal — ADR-0323 requires a
  * purchase before Continue, so if no offer is affordable the cheapest one drops its
  * qualifier and is offered standard, which no other opening card ever does. */
@@ -887,15 +918,7 @@ function normalizeCardOffers(value: unknown): RunCardOffer[] {
     return {
       ...offer,
       cardType,
-      cost: plaguedPiece
-        ? offer.value - CACOCHYMIC_DISCOUNT[plaguedPiece]
-        : offer.value + (cardType === 'legatine'
-          ? ADLECTED_COST
-          : cardType === 'concinnous'
-            ? EUTACTIC_COST
-            : cardType === 'hieratic'
-              ? AGMINATE_COST
-              : 0),
+      cost: runCardOfferCost(offer.value, cardType, plaguedPiece),
       cacochymicPieceIndex,
       effectTargetIndex,
     };

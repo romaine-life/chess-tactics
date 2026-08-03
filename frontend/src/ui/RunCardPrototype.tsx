@@ -8,34 +8,29 @@ import {
 import { SliderRow } from './dressing/SliderRow';
 import { StudioCatalogCard } from './studio/StudioCatalogCard';
 import {
-  ADLECTED_COST,
   AGMINATE_COST,
   AGMINATE_DISPLAY_NAME,
   CONCINNOUS_OFFER_DENOMINATOR,
-  EUTACTIC_DISPLAY_NAME,
+  ADLECTED_COST,
   HIERATIC_AGMINATE_OFFER_DENOMINATOR,
-  LEGATINE_ADLECTED_OFFER_DENOMINATOR,
   PESTIFEROUS_OFFER_DENOMINATOR,
   RUN_CARD_DECK,
-  RUN_CARD_TYPE_REFERENCE,
   RUN_STARTING_GOLD,
+  LEGATINE_ADLECTED_OFFER_DENOMINATOR,
   concinnousOfferRoll,
   hieraticAgminateOfferRoll,
   openingShopOffers,
   pestiferousOfferRoll,
   legatineAdlectedOfferRoll,
+  type RunCardOffer,
 } from '../run/model';
 import { runCardName } from '../run/cardNames';
 import {
   RUN_CARD_APPROVED_TUNING,
   RUN_CARD_CONTENTS_DENSITY_LADDER,
   RUN_CARD_COST_COIN_SOURCE_SLOT,
-  RUN_CARD_CONCINNOUS_FRAME_SLOT,
   RUN_CARD_FRAME_SLOT,
-  RUN_CARD_HIERATIC_FRAME_SLOT,
-  RUN_CARD_PESTIFEROUS_FRAME_SLOT,
   RUN_CARD_REFERENCE_WIDTH,
-  RUN_CARD_LEGATINE_FRAME_SLOT,
   RunCardFace,
   runCardUnitImageKind,
   type RunCardContentsDensity,
@@ -43,6 +38,12 @@ import {
   type RunCardContentsTuning,
   type RunCardImageKind,
 } from './RunCardFace';
+import {
+  runCardFaceContent,
+  runCardFrameSlot,
+  runCardSpecimen,
+  type RunCardSpecimenSpec,
+} from './runCardFaceContent';
 import {
   RUN_CARD_FRAME_BOX_LABELS,
   RUN_CARD_FRAME_BOX_NAMES,
@@ -127,57 +128,12 @@ const boxEdgeReadout = (value: number, total: number): string => (
   `${Math.round(value)} px · ${((value / total) * 100).toFixed(2)}%`
 );
 
-const STANDARD_CARD = Object.freeze({
-  name: 'Parish Militia',
-  cost: 9,
-  typeLine: 'Units',
-  grants: [
-    { count: 3, unit: 'pawn' },
-    { count: 1, unit: 'knight' },
-    { count: 1, unit: 'bishop' },
-  ] as const,
-  flavor: 'The bell was gone. Five shadows gathered at the accustomed hour.',
-}) satisfies RunCardFaceContent;
+// Every specimen below is a real Run card the Shop could deal, declared by its piece
+// composition and projected through `runCardFaceContent` like any live offer. The
+// prototype gets no private face format of its own (ADR-0283).
+const STANDARD_PIECES = ['pawn', 'pawn', 'pawn', 'knight', 'bishop'] as const;
 
-/** The type strip carries the qualifier as its right-side symbol, not as text (ADR-0339). */
-function specimenCardProperty(property: keyof typeof RUN_CARD_TYPE_REFERENCE): RunCardFaceContent['cardProperty'] {
-  return {
-    id: property,
-    name: RUN_CARD_TYPE_REFERENCE[property].name,
-    effect: RUN_CARD_TYPE_REFERENCE[property].effect,
-  };
-}
-
-const CONCINNOUS_CARD = Object.freeze({
-  name: 'Two Good Boots',
-  cost: 4,
-  typeLine: 'Units',
-  cardProperty: specimenCardProperty('concinnous'),
-  grants: [{ count: 2, unit: 'pawn' }] as const,
-  flavor: 'The road kept both pairs of boots, and returned neither name.',
-}) satisfies RunCardFaceContent;
-
-const TACTICAL_SINGLE_CARD = Object.freeze({
-  name: 'Regal Serenity',
-  cost: 9 + ADLECTED_COST,
-  typeLine: 'Units',
-  cardProperty: specimenCardProperty('legatine'),
-  grants: [{ count: 1, unit: 'queen', ability: 'adlected' }] as const,
-  flavor: 'She watched the empty court until ceremony became weather.',
-}) satisfies RunCardFaceContent;
-
-const TACTICAL_MULTI_CARD = Object.freeze({
-  ...STANDARD_CARD,
-  cost: 9 + ADLECTED_COST,
-  cardProperty: specimenCardProperty('legatine'),
-}) satisfies RunCardFaceContent;
-
-const HIERATIC_CARD = Object.freeze({
-  ...STANDARD_CARD,
-  cost: 9 + AGMINATE_COST,
-  cardProperty: specimenCardProperty('hieratic'),
-  properties: [{ name: AGMINATE_DISPLAY_NAME, target: 'Chosen on purchase' }] as const,
-}) satisfies RunCardFaceContent;
+const STANDARD_CARD_SPEC = Object.freeze({ pieces: STANDARD_PIECES }) satisfies RunCardSpecimenSpec;
 
 export type RunCardPrototypeVariant = RunCardFrameVariant;
 export type RunCardTacticalSpecimen = 'single' | 'multi';
@@ -185,7 +141,7 @@ export type RunCardTacticalSpecimen = 'single' | 'multi';
 export function runCardPrototypeVariantFromSearch(search: string): RunCardPrototypeVariant {
   const variant = new URLSearchParams(search).get('cardVariant');
   // `tactical` is the word this review address was coined under; a bookmark written
-  // before ADR-0369 still opens the frame it named.
+  // before ADR-0374 still opens the frame it named.
   if (variant === 'tactical') return 'legatine';
   return variant === 'pestiferous'
     || variant === 'legatine'
@@ -218,32 +174,41 @@ export function runCardPrototypeCostFromSearch(search: string): number | null {
   return Number.isInteger(value) && value >= 1 && value <= 12 ? value : null;
 }
 
+/**
+ * The specimen card behind each prototype variant. `targetRevealed` stands for
+ * acquisition: before it, a multi-unit card's drawn target is hidden and the face shows
+ * no marker; after it, the marker appears on the unit that actually got the state.
+ */
+export function runCardPrototypeSpecimen(
+  variant: RunCardPrototypeVariant,
+  tacticalSpecimen: RunCardTacticalSpecimen = 'single',
+  cost?: number | null,
+): RunCardOffer {
+  const spec = variant === 'pestiferous'
+    // The Bishop is the marked unit, so the card is discounted by its Cacochymic mark.
+    ? { ...STANDARD_CARD_SPEC, cardType: 'pestiferous' as const, cacochymicPieceIndex: 4 }
+    : variant === 'legatine'
+      ? tacticalSpecimen === 'multi'
+        ? { ...STANDARD_CARD_SPEC, cardType: 'legatine' as const }
+        : { pieces: ['queen'] as const, cardType: 'legatine' as const }
+      : variant === 'concinnous'
+        ? { pieces: ['pawn', 'pawn'] as const, cardType: 'concinnous' as const, effectTargetIndex: 0 }
+        : variant === 'hieratic'
+          ? { ...STANDARD_CARD_SPEC, cardType: 'hieratic' as const }
+          : STANDARD_CARD_SPEC;
+  return runCardSpecimen(cost === null || cost === undefined ? spec : { ...spec, cost });
+}
+
 export function runCardPrototypeContent(
   variant: RunCardPrototypeVariant,
   tacticalSpecimen: RunCardTacticalSpecimen = 'single',
-  concinnousTargetRevealed = false,
+  targetRevealed = false,
+  cost?: number | null,
 ): RunCardFaceContent {
-  if (variant === 'pestiferous') {
-    return {
-      ...STANDARD_CARD,
-      cost: 8,
-      cardProperty: specimenCardProperty('pestiferous'),
-      grants: STANDARD_CARD.grants.map((grant) => (
-        grant.unit === 'bishop' ? { ...grant, cacochymicIndices: [0] } : grant
-      )),
-    };
-  }
-  if (variant === 'legatine') {
-    return tacticalSpecimen === 'multi' ? TACTICAL_MULTI_CARD : TACTICAL_SINGLE_CARD;
-  }
-  if (variant === 'concinnous') {
-    return {
-      ...CONCINNOUS_CARD,
-      properties: [{ name: EUTACTIC_DISPLAY_NAME, target: concinnousTargetRevealed ? 'Pawn 1' : 'Target hidden' }],
-    };
-  }
-  if (variant === 'hieratic') return HIERATIC_CARD;
-  return STANDARD_CARD;
+  return runCardFaceContent(
+    runCardPrototypeSpecimen(variant, tacticalSpecimen, cost),
+    { purchased: targetRevealed },
+  );
 }
 
 export function runCardContentsStudyFromSearch(search: string): boolean {
@@ -262,55 +227,40 @@ const CONTENTS_STUDY_TUNING_BY_DENSITY = Object.fromEntries(
   RUN_CARD_CONTENTS_DENSITY_LADDER.map(({ density, tuning }) => [density, tuning]),
 ) as Readonly<Record<RunCardContentsDensity, RunCardContentsTuning>>;
 
-// Comparison specimens for the owner-visible Contents Box study, pinned to the
-// accepted density ladder the live face now derives per card load. They
-// deliberately keep one card identity and illustration so density is the variable.
+// Comparison specimens for the owner-visible Contents Box study, pinned to the accepted
+// density ladder the live face now derives per card load. Each is a projected card, so
+// its name and flavor follow its composition the way a real offer's do; the study holds
+// the illustration constant, and the ledger load is the variable under review.
 export const RUN_CARD_CONTENTS_STUDY_PROFILES: readonly RunCardContentsStudyProfile[] = Object.freeze([
   {
     id: 'roomy',
     label: 'Roomy',
     load: '1 cell · 1 row',
-    card: { ...STANDARD_CARD, grants: [{ count: 1, unit: 'queen' }] },
+    card: runCardFaceContent(runCardSpecimen({ pieces: ['queen'] })),
     tuning: CONTENTS_STUDY_TUNING_BY_DENSITY.roomy,
   },
   {
     id: 'filled',
     label: 'Filled',
     load: '2 cells · 2 rows',
-    card: {
-      ...STANDARD_CARD,
-      grants: [
-        { count: 3, unit: 'pawn' },
-        { count: 1, unit: 'bishop' },
-      ],
-    },
+    card: runCardFaceContent(runCardSpecimen({ pieces: ['pawn', 'pawn', 'pawn', 'bishop'] })),
     tuning: CONTENTS_STUDY_TUNING_BY_DENSITY.filled,
   },
   {
     id: 'packed',
     label: 'Packed',
     load: '3 cells · 2 rows',
-    card: {
-      ...STANDARD_CARD,
-      cardProperty: specimenCardProperty('concinnous'),
-    },
+    card: runCardFaceContent(runCardSpecimen({ ...STANDARD_CARD_SPEC, cardType: 'concinnous' })),
     tuning: CONTENTS_STUDY_TUNING_BY_DENSITY.packed,
   },
   {
     id: 'scrunched',
     label: 'Scrunched',
     load: '5 cells · 3 rows',
-    card: {
-      ...STANDARD_CARD,
-      cardProperty: specimenCardProperty('concinnous'),
-      grants: [
-        { count: 3, unit: 'pawn' },
-        { count: 1, unit: 'knight' },
-        { count: 1, unit: 'bishop' },
-        { count: 1, unit: 'rook' },
-        { count: 1, unit: 'queen' },
-      ],
-    },
+    card: runCardFaceContent(runCardSpecimen({
+      pieces: ['pawn', 'pawn', 'pawn', 'knight', 'bishop', 'rook', 'queen'],
+      cardType: 'concinnous',
+    })),
     tuning: CONTENTS_STUDY_TUNING_BY_DENSITY.scrunched,
   },
 ]);
@@ -326,8 +276,6 @@ export function scaledRunCardContentsTuning(
     countSize: tuning.countSize * scale,
     countColumn: tuning.countColumn * scale,
     rowGap: tuning.rowGap * scale,
-    effectSize: tuning.effectSize * scale,
-    effectGap: tuning.effectGap * scale,
     flavorScale: tuning.flavorScale * scale,
   };
 }
@@ -404,25 +352,21 @@ export function RunCardPrototypeViewer({
   const [hieraticDenominator, setHieraticDenominator] = useState(HIERATIC_AGMINATE_OFFER_DENOMINATOR);
   const [handoffCopyState, setHandoffCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
   const [loaded, setLoaded] = useState<ReadonlySet<RunCardImageKind>>(() => new Set());
-  const card = useMemo(
-    () => runCardPrototypeContent(cardVariant, tacticalSpecimen, concinnousTargetRevealed),
-    [cardVariant, tacticalSpecimen, concinnousTargetRevealed],
+  // The cost preview reprices the specimen and re-projects, rather than editing a face
+  // after the fact: there is one way to obtain a card face, and this is not an exception.
+  const specimen = useMemo(
+    () => runCardPrototypeSpecimen(cardVariant, tacticalSpecimen, previewCost),
+    [cardVariant, tacticalSpecimen, previewCost],
   );
   const displayedCard = useMemo(
-    () => previewCost === null ? card : { ...card, cost: previewCost },
-    [card, previewCost],
+    () => runCardFaceContent(specimen, { purchased: concinnousTargetRevealed }),
+    [specimen, concinnousTargetRevealed],
   );
-  const frameSlot = contentsStudy
-    ? RUN_CARD_FRAME_SLOT
-    : cardVariant === 'pestiferous'
-      ? RUN_CARD_PESTIFEROUS_FRAME_SLOT
-      : cardVariant === 'legatine'
-        ? RUN_CARD_LEGATINE_FRAME_SLOT
-        : cardVariant === 'concinnous'
-          ? RUN_CARD_CONCINNOUS_FRAME_SLOT
-          : cardVariant === 'hieratic'
-            ? RUN_CARD_HIERATIC_FRAME_SLOT
-            : RUN_CARD_FRAME_SLOT;
+  /** Only a multi-unit qualifier draws its target at acquisition, so only it can hide one. */
+  const drawnTargetVariant = specimen.cardType !== null
+    && specimen.cardType !== 'pestiferous'
+    && specimen.pieces.length > 1;
+  const frameSlot = contentsStudy ? RUN_CARD_FRAME_SLOT : runCardFrameSlot(specimen);
   const realizedPestiferousCount = useMemo(() => (
     Array.from({ length: RUN_CARD_SAMPLE_DRAWS }, (_, index) => {
       const card = RUN_CARD_DECK[index % RUN_CARD_DECK.length];
@@ -845,7 +789,7 @@ export function RunCardPrototypeViewer({
                   data-card-variant="tactical"
                   aria-pressed={cardVariant === 'legatine'}
                   onClick={() => chooseCardVariant('legatine')}
-                >Legatine</button>
+                >Tactical</button>
                 <button
                   type="button"
                   className={`tileset-view-action${cardVariant === 'concinnous' ? ' active' : ''}`}
@@ -863,7 +807,7 @@ export function RunCardPrototypeViewer({
               </div>
             )}
             {!contentsStudy && cardVariant === 'legatine' ? (
-              <div className="tileset-button-row" role="group" aria-label="Legatine contents">
+              <div className="tileset-button-row" role="group" aria-label="Tactical contents">
                 <button
                   type="button"
                   className={`tileset-view-action${tacticalSpecimen === 'single' ? ' active' : ''}`}
@@ -880,8 +824,8 @@ export function RunCardPrototypeViewer({
                 >Many units · chosen later</button>
               </div>
             ) : null}
-            {!contentsStudy && cardVariant === 'concinnous' ? (
-              <div className="tileset-button-row" role="group" aria-label="Concinnous target visibility">
+            {!contentsStudy && drawnTargetVariant ? (
+              <div className="tileset-button-row" role="group" aria-label="Acquisition target visibility">
                 <button
                   type="button"
                   className={`tileset-view-action${!concinnousTargetRevealed ? ' active' : ''}`}
@@ -893,7 +837,7 @@ export function RunCardPrototypeViewer({
                   className={`tileset-view-action${concinnousTargetRevealed ? ' active' : ''}`}
                   aria-pressed={concinnousTargetRevealed}
                   onClick={() => chooseConcinnousTargetState(true)}
-                >After purchase · Pawn 1</button>
+                >After purchase · marked</button>
               </div>
             ) : null}
             {!contentsStudy ? (
@@ -1069,7 +1013,7 @@ export function RunCardPrototypeViewer({
               dflt={DEFAULT_OPENING_SAMPLE_SEED}
             />
             <SliderRow
-              label={<>Legatine prevalence · 1 in {tacticalDenominator} drawn cards</>}
+              label={<>Tactical prevalence · 1 in {tacticalDenominator} drawn cards</>}
               value={tacticalDenominator}
               set={setTacticalDenominator}
               min={1}
@@ -1113,14 +1057,14 @@ export function RunCardPrototypeViewer({
                 <div><dt>Coin source</dt><dd>{coinSource.media!.sha256.slice(0, 12)} · {coinSource.status}</dd></div>
                 <div><dt>Artwork</dt><dd>{art.media!.sha256.slice(0, 12)} · {art.status}</dd></div>
                 <div><dt>Card</dt><dd>{contentsStudy ? 'Contents Box density study' : `${displayedCard.typeLine} · ${displayedCard.cost} gold`}</dd></div>
-                {cardVariant === 'legatine' ? <div><dt>Adlected target</dt><dd>{tacticalSpecimen === 'single' ? 'Forced and shown by icon' : 'Chosen at acquisition'}</dd></div> : null}
+                {cardVariant === 'legatine' ? <div><dt>Discipline target</dt><dd>{tacticalSpecimen === 'single' ? 'Forced and shown by icon' : 'Chosen at acquisition'}</dd></div> : null}
                 <div><dt>Ataraxia I sample</dt><dd>{realizedPestiferousCount} / {RUN_CARD_SAMPLE_DRAWS} Pestiferous · seed 4217</dd></div>
                 <div><dt>Opening budget</dt><dd>{RUN_STARTING_GOLD} gold · buy any affordable cards</dd></div>
                 <div><dt>Opening party</dt><dd>King + 2 Pawns + purchased cards</dd></div>
                 <div><dt>Opening sample</dt><dd>{openingSample.map((offer) => `${runCardName(offer)} (${offer.cost}${offer.cardType ? ` · ${offer.cardType}` : ''})`).join(' · ')}</dd></div>
                 <div><dt>Opening qualifiers</dt><dd>rolled as usual at every value; a card priced over {RUN_STARTING_GOLD} gold is offered out of reach</dd></div>
-                <div><dt>Legatine sample</dt><dd>{realizedTacticalCount} / {RUN_CARD_SAMPLE_DRAWS} draws · seed 4217</dd></div>
-                <div><dt>Concinnous sample</dt><dd>{realizedConcinnousCount} / {RUN_CARD_SAMPLE_DRAWS} non-Legatine draws · seed 4217 · all card values eligible</dd></div>
+                <div><dt>Tactical sample</dt><dd>{realizedTacticalCount} / {RUN_CARD_SAMPLE_DRAWS} draws · seed 4217</dd></div>
+                <div><dt>Concinnous sample</dt><dd>{realizedConcinnousCount} / {RUN_CARD_SAMPLE_DRAWS} non-Tactical draws · seed 4217 · all card values eligible</dd></div>
                 <div><dt>Hieratic sample</dt><dd>{realizedHieraticCount} / {RUN_CARD_SAMPLE_DRAWS} non-Concinnous draws · seed 4217 · {AGMINATE_DISPLAY_NAME} adds {AGMINATE_COST} gold</dd></div>
               </dl>
             ) : null}

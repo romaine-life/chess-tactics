@@ -291,6 +291,12 @@ curl -X POST <url>/api/active-run/craft -H 'content-type: application/json' -d '
 Same fields as the address grammar below, plus what an address cannot carry: units as objects
 with `abilities`, offers as objects. An unknown field is refused, not ignored.
 
+`cards` is the field for a Run that has already BOUGHT things — the Chartulary, and anything
+downstream of a purchase. Each is bought for real in the opening Shop and carried through every
+Battle before the target, so it arrives with a history (units lost, Pestiferous cards
+deteriorated) rather than as a fresh purchase; gold is restored afterwards. It cannot be given
+beside `army`, which replaces the roster those cards put there — use `add` for extra units.
+
 **The `url` it answers with — `/run/craft/<id>` — is the link to hand over, exactly as given.**
 The id is all it carries; the spec lives on the server, so the address stays short however large
 the spec grows, survives copy-paste intact, and re-crafts on every open. The id is the
@@ -320,8 +326,14 @@ hand-authored one-off leaves a durable link behind:
   names, chess letters, or a bare deck id (`pawn,pawn,knight` = `p,p,n` = `ppk`).
 - `war=<id>` picks the War (default: the first Run-eligible official one), `seed=<n>` and
   `tier=0|1` fix the roll. `view=army|relics|sell` still applies and survives the craft.
+- `cards=<card>[,<card>]` — the cards the Run already HOLDS, written exactly like `offers`.
 - Units carrying abilities cannot be written as an address — use the JSON spec above, which has
   no such limit because the link is an id either way.
+
+**Append `?to=<address>` to a craft link to land inside a Run workspace** rather than one click
+short of it — `/run/craft/<id>?to=/run/strategikon/chartulary` crafts the state and opens the
+Strategikon's held-card register on it. Only an address inside the Run is honoured. Use it
+whenever the thing to judge lives in a Run workspace; `/run` alone makes him go find it.
 
 A refused spec prints the reason on the Run screen and writes nothing. Crafting **replaces
 the account's active Run** — there is one per account. Overwrite it freely; see below.

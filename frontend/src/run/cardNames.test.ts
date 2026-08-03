@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   RUN_CARD_FLAVOR_BY_ID,
+  RUN_CARD_ID_BY_SLUG,
   RUN_CARD_NAME_BY_ID,
   canonicalCardId,
   runCardArtSlot,
   runCardFlavor,
   runCardName,
+  runCardSlug,
 } from './cardNames';
 import { RUN_CARD_DECK, cardContentsLabel, type RunCoreCard } from './model';
 
@@ -52,6 +54,20 @@ describe('Run card names', () => {
     // A shop offer and an art-review fixture with deck compositions read as their card.
     expect(runCardName({ pieces: ['knight', 'bishop'] as RunCoreCard['pieces'] })).toBe(RUN_CARD_NAME_BY_ID.kb);
     expect(runCardName({ pieces: ['pawn', 'rook'] as RunCoreCard['pieces'] })).toBe(RUN_CARD_NAME_BY_ID.pr);
+  });
+
+  it('addresses every card by its printed name, hyphenated, with no collision', () => {
+    expect(runCardSlug('ppb')).toBe('country-parish');
+    // Apostrophes are dropped rather than hyphenated, so a possessive reads as one word.
+    expect(runCardSlug('pb')).toBe('pilgrims-escort');
+    expect(runCardSlug('ppkb')).toBe('wayfarers-compact');
+    const slugs = RUN_CARD_DECK.map((card) => runCardSlug(card.id));
+    expect(new Set(slugs).size).toBe(slugs.length);
+    for (const slug of slugs) expect(slug).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+    // Every address resolves back to the card it names.
+    for (const card of RUN_CARD_DECK) expect(RUN_CARD_ID_BY_SLUG[runCardSlug(card.id)]).toBe(card.id);
+    // A card with no authored name addresses as its own id rather than an empty segment.
+    expect(runCardSlug('qq')).toBe('qq');
   });
 
   it('reads a composition outside the deck as its contents', () => {

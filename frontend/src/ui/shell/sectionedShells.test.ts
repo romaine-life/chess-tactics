@@ -119,6 +119,7 @@ const FAMILIES: ReadonlyArray<{
     sections: {
       enchiridion: address('/run/strategikon/enchiridion/units', '', runSource),
       prosopography: address('/run/strategikon/prosopography', '', runSource),
+      chartulary: address('/run/strategikon/chartulary', '', runSource),
       lipsanotheca: address('/run/strategikon/lipsanotheca', '', runSource),
     },
   },

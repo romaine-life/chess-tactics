@@ -8,7 +8,7 @@ export type RunUnitState = RunAbility | 'cacochymic';
 /**
  * Each unit state resolves its own typed `unit-ability-icon` role. The runtime never
  * substitutes a shield, movement glyph, flag, Unicode character, or the paired card
- * property's icon for one of these (ADR-0318, ADR-0339). Since ADR-0369 each locator
+ * property's icon for one of these (ADR-0318, ADR-0339). Since ADR-0374 each locator
  * is the state's own word: the slot, the stored value and the name a player reads are
  * one vocabulary.
  */

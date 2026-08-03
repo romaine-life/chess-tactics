@@ -787,16 +787,15 @@ function ShopPanel({
   return (
     <>
       {view === 'sell' ? sellWorkspace : (
+        // The title bar already says Run › Shop, so a heading painted into the
+        // scene's corner only repeats it. The name stays for assistive tech.
         <RunWorkspace
           className={`run-shop-workspace${shopScene ? ' has-scene' : ''}`}
           contentClassName="run-shop-workspace-content"
           data-testid="run-shop-workspace"
-          aria-labelledby="run-shop-workspace-title"
+          aria-label="Shop"
           backgroundArtwork={shopScene}
         >
-        {/* Always the Shop. Loot is a section that sometimes appears in it, not
-            a different place, so the heading never renames the screen. */}
-        <h2 id="run-shop-workspace-title">Shop</h2>
         {opening ? null : (
           <div className="run-shop-rules">
             <span>Victory</span>

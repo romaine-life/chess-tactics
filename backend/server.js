@@ -15808,7 +15808,7 @@ app.post('/api/admin/media-slots/retire-batch', async (req, res) => {
 });
 
 /**
- * Patch one slot's own metadata (ADR-0369). Creating a version already refuses to rewrite a
+ * Patch one slot's own metadata (ADR-0374). Creating a version already refuses to rewrite a
  * slot's contract silently — it throws `media_slot_metadata_requires_patch` — but nothing
  * implemented the patch it names, so a slot's acceptance contract could never be corrected
  * once written. A group contract that must gain or drop a member needs exactly this: the
