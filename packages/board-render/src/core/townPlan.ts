@@ -51,18 +51,49 @@ export const TOWN_PLAN_NOTES: Record<TownPlanKind, string> = {
   cluster: 'Short lanes off a centre, loosest of the four.',
 };
 
-export interface TownPlanParams {
-  /** Building sources the town draws from. A plot picks one. */
+/**
+ * One band of a town: its own buildings and its own size range, taking a share of the total.
+ *
+ * A town is rarely uniform — a row of large houses along the main street and smaller ones behind
+ * it is the normal case. Sections carry that, and `blend` decides whether they occupy separate
+ * parts of the town, interleave completely, or meet across a graded band.
+ */
+export interface TownSection {
+  id: string;
+  /** Building sources this section draws from. */
   buildingIds: readonly string[];
+  /** Relative weight against the other sections. Shares are normalised, so they need not sum to 1. */
+  share: number;
+  /** Average building scale for this section, and the boundaries it may vary between. */
+  scaleMean: number;
+  scaleMin: number;
+  scaleMax: number;
+}
+
+export const DEFAULT_TOWN_SECTION: Omit<TownSection, 'id'> = {
+  buildingIds: [],
+  share: 1,
+  scaleMean: 1,
+  scaleMin: 0.75,
+  scaleMax: 1.35,
+};
+
+export interface TownPlanParams {
+  /** The bands the town is built from. A plot belongs to exactly one. */
+  sections: readonly TownSection[];
+  /**
+   * How the sections meet, across the town's long axis.
+   * 0 keeps each section in its own stretch of the town, divided sharply.
+   * 1 interleaves them completely, so a big house may stand next to a small one anywhere.
+   * Between the two, sections hold their own ground but mingle across a band at the divide,
+   * and the band widens as this rises.
+   */
+  blend: number;
   /** Optional focal structures (a mill, a castle). At most one is sited per town. */
   landmarkIds: readonly string[];
   plan: TownPlanKind;
   /** How many buildings to site, before spacing and board rejection thin it. */
   size: number;
-  /** Average building scale, and the boundaries it may vary between. */
-  scaleMean: number;
-  scaleMin: number;
-  scaleMax: number;
   /** Average frontage per building along a street, in scene pixels. */
   plotWidth: number;
   /** Distance from a street's centreline to the buildings that face it. */
@@ -81,13 +112,11 @@ export interface TownPlanParams {
 
 /** Shipped baseline. The Town panel renders from this and its Reset restores from it (ADR-0057). */
 export const TOWN_PLAN_DEFAULTS: TownPlanParams = {
-  buildingIds: [],
+  sections: [{ id: 'a', ...DEFAULT_TOWN_SECTION }],
+  blend: 0.35,
   landmarkIds: [],
   plan: 'linear',
   size: 14,
-  scaleMean: 1,
-  scaleMin: 0.75,
-  scaleMax: 1.35,
   plotWidth: 110,
   setback: 78,
   looseness: 0.45,
@@ -328,6 +357,8 @@ export function townStreets(
 
 interface TownPlot {
   ground: ForestGroundPoint;
+  /** Normalised position along the town's long axis, 0..1. Decides which section claims it. */
+  axis: number;
   /** Screen-space vector from the plot back toward its street — the direction it must face. */
   faceX: number;
   faceY: number;
@@ -337,6 +368,8 @@ interface TownPlot {
 }
 
 export interface TownPlanInput {
+  /** Identity of the town being planned. Its buildings are tagged with it. */
+  townId: string;
   /** The area the author dragged. The town fills it and never leaves it. */
   bounds: TownBounds;
   params: TownPlanParams;
@@ -347,21 +380,17 @@ export interface TownPlanInput {
 }
 
 /**
- * Stable id prefix for the town filling an area, so regenerating replaces it rather than stacking
- * a second town on the same ground. Derived from the area itself, so it survives a page reload.
+ * Id prefix for one town INSTANCE. Keyed by the town's own id rather than by its area, so a town
+ * can be re-tuned, re-seeded and re-dragged without losing hold of the buildings it already owns,
+ * and so a board can carry as many towns as the author wants without them colliding.
  */
-export function townIdPrefix(bounds: TownBounds): string {
-  const parts = [bounds.minX, bounds.minY, bounds.maxX, bounds.maxY];
-  let key = 0x811c9dc5;
-  for (const part of parts) {
-    key = Math.imul(key ^ (Math.round(part) | 0), 0x01000193) >>> 0;
-  }
-  return `t${key.toString(36)}.`;
+export function townIdPrefix(townId: string): string {
+  return `t${townId}.`;
 }
 
-/** True when a placement belongs to the town filling this area. */
-export function isTownMember(placement: FloatingArtworkPlacement, bounds: TownBounds): boolean {
-  return placement.id.startsWith(townIdPrefix(bounds));
+/** True when a placement belongs to this town instance. */
+export function isTownMember(placement: FloatingArtworkPlacement, townId: string): boolean {
+  return placement.id.startsWith(townIdPrefix(townId));
 }
 
 function onPlayableBoard(ground: ForestGroundPoint, board: { cols: number; rows: number }): boolean {
@@ -385,12 +414,28 @@ export interface TownPlanResult {
  * can name the real cause instead of blaming frontage for a town the board filter rejected.
  */
 export function planTown(input: TownPlanInput): TownPlanResult {
-  const { bounds, params, geometry, board, existing } = input;
+  const { townId, bounds, params, geometry, board, existing } = input;
   const empty: TownPlanResult = {
     placements: [], plotsOffered: 0, rejectedOnBoard: 0, rejectedSpacing: 0,
   };
-  const buildings = params.buildingIds.filter((id) => geometry.directions(id).length > 0);
-  if (!buildings.length || params.size <= 0 || params.plotWidth <= 0) return empty;
+  // Only sections that can actually draw something count, so an empty section neither takes a
+  // share of the town nor leaves a hole in it.
+  const sections = params.sections
+    .map((section) => ({
+      ...section,
+      buildingIds: section.buildingIds.filter((id) => geometry.directions(id).length > 0),
+    }))
+    .filter((section) => section.buildingIds.length > 0 && section.share > 0);
+  if (!sections.length || params.size <= 0 || params.plotWidth <= 0) return empty;
+  const shareTotal = sections.reduce((sum, section) => sum + section.share, 0);
+  // Cumulative share bands across the town's long axis. A plot's position picks its section.
+  const bands: Array<{ end: number; section: (typeof sections)[number] }> = [];
+  let running = 0;
+  for (const section of sections) {
+    running += section.share / shareTotal;
+    bands.push({ end: running, section });
+  }
+  bands[bands.length - 1].end = 1;
   const area = {
     minX: Math.min(bounds.minX, bounds.maxX),
     maxX: Math.max(bounds.minX, bounds.maxX),
@@ -450,6 +495,7 @@ export function planTown(input: TownPlanInput): TownPlanResult {
           || cell.y < area.minY || cell.y > area.maxY) continue;
         plots.push({
           ground,
+          axis: 0,
           // Face back across the setback toward the street centreline.
           faceX: -normal.x * side,
           faceY: -normal.y * side,
@@ -461,7 +507,22 @@ export function planTown(input: TownPlanInput): TownPlanResult {
   }
   if (!plots.length) return empty;
 
-  // 2. Take the most central plots first, with a little noise so the edge frays instead of
+  // 2. Fix each plot's position along the town's LONG axis, normalised across the plots that
+  //    actually exist. Sections are laid out along this axis, so a two-section town reads as one
+  //    stretch of large houses giving way to another of small ones rather than as noise.
+  {
+    const wide = Math.abs(area.maxX - area.minX) >= Math.abs(area.maxY - area.minY);
+    const coordinate = (plot: TownPlot): number => {
+      const cell = unprojectBoardPoint({ left: plot.ground.x, top: plot.ground.y });
+      return wide ? cell.x : cell.y;
+    };
+    const values = plots.map(coordinate);
+    const low = Math.min(...values);
+    const span = Math.max(...values) - low;
+    plots.forEach((plot, i) => { plot.axis = span > 0 ? (values[i] - low) / span : 0.5; });
+  }
+
+  // 3. Take the most central plots first, with a little noise so the edge frays instead of
   //    ending on a clean circle. This is the density gradient.
   const ordered = [...plots].sort((left, right) => {
     const a = left.radius * (0.75 + hashUnit(left.index, 0, seed, 23) * 0.5);
@@ -475,14 +536,8 @@ export function planTown(input: TownPlanInput): TownPlanResult {
     if (ground) occupied.push(ground);
   }
 
-  const prefix = townIdPrefix(area);
+  const prefix = townIdPrefix(townId);
   const spacing = Math.max(0, params.spacing);
-  const scaleLow = Math.min(params.scaleMin, params.scaleMax);
-  const scaleHigh = Math.max(params.scaleMin, params.scaleMax);
-  const mean = clamp(params.scaleMean, scaleLow, scaleHigh);
-  // Vary around the AVERAGE and stay inside the boundaries: two rolls give a centre-weighted
-  // spread, so most buildings sit near the average rather than smeared across the whole range.
-  const halfRange = Math.min(mean - scaleLow, scaleHigh - mean);
 
   const produced: Array<{ placement: FloatingArtworkPlacement; ground: ForestGroundPoint }> = [];
   const landmarks = params.landmarkIds.filter((id) => geometry.directions(id).length > 0);
@@ -496,7 +551,13 @@ export function planTown(input: TownPlanInput): TownPlanResult {
 
     // The focal structure takes the most central plot, then ordinary buildings fill the rest.
     const isLandmark = landmarks.length > 0 && produced.length === 0;
-    const pool = isLandmark ? landmarks : buildings;
+    // Which section claims this plot. Blend displaces the plot's position along the axis before
+    // the band lookup: at 0 the bands are hard-edged, and as it rises the displacement grows until
+    // a plot can land in any band at all, which is a full interleave.
+    const drift = (hashUnit(plot.index, 7, seed, 29) - 0.5) * clamp(params.blend, 0, 1);
+    const at = clamp(plot.axis + drift, 0, 1);
+    const section = (bands.find((band) => at <= band.end) ?? bands[bands.length - 1]).section;
+    const pool = isLandmark ? landmarks : section.buildingIds;
     const sourceArtId = pool[Math.floor(hashUnit(plot.index, 1, seed, 24) * pool.length) % pool.length];
     const installed = geometry.directions(sourceArtId);
     let direction = facingTowards(plot.faceX, plot.faceY, installed);
@@ -507,6 +568,13 @@ export function planTown(input: TownPlanInput): TownPlanResult {
     const sprite = geometry.sprite(sourceArtId, direction);
     if (!sprite) continue;
 
+    // Size comes from the SECTION, which is what lets one part of a town be built large and
+    // another small. Two rolls give a centre-weighted spread, so most buildings sit near the
+    // section's average rather than smeared across its range.
+    const scaleLow = Math.min(section.scaleMin, section.scaleMax);
+    const scaleHigh = Math.max(section.scaleMin, section.scaleMax);
+    const mean = clamp(section.scaleMean, scaleLow, scaleHigh);
+    const halfRange = Math.min(mean - scaleLow, scaleHigh - mean);
     const spreadRoll = hashUnit(plot.index, 4, seed, 27) + hashUnit(plot.index, 5, seed, 28) - 1;
     const instanceScale = clamp(
       Math.round((mean + spreadRoll * halfRange) * 1000) / 1000,

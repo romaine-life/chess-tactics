@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react';
 import { BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM, boardBackgroundMode, boardBounds, cameraToContainBounds, defaultBoardCameraBounds, defaultSubterrainMaterial, isVersionedPredrawnBoardSurface, MAX_FLOATING_ARTWORK_PIXEL, mergeSharedLevel, normalizeBoardCameraBounds, predrawnEnvironmentGeometryFingerprintInputV2, predrawnVisualFootprintClipStyleForCell, resolvedBoardCameraBounds, resolveTerrainSideExposure, resolveTerrainSideFaces, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, type BoardBackgroundMode, type BoardCameraBounds, type BoardCameraSnapMode, type PredrawnGenerationFrame, type SubterrainMaterial, type SubterrainPlacementMap, type TerrainSideMaterials, type VersionedPredrawnBoardSurface } from '@chess-tactics/board-render';
 import { boardLabCellPosition, boardLabMetrics, immutableBoardLabTerrainSrc } from '../render/BoardLabBoard';
-import { unprojectBoardPoint } from '@chess-tactics/board-render';
+import { unprojectBoardPoint, type BoardTown, type BoardTownSection } from '@chess-tactics/board-render';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { FloatingArtworkSprite, PropSprite, propHalfSrc } from '../render/BoardStructure';
 import { PROP_DEFS, defaultPropDef, propCells, propDef, type PropDef, type PropKind } from '../core/props';
@@ -32,6 +32,7 @@ import {
   TOWN_PLAN_KINDS,
   TOWN_PLAN_LABELS,
   TOWN_PLAN_NOTES,
+  DEFAULT_TOWN_SECTION,
   isTownMember,
   pixelsInTilesAcross,
   planTown,
@@ -3099,29 +3100,34 @@ export function LevelEditor(): ReactElement {
     () => townBuildingCatalog.filter((asset) => /castle|windmill|mill|tower|keep/.test(asset.id)),
     [townBuildingCatalog],
   );
-  const [townArea, setTownArea] = useState<TownBounds | null>(null);
-  // Live rectangle while dragging, in surface pixels, so the author sees the ground being claimed.
+  /** Saved town instances. A board carries as many as the author places. */
+  const [boardTowns, setBoardTowns] = useState<BoardTown[]>(initialBoard?.towns ?? []);
+  const newTownSection = (): BoardTownSection => ({
+    id: `s${Math.random().toString(36).slice(2, 8)}`,
+    buildingIds: [],
+    share: 1,
+    scaleMean: 1,
+    scaleMin: 0.75,
+    scaleMax: 1.35,
+  });
+  const [selectedTownId, setSelectedTownId] = useState<string | null>(null);
   /** The live selection in grid cells, snapped, so the preview shows exactly what will be used. */
   const [townDragBounds, setTownDragBounds] = useState<TownBounds | null>(null);
   const townDragRef = useRef<{ pointerId: number; cellX: number; cellY: number } | null>(null);
-  const [townBuildings, setTownBuildings] = useState<string[]>([]);
-  const [townLandmarks, setTownLandmarks] = useState<string[]>([]);
-  const [townPlanKind, setTownPlanKind] = useState<TownPlanKind>(TOWN_PLAN_DEFAULTS.plan);
-  const [townSize, setTownSize] = useState(TOWN_PLAN_DEFAULTS.size);
-  const [townScaleMean, setTownScaleMean] = useState(TOWN_PLAN_DEFAULTS.scaleMean);
-  const [townScaleMin, setTownScaleMin] = useState(TOWN_PLAN_DEFAULTS.scaleMin);
-  const [townScaleMax, setTownScaleMax] = useState(TOWN_PLAN_DEFAULTS.scaleMax);
-  const [townPlotWidth, setTownPlotWidth] = useState(TOWN_PLAN_DEFAULTS.plotWidth);
-  const [townSetback, setTownSetback] = useState(TOWN_PLAN_DEFAULTS.setback);
-  const [townLooseness, setTownLooseness] = useState(TOWN_PLAN_DEFAULTS.looseness);
-  const [townFacingWobble, setTownFacingWobble] = useState(TOWN_PLAN_DEFAULTS.facingWobble);
-  const [townSpacing, setTownSpacing] = useState(TOWN_PLAN_DEFAULTS.spacing);
-  const [townAvoidBoard, setTownAvoidBoard] = useState(TOWN_PLAN_DEFAULTS.avoidPlayableBoard);
-  const [townSeed, setTownSeed] = useState(randomGeneratorSeed);
-  // How many buildings the plan actually sited. A plan offers a finite number of plots, so a
-  // large requested size can be cut short by frontage, spacing, or the board — say so.
   const [townSited, setTownSited] = useState<
     { placed: number; onBoard: number; spacing: number; offered: number } | null>(null);
+  const selectedTown = boardTowns.find((town) => town.id === selectedTownId) ?? null;
+  const townArea: TownBounds | null = selectedTown?.bounds ?? null;
+  // Knob edits live in React state and are written into the document by Regenerate, the same way
+  // the Generate panel holds its scatter rows until you press Generate.
+  const updateTown = (id: string, change: Partial<BoardTown>): void => {
+    setBoardTowns((current) => current.map((town) => (town.id === id ? { ...town, ...change } : town)));
+  };
+  const updateTownSection = (townId: string, sectionId: string, change: Partial<BoardTownSection>): void => {
+    setBoardTowns((current) => current.map((town) => (town.id === townId
+      ? { ...town, sections: town.sections.map((sec) => (sec.id === sectionId ? { ...sec, ...change } : sec)) }
+      : town)));
+  };
   // Ground cover is a per-tile FEATURE (density), not a doodad: which tiles grow vegetation
   // and how thick. Tufts are rolled deterministically from this density (see core/groundCover).
   const [boardCover, setBoardCover] = useState<Record<string, GroundCoverDensity>>(initialBoard?.cover ?? {});
@@ -3518,6 +3524,7 @@ export function LevelEditor(): ReactElement {
     setBoardProps(board.props);
     setBoardFloatingArtwork(board.floatingArtwork ?? []);
     setBoardCover(board.cover);
+    setBoardTowns(board.towns ?? []);
     setBoardCoverSeeds(board.coverSeeds ?? {});
     setBoardCoverTypes(board.coverTypes ?? {});
     setBoardFeatures(board.features);
@@ -3552,8 +3559,8 @@ export function LevelEditor(): ReactElement {
   // The current painted board as a single EditorBoard — the one shape both the transient
   // play-test URL and the level save serialize from, so they can never describe different boards.
   const currentEditorBoard = useMemo<EditorBoard>(
-    () => ({ cols: boardCols, rows: boardRows, cameraBounds: boardCameraBounds, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, backgroundMode: boardBackgroundModeState, surface: boardSurface, predrawnGenerationFrame: boardPredrawnGenerationFrame, macroTiles: boardMacroTiles, units: boardUnits, doodads: boardDoodads, props: boardProps, floatingArtwork: boardFloatingArtwork, cover: boardCover, coverTypes: boardCoverTypes, coverSeeds: boardCoverSeeds, features: boardFeatures, fences: boardFences, fencePosts: boardFencePosts, walls: boardWalls, wallArt: boardWallArt, subterrain: boardSubterrain, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions }),
-    [boardCols, boardRows, boardCameraBounds, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, boardFactionDirections, boardCells, boardBackgroundModeState, boardSurface, boardPredrawnGenerationFrame, boardMacroTiles, boardUnits, boardDoodads, boardProps, boardFloatingArtwork, boardCover, boardCoverTypes, boardCoverSeeds, boardFeatures, boardFences, boardFencePosts, boardWalls, boardWallArt, boardSubterrain, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions],
+    () => ({ cols: boardCols, rows: boardRows, cameraBounds: boardCameraBounds, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, backgroundMode: boardBackgroundModeState, surface: boardSurface, predrawnGenerationFrame: boardPredrawnGenerationFrame, macroTiles: boardMacroTiles, units: boardUnits, doodads: boardDoodads, props: boardProps, floatingArtwork: boardFloatingArtwork, cover: boardCover, coverTypes: boardCoverTypes, coverSeeds: boardCoverSeeds, features: boardFeatures, fences: boardFences, fencePosts: boardFencePosts, walls: boardWalls, wallArt: boardWallArt, subterrain: boardSubterrain, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions, towns: boardTowns }),
+    [boardCols, boardRows, boardCameraBounds, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, boardFactionDirections, boardCells, boardBackgroundModeState, boardSurface, boardPredrawnGenerationFrame, boardMacroTiles, boardUnits, boardDoodads, boardProps, boardFloatingArtwork, boardCover, boardCoverTypes, boardCoverSeeds, boardFeatures, boardFences, boardFencePosts, boardWalls, boardWallArt, boardSubterrain, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions, boardTowns],
   );
   const predrawnVersionCells = useMemo(
     () => Array.from({ length: boardRows }, (_, y) => (
@@ -4223,28 +4230,28 @@ export function LevelEditor(): ReactElement {
    * Site or re-site a town. A town's id prefix comes from its centre, so regenerating replaces
    * the buildings already standing there instead of stacking a second town on top of them.
    */
-  const generateTown = (area: TownBounds): void => {
-    if (!townBuildings.length) return;
+  /** Rebuild one town in place from its saved settings. */
+  const generateTown = (town: BoardTown, townsOverride?: BoardTown[]): void => {
+    const towns = townsOverride ?? boardTowns;
     const current = currentEditorBoardRef.current;
     const all = current.floatingArtwork ?? [];
-    const others = all.filter((placement) => !isTownMember(placement, area));
+    const others = all.filter((placement) => !isTownMember(placement, town.id));
     const result = planTown({
-      bounds: area,
+      townId: town.id,
+      bounds: town.bounds,
       params: {
-        buildingIds: townBuildings,
-        landmarkIds: townLandmarks,
-        plan: townPlanKind,
-        size: townSize,
-        scaleMean: townScaleMean,
-        scaleMin: townScaleMin,
-        scaleMax: townScaleMax,
-        plotWidth: townPlotWidth,
-        setback: townSetback,
-        looseness: townLooseness,
-        facingWobble: townFacingWobble,
-        spacing: townSpacing,
-        avoidPlayableBoard: townAvoidBoard,
-        seed: townSeed,
+        sections: town.sections,
+        blend: town.blend,
+        landmarkIds: town.landmarkIds,
+        plan: town.plan as TownPlanKind,
+        size: town.size,
+        plotWidth: town.plotWidth,
+        setback: town.setback,
+        looseness: town.looseness,
+        facingWobble: town.facingWobble,
+        spacing: town.spacing,
+        avoidPlayableBoard: town.avoidPlayableBoard,
+        seed: town.seed,
       },
       geometry: forestGeometry,
       board: { cols: current.cols, rows: current.rows },
@@ -4256,36 +4263,70 @@ export function LevelEditor(): ReactElement {
       spacing: result.rejectedSpacing,
       offered: result.plotsOffered,
     });
-    if (!result.placements.length && others.length === all.length) return;
     const next = cloneEditorBoard(current);
+    // The town list rides the committed board, like generatedRegions. Writing placements without
+    // it would hand back a board still carrying the old list and wipe the town that made them.
+    next.towns = towns;
     next.floatingArtwork = sortFloatingArtworkByDepth([...others, ...result.placements], forestGeometry);
     commitEditorBoard(next, null);
   };
 
-  const removeTown = (area: TownBounds): void => {
+  /** Drop a town: its buildings AND the saved instance. */
+  const removeTown = (town: BoardTown): void => {
     const current = currentEditorBoardRef.current;
     const all = current.floatingArtwork ?? [];
-    const kept = all.filter((placement) => !isTownMember(placement, area));
+    const kept = all.filter((placement) => !isTownMember(placement, town.id));
+    const towns = boardTowns.filter((entry) => entry.id !== town.id);
+    setBoardTowns(towns);
+    setSelectedTownId((id) => (id === town.id ? null : id));
     setTownSited(null);
-    if (kept.length === all.length) return;
     const next = cloneEditorBoard(current);
+    next.towns = towns;
     next.floatingArtwork = kept;
     commitEditorBoard(next, null);
   };
 
+  /** A fresh town on newly dragged ground. Each drag is its own instance, never a replacement. */
+  const createTown = (bounds: TownBounds): void => {
+    const template = selectedTown;
+    const town: BoardTown = {
+      id: `t${Math.random().toString(36).slice(2, 8)}`,
+      name: `Town ${boardTowns.length + 1}`,
+      bounds,
+      plan: template?.plan ?? TOWN_PLAN_DEFAULTS.plan,
+      size: template?.size ?? TOWN_PLAN_DEFAULTS.size,
+      // Carry the last town's recipe forward so placing a second one does not start from nothing.
+      sections: (template?.sections ?? [newTownSection()])
+        .map((section) => ({ ...section, buildingIds: [...section.buildingIds], id: newTownSection().id })),
+      blend: template?.blend ?? TOWN_PLAN_DEFAULTS.blend,
+      landmarkIds: template?.landmarkIds ?? [],
+      plotWidth: template?.plotWidth ?? TOWN_PLAN_DEFAULTS.plotWidth,
+      setback: template?.setback ?? TOWN_PLAN_DEFAULTS.setback,
+      looseness: template?.looseness ?? TOWN_PLAN_DEFAULTS.looseness,
+      facingWobble: template?.facingWobble ?? TOWN_PLAN_DEFAULTS.facingWobble,
+      spacing: template?.spacing ?? TOWN_PLAN_DEFAULTS.spacing,
+      avoidPlayableBoard: template?.avoidPlayableBoard ?? TOWN_PLAN_DEFAULTS.avoidPlayableBoard,
+      seed: randomGeneratorSeed(),
+    };
+    const towns = [...boardTowns, town];
+    setBoardTowns(towns);
+    setSelectedTownId(town.id);
+    generateTown(town, towns);
+  };
+
   const resetTownParams = (): void => {
-    setTownPlanKind(TOWN_PLAN_DEFAULTS.plan);
-    setTownSize(TOWN_PLAN_DEFAULTS.size);
-    setTownScaleMean(TOWN_PLAN_DEFAULTS.scaleMean);
-    setTownScaleMin(TOWN_PLAN_DEFAULTS.scaleMin);
-    setTownScaleMax(TOWN_PLAN_DEFAULTS.scaleMax);
-    setTownPlotWidth(TOWN_PLAN_DEFAULTS.plotWidth);
-    setTownSetback(TOWN_PLAN_DEFAULTS.setback);
-    setTownLooseness(TOWN_PLAN_DEFAULTS.looseness);
-    setTownFacingWobble(TOWN_PLAN_DEFAULTS.facingWobble);
-    setTownSpacing(TOWN_PLAN_DEFAULTS.spacing);
-    setTownAvoidBoard(TOWN_PLAN_DEFAULTS.avoidPlayableBoard);
-    setTownSeed(TOWN_PLAN_DEFAULTS.seed);
+    if (!selectedTown) return;
+    updateTown(selectedTown.id, {
+      plan: TOWN_PLAN_DEFAULTS.plan,
+      size: TOWN_PLAN_DEFAULTS.size,
+      blend: TOWN_PLAN_DEFAULTS.blend,
+      plotWidth: TOWN_PLAN_DEFAULTS.plotWidth,
+      setback: TOWN_PLAN_DEFAULTS.setback,
+      looseness: TOWN_PLAN_DEFAULTS.looseness,
+      facingWobble: TOWN_PLAN_DEFAULTS.facingWobble,
+      spacing: TOWN_PLAN_DEFAULTS.spacing,
+      avoidPlayableBoard: TOWN_PLAN_DEFAULTS.avoidPlayableBoard,
+    });
   };
 
   /** Re-sort every piece of scene art into back-to-front paint order. */
@@ -8364,8 +8405,16 @@ export function LevelEditor(): ReactElement {
                       // diagonal runs along ONE grid axis, and an 8x1 selection is exactly the
                       // roadside row plan. Only reject a selection with no extent at all.
                       if (area.maxX - area.minX < 1 && area.maxY - area.minY < 1) return;
-                      setTownArea(area);
-                      if (tool === 'erase') removeTown(area); else generateTown(area);
+                      if (tool === 'erase') {
+                        // Erase drops every town whose area the stroke covers.
+                        const overlapped = boardTowns.filter((town) => (
+                          town.bounds.minX <= area.maxX && town.bounds.maxX >= area.minX
+                          && town.bounds.minY <= area.maxY && town.bounds.maxY >= area.minY
+                        ));
+                        overlapped.forEach(removeTown);
+                        return;
+                      }
+                      createTown(area);
                     }}
                     onPointerCancel={() => {
                       townDragRef.current = null; setTownDragBounds(null);
@@ -9740,149 +9789,144 @@ export function LevelEditor(): ReactElement {
           </section>
         ) : brushKind === 'town' ? (
           <section className="skirmish-card le-brush-panel le-town-panel" data-testid="town-controls">
-            <h2>Town</h2>
-            <p className="le-board-note">Drag out an area and the town fills it. Buildings are laid out along streets and turned to face them — a plan, not a scatter — and none of them leave the area you dragged. Tune below and press Regenerate to rebuild the same town on the same ground. Buildings are Scene Art: visual only, never on the playable grid, no collision.</p>
-            <h2 className="le-card-subhead">Plan</h2>
-            <div className="le-seg le-town-plan-seg" role="group" aria-label="Town plan">
-              {TOWN_PLAN_KINDS.map((kind) => (
-                <ChromeButton unit="inner-text-button"
-                  key={kind}
-                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', townPlanKind === kind && 'active')}
-                  aria-pressed={townPlanKind === kind}
-                  title={TOWN_PLAN_NOTES[kind]}
-                  onClick={() => setTownPlanKind(kind)}
-                >{TOWN_PLAN_LABELS[kind]}</ChromeButton>
-              ))}
-            </div>
-            <p className="le-board-note">{TOWN_PLAN_NOTES[townPlanKind]}</p>
+            <h2>Towns</h2>
+            <p className="le-board-note">Drag out an area and a new town fills it. Every town is kept: pick one below to retune and regenerate it, and each new drag starts from the last one settings. Buildings are Scene Art: visual only, never on the playable grid, no collision.</p>
             <div className="le-pal-group">
-              <span className="le-pal-grouplabel">Buildings</span>
-              <AssetSwatchList
-                ariaLabel="Town buildings"
-                items={townBuildingCatalog.map((asset) => ({
-                  id: `town-${asset.id}`,
-                  label: asset.label,
-                  title: `${asset.label} · include in the town`,
-                  selected: townBuildings.includes(asset.id),
-                  onSelect: () => setTownBuildings((current) => (
-                    current.includes(asset.id)
-                      ? current.filter((id) => id !== asset.id)
-                      : [...current, asset.id]
-                  )),
-                  content: <>
-                    <img src={structureArtDirectionHalfSrc(asset.id, 'south', 'front')} alt="" draggable={false} />
-                    <small>{asset.label}</small>
-                  </>,
-                }))}
-              />
+              <span className="le-pal-grouplabel">Placed towns</span>
+              {boardTowns.length ? (
+                <div className="le-town-list">
+                  {boardTowns.map((town) => (
+                    <div className="le-ctrlrow" key={town.id}>
+                      <ChromeButton unit="inner-text-button"
+                        className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', selectedTownId === town.id && 'active')}
+                        aria-pressed={selectedTownId === town.id}
+                        onClick={() => setSelectedTownId(town.id)}
+                      >{town.name}</ChromeButton>
+                      <span className="le-ctrllabel">
+                        {Math.abs(town.bounds.maxX - town.bounds.minX)} × {Math.abs(town.bounds.maxY - town.bounds.minY)} tiles
+                      </span>
+                      <ChromeButton unit="inner-text-button"
+                        className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                        onClick={() => removeTown(town)}
+                      >Remove</ChromeButton>
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="le-board-note">No towns yet. Drag out an area to place one.</p>}
+            </div>
+            {selectedTown ? (<>
+              <h2 className="le-card-subhead">Plan</h2>
+              <div className="le-seg le-town-plan-seg" role="group" aria-label="Town plan">
+                {TOWN_PLAN_KINDS.map((kind) => (
+                  <ChromeButton unit="inner-text-button"
+                    key={kind}
+                    className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', selectedTown.plan === kind && 'active')}
+                    aria-pressed={selectedTown.plan === kind}
+                    title={TOWN_PLAN_NOTES[kind]}
+                    onClick={() => updateTown(selectedTown.id, { plan: kind })}
+                  >{TOWN_PLAN_LABELS[kind]}</ChromeButton>
+                ))}
+              </div>
+              <p className="le-board-note">{TOWN_PLAN_NOTES[selectedTown.plan as TownPlanKind]}</p>
+
+              <h2 className="le-card-subhead">Sections</h2>
+              <p className="le-board-note">Each section takes a share of the town and brings its own buildings and its own size range — a row of large houses and a quarter of small ones are two sections of one town, not two towns.</p>
+              {selectedTown.sections.map((section, index) => (
+                <div className="le-town-section" key={section.id}>
+                  <div className="le-ctrlrow">
+                    <span className="le-ctrllabel">Section {index + 1}</span>
+                    {selectedTown.sections.length > 1 ? (
+                      <ChromeButton unit="inner-text-button"
+                        className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                        onClick={() => updateTown(selectedTown.id, {
+                          sections: selectedTown.sections.filter((entry) => entry.id !== section.id),
+                        })}
+                      >Remove</ChromeButton>
+                    ) : null}
+                  </div>
+                  <AssetSwatchList
+                    ariaLabel={`Section ${index + 1} buildings`}
+                    items={townBuildingCatalog.map((asset) => ({
+                      id: `town-${section.id}-${asset.id}`,
+                      label: asset.label,
+                      title: `${asset.label} · include in section ${index + 1}`,
+                      selected: section.buildingIds.includes(asset.id),
+                      onSelect: () => updateTownSection(selectedTown.id, section.id, {
+                        buildingIds: section.buildingIds.includes(asset.id)
+                          ? section.buildingIds.filter((id) => id !== asset.id)
+                          : [...section.buildingIds, asset.id],
+                      }),
+                      content: <>
+                        <img src={structureArtDirectionHalfSrc(asset.id, 'south', 'front')} alt="" draggable={false} />
+                        <small>{asset.label}</small>
+                      </>,
+                    }))}
+                  />
+                  <SliderRow label={`Share · ${section.share.toFixed(1)}`} value={section.share} set={(value) => updateTownSection(selectedTown.id, section.id, { share: value })} min={0} max={5} step={0.1} nudge={0.1} dflt={1} />
+                  <SliderRow label={`Average building · ${section.scaleMean.toFixed(2)}×`} value={section.scaleMean} set={(value) => updateTownSection(selectedTown.id, section.id, { scaleMean: value })} min={0.3} max={2.5} step={0.05} nudge={0.05} dflt={1} />
+                  <SliderRow label={`Smallest · ${section.scaleMin.toFixed(2)}×`} value={section.scaleMin} set={(value) => updateTownSection(selectedTown.id, section.id, { scaleMin: value })} min={0.2} max={2.5} step={0.05} nudge={0.05} dflt={0.75} />
+                  <SliderRow label={`Largest · ${section.scaleMax.toFixed(2)}×`} value={section.scaleMax} set={(value) => updateTownSection(selectedTown.id, section.id, { scaleMax: value })} min={0.2} max={3} step={0.05} nudge={0.05} dflt={1.35} />
+                </div>
+              ))}
+              <ChromeButton unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                onClick={() => updateTown(selectedTown.id, {
+                  sections: [...selectedTown.sections, newTownSection()],
+                })}
+              >Add section</ChromeButton>
+              <SliderRow label={`Blend · ${Math.round(selectedTown.blend * 100)}%`} value={selectedTown.blend} set={(value) => updateTown(selectedTown.id, { blend: value })} min={0} max={1} step={0.05} nudge={0.05} dflt={TOWN_PLAN_DEFAULTS.blend} />
+              <p className="le-board-note">At 0% each section keeps to its own stretch of the town, divided sharply. At 100% they interleave completely. In between they hold their ground but mingle across a band at the divide, and the band widens as it rises.</p>
+
+              <h2 className="le-card-subhead">Size</h2>
+              <SliderRow label={`Buildings · ${selectedTown.size}`} value={selectedTown.size} set={(value) => updateTown(selectedTown.id, { size: Math.round(value) })} min={2} max={80} step={1} nudge={1} dflt={TOWN_PLAN_DEFAULTS.size} />
+              <h2 className="le-card-subhead">Streets</h2>
+              <SliderRow label={`Frontage per building · ${pixelsInTilesAcross(selectedTown.plotWidth).toFixed(1)} tiles`} value={selectedTown.plotWidth} set={(value) => updateTown(selectedTown.id, { plotWidth: value })} min={40} max={300} step={5} nudge={5} dflt={TOWN_PLAN_DEFAULTS.plotWidth} />
+              <SliderRow label={`Street setback · ${pixelsInTilesAcross(selectedTown.setback).toFixed(1)} tiles`} value={selectedTown.setback} set={(value) => updateTown(selectedTown.id, { setback: value })} min={20} max={260} step={2} nudge={2} dflt={TOWN_PLAN_DEFAULTS.setback} />
+              <SliderRow label={`Minimum spacing · ${pixelsInTilesAcross(selectedTown.spacing).toFixed(1)} tiles`} value={selectedTown.spacing} set={(value) => updateTown(selectedTown.id, { spacing: value })} min={0} max={200} step={2} nudge={2} dflt={TOWN_PLAN_DEFAULTS.spacing} />
+              <h2 className="le-card-subhead">Acceptable variation</h2>
+              <SliderRow label={`Looseness · ${Math.round(selectedTown.looseness * 100)}%`} value={selectedTown.looseness} set={(value) => updateTown(selectedTown.id, { looseness: value })} min={0} max={1} step={0.05} nudge={0.05} dflt={TOWN_PLAN_DEFAULTS.looseness} />
+              <SliderRow label={`Off-axis buildings · ${Math.round(selectedTown.facingWobble * 100)}%`} value={selectedTown.facingWobble} set={(value) => updateTown(selectedTown.id, { facingWobble: value })} min={0} max={1} step={0.05} nudge={0.05} dflt={TOWN_PLAN_DEFAULTS.facingWobble} />
+              <h2 className="le-card-subhead">Placement</h2>
+              <div className="le-ctrlrow">
+                <span className="le-ctrllabel">Keep off playable board</span>
+                <Toggle
+                  checked={selectedTown.avoidPlayableBoard}
+                  onChange={(value) => updateTown(selectedTown.id, { avoidPlayableBoard: value })}
+                  label="Keep the town off the playable board"
+                />
+              </div>
+              <div className="le-ctrlrow">
+                <span className="le-ctrllabel">Layout seed</span>
+                <ChromeButton unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                  onClick={() => updateTown(selectedTown.id, { seed: randomGeneratorSeed() })}
+                >Random</ChromeButton>
+              </div>
+              <SliderRow label={`Seed · ${selectedTown.seed}`} value={selectedTown.seed} set={(value) => updateTown(selectedTown.id, { seed: Math.round(value) })} min={1} max={MAX_GENERATOR_SEED} step={1} nudge={1} dflt={TOWN_PLAN_DEFAULTS.seed} />
               <div className="le-ctrlrow">
                 <ChromeButton unit="inner-text-button"
                   className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                  onClick={() => setTownBuildings(townBuildingCatalog.map((asset) => asset.id))}
-                >All</ChromeButton>
+                  onClick={() => generateTown(selectedTown)}
+                >Regenerate</ChromeButton>
                 <ChromeButton unit="inner-text-button"
                   className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                  onClick={() => setTownBuildings([])}
-                >None</ChromeButton>
-                <span className="le-ctrllabel">{townBuildings.length} selected</span>
+                  onClick={resetTownParams}
+                >Reset settings</ChromeButton>
               </div>
-            </div>
-            {townLandmarkCatalog.length ? (
-              <div className="le-pal-group">
-                <span className="le-pal-grouplabel">Focal structure</span>
-                <AssetSwatchList
-                  ariaLabel="Town focal structure"
-                  items={townLandmarkCatalog.map((asset) => ({
-                    id: `town-focal-${asset.id}`,
-                    label: asset.label,
-                    title: `${asset.label} · the structure the town is built around`,
-                    selected: townLandmarks.includes(asset.id),
-                    onSelect: () => setTownLandmarks((current) => (
-                      current.includes(asset.id)
-                        ? current.filter((id) => id !== asset.id)
-                        : [...current, asset.id]
-                    )),
-                    content: <>
-                      <img src={structureArtDirectionHalfSrc(asset.id, 'south', 'front')} alt="" draggable={false} />
-                      <small>{asset.label}</small>
-                    </>,
-                  }))}
-                />
-                <p className="le-board-note">One focal structure is sited at the town's most central plot. Leave empty for a town with no centrepiece.</p>
-              </div>
-            ) : null}
-            <h2 className="le-card-subhead">Size</h2>
-            <SliderRow label={`Buildings · ${townSize}`} value={townSize} set={setTownSize} min={2} max={60} step={1} nudge={1} dflt={TOWN_PLAN_DEFAULTS.size} />
-            <SliderRow label={`Average building · ${townScaleMean.toFixed(2)}×`} value={townScaleMean} set={setTownScaleMean} min={0.3} max={2.5} step={0.05} nudge={0.05} dflt={TOWN_PLAN_DEFAULTS.scaleMean} />
-            <SliderRow label={`Smallest allowed · ${townScaleMin.toFixed(2)}×`} value={townScaleMin} set={setTownScaleMin} min={0.2} max={2.5} step={0.05} nudge={0.05} dflt={TOWN_PLAN_DEFAULTS.scaleMin} />
-            <SliderRow label={`Largest allowed · ${townScaleMax.toFixed(2)}×`} value={townScaleMax} set={setTownScaleMax} min={0.2} max={3} step={0.05} nudge={0.05} dflt={TOWN_PLAN_DEFAULTS.scaleMax} />
-            <h2 className="le-card-subhead">Streets</h2>
-            <SliderRow label={`Frontage per building · ${pixelsInTilesAcross(townPlotWidth).toFixed(1)} tiles`} value={townPlotWidth} set={setTownPlotWidth} min={40} max={300} step={5} nudge={5} dflt={TOWN_PLAN_DEFAULTS.plotWidth} />
-            <SliderRow label={`Street setback · ${pixelsInTilesAcross(townSetback).toFixed(1)} tiles`} value={townSetback} set={setTownSetback} min={20} max={260} step={2} nudge={2} dflt={TOWN_PLAN_DEFAULTS.setback} />
-            <SliderRow label={`Minimum spacing · ${pixelsInTilesAcross(townSpacing).toFixed(1)} tiles`} value={townSpacing} set={setTownSpacing} min={0} max={200} step={2} nudge={2} dflt={TOWN_PLAN_DEFAULTS.spacing} />
-            <h2 className="le-card-subhead">Acceptable variation</h2>
-            <p className="le-board-note">How far the plan may be bent. At zero the town is surveyed: every building on its exact plot, square to its street. Raising these loosens it toward a village that grew rather than one that was laid out.</p>
-            <SliderRow label={`Looseness · ${Math.round(townLooseness * 100)}%`} value={townLooseness} set={setTownLooseness} min={0} max={1} step={0.05} nudge={0.05} dflt={TOWN_PLAN_DEFAULTS.looseness} />
-            <SliderRow label={`Off-axis buildings · ${Math.round(townFacingWobble * 100)}%`} value={townFacingWobble} set={setTownFacingWobble} min={0} max={1} step={0.05} nudge={0.05} dflt={TOWN_PLAN_DEFAULTS.facingWobble} />
-            <h2 className="le-card-subhead">Placement</h2>
-            <div className="le-ctrlrow">
-              <span className="le-ctrllabel">Keep off playable board</span>
-              <Toggle
-                checked={townAvoidBoard}
-                onChange={setTownAvoidBoard}
-                label="Keep the town off the playable board"
-              />
-              {ctlReset(() => setTownAvoidBoard(TOWN_PLAN_DEFAULTS.avoidPlayableBoard))}
-            </div>
-            <div className="le-ctrlrow">
-              <span className="le-ctrllabel">Layout seed</span>
-              <ChromeButton unit="inner-text-button"
-                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                onClick={() => setTownSeed(randomGeneratorSeed())}
-              >Random</ChromeButton>
-            </div>
-            <SliderRow
-              label={`Seed · ${townSeed}`}
-              value={townSeed}
-              set={(value) => setTownSeed(Math.round(value))}
-              min={1}
-              max={MAX_GENERATOR_SEED}
-              step={1}
-              nudge={1}
-              dflt={TOWN_PLAN_DEFAULTS.seed}
-            />
-            <div className="le-ctrlrow">
-              <ChromeButton unit="inner-text-button"
-                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                disabled={!townArea || !townBuildings.length}
-                onClick={() => { if (townArea) generateTown(townArea); }}
-              >Regenerate</ChromeButton>
-              <ChromeButton unit="inner-text-button"
-                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                disabled={!townArea}
-                onClick={() => { if (townArea) removeTown(townArea); }}
-              >Remove town</ChromeButton>
-              <ChromeButton unit="inner-text-button"
-                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                onClick={resetTownParams}
-              >Reset town settings</ChromeButton>
-            </div>
-            {townBuildings.length
-              ? townArea
-                ? townSited && townSited.placed < townSize
-                  ? <p className="le-board-note">
-                      Placed {townSited.placed} of {townSize}.{' '}
-                      {townSited.onBoard >= Math.max(1, townSited.spacing)
-                        ? `${townSited.onBoard} plot${townSited.onBoard === 1 ? '' : 's'} fell on the playable board — drag clear of it, or turn off Keep off playable board.`
-                        : townSited.spacing > 0
-                          ? `${townSited.spacing} plot${townSited.spacing === 1 ? '' : 's'} were too close to something already there — lower Minimum spacing.`
-                          : 'The area ran out of street frontage — drag a bigger area or lower Frontage per building.'}
-                    </p>
-                  : townSited
-                    ? <p className="le-board-note">Placed {townSited.placed} buildings.</p>
-                    : null
-                : <p className="le-board-note">Drag out the area you want the town to fill.</p>
-              : <p className="le-board-note">Pick at least one building above, then drag out the town area.</p>}
+              {townSited && townSited.placed < selectedTown.size ? (
+                <p className="le-board-note">
+                  Placed {townSited.placed} of {selectedTown.size}.{' '}
+                  {townSited.onBoard >= Math.max(1, townSited.spacing)
+                    ? `${townSited.onBoard} plots fell on the playable board — drag clear of it, or turn off Keep off playable board.`
+                    : townSited.spacing > 0
+                      ? `${townSited.spacing} plots were too close to something already there — lower Minimum spacing.`
+                      : 'The area ran out of street frontage — drag a bigger area or lower Frontage per building.'}
+                </p>
+              ) : townSited ? <p className="le-board-note">Placed {townSited.placed} buildings.</p> : null}
+              {selectedTown.sections.every((section) => !section.buildingIds.length)
+                ? <p className="le-board-note">Pick at least one building for a section, then press Regenerate.</p>
+                : null}
+            </>) : null}
           </section>
         ) : brushKind === 'forest' ? (
           <section className="skirmish-card le-brush-panel le-forest-panel" data-testid="forest-controls">

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_TOWN_SECTION,
   TOWN_PLAN_DEFAULTS,
   TOWN_PLAN_KINDS,
   facingTowards,
@@ -10,6 +11,7 @@ import {
   townStreets,
   type TownPlanKind,
   type TownPlanParams,
+  type TownSection,
 } from './townPlan';
 import { floatingArtworkGroundPoint, type ForestSpeciesGeometry } from './forestScatter';
 import { projectBoardPoint, unprojectBoardPoint } from '@chess-tactics/board-render';
@@ -43,9 +45,17 @@ const CENTER = (() => {
 /** Grid cell a scene-pixel ground point stands on. */
 const cellOf = (g: { x: number; y: number }) => unprojectBoardPoint({ left: g.x, top: g.y });
 
+let sectionSerial = 0;
+const section = (over: Partial<TownSection> = {}): TownSection => ({
+  id: `s${(sectionSerial += 1)}`,
+  ...DEFAULT_TOWN_SECTION,
+  buildingIds: ['cottage'],
+  ...over,
+});
+
 const params = (overrides: Partial<TownPlanParams> = {}): TownPlanParams => ({
   ...TOWN_PLAN_DEFAULTS,
-  buildingIds: ['cottage', 'cabin', 'lodge'],
+  sections: [section({ buildingIds: ['cottage', 'cabin', 'lodge'] })],
   avoidPlayableBoard: false,
   ...overrides,
 });
@@ -55,14 +65,14 @@ const run = (
   existing: FloatingArtworkPlacement[] = [],
   bounds = AREA,
 ): FloatingArtworkPlacement[] => planTown({
-  bounds, params: params(overrides), geometry, board, existing,
+  townId: 'a1', bounds, params: params(overrides), geometry, board, existing,
 }).placements;
 
 /** Full result, for the assertions that care WHY plots were dropped. */
 const runFull = (
   overrides: Partial<TownPlanParams> = {},
   bounds = AREA,
-) => planTown({ bounds, params: params(overrides), geometry, board, existing: [] });
+) => planTown({ townId: 'a1', bounds, params: params(overrides), geometry, board, existing: [] });
 
 const groundOf = (placement: FloatingArtworkPlacement) => floatingArtworkGroundPoint(placement, geometry)!;
 
@@ -286,7 +296,10 @@ describe('planTown', () => {
   });
 
   it('centres building size on the average and never leaves the boundaries', () => {
-    const town = run({ scaleMean: 1, scaleMin: 0.6, scaleMax: 1.6, size: 24, landmarkIds: [] });
+    const town = run({
+      sections: [section({ buildingIds: ['cottage', 'cabin'], scaleMean: 1, scaleMin: 0.6, scaleMax: 1.6 })],
+      size: 24, landmarkIds: [],
+    });
     const scales = town.map((placement) => placement.scale);
     expect(Math.min(...scales)).toBeGreaterThanOrEqual(0.6);
     expect(Math.max(...scales)).toBeLessThanOrEqual(1.6);
@@ -294,8 +307,87 @@ describe('planTown', () => {
     const mean = scales.reduce((sum, value) => sum + value, 0) / scales.length;
     expect(Math.abs(mean - 1)).toBeLessThan(0.12);
     // A mean pinned against a boundary must not push any building past it.
-    const skewed = run({ scaleMean: 0.65, scaleMin: 0.6, scaleMax: 1.6, size: 24, landmarkIds: [] });
+    const skewed = run({
+      sections: [section({ buildingIds: ['cottage', 'cabin'], scaleMean: 0.65, scaleMin: 0.6, scaleMax: 1.6 })],
+      size: 24, landmarkIds: [],
+    });
     expect(Math.min(...skewed.map((p) => p.scale))).toBeGreaterThanOrEqual(0.6);
+  });
+
+  // Sections: one town, several bands, each with its own buildings and its own size range.
+  describe('sections', () => {
+    const big = () => section({ buildingIds: ['lodge'], scaleMean: 1.6, scaleMin: 1.5, scaleMax: 1.7 });
+    const small = () => section({ buildingIds: ['cabin'], scaleMean: 0.6, scaleMin: 0.5, scaleMax: 0.7 });
+    const roomy = { minX: 0, minY: 0, maxX: 40, maxY: 34 };
+    const twoBands = (blend: number) => run(
+      { sections: [big(), small()], blend, size: 40, landmarkIds: [] }, [], roomy,
+    );
+
+    it('draws each building from its own section, at that section\'s size', () => {
+      for (const placement of twoBands(0)) {
+        if (placement.sourceArtId === 'lodge') {
+          expect(placement.scale).toBeGreaterThanOrEqual(1.5);
+          expect(placement.scale).toBeLessThanOrEqual(1.7);
+        } else {
+          expect(placement.sourceArtId).toBe('cabin');
+          expect(placement.scale).toBeGreaterThanOrEqual(0.5);
+          expect(placement.scale).toBeLessThanOrEqual(0.7);
+        }
+      }
+    });
+
+    it('splits the town by share', () => {
+      const lopsided = run({
+        sections: [section({ buildingIds: ['lodge'], share: 3 }), section({ buildingIds: ['cabin'], share: 1 })],
+        blend: 0, size: 40, landmarkIds: [],
+      }, [], roomy);
+      const lodges = lopsided.filter((p) => p.sourceArtId === 'lodge').length;
+      expect(lodges).toBeGreaterThan(lopsided.length - lodges);
+    });
+
+    /** Neighbouring pairs that belong to different sections — how mixed the town is. */
+    const interleaving = (town: ReturnType<typeof run>): number => {
+      const along = town
+        .map((p) => ({ at: cellOf(groundOf(p)).x, id: p.sourceArtId }))
+        .sort((a, b) => a.at - b.at);
+      let swaps = 0;
+      for (let i = 1; i < along.length; i += 1) if (along[i].id !== along[i - 1].id) swaps += 1;
+      return swaps;
+    };
+
+    // The property Nelson asked for: keep them apart, mix them fully, or meet across a band.
+    it('keeps sections apart at blend 0 and mixes them at blend 1', () => {
+      const split = interleaving(twoBands(0));
+      const mixed = interleaving(twoBands(1));
+      // Two contiguous stretches cross over about once; a full interleave crosses constantly.
+      expect(split).toBeLessThanOrEqual(2);
+      expect(mixed).toBeGreaterThan(split * 3);
+    });
+
+    it('widens the band as blend rises', () => {
+      expect(interleaving(twoBands(0.5))).toBeGreaterThan(interleaving(twoBands(0)));
+      expect(interleaving(twoBands(1))).toBeGreaterThanOrEqual(interleaving(twoBands(0.5)));
+    });
+
+    it('lays the sections out along the town, not at random', () => {
+      // At blend 0 every building of one section sits to one side of every building of the other.
+      const town = twoBands(0);
+      const lodgeAt = town.filter((p) => p.sourceArtId === 'lodge').map((p) => cellOf(groundOf(p)).x);
+      const cabinAt = town.filter((p) => p.sourceArtId === 'cabin').map((p) => cellOf(groundOf(p)).x);
+      expect(lodgeAt.length).toBeGreaterThan(0);
+      expect(cabinAt.length).toBeGreaterThan(0);
+      const lodgeMax = Math.max(...lodgeAt);
+      const cabinMin = Math.min(...cabinAt);
+      expect(lodgeMax).toBeLessThanOrEqual(cabinMin + 1e-6);
+    });
+
+    it('ignores a section with no buildings rather than leaving a gap', () => {
+      const town = run({
+        sections: [big(), section({ buildingIds: [] })], blend: 0, size: 20, landmarkIds: [],
+      }, [], roomy);
+      expect(town.length).toBeGreaterThan(0);
+      expect(new Set(town.map((p) => p.sourceArtId))).toEqual(new Set(['lodge']));
+    });
   });
 
   it('builds a dense core that frays at the edge', () => {
@@ -393,36 +485,37 @@ describe('planTown', () => {
   });
 
   it('produces nothing without buildings, size, or plot width', () => {
-    expect(run({ buildingIds: [] })).toEqual([]);
-    expect(run({ buildingIds: ['missing'] })).toEqual([]);
+    expect(run({ sections: [] })).toEqual([]);
+    expect(run({ sections: [section({ buildingIds: [] })] })).toEqual([]);
+    expect(run({ sections: [section({ buildingIds: ['missing'] })] })).toEqual([]);
     expect(run({ size: 0 })).toEqual([]);
     expect(run({ plotWidth: 0 })).toEqual([]);
   });
 });
 
 describe('townIdPrefix', () => {
-  it('keeps one identity per site so a re-roll replaces the town instead of stacking it', () => {
-    expect(townIdPrefix(AREA)).toBe(townIdPrefix(AREA));
-    for (const placement of run({ seed: 9 })) {
-      expect(isTownMember(placement, AREA)).toBe(true);
-    }
-    // A different seed is the same town re-rolled: same site, same identity.
-    for (const placement of run({ seed: 10 })) {
-      expect(isTownMember(placement, AREA)).toBe(true);
+  it('tags a town with its instance id, through a re-roll and a re-drag', () => {
+    for (const placement of run({ seed: 9 })) expect(isTownMember(placement, 'a1')).toBe(true);
+    // Same town, different seed and different ground: still the same town.
+    const elsewhere = { minX: AREA.minX + 60, minY: AREA.minY - 40,
+      maxX: AREA.maxX + 60, maxY: AREA.maxY - 40 };
+    for (const placement of run({ seed: 10 }, [], elsewhere)) {
+      expect(isTownMember(placement, 'a1')).toBe(true);
     }
   });
 
-  it('gives a town sited elsewhere its own identity', () => {
-    const elsewhere = { minX: AREA.minX + 60, minY: AREA.minY - 40,
-      maxX: AREA.maxX + 60, maxY: AREA.maxY - 40 };
-    expect(townIdPrefix(elsewhere)).not.toBe(townIdPrefix(AREA));
-    for (const placement of run({}, [], elsewhere)) {
-      expect(isTownMember(placement, AREA)).toBe(false);
-      expect(isTownMember(placement, elsewhere)).toBe(true);
+  it('keeps separate towns separate, so a board can carry many', () => {
+    const first = planTown({ townId: 'a1', bounds: AREA, params: params(), geometry, board, existing: [] });
+    const second = planTown({ townId: 'b2', bounds: AREA, params: params(), geometry, board, existing: [] });
+    expect(first.placements.length).toBeGreaterThan(0);
+    for (const placement of first.placements) {
+      expect(isTownMember(placement, 'a1')).toBe(true);
+      expect(isTownMember(placement, 'b2')).toBe(false);
     }
+    for (const placement of second.placements) expect(isTownMember(placement, 'b2')).toBe(true);
   });
 
   it('produces a prefix the sanitizer accepts', () => {
-    expect(`${townIdPrefix({ minX: -50, minY: -50, maxX: -40, maxY: -45 })}0`).toMatch(/^[A-Za-z0-9][A-Za-z0-9._:@+-]{0,127}$/);
+    expect(`${townIdPrefix('a1')}0`).toMatch(/^[A-Za-z0-9][A-Za-z0-9._:@+-]{0,127}$/);
   });
 });
