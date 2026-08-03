@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:817fb927c3c66b8ee6439f9f1f98ad7b9071b7f63a441b82b6f641304fce6711"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:d11c2defe803455fba75b7779fe4ceddfcb1b6c44a4959f77edf6377f99007a4"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Make the AI generation viewing pane a control over how much scene the model gets"
-  prNumber: "650"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/650"
-  commit: "0768ffbf"
+  prTitle: "Props place on the authored surface, not the playable grid"
+  prNumber: "651"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/651"
+  commit: "71a89a8a"
 
 name: chess-tactics
 namespace: chess-tactics
