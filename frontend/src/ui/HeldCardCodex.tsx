@@ -1,16 +1,14 @@
 // The Chartulary — the cards a Run currently HOLDS, as opposed to the Enchiridion's
 // reference gallery of every card the deck can deal.
 //
-// It is deliberately the same gallery: the same filter row, the same gold-value groups,
-// the same real card faces at the same size (ADR-0368). What a held card adds is its
-// register entry — the units it actually put in the army and what has become of them —
-// so the page answers "what did I buy, and what is left of it" without becoming a second
-// army roster.
+// It is the same gallery, and nothing more: the same filter row, the same gold-value groups,
+// the same real card faces at the same size. ADR-0364 retired the descriptive rows that used to
+// sit beside those faces because a card IS its own record; a held card is the same record and
+// gains no annotation here. What this page adds over the reference is which cards are yours.
 
 import { useMemo, useState, type ReactElement } from 'react';
 import {
   RUN_CARD_BY_ID,
-  type RunArmyUnit,
   type RunCoreCard,
   type RunDocument,
   type RunOwnedCard,
@@ -25,67 +23,23 @@ import {
 } from './Enchiridion';
 import { KitScroll } from './KitScroll';
 import { RunCard } from './RunCard';
-import { RunUnitTraitList, runUnitRosterLabel } from './RunArmyWorkspace';
 import { InnerChromeBox } from './shared/ChromeBox';
 import { RunCardCostCoin } from './shared/RunCardCostCoin';
 
 interface HeldCard {
   owned: RunOwnedCard;
   core: RunCoreCard;
-  units: RunArmyUnit[];
 }
 
 /**
  * The held cards this page can show. A card whose core id is no longer in the deck is
- * dropped rather than drawn as a blank face — the register shows real cards or nothing.
+ * dropped rather than drawn as a blank face — the gallery shows real cards or nothing.
  */
 export function heldCards(run: RunDocument): HeldCard[] {
-  const armyById = new Map(run.army.map((unit) => [unit.id, unit]));
   return run.cards.flatMap((owned) => {
     const core = RUN_CARD_BY_ID[owned.coreId];
-    if (!core) return [];
-    return [{
-      owned,
-      core,
-      units: owned.unitIds.flatMap((id) => {
-        const unit = armyById.get(id);
-        return unit ? [unit] : [];
-      }),
-    }];
+    return core ? [{ owned, core }] : [];
   });
-}
-
-function HeldCardRegister({ run, held }: { run: RunDocument; held: HeldCard }): ReactElement {
-  // Counted against the card's own pieces, not `lostUnitIds` — that field records only
-  // Pestiferous attrition, so a sold unit would go unreported by it.
-  const total = held.core.pieces.length;
-  const departed = total - held.units.length;
-  if (!held.units.length) {
-    return (
-      <InnerChromeBox className="strategikon-chartulary-register">
-        <small className="strategikon-chartulary-spent">
-          {total === 1 ? 'Its one unit has left the army.' : `All ${total} of its units have left the army.`}
-        </small>
-      </InnerChromeBox>
-    );
-  }
-  return (
-    <InnerChromeBox className="strategikon-chartulary-register">
-      <ul className="strategikon-chartulary-units">
-        {held.units.map((unit) => (
-          <li className="strategikon-chartulary-unit" key={unit.id}>
-            <span className="strategikon-chartulary-unit-name">{runUnitRosterLabel(unit)}</span>
-            <RunUnitTraitList run={run} unit={unit} compact />
-          </li>
-        ))}
-      </ul>
-      {departed ? (
-        <small className="strategikon-chartulary-departed">
-          {departed} more {departed === 1 ? 'has' : 'have'} left the army.
-        </small>
-      ) : null}
-    </InnerChromeBox>
-  );
 }
 
 export function HeldCardCodex({
@@ -112,7 +66,7 @@ export function HeldCardCodex({
       framed={framed}
       title={title}
     >
-      <p>Every card bought in this Run, with the units it put in the army. Cards are kept once bought; the units on them can still be lost or sold.</p>
+      <p>Every card bought in this Run. A card is kept once bought; the units it brought are in the Martial Prosopography.</p>
       <div className="enchiridion-card-gallery-layout">
         <CardGalleryFilters
           goldFilter={goldFilter}
@@ -136,13 +90,12 @@ export function HeldCardCodex({
                 <div className="enchiridion-card-gallery-grid">
                   {cards.map((held) => (
                     <div
-                      className="enchiridion-card-gallery-item strategikon-chartulary-item"
+                      className="enchiridion-card-gallery-item"
                       role="listitem"
                       data-card-id={held.owned.id}
                       key={held.owned.id}
                     >
                       <RunCard card={held.core} mode="reference" cardType={held.owned.cardType} />
-                      <HeldCardRegister run={run} held={held} />
                     </div>
                   ))}
                 </div>

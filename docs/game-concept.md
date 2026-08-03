@@ -254,8 +254,8 @@ these.
   the fight; its Martial Prosopography, Chartulary and Lipsanotheca expose the
   persistent army, the cards bought so far, and held relics beside the same
   Enchiridion (ADR-0231). The Chartulary is the Cards gallery itself — same
-  filters, same gold groups, same faces — with each held card's register of the
-  units it put in the army and how many have since left (ADR-0368).
+  filters, same gold groups, same faces, no annotation beside them — and the
+  only difference is which cards are in it (ADR-0368).
 - Play defaults to one activity-agnostic, descriptor-free **Continue** rail
   destination. Its column resumes in place and shows exactly one activity: the
   most recently updated resumable one, with its facts and one final **Play**

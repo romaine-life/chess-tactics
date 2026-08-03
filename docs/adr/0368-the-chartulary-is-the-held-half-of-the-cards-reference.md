@@ -18,25 +18,29 @@ the game's fixed content. Cards had only the fixed half. `RunDocument.cards` has
 every purchase since the Run format gained it, and nothing in the game displayed it: a player
 could see every card the deck *can* deal and no surface at all for the cards they *bought*.
 
-The gap is not merely a missing list. A held card is the receipt for gold already spent, and
-it is the only place the Run records which army units came from which purchase. The
-Prosopography shows the units; it cannot say which card put them there, or that a card's
-units are all gone.
+A held card is the receipt for gold already spent. The Prosopography answers "what is my army";
+nothing answered "what have I bought".
+
+The first attempt at this section put an annotation box under every face listing the units that
+card put in the army. The owner's response to it was "what is this?" — which is the answer. ADR-0364
+had already retired exactly that kind of row from the reference gallery, on the grounds that a card
+IS its own record and a prose row beside it duplicates the face. A held card is the same record.
 
 ## Decision
 
 - The Strategikon gains a third Run register, **the Chartulary — Held Cards**, at
   `/play|/run/strategikon/chartulary`. It is an authored section scene like its two
   siblings, so section travel is a director transition, not a swap.
-- It is the Enchiridion Cards gallery, not a lookalike: the same section frame, the same
+- It is the Enchiridion Cards gallery, and nothing more: the same section frame, the same
   filter row, the same gold-value coin groups, the same `RunCard` faces at the same size.
   One `CardGalleryFilters` component now serves both galleries so the two cannot drift.
   Grouping stays by gold value; `acquiredAfterBattleIndex` is deliberately NOT printed as a
   Battle number, because the opening Shop and the Shop after Battle 1 both record `0`.
-- What a held card adds is its **register**: the units it actually put in the army, named and
-  wearing the Prosopography's own trait glyphs, plus a count of the ones that have left. That
-  count is taken against the card's own pieces, never `lostUnitIds` — that field records
-  Pestiferous attrition only, so a sold unit is invisible to it.
+- **A gallery item is the face and nothing else.** No annotation box, no unit roster, no
+  acquisition caption. The difference between this gallery and the reference one is *which
+  cards are in it* — that is the whole feature. Which units came off which card is a question
+  this section deliberately does not answer; if it becomes worth answering, it belongs on the
+  card (a face that knows it is owned), not in a second box beside it.
 - A held card keeps the property it was bought with. `RunCard` accepts a `cardType` for a card
   that is no longer an offer, so an owned Pestiferous card keeps its frame and property strip,
   and the purchase-time captions ("target hidden", "chosen on purchase") belong to offers only.
@@ -69,6 +73,7 @@ general rather than particular to it:
 - The card gallery has one implementation of its filter row and its grouping, so a change to
   either lands on both the reference and the register.
 - Cards are permanent once bought: the Chartulary keeps a card whose every unit has been sold
-  or lost, and says so. Nothing in the Run removes an owned card.
+  or lost. Nothing in the Run removes an owned card, and the gallery does not distinguish one
+  whose units are gone — the card is the record, not the units.
 - A held card carrying a core id no longer in the deck is dropped from the gallery rather than
   drawn as a blank face.

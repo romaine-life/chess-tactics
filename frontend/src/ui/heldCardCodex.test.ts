@@ -13,6 +13,7 @@ import { heldCards } from './HeldCardCodex';
 
 const heldCardCodex = readFileSync(new URL('./HeldCardCodex.tsx', import.meta.url), 'utf8');
 const strategikon = readFileSync(new URL('./Strategikon.tsx', import.meta.url), 'utf8');
+const style = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 
 function war(battles = 4): RunWarSnapshot {
   return {
@@ -39,27 +40,20 @@ describe('the Chartulary reads the Run rather than the deck', () => {
     expect(heldCards(createRun(war(), 91))).toEqual([]);
   });
 
-  it('registers a bought card against the exact units it put in the army', () => {
+  it('shows a bought card as the deck card it is', () => {
     const run = boughtOne();
     const [held] = heldCards(run);
     expect(held.core.id).toBe(run.cards[0].coreId);
-    expect(held.units.map((unit) => unit.id)).toEqual(run.cards[0].unitIds);
-    expect(held.units.map((unit) => unit.type)).toEqual(held.core.pieces);
-    expect(held.owned.lostUnitIds).toEqual([]);
+    expect(held.core.pieces.length).toBe(run.cards[0].unitIds.length);
   });
 
   it('keeps the card once its units leave the army', () => {
     const run = boughtOne();
     const sold = sellArmyUnit(run, run.cards[0].unitIds[0]);
-    const [held] = heldCards(sold);
-    // The card is still held — only its register shrinks. A held-card page that
-    // dropped the card with its last unit would lose what the gold was spent on.
+    // A held-card page that dropped the card with its last unit would lose what the
+    // gold was spent on. Selling a unit does not sell the card.
     expect(heldCards(sold)).toHaveLength(1);
-    expect(held.units.length).toBe(run.cards[0].unitIds.length - 1);
-    // A sale is NOT recorded in `lostUnitIds` — that field carries Pestiferous attrition
-    // only — so the register counts departures against the card's own pieces.
-    expect(held.owned.lostUnitIds).toEqual([]);
-    expect(held.core.pieces.length - held.units.length).toBe(1);
+    expect(heldCards(sold)[0].core.id).toBe(heldCards(run)[0].core.id);
   });
 
   it('drops a card whose core id is no longer in the deck instead of drawing a blank face', () => {
@@ -86,9 +80,12 @@ describe('the Chartulary is the reference gallery, not a lookalike (ADR-0368)', 
     // The real face, carrying the property the card was BOUGHT with — an owned
     // Pestiferous card must not fall back to the plain frame.
     expect(heldCardCodex).toContain('cardType={held.owned.cardType}');
-    // Unit states come from the Prosopography's list, never a second glyph set.
-    expect(heldCardCodex).toContain('<RunUnitTraitList run={run} unit={unit} compact />');
-    expect(heldCardCodex).toContain('runUnitRosterLabel(unit)');
+    // A card IS its own record (ADR-0364). The gallery item is the face and nothing else:
+    // no annotation box, no unit roster, no second copy of what the Prosopography shows.
+    expect(heldCardCodex).not.toContain('RunUnitTraitList');
+    expect(heldCardCodex).not.toContain('runUnitRosterLabel');
+    expect(heldCardCodex).not.toContain('chartulary-register');
+    expect(style).not.toContain('strategikon-chartulary-register');
   });
 
   it('mounts unframed in the Strategikon and says so when no Run is attached', () => {
