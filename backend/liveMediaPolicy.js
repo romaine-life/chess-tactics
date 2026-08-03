@@ -56,6 +56,15 @@ const GAME_CONDITION_ICON_BY_SLOT = Object.freeze({
   'ui/kit/icons/card-properties/tactical.png': Object.freeze({ component: 'card-property-icon', variant: 'tactical' }),
   'ui/kit/icons/card-properties/hieratic.png': Object.freeze({ component: 'card-property-icon', variant: 'hieratic' }),
 });
+const CARD_TYPE_ROW_TEXTURE_COMPONENT = 'card-type-row-texture';
+const CARD_TYPE_ROW_TEXTURE_GROUP_ID = 'card-type-row-textures-pixen-v1';
+const CARD_TYPE_ROW_TEXTURE_BY_SLOT = Object.freeze({
+  'ui/surfaces/card-type-pestiferous.png': Object.freeze({ variant: 'pestiferous', width: 128, height: 64 }),
+  'ui/surfaces/card-type-concinnous.png': Object.freeze({ variant: 'concinnous', width: 512, height: 64 }),
+  'ui/surfaces/card-type-tactical.png': Object.freeze({ variant: 'tactical', width: 128, height: 64 }),
+  'ui/surfaces/card-type-hieratic.png': Object.freeze({ variant: 'hieratic', width: 128, height: 64 }),
+});
+const CARD_TYPE_ROW_TEXTURE_REQUIRED_SLOTS = Object.freeze(Object.keys(CARD_TYPE_ROW_TEXTURE_BY_SLOT).sort());
 const LEVEL_EDITOR_BRUSH_ICON_SLOT = 'ui/kit/icons/brush.png';
 const LEVEL_EDITOR_BRUSH_ICON_COMPONENT = 'level-editor-tool-icon';
 const LEVEL_EDITOR_BRUSH_ICON_PROOF_SCHEMA = 'level-editor-brush-icon-exact-byte-proof-v1';
@@ -129,6 +138,10 @@ function containedRect(value, canvasWidth, canvasHeight) {
 
 function gameConditionIconSlot(slot) {
   return GAME_CONDITION_ICON_BY_SLOT[String(slot || '')] ?? null;
+}
+
+function cardTypeRowTextureSlot(slot) {
+  return CARD_TYPE_ROW_TEXTURE_BY_SLOT[String(slot || '')] ?? null;
 }
 
 function levelEditorBrushIconSlot(slot) {
@@ -417,6 +430,64 @@ function gameConditionIconMediaIssue(row, projectedRuntime = null) {
   }
   if (runtime.altText !== '') {
     return 'game condition icon metadata.runtime.altText must be empty because the adjacent label owns its accessible name';
+  }
+  return null;
+}
+
+/**
+ * Closed production contract for the four decorative materials behind the
+ * Enchiridion's card-type rows. The semantic slot fixes both the card property
+ * and native tile geometry so arbitrary ui-kit media cannot enter this seat.
+ */
+function cardTypeRowTextureMediaIssue(row, projectedRuntime = null) {
+  const contract = cardTypeRowTextureSlot(row.slot);
+  if (!contract) return 'card-type row textures require a registered semantic slot';
+  if (row.domain !== 'ui-kit') return 'card-type row textures require the ui-kit domain';
+  if (row.role !== 'media') return 'card-type row textures require the media role';
+  if (row.media_type !== 'image/png') return 'card-type row textures require image/png';
+  if (Number(row.width) !== contract.width || Number(row.height) !== contract.height) {
+    return `card-type row texture geometry must be native ${contract.width}x${contract.height}`;
+  }
+
+  const metadata = mediaVersionMetadata(row);
+  const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+  if (!isObjectRecord(runtime)) return 'card-type row textures require metadata.runtime';
+  const allowed = new Set([
+    'component', 'variant', 'family', 'frameWidth', 'frameHeight', 'frameCount', 'altText', 'nativeRole',
+  ]);
+  const unsupported = Object.keys(runtime).filter((key) => !allowed.has(key));
+  if (unsupported.length) {
+    return `card-type row texture runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
+  }
+  if (runtime.component !== CARD_TYPE_ROW_TEXTURE_COMPONENT) {
+    return `card-type row texture metadata.runtime.component must be ${CARD_TYPE_ROW_TEXTURE_COMPONENT}`;
+  }
+  if (runtime.nativeRole !== CARD_TYPE_ROW_TEXTURE_COMPONENT) {
+    return `card-type row texture metadata.runtime.nativeRole must be ${CARD_TYPE_ROW_TEXTURE_COMPONENT}`;
+  }
+  if (runtime.variant !== contract.variant) return 'card-type row texture variant must match its semantic slot';
+  if (runtime.family !== 'card-type-row-textures') return 'card-type row texture family must identify the complete material set';
+  if (
+    runtime.frameWidth !== contract.width || runtime.frameHeight !== contract.height
+    || runtime.frameCount !== 1
+  ) return 'card-type row texture runtime geometry must describe its one native tile';
+  if (runtime.altText !== '') {
+    return 'card-type row texture metadata.runtime.altText must be empty because the row label owns its accessible name';
+  }
+  return null;
+}
+
+function cardTypeRowTextureAcceptanceGroupIssue(rows, contract) {
+  if (!Array.isArray(rows) || !contract || contract.groupId !== CARD_TYPE_ROW_TEXTURE_GROUP_ID) {
+    return 'card-type row textures require their registered atomic acceptance group';
+  }
+  const requiredSlots = Array.isArray(contract.requiredSlots) ? [...contract.requiredSlots].sort() : [];
+  if (JSON.stringify(requiredSlots) !== JSON.stringify(CARD_TYPE_ROW_TEXTURE_REQUIRED_SLOTS)) {
+    return 'card-type row texture acceptance must contain all four semantic slots';
+  }
+  const rowSlots = rows.map((row) => row?.slot).sort();
+  if (JSON.stringify(rowSlots) !== JSON.stringify(CARD_TYPE_ROW_TEXTURE_REQUIRED_SLOTS)) {
+    return 'card-type row texture acceptance rows must match all four semantic slots';
   }
   return null;
 }
@@ -933,6 +1004,9 @@ function liveCatalogReadinessIssue(catalog, { requireCritical = false } = {}) {
 }
 
 module.exports = {
+  CARD_TYPE_ROW_TEXTURE_COMPONENT,
+  CARD_TYPE_ROW_TEXTURE_GROUP_ID,
+  CARD_TYPE_ROW_TEXTURE_REQUIRED_SLOTS,
   PREDRAWN_BOARD_COMPONENT,
   PREDRAWN_BOARD_PROOF_RENDERER,
   PREDRAWN_BOARD_PROOF_SCHEMA,
@@ -953,6 +1027,9 @@ module.exports = {
   STRATEGIKON_BACKGROUND_SHA256,
   STRATEGIKON_BACKGROUND_SLOT,
   liveCatalogReadinessIssue,
+  cardTypeRowTextureAcceptanceGroupIssue,
+  cardTypeRowTextureMediaIssue,
+  cardTypeRowTextureSlot,
   gameConditionIconMediaIssue,
   gameConditionIconSlot,
   levelEditorBrushIconMediaIssue,

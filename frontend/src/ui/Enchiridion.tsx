@@ -4,7 +4,7 @@ import { createBlankLevel } from '../core/level';
 import { levelToEditorBoard, unitsForGamePieces } from '../core/levelBoard';
 import { PIECE_LABEL, PLAYABLE_PIECE_TYPES, type PlayablePieceType } from '../core/pieces';
 import type { BoardSize, Piece } from '../core/types';
-import { liveMediaForSlot, resolvedLiveMediaUrl } from '@chess-tactics/board-render';
+import { currentLiveMediaCatalog, liveMediaForSlot, resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import { PredrawnMoveHighlightPaint } from '../render/PredrawnMoveHighlightPaint';
 import { runCardArtSlot, runCardFlavor, runCardName } from '../run/cardNames';
 import {
@@ -53,6 +53,7 @@ import { ChromeButton } from './shared/ChromeButton';
 import { EnchiridionContentSceneSlot } from './shell/AuthoredSceneSlot';
 import { fetchAdminLiveMediaCatalog } from '../net/liveMediaAdmin';
 import {
+  acceptedCardTypeTextureUrls,
   cardTypeTextureUrls,
   hasCompleteCardTypeTextureSet,
   type CardTypeTextureUrls,
@@ -710,6 +711,8 @@ function CardTypesSection({ framed, textureBatch }: { framed: boolean; textureBa
   const [textureLoadFailed, setTextureLoadFailed] = useState(false);
   const selected = CARD_TYPE_REFERENCES.find((definition) => definition.id === selectedTypeId)
     ?? CARD_TYPE_REFERENCES[0];
+  const acceptedTextureUrls = acceptedCardTypeTextureUrls(currentLiveMediaCatalog());
+  const displayedTextureUrls = textureBatch ? textureUrls : acceptedTextureUrls;
   const textureReviewStatus = textureBatch
     ? loadedTextureBatch !== textureBatch
       ? 'loading'
@@ -762,7 +765,7 @@ function CardTypesSection({ framed, textureBatch }: { framed: boolean; textureBa
                 aria-label={`${definition.name}. ${definition.description}`}
                 aria-pressed={selected.id === definition.id}
               >
-                {textureUrls[definition.id] ? (
+                {displayedTextureUrls[definition.id] ? (
                   <span
                     aria-hidden="true"
                     className="enchiridion-card-type-row-material"
@@ -773,7 +776,7 @@ function CardTypesSection({ framed, textureBatch }: { framed: boolean; textureBa
                         alt=""
                         draggable={false}
                         key={index}
-                        src={textureUrls[definition.id]}
+                        src={displayedTextureUrls[definition.id]}
                       />
                     ))}
                   </span>
