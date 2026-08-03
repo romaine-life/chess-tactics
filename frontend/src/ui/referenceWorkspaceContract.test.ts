@@ -61,7 +61,12 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(enchiridion).not.toContain('ATARAXIA_LOCKED_ICON_SRC');
     expect(style).toMatch(/\.enchiridion-ataraxia-card\s*\{[\s\S]*?grid-template-columns:\s*minmax\(56px, auto\) minmax\(0, 1fr\)/);
     expect(enchiridion).toContain("if (section === 'ataraxia') return <AtaraxiaSection framed={framed} />;");
-    expect(enchiridion).toContain("ataraxia: installedUiMedia('ui-kit-icons-game-objective-png')");
+    // The ladder's rail mark IS the title bar's Ataraxia emblem, resolved from the one
+    // record that owns that decision. Naming the shared kit objective flag here gave the
+    // reference a different symbol than the bar for the same idea (ADR-0059, ADR-0363).
+    expect(enchiridion).toContain('ataraxia: installedUiMedia(RUN_PROGRESS_MEDIA_ROLE.ataraxia)');
+    expect(enchiridion).toContain("import { RUN_PROGRESS_MEDIA_ROLE } from './shared/RunProgressIcon'");
+    expect(enchiridion).not.toContain('ui-kit-icons-game-objective-png');
   });
 
   it('reads the forged rung marks by prefix so an uninstalled set degrades to type', () => {

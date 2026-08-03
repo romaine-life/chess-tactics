@@ -17,6 +17,16 @@ export interface ApparatusRailTabProps {
    * with two marks. Resolve the URL at the call site (menuModeIcon, installedUiMedia).
    */
   iconSrc: string;
+  /**
+   * How the mark's SOURCE CANVAS is authored, which decides the drawn size — not a
+   * per-tab style knob. The kit icons this rail was built for reserve canvas margin
+   * (their glyph fills 62-84% of a 64px square), so the seat's own size is their
+   * optical size. The Run's marks — Ataraxia's emblem, Conflict, Battle — are authored
+   * edge-to-edge for the title bar's tight measure seat, so drawing one at the same
+   * seat size lands a glyph a third larger than its neighbours and spills the button's
+   * frame. 'bleed' supplies the canvas margin the art does not carry.
+   */
+  markCanvas?: 'inset' | 'bleed';
   title?: string;
   testId?: string;
   detail?: string;
@@ -75,6 +85,7 @@ export function ApparatusRailTab({
   index,
   active = false,
   iconSrc,
+  markCanvas = 'inset',
   title,
   testId,
   detail,
@@ -88,7 +99,7 @@ export function ApparatusRailTab({
       title={title}
       style={{ ['--tab-index' as string]: index } as CSSProperties}
     >
-      <span className="settings-tab-icon" aria-hidden="true">
+      <span className="settings-tab-icon" data-mark-canvas={markCanvas} aria-hidden="true">
         <img src={iconSrc} alt="" />
       </span>
       {detail ? (

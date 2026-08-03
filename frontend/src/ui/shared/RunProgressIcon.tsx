@@ -13,7 +13,14 @@ import { installedUiMediaIfPresent } from '../installedUiMedia';
  */
 export type RunProgressIconVariant = 'ataraxia' | 'conflict' | 'battle';
 
-const RUN_PROGRESS_MEDIA_ROLE: Readonly<Record<RunProgressIconVariant, string>> = Object.freeze({
+/**
+ * Exported because Ataraxia's emblem is ONE decision with two seats: this title-bar
+ * measure and the Enchiridion rail's Ataraxia tab. The rail used to name the shared
+ * kit objective flag — the same glyph Start, zones and the Skirmish HUD paint — so the
+ * ladder answered to a different symbol in the reference than on the bar. Both seats
+ * now read this record, and neither can drift without the other (ADR-0059).
+ */
+export const RUN_PROGRESS_MEDIA_ROLE: Readonly<Record<RunProgressIconVariant, string>> = Object.freeze({
   ataraxia: 'ui-kit-icons-run-ataraxia-mark-png',
   conflict: 'ui-kit-icons-run-conflict-png',
   battle: 'ui-kit-icons-run-battle-png',
