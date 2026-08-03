@@ -42,7 +42,10 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(ataraxia).toContain('ATARAXIA_BY_TIER[tier]');
     // A row is its rung and its descriptive name; the ladder's own name is the section
     // heading, so `label` (which repeats it) belongs to surfaces away from that heading.
-    expect(ataraxia).toContain('{definition.numeral} — {definition.title}');
+    // The numeral takes the mark seat — it is not a prefix on the heading.
+    expect(ataraxia).toContain('<span className="enchiridion-ataraxia-numeral">{definition.numeral}</span>');
+    expect(ataraxia).toContain('<h3>{definition.title}</h3>');
+    expect(ataraxia).not.toContain('{definition.numeral} — {definition.title}');
     expect(ataraxia).not.toContain('{definition.label} — {definition.title}');
     expect(ataraxia).toContain('<p>{definition.effect}</p>');
     expect(ataraxia).not.toContain('The Untroubled Mind');
@@ -51,10 +54,12 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(ataraxia).not.toMatch(/tier === 0/);
     expect(ataraxia).toContain('const locked = tier > unlockedThrough;');
     expect(ataraxia).toContain('RUN_PROGRESSION_EVENT');
-    // The only mark a row carries is the lock on a tier not yet reached. The section's
-    // rail glyph never repeats into the rows it already labels.
-    expect(ataraxia).toContain('src={ATARAXIA_LOCKED_ICON_SRC}');
+    // A row carries no glyph at all: the section's rail mark would label nothing on a
+    // numbered rung, and lock state is stated in words by the standing line.
     expect(ataraxia).not.toContain('SECTION_ICON_SRC.ataraxia');
+    expect(ataraxia).not.toMatch(/<(?:img|AlphaBoundIcon)/);
+    expect(enchiridion).not.toContain('ATARAXIA_LOCKED_ICON_SRC');
+    expect(style).toMatch(/\.enchiridion-ataraxia-card\s*\{[\s\S]*?grid-template-columns:\s*minmax\(42px, auto\) minmax\(0, 1fr\)/);
     expect(enchiridion).toContain("if (section === 'ataraxia') return <AtaraxiaSection framed={framed} />;");
     expect(enchiridion).toContain("ataraxia: installedUiMedia('ui-kit-icons-game-objective-png')");
   });

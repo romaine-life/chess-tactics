@@ -54,21 +54,23 @@ in the Strategikon, registered in `sectionedShells.ts` like every other section.
   `ATARAXIA_BY_TIER`. It states no tier copy of its own, so a tier installed in the model
   cannot be described here in words the Run does not apply. Tier zero is a member of the
   list with no rendering branch (ADR-0291).
-- **A row is its numeral and its descriptive name** — `I — The Great Mortality`. The
-  ladder's name is the section heading, so repeating "Ataraxia" once per row says nothing
-  the row is not already under. `ATARAXIA_BY_TIER` therefore carries `numeral` beside
-  `label`: the numeral is the rung, the label is the rung qualified by the ladder's name,
-  for the Run-preparation selector and the unlock sentence, which name a tier away from
-  that heading.
+- **The numeral IS the row's mark.** Every other reference section opens a row with a
+  glyph; here that seat holds the rung, and the heading is the descriptive name alone —
+  `N` beside `The Untroubled Mind`. The ladder's own name is the section heading, so
+  repeating "Ataraxia" once per row says nothing the row is not already under.
+  `ATARAXIA_BY_TIER` therefore carries `numeral` beside `label`: the numeral is the rung,
+  the label is the rung qualified by the ladder's name, for the Run-preparation selector
+  and the unlock sentence, which name a tier away from that heading.
 - **The baseline's numeral is `N`** — medieval Latin *nulla*, the zero of the computus
   tables, and the reason `label` becomes `Ataraxia N`. ADR-0291 wrote `Ataraxia 0`, which
   puts an Arabic digit at the head of a Roman sequence; one numbering is the point of
   that ADR's equal-anatomy rule. The persisted tier remains numeric `0`.
-- **A row carries no mark except a lock.** The reference sections whose rows are a list
-  of unlike things — terrain features, unit states — identify each row by its own glyph.
-  An Ataraxia row is a numbered rung of one ladder, so a repeated section glyph would
-  label nothing. The only mark is the lock on a tier not yet reached; the seat stays in
-  the grid so every row's copy starts on one line.
+- **No row carries a glyph at all.** The sections whose rows list unlike things — terrain
+  features, unit states — identify each row by its own icon. A numbered rung of one ladder
+  has nothing for a repeated section glyph to distinguish, and lock state is stated in
+  words by the standing line, so neither the section mark nor a lock icon enters a row.
+  The numeral column is `minmax(42px, auto)`: a later `VIII` widens the seat for the whole
+  ladder rather than stepping one row out of line.
 - `ATARAXIA_TIERS` becomes a model export derived from `INSTALLED_ATARAXIA_MAX_TIER`. The
   preparation selector's hand-written `[0, 1]` is replaced by it, so the two surfaces
   cannot disagree about which tiers exist.

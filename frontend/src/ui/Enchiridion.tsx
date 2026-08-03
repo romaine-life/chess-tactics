@@ -94,9 +94,6 @@ const SECTION_ICON_SRC: Record<EnchiridionSection, string> = {
   ataraxia: installedUiMedia('ui-kit-icons-game-objective-png'),
 };
 
-/** An Ataraxia tier the account has not reached yet carries the shared lock mark. */
-const ATARAXIA_LOCKED_ICON_SRC = installedUiMedia('ui-kit-icons-lock-png');
-
 const UNIT_COPY: Record<PlayablePieceType, string> = {
   pawn: 'Moves one square forward; from its starting square it may move two. Captures one square diagonally forward.',
   knight: 'Jumps in an L: two squares along one axis and one along the other.',
@@ -887,8 +884,11 @@ function AbilitiesSection({ framed }: { framed: boolean }): ReactElement {
  * Enchiridion cannot describe a condition the Run does not apply. Tier zero is a member
  * of the ladder here exactly as it is there, with no special rendering branch.
  *
- * The ladder is linear, so a tier's standing is the only thing this record adds beyond
- * the selector: locked tiers state the completion that opens them rather than hiding.
+ * A row is its rung and its descriptive name: the numeral takes the mark seat every other
+ * reference section fills with a glyph, because a numbered rung of one ladder has nothing
+ * for a repeated section glyph to distinguish. The ladder is linear, so a tier's standing
+ * is the only thing this record adds beyond the selector: locked tiers state the
+ * completion that opens them rather than hiding.
  */
 function AtaraxiaSection({ framed }: { framed: boolean }): ReactElement {
   const [progression, setProgression] = useState<RunProgression>(EMPTY_RUN_PROGRESSION);
@@ -922,15 +922,9 @@ function AtaraxiaSection({ framed }: { framed: boolean }): ReactElement {
               className={`enchiridion-ataraxia-card${locked ? ' is-locked' : ''}`}
               key={tier}
             >
-              {locked ? (
-                <AlphaBoundIcon className="enchiridion-ataraxia-icon" src={ATARAXIA_LOCKED_ICON_SRC} draggable={false} />
-              ) : (
-                // The seat is always present so every row's copy starts on one line;
-                // an unlocked tier simply has nothing to say in it.
-                <span className="enchiridion-ataraxia-icon" aria-hidden="true" />
-              )}
+              <span className="enchiridion-ataraxia-numeral">{definition.numeral}</span>
               <span>
-                <h3>{definition.numeral} — {definition.title}</h3>
+                <h3>{definition.title}</h3>
                 <p>{definition.effect}</p>
                 <small className="enchiridion-ataraxia-standing">{standing}</small>
               </span>

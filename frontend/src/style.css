@@ -20303,8 +20303,7 @@ button.tileset-relationship-cell {
 }
 
 .enchiridion-terrain-row > :first-child,
-.enchiridion-ability-card > :first-child,
-.enchiridion-ataraxia-card > :first-child {
+.enchiridion-ability-card > :first-child {
   block-size: 34px;
   inline-size: 34px;
 }
@@ -20314,33 +20313,26 @@ button.tileset-relationship-cell {
   object-fit: contain;
 }
 
-/* The tier mark is a kit glyph whose ink fills only part of its canvas, so it seats
-   through the shared alpha-fit primitive rather than object-fit (ADR-0059) — otherwise
-   it reads a third smaller than the marks on every neighbouring reference section. */
-.enchiridion-ataraxia-icon {
-  overflow: visible;
-  position: relative;
+/* The rung IS the mark: the numeral occupies the seat its neighbouring sections give a
+   glyph. The column is min-42px and grows to the widest numeral across every row, so a
+   later VIII widens the seat for the whole ladder instead of stepping one row out. */
+.enchiridion-ataraxia-card {
+  grid-template-columns: minmax(42px, auto) minmax(0, 1fr);
 }
 
-.enchiridion-ataraxia-icon .alpha-bound-icon-image {
-  image-rendering: pixelated;
-  max-block-size: none;
-  max-inline-size: none;
-  object-fit: fill;
-  position: absolute;
+/* The rung reads first, so it sits a clear step above the row's own heading rather than
+   beside it. The pixel face carries deep internal leading — its ink is roughly half the
+   declared size — which is why this is a multiple of the largest body step. */
+.enchiridion-ataraxia-numeral {
+  font-size: calc(var(--ds-text-xl) * 1.5);
+  line-height: 1;
+  text-align: center;
 }
 
-.enchiridion-ataraxia-icon[data-alpha-fit="pending"] .alpha-bound-icon-image {
-  block-size: 100%;
-  inline-size: 100%;
-  inset: 0;
-  object-fit: contain;
-}
-
-/* A locked tier is still readable — the ladder is a reference, not a teaser. Its mark
+/* A locked tier is still readable — the ladder is a reference, not a teaser. Its numeral
    and standing line carry the state; the impact statement keeps full contrast. */
-.enchiridion-ataraxia-card.is-locked > .enchiridion-ataraxia-icon {
-  opacity: .6;
+.enchiridion-ataraxia-card.is-locked > .enchiridion-ataraxia-numeral {
+  color: var(--muted);
 }
 
 .enchiridion-ataraxia-standing {
