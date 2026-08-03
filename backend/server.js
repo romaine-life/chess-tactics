@@ -2758,6 +2758,40 @@ const MIGRATIONS = [
       );
     `,
   },
+  {
+    version: 51,
+    name: 'sfx profile owns interface cue assignments',
+    // ADR-0375: which sound an interface event makes was hardcoded in components, so changing
+    // it needed a commit — the exact condition ADR-0089 removed for terrain and ADR-0071
+    // forbids generally. The document gains one explicit assignment per cue, carrying today's
+    // audible behaviour forward so the migration changes nothing a player hears; the owner
+    // then re-assigns any of them by ear in the SFX Studio.
+    //
+    // A cue resolves to null when its set is absent, because the validator refuses an
+    // assignment naming an undeclared sound set. The constraint is loosened before the
+    // rewrite and re-tightened after, since a CHECK for the new version cannot be added
+    // while the stored row still carries the old one.
+    sql: `
+      ALTER TABLE sfx_profiles DROP CONSTRAINT IF EXISTS sfx_profiles_client_schema_version_check;
+      UPDATE sfx_profiles
+         SET data = (data - 'schemaVersion')
+                    || jsonb_build_object('schemaVersion', 2)
+                    || jsonb_build_object('interfaceAssignments', jsonb_build_object(
+                         'activate', CASE WHEN jsonb_exists(data->'soundSets', 'click')
+                           THEN to_jsonb('click'::text) ELSE 'null'::jsonb END,
+                         'card', CASE WHEN jsonb_exists(data->'soundSets', 'card-purchase')
+                           THEN to_jsonb('card-purchase'::text) ELSE 'null'::jsonb END,
+                         'gold', CASE WHEN jsonb_exists(data->'soundSets', 'gold-sell')
+                           THEN to_jsonb('gold-sell'::text) ELSE 'null'::jsonb END
+                       )),
+             client_schema_version = 2,
+             revision = revision + 1,
+             updated_at = now()
+       WHERE id = 'default' AND data->>'schemaVersion' = '1';
+      ALTER TABLE sfx_profiles ADD CONSTRAINT sfx_profiles_client_schema_version_check
+        CHECK (client_schema_version = 2);
+    `,
+  },
 ];
 
 let pool = null;
@@ -13246,10 +13280,13 @@ app.put('/api/prop-seats/:id', async (req, res) => {
 // semantic sound-set metadata/mix and gameplay assignments. It is deliberately
 // not seeded from code. Missing state means decorative silence and an unavailable
 // Studio editor, never a compiled fallback.
-const SFX_PROFILE_SCHEMA_VERSION = 1;
+const SFX_PROFILE_SCHEMA_VERSION = 2;
 const SFX_PROFILE_ID = 'default';
 const SFX_SOUND_SET_KEY = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 const SFX_ASSIGNABLE_TERRAINS = ['grass', 'water', 'sand', 'stone', 'road', 'bridge', 'dirt', 'pebble'];
+// Mirrors INTERFACE_SFX_CUES in frontend/src/core/sfxProfile.ts: a control declares the KIND
+// of interface event, and this document decides what it sounds like (ADR-0071, ADR-0089).
+const SFX_INTERFACE_CUES = ['activate', 'card', 'gold'];
 const SFX_PROFILE_LOCK_KEY = 4300193002;
 
 function exactSfxKeys(value, expected) {
@@ -13268,10 +13305,12 @@ function sfxGain(value) {
 }
 
 function validateSfxProfileData(data) {
-  if (!exactSfxKeys(data, ['schemaVersion', 'soundSets', 'terrainAssignments', 'arrival'])) {
-    return 'profile must contain exactly schemaVersion, soundSets, terrainAssignments, and arrival';
+  if (!exactSfxKeys(data, ['schemaVersion', 'soundSets', 'terrainAssignments', 'interfaceAssignments', 'arrival'])) {
+    return 'profile must contain exactly schemaVersion, soundSets, terrainAssignments, interfaceAssignments, and arrival';
   }
-  if (data.schemaVersion !== SFX_PROFILE_SCHEMA_VERSION) return 'schemaVersion must be 1';
+  if (data.schemaVersion !== SFX_PROFILE_SCHEMA_VERSION) {
+    return `schemaVersion must be ${SFX_PROFILE_SCHEMA_VERSION}`;
+  }
   if (!isObjectRecord(data.soundSets)) return 'soundSets must be an object';
   const soundKeys = Object.keys(data.soundSets).sort();
   if (soundKeys.length < 1 || soundKeys.length > 64) return 'soundSets must contain 1-64 entries';
@@ -13293,6 +13332,15 @@ function validateSfxProfileData(data) {
     const sample = data.terrainAssignments[terrain];
     if (sample !== null && (typeof sample !== 'string' || !Object.hasOwn(data.soundSets, sample))) {
       return `terrain assignment "${terrain}" must reference a declared sound set or null`;
+    }
+  }
+  if (!exactSfxKeys(data.interfaceAssignments, SFX_INTERFACE_CUES)) {
+    return 'interfaceAssignments must contain every interface cue exactly once';
+  }
+  for (const cue of SFX_INTERFACE_CUES) {
+    const sample = data.interfaceAssignments[cue];
+    if (sample !== null && (typeof sample !== 'string' || !Object.hasOwn(data.soundSets, sample))) {
+      return `interface cue "${cue}" must reference a declared sound set or null`;
     }
   }
   if (!exactSfxKeys(data.arrival, ['sample', 'gain', 'firing'])) {

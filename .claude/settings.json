@@ -1,30 +1,3 @@
 {
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "shell": "powershell",
-            "command": "& \"$env:CLAUDE_PROJECT_DIR\\bin\\claude-session-start.ps1\"",
-            "statusMessage": "Setting up the named dev environment",
-            "timeout": 900
-          }
-        ]
-      }
-    ],
-    "SessionEnd": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "shell": "powershell",
-            "command": "& \"$env:CLAUDE_PROJECT_DIR\\bin\\claude-session-end.ps1\"",
-            "statusMessage": "Stopping this session's dev environment",
-            "timeout": 120
-          }
-        ]
-      }
-    ]
-  }
+  "hooks": {}
 }
