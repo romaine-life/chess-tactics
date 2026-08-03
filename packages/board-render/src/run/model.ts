@@ -112,7 +112,7 @@ export function runAbilityDescription(ability: RunAbility, unit: RunArmyPieceTyp
 
 /**
  * The same rule with no unit in hand — what the keyword means before it is attached to a
- * piece (ADR-0369). `runAbilityDescription` states the piece-specific case and falls back
+ * piece (ADR-0370). `runAbilityDescription` states the piece-specific case and falls back
  * to this one, so the glossary and the per-unit tip cannot drift apart.
  */
 export function runAbilityGeneralDescription(ability: RunAbility): string {

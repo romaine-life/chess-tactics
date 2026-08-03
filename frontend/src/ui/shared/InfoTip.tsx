@@ -94,7 +94,7 @@ function TooltipPane({
 
 /**
  * The tip and the definitions of every mechanic it names, as one column under the
- * trigger (ADR-0369). Stacking beats nesting: the pops stay non-interactive, so a
+ * trigger (ADR-0370). Stacking beats nesting: the pops stay non-interactive, so a
  * definition reaches the reader on the same hover that raised the tip, with no
  * second target to find and nothing to keep hovered on the way there.
  */

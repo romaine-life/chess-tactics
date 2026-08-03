@@ -989,8 +989,12 @@ h1 {
 .app-shell-titlebar {
   transition: opacity var(--ds-duration-fade) var(--ds-ease-standard);
 }
+/* The bar is position:fixed at z-index 10000 — ABOVE the bootstrap curtain — so an
+   invisible pending bar would still swallow clicks meant for whatever is beneath it.
+   Pending means inert as well as unseen (ADR-0369). */
 .app-shell-titlebar.reveal-pending {
   opacity: 0;
+  pointer-events: none;
 }
 
 /* In-game confirmation dialog (ui/shared/ConfirmDialog.tsx) — replaces window.confirm() on
@@ -19666,9 +19670,9 @@ button.tileset-relationship-cell {
   object-fit: cover;
 }
 
-/* The heading and gold line read over the scene rather than above it. Selling is a Shop
+/* The gold line reads over the scene rather than above it. Selling is a Shop
    activity and stands in the same scene, so its heading gets the same treatment. */
-.run-shop-workspace.has-scene .run-shop-workspace-content > :is(h2, .run-shop-rules),
+.run-shop-workspace.has-scene .run-shop-workspace-content > .run-shop-rules,
 .run-sell-workspace.has-scene .run-sell-workspace-content > :is(h2, p) {
   text-shadow: 0 2px 6px rgba(2, 7, 12, .85);
 }
@@ -22344,7 +22348,7 @@ button.tileset-relationship-cell {
 .tooltip { position: relative; display: inline-flex; }
 .tooltip-trigger { display: inline-flex; }
 /* The positioner holds the tip AND a definition pop for every mechanic the tip names
-   (ADR-0369), so it is a column, not a single slot. `align-items: stretch` squares the
+   (ADR-0370), so it is a column, not a single slot. `align-items: stretch` squares the
    stack to its widest pane: ragged pane widths read as unrelated popups rather than one
    explanation. The gap is the pop's own inner gap, so the distance BETWEEN panes matches
    the distance between a pane's parts. */

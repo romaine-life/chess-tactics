@@ -30,7 +30,7 @@ export type RunGlossaryEntry = Readonly<{
 }>;
 
 /**
- * The Run's keyword glossary (ADR-0369). Explanatory text may name a mechanic without
+ * The Run's keyword glossary (ADR-0370). Explanatory text may name a mechanic without
  * defining it, because every surface that shows that text resolves the name from here.
  *
  * Definitions are deliberately the SHORT form: a tip states what the word means, and the

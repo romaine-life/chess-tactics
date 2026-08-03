@@ -9,7 +9,7 @@ extends:
   - 0339-run-card-properties-and-unit-states-use-paired-icons.md
 ---
 
-# ADR-0369: A tooltip defines the mechanics it names
+# ADR-0370: A tooltip defines the mechanics it names
 
 ## Context
 

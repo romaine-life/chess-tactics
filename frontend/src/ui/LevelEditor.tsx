@@ -2809,6 +2809,25 @@ export function LevelEditor(): ReactElement {
     && (isPredrawnBoard || editorTerrainPainted)
     && editorScenePainted
   );
+  // The three authorities the editor's frame is made of, registered separately rather than
+  // collapsed into one participant (ADR-0369): each can fail on its own, and the loading
+  // timeline names which one an unresolved wait belongs to instead of reporting
+  // `level-editor` for all three. `level-editor` remains the paint owner over them.
+  useSceneParticipant(
+    'document',
+    editorRouteError ? 'error' : editorReady ? 'painted' : 'loading',
+    editorRouteError,
+  );
+  useSceneParticipant(
+    'board-compositors',
+    editorRouteError ? 'error' : (isPredrawnBoard || editorTerrainPainted) ? 'painted' : 'loading',
+    editorRouteError,
+  );
+  useSceneParticipant(
+    'visible-editor-chrome',
+    editorRouteError ? 'error' : editorScenePainted ? 'painted' : 'loading',
+    editorRouteError,
+  );
   useSceneParticipant(
     'level-editor',
     editorRouteError

@@ -7,11 +7,36 @@ import {
   roleDefault,
 } from './chromeFamilyRuntime';
 import { loadingError, loadingMark, loadingMeasure } from '../diagnostics/loadingTimeline';
+import { loadDecodedImage } from '../render/imageResources';
 
 let installedChromeCss = '';
 let installedChromePromise: Promise<string> | null = null;
 
-/** Compose once per page lifetime; startup and later Studio consumers share the result. */
+/**
+ * Every image the composed CSS references, minus the ones it inlined itself.
+ *
+ * The 9-slice frames are baked to `data:` URLs here, but a role's FILL surface stays a
+ * plain `url()` into live media. That single omission is what made the persistent title
+ * bar paint as an unfilled frame on a cold load: nothing requested the oak surface until
+ * the bar mounted and asked for it, so at first paint it could not possibly be there
+ * (ADR-0369).
+ */
+function referencedImageUrls(css: string): string[] {
+  const urls = new Set<string>();
+  for (const match of css.matchAll(/url\(["']?([^"')]+)["']?\)/g)) {
+    const url = match[1];
+    if (url && !url.startsWith('data:')) urls.add(url);
+  }
+  return [...urls];
+}
+
+/**
+ * Compose once per page lifetime; startup and later Studio consumers share the result.
+ *
+ * COMPLETE by construction: this does not resolve until every image the generated CSS
+ * references is decoded. `main.tsx` awaits it before importing App, so a surface added to
+ * this CSS later cannot slip outside the guarantee — no caller has to remember it.
+ */
 export function composeInstalledChromeCss(): Promise<string> {
   if (installedChromeCss) return Promise.resolve(installedChromeCss);
   if (installedChromePromise) return installedChromePromise;
@@ -28,9 +53,12 @@ export function composeInstalledChromeCss(): Promise<string> {
     composeFrameDataUrl(inner),
     composeDividerRender(outer, dividers.outer),
     composeDividerRender(inner, dividers.inner),
-  ]).then(([outerFrame, innerFrame, outerDivider, innerDivider]) => {
-    installedChromeCss = frameCss(outer, inner, outerFrame, innerFrame, { outer: outerDivider, inner: innerDivider });
-    loadingMeasure('shell', 'chrome-composed', startedAt);
+  ]).then(async ([outerFrame, innerFrame, outerDivider, innerDivider]) => {
+    const css = frameCss(outer, inner, outerFrame, innerFrame, { outer: outerDivider, inner: innerDivider });
+    const referenced = referencedImageUrls(css);
+    await Promise.all(referenced.map((url) => loadDecodedImage(url)));
+    installedChromeCss = css;
+    loadingMeasure('shell', 'chrome-composed', startedAt, { referencedImages: referenced.length });
     return installedChromeCss;
   }).catch((error) => {
     installedChromePromise = null;
