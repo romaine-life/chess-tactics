@@ -3134,6 +3134,15 @@ export function LevelEditor(): ReactElement {
   const townDragRef = useRef<{ pointerId: number; cellX: number; cellY: number } | null>(null);
   const [townSited, setTownSited] = useState<
     { placed: number; onBoard: number; spacing: number; outside: number; offered: number } | null>(null);
+  // Keep the selection on a town that exists. Without this the dropdown opens empty on a board
+  // that already has towns, and lands on empty again whenever the selected one is removed.
+  useEffect(() => {
+    if (!boardTowns.length) {
+      if (selectedTownId !== null) setSelectedTownId(null);
+      return;
+    }
+    if (!boardTowns.some((town) => town.id === selectedTownId)) setSelectedTownId(boardTowns[0].id);
+  }, [boardTowns, selectedTownId]);
   const selectedTown = boardTowns.find((town) => town.id === selectedTownId) ?? null;
   const townArea: TownBounds | null = selectedTown?.bounds ?? null;
   // Knob edits live in React state and are written into the document by Regenerate, the same way
