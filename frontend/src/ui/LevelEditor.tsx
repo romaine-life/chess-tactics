@@ -4292,6 +4292,21 @@ export function LevelEditor(): ReactElement {
     commitEditorBoard(next, null);
   };
 
+  /**
+   * A town on default ground in the middle of the current view, for authors who have not found
+   * the drag. Dragging is the precise way to place one; this is the way that does not require
+   * knowing that.
+   */
+  const addTownAtView = (): void => {
+    // Centre of the viewport in scene pixels: the pointer conversion with a centred pointer.
+    const centre = unprojectBoardPoint({
+      left: -viewPan.x / viewZoom - artworkBoardOrigin.originLeft,
+      top: -viewPan.y / viewZoom - artworkBoardOrigin.originTop,
+    });
+    const cell = snapGridPoint(centre);
+    createTown({ minX: cell.x - 5, minY: cell.y - 4, maxX: cell.x + 5, maxY: cell.y + 4 });
+  };
+
   /** A fresh town on newly dragged ground. Each drag is its own instance, never a replacement. */
   const createTown = (bounds: TownBounds): void => {
     const template = selectedTown;
@@ -9798,7 +9813,7 @@ export function LevelEditor(): ReactElement {
         ) : brushKind === 'town' ? (
           <section className="skirmish-card le-brush-panel le-town-panel" data-testid="town-controls">
             <h2>Towns</h2>
-            <p className="le-board-note">Drag out an area and a new town fills it. Every town is kept: pick one below to retune and regenerate it, and each new drag starts from the last one settings. Buildings are Scene Art: visual only, never on the playable grid, no collision.</p>
+            <p className="le-board-note">Drag out an area on the board and a town fills it, or press Add town for one in the middle of the view. Every town is kept — pick one to retune and regenerate it. Buildings are Scene Art: visual only, never on the playable grid, no collision.</p>
             {/* Same shape the Generate panel uses for its saved regions: one dropdown of saved
                 instances, with a danger icon to drop the active one. */}
             <div className="le-gen-unit-row">
@@ -9825,8 +9840,14 @@ export function LevelEditor(): ReactElement {
                 >×</ChromeButton>
               ) : null}
             </div>
+            <ChromeButton unit="inner-text-button"
+              className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+              style={{ width: '100%' }}
+              onClick={addTownAtView}
+              title="Place a town in the middle of the current view. Drag on the board to choose the ground yourself."
+            >+ Add town</ChromeButton>
             {boardTowns.length ? null : (
-              <p className="le-board-note">Drag out an area on the board to place one.</p>
+              <p className="le-board-note">Or drag out an area on the board to choose the ground yourself.</p>
             )}
             {selectedTown ? (<>
               <h2 className="le-card-subhead">Plan</h2>
@@ -9948,7 +9969,7 @@ export function LevelEditor(): ReactElement {
                     : townSited.outside >= Math.max(1, townSited.spacing)
                       ? `${townSited.outside} building${townSited.outside === 1 ? '' : 's'} would have overhung the area — drag a bigger area, or build smaller.`
                       : townSited.spacing > 0
-                        ? `${townSited.spacing} building${townSited.spacing === 1 ? '' : 's'} had no room beside their neighbours — lower Gap between buildings, or build smaller.`
+                        ? `${townSited.spacing === 1 ? '1 building had' : `${townSited.spacing} buildings had`} no room beside the neighbours — lower Gap between buildings, or build smaller.`
                         : 'The area ran out of street frontage — drag a bigger area or lower Frontage per building.'}
                 </p>
               ) : townSited ? <p className="le-board-note">Placed {townSited.placed} buildings.</p> : null}
