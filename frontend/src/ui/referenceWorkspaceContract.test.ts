@@ -240,6 +240,8 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(cardCodex).toContain('cardContentsLabel(card)');
     expect(cardCodex).toMatch(/to=\{cardHref\?\.\(card\.id\)\}/);
     expect(cardCodex.match(/<ReferenceTrigger/g)).toHaveLength(1);
+    // Handling a card sounds like a card, not like a control (ADR-0372).
+    expect(cardCodex).toContain('data-ui-sfx="card-purchase"');
     // The main menu addresses individual cards like relic records…
     expect(mainMenu).toContain('selectedCardId={enchiridionCardFromPath(path)}');
     expect(mainMenu).toContain('cardHref={enchiridionCardHref}');
@@ -296,6 +298,8 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(cardTypes).toContain('className="enchiridion-card-type-layout"');
     expect(cardTypes).toContain('className="enchiridion-card-type-rows"');
     expect(cardTypes).toContain('data-testid={`enchiridion-card-type-${definition.id}`}');
+    // The property rows are card faces too, so they carry the card cue (ADR-0372).
+    expect(cardTypes).toContain('data-ui-sfx="card-purchase"');
     expect(cardTypes).toContain('<CardTypeReference definition={selected} />');
     expect(cardTypes).not.toContain('<CardTypeReference definition={definition} key={definition.id} />');
     expect(style).toMatch(/\.enchiridion-card-type-layout\s*\{[\s\S]*?grid-template-columns:\s*minmax\(280px,\s*1fr\) minmax\(232px,\s*300px\)/);
