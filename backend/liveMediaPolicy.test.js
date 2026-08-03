@@ -468,7 +468,7 @@ test('condition icon projection keeps all four card properties and granted state
     assert.deepEqual(gameConditionIconSlot(property.slot), { component: 'card-property-icon', variant });
     assert.equal(gameConditionIconMediaIssue(property), null);
   }
-  for (const variant of ['ataraxia', 'conflict', 'battle']) {
+  for (const variant of ['conflict', 'battle']) {
     const progress = gameConditionIcon({
       slot: `ui/kit/icons/run/${variant}.png`,
       metadata: { runtime: {

@@ -42,11 +42,19 @@ URL — which is exactly why it is contributed rather than derived in
 `titleBarConfig`. While the portal is empty the line is the plain screen name it
 has always been, chevron and spacing included.
 
-**Ataraxia, Conflict and Battle each own a typed 64×64 icon role.** Their closed
-semantic slots are `ui/kit/icons/run/{ataraxia,conflict,battle}.png`, runtime
-component `run-progress-icon`, variant equal to the idea. The runtime never
-substitutes one for another and never borrows a unit-ability or card-property
-glyph for a Run position.
+**Conflict and Battle each own a typed icon role.** Their closed semantic slots
+are `ui/kit/icons/run/{conflict,battle}.png`, runtime component
+`run-progress-icon`, variant equal to the idea. The runtime never substitutes one
+for another and never borrows a unit-ability or card-property glyph for a Run
+position.
+
+**Ataraxia is NOT one of them.** Its mark already exists: the carved rung numeral
+of ADR-0363's ladder, where the numeral IS the row's mark. The title bar resolves
+that same installed set through one shared `ataraxiaNumeral.ts`, so the rung
+stands alone in the measure — no second symbol beside it, and no digit repeating
+what it already says. A first attempt gave Ataraxia its own forged glyph and a
+written tier; that was a second visual identity for one idea (ADR-0059), and its
+slot is retired.
 
 **One chip, and measures with no box.** The Run bar carries exactly one framed
 chip: the identity it cannot draw — the War's name over the authored name of the
@@ -55,8 +63,8 @@ sitting bare on the bar: Ataraxia tier, gold, Conflict, Battle. They are the sam
 kind of fact, so they read as one row of marks rather than a row of little boxes,
 and a measure never gets a frame of its own.
 
-Ataraxia is written as its symbol and its tier — the word is gone, and the tier's
-name stays on hover rather than spending bar width. Because the measures are
+Ataraxia is written as its rung alone — the word is gone, and the tier's name
+stays on hover rather than spending bar width. Because the measures are
 compact marks and the named chip is the wide element, the chip is what sheds
 first at compact widths, not the position.
 

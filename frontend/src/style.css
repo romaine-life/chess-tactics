@@ -19007,10 +19007,28 @@ button.tileset-relationship-cell {
   font-size: var(--ds-text-md);
 }
 
+.run-topbar-measures .run-topbar-rung,
 .run-topbar-measures .run-gold-icon,
 .run-gold-amount--title .run-gold-icon {
   block-size: var(--run-measure-seat, 22px);
   inline-size: var(--run-measure-seat, 22px);
+}
+
+/* Ataraxia's mark is the carved rung numeral itself (ADR-0363), so it takes the
+   measure's whole seat with no digit beside it. Where the forged set is not
+   installed, the seat still states the rung as type. */
+.run-topbar-rung {
+  align-items: center;
+  display: inline-flex;
+  flex: none;
+  justify-content: center;
+}
+
+.run-topbar-rung img {
+  block-size: 100%;
+  image-rendering: pixelated;
+  inline-size: 100%;
+  object-fit: contain;
 }
 
 .run-gold-amount--button {

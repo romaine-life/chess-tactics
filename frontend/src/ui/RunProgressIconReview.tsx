@@ -41,13 +41,6 @@ interface VariantDefinition {
 
 export const RUN_PROGRESS_ICON_VARIANTS: readonly VariantDefinition[] = Object.freeze([
   {
-    variant: 'ataraxia',
-    slot: 'ui/kit/icons/run/ataraxia.png',
-    role: 'ui-kit-icons-run-ataraxia-png',
-    title: 'Ataraxia',
-    idea: 'The Run difficulty tier. The symbol names it; only the tier is written.',
-  },
-  {
     variant: 'conflict',
     slot: 'ui/kit/icons/run/conflict.png',
     role: 'ui-kit-icons-run-conflict-png',
@@ -222,7 +215,6 @@ function ChipPreview({
           conflict={1}
           battle={3}
           battlesInConflict={3}
-          ataraxiaIconSrc={definition.variant === 'ataraxia' ? src : undefined}
           goldIconSrc={definition.variant === 'gold' ? src : undefined}
           conflictIconSrc={definition.variant === 'conflict' ? src : undefined}
           battleIconSrc={definition.variant === 'battle' ? src : undefined}

@@ -2,15 +2,18 @@ import type { ReactElement } from 'react';
 import { installedUiMediaIfPresent } from '../installedUiMedia';
 
 /**
- * The repeatable Run ideas the persistent title bar names on every Run screen.
- * Each one owns its own typed `run-progress-icon` role, so the runtime never
+ * The Run's position within its War, as the persistent title bar names it. Each
+ * one owns its own typed `run-progress-icon` role, so the runtime never
  * substitutes one for another, and never borrows a unit-ability or card-property
  * glyph to stand in for a Run position.
+ *
+ * Ataraxia is NOT one of these: its mark is the carved rung numeral the
+ * Enchiridion ladder already installs (ADR-0363), resolved through
+ * `ataraxiaNumeral.ts`. One idea, one symbol.
  */
-export type RunProgressIconVariant = 'ataraxia' | 'conflict' | 'battle';
+export type RunProgressIconVariant = 'conflict' | 'battle';
 
 const RUN_PROGRESS_MEDIA_ROLE: Readonly<Record<RunProgressIconVariant, string>> = Object.freeze({
-  ataraxia: 'ui-kit-icons-run-ataraxia-png',
   conflict: 'ui-kit-icons-run-conflict-png',
   battle: 'ui-kit-icons-run-battle-png',
 });

@@ -1,6 +1,7 @@
 import type { ReactElement, ReactNode } from 'react';
 import { ATARAXIA_BY_TIER, formatGold, type AtaraxiaTier } from '../run/model';
 import { RunGoldIcon } from './RunResources';
+import { ataraxiaNumeralArtUrl } from './ataraxiaNumeral';
 import { RunProgressIcon } from './shared/RunProgressIcon';
 import { Tooltip } from './shared/InfoTip';
 import { TitleBarStatus } from './shell/TitleBarControls';
@@ -66,7 +67,6 @@ export function RunTitleBarMeasures({
   conflict,
   battle,
   battlesInConflict,
-  ataraxiaIconSrc,
   goldIconSrc,
   conflictIconSrc,
   battleIconSrc,
@@ -76,24 +76,26 @@ export function RunTitleBarMeasures({
   conflict: number;
   battle: number;
   battlesInConflict: number;
-  ataraxiaIconSrc?: string;
   goldIconSrc?: string;
   conflictIconSrc?: string;
   battleIconSrc?: string;
 }): ReactElement {
   const ataraxia = ATARAXIA_BY_TIER[tier];
+  const rungArt = ataraxiaNumeralArtUrl(ataraxia.numeral);
   const gold = formatGold(goldTenths);
   return (
     <div className="run-topbar-measures">
-      {/* The symbol names Ataraxia; only its tier is written. The tier's own name
-          and rule live in the tooltip rather than spending bar width. */}
+      {/* The numeral IS Ataraxia's mark (ADR-0363), so the rung stands alone here —
+          no second symbol beside it and no digit repeating what it already says. The
+          tier's name and rule live in the tooltip rather than spending bar width. */}
       <RunMeasure
         label={`${ataraxia.label}. ${ataraxia.title}. ${ataraxia.effect}`}
         name={`${ataraxia.label} — ${ataraxia.title}`}
         detail={ataraxia.effect}
       >
-        <RunProgressIcon variant="ataraxia" src={ataraxiaIconSrc} />
-        <span>{tier}</span>
+        {rungArt
+          ? <span className="run-topbar-rung"><img src={rungArt} alt="" draggable={false} /></span>
+          : <span className="run-topbar-rung is-unavailable">{ataraxia.numeral}</span>}
       </RunMeasure>
       <RunMeasure
         label={`${gold} gold`}
