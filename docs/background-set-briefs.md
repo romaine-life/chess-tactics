@@ -327,6 +327,40 @@ summer unreliable. The positive contrast is not victory over nature, but
 adaptation: people survived, unevenly and imperfectly, because they solved the
 problem as well as they could.
 
+### Set 06 Candidate: Spolia
+
+**Status:** Candidate for generated set. Backdrop candidates generated for the
+Run's conflict-opening relic page (the screen that hands the player a relic at
+the head of each Conflict).
+
+**Hidden scenario:** goods have changed hands without anyone handing them over.
+A household, a chapel, or a farm has stopped, and what it owned is being
+counted, tagged, wrapped, and moved by people who did not own it and are not
+explained.
+
+**Emotional contradiction:** careful and dispossessed; orderly and bereaved;
+valuable and unclaimed.
+
+**Visible residues:** objects laid out in rows on cloth, plank, or table; paper
+tags tied with string; wrapped bundles; a pried-empty wall niche; an open chest
+with the lid back; a half-loaded handcart; a cold hearth; a folded coat over a
+chair back; a waiting work animal; weighed vessels; a ledger left open.
+
+**Forbidden explanation:** no body, no funeral, no mourners, no looters, no
+soldiers, no fire, no readable document, no heraldry that names an owner, no
+scene that says who died or why the place stopped. Nobody gives the player
+anything, and no giver appears.
+
+**Style notes:** the accepted refined pixel-art video-game background lane. This
+set must not repeat the Relics workspace's warm candlelit treasury interior —
+that backdrop already exists and this is a different moment. Vary
+interior/exterior, season, hour, and camera height across the panels.
+
+This set answers the acquisition question the run relics already imply in their
+flavor fragments ("It was counted with the valuables. No hand claimed it." /
+"The vessels were weighed after the prayers had stopped."). It is provenance,
+not benediction.
+
 ## Candidate Scenario Bank
 
 These are not accepted sets yet. They are seeds for brainstorming.
