@@ -19159,6 +19159,71 @@ button.tileset-relationship-cell {
   block-size: auto;
 }
 
+/* Relic-mat review composite: chosen backdrop, mat over it, live relic cards on top.
+   Layout only — every visible surface in the stack is generated art or an existing
+   chrome unit, so nothing here paints. The mat and the card row share one grid cell
+   deliberately: a mat that fails to contain the row must show that it fails. */
+.relic-mat-stage {
+  aspect-ratio: 16 / 9;
+  display: grid;
+  inline-size: 100%;
+  overflow: hidden;
+  place-items: center;
+  position: relative;
+}
+
+.relic-mat-backdrop {
+  block-size: 100%;
+  image-rendering: pixelated;
+  inline-size: 100%;
+  inset: 0;
+  object-fit: cover;
+  position: absolute;
+}
+
+.relic-mat-layer {
+  display: grid;
+  inline-size: 84%;
+  place-items: center;
+  position: relative;
+}
+
+.relic-mat-art {
+  block-size: auto;
+  grid-area: 1 / 1;
+  image-rendering: pixelated;
+  inline-size: 100%;
+}
+
+.relic-mat-cards {
+  grid-area: 1 / 1;
+  inline-size: 86%;
+}
+
+.tileset-studio-card-image.relic-mat-card-image {
+  min-height: 0;
+}
+
+/* Beats the base .tileset-studio-card-image img rule, which sizes every catalog image to
+   iso-tile dimensions -- correct for a tile thumbnail, but it shrinks a backdrop to a
+   corner and detaches the mat from it, which is the one thing this card exists to show. */
+.tileset-studio-card-image.relic-mat-card-image .relic-mat-backdrop {
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.tileset-studio-card-image.relic-mat-card-image .relic-mat-art {
+  height: auto;
+  object-fit: contain;
+  width: 100%;
+}
+
+.relic-mat-figure {
+  flex: 1 1 100%;
+  min-inline-size: 0;
+}
+
 .run-relic-review-grid {
   display: grid;
   gap: var(--ds-inline-tight);

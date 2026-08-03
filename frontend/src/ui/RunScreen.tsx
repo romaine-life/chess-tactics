@@ -62,6 +62,7 @@ import { SkirmishViewStoreProvider } from '../game/SkirmishViewStoreContext';
 import { runLinkTargetMismatch } from '../run/craft';
 import { useRunCraft } from './useRunCraft';
 import { RunRelicIcon, RunRelicsWorkspace } from './RunRelics';
+import { RunRelicOfferCard } from './RunRelicOfferCard';
 import { RunGoldAmount } from './RunResources';
 import {
   runWorkspaceHref,
@@ -653,16 +654,10 @@ function RelicOffer({
   actionLabel: ReactNode;
   disabled?: boolean;
 }): ReactElement {
-  const relic = RUN_RELIC_BY_ID[relicId];
   const [target, setTarget] = useState('');
   const needsTarget = relicTargetRequired(relicId);
   return (
-    <InnerChromeBox className="run-card run-relic-card">
-      <header className="run-relic-card-heading">
-        <RunRelicIcon relicId={relicId} />
-        <h3>{relic.name}</h3>
-      </header>
-      <p>{relic.description}</p>
+    <RunRelicOfferCard relicId={relicId}>
       {needsTarget ? (
         <HouseSelect
           value={target}
@@ -681,7 +676,7 @@ function RelicOffer({
       >
         {actionLabel}
       </ChromeButton>
-    </InnerChromeBox>
+    </RunRelicOfferCard>
   );
 }
 
