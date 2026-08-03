@@ -11,7 +11,7 @@ refines:
   - "[ADR-0314](0314-run-card-presentations-promote-atomically.md)"
 ---
 
-# ADR-0361: Enchiridion Cards is a terminal gallery with no fourth column
+# ADR-0364: Enchiridion Cards is a terminal gallery with no fourth column
 
 ## Context
 

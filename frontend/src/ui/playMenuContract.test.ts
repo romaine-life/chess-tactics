@@ -114,7 +114,10 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(ataraxiaSelector).toContain('<HouseSelect');
     expect(ataraxiaSelector).toContain('disabled: locked');
     expect(ataraxiaSelector).toContain('{definition.label} — {definition.title}');
-    expect(ataraxiaSelector).toContain('Complete Ataraxia 0 to unlock');
+    // The unlock note names the rung below from the model rather than hard-coding the
+    // baseline's label, so renumbering the ladder cannot leave a stale sentence here.
+    expect(ataraxiaSelector).toContain('Complete ${ATARAXIA_BY_TIER[(tier - 1) as AtaraxiaTier].label} to unlock');
+    expect(ataraxiaSelector).not.toContain("'Complete Ataraxia 0 to unlock'");
     expect(ataraxiaSelector).toContain('<p className="run-ataraxia-effect">{ATARAXIA_BY_TIER[value].effect}</p>');
     expect(ataraxiaSelector).not.toContain('role="radiogroup"');
   });

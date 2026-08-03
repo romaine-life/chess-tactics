@@ -32,6 +32,63 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(abilities).not.toContain('Upon acquisition, one randomly chosen unit on this card gains Discipline.');
   });
 
+  it('reads the Ataraxia ladder from the Run model instead of restating it', () => {
+    const start = enchiridion.indexOf('function AtaraxiaSection');
+    const end = enchiridion.indexOf('export function EnchiridionReference', start);
+    const ataraxia = enchiridion.slice(start, end);
+    // The reference enumerates INSTALLED tiers and prints their authored anatomy, so a
+    // tier installed in the model appears here without a second copy of its copy.
+    expect(ataraxia).toContain('ATARAXIA_TIERS.map');
+    expect(ataraxia).toContain('ATARAXIA_BY_TIER[tier]');
+    // A row is its rung and its descriptive name; the ladder's own name is the section
+    // heading, so `label` (which repeats it) belongs to surfaces away from that heading.
+    // The numeral takes the mark seat — it is not a prefix on the heading.
+    expect(ataraxia).toContain('<span className="enchiridion-ataraxia-numeral">{definition.numeral}</span>');
+    expect(ataraxia).toContain('<h3>{definition.title}</h3>');
+    expect(ataraxia).not.toContain('{definition.numeral} — {definition.title}');
+    expect(ataraxia).not.toContain('{definition.label} — {definition.title}');
+    expect(ataraxia).toContain('<p>{definition.effect}</p>');
+    expect(ataraxia).not.toContain('The Untroubled Mind');
+    expect(ataraxia).not.toContain('The Great Mortality');
+    // Tier zero takes no special branch (ADR-0291); only lock standing varies.
+    expect(ataraxia).not.toMatch(/tier === 0/);
+    expect(ataraxia).toContain('const locked = tier > unlockedThrough;');
+    expect(ataraxia).toContain('RUN_PROGRESSION_EVENT');
+    // A row carries no glyph at all: the section's rail mark would label nothing on a
+    // numbered rung, and lock state is stated in words by the standing line.
+    expect(ataraxia).not.toContain('SECTION_ICON_SRC.ataraxia');
+    expect(enchiridion).not.toContain('ATARAXIA_LOCKED_ICON_SRC');
+    expect(style).toMatch(/\.enchiridion-ataraxia-card\s*\{[\s\S]*?grid-template-columns:\s*minmax\(56px, auto\) minmax\(0, 1fr\)/);
+    expect(enchiridion).toContain("if (section === 'ataraxia') return <AtaraxiaSection framed={framed} />;");
+    expect(enchiridion).toContain("ataraxia: installedUiMedia('ui-kit-icons-game-objective-png')");
+  });
+
+  it('reads the forged rung marks by prefix so an uninstalled set degrades to type', () => {
+    // The art set is installed live media, not a required slot. `liveMediaForSlot` throws
+    // on an absent slot and would take the whole section down on a deployment where the
+    // candidates have not been accepted — so the set is read by PREFIX and the typed
+    // numeral remains the fallback render path (ADR-0363).
+    const start = enchiridion.indexOf('const ATARAXIA_NUMERAL_SLOT_PREFIX');
+    const end = enchiridion.indexOf('export function EnchiridionReference', start);
+    const ataraxia = enchiridion.slice(start, end);
+    expect(ataraxia).toContain("const ATARAXIA_NUMERAL_SLOT_PREFIX = 'ui/kit/numerals/stone/'");
+    expect(ataraxia).toContain('liveMediaSlotsWithPrefix(ATARAXIA_NUMERAL_SLOT_PREFIX)');
+    expect(ataraxia).not.toContain('liveMediaForSlot(ataraxiaNumeralSlot');
+    expect(ataraxia).not.toContain('resolvedLiveMediaUrl(ataraxiaNumeralSlot');
+    // Both render paths, and the typed one is what an uninstalled set falls back to.
+    expect(ataraxia).toContain('className="enchiridion-ataraxia-numeral is-art"');
+    expect(ataraxia).toContain('<span className="enchiridion-ataraxia-numeral">{definition.numeral}</span>');
+    // The slug rule is shared verbatim with the forge that uploads the candidates.
+    expect(ataraxia).toContain("numeral === '0' ? 'zero' : numeral.toLowerCase()");
+    const forge = readFileSync(new URL('../../scripts/forge-ataraxia-numerals.mjs', import.meta.url), 'utf8');
+    expect(forge).toContain("{ key: '0', slot: 'zero'");
+    expect(forge).toContain("{ key: 'VIII', slot: 'viii'");
+    // The whole ladder is forged in one pass — a designed tier must not wait on art.
+    expect(forge.match(/\{ key: '/g)).toHaveLength(11);
+    expect(forge).toContain('styleAnchorThreadId');
+    expect(forge).toContain('imageGenVerdict');
+  });
+
   it('keeps the exact knight and bishop terrain exceptions in the shared reference', () => {
     expect(enchiridion).toContain('Knights</strong> jump over gaps, fences, and intervening obstacles');
     expect(enchiridion).toContain('Obstacles on neighboring non-diagonal tiles are ignored');
@@ -161,7 +218,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     const end = enchiridion.indexOf('type CardTypeReferenceDefinition', start);
     const cardCodex = enchiridion.slice(start, end);
     // Cards are the records themselves; there is deliberately no fourth-column
-    // detail and no compact prose list duplicating those faces (ADR-0361).
+    // detail and no compact prose list duplicating those faces (ADR-0364).
     expect(cardCodex).toContain('RUN_CARD_DECK');
     expect(cardCodex).toContain('className="enchiridion-card-gallery-layout"');
     expect(cardCodex).toContain('className="enchiridion-card-gallery-grid"');

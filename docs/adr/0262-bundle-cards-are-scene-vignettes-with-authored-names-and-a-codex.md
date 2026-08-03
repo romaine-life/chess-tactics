@@ -1,5 +1,5 @@
 ---
-status: "accepted; Enchiridion selected-record clause superseded by ADR-0361"
+status: "accepted; Enchiridion selected-record clause superseded by ADR-0364"
 date: 2026-07-30
 deciders: owner (Nelson) + Codex
 extends:
@@ -10,7 +10,7 @@ refines:
   - 0256-individual-relics-are-routable-from-the-main-menu-enchiridion.md
 partially_superseded_by:
   - 0281-unit-card-art-uses-dedicated-database-prompt-plans.md
-  - 0361-enchiridion-cards-is-a-terminal-gallery-with-no-fourth-column.md
+  - 0364-enchiridion-cards-is-a-terminal-gallery-with-no-fourth-column.md
 ---
 
 # ADR-0262: Bundle cards are scene vignettes with authored names and a codex

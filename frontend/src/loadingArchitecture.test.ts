@@ -161,6 +161,23 @@ describe('professional loading architecture guards', () => {
     );
   });
 
+  it('suppresses a preparing region by context value, never by changing the tree shape', () => {
+    // A host-preserving navigation ends by clearing the preparing region. If
+    // SceneSlotActivation answered that with a different element type — a bare fragment
+    // when the region is not preparing, providers when it is — React would read the
+    // change as a new tree and remount the destination it had just revealed, blanking
+    // the committed column for a frame at the end of every menu navigation.
+    const boundary = read('./ui/shell/SceneBoundary.tsx').replace(/\r\n/g, '\n');
+    const activation = boundary.slice(boundary.indexOf('export function SceneSlotActivation'));
+    const body = activation.slice(0, activation.indexOf('\n}\n') + 3);
+    expect(body).toContain('const suppressed = preparingRegion === region;');
+    expect(body).toContain('<SceneActivationContext.Provider value={inheritedActivation && !suppressed}>');
+    expect(body).toContain('<SceneRevealContext.Provider value={inheritedReveal && !suppressed}>');
+    // Exactly one return, and it is the provider pair — no early exit past them.
+    expect(body.match(/\breturn\b/g)).toHaveLength(1);
+    expect(body).not.toMatch(/return\s*<>/);
+  });
+
   it('routes Settings panels through an authored nested scene slot', () => {
     const settings = read('./ui/Settings.tsx');
     const styles = read('./style.css');

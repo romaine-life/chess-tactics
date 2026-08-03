@@ -4,6 +4,12 @@ const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
 const test = require('node:test');
 const {
+  ATARAXIA_NUMERAL_COMPONENT,
+  ATARAXIA_NUMERAL_PROOF_RENDERER,
+  ATARAXIA_NUMERAL_PROOF_SCHEMA,
+  ataraxiaNumeralMediaIssue,
+  ataraxiaNumeralOwnerProofIssue,
+  ataraxiaNumeralSlot,
   CARD_TYPE_ROW_TEXTURE_COMPONENT,
   CARD_TYPE_ROW_TEXTURE_GROUP_ID,
   CARD_TYPE_ROW_TEXTURE_REQUIRED_SLOTS,
@@ -56,6 +62,14 @@ const {
   strategikonBackgroundMediaIssue,
   strategikonBackgroundOwnerProofIssue,
   strategikonBackgroundSlot,
+  WALL_MATERIAL_COMPONENT,
+  WALL_MATERIAL_FRAME_HEIGHT,
+  WALL_MATERIAL_FRAME_WIDTH,
+  WALL_MATERIAL_PROOF_RENDERER,
+  WALL_MATERIAL_PROOF_SCHEMA,
+  wallMaterialMediaIssue,
+  wallMaterialOwnerProofIssue,
+  wallMaterialSlot,
 } = require('./liveMediaPolicy');
 
 const originalSha = 'a'.repeat(64);
@@ -875,4 +889,214 @@ test('backend-allocated pre-drawn slot identity is independent of the logical le
     metadata: { runtime: { ...row.metadata.runtime, variant: 'hold-bridge' } },
   }), /variant/);
   assert.match(predrawnBoardOwnerProofIssue(row, { ...proof, boardSlug: 'hold-bridge' }, surfaceUrl), /slot slug/);
+});
+
+
+const NUMERAL_SHA = createHash('sha256').update('ataraxia-rung-i').digest('hex');
+
+function numeralRow(overrides = {}) {
+  return {
+    id: '3f2504e0-4f89-41d3-9a0c-0305e82c3301',
+    slot: 'ui/kit/numerals/stone/i.png',
+    domain: 'ui-kit',
+    role: 'media',
+    media_type: 'image/png',
+    width: 64,
+    height: 64,
+    blob_sha256: NUMERAL_SHA,
+    metadata: {
+      runtime: {
+        component: ATARAXIA_NUMERAL_COMPONENT,
+        nativeRole: ATARAXIA_NUMERAL_COMPONENT,
+        variant: 'i',
+        frameWidth: 64,
+        frameHeight: 64,
+        frameCount: 1,
+        altText: 'Ataraxia I',
+      },
+    },
+    ...overrides,
+  };
+}
+
+function numeralProof(row, overrides = {}) {
+  return {
+    schema: ATARAXIA_NUMERAL_PROOF_SCHEMA,
+    renderer: ATARAXIA_NUMERAL_PROOF_RENDERER,
+    surfaceUrl: 'http://localhost:5191/enchiridion/ataraxia',
+    reviewedSet: ['ui/kit/numerals/stone/i.png', 'ui/kit/numerals/stone/zero.png'],
+    selectedCandidates: [{ slot: row.slot, versionId: row.id, sha256: row.blob_sha256, rowRevision: 1 }],
+    slotSnapshots: [{ slot: row.slot, rowRevision: 1, activeVersionId: null }],
+    ...overrides,
+  };
+}
+
+test('Ataraxia rung slots are typed, so the set is not stuck on the ui-kit bridge default', () => {
+  assert.deepEqual(ataraxiaNumeralSlot('ui/kit/numerals/stone/viii.png'), { style: 'stone', rung: 'viii' });
+  assert.equal(ataraxiaNumeralSlot('ui/kit/icons/bishop.png'), null);
+  assert.equal(ataraxiaNumeralSlot(''), null);
+
+  assert.equal(ataraxiaNumeralMediaIssue(numeralRow()), null);
+  assert.match(ataraxiaNumeralMediaIssue(numeralRow({ width: 32, height: 32 })), /native 64x64/);
+  assert.match(ataraxiaNumeralMediaIssue(numeralRow({ media_type: 'image/webp' })), /image\/png/);
+  // The rung a slot names and the rung its metadata claims cannot drift apart.
+  assert.match(ataraxiaNumeralMediaIssue(numeralRow({
+    metadata: { runtime: { ...numeralRow().metadata.runtime, variant: 'v' } },
+  })), /variant must match/);
+  assert.match(ataraxiaNumeralMediaIssue(numeralRow({
+    metadata: { runtime: { ...numeralRow().metadata.runtime, extra: 1 } },
+  })), /unsupported keys: extra/);
+});
+
+test('Ataraxia rung review proof pins the reviewed surface, bytes, and whole set', () => {
+  const row = numeralRow();
+  const surfaceUrl = 'http://localhost:5191/enchiridion/ataraxia';
+  assert.equal(ataraxiaNumeralOwnerProofIssue(row, numeralProof(row), surfaceUrl), null);
+  // Both hosts wear the mark, so both are legitimate review surfaces.
+  const strategikon = 'http://localhost:5191/run/strategikon/enchiridion/ataraxia';
+  assert.equal(
+    ataraxiaNumeralOwnerProofIssue(row, numeralProof(row, { surfaceUrl: strategikon }), strategikon),
+    null,
+  );
+  // A surface that does not wear the mark cannot stand in for one that does.
+  const elsewhere = 'http://localhost:5191/enchiridion/relics';
+  assert.match(
+    ataraxiaNumeralOwnerProofIssue(row, numeralProof(row, { surfaceUrl: elsewhere }), elsewhere),
+    /live Ataraxia reference rows/,
+  );
+  assert.match(
+    ataraxiaNumeralOwnerProofIssue(row, numeralProof(row, { surfaceUrl }), 'http://localhost:5191/studio'),
+    /does not match the reviewed surface/,
+  );
+  // The proof must name the exact reviewed bytes...
+  assert.match(ataraxiaNumeralOwnerProofIssue(row, numeralProof(row, {
+    selectedCandidates: [{ slot: row.slot, versionId: row.id, sha256: createHash('sha256').update('other').digest('hex') }],
+  }), surfaceUrl), /reviewed candidate bytes/);
+  // ...and record that the rung was judged as part of a set, not alone.
+  assert.match(ataraxiaNumeralOwnerProofIssue(row, numeralProof(row, { reviewedSet: [row.slot] }), surfaceUrl), /whole reviewed rung set/);
+  assert.match(ataraxiaNumeralOwnerProofIssue(row, numeralProof(row, { renderer: 'Studio/Whatever' }), surfaceUrl), /reviewed rung renderer/);
+});
+
+const wallVersionId = '11111111-1111-4111-8111-111111111111';
+const wallSha = 'c'.repeat(64);
+const wallFrame = (overrides = {}) => ({
+  id: wallVersionId,
+  slot: 'tiles/feature/wall-stone-9.png',
+  domain: 'terrain',
+  role: 'media',
+  media_type: 'image/png',
+  blob_sha256: wallSha,
+  width: WALL_MATERIAL_FRAME_WIDTH,
+  height: WALL_MATERIAL_FRAME_HEIGHT,
+  metadata: {},
+  ...overrides,
+});
+const wallProof = (row, overrides = {}) => ({
+  schema: WALL_MATERIAL_PROOF_SCHEMA,
+  renderer: WALL_MATERIAL_PROOF_RENDERER,
+  canonicalScale: 1,
+  assetLocalScale: 1,
+  spatialResampling: false,
+  deterministicProof: true,
+  frameWidth: WALL_MATERIAL_FRAME_WIDTH,
+  frameHeight: WALL_MATERIAL_FRAME_HEIGHT,
+  surfaceUrl: 'http://127.0.0.1:5173/studio?cat=walls&vk=wallcandidates',
+  mountedSlots: [row.slot],
+  selectedCandidates: [{ slot: row.slot, versionId: row.id, sha256: row.blob_sha256, rowRevision: 1 }],
+  slotSnapshots: [{ slot: row.slot, rowRevision: 1, activeVersionId: null }],
+  ...overrides,
+});
+
+test('wall slots name their material and face apart from board tiles', () => {
+  assert.deepEqual(wallMaterialSlot('tiles/feature/wall-mossy-1.png'), { material: 'mossy', mask: 1, thumb: false });
+  assert.deepEqual(wallMaterialSlot('tiles/feature/wall-mossy-8.png'), { material: 'mossy', mask: 8, thumb: false });
+  assert.deepEqual(wallMaterialSlot('tiles/feature/wall-mossy-thumb.png'), { material: 'mossy', mask: null, thumb: true });
+  assert.equal(wallMaterialSlot('tiles/feature/wall-mossy-2.png'), null);
+  assert.equal(wallMaterialSlot('tiles/surface/grass-0.png'), null);
+});
+
+test('ADR-0086 full-height geometry is the wall frame acceptance contract', () => {
+  assert.equal(wallMaterialMediaIssue(wallFrame()), null);
+  // The exact regression that shipped short walls floating above the board.
+  assert.match(wallMaterialMediaIssue(wallFrame({ height: 240 })), /128x336/);
+  assert.match(wallMaterialMediaIssue(wallFrame({ width: 96 })), /128x336/);
+  assert.match(wallMaterialMediaIssue(wallFrame({ role: 'top' })), /media role/);
+  assert.match(wallMaterialMediaIssue(wallFrame({ domain: 'ui-kit' })), /terrain domain/);
+  assert.match(wallMaterialMediaIssue(wallFrame({ media_type: 'image/webp' })), /image\/png/);
+});
+
+test('wall frames never fall through to the 96x180 board-tile projection', () => {
+  // A wall frame carries no terrain top/side role, so without its own typed projection every
+  // wall candidate is unacceptable no matter how it is reviewed.
+  assert.equal(wallMaterialMediaIssue(wallFrame({ role: 'media' })), null);
+  assert.match(wallMaterialMediaIssue(wallFrame({ role: 'side' })), /media role/);
+});
+
+test('wall thumbnails are square picker cards under the review role', () => {
+  const thumb = wallFrame({ slot: 'tiles/feature/wall-stone-thumb.png', role: 'review', width: 198, height: 198 });
+  assert.equal(wallMaterialMediaIssue(thumb), null);
+  assert.match(wallMaterialMediaIssue({ ...thumb, height: 107 }), /square/);
+  assert.match(wallMaterialMediaIssue({ ...thumb, role: 'media' }), /review role/);
+});
+
+test('wall runtime metadata stays optional but must agree with the uploaded frame', () => {
+  const runtime = (value) => wallFrame({ metadata: { runtime: value } });
+  assert.equal(wallMaterialMediaIssue(runtime({})), null);
+  assert.equal(wallMaterialMediaIssue(runtime({
+    component: WALL_MATERIAL_COMPONENT,
+    variant: 'stone',
+    frameWidth: WALL_MATERIAL_FRAME_WIDTH,
+    frameHeight: WALL_MATERIAL_FRAME_HEIGHT,
+    frameCount: 1,
+  })), null);
+  assert.match(wallMaterialMediaIssue(runtime({ component: 'terrain-surface' })), /component/);
+  assert.match(wallMaterialMediaIssue(runtime({ variant: 'brick' })), /own material/);
+  assert.match(wallMaterialMediaIssue(runtime({ frameHeight: 240 })), /frameHeight/);
+  assert.match(wallMaterialMediaIssue(runtime({ logicalTerrain: 'stone' })), /unsupported keys/);
+});
+
+test('wall review proof must mount the exact candidate on the real board at canonical 1x', () => {
+  const row = wallFrame();
+  const surfaceUrl = wallProof(row).surfaceUrl;
+  assert.equal(wallMaterialOwnerProofIssue(row, wallProof(row), surfaceUrl), null);
+  assert.match(wallMaterialOwnerProofIssue(row, wallProof(row, { renderer: 'BoardLabBoard/BoardTerrainLayer' }), surfaceUrl), /canonical 1x/);
+  assert.match(wallMaterialOwnerProofIssue(row, wallProof(row, { spatialResampling: true }), surfaceUrl), /canonical 1x/);
+  assert.match(wallMaterialOwnerProofIssue(row, wallProof(row, { frameHeight: 240 }), surfaceUrl), /full-height frame geometry/);
+  assert.match(wallMaterialOwnerProofIssue(row, wallProof(row, { mountedSlots: [] }), surfaceUrl), /mount this frame/);
+  assert.match(
+    wallMaterialOwnerProofIssue(row, wallProof(row, { selectedCandidates: [{ slot: row.slot, versionId: row.id, sha256: 'd'.repeat(64), rowRevision: 1 }] }), surfaceUrl),
+    /candidate bytes/,
+  );
+  assert.match(wallMaterialOwnerProofIssue(row, wallProof(row, { slotSnapshots: [] }), surfaceUrl), /snapshot this wall slot/);
+});
+
+test('wall review proof only counts from the game-owned Studio surface', () => {
+  const row = wallFrame();
+  const bespoke = 'http://127.0.0.1:5173/studio/wall-candidates';
+  assert.match(wallMaterialOwnerProofIssue(row, wallProof(row, { surfaceUrl: bespoke }), bespoke), /game-owned Studio/);
+  const editor = 'http://127.0.0.1:5173/editor/level';
+  assert.match(wallMaterialOwnerProofIssue(row, wallProof(row, { surfaceUrl: editor }), editor), /game-owned Studio/);
+  const surfaceUrl = wallProof(row).surfaceUrl;
+  assert.match(wallMaterialOwnerProofIssue(row, wallProof(row), `${surfaceUrl}&stale=1`), /does not match the reviewed surface/);
+});
+
+test('one wall proof covers a whole batch, each candidate pinned to its own slot entry', () => {
+  const stone = wallFrame();
+  const brick = wallFrame({ id: '22222222-2222-4222-8222-222222222222', slot: 'tiles/feature/wall-brick-1.png', blob_sha256: 'e'.repeat(64) });
+  const batch = wallProof(stone, {
+    mountedSlots: [stone.slot, brick.slot],
+    selectedCandidates: [
+      { slot: stone.slot, versionId: stone.id, sha256: stone.blob_sha256, rowRevision: 1 },
+      { slot: brick.slot, versionId: brick.id, sha256: brick.blob_sha256, rowRevision: 1 },
+    ],
+    slotSnapshots: [
+      { slot: stone.slot, rowRevision: 1, activeVersionId: null },
+      { slot: brick.slot, rowRevision: 1, activeVersionId: null },
+    ],
+  });
+  assert.equal(wallMaterialOwnerProofIssue(stone, batch, batch.surfaceUrl), null);
+  assert.equal(wallMaterialOwnerProofIssue(brick, batch, batch.surfaceUrl), null);
+  // A candidate absent from the batch cannot ride along on someone else's review.
+  const basalt = wallFrame({ id: '33333333-3333-4333-8333-333333333333', slot: 'tiles/feature/wall-basalt-8.png' });
+  assert.match(wallMaterialOwnerProofIssue(basalt, batch, batch.surfaceUrl), /candidate bytes/);
 });

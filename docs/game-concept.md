@@ -244,7 +244,7 @@ these.
   contained unit type. Cards uses no fourth column: its terminal third column
   fills the remaining Enchiridion canvas with real card faces in a vertically
   scrolling gallery, while individual card addresses focus those faces without
-  introducing a separate detail (ADR-0361). The Card Types reference uses the
+  introducing a separate detail (ADR-0364). The Card Types reference uses the
   third column for its four affected-type names and the fourth for one selected
   shared card face, temporarily using The Volunteer for each; Pestiferous,
   Concinnous, Tactical and Hieratic all state their accepted effects, and none

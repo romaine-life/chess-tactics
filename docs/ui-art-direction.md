@@ -299,7 +299,7 @@ previews simultaneously (ADR-0315). Cards is intentionally different: it mounts
 no fourth column. After the two rail predecessors, the terminal third column
 owns the remaining canvas and shows real card faces in left-to-right rows with
 one top-to-bottom drawn scroll; its pinned filters do not create another scroll
-region (ADR-0361). In the main-menu host, the two canonical rail
+region (ADR-0364). In the main-menu host, the two canonical rail
 anchors remain fixed while Enchiridion content consumes the remaining visible
 canvas; the ordinary action-column width does not cap it. The generated no-board scenic
 background remains the accepted background-only scene. Daily/news and the duplicate

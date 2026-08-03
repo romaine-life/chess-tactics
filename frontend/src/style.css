@@ -19050,23 +19050,6 @@ button.tileset-relationship-cell {
   filter: drop-shadow(0 2px 1px rgba(0, 0, 0, .85));
 }
 
-.run-relic-tooltip-pop {
-  display: grid;
-  gap: var(--ds-space-1);
-  padding: var(--ds-space-2) var(--ds-space-3);
-}
-
-.run-relic-tooltip-name {
-  color: #9fe7ff;
-  font: var(--ds-weight-regular) var(--ds-text-sm)/1.15 var(--ds-font-display);
-  letter-spacing: var(--ds-tracking-tight);
-}
-
-.run-relic-tooltip-description {
-  color: #e5edf3;
-  font: var(--ds-weight-regular) var(--ds-text-xs)/1.4 var(--ds-font-sans);
-}
-
 .run-screen .run-relic-strip {
   max-inline-size: calc(100% - (2 * var(--ds-space-3)));
 }
@@ -20288,7 +20271,8 @@ button.tileset-relationship-cell {
 }
 
 .enchiridion-card-panel.enchiridion-panel-unframed,
-.enchiridion-card-types-panel.enchiridion-panel-unframed {
+.enchiridion-card-types-panel.enchiridion-panel-unframed,
+.enchiridion-ataraxia-panel.enchiridion-panel-unframed {
   grid-template-rows: auto auto minmax(0, 1fr);
 }
 
@@ -20303,6 +20287,7 @@ button.tileset-relationship-cell {
 
 .enchiridion-unit-grid,
 .enchiridion-terrain-list,
+.enchiridion-ataraxia-list,
 .enchiridion-ability-list {
   align-content: start;
   display: grid;
@@ -20350,7 +20335,8 @@ button.tileset-relationship-cell {
 }
 
 .enchiridion-terrain-row,
-.enchiridion-ability-card {
+.enchiridion-ability-card,
+.enchiridion-ataraxia-card {
   align-items: center;
   display: grid;
   gap: var(--ds-inset);
@@ -20361,6 +20347,7 @@ button.tileset-relationship-cell {
 
 .enchiridion-terrain-row > span:last-child,
 .enchiridion-ability-card > span:last-child,
+.enchiridion-ataraxia-card > span:last-child,
 .enchiridion-rule-exceptions {
   align-content: start;
   display: grid;
@@ -20376,6 +20363,42 @@ button.tileset-relationship-cell {
 .enchiridion-ability-card > img {
   image-rendering: pixelated;
   object-fit: contain;
+}
+
+/* The rung IS the mark: the numeral occupies the seat its neighbouring sections give a
+   glyph. The column is min-42px and grows to the widest numeral across every row, so a
+   later VIII widens the seat for the whole ladder instead of stepping one row out. */
+.enchiridion-ataraxia-card {
+  grid-template-columns: minmax(56px, auto) minmax(0, 1fr);
+}
+
+/* The rung reads first, so it sits a clear step above the row's own heading rather than
+   beside it. The pixel face carries deep internal leading — its ink is roughly half the
+   declared size — which is why this is a multiple of the largest body step. */
+.enchiridion-ataraxia-numeral {
+  font-size: calc(var(--ds-text-xl) * 1.5);
+  line-height: 1;
+  text-align: center;
+}
+
+/* The forged rung is a 64px carved glyph; it seats at the same width the typed rung
+   occupies so the two render paths cannot shift the copy beside them. */
+.enchiridion-ataraxia-numeral.is-art {
+  block-size: 56px;
+  image-rendering: pixelated;
+  inline-size: 56px;
+  object-fit: contain;
+}
+
+/* A locked tier is still readable — the ladder is a reference, not a teaser. Its numeral
+   and standing line carry the state; the impact statement keeps full contrast. */
+.enchiridion-ataraxia-card.is-locked > .enchiridion-ataraxia-numeral {
+  color: var(--muted);
+}
+
+.enchiridion-ataraxia-standing {
+  color: var(--muted);
+  font-size: var(--ds-text-xs);
 }
 
 .enchiridion-rule-exceptions {
@@ -20536,7 +20559,7 @@ button.tileset-relationship-cell {
 
 /* Cards is the terminal third Enchiridion column, not a master-detail pair. The
    two rail predecessors keep their canonical widths; this one gallery consumes
-   every remaining pixel and scrolls only from top to bottom (ADR-0361). */
+   every remaining pixel and scrolls only from top to bottom (ADR-0364). */
 .enchiridion-card-gallery-layout {
   block-size: 100%;
   display: grid;
@@ -21954,11 +21977,36 @@ button.tileset-relationship-cell {
   position: fixed;
   z-index: 1000;
 }
+/* The pop owns the whole tooltip treatment, so no caller restates it. A grid
+   with one row per part is what the Run tooltips already established; it is the
+   default here rather than a class each call site has to remember.
+
+   `display` is load-bearing, not cosmetic: InnerChromeBox renders the pop as a
+   <span>, and an inline box ignores inline-size/max-inline-size (the tip never
+   wraps to its own width) and paints the 7px inner-box border-image once per
+   inline fragment — the doubled frame with text spilling outside it. */
 .infotip-pop {
+  box-sizing: border-box;
+  display: grid;
+  /* One part per row. The gap has to clear the body's own inter-line space
+     (line-height 1.4 leaves ~5.5px between wrapped lines) or a paragraph reads
+     looser than its distance to the title, and the tip becomes a stack of
+     strips instead of a heading over a block. */
+  gap: var(--ds-space-2);
   max-inline-size: 100%;
-  padding: 8px 10px; color: #cfd6df; font: 400 12px/1.45 system-ui, sans-serif; text-align: left;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  color: #e5edf3;
+  font: var(--ds-weight-regular) var(--ds-text-md)/1.4 var(--ds-font-sans);
+  text-align: left;
   text-transform: none; letter-spacing: normal;
   pointer-events: none;
+}
+/* The named thing the tip is about, in the display face — the Run relic and
+   ability tips set the precedent and every tip now follows it. */
+.tooltip-title {
+  color: #9fe7ff;
+  font: var(--ds-weight-regular) var(--ds-text-lg)/1.15 var(--ds-font-display);
+  letter-spacing: var(--ds-tracking-tight);
 }
 .le-fence-review-banner {
   align-items: center;

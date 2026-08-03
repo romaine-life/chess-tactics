@@ -1324,3 +1324,14 @@ ${junctionCss('outer', dividers.outer)}
 ${junctionCss('inner', dividers.inner)}
 `;
 }
+
+/**
+ * The host a portalled overlay must mount into to keep its chrome. Every rule
+ * above is scoped to the family surface, so an overlay portalled to the app-shell
+ * `<main>` or to `document.body` — both of which sit OUTSIDE it — renders as bare
+ * text with no frame and no fill.
+ */
+export function chromeFamilyPortalHost(from: Element | null | undefined): Element | null {
+  if (typeof document === 'undefined') return null;
+  return from?.closest(CHROME_FAMILY_SURFACE_SELECTOR) ?? document.body;
+}

@@ -51,6 +51,7 @@ const START = `/play/strategikon/enchiridion/units${BATTLE}`;
 const STEPS = [
   { label: 'reference-rail', to: `/play/strategikon/enchiridion/terrain${BATTLE}`, region: 'strategikon-reference-shell' },
   { label: 'reference-rail-again', to: `/play/strategikon/enchiridion/relics${BATTLE}`, region: 'strategikon-reference-shell' },
+  { label: 'reference-rail-ataraxia', to: `/play/strategikon/enchiridion/ataraxia${BATTLE}`, region: 'strategikon-reference-shell' },
   { label: 'section-rail', to: `/play/strategikon/prosopography${BATTLE}`, region: 'strategikon-shell' },
   // Returning to the Enchiridion goes through the SECTION rail, whose tab offers the
   // reference the section reopens with — the reference rail is gone while away.
