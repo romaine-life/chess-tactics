@@ -73,13 +73,15 @@ function zonesToLayers(
     }
     tiles.sort((a, b) => a[1] - b[1] || a[0] - b[0]);
     const name = entry.name?.trim();
-    const pawnsExcluded = entry.pawnsExcluded === true && entry.type === 'player-spawn';
+    const excludedPieceTypes = entry.type === 'player-spawn' && entry.excludedPieceTypes?.length
+      ? [...entry.excludedPieceTypes]
+      : undefined;
     return {
       id: entry.id.trim() || `zone-${index + 1}`,
       ...(name ? { name } : {}),
       ...(entry.color ? { color: entry.color } : {}),
       type: entry.type,
-      ...(pawnsExcluded ? { pawnsExcluded } : {}),
+      ...(excludedPieceTypes ? { excludedPieceTypes } : {}),
       tiles,
     };
   });
@@ -112,7 +114,7 @@ function zoneEntriesFromLayers(zones: Zone[] | undefined, cols: number, rows: nu
       ...(name ? { name } : {}),
       ...(zone.color ? { color: zone.color } : {}),
       type: zone.type,
-      ...(zone.pawnsExcluded && zone.type === 'player-spawn' ? { pawnsExcluded: true } : {}),
+      ...(zone.excludedPieceTypes?.length && zone.type === 'player-spawn' ? { excludedPieceTypes: [...zone.excludedPieceTypes] } : {}),
       tiles,
     });
   }

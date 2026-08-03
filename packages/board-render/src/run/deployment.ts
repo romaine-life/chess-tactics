@@ -1,9 +1,9 @@
-import type { Level, LevelUnit } from '../core/level';
+import { dedicatedDeploymentPieceType, type Level, type LevelUnit } from '../core/level';
 import type { Vec } from '../core/types';
 import { createRng } from '../core/rng';
 import { isPassableTerrain } from '../core/terrain';
 import { propCells, propDef } from '../core/props';
-import { defaultFacingForSide } from '../core/pieces';
+import { defaultFacingForSide, PLAYABLE_PIECE_TYPES, type PlayablePieceType } from '../core/pieces';
 import {
   beginBattle,
   hasRelic,
@@ -51,17 +51,18 @@ function authoredOccupied(level: Level): Set<string> {
 }
 
 /**
- * The two placement pools a War Battle's authored geometry describes (ADR-0365).
+ * The placement pools a War Battle's authored geometry describes (ADR-0365).
  *
- * `all` is every usable deployment square and therefore the Run's capacity. `pawn` is the subset
- * an automatically placed pawn may take: a pawn is column-bound, so an author can bar pawns from
- * the Player Deployment zone and/or paint a dedicated Pawn Deployment zone. The two zones may
- * overlap freely — a square in either pawn-eligible source is pawn-eligible, and a Pawn
- * Deployment square outside the Player Deployment zone takes pawns only.
+ * `all` is every usable deployment square and therefore the Run's capacity. `byType` is the subset
+ * an automatically placed unit of each piece type may take. An author steers this two ways: by
+ * barring types from the general Player Deployment zone, and by painting a dedicated zone that
+ * holds one type. Zones may overlap freely — a square is eligible for a type if ANY zone offers it
+ * to that type, so a dedicated square outside the general zone takes its one type and a shared
+ * square takes anything.
  */
 export interface PlayerDeploymentPools {
   all: Vec[];
-  pawn: Vec[];
+  byType: Record<PlayablePieceType, Vec[]>;
 }
 
 const sortCells = (cells: Iterable<Vec>): Vec[] => [...cells].sort((a, b) => a.y - b.y || a.x - b.x);
@@ -70,16 +71,16 @@ export function playerDeploymentPools(level: Level): PlayerDeploymentPools {
   const occupied = authoredOccupied(level);
   const terrain = new Map(level.layers.terrain.map((cell) => [key(cell), cell]));
   const all = new Map<string, Vec>();
-  const pawn = new Map<string, Vec>();
+  const byType = new Map<PlayablePieceType, Map<string, Vec>>(
+    PLAYABLE_PIECE_TYPES.map((type) => [type, new Map<string, Vec>()]),
+  );
   for (const zone of level.layers.zones) {
-    const deployment = zone.type === 'player-spawn' || zone.type === 'player-pawn-spawn';
-    if (!deployment) continue;
-    // A Pawn Deployment zone is always pawn-eligible. A Player Deployment zone is pawn-eligible
-    // unless the author barred pawns from it.
-    const pawnEligible = zone.type === 'player-pawn-spawn' || !zone.pawnsExcluded;
-    // A Pawn Deployment square is not open to other pieces on its own; it only widens the
-    // general pool where it overlaps the Player Deployment zone, which the union below handles.
-    const generalEligible = zone.type === 'player-spawn';
+    const dedicated = dedicatedDeploymentPieceType(zone.type);
+    if (zone.type !== 'player-spawn' && !dedicated) continue;
+    const excluded = new Set(zone.excludedPieceTypes ?? []);
+    const offeredTypes = dedicated
+      ? [dedicated]
+      : PLAYABLE_PIECE_TYPES.filter((type) => !excluded.has(type));
     for (const [x, y] of zone.tiles) {
       const cell = { x, y };
       const terrainCell = terrain.get(key(cell));
@@ -88,13 +89,17 @@ export function playerDeploymentPools(level: Level): PlayerDeploymentPools {
         || occupied.has(key(cell))
         || (terrainCell && !isPassableTerrain(terrainCell.terrain))
       ) continue;
-      if (generalEligible) all.set(key(cell), cell);
-      if (pawnEligible) pawn.set(key(cell), cell);
+      // Capacity counts every square some type could occupy, dedicated squares included.
+      all.set(key(cell), cell);
+      for (const type of offeredTypes) byType.get(type)!.set(key(cell), cell);
     }
   }
-  // Capacity counts every square a unit of some type could occupy, pawn-only squares included.
-  for (const [cellKey, cell] of pawn) all.set(cellKey, cell);
-  return { all: sortCells(all.values()), pawn: sortCells(pawn.values()) };
+  return {
+    all: sortCells(all.values()),
+    byType: Object.fromEntries(
+      PLAYABLE_PIECE_TYPES.map((type) => [type, sortCells(byType.get(type)!.values())]),
+    ) as Record<PlayablePieceType, Vec[]>,
+  };
 }
 
 /** Every usable deployment square: the Run's capacity, and the reach of a Discipline placement. */
@@ -190,12 +195,19 @@ function cellScore(
 /**
  * The order units take their turn to claim a square. Deployment is a free-for-all (ADR-0365):
  * one unit at a time, in a seeded random order, each taking the best square still available to
- * it. Nothing is reserved ahead of a unit and nothing backtracks, so a pawn whose eligible
- * squares were taken by units that went earlier simply does not deploy.
+ * it. Nothing is reserved ahead of a unit and nothing backtracks, so a unit whose eligible squares
+ * were taken by units that went earlier simply does not deploy.
+ *
+ * The King is the one exception and goes first. The Run always fields its King — it is never among
+ * the blocked units — so it cannot be the unit that misses out, and a King Deployment zone would
+ * otherwise be honored or not on a coin flip. Placing it first also lets the formation abilities
+ * that read the King's square (Agminate) work from a King that is already down.
  */
 function unitPlacementOrder(run: RunDocument, units: RunArmyUnit[], index: 0 | 1): RunArmyUnit[] {
   const stable = [...units].sort((a, b) => a.id.localeCompare(b.id));
-  return shuffled(stable, mixSeed(run.deployment?.seed ?? run.seed, 'placement-order', index));
+  const kings = stable.filter((unit) => unit.type === 'king');
+  const rest = shuffled(stable.filter((unit) => unit.type !== 'king'), mixSeed(run.deployment?.seed ?? run.seed, 'placement-order', index));
+  return [...kings, ...rest];
 }
 
 function buildLayout(run: RunDocument, level: Level, index: 0 | 1, blockedUnitIds: string[]): RunDeploymentLayout {
@@ -203,14 +215,14 @@ function buildLayout(run: RunDocument, level: Level, index: 0 | 1, blockedUnitId
   const rng = createRng(seed);
   const blocked = new Set(blockedUnitIds);
   const pools = playerDeploymentPools(level);
-  const pawnEligible = new Set(pools.pawn.map(key));
+  const eligibleByType = new Map(PLAYABLE_PIECE_TYPES.map((type) => [type, new Set(pools.byType[type].map(key))]));
   const available = new Map(pools.all.map((cell) => [key(cell), cell]));
   const placements: Record<string, Vec> = {};
   const deployed = run.army.filter((unit) => !blocked.has(unit.id));
   const disciplined = new Set(disciplineIds(run));
 
-  // A Disciplined unit is placed by the player, not by the automatic placer, so the pawn bar
-  // does not apply to it. Putting a pawn on a square the placer would refuse is a deliberate
+  // A Disciplined unit is placed by the player, not by the automatic placer, so the type bars
+  // do not apply to it. Putting a pawn on a square the placer would refuse is a deliberate
   // choice the player is welcome to make.
   for (const unit of deployed) {
     if (!disciplined.has(unit.id)) continue;
@@ -224,9 +236,8 @@ function buildLayout(run: RunDocument, level: Level, index: 0 | 1, blockedUnitId
   const stranded: string[] = [];
   for (const unit of unitPlacementOrder(run, deployed, index)) {
     if (placements[unit.id] || disciplined.has(unit.id)) continue;
-    // Only a pawn can run out of squares while the board still has room: every other piece may
-    // take any deployment square, and capacity already guarantees one is left for it.
-    const candidates = [...available.values()].filter((cell) => unit.type !== 'pawn' || pawnEligible.has(key(cell)));
+    const eligible = eligibleByType.get(unit.type)!;
+    const candidates = [...available.values()].filter((cell) => eligible.has(key(cell)));
     if (!candidates.length) {
       if (available.size) stranded.push(unit.id);
       continue;
@@ -476,19 +487,19 @@ export function levelForRunDeployment(run: RunDocument, level: Level, layout: Ru
 }
 
 /**
- * Where a reservist called up mid-Battle arrives. A reservist is placed automatically, so the
- * pawn bar applies to it exactly as it applies at Deployment (ADR-0365): a pawn arrives only on
- * a pawn-eligible square, and returns no cell at all when none is free.
+ * Where a reservist called up mid-Battle arrives. A reservist is placed automatically, so the type
+ * bars apply to it exactly as they apply at Deployment (ADR-0365): it arrives only on a square its
+ * own type may use, and returns no cell at all when none is free.
  */
 export function normalReservistCell(
   run: RunDocument,
   level: Level,
   occupied: ReadonlySet<string>,
   sequence: number,
-  unitType?: RunArmyUnit['type'],
+  unitType?: PlayablePieceType,
 ): Vec | null {
   const pools = playerDeploymentPools(level);
-  const pool = unitType === 'pawn' ? pools.pawn : pools.all;
+  const pool = unitType ? pools.byType[unitType] : pools.all;
   const free = pool.filter((cell) => !occupied.has(key(cell)));
   if (!free.length) return null;
   return createRng(mixSeed(run.deployment?.seed ?? run.seed, 'reservist-cell', sequence)).pick(free);

@@ -19,9 +19,9 @@ const PIECE_ORDER: PieceType[] = ['king', 'queen', 'rook', 'bishop', 'knight', '
 const PIECE_LABEL: Record<PieceType, string> = {
   king: 'King', queen: 'Queen', rook: 'Rook', bishop: 'Bishop', knight: 'Knight', pawn: 'Pawn', rock: 'Rock', 'random-rock': 'Rubble',
 };
-const ZONE_ORDER: ZoneType[] = ['region', 'player-spawn', 'player-pawn-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock', 'pawn-promotion'];
+const ZONE_ORDER: ZoneType[] = ['region', 'player-spawn', 'player-pawn-spawn', 'player-king-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock', 'pawn-promotion'];
 const ZONE_LABEL: Record<ZoneType, string> = {
-  region: 'Named regions', 'player-spawn': 'Ally deployment', 'player-pawn-spawn': 'Pawn deployment', 'enemy-spawn': 'Enemy deployment', 'enemy-threat': 'Threat markers', objective: 'Goal markers', 'falling-rock': 'Rockfall markers', 'pawn-promotion': 'Promotion markers',
+  region: 'Named regions', 'player-spawn': 'Ally deployment', 'player-pawn-spawn': 'Pawn deployment', 'player-king-spawn': 'King deployment', 'enemy-spawn': 'Enemy deployment', 'enemy-threat': 'Threat markers', objective: 'Goal markers', 'falling-rock': 'Rockfall markers', 'pawn-promotion': 'Promotion markers',
 };
 const TERRAIN_LABEL: Record<string, string> = {
   grass: 'Grass', water: 'Water', bridge: 'Bridge', road: 'Road', stone: 'Stone', rock: 'Rock', cliff: 'Cliff', dirt: 'Dirt', pebble: 'Pebble', sand: 'Sand',

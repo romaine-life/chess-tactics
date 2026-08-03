@@ -7485,6 +7485,8 @@ body.loading-bootstrap .app-startup-status {
 .le-deployment-zone-head > div { display: flex; flex-direction: column; gap: 3px; }
 .le-deployment-zone-head span { color: #b7ccd8; font-size: var(--ds-text-xs); }
 .le-deployment-zone-help { color: #b7ccd8; font-size: var(--ds-text-xs); }
+.le-deployment-breakouts { display: flex; flex-direction: column; gap: 8px; }
+.le-deployment-breakout { display: flex; flex-direction: column; gap: 6px; }
 .le-deployment-pawn-row { align-items: center; gap: 10px; }
 .le-deployment-pawn-row > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .le-deployment-pawn-help { color: #b7ccd8; font-size: var(--ds-text-xs); }

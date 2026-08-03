@@ -277,7 +277,7 @@ import { computeCastleTemplatePairs, type CastleTemplateUnit } from './castlingT
 import { MODE_NAME, DEFAULT_SURVIVE_TURNS, victoryRulesForObjective, kingSideOf } from '../core/objectives';
 import { CLOCK_INCREMENT_SECONDS, CLOCK_INITIAL_SECONDS, DEFAULT_TIME_CONTROL, formatClockSeconds, parseClockSeconds, stepLadder } from '../core/clock';
 import { validatePlayability, validateWarBattlePlayability } from '../core/playability';
-import { type PlayablePieceType } from '../core/pieces';
+import { PLAYABLE_PIECE_TYPES, type PlayablePieceType } from '../core/pieces';
 import { effectiveLevelEvents, normalizeLevelEvents } from '../core/levelEvents';
 import { guardRulesSeed, levelRulesSeed, seededBaselineLevel, type AuthoredRulesField, type LevelRulesSeed } from './levelEditorRulesSeed';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
@@ -1687,11 +1687,18 @@ const materialPointsForUnitId = (unitId: string): number => {
 // Authored zones are named tile regions. Legacy semantic types stay in the schema for import and
 // back-compat, but new editor-authored behavior belongs in events/rules.
 const DEFAULT_ZONE_TYPE: ZoneType = 'region';
+// The piece types that own a dedicated deployment zone, and can therefore be broken off the
+// general Player Deployment pool (ADR-0365).
+const LE_BREAKABLE_DEPLOYMENT_TYPES = [
+  { pieceType: 'pawn', label: 'Pawn' },
+  { pieceType: 'king', label: 'King' },
+] as const satisfies ReadonlyArray<{ pieceType: PlayablePieceType; label: string }>;
 const DEFAULT_ZONE_COLOR: ZoneColor = 'teal';
 const LEGACY_ZONE_COLOR: Record<ZoneType, ZoneColor> = {
   region: 'teal',
   'player-spawn': 'blue',
   'player-pawn-spawn': 'violet',
+  'player-king-spawn': 'gold',
   'enemy-spawn': 'red',
   'enemy-threat': 'violet',
   objective: 'gold',
@@ -7083,7 +7090,7 @@ export function LevelEditor(): ReactElement {
       id: entry.id,
       label: zoneDisplayName(entry, index),
       type: entry.type,
-      pawnsExcluded: entry.pawnsExcluded === true,
+      excludedPieceTypes: entry.excludedPieceTypes ?? [],
       paintedTiles: entry.tiles.length,
       usableTileKeys: [...new Set(entry.tiles.filter((tile) => {
         const [x, y] = tile.split(',').map(Number);
@@ -7141,12 +7148,14 @@ export function LevelEditor(): ReactElement {
     selectZoneEntry(zoneId);
     selectLayer('zone');
   };
-  // The Pawn Deployment zone is player-only and, like the other deployment zones, singular. Its
-  // squares take pawns; where it overlaps the Player Deployment zone the square takes anything.
-  const createPawnDeploymentZone = (): void => {
+  // A dedicated deployment zone is player-only and, like the other deployment zones, singular. Its
+  // squares take its one piece type; where it overlaps the Player Deployment zone the square takes
+  // anything that zone allows.
+  const createDedicatedDeploymentZone = (pieceType: 'pawn' | 'king'): void => {
     const board = cloneEditorBoard(currentEditorBoardRef.current);
     const entries = zoneEntriesForBoard(board).map((entry) => ({ ...entry, tiles: [...entry.tiles] }));
-    const existingIndex = entries.findIndex((entry) => entry.type === 'player-pawn-spawn');
+    const zoneType = pieceType === 'pawn' ? 'player-pawn-spawn' : 'player-king-spawn';
+    const existingIndex = entries.findIndex((entry) => entry.type === zoneType);
     if (existingIndex >= 0) {
       setSelectedZoneIndex(existingIndex);
       selectLayer('zone');
@@ -7154,22 +7163,25 @@ export function LevelEditor(): ReactElement {
     }
     entries.push({
       id: nextZoneEntryId(entries),
-      name: uniqueZoneEntryName('Pawn Deployment', entries),
-      color: 'violet',
-      type: 'player-pawn-spawn',
+      name: uniqueZoneEntryName(pieceType === 'pawn' ? 'Pawn Deployment' : 'King Deployment', entries),
+      color: pieceType === 'pawn' ? 'violet' : 'gold',
+      type: zoneType,
       tiles: [],
     });
     setSelectedZoneIndex(entries.length - 1);
     commitEditorBoard(withZoneEntries(board, entries), null);
     selectLayer('zone');
   };
-  const setZonePawnsExcluded = (zoneId: string, pawnsExcluded: boolean): void => {
+  const setZonePieceTypeExcluded = (zoneId: string, pieceType: PlayablePieceType, excluded: boolean): void => {
     const board = cloneEditorBoard(currentEditorBoardRef.current);
-    const entries = zoneEntriesForBoard(board).map((entry) => (
-      entry.id === zoneId && entry.type === 'player-spawn'
-        ? { ...entry, tiles: [...entry.tiles], ...(pawnsExcluded ? { pawnsExcluded: true } : { pawnsExcluded: undefined }) }
-        : { ...entry, tiles: [...entry.tiles] }
-    ));
+    const entries = zoneEntriesForBoard(board).map((entry) => {
+      if (entry.id !== zoneId || entry.type !== 'player-spawn') return { ...entry, tiles: [...entry.tiles] };
+      const current = new Set(entry.excludedPieceTypes ?? []);
+      if (excluded) current.add(pieceType);
+      else current.delete(pieceType);
+      const next = PLAYABLE_PIECE_TYPES.filter((type) => current.has(type));
+      return { ...entry, tiles: [...entry.tiles], excludedPieceTypes: next.length ? next : undefined };
+    });
     commitEditorBoard(withZoneEntries(board, entries), null);
   };
   const addPawnPromotionTemplate = (): void => {
@@ -8248,8 +8260,8 @@ export function LevelEditor(): ReactElement {
                   onEventsChange={setEvents}
                   onCreateZone={createDeploymentZone}
                   onEditZone={editDeploymentZone}
-                  onCreatePawnZone={createPawnDeploymentZone}
-                  onPawnsExcludedChange={setZonePawnsExcluded}
+                  onCreateDedicatedZone={createDedicatedDeploymentZone}
+                  onPieceTypeExcludedChange={setZonePieceTypeExcluded}
                 />
               )}
               otherContent={(
@@ -9166,22 +9178,28 @@ export function LevelEditor(): ReactElement {
               />
             </div>
             {activeZone?.type === 'player-spawn' ? (
-              <div className="le-ctrlrow">
-                <span className="le-ctrllabel">Pawns</span>
-                <Toggle
-                  checked={activeZone.pawnsExcluded === true}
-                  label="Keep pawns out of this Player Deployment zone"
-                  onChange={(checked) => setZonePawnsExcluded(activeZone.id, checked)}
-                />
-              </div>
+              <>
+                {LE_BREAKABLE_DEPLOYMENT_TYPES.map(({ pieceType, label }) => (
+                  <div className="le-ctrlrow" key={pieceType}>
+                    <span className="le-ctrllabel">{label}s</span>
+                    <Toggle
+                      checked={(activeZone.excludedPieceTypes ?? []).includes(pieceType)}
+                      label={`Keep ${label}s out of this Player Deployment zone`}
+                      onChange={(checked) => setZonePieceTypeExcluded(activeZone.id, pieceType, checked)}
+                    />
+                  </div>
+                ))}
+              </>
             ) : null}
             <p className="le-board-note">
               {activeZone?.type === 'player-spawn'
-                ? activeZone.pawnsExcluded
-                  ? 'Player Deployment. Automatic placement puts every piece except pawns here; a Disciplined pawn may still be placed here by hand.'
+                ? activeZone.excludedPieceTypes?.length
+                  ? `Player Deployment. Automatic placement puts every piece except ${LE_BREAKABLE_DEPLOYMENT_TYPES.filter(({ pieceType }) => activeZone.excludedPieceTypes?.includes(pieceType)).map(({ label }) => `${label}s`).join(' and ')} here; a Disciplined unit may still be placed here by hand.`
                   : 'Player Deployment. The Run army starts on these squares.'
                 : activeZone?.type === 'player-pawn-spawn'
                 ? 'Pawn Deployment. Pawns may start here. Squares shared with Player Deployment stay open to every piece.'
+                : activeZone?.type === 'player-king-spawn'
+                ? 'King Deployment. The King may start here, and takes its square before any other unit.'
                 : activeZone?.type === 'enemy-spawn'
                 ? 'Enemy Deployment. The randomized enemy roster starts on these squares.'
                 : 'Brush paints cells into the selected zone. Events decide what that zone does.'}

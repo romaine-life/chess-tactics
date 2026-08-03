@@ -6,7 +6,7 @@
 import type { BoardSize, PieceType, PromotionPieceType, Side, TerrainCell, TerrainType, UnitFacing, Vec } from './types';
 import { PROMOTION_PIECE_TYPES } from './types';
 import type { PlacedProp } from './props';
-import { UNIT_PALETTES, isPlayablePieceType, isUnitPalette, type UnitPalette } from './pieces';
+import { PLAYABLE_PIECE_TYPES, UNIT_PALETTES, isPlayablePieceType, isUnitPalette, type PlayablePieceType, type UnitPalette } from './pieces';
 import { parseEdgeKey, isOrthogonalPair } from './featureAutotile';
 
 // Terrain vocabulary now lives in the foundational type module so the editor's
@@ -23,8 +23,20 @@ export const CAMPAIGN_FORMAT_VERSION = 1;
 export const BOARD_COLS = { min: 1, max: 48 } as const;
 export const BOARD_ROWS = { min: 1, max: 48 } as const;
 
-export type ZoneType = 'region' | 'player-spawn' | 'player-pawn-spawn' | 'enemy-spawn' | 'enemy-threat' | 'objective' | 'falling-rock' | 'pawn-promotion';
-export const ZONE_TYPES = ['region', 'player-spawn', 'player-pawn-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock', 'pawn-promotion'] as const satisfies readonly ZoneType[];
+export type ZoneType = 'region' | 'player-spawn' | 'player-pawn-spawn' | 'player-king-spawn' | 'enemy-spawn' | 'enemy-threat' | 'objective' | 'falling-rock' | 'pawn-promotion';
+export const ZONE_TYPES = ['region', 'player-spawn', 'player-pawn-spawn', 'player-king-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock', 'pawn-promotion'] as const satisfies readonly ZoneType[];
+
+/**
+ * A Run-player deployment zone that holds ONE piece type and nothing else (ADR-0365). Painting one
+ * gives that type squares of its own; barring the same type from the general Player Deployment
+ * zone breaks it off that pool entirely.
+ */
+export const DEDICATED_DEPLOYMENT_ZONE_TYPES = {
+  'player-pawn-spawn': 'pawn',
+  'player-king-spawn': 'king',
+} as const satisfies Partial<Record<ZoneType, PlayablePieceType>>;
+export const dedicatedDeploymentPieceType = (type: ZoneType): PlayablePieceType | undefined =>
+  (DEDICATED_DEPLOYMENT_ZONE_TYPES as Partial<Record<ZoneType, PlayablePieceType>>)[type];
 
 /**
  * Deployment geometry a level may hold at most one of (ADR-0365). Two Player Deployment zones —
@@ -32,7 +44,7 @@ export const ZONE_TYPES = ['region', 'player-spawn', 'player-pawn-spawn', 'enemy
  * board codes, which left the author looking at duplicate objects that no UI could explain.
  * Every reader canonicalizes duplicates into one zone per type instead of warning about them.
  */
-export const SINGLETON_ZONE_TYPES = ['player-spawn', 'player-pawn-spawn', 'enemy-spawn'] as const satisfies readonly ZoneType[];
+export const SINGLETON_ZONE_TYPES = ['player-spawn', 'player-pawn-spawn', 'player-king-spawn', 'enemy-spawn'] as const satisfies readonly ZoneType[];
 export const isSingletonZoneType = (type: ZoneType): boolean => (SINGLETON_ZONE_TYPES as readonly ZoneType[]).includes(type);
 
 /**
@@ -259,13 +271,14 @@ export interface Zone {
   /** Cosmetic editor/playtest tint only. Events/rules own all behavior. */
   color?: ZoneColor;
   type: ZoneType;
-  /**
-   * Bar pawns from this Player Deployment zone's squares during automatic placement (ADR-0365).
-   * A pawn is column-bound, so an author may want whole columns of an otherwise good zone kept
-   * clear of them. This steers only the automatic placer: a square barred here still accepts
-   * every other piece, and a player placing a pawn by hand through Discipline may still use it.
+/**
+   * Piece types the automatic placer may NOT put in this Player Deployment zone (ADR-0365). A pawn
+   * is column-bound and a King may want a keep of its own, so an author can break either type off
+   * the general pool and give it a dedicated zone instead. This steers only the automatic placer:
+   * a barred square still accepts every other piece, and a player placing that type by hand
+   * through Discipline may still use it.
    */
-  pawnsExcluded?: boolean;
+  excludedPieceTypes?: PlayablePieceType[];
   tiles: Array<[number, number]>;
 }
 
@@ -780,8 +793,9 @@ export function validateLevel(value: unknown): ValidateResult {
           errors.push(`zone "${z.id}" color must be one of: ${ZONE_COLORS.join(', ')}`);
           break;
         }
-        if ((z as { pawnsExcluded?: unknown }).pawnsExcluded !== undefined && typeof (z as { pawnsExcluded?: unknown }).pawnsExcluded !== 'boolean') {
-          errors.push(`zone "${z.id}" pawnsExcluded must be a boolean`);
+        const excluded = (z as { excludedPieceTypes?: unknown }).excludedPieceTypes;
+        if (excluded !== undefined && (!Array.isArray(excluded) || excluded.some((type) => !(PLAYABLE_PIECE_TYPES as readonly unknown[]).includes(type)))) {
+          errors.push(`zone "${z.id}" excludedPieceTypes must be an array of: ${PLAYABLE_PIECE_TYPES.join(', ')}`);
           break;
         }
         const badTile = z.tiles.find((t) => !Array.isArray(t) || t.length !== 2 || !Number.isInteger(t[0]) || !Number.isInteger(t[1]));

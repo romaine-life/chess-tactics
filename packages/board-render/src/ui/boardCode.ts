@@ -40,7 +40,7 @@ import { defaultWallMaterial, fenceMaterials, wallMaterials, type FeatureKind, t
 import { wallArt, wallArtAtEdge, type WallArtId } from '../core/wallArt';
 import { canonicalizeSingletonZones, ZONE_COLORS, ZONE_TYPES, type ZoneColor, type ZoneType } from '../core/level';
 import type { TileFamilyId } from '../core/tileSockets';
-import { UNIT_FACINGS, UNIT_PALETTES, type UnitPalette } from '../core/pieces';
+import { PLAYABLE_PIECE_TYPES, UNIT_FACINGS, UNIT_PALETTES, type PlayablePieceType, type UnitPalette } from '../core/pieces';
 import type { UnitFacing } from '../core/types';
 import { rookDirections, type Direction } from './unitCatalog';
 import { cleanSubterrainPlacements, type SubterrainPlacementMap } from '../core/subterrain';
@@ -80,8 +80,8 @@ export interface EditorZoneEntry {
   name?: string;
   color?: ZoneColor;
   type: ZoneType;
-  /** Bar pawns from this Player Deployment zone during automatic placement (ADR-0365). */
-  pawnsExcluded?: boolean;
+  /** Piece types the automatic placer may not use in this Player Deployment zone (ADR-0365). */
+  excludedPieceTypes?: PlayablePieceType[];
   tiles: string[];
 }
 
@@ -290,6 +290,7 @@ const clamp01 = (value: number): number => Math.max(0, Math.min(1, value));
 const clampNumber = (value: unknown, fallback: number, min: number, max: number): number =>
   typeof value === 'number' && Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
 const validZoneTypes = new Set<string>(ZONE_TYPES);
+const validPieceTypes = new Set<string>(PLAYABLE_PIECE_TYPES);
 const validZoneColors = new Set<string>(ZONE_COLORS);
 const validWallMaterial = (value: string): boolean => wallMaterials().includes(value);
 const validFenceMaterial = (value: string): boolean => fenceMaterials().includes(value);
@@ -480,6 +481,14 @@ function visualTerrainSurfaceKeys(
   return keys;
 }
 
+/** Deduplicate and order a zone's barred types so the same authored intent always encodes alike. */
+function cleanExcludedPieceTypes(value: unknown): PlayablePieceType[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const seen = new Set(value.filter((type): type is PlayablePieceType => validPieceTypes.has(type)));
+  const types = PLAYABLE_PIECE_TYPES.filter((type) => seen.has(type));
+  return types.length ? types : undefined;
+}
+
 function normalizeZoneEntries(entries: readonly EditorZoneEntry[] | undefined, cols: number, rows: number): EditorZoneEntry[] {
   const out: EditorZoneEntry[] = [];
   for (const [index, entry] of (entries ?? []).entries()) {
@@ -494,15 +503,16 @@ function normalizeZoneEntries(entries: readonly EditorZoneEntry[] | undefined, c
     }
     const name = typeof entry.name === 'string' && entry.name.trim() ? entry.name.trim() : undefined;
     const color = entry.color && validZoneColors.has(entry.color) ? entry.color : undefined;
-    // Only a Player Deployment zone can bar pawns; the pawn zone and every other type would have
-    // no meaning for the flag, so it is dropped rather than carried as dead state.
-    const pawnsExcluded = entry.pawnsExcluded === true && entry.type === 'player-spawn' ? true : undefined;
+    // Only the general Player Deployment zone can bar a type; a dedicated zone already holds one
+    // type and every other zone type would have no meaning for the list, so it is dropped rather
+    // than carried as dead state.
+    const excludedPieceTypes = entry.type === 'player-spawn' ? cleanExcludedPieceTypes(entry.excludedPieceTypes) : undefined;
     out.push({
       id: entry.id.trim() || `zone-${index + 1}`,
       ...(name ? { name } : {}),
       ...(color ? { color } : {}),
       type: entry.type,
-      ...(pawnsExcluded ? { pawnsExcluded } : {}),
+      ...(excludedPieceTypes ? { excludedPieceTypes } : {}),
       tiles: sortCellKeys(tiles),
     });
   }
@@ -889,9 +899,9 @@ export function encodeBoard(b: EditorBoard): string {
   if (zoneEntries.length) wire.zn = zoneEntries.map((z) => {
     const name = z.name?.trim();
     const color = z.color && validZoneColors.has(z.color) ? z.color : undefined;
-    // The pawn bar rides a trailing flag so every zone without it keeps its historical
+    // The barred-type list rides a trailing element so every zone without one keeps its historical
     // 3- or 5-element tuple and its board code stays byte-identical.
-    if (z.pawnsExcluded) return [z.id, z.type, z.tiles, name ?? '', color ?? '', 1];
+    if (z.excludedPieceTypes?.length) return [z.id, z.type, z.tiles, name ?? '', color ?? '', z.excludedPieceTypes];
     return name || color ? [z.id, z.type, z.tiles, name ?? '', color ?? ''] : [z.id, z.type, z.tiles];
   });
   if (nonEmpty(zones)) wire.z = zones;
@@ -1029,12 +1039,13 @@ export function decodeBoard(code: string): EditorBoard | null {
     let zoneEntries: EditorZoneEntry[] = [];
     if (Array.isArray(w.zn)) {
       zoneEntries = normalizeZoneEntries(
-        (w.zn as Array<[unknown, unknown, unknown, unknown?, unknown?, unknown?]>).map(([id, type, tiles, name, color, pawnsExcluded]) => ({
+        (w.zn as Array<[unknown, unknown, unknown, unknown?, unknown?, unknown?]>).map(([id, type, tiles, name, color, excluded]) => ({
           id: String(id ?? ''),
           name: typeof name === 'string' ? name : undefined,
           color: typeof color === 'string' ? color as ZoneColor : undefined,
           type: type as ZoneType,
-          pawnsExcluded: pawnsExcluded === 1 || pawnsExcluded === true ? true : undefined,
+          // `1` is the short-lived pawn-only spelling of this element, before it carried a list.
+          excludedPieceTypes: excluded === 1 || excluded === true ? ['pawn'] : cleanExcludedPieceTypes(excluded),
           tiles: Array.isArray(tiles) ? tiles.map(String) : [],
         })),
         cols,
