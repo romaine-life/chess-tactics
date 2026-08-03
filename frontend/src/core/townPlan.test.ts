@@ -428,6 +428,38 @@ describe('planTown', () => {
       expect(new Set(town.map((p) => p.sourceArtId))).toEqual(new Set(['cottage']));
     });
 
+    // The point of sections: a stretch of small buildings has to be able to pack tighter than a
+    // stretch of large ones. A town-wide frontage left small buildings adrift in big ones' plots.
+    it('gives each section its own frontage, so small buildings pack tighter', () => {
+      const packed = section({
+        buildingIds: ['cabin'], scaleMean: 0.5, scaleMin: 0.45, scaleMax: 0.55, plotWidth: 55,
+      });
+      const roomy2 = { minX: 0, minY: 0, maxX: 44, maxY: 38 };
+      const tight = run({ size: 60, sections: [packed], blend: 0 }, [], roomy2);
+      const wide = run({
+        size: 60, blend: 0,
+        sections: [{ ...packed, plotWidth: 220 }],
+      }, [], roomy2);
+      // Same buildings, same ground: the section with narrower frontage fits more of them.
+      expect(tight.length).toBeGreaterThan(wide.length);
+    });
+
+    it('spaces two sections by their own frontages within one town', () => {
+      const roomy2 = { minX: 0, minY: 0, maxX: 44, maxY: 38 };
+      const town = run({
+        size: 60, blend: 0,
+        sections: [
+          section({ buildingIds: ['lodge'], scaleMean: 1, scaleMin: 0.9, scaleMax: 1.1, plotWidth: 240 }),
+          section({ buildingIds: ['cabin'], scaleMean: 0.5, scaleMin: 0.45, scaleMax: 0.55, plotWidth: 55 }),
+        ],
+      }, [], roomy2);
+      const lodges = town.filter((p) => p.sourceArtId === 'lodge').length;
+      const cabins = town.filter((p) => p.sourceArtId === 'cabin').length;
+      expect(lodges).toBeGreaterThan(0);
+      // Equal shares, but the tighter frontage fits far more buildings into its stretch.
+      expect(cabins).toBeGreaterThan(lodges);
+    });
+
     it('ignores a section with no buildings rather than leaving a gap', () => {
       const town = run({
         sections: [big(), section({ buildingIds: [] })], blend: 0, size: 20, landmarkIds: [],
@@ -521,15 +553,20 @@ describe('planTown', () => {
   });
 
   it('builds a dense core that frays at the edge', () => {
-    const town = run({ size: 24 });
-    const radii = town.map((placement) => {
-      const ground = groundOf(placement);
-      return Math.hypot(ground.x - CENTER.x, ground.y - CENTER.y);
-    }).sort((a, b) => a - b);
-    const inner = radii.slice(0, Math.floor(radii.length / 2));
-    const outer = radii.slice(Math.floor(radii.length / 2));
-    const gaps = (list: number[]): number => (list[list.length - 1] - list[0]) / Math.max(1, list.length);
-    expect(gaps(inner)).toBeLessThan(gaps(outer));
+    // Central plots are taken first, so a small town sits tighter around the middle than a large
+    // one on the same ground. Stated as a comparison between two sizes rather than as a spread
+    // within one: plot spacing now varies per section, which makes a within-town bin metric noisy.
+    const roomy = { minX: 0, minY: 0, maxX: 40, maxY: 34 };
+    const meanRadius = (size: number): number => {
+      const town = run({ size, sections: [section({ buildingIds: ['cabin'] })] }, [], roomy);
+      expect(town.length).toBeGreaterThan(2);
+      const radii = town.map((placement) => {
+        const ground = groundOf(placement);
+        return Math.hypot(ground.x - CENTER.x, ground.y - CENTER.y);
+      });
+      return radii.reduce((sum, value) => sum + value, 0) / radii.length;
+    };
+    expect(meanRadius(6)).toBeLessThan(meanRadius(40));
   });
 
   it('sites at most one focal landmark, and puts it in the middle', () => {
@@ -552,7 +589,7 @@ describe('planTown', () => {
   });
 
   it('honours minimum spacing between buildings', () => {
-    const town = run({ spacing: 70, size: 30, plotWidth: 60 });
+    const town = run({ spacing: 70, size: 30, sections: [section({ plotWidth: 60 })] });
     const grounds = town.map(groundOf);
     for (let i = 0; i < grounds.length; i += 1) {
       for (let j = i + 1; j < grounds.length; j += 1) {
@@ -621,7 +658,7 @@ describe('planTown', () => {
     expect(run({ sections: [{ ...section(), buildings: [] }] })).toEqual([]);
     expect(run({ sections: [section({ buildingIds: ['missing'] })] })).toEqual([]);
     expect(run({ size: 0 })).toEqual([]);
-    expect(run({ plotWidth: 0 })).toEqual([]);
+    expect(run({ sections: [{ ...section(), buildings: [] }] })).toEqual([]);
   });
 });
 

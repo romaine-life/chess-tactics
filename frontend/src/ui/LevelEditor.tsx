@@ -3127,6 +3127,7 @@ export function LevelEditor(): ReactElement {
     scaleMean: 1,
     scaleMin: 0.75,
     scaleMax: 1.35,
+    plotWidth: DEFAULT_TOWN_SECTION.plotWidth,
   });
   const [selectedTownId, setSelectedTownId] = useState<string | null>(null);
   /** The live selection in grid cells, snapped, so the preview shows exactly what will be used. */
@@ -4272,7 +4273,6 @@ export function LevelEditor(): ReactElement {
         landmarkIds: town.landmarkIds,
         plan: town.plan as TownPlanKind,
         size: town.size,
-        plotWidth: town.plotWidth,
         setback: town.setback,
         looseness: town.looseness,
         facingWobble: town.facingWobble,
@@ -4348,7 +4348,6 @@ export function LevelEditor(): ReactElement {
         })),
       blend: template?.blend ?? TOWN_PLAN_DEFAULTS.blend,
       landmarkIds: template?.landmarkIds ?? [],
-      plotWidth: template?.plotWidth ?? TOWN_PLAN_DEFAULTS.plotWidth,
       setback: template?.setback ?? TOWN_PLAN_DEFAULTS.setback,
       looseness: template?.looseness ?? TOWN_PLAN_DEFAULTS.looseness,
       facingWobble: template?.facingWobble ?? TOWN_PLAN_DEFAULTS.facingWobble,
@@ -4369,7 +4368,6 @@ export function LevelEditor(): ReactElement {
       plan: TOWN_PLAN_DEFAULTS.plan,
       size: TOWN_PLAN_DEFAULTS.size,
       blend: TOWN_PLAN_DEFAULTS.blend,
-      plotWidth: TOWN_PLAN_DEFAULTS.plotWidth,
       setback: TOWN_PLAN_DEFAULTS.setback,
       looseness: TOWN_PLAN_DEFAULTS.looseness,
       facingWobble: TOWN_PLAN_DEFAULTS.facingWobble,
@@ -10011,6 +10009,7 @@ export function LevelEditor(): ReactElement {
                   <SliderRow label={`Average building · ${section.scaleMean.toFixed(2)}×`} value={section.scaleMean} set={(value) => updateTownSection(selectedTown.id, section.id, { scaleMean: value })} min={0.3} max={2.5} step={0.05} nudge={0.05} dflt={1} />
                   <SliderRow label={`Smallest · ${section.scaleMin.toFixed(2)}×`} value={section.scaleMin} set={(value) => updateTownSection(selectedTown.id, section.id, { scaleMin: value })} min={0.2} max={2.5} step={0.05} nudge={0.05} dflt={0.75} />
                   <SliderRow label={`Largest · ${section.scaleMax.toFixed(2)}×`} value={section.scaleMax} set={(value) => updateTownSection(selectedTown.id, section.id, { scaleMax: value })} min={0.2} max={3} step={0.05} nudge={0.05} dflt={1.35} />
+                  <SliderRow label={`Frontage each · ${pixelsInTilesAcross(section.plotWidth).toFixed(1)} tiles`} value={section.plotWidth} set={(value) => updateTownSection(selectedTown.id, section.id, { plotWidth: value })} min={40} max={300} step={5} nudge={5} dflt={DEFAULT_TOWN_SECTION.plotWidth} />
                 </div>
               ))}
               <ChromeButton unit="inner-text-button"
@@ -10022,10 +10021,9 @@ export function LevelEditor(): ReactElement {
               <SliderRow label={`Blend · ${Math.round(selectedTown.blend * 100)}%`} value={selectedTown.blend} set={(value) => updateTown(selectedTown.id, { blend: value })} min={0} max={1} step={0.05} nudge={0.05} dflt={TOWN_PLAN_DEFAULTS.blend} />
               <p className="le-board-note">At 0% each section keeps to its own stretch of the town, divided sharply. At 100% they interleave completely. In between they hold their ground but mingle across a band at the divide, and the band widens as it rises.</p>
 
-              <h2 className="le-card-subhead">Size</h2>
+              <h2 className="le-card-subhead">How many</h2>
               <SliderRow label={`Buildings · ${selectedTown.size}`} value={selectedTown.size} set={(value) => updateTown(selectedTown.id, { size: Math.round(value) })} min={2} max={80} step={1} nudge={1} dflt={TOWN_PLAN_DEFAULTS.size} />
               <h2 className="le-card-subhead">Streets</h2>
-              <SliderRow label={`Frontage per building · ${pixelsInTilesAcross(selectedTown.plotWidth).toFixed(1)} tiles`} value={selectedTown.plotWidth} set={(value) => updateTown(selectedTown.id, { plotWidth: value })} min={40} max={300} step={5} nudge={5} dflt={TOWN_PLAN_DEFAULTS.plotWidth} />
               <SliderRow label={`Street setback · ${pixelsInTilesAcross(selectedTown.setback).toFixed(1)} tiles`} value={selectedTown.setback} set={(value) => updateTown(selectedTown.id, { setback: value })} min={20} max={260} step={2} nudge={2} dflt={TOWN_PLAN_DEFAULTS.setback} />
               <SliderRow label={`Gap between buildings · ${pixelsInTilesAcross(selectedTown.spacing).toFixed(1)} tiles`} value={selectedTown.spacing} set={(value) => updateTown(selectedTown.id, { spacing: value })} min={0} max={200} step={2} nudge={2} dflt={TOWN_PLAN_DEFAULTS.spacing} />
               <h2 className="le-card-subhead">When a building will not fit</h2>
@@ -10071,7 +10069,9 @@ export function LevelEditor(): ReactElement {
                   onClick={resetTownParams}
                 >Reset settings</ChromeButton>
               </div>
-              {townSited && townSited.placed < selectedTown.size ? (
+              {selectedTown.sections.every((section) => !section.buildings.length)
+                ? null
+                : townSited && townSited.placed < selectedTown.size ? (
                 <p className="le-board-note">
                   Placed {townSited.placed} of {selectedTown.size}.{' '}
                   {townSited.onBoard >= Math.max(1, townSited.spacing, townSited.outside)

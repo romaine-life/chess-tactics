@@ -223,6 +223,7 @@ export interface BoardTownSection {
   scaleMean: number;
   scaleMin: number;
   scaleMax: number;
+  plotWidth: number;
 }
 
 export interface BoardTown {
@@ -236,7 +237,6 @@ export interface BoardTown {
   /** 0 keeps sections apart, 1 interleaves them, between widens the band where they meet. */
   blend: number;
   landmarkIds: string[];
-  plotWidth: number;
   setback: number;
   looseness: number;
   facingWobble: number;
@@ -702,6 +702,8 @@ function cleanTowns(value: unknown): BoardTown[] {
           scaleMean: clampNumber(sec.scaleMean, 1, 0.1, 8),
           scaleMin: clampNumber(sec.scaleMin, 0.75, 0.1, 8),
           scaleMax: clampNumber(sec.scaleMax, 1.35, 0.1, 8),
+          // Frontage moved from the town onto the section; fall back to the town's old value.
+          plotWidth: clampNumber(sec.plotWidth, clampNumber(t.plotWidth, 110, 10, 1000), 10, 1000),
         }];
       })
       : [];
@@ -718,7 +720,6 @@ function cleanTowns(value: unknown): BoardTown[] {
       landmarkIds: Array.isArray(t.landmarkIds)
         ? (t.landmarkIds as unknown[]).filter((x): x is string => typeof x === 'string' && !!x)
         : [],
-      plotWidth: clampNumber(t.plotWidth, 110, 10, 1000),
       setback: clampNumber(t.setback, 78, 1, 1000),
       looseness: clampNumber(t.looseness, 0.45, 0, 1),
       facingWobble: clampNumber(t.facingWobble, 0.2, 0, 1),

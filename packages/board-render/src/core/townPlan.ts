@@ -90,6 +90,14 @@ export interface TownSection {
   scaleMean: number;
   scaleMin: number;
   scaleMax: number;
+  /**
+   * Frontage one of this section's buildings takes along its street, in scene pixels.
+   *
+   * Per section, not per town: a section of small buildings has to be able to pack tighter than
+   * one of large ones, or "a few small ones among the big" just leaves small buildings adrift in
+   * big buildings' plots.
+   */
+  plotWidth: number;
 }
 
 export const DEFAULT_TOWN_SECTION: Omit<TownSection, 'id'> = {
@@ -98,6 +106,7 @@ export const DEFAULT_TOWN_SECTION: Omit<TownSection, 'id'> = {
   scaleMean: 1,
   scaleMin: 0.75,
   scaleMax: 1.35,
+  plotWidth: 110,
 };
 
 export interface TownPlanParams {
@@ -116,8 +125,6 @@ export interface TownPlanParams {
   plan: TownPlanKind;
   /** How many buildings to site, before spacing and board rejection thin it. */
   size: number;
-  /** Average frontage per building along a street, in scene pixels. */
-  plotWidth: number;
   /** Distance from a street's centreline to the buildings that face it. */
   setback: number;
   // Extent is not a parameter: the author drags the area the town fills.
@@ -147,7 +154,6 @@ export const TOWN_PLAN_DEFAULTS: TownPlanParams = {
   landmarkIds: [],
   plan: 'linear',
   size: 14,
-  plotWidth: 110,
   setback: 78,
   looseness: 0.45,
   facingWobble: 0.2,
@@ -444,8 +450,8 @@ function footprintWithin(box: TownFootprint, area: TownBounds): boolean {
 
 interface TownPlot {
   ground: ForestGroundPoint;
-  /** Normalised position along the town's long axis, 0..1. Decides which section claims it. */
-  axis: number;
+  /** The section that claimed this plot, fixed when the frontage step was taken. */
+  section: TownSection;
   /** Screen-space vector from the plot back toward its street — the direction it must face. */
   faceX: number;
   faceY: number;
@@ -517,7 +523,7 @@ export function planTown(input: TownPlanInput): TownPlanResult {
       ),
     }))
     .filter((section) => section.buildings.length > 0 && section.share > 0);
-  if (!sections.length || params.size <= 0 || params.plotWidth <= 0) return empty;
+  if (!sections.length || params.size <= 0) return empty;
   const shareTotal = sections.reduce((sum, section) => sum + section.share, 0);
   // Cumulative share bands across the town's long axis. A plot's position picks its section.
   const bands: Array<{ end: number; section: (typeof sections)[number] }> = [];
@@ -554,7 +560,24 @@ export function planTown(input: TownPlanInput): TownPlanResult {
   const setback = Math.max(4, Math.min(params.setback, Math.min(sceneHalfW, sceneHalfH) * 0.45));
   const streets = townStreets(params.plan, area, setback, seed);
 
-  // 1. Lay out every plot the plan offers, along street frontage only.
+  // 1. Walk each street's frontage, laying out plots.
+  //
+  // The section is decided AT each step, before advancing, because the step is that section's own
+  // frontage. Laying plots at one town-wide pitch and assigning sections afterwards would leave a
+  // small-building section sitting in big-building plots, which is the whole thing sections exist
+  // to avoid. Position along the town's long axis is measured against the SELECTION, which is
+  // known up front, rather than against the plot set, which is not.
+  const wideTown = Math.abs(area.maxX - area.minX) >= Math.abs(area.maxY - area.minY);
+  const axisLow = wideTown ? area.minX : area.minY;
+  const axisSpan = Math.max(1e-6, wideTown ? area.maxX - area.minX : area.maxY - area.minY);
+  const sectionAt = (ground: ForestGroundPoint, plotIndex: number): (typeof sections)[number] => {
+    const cell = unprojectBoardPoint({ left: ground.x, top: ground.y });
+    const axis = clamp(((wideTown ? cell.x : cell.y) - axisLow) / axisSpan, 0, 1);
+    const drift = (hashUnit(plotIndex, 7, seed, 29) - 0.5) * clamp(params.blend, 0, 1);
+    const at = clamp(axis + drift, 0, 1);
+    return (bands.find((band) => at <= band.end) ?? bands[bands.length - 1]).section;
+  };
+
   const plots: TownPlot[] = [];
   let index = 0;
   for (const [streetIndex, street] of streets.entries()) {
@@ -564,14 +587,25 @@ export function planTown(input: TownPlanInput): TownPlanResult {
     if (length < 1) continue;
     const along = { x: dx / length, y: dy / length };
     const normal = { x: -along.y, y: along.x };
-    const count = Math.max(1, Math.floor(length / params.plotWidth));
 
     for (const side of street.sides) {
-      for (let step = 0; step < count; step += 1) {
+      let travelled = 0;
+      // Bounded so a pathological frontage cannot spin here.
+      for (let guard = 0; travelled < length && guard < 4096; guard += 1) {
         index += 1;
-        const t = (step + 0.5) * (length / count);
+        const offsetBase = setback;
+        const centreOfStep = {
+          x: street.x0 + along.x * travelled + normal.x * offsetBase * side,
+          y: street.y0 + along.y * travelled + normal.y * offsetBase * side,
+        };
+        const section = sectionAt(centreOfStep, index);
+        const frontage = Math.max(8, section.plotWidth);
+        const t = travelled + frontage / 2;
+        travelled += frontage;
+        if (t > length) break;
+
         const slideAlong = (hashUnit(streetIndex, index, seed, 21) - 0.5) * 2
-          * profile.alongSlack * looseness * params.plotWidth;
+          * profile.alongSlack * looseness * frontage;
         const slideOut = (hashUnit(streetIndex, index, seed, 22) - 0.5) * 2
           * profile.setbackSlack * looseness * setback;
         const offset = setback + slideOut;
@@ -586,7 +620,7 @@ export function planTown(input: TownPlanInput): TownPlanResult {
           || cell.y < area.minY || cell.y > area.maxY) continue;
         plots.push({
           ground,
-          axis: 0,
+          section,
           // Face back across the setback toward the street centreline.
           faceX: -normal.x * side,
           faceY: -normal.y * side,
@@ -598,22 +632,7 @@ export function planTown(input: TownPlanInput): TownPlanResult {
   }
   if (!plots.length) return empty;
 
-  // 2. Fix each plot's position along the town's LONG axis, normalised across the plots that
-  //    actually exist. Sections are laid out along this axis, so a two-section town reads as one
-  //    stretch of large houses giving way to another of small ones rather than as noise.
-  {
-    const wide = Math.abs(area.maxX - area.minX) >= Math.abs(area.maxY - area.minY);
-    const coordinate = (plot: TownPlot): number => {
-      const cell = unprojectBoardPoint({ left: plot.ground.x, top: plot.ground.y });
-      return wide ? cell.x : cell.y;
-    };
-    const values = plots.map(coordinate);
-    const low = Math.min(...values);
-    const span = Math.max(...values) - low;
-    plots.forEach((plot, i) => { plot.axis = span > 0 ? (values[i] - low) / span : 0.5; });
-  }
-
-  // 3. Take the most central plots first, with a little noise so the edge frays instead of
+  // 2. Take the most central plots first, with a little noise so the edge frays instead of
   //    ending on a clean circle. This is the density gradient.
   const ordered = [...plots].sort((left, right) => {
     const a = left.radius * (0.75 + hashUnit(left.index, 0, seed, 23) * 0.5);
@@ -646,12 +665,7 @@ export function planTown(input: TownPlanInput): TownPlanResult {
 
     // The focal structure takes the most central plot, then ordinary buildings fill the rest.
     const isLandmark = landmarks.length > 0 && produced.length === 0;
-    // Which section claims this plot. Blend displaces the plot's position along the axis before
-    // the band lookup: at 0 the bands are hard-edged, and as it rises the displacement grows until
-    // a plot can land in any band at all, which is a full interleave.
-    const drift = (hashUnit(plot.index, 7, seed, 29) - 0.5) * clamp(params.blend, 0, 1);
-    const at = clamp(plot.axis + drift, 0, 1);
-    const section = (bands.find((band) => at <= band.end) ?? bands[bands.length - 1]).section;
+    const { section } = plot;
     // Weighted pick, so a section can be mostly cottages with the occasional lodge.
     let sourceArtId: string;
     if (isLandmark) {
