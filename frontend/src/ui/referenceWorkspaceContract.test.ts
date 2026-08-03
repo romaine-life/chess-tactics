@@ -374,6 +374,25 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(skirmish).not.toContain('has-strategikon');
   });
 
+  it('offers the way out in the persistent title-bar control lane', () => {
+    // The Controls title mark toggles the workspace, but once open it sits behind the
+    // reference pane's chrome — so the exit also rides the one typed lane every other
+    // screen returns from (Settings, the playtest return).
+    expect(strategikon).toContain('<TitleBarControlContribution');
+    expect(strategikon).toContain('ariaLabel="Strategikon navigation"');
+    expect(strategikon).toContain("id: 'strategikon-back'");
+    expect(strategikon).toContain("presentation: 'return'");
+    expect(strategikon).toContain("testId: 'strategikon-back'");
+    // Closing means dropping the /strategikon suffix while retaining the query — the
+    // same destination the Controls toggle uses, never a history pop.
+    expect(strategikon).toContain('destination: `${base}${search}`');
+    // Named for where it lands, so it never reads as a second bare "Back" beside a
+    // playtest's own return control in the same lane.
+    expect(strategikon).toContain("const returnName = base === '/run' ? 'Run' : 'Battle';");
+    expect(strategikon).toContain('label: `‹ Back to ${returnName}`');
+    expect(skirmish).toContain("id: 'skirmish-return'");
+  });
+
   it('renders the accepted command archive through the installed application UI role', () => {
     expect(strategikon).toContain("installedUiMedia('ui-workspaces-strategikon-background-png')");
     expect(strategikon).toContain('className="strategikon-background-artwork"');
