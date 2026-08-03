@@ -427,6 +427,15 @@ everyone's, ahead of the review that was supposed to gate it.
   is ahead of the database answers `503 schema_migration_required` with the exact
   `missing_versions`. **That is the expected state of your worktree while the PR is open** —
   it is the system working, not a blocker to route around.
+- **The other direction has exactly one fix: `git merge origin/main`.** When someone else's
+  migration lands on `main`, the shared database carries a version your branch has never heard
+  of, and every `/api/*` call answers `503 schema_migration_history_invalid` with
+  `unexpected_versions: [N]`. In the browser that surfaces as **"Live assets unavailable"** or
+  **"Required scene data or artwork could not be reached"** — which look like a dead server and
+  are not. Confirm with `curl <url>/api/asset-catalog`, then merge `origin/main`; the
+  Vite-spawned backend restarts itself and serves again. **Never** reach for the database:
+  do not delete the row, do not add a matching stub migration, do not renumber yours to sit
+  above it. The branch is behind, and the branch is what moves.
 - Verify the migration through the tests that need no database:
   `cd backend && npm run test:live-media` covers migration integrity, append-only history, and
   execution planning.
