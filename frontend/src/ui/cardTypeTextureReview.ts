@@ -1,3 +1,4 @@
+import type { LiveMediaCatalog } from '@chess-tactics/board-render';
 import type { AdminLiveMediaCatalog, AdminLiveMediaVersion } from '../net/liveMediaAdmin';
 
 export const CARD_TYPE_TEXTURE_REVIEW_PARAM = 'cardTypeTextureBatch';
@@ -42,4 +43,16 @@ export function cardTypeTextureUrls(
 
 export function hasCompleteCardTypeTextureSet(urls: CardTypeTextureUrls): boolean {
   return CARD_TYPE_TEXTURE_IDS.every((id) => Boolean(urls[id]));
+}
+
+/** Resolve the accepted, production-eligible texture set from the public startup catalog. */
+export function acceptedCardTypeTextureUrls(catalog: LiveMediaCatalog | null): CardTypeTextureUrls {
+  if (!catalog) return {};
+  const urls: CardTypeTextureUrls = {};
+  for (const cardType of CARD_TYPE_TEXTURE_IDS) {
+    const slot = catalog.slots.find((entry) => entry.slot === CARD_TYPE_TEXTURE_SLOTS[cardType]);
+    if (slot?.versionStatus !== 'accepted' || !slot.productionEligible) continue;
+    urls[cardType] = slot.media.immutableUrl;
+  }
+  return urls;
 }
