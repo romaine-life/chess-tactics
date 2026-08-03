@@ -77,7 +77,7 @@ const SECTION_LABEL: Record<EnchiridionSection, string> = {
   terrain: 'Terrain',
   cards: 'Cards',
   'card-types': 'Card Types',
-  relics: 'Relics',
+  relics: 'Lipsana',
   abilities: 'Abilities',
   ataraxia: 'Ataraxia',
 };
@@ -349,7 +349,7 @@ function ReferenceTrigger({ to, onSelect, children, ...props }: ButtonHTMLAttrib
 
 export function RelicCodex({
   relicIds = RUN_RELICS.map((relic) => relic.id),
-  title = 'Relics',
+  title = 'Lipsana',
   showStatistics = true,
   framed = true,
   selectedRelicId = null,
@@ -411,7 +411,7 @@ export function RelicCodex({
       {relicIds.length ? (
         <div className="enchiridion-relic-layout">
           <div className="enchiridion-relic-browser">
-            <div className="le-seg enchiridion-relic-view-tabs" role="tablist" aria-label="Relic browsing layout">
+            <div className="le-seg enchiridion-relic-view-tabs" role="tablist" aria-label="Lipsanon browsing layout">
               <ChromeButton unit="inner-text-button"
                 data-testid="relic-view-rows"
                 role="tab"
@@ -437,7 +437,7 @@ export function RelicCodex({
               id={browsePanelId}
               className={`enchiridion-relic-browse-panel is-${browseMode}`}
               role="tabpanel"
-              aria-label={`${browseMode === 'rows' ? 'Rows' : 'Grouped'} relic view`}
+              aria-label={`${browseMode === 'rows' ? 'Rows' : 'Grouped'} lipsanon view`}
             >
               {browseMode === 'rows' ? (
                 <ul className="enchiridion-relic-rows" aria-label={title}>
@@ -501,7 +501,7 @@ export function RelicCodex({
         </div>
       ) : (
         <InnerChromeBox className="enchiridion-empty">
-          <h3>No relics held</h3>
+          <h3>No lipsana held</h3>
           <p>This Lipsanotheca is presently, and perhaps suspiciously, empty.</p>
         </InnerChromeBox>
       )}

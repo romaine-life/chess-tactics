@@ -112,7 +112,7 @@ export function Strategikon({
           />
           <ApparatusRailTab
             label="Lipsanotheca"
-            title="The Lipsanotheca — Held Relics"
+            title="The Lipsanotheca — Held Lipsana"
             to={href('lipsanotheca')}
             index={3}
             active={section === 'lipsanotheca'}
@@ -187,7 +187,7 @@ export function Strategikon({
         ) : run ? (
           <RelicCodex relicIds={run.relics} title="The Lipsanotheca" showStatistics={false} framed={false} />
         ) : (
-          <UnavailableRunReference title="The Lipsanotheca" copy="Held relics appear here during a Run." />
+          <UnavailableRunReference title="The Lipsanotheca" copy="Held lipsana appear here during a Run." />
         )}
       </StrategikonContentSceneSlot>
     </ShellWorkspace>

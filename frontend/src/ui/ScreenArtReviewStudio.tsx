@@ -26,7 +26,7 @@ const SCREEN_LABELS: Record<string, string> = {
   deployment: 'Deployment',
   sell: 'Sell Units',
   army: 'Army',
-  relics: 'Relics',
+  relics: 'Lipsana',
   victory: 'Victory — War won',
   events: 'Level Editor — Events',
   // Spolia set (docs/background-set-briefs.md): four scene directions for the

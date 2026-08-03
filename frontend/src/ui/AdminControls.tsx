@@ -49,7 +49,7 @@ export function AdminControls({
     || Boolean(pendingPromotion)
     || (presentation === 'settings' && !battleHref);
   const relicOptions = useMemo<HouseSelectOption<RelicChoice>[]>(() => [
-    { value: '', label: 'Choose a relic' },
+    { value: '', label: 'Choose a lipsanon' },
     ...RUN_RELICS
       .filter((relic) => !run?.relics.includes(relic.id))
       .map((relic) => ({ value: relic.id, label: relic.name, title: relic.description })),
@@ -112,13 +112,13 @@ export function AdminControls({
         ...(targetUnitId ? { targetUnitId } : {}),
       });
       const granted = acquireRelic(run, relicId, targetUnitId || undefined);
-      if (granted === run) throw new Error('That relic could not be granted to the current Run.');
+      if (granted === run) throw new Error('That lipsanon could not be granted to the current Run.');
       replaceRun(granted);
       setStatus(`Granted ${RUN_RELIC_BY_ID[relicId].name}.`);
       setRelicId('');
       setTargetUnitId('');
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'The relic could not be granted.');
+      setStatus(error instanceof Error ? error.message : 'The lipsanon could not be granted.');
     } finally {
       setBusy(null);
     }
@@ -242,15 +242,15 @@ export function AdminControls({
             </InnerChromeBox>
             <InnerChromeBox className="skirmish-admin-action skirmish-admin-action--stack">
               <div>
-                <strong>Gain Relic</strong>
-                <small>{selectedRelic?.description ?? (run ? 'Choose any relic not currently held.' : 'Start a Run before granting a relic.')}</small>
+                <strong>Gain Lipsanon</strong>
+                <small>{selectedRelic?.description ?? (run ? 'Choose any lipsanon not currently held.' : 'Start a Run before granting a lipsanon.')}</small>
               </div>
               <div className="admin-control-stack">
                 <HouseSelect
                   value={relicId}
                   options={relicOptions}
                   onChange={(value) => { setRelicId(value); setTargetUnitId(''); }}
-                  ariaLabel="Relic to grant"
+                  ariaLabel="Lipsanon to grant"
                   disabled={!run || busy !== null}
                 />
                 {needsRelicTarget ? (
@@ -338,8 +338,8 @@ export function AdminControls({
           </div>
         </SettingsRow>
         <SettingsRow
-          title="Gain Relic"
-          description={selectedRelic?.description ?? (run ? 'Choose any relic not currently held, including one already seen this Run.' : 'Start a Run before granting a relic.')}
+          title="Gain Lipsanon"
+          description={selectedRelic?.description ?? (run ? 'Choose any lipsanon not currently held, including one already seen this Run.' : 'Start a Run before granting a lipsanon.')}
           tall
         >
           <div className="admin-control-stack">
@@ -347,7 +347,7 @@ export function AdminControls({
               value={relicId}
               options={relicOptions}
               onChange={(value) => { setRelicId(value); setTargetUnitId(''); }}
-              ariaLabel="Relic to grant"
+              ariaLabel="Lipsanon to grant"
               disabled={!run || busy !== null}
             />
             {needsRelicTarget ? (

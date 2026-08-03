@@ -121,7 +121,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(strategikon.match(/<ApparatusRailTab/g)).toHaveLength(4);
     expect(strategikon).toContain('title="The Martial Prosopography — Current Army"');
     expect(strategikon).toContain('title="The Chartulary — Held Cards"');
-    expect(strategikon).toContain('title="The Lipsanotheca — Held Relics"');
+    expect(strategikon).toContain('title="The Lipsanotheca — Held Lipsana"');
     // Adjacent Run registers never share one mark: the army takes the Units reference's
     // mark and the Chartulary takes the Cards reference's.
     expect(strategikon).toContain("iconSrc={installedUiMedia('ui-kit-icons-unit-studio-png')}");

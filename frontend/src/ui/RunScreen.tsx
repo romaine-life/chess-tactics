@@ -173,7 +173,7 @@ function useRunAbandon(run: RunDocument): {
     if (abandoning) return;
     const confirmed = await ask({
       title: 'Abandon this Run?',
-      message: `${run.war.name} and all of its army, gold, relics, and Battle progress will be permanently removed.`,
+      message: `${run.war.name} and all of its army, gold, lipsana, and Battle progress will be permanently removed.`,
       confirmLabel: 'Abandon Run',
       cancelLabel: 'Keep Run',
       tone: 'danger',
@@ -880,7 +880,7 @@ function VictoryPanel({ run }: { run: RunDocument }): ReactElement {
       <p>{run.war.description}</p>
       <p className="run-victory-summary">
         <span>{run.army.length} persistent units</span>
-        <span>{visibleRunRelicCount(run)} relics</span>
+        <span>{visibleRunRelicCount(run)} lipsana</span>
         <RunGoldAmount valueTenths={run.goldTenths} />
       </p>
       <ChromeButton unit="inner-text-button"

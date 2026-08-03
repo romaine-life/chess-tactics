@@ -62,7 +62,7 @@ export function RunRelicStrip({
   return (
     <section
       className="run-relic-strip"
-      aria-label="Held relics"
+      aria-label="Held lipsana"
       data-testid="run-relic-strip"
     >
       <div className="run-relic-inventory-list">
@@ -101,11 +101,11 @@ export function RunRelicsWorkspace({
       aria-labelledby="run-relics-workspace-title"
     >
       <header className="run-self-inspection-head">
-        <h2 id="run-relics-workspace-title">Relics</h2>
+        <h2 id="run-relics-workspace-title">Lipsana</h2>
         <span>{knownRelicIds.length} held</span>
       </header>
       {knownRelicIds.length > 0 ? (
-        <div className="run-relics-ledger" role="list" aria-label="Held relics">
+        <div className="run-relics-ledger" role="list" aria-label="Held lipsana">
           {knownRelicIds.map((relicId, index) => {
             const relic = RUN_RELIC_BY_ID[relicId];
             return (
@@ -125,7 +125,7 @@ export function RunRelicsWorkspace({
         </div>
       ) : (
         <p className="run-self-inspection-empty" role="status">
-          No relics held. Relics acquired during this Run will appear here.
+          No lipsana held. Lipsana acquired during this Run will appear here.
         </p>
       )}
     </RunWorkspace>

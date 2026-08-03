@@ -39,7 +39,7 @@ describe('Run relic artwork', () => {
         relicIds={['conscription-notice', 'mercenary-boat']}
       />,
     );
-    expect(markup).toContain('aria-label="Held relics"');
+    expect(markup).toContain('aria-label="Held lipsana"');
     expect(markup).toContain('data-testid="run-relic-strip"');
     expect(markup).toContain('class="run-relic-strip"');
     expect(markup).not.toContain('data-chrome-unit');
@@ -74,9 +74,9 @@ describe('Run relic artwork', () => {
     expect(markup).not.toContain('data-chrome-consumer');
   });
 
-  it('keeps the Relics self-inspection destination useful before the first acquisition', () => {
+  it('keeps the Lipsana self-inspection destination useful before the first acquisition', () => {
     const markup = renderToStaticMarkup(<RunRelicsWorkspace relicIds={[]} />);
-    expect(markup).toContain('No relics held.');
+    expect(markup).toContain('No lipsana held.');
     expect(markup).toContain('role="status"');
   });
 });
