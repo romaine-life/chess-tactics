@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:7619cd0ae6a281694d62591d4a0a5ec5cf27e10388bfb1f5e8b17804b07d8574"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:97287c512a21f5be4a8ff0eb6c602b520ba8152984da5f525bdae99e96b3c04c"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Stop remounting the committed destination when the entrance ends"
-  prNumber: "646"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/646"
-  commit: "9900fc76"
+  prTitle: "Ataraxia is an Enchiridion reference section, with forged carved-stone rung marks"
+  prNumber: "647"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/647"
+  commit: "ff350871"
 
 name: chess-tactics
 namespace: chess-tactics
