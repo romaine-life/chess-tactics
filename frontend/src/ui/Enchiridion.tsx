@@ -67,6 +67,7 @@ import { NavButton } from './shared/NavButton';
 import { ChromeButton } from './shared/ChromeButton';
 import { PieceTypeIcon } from './shared/PieceTypeIcon';
 import { RunCardCostCoin } from './shared/RunCardCostCoin';
+import { RUN_PROGRESS_MEDIA_ROLE } from './shared/RunProgressIcon';
 import { KitScroll } from './KitScroll';
 import { EnchiridionContentSceneSlot } from './shell/AuthoredSceneSlot';
 import { fetchAdminLiveMediaCatalog } from '../net/liveMediaAdmin';
@@ -92,6 +93,11 @@ const SECTION_LABEL: Record<EnchiridionSection, string> = {
  * rail used to name as Skirmish-HUD glyph classes; as classes they painted a CSS
  * background under the HUD's sizing rules instead of the rail's, so Terrain (the one
  * section already on installed media) sat a third larger than its five neighbours.
+ *
+ * Ataraxia is the one section whose idea already owns a mark elsewhere, so it resolves
+ * the Run title bar's emblem role rather than naming media of its own. It used to take
+ * the shared kit objective flag, which Start, zones and the Skirmish HUD also paint —
+ * a second symbol for a ladder that already has one (ADR-0059, ADR-0363).
  */
 const SECTION_ICON_SRC: Record<EnchiridionSection, string> = {
   units: installedUiMedia('ui-kit-icons-unit-studio-png'),
@@ -100,7 +106,7 @@ const SECTION_ICON_SRC: Record<EnchiridionSection, string> = {
   'card-types': installedUiMedia('ui-kit-icons-game-power-png'),
   relics: installedUiMedia('ui-kit-icons-info-png'),
   abilities: installedUiMedia('ui-kit-icons-game-defend-png'),
-  ataraxia: installedUiMedia('ui-kit-icons-game-objective-png'),
+  ataraxia: installedUiMedia(RUN_PROGRESS_MEDIA_ROLE.ataraxia),
 };
 
 const UNIT_COPY: Record<PlayablePieceType, string> = {
