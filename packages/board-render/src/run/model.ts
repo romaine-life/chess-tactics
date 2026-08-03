@@ -25,13 +25,13 @@ export const RUN_OPENING_OFFER_COUNT = 3;
 export const INSTALLED_ATARAXIA_MAX_TIER = 1;
 export const PESTIFEROUS_OFFER_DENOMINATOR = 8;
 export const CONCINNOUS_OFFER_DENOMINATOR = 8;
-export const TACTICAL_DISCIPLINE_OFFER_DENOMINATOR = 8;
+export const LEGATINE_ADLECTED_OFFER_DENOMINATOR = 8;
 export const HIERATIC_AGMINATE_OFFER_DENOMINATOR = 8;
-export const POSITIONED_COST = 2;
-export const DISCIPLINE_COST = 3;
+export const EUTACTIC_COST = 2;
+export const ADLECTED_COST = 3;
 /** Agminate seats a unit in its role's formation instead of a rank, and its King,
- * Rook and Bishop rules interlock, so it carries Discipline's price rather than
- * Positioned's. */
+ * Rook and Bishop rules interlock, so it carries Adlected's price rather than
+ * Eutactic's. */
 export const AGMINATE_COST = 3;
 
 export type AtaraxiaTier = 0 | 1;
@@ -57,7 +57,7 @@ export const ATARAXIA_BY_TIER: Readonly<Record<AtaraxiaTier, Readonly<{
     numeral: '0',
     label: 'Ataraxia 0',
     title: 'The Untroubled Mind',
-    effect: 'Standard Run rules. Shop cards may be Tactical, Concinnous or Hieratic but are never Pestiferous.',
+    effect: 'Standard Run rules. Shop cards may be Legatine, Concinnous or Hieratic but are never Pestiferous.',
   }),
   1: Object.freeze({
     tier: 1,
@@ -82,16 +82,28 @@ export type RunArmyPieceType = PurchasablePieceType | 'king';
 export type RunAbility = 'discipline' | 'positioned' | 'marshalled';
 
 export const AGMINATE_DISPLAY_NAME = 'Agminate';
+export const EUTACTIC_DISPLAY_NAME = 'Eutactic';
+export const ADLECTED_DISPLAY_NAME = 'Adlected';
+
+/**
+ * Every unit state's player-facing name (ADR-0369). No state's stored value is its own
+ * name any longer, so this resolves a complete table rather than capitalizing the storage
+ * identity: a fallback would surface a retired word the moment a state was left out.
+ */
+const RUN_ABILITY_DISPLAY_NAME: Readonly<Record<RunAbility, string>> = Object.freeze({
+  discipline: ADLECTED_DISPLAY_NAME,
+  positioned: EUTACTIC_DISPLAY_NAME,
+  marshalled: AGMINATE_DISPLAY_NAME,
+});
 
 export function runAbilityDisplayName(ability: RunAbility): string {
-  if (ability === 'marshalled') return AGMINATE_DISPLAY_NAME;
-  return `${ability.slice(0, 1).toUpperCase()}${ability.slice(1)}`;
+  return RUN_ABILITY_DISPLAY_NAME[ability];
 }
 
 /**
  * What a state means to the player, in one vocabulary (ADR-0339). The Army ledger's
  * ability tips and the card face's contents markers both read this, so a state cannot
- * come to mean two things depending on where it is shown. Positioned and Agminate read
+ * come to mean two things depending on where it is shown. Eutactic and Agminate read
  * per piece because their deployment rule genuinely differs by piece.
  */
 export function runAbilityDescription(ability: RunAbility, unit: RunArmyPieceType): string {
@@ -130,12 +142,12 @@ export const RUN_CARD_TYPE_REFERENCE: Readonly<Record<RunCardType, Readonly<{
   concinnous: Object.freeze({
     name: 'Concinnous',
     grants: 'positioned',
-    effect: 'Makes one contained unit Positioned when the card is acquired.',
+    effect: `Makes one contained unit ${EUTACTIC_DISPLAY_NAME} when the card is acquired.`,
   }),
   tactical: Object.freeze({
-    name: 'Tactical',
+    name: 'Legatine',
     grants: 'discipline',
-    effect: 'Grants Discipline to one contained unit when the card is acquired.',
+    effect: `Grants ${ADLECTED_DISPLAY_NAME} to one contained unit when the card is acquired.`,
   }),
   hieratic: Object.freeze({
     name: 'Hieratic',
@@ -468,12 +480,15 @@ export function concinnousOfferRoll(
   return createRng(rollSeed).int(denominator) === 0;
 }
 
-export function tacticalDisciplineOfferRoll(
+/** The seed labels here and in `legatineAdlectedAcquisitionTarget` keep the retired
+ * `tactical:discipline` wording deliberately: they are RNG inputs, not names, and
+ * rewording one would deal different cards at every existing seed (ADR-0369). */
+export function legatineAdlectedOfferRoll(
   seed: number,
   battleIndex: number,
   slotIndex: number,
   coreId: string,
-  denominator = TACTICAL_DISCIPLINE_OFFER_DENOMINATOR,
+  denominator = LEGATINE_ADLECTED_OFFER_DENOMINATOR,
 ): boolean {
   if (!Number.isSafeInteger(denominator) || denominator < 1) return false;
   const rollSeed = mixSeed(seed, `tactical:discipline:${coreId}`, battleIndex * 8 + slotIndex);
@@ -497,7 +512,7 @@ function acquisitionTarget(effectSeed: number, pieceCount: number, label: string
   return createRng(mixSeed(effectSeed, label)).int(pieceCount);
 }
 
-export function tacticalDisciplineAcquisitionTarget(
+export function legatineAdlectedAcquisitionTarget(
   effectSeed: number,
   pieceCount: number,
 ): number | null {
@@ -518,10 +533,10 @@ export function createRunCardOffer(
   slotIndex: number,
   pestiferousDenominator = PESTIFEROUS_OFFER_DENOMINATOR,
   concinnousDenominator = CONCINNOUS_OFFER_DENOMINATOR,
-  tacticalDenominator = TACTICAL_DISCIPLINE_OFFER_DENOMINATOR,
+  tacticalDenominator = LEGATINE_ADLECTED_OFFER_DENOMINATOR,
   hieraticDenominator = HIERATIC_AGMINATE_OFFER_DENOMINATOR,
 ): RunCardOffer {
-  const tactical = tacticalDisciplineOfferRoll(
+  const tactical = legatineAdlectedOfferRoll(
     run.seed,
     battleIndex,
     slotIndex,
@@ -544,7 +559,7 @@ export function createRunCardOffer(
   const plaguedPiece = plaguedPieceIndex === null ? null : card.pieces[plaguedPieceIndex];
   const cost = plaguedPiece
     ? card.value - PLAGUED_DISCOUNT[plaguedPiece]
-    : card.value + (tactical ? DISCIPLINE_COST : concinnous ? POSITIONED_COST : hieratic ? AGMINATE_COST : 0);
+    : card.value + (tactical ? ADLECTED_COST : concinnous ? EUTACTIC_COST : hieratic ? AGMINATE_COST : 0);
   return {
     ...card,
     pieces: [...card.pieces],
@@ -581,7 +596,7 @@ export const OPENING_SHOP_ROLL_BATTLE_INDEX = -1;
  * 49-card deck from crowding low-value openings out of the Run.
  *
  * Opening draws roll qualifiers exactly like every later Shop draw, at every core
- * value: a Tactical surcharge may price an opening card past the starting gold and
+ * value: a Legatine surcharge may price an opening card past the starting gold and
  * out of reach. The one repair is the degenerate deal — ADR-0323 requires a
  * purchase before Continue, so if no offer is affordable the cheapest one drops its
  * qualifier and is offered standard, which no other opening card ever does. */
@@ -875,9 +890,9 @@ function normalizeCardOffers(value: unknown): RunCardOffer[] {
       cost: plaguedPiece
         ? offer.value - PLAGUED_DISCOUNT[plaguedPiece]
         : offer.value + (cardType === 'tactical'
-          ? DISCIPLINE_COST
+          ? ADLECTED_COST
           : cardType === 'concinnous'
-            ? POSITIONED_COST
+            ? EUTACTIC_COST
             : cardType === 'hieratic'
               ? AGMINATE_COST
               : 0),
@@ -1652,7 +1667,7 @@ export function buyCard(run: RunDocument, offerId: string): RunDocument {
     && Number.isSafeInteger(offer.effectTargetIndex)
     ? addedUnits[offer.effectTargetIndex!]
     : offer.cardType === 'tactical'
-      ? addedUnits[tacticalDisciplineAcquisitionTarget(offer.effectSeed, addedUnits.length) ?? -1]
+      ? addedUnits[legatineAdlectedAcquisitionTarget(offer.effectSeed, addedUnits.length) ?? -1]
       : offer.cardType === 'hieratic'
         ? addedUnits[hieraticAgminateAcquisitionTarget(offer.effectSeed, addedUnits.length) ?? -1]
         : undefined;

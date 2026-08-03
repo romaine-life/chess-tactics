@@ -18,11 +18,11 @@ import type { Level, War } from '../core/level';
 import { createRng } from '../core/rng';
 import {
   AGMINATE_COST,
-  DISCIPLINE_COST,
+  ADLECTED_COST,
   GOLD_SCALE,
   PIECE_VALUE,
   PLAGUED_DISCOUNT,
-  POSITIONED_COST,
+  EUTACTIC_COST,
   RUN_CARD_BY_ID,
   RUN_RELIC_BY_ID,
   acquireRelic,
@@ -127,12 +127,18 @@ const PIECE_ALIASES: Readonly<Record<string, PurchasablePieceType>> = Object.fre
   queen: 'queen',
 });
 
+/** Each card type answers to its qualifier, its granted state, and the retired words both
+ * were called before ADR-0369, so craft links written under the old vocabulary keep
+ * resolving. Every spelling lands on the same stored type. */
 const CARD_TYPES: Readonly<Record<string, RunCardType | null>> = Object.freeze({
   plain: null,
   none: null,
+  legatine: 'tactical',
+  adlected: 'tactical',
   tactical: 'tactical',
   discipline: 'tactical',
   concinnous: 'concinnous',
+  eutactic: 'concinnous',
   positioned: 'concinnous',
   pestiferous: 'pestiferous',
   plagued: 'pestiferous',
@@ -187,7 +193,7 @@ function cardSpec(raw: string): RunCraftCard {
   const key = typePart.toLowerCase();
   if (!(key in CARD_TYPES)) {
     throw new RunCraftError(
-      `craft offers: "${typePart}" is not a card type. Use tactical, concinnous, pestiferous, hieratic or plain.`,
+      `craft offers: "${typePart}" is not a card type. Use legatine, concinnous, pestiferous, hieratic or plain.`,
     );
   }
   return { pieces, cardType: CARD_TYPES[key] };
@@ -243,7 +249,19 @@ export function parseRunCraftSpec(search: string): RunCraftSpec | null {
   };
 }
 
-const RUN_ABILITIES: readonly RunAbility[] = ['discipline', 'positioned', 'marshalled'];
+
+/** A crafted ability may be written by its name or by its stored value (ADR-0369). The
+ * refusal message quotes the names, since those are what the game says out loud. */
+const RUN_ABILITY_ALIASES: Readonly<Record<string, RunAbility>> = Object.freeze({
+  adlected: 'discipline',
+  discipline: 'discipline',
+  eutactic: 'positioned',
+  positioned: 'positioned',
+  agminate: 'marshalled',
+  marshalled: 'marshalled',
+});
+
+const RUN_ABILITY_NAMES = ['adlected', 'eutactic', 'agminate'] as const;
 
 function craftUnitList(raw: unknown, label: string): RunCraftUnit[] {
   if (typeof raw === 'string') return craftUnits(pieceList(raw, label));
@@ -260,12 +278,15 @@ function craftUnitList(raw: unknown, label: string): RunCraftUnit[] {
     if (pieces.length !== 1) throw new RunCraftError(`craft ${label}: "${String(unit.type)}" names more than one unit.`);
     const abilities = unit.abilities === undefined ? [] : unit.abilities;
     if (!Array.isArray(abilities)) throw new RunCraftError(`craft ${label}: abilities must be a list.`);
+    const resolved: RunAbility[] = [];
     for (const ability of abilities) {
-      if (!RUN_ABILITIES.includes(ability as RunAbility)) {
-        throw new RunCraftError(`craft ${label}: "${String(ability)}" is not an ability. Use ${RUN_ABILITIES.join(', ')}.`);
+      const named = typeof ability === 'string' ? RUN_ABILITY_ALIASES[ability.toLowerCase()] : undefined;
+      if (!named) {
+        throw new RunCraftError(`craft ${label}: "${String(ability)}" is not an ability. Use ${RUN_ABILITY_NAMES.join(', ')}.`);
       }
+      resolved.push(named);
     }
-    return { type: pieces[0], abilities: abilities as RunAbility[] };
+    return { type: pieces[0], abilities: resolved };
   });
 }
 
@@ -500,7 +521,7 @@ function autoDeploy(run: RunDocument): { run: RunDocument; layout: RunDeployment
     prepared = setDeploymentChoices(prepared, { layoutChoice: 0 });
   }
   if (options.disciplineUnitIds.length) {
-    // Disciplined units are placed by hand in play, so the crafter places them the same way:
+    // Adlected units are placed by hand in play, so the crafter places them the same way:
     // the first free deployment cells, deterministically.
     const layout = selectedDeploymentLayout(prepared, options);
     const used = new Set(Object.values(layout.placements).map((cell) => `${cell.x},${cell.y}`));
@@ -661,10 +682,10 @@ function craftOffer(
     cost: plaguedPiece
       ? core.value - PLAGUED_DISCOUNT[plaguedPiece]
       : core.value + (card.cardType === 'tactical'
-        ? DISCIPLINE_COST
+        ? ADLECTED_COST
         : card.cardType === 'hieratic'
           ? AGMINATE_COST
-          : card.cardType === 'concinnous' ? POSITIONED_COST : 0),
+          : card.cardType === 'concinnous' ? EUTACTIC_COST : 0),
     cardType: card.cardType,
     effectSeed,
     plaguedPieceIndex,

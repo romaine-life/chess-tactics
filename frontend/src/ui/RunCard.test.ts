@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { RUN_CARD_BY_ID, createRunCardOffer } from '../run/model';
 import { concinnousTargetLabel, runCardGrants } from './RunCard';
 
-describe('Run Tactical card disclosure', () => {
+describe('Run Legatine card disclosure', () => {
   it('shows the Discipline icon only when a one-unit offer forces the outcome', () => {
     const oneUnit = createRunCardOffer(
       { seed: 17, ataraxiaTier: 0 },
@@ -34,7 +34,7 @@ describe('Run Tactical card disclosure', () => {
 });
 
 describe('Run Concinnous card disclosure', () => {
-  it('keeps the Positioned target hidden before purchase and can name the persisted occurrence afterward', () => {
+  it('keeps the Eutactic target hidden before purchase and can name the persisted occurrence afterward', () => {
     const offer = createRunCardOffer(
       { seed: 29, ataraxiaTier: 0 },
       RUN_CARD_BY_ID.pppk,

@@ -21,7 +21,7 @@ function version(overrides: Partial<AdminLiveMediaVersion>): AdminLiveMediaVersi
     sourcePath: null,
     domain: 'ui-kit',
     role: 'icon',
-    label: 'Positioned option',
+    label: 'Eutactic option',
     status: 'candidate',
     productionEligible: false,
     metadata: { candidateIndex: 1 },

@@ -283,7 +283,7 @@ Run to that state, and answers with both:
 ```
 curl -X POST <url>/api/active-run/craft -H 'content-type: application/json' -d '{
   "phase": "shop", "battle": 4, "gold": 33.5,
-  "army": [{ "type": "rook", "abilities": ["marshalled"] }, "knight", "pawn"],
+  "army": [{ "type": "rook", "abilities": ["agminate"] }, "knight", "pawn"],
   "offers": [{ "pieces": ["queen"] }, { "pieces": ["pawn","pawn"], "type": "concinnous" }],
   "loot": ["fair-scales"], "relics": ["quartermasters-ledger"] }'
 ```
@@ -303,7 +303,7 @@ browser and it is minted into its `/run/craft/<id>` address before anything is c
 hand-authored one-off leaves a durable link behind:
 
 ```
-/run?craft=shop&battle=3&gold=25&army=knight,rook&offers=queen,pawn+pawn:concinnous,rook:tactical
+/run?craft=shop&battle=3&gold=25&army=knight,rook&offers=queen,pawn+pawn:concinnous,rook:legatine
 /run?craft=deployment&battle=2&army=rook,rook,bishop,pawn&gold=12
 /run?craft=battle&battle=4&relics=fair-scales
 /run?craft=victory&gold=40
@@ -316,7 +316,7 @@ hand-authored one-off leaves a durable link behind:
 - `gold=25` (decimals fine), `army=knight,rook` (the exact non-King army; `add=queen`
   appends instead), `relics=<id,id>`.
 - Shop only: `offers=<card>[,<card>]` where a card is its pieces joined by `+` with an
-  optional `:tactical|:concinnous|:pestiferous|:hieratic`; `loot=<id,id>`; `paid=<id>`. Pieces accept
+  optional `:legatine|:concinnous|:pestiferous|:hieratic`; `loot=<id,id>`; `paid=<id>`. Pieces accept
   names, chess letters, or a bare deck id (`pawn,pawn,knight` = `p,p,n` = `ppk`).
 - `war=<id>` picks the War (default: the first Run-eligible official one), `seed=<n>` and
   `tier=0|1` fix the roll. `view=army|relics|sell` still applies and survives the craft.

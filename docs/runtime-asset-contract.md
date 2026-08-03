@@ -340,7 +340,7 @@ an incomplete row is an availability failure.
   `card-property-icon` under `ui/kit/icons/card-properties/<property>.png`;
   state roles use component `unit-ability-icon` under
   `ui/kit/icons/game/<state>.png`. The closed pairs are
-  Pestiferous/Cacochymic, Concinnous/Positioned, Tactical/Discipline, and
+  Pestiferous/Cacochymic, Concinnous/Eutactic, Legatine/Adlected, and
   Hieratic/Agminate. All eight roles are accepted and installed, and the
   coordinated cutover has shipped: the card type strip carries its property
   symbol instead of an em-dash qualifier suffix, every public unit state draws
@@ -348,9 +348,12 @@ an incomplete row is an availability failure.
   temporary debt is gone along with the pre-cutover slot
   `ui/run/card-status/plagued-v1.png`. Runtime code cannot infer a role from a
   slot path or substitute CSS, text, a generic glyph, or the other member of a
-  pair; `ui/kit/icons/game/plagued.png` and `ui/kit/icons/game/marshalled.png`
-  remain the non-presentational storage identities of Cacochymic and Agminate
-  (ADR-0341, ADR-0343). `RUN_CARD_COMMITTED_PROPERTY_PLACEMENTS` and
+  pair; every `ui/kit/icons/game/<state>.png` slot and every
+  `ui/kit/icons/card-properties/<property>.png` slot keeps the word it was coined
+  under — `plagued`, `marshalled`, `positioned`, `discipline`, `tactical` — as a
+  non-presentational storage identity, and no player-facing surface may expose one
+  (ADR-0341, ADR-0343, ADR-0369).
+  `RUN_CARD_COMMITTED_PROPERTY_PLACEMENTS` and
   `RUN_CARD_COMMITTED_UNIT_STATE_PLACEMENT` in `ui/RunCardFace.tsx` are the
   committed fit — one seat per property plus one shared unit-state seat — and
   are the Reset-to-committed baseline the Studio instrument compares against.

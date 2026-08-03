@@ -6,17 +6,17 @@ import {
   AGMINATE_COST,
   AGMINATE_DISPLAY_NAME,
   CONCINNOUS_OFFER_DENOMINATOR,
-  DISCIPLINE_COST,
+  ADLECTED_COST,
   GOLD_SCALE,
   HIERATIC_AGMINATE_OFFER_DENOMINATOR,
   RUN_CARD_DECK,
   PIECE_VALUE,
-  POSITIONED_COST,
+  EUTACTIC_COST,
   RUN_FORMAT_VERSION,
   RUN_OPENING_OFFER_COUNT,
   RUN_STARTING_GOLD,
   RUN_STARTING_GOLD_TENTHS,
-  TACTICAL_DISCIPLINE_OFFER_DENOMINATOR,
+  LEGATINE_ADLECTED_OFFER_DENOMINATOR,
   acquireRelic,
   battleVictoryGoldTenths,
   beginBattle,
@@ -40,7 +40,7 @@ import {
   sellArmyUnit,
   shopHasChanges,
   takeVacantiaRelic,
-  tacticalDisciplineAcquisitionTarget,
+  legatineAdlectedAcquisitionTarget,
   type RunDocument,
   type RunWarSnapshot,
 } from './model';
@@ -99,10 +99,15 @@ function deployedRunWithPawn(snapshot = war()): RunDocument {
 }
 
 describe('Run piece economy', () => {
-  it('presents the legacy marshalled storage ability as Agminate', () => {
+  it('names every stored ability by its player-facing word, never by its storage value', () => {
     expect(AGMINATE_DISPLAY_NAME).toBe('Agminate');
     expect(runAbilityDisplayName('marshalled')).toBe('Agminate');
-    expect(runAbilityDisplayName('positioned')).toBe('Positioned');
+    expect(runAbilityDisplayName('positioned')).toBe('Eutactic');
+    expect(runAbilityDisplayName('discipline')).toBe('Adlected');
+    // No state may surface its retired word: every name differs from its stored value.
+    for (const ability of ['discipline', 'positioned', 'marshalled'] as const) {
+      expect(runAbilityDisplayName(ability).toLowerCase()).not.toBe(ability);
+    }
   });
 
   it('enumerates every unique multiset worth 1–9 points exactly once', () => {
@@ -177,8 +182,8 @@ describe('Run piece economy', () => {
     const offers = openingShopOffers(91);
     expect(offers.map((offer) => offer.cardType)).toEqual(['tactical', 'concinnous', null]);
     expect(offers.map((offer) => offer.cost)).toEqual([
-      offers[0].value + DISCIPLINE_COST,
-      offers[1].value + POSITIONED_COST,
+      offers[0].value + ADLECTED_COST,
+      offers[1].value + EUTACTIC_COST,
       offers[2].value,
     ]);
     expect(offers[1].effectTargetIndex).not.toBeNull();
@@ -192,11 +197,11 @@ describe('Run piece economy', () => {
       for (const offer of opening) {
         expect(offer.cost).toBe(
           offer.cardType === 'tactical'
-            ? offer.value + DISCIPLINE_COST
+            ? offer.value + ADLECTED_COST
             : offer.cardType === 'hieratic'
               ? offer.value + AGMINATE_COST
               : offer.cardType === 'concinnous'
-                ? offer.value + POSITIONED_COST
+                ? offer.value + EUTACTIC_COST
                 : offer.value,
         );
         if (offer.cost > RUN_STARTING_GOLD) outOfReach += 1;
@@ -566,7 +571,7 @@ describe('Ataraxia ladder identities', () => {
       numeral: '0',
       label: 'Ataraxia 0',
       title: 'The Untroubled Mind',
-      effect: 'Standard Run rules. Shop cards may be Tactical, Concinnous or Hieratic but are never Pestiferous.',
+      effect: 'Standard Run rules. Shop cards may be Legatine, Concinnous or Hieratic but are never Pestiferous.',
     });
   });
 
@@ -791,7 +796,7 @@ describe('Concinnous cards', () => {
       owned.unitIds.includes(unit.id) && unit.abilities.includes('positioned')
     ));
 
-    expect(concinnous.cost).toBe(concinnous.value + POSITIONED_COST);
+    expect(concinnous.cost).toBe(concinnous.value + EUTACTIC_COST);
     expect(concinnous.effectTargetIndex).toBeGreaterThanOrEqual(0);
     expect(concinnous.effectTargetIndex).toBeLessThan(concinnous.pieces.length);
     expect(owned).toMatchObject({
@@ -842,7 +847,7 @@ describe('Concinnous cards', () => {
     expect(normalizeRunDocument(upgraded)).toBe(upgraded);
   });
 
-  it('qualifies cards whose Positioned premium produces a two-digit cost', () => {
+  it('qualifies cards whose Eutactic premium produces a two-digit cost', () => {
     const baseline = createRun(war(), 4217, 0);
     const expensive = RUN_CARD_DECK.filter((card) => card.value >= 8);
     const offers = expensive.map((card, index) => (
@@ -851,27 +856,27 @@ describe('Concinnous cards', () => {
 
     expect(CONCINNOUS_OFFER_DENOMINATOR).toBe(8);
     expect(offers.every((offer) => offer.cardType === 'concinnous')).toBe(true);
-    expect(offers.every((offer) => offer.cost === offer.value + POSITIONED_COST)).toBe(true);
+    expect(offers.every((offer) => offer.cost === offer.value + EUTACTIC_COST)).toBe(true);
     expect(offers.every((offer) => offer.effectTargetIndex !== null)).toBe(true);
     expect(new Set(offers.map((offer) => offer.cost))).toEqual(new Set([10, 11]));
   });
 });
 
-describe('Tactical Discipline cards', () => {
-  it('rolls every core card at one in eight and permits the Discipline premium through twelve gold', () => {
+describe('Legatine Adlected cards', () => {
+  it('rolls every core card at one in eight and permits the Adlected premium through twelve gold', () => {
     const baseline = createRun(war(), 4217, 0);
     const forced = RUN_CARD_DECK.map((card, index) => (
       createRunCardOffer(baseline, card, Math.floor(index / 4), index % 4, 8, 8, 1)
     ));
 
-    expect(TACTICAL_DISCIPLINE_OFFER_DENOMINATOR).toBe(8);
+    expect(LEGATINE_ADLECTED_OFFER_DENOMINATOR).toBe(8);
     expect(forced.every((offer) => offer.cardType === 'tactical')).toBe(true);
-    expect(forced.every((offer) => offer.cost === offer.value + DISCIPLINE_COST)).toBe(true);
+    expect(forced.every((offer) => offer.cost === offer.value + ADLECTED_COST)).toBe(true);
     expect(forced.every((offer) => offer.effectTargetIndex === null)).toBe(true);
     expect(Math.max(...forced.map((offer) => offer.cost))).toBe(12);
   });
 
-  it('chooses and persists exactly one Disciplined unit only when the card is acquired', () => {
+  it('chooses and persists exactly one Adlected unit only when the card is acquired', () => {
     let shop: RunDocument | null = null;
     for (let seed = 1; seed < 500 && !shop; seed += 1) {
       const candidate = openShop({ ...deployedRun(seed), goldTenths: 100 * GOLD_SCALE }, []);
@@ -893,7 +898,7 @@ describe('Tactical Discipline cards', () => {
     expect(disciplined).toHaveLength(1);
     expect(owned.effectTargetUnitId).toBe(disciplined[0].id);
     expect(owned.unitIds.indexOf(disciplined[0].id)).toBe(
-      tacticalDisciplineAcquisitionTarget(tactical.effectSeed, tactical.pieces.length),
+      legatineAdlectedAcquisitionTarget(tactical.effectSeed, tactical.pieces.length),
     );
   });
 });
@@ -908,7 +913,7 @@ describe('Hieratic Agminate cards', () => {
     ));
 
     expect(HIERATIC_AGMINATE_OFFER_DENOMINATOR).toBe(8);
-    expect(AGMINATE_COST).toBe(DISCIPLINE_COST);
+    expect(AGMINATE_COST).toBe(ADLECTED_COST);
     expect(forced.every((offer) => offer.cardType === 'hieratic')).toBe(true);
     expect(forced.every((offer) => offer.cost === offer.value + AGMINATE_COST)).toBe(true);
     // The target is drawn at acquisition, so the offer carries no seeded index.
@@ -949,7 +954,7 @@ describe('Hieratic Agminate cards', () => {
     expect(bought.goldTenths).toBe(shop!.goldTenths - (hieratic.value + AGMINATE_COST) * GOLD_SCALE);
     // The Agminate draw is its own; it does not mirror the Tactical one.
     expect(hieraticAgminateAcquisitionTarget(hieratic.effectSeed, 8))
-      .not.toBe(tacticalDisciplineAcquisitionTarget(hieratic.effectSeed, 8));
+      .not.toBe(legatineAdlectedAcquisitionTarget(hieratic.effectSeed, 8));
   });
 
   it('survives a document round trip with its acquisition target intact', () => {

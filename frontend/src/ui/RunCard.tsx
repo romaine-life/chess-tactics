@@ -5,6 +5,7 @@ import {
   AGMINATE_DISPLAY_NAME,
   CACOCHYMIC_DISPLAY_NAME,
   cardContentsLabel,
+  EUTACTIC_DISPLAY_NAME,
   PIECE_LABEL,
   RUN_CARD_TYPE_REFERENCE,
   type PurchasablePieceType,
@@ -103,13 +104,13 @@ export function RunCard({
   const frameMedia = liveMediaForSlot(frameSlot).media;
   const frameUrl = frameMedia.immutableUrl;
   const cost = offer?.cost ?? card.value;
-  // A Hieratic target is drawn at acquisition, like a Tactical one, so a multi-unit offer
+  // A Hieratic target is drawn at acquisition, like a Legatine one, so a multi-unit offer
   // cannot name it before purchase and a one-unit offer needs no label at all.
   const hieraticTargetHidden = cardType === 'hieratic' && card.pieces.length > 1;
   const targetLabel = cardType === 'pestiferous'
     ? plaguedTargetLabel(card)
     : cardType === 'concinnous' && offer
-      ? ` Positioned: ${purchased ? concinnousTargetLabel(offer) : 'target hidden'}.`
+      ? ` ${EUTACTIC_DISPLAY_NAME}: ${purchased ? concinnousTargetLabel(offer) : 'target hidden'}.`
       : hieraticTargetHidden
         ? ` ${AGMINATE_DISPLAY_NAME}: one contained unit, chosen on purchase.`
         : '';
@@ -128,7 +129,7 @@ export function RunCard({
     } : {}),
     grants: runCardGrants(card),
     properties: cardType === 'concinnous' && offer
-      ? [{ name: 'Positioned', target: purchased ? concinnousTargetLabel(offer) : 'Target hidden' }]
+      ? [{ name: EUTACTIC_DISPLAY_NAME, target: purchased ? concinnousTargetLabel(offer) : 'Target hidden' }]
       : hieraticTargetHidden
         ? [{ name: AGMINATE_DISPLAY_NAME, target: 'Chosen on purchase' }]
         : undefined,

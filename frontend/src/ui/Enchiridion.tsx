@@ -12,10 +12,12 @@ import {
 import { PredrawnMoveHighlightPaint } from '../render/PredrawnMoveHighlightPaint';
 import { runCardArtSlot, runCardFlavor, runCardName } from '../run/cardNames';
 import {
+  ADLECTED_DISPLAY_NAME,
   AGMINATE_DISPLAY_NAME,
   ATARAXIA_BY_TIER,
   ATARAXIA_TIERS,
   CACOCHYMIC_DISPLAY_NAME,
+  EUTACTIC_DISPLAY_NAME,
   RUN_CARD_BY_ID,
   RUN_CARD_DECK,
   RUN_CARD_TYPE_REFERENCE,
@@ -680,14 +682,14 @@ const CARD_TYPE_REFERENCES: readonly CardTypeReferenceDefinition[] = Object.free
     id: 'concinnous',
     name: 'Concinnous',
     cost: 3,
-    description: 'Skillfully and harmoniously arranged. One persisted contained unit becomes Positioned on purchase; its target may remain hidden until then.',
+    description: `Skillfully and harmoniously arranged. One persisted contained unit becomes ${EUTACTIC_DISPLAY_NAME} on purchase; its target may remain hidden until then.`,
     frameSlot: RUN_CARD_CONCINNOUS_FRAME_SLOT,
   },
   {
     id: 'tactical',
-    name: 'Tactical',
+    name: 'Legatine',
     cost: 4,
-    description: 'One contained unit gains Discipline when purchased. The target is hidden on multi-unit offers; this one-unit Volunteer shows the state because its target is forced.',
+    description: `Of a legate, a commander's deputy entrusted with a detached force. One contained unit gains ${ADLECTED_DISPLAY_NAME} when purchased. The target is hidden on multi-unit offers; this one-unit Volunteer shows the state because its target is forced.`,
     frameSlot: RUN_CARD_TACTICAL_FRAME_SLOT,
   },
   {
@@ -722,7 +724,7 @@ function CardTypeReference({ definition }: { definition: CardTypeReferenceDefini
       ...(definition.id === 'hieratic' ? { ability: 'marshalled' as const } : {}),
     }],
     properties: definition.id === 'concinnous'
-      ? [{ name: 'Positioned', target: 'Pawn' }]
+      ? [{ name: EUTACTIC_DISPLAY_NAME, target: 'Pawn' }]
       : undefined,
     flavor: runCardFlavor(VOLUNTEER_CARD),
   } satisfies RunCardFaceContent;
@@ -847,13 +849,13 @@ const UNIT_STATE_REFERENCES: readonly Readonly<{
 }>[] = Object.freeze([
   {
     state: 'discipline',
-    name: 'Discipline',
-    description: 'The unit may be deliberately placed on a legal square in the player deployment zone before the remainder of the army is deployed.',
+    name: ADLECTED_DISPLAY_NAME,
+    description: 'Enrolled by direct appointment rather than by the usual process. The unit may be deliberately placed on a legal square in the player deployment zone before the remainder of the army is deployed.',
   },
   {
     state: 'positioned',
-    name: 'Positioned',
-    description: 'The unit’s automatic deployment favors its piece-specific region: Pawns prefer the front row, the King and Bishops prefer the back row, and Rooks prefer outer back-row squares.',
+    name: EUTACTIC_DISPLAY_NAME,
+    description: 'Well-ordered; drawn up in good array. The unit’s automatic deployment favors its piece-specific region: Pawns prefer the front row, the King and Bishops prefer the back row, and Rooks prefer outer back-row squares.',
   },
   {
     state: 'marshalled',

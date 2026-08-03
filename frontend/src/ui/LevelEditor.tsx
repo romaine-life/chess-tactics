@@ -9258,7 +9258,7 @@ export function LevelEditor(): ReactElement {
             <p className="le-board-note">
               {activeZone?.type === 'player-spawn'
                 ? activeZone.excludedPieceTypes?.length
-                  ? `Player Deployment. Automatic placement puts every piece except ${LE_BREAKABLE_DEPLOYMENT_TYPES.filter(({ pieceType }) => activeZone.excludedPieceTypes?.includes(pieceType)).map(({ label }) => `${label}s`).join(' and ')} here; a Disciplined unit may still be placed here by hand.`
+                  ? `Player Deployment. Automatic placement puts every piece except ${LE_BREAKABLE_DEPLOYMENT_TYPES.filter(({ pieceType }) => activeZone.excludedPieceTypes?.includes(pieceType)).map(({ label }) => `${label}s`).join(' and ')} here; an Adlected unit may still be placed here by hand.`
                   : 'Player Deployment. The Run army starts on these squares.'
                 : activeZone?.type === 'player-pawn-spawn'
                 ? 'Pawn Deployment. Pawns may start here. Squares shared with Player Deployment stay open to every piece.'

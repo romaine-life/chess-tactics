@@ -305,7 +305,7 @@ describe('Run chrome hierarchy', () => {
     expect(runCard).toContain("cardType === 'hieratic'");
     expect(runCard).toContain("'discipline' as const");
     expect(runCard).toContain("'marshalled' as const");
-    expect(runCard).toContain("name: 'Positioned'");
+    expect(runCard).toContain('name: EUTACTIC_DISPLAY_NAME');
     expect(runCard).toContain("'Target hidden'");
     expect(runCardFace).toContain('RUN_CARD_COST_COIN_SOURCE_SLOT');
     expect(runCardFace).toContain('run-card-prototype-cost-coin-source');

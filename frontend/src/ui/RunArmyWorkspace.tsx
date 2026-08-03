@@ -2,9 +2,10 @@ import { useLayoutEffect, useMemo, useRef, type ReactElement, type ReactNode } f
 import { defaultBackgroundSet } from '../art/backgroundSets';
 import { defaultFacingForSide, paletteForSide, pieceSpritePath } from '../core/pieces';
 import {
-  AGMINATE_DISPLAY_NAME,
+  ADLECTED_DISPLAY_NAME,
   CACOCHYMIC_DESCRIPTION,
   CACOCHYMIC_DISPLAY_NAME,
+  EUTACTIC_DISPLAY_NAME,
   GOLD_SCALE,
   PIECE_LABEL,
   PIECE_VALUE,
@@ -12,6 +13,7 @@ import {
   hasRelic,
   relicGrantingRunAbility,
   runAbilityDescription,
+  runAbilityDisplayName,
   type RunAbility,
   type RunArmyPieceType,
   type RunArmyUnit,
@@ -101,7 +103,7 @@ function deploymentAbilityTrait(
   unit: RunArmyUnit,
   ability: Extract<RunAbility, 'positioned' | 'marshalled'>,
 ): RunUnitTrait | null {
-  const label = ability === 'positioned' ? 'Positioned' : AGMINATE_DISPLAY_NAME;
+  const label = runAbilityDisplayName(ability);
   const icon = { state: ability } as const;
   if (unit.abilities.includes(ability)) {
     return {
@@ -134,7 +136,7 @@ export function runUnitTraits(run: RunDocument, unit: RunArmyUnit): RunUnitTrait
   if (unit.abilities.includes('discipline')) {
     traits.push({
       id: 'discipline',
-      label: 'Discipline',
+      label: ADLECTED_DISPLAY_NAME,
       description: runAbilityDescription('discipline', unit.type),
       source: 'Permanent unit ability',
       inherited: false,
@@ -143,7 +145,7 @@ export function runUnitTraits(run: RunDocument, unit: RunArmyUnit): RunUnitTrait
   } else if (run.deployment?.temporaryDisciplineUnitId === unit.id) {
     traits.push(inheritedTrait(
       'discipline',
-      'Discipline',
+      ADLECTED_DISPLAY_NAME,
       'May be deliberately placed in the player zone for this Battle.',
       RUN_RELIC_BY_ID['inspirational-record'].name,
       { state: 'discipline' },
@@ -224,7 +226,7 @@ function unitRunStatus(run: RunDocument, unit: RunArmyUnit): string {
   }
   if (run.phase === 'deployment') {
     if (run.deployment?.chosenBlockedUnitIds?.includes(unit.id)) return 'Sitting out';
-    if (run.deployment?.manualPlacements[unit.id]) return 'Placed with Discipline';
+    if (run.deployment?.manualPlacements[unit.id]) return `Placed with ${ADLECTED_DISPLAY_NAME}`;
     return 'Preparing to deploy';
   }
   if (run.phase === 'shop') return unit.type === 'king' ? 'Permanently retained' : 'Available to sell';
@@ -342,9 +344,9 @@ function RunRosterFilters({
           value={filters.ability}
           options={[
             { value: 'all', label: 'All abilities' },
-            { value: 'discipline', label: 'Discipline' },
-            { value: 'positioned', label: 'Positioned' },
-            { value: 'marshalled', label: AGMINATE_DISPLAY_NAME },
+            { value: 'discipline', label: ADLECTED_DISPLAY_NAME },
+            { value: 'positioned', label: EUTACTIC_DISPLAY_NAME },
+            { value: 'marshalled', label: runAbilityDisplayName('marshalled') },
             { value: 'plagued', label: CACOCHYMIC_DISPLAY_NAME },
             { value: 'royal-tent', label: 'Royal Tent' },
             { value: 'pawn-cash-out', label: 'Cash Out' },

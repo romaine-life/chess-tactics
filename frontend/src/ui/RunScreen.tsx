@@ -23,6 +23,7 @@ import { useConfirm } from './shared/ConfirmDialog';
 import { RunWorkspace } from './RunWorkspace';
 import { workspaceBackgroundArtwork } from './workspaceBackgrounds';
 import {
+  ADLECTED_DISPLAY_NAME,
   ATARAXIA_BY_TIER,
   CACOCHYMIC_DISPLAY_NAME,
   GOLD_SCALE,
@@ -402,8 +403,8 @@ function DeploymentControls({
 
         {options.disciplineUnitIds.length > 0 ? (
           <div className="skirmish-view-group run-deployment-control">
-            <span className="skirmish-eyebrow">Discipline · {placedDisciplineCount}/{options.disciplineUnitIds.length}</span>
-            <p>Select a Disciplined unit, then choose one of its highlighted battlefield squares.</p>
+            <span className="skirmish-eyebrow">{ADLECTED_DISPLAY_NAME} · {placedDisciplineCount}/{options.disciplineUnitIds.length}</span>
+            <p>Select an {ADLECTED_DISPLAY_NAME} unit, then choose one of its highlighted battlefield squares.</p>
             <div className="run-choice-list">
               {options.disciplineUnitIds.map((unitId) => {
                 const unit = run.army.find((candidate) => candidate.id === unitId);

@@ -57,10 +57,10 @@ describe('Run relic chess invariant', () => {
     expect(Object.fromEntries(
       Object.keys(RUN_RELIC_ABILITY_GRANTS).map((id) => [id, RUN_RELICS.find((relic) => relic.id === id)?.description]),
     )).toEqual({
-      'training-linens': 'Your Pawns gain Positioned.',
-      'royal-decree': 'Your King gains Positioned.',
-      'crenellated-rampart': 'Your Rooks gain Positioned.',
-      'popes-staff': 'Your Bishops gain Positioned.',
+      'training-linens': 'Your Pawns gain Eutactic.',
+      'royal-decree': 'Your King gains Eutactic.',
+      'crenellated-rampart': 'Your Rooks gain Eutactic.',
+      'popes-staff': 'Your Bishops gain Eutactic.',
       'ghibelline-rampart': 'Your Rooks gain Agminate.',
       'popes-robes': 'Your Bishops gain Agminate.',
       'royal-sceptre': 'Your King gains Agminate.',

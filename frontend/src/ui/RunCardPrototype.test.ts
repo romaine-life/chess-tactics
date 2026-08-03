@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { EUTACTIC_DISPLAY_NAME } from '../run/model';
 import {
   RUN_CARD_APPROVED_TUNING,
   RUN_CARD_CONTENTS_DENSITY_LADDER,
@@ -52,20 +53,20 @@ describe('Run Card Layout review variant', () => {
       typeLine: 'Units',
       cardProperty: { id: 'concinnous', name: 'Concinnous' },
       grants: [{ count: 2, unit: 'pawn' }],
-      properties: [{ name: 'Positioned', target: 'Target hidden' }],
+      properties: [{ name: EUTACTIC_DISPLAY_NAME, target: 'Target hidden' }],
     });
     expect(runCardPrototypeContent('concinnous', 'single', true)).toMatchObject({
-      properties: [{ name: 'Positioned', target: 'Pawn 1' }],
+      properties: [{ name: EUTACTIC_DISPLAY_NAME, target: 'Pawn 1' }],
     });
     expect(runCardPrototypeContent('concinnous')).not.toHaveProperty('rules');
   });
 
-  it('shows Discipline only when one Tactical unit makes the random target certain', () => {
+  it('shows Adlected only when one Legatine unit makes the random target certain', () => {
     expect(runCardPrototypeContent('tactical')).toMatchObject({
       name: 'Regal Serenity',
       cost: 12,
       typeLine: 'Units',
-      cardProperty: { id: 'tactical', name: 'Tactical' },
+      cardProperty: { id: 'tactical', name: 'Legatine' },
       grants: [{ count: 1, unit: 'queen', ability: 'discipline' }],
     });
     expect(runCardPrototypeContent('tactical', 'multi')).toMatchObject({
@@ -234,9 +235,9 @@ describe('Run Card Layout review variant', () => {
       name: 'Two Good Boots',
       cost: 4,
       typeLine: 'Units',
-      cardProperty: { id: 'concinnous', name: 'Concinnous', effect: 'Makes one contained unit Positioned when the card is acquired.' },
+      cardProperty: { id: 'concinnous', name: 'Concinnous', effect: 'Makes one contained unit Eutactic when the card is acquired.' },
       grants: [{ count: 2, unit: 'pawn' }],
-      properties: [{ name: 'Positioned', target: 'Target hidden' }],
+      properties: [{ name: EUTACTIC_DISPLAY_NAME, target: 'Target hidden' }],
       flavor: 'The road kept both pairs of boots, and returned neither name.',
     };
     expect(runCardContentsDensityStepForCard(

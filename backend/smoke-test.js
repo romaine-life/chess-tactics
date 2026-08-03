@@ -3536,7 +3536,7 @@ async function main() {
     relicReference.statusCode !== 200
     || !relicReference.body.includes('<title>Royal Decree</title>')
     || !relicReference.body.includes('<meta property="og:title" content="Royal Decree">')
-    || !relicReference.body.includes('<meta property="og:description" content="Your King gains Positioned.">')
+    || !relicReference.body.includes('<meta property="og:description" content="Your King gains Eutactic.">')
     || !relicReference.body.includes('<meta property="og:image:width" content="64">')
     || !relicReference.body.includes('<meta property="og:image:height" content="64">')
     || !relicReference.body.includes('<meta name="twitter:card" content="summary">')
@@ -3552,7 +3552,7 @@ async function main() {
   if (
     unknownRelicReference.statusCode !== 200
     || !unknownRelicReference.body.includes('<meta property="og:title" content="Chess Tactics">')
-    || unknownRelicReference.body.includes('Your King gains Positioned')
+    || unknownRelicReference.body.includes('Your King gains Eutactic')
   ) {
     throw new Error(`Unknown relic ids should retain the generic unfurl: ${unknownRelicReference.statusCode}`);
   }

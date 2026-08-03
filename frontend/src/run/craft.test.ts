@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { createBlankLevel } from '../core/level';
 import {
   AGMINATE_COST,
-  DISCIPLINE_COST,
+  ADLECTED_COST,
   GOLD_SCALE,
   PIECE_VALUE,
-  POSITIONED_COST,
+  EUTACTIC_COST,
   normalizeRunDocument,
   type RunWarSnapshot,
 } from './model';
@@ -188,9 +188,9 @@ describe('crafted Run documents', () => {
     expect(offers.map((offer) => offer.pieces)).toEqual([['rook'], ['pawn', 'pawn'], ['knight'], ['bishop']]);
     expect(offers[0].cost).toBe(PIECE_VALUE.rook);
     expect(offers[0].cardType).toBeNull();
-    expect(offers[1].cost).toBe(2 * PIECE_VALUE.pawn + POSITIONED_COST);
+    expect(offers[1].cost).toBe(2 * PIECE_VALUE.pawn + EUTACTIC_COST);
     expect(offers[1].effectTargetIndex).toBeGreaterThanOrEqual(0);
-    expect(offers[2].cost).toBe(PIECE_VALUE.knight + DISCIPLINE_COST);
+    expect(offers[2].cost).toBe(PIECE_VALUE.knight + ADLECTED_COST);
     expect(offers[3].cardType).toBe('hieratic');
     expect(offers[3].cost).toBe(PIECE_VALUE.bishop + AGMINATE_COST);
     expect(offers[3].effectTargetIndex).toBeNull();
