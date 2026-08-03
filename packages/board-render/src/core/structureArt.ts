@@ -76,6 +76,20 @@ function directionMediaRole(direction: Direction, half: 'back' | 'front'): strin
   return `${direction}-${half}`;
 }
 
+/**
+ * The media an INSTALLED prop or doodad draws: its authored `back`/`front` halves, whose frame
+ * geometry the seat document's contact anchor and render scale are calibrated against. A later
+ * eight-way turntable installs `south-back`/`south-front` as SOURCE artwork for floating
+ * placement; that view has its own frame size and framing, so it must never displace the
+ * authored halves here — doing so silently reseats and resizes every placed prop. A source-only
+ * asset has no authored halves at all, so its south view is its nominal frame.
+ */
+function installedMedia(id: string, half: 'back' | 'front') {
+  const record = structureRecord(id);
+  if (!record) return undefined;
+  return record.media[half]?.media ?? record.media[directionMediaRole('south', half)]?.media;
+}
+
 function directionMedia(id: string, direction: Direction, half: 'back' | 'front') {
   const record = structureRecord(id);
   if (!record) return undefined;
@@ -83,9 +97,11 @@ function directionMedia(id: string, direction: Direction, half: 'back' | 'front'
   return explicit ?? (direction === 'south' ? record.media[half]?.media : undefined);
 }
 
-export function structureRasterDimensions(id: string, direction: Direction = 'south'): { w: number; h: number } {
-  const back = directionMedia(id, direction, 'back');
-  const front = directionMedia(id, direction, 'front');
+function pairDimensions(
+  id: string,
+  back: ReturnType<typeof installedMedia>,
+  front: ReturnType<typeof installedMedia>,
+): { w: number; h: number } {
   if (!back || !front) throw new Error(`structure art media is missing for ${id}`);
   if (!back.width || !back.height || !front.width || !front.height) {
     throw new Error(`structure art raster dimensions are missing for ${id}`);
@@ -94,6 +110,16 @@ export function structureRasterDimensions(id: string, direction: Direction = 'so
     throw new Error(`structure art halves have different raster dimensions for ${id}`);
   }
   return { w: back.width, h: back.height };
+}
+
+/** The installed drawing frame — what a placed prop/doodad is seated and scaled against. */
+export function structureRasterDimensions(id: string): { w: number; h: number } {
+  return pairDimensions(id, installedMedia(id, 'back'), installedMedia(id, 'front'));
+}
+
+/** The frame of one directional SOURCE view, used only by floating artwork placement. */
+export function structureArtDirectionRasterDimensions(id: string, direction: Direction): { w: number; h: number } {
+  return pairDimensions(id, directionMedia(id, direction, 'back'), directionMedia(id, direction, 'front'));
 }
 
 export function structureArtAsset(id: string): StructureArtAsset | undefined {
@@ -106,7 +132,7 @@ export function structureArtAsset(id: string): StructureArtAsset | undefined {
 }
 
 export function structureArtHalfSrc(id: string, half: 'back' | 'front'): string {
-  const media = directionMedia(id, 'south', half);
+  const media = installedMedia(id, half);
   if (!media) throw new Error(`structure ${id} has no ${half} media`);
   return media.immutableUrl;
 }
@@ -153,7 +179,7 @@ export function structureArtDirectionSprite(
   const scale = Number(record.scale);
   if (!base) return undefined;
   return {
-    ...structureRasterDimensions(id, direction),
+    ...structureArtDirectionRasterDimensions(id, direction),
     anchorX: Number.isFinite(anchorX) ? anchorX : base.sprite.anchorX,
     anchorY: Number.isFinite(anchorY) ? anchorY : base.sprite.anchorY,
     scale: Number.isFinite(scale) && scale > 0 ? scale : base.sprite.scale,
