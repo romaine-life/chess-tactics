@@ -21053,11 +21053,6 @@ button.tileset-relationship-cell {
   pointer-events: none;
 }
 
-.enchiridion-card-gallery-trigger:is(:focus-visible, .is-addressed) {
-  outline: 2px solid rgba(101, 184, 255, .82);
-  outline-offset: 3px;
-}
-
 .enchiridion-card-type-layout {
   align-content: start;
   align-items: start;

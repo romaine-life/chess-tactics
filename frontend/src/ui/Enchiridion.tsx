@@ -675,7 +675,7 @@ export function CardCodex({
                           to={cardHref?.(card.id)}
                           onSelect={() => setLocalSelectedId(card.id)}
                           data-ui-sfx="card-purchase"
-                          className={`enchiridion-card-gallery-trigger${focused ? ' is-addressed' : ''}`}
+                          className="enchiridion-card-gallery-trigger"
                           aria-label={`${runCardName(card)}. ${cardContentsLabel(card)}. Worth ${card.value} gold.`}
                           aria-pressed={focused}
                           aria-current={focused ? 'true' : undefined}
