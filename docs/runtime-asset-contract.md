@@ -370,6 +370,11 @@ an incomplete row is an availability failure.
   `ui/run/card-prototypes/cost-coin-source-v1.png` and overlays the live integer,
     so a frame cannot silently introduce a private coin treatment (ADR-0283,
     ADR-0329).
+  Compact cost labels outside the card use the same coin pixels through the
+  native transparent 112×112 `ui/run/card-prototypes/cost-coin-v1.png` slot and
+  retain the same live integer. The dedicated alpha asset prevents surrounding
+  frame pixels from entering non-card layouts; it does not introduce numbered
+  coin artwork.
   Concinnous resolves its accepted white frame. Hieratic resolves its distinct
   steel-armor frame and SHA-bound measured geometry while its gameplay mechanics
   remain deferred (ADR-0339); the two material identities never alias.

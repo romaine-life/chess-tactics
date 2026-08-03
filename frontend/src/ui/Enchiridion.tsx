@@ -50,6 +50,9 @@ import { InnerChromeBox, OuterChromeBox, OuterChromeHeader } from './shared/Chro
 import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
 import { NavButton } from './shared/NavButton';
 import { ChromeButton } from './shared/ChromeButton';
+import { PieceTypeIcon } from './shared/PieceTypeIcon';
+import { RunCardCostCoin } from './shared/RunCardCostCoin';
+import { KitScroll } from './KitScroll';
 import { EnchiridionContentSceneSlot } from './shell/AuthoredSceneSlot';
 import { fetchAdminLiveMediaCatalog } from '../net/liveMediaAdmin';
 import {
@@ -489,10 +492,13 @@ export type CardGoldFilter = 'all' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '
 export type CardUnitFilter = 'all' | PurchasablePieceType;
 
 const CARD_GOLD_FILTER_OPTIONS: readonly HouseSelectOption<CardGoldFilter>[] = Object.freeze([
-  { value: 'all', label: 'All gold' },
+  { value: 'all', label: 'All' },
   ...Array.from({ length: 9 }, (_, index) => {
     const value = String(index + 1) as Exclude<CardGoldFilter, 'all'>;
-    return { value, label: `${value} gold` };
+    return {
+      value,
+      label: <RunCardCostCoin value={Number(value)} className="enchiridion-card-filter-gold-amount" />,
+    };
   }),
 ]);
 
@@ -500,7 +506,12 @@ const CARD_UNIT_FILTER_OPTIONS: readonly HouseSelectOption<CardUnitFilter>[] = O
   { value: 'all', label: 'Any unit' },
   ...(['pawn', 'knight', 'bishop', 'rook', 'queen'] as const).map((value) => ({
     value,
-    label: PIECE_LABEL[value],
+    label: (
+      <span className="enchiridion-card-filter-unit-label">
+        <PieceTypeIcon type={value} className="enchiridion-card-filter-unit-icon" />
+        <span>{PIECE_LABEL[value]}</span>
+      </span>
+    ),
   })),
 ]);
 
@@ -513,33 +524,30 @@ export function cardMatchesFilters(
     && (unitFilter === 'all' || card.pieces.includes(unitFilter));
 }
 
-// The full generated card deck, grouped by gold value: a filterable browser of card
-// records and one selected card rendered as the exact face the Run deals (ADR-0253's
-// one-selection, one-description shape). A host that gives cards addresses routes
-// selection like the relic records (ADR-0256); an ephemeral host keeps local selection.
+// Cards is the terminal third-column browser: the two rail predecessors retain
+// their canonical widths and every remaining pixel belongs to a gallery of the
+// real faces themselves. Routes focus a face in that gallery; they never create
+// a duplicate fourth-column detail (ADR-0361).
 export function CardCodex({
   framed = true,
   selectedCardId = null,
   cardHref,
 }: {
   framed?: boolean;
-  /** The route-addressed card; read only when cardHref makes selection navigational. */
+  /** The route-addressed gallery face; read only when cardHref makes focus navigational. */
   selectedCardId?: string | null;
-  /** When present, card selection navigates to this address instead of setting local state. */
+  /** When present, focusing a card navigates to this address instead of setting local state. */
   cardHref?: (cardId: string) => string;
 }): ReactElement {
-  const [localSelectedId, setLocalSelectedId] = useState<string>(RUN_CARD_DECK[0].id);
+  const [localSelectedId, setLocalSelectedId] = useState<string | null>(null);
   const [goldFilter, setGoldFilter] = useState<CardGoldFilter>('all');
   const [unitFilter, setUnitFilter] = useState<CardUnitFilter>('all');
-  const selectedId = cardHref ? (selectedCardId ?? RUN_CARD_DECK[0].id) : localSelectedId;
+  const focusedCardId = cardHref ? selectedCardId : localSelectedId;
+  const galleryRef = useRef<HTMLDivElement | null>(null);
   const visibleCards = useMemo(
     () => RUN_CARD_DECK.filter((card) => cardMatchesFilters(card, goldFilter, unitFilter)),
     [goldFilter, unitFilter],
   );
-  const selectedCandidate = RUN_CARD_DECK.find((card) => card.id === selectedId);
-  const selected: RunCoreCard | null = selectedCandidate && visibleCards.includes(selectedCandidate)
-    ? selectedCandidate
-    : visibleCards[0] ?? null;
   const groups = useMemo(() => {
     const byValue = new Map<number, RunCoreCard[]>();
     for (const card of visibleCards) {
@@ -547,6 +555,13 @@ export function CardCodex({
     }
     return [...byValue.entries()].sort((left, right) => left[0] - right[0]);
   }, [visibleCards]);
+  useEffect(() => {
+    if (!focusedCardId) return;
+    const card = galleryRef.current?.querySelector<HTMLElement>(`[data-card-id="${focusedCardId}"]`);
+    if (!card) return;
+    const frame = window.requestAnimationFrame(() => card.scrollIntoView({ block: 'nearest', inline: 'nearest' }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusedCardId, visibleCards]);
   return (
     <ReferenceSectionFrame
       chromeConsumer="enchiridion-cards"
@@ -555,58 +570,63 @@ export function CardCodex({
       title="Cards"
     >
       <p>Every card the Run can deal. The opening Shop and later Shops use this one deck; a card costs its gold value.</p>
-      <div className="enchiridion-card-layout">
-        <div className="enchiridion-card-browser-column">
-          <InnerChromeBox className="enchiridion-card-filters" aria-label="Card filters">
-            <div className="enchiridion-card-filter">
-              <span>Gold</span>
-              <HouseSelect
-                value={goldFilter}
-                options={CARD_GOLD_FILTER_OPTIONS}
-                onChange={setGoldFilter}
-                ariaLabel="Filter cards by gold value"
-                testId="enchiridion-card-gold-filter"
-              />
-            </div>
-            <div className="enchiridion-card-filter">
-              <span>Contains</span>
-              <HouseSelect
-                value={unitFilter}
-                options={CARD_UNIT_FILTER_OPTIONS}
-                onChange={setUnitFilter}
-                ariaLabel="Filter cards by contained unit type"
-                testId="enchiridion-card-unit-filter"
-              />
-            </div>
-            <span className="enchiridion-card-filter-count" aria-live="polite">
-              {visibleCards.length} {visibleCards.length === 1 ? 'card' : 'cards'}
-            </span>
-          </InnerChromeBox>
-          <div className="enchiridion-card-browser" role="list" aria-label="Filtered card deck by gold value">
+      <div className="enchiridion-card-gallery-layout">
+        <InnerChromeBox className="enchiridion-card-filters" aria-label="Card filters">
+          <div className="enchiridion-card-filter">
+            <span>Gold</span>
+            <HouseSelect
+              value={goldFilter}
+              options={CARD_GOLD_FILTER_OPTIONS}
+              onChange={setGoldFilter}
+              ariaLabel="Filter cards by gold value"
+              testId="enchiridion-card-gold-filter"
+            />
+          </div>
+          <div className="enchiridion-card-filter">
+            <span>Contains</span>
+            <HouseSelect
+              value={unitFilter}
+              options={CARD_UNIT_FILTER_OPTIONS}
+              onChange={setUnitFilter}
+              ariaLabel="Filter cards by contained unit type"
+              testId="enchiridion-card-unit-filter"
+            />
+          </div>
+          <span className="enchiridion-card-filter-count" aria-live="polite">
+            {visibleCards.length} {visibleCards.length === 1 ? 'card' : 'cards'}
+          </span>
+        </InnerChromeBox>
+        <KitScroll className="enchiridion-card-gallery-scroll">
+          <div
+            ref={galleryRef}
+            className="enchiridion-card-gallery-browser"
+            role="list"
+            aria-label="Filtered card deck by gold value"
+          >
             {groups.map(([value, cards]) => (
-              <section className="enchiridion-card-group" key={value}>
-                <span className="skirmish-eyebrow">{value} gold</span>
-                <ul className="enchiridion-card-rows">
-                  {cards.map((card) => (
-                    <li key={card.id}>
-                      <ReferenceTrigger
-                        to={cardHref?.(card.id)}
-                        onSelect={() => setLocalSelectedId(card.id)}
-                        data-chrome-unit="inner-list-row"
-                        className={chromeUnitClassNames(
-                          'inner-list-row',
-                          'enchiridion-card-row',
-                          selected?.id === card.id && 'is-active',
-                        )}
-                        aria-label={`${runCardName(card)}. ${cardContentsLabel(card)}. Worth ${card.value} gold.`}
-                        aria-pressed={selected?.id === card.id}
-                      >
-                        <span className="enchiridion-card-row-name">{runCardName(card)}</span>
-                        <small className="enchiridion-card-row-contents">{cardContentsLabel(card)}</small>
-                      </ReferenceTrigger>
-                    </li>
-                  ))}
-                </ul>
+              <section className="enchiridion-card-gallery-group" key={value} aria-label={`${value} gold cards`}>
+                <h3 className="enchiridion-card-gallery-heading">
+                  <RunCardCostCoin value={value} className="enchiridion-card-group-gold" />
+                </h3>
+                <div className="enchiridion-card-gallery-grid">
+                  {cards.map((card) => {
+                    const focused = focusedCardId === card.id;
+                    return (
+                      <div className="enchiridion-card-gallery-item" role="listitem" data-card-id={card.id} key={card.id}>
+                        <ReferenceTrigger
+                          to={cardHref?.(card.id)}
+                          onSelect={() => setLocalSelectedId(card.id)}
+                          className={`enchiridion-card-gallery-trigger${focused ? ' is-addressed' : ''}`}
+                          aria-label={`${runCardName(card)}. ${cardContentsLabel(card)}. Worth ${card.value} gold.`}
+                          aria-pressed={focused}
+                          aria-current={focused ? 'true' : undefined}
+                        >
+                          <RunCard card={card} mode="reference" />
+                        </ReferenceTrigger>
+                      </div>
+                    );
+                  })}
+                </div>
               </section>
             ))}
             {!groups.length ? (
@@ -616,10 +636,7 @@ export function CardCodex({
               </InnerChromeBox>
             ) : null}
           </div>
-        </div>
-        <div className="enchiridion-card-detail">
-          {selected ? <RunCard card={selected} mode="reference" /> : null}
-        </div>
+        </KitScroll>
       </div>
     </ReferenceSectionFrame>
   );
@@ -911,9 +928,9 @@ export function Enchiridion({
   selectedRelicId?: RunRelicId | null;
   /** When present, relic selection in the relics section navigates to this address. */
   relicHref?: (relicId: RunRelicId) => string;
-  /** The route-addressed card for the cards section; see CardCodex. */
+  /** The route-addressed gallery face for the cards section; see CardCodex. */
   selectedCardId?: string | null;
-  /** When present, card selection in the cards section navigates to this address. */
+  /** When present, card focus in the cards section navigates to this address. */
   cardHref?: (cardId: string) => string;
   showSectionRail?: boolean;
   sceneInstanceKey?: string;

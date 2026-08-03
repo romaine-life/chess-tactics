@@ -78,6 +78,8 @@ const {
   preservesNativeEvidenceForUpload,
   runRelicIconMediaIssue,
   runRelicIconSlotId,
+  runCardCostCoinMediaIssue,
+  runCardCostCoinSlot,
   runResourceIconMediaIssue,
   runResourceIconSlotId,
   runShopWrapMediaIssue,
@@ -15237,6 +15239,9 @@ function mediaDomainProjectionIssue(row) {
   }
   if (runRelicIconSlotId(row.slot)) {
     return runRelicIconMediaIssue(row, runtime.value);
+  }
+  if (runCardCostCoinSlot(row.slot)) {
+    return runCardCostCoinMediaIssue(row, runtime.value);
   }
   if (runResourceIconSlotId(row.slot)) {
     return runResourceIconMediaIssue(row, runtime.value);

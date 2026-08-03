@@ -3493,6 +3493,31 @@ h1 {
   width: 58px;
 }
 
+/* A compact unit reference uses the exact accepted player-side Battle sprite.
+   AlphaBoundIcon removes the live frame's transparent canvas from the fit so
+   the battlefield art stays legible in dense filters and pickers. */
+.battlefield-unit-icon {
+  display: inline-block;
+  flex: none;
+  overflow: visible;
+  position: relative;
+}
+
+.battlefield-unit-icon .alpha-bound-icon-image {
+  image-rendering: auto;
+  max-block-size: none;
+  max-inline-size: none;
+  object-fit: fill;
+  position: absolute;
+}
+
+.battlefield-unit-icon[data-alpha-fit="pending"] .alpha-bound-icon-image {
+  block-size: 100%;
+  inline-size: 100%;
+  inset: 0;
+  object-fit: contain;
+}
+
 .icon-players { background-image: var(--media-ui-kit-icons-players-png); }
 .icon-start { background-image: var(--media-ui-kit-icons-game-objective-png); }
 .icon-leave { background-image: var(--media-ui-kit-icons-sign-out-png); }
@@ -18872,6 +18897,46 @@ button.tileset-relationship-cell {
   font-size: var(--ds-text-sm);
 }
 
+/* Compact costs outside a card draw the transparent 112px extraction of the
+   accepted card coin. The live number is laid over those same pixels instead
+   of spelling out gold. */
+.run-card-cost-coin {
+  --run-card-cost-coin-size: 24px;
+  block-size: var(--run-card-cost-coin-size);
+  display: inline-grid;
+  flex: none;
+  inline-size: var(--run-card-cost-coin-size);
+  line-height: 1;
+  overflow: hidden;
+  place-items: center;
+  position: relative;
+  vertical-align: middle;
+}
+
+.run-card-cost-coin-art {
+  block-size: 100%;
+  image-rendering: pixelated;
+  inline-size: 100%;
+  inset: 0;
+  max-inline-size: none;
+  object-fit: contain;
+  pointer-events: none;
+  position: absolute;
+}
+
+.run-card-cost-coin-value {
+  color: #17191b;
+  font-family: var(--ds-font-display);
+  font-size: calc(var(--run-card-cost-coin-size) * .52);
+  font-weight: 400;
+  line-height: 1;
+  position: relative;
+  text-shadow: 0 1px rgba(255, 232, 161, .55);
+  /* Match the card face's measured ink-centre correction (ADR-0359). */
+  transform: translateY(.0667em);
+  z-index: 1;
+}
+
 .run-gold-amount--title {
   font-size: var(--ds-text-md);
 }
@@ -20469,21 +20534,10 @@ button.tileset-relationship-cell {
   margin: 0;
 }
 
-/* Cards codex: a value-grouped browser of the full card deck beside one selected
-   card rendered as its real face (the same RunCard the Run deals). */
-.enchiridion-card-layout {
-  align-content: start;
-  align-items: start;
-  block-size: 100%;
-  display: grid;
-  gap: var(--ds-stack);
-  grid-template-columns: minmax(280px, 1fr) minmax(232px, 300px);
-  grid-template-rows: minmax(0, 1fr);
-  min-block-size: 0;
-  overflow: hidden;
-}
-
-.enchiridion-card-browser-column {
+/* Cards is the terminal third Enchiridion column, not a master-detail pair. The
+   two rail predecessors keep their canonical widths; this one gallery consumes
+   every remaining pixel and scrolls only from top to bottom (ADR-0361). */
+.enchiridion-card-gallery-layout {
   block-size: 100%;
   display: grid;
   gap: var(--ds-stack);
@@ -20519,6 +20573,24 @@ button.tileset-relationship-cell {
   inline-size: 100%;
 }
 
+.enchiridion-card-filter-gold-amount,
+.enchiridion-card-group-gold {
+  --run-card-cost-coin-size: 22px;
+}
+
+.enchiridion-card-filter-unit-label {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--ds-space-1);
+  min-inline-size: 0;
+}
+
+.enchiridion-card-filter-unit-icon {
+  block-size: 28px;
+  inline-size: 28px;
+  margin-block: -6px;
+}
+
 .enchiridion-card-filter-count {
   align-self: center;
   color: var(--skirmish-muted);
@@ -20526,56 +20598,65 @@ button.tileset-relationship-cell {
   white-space: nowrap;
 }
 
-.enchiridion-card-browser {
-  align-content: start;
+.enchiridion-card-gallery-scroll {
   block-size: 100%;
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
+.enchiridion-card-gallery-scroll > .kit-scroll-content {
+  box-sizing: border-box;
+}
+
+.enchiridion-card-gallery-browser {
+  align-content: start;
   display: grid;
   gap: var(--ds-stack);
   min-block-size: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding-inline-end: 4px;
+  min-inline-size: 0;
 }
 
-.enchiridion-card-group {
+.enchiridion-card-gallery-group {
   align-content: start;
   display: grid;
   gap: var(--ds-space-2);
+  min-inline-size: 0;
 }
 
-.enchiridion-card-rows {
-  align-content: start;
+.enchiridion-card-gallery-heading {
+  align-items: center;
+  display: flex;
+}
+
+.enchiridion-card-gallery-grid {
   display: grid;
-  gap: var(--ds-space-2);
-  list-style: none;
-  margin: 0;
-  padding: 0;
+  gap: var(--ds-stack);
+  grid-template-columns: repeat(auto-fill, minmax(188px, 232px));
+  justify-content: start;
+  min-inline-size: 0;
 }
 
-.enchiridion-card-row {
-  align-content: center;
+.enchiridion-card-gallery-item {
+  min-inline-size: 0;
+}
+
+.enchiridion-card-gallery-trigger {
+  all: unset;
+  box-sizing: border-box;
   cursor: pointer;
-  display: grid;
-  gap: 2px;
+  display: block;
   inline-size: 100%;
-  min-block-size: 52px;
-  padding: 6px 10px;
-  text-align: start;
+  position: relative;
 }
 
-.enchiridion-card-row-name {
-  font-size: var(--ds-text-md);
+.enchiridion-card-gallery-trigger > .run-card-action.is-reference {
+  cursor: inherit;
+  pointer-events: none;
 }
 
-.enchiridion-card-row-contents {
-  font-size: var(--ds-text-sm);
-  opacity: .8;
-}
-
-.enchiridion-card-detail {
-  align-self: start;
-  display: grid;
-  min-block-size: 0;
+.enchiridion-card-gallery-trigger:is(:focus-visible, .is-addressed) {
+  outline: 2px solid rgba(101, 184, 255, .82);
+  outline-offset: 3px;
 }
 
 .enchiridion-card-type-layout {

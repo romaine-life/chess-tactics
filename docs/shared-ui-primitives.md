@@ -46,6 +46,12 @@ search for before constructing a control or repeated surface.
   the one `runUnitStateIconUrl` role resolver. Card faces, the army roster and the
   Enchiridion glossary all draw the accepted raster from here; only the review
   instrument passes an exact candidate URL into the same seat.
+- `ui/shared/RunCardCostCoin.tsx` — the shared compact numbered card-cost coin,
+  drawing the dedicated transparent derivative of the accepted card coin,
+  overlaying the live value, and keeping the currency name in its accessible label.
+- `ui/shared/PieceTypeIcon.tsx` — the accepted player-side, north-facing Battle
+  sprite alpha-fitted for filters and pickers; consumers select a stable piece
+  type and supply only local seat sizing while the shared live registry owns pixels.
 - `ui/shared/InfoTip.tsx#Tooltip` — immediate hover/focus explanations for an
   existing visual trigger; its popup portals to the nearest screen host so
   component containment cannot clip fixed chrome.

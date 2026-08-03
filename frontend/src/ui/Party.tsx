@@ -5,12 +5,9 @@ import { NavButton } from './shared/NavButton';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { ChromeButton } from './shared/ChromeButton';
+import { PieceTypeIcon } from './shared/PieceTypeIcon';
 
 const OPTIONS = PLAYABLE_PIECE_TYPES.filter((piece) => piece !== 'pawn');
-
-function PieceIcon({ type }: { type: PlayablePieceType }) {
-  return <span className={`utility-piece-icon icon-${type}`} aria-hidden="true" />;
-}
 
 // Squad picker (ported from legacy app.js): pawn is locked; choose two more
 // pieces, then deploy into a skirmish. Wears the shared standard title bar
@@ -35,13 +32,13 @@ export function Party() {
             <p className="utility-lead">Pawn is locked in. Choose two more ({picks.length}/2).</p>
             <div className="utility-squad-grid">
               <span data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'utility-squad-card', 'active is-selected is-locked')}>
-                <PieceIcon type="pawn" />
+                <PieceTypeIcon type="pawn" />
                 <strong>Pawn</strong>
                 <small>Locked</small>
               </span>
               {OPTIONS.map((p) => (
                 <ChromeButton unit="inner-box" key={p} data-testid={`party-${p}`} className={chromeUnitClassNames('inner-box', 'utility-squad-card', picks.includes(p) && 'active is-selected')} onClick={() => toggle(p)}>
-                  <PieceIcon type={p} />
+                  <PieceTypeIcon type={p} />
                   <strong>{p}</strong>
                   <small>{picks.includes(p) ? 'Selected' : 'Available'}</small>
                 </ChromeButton>

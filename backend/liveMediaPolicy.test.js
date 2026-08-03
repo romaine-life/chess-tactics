@@ -16,6 +16,7 @@ const {
   LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_EXCEPTION_SCHEMA,
   RUN_RELIC_ICON_COMPONENT,
   RUN_RELIC_RESIZED_PRODUCTION_EXCEPTION_SCHEMA,
+  RUN_CARD_COST_COIN_COMPONENT,
   RUN_RESOURCE_ICON_COMPONENT,
   RUN_SHOP_WRAP_COMPONENT,
   SFX_SAMPLE_COMPONENT,
@@ -43,6 +44,8 @@ const {
   preservesNativeEvidenceForUpload,
   runRelicIconMediaIssue,
   runRelicIconSlotId,
+  runCardCostCoinMediaIssue,
+  runCardCostCoinSlot,
   runResourceIconMediaIssue,
   runResourceIconSlotId,
   runShopWrapMediaIssue,
@@ -338,6 +341,44 @@ test('Run resource icon projection binds one native reviewed icon to its resourc
   assert.match(runResourceIconMediaIssue(runResourceIcon({
     metadata: { runtime: { ...row.metadata.runtime, altText: 'Gold' } },
   })), /altText/);
+});
+
+function runCardCostCoin(overrides = {}) {
+  return {
+    slot: 'ui/run/card-prototypes/cost-coin-v1.png',
+    domain: 'ui-kit',
+    role: 'icon',
+    media_type: 'image/png',
+    width: 112,
+    height: 112,
+    metadata: {
+      runtime: {
+        component: RUN_CARD_COST_COIN_COMPONENT,
+        variant: 'gold',
+        frameWidth: 112,
+        frameHeight: 112,
+        frameCount: 1,
+        nativeRole: RUN_CARD_COST_COIN_COMPONENT,
+        altText: '',
+      },
+    },
+    ...overrides,
+  };
+}
+
+test('Run card cost coin projection binds the transparent native coin to its one semantic slot', () => {
+  const row = runCardCostCoin();
+  assert.equal(runCardCostCoinSlot(row.slot), true);
+  assert.equal(runCardCostCoinMediaIssue(row), null);
+  assert.match(runCardCostCoinMediaIssue(runCardCostCoin({ domain: 'review-media' })), /ui-kit domain/);
+  assert.match(runCardCostCoinMediaIssue(runCardCostCoin({ role: 'media' })), /icon role/);
+  assert.match(runCardCostCoinMediaIssue(runCardCostCoin({ width: 111 })), /112x112/);
+  assert.match(runCardCostCoinMediaIssue(runCardCostCoin({
+    metadata: { runtime: { ...row.metadata.runtime, variant: 'silver' } },
+  })), /variant must be gold/);
+  assert.match(runCardCostCoinMediaIssue(runCardCostCoin({
+    metadata: { runtime: { ...row.metadata.runtime, altText: 'Gold coin' } },
+  })), /altText must be empty/);
 });
 
 function gameConditionIcon(overrides = {}) {

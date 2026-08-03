@@ -41,6 +41,8 @@ const RUN_CARD_FRAME_NORMALISED_EXCEPTION_BY_SLOT = Object.freeze({
 });
 const RUN_RESOURCE_ICON_COMPONENT = 'run-resource-icon';
 const RUN_RESOURCE_ICON_SLOT = /^ui\/run\/resources\/([a-z][a-z0-9-]{0,79})\.png$/;
+const RUN_CARD_COST_COIN_COMPONENT = 'run-card-cost-coin';
+const RUN_CARD_COST_COIN_SLOT = 'ui/run/card-prototypes/cost-coin-v1.png';
 const RUN_SHOP_WRAP_COMPONENT = 'run-shop-wrap';
 const RUN_SHOP_WRAP_SLOT = /^ui\/run\/shop-wrap\/([a-z][a-z0-9-]{0,79})\.png$/;
 // A wrap frames live cards rather than replacing them, so the only geometry the
@@ -119,6 +121,10 @@ function runRelicIconSlotId(slot) {
 function runResourceIconSlotId(slot) {
   const match = RUN_RESOURCE_ICON_SLOT.exec(String(slot || ''));
   return match ? match[1] : null;
+}
+
+function runCardCostCoinSlot(slot) {
+  return String(slot || '') === RUN_CARD_COST_COIN_SLOT;
 }
 
 function runShopWrapSlotId(slot) {
@@ -389,6 +395,46 @@ function runResourceIconMediaIssue(row, projectedRuntime = null) {
   }
   if (runtime.altText !== '') {
     return 'Run resource icon metadata.runtime.altText must be empty because the live value owns its accessible name';
+  }
+  return null;
+}
+
+/**
+ * The card-price coin is the exact transparent 112px extraction of the shared
+ * card coin. The surrounding component owns both the live value and accessible
+ * currency label; the raster owns only the blank struck-metal body.
+ */
+function runCardCostCoinMediaIssue(row, projectedRuntime = null) {
+  if (!runCardCostCoinSlot(row.slot)) return 'Run card cost coin requires its registered semantic slot';
+  if (row.domain !== 'ui-kit') return 'Run card cost coin requires the ui-kit domain';
+  if (row.role !== 'icon') return 'Run card cost coin requires the icon role';
+  if (row.media_type !== 'image/png') return 'Run card cost coin requires image/png';
+  if (Number(row.width) !== 112 || Number(row.height) !== 112) {
+    return 'Run card cost coin must preserve the native 112x112 transparent raster';
+  }
+
+  const metadata = mediaVersionMetadata(row);
+  const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+  if (!isObjectRecord(runtime)) return 'Run card cost coin requires metadata.runtime';
+  const allowed = new Set([
+    'component', 'variant', 'frameWidth', 'frameHeight', 'frameCount', 'altText', 'nativeRole',
+  ]);
+  const unsupported = Object.keys(runtime).filter((key) => !allowed.has(key));
+  if (unsupported.length) {
+    return `Run card cost coin runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
+  }
+  if (runtime.component !== RUN_CARD_COST_COIN_COMPONENT) {
+    return `Run card cost coin metadata.runtime.component must be ${RUN_CARD_COST_COIN_COMPONENT}`;
+  }
+  if (runtime.variant !== 'gold') return 'Run card cost coin variant must be gold';
+  if (runtime.frameWidth !== 112 || runtime.frameHeight !== 112 || runtime.frameCount !== 1) {
+    return 'Run card cost coin runtime geometry must describe one native 112x112 frame';
+  }
+  if (runtime.nativeRole !== RUN_CARD_COST_COIN_COMPONENT) {
+    return `Run card cost coin metadata.runtime.nativeRole must be ${RUN_CARD_COST_COIN_COMPONENT}`;
+  }
+  if (runtime.altText !== '') {
+    return 'Run card cost coin metadata.runtime.altText must be empty because the live value owns its accessible name';
   }
   return null;
 }
@@ -1016,6 +1062,7 @@ module.exports = {
   LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_EXCEPTION_SCHEMA,
   RUN_RELIC_ICON_COMPONENT,
   RUN_RELIC_RESIZED_PRODUCTION_EXCEPTION_SCHEMA,
+  RUN_CARD_COST_COIN_COMPONENT,
   RUN_RESOURCE_ICON_COMPONENT,
   RUN_SHOP_WRAP_COMPONENT,
   SFX_SAMPLE_COMPONENT,
@@ -1043,6 +1090,8 @@ module.exports = {
   preservesNativeEvidenceForUpload,
   runRelicIconMediaIssue,
   runRelicIconSlotId,
+  runCardCostCoinMediaIssue,
+  runCardCostCoinSlot,
   runResourceIconMediaIssue,
   runResourceIconSlotId,
   runShopWrapMediaIssue,
