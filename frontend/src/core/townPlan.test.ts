@@ -8,6 +8,8 @@ import {
   planTown,
   townBoundsCentre,
   townIdPrefix,
+  townFootprint,
+  footprintsOverlap,
   townStreets,
   type TownPlanKind,
   type TownPlanParams,
@@ -138,16 +140,19 @@ describe('planTown', () => {
   });
 
   // The author drags the ground the town is to occupy; the town must honour it exactly.
+  // Buildings occupy real ground, so these use an area with room for several of them — the old
+  // 16x12 numbers were only reachable by letting houses overlap.
   it('keeps every building inside the dragged area', () => {
     for (const plan of TOWN_PLAN_KINDS) {
-      const town = run({ plan, size: 40, looseness: 1 });
+      const town = run({ plan, size: 40, looseness: 1, sections: [section({ buildingIds: ['cabin'] })] },
+        [], { minX: 0, minY: 0, maxX: 40, maxY: 34 });
       expect(town.length).toBeGreaterThan(4);
       for (const placement of town) {
         const cell = cellOf(groundOf(placement));
-        expect(cell.x).toBeGreaterThanOrEqual(AREA.minX);
-        expect(cell.x).toBeLessThanOrEqual(AREA.maxX);
-        expect(cell.y).toBeGreaterThanOrEqual(AREA.minY);
-        expect(cell.y).toBeLessThanOrEqual(AREA.maxY);
+        expect(cell.x).toBeGreaterThanOrEqual(0);
+        expect(cell.x).toBeLessThanOrEqual(40);
+        expect(cell.y).toBeGreaterThanOrEqual(0);
+        expect(cell.y).toBeLessThanOrEqual(34);
       }
     }
   });
@@ -190,8 +195,9 @@ describe('planTown', () => {
   // The load-bearing property: this is what separates a town from a scatter.
   it('turns every building to face the street it stands on', () => {
     for (const plan of TOWN_PLAN_KINDS) {
-      const town = run({ plan, looseness: 0, facingWobble: 0, size: 20 });
-      expect(town.length).toBeGreaterThan(6);
+      const town = run({ plan, looseness: 0, facingWobble: 0, size: 20,
+        sections: [section({ buildingIds: ['cabin'] })] });
+      expect(town.length).toBeGreaterThan(3);
       const streets = townStreets(plan, AREA, TOWN_PLAN_DEFAULTS.setback, TOWN_PLAN_DEFAULTS.seed);
       for (const placement of town) {
         const ground = groundOf(placement);
@@ -296,10 +302,12 @@ describe('planTown', () => {
   });
 
   it('centres building size on the average and never leaves the boundaries', () => {
+    // fit 'drop' so sizes come purely from the section: 'shrink' deliberately builds smaller
+    // where the ground is tight, which would pull the average down.
     const town = run({
       sections: [section({ buildingIds: ['cottage', 'cabin'], scaleMean: 1, scaleMin: 0.6, scaleMax: 1.6 })],
-      size: 24, landmarkIds: [],
-    });
+      size: 24, landmarkIds: [], fit: 'drop',
+    }, [], { minX: 0, minY: 0, maxX: 44, maxY: 38 });
     const scales = town.map((placement) => placement.scale);
     expect(Math.min(...scales)).toBeGreaterThanOrEqual(0.6);
     expect(Math.max(...scales)).toBeLessThanOrEqual(1.6);
@@ -309,8 +317,8 @@ describe('planTown', () => {
     // A mean pinned against a boundary must not push any building past it.
     const skewed = run({
       sections: [section({ buildingIds: ['cottage', 'cabin'], scaleMean: 0.65, scaleMin: 0.6, scaleMax: 1.6 })],
-      size: 24, landmarkIds: [],
-    });
+      size: 24, landmarkIds: [], fit: 'drop',
+    }, [], { minX: 0, minY: 0, maxX: 44, maxY: 38 });
     expect(Math.min(...skewed.map((p) => p.scale))).toBeGreaterThanOrEqual(0.6);
   });
 
@@ -390,6 +398,89 @@ describe('planTown', () => {
     });
   });
 
+  // Houses occupy real ground: they cannot intersect, and they cannot hang over the edge of the
+  // area. Treating them as points let both happen.
+  describe('fitting real buildings', () => {
+    const roomy = { minX: 0, minY: 0, maxX: 40, maxY: 34 };
+    const boxes = (town: FloatingArtworkPlacement[]) => town.map((placement) => townFootprint(
+      groundOf(placement),
+      geometry.sprite(placement.sourceArtId, placement.direction)!,
+      placement.scale,
+      0,
+    ));
+
+    for (const fit of ['drop', 'shrink'] as const) {
+      it(`never overlaps two buildings (${fit})`, () => {
+        const town = run({ fit, size: 60, sections: [section({ buildingIds: ['lodge', 'cottage'] })] }, [], roomy);
+        expect(town.length).toBeGreaterThan(5);
+        const all = boxes(town);
+        for (let i = 0; i < all.length; i += 1) {
+          for (let j = i + 1; j < all.length; j += 1) {
+            expect(footprintsOverlap(all[i], all[j])).toBe(false);
+          }
+        }
+      });
+
+      it(`never lets a building overhang the area (${fit})`, () => {
+        const town = run({ fit, size: 60, sections: [section({ buildingIds: ['lodge'] })] }, [], roomy);
+        expect(town.length).toBeGreaterThan(3);
+        for (const box of boxes(town)) {
+          // Exact grid half-extent of the footprint, derived independently of the planner.
+          const radius = Math.sqrt((box.rx / 48) ** 2 + (box.ry / 27) ** 2) / 2;
+          const centre = cellOf({ x: box.x, y: box.y });
+          expect(centre.x - radius).toBeGreaterThanOrEqual(roomy.minX - 1e-6);
+          expect(centre.x + radius).toBeLessThanOrEqual(roomy.maxX + 1e-6);
+          expect(centre.y - radius).toBeGreaterThanOrEqual(roomy.minY - 1e-6);
+          expect(centre.y + radius).toBeLessThanOrEqual(roomy.maxY + 1e-6);
+        }
+      });
+    }
+
+    it('honours the gap between footprints, not between centres', () => {
+      const gap = 40;
+      const town = run({ spacing: gap, size: 40, sections: [section({ buildingIds: ['lodge'] })] }, [], roomy);
+      const all = boxes(town);
+      for (let i = 0; i < all.length; i += 1) {
+        for (let j = i + 1; j < all.length; j += 1) {
+          // Padding each footprint by half the gap must still leave them clear of one another.
+          const a = { ...all[i], rx: all[i].rx + gap / 2, ry: all[i].ry + gap / 4 };
+          const b = { ...all[j], rx: all[j].rx + gap / 2, ry: all[j].ry + gap / 4 };
+          expect(footprintsOverlap(a, b)).toBe(false);
+        }
+      }
+    });
+
+    // The choice Nelson asked for, and the difference has to be real.
+    it('keeps buildings at full size when dropping, and builds smaller when shrinking', () => {
+      const tight = { minX: 0, minY: 0, maxX: 14, maxY: 12 };
+      const big = section({ buildingIds: ['lodge'], scaleMean: 1.4, scaleMin: 0.5, scaleMax: 1.5 });
+      const dropped = run({ fit: 'drop', size: 40, sections: [big] }, [], tight);
+      const shrunk = run({ fit: 'shrink', size: 40, sections: [big] }, [], tight);
+      // Dropping never goes below the section's own spread; shrinking may.
+      expect(Math.min(...dropped.map((p) => p.scale))).toBeGreaterThan(Math.min(...shrunk.map((p) => p.scale)));
+      // And shrinking fits more of them in.
+      expect(shrunk.length).toBeGreaterThan(dropped.length);
+    });
+
+    it('never shrinks a building below its section minimum', () => {
+      const tight = { minX: 0, minY: 0, maxX: 12, maxY: 10 };
+      const town = run({
+        fit: 'shrink', size: 40,
+        sections: [section({ buildingIds: ['lodge'], scaleMean: 1.2, scaleMin: 0.9, scaleMax: 1.3 })],
+      }, [], tight);
+      for (const placement of town) expect(placement.scale).toBeGreaterThanOrEqual(0.9);
+    });
+
+    it('will not build through scene art that is already there', () => {
+      const town = run({ size: 20, sections: [section({ buildingIds: ['lodge'] })] }, [], roomy);
+      const again = run({ size: 20, sections: [section({ buildingIds: ['lodge'] })] }, town, roomy);
+      const before = boxes(town);
+      for (const box of boxes(again)) {
+        for (const other of before) expect(footprintsOverlap(box, other)).toBe(false);
+      }
+    });
+  });
+
   it('builds a dense core that frays at the edge', () => {
     const town = run({ size: 24 });
     const radii = town.map((placement) => {
@@ -456,9 +547,11 @@ describe('planTown', () => {
   });
 
   it('keeps the town off the playable board when asked', () => {
-    const overBoard = { minX: 0, minY: 0, maxX: 7, maxY: 7 };
-    const free = run({ avoidPlayableBoard: false, size: 20 }, [], overBoard);
-    const kept = run({ avoidPlayableBoard: true, size: 20 }, [], overBoard);
+    // Small buildings over a generous area, so the board filter is what thins it, not the fit.
+    const overBoard = { minX: -6, minY: -6, maxX: 16, maxY: 16 };
+    const small = [section({ buildingIds: ['cabin'] })];
+    const free = run({ avoidPlayableBoard: false, size: 30, sections: small }, [], overBoard);
+    const kept = run({ avoidPlayableBoard: true, size: 30, sections: small }, [], overBoard);
     expect(free.length).toBeGreaterThan(0);
     expect(kept.length).toBeLessThanOrEqual(free.length);
     for (const placement of kept) {

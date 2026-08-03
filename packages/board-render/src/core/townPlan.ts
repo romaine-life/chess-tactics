@@ -21,7 +21,7 @@
 // turn off-axis. `looseness` scales that profile from surveyed grid to organic village, which is
 // the "which variations are acceptable" dial. A plan cannot be violated, only loosened.
 
-import { TILE_TOP_HEIGHT, TILE_TOP_WIDTH } from '../art/projectionContract';
+import { TILE_STEP_X, TILE_STEP_Y, TILE_TOP_HEIGHT, TILE_TOP_WIDTH } from '../art/projectionContract';
 import { projectBoardPoint, unprojectBoardPoint } from '../render/boardProjection';
 import { rookDirections, type Direction } from '../ui/unitCatalog';
 import {
@@ -34,6 +34,20 @@ import {
 import type { FloatingArtworkPlacement } from '../ui/boardCode';
 
 export type TownPlanKind = 'linear' | 'crossroads' | 'green' | 'cluster';
+
+export type TownFitPolicy = 'drop' | 'shrink';
+
+export const TOWN_FIT_POLICIES: readonly TownFitPolicy[] = ['drop', 'shrink'];
+
+export const TOWN_FIT_LABELS: Record<TownFitPolicy, string> = {
+  drop: 'Fewer buildings',
+  shrink: 'Smaller buildings',
+};
+
+export const TOWN_FIT_NOTES: Record<TownFitPolicy, string> = {
+  drop: 'Keep every building at its section size and site fewer of them where the ground is tight.',
+  shrink: 'Keep the count up by building smaller where it is tight, down to the section minimum.',
+};
 
 export const TOWN_PLAN_KINDS: readonly TownPlanKind[] = ['linear', 'crossroads', 'green', 'cluster'];
 
@@ -103,8 +117,16 @@ export interface TownPlanParams {
   looseness: number;
   /** 0 makes every building face its street exactly; 1 lets facings turn off-axis. */
   facingWobble: number;
-  /** Minimum separation between building ground points, in scene pixels. */
+  /** Clear ground left between two buildings' footprints, in scene pixels. */
   spacing: number;
+  /**
+   * What to do when a building will not fit — because it would overlap a neighbour or overhang
+   * the selection. Buildings are not points: a house occupies real ground and cannot intersect
+   * another one, so something has to give.
+   * 'drop' keeps every building at its section's size and sites fewer of them.
+   * 'shrink' keeps the count up by building smaller where it is tight, down to the section floor.
+   */
+  fit: TownFitPolicy;
   /** Skip buildings whose ground point lands on a playable board cell. */
   avoidPlayableBoard: boolean;
   seed: number;
@@ -121,7 +143,8 @@ export const TOWN_PLAN_DEFAULTS: TownPlanParams = {
   setback: 78,
   looseness: 0.45,
   facingWobble: 0.2,
-  spacing: 62,
+  spacing: 10,
+  fit: 'shrink',
   avoidPlayableBoard: true,
   seed: 1,
 };
@@ -355,6 +378,62 @@ export function townStreets(
   return streets;
 }
 
+/**
+ * The ground a building occupies, as an ellipse in scene pixels.
+ *
+ * Houses cannot intersect, so they need real extent — a point plus a "minimum spacing" says
+ * nothing, because a lodge is several hundred pixels across and the gap between two ground points
+ * is not the gap between two buildings. The ellipse is wide as the drawn sprite and half as deep,
+ * which is what a rectangular footprint looks like foreshortened onto this projection.
+ */
+export interface TownFootprint {
+  x: number;
+  y: number;
+  rx: number;
+  ry: number;
+}
+
+/** Ground the building covers, padded by half the requested gap so two of them leave the full gap. */
+export function townFootprint(
+  ground: ForestGroundPoint,
+  sprite: { w: number; h: number; scale: number },
+  instanceScale: number,
+  gap: number,
+): TownFootprint {
+  const drawnWidth = sprite.w * sprite.scale * instanceScale;
+  // Sprites are square frames around art that does not fill them, so the mass is a fraction of the
+  // frame rather than all of it.
+  const rx = drawnWidth * 0.34 + Math.max(0, gap) / 2;
+  return { x: ground.x, y: ground.y, rx, ry: rx * 0.5 };
+}
+
+export function footprintsOverlap(a: TownFootprint, b: TownFootprint): boolean {
+  const dx = (a.x - b.x) / (a.rx + b.rx);
+  const dy = (a.y - b.y) / (a.ry + b.ry);
+  return dx * dx + dy * dy < 1;
+}
+
+/**
+ * The footprint's half-extent in GRID cells, on both axes.
+ *
+ * Exact rather than sampled. Unprojecting the ellipse gives
+ *   gx = gx0 + (rx cos t / stepX + ry sin t / stepY) / 2
+ * whose extreme over t is sqrt((rx/stepX)^2 + (ry/stepY)^2) / 2 — and the same falls out for gy,
+ * so one radius covers both. Sampling points on the ellipse misses the true extreme; testing its
+ * bounding-box corners overshoots it and throws away usable ground.
+ */
+export function footprintGridRadius(box: TownFootprint): number {
+  return Math.sqrt((box.rx / TILE_STEP_X) ** 2 + (box.ry / TILE_STEP_Y) ** 2) / 2;
+}
+
+/** True when the whole footprint sits inside the selection, not merely its centre. */
+function footprintWithin(box: TownFootprint, area: TownBounds): boolean {
+  const radius = footprintGridRadius(box);
+  const centre = unprojectBoardPoint({ left: box.x, top: box.y });
+  return centre.x - radius >= area.minX && centre.x + radius <= area.maxX
+    && centre.y - radius >= area.minY && centre.y + radius <= area.maxY;
+}
+
 interface TownPlot {
   ground: ForestGroundPoint;
   /** Normalised position along the town's long axis, 0..1. Decides which section claims it. */
@@ -405,8 +484,10 @@ export interface TownPlanResult {
   plotsOffered: number;
   /** Plots dropped for landing on the playable board. */
   rejectedOnBoard: number;
-  /** Plots dropped for standing too close to something already placed. */
+  /** Plots dropped because the building would have overlapped another. */
   rejectedSpacing: number;
+  /** Plots dropped because the building would have overhung the selection. */
+  rejectedOutside: number;
 }
 
 /**
@@ -416,7 +497,7 @@ export interface TownPlanResult {
 export function planTown(input: TownPlanInput): TownPlanResult {
   const { townId, bounds, params, geometry, board, existing } = input;
   const empty: TownPlanResult = {
-    placements: [], plotsOffered: 0, rejectedOnBoard: 0, rejectedSpacing: 0,
+    placements: [], plotsOffered: 0, rejectedOnBoard: 0, rejectedSpacing: 0, rejectedOutside: 0,
   };
   // Only sections that can actually draw something count, so an empty section neither takes a
   // share of the town nor leaves a hole in it.
@@ -488,8 +569,8 @@ export function planTown(input: TownPlanInput): TownPlanResult {
           x: street.x0 + along.x * (t + slideAlong) + normal.x * offset * side,
           y: street.y0 + along.y * (t + slideAlong) + normal.y * offset * side,
         };
-        // The selection is a hard boundary. It is a GRID rect, so containment is tested after
-        // unprojecting the ground point — the region is a diamond on screen, not a rectangle.
+        // Coarse reject on the plot centre; the real boundary test is on the building's whole
+        // footprint once its size is known, since the sprite reaches well past its ground point.
         const cell = unprojectBoardPoint({ left: ground.x, top: ground.y });
         if (cell.x < area.minX || cell.x > area.maxX
           || cell.y < area.minY || cell.y > area.maxY) continue;
@@ -530,14 +611,17 @@ export function planTown(input: TownPlanInput): TownPlanResult {
     return a - b;
   });
 
-  const occupied: ForestGroundPoint[] = [];
-  for (const placement of existing) {
-    const ground = floatingArtworkGroundPoint(placement, geometry);
-    if (ground) occupied.push(ground);
-  }
-
   const prefix = townIdPrefix(townId);
   const spacing = Math.max(0, params.spacing);
+
+  // Scene art already on the board takes up ground too, so a town cannot be built through it.
+  const occupied: TownFootprint[] = [];
+  for (const placement of existing) {
+    const ground = floatingArtworkGroundPoint(placement, geometry);
+    const sprite = geometry.sprite(placement.sourceArtId, placement.direction);
+    if (ground && sprite) occupied.push(townFootprint(ground, sprite, placement.scale, spacing));
+  }
+
 
   const produced: Array<{ placement: FloatingArtworkPlacement; ground: ForestGroundPoint }> = [];
   const landmarks = params.landmarkIds.filter((id) => geometry.directions(id).length > 0);
@@ -545,6 +629,7 @@ export function planTown(input: TownPlanInput): TownPlanResult {
 
   let rejectedOnBoard = 0;
   let rejectedSpacing = 0;
+  let rejectedOutside = 0;
   for (const plot of ordered) {
     if (produced.length >= params.size) break;
     if (params.avoidPlayableBoard && onPlayableBoard(plot.ground, board)) { rejectedOnBoard += 1; continue; }
@@ -582,23 +667,43 @@ export function planTown(input: TownPlanInput): TownPlanResult {
       Math.min(8, scaleHigh),
     ) * (isLandmark ? 1.15 : 1);
 
-    const scale = clamp(Math.round(instanceScale * 1000) / 1000, 0.1, 8);
-    const placement: FloatingArtworkPlacement = {
-      id: `${prefix}${serial}`,
-      sourceArtId,
-      ...groundPointToPixel(plot.ground, sprite, scale),
-      direction,
-      scale,
-    };
+    // A building is not a point. Try it at its section's size, and if it will not fit, either take
+    // the plot away or build smaller on it, depending on the fit policy.
+    const wanted = clamp(Math.round(instanceScale * 1000) / 1000, 0.1, 8);
+    const floor = Math.max(0.1, Math.min(scaleLow, wanted));
+    let placed: { placement: FloatingArtworkPlacement; ground: ForestGroundPoint; box: TownFootprint } | null = null;
+    let blockedBy: 'overlap' | 'outside' = 'overlap';
 
-    // Measure against where the sprite actually lands, after integer rounding.
-    const seated = floatingArtworkGroundPoint(placement, geometry) ?? plot.ground;
-    if (spacing > 0 && occupied.some((point) => Math.hypot(point.x - seated.x, point.y - seated.y) < spacing)) {
-      rejectedSpacing += 1;
+    for (let attempt = 0; attempt < (params.fit === 'shrink' ? 12 : 1); attempt += 1) {
+      // Step down geometrically, never below the section's own minimum.
+      const scale = attempt === 0 ? wanted : Math.max(floor, Math.round(wanted * 0.88 ** attempt * 1000) / 1000);
+      const candidate: FloatingArtworkPlacement = {
+        id: `${prefix}${serial}`,
+        sourceArtId,
+        ...groundPointToPixel(plot.ground, sprite, scale),
+        direction,
+        scale,
+      };
+      // Measure against where the sprite actually lands, after integer rounding.
+      const seated = floatingArtworkGroundPoint(candidate, geometry) ?? plot.ground;
+      const box = townFootprint(seated, sprite, scale, spacing);
+      if (!footprintWithin(box, area)) {
+        blockedBy = 'outside';
+      } else if (occupied.some((other) => footprintsOverlap(box, other))) {
+        blockedBy = 'overlap';
+      } else {
+        placed = { placement: candidate, ground: seated, box };
+        break;
+      }
+      if (scale <= floor) break;
+    }
+
+    if (!placed) {
+      if (blockedBy === 'outside') rejectedOutside += 1; else rejectedSpacing += 1;
       continue;
     }
-    occupied.push(seated);
-    produced.push({ placement, ground: seated });
+    occupied.push(placed.box);
+    produced.push({ placement: placed.placement, ground: placed.ground });
     serial += 1;
   }
 
@@ -609,5 +714,6 @@ export function planTown(input: TownPlanInput): TownPlanResult {
     plotsOffered: plots.length,
     rejectedOnBoard,
     rejectedSpacing,
+    rejectedOutside,
   };
 }

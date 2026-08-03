@@ -28,6 +28,9 @@ import {
   type ForestSpeciesGeometry,
 } from '../core/forestScatter';
 import {
+  TOWN_FIT_LABELS,
+  TOWN_FIT_NOTES,
+  TOWN_FIT_POLICIES,
   TOWN_PLAN_DEFAULTS,
   TOWN_PLAN_KINDS,
   TOWN_PLAN_LABELS,
@@ -40,6 +43,7 @@ import {
   townBoundsInTiles,
   townBoundsScenePolygon,
   type TownBounds,
+  type TownFitPolicy,
   type TownPlanKind,
 } from '../core/townPlan';
 import { BoardSceneLayer } from '../render/BoardSceneLayer';
@@ -3115,7 +3119,7 @@ export function LevelEditor(): ReactElement {
   const [townDragBounds, setTownDragBounds] = useState<TownBounds | null>(null);
   const townDragRef = useRef<{ pointerId: number; cellX: number; cellY: number } | null>(null);
   const [townSited, setTownSited] = useState<
-    { placed: number; onBoard: number; spacing: number; offered: number } | null>(null);
+    { placed: number; onBoard: number; spacing: number; outside: number; offered: number } | null>(null);
   const selectedTown = boardTowns.find((town) => town.id === selectedTownId) ?? null;
   const townArea: TownBounds | null = selectedTown?.bounds ?? null;
   // Knob edits live in React state and are written into the document by Regenerate, the same way
@@ -4250,6 +4254,7 @@ export function LevelEditor(): ReactElement {
         looseness: town.looseness,
         facingWobble: town.facingWobble,
         spacing: town.spacing,
+        fit: town.fit as TownFitPolicy,
         avoidPlayableBoard: town.avoidPlayableBoard,
         seed: town.seed,
       },
@@ -4261,6 +4266,7 @@ export function LevelEditor(): ReactElement {
       placed: result.placements.length,
       onBoard: result.rejectedOnBoard,
       spacing: result.rejectedSpacing,
+      outside: result.rejectedOutside,
       offered: result.plotsOffered,
     });
     const next = cloneEditorBoard(current);
@@ -4305,6 +4311,7 @@ export function LevelEditor(): ReactElement {
       looseness: template?.looseness ?? TOWN_PLAN_DEFAULTS.looseness,
       facingWobble: template?.facingWobble ?? TOWN_PLAN_DEFAULTS.facingWobble,
       spacing: template?.spacing ?? TOWN_PLAN_DEFAULTS.spacing,
+      fit: template?.fit ?? TOWN_PLAN_DEFAULTS.fit,
       avoidPlayableBoard: template?.avoidPlayableBoard ?? TOWN_PLAN_DEFAULTS.avoidPlayableBoard,
       seed: randomGeneratorSeed(),
     };
@@ -4325,6 +4332,7 @@ export function LevelEditor(): ReactElement {
       looseness: TOWN_PLAN_DEFAULTS.looseness,
       facingWobble: TOWN_PLAN_DEFAULTS.facingWobble,
       spacing: TOWN_PLAN_DEFAULTS.spacing,
+      fit: TOWN_PLAN_DEFAULTS.fit,
       avoidPlayableBoard: TOWN_PLAN_DEFAULTS.avoidPlayableBoard,
     });
   };
@@ -9882,7 +9890,20 @@ export function LevelEditor(): ReactElement {
               <h2 className="le-card-subhead">Streets</h2>
               <SliderRow label={`Frontage per building · ${pixelsInTilesAcross(selectedTown.plotWidth).toFixed(1)} tiles`} value={selectedTown.plotWidth} set={(value) => updateTown(selectedTown.id, { plotWidth: value })} min={40} max={300} step={5} nudge={5} dflt={TOWN_PLAN_DEFAULTS.plotWidth} />
               <SliderRow label={`Street setback · ${pixelsInTilesAcross(selectedTown.setback).toFixed(1)} tiles`} value={selectedTown.setback} set={(value) => updateTown(selectedTown.id, { setback: value })} min={20} max={260} step={2} nudge={2} dflt={TOWN_PLAN_DEFAULTS.setback} />
-              <SliderRow label={`Minimum spacing · ${pixelsInTilesAcross(selectedTown.spacing).toFixed(1)} tiles`} value={selectedTown.spacing} set={(value) => updateTown(selectedTown.id, { spacing: value })} min={0} max={200} step={2} nudge={2} dflt={TOWN_PLAN_DEFAULTS.spacing} />
+              <SliderRow label={`Gap between buildings · ${pixelsInTilesAcross(selectedTown.spacing).toFixed(1)} tiles`} value={selectedTown.spacing} set={(value) => updateTown(selectedTown.id, { spacing: value })} min={0} max={200} step={2} nudge={2} dflt={TOWN_PLAN_DEFAULTS.spacing} />
+              <h2 className="le-card-subhead">When a building will not fit</h2>
+              <div className="le-seg" role="group" aria-label="Fit policy">
+                {TOWN_FIT_POLICIES.map((policy) => (
+                  <ChromeButton unit="inner-text-button"
+                    key={policy}
+                    className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', selectedTown.fit === policy && 'active')}
+                    aria-pressed={selectedTown.fit === policy}
+                    title={TOWN_FIT_NOTES[policy]}
+                    onClick={() => updateTown(selectedTown.id, { fit: policy })}
+                  >{TOWN_FIT_LABELS[policy]}</ChromeButton>
+                ))}
+              </div>
+              <p className="le-board-note">{TOWN_FIT_NOTES[selectedTown.fit as TownFitPolicy]} Buildings never overlap each other and never overhang the area either way.</p>
               <h2 className="le-card-subhead">Acceptable variation</h2>
               <SliderRow label={`Looseness · ${Math.round(selectedTown.looseness * 100)}%`} value={selectedTown.looseness} set={(value) => updateTown(selectedTown.id, { looseness: value })} min={0} max={1} step={0.05} nudge={0.05} dflt={TOWN_PLAN_DEFAULTS.looseness} />
               <SliderRow label={`Off-axis buildings · ${Math.round(selectedTown.facingWobble * 100)}%`} value={selectedTown.facingWobble} set={(value) => updateTown(selectedTown.id, { facingWobble: value })} min={0} max={1} step={0.05} nudge={0.05} dflt={TOWN_PLAN_DEFAULTS.facingWobble} />
@@ -9916,11 +9937,13 @@ export function LevelEditor(): ReactElement {
               {townSited && townSited.placed < selectedTown.size ? (
                 <p className="le-board-note">
                   Placed {townSited.placed} of {selectedTown.size}.{' '}
-                  {townSited.onBoard >= Math.max(1, townSited.spacing)
-                    ? `${townSited.onBoard} plots fell on the playable board — drag clear of it, or turn off Keep off playable board.`
-                    : townSited.spacing > 0
-                      ? `${townSited.spacing} plots were too close to something already there — lower Minimum spacing.`
-                      : 'The area ran out of street frontage — drag a bigger area or lower Frontage per building.'}
+                  {townSited.onBoard >= Math.max(1, townSited.spacing, townSited.outside)
+                    ? `${townSited.onBoard} plot${townSited.onBoard === 1 ? '' : 's'} fell on the playable board — drag clear of it, or turn off Keep off playable board.`
+                    : townSited.outside >= Math.max(1, townSited.spacing)
+                      ? `${townSited.outside} building${townSited.outside === 1 ? '' : 's'} would have overhung the area — drag a bigger area, or build smaller.`
+                      : townSited.spacing > 0
+                        ? `${townSited.spacing} building${townSited.spacing === 1 ? '' : 's'} had no room beside their neighbours — lower Gap between buildings, or build smaller.`
+                        : 'The area ran out of street frontage — drag a bigger area or lower Frontage per building.'}
                 </p>
               ) : townSited ? <p className="le-board-note">Placed {townSited.placed} buildings.</p> : null}
               {selectedTown.sections.every((section) => !section.buildingIds.length)

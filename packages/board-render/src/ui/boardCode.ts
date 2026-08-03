@@ -235,6 +235,8 @@ export interface BoardTown {
   looseness: number;
   facingWobble: number;
   spacing: number;
+  /** 'drop' sites fewer buildings where it is tight; 'shrink' builds smaller instead. */
+  fit: string;
   avoidPlayableBoard: boolean;
   seed: number;
 }
@@ -700,7 +702,8 @@ function cleanTowns(value: unknown): BoardTown[] {
       setback: clampNumber(t.setback, 78, 1, 1000),
       looseness: clampNumber(t.looseness, 0.45, 0, 1),
       facingWobble: clampNumber(t.facingWobble, 0.2, 0, 1),
-      spacing: clampNumber(t.spacing, 62, 0, 1000),
+      spacing: clampNumber(t.spacing, 10, 0, 1000),
+      fit: t.fit === 'drop' ? 'drop' : 'shrink',
       avoidPlayableBoard: t.avoidPlayableBoard !== false,
       seed: Math.round(clampNumber(t.seed, 1, 1, 0xffffffff)),
     });
