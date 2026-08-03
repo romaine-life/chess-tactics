@@ -1600,6 +1600,22 @@ h1 {
 .predrawn-generation-frame-toolbar {
   justify-content: flex-start;
 }
+.predrawn-generation-frame-toolbar {
+  flex-wrap: wrap;
+}
+.predrawn-generation-frame-size {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+.predrawn-generation-frame-size-label {
+  color: var(--ds-ink-3, #9eb1c5);
+  font-size: var(--ds-text-xs);
+}
+.predrawn-generation-frame-size .settings-stepper-field {
+  width: 88px;
+}
 .predrawn-generation-frame-readout {
   min-width: 112px;
   color: var(--ds-ink-1, #eff9ff);
@@ -1649,6 +1665,18 @@ h1 {
   pointer-events: none;
   position: absolute;
   z-index: 40000;
+}
+/* The level's own camera boundary (ADR-0301) drawn inside the crop, in the same dashed language
+   the Board page uses: art outside it is unreachable, art inside it is what a player can pan to at
+   maximum zoom-out. Paint comes from .le-camera-boundary; only the stacking order is local. */
+.predrawn-generation-frame-stage .le-camera-boundary {
+  z-index: 39999;
+}
+/* The boundary usually reaches the crop edge here, so its Board-page label — which hangs above the
+   box — would be clipped away by the stage. Seat it inside the box instead; that label is the only
+   thing telling this box apart from the required-art box. */
+.predrawn-generation-frame-stage .le-camera-boundary-label {
+  transform: none;
 }
 .predrawn-generation-frame-footer p.is-error {
   color: #ffad9d;

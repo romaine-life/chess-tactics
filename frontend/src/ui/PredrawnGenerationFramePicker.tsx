@@ -10,10 +10,14 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  centeredPlayableBoardFramingBounds,
   initialPredrawnGenerationFrame,
   normalizePredrawnGenerationFrame,
+  predrawnGenerationBoundsFromCentered,
   predrawnGenerationFrameBoardPan,
+  predrawnGenerationFrameContaining,
   predrawnGenerationRequiredBounds,
+  resolvedBoardCameraBounds,
   validatePredrawnGenerationFrame,
   type EditorBoard,
   type PredrawnGenerationFrame,
@@ -26,6 +30,7 @@ import {
   type PredrawnGenerationFrameStatus,
 } from './predrawnGenerationFrameStatus';
 import { ChromeButton } from './shared/ChromeButton';
+import { Stepper } from './shared/Stepper';
 
 const MIN_FRAME_WIDTH = 320;
 const MAX_FRAME_WIDTH = 8192;
@@ -79,9 +84,30 @@ export function PredrawnGenerationFramePicker({
   const sourceBoard = useMemo(() => boardForTopSurfaceArtExport(board), [board]);
   const requiredBounds = useMemo(() => predrawnGenerationRequiredBounds(sourceBoard), [sourceBoard]);
   const fittedFrame = useMemo(() => initialPredrawnGenerationFrame(sourceBoard), [sourceBoard]);
+  // The two rectangles the owner already authored elsewhere, in this frame's coordinates: the
+  // board's own opening/thumbnail composition, and the Board page's camera boundary — the box a
+  // player can actually reach at maximum zoom-out, so art inside it is what must exist.
+  const openingBounds = useMemo(
+    () => predrawnGenerationBoundsFromCentered(board, centeredPlayableBoardFramingBounds(board)),
+    [board],
+  );
+  const cameraBounds = useMemo(
+    () => predrawnGenerationBoundsFromCentered(board, resolvedBoardCameraBounds(board)),
+    [board],
+  );
+  const openingFrame = useMemo(
+    () => predrawnGenerationFrameContaining(sourceBoard, openingBounds),
+    [openingBounds, sourceBoard],
+  );
+  const cameraFrame = useMemo(
+    () => predrawnGenerationFrameContaining(sourceBoard, cameraBounds),
+    [cameraBounds, sourceBoard],
+  );
+  // With nothing authored yet, open on the composition the owner already recognises — the view a
+  // level loads at — instead of the tightest legal crop around gameplay geometry.
   const editorFrame = useMemo(
-    () => normalizePredrawnGenerationFrame(initialFrame) ?? fittedFrame,
-    [fittedFrame, initialFrame],
+    () => normalizePredrawnGenerationFrame(initialFrame) ?? openingFrame,
+    [openingFrame, initialFrame],
   );
   const [frame, setFrame] = useState(editorFrame);
   const [stageSize, setStageSize] = useState({ width: 1280, height: 720 });
@@ -191,12 +217,34 @@ export function PredrawnGenerationFramePicker({
     zoomBy(event.deltaY < 0 ? 0.9 : 1.1);
   };
 
-  const requiredOutline = {
-    left: (requiredBounds.minX - frame.x) * displayScale,
-    top: (requiredBounds.minY - frame.y) * displayScale,
-    width: requiredBounds.width * displayScale,
-    height: requiredBounds.height * displayScale,
-  };
+  const outlineFor = (bounds: { minX: number; minY: number; width: number; height: number }) => ({
+    left: (bounds.minX - frame.x) * displayScale,
+    top: (bounds.minY - frame.y) * displayScale,
+    width: bounds.width * displayScale,
+    height: bounds.height * displayScale,
+  });
+  const requiredOutline = outlineFor(requiredBounds);
+  const cameraOutline = outlineFor(cameraBounds);
+  const presets: Array<{ id: string; label: string; title: string; frame: PredrawnGenerationFrame }> = [
+    {
+      id: 'opening',
+      label: 'Level opening view',
+      title: 'The composition this level loads at, and the one its thumbnail shows, widened to 16:9.',
+      frame: openingFrame,
+    },
+    {
+      id: 'camera',
+      label: 'Camera boundary',
+      title: 'The Board page camera boundary — everything a player can reach at maximum zoom-out.',
+      frame: cameraFrame,
+    },
+    {
+      id: 'required',
+      label: 'Fit required art',
+      title: 'The tightest legal crop around gameplay-authoritative art.',
+      frame: fittedFrame,
+    },
+  ];
 
   return createPortal(
     <div
@@ -214,7 +262,7 @@ export function PredrawnGenerationFramePicker({
         <header className="predrawn-generation-frame-header">
           <div>
             <h2 id="predrawn-generation-frame-title">Choose the generation frame</h2>
-            <p>Drag the scene and zoom until this 16:9 crop is the exact Image 1 you want to hand off. The cyan box is required gameplay-authoritative art and must stay inside.</p>
+            <p>Start from a preset, then drag the scene, type an exact width, or zoom until this 16:9 crop is the exact Image 1 you want to hand off. The tight box is required gameplay-authoritative art and must stay inside; the labelled box is the level’s camera boundary.</p>
           </div>
           <ChromeButton unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
@@ -223,24 +271,43 @@ export function PredrawnGenerationFramePicker({
         </header>
 
         <div className="predrawn-generation-frame-toolbar">
-          <div className="skirmish-view-row" role="group" aria-label="Generation frame zoom">
-            <ChromeButton unit="inner-minus-key"
-              className={chromeUnitClassNames('inner-minus-key', 'le-seg-btn', 'le-icon-btn')}
-              onClick={() => zoomBy(1.1)}
-              aria-label="Show more scenery"
-            >−</ChromeButton>
-            <span className="predrawn-generation-frame-readout">{frame.width} × {frame.height}</span>
-            <ChromeButton unit="inner-plus-key"
-              className={chromeUnitClassNames('inner-plus-key', 'le-seg-btn', 'le-icon-btn')}
-              onClick={() => zoomBy(0.9)}
-              aria-label="Crop tighter"
-            >+</ChromeButton>
+          <div className="predrawn-generation-frame-size" role="group" aria-label="Generation frame width">
+            <span className="predrawn-generation-frame-size-label">Width</span>
+            <Stepper
+              suffix="px"
+              decreaseLabel="Crop tighter"
+              increaseLabel="Show more scenery"
+              onDecrease={() => zoomBy(0.9)}
+              onIncrease={() => zoomBy(1.1)}
+              edit={{
+                value: frame.width,
+                min: MIN_FRAME_WIDTH,
+                format: (value) => String(value),
+                parse: (raw) => {
+                  const parsed = Number(raw.trim().replace(/px$/i, ''));
+                  return raw.trim() && Number.isFinite(parsed) ? parsed : null;
+                },
+                onCommit: (value) => setFrame((current) => resizePredrawnGenerationFrame(current, value)),
+                ariaLabel: 'Generation frame width in pixels',
+              }}
+            />
+            <span className="predrawn-generation-frame-readout">× {frame.height} · 16:9</span>
           </div>
-          <div className="skirmish-view-row">
-            <ChromeButton unit="inner-text-button"
-              className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-              onClick={() => setFrame(fittedFrame)}
-            >Fit required art</ChromeButton>
+          <div className="skirmish-view-row" role="group" aria-label="Generation frame presets">
+            {presets.map((preset) => (
+              <ChromeButton unit="inner-text-button"
+                key={preset.id}
+                data-testid={`predrawn-generation-frame-preset-${preset.id}`}
+                className={chromeUnitClassNames(
+                  'inner-text-button',
+                  'le-seg-btn',
+                  samePredrawnGenerationFrame(frame, preset.frame) && 'active',
+                )}
+                aria-pressed={samePredrawnGenerationFrame(frame, preset.frame)}
+                title={preset.title}
+                onClick={() => setFrame(preset.frame)}
+              >{preset.label}</ChromeButton>
+            ))}
             <ChromeButton unit="inner-text-button"
               className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
               onClick={() => setFrame(editorFrame)}
@@ -273,6 +340,12 @@ export function PredrawnGenerationFramePicker({
               onSceneFirstFrame={acknowledgeScene}
               onFrameError={failPaint}
             />
+            <div
+              className="le-camera-boundary"
+              data-testid="predrawn-generation-frame-camera-outline"
+              style={cameraOutline}
+              aria-hidden="true"
+            ><span className="le-camera-boundary-label">Camera boundary</span></div>
             <div
               className="predrawn-generation-frame-required-outline"
               style={requiredOutline}

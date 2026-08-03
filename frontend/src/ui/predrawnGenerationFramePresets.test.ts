@@ -1,0 +1,95 @@
+import { describe, expect, it } from 'vitest';
+import {
+  centeredPlayableBoardFramingBounds,
+  defaultBoardCameraBounds,
+  initialPredrawnGenerationFrame,
+  predrawnGenerationBoundsFromCentered,
+  predrawnGenerationFrameContaining,
+  predrawnGenerationRequiredBounds,
+  resolvedBoardCameraBounds,
+  validatePredrawnGenerationFrame,
+  type EditorBoard,
+} from '@chess-tactics/board-render';
+
+const board = (cols: number, rows: number, extra: Partial<EditorBoard> = {}): EditorBoard => {
+  const cells: Record<string, string> = {};
+  for (let y = 0; y < rows; y += 1) for (let x = 0; x < cols; x += 1) cells[`${x},${y}`] = 'grass-surf-0';
+  return {
+    cols, rows, cells, units: {}, doodads: {}, props: {}, cover: {},
+    features: {}, featureCuts: {}, featureExits: {}, ...extra,
+  };
+};
+
+function contains(
+  frame: { x: number; y: number; width: number; height: number },
+  bounds: { minX: number; minY: number; width: number; height: number },
+): boolean {
+  return frame.x <= bounds.minX
+    && frame.y <= bounds.minY
+    && frame.x + frame.width >= bounds.minX + bounds.width
+    && frame.y + frame.height >= bounds.minY + bounds.height;
+}
+
+describe('generation-frame presets', () => {
+  it('maps a board-centred rectangle into generation space without resizing it', () => {
+    const subject = board(9, 5);
+    const opening = centeredPlayableBoardFramingBounds(subject);
+    const converted = predrawnGenerationBoundsFromCentered(subject, opening);
+
+    expect(converted.width).toBe(opening.width);
+    expect(converted.height).toBe(opening.height);
+    // The playable envelope the frame speaks in is centred on the same world content, so the
+    // converted opening view sits symmetrically around it rather than drifting by the origin.
+    const required = predrawnGenerationRequiredBounds(subject);
+    const openingCenterX = converted.minX + converted.width / 2;
+    const requiredCenterX = required.minX + required.width / 2;
+    expect(Math.abs(openingCenterX - requiredCenterX)).toBeLessThan(1);
+  });
+
+  it('shows the whole level opening view in an applicable 16:9 frame', () => {
+    const subject = board(9, 5);
+    const opening = predrawnGenerationBoundsFromCentered(
+      subject,
+      centeredPlayableBoardFramingBounds(subject),
+    );
+    const frame = predrawnGenerationFrameContaining(subject, opening);
+
+    expect(validatePredrawnGenerationFrame(subject, frame).ok).toBe(true);
+    expect(contains(frame, opening)).toBe(true);
+    expect(frame.width * 9).toBe(frame.height * 16);
+  });
+
+  it('shows the whole camera boundary, including an author-widened one', () => {
+    const wide = defaultBoardCameraBounds({ cols: 6, rows: 6 });
+    const subject = board(6, 6, {
+      cameraBounds: {
+        minX: wide.minX - 900,
+        minY: wide.minY - 400,
+        width: wide.width + 1800,
+        height: wide.height + 800,
+      },
+    });
+    const camera = predrawnGenerationBoundsFromCentered(subject, resolvedBoardCameraBounds(subject));
+    const frame = predrawnGenerationFrameContaining(subject, camera);
+
+    expect(validatePredrawnGenerationFrame(subject, frame).ok).toBe(true);
+    expect(contains(frame, camera)).toBe(true);
+    // A camera boundary the author widened must produce a wider crop than the tightest legal one.
+    expect(frame.width).toBeGreaterThan(initialPredrawnGenerationFrame(subject).width);
+  });
+
+  it('still contains protected gameplay art when a preset rectangle is smaller than it', () => {
+    const subject = board(8, 8);
+    const tiny = { minX: 0, minY: 0, width: 32, height: 18 };
+    const frame = predrawnGenerationFrameContaining(subject, tiny);
+
+    expect(validatePredrawnGenerationFrame(subject, frame).ok).toBe(true);
+    expect(contains(frame, predrawnGenerationRequiredBounds(subject))).toBe(true);
+  });
+
+  it('leaves the tightest legal fit unchanged', () => {
+    const subject = board(7, 4);
+    expect(predrawnGenerationFrameContaining(subject, predrawnGenerationRequiredBounds(subject)))
+      .toEqual(initialPredrawnGenerationFrame(subject));
+  });
+});
