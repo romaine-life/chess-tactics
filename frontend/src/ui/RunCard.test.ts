@@ -27,14 +27,14 @@ describe('Run acquisition-target disclosure', () => {
     const oneUnit = offerOf('q', 17, 0, 8, 8, 1);
     const multiUnit = offerOf('pppkb', 17, 1, 8, 8, 1);
 
-    expect(oneUnit.cardType).toBe('tactical');
+    expect(oneUnit.cardType).toBe('legatine');
     expect(runCardGrants(oneUnit)).toEqual([{
       unit: 'queen',
       count: 1,
-      plaguedIndices: [],
-      ability: { state: 'discipline', index: 0 },
+      cacochymicIndices: [],
+      ability: { state: 'adlected', index: 0 },
     }]);
-    expect(multiUnit.cardType).toBe('tactical');
+    expect(multiUnit.cardType).toBe('legatine');
     expect(runCardGrants(multiUnit).every((grant) => !grant.ability)).toBe(true);
   });
 
@@ -46,7 +46,7 @@ describe('Run acquisition-target disclosure', () => {
     const revealed = runCardGrants(offer, { purchased: true });
     const marked = revealed.filter((grant) => grant.ability);
     expect(marked).toHaveLength(1);
-    expect(marked[0].ability?.state).toBe('marshalled');
+    expect(marked[0].ability?.state).toBe('agminate');
     expect(marked[0].ability!.index).toBeLessThan(marked[0].count);
   });
 
@@ -69,7 +69,7 @@ describe('Run Concinnous card disclosure', () => {
     expect(offer.effectTargetIndex).toBeGreaterThanOrEqual(0);
     expect(runCardGrants(offer).every((grant) => !grant.ability)).toBe(true);
     expect(runCardGrants(offer, { purchased: true }).some((grant) => (
-      grant.ability?.state === 'positioned'
+      grant.ability?.state === 'eutactic'
     ))).toBe(true);
     expect(concinnousTargetLabel(offer)).toMatch(/^(Pawn [123]|Knight)$/);
   });

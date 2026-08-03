@@ -10,7 +10,7 @@ partially_supersedes:
   - "[ADR-0372](0372-a-card-sounds-like-a-card-when-it-is-handled.md)'s committed cue assignment and its asserted Cards/Relics asymmetry"
 ---
 
-# ADR-0374: The profile owns what an interface cue sounds like
+# ADR-0375: The profile owns what an interface cue sounds like
 
 ## Context
 

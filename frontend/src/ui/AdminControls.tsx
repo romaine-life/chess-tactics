@@ -258,7 +258,7 @@ export function AdminControls({
                     value={targetUnitId}
                     options={targetOptions}
                     onChange={setTargetUnitId}
-                    ariaLabel="Discipline target unit"
+                    ariaLabel="Adlected target unit"
                     disabled={!run || busy !== null}
                   />
                 ) : null}
@@ -355,7 +355,7 @@ export function AdminControls({
                 value={targetUnitId}
                 options={targetOptions}
                 onChange={setTargetUnitId}
-                ariaLabel="Discipline target unit"
+                ariaLabel="Adlected target unit"
                 disabled={!run || busy !== null}
               />
             ) : null}

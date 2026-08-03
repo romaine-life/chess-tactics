@@ -3536,7 +3536,7 @@ async function main() {
     relicReference.statusCode !== 200
     || !relicReference.body.includes('<title>Royal Decree</title>')
     || !relicReference.body.includes('<meta property="og:title" content="Royal Decree">')
-    || !relicReference.body.includes('<meta property="og:description" content="Your King gains Positioned.">')
+    || !relicReference.body.includes('<meta property="og:description" content="Your King gains Eutactic.">')
     || !relicReference.body.includes('<meta property="og:image:width" content="64">')
     || !relicReference.body.includes('<meta property="og:image:height" content="64">')
     || !relicReference.body.includes('<meta name="twitter:card" content="summary">')
@@ -3552,7 +3552,7 @@ async function main() {
   if (
     unknownRelicReference.statusCode !== 200
     || !unknownRelicReference.body.includes('<meta property="og:title" content="Chess Tactics">')
-    || unknownRelicReference.body.includes('Your King gains Positioned')
+    || unknownRelicReference.body.includes('Your King gains Eutactic')
   ) {
     throw new Error(`Unknown relic ids should retain the generic unfurl: ${unknownRelicReference.statusCode}`);
   }
@@ -4024,15 +4024,15 @@ async function main() {
   const activeRunStartingArmy = [activeRunKing, activeRunPawnA, activeRunPawnB];
   const activeRunNumberState = { pawn: 3, knight: 1, bishop: 1, rook: 1, queen: 1, king: 2 };
   const activeRunOffers = [
-    { id: 'p', offerId: 'opening-0-p', pieces: ['pawn'], value: 1, cost: 1, cardType: null, effectSeed: 1704, plaguedPieceIndex: null, effectTargetIndex: null },
-    { id: 'k', offerId: 'opening-1-k', pieces: ['knight'], value: 3, cost: 3, cardType: null, effectSeed: 1705, plaguedPieceIndex: null, effectTargetIndex: null },
+    { id: 'p', offerId: 'opening-0-p', pieces: ['pawn'], value: 1, cost: 1, cardType: null, effectSeed: 1704, cacochymicPieceIndex: null, effectTargetIndex: null },
+    { id: 'k', offerId: 'opening-1-k', pieces: ['knight'], value: 3, cost: 3, cardType: null, effectSeed: 1705, cacochymicPieceIndex: null, effectTargetIndex: null },
     // Opening offers roll qualifiers like any other draw, at the shared affected price and
     // at any core value — this Concinnous card costs more than the whole opening budget,
     // which is legal as long as the deal keeps something affordable.
-    { id: 'rpp', offerId: 'opening-2-rpp', pieces: ['rook', 'pawn', 'pawn'], value: 7, cost: 9, cardType: 'concinnous', effectSeed: 1706, plaguedPieceIndex: null, effectTargetIndex: 0 },
+    { id: 'rpp', offerId: 'opening-2-rpp', pieces: ['rook', 'pawn', 'pawn'], value: 7, cost: 9, cardType: 'concinnous', effectSeed: 1706, cacochymicPieceIndex: null, effectTargetIndex: 0 },
   ];
   const activeRunDocument = {
-    formatVersion: 13,
+    formatVersion: 14,
     id: 'run-smoke',
     seed: 17,
     ataraxiaTier: 1,
@@ -4096,7 +4096,7 @@ async function main() {
           effectTargetUnitId: null,
           unitIds: ['run-pawn-a'],
           lostUnitIds: [],
-          plaguedUnitId: null,
+          cacochymicUnitId: null,
           acquiredAfterBattleIndex: 0,
         }],
       },
@@ -4142,7 +4142,7 @@ async function main() {
           cardOffers: [
             activeRunOffers[0],
             activeRunOffers[1],
-            { ...activeRunOffers[2], cardType: 'tactical', cost: 5, effectTargetIndex: null },
+            { ...activeRunOffers[2], cardType: 'legatine', cost: 5, effectTargetIndex: null },
           ],
         },
       },
@@ -4163,9 +4163,9 @@ async function main() {
           // A qualifier may price a single opening card past the starting gold, but a deal
           // in which every card is out of reach cannot satisfy the required purchase.
           cardOffers: [
-            { ...activeRunOffers[0], id: 'rp', pieces: ['rook', 'pawn'], value: 6, cost: 9, cardType: 'tactical', effectTargetIndex: null },
-            { ...activeRunOffers[1], id: 'rpp', pieces: ['rook', 'pawn', 'pawn'], value: 7, cost: 10, cardType: 'tactical', effectTargetIndex: null },
-            { ...activeRunOffers[2], id: 'rn', pieces: ['rook', 'knight'], value: 8, cost: 11, cardType: 'tactical', effectTargetIndex: null },
+            { ...activeRunOffers[0], id: 'rp', pieces: ['rook', 'pawn'], value: 6, cost: 9, cardType: 'legatine', effectTargetIndex: null },
+            { ...activeRunOffers[1], id: 'rpp', pieces: ['rook', 'pawn', 'pawn'], value: 7, cost: 10, cardType: 'legatine', effectTargetIndex: null },
+            { ...activeRunOffers[2], id: 'rn', pieces: ['rook', 'knight'], value: 8, cost: 11, cardType: 'legatine', effectTargetIndex: null },
           ],
         },
       },
@@ -4258,13 +4258,13 @@ async function main() {
       {
         id: 'run-card-1', coreId: activeRunOffers[0].id, cardType: null,
         effectSeed: activeRunOffers[0].effectSeed, effectTargetUnitId: null,
-        unitIds: [purchasedPawn.id], lostUnitIds: [], plaguedUnitId: null,
+        unitIds: [purchasedPawn.id], lostUnitIds: [], cacochymicUnitId: null,
         acquiredAfterBattleIndex: 0,
       },
       {
         id: 'run-card-2', coreId: activeRunOffers[1].id, cardType: null,
         effectSeed: activeRunOffers[1].effectSeed, effectTargetUnitId: null,
-        unitIds: [purchasedKnight.id], lostUnitIds: [], plaguedUnitId: null,
+        unitIds: [purchasedKnight.id], lostUnitIds: [], cacochymicUnitId: null,
         acquiredAfterBattleIndex: 0,
       },
     ],
@@ -4308,19 +4308,19 @@ async function main() {
         cardType: 'concinnous',
         effectSeed: 1706,
         effectTargetIndex: 0,
-        plaguedPieceIndex: null,
+        cacochymicPieceIndex: null,
       }, {
         id: 'q',
         offerId: 'shop-0-1-q',
         pieces: ['queen'],
         value: 9,
         cost: 12,
-        cardType: 'tactical',
+        cardType: 'legatine',
         effectSeed: 1707,
         effectTargetIndex: null,
-        plaguedPieceIndex: null,
+        cacochymicPieceIndex: null,
       }, {
-        // Hieratic prices Agminate exactly like Discipline and carries no seeded target,
+        // Hieratic prices Agminate exactly like Adlected and carries no seeded target,
         // because its unit is drawn when the card is acquired.
         id: 'q',
         offerId: 'shop-0-2-q',
@@ -4330,7 +4330,7 @@ async function main() {
         cardType: 'hieratic',
         effectSeed: 1708,
         effectTargetIndex: null,
-        plaguedPieceIndex: null,
+        cacochymicPieceIndex: null,
       }],
       purchasedCardOfferIds: [],
       paidRelicOffer: null,

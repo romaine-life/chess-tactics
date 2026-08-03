@@ -17,7 +17,7 @@ export {
   type RunRelicId,
 };
 
-export const RUN_FORMAT_VERSION = 13;
+export const RUN_FORMAT_VERSION = 14;
 export const GOLD_SCALE = 10;
 export const RUN_STARTING_GOLD = 8;
 export const RUN_STARTING_GOLD_TENTHS = RUN_STARTING_GOLD * GOLD_SCALE;
@@ -25,18 +25,18 @@ export const RUN_OPENING_OFFER_COUNT = 3;
 export const INSTALLED_ATARAXIA_MAX_TIER = 1;
 export const PESTIFEROUS_OFFER_DENOMINATOR = 8;
 export const CONCINNOUS_OFFER_DENOMINATOR = 8;
-export const TACTICAL_DISCIPLINE_OFFER_DENOMINATOR = 8;
+export const LEGATINE_ADLECTED_OFFER_DENOMINATOR = 8;
 export const HIERATIC_AGMINATE_OFFER_DENOMINATOR = 8;
-export const POSITIONED_COST = 2;
-export const DISCIPLINE_COST = 3;
+export const EUTACTIC_COST = 2;
+export const ADLECTED_COST = 3;
 /** Agminate seats a unit in its role's formation instead of a rank, and its King,
  * Rook and Bishop rules interlock, so it carries Discipline's price rather than
  * Positioned's. */
 export const AGMINATE_COST = 3;
 
 export type AtaraxiaTier = 0 | 1;
-export type RunCardType = 'pestiferous' | 'concinnous' | 'tactical' | 'hieratic';
-export type RunUnitModifier = 'plagued';
+export type RunCardType = 'pestiferous' | 'concinnous' | 'legatine' | 'hieratic';
+export type RunUnitModifier = 'cacochymic';
 export const CACOCHYMIC_DISPLAY_NAME = 'Cacochymic';
 
 /**
@@ -57,7 +57,7 @@ export const ATARAXIA_BY_TIER: Readonly<Record<AtaraxiaTier, Readonly<{
     numeral: '0',
     label: 'Ataraxia 0',
     title: 'The Untroubled Mind',
-    effect: 'Standard Run rules. Shop cards may be Tactical, Concinnous or Hieratic but are never Pestiferous.',
+    effect: 'Standard Run rules. Shop cards may be Legatine, Concinnous or Hieratic but are never Pestiferous.',
   }),
   1: Object.freeze({
     tier: 1,
@@ -79,35 +79,48 @@ export const ATARAXIA_TIERS: readonly AtaraxiaTier[] = Object.freeze(
 
 export type PurchasablePieceType = 'pawn' | 'knight' | 'bishop' | 'rook' | 'queen';
 export type RunArmyPieceType = PurchasablePieceType | 'king';
-export type RunAbility = 'discipline' | 'positioned' | 'marshalled';
+export type RunAbility = 'adlected' | 'eutactic' | 'agminate';
 
 export const AGMINATE_DISPLAY_NAME = 'Agminate';
+export const EUTACTIC_DISPLAY_NAME = 'Eutactic';
+export const ADLECTED_DISPLAY_NAME = 'Adlected';
+
+/**
+ * Every unit state's player-facing name (ADR-0374). Since the vocabulary cutover a stored
+ * value and its name are the same word, so this resolves a complete table rather than
+ * capitalizing the storage identity: a fallback would surface whatever a state was
+ * spelled as the moment one was left out.
+ */
+const RUN_ABILITY_DISPLAY_NAME: Readonly<Record<RunAbility, string>> = Object.freeze({
+  adlected: ADLECTED_DISPLAY_NAME,
+  eutactic: EUTACTIC_DISPLAY_NAME,
+  agminate: AGMINATE_DISPLAY_NAME,
+});
 
 export function runAbilityDisplayName(ability: RunAbility): string {
-  if (ability === 'marshalled') return AGMINATE_DISPLAY_NAME;
-  return `${ability.slice(0, 1).toUpperCase()}${ability.slice(1)}`;
+  return RUN_ABILITY_DISPLAY_NAME[ability];
 }
 
 /**
  * What a state means to the player, in one vocabulary (ADR-0339). The Army ledger's
  * ability tips and the card face's contents markers both read this, so a state cannot
- * come to mean two things depending on where it is shown. Positioned and Agminate read
+ * come to mean two things depending on where it is shown. Eutactic and Agminate read
  * per piece because their deployment rule genuinely differs by piece.
  */
 export function runAbilityDescription(ability: RunAbility, unit: RunArmyPieceType): string {
-  if (ability === 'discipline') {
-    return runAbilityGeneralDescription('discipline');
+  if (ability === 'adlected') {
+    return runAbilityGeneralDescription('adlected');
   }
-  if (ability === 'positioned') {
+  if (ability === 'eutactic') {
     if (unit === 'pawn') return 'Prefers the front row during automatic deployment.';
     if (unit === 'rook') return 'Prefers an outer back-row square during automatic deployment.';
     if (unit === 'bishop' || unit === 'king') return 'Prefers the back row during automatic deployment.';
-    return runAbilityGeneralDescription('positioned');
+    return runAbilityGeneralDescription('eutactic');
   }
   if (unit === 'king') return 'Prefers a board-edge square in the player placement zone.';
   if (unit === 'rook') return 'Prefers the established King-flank and corner formation.';
   if (unit === 'bishop') return 'Prefers a square color opposite another Bishop when possible.';
-  return runAbilityGeneralDescription('marshalled');
+  return runAbilityGeneralDescription('agminate');
 }
 
 /**
@@ -116,10 +129,10 @@ export function runAbilityDescription(ability: RunAbility, unit: RunArmyPieceTyp
  * to this one, so the glossary and the per-unit tip cannot drift apart.
  */
 export function runAbilityGeneralDescription(ability: RunAbility): string {
-  if (ability === 'discipline') {
+  if (ability === 'adlected') {
     return 'May be deliberately placed in the player zone before random deployment.';
   }
-  if (ability === 'positioned') return 'Prefers its piece-specific region during automatic deployment.';
+  if (ability === 'eutactic') return 'Prefers its piece-specific region during automatic deployment.';
   return 'Prefers its piece-specific station during automatic deployment.';
 }
 
@@ -137,22 +150,22 @@ export const RUN_CARD_TYPE_REFERENCE: Readonly<Record<RunCardType, Readonly<{
 }>>> = Object.freeze({
   pestiferous: Object.freeze({
     name: 'Pestiferous',
-    grants: 'plagued',
+    grants: 'cacochymic',
     effect: `Marks one contained unit ${CACOCHYMIC_DISPLAY_NAME}; each victorious Battle loses it and marks another.`,
   }),
   concinnous: Object.freeze({
     name: 'Concinnous',
-    grants: 'positioned',
-    effect: 'Makes one contained unit Positioned when the card is acquired.',
+    grants: 'eutactic',
+    effect: `Makes one contained unit ${EUTACTIC_DISPLAY_NAME} when the card is acquired.`,
   }),
-  tactical: Object.freeze({
-    name: 'Tactical',
-    grants: 'discipline',
-    effect: 'Grants Discipline to one contained unit when the card is acquired.',
+  legatine: Object.freeze({
+    name: 'Legatine',
+    grants: 'adlected',
+    effect: `Grants ${ADLECTED_DISPLAY_NAME} to one contained unit when the card is acquired.`,
   }),
   hieratic: Object.freeze({
     name: 'Hieratic',
-    grants: 'marshalled',
+    grants: 'agminate',
     effect: `Grants ${AGMINATE_DISPLAY_NAME} to one contained unit when the card is acquired.`,
   }),
 });
@@ -222,7 +235,7 @@ export interface RunCardOffer extends RunCoreCard {
   cost: number;
   cardType: RunCardType | null;
   effectSeed: number;
-  plaguedPieceIndex: number | null;
+  cacochymicPieceIndex: number | null;
   /** Stored zero-based unit occurrence selected before a Concinnous purchase. */
   effectTargetIndex: number | null;
 }
@@ -236,7 +249,7 @@ export interface RunOwnedCard {
   effectTargetUnitId: string | null;
   unitIds: string[];
   lostUnitIds: string[];
-  plaguedUnitId: string | null;
+  cacochymicUnitId: string | null;
   acquiredAfterBattleIndex: number;
 }
 
@@ -247,18 +260,18 @@ export interface RunPestiferousLoss {
 }
 
 export interface RunRelicAbilityGrant {
-  ability: Extract<RunAbility, 'positioned' | 'marshalled'>;
+  ability: Extract<RunAbility, 'eutactic' | 'agminate'>;
   unitType: RunArmyPieceType;
 }
 
 export const RUN_RELIC_ABILITY_GRANTS: Readonly<Partial<Record<RunRelicId, RunRelicAbilityGrant>>> = Object.freeze({
-  'training-linens': { ability: 'positioned', unitType: 'pawn' },
-  'royal-decree': { ability: 'positioned', unitType: 'king' },
-  'crenellated-rampart': { ability: 'positioned', unitType: 'rook' },
-  'popes-staff': { ability: 'positioned', unitType: 'bishop' },
-  'ghibelline-rampart': { ability: 'marshalled', unitType: 'rook' },
-  'popes-robes': { ability: 'marshalled', unitType: 'bishop' },
-  'royal-sceptre': { ability: 'marshalled', unitType: 'king' },
+  'training-linens': { ability: 'eutactic', unitType: 'pawn' },
+  'royal-decree': { ability: 'eutactic', unitType: 'king' },
+  'crenellated-rampart': { ability: 'eutactic', unitType: 'rook' },
+  'popes-staff': { ability: 'eutactic', unitType: 'bishop' },
+  'ghibelline-rampart': { ability: 'agminate', unitType: 'rook' },
+  'popes-robes': { ability: 'agminate', unitType: 'bishop' },
+  'royal-sceptre': { ability: 'agminate', unitType: 'king' },
 });
 export interface RunWarBattleSnapshot {
   level: Level;
@@ -287,7 +300,7 @@ export interface RunDeploymentState {
   chosenBlockedUnitIds?: string[];
   manualPlacements: Record<string, string>;
   layoutChoice?: 0 | 1;
-  temporaryDisciplineUnitId?: string;
+  temporaryAdlectedUnitId?: string;
 }
 
 export interface RunBattleRuntime {
@@ -440,7 +453,7 @@ export function shuffled<T>(values: readonly T[], seed: number): T[] {
   return result;
 }
 
-export const PLAGUED_DISCOUNT: Readonly<Record<PurchasablePieceType, number>> = Object.freeze({
+export const CACOCHYMIC_DISCOUNT: Readonly<Record<PurchasablePieceType, number>> = Object.freeze({
   pawn: 0,
   knight: 1,
   bishop: 1,
@@ -459,9 +472,9 @@ export function runCardOfferCost(
   cardType: RunCardType | null,
   plaguedPiece: PurchasablePieceType | null,
 ): number {
-  if (plaguedPiece) return value - PLAGUED_DISCOUNT[plaguedPiece];
-  if (cardType === 'tactical') return value + DISCIPLINE_COST;
-  if (cardType === 'concinnous') return value + POSITIONED_COST;
+  if (plaguedPiece) return value - CACOCHYMIC_DISCOUNT[plaguedPiece];
+  if (cardType === 'legatine') return value + ADLECTED_COST;
+  if (cardType === 'concinnous') return value + EUTACTIC_COST;
   if (cardType === 'hieratic') return value + AGMINATE_COST;
   return value;
 }
@@ -499,12 +512,12 @@ export function concinnousOfferRoll(
   return createRng(rollSeed).int(denominator) === 0;
 }
 
-export function tacticalDisciplineOfferRoll(
+export function legatineAdlectedOfferRoll(
   seed: number,
   battleIndex: number,
   slotIndex: number,
   coreId: string,
-  denominator = TACTICAL_DISCIPLINE_OFFER_DENOMINATOR,
+  denominator = LEGATINE_ADLECTED_OFFER_DENOMINATOR,
 ): boolean {
   if (!Number.isSafeInteger(denominator) || denominator < 1) return false;
   const rollSeed = mixSeed(seed, `tactical:discipline:${coreId}`, battleIndex * 8 + slotIndex);
@@ -528,7 +541,7 @@ function acquisitionTarget(effectSeed: number, pieceCount: number, label: string
   return createRng(mixSeed(effectSeed, label)).int(pieceCount);
 }
 
-export function tacticalDisciplineAcquisitionTarget(
+export function legatineAdlectedAcquisitionTarget(
   effectSeed: number,
   pieceCount: number,
 ): number | null {
@@ -549,10 +562,10 @@ export function createRunCardOffer(
   slotIndex: number,
   pestiferousDenominator = PESTIFEROUS_OFFER_DENOMINATOR,
   concinnousDenominator = CONCINNOUS_OFFER_DENOMINATOR,
-  tacticalDenominator = TACTICAL_DISCIPLINE_OFFER_DENOMINATOR,
+  tacticalDenominator = LEGATINE_ADLECTED_OFFER_DENOMINATOR,
   hieraticDenominator = HIERATIC_AGMINATE_OFFER_DENOMINATOR,
 ): RunCardOffer {
-  const tactical = tacticalDisciplineOfferRoll(
+  const tactical = legatineAdlectedOfferRoll(
     run.seed,
     battleIndex,
     slotIndex,
@@ -569,13 +582,13 @@ export function createRunCardOffer(
     && !pestiferous
     && !concinnous
     && hieraticAgminateOfferRoll(run.seed, battleIndex, slotIndex, card.id, hieraticDenominator);
-  const plaguedPieceIndex = pestiferous
+  const cacochymicPieceIndex = pestiferous
     ? seededPestiferousTarget(effectSeed, card.pieces.map((_, index) => index), 0)
     : null;
-  const plaguedPiece = plaguedPieceIndex === null ? null : card.pieces[plaguedPieceIndex];
+  const plaguedPiece = cacochymicPieceIndex === null ? null : card.pieces[cacochymicPieceIndex];
   const cost = runCardOfferCost(
     card.value,
-    pestiferous ? 'pestiferous' : tactical ? 'tactical' : concinnous ? 'concinnous' : hieratic ? 'hieratic' : null,
+    pestiferous ? 'pestiferous' : tactical ? 'legatine' : concinnous ? 'concinnous' : hieratic ? 'hieratic' : null,
     plaguedPiece,
   );
   return {
@@ -586,14 +599,14 @@ export function createRunCardOffer(
     cardType: pestiferous
       ? 'pestiferous'
       : tactical
-        ? 'tactical'
+        ? 'legatine'
         : concinnous
           ? 'concinnous'
           : hieratic
             ? 'hieratic'
             : null,
     effectSeed,
-    plaguedPieceIndex,
+    cacochymicPieceIndex,
     effectTargetIndex: concinnous
       ? createRng(mixSeed(effectSeed, 'concinnous-target')).int(card.pieces.length)
       : null,
@@ -642,7 +655,7 @@ export function openingShopOffers(seed: number, ataraxiaTier: AtaraxiaTier = 0):
     offers[0],
   );
   return offers.map((offer) => (offer === cheapest
-    ? { ...offer, cost: offer.value, cardType: null, plaguedPieceIndex: null, effectTargetIndex: null }
+    ? { ...offer, cost: offer.value, cardType: null, cacochymicPieceIndex: null, effectTargetIndex: null }
     : offer));
 }
 
@@ -822,8 +835,8 @@ function normalizeLegacyCards(value: unknown, seed: number): RunOwnedCard[] {
       ? 'pestiferous'
       : card.cardType === 'concinnous'
         ? 'concinnous'
-        : card.cardType === 'tactical'
-          ? 'tactical'
+        : card.cardType === 'legatine'
+          ? 'legatine'
           : card.cardType === 'hieratic'
             ? 'hieratic'
         : null;
@@ -846,16 +859,16 @@ function normalizeLegacyCards(value: unknown, seed: number): RunOwnedCard[] {
       coreId: card.coreId,
       cardType,
       effectSeed,
-      effectTargetUnitId: (cardType === 'concinnous' || cardType === 'tactical' || cardType === 'hieratic')
+      effectTargetUnitId: (cardType === 'concinnous' || cardType === 'legatine' || cardType === 'hieratic')
         && storedEffectTargetUnitId !== null
         && unitIds.includes(storedEffectTargetUnitId)
         ? storedEffectTargetUnitId
         : null,
       unitIds,
       lostUnitIds,
-      plaguedUnitId: cardType === 'pestiferous'
-        ? typeof card.plaguedUnitId === 'string' && unitIds.includes(card.plaguedUnitId)
-          ? card.plaguedUnitId
+      cacochymicUnitId: cardType === 'pestiferous'
+        ? typeof card.cacochymicUnitId === 'string' && unitIds.includes(card.cacochymicUnitId)
+          ? card.cacochymicUnitId
           : seededPestiferousTarget(effectSeed, unitIds, lostUnitIds.length)
         : null,
       acquiredAfterBattleIndex: Number.isSafeInteger(card.acquiredAfterBattleIndex)
@@ -875,20 +888,20 @@ function normalizeCardOffers(value: unknown): RunCardOffer[] {
       ? 'pestiferous'
       : offer.cardType === 'concinnous'
         ? 'concinnous'
-        : offer.cardType === 'tactical'
-          ? 'tactical'
+        : offer.cardType === 'legatine'
+          ? 'legatine'
           : offer.cardType === 'hieratic'
             ? 'hieratic'
         : null;
-    const plaguedPieceIndex = cardType === 'pestiferous'
-      ? Number.isSafeInteger(offer.plaguedPieceIndex)
-        && offer.plaguedPieceIndex !== null
-        && offer.plaguedPieceIndex >= 0
-        && offer.plaguedPieceIndex < offer.pieces.length
-        ? offer.plaguedPieceIndex
+    const cacochymicPieceIndex = cardType === 'pestiferous'
+      ? Number.isSafeInteger(offer.cacochymicPieceIndex)
+        && offer.cacochymicPieceIndex !== null
+        && offer.cacochymicPieceIndex >= 0
+        && offer.cacochymicPieceIndex < offer.pieces.length
+        ? offer.cacochymicPieceIndex
         : seededPestiferousTarget(offer.effectSeed, offer.pieces.map((_, index) => index), 0)
       : null;
-    const plaguedPiece = plaguedPieceIndex === null ? null : offer.pieces[plaguedPieceIndex];
+    const plaguedPiece = cacochymicPieceIndex === null ? null : offer.pieces[cacochymicPieceIndex];
     const storedEffectTargetIndex = Number.isSafeInteger(offer.effectTargetIndex)
       ? offer.effectTargetIndex
       : Number.isSafeInteger(offer.effect?.targetPieceIndex)
@@ -906,7 +919,7 @@ function normalizeCardOffers(value: unknown): RunCardOffer[] {
       ...offer,
       cardType,
       cost: runCardOfferCost(offer.value, cardType, plaguedPiece),
-      plaguedPieceIndex,
+      cacochymicPieceIndex,
       effectTargetIndex,
     };
   });
@@ -916,11 +929,11 @@ function cardsNeedTargetNormalization(cards: readonly RunOwnedCard[]): boolean {
   return cards.some((card) => (
     card.cardType === 'pestiferous'
       ? card.unitIds.length > 0
-        ? typeof card.plaguedUnitId !== 'string' || !card.unitIds.includes(card.plaguedUnitId)
-        : card.plaguedUnitId !== null
-      : card.plaguedUnitId !== null
+        ? typeof card.cacochymicUnitId !== 'string' || !card.unitIds.includes(card.cacochymicUnitId)
+        : card.cacochymicUnitId !== null
+      : card.cacochymicUnitId !== null
   )) || cards.some((card) => (
-    (card.cardType === 'concinnous' || card.cardType === 'tactical' || card.cardType === 'hieratic')
+    (card.cardType === 'concinnous' || card.cardType === 'legatine' || card.cardType === 'hieratic')
       ? typeof card.effectTargetUnitId !== 'string' || card.effectTargetUnitId.length === 0
       : card.effectTargetUnitId !== null
   ));
@@ -929,11 +942,11 @@ function cardsNeedTargetNormalization(cards: readonly RunOwnedCard[]): boolean {
 function offersNeedTargetNormalization(offers: readonly RunCardOffer[]): boolean {
   return offers.some((offer) => (
     offer.cardType === 'pestiferous'
-      ? !Number.isSafeInteger(offer.plaguedPieceIndex)
-        || offer.plaguedPieceIndex === null
-        || offer.plaguedPieceIndex < 0
-        || offer.plaguedPieceIndex >= offer.pieces.length
-      : offer.plaguedPieceIndex !== null
+      ? !Number.isSafeInteger(offer.cacochymicPieceIndex)
+        || offer.cacochymicPieceIndex === null
+        || offer.cacochymicPieceIndex < 0
+        || offer.cacochymicPieceIndex >= offer.pieces.length
+      : offer.cacochymicPieceIndex !== null
   )) || offers.some((offer) => (
     offer.cardType === 'concinnous'
       ? !Number.isSafeInteger(offer.effectTargetIndex)
@@ -948,20 +961,20 @@ function synchronizePlaguedModifiers(
   army: RunArmyUnit[],
   cards: readonly RunOwnedCard[],
 ): RunArmyUnit[] {
-  const plaguedUnitIds = new Set(cards.flatMap((card) => (
-    card.cardType === 'pestiferous' && card.plaguedUnitId ? [card.plaguedUnitId] : []
+  const cacochymicUnitIds = new Set(cards.flatMap((card) => (
+    card.cardType === 'pestiferous' && card.cacochymicUnitId ? [card.cacochymicUnitId] : []
   )));
   let changed = false;
   const synchronized = army.map((unit) => {
-    const shouldBePlagued = plaguedUnitIds.has(unit.id);
-    const isPlagued = unit.modifiers.includes('plagued');
+    const shouldBePlagued = cacochymicUnitIds.has(unit.id);
+    const isPlagued = unit.modifiers.includes('cacochymic');
     if (shouldBePlagued === isPlagued) return unit;
     changed = true;
     return {
       ...unit,
       modifiers: shouldBePlagued
-        ? [...unit.modifiers, 'plagued' as const]
-        : unit.modifiers.filter((modifier) => modifier !== 'plagued'),
+        ? [...unit.modifiers, 'cacochymic' as const]
+        : unit.modifiers.filter((modifier) => modifier !== 'cacochymic'),
     };
   });
   return changed ? synchronized : army;
@@ -1048,7 +1061,7 @@ function normalizedArmyIdentity(run: RunDocument): {
     const inspectionSeed = assignedInspectionSeeds.get(unit.id)
       ?? mixSeed(run.seed, `run-unit-inspection:${unit.id}`, number - 1);
     const modifiers = Array.isArray(unit.modifiers)
-      ? unit.modifiers.filter((modifier): modifier is RunUnitModifier => modifier === 'plagued')
+      ? unit.modifiers.filter((modifier): modifier is RunUnitModifier => modifier === 'cacochymic')
       : [];
     const source = String(unit.source) === 'draft' ? 'shop' : unit.source;
     if (
@@ -1316,7 +1329,7 @@ function revealRelics(run: RunDocument, count: number, label: string, index: num
 export function prepareDeployment(run: RunDocument): RunDocument {
   if (run.phase !== 'deployment') return run;
   const seed = mixSeed(run.seed, 'deployment', run.battleIndex);
-  const temporaryDisciplineUnitId = hasRelic(run, 'inspirational-record')
+  const temporaryAdlectedUnitId = hasRelic(run, 'inspirational-record')
     ? createRng(mixSeed(seed, 'inspirational-record')).pick(run.army).id
     : undefined;
   return touch({
@@ -1328,7 +1341,7 @@ export function prepareDeployment(run: RunDocument): RunDocument {
           seed,
           blockedUnitIds: [],
           manualPlacements: {},
-          temporaryDisciplineUnitId,
+          temporaryAdlectedUnitId,
         },
     battleRuntime: null,
   });
@@ -1475,8 +1488,8 @@ function immediateRelic(run: RunDocument, relic: RunRelicId, targetUnitId?: stri
     next = {
       ...next,
       army: next.army.map((unit) => (
-        unit.id === targetUnitId && !unit.abilities.includes('discipline')
-          ? { ...unit, abilities: [...unit.abilities, 'discipline'] }
+        unit.id === targetUnitId && !unit.abilities.includes('adlected')
+          ? { ...unit, abilities: [...unit.abilities, 'adlected'] }
           : unit
       )),
     };
@@ -1501,12 +1514,12 @@ function cardsWithoutUnit(cards: readonly RunOwnedCard[], unitId: string): RunOw
   return cards.map((card) => {
     if (!card.unitIds.includes(unitId)) return card;
     const unitIds = card.unitIds.filter((id) => id !== unitId);
-    const plaguedUnitId = card.cardType === 'pestiferous'
-      ? card.plaguedUnitId === unitId || !unitIds.includes(card.plaguedUnitId ?? '')
+    const cacochymicUnitId = card.cardType === 'pestiferous'
+      ? card.cacochymicUnitId === unitId || !unitIds.includes(card.cacochymicUnitId ?? '')
         ? seededPestiferousTarget(card.effectSeed, unitIds, card.lostUnitIds.length)
-        : card.plaguedUnitId
+        : card.cacochymicUnitId
       : null;
-    return { ...card, unitIds, plaguedUnitId };
+    return { ...card, unitIds, cacochymicUnitId };
   });
 }
 
@@ -1533,16 +1546,16 @@ export function deterioratePestiferousCards(run: RunDocument, battleIndex: numbe
     }
     const remaining = card.unitIds.filter((id) => armyById.has(id) && !removedIds.has(id));
     if (!remaining.length) return card;
-    const unitId = card.plaguedUnitId && remaining.includes(card.plaguedUnitId)
-      ? card.plaguedUnitId
+    const unitId = card.cacochymicUnitId && remaining.includes(card.cacochymicUnitId)
+      ? card.cacochymicUnitId
       : seededPestiferousTarget(card.effectSeed, remaining, card.lostUnitIds.length);
     if (!unitId) return card;
     const unit = armyById.get(unitId);
     if (!unit) return card;
     removedIds.add(unitId);
-    const plaguedUnit = unit.modifiers.includes('plagued')
+    const plaguedUnit = unit.modifiers.includes('cacochymic')
       ? unit
-      : { ...unit, modifiers: [...unit.modifiers, 'plagued' as const] };
+      : { ...unit, modifiers: [...unit.modifiers, 'cacochymic' as const] };
     losses.push({ battleIndex, cardId: card.id, unit: cloneArmy([plaguedUnit])[0] });
     const unitIds = card.unitIds.filter((id) => id !== unitId);
     const lostUnitIds = [...card.lostUnitIds, unitId];
@@ -1550,7 +1563,7 @@ export function deterioratePestiferousCards(run: RunDocument, battleIndex: numbe
       ...card,
       unitIds,
       lostUnitIds,
-      plaguedUnitId: seededPestiferousTarget(card.effectSeed, unitIds, lostUnitIds.length),
+      cacochymicUnitId: seededPestiferousTarget(card.effectSeed, unitIds, lostUnitIds.length),
     };
   });
   if (!losses.length) return run;
@@ -1670,23 +1683,23 @@ export function buyCard(run: RunDocument, offerId: string): RunDocument {
   const cost = offer.cost * GOLD_SCALE;
   if (run.goldTenths < cost) return run;
   const { addedUnits, ...armyUpdate } = addArmyPieces(run, offer.pieces, 'shop');
-  const plaguedUnitId = offer.cardType === 'pestiferous' && offer.plaguedPieceIndex !== null
-    ? addedUnits[offer.plaguedPieceIndex]?.id ?? null
+  const cacochymicUnitId = offer.cardType === 'pestiferous' && offer.cacochymicPieceIndex !== null
+    ? addedUnits[offer.cacochymicPieceIndex]?.id ?? null
     : null;
   const effectTargetUnit = offer.cardType === 'concinnous'
     && Number.isSafeInteger(offer.effectTargetIndex)
     ? addedUnits[offer.effectTargetIndex!]
-    : offer.cardType === 'tactical'
-      ? addedUnits[tacticalDisciplineAcquisitionTarget(offer.effectSeed, addedUnits.length) ?? -1]
+    : offer.cardType === 'legatine'
+      ? addedUnits[legatineAdlectedAcquisitionTarget(offer.effectSeed, addedUnits.length) ?? -1]
       : offer.cardType === 'hieratic'
         ? addedUnits[hieraticAgminateAcquisitionTarget(offer.effectSeed, addedUnits.length) ?? -1]
         : undefined;
-  const grantedAbility: RunAbility | null = offer.cardType === 'tactical'
-    ? 'discipline'
+  const grantedAbility: RunAbility | null = offer.cardType === 'legatine'
+    ? 'adlected'
     : offer.cardType === 'concinnous'
-      ? 'positioned'
+      ? 'eutactic'
       : offer.cardType === 'hieratic'
-        ? 'marshalled'
+        ? 'agminate'
         : null;
   const abilityArmy = effectTargetUnit
     ? armyUpdate.army.map((unit): RunArmyUnit => unit.id === effectTargetUnit.id
@@ -1706,7 +1719,7 @@ export function buyCard(run: RunDocument, offerId: string): RunDocument {
     effectTargetUnitId: effectTargetUnit?.id ?? null,
     unitIds: addedUnits.map((unit) => unit.id),
     lostUnitIds: [],
-    plaguedUnitId,
+    cacochymicUnitId,
     acquiredAfterBattleIndex: run.shop.afterBattleIndex,
   };
   const cards = [...run.cards, card];

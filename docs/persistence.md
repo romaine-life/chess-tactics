@@ -52,7 +52,7 @@ the permanent King plus two starting Pawns, a seeded three-card deal, and an
 Buying stays in that same Shop transaction; its purchased state, Army and Sell
 views, Reset Shop, and explicit Continue reuse the post-Battle Shop model. The
 opening kind carries zero victory gold and no Loot or paid-relic offers. Opening
-offers roll Tactical, Concinnous, and — under Ataraxia I — Pestiferous through the
+offers roll Legatine, Concinnous, and — under Ataraxia I — Pestiferous through the
 same draw and affected pricing as any later Shop, at every core value, so a
 surcharge may price an opening card past the 8-gold budget. At least one opening
 offer is always affordable: a deal in which none is repairs its cheapest card to
@@ -77,14 +77,19 @@ opening purchase optionality by
 also stores the selected Ataraxia tier and each persisted affected Shop offer.
 Pestiferous offers store their public Cacochymic piece index under the current
 format's non-presentational `plaguedPieceIndex` storage identifier;
-Concinnous offers store their concealed Positioned target index; Tactical and
+Concinnous offers store their concealed Eutactic target index; Legatine and
 Hieratic offers deliberately store no target index because purchase chooses the
-unit. Owned Concinnous, Tactical and Hieratic cards store the exact affected unit
+unit. Owned Concinnous, Legatine and Hieratic cards store the exact affected unit
 id, while owned Pestiferous cards store the current Cacochymic unit id under
-`plaguedUnitId` and the exact loss history. Format 12 adds the Hieratic
-qualifier, whose granted Agminate ability persists on its unit under the
-non-presentational `marshalled` storage identifier (ADR-0309, ADR-0310, ADR-0311,
-ADR-0325, ADR-0327, ADR-0328, ADR-0341, ADR-0345).
+`cacochymicUnitId` and the exact loss history. Format 12 adds the Hieratic
+qualifier and its granted Agminate ability. Format 14 makes a stored value and
+its player-facing name one word: abilities persist as `adlected`, `eutactic` and
+`agminate`, the unit modifier as `cacochymic`, and the card type as `legatine`,
+with the fields named after the retired words renamed to match. Format 14
+discards in-progress Runs rather than translating them, the server validator accepts
+only the new words, and the live-media slots and `app-ui` drawable roles were
+re-pointed in the same change, so no layer keeps the retired vocabulary (ADR-0309, ADR-0310, ADR-0311, ADR-0325, ADR-0327,
+ADR-0328, ADR-0341, ADR-0345, ADR-0374).
 Format 3 stores each army unit's role-specific historical name.
 Format-1 unnamed documents and the provisional format-2 generated-name documents
 are deterministically normalized to format 3 from the Run seed and each piece

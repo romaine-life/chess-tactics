@@ -77,7 +77,7 @@ these.
   separately authored card content.
   Future mechanically different primary families may use
   types such as **Event**. Ordinary costs remain from one through nine;
-  Concinnous's two-gold premium may produce a live 10 or 11 and Tactical's
+  Concinnous's two-gold premium may produce a live 10 or 11 and Legatine's
   three-gold premium may produce a live 10 through 12 in the same coin.
   Cost is never decimal, fractional, or zero and never uses separate numbered
   coin art. Each actual unit in the ledger appears as the same
@@ -99,8 +99,8 @@ these.
   drawn offer may give particular units more than one modifier. The 49 cores do
   not multiply into variant deck entries: effects are rolled and persisted when
   a shop reveals the card, promoted unchanged if purchased, and discarded if
-  passed so a later shuffle may affect that core differently. Disciplined adds
-  3 gold, Positioned adds 2 (and can raise Concinnous cards to 10 or 11), and
+  passed so a later shuffle may affect that core differently. Adlected adds
+  3 gold, Eutactic adds 2 (and can raise Concinnous cards to 10 or 11), and
   Cacochymic discounts by piece tier—Pawn 0, minor
   1, Rook 2, Queen 3—so shop-card prices remain whole gold and a Cacochymic Pawn
   still costs 1. Exact public contents and modifier markers belong in the Contents Box
@@ -127,40 +127,40 @@ these.
   one current unit with the Cacochymic status icon; the card face does not spell
   out **Pestiferous** in the type strip or **Cacochymic** beside that unit. Its
   right-side Pestiferous property icon is distinct from the Cacochymic state icon.
-  **Tactical** causes exactly one unit to gain Discipline when the card is
-  acquired. Every shop-card draw has a seeded one-in-eight Tactical chance,
+  **Legatine** causes exactly one unit to gain Adlected when the card is
+  acquired. Every shop-card draw has a seeded one-in-eight Legatine chance,
   including the opening Shop, at every core value: an opening card whose
   surcharge passes the starting eight gold is offered out of reach rather than
   suppressed, and only a deal with nothing affordable at all repairs its cheapest
-  card (ADR-0344). Tactical resolves before
+  card (ADR-0344). Legatine resolves before
   the other qualifiers and adds three gold even when the resulting price reaches
   ten through twelve. The unit is chosen only at acquisition. Multi-unit offers
   therefore conceal the outcome, while a one-unit offer shows the dedicated
-  Discipline icon because the result is forced. The Tactical property icon in
-  the type strip is a separate symbol. Tactical uses the dedicated blue-water
+  Adlected icon because the result is forced. The Legatine property icon in
+  the type strip is a separate symbol. Legatine uses the dedicated blue-water
   frame.
   **Concinnous** means skillfully and harmoniously arranged and causes exactly
-  one contained unit to become Positioned upon acquisition. The right-side
+  one contained unit to become Eutactic upon acquisition. The right-side
   Concinnous icon declares the property; detecting it does not automatically restate its
   behavior as Contents Box prose. Before purchase, direct unit-property
   presentation marks the target as hidden. The target is seeded and persisted
   with the offer, priced normally, and merely revealed—not rerolled—after
   purchase. A card does not become Concinnous just because an external relic
   later modifies one of its units. Concinnous owns its dedicated white frame
-  treatment while retaining the shared anatomy. After Tactical and Pestiferous precedence, every remaining shop
+  treatment while retaining the shared anatomy. After Legatine and Pestiferous precedence, every remaining shop
   offer—regardless of core value—has a seeded one-in-eight Concinnous roll. It
   costs two additional gold, may reach eleven, and cannot carry another
   qualifier. Every frame uses one shared accepted gold-coin source with its live
   price overlaid (ADR-0272, ADR-0276, ADR-0305, ADR-0309, ADR-0310, ADR-0311,
   ADR-0324, ADR-0325, ADR-0327, ADR-0328, ADR-0329, ADR-0339, ADR-0341).
   **Hieratic** is the deliberately formal fourth card-property name paired with
-  **Agminate**, and it draws in every Shop. It resolves last, after Tactical,
+  **Agminate**, and it draws in every Shop. It resolves last, after Legatine,
   Pestiferous and Concinnous, at the same seeded one-in-eight chance on the draws
   that remain. Exactly one contained unit gains Agminate at acquisition, chosen
-  the way a Tactical target is: drawn on purchase, concealed by a multi-unit
+  the way a Legatine target is: drawn on purchase, concealed by a multi-unit
   offer, and shown as the forced result on a one-unit offer. Agminate seats a
   unit in its role's formation rather than a rank and its King, Rook and Bishop
-  rules interlock, so it carries Discipline's three-gold price. Hieratic owns the
+  rules interlock, so it carries Adlected's three-gold price. Hieratic owns the
   dedicated steel-armor frame (ADR-0339, ADR-0345).
 - Run difficulty is **Ataraxia**. The first Run uses **Ataraxia 0 — The
   Untroubled Mind**, whose literal impact is standard Run rules and no
@@ -198,17 +198,17 @@ these.
   invented additional benefit. The player weighs that roster-dependent value
   (ADR-0273, ADR-0274).
 - Run Deployment is a battlefield state, not a level-summary destination. The
-  full board remains primary while Controls owns any Muster Roll, Discipline,
-  or Surveyor's Compass decision. Discipline places its named unit directly on
+  full board remains primary while Controls owns any Muster Roll, Adlected,
+  or Surveyor's Compass decision. Adlected places its named unit directly on
   highlighted legal player-zone squares before ordinary deployment. While any
-  Discipline placement remains, the battlefield shows only committed
-  Disciplined units. The final required Discipline, Muster Roll, or Surveyor's
+  Adlected placement remains, the battlefield shows only committed
+  Adlected units. The final required Adlected, Muster Roll, or Surveyor's
   Compass choice is first persisted and shown on that mounted board, then commits
   directly to Battle without a separate confirmation. The same scene, session
   store, board compositor, unit identities, and camera remain mounted: the
   deterministic friendly formation and unresolved opponents join the position.
-  Each Disciplined placement and each remaining unit first introduced at Battle
-  start uses the canonical entry animation. The final Disciplined unit completes
+  Each Adlected placement and each remaining unit first introduced at Battle
+  start uses the canonical entry animation. The final Adlected unit completes
   its own arrival before automatic deployment begins as a separate wave;
   already-visible units neither move nor replay arrival, and the terrain is not
   reacquired or redrawn. Combat input,
@@ -217,7 +217,7 @@ these.
   choice exists, Shop Continue commits the deterministic formation directly
   into Battle (ADR-0346, ADR-0348, ADR-0349, ADR-0350, ADR-0351, ADR-0352).
 - Placement relics grant shared unit abilities rather than owning bespoke
-  placement rules. Field Linens grants Positioned to Pawns; Royal Decree to the
+  placement rules. Field Linens grants Eutactic to Pawns; Royal Decree to the
   King; Crenellated Rampart to Rooks; and Pope's Staff to Bishops. Ghibelline
   Rampart grants Agminate to Rooks; Pope's Robes to Bishops; and Royal Sceptre
   to the King. Their rules text names only the grant, while the unit-ability
@@ -239,7 +239,7 @@ these.
   available in every Run phase without pausing an active Battle (ADR-0230).
 - **Enchiridion** is the player-facing reference for unit movement, terrain
   rules, the filterable core card deck, affected card types, all relics, and the
-  behavior of the current unit abilities: Discipline, Positioned, Agminate,
+  behavior of the current unit abilities: Adlected, Eutactic, Agminate,
   and Cacochymic. Card filters combine exact gold value with
   contained unit type. Cards uses no fourth column: its terminal third column
   fills the remaining Enchiridion canvas with real card faces in a vertically
@@ -247,7 +247,7 @@ these.
   introducing a separate detail (ADR-0364). The Card Types reference uses the
   third column for its four affected-type names and the fourth for one selected
   shared card face, temporarily using The Volunteer for each; Pestiferous,
-  Concinnous, Tactical and Hieratic all state their accepted effects, and none
+  Concinnous, Legatine and Hieratic all state their accepted effects, and none
   remains provisional
   (ADR-0313, ADR-0315, ADR-0329, ADR-0339, ADR-0341, ADR-0345). During Battle,
   the Controls title bar opens **Strategikon** over the board without unmounting

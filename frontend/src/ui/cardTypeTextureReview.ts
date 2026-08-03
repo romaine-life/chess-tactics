@@ -6,7 +6,7 @@ export const CARD_TYPE_TEXTURE_REVIEW_PARAM = 'cardTypeTextureBatch';
 export const CARD_TYPE_TEXTURE_SLOTS = Object.freeze({
   pestiferous: 'ui/surfaces/card-type-pestiferous.png',
   concinnous: 'ui/surfaces/card-type-concinnous.png',
-  tactical: 'ui/surfaces/card-type-tactical.png',
+  legatine: 'ui/surfaces/card-type-legatine.png',
   hieratic: 'ui/surfaces/card-type-hieratic.png',
 });
 

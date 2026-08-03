@@ -17,13 +17,13 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     const start = enchiridion.indexOf('const UNIT_STATE_REFERENCES');
     const end = enchiridion.indexOf('export function EnchiridionReference', start);
     const abilities = enchiridion.slice(start, end);
-    expect(abilities.match(/state: '(?:discipline|positioned|marshalled|plagued)'/g)).toHaveLength(4);
-    expect(abilities).toContain("name: 'Discipline'");
-    expect(abilities).toContain("name: 'Positioned'");
+    expect(abilities.match(/state: '(?:adlected|eutactic|agminate|cacochymic)'/g)).toHaveLength(4);
+    expect(abilities).toContain('name: ADLECTED_DISPLAY_NAME');
+    expect(abilities).toContain('name: EUTACTIC_DISPLAY_NAME');
     expect(abilities).toContain('name: AGMINATE_DISPLAY_NAME');
     expect(abilities).toContain('name: CACOCHYMIC_DISPLAY_NAME');
     expect(abilities).not.toContain("name: 'Concinnous'");
-    expect(abilities).not.toContain("name: 'Tactical'");
+    expect(abilities).not.toContain("name: 'Legatine'");
     expect(abilities).toContain('className="enchiridion-ability-card"');
     // Every glossary entry draws its own accepted unit-state icon, never a stand-in glyph.
     expect(abilities).toContain('src={runUnitStateIconUrl(state)}');
@@ -246,7 +246,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(cardCodex).toMatch(/to=\{cardHref\?\.\(card\.id\)\}/);
     expect(cardCodex.match(/<ReferenceTrigger/g)).toHaveLength(1);
     // Handling a card sounds like a card, not like a control. The control names the CUE;
-    // the DB-owned profile decides what it plays (ADR-0374).
+    // the DB-owned profile decides what it plays (ADR-0375).
     expect(cardCodex).toContain('data-ui-sfx="card"');
     // The main menu addresses individual cards like relic records…
     expect(mainMenu).toContain('selectedCardId={enchiridionCardFromPath(path)}');
@@ -285,7 +285,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     const start = enchiridion.indexOf('const CARD_TYPE_REFERENCES');
     const end = enchiridion.indexOf('const UNIT_STATE_REFERENCES', start);
     const cardTypes = enchiridion.slice(start, end);
-    expect(cardTypes.match(/id: '(?:pestiferous|concinnous|tactical|hieratic)'/g)).toHaveLength(4);
+    expect(cardTypes.match(/id: '(?:pestiferous|concinnous|legatine|hieratic)'/g)).toHaveLength(4);
     expect(cardTypes).toContain("const VOLUNTEER_CARD = RUN_CARD_BY_ID.p");
     expect(cardTypes).toContain('<RunCardFace');
     // The glossary previews a real projected offer, so it neither picks its own frame
@@ -294,7 +294,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(cardTypes).toContain('runCardFaceContent(specimen, { purchased: true })');
     expect(cardTypes).toContain('runCardFrameSlot(specimen)');
     expect(cardTypes).not.toContain('RUN_CARD_PESTIFEROUS_FRAME_SLOT');
-    expect(cardTypes).not.toContain('RUN_CARD_TACTICAL_FRAME_SLOT');
+    expect(cardTypes).not.toContain('RUN_CARD_LEGATINE_FRAME_SLOT');
     expect(cardTypes).not.toContain('RUN_CARD_HIERATIC_FRAME_SLOT');
     // Every named property row carries its own accepted symbol, not just Pestiferous.
     expect(cardTypes).toContain('src={runCardPropertyIconUrl(definition.id)}');
@@ -311,7 +311,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(cardTypes).toContain('className="enchiridion-card-type-layout"');
     expect(cardTypes).toContain('className="enchiridion-card-type-rows"');
     expect(cardTypes).toContain('data-testid={`enchiridion-card-type-${definition.id}`}');
-    // The property rows are card faces too, so they carry the card cue (ADR-0374).
+    // The property rows are card faces too, so they carry the card cue (ADR-0375).
     expect(cardTypes).toContain('data-ui-sfx="card"');
     // Every property row is a real address, so a reviewer can be linked straight to one
     // instead of being told which row to click.
@@ -432,7 +432,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
   });
 });
 
-describe('interface cues are owner-assigned, not committed (ADR-0071, ADR-0374)', () => {
+describe('interface cues are owner-assigned, not committed (ADR-0071, ADR-0375)', () => {
   const sfx = readFileSync(new URL('../sfx.ts', import.meta.url), 'utf8');
   const studio = readFileSync(new URL('./SfxLibraryStudio.tsx', import.meta.url), 'utf8');
   const profile = readFileSync(new URL('../core/sfxProfile.ts', import.meta.url), 'utf8');

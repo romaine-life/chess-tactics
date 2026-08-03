@@ -16,9 +16,9 @@ changing the persisted phase cannot re-key the scene, readiness content, session
 provider, board, `ViewPane`, or camera. The live Battle position is promoted into
 the already-mounted board; already-visible pieces preserve identity and position.
 Per [ADR-0351](adr/0351-unit-arrival-choreography-follows-newly-visible-unit-identity.md),
-arrival is tracked per unit rather than per scene: Disciplined placements and the
+arrival is tracked per unit rather than per scene: Adlected placements and the
 remaining formation animate when first introduced, while incumbent unit ids do
-not replay their entrance. The final Disciplined arrival completes before phase
+not replay their entrance. The final Adlected arrival completes before phase
 promotion introduces the remaining formation as a separate wave; the compositor's
 own active-id ledger supplies that boundary rather than a screen-owned timer
 ([ADR-0352](adr/0352-final-discipline-arrival-precedes-the-automatic-deployment-wave.md)).

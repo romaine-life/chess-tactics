@@ -30,7 +30,7 @@ export {
   RUN_CARD_FRAME_SLOT,
   RUN_CARD_PESTIFEROUS_FRAME_SLOT,
   RUN_CARD_CONCINNOUS_FRAME_SLOT,
-  RUN_CARD_TACTICAL_FRAME_SLOT,
+  RUN_CARD_LEGATINE_FRAME_SLOT,
   RUN_CARD_HIERATIC_FRAME_SLOT,
 } from './runCardFrameGeometry';
 export const RUN_CARD_COST_COIN_SOURCE_SLOT = 'ui/run/card-prototypes/cost-coin-source-v1.png';
@@ -51,7 +51,7 @@ export type { RunUnitState };
 const RUN_CARD_PROPERTY_MEDIA_ROLE: Readonly<Record<RunCardProperty, string>> = Object.freeze({
   pestiferous: 'ui-kit-icons-card-properties-pestiferous-png',
   concinnous: 'ui-kit-icons-card-properties-concinnous-png',
-  tactical: 'ui-kit-icons-card-properties-tactical-png',
+  legatine: 'ui-kit-icons-card-properties-legatine-png',
   hieratic: 'ui-kit-icons-card-properties-hieratic-png',
 });
 
@@ -92,7 +92,7 @@ export const RUN_CARD_ICON_PLACEMENT_BASELINE: RunCardIconPlacement = Object.fre
 export const RUN_CARD_COMMITTED_PROPERTY_PLACEMENTS: Readonly<Record<RunCardProperty, RunCardIconPlacement>> = Object.freeze({
   pestiferous: Object.freeze({ x: -1.35, y: -1.05, scale: 2 }),
   concinnous: Object.freeze({ x: -0.6, y: 0.3, scale: 1 }),
-  tactical: Object.freeze({ x: -4, y: -0.95, scale: 2.75 }),
+  legatine: Object.freeze({ x: -4, y: -0.95, scale: 2.75 }),
   hieratic: Object.freeze({ x: -4, y: -3.45, scale: 1.8 }),
 });
 
@@ -357,7 +357,7 @@ export function requiredRunCardImageKinds(card: RunCardFaceContent): readonly Ru
   const stateKinds = new Set<RunCardImageKind>();
   for (const grant of card.grants) {
     if (grant.ability) stateKinds.add(`unit-state:${grant.ability.state}`);
-    if (grant.plaguedIndices?.length) stateKinds.add('unit-state:plagued');
+    if (grant.cacochymicIndices?.length) stateKinds.add('unit-state:cacochymic');
   }
   return [
     'frame',
@@ -391,8 +391,8 @@ export function runCardPresentationSignature(
     card.cardProperty ? [card.cardProperty.id, card.cardProperty.name, card.cardProperty.effect] : null,
     iconMedia.propertyUrl ?? null,
     iconMedia.unitStateUrls ?? null,
-    card.grants.map(({ count, unit, plaguedIndices, ability }) => (
-      [count, unit, plaguedIndices ?? [], ability ? [ability.state, ability.index] : null]
+    card.grants.map(({ count, unit, cacochymicIndices, ability }) => (
+      [count, unit, cacochymicIndices ?? [], ability ? [ability.state, ability.index] : null]
     )),
     card.flavor,
   ]);
@@ -567,18 +567,18 @@ function UnitStackSprite({
             title={CACOCHYMIC_DISPLAY_NAME}
             trigger={(
               <RunAbilityIcon
-                ability="plagued"
+                ability="cacochymic"
                 className="run-card-prototype-unit-marker"
                 src={plaguedIconUrl}
                 onLoad={(event) => {
                   void acknowledgeDecodedImage(
                     event.currentTarget,
-                    'unit-state:plagued',
+                    'unit-state:cacochymic',
                     onReady,
                     onError,
                   );
                 }}
-                onError={() => onError('unit-state:plagued')}
+                onError={() => onError('unit-state:cacochymic')}
               />
             )}
           >
@@ -628,9 +628,9 @@ function UnitStackSprite({
   );
 }
 
-function grantLabel({ count, unit, plaguedIndices = [], ability }: RunCardGrant): string {
+function grantLabel({ count, unit, cacochymicIndices = [], ability }: RunCardGrant): string {
   const units = `${count} ${unit}${count === 1 ? '' : 's'}`;
-  const plagued = plaguedIndices.length
+  const plagued = cacochymicIndices.length
     ? count === 1 ? `1 ${CACOCHYMIC_DISPLAY_NAME} ${unit}` : `${units}, one ${CACOCHYMIC_DISPLAY_NAME}`
     : units;
   return ability ? `${plagued} with ${runAbilityDisplayName(ability.state)}` : plagued;
@@ -793,14 +793,14 @@ function RunCardFaceLayer({
           aria-label="Card contents"
         >
           {card.grants.map((grant, cell) => {
-            const plaguedIndices = grant.plaguedIndices ?? [];
-            const stackCount = grant.count + plaguedIndices.length + (grant.ability ? 1 : 0);
+            const cacochymicIndices = grant.cacochymicIndices ?? [];
+            const stackCount = grant.count + cacochymicIndices.length + (grant.ability ? 1 : 0);
             // The marker seats immediately after the unit that actually carries the state,
             // so a revealed target on a multi-unit card is marked where it stands.
             const abilityUnitIndex = grant.ability?.index ?? -1;
             const abilityStackIndex = grant.ability
               ? abilityUnitIndex
-                + plaguedIndices.filter((plaguedIndex) => plaguedIndex <= abilityUnitIndex).length
+                + cacochymicIndices.filter((plaguedIndex) => plaguedIndex <= abilityUnitIndex).length
                 + 1
               : undefined;
             return (
@@ -822,10 +822,10 @@ function RunCardFaceLayer({
                       index={index}
                       key={`${grant.unit}-${index}`}
                       unit={grant.unit}
-                      plagued={plaguedIndices.includes(index)}
-                      plaguedIconUrl={iconMedia.unitStateUrls?.plagued}
+                      plagued={cacochymicIndices.includes(index)}
+                      plaguedIconUrl={iconMedia.unitStateUrls?.cacochymic}
                       stackCount={stackCount}
-                      stackIndex={index + plaguedIndices.filter((plaguedIndex) => plaguedIndex < index).length}
+                      stackIndex={index + cacochymicIndices.filter((plaguedIndex) => plaguedIndex < index).length}
                       tuning={contentsTuning}
                       onReady={acknowledgeLoad}
                       onError={acknowledgeError}

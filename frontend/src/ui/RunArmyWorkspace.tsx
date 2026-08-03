@@ -2,9 +2,10 @@ import { useLayoutEffect, useMemo, useRef, type ReactElement, type ReactNode } f
 import { defaultBackgroundSet } from '../art/backgroundSets';
 import { paletteForSide, pieceSpritePath } from '../core/pieces';
 import {
-  AGMINATE_DISPLAY_NAME,
+  ADLECTED_DISPLAY_NAME,
   CACOCHYMIC_DESCRIPTION,
   CACOCHYMIC_DISPLAY_NAME,
+  EUTACTIC_DISPLAY_NAME,
   GOLD_SCALE,
   PIECE_LABEL,
   PIECE_VALUE,
@@ -12,6 +13,7 @@ import {
   hasRelic,
   relicGrantingRunAbility,
   runAbilityDescription,
+  runAbilityDisplayName,
   type RunAbility,
   type RunArmyPieceType,
   type RunArmyUnit,
@@ -64,10 +66,10 @@ const PLAYER_PIECE_FACING = 'south';
 const TYPE_ORDER: readonly RunArmyPieceType[] = ['king', 'pawn', 'knight', 'bishop', 'rook', 'queen'];
 
 export type RunUnitTraitId =
-  | 'discipline'
-  | 'positioned'
-  | 'marshalled'
-  | 'plagued'
+  | 'adlected'
+  | 'eutactic'
+  | 'agminate'
+  | 'cacochymic'
   | 'royal-tent'
   | 'pawn-cash-out';
 
@@ -101,9 +103,9 @@ function inheritedTrait(
 function deploymentAbilityTrait(
   run: RunDocument,
   unit: RunArmyUnit,
-  ability: Extract<RunAbility, 'positioned' | 'marshalled'>,
+  ability: Extract<RunAbility, 'eutactic' | 'agminate'>,
 ): RunUnitTrait | null {
-  const label = ability === 'positioned' ? 'Positioned' : AGMINATE_DISPLAY_NAME;
+  const label = runAbilityDisplayName(ability);
   const icon = { state: ability } as const;
   if (unit.abilities.includes(ability)) {
     return {
@@ -123,38 +125,38 @@ function deploymentAbilityTrait(
 
 export function runUnitTraits(run: RunDocument, unit: RunArmyUnit): RunUnitTrait[] {
   const traits: RunUnitTrait[] = [];
-  if (unit.modifiers.includes('plagued')) {
+  if (unit.modifiers.includes('cacochymic')) {
     traits.push({
-      id: 'plagued',
+      id: 'cacochymic',
       label: CACOCHYMIC_DISPLAY_NAME,
       description: CACOCHYMIC_DESCRIPTION,
       source: 'The Great Mortality',
       inherited: false,
-      icon: { state: 'plagued' },
+      icon: { state: 'cacochymic' },
     });
   }
-  if (unit.abilities.includes('discipline')) {
+  if (unit.abilities.includes('adlected')) {
     traits.push({
-      id: 'discipline',
-      label: 'Discipline',
-      description: runAbilityDescription('discipline', unit.type),
+      id: 'adlected',
+      label: ADLECTED_DISPLAY_NAME,
+      description: runAbilityDescription('adlected', unit.type),
       source: 'Permanent unit ability',
       inherited: false,
-      icon: { state: 'discipline' },
+      icon: { state: 'adlected' },
     });
-  } else if (run.deployment?.temporaryDisciplineUnitId === unit.id) {
+  } else if (run.deployment?.temporaryAdlectedUnitId === unit.id) {
     traits.push(inheritedTrait(
-      'discipline',
-      'Discipline',
+      'adlected',
+      ADLECTED_DISPLAY_NAME,
       'May be deliberately placed in the player zone for this Battle.',
       RUN_RELIC_BY_ID['inspirational-record'].name,
-      { state: 'discipline' },
+      { state: 'adlected' },
     ));
   }
 
-  const positioned = deploymentAbilityTrait(run, unit, 'positioned');
+  const positioned = deploymentAbilityTrait(run, unit, 'eutactic');
   if (positioned) traits.push(positioned);
-  const marshalled = deploymentAbilityTrait(run, unit, 'marshalled');
+  const marshalled = deploymentAbilityTrait(run, unit, 'agminate');
   if (marshalled) traits.push(marshalled);
   if (unit.type === 'king' && hasRelic(run, 'royal-tent')) {
     traits.push(inheritedTrait(
@@ -226,7 +228,7 @@ function unitRunStatus(run: RunDocument, unit: RunArmyUnit): string {
   }
   if (run.phase === 'deployment') {
     if (run.deployment?.chosenBlockedUnitIds?.includes(unit.id)) return 'Sitting out';
-    if (run.deployment?.manualPlacements[unit.id]) return 'Placed with Discipline';
+    if (run.deployment?.manualPlacements[unit.id]) return `Placed with ${ADLECTED_DISPLAY_NAME}`;
     return 'Preparing to deploy';
   }
   if (run.phase === 'shop') return unit.type === 'king' ? 'Permanently retained' : 'Available to sell';
@@ -344,10 +346,10 @@ function RunRosterFilters({
           value={filters.ability}
           options={[
             { value: 'all', label: 'All abilities' },
-            { value: 'discipline', label: 'Discipline' },
-            { value: 'positioned', label: 'Positioned' },
-            { value: 'marshalled', label: AGMINATE_DISPLAY_NAME },
-            { value: 'plagued', label: CACOCHYMIC_DISPLAY_NAME },
+            { value: 'adlected', label: ADLECTED_DISPLAY_NAME },
+            { value: 'eutactic', label: EUTACTIC_DISPLAY_NAME },
+            { value: 'agminate', label: runAbilityDisplayName('agminate') },
+            { value: 'cacochymic', label: CACOCHYMIC_DISPLAY_NAME },
             { value: 'royal-tent', label: 'Royal Tent' },
             { value: 'pawn-cash-out', label: 'Cash Out' },
           ]}

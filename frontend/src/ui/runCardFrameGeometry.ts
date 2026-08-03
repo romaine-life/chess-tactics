@@ -4,20 +4,20 @@ export const RUN_CARD_FRAME_NATIVE_HEIGHT = 1484;
 export const RUN_CARD_FRAME_SLOT = 'ui/run/card-prototypes/frame-v1.png';
 export const RUN_CARD_PESTIFEROUS_FRAME_SLOT = 'ui/run/card-prototypes/pestiferous-frame-v1.png';
 export const RUN_CARD_CONCINNOUS_FRAME_SLOT = 'ui/run/card-prototypes/concinnous-frame-v1.png';
-export const RUN_CARD_TACTICAL_FRAME_SLOT = 'ui/run/card-prototypes/tactical-discipline-frame-v1.png';
+export const RUN_CARD_LEGATINE_FRAME_SLOT = 'ui/run/card-prototypes/legatine-adlected-frame-v1.png';
 export const RUN_CARD_HIERATIC_FRAME_SLOT = 'ui/run/card-prototypes/hieratic-frame-v1.png';
 
-export type RunCardFrameVariant = 'standard' | 'pestiferous' | 'concinnous' | 'tactical' | 'hieratic';
+export type RunCardFrameVariant = 'standard' | 'pestiferous' | 'concinnous' | 'legatine' | 'hieratic';
 
 export const RUN_CARD_FRAME_VARIANTS: readonly RunCardFrameVariant[] = Object.freeze([
-  'standard', 'pestiferous', 'concinnous', 'tactical', 'hieratic',
+  'standard', 'pestiferous', 'concinnous', 'legatine', 'hieratic',
 ]);
 
 export const RUN_CARD_FRAME_SLOT_BY_VARIANT: Readonly<Record<RunCardFrameVariant, string>> = Object.freeze({
   standard: RUN_CARD_FRAME_SLOT,
   pestiferous: RUN_CARD_PESTIFEROUS_FRAME_SLOT,
   concinnous: RUN_CARD_CONCINNOUS_FRAME_SLOT,
-  tactical: RUN_CARD_TACTICAL_FRAME_SLOT,
+  legatine: RUN_CARD_LEGATINE_FRAME_SLOT,
   hieratic: RUN_CARD_HIERATIC_FRAME_SLOT,
 });
 
@@ -213,8 +213,8 @@ export const RUN_CARD_CONCINNOUS_FRAME_GEOMETRY = defineGeometry({
   },
 });
 
-export const RUN_CARD_TACTICAL_FRAME_GEOMETRY = defineGeometry({
-  variant: 'tactical',
+export const RUN_CARD_LEGATINE_FRAME_GEOMETRY = defineGeometry({
+  variant: 'legatine',
   frameSha256s: ['6c54a0a6dc48f56a3cf21c83d57d08cfbf11a501ae90f820b527c07cf40d3140'],
   boxes: {
     art: { x: 97, y: 209, width: 865, height: 608 },
@@ -250,7 +250,7 @@ export const RUN_CARD_FRAME_GEOMETRY_BY_VARIANT: Readonly<Record<RunCardFrameVar
     standard: RUN_CARD_STANDARD_FRAME_GEOMETRY,
     pestiferous: RUN_CARD_PESTIFEROUS_FRAME_GEOMETRY,
     concinnous: RUN_CARD_CONCINNOUS_FRAME_GEOMETRY,
-    tactical: RUN_CARD_TACTICAL_FRAME_GEOMETRY,
+    legatine: RUN_CARD_LEGATINE_FRAME_GEOMETRY,
     hieratic: RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY,
   });
 

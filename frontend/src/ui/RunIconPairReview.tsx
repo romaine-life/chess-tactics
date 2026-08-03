@@ -44,7 +44,7 @@ export const RUN_CARD_ICON_PAIRS: readonly PairDefinition[] = Object.freeze([
   {
     property: 'pestiferous',
     propertySlot: 'ui/kit/icons/card-properties/pestiferous.png',
-    state: 'plagued',
+    state: 'cacochymic',
     stateSlot: 'ui/kit/icons/game/plagued.png',
     stateEffect: 'The marked unit receives its tier discount and is next to be lost.',
     source: 'accepted',
@@ -52,15 +52,15 @@ export const RUN_CARD_ICON_PAIRS: readonly PairDefinition[] = Object.freeze([
   {
     property: 'concinnous',
     propertySlot: 'ui/kit/icons/card-properties/concinnous.png',
-    state: 'positioned',
+    state: 'eutactic',
     stateSlot: 'ui/kit/icons/game/positioned.png',
     stateEffect: 'The unit favors its piece-specific region during automatic deployment.',
     source: 'accepted',
   },
   {
-    property: 'tactical',
+    property: 'legatine',
     propertySlot: 'ui/kit/icons/card-properties/tactical.png',
-    state: 'discipline',
+    state: 'adlected',
     stateSlot: 'ui/kit/icons/game/discipline.png',
     stateEffect: 'The unit may be deliberately placed before automatic deployment.',
     source: 'accepted',
@@ -68,7 +68,7 @@ export const RUN_CARD_ICON_PAIRS: readonly PairDefinition[] = Object.freeze([
   {
     property: 'hieratic',
     propertySlot: 'ui/kit/icons/card-properties/hieratic.png',
-    state: 'marshalled',
+    state: 'agminate',
     stateSlot: 'ui/kit/icons/game/marshalled.png',
     stateEffect: 'The unit seeks its piece-specific station within the surrounding formation.',
     source: 'accepted',
@@ -88,8 +88,8 @@ export type RunCardIconFittingDraft = Readonly<{
 }>;
 
 function displayName(value: string): string {
-  if (value === 'plagued') return 'Cacochymic';
-  if (value === 'marshalled') return AGMINATE_DISPLAY_NAME;
+  if (value === 'cacochymic') return 'Cacochymic';
+  if (value === 'agminate') return AGMINATE_DISPLAY_NAME;
   return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
 }
 
@@ -272,7 +272,7 @@ function specimenCard(pair: PairDefinition): RunCardFaceContent {
     runCardSpecimen({
       pieces: RUN_CARD_BY_ID.p.pieces,
       cardType: pair.property,
-      plaguedPieceIndex: pair.state === 'plagued' ? 0 : null,
+      cacochymicPieceIndex: pair.state === 'cacochymic' ? 0 : null,
     }),
     { purchased: true },
   );

@@ -95,13 +95,13 @@ describe('card type texture candidate projection', () => {
     expect(urls).toEqual({
       pestiferous: '/api/admin/media/pestiferous',
       concinnous: '/api/admin/media/concinnous',
-      tactical: '/api/admin/media/tactical',
+      legatine: '/api/admin/media/legatine',
       hieratic: '/api/admin/media/hieratic',
     });
     expect(hasCompleteCardTypeTextureSet(urls)).toBe(true);
   });
 
   it('does not call a partial candidate batch ready', () => {
-    expect(hasCompleteCardTypeTextureSet({ tactical: '/candidate/tactical' })).toBe(false);
+    expect(hasCompleteCardTypeTextureSet({ legatine: '/candidate/legatine' })).toBe(false);
   });
 });

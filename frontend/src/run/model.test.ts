@@ -6,17 +6,17 @@ import {
   AGMINATE_COST,
   AGMINATE_DISPLAY_NAME,
   CONCINNOUS_OFFER_DENOMINATOR,
-  DISCIPLINE_COST,
+  ADLECTED_COST,
   GOLD_SCALE,
   HIERATIC_AGMINATE_OFFER_DENOMINATOR,
   RUN_CARD_DECK,
   PIECE_VALUE,
-  POSITIONED_COST,
+  EUTACTIC_COST,
   RUN_FORMAT_VERSION,
   RUN_OPENING_OFFER_COUNT,
   RUN_STARTING_GOLD,
   RUN_STARTING_GOLD_TENTHS,
-  TACTICAL_DISCIPLINE_OFFER_DENOMINATOR,
+  LEGATINE_ADLECTED_OFFER_DENOMINATOR,
   acquireRelic,
   battleVictoryGoldTenths,
   beginBattle,
@@ -40,7 +40,7 @@ import {
   sellArmyUnit,
   shopHasChanges,
   takeVacantiaRelic,
-  tacticalDisciplineAcquisitionTarget,
+  legatineAdlectedAcquisitionTarget,
   type RunDocument,
   type RunWarSnapshot,
 } from './model';
@@ -99,10 +99,16 @@ function deployedRunWithPawn(snapshot = war()): RunDocument {
 }
 
 describe('Run piece economy', () => {
-  it('presents the legacy marshalled storage ability as Agminate', () => {
+  it('stores every ability under the exact word the game says (ADR-0374)', () => {
     expect(AGMINATE_DISPLAY_NAME).toBe('Agminate');
-    expect(runAbilityDisplayName('marshalled')).toBe('Agminate');
-    expect(runAbilityDisplayName('positioned')).toBe('Positioned');
+    expect(runAbilityDisplayName('agminate')).toBe('Agminate');
+    expect(runAbilityDisplayName('eutactic')).toBe('Eutactic');
+    expect(runAbilityDisplayName('adlected')).toBe('Adlected');
+    // The cutover's invariant: a stored value and its name are one word, so a document,
+    // a media locator and a card face can no longer drift into separate vocabularies.
+    for (const ability of ['adlected', 'eutactic', 'agminate'] as const) {
+      expect(runAbilityDisplayName(ability).toLowerCase()).toBe(ability);
+    }
   });
 
   it('enumerates every unique multiset worth 1–9 points exactly once', () => {
@@ -175,10 +181,10 @@ describe('Run piece economy', () => {
 
   it('rolls opening qualifiers at every core value, out of reach included', () => {
     const offers = openingShopOffers(91);
-    expect(offers.map((offer) => offer.cardType)).toEqual(['tactical', 'concinnous', null]);
+    expect(offers.map((offer) => offer.cardType)).toEqual(['legatine', 'concinnous', null]);
     expect(offers.map((offer) => offer.cost)).toEqual([
-      offers[0].value + DISCIPLINE_COST,
-      offers[1].value + POSITIONED_COST,
+      offers[0].value + ADLECTED_COST,
+      offers[1].value + EUTACTIC_COST,
       offers[2].value,
     ]);
     expect(offers[1].effectTargetIndex).not.toBeNull();
@@ -191,12 +197,12 @@ describe('Run piece economy', () => {
       expect(opening.some((offer) => offer.cost <= RUN_STARTING_GOLD)).toBe(true);
       for (const offer of opening) {
         expect(offer.cost).toBe(
-          offer.cardType === 'tactical'
-            ? offer.value + DISCIPLINE_COST
+          offer.cardType === 'legatine'
+            ? offer.value + ADLECTED_COST
             : offer.cardType === 'hieratic'
               ? offer.value + AGMINATE_COST
               : offer.cardType === 'concinnous'
-                ? offer.value + POSITIONED_COST
+                ? offer.value + EUTACTIC_COST
                 : offer.value,
         );
         if (offer.cost > RUN_STARTING_GOLD) outOfReach += 1;
@@ -566,7 +572,7 @@ describe('Ataraxia ladder identities', () => {
       numeral: '0',
       label: 'Ataraxia 0',
       title: 'The Untroubled Mind',
-      effect: 'Standard Run rules. Shop cards may be Tactical, Concinnous or Hieratic but are never Pestiferous.',
+      effect: 'Standard Run rules. Shop cards may be Legatine, Concinnous or Hieratic but are never Pestiferous.',
     });
   });
 
@@ -615,18 +621,18 @@ describe('Ataraxia I — The Great Mortality', () => {
     const owned = bought.cards.find((card) => (
       card.coreId === pestiferous.id && card.effectSeed === pestiferous.effectSeed
     ))!;
-    const plaguedPieceIndex = pestiferous.plaguedPieceIndex!;
-    const plaguedPiece = pestiferous.pieces[plaguedPieceIndex];
+    const cacochymicPieceIndex = pestiferous.cacochymicPieceIndex!;
+    const plaguedPiece = pestiferous.pieces[cacochymicPieceIndex];
     const discount = { pawn: 0, knight: 1, bishop: 1, rook: 2, queen: 3 }[plaguedPiece];
     const acquiredUnits = bought.army.filter((unit) => owned.unitIds.includes(unit.id));
 
-    expect(plaguedPieceIndex).toBeGreaterThanOrEqual(0);
+    expect(cacochymicPieceIndex).toBeGreaterThanOrEqual(0);
     expect(pestiferous.cost).toBe(pestiferous.value - discount);
     expect(owned).toMatchObject({ coreId: pestiferous.id, cardType: 'pestiferous', effectSeed: pestiferous.effectSeed });
     expect(owned.unitIds).toHaveLength(pestiferous.pieces.length);
-    expect(owned.plaguedUnitId).toBe(acquiredUnits[plaguedPieceIndex].id);
-    expect(acquiredUnits.filter((unit) => unit.modifiers.includes('plagued')).map((unit) => unit.id))
-      .toEqual([owned.plaguedUnitId]);
+    expect(owned.cacochymicUnitId).toBe(acquiredUnits[cacochymicPieceIndex].id);
+    expect(acquiredUnits.filter((unit) => unit.modifiers.includes('cacochymic')).map((unit) => unit.id))
+      .toEqual([owned.cacochymicUnitId]);
     expect(resetShop(bought).shop?.cardOffers).toEqual(originalOffers);
     expect(resetShop(bought).cards).toEqual(shop!.cards);
   });
@@ -642,7 +648,7 @@ describe('Ataraxia I — The Great Mortality', () => {
       ...current!,
       shop: {
         ...current!.shop!,
-        cardOffers: current!.shop!.cardOffers.map(({ plaguedPieceIndex: _target, ...offer }) => ({
+        cardOffers: current!.shop!.cardOffers.map(({ cacochymicPieceIndex: _target, ...offer }) => ({
           ...offer,
           cost: offer.cardType === 'pestiferous' ? 1 : offer.cost,
         })),
@@ -652,7 +658,7 @@ describe('Ataraxia I — The Great Mortality', () => {
 
     for (const offer of upgraded.shop!.cardOffers) {
       const original = current!.shop!.cardOffers.find((candidate) => candidate.offerId === offer.offerId)!;
-      expect(offer.plaguedPieceIndex).toBe(original.plaguedPieceIndex);
+      expect(offer.cacochymicPieceIndex).toBe(original.cacochymicPieceIndex);
       expect(offer.cost).toBe(original.cost);
     }
     expect(normalizeRunDocument(upgraded)).toBe(upgraded);
@@ -663,7 +669,7 @@ describe('Ataraxia I — The Great Mortality', () => {
     const units = base.army.filter((unit) => unit.type !== 'king').slice(0, 2).map((unit, index) => ({
       ...unit,
       modifiers: index === 0
-        ? ['plagued'] as RunDocument['army'][number]['modifiers']
+        ? ['cacochymic'] as RunDocument['army'][number]['modifiers']
         : [],
     }));
     const run: RunDocument = {
@@ -677,7 +683,7 @@ describe('Ataraxia I — The Great Mortality', () => {
         effectTargetUnitId: null,
         unitIds: units.map((unit) => unit.id),
         lostUnitIds: [],
-        plaguedUnitId: units[0].id,
+        cacochymicUnitId: units[0].id,
         acquiredAfterBattleIndex: 0,
       }],
       nextCardSequence: 2,
@@ -690,13 +696,13 @@ describe('Ataraxia I — The Great Mortality', () => {
     expect(first.army).toHaveLength(run.army.length - 1);
     expect(first.pestiferousLosses).toHaveLength(1);
     expect(first.pestiferousLosses[0].unit.id).toBe(units[0].id);
-    expect(first.cards[0].plaguedUnitId).toBe(units[1].id);
-    expect(first.army.find((unit) => unit.id === units[1].id)?.modifiers).toEqual(['plagued']);
+    expect(first.cards[0].cacochymicUnitId).toBe(units[1].id);
+    expect(first.army.find((unit) => unit.id === units[1].id)?.modifiers).toEqual(['cacochymic']);
     expect(retry.pestiferousLosses[0].unit.id).toBe(first.pestiferousLosses[0].unit.id);
     expect(deterioratePestiferousCards(first, 1)).toBe(first);
     expect(second.cards[0].unitIds).toEqual([]);
     expect(second.cards[0].lostUnitIds).toHaveLength(2);
-    expect(second.cards[0].plaguedUnitId).toBeNull();
+    expect(second.cards[0].cacochymicUnitId).toBeNull();
     expect(empty).toBe(second);
   });
 
@@ -705,7 +711,7 @@ describe('Ataraxia I — The Great Mortality', () => {
     const units = base.army.filter((unit) => unit.type !== 'king').slice(0, 2).map((unit, index) => ({
       ...unit,
       modifiers: index === 0
-        ? ['plagued'] as RunDocument['army'][number]['modifiers']
+        ? ['cacochymic'] as RunDocument['army'][number]['modifiers']
         : [],
     }));
     const run: RunDocument = {
@@ -720,7 +726,7 @@ describe('Ataraxia I — The Great Mortality', () => {
         effectTargetUnitId: null,
         unitIds: units.map((unit) => unit.id),
         lostUnitIds: [],
-        plaguedUnitId: units[0].id,
+        cacochymicUnitId: units[0].id,
         acquiredAfterBattleIndex: 0,
       }],
       shop: null,
@@ -729,15 +735,15 @@ describe('Ataraxia I — The Great Mortality', () => {
     const sold = sellArmyUnit(run, units[0].id);
 
     expect(sold.cards[0].unitIds).toEqual([units[1].id]);
-    expect(sold.cards[0].plaguedUnitId).toBe(units[1].id);
-    expect(sold.army.find((unit) => unit.id === units[1].id)?.modifiers).toEqual(['plagued']);
+    expect(sold.cards[0].cacochymicUnitId).toBe(units[1].id);
+    expect(sold.army.find((unit) => unit.id === units[1].id)?.modifiers).toEqual(['cacochymic']);
   });
 
   it('upgrades format-5 all-unit Cacochymic state to one deterministic current target', () => {
     const base = deployedAtaraxiaRun(81, war(3));
     const units = base.army.filter((unit) => unit.type !== 'king').slice(0, 2).map((unit) => ({
       ...unit,
-      modifiers: ['plagued'] as RunDocument['army'][number]['modifiers'],
+      modifiers: ['cacochymic'] as RunDocument['army'][number]['modifiers'],
     }));
     const legacy = {
       ...base,
@@ -757,19 +763,19 @@ describe('Ataraxia I — The Great Mortality', () => {
     const upgraded = normalizeRunDocument(legacy);
 
     expect(upgraded.formatVersion).toBe(RUN_FORMAT_VERSION);
-    expect(upgraded.cards[0].plaguedUnitId).not.toBeNull();
-    expect(upgraded.army.filter((unit) => unit.modifiers.includes('plagued')).map((unit) => unit.id))
-      .toEqual([upgraded.cards[0].plaguedUnitId]);
+    expect(upgraded.cards[0].cacochymicUnitId).not.toBeNull();
+    expect(upgraded.army.filter((unit) => unit.modifiers.includes('cacochymic')).map((unit) => unit.id))
+      .toEqual([upgraded.cards[0].cacochymicUnitId]);
     expect(normalizeRunDocument(upgraded)).toBe(upgraded);
 
     const missingCurrentTarget = {
       ...upgraded,
-      cards: upgraded.cards.map((card) => ({ ...card, plaguedUnitId: null })),
+      cards: upgraded.cards.map((card) => ({ ...card, cacochymicUnitId: null })),
     };
     const repaired = normalizeRunDocument(missingCurrentTarget);
-    expect(repaired.cards[0].plaguedUnitId).not.toBeNull();
-    expect(repaired.army.filter((unit) => unit.modifiers.includes('plagued')).map((unit) => unit.id))
-      .toEqual([repaired.cards[0].plaguedUnitId]);
+    expect(repaired.cards[0].cacochymicUnitId).not.toBeNull();
+    expect(repaired.army.filter((unit) => unit.modifiers.includes('cacochymic')).map((unit) => unit.id))
+      .toEqual([repaired.cards[0].cacochymicUnitId]);
   });
 });
 
@@ -788,10 +794,10 @@ describe('Concinnous cards', () => {
       card.coreId === concinnous.id && card.effectSeed === concinnous.effectSeed
     ))!;
     const positioned = bought.army.filter((unit) => (
-      owned.unitIds.includes(unit.id) && unit.abilities.includes('positioned')
+      owned.unitIds.includes(unit.id) && unit.abilities.includes('eutactic')
     ));
 
-    expect(concinnous.cost).toBe(concinnous.value + POSITIONED_COST);
+    expect(concinnous.cost).toBe(concinnous.value + EUTACTIC_COST);
     expect(concinnous.effectTargetIndex).toBeGreaterThanOrEqual(0);
     expect(concinnous.effectTargetIndex).toBeLessThan(concinnous.pieces.length);
     expect(owned).toMatchObject({
@@ -815,13 +821,13 @@ describe('Concinnous cards', () => {
     const bought = buyCard(shop!, concinnous.offerId);
     const legacy = {
       ...bought,
-      cards: bought.cards.map(({ plaguedUnitId: _plaguedUnitId, ...card }) => card),
+      cards: bought.cards.map(({ cacochymicUnitId: _cacochymicUnitId, ...card }) => card),
       shop: bought.shop && {
         ...bought.shop,
-        cardOffers: bought.shop.cardOffers.map(({ plaguedPieceIndex: _plaguedPieceIndex, ...offer }) => offer),
+        cardOffers: bought.shop.cardOffers.map(({ cacochymicPieceIndex: _cacochymicPieceIndex, ...offer }) => offer),
         entrySnapshot: {
           ...bought.shop.entrySnapshot,
-          cards: bought.shop.entrySnapshot.cards.map(({ plaguedUnitId: _plaguedUnitId, ...card }) => card),
+          cards: bought.shop.entrySnapshot.cards.map(({ cacochymicUnitId: _cacochymicUnitId, ...card }) => card),
         },
       },
     } as unknown as RunDocument;
@@ -836,13 +842,13 @@ describe('Concinnous cards', () => {
 
     expect(upgraded.formatVersion).toBe(RUN_FORMAT_VERSION);
     expect(upgradedCard.effectTargetUnitId).toBe(boughtCard.effectTargetUnitId);
-    expect(upgradedCard.plaguedUnitId).toBeNull();
+    expect(upgradedCard.cacochymicUnitId).toBeNull();
     expect(upgradedOffer.effectTargetIndex).toBe(concinnous.effectTargetIndex);
-    expect(upgradedOffer.plaguedPieceIndex).toBeNull();
+    expect(upgradedOffer.cacochymicPieceIndex).toBeNull();
     expect(normalizeRunDocument(upgraded)).toBe(upgraded);
   });
 
-  it('qualifies cards whose Positioned premium produces a two-digit cost', () => {
+  it('qualifies cards whose Eutactic premium produces a two-digit cost', () => {
     const baseline = createRun(war(), 4217, 0);
     const expensive = RUN_CARD_DECK.filter((card) => card.value >= 8);
     const offers = expensive.map((card, index) => (
@@ -851,34 +857,34 @@ describe('Concinnous cards', () => {
 
     expect(CONCINNOUS_OFFER_DENOMINATOR).toBe(8);
     expect(offers.every((offer) => offer.cardType === 'concinnous')).toBe(true);
-    expect(offers.every((offer) => offer.cost === offer.value + POSITIONED_COST)).toBe(true);
+    expect(offers.every((offer) => offer.cost === offer.value + EUTACTIC_COST)).toBe(true);
     expect(offers.every((offer) => offer.effectTargetIndex !== null)).toBe(true);
     expect(new Set(offers.map((offer) => offer.cost))).toEqual(new Set([10, 11]));
   });
 });
 
-describe('Tactical Discipline cards', () => {
-  it('rolls every core card at one in eight and permits the Discipline premium through twelve gold', () => {
+describe('Legatine Adlected cards', () => {
+  it('rolls every core card at one in eight and permits the Adlected premium through twelve gold', () => {
     const baseline = createRun(war(), 4217, 0);
     const forced = RUN_CARD_DECK.map((card, index) => (
       createRunCardOffer(baseline, card, Math.floor(index / 4), index % 4, 8, 8, 1)
     ));
 
-    expect(TACTICAL_DISCIPLINE_OFFER_DENOMINATOR).toBe(8);
-    expect(forced.every((offer) => offer.cardType === 'tactical')).toBe(true);
-    expect(forced.every((offer) => offer.cost === offer.value + DISCIPLINE_COST)).toBe(true);
+    expect(LEGATINE_ADLECTED_OFFER_DENOMINATOR).toBe(8);
+    expect(forced.every((offer) => offer.cardType === 'legatine')).toBe(true);
+    expect(forced.every((offer) => offer.cost === offer.value + ADLECTED_COST)).toBe(true);
     expect(forced.every((offer) => offer.effectTargetIndex === null)).toBe(true);
     expect(Math.max(...forced.map((offer) => offer.cost))).toBe(12);
   });
 
-  it('chooses and persists exactly one Disciplined unit only when the card is acquired', () => {
+  it('chooses and persists exactly one Adlected unit only when the card is acquired', () => {
     let shop: RunDocument | null = null;
     for (let seed = 1; seed < 500 && !shop; seed += 1) {
       const candidate = openShop({ ...deployedRun(seed), goldTenths: 100 * GOLD_SCALE }, []);
-      if (candidate.shop?.cardOffers.some((offer) => offer.cardType === 'tactical')) shop = candidate;
+      if (candidate.shop?.cardOffers.some((offer) => offer.cardType === 'legatine')) shop = candidate;
     }
     expect(shop).not.toBeNull();
-    const tactical = shop!.shop!.cardOffers.find((offer) => offer.cardType === 'tactical')!;
+    const tactical = shop!.shop!.cardOffers.find((offer) => offer.cardType === 'legatine')!;
     expect(tactical.effectTargetIndex).toBeNull();
 
     const bought = buyCard(shop!, tactical.offerId);
@@ -886,14 +892,14 @@ describe('Tactical Discipline cards', () => {
       card.coreId === tactical.id && card.effectSeed === tactical.effectSeed
     ))!;
     const disciplined = bought.army.filter((unit) => (
-      owned.unitIds.includes(unit.id) && unit.abilities.includes('discipline')
+      owned.unitIds.includes(unit.id) && unit.abilities.includes('adlected')
     ));
 
-    expect(owned.cardType).toBe('tactical');
+    expect(owned.cardType).toBe('legatine');
     expect(disciplined).toHaveLength(1);
     expect(owned.effectTargetUnitId).toBe(disciplined[0].id);
     expect(owned.unitIds.indexOf(disciplined[0].id)).toBe(
-      tacticalDisciplineAcquisitionTarget(tactical.effectSeed, tactical.pieces.length),
+      legatineAdlectedAcquisitionTarget(tactical.effectSeed, tactical.pieces.length),
     );
   });
 });
@@ -908,18 +914,18 @@ describe('Hieratic Agminate cards', () => {
     ));
 
     expect(HIERATIC_AGMINATE_OFFER_DENOMINATOR).toBe(8);
-    expect(AGMINATE_COST).toBe(DISCIPLINE_COST);
+    expect(AGMINATE_COST).toBe(ADLECTED_COST);
     expect(forced.every((offer) => offer.cardType === 'hieratic')).toBe(true);
     expect(forced.every((offer) => offer.cost === offer.value + AGMINATE_COST)).toBe(true);
     // The target is drawn at acquisition, so the offer carries no seeded index.
     expect(forced.every((offer) => offer.effectTargetIndex === null)).toBe(true);
-    expect(forced.every((offer) => offer.plaguedPieceIndex === null)).toBe(true);
+    expect(forced.every((offer) => offer.cacochymicPieceIndex === null)).toBe(true);
 
     // Tactical, Pestiferous and Concinnous all resolve first: a card carries one qualifier.
     const outranked = RUN_CARD_DECK.map((card, index) => (
       createRunCardOffer({ seed: 4217, ataraxiaTier: 1 }, card, Math.floor(index / 4), index % 4, 1, 1, 1, 1)
     ));
-    expect(outranked.every((offer) => offer.cardType === 'tactical')).toBe(true);
+    expect(outranked.every((offer) => offer.cardType === 'legatine')).toBe(true);
   });
 
   it('chooses and persists exactly one Agminate unit only when the card is acquired', () => {
@@ -937,7 +943,7 @@ describe('Hieratic Agminate cards', () => {
       card.coreId === hieratic.id && card.effectSeed === hieratic.effectSeed
     ))!;
     const agminate = bought.army.filter((unit) => (
-      owned.unitIds.includes(unit.id) && unit.abilities.includes('marshalled')
+      owned.unitIds.includes(unit.id) && unit.abilities.includes('agminate')
     ));
 
     expect(owned.cardType).toBe('hieratic');
@@ -949,7 +955,7 @@ describe('Hieratic Agminate cards', () => {
     expect(bought.goldTenths).toBe(shop!.goldTenths - (hieratic.value + AGMINATE_COST) * GOLD_SCALE);
     // The Agminate draw is its own; it does not mirror the Tactical one.
     expect(hieraticAgminateAcquisitionTarget(hieratic.effectSeed, 8))
-      .not.toBe(tacticalDisciplineAcquisitionTarget(hieratic.effectSeed, 8));
+      .not.toBe(legatineAdlectedAcquisitionTarget(hieratic.effectSeed, 8));
   });
 
   it('survives a document round trip with its acquisition target intact', () => {

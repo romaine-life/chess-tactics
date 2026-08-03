@@ -11,17 +11,17 @@ import {
   AGMINATE_COST,
   AGMINATE_DISPLAY_NAME,
   CONCINNOUS_OFFER_DENOMINATOR,
-  DISCIPLINE_COST,
+  ADLECTED_COST,
   HIERATIC_AGMINATE_OFFER_DENOMINATOR,
   PESTIFEROUS_OFFER_DENOMINATOR,
   RUN_CARD_DECK,
   RUN_STARTING_GOLD,
-  TACTICAL_DISCIPLINE_OFFER_DENOMINATOR,
+  LEGATINE_ADLECTED_OFFER_DENOMINATOR,
   concinnousOfferRoll,
   hieraticAgminateOfferRoll,
   openingShopOffers,
   pestiferousOfferRoll,
-  tacticalDisciplineOfferRoll,
+  legatineAdlectedOfferRoll,
   type RunCardOffer,
 } from '../run/model';
 import { runCardName } from '../run/cardNames';
@@ -140,8 +140,11 @@ export type RunCardTacticalSpecimen = 'single' | 'multi';
 
 export function runCardPrototypeVariantFromSearch(search: string): RunCardPrototypeVariant {
   const variant = new URLSearchParams(search).get('cardVariant');
+  // `tactical` is the word this review address was coined under; a bookmark written
+  // before ADR-0374 still opens the frame it named.
+  if (variant === 'tactical') return 'legatine';
   return variant === 'pestiferous'
-    || variant === 'tactical'
+    || variant === 'legatine'
     || variant === 'concinnous'
     || variant === 'hieratic'
     ? variant
@@ -183,11 +186,11 @@ export function runCardPrototypeSpecimen(
 ): RunCardOffer {
   const spec = variant === 'pestiferous'
     // The Bishop is the marked unit, so the card is discounted by its Cacochymic mark.
-    ? { ...STANDARD_CARD_SPEC, cardType: 'pestiferous' as const, plaguedPieceIndex: 4 }
-    : variant === 'tactical'
+    ? { ...STANDARD_CARD_SPEC, cardType: 'pestiferous' as const, cacochymicPieceIndex: 4 }
+    : variant === 'legatine'
       ? tacticalSpecimen === 'multi'
-        ? { ...STANDARD_CARD_SPEC, cardType: 'tactical' as const }
-        : { pieces: ['queen'] as const, cardType: 'tactical' as const }
+        ? { ...STANDARD_CARD_SPEC, cardType: 'legatine' as const }
+        : { pieces: ['queen'] as const, cardType: 'legatine' as const }
       : variant === 'concinnous'
         ? { pieces: ['pawn', 'pawn'] as const, cardType: 'concinnous' as const, effectTargetIndex: 0 }
         : variant === 'hieratic'
@@ -344,7 +347,7 @@ export function RunCardPrototypeViewer({
   const [selectedFrameBox, setSelectedFrameBox] = useState<RunCardFrameBoxName>('type');
   const [pestiferousDenominator, setPestiferousDenominator] = useState(PESTIFEROUS_OFFER_DENOMINATOR);
   const [openingSampleSeed, setOpeningSampleSeed] = useState(DEFAULT_OPENING_SAMPLE_SEED);
-  const [tacticalDenominator, setTacticalDenominator] = useState(TACTICAL_DISCIPLINE_OFFER_DENOMINATOR);
+  const [tacticalDenominator, setTacticalDenominator] = useState(LEGATINE_ADLECTED_OFFER_DENOMINATOR);
   const [concinnousDenominator, setConcinnousDenominator] = useState(CONCINNOUS_OFFER_DENOMINATOR);
   const [hieraticDenominator, setHieraticDenominator] = useState(HIERATIC_AGMINATE_OFFER_DENOMINATOR);
   const [handoffCopyState, setHandoffCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
@@ -374,7 +377,7 @@ export function RunCardPrototypeViewer({
   const realizedTacticalCount = useMemo(() => (
     Array.from({ length: RUN_CARD_SAMPLE_DRAWS }, (_, index) => {
       const card = RUN_CARD_DECK[index % RUN_CARD_DECK.length];
-      return tacticalDisciplineOfferRoll(
+      return legatineAdlectedOfferRoll(
         4217,
         Math.floor(index / 4),
         index % 4,
@@ -428,7 +431,7 @@ export function RunCardPrototypeViewer({
       [geometryVariant]: { ...RUN_CARD_FRAME_GEOMETRY_BY_VARIANT[geometryVariant].boxes },
     }));
   };
-  const artSlot = !contentsStudy && cardVariant === 'tactical' && tacticalSpecimen === 'single'
+  const artSlot = !contentsStudy && cardVariant === 'legatine' && tacticalSpecimen === 'single'
     ? TACTICAL_ART_SLOT
     : !contentsStudy && cardVariant === 'concinnous'
       ? CONCINNOUS_ART_SLOT
@@ -503,7 +506,7 @@ export function RunCardPrototypeViewer({
     setContentsScale(DEFAULT_CONTENTS_SCALE);
     setPestiferousDenominator(PESTIFEROUS_OFFER_DENOMINATOR);
     setOpeningSampleSeed(DEFAULT_OPENING_SAMPLE_SEED);
-    setTacticalDenominator(TACTICAL_DISCIPLINE_OFFER_DENOMINATOR);
+    setTacticalDenominator(LEGATINE_ADLECTED_OFFER_DENOMINATOR);
     setConcinnousDenominator(CONCINNOUS_OFFER_DENOMINATOR);
     setHieraticDenominator(HIERATIC_AGMINATE_OFFER_DENOMINATOR);
     setPreviewCost(null);
@@ -782,10 +785,10 @@ export function RunCardPrototypeViewer({
                 >Pestiferous</button>
                 <button
                   type="button"
-                  className={`tileset-view-action${cardVariant === 'tactical' ? ' active' : ''}`}
+                  className={`tileset-view-action${cardVariant === 'legatine' ? ' active' : ''}`}
                   data-card-variant="tactical"
-                  aria-pressed={cardVariant === 'tactical'}
-                  onClick={() => chooseCardVariant('tactical')}
+                  aria-pressed={cardVariant === 'legatine'}
+                  onClick={() => chooseCardVariant('legatine')}
                 >Tactical</button>
                 <button
                   type="button"
@@ -803,7 +806,7 @@ export function RunCardPrototypeViewer({
                 >Hieratic</button>
               </div>
             )}
-            {!contentsStudy && cardVariant === 'tactical' ? (
+            {!contentsStudy && cardVariant === 'legatine' ? (
               <div className="tileset-button-row" role="group" aria-label="Tactical contents">
                 <button
                   type="button"
@@ -1017,7 +1020,7 @@ export function RunCardPrototypeViewer({
               max={12}
               step={1}
               nudge={1}
-              dflt={TACTICAL_DISCIPLINE_OFFER_DENOMINATOR}
+              dflt={LEGATINE_ADLECTED_OFFER_DENOMINATOR}
             />
             <SliderRow
               label={<>Concinnous prevalence · 1 in {concinnousDenominator} non-Pestiferous offers</>}
@@ -1054,7 +1057,7 @@ export function RunCardPrototypeViewer({
                 <div><dt>Coin source</dt><dd>{coinSource.media!.sha256.slice(0, 12)} · {coinSource.status}</dd></div>
                 <div><dt>Artwork</dt><dd>{art.media!.sha256.slice(0, 12)} · {art.status}</dd></div>
                 <div><dt>Card</dt><dd>{contentsStudy ? 'Contents Box density study' : `${displayedCard.typeLine} · ${displayedCard.cost} gold`}</dd></div>
-                {cardVariant === 'tactical' ? <div><dt>Discipline target</dt><dd>{tacticalSpecimen === 'single' ? 'Forced and shown by icon' : 'Chosen at acquisition'}</dd></div> : null}
+                {cardVariant === 'legatine' ? <div><dt>Discipline target</dt><dd>{tacticalSpecimen === 'single' ? 'Forced and shown by icon' : 'Chosen at acquisition'}</dd></div> : null}
                 <div><dt>Ataraxia I sample</dt><dd>{realizedPestiferousCount} / {RUN_CARD_SAMPLE_DRAWS} Pestiferous · seed 4217</dd></div>
                 <div><dt>Opening budget</dt><dd>{RUN_STARTING_GOLD} gold · buy any affordable cards</dd></div>
                 <div><dt>Opening party</dt><dd>King + 2 Pawns + purchased cards</dd></div>

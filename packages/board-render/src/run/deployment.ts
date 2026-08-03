@@ -26,7 +26,7 @@ export interface RunDeploymentLayout {
 
 export interface RunDeploymentOptions {
   zoneCells: Vec[];
-  disciplineUnitIds: string[];
+  adlectedUnitIds: string[];
   overflowCount: number;
   hasBlockedChoice: boolean;
   needsBlockedChoice: boolean;
@@ -108,8 +108,8 @@ export function playerDeploymentCells(level: Level): Vec[] {
 }
 
 function disciplineIds(run: RunDocument): string[] {
-  const ids = run.army.filter((unit) => unit.abilities.includes('discipline')).map((unit) => unit.id);
-  const temporary = run.deployment?.temporaryDisciplineUnitId;
+  const ids = run.army.filter((unit) => unit.abilities.includes('adlected')).map((unit) => unit.id);
+  const temporary = run.deployment?.temporaryAdlectedUnitId;
   if (temporary && !ids.includes(temporary)) ids.push(temporary);
   return ids;
 }
@@ -144,19 +144,19 @@ function cellScore(
   const minY = Math.min(...cells.map((candidate) => candidate.y));
   const maxY = Math.max(...cells.map((candidate) => candidate.y));
   let score = rngNoise;
-  if (unit.type === 'pawn' && hasRunAbility(run, unit, 'positioned')) {
+  if (unit.type === 'pawn' && hasRunAbility(run, unit, 'eutactic')) {
     score += cell.y === minY ? 1000 : -Math.abs(cell.y - minY) * 50;
   }
   if (unit.type === 'king') {
-    if (hasRunAbility(run, unit, 'marshalled')) score += edgeDistance(cell, level) === 0 ? 5000 : -5000;
-    if (hasRunAbility(run, unit, 'positioned')) score += cell.y === maxY ? 900 : -Math.abs(cell.y - maxY) * 40;
+    if (hasRunAbility(run, unit, 'agminate')) score += edgeDistance(cell, level) === 0 ? 5000 : -5000;
+    if (hasRunAbility(run, unit, 'eutactic')) score += cell.y === maxY ? 900 : -Math.abs(cell.y - maxY) * 40;
   }
   if (unit.type === 'rook') {
-    if (hasRunAbility(run, unit, 'positioned')) {
+    if (hasRunAbility(run, unit, 'eutactic')) {
       score += cell.y === maxY ? 800 : -Math.abs(cell.y - maxY) * 30;
       score += Math.max(cell.x, level.board.cols - 1 - cell.x) * 10;
     }
-    if (hasRunAbility(run, unit, 'marshalled')) {
+    if (hasRunAbility(run, unit, 'agminate')) {
       const king = run.army.find((candidate) => candidate.type === 'king');
       const kingCell = king ? placed[king.id] : undefined;
       const backRow = cells.filter((candidate) => candidate.y === maxY);
@@ -164,7 +164,7 @@ function cellScore(
       const maxBackX = Math.max(...backRow.map((candidate) => candidate.x));
       const corners = backRow.filter((candidate) => candidate.x === minBackX || candidate.x === maxBackX);
       if (king && kingCell) {
-        if (hasRunAbility(run, king, 'marshalled') && marshalledRookIndex === 0) {
+        if (hasRunAbility(run, king, 'agminate') && marshalledRookIndex === 0) {
           const adjacent = Math.abs(cell.x - kingCell.x) + Math.abs(cell.y - kingCell.y) === 1;
           score += adjacent ? 4000 : -Math.abs(cell.x - kingCell.x) * 80;
         } else {
@@ -175,8 +175,8 @@ function cellScore(
     }
   }
   if (unit.type === 'bishop') {
-    if (hasRunAbility(run, unit, 'positioned')) score += cell.y === maxY ? 800 : -Math.abs(cell.y - maxY) * 30;
-    if (hasRunAbility(run, unit, 'marshalled')) {
+    if (hasRunAbility(run, unit, 'eutactic')) score += cell.y === maxY ? 800 : -Math.abs(cell.y - maxY) * 30;
+    if (hasRunAbility(run, unit, 'agminate')) {
       const extraParity = createRng(mixSeed(run.deployment?.seed ?? run.seed, 'bishop-color')).int(2);
       const placedBishopParities = Object.entries(placed).flatMap(([unitId, placedCell]) => (
         run.army.find((candidate) => candidate.id === unitId)?.type === 'bishop'
@@ -253,7 +253,7 @@ function buildLayout(run: RunDocument, level: Level, index: 0 | 1, blockedUnitId
     }
     placements[unit.id] = best;
     available.delete(key(best));
-    if (unit.type === 'rook' && hasRunAbility(run, unit, 'marshalled')) marshalledRookIndex += 1;
+    if (unit.type === 'rook' && hasRunAbility(run, unit, 'agminate')) marshalledRookIndex += 1;
   }
   // A unit that found no square it could use sits this Battle out exactly like an overflow unit:
   // it is blocked, and remains callable as a reservist.
@@ -303,7 +303,7 @@ export function deploymentOptions(run: RunDocument, level: Level): RunDeployment
     && overflowCount < run.army.filter((unit) => unit.type !== 'king').length;
   return {
     zoneCells,
-    disciplineUnitIds: disciplineIds(run).filter((id) => !blockedUnitIds.includes(id)),
+    adlectedUnitIds: disciplineIds(run).filter((id) => !blockedUnitIds.includes(id)),
     overflowCount,
     hasBlockedChoice,
     needsBlockedChoice: hasBlockedChoice && chosenCount !== overflowCount,
@@ -320,7 +320,7 @@ export function disciplinePlacementCells(
   options: RunDeploymentOptions,
   unitId: string,
 ): Vec[] {
-  if (!options.disciplineUnitIds.includes(unitId)) return [];
+  if (!options.adlectedUnitIds.includes(unitId)) return [];
   const used = new Set(Object.entries(run.deployment?.manualPlacements ?? {})
     .filter(([id]) => id !== unitId)
     .map(([, cell]) => cell));
@@ -362,7 +362,7 @@ export function resolveForcedDeploymentChoices(run: RunDocument, level: Level): 
   if (!options.needsBlockedChoice) {
     const manualPlacements = { ...next.deployment!.manualPlacements };
     let changed = false;
-    for (const unitId of options.disciplineUnitIds) {
+    for (const unitId of options.adlectedUnitIds) {
       if (manualPlacements[unitId]) continue;
       const candidates = disciplinePlacementCells(
         { ...next, deployment: { ...next.deployment!, manualPlacements } },
@@ -391,7 +391,7 @@ export function resolveForcedDeploymentChoices(run: RunDocument, level: Level): 
 
 export function deploymentHasMeaningfulChoice(run: RunDocument, options: RunDeploymentOptions): boolean {
   if (options.hasBlockedChoice) return true;
-  if (options.disciplineUnitIds.some((unitId) => disciplinePlacementCells(run, options, unitId).length > 1)) return true;
+  if (options.adlectedUnitIds.some((unitId) => disciplinePlacementCells(run, options, unitId).length > 1)) return true;
   return hasRelic(run, 'surveyors-compass') && layoutsDiffer(options.layouts);
 }
 
@@ -426,7 +426,7 @@ export function deploymentReady(run: RunDocument, options: RunDeploymentOptions)
   const layoutIndex = hasRelic(run, 'surveyors-compass') ? run.deployment.layoutChoice : 0;
   if (layoutIndex !== 0 && layoutIndex !== 1) return false;
   const layout = options.layouts[layoutIndex];
-  return options.disciplineUnitIds.every((id) => Boolean(layout.placements[id]));
+  return options.adlectedUnitIds.every((id) => Boolean(layout.placements[id]));
 }
 
 export function selectedDeploymentLayout(run: RunDocument, options: RunDeploymentOptions): RunDeploymentLayout {
@@ -470,7 +470,7 @@ export function levelForRunDeployment(run: RunDocument, level: Level, layout: Ru
   const projected = levelWithRunDeployment(run, level, layout);
   const options = deploymentOptions(run, level);
   const committedDisciplineUnitIds = new Set(
-    options.disciplineUnitIds.filter((unitId) => Boolean(layout.placements[unitId])),
+    options.adlectedUnitIds.filter((unitId) => Boolean(layout.placements[unitId])),
   );
   return {
     ...projected,
