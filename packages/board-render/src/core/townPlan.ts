@@ -142,8 +142,6 @@ export interface TownPlanParams {
    * 'shrink' keeps the count up by building smaller where it is tight, down to the section floor.
    */
   fit: TownFitPolicy;
-  /** Skip buildings whose ground point lands on a playable board cell. */
-  avoidPlayableBoard: boolean;
   seed: number;
 }
 
@@ -159,10 +157,6 @@ export const TOWN_PLAN_DEFAULTS: TownPlanParams = {
   facingWobble: 0.2,
   spacing: 10,
   fit: 'shrink',
-  // Off by default: a town dropped where the author is looking has to build there. Keeping scenery
-  // off the gameplay tiles is a choice worth having, but as an opt-in, not as a default that makes
-  // the tool produce nothing.
-  avoidPlayableBoard: false,
   seed: 1,
 };
 
@@ -481,7 +475,6 @@ export interface TownPlanInput {
   bounds: TownBounds;
   params: TownPlanParams;
   geometry: ForestSpeciesGeometry;
-  board: { cols: number; rows: number };
   /** Scene art already present, for spacing rejection. Town members are excluded by the caller. */
   existing: readonly FloatingArtworkPlacement[];
 }
@@ -500,18 +493,12 @@ export function isTownMember(placement: FloatingArtworkPlacement, townId: string
   return placement.id.startsWith(townIdPrefix(townId));
 }
 
-function onPlayableBoard(ground: ForestGroundPoint, board: { cols: number; rows: number }): boolean {
-  const grid = unprojectBoardPoint({ left: ground.x, top: ground.y });
-  return grid.x >= -0.5 && grid.y >= -0.5 && grid.x < board.cols - 0.5 && grid.y < board.rows - 0.5;
-}
 
 export interface TownPlanResult {
   /** The buildings, depth-sorted, dense in the middle and fraying at the edge. */
   placements: FloatingArtworkPlacement[];
   /** Plots the plan offered inside the dragged area, before any rejection. */
   plotsOffered: number;
-  /** Plots dropped for landing on the playable board. */
-  rejectedOnBoard: number;
   /** Plots dropped because the building would have overlapped another. */
   rejectedSpacing: number;
   /** Plots dropped because the building would have overhung the selection. */
@@ -523,9 +510,9 @@ export interface TownPlanResult {
  * can name the real cause instead of blaming frontage for a town the board filter rejected.
  */
 export function planTown(input: TownPlanInput): TownPlanResult {
-  const { townId, bounds, params, geometry, board, existing } = input;
+  const { townId, bounds, params, geometry, existing } = input;
   const empty: TownPlanResult = {
-    placements: [], plotsOffered: 0, rejectedOnBoard: 0, rejectedSpacing: 0, rejectedOutside: 0,
+    placements: [], plotsOffered: 0, rejectedSpacing: 0, rejectedOutside: 0,
   };
   // Only sections that can actually draw something count, so an empty section neither takes a
   // share of the town nor leaves a hole in it.
@@ -670,12 +657,10 @@ export function planTown(input: TownPlanInput): TownPlanResult {
   const landmarks = params.landmarkIds.filter((id) => geometry.directions(id).length > 0);
   let serial = 0;
 
-  let rejectedOnBoard = 0;
   let rejectedSpacing = 0;
   let rejectedOutside = 0;
   for (const plot of ordered) {
     if (produced.length >= params.size) break;
-    if (params.avoidPlayableBoard && onPlayableBoard(plot.ground, board)) { rejectedOnBoard += 1; continue; }
 
     // The focal structure takes the most central plot, then ordinary buildings fill the rest.
     const isLandmark = landmarks.length > 0 && produced.length === 0;
@@ -762,7 +747,6 @@ export function planTown(input: TownPlanInput): TownPlanResult {
       .sort((a, b) => (a.ground.y === b.ground.y ? a.ground.x - b.ground.x : a.ground.y - b.ground.y))
       .map((entry) => entry.placement),
     plotsOffered: plots.length,
-    rejectedOnBoard,
     rejectedSpacing,
     rejectedOutside,
   };

@@ -51,8 +51,6 @@ export interface ForestScatterParams {
   clumping: number;
   /** Share of the brush radius over which density fades to nothing. 0 is a hard edge. */
   falloff: number;
-  /** Skip candidates whose ground point lands on a playable board cell. */
-  avoidPlayableBoard: boolean;
   seed: number;
 }
 
@@ -68,7 +66,6 @@ export const FOREST_SCATTER_DEFAULTS: ForestScatterParams = {
   spacing: 26,
   clumping: 0.45,
   falloff: 0.35,
-  avoidPlayableBoard: true,
   seed: 1,
 };
 
@@ -99,16 +96,10 @@ export interface ForestGroundPoint {
   y: number;
 }
 
-export interface ForestBoardExtent {
-  cols: number;
-  rows: number;
-}
-
 export interface ForestScatterInput {
   area: ForestBrushArea;
   params: ForestScatterParams;
   geometry: ForestSpeciesGeometry;
-  board: ForestBoardExtent;
   /** Everything already in the scene. Used for id de-duplication and spacing rejection. */
   existing: readonly FloatingArtworkPlacement[];
 }
@@ -192,12 +183,6 @@ export function forestPlacementId(seed: number, cellX: number, cellY: number): s
   return `f${(seed >>> 0).toString(36)}.${cellX}.${cellY}`;
 }
 
-/** True when a ground point lands on the playable board rather than the scenic surround. */
-function onPlayableBoard(ground: ForestGroundPoint, board: ForestBoardExtent): boolean {
-  const grid = unprojectBoardPoint({ left: ground.x, top: ground.y });
-  return grid.x >= -0.5 && grid.y >= -0.5
-    && grid.x < board.cols - 0.5 && grid.y < board.rows - 0.5;
-}
 
 /**
  * Sort scene art into back-to-front paint order by ground contact. Placements whose source
@@ -228,7 +213,7 @@ export function sortFloatingArtworkByDepth(
  * cell is already in `existing` is left alone, so repainting the same ground is a no-op.
  */
 export function scatterForest(input: ForestScatterInput): FloatingArtworkPlacement[] {
-  const { area, params, geometry, board, existing } = input;
+  const { area, params, geometry, existing } = input;
   const species = params.speciesIds.filter((id) => geometry.directions(id).length > 0);
   if (!species.length || area.radius <= 0 || params.density <= 0) return [];
 
@@ -285,8 +270,6 @@ export function scatterForest(input: ForestScatterInput): FloatingArtworkPlaceme
         keep *= clamp(1 - clumping + 2 * clumping * noise, 0, 1);
       }
       if (hashUnit(cellX, cellY, seed, 3) >= keep) continue;
-
-      if (params.avoidPlayableBoard && onPlayableBoard(ground, board)) continue;
 
       const sourceArtId = species[Math.floor(hashUnit(cellX, cellY, seed, 4) * species.length) % species.length];
       const directions = geometry.directions(sourceArtId);

@@ -33,14 +33,12 @@ const geometry: ForestSpeciesGeometry = {
 const params = (overrides: Partial<ForestScatterParams> = {}): ForestScatterParams => ({
   ...FOREST_SCATTER_DEFAULTS,
   speciesIds: ['tall-tree'],
-  avoidPlayableBoard: false,
   spacing: 0,
   clumping: 0,
   falloff: 0,
   ...overrides,
 });
 
-const board = { cols: 8, rows: 8 };
 const area = { centerX: 900, centerY: 900, radius: 220 };
 
 const run = (
@@ -48,7 +46,7 @@ const run = (
   existing: FloatingArtworkPlacement[] = [],
   brush = area,
 ): FloatingArtworkPlacement[] => scatterForest({
-  area: brush, params: params(overrides), geometry, board, existing,
+  area: brush, params: params(overrides), geometry, existing,
 });
 
 describe('scatterForest', () => {
@@ -176,14 +174,6 @@ describe('scatterForest', () => {
       return outer.length / placements.length;
     };
     expect(edgeShare(run({ falloff: 0.9, density: 4 }))).toBeLessThan(edgeShare(run({ falloff: 0, density: 4 })));
-  });
-
-  it('keeps trees off the playable board when asked', () => {
-    // A brush centred on the board origin covers playable cells.
-    const overBoard = { centerX: 0, centerY: 0, radius: 200 };
-    expect(run({ avoidPlayableBoard: false }, [], overBoard).length).toBeGreaterThan(0);
-    expect(run({ avoidPlayableBoard: true }, [], overBoard).length)
-      .toBeLessThan(run({ avoidPlayableBoard: false }, [], overBoard).length);
   });
 
   it('emits ids and coordinates the board-code sanitizer accepts', () => {

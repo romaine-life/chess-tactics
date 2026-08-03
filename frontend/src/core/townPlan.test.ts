@@ -37,7 +37,6 @@ const geometry: ForestSpeciesGeometry = {
   sprite: (id, direction) => (id in SPRITES && ALL_DIRECTIONS.includes(direction) ? SPRITES[id] : undefined),
 };
 
-const board = { cols: 8, rows: 8 };
 // The area an author would drag, in GRID CELLS: a wide-ish rect well clear of the playable board.
 const AREA = { minX: 14, minY: 10, maxX: 30, maxY: 22 };
 const CENTER = (() => {
@@ -66,7 +65,6 @@ const section = (over: Partial<TownSection> & { buildingIds?: string[] } = {}): 
 const params = (overrides: Partial<TownPlanParams> = {}): TownPlanParams => ({
   ...TOWN_PLAN_DEFAULTS,
   sections: [section({ buildingIds: ['cottage', 'cabin', 'lodge'] })],
-  avoidPlayableBoard: false,
   ...overrides,
 });
 
@@ -75,14 +73,14 @@ const run = (
   existing: FloatingArtworkPlacement[] = [],
   bounds = AREA,
 ): FloatingArtworkPlacement[] => planTown({
-  townId: 'a1', bounds, params: params(overrides), geometry, board, existing,
+  townId: 'a1', bounds, params: params(overrides), geometry, existing,
 }).placements;
 
 /** Full result, for the assertions that care WHY plots were dropped. */
 const runFull = (
   overrides: Partial<TownPlanParams> = {},
   bounds = AREA,
-) => planTown({ townId: 'a1', bounds, params: params(overrides), geometry, board, existing: [] });
+) => planTown({ townId: 'a1', bounds, params: params(overrides), geometry, existing: [] });
 
 const groundOf = (placement: FloatingArtworkPlacement) => floatingArtworkGroundPoint(placement, geometry)!;
 
@@ -612,31 +610,9 @@ describe('planTown', () => {
   });
 
   it('reports why plots were dropped, so the editor can name the real cause', () => {
-    const overBoard = { minX: 0, minY: 0, maxX: 7, maxY: 7 };
-    const blocked = runFull({ avoidPlayableBoard: true, size: 30 }, overBoard);
-    expect(blocked.plotsOffered).toBeGreaterThan(0);
-    expect(blocked.rejectedOnBoard).toBeGreaterThan(0);
-    expect(blocked.placements.length).toBeLessThan(30);
-    // Same drag with the filter off attributes nothing to the board.
-    expect(runFull({ avoidPlayableBoard: false, size: 30 }, overBoard).rejectedOnBoard).toBe(0);
-    // A crowded plan blames spacing instead.
+    // A crowded plan reports spacing; a plan that overhangs reports the boundary.
     expect(runFull({ spacing: 200, size: 30 }).rejectedSpacing).toBeGreaterThan(0);
-  });
-
-  it('keeps the town off the playable board when asked', () => {
-    // Small buildings over a generous area, so the board filter is what thins it, not the fit.
-    const overBoard = { minX: -6, minY: -6, maxX: 16, maxY: 16 };
-    const small = [section({ buildingIds: ['cabin'] })];
-    const free = run({ avoidPlayableBoard: false, size: 30, sections: small }, [], overBoard);
-    const kept = run({ avoidPlayableBoard: true, size: 30, sections: small }, [], overBoard);
-    expect(free.length).toBeGreaterThan(0);
-    expect(kept.length).toBeLessThanOrEqual(free.length);
-    for (const placement of kept) {
-      const ground = groundOf(placement);
-      const grid = cellOf(ground);
-      const inside = grid.x >= -0.5 && grid.y >= -0.5 && grid.x < board.cols - 0.5 && grid.y < board.rows - 0.5;
-      expect(inside).toBe(false);
-    }
+    expect(runFull({ size: 40 }).plotsOffered).toBeGreaterThan(0);
   });
 
   it('returns the town already in back-to-front paint order', () => {
@@ -707,8 +683,8 @@ describe('townIdPrefix', () => {
   });
 
   it('keeps separate towns separate, so a board can carry many', () => {
-    const first = planTown({ townId: 'a1', bounds: AREA, params: params(), geometry, board, existing: [] });
-    const second = planTown({ townId: 'b2', bounds: AREA, params: params(), geometry, board, existing: [] });
+    const first = planTown({ townId: 'a1', bounds: AREA, params: params(), geometry, existing: [] });
+    const second = planTown({ townId: 'b2', bounds: AREA, params: params(), geometry, existing: [] });
     expect(first.placements.length).toBeGreaterThan(0);
     for (const placement of first.placements) {
       expect(isTownMember(placement, 'a1')).toBe(true);

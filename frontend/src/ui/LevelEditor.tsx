@@ -3086,7 +3086,6 @@ export function LevelEditor(): ReactElement {
   const [forestSpacing, setForestSpacing] = useState(FOREST_SCATTER_DEFAULTS.spacing);
   const [forestClumping, setForestClumping] = useState(FOREST_SCATTER_DEFAULTS.clumping);
   const [forestFalloff, setForestFalloff] = useState(FOREST_SCATTER_DEFAULTS.falloff);
-  const [forestAvoidBoard, setForestAvoidBoard] = useState(FOREST_SCATTER_DEFAULTS.avoidPlayableBoard);
   // Start somewhere random so a fresh session is not always the same forest. Reset still returns
   // to the documented baseline (ADR-0057). Unlike the ground-cover seed this is safe to randomise:
   // it only shapes NEWLY generated placements, which are then baked into the document, whereas
@@ -3170,7 +3169,7 @@ export function LevelEditor(): ReactElement {
   const [townDragBounds, setTownDragBounds] = useState<TownBounds | null>(null);
   const townDragRef = useRef<{ pointerId: number; cellX: number; cellY: number } | null>(null);
   const [townSited, setTownSited] = useState<
-    { placed: number; onBoard: number; spacing: number; outside: number; offered: number } | null>(null);
+    { placed: number; spacing: number; outside: number; offered: number } | null>(null);
   // Keep the selection on a town that exists. Without this the dropdown opens empty on a board
   // that already has towns, and lands on empty again whenever the selected one is removed.
   useEffect(() => {
@@ -4315,7 +4314,6 @@ export function LevelEditor(): ReactElement {
     spacing: forestSpacing,
     clumping: forestClumping,
     falloff: forestFalloff,
-    avoidPlayableBoard: forestAvoidBoard,
     seed: forestSeed,
   });
 
@@ -4327,7 +4325,6 @@ export function LevelEditor(): ReactElement {
       area,
       params: forestParams(),
       geometry: forestGeometry,
-      board: { cols: current.cols, rows: current.rows },
       existing,
     });
     if (!grown.length) return;
@@ -4360,7 +4357,6 @@ export function LevelEditor(): ReactElement {
     setForestSpacing(FOREST_SCATTER_DEFAULTS.spacing);
     setForestClumping(FOREST_SCATTER_DEFAULTS.clumping);
     setForestFalloff(FOREST_SCATTER_DEFAULTS.falloff);
-    setForestAvoidBoard(FOREST_SCATTER_DEFAULTS.avoidPlayableBoard);
     setForestSeed(FOREST_SCATTER_DEFAULTS.seed);
   };
 
@@ -4388,16 +4384,13 @@ export function LevelEditor(): ReactElement {
         facingWobble: town.facingWobble,
         spacing: town.spacing,
         fit: town.fit as TownFitPolicy,
-        avoidPlayableBoard: town.avoidPlayableBoard,
         seed: town.seed,
       },
       geometry: forestGeometry,
-      board: { cols: current.cols, rows: current.rows },
       existing: others,
     });
     setTownSited({
       placed: result.placements.length,
-      onBoard: result.rejectedOnBoard,
       spacing: result.rejectedSpacing,
       outside: result.rejectedOutside,
       offered: result.plotsOffered,
@@ -4478,7 +4471,6 @@ export function LevelEditor(): ReactElement {
       facingWobble: template?.facingWobble ?? TOWN_PLAN_DEFAULTS.facingWobble,
       spacing: template?.spacing ?? TOWN_PLAN_DEFAULTS.spacing,
       fit: template?.fit ?? TOWN_PLAN_DEFAULTS.fit,
-      avoidPlayableBoard: template?.avoidPlayableBoard ?? TOWN_PLAN_DEFAULTS.avoidPlayableBoard,
       seed: randomGeneratorSeed(),
     };
     setExpandedTownSections((current) => {
@@ -4503,7 +4495,6 @@ export function LevelEditor(): ReactElement {
       facingWobble: TOWN_PLAN_DEFAULTS.facingWobble,
       spacing: TOWN_PLAN_DEFAULTS.spacing,
       fit: TOWN_PLAN_DEFAULTS.fit,
-      avoidPlayableBoard: TOWN_PLAN_DEFAULTS.avoidPlayableBoard,
     });
   };
 
@@ -10224,14 +10215,6 @@ export function LevelEditor(): ReactElement {
               <SliderRow label={`Off-axis buildings · ${Math.round(selectedTown.facingWobble * 100)}%`} value={selectedTown.facingWobble} set={(value) => updateTown(selectedTown.id, { facingWobble: value })} min={0} max={1} step={0.05} nudge={0.05} dflt={TOWN_PLAN_DEFAULTS.facingWobble} />
               <h2 className="le-card-subhead">Placement</h2>
               <div className="le-ctrlrow">
-                <span className="le-ctrllabel">Keep off playable board</span>
-                <Toggle
-                  checked={selectedTown.avoidPlayableBoard}
-                  onChange={(value) => updateTown(selectedTown.id, { avoidPlayableBoard: value })}
-                  label="Keep the town off the playable board"
-                />
-              </div>
-              <div className="le-ctrlrow">
                 <span className="le-ctrllabel">Layout seed</span>
                 <ChromeButton unit="inner-text-button"
                   className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
@@ -10258,9 +10241,7 @@ export function LevelEditor(): ReactElement {
                 : townSited && townSited.placed < selectedTown.size ? (
                 <p className="le-board-note">
                   Placed {townSited.placed} of {selectedTown.size}.{' '}
-                  {townSited.onBoard >= Math.max(1, townSited.spacing, townSited.outside)
-                    ? `${townSited.onBoard} plot${townSited.onBoard === 1 ? '' : 's'} fell on the playable board — drag clear of it, or turn off Keep off playable board.`
-                    : townSited.outside >= Math.max(1, townSited.spacing)
+                  {townSited.outside >= Math.max(1, townSited.spacing)
                       ? `${townSited.outside} building${townSited.outside === 1 ? '' : 's'} would have overhung the area — drag a bigger area, or build smaller.`
                       : townSited.spacing > 0
                         ? `${townSited.spacing === 1 ? '1 building had' : `${townSited.spacing} buildings had`} no room beside the neighbours — lower Gap between buildings, or build smaller.`
@@ -10344,15 +10325,6 @@ export function LevelEditor(): ReactElement {
               />
             )}
             <h2 className="le-card-subhead">Placement</h2>
-            <div className="le-ctrlrow">
-              <span className="le-ctrllabel">Keep off playable board</span>
-              <Toggle
-                checked={forestAvoidBoard}
-                onChange={setForestAvoidBoard}
-                label="Keep the forest off the playable board"
-              />
-              {ctlReset(() => setForestAvoidBoard(FOREST_SCATTER_DEFAULTS.avoidPlayableBoard))}
-            </div>
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Forest seed</span>
               <ChromeButton unit="inner-text-button"
