@@ -1,8 +1,11 @@
 import { Fragment, useEffect, useMemo, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import {
+  INTERFACE_SFX_CUES,
+  INTERFACE_SFX_CUE_LABELS,
   cloneSfxProfile,
   currentLiveSfxProfileDocument,
   assertSfxProfile,
+  type InterfaceSfxCue,
   type SfxProfile,
   type SfxProfileDocument,
   type SfxSoundSetProfile,
@@ -82,6 +85,10 @@ function SfxAssignmentPanel({
     ...current,
     terrainAssignments: { ...current.terrainAssignments, [terrain]: key || null },
   }));
+  const setCue = (cue: InterfaceSfxCue, key: string) => setDraft((current) => ({
+    ...current,
+    interfaceAssignments: { ...current.interfaceAssignments, [cue]: key || null },
+  }));
   const setArrival = (patch: Partial<SfxProfile['arrival']>) => setDraft((current) => ({
     ...current,
     arrival: { ...current.arrival, ...patch },
@@ -117,6 +124,9 @@ function SfxAssignmentPanel({
   };
 
   const label: CSSProperties = { color: 'var(--ds-ink-1, #ecedf2)', textTransform: 'capitalize' };
+  // Terrain rows are raw ids ('grass') and want capitalizing; a cue label is authored prose,
+  // which the same rule would render as "Handling A Card".
+  const cueLabel: CSSProperties = { ...label, textTransform: 'none' };
   const heading: CSSProperties = { margin: 0, color: '#72bde8', font: '800 12px/1.3 var(--ds-font-sans, system-ui, sans-serif)', letterSpacing: 0.6, textTransform: 'uppercase' };
   const note: CSSProperties = { margin: 0 };
   const rows: CSSProperties = { display: 'grid', gridTemplateColumns: 'auto 1fr auto auto', gap: '6px 12px', alignItems: 'center', maxWidth: 460 };
@@ -170,6 +180,45 @@ function SfxAssignmentPanel({
                 aria-label={`Play the sound assigned to ${t}`}
               >▶</button>
               {miniReset(() => setOne(t, document.data.terrainAssignments[t] ?? ''), draft.terrainAssignments[t] === document.data.terrainAssignments[t], t)}
+            </Fragment>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gap: 8 }}>
+        <h2 style={heading}>Interface cues</h2>
+        <p className="tileset-catalog-note" style={note}>
+          Which recorded sound each kind of interface event makes. A surface says what happened
+          (handling a card, a gold transaction); this decides what you hear, including silence.
+        </p>
+        <div style={rows}>
+          {INTERFACE_SFX_CUES.map((cue) => (
+            <Fragment key={cue}>
+              <span style={cueLabel}>{INTERFACE_SFX_CUE_LABELS[cue]}</span>
+              <select
+                value={draft.interfaceAssignments[cue] ?? ''}
+                onChange={(e) => setCue(cue, e.target.value)}
+                aria-label={`Sound for ${INTERFACE_SFX_CUE_LABELS[cue]}`}
+                style={{ width: '100%' }}
+              >
+                <option value="">— silent —</option>
+                {soundKeys.map((k) => <option key={k} value={k}>{k}</option>)}
+              </select>
+              <button
+                type="button"
+                className="tileset-view-action"
+                disabled={!draft.interfaceAssignments[cue]}
+                onClick={() => {
+                  const key = draft.interfaceAssignments[cue];
+                  if (key) previewSample(key, 1, draft.soundSets[key].gain);
+                }}
+                aria-label={`Play the sound assigned to ${INTERFACE_SFX_CUE_LABELS[cue]}`}
+              >▶</button>
+              {miniReset(
+                () => setCue(cue, document.data.interfaceAssignments[cue] ?? ''),
+                draft.interfaceAssignments[cue] === document.data.interfaceAssignments[cue],
+                INTERFACE_SFX_CUE_LABELS[cue],
+              )}
             </Fragment>
           ))}
         </div>

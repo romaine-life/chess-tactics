@@ -408,6 +408,33 @@ local dev server **writes to production**. There is no place to rehearse it firs
 The owner's active Run is the one exception that needs no ceremony: it is disposable test
 state and crafting over it is expected (see the section above).
 
+## Schema migrations ship through the PR — never run them by hand
+
+**Do NOT run `npm run schema:migrate` (or otherwise set `SCHEMA_MIGRATIONS=auto` locally).**
+Adding a migration to the registry in `backend/server.js` is the whole of your job; applying it
+is the deployed backend's, on rollout. `k8s/templates/deployment.yaml` says so directly —
+*"Deployed backends intentionally own schema rollout. Local backend defaults to read-only
+schema checks unless explicitly opted into auto."* That default is the safety, not an
+inconvenience to opt out of.
+
+Why it matters more here than in a normal repo: there is no dev database (see above), so a
+hand-run migration is a **forward-only production change** — undoing it means writing another
+migration — and it lands on every other worktree sharing that database, breaking each one that
+hasn't pulled your branch yet. You are not migrating your environment; you are migrating
+everyone's, ahead of the review that was supposed to gate it.
+
+- Write the migration, and let `npm run dev` fail loudly against it. A backend whose registry
+  is ahead of the database answers `503 schema_migration_required` with the exact
+  `missing_versions`. **That is the expected state of your worktree while the PR is open** —
+  it is the system working, not a blocker to route around.
+- Verify the migration through the tests that need no database:
+  `cd backend && npm run test:live-media` covers migration integrity, append-only history, and
+  execution planning.
+- Do not report the feature as verified end-to-end when its migration has not run. Say which
+  behaviour is proven by tests and which waits on rollout.
+- If the owner explicitly asks you to apply one early, that is his call to make — state the
+  blast radius (which worktrees go stale, that it cannot be rolled back) and let him decide.
+
 ## Verifying backend / multiplayer changes (NO Postgres needed)
 
 Live lobby state and move/result relay live in an in-memory Map. Production level selection

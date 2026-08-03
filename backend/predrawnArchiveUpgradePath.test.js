@@ -368,6 +368,30 @@ test('the exact sparse numeric legacy history upgrades through migration 50', ()
     /DROP|ALTER/i,
     'migration 50 is a pure addition and must not touch already-applied schema',
   );
+  const migration51 = inlineMigration(51);
+  assert.equal(
+    migration51.name,
+    'sfx profile owns interface cue assignments',
+    'migration 51 must own the interface cue assignment identity',
+  );
+  assert.match(
+    migration51.sql,
+    /interfaceAssignments[\s\S]*'activate'[\s\S]*'card'[\s\S]*'gold'/,
+    'migration 51 must give every interface cue an explicit assignment',
+  );
+  // The stored row carries schemaVersion 1 until this runs, so a CHECK for the new version
+  // cannot be added before the rewrite — the constraint is dropped first and restored after.
+  assert.match(
+    migration51.sql,
+    /DROP CONSTRAINT IF EXISTS sfx_profiles_client_schema_version_check[\s\S]*UPDATE sfx_profiles[\s\S]*ADD CONSTRAINT sfx_profiles_client_schema_version_check[\s\S]*CHECK \(client_schema_version = 2\)/i,
+    'migration 51 must loosen, rewrite, then re-tighten the client schema version constraint',
+  );
+  // Only the v1 document is rewritten, so a re-run cannot clobber a migrated row.
+  assert.match(
+    migration51.sql,
+    /WHERE id = 'default' AND data->>'schemaVersion' = '1'/,
+    'migration 51 must rewrite only an unmigrated profile row',
+  );
 
   const migration36 = inlineMigration(36);
   const allMigrations = versions.map(inlineMigration);
@@ -394,7 +418,7 @@ test('the exact sparse numeric legacy history upgrades through migration 50', ()
   );
   assert.deepEqual(
     plan.pending.map((entry) => entry.version),
-    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50],
+    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51],
     'the bridge must fill the historical gap before applying every post-36 contract',
   );
   assert.throws(
@@ -928,13 +952,13 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
 
   const primaryUpgradeProof = sourceSection(
     smokeSource,
-    'async function validatePrimarySparseNumericMigrationUpgrade50()',
+    'async function validatePrimarySparseNumericMigrationUpgrade51()',
     '\nasync function validateEditorMigration16Preservation()',
   );
   assert.match(
     primaryUpgradeProof,
-    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*50\s*\}/,
-    'the production upgrade proof must require a complete 1-50 history',
+    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*51\s*\}/,
+    'the production upgrade proof must require a complete 1-51 history',
   );
   assert.match(
     primaryUpgradeProof,
@@ -948,8 +972,8 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   );
   assert.match(
     primaryUpgradeProof,
-    /length:\s*14[\s\S]*index\s*\+\s*37/,
-    'the production report must include every post-36 migration through 50',
+    /length:\s*15[\s\S]*index\s*\+\s*37/,
+    'the production report must include every post-36 migration through 51',
   );
   assert.match(
     primaryUpgradeProof,

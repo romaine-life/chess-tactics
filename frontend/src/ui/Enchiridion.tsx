@@ -674,7 +674,7 @@ export function CardCodex({
                         <ReferenceTrigger
                           to={cardHref?.(card.id)}
                           onSelect={() => setLocalSelectedId(card.id)}
-                          data-ui-sfx="card-purchase"
+                          data-ui-sfx="card"
                           className="enchiridion-card-gallery-trigger"
                           aria-label={`${runCardName(card)}. ${cardContentsLabel(card)}. Worth ${card.value} gold.`}
                           aria-pressed={focused}
@@ -838,7 +838,7 @@ function CardTypesSection({
               <ReferenceTrigger
                 to={cardTypeHref?.(definition.id)}
                 onSelect={() => setLocalSelectedTypeId(definition.id)}
-                data-ui-sfx="card-purchase"
+                data-ui-sfx="card"
                 data-chrome-unit="inner-list-row"
                 data-testid={`enchiridion-card-type-${definition.id}`}
                 className={chromeUnitClassNames(

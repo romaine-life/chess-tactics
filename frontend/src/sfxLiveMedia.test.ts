@@ -30,13 +30,13 @@ const mediaSlot = (slot: string, sha: string, mediaType = 'audio/mpeg'): LiveMed
 
 const profile = () => ({
   id: 'default' as const,
-  clientSchemaVersion: 1 as const,
+  clientSchemaVersion: 2 as const,
   revision: 3,
   createdAt: null,
   updatedAt: null,
   updatedBy: null,
   data: {
-    schemaVersion: 1 as const,
+    schemaVersion: 2 as const,
     soundSets: {
       grass: { label: 'Grass', character: 'Dry grass', build: 'Recorded foley', gain: 0.5 },
       water: { label: 'Water', character: 'Wet step', build: 'Recorded foley', gain: 0.6 },
@@ -46,6 +46,7 @@ const profile = () => ({
       grass: 'grass', water: 'water', sand: null, stone: null,
       road: null, bridge: null, dirt: null, pebble: null,
     },
+    interfaceAssignments: { activate: null, card: null, gold: null },
     arrival: { sample: 'arrival', gain: 0.55, firing: 'per-unit' as const },
   },
 });
