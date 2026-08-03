@@ -103,11 +103,13 @@ export function PredrawnGenerationFramePicker({
     () => predrawnGenerationFrameContaining(sourceBoard, cameraBounds),
     [cameraBounds, sourceBoard],
   );
-  // With nothing authored yet, open on the composition the owner already recognises — the view a
-  // level loads at — instead of the tightest legal crop around gameplay geometry.
+  // With nothing authored yet, open on the camera boundary. It contains the level's opening
+  // composition by construction, so the crop still reads as the view a level loads at, and it is
+  // the region a player can actually reach — opening on the smaller opening view left the boundary
+  // hanging outside the crop with its top edge clipped away by the frame.
   const editorFrame = useMemo(
-    () => normalizePredrawnGenerationFrame(initialFrame) ?? openingFrame,
-    [openingFrame, initialFrame],
+    () => normalizePredrawnGenerationFrame(initialFrame) ?? cameraFrame,
+    [cameraFrame, initialFrame],
   );
   const [frame, setFrame] = useState(editorFrame);
   const [stageSize, setStageSize] = useState({ width: 1280, height: 720 });
