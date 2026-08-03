@@ -213,15 +213,19 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(strategikon).not.toContain('relicHref');
   });
 
-  it('lists the full card deck as real card faces with routed selection', () => {
+  it('uses the full terminal content column as a routed gallery of real card faces', () => {
     const start = enchiridion.indexOf('export function CardCodex');
     const end = enchiridion.indexOf('type CardTypeReferenceDefinition', start);
     const cardCodex = enchiridion.slice(start, end);
-    // The browser lists every deck card grouped by value; the detail is the exact
-    // card face the Run deals (one selection, one description — ADR-0253's shape).
+    // Cards are the records themselves; there is deliberately no fourth-column
+    // detail and no compact prose list duplicating those faces (ADR-0364).
     expect(cardCodex).toContain('RUN_CARD_DECK');
-    // The detail is the same live-media-backed trading-card face the Run deals.
-    expect(cardCodex).toContain('<RunCard card={selected} mode="reference" />');
+    expect(cardCodex).toContain('className="enchiridion-card-gallery-layout"');
+    expect(cardCodex).toContain('className="enchiridion-card-gallery-grid"');
+    expect(cardCodex).toContain('<RunCard card={card} mode="reference" />');
+    expect(cardCodex).not.toContain('<RunCard card={selected}');
+    expect(cardCodex).not.toContain('enchiridion-card-detail');
+    expect(cardCodex).not.toContain('enchiridion-card-row');
     expect(cardCodex).not.toContain('CardDetailStage');
     expect(cardCodex).toContain('runCardName(card)');
     expect(cardCodex).toContain('cardContentsLabel(card)');
@@ -235,14 +239,27 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
   });
 
   it('filters cards by intersecting gold and contained-unit choices', () => {
-    const start = enchiridion.indexOf('export function CardCodex');
+    const start = enchiridion.indexOf('export type CardGoldFilter');
     const end = enchiridion.indexOf('type CardTypeReferenceDefinition', start);
     const cardCodex = enchiridion.slice(start, end);
     expect(cardCodex).toContain('cardMatchesFilters(card, goldFilter, unitFilter)');
     expect(cardCodex).toContain('testId="enchiridion-card-gold-filter"');
     expect(cardCodex).toContain('testId="enchiridion-card-unit-filter"');
     expect(cardCodex).toContain('<h3>No matching cards</h3>');
-    expect(cardCodex).toContain('<RunCard card={selected} mode="reference" />');
+    expect(cardCodex).toContain('<RunCard card={card} mode="reference" />');
+    // Compact amounts reuse the exact numbered coin from the card face. The
+    // contained-unit choices retain their labels and add the accepted Battle sprite.
+    expect(cardCodex).toContain('<RunCardCostCoin value={Number(value)}');
+    expect(cardCodex).toContain('<RunCardCostCoin value={value}');
+    expect(cardCodex).not.toContain('`${value} gold`');
+    expect(cardCodex).toContain('<PieceTypeIcon type={value}');
+    expect(cardCodex).toContain('<span>{PIECE_LABEL[value]}</span>');
+    expect(cardCodex).toContain('<KitScroll className="enchiridion-card-gallery-scroll">');
+    expect(style).not.toMatch(/\.run-card-cost-coin\s*\{[^}]*clip-path:/s);
+    expect(style).toMatch(/\.run-card-cost-coin-art\s*\{[^}]*inset:\s*0;[^}]*object-fit:\s*contain/s);
+    expect(style).toMatch(/\.enchiridion-card-gallery-grid\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(188px,\s*232px\)\)/s);
+    expect(style).not.toContain('.enchiridion-card-detail');
+    expect(style).not.toMatch(/\.enchiridion-card-gallery-browser\s*\{[^}]*overflow-y:/s);
   });
 
   it('selects four affected-card names in column three and previews one shared Volunteer face in column four', () => {
