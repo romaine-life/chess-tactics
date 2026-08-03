@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:94e4df8c96ea71d97420e4b19f7b01c0fb726f1efa53cd8770e5ce48c7347497"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:d7d7e962658539fbabc86d8f00891e6c9b0b3fd62c3b0d3a932f203420fa0cd8"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Stop the SFX cue labels being title-cased into prose errors"
-  prNumber: "674"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/674"
-  commit: "3e232ee9"
+  prTitle: "Match ability rows to card type backgrounds"
+  prNumber: "676"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/676"
+  commit: "251d9e07"
 
 name: chess-tactics
 namespace: chess-tactics
