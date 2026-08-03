@@ -170,6 +170,9 @@ import { levelEditorRouteIdentity } from './levelEditorRouteIdentity';
 import {
   editorDocumentWorkspaceForLevelId,
   levelEditorHrefForDocument,
+  preservedEditorRecoveryIsRedundant,
+  provisionalEditorRecoveryIsRedundant,
+  shouldAdoptPreservedEditorBranch,
   shouldRestoreLocalEditorRecovery,
 } from './levelEditorPersistence';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
@@ -5624,11 +5627,11 @@ export function LevelEditor(): ReactElement {
           : sessionRecoveryLevel
           ? { ...sessionRecoveryLevel, id: doc.level_id }
           : null;
-        const newestDivergentPreservedRecovery = preservedScopedRecoveries
-          .map((recovery) => {
-            const level = levelFromDraft(recovery.draft, doc.level);
-            return { recovery, level, signature: levelEditorLevelSignature(level) };
-          })
+        const preservedRecoveryCandidates = preservedScopedRecoveries.map((recovery) => {
+          const level = levelFromDraft(recovery.draft, doc.level);
+          return { recovery, level, signature: levelEditorLevelSignature(level) };
+        });
+        const newestDivergentPreservedRecovery = preservedRecoveryCandidates
           .find((candidate) => candidate.signature !== documentSig) ?? null;
         const newestPreservedRecovery = newestDivergentPreservedRecovery?.recovery ?? null;
         const preservedRecoveryLevel = newestDivergentPreservedRecovery?.level ?? null;
@@ -5678,6 +5681,13 @@ export function LevelEditor(): ReactElement {
         const routeSnapshotDiverged = Boolean(loadedBoard && initialSig !== documentSig);
         const routeSnapshotSafe = !routeParams.documentId || routeParams.documentRevision === doc.revision;
         const restoreRouteSnapshot = openedAsWriter && routeSnapshotDiverged && routeSnapshotSafe;
+        const restorePreservedBranch = shouldAdoptPreservedEditorBranch({
+          openedAsWriter,
+          preservedBranchDiverged: preservedRecoveryDiverged,
+          documentDirty: doc.dirty,
+          restoringLocalRecovery: restoreLocal,
+          restoringRouteSnapshot: restoreRouteSnapshot,
+        });
         const routeSnapshotRecovery: LevelEditorLocalFallbackSnapshot | null = routeSnapshotDiverged && !restoreRouteSnapshot
           ? (() => {
               const draft = {
@@ -5719,8 +5729,10 @@ export function LevelEditor(): ReactElement {
           ? initialLevel
           : restoreLocal && localLevel
           ? localLevel
+          : restorePreservedBranch && preservedRecoveryLevel
+          ? preservedRecoveryLevel
           : doc.level;
-        const shouldRecover = restoreLocal || restoreRouteSnapshot;
+        const shouldRecover = restoreLocal || restoreRouteSnapshot || restorePreservedBranch;
         let unsafeLocalRecoveryPreserved = true;
         let claimedDraftHandoffReady = !claimedUnscopedDraft || shadowedClaimedDraftHandled;
         let unsafeLocalRecovery: LevelEditorLocalFallbackSnapshot | null = null;
@@ -5780,15 +5792,30 @@ export function LevelEditor(): ReactElement {
         lastCloudSyncedSigRef.current = documentSig;
         documentConflictRef.current = recoveryConflict;
         documentConflictKindRef.current = doc.baseline_conflict ? 'baseline' : null;
-        // Old per-tab branches are not part of the shared-document model. The acknowledged cloud
-        // body opens directly; current-page crash recovery still resumes automatically above.
-        for (const recovery of preservedScopedRecoveries) {
-          clearPreservedScopedLevelEditorRecovery(scopedDraftIdentity, recovery.recoveryId);
+        // Old per-tab branches are not part of the shared-document model, so they are cleared
+        // rather than offered as a take-over flow. Clearing one whose content already equals the
+        // acknowledged body loses nothing. A DIVERGENT branch is unsent work and is kept: an
+        // adopted one self-clears on the next mount once autosave has carried it into the
+        // document, so this stays a bounded buffer instead of a growing cleanup queue.
+        for (const candidate of preservedRecoveryCandidates) {
+          if (!preservedEditorRecoveryIsRedundant({
+            recoverySignature: candidate.signature,
+            documentSignature: documentSig,
+          })) continue;
+          clearPreservedScopedLevelEditorRecovery(scopedDraftIdentity, candidate.recovery.recoveryId);
         }
         for (const candidate of provisionalPreservedRecoveries) {
-          if (!candidate.sourceIsCurrentDraft) {
-            clearPreservedScopedLevelEditorRecovery(candidate.sourceIdentity, candidate.recovery.recoveryId);
-          }
+          if (!provisionalEditorRecoveryIsRedundant({
+            isCurrentPageDraft: Boolean(candidate.sourceIsCurrentDraft),
+            // The forwarding step above marks a source only after its content was archived under
+            // the resolved document, or already matched the acknowledged body.
+            forwardedIntoDocument: isPreservedScopedLevelEditorRecoveryForwarded(
+              candidate.sourceIdentity,
+              candidate.recovery,
+              doc.document_id,
+            ),
+          })) continue;
+          clearPreservedScopedLevelEditorRecovery(candidate.sourceIdentity, candidate.recovery.recoveryId);
         }
         setEditorLoadError(null);
         setEditorDocument(doc);
