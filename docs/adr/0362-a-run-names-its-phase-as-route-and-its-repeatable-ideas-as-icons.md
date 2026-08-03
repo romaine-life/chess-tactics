@@ -60,6 +60,12 @@ name stays on hover rather than spending bar width. Because the measures are
 compact marks and the named chip is the wide element, the chip is what sheds
 first at compact widths, not the position.
 
+A measure has no frame between it and the bar's painted wall, so each mark carries
+a tight dark separation ring and its number a matching contact shadow. This is
+legibility for an unframed overlay mark — the same treatment `.mirror-los-*` and
+`.le-camera-boundary` already use — not decoration. Decoration remains generated
+art; nothing here fakes richness the icon should be carrying itself.
+
 **A seat is reserved before its icon decision exists.** `installedUiMediaIfPresent`
 returns null instead of failing closed, and the seat keeps its geometry, so
 installing an icon later cannot move the label beside it. Required chrome keeps

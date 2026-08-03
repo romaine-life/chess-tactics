@@ -18955,6 +18955,22 @@ button.tileset-relationship-cell {
   white-space: nowrap;
 }
 
+/* A measure has no frame between it and the bar's painted wall, so each mark
+   carries a soft dark separation ring and its number a matching contact shadow.
+   Legibility for an unframed overlay mark, the same treatment .mirror-los-* and
+   .le-camera-boundary use — not decoration, which stays generated art. */
+.run-topbar-measures .run-progress-icon img,
+.run-topbar-measures .run-gold-icon img {
+  filter: drop-shadow(0 0 1px #02070b)
+    drop-shadow(0 0 1px #02070b)
+    drop-shadow(0 0 2px rgba(2, 7, 11, .85))
+    drop-shadow(0 1px 1px rgba(2, 7, 11, .65));
+}
+
+.run-topbar-measure > span {
+  text-shadow: 0 2px 0 #02070b;
+}
+
 .run-victory-summary > span + span::before {
   content: "·";
   margin-inline-end: var(--ds-inline-tight);
