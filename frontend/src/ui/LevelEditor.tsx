@@ -9799,29 +9799,35 @@ export function LevelEditor(): ReactElement {
           <section className="skirmish-card le-brush-panel le-town-panel" data-testid="town-controls">
             <h2>Towns</h2>
             <p className="le-board-note">Drag out an area and a new town fills it. Every town is kept: pick one below to retune and regenerate it, and each new drag starts from the last one settings. Buildings are Scene Art: visual only, never on the playable grid, no collision.</p>
-            <div className="le-pal-group">
-              <span className="le-pal-grouplabel">Placed towns</span>
-              {boardTowns.length ? (
-                <div className="le-town-list">
-                  {boardTowns.map((town) => (
-                    <div className="le-ctrlrow" key={town.id}>
-                      <ChromeButton unit="inner-text-button"
-                        className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', selectedTownId === town.id && 'active')}
-                        aria-pressed={selectedTownId === town.id}
-                        onClick={() => setSelectedTownId(town.id)}
-                      >{town.name}</ChromeButton>
-                      <span className="le-ctrllabel">
-                        {Math.abs(town.bounds.maxX - town.bounds.minX)} × {Math.abs(town.bounds.maxY - town.bounds.minY)} tiles
-                      </span>
-                      <ChromeButton unit="inner-text-button"
-                        className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                        onClick={() => removeTown(town)}
-                      >Remove</ChromeButton>
-                    </div>
-                  ))}
-                </div>
-              ) : <p className="le-board-note">No towns yet. Drag out an area to place one.</p>}
+            {/* Same shape the Generate panel uses for its saved regions: one dropdown of saved
+                instances, with a danger icon to drop the active one. */}
+            <div className="le-gen-unit-row">
+              <div className="le-gen-unit-select">
+                <span>Town</span>
+                <HouseSelect<string>
+                  value={selectedTownId ?? ''}
+                  onChange={(id) => setSelectedTownId(id || null)}
+                  ariaLabel="Saved town"
+                  options={boardTowns.length
+                    ? boardTowns.map((town) => ({
+                      value: town.id,
+                      label: `${town.name} · ${Math.abs(town.bounds.maxX - town.bounds.minX)}×${Math.abs(town.bounds.maxY - town.bounds.minY)} tiles`,
+                    }))
+                    : [{ value: '', label: 'No towns yet' }]}
+                />
+              </div>
+              {selectedTown ? (
+                <ChromeButton unit="inner-tool-square"
+                  className={chromeUnitClassNames('inner-tool-square', 'le-gen-icon', 'danger')}
+                  onClick={() => removeTown(selectedTown)}
+                  title={`Remove ${selectedTown.name}`}
+                  aria-label={`Remove ${selectedTown.name}`}
+                >×</ChromeButton>
+              ) : null}
             </div>
+            {boardTowns.length ? null : (
+              <p className="le-board-note">Drag out an area on the board to place one.</p>
+            )}
             {selectedTown ? (<>
               <h2 className="le-card-subhead">Plan</h2>
               <div className="le-seg le-town-plan-seg" role="group" aria-label="Town plan">

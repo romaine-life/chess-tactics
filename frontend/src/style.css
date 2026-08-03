@@ -6711,13 +6711,15 @@ body.loading-bootstrap .app-startup-status {
 }
 
 /* Generate (terrain scatter) panel — chips + sliders + seed, reusing .le-seg-btn for the toggles. */
-.le-generate .le-gen-unit-row {
+/* The saved-instance selector row. Shared by the Generate panel's regions and the Town panel's
+   towns, so it is no longer scoped to one of them. */
+.le-gen-unit-row {
   display: flex;
   align-items: center;
   gap: 6px;
   margin: 8px 0 6px;
 }
-.le-generate .le-gen-unit-select {
+.le-gen-unit-select {
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
@@ -6726,12 +6728,12 @@ body.loading-bootstrap .app-startup-status {
   font-size: 12px;
   color: rgba(239, 249, 255, .82);
 }
-.le-generate .le-gen-unit-select > span {
+.le-gen-unit-select > span {
   flex: 0 0 auto;
   font-weight: 700;
   letter-spacing: 0;
 }
-.le-generate .le-gen-unit-select .house-select {
+.le-gen-unit-select .house-select {
   flex: 1 1 auto;
   min-width: 0;
 }
