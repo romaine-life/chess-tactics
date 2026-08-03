@@ -6048,7 +6048,15 @@ body.loading-bootstrap .app-startup-status {
   outline: 2px solid rgba(101, 184, 255, .72);
   outline-offset: 2px;
 }
-.le-seg-btn.active { border-image-source: var(--skirmish-chrome-inner-control-active-image); }
+.le-seg-btn.active {
+  border-image-source: var(--skirmish-chrome-inner-control-active-image);
+  /* chromeFamilyRuntime aliases the active frame to the normal control frame — there is no
+     separate active frame installed — so the image swap above is invisible and every segmented
+     control in the editor reads as unselected. Lift it the way :hover already does, one step
+     further, so the selection is legible without inventing chrome. */
+  filter: brightness(1.35) saturate(1.25);
+}
+.le-seg-btn.active:not(:disabled):hover { filter: brightness(1.45) saturate(1.3); }
 .le-seg-btn.danger { border-image-source: var(--skirmish-chrome-inner-control-danger-image); }
 /* Save when blocked by a playability violation: clickable (it explains why) but dimmed like a
    disabled control, matching the retired title-bar Save's is-disabled look. */
@@ -15545,9 +15553,20 @@ button.tileset-relationship-cell {
   flex-wrap: wrap;
 }
 
+/* The selection's tiles. Amber rather than the region tool's cyan because a town is normally sited
+   over grass, and cyan at low alpha disappears into green. */
+.le-town-cells {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 3;
+}
 /* A settled town's tiles sit quieter than the drag in progress, so the live one reads as active. */
-.le-town-cell.is-settled {
-  opacity: 0.55;
+.le-town-cells.is-settled {
+  opacity: 0.6;
 }
 
 /* How much GROUND the drag covers. Scene pixels mean nothing at an arbitrary zoom; tiles do. */

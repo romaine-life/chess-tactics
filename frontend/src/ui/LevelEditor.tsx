@@ -3118,6 +3118,14 @@ export function LevelEditor(): ReactElement {
    * saved town starts collapsed so a town of five sections is not a wall of sliders.
    */
   const [expandedTownSections, setExpandedTownSections] = useState<Set<string>>(() => new Set());
+  /**
+   * A section is open if the author opened it — or if it has no buildings at all, because a
+   * collapsed empty section hides the only thing standing between the town and Regenerate doing
+   * nothing. You cannot be finished with a section you have not filled.
+   */
+  const townSectionOpen = (section: BoardTownSection): boolean => (
+    !section.buildings.length || expandedTownSections.has(section.id)
+  );
   const toggleTownSectionExpand = (sectionId: string): void => {
     setExpandedTownSections((current) => {
       const next = new Set(current);
@@ -4227,21 +4235,32 @@ export function LevelEditor(): ReactElement {
     const down = maxY - minY;
     // A selection this large is a mis-drag, not a town; drawing every tile would stall the editor.
     if ((across + 1) * (down + 1) > 4096) return null;
-    const width = TILE_TEMPLATE.topWidth * viewZoom;
-    const height = TILE_TEMPLATE.topHeight * viewZoom;
-    const cells: Array<{ x: number; y: number; left: number; top: number; width: number; height: number }> = [];
+    const halfWidth = (TILE_TEMPLATE.topWidth / 2) * viewZoom;
+    const halfHeight = (TILE_TEMPLATE.topHeight / 2) * viewZoom;
+    // One diamond per tile, as explicit points. Drawing them as clipped boxes leaves the border
+    // as four corner fragments — clip-path cuts an inset ring that follows the RECTANGLE — which
+    // is invisible over bright terrain.
+    const cells: Array<{ key: string; points: string }> = [];
     for (let y = minY; y <= maxY; y += 1) {
       for (let x = minX; x <= maxX; x += 1) {
         const seat = projectBoardPoint({ x, y });
         const point = townSurfacePoint({ x: seat.left, y: seat.top }, viewViewportSize);
-        cells.push({ x, y, left: point.x - width / 2, top: point.y - height / 2, width, height });
+        cells.push({
+          key: `${x},${y}`,
+          points: [
+            `${point.x},${point.y - halfHeight}`,
+            `${point.x + halfWidth},${point.y}`,
+            `${point.x},${point.y + halfHeight}`,
+            `${point.x - halfWidth},${point.y}`,
+          ].join(' '),
+        });
       }
     }
     const corner = townSurfacePoint(
       (() => { const seat = projectBoardPoint({ x: minX, y: minY }); return { x: seat.left, y: seat.top }; })(),
       viewViewportSize,
     );
-    return { cells, across, down, labelX: corner.x - width / 2, labelY: corner.y - height / 2 };
+    return { cells, across, down, labelX: corner.x - halfWidth, labelY: corner.y - halfHeight * 2 };
   }, [townDragBounds, townArea, viewViewportSize, viewZoom, viewPan.x, viewPan.y,
     artworkBoardOrigin.originLeft, artworkBoardOrigin.originTop]);
 
@@ -8592,19 +8611,21 @@ export function LevelEditor(): ReactElement {
                     ) : null}
                     {townHighlight ? (
                       <>
-                        {townHighlight.cells.map((cell) => (
-                          <span
-                            key={`${cell.x},${cell.y}`}
-                            className={`le-region-cell le-town-cell${townDragBounds ? '' : ' is-settled'}`}
-                            aria-hidden="true"
-                            style={{
-                              left: `${cell.left}px`,
-                              top: `${cell.top}px`,
-                              width: `${cell.width}px`,
-                              height: `${cell.height}px`,
-                            }}
-                          />
-                        ))}
+                        <svg
+                          className={`le-town-cells${townDragBounds ? '' : ' is-settled'}`}
+                          aria-hidden="true"
+                        >
+                          {townHighlight.cells.map((cell) => (
+                            <polygon
+                              key={cell.key}
+                              points={cell.points}
+                              fill="rgba(255, 214, 92, 0.16)"
+                              stroke="rgba(255, 226, 138, 0.85)"
+                              strokeWidth="1"
+                              vectorEffect="non-scaling-stroke"
+                            />
+                          ))}
+                        </svg>
                         <span
                           className="le-town-drag-size"
                           aria-hidden="true"
@@ -9990,18 +10011,19 @@ export function LevelEditor(): ReactElement {
                 <div className="le-town-section le-gen-region-group" key={section.id}>
                   <div className="le-ctrlrow le-town-section-head">
                     <ChromeButton unit="inner-tool-square"
-                      className={chromeUnitClassNames('inner-tool-square', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-gen-cover-caret-btn', expandedTownSections.has(section.id) && 'active')}
+                      className={chromeUnitClassNames('inner-tool-square', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-gen-cover-caret-btn', townSectionOpen(section) && 'active')}
                       onClick={() => toggleTownSectionExpand(section.id)}
-                      aria-expanded={expandedTownSections.has(section.id)}
-                      aria-label={expandedTownSections.has(section.id) ? `Collapse section ${index + 1}` : `Expand section ${index + 1}`}
+                      aria-expanded={townSectionOpen(section)}
+                      disabled={!section.buildings.length}
+                      aria-label={townSectionOpen(section) ? `Collapse section ${index + 1}` : `Expand section ${index + 1}`}
                     >
-                      <span className="le-gen-cover-caret" aria-hidden="true">{expandedTownSections.has(section.id) ? '▾' : '▸'}</span>
+                      <span className="le-gen-cover-caret" aria-hidden="true">{townSectionOpen(section) ? '▾' : '▸'}</span>
                     </ChromeButton>
                     <h2 className="le-card-subhead le-town-section-title">Section {index + 1}</h2>
                     <span className="le-ctrllabel le-town-section-summary">
                       {section.buildings.length
                         ? `${section.buildings.length} kind${section.buildings.length === 1 ? '' : 's'} · ${section.scaleMean.toFixed(2)}×`
-                        : 'no buildings'}
+                        : 'add a building below'}
                     </span>
                     {selectedTown.sections.length > 1 ? (
                       <ChromeButton unit="inner-tool-square"
@@ -10014,7 +10036,7 @@ export function LevelEditor(): ReactElement {
                       >×</ChromeButton>
                     ) : null}
                   </div>
-                  {expandedTownSections.has(section.id) ? (<>
+                  {townSectionOpen(section) ? (<>
                   <span className="le-pal-grouplabel">Buildings</span>
                   {/* Buildings are entries you add, exactly like the Generate panel's cover sets:
                       each names itself in a dropdown and carries its own weight. A swatch grid
@@ -10204,6 +10226,10 @@ export function LevelEditor(): ReactElement {
               <div className="le-ctrlrow">
                 <ChromeButton unit="inner-text-button"
                   className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                  disabled={selectedTown.sections.every((section) => !section.buildings.length)}
+                  title={selectedTown.sections.every((section) => !section.buildings.length)
+                    ? 'Add a building to a section first — there is nothing to build yet.'
+                    : 'Rebuild this town from its current settings.'}
                   onClick={() => generateTown(selectedTown)}
                 >Regenerate</ChromeButton>
                 <ChromeButton unit="inner-text-button"
