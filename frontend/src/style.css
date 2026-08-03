@@ -17088,10 +17088,17 @@ button.tileset-relationship-cell {
   white-space: nowrap;
 }
 
-.titlebar-control--return,
 .titlebar-control--icon {
   inline-size: var(--titlebar-control-size, 52px);
   padding: 0;
+}
+
+/* A return is NAMED for where it lands ("‹ Back to Battle", "‹ Back to editor"), so it
+   takes the icon square as a floor and grows with its label. It was authored as a fixed
+   52px square beside the icon rule, which with `overflow: hidden` silently cropped every
+   label longer than the bare "Back" — the frame ate the last characters. */
+.titlebar-control--return {
+  min-inline-size: var(--titlebar-control-size, 52px);
 }
 
 .titlebar-control-glyph {
