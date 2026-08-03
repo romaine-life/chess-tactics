@@ -20,7 +20,7 @@ import {
   RunCardFace,
   type RunCardFaceContent,
 } from './RunCardFace';
-import { runCardFrameGeometryForSha } from './runCardFrameGeometry';
+import { runCardFrameGeometryForSlot } from './runCardFrameGeometry';
 import { InnerChromeBox } from './shared/ChromeBox';
 
 const CARD_PIECE_ORDER: readonly PurchasablePieceType[] = Object.freeze(['pawn', 'knight', 'bishop', 'rook', 'queen']);
@@ -139,7 +139,7 @@ export function RunCard({
       card={faceContent}
       frameUrl={frameUrl}
       artUrl={artUrl}
-      frameGeometry={runCardFrameGeometryForSha(frameMedia.sha256)}
+      frameGeometry={runCardFrameGeometryForSlot(frameSlot)}
       ariaHidden={mode !== 'reference'}
     />
   );
