@@ -8,16 +8,15 @@ export type RunUnitState = RunAbility | 'cacochymic';
 /**
  * Each unit state resolves its own typed `unit-ability-icon` role. The runtime never
  * substitutes a shield, movement glyph, flag, Unicode character, or the paired card
- * property's icon for one of these (ADR-0318, ADR-0339). Every locator on the right
- * keeps the word its slot was coined under; those are non-presentational storage
- * identities and move only in ADR-0339's paired-icon production cutover
- * (ADR-0341, ADR-0343, ADR-0369).
+ * property's icon for one of these (ADR-0318, ADR-0339). Since ADR-0369 each locator
+ * is the state's own word: the slot, the stored value and the name a player reads are
+ * one vocabulary.
  */
 const RUN_UNIT_STATE_MEDIA_ROLE: Readonly<Record<RunUnitState, string>> = Object.freeze({
-  adlected: 'ui-kit-icons-game-discipline-png',
-  eutactic: 'ui-kit-icons-game-positioned-png',
-  agminate: 'ui-kit-icons-game-marshalled-png',
-  cacochymic: 'ui-kit-icons-game-plagued-png',
+  adlected: 'ui-kit-icons-game-adlected-png',
+  eutactic: 'ui-kit-icons-game-eutactic-png',
+  agminate: 'ui-kit-icons-game-agminate-png',
+  cacochymic: 'ui-kit-icons-game-cacochymic-png',
 });
 
 export function runUnitStateIconUrl(state: RunUnitState): string {

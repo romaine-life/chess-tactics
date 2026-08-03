@@ -54,14 +54,28 @@ exception.
   in-progress Runs rather than translating them, and the server validator accepts
   only the new words. This retires the two-vocabulary drift ADR-0341 and ADR-0343
   opened rather than widening it.
-- **Live-media locators are the one exception, and the last one.** The seven slots
-  `ui/kit/icons/game/{discipline,positioned,marshalled,plagued}.png`,
-  `ui/kit/icons/card-properties/tactical.png`, `ui/surfaces/card-type-tactical.png`
-  and `ui/run/card-prototypes/tactical-discipline-frame-v1.png` keep the words they
-  were coined under. A slot path is accepted production content, so re-pointing one
-  is a content change rather than a code change; the code names each locator beside
-  the state it serves so the exception is visible where it is used. Moving them is
-  ADR-0339's paired-icon production cutover.
+- **The live-media locators move too, which completes ADR-0339's deferred cutover.**
+  Seven slots are re-pointed: the four unit-state icons to
+  `ui/kit/icons/game/{adlected,eutactic,agminate,cacochymic}.png`, the card property
+  icon to `ui/kit/icons/card-properties/legatine.png`, the row texture to
+  `ui/surfaces/card-type-legatine.png`, and the frame to
+  `ui/run/card-prototypes/legatine-adlected-frame-v1.png`. Each successor carries the
+  **byte-identical content** of the version it replaces — same sha256, no regeneration
+  and no resampling — so this re-identifies accepted artwork rather than proposing new
+  pixels, exactly as ADR-0309 moved the Tactical frame's bytes onto Concinnous. The
+  replaced slots are retired only after their successor is accepted and verified
+  sha256-equal, and the `app-ui` drawable roles are rebound in the same pass, because
+  the catalog fails closed on a role whose slot is retired.
+- Two gaps in the media catalog's own contract had to be closed for this to be
+  possible, and both are general fixes rather than rename plumbing:
+  - `POST /api/admin/media-slots/<slot>/metadata` implements the patch the server
+    already named in `media_slot_metadata_requires_patch` but never provided, so a
+    slot's acceptance contract can be corrected after it is written. Without it a
+    group contract could never gain or drop a member.
+  - The card-type row-texture group accepts atomically, so moving one member re-accepts
+    all four. The three textures that did not move are re-accepted only for that reason;
+    their bytes are unchanged. The retiring member is stood down to standalone first, so
+    retiring it does not demand retiring the group.
 - Seed labels are RNG inputs, not names. `tactical:discipline:<coreId>` and
   `tactical-discipline-acquisition-target` keep their exact wording, because
   rewording one would deal different cards at every existing seed.
@@ -80,9 +94,11 @@ exception.
 - Good: a Run document now reads in the same vocabulary as the screen, so
   debugging a document no longer needs a translation table.
 - Cost: format 14 makes in-progress Runs unsupported.
-- Cost: the seven media locators are now the only place the retired words survive,
-  which is a smaller gap than before but a stranger-looking one — the code reads
-  `agminate: 'ui-kit-icons-game-marshalled-png'` until the ADR-0339 cutover runs.
+- Good: the retired vocabulary now survives nowhere — not in a document, a slot path,
+  a drawable role, or a line of code. Only the two seed labels keep their wording, and
+  those are RNG inputs rather than names.
+- Cost: three card-type row textures carry a new accepted version recording a rename
+  they were not part of, because their acceptance group is atomic.
 - Cost: the Enchiridion now teaches four obscure states rather than two, and
   Adlected in particular carries no meaning on sight.
 

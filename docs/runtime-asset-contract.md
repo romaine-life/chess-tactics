@@ -348,15 +348,14 @@ an incomplete row is an availability failure.
   temporary debt is gone along with the pre-cutover slot
   `ui/run/card-status/plagued-v1.png`. Runtime code cannot infer a role from a
   slot path or substitute CSS, text, a generic glyph, or the other member of a
-  pair. Seven slot paths keep the word they were coined under —
-  `ui/kit/icons/game/{plagued,marshalled,positioned,discipline}.png`,
-  `ui/kit/icons/card-properties/tactical.png`, `ui/surfaces/card-type-tactical.png`
-  and `ui/run/card-prototypes/tactical-discipline-frame-v1.png`. Since format 14
-  these are the ONLY place the retired vocabulary survives: persisted values, card
-  types and runtime code all say Adlected, Eutactic, Agminate, Cacochymic and
-  Legatine, and each locator is named beside the state it serves so the exception is
-  visible where it is used. No player-facing surface may expose one
-  (ADR-0341, ADR-0343, ADR-0369).
+  pair. Every slot is named for the state or property it serves —
+  `ui/kit/icons/game/{cacochymic,eutactic,adlected,agminate}.png` and
+  `ui/kit/icons/card-properties/{pestiferous,concinnous,legatine,hieratic}.png` — as are
+  `ui/surfaces/card-type-legatine.png` and
+  `ui/run/card-prototypes/legatine-adlected-frame-v1.png`. ADR-0369 completed this
+  cutover by re-pointing the seven coined-word slots onto byte-identical successors and
+  retiring the originals, so a slot path, a persisted value, a drawable role and the word
+  a player reads are now one vocabulary (ADR-0341, ADR-0343, ADR-0369).
   `RUN_CARD_COMMITTED_PROPERTY_PLACEMENTS` and
   `RUN_CARD_COMMITTED_UNIT_STATE_PLACEMENT` in `ui/RunCardFace.tsx` are the
   committed fit — one seat per property plus one shared unit-state seat — and

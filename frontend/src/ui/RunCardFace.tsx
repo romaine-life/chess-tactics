@@ -43,13 +43,13 @@ export type { RunUnitState };
 /**
  * Each causal card property owns its own typed `card-property-icon` role, distinct from
  * the unit state it bestows. Runtime code resolves the role and never substitutes text,
- * a glyph, or the paired unit-state icon (ADR-0339). The Legatine locator keeps the word
- * its slot was coined under until ADR-0339's production cutover moves it (ADR-0369).
+ * a glyph, or the paired unit-state icon (ADR-0339). Each locator is the property's own
+ * word since ADR-0369.
  */
 const RUN_CARD_PROPERTY_MEDIA_ROLE: Readonly<Record<RunCardProperty, string>> = Object.freeze({
   pestiferous: 'ui-kit-icons-card-properties-pestiferous-png',
   concinnous: 'ui-kit-icons-card-properties-concinnous-png',
-  legatine: 'ui-kit-icons-card-properties-tactical-png',
+  legatine: 'ui-kit-icons-card-properties-legatine-png',
   hieratic: 'ui-kit-icons-card-properties-hieratic-png',
 });
 

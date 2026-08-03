@@ -86,8 +86,9 @@ qualifier and its granted Agminate ability. Format 14 makes a stored value and
 its player-facing name one word: abilities persist as `adlected`, `eutactic` and
 `agminate`, the unit modifier as `cacochymic`, and the card type as `legatine`,
 with the fields named after the retired words renamed to match. Format 14
-discards in-progress Runs rather than translating them, and the server validator
-accepts only the new words (ADR-0309, ADR-0310, ADR-0311, ADR-0325, ADR-0327,
+discards in-progress Runs rather than translating them, the server validator accepts
+only the new words, and the live-media slots and `app-ui` drawable roles were
+re-pointed in the same change, so no layer keeps the retired vocabulary (ADR-0309, ADR-0310, ADR-0311, ADR-0325, ADR-0327,
 ADR-0328, ADR-0341, ADR-0345, ADR-0369).
 Format 3 stores each army unit's role-specific historical name.
 Format-1 unnamed documents and the provisional format-2 generated-name documents

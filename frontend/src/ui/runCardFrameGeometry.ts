@@ -4,8 +4,7 @@ export const RUN_CARD_FRAME_NATIVE_HEIGHT = 1484;
 export const RUN_CARD_FRAME_SLOT = 'ui/run/card-prototypes/frame-v1.png';
 export const RUN_CARD_PESTIFEROUS_FRAME_SLOT = 'ui/run/card-prototypes/pestiferous-frame-v1.png';
 export const RUN_CARD_CONCINNOUS_FRAME_SLOT = 'ui/run/card-prototypes/concinnous-frame-v1.png';
-// The slot path keeps the word it was coined under; ADR-0339's production cutover moves it.
-export const RUN_CARD_LEGATINE_FRAME_SLOT = 'ui/run/card-prototypes/tactical-discipline-frame-v1.png';
+export const RUN_CARD_LEGATINE_FRAME_SLOT = 'ui/run/card-prototypes/legatine-adlected-frame-v1.png';
 export const RUN_CARD_HIERATIC_FRAME_SLOT = 'ui/run/card-prototypes/hieratic-frame-v1.png';
 
 export type RunCardFrameVariant = 'standard' | 'pestiferous' | 'concinnous' | 'legatine' | 'hieratic';

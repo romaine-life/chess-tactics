@@ -14801,7 +14801,7 @@ const RUN_CARD_ART_PIECE_ORDER = Object.freeze(['pawn', 'knight', 'bishop', 'roo
 const RUN_CARD_FRAME_SLOT = 'ui/run/card-prototypes/frame-v1.png';
 const RUN_CARD_PESTIFEROUS_FRAME_SLOT = 'ui/run/card-prototypes/pestiferous-frame-v1.png';
 const RUN_CARD_CONCINNOUS_FRAME_SLOT = 'ui/run/card-prototypes/concinnous-frame-v1.png';
-const RUN_CARD_LEGATINE_FRAME_SLOT = 'ui/run/card-prototypes/tactical-discipline-frame-v1.png';
+const RUN_CARD_LEGATINE_FRAME_SLOT = 'ui/run/card-prototypes/legatine-adlected-frame-v1.png';
 const RUN_CARD_HIERATIC_FRAME_SLOT = 'ui/run/card-prototypes/hieratic-frame-v1.png';
 const RUN_CARD_COST_COIN_SOURCE_SLOT = 'ui/run/card-prototypes/cost-coin-source-v1.png';
 const RUN_CARD_FRAME_VARIANT_BY_SLOT = Object.freeze({
@@ -15804,6 +15804,47 @@ app.post('/api/admin/media-slots/retire-batch', async (req, res) => {
     res.status(200).json(await retireMediaSlotBatch(raw.items, validateMediaRetirementProof(raw), user.email));
   } catch (error) {
     sendMediaMutationError(res, error, 'media_slot_retirement_failed');
+  }
+});
+
+/**
+ * Patch one slot's own metadata (ADR-0369). Creating a version already refuses to rewrite a
+ * slot's contract silently — it throws `media_slot_metadata_requires_patch` — but nothing
+ * implemented the patch it names, so a slot's acceptance contract could never be corrected
+ * once written. A group contract that must gain or drop a member needs exactly this: the
+ * members that are NOT moving still have to learn the group's new required set.
+ *
+ * This changes the contract a slot declares, never its accepted bytes or its active version.
+ */
+app.post(/^\/api\/admin\/media-slots\/(.+)\/metadata$/, async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  let slot = null;
+  try { slot = mediaSlotId(String(req.params[0]).split('/').map(decodeURIComponent).join('/')); } catch { slot = null; }
+  if (!slot) { res.status(400).json({ error: 'invalid_media_slot' }); return; }
+  try {
+    const expected = requireMediaExpectedRevision(req);
+    const raw = isObjectRecord(req.body) ? req.body : {};
+    const metadata = mediaJsonObject(raw.metadata, null);
+    if (!metadata) throw mediaMutationError('invalid_media_slot_metadata', 400);
+    const result = await withMediaCatalogTransaction(async (client) => {
+      const current = await client.query('SELECT * FROM media_slots WHERE slot = $1 FOR UPDATE', [slot]);
+      const row = current.rows[0];
+      if (!row) throw mediaMutationError('media_slot_not_found', 404, { slot });
+      if (Number(row.row_revision) !== expected) {
+        throw mediaMutationError('media_slot_conflict', 409, { slot, currentRevision: Number(row.row_revision) });
+      }
+      if (row.lifecycle_state === 'retired') throw mediaMutationError('media_slot_retired', 409, { slot });
+      await client.query(
+        `UPDATE media_slots SET metadata = $2::jsonb, row_revision = row_revision + 1,
+           updated_at = now(), updated_by = $3 WHERE slot = $1`,
+        [slot, JSON.stringify(metadata), user.email],
+      );
+      return { catalogRevision: await bumpMediaCatalog(client) };
+    });
+    res.status(200).json({ slot, catalogRevision: result.catalogRevision });
+  } catch (error) {
+    sendMediaMutationError(res, error, 'media_slot_metadata_update_failed');
   }
 });
 
