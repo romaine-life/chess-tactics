@@ -5,8 +5,17 @@ import { RunRelicIcon } from './RunRelics';
 import { Tooltip } from './shared/InfoTip';
 import { StudioCatalogCard } from './studio/StudioCatalogCard';
 import { StudioStepper } from './studio/StudioStepper';
-import { SliderRow } from './dressing/SliderRow';
+import { SliderRow, ctlReset } from './dressing/SliderRow';
+import { ChoiceGroup } from './shared/ChoiceGroup';
 import { ChromeButton } from './shared/ChromeButton';
+import {
+  RELIC_FLOAT_COMMITTED_PERIOD,
+  RELIC_FLOAT_COMMITTED_RISE,
+  RELIC_FLOAT_COMMITTED_TIMING,
+  RELIC_FLOAT_STEPPED_TIMING,
+  RELIC_GLOW_COMMITTED,
+  relicFloatClock,
+} from './runRelicMat';
 
 /**
  * Candidate MATS -- the surface the Run's relic offers are laid out on at the head of a
@@ -133,16 +142,46 @@ export function findRelicMat(items: readonly RelicMatCandidate[], id: string): R
  * `cards` is off for the catalog thumbnails, where 64px icons would be illegible anyway
  * and the only question is which mat to open.
  */
+export interface RelicMotionTuning {
+  /** How far the bob rises, in whole pixels. */
+  rise: number;
+  /** The base cycle every offer's own clock scales from, in seconds. */
+  period: number;
+  /** Interpolate the bob's stops (a smooth float) or hold each one (a pixel-art bob). */
+  stepped: boolean;
+  /** Multiplier on the emanation's radius and opacity. 0 puts the light out. */
+  glow: number;
+}
+
+export const RELIC_MOTION_COMMITTED: RelicMotionTuning = {
+  rise: RELIC_FLOAT_COMMITTED_RISE,
+  period: RELIC_FLOAT_COMMITTED_PERIOD,
+  stepped: false,
+  glow: RELIC_GLOW_COMMITTED,
+};
+
+/** The tuned motion as the custom properties style.css reads. */
+export function relicMotionStyle(motion: RelicMotionTuning): CSSProperties {
+  return {
+    '--relic-float-rise': `${motion.rise}px`,
+    '--relic-float-period': `${motion.period}s`,
+    '--relic-float-timing': motion.stepped ? RELIC_FLOAT_STEPPED_TIMING : RELIC_FLOAT_COMMITTED_TIMING,
+    '--relic-glow': `${motion.glow}`,
+  } as CSSProperties;
+}
+
 export function RelicMatStage({
   candidate,
   backdrop,
   cards = true,
   scale,
+  motion,
 }: {
   candidate: RelicMatCandidate;
   backdrop: string;
   cards?: boolean;
   scale?: number;
+  motion?: RelicMotionTuning;
 }): ReactElement {
   return (
     <div
@@ -150,7 +189,10 @@ export function RelicMatStage({
       data-mat={candidate.mat}
       data-generator={candidate.generator}
       data-cards={cards ? 'on' : 'off'}
-      style={scale === undefined ? undefined : { '--relic-mat-scale-tuned': scale } as CSSProperties}
+      style={{
+        ...(scale === undefined ? null : { '--relic-mat-scale-tuned': scale } as CSSProperties),
+        ...(motion ? relicMotionStyle(motion) : null),
+      }}
     >
       {backdrop ? <img className="relic-mat-backdrop" src={backdrop} alt="" draggable={false} /> : null}
       <div className="relic-mat-layer">
@@ -159,7 +201,7 @@ export function RelicMatStage({
         <img className="relic-mat-art" src={candidate.version.media!.url} alt="" draggable={false} />
         {cards ? (
           <div className="relic-mat-cards" data-testid="relic-mat-offers">
-            {REVIEW_RELICS.map((relicId) => {
+            {REVIEW_RELICS.map((relicId, index) => {
               const relic = RUN_RELIC_BY_ID[relicId];
               return (
                 <Tooltip
@@ -168,6 +210,9 @@ export function RelicMatStage({
                   label={`${relic.name}. ${relic.description}`}
                   popupMaxInlineSize={288}
                   title={relic.name}
+                  // The same per-offer clock the game lays down, so the tuner is judging
+                  // the composition the player sees and not three synchronised copies.
+                  style={relicFloatClock(index)}
                   trigger={<RunRelicIcon relicId={relicId} />}
                 >
                   <span>{relic.description}</span>
@@ -304,10 +349,12 @@ function useTunedMatMeasurement(
 function TunedScaleExport({
   candidate,
   measured,
+  motion,
   scale,
 }: {
   candidate: RelicMatCandidate | null;
   measured: TunedMatMeasurement | null;
+  motion: RelicMotionTuning;
   scale: number;
 }): ReactElement | null {
   const [copied, setCopied] = useState(false);
@@ -357,6 +404,9 @@ export function RelicMatViewer({
   const found = id ? findRelicMat(items, id) : null;
   const empty = 'No candidate selected — pick a card in the Relic Mat catalog.';
   const [scale, setScale] = useState(RELIC_MAT_COMMITTED_SCALE);
+  const [motion, setMotion] = useState<RelicMotionTuning>(RELIC_MOTION_COMMITTED);
+  const tune = <Key extends keyof RelicMotionTuning>(key: Key, value: RelicMotionTuning[Key]): void =>
+    setMotion((current) => ({ ...current, [key]: value }));
   const stage = useRef<HTMLElement | null>(null);
   const measured = useTunedMatMeasurement(stage, scale, id);
   return (
@@ -365,7 +415,7 @@ export function RelicMatViewer({
         {!found ? <p className="al-lab-empty">{empty}</p> : (
           <div className="al-lab-stages">
             <figure ref={stage} className="al-stage relic-mat-figure" data-testid="relic-mat-stage" data-mat={found.mat} data-generator={found.generator}>
-              <RelicMatStage candidate={found} backdrop={backdrop} scale={scale} />
+              <RelicMatStage candidate={found} backdrop={backdrop} scale={scale} motion={motion} />
               <figcaption>{found.matLabel} — {found.generatorLabel}</figcaption>
             </figure>
           </div>
@@ -398,7 +448,61 @@ export function RelicMatViewer({
                 ? `Mat ${measured.matWidth}×${measured.matHeight} over a ${measured.rowWidth}px relic row. Committed value is ${RELIC_MAT_COMMITTED_SCALE.toFixed(2)}× — the reset returns here.`
                 : `Committed value is ${RELIC_MAT_COMMITTED_SCALE.toFixed(2)}×.`}
             </p>
-            <TunedScaleExport candidate={found} measured={measured} scale={scale} />
+
+            {/* The relics' idle life. The stage above runs the SAME rules the game runs, so
+                what is tuned here is what ships once the value is committed to style.css. */}
+            <label className="tileset-catalog-zoom">
+              <span>Float</span>
+              <div className="pages-ctl-row">
+                <ChoiceGroup
+                  ariaLabel="Float character"
+                  value={motion.stepped ? 'stepped' : 'smooth'}
+                  options={[
+                    { value: 'smooth', label: 'Smooth', title: 'Interpolate between the bob’s stops' },
+                    { value: 'stepped', label: 'Pixel-stepped', title: 'Hold each whole-pixel stop' },
+                  ]}
+                  onChange={(value) => tune('stepped', value === 'stepped')}
+                />
+                {ctlReset(() => tune('stepped', RELIC_MOTION_COMMITTED.stepped))}
+              </div>
+            </label>
+            <SliderRow
+              label={<>Float rise <strong data-testid="relic-float-rise-value">{motion.rise}px</strong></>}
+              value={motion.rise}
+              set={(value) => tune('rise', Math.round(value))}
+              min={0}
+              max={14}
+              step={1}
+              nudge={1}
+              dflt={RELIC_MOTION_COMMITTED.rise}
+            />
+            <SliderRow
+              label={<>Float period <strong data-testid="relic-float-period-value">{motion.period.toFixed(1)}s</strong></>}
+              value={motion.period}
+              set={(value) => tune('period', value)}
+              min={0.8}
+              max={9}
+              step={0.1}
+              nudge={0.1}
+              dflt={RELIC_MOTION_COMMITTED.period}
+            />
+            <SliderRow
+              label={<>Glow <strong data-testid="relic-glow-value">{motion.glow.toFixed(2)}×</strong></>}
+              value={motion.glow}
+              set={(value) => tune('glow', value)}
+              min={0}
+              max={2.5}
+              step={0.05}
+              nudge={0.05}
+              dflt={RELIC_MOTION_COMMITTED.glow}
+            />
+            <p className="tileset-catalog-note" data-testid="relic-motion-readout">
+              {motion.stepped
+                ? `Pixel-stepped: 12 held stops per cycle, so the bob advances about every ${Math.round(motion.period * 1000 / 12)}ms and never lands off-pixel.`
+                : 'Smooth: the bob’s whole-pixel stops are interpolated, so it moves every frame and can sit between pixels.'}
+              {` Committed is ${RELIC_MOTION_COMMITTED.stepped ? 'pixel-stepped' : 'smooth'}, ${RELIC_MOTION_COMMITTED.rise}px over ${RELIC_MOTION_COMMITTED.period.toFixed(1)}s, glow ${RELIC_MOTION_COMMITTED.glow.toFixed(2)}× — every reset returns there.`}
+            </p>
+            <TunedScaleExport candidate={found} measured={measured} motion={motion} scale={scale} />
             {found ? (
               <dl className="al-meta">
                 <div><dt>Mat</dt><dd>{found.matLabel}</dd></div>

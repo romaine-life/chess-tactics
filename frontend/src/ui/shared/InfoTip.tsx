@@ -1,5 +1,5 @@
 import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { ReactElement, ReactNode } from 'react';
+import type { CSSProperties, ReactElement, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { chromeFamilyPortalHost } from '../chromeFamilyRuntime';
 import { ChromeSurfaceFill, InnerChromeBox } from './ChromeBox';
@@ -207,6 +207,7 @@ export function Tooltip({
   popupClassName = '',
   triggerClassName = '',
   focusable = true,
+  style,
 }: {
   trigger: ReactNode;
   children: ReactNode;
@@ -217,6 +218,8 @@ export function Tooltip({
   popupClassName?: string;
   triggerClassName?: string;
   focusable?: boolean;
+  /** Custom properties the trigger's own treatment reads. Not for surface paint. */
+  style?: CSSProperties;
 }): ReactElement {
   const id = useId();
   const {
@@ -237,6 +240,7 @@ export function Tooltip({
   return (
     <span
       className={`tooltip ${className}`.trim()}
+      style={style}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
     >

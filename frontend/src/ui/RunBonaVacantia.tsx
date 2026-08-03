@@ -5,7 +5,7 @@ import { RunRelicIcon } from './RunRelics';
 import { RunWorkspace } from './RunWorkspace';
 import { HouseSelect } from './shared/HouseSelect';
 import { Tooltip } from './shared/InfoTip';
-import { installedRelicMatUrl } from './runRelicMat';
+import { installedRelicMatUrl, relicFloatClock } from './runRelicMat';
 import { relicStripLandingPoint } from './runRelicFlight';
 import { runUnitRosterLabel } from './RunArmyWorkspace';
 import { workspaceBackgroundArtwork } from './workspaceBackgrounds';
@@ -149,6 +149,9 @@ export function RunBonaVacantia({
                   label={`${relic.name}. ${relic.description}`}
                   popupMaxInlineSize={288}
                   title={relic.name}
+                  // Each relic breathes on its own clock. One shared clock makes three
+                  // objects lying loose on a table read as a single animated strip.
+                  style={relicFloatClock(index)}
                   trigger={
                     <button
                       type="button"
@@ -156,12 +159,6 @@ export function RunBonaVacantia({
                       data-relic-id={relicId}
                       disabled={blocked}
                       aria-label={`Take ${relic.name}`}
-                      // Each relic breathes on its own clock. One shared clock makes three
-                      // objects lying loose on a table read as a single animated strip.
-                      style={{
-                        '--relic-float-delay': `${index * -1.9}s`,
-                        '--relic-float-duration': `${4.2 + index * 0.55}s`,
-                      } as CSSProperties}
                       onClick={(event) => take(relicId, event.currentTarget.querySelector('.run-relic-icon'))}
                     >
                       <RunRelicIcon relicId={relicId} />

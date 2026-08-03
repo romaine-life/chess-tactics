@@ -1,10 +1,13 @@
+import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { createBlankLevel } from '../core/level';
 import { craftRunDocument, parseRunCraftSpec } from '../run/craft';
 import type { RunWarSnapshot } from '../run/model';
 import { RunBonaVacantia } from './RunBonaVacantia';
+import { RELIC_MOTION_COMMITTED } from './RunRelicMatReview';
 import { relicStripLandingPoint } from './runRelicFlight';
+import { RELIC_FLOAT_COMMITTED_TIMING } from './runRelicMat';
 
 function war(battles = 4, lootAt: number[] = []): RunWarSnapshot {
   return {
@@ -36,10 +39,10 @@ describe('Bona Vacantia relics', () => {
       <RunBonaVacantia run={vacantiaRun()} replace={() => {}} />,
     );
     const delays = [...markup.matchAll(/--relic-float-delay:([^;"]+)/g)].map(([, value]) => value.trim());
-    const durations = [...markup.matchAll(/--relic-float-duration:([^;"]+)/g)].map(([, value]) => value.trim());
+    const spreads = [...markup.matchAll(/--relic-float-spread:([^;"]+)/g)].map(([, value]) => value.trim());
     expect(delays).toHaveLength(3);
     expect(new Set(delays).size).toBe(3);
-    expect(new Set(durations).size).toBe(3);
+    expect(new Set(spreads).size).toBe(3);
   });
 
   it('rests with no relic in flight and nothing dimmed', () => {
@@ -50,6 +53,18 @@ describe('Bona Vacantia relics', () => {
     expect(markup).not.toContain('data-taking');
     expect(markup).not.toContain('run-relic-flight');
     expect(markup).not.toContain('is-flying');
+  });
+
+  it('keeps the tuner resetting to the numbers style.css actually ships', () => {
+    // The viewer resets to RELIC_MOTION_COMMITTED and the game runs the custom-property
+    // fallbacks. Nothing forces those to agree, so a drift here is silent: the tuner would
+    // reset to a look the player never sees. Pin them together.
+    const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+    expect(css).toContain(`--relic-float-rise, ${RELIC_MOTION_COMMITTED.rise}px`);
+    expect(css).toContain(`--relic-float-period, ${RELIC_MOTION_COMMITTED.period}s`);
+    expect(css).toContain(`--relic-glow, ${RELIC_MOTION_COMMITTED.glow}`);
+    expect(css).toContain(`--relic-float-timing, ${RELIC_FLOAT_COMMITTED_TIMING}`);
+    expect(RELIC_MOTION_COMMITTED.stepped).toBe(false);
   });
 
   it('answers with no landing point where there is no document, so the take is committed outright', () => {
