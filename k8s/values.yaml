@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:e0b8d506cfa71e9c2c5a1c711ff58644cafe4fb3d29ce59a17b2fa60e5ed54fe"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:779b5f2bd08b828b32bad7adaf79f5fc8d593d6f9ee77b9805c820a327af3911"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Cards sound like cards, and are addressed by name"
-  prNumber: "670"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/670"
-  commit: "7acb059a"
+  prTitle: "Legatine and Eutactic retire the last plain Run vocabulary (ADR-0374)"
+  prNumber: "671"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/671"
+  commit: "1046d5b1"
 
 name: chess-tactics
 namespace: chess-tactics
