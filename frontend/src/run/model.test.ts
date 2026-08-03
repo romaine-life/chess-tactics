@@ -39,7 +39,7 @@ import {
   runAbilityDisplayName,
   sellArmyUnit,
   shopHasChanges,
-  takeLootRelic,
+  takeVacantiaRelic,
   tacticalDisciplineAcquisitionTarget,
   type RunDocument,
   type RunWarSnapshot,
@@ -62,8 +62,14 @@ function cheapestOpeningOffer(run: RunDocument) {
   return [...run.shop!.cardOffers].sort((left, right) => left.cost - right.cost)[0];
 }
 
+/** A Conflict that ends in loot now opens with Bona Vacantia, so a run may start there. */
+function pastOpeningRelic(run: RunDocument): RunDocument {
+  if (run.phase !== 'bona-vacantia' || !run.vacantia) return run;
+  return takeVacantiaRelic(run, run.vacantia.offers[0], run.army[0].id);
+}
+
 function deployedRun(seed = 17, snapshot = war()): RunDocument {
-  let run = createRun(snapshot, seed, '2026-01-01T00:00:00.000Z');
+  let run = pastOpeningRelic(createRun(snapshot, seed, '2026-01-01T00:00:00.000Z'));
   // A qualifier can price an opening offer past the starting gold, so open with the
   // cheapest card rather than whichever one landed in slot 0.
   run = buyCard(run, cheapestOpeningOffer(run).offerId);
@@ -72,7 +78,7 @@ function deployedRun(seed = 17, snapshot = war()): RunDocument {
 }
 
 function deployedAtaraxiaRun(seed = 17, snapshot = war()): RunDocument {
-  let run = createRun(snapshot, seed, 1, '2026-01-01T00:00:00.000Z');
+  let run = pastOpeningRelic(createRun(snapshot, seed, 1, '2026-01-01T00:00:00.000Z'));
   run = buyCard(run, cheapestOpeningOffer(run).offerId);
   run = prepareDeployment(leaveShop(run));
   return beginBattle(run, run.army.map((unit) => unit.id), [], []);
@@ -518,16 +524,19 @@ describe('Run progression and relic offers', () => {
     } as unknown as RunDocument)).toThrow('Older Run Shop documents are unsupported.');
   });
 
-  it('burns all three seen Loot offers, including the two not chosen', () => {
-    const firstShop = openShop(deployedRun(44, war(3, [0, 1])), []);
-    const firstOffers = firstShop.shop!.lootRelicOffers;
+  it('burns all three seen Conflict offers, including the two not chosen', () => {
+    // Battles 0 and 1 both close a Conflict, so beating each opens Bona Vacantia.
+    const first = openShop(deployedRun(44, war(5, [0, 1, 3])), []);
+    expect(first.phase).toBe('bona-vacantia');
+    const firstOffers = first.vacantia!.offers;
     expect(firstOffers).toHaveLength(3);
-    const target = firstShop.army[0].id;
-    const chosen = takeLootRelic(firstShop, firstOffers[0], target);
+    const chosen = takeVacantiaRelic(first, firstOffers[0], first.army[0].id);
+    expect(chosen.phase).toBe('shop');
     const secondBattle = beginBattle(prepareDeployment(leaveShop(chosen)), [], [], []);
-    const secondShop = openShop(secondBattle, []);
-    expect(secondShop.shop!.lootRelicOffers).toHaveLength(3);
-    expect(secondShop.shop!.lootRelicOffers.some((relic) => firstOffers.includes(relic))).toBe(false);
+    const second = openShop(secondBattle, []);
+    expect(second.phase).toBe('bona-vacantia');
+    expect(second.vacantia!.offers).toHaveLength(3);
+    expect(second.vacantia!.offers.some((relic) => firstOffers.includes(relic))).toBe(false);
   });
 
   it('keeps one Shopkey offer for the whole Conflict', () => {

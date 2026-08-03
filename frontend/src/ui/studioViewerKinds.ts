@@ -28,6 +28,7 @@ export const STUDIO_VIEWER_KIND_LABELS = {
   gym: 'Training Gym',
   solver: 'Board Solver',
   screenart: 'Screen Art',
+  relicmat: 'Relic Mat',
   cardlayout: 'Card Layout',
   cardicons: 'Card Icon Fitting',
   cardprompts: 'Card Prompts',

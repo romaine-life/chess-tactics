@@ -55,7 +55,7 @@ describe('tooltip chrome', () => {
   });
 
   it('defines the mechanics a tip names instead of leaving the reader to find them', () => {
-    // ADR-0368. Every tip resolves its own body through the one glossary, so a call
+    // ADR-0369. Every tip resolves its own body through the one glossary, so a call
     // site never has to remember to explain a keyword it just used.
     expect(infoTip).toContain('readTooltipGlossary(children, title)');
     expect(infoTip).toContain('readTooltipGlossary(children, null)');

@@ -69,7 +69,7 @@ function markNode(
 }
 
 /**
- * Read a tooltip's own body for named Run mechanics (ADR-0368). A tip that says
+ * Read a tooltip's own body for named Run mechanics (ADR-0369). A tip that says
  * "Grants Discipline to one contained unit" now marks that word and reports Discipline,
  * so the pop can carry its definition instead of leaving the reader to go find it.
  *
