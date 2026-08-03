@@ -1,6 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, type ReactElement, type ReactNode } from 'react';
 import { defaultBackgroundSet } from '../art/backgroundSets';
-import { defaultFacingForSide, paletteForSide, pieceSpritePath } from '../core/pieces';
+import { paletteForSide, pieceSpritePath } from '../core/pieces';
 import {
   AGMINATE_DISPLAY_NAME,
   CACOCHYMIC_DESCRIPTION,
@@ -58,7 +58,9 @@ export const DEFAULT_RUN_SELL_FILTERS: RunSellFilters = Object.freeze({
 });
 
 const PLAYER_PORTRAIT_PALETTE = paletteForSide('player') as PortraitPalette;
-const PLAYER_PIECE_FACING = defaultFacingForSide('player');
+// A unit identifying itself in a chrome list faces the reader, the same choice the run
+// card faces and the shared piece icon make; the board's deployment facing would show a back.
+const PLAYER_PIECE_FACING = 'south';
 const TYPE_ORDER: readonly RunArmyPieceType[] = ['king', 'pawn', 'knight', 'bishop', 'rook', 'queen'];
 
 export type RunUnitTraitId =
