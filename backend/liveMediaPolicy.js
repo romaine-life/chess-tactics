@@ -55,6 +55,11 @@ const GAME_CONDITION_ICON_BY_SLOT = Object.freeze({
   'ui/kit/icons/card-properties/concinnous.png': Object.freeze({ component: 'card-property-icon', variant: 'concinnous' }),
   'ui/kit/icons/card-properties/tactical.png': Object.freeze({ component: 'card-property-icon', variant: 'tactical' }),
   'ui/kit/icons/card-properties/hieratic.png': Object.freeze({ component: 'card-property-icon', variant: 'hieratic' }),
+  // The repeatable Run ideas the persistent title bar names on every Run screen:
+  // the Run's Ataraxia tier, and its Conflict / Battle position in the War.
+  'ui/kit/icons/run/ataraxia.png': Object.freeze({ component: 'run-progress-icon', variant: 'ataraxia' }),
+  'ui/kit/icons/run/conflict.png': Object.freeze({ component: 'run-progress-icon', variant: 'conflict' }),
+  'ui/kit/icons/run/battle.png': Object.freeze({ component: 'run-progress-icon', variant: 'battle' }),
 });
 const CARD_TYPE_ROW_TEXTURE_COMPONENT = 'card-type-row-texture';
 const CARD_TYPE_ROW_TEXTURE_GROUP_ID = 'card-type-row-textures-pixen-v1';
@@ -394,9 +399,10 @@ function runResourceIconMediaIssue(row, projectedRuntime = null) {
 }
 
 /**
- * Domain-owned runtime projection for the native icons that distinguish a
- * unit condition from the card property that grants it. Their exact semantic
- * slots are closed so an arbitrary ui-kit candidate cannot become runtime UI.
+ * Domain-owned runtime projection for the native icons that name one closed game
+ * idea: a unit condition, the card property that grants it, or a repeatable Run
+ * position. Their exact semantic slots are closed so an arbitrary ui-kit
+ * candidate cannot become runtime UI.
  */
 function gameConditionIconMediaIssue(row, projectedRuntime = null) {
   const contract = gameConditionIconSlot(row.slot);

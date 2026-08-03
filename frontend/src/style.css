@@ -17254,6 +17254,27 @@ button.tileset-relationship-cell {
   text-transform: uppercase;
 }
 
+/* The screen-name line reads as a route when a screen names its own position in it
+   (Run › Shop). The trailing segment is a portal the screen fills; while it is empty
+   the line is exactly the plain screen name it has always been, chevron and all
+   spacing included. Orientation copy, never a control (ADR-0300). */
+.brand-lockup-screen-line {
+  align-items: baseline;
+  display: flex;
+  min-width: 0;
+}
+
+.brand-lockup-route:not(:empty) {
+  color: #f0eadb;
+}
+
+.brand-lockup-route:not(:empty)::before {
+  color: #79d3ff;
+  content: "\203A";
+  margin-inline: .5em .5em;
+  opacity: .75;
+}
+
 .settings-tab span,
 .settings-row-copy {
   display: grid;
@@ -18890,6 +18911,45 @@ button.tileset-relationship-cell {
   inline-size: 18px;
 }
 
+/* The Run's repeatable ideas — Ataraxia, Conflict, Battle — each own a native icon
+   seat in the persistent title bar. The seat keeps its geometry whether or not that
+   variant's art decision exists yet, so installing one later never moves the label
+   beside it. Layout only: the chip frame is the kit panel, never a second surface. */
+.run-progress-icon {
+  align-items: center;
+  block-size: 22px;
+  display: inline-flex;
+  flex: none;
+  inline-size: 22px;
+  justify-content: center;
+}
+
+.run-progress-icon img {
+  block-size: 100%;
+  image-rendering: pixelated;
+  inline-size: 100%;
+  object-fit: contain;
+  transform: scale(1.3);
+}
+
+/* One icon and the number it measures read as a single token. */
+.run-topbar-status .run-topbar-measure {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--ds-space-1);
+  min-width: 0;
+  white-space: nowrap;
+}
+
+/* Conflict and Battle are two measures of the same position, so they sit side by
+   side on the chip's value line instead of collapsing into one run of prose. */
+.run-topbar-status .run-topbar-progress {
+  align-items: center;
+  display: flex;
+  gap: var(--ds-inline);
+  justify-content: center;
+}
+
 .run-victory-summary > span + span::before {
   content: "·";
   margin-inline-end: var(--ds-inline-tight);
@@ -19092,6 +19152,56 @@ button.tileset-relationship-cell {
 }
 
 .run-relic-review-grid small {
+  color: var(--skirmish-muted);
+}
+
+/* Run title-bar icon review: every candidate is mounted in the SAME chip the live
+   title bar paints, with its native 64x64 beside it. Layout only — the chip brings
+   its own kit frame, and the review never restyles the seat it is judging. */
+.run-progress-icon-review-section {
+  display: grid;
+  gap: var(--ds-inline-tight);
+}
+
+.run-progress-icon-review-section > h2,
+.run-progress-icon-review-section > p {
+  margin: 0;
+}
+
+.run-progress-icon-review-grid {
+  display: grid;
+  gap: var(--ds-inline);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.run-progress-icon-review-grid figure {
+  align-items: start;
+  display: grid;
+  gap: var(--ds-inline);
+  grid-template-columns: 64px minmax(0, 1fr);
+  margin: 0;
+  padding: var(--ds-inset);
+}
+
+.run-progress-icon-review-detail {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  justify-items: start;
+  min-width: 0;
+}
+
+.run-progress-icon-review-native {
+  block-size: 64px;
+  image-rendering: pixelated;
+  inline-size: 64px;
+}
+
+.run-progress-icon-review-grid figcaption {
+  display: grid;
+  gap: var(--ds-space-1);
+}
+
+.run-progress-icon-review-grid small {
   color: var(--skirmish-muted);
 }
 

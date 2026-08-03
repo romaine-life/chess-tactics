@@ -12,9 +12,15 @@ import { installedUiMedia } from '../installedUiMedia';
 // bar space are orientation copy, not an oversized navigation surface.
 export function BrandLockup({
   screenName,
+  routeSlot,
   transitionStatus,
 }: {
   screenName: string;
+  // Render the route portal target after the screen name. A screen whose position
+  // within itself is state rather than address (the Run's phase) fills it through
+  // <TitleBarSlot region="route">, so the screen-name line reads as one route —
+  // Run › Shop — instead of that position taking up a status chip.
+  routeSlot?: boolean;
   transitionStatus?: string | null;
 }): ReactElement {
   return (
@@ -27,7 +33,10 @@ export function BrandLockup({
           <em>Chess Tactics</em>
           {transitionStatus ? <span className="brand-lockup-transition-status" role="status">{transitionStatus}</span> : null}
         </span>
-        <strong>{screenName}</strong>
+        <strong className="brand-lockup-screen-line">
+          <span className="brand-lockup-screen-name">{screenName}</span>
+          {routeSlot ? <span className="brand-lockup-route" data-titlebar-portal="route" /> : null}
+        </strong>
       </span>
     </div>
   );

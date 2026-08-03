@@ -74,6 +74,7 @@ const DrawableCatalogLab = lazy(() => import('./DrawableCatalogLab').then((modul
 const RunRelicReview = lazy(() => import('./RunRelicReview').then((module) => ({ default: module.RunRelicReview })));
 const RunShopArtReview = lazy(() => import('./RunShopArtReview').then((module) => ({ default: module.RunShopArtReview })));
 const PlaguedIconReview = lazy(() => import('./PlaguedIconReview').then((module) => ({ default: module.PlaguedIconReview })));
+const RunProgressIconReview = lazy(() => import('./RunProgressIconReview').then((module) => ({ default: module.RunProgressIconReview })));
 const BrushIconReview = lazy(() => import('./BrushIconReview').then((module) => ({ default: module.BrushIconReview })));
 
 const SCENE_LOADING_MIN_MS = 350;
@@ -663,6 +664,7 @@ function renderScene(scene: ScenePath, search: string): ReactElement {
   if (path === '/studio' && new URLSearchParams(search).get('relicReview') === '1') return <RunRelicReview />;
   if (path === '/studio' && new URLSearchParams(search).get('plaguedIconReview') === '1') return <PlaguedIconReview />;
   if (path === '/studio' && new URLSearchParams(search).get('brushIconReview') === '1') return <BrushIconReview />;
+  if (path === '/studio' && new URLSearchParams(search).get('runProgressIconReview') === '1') return <RunProgressIconReview />;
   if (path === '/studio' || path === '/tileset-studio') return <TilesetStudio />;
   if (path === '/studio/wall-candidates') return <WallCandidateReview />;
   if (path === '/studio/drawables') return <DrawableCatalogLab />;

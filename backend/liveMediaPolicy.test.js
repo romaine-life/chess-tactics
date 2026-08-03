@@ -400,6 +400,19 @@ test('condition icon projection keeps all four card properties and granted state
     assert.deepEqual(gameConditionIconSlot(property.slot), { component: 'card-property-icon', variant });
     assert.equal(gameConditionIconMediaIssue(property), null);
   }
+  for (const variant of ['ataraxia', 'conflict', 'battle']) {
+    const progress = gameConditionIcon({
+      slot: `ui/kit/icons/run/${variant}.png`,
+      metadata: { runtime: {
+        ...plagued.metadata.runtime,
+        component: 'run-progress-icon',
+        variant,
+        nativeRole: 'run-progress-icon',
+      } },
+    });
+    assert.deepEqual(gameConditionIconSlot(progress.slot), { component: 'run-progress-icon', variant });
+    assert.equal(gameConditionIconMediaIssue(progress), null);
+  }
   assert.match(gameConditionIconMediaIssue(gameConditionIcon({ role: 'media' })), /icon role/);
   assert.match(gameConditionIconMediaIssue(gameConditionIcon({ width: 32 })), /64x64/);
   assert.match(gameConditionIconMediaIssue(gameConditionIcon({
