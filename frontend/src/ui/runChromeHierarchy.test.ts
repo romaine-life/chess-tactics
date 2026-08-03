@@ -305,11 +305,11 @@ describe('Run chrome hierarchy', () => {
     expect(runCard).toContain('runCardFaceContent(card, { purchased, cardType: ownedCardType })');
     expect(runCard).toContain('runCardFrameSlot(card, ownedCardType)');
     expect(runCard).not.toContain('RUN_CARD_PESTIFEROUS_FRAME_SLOT');
-    expect(runCard).not.toContain('RUN_CARD_TACTICAL_FRAME_SLOT');
+    expect(runCard).not.toContain('RUN_CARD_LEGATINE_FRAME_SLOT');
     expect(runCard).not.toContain('RUN_CARD_CONCINNOUS_FRAME_SLOT');
     expect(runCard).not.toContain('RUN_CARD_HIERATIC_FRAME_SLOT');
-    expect(runCard).not.toContain("'discipline' as const");
-    expect(runCard).not.toContain("'marshalled' as const");
+    expect(runCard).not.toContain("'adlected' as const");
+    expect(runCard).not.toContain("'agminate' as const");
     expect(runCardFace).toContain('RUN_CARD_COST_COIN_SOURCE_SLOT');
     expect(runCardFace).toContain('run-card-prototype-cost-coin-source');
     expect(runCard).not.toMatch(/\brules\s*:/);

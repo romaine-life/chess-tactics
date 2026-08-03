@@ -50,7 +50,7 @@ describe('Run card atomic presentation', () => {
     )).not.toBe(signature);
     expect(runCardPresentationSignature({
       ...card,
-      grants: [{ ...card.grants[0], ability: 'discipline' }, card.grants[1]],
+      grants: [{ ...card.grants[0], ability: 'adlected' }, card.grants[1]],
     }, '/frame-a.png', '/art-a.png')).not.toBe(signature);
   });
 
@@ -76,17 +76,17 @@ describe('Run card atomic presentation', () => {
     const pairs = [
       {
         face: runCardFaceContent(
-          runCardSpecimen({ pieces: ['queen'], cardType: 'tactical' }),
+          runCardSpecimen({ pieces: ['queen'], cardType: 'legatine' }),
           { purchased: true },
         ),
-        state: 'unit-state:discipline',
+        state: 'unit-state:adlected',
         iconMedia: { propertyUrl: '/tactical.png', unitStateUrls: { discipline: '/discipline.png' } },
       },
       {
         face: runCardFaceContent(
-          runCardSpecimen({ pieces: ['queen'], cardType: 'pestiferous', plaguedPieceIndex: 0 }),
+          runCardSpecimen({ pieces: ['queen'], cardType: 'pestiferous', cacochymicPieceIndex: 0 }),
         ),
-        state: 'unit-state:plagued',
+        state: 'unit-state:cacochymic',
         iconMedia: { propertyUrl: '/pestiferous.png', unitStateUrls: { plagued: '/plagued.png' } },
       },
       {
@@ -94,7 +94,7 @@ describe('Run card atomic presentation', () => {
           runCardSpecimen({ pieces: ['queen'], cardType: 'hieratic' }),
           { purchased: true },
         ),
-        state: 'unit-state:marshalled',
+        state: 'unit-state:agminate',
         iconMedia: { propertyUrl: '/hieratic.png', unitStateUrls: { marshalled: '/marshalled.png' } },
       },
     ] as const;

@@ -59,7 +59,7 @@ describe('a projected face says only what its card actually shows', () => {
   it('hides every drawn acquisition target uniformly, and reveals it uniformly', () => {
     // Tactical was already correct; the point of the projection is that the other three
     // cannot answer this question differently from it.
-    for (const cardType of ['tactical', 'hieratic', 'concinnous'] as const) {
+    for (const cardType of ['legatine', 'hieratic', 'concinnous'] as const) {
       const multi = runCardSpecimen({ pieces: ['pawn', 'pawn', 'pawn', 'knight'], cardType, effectTargetIndex: 2 });
       const hidden = runCardFaceContent(multi);
       expect(hidden.grants.every((grant) => !grant.ability)).toBe(true);
@@ -73,7 +73,7 @@ describe('a projected face says only what its card actually shows', () => {
   });
 
   it('shows a forced one-unit target before purchase, because it was never hidden', () => {
-    for (const cardType of ['tactical', 'hieratic'] as const) {
+    for (const cardType of ['legatine', 'hieratic'] as const) {
       const forced = runCardFaceContent(runCardSpecimen({ pieces: ['queen'], cardType }));
       expect(forced.grants[0].ability).toEqual({
         state: RUN_CARD_TYPE_REFERENCE[cardType].grants,
@@ -83,18 +83,18 @@ describe('a projected face says only what its card actually shows', () => {
   });
 
   it('marks the Cacochymic unit whether or not the card has been bought', () => {
-    const spec = { pieces: ['pawn', 'pawn', 'bishop'] as const, cardType: 'pestiferous' as const, plaguedPieceIndex: 2 };
+    const spec = { pieces: ['pawn', 'pawn', 'bishop'] as const, cardType: 'pestiferous' as const, cacochymicPieceIndex: 2 };
     for (const purchased of [false, true]) {
       const face = runCardFaceContent(runCardSpecimen(spec), { purchased });
-      expect(face.grants.find((grant) => grant.unit === 'bishop').plaguedIndices).toEqual([0]);
+      expect(face.grants.find((grant) => grant.unit === 'bishop').cacochymicIndices).toEqual([0]);
       expect(face.grants.every((grant) => !grant.ability)).toBe(true);
     }
   });
 
   it('prices and frames a specimen exactly as the Shop would price and frame the same card', () => {
     const offer = createRunCardOffer({ seed: 17, ataraxiaTier: 0 }, RUN_CARD_BY_ID.q, 0, 0, 8, 8, 1);
-    expect(offer.cardType).toBe('tactical');
-    const specimen = runCardSpecimen({ pieces: RUN_CARD_BY_ID.q.pieces, cardType: 'tactical' });
+    expect(offer.cardType).toBe('legatine');
+    const specimen = runCardSpecimen({ pieces: RUN_CARD_BY_ID.q.pieces, cardType: 'legatine' });
     expect(specimen.cost).toBe(offer.cost);
     expect(runCardFrameSlot(specimen)).toBe(runCardFrameSlot(offer));
     expect(runCardFrameSlotForType(null)).not.toBe(runCardFrameSlotForType('hieratic'));

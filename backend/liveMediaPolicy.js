@@ -49,14 +49,16 @@ const RUN_SHOP_WRAP_SLOT = /^ui\/run\/shop-wrap\/([a-z][a-z0-9-]{0,79})\.png$/;
 // runtime needs is where the card row sits inside the painted canvas.
 const RUN_SHOP_WRAP_KINDS = Object.freeze(['seat', 'band', 'slots', 'screen']);
 const RUN_PROGRESS_ICON_COMPONENT = 'run-progress-icon';
+// Each state and property is registered under the word the game says (ADR-0374): the slot,
+// the stored value and the name a player reads are one vocabulary.
 const GAME_CONDITION_ICON_BY_SLOT = Object.freeze({
-  'ui/kit/icons/game/plagued.png': Object.freeze({ component: 'unit-ability-icon', variant: 'plagued' }),
-  'ui/kit/icons/game/positioned.png': Object.freeze({ component: 'unit-ability-icon', variant: 'positioned' }),
-  'ui/kit/icons/game/discipline.png': Object.freeze({ component: 'unit-ability-icon', variant: 'discipline' }),
-  'ui/kit/icons/game/marshalled.png': Object.freeze({ component: 'unit-ability-icon', variant: 'marshalled' }),
+  'ui/kit/icons/game/cacochymic.png': Object.freeze({ component: 'unit-ability-icon', variant: 'cacochymic' }),
+  'ui/kit/icons/game/eutactic.png': Object.freeze({ component: 'unit-ability-icon', variant: 'eutactic' }),
+  'ui/kit/icons/game/adlected.png': Object.freeze({ component: 'unit-ability-icon', variant: 'adlected' }),
+  'ui/kit/icons/game/agminate.png': Object.freeze({ component: 'unit-ability-icon', variant: 'agminate' }),
   'ui/kit/icons/card-properties/pestiferous.png': Object.freeze({ component: 'card-property-icon', variant: 'pestiferous' }),
   'ui/kit/icons/card-properties/concinnous.png': Object.freeze({ component: 'card-property-icon', variant: 'concinnous' }),
-  'ui/kit/icons/card-properties/tactical.png': Object.freeze({ component: 'card-property-icon', variant: 'tactical' }),
+  'ui/kit/icons/card-properties/legatine.png': Object.freeze({ component: 'card-property-icon', variant: 'legatine' }),
   'ui/kit/icons/card-properties/hieratic.png': Object.freeze({ component: 'card-property-icon', variant: 'hieratic' }),
   // The Run's position in its War, as the persistent title bar names it, plus the
   // emblem that says WHICH ladder the carved rung beside it belongs to.
@@ -69,7 +71,7 @@ const CARD_TYPE_ROW_TEXTURE_GROUP_ID = 'card-type-row-textures-pixen-v1';
 const CARD_TYPE_ROW_TEXTURE_BY_SLOT = Object.freeze({
   'ui/surfaces/card-type-pestiferous.png': Object.freeze({ variant: 'pestiferous', width: 128, height: 64 }),
   'ui/surfaces/card-type-concinnous.png': Object.freeze({ variant: 'concinnous', width: 512, height: 64 }),
-  'ui/surfaces/card-type-tactical.png': Object.freeze({ variant: 'tactical', width: 128, height: 64 }),
+  'ui/surfaces/card-type-legatine.png': Object.freeze({ variant: 'legatine', width: 128, height: 64 }),
   'ui/surfaces/card-type-hieratic.png': Object.freeze({ variant: 'hieratic', width: 128, height: 64 }),
 });
 const CARD_TYPE_ROW_TEXTURE_REQUIRED_SLOTS = Object.freeze(Object.keys(CARD_TYPE_ROW_TEXTURE_BY_SLOT).sort());

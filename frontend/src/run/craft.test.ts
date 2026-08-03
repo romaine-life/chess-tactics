@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { createBlankLevel } from '../core/level';
 import {
   AGMINATE_COST,
-  DISCIPLINE_COST,
+  ADLECTED_COST,
   GOLD_SCALE,
   PIECE_VALUE,
-  POSITIONED_COST,
+  EUTACTIC_COST,
   normalizeRunDocument,
   type RunWarSnapshot,
 } from './model';
@@ -85,7 +85,7 @@ describe('run craft spec parsing', () => {
 
   it('reads a card type off an offer', () => {
     expect(spec('?craft=shop&offers=rook:tactical').offers).toEqual([
-      { pieces: ['rook'], cardType: 'tactical' },
+      { pieces: ['rook'], cardType: 'legatine' },
     ]);
   });
 
@@ -109,12 +109,12 @@ describe('run craft specs from a request body', () => {
     const parsed = runCraftSpecFromJson({
       phase: 'shop',
       battle: 2,
-      army: [{ type: 'rook', abilities: ['marshalled'] }, 'pawn'],
+      army: [{ type: 'rook', abilities: ['agminate'] }, 'pawn'],
       offers: [{ pieces: ['pawn', 'pawn'], type: 'concinnous' }],
       relics: ['fair-scales'],
     });
     expect(parsed.army).toEqual([
-      { type: 'rook', abilities: ['marshalled'] },
+      { type: 'rook', abilities: ['agminate'] },
       { type: 'pawn', abilities: [] },
     ]);
     expect(parsed.offers).toEqual([{ pieces: ['pawn', 'pawn'], cardType: 'concinnous' }]);
@@ -132,11 +132,11 @@ describe('run craft specs from a request body', () => {
 
   it('grants crafted abilities to the units it adds', () => {
     const run = craftRunDocument(
-      runCraftSpecFromJson({ phase: 'shop', battle: 2, army: [{ type: 'rook', abilities: ['marshalled'] }, 'pawn'] }),
+      runCraftSpecFromJson({ phase: 'shop', battle: 2, army: [{ type: 'rook', abilities: ['agminate'] }, 'pawn'] }),
       war(),
     );
     expect(run.army.map((unit) => `${unit.type}:${unit.abilities.join('+') || 'none'}`))
-      .toEqual(['king:none', 'rook:marshalled', 'pawn:none']);
+      .toEqual(['king:none', 'rook:agminate', 'pawn:none']);
   });
 });
 
@@ -188,9 +188,9 @@ describe('crafted Run documents', () => {
     expect(offers.map((offer) => offer.pieces)).toEqual([['rook'], ['pawn', 'pawn'], ['knight'], ['bishop']]);
     expect(offers[0].cost).toBe(PIECE_VALUE.rook);
     expect(offers[0].cardType).toBeNull();
-    expect(offers[1].cost).toBe(2 * PIECE_VALUE.pawn + POSITIONED_COST);
+    expect(offers[1].cost).toBe(2 * PIECE_VALUE.pawn + EUTACTIC_COST);
     expect(offers[1].effectTargetIndex).toBeGreaterThanOrEqual(0);
-    expect(offers[2].cost).toBe(PIECE_VALUE.knight + DISCIPLINE_COST);
+    expect(offers[2].cost).toBe(PIECE_VALUE.knight + ADLECTED_COST);
     expect(offers[3].cardType).toBe('hieratic');
     expect(offers[3].cost).toBe(PIECE_VALUE.bishop + AGMINATE_COST);
     expect(offers[3].effectTargetIndex).toBeNull();
@@ -201,7 +201,7 @@ describe('crafted Run documents', () => {
     const run = craft('?craft=shop&battle=2&offers=rook:pestiferous');
     const offer = run.shop!.cardOffers[0];
     expect(offer.cardType).toBe('pestiferous');
-    expect(offer.plaguedPieceIndex).toBe(0);
+    expect(offer.cacochymicPieceIndex).toBe(0);
     expect(offer.cost).toBe(PIECE_VALUE.rook - 2);
   });
 
@@ -222,7 +222,7 @@ describe('crafted Run documents', () => {
     const armyIds = new Set(run.army.map((unit) => unit.id));
     expect(held.every((card) => card.unitIds.every((id) => armyIds.has(id)))).toBe(true);
     expect(run.army.find((unit) => unit.id === held[1].effectTargetUnitId)?.abilities)
-      .toContain('positioned');
+      .toContain('eutactic');
     // The staged offers are withdrawn: the Shop reads as the one the game dealt.
     expect(run.shop?.cardOffers.some((offer) => offer.offerId.startsWith('craft-1'))).toBe(false);
     expect(run.shop?.purchasedCardOfferIds).toEqual([]);
@@ -386,7 +386,7 @@ describe('links that craft the Run they open', () => {
   });
 
   it('refuses to write an address for a spec it would have to shorten', () => {
-    const rich = runCraftSpecFromJson({ phase: 'shop', battle: 4, army: [{ type: 'rook', abilities: ['marshalled'] }] });
+    const rich = runCraftSpecFromJson({ phase: 'shop', battle: 4, army: [{ type: 'rook', abilities: ['agminate'] }] });
     expect(() => runCraftAddress(rich)).toThrow(/cannot be written as an address/);
   });
 

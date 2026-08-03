@@ -36,7 +36,7 @@ export function concinnousTargetLabel(card: RunCardOffer): string {
 function publicTargetLabel(card: RunCoreCard | RunCardOffer, purchased: boolean): string {
   if (!isRunCardOffer(card)) return '';
   if (card.cardType === 'pestiferous') {
-    const target = card.plaguedPieceIndex === null ? null : card.pieces[card.plaguedPieceIndex];
+    const target = card.cacochymicPieceIndex === null ? null : card.pieces[card.cacochymicPieceIndex];
     return target ? ` ${CACOCHYMIC_DISPLAY_NAME} ${target}.` : '';
   }
   if (card.cardType === 'concinnous' && purchased) {

@@ -4,7 +4,7 @@ import {
   RUN_CARD_TYPE_REFERENCE,
   hieraticAgminateAcquisitionTarget,
   runCardOfferCost,
-  tacticalDisciplineAcquisitionTarget,
+  legatineAdlectedAcquisitionTarget,
   type PurchasablePieceType,
   type RunAbility,
   type RunCardOffer,
@@ -16,7 +16,7 @@ import {
   RUN_CARD_FRAME_SLOT,
   RUN_CARD_HIERATIC_FRAME_SLOT,
   RUN_CARD_PESTIFEROUS_FRAME_SLOT,
-  RUN_CARD_TACTICAL_FRAME_SLOT,
+  RUN_CARD_LEGATINE_FRAME_SLOT,
 } from './runCardFrameGeometry';
 
 /**
@@ -39,7 +39,7 @@ export type RunCardGrant = Readonly<{
   count: number;
   unit: PurchasablePieceType;
   /** Occurrence indices within this cell marked Cacochymic. */
-  plaguedIndices?: readonly number[];
+  cacochymicIndices?: readonly number[];
   /** The single occurrence in this cell whose granted state is public, if any. */
   ability?: Readonly<{ state: RunAbility; index: number }>;
 }>;
@@ -77,7 +77,7 @@ const CARD_PIECE_ORDER: readonly PurchasablePieceType[] = Object.freeze([
 const FRAME_SLOT_BY_CARD_TYPE: Readonly<Record<RunCardType, string>> = Object.freeze({
   pestiferous: RUN_CARD_PESTIFEROUS_FRAME_SLOT,
   concinnous: RUN_CARD_CONCINNOUS_FRAME_SLOT,
-  tactical: RUN_CARD_TACTICAL_FRAME_SLOT,
+  legatine: RUN_CARD_LEGATINE_FRAME_SLOT,
   hieratic: RUN_CARD_HIERATIC_FRAME_SLOT,
 });
 
@@ -135,16 +135,16 @@ function publicAbilityTarget(
 ): PublicAbilityTarget | null {
   if (!isRunCardOffer(card) || !card.cardType) return null;
   const granted = RUN_CARD_TYPE_REFERENCE[card.cardType].grants;
-  // Cacochymic is a modifier the offer already names publicly through plaguedPieceIndex.
-  if (granted === 'plagued') return null;
+  // Cacochymic is a modifier the offer already names publicly through cacochymicPieceIndex.
+  if (granted === 'cacochymic') return null;
   const state: RunAbility = granted;
   // A one-unit offer forces its target, so its state is public before purchase.
   if (card.pieces.length === 1) return { state, pieceIndex: 0 };
   if (!purchased) return null;
   const pieceIndex = card.cardType === 'concinnous'
     ? card.effectTargetIndex
-    : card.cardType === 'tactical'
-      ? tacticalDisciplineAcquisitionTarget(card.effectSeed, card.pieces.length)
+    : card.cardType === 'legatine'
+      ? legatineAdlectedAcquisitionTarget(card.effectSeed, card.pieces.length)
       : hieraticAgminateAcquisitionTarget(card.effectSeed, card.pieces.length);
   if (pieceIndex === null || !card.pieces[pieceIndex]) return null;
   return { state, pieceIndex };
@@ -154,17 +154,17 @@ export function runCardGrants(
   card: RunCoreCard | RunCardOffer,
   { purchased = false }: RunCardFaceOptions = {},
 ): readonly RunCardGrant[] {
-  const plaguedPieceIndex = isRunCardOffer(card) ? card.plaguedPieceIndex : null;
+  const cacochymicPieceIndex = isRunCardOffer(card) ? card.cacochymicPieceIndex : null;
   const target = publicAbilityTarget(card, purchased);
   return CARD_PIECE_ORDER.flatMap((unit) => {
     const pieceIndices = card.pieces.flatMap((piece, index) => piece === unit ? [index] : []);
     if (pieceIndices.length === 0) return [];
-    const plaguedIndex = plaguedPieceIndex === null ? -1 : pieceIndices.indexOf(plaguedPieceIndex);
+    const plaguedIndex = cacochymicPieceIndex === null ? -1 : pieceIndices.indexOf(cacochymicPieceIndex);
     const abilityIndex = target === null ? -1 : pieceIndices.indexOf(target.pieceIndex);
     return [{
       unit,
       count: pieceIndices.length,
-      plaguedIndices: plaguedIndex >= 0 ? [plaguedIndex] : [],
+      cacochymicIndices: plaguedIndex >= 0 ? [plaguedIndex] : [],
       ...(target !== null && abilityIndex >= 0
         ? { ability: { state: target.state, index: abilityIndex } }
         : {}),
@@ -204,7 +204,7 @@ export type RunCardSpecimenSpec = Readonly<{
   /** Overrides the composition's own gold value, for a study that pins a printed cost. */
   cost?: number;
   /** Which contained unit is Cacochymic, for a Pestiferous specimen. */
-  plaguedPieceIndex?: number | null;
+  cacochymicPieceIndex?: number | null;
   /** Which contained unit a Concinnous specimen has drawn, revealed once purchased. */
   effectTargetIndex?: number | null;
   effectSeed?: number;
@@ -220,12 +220,12 @@ export function runCardSpecimen({
   pieces,
   cardType = null,
   cost,
-  plaguedPieceIndex = null,
+  cacochymicPieceIndex = null,
   effectTargetIndex = null,
   effectSeed = 0,
 }: RunCardSpecimenSpec): RunCardOffer {
   const value = pieces.reduce((total, piece) => total + PIECE_VALUE[piece], 0);
-  const plaguedPiece = plaguedPieceIndex === null ? null : pieces[plaguedPieceIndex] ?? null;
+  const plaguedPiece = cacochymicPieceIndex === null ? null : pieces[cacochymicPieceIndex] ?? null;
   return {
     id: pieces.map((piece) => piece.slice(0, 1)).join(''),
     pieces: [...pieces],
@@ -235,7 +235,7 @@ export function runCardSpecimen({
     cost: cost ?? runCardOfferCost(value, cardType, plaguedPiece),
     cardType,
     effectSeed,
-    plaguedPieceIndex,
+    cacochymicPieceIndex,
     effectTargetIndex,
   };
 }

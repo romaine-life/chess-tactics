@@ -18,11 +18,11 @@ import type { Level, War } from '../core/level';
 import { createRng } from '../core/rng';
 import {
   AGMINATE_COST,
-  DISCIPLINE_COST,
+  ADLECTED_COST,
   GOLD_SCALE,
   PIECE_VALUE,
-  PLAGUED_DISCOUNT,
-  POSITIONED_COST,
+  CACOCHYMIC_DISCOUNT,
+  EUTACTIC_COST,
   RUN_CARD_BY_ID,
   RUN_RELIC_BY_ID,
   acquireRelic,
@@ -131,12 +131,18 @@ const PIECE_ALIASES: Readonly<Record<string, PurchasablePieceType>> = Object.fre
   queen: 'queen',
 });
 
+/** Each card type answers to its qualifier, its granted state, and the retired words both
+ * were called before ADR-0374, so craft links written under the old vocabulary keep
+ * resolving. Every spelling lands on the same stored type. */
 const CARD_TYPES: Readonly<Record<string, RunCardType | null>> = Object.freeze({
   plain: null,
   none: null,
-  tactical: 'tactical',
-  discipline: 'tactical',
+  legatine: 'legatine',
+  adlected: 'legatine',
+  tactical: 'legatine',
+  discipline: 'legatine',
   concinnous: 'concinnous',
+  eutactic: 'concinnous',
   positioned: 'concinnous',
   pestiferous: 'pestiferous',
   plagued: 'pestiferous',
@@ -191,7 +197,7 @@ function cardSpec(raw: string): RunCraftCard {
   const key = typePart.toLowerCase();
   if (!(key in CARD_TYPES)) {
     throw new RunCraftError(
-      `craft offers: "${typePart}" is not a card type. Use tactical, concinnous, pestiferous, hieratic or plain.`,
+      `craft offers: "${typePart}" is not a card type. Use legatine, concinnous, pestiferous, hieratic or plain.`,
     );
   }
   return { pieces, cardType: CARD_TYPES[key] };
@@ -249,7 +255,19 @@ export function parseRunCraftSpec(search: string): RunCraftSpec | null {
   };
 }
 
-const RUN_ABILITIES: readonly RunAbility[] = ['discipline', 'positioned', 'marshalled'];
+
+/** A crafted ability may be written by its name or by its stored value (ADR-0374). The
+ * refusal message quotes the names, since those are what the game says out loud. */
+const RUN_ABILITY_ALIASES: Readonly<Record<string, RunAbility>> = Object.freeze({
+  adlected: 'adlected',
+  discipline: 'adlected',
+  eutactic: 'eutactic',
+  positioned: 'eutactic',
+  agminate: 'agminate',
+  marshalled: 'agminate',
+});
+
+const RUN_ABILITY_NAMES = ['adlected', 'eutactic', 'agminate'] as const;
 
 function craftUnitList(raw: unknown, label: string): RunCraftUnit[] {
   if (typeof raw === 'string') return craftUnits(pieceList(raw, label));
@@ -266,12 +284,15 @@ function craftUnitList(raw: unknown, label: string): RunCraftUnit[] {
     if (pieces.length !== 1) throw new RunCraftError(`craft ${label}: "${String(unit.type)}" names more than one unit.`);
     const abilities = unit.abilities === undefined ? [] : unit.abilities;
     if (!Array.isArray(abilities)) throw new RunCraftError(`craft ${label}: abilities must be a list.`);
+    const resolved: RunAbility[] = [];
     for (const ability of abilities) {
-      if (!RUN_ABILITIES.includes(ability as RunAbility)) {
-        throw new RunCraftError(`craft ${label}: "${String(ability)}" is not an ability. Use ${RUN_ABILITIES.join(', ')}.`);
+      const named = typeof ability === 'string' ? RUN_ABILITY_ALIASES[ability.toLowerCase()] : undefined;
+      if (!named) {
+        throw new RunCraftError(`craft ${label}: "${String(ability)}" is not an ability. Use ${RUN_ABILITY_NAMES.join(', ')}.`);
       }
+      resolved.push(named);
     }
-    return { type: pieces[0], abilities: abilities as RunAbility[] };
+    return { type: pieces[0], abilities: resolved };
   });
 }
 
@@ -512,13 +533,13 @@ function autoDeploy(run: RunDocument): { run: RunDocument; layout: RunDeployment
     // A Surveyor's Compass makes the layout an unmade player choice; the crafter takes the first.
     prepared = setDeploymentChoices(prepared, { layoutChoice: 0 });
   }
-  if (options.disciplineUnitIds.length) {
-    // Disciplined units are placed by hand in play, so the crafter places them the same way:
+  if (options.adlectedUnitIds.length) {
+    // Adlected units are placed by hand in play, so the crafter places them the same way:
     // the first free deployment cells, deterministically.
     const layout = selectedDeploymentLayout(prepared, options);
     const used = new Set(Object.values(layout.placements).map((cell) => `${cell.x},${cell.y}`));
     const manualPlacements = { ...(prepared.deployment?.manualPlacements ?? {}) };
-    for (const unitId of options.disciplineUnitIds) {
+    for (const unitId of options.adlectedUnitIds) {
       if (manualPlacements[unitId]) continue;
       const free = options.zoneCells.find((cell) => !used.has(`${cell.x},${cell.y}`));
       if (!free) break;
@@ -717,25 +738,25 @@ function craftOffer(
 ): RunCardOffer {
   const core = RUN_CARD_BY_ID[craftCoreCardId(card.pieces)];
   const effectSeed = mixSeed(run.seed, `craft-offer:${core.id}`, slotIndex);
-  const plaguedPieceIndex = card.cardType === 'pestiferous'
+  const cacochymicPieceIndex = card.cardType === 'pestiferous'
     ? seededPestiferousTarget(effectSeed, core.pieces.map((_piece, index) => index), 0)
     : null;
-  const plaguedPiece = plaguedPieceIndex === null ? null : core.pieces[plaguedPieceIndex];
+  const plaguedPiece = cacochymicPieceIndex === null ? null : core.pieces[cacochymicPieceIndex];
   return {
     ...core,
     pieces: [...core.pieces],
     offerId: `craft-${slotIndex}-${core.id}`,
     // The exact pricing the game and the server both derive; a hand-set cost is rejected.
     cost: plaguedPiece
-      ? core.value - PLAGUED_DISCOUNT[plaguedPiece]
-      : core.value + (card.cardType === 'tactical'
-        ? DISCIPLINE_COST
+      ? core.value - CACOCHYMIC_DISCOUNT[plaguedPiece]
+      : core.value + (card.cardType === 'legatine'
+        ? ADLECTED_COST
         : card.cardType === 'hieratic'
           ? AGMINATE_COST
-          : card.cardType === 'concinnous' ? POSITIONED_COST : 0),
+          : card.cardType === 'concinnous' ? EUTACTIC_COST : 0),
     cardType: card.cardType,
     effectSeed,
-    plaguedPieceIndex,
+    cacochymicPieceIndex,
     effectTargetIndex: card.cardType === 'concinnous'
       ? createRng(mixSeed(effectSeed, 'concinnous-target')).int(core.pieces.length)
       : null,

@@ -1,7 +1,9 @@
 import {
+  ADLECTED_DISPLAY_NAME,
   AGMINATE_DISPLAY_NAME,
   CACOCHYMIC_DESCRIPTION,
   CACOCHYMIC_DISPLAY_NAME,
+  EUTACTIC_DISPLAY_NAME,
   RUN_CARD_TYPE_REFERENCE,
   runAbilityGeneralDescription,
   type RunAbility,
@@ -39,28 +41,28 @@ export type RunGlossaryEntry = Readonly<{
  */
 export const RUN_GLOSSARY: readonly RunGlossaryEntry[] = Object.freeze([
   Object.freeze({
-    id: 'discipline' as const,
+    id: 'adlected' as const,
     kind: 'unit-state' as const,
-    term: 'Discipline',
-    forms: Object.freeze(['Discipline', 'Disciplined']),
-    definition: runAbilityGeneralDescription('discipline'),
+    term: ADLECTED_DISPLAY_NAME,
+    forms: Object.freeze([ADLECTED_DISPLAY_NAME]),
+    definition: runAbilityGeneralDescription('adlected'),
   }),
   Object.freeze({
-    id: 'positioned' as const,
+    id: 'eutactic' as const,
     kind: 'unit-state' as const,
-    term: 'Positioned',
-    forms: Object.freeze(['Positioned']),
-    definition: runAbilityGeneralDescription('positioned'),
+    term: EUTACTIC_DISPLAY_NAME,
+    forms: Object.freeze([EUTACTIC_DISPLAY_NAME]),
+    definition: runAbilityGeneralDescription('eutactic'),
   }),
   Object.freeze({
-    id: 'marshalled' as const,
+    id: 'agminate' as const,
     kind: 'unit-state' as const,
     term: AGMINATE_DISPLAY_NAME,
     forms: Object.freeze([AGMINATE_DISPLAY_NAME]),
-    definition: runAbilityGeneralDescription('marshalled'),
+    definition: runAbilityGeneralDescription('agminate'),
   }),
   Object.freeze({
-    id: 'plagued' as const,
+    id: 'cacochymic' as const,
     kind: 'unit-state' as const,
     term: CACOCHYMIC_DISPLAY_NAME,
     forms: Object.freeze([CACOCHYMIC_DISPLAY_NAME]),
@@ -88,7 +90,7 @@ function escapeForPattern(value: string): string {
 }
 
 /**
- * Longest form first so `Disciplined` is never matched as `Discipline` plus a stray `d`.
+ * Longest form first, so a term that is a prefix of another never swallows its longer form.
  * The pattern is rebuilt per call site through a fresh RegExp because a global regex
  * carries `lastIndex` between uses.
  */
@@ -105,7 +107,7 @@ export type RunGlossarySegment = Readonly<{
 /**
  * Split authored prose into plain runs and glossary terms, in reading order. Matching is
  * case sensitive and whole-word: the mechanics are capitalized proper names, so `tactical`
- * in ordinary prose is not the Tactical card property.
+ * in ordinary prose is not the Legatine card property.
  */
 export function splitRunGlossaryText(text: string): readonly RunGlossarySegment[] {
   if (!text) return [Object.freeze({ text, entry: null })];

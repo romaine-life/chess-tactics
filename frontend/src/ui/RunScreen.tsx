@@ -23,6 +23,7 @@ import { useConfirm } from './shared/ConfirmDialog';
 import { RunWorkspace } from './RunWorkspace';
 import { workspaceBackgroundArtwork } from './workspaceBackgrounds';
 import {
+  ADLECTED_DISPLAY_NAME,
   ATARAXIA_BY_TIER,
   CACOCHYMIC_DISPLAY_NAME,
   GOLD_SCALE,
@@ -354,10 +355,10 @@ function DeploymentControls({
 }): ReactElement {
   const { abandonDialog, abandoning, requestAbandon } = useRunAbandon(run);
   const chosenBlocked = run.deployment?.chosenBlockedUnitIds ?? [];
-  const placedDisciplineCount = options.disciplineUnitIds.filter(
+  const placedDisciplineCount = options.adlectedUnitIds.filter(
     (unitId) => Boolean(run.deployment?.manualPlacements[unitId]),
   ).length;
-  const disciplinePending = placedDisciplineCount < options.disciplineUnitIds.length;
+  const disciplinePending = placedDisciplineCount < options.adlectedUnitIds.length;
   const layout = selectedDeploymentLayout(run, options);
   return (
     <>
@@ -400,12 +401,12 @@ function DeploymentControls({
           <p className="skirmish-grid-hint">{options.overflowCount} excess unit{options.overflowCount === 1 ? '' : 's'} will remain in reserve.</p>
         ) : null}
 
-        {options.disciplineUnitIds.length > 0 ? (
+        {options.adlectedUnitIds.length > 0 ? (
           <div className="skirmish-view-group run-deployment-control">
-            <span className="skirmish-eyebrow">Discipline · {placedDisciplineCount}/{options.disciplineUnitIds.length}</span>
-            <p>Select a Disciplined unit, then choose one of its highlighted battlefield squares.</p>
+            <span className="skirmish-eyebrow">{ADLECTED_DISPLAY_NAME} · {placedDisciplineCount}/{options.adlectedUnitIds.length}</span>
+            <p>Select an {ADLECTED_DISPLAY_NAME} unit, then choose one of its highlighted battlefield squares.</p>
             <div className="run-choice-list">
-              {options.disciplineUnitIds.map((unitId) => {
+              {options.adlectedUnitIds.map((unitId) => {
                 const unit = run.army.find((candidate) => candidate.id === unitId);
                 const square = deploymentSquareLabel(run.deployment?.manualPlacements[unitId], run.war.battles[run.battleIndex].level.board.rows);
                 return (
@@ -489,12 +490,12 @@ function useRunDeploymentPresentation({
   const layout = selectedDeploymentLayout(prepared, options);
   const [selectedDisciplineUnitId, setSelectedDisciplineUnitId] = useState<string | null>(null);
   const [hoveredCellKey, setHoveredCellKey] = useState<string | null>(null);
-  const firstUnplacedDisciplineUnitId = options.disciplineUnitIds.find(
+  const firstUnplacedDisciplineUnitId = options.adlectedUnitIds.find(
     (unitId) => !prepared.deployment?.manualPlacements[unitId],
   ) ?? null;
-  const activeDisciplineUnitId = selectedDisciplineUnitId && options.disciplineUnitIds.includes(selectedDisciplineUnitId)
+  const activeDisciplineUnitId = selectedDisciplineUnitId && options.adlectedUnitIds.includes(selectedDisciplineUnitId)
     ? selectedDisciplineUnitId
-    : firstUnplacedDisciplineUnitId ?? options.disciplineUnitIds[0] ?? null;
+    : firstUnplacedDisciplineUnitId ?? options.adlectedUnitIds[0] ?? null;
   const activeDisciplineUnit = prepared.army.find((unit) => unit.id === activeDisciplineUnitId) ?? null;
   const legalCells = useMemo(
     () => activeDisciplineUnitId ? disciplinePlacementCells(prepared, options, activeDisciplineUnitId) : [],
@@ -575,7 +576,7 @@ function useRunDeploymentPresentation({
     pendingPlacementArrivalUnitIdRef.current = activeDisciplineUnitId;
     pendingPlacementArrivalObservedRef.current = false;
     replace(setDeploymentChoices(prepared, { manualPlacements }));
-    const nextUnplaced = options.disciplineUnitIds.find(
+    const nextUnplaced = options.adlectedUnitIds.find(
       (unitId) => unitId !== activeDisciplineUnitId && !manualPlacements[unitId],
     );
     if (nextUnplaced) setSelectedDisciplineUnitId(nextUnplaced);
@@ -812,7 +813,7 @@ function ShopPanel({
                   {loss.unit.name} · {loss.unit.type}
                   {(() => {
                     const card = run.cards.find((candidate) => candidate.id === loss.cardId);
-                    const next = run.army.find((unit) => unit.id === card?.plaguedUnitId);
+                    const next = run.army.find((unit) => unit.id === card?.cacochymicUnitId);
                     return next ? ` — ${next.name} · ${next.type} is now ${CACOCHYMIC_DISPLAY_NAME}` : '';
                   })()}
                 </li>

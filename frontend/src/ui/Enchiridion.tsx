@@ -12,10 +12,12 @@ import {
 import { PredrawnMoveHighlightPaint } from '../render/PredrawnMoveHighlightPaint';
 import { runCardArtSlot, runCardName } from '../run/cardNames';
 import {
+  ADLECTED_DISPLAY_NAME,
   AGMINATE_DISPLAY_NAME,
   ATARAXIA_BY_TIER,
   ATARAXIA_TIERS,
   CACOCHYMIC_DISPLAY_NAME,
+  EUTACTIC_DISPLAY_NAME,
   RUN_CARD_BY_ID,
   RUN_CARD_DECK,
   RUN_CARD_TYPE_REFERENCE,
@@ -720,12 +722,12 @@ const CARD_TYPE_REFERENCES: readonly CardTypeReferenceDefinition[] = Object.free
   {
     id: 'concinnous',
     cost: 3,
-    description: 'Skillfully and harmoniously arranged. One persisted contained unit becomes Positioned on purchase; its target may remain hidden until then.',
+    description: `Skillfully and harmoniously arranged. One persisted contained unit becomes ${EUTACTIC_DISPLAY_NAME} on purchase; its target may remain hidden until then.`,
   },
   {
-    id: 'tactical',
+    id: 'legatine',
     cost: 4,
-    description: 'One contained unit gains Discipline when purchased. The target is hidden on multi-unit offers; this one-unit Volunteer shows the state because its target is forced.',
+    description: `Of a legate, a commander's deputy entrusted with a detached force. One contained unit gains ${ADLECTED_DISPLAY_NAME} when purchased. The target is hidden on multi-unit offers; this one-unit Volunteer shows the state because its target is forced.`,
   },
   {
     id: 'hieratic',
@@ -751,7 +753,7 @@ function CardTypeReference({ definition }: { definition: CardTypeReferenceDefini
     pieces: VOLUNTEER_CARD.pieces,
     cardType: definition.id,
     cost: definition.cost,
-    plaguedPieceIndex: definition.id === 'pestiferous' ? 0 : null,
+    cacochymicPieceIndex: definition.id === 'pestiferous' ? 0 : null,
     effectTargetIndex: definition.id === 'concinnous' ? 0 : null,
   });
   const frameSlot = runCardFrameSlot(specimen);
@@ -894,22 +896,22 @@ const UNIT_STATE_REFERENCES: readonly Readonly<{
   description: string;
 }>[] = Object.freeze([
   {
-    state: 'discipline',
-    name: 'Discipline',
-    description: 'The unit may be deliberately placed on a legal square in the player deployment zone before the remainder of the army is deployed.',
+    state: 'adlected',
+    name: ADLECTED_DISPLAY_NAME,
+    description: 'Enrolled by direct appointment rather than by the usual process. The unit may be deliberately placed on a legal square in the player deployment zone before the remainder of the army is deployed.',
   },
   {
-    state: 'positioned',
-    name: 'Positioned',
-    description: 'The unit’s automatic deployment favors its piece-specific region: Pawns prefer the front row, the King and Bishops prefer the back row, and Rooks prefer outer back-row squares.',
+    state: 'eutactic',
+    name: EUTACTIC_DISPLAY_NAME,
+    description: 'Well-ordered; drawn up in good array. The unit’s automatic deployment favors its piece-specific region: Pawns prefer the front row, the King and Bishops prefer the back row, and Rooks prefer outer back-row squares.',
   },
   {
-    state: 'marshalled',
+    state: 'agminate',
     name: AGMINATE_DISPLAY_NAME,
     description: 'The unit seeks its piece-specific station: the King prefers a board edge, Rooks favor their King-flank and corner formation, and Bishops prefer the opposite square color from another Bishop.',
   },
   {
-    state: 'plagued',
+    state: 'cacochymic',
     name: CACOCHYMIC_DISPLAY_NAME,
     description: 'The unit may be permanently lost after a Battle when its Pestiferous card resolves attrition. Its card-price contribution is discounted by 0 gold for a Pawn, 1 for a Knight or Bishop, 2 for a Rook, and 3 for a Queen.',
   },

@@ -3,20 +3,20 @@ import type { RunAbility } from '../../run/model';
 import { installedUiMedia } from '../installedUiMedia';
 
 /** The unit states that own an accepted paired icon (ADR-0339). */
-export type RunUnitState = RunAbility | 'plagued';
+export type RunUnitState = RunAbility | 'cacochymic';
 
 /**
  * Each unit state resolves its own typed `unit-ability-icon` role. The runtime never
  * substitutes a shield, movement glyph, flag, Unicode character, or the paired card
- * property's icon for one of these (ADR-0318, ADR-0339). The `plagued`/`marshalled`
- * locators stay the non-presentational storage identities of Cacochymic and Agminate
- * (ADR-0341, ADR-0343).
+ * property's icon for one of these (ADR-0318, ADR-0339). Since ADR-0374 each locator
+ * is the state's own word: the slot, the stored value and the name a player reads are
+ * one vocabulary.
  */
 const RUN_UNIT_STATE_MEDIA_ROLE: Readonly<Record<RunUnitState, string>> = Object.freeze({
-  discipline: 'ui-kit-icons-game-discipline-png',
-  positioned: 'ui-kit-icons-game-positioned-png',
-  marshalled: 'ui-kit-icons-game-marshalled-png',
-  plagued: 'ui-kit-icons-game-plagued-png',
+  adlected: 'ui-kit-icons-game-adlected-png',
+  eutactic: 'ui-kit-icons-game-eutactic-png',
+  agminate: 'ui-kit-icons-game-agminate-png',
+  cacochymic: 'ui-kit-icons-game-cacochymic-png',
 });
 
 export function runUnitStateIconUrl(state: RunUnitState): string {

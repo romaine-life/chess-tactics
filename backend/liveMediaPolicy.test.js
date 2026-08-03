@@ -122,7 +122,7 @@ test('card-type row textures have a closed semantic-slot and native-geometry run
   assert.match(cardTypeRowTextureMediaIssue({ ...row, width: 512 }, runtime), /native 128x64/);
   assert.match(cardTypeRowTextureMediaIssue({
     ...row,
-    slot: 'ui/surfaces/card-type-tactical.png',
+    slot: 'ui/surfaces/card-type-legatine.png',
   }, runtime), /variant must match/);
   assert.equal(cardTypeRowTextureSlot('ui/surfaces/card-type-unknown.png'), null);
 });
@@ -410,7 +410,7 @@ test('Run card cost coin projection binds the transparent native coin to its one
 
 function gameConditionIcon(overrides = {}) {
   return {
-    slot: 'ui/kit/icons/game/plagued.png',
+    slot: 'ui/kit/icons/game/cacochymic.png',
     domain: 'ui-kit',
     role: 'icon',
     media_type: 'image/png',
@@ -419,7 +419,7 @@ function gameConditionIcon(overrides = {}) {
     metadata: {
       runtime: {
         component: 'unit-ability-icon',
-        variant: 'plagued',
+        variant: 'cacochymic',
         frameWidth: 64,
         frameHeight: 64,
         frameCount: 1,
@@ -432,14 +432,14 @@ function gameConditionIcon(overrides = {}) {
 }
 
 test('condition icon projection keeps all four card properties and granted states as separate typed roles', () => {
-  const plagued = gameConditionIcon();
-  assert.deepEqual(gameConditionIconSlot(plagued.slot), { component: 'unit-ability-icon', variant: 'plagued' });
-  assert.equal(gameConditionIconMediaIssue(plagued), null);
+  const cacochymic = gameConditionIcon();
+  assert.deepEqual(gameConditionIconSlot(cacochymic.slot), { component: 'unit-ability-icon', variant: 'cacochymic' });
+  assert.equal(gameConditionIconMediaIssue(cacochymic), null);
 
   const pestiferous = gameConditionIcon({
     slot: 'ui/kit/icons/card-properties/pestiferous.png',
     metadata: { runtime: {
-      ...plagued.metadata.runtime,
+      ...cacochymic.metadata.runtime,
       component: 'card-property-icon',
       variant: 'pestiferous',
       nativeRole: 'card-property-icon',
@@ -447,19 +447,19 @@ test('condition icon projection keeps all four card properties and granted state
   });
   assert.deepEqual(gameConditionIconSlot(pestiferous.slot), { component: 'card-property-icon', variant: 'pestiferous' });
   assert.equal(gameConditionIconMediaIssue(pestiferous), null);
-  for (const variant of ['positioned', 'discipline', 'marshalled']) {
+  for (const variant of ['eutactic', 'adlected', 'agminate']) {
     const state = gameConditionIcon({
       slot: `ui/kit/icons/game/${variant}.png`,
-      metadata: { runtime: { ...plagued.metadata.runtime, variant } },
+      metadata: { runtime: { ...cacochymic.metadata.runtime, variant } },
     });
     assert.deepEqual(gameConditionIconSlot(state.slot), { component: 'unit-ability-icon', variant });
     assert.equal(gameConditionIconMediaIssue(state), null);
   }
-  for (const variant of ['concinnous', 'tactical', 'hieratic']) {
+  for (const variant of ['concinnous', 'legatine', 'hieratic']) {
     const property = gameConditionIcon({
       slot: `ui/kit/icons/card-properties/${variant}.png`,
       metadata: { runtime: {
-        ...plagued.metadata.runtime,
+        ...cacochymic.metadata.runtime,
         component: 'card-property-icon',
         variant,
         nativeRole: 'card-property-icon',
@@ -472,7 +472,7 @@ test('condition icon projection keeps all four card properties and granted state
     const progress = gameConditionIcon({
       slot: `ui/kit/icons/run/${variant}.png`,
       metadata: { runtime: {
-        ...plagued.metadata.runtime,
+        ...cacochymic.metadata.runtime,
         component: 'run-progress-icon',
         variant,
         nativeRole: 'run-progress-icon',
@@ -493,7 +493,7 @@ test('condition icon projection keeps all four card properties and granted state
   assert.match(gameConditionIconMediaIssue(gameConditionIcon({ role: 'media' })), /icon role/);
   assert.match(gameConditionIconMediaIssue(gameConditionIcon({ width: 32 })), /64x64/);
   assert.match(gameConditionIconMediaIssue(gameConditionIcon({
-    metadata: { runtime: { ...plagued.metadata.runtime, variant: 'pestiferous' } },
+    metadata: { runtime: { ...cacochymic.metadata.runtime, variant: 'pestiferous' } },
   })), /variant/);
   assert.match(gameConditionIconMediaIssue(pestiferous, {
     ...pestiferous.metadata.runtime,

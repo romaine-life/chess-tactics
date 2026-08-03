@@ -15,43 +15,43 @@ import {
 describe('Run keyword glossary', () => {
   it('defines every card property and every unit state exactly once', () => {
     expect(RUN_GLOSSARY.map((entry) => entry.id).sort()).toEqual([
+      'adlected',
+      'agminate',
+      'cacochymic',
       'concinnous',
-      'discipline',
+      'eutactic',
       'hieratic',
-      'marshalled',
+      'legatine',
       'pestiferous',
-      'plagued',
-      'positioned',
-      'tactical',
     ]);
     expect(RUN_GLOSSARY.every((entry) => entry.definition.trim().length > 0)).toBe(true);
   });
 
   it('reads a card property definition from the authored effect rather than restating it', () => {
-    expect(runGlossaryEntry('Tactical')?.definition).toBe(RUN_CARD_TYPE_REFERENCE.tactical.effect);
+    expect(runGlossaryEntry('Legatine')?.definition).toBe(RUN_CARD_TYPE_REFERENCE.legatine.effect);
     expect(runGlossaryEntry('Pestiferous')?.definition).toBe(RUN_CARD_TYPE_REFERENCE.pestiferous.effect);
   });
 
   it('keeps a unit state definition tied to the rule the per-unit tip states', () => {
     // The general form IS the fallback branch of the per-unit description, so a glossary
     // entry cannot come to describe a rule the Army ledger no longer applies.
-    expect(runGlossaryEntry('Discipline')?.definition)
-      .toBe(runAbilityDescription('discipline', 'knight'));
-    expect(runGlossaryEntry('Positioned')?.definition)
-      .toBe(runAbilityGeneralDescription('positioned'));
+    expect(runGlossaryEntry('Adlected')?.definition)
+      .toBe(runAbilityDescription('adlected', 'knight'));
+    expect(runGlossaryEntry('Eutactic')?.definition)
+      .toBe(runAbilityGeneralDescription('eutactic'));
     expect(runGlossaryEntry(AGMINATE_DISPLAY_NAME)?.definition)
-      .toBe(runAbilityDescription('marshalled', 'knight'));
+      .toBe(runAbilityDescription('agminate', 'knight'));
   });
 
   it('finds the mechanic a card property effect names', () => {
-    const marked = splitRunGlossaryText(RUN_CARD_TYPE_REFERENCE.tactical.effect)
+    const marked = splitRunGlossaryText(RUN_CARD_TYPE_REFERENCE.legatine.effect)
       .filter((segment) => segment.entry);
     expect(marked).toHaveLength(1);
-    expect(marked[0]?.entry?.id).toBe('discipline');
+    expect(marked[0]?.entry?.id).toBe('adlected');
 
     const pestiferous = splitRunGlossaryText(RUN_CARD_TYPE_REFERENCE.pestiferous.effect)
       .filter((segment) => segment.entry);
-    expect(pestiferous.map((segment) => segment.entry?.id)).toEqual(['plagued']);
+    expect(pestiferous.map((segment) => segment.entry?.id)).toEqual(['cacochymic']);
   });
 
   it('preserves the original text across the split', () => {
@@ -61,10 +61,10 @@ describe('Run keyword glossary', () => {
   });
 
   it('matches an inflection whole, never as the base word plus a stray letter', () => {
-    const segments = splitRunGlossaryText('A Disciplined unit is placed by hand.');
+    const segments = splitRunGlossaryText('An Adlected unit is placed by hand.');
     const term = segments.find((segment) => segment.entry);
-    expect(term?.text).toBe('Disciplined');
-    expect(term?.entry?.id).toBe('discipline');
+    expect(term?.text).toBe('Adlected');
+    expect(term?.entry?.id).toBe('adlected');
   });
 
   it('leaves ordinary prose alone', () => {
@@ -77,8 +77,8 @@ describe('Run keyword glossary', () => {
 
   it('reports every named mechanic in reading order', () => {
     const named = splitRunGlossaryText(
-      `A ${CACOCHYMIC_DISPLAY_NAME} unit on a Pestiferous card may still gain Discipline.`,
+      `A ${CACOCHYMIC_DISPLAY_NAME} unit on a Pestiferous card may still gain Adlected.`,
     ).filter((segment) => segment.entry).map((segment) => segment.entry?.id);
-    expect(named).toEqual(['plagued', 'pestiferous', 'discipline']);
+    expect(named).toEqual(['cacochymic', 'pestiferous', 'adlected']);
   });
 });

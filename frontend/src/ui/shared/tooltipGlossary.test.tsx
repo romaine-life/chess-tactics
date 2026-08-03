@@ -15,12 +15,12 @@ function read(children: React.ReactNode, title: React.ReactNode = null) {
 describe('tooltip keyword glossary', () => {
   it('defines the mechanic a card property tip names', () => {
     const { entries, markup } = read(
-      <span>{RUN_CARD_TYPE_REFERENCE.tactical.effect}</span>,
-      'Tactical',
+      <span>{RUN_CARD_TYPE_REFERENCE.legatine.effect}</span>,
+      'Legatine',
     );
-    expect(entries.map((entry) => entry.id)).toEqual(['discipline']);
-    expect(entries[0]?.term).toBe('Discipline');
-    expect(markup).toContain('<b class="tooltip-keyword" data-glossary-term="discipline">Discipline</b>');
+    expect(entries.map((entry) => entry.id)).toEqual(['adlected']);
+    expect(entries[0]?.term).toBe('Adlected');
+    expect(markup).toContain('<b class="tooltip-keyword" data-glossary-term="adlected">Adlected</b>');
     // The rest of the sentence is untouched text, not a rebuilt string.
     expect(markup).toContain('to one contained unit when the card is acquired.');
   });
@@ -38,9 +38,9 @@ describe('tooltip keyword glossary', () => {
 
   it('reaches a term nested inside the caller’s own markup', () => {
     const { entries, markup } = read(
-      <span><span>Grants Discipline on purchase.</span><small>Relic source</small></span>,
+      <span><span>Grants Adlected on purchase.</span><small>Relic source</small></span>,
     );
-    expect(entries.map((entry) => entry.id)).toEqual(['discipline']);
+    expect(entries.map((entry) => entry.id)).toEqual(['adlected']);
     expect(markup).toContain('tooltip-keyword');
     expect(markup).toContain('Relic source');
   });
@@ -49,14 +49,14 @@ describe('tooltip keyword glossary', () => {
     const { entries } = read(
       <span>Pestiferous cards mark a unit Cacochymic; Pestiferous offers are discounted.</span>,
     );
-    expect(entries.map((entry) => entry.id)).toEqual(['pestiferous', 'plagued']);
+    expect(entries.map((entry) => entry.id)).toEqual(['pestiferous', 'cacochymic']);
   });
 
   it('stops at three definitions and leaves the overflow unmarked', () => {
     const { entries, markup } = read(
-      <span>Tactical, Concinnous, Hieratic and Pestiferous cards exist.</span>,
+      <span>Legatine, Concinnous, Hieratic and Pestiferous cards exist.</span>,
     );
-    expect(entries.map((entry) => entry.id)).toEqual(['tactical', 'concinnous', 'hieratic']);
+    expect(entries.map((entry) => entry.id)).toEqual(['legatine', 'concinnous', 'hieratic']);
     // A mark that points at no definition below it would be a broken promise.
     expect(markup).not.toContain('data-glossary-term="pestiferous"');
     expect(markup).toContain('Pestiferous cards exist.');
