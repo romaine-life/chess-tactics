@@ -743,6 +743,32 @@ const cardTypeName = (definition: CardTypeReferenceDefinition): string => (
 const VOLUNTEER_CARD = RUN_CARD_BY_ID.p;
 const CARD_TYPE_TEXTURE_TILE_COUNT = 24;
 
+function CardTypeRowMaterial({
+  cardType,
+  src,
+}: {
+  cardType: RunCardType;
+  src?: string;
+}): ReactElement | null {
+  if (!src) return null;
+  return (
+    <span
+      aria-hidden="true"
+      className="enchiridion-card-type-row-material"
+      data-card-type-texture={cardType}
+    >
+      {Array.from({ length: CARD_TYPE_TEXTURE_TILE_COUNT }, (_, index) => (
+        <img
+          alt=""
+          draggable={false}
+          key={index}
+          src={src}
+        />
+      ))}
+    </span>
+  );
+}
+
 /**
  * The reference draws a real one-unit Volunteer offer of each type and projects it like
  * every other host, so the glossary cannot show a card the Shop could never deal. Its
@@ -849,22 +875,10 @@ function CardTypesSection({
                 aria-label={`${cardTypeName(definition)}. ${definition.description}`}
                 aria-pressed={selected.id === definition.id}
               >
-                {displayedTextureUrls[definition.id] ? (
-                  <span
-                    aria-hidden="true"
-                    className="enchiridion-card-type-row-material"
-                    data-card-type-texture={definition.id}
-                  >
-                    {Array.from({ length: CARD_TYPE_TEXTURE_TILE_COUNT }, (_, index) => (
-                      <img
-                        alt=""
-                        draggable={false}
-                        key={index}
-                        src={displayedTextureUrls[definition.id]}
-                      />
-                    ))}
-                  </span>
-                ) : null}
+                <CardTypeRowMaterial
+                  cardType={definition.id}
+                  src={displayedTextureUrls[definition.id]}
+                />
                 <span className="enchiridion-card-type-row-identity">
                   <AlphaBoundIcon
                     className="enchiridion-card-type-row-icon"
@@ -917,7 +931,17 @@ const UNIT_STATE_REFERENCES: readonly Readonly<{
   },
 ]);
 
+// A unit state inherits the surface of the one card property that grants it. Derive
+// that pairing from the Run model so the two Enchiridion sections cannot drift apart.
+const CARD_TYPE_BY_UNIT_STATE = Object.freeze(Object.fromEntries(
+  (Object.entries(RUN_CARD_TYPE_REFERENCE) as [
+    RunCardType,
+    (typeof RUN_CARD_TYPE_REFERENCE)[RunCardType],
+  ][]).map(([cardType, definition]) => [definition.grants, cardType]),
+)) as Readonly<Record<RunUnitState, RunCardType>>;
+
 function AbilitiesSection({ framed }: { framed: boolean }): ReactElement {
+  const textureUrls = acceptedCardTypeTextureUrls(currentLiveMediaCatalog());
   return (
     <ReferenceSectionFrame
       chromeConsumer="enchiridion-abilities"
@@ -926,21 +950,29 @@ function AbilitiesSection({ framed }: { framed: boolean }): ReactElement {
       title="Abilities"
     >
       <div className="enchiridion-ability-list">
-        {UNIT_STATE_REFERENCES.map(({ state, name, description }) => (
-          <InnerChromeBox className="enchiridion-ability-card" key={state}>
-            <img
-              className="enchiridion-ability-icon"
-              src={runUnitStateIconUrl(state)}
-              alt=""
-              aria-hidden="true"
-              draggable={false}
-            />
-            <span>
-              <h3>{name}</h3>
-              <p>{description}</p>
-            </span>
-          </InnerChromeBox>
-        ))}
+        {UNIT_STATE_REFERENCES.map(({ state, name, description }) => {
+          const cardType = CARD_TYPE_BY_UNIT_STATE[state];
+          return (
+            <InnerChromeBox
+              className="enchiridion-ability-card"
+              data-card-type={cardType}
+              key={state}
+            >
+              <CardTypeRowMaterial cardType={cardType} src={textureUrls[cardType]} />
+              <img
+                className="enchiridion-ability-icon"
+                src={runUnitStateIconUrl(state)}
+                alt=""
+                aria-hidden="true"
+                draggable={false}
+              />
+              <span>
+                <h3>{name}</h3>
+                <p>{description}</p>
+              </span>
+            </InnerChromeBox>
+          );
+        })}
       </div>
     </ReferenceSectionFrame>
   );

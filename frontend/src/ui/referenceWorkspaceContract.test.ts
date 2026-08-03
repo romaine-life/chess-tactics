@@ -25,6 +25,15 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(abilities).not.toContain("name: 'Concinnous'");
     expect(abilities).not.toContain("name: 'Legatine'");
     expect(abilities).toContain('className="enchiridion-ability-card"');
+    // Each state inherits the accepted row material from its granting card property;
+    // the pairing comes from the Run model rather than a second hand-written table.
+    expect(abilities).toContain('const cardType = CARD_TYPE_BY_UNIT_STATE[state]');
+    expect(abilities).toContain('<CardTypeRowMaterial cardType={cardType} src={textureUrls[cardType]} />');
+    expect(enchiridion).toContain('Object.entries(RUN_CARD_TYPE_REFERENCE)');
+    expect(style).toMatch(/\.enchiridion-ability-card\s*\{[\s\S]*?isolation:\s*isolate;[\s\S]*?overflow:\s*hidden;[\s\S]*?position:\s*relative/);
+    expect(style).toMatch(/\.enchiridion-ability-card > \.enchiridion-ability-icon\s*\{[\s\S]*?block-size:\s*34px;[\s\S]*?inline-size:\s*34px/);
+    expect(style).not.toContain('.enchiridion-ability-card > :first-child');
+    expect(style).toMatch(/\.enchiridion-ability-card\[data-card-type='concinnous'\] > span:last-child\s*\{[\s\S]*?color:\s*#21190f/);
     // Every glossary entry draws its own accepted unit-state icon, never a stand-in glyph.
     expect(abilities).toContain('src={runUnitStateIconUrl(state)}');
     expect(abilities).not.toMatch(/skirmish-icon-(?:shield|move|flag)/);
