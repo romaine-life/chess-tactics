@@ -18985,23 +18985,6 @@ button.tileset-relationship-cell {
   filter: drop-shadow(0 2px 1px rgba(0, 0, 0, .85));
 }
 
-.run-relic-tooltip-pop {
-  display: grid;
-  gap: var(--ds-space-1);
-  padding: var(--ds-space-2) var(--ds-space-3);
-}
-
-.run-relic-tooltip-name {
-  color: #9fe7ff;
-  font: var(--ds-weight-regular) var(--ds-text-sm)/1.15 var(--ds-font-display);
-  letter-spacing: var(--ds-tracking-tight);
-}
-
-.run-relic-tooltip-description {
-  color: #e5edf3;
-  font: var(--ds-weight-regular) var(--ds-text-xs)/1.4 var(--ds-font-sans);
-}
-
 .run-screen .run-relic-strip {
   max-inline-size: calc(100% - (2 * var(--ds-space-3)));
 }
@@ -21873,11 +21856,36 @@ button.tileset-relationship-cell {
   position: fixed;
   z-index: 1000;
 }
+/* The pop owns the whole tooltip treatment, so no caller restates it. A grid
+   with one row per part is what the Run tooltips already established; it is the
+   default here rather than a class each call site has to remember.
+
+   `display` is load-bearing, not cosmetic: InnerChromeBox renders the pop as a
+   <span>, and an inline box ignores inline-size/max-inline-size (the tip never
+   wraps to its own width) and paints the 7px inner-box border-image once per
+   inline fragment — the doubled frame with text spilling outside it. */
 .infotip-pop {
+  box-sizing: border-box;
+  display: grid;
+  /* One part per row. The gap has to clear the body's own inter-line space
+     (line-height 1.4 leaves ~5.5px between wrapped lines) or a paragraph reads
+     looser than its distance to the title, and the tip becomes a stack of
+     strips instead of a heading over a block. */
+  gap: var(--ds-space-2);
   max-inline-size: 100%;
-  padding: 8px 10px; color: #cfd6df; font: 400 12px/1.45 system-ui, sans-serif; text-align: left;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  color: #e5edf3;
+  font: var(--ds-weight-regular) var(--ds-text-md)/1.4 var(--ds-font-sans);
+  text-align: left;
   text-transform: none; letter-spacing: normal;
   pointer-events: none;
+}
+/* The named thing the tip is about, in the display face — the Run relic and
+   ability tips set the precedent and every tip now follows it. */
+.tooltip-title {
+  color: #9fe7ff;
+  font: var(--ds-weight-regular) var(--ds-text-lg)/1.15 var(--ds-font-display);
+  letter-spacing: var(--ds-tracking-tight);
 }
 .le-fence-review-banner {
   align-items: center;
