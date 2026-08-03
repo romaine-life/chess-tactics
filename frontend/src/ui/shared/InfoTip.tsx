@@ -54,6 +54,7 @@ function TooltipPopup({
   maxInlineSize = 256,
   pos,
   portalHost,
+  title,
 }: {
   children: ReactNode;
   className?: string;
@@ -61,6 +62,7 @@ function TooltipPopup({
   maxInlineSize?: number;
   pos: TooltipPosition | null;
   portalHost: Element | null;
+  title?: ReactNode;
 }): ReactElement | null {
   if (!pos || typeof document === 'undefined') return null;
   return createPortal((
@@ -74,6 +76,7 @@ function TooltipPopup({
         id={id}
         className={`infotip-pop tooltip-pop ${className}`.trim()}
       >
+        {title ? <strong className="tooltip-title">{title}</strong> : null}
         {children}
       </InnerChromeBox>
     </span>
@@ -83,10 +86,16 @@ function TooltipPopup({
 // Canonical tooltip for an existing visual trigger. It appears immediately on
 // hover or keyboard focus and uses fixed positioning so scrolling containers do
 // not clip it. Keep native title="" off consumers of this primitive.
+//
+// `title` is the named thing the tip is about — a relic, an ability, a card
+// property — and children are its explanation. The pop owns the whole treatment
+// (grid, gaps, display face for the title, body face for the rest), so a caller
+// never restates it: a popupClassName is for sizing, not for typography.
 export function Tooltip({
   trigger,
   children,
   label,
+  title,
   className = '',
   popupMaxInlineSize = 256,
   popupClassName = '',
@@ -96,6 +105,7 @@ export function Tooltip({
   trigger: ReactNode;
   children: ReactNode;
   label: string;
+  title?: ReactNode;
   className?: string;
   popupMaxInlineSize?: number;
   popupClassName?: string;
@@ -141,6 +151,7 @@ export function Tooltip({
         portalHost={portalHost}
         className={popupClassName}
         maxInlineSize={popupMaxInlineSize}
+        title={title}
       >
         {children}
       </TooltipPopup>

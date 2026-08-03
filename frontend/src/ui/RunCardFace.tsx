@@ -767,6 +767,7 @@ function RunCardFaceLayer({
             popupClassName="run-card-prototype-property-popup"
             focusable={propertyTooltipFocusable && !pending}
             label={`${card.cardProperty.name} card property`}
+            title={card.cardProperty.name}
             trigger={(
               <img
                 className="run-card-prototype-property-icon"
@@ -780,7 +781,7 @@ function RunCardFaceLayer({
               />
             )}
           >
-            <strong>{card.cardProperty.name}</strong> · {card.cardProperty.effect}
+            <span>{card.cardProperty.effect}</span>
           </Tooltip>
         ) : null}
       </span>

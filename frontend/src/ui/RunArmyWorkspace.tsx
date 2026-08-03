@@ -284,9 +284,9 @@ function RunUnitTraitList({
         <span className="run-unit-trait" key={trait.id}>
           <Tooltip
             triggerClassName="run-unit-trait-trigger"
-            popupClassName="run-relic-tooltip-pop"
             popupMaxInlineSize={300}
             label={`${trait.label}. ${trait.description} ${trait.inherited ? `Inherited from ${trait.source}.` : trait.source}.`}
+            title={trait.label}
             trigger={'state' in trait.icon ? (
               <RunAbilityIcon ability={trait.icon.state} className="run-unit-trait-icon" />
             ) : (
@@ -296,8 +296,7 @@ function RunUnitTraitList({
               />
             )}
           >
-            <strong className="run-relic-tooltip-name">{trait.label}</strong>
-            <span className="run-relic-tooltip-description">{trait.description}</span>
+            <span>{trait.description}</span>
             <small className="run-unit-trait-source">
               {trait.inherited ? `Inherited from ${trait.source}` : trait.source}
             </small>
@@ -459,10 +458,9 @@ function ProfileSellAction({
     <Tooltip
       trigger={button}
       label={unavailableReason}
-      popupClassName="run-relic-tooltip-pop"
       popupMaxInlineSize={288}
     >
-      <span className="run-relic-tooltip-description">{unavailableReason}</span>
+      <span>{unavailableReason}</span>
     </Tooltip>
   );
 }
@@ -712,10 +710,9 @@ export function RunSellWorkspace({
               label={status === 'sold'
                 ? `${runUnitDisplayName(unit)} was sold during this shop visit. Reset Shop to restore it.`
                 : 'The King is permanently retained and cannot be sold.'}
-              popupClassName="run-relic-tooltip-pop"
               popupMaxInlineSize={300}
             >
-              <span className="run-relic-tooltip-description">
+              <span>
                 {status === 'sold'
                   ? 'Sold during this shop visit. Reset Shop to restore this unit.'
                   : 'The King is permanently retained and cannot be sold.'}

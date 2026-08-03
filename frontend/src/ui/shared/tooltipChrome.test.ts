@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 const infoTip = readFileSync(new URL('./InfoTip.tsx', import.meta.url), 'utf8');
 const runtime = readFileSync(new URL('../chromeFamilyRuntime.ts', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../../style.css', import.meta.url), 'utf8');
+const CONSUMERS = ['RunRelics.tsx', 'RunArmyWorkspace.tsx', 'RunCardFace.tsx'];
 
 function rule(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -23,16 +24,31 @@ describe('tooltip chrome', () => {
     expect(runtime).toContain('from?.closest(CHROME_FAMILY_SURFACE_SELECTOR)');
   });
 
-  it('gives the pop a block box at zero specificity', () => {
+  it('gives the pop a block box, not the inline box <span> defaults to', () => {
     // InnerChromeBox renders the pop as <span>. Left inline it ignores
     // inline-size/max-inline-size and paints the inner-box border-image once per
     // inline fragment — a doubled frame with the text spilling outside it.
-    const base = rule(':where(.infotip-pop)');
-    expect(base).toMatch(/display:\s*block/);
-    expect(base).toMatch(/box-sizing:\s*border-box/);
+    const pop = rule('.infotip-pop');
+    expect(pop).toMatch(/display:\s*grid/);
+    expect(pop).toMatch(/box-sizing:\s*border-box/);
+  });
 
-    // :where() keeps it overridable, so a popupClassName owns its inner layout.
-    expect(rule('.infotip-pop')).not.toMatch(/display:/);
-    expect(rule('.run-relic-tooltip-pop')).toMatch(/display:\s*grid/);
+  it('owns the tooltip treatment so no call site restates it', () => {
+    // The Run relic and ability tips set this treatment; it is the shared
+    // default now, not a class each caller has to remember to opt into.
+    const pop = rule('.infotip-pop');
+    expect(pop).toContain('gap: var(--ds-space-1)');
+    expect(pop).toContain('padding: var(--ds-space-2) var(--ds-space-3)');
+    expect(pop).toContain('var(--ds-font-sans)');
+    expect(pop).not.toMatch(/system-ui/);
+    expect(rule('.tooltip-title')).toContain('var(--ds-font-display)');
+
+    // The primitive renders the title itself from the `title` prop.
+    expect(infoTip).toContain('<strong className="tooltip-title">{title}</strong>');
+    expect(css).not.toContain('.run-relic-tooltip-');
+    for (const consumer of CONSUMERS) {
+      const source = readFileSync(new URL(`../${consumer}`, import.meta.url), 'utf8');
+      expect(source, consumer).not.toContain('run-relic-tooltip-');
+    }
   });
 });
