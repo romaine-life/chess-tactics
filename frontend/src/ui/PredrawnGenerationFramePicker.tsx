@@ -10,7 +10,6 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  centeredPlayableBoardFramingBounds,
   initialPredrawnGenerationFrame,
   normalizePredrawnGenerationFrame,
   predrawnGenerationBoundsFromCentered,
@@ -84,29 +83,19 @@ export function PredrawnGenerationFramePicker({
   const sourceBoard = useMemo(() => boardForTopSurfaceArtExport(board), [board]);
   const requiredBounds = useMemo(() => predrawnGenerationRequiredBounds(sourceBoard), [sourceBoard]);
   const fittedFrame = useMemo(() => initialPredrawnGenerationFrame(sourceBoard), [sourceBoard]);
-  // The two rectangles the owner already authored elsewhere, in this frame's coordinates: the
-  // board's own opening/thumbnail composition, and the Board page's camera boundary — the box a
-  // player can actually reach at maximum zoom-out, so art inside it is what must exist.
-  const openingBounds = useMemo(
-    () => predrawnGenerationBoundsFromCentered(board, centeredPlayableBoardFramingBounds(board)),
-    [board],
-  );
+  // The Board page's camera boundary in this frame's coordinates: the box a player can actually
+  // reach at maximum zoom-out, so art inside it is what must exist. It contains the level's own
+  // opening/thumbnail composition by construction (normalizeBoardCameraBounds guarantees it), which
+  // is why there is no separate opening-view preset — that crop is always a subset of this one and
+  // would always leave part of the reachable region outside the reference.
   const cameraBounds = useMemo(
     () => predrawnGenerationBoundsFromCentered(board, resolvedBoardCameraBounds(board)),
     [board],
-  );
-  const openingFrame = useMemo(
-    () => predrawnGenerationFrameContaining(sourceBoard, openingBounds),
-    [openingBounds, sourceBoard],
   );
   const cameraFrame = useMemo(
     () => predrawnGenerationFrameContaining(sourceBoard, cameraBounds),
     [cameraBounds, sourceBoard],
   );
-  // With nothing authored yet, open on the camera boundary. It contains the level's opening
-  // composition by construction, so the crop still reads as the view a level loads at, and it is
-  // the region a player can actually reach — opening on the smaller opening view left the boundary
-  // hanging outside the crop with its top edge clipped away by the frame.
   const editorFrame = useMemo(
     () => normalizePredrawnGenerationFrame(initialFrame) ?? cameraFrame,
     [cameraFrame, initialFrame],
@@ -119,6 +108,13 @@ export function PredrawnGenerationFramePicker({
   const stageRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
   const validation = useMemo(() => validatePredrawnGenerationFrame(sourceBoard, frame), [frame, sourceBoard]);
+  // A crop tighter than the camera boundary is legal, but it leaves reachable world unpainted — and
+  // the boundary outline then runs off the crop edge, which reads as a broken box unless it is said
+  // out loud. Only the deliberately tightest preset and hand-cropping can reach that state.
+  const cameraOutsideCrop = cameraBounds.minX < frame.x
+    || cameraBounds.minY < frame.y
+    || cameraBounds.minX + cameraBounds.width > frame.x + frame.width
+    || cameraBounds.minY + cameraBounds.height > frame.y + frame.height;
   const displayScale = stageSize.width > 0 ? stageSize.width / frame.width : 1;
   const nativeBoardPan = predrawnGenerationFrameBoardPan(sourceBoard, frame);
   const previewBoardPan = {
@@ -152,7 +148,7 @@ export function PredrawnGenerationFramePicker({
     ? {
         kind: 'preview',
         title: `Preview only · ${predrawnGenerationFrameReadout(validation.frame)}`,
-        detail: 'This crop has not been applied to the working copy.',
+        detail: `This crop has not been applied to the working copy.${cameraOutsideCrop ? ' It is tighter than the camera boundary, so the boundary runs past the crop edge and that area stays unpainted.' : ''}`,
       }
     : applicationStatus;
   const applyLabel = paintError
@@ -229,21 +225,15 @@ export function PredrawnGenerationFramePicker({
   const cameraOutline = outlineFor(cameraBounds);
   const presets: Array<{ id: string; label: string; title: string; frame: PredrawnGenerationFrame }> = [
     {
-      id: 'opening',
-      label: 'Level opening view',
-      title: 'The composition this level loads at, and the one its thumbnail shows, widened to 16:9.',
-      frame: openingFrame,
-    },
-    {
       id: 'camera',
       label: 'Camera boundary',
-      title: 'The Board page camera boundary — everything a player can reach at maximum zoom-out.',
+      title: 'Everything a player can reach at maximum zoom-out, which contains the view this level loads at.',
       frame: cameraFrame,
     },
     {
       id: 'required',
       label: 'Fit required art',
-      title: 'The tightest legal crop around gameplay-authoritative art.',
+      title: 'The tightest legal crop around gameplay-authoritative art. Tighter than the camera boundary.',
       frame: fittedFrame,
     },
   ];

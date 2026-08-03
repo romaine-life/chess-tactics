@@ -46,13 +46,16 @@ describe('generation-frame presets', () => {
     expect(Math.abs(openingCenterX - requiredCenterX)).toBeLessThan(1);
   });
 
-  it('shows the whole level opening view in an applicable 16:9 frame', () => {
+  // Why the picker offers no separate opening-view preset: the camera crop already shows that view
+  // whole, and cropping to the opening view alone would always leave reachable world outside.
+  it('shows the level opening view whole inside the camera-boundary crop', () => {
     const subject = board(9, 5);
     const opening = predrawnGenerationBoundsFromCentered(
       subject,
       centeredPlayableBoardFramingBounds(subject),
     );
-    const frame = predrawnGenerationFrameContaining(subject, opening);
+    const camera = predrawnGenerationBoundsFromCentered(subject, resolvedBoardCameraBounds(subject));
+    const frame = predrawnGenerationFrameContaining(subject, camera);
 
     expect(validatePredrawnGenerationFrame(subject, frame).ok).toBe(true);
     expect(contains(frame, opening)).toBe(true);
