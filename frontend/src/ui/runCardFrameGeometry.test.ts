@@ -58,8 +58,8 @@ describe('Run card frame geometry', () => {
     expect(typeMid('standard')).toBeCloseTo(898.5, 1);
     expect(typeMid('tactical')).toBeCloseTo(900, 1);
     expect(typeMid('pestiferous')).toBeCloseTo(907, 1);
-    expect(typeMid('concinnous')).toBeCloseTo(910.5, 1);
-    expect(typeMid('hieratic')).toBeCloseTo(932, 1);
+    expect(typeMid('concinnous')).toBeCloseTo(901.5, 1);
+    expect(typeMid('hieratic')).toBeCloseTo(918.4, 1);
     expect(new Set(RUN_CARD_FRAME_VARIANTS.map(typeMid)).size).toBe(RUN_CARD_FRAME_VARIANTS.length);
   });
 
@@ -71,7 +71,7 @@ describe('Run card frame geometry', () => {
       + RUN_CARD_TEXT_PLACEMENT.insetInline * RUN_CARD_FRAME_NATIVE_WIDTH / 100
     );
     expect(textLeft('standard')).toBeCloseTo(112.85, 1);
-    expect(textLeft('hieratic')).toBeCloseTo(122.85, 1);
+    expect(textLeft('hieratic')).toBeCloseTo(122.92, 1);
     expect(textLeft('hieratic')).toBeGreaterThan(textLeft('standard'));
   });
 
@@ -101,8 +101,8 @@ describe('Run card frame geometry', () => {
       RUN_CARD_STANDARD_FRAME_GEOMETRY.boxes.contents.y,
     );
     const steelCost = RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY.boxes.cost;
-    expect(steelCost.x + steelCost.width / 2).toBeCloseTo(926, 2);
-    expect(steelCost.y + steelCost.height / 2).toBeCloseTo(132, 2);
+    expect(steelCost.x + steelCost.width / 2).toBeCloseTo(926.89, 2);
+    expect(steelCost.y + steelCost.height / 2).toBeCloseTo(132.39, 2);
   });
 
   it('names every frame byte-identity its boxes were measured against', () => {
@@ -118,10 +118,10 @@ describe('Run card frame geometry', () => {
       expect(runCardFrameGeometryKnowsPixels(geometry, 'a'.repeat(64))).toBe(false);
       expect(runCardFrameGeometryKnowsPixels(geometry, null)).toBe(false);
     }
-    // Cutting Hieratic's painted backdrop changed its bytes, not its plates, so
-    // that frame answers to two identities with one set of boxes.
-    expect(RUN_CARD_FRAME_GEOMETRY_BY_VARIANT.hieratic.frameSha256s).toHaveLength(2);
-    expect(seen.size).toBe(RUN_CARD_FRAME_VARIANTS.length + 1);
+    // Each frame answers to exactly the bytes its boxes were measured on.
+
+    expect(RUN_CARD_FRAME_GEOMETRY_BY_VARIANT.hieratic.frameSha256s).toHaveLength(1);
+    expect(seen.size).toBe(RUN_CARD_FRAME_VARIANTS.length);
   });
 
   it('keeps every declared box inside the native source image', () => {

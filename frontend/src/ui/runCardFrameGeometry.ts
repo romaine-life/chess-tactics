@@ -199,15 +199,17 @@ export const RUN_CARD_PESTIFEROUS_FRAME_GEOMETRY = defineGeometry({
 
 export const RUN_CARD_CONCINNOUS_FRAME_GEOMETRY = defineGeometry({
   variant: 'concinnous',
-  frameSha256s: ['38b1290df1067dfa3562b874478b29c3f47341d8a065c90d426cec2cdaa32cc7'],
+  // Normalised to the shared painted card box; boxes remapped through the same
+  // transform, so they describe these pixels (ADR-0358).
+  frameSha256s: ['310629d033eebd8f2b1227de1b8a42e1a6b86087327111c145b8f715d4481bcb'],
   boxes: {
-    art: { x: 103, y: 218, width: 853, height: 611 },
-    contents: { x: 91, y: 972, width: 879, height: 437 },
-    title: { x: 92, y: 86, width: 767, height: 94 },
-    cost: { x: 874.17, y: 79.58, width: 117.66, height: 106.848 },
+    art: { x: 103, y: 217.74, width: 853, height: 603.25 },
+    contents: { x: 91, y: 962.19, width: 879, height: 431.46 },
+    title: { x: 92, y: 87.42, width: 767, height: 92.81 },
+    cost: { x: 874.17, y: 81.08, width: 117.66, height: 105.49 },
     // This frame's plates cast a thicker bottom shadow than they do a top
     // bevel, so the opening is read to the flat face rather than to the lip.
-    type: { x: 91, y: 877, width: 879, height: 67 },
+    type: { x: 91, y: 868.39, width: 879, height: 66.15 },
   },
 });
 
@@ -231,18 +233,15 @@ export const RUN_CARD_TACTICAL_FRAME_GEOMETRY = defineGeometry({
  */
 export const RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY = defineGeometry({
   variant: 'hieratic',
-  frameSha256s: [
-    // Backdrop cut to transparent by scripts/cut-card-frame-backdrop.mjs.
-    '7ae3b1945da8fefa46a264b696b0fc5695454c80c7256f879fd465a06a2d1152',
-    // The generated frame as delivered, with its flat backdrop still painted.
-    'cdd9a3e017881f69c49c343f6cc9e721320f3681a1a3787b2a3166ec7ea26cdf',
-  ],
+  // Normalised to the shared painted card box; boxes remapped through the same
+  // transform, so they describe these pixels (ADR-0358).
+  frameSha256s: ['6552cae59d0d1b404a466b2d37fb6d0a0e6dcdcd60b171ec4979f8a50c610348'],
   boxes: {
-    title: { x: 98, y: 94, width: 751, height: 88 },
-    cost: { x: 867.17, y: 78.58, width: 117.66, height: 106.848 },
-    art: { x: 105, y: 214, width: 851, height: 641 },
-    type: { x: 99, y: 896, width: 862, height: 72 },
-    contents: { x: 103, y: 1004, width: 853, height: 391 },
+    title: { x: 98.07, y: 95.05, width: 751.75, height: 86.46 },
+    cost: { x: 868, y: 79.9, width: 117.78, height: 104.98 },
+    art: { x: 105.08, y: 212.95, width: 851.84, height: 629.77 },
+    type: { x: 99.07, y: 883, width: 862.86, height: 70.74 },
+    contents: { x: 103.08, y: 989.11, width: 853.85, height: 384.15 },
   },
 });
 
