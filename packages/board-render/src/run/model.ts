@@ -39,25 +39,43 @@ export type RunCardType = 'pestiferous' | 'concinnous' | 'tactical' | 'hieratic'
 export type RunUnitModifier = 'plagued';
 export const CACOCHYMIC_DISPLAY_NAME = 'Cacochymic';
 
+/**
+ * Each tier's presentation. `numeral` is the rung itself and `label` is that rung
+ * qualified by the ladder's name, for a surface that names one tier away from the
+ * ladder's own heading (ADR-0363). Roman numbering has no zero, so the baseline keeps
+ * the plain `0` ADR-0291 authored rather than an antiquarian stand-in for one.
+ */
 export const ATARAXIA_BY_TIER: Readonly<Record<AtaraxiaTier, Readonly<{
   tier: AtaraxiaTier;
+  numeral: string;
   label: string;
   title: string;
   effect: string;
 }>>> = Object.freeze({
   0: Object.freeze({
     tier: 0,
+    numeral: '0',
     label: 'Ataraxia 0',
     title: 'The Untroubled Mind',
     effect: 'Standard Run rules. Shop cards may be Tactical, Concinnous or Hieratic but are never Pestiferous.',
   }),
   1: Object.freeze({
     tier: 1,
+    numeral: 'I',
     label: 'Ataraxia I',
     title: 'The Great Mortality',
     effect: `About one in eight shop cards is Pestiferous. Its marked ${CACOCHYMIC_DISPLAY_NAME} unit is lost after each victorious Battle, then another is marked.`,
   }),
 });
+
+/**
+ * Every installed tier in ladder order (ADR-0268 — one linear, cumulative sequence).
+ * The Run preparation selector and the Enchiridion's Ataraxia reference both read this
+ * list, so installing a tier cannot appear in one and be forgotten by the other.
+ */
+export const ATARAXIA_TIERS: readonly AtaraxiaTier[] = Object.freeze(
+  Array.from({ length: INSTALLED_ATARAXIA_MAX_TIER + 1 }, (_, tier) => tier as AtaraxiaTier),
+);
 
 export type PurchasablePieceType = 'pawn' | 'knight' | 'bishop' | 'rook' | 'queen';
 export type RunArmyPieceType = PurchasablePieceType | 'king';
