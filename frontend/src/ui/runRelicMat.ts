@@ -27,6 +27,8 @@ export function installedRelicMatUrl(): string | null {
 export const RELIC_FLOAT_COMMITTED_RISE = 5;
 export const RELIC_FLOAT_COMMITTED_PERIOD = 3.4;
 export const RELIC_GLOW_COMMITTED = 1;
+/** The stroke that seats the tray on the table, in whole pixels. */
+export const RELIC_TRAY_STROKE_COMMITTED = 1;
 /** `linear` interpolates the bob's stops into a float; `steps(1, end)` holds each one. */
 export const RELIC_FLOAT_COMMITTED_TIMING = 'linear';
 export const RELIC_FLOAT_STEPPED_TIMING = 'steps(1, end)';

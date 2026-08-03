@@ -19465,7 +19465,19 @@ button.tileset-relationship-cell {
    here (it resolved to top-aligned), so the block centre is pinned outright. */
 .relic-mat-art {
   block-size: auto;
+  /* The tray is a painted object dropped onto a painted room, and its wood sits at nearly the
+     same value as the table under it -- with nothing between the two silhouettes it reads as
+     pasted over the scene rather than resting in it. The same one-pixel stroke the relics
+     already carry gives the edge somewhere to end. Tuned in the Studio's Relic Mat viewer. */
+  --relic-tray-stroke: rgb(12 9 7 / 0.9);
+  filter:
+    drop-shadow(var(--relic-tray-stroke-width, 1px) 0 0 var(--relic-tray-stroke))
+    drop-shadow(calc(-1 * var(--relic-tray-stroke-width, 1px)) 0 0 var(--relic-tray-stroke))
+    drop-shadow(0 var(--relic-tray-stroke-width, 1px) 0 var(--relic-tray-stroke))
+    drop-shadow(0 calc(-1 * var(--relic-tray-stroke-width, 1px)) 0 var(--relic-tray-stroke))
+    brightness(var(--relic-tray-dim, 1));
   image-rendering: pixelated;
+  transition: --relic-tray-dim 220ms ease;
   inline-size: calc(100% * var(--relic-mat-scale));
   inset-block-start: 50%;
   inset-inline-start: calc((100% - 100% * var(--relic-mat-scale)) / 2);
@@ -19545,6 +19557,29 @@ button.tileset-relationship-cell {
   syntax: '<length>';
   inherits: true;
   initial-value: 5px;
+}
+
+/* The hover EMPHASES, each a 0..1 strength so they compose instead of competing. Registered
+   so they transition, and 0 by default so every one of them is a no-op until it is switched
+   on -- the drop-shadows they drive collapse to zero radius at zero alpha. Toggled live in
+   the Studio's Relic Mat viewer; whichever combination is chosen becomes the committed one. */
+@property --relic-flare {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --relic-lift {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+/* How far the tray is pushed back while one relic is being considered. 1 is untouched. */
+@property --relic-tray-dim {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1;
 }
 
 /* The emanation's PULSE DEPTH, on the same principle. A hovered relic has to stop moving,
@@ -19629,10 +19664,6 @@ button.tileset-relationship-cell {
     var(--relic-float-timing, linear)
     var(--relic-float-delay, 0s)
     infinite !important;
-  transition:
-    --relic-float-rise 240ms cubic-bezier(0.3, 0.7, 0.3, 1),
-    filter 200ms ease,
-    scale 200ms cubic-bezier(0.2, 0.75, 0.3, 1);
 }
 
 .relic-mat-offer .run-relic-icon img {
@@ -19658,7 +19689,20 @@ button.tileset-relationship-cell {
 .relic-mat-offer:focus-within .run-relic-icon {
   --relic-float-rise: 0px;
   --relic-glow-pulse: 0;
-  filter: brightness(1.2);
+  /* One chain, every emphasis always present at its own strength. At 0 a drop-shadow has no
+     radius and no alpha, so an effect that is switched off costs nothing and cannot fight
+     the ones that are on. */
+  filter:
+    brightness(1.2)
+    drop-shadow(
+      0 calc(7px * var(--relic-lift, 0)) calc(6px * var(--relic-lift, 0))
+      rgb(6 4 3 / calc(0.62 * var(--relic-lift, 0))))
+    drop-shadow(
+      0 0 calc(9px * var(--relic-flare, 0))
+      rgb(255 240 206 / calc(0.9 * var(--relic-flare, 0))))
+    drop-shadow(
+      0 0 calc(30px * var(--relic-flare, 0))
+      rgb(255 196 104 / calc(0.72 * var(--relic-flare, 0))));
   /* 64px x 1.25 is 80px EXACTLY. A fractional hover size (1.22 gave 78.08px) leaves the
      nearest-neighbour sampling grid landing between source pixels, and the sprite's edges
      crawl as it is re-rasterized -- movement the computed style cannot show you. */
@@ -19679,6 +19723,55 @@ button.tileset-relationship-cell {
   /* !important because the `animation` SHORTHAND above carries it, and a shorthand resets
      animation-play-state to `running` -- an unflagged pause here is simply outranked. */
   animation-play-state: paused !important;
+}
+
+/* ===== The four hover emphases =====
+   Each is switched on by a flag on the stage, so the game and the Studio viewer read the same
+   rules and the viewer can combine them. They are deliberately independent: emphasis can come
+   from adding light to the thing being considered, or from taking it away from everything
+   else, and those read very differently.
+
+   FLARE  -- the emanation opens up past the steady level a settled relic already holds.
+   LIFT   -- a contact shadow appears beneath, so the scale reads as picked up off the tray
+             rather than simply drawn bigger.
+   RIM    -- the one-pixel silhouette stroke turns from near-black to warm gold, so the edge
+             itself catches the light. It reaches a PAUSED animation because a paused
+             animation still re-resolves the var() in its keyframes.
+   FOCUS  -- the tray and the other two offers recede instead, emphasising by contrast. */
+.relic-mat-stage[data-hover-flare] .relic-mat-offer:hover .run-relic-icon,
+.relic-mat-stage[data-hover-flare] .relic-mat-offer:focus-within .run-relic-icon {
+  --relic-flare: 1;
+}
+
+.relic-mat-stage[data-hover-lift] .relic-mat-offer:hover .run-relic-icon,
+.relic-mat-stage[data-hover-lift] .relic-mat-offer:focus-within .run-relic-icon {
+  --relic-lift: 1;
+}
+
+.relic-mat-stage[data-hover-rim] .relic-mat-offer:hover .run-relic-icon img,
+.relic-mat-stage[data-hover-rim] .relic-mat-offer:focus-within .run-relic-icon img {
+  --relic-mat-stroke: rgb(255 214 142 / 0.95);
+}
+
+.relic-mat-stage[data-hover-focus] .relic-mat-layer:has(.relic-mat-offer:hover) .relic-mat-art,
+.relic-mat-stage[data-hover-focus] .relic-mat-layer:has(.relic-mat-offer:focus-within) .relic-mat-art {
+  --relic-tray-dim: 0.66;
+}
+
+.relic-mat-stage[data-hover-focus] .relic-mat-cards:has(.relic-mat-offer:hover) .relic-mat-offer:not(:hover),
+.relic-mat-stage[data-hover-focus] .relic-mat-cards:has(.relic-mat-offer:focus-within) .relic-mat-offer:not(:focus-within) {
+  opacity: 0.42;
+}
+
+/* The strengths ease rather than snap, on the same beat as the settle. Declared where each
+   one is READ: the icon owns flare and lift, the img owns the rim colour. */
+.relic-mat-offer .run-relic-icon {
+  transition:
+    --relic-flare 220ms ease,
+    --relic-float-rise 240ms cubic-bezier(0.3, 0.7, 0.3, 1),
+    --relic-lift 220ms ease,
+    filter 200ms ease,
+    scale 200ms cubic-bezier(0.2, 0.75, 0.3, 1);
 }
 
 /* An offer that cannot be taken yet does not answer the pointer at all -- it keeps the

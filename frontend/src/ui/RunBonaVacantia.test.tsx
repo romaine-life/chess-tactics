@@ -5,7 +5,7 @@ import { createBlankLevel } from '../core/level';
 import { craftRunDocument, parseRunCraftSpec } from '../run/craft';
 import type { RunWarSnapshot } from '../run/model';
 import { RunBonaVacantia } from './RunBonaVacantia';
-import { RELIC_MOTION_COMMITTED } from './RunRelicMatReview';
+import { RELIC_HOVER_EMPHASES, RELIC_MOTION_COMMITTED, relicHoverAttributes } from './RunRelicMatReview';
 import { relicStripLandingPoint } from './runRelicFlight';
 import { RELIC_FLOAT_COMMITTED_TIMING } from './runRelicMat';
 
@@ -85,14 +85,39 @@ describe('Bona Vacantia relics', () => {
     );
     // Transitioning the amplitudes is what makes the settle smooth AND predictable; freezing
     // the animations instead would stop them at a different height and level every time.
-    expect(css).toMatch(/transition:\s*--relic-float-rise \d+ms/);
-    expect(css).toMatch(/transition: --relic-glow-pulse \d+ms/);
+    // Matched inside the whole transition list — the icon transitions several properties and
+    // their order is not part of the contract.
+    expect(css).toMatch(/transition:[^;]*--relic-float-rise \d+ms/);
+    expect(css).toMatch(/transition:[^;]*--relic-glow-pulse \d+ms/);
     // Collapsing the amplitudes is not enough: a zero-amplitude animation is still RUNNING,
     // so the element stays live on the compositor and a pixelated sprite crawls along its
     // edges. The pause must carry !important — the `animation` shorthand above has it, and a
     // shorthand resets animation-play-state to `running`, outranking an unflagged pause.
     expect(css).toMatch(/animation-play-state: paused !important;/);
     expect(css).toMatch(/animation-play-state: running !important;/);
+  });
+
+  it('ships every hover emphasis switched off until one is chosen', () => {
+    // The emphases exist to be judged in the Studio viewer. Until the owner picks a
+    // combination, hovering does what it already did — settle, brighten, enlarge — so an
+    // option landing in the tree can never quietly become the game's behaviour.
+    expect(Object.values(RELIC_MOTION_COMMITTED.hover).every((on) => on === false)).toBe(true);
+    expect(RELIC_HOVER_EMPHASES.map(({ key }) => key).sort())
+      .toEqual(Object.keys(RELIC_MOTION_COMMITTED.hover).sort());
+    // Each is a no-op at strength 0 rather than a rule that has to be switched off, so any
+    // combination composes instead of the last one winning.
+    const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+    for (const { key } of RELIC_HOVER_EMPHASES) {
+      expect(css).toContain(`.relic-mat-stage[data-hover-${key}]`);
+    }
+    expect(relicHoverAttributes({ flare: true, lift: false, rim: true, focus: false }))
+      .toEqual({ 'data-hover-flare': '', 'data-hover-rim': '' });
+  });
+
+  it('seats the tray on the table with a stroke of the committed width', () => {
+    const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+    expect(css).toContain(`--relic-tray-stroke-width, ${RELIC_MOTION_COMMITTED.trayStroke}px`);
+    expect(css).toMatch(/\.relic-mat-art \{[^}]*--relic-tray-stroke:/);
   });
 
   it('holds the hovered relic at a whole-pixel size', () => {
