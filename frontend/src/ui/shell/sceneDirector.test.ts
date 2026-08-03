@@ -171,39 +171,78 @@ describe('scene director', () => {
     expect(reduceScene(state, { type: 'retry' })).toMatchObject({ phase: 'loading', error: null });
   });
 
-  it('prepares a cold deep-link through the same atomic scene lifecycle', () => {
-    const state = initialSceneState(sceneManifest('/play/select/skirmish'), true);
-    expect(state).toMatchObject({
-      phase: 'loading',
-      destination: { paintOwner: 'play-selector' },
+  it.each([
+    ['/play/select/skirmish', 'play-selector'],
+    ['/editor/level', 'level-editor'],
+    ['/', 'dom'],
+  ])('cold-loads %s through the one shell ladder', (href, paintOwner) => {
+    // Every route, not just the menu: there is no second cold-start branch (ADR-0367).
+    expect(initialSceneState(sceneManifest(href), href)).toMatchObject({
+      phase: 'startup',
+      startupActive: true,
+      startupStage: -1,
+      destination: { paintOwner },
+      destinationHref: href,
       generation: 0,
     });
   });
 
-  it('owns ordered cold-home startup and becomes current only after every stage finishes', () => {
-    let state = initialSceneState(sceneManifest('/'), false, '/', true);
-    expect(state).toMatchObject({ phase: 'startup', startupActive: true, startupStage: -1 });
-    expect(reduceScene(state, {
-      type: 'navigate',
-      destination: sceneManifest('/play'),
-      href: '/play',
-    })).toBe(state);
+  it('climbs background, then chrome, then the scene, and hands off to the ordinary entrance', () => {
+    let state = initialSceneState(sceneManifest('/editor/level'), '/editor/level');
 
-    state = reduceScene(state, { type: 'startup-ready', generation: 0, layer: 'controls' });
-    expect(reduceScene(state, { type: 'startup-reveal', generation: 0, layer: 'controls' })).toBe(state);
+    // A rung cannot open before the rung beneath it, whatever order readiness arrives in.
+    state = reduceScene(state, { type: 'startup-ready', generation: 0, layer: 'chrome' });
+    expect(reduceScene(state, { type: 'startup-reveal', generation: 0, layer: 'chrome' })).toBe(state);
+
     state = reduceScene(state, { type: 'startup-ready', generation: 0, layer: 'background' });
     state = reduceScene(state, { type: 'startup-reveal', generation: 0, layer: 'background' });
     expect(state.startupStage).toBe(0);
-    state = reduceScene(state, { type: 'startup-ready', generation: 0, layer: 'title' });
-    state = reduceScene(state, { type: 'startup-reveal', generation: 0, layer: 'title' });
-    state = reduceScene(state, { type: 'startup-reveal', generation: 0, layer: 'controls' });
-    expect(state).toMatchObject({ phase: 'startup', startupStage: 2 });
-    state = reduceScene(state, { type: 'startup-finished', generation: 0 });
-    expect(state).toMatchObject({ phase: 'current', startupActive: false });
+    state = reduceScene(state, { type: 'startup-reveal', generation: 0, layer: 'chrome' });
+    expect(state).toMatchObject({ phase: 'startup', startupStage: 1 });
+
+    // The final rung is the ORDINARY painted contract, and opening it enters normally.
+    expect(reduceScene(state, { type: 'startup-reveal', generation: 0, layer: 'scene' })).toBe(state);
+    state = reduceScene(state, { type: 'destination-painted', generation: 0 });
+    expect(state).toMatchObject({ phase: 'startup', startupReady: ['chrome', 'background', 'scene'] });
+    state = reduceScene(state, { type: 'startup-reveal', generation: 0, layer: 'scene' });
+    expect(state).toMatchObject({ phase: 'entering', startupActive: true });
+    state = reduceScene(state, { type: 'entrance-finished', generation: 0 });
+    expect(state).toMatchObject({
+      phase: 'current',
+      startupActive: false,
+      current: { id: 'level-editor' },
+      destination: null,
+    });
+  });
+
+  it('retargets a canonicalizing cold load without losing the shell rungs it has climbed', () => {
+    // The Level Editor resolves levelId -> opaque document while the cold load prepares.
+    // Swallowing that would strand the ladder on a stale address.
+    let state = initialSceneState(sceneManifest('/editor/level'), '/editor/level?levelId=off-l-battle');
+    state = reduceScene(state, { type: 'startup-ready', generation: 0, layer: 'background' });
+    state = reduceScene(state, { type: 'startup-reveal', generation: 0, layer: 'background' });
+    state = reduceScene(state, { type: 'startup-ready', generation: 0, layer: 'chrome' });
+    state = reduceScene(state, { type: 'startup-reveal', generation: 0, layer: 'chrome' });
+    state = reduceScene(state, { type: 'destination-painted', generation: 0 });
+    expect(state.startupReady).toContain('scene');
+
+    state = reduceScene(state, {
+      type: 'navigate',
+      destination: sceneManifest('/editor/level'),
+      href: '/editor/level?levelId=off-l-battle&document=doc-1',
+    });
+    expect(state).toMatchObject({
+      phase: 'startup',
+      startupStage: 1,
+      destinationHref: '/editor/level?levelId=off-l-battle&document=doc-1',
+      generation: 1,
+    });
+    expect(state.startupReady).not.toContain('scene');
+    expect(state.startupReady).toEqual(['background', 'chrome']);
   });
 
   it('retries failed startup as a fresh generation with every stage closed', () => {
-    let state = initialSceneState(sceneManifest('/'), false, '/', true);
+    let state = initialSceneState(sceneManifest('/'), '/');
     state = reduceScene(state, {
       type: 'startup-failed',
       generation: 0,

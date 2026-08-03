@@ -1,5 +1,5 @@
 import type { ScenePath } from './sceneManifest';
-import type { StartupLayer } from './startupScene';
+import { SHELL_LADDER, type ShellLayer } from './startupScene';
 
 export type ScenePhase = 'startup' | 'current' | 'exiting' | 'loading' | 'entering' | 'error';
 
@@ -12,9 +12,11 @@ export interface SceneState {
   destinationHref: string | null;
   generation: number;
   error: Error | null;
+  /** True while a cold load is walking the shell ladder in front of the scene rung. */
   startupActive: boolean;
+  /** Index into SHELL_LADDER of the deepest rung already revealed; -1 before the first. */
   startupStage: number;
-  startupReady: readonly StartupLayer[];
+  startupReady: readonly ShellLayer[];
 }
 
 export type SceneAction =
@@ -25,27 +27,35 @@ export type SceneAction =
   | { type: 'destination-painted'; generation: number }
   | { type: 'entrance-finished'; generation: number }
   | { type: 'failed'; generation: number; error: Error }
-  | { type: 'startup-ready'; generation: number; layer: StartupLayer }
-  | { type: 'startup-reveal'; generation: number; layer: StartupLayer }
+  | { type: 'startup-ready'; generation: number; layer: ShellLayer }
+  | { type: 'startup-reveal'; generation: number; layer: ShellLayer }
   | { type: 'startup-failed'; generation: number; error: Error }
-  | { type: 'startup-finished'; generation: number }
   | { type: 'retry' };
 
+const SETTLED_STAGE = SHELL_LADDER.length - 1;
+
+/**
+ * There is ONE cold-load lifecycle (ADR-0367).
+ *
+ * Passing `coldLoadHref` starts the shell ladder for whatever route the browser opened —
+ * every route, not just the main menu, and not a separate branch from preparing the
+ * initial scene. Omitting it means "already committed here", which is what the reducer's
+ * own tests and any already-settled state want.
+ */
 export function initialSceneState(
   current: ScenePath,
-  prepareInitialScene = false,
-  initialHref = '',
-  prepareStartup = false,
+  coldLoadHref: string | null = null,
 ): SceneState {
+  const cold = coldLoadHref !== null;
   return {
-    phase: prepareStartup ? 'startup' : prepareInitialScene ? 'loading' : 'current',
+    phase: cold ? 'startup' : 'current',
     current,
-    destination: prepareInitialScene ? current : null,
-    destinationHref: prepareInitialScene ? initialHref : null,
+    destination: cold ? current : null,
+    destinationHref: cold ? coldLoadHref : null,
     generation: 0,
     error: null,
-    startupActive: prepareStartup,
-    startupStage: prepareStartup ? -1 : 2,
+    startupActive: cold,
+    startupStage: cold ? -1 : SETTLED_STAGE,
     startupReady: [],
   };
 }
@@ -71,21 +81,44 @@ export function reduceScene(state: SceneState, action: SceneAction): SceneState 
   }
   if (action.type === 'startup-reveal') {
     if (!state.startupActive || action.generation !== state.generation) return state;
-    const ladder: readonly StartupLayer[] = ['background', 'title', 'controls'];
-    const next = ladder[state.startupStage + 1];
+    const next = SHELL_LADDER[state.startupStage + 1];
     if (action.layer !== next || !state.startupReady.includes(action.layer)) return state;
-    return { ...state, startupStage: state.startupStage + 1 };
+    const startupStage = state.startupStage + 1;
+    // Opening the final rung hands the cold load to the ORDINARY entrance: the scene
+    // body is painted and inert, and `entering` runs the same transition every
+    // navigation runs. There is no separate startup completion.
+    return startupStage === SETTLED_STAGE
+      ? { ...state, startupStage, phase: 'entering' }
+      : { ...state, startupStage };
   }
   if (action.type === 'startup-failed') {
     if (!state.startupActive || action.generation !== state.generation) return state;
     return { ...state, phase: 'error', error: action.error };
   }
-  if (action.type === 'startup-finished') {
-    if (!state.startupActive || action.generation !== state.generation || state.startupStage < 2) return state;
-    return { ...state, phase: 'current', startupActive: false, error: null };
-  }
   if (action.type === 'navigate') {
-    if (state.startupActive) return state;
+    // A cold load still owns a destination, and screens canonicalize their own address
+    // while it prepares (the Level Editor resolves levelId -> opaque document; PlayMenu
+    // resolves the hub root to a Continue choice). Swallowing those would strand the
+    // ladder on a stale address, so a startup retarget re-runs the SCENE rung only and
+    // leaves the shell rungs it has already climbed alone.
+    if (state.startupActive) {
+      if (!state.destination) return state;
+      if (action.destination.id === state.destination.id && action.href === state.destinationHref) {
+        return action.destination === state.destination
+          ? state
+          : { ...state, destination: action.destination };
+      }
+      return {
+        ...state,
+        phase: 'startup',
+        destination: action.destination,
+        destinationHref: action.href,
+        generation: state.generation + 1,
+        startupReady: state.startupReady.filter((layer) => layer !== 'scene'),
+        startupStage: Math.min(state.startupStage, SETTLED_STAGE - 1),
+        error: null,
+      };
+    }
     if (action.destination.id === state.current.id && state.phase === 'current') {
       return { ...state, current: action.destination };
     }
@@ -147,6 +180,12 @@ export function reduceScene(state: SceneState, action: SceneAction): SceneState 
   if (action.type === 'destination-painted' && state.phase === 'loading') {
     return { ...state, phase: 'entering' };
   }
+  // On a cold load the same painted contract satisfies the ladder's final rung instead
+  // of entering directly: the shell rungs in front of it must open first.
+  if (action.type === 'destination-painted' && state.phase === 'startup' && state.startupActive) {
+    if (state.startupReady.includes('scene')) return state;
+    return { ...state, startupReady: [...state.startupReady, 'scene'] };
+  }
   if (action.type === 'entrance-finished' && state.phase === 'entering' && state.destination) {
     return {
       ...state,
@@ -155,9 +194,11 @@ export function reduceScene(state: SceneState, action: SceneAction): SceneState 
       destination: null,
       destinationHref: null,
       error: null,
+      startupActive: false,
+      startupStage: SETTLED_STAGE,
     };
   }
-  if (action.type === 'failed' && (state.phase === 'loading' || state.phase === 'entering')) {
+  if (action.type === 'failed' && (state.phase === 'loading' || state.phase === 'entering' || state.phase === 'startup')) {
     return { ...state, phase: 'error', error: action.error };
   }
   return state;

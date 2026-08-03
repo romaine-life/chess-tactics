@@ -989,8 +989,12 @@ h1 {
 .app-shell-titlebar {
   transition: opacity var(--ds-duration-fade) var(--ds-ease-standard);
 }
+/* The bar is position:fixed at z-index 10000 — ABOVE the bootstrap curtain — so an
+   invisible pending bar would still swallow clicks meant for whatever is beneath it.
+   Pending means inert as well as unseen (ADR-0367). */
 .app-shell-titlebar.reveal-pending {
   opacity: 0;
+  pointer-events: none;
 }
 
 /* In-game confirmation dialog (ui/shared/ConfirmDialog.tsx) — replaces window.confirm() on

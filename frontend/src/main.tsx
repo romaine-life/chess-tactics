@@ -21,6 +21,7 @@ import { installNineSliceCssVariables, installUiFonts, installUiMediaCssVariable
 import { applyGroundCoverCatalog, applyWallArtCatalog, applyWallDecorCatalog, assertInstalledPresentationCatalog } from '@chess-tactics/board-render';
 import { installLoadingResourceObserver, loadingError, loadingMark, loadingMeasure } from './diagnostics/loadingTimeline';
 import { composeInstalledChromeCss } from './ui/useInstalledChromeCss';
+import { decodeShellChromeArt } from './ui/shell/shellChromeArt';
 import { startAuthSession } from './net/authSession';
 
 installLoadingResourceObserver();
@@ -142,7 +143,12 @@ if (root) {
       await retryStartup('prop-seats', loadLiveSeats);
       loadingMeasure('app', 'critical-seats-ready', startupAt);
       await criticalFonts;
+      // The persistent shell's own art is a startup PRECONDITION (ADR-0367). Chrome
+      // composition is complete — it decodes every image its generated CSS references,
+      // including the title bar's fill surface — and the bar's marks are decoded beside
+      // it. App cannot be imported, and so the bar cannot paint, before both are drawable.
       await retryStartup('installed-chrome', composeInstalledChromeCss);
+      await retryStartup('shell-chrome-art', decodeShellChromeArt);
       loadingMeasure('app', 'critical-chrome-ready', startupAt);
       // SFX are decorative: hydrate their DB-owned profile before importing the
       // Studio/runtime consumers, but keep honest silence when the row is missing

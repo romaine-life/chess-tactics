@@ -253,14 +253,14 @@ describe('scene manifests', () => {
       host: 'play-shell',
       background: 'homepage',
       paintOwner: 'play-selector',
-      critical: expect.arrayContaining(['selector-chrome', 'visible-level-thumbnails']),
+      critical: ['play-selector'],
       opportunistic: ['below-fold-level-thumbnails'],
     });
     expect(sceneManifest('/play')).toMatchObject({
       host: 'gameplay-shell',
       background: 'battlefield',
       paintOwner: 'gameplay-hud',
-      critical: expect.arrayContaining(['board-compositors', 'gameplay-hud', 'title-controls']),
+      critical: ['gameplay-hud'],
     });
   });
 
@@ -412,17 +412,42 @@ describe('scene manifests', () => {
     expect(sceneManifest('/enchiridion/units').id).not.toBe(base.id);
   });
 
-  it('requires declarations for expensive editor and Studio first viewports', () => {
-    expect(sceneManifest('/editor/level').critical).toContain('visible-palette-slice');
+  it('decomposes the editor into the authorities it actually registers', () => {
+    // Not one collapsed participant, and not a vocabulary nothing registers: these are the
+    // ids LevelEditor reports separately, so each can fail on its own (ADR-0367).
+    expect(sceneManifest('/editor/level').critical).toEqual([
+      'chrome:skirmish-screen level-editor-screen',
+      'document',
+      'board-compositors',
+      'visible-editor-chrome',
+      'level-editor',
+    ]);
     expect(sceneManifest('/studio')).toMatchObject({
       paintOwner: 'studio',
+      critical: ['studio'],
       opportunistic: ['below-fold-catalog'],
     });
   });
 
   it('makes synchronous and unmatched routes explicit rather than optional', () => {
-    expect(sceneManifest('/settings/general').critical).toContain('visible-controls');
+    expect(sceneManifest('/settings/general').critical).toEqual(['chrome:settings-shell']);
     expect(sceneManifest('/unknown')).toMatchObject({ id: 'main-menu', host: 'menu-shell', paintOwner: 'dom' });
+  });
+
+  it('never declares the shell as a scene participant', () => {
+    // The persistent bar and the shared backdrop are rendered OUTSIDE every boundary, so
+    // they could never register there. They are the director's first two ladder rungs now;
+    // naming them here is how six declared ids decayed into comments (ADR-0367).
+    const routes = [
+      '/', '/unknown', '/settings/general', '/settings/audio/tracks', '/enchiridion/units',
+      '/play/select/skirmish', '/play', '/editor', '/editor/level', '/studio', '/lobbies',
+      '/party', '/portrait-editor', '/predrawn-reference', '/run',
+    ];
+    for (const route of routes) {
+      const { critical } = sceneManifest(route);
+      expect(critical, route).not.toContain('title-bar');
+      expect(critical, route).not.toContain('homepage-background');
+    }
   });
 
   it('narrows an overlapping fade to the shell viewport when only the Run workspace changes', () => {

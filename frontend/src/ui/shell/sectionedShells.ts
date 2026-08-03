@@ -107,8 +107,13 @@ const section = (
 // Main menu — the shell whose sections are the menu destinations.
 // ---------------------------------------------------------------------------
 
-const MENU_HOME_CRITICAL = ['homepage-background', 'title-bar', 'main-menu-controls'] as const;
-const MENU_DESTINATION_CRITICAL = ['homepage-background', 'title-bar', 'visible-controls'] as const;
+// Critical participants are ENFORCED (ADR-0367): a declared id that never registers fails
+// the scene. So these name real `useSceneParticipant` registrants and nothing else — the
+// shared backdrop and the title bar are shell, owned by the director's first two ladder
+// rungs, and were never registrable from inside a boundary at all.
+//
+// `chrome:<className>` is what ArtRouteChrome registers for the surface it frames.
+const MENU_SHELL_CHROME = 'chrome:settings-shell';
 
 const mainMenuShell: SectionedShell = {
   id: 'main-menu',
@@ -120,7 +125,7 @@ const mainMenuShell: SectionedShell = {
     host: 'menu-shell',
     background: 'homepage',
     paintOwner: 'dom',
-    critical: MENU_HOME_CRITICAL,
+    critical: [MENU_SHELL_CHROME],
     opportunistic: [],
     waitPresentation: 'loading',
   },
@@ -132,17 +137,11 @@ const mainMenuShell: SectionedShell = {
     section('lobbies', SCENE_DEFINITIONS.lobbies, {
       id: 'lobbies',
       paintOwner: 'lobbies',
-      critical: [
-        'homepage-background',
-        'title-bar',
-        'lobby-identity',
-        'initial-lobby-list',
-        'visible-controls',
-      ],
+      critical: [MENU_SHELL_CHROME, 'lobbies'],
     }),
     section('party', SCENE_DEFINITIONS.party, {
       id: 'party',
-      critical: MENU_DESTINATION_CRITICAL,
+      critical: ['chrome:utility-screen utility-party'],
       waitPresentation: 'transition-only',
     }),
   ],
@@ -196,7 +195,7 @@ const settingsShell: SectionedShell = {
     host: 'settings-shell',
     background: 'homepage',
     paintOwner: 'dom',
-    critical: MENU_DESTINATION_CRITICAL,
+    critical: [MENU_SHELL_CHROME],
     opportunistic: [],
     waitPresentation: 'transition-only',
   },
@@ -238,7 +237,7 @@ const enchiridionShell: SectionedShell = {
     host: 'enchiridion-shell',
     background: 'homepage',
     paintOwner: 'dom',
-    critical: [...MENU_DESTINATION_CRITICAL, 'visible-reference-art'],
+    critical: [MENU_SHELL_CHROME],
     opportunistic: [],
     waitPresentation: 'transition-only',
   },
@@ -273,7 +272,7 @@ const campaignEditorShell: SectionedShell = {
     host: 'editor-shell',
     background: 'homepage',
     paintOwner: 'campaign-editor',
-    critical: ['homepage-background', 'title-bar', 'campaign-workspace', 'visible-draft-cards'],
+    critical: ['campaign-editor'],
     opportunistic: ['below-fold-draft-cards'],
     waitPresentation: 'transition-only',
   },
@@ -323,7 +322,7 @@ const playShell: SectionedShell = {
     host: 'play-shell',
     background: 'homepage',
     paintOwner: 'play-selector',
-    critical: ['homepage-background', 'title-bar', 'selector-chrome', 'visible-level-thumbnails'],
+    critical: ['play-selector'],
     opportunistic: ['below-fold-level-thumbnails'],
     waitPresentation: 'loading',
   },
@@ -369,7 +368,7 @@ const STRATEGIKON_MANIFEST: Omit<SceneManifest, 'id'> = {
   host: 'gameplay-shell',
   background: 'battlefield',
   paintOwner: 'gameplay-hud',
-  critical: ['battlefield-background', 'strategikon-reference'],
+  critical: [],
   opportunistic: [],
   waitPresentation: 'transition-only',
 };

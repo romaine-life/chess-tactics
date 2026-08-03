@@ -1,6 +1,8 @@
-import { type ReactElement } from 'react';
+import { useEffect, type ReactElement } from 'react';
 import { BrandLockup } from '../shared/BrandLockup';
 import { HeaderAccountCluster } from '../shared/HeaderAccountCluster';
+import { decodeShellChromeArt } from './shellChromeArt';
+import { useStartupScene } from './startupScene';
 import { titleBarConfig } from './titleBarConfig';
 
 // The ONE persistent title bar. Rendered once in App outside the replaceable
@@ -20,14 +22,29 @@ import { titleBarConfig } from './titleBarConfig';
 // never moves. Settings and the Level Editor declare intent; this component owns their
 // identical placement.
 export function AppTitleBar({ path, search, revealTitle, transitionStatus }: {
+  /** The COMMITTED scene's address, never the browser's pending intent (ADR-0367). */
   path: string;
   search?: string;
   transitionStatus?: string | null;
-  // Initial-scene choreography only: false while the bar waits its turn on a fresh menu load
-  // (see ui/shell/startupScene). Undefined/true everywhere else — the bar renders opaque,
-  // so this can never blink the persistent bar on a normal route or a later navigation.
+  // Cold-load choreography: false while the bar waits its rung on the ONE shell ladder
+  // (ui/shell/startupScene), on every route. Undefined/true afterwards — the bar renders
+  // opaque, so this can never blink the persistent bar on a later navigation.
   revealTitle?: boolean;
 }): ReactElement | null {
+  const startup = useStartupScene();
+  const { reportReady, reportFailed, generation } = startup;
+  // Rung 2 of the ladder. `main.tsx` has already decoded this art as a startup
+  // precondition, so this resolves from the shared decoded-image record rather than the
+  // network — the bar owns its own contract even so, rather than trusting a caller to
+  // have honoured the ordering for it.
+  useEffect(() => {
+    let live = true;
+    void decodeShellChromeArt()
+      .then(() => { if (live) reportReady('chrome'); })
+      .catch((error) => { if (live) reportFailed(error); });
+    return () => { live = false; };
+  }, [generation, reportFailed, reportReady]);
+
   const config = titleBarConfig(path, search);
   if (!config) return null;
 
