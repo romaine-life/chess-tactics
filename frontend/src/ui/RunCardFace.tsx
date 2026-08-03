@@ -5,18 +5,26 @@ import { CACOCHYMIC_DISPLAY_NAME, runAbilityDisplayName, type RunAbility } from 
 import {
   RUN_CARD_FRAME_BOX_NAMES,
   RUN_CARD_STANDARD_FRAME_GEOMETRY,
+  RUN_CARD_TEXT_PLACEMENT,
+  runCardCostSizeCqw,
   runCardFrameGeometryVariables,
+  type RunCardFrameBoxName,
+  type RunCardFrameBoxStyle,
   type RunCardFrameGeometry,
 } from './runCardFrameGeometry';
 import { RunAbilityIcon, runUnitStateIconUrl, type RunUnitState } from './shared/RunAbilityIcon';
 import { installedUiMedia } from './installedUiMedia';
 import { Tooltip } from './shared/InfoTip';
 
-export const RUN_CARD_FRAME_SLOT = 'ui/run/card-prototypes/frame-v1.png';
-export const RUN_CARD_PESTIFEROUS_FRAME_SLOT = 'ui/run/card-prototypes/pestiferous-frame-v1.png';
-export const RUN_CARD_CONCINNOUS_FRAME_SLOT = 'ui/run/card-prototypes/concinnous-frame-v1.png';
-export const RUN_CARD_TACTICAL_FRAME_SLOT = 'ui/run/card-prototypes/tactical-discipline-frame-v1.png';
-export const RUN_CARD_HIERATIC_FRAME_SLOT = 'ui/run/card-prototypes/hieratic-frame-v1.png';
+// Frame identity lives with the boxes each frame owns; the face re-exports it so
+// hosts pick a frame and its geometry from one import.
+export {
+  RUN_CARD_FRAME_SLOT,
+  RUN_CARD_PESTIFEROUS_FRAME_SLOT,
+  RUN_CARD_CONCINNOUS_FRAME_SLOT,
+  RUN_CARD_TACTICAL_FRAME_SLOT,
+  RUN_CARD_HIERATIC_FRAME_SLOT,
+} from './runCardFrameGeometry';
 export const RUN_CARD_COST_COIN_SOURCE_SLOT = 'ui/run/card-prototypes/cost-coin-source-v1.png';
 export const RUN_CARD_REFERENCE_WIDTH = 360;
 
@@ -122,21 +130,21 @@ export type RunCardFaceContent = Readonly<{
     ability?: RunAbility;
   }>[];
   properties?: readonly Readonly<{ name: string; target: string }>[];
-  rules?: string;
   flavor: string;
 }>;
 
+/**
+ * What a host may still choose about the face's text: how big it is, and the two
+ * shared placement values from RUN_CARD_TEXT_PLACEMENT. Where a line sits is not
+ * on this list — that is the frame's box, centered (ADR-0347).
+ */
 export type RunCardFaceTuning = Readonly<{
-  costX: number;
-  costY: number;
   costSize: number;
-  titleX: number;
-  titleY: number;
   titleSize: number;
-  typeX: number;
-  typeY: number;
   typeSize: number;
   flavorSize: number;
+  textInset: number;
+  textInkCentre: number;
 }>;
 
 export type RunCardContentsTuning = Readonly<{
@@ -156,15 +164,11 @@ export type RunCardContentsTuning = Readonly<{
 /** Owner-approved Card Layout handoff, measured in percent of the card width. */
 export const RUN_CARD_APPROVED_TUNING: RunCardFaceTuning = Object.freeze({
   titleSize: 6.85,
-  titleX: 1.35,
-  titleY: 0,
   typeSize: 5.3,
-  typeX: 1.35,
-  typeY: 1.2,
   costSize: 6.2,
-  costX: 0,
-  costY: 0,
   flavorSize: 5,
+  textInset: RUN_CARD_TEXT_PLACEMENT.insetInline,
+  textInkCentre: RUN_CARD_TEXT_PLACEMENT.inkCentreEm,
 });
 
 /** The Contents Box base values every density step overrides. Hosts get the load-derived ladder below. */
@@ -278,16 +282,13 @@ function estimatedContentsHeightCqw(
   const rows = runCardLedgerRows(card.grants.length);
   const ledger = rows * tuning.unitHeight + Math.max(0, rows - 1) * tuning.rowGap;
   const effectLine = tuning.effectSize * EFFECT_LINE_HEIGHT;
-  const rules = card.rules
-    ? tuning.effectGap + estimatedLineCount(card.rules, tuning.effectSize, lineWidthCqw) * effectLine
-    : 0;
   const propertyCount = card.properties?.length ?? 0;
   const properties = propertyCount
     ? tuning.effectGap * propertyCount + propertyCount * effectLine
     : 0;
   const flavorSize = flavorSizeCqw * tuning.flavorScale;
   const flavor = estimatedLineCount(card.flavor, flavorSize, lineWidthCqw) * flavorSize * FLAVOR_LINE_HEIGHT;
-  return tuning.paddingBlockStart + ledger + rules + properties + flavor + tuning.paddingBlockEnd;
+  return tuning.paddingBlockStart + ledger + properties + flavor + tuning.paddingBlockEnd;
 }
 
 // Flavor may grow into verified leftover box room in these increments, but it
@@ -405,7 +406,6 @@ export function runCardPresentationSignature(
     iconMedia.unitStateUrls ?? null,
     card.grants.map(({ count, unit, plaguedIndices, ability }) => [count, unit, plaguedIndices ?? [], ability ?? null]),
     card.properties?.map(({ name, target }) => [name, target]) ?? null,
-    card.rules ?? null,
     card.flavor,
   ]);
 }
@@ -670,7 +670,8 @@ function RunCardFaceLayer({
   explicitContentsTuning,
   faceTuning,
   explicitIconTuning,
-  showFrameBoxes,
+  frameBoxStyle,
+  selectedFrameBox,
   propertyTooltipFocusable,
   onImageLoad,
   onImageError,
@@ -680,7 +681,8 @@ function RunCardFaceLayer({
   explicitContentsTuning: RunCardContentsTuning | null;
   faceTuning: RunCardFaceTuning;
   explicitIconTuning: RunCardIconTuning | null;
-  showFrameBoxes: boolean;
+  frameBoxStyle: RunCardFrameBoxStyle;
+  selectedFrameBox: RunCardFrameBoxName | null;
   propertyTooltipFocusable: boolean;
   onImageLoad: (signature: string, pending: boolean, kind: RunCardImageKind) => void;
   onImageError: (signature: string, pending: boolean, kind: RunCardImageKind) => void;
@@ -827,7 +829,6 @@ function RunCardFaceLayer({
             );
           })}
         </span>
-        {card.rules ? <span className="run-card-prototype-effect">{card.rules}</span> : null}
         {card.properties?.length ? (
           <span className="run-card-prototype-properties" aria-label="Card properties">
             {card.properties.map((property) => (
@@ -840,10 +841,16 @@ function RunCardFaceLayer({
         ) : null}
         <span className="run-card-prototype-flavor">{card.flavor}</span>
       </span>
-      {showFrameBoxes ? (
-        <span className="run-card-frame-box-overlay" aria-hidden="true">
+      {frameBoxStyle !== 'off' ? (
+        <span className={`run-card-frame-box-overlay is-${frameBoxStyle}`} aria-hidden="true">
           {RUN_CARD_FRAME_BOX_NAMES.map((name) => (
-            <span className={`run-card-frame-box is-${name}`} key={name}>{name}</span>
+            <span
+              className={`run-card-frame-box is-${name}${selectedFrameBox === name ? ' is-selected' : ''}`}
+              data-frame-box={name}
+              key={name}
+            >
+              <span className="run-card-frame-box-tag">{name}</span>
+            </span>
           ))}
         </span>
       ) : null}
@@ -868,7 +875,8 @@ export function RunCardFace({
   tuning = RUN_CARD_APPROVED_TUNING,
   contentsTuning = null,
   frameGeometry = RUN_CARD_STANDARD_FRAME_GEOMETRY,
-  showFrameBoxes = false,
+  frameBoxStyle = 'off',
+  selectedFrameBox = null,
   onImageLoad = () => undefined,
   onImageError = () => undefined,
   ariaHidden = false,
@@ -885,7 +893,8 @@ export function RunCardFace({
   tuning?: RunCardFaceTuning;
   contentsTuning?: RunCardContentsTuning | null;
   frameGeometry?: RunCardFrameGeometry;
-  showFrameBoxes?: boolean;
+  frameBoxStyle?: RunCardFrameBoxStyle;
+  selectedFrameBox?: RunCardFrameBoxName | null;
   onImageLoad?: (kind: RunCardImageKind) => void;
   onImageError?: (kind: RunCardImageKind) => void;
   ariaHidden?: boolean;
@@ -894,6 +903,9 @@ export function RunCardFace({
   const requestedSignature = runCardPresentationSignature(card, frameUrl, artUrl, frameGeometry, coinSourceUrl, iconMedia);
   // The signature contains every presentation field, so equal signatures are
   // equivalent even when a host recreates its card object on another render.
+  // Boxes are layout, not identity: retuning them must reach the face without
+  // starting a media crossfade, so they key the memo but stay out of the signature.
+  const boxesKey = JSON.stringify(frameGeometry.boxes);
   const requested = useMemo<RunCardPresentation>(() => ({
     signature: requestedSignature,
     card,
@@ -902,7 +914,7 @@ export function RunCardFace({
     artUrl,
     frameGeometry,
     iconMedia,
-  }), [requestedSignature]);
+  }), [requestedSignature, boxesKey]);
   const [displayed, setDisplayed] = useState<RunCardPresentation>(requested);
   const [pending, setPending] = useState<RunCardPresentation | null>(null);
   const [pendingSettled, setPendingSettled] = useState<ReadonlySet<RunCardImageKind>>(() => new Set());
@@ -922,6 +934,8 @@ export function RunCardFace({
   useEffect(() => {
     cancelPromotion();
     if (requested.signature === displayed.signature) {
+      // Same media, retuned boxes: apply the new layout in place, no crossfade.
+      if (requested !== displayedRef.current) setDisplayed(requested);
       setPending(null);
       setPendingSettled(new Set());
       return;
@@ -1000,15 +1014,13 @@ export function RunCardFace({
       className="run-card-prototype run-card-face"
       style={{
         '--run-card-prototype-width': width,
-        '--run-card-cost-x': `${tuning.costX}cqw`,
-        '--run-card-cost-y': `${tuning.costY}cqw`,
-        '--run-card-cost-size': `${tuning.costSize}cqw`,
-        '--run-card-title-x': `${tuning.titleX}cqw`,
-        '--run-card-title-y': `${tuning.titleY}cqw`,
+        // The reading is sized to the coin's face, so a two-digit cost stops
+        // crowding the rim while a one-digit cost keeps the approved size.
+        '--run-card-cost-size': `${runCardCostSizeCqw(displayed.card.cost, tuning.costSize)}cqw`,
         '--run-card-title-size': `${tuning.titleSize}cqw`,
-        '--run-card-type-x': `${tuning.typeX}cqw`,
-        '--run-card-type-y': `${tuning.typeY}cqw`,
         '--run-card-type-size': `${tuning.typeSize}cqw`,
+        '--run-card-text-inset': `${tuning.textInset}cqw`,
+        '--run-card-text-ink-centre': tuning.textInkCentre,
       } as CSSProperties}
       aria-hidden={ariaHidden || undefined}
       aria-busy={pending ? true : undefined}
@@ -1023,7 +1035,8 @@ export function RunCardFace({
           explicitContentsTuning={contentsTuning}
           faceTuning={tuning}
           explicitIconTuning={iconTuning}
-          showFrameBoxes={showFrameBoxes}
+          frameBoxStyle={frameBoxStyle}
+          selectedFrameBox={selectedFrameBox}
           propertyTooltipFocusable={propertyTooltipFocusable}
           onImageLoad={handleImageLoad}
           onImageError={handleImageError}

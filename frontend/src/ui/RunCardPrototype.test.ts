@@ -12,14 +12,20 @@ import {
   type RunCardFaceContent,
 } from './RunCardFace';
 import {
+  RUN_CARD_FRAME_GEOMETRY_BY_VARIANT,
+  RUN_CARD_FRAME_VARIANTS,
   RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY,
   RUN_CARD_STANDARD_FRAME_GEOMETRY,
+  RUN_CARD_TEXT_PLACEMENT,
 } from './runCardFrameGeometry';
 import {
+  committedRunCardFrameBoxDrafts,
+  runCardFrameBoxDraftsAreTuned,
+  runCardFrameBoxDraftsWithEdge,
   RUN_CARD_CONTENTS_STUDY_PROFILES,
   runCardContentsStudyFromSearch,
   runCardPrototypeCostFromSearch,
-  runCardPrototypeFrameBoxesFromSearch,
+  runCardFrameBoxStyleFromSearch,
   runCardConcinnousTargetRevealedFromSearch,
   runCardPrototypeContent,
   runCardPrototypeVariantFromSearch,
@@ -112,12 +118,27 @@ describe('Run Card Layout review variant', () => {
     expect(runCardUnitStackSeatLeft(1, 2, 8, 0.8)).toBe('min(8.8000cqw, calc(100.0000% - 8.0000cqw))');
   });
 
-  it('shares one optically centered type-line tuning across ordinary and qualified cards', () => {
-    expect(RUN_CARD_APPROVED_TUNING).toMatchObject({
-      typeSize: 5.3,
-      typeX: 1.35,
-      typeY: 1.2,
-    });
+  it('lets a host choose text size and the two shared placement values, never a position', () => {
+    expect(Object.keys(RUN_CARD_APPROVED_TUNING).sort()).toEqual([
+      'costSize', 'flavorSize', 'textInkCentre', 'textInset', 'titleSize', 'typeSize',
+    ]);
+    expect(RUN_CARD_APPROVED_TUNING.typeSize).toBe(5.3);
+    expect(RUN_CARD_APPROVED_TUNING.textInset).toBe(RUN_CARD_TEXT_PLACEMENT.insetInline);
+    expect(RUN_CARD_APPROVED_TUNING.textInkCentre).toBe(RUN_CARD_TEXT_PLACEMENT.inkCentreEm);
+  });
+
+  it('hands the owner one draft per frame, seeded from what is committed', () => {
+    const drafts = committedRunCardFrameBoxDrafts();
+    expect(Object.keys(drafts).sort()).toEqual([...RUN_CARD_FRAME_VARIANTS].sort());
+    expect(drafts.pestiferous.type).toEqual(RUN_CARD_FRAME_GEOMETRY_BY_VARIANT.pestiferous.boxes.type);
+    expect(runCardFrameBoxDraftsAreTuned(drafts)).toBe(false);
+
+    const moved = runCardFrameBoxDraftsWithEdge(drafts, 'pestiferous', 'type', 'y', 888.25);
+    expect(moved.pestiferous.type.y).toBe(888.25);
+    expect(runCardFrameBoxDraftsAreTuned(moved)).toBe(true);
+    // One frame's by-eye pass never disturbs another frame's boxes.
+    expect(moved.standard).toEqual(drafts.standard);
+    expect(moved.pestiferous.title).toEqual(drafts.pestiferous.title);
   });
 
   it('addresses the Contents Box comparison without changing the ordinary default', () => {
@@ -125,9 +146,12 @@ describe('Run Card Layout review variant', () => {
     expect(runCardContentsStudyFromSearch('?mode=viewer&vk=cardlayout')).toBe(false);
   });
 
-  it('addresses the measured frame-box overlay in the review URL', () => {
-    expect(runCardPrototypeFrameBoxesFromSearch('?mode=viewer&frameBoxes=1')).toBe(true);
-    expect(runCardPrototypeFrameBoxesFromSearch('?mode=viewer')).toBe(false);
+  it('addresses each frame-box line style, so an alignment pass can see the plate', () => {
+    expect(runCardFrameBoxStyleFromSearch('?mode=viewer&frameBoxes=1')).toBe('solid');
+    expect(runCardFrameBoxStyleFromSearch('?mode=viewer&frameBoxes=solid')).toBe('solid');
+    expect(runCardFrameBoxStyleFromSearch('?mode=viewer&frameBoxes=dotted')).toBe('dotted');
+    expect(runCardFrameBoxStyleFromSearch('?mode=viewer&frameBoxes=nonsense')).toBe('off');
+    expect(runCardFrameBoxStyleFromSearch('?mode=viewer')).toBe('off');
   });
 
   it('addresses two-digit coin-cost previews without changing the actual default', () => {
@@ -175,20 +199,22 @@ describe('Run Card Layout review variant', () => {
     const roomy = runCardContentsDensityStepForCard(cardWithGrants([{ count: 1, unit: 'pawn' }]));
     expect(roomy.density).toBe('roomy');
     expect(roomy.tuning.flavorScale).toBe(1.3);
-    // A full Filled box has no leftover room, so its step object stays the ladder's own.
+    // Standard's measured panel leaves a little room under a two-cell stack, so
+    // the flavor grows into it — the step it grew inside is still Filled.
     const filled = runCardContentsDensityStepForCard(cardWithGrants([
       { count: 1, unit: 'pawn' },
       { count: 1, unit: 'knight' },
     ]));
-    expect(filled.tuning).toBe(RUN_CARD_CONTENTS_DENSITY_LADDER[1].tuning);
-    expect(filled.tuning.flavorScale).toBe(1);
+    expect(filled.density).toBe('filled');
+    expect(filled.tuning.flavorScale).toBe(1.05);
+    expect(RUN_CARD_CONTENTS_DENSITY_LADDER[1].tuning.flavorScale).toBe(1);
     const packed = runCardContentsDensityStepForCard(cardWithGrants([
       { count: 3, unit: 'pawn' },
       { count: 1, unit: 'knight' },
       { count: 1, unit: 'bishop' },
     ]));
     expect(packed.density).toBe('packed');
-    expect(packed.tuning.flavorScale).toBe(1.1);
+    expect(packed.tuning.flavorScale).toBe(1.15);
     const scrunched = runCardContentsDensityStepForCard(cardWithGrants([
       { count: 3, unit: 'pawn' },
       { count: 1, unit: 'knight' },
@@ -197,7 +223,7 @@ describe('Run Card Layout review variant', () => {
       { count: 1, unit: 'queen' },
     ]));
     expect(scrunched.density).toBe('scrunched');
-    expect(scrunched.tuning.flavorScale).toBe(1.01);
+    expect(scrunched.tuning.flavorScale).toBe(1.06);
     // Growth derives copies; the reviewed ladder itself is never rewritten.
     expect(RUN_CARD_CONTENTS_DENSITY_LADDER[0].tuning.flavorScale).toBe(1);
     expect(RUN_CARD_CONTENTS_DENSITY_LADDER[3].tuning.flavorScale).toBe(.96);

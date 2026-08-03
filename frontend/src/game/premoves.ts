@@ -7,9 +7,15 @@
 // the same square (their ghosts SHARE the tile, split between them); execution stays honest because
 // the store's drain re-validates each move against reality at fire time, so only one actually
 // arrives (or the chain drops). This module has no store/DOM deps so it also runs inline in tests.
+//
+// AND THEY ARE JUDGED AGAINST A POSITION THAT DOESN'T EXIST YET (ADR-0358). A premove answers what the player
+// PREDICTS, so current-position legality is not the test: `rules.speculativeMoves` offers every
+// square the unit's geometry reaches through the board's permanent layers (bounds, terrain, water,
+// fences, obstacles) and ignores everything the opponent's move can change — blockers, occupied
+// destinations, check. Reality is enforced once, at fire time, by the store's drain.
 
 import type { GameState, Move, Piece, PromotionPieceType, Side, Vec } from '../core/types';
-import { applyMove, gameEnv, legalMoves, pieceAt, type MoveEnv } from '../core/rules';
+import { applyMove, gameEnv, pieceAt, speculativeMoves, type MoveEnv } from '../core/rules';
 
 /** One queued move: a client-owned piece and where it will go. The "from" is implied by the piece's
  *  position along its own plan at that point. */
@@ -45,58 +51,21 @@ function envFor(game: GameState): MoveEnv {
 
 const premovedIds = (premoves: readonly PremoveStep[]): string[] => [...new Set(premoves.map((s) => s.pieceId))];
 
-function oppositeSideForSpeculation(piece: Piece): Piece['side'] {
-  return piece.side === 'enemy' ? 'player' : 'enemy';
-}
-
-function isSpeculativeRecaptureTarget(piece: Piece, target: Piece | null): target is Piece {
-  return !!target &&
-    target.alive &&
-    target.id !== piece.id &&
-    target.side === piece.side &&
-    target.side !== 'neutral' &&
-    target.type !== 'rock' &&
-    target.type !== 'random-rock';
-}
-
-function premoveMoves(piece: Piece, pieces: readonly Piece[], size: GameState['size'], env: MoveEnv): Move[] {
-  const moves = legalMoves(piece, pieces, size, env);
-  const seen = new Set(moves.map((m) => `${m.x},${m.y}`));
-  const out = [...moves];
-  for (const target of pieces) {
-    if (!isSpeculativeRecaptureTarget(piece, target)) continue;
-    const speculativePieces = pieces.map((p) =>
-      p.id === target.id ? { ...p, side: oppositeSideForSpeculation(piece) } : p,
-    );
-    const speculativePiece = speculativePieces.find((p) => p.id === piece.id);
-    const move = speculativePiece
-      ? legalMoves(speculativePiece, speculativePieces, size, env).find((m) => m.x === target.x && m.y === target.y)
-      : undefined;
-    const key = `${target.x},${target.y}`;
-    if (move && !seen.has(key)) {
-      seen.add(key);
-      out.push({ x: target.x, y: target.y });
-    }
-  }
-  return out;
-}
-
+// Project one speculative step. The destination may hold ANYTHING — that is what a premove bets
+// on — so whoever stands there is removed first: the plan reads "by the time I arrive, this square
+// is mine". A castle keeps its rook, because its payload relocates both pieces itself.
 function applyFoldMove(state: GameState, piece: Piece, move: Move, promotion?: PromotionPieceType): GameState {
-  const target = pieceAt(state.pieces, move.x, move.y);
-  if (isSpeculativeRecaptureTarget(piece, target)) {
-    return applyMove(
-      { ...state, pieces: state.pieces.filter((candidate) => candidate.id !== target.id) },
-      piece.id,
-      move,
-      { promotion },
-    ).state;
-  }
-  return applyMove(state, piece.id, move, { promotion }).state;
+  const occupant = move.castle ? null : pieceAt(state.pieces, move.x, move.y);
+  const board = occupant && occupant.id !== piece.id
+    ? { ...state, pieces: state.pieces.filter((candidate) => candidate.id !== occupant.id) }
+    : state;
+  return applyMove(board, piece.id, move, { promotion }).state;
 }
 
 // Fold ONLY one piece's queued steps onto the board, leaving every OTHER piece at its real
-// position — so a unit's plan is never blocked by another unit's plan. Each step is re-validated
-// against this per-piece board; an illegal step stops that piece's plan there.
+// position — so a unit's plan is never blocked by another unit's plan. Each step is re-checked
+// against this per-piece board under speculative rules; a step the unit's geometry can never
+// reach (an already-queued step it has since outgrown) stops that piece's plan there.
 function foldPiece(
   game: GameState,
   premoves: readonly PremoveStep[],
@@ -109,7 +78,7 @@ function foldPiece(
     if (step.pieceId !== pieceId) continue;
     const p = state.pieces.find((q) => q.id === pieceId && q.alive && q.side === localSide && q.side !== 'neutral');
     if (!p) break;
-    const mv = premoveMoves(p, state.pieces, state.size, envFor(state)).find((m) => m.x === step.x && m.y === step.y);
+    const mv = speculativeMoves(p, state.pieces, state.size, envFor(state)).find((m) => m.x === step.x && m.y === step.y);
     if (!mv) break;
     const from: Vec = { x: p.x, y: p.y };
     state = applyFoldMove(state, p, mv, step.promotion);
@@ -163,12 +132,12 @@ export function premoveGhosts(game: GameState, premoves: readonly PremoveStep[],
   return [...bySquare.entries()].map(([key, pieces]) => ({ key, pieces }));
 }
 
-/** Legal next-step destinations for `pieceId` — validated against ITS OWN plan only (other units'
- *  premoves don't block it), so two units can be queued onto the same square. Empty when the piece
- *  can't be premoved (gone, not owned by this client, or nothing selected). */
+/** Next-step destinations for `pieceId`, under speculative rules and against ITS OWN plan only
+ *  (other units' premoves don't block it), so two units can be queued onto the same square. Empty
+ *  when the piece can't be premoved (gone, not owned by this client, or nothing selected). */
 export function premoveTargets(game: GameState, premoves: readonly PremoveStep[], pieceId: string | null, localSide: Side): Move[] {
   if (!pieceId) return [];
   const state = foldPiece(game, premoves, pieceId, localSide).state;
   const p = state.pieces.find((q) => q.id === pieceId && q.alive && q.side === localSide && q.side !== 'neutral');
-  return p ? premoveMoves(p, state.pieces, state.size, envFor(state)) : [];
+  return p ? speculativeMoves(p, state.pieces, state.size, envFor(state)) : [];
 }
