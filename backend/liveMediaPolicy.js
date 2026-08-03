@@ -105,9 +105,12 @@ const STRATEGIKON_BACKGROUND_SHA256 = '8084f009cae79d3eaaa64bb2c0f5df6e26fc8dfe7
 // Full-screen artwork behind one workspace. The Strategikon keeps its own stricter,
 // byte-pinned projection (ADR-0336) and is dispatched before this one; these are the
 // screens whose backdrop is chosen from generated candidates in Studio > Screen Art.
+const RUN_RELIC_MAT_COMPONENT = 'run-relic-mat';
+const RUN_RELIC_MAT_SLOT = 'ui/run/bona-vacantia/mat.png';
+const runRelicMatSlot = (slot) => String(slot || '') === RUN_RELIC_MAT_SLOT;
 const WORKSPACE_BACKGROUND_COMPONENT = 'workspace-background';
 const WORKSPACE_BACKGROUND_SLOT = /^ui\/workspaces\/([a-z][a-z0-9-]{0,63})\/background\.png$/;
-const WORKSPACE_BACKGROUND_IDS = Object.freeze(['run-victory', 'level-editor-events']);
+const WORKSPACE_BACKGROUND_IDS = Object.freeze(['run-victory', 'run-bona-vacantia', 'level-editor-events']);
 // Perimeter walls live in the terrain domain but are NOT board tiles: they carry their own
 // full-height frame geometry (ADR-0086) instead of the 96x180 tile projection, so they are
 // dispatched before the tile rules the way the brush icon and SFX takes are.
@@ -975,6 +978,45 @@ function strategikonBackgroundMediaIssue(row, projectedRuntime = null) {
  * contract is the registered workspace id plus frame geometry that matches the uploaded
  * raster, which stops a re-crop from silently changing what the screen paints.
  */
+/**
+ * The surface the Conflict's relic offers are laid out on (Bona Vacantia). Not a workspace
+ * background: that covers the whole screen, while this is ONE object sitting on it, sized
+ * against the relic row rather than the viewport, with soft alpha edges so the backdrop
+ * reads continuously past it. It therefore carries its own typed contract instead of
+ * borrowing the full-bleed one.
+ */
+function runRelicMatMediaIssue(row, projectedRuntime = null) {
+  if (!runRelicMatSlot(row.slot)) return `run relic mats must be ${RUN_RELIC_MAT_SLOT}`;
+  if (row.domain !== 'ui-kit') return 'run relic mats require the ui-kit domain';
+  if (row.role !== 'background') return 'run relic mats require the background role';
+  if (row.media_type !== 'image/png') return 'run relic mats require image/png';
+  const width = Number(row.width);
+  const height = Number(row.height);
+  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 1 || height < 1) {
+    return 'run relic mats require decoded raster dimensions';
+  }
+  const metadata = mediaVersionMetadata(row);
+  const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+  if (!isObjectRecord(runtime)) return 'run relic mats require metadata.runtime';
+  const allowed = new Set(['component', 'variant', 'frameWidth', 'frameHeight', 'frameCount', 'altText', 'nativeRole']);
+  const unsupported = Object.keys(runtime).filter((key) => !allowed.has(key));
+  if (unsupported.length) {
+    return `run relic mat runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
+  }
+  if (runtime.component !== RUN_RELIC_MAT_COMPONENT) {
+    return `run relic mat metadata.runtime.component must be ${RUN_RELIC_MAT_COMPONENT}`;
+  }
+  if (runtime.nativeRole !== RUN_RELIC_MAT_COMPONENT) {
+    return `run relic mat metadata.runtime.nativeRole must be ${RUN_RELIC_MAT_COMPONENT}`;
+  }
+  if (typeof runtime.variant !== 'string' || !runtime.variant) return 'run relic mat runtime variant is required';
+  if (runtime.frameWidth !== width || runtime.frameHeight !== height || runtime.frameCount !== 1) {
+    return 'run relic mat runtime frame geometry must match the uploaded raster';
+  }
+  if (runtime.altText !== '') return 'decorative run relic mat runtime altText must be empty';
+  return null;
+}
+
 function workspaceBackgroundMediaIssue(row, projectedRuntime = null) {
   const workspaceId = workspaceBackgroundSlotId(row.slot);
   if (!workspaceId) {
@@ -1276,6 +1318,8 @@ function liveCatalogReadinessIssue(catalog, { requireCritical = false } = {}) {
 }
 
 module.exports = {
+  runRelicMatMediaIssue,
+  runRelicMatSlot,
   ATARAXIA_NUMERAL_COMPONENT,
   ATARAXIA_NUMERAL_PROOF_RENDERER,
   ATARAXIA_NUMERAL_PROOF_SCHEMA,

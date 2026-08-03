@@ -19234,6 +19234,34 @@ button.tileset-relationship-cell {
   overflow: visible;
 }
 
+.run-vacantia-take {
+  /* The relic IS the control here -- the take target is the art, not a panel around it.
+     These declarations only remove the shell's default button chrome; they paint no
+     parallel surface of their own. */
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  cursor: pointer;
+  display: inline-flex;
+  padding: 0;
+}
+
+.run-vacantia-take:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.run-vacantia-content {
+  display: grid;
+  gap: var(--ds-stack);
+  justify-items: start;
+}
+
+.run-vacantia-lede {
+  margin: 0;
+}
+
 .relic-mat-offer .run-relic-icon img {
   --relic-mat-stroke: rgb(16 12 9 / 0.92);
   filter:
