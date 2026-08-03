@@ -3106,6 +3106,11 @@ export function LevelEditor(): ReactElement {
   );
   /** Saved town instances. A board carries as many as the author places. */
   const [boardTowns, setBoardTowns] = useState<BoardTown[]>(initialBoard?.towns ?? []);
+  /**
+   * The open building picker: which section, and which entry it will fill. A null entryId means
+   * the pick appends a new one. Picking closes it, so the grid is only ever up while choosing.
+   */
+  const [townPicker, setTownPicker] = useState<{ sectionId: string; entryId: string | null } | null>(null);
   /** Which building entries have their knobs open, matching the cover entries' caret behaviour. */
   const [expandedTownBuildings, setExpandedTownBuildings] = useState<Set<string>>(() => new Set());
   const toggleTownBuildingExpand = (entryId: string): void => {
@@ -9907,16 +9912,22 @@ export function LevelEditor(): ReactElement {
                           >
                             <span className="le-gen-cover-caret" aria-hidden="true">{expandedTownBuildings.has(entry.id) ? '▾' : '▸'}</span>
                           </ChromeButton>
-                          <HouseSelect<string>
-                            className="le-gen-cover-select"
-                            value={entry.sourceArtId}
-                            onChange={(sourceArtId) => updateTownSection(selectedTown.id, section.id, {
-                              buildings: section.buildings.map((other) => (
-                                other.id === entry.id ? { ...other, sourceArtId } : other)),
-                            })}
-                            ariaLabel={`Section ${index + 1} building ${entryIndex + 1}`}
-                            options={townBuildingCatalog.map((asset) => ({ value: asset.id, label: asset.label }))}
-                          />
+                          {/* The entry shows the art itself and opens the picker when clicked. A
+                              prose dropdown made you read names to choose a picture. */}
+                          <ChromeButton unit="inner-text-button"
+                            className={chromeUnitClassNames('inner-text-button', 'le-town-building-pick', townPicker?.entryId === entry.id && 'active')}
+                            aria-expanded={townPicker?.entryId === entry.id}
+                            aria-label={`Section ${index + 1} building ${entryIndex + 1}`}
+                            title="Choose a different building"
+                            onClick={() => setTownPicker((current) => (
+                              current?.entryId === entry.id ? null : { sectionId: section.id, entryId: entry.id }
+                            ))}
+                          >
+                            {townBuildingCatalog.some((asset) => asset.id === entry.sourceArtId) ? (
+                              <img src={structureArtDirectionHalfSrc(entry.sourceArtId, 'south', 'front')} alt="" draggable={false} />
+                            ) : null}
+                            <span>{townBuildingCatalog.find((asset) => asset.id === entry.sourceArtId)?.label ?? 'Pick a building'}</span>
+                          </ChromeButton>
                           <ChromeButton unit="inner-tool-square"
                             className={chromeUnitClassNames('inner-tool-square', 'le-gen-icon', 'danger')}
                             onClick={() => updateTownSection(selectedTown.id, section.id, {
@@ -9942,16 +9953,50 @@ export function LevelEditor(): ReactElement {
                       </div>
                     ))}
                     <ChromeButton unit="inner-text-button"
-                      className={chromeUnitClassNames('inner-text-button', 'le-gen-cover-add')}
-                      onClick={() => updateTownSection(selectedTown.id, section.id, {
-                        buildings: [...section.buildings, {
-                          id: `b${Math.random().toString(36).slice(2, 8)}`,
-                          sourceArtId: townBuildingCatalog[0]?.id ?? '',
-                          weight: 1,
-                        }],
-                      })}
+                      className={chromeUnitClassNames('inner-text-button', 'le-gen-cover-add', townPicker?.sectionId === section.id && townPicker.entryId === null && 'active')}
+                      aria-expanded={townPicker?.sectionId === section.id && townPicker.entryId === null}
+                      onClick={() => setTownPicker((current) => (
+                        current?.sectionId === section.id && current.entryId === null
+                          ? null
+                          : { sectionId: section.id, entryId: null }
+                      ))}
                       title="Add a building kind to this section."
                     >+ Add building</ChromeButton>
+                    {townPicker?.sectionId === section.id ? (
+                      <div className="le-town-building-picker">
+                        <AssetSwatchList
+                          ariaLabel={townPicker.entryId ? 'Choose a building' : 'Add a building'}
+                          items={townBuildingCatalog.map((asset) => ({
+                            id: `town-pick-${section.id}-${asset.id}`,
+                            label: asset.label,
+                            title: asset.label,
+                            selected: townPicker.entryId
+                              ? section.buildings.some((other) => other.id === townPicker.entryId && other.sourceArtId === asset.id)
+                              : false,
+                            onSelect: () => {
+                              // Picking is the whole interaction: fill the entry, then close.
+                              updateTownSection(selectedTown.id, section.id, townPicker.entryId
+                                ? {
+                                  buildings: section.buildings.map((other) => (
+                                    other.id === townPicker.entryId ? { ...other, sourceArtId: asset.id } : other)),
+                                }
+                                : {
+                                  buildings: [...section.buildings, {
+                                    id: `b${Math.random().toString(36).slice(2, 8)}`,
+                                    sourceArtId: asset.id,
+                                    weight: 1,
+                                  }],
+                                });
+                              setTownPicker(null);
+                            },
+                            content: <>
+                              <img src={structureArtDirectionHalfSrc(asset.id, 'south', 'front')} alt="" draggable={false} />
+                              <small>{asset.label}</small>
+                            </>,
+                          }))}
+                        />
+                      </div>
+                    ) : null}
                   </div>
                   <SliderRow label={`Share · ${section.share.toFixed(1)}`} value={section.share} set={(value) => updateTownSection(selectedTown.id, section.id, { share: value })} min={0} max={5} step={0.1} nudge={0.1} dflt={1} />
                   <SliderRow label={`Average building · ${section.scaleMean.toFixed(2)}×`} value={section.scaleMean} set={(value) => updateTownSection(selectedTown.id, section.id, { scaleMean: value })} min={0.3} max={2.5} step={0.05} nudge={0.05} dflt={1} />
