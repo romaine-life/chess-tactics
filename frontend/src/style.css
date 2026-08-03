@@ -9630,6 +9630,13 @@ body { font-size: 17px; }
   width: calc(100% - 8px);
 }
 
+/* The editor's content column scrolls as ONE KitScroll (ADR-0030) — no scroll-within-a-scroll.
+   These lists used to carry their own `overflow: auto` and a native `scrollbar-color` skin.
+   Nothing here is ever genuinely scrollable (the column is), but the 8px padding-bottom sits
+   outside the auto-height box's clientHeight while counting toward its scrollHeight, so the
+   list reported a permanent ~8px of scroll and drew a native bar over content that doesn't
+   move — and that bar, eating inline space, produced a horizontal one under it. Rows render
+   at full height; the column's KitScroll does the scrolling. */
 .ce-campaign-list,
 .ce-level-list {
   align-content: start;
@@ -9637,10 +9644,7 @@ body { font-size: 17px; }
   gap: 6px;
   grid-auto-rows: max-content;
   min-height: 0;
-  overflow: auto;
   padding: 2px 4px 8px;
-  scrollbar-color: #2f7fe8 #061019;
-  scrollbar-width: thin;
 }
 
 .ce-campaign-row,
