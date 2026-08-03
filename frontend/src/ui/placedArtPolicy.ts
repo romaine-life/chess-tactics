@@ -26,9 +26,10 @@ export function canTargetPlacedArtCell(
   cols: number,
   rows: number,
 ): boolean {
-  // Scene Art and the Forest brush are gameplay-inert scenery placed in free scene pixels, so
-  // they are never confined to the playable rectangle. Doodads and props are.
-  return kind === 'artwork' || kind === 'forest' || isPlayableBoardCoordinate(x, y, cols, rows);
+  // Scene Art and the Forest/Town generators are gameplay-inert scenery placed in free scene
+  // pixels, so they are never confined to the playable rectangle. Doodads and props are.
+  return kind === 'artwork' || kind === 'forest' || kind === 'town'
+    || isPlayableBoardCoordinate(x, y, cols, rows);
 }
 
 export function isPropFootprintWithinPlayableBoard(

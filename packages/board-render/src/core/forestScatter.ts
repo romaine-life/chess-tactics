@@ -118,7 +118,7 @@ const HASH_Y = 0x27d4eb2d;
 const HASH_S = 0x165667b1;
 
 /** Stable per-cell hash. Same (cell, seed, salt) always yields the same float in [0, 1). */
-function hashUnit(cellX: number, cellY: number, seed: number, salt: number): number {
+export function hashUnit(cellX: number, cellY: number, seed: number, salt: number): number {
   let h = Math.imul(cellX | 0, HASH_X) ^ Math.imul(cellY | 0, HASH_Y) ^ Math.imul(seed | 0, HASH_S) ^ Math.imul(salt | 0, 0x85ebca6b);
   h ^= h >>> 15;
   h = Math.imul(h, 0x2545f491);
@@ -175,7 +175,7 @@ export function floatingArtworkGroundPoint(
 }
 
 /** Inverse of {@link floatingArtworkGroundPoint}: seat a ground point as an image-box centre. */
-function groundPointToPixel(
+export function groundPointToPixel(
   ground: ForestGroundPoint,
   sprite: ForestSpriteGeometry,
   instanceScale: number,

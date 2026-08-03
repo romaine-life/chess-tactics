@@ -26,6 +26,15 @@ import {
   type ForestScatterParams,
   type ForestSpeciesGeometry,
 } from '../core/forestScatter';
+import {
+  TOWN_PLAN_DEFAULTS,
+  TOWN_PLAN_KINDS,
+  TOWN_PLAN_LABELS,
+  TOWN_PLAN_NOTES,
+  isTownMember,
+  planTown,
+  type TownPlanKind,
+} from '../core/townPlan';
 import { BoardSceneLayer } from '../render/BoardSceneLayer';
 import { PredrawnOcclusionSeedLayer } from '../render/PredrawnOcclusion';
 import {
@@ -3054,6 +3063,36 @@ export function LevelEditor(): ReactElement {
   // Brush-ring position in surface pixels, so the author sees the footprint being painted.
   const [forestCursor, setForestCursor] = useState<{ x: number; y: number } | null>(null);
   const forestStrokeRef = useRef<{ pointerId: number; lastX: number; lastY: number } | null>(null);
+  // A town is sited, not painted: click to place its centre, then tune and regenerate in place.
+  // Buildings are the built structures the forest list deliberately excludes.
+  const townBuildingCatalog = useMemo(() => {
+    const built = /cottage|cabin|lodge|house|castle|windmill|mill|tower|keep|hut|barn|farm/;
+    return artworkAssets.filter((asset) => asset.kind === 'house' || built.test(asset.id));
+  }, [artworkAssets]);
+  // Focal structures: the one landmark a town is built around.
+  const townLandmarkCatalog = useMemo(
+    () => townBuildingCatalog.filter((asset) => /castle|windmill|mill|tower|keep/.test(asset.id)),
+    [townBuildingCatalog],
+  );
+  const [townSite, setTownSite] = useState<{ x: number; y: number } | null>(null);
+  const [townBuildings, setTownBuildings] = useState<string[]>([]);
+  const [townLandmarks, setTownLandmarks] = useState<string[]>([]);
+  const [townPlanKind, setTownPlanKind] = useState<TownPlanKind>(TOWN_PLAN_DEFAULTS.plan);
+  const [townSize, setTownSize] = useState(TOWN_PLAN_DEFAULTS.size);
+  const [townScaleMean, setTownScaleMean] = useState(TOWN_PLAN_DEFAULTS.scaleMean);
+  const [townScaleMin, setTownScaleMin] = useState(TOWN_PLAN_DEFAULTS.scaleMin);
+  const [townScaleMax, setTownScaleMax] = useState(TOWN_PLAN_DEFAULTS.scaleMax);
+  const [townPlotWidth, setTownPlotWidth] = useState(TOWN_PLAN_DEFAULTS.plotWidth);
+  const [townSetback, setTownSetback] = useState(TOWN_PLAN_DEFAULTS.setback);
+  const [townSpread, setTownSpread] = useState(TOWN_PLAN_DEFAULTS.spread);
+  const [townLooseness, setTownLooseness] = useState(TOWN_PLAN_DEFAULTS.looseness);
+  const [townFacingWobble, setTownFacingWobble] = useState(TOWN_PLAN_DEFAULTS.facingWobble);
+  const [townSpacing, setTownSpacing] = useState(TOWN_PLAN_DEFAULTS.spacing);
+  const [townAvoidBoard, setTownAvoidBoard] = useState(TOWN_PLAN_DEFAULTS.avoidPlayableBoard);
+  const [townSeed, setTownSeed] = useState(TOWN_PLAN_DEFAULTS.seed);
+  // How many buildings the plan actually sited. A plan offers a finite number of plots, so a
+  // large requested size can be cut short by frontage, spacing, or the board — say so.
+  const [townSited, setTownSited] = useState<number | null>(null);
   // Ground cover is a per-tile FEATURE (density), not a doodad: which tiles grow vegetation
   // and how thick. Tufts are rolled deterministically from this density (see core/groundCover).
   const [boardCover, setBoardCover] = useState<Record<string, GroundCoverDensity>>(initialBoard?.cover ?? {});
@@ -4114,6 +4153,73 @@ export function LevelEditor(): ReactElement {
     setForestSeed(FOREST_SCATTER_DEFAULTS.seed);
   };
 
+  /**
+   * Site or re-site a town. A town's id prefix comes from its centre, so regenerating replaces
+   * the buildings already standing there instead of stacking a second town on top of them.
+   */
+  const generateTown = (site: { x: number; y: number }): void => {
+    if (!townBuildings.length) return;
+    const current = currentEditorBoardRef.current;
+    const all = current.floatingArtwork ?? [];
+    const others = all.filter((placement) => !isTownMember(placement, site.x, site.y));
+    const town = planTown({
+      centerX: site.x,
+      centerY: site.y,
+      params: {
+        buildingIds: townBuildings,
+        landmarkIds: townLandmarks,
+        plan: townPlanKind,
+        size: townSize,
+        scaleMean: townScaleMean,
+        scaleMin: townScaleMin,
+        scaleMax: townScaleMax,
+        plotWidth: townPlotWidth,
+        setback: townSetback,
+        spread: townSpread,
+        looseness: townLooseness,
+        facingWobble: townFacingWobble,
+        spacing: townSpacing,
+        avoidPlayableBoard: townAvoidBoard,
+        seed: townSeed,
+      },
+      geometry: forestGeometry,
+      board: { cols: current.cols, rows: current.rows },
+      existing: others,
+    });
+    setTownSited(town.length);
+    if (!town.length && others.length === all.length) return;
+    const next = cloneEditorBoard(current);
+    next.floatingArtwork = sortFloatingArtworkByDepth([...others, ...town], forestGeometry);
+    commitEditorBoard(next, null);
+  };
+
+  const removeTown = (site: { x: number; y: number }): void => {
+    const current = currentEditorBoardRef.current;
+    const all = current.floatingArtwork ?? [];
+    const kept = all.filter((placement) => !isTownMember(placement, site.x, site.y));
+    setTownSited(null);
+    if (kept.length === all.length) return;
+    const next = cloneEditorBoard(current);
+    next.floatingArtwork = kept;
+    commitEditorBoard(next, null);
+  };
+
+  const resetTownParams = (): void => {
+    setTownPlanKind(TOWN_PLAN_DEFAULTS.plan);
+    setTownSize(TOWN_PLAN_DEFAULTS.size);
+    setTownScaleMean(TOWN_PLAN_DEFAULTS.scaleMean);
+    setTownScaleMin(TOWN_PLAN_DEFAULTS.scaleMin);
+    setTownScaleMax(TOWN_PLAN_DEFAULTS.scaleMax);
+    setTownPlotWidth(TOWN_PLAN_DEFAULTS.plotWidth);
+    setTownSetback(TOWN_PLAN_DEFAULTS.setback);
+    setTownSpread(TOWN_PLAN_DEFAULTS.spread);
+    setTownLooseness(TOWN_PLAN_DEFAULTS.looseness);
+    setTownFacingWobble(TOWN_PLAN_DEFAULTS.facingWobble);
+    setTownSpacing(TOWN_PLAN_DEFAULTS.spacing);
+    setTownAvoidBoard(TOWN_PLAN_DEFAULTS.avoidPlayableBoard);
+    setTownSeed(TOWN_PLAN_DEFAULTS.seed);
+  };
+
   /** Re-sort every piece of scene art into back-to-front paint order. */
   const sortSceneArtByDepth = (): void => {
     const current = currentEditorBoardRef.current;
@@ -4127,7 +4233,7 @@ export function LevelEditor(): ReactElement {
   const paintCell = (x: number, y: number): void => {
     // Floating artwork has its own viewport-level placement surface. It must never fall through
     // into this tile/cell painter, even if a stale pointer event arrives during a tool change.
-    if (brushKind === 'artwork' || brushKind === 'forest') return;
+    if (brushKind === 'artwork' || brushKind === 'forest' || brushKind === 'town') return;
     const key = `${x},${y}`;
     const next = cloneEditorBoard(currentEditorBoardRef.current);
     if (featureKind) {
@@ -8130,6 +8236,25 @@ export function LevelEditor(): ReactElement {
                     onFrameError={failEditorFrame}
                   />
                 )}
+                {editorReady && !saving && !editorLoadError && layer === 'placed-art' && brushKind === 'town'
+                  && (tool === 'brush' || tool === 'erase') ? (
+                  <div
+                    className="le-artwork-free-placement-surface le-town-placement-surface"
+                    data-testid="town-placement-surface"
+                    aria-label={tool === 'erase' ? 'Remove the town under the cursor' : 'Site a town'}
+                    onPointerDown={(event) => {
+                      if (event.button !== 0) return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      const point = forestScenePoint(
+                        event.clientX, event.clientY, event.currentTarget.getBoundingClientRect(),
+                      );
+                      const site = { x: Math.round(point.x), y: Math.round(point.y) };
+                      setTownSite(site);
+                      if (tool === 'erase') removeTown(site); else generateTown(site);
+                    }}
+                  />
+                ) : null}
                 {editorReady && !saving && !editorLoadError && layer === 'placed-art' && brushKind === 'forest'
                   && (tool === 'brush' || tool === 'erase') ? (
                   <div
@@ -9154,6 +9279,7 @@ export function LevelEditor(): ReactElement {
               {([
                 ['artwork', 'Scene Art'],
                 ['forest', 'Forest'],
+                ['town', 'Town'],
                 ['doodad', 'Doodads'],
                 ['prop', 'Props'],
               ] as const).map(([kind, label]) => (
@@ -9170,6 +9296,8 @@ export function LevelEditor(): ReactElement {
                 ? 'Scene Art can be placed anywhere in the scene and never affects movement.'
                 : placedArtKind === 'forest'
                   ? 'Forest scatters Scene Art trees anywhere in the scene and never affects movement.'
+                : placedArtKind === 'town'
+                  ? 'Town lays out Scene Art buildings along streets and never affects movement.'
                 : placedArtKind === 'doodad'
                   ? 'Doodads stay inside the playable board and never block movement.'
                   : 'Props stay inside the playable board and block movement.'}
@@ -9425,6 +9553,140 @@ export function LevelEditor(): ReactElement {
               );
             })}
             <p className="le-board-note">This prop spans {propBrushDef.w}×{propBrushDef.h} tile{propBrushDef.w * propBrushDef.h > 1 ? 's' : ''}, anchored at the clicked cell. Props only land where every footprint tile is one of their terrains and no unit or other prop is in the way. Blocking props (trees, houses, rocks) become impassable in play.</p>
+          </section>
+        ) : brushKind === 'town' ? (
+          <section className="skirmish-card le-brush-panel le-town-panel" data-testid="town-controls">
+            <h2>Town</h2>
+            <p className="le-board-note">Click the scene to site a town there. Buildings are laid out along streets and turned to face them — a plan, not a scatter. Tune below and press Regenerate to rebuild the same town in place. Buildings are Scene Art: visual only, never on the playable grid, no collision.</p>
+            <h2 className="le-card-subhead">Plan</h2>
+            <div className="le-seg le-town-plan-seg" role="group" aria-label="Town plan">
+              {TOWN_PLAN_KINDS.map((kind) => (
+                <ChromeButton unit="inner-text-button"
+                  key={kind}
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', townPlanKind === kind && 'active')}
+                  aria-pressed={townPlanKind === kind}
+                  title={TOWN_PLAN_NOTES[kind]}
+                  onClick={() => setTownPlanKind(kind)}
+                >{TOWN_PLAN_LABELS[kind]}</ChromeButton>
+              ))}
+            </div>
+            <p className="le-board-note">{TOWN_PLAN_NOTES[townPlanKind]}</p>
+            <div className="le-pal-group">
+              <span className="le-pal-grouplabel">Buildings</span>
+              <AssetSwatchList
+                ariaLabel="Town buildings"
+                items={townBuildingCatalog.map((asset) => ({
+                  id: `town-${asset.id}`,
+                  label: asset.label,
+                  title: `${asset.label} · include in the town`,
+                  selected: townBuildings.includes(asset.id),
+                  onSelect: () => setTownBuildings((current) => (
+                    current.includes(asset.id)
+                      ? current.filter((id) => id !== asset.id)
+                      : [...current, asset.id]
+                  )),
+                  content: <>
+                    <img src={structureArtDirectionHalfSrc(asset.id, 'south', 'front')} alt="" draggable={false} />
+                    <small>{asset.label}</small>
+                  </>,
+                }))}
+              />
+              <div className="le-ctrlrow">
+                <ChromeButton unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                  onClick={() => setTownBuildings(townBuildingCatalog.map((asset) => asset.id))}
+                >All</ChromeButton>
+                <ChromeButton unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                  onClick={() => setTownBuildings([])}
+                >None</ChromeButton>
+                <span className="le-ctrllabel">{townBuildings.length} selected</span>
+              </div>
+            </div>
+            {townLandmarkCatalog.length ? (
+              <div className="le-pal-group">
+                <span className="le-pal-grouplabel">Focal structure</span>
+                <AssetSwatchList
+                  ariaLabel="Town focal structure"
+                  items={townLandmarkCatalog.map((asset) => ({
+                    id: `town-focal-${asset.id}`,
+                    label: asset.label,
+                    title: `${asset.label} · the structure the town is built around`,
+                    selected: townLandmarks.includes(asset.id),
+                    onSelect: () => setTownLandmarks((current) => (
+                      current.includes(asset.id)
+                        ? current.filter((id) => id !== asset.id)
+                        : [...current, asset.id]
+                    )),
+                    content: <>
+                      <img src={structureArtDirectionHalfSrc(asset.id, 'south', 'front')} alt="" draggable={false} />
+                      <small>{asset.label}</small>
+                    </>,
+                  }))}
+                />
+                <p className="le-board-note">One focal structure is sited at the town's most central plot. Leave empty for a town with no centrepiece.</p>
+              </div>
+            ) : null}
+            <h2 className="le-card-subhead">Size</h2>
+            <SliderRow label={`Buildings · ${townSize}`} value={townSize} set={setTownSize} min={2} max={60} step={1} nudge={1} dflt={TOWN_PLAN_DEFAULTS.size} />
+            <SliderRow label={`Town extent · ${townSpread}px`} value={townSpread} set={setTownSpread} min={120} max={1400} step={20} nudge={20} dflt={TOWN_PLAN_DEFAULTS.spread} />
+            <SliderRow label={`Average building · ${townScaleMean.toFixed(2)}×`} value={townScaleMean} set={setTownScaleMean} min={0.3} max={2.5} step={0.05} nudge={0.05} dflt={TOWN_PLAN_DEFAULTS.scaleMean} />
+            <SliderRow label={`Smallest allowed · ${townScaleMin.toFixed(2)}×`} value={townScaleMin} set={setTownScaleMin} min={0.2} max={2.5} step={0.05} nudge={0.05} dflt={TOWN_PLAN_DEFAULTS.scaleMin} />
+            <SliderRow label={`Largest allowed · ${townScaleMax.toFixed(2)}×`} value={townScaleMax} set={setTownScaleMax} min={0.2} max={3} step={0.05} nudge={0.05} dflt={TOWN_PLAN_DEFAULTS.scaleMax} />
+            <h2 className="le-card-subhead">Streets</h2>
+            <SliderRow label={`Frontage per building · ${townPlotWidth}px`} value={townPlotWidth} set={setTownPlotWidth} min={40} max={300} step={5} nudge={5} dflt={TOWN_PLAN_DEFAULTS.plotWidth} />
+            <SliderRow label={`Street setback · ${townSetback}px`} value={townSetback} set={setTownSetback} min={20} max={260} step={2} nudge={2} dflt={TOWN_PLAN_DEFAULTS.setback} />
+            <SliderRow label={`Minimum spacing · ${townSpacing}px`} value={townSpacing} set={setTownSpacing} min={0} max={200} step={2} nudge={2} dflt={TOWN_PLAN_DEFAULTS.spacing} />
+            <h2 className="le-card-subhead">Acceptable variation</h2>
+            <p className="le-board-note">How far the plan may be bent. At zero the town is surveyed: every building on its exact plot, square to its street. Raising these loosens it toward a village that grew rather than one that was laid out.</p>
+            <SliderRow label={`Looseness · ${Math.round(townLooseness * 100)}%`} value={townLooseness} set={setTownLooseness} min={0} max={1} step={0.05} nudge={0.05} dflt={TOWN_PLAN_DEFAULTS.looseness} />
+            <SliderRow label={`Off-axis buildings · ${Math.round(townFacingWobble * 100)}%`} value={townFacingWobble} set={setTownFacingWobble} min={0} max={1} step={0.05} nudge={0.05} dflt={TOWN_PLAN_DEFAULTS.facingWobble} />
+            <h2 className="le-card-subhead">Placement</h2>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Keep off playable board</span>
+              <Toggle
+                checked={townAvoidBoard}
+                onChange={setTownAvoidBoard}
+                label="Keep the town off the playable board"
+              />
+              {ctlReset(() => setTownAvoidBoard(TOWN_PLAN_DEFAULTS.avoidPlayableBoard))}
+            </div>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Seed · {townSeed}</span>
+              <ChromeButton unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                onClick={() => {
+                  const next = (townSeed % 9999) + 1;
+                  setTownSeed(next);
+                }}
+              >Re-roll</ChromeButton>
+              {ctlReset(() => setTownSeed(TOWN_PLAN_DEFAULTS.seed))}
+            </div>
+            <div className="le-ctrlrow">
+              <ChromeButton unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                disabled={!townSite || !townBuildings.length}
+                onClick={() => { if (townSite) generateTown(townSite); }}
+              >Regenerate</ChromeButton>
+              <ChromeButton unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                disabled={!townSite}
+                onClick={() => { if (townSite) removeTown(townSite); }}
+              >Remove town</ChromeButton>
+              <ChromeButton unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                onClick={resetTownParams}
+              >Reset town settings</ChromeButton>
+            </div>
+            {townBuildings.length
+              ? townSite
+                ? townSited !== null && townSited < townSize
+                  ? <p className="le-board-note">Sited {townSited} of {townSize}. The plan ran out of street frontage — raise Town extent, lower Frontage per building, or lower Minimum spacing to fit more.</p>
+                  : townSited !== null
+                    ? <p className="le-board-note">Sited {townSited} buildings.</p>
+                    : null
+                : <p className="le-board-note">Click the scene to site the town.</p>
+              : <p className="le-board-note">Pick at least one building above before siting a town.</p>}
           </section>
         ) : brushKind === 'forest' ? (
           <section className="skirmish-card le-brush-panel le-forest-panel" data-testid="forest-controls">
