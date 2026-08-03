@@ -32,6 +32,14 @@ const APPROVED_FRAMELESS_SURFACE_RESETS = new Map([
     'border:0',
     'border-radius:0',
   ])],
+  // Bona Vacantia makes the relic art itself the take target (no card, no panel). These
+  // remove the shell's default button chrome from that trigger; they paint nothing.
+  ['src/style.css|.run-vacantia-take', new Set([
+    'background:none',
+    'border:0',
+    'border-radius:0',
+    'box-shadow:none',
+  ])],
 ]);
 
 function normalize(value) {

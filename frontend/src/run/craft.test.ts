@@ -212,15 +212,15 @@ describe('crafted Run documents', () => {
     );
   });
 
-  it('offers loot relics that are still choosable', () => {
-    const run = craft('?craft=shop&battle=2&loot=fair-scales,mercenarys-rifle');
-    expect(run.shop?.lootRelicOffers).toEqual(['fair-scales', 'mercenarys-rifle']);
-    expect(run.shop?.chosenLootRelicId).toBeNull();
+  it('offers Conflict relics that are still choosable', () => {
+    const run = craft('?craft=bona-vacantia&battle=1&loot=fair-scales,mercenarys-rifle', war(4, [2]));
+    expect(run.phase).toBe('bona-vacantia');
+    expect(run.vacantia?.offers).toEqual(['fair-scales', 'mercenarys-rifle']);
     expect(run.seenRelics).toEqual(expect.arrayContaining(['fair-scales', 'mercenarys-rifle']));
   });
 
   it('will not offer a relic the crafted Run already holds', () => {
-    expect(() => craft('?craft=shop&battle=2&relics=fair-scales&loot=fair-scales'))
+    expect(() => craft('?craft=bona-vacantia&battle=1&relics=fair-scales&loot=fair-scales', war(4, [2])))
       .toThrow(/already held/);
   });
 

@@ -88,6 +88,8 @@ const {
   runShopWrapMediaIssue,
   workspaceBackgroundSlotId,
   workspaceBackgroundMediaIssue,
+  runRelicMatSlot,
+  runRelicMatMediaIssue,
   runShopWrapSlotId,
   sfxSampleMediaIssue,
   sfxSampleOwnerProofIssue,
@@ -15290,6 +15292,9 @@ function mediaDomainProjectionIssue(row) {
   if (workspaceBackgroundSlotId(row.slot)) {
     return workspaceBackgroundMediaIssue(row, runtime.value);
   }
+  if (runRelicMatSlot(row.slot)) {
+    return runRelicMatMediaIssue(row, runtime.value);
+  }
   if (ataraxiaNumeralSlot(row.slot)) {
     return ataraxiaNumeralMediaIssue(row, runtime.value);
   }
@@ -18274,7 +18279,7 @@ app.put('/api/run-progression', async (req, res) => {
 // --- Account-scoped active Run (ADR-0193) ---------------------------------
 // Anonymous Runs stay in browser storage. Once signed in, the client adopts that
 // document here; the server owns one CAS-updated active Run per account.
-const ACTIVE_RUN_PHASES = new Set(['deployment', 'battle', 'shop', 'victory']);
+const ACTIVE_RUN_PHASES = new Set(['bona-vacantia', 'deployment', 'battle', 'shop', 'victory']);
 const ACTIVE_RUN_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
 const ACTIVE_RUN_PIECE_VALUES = Object.freeze({ pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9, king: 0 });
 const ACTIVE_RUN_ABILITIES = new Set(['discipline', 'positioned', 'marshalled']);
@@ -18287,19 +18292,38 @@ const ACTIVE_RUN_SHOP_FIELDS = new Set([
   'victoryGoldTenths',
   'cardOffers',
   'purchasedCardOfferIds',
-  'lootRelicOffers',
-  'chosenLootRelicId',
   'paidRelicOffer',
   'paidRelicBought',
   'soldUnits',
   'entrySnapshot',
 ]);
+const ACTIVE_RUN_VACANTIA_FIELDS = new Set([
+  'kind',
+  'conflictIndex',
+  'afterBattleIndex',
+  'victoryGoldTenths',
+  'offers',
+]);
 const RUN_RELICS = Array.isArray(serverRender?.RUN_RELICS) ? serverRender.RUN_RELICS : [];
 const RUN_RELIC_BY_ID = serverRender?.RUN_RELIC_BY_ID ?? {};
 const RUN_RELIC_IDS = new Set(RUN_RELICS.map((relic) => relic.id));
+/**
+ * Gold the Run's held relics paid the moment they were taken. Read from the model's own
+ * table (RUN_RELIC_IMMEDIATE_GOLD) rather than restated here, so the opening Shop's pinned
+ * gold check stays exact when a relic's payout changes.
+ */
+function openingRelicGoldTenths(run) {
+  if (!Array.isArray(run.relics)) return 0;
+  if (typeof serverRender?.relicImmediateGoldTenths === 'function') {
+    return serverRender.relicImmediateGoldTenths(run.relics);
+  }
+  const table = serverRender?.RUN_RELIC_IMMEDIATE_GOLD ?? {};
+  return run.relics.reduce((total, relic) => total + (table[relic] ?? 0) * 10, 0);
+}
+
 function validateActiveRunBody(run) {
   if (!run || typeof run !== 'object' || Array.isArray(run)) return 'run must be an object';
-  if (run.formatVersion !== 12) return 'run.formatVersion is unsupported';
+  if (run.formatVersion !== 13) return 'run.formatVersion is unsupported';
   if (typeof run.id !== 'string' || !run.id || run.id.length > 160) return 'run.id is invalid';
   if (!isFiniteInteger(run.seed) || run.seed < 0 || run.seed > 0xffffffff) return 'run.seed is invalid';
   if (run.formatVersion >= 5 && run.ataraxiaTier !== 0 && run.ataraxiaTier !== 1) return 'run.ataraxiaTier is invalid';
@@ -18519,6 +18543,31 @@ function validateActiveRunBody(run) {
   }
   if (run.formatVersion >= 8 && run.phase === 'shop' && !isObjectRecord(run.shop)) return 'run.shop is required';
   if (run.formatVersion >= 8 && run.phase !== 'shop' && run.shop !== null) return 'run.shop is invalid outside the shop phase';
+  // Bona Vacantia carries its own offers and, like the shop, exists only in its own phase.
+  if (run.formatVersion >= 13) {
+    if (run.phase === 'bona-vacantia') {
+      if (!isObjectRecord(run.vacantia)) return 'run.vacantia is required';
+      const vacantia = run.vacantia;
+      if (Object.keys(vacantia).some((field) => !ACTIVE_RUN_VACANTIA_FIELDS.has(field))) {
+        return 'run.vacantia contains an unsupported field';
+      }
+      if (vacantia.kind !== 'opening' && vacantia.kind !== 'post-battle') return 'run.vacantia.kind is invalid';
+      if (!isFiniteInteger(vacantia.conflictIndex) || vacantia.conflictIndex < 0) return 'run.vacantia.conflictIndex is invalid';
+      if (!isFiniteInteger(vacantia.afterBattleIndex) || vacantia.afterBattleIndex < 0) return 'run.vacantia.afterBattleIndex is invalid';
+      if (!isFiniteInteger(vacantia.victoryGoldTenths) || vacantia.victoryGoldTenths < 0) return 'run.vacantia.victoryGoldTenths is invalid';
+      if (!Array.isArray(vacantia.offers) || vacantia.offers.length < 1 || vacantia.offers.length > 3) {
+        return 'run.vacantia.offers is invalid';
+      }
+      if (new Set(vacantia.offers).size !== vacantia.offers.length) return 'run.vacantia.offers repeats a relic';
+      for (const relic of vacantia.offers) {
+        if (!RUN_RELIC_IDS.has(relic)) return 'run.vacantia.offers is invalid';
+        // An offer the player already holds could never have been revealed.
+        if (Array.isArray(run.relics) && run.relics.includes(relic)) return 'run.vacantia offers a held relic';
+      }
+    } else if (run.vacantia !== null && run.vacantia !== undefined) {
+      return 'run.vacantia is invalid outside the bona-vacantia phase';
+    }
+  }
   if (run.shop !== null && run.shop !== undefined) {
     if (!isObjectRecord(run.shop)) return 'run.shop is invalid';
     if (Object.keys(run.shop).some((field) => !ACTIVE_RUN_SHOP_FIELDS.has(field))) {
@@ -18652,13 +18701,14 @@ function validateActiveRunBody(run) {
           // opening cannot be left without a purchase.
           || run.shop.cardOffers.some((offer) => offer.value > 8)
           || !run.shop.cardOffers.some((offer) => offer.cost <= 8)
-          || !Array.isArray(run.shop.lootRelicOffers)
-          || run.shop.lootRelicOffers.length !== 0
-          || run.shop.chosenLootRelicId !== null
           || run.shop.paidRelicOffer !== null
           || run.shop.paidRelicBought !== false
           || !isObjectRecord(run.shop.entrySnapshot)
-          || run.shop.entrySnapshot.goldTenths !== 80
+          // Bona Vacantia runs BEFORE the opening Shop, so a relic taken there may already
+          // have paid out. The gold is still pinned value-by-value -- to the starting gold
+          // plus exactly what the relics held are worth on acquisition, computed from the
+          // model's own payout table so the two cannot drift.
+          || run.shop.entrySnapshot.goldTenths !== 80 + openingRelicGoldTenths(run)
           || !Array.isArray(run.shop.entrySnapshot.army)
           || run.shop.entrySnapshot.army.length !== 3
           || run.shop.entrySnapshot.army[0]?.id !== 'run-king'
