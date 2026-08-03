@@ -8,7 +8,7 @@ refines:
   - "[ADR-0364](0364-enchiridion-cards-is-a-terminal-gallery-with-no-fourth-column.md)"
 ---
 
-# ADR-0368: The Chartulary is the held half of the Cards reference
+# ADR-0371: The Chartulary is the held half of the Cards reference
 
 ## Context
 

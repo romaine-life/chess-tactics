@@ -39,7 +39,7 @@ import {
   seededPestiferousTarget,
   setDeploymentChoices,
   snapshotWar,
-  takeLootRelic,
+  takeVacantiaRelic,
   type AtaraxiaTier,
   type PurchasablePieceType,
   type RunAbility,
@@ -76,7 +76,7 @@ export const RUN_CRAFT_PARAMS: readonly string[] = Object.freeze([
 
 export const DEFAULT_CRAFT_SEED = 1337;
 
-export type RunCraftPhase = 'shop' | 'deployment' | 'battle' | 'victory';
+export type RunCraftPhase = 'bona-vacantia' | 'shop' | 'deployment' | 'battle' | 'victory';
 
 export interface RunCraftCard {
   pieces: PurchasablePieceType[];
@@ -144,7 +144,7 @@ const CARD_TYPES: Readonly<Record<string, RunCardType | null>> = Object.freeze({
   agminate: 'hieratic',
 });
 
-const CRAFT_PHASES: readonly RunCraftPhase[] = ['shop', 'deployment', 'battle', 'victory'];
+const CRAFT_PHASES: readonly RunCraftPhase[] = ['bona-vacantia', 'shop', 'deployment', 'battle', 'victory'];
 
 function pieceList(raw: string, label: string): PurchasablePieceType[] {
   const pieces: PurchasablePieceType[] = [];
@@ -544,19 +544,23 @@ function fightBattle(run: RunDocument): RunDocument {
   return openShop(started, deployedUnitIds);
 }
 
-function leaveShopAuto(run: RunDocument): RunDocument {
-  let next = run;
-  const shop = next.shop;
-  if (shop && shop.lootRelicOffers.length && !shop.chosenLootRelicId) {
-    const target = firstNonKingUnitId(next);
-    for (const relic of shop.lootRelicOffers) {
-      const taken = takeLootRelic(next, relic, target);
-      if (taken !== next) {
-        next = taken;
-        break;
-      }
-    }
+/**
+ * Get past a Conflict's relic screen by taking the first offer that will be accepted.
+ * Fast-forwarding has to make the same mandatory choice a player would; taking a relic is
+ * also what opens the shop behind it, so this is how the crafter reaches any later state.
+ */
+function takeVacantiaAuto(run: RunDocument): RunDocument {
+  if (run.phase !== 'bona-vacantia' || !run.vacantia) return run;
+  const target = firstNonKingUnitId(run);
+  for (const relic of run.vacantia.offers) {
+    const taken = takeVacantiaRelic(run, relic, target);
+    if (taken !== run) return taken;
   }
+  throw new RunCraftError('craft: the Conflict opened with no relic that could be taken.');
+}
+
+function leaveShopAuto(run: RunDocument): RunDocument {
+  const next = takeVacantiaAuto(run);
   if (!canLeaveShop(next)) {
     throw new RunCraftError(`craft: the Shop after Battle ${(next.shop?.afterBattleIndex ?? 0) + 1} could not be left.`);
   }
@@ -632,11 +636,11 @@ const HELD_CARD_SLOT_BASE = 1000;
 /** Fast-forward from the opening Shop to the deployment of a target Battle by playing every
  * Battle before it. */
 function advanceToDeployment(run: RunDocument, battleIndex: number, held: readonly RunCraftCard[] | null): RunDocument {
-  let next = leaveShopAuto(buyHeldCards(buyOpeningCard(run), held));
+  let next = leaveShopAuto(buyHeldCards(buyOpeningCard(takeVacantiaAuto(run)), held));
   let guard = 0;
   while (next.battleIndex < battleIndex) {
     if ((guard += 1) > 200) throw new RunCraftError('craft: fast-forward made no progress.');
-    const shopped = fightBattle(next);
+    const shopped = takeVacantiaAuto(fightBattle(next));
     if (shopped.phase !== 'shop') {
       throw new RunCraftError(`craft: the War ended before Battle ${battleIndex + 1}.`);
     }
@@ -750,20 +754,32 @@ function applyShopOffers(run: RunDocument, spec: RunCraftSpec): RunDocument {
   if (offerIds.size !== cardOffers.length) {
     throw new RunCraftError('craft offers: the same card was offered twice; each Shop card must be distinct.');
   }
-  const lootRelicOffers = spec.loot ?? shop.lootRelicOffers;
   const paidRelicOffer = spec.paidRelic ?? shop.paidRelicOffer;
   return {
     ...run,
-    seenRelics: [...new Set([...run.seenRelics, ...lootRelicOffers, ...(paidRelicOffer ? [paidRelicOffer] : [])])],
+    seenRelics: [...new Set([...run.seenRelics, ...(paidRelicOffer ? [paidRelicOffer] : [])])],
     shop: {
       ...shop,
       cardOffers,
       purchasedCardOfferIds: [],
-      lootRelicOffers,
-      chosenLootRelicId: null,
       paidRelicOffer,
       paidRelicBought: false,
     },
+  };
+}
+
+/** `loot=` now writes the Conflict's opening offers, which is where the relic moved to. */
+function applyVacantiaOffers(run: RunDocument, spec: RunCraftSpec): RunDocument {
+  const vacantia = run.vacantia;
+  if (!vacantia || !spec.loot) return run;
+  const held = new Set(run.relics);
+  for (const relic of spec.loot) {
+    if (held.has(relic)) throw new RunCraftError(`craft: "${relic}" is already held, so it cannot also be offered.`);
+  }
+  return {
+    ...run,
+    seenRelics: [...new Set([...run.seenRelics, ...spec.loot])],
+    vacantia: { ...vacantia, offers: [...spec.loot] },
   };
 }
 
@@ -791,8 +807,20 @@ export function craftRunDocument(spec: RunCraftSpec, war: RunWarSnapshot): RunDo
   }
   const opening = createRun(war, spec.seed, spec.ataraxiaTier);
 
-  // The opening Shop is pinned by the server contract — its offers, army and 8 starting gold are
-  // checked value by value — so it is craftable only as itself.
+  // The run's own first state. Bona Vacantia now sits in front of the opening Shop, so
+  // battle=1 reaches it without playing anything.
+  if (spec.phase === 'bona-vacantia' && targetIndex === 0) {
+    if (opening.phase !== 'bona-vacantia') {
+      throw new RunCraftError(`craft: ${war.name} has no loot Battle, so no Conflict opens with a relic.`);
+    }
+    // Offers last, matching the Shop path: the held-relic guard can only see a relic the
+    // spec granted once applyRelics has actually granted it.
+    return applyGold(applyVacantiaOffers(applyRelics(applyArmy(opening, spec), spec), spec), spec.goldTenths);
+  }
+
+  // The opening Shop is pinned by the server contract — its offers, army and starting gold are
+  // checked value by value — so it is craftable only as itself. It now sits behind the opening
+  // relic screen, so reaching it means taking that relic first.
   if (spec.phase === 'shop' && targetIndex === 0) {
     const overridden = OPENING_SHOP_OVERRIDES.filter((key) => spec[key] !== null);
     if (overridden.length) {
@@ -800,7 +828,7 @@ export function craftRunDocument(spec: RunCraftSpec, war: RunWarSnapshot): RunDo
         'craft: the opening Shop is fixed by the Run contract and takes no overrides. Craft battle=2 or later for a Shop with crafted contents.',
       );
     }
-    return opening;
+    return takeVacantiaAuto(opening);
   }
 
   const deploymentIndex = spec.phase === 'shop'
@@ -811,6 +839,18 @@ export function craftRunDocument(spec: RunCraftSpec, war: RunWarSnapshot): RunDo
   if (spec.cards && spec.army) {
     throw new RunCraftError('craft: cards and army cannot both be given. A crafted army replaces the roster the held cards put there; use add for extra units beside them.');
   }
+
+  // A Conflict's relic screen sits between the Battle that closed the previous Conflict and
+  // the Shop that follows it, so it is reached by fighting up to that Battle and stopping.
+  if (spec.phase === 'bona-vacantia') {
+    const closing = advanceToDeployment(opening, targetIndex - 1, spec.cards);
+    const opened = fightBattle(applyRelics(applyArmy(closing, spec), spec));
+    if (opened.phase !== 'bona-vacantia') {
+      throw new RunCraftError(`craft: Battle ${targetIndex} does not close a Conflict, so no relic screen follows it.`);
+    }
+    return applyGold(applyVacantiaOffers(opened, spec), spec.goldTenths);
+  }
+
   let run = advanceToDeployment(opening, deploymentIndex, spec.cards);
   run = applyRelics(applyArmy(run, spec), spec);
 
@@ -824,7 +864,7 @@ export function craftRunDocument(spec: RunCraftSpec, war: RunWarSnapshot): RunDo
     );
   }
 
-  const shopped = fightBattle(run);
+  const shopped = takeVacantiaAuto(fightBattle(run));
   if (spec.phase === 'victory') {
     if (shopped.phase !== 'victory') throw new RunCraftError('craft: the final Battle did not end the War.');
     return applyGold(shopped, spec.goldTenths);

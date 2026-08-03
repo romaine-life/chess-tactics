@@ -1,7 +1,6 @@
 import { lazy, Suspense, useEffect, type ReactElement } from 'react';
 import { HomepageBackdrop } from './HomepageBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
-import { loadingMark, loadingMeasure } from '../diagnostics/loadingTimeline';
 import { Settings } from './Settings';
 import { PlayMenu } from './PlayMenu';
 import { Lobbies } from './Lobbies';
@@ -15,21 +14,18 @@ import {
 } from './enchiridionRoute';
 import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
 import { isPlaySelectorPath, PLAY_SELECTOR_ROOT } from './playHubRoute';
-import { loadDecodedImage } from '../render/imageResources';
 
 // The Editor is heavier / code-split out of the menu bundle. App's SceneBoundary
 // keeps the destination unrevealed while its shared Suspense boundary resolves.
 const CampaignEditor = lazy(() => import('./CampaignEditor').then((m) => ({ default: m.CampaignEditor })));
-import { drawableAssets, requiredDrawableRole } from '@chess-tactics/board-render';
-import { useStartupScene } from './shell/startupScene';
-import { installedUiMedia } from './installedUiMedia';
+import { drawableAssets } from '@chess-tactics/board-render';
+import { useSceneReveal } from './shell/SceneBoundary';
 import { menuModeIcon } from './menuModeIcon';
 import { MenuDestinationSceneSlot } from './shell/AuthoredSceneSlot';
 
-const BRAND_SHIELD = () => installedUiMedia('ui-kit-icons-brand-shield-png');
-// The title bar's wooden surface — gate the title layer on it (plus the brand shield)
-// so the bar reveals whole, not wordmark-first then wood.
-const TITLE_SURFACE = () => installedUiMedia('ui-surfaces-hybrid-wood-oak-png');
+// The title bar's brand mark and wooden surface used to be decoded HERE, so the bar
+// revealed whole on this one screen and nowhere else. Both are shell art now: a startup
+// precondition plus the bar's own ladder rung (ADR-0369 / shell/shellChromeArt.ts).
 
 interface MenuTab { slug: string; label: string; href: string; icon: string }
 
@@ -49,8 +45,6 @@ const MENU_TABS: MenuTab[] = new Proxy([], { get: (_target, property) => { const
 // The trailing-edge Settings control (carved gear) — moved out of the rail into the
 // account cluster (ADR-0036). Lives next to the avatar so the top-right reads as one
 // "settings + user" unit.
-const SETTINGS_ICON = () => requiredDrawableRole('menu-mode', 'settings').media.icon.media.immutableUrl;
-
 // A mode entry rendered as a settings-style rail tab (shared baked-skin frame,
 // shell-selected registered surface, carved icon + label). The main-menu shell
 // supplies the same oak material to every semantic tab in its first and second
@@ -111,43 +105,25 @@ export function MainMenu({
   // home route leaves it empty. The rail's zoom-safe placement (ADR-0062) is untouched — the
   // destination just occupies the previously-empty grid track to its right.
   const dest = shellDest(path);
-  // Ordered startup scene: background, title, and buttons report real readiness and
-  // reveal in that fixed sequence (rain remains decorative)
-  // (see shell/startupScene). Here MainMenu just reports readiness for the title's brand
-  // mark and the buttons' art (icons + stone surface) and gates the background + button
-  // layers off the director's stage; the director owns the sequence and the background
-  // probe. On later/home-family navigation the director supplies an already-complete
-  // controller, so this transport does not introduce another reveal lifecycle.
-  const startup = useStartupScene();
+  // The menu is an ordinary scene now. Its body reveals on the director's final ladder
+  // rung, gated by the boundary's painted contract — which already decodes every image
+  // this subtree references, including the rail icons this screen used to decode itself.
+  const sceneRevealed = useSceneReveal();
   useEffect(() => {
     const shell = document.querySelector('.shell');
     shell?.classList.add('main-menu-active');
     return () => shell?.classList.remove('main-menu-active');
   }, []);
 
-  useEffect(() => {
-    const startedAt = performance.now();
-    loadingMark('menu', 'critical-art-decode-start');
-    // Title: the brand shield + the wooden bar surface, so the bar reveals whole.
-    void Promise.all([BRAND_SHIELD(), TITLE_SURFACE()].map(loadDecodedImage)).then(() => {
-      startup.reportReady('title');
-      loadingMeasure('menu', 'title-art-decoded', startedAt);
-    }).catch(startup.reportFailed);
-    // Buttons: the carved icons + the same oak surface that fills the title bar.
-    // Keep controls gated on the shared surface too so they never reveal as bare frames.
-    const buttonArt = [SETTINGS_ICON(), TITLE_SURFACE(), ...MENU_TABS.map((tab) => tab.icon)];
-    void Promise.all(buttonArt.map(loadDecodedImage)).then(() => {
-      startup.reportReady('controls');
-      requestAnimationFrame(() => loadingMeasure('menu', 'button-art-first-painted-frame', startedAt, { assetCount: buttonArt.length }));
-    }).catch(startup.reportFailed);
-  }, [startup.generation, startup.reportFailed, startup.reportReady]);
-
+  // The shared backdrop's reveal is the director's first ladder rung now, owned by the
+  // App-level host on every route; the menu's controls ride its scene reveal like any other
+  // screen's body (ADR-0369). Neither is the menu's own bespoke choreography any more.
   return (
     <div
       className="menu-layer main-menu-layer"
       data-testid="main-menu-next"
-      data-reveal-bg={startup.revealed('background') ? '' : undefined}
-      data-reveal-buttons={startup.revealed('controls') ? '' : undefined}
+      data-reveal-bg=""
+      data-reveal-buttons={sceneRevealed ? '' : undefined}
     >
       <HomepageBackdrop />
       {/* Settings-twin layout (ADR-0003 superseded): shared app title bar + a rail of

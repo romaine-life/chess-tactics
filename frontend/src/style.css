@@ -989,8 +989,12 @@ h1 {
 .app-shell-titlebar {
   transition: opacity var(--ds-duration-fade) var(--ds-ease-standard);
 }
+/* The bar is position:fixed at z-index 10000 — ABOVE the bootstrap curtain — so an
+   invisible pending bar would still swallow clicks meant for whatever is beneath it.
+   Pending means inert as well as unseen (ADR-0369). */
 .app-shell-titlebar.reveal-pending {
   opacity: 0;
+  pointer-events: none;
 }
 
 /* In-game confirmation dialog (ui/shared/ConfirmDialog.tsx) — replaces window.confirm() on
@@ -13277,18 +13281,21 @@ body { font-size: 17px; }
   min-height: 64px;
 }
 
-.rail-lab-source-picker {
+/* Shared Studio stepper: [<] [ dropdown ] [>]. The arrows are fixed square ends so the
+   dropdown takes every remaining pixel -- item labels are long and the middle is the part
+   worth reading. */
+.studio-stepper-picker {
   display: grid;
   grid-template-columns: 36px minmax(0, 1fr) 36px;
   gap: 6px;
   min-width: 0;
 }
 
-.rail-lab-source-picker select {
+.studio-stepper-picker select {
   min-width: 0;
 }
 
-.rail-lab-source-step {
+.studio-stepper-step {
   height: 36px;
   min-width: 36px;
   padding: 0;
@@ -17088,10 +17095,17 @@ button.tileset-relationship-cell {
   white-space: nowrap;
 }
 
-.titlebar-control--return,
 .titlebar-control--icon {
   inline-size: var(--titlebar-control-size, 52px);
   padding: 0;
+}
+
+/* A return is NAMED for where it lands ("‹ Back to Battle", "‹ Back to editor"), so it
+   takes the icon square as a floor and grows with its label. It was authored as a fixed
+   52px square beside the icon rule, which with `overflow: hidden` silently cropped every
+   label longer than the bare "Back" — the frame ate the last characters. */
+.titlebar-control--return {
+  min-inline-size: var(--titlebar-control-size, 52px);
 }
 
 .titlebar-control-glyph {
@@ -19274,6 +19288,155 @@ button.tileset-relationship-cell {
   block-size: auto;
 }
 
+/* Relic-mat review composite: chosen backdrop, mat over it, live relic cards on top.
+   Layout only — every visible surface in the stack is generated art or an existing
+   chrome unit, so nothing here paints. The mat and the card row share one grid cell
+   deliberately: a mat that fails to contain the row must show that it fails. */
+.relic-mat-stage {
+  aspect-ratio: 16 / 9;
+  display: grid;
+  inline-size: 100%;
+  overflow: hidden;
+  place-items: center;
+  position: relative;
+}
+
+.relic-mat-backdrop {
+  block-size: 100%;
+  image-rendering: pixelated;
+  inline-size: 100%;
+  inset: 0;
+  object-fit: cover;
+  position: absolute;
+}
+
+/* The CARD ROW sizes this, not the stage: the layer shrinks to the relics' own
+   max-content width and the mat is drawn to that plus one bleed on each side. Sizing the
+   mat as a share of the stage instead makes it grow with the viewport and swallow the
+   backdrop it is supposed to be lying on. */
+/* --relic-mat-scale is the mat's width as a multiple of the relic row's. It is the one
+   number this composite is tuned by, so the Viewer drives it directly and the committed
+   value below is what the Viewer's reset returns to. */
+.relic-mat-layer {
+  --relic-mat-scale: 1.74;
+  display: grid;
+  /* Leave the overhang room, or a narrow stage lets the row fill it and the mat's torn
+     edges are the first thing clipped away -- the one part of it that has to be seen. */
+  max-inline-size: calc(100% / var(--relic-mat-scale));
+  place-items: center;
+  position: relative;
+}
+
+/* The row's width plus one bleed each side. Absolute so the mat contributes nothing to
+   the layer's intrinsic width -- the row alone decides that.
+   Height stays auto so the mat keeps its own aspect ratio: stretching it to the row's box
+   would distort the torn silhouette and cropping to fit would cut it off. That makes the
+   mat taller than the row, and grid/flex centring of an overflowing item is not reliable
+   here (it resolved to top-aligned), so the block centre is pinned outright. */
+.relic-mat-art {
+  block-size: auto;
+  image-rendering: pixelated;
+  inline-size: calc(100% * var(--relic-mat-scale));
+  inset-block-start: 50%;
+  inset-inline-start: calc((100% - 100% * var(--relic-mat-scale)) / 2);
+  position: absolute;
+  translate: 0 -50%;
+}
+
+/* The offers themselves: the relic icon and nothing else. No card, no name, no effect
+   text -- the reading is the art, and the words arrive on hover through the shared
+   Tooltip. This row is what gives the layer its width, so the mat ends up sized to the
+   relics rather than to a panel wrapped around them. */
+.relic-mat-cards {
+  display: flex;
+  gap: var(--ds-space-7);
+  position: relative;
+}
+
+/* The icons are dropped straight onto painted cloth, stone or wood, so nothing separates
+   their silhouette from what is behind them. A hard one-pixel stroke does that without
+   touching the art or putting a frame back around it. */
+.relic-mat-offer .run-relic-icon {
+  overflow: visible;
+}
+
+.run-vacantia-take {
+  /* The relic IS the control here -- the take target is the art, not a panel around it.
+     These declarations only remove the shell's default button chrome; they paint no
+     parallel surface of their own. */
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  cursor: pointer;
+  display: inline-flex;
+  padding: 0;
+}
+
+.run-vacantia-take:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.run-vacantia-content {
+  display: grid;
+  gap: var(--ds-stack);
+  justify-items: start;
+}
+
+.run-vacantia-lede {
+  margin: 0;
+}
+
+.relic-mat-offer .run-relic-icon img {
+  --relic-mat-stroke: rgb(16 12 9 / 0.92);
+  filter:
+    drop-shadow(1px 0 0 var(--relic-mat-stroke))
+    drop-shadow(-1px 0 0 var(--relic-mat-stroke))
+    drop-shadow(0 1px 0 var(--relic-mat-stroke))
+    drop-shadow(0 -1px 0 var(--relic-mat-stroke));
+}
+
+/* Catalog thumbnails carry no cards, so nothing is there to size the layer. Hold the
+   same proportion the real composite lands on. */
+.relic-mat-stage[data-cards='off'] .relic-mat-layer {
+  inline-size: 68%;
+}
+
+.relic-mat-stage[data-cards='off'] .relic-mat-art {
+  inline-size: 100%;
+  inset-inline-start: 0;
+}
+
+/* The Viewer overrides --relic-mat-scale live while it is being tuned. */
+.relic-mat-stage[data-cards='on'] .relic-mat-layer {
+  --relic-mat-scale: var(--relic-mat-scale-tuned, 1.74);
+}
+
+.tileset-studio-card-image.relic-mat-card-image {
+  min-height: 0;
+}
+
+/* Beats the base .tileset-studio-card-image img rule, which sizes every catalog image to
+   iso-tile dimensions -- correct for a tile thumbnail, but it shrinks a backdrop to a
+   corner and detaches the mat from it, which is the one thing this card exists to show. */
+.tileset-studio-card-image.relic-mat-card-image .relic-mat-backdrop {
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.tileset-studio-card-image.relic-mat-card-image .relic-mat-art {
+  height: auto;
+  object-fit: contain;
+  width: 100%;
+}
+
+.relic-mat-figure {
+  flex: 1 1 100%;
+  min-inline-size: 0;
+}
+
 .run-relic-review-grid {
   display: grid;
   gap: var(--ds-inline-tight);
@@ -19507,9 +19670,9 @@ button.tileset-relationship-cell {
   object-fit: cover;
 }
 
-/* The heading and gold line read over the scene rather than above it. Selling is a Shop
+/* The gold line reads over the scene rather than above it. Selling is a Shop
    activity and stands in the same scene, so its heading gets the same treatment. */
-.run-shop-workspace.has-scene .run-shop-workspace-content > :is(h2, .run-shop-rules),
+.run-shop-workspace.has-scene .run-shop-workspace-content > .run-shop-rules,
 .run-sell-workspace.has-scene .run-sell-workspace-content > :is(h2, p) {
   text-shadow: 0 2px 6px rgba(2, 7, 12, .85);
 }
@@ -22184,7 +22347,16 @@ button.tileset-relationship-cell {
 .infotip-dot:focus-visible { outline: 2px solid rgba(101, 184, 255, .72); outline-offset: 2px; }
 .tooltip { position: relative; display: inline-flex; }
 .tooltip-trigger { display: inline-flex; }
+/* The positioner holds the tip AND a definition pop for every mechanic the tip names
+   (ADR-0370), so it is a column, not a single slot. `align-items: stretch` squares the
+   stack to its widest pane: ragged pane widths read as unrelated popups rather than one
+   explanation. The gap is the pop's own inner gap, so the distance BETWEEN panes matches
+   the distance between a pane's parts. */
 .tooltip-pop-positioner {
+  align-items: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
   inline-size: max-content;
   pointer-events: none;
   position: fixed;
@@ -22243,6 +22415,20 @@ button.tileset-relationship-cell {
   color: #9fe7ff;
   font: var(--ds-weight-regular) var(--ds-text-lg)/1.15 var(--ds-font-display);
   letter-spacing: var(--ds-tracking-tight);
+}
+/* A named mechanic inside explanatory prose. It takes the title's own color because the
+   pane directly below it is headed by that same word in that same color — the term IS
+   the reference, so it needs no icon, underline, second control, or paint of its own.
+   <b> and not <mark>: this is a name being drawn to the eye, not a search hit, and
+   <mark>'s user-agent highlight would have to be painted back out. */
+.tooltip-keyword {
+  color: #9fe7ff;
+  font-weight: var(--ds-weight-medium);
+}
+/* A definition is subordinate to the tip that raised it: same treatment, quieter title,
+   so the stack reads as one explanation with a heading rather than as equal popups. */
+.tooltip-keyword-pop > .tooltip-title {
+  font-size: var(--ds-text-md);
 }
 .le-fence-review-banner {
   align-items: center;

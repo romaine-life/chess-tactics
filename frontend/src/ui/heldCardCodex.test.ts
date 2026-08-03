@@ -66,7 +66,7 @@ describe('the Chartulary reads the Run rather than the deck', () => {
   });
 });
 
-describe('the Chartulary is the reference gallery, not a lookalike (ADR-0368)', () => {
+describe('the Chartulary is the reference gallery, not a lookalike (ADR-0371)', () => {
   it('reuses the reference gallery frame, filter row, groups and faces', () => {
     expect(heldCardCodex).toContain("from './Enchiridion'");
     expect(heldCardCodex).toContain('<ReferenceSectionFrame');
