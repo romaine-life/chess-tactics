@@ -32,6 +32,26 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(abilities).not.toContain('Upon acquisition, one randomly chosen unit on this card gains Discipline.');
   });
 
+  it('reads the Ataraxia ladder from the Run model instead of restating it', () => {
+    const start = enchiridion.indexOf('function AtaraxiaSection');
+    const end = enchiridion.indexOf('export function EnchiridionReference', start);
+    const ataraxia = enchiridion.slice(start, end);
+    // The reference enumerates INSTALLED tiers and prints their authored anatomy, so a
+    // tier installed in the model appears here without a second copy of its copy.
+    expect(ataraxia).toContain('ATARAXIA_TIERS.map');
+    expect(ataraxia).toContain('ATARAXIA_BY_TIER[tier]');
+    expect(ataraxia).toContain('{definition.label} — {definition.title}');
+    expect(ataraxia).toContain('<p>{definition.effect}</p>');
+    expect(ataraxia).not.toContain('The Untroubled Mind');
+    expect(ataraxia).not.toContain('The Great Mortality');
+    // Tier zero takes no special branch (ADR-0291); only lock standing varies.
+    expect(ataraxia).not.toMatch(/tier === 0/);
+    expect(ataraxia).toContain('const locked = tier > unlockedThrough;');
+    expect(ataraxia).toContain('RUN_PROGRESSION_EVENT');
+    expect(enchiridion).toContain("if (section === 'ataraxia') return <AtaraxiaSection framed={framed} />;");
+    expect(enchiridion).toContain("ataraxia: installedUiMedia('ui-kit-icons-game-objective-png')");
+  });
+
   it('keeps the exact knight and bishop terrain exceptions in the shared reference', () => {
     expect(enchiridion).toContain('Knights</strong> jump over gaps, fences, and intervening obstacles');
     expect(enchiridion).toContain('Obstacles on neighboring non-diagonal tiles are ignored');

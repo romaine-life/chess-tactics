@@ -9,17 +9,27 @@ import { PredrawnMoveHighlightPaint } from '../render/PredrawnMoveHighlightPaint
 import { runCardArtSlot, runCardFlavor, runCardName } from '../run/cardNames';
 import {
   AGMINATE_DISPLAY_NAME,
+  ATARAXIA_BY_TIER,
+  ATARAXIA_TIERS,
   CACOCHYMIC_DISPLAY_NAME,
   RUN_CARD_BY_ID,
   RUN_CARD_DECK,
   RUN_CARD_TYPE_REFERENCE,
   RUN_RELICS,
   cardContentsLabel,
+  type AtaraxiaTier,
   type PurchasablePieceType,
   type RunCardType,
   type RunCoreCard,
   type RunRelicId,
 } from '../run/model';
+import {
+  EMPTY_RUN_PROGRESSION,
+  RUN_PROGRESSION_EVENT,
+  highestUnlockedAtaraxiaTier,
+  readRunProgression,
+  type RunProgression,
+} from '../run/progression';
 import { generateTerrainDressing } from './generatedReferenceBoard';
 import { RunCard } from './RunCard';
 import {
@@ -65,6 +75,7 @@ const SECTION_LABEL: Record<EnchiridionSection, string> = {
   'card-types': 'Card Types',
   relics: 'Relics',
   abilities: 'Abilities',
+  ataraxia: 'Ataraxia',
 };
 
 /**
@@ -80,7 +91,11 @@ const SECTION_ICON_SRC: Record<EnchiridionSection, string> = {
   'card-types': installedUiMedia('ui-kit-icons-game-power-png'),
   relics: installedUiMedia('ui-kit-icons-info-png'),
   abilities: installedUiMedia('ui-kit-icons-game-defend-png'),
+  ataraxia: installedUiMedia('ui-kit-icons-game-objective-png'),
 };
+
+/** An Ataraxia tier the account has not reached yet carries the shared lock mark. */
+const ATARAXIA_LOCKED_ICON_SRC = installedUiMedia('ui-kit-icons-lock-png');
 
 const UNIT_COPY: Record<PlayablePieceType, string> = {
   pawn: 'Moves one square forward; from its starting square it may move two. Captures one square diagonally forward.',
@@ -866,6 +881,66 @@ function AbilitiesSection({ framed }: { framed: boolean }): ReactElement {
 }
 
 /**
+ * Optional Run difficulty as a reference record (ADR-0266, ADR-0268, ADR-0291). Every
+ * installed tier presents the one anatomy the selector presents — numbered label,
+ * subtitle, literal impact — read from the same `ATARAXIA_BY_TIER` the Run reads, so the
+ * Enchiridion cannot describe a condition the Run does not apply. Tier zero is a member
+ * of the ladder here exactly as it is there, with no special rendering branch.
+ *
+ * The ladder is linear, so a tier's standing is the only thing this record adds beyond
+ * the selector: locked tiers state the completion that opens them rather than hiding.
+ */
+function AtaraxiaSection({ framed }: { framed: boolean }): ReactElement {
+  const [progression, setProgression] = useState<RunProgression>(EMPTY_RUN_PROGRESSION);
+
+  useEffect(() => {
+    const refresh = () => setProgression(readRunProgression());
+    refresh();
+    window.addEventListener(RUN_PROGRESSION_EVENT, refresh);
+    return () => window.removeEventListener(RUN_PROGRESSION_EVENT, refresh);
+  }, []);
+
+  const unlockedThrough = highestUnlockedAtaraxiaTier(progression);
+  const completedThrough = progression.highestCompletedAtaraxiaTier;
+  return (
+    <ReferenceSectionFrame
+      chromeConsumer="enchiridion-ataraxia"
+      className="enchiridion-ataraxia-panel"
+      framed={framed}
+      title="Ataraxia"
+    >
+      <p>Optional Run difficulty, named after real history. The ladder is linear and cumulative: completing the highest tier available to you unlocks exactly the next one, and selecting a tier applies the conditions of every tier up to and including it.</p>
+      <div className="enchiridion-ataraxia-list">
+        {ATARAXIA_TIERS.map((tier) => {
+          const definition = ATARAXIA_BY_TIER[tier];
+          const locked = tier > unlockedThrough;
+          const standing = locked
+            ? `Locked — complete ${ATARAXIA_BY_TIER[(tier - 1) as AtaraxiaTier].label} to unlock`
+            : tier <= completedThrough ? 'Completed' : 'Unlocked';
+          return (
+            <InnerChromeBox
+              className={`enchiridion-ataraxia-card${locked ? ' is-locked' : ''}`}
+              key={tier}
+            >
+              <AlphaBoundIcon
+                className="enchiridion-ataraxia-icon"
+                src={locked ? ATARAXIA_LOCKED_ICON_SRC : SECTION_ICON_SRC.ataraxia}
+                draggable={false}
+              />
+              <span>
+                <h3>{definition.label} — {definition.title}</h3>
+                <p>{definition.effect}</p>
+                <small className="enchiridion-ataraxia-standing">{standing}</small>
+              </span>
+            </InnerChromeBox>
+          );
+        })}
+      </div>
+    </ReferenceSectionFrame>
+  );
+}
+
+/**
  * The reference body for one section, with no rail and no scene slot of its own.
  * The Strategikon mounts this directly inside ITS reference slot: embedding the
  * whole `Enchiridion` would nest a second `enchiridion-shell` region inside the
@@ -893,6 +968,7 @@ export function EnchiridionReference({
   if (section === 'card-types') return <CardTypesSection framed={framed} textureBatch={cardTypeTextureBatch} />;
   if (section === 'relics') return <RelicCodex framed={framed} selectedRelicId={selectedRelicId} relicHref={relicHref} />;
   if (section === 'abilities') return <AbilitiesSection framed={framed} />;
+  if (section === 'ataraxia') return <AtaraxiaSection framed={framed} />;
   return <UnitsSection framed={framed} />;
 }
 

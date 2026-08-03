@@ -20219,7 +20219,8 @@ button.tileset-relationship-cell {
 }
 
 .enchiridion-card-panel.enchiridion-panel-unframed,
-.enchiridion-card-types-panel.enchiridion-panel-unframed {
+.enchiridion-card-types-panel.enchiridion-panel-unframed,
+.enchiridion-ataraxia-panel.enchiridion-panel-unframed {
   grid-template-rows: auto auto minmax(0, 1fr);
 }
 
@@ -20234,6 +20235,7 @@ button.tileset-relationship-cell {
 
 .enchiridion-unit-grid,
 .enchiridion-terrain-list,
+.enchiridion-ataraxia-list,
 .enchiridion-ability-list {
   align-content: start;
   display: grid;
@@ -20281,7 +20283,8 @@ button.tileset-relationship-cell {
 }
 
 .enchiridion-terrain-row,
-.enchiridion-ability-card {
+.enchiridion-ability-card,
+.enchiridion-ataraxia-card {
   align-items: center;
   display: grid;
   gap: var(--ds-inset);
@@ -20292,6 +20295,7 @@ button.tileset-relationship-cell {
 
 .enchiridion-terrain-row > span:last-child,
 .enchiridion-ability-card > span:last-child,
+.enchiridion-ataraxia-card > span:last-child,
 .enchiridion-rule-exceptions {
   align-content: start;
   display: grid;
@@ -20299,7 +20303,8 @@ button.tileset-relationship-cell {
 }
 
 .enchiridion-terrain-row > :first-child,
-.enchiridion-ability-card > :first-child {
+.enchiridion-ability-card > :first-child,
+.enchiridion-ataraxia-card > :first-child {
   block-size: 34px;
   inline-size: 34px;
 }
@@ -20307,6 +20312,40 @@ button.tileset-relationship-cell {
 .enchiridion-ability-card > img {
   image-rendering: pixelated;
   object-fit: contain;
+}
+
+/* The tier mark is a kit glyph whose ink fills only part of its canvas, so it seats
+   through the shared alpha-fit primitive rather than object-fit (ADR-0059) — otherwise
+   it reads a third smaller than the marks on every neighbouring reference section. */
+.enchiridion-ataraxia-icon {
+  overflow: visible;
+  position: relative;
+}
+
+.enchiridion-ataraxia-icon .alpha-bound-icon-image {
+  image-rendering: pixelated;
+  max-block-size: none;
+  max-inline-size: none;
+  object-fit: fill;
+  position: absolute;
+}
+
+.enchiridion-ataraxia-icon[data-alpha-fit="pending"] .alpha-bound-icon-image {
+  block-size: 100%;
+  inline-size: 100%;
+  inset: 0;
+  object-fit: contain;
+}
+
+/* A locked tier is still readable — the ladder is a reference, not a teaser. Its mark
+   and standing line carry the state; the impact statement keeps full contrast. */
+.enchiridion-ataraxia-card.is-locked > .enchiridion-ataraxia-icon {
+  opacity: .6;
+}
+
+.enchiridion-ataraxia-standing {
+  color: var(--muted);
+  font-size: var(--ds-text-xs);
 }
 
 .enchiridion-rule-exceptions {

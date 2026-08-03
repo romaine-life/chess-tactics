@@ -59,6 +59,15 @@ export const ATARAXIA_BY_TIER: Readonly<Record<AtaraxiaTier, Readonly<{
   }),
 });
 
+/**
+ * Every installed tier in ladder order (ADR-0268 — one linear, cumulative sequence).
+ * The Run preparation selector and the Enchiridion's Ataraxia reference both read this
+ * list, so installing a tier cannot appear in one and be forgotten by the other.
+ */
+export const ATARAXIA_TIERS: readonly AtaraxiaTier[] = Object.freeze(
+  Array.from({ length: INSTALLED_ATARAXIA_MAX_TIER + 1 }, (_, tier) => tier as AtaraxiaTier),
+);
+
 export type PurchasablePieceType = 'pawn' | 'knight' | 'bishop' | 'rook' | 'queen';
 export type RunArmyPieceType = PurchasablePieceType | 'king';
 export type RunAbility = 'discipline' | 'positioned' | 'marshalled';

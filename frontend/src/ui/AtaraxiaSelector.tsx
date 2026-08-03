@@ -1,8 +1,6 @@
 import type { ReactElement } from 'react';
-import { ATARAXIA_BY_TIER, type AtaraxiaTier } from '../run/model';
+import { ATARAXIA_BY_TIER, ATARAXIA_TIERS, type AtaraxiaTier } from '../run/model';
 import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
-
-const ATARAXIA_TIERS: readonly AtaraxiaTier[] = [0, 1];
 
 export function AtaraxiaSelector({
   value,
