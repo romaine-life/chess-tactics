@@ -1076,6 +1076,7 @@ export function EnchiridionSectionRail({
           index={index}
           active={section === candidate}
           iconSrc={SECTION_ICON_SRC[candidate]}
+          markCanvas={candidate === 'ataraxia' ? 'bleed' : 'inset'}
         />
       ))}
     </ApparatusRailColumn>

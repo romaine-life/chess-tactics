@@ -17877,6 +17877,10 @@ button.tileset-relationship-cell {
 .settings-tab {
   --settings-tab-icon-slot: 40px;
   --settings-tab-icon-size: 64px;
+  /* A mark authored edge-to-edge draws at THIS size instead, so it lands at the same
+     optical weight as the kit icons that reserve their own canvas margin. Whole pixels
+     at every seat size (73% of 64/44/40), because these are raster marks. */
+  --settings-tab-icon-bleed-size: 47px;
   align-items: center;
   appearance: none;
   /* Rendered as a <button> since ADR-0052: buttons don't inherit font (UA default) and
@@ -18009,7 +18013,13 @@ button.tileset-relationship-cell {
 
 .settings-tab.main-menu-mode-tab {
   --settings-tab-icon-size: 44px;
+  --settings-tab-icon-bleed-size: 32px;
   overflow: hidden;
+}
+
+.settings-tab-icon[data-mark-canvas="bleed"] img {
+  height: var(--settings-tab-icon-bleed-size);
+  width: var(--settings-tab-icon-bleed-size);
 }
 
 .main-menu-mode-tab .settings-tab-icon {
@@ -22231,6 +22241,7 @@ button.tileset-relationship-cell {
     padding: 10px 12px;
     gap: 8px;
     --settings-tab-icon-size: 40px;
+    --settings-tab-icon-bleed-size: 29px;
   }
   .settings-tab > span:not(.settings-tab-icon) { transform: none; }  /* was translateX(37px) */
   .settings-tab strong { font-size: var(--ds-text-md, 1rem); }
