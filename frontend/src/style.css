@@ -1672,10 +1672,10 @@ h1 {
 .predrawn-generation-frame-stage .le-camera-boundary {
   z-index: 39999;
 }
-/* The boundary usually reaches the crop edge here, so its Board-page label — which hangs above the
-   box — would be clipped away by the stage. Seat it inside the box instead; that label is the only
-   thing telling this box apart from the required-art box. */
-.predrawn-generation-frame-stage .le-camera-boundary-label {
+/* Both boxes usually reach the crop edge here, so a label hanging above its box — the Board page
+   placement — would be clipped away by the stage. Seat them inside their boxes instead. */
+.predrawn-generation-frame-stage .le-camera-boundary-label,
+.predrawn-generation-frame-outline-label {
   transform: none;
 }
 .predrawn-generation-frame-footer p.is-error {
@@ -15274,7 +15274,10 @@ button.tileset-relationship-cell {
   outline-style: solid;
 }
 
-.le-camera-boundary-label {
+/* Every reference rectangle drawn over a board names itself in the same voice, so a second box is
+   never an unexplained shape the owner has to guess at. */
+.le-camera-boundary-label,
+.predrawn-generation-frame-outline-label {
   color: #bcecff;
   display: block;
   font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;

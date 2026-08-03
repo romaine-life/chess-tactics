@@ -272,7 +272,7 @@ export function PredrawnGenerationFramePicker({
         <header className="predrawn-generation-frame-header">
           <div>
             <h2 id="predrawn-generation-frame-title">Choose the generation frame</h2>
-            <p>Start from a preset, then drag the scene, type an exact width, or zoom until this 16:9 crop is the exact Image 1 you want to hand off. The tight box is required gameplay-authoritative art and must stay inside; the labelled box is the level’s camera boundary.</p>
+            <p>Start from a preset, then drag the scene, type an exact width, or zoom until this 16:9 crop is the exact Image 1 you want to hand off. Required art must stay inside the crop; the camera boundary is everything a player can reach.</p>
           </div>
           <ChromeButton unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
@@ -363,9 +363,10 @@ export function PredrawnGenerationFramePicker({
             ><span className="le-camera-boundary-label">Camera boundary</span></div>
             <div
               className="predrawn-generation-frame-required-outline"
+              data-testid="predrawn-generation-frame-required-outline"
               style={requiredOutline}
               aria-hidden="true"
-            />
+            ><span className="predrawn-generation-frame-outline-label">Required art</span></div>
             {!exactFramePainted ? (
               <p className={`predrawn-generation-frame-loading${paintError ? ' is-error' : ''}`} role="status">
                 {paintError ? `Could not paint this frame: ${paintError}` : 'Painting the exact frame…'}
