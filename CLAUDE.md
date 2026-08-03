@@ -154,6 +154,16 @@ and don't tell the user screenshots are impossible. Use the helper below.
    It fails on more than one exit per navigation, a lost canonicalization
    navigation, or an uncanonicalized final address — the double-fade bug class.
 
+   Board reveal / unit-entrance changes additionally run the live entrance gate,
+   which records the real transition and reads its pixels:
+   ```
+   npm run verify:unit-arrival -- '<vite-url>/play/select/campaign/off-c-crown-valoria' --click '.campaign-level-row [aria-label^="Play "]'
+   npm run verify:unit-arrival -- '<vite-url>/play/select/continue/run' --click 'a[href^="/run"], [data-nav^="/run"]'
+   ```
+   It fails when a battlefield is revealed with units still to arrive standing at
+   their seats, and when a board that has already resolved disagrees with its own
+   settled composition — the seen-then-vanished-then-placed bug class (ADR-0357).
+
 This works on ANY live route by selector — no per-target fixture, so there's no "new
 screen ⇒ flail" cliff. `frontend/scripts/shot.mjs` is the implementation.
 
@@ -314,3 +324,45 @@ The full `smoke-test.js` additionally covers the DB-backed persistence endpoints
 On a host without Postgres binaries (this Windows box has none), the full smoke test can't
 run locally — but `netplay-smoke-test.js` covers everything multiplayer, so reach for that.
 Both are wired into `npm test` (netplay first, so netplay regressions fail fast).
+
+## Checking a PR: use `pr-gate`, never a hand-written poll loop
+
+After opening a PR, run this from the repo root and read the one-line verdict:
+
+```
+node bin/pr-gate.mjs [<pr>] [--no-wait] [--appear <s>] [--timeout <s>]
+```
+
+| Verdict | Exit | What it means |
+| --- | --- | --- |
+| `READY` | 0 | Mergeable and every check passed or skipped. |
+| `ERROR` | 1 | No PR for the branch, `gh` missing, or unreadable output. |
+| `CONFLICT` | 2 | Conflicts with base. **No CI can run at all** — resolve, push, re-run. |
+| `BEHIND` | 3 | Base moved; update the branch, push, re-run. |
+| `NO_CHECKS` | 4 | None appeared in time. The output says whether CI is unconfigured or configured-but-untriggered. |
+| `CI_FAILED` | 5 | Prints the failing job and its log link. |
+| `TIMEOUT` | 6 | Checks never finished. Report the wait; do not merge. |
+
+**Do not hand-write a `gh pr view` / `gh pr checks` polling loop.** Every attempt to date has
+gone silent for 10–13 minutes and then reported the wrong cause. The three ways it fails, all
+already handled inside `pr-gate`:
+
+- **A conflicting PR produces no CI whatsoever.** `pull_request` workflows run against a merge
+  commit GitHub cannot create while the branch conflicts. Watching one waits forever, and the
+  empty check list reads as "CI is not configured". Always resolve mergeability *before*
+  watching checks.
+- **`jq` is not installed on this machine.** A bare `| jq` exits 127 into `/dev/null`, so a
+  poll loop produces no output and never terminates. Use `gh --jq`, or parse in Node as
+  `pr-gate` does. Never pipe to a `jq` binary in a local script.
+- **`gh pr checks --json` does not emit `[]` when no checks are registered.** It prints a
+  plain-English sentence, sometimes on stdout with exit 0 and sometimes on stderr with exit 1.
+  Parse the payload; do not key off the exit code or scan only one stream.
+
+A watch must speak on every poll, not only on success — `pr-gate` heartbeats elapsed/pending
+to stderr so a live wait is never mistaken for a dead one.
+
+Before opening the PR, run the command CI actually runs, not a subset. Bare `vitest` passes
+while CI fails: `cd frontend && npm run check` also runs `tsc --noEmit` and the
+`frontend/scripts/check-*.mjs` guards, several of which pin exact JSX literals and break on
+any shell or chrome refactor. For `backend/`, `bin/`, or `packages/`, run
+`cd backend && npm run test:backend`.

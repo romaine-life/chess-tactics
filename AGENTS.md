@@ -64,6 +64,7 @@ contracts whenever the task vocabulary suggests one.
 | Deployment and infrastructure | The Deploy section of [`README.md`](README.md), [`.github/workflows/`](.github/workflows/), [`k8s/`](k8s/), and [`tofu/`](tofu/) |
 | Retiring or migrating a system | [`docs/migration-policy.md`](docs/migration-policy.md) and the ADR that retires or supersedes the old path |
 | Running and visual verification | `CLAUDE.md` for the current server, dynamic-port, direct-link, and screenshot workflow |
+| Opening a PR and waiting on CI | The `pr-gate` section of `CLAUDE.md`; run `node bin/pr-gate.mjs` rather than hand-writing a `gh` poll loop |
 
 ## Standing implementation invariants
 
@@ -118,6 +119,12 @@ contracts whenever the task vocabulary suggests one.
 - A request to open a pull request alone does not authorize merging it. Merge
   only after required checks are green and the user has explicitly requested or
   approved that PR for merge.
+- Establish "required checks are green" with `node bin/pr-gate.mjs`, which reports
+  one verdict covering mergeability and CI. Do not hand-write a `gh pr view` /
+  `gh pr checks` polling loop: a conflicting PR produces no CI at all, `jq` is not
+  installed on every dev box, and `gh` does not emit `[]` when no checks exist.
+  Each has already caused a watch to sit silent for over ten minutes and then
+  report the wrong cause. See the `pr-gate` section of `CLAUDE.md`.
 
 ## Shared database migration workflow
 

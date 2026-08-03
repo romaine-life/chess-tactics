@@ -28,6 +28,7 @@
     "verify:titlebar": "node scripts/check-titlebar-geometry.mjs",
     "verify:workspace": "node scripts/check-workspace-geometry.mjs",
     "verify:play-transition": "node scripts/check-play-transition.mjs",
+    "verify:unit-arrival": "node scripts/verify-unit-arrival.mjs",
     "cards:check-prompts": "node scripts/install-run-card-art-prompts.mjs --dry-run",
     "cards:install-art": "node scripts/install-run-card-art-prompts.mjs --install-images",
     "typecheck": "tsc --noEmit",
@@ -36,7 +37,8 @@
     "test": "vitest run",
     "precheck": "npm run build:board-render",
     "check": "node --check src/bgm.js && node scripts/check-no-committed-media.mjs && node scripts/check-ui-surface-contract.mjs && node scripts/check-presentation-architecture.mjs && node --test scripts/check-ui-surface-contract.node-test.mjs && node scripts/check-bgm-shuffle.mjs && node scripts/check-imagegen-gate.mjs && node scripts/check-light-art-chrome.mjs && node scripts/check-titlebar-actions.mjs && node scripts/check-empty-panel-frame-overlay.mjs && node scripts/check-level-editor-chrome.mjs && node --test scripts/check-level-editor-chrome.node-test.mjs && node scripts/check-shared-primitives.mjs && node --test scripts/check-shared-primitives.node-test.mjs && node scripts/check-no-dev-data-seam.mjs && node scripts/check-auth-session-owner.mjs && node --test scripts/check-auth-session-owner.node-test.mjs && npm run cards:check-prompts && vitest run && tsc --noEmit",
-    "check:media-final": "node scripts/check-no-committed-media.mjs"
+    "check:media-final": "node scripts/check-no-committed-media.mjs",
+    "verify:strategikon": "node scripts/check-strategikon-transition.mjs"
   },
   "devDependencies": {
     "@types/react": "^19.2.17",

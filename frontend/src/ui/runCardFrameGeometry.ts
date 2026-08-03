@@ -78,7 +78,7 @@ export type RunCardFrameGeometry = Readonly<{
  * the line box, which reserves descender room these numerals and caps never use
  * and would leave every line floating high. No card, frame, or type line carries
  * an offset of its own; a line that sits wrong means its box is wrong, and the
- * box is what gets tuned (ADR-0355).
+ * box is what gets tuned (ADR-0359).
  *
  * Horizontal: title and type text is inset from both plate edges by one shared
  * value; the cost reading is centered in its coin box.

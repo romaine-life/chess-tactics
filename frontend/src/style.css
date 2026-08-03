@@ -8948,7 +8948,7 @@ body.loading-bootstrap .app-startup-status {
   }
 
   /* A Run's Conflict/Battle/level/phase orientation remains title-bar information
-     at compact widths (ADR-0355). Keep that one chip and shed War identity + gold. */
+     at compact widths (ADR-0359). Keep that one chip and shed War identity + gold. */
   .app-shell-titlebar .run-topbar-status .skirmish-turn-plate,
   .app-shell-titlebar .run-topbar-status .skirmish-clock {
     display: none;
@@ -17291,11 +17291,6 @@ button.tileset-relationship-cell {
   text-transform: none;
 }
 
-.settings-tab-icon > :is(.skirmish-tab-icon, .skirmish-icon, [class^="ic-"]) {
-  block-size: 30px;
-  inline-size: 30px;
-}
-
 .settings-row p,
 .settings-row-value {
   color: #9fc4d5;
@@ -20610,26 +20605,76 @@ button.tileset-relationship-cell {
   display: grid;
   gap: 2px;
   inline-size: 100%;
+  isolation: isolate;
   min-block-size: 52px;
   padding: 6px 10px;
+  position: relative;
   text-align: start;
 }
 
+.enchiridion-card-type-row-material {
+  display: flex;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+  z-index: 0;
+}
+
+.enchiridion-card-type-row-material > img {
+  block-size: 100%;
+  flex: 0 0 128px;
+  image-rendering: pixelated;
+  inline-size: 128px;
+  max-inline-size: none;
+  object-fit: fill;
+}
+
+.enchiridion-card-type-row-material[data-card-type-texture='concinnous'] > img {
+  flex-basis: 512px;
+  inline-size: 512px;
+}
+
 .enchiridion-card-type-row-name {
+  align-self: center;
   font-size: var(--ds-text-md);
+  justify-self: start;
+  line-height: 1;
+}
+
+[data-testid='enchiridion-card-type-concinnous'] .enchiridion-card-type-row-name {
+  color: #21190f;
+  text-shadow: 0 1px 0 rgb(255 255 255 / 55%);
 }
 
 .enchiridion-card-type-row-identity {
   align-items: center;
   display: grid;
-  gap: var(--ds-inline-tight);
+  column-gap: var(--ds-space-2);
   grid-template-columns: 34px minmax(0, 1fr);
+  position: relative;
+  z-index: 1;
 }
 
 .enchiridion-card-type-row-icon {
   block-size: 34px;
-  image-rendering: pixelated;
   inline-size: 34px;
+  overflow: visible;
+  position: relative;
+}
+
+.enchiridion-card-type-row-icon .alpha-bound-icon-image {
+  image-rendering: pixelated;
+  max-block-size: none;
+  max-inline-size: none;
+  object-fit: fill;
+  position: absolute;
+}
+
+.enchiridion-card-type-row-icon[data-alpha-fit="pending"] .alpha-bound-icon-image {
+  block-size: 100%;
+  inline-size: 100%;
+  inset: 0;
   object-fit: contain;
 }
 
@@ -20643,12 +20688,17 @@ button.tileset-relationship-cell {
 
 .enchiridion-card-type-detail {
   align-self: start;
+  container-type: inline-size;
   display: grid;
   min-block-size: 0;
 }
 
 .enchiridion-card-type-preview {
   inline-size: 100%;
+  /* Every 1060px Run frame carries a roughly 42px transparent/art apron before
+     its painted top rail. Align that rail, rather than the raster box, with the
+     selected row's top rail at every responsive card width. */
+  margin-block-start: -4cqw;
   min-inline-size: 0;
 }
 
@@ -20707,8 +20757,37 @@ button.tileset-relationship-cell {
   grid-template-columns: var(--main-menu-tab-column-w) minmax(0, 1fr);
 }
 
-.strategikon-workspace-layout.has-secondary-rail {
-  grid-template-columns: repeat(2, var(--main-menu-tab-column-w)) minmax(0, 1fr);
+/* The Enchiridion reference rail is a column of the REPLACEABLE pane, not of the
+   workspace: it belongs to the Enchiridion section and leaves with it, while the
+   Strategikon's own section rail is retained outside the slot. The body's start
+   inset is removed for this lane so the two rails still read as adjacent columns
+   of one sheet (ADR-0063) exactly as they did when both were workspace columns. */
+.strategikon-pane {
+  block-size: 100%;
+  min-block-size: 0;
+}
+
+.strategikon-pane.has-secondary-rail {
+  display: grid;
+  gap: 0;
+  grid-template-columns: var(--main-menu-tab-column-w) minmax(0, 1fr);
+}
+
+/* A rail is chrome, not body content: it carries its own ADR-0062 placement inset
+   and docks to the workspace edge, exactly as it did when it was a workspace
+   column. Inside the pane it would otherwise sit on the shell's body inset AND its
+   own, landing a tab column-width off the section rail beside it. Stepping this one
+   lane back out is the whole exemption — the shell keeps owning the body perimeter
+   for the record pane and for the sections that have no rail (ADR-0297). */
+.strategikon-pane > .enchiridion-section-rail {
+  margin-block: calc(-1 * var(--shell-workspace-body-inset-block, 0px));
+  margin-inline-start: calc(-1 * var(--shell-workspace-body-inset-start, 0px));
+}
+
+.strategikon-reference-pane {
+  block-size: 100%;
+  min-block-size: 0;
+  min-inline-size: 0;
 }
 
 .strategikon-rail,
@@ -20727,18 +20806,9 @@ button.tileset-relationship-cell {
   box-sizing: border-box;
 }
 
-.strategikon-content > .enchiridion-workspace {
-  block-size: 100%;
-  display: block;
-  min-block-size: 0;
-}
-
-.strategikon-content > .enchiridion-workspace > .enchiridion-content {
-  block-size: 100%;
-}
-
-.strategikon-content > .run-workspace,
-.strategikon-content > .run-panel-unframed,
+.strategikon-pane > .run-workspace,
+.strategikon-pane > .run-panel-unframed,
+.strategikon-reference-pane > .enchiridion-panel,
 .strategikon-reference {
   block-size: 100%;
   box-sizing: border-box;
@@ -22458,7 +22528,7 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   z-index: 3;
 }
 
-/* ADR-0355: a text line is centered in the frame box it belongs to, inset from
+/* ADR-0359: a text line is centered in the frame box it belongs to, inset from
    both plate edges by one shared value. No card, frame, or type line carries a
    placement offset of its own — a line that reads wrong means its box is wrong. */
 .run-card-prototype-name,
@@ -22842,6 +22912,14 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   display: grid;
   flex: 1 1 auto;
   min-block-size: 0;
+}
+
+/* Continue resumes in place (ADR-0356): the resume card owns the action column, so it
+   stacks the head, facts, and the single Play verb instead of handing them to a fourth
+   column. */
+.continue-resume {
+  display: grid;
+  gap: var(--ds-stack);
 }
 
 .play-detail-facts {

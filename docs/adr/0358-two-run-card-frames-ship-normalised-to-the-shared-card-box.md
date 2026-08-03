@@ -5,7 +5,7 @@ deciders: owner (Nelson) + Claude
 extends:
   - "[ADR-0076](0076-live-media-is-native-1x.md)"
   - "[ADR-0332](0332-eight-run-relic-icons-ship-the-approved-resized-pixels.md)"
-  - "[ADR-0355](0355-run-card-text-is-centered-in-per-frame-boxes.md)"
+  - "[ADR-0359](0359-run-card-text-is-centered-in-per-frame-boxes.md)"
 ---
 
 # ADR-0358: Two Run card frames ship normalised to the shared card box
@@ -54,7 +54,7 @@ native-1x gate.
 
 Because the transform moves each frame's drawn plates, both frames' boxes are
 remapped through the same affine and land with the bytes, so the geometry always
-describes the pixels being served (ADR-0355).
+describes the pixels being served (ADR-0359).
 
 ## Consequences
 

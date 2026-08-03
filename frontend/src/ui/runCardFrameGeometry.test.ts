@@ -50,7 +50,7 @@ describe('Run card frame geometry', () => {
 
   it('gives each frame the plate height its own art draws', () => {
     // The four painted frames sit at four different type-plate heights; that
-    // spread is exactly what one shared box used to flatten (ADR-0355).
+    // spread is exactly what one shared box used to flatten (ADR-0359).
     const typeMid = (v: RunCardFrameVariant): number => {
       const box = RUN_CARD_FRAME_GEOMETRY_BY_VARIANT[v].boxes.type;
       return box.y + box.height / 2;

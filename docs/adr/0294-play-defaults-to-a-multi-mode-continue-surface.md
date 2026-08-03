@@ -11,6 +11,8 @@ refines:
   - "[ADR-0074](0074-one-play-entry-one-shared-selector.md)"
   - "[ADR-0232](0232-continue-run-selects-run-before-play.md)"
   - "[ADR-0290](0290-run-preparation-follows-play-master-detail-navigation.md)"
+partially_superseded_by:
+  - "[ADR-0356](0356-continue-resumes-in-place-instead-of-re-listing-the-rail.md)"
 ---
 
 # ADR-0294: Play defaults to a multi-mode Continue surface

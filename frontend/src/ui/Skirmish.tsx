@@ -1364,7 +1364,7 @@ function SkirmishSession({
                   onArrivingUnitIdsChange={runDeployment?.onArrivingUnitIdsChange}
                   reveal={playableSurfaceReady && sceneRevealed}
                   activate={!runDeployment && sceneActivated}
-                  unitArrivalsActive={sceneActivated}
+                  unitArrivals={sceneActivated ? 'active' : 'pending'}
                   predrawnReview={predrawnPreview ? {
                     src: predrawnPreview,
                     registration: predrawnRegistration,
