@@ -60,11 +60,20 @@ name stays on hover rather than spending bar width. Because the measures are
 compact marks and the named chip is the wide element, the chip is what sheds
 first at compact widths, not the position.
 
-A measure has no frame between it and the bar's painted wall, so each mark carries
-a tight dark separation ring and its number a matching contact shadow. This is
-legibility for an unframed overlay mark — the same treatment `.mirror-los-*` and
-`.le-camera-boundary` already use — not decoration. Decoration remains generated
-art; nothing here fakes richness the icon should be carrying itself.
+A measure has no frame between it and the bar's painted wall, so its mark needs a
+stroke to hold its silhouette — and **the stroke belongs to the artwork**. The
+palette-forced generation dropped the black keyline the accepted ui-kit icons all
+carry, so each candidate is post-processed by `scripts/bake-icon-stroke.mjs`: a
+2px **outer** stroke in `#05080c`, grown from the sprite's own alpha. Outer, not
+inner — an inner stroke only eats the sprite's mass, which against a mid-dark wall
+reads as less, not more. The pass is deterministic pixel logic over pixels the
+generator placed, so it lives in git while its output lives in blob storage, and
+it neither resamples nor grows past the native 64×64 canvas.
+
+A CSS drop-shadow ring was tried first and removed. It worked, but it is a soft
+shadow standing in for a stroke the asset should carry — the wrong layer
+(ADR-0011). Only the measure's NUMBER keeps a text shadow, which is ordinary type
+treatment.
 
 **A seat is reserved before its icon decision exists.** `installedUiMediaIfPresent`
 returns null instead of failing closed, and the seat keeps its geometry, so

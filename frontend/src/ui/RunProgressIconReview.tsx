@@ -26,7 +26,7 @@ import { useSceneParticipant } from './shell/SceneBoundary';
  * The public drawable catalog refuses a role bound to an unaccepted slot, so the
  * binding can only ever follow acceptance (ADR-0316 review shape, ADR-0318 roles).
  */
-export const RUN_PROGRESS_ICON_BATCH_ID = 'run-progress-icons-2026-08-02-v1';
+export const RUN_PROGRESS_ICON_BATCH_ID = 'run-progress-icons-stroked-2026-08-02-v3';
 
 interface VariantDefinition {
   variant: RunProgressIconVariant;
