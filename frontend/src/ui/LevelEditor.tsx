@@ -3034,12 +3034,20 @@ export function LevelEditor(): ReactElement {
   // Built structures are deliberately excluded; they are not forest, whatever their art kind.
   const forestSpeciesCatalog = useMemo(() => {
     const built = /castle|windmill|mill|cottage|cabin|lodge|house|tower|keep/;
+    // Sources that bake their own patch of ground into the sprite. Scattered across authored
+    // terrain they stamp a visible disc of foreign soil under every instance, so they are not
+    // forest material however good the tree on top is. Checked by eye against the whole tree
+    // catalogue: rootbound-majesty-tree is the only current offender (a scan of a dead tree
+    // sitting on a mound of earth and roots). Re-check the same way when tree art is added —
+    // silhouette width and base fill density both fail to separate a mound from a conifer's
+    // dense lower skirt.
+    const bakedGround = /^(rootbound-majesty-tree)$/;
     const natural = /tree|forest|mushroom|cactus|fern|flower|rock|boulder|shrub|bush|stump|log/;
     const rank = (asset: typeof artworkAssets[number]): number => (
       asset.kind === 'tree' || asset.propKind === 'tree' || /tree/.test(asset.id) ? 0 : 1
     );
     return artworkAssets
-      .filter((asset) => !built.test(asset.id))
+      .filter((asset) => !built.test(asset.id) && !bakedGround.test(asset.id))
       .filter((asset) => (
         asset.kind === 'tree' || asset.kind === 'doodad'
         || asset.propKind === 'tree' || asset.propKind === 'rock'
