@@ -1,65 +1,22 @@
 import type { ReactElement } from 'react';
 import { liveMediaForSlot, resolvedLiveMediaUrl } from '@chess-tactics/board-render';
-import { runCardArtSlot, runCardFlavor, runCardName } from '../run/cardNames';
+import { runCardArtSlot, runCardName } from '../run/cardNames';
 import {
-  AGMINATE_DISPLAY_NAME,
   CACOCHYMIC_DISPLAY_NAME,
   cardContentsLabel,
   PIECE_LABEL,
-  RUN_CARD_TYPE_REFERENCE,
-  type PurchasablePieceType,
   type RunCardOffer,
   type RunCardType,
   type RunCoreCard,
 } from '../run/model';
+import { RunCardFace } from './RunCardFace';
 import {
-  RUN_CARD_FRAME_SLOT,
-  RUN_CARD_CONCINNOUS_FRAME_SLOT,
-  RUN_CARD_HIERATIC_FRAME_SLOT,
-  RUN_CARD_PESTIFEROUS_FRAME_SLOT,
-  RUN_CARD_TACTICAL_FRAME_SLOT,
-  RunCardFace,
-  type RunCardFaceContent,
-} from './RunCardFace';
+  isRunCardOffer,
+  runCardFaceContent,
+  runCardFrameSlot,
+} from './runCardFaceContent';
 import { runCardFrameGeometryForSlot } from './runCardFrameGeometry';
 import { InnerChromeBox } from './shared/ChromeBox';
-
-const CARD_PIECE_ORDER: readonly PurchasablePieceType[] = Object.freeze(['pawn', 'knight', 'bishop', 'rook', 'queen']);
-
-function isCardOffer(card: RunCoreCard | RunCardOffer): card is RunCardOffer {
-  return 'offerId' in card;
-}
-
-export function runCardGrants(card: RunCoreCard | RunCardOffer): RunCardFaceContent['grants'] {
-  // A one-unit acquisition-target offer has no hidden outcome, so its face shows the
-  // granted state on the unit itself.
-  const forcedAbility = isCardOffer(card) && card.pieces.length === 1
-    ? card.cardType === 'tactical'
-      ? 'discipline' as const
-      : card.cardType === 'hieratic'
-        ? 'marshalled' as const
-        : null
-    : null;
-  return CARD_PIECE_ORDER.flatMap((unit) => {
-    const pieceIndices = card.pieces.flatMap((piece, index) => piece === unit ? [index] : []);
-    const plaguedPieceIndex = isCardOffer(card) ? card.plaguedPieceIndex : null;
-    const plaguedIndex = plaguedPieceIndex === null ? -1 : pieceIndices.indexOf(plaguedPieceIndex);
-    return pieceIndices.length > 0
-      ? [{
-          unit,
-          count: pieceIndices.length,
-          plaguedIndices: plaguedIndex >= 0 ? [plaguedIndex] : [],
-          ...(forcedAbility && pieceIndices.length === 1 ? { ability: forcedAbility } : {}),
-        }]
-      : [];
-  });
-}
-
-function plaguedTargetLabel(card: RunCoreCard | RunCardOffer): string {
-  if (!isCardOffer(card) || card.plaguedPieceIndex === null) return '';
-  const target = card.pieces[card.plaguedPieceIndex];
-  return target ? ` ${CACOCHYMIC_DISPLAY_NAME} ${target}.` : '';
-}
 
 export function concinnousTargetLabel(card: RunCardOffer): string {
   const targetIndex = card.effectTargetIndex;
@@ -71,9 +28,27 @@ export function concinnousTargetLabel(card: RunCardOffer): string {
   return `${PIECE_LABEL[target]} ${ordinal}`;
 }
 
+/**
+ * What the card says out loud beyond its own face. A state is spoken only while it is
+ * public on the face too: a hidden acquisition target is silent in both channels rather
+ * than being announced by a sentence the printed card no longer carries (ADR-0339).
+ */
+function publicTargetLabel(card: RunCoreCard | RunCardOffer, purchased: boolean): string {
+  if (!isRunCardOffer(card)) return '';
+  if (card.cardType === 'pestiferous') {
+    const target = card.plaguedPieceIndex === null ? null : card.pieces[card.plaguedPieceIndex];
+    return target ? ` ${CACOCHYMIC_DISPLAY_NAME} ${target}.` : '';
+  }
+  if (card.cardType === 'concinnous' && purchased) {
+    return ` Positioned: ${concinnousTargetLabel(card)}.`;
+  }
+  return '';
+}
+
 // One trading-card face shared by the Studio instrument, opening shop, later shops,
 // art review, and Enchiridion. Runtime hosts add interaction around the approved face;
-// they do not substitute a parallel offer-box layout.
+// they do not substitute a parallel offer-box layout, and they do not build their own
+// face content — `runCardFaceContent` is the only projection there is.
 export function RunCard({
   card,
   mode,
@@ -96,58 +71,14 @@ export function RunCard({
 }): ReactElement {
   const label = cardContentsLabel(card);
   const name = runCardName(card);
-  const artUrl = resolvedLiveMediaUrl(runCardArtSlot(card));
-  const offer = isCardOffer(card) ? card : null;
-  const cardType = offer?.cardType ?? ownedCardType;
-  const frameSlot = cardType === 'pestiferous'
-    ? RUN_CARD_PESTIFEROUS_FRAME_SLOT
-    : cardType === 'tactical'
-      ? RUN_CARD_TACTICAL_FRAME_SLOT
-    : cardType === 'concinnous'
-      ? RUN_CARD_CONCINNOUS_FRAME_SLOT
-    : cardType === 'hieratic'
-      ? RUN_CARD_HIERATIC_FRAME_SLOT
-      : RUN_CARD_FRAME_SLOT;
-  const frameMedia = liveMediaForSlot(frameSlot).media;
-  const frameUrl = frameMedia.immutableUrl;
-  const cost = offer?.cost ?? card.value;
-  // A Hieratic target is drawn at acquisition, like a Tactical one, so a multi-unit offer
-  // cannot name it before purchase and a one-unit offer needs no label at all. A card the
-  // Run already holds is past that draw, so it never wears the purchase-time caption.
-  const hieraticTargetHidden = Boolean(offer) && cardType === 'hieratic' && card.pieces.length > 1;
-  const targetLabel = cardType === 'pestiferous'
-    ? plaguedTargetLabel(card)
-    : cardType === 'concinnous' && offer
-      ? ` Positioned: ${purchased ? concinnousTargetLabel(offer) : 'target hidden'}.`
-      : hieraticTargetHidden
-        ? ` ${AGMINATE_DISPLAY_NAME}: one contained unit, chosen on purchase.`
-        : '';
-  const faceContent = {
-    name,
-    cost,
-    // The type strip prints the primary type and carries the qualifier as its right-side
-    // symbol; it no longer spells the qualifier out after an em dash (ADR-0339).
-    typeLine: 'Units',
-    ...(cardType ? {
-      cardProperty: {
-        id: cardType,
-        name: RUN_CARD_TYPE_REFERENCE[cardType].name,
-        effect: RUN_CARD_TYPE_REFERENCE[cardType].effect,
-      },
-    } : {}),
-    grants: runCardGrants(card),
-    properties: cardType === 'concinnous' && offer
-      ? [{ name: 'Positioned', target: purchased ? concinnousTargetLabel(offer) : 'Target hidden' }]
-      : hieraticTargetHidden
-        ? [{ name: AGMINATE_DISPLAY_NAME, target: 'Chosen on purchase' }]
-        : undefined,
-    flavor: runCardFlavor(card),
-  } satisfies RunCardFaceContent;
+  const frameSlot = runCardFrameSlot(card, ownedCardType);
+  const faceContent = runCardFaceContent(card, { purchased, cardType: ownedCardType });
+  const targetLabel = publicTargetLabel(card, purchased);
   const face = (
     <RunCardFace
       card={faceContent}
-      frameUrl={frameUrl}
-      artUrl={artUrl}
+      frameUrl={liveMediaForSlot(frameSlot).media.immutableUrl}
+      artUrl={resolvedLiveMediaUrl(runCardArtSlot(card))}
       frameGeometry={runCardFrameGeometryForSlot(frameSlot)}
       ariaHidden={mode !== 'reference'}
     />
@@ -156,13 +87,13 @@ export function RunCard({
     return (
       <span
         className="run-card-action is-reference"
-        aria-label={`${name}. ${label}. Worth ${cost} gold.${targetLabel}`}
+        aria-label={`${name}. ${label}. Worth ${faceContent.cost} gold.${targetLabel}`}
       >
         {face}
       </span>
     );
   }
-  const actionLabel = `${purchased ? 'Purchased' : 'Buy'} ${name} — ${label} — for ${cost} gold.${targetLabel}`;
+  const actionLabel = `${purchased ? 'Purchased' : 'Buy'} ${name} — ${label} — for ${faceContent.cost} gold.${targetLabel}`;
   return (
     <span className="run-card-offer">
       <button

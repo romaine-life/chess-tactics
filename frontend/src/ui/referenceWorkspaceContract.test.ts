@@ -285,29 +285,43 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(cardTypes.match(/id: '(?:pestiferous|concinnous|tactical|hieratic)'/g)).toHaveLength(4);
     expect(cardTypes).toContain("const VOLUNTEER_CARD = RUN_CARD_BY_ID.p");
     expect(cardTypes).toContain('<RunCardFace');
-    expect(cardTypes).toContain('RUN_CARD_PESTIFEROUS_FRAME_SLOT');
-    expect(cardTypes).toContain('RUN_CARD_TACTICAL_FRAME_SLOT');
-    expect(cardTypes).toContain('RUN_CARD_HIERATIC_FRAME_SLOT');
+    // The glossary previews a real projected offer, so it neither picks its own frame
+    // nor assembles its own face — both come from the single card projection.
+    expect(cardTypes).toContain('runCardSpecimen({');
+    expect(cardTypes).toContain('runCardFaceContent(specimen, { purchased: true })');
+    expect(cardTypes).toContain('runCardFrameSlot(specimen)');
+    expect(cardTypes).not.toContain('RUN_CARD_PESTIFEROUS_FRAME_SLOT');
+    expect(cardTypes).not.toContain('RUN_CARD_TACTICAL_FRAME_SLOT');
+    expect(cardTypes).not.toContain('RUN_CARD_HIERATIC_FRAME_SLOT');
     // Every named property row carries its own accepted symbol, not just Pestiferous.
     expect(cardTypes).toContain('src={runCardPropertyIconUrl(definition.id)}');
     expect(cardTypes).toContain('<AlphaBoundIcon');
     expect(cardTypes).toContain('className="enchiridion-card-type-row-icon"');
-    // The preview face carries the qualifier as its symbol instead of an em-dash suffix.
-    expect(cardTypes).toContain("typeLine: 'Units',");
-    expect(cardTypes).not.toContain('typeLine: `Units — ${definition.name}`');
+    // The preview face carries the qualifier as its symbol instead of an em-dash suffix,
+    // and the reference no longer restates a card property's own name.
+    expect(cardTypes).not.toContain('typeLine:');
+    expect(cardTypes).not.toContain("name: 'Pestiferous'");
+    expect(cardTypes).toContain('RUN_CARD_TYPE_REFERENCE[definition.id].name');
     // Every named card property now has installed Run mechanics, so none is provisional.
     expect(cardTypes).not.toContain('provisional: true');
-    expect(cardTypes).toContain("useState('pestiferous')");
+    expect(cardTypes).toContain("useState<RunCardType>('pestiferous')");
     expect(cardTypes).toContain('className="enchiridion-card-type-layout"');
     expect(cardTypes).toContain('className="enchiridion-card-type-rows"');
     expect(cardTypes).toContain('data-testid={`enchiridion-card-type-${definition.id}`}');
+    // Every property row is a real address, so a reviewer can be linked straight to one
+    // instead of being told which row to click.
+    expect(cardTypes).toContain('to={cardTypeHref?.(definition.id)}');
+    expect(mainMenu).toContain('selectedCardTypeId={enchiridionCardTypeFromPath(path)}');
+    expect(mainMenu).toContain('cardTypeHref={enchiridionCardTypeHref}');
     expect(cardTypes).toContain('<CardTypeReference definition={selected} />');
     expect(cardTypes).not.toContain('<CardTypeReference definition={definition} key={definition.id} />');
     expect(style).toMatch(/\.enchiridion-card-type-layout\s*\{[\s\S]*?grid-template-columns:\s*minmax\(280px,\s*1fr\) minmax\(232px,\s*300px\)/);
     expect(style).toMatch(/\.enchiridion-card-type-detail\s*\{[\s\S]*?container-type:\s*inline-size/);
     expect(style).toMatch(/\.enchiridion-card-type-preview\s*\{[\s\S]*?margin-block-start:\s*-4cqw/);
     expect(style).toMatch(/\.enchiridion-card-type-row-name\s*\{[\s\S]*?line-height:\s*1/);
-    expect(enchiridion).toContain("if (section === 'card-types') return <CardTypesSection framed={framed} textureBatch={cardTypeTextureBatch} />;");
+    expect(enchiridion).toContain("if (section === 'card-types') {");
+    expect(enchiridion).toContain('<CardTypesSection');
+    expect(enchiridion).toContain('textureBatch={cardTypeTextureBatch}');
     // The normal screen resolves accepted public slots. An exact query-addressed
     // candidate batch remains an explicitly labeled private review override.
     expect(cardTypes).toContain('acceptedCardTypeTextureUrls(currentLiveMediaCatalog())');

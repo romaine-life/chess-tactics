@@ -414,6 +414,15 @@ describe('scene manifests', () => {
     expect(sceneManifest('/enchiridion/units').id).not.toBe(base.id);
   });
 
+  it('addresses individual card properties inside the one retained card-types scene', () => {
+    const base = sceneManifest('/enchiridion/card-types');
+    const addressed = sceneManifest('/enchiridion/card-types/hieratic');
+    expect(addressed.id).toBe(base.id);
+    expect(addressed.instances.map((entry) => entry.key)).toEqual(base.instances.map((entry) => entry.key));
+    expect(addressed.leaf.definition.id).toBe('enchiridion/card-types');
+    expect(sceneManifest('/enchiridion/units').id).not.toBe(base.id);
+  });
+
   it('decomposes the editor into the authorities it actually registers', () => {
     // Not one collapsed participant, and not a vocabulary nothing registers: these are the
     // ids LevelEditor reports separately, so each can fail on its own (ADR-0369).

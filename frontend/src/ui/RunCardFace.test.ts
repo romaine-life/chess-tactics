@@ -12,14 +12,14 @@ import {
   RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY,
   RUN_CARD_STANDARD_FRAME_GEOMETRY,
 } from './runCardFrameGeometry';
+import { runCardFaceContent, runCardSpecimen } from './runCardFaceContent';
 
-const card: RunCardFaceContent = Object.freeze({
-  name: 'The Volunteer',
-  cost: 1,
-  typeLine: 'Units',
-  grants: Object.freeze([{ count: 2, unit: 'pawn' }, { count: 1, unit: 'bishop' }]),
-  flavor: 'The road remembered.',
-});
+// Even a promotion fixture is a projected card. This file opts out of typechecking for
+// its node built-ins, so the branded type cannot stop a hand-authored face here — the
+// discipline has to be kept on purpose.
+const card: RunCardFaceContent = runCardFaceContent(
+  runCardSpecimen({ pieces: ['pawn', 'pawn', 'bishop'] }),
+);
 
 describe('Run card atomic presentation', () => {
   it('binds every visible content field and media identity into one generation', () => {
@@ -71,37 +71,50 @@ describe('Run card atomic presentation', () => {
   });
 
   it('holds a paired property/state face until both exact icon consumers settle', () => {
-    const paired = {
-      ...card,
-      cardProperty: {
-        id: 'tactical' as const,
-        name: 'Tactical',
-        effect: 'One unit gains Discipline.',
+    // A card carries one property, so it owes one property icon and the one unit-state
+    // icon that property bestows. Each pair is checked on a card that can actually exist.
+    const pairs = [
+      {
+        face: runCardFaceContent(
+          runCardSpecimen({ pieces: ['queen'], cardType: 'tactical' }),
+          { purchased: true },
+        ),
+        state: 'unit-state:discipline',
+        iconMedia: { propertyUrl: '/tactical.png', unitStateUrls: { discipline: '/discipline.png' } },
       },
-      grants: [
-        { ...card.grants[0], ability: 'discipline' as const },
-        { ...card.grants[1], plaguedIndices: [0] },
-      ],
-    } satisfies RunCardFaceContent;
-    const iconMedia = {
-      propertyUrl: '/tactical.png',
-      unitStateUrls: { discipline: '/discipline.png', plagued: '/plagued.png' },
-    } as const;
-    const kinds = requiredRunCardImageKinds(paired, iconMedia);
-    expect(kinds).toContain('property-icon');
-    expect(kinds).toContain('unit-state:discipline');
-    expect(kinds).toContain('unit-state:plagued');
-    const signature = runCardPresentationSignature(
-      paired,
-      '/frame.png',
-      '/art.png',
-      RUN_CARD_STANDARD_FRAME_GEOMETRY,
-      '/coin.png',
-      iconMedia,
-    );
-    const incomplete = new Set<RunCardImageKind>(kinds.filter((kind) => kind !== 'unit-state:discipline'));
-    expect(runCardPresentationCanPromote(signature, signature, paired, incomplete, iconMedia)).toBe(false);
-    expect(runCardPresentationCanPromote(signature, signature, paired, new Set(kinds), iconMedia)).toBe(true);
+      {
+        face: runCardFaceContent(
+          runCardSpecimen({ pieces: ['queen'], cardType: 'pestiferous', plaguedPieceIndex: 0 }),
+        ),
+        state: 'unit-state:plagued',
+        iconMedia: { propertyUrl: '/pestiferous.png', unitStateUrls: { plagued: '/plagued.png' } },
+      },
+      {
+        face: runCardFaceContent(
+          runCardSpecimen({ pieces: ['queen'], cardType: 'hieratic' }),
+          { purchased: true },
+        ),
+        state: 'unit-state:marshalled',
+        iconMedia: { propertyUrl: '/hieratic.png', unitStateUrls: { marshalled: '/marshalled.png' } },
+      },
+    ] as const;
+
+    for (const { face, state, iconMedia } of pairs) {
+      const kinds = requiredRunCardImageKinds(face, iconMedia);
+      expect(kinds).toContain('property-icon');
+      expect(kinds).toContain(state);
+      const signature = runCardPresentationSignature(
+        face,
+        '/frame.png',
+        '/art.png',
+        RUN_CARD_STANDARD_FRAME_GEOMETRY,
+        '/coin.png',
+        iconMedia,
+      );
+      const incomplete = new Set<RunCardImageKind>(kinds.filter((kind) => kind !== state));
+      expect(runCardPresentationCanPromote(signature, signature, face, incomplete, iconMedia)).toBe(false);
+      expect(runCardPresentationCanPromote(signature, signature, face, new Set(kinds), iconMedia)).toBe(true);
+    }
   });
 
   it('rejects a fully loaded generation after a newer selection supersedes it', () => {

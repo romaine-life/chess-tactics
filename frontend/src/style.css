@@ -23383,28 +23383,6 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   text-wrap: wrap;
 }
 
-.run-card-prototype-properties {
-  display: grid;
-  font: 400 var(--run-card-effect-size, 2.75cqw)/1.12 var(--ds-font-display);
-  gap: var(--run-card-effect-gap, .7cqw);
-  margin-block-start: var(--run-card-effect-gap, .7cqw);
-}
-
-.run-card-prototype-property {
-  align-items: center;
-  display: flex;
-  gap: .8cqw;
-}
-
-.run-card-prototype-property strong {
-  font-weight: 700;
-}
-
-.run-card-prototype-property strong::after {
-  content: '·';
-  margin-inline-start: .8cqw;
-}
-
 .run-ataraxia-selector {
   display: grid;
   gap: var(--ds-inline-tight);
