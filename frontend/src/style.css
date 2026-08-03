@@ -19528,6 +19528,18 @@ button.tileset-relationship-cell {
    cast by each relic's OWN silhouette, which is why it follows the art instead of sitting
    behind it as a disc. */
 
+/* Registered so the amplitude itself can be TRANSITIONED. That is what lets a hovered relic
+   settle: the bob keeps running on its own clock while its rise eases to zero, so the relic
+   comes to rest at exactly translate 0 -- its seat on the mat -- from wherever in the cycle
+   the pointer caught it, and picks the bob back up from the same clock on the way out.
+   Freezing the animation instead would stop it wherever it happened to be, which is a
+   different resting height every time. The initial value is the committed rise. */
+@property --relic-float-rise {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 5px;
+}
+
 /* The bob is one ramp of stops expressed as fractions of --relic-float-rise, and the TIMING
    FUNCTION decides its character: interpolate between the stops and it is a smooth float;
    hold each stop with steps(1, end) and it is a pixel-art bob that never lands off-pixel.
@@ -19589,6 +19601,7 @@ button.tileset-relationship-cell {
     var(--relic-float-delay, 0s)
     infinite !important;
   transition:
+    --relic-float-rise 240ms cubic-bezier(0.3, 0.7, 0.3, 1),
     filter 200ms ease,
     scale 200ms cubic-bezier(0.2, 0.75, 0.3, 1);
 }
@@ -19602,18 +19615,24 @@ button.tileset-relationship-cell {
     infinite !important;
 }
 
-/* Hovering picks the relic up a little: it comes toward the reader and catches more light.
-   Keyed off the offer rather than the button so focusing the tooltip trigger reads the same,
-   and so the viewer's unbuttoned copy answers the pointer exactly as the game does. */
+/* Hovering picks the relic up and SETTLES it: the rise eases to zero, so the relic stops
+   drifting and comes to rest on its seat -- the same height every time, whatever part of the
+   bob the pointer caught. A held object the reader is deciding about should hold still and be
+   easy to aim at; it is still lit, and the emanation keeps breathing, because light is not
+   movement. Keyed off the offer rather than the button so focusing the tooltip trigger reads
+   the same, and so the viewer's unbuttoned copy answers the pointer exactly as the game does. */
 .relic-mat-offer:hover .run-relic-icon,
 .relic-mat-offer:focus-within .run-relic-icon {
+  --relic-float-rise: 0px;
   filter: brightness(1.2);
   scale: 1.22;
 }
 
-/* An offer that cannot be taken yet does not answer the pointer. Ordered after the hover
-   rule deliberately: the two carry equal specificity and the later one is meant to win. */
+/* An offer that cannot be taken yet does not answer the pointer at all -- it keeps the
+   amplitude it inherits from the stage and goes on drifting. Ordered after the hover rule
+   deliberately: the two carry equal specificity and the later one is meant to win. */
 .run-vacantia-take:disabled .run-relic-icon {
+  --relic-float-rise: inherit;
   filter: none;
   scale: 1;
 }
