@@ -300,8 +300,10 @@ describe('Run chrome hierarchy', () => {
     // and authors no face of its own. Every one of those belongs to the single
     // projection in runCardFaceContent.ts, and this guard keeps them from creeping back.
     expect(runCard).toContain("from './runCardFaceContent'");
-    expect(runCard).toContain('runCardFaceContent(card, { purchased })');
-    expect(runCard).toContain('runCardFrameSlot(card)');
+    // A held card's property (ADR-0371) reaches the face through the projection too,
+    // rather than RunCard re-deriving a frame or a face from it.
+    expect(runCard).toContain('runCardFaceContent(card, { purchased, cardType: ownedCardType })');
+    expect(runCard).toContain('runCardFrameSlot(card, ownedCardType)');
     expect(runCard).not.toContain('RUN_CARD_PESTIFEROUS_FRAME_SLOT');
     expect(runCard).not.toContain('RUN_CARD_TACTICAL_FRAME_SLOT');
     expect(runCard).not.toContain('RUN_CARD_CONCINNOUS_FRAME_SLOT');

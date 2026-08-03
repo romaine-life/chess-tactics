@@ -6,6 +6,7 @@ import {
   type RunArmyFilters,
 } from './RunArmyWorkspace';
 import { EnchiridionReference, EnchiridionSectionRail, RelicCodex } from './Enchiridion';
+import { HeldCardCodex } from './HeldCardCodex';
 import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
 import { InnerChromeBox, ShellWorkspace } from './shared/ChromeBox';
 import {
@@ -96,13 +97,24 @@ export function Strategikon({
             to={href('prosopography')}
             index={1}
             active={section === 'prosopography'}
+            // The Enchiridion's Units and Cards references mark units and cards; this rail's
+            // two Run registers are those same two kinds of record, so they take the same
+            // two marks rather than sharing one between adjacent tabs.
+            iconSrc={installedUiMedia('ui-kit-icons-unit-studio-png')}
+          />
+          <ApparatusRailTab
+            label="Chartulary"
+            title="The Chartulary — Held Cards"
+            to={href('chartulary')}
+            index={2}
+            active={section === 'chartulary'}
             iconSrc={installedUiMedia('ui-kit-icons-players-png')}
           />
           <ApparatusRailTab
             label="Lipsanotheca"
             title="The Lipsanotheca — Held Relics"
             to={href('lipsanotheca')}
-            index={2}
+            index={3}
             active={section === 'lipsanotheca'}
             iconSrc={installedUiMedia('ui-kit-icons-info-png')}
           />
@@ -165,6 +177,12 @@ export function Strategikon({
             />
           ) : (
             <UnavailableRunReference title="The Martial Prosopography" copy="A persistent Current Army appears here during a Run." />
+          )
+        ) : section === 'chartulary' ? (
+          run ? (
+            <HeldCardCodex run={run} title="The Chartulary" framed={false} />
+          ) : (
+            <UnavailableRunReference title="The Chartulary" copy="Cards bought during a Run appear here." />
           )
         ) : run ? (
           <RelicCodex relicIds={run.relics} title="The Lipsanotheca" showStatistics={false} framed={false} />

@@ -396,6 +396,7 @@ const strategikonShell: SectionedShell = {
   sections: [
     section('enchiridion', SCENE_DEFINITIONS.strategikonEnchiridion),
     section('prosopography', SCENE_DEFINITIONS.strategikonProsopography),
+    section('chartulary', SCENE_DEFINITIONS.strategikonChartulary),
     section('lipsanotheca', SCENE_DEFINITIONS.strategikonLipsanotheca),
   ],
   // The canonical address carries the base, so the two ancestries never share an id.

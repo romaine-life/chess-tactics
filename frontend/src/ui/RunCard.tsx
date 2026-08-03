@@ -6,6 +6,7 @@ import {
   cardContentsLabel,
   PIECE_LABEL,
   type RunCardOffer,
+  type RunCardType,
   type RunCoreCard,
 } from '../run/model';
 import { RunCardFace } from './RunCardFace';
@@ -51,20 +52,27 @@ function publicTargetLabel(card: RunCoreCard | RunCardOffer, purchased: boolean)
 export function RunCard({
   card,
   mode,
+  cardType: ownedCardType = null,
   purchased = false,
   disabled = false,
   onSelect,
 }: {
   card: RunCoreCard | RunCardOffer;
   mode: 'shop' | 'reference';
+  /**
+   * The property of a card that is no longer an offer — a card the Run HOLDS. An owned
+   * card keeps the property it was bought with, so its face must keep the matching frame
+   * and property strip; an offer still carries its own and ignores this.
+   */
+  cardType?: RunCardType | null;
   purchased?: boolean;
   disabled?: boolean;
   onSelect?: () => void;
 }): ReactElement {
   const label = cardContentsLabel(card);
   const name = runCardName(card);
-  const frameSlot = runCardFrameSlot(card);
-  const faceContent = runCardFaceContent(card, { purchased });
+  const frameSlot = runCardFrameSlot(card, ownedCardType);
+  const faceContent = runCardFaceContent(card, { purchased, cardType: ownedCardType });
   const targetLabel = publicTargetLabel(card, purchased);
   const face = (
     <RunCardFace

@@ -90,9 +90,15 @@ export function runCardFrameSlotForType(cardType: RunCardType | null): string {
   return cardType ? FRAME_SLOT_BY_CARD_TYPE[cardType] : RUN_CARD_FRAME_SLOT;
 }
 
-/** The frame a card is printed on. */
-export function runCardFrameSlot(card: RunCoreCard | RunCardOffer): string {
-  return runCardFrameSlotForType(isRunCardOffer(card) ? card.cardType : null);
+/**
+ * The frame a card is printed on. A card the Run HOLDS is no longer an offer but keeps
+ * the property it was bought with, so its carrier supplies that property (ADR-0371).
+ */
+export function runCardFrameSlot(
+  card: RunCoreCard | RunCardOffer,
+  heldCardType: RunCardType | null = null,
+): string {
+  return runCardFrameSlotForType(runCardProperty(card, heldCardType));
 }
 
 export type RunCardFaceOptions = Readonly<{
@@ -102,7 +108,20 @@ export type RunCardFaceOptions = Readonly<{
    * marker and no substitute sentence (ADR-0339's Tactical rule, applied to every type).
    */
   purchased?: boolean;
+  /**
+   * The property of a card the Run holds, which carries no offer of its own (ADR-0371).
+   * An offer always carries its own property and ignores this.
+   */
+  cardType?: RunCardType | null;
 }>;
+
+/** The property a card wears: its offer's, or the one a held card was bought with. */
+function runCardProperty(
+  card: RunCoreCard | RunCardOffer,
+  heldCardType: RunCardType | null,
+): RunCardType | null {
+  return (isRunCardOffer(card) ? card.cardType : null) ?? heldCardType;
+}
 
 type PublicAbilityTarget = Readonly<{ state: RunAbility; pieceIndex: number }>;
 
@@ -159,7 +178,7 @@ export function runCardFaceContent(
   options: RunCardFaceOptions = {},
 ): RunCardFaceContent {
   const offer = isRunCardOffer(card) ? card : null;
-  const cardType = offer?.cardType ?? null;
+  const cardType = runCardProperty(card, options.cardType ?? null);
   return {
     name: runCardName(card),
     cost: offer?.cost ?? card.value,
