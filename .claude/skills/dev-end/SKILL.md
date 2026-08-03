@@ -13,15 +13,40 @@ Use this closeout workflow for `D:\repos\chess-tactics` after code changes are c
    production Postgres, so a throwaway Level Editor document opened for a screenshot, a scratch
    level, or any other verification artifact is a real row in the owner's live data. Clean up what
    you made:
-   - Editor documents — `DELETE /api/editor-documents/<documentId>` for each one the session
-     created. A document reached through `?board=<code>` mints a NEW document on open, so every
-     such link left a row behind.
+   - Editor documents. A document reached through `?board=<code>` mints a NEW document on open,
+     so every such link left a row behind. **A bare `DELETE` does not work** — it answers
+     `revision_required`, then `editor_document_edit_session_required`. Deleting is a
+     compare-and-swap performed by a page session, so it takes three calls per document, run from
+     an authenticated owner page on the dev server:
+
+     1. `GET /api/editor-documents/<id>` → read `document.revision`.
+     2. `POST /api/editor-documents/<id>/edit-sessions` with a client-generated
+        `{session_id, session_key, device_id, client_label, intent:'write'}` → read
+        `session.edit_generation`. The key is client-minted bearer authority the server only
+        ever stores hashed; it is never returned to you.
+     3. `DELETE /api/editor-documents/<id>` with
+        `{revision, edit_session_id, edit_session_key, edit_generation}`.
+
+     Two properties worth relying on. The route deletes **never-saved documents only**
+     (`dbDeleteNeverSavedEditorDocument`), so a working copy ever promoted to a canonical Level is
+     refused — a real guard, not a formality. And `GET /api/editor-documents` returns **one page
+     of 100**, newest first, with `next_offset` in the response body: follow it (or pass
+     `limit`/`offset`) instead of assuming the first page is everything. Read one page and older
+     documents are simply invisible.
    - Scratch files written into the repo (`tmp-shots/` is gitignored and fine to leave).
 
    Do this **before** step 2: the API is only reachable through the running dev server. Only
    delete what this session created — never an owner document you merely opened or were handed.
-   If something can't be removed, name it and its id in the final report instead of leaving it
-   silently behind.
+   Guard on the authoritative body (`document.level.name`, `document.never_saved`); the top-level
+   `name` exists on the LIST response only and reads `undefined` on a single-document GET, so a
+   guard written against it rejects everything. If something can't be removed, name it and its id
+   in the final report instead of leaving it silently behind.
+
+   Clearing litter this session did **not** create — an accumulated backlog of old documents — is
+   a bulk production deletion and is not part of closeout. Report the backlog and let the owner
+   decide. If they say yes, hold back anything updated in the last ~30 minutes: sessions in other
+   worktrees write to this same production database, and deleting a document out from under a live
+   editor is the exact failure the persistence ADR exists to prevent.
 2. Stop the dev server started during the session. If the server was started outside the session or ownership is unclear, identify it and ask before killing it. If a later step sends you back to fix something, restart it through `devctl` rather than working blind.
 3. Inspect `git status --short --branch` and review the diff. Keep unrelated user changes out of the commit.
 4. Run the **exact command CI runs**, not a subset of it. Bare `vitest` is not the gate and
