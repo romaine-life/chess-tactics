@@ -6,6 +6,7 @@ import { Tooltip } from './shared/InfoTip';
 import { StudioCatalogCard } from './studio/StudioCatalogCard';
 import { StudioStepper } from './studio/StudioStepper';
 import { SliderRow } from './dressing/SliderRow';
+import { ChromeButton } from './shared/ChromeButton';
 
 /**
  * Candidate MATS -- the surface the Run's relic offers are laid out on at the head of a
@@ -31,7 +32,7 @@ export const RELIC_MAT_CHOSEN_ID = 'mat-tray--codex';
  * style.css and is what the Viewer's tuning slider resets to -- a reset returns to the
  * value the game ships, never to zero or to the slider's floor (ADR-0057).
  */
-export const RELIC_MAT_COMMITTED_SCALE = 1.21;
+export const RELIC_MAT_COMMITTED_SCALE = 1.74;
 
 // Card titles truncate around 14 characters, so every name has to survive that intact --
 // "Inventory She..." is not a label.
@@ -292,6 +293,53 @@ function useTunedMatMeasurement(
   return measured;
 }
 
+/**
+ * Hand the tuned value back. A tuning surface that can only be read aloud makes the owner
+ * transcribe a number off a screenshot, so this copies the decision -- which mat, at what
+ * multiple, over which backdrop -- as text that can be pasted straight into a reply.
+ *
+ * It exports the INTENT, not the literal CSS: the multiple and what it was measured
+ * against, because that is what gets committed and it stays true at any pane width.
+ */
+function TunedScaleExport({
+  candidate,
+  measured,
+  scale,
+}: {
+  candidate: RelicMatCandidate | null;
+  measured: TunedMatMeasurement | null;
+  scale: number;
+}): ReactElement | null {
+  const [copied, setCopied] = useState(false);
+  if (!candidate) return null;
+
+  const summary = [
+    `Relic mat: ${candidate.version.slot}`,
+    `Mat scale: ${scale.toFixed(2)}× the relic row`,
+    measured ? `Measured: mat ${measured.matWidth}×${measured.matHeight} over a ${measured.rowWidth}px row` : null,
+    `Backdrop: ${RELIC_MAT_BACKDROP_SLOT}`,
+    `Committed: ${RELIC_MAT_COMMITTED_SCALE.toFixed(2)}×`,
+  ].filter(Boolean).join('\n');
+
+  const copy = async (): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(summary);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1400);
+    } catch { /* clipboard refused; the readout above still carries the number */ }
+  };
+
+  return (
+    <ChromeButton
+      unit="inner-text-button"
+      data-testid="relic-mat-export"
+      onClick={() => { void copy(); }}
+    >
+      {copied ? 'Copied' : 'Export value'}
+    </ChromeButton>
+  );
+}
+
 /** Viewer stage: the composite as large as the pane allows, plus the Details readout. */
 export function RelicMatViewer({
   items,
@@ -350,6 +398,7 @@ export function RelicMatViewer({
                 ? `Mat ${measured.matWidth}×${measured.matHeight} over a ${measured.rowWidth}px relic row. Committed value is ${RELIC_MAT_COMMITTED_SCALE.toFixed(2)}× — the reset returns here.`
                 : `Committed value is ${RELIC_MAT_COMMITTED_SCALE.toFixed(2)}×.`}
             </p>
+            <TunedScaleExport candidate={found} measured={measured} scale={scale} />
             {found ? (
               <dl className="al-meta">
                 <div><dt>Mat</dt><dd>{found.matLabel}</dd></div>

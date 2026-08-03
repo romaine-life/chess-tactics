@@ -19192,7 +19192,7 @@ button.tileset-relationship-cell {
    number this composite is tuned by, so the Viewer drives it directly and the committed
    value below is what the Viewer's reset returns to. */
 .relic-mat-layer {
-  --relic-mat-scale: 1.21;
+  --relic-mat-scale: 1.74;
   display: grid;
   /* Leave the overhang room, or a narrow stage lets the row fill it and the mat's torn
      edges are the first thing clipped away -- the one part of it that has to be seen. */
@@ -19256,7 +19256,7 @@ button.tileset-relationship-cell {
 
 /* The Viewer overrides --relic-mat-scale live while it is being tuned. */
 .relic-mat-stage[data-cards='on'] .relic-mat-layer {
-  --relic-mat-scale: var(--relic-mat-scale-tuned, 1.21);
+  --relic-mat-scale: var(--relic-mat-scale-tuned, 1.74);
 }
 
 .tileset-studio-card-image.relic-mat-card-image {
