@@ -287,6 +287,44 @@ export function initialPredrawnGenerationFrame(board: EditorBoard): PredrawnGene
 }
 
 /**
+ * Pull an owner-driven pan/zoom back to the nearest frame that still holds the required art.
+ *
+ * Framing controls should not be able to produce a frame that cannot be applied. Without this a
+ * drag walks the required geometry out of the crop, and zooming past the smallest legal width
+ * strands the owner: pulling one edge inside pushes the opposite edge out, with no way back except
+ * a preset. Width grows to the smallest legal size when needed, then each axis clamps
+ * independently, so a drag simply stops at the boundary instead of going invalid.
+ */
+export function clampPredrawnGenerationFrame(
+  board: EditorBoard,
+  value: unknown,
+): PredrawnGenerationFrame {
+  const smallest = initialPredrawnGenerationFrame(board);
+  const frame = normalizePredrawnGenerationFrame(value);
+  if (!frame) return smallest;
+  const width = Math.max(frame.width, smallest.width);
+  const height = width / FRAME_WIDTH_UNITS * FRAME_HEIGHT_UNITS;
+  // Grow around the centre the owner was looking at, so a clamped zoom keeps their composition.
+  const desiredX = Math.round(frame.x + frame.width / 2 - width / 2);
+  const desiredY = Math.round(frame.y + frame.height / 2 - height / 2);
+  const required = predrawnGenerationRequiredBounds(board);
+  const x = nearestAllowedFrameOrigin(
+    desiredX,
+    width,
+    required.minX,
+    required.minX + required.width,
+  );
+  const y = nearestAllowedFrameOrigin(
+    desiredY,
+    height,
+    required.minY,
+    required.minY + required.height,
+  );
+  if (x === undefined || y === undefined) return smallest;
+  return { version: 1, x, y, width, height };
+}
+
+/**
  * TileGrid's board-centred origin for this board.
  *
  * Generation frames are expressed in raw projected board coordinates; the camera boundary and every

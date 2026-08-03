@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   centeredPlayableBoardFramingBounds,
+  clampPredrawnGenerationFrame,
   defaultBoardCameraBounds,
   initialPredrawnGenerationFrame,
   predrawnGenerationBoundsFromCentered,
@@ -94,5 +95,40 @@ describe('generation-frame presets', () => {
     const subject = board(7, 4);
     expect(predrawnGenerationFrameContaining(subject, predrawnGenerationRequiredBounds(subject)))
       .toEqual(initialPredrawnGenerationFrame(subject));
+  });
+});
+
+describe('framing controls cannot reach an unappliable frame', () => {
+  const subject = board(8, 8);
+  const smallest = initialPredrawnGenerationFrame(subject);
+
+  it('grows a crop zoomed past the smallest legal width, keeping 16:9', () => {
+    const tooSmall = { ...smallest, width: 320, height: 180 };
+    const clamped = clampPredrawnGenerationFrame(subject, tooSmall);
+
+    expect(clamped.width).toBe(smallest.width);
+    expect(clamped.width * 9).toBe(clamped.height * 16);
+    expect(validatePredrawnGenerationFrame(subject, clamped).ok).toBe(true);
+  });
+
+  it('stops a runaway pan at the boundary instead of walking required art out', () => {
+    const wide = predrawnGenerationFrameContaining(subject, predrawnGenerationBoundsFromCentered(
+      subject,
+      resolvedBoardCameraBounds(subject),
+    ));
+    const dragged = clampPredrawnGenerationFrame(subject, { ...wide, y: wide.y - 5000 });
+
+    expect(validatePredrawnGenerationFrame(subject, dragged).ok).toBe(true);
+    expect(dragged.width).toBe(wide.width);
+    expect(dragged.y).toBeGreaterThan(wide.y - 5000);
+  });
+
+  it('leaves a frame that is already applicable exactly as authored', () => {
+    expect(clampPredrawnGenerationFrame(subject, smallest)).toEqual(smallest);
+  });
+
+  it('falls back to the smallest legal frame for unusable input', () => {
+    expect(clampPredrawnGenerationFrame(subject, { version: 1, x: 0, y: 0, width: 100, height: 100 }))
+      .toEqual(smallest);
   });
 });

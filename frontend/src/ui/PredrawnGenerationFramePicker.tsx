@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  clampPredrawnGenerationFrame,
   initialPredrawnGenerationFrame,
   normalizePredrawnGenerationFrame,
   predrawnGenerationBoundsFromCentered,
@@ -83,6 +84,17 @@ export function PredrawnGenerationFramePicker({
   const sourceBoard = useMemo(() => boardForTopSurfaceArtExport(board), [board]);
   const requiredBounds = useMemo(() => predrawnGenerationRequiredBounds(sourceBoard), [sourceBoard]);
   const fittedFrame = useMemo(() => initialPredrawnGenerationFrame(sourceBoard), [sourceBoard]);
+  // The tightest legal fit IS this level's minimum width: below it no position on the board can hold
+  // the required art, so zooming past it strands the owner in a crop that can never be applied and
+  // whose outlines can never all be brought inside — pulling one edge in pushes the opposite out.
+  const minFrameWidth = fittedFrame.width;
+  const clampFrame = useCallback(
+    (next: PredrawnGenerationFrame) => clampPredrawnGenerationFrame(sourceBoard, next),
+    [sourceBoard],
+  );
+  const resizeTo = (current: PredrawnGenerationFrame, width: number): PredrawnGenerationFrame => (
+    clampFrame(resizePredrawnGenerationFrame(current, Math.max(minFrameWidth, width)))
+  );
   // The Board page's camera boundary in this frame's coordinates: the box a player can actually
   // reach at maximum zoom-out, so art inside it is what must exist. It contains the level's own
   // opening/thumbnail composition by construction (normalizeBoardCameraBounds guarantees it), which
@@ -180,7 +192,7 @@ export function PredrawnGenerationFramePicker({
   }, []);
 
   const zoomBy = (factor: number): void => {
-    setFrame((current) => resizePredrawnGenerationFrame(current, current.width * factor));
+    setFrame((current) => resizeTo(current, current.width * factor));
   };
 
   const startPan = (event: ReactPointerEvent<HTMLDivElement>): void => {
@@ -197,11 +209,12 @@ export function PredrawnGenerationFramePicker({
   const movePan = (event: ReactPointerEvent<HTMLDivElement>): void => {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId || displayScale <= 0) return;
-    setFrame({
+    // Clamped, so the drag stops at the boundary rather than walking required art out of the crop.
+    setFrame(clampFrame({
       ...drag.frame,
       x: Math.round(drag.frame.x - (event.clientX - drag.startX) / displayScale),
       y: Math.round(drag.frame.y - (event.clientY - drag.startY) / displayScale),
-    });
+    }));
   };
 
   const endPan = (event: ReactPointerEvent<HTMLDivElement>): void => {
@@ -263,7 +276,12 @@ export function PredrawnGenerationFramePicker({
         </header>
 
         <div className="predrawn-generation-frame-toolbar">
-          <div className="predrawn-generation-frame-size" role="group" aria-label="Generation frame width">
+          <div
+            className="predrawn-generation-frame-size"
+            role="group"
+            aria-label="Generation frame width"
+            title={`${minFrameWidth}px is the tightest crop that can hold this level's required art.`}
+          >
             <span className="predrawn-generation-frame-size-label">Width</span>
             <Stepper
               suffix="px"
@@ -273,13 +291,13 @@ export function PredrawnGenerationFramePicker({
               onIncrease={() => zoomBy(1.1)}
               edit={{
                 value: frame.width,
-                min: MIN_FRAME_WIDTH,
+                min: minFrameWidth,
                 format: (value) => String(value),
                 parse: (raw) => {
                   const parsed = Number(raw.trim().replace(/px$/i, ''));
                   return raw.trim() && Number.isFinite(parsed) ? parsed : null;
                 },
-                onCommit: (value) => setFrame((current) => resizePredrawnGenerationFrame(current, value)),
+                onCommit: (value) => setFrame((current) => resizeTo(current, value)),
                 ariaLabel: 'Generation frame width in pixels',
               }}
             />
