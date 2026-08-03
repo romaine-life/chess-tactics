@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react';
 import { BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM, boardBackgroundMode, boardBounds, cameraToContainBounds, defaultBoardCameraBounds, defaultSubterrainMaterial, isVersionedPredrawnBoardSurface, MAX_FLOATING_ARTWORK_PIXEL, mergeSharedLevel, normalizeBoardCameraBounds, predrawnEnvironmentGeometryFingerprintInputV2, predrawnVisualFootprintClipStyleForCell, resolvedBoardCameraBounds, resolveTerrainSideExposure, resolveTerrainSideFaces, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, type BoardBackgroundMode, type BoardCameraBounds, type BoardCameraSnapMode, type PredrawnGenerationFrame, type SubterrainMaterial, type SubterrainPlacementMap, type TerrainSideMaterials, type VersionedPredrawnBoardSurface } from '@chess-tactics/board-render';
 import { boardLabCellPosition, boardLabMetrics, immutableBoardLabTerrainSrc } from '../render/BoardLabBoard';
+import { unprojectBoardPoint } from '@chess-tactics/board-render';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { FloatingArtworkSprite, PropSprite, propHalfSrc } from '../render/BoardStructure';
 import { PROP_DEFS, defaultPropDef, propCells, propDef, type PropDef, type PropKind } from '../core/props';
@@ -34,7 +35,9 @@ import {
   isTownMember,
   pixelsInTilesAcross,
   planTown,
+  snapGridPoint,
   townBoundsInTiles,
+  townBoundsScenePolygon,
   type TownBounds,
   type TownPlanKind,
 } from '../core/townPlan';
@@ -3087,12 +3090,9 @@ export function LevelEditor(): ReactElement {
   );
   const [townArea, setTownArea] = useState<TownBounds | null>(null);
   // Live rectangle while dragging, in surface pixels, so the author sees the ground being claimed.
-  const [townDragRect, setTownDragRect] = useState<
-    { x0: number; y0: number; x1: number; y1: number } | null>(null);
-  /** The live drag measured as ground, so the label reports tiles rather than screen pixels. */
-  const [townDragTiles, setTownDragTiles] = useState<{ across: number; down: number } | null>(null);
-  const townDragRef = useRef<{ pointerId: number; sceneX: number; sceneY: number;
-    surfaceX: number; surfaceY: number } | null>(null);
+  /** The live selection in grid cells, snapped, so the preview shows exactly what will be used. */
+  const [townDragBounds, setTownDragBounds] = useState<TownBounds | null>(null);
+  const townDragRef = useRef<{ pointerId: number; cellX: number; cellY: number } | null>(null);
   const [townBuildings, setTownBuildings] = useState<string[]>([]);
   const [townLandmarks, setTownLandmarks] = useState<string[]>([]);
   const [townPlanKind, setTownPlanKind] = useState<TownPlanKind>(TOWN_PLAN_DEFAULTS.plan);
@@ -4104,6 +4104,30 @@ export function LevelEditor(): ReactElement {
     x: (clientX - (rect.left + rect.width / 2) - viewPan.x) / viewZoom - artworkBoardOrigin.originLeft,
     y: (clientY - (rect.top + rect.height / 2) - viewPan.y) / viewZoom - artworkBoardOrigin.originTop,
   });
+
+  /** Viewport pointer -> the whole board cell under it. The town selection snaps to these. */
+  const townCellAt = (clientX: number, clientY: number, rect: DOMRect): { x: number; y: number } => {
+    const scene = forestScenePoint(clientX, clientY, rect);
+    return snapGridPoint(unprojectBoardPoint({ left: scene.x, top: scene.y }));
+  };
+
+  /** Scene pixels -> pixels inside the placement surface. Inverse of forestScenePoint. */
+  const townSurfacePoint = (
+    scene: { x: number; y: number },
+    rect: { width: number; height: number },
+  ): { x: number; y: number } => ({
+    x: (scene.x + artworkBoardOrigin.originLeft) * viewZoom + viewPan.x + rect.width / 2,
+    y: (scene.y + artworkBoardOrigin.originTop) * viewZoom + viewPan.y + rect.height / 2,
+  });
+
+  // The live selection as a screen polygon. A grid rect projects to a diamond, so the preview has
+  // to be four projected corners rather than a screen-space rectangle.
+  const townDragSurfacePolygon = useMemo(() => {
+    if (!townDragBounds || !viewViewportSize) return null;
+    return townBoundsScenePolygon(townDragBounds)
+      .map((corner) => townSurfacePoint(corner, viewViewportSize));
+  }, [townDragBounds, viewViewportSize, viewZoom, viewPan.x, viewPan.y,
+    artworkBoardOrigin.originLeft, artworkBoardOrigin.originTop]);
 
   // Source geometry for the scatter, read from the same live catalog the renderer draws from.
   const forestGeometry = useMemo<ForestSpeciesGeometry>(() => ({
@@ -8268,33 +8292,20 @@ export function LevelEditor(): ReactElement {
                       event.stopPropagation();
                       const surface = event.currentTarget;
                       surface.setPointerCapture(event.pointerId);
-                      const rect = surface.getBoundingClientRect();
-                      const scene = forestScenePoint(event.clientX, event.clientY, rect);
-                      townDragRef.current = {
-                        pointerId: event.pointerId,
-                        sceneX: scene.x,
-                        sceneY: scene.y,
-                        surfaceX: event.clientX - rect.left,
-                        surfaceY: event.clientY - rect.top,
-                      };
-                      setTownDragRect({
-                        x0: event.clientX - rect.left, y0: event.clientY - rect.top,
-                        x1: event.clientX - rect.left, y1: event.clientY - rect.top,
-                      });
-                      setTownDragTiles({ across: 0, down: 0 });
+                      const cell = townCellAt(event.clientX, event.clientY, surface.getBoundingClientRect());
+                      townDragRef.current = { pointerId: event.pointerId, cellX: cell.x, cellY: cell.y };
+                      setTownDragBounds({ minX: cell.x, minY: cell.y, maxX: cell.x, maxY: cell.y });
                     }}
                     onPointerMove={(event) => {
                       const drag = townDragRef.current;
                       if (!drag || drag.pointerId !== event.pointerId) return;
-                      const rect = event.currentTarget.getBoundingClientRect();
-                      setTownDragRect({
-                        x0: drag.surfaceX, y0: drag.surfaceY,
-                        x1: event.clientX - rect.left, y1: event.clientY - rect.top,
+                      const cell = townCellAt(
+                        event.clientX, event.clientY, event.currentTarget.getBoundingClientRect(),
+                      );
+                      setTownDragBounds({
+                        minX: Math.min(drag.cellX, cell.x), minY: Math.min(drag.cellY, cell.y),
+                        maxX: Math.max(drag.cellX, cell.x), maxY: Math.max(drag.cellY, cell.y),
                       });
-                      const scene = forestScenePoint(event.clientX, event.clientY, rect);
-                      setTownDragTiles(townBoundsInTiles({
-                        minX: drag.sceneX, minY: drag.sceneY, maxX: scene.x, maxY: scene.y,
-                      }));
                     }}
                     onPointerUp={(event) => {
                       const drag = townDragRef.current;
@@ -8302,57 +8313,49 @@ export function LevelEditor(): ReactElement {
                         event.currentTarget.releasePointerCapture(event.pointerId);
                       }
                       townDragRef.current = null;
-                      setTownDragRect(null);
-                      setTownDragTiles(null);
+                      setTownDragBounds(null);
                       if (!drag || drag.pointerId !== event.pointerId) return;
-                      const scene = forestScenePoint(
+                      const cell = townCellAt(
                         event.clientX, event.clientY, event.currentTarget.getBoundingClientRect(),
                       );
                       const area: TownBounds = {
-                        minX: Math.round(Math.min(drag.sceneX, scene.x)),
-                        minY: Math.round(Math.min(drag.sceneY, scene.y)),
-                        maxX: Math.round(Math.max(drag.sceneX, scene.x)),
-                        maxY: Math.round(Math.max(drag.sceneY, scene.y)),
+                        minX: Math.min(drag.cellX, cell.x), minY: Math.min(drag.cellY, cell.y),
+                        maxX: Math.max(drag.cellX, cell.x), maxY: Math.max(drag.cellY, cell.y),
                       };
-                      // A stray click is not a town. Require a real area to have been dragged.
-                      if (area.maxX - area.minX < 24 || area.maxY - area.minY < 24) return;
+                      // A stray click is not a town, but a thin strip is: dragging along a screen
+                      // diagonal runs along ONE grid axis, and an 8x1 selection is exactly the
+                      // roadside row plan. Only reject a selection with no extent at all.
+                      if (area.maxX - area.minX < 1 && area.maxY - area.minY < 1) return;
                       setTownArea(area);
                       if (tool === 'erase') removeTown(area); else generateTown(area);
                     }}
                     onPointerCancel={() => {
-                      townDragRef.current = null; setTownDragRect(null); setTownDragTiles(null);
+                      townDragRef.current = null; setTownDragBounds(null);
                     }}
                   >
-                    {townDragRect ? (
-                      <svg
-                        className="le-town-drag-rect"
-                        aria-hidden="true"
-                        style={{
-                          left: `${Math.min(townDragRect.x0, townDragRect.x1)}px`,
-                          top: `${Math.min(townDragRect.y0, townDragRect.y1)}px`,
-                          width: `${Math.abs(townDragRect.x1 - townDragRect.x0)}px`,
-                          height: `${Math.abs(townDragRect.y1 - townDragRect.y0)}px`,
-                        }}
-                      >
-                        <rect
-                          x="0" y="0" width="100%" height="100%"
-                          fill="rgba(226, 188, 108, 0.12)"
-                          stroke="rgba(244, 214, 150, 0.92)"
-                          strokeWidth="1.5"
-                          strokeDasharray="5 3"
-                          vectorEffect="non-scaling-stroke"
-                        />
-                      </svg>
-                    ) : null}
-                    {townDragRect && townDragTiles ? (
-                      <span
-                        className="le-town-drag-size"
-                        aria-hidden="true"
-                        style={{
-                          left: `${Math.min(townDragRect.x0, townDragRect.x1)}px`,
-                          top: `${Math.min(townDragRect.y0, townDragRect.y1)}px`,
-                        }}
-                      >{townDragTiles.across.toFixed(1)} × {townDragTiles.down.toFixed(1)} tiles</span>
+                    {townDragBounds && townDragSurfacePolygon ? (
+                      <>
+                        <svg className="le-town-drag-rect" aria-hidden="true">
+                          {/* A grid rect is a DIAMOND on screen. Drawing a screen-space rectangle
+                              here would show an area the town does not actually use. */}
+                          <polygon
+                            points={townDragSurfacePolygon.map((p) => `${p.x},${p.y}`).join(' ')}
+                            fill="rgba(226, 188, 108, 0.12)"
+                            stroke="rgba(244, 214, 150, 0.92)"
+                            strokeWidth="1.5"
+                            strokeDasharray="5 3"
+                            vectorEffect="non-scaling-stroke"
+                          />
+                        </svg>
+                        <span
+                          className="le-town-drag-size"
+                          aria-hidden="true"
+                          style={{
+                            left: `${Math.min(...townDragSurfacePolygon.map((p) => p.x))}px`,
+                            top: `${Math.min(...townDragSurfacePolygon.map((p) => p.y))}px`,
+                          }}
+                        >{townBoundsInTiles(townDragBounds).across} × {townBoundsInTiles(townDragBounds).down} tiles</span>
+                      </>
                     ) : null}
                   </div>
                 ) : null}

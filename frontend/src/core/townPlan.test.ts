@@ -12,7 +12,7 @@ import {
   type TownPlanParams,
 } from './townPlan';
 import { floatingArtworkGroundPoint, type ForestSpeciesGeometry } from './forestScatter';
-import { projectBoardPoint } from '@chess-tactics/board-render';
+import { projectBoardPoint, unprojectBoardPoint } from '@chess-tactics/board-render';
 import type { Direction } from '../ui/unitCatalog';
 import type { FloatingArtworkPlacement } from '../ui/boardCode';
 
@@ -33,9 +33,15 @@ const geometry: ForestSpeciesGeometry = {
 };
 
 const board = { cols: 8, rows: 8 };
-// The area an author would drag: a wide-ish rectangle well clear of the playable board.
-const AREA = { minX: 900, minY: 1100, maxX: 1900, maxY: 1700 };
-const CENTER = townBoundsCentre(AREA);
+// The area an author would drag, in GRID CELLS: a wide-ish rect well clear of the playable board.
+const AREA = { minX: 14, minY: 10, maxX: 30, maxY: 22 };
+const CENTER = (() => {
+  const c = townBoundsCentre(AREA);
+  const seat = projectBoardPoint(c);
+  return { x: seat.left, y: seat.top };
+})();
+/** Grid cell a scene-pixel ground point stands on. */
+const cellOf = (g: { x: number; y: number }) => unprojectBoardPoint({ left: g.x, top: g.y });
 
 const params = (overrides: Partial<TownPlanParams> = {}): TownPlanParams => ({
   ...TOWN_PLAN_DEFAULTS,
@@ -117,7 +123,7 @@ describe('planTown', () => {
     expect(run({ size: 6 })).toHaveLength(6);
     // Size is a ceiling, not a quota: a drag only holds as many plots as its frontage allows.
     expect(run({ size: 14 }).length).toBeLessThanOrEqual(14);
-    const roomy = { minX: 300, minY: 500, maxX: 2500, maxY: 2300 };
+    const roomy = { minX: 0, minY: 0, maxX: 40, maxY: 34 };
     expect(run({ size: 14 }, [], roomy)).toHaveLength(14);
   });
 
@@ -127,28 +133,35 @@ describe('planTown', () => {
       const town = run({ plan, size: 40, looseness: 1 });
       expect(town.length).toBeGreaterThan(4);
       for (const placement of town) {
-        const ground = groundOf(placement);
-        expect(ground.x).toBeGreaterThanOrEqual(AREA.minX);
-        expect(ground.x).toBeLessThanOrEqual(AREA.maxX);
-        expect(ground.y).toBeGreaterThanOrEqual(AREA.minY);
-        expect(ground.y).toBeLessThanOrEqual(AREA.maxY);
+        const cell = cellOf(groundOf(placement));
+        expect(cell.x).toBeGreaterThanOrEqual(AREA.minX);
+        expect(cell.x).toBeLessThanOrEqual(AREA.maxX);
+        expect(cell.y).toBeGreaterThanOrEqual(AREA.minY);
+        expect(cell.y).toBeLessThanOrEqual(AREA.maxY);
       }
     }
   });
 
   it('fills a bigger drag with more town and a smaller drag with less', () => {
-    const small = { minX: 900, minY: 1100, maxX: 1300, maxY: 1400 };
-    const big = { minX: 500, minY: 700, maxX: 2300, maxY: 2100 };
+    const small = { minX: 14, minY: 10, maxX: 20, maxY: 15 };
+    const big = { minX: 4, minY: 2, maxX: 40, maxY: 32 };
     expect(run({ size: 60 }, [], big).length).toBeGreaterThan(run({ size: 60 }, [], small).length);
   });
 
   it('runs the main street along the longer axis of the drag', () => {
-    const wide = { minX: 0, minY: 0, maxX: 1200, maxY: 400 };
-    const tall = { minX: 0, minY: 0, maxX: 400, maxY: 1200 };
+    const wide = { minX: 0, minY: 0, maxX: 24, maxY: 6 };
+    const tall = { minX: 0, minY: 0, maxX: 6, maxY: 24 };
+    // Streets are returned in scene pixels; unproject them so the axes compared are the BOARD's.
+    // A 24x6 and a 6x24 selection project to mirror-image diamonds with identical screen bounding
+    // boxes, so a screen-space comparison cannot tell them apart at all.
     const span = (bounds: typeof wide): { x: number; y: number } => {
       const streets = townStreets('linear', bounds, TOWN_PLAN_DEFAULTS.setback, 1);
-      const xs = streets.flatMap((s) => [s.x0, s.x1]);
-      const ys = streets.flatMap((s) => [s.y0, s.y1]);
+      const cells = streets.flatMap((s) => [
+        unprojectBoardPoint({ left: s.x0, top: s.y0 }),
+        unprojectBoardPoint({ left: s.x1, top: s.y1 }),
+      ]);
+      const xs = cells.map((c) => c.x);
+      const ys = cells.map((c) => c.y);
       return { x: Math.max(...xs) - Math.min(...xs), y: Math.max(...ys) - Math.min(...ys) };
     };
     expect(span(wide).x).toBeGreaterThan(span(wide).y);
@@ -156,7 +169,7 @@ describe('planTown', () => {
   });
 
   it('produces nothing for a drag too small to hold a town', () => {
-    expect(run({}, [], { minX: 100, minY: 100, maxX: 103, maxY: 104 })).toEqual([]);
+    expect(run({}, [], { minX: 5, minY: 5, maxX: 5.5, maxY: 5.5 })).toEqual([]);
   });
 
   it('is deterministic, and re-rolls the whole town on a new seed', () => {
@@ -339,7 +352,7 @@ describe('planTown', () => {
   });
 
   it('reports why plots were dropped, so the editor can name the real cause', () => {
-    const overBoard = { minX: -300, minY: -200, maxX: 300, maxY: 200 };
+    const overBoard = { minX: 0, minY: 0, maxX: 7, maxY: 7 };
     const blocked = runFull({ avoidPlayableBoard: true, size: 30 }, overBoard);
     expect(blocked.plotsOffered).toBeGreaterThan(0);
     expect(blocked.rejectedOnBoard).toBeGreaterThan(0);
@@ -351,14 +364,14 @@ describe('planTown', () => {
   });
 
   it('keeps the town off the playable board when asked', () => {
-    const overBoard = { minX: -300, minY: -200, maxX: 300, maxY: 200 };
+    const overBoard = { minX: 0, minY: 0, maxX: 7, maxY: 7 };
     const free = run({ avoidPlayableBoard: false, size: 20 }, [], overBoard);
     const kept = run({ avoidPlayableBoard: true, size: 20 }, [], overBoard);
     expect(free.length).toBeGreaterThan(0);
     expect(kept.length).toBeLessThanOrEqual(free.length);
     for (const placement of kept) {
       const ground = groundOf(placement);
-      const grid = { x: (ground.y / 27 + ground.x / 48) / 2, y: (ground.y / 27 - ground.x / 48) / 2 };
+      const grid = cellOf(ground);
       const inside = grid.x >= -0.5 && grid.y >= -0.5 && grid.x < board.cols - 0.5 && grid.y < board.rows - 0.5;
       expect(inside).toBe(false);
     }
@@ -400,8 +413,8 @@ describe('townIdPrefix', () => {
   });
 
   it('gives a town sited elsewhere its own identity', () => {
-    const elsewhere = { minX: AREA.minX + 3000, minY: AREA.minY - 2000,
-      maxX: AREA.maxX + 3000, maxY: AREA.maxY - 2000 };
+    const elsewhere = { minX: AREA.minX + 60, minY: AREA.minY - 40,
+      maxX: AREA.maxX + 60, maxY: AREA.maxY - 40 };
     expect(townIdPrefix(elsewhere)).not.toBe(townIdPrefix(AREA));
     for (const placement of run({}, [], elsewhere)) {
       expect(isTownMember(placement, AREA)).toBe(false);
@@ -410,6 +423,6 @@ describe('townIdPrefix', () => {
   });
 
   it('produces a prefix the sanitizer accepts', () => {
-    expect(`${townIdPrefix({ minX: -5000, minY: -5000, maxX: -4000, maxY: -4500 })}0`).toMatch(/^[A-Za-z0-9][A-Za-z0-9._:@+-]{0,127}$/);
+    expect(`${townIdPrefix({ minX: -50, minY: -50, maxX: -40, maxY: -45 })}0`).toMatch(/^[A-Za-z0-9][A-Za-z0-9._:@+-]{0,127}$/);
   });
 });

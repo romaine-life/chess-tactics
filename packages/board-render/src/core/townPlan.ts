@@ -184,7 +184,16 @@ function turnFacing(direction: Direction, steps: number, installed: readonly Dir
   return direction;
 }
 
-/** The dragged area a town fills, in scene pixels. */
+/**
+ * The dragged area a town fills, in BOARD GRID cells — not scene pixels.
+ *
+ * The editor is a tile editor and the author thinks in tiles, so the selection snaps to whole
+ * cells and reads as "6 x 4 tiles". Coordinates may be negative or beyond the playable board:
+ * scenery lives out in the apron, and the projection inverse is defined everywhere.
+ *
+ * Only the SELECTION is gridded. Buildings inside it still stand at free pixel positions, because
+ * a town that snapped to cells would read as a survey rather than a settlement.
+ */
 export interface TownBounds {
   minX: number;
   minY: number;
@@ -192,24 +201,36 @@ export interface TownBounds {
   maxY: number;
 }
 
+/** Grid rect -> its centre in scene pixels. */
+export function townBoundsScenePolygon(bounds: TownBounds): Array<{ x: number; y: number }> {
+  return [
+    { x: bounds.minX, y: bounds.minY },
+    { x: bounds.maxX, y: bounds.minY },
+    { x: bounds.maxX, y: bounds.maxY },
+    { x: bounds.minX, y: bounds.maxY },
+  ].map((corner) => {
+    const seat = projectBoardPoint(corner);
+    return { x: seat.left, y: seat.top };
+  });
+}
+
+/** Snap a continuous grid point to the nearest whole cell corner. */
+export const snapGridPoint = (point: { x: number; y: number }): { x: number; y: number } => ({
+  x: Math.round(point.x),
+  y: Math.round(point.y),
+});
+
+/** Centre of the dragged area, in grid cells. */
 export const townBoundsCentre = (bounds: TownBounds): { x: number; y: number } => ({
   x: (bounds.minX + bounds.maxX) / 2,
   y: (bounds.minY + bounds.maxY) / 2,
 });
 
-/**
- * A dragged area measured in tiles rather than raw pixels, so the author can see how much GROUND
- * they grabbed. Scene pixels are meaningless on their own — a screen-filling drag at high zoom can
- * be two tiles of ground — and every size knob here is quoted in the same pixels, so without this
- * the numbers never connect to the board.
- *
- * A tile top is 96x54 px, so the two axes divide differently. This is a legibility readout, not a
- * grid: nothing snaps.
- */
+/** The dragged area as whole tiles along each grid axis. */
 export function townBoundsInTiles(bounds: TownBounds): { across: number; down: number } {
   return {
-    across: Math.abs(bounds.maxX - bounds.minX) / TILE_TOP_WIDTH,
-    down: Math.abs(bounds.maxY - bounds.minY) / TILE_TOP_HEIGHT,
+    across: Math.abs(bounds.maxX - bounds.minX),
+    down: Math.abs(bounds.maxY - bounds.minY),
   };
 }
 
@@ -233,13 +254,20 @@ export function townStreets(
   const centre = townBoundsCentre(bounds);
   const halfW = Math.abs(bounds.maxX - bounds.minX) / 2;
   const halfH = Math.abs(bounds.maxY - bounds.minY) / 2;
-  // Keep the frontage inside the drag: streets sit at least `setback` in from the edges.
-  const insetX = Math.max(0, halfW - Math.min(setback, halfW * 0.8));
-  const insetY = Math.max(0, halfH - Math.min(setback, halfH * 0.8));
-  const at = (dx: number, dy: number): { x: number; y: number } => ({ x: centre.x + dx, y: centre.y + dy });
+  // Setback is a scene-pixel distance; express it in cells to keep frontage inside the selection.
+  const setbackCells = setback / TILE_TOP_WIDTH;
+  const insetX = Math.max(0, halfW - Math.min(setbackCells, halfW * 0.8));
+  const insetY = Math.max(0, halfH - Math.min(setbackCells, halfH * 0.8));
+
+  // Streets are laid out in GRID space and projected, so they run along the board's own axes
+  // instead of across it. This is what the old hardcoded 0.62 vertical squash was approximating.
+  const at = (dx: number, dy: number): { x: number; y: number } => {
+    const seat = projectBoardPoint({ x: centre.x + dx, y: centre.y + dy });
+    return { x: seat.left, y: seat.top };
+  };
 
   if (plan === 'linear') {
-    // One street along the LONGER axis of the drag, with a slight bend so the row is not a ruler.
+    // One street along the LONGER axis of the selection, with a slight bend so it is not a ruler.
     const horizontal = halfW >= halfH;
     const reach = horizontal ? insetX : insetY;
     const bend = (hashUnit(1, 0, seed, 12) - 0.5) * (horizontal ? insetY : insetX) * 0.5;
@@ -254,26 +282,31 @@ export function townStreets(
 
   if (plan === 'crossroads') {
     const hub = at(0, 0);
+    const w0 = at(-insetX, 0);
+    const w1 = at(insetX, 0);
+    const n0 = at(0, -insetY);
+    const n1 = at(0, insetY);
     return [
-      { x0: at(-insetX, 0).x, y0: at(-insetX, 0).y, x1: hub.x, y1: hub.y, sides: [-1, 1] },
-      { x0: hub.x, y0: hub.y, x1: at(insetX, 0).x, y1: at(insetX, 0).y, sides: [-1, 1] },
-      { x0: at(0, -insetY).x, y0: at(0, -insetY).y, x1: hub.x, y1: hub.y, sides: [-1, 1] },
-      { x0: hub.x, y0: hub.y, x1: at(0, insetY).x, y1: at(0, insetY).y, sides: [-1, 1] },
+      { x0: w0.x, y0: w0.y, x1: hub.x, y1: hub.y, sides: [-1, 1] },
+      { x0: hub.x, y0: hub.y, x1: w1.x, y1: w1.y, sides: [-1, 1] },
+      { x0: n0.x, y0: n0.y, x1: hub.x, y1: hub.y, sides: [-1, 1] },
+      { x0: hub.x, y0: hub.y, x1: n1.x, y1: n1.y, sides: [-1, 1] },
     ];
   }
 
   if (plan === 'green') {
-    // A closed ring inscribed in the drag, wound counter-clockwise so its segment normal points
-    // INWARD. Frontage is on side -1 (outside the ring), putting every building's face on the green.
+    // A closed ring inscribed in the selection, wound counter-clockwise in grid space so its
+    // segment normal points INWARD. Frontage is on side -1 (outside the ring), which puts every
+    // building's face on the green.
     const corners = 6;
     const streets: TownStreet[] = [];
     for (let i = 0; i < corners; i += 1) {
       const t0 = (i / corners) * Math.PI * 2;
       const t1 = ((i + 1) / corners) * Math.PI * 2;
-      const w0 = 1 + (hashUnit(i, 0, seed, 13) - 0.5) * 0.18;
-      const w1 = 1 + (hashUnit(i + 1, 0, seed, 13) - 0.5) * 0.18;
-      const p0 = at(Math.cos(t0) * insetX * w0, Math.sin(t0) * insetY * w0);
-      const p1 = at(Math.cos(t1) * insetX * w1, Math.sin(t1) * insetY * w1);
+      const k0 = 1 + (hashUnit(i, 0, seed, 13) - 0.5) * 0.18;
+      const k1 = 1 + (hashUnit(i + 1, 0, seed, 13) - 0.5) * 0.18;
+      const p0 = at(Math.cos(t0) * insetX * k0, Math.sin(t0) * insetY * k0);
+      const p1 = at(Math.cos(t1) * insetX * k1, Math.sin(t1) * insetY * k1);
       streets.push({ x0: p0.x, y0: p0.y, x1: p1.x, y1: p1.y, sides: [-1] });
     }
     return streets;
@@ -364,19 +397,25 @@ export function planTown(input: TownPlanInput): TownPlanResult {
     minY: Math.min(bounds.minY, bounds.maxY),
     maxY: Math.max(bounds.minY, bounds.maxY),
   };
-  if (area.maxX - area.minX < 8 || area.maxY - area.minY < 8) return empty;
-  const { x: centerX, y: centerY } = townBoundsCentre(area);
+  // A thin strip is a valid town (a roadside row), so only a selection with no extent on BOTH
+  // axes is rejected. The street skeleton handles the degenerate axis by running along the other.
+  if (area.maxX - area.minX < 1 && area.maxY - area.minY < 1) return empty;
+  const centreCell = townBoundsCentre(area);
+  const centreSeat = projectBoardPoint(centreCell);
+  const centerX = centreSeat.left;
+  const centerY = centreSeat.top;
 
   const seed = params.seed >>> 0;
   const profile = PLAN_PROFILES[params.plan] ?? PLAN_PROFILES.linear;
   const looseness = clamp(params.looseness, 0, 1);
   const wobble = clamp(params.facingWobble, 0, 1);
-  // Setback is an ideal, not a floor. On a small drag the full setback would consume the whole
-  // area and leave no street to front, so it scales down with the area: a tight drag gets a
-  // tighter town rather than an empty one.
-  const halfW = (area.maxX - area.minX) / 2;
-  const halfH = (area.maxY - area.minY) / 2;
-  const setback = Math.max(4, Math.min(params.setback, Math.min(halfW, halfH) * 0.45));
+  // Setback is an ideal, not a floor. On a small selection the full setback would consume the
+  // whole area and leave no street to front, so it scales down with the area in SCENE pixels:
+  // a tight selection gets a tighter town rather than an empty one.
+  const corners = townBoundsScenePolygon(area);
+  const sceneHalfW = (Math.max(...corners.map((c) => c.x)) - Math.min(...corners.map((c) => c.x))) / 2;
+  const sceneHalfH = (Math.max(...corners.map((c) => c.y)) - Math.min(...corners.map((c) => c.y))) / 2;
+  const setback = Math.max(4, Math.min(params.setback, Math.min(sceneHalfW, sceneHalfH) * 0.45));
   const streets = townStreets(params.plan, area, setback, seed);
 
   // 1. Lay out every plot the plan offers, along street frontage only.
@@ -404,9 +443,11 @@ export function planTown(input: TownPlanInput): TownPlanResult {
           x: street.x0 + along.x * (t + slideAlong) + normal.x * offset * side,
           y: street.y0 + along.y * (t + slideAlong) + normal.y * offset * side,
         };
-        // The drag is a hard boundary: a town never spills outside the ground the author gave it.
-        if (ground.x < area.minX || ground.x > area.maxX
-          || ground.y < area.minY || ground.y > area.maxY) continue;
+        // The selection is a hard boundary. It is a GRID rect, so containment is tested after
+        // unprojecting the ground point — the region is a diamond on screen, not a rectangle.
+        const cell = unprojectBoardPoint({ left: ground.x, top: ground.y });
+        if (cell.x < area.minX || cell.x > area.maxX
+          || cell.y < area.minY || cell.y > area.maxY) continue;
         plots.push({
           ground,
           // Face back across the setback toward the street centreline.
