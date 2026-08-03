@@ -32,6 +32,8 @@ import {
   runCardTacticalSpecimenFromSearch,
   scaledRunCardContentsTuning,
 } from './RunCardPrototype';
+import { runCardFaceContent, runCardSpecimen } from './runCardFaceContent';
+import type { PurchasablePieceType } from '../run/model';
 
 describe('Run Card Layout review variant', () => {
   it('addresses each affected-card review state in the URL', () => {
@@ -43,7 +45,7 @@ describe('Run Card Layout review variant', () => {
     expect(runCardTacticalSpecimenFromSearch('?cardVariant=tactical')).toBe('single');
   });
 
-  it('addresses Concinnous hidden and revealed purchase states without synthesized rules prose', () => {
+  it('addresses hidden and revealed purchase states without synthesized prose', () => {
     expect(runCardConcinnousTargetRevealedFromSearch('?cardVariant=concinnous')).toBe(false);
     expect(runCardConcinnousTargetRevealedFromSearch('?cardVariant=concinnous&concinnousTarget=revealed')).toBe(true);
     expect(runCardPrototypeContent('concinnous')).toMatchObject({
@@ -52,12 +54,14 @@ describe('Run Card Layout review variant', () => {
       typeLine: 'Units',
       cardProperty: { id: 'concinnous', name: 'Concinnous' },
       grants: [{ count: 2, unit: 'pawn' }],
-      properties: [{ name: 'Positioned', target: 'Target hidden' }],
     });
-    expect(runCardPrototypeContent('concinnous', 'single', true)).toMatchObject({
-      properties: [{ name: 'Positioned', target: 'Pawn 1' }],
-    });
+    // A hidden target draws nothing; acquisition marks the unit that actually got it.
+    expect(runCardPrototypeContent('concinnous').grants.every((grant) => !grant.ability)).toBe(true);
+    expect(runCardPrototypeContent('concinnous', 'single', true).grants).toContainEqual(
+      expect.objectContaining({ ability: { state: 'positioned', index: 0 } }),
+    );
     expect(runCardPrototypeContent('concinnous')).not.toHaveProperty('rules');
+    expect(runCardPrototypeContent('concinnous')).not.toHaveProperty('properties');
   });
 
   it('shows Discipline only when one Tactical unit makes the random target certain', () => {
@@ -66,7 +70,7 @@ describe('Run Card Layout review variant', () => {
       cost: 12,
       typeLine: 'Units',
       cardProperty: { id: 'tactical', name: 'Tactical' },
-      grants: [{ count: 1, unit: 'queen', ability: 'discipline' }],
+      grants: [{ count: 1, unit: 'queen', ability: { state: 'discipline', index: 0 } }],
     });
     expect(runCardPrototypeContent('tactical', 'multi')).toMatchObject({
       cost: 12,
@@ -74,6 +78,21 @@ describe('Run Card Layout review variant', () => {
       cardProperty: { id: 'tactical' },
     });
     expect(runCardPrototypeContent('tactical', 'multi').grants.every((grant) => !grant.ability)).toBe(true);
+  });
+
+  it('gives Hieratic exactly the Tactical treatment: a symbol, and no sentence in place of a hidden target', () => {
+    const hidden = runCardPrototypeContent('hieratic');
+    expect(hidden).toMatchObject({ typeLine: 'Units', cardProperty: { id: 'hieratic', name: 'Hieratic' } });
+    expect(hidden.grants.every((grant) => !grant.ability)).toBe(true);
+    expect(hidden).not.toHaveProperty('properties');
+    // Agminate is named in the property tooltip's authored effect, which ADR-0339 keeps.
+    // What is gone is any sentence printed into the card body in place of a hidden target.
+    expect(JSON.stringify(hidden)).not.toContain('Chosen on purchase');
+    expect(hidden.flavor).not.toContain('Agminate');
+    expect(hidden.name).not.toContain('Agminate');
+    // Acquisition reveals it the same way every other drawn target is revealed.
+    const revealed = runCardPrototypeContent('hieratic', 'single', true);
+    expect(revealed.grants.some((grant) => grant.ability?.state === 'marshalled')).toBe(true);
   });
 
   it('keeps the primary type line and carries the qualifier as a symbol', () => {
@@ -162,91 +181,64 @@ describe('Run Card Layout review variant', () => {
     expect(runCardPrototypeCostFromSearch('')).toBeNull();
   });
 
-  const cardWithGrants = (grants: RunCardFaceContent['grants']): RunCardFaceContent => ({
-    name: 'Specimen',
-    cost: 3,
-    typeLine: 'Units',
-    grants,
-    flavor: 'The frost came in June. By August, the road had found him.',
-  });
+  // Density specimens are projected cards, not fabricated faces: a load the estimator is
+  // asked about is always a load a real card could present.
+  const cardWithPieces = (...pieces: PurchasablePieceType[]): RunCardFaceContent => (
+    runCardFaceContent(runCardSpecimen({ pieces }))
+  );
 
   it('derives each live card face density step from its own cell load', () => {
     expect(runCardLedgerRows(1)).toBe(1);
     expect(runCardLedgerRows(2)).toBe(2);
     expect(runCardLedgerRows(4)).toBe(2);
     expect(runCardLedgerRows(5)).toBe(3);
-    expect(runCardContentsDensityStepForCard(cardWithGrants([{ count: 1, unit: 'pawn' }])).density).toBe('roomy');
-    expect(runCardContentsDensityStepForCard(cardWithGrants([{ count: 2, unit: 'pawn' }])).density).toBe('roomy');
-    expect(runCardContentsDensityStepForCard(cardWithGrants([
-      { count: 1, unit: 'pawn' },
-      { count: 1, unit: 'knight' },
-    ])).density).toBe('filled');
-    expect(runCardContentsDensityStepForCard(cardWithGrants([
-      { count: 3, unit: 'pawn' },
-      { count: 1, unit: 'knight' },
-      { count: 1, unit: 'bishop' },
-    ])).density).toBe('packed');
-    expect(runCardContentsDensityStepForCard(cardWithGrants([
-      { count: 3, unit: 'pawn' },
-      { count: 1, unit: 'knight' },
-      { count: 1, unit: 'bishop' },
-      { count: 1, unit: 'rook' },
-      { count: 1, unit: 'queen' },
-    ])).density).toBe('scrunched');
+    expect(runCardContentsDensityStepForCard(cardWithPieces('pawn')).density).toBe('roomy');
+    expect(runCardContentsDensityStepForCard(cardWithPieces('pawn', 'pawn')).density).toBe('roomy');
+    expect(runCardContentsDensityStepForCard(cardWithPieces('pawn', 'knight')).density).toBe('filled');
+    expect(runCardContentsDensityStepForCard(cardWithPieces('pawn', 'pawn', 'pawn', 'knight', 'bishop')).density).toBe('packed');
+    expect(runCardContentsDensityStepForCard(cardWithPieces('pawn', 'pawn', 'pawn', 'knight', 'bishop', 'rook', 'queen')).density).toBe('scrunched');
   });
 
   it('grows flavor into leftover Contents room without changing the chosen step', () => {
-    const roomy = runCardContentsDensityStepForCard(cardWithGrants([{ count: 1, unit: 'pawn' }]));
+    const roomy = runCardContentsDensityStepForCard(cardWithPieces('pawn'));
     expect(roomy.density).toBe('roomy');
     expect(roomy.tuning.flavorScale).toBe(1.3);
     // Standard's measured panel leaves a little room under a two-cell stack, so
     // the flavor grows into it — the step it grew inside is still Filled.
-    const filled = runCardContentsDensityStepForCard(cardWithGrants([
-      { count: 1, unit: 'pawn' },
-      { count: 1, unit: 'knight' },
-    ]));
+    const filled = runCardContentsDensityStepForCard(cardWithPieces('pawn', 'knight'));
     expect(filled.density).toBe('filled');
     expect(filled.tuning.flavorScale).toBe(1.05);
     expect(RUN_CARD_CONTENTS_DENSITY_LADDER[1].tuning.flavorScale).toBe(1);
-    const packed = runCardContentsDensityStepForCard(cardWithGrants([
-      { count: 3, unit: 'pawn' },
-      { count: 1, unit: 'knight' },
-      { count: 1, unit: 'bishop' },
-    ]));
+    const packed = runCardContentsDensityStepForCard(cardWithPieces('pawn', 'pawn', 'pawn', 'knight', 'bishop'));
     expect(packed.density).toBe('packed');
     expect(packed.tuning.flavorScale).toBe(1.15);
-    const scrunched = runCardContentsDensityStepForCard(cardWithGrants([
-      { count: 3, unit: 'pawn' },
-      { count: 1, unit: 'knight' },
-      { count: 1, unit: 'bishop' },
-      { count: 1, unit: 'rook' },
-      { count: 1, unit: 'queen' },
-    ]));
+    const scrunched = runCardContentsDensityStepForCard(cardWithPieces('pawn', 'pawn', 'pawn', 'knight', 'bishop', 'rook', 'queen'));
     expect(scrunched.density).toBe('scrunched');
-    expect(scrunched.tuning.flavorScale).toBe(1.06);
+    // A 5-cell load is above the deck's 9-gold ceiling, so this composition has no
+    // authored banner flavor and falls back to its short prose label — which leaves it
+    // more room to grow into than the reviewed cards above.
+    expect(scrunched.tuning.flavorScale).toBe(1.26);
     // Growth derives copies; the reviewed ladder itself is never rewritten.
     expect(RUN_CARD_CONTENTS_DENSITY_LADDER[0].tuning.flavorScale).toBe(1);
     expect(RUN_CARD_CONTENTS_DENSITY_LADDER[3].tuning.flavorScale).toBe(.96);
   });
 
   it('steps a sparse card denser only when extras would overflow its actual Contents Box', () => {
-    const concinnousPair: RunCardFaceContent = {
-      name: 'Two Good Boots',
-      cost: 4,
-      typeLine: 'Units',
-      cardProperty: { id: 'concinnous', name: 'Concinnous', effect: 'Makes one contained unit Positioned when the card is acquired.' },
-      grants: [{ count: 2, unit: 'pawn' }],
-      properties: [{ name: 'Positioned', target: 'Target hidden' }],
-      flavor: 'The road kept both pairs of boots, and returned neither name.',
-    };
+    // Same card, two frames. The steel Hieratic plate has the tighter Contents Box, so
+    // a two-cell load that sits Filled on the standard frame must step denser there.
+    const twoCell = runCardFaceContent(runCardSpecimen({ pieces: ['pawn', 'knight'] }));
     expect(runCardContentsDensityStepForCard(
-      concinnousPair,
-      RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY,
+      twoCell,
+      RUN_CARD_STANDARD_FRAME_GEOMETRY,
     ).density).toBe('filled');
     expect(runCardContentsDensityStepForCard(
-      { ...concinnousPair, typeLine: 'Units', properties: undefined },
-      RUN_CARD_STANDARD_FRAME_GEOMETRY,
-    ).density).toBe('roomy');
+      twoCell,
+      RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY,
+    ).density).toBe('scrunched');
+    // A one-cell card fits its anchor step on either frame and is never stepped denser.
+    const oneCell = runCardFaceContent(runCardSpecimen({ pieces: ['pawn', 'pawn'] }));
+    expect(runCardContentsDensityStepForCard(oneCell, RUN_CARD_STANDARD_FRAME_GEOMETRY).density).toBe('roomy');
+    expect(runCardContentsDensityStepForCard(oneCell, RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY).density).toBe('roomy');
   });
 
   it('shows progressively denser Contents Box specimens at the real card width', () => {

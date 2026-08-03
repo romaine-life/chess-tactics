@@ -416,6 +416,24 @@ export const PLAGUED_DISCOUNT: Readonly<Record<PurchasablePieceType, number>> = 
   queen: 3,
 });
 
+/**
+ * What a card's qualifier does to its price: Pestiferous discounts by the marked piece,
+ * every other property charges its state's surcharge. Offer creation, stored-offer
+ * normalization and review specimens all price through here, so a card cannot cost one
+ * thing in the Shop and another wherever else it is shown.
+ */
+export function runCardOfferCost(
+  value: number,
+  cardType: RunCardType | null,
+  plaguedPiece: PurchasablePieceType | null,
+): number {
+  if (plaguedPiece) return value - PLAGUED_DISCOUNT[plaguedPiece];
+  if (cardType === 'tactical') return value + DISCIPLINE_COST;
+  if (cardType === 'concinnous') return value + POSITIONED_COST;
+  if (cardType === 'hieratic') return value + AGMINATE_COST;
+  return value;
+}
+
 export function seededPestiferousTarget<T>(
   effectSeed: number,
   candidates: readonly T[],
@@ -523,9 +541,11 @@ export function createRunCardOffer(
     ? seededPestiferousTarget(effectSeed, card.pieces.map((_, index) => index), 0)
     : null;
   const plaguedPiece = plaguedPieceIndex === null ? null : card.pieces[plaguedPieceIndex];
-  const cost = plaguedPiece
-    ? card.value - PLAGUED_DISCOUNT[plaguedPiece]
-    : card.value + (tactical ? DISCIPLINE_COST : concinnous ? POSITIONED_COST : hieratic ? AGMINATE_COST : 0);
+  const cost = runCardOfferCost(
+    card.value,
+    pestiferous ? 'pestiferous' : tactical ? 'tactical' : concinnous ? 'concinnous' : hieratic ? 'hieratic' : null,
+    plaguedPiece,
+  );
   return {
     ...card,
     pieces: [...card.pieces],
@@ -816,15 +836,7 @@ function normalizeCardOffers(value: unknown): RunCardOffer[] {
     return {
       ...offer,
       cardType,
-      cost: plaguedPiece
-        ? offer.value - PLAGUED_DISCOUNT[plaguedPiece]
-        : offer.value + (cardType === 'tactical'
-          ? DISCIPLINE_COST
-          : cardType === 'concinnous'
-            ? POSITIONED_COST
-            : cardType === 'hieratic'
-              ? AGMINATE_COST
-              : 0),
+      cost: runCardOfferCost(offer.value, cardType, plaguedPiece),
       plaguedPieceIndex,
       effectTargetIndex,
     };

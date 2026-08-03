@@ -10,7 +10,7 @@ import {
   resolvedLiveMediaUrl,
 } from '@chess-tactics/board-render';
 import { PredrawnMoveHighlightPaint } from '../render/PredrawnMoveHighlightPaint';
-import { runCardArtSlot, runCardFlavor, runCardName } from '../run/cardNames';
+import { runCardArtSlot, runCardName } from '../run/cardNames';
 import {
   AGMINATE_DISPLAY_NAME,
   ATARAXIA_BY_TIER,
@@ -36,16 +36,8 @@ import {
 } from '../run/progression';
 import { generateTerrainDressing } from './generatedReferenceBoard';
 import { RunCard } from './RunCard';
-import {
-  RUN_CARD_FRAME_SLOT,
-  RUN_CARD_CONCINNOUS_FRAME_SLOT,
-  RUN_CARD_HIERATIC_FRAME_SLOT,
-  RUN_CARD_PESTIFEROUS_FRAME_SLOT,
-  RUN_CARD_TACTICAL_FRAME_SLOT,
-  RunCardFace,
-  runCardPropertyIconUrl,
-  type RunCardFaceContent,
-} from './RunCardFace';
+import { RunCardFace, runCardPropertyIconUrl } from './RunCardFace';
+import { runCardFaceContent, runCardFrameSlot, runCardSpecimen } from './runCardFaceContent';
 import { runUnitStateIconUrl, type RunUnitState } from './shared/RunAbilityIcon';
 import { runCardFrameGeometryForSlot } from './runCardFrameGeometry';
 import { StaticReadOnlyBoardView } from './shared/BoardViewFraming';
@@ -659,79 +651,68 @@ export function CardCodex({
   );
 }
 
+/**
+ * The reference adds only what the model does not already carry: the specimen's printed
+ * cost and the longer authored gloss. Its name and frame are read from the card type
+ * itself, never restated here.
+ */
 type CardTypeReferenceDefinition = Readonly<{
   id: RunCardType;
-  name: string;
   cost: number;
   description: string;
   provisional?: boolean;
-  frameSlot?: string;
 }>;
 
 const CARD_TYPE_REFERENCES: readonly CardTypeReferenceDefinition[] = Object.freeze([
   {
     id: 'pestiferous',
-    name: 'Pestiferous',
     cost: 1,
     description: `One public unit is ${CACOCHYMIC_DISPLAY_NAME} and receives the tier discount. A victorious Battle loses that unit, then marks one remaining unit; the empty card remains in the deck.`,
-    frameSlot: RUN_CARD_PESTIFEROUS_FRAME_SLOT,
   },
   {
     id: 'concinnous',
-    name: 'Concinnous',
     cost: 3,
     description: 'Skillfully and harmoniously arranged. One persisted contained unit becomes Positioned on purchase; its target may remain hidden until then.',
-    frameSlot: RUN_CARD_CONCINNOUS_FRAME_SLOT,
   },
   {
     id: 'tactical',
-    name: 'Tactical',
     cost: 4,
     description: 'One contained unit gains Discipline when purchased. The target is hidden on multi-unit offers; this one-unit Volunteer shows the state because its target is forced.',
-    frameSlot: RUN_CARD_TACTICAL_FRAME_SLOT,
   },
   {
     id: 'hieratic',
-    name: 'Hieratic',
     cost: 4,
     description: `Priestly, highly formal, and rigidly stylized. One contained unit gains ${AGMINATE_DISPLAY_NAME} when purchased and deploys into its role's formation seat rather than a rank. The target is hidden on multi-unit offers; this one-unit Volunteer shows the state because its target is forced.`,
-    frameSlot: RUN_CARD_HIERATIC_FRAME_SLOT,
   },
 ]);
+
+const cardTypeName = (definition: CardTypeReferenceDefinition): string => (
+  RUN_CARD_TYPE_REFERENCE[definition.id].name
+);
 
 const VOLUNTEER_CARD = RUN_CARD_BY_ID.p;
 const CARD_TYPE_TEXTURE_TILE_COUNT = 24;
 
+/**
+ * The reference draws a real one-unit Volunteer offer of each type and projects it like
+ * every other host, so the glossary cannot show a card the Shop could never deal. Its
+ * target is forced by the single unit, which is why each state is public here.
+ */
 function CardTypeReference({ definition }: { definition: CardTypeReferenceDefinition }): ReactElement {
-  const frameSlot = definition.frameSlot ?? RUN_CARD_FRAME_SLOT;
-  const frameMedia = liveMediaForSlot(frameSlot).media;
-  const card = {
-    name: runCardName(VOLUNTEER_CARD),
+  const specimen = runCardSpecimen({
+    pieces: VOLUNTEER_CARD.pieces,
+    cardType: definition.id,
     cost: definition.cost,
-    typeLine: 'Units',
-    cardProperty: {
-      id: definition.id,
-      name: definition.name,
-      effect: RUN_CARD_TYPE_REFERENCE[definition.id].effect,
-    },
-    grants: [{
-      unit: 'pawn',
-      count: 1,
-      ...(definition.id === 'pestiferous' ? { plaguedIndices: [0] } : {}),
-      ...(definition.id === 'tactical' ? { ability: 'discipline' as const } : {}),
-      ...(definition.id === 'hieratic' ? { ability: 'marshalled' as const } : {}),
-    }],
-    properties: definition.id === 'concinnous'
-      ? [{ name: 'Positioned', target: 'Pawn' }]
-      : undefined,
-    flavor: runCardFlavor(VOLUNTEER_CARD),
-  } satisfies RunCardFaceContent;
+    plaguedPieceIndex: definition.id === 'pestiferous' ? 0 : null,
+    effectTargetIndex: definition.id === 'concinnous' ? 0 : null,
+  });
+  const frameSlot = runCardFrameSlot(specimen);
   return (
     <div className="enchiridion-card-type-preview">
       <RunCardFace
-        card={card}
-        frameUrl={frameMedia.immutableUrl}
-        artUrl={resolvedLiveMediaUrl(runCardArtSlot(VOLUNTEER_CARD))}
+        card={runCardFaceContent(specimen, { purchased: true })}
+        frameUrl={liveMediaForSlot(frameSlot).media.immutableUrl}
+        artUrl={resolvedLiveMediaUrl(runCardArtSlot(specimen))}
         frameGeometry={runCardFrameGeometryForSlot(frameSlot)}
       />
     </div>
@@ -796,7 +777,7 @@ function CardTypesSection({ framed, textureBatch }: { framed: boolean; textureBa
                   'enchiridion-card-type-row',
                   selected.id === definition.id && 'is-active',
                 )}
-                aria-label={`${definition.name}. ${definition.description}`}
+                aria-label={`${cardTypeName(definition)}. ${definition.description}`}
                 aria-pressed={selected.id === definition.id}
               >
                 {displayedTextureUrls[definition.id] ? (
@@ -821,7 +802,7 @@ function CardTypesSection({ framed, textureBatch }: { framed: boolean; textureBa
                     src={runCardPropertyIconUrl(definition.id)}
                     draggable={false}
                   />
-                  <span className="enchiridion-card-type-row-name">{definition.name}</span>
+                  <span className="enchiridion-card-type-row-name">{cardTypeName(definition)}</span>
                 </span>
                 {definition.provisional ? <small>Provisional</small> : null}
               </ReferenceTrigger>

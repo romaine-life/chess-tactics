@@ -9,22 +9,19 @@ import {
   fetchRunCardIconFittingPortfolio,
   saveRunCardIconFittingPortfolio,
 } from '../net/runCardIconFitting';
-import { runCardArtSlot, runCardFlavor, runCardName } from '../run/cardNames';
-import { AGMINATE_DISPLAY_NAME, RUN_CARD_BY_ID, RUN_CARD_TYPE_REFERENCE, type RunAbility } from '../run/model';
+import { runCardArtSlot } from '../run/cardNames';
+import { AGMINATE_DISPLAY_NAME, RUN_CARD_BY_ID } from '../run/model';
 import {
-  RUN_CARD_CONCINNOUS_FRAME_SLOT,
-  RUN_CARD_HIERATIC_FRAME_SLOT,
   RUN_CARD_COMMITTED_PROPERTY_PLACEMENTS,
   RUN_CARD_COMMITTED_UNIT_STATE_PLACEMENT,
   RUN_CARD_ICON_PLACEMENT_BASELINE,
-  RUN_CARD_PESTIFEROUS_FRAME_SLOT,
-  RUN_CARD_TACTICAL_FRAME_SLOT,
   RunCardFace,
   type RunCardFaceContent,
   type RunCardIconPlacement,
   type RunCardProperty,
   type RunUnitState,
 } from './RunCardFace';
+import { runCardFaceContent, runCardFrameSlotForType, runCardSpecimen } from './runCardFaceContent';
 import { runCardFrameGeometryForSlot } from './runCardFrameGeometry';
 import { SliderRow, ctlReset } from './dressing/SliderRow';
 import { AssetSwatchList } from './shared/AssetSwatchList';
@@ -37,11 +34,9 @@ export const RUN_CARD_ICON_FITTING_SCALE_MAX = 5;
 type PairDefinition = Readonly<{
   property: RunCardProperty;
   propertySlot: string;
-  propertyEffect: string;
   state: RunUnitState;
   stateSlot: string;
   stateEffect: string;
-  frameSlot: string;
   source: 'accepted' | 'owner-selected' | 'review';
 }>;
 
@@ -49,41 +44,33 @@ export const RUN_CARD_ICON_PAIRS: readonly PairDefinition[] = Object.freeze([
   {
     property: 'pestiferous',
     propertySlot: 'ui/kit/icons/card-properties/pestiferous.png',
-    propertyEffect: RUN_CARD_TYPE_REFERENCE.pestiferous.effect,
     state: 'plagued',
     stateSlot: 'ui/kit/icons/game/plagued.png',
     stateEffect: 'The marked unit receives its tier discount and is next to be lost.',
-    frameSlot: RUN_CARD_PESTIFEROUS_FRAME_SLOT,
     source: 'accepted',
   },
   {
     property: 'concinnous',
     propertySlot: 'ui/kit/icons/card-properties/concinnous.png',
-    propertyEffect: RUN_CARD_TYPE_REFERENCE.concinnous.effect,
     state: 'positioned',
     stateSlot: 'ui/kit/icons/game/positioned.png',
     stateEffect: 'The unit favors its piece-specific region during automatic deployment.',
-    frameSlot: RUN_CARD_CONCINNOUS_FRAME_SLOT,
     source: 'accepted',
   },
   {
     property: 'tactical',
     propertySlot: 'ui/kit/icons/card-properties/tactical.png',
-    propertyEffect: RUN_CARD_TYPE_REFERENCE.tactical.effect,
     state: 'discipline',
     stateSlot: 'ui/kit/icons/game/discipline.png',
     stateEffect: 'The unit may be deliberately placed before automatic deployment.',
-    frameSlot: RUN_CARD_TACTICAL_FRAME_SLOT,
     source: 'accepted',
   },
   {
     property: 'hieratic',
     propertySlot: 'ui/kit/icons/card-properties/hieratic.png',
-    propertyEffect: RUN_CARD_TYPE_REFERENCE.hieratic.effect,
     state: 'marshalled',
     stateSlot: 'ui/kit/icons/game/marshalled.png',
     stateEffect: 'The unit seeks its piece-specific station within the surrounding formation.',
-    frameSlot: RUN_CARD_HIERATIC_FRAME_SLOT,
     source: 'accepted',
   },
 ]);
@@ -274,24 +261,21 @@ function candidateConcept(version: AdminLiveMediaVersion): string {
   return typeof version.metadata.concept === 'string' ? version.metadata.concept : version.label;
 }
 
+/**
+ * The fitting specimen is a real one-unit Volunteer offer of the pair's card type,
+ * projected like every other card. Its single unit forces the target, so the paired
+ * property symbol and unit-state marker are both public and both seat where they will
+ * in a Shop.
+ */
 function specimenCard(pair: PairDefinition): RunCardFaceContent {
-  const ability = pair.state === 'plagued' ? undefined : pair.state satisfies RunAbility;
-  return {
-    name: runCardName(RUN_CARD_BY_ID.p),
-    cost: pair.property === 'tactical' ? 4 : pair.property === 'concinnous' ? 3 : 1,
-    typeLine: 'Units',
-    cardProperty: {
-      id: pair.property,
-      name: displayName(pair.property),
-      effect: pair.propertyEffect,
-    },
-    grants: [{
-      unit: 'pawn',
-      count: 1,
-      ...(pair.state === 'plagued' ? { plaguedIndices: [0] } : { ability }),
-    }],
-    flavor: runCardFlavor(RUN_CARD_BY_ID.p),
-  };
+  return runCardFaceContent(
+    runCardSpecimen({
+      pieces: RUN_CARD_BY_ID.p.pieces,
+      cardType: pair.property,
+      plaguedPieceIndex: pair.state === 'plagued' ? 0 : null,
+    }),
+    { purchased: true },
+  );
 }
 
 function selectedVersion(
@@ -381,7 +365,7 @@ export function RunCardIconFittingViewer({
     () => catalog ? runCardIconFittingVersions(catalog, pair.stateSlot) : [],
     [catalog, pair.stateSlot],
   );
-  const frame = catalog ? runIconPairReviewFrameVersion(catalog, pair.frameSlot) : null;
+  const frame = catalog ? runIconPairReviewFrameVersion(catalog, runCardFrameSlotForType(pair.property)) : null;
   const selection = draft?.selections[pair.property];
   const propertyVersion = selection ? selectedVersion(propertyVersions, selection.propertyVersionId) : null;
   const stateVersion = selection ? selectedVersion(stateVersions, selection.stateVersionId) : null;
@@ -486,7 +470,7 @@ export function RunCardIconFittingViewer({
                 card={specimenCard(pair)}
                 frameUrl={frame.media!.url}
                 artUrl={resolvedLiveMediaUrl(runCardArtSlot(RUN_CARD_BY_ID.p))}
-                frameGeometry={runCardFrameGeometryForSlot(pair.frameSlot)}
+                frameGeometry={runCardFrameGeometryForSlot(runCardFrameSlotForType(pair.property))}
                 iconMedia={{
                   propertyUrl: propertyVersion.media!.url,
                   unitStateUrls: { [pair.state]: stateVersion.media!.url },
