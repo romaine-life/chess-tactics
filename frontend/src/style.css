@@ -19211,16 +19211,30 @@ button.tileset-relationship-cell {
   translate: 0 -50%;
 }
 
-/* .run-card-grid's repeat(auto-fit, ...) needs a definite container to count tracks
-   against, and this row deliberately has none -- it is what makes the width definite.
-   Flowing one auto column per offer keeps the same track size without that circularity,
-   and without hardcoding how many relics are on show. */
+/* The offers themselves: the relic icon and nothing else. No card, no name, no effect
+   text -- the reading is the art, and the words arrive on hover through the shared
+   Tooltip. This row is what gives the layer its width, so the mat ends up sized to the
+   relics rather than to a panel wrapped around them. */
 .relic-mat-cards {
-  grid-area: 1 / 1;
-  grid-auto-columns: minmax(196px, 236px);
-  grid-auto-flow: column;
-  grid-template-columns: none;
+  display: flex;
+  gap: var(--ds-space-7);
   position: relative;
+}
+
+/* The icons are dropped straight onto painted cloth, stone or wood, so nothing separates
+   their silhouette from what is behind them. A hard one-pixel stroke does that without
+   touching the art or putting a frame back around it. */
+.relic-mat-offer .run-relic-icon {
+  overflow: visible;
+}
+
+.relic-mat-offer .run-relic-icon img {
+  --relic-mat-stroke: rgb(16 12 9 / 0.92);
+  filter:
+    drop-shadow(1px 0 0 var(--relic-mat-stroke))
+    drop-shadow(-1px 0 0 var(--relic-mat-stroke))
+    drop-shadow(0 1px 0 var(--relic-mat-stroke))
+    drop-shadow(0 -1px 0 var(--relic-mat-stroke));
 }
 
 /* Catalog thumbnails carry no cards, so nothing is there to size the layer. Hold the

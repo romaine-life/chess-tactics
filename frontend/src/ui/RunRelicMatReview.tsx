@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { fetchAdminLiveMediaCatalog, type AdminLiveMediaCatalog, type AdminLiveMediaVersion } from '../net/liveMediaAdmin';
-import type { RunRelicId } from '../run/model';
-import { RunRelicOfferCard } from './RunRelicOfferCard';
+import { RUN_RELIC_BY_ID, type RunRelicId } from '../run/model';
+import { RunRelicIcon } from './RunRelics';
+import { Tooltip } from './shared/InfoTip';
 import { StudioCatalogCard } from './studio/StudioCatalogCard';
 
 /**
@@ -9,9 +10,9 @@ import { StudioCatalogCard } from './studio/StudioCatalogCard';
  * Conflict -- read straight from the live-media catalog.
  *
  * A mat cannot be judged alone. It is a middle layer: the chosen Spolia backdrop is
- * behind it and three real relic cards sit on it, and whether it works is entirely a
- * question of what it does between those two. So every card and the viewer stage mount
- * the actual composite rather than showing the mat's pixels on a checkerboard.
+ * behind it and the relic icons sit on it, and whether it works is entirely a question of
+ * what it does between those two. So every card and the viewer stage mount the actual
+ * composite rather than showing the mat's pixels on a checkerboard.
  *
  * Read-only. Nothing here accepts, installs, or promotes a candidate.
  */
@@ -106,9 +107,12 @@ export function findRelicMat(items: readonly RelicMatCandidate[], id: string): R
 }
 
 /**
- * The composite under review: backdrop, mat, real relic cards. `cards` is off for the
- * catalog thumbnails, where three full cards at grid size would be illegible anyway and
- * the question is only which mat to open.
+ * The composite under review: backdrop, mat, and the relic icons laid on it raw at their
+ * installed 64x64 -- no card, no name, no effect text. The words arrive on hover through
+ * the shared Tooltip, which is the same trigger the held-relic strip already uses.
+ *
+ * `cards` is off for the catalog thumbnails, where 64px icons would be illegible anyway
+ * and the only question is which mat to open.
  */
 export function RelicMatStage({
   candidate,
@@ -132,8 +136,22 @@ export function RelicMatStage({
             row's intrinsic sizing, and the layer grows to the raster instead of the cards. */}
         <img className="relic-mat-art" src={candidate.version.media!.url} alt="" draggable={false} />
         {cards ? (
-          <div className="run-card-grid relic-mat-cards">
-            {REVIEW_RELICS.map((relicId) => <RunRelicOfferCard key={relicId} relicId={relicId} />)}
+          <div className="relic-mat-cards" data-testid="relic-mat-offers">
+            {REVIEW_RELICS.map((relicId) => {
+              const relic = RUN_RELIC_BY_ID[relicId];
+              return (
+                <Tooltip
+                  className="relic-mat-offer"
+                  key={relicId}
+                  label={`${relic.name}. ${relic.description}`}
+                  popupMaxInlineSize={288}
+                  title={relic.name}
+                  trigger={<RunRelicIcon relicId={relicId} />}
+                >
+                  <span>{relic.description}</span>
+                </Tooltip>
+              );
+            })}
           </div>
         ) : null}
       </div>
