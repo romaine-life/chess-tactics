@@ -80,7 +80,7 @@ export interface EditorZoneEntry {
   name?: string;
   color?: ZoneColor;
   type: ZoneType;
-  /** Piece types the automatic placer may not use in this Player Deployment zone (ADR-0365). */
+  /** Piece types the automatic placer may not use in this Player Deployment zone (ADR-0366). */
   excludedPieceTypes?: PlayablePieceType[];
   tiles: string[];
 }
@@ -517,7 +517,7 @@ function normalizeZoneEntries(entries: readonly EditorZoneEntry[] | undefined, c
     });
   }
   // At most one Player Deployment, Pawn Deployment and Enemy Deployment zone can survive a
-  // normalize, so no decode, paste or legacy import can reintroduce a duplicate (ADR-0365).
+  // normalize, so no decode, paste or legacy import can reintroduce a duplicate (ADR-0366).
   return canonicalizeSingletonZones(out).map((entry) => ({ ...entry, tiles: sortCellKeys(entry.tiles) }));
 }
 

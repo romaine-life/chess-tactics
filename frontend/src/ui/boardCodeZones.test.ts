@@ -92,7 +92,7 @@ describe('boardCode — zones wire key (z)', () => {
 
   it('folds duplicate deployment zones into one per type, keeping every painted square', () => {
     // A pasted or legacy code can carry two Enemy Deployment zones; only one object may survive,
-    // and no square it painted may be lost (ADR-0365).
+    // and no square it painted may be lost (ADR-0366).
     const board = base({
       zoneEntries: [
         { id: 'zone-1', name: 'Enemy Deployment', type: 'enemy-spawn', tiles: ['0,0'] },

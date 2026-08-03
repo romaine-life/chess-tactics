@@ -10,7 +10,7 @@ partially_supersedes:
   - "[ADR-0288](0288-new-deployment-authoring-uses-one-flexible-zone-per-side.md)"
 ---
 
-# ADR-0365: A piece type can be broken off the deployment pool, and placement is a free-for-all
+# ADR-0366: A piece type can be broken off the deployment pool, and placement is a free-for-all
 
 ## Context
 

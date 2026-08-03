@@ -300,7 +300,7 @@ export function validateWarBattlePlayability(level: Level): PlayabilityResult {
   }
   // The Run always fields its King, so a level whose geometry leaves the King nowhere to stand is
   // unplayable rather than merely unlucky — unlike a benched pawn, which is a legal outcome
-  // (ADR-0365).
+  // (ADR-0366).
   if (!playerDeploymentPools(level).byType.king.length) {
     ordinary.push({
       code: 'W3_PLAYER_KING_SQUARE',

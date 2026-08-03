@@ -5856,7 +5856,7 @@ function validateWorkspaceLevel(level, key) {
   }
   for (const zone of layers.zones) {
     if (!zone || typeof zone.id !== 'string' || !WORKSPACE_ZONE_TYPES.has(zone.type) || !Array.isArray(zone.tiles)) return `levels.${key}.layers.zones contains an invalid zone`;
-    // ADR-0365: the piece types a Player Deployment zone bars from automatic placement.
+    // ADR-0366: the piece types a Player Deployment zone bars from automatic placement.
     if (zone.excludedPieceTypes !== undefined) {
       if (!Array.isArray(zone.excludedPieceTypes) || zone.excludedPieceTypes.some((type) => !WORKSPACE_ROSTER_PIECES.has(type))) {
         return `levels.${key}.layers.zones contains an invalid excludedPieceTypes`;

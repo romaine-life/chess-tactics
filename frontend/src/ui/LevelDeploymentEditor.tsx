@@ -12,7 +12,7 @@ export interface DeploymentZoneOption {
   id: string;
   label: string;
   type: ZoneType;
-  /** Player Deployment zone only: piece types automatic placement will not put here (ADR-0365). */
+  /** Player Deployment zone only: piece types automatic placement will not put here (ADR-0366). */
   excludedPieceTypes: readonly PlayablePieceType[];
   paintedTiles: number;
   usableTileKeys: string[];
@@ -20,7 +20,7 @@ export interface DeploymentZoneOption {
 
 /**
  * The piece types an author can break off the general Player Deployment pool: each owns a
- * dedicated zone type, and each can be barred from the general zone (ADR-0365).
+ * dedicated zone type, and each can be barred from the general zone (ADR-0366).
  */
 const BREAKABLE = [
   { pieceType: 'pawn', label: 'Pawn', zoneType: 'player-pawn-spawn' },
