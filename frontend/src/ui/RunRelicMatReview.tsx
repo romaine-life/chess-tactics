@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode, type RefObject } from 'react';
 import { fetchAdminLiveMediaCatalog, type AdminLiveMediaCatalog, type AdminLiveMediaVersion } from '../net/liveMediaAdmin';
 import { RUN_RELIC_BY_ID, type RunRelicId } from '../run/model';
 import { RunRelicIcon } from './RunRelics';
 import { Tooltip } from './shared/InfoTip';
 import { StudioCatalogCard } from './studio/StudioCatalogCard';
 import { StudioStepper } from './studio/StudioStepper';
+import { SliderRow } from './dressing/SliderRow';
 
 /**
  * Candidate MATS -- the surface the Run's relic offers are laid out on at the head of a
@@ -21,6 +22,16 @@ const RELIC_MAT_SLOT = /^review\/run-relic-mat\/([a-z][a-z0-9-]*)\/([a-z][a-z0-9
 
 /** The backdrop the owner chose for this screen; the mat is judged over these pixels. */
 export const RELIC_MAT_BACKDROP_SLOT = 'review/run-screen-art/spolia-inventory/codex.png';
+
+/** The mat the owner chose. The Viewer opens on it rather than on whatever sorts first. */
+export const RELIC_MAT_CHOSEN_ID = 'mat-tray--codex';
+
+/**
+ * The committed mat width, as a multiple of the relic row's. Mirrors --relic-mat-scale in
+ * style.css and is what the Viewer's tuning slider resets to -- a reset returns to the
+ * value the game ships, never to zero or to the slider's floor (ADR-0057).
+ */
+export const RELIC_MAT_COMMITTED_SCALE = 1.21;
 
 // Card titles truncate around 14 characters, so every name has to survive that intact --
 // "Inventory She..." is not a label.
@@ -84,6 +95,7 @@ export function relicMatBackdropUrl(catalog: AdminLiveMediaCatalog): string {
 export function useRelicMatCatalog(): {
   items: RelicMatCandidate[];
   backdrop: string;
+  defaultId: string;
   loading: boolean;
   error: string;
   refresh: () => void;
@@ -100,7 +112,12 @@ export function useRelicMatCatalog(): {
   }, [nonce]);
   const items = useMemo(() => catalog ? relicMatCandidates(catalog) : [], [catalog]);
   const backdrop = useMemo(() => catalog ? relicMatBackdropUrl(catalog) : '', [catalog]);
-  return { items, backdrop, loading: !catalog && !error, error, refresh: () => setNonce((value) => value + 1) };
+  // Land on the owner's pick, falling back to first-sorted only if it is not in the
+  // catalog -- an unreachable default would silently show the wrong mat, not nothing.
+  const defaultId = useMemo(() => (
+    items.some((item) => item.id === RELIC_MAT_CHOSEN_ID) ? RELIC_MAT_CHOSEN_ID : items[0]?.id ?? ''
+  ), [items]);
+  return { items, backdrop, defaultId, loading: !catalog && !error, error, refresh: () => setNonce((value) => value + 1) };
 }
 
 export function findRelicMat(items: readonly RelicMatCandidate[], id: string): RelicMatCandidate | null {
@@ -119,10 +136,12 @@ export function RelicMatStage({
   candidate,
   backdrop,
   cards = true,
+  scale,
 }: {
   candidate: RelicMatCandidate;
   backdrop: string;
   cards?: boolean;
+  scale?: number;
 }): ReactElement {
   return (
     <div
@@ -130,6 +149,7 @@ export function RelicMatStage({
       data-mat={candidate.mat}
       data-generator={candidate.generator}
       data-cards={cards ? 'on' : 'off'}
+      style={scale === undefined ? undefined : { '--relic-mat-scale-tuned': scale } as CSSProperties}
     >
       {backdrop ? <img className="relic-mat-backdrop" src={backdrop} alt="" draggable={false} /> : null}
       <div className="relic-mat-layer">
@@ -221,6 +241,57 @@ export function RelicMatCatalog({
   );
 }
 
+interface TunedMatMeasurement {
+  matWidth: number;
+  matHeight: number;
+  rowWidth: number;
+}
+
+/**
+ * The rendered pixels behind the tuned number. The slider's value is the multiple that
+ * gets handed back and committed, but a multiple alone does not say whether the mat has
+ * grown past the pane or is still hugging the relics -- so report what it actually drew.
+ * Measured from the DOM rather than recomputed, because the layer is also capped so the
+ * mat cannot overflow, and that cap only shows up in the real box.
+ */
+function useTunedMatMeasurement(
+  stage: RefObject<HTMLElement | null>,
+  scale: number,
+  id: string,
+): TunedMatMeasurement | null {
+  const [measured, setMeasured] = useState<TunedMatMeasurement | null>(null);
+  useEffect(() => {
+    const root = stage.current;
+    const art = root?.querySelector('.relic-mat-art');
+    const row = root?.querySelector('.relic-mat-cards');
+    if (!art || !row) { setMeasured(null); return; }
+
+    const read = (): void => {
+      const artBox = art.getBoundingClientRect();
+      const rowBox = row.getBoundingClientRect();
+      // The mat's height comes from its own aspect ratio, so it stays 0 until the image
+      // has decoded. Reporting that zero would look like a broken mat rather than a
+      // pending one, so wait for a real box.
+      if (!artBox.height) return;
+      setMeasured({
+        matWidth: Math.round(artBox.width),
+        matHeight: Math.round(artBox.height),
+        rowWidth: Math.round(rowBox.width),
+      });
+    };
+
+    // Observing beats one measurement after layout: the box changes again when the image
+    // decodes and whenever the pane resizes, and the row is capped against the stage, so
+    // the same multiple measures differently at different widths.
+    const observer = new ResizeObserver(read);
+    observer.observe(art);
+    observer.observe(row);
+    read();
+    return () => observer.disconnect();
+  }, [stage, scale, id]);
+  return measured;
+}
+
 /** Viewer stage: the composite as large as the pane allows, plus the Details readout. */
 export function RelicMatViewer({
   items,
@@ -237,13 +308,16 @@ export function RelicMatViewer({
 }): ReactElement {
   const found = id ? findRelicMat(items, id) : null;
   const empty = 'No candidate selected — pick a card in the Relic Mat catalog.';
+  const [scale, setScale] = useState(RELIC_MAT_COMMITTED_SCALE);
+  const stage = useRef<HTMLElement | null>(null);
+  const measured = useTunedMatMeasurement(stage, scale, id);
   return (
     <>
       <section className="al-lab-main" aria-label="Relic mat preview">
         {!found ? <p className="al-lab-empty">{empty}</p> : (
           <div className="al-lab-stages">
-            <figure className="al-stage relic-mat-figure" data-testid="relic-mat-stage" data-mat={found.mat} data-generator={found.generator}>
-              <RelicMatStage candidate={found} backdrop={backdrop} />
+            <figure ref={stage} className="al-stage relic-mat-figure" data-testid="relic-mat-stage" data-mat={found.mat} data-generator={found.generator}>
+              <RelicMatStage candidate={found} backdrop={backdrop} scale={scale} />
               <figcaption>{found.matLabel} — {found.generatorLabel}</figcaption>
             </figure>
           </div>
@@ -261,6 +335,21 @@ export function RelicMatViewer({
               options={items.map((item) => ({ id: item.id, label: `${item.matLabel} — ${item.generatorLabel}` }))}
               value={found?.id ?? ''}
             />
+            <SliderRow
+              label={<>Mat scale <strong data-testid="relic-mat-scale-value">{scale.toFixed(2)}×</strong> the relic row</>}
+              value={scale}
+              set={setScale}
+              min={1}
+              max={3}
+              step={0.01}
+              nudge={0.01}
+              dflt={RELIC_MAT_COMMITTED_SCALE}
+            />
+            <p className="tileset-catalog-note" data-testid="relic-mat-scale-readout">
+              {measured
+                ? `Mat ${measured.matWidth}×${measured.matHeight} over a ${measured.rowWidth}px relic row. Committed value is ${RELIC_MAT_COMMITTED_SCALE.toFixed(2)}× — the reset returns here.`
+                : `Committed value is ${RELIC_MAT_COMMITTED_SCALE.toFixed(2)}×.`}
+            </p>
             {found ? (
               <dl className="al-meta">
                 <div><dt>Mat</dt><dd>{found.matLabel}</dd></div>

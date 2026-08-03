@@ -19188,12 +19188,15 @@ button.tileset-relationship-cell {
    max-content width and the mat is drawn to that plus one bleed on each side. Sizing the
    mat as a share of the stage instead makes it grow with the viewport and swallow the
    backdrop it is supposed to be lying on. */
+/* --relic-mat-scale is the mat's width as a multiple of the relic row's. It is the one
+   number this composite is tuned by, so the Viewer drives it directly and the committed
+   value below is what the Viewer's reset returns to. */
 .relic-mat-layer {
-  --relic-mat-bleed: 30px;
+  --relic-mat-scale: 1.21;
   display: grid;
-  /* Leave the bleed room, or a narrow stage lets the row fill it and the mat's torn edges
-     are the first thing clipped away -- the one part of it that has to be seen. */
-  max-inline-size: calc(100% - 2 * var(--relic-mat-bleed));
+  /* Leave the overhang room, or a narrow stage lets the row fill it and the mat's torn
+     edges are the first thing clipped away -- the one part of it that has to be seen. */
+  max-inline-size: calc(100% / var(--relic-mat-scale));
   place-items: center;
   position: relative;
 }
@@ -19207,9 +19210,9 @@ button.tileset-relationship-cell {
 .relic-mat-art {
   block-size: auto;
   image-rendering: pixelated;
-  inline-size: calc(100% + 2 * var(--relic-mat-bleed));
+  inline-size: calc(100% * var(--relic-mat-scale));
   inset-block-start: 50%;
-  inset-inline-start: calc(-1 * var(--relic-mat-bleed));
+  inset-inline-start: calc((100% - 100% * var(--relic-mat-scale)) / 2);
   position: absolute;
   translate: 0 -50%;
 }
@@ -19249,6 +19252,11 @@ button.tileset-relationship-cell {
 .relic-mat-stage[data-cards='off'] .relic-mat-art {
   inline-size: 100%;
   inset-inline-start: 0;
+}
+
+/* The Viewer overrides --relic-mat-scale live while it is being tuned. */
+.relic-mat-stage[data-cards='on'] .relic-mat-layer {
+  --relic-mat-scale: var(--relic-mat-scale-tuned, 1.21);
 }
 
 .tileset-studio-card-image.relic-mat-card-image {

@@ -1748,7 +1748,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
           error={relicMat.error}
           search={relicMatSearch}
           zoom={zoom}
-          selected={selectedRelicMatId || relicMat.items[0]?.id || ''}
+          selected={selectedRelicMatId || relicMat.defaultId}
           onSelect={setSelectedRelicMatId}
           onView={(id) => { setSelectedRelicMatId(id); openViewer('relicmat'); }}
         />
@@ -2188,7 +2188,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             : viewerKind === 'screenart'
             ? <ScreenArtViewer items={screenArt.items} id={selectedScreenArtId || screenArt.items[0]?.id || ''} header={studioViewerHeader} catalog={screenArt.catalog} onInstalled={screenArt.refresh} onSelect={setSelectedScreenArtId} />
             : viewerKind === 'relicmat'
-            ? <RelicMatViewer items={relicMat.items} backdrop={relicMat.backdrop} id={selectedRelicMatId || relicMat.items[0]?.id || ''} header={studioViewerHeader} onSelect={setSelectedRelicMatId} />
+            ? <RelicMatViewer items={relicMat.items} backdrop={relicMat.backdrop} id={selectedRelicMatId || relicMat.defaultId} header={studioViewerHeader} onSelect={setSelectedRelicMatId} />
             : viewerKind === 'artwork'
               ? <ArtworkLab library={studioMedia.artwork} name={selectedArtworkName} header={studioViewerHeader} />
               : viewerKind === 'glossary'
