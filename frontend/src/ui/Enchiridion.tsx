@@ -215,7 +215,11 @@ function MovementDiagram({ type }: { type: PlayablePieceType }): ReactElement {
   );
 }
 
-function ReferenceSectionFrame({
+// The one section frame every reference panel wears, in both transports: framed as its
+// own titled chrome box on a host that owns no header, unframed under a host that does.
+// Exported because the Strategikon's Run-fed sections (the Chartulary) are the same kind
+// of panel and must not grow a lookalike frame (ADR-0059).
+export function ReferenceSectionFrame({
   children,
   chromeConsumer,
   className = '',
@@ -541,6 +545,66 @@ export function cardMatchesFilters(
     && (unitFilter === 'all' || card.pieces.includes(unitFilter));
 }
 
+// The card gallery's filter row, shared by the whole-deck reference and the Run's held
+// Chartulary. One control row governs both, so the two galleries cannot drift into
+// lookalike filters with different options or different compact amounts (ADR-0059).
+export function CardGalleryFilters({
+  goldFilter,
+  unitFilter,
+  onGoldFilterChange,
+  onUnitFilterChange,
+  count,
+  testIdPrefix,
+}: {
+  goldFilter: CardGoldFilter;
+  unitFilter: CardUnitFilter;
+  onGoldFilterChange: (filter: CardGoldFilter) => void;
+  onUnitFilterChange: (filter: CardUnitFilter) => void;
+  count: number;
+  testIdPrefix: string;
+}): ReactElement {
+  return (
+    <InnerChromeBox className="enchiridion-card-filters" aria-label="Card filters">
+      <div className="enchiridion-card-filter">
+        <span>Gold</span>
+        <HouseSelect
+          value={goldFilter}
+          options={CARD_GOLD_FILTER_OPTIONS}
+          onChange={onGoldFilterChange}
+          ariaLabel="Filter cards by gold value"
+          testId={`${testIdPrefix}-gold-filter`}
+        />
+      </div>
+      <div className="enchiridion-card-filter">
+        <span>Contains</span>
+        <HouseSelect
+          value={unitFilter}
+          options={CARD_UNIT_FILTER_OPTIONS}
+          onChange={onUnitFilterChange}
+          ariaLabel="Filter cards by contained unit type"
+          testId={`${testIdPrefix}-unit-filter`}
+        />
+      </div>
+      <span className="enchiridion-card-filter-count" aria-live="polite">
+        {count} {count === 1 ? 'card' : 'cards'}
+      </span>
+    </InnerChromeBox>
+  );
+}
+
+/** Cards grouped by gold value, ascending — the gallery's one authored ordering. */
+export function cardsByGoldValue<T>(
+  entries: readonly T[],
+  coreOf: (entry: T) => RunCoreCard,
+): Array<[number, T[]]> {
+  const byValue = new Map<number, T[]>();
+  for (const entry of entries) {
+    const value = coreOf(entry).value;
+    byValue.set(value, [...(byValue.get(value) ?? []), entry]);
+  }
+  return [...byValue.entries()].sort((left, right) => left[0] - right[0]);
+}
+
 // Cards is the terminal third-column browser: the two rail predecessors retain
 // their canonical widths and every remaining pixel belongs to a gallery of the
 // real faces themselves. Routes focus a face in that gallery; they never create
@@ -565,13 +629,7 @@ export function CardCodex({
     () => RUN_CARD_DECK.filter((card) => cardMatchesFilters(card, goldFilter, unitFilter)),
     [goldFilter, unitFilter],
   );
-  const groups = useMemo(() => {
-    const byValue = new Map<number, RunCoreCard[]>();
-    for (const card of visibleCards) {
-      byValue.set(card.value, [...(byValue.get(card.value) ?? []), card]);
-    }
-    return [...byValue.entries()].sort((left, right) => left[0] - right[0]);
-  }, [visibleCards]);
+  const groups = useMemo(() => cardsByGoldValue(visibleCards, (card) => card), [visibleCards]);
   useEffect(() => {
     if (!focusedCardId) return;
     const card = galleryRef.current?.querySelector<HTMLElement>(`[data-card-id="${focusedCardId}"]`);
@@ -588,31 +646,14 @@ export function CardCodex({
     >
       <p>Every card the Run can deal. The opening Shop and later Shops use this one deck; a card costs its gold value.</p>
       <div className="enchiridion-card-gallery-layout">
-        <InnerChromeBox className="enchiridion-card-filters" aria-label="Card filters">
-          <div className="enchiridion-card-filter">
-            <span>Gold</span>
-            <HouseSelect
-              value={goldFilter}
-              options={CARD_GOLD_FILTER_OPTIONS}
-              onChange={setGoldFilter}
-              ariaLabel="Filter cards by gold value"
-              testId="enchiridion-card-gold-filter"
-            />
-          </div>
-          <div className="enchiridion-card-filter">
-            <span>Contains</span>
-            <HouseSelect
-              value={unitFilter}
-              options={CARD_UNIT_FILTER_OPTIONS}
-              onChange={setUnitFilter}
-              ariaLabel="Filter cards by contained unit type"
-              testId="enchiridion-card-unit-filter"
-            />
-          </div>
-          <span className="enchiridion-card-filter-count" aria-live="polite">
-            {visibleCards.length} {visibleCards.length === 1 ? 'card' : 'cards'}
-          </span>
-        </InnerChromeBox>
+        <CardGalleryFilters
+          goldFilter={goldFilter}
+          unitFilter={unitFilter}
+          onGoldFilterChange={setGoldFilter}
+          onUnitFilterChange={setUnitFilter}
+          count={visibleCards.length}
+          testIdPrefix="enchiridion-card"
+        />
         <KitScroll className="enchiridion-card-gallery-scroll">
           <div
             ref={galleryRef}

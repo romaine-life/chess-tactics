@@ -34,6 +34,25 @@ function craftRequest(routePath: string, routeSearch: string): 'link' | 'mint' |
   return hasRunCraftRequest(routeSearch) ? 'mint' : null;
 }
 
+/**
+ * Where a craft link lands. `/run` by default; `to=` names a deeper Run address so a crafted
+ * state can be handed over with the workspace it is about already open — the Strategikon's
+ * Chartulary, say — instead of one click short of it.
+ *
+ * Only an address inside the Run is honoured, and never another craft link: the link's job is to
+ * land on the Run it just crafted, and anything else would make it mean something other than
+ * what it says.
+ */
+export function craftDestination(routeSearch: string): string {
+  const params = new URLSearchParams(routeSearch);
+  const to = params.get('to');
+  params.delete('to');
+  const rest = params.toString();
+  const search = rest ? `?${rest}` : '';
+  const inRun = to !== null && /^\/run(\/|$)/.test(to) && !isRunCraftLinkPath(to);
+  return `${inRun ? to : '/run'}${search}`;
+}
+
 /** Resolves to the refusal message, or null once the crafted Run has been adopted. Never rejects:
  * the outcome is the screen's copy, not an unhandled failure. */
 async function applyCraft(routePath: string, routeSearch: string): Promise<string | null> {
@@ -53,7 +72,7 @@ async function applyCraft(routePath: string, routeSearch: string): Promise<strin
     const crafted = await craftActiveRunFromLink(id);
     if (!crafted.run) return 'The Run was crafted, but the server did not return it.';
     useActiveRun.getState().adoptCraftedRun(crafted.run, crafted.revision);
-    navigateApp(`/run${routeSearch}`, { replace: true, scroll: false });
+    navigateApp(craftDestination(routeSearch), { replace: true, scroll: false });
     return null;
   } catch (error) {
     return error instanceof Error ? error.message : String(error);
