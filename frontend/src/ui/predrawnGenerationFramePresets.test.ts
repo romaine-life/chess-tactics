@@ -11,6 +11,7 @@ import {
   validatePredrawnGenerationFrame,
   type EditorBoard,
 } from '@chess-tactics/board-render';
+import { expandBounds } from './PredrawnGenerationFramePicker';
 
 const board = (cols: number, rows: number, extra: Partial<EditorBoard> = {}): EditorBoard => {
   const cells: Record<string, string> = {};
@@ -95,6 +96,37 @@ describe('generation-frame presets', () => {
     const subject = board(7, 4);
     expect(predrawnGenerationFrameContaining(subject, predrawnGenerationRequiredBounds(subject)))
       .toEqual(initialPredrawnGenerationFrame(subject));
+  });
+});
+
+describe('room presets', () => {
+  const subject = board(8, 8);
+  const camera = predrawnGenerationBoundsFromCentered(subject, resolvedBoardCameraBounds(subject));
+  const roomFrame = (room: number) => predrawnGenerationFrameContaining(subject, expandBounds(camera, room));
+
+  it('grows the scene around the player view without moving its centre', () => {
+    const wide = expandBounds(camera, 2);
+    expect(wide.width).toBe(camera.width * 2);
+    expect(wide.minX + wide.width / 2).toBeCloseTo(camera.minX + camera.width / 2, 6);
+    expect(wide.minY + wide.height / 2).toBeCloseTo(camera.minY + camera.height / 2, 6);
+  });
+
+  it('offers strictly more scene at each step, and every step is applicable', () => {
+    const snug = roomFrame(1);
+    const roomy = roomFrame(1.5);
+    const wide = roomFrame(2.25);
+
+    expect(roomy.width).toBeGreaterThan(snug.width);
+    expect(wide.width).toBeGreaterThan(roomy.width);
+    for (const frame of [snug, roomy, wide]) {
+      expect(validatePredrawnGenerationFrame(subject, frame).ok).toBe(true);
+    }
+  });
+
+  it('shows the whole player view at the default, unlike the tightest legal crop', () => {
+    const roomy = roomFrame(1.5);
+    expect(contains(roomy, camera)).toBe(true);
+    expect(contains(initialPredrawnGenerationFrame(subject), camera)).toBe(false);
   });
 });
 

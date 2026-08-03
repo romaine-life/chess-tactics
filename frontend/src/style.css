@@ -1675,8 +1675,15 @@ h1 {
 /* Both boxes usually reach the crop edge here, so a label hanging above its box — the Board page
    placement — would be clipped away by the stage. Seat them inside their boxes instead. */
 .predrawn-generation-frame-stage .le-camera-boundary-label,
-.predrawn-generation-frame-outline-label {
+.predrawn-generation-frame-stage .predrawn-generation-frame-outline-label {
   transform: none;
+}
+/* Seat the inner box's name on the opposite corner: the two boxes share a top-left region whenever
+   the crop is snug, and two names stacked there read as one garbled line. Stage-scoped so it beats
+   the shared label rule, which is defined later in this file. */
+.predrawn-generation-frame-stage .predrawn-generation-frame-outline-label {
+  inset: 0 -2px auto auto;
+  text-align: right;
 }
 .predrawn-generation-frame-footer p.is-error {
   color: #ffad9d;

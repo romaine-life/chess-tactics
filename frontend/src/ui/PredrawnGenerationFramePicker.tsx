@@ -36,6 +36,25 @@ const MIN_FRAME_WIDTH = 320;
 const MAX_FRAME_WIDTH = 8192;
 /** Total slack the stage leaves inside its clipping slot so its 1px frame line survives on all four sides. */
 const FRAME_LINE_ROOM = 4;
+/** Scene around the player's farthest view, as a multiple of it. Roomy is the default. */
+const SNUG_ROOM = 1;
+const ROOMY_ROOM = 1.5;
+const WIDE_ROOM = 2.25;
+
+/** Grow (or shrink) a rectangle about its own centre. */
+export function expandBounds(
+  bounds: { minX: number; minY: number; width: number; height: number },
+  factor: number,
+): { minX: number; minY: number; width: number; height: number } {
+  const width = bounds.width * factor;
+  const height = bounds.height * factor;
+  return {
+    minX: bounds.minX + (bounds.width - width) / 2,
+    minY: bounds.minY + (bounds.height - height) / 2,
+    width,
+    height,
+  };
+}
 
 type DragState = {
   pointerId: number;
@@ -106,13 +125,21 @@ export function PredrawnGenerationFramePicker({
     () => predrawnGenerationBoundsFromCentered(board, resolvedBoardCameraBounds(board)),
     [board],
   );
-  const cameraFrame = useMemo(
-    () => predrawnGenerationFrameContaining(sourceBoard, cameraBounds),
+  // Room is the whole point of this crop: the model paints what it is shown, so a picture that stops
+  // at the player's reach gives it nothing to compose with and the board comes back cramped. Every
+  // preset is therefore "the player's view, plus this much scene around it".
+  const roomFrame = useCallback(
+    (room: number) => predrawnGenerationFrameContaining(sourceBoard, expandBounds(cameraBounds, room)),
     [cameraBounds, sourceBoard],
   );
+  const roomFrames = useMemo(() => ({
+    snug: roomFrame(SNUG_ROOM),
+    roomy: roomFrame(ROOMY_ROOM),
+    wide: roomFrame(WIDE_ROOM),
+  }), [roomFrame]);
   const editorFrame = useMemo(
-    () => normalizePredrawnGenerationFrame(initialFrame) ?? cameraFrame,
-    [cameraFrame, initialFrame],
+    () => normalizePredrawnGenerationFrame(initialFrame) ?? roomFrames.roomy,
+    [roomFrames, initialFrame],
   );
   const [frame, setFrame] = useState(editorFrame);
   const [stageSize, setStageSize] = useState({ width: 1280, height: 720 });
@@ -162,7 +189,7 @@ export function PredrawnGenerationFramePicker({
     ? {
         kind: 'preview',
         title: `Preview only · ${predrawnGenerationFrameReadout(validation.frame)}`,
-        detail: `This crop has not been applied to the working copy.${cameraOutsideCrop ? ' It is tighter than the camera boundary, so the boundary runs past the crop edge and that area stays unpainted.' : ''}`,
+        detail: `This crop has not been applied to the working copy.${cameraOutsideCrop ? ' It is tighter than the player can see, so part of what they reach will have no painted art behind it.' : ''}`,
       }
     : applicationStatus;
   const applyLabel = paintError
@@ -241,17 +268,32 @@ export function PredrawnGenerationFramePicker({
   });
   const requiredOutline = outlineFor(requiredBounds);
   const cameraOutline = outlineFor(cameraBounds);
+  // How much scene this crop shows beyond the player's farthest view, which is the thing being
+  // chosen here. Negative means the crop cuts into what the player can reach.
+  const roomBeyondView = Math.round((frame.width / cameraBounds.width - 1) * 100);
   const presets: Array<{ id: string; label: string; title: string; frame: PredrawnGenerationFrame }> = [
     {
-      id: 'camera',
-      label: 'Camera boundary',
-      title: 'Everything a player can reach at maximum zoom-out, which contains the view this level loads at.',
-      frame: cameraFrame,
+      id: 'snug',
+      label: 'Snug',
+      title: 'Stops at the player\'s farthest view. No scenery beyond it for the model to compose with.',
+      frame: roomFrames.snug,
     },
     {
-      id: 'required',
-      label: 'Fit required art',
-      title: 'The tightest legal crop around gameplay-authoritative art. Tighter than the camera boundary.',
+      id: 'roomy',
+      label: 'Roomy',
+      title: 'Half again as much scene as the player can reach. The default, and the safe choice.',
+      frame: roomFrames.roomy,
+    },
+    {
+      id: 'wide',
+      label: 'Wide',
+      title: 'Over twice the player\'s reach. Most scenery for the model, smallest board in the picture.',
+      frame: roomFrames.wide,
+    },
+    {
+      id: 'minimum',
+      label: 'Minimum',
+      title: 'The tightest crop this level allows. Cuts into what the player can reach.',
       frame: fittedFrame,
     },
   ];
@@ -271,8 +313,8 @@ export function PredrawnGenerationFramePicker({
       >
         <header className="predrawn-generation-frame-header">
           <div>
-            <h2 id="predrawn-generation-frame-title">Choose the generation frame</h2>
-            <p>Start from a preset, then drag the scene, type an exact width, or zoom until this 16:9 crop is the exact Image 1 you want to hand off. Required art must stay inside the crop; the camera boundary is everything a player can reach.</p>
+            <h2 id="predrawn-generation-frame-title">How much scene the AI gets to paint</h2>
+            <p>This 16:9 crop is the picture handed to the model, and the model paints what it is shown. The wider you set it, the more room the painted board has around it; a crop that stops at the player&rsquo;s view comes back cramped. Pick a preset, then drag or set an exact width.</p>
           </div>
           <ChromeButton unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
@@ -306,7 +348,10 @@ export function PredrawnGenerationFramePicker({
                 ariaLabel: 'Generation frame width in pixels',
               }}
             />
-            <span className="predrawn-generation-frame-readout">× {frame.height} · 16:9</span>
+            <span
+              className="predrawn-generation-frame-readout"
+              data-testid="predrawn-generation-frame-room"
+            >× {frame.height} · {roomBeyondView >= 0 ? `+${roomBeyondView}% scene` : `${roomBeyondView}% — cuts in`}</span>
           </div>
           <div className="skirmish-view-row" role="group" aria-label="Generation frame presets">
             {presets.map((preset) => (
@@ -360,13 +405,13 @@ export function PredrawnGenerationFramePicker({
               data-testid="predrawn-generation-frame-camera-outline"
               style={cameraOutline}
               aria-hidden="true"
-            ><span className="le-camera-boundary-label">Camera boundary</span></div>
+            ><span className="le-camera-boundary-label">Player can see to here</span></div>
             <div
               className="predrawn-generation-frame-required-outline"
               data-testid="predrawn-generation-frame-required-outline"
               style={requiredOutline}
               aria-hidden="true"
-            ><span className="predrawn-generation-frame-outline-label">Required art</span></div>
+            ><span className="predrawn-generation-frame-outline-label">The level itself — must be in shot</span></div>
             {!exactFramePainted ? (
               <p className={`predrawn-generation-frame-loading${paintError ? ' is-error' : ''}`} role="status">
                 {paintError ? `Could not paint this frame: ${paintError}` : 'Painting the exact frame…'}
