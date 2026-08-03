@@ -3,7 +3,7 @@ import { currentLiveSfxProfileDocument, resetLiveSfxProfile, type SfxProfile } f
 import { loadLiveSfxProfile, saveLiveSfxProfile } from './sfxProfile';
 
 const data = (): SfxProfile => ({
-  schemaVersion: 1,
+  schemaVersion: 2,
   soundSets: {
     click: { label: 'Click', character: 'Interface tap', build: 'Recorded foley', gain: 0.5 },
   },
@@ -11,12 +11,13 @@ const data = (): SfxProfile => ({
     grass: null, water: null, sand: null, stone: null,
     road: null, bridge: null, dirt: null, pebble: null,
   },
+  interfaceAssignments: { activate: 'click', card: null, gold: null },
   arrival: { sample: null, gain: 0, firing: 'once' },
 });
 
 const responseBody = (revision: number) => ({
   profile: {
-    id: 'default', data: data(), clientSchemaVersion: 1, revision,
+    id: 'default', data: data(), clientSchemaVersion: 2, revision,
     createdAt: null, updatedAt: null, updatedBy: null,
   },
 });
@@ -36,7 +37,7 @@ describe('SFX profile network client', () => {
   it('saves with the expected revision and installs the returned live document', async () => {
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
       expect(init?.method).toBe('PUT');
-      expect(JSON.parse(String(init?.body))).toMatchObject({ expectedRevision: 4, clientSchemaVersion: 1 });
+      expect(JSON.parse(String(init?.body))).toMatchObject({ expectedRevision: 4, clientSchemaVersion: 2 });
       return new Response(JSON.stringify(responseBody(5)), { status: 200, headers: { 'content-type': 'application/json' } });
     });
     vi.stubGlobal('fetch', fetchMock);

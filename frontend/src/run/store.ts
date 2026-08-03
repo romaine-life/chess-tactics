@@ -85,6 +85,7 @@ function queueRemoteSave(run: RunDocument): void {
             useActiveRun.setState({
               adoptionConflict: { browserRun, accountRun },
               remoteRevision: remote.revision,
+              syncing: false,
               persistenceError: 'Choose which active Run this account should keep.',
             });
             return;

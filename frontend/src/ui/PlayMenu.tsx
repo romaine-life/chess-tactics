@@ -199,11 +199,13 @@ function RunPanel({
   const [ataraxiaTier, setAtaraxiaTier] = useState<AtaraxiaTier>(0);
   const eligible = useMemo(() => runEligibleOfficialWars(wars), [wars]);
   const highestUnlockedTier = highestUnlockedAtaraxiaTier(progression);
+  // An adoption conflict does not gate a new Run: starting one discards both candidates, so it
+  // is a third answer to "which Run does the account keep?" rather than something blocked by the
+  // question. `start` abandons the current Run first, which settles the conflict before the save.
   const newRunUnavailable = loading
     || !hydrated
     || syncing
-    || eligible.length === 0
-    || Boolean(adoptionConflict);
+    || eligible.length === 0;
 
   useEffect(() => { void hydrate(); }, [hydrate]);
   useEffect(() => {
