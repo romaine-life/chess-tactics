@@ -78,14 +78,41 @@ describe('Bona Vacantia relics', () => {
     // cannot be taken takes the amplitude back so it never answers the pointer at all.
     const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
     expect(css).toMatch(
-      /\.relic-mat-offer:hover \.run-relic-icon,\s*\.relic-mat-offer:focus-within \.run-relic-icon \{\s*--relic-float-rise: 0px;/,
+      /\.relic-mat-offer:hover \.run-relic-icon,\s*\.relic-mat-offer:focus-within \.run-relic-icon \{\s*--relic-float-rise: 0px;\s*--relic-glow-pulse: 0;/,
     );
     expect(css).toMatch(
-      /\.run-vacantia-take:disabled \.run-relic-icon \{\s*--relic-float-rise: inherit;/,
+      /\.run-vacantia-take:disabled \.run-relic-icon \{\s*--relic-float-rise: inherit;\s*--relic-glow-pulse: inherit;/,
     );
-    // Transitioning the amplitude is what makes the settle smooth AND predictable; freezing
-    // the animation instead would stop it at a different height every time.
+    // Transitioning the amplitudes is what makes the settle smooth AND predictable; freezing
+    // the animations instead would stop them at a different height and level every time.
     expect(css).toMatch(/transition:\s*--relic-float-rise \d+ms/);
+    expect(css).toMatch(/transition: --relic-glow-pulse \d+ms/);
+  });
+
+  it('holds the emanation at ONE colour so a settled relic is completely still', () => {
+    // An animated filter interpolates every component it is given. Radius and opacity carry
+    // the pulse; if the two keyframes also disagreed on RGB, the hue would keep drifting
+    // under a relic whose amplitude had been collapsed to zero — still visibly moving.
+    const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+    const emanate = css.slice(css.indexOf('@keyframes relic-vacantia-emanate'));
+    // style.css is CRLF here, and the keyframes' own closing brace is the first one at the
+    // start of a line — the frames inside it are indented.
+    const body = emanate.slice(0, emanate.search(/\r?\n\}/));
+    const glowColours = [...body.matchAll(/rgb\((255 \d+ \d+) \//g)].map(([, rgb]) => rgb);
+    expect(glowColours).toHaveLength(4);
+    expect(new Set(glowColours).size).toBe(2);
+  });
+
+  it('never leaves the Run workspace scrolling on a raw OS scrollbar', () => {
+    // .run-shell-workspace-content scrolls whenever a workspace outgrows a short window and
+    // sits directly beside the always-skinned Controls rail. Unskinned it renders the
+    // platform bar, arrow buttons and all, inside a painted room.
+    const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+    const rail = css.slice(css.indexOf('.run-shell-workspace-content {'));
+    const body = rail.slice(0, rail.indexOf('}'));
+    expect(body).toContain('overflow-y: auto');
+    expect(body).toMatch(/scrollbar-color: #315160 #071017;/);
+    expect(body).toMatch(/scrollbar-width: thin;/);
   });
 
   it('answers with no landing point where there is no document, so the take is committed outright', () => {

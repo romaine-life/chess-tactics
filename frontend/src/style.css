@@ -18987,6 +18987,13 @@ button.tileset-relationship-cell {
   gap: var(--ds-stack);
   overflow-x: hidden;
   overflow-y: auto;
+  /* This rail scrolls whenever a workspace outgrows a short window, and it sits directly
+     beside the Controls rail, which has always carried the app's own scrollbar. Left
+     unskinned it renders the raw OS scrollbar -- arrow buttons and all -- inside a painted
+     medieval room, one shared surface away from a themed one. Same treatment as
+     .run-meta-controls, so no Run surface can ever show an OS bar. */
+  scrollbar-color: #315160 #071017;
+  scrollbar-width: thin;
 }
 
 .run-shell-workspace-content :is(h2, h3, h4, p),
@@ -19540,6 +19547,17 @@ button.tileset-relationship-cell {
   initial-value: 5px;
 }
 
+/* The emanation's PULSE DEPTH, on the same principle. A hovered relic has to stop moving,
+   and a halo whose blur radius breathes in and out is moving -- the lit edge visibly grows
+   and shrinks even though the sprite is perfectly still. Easing the depth to zero collapses
+   the pulse onto its bright end, so the hovered relic holds one steady light instead of
+   going dark or continuing to breathe. */
+@property --relic-glow-pulse {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1;
+}
+
 /* The bob is one ramp of stops expressed as fractions of --relic-float-rise, and the TIMING
    FUNCTION decides its character: interpolate between the stops and it is a smooth float;
    hold each stop with steps(1, end) and it is a pixel-art bob that never lands off-pixel.
@@ -19563,7 +19581,10 @@ button.tileset-relationship-cell {
 
 /* The emanation, on the other hand, is light rather than pixels, so it moves continuously.
    The stroke is repeated in every frame because an animated `filter` replaces the whole
-   declaration -- drop it and the silhouette loses its footing against the mat. */
+   declaration -- drop it and the silhouette loses its footing against the mat.
+   The BRIGHT end is the fixed one and the trough is written as the bright end minus a depth
+   scaled by --relic-glow-pulse, so collapsing the pulse to 0 leaves both keyframes equal at
+   full brightness. That is what a settled relic holds. */
 @keyframes relic-vacantia-emanate {
   0%, 100% {
     filter:
@@ -19571,8 +19592,16 @@ button.tileset-relationship-cell {
       drop-shadow(-1px 0 0 var(--relic-mat-stroke))
       drop-shadow(0 1px 0 var(--relic-mat-stroke))
       drop-shadow(0 -1px 0 var(--relic-mat-stroke))
-      drop-shadow(0 0 calc(3px * var(--relic-glow, 1)) rgb(255 214 150 / calc(0.5 * var(--relic-glow, 1))))
-      drop-shadow(0 0 calc(10px * var(--relic-glow, 1)) rgb(255 176 84 / calc(0.28 * var(--relic-glow, 1))));
+      /* Same RGB at both ends, deliberately: radius and opacity carry the whole pulse. Let
+         the colour differ too and the two frames never become equal at pulse 0 -- the hue
+         goes on drifting under a settled relic, which is exactly the movement being removed
+         here. At half opacity the warmer trough tint was doing nothing visible anyway. */
+      drop-shadow(
+        0 0 calc((6px - 3px * var(--relic-glow-pulse, 1)) * var(--relic-glow, 1))
+        rgb(255 232 186 / calc((0.86 - 0.36 * var(--relic-glow-pulse, 1)) * var(--relic-glow, 1))))
+      drop-shadow(
+        0 0 calc((20px - 10px * var(--relic-glow-pulse, 1)) * var(--relic-glow, 1))
+        rgb(255 190 96 / calc((0.52 - 0.24 * var(--relic-glow-pulse, 1)) * var(--relic-glow, 1))));
   }
   50% {
     filter:
@@ -19613,6 +19642,10 @@ button.tileset-relationship-cell {
     ease-in-out
     var(--relic-float-delay, 0s)
     infinite !important;
+  /* Declared HERE, on the element the filter belongs to. The hover sets the depth on the
+     icon above, which jumps; the img sees that inherited change and eases it, so the light
+     comes up to its steady level over the same beat the relic takes to settle. */
+  transition: --relic-glow-pulse 240ms cubic-bezier(0.3, 0.7, 0.3, 1);
 }
 
 /* Hovering picks the relic up and SETTLES it: the rise eases to zero, so the relic stops
@@ -19624,6 +19657,7 @@ button.tileset-relationship-cell {
 .relic-mat-offer:hover .run-relic-icon,
 .relic-mat-offer:focus-within .run-relic-icon {
   --relic-float-rise: 0px;
+  --relic-glow-pulse: 0;
   filter: brightness(1.2);
   scale: 1.22;
 }
@@ -19633,6 +19667,7 @@ button.tileset-relationship-cell {
    deliberately: the two carry equal specificity and the later one is meant to win. */
 .run-vacantia-take:disabled .run-relic-icon {
   --relic-float-rise: inherit;
+  --relic-glow-pulse: inherit;
   filter: none;
   scale: 1;
 }
