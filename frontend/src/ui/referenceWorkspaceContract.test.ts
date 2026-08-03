@@ -17,7 +17,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     const start = enchiridion.indexOf('const UNIT_STATE_REFERENCES');
     const end = enchiridion.indexOf('export function EnchiridionReference', start);
     const abilities = enchiridion.slice(start, end);
-    expect(abilities.match(/state: '(?:discipline|positioned|marshalled|plagued)'/g)).toHaveLength(4);
+    expect(abilities.match(/state: '(?:adlected|eutactic|agminate|cacochymic)'/g)).toHaveLength(4);
     expect(abilities).toContain('name: ADLECTED_DISPLAY_NAME');
     expect(abilities).toContain('name: EUTACTIC_DISPLAY_NAME');
     expect(abilities).toContain('name: AGMINATE_DISPLAY_NAME');
@@ -270,11 +270,11 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     const start = enchiridion.indexOf('const CARD_TYPE_REFERENCES');
     const end = enchiridion.indexOf('const UNIT_STATE_REFERENCES', start);
     const cardTypes = enchiridion.slice(start, end);
-    expect(cardTypes.match(/id: '(?:pestiferous|concinnous|tactical|hieratic)'/g)).toHaveLength(4);
+    expect(cardTypes.match(/id: '(?:pestiferous|concinnous|legatine|hieratic)'/g)).toHaveLength(4);
     expect(cardTypes).toContain("const VOLUNTEER_CARD = RUN_CARD_BY_ID.p");
     expect(cardTypes).toContain('<RunCardFace');
     expect(cardTypes).toContain('RUN_CARD_PESTIFEROUS_FRAME_SLOT');
-    expect(cardTypes).toContain('RUN_CARD_TACTICAL_FRAME_SLOT');
+    expect(cardTypes).toContain('RUN_CARD_LEGATINE_FRAME_SLOT');
     expect(cardTypes).toContain('RUN_CARD_HIERATIC_FRAME_SLOT');
     // Every named property row carries its own accepted symbol, not just Pestiferous.
     expect(cardTypes).toContain('src={runCardPropertyIconUrl(definition.id)}');

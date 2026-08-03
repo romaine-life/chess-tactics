@@ -46,12 +46,22 @@ exception.
 - `runAbilityDisplayName` resolves a complete table and no longer falls back to
   capitalizing a stored value. A state added without a name is a type error rather
   than a retired word on screen.
-- Every persisted value and live-media locator keeps the word it was coined with:
-  `discipline`, `positioned`, `marshalled`, `plagued`, the `tactical` card type,
-  and the icon slots named after them. These are storage identities and no
-  player-facing surface may expose one. Retiring them belongs to ADR-0339's
-  deferred paired-icon production cutover, which must migrate persisted values,
-  installed configuration and media locators in one transaction.
+- **A stored value and its name are one word.** `RunAbility` is
+  `adlected | eutactic | agminate`, `RunUnitModifier` is `cacochymic`, and
+  `RunCardType` carries `legatine`; the fields named after the retired words move
+  with them (`temporaryAdlectedUnitId`, `adlectedUnitIds`, `cacochymicUnitId`,
+  `cacochymicPieceIndex`, `cacochymicIndices`). `RUN_FORMAT_VERSION` 14 discards
+  in-progress Runs rather than translating them, and the server validator accepts
+  only the new words. This retires the two-vocabulary drift ADR-0341 and ADR-0343
+  opened rather than widening it.
+- **Live-media locators are the one exception, and the last one.** The seven slots
+  `ui/kit/icons/game/{discipline,positioned,marshalled,plagued}.png`,
+  `ui/kit/icons/card-properties/tactical.png`, `ui/surfaces/card-type-tactical.png`
+  and `ui/run/card-prototypes/tactical-discipline-frame-v1.png` keep the words they
+  were coined under. A slot path is accepted production content, so re-pointing one
+  is a content change rather than a code change; the code names each locator beside
+  the state it serves so the exception is visible where it is used. Moving them is
+  ADR-0339's paired-icon production cutover.
 - Seed labels are RNG inputs, not names. `tactical:discipline:<coreId>` and
   `tactical-discipline-acquisition-target` keep their exact wording, because
   rewording one would deal different cards at every existing seed.
@@ -67,9 +77,12 @@ exception.
   player meets on a card reads the same way as the pair beside it.
 - Good: the display-name fallback that made drift silent is gone, so a future
   state cannot leak its storage identity by omission.
-- Cost: the gap between what the game says and what it stores widens from two
-  words to five until the ADR-0339 cutover runs. Anyone reading a Run document,
-  an icon slot or a seed label must consult the mapping above.
+- Good: a Run document now reads in the same vocabulary as the screen, so
+  debugging a document no longer needs a translation table.
+- Cost: format 14 makes in-progress Runs unsupported.
+- Cost: the seven media locators are now the only place the retired words survive,
+  which is a smaller gap than before but a stranger-looking one — the code reads
+  `agminate: 'ui-kit-icons-game-marshalled-png'` until the ADR-0339 cutover runs.
 - Cost: the Enchiridion now teaches four obscure states rather than two, and
   Adlected in particular carries no meaning on sight.
 

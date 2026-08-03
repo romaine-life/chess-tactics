@@ -35,7 +35,7 @@ import {
   RUN_CARD_HIERATIC_FRAME_SLOT,
   RUN_CARD_PESTIFEROUS_FRAME_SLOT,
   RUN_CARD_REFERENCE_WIDTH,
-  RUN_CARD_TACTICAL_FRAME_SLOT,
+  RUN_CARD_LEGATINE_FRAME_SLOT,
   RunCardFace,
   runCardUnitImageKind,
   type RunCardContentsDensity,
@@ -161,15 +161,15 @@ const TACTICAL_SINGLE_CARD = Object.freeze({
   name: 'Regal Serenity',
   cost: 9 + ADLECTED_COST,
   typeLine: 'Units',
-  cardProperty: specimenCardProperty('tactical'),
-  grants: [{ count: 1, unit: 'queen', ability: 'discipline' }] as const,
+  cardProperty: specimenCardProperty('legatine'),
+  grants: [{ count: 1, unit: 'queen', ability: 'adlected' }] as const,
   flavor: 'She watched the empty court until ceremony became weather.',
 }) satisfies RunCardFaceContent;
 
 const TACTICAL_MULTI_CARD = Object.freeze({
   ...STANDARD_CARD,
   cost: 9 + ADLECTED_COST,
-  cardProperty: specimenCardProperty('tactical'),
+  cardProperty: specimenCardProperty('legatine'),
 }) satisfies RunCardFaceContent;
 
 const HIERATIC_CARD = Object.freeze({
@@ -184,8 +184,11 @@ export type RunCardTacticalSpecimen = 'single' | 'multi';
 
 export function runCardPrototypeVariantFromSearch(search: string): RunCardPrototypeVariant {
   const variant = new URLSearchParams(search).get('cardVariant');
+  // `tactical` is the word this review address was coined under; a bookmark written
+  // before ADR-0369 still opens the frame it named.
+  if (variant === 'tactical') return 'legatine';
   return variant === 'pestiferous'
-    || variant === 'tactical'
+    || variant === 'legatine'
     || variant === 'concinnous'
     || variant === 'hieratic'
     ? variant
@@ -226,11 +229,11 @@ export function runCardPrototypeContent(
       cost: 8,
       cardProperty: specimenCardProperty('pestiferous'),
       grants: STANDARD_CARD.grants.map((grant) => (
-        grant.unit === 'bishop' ? { ...grant, plaguedIndices: [0] } : grant
+        grant.unit === 'bishop' ? { ...grant, cacochymicIndices: [0] } : grant
       )),
     };
   }
-  if (variant === 'tactical') {
+  if (variant === 'legatine') {
     return tacticalSpecimen === 'multi' ? TACTICAL_MULTI_CARD : TACTICAL_SINGLE_CARD;
   }
   if (variant === 'concinnous') {
@@ -413,8 +416,8 @@ export function RunCardPrototypeViewer({
     ? RUN_CARD_FRAME_SLOT
     : cardVariant === 'pestiferous'
       ? RUN_CARD_PESTIFEROUS_FRAME_SLOT
-      : cardVariant === 'tactical'
-        ? RUN_CARD_TACTICAL_FRAME_SLOT
+      : cardVariant === 'legatine'
+        ? RUN_CARD_LEGATINE_FRAME_SLOT
         : cardVariant === 'concinnous'
           ? RUN_CARD_CONCINNOUS_FRAME_SLOT
           : cardVariant === 'hieratic'
@@ -484,7 +487,7 @@ export function RunCardPrototypeViewer({
       [geometryVariant]: { ...RUN_CARD_FRAME_GEOMETRY_BY_VARIANT[geometryVariant].boxes },
     }));
   };
-  const artSlot = !contentsStudy && cardVariant === 'tactical' && tacticalSpecimen === 'single'
+  const artSlot = !contentsStudy && cardVariant === 'legatine' && tacticalSpecimen === 'single'
     ? TACTICAL_ART_SLOT
     : !contentsStudy && cardVariant === 'concinnous'
       ? CONCINNOUS_ART_SLOT
@@ -838,10 +841,10 @@ export function RunCardPrototypeViewer({
                 >Pestiferous</button>
                 <button
                   type="button"
-                  className={`tileset-view-action${cardVariant === 'tactical' ? ' active' : ''}`}
+                  className={`tileset-view-action${cardVariant === 'legatine' ? ' active' : ''}`}
                   data-card-variant="tactical"
-                  aria-pressed={cardVariant === 'tactical'}
-                  onClick={() => chooseCardVariant('tactical')}
+                  aria-pressed={cardVariant === 'legatine'}
+                  onClick={() => chooseCardVariant('legatine')}
                 >Legatine</button>
                 <button
                   type="button"
@@ -859,7 +862,7 @@ export function RunCardPrototypeViewer({
                 >Hieratic</button>
               </div>
             )}
-            {!contentsStudy && cardVariant === 'tactical' ? (
+            {!contentsStudy && cardVariant === 'legatine' ? (
               <div className="tileset-button-row" role="group" aria-label="Legatine contents">
                 <button
                   type="button"
@@ -1110,7 +1113,7 @@ export function RunCardPrototypeViewer({
                 <div><dt>Coin source</dt><dd>{coinSource.media!.sha256.slice(0, 12)} · {coinSource.status}</dd></div>
                 <div><dt>Artwork</dt><dd>{art.media!.sha256.slice(0, 12)} · {art.status}</dd></div>
                 <div><dt>Card</dt><dd>{contentsStudy ? 'Contents Box density study' : `${displayedCard.typeLine} · ${displayedCard.cost} gold`}</dd></div>
-                {cardVariant === 'tactical' ? <div><dt>Adlected target</dt><dd>{tacticalSpecimen === 'single' ? 'Forced and shown by icon' : 'Chosen at acquisition'}</dd></div> : null}
+                {cardVariant === 'legatine' ? <div><dt>Adlected target</dt><dd>{tacticalSpecimen === 'single' ? 'Forced and shown by icon' : 'Chosen at acquisition'}</dd></div> : null}
                 <div><dt>Ataraxia I sample</dt><dd>{realizedPestiferousCount} / {RUN_CARD_SAMPLE_DRAWS} Pestiferous · seed 4217</dd></div>
                 <div><dt>Opening budget</dt><dd>{RUN_STARTING_GOLD} gold · buy any affordable cards</dd></div>
                 <div><dt>Opening party</dt><dd>King + 2 Pawns + purchased cards</dd></div>

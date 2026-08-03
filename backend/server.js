@@ -14801,14 +14801,14 @@ const RUN_CARD_ART_PIECE_ORDER = Object.freeze(['pawn', 'knight', 'bishop', 'roo
 const RUN_CARD_FRAME_SLOT = 'ui/run/card-prototypes/frame-v1.png';
 const RUN_CARD_PESTIFEROUS_FRAME_SLOT = 'ui/run/card-prototypes/pestiferous-frame-v1.png';
 const RUN_CARD_CONCINNOUS_FRAME_SLOT = 'ui/run/card-prototypes/concinnous-frame-v1.png';
-const RUN_CARD_TACTICAL_FRAME_SLOT = 'ui/run/card-prototypes/tactical-discipline-frame-v1.png';
+const RUN_CARD_LEGATINE_FRAME_SLOT = 'ui/run/card-prototypes/tactical-discipline-frame-v1.png';
 const RUN_CARD_HIERATIC_FRAME_SLOT = 'ui/run/card-prototypes/hieratic-frame-v1.png';
 const RUN_CARD_COST_COIN_SOURCE_SLOT = 'ui/run/card-prototypes/cost-coin-source-v1.png';
 const RUN_CARD_FRAME_VARIANT_BY_SLOT = Object.freeze({
   [RUN_CARD_FRAME_SLOT]: 'standard',
   [RUN_CARD_PESTIFEROUS_FRAME_SLOT]: 'pestiferous',
   [RUN_CARD_CONCINNOUS_FRAME_SLOT]: 'concinnous',
-  [RUN_CARD_TACTICAL_FRAME_SLOT]: 'tactical',
+  [RUN_CARD_LEGATINE_FRAME_SLOT]: 'legatine',
   [RUN_CARD_HIERATIC_FRAME_SLOT]: 'hieratic',
   [RUN_CARD_COST_COIN_SOURCE_SLOT]: 'cost-coin-source',
 });
@@ -18282,9 +18282,9 @@ app.put('/api/run-progression', async (req, res) => {
 const ACTIVE_RUN_PHASES = new Set(['bona-vacantia', 'deployment', 'battle', 'shop', 'victory']);
 const ACTIVE_RUN_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
 const ACTIVE_RUN_PIECE_VALUES = Object.freeze({ pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9, king: 0 });
-const ACTIVE_RUN_ABILITIES = new Set(['discipline', 'positioned', 'marshalled']);
-const ACTIVE_RUN_MODIFIERS = new Set(['plagued']);
-const ACTIVE_RUN_PLAGUED_DISCOUNTS = Object.freeze({ pawn: 0, knight: 1, bishop: 1, rook: 2, queen: 3 });
+const ACTIVE_RUN_ABILITIES = new Set(['adlected', 'eutactic', 'agminate']);
+const ACTIVE_RUN_MODIFIERS = new Set(['cacochymic']);
+const ACTIVE_RUN_CACOCHYMIC_DISCOUNTS = Object.freeze({ pawn: 0, knight: 1, bishop: 1, rook: 2, queen: 3 });
 const ACTIVE_RUN_SHOP_FIELDS = new Set([
   'kind',
   'afterBattleIndex',
@@ -18323,7 +18323,7 @@ function openingRelicGoldTenths(run) {
 
 function validateActiveRunBody(run) {
   if (!run || typeof run !== 'object' || Array.isArray(run)) return 'run must be an object';
-  if (run.formatVersion !== 13) return 'run.formatVersion is unsupported';
+  if (run.formatVersion !== 14) return 'run.formatVersion is unsupported';
   if (typeof run.id !== 'string' || !run.id || run.id.length > 160) return 'run.id is invalid';
   if (!isFiniteInteger(run.seed) || run.seed < 0 || run.seed > 0xffffffff) return 'run.seed is invalid';
   if (run.formatVersion >= 5 && run.ataraxiaTier !== 0 && run.ataraxiaTier !== 1) return 'run.ataraxiaTier is invalid';
@@ -18387,26 +18387,26 @@ function validateActiveRunBody(run) {
     const cardIds = new Set();
     const cardUnitIds = new Set();
     const lostCardUnitIds = new Set();
-    const plaguedTargetUnitIds = new Set();
+    const cacochymicTargetUnitIds = new Set();
     for (const card of run.cards) {
       if (!isObjectRecord(card)) return 'run.cards contains an invalid card';
       const cardTypeValid = card.cardType === null
         || card.cardType === 'pestiferous'
         || (run.formatVersion >= 6 && card.cardType === 'concinnous')
-        || (run.formatVersion >= 8 && card.cardType === 'tactical')
+        || (run.formatVersion >= 8 && card.cardType === 'legatine')
         || (run.formatVersion >= 12 && card.cardType === 'hieratic');
       const directEffectTarget = card.effectTargetUnitId;
       const legacyEffectTarget = isObjectRecord(card.effect) ? card.effect.targetUnitId : null;
       const effectTarget = typeof directEffectTarget === 'string' ? directEffectTarget : legacyEffectTarget;
       const affectedCard = card.cardType === 'concinnous'
-        || card.cardType === 'tactical'
+        || card.cardType === 'legatine'
         || card.cardType === 'hieratic';
       // Each acquisition qualifier grants exactly one ability to its recorded target unit.
-      const expectedGrantedAbility = card.cardType === 'tactical'
-        ? 'discipline'
+      const expectedGrantedAbility = card.cardType === 'legatine'
+        ? 'adlected'
         : card.cardType === 'hieratic'
-          ? 'marshalled'
-          : 'positioned';
+          ? 'agminate'
+          : 'eutactic';
       const effectTargetValid = run.formatVersion < 6 || (
         affectedCard
           ? typeof effectTarget === 'string'
@@ -18449,11 +18449,11 @@ function validateActiveRunBody(run) {
       if (run.formatVersion >= 7) {
         const validPlaguedTarget = card.cardType === 'pestiferous'
           ? card.unitIds.length > 0
-            ? typeof card.plaguedUnitId === 'string' && card.unitIds.includes(card.plaguedUnitId)
-            : card.plaguedUnitId === null
-          : card.plaguedUnitId === null;
+            ? typeof card.cacochymicUnitId === 'string' && card.unitIds.includes(card.cacochymicUnitId)
+            : card.cacochymicUnitId === null
+          : card.cacochymicUnitId === null;
         if (!validPlaguedTarget) return 'run.cards contains an invalid Cacochymic target';
-        if (card.plaguedUnitId !== null) plaguedTargetUnitIds.add(card.plaguedUnitId);
+        if (card.cacochymicUnitId !== null) cacochymicTargetUnitIds.add(card.cacochymicUnitId);
       }
       cardIds.add(card.id);
       for (const unitId of card.unitIds) {
@@ -18481,7 +18481,7 @@ function validateActiveRunBody(run) {
     }
     if (run.formatVersion >= 7) {
       for (const unit of run.army) {
-        if (unit.modifiers.includes('plagued') !== plaguedTargetUnitIds.has(unit.id)) {
+        if (unit.modifiers.includes('cacochymic') !== cacochymicTargetUnitIds.has(unit.id)) {
           return 'run.army Cacochymic modifiers do not match card targets';
         }
       }
@@ -18515,7 +18515,7 @@ function validateActiveRunBody(run) {
         || !Array.isArray(unit.abilities)
         || unit.abilities.some((ability) => !ACTIVE_RUN_ABILITIES.has(ability))
         || !Array.isArray(unit.modifiers)
-        || !unit.modifiers.includes('plagued')
+        || !unit.modifiers.includes('cacochymic')
         || unit.modifiers.some((modifier) => !ACTIVE_RUN_MODIFIERS.has(modifier))
         || !isFiniteInteger(unit.inspectionSeed)
         || unit.inspectionSeed < 0
@@ -18591,7 +18591,7 @@ function validateActiveRunBody(run) {
         const cardTypeValid = offer.cardType === null
           || offer.cardType === 'pestiferous'
           || offer.cardType === 'concinnous'
-          || offer.cardType === 'tactical'
+          || offer.cardType === 'legatine'
           || offer.cardType === 'hieratic';
         const effectTargetValid = offer.cardType === 'concinnous'
           ? isFiniteInteger(offer.effectTargetIndex)
@@ -18623,16 +18623,16 @@ function validateActiveRunBody(run) {
           || offer.pieces.reduce((total, piece) => total + ACTIVE_RUN_PIECE_VALUES[piece], 0) !== offer.value
         ) return 'run.shop.cardOffers contains an invalid offer';
         const validPlaguedTarget = offer.cardType === 'pestiferous'
-          ? isFiniteInteger(offer.plaguedPieceIndex)
-            && offer.plaguedPieceIndex >= 0
-            && offer.plaguedPieceIndex < offer.pieces.length
-          : offer.plaguedPieceIndex === null;
+          ? isFiniteInteger(offer.cacochymicPieceIndex)
+            && offer.cacochymicPieceIndex >= 0
+            && offer.cacochymicPieceIndex < offer.pieces.length
+          : offer.cacochymicPieceIndex === null;
         if (!validPlaguedTarget) return 'run.shop.cardOffers contains an invalid Cacochymic target';
-        const plaguedPiece = offer.plaguedPieceIndex === null ? null : offer.pieces[offer.plaguedPieceIndex];
+        const plaguedPiece = offer.cacochymicPieceIndex === null ? null : offer.pieces[offer.cacochymicPieceIndex];
         const expectedCost = offer.cardType === 'pestiferous'
-          ? offer.value - (plaguedPiece ? ACTIVE_RUN_PLAGUED_DISCOUNTS[plaguedPiece] : 0)
+          ? offer.value - (plaguedPiece ? ACTIVE_RUN_CACOCHYMIC_DISCOUNTS[plaguedPiece] : 0)
           : offer.value + (
-            offer.cardType === 'tactical' || offer.cardType === 'hieratic'
+            offer.cardType === 'legatine' || offer.cardType === 'hieratic'
               ? 3
               : offer.cardType === 'concinnous' ? 2 : 0
           );
@@ -18664,9 +18664,9 @@ function validateActiveRunBody(run) {
           || (
             card.cardType === 'pestiferous'
               ? card.unitIds.length > 0
-                ? typeof card.plaguedUnitId !== 'string' || !card.unitIds.includes(card.plaguedUnitId)
-                : card.plaguedUnitId !== null
-              : card.plaguedUnitId !== null
+                ? typeof card.cacochymicUnitId !== 'string' || !card.unitIds.includes(card.cacochymicUnitId)
+                : card.cacochymicUnitId !== null
+              : card.cacochymicUnitId !== null
           )
         ))
       ) return 'run.shop.entrySnapshot contains an invalid Cacochymic target';

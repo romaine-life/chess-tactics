@@ -46,13 +46,13 @@ describe('Run relic chess invariant', () => {
 
   it('expresses placement relics only as shared unit-ability grants', () => {
     expect(RUN_RELIC_ABILITY_GRANTS).toEqual({
-      'training-linens': { ability: 'positioned', unitType: 'pawn' },
-      'royal-decree': { ability: 'positioned', unitType: 'king' },
-      'crenellated-rampart': { ability: 'positioned', unitType: 'rook' },
-      'popes-staff': { ability: 'positioned', unitType: 'bishop' },
-      'ghibelline-rampart': { ability: 'marshalled', unitType: 'rook' },
-      'popes-robes': { ability: 'marshalled', unitType: 'bishop' },
-      'royal-sceptre': { ability: 'marshalled', unitType: 'king' },
+      'training-linens': { ability: 'eutactic', unitType: 'pawn' },
+      'royal-decree': { ability: 'eutactic', unitType: 'king' },
+      'crenellated-rampart': { ability: 'eutactic', unitType: 'rook' },
+      'popes-staff': { ability: 'eutactic', unitType: 'bishop' },
+      'ghibelline-rampart': { ability: 'agminate', unitType: 'rook' },
+      'popes-robes': { ability: 'agminate', unitType: 'bishop' },
+      'royal-sceptre': { ability: 'agminate', unitType: 'king' },
     });
     expect(Object.fromEntries(
       Object.keys(RUN_RELIC_ABILITY_GRANTS).map((id) => [id, RUN_RELICS.find((relic) => relic.id === id)?.description]),

@@ -50,7 +50,7 @@ describe('Run card atomic presentation', () => {
     )).not.toBe(signature);
     expect(runCardPresentationSignature({
       ...card,
-      grants: [{ ...card.grants[0], ability: 'discipline' }, card.grants[1]],
+      grants: [{ ...card.grants[0], ability: 'adlected' }, card.grants[1]],
     }, '/frame-a.png', '/art-a.png')).not.toBe(signature);
   });
 
@@ -74,13 +74,13 @@ describe('Run card atomic presentation', () => {
     const paired = {
       ...card,
       cardProperty: {
-        id: 'tactical' as const,
+        id: 'legatine' as const,
         name: 'Tactical',
         effect: 'One unit gains Discipline.',
       },
       grants: [
-        { ...card.grants[0], ability: 'discipline' as const },
-        { ...card.grants[1], plaguedIndices: [0] },
+        { ...card.grants[0], ability: 'adlected' as const },
+        { ...card.grants[1], cacochymicIndices: [0] },
       ],
     } satisfies RunCardFaceContent;
     const iconMedia = {
@@ -89,8 +89,8 @@ describe('Run card atomic presentation', () => {
     } as const;
     const kinds = requiredRunCardImageKinds(paired, iconMedia);
     expect(kinds).toContain('property-icon');
-    expect(kinds).toContain('unit-state:discipline');
-    expect(kinds).toContain('unit-state:plagued');
+    expect(kinds).toContain('unit-state:adlected');
+    expect(kinds).toContain('unit-state:cacochymic');
     const signature = runCardPresentationSignature(
       paired,
       '/frame.png',
@@ -99,7 +99,7 @@ describe('Run card atomic presentation', () => {
       '/coin.png',
       iconMedia,
     );
-    const incomplete = new Set<RunCardImageKind>(kinds.filter((kind) => kind !== 'unit-state:discipline'));
+    const incomplete = new Set<RunCardImageKind>(kinds.filter((kind) => kind !== 'unit-state:adlected'));
     expect(runCardPresentationCanPromote(signature, signature, paired, incomplete, iconMedia)).toBe(false);
     expect(runCardPresentationCanPromote(signature, signature, paired, new Set(kinds), iconMedia)).toBe(true);
   });

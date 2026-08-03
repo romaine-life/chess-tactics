@@ -43,7 +43,7 @@ import {
   RUN_CARD_CONCINNOUS_FRAME_SLOT,
   RUN_CARD_HIERATIC_FRAME_SLOT,
   RUN_CARD_PESTIFEROUS_FRAME_SLOT,
-  RUN_CARD_TACTICAL_FRAME_SLOT,
+  RUN_CARD_LEGATINE_FRAME_SLOT,
   RunCardFace,
   runCardPropertyIconUrl,
   type RunCardFaceContent,
@@ -686,11 +686,11 @@ const CARD_TYPE_REFERENCES: readonly CardTypeReferenceDefinition[] = Object.free
     frameSlot: RUN_CARD_CONCINNOUS_FRAME_SLOT,
   },
   {
-    id: 'tactical',
+    id: 'legatine',
     name: 'Legatine',
     cost: 4,
     description: `Of a legate, a commander's deputy entrusted with a detached force. One contained unit gains ${ADLECTED_DISPLAY_NAME} when purchased. The target is hidden on multi-unit offers; this one-unit Volunteer shows the state because its target is forced.`,
-    frameSlot: RUN_CARD_TACTICAL_FRAME_SLOT,
+    frameSlot: RUN_CARD_LEGATINE_FRAME_SLOT,
   },
   {
     id: 'hieratic',
@@ -719,9 +719,9 @@ function CardTypeReference({ definition }: { definition: CardTypeReferenceDefini
     grants: [{
       unit: 'pawn',
       count: 1,
-      ...(definition.id === 'pestiferous' ? { plaguedIndices: [0] } : {}),
-      ...(definition.id === 'tactical' ? { ability: 'discipline' as const } : {}),
-      ...(definition.id === 'hieratic' ? { ability: 'marshalled' as const } : {}),
+      ...(definition.id === 'pestiferous' ? { cacochymicIndices: [0] } : {}),
+      ...(definition.id === 'legatine' ? { ability: 'adlected' as const } : {}),
+      ...(definition.id === 'hieratic' ? { ability: 'agminate' as const } : {}),
     }],
     properties: definition.id === 'concinnous'
       ? [{ name: EUTACTIC_DISPLAY_NAME, target: 'Pawn' }]
@@ -848,22 +848,22 @@ const UNIT_STATE_REFERENCES: readonly Readonly<{
   description: string;
 }>[] = Object.freeze([
   {
-    state: 'discipline',
+    state: 'adlected',
     name: ADLECTED_DISPLAY_NAME,
     description: 'Enrolled by direct appointment rather than by the usual process. The unit may be deliberately placed on a legal square in the player deployment zone before the remainder of the army is deployed.',
   },
   {
-    state: 'positioned',
+    state: 'eutactic',
     name: EUTACTIC_DISPLAY_NAME,
     description: 'Well-ordered; drawn up in good array. The unit’s automatic deployment favors its piece-specific region: Pawns prefer the front row, the King and Bishops prefer the back row, and Rooks prefer outer back-row squares.',
   },
   {
-    state: 'marshalled',
+    state: 'agminate',
     name: AGMINATE_DISPLAY_NAME,
     description: 'The unit seeks its piece-specific station: the King prefers a board edge, Rooks favor their King-flank and corner formation, and Bishops prefer the opposite square color from another Bishop.',
   },
   {
-    state: 'plagued',
+    state: 'cacochymic',
     name: CACOCHYMIC_DISPLAY_NAME,
     description: 'The unit may be permanently lost after a Battle when its Pestiferous card resolves attrition. Its card-price contribution is discounted by 0 gold for a Pawn, 1 for a Knight or Bishop, 2 for a Rook, and 3 for a Queen.',
   },

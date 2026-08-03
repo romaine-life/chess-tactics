@@ -21,7 +21,7 @@ import {
   ADLECTED_COST,
   GOLD_SCALE,
   PIECE_VALUE,
-  PLAGUED_DISCOUNT,
+  CACOCHYMIC_DISCOUNT,
   EUTACTIC_COST,
   RUN_CARD_BY_ID,
   RUN_RELIC_BY_ID,
@@ -133,10 +133,10 @@ const PIECE_ALIASES: Readonly<Record<string, PurchasablePieceType>> = Object.fre
 const CARD_TYPES: Readonly<Record<string, RunCardType | null>> = Object.freeze({
   plain: null,
   none: null,
-  legatine: 'tactical',
-  adlected: 'tactical',
-  tactical: 'tactical',
-  discipline: 'tactical',
+  legatine: 'legatine',
+  adlected: 'legatine',
+  tactical: 'legatine',
+  discipline: 'legatine',
   concinnous: 'concinnous',
   eutactic: 'concinnous',
   positioned: 'concinnous',
@@ -253,12 +253,12 @@ export function parseRunCraftSpec(search: string): RunCraftSpec | null {
 /** A crafted ability may be written by its name or by its stored value (ADR-0369). The
  * refusal message quotes the names, since those are what the game says out loud. */
 const RUN_ABILITY_ALIASES: Readonly<Record<string, RunAbility>> = Object.freeze({
-  adlected: 'discipline',
-  discipline: 'discipline',
-  eutactic: 'positioned',
-  positioned: 'positioned',
-  agminate: 'marshalled',
-  marshalled: 'marshalled',
+  adlected: 'adlected',
+  discipline: 'adlected',
+  eutactic: 'eutactic',
+  positioned: 'eutactic',
+  agminate: 'agminate',
+  marshalled: 'agminate',
 });
 
 const RUN_ABILITY_NAMES = ['adlected', 'eutactic', 'agminate'] as const;
@@ -520,13 +520,13 @@ function autoDeploy(run: RunDocument): { run: RunDocument; layout: RunDeployment
     // A Surveyor's Compass makes the layout an unmade player choice; the crafter takes the first.
     prepared = setDeploymentChoices(prepared, { layoutChoice: 0 });
   }
-  if (options.disciplineUnitIds.length) {
+  if (options.adlectedUnitIds.length) {
     // Adlected units are placed by hand in play, so the crafter places them the same way:
     // the first free deployment cells, deterministically.
     const layout = selectedDeploymentLayout(prepared, options);
     const used = new Set(Object.values(layout.placements).map((cell) => `${cell.x},${cell.y}`));
     const manualPlacements = { ...(prepared.deployment?.manualPlacements ?? {}) };
-    for (const unitId of options.disciplineUnitIds) {
+    for (const unitId of options.adlectedUnitIds) {
       if (manualPlacements[unitId]) continue;
       const free = options.zoneCells.find((cell) => !used.has(`${cell.x},${cell.y}`));
       if (!free) break;
@@ -670,25 +670,25 @@ function craftOffer(
 ): RunCardOffer {
   const core = RUN_CARD_BY_ID[craftCoreCardId(card.pieces)];
   const effectSeed = mixSeed(run.seed, `craft-offer:${core.id}`, slotIndex);
-  const plaguedPieceIndex = card.cardType === 'pestiferous'
+  const cacochymicPieceIndex = card.cardType === 'pestiferous'
     ? seededPestiferousTarget(effectSeed, core.pieces.map((_piece, index) => index), 0)
     : null;
-  const plaguedPiece = plaguedPieceIndex === null ? null : core.pieces[plaguedPieceIndex];
+  const plaguedPiece = cacochymicPieceIndex === null ? null : core.pieces[cacochymicPieceIndex];
   return {
     ...core,
     pieces: [...core.pieces],
     offerId: `craft-${slotIndex}-${core.id}`,
     // The exact pricing the game and the server both derive; a hand-set cost is rejected.
     cost: plaguedPiece
-      ? core.value - PLAGUED_DISCOUNT[plaguedPiece]
-      : core.value + (card.cardType === 'tactical'
+      ? core.value - CACOCHYMIC_DISCOUNT[plaguedPiece]
+      : core.value + (card.cardType === 'legatine'
         ? ADLECTED_COST
         : card.cardType === 'hieratic'
           ? AGMINATE_COST
           : card.cardType === 'concinnous' ? EUTACTIC_COST : 0),
     cardType: card.cardType,
     effectSeed,
-    plaguedPieceIndex,
+    cacochymicPieceIndex,
     effectTargetIndex: card.cardType === 'concinnous'
       ? createRng(mixSeed(effectSeed, 'concinnous-target')).int(core.pieces.length)
       : null,

@@ -77,11 +77,11 @@ describe('Run deployment', () => {
     disciplined = {
       ...disciplined,
       army: disciplined.army.map((unit) => unit.id === 'run-king'
-        ? { ...unit, abilities: ['discipline'] }
+        ? { ...unit, abilities: ['adlected'] }
         : unit),
     };
     let options = deploymentOptions(disciplined, level);
-    expect(options.disciplineUnitIds).toContain('run-king');
+    expect(options.adlectedUnitIds).toContain('run-king');
     expect(options.layouts[0].placements['run-king']).toBeUndefined();
     disciplined = setDeploymentChoices(disciplined, { manualPlacements: { 'run-king': '1,3' } });
     options = deploymentOptions(disciplined, level);
@@ -101,7 +101,7 @@ describe('Run deployment', () => {
     const disciplined = {
       ...current,
       army: current.army.map((unit) => unit.id === 'run-king'
-        ? { ...unit, abilities: ['discipline'] as RunArmyUnit['abilities'] }
+        ? { ...unit, abilities: ['adlected'] as RunArmyUnit['abilities'] }
         : unit),
     };
     expect(deploymentHasMeaningfulChoice(disciplined, deploymentOptions(disciplined, level))).toBe(true);
@@ -119,7 +119,7 @@ describe('Run deployment', () => {
     const disciplined = {
       ...current,
       army: current.army.map((unit) => unit.id === 'run-king'
-        ? { ...unit, abilities: ['discipline'] as RunArmyUnit['abilities'] }
+        ? { ...unit, abilities: ['adlected'] as RunArmyUnit['abilities'] }
         : unit),
     };
     const resolved = resolveForcedDeploymentChoices(disciplined, level);
@@ -149,13 +149,13 @@ describe('Run deployment', () => {
       ...current,
       relics: ['royal-sceptre', 'royal-decree'] as RunDocument['relics'],
     };
-    expect(hasRunAbility(inherited, king, 'positioned')).toBe(true);
-    expect(hasRunAbility(inherited, king, 'marshalled')).toBe(true);
+    expect(hasRunAbility(inherited, king, 'eutactic')).toBe(true);
+    expect(hasRunAbility(inherited, king, 'agminate')).toBe(true);
 
-    const permanentKing = { ...king, abilities: ['positioned', 'marshalled'] as RunArmyUnit['abilities'] };
+    const permanentKing = { ...king, abilities: ['eutactic', 'agminate'] as RunArmyUnit['abilities'] };
     const permanent = { ...current, army: current.army.map((unit) => unit.id === king.id ? permanentKing : unit) };
-    expect(hasRunAbility(permanent, permanentKing, 'positioned')).toBe(true);
-    expect(hasRunAbility(permanent, permanentKing, 'marshalled')).toBe(true);
+    expect(hasRunAbility(permanent, permanentKing, 'eutactic')).toBe(true);
+    expect(hasRunAbility(permanent, permanentKing, 'agminate')).toBe(true);
     expect(deploymentOptions(permanent, battle()).layouts[0].placements['run-king']).toEqual(
       deploymentOptions(inherited, battle()).layouts[0].placements['run-king'],
     );
@@ -179,7 +179,7 @@ describe('Run deployment', () => {
       army: [
         king,
         bishop('ordinary-bishop', 1, []),
-        bishop('marshalled-bishop', 2, ['marshalled']),
+        bishop('marshalled-bishop', 2, ['agminate']),
       ],
     };
     const placements = deploymentOptions(bishops, battle()).layouts[0].placements;
@@ -240,8 +240,8 @@ describe('Run deployment', () => {
       army: current.army.map((unit) => ({
         ...unit,
         abilities: [king.id, other.id].includes(unit.id)
-          ? ['discipline'] as RunArmyUnit['abilities']
-          : unit.abilities.filter((ability) => ability !== 'discipline'),
+          ? ['adlected'] as RunArmyUnit['abilities']
+          : unit.abilities.filter((ability) => ability !== 'adlected'),
       })),
     };
 
@@ -387,7 +387,7 @@ describe('Dedicated deployment zones', () => {
     const disciplined = {
       ...base,
       army: base.army.map((unit) => unit.id === 'run-pawn-0'
-        ? { ...unit, abilities: ['discipline'] as RunArmyUnit['abilities'] }
+        ? { ...unit, abilities: ['adlected'] as RunArmyUnit['abilities'] }
         : unit),
     };
     const options = deploymentOptions(disciplined, level);
@@ -435,7 +435,7 @@ describe('Dedicated deployment zones', () => {
     const base = armyOf(['rook']);
     const agminate = {
       ...base,
-      army: base.army.map((unit) => ({ ...unit, abilities: ['marshalled'] as RunArmyUnit['abilities'] })),
+      army: base.army.map((unit) => ({ ...unit, abilities: ['agminate'] as RunArmyUnit['abilities'] })),
     };
     const placements = deploymentOptions(agminate, level).layouts[0].placements;
     const king = placements['run-king'];

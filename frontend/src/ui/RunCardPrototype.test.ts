@@ -37,7 +37,7 @@ import {
 describe('Run Card Layout review variant', () => {
   it('addresses each affected-card review state in the URL', () => {
     expect(runCardPrototypeVariantFromSearch('?mode=viewer&cardVariant=pestiferous')).toBe('pestiferous');
-    expect(runCardPrototypeVariantFromSearch('?mode=viewer&cardVariant=tactical')).toBe('tactical');
+    expect(runCardPrototypeVariantFromSearch('?mode=viewer&cardVariant=tactical')).toBe('legatine');
     expect(runCardPrototypeVariantFromSearch('?mode=viewer&cardVariant=concinnous')).toBe('concinnous');
     expect(runCardPrototypeVariantFromSearch('?mode=viewer&cardVariant=unknown')).toBe('standard');
     expect(runCardTacticalSpecimenFromSearch('?cardVariant=tactical&tacticalSpecimen=multi')).toBe('multi');
@@ -62,19 +62,19 @@ describe('Run Card Layout review variant', () => {
   });
 
   it('shows Adlected only when one Legatine unit makes the random target certain', () => {
-    expect(runCardPrototypeContent('tactical')).toMatchObject({
+    expect(runCardPrototypeContent('legatine')).toMatchObject({
       name: 'Regal Serenity',
       cost: 12,
       typeLine: 'Units',
-      cardProperty: { id: 'tactical', name: 'Legatine' },
-      grants: [{ count: 1, unit: 'queen', ability: 'discipline' }],
+      cardProperty: { id: 'legatine', name: 'Legatine' },
+      grants: [{ count: 1, unit: 'queen', ability: 'adlected' }],
     });
-    expect(runCardPrototypeContent('tactical', 'multi')).toMatchObject({
+    expect(runCardPrototypeContent('legatine', 'multi')).toMatchObject({
       cost: 12,
       typeLine: 'Units',
-      cardProperty: { id: 'tactical' },
+      cardProperty: { id: 'legatine' },
     });
-    expect(runCardPrototypeContent('tactical', 'multi').grants.every((grant) => !grant.ability)).toBe(true);
+    expect(runCardPrototypeContent('legatine', 'multi').grants.every((grant) => !grant.ability)).toBe(true);
   });
 
   it('keeps the primary type line and carries the qualifier as a symbol', () => {
@@ -85,27 +85,27 @@ describe('Run Card Layout review variant', () => {
       cardProperty: { id: 'pestiferous', name: 'Pestiferous' },
     });
     expect(runCardPrototypeContent('pestiferous').grants).toContainEqual(
-      expect.objectContaining({ unit: 'bishop', plaguedIndices: [0] }),
+      expect.objectContaining({ unit: 'bishop', cacochymicIndices: [0] }),
     );
     expect(runCardPrototypeContent('pestiferous')).not.toHaveProperty('rules');
     expect(runCardPrototypeContent('standard').typeLine).toBe('Units');
     expect(runCardPrototypeContent('standard')).not.toHaveProperty('cardProperty');
     // No affected card spells its qualifier out after an em dash any more (ADR-0339).
-    for (const variant of ['standard', 'pestiferous', 'tactical', 'concinnous', 'hieratic'] as const) {
+    for (const variant of ['standard', 'pestiferous', 'legatine', 'concinnous', 'hieratic'] as const) {
       expect(runCardPrototypeContent(variant).typeLine).toBe('Units');
     }
   });
 
   it('owes every declared property and unit-state icon before a face may promote', () => {
-    const tactical = runCardPrototypeContent('tactical');
+    const tactical = runCardPrototypeContent('legatine');
     expect(requiredRunCardImageKinds(tactical)).toContain('property-icon');
-    expect(requiredRunCardImageKinds(tactical)).toContain('unit-state:discipline');
-    expect(requiredRunCardImageKinds(runCardPrototypeContent('pestiferous'))).toContain('unit-state:plagued');
+    expect(requiredRunCardImageKinds(tactical)).toContain('unit-state:adlected');
+    expect(requiredRunCardImageKinds(runCardPrototypeContent('pestiferous'))).toContain('unit-state:cacochymic');
     expect(requiredRunCardImageKinds(runCardPrototypeContent('standard'))).not.toContain('property-icon');
   });
 
   it('fits each property in its own committed seat and shares one unit-state seat', () => {
-    expect(RUN_CARD_COMMITTED_PROPERTY_PLACEMENTS.tactical).toEqual({ x: -4, y: -0.95, scale: 2.75 });
+    expect(RUN_CARD_COMMITTED_PROPERTY_PLACEMENTS.legatine).toEqual({ x: -4, y: -0.95, scale: 2.75 });
     expect(RUN_CARD_COMMITTED_UNIT_STATE_PLACEMENT).toEqual({ x: 2.2, y: -0.95, scale: 5 });
     expect(runCardCommittedIconTuning('hieratic')).toEqual({
       property: RUN_CARD_COMMITTED_PROPERTY_PLACEMENTS.hieratic,

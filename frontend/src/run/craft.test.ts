@@ -85,7 +85,7 @@ describe('run craft spec parsing', () => {
 
   it('reads a card type off an offer', () => {
     expect(spec('?craft=shop&offers=rook:tactical').offers).toEqual([
-      { pieces: ['rook'], cardType: 'tactical' },
+      { pieces: ['rook'], cardType: 'legatine' },
     ]);
   });
 
@@ -109,12 +109,12 @@ describe('run craft specs from a request body', () => {
     const parsed = runCraftSpecFromJson({
       phase: 'shop',
       battle: 2,
-      army: [{ type: 'rook', abilities: ['marshalled'] }, 'pawn'],
+      army: [{ type: 'rook', abilities: ['agminate'] }, 'pawn'],
       offers: [{ pieces: ['pawn', 'pawn'], type: 'concinnous' }],
       relics: ['fair-scales'],
     });
     expect(parsed.army).toEqual([
-      { type: 'rook', abilities: ['marshalled'] },
+      { type: 'rook', abilities: ['agminate'] },
       { type: 'pawn', abilities: [] },
     ]);
     expect(parsed.offers).toEqual([{ pieces: ['pawn', 'pawn'], cardType: 'concinnous' }]);
@@ -132,11 +132,11 @@ describe('run craft specs from a request body', () => {
 
   it('grants crafted abilities to the units it adds', () => {
     const run = craftRunDocument(
-      runCraftSpecFromJson({ phase: 'shop', battle: 2, army: [{ type: 'rook', abilities: ['marshalled'] }, 'pawn'] }),
+      runCraftSpecFromJson({ phase: 'shop', battle: 2, army: [{ type: 'rook', abilities: ['agminate'] }, 'pawn'] }),
       war(),
     );
     expect(run.army.map((unit) => `${unit.type}:${unit.abilities.join('+') || 'none'}`))
-      .toEqual(['king:none', 'rook:marshalled', 'pawn:none']);
+      .toEqual(['king:none', 'rook:agminate', 'pawn:none']);
   });
 });
 
@@ -201,7 +201,7 @@ describe('crafted Run documents', () => {
     const run = craft('?craft=shop&battle=2&offers=rook:pestiferous');
     const offer = run.shop!.cardOffers[0];
     expect(offer.cardType).toBe('pestiferous');
-    expect(offer.plaguedPieceIndex).toBe(0);
+    expect(offer.cacochymicPieceIndex).toBe(0);
     expect(offer.cost).toBe(PIECE_VALUE.rook - 2);
   });
 
@@ -347,7 +347,7 @@ describe('links that craft the Run they open', () => {
   });
 
   it('refuses to write an address for a spec it would have to shorten', () => {
-    const rich = runCraftSpecFromJson({ phase: 'shop', battle: 4, army: [{ type: 'rook', abilities: ['marshalled'] }] });
+    const rich = runCraftSpecFromJson({ phase: 'shop', battle: 4, army: [{ type: 'rook', abilities: ['agminate'] }] });
     expect(() => runCraftAddress(rich)).toThrow(/cannot be written as an address/);
   });
 

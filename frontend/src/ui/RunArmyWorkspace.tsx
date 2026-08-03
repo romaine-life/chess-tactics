@@ -64,10 +64,10 @@ const PLAYER_PIECE_FACING = defaultFacingForSide('player');
 const TYPE_ORDER: readonly RunArmyPieceType[] = ['king', 'pawn', 'knight', 'bishop', 'rook', 'queen'];
 
 export type RunUnitTraitId =
-  | 'discipline'
-  | 'positioned'
-  | 'marshalled'
-  | 'plagued'
+  | 'adlected'
+  | 'eutactic'
+  | 'agminate'
+  | 'cacochymic'
   | 'royal-tent'
   | 'pawn-cash-out';
 
@@ -101,7 +101,7 @@ function inheritedTrait(
 function deploymentAbilityTrait(
   run: RunDocument,
   unit: RunArmyUnit,
-  ability: Extract<RunAbility, 'positioned' | 'marshalled'>,
+  ability: Extract<RunAbility, 'eutactic' | 'agminate'>,
 ): RunUnitTrait | null {
   const label = runAbilityDisplayName(ability);
   const icon = { state: ability } as const;
@@ -123,38 +123,38 @@ function deploymentAbilityTrait(
 
 export function runUnitTraits(run: RunDocument, unit: RunArmyUnit): RunUnitTrait[] {
   const traits: RunUnitTrait[] = [];
-  if (unit.modifiers.includes('plagued')) {
+  if (unit.modifiers.includes('cacochymic')) {
     traits.push({
-      id: 'plagued',
+      id: 'cacochymic',
       label: CACOCHYMIC_DISPLAY_NAME,
       description: CACOCHYMIC_DESCRIPTION,
       source: 'The Great Mortality',
       inherited: false,
-      icon: { state: 'plagued' },
+      icon: { state: 'cacochymic' },
     });
   }
-  if (unit.abilities.includes('discipline')) {
+  if (unit.abilities.includes('adlected')) {
     traits.push({
-      id: 'discipline',
+      id: 'adlected',
       label: ADLECTED_DISPLAY_NAME,
-      description: runAbilityDescription('discipline', unit.type),
+      description: runAbilityDescription('adlected', unit.type),
       source: 'Permanent unit ability',
       inherited: false,
-      icon: { state: 'discipline' },
+      icon: { state: 'adlected' },
     });
-  } else if (run.deployment?.temporaryDisciplineUnitId === unit.id) {
+  } else if (run.deployment?.temporaryAdlectedUnitId === unit.id) {
     traits.push(inheritedTrait(
-      'discipline',
+      'adlected',
       ADLECTED_DISPLAY_NAME,
       'May be deliberately placed in the player zone for this Battle.',
       RUN_RELIC_BY_ID['inspirational-record'].name,
-      { state: 'discipline' },
+      { state: 'adlected' },
     ));
   }
 
-  const positioned = deploymentAbilityTrait(run, unit, 'positioned');
+  const positioned = deploymentAbilityTrait(run, unit, 'eutactic');
   if (positioned) traits.push(positioned);
-  const marshalled = deploymentAbilityTrait(run, unit, 'marshalled');
+  const marshalled = deploymentAbilityTrait(run, unit, 'agminate');
   if (marshalled) traits.push(marshalled);
   if (unit.type === 'king' && hasRelic(run, 'royal-tent')) {
     traits.push(inheritedTrait(
@@ -344,10 +344,10 @@ function RunRosterFilters({
           value={filters.ability}
           options={[
             { value: 'all', label: 'All abilities' },
-            { value: 'discipline', label: ADLECTED_DISPLAY_NAME },
-            { value: 'positioned', label: EUTACTIC_DISPLAY_NAME },
-            { value: 'marshalled', label: runAbilityDisplayName('marshalled') },
-            { value: 'plagued', label: CACOCHYMIC_DISPLAY_NAME },
+            { value: 'adlected', label: ADLECTED_DISPLAY_NAME },
+            { value: 'eutactic', label: EUTACTIC_DISPLAY_NAME },
+            { value: 'agminate', label: runAbilityDisplayName('agminate') },
+            { value: 'cacochymic', label: CACOCHYMIC_DISPLAY_NAME },
             { value: 'royal-tent', label: 'Royal Tent' },
             { value: 'pawn-cash-out', label: 'Cash Out' },
           ]}

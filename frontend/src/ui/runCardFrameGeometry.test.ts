@@ -56,7 +56,7 @@ describe('Run card frame geometry', () => {
       return box.y + box.height / 2;
     };
     expect(typeMid('standard')).toBeCloseTo(898.5, 1);
-    expect(typeMid('tactical')).toBeCloseTo(900, 1);
+    expect(typeMid('legatine')).toBeCloseTo(900, 1);
     expect(typeMid('pestiferous')).toBeCloseTo(907, 1);
     expect(typeMid('concinnous')).toBeCloseTo(901.5, 1);
     expect(typeMid('hieratic')).toBeCloseTo(918.4, 1);

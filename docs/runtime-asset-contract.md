@@ -348,10 +348,14 @@ an incomplete row is an availability failure.
   temporary debt is gone along with the pre-cutover slot
   `ui/run/card-status/plagued-v1.png`. Runtime code cannot infer a role from a
   slot path or substitute CSS, text, a generic glyph, or the other member of a
-  pair; every `ui/kit/icons/game/<state>.png` slot and every
-  `ui/kit/icons/card-properties/<property>.png` slot keeps the word it was coined
-  under — `plagued`, `marshalled`, `positioned`, `discipline`, `tactical` — as a
-  non-presentational storage identity, and no player-facing surface may expose one
+  pair. Seven slot paths keep the word they were coined under —
+  `ui/kit/icons/game/{plagued,marshalled,positioned,discipline}.png`,
+  `ui/kit/icons/card-properties/tactical.png`, `ui/surfaces/card-type-tactical.png`
+  and `ui/run/card-prototypes/tactical-discipline-frame-v1.png`. Since format 14
+  these are the ONLY place the retired vocabulary survives: persisted values, card
+  types and runtime code all say Adlected, Eutactic, Agminate, Cacochymic and
+  Legatine, and each locator is named beside the state it serves so the exception is
+  visible where it is used. No player-facing surface may expose one
   (ADR-0341, ADR-0343, ADR-0369).
   `RUN_CARD_COMMITTED_PROPERTY_PLACEMENTS` and
   `RUN_CARD_COMMITTED_UNIT_STATE_PLACEMENT` in `ui/RunCardFace.tsx` are the

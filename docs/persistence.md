@@ -81,14 +81,14 @@ Concinnous offers store their concealed Eutactic target index; Legatine and
 Hieratic offers deliberately store no target index because purchase chooses the
 unit. Owned Concinnous, Legatine and Hieratic cards store the exact affected unit
 id, while owned Pestiferous cards store the current Cacochymic unit id under
-`plaguedUnitId` and the exact loss history. Format 12 adds the Hieratic
-qualifier, whose granted Agminate ability persists on its unit under the
-non-presentational `marshalled` storage identifier. Every unit state and card
-type persists under the word it was coined with rather than the word the game
-says: Adlected under `discipline`, Eutactic under `positioned`, Agminate under
-`marshalled`, Cacochymic under `plagued`, and the Legatine card type under
-`tactical` (ADR-0309, ADR-0310, ADR-0311, ADR-0325, ADR-0327, ADR-0328,
-ADR-0341, ADR-0345, ADR-0369).
+`cacochymicUnitId` and the exact loss history. Format 12 adds the Hieratic
+qualifier and its granted Agminate ability. Format 14 makes a stored value and
+its player-facing name one word: abilities persist as `adlected`, `eutactic` and
+`agminate`, the unit modifier as `cacochymic`, and the card type as `legatine`,
+with the fields named after the retired words renamed to match. Format 14
+discards in-progress Runs rather than translating them, and the server validator
+accepts only the new words (ADR-0309, ADR-0310, ADR-0311, ADR-0325, ADR-0327,
+ADR-0328, ADR-0341, ADR-0345, ADR-0369).
 Format 3 stores each army unit's role-specific historical name.
 Format-1 unnamed documents and the provisional format-2 generated-name documents
 are deterministically normalized to format 3 from the Run seed and each piece

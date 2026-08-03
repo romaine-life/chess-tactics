@@ -26,8 +26,8 @@ describe('Run Legatine card disclosure', () => {
     expect(runCardGrants(oneUnit)).toEqual([{
       unit: 'queen',
       count: 1,
-      plaguedIndices: [],
-      ability: 'discipline',
+      cacochymicIndices: [],
+      ability: 'adlected',
     }]);
     expect(runCardGrants(multiUnit).every((grant) => !grant.ability)).toBe(true);
   });

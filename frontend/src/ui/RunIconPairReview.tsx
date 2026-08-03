@@ -18,7 +18,7 @@ import {
   RUN_CARD_COMMITTED_UNIT_STATE_PLACEMENT,
   RUN_CARD_ICON_PLACEMENT_BASELINE,
   RUN_CARD_PESTIFEROUS_FRAME_SLOT,
-  RUN_CARD_TACTICAL_FRAME_SLOT,
+  RUN_CARD_LEGATINE_FRAME_SLOT,
   RunCardFace,
   type RunCardFaceContent,
   type RunCardIconPlacement,
@@ -50,7 +50,7 @@ export const RUN_CARD_ICON_PAIRS: readonly PairDefinition[] = Object.freeze([
     property: 'pestiferous',
     propertySlot: 'ui/kit/icons/card-properties/pestiferous.png',
     propertyEffect: RUN_CARD_TYPE_REFERENCE.pestiferous.effect,
-    state: 'plagued',
+    state: 'cacochymic',
     stateSlot: 'ui/kit/icons/game/plagued.png',
     stateEffect: 'The marked unit receives its tier discount and is next to be lost.',
     frameSlot: RUN_CARD_PESTIFEROUS_FRAME_SLOT,
@@ -60,27 +60,27 @@ export const RUN_CARD_ICON_PAIRS: readonly PairDefinition[] = Object.freeze([
     property: 'concinnous',
     propertySlot: 'ui/kit/icons/card-properties/concinnous.png',
     propertyEffect: RUN_CARD_TYPE_REFERENCE.concinnous.effect,
-    state: 'positioned',
+    state: 'eutactic',
     stateSlot: 'ui/kit/icons/game/positioned.png',
     stateEffect: 'The unit favors its piece-specific region during automatic deployment.',
     frameSlot: RUN_CARD_CONCINNOUS_FRAME_SLOT,
     source: 'accepted',
   },
   {
-    property: 'tactical',
+    property: 'legatine',
     propertySlot: 'ui/kit/icons/card-properties/tactical.png',
-    propertyEffect: RUN_CARD_TYPE_REFERENCE.tactical.effect,
-    state: 'discipline',
+    propertyEffect: RUN_CARD_TYPE_REFERENCE.legatine.effect,
+    state: 'adlected',
     stateSlot: 'ui/kit/icons/game/discipline.png',
     stateEffect: 'The unit may be deliberately placed before automatic deployment.',
-    frameSlot: RUN_CARD_TACTICAL_FRAME_SLOT,
+    frameSlot: RUN_CARD_LEGATINE_FRAME_SLOT,
     source: 'accepted',
   },
   {
     property: 'hieratic',
     propertySlot: 'ui/kit/icons/card-properties/hieratic.png',
     propertyEffect: RUN_CARD_TYPE_REFERENCE.hieratic.effect,
-    state: 'marshalled',
+    state: 'agminate',
     stateSlot: 'ui/kit/icons/game/marshalled.png',
     stateEffect: 'The unit seeks its piece-specific station within the surrounding formation.',
     frameSlot: RUN_CARD_HIERATIC_FRAME_SLOT,
@@ -101,8 +101,8 @@ export type RunCardIconFittingDraft = Readonly<{
 }>;
 
 function displayName(value: string): string {
-  if (value === 'plagued') return 'Cacochymic';
-  if (value === 'marshalled') return AGMINATE_DISPLAY_NAME;
+  if (value === 'cacochymic') return 'Cacochymic';
+  if (value === 'agminate') return AGMINATE_DISPLAY_NAME;
   return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
 }
 
@@ -275,10 +275,10 @@ function candidateConcept(version: AdminLiveMediaVersion): string {
 }
 
 function specimenCard(pair: PairDefinition): RunCardFaceContent {
-  const ability = pair.state === 'plagued' ? undefined : pair.state satisfies RunAbility;
+  const ability = pair.state === 'cacochymic' ? undefined : pair.state satisfies RunAbility;
   return {
     name: runCardName(RUN_CARD_BY_ID.p),
-    cost: pair.property === 'tactical' ? 4 : pair.property === 'concinnous' ? 3 : 1,
+    cost: pair.property === 'legatine' ? 4 : pair.property === 'concinnous' ? 3 : 1,
     typeLine: 'Units',
     cardProperty: {
       id: pair.property,
@@ -288,7 +288,7 @@ function specimenCard(pair: PairDefinition): RunCardFaceContent {
     grants: [{
       unit: 'pawn',
       count: 1,
-      ...(pair.state === 'plagued' ? { plaguedIndices: [0] } : { ability }),
+      ...(pair.state === 'cacochymic' ? { cacochymicIndices: [0] } : { ability }),
     }],
     flavor: runCardFlavor(RUN_CARD_BY_ID.p),
   };

@@ -17,7 +17,7 @@ import {
   RUN_CARD_CONCINNOUS_FRAME_SLOT,
   RUN_CARD_HIERATIC_FRAME_SLOT,
   RUN_CARD_PESTIFEROUS_FRAME_SLOT,
-  RUN_CARD_TACTICAL_FRAME_SLOT,
+  RUN_CARD_LEGATINE_FRAME_SLOT,
   RunCardFace,
   type RunCardFaceContent,
 } from './RunCardFace';
@@ -34,21 +34,21 @@ export function runCardGrants(card: RunCoreCard | RunCardOffer): RunCardFaceCont
   // A one-unit acquisition-target offer has no hidden outcome, so its face shows the
   // granted state on the unit itself.
   const forcedAbility = isCardOffer(card) && card.pieces.length === 1
-    ? card.cardType === 'tactical'
-      ? 'discipline' as const
+    ? card.cardType === 'legatine'
+      ? 'adlected' as const
       : card.cardType === 'hieratic'
-        ? 'marshalled' as const
+        ? 'agminate' as const
         : null
     : null;
   return CARD_PIECE_ORDER.flatMap((unit) => {
     const pieceIndices = card.pieces.flatMap((piece, index) => piece === unit ? [index] : []);
-    const plaguedPieceIndex = isCardOffer(card) ? card.plaguedPieceIndex : null;
-    const plaguedIndex = plaguedPieceIndex === null ? -1 : pieceIndices.indexOf(plaguedPieceIndex);
+    const cacochymicPieceIndex = isCardOffer(card) ? card.cacochymicPieceIndex : null;
+    const plaguedIndex = cacochymicPieceIndex === null ? -1 : pieceIndices.indexOf(cacochymicPieceIndex);
     return pieceIndices.length > 0
       ? [{
           unit,
           count: pieceIndices.length,
-          plaguedIndices: plaguedIndex >= 0 ? [plaguedIndex] : [],
+          cacochymicIndices: plaguedIndex >= 0 ? [plaguedIndex] : [],
           ...(forcedAbility && pieceIndices.length === 1 ? { ability: forcedAbility } : {}),
         }]
       : [];
@@ -56,8 +56,8 @@ export function runCardGrants(card: RunCoreCard | RunCardOffer): RunCardFaceCont
 }
 
 function plaguedTargetLabel(card: RunCoreCard | RunCardOffer): string {
-  if (!isCardOffer(card) || card.plaguedPieceIndex === null) return '';
-  const target = card.pieces[card.plaguedPieceIndex];
+  if (!isCardOffer(card) || card.cacochymicPieceIndex === null) return '';
+  const target = card.pieces[card.cacochymicPieceIndex];
   return target ? ` ${CACOCHYMIC_DISPLAY_NAME} ${target}.` : '';
 }
 
@@ -94,8 +94,8 @@ export function RunCard({
   const cardType = offer?.cardType ?? null;
   const frameSlot = cardType === 'pestiferous'
     ? RUN_CARD_PESTIFEROUS_FRAME_SLOT
-    : cardType === 'tactical'
-      ? RUN_CARD_TACTICAL_FRAME_SLOT
+    : cardType === 'legatine'
+      ? RUN_CARD_LEGATINE_FRAME_SLOT
     : cardType === 'concinnous'
       ? RUN_CARD_CONCINNOUS_FRAME_SLOT
     : cardType === 'hieratic'
