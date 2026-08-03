@@ -58,8 +58,9 @@ const GAME_CONDITION_ICON_BY_SLOT = Object.freeze({
   'ui/kit/icons/card-properties/concinnous.png': Object.freeze({ component: 'card-property-icon', variant: 'concinnous' }),
   'ui/kit/icons/card-properties/tactical.png': Object.freeze({ component: 'card-property-icon', variant: 'tactical' }),
   'ui/kit/icons/card-properties/hieratic.png': Object.freeze({ component: 'card-property-icon', variant: 'hieratic' }),
-  // The Run's position in its War, as the persistent title bar names it. Ataraxia
-  // is not here: its mark is the carved rung numeral of ADR-0363's ladder.
+  // The Run's position in its War, as the persistent title bar names it, plus the
+  // emblem that says WHICH ladder the carved rung beside it belongs to.
+  'ui/kit/icons/run/ataraxia-mark.png': Object.freeze({ component: RUN_PROGRESS_ICON_COMPONENT, variant: 'ataraxia' }),
   'ui/kit/icons/run/conflict.png': Object.freeze({ component: RUN_PROGRESS_ICON_COMPONENT, variant: 'conflict' }),
   'ui/kit/icons/run/battle.png': Object.freeze({ component: RUN_PROGRESS_ICON_COMPONENT, variant: 'battle' }),
 });

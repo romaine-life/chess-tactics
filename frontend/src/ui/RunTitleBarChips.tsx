@@ -67,6 +67,7 @@ export function RunTitleBarMeasures({
   conflict,
   battle,
   battlesInConflict,
+  ataraxiaIconSrc,
   goldIconSrc,
   conflictIconSrc,
   battleIconSrc,
@@ -76,6 +77,7 @@ export function RunTitleBarMeasures({
   conflict: number;
   battle: number;
   battlesInConflict: number;
+  ataraxiaIconSrc?: string;
   goldIconSrc?: string;
   conflictIconSrc?: string;
   battleIconSrc?: string;
@@ -85,14 +87,16 @@ export function RunTitleBarMeasures({
   const gold = formatGold(goldTenths);
   return (
     <div className="run-topbar-measures">
-      {/* The numeral IS Ataraxia's mark (ADR-0363), so the rung stands alone here —
-          no second symbol beside it and no digit repeating what it already says. The
-          tier's name and rule live in the tooltip rather than spending bar width. */}
+      {/* The emblem says WHICH ladder, the carved rung says how far up it (ADR-0363).
+          The Enchiridion row can drop the emblem because its section heading already
+          names Ataraxia; a bar with no heading cannot, or the rung reads as a loose
+          counter. The tier's name and rule stay in the tooltip. */}
       <RunMeasure
         label={`${ataraxia.label}. ${ataraxia.title}. ${ataraxia.effect}`}
         name={`${ataraxia.label} — ${ataraxia.title}`}
         detail={ataraxia.effect}
       >
+        <RunProgressIcon variant="ataraxia" src={ataraxiaIconSrc} />
         {rungArt
           ? <span className="run-topbar-rung"><img src={rungArt} alt="" draggable={false} /></span>
           : <span className="run-topbar-rung is-unavailable">{ataraxia.numeral}</span>}

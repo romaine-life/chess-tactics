@@ -7,13 +7,14 @@ import { installedUiMediaIfPresent } from '../installedUiMedia';
  * substitutes one for another, and never borrows a unit-ability or card-property
  * glyph to stand in for a Run position.
  *
- * Ataraxia is NOT one of these: its mark is the carved rung numeral the
- * Enchiridion ladder already installs (ADR-0363), resolved through
- * `ataraxiaNumeral.ts`. One idea, one symbol.
+ * Ataraxia's emblem is here too, but it does not carry the tier: the carved rung
+ * numeral beside it does (ADR-0363). The emblem says WHICH ladder that rung
+ * belongs to, which a bare numeral in a bar with no heading cannot.
  */
-export type RunProgressIconVariant = 'conflict' | 'battle';
+export type RunProgressIconVariant = 'ataraxia' | 'conflict' | 'battle';
 
 const RUN_PROGRESS_MEDIA_ROLE: Readonly<Record<RunProgressIconVariant, string>> = Object.freeze({
+  ataraxia: 'ui-kit-icons-run-ataraxia-mark-png',
   conflict: 'ui-kit-icons-run-conflict-png',
   battle: 'ui-kit-icons-run-battle-png',
 });

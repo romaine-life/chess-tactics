@@ -2,7 +2,7 @@ import { useCallback, useId, useRef, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { chromeFamilyPortalHost } from '../chromeFamilyRuntime';
-import { InnerChromeBox } from './ChromeBox';
+import { ChromeSurfaceFill, InnerChromeBox } from './ChromeBox';
 
 interface TooltipPosition {
   left: number;
@@ -82,6 +82,7 @@ function TooltipPopup({
         id={id}
         className={`infotip-pop tooltip-pop ${className}`.trim()}
       >
+        <ChromeSurfaceFill role="inner" className="tooltip-pop-fill" />
         {title ? <strong className="tooltip-title">{title}</strong> : null}
         {children}
       </InnerChromeBox>

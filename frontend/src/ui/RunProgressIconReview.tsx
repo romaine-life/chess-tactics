@@ -26,7 +26,12 @@ import { useSceneParticipant } from './shell/SceneBoundary';
  * The public drawable catalog refuses a role bound to an unaccepted slot, so the
  * binding can only ever follow acceptance (ADR-0316 review shape, ADR-0318 roles).
  */
-export const RUN_PROGRESS_ICON_BATCH_ID = 'run-progress-icons-trimmed-2026-08-02-v4';
+/** The candidate batches this review presents. Ataraxia's emblem was forged in its
+ *  own pass after the position marks, so the review reads a set rather than one id. */
+export const RUN_PROGRESS_ICON_BATCH_IDS: readonly string[] = Object.freeze([
+  'run-progress-icons-trimmed-2026-08-02-v4',
+  'run-ataraxia-mark-2026-08-02-v1',
+]);
 
 /** One mark in the title bar's measure row. `role` is the application-UI media
  *  role the slot must be bound to once accepted, or null when the slot already
@@ -40,6 +45,13 @@ interface VariantDefinition {
 }
 
 export const RUN_PROGRESS_ICON_VARIANTS: readonly VariantDefinition[] = Object.freeze([
+  {
+    variant: 'ataraxia',
+    slot: 'ui/kit/icons/run/ataraxia-mark.png',
+    role: 'ui-kit-icons-run-ataraxia-mark-png',
+    title: 'Ataraxia',
+    idea: 'The emblem that says which ladder the carved rung beside it belongs to. The rung itself is ADR-0363’s installed numeral and is not chosen here.',
+  },
   {
     variant: 'conflict',
     slot: 'ui/kit/icons/run/conflict.png',
@@ -87,7 +99,7 @@ export function runProgressIconOptions(
     .filter((version) => version.slot === slot
       && Boolean(version.media)
       && (version.id === activeVersionId
-        || (version.status === 'candidate' && batchId(version) === RUN_PROGRESS_ICON_BATCH_ID)))
+        || (version.status === 'candidate' && RUN_PROGRESS_ICON_BATCH_IDS.includes(batchId(version) ?? ''))))
     .sort((left, right) => candidateIndex(left) - candidateIndex(right));
 }
 
@@ -216,6 +228,7 @@ function ChipPreview({
           battle={3}
           battlesInConflict={3}
           goldIconSrc={definition.variant === 'gold' ? src : undefined}
+          ataraxiaIconSrc={definition.variant === 'ataraxia' ? src : undefined}
           conflictIconSrc={definition.variant === 'conflict' ? src : undefined}
           battleIconSrc={definition.variant === 'battle' ? src : undefined}
         />

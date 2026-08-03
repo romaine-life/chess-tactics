@@ -48,13 +48,12 @@ are `ui/kit/icons/run/{conflict,battle}.png`, runtime component
 for another and never borrows a unit-ability or card-property glyph for a Run
 position.
 
-**Ataraxia is NOT one of them.** Its mark already exists: the carved rung numeral
-of ADR-0363's ladder, where the numeral IS the row's mark. The title bar resolves
-that same installed set through one shared `ataraxiaNumeral.ts`, so the rung
-stands alone in the measure — no second symbol beside it, and no digit repeating
-what it already says. A first attempt gave Ataraxia its own forged glyph and a
-written tier; that was a second visual identity for one idea (ADR-0059), and its
-slot is retired.
+**Ataraxia is an emblem AND a rung.** The tier is ADR-0363's carved rung numeral,
+resolved from that same installed set through one shared `ataraxiaNumeral.ts` — no
+digit is written and no second numeral is forged. The emblem in front of it says
+WHICH ladder that rung belongs to. The Enchiridion row can drop the emblem because
+its section heading already names Ataraxia; a title bar has no heading, so a rung
+alone reads as a loose counter.
 
 **One chip, and measures with no box.** The Run bar carries exactly one framed
 chip: the identity it cannot draw — the War's name over the authored name of the

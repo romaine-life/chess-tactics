@@ -22202,6 +22202,20 @@ button.tileset-relationship-cell {
   text-align: left;
   text-transform: none; letter-spacing: normal;
   pointer-events: none;
+  /* A tip floats over live artwork, so it needs an OPAQUE bed: the inner-box
+     frame's own 9-slice fill is drawn to sit on a panel that already has one.
+     The registered inner surface fill supplies it (below); these two only make
+     room for it to sit under the content. */
+  position: relative;
+}
+
+.infotip-pop > .tooltip-pop-fill {
+  inset: 0;
+}
+
+.infotip-pop > :not(.tooltip-pop-fill) {
+  position: relative;
+  z-index: 1;
 }
 /* The named thing the tip is about, in the display face — the Run relic and
    ability tips set the precedent and every tip now follows it. */
