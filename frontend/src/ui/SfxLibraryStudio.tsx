@@ -124,6 +124,9 @@ function SfxAssignmentPanel({
   };
 
   const label: CSSProperties = { color: 'var(--ds-ink-1, #ecedf2)', textTransform: 'capitalize' };
+  // Terrain rows are raw ids ('grass') and want capitalizing; a cue label is authored prose,
+  // which the same rule would render as "Handling A Card".
+  const cueLabel: CSSProperties = { ...label, textTransform: 'none' };
   const heading: CSSProperties = { margin: 0, color: '#72bde8', font: '800 12px/1.3 var(--ds-font-sans, system-ui, sans-serif)', letterSpacing: 0.6, textTransform: 'uppercase' };
   const note: CSSProperties = { margin: 0 };
   const rows: CSSProperties = { display: 'grid', gridTemplateColumns: 'auto 1fr auto auto', gap: '6px 12px', alignItems: 'center', maxWidth: 460 };
@@ -191,7 +194,7 @@ function SfxAssignmentPanel({
         <div style={rows}>
           {INTERFACE_SFX_CUES.map((cue) => (
             <Fragment key={cue}>
-              <span style={label}>{INTERFACE_SFX_CUE_LABELS[cue]}</span>
+              <span style={cueLabel}>{INTERFACE_SFX_CUE_LABELS[cue]}</span>
               <select
                 value={draft.interfaceAssignments[cue] ?? ''}
                 onChange={(e) => setCue(cue, e.target.value)}
