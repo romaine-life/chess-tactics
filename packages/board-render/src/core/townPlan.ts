@@ -21,6 +21,7 @@
 // turn off-axis. `looseness` scales that profile from surveyed grid to organic village, which is
 // the "which variations are acceptable" dial. A plan cannot be violated, only loosened.
 
+import { TILE_TOP_HEIGHT, TILE_TOP_WIDTH } from '../art/projectionContract';
 import { projectBoardPoint, unprojectBoardPoint } from '../render/boardProjection';
 import { rookDirections, type Direction } from '../ui/unitCatalog';
 import {
@@ -195,6 +196,25 @@ export const townBoundsCentre = (bounds: TownBounds): { x: number; y: number } =
   x: (bounds.minX + bounds.maxX) / 2,
   y: (bounds.minY + bounds.maxY) / 2,
 });
+
+/**
+ * A dragged area measured in tiles rather than raw pixels, so the author can see how much GROUND
+ * they grabbed. Scene pixels are meaningless on their own — a screen-filling drag at high zoom can
+ * be two tiles of ground — and every size knob here is quoted in the same pixels, so without this
+ * the numbers never connect to the board.
+ *
+ * A tile top is 96x54 px, so the two axes divide differently. This is a legibility readout, not a
+ * grid: nothing snaps.
+ */
+export function townBoundsInTiles(bounds: TownBounds): { across: number; down: number } {
+  return {
+    across: Math.abs(bounds.maxX - bounds.minX) / TILE_TOP_WIDTH,
+    down: Math.abs(bounds.maxY - bounds.minY) / TILE_TOP_HEIGHT,
+  };
+}
+
+/** The same measure for any pixel length quoted along the board's horizontal axis. */
+export const pixelsInTilesAcross = (pixels: number): number => pixels / TILE_TOP_WIDTH;
 
 /**
  * The street skeleton for a plan, FITTED TO THE DRAGGED AREA. The author drags the ground the

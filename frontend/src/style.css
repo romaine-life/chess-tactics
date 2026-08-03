@@ -15482,6 +15482,17 @@ button.tileset-relationship-cell {
   overflow: visible;
 }
 
+/* How much GROUND the drag covers. Scene pixels mean nothing at an arbitrary zoom; tiles do. */
+.le-town-drag-size {
+  position: absolute;
+  transform: translateY(-1.35em);
+  pointer-events: none;
+  white-space: nowrap;
+  font-size: 12px;
+  color: rgb(244, 214, 150);
+  text-shadow: 0 1px 2px rgb(8, 12, 20), 0 0 6px rgb(8, 12, 20);
+}
+
 .le-floating-artwork-hit.is-selectable {
   outline: 2px dashed rgba(111, 210, 255, 0.94);
   outline-offset: 4px;

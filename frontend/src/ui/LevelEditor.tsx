@@ -32,7 +32,9 @@ import {
   TOWN_PLAN_LABELS,
   TOWN_PLAN_NOTES,
   isTownMember,
+  pixelsInTilesAcross,
   planTown,
+  townBoundsInTiles,
   type TownBounds,
   type TownPlanKind,
 } from '../core/townPlan';
@@ -3087,6 +3089,8 @@ export function LevelEditor(): ReactElement {
   // Live rectangle while dragging, in surface pixels, so the author sees the ground being claimed.
   const [townDragRect, setTownDragRect] = useState<
     { x0: number; y0: number; x1: number; y1: number } | null>(null);
+  /** The live drag measured as ground, so the label reports tiles rather than screen pixels. */
+  const [townDragTiles, setTownDragTiles] = useState<{ across: number; down: number } | null>(null);
   const townDragRef = useRef<{ pointerId: number; sceneX: number; sceneY: number;
     surfaceX: number; surfaceY: number } | null>(null);
   const [townBuildings, setTownBuildings] = useState<string[]>([]);
@@ -8277,6 +8281,7 @@ export function LevelEditor(): ReactElement {
                         x0: event.clientX - rect.left, y0: event.clientY - rect.top,
                         x1: event.clientX - rect.left, y1: event.clientY - rect.top,
                       });
+                      setTownDragTiles({ across: 0, down: 0 });
                     }}
                     onPointerMove={(event) => {
                       const drag = townDragRef.current;
@@ -8286,6 +8291,10 @@ export function LevelEditor(): ReactElement {
                         x0: drag.surfaceX, y0: drag.surfaceY,
                         x1: event.clientX - rect.left, y1: event.clientY - rect.top,
                       });
+                      const scene = forestScenePoint(event.clientX, event.clientY, rect);
+                      setTownDragTiles(townBoundsInTiles({
+                        minX: drag.sceneX, minY: drag.sceneY, maxX: scene.x, maxY: scene.y,
+                      }));
                     }}
                     onPointerUp={(event) => {
                       const drag = townDragRef.current;
@@ -8294,6 +8303,7 @@ export function LevelEditor(): ReactElement {
                       }
                       townDragRef.current = null;
                       setTownDragRect(null);
+                      setTownDragTiles(null);
                       if (!drag || drag.pointerId !== event.pointerId) return;
                       const scene = forestScenePoint(
                         event.clientX, event.clientY, event.currentTarget.getBoundingClientRect(),
@@ -8309,7 +8319,9 @@ export function LevelEditor(): ReactElement {
                       setTownArea(area);
                       if (tool === 'erase') removeTown(area); else generateTown(area);
                     }}
-                    onPointerCancel={() => { townDragRef.current = null; setTownDragRect(null); }}
+                    onPointerCancel={() => {
+                      townDragRef.current = null; setTownDragRect(null); setTownDragTiles(null);
+                    }}
                   >
                     {townDragRect ? (
                       <svg
@@ -8331,6 +8343,16 @@ export function LevelEditor(): ReactElement {
                           vectorEffect="non-scaling-stroke"
                         />
                       </svg>
+                    ) : null}
+                    {townDragRect && townDragTiles ? (
+                      <span
+                        className="le-town-drag-size"
+                        aria-hidden="true"
+                        style={{
+                          left: `${Math.min(townDragRect.x0, townDragRect.x1)}px`,
+                          top: `${Math.min(townDragRect.y0, townDragRect.y1)}px`,
+                        }}
+                      >{townDragTiles.across.toFixed(1)} × {townDragTiles.down.toFixed(1)} tiles</span>
                     ) : null}
                   </div>
                 ) : null}
@@ -9712,9 +9734,9 @@ export function LevelEditor(): ReactElement {
             <SliderRow label={`Smallest allowed · ${townScaleMin.toFixed(2)}×`} value={townScaleMin} set={setTownScaleMin} min={0.2} max={2.5} step={0.05} nudge={0.05} dflt={TOWN_PLAN_DEFAULTS.scaleMin} />
             <SliderRow label={`Largest allowed · ${townScaleMax.toFixed(2)}×`} value={townScaleMax} set={setTownScaleMax} min={0.2} max={3} step={0.05} nudge={0.05} dflt={TOWN_PLAN_DEFAULTS.scaleMax} />
             <h2 className="le-card-subhead">Streets</h2>
-            <SliderRow label={`Frontage per building · ${townPlotWidth}px`} value={townPlotWidth} set={setTownPlotWidth} min={40} max={300} step={5} nudge={5} dflt={TOWN_PLAN_DEFAULTS.plotWidth} />
-            <SliderRow label={`Street setback · ${townSetback}px`} value={townSetback} set={setTownSetback} min={20} max={260} step={2} nudge={2} dflt={TOWN_PLAN_DEFAULTS.setback} />
-            <SliderRow label={`Minimum spacing · ${townSpacing}px`} value={townSpacing} set={setTownSpacing} min={0} max={200} step={2} nudge={2} dflt={TOWN_PLAN_DEFAULTS.spacing} />
+            <SliderRow label={`Frontage per building · ${pixelsInTilesAcross(townPlotWidth).toFixed(1)} tiles`} value={townPlotWidth} set={setTownPlotWidth} min={40} max={300} step={5} nudge={5} dflt={TOWN_PLAN_DEFAULTS.plotWidth} />
+            <SliderRow label={`Street setback · ${pixelsInTilesAcross(townSetback).toFixed(1)} tiles`} value={townSetback} set={setTownSetback} min={20} max={260} step={2} nudge={2} dflt={TOWN_PLAN_DEFAULTS.setback} />
+            <SliderRow label={`Minimum spacing · ${pixelsInTilesAcross(townSpacing).toFixed(1)} tiles`} value={townSpacing} set={setTownSpacing} min={0} max={200} step={2} nudge={2} dflt={TOWN_PLAN_DEFAULTS.spacing} />
             <h2 className="le-card-subhead">Acceptable variation</h2>
             <p className="le-board-note">How far the plan may be bent. At zero the town is surveyed: every building on its exact plot, square to its street. Raising these loosens it toward a village that grew rather than one that was laid out.</p>
             <SliderRow label={`Looseness · ${Math.round(townLooseness * 100)}%`} value={townLooseness} set={setTownLooseness} min={0} max={1} step={0.05} nudge={0.05} dflt={TOWN_PLAN_DEFAULTS.looseness} />
