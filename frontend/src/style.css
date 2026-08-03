@@ -15534,6 +15534,17 @@ button.tileset-relationship-cell {
 }
 
 /* The area being dragged for a town, drawn as SVG geometry rather than CSS surface paint. */
+/* The size example standing on the board. Layout only; the art carries its own appearance. */
+.le-town-size-example {
+  position: absolute;
+  pointer-events: none;
+  image-rendering: pixelated;
+  z-index: 4;
+}
+.le-town-size-preview {
+  flex-wrap: wrap;
+}
+
 /* A settled town's tiles sit quieter than the drag in progress, so the live one reads as active. */
 .le-town-cell.is-settled {
   opacity: 0.55;

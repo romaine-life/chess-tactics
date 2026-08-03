@@ -21,6 +21,7 @@ import {
 import {
   FOREST_SCATTER_DEFAULTS,
   eraseForestArea,
+  groundPointToPixel,
   scatterForest,
   sortFloatingArtworkByDepth,
   type ForestBrushArea,
@@ -4243,6 +4244,39 @@ export function LevelEditor(): ReactElement {
     return { cells, across, down, labelX: corner.x - width / 2, labelY: corner.y - height / 2 };
   }, [townDragBounds, townArea, viewViewportSize, viewZoom, viewPan.x, viewPan.y,
     artworkBoardOrigin.originLeft, artworkBoardOrigin.originTop]);
+
+  /**
+   * The example building for the size bound being previewed, stood in the middle of the playable
+   * board. A scale like "0.75x" means nothing on its own; standing one next to the tiles is the
+   * only way to know what size you are asking for.
+   */
+  const townSizeExample = useMemo(() => {
+    if (!townSizePreview || !selectedTown || !viewViewportSize) return null;
+    const section = selectedTown.sections.find((entry) => entry.id === townSizePreview.sectionId);
+    const source = section?.buildings.find((entry) => entry.weight > 0) ?? section?.buildings[0];
+    if (!section || !source) return null;
+    const sprite = structureArtDirectionSprite(source.sourceArtId, 'south');
+    if (!sprite) return null;
+    const scale = townSizePreview.bound === 'min' ? section.scaleMin : section.scaleMax;
+    const drawnWidth = sprite.w * sprite.scale * scale;
+    const drawnHeight = sprite.h * sprite.scale * scale;
+    // Stand it on the middle of the playable board, where there are tiles to judge it against.
+    const seat = projectBoardPoint({ x: (boardCols - 1) / 2, y: (boardRows - 1) / 2 });
+    const centre = groundPointToPixel({ x: seat.left, y: seat.top }, sprite, scale);
+    const corner = townSurfacePoint(
+      { x: centre.pixelX - drawnWidth / 2, y: centre.pixelY - drawnHeight / 2 },
+      viewViewportSize,
+    );
+    return {
+      src: structureArtDirectionHalfSrc(source.sourceArtId, 'south', 'front'),
+      label: `${townBuildingCatalog.find((asset) => asset.id === source.sourceArtId)?.label ?? source.sourceArtId} · ${scale.toFixed(2)}×`,
+      left: corner.x,
+      top: corner.y,
+      width: drawnWidth * viewZoom,
+      height: drawnHeight * viewZoom,
+    };
+  }, [townSizePreview, selectedTown, viewViewportSize, viewZoom, viewPan.x, viewPan.y,
+    artworkBoardOrigin.originLeft, artworkBoardOrigin.originTop, boardCols, boardRows, townBuildingCatalog]);
 
   // Source geometry for the scatter, read from the same live catalog the renderer draws from.
   const forestGeometry = useMemo<ForestSpeciesGeometry>(() => ({
@@ -8532,6 +8566,30 @@ export function LevelEditor(): ReactElement {
                     {/* The committed selection stays outlined once the drag ends: Regenerate and
                         Remove act on it, so it must remain visible. The live drag wins while one
                         is in progress. */}
+                    {townSizeExample ? (
+                      <>
+                        <img
+                          className="le-town-size-example"
+                          src={townSizeExample.src}
+                          alt=""
+                          draggable={false}
+                          style={{
+                            left: `${townSizeExample.left}px`,
+                            top: `${townSizeExample.top}px`,
+                            width: `${townSizeExample.width}px`,
+                            height: `${townSizeExample.height}px`,
+                          }}
+                        />
+                        <span
+                          className="le-town-drag-size"
+                          aria-hidden="true"
+                          style={{
+                            left: `${townSizeExample.left}px`,
+                            top: `${townSizeExample.top + townSizeExample.height}px`,
+                          }}
+                        >{townSizeExample.label}</span>
+                      </>
+                    ) : null}
                     {townHighlight ? (
                       <>
                         {townHighlight.cells.map((cell) => (
@@ -10070,6 +10128,26 @@ export function LevelEditor(): ReactElement {
                   <SliderRow label={`Average building · ${section.scaleMean.toFixed(2)}×`} value={section.scaleMean} set={(value) => updateTownSection(selectedTown.id, section.id, { scaleMean: value })} min={0.3} max={2.5} step={0.05} nudge={0.05} dflt={1} />
                   <SliderRow label={`Smallest · ${section.scaleMin.toFixed(2)}×`} value={section.scaleMin} set={(value) => updateTownSection(selectedTown.id, section.id, { scaleMin: value })} min={0.2} max={2.5} step={0.05} nudge={0.05} dflt={0.75} />
                   <SliderRow label={`Largest · ${section.scaleMax.toFixed(2)}×`} value={section.scaleMax} set={(value) => updateTownSection(selectedTown.id, section.id, { scaleMax: value })} min={0.2} max={3} step={0.05} nudge={0.05} dflt={1.35} />
+                  {/* Mutually exclusive, and each turns itself off when pressed again. Showing an
+                      example is something you ask for while judging a number, not a mode to be in. */}
+                  <div className="le-ctrlrow le-town-size-preview">
+                    <span className="le-ctrllabel">Show on board</span>
+                    {([['min', 'Smallest'], ['max', 'Largest']] as const).map(([bound, label]) => {
+                      const on = townSizePreview?.sectionId === section.id && townSizePreview.bound === bound;
+                      return (
+                        <ChromeButton unit="inner-text-button"
+                          key={bound}
+                          className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', on && 'active')}
+                          aria-pressed={on}
+                          disabled={!section.buildings.length}
+                          title={section.buildings.length
+                            ? `Stand one ${label.toLowerCase()} building on the board for scale`
+                            : 'Add a building to this section first'}
+                          onClick={() => toggleTownSizePreview(section.id, bound)}
+                        >{label}</ChromeButton>
+                      );
+                    })}
+                  </div>
                   <SliderRow label={`Frontage each · ${pixelsInTilesAcross(section.plotWidth).toFixed(1)} tiles`} value={section.plotWidth} set={(value) => updateTownSection(selectedTown.id, section.id, { plotWidth: value })} min={40} max={300} step={5} nudge={5} dflt={DEFAULT_TOWN_SECTION.plotWidth} />
                   </>) : null}
                 </div>
