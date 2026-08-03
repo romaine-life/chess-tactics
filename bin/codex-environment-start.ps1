@@ -39,10 +39,6 @@ function Remove-DeadDevctlEntries {
     & $devctlCommand -Command clean -Target ([string]$state.name)
 }
 
-function Stop-DevctlEnvironment {
-    & $devctlCommand -Command stop -Target ([string]$state.name)
-}
-
 function Start-DevctlFrontend {
     return & $devctlCommand -Command up -Target frontend -Name ([string]$state.name) -Cwd $frontendDir -Project chess-tactics -Json
 }
@@ -55,15 +51,6 @@ if ($existing.Count -gt 1) {
     throw "devctl has more than one entry named '$($state.name)'. Run devctl clean and retry."
 }
 
-# A dev server belongs to the session that started it. Name, worktree and URL are all
-# identical for every session that ever runs here, so they cannot answer "is this mine?" —
-# only the recorded owner can. An unowned or foreign process is replaced, never adopted:
-# handing a live server to a second session means one session's test runs bounce the other
-# session's backend under it, which looks to the owner like the app hanging for no reason.
-$sessionId = [string]$env:CLAUDE_SESSION_ID
-$recordedOwner = if ($state.PSObject.Properties['session_id']) { [string]$state.session_id } else { '' }
-$ownedByThisSession = $sessionId -and $recordedOwner -and [string]::Equals($recordedOwner, $sessionId, [StringComparison]::Ordinal)
-
 $entry = $existing | Select-Object -First 1
 if ($entry) {
     $sameWorktree = [string]::Equals(
@@ -71,19 +58,13 @@ if ($entry) {
         [IO.Path]::GetFullPath($frontendDir).TrimEnd('\'),
         [StringComparison]::OrdinalIgnoreCase
     )
-    if (-not $sameWorktree) {
-        throw "Environment name '$($state.name)' is already owned by another live dev server at $($entry.cwd)."
-    }
-    if ($entry.status -eq 'ready' -and $ownedByThisSession -and $entry.url -eq $expectedUrl) {
-        # The same session re-entering: a resume, a compaction, or a cleared context. Its own
-        # server keeps running rather than being bounced mid-task.
-        Write-Host "Reusing this session's dev server $($entry.name) at $($entry.url)." -ForegroundColor Green
-    } else {
-        $owner = if ($recordedOwner) { "session $recordedOwner" } else { 'an unrecorded session' }
-        Write-Host "Replacing the dev server left by $owner — this session starts its own." -ForegroundColor Yellow
-        Stop-DevctlEnvironment | Out-Host
+    if ($entry.status -eq 'ready' -and $sameWorktree -and $entry.url -eq $expectedUrl) {
+        Write-Host "Reusing named dev server $($entry.name) at $($entry.url)." -ForegroundColor Green
+    } elseif ($entry.status -in @('stopped', 'failed') -and -not [bool]$entry.checks.supervisor) {
         Remove-DeadDevctlEntries | Out-Host
         $entry = $null
+    } else {
+        throw "Environment name '$($state.name)' is already owned by another live dev server at $($entry.cwd)."
     }
 }
 
@@ -96,7 +77,6 @@ if ($entry.url -ne $expectedUrl) {
     throw "devctl returned '$($entry.url)' but this environment requires '$expectedUrl'."
 }
 
-$state | Add-Member -NotePropertyName session_id -NotePropertyValue $sessionId -Force
 $state | Add-Member -NotePropertyName devctl_name -NotePropertyValue $entry.name -Force
 $state | Add-Member -NotePropertyName frontend_port -NotePropertyValue ([int]$entry.port) -Force
 $state | Add-Member -NotePropertyName server_pid -NotePropertyValue ([int]$entry.pid) -Force
