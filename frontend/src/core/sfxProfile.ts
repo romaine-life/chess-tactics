@@ -1,12 +1,30 @@
 import type { TerrainType } from './types';
 
 export const SFX_PROFILE_ID = 'default';
-export const SFX_PROFILE_SCHEMA_VERSION = 1;
+export const SFX_PROFILE_SCHEMA_VERSION = 2;
 
 export const ASSIGNABLE_SFX_TERRAINS = [
   'grass', 'water', 'sand', 'stone', 'road', 'bridge', 'dirt', 'pebble',
 ] as const satisfies readonly TerrainType[];
 
+/**
+ * The interface events a control can declare through `data-ui-sfx`. A surface says what
+ * KIND of thing just happened; the profile says what that sounds like, so changing the
+ * sound a card makes is an owner edit in the running app rather than a commit (ADR-0071
+ * rule 2/3, extending ADR-0089 to the interface cues it left in TypeScript).
+ *
+ * `activate` is the cue for any control that declares nothing — the generic UI feedback.
+ */
+export const INTERFACE_SFX_CUES = ['activate', 'card', 'gold'] as const;
+
+/** Owner-facing name for each cue, used by the Studio assignment rows. */
+export const INTERFACE_SFX_CUE_LABELS: Readonly<Record<InterfaceSfxCue, string>> = Object.freeze({
+  activate: 'Any control',
+  card: 'Handling a card',
+  gold: 'Gold transaction',
+});
+
+export type InterfaceSfxCue = (typeof INTERFACE_SFX_CUES)[number];
 export type AssignableSfxTerrain = (typeof ASSIGNABLE_SFX_TERRAINS)[number];
 export type SfxArrivalFiring = 'per-unit' | 'once';
 
@@ -21,6 +39,7 @@ export interface SfxProfile {
   schemaVersion: typeof SFX_PROFILE_SCHEMA_VERSION;
   soundSets: Record<string, SfxSoundSetProfile>;
   terrainAssignments: Record<AssignableSfxTerrain, string | null>;
+  interfaceAssignments: Record<InterfaceSfxCue, string | null>;
   arrival: {
     sample: string | null;
     gain: number;
@@ -63,8 +82,11 @@ function gainValue(value: unknown, label: string): asserts value is number {
 
 /** Validate the complete DB-owned SFX profile. Partial overlays are not accepted. */
 export function assertSfxProfile(value: unknown): asserts value is SfxProfile {
-  if (!isRecord(value) || !exactKeys(value, ['schemaVersion', 'soundSets', 'terrainAssignments', 'arrival'])) {
-    throw new Error('SFX profile must contain exactly schemaVersion, soundSets, terrainAssignments, and arrival');
+  if (!isRecord(value)
+    || !exactKeys(value, ['schemaVersion', 'soundSets', 'terrainAssignments', 'interfaceAssignments', 'arrival'])) {
+    throw new Error(
+      'SFX profile must contain exactly schemaVersion, soundSets, terrainAssignments, interfaceAssignments, and arrival',
+    );
   }
   if (value.schemaVersion !== SFX_PROFILE_SCHEMA_VERSION) {
     throw new Error(`SFX profile schemaVersion must be ${SFX_PROFILE_SCHEMA_VERSION}`);
@@ -92,6 +114,17 @@ export function assertSfxProfile(value: unknown): asserts value is SfxProfile {
     const sample = value.terrainAssignments[terrain];
     if (sample !== null && (typeof sample !== 'string' || !Object.hasOwn(value.soundSets, sample))) {
       throw new Error(`SFX terrain ${terrain} must reference a declared sound set or null`);
+    }
+  }
+
+  if (!isRecord(value.interfaceAssignments)
+    || !exactKeys(value.interfaceAssignments, INTERFACE_SFX_CUES)) {
+    throw new Error('SFX interfaceAssignments must contain every interface cue exactly once');
+  }
+  for (const cue of INTERFACE_SFX_CUES) {
+    const sample = value.interfaceAssignments[cue];
+    if (sample !== null && (typeof sample !== 'string' || !Object.hasOwn(value.soundSets, sample))) {
+      throw new Error(`SFX interface cue ${cue} must reference a declared sound set or null`);
     }
   }
 
