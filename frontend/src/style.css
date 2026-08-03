@@ -21863,11 +21863,15 @@ button.tileset-relationship-cell {
 .infotip-pop {
   box-sizing: border-box;
   display: grid;
-  gap: var(--ds-space-1);
+  /* One part per row. The gap has to clear the body's own inter-line space
+     (line-height 1.4 leaves ~5.5px between wrapped lines) or a paragraph reads
+     looser than its distance to the title, and the tip becomes a stack of
+     strips instead of a heading over a block. */
+  gap: var(--ds-space-2);
   max-inline-size: 100%;
   padding: var(--ds-space-2) var(--ds-space-3);
   color: #e5edf3;
-  font: var(--ds-weight-regular) var(--ds-text-xs)/1.4 var(--ds-font-sans);
+  font: var(--ds-weight-regular) var(--ds-text-md)/1.4 var(--ds-font-sans);
   text-align: left;
   text-transform: none; letter-spacing: normal;
   pointer-events: none;
@@ -21876,7 +21880,7 @@ button.tileset-relationship-cell {
    ability tips set the precedent and every tip now follows it. */
 .tooltip-title {
   color: #9fe7ff;
-  font: var(--ds-weight-regular) var(--ds-text-sm)/1.15 var(--ds-font-display);
+  font: var(--ds-weight-regular) var(--ds-text-lg)/1.15 var(--ds-font-display);
   letter-spacing: var(--ds-tracking-tight);
 }
 .le-fence-review-banner {

@@ -37,7 +37,9 @@ describe('tooltip chrome', () => {
     // The Run relic and ability tips set this treatment; it is the shared
     // default now, not a class each caller has to remember to opt into.
     const pop = rule('.infotip-pop');
-    expect(pop).toContain('gap: var(--ds-space-1)');
+    // The gap between parts must clear the body's own inter-line space, or a
+    // wrapped paragraph reads looser than its distance to the title.
+    expect(pop).toContain('gap: var(--ds-space-2)');
     expect(pop).toContain('padding: var(--ds-space-2) var(--ds-space-3)');
     expect(pop).toContain('var(--ds-font-sans)');
     expect(pop).not.toMatch(/system-ui/);
