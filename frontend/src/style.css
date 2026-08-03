@@ -6120,7 +6120,15 @@ body.loading-bootstrap .app-startup-status {
   outline: 2px solid rgba(101, 184, 255, .72);
   outline-offset: 2px;
 }
-.le-seg-btn.active { border-image-source: var(--skirmish-chrome-inner-control-active-image); }
+.le-seg-btn.active {
+  border-image-source: var(--skirmish-chrome-inner-control-active-image);
+  /* chromeFamilyRuntime aliases the active frame to the normal control frame — there is no
+     separate active frame installed — so the image swap above is invisible and every segmented
+     control in the editor reads as unselected. Lift it the way :hover already does, one step
+     further, so the selection is legible without inventing chrome. */
+  filter: brightness(1.35) saturate(1.25);
+}
+.le-seg-btn.active:not(:disabled):hover { filter: brightness(1.45) saturate(1.3); }
 .le-seg-btn.danger { border-image-source: var(--skirmish-chrome-inner-control-danger-image); }
 /* Save when blocked by a playability violation: clickable (it explains why) but dimmed like a
    disabled control, matching the retired title-bar Save's is-disabled look. */
@@ -6783,13 +6791,15 @@ body.loading-bootstrap .app-startup-status {
 }
 
 /* Generate (terrain scatter) panel — chips + sliders + seed, reusing .le-seg-btn for the toggles. */
-.le-generate .le-gen-unit-row {
+/* The saved-instance selector row. Shared by the Generate panel's regions and the Town panel's
+   towns, so it is no longer scoped to one of them. */
+.le-gen-unit-row {
   display: flex;
   align-items: center;
   gap: 6px;
   margin: 8px 0 6px;
 }
-.le-generate .le-gen-unit-select {
+.le-gen-unit-select {
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
@@ -6798,12 +6808,12 @@ body.loading-bootstrap .app-startup-status {
   font-size: 12px;
   color: rgba(239, 249, 255, .82);
 }
-.le-generate .le-gen-unit-select > span {
+.le-gen-unit-select > span {
   flex: 0 0 auto;
   font-weight: 700;
   letter-spacing: 0;
 }
-.le-generate .le-gen-unit-select .house-select {
+.le-gen-unit-select .house-select {
   flex: 1 1 auto;
   min-width: 0;
 }
@@ -6833,12 +6843,12 @@ body.loading-bootstrap .app-startup-status {
   flex: 0 0 96px;
   min-width: 0;
 }
-.le-generate .le-gen-cover-select {
+.le-gen-cover-select {
   flex: 1 1 auto;
   min-width: 0;
 }
 .le-generate .le-gen-region-select .house-select-trigger,
-.le-generate .le-gen-cover-select .house-select-trigger {
+.le-gen-cover-select .house-select-trigger {
   padding-left: 7px;
   padding-right: 24px;
 }
@@ -6880,8 +6890,10 @@ body.loading-bootstrap .app-startup-status {
   flex-direction: column;
   gap: 2px;
 }
-/* Ground cover for a region: a compact list of collapsible cover rows, indented under the region. */
-.le-generate .le-gen-cover {
+/* Entry-list primitive: an added row that names itself, keeps its knobs behind a caret and can be
+   removed. Shared by the Generate panel's cover sets and the Town panel's buildings, so these are
+   no longer scoped to .le-generate. */
+.le-gen-cover {
   margin: 0 0 6px 12px;
   padding-left: 8px;
   border-left: 2px solid rgba(110, 238, 246, .22);
@@ -6889,28 +6901,82 @@ body.loading-bootstrap .app-startup-status {
   flex-direction: column;
   gap: 2px;
 }
-.le-generate .le-gen-cover-entry { display: flex; flex-direction: column; gap: 3px; }
+.le-gen-cover-entry { display: flex; flex-direction: column; gap: 3px; }
 /* One cover row's header: a compact caret + set-name toggle on the left, remove × on the right. */
-.le-generate .le-gen-cover-head {
+.le-gen-cover-head {
   display: flex;
   align-items: center;
   gap: 6px;
 }
-.le-generate .le-gen-cover-head .house-select { flex: 1 1 auto; min-width: 0; }
+.le-gen-cover-head .house-select { flex: 1 1 auto; min-width: 0; }
 /* The disclosure is a registered tool square; this rule only seats it in the cover row. */
-.le-generate .le-gen-cover-caret-btn {
+.le-gen-cover-caret-btn {
   flex: 0 0 auto;
   color: inherit;
   cursor: pointer;
 }
-.le-generate .le-gen-cover-caret { flex: 0 0 auto; width: 10px; font-size: 10px; }
-.le-generate .le-gen-cover-knobs {
+.le-gen-cover-caret { flex: 0 0 auto; width: 10px; font-size: 10px; }
+.le-gen-cover-knobs {
   display: flex;
   flex-direction: column;
   gap: 2px;
   margin: 2px 0 4px 16px;
 }
-.le-generate .le-gen-cover-add {
+/* An entry showing its own art: thumbnail beside the name, so you choose by sight. */
+/* One section of a town: its own block, separated from the next, with its buildings indented
+   under it by the shared entry-list rail. Layout only — no surface paint. */
+.le-town-section {
+  margin: 10px 0 2px;
+}
+.le-town-section + .le-town-section {
+  margin-top: 16px;
+}
+.le-town-section-head {
+  align-items: baseline;
+}
+.le-town-section-title {
+  flex: 0 0 auto;
+  margin: 0;
+}
+/* Collapsed sections still have to say what they are, so a caret is not a blind box. */
+.le-town-section-summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.le-town-building-pick {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+}
+.le-town-building-pick img {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+.le-town-building-pick > span {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+/* The picker grid, open only while choosing. */
+.le-town-building-picker {
+  margin: 4px 0 2px;
+}
+
+.le-gen-cover-add {
   width: 100%;
   margin-top: 2px;
   padding: 4px 8px;
@@ -6920,7 +6986,7 @@ body.loading-bootstrap .app-startup-status {
   opacity: .8;
   cursor: pointer;
 }
-.le-generate .le-gen-cover-add:hover { opacity: 1; }
+.le-gen-cover-add:hover { opacity: 1; }
 .le-generate .le-gen-run {
   font-weight: 600;
 }
@@ -15550,6 +15616,53 @@ button.tileset-relationship-cell {
   z-index: 2;
   cursor: crosshair;
   touch-action: none;
+}
+
+/* The forest brush footprint, so the author paints an area they can see rather than guess.
+   Drawn as SVG geometry (like .le-fence-edge-hint), not CSS surface paint. */
+.le-forest-brush-ring {
+  position: absolute;
+  pointer-events: none;
+  overflow: visible;
+}
+
+/* The area being dragged for a town, drawn as SVG geometry rather than CSS surface paint. */
+/* The size example standing on the board. Layout only; the art carries its own appearance. */
+.le-town-size-example {
+  position: absolute;
+  pointer-events: none;
+  image-rendering: pixelated;
+  z-index: 4;
+}
+.le-town-size-preview {
+  flex-wrap: wrap;
+}
+
+/* The selection's tiles. Amber rather than the region tool's cyan because a town is normally sited
+   over grass, and cyan at low alpha disappears into green. */
+.le-town-cells {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 3;
+}
+/* A settled town's tiles sit quieter than the drag in progress, so the live one reads as active. */
+.le-town-cells.is-settled {
+  opacity: 0.6;
+}
+
+/* How much GROUND the drag covers. Scene pixels mean nothing at an arbitrary zoom; tiles do. */
+.le-town-drag-size {
+  position: absolute;
+  transform: translateY(-1.35em);
+  pointer-events: none;
+  white-space: nowrap;
+  font-size: 12px;
+  color: rgb(244, 214, 150);
+  text-shadow: 0 1px 2px rgb(8, 12, 20), 0 0 6px rgb(8, 12, 20);
 }
 
 .le-floating-artwork-hit.is-selectable {

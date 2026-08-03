@@ -207,6 +207,47 @@ export interface FloatingArtworkPlacement {
   scale: number;
 }
 
+/**
+ * One saved town INSTANCE, mirroring how BoardGeneratedRegion saves a generated terrain unit:
+ * a named thing that owns an area, remembers the settings it was built from, and can be reselected
+ * and regenerated later. A board carries as many as the author places.
+ */
+export interface BoardTownBuilding {
+  id: string;
+  sourceArtId: string;
+  weight: number;
+}
+
+export interface BoardTownSection {
+  id: string;
+  buildings: BoardTownBuilding[];
+  share: number;
+  scaleMean: number;
+  scaleMin: number;
+  scaleMax: number;
+  plotWidth: number;
+}
+
+export interface BoardTown {
+  id: string;
+  name: string;
+  /** Grid-cell rect the town fills. */
+  bounds: { minX: number; minY: number; maxX: number; maxY: number };
+  plan: string;
+  size: number;
+  sections: BoardTownSection[];
+  /** 0 keeps sections apart, 1 interleaves them, between widens the band where they meet. */
+  blend: number;
+  landmarkIds: string[];
+  setback: number;
+  looseness: number;
+  facingWobble: number;
+  spacing: number;
+  /** 'drop' sites fewer buildings where it is tight; 'shrink' builds smaller instead. */
+  fit: string;
+  seed: number;
+}
+
 export interface EditorBoard {
   cols: number;
   rows: number;
@@ -246,6 +287,13 @@ export interface EditorBoard {
   /** Floating, gameplay-inert source artwork used by the pre-drawn generation reference. */
   floatingArtwork?: FloatingArtworkPlacement[];
   cover: Record<string, GroundCoverDensity>;
+  /**
+   * The seed each painted cover cell was rolled with, baked at paint time. Absent for every board
+   * authored before cover was baked; those cells fall back to LEGACY_GROUND_COVER_SEED and so keep
+   * rendering exactly as they always have. Baking is what stops the cover brush's seed control
+   * from re-styling grass that is already down.
+   */
+  coverSeeds?: Record<string, number>;
   /** Per-cell cover-set OVERRIDE (cell "x,y" -> cover family), decoupling ground cover from the
    * tile's terrain (e.g. grass tufts on a stone region). A cell absent here falls back to its own
    * tile terrain (the classic behaviour). Optional + back-compat (like `zones`). */
@@ -279,6 +327,8 @@ export interface EditorBoard {
   zones?: Record<string, ZoneType>;
   /** Editor-only generated-region units: saved selections + Generate panel settings. */
   generatedRegions?: BoardGeneratedRegion[];
+  /** Saved town instances: the selection each owns plus the settings it was generated from. */
+  towns?: BoardTown[];
 }
 
 const enc = (s: string): string => btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -627,6 +677,98 @@ function cleanFloatingArtwork(value: unknown): FloatingArtworkPlacement[] {
   return out;
 }
 
+/**
+ * Baked cover seeds, kept only for cells that actually carry cover. A seed without cover is dead
+ * weight in the code and would resurrect if that cell were ever painted again.
+ */
+const townIdPattern = /^[A-Za-z0-9][A-Za-z0-9._:@+-]{0,63}$/;
+
+/** Saved town instances, rejecting anything that could not be regenerated from. */
+function cleanTowns(value: unknown): BoardTown[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const out: BoardTown[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+    const t = raw as Record<string, unknown>;
+    const id = typeof t.id === 'string' ? t.id.trim() : '';
+    const bounds = t.bounds as Record<string, unknown> | undefined;
+    if (!townIdPattern.test(id) || seen.has(id) || !bounds || typeof bounds !== 'object') continue;
+    const rect = ['minX', 'minY', 'maxX', 'maxY'].map((k) => Number((bounds as Record<string, unknown>)[k]));
+    if (rect.some((n) => !Number.isSafeInteger(n) || Math.abs(n) > 4096)) continue;
+    const sections: BoardTownSection[] = Array.isArray(t.sections)
+      ? (t.sections as unknown[]).flatMap((rawSection) => {
+        if (!rawSection || typeof rawSection !== 'object') return [];
+        const sec = rawSection as Record<string, unknown>;
+        const sectionId = typeof sec.id === 'string' ? sec.id.trim() : '';
+        if (!townIdPattern.test(sectionId)) return [];
+        // Accept the flat id list this shipped with for an afternoon, so a board saved then still
+        // opens: each id becomes an evenly weighted entry.
+        const legacy = Array.isArray(sec.buildingIds)
+          ? (sec.buildingIds as unknown[]).filter((x): x is string => typeof x === 'string' && !!x)
+              .map((sourceArtId, index) => ({ id: `b${index}`, sourceArtId, weight: 1 }))
+          : [];
+        const buildings = Array.isArray(sec.buildings)
+          ? (sec.buildings as unknown[]).flatMap((rawEntry) => {
+            if (!rawEntry || typeof rawEntry !== 'object') return [];
+            const entry = rawEntry as Record<string, unknown>;
+            const entryId = typeof entry.id === 'string' ? entry.id.trim() : '';
+            const sourceArtId = typeof entry.sourceArtId === 'string' ? entry.sourceArtId.trim() : '';
+            if (!townIdPattern.test(entryId) || !sourceArtId) return [];
+            return [{ id: entryId, sourceArtId, weight: clampNumber(entry.weight, 1, 0, 100) }];
+          })
+          : [];
+        return [{
+          id: sectionId,
+          buildings: buildings.length ? buildings : legacy,
+          share: clampNumber(sec.share, 1, 0, 100),
+          scaleMean: clampNumber(sec.scaleMean, 1, 0.1, 8),
+          scaleMin: clampNumber(sec.scaleMin, 0.75, 0.1, 8),
+          scaleMax: clampNumber(sec.scaleMax, 1.35, 0.1, 8),
+          // Frontage moved from the town onto the section; fall back to the town's old value.
+          plotWidth: clampNumber(sec.plotWidth, clampNumber(t.plotWidth, 110, 10, 1000), 10, 1000),
+        }];
+      })
+      : [];
+    if (!sections.length) continue;
+    seen.add(id);
+    out.push({
+      id,
+      name: typeof t.name === 'string' && t.name.trim() ? t.name.trim().slice(0, 64) : id,
+      bounds: { minX: rect[0], minY: rect[1], maxX: rect[2], maxY: rect[3] },
+      plan: typeof t.plan === 'string' ? t.plan : 'linear',
+      size: Math.round(clampNumber(t.size, 14, 1, 400)),
+      sections,
+      blend: clampNumber(t.blend, 0.35, 0, 1),
+      landmarkIds: Array.isArray(t.landmarkIds)
+        ? (t.landmarkIds as unknown[]).filter((x): x is string => typeof x === 'string' && !!x)
+        : [],
+      setback: clampNumber(t.setback, 78, 1, 1000),
+      looseness: clampNumber(t.looseness, 0.45, 0, 1),
+      facingWobble: clampNumber(t.facingWobble, 0.2, 0, 1),
+      spacing: clampNumber(t.spacing, 10, 0, 1000),
+      fit: t.fit === 'drop' ? 'drop' : 'shrink',
+      seed: Math.round(clampNumber(t.seed, 1, 1, 0xffffffff)),
+    });
+  }
+  return out;
+}
+
+function cleanCoverSeeds(
+  value: unknown,
+  cover: Record<string, unknown> | undefined,
+): Record<string, number> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const out: Record<string, number> = {};
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (!cover || cover[key] === undefined) continue;
+    const seed = Number(raw);
+    if (!Number.isSafeInteger(seed) || seed < 0 || seed > 0xffffffff) continue;
+    out[key] = seed;
+  }
+  return out;
+}
+
 function cleanMacroTiles(value: unknown, cols: number, rows: number): MacroTilePlacement[] {
   if (!Array.isArray(value)) return [];
   const out: MacroTilePlacement[] = [];
@@ -864,6 +1006,10 @@ export function encodeBoard(b: EditorBoard): string {
   // Cover-set overrides ride a separate channel, emitted only when non-empty so a board that never
   // decouples cover from terrain encodes byte-identically to a pre-override code.
   if (b.coverTypes && nonEmpty(b.coverTypes)) wire.ct = b.coverTypes;
+  // Baked cover seeds ride their own channel, emitted only when present so a board authored
+  // before baking encodes byte-identically to its old code.
+  const coverSeeds = cleanCoverSeeds(b.coverSeeds, b.cover);
+  if (nonEmpty(coverSeeds)) wire.vs = coverSeeds;
   // Split the autotiling ribbon features by kind so each map's values are bare materials
   // (rd=roads, rv=rivers). Fences ride separately in `fe` (edge-keyed), below.
   const rd: Record<string, RoadMaterial> = {};
@@ -905,6 +1051,8 @@ export function encodeBoard(b: EditorBoard): string {
     return name || color ? [z.id, z.type, z.tiles, name ?? '', color ?? ''] : [z.id, z.type, z.tiles];
   });
   if (nonEmpty(zones)) wire.z = zones;
+  const towns = cleanTowns(b.towns);
+  if (towns.length) wire.tw = towns;
   const gr = encodeGeneratedRegions(b.generatedRegions, b.cols, b.rows, b.decorativeApron);
   if (gr.length) wire.gr = gr;
   return enc(JSON.stringify(wire));
@@ -1069,6 +1217,7 @@ export function decodeBoard(code: string): EditorBoard | null {
     };
     const floatingArtwork = cleanFloatingArtwork(w.fa);
     const generatedRegions = decodeGeneratedRegions(w.gr, cols, rows, decorativeApron);
+    const towns = cleanTowns(w.tw);
     const surface = Array.isArray(w.pd)
       ? w.pd[0] === 2 || w.pd[0] === 3
         ? normalizePredrawnBoardSurface({
@@ -1140,6 +1289,7 @@ export function decodeBoard(code: string): EditorBoard | null {
       playerFaction: typeof w.pf === 'string' ? w.pf : undefined, factionDirections, cells, macroTiles, units, doodads, props, floatingArtwork,
       cover: (w.v ?? {}) as Record<string, GroundCoverDensity>,
       coverTypes: (w.ct ?? {}) as Record<string, TileFamilyId>,
+      coverSeeds: cleanCoverSeeds(w.vs, (w.v ?? {}) as Record<string, GroundCoverDensity>),
       features,
       fences,
       fencePosts,
@@ -1151,6 +1301,7 @@ export function decodeBoard(code: string): EditorBoard | null {
       zoneEntries,
       zones,
       generatedRegions,
+      towns,
     };
   } catch {
     return null;
