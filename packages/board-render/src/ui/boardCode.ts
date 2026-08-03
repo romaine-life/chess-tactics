@@ -38,7 +38,7 @@ import type { GroundCoverDensity } from '../core/groundCover';
 import { macroTileAsset, macroTileBreakIndices, type MacroTilePlacement } from '../core/macroTiles';
 import { defaultWallMaterial, fenceMaterials, wallMaterials, type FeatureKind, type FeatureMaterial, type RoadMaterial, type RiverMaterial, type FenceMaterial, type WallMaterial } from '../core/featureAutotile';
 import { wallArt, wallArtAtEdge, type WallArtId } from '../core/wallArt';
-import { ZONE_COLORS, ZONE_TYPES, type ZoneColor, type ZoneType } from '../core/level';
+import { canonicalizeSingletonZones, ZONE_COLORS, ZONE_TYPES, type ZoneColor, type ZoneType } from '../core/level';
 import type { TileFamilyId } from '../core/tileSockets';
 import { UNIT_FACINGS, UNIT_PALETTES, type UnitPalette } from '../core/pieces';
 import type { UnitFacing } from '../core/types';
@@ -80,6 +80,8 @@ export interface EditorZoneEntry {
   name?: string;
   color?: ZoneColor;
   type: ZoneType;
+  /** Bar pawns from this Player Deployment zone during automatic placement (ADR-0365). */
+  pawnsExcluded?: boolean;
   tiles: string[];
 }
 
@@ -492,9 +494,21 @@ function normalizeZoneEntries(entries: readonly EditorZoneEntry[] | undefined, c
     }
     const name = typeof entry.name === 'string' && entry.name.trim() ? entry.name.trim() : undefined;
     const color = entry.color && validZoneColors.has(entry.color) ? entry.color : undefined;
-    out.push({ id: entry.id.trim() || `zone-${index + 1}`, ...(name ? { name } : {}), ...(color ? { color } : {}), type: entry.type, tiles: sortCellKeys(tiles) });
+    // Only a Player Deployment zone can bar pawns; the pawn zone and every other type would have
+    // no meaning for the flag, so it is dropped rather than carried as dead state.
+    const pawnsExcluded = entry.pawnsExcluded === true && entry.type === 'player-spawn' ? true : undefined;
+    out.push({
+      id: entry.id.trim() || `zone-${index + 1}`,
+      ...(name ? { name } : {}),
+      ...(color ? { color } : {}),
+      type: entry.type,
+      ...(pawnsExcluded ? { pawnsExcluded } : {}),
+      tiles: sortCellKeys(tiles),
+    });
   }
-  return out;
+  // At most one Player Deployment, Pawn Deployment and Enemy Deployment zone can survive a
+  // normalize, so no decode, paste or legacy import can reintroduce a duplicate (ADR-0365).
+  return canonicalizeSingletonZones(out).map((entry) => ({ ...entry, tiles: sortCellKeys(entry.tiles) }));
 }
 
 export function zoneCellMapFromEntries(entries: readonly EditorZoneEntry[] | undefined): Record<string, ZoneType> {
@@ -875,6 +889,9 @@ export function encodeBoard(b: EditorBoard): string {
   if (zoneEntries.length) wire.zn = zoneEntries.map((z) => {
     const name = z.name?.trim();
     const color = z.color && validZoneColors.has(z.color) ? z.color : undefined;
+    // The pawn bar rides a trailing flag so every zone without it keeps its historical
+    // 3- or 5-element tuple and its board code stays byte-identical.
+    if (z.pawnsExcluded) return [z.id, z.type, z.tiles, name ?? '', color ?? '', 1];
     return name || color ? [z.id, z.type, z.tiles, name ?? '', color ?? ''] : [z.id, z.type, z.tiles];
   });
   if (nonEmpty(zones)) wire.z = zones;
@@ -1012,11 +1029,12 @@ export function decodeBoard(code: string): EditorBoard | null {
     let zoneEntries: EditorZoneEntry[] = [];
     if (Array.isArray(w.zn)) {
       zoneEntries = normalizeZoneEntries(
-        (w.zn as Array<[unknown, unknown, unknown, unknown?, unknown?]>).map(([id, type, tiles, name, color]) => ({
+        (w.zn as Array<[unknown, unknown, unknown, unknown?, unknown?, unknown?]>).map(([id, type, tiles, name, color, pawnsExcluded]) => ({
           id: String(id ?? ''),
           name: typeof name === 'string' ? name : undefined,
           color: typeof color === 'string' ? color as ZoneColor : undefined,
           type: type as ZoneType,
+          pawnsExcluded: pawnsExcluded === 1 || pawnsExcluded === true ? true : undefined,
           tiles: Array.isArray(tiles) ? tiles.map(String) : [],
         })),
         cols,

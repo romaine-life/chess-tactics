@@ -23,8 +23,48 @@ export const CAMPAIGN_FORMAT_VERSION = 1;
 export const BOARD_COLS = { min: 1, max: 48 } as const;
 export const BOARD_ROWS = { min: 1, max: 48 } as const;
 
-export type ZoneType = 'region' | 'player-spawn' | 'enemy-spawn' | 'enemy-threat' | 'objective' | 'falling-rock' | 'pawn-promotion';
-export const ZONE_TYPES = ['region', 'player-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock', 'pawn-promotion'] as const satisfies readonly ZoneType[];
+export type ZoneType = 'region' | 'player-spawn' | 'player-pawn-spawn' | 'enemy-spawn' | 'enemy-threat' | 'objective' | 'falling-rock' | 'pawn-promotion';
+export const ZONE_TYPES = ['region', 'player-spawn', 'player-pawn-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock', 'pawn-promotion'] as const satisfies readonly ZoneType[];
+
+/**
+ * Deployment geometry a level may hold at most one of (ADR-0365). Two Player Deployment zones —
+ * or two Enemy Deployment zones — were previously reachable through legacy content and pasted
+ * board codes, which left the author looking at duplicate objects that no UI could explain.
+ * Every reader canonicalizes duplicates into one zone per type instead of warning about them.
+ */
+export const SINGLETON_ZONE_TYPES = ['player-spawn', 'player-pawn-spawn', 'enemy-spawn'] as const satisfies readonly ZoneType[];
+export const isSingletonZoneType = (type: ZoneType): boolean => (SINGLETON_ZONE_TYPES as readonly ZoneType[]).includes(type);
+
+/**
+ * Fold every duplicate of a singleton deployment type into that type's first entry, keeping its
+ * id, name, color and flags while absorbing the later entries' squares. Painted geometry is never
+ * discarded — the extra zone OBJECT disappears, its squares do not — so an older level opens as
+ * the one-zone-per-side model without losing author work. It runs on the editor's `"x,y"` keyed
+ * entries, which every Level read and write passes through before `layers.zones` is projected.
+ */
+export function canonicalizeSingletonZones<Entry extends { type: ZoneType; tiles: string[] }>(
+  entries: readonly Entry[],
+): Entry[] {
+  const survivorIndexByType = new Map<ZoneType, number>();
+  const out: Entry[] = [];
+  for (const entry of entries) {
+    if (!isSingletonZoneType(entry.type)) {
+      out.push(entry);
+      continue;
+    }
+    const survivorIndex = survivorIndexByType.get(entry.type);
+    if (survivorIndex === undefined) {
+      survivorIndexByType.set(entry.type, out.length);
+      out.push(entry);
+      continue;
+    }
+    const survivor = out[survivorIndex];
+    const seen = new Set(survivor.tiles);
+    const added = entry.tiles.filter((tile) => !seen.has(tile));
+    if (added.length) out[survivorIndex] = { ...survivor, tiles: [...survivor.tiles, ...added] };
+  }
+  return out;
+}
 export type ZoneColor = 'teal' | 'blue' | 'red' | 'gold' | 'violet' | 'slate' | 'amber';
 export const ZONE_COLORS = ['teal', 'blue', 'red', 'gold', 'violet', 'slate', 'amber'] as const satisfies readonly ZoneColor[];
 
@@ -219,6 +259,13 @@ export interface Zone {
   /** Cosmetic editor/playtest tint only. Events/rules own all behavior. */
   color?: ZoneColor;
   type: ZoneType;
+  /**
+   * Bar pawns from this Player Deployment zone's squares during automatic placement (ADR-0365).
+   * A pawn is column-bound, so an author may want whole columns of an otherwise good zone kept
+   * clear of them. This steers only the automatic placer: a square barred here still accepts
+   * every other piece, and a player placing a pawn by hand through Discipline may still use it.
+   */
+  pawnsExcluded?: boolean;
   tiles: Array<[number, number]>;
 }
 
@@ -731,6 +778,10 @@ export function validateLevel(value: unknown): ValidateResult {
         }
         if ((z as { color?: unknown }).color !== undefined && !(ZONE_COLORS as readonly unknown[]).includes((z as { color?: unknown }).color)) {
           errors.push(`zone "${z.id}" color must be one of: ${ZONE_COLORS.join(', ')}`);
+          break;
+        }
+        if ((z as { pawnsExcluded?: unknown }).pawnsExcluded !== undefined && typeof (z as { pawnsExcluded?: unknown }).pawnsExcluded !== 'boolean') {
+          errors.push(`zone "${z.id}" pawnsExcluded must be a boolean`);
           break;
         }
         const badTile = z.tiles.find((t) => !Array.isArray(t) || t.length !== 2 || !Number.isInteger(t[0]) || !Number.isInteger(t[1]));

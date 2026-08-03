@@ -50,12 +50,36 @@ function authoredOccupied(level: Level): Set<string> {
   return occupied;
 }
 
-export function playerDeploymentCells(level: Level): Vec[] {
+/**
+ * The two placement pools a War Battle's authored geometry describes (ADR-0365).
+ *
+ * `all` is every usable deployment square and therefore the Run's capacity. `pawn` is the subset
+ * an automatically placed pawn may take: a pawn is column-bound, so an author can bar pawns from
+ * the Player Deployment zone and/or paint a dedicated Pawn Deployment zone. The two zones may
+ * overlap freely — a square in either pawn-eligible source is pawn-eligible, and a Pawn
+ * Deployment square outside the Player Deployment zone takes pawns only.
+ */
+export interface PlayerDeploymentPools {
+  all: Vec[];
+  pawn: Vec[];
+}
+
+const sortCells = (cells: Iterable<Vec>): Vec[] => [...cells].sort((a, b) => a.y - b.y || a.x - b.x);
+
+export function playerDeploymentPools(level: Level): PlayerDeploymentPools {
   const occupied = authoredOccupied(level);
   const terrain = new Map(level.layers.terrain.map((cell) => [key(cell), cell]));
-  const cells = new Map<string, Vec>();
+  const all = new Map<string, Vec>();
+  const pawn = new Map<string, Vec>();
   for (const zone of level.layers.zones) {
-    if (zone.type !== 'player-spawn') continue;
+    const deployment = zone.type === 'player-spawn' || zone.type === 'player-pawn-spawn';
+    if (!deployment) continue;
+    // A Pawn Deployment zone is always pawn-eligible. A Player Deployment zone is pawn-eligible
+    // unless the author barred pawns from it.
+    const pawnEligible = zone.type === 'player-pawn-spawn' || !zone.pawnsExcluded;
+    // A Pawn Deployment square is not open to other pieces on its own; it only widens the
+    // general pool where it overlaps the Player Deployment zone, which the union below handles.
+    const generalEligible = zone.type === 'player-spawn';
     for (const [x, y] of zone.tiles) {
       const cell = { x, y };
       const terrainCell = terrain.get(key(cell));
@@ -64,10 +88,18 @@ export function playerDeploymentCells(level: Level): Vec[] {
         || occupied.has(key(cell))
         || (terrainCell && !isPassableTerrain(terrainCell.terrain))
       ) continue;
-      cells.set(key(cell), cell);
+      if (generalEligible) all.set(key(cell), cell);
+      if (pawnEligible) pawn.set(key(cell), cell);
     }
   }
-  return [...cells.values()].sort((a, b) => a.y - b.y || a.x - b.x);
+  // Capacity counts every square a unit of some type could occupy, pawn-only squares included.
+  for (const [cellKey, cell] of pawn) all.set(cellKey, cell);
+  return { all: sortCells(all.values()), pawn: sortCells(pawn.values()) };
+}
+
+/** Every usable deployment square: the Run's capacity, and the reach of a Discipline placement. */
+export function playerDeploymentCells(level: Level): Vec[] {
+  return playerDeploymentPools(level).all;
 }
 
 function disciplineIds(run: RunDocument): string[] {
@@ -97,13 +129,13 @@ function edgeDistance(cell: Vec, level: Level): number {
 function cellScore(
   run: RunDocument,
   level: Level,
+  cells: readonly Vec[],
   unit: RunArmyUnit,
   cell: Vec,
   placed: Record<string, Vec>,
   marshalledRookIndex: number,
   rngNoise: number,
 ): number {
-  const cells = playerDeploymentCells(level);
   const minY = Math.min(...cells.map((candidate) => candidate.y));
   const maxY = Math.max(...cells.map((candidate) => candidate.y));
   let score = rngNoise;
@@ -155,35 +187,31 @@ function cellScore(
   return score;
 }
 
-function unitPlacementOrder(run: RunDocument, units: RunArmyUnit[]): RunArmyUnit[] {
-  const order: Record<RunArmyUnit['type'], number> = {
-    king: 0,
-    rook: 1,
-    bishop: 2,
-    pawn: 3,
-    knight: 4,
-    queen: 5,
-  };
-  return [...units].sort((a, b) => {
-    const pieceOrder = order[a.type] - order[b.type];
-    if (pieceOrder) return pieceOrder;
-    if (a.type === 'bishop' && b.type === 'bishop') {
-      const abilityOrder = Number(hasRunAbility(run, a, 'marshalled')) - Number(hasRunAbility(run, b, 'marshalled'));
-      if (abilityOrder) return abilityOrder;
-    }
-    return a.id.localeCompare(b.id);
-  });
+/**
+ * The order units take their turn to claim a square. Deployment is a free-for-all (ADR-0365):
+ * one unit at a time, in a seeded random order, each taking the best square still available to
+ * it. Nothing is reserved ahead of a unit and nothing backtracks, so a pawn whose eligible
+ * squares were taken by units that went earlier simply does not deploy.
+ */
+function unitPlacementOrder(run: RunDocument, units: RunArmyUnit[], index: 0 | 1): RunArmyUnit[] {
+  const stable = [...units].sort((a, b) => a.id.localeCompare(b.id));
+  return shuffled(stable, mixSeed(run.deployment?.seed ?? run.seed, 'placement-order', index));
 }
 
 function buildLayout(run: RunDocument, level: Level, index: 0 | 1, blockedUnitIds: string[]): RunDeploymentLayout {
   const seed = mixSeed(run.deployment?.seed ?? run.seed, 'layout', index);
   const rng = createRng(seed);
   const blocked = new Set(blockedUnitIds);
-  const available = new Map(playerDeploymentCells(level).map((cell) => [key(cell), cell]));
+  const pools = playerDeploymentPools(level);
+  const pawnEligible = new Set(pools.pawn.map(key));
+  const available = new Map(pools.all.map((cell) => [key(cell), cell]));
   const placements: Record<string, Vec> = {};
   const deployed = run.army.filter((unit) => !blocked.has(unit.id));
   const disciplined = new Set(disciplineIds(run));
 
+  // A Disciplined unit is placed by the player, not by the automatic placer, so the pawn bar
+  // does not apply to it. Putting a pawn on a square the placer would refuse is a deliberate
+  // choice the player is welcome to make.
   for (const unit of deployed) {
     if (!disciplined.has(unit.id)) continue;
     const manual = fromKey(run.deployment?.manualPlacements[unit.id] ?? '');
@@ -193,14 +221,20 @@ function buildLayout(run: RunDocument, level: Level, index: 0 | 1, blockedUnitId
   }
 
   let marshalledRookIndex = 0;
-  for (const unit of unitPlacementOrder(run, deployed)) {
+  const stranded: string[] = [];
+  for (const unit of unitPlacementOrder(run, deployed, index)) {
     if (placements[unit.id] || disciplined.has(unit.id)) continue;
-    const candidates = [...available.values()];
-    if (!candidates.length) break;
+    // Only a pawn can run out of squares while the board still has room: every other piece may
+    // take any deployment square, and capacity already guarantees one is left for it.
+    const candidates = [...available.values()].filter((cell) => unit.type !== 'pawn' || pawnEligible.has(key(cell)));
+    if (!candidates.length) {
+      if (available.size) stranded.push(unit.id);
+      continue;
+    }
     let best = candidates[0];
     let bestScore = Number.NEGATIVE_INFINITY;
     for (const cell of candidates) {
-      const score = cellScore(run, level, unit, cell, placements, marshalledRookIndex, rng.next());
+      const score = cellScore(run, level, pools.all, unit, cell, placements, marshalledRookIndex, rng.next());
       if (score > bestScore) {
         best = cell;
         bestScore = score;
@@ -210,6 +244,9 @@ function buildLayout(run: RunDocument, level: Level, index: 0 | 1, blockedUnitId
     available.delete(key(best));
     if (unit.type === 'rook' && hasRunAbility(run, unit, 'marshalled')) marshalledRookIndex += 1;
   }
+  // A unit that found no square it could use sits this Battle out exactly like an overflow unit:
+  // it is blocked, and remains callable as a reservist.
+  const heldBack = [...blockedUnitIds, ...stranded];
 
   const temporaryRocks: Vec[] = [];
   if (hasRelic(run, 'royal-tent') && hasRelic(run, 'royal-decree')) {
@@ -238,8 +275,8 @@ function buildLayout(run: RunDocument, level: Level, index: 0 | 1, blockedUnitId
   return {
     index,
     placements,
-    blockedUnitIds: [...blockedUnitIds],
-    reserveUnitIds: [...blockedUnitIds],
+    blockedUnitIds: heldBack,
+    reserveUnitIds: [...heldBack],
     temporaryRocks,
   };
 }
@@ -438,8 +475,21 @@ export function levelForRunDeployment(run: RunDocument, level: Level, layout: Ru
   };
 }
 
-export function normalReservistCell(run: RunDocument, level: Level, occupied: ReadonlySet<string>, sequence: number): Vec | null {
-  const free = playerDeploymentCells(level).filter((cell) => !occupied.has(key(cell)));
+/**
+ * Where a reservist called up mid-Battle arrives. A reservist is placed automatically, so the
+ * pawn bar applies to it exactly as it applies at Deployment (ADR-0365): a pawn arrives only on
+ * a pawn-eligible square, and returns no cell at all when none is free.
+ */
+export function normalReservistCell(
+  run: RunDocument,
+  level: Level,
+  occupied: ReadonlySet<string>,
+  sequence: number,
+  unitType?: RunArmyUnit['type'],
+): Vec | null {
+  const pools = playerDeploymentPools(level);
+  const pool = unitType === 'pawn' ? pools.pawn : pools.all;
+  const free = pool.filter((cell) => !occupied.has(key(cell)));
   if (!free.length) return null;
   return createRng(mixSeed(run.deployment?.seed ?? run.seed, 'reservist-cell', sequence)).pick(free);
 }

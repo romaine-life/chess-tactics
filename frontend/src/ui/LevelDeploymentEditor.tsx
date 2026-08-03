@@ -12,6 +12,8 @@ export interface DeploymentZoneOption {
   id: string;
   label: string;
   type: ZoneType;
+  /** Player Deployment zone only: automatic placement will not put pawns here (ADR-0365). */
+  pawnsExcluded: boolean;
   paintedTiles: number;
   usableTileKeys: string[];
 }
@@ -37,6 +39,8 @@ function DeploymentSideCard({
   onEventsChange,
   onCreateZone,
   onEditZone,
+  onCreatePawnZone,
+  onPawnsExcludedChange,
 }: {
   side: ConditionSide;
   events: LevelEvents;
@@ -46,6 +50,8 @@ function DeploymentSideCard({
   onEventsChange: (events: LevelEvents) => void;
   onCreateZone: (side: ConditionSide) => void;
   onEditZone: (zoneId: string) => void;
+  onCreatePawnZone: () => void;
+  onPawnsExcludedChange: (zoneId: string, pawnsExcluded: boolean) => void;
 }): ReactElement {
   const deployment = authoredDeploymentForSide(events, side);
   const expectedType = sideZoneType(side);
@@ -53,8 +59,14 @@ function DeploymentSideCard({
   const deploymentZone = eligibleZones.find((zone) => deployment.zoneIds.includes(zone.id) && zone.type === expectedType)
     ?? eligibleZones.find((zone) => zone.type === expectedType)
     ?? eligibleZones[0];
-  const extraZoneCount = Math.max(0, eligibleZones.length - (deploymentZone ? 1 : 0));
   const deploymentZoneIds = deploymentZone ? [deploymentZone.id] : [];
+  const pawnZone = side === 'player' ? zones.find((zone) => zone.type === 'player-pawn-spawn') : undefined;
+  // What an automatically placed pawn can actually use: the Player Deployment zone unless it
+  // bars pawns, plus every Pawn Deployment square.
+  const pawnSquareKeys = new Set([
+    ...(deploymentZone && !deploymentZone.pawnsExcluded ? deploymentZone.usableTileKeys : []),
+    ...(pawnZone?.usableTileKeys ?? []),
+  ]);
   const title = side === 'player' ? 'Player force' : 'Enemy force';
   const sideLabel = side === 'player' ? 'Player' : 'Enemy';
   const fixedLabel = side === 'player'
@@ -113,7 +125,42 @@ function DeploymentSideCard({
           ) : (
             <p className="le-board-warning">No Player starting zone exists. Create and paint one before saving this War Battle.</p>
           )}
-          {extraZoneCount > 0 ? <p className="le-board-warning">This older level has {extraZoneCount} extra Player starting zone{extraZoneCount === 1 ? '' : 's'}. Move any wanted squares into {deploymentZone?.label ?? 'the starting zone'}; new authoring uses one zone per side.</p> : null}
+
+          {deploymentZone ? (
+            <div className="le-ctrlrow le-deployment-pawn-row">
+              <div>
+                <span className="le-ctrllabel">Keep pawns out of this zone</span>
+                <span className="le-deployment-pawn-help">A pawn cannot change column, so squares whose column is a dead end are wasted on one. Barring pawns here leaves those squares for every other piece.</span>
+              </div>
+              <Toggle
+                checked={deploymentZone.pawnsExcluded}
+                label="Keep pawns out of the Player starting zone"
+                onChange={(checked) => onPawnsExcludedChange(deploymentZone.id, checked)}
+              />
+            </div>
+          ) : null}
+
+          <div className="le-deployment-zone-head">
+            <div>
+              <h4>Pawn starting zone</h4>
+              <span>{pawnZone
+                ? 'Pawns may start here. Squares it shares with the Player starting zone stay open to every piece.'
+                : 'Optional. Paint one when pawns need their own squares.'}</span>
+            </div>
+            <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={() => pawnZone ? onEditZone(pawnZone.id) : onCreatePawnZone()}>{pawnZone ? 'Edit squares' : 'Create pawn starting zone'}</ChromeButton>
+          </div>
+          {pawnZone ? (
+            <div className="le-deployment-zones">
+              <div data-chrome-unit="inner-list-row" className={chromeUnitClassNames('inner-list-row', 'le-deployment-zone-row', 'is-selected')}>
+                <span><strong>{pawnZone.label}</strong><small>{pawnZone.paintedTiles} painted · {pawnZone.usableTileKeys.length} usable</small></span>
+                <span className="le-md-item-out">Pawns only</span>
+              </div>
+            </div>
+          ) : null}
+          <p className="le-deployment-zone-help">
+            Deployment is a free-for-all: units take their squares one at a time in random order, each taking what is still open to it. A pawn that finds its squares gone does not deploy and stays in reserve. {pawnSquareKeys.size} square{pawnSquareKeys.size === 1 ? '' : 's'} currently accept{pawnSquareKeys.size === 1 ? 's' : ''} a pawn.
+          </p>
+          {deploymentZone && pawnSquareKeys.size === 0 ? <p className="le-board-warning">No square accepts a pawn. Every pawn in the Run army will sit this Battle out in reserve.</p> : null}
         </>
       ) : deployment.enabled ? (
         <>
@@ -160,7 +207,6 @@ function DeploymentSideCard({
           ) : (
             <p className="le-board-warning">No {sideLabel} starting zone exists. Create and paint one, or turn randomized deployment off.</p>
           )}
-          {extraZoneCount > 0 ? <p className="le-board-warning">This older level has {extraZoneCount} extra {sideLabel} starting zone{extraZoneCount === 1 ? '' : 's'}. Move any wanted squares into {deploymentZone?.label ?? 'the starting zone'}; new authoring uses one zone per side.</p> : null}
         </>
       ) : (
         <>
@@ -183,7 +229,6 @@ function DeploymentSideCard({
               </div>
             </div>
           ) : null}
-          {extraZoneCount > 0 ? <p className="le-board-warning">This older level has {extraZoneCount} extra {sideLabel} starting zone{extraZoneCount === 1 ? '' : 's'}. New authoring uses one zone per side.</p> : null}
         </>
       )}
     </InnerChromeBox>
@@ -199,6 +244,8 @@ export function LevelDeploymentEditor({
   onEventsChange,
   onCreateZone,
   onEditZone,
+  onCreatePawnZone,
+  onPawnsExcludedChange,
 }: {
   events: LevelEvents;
   zones: readonly DeploymentZoneOption[];
@@ -208,6 +255,8 @@ export function LevelDeploymentEditor({
   onEventsChange: (events: LevelEvents) => void;
   onCreateZone: (side: ConditionSide) => void;
   onEditZone: (zoneId: string) => void;
+  onCreatePawnZone: () => void;
+  onPawnsExcludedChange: (zoneId: string, pawnsExcluded: boolean) => void;
 }): ReactElement {
   return (
     <div className="le-deployment-editor">
@@ -225,6 +274,8 @@ export function LevelDeploymentEditor({
           onEventsChange={onEventsChange}
           onCreateZone={onCreateZone}
           onEditZone={onEditZone}
+          onCreatePawnZone={onCreatePawnZone}
+          onPawnsExcludedChange={onPawnsExcludedChange}
         />
         <DeploymentSideCard
           side="enemy"
@@ -235,6 +286,8 @@ export function LevelDeploymentEditor({
           onEventsChange={onEventsChange}
           onCreateZone={onCreateZone}
           onEditZone={onEditZone}
+          onCreatePawnZone={onCreatePawnZone}
+          onPawnsExcludedChange={onPawnsExcludedChange}
         />
       </div>
     </div>

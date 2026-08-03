@@ -67,6 +67,35 @@ describe('levelBoard — zone projection into layers.zones', () => {
     expect(reopened.zones).toEqual({ '4,4': 'player-spawn' });
   });
 
+  it('projects the pawn bar and the Pawn Deployment zone into layers.zones and back', () => {
+    const level = editorBoardToLevel(board({
+      zoneEntries: [
+        { id: 'z-player', name: 'Player Deployment', type: 'player-spawn', pawnsExcluded: true, tiles: ['0,0', '1,0'] },
+        { id: 'z-pawn', name: 'Pawn Deployment', type: 'player-pawn-spawn', tiles: ['1,0', '2,0'] },
+      ],
+    }), { id: 'l-pawn', name: 'Pawn zones' });
+    expect(level.layers.zones).toEqual([
+      { id: 'z-player', name: 'Player Deployment', type: 'player-spawn', pawnsExcluded: true, tiles: [[0, 0], [1, 0]] },
+      { id: 'z-pawn', name: 'Pawn Deployment', type: 'player-pawn-spawn', tiles: [[1, 0], [2, 0]] },
+    ]);
+    expect(levelToEditorBoard(level).zoneEntries).toEqual([
+      { id: 'z-player', name: 'Player Deployment', type: 'player-spawn', pawnsExcluded: true, tiles: ['0,0', '1,0'] },
+      { id: 'z-pawn', name: 'Pawn Deployment', type: 'player-pawn-spawn', tiles: ['1,0', '2,0'] },
+    ]);
+  });
+
+  it('a saved Level can never hold two Player Deployment zones', () => {
+    const level = editorBoardToLevel(board({
+      zoneEntries: [
+        { id: 'z-a', name: 'Player Deployment', type: 'player-spawn', tiles: ['0,0'] },
+        { id: 'z-b', name: 'Player Deployment 2', type: 'player-spawn', tiles: ['1,0'] },
+      ],
+    }), { id: 'l-dupe', name: 'Duplicates' });
+    expect(level.layers.zones).toEqual([
+      { id: 'z-a', name: 'Player Deployment', type: 'player-spawn', tiles: [[0, 0], [1, 0]] },
+    ]);
+  });
+
   it('legacy fallback (no boardCode, has layers.zones) rebuilds the zones channel', () => {
     const level = createBlankLevel('legacy', 'L', 8, 8);
     level.layers.zones = [

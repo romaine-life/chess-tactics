@@ -297,9 +297,11 @@ export function validateWarBattlePlayability(level: Level): PlayabilityResult {
       message: 'Run Battle needs a usable Player Spawn zone tile on the board edge.',
     });
   }
+  // Both Run-player deployment zones are off limits to the enemy: a Pawn Deployment square is
+  // still a square the Run army starts on (ADR-0365).
   const playerDeploymentPool = new Set(
     level.layers.zones
-      .filter((zone) => zone.type === 'player-spawn')
+      .filter((zone) => zone.type === 'player-spawn' || zone.type === 'player-pawn-spawn')
       .flatMap((zone) => zone.tiles.map(([x, y]) => key(x, y))),
   );
   const enemyDeploymentPool = new Set(

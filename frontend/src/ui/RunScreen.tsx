@@ -959,6 +959,7 @@ function RunBattlefieldPanel({
           baseLevel,
           occupied,
           active.battleRuntime?.reinforcementSequence ?? 0,
+          reservist.type,
         );
         if (!cell) continue;
         const facing = defaultFacingForSide('player');

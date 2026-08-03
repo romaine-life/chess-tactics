@@ -66,6 +66,48 @@ describe('boardCode — zones wire key (z)', () => {
     expect(decoded.zones).toEqual({ '0,0': 'region', '1,0': 'region' });
   });
 
+  it('round-trips a Pawn Deployment zone and a pawn-barred Player Deployment zone', () => {
+    const board = base({
+      zoneEntries: [
+        { id: 'zone-1', name: 'Player Deployment', color: 'blue', type: 'player-spawn', pawnsExcluded: true, tiles: ['0,0', '1,0'] },
+        { id: 'zone-2', name: 'Pawn Deployment', color: 'violet', type: 'player-pawn-spawn', tiles: ['1,0', '2,0'] },
+      ],
+    });
+    const decoded = decodeBoard(encodeBoard(board))!;
+    expect(decoded.zoneEntries).toEqual(board.zoneEntries);
+  });
+
+  it('leaves a board code without a pawn bar byte-identical to one that never had the flag', () => {
+    const withFlag = base({ zoneEntries: [{ id: 'zone-1', type: 'player-spawn', pawnsExcluded: false, tiles: ['0,0'] }] });
+    const withoutFlag = base({ zoneEntries: [{ id: 'zone-1', type: 'player-spawn', tiles: ['0,0'] }] });
+    expect(encodeBoard(withFlag)).toBe(encodeBoard(withoutFlag));
+  });
+
+  it('drops a pawn bar written on a zone type that cannot use one', () => {
+    const board = base({ zoneEntries: [{ id: 'zone-1', type: 'player-pawn-spawn', pawnsExcluded: true, tiles: ['0,0'] }] });
+    const decoded = decodeBoard(encodeBoard(board))!;
+    expect(decoded.zoneEntries).toEqual([{ id: 'zone-1', type: 'player-pawn-spawn', tiles: ['0,0'] }]);
+  });
+
+  it('folds duplicate deployment zones into one per type, keeping every painted square', () => {
+    // A pasted or legacy code can carry two Enemy Deployment zones; only one object may survive,
+    // and no square it painted may be lost (ADR-0365).
+    const board = base({
+      zoneEntries: [
+        { id: 'zone-1', name: 'Enemy Deployment', type: 'enemy-spawn', tiles: ['0,0'] },
+        { id: 'zone-2', name: 'Enemy Deployment 2', type: 'enemy-spawn', tiles: ['0,0', '1,0'] },
+        { id: 'zone-3', name: 'A region', type: 'region', tiles: ['2,0'] },
+        { id: 'zone-4', name: 'Another region', type: 'region', tiles: ['3,0'] },
+      ],
+    });
+    const decoded = decodeBoard(encodeBoard(board))!;
+    expect(decoded.zoneEntries).toEqual([
+      { id: 'zone-1', name: 'Enemy Deployment', type: 'enemy-spawn', tiles: ['0,0', '1,0'] },
+      { id: 'zone-3', name: 'A region', type: 'region', tiles: ['2,0'] },
+      { id: 'zone-4', name: 'Another region', type: 'region', tiles: ['3,0'] },
+    ]);
+  });
+
   it('decodes legacy authored zone entries that do not carry names', () => {
     const board = base({
       zoneEntries: [
