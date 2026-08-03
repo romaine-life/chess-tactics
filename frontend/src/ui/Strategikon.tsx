@@ -12,6 +12,7 @@ import {
   StrategikonContentSceneSlot,
   StrategikonReferenceSceneSlot,
 } from './shell/AuthoredSceneSlot';
+import { TitleBarControlContribution } from './shell/TitleBarControls';
 import type { EnchiridionSection } from './enchiridionRoute';
 import { strategikonAddress, strategikonHref, type StrategikonSection } from './strategikonRoute';
 import { installedUiMedia } from './installedUiMedia';
@@ -57,6 +58,12 @@ export function Strategikon({
   const href = (next: StrategikonSection, nextReference: EnchiridionSection = 'units'): string => (
     `${strategikonHref(base, next, nextReference)}${search}`
   );
+  // The way out. The Controls title mark that opened the workspace is the only other
+  // exit and it sits behind the reference pane's own chrome, so leaving read as a
+  // puzzle. The return rides the same typed title-bar lane Settings and the playtest
+  // return use — named for its destination so it never reads as a second bare "Back"
+  // beside a playtest's own return control.
+  const returnName = base === '/run' ? 'Run' : 'Battle';
 
   return (
     <ShellWorkspace
@@ -104,6 +111,19 @@ export function Strategikon({
       aria-label="Strategikon"
       data-testid="strategikon"
     >
+      {/* Portals to the title bar's control lane — it renders nothing here. */}
+      <TitleBarControlContribution
+        ariaLabel="Strategikon navigation"
+        controls={[{
+          id: 'strategikon-back',
+          kind: 'navigation',
+          presentation: 'return',
+          label: `‹ Back to ${returnName}`,
+          destination: `${base}${search}`,
+          title: `Close the Strategikon and return to the ${returnName}.`,
+          testId: 'strategikon-back',
+        }]}
+      />
       <StrategikonContentSceneSlot
         className={`strategikon-pane${section === 'enchiridion' ? ' has-secondary-rail' : ''}`}
         sceneInstance={`strategikon/${section}`}

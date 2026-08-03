@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { SliderRow } from './dressing/SliderRow';
+import { StudioStepper } from './studio/StudioStepper';
 import { ViewPane } from './shared/ViewPane';
 import { fetchAdminLiveMediaCatalog } from '../net/liveMediaAdmin';
 import {
@@ -190,23 +191,15 @@ function RailMemberPicker({
   sourceId: string;
   onSourceId: (id: string) => void;
 }): ReactElement {
-  const cycle = (delta: -1 | 1): void => {
-    const currentIndex = sources.findIndex((source) => source.id === sourceId);
-    const nextIndex = (Math.max(0, currentIndex) + delta + sources.length) % sources.length;
-    onSourceId(sources[nextIndex].id);
-  };
-
   return (
-    <div className="tileset-category-select rail-lab-source-control">
-      <span>{label}</span>
-      <div className="rail-lab-source-picker">
-        <button type="button" className="tileset-view-action rail-lab-source-step" onClick={() => cycle(-1)} aria-label={`Previous ${orientation} variant`} title={`Previous ${orientation} variant`}>&lt;</button>
-        <select value={sourceId} onChange={(event) => onSourceId(event.target.value)} aria-label={`${label} source`}>
-          {sources.map((source, index) => <option key={source.id} value={source.id}>{memberLabel(source, index)}</option>)}
-        </select>
-        <button type="button" className="tileset-view-action rail-lab-source-step" onClick={() => cycle(1)} aria-label={`Next ${orientation} variant`} title={`Next ${orientation} variant`}>&gt;</button>
-      </div>
-    </div>
+    <StudioStepper
+      className="rail-lab-source-control"
+      itemNoun={`${orientation} variant`}
+      label={label}
+      onChange={onSourceId}
+      options={sources.map((source, index) => ({ id: source.id, label: memberLabel(source, index) }))}
+      value={sourceId}
+    />
   );
 }
 
@@ -312,12 +305,6 @@ export function RailLab({
     else setOwnFamilyId(id);
   };
 
-  const cycleFamily = (delta: -1 | 1): void => {
-    const currentIndex = railFamilies.findIndex((entry) => entry.id === family.id);
-    const nextIndex = (Math.max(0, currentIndex) + delta + railFamilies.length) % railFamilies.length;
-    selectFamily(railFamilies[nextIndex].id);
-  };
-
   const selectFamilyMember = (orientation: NativeRailOrientation, id: string): void => {
     setSeamTrim(0);
     setMemberSelections((current) => ({
@@ -361,16 +348,14 @@ export function RailLab({
           <h2>Controls</h2>
           <div className="tileset-control-stack">
             {header}
-            <div className="tileset-category-select rail-lab-source-control">
-              <span>Rail family</span>
-              <div className="rail-lab-source-picker">
-                <button type="button" className="tileset-view-action rail-lab-source-step" onClick={() => cycleFamily(-1)} aria-label="Previous rail family" title="Previous rail family">&lt;</button>
-                <select value={family.id} onChange={(event) => selectFamily(event.target.value)} aria-label="Rail family">
-                  {railFamilies.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
-                </select>
-                <button type="button" className="tileset-view-action rail-lab-source-step" onClick={() => cycleFamily(1)} aria-label="Next rail family" title="Next rail family">&gt;</button>
-              </div>
-            </div>
+            <StudioStepper
+              className="rail-lab-source-control"
+              itemNoun="rail family"
+              label="Rail family"
+              onChange={selectFamily}
+              options={railFamilies.map((entry) => ({ id: entry.id, label: entry.label }))}
+              value={family.id}
+            />
             {zoomControl}
             <div className="rail-lab-catalog-status" aria-live="polite">
               <span>{catalogState.catalog.sources.length} backend candidates · {railFamilies.length} complete families</span>
