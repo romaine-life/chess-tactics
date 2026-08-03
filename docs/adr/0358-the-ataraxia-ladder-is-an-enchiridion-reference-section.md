@@ -6,9 +6,8 @@ refines:
   - ADR-0231
   - ADR-0266
   - ADR-0268
+  - ADR-0291
   - ADR-0355
-partially_supersedes:
-  - "[ADR-0291](0291-ataraxia-zero-is-a-named-tier-with-visible-impact.md)'s Ataraxia 0 label"
 ---
 
 # ADR-0358: The Ataraxia ladder is an Enchiridion reference section
@@ -56,15 +55,15 @@ in the Strategikon, registered in `sectionedShells.ts` like every other section.
   list with no rendering branch (ADR-0291).
 - **The numeral IS the row's mark.** Every other reference section opens a row with a
   glyph; here that seat holds the rung, and the heading is the descriptive name alone —
-  `N` beside `The Untroubled Mind`. The ladder's own name is the section heading, so
+  `0` beside `The Untroubled Mind`. The ladder's own name is the section heading, so
   repeating "Ataraxia" once per row says nothing the row is not already under.
   `ATARAXIA_BY_TIER` therefore carries `numeral` beside `label`: the numeral is the rung,
   the label is the rung qualified by the ladder's name, for the Run-preparation selector
   and the unlock sentence, which name a tier away from that heading.
-- **The baseline's numeral is `N`** — medieval Latin *nulla*, the zero of the computus
-  tables, and the reason `label` becomes `Ataraxia N`. ADR-0291 wrote `Ataraxia 0`, which
-  puts an Arabic digit at the head of a Roman sequence; one numbering is the point of
-  that ADR's equal-anatomy rule. The persisted tier remains numeric `0`.
+- **The baseline keeps `0`.** Roman numbering has no zero, and the antiquarian stand-ins
+  for one (`N` for *nulla*) have to be explained to be read, which a reference row cannot
+  afford. A plain `0` at the head of a Roman sequence is the smaller cost, and it is the
+  label ADR-0291 already authored.
 - **No row carries a glyph at all.** The sections whose rows list unlike things — terrain
   features, unit states — identify each row by its own icon. A numbered rung of one ladder
   has nothing for a repeated section glyph to distinguish, and lock state is stated in
@@ -96,9 +95,8 @@ in the Strategikon, registered in `sectionedShells.ts` like every other section.
   baseline's label, so it cannot go stale.
 - Cost: the reference reads account progression, so it is the first Enchiridion section
   besides Relics whose content varies per account.
-- Cost: `N` is legible as a Roman zero only to a reader who knows *nulla*. The
-  descriptive name carries the row either way, and the register is the one the
-  Enchiridion, Strategikon, Prosopography and Lipsanotheca already speak.
+- Cost: the baseline's `0` is an Arabic digit at the head of a Roman sequence. Every
+  antiquarian alternative needs explaining, which a row of a reference cannot carry.
 - Cost: the section's rail mark reuses the installed objective glyph, whose ink is
   thinner than its neighbours. Swapping it is a media-role change with no code
   consequence.

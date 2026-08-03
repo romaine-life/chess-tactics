@@ -554,19 +554,19 @@ describe('Ataraxia ladder identities', () => {
   it('gives the baseline tier the same identity and literal-impact fields as later tiers', () => {
     expect(ATARAXIA_BY_TIER[0]).toEqual({
       tier: 0,
-      numeral: 'N',
-      label: 'Ataraxia N',
+      numeral: '0',
+      label: 'Ataraxia 0',
       title: 'The Untroubled Mind',
       effect: 'Standard Run rules. Shop cards may be Tactical, Concinnous or Hieratic but are never Pestiferous.',
     });
   });
 
-  // Every rung is a numeral, baseline included — N is the Roman zero (ADR-0358), so the
-  // ladder never mixes an Arabic digit into a Roman sequence.
-  it('numbers every installed rung in one numbering, and qualifies each with the ladder name', () => {
+  // Every rung carries a numeral, and the label is that numeral qualified by the ladder
+  // name — so renumbering a rung is one edit rather than two strings that can disagree.
+  it('numbers every installed rung and qualifies each with the ladder name', () => {
     for (const tier of ATARAXIA_TIERS) {
       const definition = ATARAXIA_BY_TIER[tier];
-      expect(definition.numeral).toMatch(/^[NIVX]+$/);
+      expect(definition.numeral).toMatch(/^(?:0|[IVX]+)$/);
       expect(definition.label).toBe(`Ataraxia ${definition.numeral}`);
     }
   });

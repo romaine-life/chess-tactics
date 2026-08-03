@@ -42,9 +42,8 @@ export const CACOCHYMIC_DISPLAY_NAME = 'Cacochymic';
 /**
  * Each tier's presentation. `numeral` is the rung itself and `label` is that rung
  * qualified by the ladder's name, for a surface that names one tier away from the
- * ladder's own heading. Tier zero's numeral is **N** — medieval Latin *nulla*, the
- * Roman zero of the computus tables — so the whole ladder reads in one numbering
- * (ADR-0358). The persisted tier remains numeric `0` (ADR-0291).
+ * ladder's own heading (ADR-0358). Roman numbering has no zero, so the baseline keeps
+ * the plain `0` ADR-0291 authored rather than an antiquarian stand-in for one.
  */
 export const ATARAXIA_BY_TIER: Readonly<Record<AtaraxiaTier, Readonly<{
   tier: AtaraxiaTier;
@@ -55,8 +54,8 @@ export const ATARAXIA_BY_TIER: Readonly<Record<AtaraxiaTier, Readonly<{
 }>>> = Object.freeze({
   0: Object.freeze({
     tier: 0,
-    numeral: 'N',
-    label: 'Ataraxia N',
+    numeral: '0',
+    label: 'Ataraxia 0',
     title: 'The Untroubled Mind',
     effect: 'Standard Run rules. Shop cards may be Tactical, Concinnous or Hieratic but are never Pestiferous.',
   }),
