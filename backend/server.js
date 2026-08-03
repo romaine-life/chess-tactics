@@ -62,6 +62,9 @@ const {
   resolveRunRelicIcon,
 } = require(path.join(bakedBackendDir, 'thumbnailPresentation'));
 const {
+  cardTypeRowTextureAcceptanceGroupIssue,
+  cardTypeRowTextureMediaIssue,
+  cardTypeRowTextureSlot,
   liveCatalogReadinessIssue,
   gameConditionIconMediaIssue,
   gameConditionIconSlot,
@@ -15250,6 +15253,9 @@ function mediaDomainProjectionIssue(row) {
   if (gameConditionIconSlot(row.slot)) {
     return gameConditionIconMediaIssue(row, runtime.value);
   }
+  if (cardTypeRowTextureSlot(row.slot)) {
+    return cardTypeRowTextureMediaIssue(row, runtime.value);
+  }
   if (levelEditorBrushIconSlot(row.slot)) {
     return levelEditorBrushIconMediaIssue(row, runtime.value);
   }
@@ -16745,11 +16751,21 @@ async function acceptMediaVersionBatch(items, actorEmail) {
           throw mediaMutationError('media_group_contract_mismatch', 409, { groupId, slot });
         }
       }
+      const cardTypeTextureGroup = group.rows.some((row) => cardTypeRowTextureSlot(row.slot))
+        || group.required.some((slot) => cardTypeRowTextureSlot(slot));
+      if (cardTypeTextureGroup) {
+        const issue = cardTypeRowTextureAcceptanceGroupIssue(group.rows, {
+          groupId, requiredSlots: group.required,
+        });
+        if (issue) throw mediaMutationError('media_group_contract_mismatch', 409, { groupId, reason: issue });
+      }
       const [first] = group.rows;
       for (const row of group.rows) {
         if (
           row.domain !== first.domain || row.role !== first.role || row.media_type !== first.media_type
-          || Number(row.width) !== Number(first.width) || Number(row.height) !== Number(first.height)
+          || (!cardTypeTextureGroup && (
+            Number(row.width) !== Number(first.width) || Number(row.height) !== Number(first.height)
+          ))
         ) throw mediaMutationError('media_group_projection_mismatch', 409, { groupId, slot: row.slot });
       }
       assertTerrainAcceptanceProof(group.rows, slotById, {

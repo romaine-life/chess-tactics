@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from 'react';
 import { resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import { paletteForSide, pieceSpritePath, type PlayablePieceType } from '../core/pieces';
-import { CACOCHYMIC_DISPLAY_NAME, runAbilityDisplayName, type RunAbility } from '../run/model';
+import {
+  CACOCHYMIC_DESCRIPTION,
+  CACOCHYMIC_DISPLAY_NAME,
+  runAbilityDescription,
+  runAbilityDisplayName,
+  type RunAbility,
+} from '../run/model';
 import {
   RUN_CARD_FRAME_BOX_NAMES,
   RUN_CARD_STANDARD_FRAME_GEOMETRY,
@@ -571,20 +577,31 @@ function UnitStackSprite({
             zIndex: stackIndex + 2,
           } as CSSProperties}
         >
-          <RunAbilityIcon
-            ability="plagued"
-            className="run-card-prototype-unit-marker"
-            src={plaguedIconUrl}
-            onLoad={(event) => {
-              void acknowledgeDecodedImage(
-                event.currentTarget,
-                'unit-state:plagued',
-                onReady,
-                onError,
-              );
-            }}
-            onError={() => onError('unit-state:plagued')}
-          />
+          <Tooltip
+            className="run-card-prototype-unit-marker-tooltip"
+            triggerClassName="run-card-prototype-unit-marker-trigger"
+            focusable={false}
+            label={CACOCHYMIC_DISPLAY_NAME}
+            title={CACOCHYMIC_DISPLAY_NAME}
+            trigger={(
+              <RunAbilityIcon
+                ability="plagued"
+                className="run-card-prototype-unit-marker"
+                src={plaguedIconUrl}
+                onLoad={(event) => {
+                  void acknowledgeDecodedImage(
+                    event.currentTarget,
+                    'unit-state:plagued',
+                    onReady,
+                    onError,
+                  );
+                }}
+                onError={() => onError('unit-state:plagued')}
+              />
+            )}
+          >
+            <span>{CACOCHYMIC_DESCRIPTION}</span>
+          </Tooltip>
         </span>
       ) : null}
       {ability && abilitySeatLeft !== null && abilityStackIndex !== undefined ? (
@@ -598,20 +615,31 @@ function UnitStackSprite({
             zIndex: abilityStackIndex + 1,
           } as CSSProperties}
         >
-          <RunAbilityIcon
-            ability={ability}
-            className="run-card-prototype-unit-marker is-ability"
-            src={abilityIconUrl}
-            onLoad={(event) => {
-              void acknowledgeDecodedImage(
-                event.currentTarget,
-                runCardUnitStateImageKind(ability),
-                onReady,
-                onError,
-              );
-            }}
-            onError={() => onError(runCardUnitStateImageKind(ability))}
-          />
+          <Tooltip
+            className="run-card-prototype-unit-marker-tooltip"
+            triggerClassName="run-card-prototype-unit-marker-trigger"
+            focusable={false}
+            label={runAbilityDisplayName(ability)}
+            title={runAbilityDisplayName(ability)}
+            trigger={(
+              <RunAbilityIcon
+                ability={ability}
+                className="run-card-prototype-unit-marker is-ability"
+                src={abilityIconUrl}
+                onLoad={(event) => {
+                  void acknowledgeDecodedImage(
+                    event.currentTarget,
+                    runCardUnitStateImageKind(ability),
+                    onReady,
+                    onError,
+                  );
+                }}
+                onError={() => onError(runCardUnitStateImageKind(ability))}
+              />
+            )}
+          >
+            <span>{runAbilityDescription(ability, unit)}</span>
+          </Tooltip>
         </span>
       ) : null}
     </>
@@ -769,6 +797,7 @@ function RunCardFaceLayer({
             popupClassName="run-card-prototype-property-popup"
             focusable={propertyTooltipFocusable && !pending}
             label={`${card.cardProperty.name} card property`}
+            title={card.cardProperty.name}
             trigger={(
               <img
                 className="run-card-prototype-property-icon"
@@ -782,7 +811,7 @@ function RunCardFaceLayer({
               />
             )}
           >
-            <strong>{card.cardProperty.name}</strong> · {card.cardProperty.effect}
+            <span>{card.cardProperty.effect}</span>
           </Tooltip>
         ) : null}
       </span>

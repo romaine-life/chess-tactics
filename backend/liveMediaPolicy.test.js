@@ -4,6 +4,9 @@ const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
 const test = require('node:test');
 const {
+  CARD_TYPE_ROW_TEXTURE_COMPONENT,
+  CARD_TYPE_ROW_TEXTURE_GROUP_ID,
+  CARD_TYPE_ROW_TEXTURE_REQUIRED_SLOTS,
   PREDRAWN_BOARD_COMPONENT,
   PREDRAWN_BOARD_PROOF_RENDERER,
   PREDRAWN_BOARD_PROOF_SCHEMA,
@@ -24,6 +27,9 @@ const {
   STRATEGIKON_BACKGROUND_SHA256,
   STRATEGIKON_BACKGROUND_SLOT,
   liveCatalogReadinessIssue,
+  cardTypeRowTextureAcceptanceGroupIssue,
+  cardTypeRowTextureMediaIssue,
+  cardTypeRowTextureSlot,
   gameConditionIconMediaIssue,
   gameConditionIconSlot,
   levelEditorBrushIconMediaIssue,
@@ -79,6 +85,51 @@ test('raster native evidence is required to identify the exact uploaded bytes', 
   delete missingSha.native_evidence.sourceSha256;
   assert.match(nativeMediaEvidenceIssue(missingSha), /sourceSha256 is required/);
   assert.equal(nativeMediaEvidenceIssue(raster()), null);
+});
+
+test('card-type row textures have a closed semantic-slot and native-geometry runtime contract', () => {
+  const runtime = {
+    component: CARD_TYPE_ROW_TEXTURE_COMPONENT,
+    variant: 'pestiferous',
+    family: 'card-type-row-textures',
+    frameWidth: 128,
+    frameHeight: 64,
+    frameCount: 1,
+    nativeRole: CARD_TYPE_ROW_TEXTURE_COMPONENT,
+    altText: '',
+  };
+  const row = {
+    slot: 'ui/surfaces/card-type-pestiferous.png',
+    domain: 'ui-kit',
+    role: 'media',
+    media_type: 'image/png',
+    width: 128,
+    height: 64,
+    metadata: { runtime },
+  };
+
+  assert.deepEqual(cardTypeRowTextureSlot(row.slot), { variant: 'pestiferous', width: 128, height: 64 });
+  assert.equal(cardTypeRowTextureMediaIssue(row, runtime), null);
+  assert.match(cardTypeRowTextureMediaIssue({ ...row, width: 512 }, runtime), /native 128x64/);
+  assert.match(cardTypeRowTextureMediaIssue({
+    ...row,
+    slot: 'ui/surfaces/card-type-tactical.png',
+  }, runtime), /variant must match/);
+  assert.equal(cardTypeRowTextureSlot('ui/surfaces/card-type-unknown.png'), null);
+});
+
+test('card-type row textures accept their intentionally mixed-width tiles only as one exact group', () => {
+  const rows = CARD_TYPE_ROW_TEXTURE_REQUIRED_SLOTS.map((slot) => ({ slot }));
+  const contract = {
+    groupId: CARD_TYPE_ROW_TEXTURE_GROUP_ID,
+    requiredSlots: CARD_TYPE_ROW_TEXTURE_REQUIRED_SLOTS,
+  };
+  assert.equal(cardTypeRowTextureAcceptanceGroupIssue(rows, contract), null);
+  assert.match(cardTypeRowTextureAcceptanceGroupIssue(rows.slice(1), contract), /rows must match all four/);
+  assert.match(cardTypeRowTextureAcceptanceGroupIssue(rows, {
+    ...contract,
+    groupId: 'arbitrary-ui-kit-group',
+  }), /registered atomic acceptance group/);
 });
 
 test('same-dimension replacement bytes clear stale native evidence', () => {

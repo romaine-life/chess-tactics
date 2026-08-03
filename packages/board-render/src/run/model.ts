@@ -71,6 +71,30 @@ export function runAbilityDisplayName(ability: RunAbility): string {
 }
 
 /**
+ * What a state means to the player, in one vocabulary (ADR-0339). The Army ledger's
+ * ability tips and the card face's contents markers both read this, so a state cannot
+ * come to mean two things depending on where it is shown. Positioned and Agminate read
+ * per piece because their deployment rule genuinely differs by piece.
+ */
+export function runAbilityDescription(ability: RunAbility, unit: RunArmyPieceType): string {
+  if (ability === 'discipline') {
+    return 'May be deliberately placed in the player zone before random deployment.';
+  }
+  if (ability === 'positioned') {
+    if (unit === 'pawn') return 'Prefers the front row during automatic deployment.';
+    if (unit === 'rook') return 'Prefers an outer back-row square during automatic deployment.';
+    if (unit === 'bishop' || unit === 'king') return 'Prefers the back row during automatic deployment.';
+    return 'Prefers its piece-specific region during automatic deployment.';
+  }
+  if (unit === 'king') return 'Prefers a board-edge square in the player placement zone.';
+  if (unit === 'rook') return 'Prefers the established King-flank and corner formation.';
+  if (unit === 'bishop') return 'Prefers a square color opposite another Bishop when possible.';
+  return 'Prefers its piece-specific station during automatic deployment.';
+}
+
+export const CACOCHYMIC_DESCRIPTION = 'Will be permanently lost after the next victorious Battle.';
+
+/**
  * The four causal card properties and the unit state each one bestows (ADR-0339). Card
  * faces, the Enchiridion and the Studio fitting instrument all name a property from here
  * so cause and result stay one paired vocabulary instead of lookalike copies.
