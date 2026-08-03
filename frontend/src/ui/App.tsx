@@ -12,9 +12,8 @@ import {
 } from 'react';
 import { MainMenu } from './MainMenu';
 import {
+  SHELL_LADDER,
   StartupSceneContext,
-  isMainMenuPath,
-  type StartupLayer,
   type StartupSceneController,
 } from './shell/startupScene';
 import { Party } from './Party';
@@ -78,7 +77,6 @@ const BrushIconReview = lazy(() => import('./BrushIconReview').then((module) => 
 
 const SCENE_LOADING_MIN_MS = 350;
 const STARTUP_STAGE_BEAT_MS = 140;
-const STARTUP_LADDER: readonly StartupLayer[] = ['background', 'title', 'controls'];
 const sceneFailureCopy = (error: Error | null): string => (
   error?.message.includes('Canonical thumbnail derivative')
     ? 'A required level preview could not be prepared. Retry to rebuild the preview.'
@@ -99,10 +97,12 @@ export function App(): ReactElement {
   const activeRunHydrated = useActiveRun((state) => state.hydrated);
   const hydrateActiveRun = useActiveRun((state) => state.hydrate);
   const initialPath = normalizeRoutePath(window.location.pathname);
-  const prepareInitialScene = !isMainMenuPath(initialPath);
-  const prepareStartup = isMainMenuPath(initialPath);
   const [path, setPath] = useState(initialPath);
   const [search, setSearch] = useState(window.location.search);
+  // The query the COMMITTED scene was resolved with. The bar reads this, not `search`.
+  const [committedSearch, setCommittedSearch] = useState(window.location.search);
+  // Every route cold-loads through the one shell ladder (ADR-0369) — there is no
+  // main-menu branch and no separate "prepare the initial scene" path.
   const [scene, dispatchScene] = useReducer(
     reduceScene,
     sceneManifest(initialPath, window.location.search, {
@@ -110,13 +110,11 @@ export function App(): ReactElement {
     }),
     (manifest) => initialSceneState(
       manifest,
-      prepareInitialScene,
       `${window.location.pathname}${window.location.search}`,
-      prepareStartup,
     ),
   );
   const sceneRef = useRef(scene);
-  const loadingStartedAt = useRef(prepareInitialScene ? performance.now() : 0);
+  const loadingStartedAt = useRef(performance.now());
   const timers = useRef<number[]>([]);
   const startupStageStartedAt = useRef(performance.now());
   const previousStartupStage = useRef(scene.startupStage);
@@ -138,6 +136,13 @@ export function App(): ReactElement {
   // setups) where a dispatched navigation is silently lost.
   const committedLocationRef = useRef({ path: initialPath, search: window.location.search });
   useLayoutEffect(() => { committedLocationRef.current = { path, search }; }, [path, search]);
+  // A same-scene address rewrite (the editor canonicalizing its document, Settings
+  // threading returnTo) commits immediately; a navigation commits when the destination
+  // has entered. Both land here, and nowhere else does the persistent bar learn an address.
+  useLayoutEffect(() => {
+    if (scene.phase !== 'current') return;
+    setCommittedSearch(search);
+  }, [scene.current, scene.phase, search]);
   const resolveSceneRef = useRef(resolveScene);
   useLayoutEffect(() => { resolveSceneRef.current = resolveScene; }, [resolveScene]);
   useEffect(() => {
@@ -182,9 +187,12 @@ export function App(): ReactElement {
       setBootstrapPresentationPresent(false);
       return undefined;
     }
+    // The curtain hands over to the app's own background field the moment the ladder's
+    // first rung opens — on every route, which is what makes the reveal an ordered build
+    // rather than a black rectangle followed by a finished screen (ADR-0369).
     const release = scene.phase === 'error'
-      || (scene.phase === 'startup' && scene.startupStage >= 0)
-      || (!scene.startupActive && (scene.phase === 'entering' || scene.phase === 'current'));
+      || scene.startupStage >= 0
+      || !scene.startupActive;
     if (!release) return undefined;
     if (scene.phase === 'error') {
       status.remove();
@@ -207,7 +215,7 @@ export function App(): ReactElement {
   const startupController = useMemo<StartupSceneController>(() => ({
     active: scene.startupActive,
     generation: scene.generation,
-    revealed: (layer) => !scene.startupActive || scene.startupStage >= STARTUP_LADDER.indexOf(layer),
+    revealed: (layer) => !scene.startupActive || scene.startupStage >= SHELL_LADDER.indexOf(layer),
     reportReady: (layer) => dispatchScene({
       type: 'startup-ready',
       generation: scene.generation,
@@ -224,10 +232,17 @@ export function App(): ReactElement {
     scene.startupStage,
   ]);
 
+  // Ladder rung 1. A scene that declares a different background has no shared vista
+  // beneath it, so the rung resolves immediately rather than decoding art it never shows.
+  const coldLoadBackground = (scene.destination ?? scene.current).background;
   useEffect(() => {
     if (!scene.startupActive || scene.phase !== 'startup') return undefined;
     const generation = scene.generation;
     let cancelled = false;
+    if (coldLoadBackground !== 'homepage') {
+      dispatchScene({ type: 'startup-ready', generation, layer: 'background' });
+      return undefined;
+    }
     const backgroundUrl = homepageSceneMedia().immutableUrl;
     const bootstrap = window as Window & {
       __ctBootstrapScene?: Promise<{ scene?: { background?: { immutableUrl?: string } } } | null>;
@@ -254,20 +269,16 @@ export function App(): ReactElement {
         });
       });
     return () => { cancelled = true; };
-  }, [scene.generation, scene.phase, scene.startupActive]);
+  }, [coldLoadBackground, scene.generation, scene.phase, scene.startupActive]);
 
+  // The ladder's clock. Each rung opens once its own readiness has been reported and the
+  // rung before it has had its beat, so the screen is built in a legible order rather than
+  // assembled all at once. The final rung hands off to the ordinary entrance in the reducer.
   useEffect(() => {
     if (!scene.startupActive || scene.phase !== 'startup') return undefined;
     const generation = scene.generation;
-    if (scene.startupStage >= STARTUP_LADDER.length - 1) {
-      const timer = window.setTimeout(
-        () => dispatchScene({ type: 'startup-finished', generation }),
-        sceneTransitionDurationMs(),
-      );
-      timers.current.push(timer);
-      return () => window.clearTimeout(timer);
-    }
-    const nextLayer = STARTUP_LADDER[scene.startupStage + 1];
+    const nextLayer = SHELL_LADDER[scene.startupStage + 1];
+    if (!nextLayer) return undefined;
     if (!scene.startupReady.includes(nextLayer)) return undefined;
     const minimumDelay = scene.startupStage < 0 ? 0 : sceneTransitionDurationMs() + STARTUP_STAGE_BEAT_MS;
     const elapsed = performance.now() - startupStageStartedAt.current;
@@ -484,7 +495,12 @@ export function App(): ReactElement {
     };
   }, [scene.generation, scene.phase]);
 
-  const preparing = scene.phase === 'loading' || scene.phase === 'entering' || scene.phase === 'error';
+  // `startup` prepares its destination through the same boundary contract as any other
+  // navigation — the ladder puts the shell rungs in front of it, it does not replace it.
+  const preparing = scene.phase === 'loading'
+    || scene.phase === 'entering'
+    || scene.phase === 'error'
+    || scene.phase === 'startup';
   const manifest = scene.destination ?? scene.current;
   // `path` advances only when the director accepts exit-finished. Keep the
   // renderer bound to that mounted path; `manifest` may describe a pending
@@ -502,15 +518,20 @@ export function App(): ReactElement {
   const overlapsRunScene = Boolean(
     scene.destination && overlapsStateDrivenRunScene(scene.current, scene.destination),
   );
-  const preservedSceneHost = scene.destination && !overlapsRunScene
+  // A cold load has no outgoing scene: its destination IS its current, so there is no
+  // painted host to retain and nothing to overlap. Preserving a host here would leave the
+  // shell's own chrome on screen while only the inner region waited — which is exactly the
+  // half-built frame the ladder exists to prevent, now that the curtain lifts at rung 1.
+  const initialPreparation = scene.startupActive;
+  const preservedSceneHost = scene.destination && !overlapsRunScene && !initialPreparation
     ? deepestSharedSceneRegion(scene.current, scene.destination)
     : null;
   const preservesSceneHost = preservedSceneHost !== null;
-  const initialPreparation = Boolean(
-    scene.destination
-    && scene.generation === 0
-    && scene.current.id === scene.destination.id,
-  );
+  // The persistent bar wears the COMMITTED scene's identity, never the browser's intent
+  // (ADR-0369). `path`/`search` advance when the director accepts exit-finished, which is
+  // before the destination has painted — binding the bar to them made it announce the
+  // destination over a screen that was still the previous one for the whole preparation.
+  const committedPath = scene.current.pathname;
   const overlapsCompleteScenes = Boolean(
     scene.destination
     && (!preservesSceneHost || overlapsRunScene)
@@ -599,9 +620,9 @@ export function App(): ReactElement {
         </div>
         <StartupSceneContext.Provider value={startupController}>
           <AppTitleBar
-            path={path}
-            search={search}
-            revealTitle={startupController.revealed('title')}
+            path={committedPath}
+            search={committedSearch}
+            revealTitle={startupController.revealed('chrome')}
             transitionStatus={titleBarLoading ? 'Loading…' : null}
           />
           {sceneLayers.map((layer) => (

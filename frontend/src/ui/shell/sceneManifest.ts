@@ -124,10 +124,7 @@ export function sceneManifest(
     const instances = runStateInstances(snapshot);
     const runIdentity = `run:${snapshot.run?.id ?? 'none'}:${runPhaseIdentity(snapshot)}:${snapshot.workspace}`;
     const fields = manifest(runIdentity, 'battlefield', 'gameplay-hud', [
-      'battlefield-background',
-      'active-run',
-      'run-chrome',
-      'visible-relics',
+      'gameplay-hud',
     ], [], 'gameplay-shell', 'transition-only');
     if (!strategikon) return scene(path, fields, instances, snapshot);
     const reference = resolveSectionedShellScene('strategikon', path, search, instances)!;
@@ -145,12 +142,7 @@ export function sceneManifest(
   if (path === '/play' || (strategikon && base === '/play')) {
     const instances = [instance(SCENE_DEFINITIONS.gameplay)];
     const fields = manifest('gameplay', 'battlefield', 'gameplay-hud', [
-      'battlefield-background',
-      'level-snapshot',
-      'board-compositors',
-      'visible-units-and-overlays',
       'gameplay-hud',
-      'title-controls',
     ], [], 'gameplay-shell', 'transition-only');
     if (!strategikon) return scene(path, fields, instances);
     const reference = resolveSectionedShellScene('strategikon', path, search, instances)!;
@@ -164,29 +156,29 @@ export function sceneManifest(
 
   // --- Standalone screens: no retained shell, so no sections.
   if (isLevelEditorPath(path)) {
+    // The editor keeps a real decomposition rather than one collapsed participant: these
+    // are the authorities it already computes separately, so each can fail on its own and
+    // the loading timeline names which one the wait belongs to (ADR-0369).
     return scene(path, manifest('level-editor', 'homepage', 'level-editor', [
-      'homepage-background',
-      'title-bar',
+      'chrome:skirmish-screen level-editor-screen',
       'document',
       'board-compositors',
       'visible-editor-chrome',
-      'visible-palette-slice',
+      'level-editor',
     ], ['below-fold-palette']), [instance(SCENE_DEFINITIONS.levelEditor)]);
   }
   if (isStudioPath(path)) {
     return scene(path, manifest(`studio:${path}`, 'tool', 'studio', [
-      'studio-chrome',
-      'selected-viewer',
-      'visible-catalog-slice',
+      'studio',
     ], ['below-fold-catalog']), [instance(SCENE_DEFINITIONS.studio, { path })]);
   }
   if (path === '/predrawn-reference') {
-    return scene(path, manifest('predrawn-reference', 'tool', 'predrawn-reference', ['tool-chrome', 'selected-artwork']), [
+    return scene(path, manifest('predrawn-reference', 'tool', 'predrawn-reference', ['predrawn-reference']), [
       instance(SCENE_DEFINITIONS.predrawnReference),
     ]);
   }
   if (path === '/portrait-editor') {
-    return scene(path, manifest('portrait-editor', 'tool', 'portrait-editor', ['tool-chrome', 'selected-artwork']), [
+    return scene(path, manifest('portrait-editor', 'tool', 'portrait-editor', ['portrait-editor']), [
       instance(SCENE_DEFINITIONS.portraitEditor),
     ]);
   }
