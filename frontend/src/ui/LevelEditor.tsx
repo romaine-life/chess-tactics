@@ -1802,6 +1802,13 @@ const cloneEditorBoard = (board: EditorBoard): EditorBoard => structuredClone(bo
 const HISTORY_LIMIT = 100;
 /** Forest brush footprint in scene pixels — roughly two tiles across at the default. */
 const FOREST_DEFAULT_RADIUS = 160;
+const MAX_GENERATOR_SEED = 9999;
+/**
+ * A genuinely random seed. The +/- steppers walk to a NEIGHBOURING seed (which the hash already
+ * decorrelates, so it looks entirely different); this jumps somewhere else in the range. Both are
+ * reversible because the seed is a plain number the author can dial back to.
+ */
+const randomGeneratorSeed = (): number => Math.floor(Math.random() * MAX_GENERATOR_SEED) + 1;
 
 const zoneEntriesForBoard = (board: EditorBoard): EditorZoneEntry[] =>
   board.zoneEntries ? board.zoneEntries : zoneEntriesFromCellMap(board.zones, board.cols, board.rows);
@@ -3073,7 +3080,11 @@ export function LevelEditor(): ReactElement {
   const [forestClumping, setForestClumping] = useState(FOREST_SCATTER_DEFAULTS.clumping);
   const [forestFalloff, setForestFalloff] = useState(FOREST_SCATTER_DEFAULTS.falloff);
   const [forestAvoidBoard, setForestAvoidBoard] = useState(FOREST_SCATTER_DEFAULTS.avoidPlayableBoard);
-  const [forestSeed, setForestSeed] = useState(FOREST_SCATTER_DEFAULTS.seed);
+  // Start somewhere random so a fresh session is not always the same forest. Reset still returns
+  // to the documented baseline (ADR-0057). Unlike the ground-cover seed this is safe to randomise:
+  // it only shapes NEWLY generated placements, which are then baked into the document, whereas
+  // cover is re-rolled from its seed at render time and must stay stable across sessions.
+  const [forestSeed, setForestSeed] = useState(randomGeneratorSeed);
   // Brush-ring position in surface pixels, so the author sees the footprint being painted.
   const [forestCursor, setForestCursor] = useState<{ x: number; y: number } | null>(null);
   const forestStrokeRef = useRef<{ pointerId: number; lastX: number; lastY: number } | null>(null);
@@ -3106,7 +3117,7 @@ export function LevelEditor(): ReactElement {
   const [townFacingWobble, setTownFacingWobble] = useState(TOWN_PLAN_DEFAULTS.facingWobble);
   const [townSpacing, setTownSpacing] = useState(TOWN_PLAN_DEFAULTS.spacing);
   const [townAvoidBoard, setTownAvoidBoard] = useState(TOWN_PLAN_DEFAULTS.avoidPlayableBoard);
-  const [townSeed, setTownSeed] = useState(TOWN_PLAN_DEFAULTS.seed);
+  const [townSeed, setTownSeed] = useState(randomGeneratorSeed);
   // How many buildings the plan actually sited. A plan offers a finite number of plots, so a
   // large requested size can be cut short by frontage, spacing, or the board — say so.
   const [townSited, setTownSited] = useState<
@@ -4120,14 +4131,19 @@ export function LevelEditor(): ReactElement {
     y: (scene.y + artworkBoardOrigin.originTop) * viewZoom + viewPan.y + rect.height / 2,
   });
 
-  // The live selection as a screen polygon. A grid rect projects to a diamond, so the preview has
-  // to be four projected corners rather than a screen-space rectangle.
-  const townDragSurfacePolygon = useMemo(() => {
-    if (!townDragBounds || !viewViewportSize) return null;
-    return townBoundsScenePolygon(townDragBounds)
-      .map((corner) => townSurfacePoint(corner, viewViewportSize));
-  }, [townDragBounds, viewViewportSize, viewZoom, viewPan.x, viewPan.y,
+  // A grid rect projects to a diamond, so a selection outline is four projected corners rather
+  // than a screen-space rectangle.
+  const townSurfacePolygon = useCallback((bounds: TownBounds | null) => {
+    if (!bounds || !viewViewportSize) return null;
+    return townBoundsScenePolygon(bounds).map((corner) => townSurfacePoint(corner, viewViewportSize));
+  }, [viewViewportSize, viewZoom, viewPan.x, viewPan.y,
     artworkBoardOrigin.originLeft, artworkBoardOrigin.originTop]);
+  const townDragSurfacePolygon = useMemo(
+    () => townSurfacePolygon(townDragBounds), [townSurfacePolygon, townDragBounds]);
+  // The COMMITTED selection stays outlined after the drag ends, because Regenerate and Remove
+  // act on it — an invisible selection is one the author has to remember.
+  const townAreaSurfacePolygon = useMemo(
+    () => townSurfacePolygon(townArea), [townSurfacePolygon, townArea]);
 
   // Source geometry for the scatter, read from the same live catalog the renderer draws from.
   const forestGeometry = useMemo<ForestSpeciesGeometry>(() => ({
@@ -8333,28 +8349,53 @@ export function LevelEditor(): ReactElement {
                       townDragRef.current = null; setTownDragBounds(null);
                     }}
                   >
-                    {townDragBounds && townDragSurfacePolygon ? (
+                    {/* The committed selection stays outlined once the drag ends: Regenerate and
+                        Remove act on it, so it must remain visible. Dimmed while a new drag is in
+                        progress so the live one reads as the active shape. */}
+                    {townArea && townAreaSurfacePolygon ? (
+                      <svg className="le-town-drag-rect" aria-hidden="true">
+                        <polygon
+                          points={townAreaSurfacePolygon.map((p) => `${p.x},${p.y}`).join(' ')}
+                          fill={townDragBounds ? 'none' : 'rgba(226, 188, 108, 0.14)'}
+                          stroke={townDragBounds ? 'rgba(244, 214, 150, 0.32)' : 'rgba(255, 226, 150, 0.95)'}
+                          strokeWidth="2"
+                          strokeDasharray="7 5"
+                          vectorEffect="non-scaling-stroke"
+                        />
+                      </svg>
+                    ) : null}
+                    {(townDragBounds && townDragSurfacePolygon) || (townArea && townAreaSurfacePolygon) ? (
                       <>
-                        <svg className="le-town-drag-rect" aria-hidden="true">
-                          {/* A grid rect is a DIAMOND on screen. Drawing a screen-space rectangle
-                              here would show an area the town does not actually use. */}
-                          <polygon
-                            points={townDragSurfacePolygon.map((p) => `${p.x},${p.y}`).join(' ')}
-                            fill="rgba(226, 188, 108, 0.12)"
-                            stroke="rgba(244, 214, 150, 0.92)"
-                            strokeWidth="1.5"
-                            strokeDasharray="5 3"
-                            vectorEffect="non-scaling-stroke"
-                          />
-                        </svg>
-                        <span
-                          className="le-town-drag-size"
-                          aria-hidden="true"
-                          style={{
-                            left: `${Math.min(...townDragSurfacePolygon.map((p) => p.x))}px`,
-                            top: `${Math.min(...townDragSurfacePolygon.map((p) => p.y))}px`,
-                          }}
-                        >{townBoundsInTiles(townDragBounds).across} × {townBoundsInTiles(townDragBounds).down} tiles</span>
+                        {townDragBounds && townDragSurfacePolygon ? (
+                          <svg className="le-town-drag-rect" aria-hidden="true">
+                            {/* A grid rect is a DIAMOND on screen. Drawing a screen-space rectangle
+                                here would show an area the town does not actually use. */}
+                            <polygon
+                              points={townDragSurfacePolygon.map((p) => `${p.x},${p.y}`).join(' ')}
+                              fill="rgba(226, 188, 108, 0.12)"
+                              stroke="rgba(244, 214, 150, 0.92)"
+                              strokeWidth="1.5"
+                              strokeDasharray="5 3"
+                              vectorEffect="non-scaling-stroke"
+                            />
+                          </svg>
+                        ) : null}
+                        {(() => {
+                          const shown = townDragBounds ?? townArea;
+                          const polygon = townDragBounds ? townDragSurfacePolygon : townAreaSurfacePolygon;
+                          if (!shown || !polygon) return null;
+                          const tiles = townBoundsInTiles(shown);
+                          return (
+                            <span
+                              className="le-town-drag-size"
+                              aria-hidden="true"
+                              style={{
+                                left: `${Math.min(...polygon.map((p) => p.x))}px`,
+                                top: `${Math.min(...polygon.map((p) => p.y))}px`,
+                              }}
+                            >{tiles.across} × {tiles.down} tiles</span>
+                          );
+                        })()}
                       </>
                     ) : null}
                   </div>
@@ -9755,16 +9796,22 @@ export function LevelEditor(): ReactElement {
               {ctlReset(() => setTownAvoidBoard(TOWN_PLAN_DEFAULTS.avoidPlayableBoard))}
             </div>
             <div className="le-ctrlrow">
-              <span className="le-ctrllabel">Seed · {townSeed}</span>
+              <span className="le-ctrllabel">Layout seed</span>
               <ChromeButton unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                onClick={() => {
-                  const next = (townSeed % 9999) + 1;
-                  setTownSeed(next);
-                }}
-              >Re-roll</ChromeButton>
-              {ctlReset(() => setTownSeed(TOWN_PLAN_DEFAULTS.seed))}
+                onClick={() => setTownSeed(randomGeneratorSeed())}
+              >Random</ChromeButton>
             </div>
+            <SliderRow
+              label={`Seed · ${townSeed}`}
+              value={townSeed}
+              set={(value) => setTownSeed(Math.round(value))}
+              min={1}
+              max={MAX_GENERATOR_SEED}
+              step={1}
+              nudge={1}
+              dflt={TOWN_PLAN_DEFAULTS.seed}
+            />
             <div className="le-ctrlrow">
               <ChromeButton unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
@@ -9801,7 +9848,7 @@ export function LevelEditor(): ReactElement {
         ) : brushKind === 'forest' ? (
           <section className="skirmish-card le-brush-panel le-forest-panel" data-testid="forest-controls">
             <h2>Forest</h2>
-            <p className="le-board-note">Drag over the scene to grow trees. Painting the same ground again changes nothing — re-roll the seed for a different forest. Trees are Scene Art: visual only, never on the playable grid, no collision.</p>
+            <p className="le-board-note">Drag over the scene to grow trees. Painting the same ground again changes nothing — change the seed for a different forest. Trees are Scene Art: visual only, never on the playable grid, no collision.</p>
             <div className="le-pal-group">
               <span className="le-pal-grouplabel">Species</span>
               <AssetSwatchList
@@ -9880,13 +9927,22 @@ export function LevelEditor(): ReactElement {
               {ctlReset(() => setForestAvoidBoard(FOREST_SCATTER_DEFAULTS.avoidPlayableBoard))}
             </div>
             <div className="le-ctrlrow">
-              <span className="le-ctrllabel">Seed · {forestSeed}</span>
+              <span className="le-ctrllabel">Forest seed</span>
               <ChromeButton unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                onClick={() => setForestSeed((current) => (current % 9999) + 1)}
-              >Re-roll</ChromeButton>
-              {ctlReset(() => setForestSeed(FOREST_SCATTER_DEFAULTS.seed))}
+                onClick={() => setForestSeed(randomGeneratorSeed())}
+              >Random</ChromeButton>
             </div>
+            <SliderRow
+              label={`Seed · ${forestSeed}`}
+              value={forestSeed}
+              set={(value) => setForestSeed(Math.round(value))}
+              min={1}
+              max={MAX_GENERATOR_SEED}
+              step={1}
+              nudge={1}
+              dflt={FOREST_SCATTER_DEFAULTS.seed}
+            />
             <div className="le-ctrlrow">
               <ChromeButton unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
