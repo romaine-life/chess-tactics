@@ -157,3 +157,23 @@ export function runCardFlavor(card: Pick<RunCoreCard, 'pieces'>): string {
 export function runCardArtSlot(card: Pick<RunCoreCard, 'pieces'>): string {
   return `ui/run/card-art/${canonicalCardId(card)}/illustration.png`;
 }
+
+// A card is addressed by the name printed on its banner, not by the piece-initial id the
+// model keys it under: `/enchiridion/cards/country-parish` names the record a reader can
+// see, where `ppb` names an implementation detail. The id remains the model's key.
+const slugify = (name: string): string => name
+  .toLowerCase()
+  .replace(/['’]/g, '')
+  .replace(/[^a-z0-9]+/g, '-')
+  .replace(/^-+|-+$/g, '');
+
+/** The address form of a card id: its banner name, hyphenated. Unnamed ids address as themselves. */
+export function runCardSlug(cardId: string): string {
+  const name = RUN_CARD_NAME_BY_ID[cardId];
+  return name ? slugify(name) : cardId;
+}
+
+/** Every authored card address, resolved back to the deck id it names. */
+export const RUN_CARD_ID_BY_SLUG: Readonly<Record<string, string>> = Object.freeze(
+  Object.fromEntries(Object.keys(RUN_CARD_NAME_BY_ID).map((id) => [runCardSlug(id), id])),
+);

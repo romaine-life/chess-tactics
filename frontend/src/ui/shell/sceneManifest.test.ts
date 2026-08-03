@@ -407,7 +407,7 @@ describe('scene manifests', () => {
 
   it('addresses individual cards inside the one retained card-reference scene', () => {
     const base = sceneManifest('/enchiridion/cards');
-    const addressed = sceneManifest('/enchiridion/cards/ppb');
+    const addressed = sceneManifest('/enchiridion/cards/country-parish');
     expect(addressed.id).toBe(base.id);
     expect(addressed.instances.map((entry) => entry.key)).toEqual(base.instances.map((entry) => entry.key));
     expect(addressed.leaf.definition.id).toBe('enchiridion/cards');
