@@ -12,7 +12,7 @@ import { loadLiveMediaCatalog } from '../net/liveMedia';
 import {
   acceptLiveMediaVersions,
   fetchAdminLiveMediaCatalog,
-  reviewLiveMediaVersions,
+  reviewLiveMediaVersion,
   updateLiveMediaVersion,
   type AdminLiveMediaCatalog,
 } from '../net/liveMediaAdmin';
@@ -147,22 +147,29 @@ export function WallCandidateReview({ header }: { header?: ReactNode } = {}): Re
       let repaired = 0;
       const pinned: WallReviewCandidate[] = [];
       for (const candidate of batch.candidates) {
-        const evidence = wallNativeEvidence(candidate.version);
-        if (!evidence) { pinned.push(candidate); continue; }
+        const native = wallNativeEvidence(candidate.version);
+        if (!native) { pinned.push(candidate); continue; }
         const version = await updateLiveMediaVersion({
           id: candidate.version.id,
           expectedRevision: candidate.version.rowRevision,
-          nativeEvidence: evidence,
+          nativeEvidence: native,
         });
         pinned.push({ ...candidate, version });
         repaired += 1;
       }
-      await reviewLiveMediaVersions({
-        versions: pinned.map((candidate) => candidate.version),
-        notes: reviewNotes.trim(),
-        surfaceUrl,
-        evidence: wallReviewProofEvidence({ surfaceUrl, candidates: pinned, mountedSlots }),
-      });
+      // Wall slots accept standalone, so each candidate records its own review against the one
+      // batch proof. review-batch is reserved for slots that share a group acceptance contract
+      // and refuses a multi-version batch without one.
+      const evidence = wallReviewProofEvidence({ surfaceUrl, candidates: pinned, mountedSlots });
+      for (const candidate of pinned) {
+        await reviewLiveMediaVersion({
+          id: candidate.version.id,
+          expectedRevision: candidate.version.rowRevision,
+          notes: reviewNotes.trim(),
+          surfaceUrl,
+          evidence,
+        });
+      }
       const fresh = await refresh();
       setNotice(
         `Recorded owner review for ${pinned.length} wall candidate${pinned.length === 1 ? '' : 's'}`
