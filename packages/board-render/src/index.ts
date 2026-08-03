@@ -186,4 +186,12 @@ export * from './ui/unitCatalog';
 // Only the crafter is exported here: the model and deployment modules keep names that already
 // belong to core/pieces (PIECE_LABEL), and consumers of those reach them by subpath.
 export * from './run/craft';
-export { RUN_FORMAT_VERSION, snapshotWar, type RunDocument, type RunWarSnapshot } from './run/model';
+export {
+  RUN_FORMAT_VERSION,
+  RUN_RELIC_IMMEDIATE_GOLD,
+  relicImmediateGoldTenths,
+  snapshotWar,
+  type RunDocument,
+  type RunVacantiaState,
+  type RunWarSnapshot,
+} from './run/model';

@@ -22,7 +22,7 @@ import { titleBarConfig } from './titleBarConfig';
 // never moves. Settings and the Level Editor declare intent; this component owns their
 // identical placement.
 export function AppTitleBar({ path, search, revealTitle, transitionStatus }: {
-  /** The COMMITTED scene's address, never the browser's pending intent (ADR-0368). */
+  /** The COMMITTED scene's address, never the browser's pending intent (ADR-0369). */
   path: string;
   search?: string;
   transitionStatus?: string | null;

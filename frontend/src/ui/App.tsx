@@ -101,7 +101,7 @@ export function App(): ReactElement {
   const [search, setSearch] = useState(window.location.search);
   // The query the COMMITTED scene was resolved with. The bar reads this, not `search`.
   const [committedSearch, setCommittedSearch] = useState(window.location.search);
-  // Every route cold-loads through the one shell ladder (ADR-0368) — there is no
+  // Every route cold-loads through the one shell ladder (ADR-0369) — there is no
   // main-menu branch and no separate "prepare the initial scene" path.
   const [scene, dispatchScene] = useReducer(
     reduceScene,
@@ -189,7 +189,7 @@ export function App(): ReactElement {
     }
     // The curtain hands over to the app's own background field the moment the ladder's
     // first rung opens — on every route, which is what makes the reveal an ordered build
-    // rather than a black rectangle followed by a finished screen (ADR-0368).
+    // rather than a black rectangle followed by a finished screen (ADR-0369).
     const release = scene.phase === 'error'
       || scene.startupStage >= 0
       || !scene.startupActive;
@@ -528,7 +528,7 @@ export function App(): ReactElement {
     : null;
   const preservesSceneHost = preservedSceneHost !== null;
   // The persistent bar wears the COMMITTED scene's identity, never the browser's intent
-  // (ADR-0368). `path`/`search` advance when the director accepts exit-finished, which is
+  // (ADR-0369). `path`/`search` advance when the director accepts exit-finished, which is
   // before the destination has painted — binding the bar to them made it announce the
   // destination over a screen that was still the previous one for the whole preparation.
   const committedPath = scene.current.pathname;

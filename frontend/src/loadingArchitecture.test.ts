@@ -235,7 +235,7 @@ describe('professional loading architecture guards', () => {
     const styles = read('./style.css');
     expect(app).toContain("transitionStatus={titleBarLoading ? 'Loading…' : null}");
     // The curtain hands over on the ladder's FIRST rung, on every route — not once the
-    // whole destination has entered (ADR-0368).
+    // whole destination has entered (ADR-0369).
     expect(app).toContain('|| scene.startupStage >= 0');
     expect(app).toContain('|| !scene.startupActive;');
     expect(app).toContain('key: sceneLayerKey(mountedScene)');

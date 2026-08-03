@@ -414,7 +414,7 @@ describe('scene manifests', () => {
 
   it('decomposes the editor into the authorities it actually registers', () => {
     // Not one collapsed participant, and not a vocabulary nothing registers: these are the
-    // ids LevelEditor reports separately, so each can fail on its own (ADR-0368).
+    // ids LevelEditor reports separately, so each can fail on its own (ADR-0369).
     expect(sceneManifest('/editor/level').critical).toEqual([
       'chrome:skirmish-screen level-editor-screen',
       'document',
@@ -437,7 +437,7 @@ describe('scene manifests', () => {
   it('never declares the shell as a scene participant', () => {
     // The persistent bar and the shared backdrop are rendered OUTSIDE every boundary, so
     // they could never register there. They are the director's first two ladder rungs now;
-    // naming them here is how six declared ids decayed into comments (ADR-0368).
+    // naming them here is how six declared ids decayed into comments (ADR-0369).
     const routes = [
       '/', '/unknown', '/settings/general', '/settings/audio/tracks', '/enchiridion/units',
       '/play/select/skirmish', '/play', '/editor', '/editor/level', '/studio', '/lobbies',

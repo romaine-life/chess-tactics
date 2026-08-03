@@ -2810,7 +2810,7 @@ export function LevelEditor(): ReactElement {
     && editorScenePainted
   );
   // The three authorities the editor's frame is made of, registered separately rather than
-  // collapsed into one participant (ADR-0368): each can fail on its own, and the loading
+  // collapsed into one participant (ADR-0369): each can fail on its own, and the loading
   // timeline names which one an unresolved wait belongs to instead of reporting
   // `level-editor` for all three. `level-editor` remains the paint owner over them.
   useSceneParticipant(

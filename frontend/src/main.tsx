@@ -143,7 +143,7 @@ if (root) {
       await retryStartup('prop-seats', loadLiveSeats);
       loadingMeasure('app', 'critical-seats-ready', startupAt);
       await criticalFonts;
-      // The persistent shell's own art is a startup PRECONDITION (ADR-0368). Chrome
+      // The persistent shell's own art is a startup PRECONDITION (ADR-0369). Chrome
       // composition is complete — it decodes every image its generated CSS references,
       // including the title bar's fill surface — and the bar's marks are decoded beside
       // it. App cannot be imported, and so the bar cannot paint, before both are drawable.

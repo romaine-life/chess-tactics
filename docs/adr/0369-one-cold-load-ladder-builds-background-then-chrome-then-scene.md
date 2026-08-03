@@ -9,7 +9,7 @@ refines:
   - "[ADR-0042](0042-title-bar-is-an-invariant-screens-add-slots.md)"
 ---
 
-# ADR-0368: One cold-load ladder builds background, then chrome, then scene
+# ADR-0369: One cold-load ladder builds background, then chrome, then scene
 
 ## Context and Problem Statement
 

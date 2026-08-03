@@ -1,7 +1,7 @@
 import { createContext, useContext } from 'react';
 
 /**
- * The rungs of the ONE cold-load ladder (ADR-0368).
+ * The rungs of the ONE cold-load ladder (ADR-0369).
  *
  * Every route walks these in order, not just the main menu: the shared backdrop, then
  * the persistent title bar, then the scene body. The third rung is the ordinary
