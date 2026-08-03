@@ -33,6 +33,7 @@ import {
   TOWN_PLAN_NOTES,
   isTownMember,
   planTown,
+  type TownBounds,
   type TownPlanKind,
 } from '../core/townPlan';
 import { BoardSceneLayer } from '../render/BoardSceneLayer';
@@ -3082,7 +3083,12 @@ export function LevelEditor(): ReactElement {
     () => townBuildingCatalog.filter((asset) => /castle|windmill|mill|tower|keep/.test(asset.id)),
     [townBuildingCatalog],
   );
-  const [townSite, setTownSite] = useState<{ x: number; y: number } | null>(null);
+  const [townArea, setTownArea] = useState<TownBounds | null>(null);
+  // Live rectangle while dragging, in surface pixels, so the author sees the ground being claimed.
+  const [townDragRect, setTownDragRect] = useState<
+    { x0: number; y0: number; x1: number; y1: number } | null>(null);
+  const townDragRef = useRef<{ pointerId: number; sceneX: number; sceneY: number;
+    surfaceX: number; surfaceY: number } | null>(null);
   const [townBuildings, setTownBuildings] = useState<string[]>([]);
   const [townLandmarks, setTownLandmarks] = useState<string[]>([]);
   const [townPlanKind, setTownPlanKind] = useState<TownPlanKind>(TOWN_PLAN_DEFAULTS.plan);
@@ -3092,7 +3098,6 @@ export function LevelEditor(): ReactElement {
   const [townScaleMax, setTownScaleMax] = useState(TOWN_PLAN_DEFAULTS.scaleMax);
   const [townPlotWidth, setTownPlotWidth] = useState(TOWN_PLAN_DEFAULTS.plotWidth);
   const [townSetback, setTownSetback] = useState(TOWN_PLAN_DEFAULTS.setback);
-  const [townSpread, setTownSpread] = useState(TOWN_PLAN_DEFAULTS.spread);
   const [townLooseness, setTownLooseness] = useState(TOWN_PLAN_DEFAULTS.looseness);
   const [townFacingWobble, setTownFacingWobble] = useState(TOWN_PLAN_DEFAULTS.facingWobble);
   const [townSpacing, setTownSpacing] = useState(TOWN_PLAN_DEFAULTS.spacing);
@@ -3100,7 +3105,8 @@ export function LevelEditor(): ReactElement {
   const [townSeed, setTownSeed] = useState(TOWN_PLAN_DEFAULTS.seed);
   // How many buildings the plan actually sited. A plan offers a finite number of plots, so a
   // large requested size can be cut short by frontage, spacing, or the board — say so.
-  const [townSited, setTownSited] = useState<number | null>(null);
+  const [townSited, setTownSited] = useState<
+    { placed: number; onBoard: number; spacing: number; offered: number } | null>(null);
   // Ground cover is a per-tile FEATURE (density), not a doodad: which tiles grow vegetation
   // and how thick. Tufts are rolled deterministically from this density (see core/groundCover).
   const [boardCover, setBoardCover] = useState<Record<string, GroundCoverDensity>>(initialBoard?.cover ?? {});
@@ -4165,14 +4171,13 @@ export function LevelEditor(): ReactElement {
    * Site or re-site a town. A town's id prefix comes from its centre, so regenerating replaces
    * the buildings already standing there instead of stacking a second town on top of them.
    */
-  const generateTown = (site: { x: number; y: number }): void => {
+  const generateTown = (area: TownBounds): void => {
     if (!townBuildings.length) return;
     const current = currentEditorBoardRef.current;
     const all = current.floatingArtwork ?? [];
-    const others = all.filter((placement) => !isTownMember(placement, site.x, site.y));
-    const town = planTown({
-      centerX: site.x,
-      centerY: site.y,
+    const others = all.filter((placement) => !isTownMember(placement, area));
+    const result = planTown({
+      bounds: area,
       params: {
         buildingIds: townBuildings,
         landmarkIds: townLandmarks,
@@ -4183,7 +4188,6 @@ export function LevelEditor(): ReactElement {
         scaleMax: townScaleMax,
         plotWidth: townPlotWidth,
         setback: townSetback,
-        spread: townSpread,
         looseness: townLooseness,
         facingWobble: townFacingWobble,
         spacing: townSpacing,
@@ -4194,17 +4198,22 @@ export function LevelEditor(): ReactElement {
       board: { cols: current.cols, rows: current.rows },
       existing: others,
     });
-    setTownSited(town.length);
-    if (!town.length && others.length === all.length) return;
+    setTownSited({
+      placed: result.placements.length,
+      onBoard: result.rejectedOnBoard,
+      spacing: result.rejectedSpacing,
+      offered: result.plotsOffered,
+    });
+    if (!result.placements.length && others.length === all.length) return;
     const next = cloneEditorBoard(current);
-    next.floatingArtwork = sortFloatingArtworkByDepth([...others, ...town], forestGeometry);
+    next.floatingArtwork = sortFloatingArtworkByDepth([...others, ...result.placements], forestGeometry);
     commitEditorBoard(next, null);
   };
 
-  const removeTown = (site: { x: number; y: number }): void => {
+  const removeTown = (area: TownBounds): void => {
     const current = currentEditorBoardRef.current;
     const all = current.floatingArtwork ?? [];
-    const kept = all.filter((placement) => !isTownMember(placement, site.x, site.y));
+    const kept = all.filter((placement) => !isTownMember(placement, area));
     setTownSited(null);
     if (kept.length === all.length) return;
     const next = cloneEditorBoard(current);
@@ -4220,7 +4229,6 @@ export function LevelEditor(): ReactElement {
     setTownScaleMax(TOWN_PLAN_DEFAULTS.scaleMax);
     setTownPlotWidth(TOWN_PLAN_DEFAULTS.plotWidth);
     setTownSetback(TOWN_PLAN_DEFAULTS.setback);
-    setTownSpread(TOWN_PLAN_DEFAULTS.spread);
     setTownLooseness(TOWN_PLAN_DEFAULTS.looseness);
     setTownFacingWobble(TOWN_PLAN_DEFAULTS.facingWobble);
     setTownSpacing(TOWN_PLAN_DEFAULTS.spacing);
@@ -8249,19 +8257,82 @@ export function LevelEditor(): ReactElement {
                   <div
                     className="le-artwork-free-placement-surface le-town-placement-surface"
                     data-testid="town-placement-surface"
-                    aria-label={tool === 'erase' ? 'Remove the town under the cursor' : 'Site a town'}
+                    aria-label={tool === 'erase' ? 'Drag over a town to remove it' : 'Drag out the area the town fills'}
                     onPointerDown={(event) => {
                       if (event.button !== 0) return;
                       event.preventDefault();
                       event.stopPropagation();
-                      const point = forestScenePoint(
+                      const surface = event.currentTarget;
+                      surface.setPointerCapture(event.pointerId);
+                      const rect = surface.getBoundingClientRect();
+                      const scene = forestScenePoint(event.clientX, event.clientY, rect);
+                      townDragRef.current = {
+                        pointerId: event.pointerId,
+                        sceneX: scene.x,
+                        sceneY: scene.y,
+                        surfaceX: event.clientX - rect.left,
+                        surfaceY: event.clientY - rect.top,
+                      };
+                      setTownDragRect({
+                        x0: event.clientX - rect.left, y0: event.clientY - rect.top,
+                        x1: event.clientX - rect.left, y1: event.clientY - rect.top,
+                      });
+                    }}
+                    onPointerMove={(event) => {
+                      const drag = townDragRef.current;
+                      if (!drag || drag.pointerId !== event.pointerId) return;
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      setTownDragRect({
+                        x0: drag.surfaceX, y0: drag.surfaceY,
+                        x1: event.clientX - rect.left, y1: event.clientY - rect.top,
+                      });
+                    }}
+                    onPointerUp={(event) => {
+                      const drag = townDragRef.current;
+                      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                        event.currentTarget.releasePointerCapture(event.pointerId);
+                      }
+                      townDragRef.current = null;
+                      setTownDragRect(null);
+                      if (!drag || drag.pointerId !== event.pointerId) return;
+                      const scene = forestScenePoint(
                         event.clientX, event.clientY, event.currentTarget.getBoundingClientRect(),
                       );
-                      const site = { x: Math.round(point.x), y: Math.round(point.y) };
-                      setTownSite(site);
-                      if (tool === 'erase') removeTown(site); else generateTown(site);
+                      const area: TownBounds = {
+                        minX: Math.round(Math.min(drag.sceneX, scene.x)),
+                        minY: Math.round(Math.min(drag.sceneY, scene.y)),
+                        maxX: Math.round(Math.max(drag.sceneX, scene.x)),
+                        maxY: Math.round(Math.max(drag.sceneY, scene.y)),
+                      };
+                      // A stray click is not a town. Require a real area to have been dragged.
+                      if (area.maxX - area.minX < 24 || area.maxY - area.minY < 24) return;
+                      setTownArea(area);
+                      if (tool === 'erase') removeTown(area); else generateTown(area);
                     }}
-                  />
+                    onPointerCancel={() => { townDragRef.current = null; setTownDragRect(null); }}
+                  >
+                    {townDragRect ? (
+                      <svg
+                        className="le-town-drag-rect"
+                        aria-hidden="true"
+                        style={{
+                          left: `${Math.min(townDragRect.x0, townDragRect.x1)}px`,
+                          top: `${Math.min(townDragRect.y0, townDragRect.y1)}px`,
+                          width: `${Math.abs(townDragRect.x1 - townDragRect.x0)}px`,
+                          height: `${Math.abs(townDragRect.y1 - townDragRect.y0)}px`,
+                        }}
+                      >
+                        <rect
+                          x="0" y="0" width="100%" height="100%"
+                          fill="rgba(226, 188, 108, 0.12)"
+                          stroke="rgba(244, 214, 150, 0.92)"
+                          strokeWidth="1.5"
+                          strokeDasharray="5 3"
+                          vectorEffect="non-scaling-stroke"
+                        />
+                      </svg>
+                    ) : null}
+                  </div>
                 ) : null}
                 {editorReady && !saving && !editorLoadError && layer === 'placed-art' && brushKind === 'forest'
                   && (tool === 'brush' || tool === 'erase') ? (
@@ -9565,7 +9636,7 @@ export function LevelEditor(): ReactElement {
         ) : brushKind === 'town' ? (
           <section className="skirmish-card le-brush-panel le-town-panel" data-testid="town-controls">
             <h2>Town</h2>
-            <p className="le-board-note">Click the scene to site a town there. Buildings are laid out along streets and turned to face them — a plan, not a scatter. Tune below and press Regenerate to rebuild the same town in place. Buildings are Scene Art: visual only, never on the playable grid, no collision.</p>
+            <p className="le-board-note">Drag out an area and the town fills it. Buildings are laid out along streets and turned to face them — a plan, not a scatter — and none of them leave the area you dragged. Tune below and press Regenerate to rebuild the same town on the same ground. Buildings are Scene Art: visual only, never on the playable grid, no collision.</p>
             <h2 className="le-card-subhead">Plan</h2>
             <div className="le-seg le-town-plan-seg" role="group" aria-label="Town plan">
               {TOWN_PLAN_KINDS.map((kind) => (
@@ -9637,7 +9708,6 @@ export function LevelEditor(): ReactElement {
             ) : null}
             <h2 className="le-card-subhead">Size</h2>
             <SliderRow label={`Buildings · ${townSize}`} value={townSize} set={setTownSize} min={2} max={60} step={1} nudge={1} dflt={TOWN_PLAN_DEFAULTS.size} />
-            <SliderRow label={`Town extent · ${townSpread}px`} value={townSpread} set={setTownSpread} min={120} max={1400} step={20} nudge={20} dflt={TOWN_PLAN_DEFAULTS.spread} />
             <SliderRow label={`Average building · ${townScaleMean.toFixed(2)}×`} value={townScaleMean} set={setTownScaleMean} min={0.3} max={2.5} step={0.05} nudge={0.05} dflt={TOWN_PLAN_DEFAULTS.scaleMean} />
             <SliderRow label={`Smallest allowed · ${townScaleMin.toFixed(2)}×`} value={townScaleMin} set={setTownScaleMin} min={0.2} max={2.5} step={0.05} nudge={0.05} dflt={TOWN_PLAN_DEFAULTS.scaleMin} />
             <SliderRow label={`Largest allowed · ${townScaleMax.toFixed(2)}×`} value={townScaleMax} set={setTownScaleMax} min={0.2} max={3} step={0.05} nudge={0.05} dflt={TOWN_PLAN_DEFAULTS.scaleMax} />
@@ -9673,13 +9743,13 @@ export function LevelEditor(): ReactElement {
             <div className="le-ctrlrow">
               <ChromeButton unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                disabled={!townSite || !townBuildings.length}
-                onClick={() => { if (townSite) generateTown(townSite); }}
+                disabled={!townArea || !townBuildings.length}
+                onClick={() => { if (townArea) generateTown(townArea); }}
               >Regenerate</ChromeButton>
               <ChromeButton unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                disabled={!townSite}
-                onClick={() => { if (townSite) removeTown(townSite); }}
+                disabled={!townArea}
+                onClick={() => { if (townArea) removeTown(townArea); }}
               >Remove town</ChromeButton>
               <ChromeButton unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
@@ -9687,14 +9757,21 @@ export function LevelEditor(): ReactElement {
               >Reset town settings</ChromeButton>
             </div>
             {townBuildings.length
-              ? townSite
-                ? townSited !== null && townSited < townSize
-                  ? <p className="le-board-note">Sited {townSited} of {townSize}. The plan ran out of street frontage — raise Town extent, lower Frontage per building, or lower Minimum spacing to fit more.</p>
-                  : townSited !== null
-                    ? <p className="le-board-note">Sited {townSited} buildings.</p>
+              ? townArea
+                ? townSited && townSited.placed < townSize
+                  ? <p className="le-board-note">
+                      Placed {townSited.placed} of {townSize}.{' '}
+                      {townSited.onBoard >= Math.max(1, townSited.spacing)
+                        ? `${townSited.onBoard} plot${townSited.onBoard === 1 ? '' : 's'} fell on the playable board — drag clear of it, or turn off Keep off playable board.`
+                        : townSited.spacing > 0
+                          ? `${townSited.spacing} plot${townSited.spacing === 1 ? '' : 's'} were too close to something already there — lower Minimum spacing.`
+                          : 'The area ran out of street frontage — drag a bigger area or lower Frontage per building.'}
+                    </p>
+                  : townSited
+                    ? <p className="le-board-note">Placed {townSited.placed} buildings.</p>
                     : null
-                : <p className="le-board-note">Click the scene to site the town.</p>
-              : <p className="le-board-note">Pick at least one building above before siting a town.</p>}
+                : <p className="le-board-note">Drag out the area you want the town to fill.</p>
+              : <p className="le-board-note">Pick at least one building above, then drag out the town area.</p>}
           </section>
         ) : brushKind === 'forest' ? (
           <section className="skirmish-card le-brush-panel le-forest-panel" data-testid="forest-controls">

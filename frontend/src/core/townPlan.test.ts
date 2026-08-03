@@ -5,6 +5,7 @@ import {
   facingTowards,
   isTownMember,
   planTown,
+  townBoundsCentre,
   townIdPrefix,
   townStreets,
   type TownPlanKind,
@@ -32,7 +33,9 @@ const geometry: ForestSpeciesGeometry = {
 };
 
 const board = { cols: 8, rows: 8 };
-const CENTER = { x: 1400, y: 1400 };
+// The area an author would drag: a wide-ish rectangle well clear of the playable board.
+const AREA = { minX: 900, minY: 1100, maxX: 1900, maxY: 1700 };
+const CENTER = townBoundsCentre(AREA);
 
 const params = (overrides: Partial<TownPlanParams> = {}): TownPlanParams => ({
   ...TOWN_PLAN_DEFAULTS,
@@ -44,10 +47,16 @@ const params = (overrides: Partial<TownPlanParams> = {}): TownPlanParams => ({
 const run = (
   overrides: Partial<TownPlanParams> = {},
   existing: FloatingArtworkPlacement[] = [],
-  center = CENTER,
+  bounds = AREA,
 ): FloatingArtworkPlacement[] => planTown({
-  centerX: center.x, centerY: center.y, params: params(overrides), geometry, board, existing,
-});
+  bounds, params: params(overrides), geometry, board, existing,
+}).placements;
+
+/** Full result, for the assertions that care WHY plots were dropped. */
+const runFull = (
+  overrides: Partial<TownPlanParams> = {},
+  bounds = AREA,
+) => planTown({ bounds, params: params(overrides), geometry, board, existing: [] });
 
 const groundOf = (placement: FloatingArtworkPlacement) => floatingArtworkGroundPoint(placement, geometry)!;
 
@@ -88,7 +97,7 @@ describe('facingTowards', () => {
 describe('townStreets', () => {
   it('gives every plan a street skeleton with real length', () => {
     for (const plan of TOWN_PLAN_KINDS) {
-      const streets = townStreets(plan, 0, 0, 500, 1);
+      const streets = townStreets(plan, AREA, TOWN_PLAN_DEFAULTS.setback, 1);
       expect(streets.length).toBeGreaterThan(0);
       for (const street of streets) {
         expect(Math.hypot(street.x1 - street.x0, street.y1 - street.y0)).toBeGreaterThan(1);
@@ -98,15 +107,56 @@ describe('townStreets', () => {
   });
 
   it('fronts the village green from outside the ring only', () => {
-    const streets = townStreets('green', 0, 0, 500, 1);
+    const streets = townStreets('green', AREA, TOWN_PLAN_DEFAULTS.setback, 1);
     for (const street of streets) expect(street.sides).toEqual([-1]);
   });
 });
 
 describe('planTown', () => {
-  it('sites the requested number of buildings', () => {
-    expect(run({ size: 14 })).toHaveLength(14);
+  it('never exceeds the requested count, and reaches it when the drag has room', () => {
     expect(run({ size: 6 })).toHaveLength(6);
+    // Size is a ceiling, not a quota: a drag only holds as many plots as its frontage allows.
+    expect(run({ size: 14 }).length).toBeLessThanOrEqual(14);
+    const roomy = { minX: 300, minY: 500, maxX: 2500, maxY: 2300 };
+    expect(run({ size: 14 }, [], roomy)).toHaveLength(14);
+  });
+
+  // The author drags the ground the town is to occupy; the town must honour it exactly.
+  it('keeps every building inside the dragged area', () => {
+    for (const plan of TOWN_PLAN_KINDS) {
+      const town = run({ plan, size: 40, looseness: 1 });
+      expect(town.length).toBeGreaterThan(4);
+      for (const placement of town) {
+        const ground = groundOf(placement);
+        expect(ground.x).toBeGreaterThanOrEqual(AREA.minX);
+        expect(ground.x).toBeLessThanOrEqual(AREA.maxX);
+        expect(ground.y).toBeGreaterThanOrEqual(AREA.minY);
+        expect(ground.y).toBeLessThanOrEqual(AREA.maxY);
+      }
+    }
+  });
+
+  it('fills a bigger drag with more town and a smaller drag with less', () => {
+    const small = { minX: 900, minY: 1100, maxX: 1300, maxY: 1400 };
+    const big = { minX: 500, minY: 700, maxX: 2300, maxY: 2100 };
+    expect(run({ size: 60 }, [], big).length).toBeGreaterThan(run({ size: 60 }, [], small).length);
+  });
+
+  it('runs the main street along the longer axis of the drag', () => {
+    const wide = { minX: 0, minY: 0, maxX: 1200, maxY: 400 };
+    const tall = { minX: 0, minY: 0, maxX: 400, maxY: 1200 };
+    const span = (bounds: typeof wide): { x: number; y: number } => {
+      const streets = townStreets('linear', bounds, TOWN_PLAN_DEFAULTS.setback, 1);
+      const xs = streets.flatMap((s) => [s.x0, s.x1]);
+      const ys = streets.flatMap((s) => [s.y0, s.y1]);
+      return { x: Math.max(...xs) - Math.min(...xs), y: Math.max(...ys) - Math.min(...ys) };
+    };
+    expect(span(wide).x).toBeGreaterThan(span(wide).y);
+    expect(span(tall).y).toBeGreaterThan(span(tall).x);
+  });
+
+  it('produces nothing for a drag too small to hold a town', () => {
+    expect(run({}, [], { minX: 100, minY: 100, maxX: 103, maxY: 104 })).toEqual([]);
   });
 
   it('is deterministic, and re-rolls the whole town on a new seed', () => {
@@ -119,7 +169,7 @@ describe('planTown', () => {
     for (const plan of TOWN_PLAN_KINDS) {
       const town = run({ plan, looseness: 0, facingWobble: 0, size: 20 });
       expect(town.length).toBeGreaterThan(6);
-      const streets = townStreets(plan, CENTER.x, CENTER.y, TOWN_PLAN_DEFAULTS.spread, TOWN_PLAN_DEFAULTS.seed);
+      const streets = townStreets(plan, AREA, TOWN_PLAN_DEFAULTS.setback, TOWN_PLAN_DEFAULTS.seed);
       for (const placement of town) {
         const ground = groundOf(placement);
         const facing = facingVector(placement.direction);
@@ -157,7 +207,8 @@ describe('planTown', () => {
   it('lines buildings up on their frontage at the setback distance', () => {
     const setback = 90;
     const town = run({ looseness: 0, facingWobble: 0, setback, plan: 'linear', size: 16 });
-    const streets = townStreets('linear', CENTER.x, CENTER.y, TOWN_PLAN_DEFAULTS.spread, TOWN_PLAN_DEFAULTS.seed);
+    // Streets are inset by the setback, so the skeleton must be derived with the same value.
+    const streets = townStreets('linear', AREA, setback, TOWN_PLAN_DEFAULTS.seed);
     for (const placement of town) {
       const ground = groundOf(placement);
       let best = Infinity;
@@ -175,7 +226,7 @@ describe('planTown', () => {
   it('holds the plot exactly at zero looseness and lets it drift as looseness rises', () => {
     const offsets = (looseness: number): number[] => {
       const town = run({ looseness, facingWobble: 0, plan: 'linear', size: 16 });
-      const streets = townStreets('linear', CENTER.x, CENTER.y, TOWN_PLAN_DEFAULTS.spread, TOWN_PLAN_DEFAULTS.seed);
+      const streets = townStreets('linear', AREA, TOWN_PLAN_DEFAULTS.setback, TOWN_PLAN_DEFAULTS.seed);
       return town.map((placement) => {
         const ground = groundOf(placement);
         let best = Infinity;
@@ -198,7 +249,7 @@ describe('planTown', () => {
   it('keeps facings on-axis at zero wobble and lets them turn as wobble rises', () => {
     const offAxis = (facingWobble: number): number => {
       const town = run({ plan: 'cluster', looseness: 0, facingWobble, size: 24, seed: 5 });
-      const streets = townStreets('cluster', CENTER.x, CENTER.y, TOWN_PLAN_DEFAULTS.spread, 5);
+      const streets = townStreets('cluster', AREA, TOWN_PLAN_DEFAULTS.setback, 5);
       let count = 0;
       for (const placement of town) {
         const ground = groundOf(placement);
@@ -287,8 +338,20 @@ describe('planTown', () => {
     }
   });
 
+  it('reports why plots were dropped, so the editor can name the real cause', () => {
+    const overBoard = { minX: -300, minY: -200, maxX: 300, maxY: 200 };
+    const blocked = runFull({ avoidPlayableBoard: true, size: 30 }, overBoard);
+    expect(blocked.plotsOffered).toBeGreaterThan(0);
+    expect(blocked.rejectedOnBoard).toBeGreaterThan(0);
+    expect(blocked.placements.length).toBeLessThan(30);
+    // Same drag with the filter off attributes nothing to the board.
+    expect(runFull({ avoidPlayableBoard: false, size: 30 }, overBoard).rejectedOnBoard).toBe(0);
+    // A crowded plan blames spacing instead.
+    expect(runFull({ spacing: 200, size: 30 }).rejectedSpacing).toBeGreaterThan(0);
+  });
+
   it('keeps the town off the playable board when asked', () => {
-    const overBoard = { x: 0, y: 0 };
+    const overBoard = { minX: -300, minY: -200, maxX: 300, maxY: 200 };
     const free = run({ avoidPlayableBoard: false, size: 20 }, [], overBoard);
     const kept = run({ avoidPlayableBoard: true, size: 20 }, [], overBoard);
     expect(free.length).toBeGreaterThan(0);
@@ -326,26 +389,27 @@ describe('planTown', () => {
 
 describe('townIdPrefix', () => {
   it('keeps one identity per site so a re-roll replaces the town instead of stacking it', () => {
-    expect(townIdPrefix(CENTER.x, CENTER.y)).toBe(townIdPrefix(CENTER.x, CENTER.y));
+    expect(townIdPrefix(AREA)).toBe(townIdPrefix(AREA));
     for (const placement of run({ seed: 9 })) {
-      expect(isTownMember(placement, CENTER.x, CENTER.y)).toBe(true);
+      expect(isTownMember(placement, AREA)).toBe(true);
     }
     // A different seed is the same town re-rolled: same site, same identity.
     for (const placement of run({ seed: 10 })) {
-      expect(isTownMember(placement, CENTER.x, CENTER.y)).toBe(true);
+      expect(isTownMember(placement, AREA)).toBe(true);
     }
   });
 
   it('gives a town sited elsewhere its own identity', () => {
-    const elsewhere = { x: CENTER.x + 3000, y: CENTER.y - 2000 };
-    expect(townIdPrefix(elsewhere.x, elsewhere.y)).not.toBe(townIdPrefix(CENTER.x, CENTER.y));
+    const elsewhere = { minX: AREA.minX + 3000, minY: AREA.minY - 2000,
+      maxX: AREA.maxX + 3000, maxY: AREA.maxY - 2000 };
+    expect(townIdPrefix(elsewhere)).not.toBe(townIdPrefix(AREA));
     for (const placement of run({}, [], elsewhere)) {
-      expect(isTownMember(placement, CENTER.x, CENTER.y)).toBe(false);
-      expect(isTownMember(placement, elsewhere.x, elsewhere.y)).toBe(true);
+      expect(isTownMember(placement, AREA)).toBe(false);
+      expect(isTownMember(placement, elsewhere)).toBe(true);
     }
   });
 
   it('produces a prefix the sanitizer accepts', () => {
-    expect(`${townIdPrefix(-5000, -5000)}0`).toMatch(/^[A-Za-z0-9][A-Za-z0-9._:@+-]{0,127}$/);
+    expect(`${townIdPrefix({ minX: -5000, minY: -5000, maxX: -4000, maxY: -4500 })}0`).toMatch(/^[A-Za-z0-9][A-Za-z0-9._:@+-]{0,127}$/);
   });
 });

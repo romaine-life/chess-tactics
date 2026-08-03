@@ -66,8 +66,7 @@ export interface TownPlanParams {
   plotWidth: number;
   /** Distance from a street's centreline to the buildings that face it. */
   setback: number;
-  /** Overall town extent in scene pixels. */
-  spread: number;
+  // Extent is not a parameter: the author drags the area the town fills.
   /** 0 keeps every building on its surveyed plot; 1 lets the plan run to its tolerances. */
   looseness: number;
   /** 0 makes every building face its street exactly; 1 lets facings turn off-axis. */
@@ -90,7 +89,6 @@ export const TOWN_PLAN_DEFAULTS: TownPlanParams = {
   scaleMax: 1.35,
   plotWidth: 110,
   setback: 78,
-  spread: 460,
   looseness: 0.45,
   facingWobble: 0.2,
   spacing: 62,
@@ -185,32 +183,49 @@ function turnFacing(direction: Direction, steps: number, installed: readonly Dir
   return direction;
 }
 
+/** The dragged area a town fills, in scene pixels. */
+export interface TownBounds {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+export const townBoundsCentre = (bounds: TownBounds): { x: number; y: number } => ({
+  x: (bounds.minX + bounds.maxX) / 2,
+  y: (bounds.minY + bounds.maxY) / 2,
+});
+
 /**
- * The street skeleton for a plan. Streets are line segments in scene pixels, centred on the town.
- * Every building in the town hangs off one of these; nothing is placed on open ground.
+ * The street skeleton for a plan, FITTED TO THE DRAGGED AREA. The author drags the ground the
+ * town is to occupy, so the skeleton adapts to that rectangle's shape and size — a wide drag runs
+ * its main street the long way, a tall drag runs it the other way. Streets are inset by the
+ * setback so the buildings that front them still land inside the area.
+ *
+ * Every building hangs off one of these; nothing is placed on open ground.
  */
 export function townStreets(
   plan: TownPlanKind,
-  centerX: number,
-  centerY: number,
-  spread: number,
+  bounds: TownBounds,
+  setback: number,
   seed: number,
 ): TownStreet[] {
-  const at = (dx: number, dy: number): { x: number; y: number } => ({ x: centerX + dx, y: centerY + dy });
-  // Streets are laid out in screen space but squashed vertically to sit along the iso ground plane.
-  const squash = 0.62;
-  const angle = (hashUnit(0, 0, seed, 11) - 0.5) * 0.7;
-  const rotate = (dx: number, dy: number): { x: number; y: number } => at(
-    dx * Math.cos(angle) - dy * Math.sin(angle),
-    (dx * Math.sin(angle) + dy * Math.cos(angle)) * squash,
-  );
+  const centre = townBoundsCentre(bounds);
+  const halfW = Math.abs(bounds.maxX - bounds.minX) / 2;
+  const halfH = Math.abs(bounds.maxY - bounds.minY) / 2;
+  // Keep the frontage inside the drag: streets sit at least `setback` in from the edges.
+  const insetX = Math.max(0, halfW - Math.min(setback, halfW * 0.8));
+  const insetY = Math.max(0, halfH - Math.min(setback, halfH * 0.8));
+  const at = (dx: number, dy: number): { x: number; y: number } => ({ x: centre.x + dx, y: centre.y + dy });
 
   if (plan === 'linear') {
-    // A single street with a slight bend, so the row is not a ruler-straight line.
-    const bend = (hashUnit(1, 0, seed, 12) - 0.5) * spread * 0.22;
-    const a = rotate(-spread, 0);
-    const mid = rotate(0, bend);
-    const b = rotate(spread, 0);
+    // One street along the LONGER axis of the drag, with a slight bend so the row is not a ruler.
+    const horizontal = halfW >= halfH;
+    const reach = horizontal ? insetX : insetY;
+    const bend = (hashUnit(1, 0, seed, 12) - 0.5) * (horizontal ? insetY : insetX) * 0.5;
+    const a = horizontal ? at(-reach, bend * 0.2) : at(bend * 0.2, -reach);
+    const mid = horizontal ? at(0, bend) : at(bend, 0);
+    const b = horizontal ? at(reach, -bend * 0.2) : at(-bend * 0.2, reach);
     return [
       { x0: a.x, y0: a.y, x1: mid.x, y1: mid.y, sides: [-1, 1] },
       { x0: mid.x, y0: mid.y, x1: b.x, y1: b.y, sides: [-1, 1] },
@@ -218,31 +233,27 @@ export function townStreets(
   }
 
   if (plan === 'crossroads') {
-    const a = rotate(-spread, 0);
-    const b = rotate(spread, 0);
-    const c = rotate(0, -spread * 0.85);
-    const d = rotate(0, spread * 0.85);
-    const hub = rotate(0, 0);
+    const hub = at(0, 0);
     return [
-      { x0: a.x, y0: a.y, x1: hub.x, y1: hub.y, sides: [-1, 1] },
-      { x0: hub.x, y0: hub.y, x1: b.x, y1: b.y, sides: [-1, 1] },
-      { x0: c.x, y0: c.y, x1: hub.x, y1: hub.y, sides: [-1, 1] },
-      { x0: hub.x, y0: hub.y, x1: d.x, y1: d.y, sides: [-1, 1] },
+      { x0: at(-insetX, 0).x, y0: at(-insetX, 0).y, x1: hub.x, y1: hub.y, sides: [-1, 1] },
+      { x0: hub.x, y0: hub.y, x1: at(insetX, 0).x, y1: at(insetX, 0).y, sides: [-1, 1] },
+      { x0: at(0, -insetY).x, y0: at(0, -insetY).y, x1: hub.x, y1: hub.y, sides: [-1, 1] },
+      { x0: hub.x, y0: hub.y, x1: at(0, insetY).x, y1: at(0, insetY).y, sides: [-1, 1] },
     ];
   }
 
   if (plan === 'green') {
-    // A closed ring wound counter-clockwise, so its segment normal points INWARD. Frontage is
-    // therefore on side -1 (outside the ring), which puts every building's face on the green.
-    const radius = spread * 0.55;
+    // A closed ring inscribed in the drag, wound counter-clockwise so its segment normal points
+    // INWARD. Frontage is on side -1 (outside the ring), putting every building's face on the green.
     const corners = 6;
     const streets: TownStreet[] = [];
     for (let i = 0; i < corners; i += 1) {
       const t0 = (i / corners) * Math.PI * 2;
       const t1 = ((i + 1) / corners) * Math.PI * 2;
-      const wobble = 1 + (hashUnit(i, 0, seed, 13) - 0.5) * 0.18;
-      const p0 = rotate(Math.cos(t0) * radius * wobble, Math.sin(t0) * radius * wobble);
-      const p1 = rotate(Math.cos(t1) * radius * wobble, Math.sin(t1) * radius * wobble);
+      const w0 = 1 + (hashUnit(i, 0, seed, 13) - 0.5) * 0.18;
+      const w1 = 1 + (hashUnit(i + 1, 0, seed, 13) - 0.5) * 0.18;
+      const p0 = at(Math.cos(t0) * insetX * w0, Math.sin(t0) * insetY * w0);
+      const p1 = at(Math.cos(t1) * insetX * w1, Math.sin(t1) * insetY * w1);
       streets.push({ x0: p0.x, y0: p0.y, x1: p1.x, y1: p1.y, sides: [-1] });
     }
     return streets;
@@ -254,9 +265,9 @@ export function townStreets(
   for (let i = 0; i < lanes; i += 1) {
     const t = (i / lanes) * Math.PI * 2 + hashUnit(i, 1, seed, 14) * 0.6;
     const inner = 0.18 + hashUnit(i, 2, seed, 15) * 0.15;
-    const outer = 0.7 + hashUnit(i, 3, seed, 16) * 0.35;
-    const p0 = rotate(Math.cos(t) * spread * inner, Math.sin(t) * spread * inner);
-    const p1 = rotate(Math.cos(t) * spread * outer, Math.sin(t) * spread * outer);
+    const outer = 0.75 + hashUnit(i, 3, seed, 16) * 0.25;
+    const p0 = at(Math.cos(t) * insetX * inner, Math.sin(t) * insetY * inner);
+    const p1 = at(Math.cos(t) * insetX * outer, Math.sin(t) * insetY * outer);
     streets.push({ x0: p0.x, y0: p0.y, x1: p1.x, y1: p1.y, sides: [-1, 1] });
   }
   return streets;
@@ -273,8 +284,8 @@ interface TownPlot {
 }
 
 export interface TownPlanInput {
-  centerX: number;
-  centerY: number;
+  /** The area the author dragged. The town fills it and never leaves it. */
+  bounds: TownBounds;
   params: TownPlanParams;
   geometry: ForestSpeciesGeometry;
   board: { cols: number; rows: number };
@@ -282,15 +293,22 @@ export interface TownPlanInput {
   existing: readonly FloatingArtworkPlacement[];
 }
 
-/** Stable id prefix for a town sited at a point, so a regenerate replaces it rather than stacking. */
-export function townIdPrefix(centerX: number, centerY: number): string {
-  const key = (Math.imul(Math.round(centerX) | 0, 0x9e3779b1) ^ Math.imul(Math.round(centerY) | 0, 0x85ebca6b)) >>> 0;
+/**
+ * Stable id prefix for the town filling an area, so regenerating replaces it rather than stacking
+ * a second town on the same ground. Derived from the area itself, so it survives a page reload.
+ */
+export function townIdPrefix(bounds: TownBounds): string {
+  const parts = [bounds.minX, bounds.minY, bounds.maxX, bounds.maxY];
+  let key = 0x811c9dc5;
+  for (const part of parts) {
+    key = Math.imul(key ^ (Math.round(part) | 0), 0x01000193) >>> 0;
+  }
   return `t${key.toString(36)}.`;
 }
 
-/** True when a placement belongs to the town sited at this point. */
-export function isTownMember(placement: FloatingArtworkPlacement, centerX: number, centerY: number): boolean {
-  return placement.id.startsWith(townIdPrefix(centerX, centerY));
+/** True when a placement belongs to the town filling this area. */
+export function isTownMember(placement: FloatingArtworkPlacement, bounds: TownBounds): boolean {
+  return placement.id.startsWith(townIdPrefix(bounds));
 }
 
 function onPlayableBoard(ground: ForestGroundPoint, board: { cols: number; rows: number }): boolean {
@@ -298,19 +316,48 @@ function onPlayableBoard(ground: ForestGroundPoint, board: { cols: number; rows:
   return grid.x >= -0.5 && grid.y >= -0.5 && grid.x < board.cols - 0.5 && grid.y < board.rows - 0.5;
 }
 
+export interface TownPlanResult {
+  /** The buildings, depth-sorted, dense in the middle and fraying at the edge. */
+  placements: FloatingArtworkPlacement[];
+  /** Plots the plan offered inside the dragged area, before any rejection. */
+  plotsOffered: number;
+  /** Plots dropped for landing on the playable board. */
+  rejectedOnBoard: number;
+  /** Plots dropped for standing too close to something already placed. */
+  rejectedSpacing: number;
+}
+
 /**
- * Site a town. Returns the buildings depth-sorted, dense in the middle and fraying at the edge.
+ * Plan a town inside the dragged area. The result carries WHY plots were dropped, so the editor
+ * can name the real cause instead of blaming frontage for a town the board filter rejected.
  */
-export function planTown(input: TownPlanInput): FloatingArtworkPlacement[] {
-  const { centerX, centerY, params, geometry, board, existing } = input;
+export function planTown(input: TownPlanInput): TownPlanResult {
+  const { bounds, params, geometry, board, existing } = input;
+  const empty: TownPlanResult = {
+    placements: [], plotsOffered: 0, rejectedOnBoard: 0, rejectedSpacing: 0,
+  };
   const buildings = params.buildingIds.filter((id) => geometry.directions(id).length > 0);
-  if (!buildings.length || params.size <= 0 || params.plotWidth <= 0) return [];
+  if (!buildings.length || params.size <= 0 || params.plotWidth <= 0) return empty;
+  const area = {
+    minX: Math.min(bounds.minX, bounds.maxX),
+    maxX: Math.max(bounds.minX, bounds.maxX),
+    minY: Math.min(bounds.minY, bounds.maxY),
+    maxY: Math.max(bounds.minY, bounds.maxY),
+  };
+  if (area.maxX - area.minX < 8 || area.maxY - area.minY < 8) return empty;
+  const { x: centerX, y: centerY } = townBoundsCentre(area);
 
   const seed = params.seed >>> 0;
   const profile = PLAN_PROFILES[params.plan] ?? PLAN_PROFILES.linear;
   const looseness = clamp(params.looseness, 0, 1);
   const wobble = clamp(params.facingWobble, 0, 1);
-  const streets = townStreets(params.plan, centerX, centerY, Math.max(40, params.spread), seed);
+  // Setback is an ideal, not a floor. On a small drag the full setback would consume the whole
+  // area and leave no street to front, so it scales down with the area: a tight drag gets a
+  // tighter town rather than an empty one.
+  const halfW = (area.maxX - area.minX) / 2;
+  const halfH = (area.maxY - area.minY) / 2;
+  const setback = Math.max(4, Math.min(params.setback, Math.min(halfW, halfH) * 0.45));
+  const streets = townStreets(params.plan, area, setback, seed);
 
   // 1. Lay out every plot the plan offers, along street frontage only.
   const plots: TownPlot[] = [];
@@ -331,12 +378,15 @@ export function planTown(input: TownPlanInput): FloatingArtworkPlacement[] {
         const slideAlong = (hashUnit(streetIndex, index, seed, 21) - 0.5) * 2
           * profile.alongSlack * looseness * params.plotWidth;
         const slideOut = (hashUnit(streetIndex, index, seed, 22) - 0.5) * 2
-          * profile.setbackSlack * looseness * params.setback;
-        const offset = params.setback + slideOut;
+          * profile.setbackSlack * looseness * setback;
+        const offset = setback + slideOut;
         const ground = {
           x: street.x0 + along.x * (t + slideAlong) + normal.x * offset * side,
           y: street.y0 + along.y * (t + slideAlong) + normal.y * offset * side,
         };
+        // The drag is a hard boundary: a town never spills outside the ground the author gave it.
+        if (ground.x < area.minX || ground.x > area.maxX
+          || ground.y < area.minY || ground.y > area.maxY) continue;
         plots.push({
           ground,
           // Face back across the setback toward the street centreline.
@@ -348,7 +398,7 @@ export function planTown(input: TownPlanInput): FloatingArtworkPlacement[] {
       }
     }
   }
-  if (!plots.length) return [];
+  if (!plots.length) return empty;
 
   // 2. Take the most central plots first, with a little noise so the edge frays instead of
   //    ending on a clean circle. This is the density gradient.
@@ -364,7 +414,7 @@ export function planTown(input: TownPlanInput): FloatingArtworkPlacement[] {
     if (ground) occupied.push(ground);
   }
 
-  const prefix = townIdPrefix(centerX, centerY);
+  const prefix = townIdPrefix(area);
   const spacing = Math.max(0, params.spacing);
   const scaleLow = Math.min(params.scaleMin, params.scaleMax);
   const scaleHigh = Math.max(params.scaleMin, params.scaleMax);
@@ -377,9 +427,11 @@ export function planTown(input: TownPlanInput): FloatingArtworkPlacement[] {
   const landmarks = params.landmarkIds.filter((id) => geometry.directions(id).length > 0);
   let serial = 0;
 
+  let rejectedOnBoard = 0;
+  let rejectedSpacing = 0;
   for (const plot of ordered) {
     if (produced.length >= params.size) break;
-    if (params.avoidPlayableBoard && onPlayableBoard(plot.ground, board)) continue;
+    if (params.avoidPlayableBoard && onPlayableBoard(plot.ground, board)) { rejectedOnBoard += 1; continue; }
 
     // The focal structure takes the most central plot, then ordinary buildings fill the rest.
     const isLandmark = landmarks.length > 0 && produced.length === 0;
@@ -413,6 +465,7 @@ export function planTown(input: TownPlanInput): FloatingArtworkPlacement[] {
     // Measure against where the sprite actually lands, after integer rounding.
     const seated = floatingArtworkGroundPoint(placement, geometry) ?? plot.ground;
     if (spacing > 0 && occupied.some((point) => Math.hypot(point.x - seated.x, point.y - seated.y) < spacing)) {
+      rejectedSpacing += 1;
       continue;
     }
     occupied.push(seated);
@@ -420,7 +473,12 @@ export function planTown(input: TownPlanInput): FloatingArtworkPlacement[] {
     serial += 1;
   }
 
-  return produced
-    .sort((a, b) => (a.ground.y === b.ground.y ? a.ground.x - b.ground.x : a.ground.y - b.ground.y))
-    .map((entry) => entry.placement);
+  return {
+    placements: produced
+      .sort((a, b) => (a.ground.y === b.ground.y ? a.ground.x - b.ground.x : a.ground.y - b.ground.y))
+      .map((entry) => entry.placement),
+    plotsOffered: plots.length,
+    rejectedOnBoard,
+    rejectedSpacing,
+  };
 }

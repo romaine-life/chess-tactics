@@ -15475,6 +15475,13 @@ button.tileset-relationship-cell {
   overflow: visible;
 }
 
+/* The area being dragged for a town, drawn as SVG geometry rather than CSS surface paint. */
+.le-town-drag-rect {
+  position: absolute;
+  pointer-events: none;
+  overflow: visible;
+}
+
 .le-floating-artwork-hit.is-selectable {
   outline: 2px dashed rgba(111, 210, 255, 0.94);
   outline-offset: 4px;
