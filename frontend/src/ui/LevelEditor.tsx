@@ -81,7 +81,7 @@ import { paintTerrainArea } from './levelEditorTerrainEditing';
 import {
   canTargetPlacedArtCell,
   isPlayableBoardCoordinate,
-  isPropFootprintWithinPlayableBoard,
+  isPropFootprintOnAuthoredSurface,
 } from './placedArtPolicy';
 import {
   fillScenicTerrainViewportTargets,
@@ -954,6 +954,15 @@ function StudioEditableBoard({
     const postHere = fencePostTool && hoverPost?.x === coordinate.x && hoverPost?.y === coordinate.y
       ? FENCE_VERTEX_CORNERS.find((corner) => corner.id === hoverPost.corner) ?? null
       : null;
+    // Props live out here too, so scenic cells carry the same move-tool feedback as playable ones:
+    // the held object's footprint, plus the drop cell tinted by whether the drop is legal.
+    const scenicMovingCells = movingFootprintCells(movingFrom);
+    const isScenicMoveFrom = tool === 'move' && scenicMovingCells.has(key);
+    const isScenicMoveTo = tool === 'move' && !!movingFrom && !isScenicMoveFrom
+      && hoverCell?.x === coordinate.x && hoverCell?.y === coordinate.y;
+    const scenicMoveDroppable = isScenicMoveTo && movingFrom
+      ? (canMoveTo ? canMoveTo(movingFrom, { x: coordinate.x, y: coordinate.y }) : true)
+      : false;
     cells.push({
       key: `decorative-hit:${key}`,
       x: coordinate.x,
@@ -962,6 +971,8 @@ function StudioEditableBoard({
       data: { 'data-board-x': coordinate.x, 'data-board-y': coordinate.y, 'data-decorative-cell': 'true' },
       children: (
         <>
+          {isScenicMoveFrom ? <span className="tileset-cell-ring is-move-from" aria-hidden="true" /> : null}
+          {isScenicMoveTo ? <span className={`tileset-cell-ring ${scenicMoveDroppable ? 'is-move-ok' : 'is-move-blocked'}`} aria-hidden="true" /> : null}
           {fenceHere ? (
             <svg className="le-fence-edge-hint" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
               <line x1={EDGE_LINE[fenceHere][0]} y1={EDGE_LINE[fenceHere][1]} x2={EDGE_LINE[fenceHere][2]} y2={EDGE_LINE[fenceHere][3]} />
@@ -974,7 +985,7 @@ function StudioEditableBoard({
               aria-hidden="true"
             />
           ) : null}
-          {tool === 'region' || allowDecorativeEditing ? (
+          {tool === 'region' || tool === 'move' || allowDecorativeEditing ? (
             <span
               className="tileset-cell-hit"
               style={artworkEditing ? { pointerEvents: 'none' } : undefined}
@@ -987,6 +998,12 @@ function StudioEditableBoard({
                   const edge = edgeAtPointer(event);
                   if (wallTool && edge !== 'N' && edge !== 'W') return;
                   applyBarrierAt(coordinate.x, coordinate.y, edge, tool === 'erase');
+                } else if (tool === 'move') {
+                  // Scenic cells hold props too, so the Move tool picks one up out here exactly as
+                  // it does on the playable board. Units never leave the playable rectangle.
+                  const prop = propAtCell(coordinate.x, coordinate.y);
+                  if (prop) setMovingFrom(prop);
+                  setHoverCell({ x: coordinate.x, y: coordinate.y });
                 } else if (tool === 'brush') {
                   paintingRef.current = true;
                   onPaint(coordinate.x, coordinate.y);
@@ -994,6 +1011,9 @@ function StudioEditableBoard({
                 else if (tool === 'erase') { paintingRef.current = true; onErase(coordinate.x, coordinate.y); }
               }}
               onPointerEnter={() => {
+                // The prop brush ghosts its footprint at the hovered cell, so scenic cells report
+                // hover the same way playable ones do.
+                setHoverCell({ x: coordinate.x, y: coordinate.y });
                 if (placementTargetTool || !paintingRef.current) return;
                 if (tool === 'brush') onPaint(coordinate.x, coordinate.y);
                 else if (tool === 'erase') onErase(coordinate.x, coordinate.y);
@@ -1002,7 +1022,14 @@ function StudioEditableBoard({
                 if (fencePostTool) hoverFencePost(coordinate.x, coordinate.y, vertexAtPointer(event));
                 else hoverBarrierEdge(coordinate.x, coordinate.y, edgeAtPointer(event));
               } : undefined}
-              onPointerUp={() => { paintingRef.current = false; }}
+              onPointerUp={(event) => {
+                if (tool === 'move' && movingFrom) {
+                  event.stopPropagation();
+                  finishMoveAt({ x: coordinate.x, y: coordinate.y });
+                  return;
+                }
+                paintingRef.current = false;
+              }}
             />
           ) : null}
         </>
@@ -1253,7 +1280,10 @@ function StudioEditableBoard({
     const { def } = propBrush;
     const placeable = propBrush.canPlaceAt(hoverCell.x, hoverCell.y);
     for (const c of propCells(hoverCell.x, hoverCell.y, def)) {
-      if (c.x < 0 || c.x >= cols || c.y < 0 || c.y >= rows) continue;
+      // Outline every footprint cell that has authored ground under it — playable or scenic. A cell
+      // past the scenic rectangle has no tile to outline; `placeable` is already false there.
+      const onBoard = c.x >= 0 && c.x < cols && c.y >= 0 && c.y < rows;
+      if (!onBoard && !scenicContains(c.x, c.y)) continue;
       const { left, top, zIndex } = boardLabCellPosition(c);
       overlaySprites.push(
         <span
@@ -3877,11 +3907,16 @@ export function LevelEditor(): ReactElement {
       (authoredX, authoredY) => decorativeCells[`${authoredX},${authoredY}`],
     );
   };
-  // A prop is gameplay art: every footprint cell must stay on the playable board and its tile
-  // family must accept the prop. Scene Art owns free placement outside that rectangle.
+  // A prop sits on authored GROUND, and the authored board extends past the playable rectangle into
+  // the scenic apron (ADR-0098/ADR-0365): every footprint cell must be an authored surface cell —
+  // playable or scenic — whose tile family accepts the prop, and the footprint must be wholly on
+  // one side of the playable edge. The terrain gate is what bounds an off-board prop: past the
+  // apron there is no tile, so there is nothing to stand on. Only playable props project into
+  // layers.props, so an off-board prop is scenery with no collider — which is exactly why a
+  // straddling footprint is refused. Scene Art still owns free pixel placement off the terrain.
   const propFitsBoard = (def: PropDef, ax: number, ay: number): boolean => {
     const footprint = propCells(ax, ay, def);
-    if (!isPropFootprintWithinPlayableBoard(footprint, boardCols, boardRows)) return false;
+    if (!isPropFootprintOnAuthoredSurface(footprint, boardCols, boardRows, (x, y) => cellWithinScenicSurface(`${x},${y}`))) return false;
     return footprint.every((c) => {
       const tileId = authoredCellTileId(c.x, c.y);
       const fam = tileId ? leFamilyOfTile(tileId)?.id : undefined;
@@ -7310,17 +7345,30 @@ export function LevelEditor(): ReactElement {
     nextBoard.cells = prune(nextBoard.cells);
     nextBoard.units = prune(nextBoard.units);
     nextBoard.doodads = prune(nextBoard.doodads);
-    // Props are FOOTPRINT-aware: drop a prop if its anchor OR any footprint cell falls outside
-    // the new bounds (a 2×2 anchored at the last column would otherwise hang off the edge).
+    // Props are FOOTPRINT-aware and may stand on the scenic apron (ADR-0365), so the resize rule is
+    // "does every footprint cell still have authored ground under the NEW dimensions" — playable or
+    // scenic. A prop only disappears when the shrink pulls the ground out from under it.
     {
+      const survivingScenicKeys = new Set(
+        decorativeTerrainApronCoordinates(
+          nextCols,
+          nextRows,
+          nextBoard.decorativeApron ?? decorativeApron,
+          nextBoard.decorativeFootprint ?? [],
+        ).map(({ x, y }) => `${x},${y}`),
+      );
+      const onAuthoredSurface = (x: number, y: number): boolean =>
+        (x >= 0 && y >= 0 && x < nextCols && y < nextRows) || survivingScenicKeys.has(`${x},${y}`);
       const next: Record<string, { propId: string }> = {};
       let dropped = false;
       for (const [key, placement] of Object.entries(nextBoard.props)) {
         const def = resolvePropDef(placement.propId);
         const [ax, ay] = key.split(',').map(Number);
         const fits = def
-          ? ax >= 0 && ay >= 0 && ax + def.w <= nextCols && ay + def.h <= nextRows
-          : within(key); // unknown id: fall back to the anchor-only check
+          // Same rule the brush applies: authored ground under every cell, and wholly playable or
+          // wholly scenic — a grow that would straddle a prop across the new edge drops it.
+          ? isPropFootprintOnAuthoredSurface(propCells(ax, ay, def), nextCols, nextRows, onAuthoredSurface)
+          : onAuthoredSurface(ax, ay); // unknown id: fall back to the anchor-only check
         if (fits) next[key] = placement;
         else dropped = true;
       }
@@ -7996,8 +8044,8 @@ export function LevelEditor(): ReactElement {
                     decorativeFences={decorativeFences}
                     decorativeFencePosts={decorativeFencePosts}
                     decorativeWalls={decorativeWalls}
-                    allowDecorativeEditing={['tile', 'cover', 'road', 'river', 'fence', 'wall', 'subterrain'].includes(brushKind)
-                      || (tool === 'erase' && (brushKind === 'doodad' || brushKind === 'prop'))}
+                    allowDecorativeEditing={['tile', 'cover', 'road', 'river', 'fence', 'wall', 'subterrain', 'prop'].includes(brushKind)
+                      || (tool === 'erase' && brushKind === 'doodad')}
                     onTerrainFirstFrame={acknowledgeEditorTerrain}
                     onSceneFirstFrame={acknowledgeEditorScene}
                     onFrameError={failEditorFrame}

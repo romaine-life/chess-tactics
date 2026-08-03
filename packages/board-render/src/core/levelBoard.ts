@@ -348,8 +348,13 @@ export function editorBoardToLevel(board: EditorBoard, meta: LevelMeta): Level {
 
   // Dual-write props: the durable game channel (layers.props) AND the lossless boardCode 'p' map
   // (via encodeBoard below). The game reads layers.props; the editor re-opens from boardCode. The
-  // anchor (the prop's min-corner) is the map key; out-of-bounds anchors are dropped on resize so
-  // this is just a projection. (Footprint bounds are enforced at paint time, not re-checked here.)
+  // anchor (the prop's min-corner) is the map key.
+  //
+  // Props may be authored onto the scenic apron as well as the playable board (ADR-0365), and this
+  // filter is the gameplay isolation for that: an off-board prop survives losslessly in boardCode
+  // and renders, but never reaches layers.props, so it stamps no collider and cannot alter movement,
+  // deployment, or solver state. That keeps `validateLevel` and the backend's playable-bounds
+  // rejection intact — the outer scene has no gameplay authority (ADR-0098).
   const props: PlacedProp[] = [];
   for (const [key, placement] of Object.entries(board.props ?? {})) {
     const [x, y] = key.split(',').map(Number);

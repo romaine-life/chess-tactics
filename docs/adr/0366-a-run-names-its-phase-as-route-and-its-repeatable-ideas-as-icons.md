@@ -9,7 +9,7 @@ refines:
   - "[ADR-0318](0318-plagued-and-pestiferous-use-separate-owner-selected-icons.md)"
 ---
 
-# ADR-0365: A Run names its phase as route and its repeatable ideas as icons
+# ADR-0366: A Run names its phase as route and its repeatable ideas as icons
 
 ## Context and Problem Statement
 
