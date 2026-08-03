@@ -87,10 +87,12 @@ function TooltipPopup({
             The role's fill alone is a translucent tint — correct on a panel that
             already has a surface, wrong here: the art underneath tinted the type and
             made the same tooltip read differently in the title bar than on a screen. */}
-        <ChromeSurfaceFill surface="hybrid-stone-blue" className="tooltip-pop-fill" />
+        <ChromeSurfaceFill surface="baseline-stone-blue" className="tooltip-pop-fill" />
         <ChromeSurfaceFill role="inner" className="tooltip-pop-fill" />
         {title ? <strong className="tooltip-title">{title}</strong> : null}
-        {children}
+        {/* An ELEMENT, always: a bare text child cannot be lifted above the fills
+            and would be painted over by the tip's own bed. */}
+        <span className="tooltip-body">{children}</span>
       </InnerChromeBox>
     </span>
   ), portalHost ?? document.body);

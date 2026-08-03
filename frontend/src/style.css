@@ -16907,7 +16907,11 @@ button.tileset-relationship-cell {
   z-index: 0;
 }
 
-.app-titlebar > :not(.app-titlebar-fill):not(.app-shell-titlebar-stud) {
+/* The bar stacks its own grid children. A portalled overlay that merely lands
+   inside the bar — a tooltip re-homed here to reach the chrome family scope — is
+   NOT one of them: forcing it relative defeats its fixed placement and drops it
+   at its flow position instead of beside the mark it explains. */
+.app-titlebar > :not(.app-titlebar-fill):not(.app-shell-titlebar-stud):not(.tooltip-pop-positioner) {
   position: relative;
   z-index: 2;
 }
@@ -22216,6 +22220,10 @@ button.tileset-relationship-cell {
 .infotip-pop > :not(.tooltip-pop-fill) {
   position: relative;
   z-index: 1;
+}
+
+.tooltip-body {
+  min-width: 0;
 }
 /* The named thing the tip is about, in the display face — the Run relic and
    ability tips set the precedent and every tip now follows it. */
