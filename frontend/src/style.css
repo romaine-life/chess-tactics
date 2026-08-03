@@ -6763,12 +6763,12 @@ body.loading-bootstrap .app-startup-status {
   flex: 0 0 96px;
   min-width: 0;
 }
-.le-generate .le-gen-cover-select {
+.le-gen-cover-select {
   flex: 1 1 auto;
   min-width: 0;
 }
 .le-generate .le-gen-region-select .house-select-trigger,
-.le-generate .le-gen-cover-select .house-select-trigger {
+.le-gen-cover-select .house-select-trigger {
   padding-left: 7px;
   padding-right: 24px;
 }
@@ -6810,8 +6810,10 @@ body.loading-bootstrap .app-startup-status {
   flex-direction: column;
   gap: 2px;
 }
-/* Ground cover for a region: a compact list of collapsible cover rows, indented under the region. */
-.le-generate .le-gen-cover {
+/* Entry-list primitive: an added row that names itself, keeps its knobs behind a caret and can be
+   removed. Shared by the Generate panel's cover sets and the Town panel's buildings, so these are
+   no longer scoped to .le-generate. */
+.le-gen-cover {
   margin: 0 0 6px 12px;
   padding-left: 8px;
   border-left: 2px solid rgba(110, 238, 246, .22);
@@ -6819,28 +6821,28 @@ body.loading-bootstrap .app-startup-status {
   flex-direction: column;
   gap: 2px;
 }
-.le-generate .le-gen-cover-entry { display: flex; flex-direction: column; gap: 3px; }
+.le-gen-cover-entry { display: flex; flex-direction: column; gap: 3px; }
 /* One cover row's header: a compact caret + set-name toggle on the left, remove × on the right. */
-.le-generate .le-gen-cover-head {
+.le-gen-cover-head {
   display: flex;
   align-items: center;
   gap: 6px;
 }
-.le-generate .le-gen-cover-head .house-select { flex: 1 1 auto; min-width: 0; }
+.le-gen-cover-head .house-select { flex: 1 1 auto; min-width: 0; }
 /* The disclosure is a registered tool square; this rule only seats it in the cover row. */
-.le-generate .le-gen-cover-caret-btn {
+.le-gen-cover-caret-btn {
   flex: 0 0 auto;
   color: inherit;
   cursor: pointer;
 }
-.le-generate .le-gen-cover-caret { flex: 0 0 auto; width: 10px; font-size: 10px; }
-.le-generate .le-gen-cover-knobs {
+.le-gen-cover-caret { flex: 0 0 auto; width: 10px; font-size: 10px; }
+.le-gen-cover-knobs {
   display: flex;
   flex-direction: column;
   gap: 2px;
   margin: 2px 0 4px 16px;
 }
-.le-generate .le-gen-cover-add {
+.le-gen-cover-add {
   width: 100%;
   margin-top: 2px;
   padding: 4px 8px;
@@ -6850,7 +6852,7 @@ body.loading-bootstrap .app-startup-status {
   opacity: .8;
   cursor: pointer;
 }
-.le-generate .le-gen-cover-add:hover { opacity: 1; }
+.le-gen-cover-add:hover { opacity: 1; }
 .le-generate .le-gen-run {
   font-weight: 600;
 }

@@ -48,12 +48,19 @@ const CENTER = (() => {
 const cellOf = (g: { x: number; y: number }) => unprojectBoardPoint({ left: g.x, top: g.y });
 
 let sectionSerial = 0;
-const section = (over: Partial<TownSection> = {}): TownSection => ({
-  id: `s${(sectionSerial += 1)}`,
-  ...DEFAULT_TOWN_SECTION,
-  buildingIds: ['cottage'],
-  ...over,
-});
+/** Building ids as evenly weighted entries, which is what the panel builds when you add them. */
+const entries = (ids: string[]) => ids.map((sourceArtId, index) => ({
+  id: `b${(sectionSerial += 1)}-${index}`, sourceArtId, weight: 1,
+}));
+const section = (over: Partial<TownSection> & { buildingIds?: string[] } = {}): TownSection => {
+  const { buildingIds, ...rest } = over;
+  return {
+    id: `s${(sectionSerial += 1)}`,
+    ...DEFAULT_TOWN_SECTION,
+    buildings: buildingIds ? entries(buildingIds) : entries(['cottage']),
+    ...rest,
+  };
+};
 
 const params = (overrides: Partial<TownPlanParams> = {}): TownPlanParams => ({
   ...TOWN_PLAN_DEFAULTS,
@@ -389,6 +396,38 @@ describe('planTown', () => {
       expect(lodgeMax).toBeLessThanOrEqual(cabinMin + 1e-6);
     });
 
+    it('weights building kinds within a section', () => {
+      const town = run({
+        size: 60,
+        sections: [{
+          ...section(),
+          buildings: [
+            { id: 'b1', sourceArtId: 'cottage', weight: 5 },
+            { id: 'b2', sourceArtId: 'cabin', weight: 1 },
+          ],
+        }],
+      }, [], roomy);
+      const cottages = town.filter((p) => p.sourceArtId === 'cottage').length;
+      const cabins = town.filter((p) => p.sourceArtId === 'cabin').length;
+      expect(cottages).toBeGreaterThan(cabins);
+      expect(cabins).toBeGreaterThan(0);
+    });
+
+    it('never places a building kind whose weight is zero', () => {
+      const town = run({
+        size: 40,
+        sections: [{
+          ...section(),
+          buildings: [
+            { id: 'b1', sourceArtId: 'cottage', weight: 1 },
+            { id: 'b2', sourceArtId: 'cabin', weight: 0 },
+          ],
+        }],
+      }, [], roomy);
+      expect(town.length).toBeGreaterThan(0);
+      expect(new Set(town.map((p) => p.sourceArtId))).toEqual(new Set(['cottage']));
+    });
+
     it('ignores a section with no buildings rather than leaving a gap', () => {
       const town = run({
         sections: [big(), section({ buildingIds: [] })], blend: 0, size: 20, landmarkIds: [],
@@ -579,7 +618,7 @@ describe('planTown', () => {
 
   it('produces nothing without buildings, size, or plot width', () => {
     expect(run({ sections: [] })).toEqual([]);
-    expect(run({ sections: [section({ buildingIds: [] })] })).toEqual([]);
+    expect(run({ sections: [{ ...section(), buildings: [] }] })).toEqual([]);
     expect(run({ sections: [section({ buildingIds: ['missing'] })] })).toEqual([]);
     expect(run({ size: 0 })).toEqual([]);
     expect(run({ plotWidth: 0 })).toEqual([]);

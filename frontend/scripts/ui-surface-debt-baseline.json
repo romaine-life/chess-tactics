@@ -5430,6 +5430,14 @@
       "kind": "css",
       "file": "src/style.css",
       "context": "",
+      "selector": "/* Entry-list primitive: an added row that names itself, keeps its knobs behind a caret and can be removed. Shared by the Generate panel's cover sets and the Town panel's buildings, so these are no longer scoped to .le-generate. */ .le-gen-cover",
+      "surfaceHash": "13e77da7c2ac04175ed2e9bcfca270620eaf102aa8f5c4a689aeb5c68af2dffe",
+      "occurrence": 1
+    },
+    {
+      "kind": "css",
+      "file": "src/style.css",
+      "context": "",
       "selector": "/* Footer = campaign actions: Duplicate + Export neutral, Delete Campaign danger (base .is-danger). */ .ce-import-campaign, .ce-footer .ce-asset-button:not(.is-danger)",
       "surfaceHash": "277bdb0426fbd5d87210424b00ac6c1525193cdb2b056c94d6c7e0fe251b5a78",
       "occurrence": 1
@@ -5448,14 +5456,6 @@
       "context": "",
       "selector": "/* Frame the clock config as the same baked stone panel the settings rows wear (panel-line over the stone surface), so it reads as a real framed control on the page rather than text floating on the scene. Content matches .settings-row's inset. */ .skirmish-setup-clock",
       "surfaceHash": "e11300d5de5ab69184f9cd09df10dd92fe04dffb418f3064780f5a8497d31838",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
-      "selector": "/* Ground cover for a region: a compact list of collapsible cover rows, indented under the region. */ .le-generate .le-gen-cover",
-      "surfaceHash": "13e77da7c2ac04175ed2e9bcfca270620eaf102aa8f5c4a689aeb5c68af2dffe",
       "occurrence": 1
     },
     {

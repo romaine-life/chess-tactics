@@ -3106,9 +3106,18 @@ export function LevelEditor(): ReactElement {
   );
   /** Saved town instances. A board carries as many as the author places. */
   const [boardTowns, setBoardTowns] = useState<BoardTown[]>(initialBoard?.towns ?? []);
+  /** Which building entries have their knobs open, matching the cover entries' caret behaviour. */
+  const [expandedTownBuildings, setExpandedTownBuildings] = useState<Set<string>>(() => new Set());
+  const toggleTownBuildingExpand = (entryId: string): void => {
+    setExpandedTownBuildings((current) => {
+      const next = new Set(current);
+      if (next.has(entryId)) next.delete(entryId); else next.add(entryId);
+      return next;
+    });
+  };
   const newTownSection = (): BoardTownSection => ({
     id: `s${Math.random().toString(36).slice(2, 8)}`,
-    buildingIds: [],
+    buildings: [],
     share: 1,
     scaleMean: 1,
     scaleMin: 0.75,
@@ -4318,7 +4327,11 @@ export function LevelEditor(): ReactElement {
       size: template?.size ?? TOWN_PLAN_DEFAULTS.size,
       // Carry the last town's recipe forward so placing a second one does not start from nothing.
       sections: (template?.sections ?? [newTownSection()])
-        .map((section) => ({ ...section, buildingIds: [...section.buildingIds], id: newTownSection().id })),
+        .map((section) => ({
+          ...section,
+          buildings: section.buildings.map((entry) => ({ ...entry })),
+          id: newTownSection().id,
+        })),
       blend: template?.blend ?? TOWN_PLAN_DEFAULTS.blend,
       landmarkIds: template?.landmarkIds ?? [],
       plotWidth: template?.plotWidth ?? TOWN_PLAN_DEFAULTS.plotWidth,
@@ -9879,24 +9892,67 @@ export function LevelEditor(): ReactElement {
                       >Remove</ChromeButton>
                     ) : null}
                   </div>
-                  <AssetSwatchList
-                    ariaLabel={`Section ${index + 1} buildings`}
-                    items={townBuildingCatalog.map((asset) => ({
-                      id: `town-${section.id}-${asset.id}`,
-                      label: asset.label,
-                      title: `${asset.label} · include in section ${index + 1}`,
-                      selected: section.buildingIds.includes(asset.id),
-                      onSelect: () => updateTownSection(selectedTown.id, section.id, {
-                        buildingIds: section.buildingIds.includes(asset.id)
-                          ? section.buildingIds.filter((id) => id !== asset.id)
-                          : [...section.buildingIds, asset.id],
-                      }),
-                      content: <>
-                        <img src={structureArtDirectionHalfSrc(asset.id, 'south', 'front')} alt="" draggable={false} />
-                        <small>{asset.label}</small>
-                      </>,
-                    }))}
-                  />
+                  {/* Buildings are entries you add, exactly like the Generate panel's cover sets:
+                      each names itself in a dropdown and carries its own weight. A swatch grid
+                      hid which buildings were in, because the only signal was a selected border. */}
+                  <div className="le-gen-cover">
+                    {section.buildings.map((entry, entryIndex) => (
+                      <div className="le-gen-cover-entry" key={entry.id}>
+                        <div className="le-gen-cover-head">
+                          <ChromeButton unit="inner-tool-square"
+                            className={chromeUnitClassNames('inner-tool-square', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-gen-cover-caret-btn', expandedTownBuildings.has(entry.id) && 'active')}
+                            onClick={() => toggleTownBuildingExpand(entry.id)}
+                            aria-expanded={expandedTownBuildings.has(entry.id)}
+                            aria-label={expandedTownBuildings.has(entry.id) ? 'Collapse building settings' : 'Expand building settings'}
+                          >
+                            <span className="le-gen-cover-caret" aria-hidden="true">{expandedTownBuildings.has(entry.id) ? '▾' : '▸'}</span>
+                          </ChromeButton>
+                          <HouseSelect<string>
+                            className="le-gen-cover-select"
+                            value={entry.sourceArtId}
+                            onChange={(sourceArtId) => updateTownSection(selectedTown.id, section.id, {
+                              buildings: section.buildings.map((other) => (
+                                other.id === entry.id ? { ...other, sourceArtId } : other)),
+                            })}
+                            ariaLabel={`Section ${index + 1} building ${entryIndex + 1}`}
+                            options={townBuildingCatalog.map((asset) => ({ value: asset.id, label: asset.label }))}
+                          />
+                          <ChromeButton unit="inner-tool-square"
+                            className={chromeUnitClassNames('inner-tool-square', 'le-gen-icon', 'danger')}
+                            onClick={() => updateTownSection(selectedTown.id, section.id, {
+                              buildings: section.buildings.filter((other) => other.id !== entry.id),
+                            })}
+                            title="Remove this building"
+                            aria-label="Remove this building"
+                          >×</ChromeButton>
+                        </div>
+                        {expandedTownBuildings.has(entry.id) ? (
+                          <div className="le-gen-cover-knobs">
+                            <SliderRow
+                              label={`How often · ${entry.weight.toFixed(1)}`}
+                              value={entry.weight}
+                              set={(weight) => updateTownSection(selectedTown.id, section.id, {
+                                buildings: section.buildings.map((other) => (
+                                  other.id === entry.id ? { ...other, weight } : other)),
+                              })}
+                              min={0} max={5} step={0.1} nudge={0.1} dflt={1}
+                            />
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                    <ChromeButton unit="inner-text-button"
+                      className={chromeUnitClassNames('inner-text-button', 'le-gen-cover-add')}
+                      onClick={() => updateTownSection(selectedTown.id, section.id, {
+                        buildings: [...section.buildings, {
+                          id: `b${Math.random().toString(36).slice(2, 8)}`,
+                          sourceArtId: townBuildingCatalog[0]?.id ?? '',
+                          weight: 1,
+                        }],
+                      })}
+                      title="Add a building kind to this section."
+                    >+ Add building</ChromeButton>
+                  </div>
                   <SliderRow label={`Share · ${section.share.toFixed(1)}`} value={section.share} set={(value) => updateTownSection(selectedTown.id, section.id, { share: value })} min={0} max={5} step={0.1} nudge={0.1} dflt={1} />
                   <SliderRow label={`Average building · ${section.scaleMean.toFixed(2)}×`} value={section.scaleMean} set={(value) => updateTownSection(selectedTown.id, section.id, { scaleMean: value })} min={0.3} max={2.5} step={0.05} nudge={0.05} dflt={1} />
                   <SliderRow label={`Smallest · ${section.scaleMin.toFixed(2)}×`} value={section.scaleMin} set={(value) => updateTownSection(selectedTown.id, section.id, { scaleMin: value })} min={0.2} max={2.5} step={0.05} nudge={0.05} dflt={0.75} />
@@ -9973,7 +10029,7 @@ export function LevelEditor(): ReactElement {
                         : 'The area ran out of street frontage — drag a bigger area or lower Frontage per building.'}
                 </p>
               ) : townSited ? <p className="le-board-note">Placed {townSited.placed} buildings.</p> : null}
-              {selectedTown.sections.every((section) => !section.buildingIds.length)
+              {selectedTown.sections.every((section) => !section.buildings.length)
                 ? <p className="le-board-note">Pick at least one building for a section, then press Regenerate.</p>
                 : null}
             </>) : null}

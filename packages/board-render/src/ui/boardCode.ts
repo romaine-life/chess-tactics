@@ -210,9 +210,15 @@ export interface FloatingArtworkPlacement {
  * a named thing that owns an area, remembers the settings it was built from, and can be reselected
  * and regenerated later. A board carries as many as the author places.
  */
+export interface BoardTownBuilding {
+  id: string;
+  sourceArtId: string;
+  weight: number;
+}
+
 export interface BoardTownSection {
   id: string;
-  buildingIds: string[];
+  buildings: BoardTownBuilding[];
   share: number;
   scaleMean: number;
   scaleMin: number;
@@ -673,11 +679,25 @@ function cleanTowns(value: unknown): BoardTown[] {
         const sec = rawSection as Record<string, unknown>;
         const sectionId = typeof sec.id === 'string' ? sec.id.trim() : '';
         if (!townIdPattern.test(sectionId)) return [];
+        // Accept the flat id list this shipped with for an afternoon, so a board saved then still
+        // opens: each id becomes an evenly weighted entry.
+        const legacy = Array.isArray(sec.buildingIds)
+          ? (sec.buildingIds as unknown[]).filter((x): x is string => typeof x === 'string' && !!x)
+              .map((sourceArtId, index) => ({ id: `b${index}`, sourceArtId, weight: 1 }))
+          : [];
+        const buildings = Array.isArray(sec.buildings)
+          ? (sec.buildings as unknown[]).flatMap((rawEntry) => {
+            if (!rawEntry || typeof rawEntry !== 'object') return [];
+            const entry = rawEntry as Record<string, unknown>;
+            const entryId = typeof entry.id === 'string' ? entry.id.trim() : '';
+            const sourceArtId = typeof entry.sourceArtId === 'string' ? entry.sourceArtId.trim() : '';
+            if (!townIdPattern.test(entryId) || !sourceArtId) return [];
+            return [{ id: entryId, sourceArtId, weight: clampNumber(entry.weight, 1, 0, 100) }];
+          })
+          : [];
         return [{
           id: sectionId,
-          buildingIds: Array.isArray(sec.buildingIds)
-            ? (sec.buildingIds as unknown[]).filter((x): x is string => typeof x === 'string' && !!x)
-            : [],
+          buildings: buildings.length ? buildings : legacy,
           share: clampNumber(sec.share, 1, 0, 100),
           scaleMean: clampNumber(sec.scaleMean, 1, 0.1, 8),
           scaleMin: clampNumber(sec.scaleMin, 0.75, 0.1, 8),

@@ -72,10 +72,18 @@ export const TOWN_PLAN_NOTES: Record<TownPlanKind, string> = {
  * it is the normal case. Sections carry that, and `blend` decides whether they occupy separate
  * parts of the town, interleave completely, or meet across a graded band.
  */
+/** One building kind in a section, added explicitly and weighted against the others. */
+export interface TownBuilding {
+  id: string;
+  sourceArtId: string;
+  /** Relative frequency against the other buildings in this section. */
+  weight: number;
+}
+
 export interface TownSection {
   id: string;
-  /** Building sources this section draws from. */
-  buildingIds: readonly string[];
+  /** Building kinds this section draws from, each an entry the author added. */
+  buildings: readonly TownBuilding[];
   /** Relative weight against the other sections. Shares are normalised, so they need not sum to 1. */
   share: number;
   /** Average building scale for this section, and the boundaries it may vary between. */
@@ -85,7 +93,7 @@ export interface TownSection {
 }
 
 export const DEFAULT_TOWN_SECTION: Omit<TownSection, 'id'> = {
-  buildingIds: [],
+  buildings: [],
   share: 1,
   scaleMean: 1,
   scaleMin: 0.75,
@@ -504,9 +512,11 @@ export function planTown(input: TownPlanInput): TownPlanResult {
   const sections = params.sections
     .map((section) => ({
       ...section,
-      buildingIds: section.buildingIds.filter((id) => geometry.directions(id).length > 0),
+      buildings: section.buildings.filter(
+        (entry) => entry.weight > 0 && geometry.directions(entry.sourceArtId).length > 0,
+      ),
     }))
-    .filter((section) => section.buildingIds.length > 0 && section.share > 0);
+    .filter((section) => section.buildings.length > 0 && section.share > 0);
   if (!sections.length || params.size <= 0 || params.plotWidth <= 0) return empty;
   const shareTotal = sections.reduce((sum, section) => sum + section.share, 0);
   // Cumulative share bands across the town's long axis. A plot's position picks its section.
@@ -642,8 +652,20 @@ export function planTown(input: TownPlanInput): TownPlanResult {
     const drift = (hashUnit(plot.index, 7, seed, 29) - 0.5) * clamp(params.blend, 0, 1);
     const at = clamp(plot.axis + drift, 0, 1);
     const section = (bands.find((band) => at <= band.end) ?? bands[bands.length - 1]).section;
-    const pool = isLandmark ? landmarks : section.buildingIds;
-    const sourceArtId = pool[Math.floor(hashUnit(plot.index, 1, seed, 24) * pool.length) % pool.length];
+    // Weighted pick, so a section can be mostly cottages with the occasional lodge.
+    let sourceArtId: string;
+    if (isLandmark) {
+      sourceArtId = landmarks[Math.floor(hashUnit(plot.index, 1, seed, 24) * landmarks.length) % landmarks.length];
+    } else {
+      const total = section.buildings.reduce((sum, entry) => sum + entry.weight, 0);
+      let roll = hashUnit(plot.index, 1, seed, 24) * total;
+      let chosen = section.buildings[section.buildings.length - 1];
+      for (const entry of section.buildings) {
+        roll -= entry.weight;
+        if (roll <= 0) { chosen = entry; break; }
+      }
+      sourceArtId = chosen.sourceArtId;
+    }
     const installed = geometry.directions(sourceArtId);
     let direction = facingTowards(plot.faceX, plot.faceY, installed);
     if (!direction) continue;
