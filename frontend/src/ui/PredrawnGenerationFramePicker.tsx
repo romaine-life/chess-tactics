@@ -34,6 +34,8 @@ import { Stepper } from './shared/Stepper';
 
 const MIN_FRAME_WIDTH = 320;
 const MAX_FRAME_WIDTH = 8192;
+/** Total slack the stage leaves inside its clipping slot so its 1px frame line survives on all four sides. */
+const FRAME_LINE_ROOM = 4;
 
 type DragState = {
   pointerId: number;
@@ -181,8 +183,11 @@ export function PredrawnGenerationFramePicker({
   useLayoutEffect(() => {
     const slot = stageSlotRef.current;
     if (!slot) return undefined;
+    // Leave room for the stage's own 1px frame line. It is painted outside the element, so sizing
+    // the stage to the full slot lets the clipping slot shave whichever edges are flush — the crop
+    // then reads as an unbordered black field on those sides.
     const measure = (): void => {
-      const width = Math.min(slot.clientWidth, slot.clientHeight * 16 / 9);
+      const width = Math.min(slot.clientWidth - FRAME_LINE_ROOM, (slot.clientHeight - FRAME_LINE_ROOM) * 16 / 9);
       setStageSize({ width, height: width * 9 / 16 });
     };
     measure();
