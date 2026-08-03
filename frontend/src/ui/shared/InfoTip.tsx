@@ -82,6 +82,12 @@ function TooltipPopup({
         id={id}
         className={`infotip-pop tooltip-pop ${className}`.trim()}
       >
+        {/* A tip floats over live artwork with nothing behind it, so it beds on an
+            installed OPAQUE surface first and takes the inner role's tint over that.
+            The role's fill alone is a translucent tint — correct on a panel that
+            already has a surface, wrong here: the art underneath tinted the type and
+            made the same tooltip read differently in the title bar than on a screen. */}
+        <ChromeSurfaceFill surface="hybrid-stone-blue" className="tooltip-pop-fill" />
         <ChromeSurfaceFill role="inner" className="tooltip-pop-fill" />
         {title ? <strong className="tooltip-title">{title}</strong> : null}
         {children}
