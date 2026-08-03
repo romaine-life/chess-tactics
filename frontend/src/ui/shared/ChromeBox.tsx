@@ -6,13 +6,19 @@ import { shellViewportOverlapRegion } from '../shell/AuthoredSceneSlot';
 export function ChromeSurfaceFill({
   role,
   className = '',
+  surface,
 }: {
-  role: ChromeRole;
+  role?: ChromeRole;
   className?: string;
+  /** Name an installed chrome surface directly. A role's own fill may be a TINT,
+   *  which is correct on a panel that already has a surface under it and wrong
+   *  for chrome that floats over live artwork with nothing behind it. */
+  surface?: string;
 }): ReactElement {
   return (
     <span
       data-chrome-fill-role={role}
+      data-chrome-fill-surface={surface}
       className={`chrome-surface-fill ${className}`.trim()}
       aria-hidden="true"
     />

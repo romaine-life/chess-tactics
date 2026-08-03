@@ -107,7 +107,7 @@ const section = (
 // Main menu — the shell whose sections are the menu destinations.
 // ---------------------------------------------------------------------------
 
-// Critical participants are ENFORCED (ADR-0367): a declared id that never registers fails
+// Critical participants are ENFORCED (ADR-0368): a declared id that never registers fails
 // the scene. So these name real `useSceneParticipant` registrants and nothing else — the
 // shared backdrop and the title bar are shell, owned by the director's first two ladder
 // rungs, and were never registrable from inside a boundary at all.

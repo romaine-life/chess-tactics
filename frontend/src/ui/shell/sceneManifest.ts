@@ -158,7 +158,7 @@ export function sceneManifest(
   if (isLevelEditorPath(path)) {
     // The editor keeps a real decomposition rather than one collapsed participant: these
     // are the authorities it already computes separately, so each can fail on its own and
-    // the loading timeline names which one the wait belongs to (ADR-0367).
+    // the loading timeline names which one the wait belongs to (ADR-0368).
     return scene(path, manifest('level-editor', 'homepage', 'level-editor', [
       'chrome:skirmish-screen level-editor-screen',
       'document',

@@ -22,7 +22,7 @@ import { titleBarConfig } from './titleBarConfig';
 // never moves. Settings and the Level Editor declare intent; this component owns their
 // identical placement.
 export function AppTitleBar({ path, search, revealTitle, transitionStatus }: {
-  /** The COMMITTED scene's address, never the browser's pending intent (ADR-0367). */
+  /** The COMMITTED scene's address, never the browser's pending intent (ADR-0368). */
   path: string;
   search?: string;
   transitionStatus?: string | null;
@@ -64,6 +64,7 @@ export function AppTitleBar({ path, search, revealTitle, transitionStatus }: {
       <span className="app-shell-rail-junction app-shell-rail-junction--right-continuation" aria-hidden="true" />
       <BrandLockup
         screenName={config.screenName}
+        routeSlot={config.routeSlot}
         transitionStatus={transitionStatus}
       />
       {config.centerSlot ? <div className="app-shell-titlebar-center" data-titlebar-portal="center" /> : null}

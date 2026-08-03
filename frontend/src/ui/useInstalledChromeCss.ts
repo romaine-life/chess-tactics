@@ -19,7 +19,7 @@ let installedChromePromise: Promise<string> | null = null;
  * plain `url()` into live media. That single omission is what made the persistent title
  * bar paint as an unfilled frame on a cold load: nothing requested the oak surface until
  * the bar mounted and asked for it, so at first paint it could not possibly be there
- * (ADR-0367).
+ * (ADR-0368).
  */
 function referencedImageUrls(css: string): string[] {
   const urls = new Set<string>();

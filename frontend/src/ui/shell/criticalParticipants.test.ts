@@ -9,7 +9,7 @@ import { sceneManifest } from './sceneManifest';
  * `SceneBoundary` now FAILS a scene whose manifest names a critical participant nothing
  * registered, so a manifest can no longer carry aspirational vocabulary — but that failure
  * only surfaces when the route is actually opened. This test is the same rule applied to
- * the whole scene graph at once, which is what stops the drift that produced ADR-0367:
+ * the whole scene graph at once, which is what stops the drift that produced ADR-0368:
  * six declared ids across six families, none of them registrable, none of them checked.
  *
  * The registrant side is read from source rather than from a hand-kept list, for the same
@@ -80,7 +80,7 @@ describe('critical scene participants', () => {
 
   it('keeps the persistent shell out of every scene declaration', () => {
     // The bar and the shared backdrop render outside every boundary and cannot register
-    // there. They are the director's first two ladder rungs (ADR-0367).
+    // there. They are the director's first two ladder rungs (ADR-0368).
     for (const route of ROUTES) {
       const { critical } = sceneManifest(route);
       expect(critical, route).not.toContain('title-bar');

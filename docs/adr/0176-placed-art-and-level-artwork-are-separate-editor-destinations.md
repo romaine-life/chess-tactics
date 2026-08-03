@@ -1,7 +1,9 @@
 ---
-status: accepted
+status: accepted; the Props placement boundary is superseded by ADR-0365
 date: 2026-07-25
 deciders: Nelson, Codex
+partially_superseded_by:
+  - "[ADR-0365](0365-props-stand-on-the-authored-surface-not-the-playable-grid.md)"
 partially_supersedes:
   - "[ADR-0098](0098-authored-board-extends-beyond-playable-grid.md)'s off-board prop and doodad authoring permission"
   - "[ADR-0145](0145-scenic-artwork-is-free-transform-generation-input.md)'s Level Editor Artwork destination and source-shelf naming"
@@ -73,9 +75,14 @@ Placed Art begins with one persistent, visible subtype selector:
 3. **Props** use canonical tile-addressed prop placement and rendering, retain
    their blocking and footprint semantics, and may be placed or moved only when
    their complete footprint lies inside the playable board.
+   **Superseded by [ADR-0365](0365-props-stand-on-the-authored-surface-not-the-playable-grid.md):**
+   a prop's complete footprint must lie on the authored surface — the playable
+   board plus the scenic apron — and gameplay isolation comes from the export
+   projection rather than the placement boundary. Doodads are unaffected.
 
 Scene Art is therefore the only **Placed Art** type that accepts a new
-off-board position. This does not revoke the separate scenic-terrain and
+off-board position. (ADR-0365 adds Props to that list; Doodads remain
+playable-only.) This does not revoke the separate scenic-terrain and
 visual-feature decisions governing other Level Editor tools.
 
 Switching the subtype changes the controls and active placement behavior in

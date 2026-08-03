@@ -8,6 +8,13 @@ export function installedUiMedia(role: string): string {
   return media.immutableUrl;
 }
 
+/** The installed URL for a role whose art decision is still open, or null.
+ * Only for a seat that ships a reserved empty state until its own selection
+ * exists (ADR-0318); required chrome uses installedUiMedia and fails closed. */
+export function installedUiMediaIfPresent(role: string): string | null {
+  return installed().media[role]?.media.immutableUrl ?? null;
+}
+
 /** CSS contains only semantic role variables. The DB projection owns which live
  * media slot satisfies each role and this installs immutable URLs atomically
  * before the application component tree is imported. */

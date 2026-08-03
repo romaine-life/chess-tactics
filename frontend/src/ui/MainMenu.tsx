@@ -25,7 +25,7 @@ import { MenuDestinationSceneSlot } from './shell/AuthoredSceneSlot';
 
 // The title bar's brand mark and wooden surface used to be decoded HERE, so the bar
 // revealed whole on this one screen and nowhere else. Both are shell art now: a startup
-// precondition plus the bar's own ladder rung (ADR-0367 / shell/shellChromeArt.ts).
+// precondition plus the bar's own ladder rung (ADR-0368 / shell/shellChromeArt.ts).
 
 interface MenuTab { slug: string; label: string; href: string; icon: string }
 
@@ -117,7 +117,7 @@ export function MainMenu({
 
   // The shared backdrop's reveal is the director's first ladder rung now, owned by the
   // App-level host on every route; the menu's controls ride its scene reveal like any other
-  // screen's body (ADR-0367). Neither is the menu's own bespoke choreography any more.
+  // screen's body (ADR-0368). Neither is the menu's own bespoke choreography any more.
   return (
     <div
       className="menu-layer main-menu-layer"

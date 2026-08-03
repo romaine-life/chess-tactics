@@ -991,7 +991,7 @@ h1 {
 }
 /* The bar is position:fixed at z-index 10000 — ABOVE the bootstrap curtain — so an
    invisible pending bar would still swallow clicks meant for whatever is beneath it.
-   Pending means inert as well as unseen (ADR-0367). */
+   Pending means inert as well as unseen (ADR-0368). */
 .app-shell-titlebar.reveal-pending {
   opacity: 0;
   pointer-events: none;
@@ -7532,6 +7532,13 @@ body.loading-bootstrap .app-startup-status {
 .le-deployment-zone-head > div { display: flex; flex-direction: column; gap: 3px; }
 .le-deployment-zone-head span { color: #b7ccd8; font-size: var(--ds-text-xs); }
 .le-deployment-zone-help { color: #b7ccd8; font-size: var(--ds-text-xs); }
+.le-deployment-breakouts { display: flex; flex-direction: column; gap: 8px; }
+.le-deployment-breakout { display: flex; flex-direction: column; gap: 6px; }
+/* Beats `.le-deployment-zone-head > div`, which columns every direct child of the head row. */
+.le-deployment-zone-head > .le-deployment-breakout-controls { align-items: center; display: flex; flex-direction: row; gap: 10px; }
+.le-deployment-pawn-row { align-items: center; gap: 10px; }
+.le-deployment-pawn-row > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.le-deployment-pawn-help { color: #b7ccd8; font-size: var(--ds-text-xs); }
 .le-deployment-zone-head .le-seg-btn,
 .le-deployment-edit-zone { min-height: var(--le-inner-control-compact-h); min-width: 0; padding: 0 10px; }
 .le-deployment-zones { display: flex; flex-direction: column; gap: 5px; }
@@ -9019,16 +9026,15 @@ body.loading-bootstrap .app-startup-status {
     display: none;
   }
 
-  /* A Run's Conflict/Battle/level/phase orientation remains title-bar information
-     at compact widths (ADR-0359). Keep that one chip and shed War identity + gold. */
-  .app-shell-titlebar .run-topbar-status .skirmish-turn-plate,
-  .app-shell-titlebar .run-topbar-status .skirmish-clock {
+  /* A Run's measures — Ataraxia, gold, Conflict, Battle — are compact marks and
+     stay title-bar information at every width. The named identity chip is the
+     wide element, so that is what sheds first. */
+  .app-shell-titlebar .run-topbar-status .run-topbar-identity {
     display: none;
   }
 
-  .app-shell-titlebar .run-topbar-status .skirmish-objective {
+  .app-shell-titlebar .run-topbar-status .run-topbar-measures {
     display: flex;
-    min-inline-size: 150px;
   }
 
 }
@@ -16912,7 +16918,11 @@ button.tileset-relationship-cell {
   z-index: 0;
 }
 
-.app-titlebar > :not(.app-titlebar-fill):not(.app-shell-titlebar-stud) {
+/* The bar stacks its own grid children. A portalled overlay that merely lands
+   inside the bar — a tooltip re-homed here to reach the chrome family scope — is
+   NOT one of them: forcing it relative defeats its fixed placement and drops it
+   at its flow position instead of beside the mark it explains. */
+.app-titlebar > :not(.app-titlebar-fill):not(.app-shell-titlebar-stud):not(.tooltip-pop-positioner) {
   position: relative;
   z-index: 2;
 }
@@ -17328,6 +17338,27 @@ button.tileset-relationship-cell {
   letter-spacing: .14em;
   line-height: 1.2;
   text-transform: uppercase;
+}
+
+/* The screen-name line reads as a route when a screen names its own position in it
+   (Run › Shop). The trailing segment is a portal the screen fills; while it is empty
+   the line is exactly the plain screen name it has always been, chevron and all
+   spacing included. Orientation copy, never a control (ADR-0300). */
+.brand-lockup-screen-line {
+  align-items: baseline;
+  display: flex;
+  min-width: 0;
+}
+
+.brand-lockup-route:not(:empty) {
+  color: #f0eadb;
+}
+
+.brand-lockup-route:not(:empty)::before {
+  color: #79d3ff;
+  content: "\203A";
+  margin-inline: .5em .5em;
+  opacity: .75;
 }
 
 .settings-tab span,
@@ -18941,7 +18972,6 @@ button.tileset-relationship-cell {
   image-rendering: pixelated;
   inline-size: 100%;
   object-fit: contain;
-  transform: scale(1.55);
 }
 
 .run-gold-icon.is-unavailable {
@@ -18992,9 +19022,28 @@ button.tileset-relationship-cell {
   font-size: var(--ds-text-md);
 }
 
+.run-topbar-measures .run-topbar-rung,
+.run-topbar-measures .run-gold-icon,
 .run-gold-amount--title .run-gold-icon {
-  block-size: 22px;
-  inline-size: 22px;
+  block-size: var(--run-measure-seat, 22px);
+  inline-size: var(--run-measure-seat, 22px);
+}
+
+/* Ataraxia's mark is the carved rung numeral itself (ADR-0363), so it takes the
+   measure's whole seat with no digit beside it. Where the forged set is not
+   installed, the seat still states the rung as type. */
+.run-topbar-rung {
+  align-items: center;
+  display: inline-flex;
+  flex: none;
+  justify-content: center;
+}
+
+.run-topbar-rung img {
+  block-size: 100%;
+  image-rendering: pixelated;
+  inline-size: 100%;
+  object-fit: contain;
 }
 
 .run-gold-amount--button {
@@ -19005,6 +19054,72 @@ button.tileset-relationship-cell {
   block-size: 18px;
   inline-size: 18px;
 }
+
+/* The Run's repeatable ideas — Ataraxia, Conflict, Battle — each own a native icon
+   seat in the persistent title bar. The seat keeps its geometry whether or not that
+   variant's art decision exists yet, so installing one later never moves the label
+   beside it. Layout only: the chip frame is the kit panel, never a second surface. */
+.run-progress-icon {
+  align-items: center;
+  block-size: var(--run-measure-seat);
+  display: inline-flex;
+  flex: none;
+  inline-size: var(--run-measure-seat);
+  justify-content: center;
+}
+
+/* Every mark ships trimmed to its own ink, so the seat needs no per-icon
+   compensation: contain in a square seat draws each one at the same size, and the
+   only spacing left is the gap the row asks for. */
+.run-progress-icon img {
+  block-size: 100%;
+  image-rendering: pixelated;
+  inline-size: 100%;
+  object-fit: contain;
+}
+
+/* A measure is one icon and its number, sitting bare on the bar — Ataraxia tier,
+   gold, Conflict, Battle are all the same kind of fact and read as one row of
+   marks. Only the War/Battle identity, which cannot be drawn, keeps a chip
+   frame; a measure never gets a box of its own. */
+.run-topbar-measures {
+  /* One seat for every mark, because every mark is trimmed to its own ink: the
+     coin, the wreath and the drum all draw at the same size, and the gap between
+     a mark and its number is the same gap everywhere in the row. */
+  --run-measure-seat: 30px;
+  align-items: center;
+  display: flex;
+  gap: var(--ds-inline);
+  min-width: 0;
+}
+
+.run-topbar-measure {
+  align-items: center;
+  color: #eaf6ff;
+  display: inline-flex;
+  font: var(--ds-weight-strong) var(--ds-text-md)/1 var(--ds-font-display);
+  gap: var(--ds-space-1);
+  letter-spacing: .04em;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+/* A measure has no frame between it and the bar's painted wall, so its mark needs
+   a stroke to hold its silhouette. The stroke is baked into the artwork
+   (scripts/bake-icon-stroke.mjs), the way the accepted ui-kit icons carry theirs —
+   NOT a CSS shadow standing in for one. Only the number gets a contact shadow,
+   which is ordinary type treatment. */
+.run-topbar-measure > span {
+  text-shadow: 0 2px 0 #02070b;
+}
+
+/* A mark is a symbol standing in for a word, so every measure names itself on
+   hover or keyboard focus through the shared Tooltip. The popup owns its whole
+   treatment (ADR-0362's promotion); this only keeps the trigger's own layout. */
+.run-topbar-measure-tip {
+  min-width: 0;
+}
+
 
 .run-victory-summary > span + span::before {
   content: "·";
@@ -19191,6 +19306,57 @@ button.tileset-relationship-cell {
 }
 
 .run-relic-review-grid small {
+  color: var(--skirmish-muted);
+}
+
+/* Run title-bar icon review: every candidate is mounted in the SAME chip the live
+   title bar paints, with its native 64x64 beside it. Layout only — the chip brings
+   its own kit frame, and the review never restyles the seat it is judging. */
+.run-progress-icon-review-section {
+  display: grid;
+  gap: var(--ds-inline-tight);
+}
+
+.run-progress-icon-review-section > h2,
+.run-progress-icon-review-section > p {
+  margin: 0;
+}
+
+.run-progress-icon-review-grid {
+  display: grid;
+  gap: var(--ds-inline);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.run-progress-icon-review-grid figure {
+  align-items: start;
+  display: grid;
+  gap: var(--ds-inline);
+  grid-template-columns: 64px minmax(0, 1fr);
+  margin: 0;
+  padding: var(--ds-inset);
+}
+
+.run-progress-icon-review-detail {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  justify-items: start;
+  min-width: 0;
+}
+
+.run-progress-icon-review-native {
+  block-size: 64px;
+  image-rendering: pixelated;
+  inline-size: 64px;
+  object-fit: contain;
+}
+
+.run-progress-icon-review-grid figcaption {
+  display: grid;
+  gap: var(--ds-space-1);
+}
+
+.run-progress-icon-review-grid small {
   color: var(--skirmish-muted);
 }
 
@@ -22051,6 +22217,29 @@ button.tileset-relationship-cell {
   text-align: left;
   text-transform: none; letter-spacing: normal;
   pointer-events: none;
+  /* A tip floats over live artwork, so it needs an OPAQUE bed: the inner-box
+     frame's own 9-slice fill is drawn to sit on a panel that already has one.
+     The registered inner surface fill supplies it (below); these two only make
+     room for it to sit under the content. */
+  position: relative;
+}
+
+.infotip-pop > .tooltip-pop-fill {
+  inset: 0;
+}
+
+.infotip-pop > :not(.tooltip-pop-fill) {
+  position: relative;
+  z-index: 1;
+}
+
+/* The body carries whatever parts a caller passes — the Army's unit-trait tip
+   passes a description AND its source. They were rows of the pop's own grid
+   before the body became one element, so the body IS that grid now. */
+.tooltip-body {
+  display: grid;
+  gap: var(--ds-space-2);
+  min-width: 0;
 }
 /* The named thing the tip is about, in the display face — the Run relic and
    ability tips set the precedent and every tip now follows it. */

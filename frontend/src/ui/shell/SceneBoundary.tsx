@@ -248,7 +248,7 @@ export function SceneBoundary({
         // A declared critical participant that never registered is a BROKEN DECLARATION,
         // not a resource to wait on: waiting hangs the scene forever, and ignoring it is
         // exactly how six declared ids decayed into comments while nothing checked them
-        // (ADR-0367). Checked after two frames, so every child layout effect — including a
+        // (ADR-0368). Checked after two frames, so every child layout effect — including a
         // subtree that only just mounted — has had its chance to register; a registration
         // that lands later bumps `revision` and restarts this pass from the top.
         const missing = manifest.critical.filter((id) => !participantsRef.current.has(id));

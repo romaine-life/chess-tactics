@@ -35,7 +35,7 @@ export type SceneAction =
 const SETTLED_STAGE = SHELL_LADDER.length - 1;
 
 /**
- * There is ONE cold-load lifecycle (ADR-0367).
+ * There is ONE cold-load lifecycle (ADR-0368).
  *
  * Passing `coldLoadHref` starts the shell ladder for whatever route the browser opened —
  * every route, not just the main menu, and not a separate branch from preparing the

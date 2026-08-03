@@ -47,7 +47,7 @@ describe('Main Menu chrome hierarchy', () => {
     expect(mainMenu).not.toContain('STONE_SURFACE');
     // Reveal gating is NOT this screen's job any more. The menu used to decode the oak
     // surface and the brand shield itself, which is why the bar revealed whole here and
-    // nowhere else; both are shell art on the one cold-load ladder now (ADR-0367).
+    // nowhere else; both are shell art on the one cold-load ladder now (ADR-0368).
     expect(mainMenu).not.toContain('ui-surfaces-hybrid-wood-oak-png');
     expect(mainMenu).not.toContain('buttonArt');
     expect(mainMenu).not.toContain('reportReady');

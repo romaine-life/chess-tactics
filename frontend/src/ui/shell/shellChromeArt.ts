@@ -6,7 +6,7 @@ import { installedUiMedia } from '../installedUiMedia';
  * The art the PERSISTENT shell paints — the title bar's brand mark and the marks in its
  * always-on trailing cluster.
  *
- * This is a startup PRECONDITION, not a per-scene readiness contract (ADR-0367). The bar
+ * This is a startup PRECONDITION, not a per-scene readiness contract (ADR-0368). The bar
  * outlives every scene and paints the same marks on every route, so there is no per-scene
  * variance to model: `main.tsx` decodes these once, before App is imported, and an
  * unfinished bar stops being something to gate against and becomes unreachable.

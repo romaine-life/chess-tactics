@@ -176,7 +176,7 @@ describe('scene director', () => {
     ['/editor/level', 'level-editor'],
     ['/', 'dom'],
   ])('cold-loads %s through the one shell ladder', (href, paintOwner) => {
-    // Every route, not just the menu: there is no second cold-start branch (ADR-0367).
+    // Every route, not just the menu: there is no second cold-start branch (ADR-0368).
     expect(initialSceneState(sceneManifest(href), href)).toMatchObject({
       phase: 'startup',
       startupActive: true,

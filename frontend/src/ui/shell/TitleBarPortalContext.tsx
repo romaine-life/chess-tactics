@@ -5,11 +5,12 @@ import { useLayoutEffect, useState } from 'react';
 // without lifting DOM nodes into the scene director. Center/stud content uses <TitleBarSlot>;
 // routed controls use the closed <TitleBarControlContribution> API so callers cannot
 // choose the title bar's button markup or placement (ADR-0104).
-export type TitleBarPortalRegion = 'center' | 'before-divider' | 'stud';
+export type TitleBarPortalRegion = 'center' | 'before-divider' | 'route' | 'stud';
 
 const SELECTORS: Record<TitleBarPortalRegion, string> = {
   center: '[data-titlebar-portal="center"]',
   'before-divider': '[data-titlebar-portal="before-divider"]',
+  route: '[data-titlebar-portal="route"]',
   stud: '[data-titlebar-portal="stud"]',
 };
 
