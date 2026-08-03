@@ -20844,6 +20844,12 @@ button.tileset-relationship-cell {
   padding: var(--ds-inset);
 }
 
+.enchiridion-ability-card {
+  isolation: isolate;
+  overflow: hidden;
+  position: relative;
+}
+
 .enchiridion-terrain-row > span:last-child,
 .enchiridion-ability-card > span:last-child,
 .enchiridion-ataraxia-card > span:last-child,
@@ -20854,7 +20860,7 @@ button.tileset-relationship-cell {
 }
 
 .enchiridion-terrain-row > :first-child,
-.enchiridion-ability-card > :first-child {
+.enchiridion-ability-card > .enchiridion-ability-icon {
   block-size: 34px;
   inline-size: 34px;
 }
@@ -20862,6 +20868,17 @@ button.tileset-relationship-cell {
 .enchiridion-ability-card > img {
   image-rendering: pixelated;
   object-fit: contain;
+}
+
+.enchiridion-ability-card > img,
+.enchiridion-ability-card > span:last-child {
+  position: relative;
+  z-index: 1;
+}
+
+.enchiridion-ability-card[data-card-type='concinnous'] > span:last-child {
+  color: #21190f;
+  text-shadow: 0 1px 0 rgb(255 255 255 / 55%);
 }
 
 /* The rung IS the mark: the numeral occupies the seat its neighbouring sections give a
