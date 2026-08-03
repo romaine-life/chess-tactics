@@ -719,8 +719,25 @@ function CardTypeReference({ definition }: { definition: CardTypeReferenceDefini
   );
 }
 
-function CardTypesSection({ framed, textureBatch }: { framed: boolean; textureBatch: string | null }): ReactElement {
-  const [selectedTypeId, setSelectedTypeId] = useState('pestiferous');
+function CardTypesSection({
+  framed,
+  textureBatch,
+  selectedCardTypeId = null,
+  cardTypeHref,
+}: {
+  framed: boolean;
+  textureBatch: string | null;
+  /** The route-addressed property; read only when cardTypeHref makes selection navigational. */
+  selectedCardTypeId?: RunCardType | null;
+  /** When present, selecting a property navigates to this address instead of setting local state. */
+  cardTypeHref?: (cardType: RunCardType) => string;
+}): ReactElement {
+  const [localSelectedTypeId, setLocalSelectedTypeId] = useState<RunCardType>('pestiferous');
+  // Routed hosts derive the selection from the address every render; an unknown or absent
+  // card-type address falls back to the first property without rewriting the URL.
+  const selectedTypeId = cardTypeHref
+    ? selectedCardTypeId ?? CARD_TYPE_REFERENCES[0].id
+    : localSelectedTypeId;
   const [loadedTextureBatch, setLoadedTextureBatch] = useState<string | null>(null);
   const [textureUrls, setTextureUrls] = useState<CardTypeTextureUrls>({});
   const [textureLoadFailed, setTextureLoadFailed] = useState(false);
@@ -769,7 +786,8 @@ function CardTypesSection({ framed, textureBatch }: { framed: boolean; textureBa
           {CARD_TYPE_REFERENCES.map((definition) => (
             <li key={definition.id}>
               <ReferenceTrigger
-                onSelect={() => setSelectedTypeId(definition.id)}
+                to={cardTypeHref?.(definition.id)}
+                onSelect={() => setLocalSelectedTypeId(definition.id)}
                 data-chrome-unit="inner-list-row"
                 data-testid={`enchiridion-card-type-${definition.id}`}
                 className={chromeUnitClassNames(
@@ -966,6 +984,8 @@ export function EnchiridionReference({
   relicHref,
   selectedCardId,
   cardHref,
+  selectedCardTypeId,
+  cardTypeHref,
   cardTypeTextureBatch = null,
 }: {
   section: EnchiridionSection;
@@ -974,11 +994,22 @@ export function EnchiridionReference({
   relicHref?: (relicId: RunRelicId) => string;
   selectedCardId: string | null;
   cardHref?: (cardId: string) => string;
+  selectedCardTypeId: RunCardType | null;
+  cardTypeHref?: (cardType: RunCardType) => string;
   cardTypeTextureBatch?: string | null;
 }): ReactElement {
   if (section === 'terrain') return <TerrainSection framed={framed} />;
   if (section === 'cards') return <CardCodex framed={framed} selectedCardId={selectedCardId} cardHref={cardHref} />;
-  if (section === 'card-types') return <CardTypesSection framed={framed} textureBatch={cardTypeTextureBatch} />;
+  if (section === 'card-types') {
+    return (
+      <CardTypesSection
+        framed={framed}
+        textureBatch={cardTypeTextureBatch}
+        selectedCardTypeId={selectedCardTypeId}
+        cardTypeHref={cardTypeHref}
+      />
+    );
+  }
   if (section === 'relics') return <RelicCodex framed={framed} selectedRelicId={selectedRelicId} relicHref={relicHref} />;
   if (section === 'abilities') return <AbilitiesSection framed={framed} />;
   if (section === 'ataraxia') return <AtaraxiaSection framed={framed} />;
@@ -992,6 +1023,8 @@ export function Enchiridion({
   relicHref,
   selectedCardId = null,
   cardHref,
+  selectedCardTypeId = null,
+  cardTypeHref,
   showSectionRail = true,
   sceneInstanceKey = `enchiridion/${section}`,
   framed = true,
@@ -1007,6 +1040,10 @@ export function Enchiridion({
   selectedCardId?: string | null;
   /** When present, card focus in the cards section navigates to this address. */
   cardHref?: (cardId: string) => string;
+  /** The route-addressed property for the card-types section; see CardTypesSection. */
+  selectedCardTypeId?: RunCardType | null;
+  /** When present, property selection in the card-types section navigates to this address. */
+  cardTypeHref?: (cardType: RunCardType) => string;
   showSectionRail?: boolean;
   sceneInstanceKey?: string;
   framed?: boolean;
@@ -1027,6 +1064,8 @@ export function Enchiridion({
           relicHref={relicHref}
           selectedCardId={selectedCardId}
           cardHref={cardHref}
+          selectedCardTypeId={selectedCardTypeId}
+          cardTypeHref={cardTypeHref}
           cardTypeTextureBatch={cardTypeTextureBatch}
         />
       </EnchiridionContentSceneSlot>

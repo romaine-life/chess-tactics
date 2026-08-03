@@ -292,17 +292,24 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(cardTypes).toContain('RUN_CARD_TYPE_REFERENCE[definition.id].name');
     // Every named card property now has installed Run mechanics, so none is provisional.
     expect(cardTypes).not.toContain('provisional: true');
-    expect(cardTypes).toContain("useState('pestiferous')");
+    expect(cardTypes).toContain("useState<RunCardType>('pestiferous')");
     expect(cardTypes).toContain('className="enchiridion-card-type-layout"');
     expect(cardTypes).toContain('className="enchiridion-card-type-rows"');
     expect(cardTypes).toContain('data-testid={`enchiridion-card-type-${definition.id}`}');
+    // Every property row is a real address, so a reviewer can be linked straight to one
+    // instead of being told which row to click.
+    expect(cardTypes).toContain('to={cardTypeHref?.(definition.id)}');
+    expect(mainMenu).toContain('selectedCardTypeId={enchiridionCardTypeFromPath(path)}');
+    expect(mainMenu).toContain('cardTypeHref={enchiridionCardTypeHref}');
     expect(cardTypes).toContain('<CardTypeReference definition={selected} />');
     expect(cardTypes).not.toContain('<CardTypeReference definition={definition} key={definition.id} />');
     expect(style).toMatch(/\.enchiridion-card-type-layout\s*\{[\s\S]*?grid-template-columns:\s*minmax\(280px,\s*1fr\) minmax\(232px,\s*300px\)/);
     expect(style).toMatch(/\.enchiridion-card-type-detail\s*\{[\s\S]*?container-type:\s*inline-size/);
     expect(style).toMatch(/\.enchiridion-card-type-preview\s*\{[\s\S]*?margin-block-start:\s*-4cqw/);
     expect(style).toMatch(/\.enchiridion-card-type-row-name\s*\{[\s\S]*?line-height:\s*1/);
-    expect(enchiridion).toContain("if (section === 'card-types') return <CardTypesSection framed={framed} textureBatch={cardTypeTextureBatch} />;");
+    expect(enchiridion).toContain("if (section === 'card-types') {");
+    expect(enchiridion).toContain('<CardTypesSection');
+    expect(enchiridion).toContain('textureBatch={cardTypeTextureBatch}');
     // The normal screen resolves accepted public slots. An exact query-addressed
     // candidate batch remains an explicitly labeled private review override.
     expect(cardTypes).toContain('acceptedCardTypeTextureUrls(currentLiveMediaCatalog())');

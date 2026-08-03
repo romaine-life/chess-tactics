@@ -9,6 +9,8 @@ import { Enchiridion } from './Enchiridion';
 import {
   enchiridionCardFromPath,
   enchiridionCardHref,
+  enchiridionCardTypeFromPath,
+  enchiridionCardTypeHref,
   enchiridionRelicFromPath,
   enchiridionRelicHref,
   enchiridionSectionFromPath,
@@ -191,6 +193,8 @@ export function MainMenu({
                         relicHref={enchiridionRelicHref}
                         selectedCardId={enchiridionCardFromPath(path)}
                         cardHref={enchiridionCardHref}
+                        selectedCardTypeId={enchiridionCardTypeFromPath(path)}
+                        cardTypeHref={enchiridionCardTypeHref}
                         sceneInstanceKey={sceneInstanceKey}
                         framed={false}
                       />
