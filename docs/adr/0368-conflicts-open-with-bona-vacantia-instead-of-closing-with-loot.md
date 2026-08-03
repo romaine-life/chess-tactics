@@ -1,4 +1,4 @@
-# ADR-0365: Conflicts open with Bona Vacantia instead of closing with loot
+# ADR-0368: Conflicts open with Bona Vacantia instead of closing with loot
 
 ## Status
 
