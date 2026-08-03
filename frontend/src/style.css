@@ -8947,16 +8947,15 @@ body.loading-bootstrap .app-startup-status {
     display: none;
   }
 
-  /* A Run's Conflict/Battle/level/phase orientation remains title-bar information
-     at compact widths (ADR-0359). Keep that one chip and shed War identity + gold. */
-  .app-shell-titlebar .run-topbar-status .skirmish-turn-plate,
-  .app-shell-titlebar .run-topbar-status .skirmish-clock {
+  /* A Run's measures — Ataraxia, gold, Conflict, Battle — are compact marks and
+     stay title-bar information at every width. The named identity chip is the
+     wide element, so that is what sheds first. */
+  .app-shell-titlebar .run-topbar-status .run-topbar-identity {
     display: none;
   }
 
-  .app-shell-titlebar .run-topbar-status .skirmish-objective {
+  .app-shell-titlebar .run-topbar-status .run-topbar-measures {
     display: flex;
-    min-inline-size: 150px;
   }
 
 }
@@ -18929,25 +18928,31 @@ button.tileset-relationship-cell {
   image-rendering: pixelated;
   inline-size: 100%;
   object-fit: contain;
-  transform: scale(1.3);
+  /* Match the gold coin's drawn presence: unboxed marks carry the bar, so they
+     overfill their seat by the same amount the coin does. */
+  transform: scale(1.5);
 }
 
-/* One icon and the number it measures read as a single token. */
-.run-topbar-status .run-topbar-measure {
-  align-items: center;
-  display: inline-flex;
-  gap: var(--ds-space-1);
-  min-width: 0;
-  white-space: nowrap;
-}
-
-/* Conflict and Battle are two measures of the same position, so they sit side by
-   side on the chip's value line instead of collapsing into one run of prose. */
-.run-topbar-status .run-topbar-progress {
+/* A measure is one icon and its number, sitting bare on the bar — Ataraxia tier,
+   gold, Conflict, Battle are all the same kind of fact and read as one row of
+   marks. Only the War/Battle identity, which cannot be drawn, keeps a chip
+   frame; a measure never gets a box of its own. */
+.run-topbar-measures {
   align-items: center;
   display: flex;
   gap: var(--ds-inline);
-  justify-content: center;
+  min-width: 0;
+}
+
+.run-topbar-measure {
+  align-items: center;
+  color: #eaf6ff;
+  display: inline-flex;
+  font: var(--ds-weight-strong) var(--ds-text-md)/1 var(--ds-font-display);
+  gap: var(--ds-space-1);
+  letter-spacing: .04em;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .run-victory-summary > span + span::before {

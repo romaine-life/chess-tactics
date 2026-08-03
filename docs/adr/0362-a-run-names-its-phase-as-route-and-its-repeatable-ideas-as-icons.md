@@ -46,9 +46,19 @@ has always been, chevron and spacing included.
 semantic slots are `ui/kit/icons/run/{ataraxia,conflict,battle}.png`, runtime
 component `run-progress-icon`, variant equal to the idea. The runtime never
 substitutes one for another and never borrows a unit-ability or card-property
-glyph for a Run position. The progress chip becomes two icon-and-number measures —
-Conflict N and Battle n/m — and its remaining small line is the authored Battle
-name alone.
+glyph for a Run position.
+
+**One chip, and measures with no box.** The Run bar carries exactly one framed
+chip: the identity it cannot draw — the War's name over the authored name of the
+Battle you are at. Everything else is a **measure**, an icon and its number
+sitting bare on the bar: Ataraxia tier, gold, Conflict, Battle. They are the same
+kind of fact, so they read as one row of marks rather than a row of little boxes,
+and a measure never gets a frame of its own.
+
+Ataraxia is written as its symbol and its tier — the word is gone, and the tier's
+name stays on hover rather than spending bar width. Because the measures are
+compact marks and the named chip is the wide element, the chip is what sheds
+first at compact widths, not the position.
 
 **A seat is reserved before its icon decision exists.** `installedUiMediaIfPresent`
 returns null instead of failing closed, and the seat keeps its geometry, so
@@ -56,7 +66,7 @@ installing an icon later cannot move the label beside it. Required chrome keeps
 using `installedUiMedia` and still fails closed.
 
 **Selection is one owner act on the real seat.** `/studio?runProgressIconReview=1`
-mounts every candidate in the SAME chip components the live bar paints
+mounts every candidate in the SAME measure row the live bar paints
 (`RunTitleBarChips`, shared by both — ADR-0059) plus its native 64×64 pixels.
 **Use for &lt;idea&gt;** records owner approval of those exact bytes, accepts the
 version into its slot, and binds the slot to its `app-ui` media role. The binding
@@ -66,7 +76,7 @@ with no accepted version, so a role bound early would 503 the whole catalog.
 ## Consequences
 
 - The Run's position reads at the top-left with the rest of the app's orientation
-  copy, and the progress chip is a position rather than a sentence.
+  copy, and the bar's numbers are a row of marks rather than a sentence in boxes.
 - Another screen whose position is state rather than address can name it the same
   way without inventing a status chip for it.
 - Until an icon is installed the bar shows a reserved empty seat. That is the

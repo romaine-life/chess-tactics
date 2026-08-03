@@ -7,7 +7,7 @@ import { InnerChromeBox, ShellViewportSwap } from './shared/ChromeBox';
 import { HouseSelect } from './shared/HouseSelect';
 import { TitleBarStatus } from './shell/TitleBarControls';
 import { TitleBarSlot } from './shell/TitleBarSlot';
-import { RunAtaraxiaChip, RunProgressChip } from './RunTitleBarChips';
+import { RunIdentityChip, RunTitleBarMeasures } from './RunTitleBarChips';
 import { PLAY_RUN_SELECTOR_HREF } from './playHubRoute';
 import {
   Skirmish,
@@ -139,15 +139,16 @@ function RunTitleBarStatus({ run }: { run: RunDocument }): ReactElement {
           beneath the wordmark, rather than as a second line on a status chip. */}
       <TitleBarSlot region="route">{runPhaseRouteName(run)}</TitleBarSlot>
       <div className="skirmish-topbar-status run-topbar-status">
-        <RunAtaraxiaChip warName={run.war.name} tier={run.ataraxiaTier} />
-        <TitleBarStatus className="skirmish-status-chip skirmish-clock">
-          <RunGoldAmount valueTenths={run.goldTenths} className="run-gold-amount--title" />
-        </TitleBarStatus>
-        <RunProgressChip
+        <RunIdentityChip
+          warName={run.war.name}
+          levelName={isGeneratedRunBattleName(levelName) ? null : levelName}
+        />
+        <RunTitleBarMeasures
+          tier={run.ataraxiaTier}
+          goldTenths={run.goldTenths}
           conflict={progress.conflict}
           battle={progress.battle}
           battlesInConflict={progress.battlesInConflict}
-          levelName={isGeneratedRunBattleName(levelName) ? null : levelName}
         />
       </div>
     </>

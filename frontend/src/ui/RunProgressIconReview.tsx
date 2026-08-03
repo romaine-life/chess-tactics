@@ -10,7 +10,7 @@ import { fetchAdminDrawableCatalog, saveDrawableAsset } from '../net/drawableCat
 import { defaultBackgroundSet } from '../art/backgroundSets';
 import { ChromeButton } from './shared/ChromeButton';
 import { OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
-import { RunAtaraxiaChip, RunProgressChip } from './RunTitleBarChips';
+import { RunTitleBarMeasures } from './RunTitleBarChips';
 import type { RunProgressIconVariant } from './shared/RunProgressIcon';
 import { useSceneParticipant } from './shell/SceneBoundary';
 
@@ -42,7 +42,7 @@ export const RUN_PROGRESS_ICON_VARIANTS: readonly VariantDefinition[] = Object.f
     slot: 'ui/kit/icons/run/ataraxia.png',
     role: 'ui-kit-icons-run-ataraxia-png',
     title: 'Ataraxia',
-    idea: 'The Run difficulty tier, named on the war-name chip.',
+    idea: 'The Run difficulty tier. The symbol names it; only the tier is written.',
   },
   {
     variant: 'conflict',
@@ -193,7 +193,7 @@ function InstallControl({
   );
 }
 
-/** The candidate mounted in the exact chip the live title bar paints. */
+/** The candidate mounted in the exact measure row the live title bar paints. */
 function ChipPreview({
   definition,
   src,
@@ -204,18 +204,16 @@ function ChipPreview({
   return (
     <div className="skirmish-topbar run-progress-icon-review-chip">
       <div className="skirmish-topbar-status run-topbar-status">
-        {definition.variant === 'ataraxia' ? (
-          <RunAtaraxiaChip warName="Ten-Battle Run Test" tier={0} iconSrc={src} />
-        ) : (
-          <RunProgressChip
-            conflict={1}
-            battle={3}
-            battlesInConflict={3}
-            levelName="Boxed in"
-            conflictIconSrc={definition.variant === 'conflict' ? src : undefined}
-            battleIconSrc={definition.variant === 'battle' ? src : undefined}
-          />
-        )}
+        <RunTitleBarMeasures
+          tier={0}
+          goldTenths={335}
+          conflict={1}
+          battle={3}
+          battlesInConflict={3}
+          ataraxiaIconSrc={definition.variant === 'ataraxia' ? src : undefined}
+          conflictIconSrc={definition.variant === 'conflict' ? src : undefined}
+          battleIconSrc={definition.variant === 'battle' ? src : undefined}
+        />
       </div>
     </div>
   );
@@ -244,8 +242,8 @@ export function RunProgressIconReview(): ReactElement {
       <OuterChromeBox chromeConsumer="run-progress-icon-review" titled className="run-relic-review-panel">
         <OuterChromeHeader title="Run Title-Bar Icon Review" />
         <p>
-          Each option is mounted in the real title-bar chip and at its native 64×64 pixels.
-          Nothing is installed until you install one; the seat stays reserved until then.
+          Each option is mounted in the real title-bar measure row and at its native 64×64
+          pixels. Nothing is installed until you install one; the seat stays reserved until then.
         </p>
         {error ? <p role="alert">{error}</p> : null}
         {!catalog && !error ? <p role="status">Loading candidates…</p> : null}
