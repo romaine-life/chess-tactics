@@ -40,9 +40,20 @@ code, legacy Level, paste, or editor command can produce a second one.
 **A Player Deployment zone may bar piece types.** `Zone.excludedPieceTypes` lists the types the
 automatic placer may not put there. Every other piece uses those squares normally.
 
-**A broken-off type gets its own painted zone.** `player-pawn-spawn` and `player-king-spawn` are
-zone types, created from the Deployment card and painted in the ordinary Zones layer like any
-other zone. Each holds exactly one piece type. They may overlap the Player Deployment zone and
+**A broken-off type gets its own painted zone, and one control owns both halves.** Barring a type
+and giving it a zone are not two settings: `excludedPieceTypes` is the only stored one, and a
+dedicated zone is ON exactly when its type appears in it. The author sees a single switch per type
+on the Deployment card. Turning it on bars the type and creates its zone in the same click;
+turning it off returns the type to the shared pool.
+
+A switched-off zone is **retained but not on the level**. Its painted squares stay in the editor's
+own store so turning the type back on returns the zone the author had, but `layers.zones` does not
+carry it: gameplay, validation, rendering and the Zones dropdown all read a level where it does not
+exist. There are no stray zones for a feature the author has not turned on, and the cost — you
+cannot see or edit a hidden zone without turning its type back on — is one click to undo.
+
+`player-pawn-spawn` and `player-king-spawn` are zone types painted in the ordinary Zones layer like
+any other zone. Each holds exactly one piece type. They may overlap the Player Deployment zone and
 each other freely — overlapping zones are ordinary authoring, not a conflict to resolve.
 
 Those two facts reduce to a per-square permission per piece type:
@@ -102,10 +113,13 @@ free.
 - Ability-driven formations are weaker than under type-priority ordering for every piece except
   the King. Agminate, which reads the King's placed square, is unaffected because the King is
   placed first.
-- A level whose Player Deployment zone bars pawns and that paints no Pawn Deployment zone will
-  bench every pawn in the Run army. The Deployment card states each type's square count and warns
-  when it reaches zero; for pawns it is legal to save, because it may be what the author wants.
-  For the King the same state blocks Save.
+- Turning a type on and not painting its zone leaves it with nowhere to stand. For pawns that
+  benches them and is legal to save, because it may be what the author wants; for the King it
+  blocks Save. Turning a switch on can therefore make a level unpublishable until its zone is
+  painted, which is acceptable: the working copy autosaves, so the state is never lost while the
+  author goes and paints it.
+- The dedicated zone can no longer ADD squares for a type that is still welcome in the shared pool.
+  One switch means the zone is always a replacement, never a supplement.
 - Enemy randomized deployment is untouched. It uses the seeded setup resolver and has no dedicated
   zones of its own.
 - ADR-0288's "does not silently delete extra zone geometry" stands — geometry is preserved by the

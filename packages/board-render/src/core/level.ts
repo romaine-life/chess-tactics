@@ -39,6 +39,34 @@ export const dedicatedDeploymentPieceType = (type: ZoneType): PlayablePieceType 
   (DEDICATED_DEPLOYMENT_ZONE_TYPES as Partial<Record<ZoneType, PlayablePieceType>>)[type];
 
 /**
+ * Whether a dedicated deployment zone is switched on, which is not a flag of its own: a type's
+ * zone exists exactly when that type is barred from the general Player Deployment zone (ADR-0365).
+ * One stored setting drives both halves, so they can never disagree — a type cannot be barred with
+ * nowhere to go, or hold a zone it was never broken off into.
+ */
+export function dedicatedDeploymentZoneIsOn(
+  type: ZoneType,
+  entries: readonly { type: ZoneType; excludedPieceTypes?: PlayablePieceType[] }[],
+): boolean {
+  const pieceType = dedicatedDeploymentPieceType(type);
+  if (!pieceType) return true;
+  const general = entries.find((entry) => entry.type === 'player-spawn');
+  return Boolean(general?.excludedPieceTypes?.includes(pieceType));
+}
+
+/**
+ * The zones that are actually ON the level. A dedicated zone the author has not switched on is
+ * retained in the editor's own store — its painted squares survive so switching back on returns
+ * the zone the author had — but it is not part of the Level: gameplay, validation, rendering and
+ * the Zones dropdown all read a level where it does not exist (ADR-0365).
+ */
+export function zoneEntriesOnLevel<Entry extends { type: ZoneType; excludedPieceTypes?: PlayablePieceType[] }>(
+  entries: readonly Entry[],
+): Entry[] {
+  return entries.filter((entry) => dedicatedDeploymentZoneIsOn(entry.type, entries));
+}
+
+/**
  * Deployment geometry a level may hold at most one of (ADR-0365). Two Player Deployment zones —
  * or two Enemy Deployment zones — were previously reachable through legacy content and pasted
  * board codes, which left the author looking at duplicate objects that no UI could explain.

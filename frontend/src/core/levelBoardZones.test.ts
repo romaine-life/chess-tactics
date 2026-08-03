@@ -84,6 +84,23 @@ describe('levelBoard — zone projection into layers.zones', () => {
     ]);
   });
 
+  it('keeps a switched-off dedicated zone out of the Level while retaining its squares', () => {
+    // The King is not barred from the shared pool, so its zone is switched off (ADR-0365): the
+    // Level must not carry it, and the editor must not lose the squares already painted into it.
+    const authored = board({
+      zoneEntries: [
+        { id: 'z-player', name: 'Player Deployment', type: 'player-spawn', excludedPieceTypes: ['pawn'], tiles: ['0,0', '1,0'] },
+        { id: 'z-pawn', name: 'Pawn Deployment', type: 'player-pawn-spawn', tiles: ['2,0'] },
+        { id: 'z-king', name: 'King Deployment', type: 'player-king-spawn', tiles: ['3,0', '4,0'] },
+      ],
+    });
+    const level = editorBoardToLevel(authored, { id: 'l-off', name: 'Switched off' });
+    expect(level.layers.zones.map((zone) => zone.id)).toEqual(['z-player', 'z-pawn']);
+    // Reopening restores the retained King geometry, so switching it back on returns those squares.
+    const king = levelToEditorBoard(level).zoneEntries?.find((entry) => entry.type === 'player-king-spawn');
+    expect(king?.tiles).toEqual(['3,0', '4,0']);
+  });
+
   it('a saved Level can never hold two Player Deployment zones', () => {
     const level = editorBoardToLevel(board({
       zoneEntries: [

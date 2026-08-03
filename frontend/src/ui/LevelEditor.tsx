@@ -272,7 +272,7 @@ import {
   type EditorDocumentEditSessionResult,
 } from '../net/editorDocuments';
 import { consumeNewBuildReloadIntent } from '../net/appUpdate';
-import { OBJECTIVE_TYPES, ZONE_COLORS, type CastleEventAction, type ChessDrawsEventAction, type ConditionSide, type Level, type LevelEvent, type LevelEventAction, type LevelEvents, type ObjectiveType, type VictoryRules, type ZoneColor, type ZoneType } from '../core/level';
+import { OBJECTIVE_TYPES, ZONE_COLORS, zoneEntriesOnLevel, type CastleEventAction, type ChessDrawsEventAction, type ConditionSide, type Level, type LevelEvent, type LevelEventAction, type LevelEvents, type ObjectiveType, type VictoryRules, type ZoneColor, type ZoneType } from '../core/level';
 import { computeCastleTemplatePairs, type CastleTemplateUnit } from './castlingTemplate';
 import { MODE_NAME, DEFAULT_SURVIVE_TURNS, victoryRulesForObjective, kingSideOf } from '../core/objectives';
 import { CLOCK_INCREMENT_SECONDS, CLOCK_INITIAL_SECONDS, DEFAULT_TIME_CONTROL, formatClockSeconds, parseClockSeconds, stepLadder } from '../core/clock';
@@ -3167,7 +3167,13 @@ export function LevelEditor(): ReactElement {
     return Math.max(0, entries.findIndex((entry) => entry.id === studioArm.brush));
   });
   const boardZones = useMemo(() => zoneCellMapFromEntries(boardZoneEntries), [boardZoneEntries]);
-  const activeZone = boardZoneEntries[selectedZoneIndex] ?? null;
+  // Indices of the zones that are ON the level. A dedicated zone whose type is not broken off is
+  // retained but hidden: it cannot be selected, cycled, painted or seen (ADR-0365).
+  const visibleZoneIndices = useMemo(() => {
+    const onLevel = new Set(zoneEntriesOnLevel(boardZoneEntries));
+    return boardZoneEntries.flatMap((entry, index) => onLevel.has(entry) ? [index] : []);
+  }, [boardZoneEntries]);
+  const activeZone = visibleZoneIndices.includes(selectedZoneIndex) ? boardZoneEntries[selectedZoneIndex] ?? null : null;
   const activeZoneName = activeZone ? zoneDisplayName(activeZone, selectedZoneIndex) : '';
   const activeZoneNameValue = activeZone ? activeZone.name ?? activeZoneName : '';
   const activeZoneColor = activeZone ? zoneDisplayColor(activeZone) : DEFAULT_ZONE_COLOR;
@@ -3175,9 +3181,9 @@ export function LevelEditor(): ReactElement {
   const activeZoneOverlay = useMemo(() => activeZone ? zoneCellColorMapFromEntries([activeZone]) : {}, [activeZone]);
   const visibleZones = brushKind === 'zone' ? activeZoneOverlay : {};
   useEffect(() => {
-    if (selectedZoneIndex < boardZoneEntries.length || selectedZoneIndex === 0) return;
-    setSelectedZoneIndex(Math.max(0, boardZoneEntries.length - 1));
-  }, [boardZoneEntries.length, selectedZoneIndex]);
+    if (visibleZoneIndices.includes(selectedZoneIndex)) return;
+    setSelectedZoneIndex(visibleZoneIndices[0] ?? 0);
+  }, [visibleZoneIndices, selectedZoneIndex]);
 
   // The Rules panel state: authored win rules, non-victory events, and ancillary battle settings.
   // Seeded from the campaign level on hydrate (below); a fresh/standalone board starts at the
@@ -7148,40 +7154,38 @@ export function LevelEditor(): ReactElement {
     selectZoneEntry(zoneId);
     selectLayer('zone');
   };
-  // A dedicated deployment zone is player-only and, like the other deployment zones, singular. Its
-  // squares take its one piece type; where it overlaps the Player Deployment zone the square takes
-  // anything that zone allows.
-  const createDedicatedDeploymentZone = (pieceType: 'pawn' | 'king'): void => {
+  // Switching a piece type into its own deployment zone is ONE command (ADR-0365): it bars the type
+  // from the general Player Deployment zone and, on the same click, gives it a zone to stand in.
+  // Switching back off retains the painted squares — the entry stays in the editor's store and
+  // simply stops being part of the Level — so switching on again returns the zone the author had.
+  const setDedicatedDeploymentZone = (pieceType: 'pawn' | 'king', on: boolean): void => {
     const board = cloneEditorBoard(currentEditorBoardRef.current);
     const entries = zoneEntriesForBoard(board).map((entry) => ({ ...entry, tiles: [...entry.tiles] }));
-    const zoneType = pieceType === 'pawn' ? 'player-pawn-spawn' : 'player-king-spawn';
-    const existingIndex = entries.findIndex((entry) => entry.type === zoneType);
-    if (existingIndex >= 0) {
-      setSelectedZoneIndex(existingIndex);
-      selectLayer('zone');
+    const generalIndex = entries.findIndex((entry) => entry.type === 'player-spawn');
+    if (generalIndex < 0) {
+      reportStatus('Create the Player starting zone first.', 'error', 'A piece type is broken off the shared deployment pool, so that pool has to exist before a type can leave it.');
       return;
     }
-    entries.push({
-      id: nextZoneEntryId(entries),
-      name: uniqueZoneEntryName(pieceType === 'pawn' ? 'Pawn Deployment' : 'King Deployment', entries),
-      color: pieceType === 'pawn' ? 'violet' : 'gold',
-      type: zoneType,
-      tiles: [],
-    });
-    setSelectedZoneIndex(entries.length - 1);
-    commitEditorBoard(withZoneEntries(board, entries), null);
-    selectLayer('zone');
-  };
-  const setZonePieceTypeExcluded = (zoneId: string, pieceType: PlayablePieceType, excluded: boolean): void => {
-    const board = cloneEditorBoard(currentEditorBoardRef.current);
-    const entries = zoneEntriesForBoard(board).map((entry) => {
-      if (entry.id !== zoneId || entry.type !== 'player-spawn') return { ...entry, tiles: [...entry.tiles] };
-      const current = new Set(entry.excludedPieceTypes ?? []);
-      if (excluded) current.add(pieceType);
-      else current.delete(pieceType);
-      const next = PLAYABLE_PIECE_TYPES.filter((type) => current.has(type));
-      return { ...entry, tiles: [...entry.tiles], excludedPieceTypes: next.length ? next : undefined };
-    });
+    const general = entries[generalIndex];
+    const excluded = new Set(general.excludedPieceTypes ?? []);
+    if (on) excluded.add(pieceType);
+    else excluded.delete(pieceType);
+    const nextExcluded = PLAYABLE_PIECE_TYPES.filter((type) => excluded.has(type));
+    entries[generalIndex] = { ...general, excludedPieceTypes: nextExcluded.length ? nextExcluded : undefined };
+
+    const zoneType = pieceType === 'pawn' ? 'player-pawn-spawn' : 'player-king-spawn';
+    let zoneIndex = entries.findIndex((entry) => entry.type === zoneType);
+    if (on && zoneIndex < 0) {
+      entries.push({
+        id: nextZoneEntryId(entries),
+        name: uniqueZoneEntryName(pieceType === 'pawn' ? 'Pawn Deployment' : 'King Deployment', entries),
+        color: pieceType === 'pawn' ? 'violet' : 'gold',
+        type: zoneType,
+        tiles: [],
+      });
+      zoneIndex = entries.length - 1;
+    }
+    if (on && zoneIndex >= 0) setSelectedZoneIndex(zoneIndex);
     commitEditorBoard(withZoneEntries(board, entries), null);
   };
   const addPawnPromotionTemplate = (): void => {
@@ -7602,14 +7606,14 @@ export function LevelEditor(): ReactElement {
   };
   const selectZoneEntry = (id: string): void => {
     const index = boardZoneEntries.findIndex((zone) => zone.id === id);
-    if (index >= 0) setSelectedZoneIndex(index);
+    if (index >= 0 && visibleZoneIndices.includes(index)) setSelectedZoneIndex(index);
   };
   const stepZoneEntry = (delta: -1 | 1): void => {
-    const count = boardZoneEntries.length;
+    const count = visibleZoneIndices.length;
     if (!count) return;
     setSelectedZoneIndex((current) => {
-      const normalized = Math.min(Math.max(current, 0), count - 1);
-      return (normalized + delta + count) % count;
+      const at = Math.max(0, visibleZoneIndices.indexOf(current));
+      return visibleZoneIndices[(at + delta + count) % count];
     });
   };
   const setActiveZoneName = (name: string): void => {
@@ -8260,8 +8264,7 @@ export function LevelEditor(): ReactElement {
                   onEventsChange={setEvents}
                   onCreateZone={createDeploymentZone}
                   onEditZone={editDeploymentZone}
-                  onCreateDedicatedZone={createDedicatedDeploymentZone}
-                  onPieceTypeExcludedChange={setZonePieceTypeExcluded}
+                  onDedicatedZoneChange={setDedicatedDeploymentZone}
                 />
               )}
               otherContent={(
@@ -9123,8 +9126,8 @@ export function LevelEditor(): ReactElement {
                   buttonClassName="le-zone-stepper-button"
                   previousLabel="Previous zone"
                   nextLabel="Next zone"
-                  previousDisabled={boardZoneEntries.length <= 1}
-                  nextDisabled={boardZoneEntries.length <= 1}
+                  previousDisabled={visibleZoneIndices.length <= 1}
+                  nextDisabled={visibleZoneIndices.length <= 1}
                   onPrevious={() => stepZoneEntry(-1)}
                   onNext={() => stepZoneEntry(1)}
                 >
@@ -9132,7 +9135,7 @@ export function LevelEditor(): ReactElement {
                     value={activeZone?.id ?? ''}
                     options={[
                       ...(activeZone ? [] : [{ value: '', label: 'None' }]),
-                      ...boardZoneEntries.map((zone, index) => ({ value: zone.id, label: zoneDisplayName(zone, index) })),
+                      ...visibleZoneIndices.map((index) => ({ value: boardZoneEntries[index].id, label: zoneDisplayName(boardZoneEntries[index], index) })),
                     ]}
                     disabled={!activeZone}
                     ariaLabel="Selected zone"
@@ -9177,20 +9180,6 @@ export function LevelEditor(): ReactElement {
                 onChange={setActiveZoneColor}
               />
             </div>
-            {activeZone?.type === 'player-spawn' ? (
-              <>
-                {LE_BREAKABLE_DEPLOYMENT_TYPES.map(({ pieceType, label }) => (
-                  <div className="le-ctrlrow" key={pieceType}>
-                    <span className="le-ctrllabel">{label}s</span>
-                    <Toggle
-                      checked={(activeZone.excludedPieceTypes ?? []).includes(pieceType)}
-                      label={`Keep ${label}s out of this Player Deployment zone`}
-                      onChange={(checked) => setZonePieceTypeExcluded(activeZone.id, pieceType, checked)}
-                    />
-                  </div>
-                ))}
-              </>
-            ) : null}
             <p className="le-board-note">
               {activeZone?.type === 'player-spawn'
                 ? activeZone.excludedPieceTypes?.length

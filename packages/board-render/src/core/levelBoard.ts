@@ -11,7 +11,7 @@
 //    the game (which reads `layers`, not `boardCode`) plays the authored board.
 
 import type { BattleSettings, Level, LevelEconomy, LevelEvents, LevelUnit, ObjectiveType, Roster, TimeControl, VictoryRules, Zone } from './level';
-import { BOARD_COLS, BOARD_ROWS, LEVEL_FORMAT_VERSION, canonicalizeSingletonZones } from './level';
+import { BOARD_COLS, BOARD_ROWS, LEVEL_FORMAT_VERSION, canonicalizeSingletonZones, zoneEntriesOnLevel } from './level';
 import type { PlacedProp } from './props';
 import type { Piece, Side, TerrainCell, TerrainType, UnitFacing } from './types';
 import { defaultTerrainFamily, familyForGameplayTerrain, gameplayTerrainForFamily, terrainFamilyRecords, type TileFamilyId } from './tileSockets';
@@ -53,14 +53,15 @@ const sideForFaction = (faction: string, playerFaction: string | null | undefine
  * Project the editor's authored zone entries into `layers.zones`. Empty entries are preserved
  * because the editor's zone dropdown is explicitly controlled by the author; in-bounds tiles are
  * emitted in row-major order for stable, diff-friendly saves. Duplicate deployment zones fold
- * into one per type on the way out, so a saved Level can never hold two (ADR-0365).
+ * into one per type on the way out, so a saved Level can never hold two, and a dedicated zone the
+ * author has not switched on never reaches the Level at all (ADR-0365).
  */
 function zonesToLayers(
   entries: readonly EditorZoneEntry[] | undefined,
   cols: number,
   rows: number,
 ): Zone[] {
-  return canonicalizeSingletonZones([...(entries ?? [])]).map((entry, index) => {
+  return zoneEntriesOnLevel(canonicalizeSingletonZones([...(entries ?? [])])).map((entry, index) => {
     const tiles: Array<[number, number]> = [];
     const seen = new Set<string>();
     for (const key of entry.tiles) {
