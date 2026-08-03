@@ -264,6 +264,106 @@ function addBlockedCandidate(
   return !haltsTravelAt(env, x, y);
 }
 
+/** Occupancy a SPECULATIVE move may NOT see through. Rocks and neutral pieces are board
+ *  furniture: they never move, never die, and can never be captured, so no future position
+ *  clears them. Every other piece is exactly what a premove is allowed to bet against. */
+function permanentOccupant(occ: Piece | null): boolean {
+  return !!occ && (isObstacle(occ) || occ.side === 'neutral');
+}
+
+/**
+ * Destinations a SPECULATIVE intent — a premove — may be queued to.
+ *
+ * A premove answers a position that does not exist yet, so judging it against the CURRENT
+ * occupancy asks the wrong question: the blocker in front of the rook, the empty square the
+ * pawn wants to strike, the piece standing on the destination are all precisely what the
+ * player predicts will change. So piece occupancy is ignored outright — rays slide through
+ * pieces, a pawn's diagonal is always offered (covering both a capture that hasn't happened
+ * yet and en passant), a destination may hold anything — and king safety is not judged,
+ * because the check a premove appears to walk into may be the very thing the opponent's move
+ * dissolves.
+ *
+ * What still binds it is what NO future position can change: the board's bounds, the piece's
+ * own movement geometry, terrain/elevation/water, edge fences, and obstacles. A square
+ * unreachable through those is unreachable forever, so offering it would only ever queue a
+ * move that cannot fire.
+ *
+ * This decides what may be QUEUED. Firing re-validates through `legalMoves` against the real
+ * board (see the store's premove drain), so a fully legal move is still the only thing that
+ * ever executes; a speculation reality didn't honour simply drops the chain.
+ */
+export function speculativeMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, env?: MoveEnv): Move[] {
+  if (!piece || !piece.alive || isObstacle(piece)) return [];
+  const originElev = env?.terrain ? elevationAt(env.terrain, piece.x, piece.y) : 0;
+  const moves: Move[] = [];
+  const seen = new Set<string>();
+  // First writer wins, so a castle's payload keeps a square a plain king step would also reach.
+  const offer = (move: Move): void => {
+    const key = `${move.x},${move.y}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    moves.push(move);
+  };
+  // Closed for good: off the board, or barred by a layer the opponent cannot move.
+  const closed = (fromX: number, fromY: number, x: number, y: number): boolean => (
+    !inBounds(x, y, size)
+    || fenceBlocks(env, fromX, fromY, x, y)
+    || blockedByTerrain(env, originElev, x, y)
+    || permanentOccupant(pieceAt(pieces, x, y))
+  );
+  const ray = (dirs: ReadonlyArray<readonly [number, number]>): void => {
+    for (const [dx, dy] of dirs) {
+      for (let step = 1; ; step += 1) {
+        const x = piece.x + dx * step;
+        const y = piece.y + dy * step;
+        if (closed(x - dx, y - dy, x, y)) break;
+        offer({ x, y });
+        if (haltsTravelAt(env, x, y)) break; // water: the slide may end here, never pass
+      }
+    }
+  };
+  const steps = (deltas: ReadonlyArray<readonly [number, number]>): void => {
+    for (const [dx, dy] of deltas) {
+      const x = piece.x + dx;
+      const y = piece.y + dy;
+      if (!closed(piece.x, piece.y, x, y)) offer({ x, y });
+    }
+  };
+
+  switch (piece.type) {
+    case 'pawn': {
+      const [forwardX, forwardY] = pawnForwardVector(piece);
+      const oneX = piece.x + forwardX;
+      const oneY = piece.y + forwardY;
+      if (!closed(piece.x, piece.y, oneX, oneY)) {
+        offer({ x: oneX, y: oneY });
+        const twoX = piece.x + forwardX * 2;
+        const twoY = piece.y + forwardY * 2;
+        if (onPawnStart(piece) && !haltsTravelAt(env, oneX, oneY) && !closed(oneX, oneY, twoX, twoY)) {
+          offer({ x: twoX, y: twoY });
+        }
+      }
+      // Offered whether or not anything stands there: the capture IS the prediction.
+      for (const [dx, dy] of pawnCaptureVectors(piece)) {
+        const x = piece.x + dx;
+        const y = piece.y + dy;
+        if (!closed(piece.x, piece.y, x, y)) offer({ x, y });
+      }
+      break;
+    }
+    case 'knight': steps(KNIGHT); break;
+    case 'bishop': ray(DIAG); break;
+    case 'rook': ray(ORTHO); break;
+    case 'queen': ray(ALL8); break;
+    case 'king':
+      for (const move of castleMoves(piece, pieces, size, env, originElev, true)) offer(move);
+      steps(ALL8);
+      break;
+    default: return [];
+  }
+  return moves;
+}
+
 /** Squares that are geometrically relevant to a piece but blocked by terrain, fences,
  * friendly pieces, or neutral obstacles. Used by render overlays only; legalMoves
  * remains the source of truth for playable destinations. */
@@ -352,8 +452,13 @@ function boardAfterMove(mover: Piece, move: Move, pieces: readonly Piece[]): Pie
  * displaced — see boardAfterMove), and both pieces' straight-line travel respects
  * terrain, water, and fences like any slide. Encoded as a king move to `kingTo`
  * carrying the rook's hop, so one applyMove relocates both pieces in one action.
+ *
+ * `speculative` (premove generation) drops every condition the opponent's next move can
+ * change — the squares between being clear, the destinations being clear, and the check /
+ * crossed-square safety — and keeps the ones it cannot: the authored rule, both pieces
+ * unmoved on their squares, and terrain/fence travel. See `speculativeMoves`.
  */
-function castleMoves(king: Piece, pieces: readonly Piece[], size: BoardSize, env: MoveEnv | undefined, originElev: number): Move[] {
+function castleMoves(king: Piece, pieces: readonly Piece[], size: BoardSize, env: MoveEnv | undefined, originElev: number, speculative = false): Move[] {
   const rules = env?.castleRules;
   if (!rules?.length || king.hasMoved) return [];
 
@@ -398,23 +503,25 @@ function castleMoves(king: Piece, pieces: readonly Piece[], size: BoardSize, env
     const dx = Math.sign(rule.rook.x - king.x);
     const dy = Math.sign(rule.rook.y - king.y);
     if ((dx !== 0) === (dy !== 0)) continue;
-    let open = true;
-    for (let x = king.x + dx, y = king.y + dy; x !== rule.rook.x || y !== rule.rook.y; x += dx, y += dy) {
-      if (!inBounds(x, y, size) || pieceAt(pieces, x, y)) { open = false; break; }
-    }
-    if (!open) continue;
+    if (!speculative) {
+      let open = true;
+      for (let x = king.x + dx, y = king.y + dy; x !== rule.rook.x || y !== rule.rook.y; x += dx, y += dy) {
+        if (!inBounds(x, y, size) || pieceAt(pieces, x, y)) { open = false; break; }
+      }
+      if (!open) continue;
 
-    // Destinations clear — the vacated king/rook squares themselves don't block.
-    const ktOcc = pieceAt(pieces, rule.kingTo.x, rule.kingTo.y);
-    if (ktOcc && ktOcc.id !== king.id && ktOcc.id !== rook.id) continue;
-    const rtOcc = pieceAt(pieces, rule.rookTo.x, rule.rookTo.y);
-    if (rtOcc && rtOcc.id !== king.id && rtOcc.id !== rook.id) continue;
+      // Destinations clear — the vacated king/rook squares themselves don't block.
+      const ktOcc = pieceAt(pieces, rule.kingTo.x, rule.kingTo.y);
+      if (ktOcc && ktOcc.id !== king.id && ktOcc.id !== rook.id) continue;
+      const rtOcc = pieceAt(pieces, rule.rookTo.x, rule.rookTo.y);
+      if (rtOcc && rtOcc.id !== king.id && rtOcc.id !== rook.id) continue;
+    }
 
     // No castling out of check, and the king's crossed squares must be safe. The rook's
     // path ignores occupancy (both pieces move at once, chess-style) but not terrain.
     const opponent: Side = king.side === 'player' ? 'enemy' : 'player';
-    if (squareAttackedBy({ x: king.x, y: king.y }, opponent, pieces, size, env)) continue;
-    if (!walk(king.x, king.y, rule.kingTo, originElev, true, opponent)) continue;
+    if (!speculative && squareAttackedBy({ x: king.x, y: king.y }, opponent, pieces, size, env)) continue;
+    if (!walk(king.x, king.y, rule.kingTo, originElev, !speculative, opponent)) continue;
     const rookElev = env?.terrain ? elevationAt(env.terrain, rook.x, rook.y) : 0;
     if (!walk(rook.x, rook.y, rule.rookTo, rookElev, false, opponent)) continue;
 

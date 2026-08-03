@@ -51,7 +51,7 @@ describe('premoveGhosts', () => {
     expect(targets.some((m) => m.x === 0 && m.y === 3)).toBe(true);
   });
 
-  it('a unit can premove onto a friendly-occupied square as a speculative recapture', () => {
+  it('a unit can premove onto a friendly-occupied square, and THROUGH it', () => {
     const g = board([
       piece('pr', 'player', 'rook', 0, 3),
       piece('bait', 'player', 'pawn', 3, 3),
@@ -59,8 +59,51 @@ describe('premoveGhosts', () => {
       piece('ek', 'enemy', 'king', 7, 7),
     ]);
     const targets = premoveTargets(g, [], 'pr', 'player');
+    expect(targets.some((m) => m.x === 3 && m.y === 3)).toBe(true); // the recapture square
+    expect(targets.some((m) => m.x === 4 && m.y === 3)).toBe(true); // past it: the blocker may leave
+    expect(targets.some((m) => m.x === 7 && m.y === 3)).toBe(true); // all the way down the rank
+  });
+
+  it('a pawn may premove its diagonal onto an empty square — the capture is the prediction', () => {
+    const g = board([
+      piece('pp', 'player', 'pawn', 4, 4),
+      piece('pk', 'player', 'king', 7, 0),
+      piece('ek', 'enemy', 'king', 7, 7),
+    ]);
+    const targets = premoveTargets(g, [], 'pp', 'player');
+    // Player pawns advance north (-y). Both diagonals are offered with nothing standing there.
     expect(targets.some((m) => m.x === 3 && m.y === 3)).toBe(true);
-    expect(targets.some((m) => m.x === 4 && m.y === 3)).toBe(false);
+    expect(targets.some((m) => m.x === 5 && m.y === 3)).toBe(true);
+    expect(targets.some((m) => m.x === 4 && m.y === 3)).toBe(true); // and the push
+    expect(targets.some((m) => m.x === 3 && m.y === 5)).toBe(false); // never backwards
+  });
+
+  it('a king may premove into a square that is attacked right now', () => {
+    const g = board([
+      piece('pk', 'player', 'king', 4, 4),
+      piece('er', 'enemy', 'rook', 0, 3), // covers the whole y=3 rank today
+      piece('ek', 'enemy', 'king', 7, 7),
+    ]);
+    const targets = premoveTargets(g, [], 'pk', 'player');
+    expect(targets.some((m) => m.x === 4 && m.y === 3)).toBe(true);
+  });
+
+  it('permanent board furniture still blocks: a rock stops the ray it stands on', () => {
+    const g = board([
+      piece('pr', 'player', 'rook', 0, 3),
+      piece('rock', 'neutral', 'rock', 3, 3),
+      piece('pk', 'player', 'king', 7, 0),
+      piece('ek', 'enemy', 'king', 7, 7),
+    ]);
+    const targets = premoveTargets(g, [], 'pr', 'player');
+    expect(targets.some((m) => m.x === 2 && m.y === 3)).toBe(true);
+    expect(targets.some((m) => m.x === 3 && m.y === 3)).toBe(false); // never capturable
+    expect(targets.some((m) => m.x === 4 && m.y === 3)).toBe(false); // and never passable
+  });
+
+  it('geometry still binds: a rook is never offered a square off its rank and file', () => {
+    const g = board([piece('pr', 'player', 'rook', 0, 0), piece('pk', 'player', 'king', 7, 0), piece('ek', 'enemy', 'king', 7, 7)]);
+    expect(premoveTargets(g, [], 'pr', 'player').some((m) => m.x === 1 && m.y === 5)).toBe(false);
   });
 
   it('a chain can continue from a speculative recapture square', () => {

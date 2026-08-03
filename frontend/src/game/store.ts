@@ -833,7 +833,9 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
   };
 
   // Drain one premove as control returns to this client. Returns true iff a premove was
-  // applied locally or submitted as the next authoritative net intent. The head is
+  // applied locally or submitted as the next authoritative net intent. This is the ONLY
+  // place a premove meets exact legality: queuing is deliberately speculative (ADR-0358),
+  // so a queued step is a prediction until it arrives here. The head is
   // re-validated against the REAL board the opponent produced —
   // if its piece was captured or the square is no longer reachable, the WHOLE chain is
   // dropped (chess default: one illegal step kills the queue). A decided game clears the
