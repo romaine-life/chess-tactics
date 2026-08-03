@@ -19181,23 +19181,57 @@ button.tileset-relationship-cell {
   position: absolute;
 }
 
+/* The CARD ROW sizes this, not the stage: the layer shrinks to the relics' own
+   max-content width and the mat is drawn to that plus one bleed on each side. Sizing the
+   mat as a share of the stage instead makes it grow with the viewport and swallow the
+   backdrop it is supposed to be lying on. */
 .relic-mat-layer {
+  --relic-mat-bleed: 30px;
   display: grid;
-  inline-size: 84%;
+  /* Leave the bleed room, or a narrow stage lets the row fill it and the mat's torn edges
+     are the first thing clipped away -- the one part of it that has to be seen. */
+  max-inline-size: calc(100% - 2 * var(--relic-mat-bleed));
   place-items: center;
   position: relative;
 }
 
+/* The row's width plus one bleed each side. Absolute so the mat contributes nothing to
+   the layer's intrinsic width -- the row alone decides that.
+   Height stays auto so the mat keeps its own aspect ratio: stretching it to the row's box
+   would distort the torn silhouette and cropping to fit would cut it off. That makes the
+   mat taller than the row, and grid/flex centring of an overflowing item is not reliable
+   here (it resolved to top-aligned), so the block centre is pinned outright. */
 .relic-mat-art {
   block-size: auto;
-  grid-area: 1 / 1;
   image-rendering: pixelated;
-  inline-size: 100%;
+  inline-size: calc(100% + 2 * var(--relic-mat-bleed));
+  inset-block-start: 50%;
+  inset-inline-start: calc(-1 * var(--relic-mat-bleed));
+  position: absolute;
+  translate: 0 -50%;
 }
 
+/* .run-card-grid's repeat(auto-fit, ...) needs a definite container to count tracks
+   against, and this row deliberately has none -- it is what makes the width definite.
+   Flowing one auto column per offer keeps the same track size without that circularity,
+   and without hardcoding how many relics are on show. */
 .relic-mat-cards {
   grid-area: 1 / 1;
-  inline-size: 86%;
+  grid-auto-columns: minmax(196px, 236px);
+  grid-auto-flow: column;
+  grid-template-columns: none;
+  position: relative;
+}
+
+/* Catalog thumbnails carry no cards, so nothing is there to size the layer. Hold the
+   same proportion the real composite lands on. */
+.relic-mat-stage[data-cards='off'] .relic-mat-layer {
+  inline-size: 68%;
+}
+
+.relic-mat-stage[data-cards='off'] .relic-mat-art {
+  inline-size: 100%;
+  inset-inline-start: 0;
 }
 
 .tileset-studio-card-image.relic-mat-card-image {

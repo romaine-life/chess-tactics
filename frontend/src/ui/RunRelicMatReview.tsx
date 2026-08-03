@@ -120,9 +120,16 @@ export function RelicMatStage({
   cards?: boolean;
 }): ReactElement {
   return (
-    <div className="relic-mat-stage" data-mat={candidate.mat} data-generator={candidate.generator}>
+    <div
+      className="relic-mat-stage"
+      data-mat={candidate.mat}
+      data-generator={candidate.generator}
+      data-cards={cards ? 'on' : 'off'}
+    >
       {backdrop ? <img className="relic-mat-backdrop" src={backdrop} alt="" draggable={false} /> : null}
       <div className="relic-mat-layer">
+        {/* Out of flow on purpose: in flow the mat's own natural width feeds back into the
+            row's intrinsic sizing, and the layer grows to the raster instead of the cards. */}
         <img className="relic-mat-art" src={candidate.version.media!.url} alt="" draggable={false} />
         {cards ? (
           <div className="run-card-grid relic-mat-cards">
