@@ -15467,6 +15467,14 @@ button.tileset-relationship-cell {
   touch-action: none;
 }
 
+/* The forest brush footprint, so the author paints an area they can see rather than guess.
+   Drawn as SVG geometry (like .le-fence-edge-hint), not CSS surface paint. */
+.le-forest-brush-ring {
+  position: absolute;
+  pointer-events: none;
+  overflow: visible;
+}
+
 .le-floating-artwork-hit.is-selectable {
   outline: 2px dashed rgba(111, 210, 255, 0.94);
   outline-offset: 4px;

@@ -325,7 +325,7 @@ describe('Level Editor chrome hierarchy', () => {
   });
 
   it('registers every asset and material swatch under the shared inner role', () => {
-    expect(levelEditor.match(/<AssetSwatchList\b/g)).toHaveLength(13);
+    expect(levelEditor.match(/<AssetSwatchList\b/g)).toHaveLength(14);
     expect(assetSwatchList).toContain('unit="inner-asset-swatch"');
     expect(assetSwatchList).toContain('className={`le-swatch ${item.className ?? \'\'}`.trim()}');
   });

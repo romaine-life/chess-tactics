@@ -17,6 +17,15 @@ import {
   structureArtDirections,
   structureArtHasCompleteTurntable,
 } from '../core/structureArt';
+import {
+  FOREST_SCATTER_DEFAULTS,
+  eraseForestArea,
+  scatterForest,
+  sortFloatingArtworkByDepth,
+  type ForestBrushArea,
+  type ForestScatterParams,
+  type ForestSpeciesGeometry,
+} from '../core/forestScatter';
 import { BoardSceneLayer } from '../render/BoardSceneLayer';
 import { PredrawnOcclusionSeedLayer } from '../render/PredrawnOcclusion';
 import {
@@ -231,7 +240,7 @@ import {
   type MacroTileAsset,
   type MacroTilePlacement,
 } from '../core/macroTiles';
-import { SliderRow } from './dressing/SliderRow';
+import { SliderRow, ctlReset } from './dressing/SliderRow';
 import { objectBaseZIndex, structureFrontZIndex } from '../render/sceneDepth';
 import { groundCoverSet, type GroundCoverDensity } from '../core/groundCover';
 import { UNIT_PALETTE_LABELS, UNIT_PALETTES, isUnitPalette, type UnitPalette } from '../core/pieces';
@@ -1776,6 +1785,8 @@ function editorRecoveryFileStem(levelName: string, documentId: string): string {
 const boardSignature = (board: EditorBoard): string => encodeBoard(board);
 const cloneEditorBoard = (board: EditorBoard): EditorBoard => structuredClone(board) as EditorBoard;
 const HISTORY_LIMIT = 100;
+/** Forest brush footprint in scene pixels — roughly two tiles across at the default. */
+const FOREST_DEFAULT_RADIUS = 160;
 
 const zoneEntriesForBoard = (board: EditorBoard): EditorZoneEntry[] =>
   board.zoneEntries ? board.zoneEntries : zoneEntriesFromCellMap(board.zones, board.cols, board.rows);
@@ -3009,6 +3020,40 @@ export function LevelEditor(): ReactElement {
       : artworkAssets[0]?.id ?? ''
   ));
   const [artworkBrushDirection, setArtworkBrushDirection] = useState<Direction>('south');
+  // The Forest brush scatters ordinary Scene Art from a few knobs. The species list is the live
+  // catalog's NATURAL scenery — trees first, then the undergrowth an author wants between them.
+  // Built structures are deliberately excluded; they are not forest, whatever their art kind.
+  const forestSpeciesCatalog = useMemo(() => {
+    const built = /castle|windmill|mill|cottage|cabin|lodge|house|tower|keep/;
+    const natural = /tree|forest|mushroom|cactus|fern|flower|rock|boulder|shrub|bush|stump|log/;
+    const rank = (asset: typeof artworkAssets[number]): number => (
+      asset.kind === 'tree' || asset.propKind === 'tree' || /tree/.test(asset.id) ? 0 : 1
+    );
+    return artworkAssets
+      .filter((asset) => !built.test(asset.id))
+      .filter((asset) => (
+        asset.kind === 'tree' || asset.kind === 'doodad'
+        || asset.propKind === 'tree' || asset.propKind === 'rock'
+        || natural.test(asset.id)
+      ))
+      .sort((left, right) => rank(left) - rank(right));
+  }, [artworkAssets]);
+  const [forestSpecies, setForestSpecies] = useState<string[]>([]);
+  const [forestRadius, setForestRadius] = useState(FOREST_DEFAULT_RADIUS);
+  const [forestDensity, setForestDensity] = useState(FOREST_SCATTER_DEFAULTS.density);
+  const [forestJitter, setForestJitter] = useState(FOREST_SCATTER_DEFAULTS.jitter);
+  const [forestScaleMin, setForestScaleMin] = useState(FOREST_SCATTER_DEFAULTS.scaleMin);
+  const [forestScaleMax, setForestScaleMax] = useState(FOREST_SCATTER_DEFAULTS.scaleMax);
+  const [forestRandomFacing, setForestRandomFacing] = useState(FOREST_SCATTER_DEFAULTS.randomFacing);
+  const [forestFacing, setForestFacing] = useState<Direction>(FOREST_SCATTER_DEFAULTS.facing);
+  const [forestSpacing, setForestSpacing] = useState(FOREST_SCATTER_DEFAULTS.spacing);
+  const [forestClumping, setForestClumping] = useState(FOREST_SCATTER_DEFAULTS.clumping);
+  const [forestFalloff, setForestFalloff] = useState(FOREST_SCATTER_DEFAULTS.falloff);
+  const [forestAvoidBoard, setForestAvoidBoard] = useState(FOREST_SCATTER_DEFAULTS.avoidPlayableBoard);
+  const [forestSeed, setForestSeed] = useState(FOREST_SCATTER_DEFAULTS.seed);
+  // Brush-ring position in surface pixels, so the author sees the footprint being painted.
+  const [forestCursor, setForestCursor] = useState<{ x: number; y: number } | null>(null);
+  const forestStrokeRef = useRef<{ pointerId: number; lastX: number; lastY: number } | null>(null);
   // Ground cover is a per-tile FEATURE (density), not a doodad: which tiles grow vegetation
   // and how thick. Tufts are rolled deterministically from this density (see core/groundCover).
   const [boardCover, setBoardCover] = useState<Record<string, GroundCoverDensity>>(initialBoard?.cover ?? {});
@@ -3997,10 +4042,92 @@ export function LevelEditor(): ReactElement {
     if (commitEditorBoard(next, null)) setSelectedArtworkId(placement.id);
   };
 
+  /** Viewport pointer -> scene pixels, the space `FloatingArtworkPlacement` stores. */
+  const forestScenePoint = (clientX: number, clientY: number, rect: DOMRect): { x: number; y: number } => ({
+    x: (clientX - (rect.left + rect.width / 2) - viewPan.x) / viewZoom - artworkBoardOrigin.originLeft,
+    y: (clientY - (rect.top + rect.height / 2) - viewPan.y) / viewZoom - artworkBoardOrigin.originTop,
+  });
+
+  // Source geometry for the scatter, read from the same live catalog the renderer draws from.
+  const forestGeometry = useMemo<ForestSpeciesGeometry>(() => ({
+    directions: (id) => structureArtDirections(id),
+    sprite: (id, direction) => structureArtDirectionSprite(id, direction),
+  }), []);
+
+  const forestParams = (): ForestScatterParams => ({
+    speciesIds: forestSpecies,
+    density: forestDensity,
+    jitter: forestJitter,
+    scaleMin: forestScaleMin,
+    scaleMax: forestScaleMax,
+    randomFacing: forestRandomFacing,
+    facing: forestFacing,
+    spacing: forestSpacing,
+    clumping: forestClumping,
+    falloff: forestFalloff,
+    avoidPlayableBoard: forestAvoidBoard,
+    seed: forestSeed,
+  });
+
+  const paintForest = (area: ForestBrushArea): void => {
+    if (!forestSpecies.length) return;
+    const current = currentEditorBoardRef.current;
+    const existing = current.floatingArtwork ?? [];
+    const grown = scatterForest({
+      area,
+      params: forestParams(),
+      geometry: forestGeometry,
+      board: { cols: current.cols, rows: current.rows },
+      existing,
+    });
+    if (!grown.length) return;
+    const next = cloneEditorBoard(current);
+    // Scene art paints in array order with no board-derived depth, so the merged scene has to be
+    // re-sorted by ground contact or a new near tree would draw behind an older far one.
+    next.floatingArtwork = sortFloatingArtworkByDepth([...existing, ...grown], forestGeometry);
+    commitEditorBoard(next, null);
+  };
+
+  const eraseForest = (area: ForestBrushArea): void => {
+    const current = currentEditorBoardRef.current;
+    const existing = current.floatingArtwork ?? [];
+    if (!existing.length) return;
+    const kept = eraseForestArea(existing, area, forestGeometry);
+    if (kept.length === existing.length) return;
+    const next = cloneEditorBoard(current);
+    next.floatingArtwork = kept;
+    commitEditorBoard(next, null);
+  };
+
+  const resetForestParams = (): void => {
+    setForestRadius(FOREST_DEFAULT_RADIUS);
+    setForestDensity(FOREST_SCATTER_DEFAULTS.density);
+    setForestJitter(FOREST_SCATTER_DEFAULTS.jitter);
+    setForestScaleMin(FOREST_SCATTER_DEFAULTS.scaleMin);
+    setForestScaleMax(FOREST_SCATTER_DEFAULTS.scaleMax);
+    setForestRandomFacing(FOREST_SCATTER_DEFAULTS.randomFacing);
+    setForestFacing(FOREST_SCATTER_DEFAULTS.facing);
+    setForestSpacing(FOREST_SCATTER_DEFAULTS.spacing);
+    setForestClumping(FOREST_SCATTER_DEFAULTS.clumping);
+    setForestFalloff(FOREST_SCATTER_DEFAULTS.falloff);
+    setForestAvoidBoard(FOREST_SCATTER_DEFAULTS.avoidPlayableBoard);
+    setForestSeed(FOREST_SCATTER_DEFAULTS.seed);
+  };
+
+  /** Re-sort every piece of scene art into back-to-front paint order. */
+  const sortSceneArtByDepth = (): void => {
+    const current = currentEditorBoardRef.current;
+    const existing = current.floatingArtwork ?? [];
+    if (existing.length < 2) return;
+    const next = cloneEditorBoard(current);
+    next.floatingArtwork = sortFloatingArtworkByDepth(existing, forestGeometry);
+    commitEditorBoard(next, null);
+  };
+
   const paintCell = (x: number, y: number): void => {
     // Floating artwork has its own viewport-level placement surface. It must never fall through
     // into this tile/cell painter, even if a stale pointer event arrives during a tool change.
-    if (brushKind === 'artwork') return;
+    if (brushKind === 'artwork' || brushKind === 'forest') return;
     const key = `${x},${y}`;
     const next = cloneEditorBoard(currentEditorBoardRef.current);
     if (featureKind) {
@@ -8003,6 +8130,71 @@ export function LevelEditor(): ReactElement {
                     onFrameError={failEditorFrame}
                   />
                 )}
+                {editorReady && !saving && !editorLoadError && layer === 'placed-art' && brushKind === 'forest'
+                  && (tool === 'brush' || tool === 'erase') ? (
+                  <div
+                    className="le-artwork-free-placement-surface le-forest-placement-surface"
+                    data-testid="forest-placement-surface"
+                    aria-label={tool === 'erase' ? 'Erase scene art under the forest brush' : 'Paint a forest'}
+                    onPointerDown={(event) => {
+                      if (event.button !== 0) return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      const surface = event.currentTarget;
+                      surface.setPointerCapture(event.pointerId);
+                      const point = forestScenePoint(event.clientX, event.clientY, surface.getBoundingClientRect());
+                      forestStrokeRef.current = { pointerId: event.pointerId, lastX: point.x, lastY: point.y };
+                      const area = { centerX: point.x, centerY: point.y, radius: forestRadius };
+                      if (tool === 'erase') eraseForest(area); else paintForest(area);
+                    }}
+                    onPointerMove={(event) => {
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      setForestCursor({ x: event.clientX - rect.left, y: event.clientY - rect.top });
+                      const stroke = forestStrokeRef.current;
+                      if (!stroke || stroke.pointerId !== event.pointerId) return;
+                      const point = forestScenePoint(event.clientX, event.clientY, rect);
+                      // Stamp at a fraction of the radius so a fast drag still lays a continuous
+                      // band, without re-running the scatter on every pointer pixel.
+                      if (Math.hypot(point.x - stroke.lastX, point.y - stroke.lastY) < forestRadius / 3) return;
+                      stroke.lastX = point.x;
+                      stroke.lastY = point.y;
+                      const area = { centerX: point.x, centerY: point.y, radius: forestRadius };
+                      if (tool === 'erase') eraseForest(area); else paintForest(area);
+                    }}
+                    onPointerUp={(event) => {
+                      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                        event.currentTarget.releasePointerCapture(event.pointerId);
+                      }
+                      forestStrokeRef.current = null;
+                    }}
+                    onPointerCancel={() => { forestStrokeRef.current = null; }}
+                    onPointerLeave={() => { setForestCursor(null); }}
+                  >
+                    {forestCursor ? (
+                      <svg
+                        className="le-forest-brush-ring"
+                        aria-hidden="true"
+                        viewBox="0 0 100 100"
+                        preserveAspectRatio="none"
+                        style={{
+                          left: `${forestCursor.x - forestRadius * viewZoom}px`,
+                          top: `${forestCursor.y - forestRadius * viewZoom}px`,
+                          width: `${forestRadius * viewZoom * 2}px`,
+                          height: `${forestRadius * viewZoom * 2}px`,
+                        }}
+                      >
+                        <circle
+                          cx="50" cy="50" r="49"
+                          fill="rgba(74, 196, 126, 0.1)"
+                          stroke="rgba(126, 232, 168, 0.9)"
+                          strokeWidth="1.5"
+                          strokeDasharray="4 3"
+                          vectorEffect="non-scaling-stroke"
+                        />
+                      </svg>
+                    ) : null}
+                  </div>
+                ) : null}
                 {editorReady && !saving && !editorLoadError && layer === 'placed-art' && brushKind === 'artwork' && tool === 'brush' ? (
                   <div
                     className="le-artwork-free-placement-surface"
@@ -8961,6 +9153,7 @@ export function LevelEditor(): ReactElement {
             <div className="le-seg" role="group" aria-label="Placed art type">
               {([
                 ['artwork', 'Scene Art'],
+                ['forest', 'Forest'],
                 ['doodad', 'Doodads'],
                 ['prop', 'Props'],
               ] as const).map(([kind, label]) => (
@@ -8975,6 +9168,8 @@ export function LevelEditor(): ReactElement {
             <p className="le-board-note">
               {placedArtKind === 'artwork'
                 ? 'Scene Art can be placed anywhere in the scene and never affects movement.'
+                : placedArtKind === 'forest'
+                  ? 'Forest scatters Scene Art trees anywhere in the scene and never affects movement.'
                 : placedArtKind === 'doodad'
                   ? 'Doodads stay inside the playable board and never block movement.'
                   : 'Props stay inside the playable board and block movement.'}
@@ -9230,6 +9425,110 @@ export function LevelEditor(): ReactElement {
               );
             })}
             <p className="le-board-note">This prop spans {propBrushDef.w}×{propBrushDef.h} tile{propBrushDef.w * propBrushDef.h > 1 ? 's' : ''}, anchored at the clicked cell. Props only land where every footprint tile is one of their terrains and no unit or other prop is in the way. Blocking props (trees, houses, rocks) become impassable in play.</p>
+          </section>
+        ) : brushKind === 'forest' ? (
+          <section className="skirmish-card le-brush-panel le-forest-panel" data-testid="forest-controls">
+            <h2>Forest</h2>
+            <p className="le-board-note">Drag over the scene to grow trees. Painting the same ground again changes nothing — re-roll the seed for a different forest. Trees are Scene Art: visual only, never on the playable grid, no collision.</p>
+            <div className="le-pal-group">
+              <span className="le-pal-grouplabel">Species</span>
+              <AssetSwatchList
+                ariaLabel="Forest species"
+                items={forestSpeciesCatalog.map((asset) => ({
+                  id: `forest-${asset.id}`,
+                  label: asset.label,
+                  title: `${asset.label} · include in the forest`,
+                  selected: forestSpecies.includes(asset.id),
+                  onSelect: () => setForestSpecies((current) => (
+                    current.includes(asset.id)
+                      ? current.filter((id) => id !== asset.id)
+                      : [...current, asset.id]
+                  )),
+                  content: <>
+                    <img src={structureArtDirectionHalfSrc(asset.id, 'south', 'front')} alt="" draggable={false} />
+                    <small>{asset.label}</small>
+                  </>,
+                }))}
+              />
+              <div className="le-ctrlrow">
+                <ChromeButton unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                  onClick={() => setForestSpecies(forestSpeciesCatalog.map((asset) => asset.id))}
+                >All</ChromeButton>
+                <ChromeButton unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                  onClick={() => setForestSpecies([])}
+                >None</ChromeButton>
+                <span className="le-ctrllabel">{forestSpecies.length} selected</span>
+              </div>
+            </div>
+            <h2 className="le-card-subhead">Shape</h2>
+            <SliderRow label={`Brush size · ${forestRadius}px`} value={forestRadius} set={setForestRadius} min={40} max={600} step={10} nudge={10} dflt={FOREST_DEFAULT_RADIUS} />
+            <SliderRow label={`Density · ${forestDensity.toFixed(1)} per tile`} value={forestDensity} set={setForestDensity} min={0.2} max={6} step={0.1} nudge={0.1} dflt={FOREST_SCATTER_DEFAULTS.density} />
+            <SliderRow label={`Grid randomness · ${Math.round(forestJitter * 100)}%`} value={forestJitter} set={setForestJitter} min={0} max={1} step={0.05} nudge={0.05} dflt={FOREST_SCATTER_DEFAULTS.jitter} />
+            <SliderRow label={`Minimum spacing · ${forestSpacing}px`} value={forestSpacing} set={setForestSpacing} min={0} max={120} step={2} nudge={2} dflt={FOREST_SCATTER_DEFAULTS.spacing} />
+            <SliderRow label={`Clumping · ${Math.round(forestClumping * 100)}%`} value={forestClumping} set={setForestClumping} min={0} max={1} step={0.05} nudge={0.05} dflt={FOREST_SCATTER_DEFAULTS.clumping} />
+            <SliderRow label={`Edge feathering · ${Math.round(forestFalloff * 100)}%`} value={forestFalloff} set={setForestFalloff} min={0} max={1} step={0.05} nudge={0.05} dflt={FOREST_SCATTER_DEFAULTS.falloff} />
+            <h2 className="le-card-subhead">Variation</h2>
+            <SliderRow label={`Smallest tree · ${forestScaleMin.toFixed(2)}×`} value={forestScaleMin} set={setForestScaleMin} min={0.2} max={3} step={0.05} nudge={0.05} dflt={FOREST_SCATTER_DEFAULTS.scaleMin} />
+            <SliderRow label={`Largest tree · ${forestScaleMax.toFixed(2)}×`} value={forestScaleMax} set={setForestScaleMax} min={0.2} max={3} step={0.05} nudge={0.05} dflt={FOREST_SCATTER_DEFAULTS.scaleMax} />
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Orientation</span>
+              <div className="le-seg" role="group" aria-label="Forest orientation">
+                {([[true, 'Random'], [false, 'Fixed']] as const).map(([random, label]) => (
+                  <ChromeButton unit="inner-text-button"
+                    key={label}
+                    className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', forestRandomFacing === random && 'active')}
+                    aria-pressed={forestRandomFacing === random}
+                    onClick={() => setForestRandomFacing(random)}
+                  >{label}</ChromeButton>
+                ))}
+              </div>
+              {ctlReset(() => setForestRandomFacing(FOREST_SCATTER_DEFAULTS.randomFacing))}
+            </div>
+            {forestRandomFacing ? null : (
+              <FacingCompass
+                direction={forestFacing}
+                onSelect={setForestFacing}
+                onRotate={() => setForestFacing((current) => (
+                  rookDirections[(rookDirections.indexOf(current) + 1) % rookDirections.length]
+                ))}
+                available={() => true}
+                ariaLabel="Forest facing"
+              />
+            )}
+            <h2 className="le-card-subhead">Placement</h2>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Keep off playable board</span>
+              <Toggle
+                checked={forestAvoidBoard}
+                onChange={setForestAvoidBoard}
+                label="Keep the forest off the playable board"
+              />
+              {ctlReset(() => setForestAvoidBoard(FOREST_SCATTER_DEFAULTS.avoidPlayableBoard))}
+            </div>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Seed · {forestSeed}</span>
+              <ChromeButton unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                onClick={() => setForestSeed((current) => (current % 9999) + 1)}
+              >Re-roll</ChromeButton>
+              {ctlReset(() => setForestSeed(FOREST_SCATTER_DEFAULTS.seed))}
+            </div>
+            <div className="le-ctrlrow">
+              <ChromeButton unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                onClick={sortSceneArtByDepth}
+                title="Re-order every piece of scene art back to front so nearer art overlaps farther art"
+              >Fix scene art overlap order</ChromeButton>
+              <ChromeButton unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                onClick={resetForestParams}
+              >Reset forest settings</ChromeButton>
+            </div>
+            {forestSpecies.length ? null : (
+              <p className="le-board-note">Pick at least one species above before painting.</p>
+            )}
           </section>
         ) : brushKind === 'artwork' ? (
           <section className="skirmish-card le-brush-panel">
