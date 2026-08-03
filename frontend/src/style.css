@@ -8948,7 +8948,7 @@ body.loading-bootstrap .app-startup-status {
   }
 
   /* A Run's Conflict/Battle/level/phase orientation remains title-bar information
-     at compact widths (ADR-0346). Keep that one chip and shed War identity + gold. */
+     at compact widths (ADR-0359). Keep that one chip and shed War identity + gold. */
   .app-shell-titlebar .run-topbar-status .skirmish-turn-plate,
   .app-shell-titlebar .run-topbar-status .skirmish-clock {
     display: none;
@@ -22355,6 +22355,23 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   inline-size: 100%;
 }
 
+/* The by-eye box pass: pick a box, move its edges, watch the text re-center. */
+.run-card-frame-box-tuner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Short labels wrap the row, never the word: "Type" split as "Typ/e" reads broken. */
+.run-card-frame-box-tuner .tileset-button-row > button {
+  white-space: nowrap;
+}
+
+.run-card-frame-box-tuner > [data-card-layout-action="reset-frame-boxes"] {
+  inline-size: 100%;
+  text-transform: capitalize;
+}
+
 .run-card-prototype-catalog-image {
   align-items: center;
   display: flex;
@@ -22511,15 +22528,23 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   z-index: 3;
 }
 
+/* ADR-0359: a text line is centered in the frame box it belongs to, inset from
+   both plate edges by one shared value. No card, frame, or type line carries a
+   placement offset of its own — a line that reads wrong means its box is wrong. */
 .run-card-prototype-name,
 .run-card-prototype-type {
   align-items: center;
+  box-sizing: border-box;
   display: flex;
   font-family: var(--ds-font-display);
   font-weight: 400;
   letter-spacing: var(--ds-tracking-tight);
   line-height: 1;
   overflow: hidden;
+  padding-inline: var(--run-card-text-inset, 1.35cqw);
+  /* Centre the ink, not the line box: the face reserves descender room these
+     lines never use, which otherwise leaves every one of them sitting high. */
+  transform: translateY(calc(var(--run-card-text-ink-centre, .0667) * 1em));
   white-space: nowrap;
 }
 
@@ -22529,9 +22554,10 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   inset-inline-start: var(--run-card-title-left, 9.3%);
   block-size: var(--run-card-title-height, 6.2%);
   inline-size: var(--run-card-title-width, 68.4%);
-  transform: translate(var(--run-card-title-x), var(--run-card-title-y));
 }
 
+/* The coin reading is centered in the coin box on both axes; the box is seated
+   on the frame's drawn socket, so the socket is what gets tuned. */
 .run-card-prototype-cost {
   align-items: center;
   display: flex;
@@ -22542,7 +22568,7 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   inline-size: var(--run-card-cost-width, 11.1%);
   justify-content: center;
   text-shadow: 0 1px 0 rgba(255, 232, 161, .55);
-  transform: translate(var(--run-card-cost-x), var(--run-card-cost-y));
+  transform: translateY(calc(var(--run-card-text-ink-centre, .0667) * 1em));
 }
 
 .run-card-prototype-type {
@@ -22551,7 +22577,6 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   inset-inline-start: var(--run-card-type-left, 9.3%);
   block-size: var(--run-card-type-height, 4.65%);
   inline-size: var(--run-card-type-width, 80.6%);
-  transform: translate(var(--run-card-type-x), var(--run-card-type-y));
 }
 
 .run-card-prototype-type:has(.run-card-prototype-property-icon) {
@@ -22623,9 +22648,50 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   font: 700 2.35cqw/1 var(--ds-font-body);
   outline: max(1px, .22cqw) solid rgba(88, 224, 255, .92);
   outline-offset: max(-1px, -.22cqw);
-  padding: .45cqw;
   position: absolute;
   text-shadow: 0 1px 1px #001219;
+}
+
+/* The name rides just above its box so it never covers the text being judged. */
+.run-card-frame-box-tag {
+  inset-block-end: calc(100% + .3cqw);
+  inset-inline-start: 0;
+  position: absolute;
+}
+
+/* The box being tuned reads over the others without hiding where they sit. */
+.run-card-frame-box-overlay:has(.run-card-frame-box.is-selected) .run-card-frame-box:not(.is-selected) {
+  color: rgba(216, 248, 255, .38);
+  outline-color: rgba(88, 224, 255, .32);
+}
+
+.run-card-frame-box.is-selected {
+  color: #ffe6bd;
+  outline-color: rgba(255, 176, 64, .95);
+  outline-width: max(2px, .34cqw);
+  z-index: 1;
+}
+
+/* Aligning a box to a plate edge painted into the frame means seeing that edge:
+   the dotted pass thins every line to a hairline and drops the unselected boxes
+   to a hint, so what is underneath stays readable. */
+.run-card-frame-box-overlay.is-dotted .run-card-frame-box {
+  outline-style: dotted;
+  outline-width: 1px;
+  outline-offset: -1px;
+}
+
+.run-card-frame-box-overlay.is-dotted .run-card-frame-box:not(.is-selected) {
+  color: rgba(216, 248, 255, .3);
+  outline-color: rgba(88, 224, 255, .3);
+}
+
+.run-card-frame-box-overlay.is-dotted .run-card-frame-box.is-selected {
+  outline-color: rgba(255, 190, 96, .9);
+}
+
+.run-card-frame-box-overlay.is-dotted .run-card-frame-box-tag {
+  opacity: .7;
 }
 
 .run-card-frame-box.is-title {
@@ -22704,11 +22770,15 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   position: absolute;
 }
 
+/* The marker rides the unit it marks: the density ladder resizes the sprite per
+   card, so a fixed card fraction would leave the icon half again the unit's
+   height on a busy card. .162 x the committed x5 unit-state fit is the 0.81 of
+   unit height that fitting approved on the roomy step. */
 .run-card-prototype-unit-marker {
   align-items: center;
-  block-size: 3.4cqw;
+  block-size: calc(var(--run-card-unit-height, 9cqw) * .162);
   display: inline-flex;
-  inline-size: 3.4cqw;
+  inline-size: calc(var(--run-card-unit-height, 9cqw) * .162);
   justify-content: center;
   z-index: 3;
   image-rendering: pixelated;
@@ -22745,12 +22815,6 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   font-style: italic;
   margin: auto 0 0;
   text-wrap: wrap;
-}
-
-.run-card-prototype-effect {
-  font: 400 var(--run-card-effect-size, 2.75cqw)/1.12 var(--ds-font-display);
-  margin-block-start: var(--run-card-effect-gap, .7cqw);
-  text-wrap: balance;
 }
 
 .run-card-prototype-properties {

@@ -20,6 +20,25 @@ const RUN_RELIC_RESIZED_PRODUCTION_EXCEPTION_SHA_BY_SLOT = Object.freeze({
   'ui/run/relics/occult-dagger.png': 'bc7984ccbabf45e39e672957d7ed1e2716c7e82e14b671fcbed38a7f82b9208d',
   'ui/run/relics/training-linens.png': 'e1349bd32f7bcaccbd706dbc55a6f97df8a0dd96533f309d1e2c0ea38aabf461',
 });
+// ADR-0360. Two generated card frames painted their card at a different SHAPE
+// from the other three, so the same 5:7 element rendered visibly different card
+// sizes. Normalising them to the shared 1009x1402 painted box means resampling,
+// which is not native 1x — admitted only for these exact slots, bytes and
+// transform, exactly as ADR-0332 admits the resized relic icons.
+const RUN_CARD_FRAME_NORMALISED_EXCEPTION_SCHEMA = 'run-card-frame-normalised-production-exception-v1';
+const RUN_CARD_FRAME_NORMALISED_EXCEPTION_TRANSFORM = 'painted-card-box-normalise-lanczos-1009x1402';
+const RUN_CARD_FRAME_NORMALISED_EXCEPTION_BY_SLOT = Object.freeze({
+  'ui/run/card-prototypes/concinnous-frame-v1.png': Object.freeze({
+    outputSha256: '310629d033eebd8f2b1227de1b8a42e1a6b86087327111c145b8f715d4481bcb',
+    sourceSha256: '38b1290df1067dfa3562b874478b29c3f47341d8a065c90d426cec2cdaa32cc7',
+    sourcePaintedHeight: 1420,
+  }),
+  'ui/run/card-prototypes/hieratic-frame-v1.png': Object.freeze({
+    outputSha256: '6552cae59d0d1b404a466b2d37fb6d0a0e6dcdcd60b171ec4979f8a50c610348',
+    sourceSha256: '7ae3b1945da8fefa46a264b696b0fc5695454c80c7256f879fd465a06a2d1152',
+    sourcePaintedHeight: 1427,
+  }),
+});
 const RUN_RESOURCE_ICON_COMPONENT = 'run-resource-icon';
 const RUN_RESOURCE_ICON_SLOT = /^ui\/run\/resources\/([a-z][a-z0-9-]{0,79})\.png$/;
 const RUN_SHOP_WRAP_COMPONENT = 'run-shop-wrap';
@@ -851,6 +870,32 @@ function nativeMediaEvidenceIssue(row) {
       || !normalizedSha(evidence.sourceSha256)
       || evidence.transform !== 'chroma-key-crop-nearest-neighbor-fit-52-alpha-threshold-96'
     ) return 'ADR-0332 resized production evidence is missing its archived source or exact transform';
+    return null;
+  }
+  if (evidence.schema === RUN_CARD_FRAME_NORMALISED_EXCEPTION_SCHEMA) {
+    const expected = RUN_CARD_FRAME_NORMALISED_EXCEPTION_BY_SLOT[String(row.slot || '')];
+    if (!expected) return 'ADR-0360 normalised card-frame evidence is restricted to its two Run card frame slots';
+    if (
+      normalizedSha(row.blob_sha256) !== expected.outputSha256
+      || normalizedSha(evidence.outputSha256) !== expected.outputSha256
+    ) return 'ADR-0360 normalised card-frame evidence does not authorize these uploaded bytes';
+    if (normalizedSha(evidence.sourceSha256) !== expected.sourceSha256) {
+      return 'ADR-0360 normalised card-frame evidence does not name the frame it was normalised from';
+    }
+    if (
+      evidence.decision !== 'ADR-0360'
+      || evidence.status !== 'owner-approved-production-exception'
+      || evidence.native1x !== false
+      || evidence.spatialResampling !== true
+    ) return 'ADR-0360 normalised card-frame evidence is incomplete';
+    if (Number(row.width) !== 1060 || Number(row.height) !== 1484) {
+      return 'ADR-0360 normalised card-frame evidence requires the native 1060x1484 canvas';
+    }
+    if (
+      Number(evidence.paintedWidth) !== 1009 || Number(evidence.paintedHeight) !== 1402
+      || Number(evidence.sourcePaintedHeight) !== expected.sourcePaintedHeight
+      || evidence.transform !== RUN_CARD_FRAME_NORMALISED_EXCEPTION_TRANSFORM
+    ) return 'ADR-0360 normalised card-frame evidence is missing its painted box or exact transform';
     return null;
   }
   if (evidence.native1x !== true) return 'nativeEvidence.native1x must be true';
