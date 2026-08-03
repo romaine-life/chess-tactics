@@ -73,13 +73,12 @@ export function RunRelicStrip({
               className="run-relic-inventory-item"
               key={relicId}
               triggerClassName="run-relic-inventory-trigger"
-              popupClassName="run-relic-tooltip-pop"
               popupMaxInlineSize={288}
               label={`${relic.name}. ${relic.description}`}
+              title={relic.name}
               trigger={<RunRelicIcon relicId={relicId} />}
             >
-              <strong className="run-relic-tooltip-name">{relic.name}</strong>
-              <span className="run-relic-tooltip-description">{relic.description}</span>
+              <span>{relic.description}</span>
             </Tooltip>
           );
         })}

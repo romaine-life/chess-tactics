@@ -1,6 +1,7 @@
 import { useCallback, useId, useRef, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { chromeFamilyPortalHost } from '../chromeFamilyRuntime';
 import { InnerChromeBox } from './ChromeBox';
 
 interface TooltipPosition {
@@ -44,7 +45,12 @@ function useTooltipPosition<T extends HTMLElement>() {
     if (!hovered.current) hide();
   }, [hide]);
 
-  return { ref, pos, hide, onBlur, onFocus, onMouseEnter, onMouseLeave };
+  // The pop is portalled out of the trigger's scrolling panel, so it must be
+  // re-homed inside the chrome family surface. Portalling to <main> or <body>
+  // (both sit outside it) leaves the pop with no frame and no fill.
+  const portalHost = chromeFamilyPortalHost(ref.current);
+
+  return { ref, pos, hide, onBlur, onFocus, onMouseEnter, onMouseLeave, portalHost };
 }
 
 function TooltipPopup({
@@ -54,6 +60,7 @@ function TooltipPopup({
   maxInlineSize = 256,
   pos,
   portalHost,
+  title,
 }: {
   children: ReactNode;
   className?: string;
@@ -61,15 +68,12 @@ function TooltipPopup({
   maxInlineSize?: number;
   pos: TooltipPosition | null;
   portalHost: Element | null;
+  title?: ReactNode;
 }): ReactElement | null {
   if (!pos || typeof document === 'undefined') return null;
   return createPortal((
     <span
-      // The popup is portalled out of its trigger's subtree, so it carries the
-      // chrome family scope with it. Without this an inner-box that escapes to
-      // <body> — a tooltip on the persistent title bar, which lives outside every
-      // screen <main> — renders as unframed floating text.
-      className="tooltip-pop-positioner chrome-family-surface"
+      className="tooltip-pop-positioner"
       style={{ left: pos.left, maxInlineSize, top: pos.top }}
     >
       <InnerChromeBox
@@ -78,6 +82,7 @@ function TooltipPopup({
         id={id}
         className={`infotip-pop tooltip-pop ${className}`.trim()}
       >
+        {title ? <strong className="tooltip-title">{title}</strong> : null}
         {children}
       </InnerChromeBox>
     </span>
@@ -87,10 +92,16 @@ function TooltipPopup({
 // Canonical tooltip for an existing visual trigger. It appears immediately on
 // hover or keyboard focus and uses fixed positioning so scrolling containers do
 // not clip it. Keep native title="" off consumers of this primitive.
+//
+// `title` is the named thing the tip is about — a relic, an ability, a card
+// property — and children are its explanation. The pop owns the whole treatment
+// (grid, gaps, display face for the title, body face for the rest), so a caller
+// never restates it: a popupClassName is for sizing, not for typography.
 export function Tooltip({
   trigger,
   children,
   label,
+  title,
   className = '',
   popupMaxInlineSize = 256,
   popupClassName = '',
@@ -100,6 +111,7 @@ export function Tooltip({
   trigger: ReactNode;
   children: ReactNode;
   label: string;
+  title?: ReactNode;
   className?: string;
   popupMaxInlineSize?: number;
   popupClassName?: string;
@@ -115,8 +127,8 @@ export function Tooltip({
     onFocus,
     onMouseEnter,
     onMouseLeave,
+    portalHost,
   } = useTooltipPosition<HTMLSpanElement>();
-  const portalHost = typeof document === 'undefined' ? null : ref.current?.closest('main') ?? document.body;
 
   return (
     <span
@@ -145,6 +157,7 @@ export function Tooltip({
         portalHost={portalHost}
         className={popupClassName}
         maxInlineSize={popupMaxInlineSize}
+        title={title}
       >
         {children}
       </TooltipPopup>
@@ -166,8 +179,8 @@ export function InfoTip({ children, label = 'More info' }: { children: ReactNode
     onFocus,
     onMouseEnter,
     onMouseLeave,
+    portalHost,
   } = useTooltipPosition<HTMLButtonElement>();
-  const portalHost = typeof document === 'undefined' ? null : ref.current?.closest('main') ?? document.body;
 
   return (
     <span className="infotip" onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>

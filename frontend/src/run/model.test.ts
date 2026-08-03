@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createBlankLevel } from '../core/level';
 import {
   ATARAXIA_BY_TIER,
+  ATARAXIA_TIERS,
   AGMINATE_COST,
   AGMINATE_DISPLAY_NAME,
   CONCINNOUS_OFFER_DENOMINATOR,
@@ -550,13 +551,24 @@ describe('Run progression and relic offers', () => {
 });
 
 describe('Ataraxia ladder identities', () => {
-  it('gives Ataraxia 0 the same identity and literal-impact fields as later tiers', () => {
+  it('gives the baseline tier the same identity and literal-impact fields as later tiers', () => {
     expect(ATARAXIA_BY_TIER[0]).toEqual({
       tier: 0,
+      numeral: '0',
       label: 'Ataraxia 0',
       title: 'The Untroubled Mind',
       effect: 'Standard Run rules. Shop cards may be Tactical, Concinnous or Hieratic but are never Pestiferous.',
     });
+  });
+
+  // Every rung carries a numeral, and the label is that numeral qualified by the ladder
+  // name — so renumbering a rung is one edit rather than two strings that can disagree.
+  it('numbers every installed rung and qualifies each with the ladder name', () => {
+    for (const tier of ATARAXIA_TIERS) {
+      const definition = ATARAXIA_BY_TIER[tier];
+      expect(definition.numeral).toMatch(/^(?:0|[IVX]+)$/);
+      expect(definition.label).toBe(`Ataraxia ${definition.numeral}`);
+    }
   });
 });
 

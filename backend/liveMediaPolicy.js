@@ -41,6 +41,8 @@ const RUN_CARD_FRAME_NORMALISED_EXCEPTION_BY_SLOT = Object.freeze({
 });
 const RUN_RESOURCE_ICON_COMPONENT = 'run-resource-icon';
 const RUN_RESOURCE_ICON_SLOT = /^ui\/run\/resources\/([a-z][a-z0-9-]{0,79})\.png$/;
+const RUN_CARD_COST_COIN_COMPONENT = 'run-card-cost-coin';
+const RUN_CARD_COST_COIN_SLOT = 'ui/run/card-prototypes/cost-coin-v1.png';
 const RUN_SHOP_WRAP_COMPONENT = 'run-shop-wrap';
 const RUN_SHOP_WRAP_SLOT = /^ui\/run\/shop-wrap\/([a-z][a-z0-9-]{0,79})\.png$/;
 // A wrap frames live cards rather than replacing them, so the only geometry the
@@ -91,6 +93,16 @@ const SFX_MEDIA_TYPE_BY_EXTENSION = Object.freeze({
   wav: 'audio/wav',
   webm: 'audio/webm',
 });
+// The Ataraxia rung marks (ADR-0362): `ui/kit/numerals/<style>/<rung>.png`, forged 0-through-X
+// as one set and reviewed on the Ataraxia reference rows of either host.
+const ATARAXIA_NUMERAL_SLOT = /^ui\/kit\/numerals\/([a-z][a-z0-9-]{0,31})\/([a-z][a-z0-9-]{0,15})\.png$/;
+const ATARAXIA_NUMERAL_COMPONENT = 'ataraxia-rung-numeral';
+// The rung marks compose the GENERIC typed owner proof (which acceptance requires of every
+// non-terrain, non-group domain) with the domain rules below — one evidence object that both
+// the review-time surface check and the accept-time typed-proof check read.
+const ATARAXIA_NUMERAL_PROOF_SCHEMA = 'live-media-owner-proof-v1';
+const ATARAXIA_NUMERAL_PROOF_RENDERER = 'Enchiridion/AtaraxiaSection';
+const ATARAXIA_NUMERAL_REVIEW_SURFACE = /^(?:\/(?:play|run))?\/(?:strategikon\/)?enchiridion\/ataraxia$/;
 const STRATEGIKON_BACKGROUND_COMPONENT = 'strategikon-background';
 const STRATEGIKON_BACKGROUND_PROOF_RENDERER = 'ShellWorkspace/StrategikonBackgroundArtwork';
 const STRATEGIKON_BACKGROUND_PROOF_SCHEMA = 'strategikon-background-cover-exception-v1';
@@ -102,6 +114,17 @@ const STRATEGIKON_BACKGROUND_SHA256 = '8084f009cae79d3eaaa64bb2c0f5df6e26fc8dfe7
 const WORKSPACE_BACKGROUND_COMPONENT = 'workspace-background';
 const WORKSPACE_BACKGROUND_SLOT = /^ui\/workspaces\/([a-z][a-z0-9-]{0,63})\/background\.png$/;
 const WORKSPACE_BACKGROUND_IDS = Object.freeze(['run-victory', 'level-editor-events']);
+// Perimeter walls live in the terrain domain but are NOT board tiles: they carry their own
+// full-height frame geometry (ADR-0086) instead of the 96x180 tile projection, so they are
+// dispatched before the tile rules the way the brush icon and SFX takes are.
+const WALL_MATERIAL_COMPONENT = 'wall-material';
+const WALL_MATERIAL_PROOF_SCHEMA = 'wall-material-canonical-board-proof-v1';
+const WALL_MATERIAL_PROOF_RENDERER = 'BoardLabBoard/BoardBarrierSceneLayer';
+const WALL_MATERIAL_FRAME_SLOT = /^tiles\/feature\/wall-([a-z][a-z0-9-]{0,63})-(1|8|9)\.png$/;
+const WALL_MATERIAL_THUMB_SLOT = /^tiles\/feature\/wall-([a-z][a-z0-9-]{0,63})-thumb\.png$/;
+const WALL_MATERIAL_FRAME_WIDTH = 128;
+const WALL_MATERIAL_FRAME_HEIGHT = 336;
+const WALL_MATERIAL_THUMB_MAX = 512;
 
 function isObjectRecord(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -125,6 +148,10 @@ function runRelicIconSlotId(slot) {
 function runResourceIconSlotId(slot) {
   const match = RUN_RESOURCE_ICON_SLOT.exec(String(slot || ''));
   return match ? match[1] : null;
+}
+
+function runCardCostCoinSlot(slot) {
+  return String(slot || '') === RUN_CARD_COST_COIN_SLOT;
 }
 
 function runShopWrapSlotId(slot) {
@@ -164,6 +191,111 @@ function sfxSampleSlot(slot) {
 
 function strategikonBackgroundSlot(slot) {
   return String(slot || '') === STRATEGIKON_BACKGROUND_SLOT;
+}
+
+/** The `{style, rung}` an Ataraxia rung-mark slot names, or null (ADR-0362). */
+function ataraxiaNumeralSlot(slot) {
+  const match = ATARAXIA_NUMERAL_SLOT.exec(String(slot || ''));
+  return match ? { style: match[1], rung: match[2] } : null;
+}
+
+/**
+ * The typed completeness validator that lifts rung marks out of `ui-kit`'s bridge-only
+ * default: a rung mark is one native 64x64 PNG naming its own rung, so the catalog can
+ * state what the row will draw instead of trusting an untyped kit upload.
+ */
+function ataraxiaNumeralMediaIssue(row, projectedRuntime = null) {
+  const contract = ataraxiaNumeralSlot(row.slot);
+  if (!contract) return 'Ataraxia rung marks require a registered semantic slot';
+  if (row.domain !== 'ui-kit') return 'Ataraxia rung marks require the ui-kit domain';
+  if (row.media_type !== 'image/png') return 'Ataraxia rung marks require image/png';
+  if (Number(row.width) !== 64 || Number(row.height) !== 64) {
+    return 'Ataraxia rung marks must be native 64x64 rasters';
+  }
+
+  const metadata = mediaVersionMetadata(row);
+  const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+  if (!isObjectRecord(runtime)) return 'Ataraxia rung marks require metadata.runtime';
+  const allowed = new Set([
+    'component', 'variant', 'frameWidth', 'frameHeight', 'frameCount', 'altText', 'nativeRole',
+  ]);
+  const unsupported = Object.keys(runtime).filter((key) => !allowed.has(key));
+  if (unsupported.length) {
+    return `Ataraxia rung mark runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
+  }
+  if (runtime.component !== ATARAXIA_NUMERAL_COMPONENT) {
+    return `Ataraxia rung mark metadata.runtime.component must be ${ATARAXIA_NUMERAL_COMPONENT}`;
+  }
+  if (runtime.nativeRole !== ATARAXIA_NUMERAL_COMPONENT) {
+    return `Ataraxia rung mark metadata.runtime.nativeRole must be ${ATARAXIA_NUMERAL_COMPONENT}`;
+  }
+  // The style is the slot's own path segment; the runtime block stays inside the shared
+  // key allowlist rather than inventing a projection key for it.
+  if (runtime.variant !== contract.rung) return 'Ataraxia rung mark variant must match its semantic slot';
+  if (runtime.frameWidth !== 64 || runtime.frameHeight !== 64 || runtime.frameCount !== 1) {
+    return 'Ataraxia rung mark runtime geometry must describe one native 64x64 frame';
+  }
+  return null;
+}
+
+/**
+ * A rung mark is reviewed where it is worn: the Ataraxia reference rows, on either host.
+ * Every other art domain names its own review surface this way; without one, this domain
+ * would fall through to the `/studio` backstop and evidence would have to claim a surface
+ * the reviewer never opened. The proof carries the same candidate/slot snapshot every
+ * other domain requires — this registers a surface, it does not relax a gate.
+ */
+function ataraxiaNumeralOwnerProofIssue(row, proof, surfaceUrl = null) {
+  if (!ataraxiaNumeralSlot(row.slot)) return 'Ataraxia numeral proof requires a registered rung slot';
+  if (!isObjectRecord(proof) || proof.schema !== ATARAXIA_NUMERAL_PROOF_SCHEMA) {
+    return `Ataraxia numeral review requires ${ATARAXIA_NUMERAL_PROOF_SCHEMA}`;
+  }
+  if (proof.renderer !== ATARAXIA_NUMERAL_PROOF_RENDERER) {
+    return 'Ataraxia numeral proof does not name the reviewed rung renderer';
+  }
+  if (surfaceUrl !== null && proof.surfaceUrl !== surfaceUrl) {
+    return 'Ataraxia numeral proof surfaceUrl does not match the reviewed surface';
+  }
+  let parsedSurface;
+  try { parsedSurface = new URL(proof.surfaceUrl); } catch { return 'Ataraxia numeral proof surfaceUrl is invalid'; }
+  if (!ATARAXIA_NUMERAL_REVIEW_SURFACE.test(parsedSurface.pathname)) {
+    return 'Ataraxia numeral proof must identify the live Ataraxia reference rows';
+  }
+  const candidateSha256 = normalizedSha(row.blob_sha256);
+  if (!candidateSha256 || !Array.isArray(proof.selectedCandidates) || proof.selectedCandidates.length !== 1) {
+    return 'Ataraxia numeral proof must identify exactly one candidate';
+  }
+  const selected = proof.selectedCandidates[0];
+  if (
+    !isObjectRecord(selected) || selected.slot !== row.slot || selected.versionId !== String(row.id)
+    || normalizedSha(selected.sha256) !== candidateSha256
+  ) return 'Ataraxia numeral proof does not identify the reviewed candidate bytes';
+  if (!Array.isArray(proof.slotSnapshots) || proof.slotSnapshots.length !== 1) {
+    return 'Ataraxia numeral proof must snapshot exactly one semantic slot';
+  }
+  const snapshot = proof.slotSnapshots[0];
+  if (!isObjectRecord(snapshot) || snapshot.slot !== row.slot) {
+    return 'Ataraxia numeral proof slot snapshot is invalid';
+  }
+  // The set is judged together — a half-carved ladder is the defect this records against.
+  if (!Array.isArray(proof.reviewedSet) || proof.reviewedSet.length < 2
+    || !proof.reviewedSet.every((entry) => typeof entry === 'string' && ataraxiaNumeralSlot(entry))
+    || !proof.reviewedSet.includes(row.slot)) {
+    return 'Ataraxia numeral proof must record the whole reviewed rung set';
+  }
+  return null;
+}
+
+/**
+ * The wall material and face a `tiles/feature/wall-<material>-<mask|thumb>.png` slot names, or
+ * null. `mask` is the N(1)/W(8) face bitmask the frame paints; `thumb` is its picker card.
+ */
+function wallMaterialSlot(slot) {
+  const raw = String(slot || '');
+  const frame = WALL_MATERIAL_FRAME_SLOT.exec(raw);
+  if (frame) return { material: frame[1], mask: Number(frame[2]), thumb: false };
+  const thumb = WALL_MATERIAL_THUMB_SLOT.exec(raw);
+  return thumb ? { material: thumb[1], mask: null, thumb: true } : null;
 }
 
 /** The workspace id a `ui/workspaces/<id>/background.png` slot names, or null. */
@@ -426,6 +558,46 @@ function runResourceIconMediaIssue(row, projectedRuntime = null) {
 }
 
 /**
+ * The card-price coin is the exact transparent 112px extraction of the shared
+ * card coin. The surrounding component owns both the live value and accessible
+ * currency label; the raster owns only the blank struck-metal body.
+ */
+function runCardCostCoinMediaIssue(row, projectedRuntime = null) {
+  if (!runCardCostCoinSlot(row.slot)) return 'Run card cost coin requires its registered semantic slot';
+  if (row.domain !== 'ui-kit') return 'Run card cost coin requires the ui-kit domain';
+  if (row.role !== 'icon') return 'Run card cost coin requires the icon role';
+  if (row.media_type !== 'image/png') return 'Run card cost coin requires image/png';
+  if (Number(row.width) !== 112 || Number(row.height) !== 112) {
+    return 'Run card cost coin must preserve the native 112x112 transparent raster';
+  }
+
+  const metadata = mediaVersionMetadata(row);
+  const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+  if (!isObjectRecord(runtime)) return 'Run card cost coin requires metadata.runtime';
+  const allowed = new Set([
+    'component', 'variant', 'frameWidth', 'frameHeight', 'frameCount', 'altText', 'nativeRole',
+  ]);
+  const unsupported = Object.keys(runtime).filter((key) => !allowed.has(key));
+  if (unsupported.length) {
+    return `Run card cost coin runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
+  }
+  if (runtime.component !== RUN_CARD_COST_COIN_COMPONENT) {
+    return `Run card cost coin metadata.runtime.component must be ${RUN_CARD_COST_COIN_COMPONENT}`;
+  }
+  if (runtime.variant !== 'gold') return 'Run card cost coin variant must be gold';
+  if (runtime.frameWidth !== 112 || runtime.frameHeight !== 112 || runtime.frameCount !== 1) {
+    return 'Run card cost coin runtime geometry must describe one native 112x112 frame';
+  }
+  if (runtime.nativeRole !== RUN_CARD_COST_COIN_COMPONENT) {
+    return `Run card cost coin metadata.runtime.nativeRole must be ${RUN_CARD_COST_COIN_COMPONENT}`;
+  }
+  if (runtime.altText !== '') {
+    return 'Run card cost coin metadata.runtime.altText must be empty because the live value owns its accessible name';
+  }
+  return null;
+}
+
+/**
  * Domain-owned runtime projection for the native icons that name one closed game
  * idea: a unit condition, the card property that grants it, or a repeatable Run
  * position. Their exact semantic slots are closed so an arbitrary ui-kit
@@ -658,6 +830,106 @@ function levelEditorBrushIconOwnerProofIssue(row, proof, surfaceUrl = null) {
     || proof.opaqueBounds.width !== bounds.width || proof.opaqueBounds.height !== bounds.height
   ) {
     return 'Level Editor brush proof opaque bounds do not match the validated candidate evidence';
+  }
+  return null;
+}
+
+/**
+ * Domain-owned runtime projection for one perimeter wall raster. ADR-0086 makes the
+ * full-height frame the only wall geometry, so the frame size is the contract: a wall
+ * candidate that does not carry it cannot seat on the board's back edges at all.
+ */
+function wallMaterialMediaIssue(row, projectedRuntime = null) {
+  const wall = wallMaterialSlot(row.slot);
+  if (!wall) return 'wall slots must match tiles/feature/wall-<material>-<1|8|9|thumb>.png';
+  if (row.domain !== 'terrain') return 'wall materials require the terrain domain';
+  if (row.media_type !== 'image/png') return 'wall materials require image/png';
+  if (wall.thumb) {
+    if (row.role !== 'review') return 'wall material thumbnails require the review role';
+    const width = Number(row.width);
+    const height = Number(row.height);
+    if (!Number.isInteger(width) || !Number.isInteger(height) || width !== height) {
+      return 'wall material thumbnails must be square';
+    }
+    if (width < 1 || width > WALL_MATERIAL_THUMB_MAX) {
+      return `wall material thumbnails must be 1-${WALL_MATERIAL_THUMB_MAX}px square`;
+    }
+  } else {
+    if (row.role !== 'media') return 'wall material frames require the terrain media role';
+    if (Number(row.width) !== WALL_MATERIAL_FRAME_WIDTH || Number(row.height) !== WALL_MATERIAL_FRAME_HEIGHT) {
+      return `ADR-0086 wall frames must be native ${WALL_MATERIAL_FRAME_WIDTH}x${WALL_MATERIAL_FRAME_HEIGHT}`;
+    }
+  }
+
+  const metadata = mediaVersionMetadata(row);
+  const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+  if (!isObjectRecord(runtime) || !Object.keys(runtime).length) return null;
+  const allowed = new Set(['component', 'variant', 'frameWidth', 'frameHeight', 'frameCount', 'altText']);
+  const unsupported = Object.keys(runtime).filter((key) => !allowed.has(key));
+  if (unsupported.length) {
+    return `wall material runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
+  }
+  if (runtime.component !== undefined && runtime.component !== WALL_MATERIAL_COMPONENT) {
+    return `wall material metadata.runtime.component must be ${WALL_MATERIAL_COMPONENT}`;
+  }
+  if (runtime.variant !== undefined && runtime.variant !== wall.material) {
+    return 'wall material metadata.runtime.variant must name its own material';
+  }
+  if (runtime.frameCount !== undefined && runtime.frameCount !== 1) {
+    return 'wall material frames are single-frame rasters';
+  }
+  if (runtime.frameWidth !== undefined && runtime.frameWidth !== Number(row.width)) {
+    return 'wall material runtime frameWidth does not match uploaded geometry';
+  }
+  if (runtime.frameHeight !== undefined && runtime.frameHeight !== Number(row.height)) {
+    return 'wall material runtime frameHeight does not match uploaded geometry';
+  }
+  return null;
+}
+
+/**
+ * Owner review for a wall candidate is only meaningful mounted on the real board renderer at
+ * canonical 1x, seated against live terrain. One proof covers a whole wall batch, so each
+ * candidate is checked against its OWN slot entry rather than a single-element proof.
+ */
+function wallMaterialOwnerProofIssue(row, proof, surfaceUrl = null) {
+  const wall = wallMaterialSlot(row.slot);
+  if (!wall) return 'wall material proof requires a registered wall slot';
+  if (!isObjectRecord(proof) || proof.schema !== WALL_MATERIAL_PROOF_SCHEMA) {
+    return `wall material review requires ${WALL_MATERIAL_PROOF_SCHEMA}`;
+  }
+  if (
+    proof.renderer !== WALL_MATERIAL_PROOF_RENDERER
+    || proof.canonicalScale !== 1 || proof.assetLocalScale !== 1
+    || proof.spatialResampling !== false || proof.deterministicProof !== true
+  ) return 'wall material proof must cover exact canonical 1x pixels without resampling';
+  if (
+    proof.frameWidth !== WALL_MATERIAL_FRAME_WIDTH || proof.frameHeight !== WALL_MATERIAL_FRAME_HEIGHT
+  ) return 'wall material proof does not mount the ADR-0086 full-height frame geometry';
+  if (surfaceUrl !== null && proof.surfaceUrl !== surfaceUrl) {
+    return 'wall material proof surfaceUrl does not match the reviewed surface';
+  }
+  let parsedSurface;
+  try { parsedSurface = new URL(proof.surfaceUrl); } catch { return 'wall material proof surfaceUrl is invalid'; }
+  if (parsedSurface.pathname !== '/studio') {
+    return 'wall material proof must come from the game-owned Studio wall surface';
+  }
+  const candidateSha256 = normalizedSha(row.blob_sha256);
+  if (!candidateSha256) return 'wall material proof requires uploaded candidate bytes';
+  if (!Array.isArray(proof.selectedCandidates) || !Array.isArray(proof.slotSnapshots)) {
+    return 'wall material proof is incomplete';
+  }
+  const selected = proof.selectedCandidates.filter((item) => isObjectRecord(item) && item.slot === row.slot);
+  if (
+    selected.length !== 1 || selected[0].versionId !== String(row.id)
+    || normalizedSha(selected[0].sha256) !== candidateSha256
+  ) return 'wall material proof does not identify the reviewed candidate bytes';
+  const snapshots = proof.slotSnapshots.filter((item) => isObjectRecord(item) && item.slot === row.slot);
+  if (snapshots.length !== 1) return 'wall material proof must snapshot this wall slot exactly once';
+  // A wall face is only judged against the walls it will stand beside, so every frame in the
+  // batch has to be mounted on the same board — not reviewed one sprite at a time.
+  if (!wall.thumb && !proof.mountedSlots?.includes?.(row.slot)) {
+    return 'wall material proof must mount this frame on the reviewed board';
   }
   return null;
 }
@@ -1044,6 +1316,12 @@ function liveCatalogReadinessIssue(catalog, { requireCritical = false } = {}) {
 }
 
 module.exports = {
+  ATARAXIA_NUMERAL_COMPONENT,
+  ATARAXIA_NUMERAL_PROOF_RENDERER,
+  ATARAXIA_NUMERAL_PROOF_SCHEMA,
+  ataraxiaNumeralMediaIssue,
+  ataraxiaNumeralOwnerProofIssue,
+  ataraxiaNumeralSlot,
   CARD_TYPE_ROW_TEXTURE_COMPONENT,
   CARD_TYPE_ROW_TEXTURE_GROUP_ID,
   CARD_TYPE_ROW_TEXTURE_REQUIRED_SLOTS,
@@ -1056,6 +1334,7 @@ module.exports = {
   LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_EXCEPTION_SCHEMA,
   RUN_RELIC_ICON_COMPONENT,
   RUN_RELIC_RESIZED_PRODUCTION_EXCEPTION_SCHEMA,
+  RUN_CARD_COST_COIN_COMPONENT,
   RUN_RESOURCE_ICON_COMPONENT,
   RUN_SHOP_WRAP_COMPONENT,
   SFX_SAMPLE_COMPONENT,
@@ -1066,6 +1345,11 @@ module.exports = {
   STRATEGIKON_BACKGROUND_PROOF_SCHEMA,
   STRATEGIKON_BACKGROUND_SHA256,
   STRATEGIKON_BACKGROUND_SLOT,
+  WALL_MATERIAL_COMPONENT,
+  WALL_MATERIAL_FRAME_HEIGHT,
+  WALL_MATERIAL_FRAME_WIDTH,
+  WALL_MATERIAL_PROOF_RENDERER,
+  WALL_MATERIAL_PROOF_SCHEMA,
   liveCatalogReadinessIssue,
   cardTypeRowTextureAcceptanceGroupIssue,
   cardTypeRowTextureMediaIssue,
@@ -1083,6 +1367,8 @@ module.exports = {
   preservesNativeEvidenceForUpload,
   runRelicIconMediaIssue,
   runRelicIconSlotId,
+  runCardCostCoinMediaIssue,
+  runCardCostCoinSlot,
   runResourceIconMediaIssue,
   runResourceIconSlotId,
   runShopWrapMediaIssue,
@@ -1096,4 +1382,7 @@ module.exports = {
   strategikonBackgroundMediaIssue,
   strategikonBackgroundOwnerProofIssue,
   strategikonBackgroundSlot,
+  wallMaterialMediaIssue,
+  wallMaterialOwnerProofIssue,
+  wallMaterialSlot,
 };

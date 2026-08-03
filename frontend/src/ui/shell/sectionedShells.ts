@@ -225,6 +225,7 @@ const ENCHIRIDION_SECTION_DEFINITIONS: Readonly<Record<string, SceneDefinition>>
   'card-types': SCENE_DEFINITIONS.enchiridionCardTypes,
   relics: SCENE_DEFINITIONS.enchiridionRelics,
   abilities: SCENE_DEFINITIONS.enchiridionAbilities,
+  ataraxia: SCENE_DEFINITIONS.enchiridionAtaraxia,
 });
 
 const enchiridionShell: SectionedShell = {
@@ -361,6 +362,7 @@ const STRATEGIKON_REFERENCE_DEFINITIONS: Readonly<Record<string, SceneDefinition
   'card-types': SCENE_DEFINITIONS.strategikonReferenceCardTypes,
   relics: SCENE_DEFINITIONS.strategikonReferenceRelics,
   abilities: SCENE_DEFINITIONS.strategikonReferenceAbilities,
+  ataraxia: SCENE_DEFINITIONS.strategikonReferenceAtaraxia,
 });
 
 const STRATEGIKON_MANIFEST: Omit<SceneManifest, 'id'> = {

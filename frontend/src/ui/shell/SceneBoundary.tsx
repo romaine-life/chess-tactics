@@ -46,13 +46,25 @@ export function useSceneActivation(): boolean {
  *
  * Every authored scene slot wraps its children in this, so the preparing region is
  * still the one thing that cannot contribute.
+ *
+ * The providers are UNCONDITIONAL. Returning a bare fragment when this region is not
+ * the preparing one changes the element type at this position, and React answers a
+ * changed type by destroying the subtree and mounting a fresh one. That is exactly
+ * what happens the instant the director commits an entrance: the region stops being
+ * the preparing one, the just-revealed destination is thrown away and rebuilt, and its
+ * PaintedSurfaceBoundary re-enters `is-loading` — one blank frame in the destination
+ * column at the end of every menu navigation. Suppression is a VALUE, so it composes
+ * with the ancestor rather than replacing it: a nested slot inside a preparing outer
+ * region stays suppressed, which a hardcoded `true` here would silently undo.
  */
 export function SceneSlotActivation({ region, children }: { region: SceneHost; children: ReactNode }): ReactElement {
   const preparingRegion = useContext(ScenePreparingRegionContext);
-  if (preparingRegion !== region) return <>{children}</>;
+  const inheritedActivation = useContext(SceneActivationContext);
+  const inheritedReveal = useContext(SceneRevealContext);
+  const suppressed = preparingRegion === region;
   return (
-    <SceneActivationContext.Provider value={false}>
-      <SceneRevealContext.Provider value={false}>
+    <SceneActivationContext.Provider value={inheritedActivation && !suppressed}>
+      <SceneRevealContext.Provider value={inheritedReveal && !suppressed}>
         {children}
       </SceneRevealContext.Provider>
     </SceneActivationContext.Provider>

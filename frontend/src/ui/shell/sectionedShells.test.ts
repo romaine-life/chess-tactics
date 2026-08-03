@@ -81,6 +81,7 @@ const FAMILIES: ReadonlyArray<{
       'card-types': address('/enchiridion/card-types'),
       relics: address('/enchiridion/relics'),
       abilities: address('/enchiridion/abilities'),
+      ataraxia: address('/enchiridion/ataraxia'),
     },
   },
   {
@@ -131,6 +132,7 @@ const FAMILIES: ReadonlyArray<{
       'card-types': address('/run/strategikon/enchiridion/card-types', '', runSource),
       relics: address('/run/strategikon/enchiridion/relics', '', runSource),
       abilities: address('/run/strategikon/enchiridion/abilities', '', runSource),
+      ataraxia: address('/run/strategikon/enchiridion/ataraxia', '', runSource),
     },
   },
 ];

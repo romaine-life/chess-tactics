@@ -1600,6 +1600,22 @@ h1 {
 .predrawn-generation-frame-toolbar {
   justify-content: flex-start;
 }
+.predrawn-generation-frame-toolbar {
+  flex-wrap: wrap;
+}
+.predrawn-generation-frame-size {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+.predrawn-generation-frame-size-label {
+  color: var(--ds-ink-3, #9eb1c5);
+  font-size: var(--ds-text-xs);
+}
+.predrawn-generation-frame-size .settings-stepper-field {
+  width: 88px;
+}
 .predrawn-generation-frame-readout {
   min-width: 112px;
   color: var(--ds-ink-1, #eff9ff);
@@ -1649,6 +1665,33 @@ h1 {
   pointer-events: none;
   position: absolute;
   z-index: 40000;
+}
+/* The level's own camera boundary (ADR-0301) drawn inside the crop, in the same dashed language
+   the Board page uses: art outside it is unreachable, art inside it is what a player can pan to at
+   maximum zoom-out. Paint comes from .le-camera-boundary; only the stacking order is local. */
+.predrawn-generation-frame-stage .le-camera-boundary {
+  z-index: 39999;
+}
+/* Both boxes usually reach the crop edge here, so a label hanging above its box — the Board page
+   placement — would be clipped away by the stage. Seat them inside their boxes instead. */
+.predrawn-generation-frame-stage .le-camera-boundary-label,
+.predrawn-generation-frame-stage .predrawn-generation-frame-outline-label {
+  transform: none;
+}
+/* Seat the inner box's name on the opposite corner: the two boxes share a top-left region whenever
+   the crop is snug, and two names stacked there read as one garbled line. Stage-scoped so it beats
+   the shared label rule, which is defined later in this file. */
+.predrawn-generation-frame-stage .predrawn-generation-frame-outline-label {
+  inset: 0 -2px auto auto;
+  text-align: right;
+}
+/* The crop names itself on the one corner the two inner boxes never reach. Stage-scoped so it beats
+   the shared label rule's top-left placement, which is defined later in this file. */
+.predrawn-generation-frame-stage .predrawn-generation-frame-crop-label {
+  inset: auto auto 1px 3px;
+  pointer-events: none;
+  transform: none;
+  z-index: 40002;
 }
 .predrawn-generation-frame-footer p.is-error {
   color: #ffad9d;
@@ -3491,6 +3534,31 @@ h1 {
 .utility-piece-icon {
   height: 58px;
   width: 58px;
+}
+
+/* A compact unit reference uses the exact accepted player-side Battle sprite.
+   AlphaBoundIcon removes the live frame's transparent canvas from the fit so
+   the battlefield art stays legible in dense filters and pickers. */
+.battlefield-unit-icon {
+  display: inline-block;
+  flex: none;
+  overflow: visible;
+  position: relative;
+}
+
+.battlefield-unit-icon .alpha-bound-icon-image {
+  image-rendering: auto;
+  max-block-size: none;
+  max-inline-size: none;
+  object-fit: fill;
+  position: absolute;
+}
+
+.battlefield-unit-icon[data-alpha-fit="pending"] .alpha-bound-icon-image {
+  block-size: 100%;
+  inline-size: 100%;
+  inset: 0;
+  object-fit: contain;
 }
 
 .icon-players { background-image: var(--media-ui-kit-icons-players-png); }
@@ -15245,7 +15313,11 @@ button.tileset-relationship-cell {
   outline-style: solid;
 }
 
-.le-camera-boundary-label {
+/* Every reference rectangle drawn over a board names itself in the same voice, so a second box is
+   never an unexplained shape the owner has to guess at. */
+.le-camera-boundary-label,
+.predrawn-generation-frame-outline-label,
+.predrawn-generation-frame-crop-label {
   color: #bcecff;
   display: block;
   font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
@@ -18891,6 +18963,46 @@ button.tileset-relationship-cell {
   font-size: var(--ds-text-sm);
 }
 
+/* Compact costs outside a card draw the transparent 112px extraction of the
+   accepted card coin. The live number is laid over those same pixels instead
+   of spelling out gold. */
+.run-card-cost-coin {
+  --run-card-cost-coin-size: 24px;
+  block-size: var(--run-card-cost-coin-size);
+  display: inline-grid;
+  flex: none;
+  inline-size: var(--run-card-cost-coin-size);
+  line-height: 1;
+  overflow: hidden;
+  place-items: center;
+  position: relative;
+  vertical-align: middle;
+}
+
+.run-card-cost-coin-art {
+  block-size: 100%;
+  image-rendering: pixelated;
+  inline-size: 100%;
+  inset: 0;
+  max-inline-size: none;
+  object-fit: contain;
+  pointer-events: none;
+  position: absolute;
+}
+
+.run-card-cost-coin-value {
+  color: #17191b;
+  font-family: var(--ds-font-display);
+  font-size: calc(var(--run-card-cost-coin-size) * .52);
+  font-weight: 400;
+  line-height: 1;
+  position: relative;
+  text-shadow: 0 1px rgba(255, 232, 161, .55);
+  /* Match the card face's measured ink-centre correction (ADR-0359). */
+  transform: translateY(.0667em);
+  z-index: 1;
+}
+
 .run-gold-amount--title {
   font-size: var(--ds-text-md);
 }
@@ -18969,20 +19081,12 @@ button.tileset-relationship-cell {
 }
 
 /* A mark is a symbol standing in for a word, so every measure names itself on
-   hover or keyboard focus through the shared Tooltip. The tip is the game's own
-   framed popup; the trigger keeps the measure's own layout. */
+   hover or keyboard focus through the shared Tooltip. The popup owns its whole
+   treatment (ADR-0362's promotion); this only keeps the trigger's own layout. */
 .run-topbar-measure-tip {
   min-width: 0;
 }
 
-.run-topbar-measure-tooltip-pop {
-  display: grid;
-  gap: var(--ds-space-1);
-}
-
-.run-topbar-measure-tooltip-name {
-  color: #f0eadb;
-}
 
 .run-victory-summary > span + span::before {
   content: "·";
@@ -19077,23 +19181,6 @@ button.tileset-relationship-cell {
 
 .run-relic-inventory-item img {
   filter: drop-shadow(0 2px 1px rgba(0, 0, 0, .85));
-}
-
-.run-relic-tooltip-pop {
-  display: grid;
-  gap: var(--ds-space-1);
-  padding: var(--ds-space-2) var(--ds-space-3);
-}
-
-.run-relic-tooltip-name {
-  color: #9fe7ff;
-  font: var(--ds-weight-regular) var(--ds-text-sm)/1.15 var(--ds-font-display);
-  letter-spacing: var(--ds-tracking-tight);
-}
-
-.run-relic-tooltip-description {
-  color: #e5edf3;
-  font: var(--ds-weight-regular) var(--ds-text-xs)/1.4 var(--ds-font-sans);
 }
 
 .run-screen .run-relic-strip {
@@ -20368,7 +20455,8 @@ button.tileset-relationship-cell {
 }
 
 .enchiridion-card-panel.enchiridion-panel-unframed,
-.enchiridion-card-types-panel.enchiridion-panel-unframed {
+.enchiridion-card-types-panel.enchiridion-panel-unframed,
+.enchiridion-ataraxia-panel.enchiridion-panel-unframed {
   grid-template-rows: auto auto minmax(0, 1fr);
 }
 
@@ -20383,6 +20471,7 @@ button.tileset-relationship-cell {
 
 .enchiridion-unit-grid,
 .enchiridion-terrain-list,
+.enchiridion-ataraxia-list,
 .enchiridion-ability-list {
   align-content: start;
   display: grid;
@@ -20430,7 +20519,8 @@ button.tileset-relationship-cell {
 }
 
 .enchiridion-terrain-row,
-.enchiridion-ability-card {
+.enchiridion-ability-card,
+.enchiridion-ataraxia-card {
   align-items: center;
   display: grid;
   gap: var(--ds-inset);
@@ -20441,6 +20531,7 @@ button.tileset-relationship-cell {
 
 .enchiridion-terrain-row > span:last-child,
 .enchiridion-ability-card > span:last-child,
+.enchiridion-ataraxia-card > span:last-child,
 .enchiridion-rule-exceptions {
   align-content: start;
   display: grid;
@@ -20456,6 +20547,42 @@ button.tileset-relationship-cell {
 .enchiridion-ability-card > img {
   image-rendering: pixelated;
   object-fit: contain;
+}
+
+/* The rung IS the mark: the numeral occupies the seat its neighbouring sections give a
+   glyph. The column is min-42px and grows to the widest numeral across every row, so a
+   later VIII widens the seat for the whole ladder instead of stepping one row out. */
+.enchiridion-ataraxia-card {
+  grid-template-columns: minmax(56px, auto) minmax(0, 1fr);
+}
+
+/* The rung reads first, so it sits a clear step above the row's own heading rather than
+   beside it. The pixel face carries deep internal leading — its ink is roughly half the
+   declared size — which is why this is a multiple of the largest body step. */
+.enchiridion-ataraxia-numeral {
+  font-size: calc(var(--ds-text-xl) * 1.5);
+  line-height: 1;
+  text-align: center;
+}
+
+/* The forged rung is a 64px carved glyph; it seats at the same width the typed rung
+   occupies so the two render paths cannot shift the copy beside them. */
+.enchiridion-ataraxia-numeral.is-art {
+  block-size: 56px;
+  image-rendering: pixelated;
+  inline-size: 56px;
+  object-fit: contain;
+}
+
+/* A locked tier is still readable — the ladder is a reference, not a teaser. Its numeral
+   and standing line carry the state; the impact statement keeps full contrast. */
+.enchiridion-ataraxia-card.is-locked > .enchiridion-ataraxia-numeral {
+  color: var(--muted);
+}
+
+.enchiridion-ataraxia-standing {
+  color: var(--muted);
+  font-size: var(--ds-text-xs);
 }
 
 .enchiridion-rule-exceptions {
@@ -20614,21 +20741,10 @@ button.tileset-relationship-cell {
   margin: 0;
 }
 
-/* Cards codex: a value-grouped browser of the full card deck beside one selected
-   card rendered as its real face (the same RunCard the Run deals). */
-.enchiridion-card-layout {
-  align-content: start;
-  align-items: start;
-  block-size: 100%;
-  display: grid;
-  gap: var(--ds-stack);
-  grid-template-columns: minmax(280px, 1fr) minmax(232px, 300px);
-  grid-template-rows: minmax(0, 1fr);
-  min-block-size: 0;
-  overflow: hidden;
-}
-
-.enchiridion-card-browser-column {
+/* Cards is the terminal third Enchiridion column, not a master-detail pair. The
+   two rail predecessors keep their canonical widths; this one gallery consumes
+   every remaining pixel and scrolls only from top to bottom (ADR-0364). */
+.enchiridion-card-gallery-layout {
   block-size: 100%;
   display: grid;
   gap: var(--ds-stack);
@@ -20664,6 +20780,24 @@ button.tileset-relationship-cell {
   inline-size: 100%;
 }
 
+.enchiridion-card-filter-gold-amount,
+.enchiridion-card-group-gold {
+  --run-card-cost-coin-size: 22px;
+}
+
+.enchiridion-card-filter-unit-label {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--ds-space-1);
+  min-inline-size: 0;
+}
+
+.enchiridion-card-filter-unit-icon {
+  block-size: 28px;
+  inline-size: 28px;
+  margin-block: -6px;
+}
+
 .enchiridion-card-filter-count {
   align-self: center;
   color: var(--skirmish-muted);
@@ -20671,56 +20805,65 @@ button.tileset-relationship-cell {
   white-space: nowrap;
 }
 
-.enchiridion-card-browser {
-  align-content: start;
+.enchiridion-card-gallery-scroll {
   block-size: 100%;
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
+.enchiridion-card-gallery-scroll > .kit-scroll-content {
+  box-sizing: border-box;
+}
+
+.enchiridion-card-gallery-browser {
+  align-content: start;
   display: grid;
   gap: var(--ds-stack);
   min-block-size: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding-inline-end: 4px;
+  min-inline-size: 0;
 }
 
-.enchiridion-card-group {
+.enchiridion-card-gallery-group {
   align-content: start;
   display: grid;
   gap: var(--ds-space-2);
+  min-inline-size: 0;
 }
 
-.enchiridion-card-rows {
-  align-content: start;
+.enchiridion-card-gallery-heading {
+  align-items: center;
+  display: flex;
+}
+
+.enchiridion-card-gallery-grid {
   display: grid;
-  gap: var(--ds-space-2);
-  list-style: none;
-  margin: 0;
-  padding: 0;
+  gap: var(--ds-stack);
+  grid-template-columns: repeat(auto-fill, minmax(188px, 232px));
+  justify-content: start;
+  min-inline-size: 0;
 }
 
-.enchiridion-card-row {
-  align-content: center;
+.enchiridion-card-gallery-item {
+  min-inline-size: 0;
+}
+
+.enchiridion-card-gallery-trigger {
+  all: unset;
+  box-sizing: border-box;
   cursor: pointer;
-  display: grid;
-  gap: 2px;
+  display: block;
   inline-size: 100%;
-  min-block-size: 52px;
-  padding: 6px 10px;
-  text-align: start;
+  position: relative;
 }
 
-.enchiridion-card-row-name {
-  font-size: var(--ds-text-md);
+.enchiridion-card-gallery-trigger > .run-card-action.is-reference {
+  cursor: inherit;
+  pointer-events: none;
 }
 
-.enchiridion-card-row-contents {
-  font-size: var(--ds-text-sm);
-  opacity: .8;
-}
-
-.enchiridion-card-detail {
-  align-self: start;
-  display: grid;
-  min-block-size: 0;
+.enchiridion-card-gallery-trigger:is(:focus-visible, .is-addressed) {
+  outline: 2px solid rgba(101, 184, 255, .82);
+  outline-offset: 3px;
 }
 
 .enchiridion-card-type-layout {
@@ -22018,11 +22161,36 @@ button.tileset-relationship-cell {
   position: fixed;
   z-index: 1000;
 }
+/* The pop owns the whole tooltip treatment, so no caller restates it. A grid
+   with one row per part is what the Run tooltips already established; it is the
+   default here rather than a class each call site has to remember.
+
+   `display` is load-bearing, not cosmetic: InnerChromeBox renders the pop as a
+   <span>, and an inline box ignores inline-size/max-inline-size (the tip never
+   wraps to its own width) and paints the 7px inner-box border-image once per
+   inline fragment — the doubled frame with text spilling outside it. */
 .infotip-pop {
+  box-sizing: border-box;
+  display: grid;
+  /* One part per row. The gap has to clear the body's own inter-line space
+     (line-height 1.4 leaves ~5.5px between wrapped lines) or a paragraph reads
+     looser than its distance to the title, and the tip becomes a stack of
+     strips instead of a heading over a block. */
+  gap: var(--ds-space-2);
   max-inline-size: 100%;
-  padding: 8px 10px; color: #cfd6df; font: 400 12px/1.45 system-ui, sans-serif; text-align: left;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  color: #e5edf3;
+  font: var(--ds-weight-regular) var(--ds-text-md)/1.4 var(--ds-font-sans);
+  text-align: left;
   text-transform: none; letter-spacing: normal;
   pointer-events: none;
+}
+/* The named thing the tip is about, in the display face — the Run relic and
+   ability tips set the precedent and every tip now follows it. */
+.tooltip-title {
+  color: #9fe7ff;
+  font: var(--ds-weight-regular) var(--ds-text-lg)/1.15 var(--ds-font-display);
+  letter-spacing: var(--ds-tracking-tight);
 }
 .le-fence-review-banner {
   align-items: center;

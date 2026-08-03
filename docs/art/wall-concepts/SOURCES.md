@@ -1,7 +1,7 @@
 # Wall art provenance
 
-Wall footprint masks, north/west placement rules, and the `(64,96)` anchor are
-deterministic geometry. Source materials, generated candidates, wall frames,
+Wall footprint masks, north/west placement rules, and the `(64,192)` anchor of the
+ADR-0086 full-height `128x336` frame are deterministic geometry. Source materials, generated candidates, wall frames,
 thumbnails, and proofs are live-media records in private object storage.
 
 The retired wall bake read media from this directory and wrote frames into

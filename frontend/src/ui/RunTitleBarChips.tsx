@@ -51,12 +51,11 @@ function RunMeasure({
     <Tooltip
       className="run-topbar-measure-tip"
       triggerClassName="run-topbar-measure"
-      popupClassName="run-topbar-measure-tooltip-pop"
       label={label}
+      title={name}
       trigger={children}
     >
-      <strong className="run-topbar-measure-tooltip-name">{name}</strong>
-      <span className="run-topbar-measure-tooltip-detail">{detail}</span>
+      {detail}
     </Tooltip>
   );
 }

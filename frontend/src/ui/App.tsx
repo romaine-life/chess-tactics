@@ -68,7 +68,6 @@ const RunScreen = lazy(() => importRunScreen().then((module) => ({ default: modu
 const TilesetStudio = lazy(() => importTilePreview().then((module) => ({ default: module.TilesetStudio })));
 const LevelEditor = lazy(() => importLevelEditor().then((module) => ({ default: module.LevelEditor })));
 const PortraitEditor = lazy(() => importPortraitEditor().then((module) => ({ default: module.PortraitEditor })));
-const WallCandidateReview = lazy(() => import('./WallCandidateReview').then((module) => ({ default: module.WallCandidateReview })));
 const PredrawnReference = lazy(() => import('./PredrawnReference').then((module) => ({ default: module.PredrawnReference })));
 const DrawableCatalogLab = lazy(() => import('./DrawableCatalogLab').then((module) => ({ default: module.DrawableCatalogLab })));
 const RunRelicReview = lazy(() => import('./RunRelicReview').then((module) => ({ default: module.RunRelicReview })));
@@ -666,7 +665,10 @@ function renderScene(scene: ScenePath, search: string): ReactElement {
   if (path === '/studio' && new URLSearchParams(search).get('brushIconReview') === '1') return <BrushIconReview />;
   if (path === '/studio' && new URLSearchParams(search).get('runProgressIconReview') === '1') return <RunProgressIconReview />;
   if (path === '/studio' || path === '/tileset-studio') return <TilesetStudio />;
-  if (path === '/studio/wall-candidates') return <WallCandidateReview />;
+  // Wall review lives in the Studio proper: an owner proof only counts from a game-owned
+  // surface, and this bespoke path is not one. The studio's route writer canonicalises this
+  // alias to /studio?cat=walls&mode=viewer&vk=wallcandidates, so old links keep working.
+  if (path === '/studio/wall-candidates') return <TilesetStudio initialCategory="walls" />;
   if (path === '/studio/drawables') return <DrawableCatalogLab />;
   if (path === '/unit-studio') return <TilesetStudio initialCategory="units" />;
   if (path === '/portrait-editor') return <PortraitEditor />;

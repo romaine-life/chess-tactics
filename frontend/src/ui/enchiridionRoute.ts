@@ -2,13 +2,13 @@
 // MainMenu and the scene manifest resolve one address contract instead of lookalike
 // parsers. `/enchiridion/<section>` selects a reference section; the relics section
 // additionally addresses one relic as `/enchiridion/relics/<relic-id>`, and the cards
-// section addresses one card as `/enchiridion/cards/<card-id>`. The
+// section addresses and focuses one gallery face as `/enchiridion/cards/<card-id>`. The
 // Battle-hosted Strategikon keeps its own `/play|/run/strategikon/...` prefixes and
 // ephemeral reference selection — these helpers speak only the main-menu addresses.
 
 import { RUN_CARD_BY_ID, RUN_RELICS, type RunRelicId } from '../run/model';
 
-export const ENCHIRIDION_SECTIONS = ['units', 'terrain', 'cards', 'card-types', 'relics', 'abilities'] as const;
+export const ENCHIRIDION_SECTIONS = ['units', 'terrain', 'cards', 'card-types', 'relics', 'abilities', 'ataraxia'] as const;
 export type EnchiridionSection = typeof ENCHIRIDION_SECTIONS[number];
 
 export function enchiridionSectionHref(section: EnchiridionSection): string {
@@ -47,12 +47,12 @@ export function enchiridionRelicFromPath(path: string): RunRelicId | null {
   return id && RUN_RELICS.some((relic) => relic.id === id) ? (id as RunRelicId) : null;
 }
 
-/** The address of one card's record in the main-menu Enchiridion. */
+/** The address of one card face in the main-menu Enchiridion gallery. */
 export function enchiridionCardHref(cardId: string): string {
   return `/enchiridion/cards/${cardId}`;
 }
 
-/** The deck card addressed by /enchiridion/cards/<card-id>; null when absent or unknown. */
+/** The gallery face addressed by /enchiridion/cards/<card-id>; null when absent or unknown. */
 export function enchiridionCardFromPath(path: string): string | null {
   const match = /^\/enchiridion\/cards\/([^/]+)$/.exec(path);
   const id = match?.[1];
