@@ -22229,7 +22229,12 @@ button.tileset-relationship-cell {
   z-index: 1;
 }
 
+/* The body carries whatever parts a caller passes — the Army's unit-trait tip
+   passes a description AND its source. They were rows of the pop's own grid
+   before the body became one element, so the body IS that grid now. */
 .tooltip-body {
+  display: grid;
+  gap: var(--ds-space-2);
   min-width: 0;
 }
 /* The named thing the tip is about, in the display face — the Run relic and
