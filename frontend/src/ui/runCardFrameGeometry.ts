@@ -200,7 +200,7 @@ export const RUN_CARD_PESTIFEROUS_FRAME_GEOMETRY = defineGeometry({
 export const RUN_CARD_CONCINNOUS_FRAME_GEOMETRY = defineGeometry({
   variant: 'concinnous',
   // Normalised to the shared painted card box; boxes remapped through the same
-  // transform, so they describe these pixels (ADR-0358).
+  // transform, so they describe these pixels (ADR-0360).
   frameSha256s: ['310629d033eebd8f2b1227de1b8a42e1a6b86087327111c145b8f715d4481bcb'],
   boxes: {
     art: { x: 103, y: 217.74, width: 853, height: 603.25 },
@@ -234,7 +234,7 @@ export const RUN_CARD_TACTICAL_FRAME_GEOMETRY = defineGeometry({
 export const RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY = defineGeometry({
   variant: 'hieratic',
   // Normalised to the shared painted card box; boxes remapped through the same
-  // transform, so they describe these pixels (ADR-0358).
+  // transform, so they describe these pixels (ADR-0360).
   frameSha256s: ['6552cae59d0d1b404a466b2d37fb6d0a0e6dcdcd60b171ec4979f8a50c610348'],
   boxes: {
     title: { x: 98.07, y: 95.05, width: 751.75, height: 86.46 },

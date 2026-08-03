@@ -8,7 +8,7 @@ extends:
   - "[ADR-0359](0359-run-card-text-is-centered-in-per-frame-boxes.md)"
 ---
 
-# ADR-0358: Two Run card frames ship normalised to the shared card box
+# ADR-0360: Two Run card frames ship normalised to the shared card box
 
 ## Context
 

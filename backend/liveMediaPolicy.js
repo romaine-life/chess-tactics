@@ -20,7 +20,7 @@ const RUN_RELIC_RESIZED_PRODUCTION_EXCEPTION_SHA_BY_SLOT = Object.freeze({
   'ui/run/relics/occult-dagger.png': 'bc7984ccbabf45e39e672957d7ed1e2716c7e82e14b671fcbed38a7f82b9208d',
   'ui/run/relics/training-linens.png': 'e1349bd32f7bcaccbd706dbc55a6f97df8a0dd96533f309d1e2c0ea38aabf461',
 });
-// ADR-0358. Two generated card frames painted their card at a different SHAPE
+// ADR-0360. Two generated card frames painted their card at a different SHAPE
 // from the other three, so the same 5:7 element rendered visibly different card
 // sizes. Normalising them to the shared 1009x1402 painted box means resampling,
 // which is not native 1x — admitted only for these exact slots, bytes and
@@ -874,28 +874,28 @@ function nativeMediaEvidenceIssue(row) {
   }
   if (evidence.schema === RUN_CARD_FRAME_NORMALISED_EXCEPTION_SCHEMA) {
     const expected = RUN_CARD_FRAME_NORMALISED_EXCEPTION_BY_SLOT[String(row.slot || '')];
-    if (!expected) return 'ADR-0358 normalised card-frame evidence is restricted to its two Run card frame slots';
+    if (!expected) return 'ADR-0360 normalised card-frame evidence is restricted to its two Run card frame slots';
     if (
       normalizedSha(row.blob_sha256) !== expected.outputSha256
       || normalizedSha(evidence.outputSha256) !== expected.outputSha256
-    ) return 'ADR-0358 normalised card-frame evidence does not authorize these uploaded bytes';
+    ) return 'ADR-0360 normalised card-frame evidence does not authorize these uploaded bytes';
     if (normalizedSha(evidence.sourceSha256) !== expected.sourceSha256) {
-      return 'ADR-0358 normalised card-frame evidence does not name the frame it was normalised from';
+      return 'ADR-0360 normalised card-frame evidence does not name the frame it was normalised from';
     }
     if (
-      evidence.decision !== 'ADR-0358'
+      evidence.decision !== 'ADR-0360'
       || evidence.status !== 'owner-approved-production-exception'
       || evidence.native1x !== false
       || evidence.spatialResampling !== true
-    ) return 'ADR-0358 normalised card-frame evidence is incomplete';
+    ) return 'ADR-0360 normalised card-frame evidence is incomplete';
     if (Number(row.width) !== 1060 || Number(row.height) !== 1484) {
-      return 'ADR-0358 normalised card-frame evidence requires the native 1060x1484 canvas';
+      return 'ADR-0360 normalised card-frame evidence requires the native 1060x1484 canvas';
     }
     if (
       Number(evidence.paintedWidth) !== 1009 || Number(evidence.paintedHeight) !== 1402
       || Number(evidence.sourcePaintedHeight) !== expected.sourcePaintedHeight
       || evidence.transform !== RUN_CARD_FRAME_NORMALISED_EXCEPTION_TRANSFORM
-    ) return 'ADR-0358 normalised card-frame evidence is missing its painted box or exact transform';
+    ) return 'ADR-0360 normalised card-frame evidence is missing its painted box or exact transform';
     return null;
   }
   if (evidence.native1x !== true) return 'nativeEvidence.native1x must be true';
