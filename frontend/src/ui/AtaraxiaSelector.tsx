@@ -14,7 +14,10 @@ export function AtaraxiaSelector({
   const options: readonly HouseSelectOption[] = ATARAXIA_TIERS.map((tier) => {
     const definition = ATARAXIA_BY_TIER[tier];
     const locked = tier > highestUnlockedTier;
-    const unlockNote = locked ? 'Complete Ataraxia 0 to unlock' : null;
+    // The ladder is linear, so the tier below is exactly the one that opens this rung.
+    const unlockNote = locked
+      ? `Complete ${ATARAXIA_BY_TIER[(tier - 1) as AtaraxiaTier].label} to unlock`
+      : null;
     return {
       value: String(tier),
       disabled: locked,

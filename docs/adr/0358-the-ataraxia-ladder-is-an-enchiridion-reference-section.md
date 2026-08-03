@@ -6,8 +6,9 @@ refines:
   - ADR-0231
   - ADR-0266
   - ADR-0268
-  - ADR-0291
   - ADR-0355
+partially_supersedes:
+  - "[ADR-0291](0291-ataraxia-zero-is-a-named-tier-with-visible-impact.md)'s Ataraxia 0 label"
 ---
 
 # ADR-0358: The Ataraxia ladder is an Enchiridion reference section
@@ -53,6 +54,21 @@ in the Strategikon, registered in `sectionedShells.ts` like every other section.
   `ATARAXIA_BY_TIER`. It states no tier copy of its own, so a tier installed in the model
   cannot be described here in words the Run does not apply. Tier zero is a member of the
   list with no rendering branch (ADR-0291).
+- **A row is its numeral and its descriptive name** — `I — The Great Mortality`. The
+  ladder's name is the section heading, so repeating "Ataraxia" once per row says nothing
+  the row is not already under. `ATARAXIA_BY_TIER` therefore carries `numeral` beside
+  `label`: the numeral is the rung, the label is the rung qualified by the ladder's name,
+  for the Run-preparation selector and the unlock sentence, which name a tier away from
+  that heading.
+- **The baseline's numeral is `N`** — medieval Latin *nulla*, the zero of the computus
+  tables, and the reason `label` becomes `Ataraxia N`. ADR-0291 wrote `Ataraxia 0`, which
+  puts an Arabic digit at the head of a Roman sequence; one numbering is the point of
+  that ADR's equal-anatomy rule. The persisted tier remains numeric `0`.
+- **A row carries no mark except a lock.** The reference sections whose rows are a list
+  of unlike things — terrain features, unit states — identify each row by its own glyph.
+  An Ataraxia row is a numbered rung of one ladder, so a repeated section glyph would
+  label nothing. The only mark is the lock on a tier not yet reached; the seat stays in
+  the grid so every row's copy starts on one line.
 - `ATARAXIA_TIERS` becomes a model export derived from `INSTALLED_ATARAXIA_MAX_TIER`. The
   preparation selector's hand-written `[0, 1]` is replaced by it, so the two surfaces
   cannot disagree about which tiers exist.
@@ -73,10 +89,16 @@ in the Strategikon, registered in `sectionedShells.ts` like every other section.
   and this reference with no further edit.
 - Good: the registry walk in `sectionedShells.test.ts` covered the new section the moment
   it was declared — the coverage check fails an entry with no address.
+- Good: renumbering or renaming a rung is one edit in the model. The selector's unlock
+  note now derives the tier below from `ATARAXIA_BY_TIER` instead of hard-coding the
+  baseline's label, so it cannot go stale.
 - Cost: the reference reads account progression, so it is the first Enchiridion section
   besides Relics whose content varies per account.
-- Cost: the section's mark reuses the installed objective glyph, whose ink is thinner
-  than its neighbours in the rail. Swapping it is a media-role change with no code
+- Cost: `N` is legible as a Roman zero only to a reader who knows *nulla*. The
+  descriptive name carries the row either way, and the register is the one the
+  Enchiridion, Strategikon, Prosopography and Lipsanotheca already speak.
+- Cost: the section's rail mark reuses the installed objective glyph, whose ink is
+  thinner than its neighbours. Swapping it is a media-role change with no code
   consequence.
 
 ## More Information

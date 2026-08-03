@@ -39,20 +39,30 @@ export type RunCardType = 'pestiferous' | 'concinnous' | 'tactical' | 'hieratic'
 export type RunUnitModifier = 'plagued';
 export const CACOCHYMIC_DISPLAY_NAME = 'Cacochymic';
 
+/**
+ * Each tier's presentation. `numeral` is the rung itself and `label` is that rung
+ * qualified by the ladder's name, for a surface that names one tier away from the
+ * ladder's own heading. Tier zero's numeral is **N** — medieval Latin *nulla*, the
+ * Roman zero of the computus tables — so the whole ladder reads in one numbering
+ * (ADR-0358). The persisted tier remains numeric `0` (ADR-0291).
+ */
 export const ATARAXIA_BY_TIER: Readonly<Record<AtaraxiaTier, Readonly<{
   tier: AtaraxiaTier;
+  numeral: string;
   label: string;
   title: string;
   effect: string;
 }>>> = Object.freeze({
   0: Object.freeze({
     tier: 0,
-    label: 'Ataraxia 0',
+    numeral: 'N',
+    label: 'Ataraxia N',
     title: 'The Untroubled Mind',
     effect: 'Standard Run rules. Shop cards may be Tactical, Concinnous or Hieratic but are never Pestiferous.',
   }),
   1: Object.freeze({
     tier: 1,
+    numeral: 'I',
     label: 'Ataraxia I',
     title: 'The Great Mortality',
     effect: `About one in eight shop cards is Pestiferous. Its marked ${CACOCHYMIC_DISPLAY_NAME} unit is lost after each victorious Battle, then another is marked.`,

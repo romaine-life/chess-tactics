@@ -40,7 +40,10 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     // tier installed in the model appears here without a second copy of its copy.
     expect(ataraxia).toContain('ATARAXIA_TIERS.map');
     expect(ataraxia).toContain('ATARAXIA_BY_TIER[tier]');
-    expect(ataraxia).toContain('{definition.label} — {definition.title}');
+    // A row is its rung and its descriptive name; the ladder's own name is the section
+    // heading, so `label` (which repeats it) belongs to surfaces away from that heading.
+    expect(ataraxia).toContain('{definition.numeral} — {definition.title}');
+    expect(ataraxia).not.toContain('{definition.label} — {definition.title}');
     expect(ataraxia).toContain('<p>{definition.effect}</p>');
     expect(ataraxia).not.toContain('The Untroubled Mind');
     expect(ataraxia).not.toContain('The Great Mortality');
@@ -48,6 +51,10 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(ataraxia).not.toMatch(/tier === 0/);
     expect(ataraxia).toContain('const locked = tier > unlockedThrough;');
     expect(ataraxia).toContain('RUN_PROGRESSION_EVENT');
+    // The only mark a row carries is the lock on a tier not yet reached. The section's
+    // rail glyph never repeats into the rows it already labels.
+    expect(ataraxia).toContain('src={ATARAXIA_LOCKED_ICON_SRC}');
+    expect(ataraxia).not.toContain('SECTION_ICON_SRC.ataraxia');
     expect(enchiridion).toContain("if (section === 'ataraxia') return <AtaraxiaSection framed={framed} />;");
     expect(enchiridion).toContain("ataraxia: installedUiMedia('ui-kit-icons-game-objective-png')");
   });

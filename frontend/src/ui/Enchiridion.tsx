@@ -922,13 +922,15 @@ function AtaraxiaSection({ framed }: { framed: boolean }): ReactElement {
               className={`enchiridion-ataraxia-card${locked ? ' is-locked' : ''}`}
               key={tier}
             >
-              <AlphaBoundIcon
-                className="enchiridion-ataraxia-icon"
-                src={locked ? ATARAXIA_LOCKED_ICON_SRC : SECTION_ICON_SRC.ataraxia}
-                draggable={false}
-              />
+              {locked ? (
+                <AlphaBoundIcon className="enchiridion-ataraxia-icon" src={ATARAXIA_LOCKED_ICON_SRC} draggable={false} />
+              ) : (
+                // The seat is always present so every row's copy starts on one line;
+                // an unlocked tier simply has nothing to say in it.
+                <span className="enchiridion-ataraxia-icon" aria-hidden="true" />
+              )}
               <span>
-                <h3>{definition.label} — {definition.title}</h3>
+                <h3>{definition.numeral} — {definition.title}</h3>
                 <p>{definition.effect}</p>
                 <small className="enchiridion-ataraxia-standing">{standing}</small>
               </span>
