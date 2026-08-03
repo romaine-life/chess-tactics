@@ -19507,9 +19507,9 @@ button.tileset-relationship-cell {
   object-fit: cover;
 }
 
-/* The heading and gold line read over the scene rather than above it. Selling is a Shop
+/* The gold line reads over the scene rather than above it. Selling is a Shop
    activity and stands in the same scene, so its heading gets the same treatment. */
-.run-shop-workspace.has-scene .run-shop-workspace-content > :is(h2, .run-shop-rules),
+.run-shop-workspace.has-scene .run-shop-workspace-content > .run-shop-rules,
 .run-sell-workspace.has-scene .run-sell-workspace-content > :is(h2, p) {
   text-shadow: 0 2px 6px rgba(2, 7, 12, .85);
 }
