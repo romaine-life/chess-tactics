@@ -19511,13 +19511,146 @@ button.tileset-relationship-cell {
   margin: 0;
 }
 
-.relic-mat-offer .run-relic-icon img {
+.relic-mat-offer .run-relic-icon img,
+.run-relic-flight .run-relic-icon img {
   --relic-mat-stroke: rgb(16 12 9 / 0.92);
   filter:
     drop-shadow(1px 0 0 var(--relic-mat-stroke))
     drop-shadow(-1px 0 0 var(--relic-mat-stroke))
     drop-shadow(0 1px 0 var(--relic-mat-stroke))
     drop-shadow(0 -1px 0 var(--relic-mat-stroke));
+}
+
+/* ===== The relics are alive on the mat =====
+   Three unclaimed objects lying in a dim room. They breathe, they give off a little light,
+   and they answer the pointer -- so the screen reads as goods worth taking rather than three
+   inert thumbnails. Motion and light only: nothing here paints a surface, and the light is
+   cast by each relic's OWN silhouette, which is why it follows the art instead of sitting
+   behind it as a disc. */
+
+/* Integer pixel steps, never a sub-pixel drift: these are 64px sprites drawn 1:1, and a
+   fractional offset resamples the whole sprite and softens every edge of it. */
+@keyframes relic-vacantia-float {
+  0%    { translate: 0 0; }
+  8.4%  { translate: 0 -1px; }
+  16.7% { translate: 0 -2px; }
+  25%   { translate: 0 -3px; }
+  33.4% { translate: 0 -4px; }
+  41.7% { translate: 0 -5px; }
+  58.4% { translate: 0 -5px; }
+  66.7% { translate: 0 -4px; }
+  75%   { translate: 0 -3px; }
+  83.4% { translate: 0 -2px; }
+  91.7% { translate: 0 -1px; }
+  100%  { translate: 0 0; }
+}
+
+/* The emanation, on the other hand, is light rather than pixels, so it moves continuously.
+   The stroke is repeated in every frame because an animated `filter` replaces the whole
+   declaration -- drop it and the silhouette loses its footing against the mat. */
+@keyframes relic-vacantia-emanate {
+  0%, 100% {
+    filter:
+      drop-shadow(1px 0 0 var(--relic-mat-stroke))
+      drop-shadow(-1px 0 0 var(--relic-mat-stroke))
+      drop-shadow(0 1px 0 var(--relic-mat-stroke))
+      drop-shadow(0 -1px 0 var(--relic-mat-stroke))
+      drop-shadow(0 0 3px rgb(255 214 150 / 0.5))
+      drop-shadow(0 0 10px rgb(255 176 84 / 0.28));
+  }
+  50% {
+    filter:
+      drop-shadow(1px 0 0 var(--relic-mat-stroke))
+      drop-shadow(-1px 0 0 var(--relic-mat-stroke))
+      drop-shadow(0 1px 0 var(--relic-mat-stroke))
+      drop-shadow(0 -1px 0 var(--relic-mat-stroke))
+      drop-shadow(0 0 6px rgb(255 232 186 / 0.86))
+      drop-shadow(0 0 20px rgb(255 190 96 / 0.52));
+  }
+}
+
+/* !important clears the global `* { animation: none }` OS-reduce reset: Windows "animation
+   effects off" reports prefers-reduced-motion falsely (deploy-drop/ADR-0048 precedent), and
+   this is the whole life of the screen. The EXPLICIT in-game choice still stills it, below. */
+.run-vacantia-take .run-relic-icon {
+  animation: relic-vacantia-float var(--relic-float-duration, 4.2s) steps(1, end) var(--relic-float-delay, 0s) infinite !important;
+  transition:
+    filter 200ms ease,
+    scale 200ms cubic-bezier(0.2, 0.75, 0.3, 1);
+}
+
+.relic-mat-offer .run-relic-icon img {
+  animation: relic-vacantia-emanate calc(var(--relic-float-duration, 4.2s) * 0.78) ease-in-out var(--relic-float-delay, 0s) infinite !important;
+}
+
+/* Hovering picks the relic up a little: it comes toward the reader and catches more light.
+   Focus does the same, so the keyboard reader is told which one is under the cursor too. */
+.run-vacantia-take:not(:disabled):hover .run-relic-icon,
+.run-vacantia-take:not(:disabled):focus-visible .run-relic-icon {
+  filter: brightness(1.2);
+  scale: 1.22;
+}
+
+/* Taking is committed when the relic lands, so the mat has to hold still while it travels:
+   the other two recede, the taken one leaves with the flying copy, and nothing is clickable. */
+.relic-mat-offer {
+  transition: opacity 320ms ease;
+}
+
+.relic-mat-cards[data-taking] .run-vacantia-take {
+  pointer-events: none;
+}
+
+.relic-mat-cards[data-taking] .relic-mat-offer {
+  opacity: 0.5;
+}
+
+.relic-mat-cards[data-taking] .relic-mat-offer.is-flying {
+  opacity: 0;
+  transition: none;
+}
+
+/* The relic in transit. Fixed to the viewport and portalled out of the workspace, because
+   it starts inside an overflow-hidden scene slot and ends in the strip outside it.
+   Transitions rather than keyframes deliberately: the global reduced-motion reset kills
+   animations, and a take that silently teleports is a take the player cannot follow. */
+.run-relic-flight {
+  --relic-flight-duration: 560ms;
+  pointer-events: none;
+  position: fixed;
+  transition: translate var(--relic-flight-duration) cubic-bezier(0.62, 0.02, 0.3, 1);
+  z-index: 200;
+}
+
+.run-relic-flight .run-relic-icon {
+  overflow: visible;
+}
+
+/* Two axes on two elements so they can carry different easings: the relic clears the mat
+   early and then travels across, which reads as being picked up rather than dragged along
+   a ruler. It also arrives at the size it will keep, shrinking out of its hover lift. */
+.run-relic-flight-lift {
+  scale: 1.22;
+  transition:
+    scale var(--relic-flight-duration) cubic-bezier(0.4, 0, 0.4, 1),
+    translate var(--relic-flight-duration) cubic-bezier(0.18, 0.74, 0.3, 1);
+}
+
+.run-relic-flight.is-landed {
+  translate: var(--relic-flight-x) 0;
+}
+
+.run-relic-flight.is-landed .run-relic-flight-lift {
+  scale: 1;
+  translate: 0 var(--relic-flight-y);
+}
+
+/* The explicit in-game reduced-motion choice: the relics hold still and keep the static
+   stroke rule above. The take still slides -- it is what tells the player where the relic
+   went, and it is a single short slide with nothing else moving. */
+:root.reduce-motion .run-vacantia-take .run-relic-icon,
+:root.reduce-motion .relic-mat-offer .run-relic-icon img {
+  animation: none !important;
 }
 
 /* Catalog thumbnails carry no cards, so nothing is there to size the layer. Hold the
