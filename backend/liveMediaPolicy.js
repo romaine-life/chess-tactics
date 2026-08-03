@@ -20,6 +20,25 @@ const RUN_RELIC_RESIZED_PRODUCTION_EXCEPTION_SHA_BY_SLOT = Object.freeze({
   'ui/run/relics/occult-dagger.png': 'bc7984ccbabf45e39e672957d7ed1e2716c7e82e14b671fcbed38a7f82b9208d',
   'ui/run/relics/training-linens.png': 'e1349bd32f7bcaccbd706dbc55a6f97df8a0dd96533f309d1e2c0ea38aabf461',
 });
+// ADR-0360. Two generated card frames painted their card at a different SHAPE
+// from the other three, so the same 5:7 element rendered visibly different card
+// sizes. Normalising them to the shared 1009x1402 painted box means resampling,
+// which is not native 1x — admitted only for these exact slots, bytes and
+// transform, exactly as ADR-0332 admits the resized relic icons.
+const RUN_CARD_FRAME_NORMALISED_EXCEPTION_SCHEMA = 'run-card-frame-normalised-production-exception-v1';
+const RUN_CARD_FRAME_NORMALISED_EXCEPTION_TRANSFORM = 'painted-card-box-normalise-lanczos-1009x1402';
+const RUN_CARD_FRAME_NORMALISED_EXCEPTION_BY_SLOT = Object.freeze({
+  'ui/run/card-prototypes/concinnous-frame-v1.png': Object.freeze({
+    outputSha256: '310629d033eebd8f2b1227de1b8a42e1a6b86087327111c145b8f715d4481bcb',
+    sourceSha256: '38b1290df1067dfa3562b874478b29c3f47341d8a065c90d426cec2cdaa32cc7',
+    sourcePaintedHeight: 1420,
+  }),
+  'ui/run/card-prototypes/hieratic-frame-v1.png': Object.freeze({
+    outputSha256: '6552cae59d0d1b404a466b2d37fb6d0a0e6dcdcd60b171ec4979f8a50c610348',
+    sourceSha256: '7ae3b1945da8fefa46a264b696b0fc5695454c80c7256f879fd465a06a2d1152',
+    sourcePaintedHeight: 1427,
+  }),
+});
 const RUN_RESOURCE_ICON_COMPONENT = 'run-resource-icon';
 const RUN_RESOURCE_ICON_SLOT = /^ui\/run\/resources\/([a-z][a-z0-9-]{0,79})\.png$/;
 const RUN_SHOP_WRAP_COMPONENT = 'run-shop-wrap';
@@ -37,6 +56,15 @@ const GAME_CONDITION_ICON_BY_SLOT = Object.freeze({
   'ui/kit/icons/card-properties/tactical.png': Object.freeze({ component: 'card-property-icon', variant: 'tactical' }),
   'ui/kit/icons/card-properties/hieratic.png': Object.freeze({ component: 'card-property-icon', variant: 'hieratic' }),
 });
+const CARD_TYPE_ROW_TEXTURE_COMPONENT = 'card-type-row-texture';
+const CARD_TYPE_ROW_TEXTURE_GROUP_ID = 'card-type-row-textures-pixen-v1';
+const CARD_TYPE_ROW_TEXTURE_BY_SLOT = Object.freeze({
+  'ui/surfaces/card-type-pestiferous.png': Object.freeze({ variant: 'pestiferous', width: 128, height: 64 }),
+  'ui/surfaces/card-type-concinnous.png': Object.freeze({ variant: 'concinnous', width: 512, height: 64 }),
+  'ui/surfaces/card-type-tactical.png': Object.freeze({ variant: 'tactical', width: 128, height: 64 }),
+  'ui/surfaces/card-type-hieratic.png': Object.freeze({ variant: 'hieratic', width: 128, height: 64 }),
+});
+const CARD_TYPE_ROW_TEXTURE_REQUIRED_SLOTS = Object.freeze(Object.keys(CARD_TYPE_ROW_TEXTURE_BY_SLOT).sort());
 const LEVEL_EDITOR_BRUSH_ICON_SLOT = 'ui/kit/icons/brush.png';
 const LEVEL_EDITOR_BRUSH_ICON_COMPONENT = 'level-editor-tool-icon';
 const LEVEL_EDITOR_BRUSH_ICON_PROOF_SCHEMA = 'level-editor-brush-icon-exact-byte-proof-v1';
@@ -110,6 +138,10 @@ function containedRect(value, canvasWidth, canvasHeight) {
 
 function gameConditionIconSlot(slot) {
   return GAME_CONDITION_ICON_BY_SLOT[String(slot || '')] ?? null;
+}
+
+function cardTypeRowTextureSlot(slot) {
+  return CARD_TYPE_ROW_TEXTURE_BY_SLOT[String(slot || '')] ?? null;
 }
 
 function levelEditorBrushIconSlot(slot) {
@@ -398,6 +430,64 @@ function gameConditionIconMediaIssue(row, projectedRuntime = null) {
   }
   if (runtime.altText !== '') {
     return 'game condition icon metadata.runtime.altText must be empty because the adjacent label owns its accessible name';
+  }
+  return null;
+}
+
+/**
+ * Closed production contract for the four decorative materials behind the
+ * Enchiridion's card-type rows. The semantic slot fixes both the card property
+ * and native tile geometry so arbitrary ui-kit media cannot enter this seat.
+ */
+function cardTypeRowTextureMediaIssue(row, projectedRuntime = null) {
+  const contract = cardTypeRowTextureSlot(row.slot);
+  if (!contract) return 'card-type row textures require a registered semantic slot';
+  if (row.domain !== 'ui-kit') return 'card-type row textures require the ui-kit domain';
+  if (row.role !== 'media') return 'card-type row textures require the media role';
+  if (row.media_type !== 'image/png') return 'card-type row textures require image/png';
+  if (Number(row.width) !== contract.width || Number(row.height) !== contract.height) {
+    return `card-type row texture geometry must be native ${contract.width}x${contract.height}`;
+  }
+
+  const metadata = mediaVersionMetadata(row);
+  const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+  if (!isObjectRecord(runtime)) return 'card-type row textures require metadata.runtime';
+  const allowed = new Set([
+    'component', 'variant', 'family', 'frameWidth', 'frameHeight', 'frameCount', 'altText', 'nativeRole',
+  ]);
+  const unsupported = Object.keys(runtime).filter((key) => !allowed.has(key));
+  if (unsupported.length) {
+    return `card-type row texture runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
+  }
+  if (runtime.component !== CARD_TYPE_ROW_TEXTURE_COMPONENT) {
+    return `card-type row texture metadata.runtime.component must be ${CARD_TYPE_ROW_TEXTURE_COMPONENT}`;
+  }
+  if (runtime.nativeRole !== CARD_TYPE_ROW_TEXTURE_COMPONENT) {
+    return `card-type row texture metadata.runtime.nativeRole must be ${CARD_TYPE_ROW_TEXTURE_COMPONENT}`;
+  }
+  if (runtime.variant !== contract.variant) return 'card-type row texture variant must match its semantic slot';
+  if (runtime.family !== 'card-type-row-textures') return 'card-type row texture family must identify the complete material set';
+  if (
+    runtime.frameWidth !== contract.width || runtime.frameHeight !== contract.height
+    || runtime.frameCount !== 1
+  ) return 'card-type row texture runtime geometry must describe its one native tile';
+  if (runtime.altText !== '') {
+    return 'card-type row texture metadata.runtime.altText must be empty because the row label owns its accessible name';
+  }
+  return null;
+}
+
+function cardTypeRowTextureAcceptanceGroupIssue(rows, contract) {
+  if (!Array.isArray(rows) || !contract || contract.groupId !== CARD_TYPE_ROW_TEXTURE_GROUP_ID) {
+    return 'card-type row textures require their registered atomic acceptance group';
+  }
+  const requiredSlots = Array.isArray(contract.requiredSlots) ? [...contract.requiredSlots].sort() : [];
+  if (JSON.stringify(requiredSlots) !== JSON.stringify(CARD_TYPE_ROW_TEXTURE_REQUIRED_SLOTS)) {
+    return 'card-type row texture acceptance must contain all four semantic slots';
+  }
+  const rowSlots = rows.map((row) => row?.slot).sort();
+  if (JSON.stringify(rowSlots) !== JSON.stringify(CARD_TYPE_ROW_TEXTURE_REQUIRED_SLOTS)) {
+    return 'card-type row texture acceptance rows must match all four semantic slots';
   }
   return null;
 }
@@ -853,6 +943,32 @@ function nativeMediaEvidenceIssue(row) {
     ) return 'ADR-0332 resized production evidence is missing its archived source or exact transform';
     return null;
   }
+  if (evidence.schema === RUN_CARD_FRAME_NORMALISED_EXCEPTION_SCHEMA) {
+    const expected = RUN_CARD_FRAME_NORMALISED_EXCEPTION_BY_SLOT[String(row.slot || '')];
+    if (!expected) return 'ADR-0360 normalised card-frame evidence is restricted to its two Run card frame slots';
+    if (
+      normalizedSha(row.blob_sha256) !== expected.outputSha256
+      || normalizedSha(evidence.outputSha256) !== expected.outputSha256
+    ) return 'ADR-0360 normalised card-frame evidence does not authorize these uploaded bytes';
+    if (normalizedSha(evidence.sourceSha256) !== expected.sourceSha256) {
+      return 'ADR-0360 normalised card-frame evidence does not name the frame it was normalised from';
+    }
+    if (
+      evidence.decision !== 'ADR-0360'
+      || evidence.status !== 'owner-approved-production-exception'
+      || evidence.native1x !== false
+      || evidence.spatialResampling !== true
+    ) return 'ADR-0360 normalised card-frame evidence is incomplete';
+    if (Number(row.width) !== 1060 || Number(row.height) !== 1484) {
+      return 'ADR-0360 normalised card-frame evidence requires the native 1060x1484 canvas';
+    }
+    if (
+      Number(evidence.paintedWidth) !== 1009 || Number(evidence.paintedHeight) !== 1402
+      || Number(evidence.sourcePaintedHeight) !== expected.sourcePaintedHeight
+      || evidence.transform !== RUN_CARD_FRAME_NORMALISED_EXCEPTION_TRANSFORM
+    ) return 'ADR-0360 normalised card-frame evidence is missing its painted box or exact transform';
+    return null;
+  }
   if (evidence.native1x !== true) return 'nativeEvidence.native1x must be true';
   if (evidence.spatialResampling !== false) return 'nativeEvidence.spatialResampling must be false';
   if (row.width !== null || row.height !== null) {
@@ -888,6 +1004,9 @@ function liveCatalogReadinessIssue(catalog, { requireCritical = false } = {}) {
 }
 
 module.exports = {
+  CARD_TYPE_ROW_TEXTURE_COMPONENT,
+  CARD_TYPE_ROW_TEXTURE_GROUP_ID,
+  CARD_TYPE_ROW_TEXTURE_REQUIRED_SLOTS,
   PREDRAWN_BOARD_COMPONENT,
   PREDRAWN_BOARD_PROOF_RENDERER,
   PREDRAWN_BOARD_PROOF_SCHEMA,
@@ -908,6 +1027,9 @@ module.exports = {
   STRATEGIKON_BACKGROUND_SHA256,
   STRATEGIKON_BACKGROUND_SLOT,
   liveCatalogReadinessIssue,
+  cardTypeRowTextureAcceptanceGroupIssue,
+  cardTypeRowTextureMediaIssue,
+  cardTypeRowTextureSlot,
   gameConditionIconMediaIssue,
   gameConditionIconSlot,
   levelEditorBrushIconMediaIssue,

@@ -4,7 +4,7 @@ import { createBlankLevel } from '../core/level';
 import { levelToEditorBoard, unitsForGamePieces } from '../core/levelBoard';
 import { PIECE_LABEL, PLAYABLE_PIECE_TYPES, type PlayablePieceType } from '../core/pieces';
 import type { BoardSize, Piece } from '../core/types';
-import { liveMediaForSlot, resolvedLiveMediaUrl } from '@chess-tactics/board-render';
+import { currentLiveMediaCatalog, liveMediaForSlot, resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import { PredrawnMoveHighlightPaint } from '../render/PredrawnMoveHighlightPaint';
 import { runCardArtSlot, runCardFlavor, runCardName } from '../run/cardNames';
 import {
@@ -33,7 +33,7 @@ import {
   type RunCardFaceContent,
 } from './RunCardFace';
 import { runUnitStateIconUrl, type RunUnitState } from './shared/RunAbilityIcon';
-import { runCardFrameGeometryForSha } from './runCardFrameGeometry';
+import { runCardFrameGeometryForSlot } from './runCardFrameGeometry';
 import { StaticReadOnlyBoardView } from './shared/BoardViewFraming';
 import { AlphaBoundIcon } from './shared/AlphaBoundIcon';
 import {
@@ -53,6 +53,7 @@ import { ChromeButton } from './shared/ChromeButton';
 import { EnchiridionContentSceneSlot } from './shell/AuthoredSceneSlot';
 import { fetchAdminLiveMediaCatalog } from '../net/liveMediaAdmin';
 import {
+  acceptedCardTypeTextureUrls,
   cardTypeTextureUrls,
   hasCompleteCardTypeTextureSet,
   type CardTypeTextureUrls,
@@ -628,7 +629,6 @@ type CardTypeReferenceDefinition = Readonly<{
   id: RunCardType;
   name: string;
   cost: number;
-  rules: string;
   description: string;
   provisional?: boolean;
   frameSlot?: string;
@@ -639,7 +639,6 @@ const CARD_TYPE_REFERENCES: readonly CardTypeReferenceDefinition[] = Object.free
     id: 'pestiferous',
     name: 'Pestiferous',
     cost: 1,
-    rules: `One unit on this card is ${CACOCHYMIC_DISPLAY_NAME}. After each victorious Battle, lose that unit, then mark another unit on this card ${CACOCHYMIC_DISPLAY_NAME}.`,
     description: `One public unit is ${CACOCHYMIC_DISPLAY_NAME} and receives the tier discount. A victorious Battle loses that unit, then marks one remaining unit; the empty card remains in the deck.`,
     frameSlot: RUN_CARD_PESTIFEROUS_FRAME_SLOT,
   },
@@ -647,7 +646,6 @@ const CARD_TYPE_REFERENCES: readonly CardTypeReferenceDefinition[] = Object.free
     id: 'concinnous',
     name: 'Concinnous',
     cost: 3,
-    rules: 'One unit on this card is Positioned. Its target may be hidden until purchase.',
     description: 'Skillfully and harmoniously arranged. One persisted contained unit becomes Positioned on purchase; its target may remain hidden until then.',
     frameSlot: RUN_CARD_CONCINNOUS_FRAME_SLOT,
   },
@@ -655,7 +653,6 @@ const CARD_TYPE_REFERENCES: readonly CardTypeReferenceDefinition[] = Object.free
     id: 'tactical',
     name: 'Tactical',
     cost: 4,
-    rules: 'Upon acquisition, one randomly chosen unit on this card gains Discipline.',
     description: 'One contained unit gains Discipline when purchased. The target is hidden on multi-unit offers; this one-unit Volunteer shows the state because its target is forced.',
     frameSlot: RUN_CARD_TACTICAL_FRAME_SLOT,
   },
@@ -663,7 +660,6 @@ const CARD_TYPE_REFERENCES: readonly CardTypeReferenceDefinition[] = Object.free
     id: 'hieratic',
     name: 'Hieratic',
     cost: 4,
-    rules: `Upon acquisition, one randomly chosen unit on this card gains ${AGMINATE_DISPLAY_NAME}.`,
     description: `Priestly, highly formal, and rigidly stylized. One contained unit gains ${AGMINATE_DISPLAY_NAME} when purchased and deploys into its role's formation seat rather than a rank. The target is hidden on multi-unit offers; this one-unit Volunteer shows the state because its target is forced.`,
     frameSlot: RUN_CARD_HIERATIC_FRAME_SLOT,
   },
@@ -694,7 +690,6 @@ function CardTypeReference({ definition }: { definition: CardTypeReferenceDefini
     properties: definition.id === 'concinnous'
       ? [{ name: 'Positioned', target: 'Pawn' }]
       : undefined,
-    rules: definition.rules,
     flavor: runCardFlavor(VOLUNTEER_CARD),
   } satisfies RunCardFaceContent;
   return (
@@ -703,7 +698,7 @@ function CardTypeReference({ definition }: { definition: CardTypeReferenceDefini
         card={card}
         frameUrl={frameMedia.immutableUrl}
         artUrl={resolvedLiveMediaUrl(runCardArtSlot(VOLUNTEER_CARD))}
-        frameGeometry={runCardFrameGeometryForSha(frameMedia.sha256)}
+        frameGeometry={runCardFrameGeometryForSlot(frameSlot)}
       />
     </div>
   );
@@ -716,6 +711,8 @@ function CardTypesSection({ framed, textureBatch }: { framed: boolean; textureBa
   const [textureLoadFailed, setTextureLoadFailed] = useState(false);
   const selected = CARD_TYPE_REFERENCES.find((definition) => definition.id === selectedTypeId)
     ?? CARD_TYPE_REFERENCES[0];
+  const acceptedTextureUrls = acceptedCardTypeTextureUrls(currentLiveMediaCatalog());
+  const displayedTextureUrls = textureBatch ? textureUrls : acceptedTextureUrls;
   const textureReviewStatus = textureBatch
     ? loadedTextureBatch !== textureBatch
       ? 'loading'
@@ -768,7 +765,7 @@ function CardTypesSection({ framed, textureBatch }: { framed: boolean; textureBa
                 aria-label={`${definition.name}. ${definition.description}`}
                 aria-pressed={selected.id === definition.id}
               >
-                {textureUrls[definition.id] ? (
+                {displayedTextureUrls[definition.id] ? (
                   <span
                     aria-hidden="true"
                     className="enchiridion-card-type-row-material"
@@ -779,7 +776,7 @@ function CardTypesSection({ framed, textureBatch }: { framed: boolean; textureBa
                         alt=""
                         draggable={false}
                         key={index}
-                        src={textureUrls[definition.id]}
+                        src={displayedTextureUrls[definition.id]}
                       />
                     ))}
                   </span>

@@ -1,5 +1,69 @@
 # Working in this repo
 
+## Hand over a link, every turn
+
+**End every turn with a clickable markdown link to the exact running surface your work can be
+judged on**, unless there is a real reason none exists (a pure question, a refactor with no visible
+surface, a turn that produced nothing to look at). This is not a nicety and not a substitute for
+doing the work — it is how the work gets reviewed at all.
+
+**Nelson usually will not read the prose.** He scans for the link, clicks it, and reads the state of
+your work off the screen. Write with that in mind. The direct consequence:
+
+> **Never hand over a link he will open and have to ask "what is this?"**
+
+If the link would land him somewhere ambiguous, the answer is *not* a longer paragraph explaining
+it. It is one of exactly two things: **do more work** so the surface speaks for itself, or **ask him
+the intent question** you have been avoiding. A vague link plus an explanation is the failure mode,
+not the fix.
+
+Two more rules that follow from the same place:
+
+- **A link, never a command.** Give the bare URL as a markdown link. Do not wrap it in a
+  ```bash fence with `start ""` / `open` / `xdg-open`, and do not tell him to run anything to see
+  a page. Shell fences are for commands he asked for.
+- **Maximum specificity.** Link the deepest address that puts him *inside* the thing to review —
+  the right tab, the right phase, the right board, with the right brush armed. Landing one click
+  short (the default tab, the picker instead of the board, the editor instead of the running test)
+  makes him do the navigating, which is the thing the link was for.
+
+### The repo is built to make specific links possible
+
+Most surfaces encode their state in the address. Read the route contract and build the URL; a click
+path is at best extra context, never the deliverable.
+
+**Run states — a link that CRAFTS what it shows (the common case).** `POST /api/active-run/craft`
+mints `/run/craft/<id>`. Opening it *sets* the active Run to that state, from whatever the Run has
+since become — so it is a repeatable restart button: he finds a bug on the state you sent, presses
+the same link, and is back at it without asking you. Lead with one of these while troubleshooting,
+not just at the end. Full grammar under "Crafting a Run state to link to" below.
+
+**Run states — a one-shot identity address (rare).** `/run?run=<id>` only asserts a Run already in
+hand and cannot restore one that has moved on. Use it only when you specifically mean "the Run as it
+stands", never as the handoff for a state you crafted.
+
+**Deep navigation is linkable nearly everywhere.** Non-exhaustive, all verified in-tree:
+
+- **Level Editor panels** — `?layer=<id>` opens straight on a panel: `board`, `camera`,
+  `level-artwork`, `tile`, `generate`, `paths`, `fence`, `wall`, `subterrain`, `wallart`, `unit`,
+  `placed-art`, `cover`, `zone`, `rules`, `status`, `history`. `?kind=<brush>` arms a brush and
+  `?brush=<id>` pre-selects one; `layer=prop` and `layer=doodad` are aliases that open Placed Art
+  with that brush kind. Props are **Placed Art → Props**, so a prop link is
+  `/editor/level?layer=prop&brush=oak&board=<code>` — `/editor/level?board=<code>` alone lands on
+  Board and makes him go find them.
+- **Level Editor events** — `layer=rules&eventsEditor=1`, plus `eventsTab=deployment|other`.
+- **A whole board from a URL** — `?board=<code>` on the editor (see `ui/boardCode.encodeBoard`;
+  the wire is base64url JSON, `c`/`r` dims, `f` fill tile, `t` tiles, `u` units, `p` props keyed by
+  anchor cell). Tile ids are catalog ids like `grass-surf-0`, not family names.
+- **A playable board-link** — `/play?board=<code>&obj=capture-all&returnTo=<editor url>` boots
+  straight into the live game with a "Back to editor" so tweak → play → back is a loop. Prefer this
+  over the editor when the thing to judge is how it PLAYS.
+- **Studio** — `mode=catalog|lab|viewer`, `cat=`, `vk=`, `lab=`, and per-item params; see
+  "Reaching a specific UI state" below.
+
+When a surface you need is not addressable, that is worth fixing — an unlinkable review surface
+costs him a navigation every single time it comes up.
+
 ## Agent backend rule
 
 Codex environment setup obtains a browser-approved `auth.romaine.life` device grant and stores it
