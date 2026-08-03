@@ -4437,40 +4437,22 @@ export function LevelEditor(): ReactElement {
       top: -viewPan.y / viewZoom - artworkBoardOrigin.originTop,
     });
     const cell = snapGridPoint(centre);
-    // Sized to hold the default building count: a default that cannot meet its own default
-    // always opens by complaining that it ran out of room.
-    let bounds: TownBounds = { minX: cell.x - 9, minY: cell.y - 7, maxX: cell.x + 9, maxY: cell.y + 7 };
-    // The view is usually centred on the board, and a town defaults to keeping OFF the board — so
-    // dropping one at the view centre would site it exactly where it is forbidden to build and
-    // produce almost nothing. Shift it clear by the shortest move instead.
-    const keepOff = selectedTown?.avoidPlayableBoard ?? TOWN_PLAN_DEFAULTS.avoidPlayableBoard;
-    const overlapsBoard = bounds.minX <= boardCols - 0.5 && bounds.maxX >= -0.5
-      && bounds.minY <= boardRows - 0.5 && bounds.maxY >= -0.5;
-    if (keepOff && overlapsBoard) {
-      const moves = [
-        { dx: -1.5 - bounds.maxX, dy: 0 },
-        { dx: boardCols + 0.5 - bounds.minX, dy: 0 },
-        { dx: 0, dy: -1.5 - bounds.maxY },
-        { dx: 0, dy: boardRows + 0.5 - bounds.minY },
-      ];
-      const shift = moves.reduce((best, move) => (
-        Math.abs(move.dx) + Math.abs(move.dy) < Math.abs(best.dx) + Math.abs(best.dy) ? move : best
-      ));
-      const dx = Math.round(shift.dx);
-      const dy = Math.round(shift.dy);
-      bounds = {
-        minX: bounds.minX + dx, maxX: bounds.maxX + dx,
-        minY: bounds.minY + dy, maxY: bounds.maxY + dy,
-      };
-    }
-    createTown(bounds);
-    // Shifting clear of the board can push the town out of view, and a town you cannot see is the
-    // same failure as no town at all. Bring the view to it.
-    const centreSeat = projectBoardPoint(townBoundsCentre(bounds));
-    setViewPan({
-      x: -(centreSeat.left + artworkBoardOrigin.originLeft) * viewZoom,
-      y: -(centreSeat.top + artworkBoardOrigin.originTop) * viewZoom,
-    });
+    // Keep the town on TERRAIN and where the author is looking. An earlier version shifted it
+    // clear of the playable board and panned to it, which sent it out onto the void beyond the
+    // apron — grass is what a town needs to sit on, not merely "not the board".
+    const half = { x: 9, y: 7 };
+    const terrain = {
+      minX: -(decorativeApron?.left ?? 0),
+      maxX: boardCols - 1 + (decorativeApron?.right ?? 0),
+      minY: -(decorativeApron?.top ?? 0),
+      maxY: boardRows - 1 + (decorativeApron?.bottom ?? 0),
+    };
+    // Fit the default inside the terrain rather than dwarfing it on a small board.
+    const width = Math.min(half.x * 2, terrain.maxX - terrain.minX);
+    const height = Math.min(half.y * 2, terrain.maxY - terrain.minY);
+    const minX = Math.max(terrain.minX, Math.min(cell.x - Math.round(width / 2), terrain.maxX - width));
+    const minY = Math.max(terrain.minY, Math.min(cell.y - Math.round(height / 2), terrain.maxY - height));
+    createTown({ minX, minY, maxX: minX + width, maxY: minY + height });
   };
 
   /** A fresh town on newly dragged ground. Each drag is its own instance, never a replacement. */

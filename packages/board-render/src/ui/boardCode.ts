@@ -725,7 +725,7 @@ function cleanTowns(value: unknown): BoardTown[] {
       facingWobble: clampNumber(t.facingWobble, 0.2, 0, 1),
       spacing: clampNumber(t.spacing, 10, 0, 1000),
       fit: t.fit === 'drop' ? 'drop' : 'shrink',
-      avoidPlayableBoard: t.avoidPlayableBoard !== false,
+      avoidPlayableBoard: t.avoidPlayableBoard === true,
       seed: Math.round(clampNumber(t.seed, 1, 1, 0xffffffff)),
     });
   }

@@ -159,7 +159,10 @@ export const TOWN_PLAN_DEFAULTS: TownPlanParams = {
   facingWobble: 0.2,
   spacing: 10,
   fit: 'shrink',
-  avoidPlayableBoard: true,
+  // Off by default: a town dropped where the author is looking has to build there. Keeping scenery
+  // off the gameplay tiles is a choice worth having, but as an opt-in, not as a default that makes
+  // the tool produce nothing.
+  avoidPlayableBoard: false,
   seed: 1,
 };
 
