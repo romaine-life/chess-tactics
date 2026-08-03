@@ -3111,7 +3111,19 @@ export function LevelEditor(): ReactElement {
    * the pick appends a new one. Picking closes it, so the grid is only ever up while choosing.
    */
   const [townPicker, setTownPicker] = useState<{ sectionId: string; entryId: string | null } | null>(null);
-  /** Which building entries have their knobs open, matching the cover entries' caret behaviour. */
+  /**
+   * Which sections and building entries are open. Follows the cover entries' convention: something
+   * you just added opens expanded because you are about to tune it, and anything loaded from a
+   * saved town starts collapsed so a town of five sections is not a wall of sliders.
+   */
+  const [expandedTownSections, setExpandedTownSections] = useState<Set<string>>(() => new Set());
+  const toggleTownSectionExpand = (sectionId: string): void => {
+    setExpandedTownSections((current) => {
+      const next = new Set(current);
+      if (next.has(sectionId)) next.delete(sectionId); else next.add(sectionId);
+      return next;
+    });
+  };
   const [expandedTownBuildings, setExpandedTownBuildings] = useState<Set<string>>(() => new Set());
   const toggleTownBuildingExpand = (entryId: string): void => {
     setExpandedTownBuildings((current) => {
@@ -4356,6 +4368,11 @@ export function LevelEditor(): ReactElement {
       avoidPlayableBoard: template?.avoidPlayableBoard ?? TOWN_PLAN_DEFAULTS.avoidPlayableBoard,
       seed: randomGeneratorSeed(),
     };
+    setExpandedTownSections((current) => {
+      const next = new Set(current);
+      for (const section of town.sections) next.add(section.id);
+      return next;
+    });
     const towns = [...boardTowns, town];
     setBoardTowns(towns);
     setSelectedTownId(town.id);
@@ -9894,7 +9911,20 @@ export function LevelEditor(): ReactElement {
               {selectedTown.sections.map((section, index) => (
                 <div className="le-town-section le-gen-region-group" key={section.id}>
                   <div className="le-ctrlrow le-town-section-head">
+                    <ChromeButton unit="inner-tool-square"
+                      className={chromeUnitClassNames('inner-tool-square', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-gen-cover-caret-btn', expandedTownSections.has(section.id) && 'active')}
+                      onClick={() => toggleTownSectionExpand(section.id)}
+                      aria-expanded={expandedTownSections.has(section.id)}
+                      aria-label={expandedTownSections.has(section.id) ? `Collapse section ${index + 1}` : `Expand section ${index + 1}`}
+                    >
+                      <span className="le-gen-cover-caret" aria-hidden="true">{expandedTownSections.has(section.id) ? '▾' : '▸'}</span>
+                    </ChromeButton>
                     <h2 className="le-card-subhead le-town-section-title">Section {index + 1}</h2>
+                    <span className="le-ctrllabel le-town-section-summary">
+                      {section.buildings.length
+                        ? `${section.buildings.length} kind${section.buildings.length === 1 ? '' : 's'} · ${section.scaleMean.toFixed(2)}×`
+                        : 'no buildings'}
+                    </span>
                     {selectedTown.sections.length > 1 ? (
                       <ChromeButton unit="inner-tool-square"
                         className={chromeUnitClassNames('inner-tool-square', 'le-gen-icon', 'danger')}
@@ -9906,6 +9936,7 @@ export function LevelEditor(): ReactElement {
                       >×</ChromeButton>
                     ) : null}
                   </div>
+                  {expandedTownSections.has(section.id) ? (<>
                   <span className="le-pal-grouplabel">Buildings</span>
                   {/* Buildings are entries you add, exactly like the Generate panel's cover sets:
                       each names itself in a dropdown and carries its own weight. A swatch grid
@@ -9985,6 +10016,7 @@ export function LevelEditor(): ReactElement {
                               : false,
                             onSelect: () => {
                               // Picking is the whole interaction: fill the entry, then close.
+                              const addedBuildingId = `b${Math.random().toString(36).slice(2, 8)}`;
                               updateTownSection(selectedTown.id, section.id, townPicker.entryId
                                 ? {
                                   buildings: section.buildings.map((other) => (
@@ -9992,11 +10024,14 @@ export function LevelEditor(): ReactElement {
                                 }
                                 : {
                                   buildings: [...section.buildings, {
-                                    id: `b${Math.random().toString(36).slice(2, 8)}`,
+                                    id: addedBuildingId,
                                     sourceArtId: asset.id,
                                     weight: 1,
                                   }],
                                 });
+                              if (!townPicker.entryId) {
+                                setExpandedTownBuildings((current) => new Set(current).add(addedBuildingId));
+                              }
                               setTownPicker(null);
                             },
                             content: <>
@@ -10016,13 +10051,16 @@ export function LevelEditor(): ReactElement {
                   <SliderRow label={`Smallest · ${section.scaleMin.toFixed(2)}×`} value={section.scaleMin} set={(value) => updateTownSection(selectedTown.id, section.id, { scaleMin: value })} min={0.2} max={2.5} step={0.05} nudge={0.05} dflt={0.75} />
                   <SliderRow label={`Largest · ${section.scaleMax.toFixed(2)}×`} value={section.scaleMax} set={(value) => updateTownSection(selectedTown.id, section.id, { scaleMax: value })} min={0.2} max={3} step={0.05} nudge={0.05} dflt={1.35} />
                   <SliderRow label={`Frontage each · ${pixelsInTilesAcross(section.plotWidth).toFixed(1)} tiles`} value={section.plotWidth} set={(value) => updateTownSection(selectedTown.id, section.id, { plotWidth: value })} min={40} max={300} step={5} nudge={5} dflt={DEFAULT_TOWN_SECTION.plotWidth} />
+                  </>) : null}
                 </div>
               ))}
               <ChromeButton unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                onClick={() => updateTown(selectedTown.id, {
-                  sections: [...selectedTown.sections, newTownSection()],
-                })}
+                onClick={() => {
+                  const added = newTownSection();
+                  setExpandedTownSections((current) => new Set(current).add(added.id));
+                  updateTown(selectedTown.id, { sections: [...selectedTown.sections, added] });
+                }}
               >Add section</ChromeButton>
               <SliderRow label={`Blend · ${Math.round(selectedTown.blend * 100)}%`} value={selectedTown.blend} set={(value) => updateTown(selectedTown.id, { blend: value })} min={0} max={1} step={0.05} nudge={0.05} dflt={TOWN_PLAN_DEFAULTS.blend} />
               <p className="le-board-note">At 0% each section keeps to its own stretch of the town, divided sharply. At 100% they interleave completely. In between they hold their ground but mingle across a band at the divide, and the band widens as it rises.</p>

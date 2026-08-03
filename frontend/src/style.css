@@ -6855,8 +6855,17 @@ body.loading-bootstrap .app-startup-status {
   align-items: baseline;
 }
 .le-town-section-title {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   margin: 0;
+}
+/* Collapsed sections still have to say what they are, so a caret is not a blind box. */
+.le-town-section-summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
 }
 
 .le-town-building-pick {
