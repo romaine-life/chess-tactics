@@ -1,6 +1,7 @@
 import { useCallback, useId, useRef, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { chromeFamilyPortalHost } from '../chromeFamilyRuntime';
 import { InnerChromeBox } from './ChromeBox';
 
 interface TooltipPosition {
@@ -38,7 +39,12 @@ function useTooltipPosition<T extends HTMLElement>() {
     if (!hovered.current) hide();
   }, [hide]);
 
-  return { ref, pos, hide, onBlur, onFocus, onMouseEnter, onMouseLeave };
+  // The pop is portalled out of the trigger's scrolling panel, so it must be
+  // re-homed inside the chrome family surface. Portalling to <main> or <body>
+  // (both sit outside it) leaves the pop with no frame and no fill.
+  const portalHost = chromeFamilyPortalHost(ref.current);
+
+  return { ref, pos, hide, onBlur, onFocus, onMouseEnter, onMouseLeave, portalHost };
 }
 
 function TooltipPopup({
@@ -105,8 +111,8 @@ export function Tooltip({
     onFocus,
     onMouseEnter,
     onMouseLeave,
+    portalHost,
   } = useTooltipPosition<HTMLSpanElement>();
-  const portalHost = typeof document === 'undefined' ? null : ref.current?.closest('main') ?? document.body;
 
   return (
     <span
@@ -156,8 +162,8 @@ export function InfoTip({ children, label = 'More info' }: { children: ReactNode
     onFocus,
     onMouseEnter,
     onMouseLeave,
+    portalHost,
   } = useTooltipPosition<HTMLButtonElement>();
-  const portalHost = typeof document === 'undefined' ? null : ref.current?.closest('main') ?? document.body;
 
   return (
     <span className="infotip" onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
