@@ -20376,9 +20376,16 @@ button.tileset-relationship-cell {
   min-inline-size: 0;
 }
 
+/* The ledger is as tall as the units in it, and no taller. It grows to the full
+   track — and only then starts scrolling — once the roster outgrows the space.
+   The inner row track is what lets the capped box constrain its own scrollport
+   instead of letting the rows run past the frame. */
 .run-army-ledger-grid {
   --run-army-row-block-size: 158px;
-  block-size: 100%;
+  align-self: start;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  max-block-size: 100%;
   min-block-size: 0;
 }
 
