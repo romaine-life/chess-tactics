@@ -27,7 +27,7 @@ export type ZoneType = 'region' | 'player-spawn' | 'player-pawn-spawn' | 'player
 export const ZONE_TYPES = ['region', 'player-spawn', 'player-pawn-spawn', 'player-king-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock', 'pawn-promotion'] as const satisfies readonly ZoneType[];
 
 /**
- * A Run-player deployment zone that holds ONE piece type and nothing else (ADR-0366). Painting one
+ * A Run-player deployment zone that holds ONE piece type and nothing else (ADR-0367). Painting one
  * gives that type squares of its own; barring the same type from the general Player Deployment
  * zone breaks it off that pool entirely.
  */
@@ -40,7 +40,7 @@ export const dedicatedDeploymentPieceType = (type: ZoneType): PlayablePieceType 
 
 /**
  * Whether a dedicated deployment zone is switched on, which is not a flag of its own: a type's
- * zone exists exactly when that type is barred from the general Player Deployment zone (ADR-0366).
+ * zone exists exactly when that type is barred from the general Player Deployment zone (ADR-0367).
  * One stored setting drives both halves, so they can never disagree — a type cannot be barred with
  * nowhere to go, or hold a zone it was never broken off into.
  */
@@ -58,7 +58,7 @@ export function dedicatedDeploymentZoneIsOn(
  * The zones that are actually ON the level. A dedicated zone the author has not switched on is
  * retained in the editor's own store — its painted squares survive so switching back on returns
  * the zone the author had — but it is not part of the Level: gameplay, validation, rendering and
- * the Zones dropdown all read a level where it does not exist (ADR-0366).
+ * the Zones dropdown all read a level where it does not exist (ADR-0367).
  */
 export function zoneEntriesOnLevel<Entry extends { type: ZoneType; excludedPieceTypes?: PlayablePieceType[] }>(
   entries: readonly Entry[],
@@ -67,7 +67,7 @@ export function zoneEntriesOnLevel<Entry extends { type: ZoneType; excludedPiece
 }
 
 /**
- * Deployment geometry a level may hold at most one of (ADR-0366). Two Player Deployment zones —
+ * Deployment geometry a level may hold at most one of (ADR-0367). Two Player Deployment zones —
  * or two Enemy Deployment zones — were previously reachable through legacy content and pasted
  * board codes, which left the author looking at duplicate objects that no UI could explain.
  * Every reader canonicalizes duplicates into one zone per type instead of warning about them.
@@ -300,7 +300,7 @@ export interface Zone {
   color?: ZoneColor;
   type: ZoneType;
 /**
-   * Piece types the automatic placer may NOT put in this Player Deployment zone (ADR-0366). A pawn
+   * Piece types the automatic placer may NOT put in this Player Deployment zone (ADR-0367). A pawn
    * is column-bound and a King may want a keep of its own, so an author can break either type off
    * the general pool and give it a dedicated zone instead. This steers only the automatic placer:
    * a barred square still accepts every other piece, and a player placing that type by hand

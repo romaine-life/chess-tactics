@@ -1718,7 +1718,7 @@ const materialPointsForUnitId = (unitId: string): number => {
 // back-compat, but new editor-authored behavior belongs in events/rules.
 const DEFAULT_ZONE_TYPE: ZoneType = 'region';
 // The piece types that own a dedicated deployment zone, and can therefore be broken off the
-// general Player Deployment pool (ADR-0366).
+// general Player Deployment pool (ADR-0367).
 const LE_BREAKABLE_DEPLOYMENT_TYPES = [
   { pieceType: 'pawn', label: 'Pawn' },
   { pieceType: 'king', label: 'King' },
@@ -3198,7 +3198,7 @@ export function LevelEditor(): ReactElement {
   });
   const boardZones = useMemo(() => zoneCellMapFromEntries(boardZoneEntries), [boardZoneEntries]);
   // Indices of the zones that are ON the level. A dedicated zone whose type is not broken off is
-  // retained but hidden: it cannot be selected, cycled, painted or seen (ADR-0366).
+  // retained but hidden: it cannot be selected, cycled, painted or seen (ADR-0367).
   const visibleZoneIndices = useMemo(() => {
     const onLevel = new Set(zoneEntriesOnLevel(boardZoneEntries));
     return boardZoneEntries.flatMap((entry, index) => onLevel.has(entry) ? [index] : []);
@@ -7158,7 +7158,7 @@ export function LevelEditor(): ReactElement {
     const board = cloneEditorBoard(currentEditorBoardRef.current);
     const entries = zoneEntriesForBoard(board).map((entry) => ({ ...entry, tiles: [...entry.tiles] }));
     const zoneType = side === 'player' ? 'player-spawn' : 'enemy-spawn';
-    // One zone per deployment type, always (ADR-0366). Creating an existing one opens it.
+    // One zone per deployment type, always (ADR-0367). Creating an existing one opens it.
     const existingIndex = entries.findIndex((entry) => entry.type === zoneType);
     if (existingIndex >= 0) {
       setSelectedZoneIndex(existingIndex);
@@ -7189,7 +7189,7 @@ export function LevelEditor(): ReactElement {
     selectZoneEntry(zoneId);
     selectLayer('zone');
   };
-  // Switching a piece type into its own deployment zone is ONE command (ADR-0366): it bars the type
+  // Switching a piece type into its own deployment zone is ONE command (ADR-0367): it bars the type
   // from the general Player Deployment zone and, on the same click, gives it a zone to stand in.
   // Switching back off retains the painted squares — the entry stays in the editor's store and
   // simply stops being part of the Level — so switching on again returns the zone the author had.

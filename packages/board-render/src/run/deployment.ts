@@ -51,7 +51,7 @@ function authoredOccupied(level: Level): Set<string> {
 }
 
 /**
- * The placement pools a War Battle's authored geometry describes (ADR-0366).
+ * The placement pools a War Battle's authored geometry describes (ADR-0367).
  *
  * `all` is every usable deployment square and therefore the Run's capacity. `byType` is the subset
  * an automatically placed unit of each piece type may take. An author steers this two ways: by
@@ -193,7 +193,7 @@ function cellScore(
 }
 
 /**
- * The order units take their turn to claim a square. Deployment is a free-for-all (ADR-0366):
+ * The order units take their turn to claim a square. Deployment is a free-for-all (ADR-0367):
  * one unit at a time, in a seeded random order, each taking the best square still available to
  * it. Nothing is reserved ahead of a unit and nothing backtracks, so a unit whose eligible squares
  * were taken by units that went earlier simply does not deploy.
@@ -488,7 +488,7 @@ export function levelForRunDeployment(run: RunDocument, level: Level, layout: Ru
 
 /**
  * Where a reservist called up mid-Battle arrives. A reservist is placed automatically, so the type
- * bars apply to it exactly as they apply at Deployment (ADR-0366): it arrives only on a square its
+ * bars apply to it exactly as they apply at Deployment (ADR-0367): it arrives only on a square its
  * own type may use, and returns no cell at all when none is free.
  */
 export function normalReservistCell(

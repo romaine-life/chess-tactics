@@ -129,7 +129,7 @@ describe('Run deployment', () => {
 
   it('keeps Royal Sceptre Kings on a board-edge square and Royal Decree Kings on the back row', () => {
     const level = battle();
-    // Placement is a free-for-all in random order (ADR-0366), so an ability steers a unit through
+    // Placement is a free-for-all in random order (ADR-0367), so an ability steers a unit through
     // what is still open when its turn comes. Judge the ability itself on an uncontested zone.
     const base = run();
     const royal = {
@@ -270,7 +270,7 @@ describe('Run deployment', () => {
   });
 });
 
-// ---- Pawn deployment zones (ADR-0366) --------------------------------------------------------
+// ---- Pawn deployment zones (ADR-0367) --------------------------------------------------------
 
 /** A Run whose army is exactly the requested non-King types, plus the permanent King. */
 function armyOf(types: RunArmyUnit['type'][], seed = 13): RunDocument {

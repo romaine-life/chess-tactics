@@ -85,7 +85,7 @@ describe('levelBoard — zone projection into layers.zones', () => {
   });
 
   it('keeps a switched-off dedicated zone out of the Level while retaining its squares', () => {
-    // The King is not barred from the shared pool, so its zone is switched off (ADR-0366): the
+    // The King is not barred from the shared pool, so its zone is switched off (ADR-0367): the
     // Level must not carry it, and the editor must not lose the squares already painted into it.
     const authored = board({
       zoneEntries: [

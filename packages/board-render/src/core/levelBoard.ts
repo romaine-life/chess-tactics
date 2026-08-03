@@ -54,7 +54,7 @@ const sideForFaction = (faction: string, playerFaction: string | null | undefine
  * because the editor's zone dropdown is explicitly controlled by the author; in-bounds tiles are
  * emitted in row-major order for stable, diff-friendly saves. Duplicate deployment zones fold
  * into one per type on the way out, so a saved Level can never hold two, and a dedicated zone the
- * author has not switched on never reaches the Level at all (ADR-0366).
+ * author has not switched on never reaches the Level at all (ADR-0367).
  */
 function zonesToLayers(
   entries: readonly EditorZoneEntry[] | undefined,
