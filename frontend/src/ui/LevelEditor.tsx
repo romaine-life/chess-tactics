@@ -39,6 +39,7 @@ import {
   DEFAULT_TOWN_SECTION,
   isTownMember,
   pixelsInTilesAcross,
+  townBoundsCentre,
   planTown,
   snapGridPoint,
   townBoundsInTiles,
@@ -4436,7 +4437,40 @@ export function LevelEditor(): ReactElement {
       top: -viewPan.y / viewZoom - artworkBoardOrigin.originTop,
     });
     const cell = snapGridPoint(centre);
-    createTown({ minX: cell.x - 5, minY: cell.y - 4, maxX: cell.x + 5, maxY: cell.y + 4 });
+    // Sized to hold the default building count: a default that cannot meet its own default
+    // always opens by complaining that it ran out of room.
+    let bounds: TownBounds = { minX: cell.x - 9, minY: cell.y - 7, maxX: cell.x + 9, maxY: cell.y + 7 };
+    // The view is usually centred on the board, and a town defaults to keeping OFF the board — so
+    // dropping one at the view centre would site it exactly where it is forbidden to build and
+    // produce almost nothing. Shift it clear by the shortest move instead.
+    const keepOff = selectedTown?.avoidPlayableBoard ?? TOWN_PLAN_DEFAULTS.avoidPlayableBoard;
+    const overlapsBoard = bounds.minX <= boardCols - 0.5 && bounds.maxX >= -0.5
+      && bounds.minY <= boardRows - 0.5 && bounds.maxY >= -0.5;
+    if (keepOff && overlapsBoard) {
+      const moves = [
+        { dx: -1.5 - bounds.maxX, dy: 0 },
+        { dx: boardCols + 0.5 - bounds.minX, dy: 0 },
+        { dx: 0, dy: -1.5 - bounds.maxY },
+        { dx: 0, dy: boardRows + 0.5 - bounds.minY },
+      ];
+      const shift = moves.reduce((best, move) => (
+        Math.abs(move.dx) + Math.abs(move.dy) < Math.abs(best.dx) + Math.abs(best.dy) ? move : best
+      ));
+      const dx = Math.round(shift.dx);
+      const dy = Math.round(shift.dy);
+      bounds = {
+        minX: bounds.minX + dx, maxX: bounds.maxX + dx,
+        minY: bounds.minY + dy, maxY: bounds.maxY + dy,
+      };
+    }
+    createTown(bounds);
+    // Shifting clear of the board can push the town out of view, and a town you cannot see is the
+    // same failure as no town at all. Bring the view to it.
+    const centreSeat = projectBoardPoint(townBoundsCentre(bounds));
+    setViewPan({
+      x: -(centreSeat.left + artworkBoardOrigin.originLeft) * viewZoom,
+      y: -(centreSeat.top + artworkBoardOrigin.originTop) * viewZoom,
+    });
   };
 
   /** A fresh town on newly dragged ground. Each drag is its own instance, never a replacement. */

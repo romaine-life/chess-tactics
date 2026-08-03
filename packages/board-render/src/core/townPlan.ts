@@ -153,7 +153,7 @@ export const TOWN_PLAN_DEFAULTS: TownPlanParams = {
   blend: 0.35,
   landmarkIds: [],
   plan: 'linear',
-  size: 14,
+  size: 12,
   setback: 78,
   looseness: 0.45,
   facingWobble: 0.2,
