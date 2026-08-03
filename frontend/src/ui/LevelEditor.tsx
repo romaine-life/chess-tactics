@@ -272,12 +272,12 @@ import {
   type EditorDocumentEditSessionResult,
 } from '../net/editorDocuments';
 import { consumeNewBuildReloadIntent } from '../net/appUpdate';
-import { OBJECTIVE_TYPES, ZONE_COLORS, type CastleEventAction, type ChessDrawsEventAction, type ConditionSide, type Level, type LevelEvent, type LevelEventAction, type LevelEvents, type ObjectiveType, type VictoryRules, type ZoneColor, type ZoneType } from '../core/level';
+import { OBJECTIVE_TYPES, ZONE_COLORS, zoneEntriesOnLevel, type CastleEventAction, type ChessDrawsEventAction, type ConditionSide, type Level, type LevelEvent, type LevelEventAction, type LevelEvents, type ObjectiveType, type VictoryRules, type ZoneColor, type ZoneType } from '../core/level';
 import { computeCastleTemplatePairs, type CastleTemplateUnit } from './castlingTemplate';
 import { MODE_NAME, DEFAULT_SURVIVE_TURNS, victoryRulesForObjective, kingSideOf } from '../core/objectives';
 import { CLOCK_INCREMENT_SECONDS, CLOCK_INITIAL_SECONDS, DEFAULT_TIME_CONTROL, formatClockSeconds, parseClockSeconds, stepLadder } from '../core/clock';
 import { validatePlayability, validateWarBattlePlayability } from '../core/playability';
-import { type PlayablePieceType } from '../core/pieces';
+import { PLAYABLE_PIECE_TYPES, type PlayablePieceType } from '../core/pieces';
 import { effectiveLevelEvents, normalizeLevelEvents } from '../core/levelEvents';
 import { guardRulesSeed, levelRulesSeed, seededBaselineLevel, type AuthoredRulesField, type LevelRulesSeed } from './levelEditorRulesSeed';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
@@ -1717,10 +1717,18 @@ const materialPointsForUnitId = (unitId: string): number => {
 // Authored zones are named tile regions. Legacy semantic types stay in the schema for import and
 // back-compat, but new editor-authored behavior belongs in events/rules.
 const DEFAULT_ZONE_TYPE: ZoneType = 'region';
+// The piece types that own a dedicated deployment zone, and can therefore be broken off the
+// general Player Deployment pool (ADR-0367).
+const LE_BREAKABLE_DEPLOYMENT_TYPES = [
+  { pieceType: 'pawn', label: 'Pawn' },
+  { pieceType: 'king', label: 'King' },
+] as const satisfies ReadonlyArray<{ pieceType: PlayablePieceType; label: string }>;
 const DEFAULT_ZONE_COLOR: ZoneColor = 'teal';
 const LEGACY_ZONE_COLOR: Record<ZoneType, ZoneColor> = {
   region: 'teal',
   'player-spawn': 'blue',
+  'player-pawn-spawn': 'violet',
+  'player-king-spawn': 'gold',
   'enemy-spawn': 'red',
   'enemy-threat': 'violet',
   objective: 'gold',
@@ -3181,9 +3189,21 @@ export function LevelEditor(): ReactElement {
   // Gameplay zones: an authored list of named region entries. `boardZones` below is the legacy
   // per-cell overlay map derived from this list for board rendering and old board-code compatibility.
   const [boardZoneEntries, setBoardZoneEntries] = useState<EditorZoneEntry[]>(() => zoneEntriesForBoard(initialBoard ?? { cols: boardCols, rows: boardRows, cells: {}, units: {}, doodads: {}, props: {}, cover: {}, features: {}, featureCuts: {}, featureExits: {}, zones: {} }));
-  const [selectedZoneIndex, setSelectedZoneIndex] = useState(0);
+  // `?kind=zone&brush=<zoneId>` opens the Zones layer with that exact zone armed, so a review
+  // link can land on the zone being discussed instead of whichever one sorts first.
+  const [selectedZoneIndex, setSelectedZoneIndex] = useState(() => {
+    if (studioArm.kind !== 'zone' || !studioArm.brush) return 0;
+    const entries = zoneEntriesForBoard(initialBoard ?? { cols: boardCols, rows: boardRows, cells: {}, units: {}, doodads: {}, props: {}, cover: {}, features: {}, featureCuts: {}, featureExits: {}, zones: {} });
+    return Math.max(0, entries.findIndex((entry) => entry.id === studioArm.brush));
+  });
   const boardZones = useMemo(() => zoneCellMapFromEntries(boardZoneEntries), [boardZoneEntries]);
-  const activeZone = boardZoneEntries[selectedZoneIndex] ?? null;
+  // Indices of the zones that are ON the level. A dedicated zone whose type is not broken off is
+  // retained but hidden: it cannot be selected, cycled, painted or seen (ADR-0367).
+  const visibleZoneIndices = useMemo(() => {
+    const onLevel = new Set(zoneEntriesOnLevel(boardZoneEntries));
+    return boardZoneEntries.flatMap((entry, index) => onLevel.has(entry) ? [index] : []);
+  }, [boardZoneEntries]);
+  const activeZone = visibleZoneIndices.includes(selectedZoneIndex) ? boardZoneEntries[selectedZoneIndex] ?? null : null;
   const activeZoneName = activeZone ? zoneDisplayName(activeZone, selectedZoneIndex) : '';
   const activeZoneNameValue = activeZone ? activeZone.name ?? activeZoneName : '';
   const activeZoneColor = activeZone ? zoneDisplayColor(activeZone) : DEFAULT_ZONE_COLOR;
@@ -3191,9 +3211,9 @@ export function LevelEditor(): ReactElement {
   const activeZoneOverlay = useMemo(() => activeZone ? zoneCellColorMapFromEntries([activeZone]) : {}, [activeZone]);
   const visibleZones = brushKind === 'zone' ? activeZoneOverlay : {};
   useEffect(() => {
-    if (selectedZoneIndex < boardZoneEntries.length || selectedZoneIndex === 0) return;
-    setSelectedZoneIndex(Math.max(0, boardZoneEntries.length - 1));
-  }, [boardZoneEntries.length, selectedZoneIndex]);
+    if (visibleZoneIndices.includes(selectedZoneIndex)) return;
+    setSelectedZoneIndex(visibleZoneIndices[0] ?? 0);
+  }, [visibleZoneIndices, selectedZoneIndex]);
 
   // The Rules panel state: authored win rules, non-victory events, and ancillary battle settings.
   // Seeded from the campaign level on hydrate (below); a fresh/standalone board starts at the
@@ -3305,11 +3325,13 @@ export function LevelEditor(): ReactElement {
       brushKind: levelEditorRouteBrushKind(layer, brushKind),
       // A copied/reloaded Wall Art editor URL must keep the exact armed stamp. Losing this made a
       // Grand Gallery handoff silently reopen with the first catalog item (Tattered Banner).
-      brush: brushKind === 'wallart' ? wallArtBrushId : null,
+      // The armed zone rides the same stamp, so a copied Zones URL reopens on the zone the author
+      // was painting rather than on whichever entry sorts first.
+      brush: brushKind === 'wallart' ? wallArtBrushId : brushKind === 'zone' ? (activeZone?.id ?? null) : null,
       levelArtworkWorkspace: layer === 'level-artwork' ? levelArtworkWorkspace : null,
     });
     navigateApp(nextHref, { replace: true, scroll: false });
-  }, [levelArtworkWorkspace, brushKind, layer, wallArtBrushId]);
+  }, [levelArtworkWorkspace, brushKind, layer, wallArtBrushId, activeZone?.id]);
 
   useEffect(() => {
     const syncFromRoute = (): void => {
@@ -7109,6 +7131,7 @@ export function LevelEditor(): ReactElement {
       id: entry.id,
       label: zoneDisplayName(entry, index),
       type: entry.type,
+      excludedPieceTypes: entry.excludedPieceTypes ?? [],
       paintedTiles: entry.tiles.length,
       usableTileKeys: [...new Set(entry.tiles.filter((tile) => {
         const [x, y] = tile.split(',').map(Number);
@@ -7135,6 +7158,7 @@ export function LevelEditor(): ReactElement {
     const board = cloneEditorBoard(currentEditorBoardRef.current);
     const entries = zoneEntriesForBoard(board).map((entry) => ({ ...entry, tiles: [...entry.tiles] }));
     const zoneType = side === 'player' ? 'player-spawn' : 'enemy-spawn';
+    // One zone per deployment type, always (ADR-0367). Creating an existing one opens it.
     const existingIndex = entries.findIndex((entry) => entry.type === zoneType);
     if (existingIndex >= 0) {
       setSelectedZoneIndex(existingIndex);
@@ -7164,6 +7188,40 @@ export function LevelEditor(): ReactElement {
   const editDeploymentZone = (zoneId: string): void => {
     selectZoneEntry(zoneId);
     selectLayer('zone');
+  };
+  // Switching a piece type into its own deployment zone is ONE command (ADR-0367): it bars the type
+  // from the general Player Deployment zone and, on the same click, gives it a zone to stand in.
+  // Switching back off retains the painted squares — the entry stays in the editor's store and
+  // simply stops being part of the Level — so switching on again returns the zone the author had.
+  const setDedicatedDeploymentZone = (pieceType: 'pawn' | 'king', on: boolean): void => {
+    const board = cloneEditorBoard(currentEditorBoardRef.current);
+    const entries = zoneEntriesForBoard(board).map((entry) => ({ ...entry, tiles: [...entry.tiles] }));
+    const generalIndex = entries.findIndex((entry) => entry.type === 'player-spawn');
+    if (generalIndex < 0) {
+      reportStatus('Create the Player starting zone first.', 'error', 'A piece type is broken off the shared deployment pool, so that pool has to exist before a type can leave it.');
+      return;
+    }
+    const general = entries[generalIndex];
+    const excluded = new Set(general.excludedPieceTypes ?? []);
+    if (on) excluded.add(pieceType);
+    else excluded.delete(pieceType);
+    const nextExcluded = PLAYABLE_PIECE_TYPES.filter((type) => excluded.has(type));
+    entries[generalIndex] = { ...general, excludedPieceTypes: nextExcluded.length ? nextExcluded : undefined };
+
+    const zoneType = pieceType === 'pawn' ? 'player-pawn-spawn' : 'player-king-spawn';
+    let zoneIndex = entries.findIndex((entry) => entry.type === zoneType);
+    if (on && zoneIndex < 0) {
+      entries.push({
+        id: nextZoneEntryId(entries),
+        name: uniqueZoneEntryName(pieceType === 'pawn' ? 'Pawn Deployment' : 'King Deployment', entries),
+        color: pieceType === 'pawn' ? 'violet' : 'gold',
+        type: zoneType,
+        tiles: [],
+      });
+      zoneIndex = entries.length - 1;
+    }
+    if (on && zoneIndex >= 0) setSelectedZoneIndex(zoneIndex);
+    commitEditorBoard(withZoneEntries(board, entries), null);
   };
   const addPawnPromotionTemplate = (): void => {
     const board = cloneEditorBoard(currentEditorBoardRef.current);
@@ -7596,14 +7654,14 @@ export function LevelEditor(): ReactElement {
   };
   const selectZoneEntry = (id: string): void => {
     const index = boardZoneEntries.findIndex((zone) => zone.id === id);
-    if (index >= 0) setSelectedZoneIndex(index);
+    if (index >= 0 && visibleZoneIndices.includes(index)) setSelectedZoneIndex(index);
   };
   const stepZoneEntry = (delta: -1 | 1): void => {
-    const count = boardZoneEntries.length;
+    const count = visibleZoneIndices.length;
     if (!count) return;
     setSelectedZoneIndex((current) => {
-      const normalized = Math.min(Math.max(current, 0), count - 1);
-      return (normalized + delta + count) % count;
+      const at = Math.max(0, visibleZoneIndices.indexOf(current));
+      return visibleZoneIndices[(at + delta + count) % count];
     });
   };
   const setActiveZoneName = (name: string): void => {
@@ -8254,6 +8312,7 @@ export function LevelEditor(): ReactElement {
                   onEventsChange={setEvents}
                   onCreateZone={createDeploymentZone}
                   onEditZone={editDeploymentZone}
+                  onDedicatedZoneChange={setDedicatedDeploymentZone}
                 />
               )}
               otherContent={(
@@ -9115,8 +9174,8 @@ export function LevelEditor(): ReactElement {
                   buttonClassName="le-zone-stepper-button"
                   previousLabel="Previous zone"
                   nextLabel="Next zone"
-                  previousDisabled={boardZoneEntries.length <= 1}
-                  nextDisabled={boardZoneEntries.length <= 1}
+                  previousDisabled={visibleZoneIndices.length <= 1}
+                  nextDisabled={visibleZoneIndices.length <= 1}
                   onPrevious={() => stepZoneEntry(-1)}
                   onNext={() => stepZoneEntry(1)}
                 >
@@ -9124,7 +9183,7 @@ export function LevelEditor(): ReactElement {
                     value={activeZone?.id ?? ''}
                     options={[
                       ...(activeZone ? [] : [{ value: '', label: 'None' }]),
-                      ...boardZoneEntries.map((zone, index) => ({ value: zone.id, label: zoneDisplayName(zone, index) })),
+                      ...visibleZoneIndices.map((index) => ({ value: boardZoneEntries[index].id, label: zoneDisplayName(boardZoneEntries[index], index) })),
                     ]}
                     disabled={!activeZone}
                     ariaLabel="Selected zone"
@@ -9170,7 +9229,17 @@ export function LevelEditor(): ReactElement {
               />
             </div>
             <p className="le-board-note">
-              Brush paints cells into the selected zone. Events decide what that zone does.
+              {activeZone?.type === 'player-spawn'
+                ? activeZone.excludedPieceTypes?.length
+                  ? `Player Deployment. Automatic placement puts every piece except ${LE_BREAKABLE_DEPLOYMENT_TYPES.filter(({ pieceType }) => activeZone.excludedPieceTypes?.includes(pieceType)).map(({ label }) => `${label}s`).join(' and ')} here; a Disciplined unit may still be placed here by hand.`
+                  : 'Player Deployment. The Run army starts on these squares.'
+                : activeZone?.type === 'player-pawn-spawn'
+                ? 'Pawn Deployment. Pawns may start here. Squares shared with Player Deployment stay open to every piece.'
+                : activeZone?.type === 'player-king-spawn'
+                ? 'King Deployment. The King may start here, and takes its square before any other unit.'
+                : activeZone?.type === 'enemy-spawn'
+                ? 'Enemy Deployment. The randomized enemy roster starts on these squares.'
+                : 'Brush paints cells into the selected zone. Events decide what that zone does.'}
             </p>
           </section>
         ) : null}

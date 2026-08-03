@@ -11,7 +11,7 @@
 //    the game (which reads `layers`, not `boardCode`) plays the authored board.
 
 import type { BattleSettings, Level, LevelEconomy, LevelEvents, LevelUnit, ObjectiveType, Roster, TimeControl, VictoryRules, Zone } from './level';
-import { BOARD_COLS, BOARD_ROWS, LEVEL_FORMAT_VERSION } from './level';
+import { BOARD_COLS, BOARD_ROWS, LEVEL_FORMAT_VERSION, canonicalizeSingletonZones, zoneEntriesOnLevel } from './level';
 import type { PlacedProp } from './props';
 import type { Piece, Side, TerrainCell, TerrainType, UnitFacing } from './types';
 import { defaultTerrainFamily, familyForGameplayTerrain, gameplayTerrainForFamily, terrainFamilyRecords, type TileFamilyId } from './tileSockets';
@@ -52,14 +52,16 @@ const sideForFaction = (faction: string, playerFaction: string | null | undefine
 /**
  * Project the editor's authored zone entries into `layers.zones`. Empty entries are preserved
  * because the editor's zone dropdown is explicitly controlled by the author; in-bounds tiles are
- * emitted in row-major order for stable, diff-friendly saves.
+ * emitted in row-major order for stable, diff-friendly saves. Duplicate deployment zones fold
+ * into one per type on the way out, so a saved Level can never hold two, and a dedicated zone the
+ * author has not switched on never reaches the Level at all (ADR-0367).
  */
 function zonesToLayers(
   entries: readonly EditorZoneEntry[] | undefined,
   cols: number,
   rows: number,
 ): Zone[] {
-  return (entries ?? []).map((entry, index) => {
+  return zoneEntriesOnLevel(canonicalizeSingletonZones([...(entries ?? [])])).map((entry, index) => {
     const tiles: Array<[number, number]> = [];
     const seen = new Set<string>();
     for (const key of entry.tiles) {
@@ -72,7 +74,17 @@ function zonesToLayers(
     }
     tiles.sort((a, b) => a[1] - b[1] || a[0] - b[0]);
     const name = entry.name?.trim();
-    return { id: entry.id.trim() || `zone-${index + 1}`, ...(name ? { name } : {}), ...(entry.color ? { color: entry.color } : {}), type: entry.type, tiles };
+    const excludedPieceTypes = entry.type === 'player-spawn' && entry.excludedPieceTypes?.length
+      ? [...entry.excludedPieceTypes]
+      : undefined;
+    return {
+      id: entry.id.trim() || `zone-${index + 1}`,
+      ...(name ? { name } : {}),
+      ...(entry.color ? { color: entry.color } : {}),
+      type: entry.type,
+      ...(excludedPieceTypes ? { excludedPieceTypes } : {}),
+      tiles,
+    };
   });
 }
 
@@ -98,9 +110,16 @@ function zoneEntriesFromLayers(zones: Zone[] | undefined, cols: number, rows: nu
     });
     index += 1;
     const name = zone.name?.trim();
-    entries.push({ id: zone.id.trim() || `zone-${index}`, ...(name ? { name } : {}), ...(zone.color ? { color: zone.color } : {}), type: zone.type, tiles });
+    entries.push({
+      id: zone.id.trim() || `zone-${index}`,
+      ...(name ? { name } : {}),
+      ...(zone.color ? { color: zone.color } : {}),
+      type: zone.type,
+      ...(zone.excludedPieceTypes?.length && zone.type === 'player-spawn' ? { excludedPieceTypes: [...zone.excludedPieceTypes] } : {}),
+      tiles,
+    });
   }
-  return entries;
+  return canonicalizeSingletonZones(entries);
 }
 
 // Resolve a Studio tile id to its family (so its terrain material is known). Exported so the

@@ -6,7 +6,7 @@
 import type { BoardSize, PieceType, PromotionPieceType, Side, TerrainCell, TerrainType, UnitFacing, Vec } from './types';
 import { PROMOTION_PIECE_TYPES } from './types';
 import type { PlacedProp } from './props';
-import { UNIT_PALETTES, isPlayablePieceType, isUnitPalette, type UnitPalette } from './pieces';
+import { PLAYABLE_PIECE_TYPES, UNIT_PALETTES, isPlayablePieceType, isUnitPalette, type PlayablePieceType, type UnitPalette } from './pieces';
 import { parseEdgeKey, isOrthogonalPair } from './featureAutotile';
 
 // Terrain vocabulary now lives in the foundational type module so the editor's
@@ -23,8 +23,88 @@ export const CAMPAIGN_FORMAT_VERSION = 1;
 export const BOARD_COLS = { min: 1, max: 48 } as const;
 export const BOARD_ROWS = { min: 1, max: 48 } as const;
 
-export type ZoneType = 'region' | 'player-spawn' | 'enemy-spawn' | 'enemy-threat' | 'objective' | 'falling-rock' | 'pawn-promotion';
-export const ZONE_TYPES = ['region', 'player-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock', 'pawn-promotion'] as const satisfies readonly ZoneType[];
+export type ZoneType = 'region' | 'player-spawn' | 'player-pawn-spawn' | 'player-king-spawn' | 'enemy-spawn' | 'enemy-threat' | 'objective' | 'falling-rock' | 'pawn-promotion';
+export const ZONE_TYPES = ['region', 'player-spawn', 'player-pawn-spawn', 'player-king-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock', 'pawn-promotion'] as const satisfies readonly ZoneType[];
+
+/**
+ * A Run-player deployment zone that holds ONE piece type and nothing else (ADR-0367). Painting one
+ * gives that type squares of its own; barring the same type from the general Player Deployment
+ * zone breaks it off that pool entirely.
+ */
+export const DEDICATED_DEPLOYMENT_ZONE_TYPES = {
+  'player-pawn-spawn': 'pawn',
+  'player-king-spawn': 'king',
+} as const satisfies Partial<Record<ZoneType, PlayablePieceType>>;
+export const dedicatedDeploymentPieceType = (type: ZoneType): PlayablePieceType | undefined =>
+  (DEDICATED_DEPLOYMENT_ZONE_TYPES as Partial<Record<ZoneType, PlayablePieceType>>)[type];
+
+/**
+ * Whether a dedicated deployment zone is switched on, which is not a flag of its own: a type's
+ * zone exists exactly when that type is barred from the general Player Deployment zone (ADR-0367).
+ * One stored setting drives both halves, so they can never disagree — a type cannot be barred with
+ * nowhere to go, or hold a zone it was never broken off into.
+ */
+export function dedicatedDeploymentZoneIsOn(
+  type: ZoneType,
+  entries: readonly { type: ZoneType; excludedPieceTypes?: PlayablePieceType[] }[],
+): boolean {
+  const pieceType = dedicatedDeploymentPieceType(type);
+  if (!pieceType) return true;
+  const general = entries.find((entry) => entry.type === 'player-spawn');
+  return Boolean(general?.excludedPieceTypes?.includes(pieceType));
+}
+
+/**
+ * The zones that are actually ON the level. A dedicated zone the author has not switched on is
+ * retained in the editor's own store — its painted squares survive so switching back on returns
+ * the zone the author had — but it is not part of the Level: gameplay, validation, rendering and
+ * the Zones dropdown all read a level where it does not exist (ADR-0367).
+ */
+export function zoneEntriesOnLevel<Entry extends { type: ZoneType; excludedPieceTypes?: PlayablePieceType[] }>(
+  entries: readonly Entry[],
+): Entry[] {
+  return entries.filter((entry) => dedicatedDeploymentZoneIsOn(entry.type, entries));
+}
+
+/**
+ * Deployment geometry a level may hold at most one of (ADR-0367). Two Player Deployment zones —
+ * or two Enemy Deployment zones — were previously reachable through legacy content and pasted
+ * board codes, which left the author looking at duplicate objects that no UI could explain.
+ * Every reader canonicalizes duplicates into one zone per type instead of warning about them.
+ */
+export const SINGLETON_ZONE_TYPES = ['player-spawn', 'player-pawn-spawn', 'player-king-spawn', 'enemy-spawn'] as const satisfies readonly ZoneType[];
+export const isSingletonZoneType = (type: ZoneType): boolean => (SINGLETON_ZONE_TYPES as readonly ZoneType[]).includes(type);
+
+/**
+ * Fold every duplicate of a singleton deployment type into that type's first entry, keeping its
+ * id, name, color and flags while absorbing the later entries' squares. Painted geometry is never
+ * discarded — the extra zone OBJECT disappears, its squares do not — so an older level opens as
+ * the one-zone-per-side model without losing author work. It runs on the editor's `"x,y"` keyed
+ * entries, which every Level read and write passes through before `layers.zones` is projected.
+ */
+export function canonicalizeSingletonZones<Entry extends { type: ZoneType; tiles: string[] }>(
+  entries: readonly Entry[],
+): Entry[] {
+  const survivorIndexByType = new Map<ZoneType, number>();
+  const out: Entry[] = [];
+  for (const entry of entries) {
+    if (!isSingletonZoneType(entry.type)) {
+      out.push(entry);
+      continue;
+    }
+    const survivorIndex = survivorIndexByType.get(entry.type);
+    if (survivorIndex === undefined) {
+      survivorIndexByType.set(entry.type, out.length);
+      out.push(entry);
+      continue;
+    }
+    const survivor = out[survivorIndex];
+    const seen = new Set(survivor.tiles);
+    const added = entry.tiles.filter((tile) => !seen.has(tile));
+    if (added.length) out[survivorIndex] = { ...survivor, tiles: [...survivor.tiles, ...added] };
+  }
+  return out;
+}
 export type ZoneColor = 'teal' | 'blue' | 'red' | 'gold' | 'violet' | 'slate' | 'amber';
 export const ZONE_COLORS = ['teal', 'blue', 'red', 'gold', 'violet', 'slate', 'amber'] as const satisfies readonly ZoneColor[];
 
@@ -219,6 +299,14 @@ export interface Zone {
   /** Cosmetic editor/playtest tint only. Events/rules own all behavior. */
   color?: ZoneColor;
   type: ZoneType;
+/**
+   * Piece types the automatic placer may NOT put in this Player Deployment zone (ADR-0367). A pawn
+   * is column-bound and a King may want a keep of its own, so an author can break either type off
+   * the general pool and give it a dedicated zone instead. This steers only the automatic placer:
+   * a barred square still accepts every other piece, and a player placing that type by hand
+   * through Discipline may still use it.
+   */
+  excludedPieceTypes?: PlayablePieceType[];
   tiles: Array<[number, number]>;
 }
 
@@ -731,6 +819,11 @@ export function validateLevel(value: unknown): ValidateResult {
         }
         if ((z as { color?: unknown }).color !== undefined && !(ZONE_COLORS as readonly unknown[]).includes((z as { color?: unknown }).color)) {
           errors.push(`zone "${z.id}" color must be one of: ${ZONE_COLORS.join(', ')}`);
+          break;
+        }
+        const excluded = (z as { excludedPieceTypes?: unknown }).excludedPieceTypes;
+        if (excluded !== undefined && (!Array.isArray(excluded) || excluded.some((type) => !(PLAYABLE_PIECE_TYPES as readonly unknown[]).includes(type)))) {
+          errors.push(`zone "${z.id}" excludedPieceTypes must be an array of: ${PLAYABLE_PIECE_TYPES.join(', ')}`);
           break;
         }
         const badTile = z.tiles.find((t) => !Array.isArray(t) || t.length !== 2 || !Number.isInteger(t[0]) || !Number.isInteger(t[1]));
