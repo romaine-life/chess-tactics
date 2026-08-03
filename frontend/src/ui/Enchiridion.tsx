@@ -7,7 +7,6 @@ import type { BoardSize, Piece } from '../core/types';
 import {
   currentLiveMediaCatalog,
   liveMediaForSlot,
-  liveMediaSlotsWithPrefix,
   resolvedLiveMediaUrl,
 } from '@chess-tactics/board-render';
 import { PredrawnMoveHighlightPaint } from '../render/PredrawnMoveHighlightPaint';
@@ -61,6 +60,7 @@ import { ENCHIRIDION_SECTIONS, enchiridionSectionHref, type EnchiridionSection }
 import { installedUiMedia } from './installedUiMedia';
 import { RunRelicIcon } from './RunRelics';
 import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
+import { ataraxiaNumeralArtUrl } from './ataraxiaNumeral';
 import { InnerChromeBox, OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
 import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
 import { NavButton } from './shared/NavButton';
@@ -909,28 +909,6 @@ function AbilitiesSection({ framed }: { framed: boolean }): ReactElement {
  * is the only thing this record adds beyond the selector: locked tiers state the
  * completion that opens them rather than hiding.
  */
-/**
- * The carved-stone rung marks (ADR-0363), forged by `scripts/forge-ataraxia-numerals.mjs`
- * and installed as live media under one prefix. Read by PREFIX, not by required slot: an
- * installed art set is the enrichment, and the ladder must still render its rungs on a
- * deployment where the set has not been accepted yet. `liveMediaForSlot` would throw there
- * and take the whole section down for a mark.
- *
- * The slug rule matches the forge's: the baseline is `zero` because a bare `0.png` reads as
- * an index, every Roman rung is its own numeral lowercased.
- */
-const ATARAXIA_NUMERAL_SLOT_PREFIX = 'ui/kit/numerals/stone/';
-
-function ataraxiaNumeralSlot(numeral: string): string {
-  return `${ATARAXIA_NUMERAL_SLOT_PREFIX}${numeral === '0' ? 'zero' : numeral.toLowerCase()}.png`;
-}
-
-function ataraxiaNumeralArtUrl(numeral: string): string | null {
-  const slot = ataraxiaNumeralSlot(numeral);
-  return liveMediaSlotsWithPrefix(ATARAXIA_NUMERAL_SLOT_PREFIX)
-    .find((entry) => entry.slot === slot)?.media.immutableUrl ?? null;
-}
-
 function AtaraxiaSection({ framed }: { framed: boolean }): ReactElement {
   const [progression, setProgression] = useState<RunProgression>(EMPTY_RUN_PROGRESSION);
 

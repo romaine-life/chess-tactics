@@ -32,6 +32,26 @@ describe('levelBoard — props dual-write + round-trip', () => {
     expect(derived.props).toEqual({ '0,0': { propId: 'oak' }, '4,4': { propId: 'cottage' } });
   });
 
+  it('keeps a scenic (off-board) prop in boardCode while withholding it from gameplay', () => {
+    // ADR-0365: props may stand on the scenic apron. boardCode is lossless so the editor reopens
+    // the authored scene exactly; layers.props stays playable-only so the prop stamps no collider
+    // and the level still passes validateLevel's playable-bounds check.
+    const level = editorBoardToLevel(
+      board({ props: { '-2,-1': { propId: 'oak' } , '3,3': { propId: 'cottage' } } }),
+      { id: 'l5', name: 'Scenic prop' },
+    );
+
+    expect(level.layers.props).toEqual([{ x: 3, y: 3, propId: 'cottage' }]);
+    expect(decodeBoard(level.boardCode!)?.props).toEqual({
+      '-2,-1': { propId: 'oak' },
+      '3,3': { propId: 'cottage' },
+    });
+    expect(levelToEditorBoard(level).props).toEqual({
+      '-2,-1': { propId: 'oak' },
+      '3,3': { propId: 'cottage' },
+    });
+  });
+
   it('a prop-free editor board yields layers.props []', () => {
     const level = editorBoardToLevel(board(), { id: 'l3', name: 'Empty' });
     expect(level.layers.props).toEqual([]);

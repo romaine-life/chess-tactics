@@ -2,7 +2,7 @@ import { useCallback, useId, useRef, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { chromeFamilyPortalHost } from '../chromeFamilyRuntime';
-import { InnerChromeBox } from './ChromeBox';
+import { ChromeSurfaceFill, InnerChromeBox } from './ChromeBox';
 
 interface TooltipPosition {
   left: number;
@@ -18,7 +18,9 @@ function useTooltipPosition<T extends HTMLElement>() {
   const show = useCallback(() => {
     const r = ref.current?.getBoundingClientRect();
     if (!r) return;
-    // Below the trigger, clamped so a wide tip never runs off the viewport.
+    // Below the trigger, clamped so a wide tip never runs off the viewport. Every
+    // trigger measures the same way, including one in the persistent title bar: a
+    // tip sits the same distance from the thing it explains wherever that thing is.
     setPos({ left: Math.max(8, Math.min(r.left, window.innerWidth - 300)), top: r.bottom + 6 });
   }, []);
   const hide = useCallback(() => setPos(null), []);
@@ -76,8 +78,17 @@ function TooltipPopup({
         id={id}
         className={`infotip-pop tooltip-pop ${className}`.trim()}
       >
+        {/* A tip floats over live artwork with nothing behind it, so it beds on an
+            installed OPAQUE surface first and takes the inner role's tint over that.
+            The role's fill alone is a translucent tint — correct on a panel that
+            already has a surface, wrong here: the art underneath tinted the type and
+            made the same tooltip read differently in the title bar than on a screen. */}
+        <ChromeSurfaceFill surface="baseline-stone-blue" className="tooltip-pop-fill" />
+        <ChromeSurfaceFill role="inner" className="tooltip-pop-fill" />
         {title ? <strong className="tooltip-title">{title}</strong> : null}
-        {children}
+        {/* An ELEMENT, always: a bare text child cannot be lifted above the fills
+            and would be painted over by the tip's own bed. */}
+        <span className="tooltip-body">{children}</span>
       </InnerChromeBox>
     </span>
   ), portalHost ?? document.body);

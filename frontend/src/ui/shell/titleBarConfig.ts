@@ -23,6 +23,10 @@ export interface TitleBarConfig {
   barClass?: string;
   /** Render a center portal slot the screen fills via <TitleBarSlot region="center">. */
   centerSlot?: boolean;
+  /** Render the trailing route segment of the screen-name line, filled via
+   *  <TitleBarSlot region="route">. For a screen whose position within itself is
+   *  live state rather than address — the Run's phase reads as `Run › Shop`. */
+  routeSlot?: boolean;
   /** Render the bottom-centre "stud" portal slot — the decorative nailhead diamond
    *  becomes an interactive control the screen fills via <TitleBarSlot region="stud">.
    *  Absolutely positioned over the ornament, out of the grid, so it never shifts the
@@ -48,10 +52,14 @@ export function titleBarConfig(path: string, search = ''): TitleBarConfig | null
   if (path === '/play' || path.startsWith('/play/strategikon/') || isRunRoutePath(path)) {
     // studSlot lets a single-player battle turn the ornament diamond into a Retry button
     // (the Skirmish screen portals it in, netplay omitted).
+    const run = path.startsWith('/run');
     return {
-      screenName: path.startsWith('/run') ? 'Run' : playRouteScreenName({ path: '/play', search }),
+      screenName: run ? 'Run' : playRouteScreenName({ path: '/play', search }),
       barClass: 'skirmish-topbar',
       centerSlot: true,
+      // A Run's phase is document state, not address, so the Run screen names it
+      // in the route line rather than the shell reading it out of the URL.
+      routeSlot: run,
       studSlot: true,
     };
   }
