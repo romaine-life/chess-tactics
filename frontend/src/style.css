@@ -20317,7 +20317,7 @@ button.tileset-relationship-cell {
    glyph. The column is min-42px and grows to the widest numeral across every row, so a
    later VIII widens the seat for the whole ladder instead of stepping one row out. */
 .enchiridion-ataraxia-card {
-  grid-template-columns: minmax(42px, auto) minmax(0, 1fr);
+  grid-template-columns: minmax(56px, auto) minmax(0, 1fr);
 }
 
 /* The rung reads first, so it sits a clear step above the row's own heading rather than
@@ -20327,6 +20327,15 @@ button.tileset-relationship-cell {
   font-size: calc(var(--ds-text-xl) * 1.5);
   line-height: 1;
   text-align: center;
+}
+
+/* The forged rung is a 64px carved glyph; it seats at the same width the typed rung
+   occupies so the two render paths cannot shift the copy beside them. */
+.enchiridion-ataraxia-numeral.is-art {
+  block-size: 56px;
+  image-rendering: pixelated;
+  inline-size: 56px;
+  object-fit: contain;
 }
 
 /* A locked tier is still readable — the ladder is a reference, not a teaser. Its numeral

@@ -4,7 +4,7 @@ import { createBlankLevel } from '../core/level';
 import { levelToEditorBoard, unitsForGamePieces } from '../core/levelBoard';
 import { PIECE_LABEL, PLAYABLE_PIECE_TYPES, type PlayablePieceType } from '../core/pieces';
 import type { BoardSize, Piece } from '../core/types';
-import { liveMediaForSlot, resolvedLiveMediaUrl } from '@chess-tactics/board-render';
+import { liveMediaForSlot, liveMediaSlotsWithPrefix, resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import { PredrawnMoveHighlightPaint } from '../render/PredrawnMoveHighlightPaint';
 import { runCardArtSlot, runCardFlavor, runCardName } from '../run/cardNames';
 import {
@@ -890,6 +890,28 @@ function AbilitiesSection({ framed }: { framed: boolean }): ReactElement {
  * is the only thing this record adds beyond the selector: locked tiers state the
  * completion that opens them rather than hiding.
  */
+/**
+ * The carved-stone rung marks (ADR-0358), forged by `scripts/forge-ataraxia-numerals.mjs`
+ * and installed as live media under one prefix. Read by PREFIX, not by required slot: an
+ * installed art set is the enrichment, and the ladder must still render its rungs on a
+ * deployment where the set has not been accepted yet. `liveMediaForSlot` would throw there
+ * and take the whole section down for a mark.
+ *
+ * The slug rule matches the forge's: the baseline is `zero` because a bare `0.png` reads as
+ * an index, every Roman rung is its own numeral lowercased.
+ */
+const ATARAXIA_NUMERAL_SLOT_PREFIX = 'ui/kit/numerals/stone/';
+
+function ataraxiaNumeralSlot(numeral: string): string {
+  return `${ATARAXIA_NUMERAL_SLOT_PREFIX}${numeral === '0' ? 'zero' : numeral.toLowerCase()}.png`;
+}
+
+function ataraxiaNumeralArtUrl(numeral: string): string | null {
+  const slot = ataraxiaNumeralSlot(numeral);
+  return liveMediaSlotsWithPrefix(ATARAXIA_NUMERAL_SLOT_PREFIX)
+    .find((entry) => entry.slot === slot)?.media.immutableUrl ?? null;
+}
+
 function AtaraxiaSection({ framed }: { framed: boolean }): ReactElement {
   const [progression, setProgression] = useState<RunProgression>(EMPTY_RUN_PROGRESSION);
 
@@ -902,6 +924,14 @@ function AtaraxiaSection({ framed }: { framed: boolean }): ReactElement {
 
   const unlockedThrough = highestUnlockedAtaraxiaTier(progression);
   const completedThrough = progression.highestCompletedAtaraxiaTier;
+  // One catalog read for the whole list rather than a prefix scan per row.
+  const artUrl = useMemo(() => {
+    const byNumeral = new Map(ATARAXIA_TIERS.map((tier) => {
+      const { numeral } = ATARAXIA_BY_TIER[tier];
+      return [numeral, ataraxiaNumeralArtUrl(numeral)] as const;
+    }));
+    return (numeral: string) => byNumeral.get(numeral) ?? null;
+  }, []);
   return (
     <ReferenceSectionFrame
       chromeConsumer="enchiridion-ataraxia"
@@ -922,7 +952,16 @@ function AtaraxiaSection({ framed }: { framed: boolean }): ReactElement {
               className={`enchiridion-ataraxia-card${locked ? ' is-locked' : ''}`}
               key={tier}
             >
-              <span className="enchiridion-ataraxia-numeral">{definition.numeral}</span>
+              {artUrl(definition.numeral) ? (
+                <img
+                  className="enchiridion-ataraxia-numeral is-art"
+                  src={artUrl(definition.numeral) ?? undefined}
+                  alt={definition.numeral}
+                  draggable={false}
+                />
+              ) : (
+                <span className="enchiridion-ataraxia-numeral">{definition.numeral}</span>
+              )}
               <span>
                 <h3>{definition.title}</h3>
                 <p>{definition.effect}</p>

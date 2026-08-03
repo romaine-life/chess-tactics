@@ -68,8 +68,35 @@ in the Strategikon, registered in `sectionedShells.ts` like every other section.
   features, unit states — identify each row by its own icon. A numbered rung of one ladder
   has nothing for a repeated section glyph to distinguish, and lock state is stated in
   words by the standing line, so neither the section mark nor a lock icon enters a row.
-  The numeral column is `minmax(42px, auto)`: a later `VIII` widens the seat for the whole
+  The numeral column is `minmax(56px, auto)`: a later `VIII` widens the seat for the whole
   ladder rather than stepping one row out of line.
+
+### The rung mark is forged art, and the whole ladder is forged at once
+
+The typed rung is the game's own display face — correct, but it is type where every
+neighbouring section has a crafted mark. The owner selected a **carved-stone** numeral set
+(2026-08-02) over a gold-leaf alternative: quieter, closer to the existing chrome.
+
+- `scripts/forge-ataraxia-numerals.mjs` forges the set through the kit's method and gates
+  (ADR-0011/0013/0014/0026) — codex txt2img onto a flat chroma plate, verified against the
+  session ROLLOUT, despilled to alpha, low-fi downscaled to a 64×64 canvas.
+- **It forges `0` through `X` in one pass, not one rung per installed tier.** Ataraxia grows
+  by editing `ATARAXIA_BY_TIER` (ADR-0268); an art pass standing between a designed tier and
+  a shippable one would turn that edit into a two-day job. Every glyph after the first takes
+  its own style's `I` as a `-i` style reference, so the set holds one material, palette,
+  bevel and stroke weight instead of eleven independent inventions.
+- PixelLab is not an alternative here and was measured, not assumed: its image models
+  returned 16/16 non-letterforms for a single-numeral brief, and `create_font` emits 1-bit
+  monochrome, so a material description collapses to a flat shape. Codex draws typography;
+  the pixel-art generators do not.
+- **The set is read by PREFIX, and the typed numeral stays the fallback render path.**
+  `liveMediaForSlot` throws on an absent slot, which would take the entire section down on
+  any deployment where the candidates have not been accepted. An installed art set is the
+  enrichment; the ladder must render its rungs either way. Acceptance turns the art on with
+  no second code change.
+- Candidate upload is the generator's durable output; review, acceptance and activation
+  remain owner operations in the game-owned review instrument, which the admin CLI
+  deliberately cannot perform.
 - `ATARAXIA_TIERS` becomes a model export derived from `INSTALLED_ATARAXIA_MAX_TIER`. The
   preparation selector's hand-written `[0, 1]` is replaced by it, so the two surfaces
   cannot disagree about which tiers exist.
@@ -97,9 +124,15 @@ in the Strategikon, registered in `sectionedShells.ts` like every other section.
   besides Relics whose content varies per account.
 - Cost: the baseline's `0` is an Arabic digit at the head of a Roman sequence. Every
   antiquarian alternative needs explaining, which a row of a reference cannot carry.
+- Good: the ladder can reach Ataraxia X without another art pass, so installing a tier
+  stays a model edit.
 - Cost: the section's rail mark reuses the installed objective glyph, whose ink is
   thinner than its neighbours. Swapping it is a media-role change with no code
   consequence.
+- Cost: two render paths for one mark. The typed fallback is exercised on every
+  deployment whose numeral candidates are unaccepted, so it cannot be treated as dead.
+- Cost: a twelfth rung means forging `XI` before it looks like the others; the forge takes
+  `--only XI` and anchors to the installed `I`.
 
 ## More Information
 
