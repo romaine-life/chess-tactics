@@ -17,7 +17,7 @@ export {
   type RunRelicId,
 };
 
-export const RUN_FORMAT_VERSION = 12;
+export const RUN_FORMAT_VERSION = 13;
 export const GOLD_SCALE = 10;
 export const RUN_STARTING_GOLD = 8;
 export const RUN_STARTING_GOLD_TENTHS = RUN_STARTING_GOLD * GOLD_SCALE;
@@ -39,25 +39,43 @@ export type RunCardType = 'pestiferous' | 'concinnous' | 'tactical' | 'hieratic'
 export type RunUnitModifier = 'plagued';
 export const CACOCHYMIC_DISPLAY_NAME = 'Cacochymic';
 
+/**
+ * Each tier's presentation. `numeral` is the rung itself and `label` is that rung
+ * qualified by the ladder's name, for a surface that names one tier away from the
+ * ladder's own heading (ADR-0363). Roman numbering has no zero, so the baseline keeps
+ * the plain `0` ADR-0291 authored rather than an antiquarian stand-in for one.
+ */
 export const ATARAXIA_BY_TIER: Readonly<Record<AtaraxiaTier, Readonly<{
   tier: AtaraxiaTier;
+  numeral: string;
   label: string;
   title: string;
   effect: string;
 }>>> = Object.freeze({
   0: Object.freeze({
     tier: 0,
+    numeral: '0',
     label: 'Ataraxia 0',
     title: 'The Untroubled Mind',
     effect: 'Standard Run rules. Shop cards may be Tactical, Concinnous or Hieratic but are never Pestiferous.',
   }),
   1: Object.freeze({
     tier: 1,
+    numeral: 'I',
     label: 'Ataraxia I',
     title: 'The Great Mortality',
     effect: `About one in eight shop cards is Pestiferous. Its marked ${CACOCHYMIC_DISPLAY_NAME} unit is lost after each victorious Battle, then another is marked.`,
   }),
 });
+
+/**
+ * Every installed tier in ladder order (ADR-0268 — one linear, cumulative sequence).
+ * The Run preparation selector and the Enchiridion's Ataraxia reference both read this
+ * list, so installing a tier cannot appear in one and be forgotten by the other.
+ */
+export const ATARAXIA_TIERS: readonly AtaraxiaTier[] = Object.freeze(
+  Array.from({ length: INSTALLED_ATARAXIA_MAX_TIER + 1 }, (_, tier) => tier as AtaraxiaTier),
+);
 
 export type PurchasablePieceType = 'pawn' | 'knight' | 'bishop' | 'rook' | 'queen';
 export type RunArmyPieceType = PurchasablePieceType | 'king';
@@ -69,6 +87,43 @@ export function runAbilityDisplayName(ability: RunAbility): string {
   if (ability === 'marshalled') return AGMINATE_DISPLAY_NAME;
   return `${ability.slice(0, 1).toUpperCase()}${ability.slice(1)}`;
 }
+
+/**
+ * What a state means to the player, in one vocabulary (ADR-0339). The Army ledger's
+ * ability tips and the card face's contents markers both read this, so a state cannot
+ * come to mean two things depending on where it is shown. Positioned and Agminate read
+ * per piece because their deployment rule genuinely differs by piece.
+ */
+export function runAbilityDescription(ability: RunAbility, unit: RunArmyPieceType): string {
+  if (ability === 'discipline') {
+    return runAbilityGeneralDescription('discipline');
+  }
+  if (ability === 'positioned') {
+    if (unit === 'pawn') return 'Prefers the front row during automatic deployment.';
+    if (unit === 'rook') return 'Prefers an outer back-row square during automatic deployment.';
+    if (unit === 'bishop' || unit === 'king') return 'Prefers the back row during automatic deployment.';
+    return runAbilityGeneralDescription('positioned');
+  }
+  if (unit === 'king') return 'Prefers a board-edge square in the player placement zone.';
+  if (unit === 'rook') return 'Prefers the established King-flank and corner formation.';
+  if (unit === 'bishop') return 'Prefers a square color opposite another Bishop when possible.';
+  return runAbilityGeneralDescription('marshalled');
+}
+
+/**
+ * The same rule with no unit in hand — what the keyword means before it is attached to a
+ * piece (ADR-0370). `runAbilityDescription` states the piece-specific case and falls back
+ * to this one, so the glossary and the per-unit tip cannot drift apart.
+ */
+export function runAbilityGeneralDescription(ability: RunAbility): string {
+  if (ability === 'discipline') {
+    return 'May be deliberately placed in the player zone before random deployment.';
+  }
+  if (ability === 'positioned') return 'Prefers its piece-specific region during automatic deployment.';
+  return 'Prefers its piece-specific station during automatic deployment.';
+}
+
+export const CACOCHYMIC_DESCRIPTION = 'Will be permanently lost after the next victorious Battle.';
 
 /**
  * The four causal card properties and the unit state each one bestows (ADR-0339). Card
@@ -217,7 +272,13 @@ export interface RunWarSnapshot {
   battles: RunWarBattleSnapshot[];
 }
 
-export type RunPhase = 'deployment' | 'battle' | 'shop' | 'victory';
+/**
+ * 'bona-vacantia' opens a Conflict: the player takes one relic before the shop that leads
+ * into the Conflict's first Battle. It replaced the loot relic that used to be won at a
+ * Conflict's END, inside the shop -- same three-per-run cadence, opposite end, so the
+ * choice is made looking forward rather than handed out as a reward.
+ */
+export type RunPhase = 'bona-vacantia' | 'deployment' | 'battle' | 'shop' | 'victory';
 
 export interface RunDeploymentState {
   battleIndex: number;
@@ -247,8 +308,6 @@ export interface RunShopState {
   victoryGoldTenths: number;
   cardOffers: RunCardOffer[];
   purchasedCardOfferIds: string[];
-  lootRelicOffers: RunRelicId[];
-  chosenLootRelicId: RunRelicId | null;
   paidRelicOffer: RunRelicId | null;
   paidRelicBought: boolean;
   soldUnits: Array<{
@@ -256,6 +315,20 @@ export interface RunShopState {
     proceedsTenths: number;
   }>;
   entrySnapshot: RunShopEntrySnapshot;
+}
+
+/**
+ * The relic offer that opens a Conflict. `kind` says which shop this hands off to once a
+ * relic is taken: the run's pinned opening shop, or the post-battle shop that follows the
+ * Battle just fought. `victoryGoldTenths` is carried through because that shop reports it
+ * and the Battle's gold is banked before this screen, not after it.
+ */
+export interface RunVacantiaState {
+  kind: 'opening' | 'post-battle';
+  conflictIndex: number;
+  afterBattleIndex: number;
+  victoryGoldTenths: number;
+  offers: RunRelicId[];
 }
 
 export interface RunShopEntrySnapshot {
@@ -294,6 +367,7 @@ export interface RunDocument {
   deployment: RunDeploymentState | null;
   battleRuntime: RunBattleRuntime | null;
   shop: RunShopState | null;
+  vacantia: RunVacantiaState | null;
 }
 
 /** Stable identity for the one playable battle inside a Run. Level ids are not
@@ -639,9 +713,38 @@ export function createRun(
     deployment: null,
     battleRuntime: null,
     shop: null,
+    vacantia: null,
   };
+  // A Conflict that ends in loot opens with Bona Vacantia; a war with no loot battles at
+  // all still starts straight in the shop, exactly as it used to.
+  if (conflictOpensWithVacantia(war, 0)) {
+    const reveal = revealRelics(run, 3, 'vacantia-relics', 0);
+    return {
+      ...run,
+      phase: 'bona-vacantia',
+      seenRelics: reveal.seenRelics,
+      vacantia: {
+        kind: 'opening',
+        conflictIndex: 0,
+        afterBattleIndex: 0,
+        victoryGoldTenths: 0,
+        offers: reveal.offers,
+      },
+    };
+  }
+  return openOpeningShop(run, seed, ataraxiaTier);
+}
+
+/**
+ * The run's pinned opening shop. Held apart from createRun because Bona Vacantia now sits
+ * in front of it: the relic is taken first, and only then is this shop built -- so its
+ * entry snapshot records the army and relics the player actually walks in with.
+ */
+function openOpeningShop(run: RunDocument, seed: number, ataraxiaTier: AtaraxiaTier): RunDocument {
   return {
     ...run,
+    phase: 'shop',
+    vacantia: null,
     shop: {
       kind: 'opening',
       afterBattleIndex: 0,
@@ -649,14 +752,22 @@ export function createRun(
       victoryGoldTenths: 0,
       cardOffers: openingShopOffers(seed, ataraxiaTier),
       purchasedCardOfferIds: [],
-      lootRelicOffers: [],
-      chosenLootRelicId: null,
       paidRelicOffer: null,
       paidRelicBought: false,
       soldUnits: [],
       entrySnapshot: createShopEntrySnapshot(run, false),
     },
   };
+}
+
+/**
+ * Whether the Conflict beginning at `firstBattleIndex` opens with a relic. A Conflict runs
+ * up to and including its loot Battle, so a stretch with no loot Battle left in it is the
+ * run's final approach and gets nothing -- which is what keeps the last Battle relic-free
+ * without hardcoding a Battle number.
+ */
+function conflictOpensWithVacantia(war: RunWarSnapshot, firstBattleIndex: number): boolean {
+  return war.battles.slice(firstBattleIndex).some((battle) => battle.loot === true);
 }
 
 function touch(run: RunDocument): RunDocument {
@@ -981,7 +1092,14 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
   if (raw.phase === 'shop' && Number(raw.formatVersion) !== RUN_FORMAT_VERSION) {
     throw new Error('Older Run Shop documents are unsupported.');
   }
+  // Format 13 moved the Conflict relic out of the shop and into its own phase. A document
+  // written before that has no offer to show and a shop that still expects a loot pick, so
+  // it cannot be carried forward -- it is discarded rather than half-migrated.
+  if (raw.phase === 'bona-vacantia' && Number(raw.formatVersion) !== RUN_FORMAT_VERSION) {
+    throw new Error('Older Run Shop documents are unsupported.');
+  }
   let next = run;
+  if (next.vacantia === undefined) next = { ...next, vacantia: null };
   if ('draftOffers' in raw || 'chosenDraftId' in raw) {
     const withoutDraft = { ...raw } as Record<string, unknown>;
     delete withoutDraft.draftOffers;
@@ -1321,10 +1439,26 @@ export function markReservistDeployed(run: RunDocument, unitId: string): RunDocu
   });
 }
 
+/**
+ * Gold a relic pays the moment it is taken. Data rather than branches because the server
+ * has to verify it independently: the opening Shop's gold is pinned value-by-value, and
+ * Bona Vacantia now runs BEFORE that shop, so an opening relic can legitimately move the
+ * number the contract checks. Both sides read this map, so neither can drift.
+ */
+export const RUN_RELIC_IMMEDIATE_GOLD: Readonly<Partial<Record<RunRelicId, number>>> = Object.freeze({
+  'congressional-approval': 5,
+  'occult-dagger': 10,
+});
+
+/** The gold these relics have already paid out, in tenths. */
+export function relicImmediateGoldTenths(relics: readonly RunRelicId[]): number {
+  return relics.reduce((total, relic) => total + (RUN_RELIC_IMMEDIATE_GOLD[relic] ?? 0) * GOLD_SCALE, 0);
+}
+
 function immediateRelic(run: RunDocument, relic: RunRelicId, targetUnitId?: string): RunDocument {
   let next = run;
-  if (relic === 'congressional-approval') next = { ...next, goldTenths: next.goldTenths + 5 * GOLD_SCALE };
-  if (relic === 'occult-dagger') next = { ...next, goldTenths: next.goldTenths + 10 * GOLD_SCALE };
+  const payout = RUN_RELIC_IMMEDIATE_GOLD[relic];
+  if (payout) next = { ...next, goldTenths: next.goldTenths + payout * GOLD_SCALE };
   if (relic === 'conscription-notice' && targetUnitId) {
     next = {
       ...next,
@@ -1433,20 +1567,46 @@ export function openShop(run: RunDocument, survivingUnitIds: readonly string[]):
   if (finalBattle) {
     return touch({ ...deteriorated, phase: 'victory', shop: null, deployment: null, battleRuntime: null });
   }
-  let next: RunDocument = {
+  const banked: RunDocument = {
     ...deteriorated,
-    phase: 'shop',
     goldTenths: run.goldTenths + victoryGoldTenths + rifleTenths,
     deployment: null,
     battleRuntime: null,
   };
+  // A loot Battle closes a Conflict, so the next one opens here -- before the shop, so the
+  // player inherits the relic and then decides what to spend on. The Battle's gold is
+  // already banked above, which is why this screen can precede the shop without the shop's
+  // entry snapshot going stale.
+  const closedConflict = banked.war.battles[banked.battleIndex]?.loot === true;
+  if (closedConflict && conflictOpensWithVacantia(banked.war, banked.battleIndex + 1)) {
+    const reveal = revealRelics(banked, 3, 'vacantia-relics', banked.battleIndex + 1);
+    return touch({
+      ...banked,
+      phase: 'bona-vacantia',
+      seenRelics: reveal.seenRelics,
+      shop: null,
+      vacantia: {
+        kind: 'post-battle',
+        conflictIndex: banked.conflictIndex + 1,
+        afterBattleIndex: banked.battleIndex,
+        victoryGoldTenths,
+        offers: reveal.offers,
+      },
+    });
+  }
+  return touch(openPostBattleShop(banked, victoryGoldTenths));
+}
+
+/**
+ * The shop that follows a Battle. Split out of openShop because Bona Vacantia can land in
+ * between: when a Conflict closes, the relic screen comes first and then hands off here.
+ */
+function openPostBattleShop(run: RunDocument, victoryGoldTenths: number): RunDocument {
+  let next: RunDocument = { ...run, phase: 'shop', vacantia: null };
   const cardCount = hasRelic(next, 'quartermasters-ledger') ? 4 : 3;
   const cardOffers = shuffled(RUN_CARD_DECK, mixSeed(next.seed, 'shop-cards', next.battleIndex))
     .slice(0, cardCount)
     .map((card, slotIndex) => createRunCardOffer(next, card, next.battleIndex, slotIndex));
-  const loot = next.war.battles[next.battleIndex]?.loot === true;
-  const lootReveal = loot ? revealRelics(next, 3, 'loot-relics', next.battleIndex) : { offers: [], seenRelics: next.seenRelics };
-  next = { ...next, seenRelics: lootReveal.seenRelics };
   let paidRelicOffer: RunRelicId | null = null;
   let paidRelicBought = false;
   if (hasRelic(next, 'merchants-shopkey')) {
@@ -1470,7 +1630,7 @@ export function openShop(run: RunDocument, survivingUnitIds: readonly string[]):
     }
   }
   const entrySnapshot = createShopEntrySnapshot(next, paidRelicBought);
-  return touch({
+  return {
     ...next,
     shop: {
       kind: 'post-battle',
@@ -1479,14 +1639,12 @@ export function openShop(run: RunDocument, survivingUnitIds: readonly string[]):
       victoryGoldTenths,
       cardOffers,
       purchasedCardOfferIds: [],
-      lootRelicOffers: lootReveal.offers,
-      chosenLootRelicId: null,
       paidRelicOffer,
       paidRelicBought,
       soldUnits: [],
       entrySnapshot,
     },
-  });
+  };
 }
 
 export function buyCard(run: RunDocument, offerId: string): RunDocument {
@@ -1591,7 +1749,6 @@ export function resetShop(run: RunDocument): RunDocument {
     shop: {
       ...run.shop,
       purchasedCardOfferIds: [],
-      chosenLootRelicId: null,
       paidRelicBought: snapshot.paidRelicBought,
       soldUnits: [],
     },
@@ -1605,7 +1762,6 @@ export function shopHasChanges(run: RunDocument): boolean {
     run.goldTenths !== snapshot.goldTenths
     || run.nextArmyUnitSequence !== snapshot.nextArmyUnitSequence
     || run.shop.purchasedCardOfferIds.length > 0
-    || run.shop.chosenLootRelicId !== null
     || run.shop.paidRelicBought !== snapshot.paidRelicBought
     || run.shop.soldUnits.length > 0
     || JSON.stringify(run.army) !== JSON.stringify(snapshot.army)
@@ -1616,16 +1772,22 @@ export function shopHasChanges(run: RunDocument): boolean {
 }
 
 export function canLeaveShop(run: RunDocument): boolean {
-  if (run.phase !== 'shop' || !run.shop) return false;
-  if (run.shop.lootRelicOffers.length > 0 && !run.shop.chosenLootRelicId) return false;
-  return true;
+  return run.phase === 'shop' && Boolean(run.shop);
 }
 
-export function takeLootRelic(run: RunDocument, relic: RunRelicId, targetUnitId?: string): RunDocument {
-  if (run.phase !== 'shop' || !run.shop || run.shop.chosenLootRelicId || !run.shop.lootRelicOffers.includes(relic)) return run;
+/**
+ * Take the Conflict's relic. Mandatory, as the loot relic was: there is no way past this
+ * screen without one, so taking it is also what opens the shop behind it.
+ */
+export function takeVacantiaRelic(run: RunDocument, relic: RunRelicId, targetUnitId?: string): RunDocument {
+  if (run.phase !== 'bona-vacantia' || !run.vacantia || !run.vacantia.offers.includes(relic)) return run;
   const acquired = acquireRelic(run, relic, targetUnitId);
   if (acquired === run) return run;
-  return touch({ ...acquired, shop: { ...run.shop, chosenLootRelicId: relic } });
+  const vacantia = run.vacantia;
+  const opened = vacantia.kind === 'opening'
+    ? openOpeningShop(acquired, acquired.seed, acquired.ataraxiaTier)
+    : openPostBattleShop(acquired, vacantia.victoryGoldTenths);
+  return touch(opened);
 }
 
 export function buyPaidRelic(run: RunDocument, targetUnitId?: string): RunDocument {

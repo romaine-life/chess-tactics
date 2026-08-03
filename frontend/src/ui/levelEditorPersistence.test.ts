@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   editorDocumentWorkspaceForLevelId,
   levelEditorHrefForDocument,
+  preservedEditorRecoveryIsRedundant,
+  provisionalEditorRecoveryIsRedundant,
+  shouldAdoptPreservedEditorBranch,
   shouldRestoreLocalEditorRecovery,
 } from './levelEditorPersistence';
 
@@ -196,5 +199,99 @@ describe('durable document editor href', () => {
       'https://example.test/editor/level?levelId=temporary&document=old-doc&kind=unit&brush=rook',
       { levelId: 'off-l-new-level', documentId: 'new-doc' },
     )).toBe('/editor/level?levelId=off-l-new-level&document=new-doc&kind=unit&brush=rook');
+  });
+});
+
+describe('preserved editor recovery cleanup', () => {
+  it('clears a branch whose content already matches the acknowledged document', () => {
+    expect(preservedEditorRecoveryIsRedundant({
+      recoverySignature: 'same-board',
+      documentSignature: 'same-board',
+    })).toBe(true);
+  });
+
+  it('keeps a divergent branch instead of destroying unsent work', () => {
+    expect(preservedEditorRecoveryIsRedundant({
+      recoverySignature: 'ten-by-seven-with-fences',
+      documentSignature: 'empty-six-by-six',
+    })).toBe(false);
+  });
+
+  it('keeps a branch whose signature could not be computed', () => {
+    expect(preservedEditorRecoveryIsRedundant({
+      recoverySignature: undefined,
+      documentSignature: 'empty-six-by-six',
+    })).toBe(false);
+    expect(preservedEditorRecoveryIsRedundant({
+      recoverySignature: 'ten-by-seven-with-fences',
+      documentSignature: undefined,
+    })).toBe(false);
+  });
+
+  it('clears a provisional source only once it was forwarded into the document', () => {
+    expect(provisionalEditorRecoveryIsRedundant({
+      isCurrentPageDraft: false,
+      forwardedIntoDocument: true,
+    })).toBe(true);
+  });
+
+  it('keeps an offline provisional draft that was never forwarded', () => {
+    expect(provisionalEditorRecoveryIsRedundant({
+      isCurrentPageDraft: false,
+      forwardedIntoDocument: false,
+    })).toBe(false);
+  });
+
+  it('never discards the current page\u2019s own draft', () => {
+    expect(provisionalEditorRecoveryIsRedundant({
+      isCurrentPageDraft: true,
+      forwardedIntoDocument: true,
+    })).toBe(false);
+  });
+});
+
+describe('adopting an unsent editor branch after sign-in', () => {
+  const signedInOnCleanDocument = {
+    openedAsWriter: true,
+    preservedBranchDiverged: true,
+    documentDirty: false,
+    restoringLocalRecovery: false,
+    restoringRouteSnapshot: false,
+  };
+
+  it('adopts offline work when the resolved working copy is clean', () => {
+    expect(shouldAdoptPreservedEditorBranch(signedInOnCleanDocument)).toBe(true);
+  });
+
+  it('leaves the branch preserved when the document already holds unsaved server work', () => {
+    expect(shouldAdoptPreservedEditorBranch({
+      ...signedInOnCleanDocument,
+      documentDirty: true,
+    })).toBe(false);
+  });
+
+  it('does not adopt when the branch matches the document', () => {
+    expect(shouldAdoptPreservedEditorBranch({
+      ...signedInOnCleanDocument,
+      preservedBranchDiverged: false,
+    })).toBe(false);
+  });
+
+  it('yields to a claimed local recovery or a route snapshot', () => {
+    expect(shouldAdoptPreservedEditorBranch({
+      ...signedInOnCleanDocument,
+      restoringLocalRecovery: true,
+    })).toBe(false);
+    expect(shouldAdoptPreservedEditorBranch({
+      ...signedInOnCleanDocument,
+      restoringRouteSnapshot: true,
+    })).toBe(false);
+  });
+
+  it('never adopts without write authority', () => {
+    expect(shouldAdoptPreservedEditorBranch({
+      ...signedInOnCleanDocument,
+      openedAsWriter: false,
+    })).toBe(false);
   });
 });

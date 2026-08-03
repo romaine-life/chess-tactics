@@ -67,9 +67,11 @@ export type SceneViewId =
   | 'enchiridion-card-types'
   | 'enchiridion-relics'
   | 'enchiridion-abilities'
+  | 'enchiridion-ataraxia'
   | 'strategikon'
   | 'strategikon-enchiridion'
   | 'strategikon-prosopography'
+  | 'strategikon-chartulary'
   | 'strategikon-lipsanotheca'
   | 'strategikon-reference'
   | 'lobbies'
@@ -178,6 +180,7 @@ export const SCENE_DEFINITIONS = Object.freeze({
   enchiridionCardTypes: defineScene({ id: 'enchiridion/card-types', parent: 'enchiridion', slot: 'enchiridion-content', view: 'enchiridion-card-types' }),
   enchiridionRelics: defineScene({ id: 'enchiridion/relics', parent: 'enchiridion', slot: 'enchiridion-content', view: 'enchiridion-relics' }),
   enchiridionAbilities: defineScene({ id: 'enchiridion/abilities', parent: 'enchiridion', slot: 'enchiridion-content', view: 'enchiridion-abilities' }),
+  enchiridionAtaraxia: defineScene({ id: 'enchiridion/ataraxia', parent: 'enchiridion', slot: 'enchiridion-content', view: 'enchiridion-ataraxia' }),
   // The Strategikon is one authored shell mounted under two ancestries (Battle's
   // `gameplay` root and the Run's `run/workspace` slot). Its sections are authored
   // scenes in their own slot, so a section change is a director transition on both
@@ -185,6 +188,7 @@ export const SCENE_DEFINITIONS = Object.freeze({
   strategikon: defineScene({ id: 'strategikon', parent: null, slot: 'gameplay-content', view: 'strategikon' }),
   strategikonEnchiridion: defineScene({ id: 'strategikon/enchiridion', parent: 'strategikon', slot: 'strategikon-content', view: 'strategikon-enchiridion' }),
   strategikonProsopography: defineScene({ id: 'strategikon/prosopography', parent: 'strategikon', slot: 'strategikon-content', view: 'strategikon-prosopography' }),
+  strategikonChartulary: defineScene({ id: 'strategikon/chartulary', parent: 'strategikon', slot: 'strategikon-content', view: 'strategikon-chartulary' }),
   strategikonLipsanotheca: defineScene({ id: 'strategikon/lipsanotheca', parent: 'strategikon', slot: 'strategikon-content', view: 'strategikon-lipsanotheca' }),
   strategikonReferenceUnits: defineScene({ id: 'strategikon/enchiridion/units', parent: 'strategikon/enchiridion', slot: 'strategikon-reference-content', view: 'strategikon-reference' }),
   strategikonReferenceTerrain: defineScene({ id: 'strategikon/enchiridion/terrain', parent: 'strategikon/enchiridion', slot: 'strategikon-reference-content', view: 'strategikon-reference' }),
@@ -192,6 +196,7 @@ export const SCENE_DEFINITIONS = Object.freeze({
   strategikonReferenceCardTypes: defineScene({ id: 'strategikon/enchiridion/card-types', parent: 'strategikon/enchiridion', slot: 'strategikon-reference-content', view: 'strategikon-reference' }),
   strategikonReferenceRelics: defineScene({ id: 'strategikon/enchiridion/relics', parent: 'strategikon/enchiridion', slot: 'strategikon-reference-content', view: 'strategikon-reference' }),
   strategikonReferenceAbilities: defineScene({ id: 'strategikon/enchiridion/abilities', parent: 'strategikon/enchiridion', slot: 'strategikon-reference-content', view: 'strategikon-reference' }),
+  strategikonReferenceAtaraxia: defineScene({ id: 'strategikon/enchiridion/ataraxia', parent: 'strategikon/enchiridion', slot: 'strategikon-reference-content', view: 'strategikon-reference' }),
   lobbies: defineScene({ id: 'lobbies', parent: 'main-menu', slot: 'menu-destination', view: 'lobbies' }),
   studio: defineScene({ id: 'studio', parent: null, slot: 'root', view: 'studio' }),
   predrawnReference: defineScene({ id: 'predrawn-reference', parent: null, slot: 'root', view: 'predrawn-reference' }),

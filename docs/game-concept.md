@@ -241,14 +241,21 @@ these.
   rules, the filterable core card deck, affected card types, all relics, and the
   behavior of the current unit abilities: Discipline, Positioned, Agminate,
   and Cacochymic. Card filters combine exact gold value with
-  contained unit type. The Card Types reference uses the third column for its
-  four affected-type names and the fourth for one selected shared card face,
-  temporarily using The Volunteer for each; Pestiferous, Concinnous, Tactical
-  and Hieratic all state their accepted effects, and none remains provisional
+  contained unit type. Cards uses no fourth column: its terminal third column
+  fills the remaining Enchiridion canvas with real card faces in a vertically
+  scrolling gallery, while individual card addresses focus those faces without
+  introducing a separate detail (ADR-0364). The Card Types reference uses the
+  third column for its four affected-type names and the fourth for one selected
+  shared card face, temporarily using The Volunteer for each; Pestiferous,
+  Concinnous, Tactical and Hieratic all state their accepted effects, and none
+  remains provisional
   (ADR-0313, ADR-0315, ADR-0329, ADR-0339, ADR-0341, ADR-0345). During Battle,
   the Controls title bar opens **Strategikon** over the board without unmounting
-  the fight; its Martial Prosopography and Lipsanotheca expose the persistent
-  army and held relics beside the same Enchiridion (ADR-0231).
+  the fight; its Martial Prosopography, Chartulary and Lipsanotheca expose the
+  persistent army, the cards bought so far, and held relics beside the same
+  Enchiridion (ADR-0231). The Chartulary is the Cards gallery itself — same
+  filters, same gold groups, same faces, no annotation beside them — and the
+  only difference is which cards are in it (ADR-0371).
 - Play defaults to one activity-agnostic, descriptor-free **Continue** rail
   destination. Its column resumes in place and shows exactly one activity: the
   most recently updated resumable one, with its facts and one final **Play**

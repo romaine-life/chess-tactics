@@ -1,5 +1,69 @@
 # Working in this repo
 
+## Hand over a link, every turn
+
+**End every turn with a clickable markdown link to the exact running surface your work can be
+judged on**, unless there is a real reason none exists (a pure question, a refactor with no visible
+surface, a turn that produced nothing to look at). This is not a nicety and not a substitute for
+doing the work — it is how the work gets reviewed at all.
+
+**Nelson usually will not read the prose.** He scans for the link, clicks it, and reads the state of
+your work off the screen. Write with that in mind. The direct consequence:
+
+> **Never hand over a link he will open and have to ask "what is this?"**
+
+If the link would land him somewhere ambiguous, the answer is *not* a longer paragraph explaining
+it. It is one of exactly two things: **do more work** so the surface speaks for itself, or **ask him
+the intent question** you have been avoiding. A vague link plus an explanation is the failure mode,
+not the fix.
+
+Two more rules that follow from the same place:
+
+- **A link, never a command.** Give the bare URL as a markdown link. Do not wrap it in a
+  ```bash fence with `start ""` / `open` / `xdg-open`, and do not tell him to run anything to see
+  a page. Shell fences are for commands he asked for.
+- **Maximum specificity.** Link the deepest address that puts him *inside* the thing to review —
+  the right tab, the right phase, the right board, with the right brush armed. Landing one click
+  short (the default tab, the picker instead of the board, the editor instead of the running test)
+  makes him do the navigating, which is the thing the link was for.
+
+### The repo is built to make specific links possible
+
+Most surfaces encode their state in the address. Read the route contract and build the URL; a click
+path is at best extra context, never the deliverable.
+
+**Run states — a link that CRAFTS what it shows (the common case).** `POST /api/active-run/craft`
+mints `/run/craft/<id>`. Opening it *sets* the active Run to that state, from whatever the Run has
+since become — so it is a repeatable restart button: he finds a bug on the state you sent, presses
+the same link, and is back at it without asking you. Lead with one of these while troubleshooting,
+not just at the end. Full grammar under "Crafting a Run state to link to" below.
+
+**Run states — a one-shot identity address (rare).** `/run?run=<id>` only asserts a Run already in
+hand and cannot restore one that has moved on. Use it only when you specifically mean "the Run as it
+stands", never as the handoff for a state you crafted.
+
+**Deep navigation is linkable nearly everywhere.** Non-exhaustive, all verified in-tree:
+
+- **Level Editor panels** — `?layer=<id>` opens straight on a panel: `board`, `camera`,
+  `level-artwork`, `tile`, `generate`, `paths`, `fence`, `wall`, `subterrain`, `wallart`, `unit`,
+  `placed-art`, `cover`, `zone`, `rules`, `status`, `history`. `?kind=<brush>` arms a brush and
+  `?brush=<id>` pre-selects one; `layer=prop` and `layer=doodad` are aliases that open Placed Art
+  with that brush kind. Props are **Placed Art → Props**, so a prop link is
+  `/editor/level?layer=prop&brush=oak&board=<code>` — `/editor/level?board=<code>` alone lands on
+  Board and makes him go find them.
+- **Level Editor events** — `layer=rules&eventsEditor=1`, plus `eventsTab=deployment|other`.
+- **A whole board from a URL** — `?board=<code>` on the editor (see `ui/boardCode.encodeBoard`;
+  the wire is base64url JSON, `c`/`r` dims, `f` fill tile, `t` tiles, `u` units, `p` props keyed by
+  anchor cell). Tile ids are catalog ids like `grass-surf-0`, not family names.
+- **A playable board-link** — `/play?board=<code>&obj=capture-all&returnTo=<editor url>` boots
+  straight into the live game with a "Back to editor" so tweak → play → back is a loop. Prefer this
+  over the editor when the thing to judge is how it PLAYS.
+- **Studio** — `mode=catalog|lab|viewer`, `cat=`, `vk=`, `lab=`, and per-item params; see
+  "Reaching a specific UI state" below.
+
+When a surface you need is not addressable, that is worth fixing — an unlinkable review surface
+costs him a navigation every single time it comes up.
+
 ## Agent backend rule
 
 Codex environment setup obtains a browser-approved `auth.romaine.life` device grant and stores it
@@ -50,7 +114,12 @@ There is no owner-facing Start editing, Follow latest, or Take over flow.
 A page close, process loss, stale heartbeat, or expired legacy lease metadata must not create a
 recovery branch or block a later page. Browser storage is only a bounded crash/offline retry buffer
 for the same working copy. It must not become a second document identity or routine cleanup queue.
-Authenticated automated verification remains an explicitly observing session and cannot write.
+
+Automated verification opens an **observing** session against a real document — screenshots and
+checks read it, they never write to it. That protects the documents Nelson actually cares about; it
+is not a ban on writing. When proving a behaviour genuinely needs a writer session, create a
+throwaway level, prove it there, and delete it afterwards. Do not report work as merely "wired,
+unverified" when a scratch level would have settled it.
 
 Authenticated edits autosave to the durable working copy. **Save** promotes that copy to the
 canonical Level, and **Discard changes** restores it from canonical. Copying the browser URL remains
@@ -222,6 +291,12 @@ curl -X POST <url>/api/active-run/craft -H 'content-type: application/json' -d '
 Same fields as the address grammar below, plus what an address cannot carry: units as objects
 with `abilities`, offers as objects. An unknown field is refused, not ignored.
 
+`cards` is the field for a Run that has already BOUGHT things — the Chartulary, and anything
+downstream of a purchase. Each is bought for real in the opening Shop and carried through every
+Battle before the target, so it arrives with a history (units lost, Pestiferous cards
+deteriorated) rather than as a fresh purchase; gold is restored afterwards. It cannot be given
+beside `army`, which replaces the roster those cards put there — use `add` for extra units.
+
 **The `url` it answers with — `/run/craft/<id>` — is the link to hand over, exactly as given.**
 The id is all it carries; the spec lives on the server, so the address stays short however large
 the spec grows, survives copy-paste intact, and re-crafts on every open. The id is the
@@ -251,8 +326,14 @@ hand-authored one-off leaves a durable link behind:
   names, chess letters, or a bare deck id (`pawn,pawn,knight` = `p,p,n` = `ppk`).
 - `war=<id>` picks the War (default: the first Run-eligible official one), `seed=<n>` and
   `tier=0|1` fix the roll. `view=army|relics|sell` still applies and survives the craft.
+- `cards=<card>[,<card>]` — the cards the Run already HOLDS, written exactly like `offers`.
 - Units carrying abilities cannot be written as an address — use the JSON spec above, which has
   no such limit because the link is an id either way.
+
+**Append `?to=<address>` to a craft link to land inside a Run workspace** rather than one click
+short of it — `/run/craft/<id>?to=/run/strategikon/chartulary` crafts the state and opens the
+Strategikon's held-card register on it. Only an address inside the Run is honoured. Use it
+whenever the thing to judge lives in a Run workspace; `/run` alone makes him go find it.
 
 A refused spec prints the reason on the Run screen and writes nothing. Crafting **replaces
 the account's active Run** — there is one per account. Overwrite it freely; see below.
@@ -301,6 +382,31 @@ governs what the *code* must do with old documents; this rule is only about whos
   `npm run dev` launch after that launch exits, but it must never kill a living
   ready-era Vite process merely because a backend health probe failed. Caddy
   only switches between the reverse proxy and devctl's diagnostic response.
+
+## There is no dev database — localhost writes to PRODUCTION
+
+The backend Vite spawns for `npm run dev` connects to **production Azure Postgres**. Not a
+copy, not a seeded fixture, not a staging tier. `frontend/vite.config.js` → `prodBackend`
+defaults `POSTGRES_HOST` to `chess-tactics-pg.postgres.database.azure.com`; the only other
+path is the explicit opt-in of `LIVE_MEDIA_STORAGE_DIR` **plus** a loopback `DATABASE_URL`,
+which nothing sets for you.
+
+So `http://localhost:<port>/api/admin/...` is the live data plane. Uploading a media
+candidate, accepting or activating one, crafting a Run, or any other admin write from your
+local dev server **writes to production**. There is no place to rehearse it first.
+
+- **Never call it a dev database, dev catalog, or staging.** It is production. Saying
+  otherwise in a handoff has already caused an agent to report a prod install as pending
+  work when it had already shipped.
+- **Confirm the target before your first admin write.** Cheapest check: the catalog size.
+  Production carries ~1700–2400 slots and a four-digit revision; anything disposable would
+  carry neither. `grep -n DATABASE_URL frontend/vite.config.js` is the direct answer.
+- Adding a NEW slot is additive and recoverable by retiring it. Overwriting, retiring, or
+  re-pointing an EXISTING slot is a production content change — get the owner's word first.
+- Reads are free. It is the writes that need the check.
+
+The owner's active Run is the one exception that needs no ceremony: it is disposable test
+state and crafting over it is expected (see the section above).
 
 ## Verifying backend / multiplayer changes (NO Postgres needed)
 

@@ -1,9 +1,9 @@
-import type { Level, LevelUnit } from '../core/level';
+import { dedicatedDeploymentPieceType, type Level, type LevelUnit } from '../core/level';
 import type { Vec } from '../core/types';
 import { createRng } from '../core/rng';
 import { isPassableTerrain } from '../core/terrain';
 import { propCells, propDef } from '../core/props';
-import { defaultFacingForSide } from '../core/pieces';
+import { defaultFacingForSide, PLAYABLE_PIECE_TYPES, type PlayablePieceType } from '../core/pieces';
 import {
   beginBattle,
   hasRelic,
@@ -50,12 +50,37 @@ function authoredOccupied(level: Level): Set<string> {
   return occupied;
 }
 
-export function playerDeploymentCells(level: Level): Vec[] {
+/**
+ * The placement pools a War Battle's authored geometry describes (ADR-0367).
+ *
+ * `all` is every usable deployment square and therefore the Run's capacity. `byType` is the subset
+ * an automatically placed unit of each piece type may take. An author steers this two ways: by
+ * barring types from the general Player Deployment zone, and by painting a dedicated zone that
+ * holds one type. Zones may overlap freely — a square is eligible for a type if ANY zone offers it
+ * to that type, so a dedicated square outside the general zone takes its one type and a shared
+ * square takes anything.
+ */
+export interface PlayerDeploymentPools {
+  all: Vec[];
+  byType: Record<PlayablePieceType, Vec[]>;
+}
+
+const sortCells = (cells: Iterable<Vec>): Vec[] => [...cells].sort((a, b) => a.y - b.y || a.x - b.x);
+
+export function playerDeploymentPools(level: Level): PlayerDeploymentPools {
   const occupied = authoredOccupied(level);
   const terrain = new Map(level.layers.terrain.map((cell) => [key(cell), cell]));
-  const cells = new Map<string, Vec>();
+  const all = new Map<string, Vec>();
+  const byType = new Map<PlayablePieceType, Map<string, Vec>>(
+    PLAYABLE_PIECE_TYPES.map((type) => [type, new Map<string, Vec>()]),
+  );
   for (const zone of level.layers.zones) {
-    if (zone.type !== 'player-spawn') continue;
+    const dedicated = dedicatedDeploymentPieceType(zone.type);
+    if (zone.type !== 'player-spawn' && !dedicated) continue;
+    const excluded = new Set(zone.excludedPieceTypes ?? []);
+    const offeredTypes = dedicated
+      ? [dedicated]
+      : PLAYABLE_PIECE_TYPES.filter((type) => !excluded.has(type));
     for (const [x, y] of zone.tiles) {
       const cell = { x, y };
       const terrainCell = terrain.get(key(cell));
@@ -64,10 +89,22 @@ export function playerDeploymentCells(level: Level): Vec[] {
         || occupied.has(key(cell))
         || (terrainCell && !isPassableTerrain(terrainCell.terrain))
       ) continue;
-      cells.set(key(cell), cell);
+      // Capacity counts every square some type could occupy, dedicated squares included.
+      all.set(key(cell), cell);
+      for (const type of offeredTypes) byType.get(type)!.set(key(cell), cell);
     }
   }
-  return [...cells.values()].sort((a, b) => a.y - b.y || a.x - b.x);
+  return {
+    all: sortCells(all.values()),
+    byType: Object.fromEntries(
+      PLAYABLE_PIECE_TYPES.map((type) => [type, sortCells(byType.get(type)!.values())]),
+    ) as Record<PlayablePieceType, Vec[]>,
+  };
+}
+
+/** Every usable deployment square: the Run's capacity, and the reach of a Discipline placement. */
+export function playerDeploymentCells(level: Level): Vec[] {
+  return playerDeploymentPools(level).all;
 }
 
 function disciplineIds(run: RunDocument): string[] {
@@ -97,13 +134,13 @@ function edgeDistance(cell: Vec, level: Level): number {
 function cellScore(
   run: RunDocument,
   level: Level,
+  cells: readonly Vec[],
   unit: RunArmyUnit,
   cell: Vec,
   placed: Record<string, Vec>,
   marshalledRookIndex: number,
   rngNoise: number,
 ): number {
-  const cells = playerDeploymentCells(level);
   const minY = Math.min(...cells.map((candidate) => candidate.y));
   const maxY = Math.max(...cells.map((candidate) => candidate.y));
   let score = rngNoise;
@@ -155,35 +192,38 @@ function cellScore(
   return score;
 }
 
-function unitPlacementOrder(run: RunDocument, units: RunArmyUnit[]): RunArmyUnit[] {
-  const order: Record<RunArmyUnit['type'], number> = {
-    king: 0,
-    rook: 1,
-    bishop: 2,
-    pawn: 3,
-    knight: 4,
-    queen: 5,
-  };
-  return [...units].sort((a, b) => {
-    const pieceOrder = order[a.type] - order[b.type];
-    if (pieceOrder) return pieceOrder;
-    if (a.type === 'bishop' && b.type === 'bishop') {
-      const abilityOrder = Number(hasRunAbility(run, a, 'marshalled')) - Number(hasRunAbility(run, b, 'marshalled'));
-      if (abilityOrder) return abilityOrder;
-    }
-    return a.id.localeCompare(b.id);
-  });
+/**
+ * The order units take their turn to claim a square. Deployment is a free-for-all (ADR-0367):
+ * one unit at a time, in a seeded random order, each taking the best square still available to
+ * it. Nothing is reserved ahead of a unit and nothing backtracks, so a unit whose eligible squares
+ * were taken by units that went earlier simply does not deploy.
+ *
+ * The King is the one exception and goes first. The Run always fields its King — it is never among
+ * the blocked units — so it cannot be the unit that misses out, and a King Deployment zone would
+ * otherwise be honored or not on a coin flip. Placing it first also lets the formation abilities
+ * that read the King's square (Agminate) work from a King that is already down.
+ */
+function unitPlacementOrder(run: RunDocument, units: RunArmyUnit[], index: 0 | 1): RunArmyUnit[] {
+  const stable = [...units].sort((a, b) => a.id.localeCompare(b.id));
+  const kings = stable.filter((unit) => unit.type === 'king');
+  const rest = shuffled(stable.filter((unit) => unit.type !== 'king'), mixSeed(run.deployment?.seed ?? run.seed, 'placement-order', index));
+  return [...kings, ...rest];
 }
 
 function buildLayout(run: RunDocument, level: Level, index: 0 | 1, blockedUnitIds: string[]): RunDeploymentLayout {
   const seed = mixSeed(run.deployment?.seed ?? run.seed, 'layout', index);
   const rng = createRng(seed);
   const blocked = new Set(blockedUnitIds);
-  const available = new Map(playerDeploymentCells(level).map((cell) => [key(cell), cell]));
+  const pools = playerDeploymentPools(level);
+  const eligibleByType = new Map(PLAYABLE_PIECE_TYPES.map((type) => [type, new Set(pools.byType[type].map(key))]));
+  const available = new Map(pools.all.map((cell) => [key(cell), cell]));
   const placements: Record<string, Vec> = {};
   const deployed = run.army.filter((unit) => !blocked.has(unit.id));
   const disciplined = new Set(disciplineIds(run));
 
+  // A Disciplined unit is placed by the player, not by the automatic placer, so the type bars
+  // do not apply to it. Putting a pawn on a square the placer would refuse is a deliberate
+  // choice the player is welcome to make.
   for (const unit of deployed) {
     if (!disciplined.has(unit.id)) continue;
     const manual = fromKey(run.deployment?.manualPlacements[unit.id] ?? '');
@@ -193,14 +233,19 @@ function buildLayout(run: RunDocument, level: Level, index: 0 | 1, blockedUnitId
   }
 
   let marshalledRookIndex = 0;
-  for (const unit of unitPlacementOrder(run, deployed)) {
+  const stranded: string[] = [];
+  for (const unit of unitPlacementOrder(run, deployed, index)) {
     if (placements[unit.id] || disciplined.has(unit.id)) continue;
-    const candidates = [...available.values()];
-    if (!candidates.length) break;
+    const eligible = eligibleByType.get(unit.type)!;
+    const candidates = [...available.values()].filter((cell) => eligible.has(key(cell)));
+    if (!candidates.length) {
+      if (available.size) stranded.push(unit.id);
+      continue;
+    }
     let best = candidates[0];
     let bestScore = Number.NEGATIVE_INFINITY;
     for (const cell of candidates) {
-      const score = cellScore(run, level, unit, cell, placements, marshalledRookIndex, rng.next());
+      const score = cellScore(run, level, pools.all, unit, cell, placements, marshalledRookIndex, rng.next());
       if (score > bestScore) {
         best = cell;
         bestScore = score;
@@ -210,6 +255,9 @@ function buildLayout(run: RunDocument, level: Level, index: 0 | 1, blockedUnitId
     available.delete(key(best));
     if (unit.type === 'rook' && hasRunAbility(run, unit, 'marshalled')) marshalledRookIndex += 1;
   }
+  // A unit that found no square it could use sits this Battle out exactly like an overflow unit:
+  // it is blocked, and remains callable as a reservist.
+  const heldBack = [...blockedUnitIds, ...stranded];
 
   const temporaryRocks: Vec[] = [];
   if (hasRelic(run, 'royal-tent') && hasRelic(run, 'royal-decree')) {
@@ -238,8 +286,8 @@ function buildLayout(run: RunDocument, level: Level, index: 0 | 1, blockedUnitId
   return {
     index,
     placements,
-    blockedUnitIds: [...blockedUnitIds],
-    reserveUnitIds: [...blockedUnitIds],
+    blockedUnitIds: heldBack,
+    reserveUnitIds: [...heldBack],
     temporaryRocks,
   };
 }
@@ -438,8 +486,21 @@ export function levelForRunDeployment(run: RunDocument, level: Level, layout: Ru
   };
 }
 
-export function normalReservistCell(run: RunDocument, level: Level, occupied: ReadonlySet<string>, sequence: number): Vec | null {
-  const free = playerDeploymentCells(level).filter((cell) => !occupied.has(key(cell)));
+/**
+ * Where a reservist called up mid-Battle arrives. A reservist is placed automatically, so the type
+ * bars apply to it exactly as they apply at Deployment (ADR-0367): it arrives only on a square its
+ * own type may use, and returns no cell at all when none is free.
+ */
+export function normalReservistCell(
+  run: RunDocument,
+  level: Level,
+  occupied: ReadonlySet<string>,
+  sequence: number,
+  unitType?: PlayablePieceType,
+): Vec | null {
+  const pools = playerDeploymentPools(level);
+  const pool = unitType ? pools.byType[unitType] : pools.all;
+  const free = pool.filter((cell) => !occupied.has(key(cell)));
   if (!free.length) return null;
   return createRng(mixSeed(run.deployment?.seed ?? run.seed, 'reservist-cell', sequence)).pick(free);
 }

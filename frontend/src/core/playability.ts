@@ -13,6 +13,7 @@ import { MODE_NAME, ruleOutcome } from './objectives';
 import { isPassableTerrain } from './terrain';
 import { propCells, propDef } from './props';
 import { spawnEventsForLevel, zoneCellsByIds, zonesByIds } from './levelEvents';
+import { playerDeploymentPools } from '../run/deployment';
 
 export interface PlayabilityViolation {
   /** Stable machine id (P1_SIDE_EMPTY, P2_KING_ASSAULT_KINGS, P2_RIVAL_KINGS_KINGS,
@@ -297,9 +298,20 @@ export function validateWarBattlePlayability(level: Level): PlayabilityResult {
       message: 'Run Battle needs a usable Player Spawn zone tile on the board edge.',
     });
   }
+  // The Run always fields its King, so a level whose geometry leaves the King nowhere to stand is
+  // unplayable rather than merely unlucky — unlike a benched pawn, which is a legal outcome
+  // (ADR-0367).
+  if (!playerDeploymentPools(level).byType.king.length) {
+    ordinary.push({
+      code: 'W3_PLAYER_KING_SQUARE',
+      message: 'No usable deployment square accepts the King. Paint a King Deployment zone, or stop barring Kings from the Player Deployment zone.',
+    });
+  }
+  // Every Run-player deployment zone is off limits to the enemy: a Pawn or King Deployment square
+  // is still a square the Run army starts on.
   const playerDeploymentPool = new Set(
     level.layers.zones
-      .filter((zone) => zone.type === 'player-spawn')
+      .filter((zone) => zone.type === 'player-spawn' || zone.type === 'player-pawn-spawn' || zone.type === 'player-king-spawn')
       .flatMap((zone) => zone.tiles.map(([x, y]) => key(x, y))),
   );
   const enemyDeploymentPool = new Set(

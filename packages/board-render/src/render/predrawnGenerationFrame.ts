@@ -231,37 +231,41 @@ function nearestAllowedFrameOrigin(
 }
 
 /**
- * Produce the tightest safe explicit first owner frame. It is the smallest native-1x 16:9
- * rectangle that contains protected gameplay geometry with the required inset, centered as
- * closely as integer frame coordinates permit. The owner may subsequently zoom back out to admit
- * more scenic art or pan while validation keeps the required geometry inside.
+ * Smallest valid native-1x 16:9 frame that shows an entire named board rectangle.
+ *
+ * The result always also contains protected gameplay geometry with its required inset, because a
+ * frame that cannot pass validation is not a usable starting point. It is centred on the requested
+ * rectangle as closely as integer frame coordinates permit, so a preset reads as "this view, in
+ * 16:9" rather than as an unrelated crop.
  */
-export function initialPredrawnGenerationFrame(board: EditorBoard): PredrawnGenerationFrame {
-  const requiredBounds = predrawnGenerationRequiredBounds(board);
-  const minimumRequiredScale = Math.max(1, Math.ceil(Math.max(
-    (requiredBounds.width + REQUIRED_CLEARANCE * 2) / FRAME_WIDTH_UNITS,
-    (requiredBounds.height + REQUIRED_CLEARANCE * 2) / FRAME_HEIGHT_UNITS,
+export function predrawnGenerationFrameContaining(
+  board: EditorBoard,
+  target: BakeBounds,
+): PredrawnGenerationFrame {
+  const contained = unionBounds(predrawnGenerationRequiredBounds(board), target);
+  const containedMaxX = contained.minX + contained.width;
+  const containedMaxY = contained.minY + contained.height;
+  const targetCenterX = target.minX + target.width / 2;
+  const targetCenterY = target.minY + target.height / 2;
+  let scale = Math.max(1, Math.ceil(Math.max(
+    (contained.width + REQUIRED_CLEARANCE * 2) / FRAME_WIDTH_UNITS,
+    (contained.height + REQUIRED_CLEARANCE * 2) / FRAME_HEIGHT_UNITS,
   )));
-  let scale = minimumRequiredScale;
-  const requiredCenterX = requiredBounds.minX + requiredBounds.width / 2;
-  const requiredCenterY = requiredBounds.minY + requiredBounds.height / 2;
-  const requiredMaxX = requiredBounds.minX + requiredBounds.width;
-  const requiredMaxY = requiredBounds.minY + requiredBounds.height;
 
   for (; scale <= MAX_FRAME_SCALE; scale += 1) {
     const width = FRAME_WIDTH_UNITS * scale;
     const height = FRAME_HEIGHT_UNITS * scale;
     const x = nearestAllowedFrameOrigin(
-      requiredCenterX - width / 2,
+      targetCenterX - width / 2,
       width,
-      requiredBounds.minX,
-      requiredMaxX,
+      contained.minX,
+      containedMaxX,
     );
     const y = nearestAllowedFrameOrigin(
-      requiredCenterY - height / 2,
+      targetCenterY - height / 2,
       height,
-      requiredBounds.minY,
-      requiredMaxY,
+      contained.minY,
+      containedMaxY,
     );
     if (x === undefined || y === undefined) continue;
     const frame: PredrawnGenerationFrame = { version: 1, x, y, width, height };
@@ -270,6 +274,84 @@ export function initialPredrawnGenerationFrame(board: EditorBoard): PredrawnGene
   throw new Error(
     `generation-required geometry does not fit inside a ${MAX_PREDRAWN_GENERATION_FRAME_DIMENSION}px-wide 16:9 frame at native 1x`,
   );
+}
+
+/**
+ * Produce the tightest safe explicit first owner frame. It is the smallest native-1x 16:9
+ * rectangle that contains protected gameplay geometry with the required inset, centered as
+ * closely as integer frame coordinates permit. The owner may subsequently zoom back out to admit
+ * more scenic art or pan while validation keeps the required geometry inside.
+ */
+export function initialPredrawnGenerationFrame(board: EditorBoard): PredrawnGenerationFrame {
+  return predrawnGenerationFrameContaining(board, predrawnGenerationRequiredBounds(board));
+}
+
+/**
+ * Pull an owner-driven pan/zoom back to the nearest frame that still holds the required art.
+ *
+ * Framing controls should not be able to produce a frame that cannot be applied. Without this a
+ * drag walks the required geometry out of the crop, and zooming past the smallest legal width
+ * strands the owner: pulling one edge inside pushes the opposite edge out, with no way back except
+ * a preset. Width grows to the smallest legal size when needed, then each axis clamps
+ * independently, so a drag simply stops at the boundary instead of going invalid.
+ */
+export function clampPredrawnGenerationFrame(
+  board: EditorBoard,
+  value: unknown,
+): PredrawnGenerationFrame {
+  const smallest = initialPredrawnGenerationFrame(board);
+  const frame = normalizePredrawnGenerationFrame(value);
+  if (!frame) return smallest;
+  const width = Math.max(frame.width, smallest.width);
+  const height = width / FRAME_WIDTH_UNITS * FRAME_HEIGHT_UNITS;
+  // Grow around the centre the owner was looking at, so a clamped zoom keeps their composition.
+  const desiredX = Math.round(frame.x + frame.width / 2 - width / 2);
+  const desiredY = Math.round(frame.y + frame.height / 2 - height / 2);
+  const required = predrawnGenerationRequiredBounds(board);
+  const x = nearestAllowedFrameOrigin(
+    desiredX,
+    width,
+    required.minX,
+    required.minX + required.width,
+  );
+  const y = nearestAllowedFrameOrigin(
+    desiredY,
+    height,
+    required.minY,
+    required.minY + required.height,
+  );
+  if (x === undefined || y === undefined) return smallest;
+  return { version: 1, x, y, width, height };
+}
+
+/**
+ * TileGrid's board-centred origin for this board.
+ *
+ * Generation frames are expressed in raw projected board coordinates; the camera boundary and every
+ * derived opening/thumbnail framing are expressed in TileGrid's board-centred world. The two spaces
+ * differ by exactly this origin, so one translation converts between them.
+ */
+function boardProjectionOrigin(
+  board: Pick<EditorBoard, 'cols' | 'rows'>,
+): { originLeft: number; originTop: number } {
+  const cells = Array.from({ length: board.rows }, (_, y) => (
+    Array.from({ length: board.cols }, (__, x) => ({ x, y }))
+  )).flat();
+  return boardLabMetrics(cells);
+}
+
+/** Convert a board-centred rectangle (camera boundary, opening framing) into generation space. */
+export function predrawnGenerationBoundsFromCentered(
+  board: Pick<EditorBoard, 'cols' | 'rows'>,
+  bounds: BakeBounds,
+): BakeBounds {
+  const { originLeft, originTop } = boardProjectionOrigin(board);
+  return {
+    minX: bounds.minX - originLeft,
+    minY: bounds.minY - originTop,
+    width: bounds.width,
+    height: bounds.height,
+  };
 }
 
 /** Map any finite positive board-world rectangle into TileGrid's viewport-centred boardPan. */
@@ -285,10 +367,7 @@ export function predrawnWorldBoundsBoardPan(
     || bounds.width <= 0
     || bounds.height <= 0
   ) throw new Error('cannot map invalid predrawn world bounds');
-  const cells = Array.from({ length: board.rows }, (_, y) => (
-    Array.from({ length: board.cols }, (__, x) => ({ x, y }))
-  )).flat();
-  const metrics = boardLabMetrics(cells);
+  const metrics = boardProjectionOrigin(board);
   return {
     x: -bounds.minX - metrics.originLeft - bounds.width / 2,
     y: -bounds.minY - metrics.originTop - bounds.height / 2,

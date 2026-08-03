@@ -62,6 +62,9 @@ const {
   resolveRunRelicIcon,
 } = require(path.join(bakedBackendDir, 'thumbnailPresentation'));
 const {
+  ataraxiaNumeralMediaIssue,
+  ataraxiaNumeralOwnerProofIssue,
+  ataraxiaNumeralSlot,
   cardTypeRowTextureAcceptanceGroupIssue,
   cardTypeRowTextureMediaIssue,
   cardTypeRowTextureSlot,
@@ -78,11 +81,15 @@ const {
   preservesNativeEvidenceForUpload,
   runRelicIconMediaIssue,
   runRelicIconSlotId,
+  runCardCostCoinMediaIssue,
+  runCardCostCoinSlot,
   runResourceIconMediaIssue,
   runResourceIconSlotId,
   runShopWrapMediaIssue,
   workspaceBackgroundSlotId,
   workspaceBackgroundMediaIssue,
+  runRelicMatSlot,
+  runRelicMatMediaIssue,
   runShopWrapSlotId,
   sfxSampleMediaIssue,
   sfxSampleOwnerProofIssue,
@@ -90,6 +97,9 @@ const {
   strategikonBackgroundMediaIssue,
   strategikonBackgroundOwnerProofIssue,
   strategikonBackgroundSlot,
+  wallMaterialMediaIssue,
+  wallMaterialOwnerProofIssue,
+  wallMaterialSlot,
 } = require(path.join(bakedBackendDir, 'liveMediaPolicy'));
 const {
   ATTEMPT_PIPELINE_SOURCE_REQUEST_SCHEMA,
@@ -5573,7 +5583,10 @@ function isLevelBody(body) {
 // force a prod data migration (docs/migration-policy.md).
 const WORKSPACE_OBJECTIVES = new Set(['capture-all', 'capture-king', 'rival-kings', 'survive', 'reach']);
 const WORKSPACE_TERRAIN = new Set(['grass', 'water', 'stone', 'road', 'bridge', 'cliff', 'rock', 'sand', 'dirt', 'pebble', 'void']);
-const WORKSPACE_ZONE_TYPES = new Set(['region', 'player-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock', 'pawn-promotion']);
+// Mirror of core/level.ts ZONE_TYPES. `workspaceZoneTypes.test.js` fails when this drifts from
+// the shared source: a zone type the editor can author but this set does not know is rejected
+// as an invalid level body, which surfaces to the author only as "Cloud autosave is unavailable".
+const WORKSPACE_ZONE_TYPES = new Set(['region', 'player-spawn', 'player-pawn-spawn', 'player-king-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock', 'pawn-promotion']);
 const WORKSPACE_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king', 'rock', 'random-rock']);
 const WORKSPACE_SIDES = new Set(['player', 'enemy', 'neutral']);
 // Playable-only piece types for a random-placement roster (no rocks) — mirrors the
@@ -5845,6 +5858,12 @@ function validateWorkspaceLevel(level, key) {
   }
   for (const zone of layers.zones) {
     if (!zone || typeof zone.id !== 'string' || !WORKSPACE_ZONE_TYPES.has(zone.type) || !Array.isArray(zone.tiles)) return `levels.${key}.layers.zones contains an invalid zone`;
+    // ADR-0367: the piece types a Player Deployment zone bars from automatic placement.
+    if (zone.excludedPieceTypes !== undefined) {
+      if (!Array.isArray(zone.excludedPieceTypes) || zone.excludedPieceTypes.some((type) => !WORKSPACE_ROSTER_PIECES.has(type))) {
+        return `levels.${key}.layers.zones contains an invalid excludedPieceTypes`;
+      }
+    }
     for (const tile of zone.tiles) {
       if (!Array.isArray(tile) || tile.length !== 2 || !isFiniteInteger(tile[0]) || !isFiniteInteger(tile[1]) || tile[0] < 0 || tile[0] >= board.cols || tile[1] < 0 || tile[1] >= board.rows) {
         return `levels.${key}.layers.zones contains an out-of-bounds tile`;
@@ -14716,6 +14735,9 @@ function reviewedMediaEvidenceIssue(row) {
   } else if (strategikonBackgroundSlot(row.slot)) {
     const issue = strategikonBackgroundOwnerProofIssue(row, proof, evidence.surfaceUrl);
     if (issue) return issue;
+  } else if (wallMaterialSlot(row.slot)) {
+    const issue = wallMaterialOwnerProofIssue(row, proof, evidence.surfaceUrl);
+    if (issue) return issue;
   } else if (sourceArt.claimed && !sourceArt.issue) {
     const issue = sourceArtTurntableOwnerProofIssue(sourceArt.value, proof, evidence.surfaceUrl);
     if (issue) return issue;
@@ -15238,6 +15260,9 @@ function mediaDomainProjectionIssue(row) {
   if (runRelicIconSlotId(row.slot)) {
     return runRelicIconMediaIssue(row, runtime.value);
   }
+  if (runCardCostCoinSlot(row.slot)) {
+    return runCardCostCoinMediaIssue(row, runtime.value);
+  }
   if (runResourceIconSlotId(row.slot)) {
     return runResourceIconMediaIssue(row, runtime.value);
   }
@@ -15259,8 +15284,19 @@ function mediaDomainProjectionIssue(row) {
   if (strategikonBackgroundSlot(row.slot)) {
     return strategikonBackgroundMediaIssue(row, runtime.value);
   }
+  // Walls sit in the terrain domain but own the ADR-0086 full-height frame, not the 96x180
+  // tile projection, so they resolve before the board-tile rules below.
+  if (wallMaterialSlot(row.slot)) {
+    return wallMaterialMediaIssue(row, runtime.value);
+  }
   if (workspaceBackgroundSlotId(row.slot)) {
     return workspaceBackgroundMediaIssue(row, runtime.value);
+  }
+  if (runRelicMatSlot(row.slot)) {
+    return runRelicMatMediaIssue(row, runtime.value);
+  }
+  if (ataraxiaNumeralSlot(row.slot)) {
+    return ataraxiaNumeralMediaIssue(row, runtime.value);
   }
   const runCardFrame = runCardFrameProjection(row);
   if (runCardFrame.claimed) return runCardFrame.issue;
@@ -16030,6 +16066,8 @@ app.put(
   },
 );
 
+const ATARAXIA_NUMERAL_REVIEW_PATH = /^(?:\/(?:play|run))?\/(?:strategikon\/)?enchiridion\/ataraxia$/;
+
 function gameOwnedReviewSurfaceUrl(req, raw) {
   const value = boundedMediaText(raw, '', 2048);
   if (!value) return null;
@@ -16039,8 +16077,11 @@ function gameOwnedReviewSurfaceUrl(req, raw) {
     const sameOrigin = requestOrigin
       ? url.origin === requestOrigin
       : url.host.toLowerCase() === String(req.get('host') || '').toLowerCase();
+    // Each entry is a surface some art domain is genuinely reviewed on; the Ataraxia rung
+    // marks are worn by the Ataraxia reference rows, on either host (ADR-0363).
     const gameOwnedPath = url.pathname === '/studio' || url.pathname === '/editor/level'
-      || url.pathname === '/play/strategikon/enchiridion/units';
+      || url.pathname === '/play/strategikon/enchiridion/units'
+      || ATARAXIA_NUMERAL_REVIEW_PATH.test(url.pathname);
     if (!sameOrigin || (url.protocol !== 'http:' && url.protocol !== 'https:') || !gameOwnedPath || url.hash) return null;
     return url.toString();
   } catch {
@@ -16127,8 +16168,61 @@ async function validateMediaReviewProofSnapshot(client, current, evidence, surfa
     }
     return;
   }
+  if (ataraxiaNumeralSlot(current.slot)) {
+    const projectionIssue = mediaDomainProjectionIssue(current);
+    if (projectionIssue) {
+      throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: projectionIssue });
+    }
+    const proofIssue = ataraxiaNumeralOwnerProofIssue(current, evidence, surfaceUrl);
+    if (proofIssue) {
+      throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: proofIssue });
+    }
+    const selected = evidence.selectedCandidates[0];
+    const snapshot = evidence.slotSnapshots[0];
+    const slotResult = await client.query(
+      'SELECT slot, active_version_id, row_revision FROM media_slots WHERE slot = $1',
+      [current.slot],
+    );
+    const slotRow = slotResult.rows[0];
+    if (!slotRow) throw mediaMutationError('media_slot_not_found', 404);
+    if (
+      Number(snapshot.rowRevision) !== Number(slotRow.row_revision)
+      || (snapshot.activeVersionId ?? null) !== (slotRow.active_version_id ? String(slotRow.active_version_id) : null)
+    ) throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: 'slot snapshot mismatch' });
+    if (current.status !== 'candidate' || Number(selected.rowRevision) !== Number(current.row_revision)) {
+      throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: 'candidate snapshot mismatch' });
+    }
+    return;
+  }
   if (new URL(surfaceUrl).pathname !== '/studio') {
     throw mediaMutationError('invalid_media_review_proof', 409, 'this media domain requires its Studio proof surface');
+  }
+  if (wallMaterialSlot(current.slot)) {
+    const projectionIssue = mediaDomainProjectionIssue(current);
+    if (projectionIssue) {
+      throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: projectionIssue });
+    }
+    const proofIssue = wallMaterialOwnerProofIssue(current, evidence, surfaceUrl);
+    if (proofIssue) {
+      throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: proofIssue });
+    }
+    // One wall proof covers the whole batch, so pin this candidate against its own entries.
+    const selected = evidence.selectedCandidates.find((item) => isObjectRecord(item) && item.slot === current.slot);
+    const snapshot = evidence.slotSnapshots.find((item) => isObjectRecord(item) && item.slot === current.slot);
+    const slotResult = await client.query(
+      'SELECT slot, active_version_id, row_revision FROM media_slots WHERE slot = $1',
+      [current.slot],
+    );
+    const slotRow = slotResult.rows[0];
+    if (!slotRow) throw mediaMutationError('media_slot_not_found', 404);
+    if (
+      Number(snapshot.rowRevision) !== Number(slotRow.row_revision)
+      || (snapshot.activeVersionId ?? null) !== (slotRow.active_version_id ? String(slotRow.active_version_id) : null)
+    ) throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: 'slot snapshot mismatch' });
+    if (current.status !== 'candidate' || Number(selected.rowRevision) !== Number(current.row_revision)) {
+      throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: 'candidate snapshot mismatch' });
+    }
+    return;
   }
   if (current.domain !== 'terrain') {
     const runCardArt = runCardArtProjection(current);
@@ -18185,7 +18279,7 @@ app.put('/api/run-progression', async (req, res) => {
 // --- Account-scoped active Run (ADR-0193) ---------------------------------
 // Anonymous Runs stay in browser storage. Once signed in, the client adopts that
 // document here; the server owns one CAS-updated active Run per account.
-const ACTIVE_RUN_PHASES = new Set(['deployment', 'battle', 'shop', 'victory']);
+const ACTIVE_RUN_PHASES = new Set(['bona-vacantia', 'deployment', 'battle', 'shop', 'victory']);
 const ACTIVE_RUN_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
 const ACTIVE_RUN_PIECE_VALUES = Object.freeze({ pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9, king: 0 });
 const ACTIVE_RUN_ABILITIES = new Set(['discipline', 'positioned', 'marshalled']);
@@ -18198,19 +18292,38 @@ const ACTIVE_RUN_SHOP_FIELDS = new Set([
   'victoryGoldTenths',
   'cardOffers',
   'purchasedCardOfferIds',
-  'lootRelicOffers',
-  'chosenLootRelicId',
   'paidRelicOffer',
   'paidRelicBought',
   'soldUnits',
   'entrySnapshot',
 ]);
+const ACTIVE_RUN_VACANTIA_FIELDS = new Set([
+  'kind',
+  'conflictIndex',
+  'afterBattleIndex',
+  'victoryGoldTenths',
+  'offers',
+]);
 const RUN_RELICS = Array.isArray(serverRender?.RUN_RELICS) ? serverRender.RUN_RELICS : [];
 const RUN_RELIC_BY_ID = serverRender?.RUN_RELIC_BY_ID ?? {};
 const RUN_RELIC_IDS = new Set(RUN_RELICS.map((relic) => relic.id));
+/**
+ * Gold the Run's held relics paid the moment they were taken. Read from the model's own
+ * table (RUN_RELIC_IMMEDIATE_GOLD) rather than restated here, so the opening Shop's pinned
+ * gold check stays exact when a relic's payout changes.
+ */
+function openingRelicGoldTenths(run) {
+  if (!Array.isArray(run.relics)) return 0;
+  if (typeof serverRender?.relicImmediateGoldTenths === 'function') {
+    return serverRender.relicImmediateGoldTenths(run.relics);
+  }
+  const table = serverRender?.RUN_RELIC_IMMEDIATE_GOLD ?? {};
+  return run.relics.reduce((total, relic) => total + (table[relic] ?? 0) * 10, 0);
+}
+
 function validateActiveRunBody(run) {
   if (!run || typeof run !== 'object' || Array.isArray(run)) return 'run must be an object';
-  if (run.formatVersion !== 12) return 'run.formatVersion is unsupported';
+  if (run.formatVersion !== 13) return 'run.formatVersion is unsupported';
   if (typeof run.id !== 'string' || !run.id || run.id.length > 160) return 'run.id is invalid';
   if (!isFiniteInteger(run.seed) || run.seed < 0 || run.seed > 0xffffffff) return 'run.seed is invalid';
   if (run.formatVersion >= 5 && run.ataraxiaTier !== 0 && run.ataraxiaTier !== 1) return 'run.ataraxiaTier is invalid';
@@ -18430,6 +18543,31 @@ function validateActiveRunBody(run) {
   }
   if (run.formatVersion >= 8 && run.phase === 'shop' && !isObjectRecord(run.shop)) return 'run.shop is required';
   if (run.formatVersion >= 8 && run.phase !== 'shop' && run.shop !== null) return 'run.shop is invalid outside the shop phase';
+  // Bona Vacantia carries its own offers and, like the shop, exists only in its own phase.
+  if (run.formatVersion >= 13) {
+    if (run.phase === 'bona-vacantia') {
+      if (!isObjectRecord(run.vacantia)) return 'run.vacantia is required';
+      const vacantia = run.vacantia;
+      if (Object.keys(vacantia).some((field) => !ACTIVE_RUN_VACANTIA_FIELDS.has(field))) {
+        return 'run.vacantia contains an unsupported field';
+      }
+      if (vacantia.kind !== 'opening' && vacantia.kind !== 'post-battle') return 'run.vacantia.kind is invalid';
+      if (!isFiniteInteger(vacantia.conflictIndex) || vacantia.conflictIndex < 0) return 'run.vacantia.conflictIndex is invalid';
+      if (!isFiniteInteger(vacantia.afterBattleIndex) || vacantia.afterBattleIndex < 0) return 'run.vacantia.afterBattleIndex is invalid';
+      if (!isFiniteInteger(vacantia.victoryGoldTenths) || vacantia.victoryGoldTenths < 0) return 'run.vacantia.victoryGoldTenths is invalid';
+      if (!Array.isArray(vacantia.offers) || vacantia.offers.length < 1 || vacantia.offers.length > 3) {
+        return 'run.vacantia.offers is invalid';
+      }
+      if (new Set(vacantia.offers).size !== vacantia.offers.length) return 'run.vacantia.offers repeats a relic';
+      for (const relic of vacantia.offers) {
+        if (!RUN_RELIC_IDS.has(relic)) return 'run.vacantia.offers is invalid';
+        // An offer the player already holds could never have been revealed.
+        if (Array.isArray(run.relics) && run.relics.includes(relic)) return 'run.vacantia offers a held relic';
+      }
+    } else if (run.vacantia !== null && run.vacantia !== undefined) {
+      return 'run.vacantia is invalid outside the bona-vacantia phase';
+    }
+  }
   if (run.shop !== null && run.shop !== undefined) {
     if (!isObjectRecord(run.shop)) return 'run.shop is invalid';
     if (Object.keys(run.shop).some((field) => !ACTIVE_RUN_SHOP_FIELDS.has(field))) {
@@ -18563,13 +18701,14 @@ function validateActiveRunBody(run) {
           // opening cannot be left without a purchase.
           || run.shop.cardOffers.some((offer) => offer.value > 8)
           || !run.shop.cardOffers.some((offer) => offer.cost <= 8)
-          || !Array.isArray(run.shop.lootRelicOffers)
-          || run.shop.lootRelicOffers.length !== 0
-          || run.shop.chosenLootRelicId !== null
           || run.shop.paidRelicOffer !== null
           || run.shop.paidRelicBought !== false
           || !isObjectRecord(run.shop.entrySnapshot)
-          || run.shop.entrySnapshot.goldTenths !== 80
+          // Bona Vacantia runs BEFORE the opening Shop, so a relic taken there may already
+          // have paid out. The gold is still pinned value-by-value -- to the starting gold
+          // plus exactly what the relics held are worth on acquisition, computed from the
+          // model's own payout table so the two cannot drift.
+          || run.shop.entrySnapshot.goldTenths !== 80 + openingRelicGoldTenths(run)
           || !Array.isArray(run.shop.entrySnapshot.army)
           || run.shop.entrySnapshot.army.length !== 3
           || run.shop.entrySnapshot.army[0]?.id !== 'run-king'

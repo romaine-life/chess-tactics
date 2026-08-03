@@ -304,7 +304,9 @@ describe('Level Editor chrome hierarchy', () => {
     }
     expect(levelEditor).toMatch(/<HouseSelect<string>\s+value=\{activeZone\?\.id \?\? ''\}[\s\S]*?disabled=\{!activeZone\}[\s\S]*?ariaLabel="Selected zone"[\s\S]*?onChange=\{selectZoneEntry\}/);
     expect(levelEditor).toContain("...(activeZone ? [] : [{ value: '', label: 'None' }]),");
-    expect(levelEditor).toContain('...boardZoneEntries.map((zone, index) => ({ value: zone.id, label: zoneDisplayName(zone, index) }))');
+    // The dropdown lists only the zones that are ON the level: a dedicated deployment zone whose
+    // type is not broken off is retained but hidden, and must not be selectable (ADR-0367).
+    expect(levelEditor).toContain('...visibleZoneIndices.map((index) => ({ value: boardZoneEntries[index].id, label: zoneDisplayName(boardZoneEntries[index], index) }))');
     expect(levelEditor).toMatch(/<HouseSelect<string>\s+value=\{activeFenceArtwork\.id\}[\s\S]*?options=\{fenceArtCatalog\.map\(\(artwork\) => \(\{ value: artwork\.id, label: artwork\.label \}\)\)\}[\s\S]*?ariaLabel="Fence artwork"[\s\S]*?onChange=\{selectFenceArtwork\}/);
     expect(levelEditor).toMatch(/<HouseSelect<string>\s+ariaLabel="Composite terrain footprint"[\s\S]*?value=\{macroTileFootprint\}[\s\S]*?options=\{leMacroTileFootprints\(\)\.map\(\(footprint\) => \(\{ value: footprint, label: footprint \}\)\)\}[\s\S]*?setMacroTileFootprint\(footprint\);[\s\S]*?setMacroTileBrushId\(null\);/);
     expect(levelEditor).not.toContain('function SelectFrame');

@@ -37,16 +37,20 @@ describe('Main Menu chrome hierarchy', () => {
     expect(modeTab).not.toMatch(/className=\{`settings-tab main-menu-mode-tab/);
   });
 
-  it('uses the registered title-oak surface for every semantic tab in the main-menu shell and gates reveal on it', () => {
+  it('uses the registered title-oak surface for every semantic tab in the main-menu shell', () => {
     // The surface is declared ONCE on the shared rail primitive, so every menu-language
     // rail (Main Menu, Settings, Editor, Play, Enchiridion, Strategikon) is painted from
     // the same source and a re-skin is a single edit. A per-screen literal is the drift.
     expect(apparatusRailTab).toContain("export const APPARATUS_RAIL_FILL_SURFACE = 'hybrid-wood-oak'");
     expect(apparatusRailTab).toContain('data-chrome-tab-fill-surface={APPARATUS_RAIL_FILL_SURFACE}');
     expect(mainMenu).not.toContain('data-chrome-tab-fill-surface=');
-    expect(mainMenu).toContain("const TITLE_SURFACE = () => installedUiMedia('ui-surfaces-hybrid-wood-oak-png')");
-    expect(mainMenu).toContain('const buttonArt = [SETTINGS_ICON(), TITLE_SURFACE(), ...MENU_TABS.map((tab) => tab.icon)]');
     expect(mainMenu).not.toContain('STONE_SURFACE');
+    // Reveal gating is NOT this screen's job any more. The menu used to decode the oak
+    // surface and the brand shield itself, which is why the bar revealed whole here and
+    // nowhere else; both are shell art on the one cold-load ladder now (ADR-0369).
+    expect(mainMenu).not.toContain('ui-surfaces-hybrid-wood-oak-png');
+    expect(mainMenu).not.toContain('buttonArt');
+    expect(mainMenu).not.toContain('reportReady');
   });
 
   it('owns the main-menu icon footprint without changing shared settings tabs', () => {

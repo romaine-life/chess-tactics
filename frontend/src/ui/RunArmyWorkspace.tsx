@@ -3,6 +3,7 @@ import { defaultBackgroundSet } from '../art/backgroundSets';
 import { defaultFacingForSide, paletteForSide, pieceSpritePath } from '../core/pieces';
 import {
   AGMINATE_DISPLAY_NAME,
+  CACOCHYMIC_DESCRIPTION,
   CACOCHYMIC_DISPLAY_NAME,
   GOLD_SCALE,
   PIECE_LABEL,
@@ -10,6 +11,7 @@ import {
   RUN_RELIC_BY_ID,
   hasRelic,
   relicGrantingRunAbility,
+  runAbilityDescription,
   type RunAbility,
   type RunArmyPieceType,
   type RunArmyUnit,
@@ -94,19 +96,6 @@ function inheritedTrait(
   return { id, label, description, source, inherited: true, icon };
 }
 
-function abilityDescription(unit: RunArmyUnit, ability: Extract<RunAbility, 'positioned' | 'marshalled'>): string {
-  if (ability === 'positioned') {
-    if (unit.type === 'pawn') return 'Prefers the front row during automatic deployment.';
-    if (unit.type === 'rook') return 'Prefers an outer back-row square during automatic deployment.';
-    if (unit.type === 'bishop' || unit.type === 'king') return 'Prefers the back row during automatic deployment.';
-    return 'Prefers its piece-specific region during automatic deployment.';
-  }
-  if (unit.type === 'king') return 'Prefers a board-edge square in the player placement zone.';
-  if (unit.type === 'rook') return 'Prefers the established King-flank and corner formation.';
-  if (unit.type === 'bishop') return 'Prefers a square color opposite another Bishop when possible.';
-  return 'Prefers its piece-specific station during automatic deployment.';
-}
-
 function deploymentAbilityTrait(
   run: RunDocument,
   unit: RunArmyUnit,
@@ -118,7 +107,7 @@ function deploymentAbilityTrait(
     return {
       id: ability,
       label,
-      description: abilityDescription(unit, ability),
+      description: runAbilityDescription(ability, unit.type),
       source: 'Permanent unit ability',
       inherited: false,
       icon,
@@ -126,7 +115,7 @@ function deploymentAbilityTrait(
   }
   const relicId = relicGrantingRunAbility(run, unit, ability);
   return relicId
-    ? inheritedTrait(ability, label, abilityDescription(unit, ability), RUN_RELIC_BY_ID[relicId].name, icon)
+    ? inheritedTrait(ability, label, runAbilityDescription(ability, unit.type), RUN_RELIC_BY_ID[relicId].name, icon)
     : null;
 }
 
@@ -136,7 +125,7 @@ export function runUnitTraits(run: RunDocument, unit: RunArmyUnit): RunUnitTrait
     traits.push({
       id: 'plagued',
       label: CACOCHYMIC_DISPLAY_NAME,
-      description: 'Will be permanently lost after the next victorious Battle.',
+      description: CACOCHYMIC_DESCRIPTION,
       source: 'The Great Mortality',
       inherited: false,
       icon: { state: 'plagued' },
@@ -146,7 +135,7 @@ export function runUnitTraits(run: RunDocument, unit: RunArmyUnit): RunUnitTrait
     traits.push({
       id: 'discipline',
       label: 'Discipline',
-      description: 'May be deliberately placed in the player zone before random deployment.',
+      description: runAbilityDescription('discipline', unit.type),
       source: 'Permanent unit ability',
       inherited: false,
       icon: { state: 'discipline' },
@@ -284,9 +273,9 @@ function RunUnitTraitList({
         <span className="run-unit-trait" key={trait.id}>
           <Tooltip
             triggerClassName="run-unit-trait-trigger"
-            popupClassName="run-relic-tooltip-pop"
             popupMaxInlineSize={300}
             label={`${trait.label}. ${trait.description} ${trait.inherited ? `Inherited from ${trait.source}.` : trait.source}.`}
+            title={trait.label}
             trigger={'state' in trait.icon ? (
               <RunAbilityIcon ability={trait.icon.state} className="run-unit-trait-icon" />
             ) : (
@@ -296,8 +285,7 @@ function RunUnitTraitList({
               />
             )}
           >
-            <strong className="run-relic-tooltip-name">{trait.label}</strong>
-            <span className="run-relic-tooltip-description">{trait.description}</span>
+            <span>{trait.description}</span>
             <small className="run-unit-trait-source">
               {trait.inherited ? `Inherited from ${trait.source}` : trait.source}
             </small>
@@ -459,10 +447,9 @@ function ProfileSellAction({
     <Tooltip
       trigger={button}
       label={unavailableReason}
-      popupClassName="run-relic-tooltip-pop"
       popupMaxInlineSize={288}
     >
-      <span className="run-relic-tooltip-description">{unavailableReason}</span>
+      <span>{unavailableReason}</span>
     </Tooltip>
   );
 }
@@ -712,10 +699,9 @@ export function RunSellWorkspace({
               label={status === 'sold'
                 ? `${runUnitDisplayName(unit)} was sold during this shop visit. Reset Shop to restore it.`
                 : 'The King is permanently retained and cannot be sold.'}
-              popupClassName="run-relic-tooltip-pop"
               popupMaxInlineSize={300}
             >
-              <span className="run-relic-tooltip-description">
+              <span>
                 {status === 'sold'
                   ? 'Sold during this shop visit. Reset Shop to restore this unit.'
                   : 'The King is permanently retained and cannot be sold.'}

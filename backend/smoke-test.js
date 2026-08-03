@@ -4032,7 +4032,7 @@ async function main() {
     { id: 'rpp', offerId: 'opening-2-rpp', pieces: ['rook', 'pawn', 'pawn'], value: 7, cost: 9, cardType: 'concinnous', effectSeed: 1706, plaguedPieceIndex: null, effectTargetIndex: 0 },
   ];
   const activeRunDocument = {
-    formatVersion: 12,
+    formatVersion: 13,
     id: 'run-smoke',
     seed: 17,
     ataraxiaTier: 1,
@@ -4065,8 +4065,6 @@ async function main() {
       victoryGoldTenths: 0,
       cardOffers: activeRunOffers,
       purchasedCardOfferIds: [],
-      lootRelicOffers: [],
-      chosenLootRelicId: null,
       paidRelicOffer: null,
       paidRelicBought: false,
       soldUnits: [],
@@ -4335,8 +4333,6 @@ async function main() {
         plaguedPieceIndex: null,
       }],
       purchasedCardOfferIds: [],
-      lootRelicOffers: [],
-      chosenLootRelicId: null,
       paidRelicOffer: null,
       paidRelicBought: false,
       soldUnits: [],

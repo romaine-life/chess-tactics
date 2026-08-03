@@ -161,6 +161,23 @@ describe('professional loading architecture guards', () => {
     );
   });
 
+  it('suppresses a preparing region by context value, never by changing the tree shape', () => {
+    // A host-preserving navigation ends by clearing the preparing region. If
+    // SceneSlotActivation answered that with a different element type — a bare fragment
+    // when the region is not preparing, providers when it is — React would read the
+    // change as a new tree and remount the destination it had just revealed, blanking
+    // the committed column for a frame at the end of every menu navigation.
+    const boundary = read('./ui/shell/SceneBoundary.tsx').replace(/\r\n/g, '\n');
+    const activation = boundary.slice(boundary.indexOf('export function SceneSlotActivation'));
+    const body = activation.slice(0, activation.indexOf('\n}\n') + 3);
+    expect(body).toContain('const suppressed = preparingRegion === region;');
+    expect(body).toContain('<SceneActivationContext.Provider value={inheritedActivation && !suppressed}>');
+    expect(body).toContain('<SceneRevealContext.Provider value={inheritedReveal && !suppressed}>');
+    // Exactly one return, and it is the provider pair — no early exit past them.
+    expect(body.match(/\breturn\b/g)).toHaveLength(1);
+    expect(body).not.toMatch(/return\s*<>/);
+  });
+
   it('routes Settings panels through an authored nested scene slot', () => {
     const settings = read('./ui/Settings.tsx');
     const styles = read('./style.css');
@@ -217,7 +234,10 @@ describe('professional loading architecture guards', () => {
     const titleBar = read('./ui/shell/AppTitleBar.tsx');
     const styles = read('./style.css');
     expect(app).toContain("transitionStatus={titleBarLoading ? 'Loading…' : null}");
-    expect(app).toContain("scene.phase === 'entering' || scene.phase === 'current'");
+    // The curtain hands over on the ladder's FIRST rung, on every route — not once the
+    // whole destination has entered (ADR-0369).
+    expect(app).toContain('|| scene.startupStage >= 0');
+    expect(app).toContain('|| !scene.startupActive;');
     expect(app).toContain('key: sceneLayerKey(mountedScene)');
     expect(titleBar).toContain('screenName={config.screenName}');
     expect(titleBar).toContain('transitionStatus={transitionStatus}');
@@ -250,6 +270,62 @@ describe('professional loading architecture guards', () => {
     const chromeLab = read('./ui/ChromeLab.tsx');
     expect(chromeLab).toContain('...installed.behavior');
     expect(chromeLab).toContain('roles: installed.behavior.roles');
+  });
+
+  it('runs ONE cold-load ladder for every route, with the shell in front of the scene', () => {
+    const app = read('./ui/App.tsx');
+    const director = read('./ui/shell/sceneDirector.ts');
+    const startup = read('./ui/shell/startupScene.ts');
+    const titleBar = read('./ui/shell/AppTitleBar.tsx');
+    const menu = read('./ui/MainMenu.tsx');
+    const styles = read('./style.css');
+    // One ladder, one cold-load branch: the menu is not a special route any more.
+    expect(startup).toContain("export type ShellLayer = 'background' | 'chrome' | 'scene'");
+    expect(startup).toContain("SHELL_LADDER: readonly ShellLayer[] = ['background', 'chrome', 'scene']");
+    expect(app).not.toContain('isMainMenuPath');
+    expect(app).not.toContain('prepareStartup');
+    expect(app).not.toContain('prepareInitialScene');
+    expect(app).toContain('`${window.location.pathname}${window.location.search}`,');
+    // The final rung is the ordinary painted contract, entering the ordinary way.
+    expect(director).toContain("startupStage === SETTLED_STAGE");
+    expect(director).toContain("? { ...state, startupStage, phase: 'entering' }");
+    expect(director).not.toContain("startup-finished");
+    expect(app).toContain("scene.phase === 'startup'");
+    // The bar owns its own rung and its own art; the menu no longer decodes it.
+    expect(titleBar).toContain("reportReady('chrome')");
+    expect(titleBar).toContain('decodeShellChromeArt()');
+    expect(menu).not.toContain('reportReady');
+    expect(menu).not.toContain('ui-surfaces-hybrid-wood-oak-png');
+    expect(app).toContain("revealTitle={startupController.revealed('chrome')}");
+    // Committed identity, never browser intent.
+    expect(app).toContain('const committedPath = scene.current.pathname;');
+    expect(app).toContain('path={committedPath}');
+    expect(app).toContain('search={committedSearch}');
+    // Pending chrome is inert, not merely invisible: it outranks the curtain.
+    expect(styles).toMatch(/\.app-shell-titlebar\.reveal-pending \{[^}]*pointer-events: none/);
+  });
+
+  it('makes shell art a startup precondition and critical participants enforceable', () => {
+    const chromeCss = read('./ui/useInstalledChromeCss.ts');
+    const boundary = read('./ui/shell/SceneBoundary.tsx');
+    const main = read('./main.tsx');
+    const editor = read('./ui/LevelEditor.tsx');
+    // Chrome composition is COMPLETE — it decodes everything its own output references,
+    // so the bar's fill surface cannot be the one image left outside the guarantee.
+    expect(chromeCss).toContain('function referencedImageUrls');
+    expect(chromeCss).toContain("!url.startsWith('data:')");
+    expect(chromeCss).toContain('await Promise.all(referenced.map((url) => loadDecodedImage(url)))');
+    expect(main).toContain("retryStartup('shell-chrome-art', decodeShellChromeArt)");
+    expect(main.indexOf('shell-chrome-art')).toBeLessThan(main.indexOf("await import('./ui/App')"));
+    // A declared critical participant that never registers FAILS the scene.
+    expect(boundary).toContain('const missing = manifest.critical.filter((id) => !participantsRef.current.has(id))');
+    expect(boundary).toContain('declares critical participants that never registered');
+    // The editor registers the decomposition it already computes, rather than collapsing
+    // three separately-computed authorities into one participant.
+    const editorSource = editor.replace(/\r\n/g, '\n');
+    for (const id of ['document', 'board-compositors', 'visible-editor-chrome', 'level-editor']) {
+      expect(editorSource, id).toContain(`useSceneParticipant(\n    '${id}',`);
+    }
   });
 
   it('does not let menu, screen, or board readiness expire into success', () => {

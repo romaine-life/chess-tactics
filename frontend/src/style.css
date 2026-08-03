@@ -989,8 +989,12 @@ h1 {
 .app-shell-titlebar {
   transition: opacity var(--ds-duration-fade) var(--ds-ease-standard);
 }
+/* The bar is position:fixed at z-index 10000 — ABOVE the bootstrap curtain — so an
+   invisible pending bar would still swallow clicks meant for whatever is beneath it.
+   Pending means inert as well as unseen (ADR-0369). */
 .app-shell-titlebar.reveal-pending {
   opacity: 0;
+  pointer-events: none;
 }
 
 /* In-game confirmation dialog (ui/shared/ConfirmDialog.tsx) — replaces window.confirm() on
@@ -1600,6 +1604,22 @@ h1 {
 .predrawn-generation-frame-toolbar {
   justify-content: flex-start;
 }
+.predrawn-generation-frame-toolbar {
+  flex-wrap: wrap;
+}
+.predrawn-generation-frame-size {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+.predrawn-generation-frame-size-label {
+  color: var(--ds-ink-3, #9eb1c5);
+  font-size: var(--ds-text-xs);
+}
+.predrawn-generation-frame-size .settings-stepper-field {
+  width: 88px;
+}
 .predrawn-generation-frame-readout {
   min-width: 112px;
   color: var(--ds-ink-1, #eff9ff);
@@ -1649,6 +1669,33 @@ h1 {
   pointer-events: none;
   position: absolute;
   z-index: 40000;
+}
+/* The level's own camera boundary (ADR-0301) drawn inside the crop, in the same dashed language
+   the Board page uses: art outside it is unreachable, art inside it is what a player can pan to at
+   maximum zoom-out. Paint comes from .le-camera-boundary; only the stacking order is local. */
+.predrawn-generation-frame-stage .le-camera-boundary {
+  z-index: 39999;
+}
+/* Both boxes usually reach the crop edge here, so a label hanging above its box — the Board page
+   placement — would be clipped away by the stage. Seat them inside their boxes instead. */
+.predrawn-generation-frame-stage .le-camera-boundary-label,
+.predrawn-generation-frame-stage .predrawn-generation-frame-outline-label {
+  transform: none;
+}
+/* Seat the inner box's name on the opposite corner: the two boxes share a top-left region whenever
+   the crop is snug, and two names stacked there read as one garbled line. Stage-scoped so it beats
+   the shared label rule, which is defined later in this file. */
+.predrawn-generation-frame-stage .predrawn-generation-frame-outline-label {
+  inset: 0 -2px auto auto;
+  text-align: right;
+}
+/* The crop names itself on the one corner the two inner boxes never reach. Stage-scoped so it beats
+   the shared label rule's top-left placement, which is defined later in this file. */
+.predrawn-generation-frame-stage .predrawn-generation-frame-crop-label {
+  inset: auto auto 1px 3px;
+  pointer-events: none;
+  transform: none;
+  z-index: 40002;
 }
 .predrawn-generation-frame-footer p.is-error {
   color: #ffad9d;
@@ -3491,6 +3538,31 @@ h1 {
 .utility-piece-icon {
   height: 58px;
   width: 58px;
+}
+
+/* A compact unit reference uses the exact accepted player-side Battle sprite.
+   AlphaBoundIcon removes the live frame's transparent canvas from the fit so
+   the battlefield art stays legible in dense filters and pickers. */
+.battlefield-unit-icon {
+  display: inline-block;
+  flex: none;
+  overflow: visible;
+  position: relative;
+}
+
+.battlefield-unit-icon .alpha-bound-icon-image {
+  image-rendering: auto;
+  max-block-size: none;
+  max-inline-size: none;
+  object-fit: fill;
+  position: absolute;
+}
+
+.battlefield-unit-icon[data-alpha-fit="pending"] .alpha-bound-icon-image {
+  block-size: 100%;
+  inline-size: 100%;
+  inset: 0;
+  object-fit: contain;
 }
 
 .icon-players { background-image: var(--media-ui-kit-icons-players-png); }
@@ -7526,6 +7598,13 @@ body.loading-bootstrap .app-startup-status {
 .le-deployment-zone-head > div { display: flex; flex-direction: column; gap: 3px; }
 .le-deployment-zone-head span { color: #b7ccd8; font-size: var(--ds-text-xs); }
 .le-deployment-zone-help { color: #b7ccd8; font-size: var(--ds-text-xs); }
+.le-deployment-breakouts { display: flex; flex-direction: column; gap: 8px; }
+.le-deployment-breakout { display: flex; flex-direction: column; gap: 6px; }
+/* Beats `.le-deployment-zone-head > div`, which columns every direct child of the head row. */
+.le-deployment-zone-head > .le-deployment-breakout-controls { align-items: center; display: flex; flex-direction: row; gap: 10px; }
+.le-deployment-pawn-row { align-items: center; gap: 10px; }
+.le-deployment-pawn-row > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.le-deployment-pawn-help { color: #b7ccd8; font-size: var(--ds-text-xs); }
 .le-deployment-zone-head .le-seg-btn,
 .le-deployment-edit-zone { min-height: var(--le-inner-control-compact-h); min-width: 0; padding: 0 10px; }
 .le-deployment-zones { display: flex; flex-direction: column; gap: 5px; }
@@ -9013,16 +9092,15 @@ body.loading-bootstrap .app-startup-status {
     display: none;
   }
 
-  /* A Run's Conflict/Battle/level/phase orientation remains title-bar information
-     at compact widths (ADR-0359). Keep that one chip and shed War identity + gold. */
-  .app-shell-titlebar .run-topbar-status .skirmish-turn-plate,
-  .app-shell-titlebar .run-topbar-status .skirmish-clock {
+  /* A Run's measures — Ataraxia, gold, Conflict, Battle — are compact marks and
+     stay title-bar information at every width. The named identity chip is the
+     wide element, so that is what sheds first. */
+  .app-shell-titlebar .run-topbar-status .run-topbar-identity {
     display: none;
   }
 
-  .app-shell-titlebar .run-topbar-status .skirmish-objective {
+  .app-shell-titlebar .run-topbar-status .run-topbar-measures {
     display: flex;
-    min-inline-size: 150px;
   }
 
 }
@@ -13269,18 +13347,21 @@ body { font-size: 17px; }
   min-height: 64px;
 }
 
-.rail-lab-source-picker {
+/* Shared Studio stepper: [<] [ dropdown ] [>]. The arrows are fixed square ends so the
+   dropdown takes every remaining pixel -- item labels are long and the middle is the part
+   worth reading. */
+.studio-stepper-picker {
   display: grid;
   grid-template-columns: 36px minmax(0, 1fr) 36px;
   gap: 6px;
   min-width: 0;
 }
 
-.rail-lab-source-picker select {
+.studio-stepper-picker select {
   min-width: 0;
 }
 
-.rail-lab-source-step {
+.studio-stepper-step {
   height: 36px;
   min-width: 36px;
   padding: 0;
@@ -15312,7 +15393,11 @@ button.tileset-relationship-cell {
   outline-style: solid;
 }
 
-.le-camera-boundary-label {
+/* Every reference rectangle drawn over a board names itself in the same voice, so a second box is
+   never an unexplained shape the owner has to guess at. */
+.le-camera-boundary-label,
+.predrawn-generation-frame-outline-label,
+.predrawn-generation-frame-crop-label {
   color: #bcecff;
   display: block;
   font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
@@ -16949,7 +17034,11 @@ button.tileset-relationship-cell {
   z-index: 0;
 }
 
-.app-titlebar > :not(.app-titlebar-fill):not(.app-shell-titlebar-stud) {
+/* The bar stacks its own grid children. A portalled overlay that merely lands
+   inside the bar — a tooltip re-homed here to reach the chrome family scope — is
+   NOT one of them: forcing it relative defeats its fixed placement and drops it
+   at its flow position instead of beside the mark it explains. */
+.app-titlebar > :not(.app-titlebar-fill):not(.app-shell-titlebar-stud):not(.tooltip-pop-positioner) {
   position: relative;
   z-index: 2;
 }
@@ -17119,10 +17208,17 @@ button.tileset-relationship-cell {
   white-space: nowrap;
 }
 
-.titlebar-control--return,
 .titlebar-control--icon {
   inline-size: var(--titlebar-control-size, 52px);
   padding: 0;
+}
+
+/* A return is NAMED for where it lands ("‹ Back to Battle", "‹ Back to editor"), so it
+   takes the icon square as a floor and grows with its label. It was authored as a fixed
+   52px square beside the icon rule, which with `overflow: hidden` silently cropped every
+   label longer than the bare "Back" — the frame ate the last characters. */
+.titlebar-control--return {
+  min-inline-size: var(--titlebar-control-size, 52px);
 }
 
 .titlebar-control-glyph {
@@ -17365,6 +17461,27 @@ button.tileset-relationship-cell {
   letter-spacing: .14em;
   line-height: 1.2;
   text-transform: uppercase;
+}
+
+/* The screen-name line reads as a route when a screen names its own position in it
+   (Run › Shop). The trailing segment is a portal the screen fills; while it is empty
+   the line is exactly the plain screen name it has always been, chevron and all
+   spacing included. Orientation copy, never a control (ADR-0300). */
+.brand-lockup-screen-line {
+  align-items: baseline;
+  display: flex;
+  min-width: 0;
+}
+
+.brand-lockup-route:not(:empty) {
+  color: #f0eadb;
+}
+
+.brand-lockup-route:not(:empty)::before {
+  color: #79d3ff;
+  content: "\203A";
+  margin-inline: .5em .5em;
+  opacity: .75;
 }
 
 .settings-tab span,
@@ -18978,20 +19095,78 @@ button.tileset-relationship-cell {
   image-rendering: pixelated;
   inline-size: 100%;
   object-fit: contain;
-  transform: scale(1.55);
 }
 
 .run-gold-icon.is-unavailable {
   font-size: var(--ds-text-sm);
 }
 
+/* Compact costs outside a card draw the transparent 112px extraction of the
+   accepted card coin. The live number is laid over those same pixels instead
+   of spelling out gold. */
+.run-card-cost-coin {
+  --run-card-cost-coin-size: 24px;
+  block-size: var(--run-card-cost-coin-size);
+  display: inline-grid;
+  flex: none;
+  inline-size: var(--run-card-cost-coin-size);
+  line-height: 1;
+  overflow: hidden;
+  place-items: center;
+  position: relative;
+  vertical-align: middle;
+}
+
+.run-card-cost-coin-art {
+  block-size: 100%;
+  image-rendering: pixelated;
+  inline-size: 100%;
+  inset: 0;
+  max-inline-size: none;
+  object-fit: contain;
+  pointer-events: none;
+  position: absolute;
+}
+
+.run-card-cost-coin-value {
+  color: #17191b;
+  font-family: var(--ds-font-display);
+  font-size: calc(var(--run-card-cost-coin-size) * .52);
+  font-weight: 400;
+  line-height: 1;
+  position: relative;
+  text-shadow: 0 1px rgba(255, 232, 161, .55);
+  /* Match the card face's measured ink-centre correction (ADR-0359). */
+  transform: translateY(.0667em);
+  z-index: 1;
+}
+
 .run-gold-amount--title {
   font-size: var(--ds-text-md);
 }
 
+.run-topbar-measures .run-topbar-rung,
+.run-topbar-measures .run-gold-icon,
 .run-gold-amount--title .run-gold-icon {
-  block-size: 22px;
-  inline-size: 22px;
+  block-size: var(--run-measure-seat, 22px);
+  inline-size: var(--run-measure-seat, 22px);
+}
+
+/* Ataraxia's mark is the carved rung numeral itself (ADR-0363), so it takes the
+   measure's whole seat with no digit beside it. Where the forged set is not
+   installed, the seat still states the rung as type. */
+.run-topbar-rung {
+  align-items: center;
+  display: inline-flex;
+  flex: none;
+  justify-content: center;
+}
+
+.run-topbar-rung img {
+  block-size: 100%;
+  image-rendering: pixelated;
+  inline-size: 100%;
+  object-fit: contain;
 }
 
 .run-gold-amount--button {
@@ -19002,6 +19177,72 @@ button.tileset-relationship-cell {
   block-size: 18px;
   inline-size: 18px;
 }
+
+/* The Run's repeatable ideas — Ataraxia, Conflict, Battle — each own a native icon
+   seat in the persistent title bar. The seat keeps its geometry whether or not that
+   variant's art decision exists yet, so installing one later never moves the label
+   beside it. Layout only: the chip frame is the kit panel, never a second surface. */
+.run-progress-icon {
+  align-items: center;
+  block-size: var(--run-measure-seat);
+  display: inline-flex;
+  flex: none;
+  inline-size: var(--run-measure-seat);
+  justify-content: center;
+}
+
+/* Every mark ships trimmed to its own ink, so the seat needs no per-icon
+   compensation: contain in a square seat draws each one at the same size, and the
+   only spacing left is the gap the row asks for. */
+.run-progress-icon img {
+  block-size: 100%;
+  image-rendering: pixelated;
+  inline-size: 100%;
+  object-fit: contain;
+}
+
+/* A measure is one icon and its number, sitting bare on the bar — Ataraxia tier,
+   gold, Conflict, Battle are all the same kind of fact and read as one row of
+   marks. Only the War/Battle identity, which cannot be drawn, keeps a chip
+   frame; a measure never gets a box of its own. */
+.run-topbar-measures {
+  /* One seat for every mark, because every mark is trimmed to its own ink: the
+     coin, the wreath and the drum all draw at the same size, and the gap between
+     a mark and its number is the same gap everywhere in the row. */
+  --run-measure-seat: 30px;
+  align-items: center;
+  display: flex;
+  gap: var(--ds-inline);
+  min-width: 0;
+}
+
+.run-topbar-measure {
+  align-items: center;
+  color: #eaf6ff;
+  display: inline-flex;
+  font: var(--ds-weight-strong) var(--ds-text-md)/1 var(--ds-font-display);
+  gap: var(--ds-space-1);
+  letter-spacing: .04em;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+/* A measure has no frame between it and the bar's painted wall, so its mark needs
+   a stroke to hold its silhouette. The stroke is baked into the artwork
+   (scripts/bake-icon-stroke.mjs), the way the accepted ui-kit icons carry theirs —
+   NOT a CSS shadow standing in for one. Only the number gets a contact shadow,
+   which is ordinary type treatment. */
+.run-topbar-measure > span {
+  text-shadow: 0 2px 0 #02070b;
+}
+
+/* A mark is a symbol standing in for a word, so every measure names itself on
+   hover or keyboard focus through the shared Tooltip. The popup owns its whole
+   treatment (ADR-0362's promotion); this only keeps the trigger's own layout. */
+.run-topbar-measure-tip {
+  min-width: 0;
+}
+
 
 .run-victory-summary > span + span::before {
   content: "·";
@@ -19098,23 +19339,6 @@ button.tileset-relationship-cell {
   filter: drop-shadow(0 2px 1px rgba(0, 0, 0, .85));
 }
 
-.run-relic-tooltip-pop {
-  display: grid;
-  gap: var(--ds-space-1);
-  padding: var(--ds-space-2) var(--ds-space-3);
-}
-
-.run-relic-tooltip-name {
-  color: #9fe7ff;
-  font: var(--ds-weight-regular) var(--ds-text-sm)/1.15 var(--ds-font-display);
-  letter-spacing: var(--ds-tracking-tight);
-}
-
-.run-relic-tooltip-description {
-  color: #e5edf3;
-  font: var(--ds-weight-regular) var(--ds-text-xs)/1.4 var(--ds-font-sans);
-}
-
 .run-screen .run-relic-strip {
   max-inline-size: calc(100% - (2 * var(--ds-space-3)));
 }
@@ -19177,6 +19401,155 @@ button.tileset-relationship-cell {
   block-size: auto;
 }
 
+/* Relic-mat review composite: chosen backdrop, mat over it, live relic cards on top.
+   Layout only — every visible surface in the stack is generated art or an existing
+   chrome unit, so nothing here paints. The mat and the card row share one grid cell
+   deliberately: a mat that fails to contain the row must show that it fails. */
+.relic-mat-stage {
+  aspect-ratio: 16 / 9;
+  display: grid;
+  inline-size: 100%;
+  overflow: hidden;
+  place-items: center;
+  position: relative;
+}
+
+.relic-mat-backdrop {
+  block-size: 100%;
+  image-rendering: pixelated;
+  inline-size: 100%;
+  inset: 0;
+  object-fit: cover;
+  position: absolute;
+}
+
+/* The CARD ROW sizes this, not the stage: the layer shrinks to the relics' own
+   max-content width and the mat is drawn to that plus one bleed on each side. Sizing the
+   mat as a share of the stage instead makes it grow with the viewport and swallow the
+   backdrop it is supposed to be lying on. */
+/* --relic-mat-scale is the mat's width as a multiple of the relic row's. It is the one
+   number this composite is tuned by, so the Viewer drives it directly and the committed
+   value below is what the Viewer's reset returns to. */
+.relic-mat-layer {
+  --relic-mat-scale: 1.74;
+  display: grid;
+  /* Leave the overhang room, or a narrow stage lets the row fill it and the mat's torn
+     edges are the first thing clipped away -- the one part of it that has to be seen. */
+  max-inline-size: calc(100% / var(--relic-mat-scale));
+  place-items: center;
+  position: relative;
+}
+
+/* The row's width plus one bleed each side. Absolute so the mat contributes nothing to
+   the layer's intrinsic width -- the row alone decides that.
+   Height stays auto so the mat keeps its own aspect ratio: stretching it to the row's box
+   would distort the torn silhouette and cropping to fit would cut it off. That makes the
+   mat taller than the row, and grid/flex centring of an overflowing item is not reliable
+   here (it resolved to top-aligned), so the block centre is pinned outright. */
+.relic-mat-art {
+  block-size: auto;
+  image-rendering: pixelated;
+  inline-size: calc(100% * var(--relic-mat-scale));
+  inset-block-start: 50%;
+  inset-inline-start: calc((100% - 100% * var(--relic-mat-scale)) / 2);
+  position: absolute;
+  translate: 0 -50%;
+}
+
+/* The offers themselves: the relic icon and nothing else. No card, no name, no effect
+   text -- the reading is the art, and the words arrive on hover through the shared
+   Tooltip. This row is what gives the layer its width, so the mat ends up sized to the
+   relics rather than to a panel wrapped around them. */
+.relic-mat-cards {
+  display: flex;
+  gap: var(--ds-space-7);
+  position: relative;
+}
+
+/* The icons are dropped straight onto painted cloth, stone or wood, so nothing separates
+   their silhouette from what is behind them. A hard one-pixel stroke does that without
+   touching the art or putting a frame back around it. */
+.relic-mat-offer .run-relic-icon {
+  overflow: visible;
+}
+
+.run-vacantia-take {
+  /* The relic IS the control here -- the take target is the art, not a panel around it.
+     These declarations only remove the shell's default button chrome; they paint no
+     parallel surface of their own. */
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  cursor: pointer;
+  display: inline-flex;
+  padding: 0;
+}
+
+.run-vacantia-take:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.run-vacantia-content {
+  display: grid;
+  gap: var(--ds-stack);
+  justify-items: start;
+}
+
+.run-vacantia-lede {
+  margin: 0;
+}
+
+.relic-mat-offer .run-relic-icon img {
+  --relic-mat-stroke: rgb(16 12 9 / 0.92);
+  filter:
+    drop-shadow(1px 0 0 var(--relic-mat-stroke))
+    drop-shadow(-1px 0 0 var(--relic-mat-stroke))
+    drop-shadow(0 1px 0 var(--relic-mat-stroke))
+    drop-shadow(0 -1px 0 var(--relic-mat-stroke));
+}
+
+/* Catalog thumbnails carry no cards, so nothing is there to size the layer. Hold the
+   same proportion the real composite lands on. */
+.relic-mat-stage[data-cards='off'] .relic-mat-layer {
+  inline-size: 68%;
+}
+
+.relic-mat-stage[data-cards='off'] .relic-mat-art {
+  inline-size: 100%;
+  inset-inline-start: 0;
+}
+
+/* The Viewer overrides --relic-mat-scale live while it is being tuned. */
+.relic-mat-stage[data-cards='on'] .relic-mat-layer {
+  --relic-mat-scale: var(--relic-mat-scale-tuned, 1.74);
+}
+
+.tileset-studio-card-image.relic-mat-card-image {
+  min-height: 0;
+}
+
+/* Beats the base .tileset-studio-card-image img rule, which sizes every catalog image to
+   iso-tile dimensions -- correct for a tile thumbnail, but it shrinks a backdrop to a
+   corner and detaches the mat from it, which is the one thing this card exists to show. */
+.tileset-studio-card-image.relic-mat-card-image .relic-mat-backdrop {
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.tileset-studio-card-image.relic-mat-card-image .relic-mat-art {
+  height: auto;
+  object-fit: contain;
+  width: 100%;
+}
+
+.relic-mat-figure {
+  flex: 1 1 100%;
+  min-inline-size: 0;
+}
+
 .run-relic-review-grid {
   display: grid;
   gap: var(--ds-inline-tight);
@@ -19205,6 +19578,57 @@ button.tileset-relationship-cell {
 }
 
 .run-relic-review-grid small {
+  color: var(--skirmish-muted);
+}
+
+/* Run title-bar icon review: every candidate is mounted in the SAME chip the live
+   title bar paints, with its native 64x64 beside it. Layout only — the chip brings
+   its own kit frame, and the review never restyles the seat it is judging. */
+.run-progress-icon-review-section {
+  display: grid;
+  gap: var(--ds-inline-tight);
+}
+
+.run-progress-icon-review-section > h2,
+.run-progress-icon-review-section > p {
+  margin: 0;
+}
+
+.run-progress-icon-review-grid {
+  display: grid;
+  gap: var(--ds-inline);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.run-progress-icon-review-grid figure {
+  align-items: start;
+  display: grid;
+  gap: var(--ds-inline);
+  grid-template-columns: 64px minmax(0, 1fr);
+  margin: 0;
+  padding: var(--ds-inset);
+}
+
+.run-progress-icon-review-detail {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  justify-items: start;
+  min-width: 0;
+}
+
+.run-progress-icon-review-native {
+  block-size: 64px;
+  image-rendering: pixelated;
+  inline-size: 64px;
+  object-fit: contain;
+}
+
+.run-progress-icon-review-grid figcaption {
+  display: grid;
+  gap: var(--ds-space-1);
+}
+
+.run-progress-icon-review-grid small {
   color: var(--skirmish-muted);
 }
 
@@ -19359,9 +19783,9 @@ button.tileset-relationship-cell {
   object-fit: cover;
 }
 
-/* The heading and gold line read over the scene rather than above it. Selling is a Shop
+/* The gold line reads over the scene rather than above it. Selling is a Shop
    activity and stands in the same scene, so its heading gets the same treatment. */
-.run-shop-workspace.has-scene .run-shop-workspace-content > :is(h2, .run-shop-rules),
+.run-shop-workspace.has-scene .run-shop-workspace-content > .run-shop-rules,
 .run-sell-workspace.has-scene .run-sell-workspace-content > :is(h2, p) {
   text-shadow: 0 2px 6px rgba(2, 7, 12, .85);
 }
@@ -20336,7 +20760,8 @@ button.tileset-relationship-cell {
 }
 
 .enchiridion-card-panel.enchiridion-panel-unframed,
-.enchiridion-card-types-panel.enchiridion-panel-unframed {
+.enchiridion-card-types-panel.enchiridion-panel-unframed,
+.enchiridion-ataraxia-panel.enchiridion-panel-unframed {
   grid-template-rows: auto auto minmax(0, 1fr);
 }
 
@@ -20351,6 +20776,7 @@ button.tileset-relationship-cell {
 
 .enchiridion-unit-grid,
 .enchiridion-terrain-list,
+.enchiridion-ataraxia-list,
 .enchiridion-ability-list {
   align-content: start;
   display: grid;
@@ -20398,7 +20824,8 @@ button.tileset-relationship-cell {
 }
 
 .enchiridion-terrain-row,
-.enchiridion-ability-card {
+.enchiridion-ability-card,
+.enchiridion-ataraxia-card {
   align-items: center;
   display: grid;
   gap: var(--ds-inset);
@@ -20409,6 +20836,7 @@ button.tileset-relationship-cell {
 
 .enchiridion-terrain-row > span:last-child,
 .enchiridion-ability-card > span:last-child,
+.enchiridion-ataraxia-card > span:last-child,
 .enchiridion-rule-exceptions {
   align-content: start;
   display: grid;
@@ -20424,6 +20852,42 @@ button.tileset-relationship-cell {
 .enchiridion-ability-card > img {
   image-rendering: pixelated;
   object-fit: contain;
+}
+
+/* The rung IS the mark: the numeral occupies the seat its neighbouring sections give a
+   glyph. The column is min-42px and grows to the widest numeral across every row, so a
+   later VIII widens the seat for the whole ladder instead of stepping one row out. */
+.enchiridion-ataraxia-card {
+  grid-template-columns: minmax(56px, auto) minmax(0, 1fr);
+}
+
+/* The rung reads first, so it sits a clear step above the row's own heading rather than
+   beside it. The pixel face carries deep internal leading — its ink is roughly half the
+   declared size — which is why this is a multiple of the largest body step. */
+.enchiridion-ataraxia-numeral {
+  font-size: calc(var(--ds-text-xl) * 1.5);
+  line-height: 1;
+  text-align: center;
+}
+
+/* The forged rung is a 64px carved glyph; it seats at the same width the typed rung
+   occupies so the two render paths cannot shift the copy beside them. */
+.enchiridion-ataraxia-numeral.is-art {
+  block-size: 56px;
+  image-rendering: pixelated;
+  inline-size: 56px;
+  object-fit: contain;
+}
+
+/* A locked tier is still readable — the ladder is a reference, not a teaser. Its numeral
+   and standing line carry the state; the impact statement keeps full contrast. */
+.enchiridion-ataraxia-card.is-locked > .enchiridion-ataraxia-numeral {
+  color: var(--muted);
+}
+
+.enchiridion-ataraxia-standing {
+  color: var(--muted);
+  font-size: var(--ds-text-xs);
 }
 
 .enchiridion-rule-exceptions {
@@ -20582,21 +21046,10 @@ button.tileset-relationship-cell {
   margin: 0;
 }
 
-/* Cards codex: a value-grouped browser of the full card deck beside one selected
-   card rendered as its real face (the same RunCard the Run deals). */
-.enchiridion-card-layout {
-  align-content: start;
-  align-items: start;
-  block-size: 100%;
-  display: grid;
-  gap: var(--ds-stack);
-  grid-template-columns: minmax(280px, 1fr) minmax(232px, 300px);
-  grid-template-rows: minmax(0, 1fr);
-  min-block-size: 0;
-  overflow: hidden;
-}
-
-.enchiridion-card-browser-column {
+/* Cards is the terminal third Enchiridion column, not a master-detail pair. The
+   two rail predecessors keep their canonical widths; this one gallery consumes
+   every remaining pixel and scrolls only from top to bottom (ADR-0364). */
+.enchiridion-card-gallery-layout {
   block-size: 100%;
   display: grid;
   gap: var(--ds-stack);
@@ -20632,6 +21085,24 @@ button.tileset-relationship-cell {
   inline-size: 100%;
 }
 
+.enchiridion-card-filter-gold-amount,
+.enchiridion-card-group-gold {
+  --run-card-cost-coin-size: 22px;
+}
+
+.enchiridion-card-filter-unit-label {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--ds-space-1);
+  min-inline-size: 0;
+}
+
+.enchiridion-card-filter-unit-icon {
+  block-size: 28px;
+  inline-size: 28px;
+  margin-block: -6px;
+}
+
 .enchiridion-card-filter-count {
   align-self: center;
   color: var(--skirmish-muted);
@@ -20639,56 +21110,65 @@ button.tileset-relationship-cell {
   white-space: nowrap;
 }
 
-.enchiridion-card-browser {
-  align-content: start;
+.enchiridion-card-gallery-scroll {
   block-size: 100%;
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
+.enchiridion-card-gallery-scroll > .kit-scroll-content {
+  box-sizing: border-box;
+}
+
+.enchiridion-card-gallery-browser {
+  align-content: start;
   display: grid;
   gap: var(--ds-stack);
   min-block-size: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding-inline-end: 4px;
+  min-inline-size: 0;
 }
 
-.enchiridion-card-group {
+.enchiridion-card-gallery-group {
   align-content: start;
   display: grid;
   gap: var(--ds-space-2);
+  min-inline-size: 0;
 }
 
-.enchiridion-card-rows {
-  align-content: start;
+.enchiridion-card-gallery-heading {
+  align-items: center;
+  display: flex;
+}
+
+.enchiridion-card-gallery-grid {
   display: grid;
-  gap: var(--ds-space-2);
-  list-style: none;
-  margin: 0;
-  padding: 0;
+  gap: var(--ds-stack);
+  grid-template-columns: repeat(auto-fill, minmax(188px, 232px));
+  justify-content: start;
+  min-inline-size: 0;
 }
 
-.enchiridion-card-row {
-  align-content: center;
+.enchiridion-card-gallery-item {
+  min-inline-size: 0;
+}
+
+.enchiridion-card-gallery-trigger {
+  all: unset;
+  box-sizing: border-box;
   cursor: pointer;
-  display: grid;
-  gap: 2px;
+  display: block;
   inline-size: 100%;
-  min-block-size: 52px;
-  padding: 6px 10px;
-  text-align: start;
+  position: relative;
 }
 
-.enchiridion-card-row-name {
-  font-size: var(--ds-text-md);
+.enchiridion-card-gallery-trigger > .run-card-action.is-reference {
+  cursor: inherit;
+  pointer-events: none;
 }
 
-.enchiridion-card-row-contents {
-  font-size: var(--ds-text-sm);
-  opacity: .8;
-}
-
-.enchiridion-card-detail {
-  align-self: start;
-  display: grid;
-  min-block-size: 0;
+.enchiridion-card-gallery-trigger:is(:focus-visible, .is-addressed) {
+  outline: 2px solid rgba(101, 184, 255, .82);
+  outline-offset: 3px;
 }
 
 .enchiridion-card-type-layout {
@@ -21980,17 +22460,88 @@ button.tileset-relationship-cell {
 .infotip-dot:focus-visible { outline: 2px solid rgba(101, 184, 255, .72); outline-offset: 2px; }
 .tooltip { position: relative; display: inline-flex; }
 .tooltip-trigger { display: inline-flex; }
+/* The positioner holds the tip AND a definition pop for every mechanic the tip names
+   (ADR-0370), so it is a column, not a single slot. `align-items: stretch` squares the
+   stack to its widest pane: ragged pane widths read as unrelated popups rather than one
+   explanation. The gap is the pop's own inner gap, so the distance BETWEEN panes matches
+   the distance between a pane's parts. */
 .tooltip-pop-positioner {
+  align-items: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
   inline-size: max-content;
   pointer-events: none;
   position: fixed;
   z-index: 1000;
 }
+/* The pop owns the whole tooltip treatment, so no caller restates it. A grid
+   with one row per part is what the Run tooltips already established; it is the
+   default here rather than a class each call site has to remember.
+
+   `display` is load-bearing, not cosmetic: InnerChromeBox renders the pop as a
+   <span>, and an inline box ignores inline-size/max-inline-size (the tip never
+   wraps to its own width) and paints the 7px inner-box border-image once per
+   inline fragment — the doubled frame with text spilling outside it. */
 .infotip-pop {
+  box-sizing: border-box;
+  display: grid;
+  /* One part per row. The gap has to clear the body's own inter-line space
+     (line-height 1.4 leaves ~5.5px between wrapped lines) or a paragraph reads
+     looser than its distance to the title, and the tip becomes a stack of
+     strips instead of a heading over a block. */
+  gap: var(--ds-space-2);
   max-inline-size: 100%;
-  padding: 8px 10px; color: #cfd6df; font: 400 12px/1.45 system-ui, sans-serif; text-align: left;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  color: #e5edf3;
+  font: var(--ds-weight-regular) var(--ds-text-md)/1.4 var(--ds-font-sans);
+  text-align: left;
   text-transform: none; letter-spacing: normal;
   pointer-events: none;
+  /* A tip floats over live artwork, so it needs an OPAQUE bed: the inner-box
+     frame's own 9-slice fill is drawn to sit on a panel that already has one.
+     The registered inner surface fill supplies it (below); these two only make
+     room for it to sit under the content. */
+  position: relative;
+}
+
+.infotip-pop > .tooltip-pop-fill {
+  inset: 0;
+}
+
+.infotip-pop > :not(.tooltip-pop-fill) {
+  position: relative;
+  z-index: 1;
+}
+
+/* The body carries whatever parts a caller passes — the Army's unit-trait tip
+   passes a description AND its source. They were rows of the pop's own grid
+   before the body became one element, so the body IS that grid now. */
+.tooltip-body {
+  display: grid;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+/* The named thing the tip is about, in the display face — the Run relic and
+   ability tips set the precedent and every tip now follows it. */
+.tooltip-title {
+  color: #9fe7ff;
+  font: var(--ds-weight-regular) var(--ds-text-lg)/1.15 var(--ds-font-display);
+  letter-spacing: var(--ds-tracking-tight);
+}
+/* A named mechanic inside explanatory prose. It takes the title's own color because the
+   pane directly below it is headed by that same word in that same color — the term IS
+   the reference, so it needs no icon, underline, second control, or paint of its own.
+   <b> and not <mark>: this is a name being drawn to the eye, not a search hit, and
+   <mark>'s user-agent highlight would have to be painted back out. */
+.tooltip-keyword {
+  color: #9fe7ff;
+  font-weight: var(--ds-weight-medium);
+}
+/* A definition is subordinate to the tip that raised it: same treatment, quieter title,
+   so the stack reads as one explanation with a heading rather than as equal popups. */
+.tooltip-keyword-pop > .tooltip-title {
+  font-size: var(--ds-text-md);
 }
 .le-fence-review-banner {
   align-items: center;

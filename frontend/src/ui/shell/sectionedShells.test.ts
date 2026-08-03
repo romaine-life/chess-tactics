@@ -81,6 +81,7 @@ const FAMILIES: ReadonlyArray<{
       'card-types': address('/enchiridion/card-types'),
       relics: address('/enchiridion/relics'),
       abilities: address('/enchiridion/abilities'),
+      ataraxia: address('/enchiridion/ataraxia'),
     },
   },
   {
@@ -118,6 +119,7 @@ const FAMILIES: ReadonlyArray<{
     sections: {
       enchiridion: address('/run/strategikon/enchiridion/units', '', runSource),
       prosopography: address('/run/strategikon/prosopography', '', runSource),
+      chartulary: address('/run/strategikon/chartulary', '', runSource),
       lipsanotheca: address('/run/strategikon/lipsanotheca', '', runSource),
     },
   },
@@ -131,6 +133,7 @@ const FAMILIES: ReadonlyArray<{
       'card-types': address('/run/strategikon/enchiridion/card-types', '', runSource),
       relics: address('/run/strategikon/enchiridion/relics', '', runSource),
       abilities: address('/run/strategikon/enchiridion/abilities', '', runSource),
+      ataraxia: address('/run/strategikon/enchiridion/ataraxia', '', runSource),
     },
   },
 ];

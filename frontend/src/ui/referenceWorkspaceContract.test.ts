@@ -10,6 +10,7 @@ const style = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const skirmish = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
 const hud = readFileSync(new URL('./SkirmishHud.tsx', import.meta.url), 'utf8');
 const runArmy = readFileSync(new URL('./RunArmyWorkspace.tsx', import.meta.url), 'utf8');
+const ataraxiaNumeral = readFileSync(new URL('./ataraxiaNumeral.ts', import.meta.url), 'utf8');
 
 describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
   it('describes exactly the four unit abilities without card qualifiers', () => {
@@ -32,6 +33,66 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(abilities).not.toContain('Upon acquisition, one randomly chosen unit on this card gains Discipline.');
   });
 
+  it('reads the Ataraxia ladder from the Run model instead of restating it', () => {
+    const start = enchiridion.indexOf('function AtaraxiaSection');
+    const end = enchiridion.indexOf('export function EnchiridionReference', start);
+    const ataraxia = enchiridion.slice(start, end);
+    // The reference enumerates INSTALLED tiers and prints their authored anatomy, so a
+    // tier installed in the model appears here without a second copy of its copy.
+    expect(ataraxia).toContain('ATARAXIA_TIERS.map');
+    expect(ataraxia).toContain('ATARAXIA_BY_TIER[tier]');
+    // A row is its rung and its descriptive name; the ladder's own name is the section
+    // heading, so `label` (which repeats it) belongs to surfaces away from that heading.
+    // The numeral takes the mark seat — it is not a prefix on the heading.
+    expect(ataraxia).toContain('<span className="enchiridion-ataraxia-numeral">{definition.numeral}</span>');
+    expect(ataraxia).toContain('<h3>{definition.title}</h3>');
+    expect(ataraxia).not.toContain('{definition.numeral} — {definition.title}');
+    expect(ataraxia).not.toContain('{definition.label} — {definition.title}');
+    expect(ataraxia).toContain('<p>{definition.effect}</p>');
+    expect(ataraxia).not.toContain('The Untroubled Mind');
+    expect(ataraxia).not.toContain('The Great Mortality');
+    // Tier zero takes no special branch (ADR-0291); only lock standing varies.
+    expect(ataraxia).not.toMatch(/tier === 0/);
+    expect(ataraxia).toContain('const locked = tier > unlockedThrough;');
+    expect(ataraxia).toContain('RUN_PROGRESSION_EVENT');
+    // A row carries no glyph at all: the section's rail mark would label nothing on a
+    // numbered rung, and lock state is stated in words by the standing line.
+    expect(ataraxia).not.toContain('SECTION_ICON_SRC.ataraxia');
+    expect(enchiridion).not.toContain('ATARAXIA_LOCKED_ICON_SRC');
+    expect(style).toMatch(/\.enchiridion-ataraxia-card\s*\{[\s\S]*?grid-template-columns:\s*minmax\(56px, auto\) minmax\(0, 1fr\)/);
+    expect(enchiridion).toContain("if (section === 'ataraxia') return <AtaraxiaSection framed={framed} />;");
+    expect(enchiridion).toContain("ataraxia: installedUiMedia('ui-kit-icons-game-objective-png')");
+  });
+
+  it('reads the forged rung marks by prefix so an uninstalled set degrades to type', () => {
+    // The art set is installed live media, not a required slot. `liveMediaForSlot` throws
+    // on an absent slot and would take the whole section down on a deployment where the
+    // candidates have not been accepted — so the set is read by PREFIX and the typed
+    // numeral remains the fallback render path (ADR-0363).
+    // The resolver is ONE module because the numeral is Ataraxia's mark wherever a
+    // tier is shown — the ladder here and the Run title bar both read it (ADR-0059).
+    expect(ataraxiaNumeral).toContain("const ATARAXIA_NUMERAL_SLOT_PREFIX = 'ui/kit/numerals/stone/'");
+    expect(ataraxiaNumeral).toContain('liveMediaSlotsWithPrefix(ATARAXIA_NUMERAL_SLOT_PREFIX)');
+    expect(ataraxiaNumeral).not.toContain('liveMediaForSlot(ataraxiaNumeralSlot');
+    expect(ataraxiaNumeral).not.toContain('resolvedLiveMediaUrl(ataraxiaNumeralSlot');
+    expect(enchiridion).toContain("import { ataraxiaNumeralArtUrl } from './ataraxiaNumeral'");
+    const start = enchiridion.indexOf('function AtaraxiaSection');
+    const end = enchiridion.indexOf('export function EnchiridionReference', start);
+    const ataraxia = enchiridion.slice(start, end);
+    // Both render paths, and the typed one is what an uninstalled set falls back to.
+    expect(ataraxia).toContain('className="enchiridion-ataraxia-numeral is-art"');
+    expect(ataraxia).toContain('<span className="enchiridion-ataraxia-numeral">{definition.numeral}</span>');
+    // The slug rule is shared verbatim with the forge that uploads the candidates.
+    expect(ataraxiaNumeral).toContain("numeral === '0' ? 'zero' : numeral.toLowerCase()");
+    const forge = readFileSync(new URL('../../scripts/forge-ataraxia-numerals.mjs', import.meta.url), 'utf8');
+    expect(forge).toContain("{ key: '0', slot: 'zero'");
+    expect(forge).toContain("{ key: 'VIII', slot: 'viii'");
+    // The whole ladder is forged in one pass — a designed tier must not wait on art.
+    expect(forge.match(/\{ key: '/g)).toHaveLength(11);
+    expect(forge).toContain('styleAnchorThreadId');
+    expect(forge).toContain('imageGenVerdict');
+  });
+
   it('keeps the exact knight and bishop terrain exceptions in the shared reference', () => {
     expect(enchiridion).toContain('Knights</strong> jump over gaps, fences, and intervening obstacles');
     expect(enchiridion).toContain('Obstacles on neighboring non-diagonal tiles are ignored');
@@ -43,9 +104,14 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(enchiridion).toContain('<ApparatusRailColumn className="enchiridion-section-rail"');
     expect(strategikon).toContain('<ApparatusRailColumn className="strategikon-rail"');
     expect(strategikon).toContain('<EnchiridionSectionRail');
-    expect(strategikon.match(/<ApparatusRailTab/g)).toHaveLength(3);
+    expect(strategikon.match(/<ApparatusRailTab/g)).toHaveLength(4);
     expect(strategikon).toContain('title="The Martial Prosopography — Current Army"');
+    expect(strategikon).toContain('title="The Chartulary — Held Cards"');
     expect(strategikon).toContain('title="The Lipsanotheca — Held Relics"');
+    // Adjacent Run registers never share one mark: the army takes the Units reference's
+    // mark and the Chartulary takes the Cards reference's.
+    expect(strategikon).toContain("iconSrc={installedUiMedia('ui-kit-icons-unit-studio-png')}");
+    expect(strategikon).toContain("iconSrc={installedUiMedia('ui-kit-icons-players-png')}");
   });
 
   it('uses the canonical terrain-tile glyph instead of the creator-tools grid mark', () => {
@@ -156,15 +222,19 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(strategikon).not.toContain('relicHref');
   });
 
-  it('lists the full card deck as real card faces with routed selection', () => {
+  it('uses the full terminal content column as a routed gallery of real card faces', () => {
     const start = enchiridion.indexOf('export function CardCodex');
     const end = enchiridion.indexOf('type CardTypeReferenceDefinition', start);
     const cardCodex = enchiridion.slice(start, end);
-    // The browser lists every deck card grouped by value; the detail is the exact
-    // card face the Run deals (one selection, one description — ADR-0253's shape).
+    // Cards are the records themselves; there is deliberately no fourth-column
+    // detail and no compact prose list duplicating those faces (ADR-0364).
     expect(cardCodex).toContain('RUN_CARD_DECK');
-    // The detail is the same live-media-backed trading-card face the Run deals.
-    expect(cardCodex).toContain('<RunCard card={selected} mode="reference" />');
+    expect(cardCodex).toContain('className="enchiridion-card-gallery-layout"');
+    expect(cardCodex).toContain('className="enchiridion-card-gallery-grid"');
+    expect(cardCodex).toContain('<RunCard card={card} mode="reference" />');
+    expect(cardCodex).not.toContain('<RunCard card={selected}');
+    expect(cardCodex).not.toContain('enchiridion-card-detail');
+    expect(cardCodex).not.toContain('enchiridion-card-row');
     expect(cardCodex).not.toContain('CardDetailStage');
     expect(cardCodex).toContain('runCardName(card)');
     expect(cardCodex).toContain('cardContentsLabel(card)');
@@ -178,14 +248,29 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
   });
 
   it('filters cards by intersecting gold and contained-unit choices', () => {
-    const start = enchiridion.indexOf('export function CardCodex');
+    const start = enchiridion.indexOf('export type CardGoldFilter');
     const end = enchiridion.indexOf('type CardTypeReferenceDefinition', start);
     const cardCodex = enchiridion.slice(start, end);
     expect(cardCodex).toContain('cardMatchesFilters(card, goldFilter, unitFilter)');
-    expect(cardCodex).toContain('testId="enchiridion-card-gold-filter"');
-    expect(cardCodex).toContain('testId="enchiridion-card-unit-filter"');
+    // ONE filter row governs both card galleries; each host names its own test ids.
+    expect(cardCodex).toContain('testId={`${testIdPrefix}-gold-filter`}');
+    expect(cardCodex).toContain('testId={`${testIdPrefix}-unit-filter`}');
+    expect(cardCodex).toContain('testIdPrefix="enchiridion-card"');
     expect(cardCodex).toContain('<h3>No matching cards</h3>');
-    expect(cardCodex).toContain('<RunCard card={selected} mode="reference" />');
+    expect(cardCodex).toContain('<RunCard card={card} mode="reference" />');
+    // Compact amounts reuse the exact numbered coin from the card face. The
+    // contained-unit choices retain their labels and add the accepted Battle sprite.
+    expect(cardCodex).toContain('<RunCardCostCoin value={Number(value)}');
+    expect(cardCodex).toContain('<RunCardCostCoin value={value}');
+    expect(cardCodex).not.toContain('`${value} gold`');
+    expect(cardCodex).toContain('<PieceTypeIcon type={value}');
+    expect(cardCodex).toContain('<span>{PIECE_LABEL[value]}</span>');
+    expect(cardCodex).toContain('<KitScroll className="enchiridion-card-gallery-scroll">');
+    expect(style).not.toMatch(/\.run-card-cost-coin\s*\{[^}]*clip-path:/s);
+    expect(style).toMatch(/\.run-card-cost-coin-art\s*\{[^}]*inset:\s*0;[^}]*object-fit:\s*contain/s);
+    expect(style).toMatch(/\.enchiridion-card-gallery-grid\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(188px,\s*232px\)\)/s);
+    expect(style).not.toContain('.enchiridion-card-detail');
+    expect(style).not.toMatch(/\.enchiridion-card-gallery-browser\s*\{[^}]*overflow-y:/s);
   });
 
   it('selects four affected-card names in column three and previews one shared Volunteer face in column four', () => {
@@ -249,7 +334,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(hud).not.toContain('data-testid="strategikon-toggle"\n      data-chrome-unit=');
     expect(hud).toContain("installedUiMedia('ui-kit-icons-studio-catalog-png')");
     expect(hud).toContain("strategikonOpen ? 'Return to Battle' : 'Open Strategikon'");
-    expect(hud).toContain('Strategikon — inspect battle references, the current army, and held relics.');
+    expect(hud).toContain('Strategikon — inspect battle references, the current army, and held cards and relics.');
     expect(hud).toContain('Return to Battle — close Strategikon without leaving this fight.');
     expect(hud).toMatch(/data-testid="strategikon-toggle"[\s\S]*?<img[\s\S]*?<\/NavButton>/);
     expect(style).toMatch(/\.skirmish-screen \.skirmish-hud-titlebar > \.outer-chrome-header-title-actions\s*\{[\s\S]*?inset-inline-end:\s*calc\(var\(--le-control-content-inset\)\s*-\s*5px\)/);
@@ -294,6 +379,25 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(style).toMatch(/\.shell-workspace-body\s*\{[\s\S]*?padding-inline-end:\s*0/);
     expect(style).not.toContain('--shell-workspace-body-inset-end');
     expect(skirmish).not.toContain('has-strategikon');
+  });
+
+  it('offers the way out in the persistent title-bar control lane', () => {
+    // The Controls title mark toggles the workspace, but once open it sits behind the
+    // reference pane's chrome — so the exit also rides the one typed lane every other
+    // screen returns from (Settings, the playtest return).
+    expect(strategikon).toContain('<TitleBarControlContribution');
+    expect(strategikon).toContain('ariaLabel="Strategikon navigation"');
+    expect(strategikon).toContain("id: 'strategikon-back'");
+    expect(strategikon).toContain("presentation: 'return'");
+    expect(strategikon).toContain("testId: 'strategikon-back'");
+    // Closing means dropping the /strategikon suffix while retaining the query — the
+    // same destination the Controls toggle uses, never a history pop.
+    expect(strategikon).toContain('destination: `${base}${search}`');
+    // Named for where it lands, so it never reads as a second bare "Back" beside a
+    // playtest's own return control in the same lane.
+    expect(strategikon).toContain("const returnName = base === '/run' ? 'Run' : 'Battle';");
+    expect(strategikon).toContain('label: `‹ Back to ${returnName}`');
+    expect(skirmish).toContain("id: 'skirmish-return'");
   });
 
   it('renders the accepted command archive through the installed application UI role', () => {
