@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:e817ad7ad544ad612abf0dbbee480729d72672a545d014a36b82d0323fb0401d"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:1972342b3acc047681d1050a6c101c7e072b73d95f3fb1aaa7270c661ad93100"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "One projection mints every Run card face, and it has no text slot"
-  prNumber: "665"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/665"
-  commit: "3e5cbb5c"
+  prTitle: "Forest and Town generators for the level editor"
+  prNumber: "669"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/669"
+  commit: "ede017bb"
 
 name: chess-tactics
 namespace: chess-tactics
