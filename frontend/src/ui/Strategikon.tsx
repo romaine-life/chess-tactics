@@ -150,11 +150,14 @@ export function Strategikon({
               className="strategikon-reference-pane"
               sceneInstance={`strategikon/enchiridion/${reference}`}
             >
+              {/* The Battle-hosted reference keeps its selection ephemeral: no href is
+                  supplied, so each codex falls back to its own local selection state. */}
               <EnchiridionReference
                 section={reference}
                 framed={false}
                 selectedRelicId={null}
                 selectedCardId={null}
+                selectedCardTypeId={null}
               />
             </StrategikonReferenceSceneSlot>
           </>

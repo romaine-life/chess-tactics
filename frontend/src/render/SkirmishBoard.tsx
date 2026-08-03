@@ -251,8 +251,12 @@ function resolveSkirmishGroundCover(
   // falls back to a low-frequency density field so generated/legacy boards still grow grass.
   const painted = coverMapForGame(game, exactBoard);
   const hasPainted = exactBoard ? true : painted.size > 0;
-  resolveGroundCover(result.cells, seed, (cell) =>
-    painted.get(`${cell.x},${cell.y}`) ?? (hasPainted ? null : densityFieldAt(cell.x, cell.y, seed)),
+  // A cell painted in the editor carries the seed it was painted with, so the game renders the
+  // exact arrangement the author saw. Everything else falls back to the ambient seed.
+  resolveGroundCover(
+    result.cells,
+    (cell) => exactBoard?.coverSeeds?.[`${cell.x},${cell.y}`] ?? seed,
+    (cell) => painted.get(`${cell.x},${cell.y}`) ?? (hasPainted ? null : densityFieldAt(cell.x, cell.y, seed)),
   );
   const voids = voidTerrainKeys(game);
   if (voids.size > 0) {

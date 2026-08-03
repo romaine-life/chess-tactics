@@ -292,21 +292,24 @@ describe('Run chrome hierarchy', () => {
   it('draws every card through the approved shared trading-card face', () => {
     expect(runCard).not.toContain('RunCardScene');
     expect(runCard).toContain('runCardName(card)');
-    expect(runCard).toContain('runCardFlavor(card)');
     expect(runCard).toContain('runCardArtSlot(card)');
-    expect(runCard).toContain('RUN_CARD_FRAME_SLOT');
-    expect(runCard).toContain('RUN_CARD_PESTIFEROUS_FRAME_SLOT');
-    expect(runCard).toContain('RUN_CARD_TACTICAL_FRAME_SLOT');
-    expect(runCard).toContain('RUN_CARD_CONCINNOUS_FRAME_SLOT');
-    expect(runCard).toContain('RUN_CARD_HIERATIC_FRAME_SLOT');
-    expect(runCard).toContain("cardType === 'pestiferous'");
-    expect(runCard).toContain("cardType === 'tactical'");
-    expect(runCard).toContain("cardType === 'concinnous'");
-    expect(runCard).toContain("cardType === 'hieratic'");
-    expect(runCard).toContain("'discipline' as const");
-    expect(runCard).toContain("'marshalled' as const");
-    expect(runCard).toContain("name: 'Positioned'");
-    expect(runCard).toContain("'Target hidden'");
+    // Name, flavor, contents and cost all arrive already projected, so RunCard has no
+    // reason to reach for the card's authored text itself.
+    expect(runCard).not.toContain('runCardFlavor(');
+    // RunCard is a host, not a second card model: it picks no frame, derives no grants
+    // and authors no face of its own. Every one of those belongs to the single
+    // projection in runCardFaceContent.ts, and this guard keeps them from creeping back.
+    expect(runCard).toContain("from './runCardFaceContent'");
+    // A held card's property (ADR-0371) reaches the face through the projection too,
+    // rather than RunCard re-deriving a frame or a face from it.
+    expect(runCard).toContain('runCardFaceContent(card, { purchased, cardType: ownedCardType })');
+    expect(runCard).toContain('runCardFrameSlot(card, ownedCardType)');
+    expect(runCard).not.toContain('RUN_CARD_PESTIFEROUS_FRAME_SLOT');
+    expect(runCard).not.toContain('RUN_CARD_TACTICAL_FRAME_SLOT');
+    expect(runCard).not.toContain('RUN_CARD_CONCINNOUS_FRAME_SLOT');
+    expect(runCard).not.toContain('RUN_CARD_HIERATIC_FRAME_SLOT');
+    expect(runCard).not.toContain("'discipline' as const");
+    expect(runCard).not.toContain("'marshalled' as const");
     expect(runCardFace).toContain('RUN_CARD_COST_COIN_SOURCE_SLOT');
     expect(runCardFace).toContain('run-card-prototype-cost-coin-source');
     expect(runCard).not.toMatch(/\brules\s*:/);
