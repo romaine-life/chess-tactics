@@ -366,6 +366,31 @@ governs what the *code* must do with old documents; this rule is only about whos
   ready-era Vite process merely because a backend health probe failed. Caddy
   only switches between the reverse proxy and devctl's diagnostic response.
 
+## There is no dev database — localhost writes to PRODUCTION
+
+The backend Vite spawns for `npm run dev` connects to **production Azure Postgres**. Not a
+copy, not a seeded fixture, not a staging tier. `frontend/vite.config.js` → `prodBackend`
+defaults `POSTGRES_HOST` to `chess-tactics-pg.postgres.database.azure.com`; the only other
+path is the explicit opt-in of `LIVE_MEDIA_STORAGE_DIR` **plus** a loopback `DATABASE_URL`,
+which nothing sets for you.
+
+So `http://localhost:<port>/api/admin/...` is the live data plane. Uploading a media
+candidate, accepting or activating one, crafting a Run, or any other admin write from your
+local dev server **writes to production**. There is no place to rehearse it first.
+
+- **Never call it a dev database, dev catalog, or staging.** It is production. Saying
+  otherwise in a handoff has already caused an agent to report a prod install as pending
+  work when it had already shipped.
+- **Confirm the target before your first admin write.** Cheapest check: the catalog size.
+  Production carries ~1700–2400 slots and a four-digit revision; anything disposable would
+  carry neither. `grep -n DATABASE_URL frontend/vite.config.js` is the direct answer.
+- Adding a NEW slot is additive and recoverable by retiring it. Overwriting, retiring, or
+  re-pointing an EXISTING slot is a production content change — get the owner's word first.
+- Reads are free. It is the writes that need the check.
+
+The owner's active Run is the one exception that needs no ceremony: it is disposable test
+state and crafting over it is expected (see the section above).
+
 ## Verifying backend / multiplayer changes (NO Postgres needed)
 
 Live lobby state and move/result relay live in an in-memory Map. Production level selection
