@@ -67,7 +67,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     // The art set is installed live media, not a required slot. `liveMediaForSlot` throws
     // on an absent slot and would take the whole section down on a deployment where the
     // candidates have not been accepted — so the set is read by PREFIX and the typed
-    // numeral remains the fallback render path (ADR-0358).
+    // numeral remains the fallback render path (ADR-0362).
     const start = enchiridion.indexOf('const ATARAXIA_NUMERAL_SLOT_PREFIX');
     const end = enchiridion.indexOf('export function EnchiridionReference', start);
     const ataraxia = enchiridion.slice(start, end);
@@ -275,8 +275,10 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(style).toMatch(/\.enchiridion-card-type-preview\s*\{[\s\S]*?margin-block-start:\s*-4cqw/);
     expect(style).toMatch(/\.enchiridion-card-type-row-name\s*\{[\s\S]*?line-height:\s*1/);
     expect(enchiridion).toContain("if (section === 'card-types') return <CardTypesSection framed={framed} textureBatch={cardTypeTextureBatch} />;");
-    // Generated materials remain private and opt-in: only the exact query-addressed
-    // batch is projected into a labeled candidate review; the normal screen is unchanged.
+    // The normal screen resolves accepted public slots. An exact query-addressed
+    // candidate batch remains an explicitly labeled private review override.
+    expect(cardTypes).toContain('acceptedCardTypeTextureUrls(currentLiveMediaCatalog())');
+    expect(cardTypes).toContain('const displayedTextureUrls = textureBatch ? textureUrls : acceptedTextureUrls;');
     expect(mainMenu).toContain("cardTypeTextureBatch={new URLSearchParams(search).get('cardTypeTextureBatch')}");
     expect(cardTypes).toContain("title={textureBatch ? 'Card Types · PixelLab candidates' : 'Card Types'}");
     expect(cardTypes).toContain('data-card-type-texture-review={textureReviewStatus}');

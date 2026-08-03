@@ -65,6 +65,9 @@ const {
   ataraxiaNumeralMediaIssue,
   ataraxiaNumeralOwnerProofIssue,
   ataraxiaNumeralSlot,
+  cardTypeRowTextureAcceptanceGroupIssue,
+  cardTypeRowTextureMediaIssue,
+  cardTypeRowTextureSlot,
   liveCatalogReadinessIssue,
   gameConditionIconMediaIssue,
   gameConditionIconSlot,
@@ -15247,6 +15250,9 @@ function mediaDomainProjectionIssue(row) {
   if (gameConditionIconSlot(row.slot)) {
     return gameConditionIconMediaIssue(row, runtime.value);
   }
+  if (cardTypeRowTextureSlot(row.slot)) {
+    return cardTypeRowTextureMediaIssue(row, runtime.value);
+  }
   if (levelEditorBrushIconSlot(row.slot)) {
     return levelEditorBrushIconMediaIssue(row, runtime.value);
   }
@@ -16042,7 +16048,7 @@ function gameOwnedReviewSurfaceUrl(req, raw) {
       ? url.origin === requestOrigin
       : url.host.toLowerCase() === String(req.get('host') || '').toLowerCase();
     // Each entry is a surface some art domain is genuinely reviewed on; the Ataraxia rung
-    // marks are worn by the Ataraxia reference rows, on either host (ADR-0358).
+    // marks are worn by the Ataraxia reference rows, on either host (ADR-0362).
     const gameOwnedPath = url.pathname === '/studio' || url.pathname === '/editor/level'
       || url.pathname === '/play/strategikon/enchiridion/units'
       || ATARAXIA_NUMERAL_REVIEW_PATH.test(url.pathname);
@@ -16744,11 +16750,21 @@ async function acceptMediaVersionBatch(items, actorEmail) {
           throw mediaMutationError('media_group_contract_mismatch', 409, { groupId, slot });
         }
       }
+      const cardTypeTextureGroup = group.rows.some((row) => cardTypeRowTextureSlot(row.slot))
+        || group.required.some((slot) => cardTypeRowTextureSlot(slot));
+      if (cardTypeTextureGroup) {
+        const issue = cardTypeRowTextureAcceptanceGroupIssue(group.rows, {
+          groupId, requiredSlots: group.required,
+        });
+        if (issue) throw mediaMutationError('media_group_contract_mismatch', 409, { groupId, reason: issue });
+      }
       const [first] = group.rows;
       for (const row of group.rows) {
         if (
           row.domain !== first.domain || row.role !== first.role || row.media_type !== first.media_type
-          || Number(row.width) !== Number(first.width) || Number(row.height) !== Number(first.height)
+          || (!cardTypeTextureGroup && (
+            Number(row.width) !== Number(first.width) || Number(row.height) !== Number(first.height)
+          ))
         ) throw mediaMutationError('media_group_projection_mismatch', 409, { groupId, slot: row.slot });
       }
       assertTerrainAcceptanceProof(group.rows, slotById, {

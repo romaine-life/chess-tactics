@@ -1,5 +1,5 @@
 // Forge the Ataraxia rung numerals — the mark each row of the Enchiridion's Ataraxia
-// section carries in place of a section glyph (ADR-0358).
+// section carries in place of a section glyph (ADR-0362).
 //
 // THE WHOLE LADDER IS FORGED AT ONCE, not one rung per installed tier. Ataraxia grows by
 // editing ATARAXIA_BY_TIER (ADR-0268); an art pass standing between a designed tier and a
