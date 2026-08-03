@@ -2588,7 +2588,7 @@ async function main() {
     throw new Error(`Missing SFX profile should be explicit: ${missingSfxProfile.statusCode} ${missingSfxProfile.body}`);
   }
   const syntheticSfxProfile = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     soundSets: {
       grass: { label: 'Grass', character: 'Synthetic dry step', build: 'Synthetic smoke recording', gain: 0.5 },
       arrival: { label: 'Arrival', character: 'Synthetic deploy thump', build: 'Synthetic smoke recording', gain: 0.6 },
@@ -2598,11 +2598,12 @@ async function main() {
       grass: 'grass', water: null, sand: null, stone: null,
       road: null, bridge: null, dirt: null, pebble: null,
     },
+    interfaceAssignments: { activate: 'click', card: null, gold: null },
     arrival: { sample: 'arrival', gain: 0.55, firing: 'per-unit' },
   };
   const anonymousSfxWrite = await request(
     'PUT', '/api/sfx-profiles/default', { 'content-type': 'application/json' },
-    JSON.stringify({ data: syntheticSfxProfile, expectedRevision: null, clientSchemaVersion: 1 }), 5000,
+    JSON.stringify({ data: syntheticSfxProfile, expectedRevision: null, clientSchemaVersion: 2 }), 5000,
   );
   if (anonymousSfxWrite.statusCode !== 401) throw new Error(`Anonymous SFX profile write should be 401: ${anonymousSfxWrite.statusCode}`);
   const invalidSfxWrite = await request(
@@ -2610,7 +2611,7 @@ async function main() {
     JSON.stringify({
       data: { ...syntheticSfxProfile, terrainAssignments: { grass: 'missing' } },
       expectedRevision: null,
-      clientSchemaVersion: 1,
+      clientSchemaVersion: 2,
     }), 5000,
   );
   if (invalidSfxWrite.statusCode !== 400 || JSON.parse(invalidSfxWrite.body).error !== 'invalid_sfx_profile') {
@@ -2618,7 +2619,7 @@ async function main() {
   }
   const createdSfxProfile = await request(
     'PUT', '/api/sfx-profiles/default', adminJson,
-    JSON.stringify({ data: syntheticSfxProfile, expectedRevision: null, clientSchemaVersion: 1 }), 5000,
+    JSON.stringify({ data: syntheticSfxProfile, expectedRevision: null, clientSchemaVersion: 2 }), 5000,
   );
   const createdSfxBody = JSON.parse(createdSfxProfile.body);
   if (
@@ -2629,10 +2630,25 @@ async function main() {
   if (
     publicSfxProfile.statusCode !== 200 || publicSfxProfile.headers.etag !== '"sfx-profile-0"'
     || JSON.parse(publicSfxProfile.body).profile.data.terrainAssignments.grass !== 'grass'
+    // The cue mapping is what the running app reads to decide a sound, so it must survive
+    // the write/read round trip like any other assignment — including an explicit silence.
+    || JSON.parse(publicSfxProfile.body).profile.data.interfaceAssignments.activate !== 'click'
+    || JSON.parse(publicSfxProfile.body).profile.data.interfaceAssignments.card !== null
   ) throw new Error(`Public SFX profile read failed: ${publicSfxProfile.statusCode} ${publicSfxProfile.body}`);
+  const undeclaredCueWrite = await request(
+    'PUT', '/api/sfx-profiles/default', adminJson,
+    JSON.stringify({
+      data: { ...syntheticSfxProfile, interfaceAssignments: { activate: 'missing', card: null, gold: null } },
+      expectedRevision: 0,
+      clientSchemaVersion: 2,
+    }), 5000,
+  );
+  if (undeclaredCueWrite.statusCode !== 400 || JSON.parse(undeclaredCueWrite.body).error !== 'invalid_sfx_profile') {
+    throw new Error(`Undeclared cue sound set should be rejected: ${undeclaredCueWrite.statusCode} ${undeclaredCueWrite.body}`);
+  }
   const staleSfxWrite = await request(
     'PUT', '/api/sfx-profiles/default', adminJson,
-    JSON.stringify({ data: syntheticSfxProfile, expectedRevision: 9, clientSchemaVersion: 1 }), 5000,
+    JSON.stringify({ data: syntheticSfxProfile, expectedRevision: 9, clientSchemaVersion: 2 }), 5000,
   );
   if (
     staleSfxWrite.statusCode !== 409 || JSON.parse(staleSfxWrite.body).error !== 'sfx_profile_conflict'
@@ -2650,7 +2666,7 @@ async function main() {
         arrival: { ...syntheticSfxProfile.arrival, firing: 'once' },
       },
       expectedRevision: 0,
-      clientSchemaVersion: 1,
+      clientSchemaVersion: 2,
     }), 5000,
   );
   const updatedSfxBody = JSON.parse(updatedSfxProfile.body);
