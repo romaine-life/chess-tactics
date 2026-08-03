@@ -18895,9 +18895,10 @@ button.tileset-relationship-cell {
   font-size: var(--ds-text-md);
 }
 
+.run-topbar-measures .run-gold-icon,
 .run-gold-amount--title .run-gold-icon {
-  block-size: var(--run-measure-seat);
-  inline-size: var(--run-measure-seat);
+  block-size: var(--run-measure-seat, 22px);
+  inline-size: var(--run-measure-seat, 22px);
 }
 
 .run-gold-amount--button {
@@ -18965,6 +18966,22 @@ button.tileset-relationship-cell {
    which is ordinary type treatment. */
 .run-topbar-measure > span {
   text-shadow: 0 2px 0 #02070b;
+}
+
+/* A mark is a symbol standing in for a word, so every measure names itself on
+   hover or keyboard focus through the shared Tooltip. The tip is the game's own
+   framed popup; the trigger keeps the measure's own layout. */
+.run-topbar-measure-tip {
+  min-width: 0;
+}
+
+.run-topbar-measure-tooltip-pop {
+  display: grid;
+  gap: var(--ds-space-1);
+}
+
+.run-topbar-measure-tooltip-name {
+  color: #f0eadb;
 }
 
 .run-victory-summary > span + span::before {

@@ -93,6 +93,23 @@ card-property icons keep their exact 64×64 contract.
 the same trim. It is a shared production asset: those exact bytes are what every
 surface that draws gold now draws.
 
+**A mark is a symbol standing in for a word, so it names itself.** Every measure
+is a shared `Tooltip` trigger — the game's own framed popup, on hover and on
+keyboard focus — carrying the idea's name and what it means. Never a native
+`title=""`, which is a browser convention rather than a game one (ADR-0052).
+
+Two fixes in the shared primitive fell out of being its first title-bar consumer,
+and both are general:
+
+- A portalled popup now carries `chrome-family-surface` on its positioner. Chrome
+  units only paint inside a chrome-family scope, and a popup that escapes to
+  `<body>` — as any title-bar tooltip must, the bar living outside every screen's
+  `<main>` — was rendering as unframed floating text.
+- A trigger inside the persistent title bar anchors its popup below the WHOLE BAR
+  rather than below itself. The bar is taller than the mark it frames and paints
+  over what sits under it, so "below the trigger" put the tip's first line behind
+  the chrome.
+
 **A seat is reserved before its icon decision exists.** `installedUiMediaIfPresent`
 returns null instead of failing closed, and the seat keeps its geometry, so
 installing an icon later cannot move the label beside it. Required chrome keeps

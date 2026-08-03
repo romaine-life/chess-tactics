@@ -15,10 +15,16 @@ function useTooltipPosition<T extends HTMLElement>() {
   const hovered = useRef(false);
 
   const show = useCallback(() => {
-    const r = ref.current?.getBoundingClientRect();
-    if (!r) return;
-    // Below the trigger, clamped so a wide tip never runs off the viewport.
-    setPos({ left: Math.max(8, Math.min(r.left, window.innerWidth - 300)), top: r.bottom + 6 });
+    const trigger = ref.current;
+    const r = trigger?.getBoundingClientRect();
+    if (!trigger || !r) return;
+    // Below the trigger, clamped so a wide tip never runs off the viewport. A
+    // trigger inside the persistent title bar clears the whole bar instead: the
+    // bar is taller than the mark it frames and paints over anything under it,
+    // so "below the trigger" would put the tip's first line behind the chrome.
+    const bar = trigger.closest('.app-shell-titlebar');
+    const below = (bar ?? trigger).getBoundingClientRect().bottom + 6;
+    setPos({ left: Math.max(8, Math.min(r.left, window.innerWidth - 300)), top: below });
   }, []);
   const hide = useCallback(() => setPos(null), []);
   const onMouseEnter = useCallback(() => {
@@ -59,7 +65,11 @@ function TooltipPopup({
   if (!pos || typeof document === 'undefined') return null;
   return createPortal((
     <span
-      className="tooltip-pop-positioner"
+      // The popup is portalled out of its trigger's subtree, so it carries the
+      // chrome family scope with it. Without this an inner-box that escapes to
+      // <body> — a tooltip on the persistent title bar, which lives outside every
+      // screen <main> — renders as unframed floating text.
+      className="tooltip-pop-positioner chrome-family-surface"
       style={{ left: pos.left, maxInlineSize, top: pos.top }}
     >
       <InnerChromeBox

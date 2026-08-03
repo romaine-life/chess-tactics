@@ -1,7 +1,8 @@
-import type { ReactElement } from 'react';
-import { ATARAXIA_BY_TIER, type AtaraxiaTier } from '../run/model';
-import { RunGoldAmount } from './RunResources';
+import type { ReactElement, ReactNode } from 'react';
+import { ATARAXIA_BY_TIER, formatGold, type AtaraxiaTier } from '../run/model';
+import { RunGoldIcon } from './RunResources';
 import { RunProgressIcon } from './shared/RunProgressIcon';
+import { Tooltip } from './shared/InfoTip';
 import { TitleBarStatus } from './shell/TitleBarControls';
 
 // What the persistent title bar says about a Run, in two parts.
@@ -11,6 +12,10 @@ import { TitleBarStatus } from './shell/TitleBarControls';
 // and its number, sitting bare on the bar with no frame of its own. A Run's
 // Ataraxia tier, gold, Conflict and Battle are all the same kind of fact, so
 // they read as one row of marks rather than a row of little boxes.
+//
+// A mark is a symbol standing in for a word, so every measure names itself
+// through the shared Tooltip — never a native title="", which is a browser
+// convention rather than a game one (ADR-0052).
 //
 // The icon review mounts these SAME components (ADR-0059), so a candidate is
 // judged in its real seat. `…IconSrc` is the review-only seam: it paints exact
@@ -28,6 +33,31 @@ export function RunIdentityChip({
       <strong>{warName}</strong>
       {levelName ? <small>{levelName}</small> : null}
     </TitleBarStatus>
+  );
+}
+
+function RunMeasure({
+  label,
+  name,
+  detail,
+  children,
+}: {
+  label: string;
+  name: string;
+  detail: string;
+  children: ReactNode;
+}): ReactElement {
+  return (
+    <Tooltip
+      className="run-topbar-measure-tip"
+      triggerClassName="run-topbar-measure"
+      popupClassName="run-topbar-measure-tooltip-pop"
+      label={label}
+      trigger={children}
+    >
+      <strong className="run-topbar-measure-tooltip-name">{name}</strong>
+      <span className="run-topbar-measure-tooltip-detail">{detail}</span>
+    </Tooltip>
   );
 }
 
@@ -53,23 +83,43 @@ export function RunTitleBarMeasures({
   battleIconSrc?: string;
 }): ReactElement {
   const ataraxia = ATARAXIA_BY_TIER[tier];
+  const gold = formatGold(goldTenths);
   return (
     <div className="run-topbar-measures">
       {/* The symbol names Ataraxia; only its tier is written. The tier's own name
-          stays available on hover rather than spending bar width on the word. */}
-      <span className="run-topbar-measure" title={`${ataraxia.label} — ${ataraxia.title}`}>
+          and rule live in the tooltip rather than spending bar width. */}
+      <RunMeasure
+        label={`${ataraxia.label}. ${ataraxia.title}. ${ataraxia.effect}`}
+        name={`${ataraxia.label} — ${ataraxia.title}`}
+        detail={ataraxia.effect}
+      >
         <RunProgressIcon variant="ataraxia" src={ataraxiaIconSrc} />
         <span>{tier}</span>
-      </span>
-      <RunGoldAmount valueTenths={goldTenths} className="run-gold-amount--title" iconSrc={goldIconSrc} />
-      <span className="run-topbar-measure" title={`Conflict ${conflict}`}>
+      </RunMeasure>
+      <RunMeasure
+        label={`${gold} gold`}
+        name="Gold"
+        detail="What this Run has to spend in the Shop."
+      >
+        <RunGoldIcon src={goldIconSrc} />
+        <span>{gold}</span>
+      </RunMeasure>
+      <RunMeasure
+        label={`Conflict ${conflict}`}
+        name={`Conflict ${conflict}`}
+        detail="The chapter of the War this Run is in. Each one ends in Loot."
+      >
         <RunProgressIcon variant="conflict" src={conflictIconSrc} />
         <span>{conflict}</span>
-      </span>
-      <span className="run-topbar-measure" title={`Battle ${battle} of ${battlesInConflict}`}>
+      </RunMeasure>
+      <RunMeasure
+        label={`Battle ${battle} of ${battlesInConflict}`}
+        name={`Battle ${battle} of ${battlesInConflict}`}
+        detail="Where this Run stands among that Conflict's Battles."
+      >
         <RunProgressIcon variant="battle" src={battleIconSrc} />
         <span>{battle}/{battlesInConflict}</span>
-      </span>
+      </RunMeasure>
     </div>
   );
 }
