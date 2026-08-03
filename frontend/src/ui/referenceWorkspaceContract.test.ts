@@ -10,6 +10,7 @@ const style = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const skirmish = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
 const hud = readFileSync(new URL('./SkirmishHud.tsx', import.meta.url), 'utf8');
 const runArmy = readFileSync(new URL('./RunArmyWorkspace.tsx', import.meta.url), 'utf8');
+const ataraxiaNumeral = readFileSync(new URL('./ataraxiaNumeral.ts', import.meta.url), 'utf8');
 
 describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
   it('describes exactly the four unit abilities without card qualifiers', () => {
@@ -68,18 +69,21 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     // on an absent slot and would take the whole section down on a deployment where the
     // candidates have not been accepted — so the set is read by PREFIX and the typed
     // numeral remains the fallback render path (ADR-0363).
-    const start = enchiridion.indexOf('const ATARAXIA_NUMERAL_SLOT_PREFIX');
+    // The resolver is ONE module because the numeral is Ataraxia's mark wherever a
+    // tier is shown — the ladder here and the Run title bar both read it (ADR-0059).
+    expect(ataraxiaNumeral).toContain("const ATARAXIA_NUMERAL_SLOT_PREFIX = 'ui/kit/numerals/stone/'");
+    expect(ataraxiaNumeral).toContain('liveMediaSlotsWithPrefix(ATARAXIA_NUMERAL_SLOT_PREFIX)');
+    expect(ataraxiaNumeral).not.toContain('liveMediaForSlot(ataraxiaNumeralSlot');
+    expect(ataraxiaNumeral).not.toContain('resolvedLiveMediaUrl(ataraxiaNumeralSlot');
+    expect(enchiridion).toContain("import { ataraxiaNumeralArtUrl } from './ataraxiaNumeral'");
+    const start = enchiridion.indexOf('function AtaraxiaSection');
     const end = enchiridion.indexOf('export function EnchiridionReference', start);
     const ataraxia = enchiridion.slice(start, end);
-    expect(ataraxia).toContain("const ATARAXIA_NUMERAL_SLOT_PREFIX = 'ui/kit/numerals/stone/'");
-    expect(ataraxia).toContain('liveMediaSlotsWithPrefix(ATARAXIA_NUMERAL_SLOT_PREFIX)');
-    expect(ataraxia).not.toContain('liveMediaForSlot(ataraxiaNumeralSlot');
-    expect(ataraxia).not.toContain('resolvedLiveMediaUrl(ataraxiaNumeralSlot');
     // Both render paths, and the typed one is what an uninstalled set falls back to.
     expect(ataraxia).toContain('className="enchiridion-ataraxia-numeral is-art"');
     expect(ataraxia).toContain('<span className="enchiridion-ataraxia-numeral">{definition.numeral}</span>');
     // The slug rule is shared verbatim with the forge that uploads the candidates.
-    expect(ataraxia).toContain("numeral === '0' ? 'zero' : numeral.toLowerCase()");
+    expect(ataraxiaNumeral).toContain("numeral === '0' ? 'zero' : numeral.toLowerCase()");
     const forge = readFileSync(new URL('../../scripts/forge-ataraxia-numerals.mjs', import.meta.url), 'utf8');
     expect(forge).toContain("{ key: '0', slot: 'zero'");
     expect(forge).toContain("{ key: 'VIII', slot: 'viii'");

@@ -48,6 +48,7 @@ const RUN_SHOP_WRAP_SLOT = /^ui\/run\/shop-wrap\/([a-z][a-z0-9-]{0,79})\.png$/;
 // A wrap frames live cards rather than replacing them, so the only geometry the
 // runtime needs is where the card row sits inside the painted canvas.
 const RUN_SHOP_WRAP_KINDS = Object.freeze(['seat', 'band', 'slots', 'screen']);
+const RUN_PROGRESS_ICON_COMPONENT = 'run-progress-icon';
 const GAME_CONDITION_ICON_BY_SLOT = Object.freeze({
   'ui/kit/icons/game/plagued.png': Object.freeze({ component: 'unit-ability-icon', variant: 'plagued' }),
   'ui/kit/icons/game/positioned.png': Object.freeze({ component: 'unit-ability-icon', variant: 'positioned' }),
@@ -57,6 +58,11 @@ const GAME_CONDITION_ICON_BY_SLOT = Object.freeze({
   'ui/kit/icons/card-properties/concinnous.png': Object.freeze({ component: 'card-property-icon', variant: 'concinnous' }),
   'ui/kit/icons/card-properties/tactical.png': Object.freeze({ component: 'card-property-icon', variant: 'tactical' }),
   'ui/kit/icons/card-properties/hieratic.png': Object.freeze({ component: 'card-property-icon', variant: 'hieratic' }),
+  // The Run's position in its War, as the persistent title bar names it, plus the
+  // emblem that says WHICH ladder the carved rung beside it belongs to.
+  'ui/kit/icons/run/ataraxia-mark.png': Object.freeze({ component: RUN_PROGRESS_ICON_COMPONENT, variant: 'ataraxia' }),
+  'ui/kit/icons/run/conflict.png': Object.freeze({ component: RUN_PROGRESS_ICON_COMPONENT, variant: 'conflict' }),
+  'ui/kit/icons/run/battle.png': Object.freeze({ component: RUN_PROGRESS_ICON_COMPONENT, variant: 'battle' }),
 });
 const CARD_TYPE_ROW_TEXTURE_COMPONENT = 'card-type-row-texture';
 const CARD_TYPE_ROW_TEXTURE_GROUP_ID = 'card-type-row-textures-pixen-v1';
@@ -492,15 +498,42 @@ function runShopWrapMediaIssue(row, projectedRuntime = null) {
  * Domain-owned runtime projection for one native Run resource icon. The
  * surrounding live number owns the accessible currency value.
  */
+// A 64x64 canvas is a FRAME, not a size. An icon that fills 20 of it and one that
+// fills 62 draw at wildly different scales and carry wildly different invisible
+// padding, which is what makes a row of marks look unevenly spaced. So an icon in
+// these families ships TRIMMED to its occupied pixels and padded to the square that
+// bounds them: the raster is the art, and the only spacing left is the one the
+// layout asks for. The historical full-frame 64x64 rasters remain valid — they are
+// simply the case where the ink already filled the frame.
+const TRIMMED_ICON_MIN_SIDE = 16;
+const TRIMMED_ICON_MAX_SIDE = 64;
+
+function trimmedIconRasterIssue(row, label) {
+  const width = Number(row.width);
+  const height = Number(row.height);
+  if (width !== height) return `${label} must be square rasters`;
+  if (!Number.isSafeInteger(width) || width < TRIMMED_ICON_MIN_SIDE || width > TRIMMED_ICON_MAX_SIDE) {
+    return `${label} must be native square rasters from ${TRIMMED_ICON_MIN_SIDE}x${TRIMMED_ICON_MIN_SIDE} through ${TRIMMED_ICON_MAX_SIDE}x${TRIMMED_ICON_MAX_SIDE}`;
+  }
+  return null;
+}
+
+function trimmedIconRuntimeGeometryIssue(row, runtime, label) {
+  const side = Number(row.width);
+  if (runtime.frameWidth !== side || runtime.frameHeight !== side || runtime.frameCount !== 1) {
+    return `${label} runtime geometry must describe one native ${side}x${side} frame`;
+  }
+  return null;
+}
+
 function runResourceIconMediaIssue(row, projectedRuntime = null) {
   const resourceId = runResourceIconSlotId(row.slot);
   if (!resourceId) return 'Run resource icon slots must match ui/run/resources/<resource-id>.png';
   if (row.domain !== 'ui-kit') return 'Run resource icons require the ui-kit domain';
   if (row.role !== 'icon') return 'Run resource icons require the icon role';
   if (row.media_type !== 'image/png') return 'Run resource icons require image/png';
-  if (Number(row.width) !== 64 || Number(row.height) !== 64) {
-    return 'Run resource icons must be native 64x64 rasters';
-  }
+  const trimmed = trimmedIconRasterIssue(row, 'Run resource icons');
+  if (trimmed) return trimmed;
 
   const metadata = mediaVersionMetadata(row);
   const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
@@ -516,9 +549,8 @@ function runResourceIconMediaIssue(row, projectedRuntime = null) {
     return `Run resource icon metadata.runtime.component must be ${RUN_RESOURCE_ICON_COMPONENT}`;
   }
   if (runtime.variant !== resourceId) return 'Run resource icon variant must match its semantic slot id';
-  if (runtime.frameWidth !== 64 || runtime.frameHeight !== 64 || runtime.frameCount !== 1) {
-    return 'Run resource icon runtime geometry must describe one native 64x64 frame';
-  }
+  const geometry = trimmedIconRuntimeGeometryIssue(row, runtime, 'Run resource icon');
+  if (geometry) return geometry;
   if (runtime.nativeRole !== RUN_RESOURCE_ICON_COMPONENT) {
     return `Run resource icon metadata.runtime.nativeRole must be ${RUN_RESOURCE_ICON_COMPONENT}`;
   }
@@ -569,9 +601,10 @@ function runCardCostCoinMediaIssue(row, projectedRuntime = null) {
 }
 
 /**
- * Domain-owned runtime projection for the native icons that distinguish a
- * unit condition from the card property that grants it. Their exact semantic
- * slots are closed so an arbitrary ui-kit candidate cannot become runtime UI.
+ * Domain-owned runtime projection for the native icons that name one closed game
+ * idea: a unit condition, the card property that grants it, or a repeatable Run
+ * position. Their exact semantic slots are closed so an arbitrary ui-kit
+ * candidate cannot become runtime UI.
  */
 function gameConditionIconMediaIssue(row, projectedRuntime = null) {
   const contract = gameConditionIconSlot(row.slot);
@@ -579,9 +612,14 @@ function gameConditionIconMediaIssue(row, projectedRuntime = null) {
   if (row.domain !== 'ui-kit') return 'game condition icons require the ui-kit domain';
   if (row.role !== 'icon') return 'game condition icons require the icon role';
   if (row.media_type !== 'image/png') return 'game condition icons require image/png';
-  if (Number(row.width) !== 64 || Number(row.height) !== 64) {
-    return 'game condition icons must be native 64x64 rasters';
-  }
+  // Run-position marks sit unframed in a row and ship trimmed to their own ink;
+  // the established unit-ability and card-property icons keep their full frame.
+  const trimmed = contract.component === RUN_PROGRESS_ICON_COMPONENT;
+  const rasterIssue = trimmed
+    ? trimmedIconRasterIssue(row, 'Run position icons')
+    : (Number(row.width) !== 64 || Number(row.height) !== 64
+      ? 'game condition icons must be native 64x64 rasters' : null);
+  if (rasterIssue) return rasterIssue;
 
   const metadata = mediaVersionMetadata(row);
   const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
@@ -597,9 +635,11 @@ function gameConditionIconMediaIssue(row, projectedRuntime = null) {
     return `game condition icon metadata.runtime.component must be ${contract.component}`;
   }
   if (runtime.variant !== contract.variant) return 'game condition icon variant must match its semantic slot';
-  if (runtime.frameWidth !== 64 || runtime.frameHeight !== 64 || runtime.frameCount !== 1) {
-    return 'game condition icon runtime geometry must describe one native 64x64 frame';
-  }
+  const geometryIssue = trimmed
+    ? trimmedIconRuntimeGeometryIssue(row, runtime, 'Run position icon')
+    : (runtime.frameWidth !== 64 || runtime.frameHeight !== 64 || runtime.frameCount !== 1
+      ? 'game condition icon runtime geometry must describe one native 64x64 frame' : null);
+  if (geometryIssue) return geometryIssue;
   if (runtime.nativeRole !== contract.component) {
     return `game condition icon metadata.runtime.nativeRole must be ${contract.component}`;
   }

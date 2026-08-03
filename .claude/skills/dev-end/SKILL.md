@@ -9,9 +9,47 @@ description: Finish the chess-tactics project coding session. Use when the user 
 
 Use this closeout workflow for `D:\repos\chess-tactics` after code changes are complete.
 
-1. Stop the dev server started during the session. If the server was started outside the session or ownership is unclear, identify it and ask before killing it.
-2. Inspect `git status --short --branch` and review the diff. Keep unrelated user changes out of the commit.
-3. Run the **exact command CI runs**, not a subset of it. Bare `vitest` is not the gate and
+1. **Delete the production state this session created to verify itself.** `npm run dev` talks to
+   production Postgres, so a throwaway Level Editor document opened for a screenshot, a scratch
+   level, or any other verification artifact is a real row in the owner's live data. Clean up what
+   you made:
+   - Editor documents. A document reached through `?board=<code>` mints a NEW document on open,
+     so every such link left a row behind. **A bare `DELETE` does not work** — it answers
+     `revision_required`, then `editor_document_edit_session_required`. Deleting is a
+     compare-and-swap performed by a page session, so it takes three calls per document, run from
+     an authenticated owner page on the dev server:
+
+     1. `GET /api/editor-documents/<id>` → read `document.revision`.
+     2. `POST /api/editor-documents/<id>/edit-sessions` with a client-generated
+        `{session_id, session_key, device_id, client_label, intent:'write'}` → read
+        `session.edit_generation`. The key is client-minted bearer authority the server only
+        ever stores hashed; it is never returned to you.
+     3. `DELETE /api/editor-documents/<id>` with
+        `{revision, edit_session_id, edit_session_key, edit_generation}`.
+
+     Two properties worth relying on. The route deletes **never-saved documents only**
+     (`dbDeleteNeverSavedEditorDocument`), so a working copy ever promoted to a canonical Level is
+     refused — a real guard, not a formality. And `GET /api/editor-documents` returns **one page
+     of 100**, newest first, with `next_offset` in the response body: follow it (or pass
+     `limit`/`offset`) instead of assuming the first page is everything. Read one page and older
+     documents are simply invisible.
+   - Scratch files written into the repo (`tmp-shots/` is gitignored and fine to leave).
+
+   Do this **before** step 2: the API is only reachable through the running dev server. Only
+   delete what this session created — never an owner document you merely opened or were handed.
+   Guard on the authoritative body (`document.level.name`, `document.never_saved`); the top-level
+   `name` exists on the LIST response only and reads `undefined` on a single-document GET, so a
+   guard written against it rejects everything. If something can't be removed, name it and its id
+   in the final report instead of leaving it silently behind.
+
+   Clearing litter this session did **not** create — an accumulated backlog of old documents — is
+   a bulk production deletion and is not part of closeout. Report the backlog and let the owner
+   decide. If they say yes, hold back anything updated in the last ~30 minutes: sessions in other
+   worktrees write to this same production database, and deleting a document out from under a live
+   editor is the exact failure the persistence ADR exists to prevent.
+2. Stop the dev server started during the session. If the server was started outside the session or ownership is unclear, identify it and ask before killing it. If a later step sends you back to fix something, restart it through `devctl` rather than working blind.
+3. Inspect `git status --short --branch` and review the diff. Keep unrelated user changes out of the commit.
+4. Run the **exact command CI runs**, not a subset of it. Bare `vitest` is not the gate and
    passes while CI fails: `npm run check` also runs `tsc --noEmit` and every
    `frontend/scripts/check-*.mjs` guard, several of which pin exact JSX literals and break on
    any shell or chrome refactor.
@@ -23,11 +61,11 @@ Use this closeout workflow for `D:\repos\chess-tactics` after code changes are c
      example `npm run test:pr-gate`).
    If validation cannot run, explain why before continuing. Do not proceed to a PR on a
    subset run and describe it as green.
-4. Stage only files that belong to the completed task.
-5. Commit with a concise message that reflects the user-facing change.
-6. Push the feature branch.
-7. Create a pull request against `main` using the repository's usual tool, normally `gh pr create` when available.
-8. Gate the PR with `node bin/pr-gate.mjs` from the repo root. It checks mergeability, then
+5. Stage only files that belong to the completed task.
+6. Commit with a concise message that reflects the user-facing change.
+7. Push the feature branch.
+8. Create a pull request against `main` using the repository's usual tool, normally `gh pr create` when available.
+9. Gate the PR with `node bin/pr-gate.mjs` from the repo root. It checks mergeability, then
    waits out CI, and prints one verdict. **Do not hand-write a `gh pr view` / `gh pr checks`
    polling loop — this tool exists so you never have to.**
 
@@ -44,11 +82,16 @@ Use this closeout workflow for `D:\repos\chess-tactics` after code changes are c
    Report `CONFLICT`, `BEHIND`, and `NO_CHECKS` to the user as soon as the gate returns them.
    Each means the long wait is over before it started, not that it should be restarted blindly.
    Use `--no-wait` for a one-shot status read while troubleshooting.
-9. Merge the PR after the gate returns `READY`. Use the repository's normal merge method when discoverable; otherwise prefer squash merge for a clean project history. When using `gh pr merge`, do **not** pass `--delete-branch`: it also attempts local branch cleanup/checkouts and can fail when `main` is checked out in another worktree. Merge without that flag and do not manually delete branches as part of the normal flow; remote branch deletion is handled automatically by repository settings.
-10. Report the PR URL, merge result, final commit, and dev-server shutdown status.
+10. Merge the PR after the gate returns `READY`. Use the repository's normal merge method when discoverable; otherwise prefer squash merge for a clean project history. When using `gh pr merge`, do **not** pass `--delete-branch`: it also attempts local branch cleanup/checkouts and can fail when `main` is checked out in another worktree. Merge without that flag and do not manually delete branches as part of the normal flow; remote branch deletion is handled automatically by repository settings.
+11. Report the PR URL, merge result, final commit, cleanup of session-created production state, and dev-server shutdown status.
 
 ## Notes
 
+- The owner's **active Run** is the one exception to step 1: it is disposable test state, crafting
+  over it is expected, and it needs no cleanup and no mention beyond stating a format consequence.
+- Adding a NEW live-media slot for review is additive and recoverable by retiring it; overwriting,
+  retiring, or re-pointing an EXISTING slot is a production content change. Never undo one as
+  "cleanup" — report it and let the owner decide.
 - Do not include unrelated dirty files in the PR.
 - Do not force-push or rewrite shared history unless the user explicitly asks.
 - Do not rely on `gh pr merge --delete-branch` in worktree-based sessions; it may try to switch the local checkout to `main`. Leave the local worktree and branch cleanup alone unless the user explicitly asks for local cleanup.

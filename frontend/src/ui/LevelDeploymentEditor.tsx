@@ -12,9 +12,27 @@ export interface DeploymentZoneOption {
   id: string;
   label: string;
   type: ZoneType;
+  /** Player Deployment zone only: piece types automatic placement will not put here (ADR-0367). */
+  excludedPieceTypes: readonly PlayablePieceType[];
   paintedTiles: number;
   usableTileKeys: string[];
 }
+
+/**
+ * The piece types an author can break off the general Player Deployment pool: each owns a
+ * dedicated zone type, and each can be barred from the general zone (ADR-0367).
+ */
+const BREAKABLE = [
+  { pieceType: 'pawn', label: 'Pawn', zoneType: 'player-pawn-spawn' },
+  { pieceType: 'king', label: 'King', zoneType: 'player-king-spawn' },
+] as const satisfies ReadonlyArray<{ pieceType: PlayablePieceType; label: string; zoneType: ZoneType }>;
+export type BreakablePieceType = typeof BREAKABLE[number]['pieceType'];
+
+/** Why an author would break this type off the general pool, in the author's own terms. */
+const BREAKOUT_REASON: Record<BreakablePieceType, string> = {
+  pawn: 'A pawn cannot change column, so squares whose column is a dead end are wasted on one.',
+  king: 'The King starts where you paint for it — a keep, a back rank, a corner — instead of wherever the roll lands it.',
+};
 
 function patchedRoster(roster: Roster, type: PlayablePieceType, delta: number): Roster {
   const count = Math.max(0, (roster[type] ?? 0) + delta);
@@ -37,6 +55,7 @@ function DeploymentSideCard({
   onEventsChange,
   onCreateZone,
   onEditZone,
+  onDedicatedZoneChange,
 }: {
   side: ConditionSide;
   events: LevelEvents;
@@ -46,6 +65,7 @@ function DeploymentSideCard({
   onEventsChange: (events: LevelEvents) => void;
   onCreateZone: (side: ConditionSide) => void;
   onEditZone: (zoneId: string) => void;
+  onDedicatedZoneChange: (pieceType: BreakablePieceType, on: boolean) => void;
 }): ReactElement {
   const deployment = authoredDeploymentForSide(events, side);
   const expectedType = sideZoneType(side);
@@ -53,8 +73,20 @@ function DeploymentSideCard({
   const deploymentZone = eligibleZones.find((zone) => deployment.zoneIds.includes(zone.id) && zone.type === expectedType)
     ?? eligibleZones.find((zone) => zone.type === expectedType)
     ?? eligibleZones[0];
-  const extraZoneCount = Math.max(0, eligibleZones.length - (deploymentZone ? 1 : 0));
   const deploymentZoneIds = deploymentZone ? [deploymentZone.id] : [];
+  const dedicatedZones = Object.fromEntries(BREAKABLE.map(({ pieceType, zoneType }) => [
+    pieceType,
+    side === 'player' ? zones.find((zone) => zone.type === zoneType) : undefined,
+  ])) as Record<BreakablePieceType, DeploymentZoneOption | undefined>;
+  // What an automatically placed unit of a broken-off type can actually use: the Player Deployment
+  // zone unless it bars that type, plus every square of that type's dedicated zone.
+  const eligibleSquares = Object.fromEntries(BREAKABLE.map(({ pieceType }) => [
+    pieceType,
+    new Set([
+      ...(deploymentZone && !deploymentZone.excludedPieceTypes.includes(pieceType) ? deploymentZone.usableTileKeys : []),
+      ...(dedicatedZones[pieceType]?.usableTileKeys ?? []),
+    ]),
+  ])) as Record<BreakablePieceType, Set<string>>;
   const title = side === 'player' ? 'Player force' : 'Enemy force';
   const sideLabel = side === 'player' ? 'Player' : 'Enemy';
   const fixedLabel = side === 'player'
@@ -113,7 +145,53 @@ function DeploymentSideCard({
           ) : (
             <p className="le-board-warning">No Player starting zone exists. Create and paint one before saving this War Battle.</p>
           )}
-          {extraZoneCount > 0 ? <p className="le-board-warning">This older level has {extraZoneCount} extra Player starting zone{extraZoneCount === 1 ? '' : 's'}. Move any wanted squares into {deploymentZone?.label ?? 'the starting zone'}; new authoring uses one zone per side.</p> : null}
+
+          {deploymentZone ? BREAKABLE.map(({ pieceType, label }) => {
+            const zone = dedicatedZones[pieceType];
+            const on = deploymentZone.excludedPieceTypes.includes(pieceType);
+            const squares = eligibleSquares[pieceType].size;
+            return (
+              <div className="le-deployment-breakout" key={pieceType}>
+                <div className="le-deployment-zone-head">
+                  <div>
+                    <h4>{label} starting zone</h4>
+                    <span>{on
+                      ? `The ${label} leaves the shared zone and starts only on squares painted here.`
+                      : `The ${label} starts in the shared Player starting zone.`}</span>
+                  </div>
+                  <div className="le-deployment-breakout-controls">
+                    {on ? (
+                      <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={() => zone && onEditZone(zone.id)}>Edit squares</ChromeButton>
+                    ) : null}
+                    <Toggle
+                      checked={on}
+                      label={`Give the ${label} its own starting zone`}
+                      onChange={(checked) => onDedicatedZoneChange(pieceType, checked)}
+                    />
+                  </div>
+                </div>
+                {on && zone ? (
+                  <div className="le-deployment-zones">
+                    <div data-chrome-unit="inner-list-row" className={chromeUnitClassNames('inner-list-row', 'le-deployment-zone-row', 'is-selected')}>
+                      <span><strong>{zone.label}</strong><small>{zone.paintedTiles} painted · {zone.usableTileKeys.length} usable</small></span>
+                      <span className="le-md-item-out">{label}s only</span>
+                    </div>
+                  </div>
+                ) : null}
+                {on && squares === 0 ? (
+                  <p className="le-board-warning">{pieceType === 'king'
+                    ? 'No square accepts the King. Paint this zone — a War Battle cannot be saved while the Run has nowhere to put its King.'
+                    : 'No square accepts a pawn. Paint this zone, or every pawn in the Run army sits the Battle out in reserve.'}</p>
+                ) : on ? (
+                  <p className="le-deployment-zone-help">{squares} square{squares === 1 ? '' : 's'} currently accept{squares === 1 ? 's' : ''} the {label}. {BREAKOUT_REASON[pieceType]}</p>
+                ) : null}
+              </div>
+            );
+          }) : null}
+
+          <p className="le-deployment-zone-help">
+            The King takes its square first. Every other unit then follows in random order, one at a time, each taking what is still open to it — a pawn that finds its squares gone does not deploy and stays in reserve.
+          </p>
         </>
       ) : deployment.enabled ? (
         <>
@@ -160,7 +238,6 @@ function DeploymentSideCard({
           ) : (
             <p className="le-board-warning">No {sideLabel} starting zone exists. Create and paint one, or turn randomized deployment off.</p>
           )}
-          {extraZoneCount > 0 ? <p className="le-board-warning">This older level has {extraZoneCount} extra {sideLabel} starting zone{extraZoneCount === 1 ? '' : 's'}. Move any wanted squares into {deploymentZone?.label ?? 'the starting zone'}; new authoring uses one zone per side.</p> : null}
         </>
       ) : (
         <>
@@ -183,7 +260,6 @@ function DeploymentSideCard({
               </div>
             </div>
           ) : null}
-          {extraZoneCount > 0 ? <p className="le-board-warning">This older level has {extraZoneCount} extra {sideLabel} starting zone{extraZoneCount === 1 ? '' : 's'}. New authoring uses one zone per side.</p> : null}
         </>
       )}
     </InnerChromeBox>
@@ -199,6 +275,7 @@ export function LevelDeploymentEditor({
   onEventsChange,
   onCreateZone,
   onEditZone,
+  onDedicatedZoneChange,
 }: {
   events: LevelEvents;
   zones: readonly DeploymentZoneOption[];
@@ -208,6 +285,7 @@ export function LevelDeploymentEditor({
   onEventsChange: (events: LevelEvents) => void;
   onCreateZone: (side: ConditionSide) => void;
   onEditZone: (zoneId: string) => void;
+  onDedicatedZoneChange: (pieceType: BreakablePieceType, on: boolean) => void;
 }): ReactElement {
   return (
     <div className="le-deployment-editor">
@@ -225,6 +303,7 @@ export function LevelDeploymentEditor({
           onEventsChange={onEventsChange}
           onCreateZone={onCreateZone}
           onEditZone={onEditZone}
+          onDedicatedZoneChange={onDedicatedZoneChange}
         />
         <DeploymentSideCard
           side="enemy"
@@ -235,6 +314,7 @@ export function LevelDeploymentEditor({
           onEventsChange={onEventsChange}
           onCreateZone={onCreateZone}
           onEditZone={onEditZone}
+          onDedicatedZoneChange={onDedicatedZoneChange}
         />
       </div>
     </div>

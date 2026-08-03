@@ -81,7 +81,7 @@ import { paintTerrainArea } from './levelEditorTerrainEditing';
 import {
   canTargetPlacedArtCell,
   isPlayableBoardCoordinate,
-  isPropFootprintWithinPlayableBoard,
+  isPropFootprintOnAuthoredSurface,
 } from './placedArtPolicy';
 import {
   fillScenicTerrainViewportTargets,
@@ -170,6 +170,9 @@ import { levelEditorRouteIdentity } from './levelEditorRouteIdentity';
 import {
   editorDocumentWorkspaceForLevelId,
   levelEditorHrefForDocument,
+  preservedEditorRecoveryIsRedundant,
+  provisionalEditorRecoveryIsRedundant,
+  shouldAdoptPreservedEditorBranch,
   shouldRestoreLocalEditorRecovery,
 } from './levelEditorPersistence';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
@@ -272,12 +275,12 @@ import {
   type EditorDocumentEditSessionResult,
 } from '../net/editorDocuments';
 import { consumeNewBuildReloadIntent } from '../net/appUpdate';
-import { OBJECTIVE_TYPES, ZONE_COLORS, type CastleEventAction, type ChessDrawsEventAction, type ConditionSide, type Level, type LevelEvent, type LevelEventAction, type LevelEvents, type ObjectiveType, type VictoryRules, type ZoneColor, type ZoneType } from '../core/level';
+import { OBJECTIVE_TYPES, ZONE_COLORS, zoneEntriesOnLevel, type CastleEventAction, type ChessDrawsEventAction, type ConditionSide, type Level, type LevelEvent, type LevelEventAction, type LevelEvents, type ObjectiveType, type VictoryRules, type ZoneColor, type ZoneType } from '../core/level';
 import { computeCastleTemplatePairs, type CastleTemplateUnit } from './castlingTemplate';
 import { MODE_NAME, DEFAULT_SURVIVE_TURNS, victoryRulesForObjective, kingSideOf } from '../core/objectives';
 import { CLOCK_INCREMENT_SECONDS, CLOCK_INITIAL_SECONDS, DEFAULT_TIME_CONTROL, formatClockSeconds, parseClockSeconds, stepLadder } from '../core/clock';
 import { validatePlayability, validateWarBattlePlayability } from '../core/playability';
-import { type PlayablePieceType } from '../core/pieces';
+import { PLAYABLE_PIECE_TYPES, type PlayablePieceType } from '../core/pieces';
 import { effectiveLevelEvents, normalizeLevelEvents } from '../core/levelEvents';
 import { guardRulesSeed, levelRulesSeed, seededBaselineLevel, type AuthoredRulesField, type LevelRulesSeed } from './levelEditorRulesSeed';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
@@ -954,6 +957,15 @@ function StudioEditableBoard({
     const postHere = fencePostTool && hoverPost?.x === coordinate.x && hoverPost?.y === coordinate.y
       ? FENCE_VERTEX_CORNERS.find((corner) => corner.id === hoverPost.corner) ?? null
       : null;
+    // Props live out here too, so scenic cells carry the same move-tool feedback as playable ones:
+    // the held object's footprint, plus the drop cell tinted by whether the drop is legal.
+    const scenicMovingCells = movingFootprintCells(movingFrom);
+    const isScenicMoveFrom = tool === 'move' && scenicMovingCells.has(key);
+    const isScenicMoveTo = tool === 'move' && !!movingFrom && !isScenicMoveFrom
+      && hoverCell?.x === coordinate.x && hoverCell?.y === coordinate.y;
+    const scenicMoveDroppable = isScenicMoveTo && movingFrom
+      ? (canMoveTo ? canMoveTo(movingFrom, { x: coordinate.x, y: coordinate.y }) : true)
+      : false;
     cells.push({
       key: `decorative-hit:${key}`,
       x: coordinate.x,
@@ -962,6 +974,8 @@ function StudioEditableBoard({
       data: { 'data-board-x': coordinate.x, 'data-board-y': coordinate.y, 'data-decorative-cell': 'true' },
       children: (
         <>
+          {isScenicMoveFrom ? <span className="tileset-cell-ring is-move-from" aria-hidden="true" /> : null}
+          {isScenicMoveTo ? <span className={`tileset-cell-ring ${scenicMoveDroppable ? 'is-move-ok' : 'is-move-blocked'}`} aria-hidden="true" /> : null}
           {fenceHere ? (
             <svg className="le-fence-edge-hint" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
               <line x1={EDGE_LINE[fenceHere][0]} y1={EDGE_LINE[fenceHere][1]} x2={EDGE_LINE[fenceHere][2]} y2={EDGE_LINE[fenceHere][3]} />
@@ -974,7 +988,7 @@ function StudioEditableBoard({
               aria-hidden="true"
             />
           ) : null}
-          {tool === 'region' || allowDecorativeEditing ? (
+          {tool === 'region' || tool === 'move' || allowDecorativeEditing ? (
             <span
               className="tileset-cell-hit"
               style={artworkEditing ? { pointerEvents: 'none' } : undefined}
@@ -987,6 +1001,12 @@ function StudioEditableBoard({
                   const edge = edgeAtPointer(event);
                   if (wallTool && edge !== 'N' && edge !== 'W') return;
                   applyBarrierAt(coordinate.x, coordinate.y, edge, tool === 'erase');
+                } else if (tool === 'move') {
+                  // Scenic cells hold props too, so the Move tool picks one up out here exactly as
+                  // it does on the playable board. Units never leave the playable rectangle.
+                  const prop = propAtCell(coordinate.x, coordinate.y);
+                  if (prop) setMovingFrom(prop);
+                  setHoverCell({ x: coordinate.x, y: coordinate.y });
                 } else if (tool === 'brush') {
                   paintingRef.current = true;
                   onPaint(coordinate.x, coordinate.y);
@@ -994,6 +1014,9 @@ function StudioEditableBoard({
                 else if (tool === 'erase') { paintingRef.current = true; onErase(coordinate.x, coordinate.y); }
               }}
               onPointerEnter={() => {
+                // The prop brush ghosts its footprint at the hovered cell, so scenic cells report
+                // hover the same way playable ones do.
+                setHoverCell({ x: coordinate.x, y: coordinate.y });
                 if (placementTargetTool || !paintingRef.current) return;
                 if (tool === 'brush') onPaint(coordinate.x, coordinate.y);
                 else if (tool === 'erase') onErase(coordinate.x, coordinate.y);
@@ -1002,7 +1025,14 @@ function StudioEditableBoard({
                 if (fencePostTool) hoverFencePost(coordinate.x, coordinate.y, vertexAtPointer(event));
                 else hoverBarrierEdge(coordinate.x, coordinate.y, edgeAtPointer(event));
               } : undefined}
-              onPointerUp={() => { paintingRef.current = false; }}
+              onPointerUp={(event) => {
+                if (tool === 'move' && movingFrom) {
+                  event.stopPropagation();
+                  finishMoveAt({ x: coordinate.x, y: coordinate.y });
+                  return;
+                }
+                paintingRef.current = false;
+              }}
             />
           ) : null}
         </>
@@ -1253,7 +1283,10 @@ function StudioEditableBoard({
     const { def } = propBrush;
     const placeable = propBrush.canPlaceAt(hoverCell.x, hoverCell.y);
     for (const c of propCells(hoverCell.x, hoverCell.y, def)) {
-      if (c.x < 0 || c.x >= cols || c.y < 0 || c.y >= rows) continue;
+      // Outline every footprint cell that has authored ground under it — playable or scenic. A cell
+      // past the scenic rectangle has no tile to outline; `placeable` is already false there.
+      const onBoard = c.x >= 0 && c.x < cols && c.y >= 0 && c.y < rows;
+      if (!onBoard && !scenicContains(c.x, c.y)) continue;
       const { left, top, zIndex } = boardLabCellPosition(c);
       overlaySprites.push(
         <span
@@ -1687,10 +1720,18 @@ const materialPointsForUnitId = (unitId: string): number => {
 // Authored zones are named tile regions. Legacy semantic types stay in the schema for import and
 // back-compat, but new editor-authored behavior belongs in events/rules.
 const DEFAULT_ZONE_TYPE: ZoneType = 'region';
+// The piece types that own a dedicated deployment zone, and can therefore be broken off the
+// general Player Deployment pool (ADR-0367).
+const LE_BREAKABLE_DEPLOYMENT_TYPES = [
+  { pieceType: 'pawn', label: 'Pawn' },
+  { pieceType: 'king', label: 'King' },
+] as const satisfies ReadonlyArray<{ pieceType: PlayablePieceType; label: string }>;
 const DEFAULT_ZONE_COLOR: ZoneColor = 'teal';
 const LEGACY_ZONE_COLOR: Record<ZoneType, ZoneColor> = {
   region: 'teal',
   'player-spawn': 'blue',
+  'player-pawn-spawn': 'violet',
+  'player-king-spawn': 'gold',
   'enemy-spawn': 'red',
   'enemy-threat': 'violet',
   objective: 'gold',
@@ -3151,9 +3192,21 @@ export function LevelEditor(): ReactElement {
   // Gameplay zones: an authored list of named region entries. `boardZones` below is the legacy
   // per-cell overlay map derived from this list for board rendering and old board-code compatibility.
   const [boardZoneEntries, setBoardZoneEntries] = useState<EditorZoneEntry[]>(() => zoneEntriesForBoard(initialBoard ?? { cols: boardCols, rows: boardRows, cells: {}, units: {}, doodads: {}, props: {}, cover: {}, features: {}, featureCuts: {}, featureExits: {}, zones: {} }));
-  const [selectedZoneIndex, setSelectedZoneIndex] = useState(0);
+  // `?kind=zone&brush=<zoneId>` opens the Zones layer with that exact zone armed, so a review
+  // link can land on the zone being discussed instead of whichever one sorts first.
+  const [selectedZoneIndex, setSelectedZoneIndex] = useState(() => {
+    if (studioArm.kind !== 'zone' || !studioArm.brush) return 0;
+    const entries = zoneEntriesForBoard(initialBoard ?? { cols: boardCols, rows: boardRows, cells: {}, units: {}, doodads: {}, props: {}, cover: {}, features: {}, featureCuts: {}, featureExits: {}, zones: {} });
+    return Math.max(0, entries.findIndex((entry) => entry.id === studioArm.brush));
+  });
   const boardZones = useMemo(() => zoneCellMapFromEntries(boardZoneEntries), [boardZoneEntries]);
-  const activeZone = boardZoneEntries[selectedZoneIndex] ?? null;
+  // Indices of the zones that are ON the level. A dedicated zone whose type is not broken off is
+  // retained but hidden: it cannot be selected, cycled, painted or seen (ADR-0367).
+  const visibleZoneIndices = useMemo(() => {
+    const onLevel = new Set(zoneEntriesOnLevel(boardZoneEntries));
+    return boardZoneEntries.flatMap((entry, index) => onLevel.has(entry) ? [index] : []);
+  }, [boardZoneEntries]);
+  const activeZone = visibleZoneIndices.includes(selectedZoneIndex) ? boardZoneEntries[selectedZoneIndex] ?? null : null;
   const activeZoneName = activeZone ? zoneDisplayName(activeZone, selectedZoneIndex) : '';
   const activeZoneNameValue = activeZone ? activeZone.name ?? activeZoneName : '';
   const activeZoneColor = activeZone ? zoneDisplayColor(activeZone) : DEFAULT_ZONE_COLOR;
@@ -3161,9 +3214,9 @@ export function LevelEditor(): ReactElement {
   const activeZoneOverlay = useMemo(() => activeZone ? zoneCellColorMapFromEntries([activeZone]) : {}, [activeZone]);
   const visibleZones = brushKind === 'zone' ? activeZoneOverlay : {};
   useEffect(() => {
-    if (selectedZoneIndex < boardZoneEntries.length || selectedZoneIndex === 0) return;
-    setSelectedZoneIndex(Math.max(0, boardZoneEntries.length - 1));
-  }, [boardZoneEntries.length, selectedZoneIndex]);
+    if (visibleZoneIndices.includes(selectedZoneIndex)) return;
+    setSelectedZoneIndex(visibleZoneIndices[0] ?? 0);
+  }, [visibleZoneIndices, selectedZoneIndex]);
 
   // The Rules panel state: authored win rules, non-victory events, and ancillary battle settings.
   // Seeded from the campaign level on hydrate (below); a fresh/standalone board starts at the
@@ -3275,11 +3328,13 @@ export function LevelEditor(): ReactElement {
       brushKind: levelEditorRouteBrushKind(layer, brushKind),
       // A copied/reloaded Wall Art editor URL must keep the exact armed stamp. Losing this made a
       // Grand Gallery handoff silently reopen with the first catalog item (Tattered Banner).
-      brush: brushKind === 'wallart' ? wallArtBrushId : null,
+      // The armed zone rides the same stamp, so a copied Zones URL reopens on the zone the author
+      // was painting rather than on whichever entry sorts first.
+      brush: brushKind === 'wallart' ? wallArtBrushId : brushKind === 'zone' ? (activeZone?.id ?? null) : null,
       levelArtworkWorkspace: layer === 'level-artwork' ? levelArtworkWorkspace : null,
     });
     navigateApp(nextHref, { replace: true, scroll: false });
-  }, [levelArtworkWorkspace, brushKind, layer, wallArtBrushId]);
+  }, [levelArtworkWorkspace, brushKind, layer, wallArtBrushId, activeZone?.id]);
 
   useEffect(() => {
     const syncFromRoute = (): void => {
@@ -3877,11 +3932,16 @@ export function LevelEditor(): ReactElement {
       (authoredX, authoredY) => decorativeCells[`${authoredX},${authoredY}`],
     );
   };
-  // A prop is gameplay art: every footprint cell must stay on the playable board and its tile
-  // family must accept the prop. Scene Art owns free placement outside that rectangle.
+  // A prop sits on authored GROUND, and the authored board extends past the playable rectangle into
+  // the scenic apron (ADR-0098/ADR-0365): every footprint cell must be an authored surface cell —
+  // playable or scenic — whose tile family accepts the prop, and the footprint must be wholly on
+  // one side of the playable edge. The terrain gate is what bounds an off-board prop: past the
+  // apron there is no tile, so there is nothing to stand on. Only playable props project into
+  // layers.props, so an off-board prop is scenery with no collider — which is exactly why a
+  // straddling footprint is refused. Scene Art still owns free pixel placement off the terrain.
   const propFitsBoard = (def: PropDef, ax: number, ay: number): boolean => {
     const footprint = propCells(ax, ay, def);
-    if (!isPropFootprintWithinPlayableBoard(footprint, boardCols, boardRows)) return false;
+    if (!isPropFootprintOnAuthoredSurface(footprint, boardCols, boardRows, (x, y) => cellWithinScenicSurface(`${x},${y}`))) return false;
     return footprint.every((c) => {
       const tileId = authoredCellTileId(c.x, c.y);
       const fam = tileId ? leFamilyOfTile(tileId)?.id : undefined;
@@ -5624,11 +5684,11 @@ export function LevelEditor(): ReactElement {
           : sessionRecoveryLevel
           ? { ...sessionRecoveryLevel, id: doc.level_id }
           : null;
-        const newestDivergentPreservedRecovery = preservedScopedRecoveries
-          .map((recovery) => {
-            const level = levelFromDraft(recovery.draft, doc.level);
-            return { recovery, level, signature: levelEditorLevelSignature(level) };
-          })
+        const preservedRecoveryCandidates = preservedScopedRecoveries.map((recovery) => {
+          const level = levelFromDraft(recovery.draft, doc.level);
+          return { recovery, level, signature: levelEditorLevelSignature(level) };
+        });
+        const newestDivergentPreservedRecovery = preservedRecoveryCandidates
           .find((candidate) => candidate.signature !== documentSig) ?? null;
         const newestPreservedRecovery = newestDivergentPreservedRecovery?.recovery ?? null;
         const preservedRecoveryLevel = newestDivergentPreservedRecovery?.level ?? null;
@@ -5678,6 +5738,13 @@ export function LevelEditor(): ReactElement {
         const routeSnapshotDiverged = Boolean(loadedBoard && initialSig !== documentSig);
         const routeSnapshotSafe = !routeParams.documentId || routeParams.documentRevision === doc.revision;
         const restoreRouteSnapshot = openedAsWriter && routeSnapshotDiverged && routeSnapshotSafe;
+        const restorePreservedBranch = shouldAdoptPreservedEditorBranch({
+          openedAsWriter,
+          preservedBranchDiverged: preservedRecoveryDiverged,
+          documentDirty: doc.dirty,
+          restoringLocalRecovery: restoreLocal,
+          restoringRouteSnapshot: restoreRouteSnapshot,
+        });
         const routeSnapshotRecovery: LevelEditorLocalFallbackSnapshot | null = routeSnapshotDiverged && !restoreRouteSnapshot
           ? (() => {
               const draft = {
@@ -5719,8 +5786,10 @@ export function LevelEditor(): ReactElement {
           ? initialLevel
           : restoreLocal && localLevel
           ? localLevel
+          : restorePreservedBranch && preservedRecoveryLevel
+          ? preservedRecoveryLevel
           : doc.level;
-        const shouldRecover = restoreLocal || restoreRouteSnapshot;
+        const shouldRecover = restoreLocal || restoreRouteSnapshot || restorePreservedBranch;
         let unsafeLocalRecoveryPreserved = true;
         let claimedDraftHandoffReady = !claimedUnscopedDraft || shadowedClaimedDraftHandled;
         let unsafeLocalRecovery: LevelEditorLocalFallbackSnapshot | null = null;
@@ -5780,15 +5849,30 @@ export function LevelEditor(): ReactElement {
         lastCloudSyncedSigRef.current = documentSig;
         documentConflictRef.current = recoveryConflict;
         documentConflictKindRef.current = doc.baseline_conflict ? 'baseline' : null;
-        // Old per-tab branches are not part of the shared-document model. The acknowledged cloud
-        // body opens directly; current-page crash recovery still resumes automatically above.
-        for (const recovery of preservedScopedRecoveries) {
-          clearPreservedScopedLevelEditorRecovery(scopedDraftIdentity, recovery.recoveryId);
+        // Old per-tab branches are not part of the shared-document model, so they are cleared
+        // rather than offered as a take-over flow. Clearing one whose content already equals the
+        // acknowledged body loses nothing. A DIVERGENT branch is unsent work and is kept: an
+        // adopted one self-clears on the next mount once autosave has carried it into the
+        // document, so this stays a bounded buffer instead of a growing cleanup queue.
+        for (const candidate of preservedRecoveryCandidates) {
+          if (!preservedEditorRecoveryIsRedundant({
+            recoverySignature: candidate.signature,
+            documentSignature: documentSig,
+          })) continue;
+          clearPreservedScopedLevelEditorRecovery(scopedDraftIdentity, candidate.recovery.recoveryId);
         }
         for (const candidate of provisionalPreservedRecoveries) {
-          if (!candidate.sourceIsCurrentDraft) {
-            clearPreservedScopedLevelEditorRecovery(candidate.sourceIdentity, candidate.recovery.recoveryId);
-          }
+          if (!provisionalEditorRecoveryIsRedundant({
+            isCurrentPageDraft: Boolean(candidate.sourceIsCurrentDraft),
+            // The forwarding step above marks a source only after its content was archived under
+            // the resolved document, or already matched the acknowledged body.
+            forwardedIntoDocument: isPreservedScopedLevelEditorRecoveryForwarded(
+              candidate.sourceIdentity,
+              candidate.recovery,
+              doc.document_id,
+            ),
+          })) continue;
+          clearPreservedScopedLevelEditorRecovery(candidate.sourceIdentity, candidate.recovery.recoveryId);
         }
         setEditorLoadError(null);
         setEditorDocument(doc);
@@ -7074,6 +7158,7 @@ export function LevelEditor(): ReactElement {
       id: entry.id,
       label: zoneDisplayName(entry, index),
       type: entry.type,
+      excludedPieceTypes: entry.excludedPieceTypes ?? [],
       paintedTiles: entry.tiles.length,
       usableTileKeys: [...new Set(entry.tiles.filter((tile) => {
         const [x, y] = tile.split(',').map(Number);
@@ -7100,6 +7185,7 @@ export function LevelEditor(): ReactElement {
     const board = cloneEditorBoard(currentEditorBoardRef.current);
     const entries = zoneEntriesForBoard(board).map((entry) => ({ ...entry, tiles: [...entry.tiles] }));
     const zoneType = side === 'player' ? 'player-spawn' : 'enemy-spawn';
+    // One zone per deployment type, always (ADR-0367). Creating an existing one opens it.
     const existingIndex = entries.findIndex((entry) => entry.type === zoneType);
     if (existingIndex >= 0) {
       setSelectedZoneIndex(existingIndex);
@@ -7129,6 +7215,40 @@ export function LevelEditor(): ReactElement {
   const editDeploymentZone = (zoneId: string): void => {
     selectZoneEntry(zoneId);
     selectLayer('zone');
+  };
+  // Switching a piece type into its own deployment zone is ONE command (ADR-0367): it bars the type
+  // from the general Player Deployment zone and, on the same click, gives it a zone to stand in.
+  // Switching back off retains the painted squares — the entry stays in the editor's store and
+  // simply stops being part of the Level — so switching on again returns the zone the author had.
+  const setDedicatedDeploymentZone = (pieceType: 'pawn' | 'king', on: boolean): void => {
+    const board = cloneEditorBoard(currentEditorBoardRef.current);
+    const entries = zoneEntriesForBoard(board).map((entry) => ({ ...entry, tiles: [...entry.tiles] }));
+    const generalIndex = entries.findIndex((entry) => entry.type === 'player-spawn');
+    if (generalIndex < 0) {
+      reportStatus('Create the Player starting zone first.', 'error', 'A piece type is broken off the shared deployment pool, so that pool has to exist before a type can leave it.');
+      return;
+    }
+    const general = entries[generalIndex];
+    const excluded = new Set(general.excludedPieceTypes ?? []);
+    if (on) excluded.add(pieceType);
+    else excluded.delete(pieceType);
+    const nextExcluded = PLAYABLE_PIECE_TYPES.filter((type) => excluded.has(type));
+    entries[generalIndex] = { ...general, excludedPieceTypes: nextExcluded.length ? nextExcluded : undefined };
+
+    const zoneType = pieceType === 'pawn' ? 'player-pawn-spawn' : 'player-king-spawn';
+    let zoneIndex = entries.findIndex((entry) => entry.type === zoneType);
+    if (on && zoneIndex < 0) {
+      entries.push({
+        id: nextZoneEntryId(entries),
+        name: uniqueZoneEntryName(pieceType === 'pawn' ? 'Pawn Deployment' : 'King Deployment', entries),
+        color: pieceType === 'pawn' ? 'violet' : 'gold',
+        type: zoneType,
+        tiles: [],
+      });
+      zoneIndex = entries.length - 1;
+    }
+    if (on && zoneIndex >= 0) setSelectedZoneIndex(zoneIndex);
+    commitEditorBoard(withZoneEntries(board, entries), null);
   };
   const addPawnPromotionTemplate = (): void => {
     const board = cloneEditorBoard(currentEditorBoardRef.current);
@@ -7310,17 +7430,30 @@ export function LevelEditor(): ReactElement {
     nextBoard.cells = prune(nextBoard.cells);
     nextBoard.units = prune(nextBoard.units);
     nextBoard.doodads = prune(nextBoard.doodads);
-    // Props are FOOTPRINT-aware: drop a prop if its anchor OR any footprint cell falls outside
-    // the new bounds (a 2×2 anchored at the last column would otherwise hang off the edge).
+    // Props are FOOTPRINT-aware and may stand on the scenic apron (ADR-0365), so the resize rule is
+    // "does every footprint cell still have authored ground under the NEW dimensions" — playable or
+    // scenic. A prop only disappears when the shrink pulls the ground out from under it.
     {
+      const survivingScenicKeys = new Set(
+        decorativeTerrainApronCoordinates(
+          nextCols,
+          nextRows,
+          nextBoard.decorativeApron ?? decorativeApron,
+          nextBoard.decorativeFootprint ?? [],
+        ).map(({ x, y }) => `${x},${y}`),
+      );
+      const onAuthoredSurface = (x: number, y: number): boolean =>
+        (x >= 0 && y >= 0 && x < nextCols && y < nextRows) || survivingScenicKeys.has(`${x},${y}`);
       const next: Record<string, { propId: string }> = {};
       let dropped = false;
       for (const [key, placement] of Object.entries(nextBoard.props)) {
         const def = resolvePropDef(placement.propId);
         const [ax, ay] = key.split(',').map(Number);
         const fits = def
-          ? ax >= 0 && ay >= 0 && ax + def.w <= nextCols && ay + def.h <= nextRows
-          : within(key); // unknown id: fall back to the anchor-only check
+          // Same rule the brush applies: authored ground under every cell, and wholly playable or
+          // wholly scenic — a grow that would straddle a prop across the new edge drops it.
+          ? isPropFootprintOnAuthoredSurface(propCells(ax, ay, def), nextCols, nextRows, onAuthoredSurface)
+          : onAuthoredSurface(ax, ay); // unknown id: fall back to the anchor-only check
         if (fits) next[key] = placement;
         else dropped = true;
       }
@@ -7548,14 +7681,14 @@ export function LevelEditor(): ReactElement {
   };
   const selectZoneEntry = (id: string): void => {
     const index = boardZoneEntries.findIndex((zone) => zone.id === id);
-    if (index >= 0) setSelectedZoneIndex(index);
+    if (index >= 0 && visibleZoneIndices.includes(index)) setSelectedZoneIndex(index);
   };
   const stepZoneEntry = (delta: -1 | 1): void => {
-    const count = boardZoneEntries.length;
+    const count = visibleZoneIndices.length;
     if (!count) return;
     setSelectedZoneIndex((current) => {
-      const normalized = Math.min(Math.max(current, 0), count - 1);
-      return (normalized + delta + count) % count;
+      const at = Math.max(0, visibleZoneIndices.indexOf(current));
+      return visibleZoneIndices[(at + delta + count) % count];
     });
   };
   const setActiveZoneName = (name: string): void => {
@@ -7996,8 +8129,8 @@ export function LevelEditor(): ReactElement {
                     decorativeFences={decorativeFences}
                     decorativeFencePosts={decorativeFencePosts}
                     decorativeWalls={decorativeWalls}
-                    allowDecorativeEditing={['tile', 'cover', 'road', 'river', 'fence', 'wall', 'subterrain'].includes(brushKind)
-                      || (tool === 'erase' && (brushKind === 'doodad' || brushKind === 'prop'))}
+                    allowDecorativeEditing={['tile', 'cover', 'road', 'river', 'fence', 'wall', 'subterrain', 'prop'].includes(brushKind)
+                      || (tool === 'erase' && brushKind === 'doodad')}
                     onTerrainFirstFrame={acknowledgeEditorTerrain}
                     onSceneFirstFrame={acknowledgeEditorScene}
                     onFrameError={failEditorFrame}
@@ -8206,6 +8339,7 @@ export function LevelEditor(): ReactElement {
                   onEventsChange={setEvents}
                   onCreateZone={createDeploymentZone}
                   onEditZone={editDeploymentZone}
+                  onDedicatedZoneChange={setDedicatedDeploymentZone}
                 />
               )}
               otherContent={(
@@ -9067,8 +9201,8 @@ export function LevelEditor(): ReactElement {
                   buttonClassName="le-zone-stepper-button"
                   previousLabel="Previous zone"
                   nextLabel="Next zone"
-                  previousDisabled={boardZoneEntries.length <= 1}
-                  nextDisabled={boardZoneEntries.length <= 1}
+                  previousDisabled={visibleZoneIndices.length <= 1}
+                  nextDisabled={visibleZoneIndices.length <= 1}
                   onPrevious={() => stepZoneEntry(-1)}
                   onNext={() => stepZoneEntry(1)}
                 >
@@ -9076,7 +9210,7 @@ export function LevelEditor(): ReactElement {
                     value={activeZone?.id ?? ''}
                     options={[
                       ...(activeZone ? [] : [{ value: '', label: 'None' }]),
-                      ...boardZoneEntries.map((zone, index) => ({ value: zone.id, label: zoneDisplayName(zone, index) })),
+                      ...visibleZoneIndices.map((index) => ({ value: boardZoneEntries[index].id, label: zoneDisplayName(boardZoneEntries[index], index) })),
                     ]}
                     disabled={!activeZone}
                     ariaLabel="Selected zone"
@@ -9122,7 +9256,17 @@ export function LevelEditor(): ReactElement {
               />
             </div>
             <p className="le-board-note">
-              Brush paints cells into the selected zone. Events decide what that zone does.
+              {activeZone?.type === 'player-spawn'
+                ? activeZone.excludedPieceTypes?.length
+                  ? `Player Deployment. Automatic placement puts every piece except ${LE_BREAKABLE_DEPLOYMENT_TYPES.filter(({ pieceType }) => activeZone.excludedPieceTypes?.includes(pieceType)).map(({ label }) => `${label}s`).join(' and ')} here; a Disciplined unit may still be placed here by hand.`
+                  : 'Player Deployment. The Run army starts on these squares.'
+                : activeZone?.type === 'player-pawn-spawn'
+                ? 'Pawn Deployment. Pawns may start here. Squares shared with Player Deployment stay open to every piece.'
+                : activeZone?.type === 'player-king-spawn'
+                ? 'King Deployment. The King may start here, and takes its square before any other unit.'
+                : activeZone?.type === 'enemy-spawn'
+                ? 'Enemy Deployment. The randomized enemy roster starts on these squares.'
+                : 'Brush paints cells into the selected zone. Events decide what that zone does.'}
             </p>
           </section>
         ) : null}

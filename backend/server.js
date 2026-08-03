@@ -5583,7 +5583,10 @@ function isLevelBody(body) {
 // force a prod data migration (docs/migration-policy.md).
 const WORKSPACE_OBJECTIVES = new Set(['capture-all', 'capture-king', 'rival-kings', 'survive', 'reach']);
 const WORKSPACE_TERRAIN = new Set(['grass', 'water', 'stone', 'road', 'bridge', 'cliff', 'rock', 'sand', 'dirt', 'pebble', 'void']);
-const WORKSPACE_ZONE_TYPES = new Set(['region', 'player-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock', 'pawn-promotion']);
+// Mirror of core/level.ts ZONE_TYPES. `workspaceZoneTypes.test.js` fails when this drifts from
+// the shared source: a zone type the editor can author but this set does not know is rejected
+// as an invalid level body, which surfaces to the author only as "Cloud autosave is unavailable".
+const WORKSPACE_ZONE_TYPES = new Set(['region', 'player-spawn', 'player-pawn-spawn', 'player-king-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock', 'pawn-promotion']);
 const WORKSPACE_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king', 'rock', 'random-rock']);
 const WORKSPACE_SIDES = new Set(['player', 'enemy', 'neutral']);
 // Playable-only piece types for a random-placement roster (no rocks) — mirrors the
@@ -5855,6 +5858,12 @@ function validateWorkspaceLevel(level, key) {
   }
   for (const zone of layers.zones) {
     if (!zone || typeof zone.id !== 'string' || !WORKSPACE_ZONE_TYPES.has(zone.type) || !Array.isArray(zone.tiles)) return `levels.${key}.layers.zones contains an invalid zone`;
+    // ADR-0367: the piece types a Player Deployment zone bars from automatic placement.
+    if (zone.excludedPieceTypes !== undefined) {
+      if (!Array.isArray(zone.excludedPieceTypes) || zone.excludedPieceTypes.some((type) => !WORKSPACE_ROSTER_PIECES.has(type))) {
+        return `levels.${key}.layers.zones contains an invalid excludedPieceTypes`;
+      }
+    }
     for (const tile of zone.tiles) {
       if (!Array.isArray(tile) || tile.length !== 2 || !isFiniteInteger(tile[0]) || !isFiniteInteger(tile[1]) || tile[0] < 0 || tile[0] >= board.cols || tile[1] < 0 || tile[1] >= board.rows) {
         return `levels.${key}.layers.zones contains an out-of-bounds tile`;

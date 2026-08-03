@@ -182,11 +182,13 @@ describe('Level Editor board pointer contract', () => {
     expect(styles).toContain('outline: 2px dotted');
   });
 
-  it('keeps cell-based Placed Art inside the playable board while Scene Art remains free', () => {
+  it('keeps Doodads inside the playable board while Scene Art and Props reach the authored surface', () => {
     expect(levelEditor).toContain("canTargetPlacedArtCell('doodad', x, y, boardCols, boardRows)");
-    expect(levelEditor).toContain('isPropFootprintWithinPlayableBoard(footprint, boardCols, boardRows)');
-    expect(levelEditor).toContain("|| (tool === 'erase' && (brushKind === 'doodad' || brushKind === 'prop'))");
-    expect(levelEditor).not.toContain("allowDecorativeEditing={['tile', 'doodad', 'prop'");
+    // Props follow authored GROUND, not the playable rectangle (ADR-0365): the scenic apron counts.
+    expect(levelEditor).toContain('isPropFootprintOnAuthoredSurface(footprint, boardCols, boardRows, (x, y) => cellWithinScenicSurface(`${x},${y}`))');
+    expect(levelEditor).not.toContain('isPropFootprintWithinPlayableBoard');
+    expect(levelEditor).toContain("'subterrain', 'prop'].includes(brushKind)");
+    expect(levelEditor).toContain("|| (tool === 'erase' && brushKind === 'doodad')");
     expect(levelEditor).toContain("layer === 'placed-art' && brushKind === 'artwork' && tool === 'brush'");
   });
 

@@ -114,7 +114,12 @@ There is no owner-facing Start editing, Follow latest, or Take over flow.
 A page close, process loss, stale heartbeat, or expired legacy lease metadata must not create a
 recovery branch or block a later page. Browser storage is only a bounded crash/offline retry buffer
 for the same working copy. It must not become a second document identity or routine cleanup queue.
-Authenticated automated verification remains an explicitly observing session and cannot write.
+
+Automated verification opens an **observing** session against a real document — screenshots and
+checks read it, they never write to it. That protects the documents Nelson actually cares about; it
+is not a ban on writing. When proving a behaviour genuinely needs a writer session, create a
+throwaway level, prove it there, and delete it afterwards. Do not report work as merely "wired,
+unverified" when a scratch level would have settled it.
 
 Authenticated edits autosave to the durable working copy. **Save** promotes that copy to the
 canonical Level, and **Discard changes** restores it from canonical. Copying the browser URL remains

@@ -78,6 +78,58 @@ export function shouldRestoreLocalEditorRecovery(input: {
 }
 
 /**
+ * Per-tab branches are cleared rather than offered as a take-over flow (ADR-0304), but clearing
+ * one is only safe when discarding it loses nothing — its content already equals the acknowledged
+ * document body. A divergent branch is work that never reached the server; it is retained, and a
+ * later mount clears it once autosave has carried it into the document and the signatures agree.
+ * That keeps browser storage a bounded buffer instead of a growing cleanup queue.
+ */
+export function preservedEditorRecoveryIsRedundant(input: {
+  recoverySignature: string | undefined;
+  documentSignature: string | undefined;
+}): boolean {
+  const { recoverySignature, documentSignature } = input;
+  return typeof recoverySignature === 'string'
+    && typeof documentSignature === 'string'
+    && recoverySignature === documentSignature;
+}
+
+/**
+ * A provisional draft is written before any document exists (signed out, or signed in before the
+ * level resolves). It may only be cleared once the resolved document demonstrably holds a copy —
+ * the forwarding marker. Merely arriving at a document is not proof, and the current page's own
+ * draft is never a discardable branch.
+ */
+export function provisionalEditorRecoveryIsRedundant(input: {
+  isCurrentPageDraft: boolean;
+  forwardedIntoDocument: boolean;
+}): boolean {
+  return !input.isCurrentPageDraft && input.forwardedIntoDocument;
+}
+
+/**
+ * Adopt an unsent branch as this page's local changes instead of opening the document body over
+ * it. Offline editing — and a sign-in that re-homes the page into a fresh session, so the draft
+ * arrives as another session's preserved recovery rather than this page's claimed draft — both
+ * land here. A clean working copy still equals the canonical saved level, so adopting cannot
+ * overwrite anything and autosave carries the branch into the durable copy. A dirty document has
+ * server-side work of its own, so the branch stays preserved rather than being applied over it.
+ */
+export function shouldAdoptPreservedEditorBranch(input: {
+  openedAsWriter: boolean;
+  preservedBranchDiverged: boolean;
+  documentDirty: boolean;
+  restoringLocalRecovery: boolean;
+  restoringRouteSnapshot: boolean;
+}): boolean {
+  return input.openedAsWriter
+    && input.preservedBranchDiverged
+    && !input.documentDirty
+    && !input.restoringLocalRecovery
+    && !input.restoringRouteSnapshot;
+}
+
+/**
  * Canonicalize the editor route after the backend resolves its opaque document
  * identity (and, for a new level, allocates the level id). Every other query
  * parameter remains intact. One-shot Test/recovery snapshot fields are consumed by default so a

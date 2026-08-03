@@ -6,6 +6,8 @@ import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox, ShellViewportSwap } from './shared/ChromeBox';
 import { HouseSelect } from './shared/HouseSelect';
 import { TitleBarStatus } from './shell/TitleBarControls';
+import { TitleBarSlot } from './shell/TitleBarSlot';
+import { RunIdentityChip, RunTitleBarMeasures } from './RunTitleBarChips';
 import { PLAY_RUN_SELECTOR_HREF } from './playHubRoute';
 import {
   Skirmish,
@@ -122,31 +124,39 @@ function isGeneratedRunBattleName(name: string): boolean {
   return /^(?:conflict\s+(?:\d+|[ivxlcdm]+)\s*[—–-]\s*)?battle\s+\d+$/i.test(name.trim().replace(/\s+/g, ' '));
 }
 
-function RunTitleBarStatus({ run }: { run: RunDocument }): ReactElement {
-  const progress = runBattleProgress(run);
-  const levelName = run.war.battles[run.battleIndex]?.level.name ?? 'Battle';
-  const phase = run.phase === 'victory'
-    ? 'War won'
+/** The Run phase as the trailing segment of the title bar's route line. */
+function runPhaseRouteName(run: RunDocument): string {
+  // 'bona-vacantia' is the only phase id that is not one capitalised word, so capitalising
+  // the id would route to "Bona-vacantia".
+  return run.phase === 'victory'
+    ? 'Victory'
     : run.phase === 'bona-vacantia'
       ? 'Bona Vacantia'
       : `${run.phase.charAt(0).toUpperCase()}${run.phase.slice(1)}`;
-  const detail = isGeneratedRunBattleName(levelName) ? phase : `${levelName} · ${phase}`;
+}
+
+function RunTitleBarStatus({ run }: { run: RunDocument }): ReactElement {
+  const progress = runBattleProgress(run);
+  const levelName = run.war.battles[run.battleIndex]?.level.name ?? 'Battle';
   return (
-    <div className="skirmish-topbar-status run-topbar-status">
-      <TitleBarStatus className="skirmish-status-chip skirmish-turn-plate">
-        <strong>{run.war.name}</strong>
-        <small>{ATARAXIA_BY_TIER[run.ataraxiaTier].label}</small>
-      </TitleBarStatus>
-      <TitleBarStatus className="skirmish-status-chip skirmish-clock">
-        <RunGoldAmount valueTenths={run.goldTenths} className="run-gold-amount--title" />
-      </TitleBarStatus>
-      <TitleBarStatus className="skirmish-status-chip skirmish-objective">
-        <span>
-          <strong>Conflict {progress.conflict} · Battle {progress.battle}/{progress.battlesInConflict}</strong>
-          <small>{detail}</small>
-        </span>
-      </TitleBarStatus>
-    </div>
+    <>
+      {/* The phase is where you ARE in the Run, so it reads as route — Run › Shop —
+          beneath the wordmark, rather than as a second line on a status chip. */}
+      <TitleBarSlot region="route">{runPhaseRouteName(run)}</TitleBarSlot>
+      <div className="skirmish-topbar-status run-topbar-status">
+        <RunIdentityChip
+          warName={run.war.name}
+          levelName={isGeneratedRunBattleName(levelName) ? null : levelName}
+        />
+        <RunTitleBarMeasures
+          tier={run.ataraxiaTier}
+          goldTenths={run.goldTenths}
+          conflict={progress.conflict}
+          battle={progress.battle}
+          battlesInConflict={progress.battlesInConflict}
+        />
+      </div>
+    </>
   );
 }
 
@@ -948,6 +958,7 @@ function RunBattlefieldPanel({
           baseLevel,
           occupied,
           active.battleRuntime?.reinforcementSequence ?? 0,
+          reservist.type,
         );
         if (!cell) continue;
         const facing = defaultFacingForSide('player');
