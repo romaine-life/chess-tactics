@@ -256,7 +256,9 @@ function RunArmyPortrait({
   );
 }
 
-function RunUnitTraitList({
+// Exported because the Chartulary states the same unit states about the units a held
+// card put in the army; a second glyph list would drift from this one (ADR-0059).
+export function RunUnitTraitList({
   run,
   unit,
   compact = false,

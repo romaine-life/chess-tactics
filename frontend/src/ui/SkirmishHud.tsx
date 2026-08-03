@@ -319,7 +319,7 @@ export function SkirmishHud({
   const strategikonLabel = strategikonOpen ? 'Return to Battle' : 'Open Strategikon';
   const strategikonTitle = strategikonOpen
     ? 'Return to Battle — close Strategikon without leaving this fight.'
-    : 'Strategikon — inspect battle references, the current army, and held relics.';
+    : 'Strategikon — inspect battle references, the current army, and held cards and relics.';
   const strategikonToggle = strategikonHref ? (
     <NavButton
       data-testid="strategikon-toggle"

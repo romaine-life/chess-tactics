@@ -68,6 +68,7 @@ export const RUN_CRAFT_PARAMS: readonly string[] = Object.freeze([
   'army',
   'add',
   'offers',
+  'cards',
   'loot',
   'paid',
   'relics',
@@ -100,6 +101,9 @@ export interface RunCraftSpec {
   army: RunCraftUnit[] | null;
   add: RunCraftUnit[] | null;
   offers: RunCraftCard[] | null;
+  /** Cards the Run already HOLDS. Bought for real in the opening Shop and carried forward, so the
+   * army, abilities, Plagued marks and card records are the ones the game itself writes. */
+  cards: RunCraftCard[] | null;
   loot: RunRelicId[] | null;
   paidRelic: RunRelicId | null;
   relics: RunRelicId[] | null;
@@ -222,6 +226,7 @@ export function parseRunCraftSpec(search: string): RunCraftSpec | null {
     throw new RunCraftError(`craft gold: "${goldRaw}" must be a gold amount of 0 or more.`);
   }
   const offers = params.get('offers');
+  const cards = params.get('cards');
   const army = params.get('army');
   const add = params.get('add');
   const loot = params.get('loot');
@@ -237,6 +242,7 @@ export function parseRunCraftSpec(search: string): RunCraftSpec | null {
     army: army === null ? null : craftUnits(pieceList(army, 'army')),
     add: add === null ? null : craftUnits(pieceList(add, 'add')),
     offers: offers === null ? null : offers.split(',').map((token) => token.trim()).filter(Boolean).map(cardSpec),
+    cards: cards === null ? null : cards.split(',').map((token) => token.trim()).filter(Boolean).map(cardSpec),
     loot: loot === null ? null : relicList(loot, 'loot'),
     paidRelic: paid === null ? null : relicList(paid, 'paid')[0] ?? null,
     relics: relics === null ? null : relicList(relics, 'relics'),
@@ -313,19 +319,20 @@ export function runCraftSpecFromJson(raw: unknown): RunCraftSpec {
     goldTenths,
     army: spec.army === undefined || spec.army === null ? null : craftUnitList(spec.army, 'army'),
     add: spec.add === undefined || spec.add === null ? null : craftUnitList(spec.add, 'add'),
-    offers: offers === undefined || offers === null ? null : craftCardList(offers),
+    offers: offers === undefined || offers === null ? null : craftCardList(offers, 'offers'),
+    cards: spec.cards === undefined || spec.cards === null ? null : craftCardList(spec.cards, 'cards'),
     loot: spec.loot === undefined || spec.loot === null ? null : relicIdList(spec.loot, 'loot'),
     paidRelic: spec.paid === undefined || spec.paid === null ? null : relicIdList(spec.paid, 'paid')[0] ?? null,
     relics: spec.relics === undefined || spec.relics === null ? null : relicIdList(spec.relics, 'relics'),
   };
 }
 
-function craftCardList(raw: unknown): RunCraftCard[] {
+function craftCardList(raw: unknown, label: string): RunCraftCard[] {
   if (typeof raw === 'string') return raw.split(',').map((token) => token.trim()).filter(Boolean).map(cardSpec);
-  if (!Array.isArray(raw)) throw new RunCraftError('craft offers: expected a list of cards.');
+  if (!Array.isArray(raw)) throw new RunCraftError(`craft ${label}: expected a list of cards.`);
   return raw.map((entry) => {
     if (typeof entry === 'string') return cardSpec(entry);
-    if (!entry || typeof entry !== 'object') throw new RunCraftError('craft offers: expected a card string or object.');
+    if (!entry || typeof entry !== 'object') throw new RunCraftError(`craft ${label}: expected a card string or object.`);
     const card = entry as { pieces?: unknown; type?: unknown; cardType?: unknown };
     const pieces = Array.isArray(card.pieces) ? card.pieces.map((piece) => String(piece)).join('+') : String(card.pieces ?? '');
     const type = card.type ?? card.cardType;
@@ -387,6 +394,7 @@ export function runCraftSpecToJson(spec: RunCraftSpec): Record<string, unknown> 
   if (spec.army) json.army = spec.army.map(unit);
   if (spec.add) json.add = spec.add.map(unit);
   if (spec.offers) json.offers = spec.offers.map((card) => ({ pieces: [...card.pieces], type: card.cardType }));
+  if (spec.cards) json.cards = spec.cards.map((card) => ({ pieces: [...card.pieces], type: card.cardType }));
   if (spec.loot) json.loot = [...spec.loot];
   if (spec.paidRelic !== null) json.paid = spec.paidRelic;
   if (spec.relics) json.relics = [...spec.relics];
@@ -422,6 +430,11 @@ export function runCraftAddressParams(spec: RunCraftSpec): URLSearchParams {
   if (spec.add) params.set('add', spec.add.map((entry) => entry.type).join(','));
   if (spec.offers) {
     params.set('offers', spec.offers
+      .map((card) => card.pieces.join('+') + (card.cardType ? `:${card.cardType}` : ''))
+      .join(','));
+  }
+  if (spec.cards) {
+    params.set('cards', spec.cards
       .map((card) => card.pieces.join('+') + (card.cardType ? `:${card.cardType}` : ''))
       .join(','));
   }
@@ -561,10 +574,65 @@ function buyOpeningCard(run: RunDocument): RunDocument {
   return bought;
 }
 
+/**
+ * Buy the cards the Run should already HOLD, in the opening Shop it is standing in.
+ *
+ * The point of the field is the Chartulary and everything downstream of a purchase: real units
+ * with real ids, the abilities and Plagued marks `buyCard` grants, and card records the server
+ * validator accepts. So each card is staged as an ordinary offer and bought — never written into
+ * `run.cards` directly. Gold is restored afterwards, so held cards do not silently pay for
+ * themselves out of what the Run has to spend, and the staged offers are withdrawn so the Shop
+ * that is about to be left still reads as the one the game dealt.
+ *
+ * They are bought at the START of the fast-forward, which means they then live through every
+ * Battle before the target: units die, Pestiferous cards deteriorate, and what arrives is a card
+ * with a history rather than a fresh purchase.
+ */
+function buyHeldCards(run: RunDocument, cards: readonly RunCraftCard[] | null): RunDocument {
+  if (!cards?.length) return run;
+  if (!run.shop) throw new RunCraftError('craft cards: there is no Shop to buy the held cards in.');
+  const goldTenths = run.goldTenths;
+  let next = run;
+  cards.forEach((card, index) => {
+    const shop = next.shop!;
+    const offer = craftOffer(next, card, HELD_CARD_SLOT_BASE + index);
+    const staged: RunDocument = {
+      ...next,
+      goldTenths: next.goldTenths + offer.cost * GOLD_SCALE,
+      shop: { ...shop, cardOffers: [...shop.cardOffers, offer] },
+    };
+    const bought = buyCard(staged, offer.offerId);
+    if (bought === staged) {
+      throw new RunCraftError(`craft cards: "${card.pieces.join('+')}" could not be bought.`);
+    }
+    next = {
+      ...bought,
+      shop: {
+        ...bought.shop!,
+        cardOffers: bought.shop!.cardOffers.filter((entry) => entry.offerId !== offer.offerId),
+        purchasedCardOfferIds: bought.shop!.purchasedCardOfferIds.filter((id) => id !== offer.offerId),
+      },
+    };
+  });
+  // The Shop's own entry snapshot moves with them: they are cards the Run came in holding, not
+  // purchases a Discard changes should undo.
+  return {
+    ...next,
+    goldTenths,
+    shop: {
+      ...next.shop!,
+      entrySnapshot: { ...next.shop!.entrySnapshot, army: next.army, cards: next.cards, goldTenths },
+    },
+  };
+}
+
+/** Far above any real Shop slot, so a staged held-card offer can never collide with a dealt one. */
+const HELD_CARD_SLOT_BASE = 1000;
+
 /** Fast-forward from the opening Shop to the deployment of a target Battle by playing every
  * Battle before it. */
-function advanceToDeployment(run: RunDocument, battleIndex: number): RunDocument {
-  let next = leaveShopAuto(buyOpeningCard(run));
+function advanceToDeployment(run: RunDocument, battleIndex: number, held: readonly RunCraftCard[] | null): RunDocument {
+  let next = leaveShopAuto(buyHeldCards(buyOpeningCard(run), held));
   let guard = 0;
   while (next.battleIndex < battleIndex) {
     if ((guard += 1) > 200) throw new RunCraftError('craft: fast-forward made no progress.');
@@ -712,7 +780,7 @@ function applyGold(run: RunDocument, goldTenths: number | null): RunDocument {
   };
 }
 
-const OPENING_SHOP_OVERRIDES: readonly (keyof RunCraftSpec)[] = ['goldTenths', 'army', 'add', 'offers', 'loot', 'paidRelic', 'relics'];
+const OPENING_SHOP_OVERRIDES: readonly (keyof RunCraftSpec)[] = ['goldTenths', 'army', 'add', 'offers', 'cards', 'loot', 'paidRelic', 'relics'];
 
 /** Build the crafted Run. Every state is reached by the transitions the game itself plays. */
 export function craftRunDocument(spec: RunCraftSpec, war: RunWarSnapshot): RunDocument {
@@ -738,7 +806,12 @@ export function craftRunDocument(spec: RunCraftSpec, war: RunWarSnapshot): RunDo
   const deploymentIndex = spec.phase === 'shop'
     ? targetIndex - 1
     : spec.phase === 'victory' ? battles - 1 : targetIndex;
-  let run = advanceToDeployment(opening, deploymentIndex);
+  // A crafted army REPLACES the roster, which takes the units the held cards put there with it —
+  // so the two ways of saying what the Run has cannot both be given.
+  if (spec.cards && spec.army) {
+    throw new RunCraftError('craft: cards and army cannot both be given. A crafted army replaces the roster the held cards put there; use add for extra units beside them.');
+  }
+  let run = advanceToDeployment(opening, deploymentIndex, spec.cards);
   run = applyRelics(applyArmy(run, spec), spec);
 
   if (spec.phase === 'deployment') return applyGold(prepareDeployment(run), spec.goldTenths);

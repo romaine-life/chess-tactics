@@ -9,6 +9,7 @@ import {
   RUN_CARD_TYPE_REFERENCE,
   type PurchasablePieceType,
   type RunCardOffer,
+  type RunCardType,
   type RunCoreCard,
 } from '../run/model';
 import {
@@ -76,12 +77,19 @@ export function concinnousTargetLabel(card: RunCardOffer): string {
 export function RunCard({
   card,
   mode,
+  cardType: ownedCardType = null,
   purchased = false,
   disabled = false,
   onSelect,
 }: {
   card: RunCoreCard | RunCardOffer;
   mode: 'shop' | 'reference';
+  /**
+   * The property of a card that is no longer an offer — a card the Run HOLDS. An owned
+   * card keeps the property it was bought with, so its face must keep the matching frame
+   * and property strip; an offer still carries its own and ignores this.
+   */
+  cardType?: RunCardType | null;
   purchased?: boolean;
   disabled?: boolean;
   onSelect?: () => void;
@@ -90,7 +98,7 @@ export function RunCard({
   const name = runCardName(card);
   const artUrl = resolvedLiveMediaUrl(runCardArtSlot(card));
   const offer = isCardOffer(card) ? card : null;
-  const cardType = offer?.cardType ?? null;
+  const cardType = offer?.cardType ?? ownedCardType;
   const frameSlot = cardType === 'pestiferous'
     ? RUN_CARD_PESTIFEROUS_FRAME_SLOT
     : cardType === 'tactical'
@@ -104,8 +112,9 @@ export function RunCard({
   const frameUrl = frameMedia.immutableUrl;
   const cost = offer?.cost ?? card.value;
   // A Hieratic target is drawn at acquisition, like a Tactical one, so a multi-unit offer
-  // cannot name it before purchase and a one-unit offer needs no label at all.
-  const hieraticTargetHidden = cardType === 'hieratic' && card.pieces.length > 1;
+  // cannot name it before purchase and a one-unit offer needs no label at all. A card the
+  // Run already holds is past that draw, so it never wears the purchase-time caption.
+  const hieraticTargetHidden = Boolean(offer) && cardType === 'hieratic' && card.pieces.length > 1;
   const targetLabel = cardType === 'pestiferous'
     ? plaguedTargetLabel(card)
     : cardType === 'concinnous' && offer

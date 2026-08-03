@@ -20895,6 +20895,52 @@ button.tileset-relationship-cell {
   outline-offset: 3px;
 }
 
+/* The Chartulary reuses the reference gallery exactly and adds one register box under
+   each face: the units that card actually put in the army, and what became of them. */
+.strategikon-chartulary-item {
+  align-content: start;
+  display: grid;
+  gap: var(--ds-space-2);
+  grid-template-rows: auto auto;
+}
+
+.strategikon-chartulary-register {
+  align-content: start;
+  display: grid;
+  gap: var(--ds-space-1);
+  padding: var(--ds-space-2) var(--ds-space-3);
+}
+
+.strategikon-chartulary-units {
+  display: grid;
+  gap: var(--ds-space-1);
+  list-style: none;
+  margin: 0;
+  min-inline-size: 0;
+  padding: 0;
+}
+
+.strategikon-chartulary-unit {
+  align-items: center;
+  column-gap: var(--ds-space-2);
+  display: flex;
+  flex-wrap: wrap;
+  min-inline-size: 0;
+  row-gap: 2px;
+}
+
+.strategikon-chartulary-unit-name {
+  font-size: var(--ds-text-sm);
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.strategikon-chartulary-spent,
+.strategikon-chartulary-departed {
+  color: var(--skirmish-muted);
+  font-size: var(--ds-text-xs);
+}
+
 .enchiridion-card-type-layout {
   align-content: start;
   align-items: start;

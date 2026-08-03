@@ -212,6 +212,45 @@ describe('crafted Run documents', () => {
     );
   });
 
+  it('crafts the cards the Run already holds by buying them for real', () => {
+    const run = craft('?craft=shop&battle=3&cards=rook,pawn+pawn:concinnous&gold=20');
+    expect(run.cards).toHaveLength(3); // the opening purchase plus the two named cards
+    const held = run.cards.slice(1);
+    expect(held.map((card) => card.coreId)).toEqual(['r', 'pp']);
+    // Real purchases: every held unit id is an army unit, and the Concinnous target got its
+    // ability from buyCard rather than from the spec.
+    const armyIds = new Set(run.army.map((unit) => unit.id));
+    expect(held.every((card) => card.unitIds.every((id) => armyIds.has(id)))).toBe(true);
+    expect(run.army.find((unit) => unit.id === held[1].effectTargetUnitId)?.abilities)
+      .toContain('positioned');
+    // The staged offers are withdrawn: the Shop reads as the one the game dealt.
+    expect(run.shop?.cardOffers.some((offer) => offer.offerId.startsWith('craft-1'))).toBe(false);
+    expect(run.shop?.purchasedCardOfferIds).toEqual([]);
+    // And they were not paid for out of the Run's gold.
+    expect(run.goldTenths).toBe(20 * GOLD_SCALE);
+  });
+
+  it('carries held cards through every Battle before the target', () => {
+    const early = craft('?craft=deployment&battle=2&cards=rook');
+    const late = craft('?craft=deployment&battle=4&cards=rook');
+    expect(early.cards.map((card) => card.coreId)).toEqual(late.cards.map((card) => card.coreId));
+    expect(late.battleIndex).toBe(3);
+  });
+
+  it('refuses held cards beside a crafted army, which would replace their units', () => {
+    expect(() => craft('?craft=shop&battle=3&cards=rook&army=knight')).toThrow(/cards and army/);
+  });
+
+  it('round-trips held cards through the spec fingerprint and the address', () => {
+    const parsed = spec('?craft=shop&battle=3&cards=rook,pawn+pawn:concinnous');
+    expect(runCraftSpecToJson(parsed).cards)
+      .toEqual([{ pieces: ['rook'], type: null }, { pieces: ['pawn', 'pawn'], type: 'concinnous' }]);
+    expect(runCraftAddress(parsed)).toContain('cards=rook%2Cpawn%2Bpawn%3Aconcinnous');
+    expect(runCraftSpecFingerprint(spec(runCraftAddress(parsed).slice('/run'.length))))
+      .toBe(runCraftSpecFingerprint(parsed));
+    expect(runCraftSpecFromJson(runCraftSpecToJson(parsed)).cards).toEqual(parsed.cards);
+  });
+
   it('offers loot relics that are still choosable', () => {
     const run = craft('?craft=shop&battle=2&loot=fair-scales,mercenarys-rifle');
     expect(run.shop?.lootRelicOffers).toEqual(['fair-scales', 'mercenarys-rifle']);

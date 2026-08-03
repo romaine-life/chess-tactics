@@ -104,9 +104,14 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(enchiridion).toContain('<ApparatusRailColumn className="enchiridion-section-rail"');
     expect(strategikon).toContain('<ApparatusRailColumn className="strategikon-rail"');
     expect(strategikon).toContain('<EnchiridionSectionRail');
-    expect(strategikon.match(/<ApparatusRailTab/g)).toHaveLength(3);
+    expect(strategikon.match(/<ApparatusRailTab/g)).toHaveLength(4);
     expect(strategikon).toContain('title="The Martial Prosopography — Current Army"');
+    expect(strategikon).toContain('title="The Chartulary — Held Cards"');
     expect(strategikon).toContain('title="The Lipsanotheca — Held Relics"');
+    // Adjacent Run registers never share one mark: the army takes the Units reference's
+    // mark and the Chartulary takes the Cards reference's.
+    expect(strategikon).toContain("iconSrc={installedUiMedia('ui-kit-icons-unit-studio-png')}");
+    expect(strategikon).toContain("iconSrc={installedUiMedia('ui-kit-icons-players-png')}");
   });
 
   it('uses the canonical terrain-tile glyph instead of the creator-tools grid mark', () => {
@@ -247,8 +252,10 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     const end = enchiridion.indexOf('type CardTypeReferenceDefinition', start);
     const cardCodex = enchiridion.slice(start, end);
     expect(cardCodex).toContain('cardMatchesFilters(card, goldFilter, unitFilter)');
-    expect(cardCodex).toContain('testId="enchiridion-card-gold-filter"');
-    expect(cardCodex).toContain('testId="enchiridion-card-unit-filter"');
+    // ONE filter row governs both card galleries; each host names its own test ids.
+    expect(cardCodex).toContain('testId={`${testIdPrefix}-gold-filter`}');
+    expect(cardCodex).toContain('testId={`${testIdPrefix}-unit-filter`}');
+    expect(cardCodex).toContain('testIdPrefix="enchiridion-card"');
     expect(cardCodex).toContain('<h3>No matching cards</h3>');
     expect(cardCodex).toContain('<RunCard card={card} mode="reference" />');
     // Compact amounts reuse the exact numbered coin from the card face. The
@@ -327,7 +334,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(hud).not.toContain('data-testid="strategikon-toggle"\n      data-chrome-unit=');
     expect(hud).toContain("installedUiMedia('ui-kit-icons-studio-catalog-png')");
     expect(hud).toContain("strategikonOpen ? 'Return to Battle' : 'Open Strategikon'");
-    expect(hud).toContain('Strategikon — inspect battle references, the current army, and held relics.');
+    expect(hud).toContain('Strategikon — inspect battle references, the current army, and held cards and relics.');
     expect(hud).toContain('Return to Battle — close Strategikon without leaving this fight.');
     expect(hud).toMatch(/data-testid="strategikon-toggle"[\s\S]*?<img[\s\S]*?<\/NavButton>/);
     expect(style).toMatch(/\.skirmish-screen \.skirmish-hud-titlebar > \.outer-chrome-header-title-actions\s*\{[\s\S]*?inset-inline-end:\s*calc\(var\(--le-control-content-inset\)\s*-\s*5px\)/);

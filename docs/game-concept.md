@@ -251,8 +251,11 @@ these.
   remains provisional
   (ADR-0313, ADR-0315, ADR-0329, ADR-0339, ADR-0341, ADR-0345). During Battle,
   the Controls title bar opens **Strategikon** over the board without unmounting
-  the fight; its Martial Prosopography and Lipsanotheca expose the persistent
-  army and held relics beside the same Enchiridion (ADR-0231).
+  the fight; its Martial Prosopography, Chartulary and Lipsanotheca expose the
+  persistent army, the cards bought so far, and held relics beside the same
+  Enchiridion (ADR-0231). The Chartulary is the Cards gallery itself — same
+  filters, same gold groups, same faces — with each held card's register of the
+  units it put in the army and how many have since left (ADR-0368).
 - Play defaults to one activity-agnostic, descriptor-free **Continue** rail
   destination. Its column resumes in place and shows exactly one activity: the
   most recently updated resumable one, with its facts and one final **Play**
