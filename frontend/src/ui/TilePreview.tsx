@@ -2186,9 +2186,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             : viewerKind === 'sourceart'
             ? <SourceArtTurntableLab assetId={selectedSourceArtId} onAssetId={setSelectedSourceArtId} />
             : viewerKind === 'screenart'
-            ? <ScreenArtViewer items={screenArt.items} id={selectedScreenArtId || screenArt.items[0]?.id || ''} header={studioViewerHeader} catalog={screenArt.catalog} onInstalled={screenArt.refresh} />
+            ? <ScreenArtViewer items={screenArt.items} id={selectedScreenArtId || screenArt.items[0]?.id || ''} header={studioViewerHeader} catalog={screenArt.catalog} onInstalled={screenArt.refresh} onSelect={setSelectedScreenArtId} />
             : viewerKind === 'relicmat'
-            ? <RelicMatViewer items={relicMat.items} backdrop={relicMat.backdrop} id={selectedRelicMatId || relicMat.items[0]?.id || ''} header={studioViewerHeader} />
+            ? <RelicMatViewer items={relicMat.items} backdrop={relicMat.backdrop} id={selectedRelicMatId || relicMat.items[0]?.id || ''} header={studioViewerHeader} onSelect={setSelectedRelicMatId} />
             : viewerKind === 'artwork'
               ? <ArtworkLab library={studioMedia.artwork} name={selectedArtworkName} header={studioViewerHeader} />
               : viewerKind === 'glossary'

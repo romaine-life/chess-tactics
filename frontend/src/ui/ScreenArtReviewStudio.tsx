@@ -7,6 +7,7 @@ import {
   type AdminLiveMediaVersion,
 } from '../net/liveMediaAdmin';
 import { StudioCatalogCard } from './studio/StudioCatalogCard';
+import { StudioStepper } from './studio/StudioStepper';
 import { ChromeButton } from './shared/ChromeButton';
 
 /**
@@ -264,12 +265,14 @@ export function ScreenArtViewer({
   header,
   catalog,
   onInstalled,
+  onSelect,
 }: {
   items: readonly ScreenArtCandidate[];
   id: string;
   header?: ReactNode;
   catalog: AdminLiveMediaCatalog | null;
   onInstalled: () => void;
+  onSelect: (id: string) => void;
 }): ReactElement {
   const found = id ? findScreenArt(items, id) : null;
   const empty = 'No candidate selected — pick a card in the Screen Art catalog.';
@@ -294,6 +297,13 @@ export function ScreenArtViewer({
           <h2>Controls</h2>
           <div className="tileset-control-stack">
             {header}
+            <StudioStepper
+              itemNoun="candidate"
+              label="Candidate"
+              onChange={onSelect}
+              options={items.map((item) => ({ id: item.id, label: `${item.screenLabel} — ${item.generatorLabel}` }))}
+              value={found?.id ?? ''}
+            />
             {found ? (
               <dl className="al-meta">
                 <div><dt>Screen</dt><dd>{found.screenLabel}</dd></div>

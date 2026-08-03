@@ -13271,18 +13271,21 @@ body { font-size: 17px; }
   min-height: 64px;
 }
 
-.rail-lab-source-picker {
+/* Shared Studio stepper: [<] [ dropdown ] [>]. The arrows are fixed square ends so the
+   dropdown takes every remaining pixel -- item labels are long and the middle is the part
+   worth reading. */
+.studio-stepper-picker {
   display: grid;
   grid-template-columns: 36px minmax(0, 1fr) 36px;
   gap: 6px;
   min-width: 0;
 }
 
-.rail-lab-source-picker select {
+.studio-stepper-picker select {
   min-width: 0;
 }
 
-.rail-lab-source-step {
+.studio-stepper-step {
   height: 36px;
   min-width: 36px;
   padding: 0;

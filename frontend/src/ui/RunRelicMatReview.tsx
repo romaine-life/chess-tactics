@@ -4,6 +4,7 @@ import { RUN_RELIC_BY_ID, type RunRelicId } from '../run/model';
 import { RunRelicIcon } from './RunRelics';
 import { Tooltip } from './shared/InfoTip';
 import { StudioCatalogCard } from './studio/StudioCatalogCard';
+import { StudioStepper } from './studio/StudioStepper';
 
 /**
  * Candidate MATS -- the surface the Run's relic offers are laid out on at the head of a
@@ -226,11 +227,13 @@ export function RelicMatViewer({
   backdrop,
   id,
   header,
+  onSelect,
 }: {
   items: readonly RelicMatCandidate[];
   backdrop: string;
   id: string;
   header?: ReactNode;
+  onSelect: (id: string) => void;
 }): ReactElement {
   const found = id ? findRelicMat(items, id) : null;
   const empty = 'No candidate selected — pick a card in the Relic Mat catalog.';
@@ -251,6 +254,13 @@ export function RelicMatViewer({
           <h2>Controls</h2>
           <div className="tileset-control-stack">
             {header}
+            <StudioStepper
+              itemNoun="candidate"
+              label="Candidate"
+              onChange={onSelect}
+              options={items.map((item) => ({ id: item.id, label: `${item.matLabel} — ${item.generatorLabel}` }))}
+              value={found?.id ?? ''}
+            />
             {found ? (
               <dl className="al-meta">
                 <div><dt>Mat</dt><dd>{found.matLabel}</dd></div>
