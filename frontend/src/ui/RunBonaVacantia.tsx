@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactElement } from 'react';
-import { createPortal } from 'react-dom';
+import { useState, type ReactElement } from 'react';
 import { RUN_RELIC_BY_ID, takeVacantiaRelic, type RunDocument, type RunRelicId } from '../run/model';
 import { RunRelicIcon } from './RunRelics';
 import { RunWorkspace } from './RunWorkspace';
@@ -7,6 +6,7 @@ import { HouseSelect } from './shared/HouseSelect';
 import { Tooltip } from './shared/InfoTip';
 import { installedRelicMatUrl, relicFloatClock } from './runRelicMat';
 import { relicStripLandingPoint } from './runRelicFlight';
+import { useRelicFlight } from './runRelicFlightView';
 import { runUnitRosterLabel } from './RunArmyWorkspace';
 import { workspaceBackgroundArtwork } from './workspaceBackgrounds';
 
@@ -19,28 +19,13 @@ import { workspaceBackgroundArtwork } from './workspaceBackgrounds';
  * the held-relic strip uses. The reading is the art.
  *
  * Taking is mandatory and there is no confirm step: choosing is the whole screen, and the
- * choice is what advances the Run.
+ * choice is what advances the Run. The take is committed when the relic LANDS in the
+ * held-relic strip — commit first and the workspace it is flying out of is already gone.
  */
 
 /** Relics that cannot be granted blind — they need a unit named before they mean anything. */
 function relicTargetRequired(relic: RunRelicId): boolean {
   return relic === 'conscription-notice';
-}
-
-/** How long the taken relic spends travelling to the held-relic strip. */
-const RELIC_FLIGHT_MS = 560;
-
-/**
- * The relic in transit between the mat and the held-relic strip.
- *
- * Committing the take is what ENDS this screen, so the commit is held back until the
- * flight lands: commit first and the workspace the relic is flying out of is already gone.
- */
-interface RelicFlight {
-  relicId: RunRelicId;
-  targetUnitId: string | undefined;
-  from: { left: number; top: number };
-  to: { left: number; top: number };
 }
 
 export function RunBonaVacantia({
@@ -52,38 +37,10 @@ export function RunBonaVacantia({
 }): ReactElement | null {
   const vacantia = run.vacantia;
   const [target, setTarget] = useState('');
-  const [flight, setFlight] = useState<RelicFlight | null>(null);
-  // A transition needs a frame with the start state applied before the end state arrives;
-  // rendering the flight already landed would snap the relic into the strip with no travel.
-  const [landed, setLanded] = useState(false);
-  // The travelling copy is dropped the moment the real strip slot exists, in the same
-  // commit, so the two never draw on top of each other while the screen changes behind it.
-  const [settled, setSettled] = useState(false);
-  const settledRef = useRef(false);
   const mat = installedRelicMatUrl();
-
-  // The take is committed exactly once per flight, by whichever of the transition or its
-  // watchdog gets there first.
-  const commitRef = useRef<() => void>(() => {});
-  commitRef.current = () => {
-    if (settledRef.current || !flight) return;
-    settledRef.current = true;
-    setSettled(true);
-    replace(takeVacantiaRelic(run, flight.relicId, flight.targetUnitId));
-  };
-  const settle = useCallback(() => commitRef.current(), []);
-
-  useEffect(() => {
-    if (!flight) return undefined;
-    const raf = requestAnimationFrame(() => requestAnimationFrame(() => setLanded(true)));
-    // transitionend is the real settle. This only guarantees the Run still advances when
-    // the travel never completes — a backgrounded tab, an interrupted transition.
-    const watchdog = setTimeout(settle, RELIC_FLIGHT_MS + 240);
-    return () => {
-      cancelAnimationFrame(raf);
-      clearTimeout(watchdog);
-    };
-  }, [flight, settle]);
+  const { flight, launch, element } = useRelicFlight((relicId) => {
+    replace(takeVacantiaRelic(run, relicId, target || undefined));
+  });
 
   if (!vacantia) return null;
 
@@ -91,20 +48,11 @@ export function RunBonaVacantia({
   const heldRelicCount = run.relics.filter((relicId) => Boolean(RUN_RELIC_BY_ID[relicId])).length;
 
   function take(relicId: RunRelicId, icon: Element | null): void {
-    if (flight) return;
-    const targetUnitId = target || undefined;
-    const from = icon?.getBoundingClientRect();
-    const to = relicStripLandingPoint(heldRelicCount);
     // Nothing measurable to fly between means nothing to show — take the relic outright
     // rather than stalling the screen on its own presentation.
-    if (!from || !to) {
-      replace(takeVacantiaRelic(run, relicId, targetUnitId));
-      return;
+    if (!launch(relicId, icon, relicStripLandingPoint(heldRelicCount))) {
+      replace(takeVacantiaRelic(run, relicId, target || undefined));
     }
-    settledRef.current = false;
-    setLanded(false);
-    setSettled(false);
-    setFlight({ relicId, targetUnitId, from: { left: from.left, top: from.top }, to });
   }
 
   return (
@@ -173,32 +121,7 @@ export function RunBonaVacantia({
         </div>
       </div>
 
-      {flight && !settled ? createPortal(
-        // Portalled to the document so the travel is not clipped by the workspace it
-        // leaves: the mat sits inside an overflow-hidden scene slot, the strip does not.
-        <div
-          className={`run-relic-flight${landed ? ' is-landed' : ''}`}
-          data-testid="run-vacantia-flight"
-          aria-hidden="true"
-          style={{
-            insetInlineStart: `${flight.from.left}px`,
-            insetBlockStart: `${flight.from.top}px`,
-            '--relic-flight-x': `${flight.to.left - flight.from.left}px`,
-            '--relic-flight-y': `${flight.to.top - flight.from.top}px`,
-            '--relic-flight-duration': `${RELIC_FLIGHT_MS}ms`,
-          } as CSSProperties}
-          onTransitionEnd={(event) => {
-            if (event.propertyName === 'translate') settle();
-          }}
-        >
-          {/* Two axes, two easings: the relic lifts clear of the mat first and then carries
-              across, which reads as being picked up rather than dragged along a ruler. */}
-          <div className="run-relic-flight-lift">
-            <RunRelicIcon relicId={flight.relicId} />
-          </div>
-        </div>,
-        document.body,
-      ) : null}
+      {element}
     </RunWorkspace>
   );
 }

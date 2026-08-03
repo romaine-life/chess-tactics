@@ -19803,9 +19803,37 @@ button.tileset-relationship-cell {
   opacity: 0.5;
 }
 
+/* The relic that LEFT is gone from the mat, whether or not the rest are receding: the
+   travelling copy is the only one of it that should be on screen. Both selectors are needed
+   because the dimming rule above is more specific than a bare `.relic-mat-offer.is-flying`. */
+.relic-mat-cards .relic-mat-offer.is-flying,
 .relic-mat-cards[data-taking] .relic-mat-offer.is-flying {
   opacity: 0;
   transition: none;
+}
+
+/* The Studio viewer's landing corner. The game sends a taken relic to the held-relic strip
+   in the screen's top-left, so the stand-in sits in the same corner of the stage and uses the
+   same 64px slots -- the travel being judged has to be the travel that ships, not a shorter
+   one to a nearer target. */
+.relic-mat-landing {
+  display: flex;
+  gap: var(--ds-space-1);
+  inset-block-start: var(--ds-space-2);
+  inset-inline-start: var(--ds-space-2);
+  position: absolute;
+  z-index: 2;
+}
+
+.relic-mat-landing-slot {
+  block-size: 64px;
+  display: inline-flex;
+  flex: 0 0 64px;
+  inline-size: 64px;
+}
+
+.relic-mat-landing-slot img {
+  filter: drop-shadow(0 2px 1px rgb(0 0 0 / 0.85));
 }
 
 /* The relic in transit. Fixed to the viewport and portalled out of the workspace, because

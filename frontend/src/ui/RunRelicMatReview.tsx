@@ -8,6 +8,7 @@ import { StudioStepper } from './studio/StudioStepper';
 import { SliderRow, ctlReset } from './dressing/SliderRow';
 import { ChoiceGroup } from './shared/ChoiceGroup';
 import { Toggle } from './shared/Toggle';
+import { slotPoint, useRelicFlight } from './runRelicFlightView';
 import { ChromeButton } from './shared/ChromeButton';
 import {
   RELIC_FLOAT_COMMITTED_PERIOD,
@@ -219,13 +220,23 @@ export function RelicMatStage({
   cards = true,
   scale,
   motion,
+  taken,
+  flying,
+  onTake,
 }: {
   candidate: RelicMatCandidate;
   backdrop: string;
   cards?: boolean;
   scale?: number;
   motion?: RelicMotionTuning;
+  /** Relics already sent to the corner. Absent means the stage is not interactive. */
+  taken?: readonly RunRelicId[];
+  /** The relic currently travelling, so the mat lets go of it as it leaves. */
+  flying?: RunRelicId | null;
+  onTake?: (relicId: RunRelicId, icon: Element | null, landing: Element | null) => void;
 }): ReactElement {
+  const landingSlot = useRef<HTMLSpanElement | null>(null);
+  const gone = new Set([...(taken ?? []), ...(flying ? [flying] : [])]);
   return (
     <div
       className="relic-mat-stage"
@@ -244,12 +255,13 @@ export function RelicMatStage({
             row's intrinsic sizing, and the layer grows to the raster instead of the cards. */}
         <img className="relic-mat-art" src={candidate.version.media!.url} alt="" draggable={false} />
         {cards ? (
-          <div className="relic-mat-cards" data-testid="relic-mat-offers">
+          <div className="relic-mat-cards" data-testid="relic-mat-offers" data-taking={flying ? '' : undefined}>
             {REVIEW_RELICS.map((relicId, index) => {
               const relic = RUN_RELIC_BY_ID[relicId];
+              const flown = gone.has(relicId);
               return (
                 <Tooltip
-                  className="relic-mat-offer"
+                  className={`relic-mat-offer${flown ? ' is-flying' : ''}`}
                   key={relicId}
                   label={`${relic.name}. ${relic.description}`}
                   popupMaxInlineSize={288}
@@ -257,7 +269,21 @@ export function RelicMatStage({
                   // The same per-offer clock the game lays down, so the tuner is judging
                   // the composition the player sees and not three synchronised copies.
                   style={relicFloatClock(index)}
-                  trigger={<RunRelicIcon relicId={relicId} />}
+                  trigger={onTake ? (
+                    <button
+                      type="button"
+                      className="run-vacantia-take"
+                      data-relic-id={relicId}
+                      aria-label={`Send ${relic.name} to the corner`}
+                      onClick={(event) => onTake(
+                        relicId,
+                        event.currentTarget.querySelector('.run-relic-icon'),
+                        landingSlot.current,
+                      )}
+                    >
+                      <RunRelicIcon relicId={relicId} />
+                    </button>
+                  ) : <RunRelicIcon relicId={relicId} />}
                 >
                   <span>{relic.description}</span>
                 </Tooltip>
@@ -266,6 +292,20 @@ export function RelicMatStage({
           </div>
         ) : null}
       </div>
+      {/* Where a clicked relic goes. The game's destination is the held-relic strip in the
+          screen's top-left, so this stands in the same corner and keeps the travel honest.
+          The trailing empty slot is what the flight is aimed at — measuring the real box
+          beats recomputing the geometry, and it is correct the moment the row reflows. */}
+      {taken ? (
+        <div className="relic-mat-landing" data-testid="relic-mat-landing" aria-label="Relics sent to the corner">
+          {taken.map((relicId) => (
+            <span className="relic-mat-landing-slot" key={relicId}>
+              <RunRelicIcon relicId={relicId} />
+            </span>
+          ))}
+          <span className="relic-mat-landing-slot" ref={landingSlot} aria-hidden="true" />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -449,6 +489,12 @@ export function RelicMatViewer({
   const empty = 'No candidate selected — pick a card in the Relic Mat catalog.';
   const [scale, setScale] = useState(RELIC_MAT_COMMITTED_SCALE);
   const [motion, setMotion] = useState<RelicMotionTuning>(RELIC_MOTION_COMMITTED);
+  // Clicking a relic plays the real take: the same travel, to the same corner of the screen
+  // the game sends it to. Reset lays them back out so it can be watched again.
+  const [taken, setTaken] = useState<RunRelicId[]>([]);
+  const { flight, launch, element: flightElement } = useRelicFlight(
+    (relicId) => setTaken((current) => (current.includes(relicId) ? current : [...current, relicId])),
+  );
   const tune = <Key extends keyof RelicMotionTuning>(key: Key, value: RelicMotionTuning[Key]): void =>
     setMotion((current) => ({ ...current, [key]: value }));
   const stage = useRef<HTMLElement | null>(null);
@@ -459,9 +505,22 @@ export function RelicMatViewer({
         {!found ? <p className="al-lab-empty">{empty}</p> : (
           <div className="al-lab-stages">
             <figure ref={stage} className="al-stage relic-mat-figure" data-testid="relic-mat-stage" data-mat={found.mat} data-generator={found.generator}>
-              <RelicMatStage candidate={found} backdrop={backdrop} scale={scale} motion={motion} />
+              <RelicMatStage
+                candidate={found}
+                backdrop={backdrop}
+                scale={scale}
+                motion={motion}
+                taken={taken}
+                flying={flight?.relicId ?? null}
+                onTake={(relicId, icon, landing) => {
+                  if (!launch(relicId, icon, slotPoint(landing))) {
+                    setTaken((current) => (current.includes(relicId) ? current : [...current, relicId]));
+                  }
+                }}
+              />
               <figcaption>{found.matLabel} — {found.generatorLabel}</figcaption>
             </figure>
+            {flightElement}
           </div>
         )}
       </section>
@@ -477,6 +536,21 @@ export function RelicMatViewer({
               options={items.map((item) => ({ id: item.id, label: `${item.matLabel} — ${item.generatorLabel}` }))}
               value={found?.id ?? ''}
             />
+            {/* Clicking a relic on the stage plays its travel to the corner. This lays them
+                back out so it can be replayed without leaving the screen. */}
+            <label className="tileset-catalog-zoom">
+              <span>Take animation <strong data-testid="relic-mat-taken-count">{taken.length}/{REVIEW_RELICS.length} sent</strong></span>
+              <div className="pages-ctl-row">
+                <ChromeButton
+                  unit="inner-text-button"
+                  data-testid="relic-mat-reset-take"
+                  disabled={taken.length === 0}
+                  onClick={() => setTaken([])}
+                >
+                  Reset relics
+                </ChromeButton>
+              </div>
+            </label>
             <SliderRow
               label={<>Mat scale <strong data-testid="relic-mat-scale-value">{scale.toFixed(2)}×</strong> the relic row</>}
               value={scale}
