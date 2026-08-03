@@ -57,6 +57,16 @@ const SFX_MEDIA_TYPE_BY_EXTENSION = Object.freeze({
   wav: 'audio/wav',
   webm: 'audio/webm',
 });
+// The Ataraxia rung marks (ADR-0358): `ui/kit/numerals/<style>/<rung>.png`, forged 0-through-X
+// as one set and reviewed on the Ataraxia reference rows of either host.
+const ATARAXIA_NUMERAL_SLOT = /^ui\/kit\/numerals\/([a-z][a-z0-9-]{0,31})\/([a-z][a-z0-9-]{0,15})\.png$/;
+const ATARAXIA_NUMERAL_COMPONENT = 'ataraxia-rung-numeral';
+// The rung marks compose the GENERIC typed owner proof (which acceptance requires of every
+// non-terrain, non-group domain) with the domain rules below — one evidence object that both
+// the review-time surface check and the accept-time typed-proof check read.
+const ATARAXIA_NUMERAL_PROOF_SCHEMA = 'live-media-owner-proof-v1';
+const ATARAXIA_NUMERAL_PROOF_RENDERER = 'Enchiridion/AtaraxiaSection';
+const ATARAXIA_NUMERAL_REVIEW_SURFACE = /^(?:\/(?:play|run))?\/(?:strategikon\/)?enchiridion\/ataraxia$/;
 const STRATEGIKON_BACKGROUND_COMPONENT = 'strategikon-background';
 const STRATEGIKON_BACKGROUND_PROOF_RENDERER = 'ShellWorkspace/StrategikonBackgroundArtwork';
 const STRATEGIKON_BACKGROUND_PROOF_SCHEMA = 'strategikon-background-cover-exception-v1';
@@ -126,6 +136,99 @@ function sfxSampleSlot(slot) {
 
 function strategikonBackgroundSlot(slot) {
   return String(slot || '') === STRATEGIKON_BACKGROUND_SLOT;
+}
+
+/** The `{style, rung}` an Ataraxia rung-mark slot names, or null (ADR-0358). */
+function ataraxiaNumeralSlot(slot) {
+  const match = ATARAXIA_NUMERAL_SLOT.exec(String(slot || ''));
+  return match ? { style: match[1], rung: match[2] } : null;
+}
+
+/**
+ * The typed completeness validator that lifts rung marks out of `ui-kit`'s bridge-only
+ * default: a rung mark is one native 64x64 PNG naming its own rung, so the catalog can
+ * state what the row will draw instead of trusting an untyped kit upload.
+ */
+function ataraxiaNumeralMediaIssue(row, projectedRuntime = null) {
+  const contract = ataraxiaNumeralSlot(row.slot);
+  if (!contract) return 'Ataraxia rung marks require a registered semantic slot';
+  if (row.domain !== 'ui-kit') return 'Ataraxia rung marks require the ui-kit domain';
+  if (row.media_type !== 'image/png') return 'Ataraxia rung marks require image/png';
+  if (Number(row.width) !== 64 || Number(row.height) !== 64) {
+    return 'Ataraxia rung marks must be native 64x64 rasters';
+  }
+
+  const metadata = mediaVersionMetadata(row);
+  const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+  if (!isObjectRecord(runtime)) return 'Ataraxia rung marks require metadata.runtime';
+  const allowed = new Set([
+    'component', 'variant', 'frameWidth', 'frameHeight', 'frameCount', 'altText', 'nativeRole',
+  ]);
+  const unsupported = Object.keys(runtime).filter((key) => !allowed.has(key));
+  if (unsupported.length) {
+    return `Ataraxia rung mark runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
+  }
+  if (runtime.component !== ATARAXIA_NUMERAL_COMPONENT) {
+    return `Ataraxia rung mark metadata.runtime.component must be ${ATARAXIA_NUMERAL_COMPONENT}`;
+  }
+  if (runtime.nativeRole !== ATARAXIA_NUMERAL_COMPONENT) {
+    return `Ataraxia rung mark metadata.runtime.nativeRole must be ${ATARAXIA_NUMERAL_COMPONENT}`;
+  }
+  // The style is the slot's own path segment; the runtime block stays inside the shared
+  // key allowlist rather than inventing a projection key for it.
+  if (runtime.variant !== contract.rung) return 'Ataraxia rung mark variant must match its semantic slot';
+  if (runtime.frameWidth !== 64 || runtime.frameHeight !== 64 || runtime.frameCount !== 1) {
+    return 'Ataraxia rung mark runtime geometry must describe one native 64x64 frame';
+  }
+  return null;
+}
+
+/**
+ * A rung mark is reviewed where it is worn: the Ataraxia reference rows, on either host.
+ * Every other art domain names its own review surface this way; without one, this domain
+ * would fall through to the `/studio` backstop and evidence would have to claim a surface
+ * the reviewer never opened. The proof carries the same candidate/slot snapshot every
+ * other domain requires — this registers a surface, it does not relax a gate.
+ */
+function ataraxiaNumeralOwnerProofIssue(row, proof, surfaceUrl = null) {
+  if (!ataraxiaNumeralSlot(row.slot)) return 'Ataraxia numeral proof requires a registered rung slot';
+  if (!isObjectRecord(proof) || proof.schema !== ATARAXIA_NUMERAL_PROOF_SCHEMA) {
+    return `Ataraxia numeral review requires ${ATARAXIA_NUMERAL_PROOF_SCHEMA}`;
+  }
+  if (proof.renderer !== ATARAXIA_NUMERAL_PROOF_RENDERER) {
+    return 'Ataraxia numeral proof does not name the reviewed rung renderer';
+  }
+  if (surfaceUrl !== null && proof.surfaceUrl !== surfaceUrl) {
+    return 'Ataraxia numeral proof surfaceUrl does not match the reviewed surface';
+  }
+  let parsedSurface;
+  try { parsedSurface = new URL(proof.surfaceUrl); } catch { return 'Ataraxia numeral proof surfaceUrl is invalid'; }
+  if (!ATARAXIA_NUMERAL_REVIEW_SURFACE.test(parsedSurface.pathname)) {
+    return 'Ataraxia numeral proof must identify the live Ataraxia reference rows';
+  }
+  const candidateSha256 = normalizedSha(row.blob_sha256);
+  if (!candidateSha256 || !Array.isArray(proof.selectedCandidates) || proof.selectedCandidates.length !== 1) {
+    return 'Ataraxia numeral proof must identify exactly one candidate';
+  }
+  const selected = proof.selectedCandidates[0];
+  if (
+    !isObjectRecord(selected) || selected.slot !== row.slot || selected.versionId !== String(row.id)
+    || normalizedSha(selected.sha256) !== candidateSha256
+  ) return 'Ataraxia numeral proof does not identify the reviewed candidate bytes';
+  if (!Array.isArray(proof.slotSnapshots) || proof.slotSnapshots.length !== 1) {
+    return 'Ataraxia numeral proof must snapshot exactly one semantic slot';
+  }
+  const snapshot = proof.slotSnapshots[0];
+  if (!isObjectRecord(snapshot) || snapshot.slot !== row.slot) {
+    return 'Ataraxia numeral proof slot snapshot is invalid';
+  }
+  // The set is judged together — a half-carved ladder is the defect this records against.
+  if (!Array.isArray(proof.reviewedSet) || proof.reviewedSet.length < 2
+    || !proof.reviewedSet.every((entry) => typeof entry === 'string' && ataraxiaNumeralSlot(entry))
+    || !proof.reviewedSet.includes(row.slot)) {
+    return 'Ataraxia numeral proof must record the whole reviewed rung set';
+  }
+  return null;
 }
 
 /** The workspace id a `ui/workspaces/<id>/background.png` slot names, or null. */
@@ -888,6 +991,12 @@ function liveCatalogReadinessIssue(catalog, { requireCritical = false } = {}) {
 }
 
 module.exports = {
+  ATARAXIA_NUMERAL_COMPONENT,
+  ATARAXIA_NUMERAL_PROOF_RENDERER,
+  ATARAXIA_NUMERAL_PROOF_SCHEMA,
+  ataraxiaNumeralMediaIssue,
+  ataraxiaNumeralOwnerProofIssue,
+  ataraxiaNumeralSlot,
   PREDRAWN_BOARD_COMPONENT,
   PREDRAWN_BOARD_PROOF_RENDERER,
   PREDRAWN_BOARD_PROOF_SCHEMA,

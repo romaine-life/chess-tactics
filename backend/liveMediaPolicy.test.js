@@ -4,6 +4,12 @@ const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
 const test = require('node:test');
 const {
+  ATARAXIA_NUMERAL_COMPONENT,
+  ATARAXIA_NUMERAL_PROOF_RENDERER,
+  ATARAXIA_NUMERAL_PROOF_SCHEMA,
+  ataraxiaNumeralMediaIssue,
+  ataraxiaNumeralOwnerProofIssue,
+  ataraxiaNumeralSlot,
   PREDRAWN_BOARD_COMPONENT,
   PREDRAWN_BOARD_PROOF_RENDERER,
   PREDRAWN_BOARD_PROOF_SCHEMA,
@@ -783,4 +789,90 @@ test('backend-allocated pre-drawn slot identity is independent of the logical le
     metadata: { runtime: { ...row.metadata.runtime, variant: 'hold-bridge' } },
   }), /variant/);
   assert.match(predrawnBoardOwnerProofIssue(row, { ...proof, boardSlug: 'hold-bridge' }, surfaceUrl), /slot slug/);
+});
+
+
+const NUMERAL_SHA = createHash('sha256').update('ataraxia-rung-i').digest('hex');
+
+function numeralRow(overrides = {}) {
+  return {
+    id: '3f2504e0-4f89-41d3-9a0c-0305e82c3301',
+    slot: 'ui/kit/numerals/stone/i.png',
+    domain: 'ui-kit',
+    role: 'media',
+    media_type: 'image/png',
+    width: 64,
+    height: 64,
+    blob_sha256: NUMERAL_SHA,
+    metadata: {
+      runtime: {
+        component: ATARAXIA_NUMERAL_COMPONENT,
+        nativeRole: ATARAXIA_NUMERAL_COMPONENT,
+        variant: 'i',
+        frameWidth: 64,
+        frameHeight: 64,
+        frameCount: 1,
+        altText: 'Ataraxia I',
+      },
+    },
+    ...overrides,
+  };
+}
+
+function numeralProof(row, overrides = {}) {
+  return {
+    schema: ATARAXIA_NUMERAL_PROOF_SCHEMA,
+    renderer: ATARAXIA_NUMERAL_PROOF_RENDERER,
+    surfaceUrl: 'http://localhost:5191/enchiridion/ataraxia',
+    reviewedSet: ['ui/kit/numerals/stone/i.png', 'ui/kit/numerals/stone/zero.png'],
+    selectedCandidates: [{ slot: row.slot, versionId: row.id, sha256: row.blob_sha256, rowRevision: 1 }],
+    slotSnapshots: [{ slot: row.slot, rowRevision: 1, activeVersionId: null }],
+    ...overrides,
+  };
+}
+
+test('Ataraxia rung slots are typed, so the set is not stuck on the ui-kit bridge default', () => {
+  assert.deepEqual(ataraxiaNumeralSlot('ui/kit/numerals/stone/viii.png'), { style: 'stone', rung: 'viii' });
+  assert.equal(ataraxiaNumeralSlot('ui/kit/icons/bishop.png'), null);
+  assert.equal(ataraxiaNumeralSlot(''), null);
+
+  assert.equal(ataraxiaNumeralMediaIssue(numeralRow()), null);
+  assert.match(ataraxiaNumeralMediaIssue(numeralRow({ width: 32, height: 32 })), /native 64x64/);
+  assert.match(ataraxiaNumeralMediaIssue(numeralRow({ media_type: 'image/webp' })), /image\/png/);
+  // The rung a slot names and the rung its metadata claims cannot drift apart.
+  assert.match(ataraxiaNumeralMediaIssue(numeralRow({
+    metadata: { runtime: { ...numeralRow().metadata.runtime, variant: 'v' } },
+  })), /variant must match/);
+  assert.match(ataraxiaNumeralMediaIssue(numeralRow({
+    metadata: { runtime: { ...numeralRow().metadata.runtime, extra: 1 } },
+  })), /unsupported keys: extra/);
+});
+
+test('Ataraxia rung review proof pins the reviewed surface, bytes, and whole set', () => {
+  const row = numeralRow();
+  const surfaceUrl = 'http://localhost:5191/enchiridion/ataraxia';
+  assert.equal(ataraxiaNumeralOwnerProofIssue(row, numeralProof(row), surfaceUrl), null);
+  // Both hosts wear the mark, so both are legitimate review surfaces.
+  const strategikon = 'http://localhost:5191/run/strategikon/enchiridion/ataraxia';
+  assert.equal(
+    ataraxiaNumeralOwnerProofIssue(row, numeralProof(row, { surfaceUrl: strategikon }), strategikon),
+    null,
+  );
+  // A surface that does not wear the mark cannot stand in for one that does.
+  const elsewhere = 'http://localhost:5191/enchiridion/relics';
+  assert.match(
+    ataraxiaNumeralOwnerProofIssue(row, numeralProof(row, { surfaceUrl: elsewhere }), elsewhere),
+    /live Ataraxia reference rows/,
+  );
+  assert.match(
+    ataraxiaNumeralOwnerProofIssue(row, numeralProof(row, { surfaceUrl }), 'http://localhost:5191/studio'),
+    /does not match the reviewed surface/,
+  );
+  // The proof must name the exact reviewed bytes...
+  assert.match(ataraxiaNumeralOwnerProofIssue(row, numeralProof(row, {
+    selectedCandidates: [{ slot: row.slot, versionId: row.id, sha256: createHash('sha256').update('other').digest('hex') }],
+  }), surfaceUrl), /reviewed candidate bytes/);
+  // ...and record that the rung was judged as part of a set, not alone.
+  assert.match(ataraxiaNumeralOwnerProofIssue(row, numeralProof(row, { reviewedSet: [row.slot] }), surfaceUrl), /whole reviewed rung set/);
+  assert.match(ataraxiaNumeralOwnerProofIssue(row, numeralProof(row, { renderer: 'Studio/Whatever' }), surfaceUrl), /reviewed rung renderer/);
 });

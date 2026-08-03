@@ -62,6 +62,9 @@ const {
   resolveRunRelicIcon,
 } = require(path.join(bakedBackendDir, 'thumbnailPresentation'));
 const {
+  ataraxiaNumeralMediaIssue,
+  ataraxiaNumeralOwnerProofIssue,
+  ataraxiaNumeralSlot,
   liveCatalogReadinessIssue,
   gameConditionIconMediaIssue,
   gameConditionIconSlot,
@@ -15256,6 +15259,9 @@ function mediaDomainProjectionIssue(row) {
   if (workspaceBackgroundSlotId(row.slot)) {
     return workspaceBackgroundMediaIssue(row, runtime.value);
   }
+  if (ataraxiaNumeralSlot(row.slot)) {
+    return ataraxiaNumeralMediaIssue(row, runtime.value);
+  }
   const runCardFrame = runCardFrameProjection(row);
   if (runCardFrame.claimed) return runCardFrame.issue;
   const runCardArt = runCardArtProjection(row);
@@ -16024,6 +16030,8 @@ app.put(
   },
 );
 
+const ATARAXIA_NUMERAL_REVIEW_PATH = /^(?:\/(?:play|run))?\/(?:strategikon\/)?enchiridion\/ataraxia$/;
+
 function gameOwnedReviewSurfaceUrl(req, raw) {
   const value = boundedMediaText(raw, '', 2048);
   if (!value) return null;
@@ -16033,8 +16041,11 @@ function gameOwnedReviewSurfaceUrl(req, raw) {
     const sameOrigin = requestOrigin
       ? url.origin === requestOrigin
       : url.host.toLowerCase() === String(req.get('host') || '').toLowerCase();
+    // Each entry is a surface some art domain is genuinely reviewed on; the Ataraxia rung
+    // marks are worn by the Ataraxia reference rows, on either host (ADR-0358).
     const gameOwnedPath = url.pathname === '/studio' || url.pathname === '/editor/level'
-      || url.pathname === '/play/strategikon/enchiridion/units';
+      || url.pathname === '/play/strategikon/enchiridion/units'
+      || ATARAXIA_NUMERAL_REVIEW_PATH.test(url.pathname);
     if (!sameOrigin || (url.protocol !== 'http:' && url.protocol !== 'https:') || !gameOwnedPath || url.hash) return null;
     return url.toString();
   } catch {
@@ -16101,6 +16112,32 @@ async function validateMediaReviewProofSnapshot(client, current, evidence, surfa
     const proofIssue = levelEditorBrushIconSlot(current.slot)
       ? levelEditorBrushIconOwnerProofIssue(current, evidence, surfaceUrl)
       : strategikonBackgroundOwnerProofIssue(current, evidence, surfaceUrl);
+    if (proofIssue) {
+      throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: proofIssue });
+    }
+    const selected = evidence.selectedCandidates[0];
+    const snapshot = evidence.slotSnapshots[0];
+    const slotResult = await client.query(
+      'SELECT slot, active_version_id, row_revision FROM media_slots WHERE slot = $1',
+      [current.slot],
+    );
+    const slotRow = slotResult.rows[0];
+    if (!slotRow) throw mediaMutationError('media_slot_not_found', 404);
+    if (
+      Number(snapshot.rowRevision) !== Number(slotRow.row_revision)
+      || (snapshot.activeVersionId ?? null) !== (slotRow.active_version_id ? String(slotRow.active_version_id) : null)
+    ) throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: 'slot snapshot mismatch' });
+    if (current.status !== 'candidate' || Number(selected.rowRevision) !== Number(current.row_revision)) {
+      throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: 'candidate snapshot mismatch' });
+    }
+    return;
+  }
+  if (ataraxiaNumeralSlot(current.slot)) {
+    const projectionIssue = mediaDomainProjectionIssue(current);
+    if (projectionIssue) {
+      throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: projectionIssue });
+    }
+    const proofIssue = ataraxiaNumeralOwnerProofIssue(current, evidence, surfaceUrl);
     if (proofIssue) {
       throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: proofIssue });
     }

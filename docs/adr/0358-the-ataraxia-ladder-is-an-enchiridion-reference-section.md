@@ -95,8 +95,19 @@ neighbouring section has a crafted mark. The owner selected a **carved-stone** n
   enrichment; the ladder must render its rungs either way. Acceptance turns the art on with
   no second code change.
 - Candidate upload is the generator's durable output; review, acceptance and activation
-  remain owner operations in the game-owned review instrument, which the admin CLI
-  deliberately cannot perform.
+  remain owner operations. The rung marks are the first `ui-kit` slots to leave that
+  domain's bridge-only default, which required registering the domain properly rather than
+  waving it through:
+  - `ataraxiaNumeralMediaIssue` is the typed completeness validator — one native 64x64 PNG
+    whose runtime metadata names the rung its own slot names.
+  - `ataraxiaNumeralOwnerProofIssue` names the review surface. A rung mark is reviewed
+    where it is worn, so the Ataraxia rows of either host are its sanctioned surface. It
+    composes the generic `live-media-owner-proof-v1` the accept path requires, and adds the
+    reviewed-set record: a rung is judged with its ladder, because a half-carved ladder is
+    the defect worth recording against.
+  - The alternative was to record `/studio` as the surface and accept there. That would
+    have written a place the reviewer never opened into a durable audit record, which is a
+    worse outcome than registering the domain.
 - `ATARAXIA_TIERS` becomes a model export derived from `INSTALLED_ATARAXIA_MAX_TIER`. The
   preparation selector's hand-written `[0, 1]` is replaced by it, so the two surfaces
   cannot disagree about which tiers exist.
