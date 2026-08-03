@@ -19659,7 +19659,26 @@ button.tileset-relationship-cell {
   --relic-float-rise: 0px;
   --relic-glow-pulse: 0;
   filter: brightness(1.2);
-  scale: 1.22;
+  /* 64px x 1.25 is 80px EXACTLY. A fractional hover size (1.22 gave 78.08px) leaves the
+     nearest-neighbour sampling grid landing between source pixels, and the sprite's edges
+     crawl as it is re-rasterized -- movement the computed style cannot show you. */
+  scale: 1.25;
+}
+
+/* Settled means STOPPED, not zero-amplitude. An animation with its amplitude collapsed is
+   still a running animation: the element stays live on the compositor and is re-rasterized
+   every frame, which a pixelated sprite shows as a crawl along its edges. Pausing ends that.
+   The settle survives the pause because a paused animation still re-resolves the var() in
+   its keyframes -- verified in Chrome -- so the rise and the pulse go on easing to zero
+   underneath it and the relic still comes to rest on its seat rather than freezing wherever
+   the pointer caught it. */
+.relic-mat-offer:hover .run-relic-icon,
+.relic-mat-offer:focus-within .run-relic-icon,
+.relic-mat-offer:hover .run-relic-icon img,
+.relic-mat-offer:focus-within .run-relic-icon img {
+  /* !important because the `animation` SHORTHAND above carries it, and a shorthand resets
+     animation-play-state to `running` -- an unflagged pause here is simply outranked. */
+  animation-play-state: paused !important;
 }
 
 /* An offer that cannot be taken yet does not answer the pointer at all -- it keeps the
@@ -19668,8 +19687,13 @@ button.tileset-relationship-cell {
 .run-vacantia-take:disabled .run-relic-icon {
   --relic-float-rise: inherit;
   --relic-glow-pulse: inherit;
+  animation-play-state: running !important;
   filter: none;
   scale: 1;
+}
+
+.run-vacantia-take:disabled .run-relic-icon img {
+  animation-play-state: running !important;
 }
 
 /* Taking is committed when the relic lands, so the mat has to hold still while it travels:
@@ -19711,7 +19735,7 @@ button.tileset-relationship-cell {
    early and then travels across, which reads as being picked up rather than dragged along
    a ruler. It also arrives at the size it will keep, shrinking out of its hover lift. */
 .run-relic-flight-lift {
-  scale: 1.22;
+  scale: 1.25;
   transition:
     scale var(--relic-flight-duration) cubic-bezier(0.4, 0, 0.4, 1),
     translate var(--relic-flight-duration) cubic-bezier(0.18, 0.74, 0.3, 1);

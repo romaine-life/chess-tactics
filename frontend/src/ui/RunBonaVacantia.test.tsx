@@ -87,6 +87,22 @@ describe('Bona Vacantia relics', () => {
     // the animations instead would stop them at a different height and level every time.
     expect(css).toMatch(/transition:\s*--relic-float-rise \d+ms/);
     expect(css).toMatch(/transition: --relic-glow-pulse \d+ms/);
+    // Collapsing the amplitudes is not enough: a zero-amplitude animation is still RUNNING,
+    // so the element stays live on the compositor and a pixelated sprite crawls along its
+    // edges. The pause must carry !important — the `animation` shorthand above has it, and a
+    // shorthand resets animation-play-state to `running`, outranking an unflagged pause.
+    expect(css).toMatch(/animation-play-state: paused !important;/);
+    expect(css).toMatch(/animation-play-state: running !important;/);
+  });
+
+  it('holds the hovered relic at a whole-pixel size', () => {
+    // The icons are 64px sprites drawn 1:1 and rendered nearest-neighbour. A fractional
+    // hover size lands the sampling grid between source pixels and the edges shimmer, so the
+    // scale has to multiply 64 up to a whole number of pixels.
+    const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+    const scales = [...css.matchAll(/^\s*scale: (1\.\d+);$/gm)].map(([, value]) => Number(value));
+    expect(scales.length).toBeGreaterThan(0);
+    for (const scale of scales) expect(Number.isInteger(scale * 64)).toBe(true);
   });
 
   it('holds the emanation at ONE colour so a settled relic is completely still', () => {
