@@ -20,8 +20,15 @@ function installedGoldIconSrc(): string | null {
   return src;
 }
 
-export function RunGoldIcon({ className = '' }: { className?: string }): ReactElement {
-  const src = reviewedGoldCandidateSrc() ?? installedGoldIconSrc();
+export function RunGoldIcon({
+  className = '',
+  src: override,
+}: {
+  className?: string;
+  /** Review-only: paint exact candidate bytes in the real seat without installing them. */
+  src?: string;
+}): ReactElement {
+  const src = override ?? reviewedGoldCandidateSrc() ?? installedGoldIconSrc();
   return (
     <span className={`run-gold-icon${src ? '' : ' is-unavailable'} ${className}`.trim()} aria-hidden="true">
       {src ? <img src={src} alt="" draggable={false} /> : <span>?</span>}
@@ -32,14 +39,16 @@ export function RunGoldIcon({ className = '' }: { className?: string }): ReactEl
 export function RunGoldAmount({
   valueTenths,
   className = '',
+  iconSrc,
 }: {
   valueTenths: number;
   className?: string;
+  iconSrc?: string;
 }): ReactElement {
   const value = formatGold(valueTenths);
   return (
     <span className={`run-gold-amount ${className}`.trim()} aria-label={`${value} gold`}>
-      <RunGoldIcon />
+      <RunGoldIcon src={iconSrc} />
       <span aria-hidden="true">{value}</span>
     </span>
   );

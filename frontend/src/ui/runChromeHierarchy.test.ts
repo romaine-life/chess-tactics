@@ -277,7 +277,10 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('advanceReadyDeployment(');
     expect(runScreen).not.toContain('data-testid="begin-run-battle"');
     expect(runScreen).not.toContain('onBeginBattle');
-    expect(runScreen).toContain('isGeneratedRunBattleName(levelName) ? phase');
+    // The phase is the title bar's ROUTE segment (Run › Shop), never a second line
+    // on the progress chip; the chip's small line is the authored Battle name only.
+    expect(runScreen).toContain('<TitleBarSlot region="route">{runPhaseRouteName(run)}</TitleBarSlot>');
+    expect(runScreen).toContain('levelName={isGeneratedRunBattleName(levelName) ? null : levelName}');
     expect(runScreen).not.toContain('run-deployment-workspace');
     expect(runScreen).not.toContain('<LevelPreviewColumn');
     expect(runScreen).not.toContain('Choose square…');

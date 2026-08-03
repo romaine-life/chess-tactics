@@ -47,6 +47,7 @@ export function AppTitleBar({ path, search, revealTitle, transitionStatus }: {
       <span className="app-shell-rail-junction app-shell-rail-junction--right-continuation" aria-hidden="true" />
       <BrandLockup
         screenName={config.screenName}
+        routeSlot={config.routeSlot}
         transitionStatus={transitionStatus}
       />
       {config.centerSlot ? <div className="app-shell-titlebar-center" data-titlebar-portal="center" /> : null}
