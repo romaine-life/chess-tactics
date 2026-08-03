@@ -57,6 +57,7 @@ import { PropSeatLab, type StructureEditorDraft } from './PropSeatLab';
 import { PROP_DEFS, defaultPropDef, type PropDef, type PropKind } from '../core/props';
 import { TileCompareLab, COMPARE_TILES, COMPARE_TILE_FAMILIES, compareTileCap, defaultCompareTile, type CompareTile } from './TileCompareLab';
 import { SurfaceTilesLab, SURFACE_TILE_FAMILIES, surfaceTileCap } from './SurfaceTilesLab';
+import { WallCandidateReview } from './WallCandidateReview';
 import { defaultGroundCoverAsset, GROUND_COVER_ASSETS, GroundCoverPreview, groundCoverAsset, type GroundCoverCatalogAsset, type GroundCoverId } from './groundCoverCatalog';
 import { WALL_DECOR_ASSETS, WALL_DECOR_KIND_LABELS, WALL_DECOR_KINDS, WallDecorLab, WallDecorPreview, defaultWallDecorAsset, wallDecorAsset, type WallDecorAsset, type WallDecorKind } from './wallDecorCatalog';
 import { wallArt, wallArtBadge, wallArtIdOrDefault, wallArtItems, type WallArt } from '../core/wallArt';
@@ -322,6 +323,9 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   // /artwork-compare: alias into the 'artworkcompare' viewer (reached from Pages). It reads its
   // own ?opts/l/r/lcss/rcss on mount, so those deep links still load.
   const isArtworkCompareAlias = window.location.pathname === '/artwork-compare';
+  // /studio/wall-candidates: alias into the Walls category, 'wallcandidates' viewer. Owner
+  // review proofs are only valid from /studio, so this canonicalises there like every alias.
+  const isWallCandidatesAlias = window.location.pathname === '/studio/wall-candidates';
   const prop = params.get('prop') || (isPropLabAlias ? params.get('prop') : null);
   const tile = params.get('tile');
   const cover = params.get('cover');
@@ -335,8 +339,8 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const rail = params.get('rail');
   // Destination is decoupled from category — any mode is valid with any category,
   // so the URL is taken at face value (no normalization).
-  const studioMode = isCardIconReviewAlias || isUnitStudioAlias || isNineSliceAlias || isPropLabAlias || isTileCompareAlias || isSurfaceLabAlias || isSceneAnimAlias || isDoodadEditorAlias || isArtworkCompareAlias ? 'viewer' : isStudioMode(mode) ? mode : defaults.studioMode;
-  const routeCategory = isCardIconReviewAlias ? 'cardicons' : isUnitStudioAlias ? 'units' : isNineSliceAlias ? 'assets' : isPropLabAlias ? 'props' : isTileCompareAlias ? 'tilecompare' : isSurfaceLabAlias ? 'surfacetiles' : isSceneAnimAlias ? 'sceneanim' : isDoodadEditorAlias ? 'doodads' : isArtworkCompareAlias ? 'pages' : isStudioCategory(normalizedCat) ? normalizedCat : undefined;
+  const studioMode = isCardIconReviewAlias || isUnitStudioAlias || isNineSliceAlias || isPropLabAlias || isTileCompareAlias || isSurfaceLabAlias || isSceneAnimAlias || isDoodadEditorAlias || isArtworkCompareAlias || isWallCandidatesAlias ? 'viewer' : isStudioMode(mode) ? mode : defaults.studioMode;
+  const routeCategory = isCardIconReviewAlias ? 'cardicons' : isUnitStudioAlias ? 'units' : isNineSliceAlias ? 'assets' : isPropLabAlias ? 'props' : isTileCompareAlias ? 'tilecompare' : isSurfaceLabAlias ? 'surfacetiles' : isSceneAnimAlias ? 'sceneanim' : isDoodadEditorAlias ? 'doodads' : isArtworkCompareAlias ? 'pages' : isWallCandidatesAlias ? 'walls' : isStudioCategory(normalizedCat) ? normalizedCat : undefined;
   const routeTileFilter = view === 'board' ? 'board' : isTileFilter(collection) ? collection : defaults.tileFilter;
   const explicitLabMode = isLabMode(lab) ? lab : undefined;
   const brushParam = params.get('brush');
@@ -382,7 +386,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedFenceArtworkId: fenceArt || undefined,
     selectedSurfaceFamily: sfamily || undefined,
     selectedRegionId: regionParam || undefined,
-    viewerKind: isCardIconReviewAlias ? 'cardicons' : isUnitStudioAlias ? 'unitart' : isNineSliceAlias ? 'nineslice' : isPropLabAlias || isDoodadEditorAlias ? 'propseat' : isTileCompareAlias ? 'tilecompare' : isSurfaceLabAlias ? 'surfacetiles' : isSceneAnimAlias ? 'sceneanim' : isArtworkCompareAlias ? 'artworkcompare'
+    viewerKind: isCardIconReviewAlias ? 'cardicons' : isUnitStudioAlias ? 'unitart' : isNineSliceAlias ? 'nineslice' : isPropLabAlias || isDoodadEditorAlias ? 'propseat' : isTileCompareAlias ? 'tilecompare' : isSurfaceLabAlias ? 'surfacetiles' : isSceneAnimAlias ? 'sceneanim' : isWallCandidatesAlias ? 'wallcandidates' : isArtworkCompareAlias ? 'artworkcompare'
       : isViewerKind(normalizedVk) ? normalizedVk : undefined,
     labMode: routeLabMode,
     tileFilter: effectiveTileFilter,
@@ -1326,10 +1330,11 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     },
     zoom: { value: zoom, set: setZoom, min: 0.75, max: 2, step: 0.05, cssVar: '--tile-zoom' },
     onSelect: (wall) => setSelectedWallId(wall.id),
-    onView: (wall) => openInLevelEditor('wall', wall.material),
+    onView: () => openViewer('wallcandidates'),
     onArm: (wall) => openInLevelEditor('wall', wall.material),
     selectedId: selectedWallId,
-    note: 'Walls are tall blockers for the map north and west perimeter edges.',
+    note: 'Walls are tall blockers for the map north and west perimeter edges. Inspect to review '
+      + 'and accept full-height wall candidates on the board; Arm paints one in the Level Editor.',
   };
 
   // Tile Pipeline — the 36 QA tiles (raw PixelLab vs snapped-to-grid). Read-only; Inspect
@@ -2130,6 +2135,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             ? <TileCompareLab tileId={selectedTileCompareId} onTileId={setSelectedTileCompareId} header={studioViewerHeader} />
             : viewerKind === 'surfacetiles'
             ? <SurfaceTilesLab family={selectedSurfaceFamily} onFamily={setSelectedSurfaceFamily} header={studioViewerHeader} />
+            : viewerKind === 'wallcandidates'
+            ? <WallCandidateReview header={studioViewerHeader} />
             : viewerKind === 'animscene'
             ? <SceneRegionPicker sceneId={selectedSceneId} onSceneId={setSelectedSceneId} onPickRegion={(id) => { setSelectedRegionId(id); openViewer('sceneanim'); }} header={studioViewerHeader} />
             : viewerKind === 'sceneanim'

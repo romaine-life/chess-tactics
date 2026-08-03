@@ -10,7 +10,7 @@ refines:
   - ADR-0355
 ---
 
-# ADR-0362: The Ataraxia ladder is an Enchiridion reference section
+# ADR-0363: The Ataraxia ladder is an Enchiridion reference section
 
 ## Context and Problem Statement
 

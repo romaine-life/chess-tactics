@@ -42,7 +42,7 @@ export const CACOCHYMIC_DISPLAY_NAME = 'Cacochymic';
 /**
  * Each tier's presentation. `numeral` is the rung itself and `label` is that rung
  * qualified by the ladder's name, for a surface that names one tier away from the
- * ladder's own heading (ADR-0362). Roman numbering has no zero, so the baseline keeps
+ * ladder's own heading (ADR-0363). Roman numbering has no zero, so the baseline keeps
  * the plain `0` ADR-0291 authored rather than an antiquarian stand-in for one.
  */
 export const ATARAXIA_BY_TIER: Readonly<Record<AtaraxiaTier, Readonly<{

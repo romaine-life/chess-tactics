@@ -67,7 +67,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     // The art set is installed live media, not a required slot. `liveMediaForSlot` throws
     // on an absent slot and would take the whole section down on a deployment where the
     // candidates have not been accepted — so the set is read by PREFIX and the typed
-    // numeral remains the fallback render path (ADR-0362).
+    // numeral remains the fallback render path (ADR-0363).
     const start = enchiridion.indexOf('const ATARAXIA_NUMERAL_SLOT_PREFIX');
     const end = enchiridion.indexOf('export function EnchiridionReference', start);
     const ataraxia = enchiridion.slice(start, end);

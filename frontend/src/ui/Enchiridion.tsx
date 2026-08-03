@@ -893,7 +893,7 @@ function AbilitiesSection({ framed }: { framed: boolean }): ReactElement {
  * completion that opens them rather than hiding.
  */
 /**
- * The carved-stone rung marks (ADR-0362), forged by `scripts/forge-ataraxia-numerals.mjs`
+ * The carved-stone rung marks (ADR-0363), forged by `scripts/forge-ataraxia-numerals.mjs`
  * and installed as live media under one prefix. Read by PREFIX, not by required slot: an
  * installed art set is the enrichment, and the ladder must still render its rungs on a
  * deployment where the set has not been accepted yet. `liveMediaForSlot` would throw there

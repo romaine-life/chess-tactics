@@ -106,6 +106,17 @@ const STRATEGIKON_BACKGROUND_SHA256 = '8084f009cae79d3eaaa64bb2c0f5df6e26fc8dfe7
 const WORKSPACE_BACKGROUND_COMPONENT = 'workspace-background';
 const WORKSPACE_BACKGROUND_SLOT = /^ui\/workspaces\/([a-z][a-z0-9-]{0,63})\/background\.png$/;
 const WORKSPACE_BACKGROUND_IDS = Object.freeze(['run-victory', 'level-editor-events']);
+// Perimeter walls live in the terrain domain but are NOT board tiles: they carry their own
+// full-height frame geometry (ADR-0086) instead of the 96x180 tile projection, so they are
+// dispatched before the tile rules the way the brush icon and SFX takes are.
+const WALL_MATERIAL_COMPONENT = 'wall-material';
+const WALL_MATERIAL_PROOF_SCHEMA = 'wall-material-canonical-board-proof-v1';
+const WALL_MATERIAL_PROOF_RENDERER = 'BoardLabBoard/BoardBarrierSceneLayer';
+const WALL_MATERIAL_FRAME_SLOT = /^tiles\/feature\/wall-([a-z][a-z0-9-]{0,63})-(1|8|9)\.png$/;
+const WALL_MATERIAL_THUMB_SLOT = /^tiles\/feature\/wall-([a-z][a-z0-9-]{0,63})-thumb\.png$/;
+const WALL_MATERIAL_FRAME_WIDTH = 128;
+const WALL_MATERIAL_FRAME_HEIGHT = 336;
+const WALL_MATERIAL_THUMB_MAX = 512;
 
 function isObjectRecord(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -261,6 +272,18 @@ function ataraxiaNumeralOwnerProofIssue(row, proof, surfaceUrl = null) {
     return 'Ataraxia numeral proof must record the whole reviewed rung set';
   }
   return null;
+}
+
+/**
+ * The wall material and face a `tiles/feature/wall-<material>-<mask|thumb>.png` slot names, or
+ * null. `mask` is the N(1)/W(8) face bitmask the frame paints; `thumb` is its picker card.
+ */
+function wallMaterialSlot(slot) {
+  const raw = String(slot || '');
+  const frame = WALL_MATERIAL_FRAME_SLOT.exec(raw);
+  if (frame) return { material: frame[1], mask: Number(frame[2]), thumb: false };
+  const thumb = WALL_MATERIAL_THUMB_SLOT.exec(raw);
+  return thumb ? { material: thumb[1], mask: null, thumb: true } : null;
 }
 
 /** The workspace id a `ui/workspaces/<id>/background.png` slot names, or null. */
@@ -726,6 +749,106 @@ function levelEditorBrushIconOwnerProofIssue(row, proof, surfaceUrl = null) {
 }
 
 /**
+ * Domain-owned runtime projection for one perimeter wall raster. ADR-0086 makes the
+ * full-height frame the only wall geometry, so the frame size is the contract: a wall
+ * candidate that does not carry it cannot seat on the board's back edges at all.
+ */
+function wallMaterialMediaIssue(row, projectedRuntime = null) {
+  const wall = wallMaterialSlot(row.slot);
+  if (!wall) return 'wall slots must match tiles/feature/wall-<material>-<1|8|9|thumb>.png';
+  if (row.domain !== 'terrain') return 'wall materials require the terrain domain';
+  if (row.media_type !== 'image/png') return 'wall materials require image/png';
+  if (wall.thumb) {
+    if (row.role !== 'review') return 'wall material thumbnails require the review role';
+    const width = Number(row.width);
+    const height = Number(row.height);
+    if (!Number.isInteger(width) || !Number.isInteger(height) || width !== height) {
+      return 'wall material thumbnails must be square';
+    }
+    if (width < 1 || width > WALL_MATERIAL_THUMB_MAX) {
+      return `wall material thumbnails must be 1-${WALL_MATERIAL_THUMB_MAX}px square`;
+    }
+  } else {
+    if (row.role !== 'media') return 'wall material frames require the terrain media role';
+    if (Number(row.width) !== WALL_MATERIAL_FRAME_WIDTH || Number(row.height) !== WALL_MATERIAL_FRAME_HEIGHT) {
+      return `ADR-0086 wall frames must be native ${WALL_MATERIAL_FRAME_WIDTH}x${WALL_MATERIAL_FRAME_HEIGHT}`;
+    }
+  }
+
+  const metadata = mediaVersionMetadata(row);
+  const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+  if (!isObjectRecord(runtime) || !Object.keys(runtime).length) return null;
+  const allowed = new Set(['component', 'variant', 'frameWidth', 'frameHeight', 'frameCount', 'altText']);
+  const unsupported = Object.keys(runtime).filter((key) => !allowed.has(key));
+  if (unsupported.length) {
+    return `wall material runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
+  }
+  if (runtime.component !== undefined && runtime.component !== WALL_MATERIAL_COMPONENT) {
+    return `wall material metadata.runtime.component must be ${WALL_MATERIAL_COMPONENT}`;
+  }
+  if (runtime.variant !== undefined && runtime.variant !== wall.material) {
+    return 'wall material metadata.runtime.variant must name its own material';
+  }
+  if (runtime.frameCount !== undefined && runtime.frameCount !== 1) {
+    return 'wall material frames are single-frame rasters';
+  }
+  if (runtime.frameWidth !== undefined && runtime.frameWidth !== Number(row.width)) {
+    return 'wall material runtime frameWidth does not match uploaded geometry';
+  }
+  if (runtime.frameHeight !== undefined && runtime.frameHeight !== Number(row.height)) {
+    return 'wall material runtime frameHeight does not match uploaded geometry';
+  }
+  return null;
+}
+
+/**
+ * Owner review for a wall candidate is only meaningful mounted on the real board renderer at
+ * canonical 1x, seated against live terrain. One proof covers a whole wall batch, so each
+ * candidate is checked against its OWN slot entry rather than a single-element proof.
+ */
+function wallMaterialOwnerProofIssue(row, proof, surfaceUrl = null) {
+  const wall = wallMaterialSlot(row.slot);
+  if (!wall) return 'wall material proof requires a registered wall slot';
+  if (!isObjectRecord(proof) || proof.schema !== WALL_MATERIAL_PROOF_SCHEMA) {
+    return `wall material review requires ${WALL_MATERIAL_PROOF_SCHEMA}`;
+  }
+  if (
+    proof.renderer !== WALL_MATERIAL_PROOF_RENDERER
+    || proof.canonicalScale !== 1 || proof.assetLocalScale !== 1
+    || proof.spatialResampling !== false || proof.deterministicProof !== true
+  ) return 'wall material proof must cover exact canonical 1x pixels without resampling';
+  if (
+    proof.frameWidth !== WALL_MATERIAL_FRAME_WIDTH || proof.frameHeight !== WALL_MATERIAL_FRAME_HEIGHT
+  ) return 'wall material proof does not mount the ADR-0086 full-height frame geometry';
+  if (surfaceUrl !== null && proof.surfaceUrl !== surfaceUrl) {
+    return 'wall material proof surfaceUrl does not match the reviewed surface';
+  }
+  let parsedSurface;
+  try { parsedSurface = new URL(proof.surfaceUrl); } catch { return 'wall material proof surfaceUrl is invalid'; }
+  if (parsedSurface.pathname !== '/studio') {
+    return 'wall material proof must come from the game-owned Studio wall surface';
+  }
+  const candidateSha256 = normalizedSha(row.blob_sha256);
+  if (!candidateSha256) return 'wall material proof requires uploaded candidate bytes';
+  if (!Array.isArray(proof.selectedCandidates) || !Array.isArray(proof.slotSnapshots)) {
+    return 'wall material proof is incomplete';
+  }
+  const selected = proof.selectedCandidates.filter((item) => isObjectRecord(item) && item.slot === row.slot);
+  if (
+    selected.length !== 1 || selected[0].versionId !== String(row.id)
+    || normalizedSha(selected[0].sha256) !== candidateSha256
+  ) return 'wall material proof does not identify the reviewed candidate bytes';
+  const snapshots = proof.slotSnapshots.filter((item) => isObjectRecord(item) && item.slot === row.slot);
+  if (snapshots.length !== 1) return 'wall material proof must snapshot this wall slot exactly once';
+  // A wall face is only judged against the walls it will stand beside, so every frame in the
+  // batch has to be mounted on the same board — not reviewed one sprite at a time.
+  if (!wall.thumb && !proof.mountedSlots?.includes?.(row.slot)) {
+    return 'wall material proof must mount this frame on the reviewed board';
+  }
+  return null;
+}
+
+/**
  * Domain-owned runtime projection for one authored one-shot take. Sound-set
  * labels, gains, and assignments remain in the DB-owned SFX profile.
  */
@@ -1135,6 +1258,11 @@ module.exports = {
   STRATEGIKON_BACKGROUND_PROOF_SCHEMA,
   STRATEGIKON_BACKGROUND_SHA256,
   STRATEGIKON_BACKGROUND_SLOT,
+  WALL_MATERIAL_COMPONENT,
+  WALL_MATERIAL_FRAME_HEIGHT,
+  WALL_MATERIAL_FRAME_WIDTH,
+  WALL_MATERIAL_PROOF_RENDERER,
+  WALL_MATERIAL_PROOF_SCHEMA,
   liveCatalogReadinessIssue,
   cardTypeRowTextureAcceptanceGroupIssue,
   cardTypeRowTextureMediaIssue,
@@ -1165,4 +1293,7 @@ module.exports = {
   strategikonBackgroundMediaIssue,
   strategikonBackgroundOwnerProofIssue,
   strategikonBackgroundSlot,
+  wallMaterialMediaIssue,
+  wallMaterialOwnerProofIssue,
+  wallMaterialSlot,
 };

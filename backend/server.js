@@ -93,6 +93,9 @@ const {
   strategikonBackgroundMediaIssue,
   strategikonBackgroundOwnerProofIssue,
   strategikonBackgroundSlot,
+  wallMaterialMediaIssue,
+  wallMaterialOwnerProofIssue,
+  wallMaterialSlot,
 } = require(path.join(bakedBackendDir, 'liveMediaPolicy'));
 const {
   ATTEMPT_PIPELINE_SOURCE_REQUEST_SCHEMA,
@@ -14719,6 +14722,9 @@ function reviewedMediaEvidenceIssue(row) {
   } else if (strategikonBackgroundSlot(row.slot)) {
     const issue = strategikonBackgroundOwnerProofIssue(row, proof, evidence.surfaceUrl);
     if (issue) return issue;
+  } else if (wallMaterialSlot(row.slot)) {
+    const issue = wallMaterialOwnerProofIssue(row, proof, evidence.surfaceUrl);
+    if (issue) return issue;
   } else if (sourceArt.claimed && !sourceArt.issue) {
     const issue = sourceArtTurntableOwnerProofIssue(sourceArt.value, proof, evidence.surfaceUrl);
     if (issue) return issue;
@@ -15261,6 +15267,11 @@ function mediaDomainProjectionIssue(row) {
   }
   if (strategikonBackgroundSlot(row.slot)) {
     return strategikonBackgroundMediaIssue(row, runtime.value);
+  }
+  // Walls sit in the terrain domain but own the ADR-0086 full-height frame, not the 96x180
+  // tile projection, so they resolve before the board-tile rules below.
+  if (wallMaterialSlot(row.slot)) {
+    return wallMaterialMediaIssue(row, runtime.value);
   }
   if (workspaceBackgroundSlotId(row.slot)) {
     return workspaceBackgroundMediaIssue(row, runtime.value);
@@ -16048,7 +16059,7 @@ function gameOwnedReviewSurfaceUrl(req, raw) {
       ? url.origin === requestOrigin
       : url.host.toLowerCase() === String(req.get('host') || '').toLowerCase();
     // Each entry is a surface some art domain is genuinely reviewed on; the Ataraxia rung
-    // marks are worn by the Ataraxia reference rows, on either host (ADR-0362).
+    // marks are worn by the Ataraxia reference rows, on either host (ADR-0363).
     const gameOwnedPath = url.pathname === '/studio' || url.pathname === '/editor/level'
       || url.pathname === '/play/strategikon/enchiridion/units'
       || ATARAXIA_NUMERAL_REVIEW_PATH.test(url.pathname);
@@ -16166,6 +16177,33 @@ async function validateMediaReviewProofSnapshot(client, current, evidence, surfa
   }
   if (new URL(surfaceUrl).pathname !== '/studio') {
     throw mediaMutationError('invalid_media_review_proof', 409, 'this media domain requires its Studio proof surface');
+  }
+  if (wallMaterialSlot(current.slot)) {
+    const projectionIssue = mediaDomainProjectionIssue(current);
+    if (projectionIssue) {
+      throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: projectionIssue });
+    }
+    const proofIssue = wallMaterialOwnerProofIssue(current, evidence, surfaceUrl);
+    if (proofIssue) {
+      throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: proofIssue });
+    }
+    // One wall proof covers the whole batch, so pin this candidate against its own entries.
+    const selected = evidence.selectedCandidates.find((item) => isObjectRecord(item) && item.slot === current.slot);
+    const snapshot = evidence.slotSnapshots.find((item) => isObjectRecord(item) && item.slot === current.slot);
+    const slotResult = await client.query(
+      'SELECT slot, active_version_id, row_revision FROM media_slots WHERE slot = $1',
+      [current.slot],
+    );
+    const slotRow = slotResult.rows[0];
+    if (!slotRow) throw mediaMutationError('media_slot_not_found', 404);
+    if (
+      Number(snapshot.rowRevision) !== Number(slotRow.row_revision)
+      || (snapshot.activeVersionId ?? null) !== (slotRow.active_version_id ? String(slotRow.active_version_id) : null)
+    ) throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: 'slot snapshot mismatch' });
+    if (current.status !== 'candidate' || Number(selected.rowRevision) !== Number(current.row_revision)) {
+      throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: 'candidate snapshot mismatch' });
+    }
+    return;
   }
   if (current.domain !== 'terrain') {
     const runCardArt = runCardArtProjection(current);
