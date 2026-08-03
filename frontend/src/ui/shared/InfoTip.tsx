@@ -1,12 +1,17 @@
-import { useCallback, useId, useRef, useState } from 'react';
+import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { chromeFamilyPortalHost } from '../chromeFamilyRuntime';
 import { ChromeSurfaceFill, InnerChromeBox } from './ChromeBox';
+import { readTooltipGlossary } from './tooltipGlossary';
+import type { RunGlossaryEntry } from '../../run/glossary';
 
 interface TooltipPosition {
   left: number;
+  /** Where the stack starts when it hangs below the trigger, the normal case. */
   top: number;
+  /** The trigger's own top edge, so an overflowing stack can hang above it instead. */
+  anchorTop: number;
 }
 
 function useTooltipPosition<T extends HTMLElement>() {
@@ -21,7 +26,11 @@ function useTooltipPosition<T extends HTMLElement>() {
     // Below the trigger, clamped so a wide tip never runs off the viewport. Every
     // trigger measures the same way, including one in the persistent title bar: a
     // tip sits the same distance from the thing it explains wherever that thing is.
-    setPos({ left: Math.max(8, Math.min(r.left, window.innerWidth - 300)), top: r.bottom + 6 });
+    setPos({
+      anchorTop: r.top,
+      left: Math.max(8, Math.min(r.left, window.innerWidth - 300)),
+      top: r.bottom + 6,
+    });
   }, []);
   const hide = useCallback(() => setPos(null), []);
   const onMouseEnter = useCallback(() => {
@@ -49,9 +58,107 @@ function useTooltipPosition<T extends HTMLElement>() {
   return { ref, pos, hide, onBlur, onFocus, onMouseEnter, onMouseLeave, portalHost };
 }
 
+/** One framed pop. The stack renders the tip itself and one of these per named term. */
+function TooltipPane({
+  children,
+  className,
+  id,
+  title,
+}: {
+  children: ReactNode;
+  className: string;
+  id?: string;
+  title?: ReactNode;
+}): ReactElement {
+  return (
+    <InnerChromeBox
+      as="span"
+      role="tooltip"
+      id={id}
+      className={className}
+    >
+      {/* A tip floats over live artwork with nothing behind it, so it beds on an
+          installed OPAQUE surface first and takes the inner role's tint over that.
+          The role's fill alone is a translucent tint — correct on a panel that
+          already has a surface, wrong here: the art underneath tinted the type and
+          made the same tooltip read differently in the title bar than on a screen. */}
+      <ChromeSurfaceFill surface="baseline-stone-blue" className="tooltip-pop-fill" />
+      <ChromeSurfaceFill role="inner" className="tooltip-pop-fill" />
+      {title ? <strong className="tooltip-title">{title}</strong> : null}
+      {/* An ELEMENT, always: a bare text child cannot be lifted above the fills
+          and would be painted over by the tip's own bed. */}
+      <span className="tooltip-body">{children}</span>
+    </InnerChromeBox>
+  );
+}
+
+/**
+ * The tip and the definitions of every mechanic it names, as one column under the
+ * trigger (ADR-0368). Stacking beats nesting: the pops stay non-interactive, so a
+ * definition reaches the reader on the same hover that raised the tip, with no
+ * second target to find and nothing to keep hovered on the way there.
+ */
+function TooltipStack({
+  children,
+  className,
+  glossary,
+  id,
+  maxInlineSize,
+  pos,
+  title,
+}: {
+  children: ReactNode;
+  className: string;
+  glossary: readonly RunGlossaryEntry[];
+  id: string;
+  maxInlineSize: number;
+  pos: TooltipPosition;
+  title?: ReactNode;
+}): ReactElement {
+  const stackRef = useRef<HTMLSpanElement | null>(null);
+  const [top, setTop] = useState(pos.top);
+
+  // A definition column is taller than the one pop this placement was written for, so
+  // the stack is measured once it exists and hung above the trigger when hanging below
+  // would run it off the bottom of the viewport.
+  useLayoutEffect(() => {
+    const height = stackRef.current?.getBoundingClientRect().height ?? 0;
+    const lowest = window.innerHeight - 8 - height;
+    if (height === 0 || pos.top <= lowest) {
+      setTop(pos.top);
+      return;
+    }
+    const above = pos.anchorTop - 6 - height;
+    setTop(above >= 8 ? above : Math.max(8, lowest));
+  }, [glossary, pos.anchorTop, pos.top]);
+
+  return (
+    <span
+      className="tooltip-pop-positioner"
+      ref={stackRef}
+      style={{ left: pos.left, maxInlineSize, top }}
+    >
+      <TooltipPane className={`infotip-pop tooltip-pop ${className}`.trim()} id={id} title={title}>
+        {children}
+      </TooltipPane>
+      {glossary.map((entry) => (
+        <TooltipPane
+          className="infotip-pop tooltip-pop tooltip-keyword-pop"
+          id={`${id}-${entry.id}`}
+          key={entry.id}
+          title={entry.term}
+        >
+          <span>{entry.definition}</span>
+        </TooltipPane>
+      ))}
+    </span>
+  );
+}
+
 function TooltipPopup({
   children,
   className = '',
+  glossary = [],
   id,
   maxInlineSize = 256,
   pos,
@@ -60,6 +167,7 @@ function TooltipPopup({
 }: {
   children: ReactNode;
   className?: string;
+  glossary?: readonly RunGlossaryEntry[];
   id: string;
   maxInlineSize?: number;
   pos: TooltipPosition | null;
@@ -68,29 +176,16 @@ function TooltipPopup({
 }): ReactElement | null {
   if (!pos || typeof document === 'undefined') return null;
   return createPortal((
-    <span
-      className="tooltip-pop-positioner"
-      style={{ left: pos.left, maxInlineSize, top: pos.top }}
+    <TooltipStack
+      className={className}
+      glossary={glossary}
+      id={id}
+      maxInlineSize={maxInlineSize}
+      pos={pos}
+      title={title}
     >
-      <InnerChromeBox
-        as="span"
-        role="tooltip"
-        id={id}
-        className={`infotip-pop tooltip-pop ${className}`.trim()}
-      >
-        {/* A tip floats over live artwork with nothing behind it, so it beds on an
-            installed OPAQUE surface first and takes the inner role's tint over that.
-            The role's fill alone is a translucent tint — correct on a panel that
-            already has a surface, wrong here: the art underneath tinted the type and
-            made the same tooltip read differently in the title bar than on a screen. */}
-        <ChromeSurfaceFill surface="baseline-stone-blue" className="tooltip-pop-fill" />
-        <ChromeSurfaceFill role="inner" className="tooltip-pop-fill" />
-        {title ? <strong className="tooltip-title">{title}</strong> : null}
-        {/* An ELEMENT, always: a bare text child cannot be lifted above the fills
-            and would be painted over by the tip's own bed. */}
-        <span className="tooltip-body">{children}</span>
-      </InnerChromeBox>
-    </span>
+      {children}
+    </TooltipStack>
   ), portalHost ?? document.body);
 }
 
@@ -134,6 +229,10 @@ export function Tooltip({
     onMouseLeave,
     portalHost,
   } = useTooltipPosition<HTMLSpanElement>();
+  const { content, entries } = useMemo(() => readTooltipGlossary(children, title), [children, title]);
+  // Every pane in the stack describes the trigger, so a keyboard reader hears the
+  // definitions the sighted reader was just handed.
+  const describedBy = [id, ...entries.map((entry) => `${id}-${entry.id}`)].join(' ');
 
   return (
     <span
@@ -147,7 +246,7 @@ export function Tooltip({
         tabIndex={focusable ? 0 : undefined}
         aria-label={focusable ? label : undefined}
         aria-hidden={focusable ? undefined : 'true'}
-        aria-describedby={focusable && pos ? id : undefined}
+        aria-describedby={focusable && pos ? describedBy : undefined}
         onFocus={onFocus}
         onBlur={onBlur}
         onKeyDown={(event) => {
@@ -161,10 +260,11 @@ export function Tooltip({
         pos={pos}
         portalHost={portalHost}
         className={popupClassName}
+        glossary={entries}
         maxInlineSize={popupMaxInlineSize}
         title={title}
       >
-        {children}
+        {content}
       </TooltipPopup>
     </span>
   );
@@ -186,6 +286,8 @@ export function InfoTip({ children, label = 'More info' }: { children: ReactNode
     onMouseLeave,
     portalHost,
   } = useTooltipPosition<HTMLButtonElement>();
+  const { content, entries } = useMemo(() => readTooltipGlossary(children, null), [children]);
+  const describedBy = [id, ...entries.map((entry) => `${id}-${entry.id}`)].join(' ');
 
   return (
     <span className="infotip" onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
@@ -194,14 +296,14 @@ export function InfoTip({ children, label = 'More info' }: { children: ReactNode
         type="button"
         className="infotip-dot"
         aria-label={label}
-        aria-describedby={pos ? id : undefined}
+        aria-describedby={pos ? describedBy : undefined}
         onFocus={onFocus}
         onBlur={onBlur}
         onClick={(e) => e.preventDefault()}
       >
         i
       </button>
-      <TooltipPopup id={id} pos={pos} portalHost={portalHost}>{children}</TooltipPopup>
+      <TooltipPopup glossary={entries} id={id} pos={pos} portalHost={portalHost}>{content}</TooltipPopup>
     </span>
   );
 }

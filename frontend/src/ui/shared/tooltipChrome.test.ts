@@ -53,4 +53,39 @@ describe('tooltip chrome', () => {
       expect(source, consumer).not.toContain('run-relic-tooltip-');
     }
   });
+
+  it('defines the mechanics a tip names instead of leaving the reader to find them', () => {
+    // ADR-0368. Every tip resolves its own body through the one glossary, so a call
+    // site never has to remember to explain a keyword it just used.
+    expect(infoTip).toContain('readTooltipGlossary(children, title)');
+    expect(infoTip).toContain('readTooltipGlossary(children, null)');
+    // The definitions describe the trigger too — a keyboard reader hears what a
+    // sighted reader was just handed.
+    expect(infoTip).toContain('const describedBy = [id, ...entries.map((entry) => `${id}-${entry.id}`)].join(\' \');');
+    expect(infoTip).toContain('aria-describedby={focusable && pos ? describedBy : undefined}');
+  });
+
+  it('stacks the tip and its definitions as one column, not as scattered popups', () => {
+    // The positioner used to hold exactly one pop. Left a plain fixed box, the
+    // definition panes would pile on top of the tip at the same coordinates.
+    const positioner = rule('.tooltip-pop-positioner');
+    expect(positioner).toMatch(/display:\s*flex/);
+    expect(positioner).toMatch(/flex-direction:\s*column/);
+    // Ragged widths read as unrelated popups rather than one explanation.
+    expect(positioner).toMatch(/align-items:\s*stretch/);
+    // Between panes, the same distance the pop uses between its own parts.
+    expect(positioner).toContain('gap: var(--ds-space-2)');
+    // The stack stays non-interactive: a definition arrives on the hover that raised
+    // the tip, so nothing has to be kept hovered on the way to it.
+    expect(positioner).toContain('pointer-events: none');
+  });
+
+  it('names a mechanic in type alone, with no surface of its own', () => {
+    // The term takes the title color of the pane that defines it — that color IS the
+    // reference. Paint would make it a second chrome surface inside the pop.
+    const keyword = rule('.tooltip-keyword');
+    expect(keyword).toContain('#9fe7ff');
+    expect(rule('.tooltip-title')).toContain('#9fe7ff');
+    expect(keyword).not.toMatch(/background|border|box-shadow/);
+  });
 });
