@@ -267,13 +267,24 @@ export interface TownBounds {
   maxY: number;
 }
 
-/** Grid rect -> its centre in scene pixels. */
+/**
+ * The selection's outline in scene pixels, as the four projected corners of the tiles it covers.
+ *
+ * Expanded by half a cell on every side because `projectBoardPoint` of an integer cell is that
+ * tile's CENTRE, not its corner. Drawing straight through the centres runs the outline through the
+ * middle of every boundary tile instead of around the outside of them, which reads as an outline
+ * that does not follow the grid.
+ */
 export function townBoundsScenePolygon(bounds: TownBounds): Array<{ x: number; y: number }> {
+  const minX = Math.min(bounds.minX, bounds.maxX) - 0.5;
+  const maxX = Math.max(bounds.minX, bounds.maxX) + 0.5;
+  const minY = Math.min(bounds.minY, bounds.maxY) - 0.5;
+  const maxY = Math.max(bounds.minY, bounds.maxY) + 0.5;
   return [
-    { x: bounds.minX, y: bounds.minY },
-    { x: bounds.maxX, y: bounds.minY },
-    { x: bounds.maxX, y: bounds.maxY },
-    { x: bounds.minX, y: bounds.maxY },
+    { x: minX, y: minY },
+    { x: maxX, y: minY },
+    { x: maxX, y: maxY },
+    { x: minX, y: maxY },
   ].map((corner) => {
     const seat = projectBoardPoint(corner);
     return { x: seat.left, y: seat.top };

@@ -15534,10 +15534,9 @@ button.tileset-relationship-cell {
 }
 
 /* The area being dragged for a town, drawn as SVG geometry rather than CSS surface paint. */
-.le-town-drag-rect {
-  position: absolute;
-  pointer-events: none;
-  overflow: visible;
+/* A settled town's tiles sit quieter than the drag in progress, so the live one reads as active. */
+.le-town-cell.is-settled {
+  opacity: 0.55;
 }
 
 /* How much GROUND the drag covers. Scene pixels mean nothing at an arbitrary zoom; tiles do. */

@@ -8,6 +8,7 @@ import {
   planTown,
   townBoundsCentre,
   townIdPrefix,
+  townBoundsScenePolygon,
   townFootprint,
   footprintsOverlap,
   townStreets,
@@ -659,6 +660,38 @@ describe('planTown', () => {
     expect(run({ sections: [section({ buildingIds: ['missing'] })] })).toEqual([]);
     expect(run({ size: 0 })).toEqual([]);
     expect(run({ sections: [{ ...section(), buildings: [] }] })).toEqual([]);
+  });
+});
+
+describe('townBoundsScenePolygon', () => {
+  // projectBoardPoint of an integer cell is that tile's CENTRE. An outline drawn through centres
+  // cuts the boundary tiles in half and reads as not following the grid at all.
+  it('traces the outside edge of the covered tiles, not their centres', () => {
+    const bounds = { minX: 2, minY: 3, maxX: 6, maxY: 5 };
+    const corners = townBoundsScenePolygon(bounds).map((corner) => unprojectBoardPoint({
+      left: corner.x, top: corner.y,
+    }));
+    const xs = corners.map((c) => c.x);
+    const ys = corners.map((c) => c.y);
+    expect(Math.min(...xs)).toBeCloseTo(bounds.minX - 0.5, 6);
+    expect(Math.max(...xs)).toBeCloseTo(bounds.maxX + 0.5, 6);
+    expect(Math.min(...ys)).toBeCloseTo(bounds.minY - 0.5, 6);
+    expect(Math.max(...ys)).toBeCloseTo(bounds.maxY + 0.5, 6);
+  });
+
+  it('encloses every cell the selection claims', () => {
+    const bounds = { minX: -2, minY: 0, maxX: 3, maxY: 4 };
+    const corners = townBoundsScenePolygon(bounds).map((corner) => unprojectBoardPoint({
+      left: corner.x, top: corner.y,
+    }));
+    for (let x = bounds.minX; x <= bounds.maxX; x += 1) {
+      for (let y = bounds.minY; y <= bounds.maxY; y += 1) {
+        expect(x).toBeGreaterThanOrEqual(Math.min(...corners.map((c) => c.x)));
+        expect(x).toBeLessThanOrEqual(Math.max(...corners.map((c) => c.x)));
+        expect(y).toBeGreaterThanOrEqual(Math.min(...corners.map((c) => c.y)));
+        expect(y).toBeLessThanOrEqual(Math.max(...corners.map((c) => c.y)));
+      }
+    }
   });
 });
 

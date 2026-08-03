@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react';
 import { BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM, boardBackgroundMode, boardBounds, cameraToContainBounds, defaultBoardCameraBounds, defaultSubterrainMaterial, isVersionedPredrawnBoardSurface, MAX_FLOATING_ARTWORK_PIXEL, mergeSharedLevel, normalizeBoardCameraBounds, predrawnEnvironmentGeometryFingerprintInputV2, predrawnVisualFootprintClipStyleForCell, resolvedBoardCameraBounds, resolveTerrainSideExposure, resolveTerrainSideFaces, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, type BoardBackgroundMode, type BoardCameraBounds, type BoardCameraSnapMode, type PredrawnGenerationFrame, type SubterrainMaterial, type SubterrainPlacementMap, type TerrainSideMaterials, type VersionedPredrawnBoardSurface } from '@chess-tactics/board-render';
 import { boardLabCellPosition, boardLabMetrics, immutableBoardLabTerrainSrc } from '../render/BoardLabBoard';
-import { unprojectBoardPoint, type BoardTown, type BoardTownSection } from '@chess-tactics/board-render';
+import { projectBoardPoint, unprojectBoardPoint, type BoardTown, type BoardTownSection } from '@chess-tactics/board-render';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { FloatingArtworkSprite, PropSprite, propHalfSrc } from '../render/BoardStructure';
 import { PROP_DEFS, defaultPropDef, propCells, propDef, type PropDef, type PropKind } from '../core/props';
@@ -3125,6 +3125,20 @@ export function LevelEditor(): ReactElement {
     });
   };
   const [expandedTownBuildings, setExpandedTownBuildings] = useState<Set<string>>(() => new Set());
+  /**
+   * Which size bound is being shown on the board, if any. A number like "0.75x" says nothing about
+   * how big a house that is next to a tile; this stands one on the board so the number has a
+   * referent. Deliberately not automatic — it is a thing you ask for and dismiss.
+   */
+  const [townSizePreview, setTownSizePreview] = useState<
+    { sectionId: string; bound: 'min' | 'max' } | null>(null);
+  const toggleTownSizePreview = (sectionId: string, bound: 'min' | 'max'): void => {
+    setTownSizePreview((current) => (
+      current && current.sectionId === sectionId && current.bound === bound
+        ? null
+        : { sectionId, bound }
+    ));
+  };
   const toggleTownBuildingExpand = (entryId: string): void => {
     setExpandedTownBuildings((current) => {
       const next = new Set(current);
@@ -4193,12 +4207,42 @@ export function LevelEditor(): ReactElement {
     return townBoundsScenePolygon(bounds).map((corner) => townSurfacePoint(corner, viewViewportSize));
   }, [viewViewportSize, viewZoom, viewPan.x, viewPan.y,
     artworkBoardOrigin.originLeft, artworkBoardOrigin.originTop]);
-  const townDragSurfacePolygon = useMemo(
-    () => townSurfacePolygon(townDragBounds), [townSurfacePolygon, townDragBounds]);
-  // The COMMITTED selection stays outlined after the drag ends, because Regenerate and Remove
-  // act on it — an invisible selection is one the author has to remember.
-  const townAreaSurfacePolygon = useMemo(
-    () => townSurfacePolygon(townArea), [townSurfacePolygon, townArea]);
+  /**
+   * The selection as highlighted TILES, the same cyan diamond the region tool uses.
+   *
+   * Drawn here rather than through the board's renderCellOverlay because that only runs for
+   * playable cells, and a town normally sits out in the scenic apron where there are none — the
+   * highlight would vanish exactly where towns go. Positions come from the same projection the
+   * board uses, so the diamonds sit on the tiles rather than near them.
+   */
+  const townHighlight = useMemo(() => {
+    const bounds = townDragBounds ?? townArea;
+    if (!bounds || !viewViewportSize) return null;
+    const minX = Math.min(bounds.minX, bounds.maxX);
+    const maxX = Math.max(bounds.minX, bounds.maxX);
+    const minY = Math.min(bounds.minY, bounds.maxY);
+    const maxY = Math.max(bounds.minY, bounds.maxY);
+    const across = maxX - minX;
+    const down = maxY - minY;
+    // A selection this large is a mis-drag, not a town; drawing every tile would stall the editor.
+    if ((across + 1) * (down + 1) > 4096) return null;
+    const width = TILE_TEMPLATE.topWidth * viewZoom;
+    const height = TILE_TEMPLATE.topHeight * viewZoom;
+    const cells: Array<{ x: number; y: number; left: number; top: number; width: number; height: number }> = [];
+    for (let y = minY; y <= maxY; y += 1) {
+      for (let x = minX; x <= maxX; x += 1) {
+        const seat = projectBoardPoint({ x, y });
+        const point = townSurfacePoint({ x: seat.left, y: seat.top }, viewViewportSize);
+        cells.push({ x, y, left: point.x - width / 2, top: point.y - height / 2, width, height });
+      }
+    }
+    const corner = townSurfacePoint(
+      (() => { const seat = projectBoardPoint({ x: minX, y: minY }); return { x: seat.left, y: seat.top }; })(),
+      viewViewportSize,
+    );
+    return { cells, across, down, labelX: corner.x - width / 2, labelY: corner.y - height / 2 };
+  }, [townDragBounds, townArea, viewViewportSize, viewZoom, viewPan.x, viewPan.y,
+    artworkBoardOrigin.originLeft, artworkBoardOrigin.originTop]);
 
   // Source geometry for the scatter, read from the same live catalog the renderer draws from.
   const forestGeometry = useMemo<ForestSpeciesGeometry>(() => ({
@@ -8486,52 +8530,28 @@ export function LevelEditor(): ReactElement {
                     }}
                   >
                     {/* The committed selection stays outlined once the drag ends: Regenerate and
-                        Remove act on it, so it must remain visible. Dimmed while a new drag is in
-                        progress so the live one reads as the active shape. */}
-                    {townArea && townAreaSurfacePolygon ? (
-                      <svg className="le-town-drag-rect" aria-hidden="true">
-                        <polygon
-                          points={townAreaSurfacePolygon.map((p) => `${p.x},${p.y}`).join(' ')}
-                          fill={townDragBounds ? 'none' : 'rgba(226, 188, 108, 0.14)'}
-                          stroke={townDragBounds ? 'rgba(244, 214, 150, 0.32)' : 'rgba(255, 226, 150, 0.95)'}
-                          strokeWidth="2"
-                          strokeDasharray="7 5"
-                          vectorEffect="non-scaling-stroke"
-                        />
-                      </svg>
-                    ) : null}
-                    {(townDragBounds && townDragSurfacePolygon) || (townArea && townAreaSurfacePolygon) ? (
+                        Remove act on it, so it must remain visible. The live drag wins while one
+                        is in progress. */}
+                    {townHighlight ? (
                       <>
-                        {townDragBounds && townDragSurfacePolygon ? (
-                          <svg className="le-town-drag-rect" aria-hidden="true">
-                            {/* A grid rect is a DIAMOND on screen. Drawing a screen-space rectangle
-                                here would show an area the town does not actually use. */}
-                            <polygon
-                              points={townDragSurfacePolygon.map((p) => `${p.x},${p.y}`).join(' ')}
-                              fill="rgba(226, 188, 108, 0.12)"
-                              stroke="rgba(244, 214, 150, 0.92)"
-                              strokeWidth="1.5"
-                              strokeDasharray="5 3"
-                              vectorEffect="non-scaling-stroke"
-                            />
-                          </svg>
-                        ) : null}
-                        {(() => {
-                          const shown = townDragBounds ?? townArea;
-                          const polygon = townDragBounds ? townDragSurfacePolygon : townAreaSurfacePolygon;
-                          if (!shown || !polygon) return null;
-                          const tiles = townBoundsInTiles(shown);
-                          return (
-                            <span
-                              className="le-town-drag-size"
-                              aria-hidden="true"
-                              style={{
-                                left: `${Math.min(...polygon.map((p) => p.x))}px`,
-                                top: `${Math.min(...polygon.map((p) => p.y))}px`,
-                              }}
-                            >{tiles.across} × {tiles.down} tiles</span>
-                          );
-                        })()}
+                        {townHighlight.cells.map((cell) => (
+                          <span
+                            key={`${cell.x},${cell.y}`}
+                            className={`le-region-cell le-town-cell${townDragBounds ? '' : ' is-settled'}`}
+                            aria-hidden="true"
+                            style={{
+                              left: `${cell.left}px`,
+                              top: `${cell.top}px`,
+                              width: `${cell.width}px`,
+                              height: `${cell.height}px`,
+                            }}
+                          />
+                        ))}
+                        <span
+                          className="le-town-drag-size"
+                          aria-hidden="true"
+                          style={{ left: `${townHighlight.labelX}px`, top: `${townHighlight.labelY}px` }}
+                        >{townHighlight.across} × {townHighlight.down} tiles</span>
                       </>
                     ) : null}
                   </div>
