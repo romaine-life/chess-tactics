@@ -121,6 +121,56 @@ export function innerStroke(bytes, width = 1, colour = [5, 8, 12]) {
   return PNG.sync.write(png);
 }
 
+/**
+ * Crop to the occupied pixels, then pad to the square that bounds them.
+ *
+ * A 64x64 canvas is a frame, not a size: two icons that fill 20 and 62 of it
+ * draw at wildly different scales and carry wildly different invisible padding,
+ * which is what makes a row of marks look unevenly spaced. Trimming to the ink
+ * makes the element's box the ART, so the only spacing left is the one the
+ * layout asks for. Square, so the seat can stay square and `contain` can size
+ * every mark by its longest edge.
+ *
+ * Pure crop and pad — no resampling, so the bytes stay honestly native 1x.
+ * @returns {Buffer}
+ */
+export function trimToInkSquare(bytes) {
+  const png = PNG.sync.read(bytes);
+  const { width: w, height: h, data } = png;
+  let minX = w;
+  let minY = h;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < h; y += 1) {
+    for (let x = 0; x < w; x += 1) {
+      if (data[(y * w + x) * 4 + 3] < OPAQUE) continue;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+  }
+  if (maxX < 0) throw new Error('icon has no occupied pixels');
+  const inkWidth = maxX - minX + 1;
+  const inkHeight = maxY - minY + 1;
+  const side = Math.max(inkWidth, inkHeight);
+  const offsetX = Math.floor((side - inkWidth) / 2);
+  const offsetY = Math.floor((side - inkHeight) / 2);
+  const out = new PNG({ width: side, height: side });
+  out.data.fill(0);
+  for (let y = 0; y < inkHeight; y += 1) {
+    for (let x = 0; x < inkWidth; x += 1) {
+      const from = ((minY + y) * w + (minX + x)) * 4;
+      const to = ((offsetY + y) * side + (offsetX + x)) * 4;
+      out.data[to] = data[from];
+      out.data[to + 1] = data[from + 1];
+      out.data[to + 2] = data[from + 2];
+      out.data[to + 3] = data[from + 3];
+    }
+  }
+  return PNG.sync.write(out);
+}
+
 export function parseColour(value) {
   const hex = String(value).replace(/^#/, '');
   if (!/^[0-9a-f]{6}$/i.test(hex)) throw new Error(`--colour must be a 6-digit hex value, got ${value}`);
@@ -141,6 +191,8 @@ if ((process.argv[1] ?? '').endsWith('bake-icon-stroke.mjs')) {
   const mode = flag('mode', 'outer');
   if (mode !== 'outer' && mode !== 'inner') throw new Error('--mode must be outer or inner');
   const stroke = mode === 'outer' ? outerStroke : innerStroke;
-  writeFileSync(output, stroke(readFileSync(input), Number(flag('width', mode === 'outer' ? 2 : 1)), parseColour(flag('colour', '05080c'))));
+  let bytes = stroke(readFileSync(input), Number(flag('width', mode === 'outer' ? 2 : 1)), parseColour(flag('colour', '05080c')));
+  if (argv.includes('--trim')) bytes = trimToInkSquare(bytes);
+  writeFileSync(output, bytes);
   console.log(`wrote ${output}`);
 }

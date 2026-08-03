@@ -331,7 +331,20 @@ test('Run resource icon projection binds one native reviewed icon to its resourc
   assert.equal(runResourceIconMediaIssue(row), null);
   assert.match(runResourceIconMediaIssue(runResourceIcon({ domain: 'review-media' })), /ui-kit domain/);
   assert.match(runResourceIconMediaIssue(runResourceIcon({ role: 'media' })), /icon role/);
-  assert.match(runResourceIconMediaIssue(runResourceIcon({ height: 63 })), /64x64/);
+  // A trimmed icon ships at its own square side; only a non-square or out-of-range
+  // raster is refused, and the runtime frame must equal whatever side it shipped.
+  assert.match(runResourceIconMediaIssue(runResourceIcon({ height: 63 })), /square/);
+  assert.equal(runResourceIconMediaIssue(runResourceIcon({
+    width: 39,
+    height: 39,
+    metadata: { runtime: { ...row.metadata.runtime, frameWidth: 39, frameHeight: 39 } },
+  })), null);
+  assert.match(runResourceIconMediaIssue(runResourceIcon({ width: 39, height: 39 })), /39x39 frame/);
+  assert.match(runResourceIconMediaIssue(runResourceIcon({
+    width: 8,
+    height: 8,
+    metadata: { runtime: { ...row.metadata.runtime, frameWidth: 8, frameHeight: 8 } },
+  })), /16x16/);
   assert.match(runResourceIconMediaIssue(runResourceIcon({
     metadata: { runtime: { ...row.metadata.runtime, variant: 'favor' } },
   })), /variant/);
@@ -412,6 +425,15 @@ test('condition icon projection keeps all four card properties and granted state
     });
     assert.deepEqual(gameConditionIconSlot(progress.slot), { component: 'run-progress-icon', variant });
     assert.equal(gameConditionIconMediaIssue(progress), null);
+    // A Run-position mark ships trimmed to its own ink, so its square side is its
+    // art rather than a shared frame; the unit-ability icons above keep 64x64.
+    assert.equal(gameConditionIconMediaIssue({
+      ...progress,
+      width: 47,
+      height: 47,
+      metadata: { runtime: { ...progress.metadata.runtime, frameWidth: 47, frameHeight: 47 } },
+    }), null);
+    assert.match(gameConditionIconMediaIssue({ ...progress, width: 47 }), /square/);
   }
   assert.match(gameConditionIconMediaIssue(gameConditionIcon({ role: 'media' })), /icon role/);
   assert.match(gameConditionIconMediaIssue(gameConditionIcon({ width: 32 })), /64x64/);

@@ -26,12 +26,15 @@ import { useSceneParticipant } from './shell/SceneBoundary';
  * The public drawable catalog refuses a role bound to an unaccepted slot, so the
  * binding can only ever follow acceptance (ADR-0316 review shape, ADR-0318 roles).
  */
-export const RUN_PROGRESS_ICON_BATCH_ID = 'run-progress-icons-stroked-2026-08-02-v3';
+export const RUN_PROGRESS_ICON_BATCH_ID = 'run-progress-icons-trimmed-2026-08-02-v4';
 
+/** One mark in the title bar's measure row. `role` is the application-UI media
+ *  role the slot must be bound to once accepted, or null when the slot already
+ *  reaches the runtime through its own installed drawable (gold). */
 interface VariantDefinition {
-  variant: RunProgressIconVariant;
+  variant: RunProgressIconVariant | 'gold';
   slot: string;
-  role: string;
+  role: string | null;
   title: string;
   idea: string;
 }
@@ -57,6 +60,13 @@ export const RUN_PROGRESS_ICON_VARIANTS: readonly VariantDefinition[] = Object.f
     role: 'ui-kit-icons-run-battle-png',
     title: 'Battle',
     idea: 'Which Battle of that Conflict the Run is on.',
+  },
+  {
+    variant: 'gold',
+    slot: 'ui/run/resources/gold.png',
+    role: null,
+    title: 'Gold',
+    idea: 'The fourth mark in the same row. Its installed drawable already binds this slot, so installing here only swaps the bytes — and swaps them everywhere gold is drawn.',
   },
 ]);
 
@@ -163,8 +173,10 @@ function InstallControl({
         expectedSlotRevision: slot?.rowRevision ?? 0,
         expectedActiveVersionId: slot?.activeVersionId ?? null,
       }]);
-      setStatus('Binding the title-bar media role…');
-      await bindApplicationUiRole(definition.role, definition.slot);
+      if (definition.role) {
+        setStatus('Binding the title-bar media role…');
+        await bindApplicationUiRole(definition.role, definition.slot);
+      }
       setStatus(`Installed. The title bar paints this ${definition.title} icon now — reload a Run screen to see it.`);
       onInstalled();
     } catch (reason) {
@@ -211,6 +223,7 @@ function ChipPreview({
           battle={3}
           battlesInConflict={3}
           ataraxiaIconSrc={definition.variant === 'ataraxia' ? src : undefined}
+          goldIconSrc={definition.variant === 'gold' ? src : undefined}
           conflictIconSrc={definition.variant === 'conflict' ? src : undefined}
           battleIconSrc={definition.variant === 'battle' ? src : undefined}
         />
@@ -242,8 +255,9 @@ export function RunProgressIconReview(): ReactElement {
       <OuterChromeBox chromeConsumer="run-progress-icon-review" titled className="run-relic-review-panel">
         <OuterChromeHeader title="Run Title-Bar Icon Review" />
         <p>
-          Each option is mounted in the real title-bar measure row and at its native 64×64
-          pixels. Nothing is installed until you install one; the seat stays reserved until then.
+          Each option is mounted in the real title-bar measure row and at its own native
+          pixels — every mark is trimmed to its occupied pixels, so its raster IS its art.
+          Nothing is installed until you install one; the seat stays reserved until then.
         </p>
         {error ? <p role="alert">{error}</p> : null}
         {!catalog && !error ? <p role="status">Loading candidates…</p> : null}
@@ -267,8 +281,6 @@ export function RunProgressIconReview(): ReactElement {
                       <img
                         className="run-progress-icon-review-native"
                         src={version.media!.url}
-                        width="64"
-                        height="64"
                         alt=""
                         draggable={false}
                       />

@@ -75,6 +75,24 @@ shadow standing in for a stroke the asset should carry — the wrong layer
 (ADR-0011). Only the measure's NUMBER keeps a text shadow, which is ordinary type
 treatment.
 
+**A mark's raster is its art, not a frame.** The same bake trims every mark to its
+occupied pixels and pads it to the square that bounds them. A 64×64 canvas filled
+by anywhere from 20 to 62 pixels draws at wildly different scales and carries that
+much invisible padding, which is what makes a row of marks look unevenly spaced.
+Trimmed, one seat size draws every mark the same and the only spacing left is the
+gap the row asks for — so the seat needs no per-icon compensating transform, and
+the two that existed are gone.
+
+The `run-progress-icon` and `run-resource-icon` families therefore accept a square
+raster from 16×16 through 64×64 whose runtime frame equals its own side, rather
+than exactly 64×64. Historical full-frame rasters stay valid: they are the case
+where the ink already filled the frame. The established unit-ability and
+card-property icons keep their exact 64×64 contract.
+
+**The gold coin is the fourth mark in that row**, so it takes the same stroke and
+the same trim. It is a shared production asset: those exact bytes are what every
+surface that draws gold now draws.
+
 **A seat is reserved before its icon decision exists.** `installedUiMediaIfPresent`
 returns null instead of failing closed, and the seat keeps its geometry, so
 installing an icon later cannot move the label beside it. Required chrome keeps

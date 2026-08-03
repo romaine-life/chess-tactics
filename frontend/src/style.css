@@ -18885,7 +18885,6 @@ button.tileset-relationship-cell {
   image-rendering: pixelated;
   inline-size: 100%;
   object-fit: contain;
-  transform: scale(1.55);
 }
 
 .run-gold-icon.is-unavailable {
@@ -18897,8 +18896,8 @@ button.tileset-relationship-cell {
 }
 
 .run-gold-amount--title .run-gold-icon {
-  block-size: 22px;
-  inline-size: 22px;
+  block-size: var(--run-measure-seat);
+  inline-size: var(--run-measure-seat);
 }
 
 .run-gold-amount--button {
@@ -18916,21 +18915,21 @@ button.tileset-relationship-cell {
    beside it. Layout only: the chip frame is the kit panel, never a second surface. */
 .run-progress-icon {
   align-items: center;
-  block-size: 22px;
+  block-size: var(--run-measure-seat);
   display: inline-flex;
   flex: none;
-  inline-size: 22px;
+  inline-size: var(--run-measure-seat);
   justify-content: center;
 }
 
+/* Every mark ships trimmed to its own ink, so the seat needs no per-icon
+   compensation: contain in a square seat draws each one at the same size, and the
+   only spacing left is the gap the row asks for. */
 .run-progress-icon img {
   block-size: 100%;
   image-rendering: pixelated;
   inline-size: 100%;
   object-fit: contain;
-  /* Match the gold coin's drawn presence: unboxed marks carry the bar, so they
-     overfill their seat by the same amount the coin does. */
-  transform: scale(1.5);
 }
 
 /* A measure is one icon and its number, sitting bare on the bar — Ataraxia tier,
@@ -18938,6 +18937,10 @@ button.tileset-relationship-cell {
    marks. Only the War/Battle identity, which cannot be drawn, keeps a chip
    frame; a measure never gets a box of its own. */
 .run-topbar-measures {
+  /* One seat for every mark, because every mark is trimmed to its own ink: the
+     coin, the wreath and the drum all draw at the same size, and the gap between
+     a mark and its number is the same gap everywhere in the row. */
+  --run-measure-seat: 30px;
   align-items: center;
   display: flex;
   gap: var(--ds-inline);
@@ -19208,6 +19211,7 @@ button.tileset-relationship-cell {
   block-size: 64px;
   image-rendering: pixelated;
   inline-size: 64px;
+  object-fit: contain;
 }
 
 .run-progress-icon-review-grid figcaption {

@@ -38,6 +38,7 @@ export function RunTitleBarMeasures({
   battle,
   battlesInConflict,
   ataraxiaIconSrc,
+  goldIconSrc,
   conflictIconSrc,
   battleIconSrc,
 }: {
@@ -47,6 +48,7 @@ export function RunTitleBarMeasures({
   battle: number;
   battlesInConflict: number;
   ataraxiaIconSrc?: string;
+  goldIconSrc?: string;
   conflictIconSrc?: string;
   battleIconSrc?: string;
 }): ReactElement {
@@ -59,7 +61,7 @@ export function RunTitleBarMeasures({
         <RunProgressIcon variant="ataraxia" src={ataraxiaIconSrc} />
         <span>{tier}</span>
       </span>
-      <RunGoldAmount valueTenths={goldTenths} className="run-gold-amount--title" />
+      <RunGoldAmount valueTenths={goldTenths} className="run-gold-amount--title" iconSrc={goldIconSrc} />
       <span className="run-topbar-measure" title={`Conflict ${conflict}`}>
         <RunProgressIcon variant="conflict" src={conflictIconSrc} />
         <span>{conflict}</span>
