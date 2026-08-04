@@ -309,12 +309,42 @@ describe('crafted Run documents', () => {
     expect(() => craft('?craft=deployment&battle=9')).toThrow(/has 4 Battles/);
   });
 
+  it('stops on the Battle report the aftermath phase names', () => {
+    const run = craft('?craft=aftermath&battle=2');
+    expect(run.phase).toBe('aftermath');
+    expect(run.battleIndex).toBe(1);
+    expect(run.shop).toBeNull();
+    // The reward is reported and not yet banked, exactly as a played Battle leaves it.
+    expect(run.aftermath?.goldTenths).toBe(GOLD_SCALE);
+    expect(run.aftermath?.turns).toBe(14);
+    expect(run.aftermath?.elapsedMs).toBeGreaterThanOrEqual(277_000);
+  });
+
+  it('puts the reported result a crafted Battle cannot produce on its own', () => {
+    const run = craft('?craft=aftermath&battle=2&turns=31&seconds=90&fallen=2');
+    expect(run.aftermath?.turns).toBe(31);
+    expect(run.aftermath?.elapsedMs).toBeGreaterThanOrEqual(90_000);
+    expect(run.aftermath?.elapsedMs).toBeLessThan(120_000);
+    expect(run.aftermath?.fallenUnits).toHaveLength(2);
+    expect(run.aftermath?.fallenUnits.every((unit) => unit.type !== 'king')).toBe(true);
+    // Fallen units are not survivors, so the two lists cannot both claim them.
+    const survivors = new Set(run.aftermath?.survivingUnitIds ?? []);
+    expect(run.aftermath?.fallenUnits.some((unit) => survivors.has(unit.id))).toBe(false);
+  });
+
+  it('refuses a Battle report the Run has no room for', () => {
+    expect(() => craft('?craft=aftermath&battle=4')).toThrow(/ends the War/);
+    expect(() => craft('?craft=aftermath&battle=2&fallen=99')).toThrow(/could fall/);
+    expect(() => craft('?craft=shop&battle=3&turns=12')).toThrow(/belong to craft=aftermath/);
+  });
+
   it('crafts documents the Run loader accepts unchanged', () => {
     for (const search of [
       '?craft=shop',
       '?craft=shop&battle=3&gold=25&army=knight,rook&offers=queen,pawn+pawn:pestiferous',
       '?craft=deployment&battle=2',
       '?craft=battle&battle=2',
+      '?craft=aftermath&battle=2&turns=21&seconds=402&fallen=2',
       '?craft=victory',
     ]) {
       const run = craft(search);

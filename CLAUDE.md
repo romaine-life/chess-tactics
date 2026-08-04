@@ -312,10 +312,11 @@ hand-authored one-off leaves a durable link behind:
 /run?craft=shop&battle=3&gold=25&army=knight,rook&offers=queen,pawn+pawn:concinnous,rook:legatine
 /run?craft=deployment&battle=2&army=rook,rook,bishop,pawn&gold=12
 /run?craft=battle&battle=4&lipsana=fair-scales
+/run?craft=aftermath&battle=3&turns=21&seconds=402&fallen=2
 /run?craft=victory&gold=40
 ```
 
-- `craft=shop|deployment|battle|victory` — the phase to land on.
+- `craft=shop|deployment|battle|aftermath|victory` — the phase to land on.
 - `battle=N` — the Battle you are at, 1-based. For a Shop that is the Shop you leave into
   Battle N, so `battle=1` is the opening Shop (which takes no overrides — the Run contract
   pins its offers, army and 8 gold).
@@ -324,6 +325,10 @@ hand-authored one-off leaves a durable link behind:
 - Shop only: `offers=<card>[,<card>]` where a card is its pieces joined by `+` with an
   optional `:legatine|:concinnous|:pestiferous|:hieratic`; `loot=<id,id>`; `paid=<id>`. Pieces accept
   names, chess letters, or a bare deck id (`pawn,pawn,knight` = `p,p,n` = `ppk`).
+- Aftermath only: `turns=<n>`, `seconds=<n>` and `fallen=<n>` write the Battle report a
+  crafted Battle cannot produce on its own — it is placed, not played. `battle=N` is the
+  Battle just won; the FINAL Battle has no aftermath (its report is the War victory
+  screen), so craft `victory` for that one.
 - `war=<id>` picks the War (default: the first Run-eligible official one), `seed=<n>` and
   `tier=0|1` fix the roll. `view=army|lipsana|sell` still applies and survives the craft.
 - `cards=<card>[,<card>]` — the cards the Run already HOLDS, written exactly like `offers`.

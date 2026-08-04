@@ -4048,7 +4048,7 @@ async function main() {
     { id: 'rpp', offerId: 'opening-2-rpp', pieces: ['rook', 'pawn', 'pawn'], value: 7, cost: 9, cardType: 'concinnous', effectSeed: 1706, cacochymicPieceIndex: null, effectTargetIndex: 0 },
   ];
   const activeRunDocument = {
-    formatVersion: 15,
+    formatVersion: 16,
     id: 'run-smoke',
     seed: 17,
     ataraxiaTier: 1,

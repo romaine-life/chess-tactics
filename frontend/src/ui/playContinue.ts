@@ -30,7 +30,9 @@ function parsedTime(value: string | undefined): number {
 function runPhase(run: RunDocument): string {
   return run.phase === 'battle'
     ? `Battle ${run.battleIndex + 1} of ${run.war.battles.length}`
-    : run.phase === 'shop'
+    : run.phase === 'aftermath'
+      ? `Battle ${run.battleIndex + 1} won`
+      : run.phase === 'shop'
       ? `Shop after Battle ${run.battleIndex + 1}`
       : run.phase === 'victory'
         ? 'War won'

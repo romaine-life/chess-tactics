@@ -18471,7 +18471,7 @@ app.put('/api/run-progression', async (req, res) => {
 // --- Account-scoped active Run (ADR-0193) ---------------------------------
 // Anonymous Runs stay in browser storage. Once signed in, the client adopts that
 // document here; the server owns one CAS-updated active Run per account.
-const ACTIVE_RUN_PHASES = new Set(['bona-vacantia', 'deployment', 'battle', 'shop', 'victory']);
+const ACTIVE_RUN_PHASES = new Set(['aftermath', 'bona-vacantia', 'deployment', 'battle', 'shop', 'victory']);
 const ACTIVE_RUN_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
 const ACTIVE_RUN_PIECE_VALUES = Object.freeze({ pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9, king: 0 });
 const ACTIVE_RUN_ABILITIES = new Set(['adlected', 'eutactic', 'agminate']);
@@ -18496,6 +18496,15 @@ const ACTIVE_RUN_VACANTIA_FIELDS = new Set([
   'victoryGoldTenths',
   'offers',
 ]);
+const ACTIVE_RUN_AFTERMATH_FIELDS = new Set([
+  'battleIndex',
+  'turns',
+  'elapsedMs',
+  'goldTenths',
+  'bonusGoldTenths',
+  'survivingUnitIds',
+  'fallenUnits',
+]);
 const RUN_LIPSANA = Array.isArray(serverRender?.RUN_LIPSANA) ? serverRender.RUN_LIPSANA : [];
 const LIPSANON_BY_ID = serverRender?.LIPSANON_BY_ID ?? {};
 const RUN_LIPSANON_IDS = new Set(RUN_LIPSANA.map((lipsanon) => lipsanon.id));
@@ -18515,7 +18524,7 @@ function openingLipsanonGoldTenths(run) {
 
 function validateActiveRunBody(run) {
   if (!run || typeof run !== 'object' || Array.isArray(run)) return 'run must be an object';
-  if (run.formatVersion !== 15) return 'run.formatVersion is unsupported';
+  if (run.formatVersion !== 16) return 'run.formatVersion is unsupported';
   if (typeof run.id !== 'string' || !run.id || run.id.length > 160) return 'run.id is invalid';
   if (!isFiniteInteger(run.seed) || run.seed < 0 || run.seed > 0xffffffff) return 'run.seed is invalid';
   if (run.formatVersion >= 5 && run.ataraxiaTier !== 0 && run.ataraxiaTier !== 1) return 'run.ataraxiaTier is invalid';
@@ -18758,6 +18767,42 @@ function validateActiveRunBody(run) {
       }
     } else if (run.vacantia !== null && run.vacantia !== undefined) {
       return 'run.vacantia is invalid outside the bona-vacantia phase';
+    }
+  }
+  // The aftermath report is the aftermath phase: it exists only there, and cannot be absent
+  // there, because the shop that follows is opened from the survivors it carries.
+  if (run.formatVersion >= 16) {
+    if (run.phase === 'aftermath') {
+      if (!isObjectRecord(run.aftermath)) return 'run.aftermath is required';
+      const aftermath = run.aftermath;
+      if (Object.keys(aftermath).some((field) => !ACTIVE_RUN_AFTERMATH_FIELDS.has(field))) {
+        return 'run.aftermath contains an unsupported field';
+      }
+      if (!isFiniteInteger(aftermath.battleIndex) || aftermath.battleIndex < 0) return 'run.aftermath.battleIndex is invalid';
+      if (!isFiniteInteger(aftermath.turns) || aftermath.turns < 0) return 'run.aftermath.turns is invalid';
+      if (aftermath.elapsedMs !== null && (!isFiniteInteger(aftermath.elapsedMs) || aftermath.elapsedMs < 0)) {
+        return 'run.aftermath.elapsedMs is invalid';
+      }
+      for (const field of ['goldTenths', 'bonusGoldTenths']) {
+        if (!isFiniteInteger(aftermath[field]) || aftermath[field] < 0) return `run.aftermath.${field} is invalid`;
+      }
+      if (aftermath.bonusGoldTenths > aftermath.goldTenths) return 'run.aftermath.bonusGoldTenths is invalid';
+      if (
+        !Array.isArray(aftermath.survivingUnitIds)
+        || aftermath.survivingUnitIds.length > 100
+        || aftermath.survivingUnitIds.some((id) => typeof id !== 'string' || !id)
+      ) return 'run.aftermath.survivingUnitIds is invalid';
+      if (!Array.isArray(aftermath.fallenUnits) || aftermath.fallenUnits.length > 100) {
+        return 'run.aftermath.fallenUnits is invalid';
+      }
+      for (const unit of aftermath.fallenUnits) {
+        if (!isObjectRecord(unit)) return 'run.aftermath.fallenUnits is invalid';
+        if (typeof unit.id !== 'string' || !unit.id || unit.id.length > 160) return 'run.aftermath.fallenUnits is invalid';
+        if (typeof unit.name !== 'string' || unit.name.length > 160) return 'run.aftermath.fallenUnits is invalid';
+        if (!ACTIVE_RUN_PIECES.has(unit.type)) return 'run.aftermath.fallenUnits is invalid';
+      }
+    } else if (run.aftermath !== null && run.aftermath !== undefined) {
+      return 'run.aftermath is invalid outside the aftermath phase';
     }
   }
   if (run.shop !== null && run.shop !== undefined) {

@@ -20,7 +20,7 @@ export {
 // Format 15 renamed the held-lipsanon field to `lipsana` (ADR-0376). The old `lipsana` key is
 // not read: docs/migration-policy.md prohibits a compatibility read, so a document written
 // before the rename is unsupported rather than half-migrated.
-export const RUN_FORMAT_VERSION = 15;
+export const RUN_FORMAT_VERSION = 16;
 export const GOLD_SCALE = 10;
 export const RUN_STARTING_GOLD = 8;
 export const RUN_STARTING_GOLD_TENTHS = RUN_STARTING_GOLD * GOLD_SCALE;
@@ -293,8 +293,12 @@ export interface RunWarSnapshot {
  * into the Conflict's first Battle. It replaced the loot lipsanon that used to be won at a
  * Conflict's END, inside the shop -- same three-per-run cadence, opposite end, so the
  * choice is made looking forward rather than handed out as a reward.
+ *
+ * 'aftermath' closes a Battle: what the Battle paid and cost gets its own screen before
+ * the Run moves on. The reward used to be reported by a line inside the shop, which put
+ * the result of the fight in the room where the money is spent.
  */
-export type RunPhase = 'bona-vacantia' | 'deployment' | 'battle' | 'shop' | 'victory';
+export type RunPhase = 'aftermath' | 'bona-vacantia' | 'deployment' | 'battle' | 'shop' | 'victory';
 
 export interface RunDeploymentState {
   battleIndex: number;
@@ -308,6 +312,10 @@ export interface RunDeploymentState {
 
 export interface RunBattleRuntime {
   battleIndex: number;
+  /** Wall clock at the moment the Battle started, so the aftermath can report how long it
+   * took. Stored on the document rather than held in the battlefield's own memory, which a
+   * reload discards. Absent on a Battle already in progress when this arrived. */
+  startedAtMs?: number;
   initiallyDeployedUnitIds: string[];
   reserveUnitIds: string[];
   reservistPoolUnitIds: string[];
@@ -315,6 +323,41 @@ export interface RunBattleRuntime {
   observedDeadUnitIds: string[];
   cashedOutUnitIds: string[];
   reinforcementSequence: number;
+}
+
+/** One unit that fell during the Battle. Persistent units are not lost for falling -- they
+ * return for the next Battle -- so this is the Battle's casualty list, not the roster's. */
+export interface RunAftermathFallenUnit {
+  id: string;
+  name: string;
+  type: RunArmyPieceType;
+}
+
+/**
+ * What one Battle paid and cost, reported on its own screen before the Run moves on.
+ *
+ * The numbers are captured at the moment the Battle ends because nothing else keeps them:
+ * the Battle's runtime is torn down when the shop opens, and the battlefield's turn count
+ * and clock live only in the board store, which unmounts with the board.
+ */
+export interface RunAftermathState {
+  battleIndex: number;
+  /** Completed player->enemy rounds, as the Battle's own objective clock counted them. */
+  turns: number;
+  /** Wall-clock time on the Battle, or null when its start was never recorded. */
+  elapsedMs: number | null;
+  /** Total gold the Battle awarded -- banked when the player leaves this screen. */
+  goldTenths: number;
+  /** The part of `goldTenths` a lipsanon paid on top of the Battle's own reward. */
+  bonusGoldTenths: number;
+  survivingUnitIds: string[];
+  fallenUnits: RunAftermathFallenUnit[];
+}
+
+/** What the battlefield hands back when its Battle is won. */
+export interface RunBattleReport {
+  survivingUnitIds: readonly string[];
+  turns: number;
 }
 
 export interface RunShopState {
@@ -382,6 +425,7 @@ export interface RunDocument {
   nextCardSequence: number;
   deployment: RunDeploymentState | null;
   battleRuntime: RunBattleRuntime | null;
+  aftermath: RunAftermathState | null;
   shop: RunShopState | null;
   vacantia: RunVacantiaState | null;
 }
@@ -748,6 +792,7 @@ export function createRun(
     nextCardSequence: 1,
     deployment: null,
     battleRuntime: null,
+    aftermath: null,
     shop: null,
     vacantia: null,
   };
@@ -1132,8 +1177,18 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
   if (raw.phase === 'bona-vacantia' && Number(raw.formatVersion) !== RUN_FORMAT_VERSION) {
     throw new Error('Older Run Shop documents are unsupported.');
   }
+  // The aftermath phase IS its report; a document standing in it without one has nothing to
+  // show and no survivors to open the shop with.
+  if (raw.phase === 'aftermath' && !run.aftermath) {
+    throw new Error('A Run aftermath document with no battle report is unsupported.');
+  }
   let next = run;
   if (next.vacantia === undefined) next = { ...next, vacantia: null };
+  // The aftermath report belongs to the Battle it closed, so it is not carried into any
+  // later phase -- a document written before format 15 simply has none.
+  if (next.aftermath === undefined || (next.phase !== 'aftermath' && next.aftermath !== null)) {
+    next = { ...next, aftermath: next.phase === 'aftermath' ? next.aftermath ?? null : null };
+  }
   if ('draftOffers' in raw || 'chosenDraftId' in raw) {
     const withoutDraft = { ...raw } as Record<string, unknown>;
     delete withoutDraft.draftOffers;
@@ -1377,6 +1432,7 @@ export function beginBattle(
     deployment: { ...run.deployment, blockedUnitIds: [...blockedUnitIds] },
     battleRuntime: {
       battleIndex: run.battleIndex,
+      startedAtMs: Date.now(),
       initiallyDeployedUnitIds: [...deployedUnitIds],
       reserveUnitIds: [...reserveUnitIds],
       reservistPoolUnitIds: [],
@@ -1394,6 +1450,9 @@ export function restartBattle(run: RunDocument): RunDocument {
     ...run,
     battleRuntime: {
       battleIndex: run.battleIndex,
+      // A retry is a fresh Battle, so its clock starts again rather than counting the
+      // attempt that was thrown away.
+      startedAtMs: Date.now(),
       initiallyDeployedUnitIds: run.army
         .filter((unit) => !run.deployment?.blockedUnitIds.includes(unit.id))
         .map((unit) => unit.id),
@@ -1588,24 +1647,81 @@ export function deterioratePestiferousCards(run: RunDocument, battleIndex: numbe
   };
 }
 
-export function openShop(run: RunDocument, survivingUnitIds: readonly string[]): RunDocument {
+/**
+ * What the Battle just fought pays out: its own reward, plus whatever a lipsanon adds on top
+ * of it. Shared by the aftermath report and the transition that banks it, so the screen
+ * cannot quote a number the Run then fails to pay.
+ */
+function battleRewardTenths(run: RunDocument, survivingUnitIds: readonly string[]): {
+  victoryGoldTenths: number;
+  bonusGoldTenths: number;
+} {
+  const survivorSet = new Set(survivingUnitIds);
+  return {
+    victoryGoldTenths: battleVictoryGoldTenths(run.war.battles[run.battleIndex].level),
+    bonusGoldTenths: hasLipsanon(run, 'mercenarys-rifle')
+      ? run.army.reduce((total, unit) => total + (survivorSet.has(unit.id) ? PIECE_VALUE[unit.type] : 0), 0)
+      : 0,
+  };
+}
+
+/**
+ * The Battle is won. Its result gets a screen of its own before the Run moves on, so the
+ * shop is not opened underneath a report of the fight that paid for it.
+ *
+ * The final Battle is the exception on both counts: it ends the War, whose own victory
+ * screen is the report, and it grants no spendable reward (ADR-0220) -- so an aftermath
+ * screen there would announce gold that is never banked.
+ */
+export function closeBattle(run: RunDocument, report: RunBattleReport): RunDocument {
   if (run.phase !== 'battle') return run;
+  if (run.battleIndex >= run.war.battles.length - 1) return openShop(run, report.survivingUnitIds);
+  const { victoryGoldTenths, bonusGoldTenths } = battleRewardTenths(run, report.survivingUnitIds);
+  const startedAtMs = run.battleRuntime?.startedAtMs;
+  const armyById = new Map(run.army.map((unit) => [unit.id, unit]));
+  return touch({
+    ...run,
+    phase: 'aftermath',
+    aftermath: {
+      battleIndex: run.battleIndex,
+      turns: Number.isSafeInteger(report.turns) && report.turns > 0 ? report.turns : 0,
+      elapsedMs: Number.isSafeInteger(startedAtMs)
+        ? Math.max(0, Date.now() - (startedAtMs as number))
+        : null,
+      goldTenths: victoryGoldTenths + bonusGoldTenths,
+      bonusGoldTenths,
+      survivingUnitIds: [...report.survivingUnitIds],
+      fallenUnits: (run.battleRuntime?.observedDeadUnitIds ?? []).flatMap((id) => {
+        const unit = armyById.get(id);
+        return unit ? [{ id: unit.id, name: unit.name, type: unit.type }] : [];
+      }),
+    },
+  });
+}
+
+/** Leave the aftermath report; whatever follows the Battle opens now. */
+export function leaveAftermath(run: RunDocument): RunDocument {
+  if (run.phase !== 'aftermath' || !run.aftermath) return run;
+  return openShop(run, run.aftermath.survivingUnitIds);
+}
+
+export function openShop(run: RunDocument, survivingUnitIds: readonly string[]): RunDocument {
+  // Reachable from the Battle itself (the final one, and every fast-forwarded Battle the
+  // crafter plays) and from the aftermath report the other Battles stop at.
+  if (run.phase !== 'battle' && run.phase !== 'aftermath') return run;
   const finalBattle = run.battleIndex >= run.war.battles.length - 1;
 
-  const survivorSet = new Set(survivingUnitIds);
-  const rifleTenths = hasLipsanon(run, 'mercenarys-rifle')
-    ? run.army.reduce((total, unit) => total + (survivorSet.has(unit.id) ? PIECE_VALUE[unit.type] : 0), 0)
-    : 0;
-  const victoryGoldTenths = battleVictoryGoldTenths(run.war.battles[run.battleIndex].level);
+  const { victoryGoldTenths, bonusGoldTenths: rifleTenths } = battleRewardTenths(run, survivingUnitIds);
   const deteriorated = deterioratePestiferousCards(run, run.battleIndex);
   if (finalBattle) {
-    return touch({ ...deteriorated, phase: 'victory', shop: null, deployment: null, battleRuntime: null });
+    return touch({ ...deteriorated, phase: 'victory', shop: null, deployment: null, battleRuntime: null, aftermath: null });
   }
   const banked: RunDocument = {
     ...deteriorated,
     goldTenths: run.goldTenths + victoryGoldTenths + rifleTenths,
     deployment: null,
     battleRuntime: null,
+    aftermath: null,
   };
   // A loot Battle closes a Conflict, so the next one opens here -- before the shop, so the
   // player inherits the lipsanon and then decides what to spend on. The Battle's gold is
