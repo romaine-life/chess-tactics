@@ -307,11 +307,24 @@ export function RelicMatStage({
           beats recomputing the geometry, and it is correct the moment the row reflows. */}
       {taken ? (
         <div className="relic-mat-landing" data-testid="relic-mat-landing" aria-label="Relics sent to the corner">
-          {taken.map((relicId) => (
-            <span className="relic-mat-landing-slot" key={relicId}>
-              <RunRelicIcon relicId={relicId} />
-            </span>
-          ))}
+          {taken.map((relicId) => {
+            const relic = RUN_RELIC_BY_ID[relicId];
+            // The strip's own classes, not a lookalike: a landed relic has to behave the way
+            // a held one does, or the corner stops being a preview of where it went.
+            return (
+              <Tooltip
+                className="relic-mat-landing-slot run-relic-inventory-item"
+                key={relicId}
+                triggerClassName="run-relic-inventory-trigger"
+                popupMaxInlineSize={288}
+                label={`${relic.name}. ${relic.description}`}
+                title={relic.name}
+                trigger={<RunRelicIcon relicId={relicId} />}
+              >
+                <span>{relic.description}</span>
+              </Tooltip>
+            );
+          })}
           <span className="relic-mat-landing-slot" ref={landingSlot} aria-hidden="true" />
         </div>
       ) : null}

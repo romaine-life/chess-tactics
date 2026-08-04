@@ -19342,6 +19342,22 @@ button.tileset-relationship-cell {
   filter: drop-shadow(0 0 4px #9fe7ff);
 }
 
+/* A held relic answers the pointer. It carries a tip that only appears on hover, so without
+   a highlight there is nothing to say it is worth hovering -- the strip read as decoration.
+   Same language as the mat, at HUD scale: 64px x 1.125 is 72px exactly, so the sprite still
+   lands on whole pixels. The cyan ring above stays the keyboard affordance. */
+.run-relic-inventory-item .run-relic-icon {
+  overflow: visible;
+  transition:
+    filter 180ms ease,
+    scale 180ms cubic-bezier(0.2, 0.75, 0.3, 1);
+}
+
+.run-relic-inventory-trigger:is(:hover, :focus-visible) .run-relic-icon {
+  filter: brightness(1.18) drop-shadow(0 0 6px rgb(255 226 168 / 0.6));
+  scale: 1.125;
+}
+
 .run-relic-inventory-item .run-relic-icon,
 .run-relic-inventory-item .run-relic-icon img {
   block-size: 64px;
