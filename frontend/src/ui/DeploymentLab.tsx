@@ -90,6 +90,11 @@ const ROUTE_KEYS = ['df', 'dr', 'dg', 'ds', 'dl', 'dk', 'dmr', 'dsc', 'du', 'do'
 const PIECE_CODE: Record<PlayablePieceType, string> = {
   pawn: 'p', knight: 'n', bishop: 'b', rook: 'r', queen: 'q', king: 'k',
 };
+// Route encoding needs n/k to distinguish Knight from King. Card identity predates that
+// route and uses the deck's p/k/b/r/q alphabet, where Kings never appear on ordinary cards.
+const CARD_PIECE_CODE: Record<Exclude<PlayablePieceType, 'king'>, string> = {
+  pawn: 'p', knight: 'k', bishop: 'b', rook: 'r', queen: 'q',
+};
 const PIECE_BY_CODE = Object.fromEntries(
   Object.entries(PIECE_CODE).map(([type, code]) => [code, type]),
 ) as Record<string, PlayablePieceType>;
@@ -380,7 +385,7 @@ function buildCards(
       const coreId = [...entries]
         .sort((a, b) => pieceOrder.indexOf(a.unit.type as Exclude<PlayablePieceType, 'king'>)
           - pieceOrder.indexOf(b.unit.type as Exclude<PlayablePieceType, 'king'>))
-        .map((entry) => PIECE_CODE[entry.unit.type])
+        .map((entry) => CARD_PIECE_CODE[entry.unit.type as Exclude<PlayablePieceType, 'king'>])
         .join('');
       return {
         id: `deployment-lab-card-${index + 1}`,

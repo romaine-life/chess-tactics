@@ -291,6 +291,7 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).not.toContain('levelToEditorBoard');
     expect(runScreen).toContain("legal ? 'is-move' : 'is-deployment-blocked'");
     expect(runScreen).toContain('aria-disabled={!legal}');
+    expect(runScreen).toContain('if (event.button === 0) event.stopPropagation();');
     expect(runScreen).toContain('onClick={legal ? () => replace(placeAdlectedDeploymentUnit(prepared, level, cell)) : undefined}');
     expect(runScreen).toContain('boardLabCellPosition(hoveredPlacementCell)');
     expect(runScreen).toContain('left: hoveredPlacementSeat.left');

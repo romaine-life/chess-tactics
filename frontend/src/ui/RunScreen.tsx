@@ -670,6 +670,12 @@ function useRunDeploymentPresentation({
           aria-label={legal ? `Place ${runUnitRosterLabel(activeAdlected)} on ${label}` : `${label} is unavailable`}
           aria-disabled={!legal}
           style={visualFootprintStyle}
+          onPointerDown={(event) => {
+            // ViewPane owns primary-drag panning on its bubbling path. An Adlected square is
+            // a real button, so keep its primary press paired with its release; secondary
+            // button panning still reaches ViewPane's capture handler.
+            if (event.button === 0) event.stopPropagation();
+          }}
           onPointerEnter={() => setHoveredCellKey(cellKey)}
           onPointerLeave={() => setHoveredCellKey((current) => current === cellKey ? null : current)}
           onClick={legal ? () => replace(placeAdlectedDeploymentUnit(prepared, level, cell)) : undefined}
