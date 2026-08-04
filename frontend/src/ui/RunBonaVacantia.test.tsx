@@ -120,6 +120,18 @@ describe('Bona Vacantia relics', () => {
     expect(css).toMatch(/\.relic-mat-art \{[^}]*--relic-tray-stroke:/);
   });
 
+  it('flies a taken relic along one straight segment', () => {
+    // Splitting x and y across two elements is what curves a path: different easings reach
+    // their halfway points at different moments and the relic bows off the line between its
+    // endpoints. One translate, on one element, is the whole of the contract.
+    const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+    expect(css).toMatch(/\.run-relic-flight\.is-landed \{\s*translate: var\(--relic-flight-x\) var\(--relic-flight-y\);/);
+    const lift = css.slice(css.indexOf('.run-relic-flight-lift {'));
+    const body = lift.slice(0, lift.indexOf('}'));
+    expect(body).toContain('scale');
+    expect(body).not.toContain('translate');
+  });
+
   it('holds the hovered relic at a whole-pixel size', () => {
     // The icons are 64px sprites drawn 1:1 and rendered nearest-neighbour. A fractional
     // hover size lands the sampling grid between source pixels and the edges shimmer, so the

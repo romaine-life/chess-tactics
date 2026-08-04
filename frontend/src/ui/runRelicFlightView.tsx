@@ -114,9 +114,9 @@ export function useRelicFlight(onLanded: (relicId: RunRelicId) => void): {
           if (event.propertyName === 'translate') settle();
         }}
       >
-        {/* Two axes, two easings: the relic clears the mat early and then carries across,
-            which reads as being picked up rather than dragged along a ruler. It also arrives
-            at the size it will keep, shrinking out of its hover lift. */}
+        {/* The travel is one straight segment, owned entirely by the element above. This
+            inner one carries only the size, shrinking out of the hover lift as it goes —
+            scaling does not move the centre, so it cannot bend the line. */}
         <div className="run-relic-flight-lift">
           <RunRelicIcon relicId={flight.relicId} />
         </div>

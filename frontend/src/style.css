@@ -19844,7 +19844,11 @@ button.tileset-relationship-cell {
   --relic-flight-duration: 560ms;
   pointer-events: none;
   position: fixed;
-  transition: translate var(--relic-flight-duration) cubic-bezier(0.62, 0.02, 0.3, 1);
+  /* ONE translate on ONE element, so the relic travels the straight segment between where it
+     was laid out and where it is kept. Splitting the axes across two elements is what curves
+     a path: give x and y different easings and they reach their halfway points at different
+     moments, and the relic bows away from the line between its endpoints. */
+  transition: translate var(--relic-flight-duration) cubic-bezier(0.45, 0.05, 0.25, 1);
   z-index: 200;
 }
 
@@ -19852,23 +19856,19 @@ button.tileset-relationship-cell {
   overflow: visible;
 }
 
-/* Two axes on two elements so they can carry different easings: the relic clears the mat
-   early and then travels across, which reads as being picked up rather than dragged along
-   a ruler. It also arrives at the size it will keep, shrinking out of its hover lift. */
+/* The size only. It arrives at the size it will keep, shrinking out of its hover lift over
+   the same beat -- a scale change does not move the centre, so it cannot bend the path. */
 .run-relic-flight-lift {
   scale: 1.25;
-  transition:
-    scale var(--relic-flight-duration) cubic-bezier(0.4, 0, 0.4, 1),
-    translate var(--relic-flight-duration) cubic-bezier(0.18, 0.74, 0.3, 1);
+  transition: scale var(--relic-flight-duration) cubic-bezier(0.4, 0, 0.4, 1);
 }
 
 .run-relic-flight.is-landed {
-  translate: var(--relic-flight-x) 0;
+  translate: var(--relic-flight-x) var(--relic-flight-y);
 }
 
 .run-relic-flight.is-landed .run-relic-flight-lift {
   scale: 1;
-  translate: 0 var(--relic-flight-y);
 }
 
 /* The explicit in-game reduced-motion choice: the relics hold still and keep the static
