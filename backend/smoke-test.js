@@ -937,7 +937,7 @@ function inlineMigrationSql(version) {
   return inlineMigrationDefinition(version).sql;
 }
 
-async function validatePrimarySparseNumericMigrationUpgrade54() {
+async function validatePrimarySparseNumericMigrationUpgrade55() {
   const history = await queryDb(
     `SELECT version, name, checksum
        FROM schema_migrations
@@ -952,7 +952,7 @@ async function validatePrimarySparseNumericMigrationUpgrade54() {
       ORDER BY column_name`,
   );
   const versions = history.rows.map((row) => Number(row.version));
-  const expectedVersions = Array.from({ length: 54 }, (_, index) => index + 1);
+  const expectedVersions = Array.from({ length: 55 }, (_, index) => index + 1);
   const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
   const expectedByVersion = new Map(
     expectedMigrations.map((migration) => [migration.version, migration]),
@@ -967,7 +967,7 @@ async function validatePrimarySparseNumericMigrationUpgrade54() {
   });
   const appliedMigrationVersions = [
     ...Array.from({ length: 8 }, (_, index) => index + 28),
-    ...Array.from({ length: 18 }, (_, index) => index + 37),
+    ...Array.from({ length: 19 }, (_, index) => index + 37),
   ];
   const skippedMigrationVersions = [
     ...Array.from({ length: 27 }, (_, index) => index + 1),
@@ -1081,7 +1081,7 @@ async function validatePrimarySparseNumericMigrationUpgrade54() {
     )
   ) {
     throw new Error(
-      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 52: `
+      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 55: `
       + `${JSON.stringify({
         history: history.rows,
         identity_columns: identityColumns.rows,
@@ -1356,6 +1356,214 @@ async function validateRunSaveVersionMigration54() {
   }
 }
 
+async function validateSectioOperationsVocabularyMigration55() {
+  const { Client } = require('pg');
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('CREATE SCHEMA smoke_sectio_vocabulary_migration_55');
+    await client.query('SET LOCAL search_path TO smoke_sectio_vocabulary_migration_55');
+    await client.query(`
+      CREATE TABLE active_runs (
+        owner_email text PRIMARY KEY,
+        body jsonb NOT NULL,
+        revision integer NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE run_craft_links (
+        id text PRIMARY KEY,
+        spec jsonb NOT NULL
+      );
+      CREATE TABLE media_slots (
+        slot text PRIMARY KEY,
+        active_version_id uuid,
+        role text NOT NULL,
+        metadata jsonb NOT NULL DEFAULT '{}'::jsonb
+      );
+      CREATE TABLE media_versions (
+        id uuid PRIMARY KEY,
+        slot text REFERENCES media_slots(slot) ON DELETE RESTRICT,
+        role text NOT NULL,
+        metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+        UNIQUE (id, slot)
+      );
+      CREATE TABLE media_asset_events (
+        id bigserial PRIMARY KEY,
+        slot text
+      );
+      CREATE TABLE drawable_asset_media (
+        asset_id text NOT NULL,
+        role text NOT NULL,
+        slot text NOT NULL REFERENCES media_slots(slot) ON DELETE RESTRICT,
+        PRIMARY KEY (asset_id, role)
+      );
+      CREATE TABLE media_catalog_state (
+        singleton boolean PRIMARY KEY,
+        revision bigint NOT NULL DEFAULT 0,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+
+      INSERT INTO media_slots (slot, role, metadata) VALUES
+        (
+          'review/run-shop-wrap/market.png',
+          'shop-wrap',
+          '{"schema":"run-shop-wrap-candidate-v1"}'::jsonb
+        ),
+        (
+          'ui/run/shop-wrap/market.png',
+          'shop-wrap',
+          '{"schema":"run-shop-wrap-runtime-v1","runtime":{"component":"run-shop-wrap","nativeRole":"run-shop-wrap"}}'::jsonb
+        ),
+        (
+          'review/run-screen-art/sell/codex.png',
+          'screen-art',
+          '{}'::jsonb
+        );
+      INSERT INTO media_versions (id, slot, role, metadata) VALUES
+        (
+          '00000000-0000-4000-8000-000000000551',
+          'review/run-shop-wrap/market.png',
+          'shop-wrap',
+          '{"schema":"run-shop-wrap-candidate-v1"}'::jsonb
+        ),
+        (
+          '00000000-0000-4000-8000-000000000552',
+          'ui/run/shop-wrap/market.png',
+          'shop-wrap',
+          '{"schema":"run-shop-wrap-runtime-v1","runtime":{"component":"run-shop-wrap","nativeRole":"run-shop-wrap"}}'::jsonb
+        ),
+        (
+          '00000000-0000-4000-8000-000000000553',
+          'review/run-screen-art/sell/codex.png',
+          'screen-art',
+          '{}'::jsonb
+        );
+      UPDATE media_slots
+         SET active_version_id = CASE slot
+           WHEN 'review/run-shop-wrap/market.png'
+             THEN '00000000-0000-4000-8000-000000000551'::uuid
+           WHEN 'ui/run/shop-wrap/market.png'
+             THEN '00000000-0000-4000-8000-000000000552'::uuid
+           ELSE '00000000-0000-4000-8000-000000000553'::uuid
+         END;
+      ALTER TABLE media_slots
+        ADD CONSTRAINT media_slots_active_version_fk
+        FOREIGN KEY (active_version_id, slot) REFERENCES media_versions(id, slot);
+      INSERT INTO media_asset_events (slot) VALUES
+        ('review/run-shop-wrap/market.png'),
+        ('ui/run/shop-wrap/market.png'),
+        ('review/run-screen-art/sell/codex.png');
+      INSERT INTO drawable_asset_media (asset_id, role, slot) VALUES
+        ('app-ui', 'sectio-wrap', 'ui/run/shop-wrap/market.png');
+      INSERT INTO media_catalog_state (singleton) VALUES (true);
+      INSERT INTO run_craft_links (id, spec) VALUES
+        ('legacy-shop', '{"phase":"shop","battle":3}'::jsonb),
+        ('current-battle', '{"phase":"battle","battle":3}'::jsonb);
+    `);
+    const legacyRun = {
+      runSaveVersion: 17,
+      id: 'legacy-shop-run',
+      phase: 'shop',
+      army: [
+        { id: 'acquired', source: 'shop' },
+        { id: 'starting', source: 'starting' },
+      ],
+      pestiferousLosses: [{ unit: { id: 'lost', source: 'shop' } }],
+      shop: {
+        cardOffers: [
+          { offerId: 'shop-2-0-pp' },
+          { offerId: 'opening-0-p' },
+        ],
+        purchasedCardOfferIds: ['shop-2-0-pp'],
+        soldUnits: [{ unit: { id: 'sold', source: 'shop' }, proceedsTenths: 10 }],
+        entrySnapshot: { army: [{ id: 'snapshot', source: 'shop' }] },
+      },
+      marker: 'preserved',
+    };
+    await client.query(
+      `INSERT INTO active_runs (owner_email, body, revision) VALUES
+         ('version17@example.com', $1::jsonb, 7),
+         ('version18@example.com', '{"runSaveVersion":18,"id":"current"}'::jsonb, 3)`,
+      [JSON.stringify(legacyRun)],
+    );
+
+    await client.query(inlineMigrationSql(55));
+    await client.query(inlineMigrationSql(55));
+
+    const activeRuns = await client.query(
+      'SELECT owner_email, body, revision FROM active_runs ORDER BY owner_email',
+    );
+    const migrated = activeRuns.rows.find((row) => row.owner_email === 'version17@example.com');
+    const current = activeRuns.rows.find((row) => row.owner_email === 'version18@example.com');
+    const craftLinks = await client.query('SELECT id, spec FROM run_craft_links ORDER BY id');
+    const slots = await client.query('SELECT slot, role, metadata FROM media_slots ORDER BY slot');
+    const versions = await client.query('SELECT slot, role, metadata FROM media_versions ORDER BY slot');
+    const events = await client.query('SELECT slot FROM media_asset_events ORDER BY slot');
+    const drawables = await client.query('SELECT slot FROM drawable_asset_media ORDER BY slot');
+    const mediaForeignKeys = await client.query(`
+      SELECT local_table.relname AS local_table
+        FROM pg_constraint constraint_entry
+        JOIN pg_class local_table ON local_table.oid = constraint_entry.conrelid
+       WHERE constraint_entry.contype = 'f'
+         AND local_table.relname IN ('media_slots', 'media_versions', 'drawable_asset_media')
+       ORDER BY local_table.relname
+    `);
+    const allMediaRows = [...slots.rows, ...versions.rows];
+    if (
+      migrated?.body?.runSaveVersion !== 18
+      || migrated?.body?.phase !== 'sectio'
+      || Object.hasOwn(migrated?.body ?? {}, 'shop')
+      || migrated?.body?.marker !== 'preserved'
+      || migrated?.body?.army?.[0]?.source !== 'adlectio'
+      || migrated?.body?.army?.[1]?.source !== 'starting'
+      || migrated?.body?.pestiferousLosses?.[0]?.unit?.source !== 'adlectio'
+      || migrated?.body?.sectio?.cardOffers?.[0]?.offerId !== 'sectio-2-0-pp'
+      || migrated?.body?.sectio?.cardOffers?.[1]?.offerId !== 'opening-0-p'
+      || migrated?.body?.sectio?.adlectedCardOfferIds?.[0] !== 'sectio-2-0-pp'
+      || migrated?.body?.sectio?.alienatedUnits?.[0]?.unit?.source !== 'adlectio'
+      || Object.hasOwn(migrated?.body?.sectio ?? {}, 'purchasedCardOfferIds')
+      || Object.hasOwn(migrated?.body?.sectio ?? {}, 'soldUnits')
+      || migrated?.body?.sectio?.entrySnapshot?.army?.[0]?.source !== 'adlectio'
+      || Number(migrated?.revision) !== 8
+      || current?.body?.runSaveVersion !== 18
+      || Number(current?.revision) !== 3
+      || craftLinks.rows.find((row) => row.id === 'legacy-shop')?.spec?.phase !== 'sectio'
+      || craftLinks.rows.find((row) => row.id === 'current-battle')?.spec?.phase !== 'battle'
+      || slots.rows.map((row) => row.slot).join(',')
+        !== 'review/run-screen-art/alienatio/codex.png,review/run-sectio-wrap/market.png,ui/run/sectio-wrap/market.png'
+      || versions.rows.map((row) => row.slot).join(',')
+        !== 'review/run-screen-art/alienatio/codex.png,review/run-sectio-wrap/market.png,ui/run/sectio-wrap/market.png'
+      || events.rows.map((row) => row.slot).join(',')
+        !== 'review/run-screen-art/alienatio/codex.png,review/run-sectio-wrap/market.png,ui/run/sectio-wrap/market.png'
+      || drawables.rows.map((row) => row.slot).join(',') !== 'ui/run/sectio-wrap/market.png'
+      || allMediaRows.filter((row) => row.slot.includes('sectio-wrap')).some((row) => row.role !== 'sectio-wrap')
+      || allMediaRows.filter((row) => row.slot.includes('screen-art')).some((row) => row.role !== 'screen-art')
+      || allMediaRows.some((row) => row.metadata?.schema?.startsWith('run-shop-wrap-'))
+      || allMediaRows.some((row) => row.metadata?.runtime?.component === 'run-shop-wrap')
+      || allMediaRows.some((row) => row.metadata?.runtime?.nativeRole === 'run-shop-wrap')
+      || mediaForeignKeys.rows.map((row) => row.local_table).join(',')
+        !== 'drawable_asset_media,media_slots,media_versions'
+    ) {
+      throw new Error(`Migration 55 did not move the complete Sectio, Adlectio, and Alienatio vocabulary graph: ${JSON.stringify({
+        active_runs: activeRuns.rows,
+        craft_links: craftLinks.rows,
+        slots: slots.rows,
+        versions: versions.rows,
+        events: events.rows,
+        drawables: drawables.rows,
+        media_foreign_keys: mediaForeignKeys.rows,
+      })}`);
+    }
+    await client.query('ROLLBACK');
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve validation error */ }
+    throw error;
+  } finally {
+    await client.end();
+  }
+}
+
 async function waitForServer() {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     if (child.exitCode !== null) {
@@ -1388,7 +1596,7 @@ async function main() {
   await new Promise((resolve) => mockAuth.listen(authPort, '127.0.0.1', resolve));
   await new Promise((resolve) => mockBgm.listen(bgmPort, '127.0.0.1', resolve));
   await waitForServer();
-  await validatePrimarySparseNumericMigrationUpgrade54();
+  await validatePrimarySparseNumericMigrationUpgrade55();
   const databaseRuntime = await queryDb('SELECT version() AS version');
   const isPgliteRuntime = /\bPGlite\b/i.test(String(databaseRuntime.rows[0]?.version || ''));
   if (!isPgliteRuntime) {
@@ -1417,6 +1625,7 @@ async function main() {
   await validateThumbnailRepairMigration22();
   await validateEditorRevisionReasonMigration37();
   await validateRunSaveVersionMigration54();
+  await validateSectioOperationsVocabularyMigration55();
   await resetDb();
 
   const missingPropSeats = await get('/api/prop-seats/default');
@@ -4113,7 +4322,7 @@ async function main() {
       description: 'Pinned War snapshot.',
       battles: [{ level: warBattleLevel, loot: true }],
     },
-    phase: 'shop',
+    phase: 'sectio',
     battleIndex: 0,
     conflictIndex: 0,
     goldTenths: 80,
@@ -4130,16 +4339,16 @@ async function main() {
     battleRuntime: null,
     aftermath: null,
     vacantia: null,
-    shop: {
+    sectio: {
       kind: 'opening',
       afterBattleIndex: 0,
       conflictIndex: 0,
       victoryGoldTenths: 0,
       cardOffers: activeRunOffers,
-      purchasedCardOfferIds: [],
+      adlectedCardOfferIds: [],
       paidLipsanonOffer: null,
       paidLipsanonBought: false,
-      soldUnits: [],
+      alienatedUnits: [],
       entrySnapshot: {
         goldTenths: 80,
         army: activeRunStartingArmy,
@@ -4197,19 +4406,27 @@ async function main() {
   if (retiredRunVersionField.statusCode !== 400 || JSON.parse(retiredRunVersionField.body).error !== 'invalid_active_run') {
     throw new Error(`Active Runs must reject the retired formatVersion field: ${retiredRunVersionField.statusCode} ${retiredRunVersionField.body}`);
   }
+  const retiredShopState = await request(
+    'PUT', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({ run: { ...activeRunDocument, shop: null }, revision: 0 }),
+  );
+  if (retiredShopState.statusCode !== 400 || JSON.parse(retiredShopState.body).error !== 'invalid_active_run') {
+    throw new Error(`Active Runs must reject the retired Shop property: ${retiredShopState.statusCode} ${retiredShopState.body}`);
+  }
   const invalidOpeningRun = await request(
     'PUT', '/api/active-run',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({
       run: {
         ...activeRunDocument,
-        shop: { ...activeRunDocument.shop, cardOffers: activeRunDocument.shop.cardOffers.slice(0, 2) },
+        sectio: { ...activeRunDocument.sectio, cardOffers: activeRunDocument.sectio.cardOffers.slice(0, 2) },
       },
       revision: 0,
     }),
   );
   if (invalidOpeningRun.statusCode !== 400 || JSON.parse(invalidOpeningRun.body).error !== 'invalid_active_run') {
-    throw new Error(`Current Run saves must persist three opening Shop offers: ${invalidOpeningRun.statusCode} ${invalidOpeningRun.body}`);
+    throw new Error(`Current Run saves must persist three opening Sectio offers: ${invalidOpeningRun.statusCode} ${invalidOpeningRun.body}`);
   }
   const unaffordableOpeningRun = await request(
     'PUT', '/api/active-run',
@@ -4217,8 +4434,8 @@ async function main() {
     JSON.stringify({
       run: {
         ...activeRunDocument,
-        shop: {
-          ...activeRunDocument.shop,
+        sectio: {
+          ...activeRunDocument.sectio,
           cardOffers: [
             activeRunOffers[0],
             activeRunOffers[1],
@@ -4232,16 +4449,16 @@ async function main() {
   if (unaffordableOpeningRun.statusCode !== 400 || JSON.parse(unaffordableOpeningRun.body).error !== 'invalid_active_run') {
     throw new Error(`Opening offers must carry the shared affected price: ${unaffordableOpeningRun.statusCode} ${unaffordableOpeningRun.body}`);
   }
-  const unbuyableOpeningRun = await request(
+  const noAffordableAdlectioRun = await request(
     'PUT', '/api/active-run',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({
       run: {
         ...activeRunDocument,
-        shop: {
-          ...activeRunDocument.shop,
+        sectio: {
+          ...activeRunDocument.sectio,
           // A qualifier may price a single opening card past the starting gold, but a deal
-          // in which every card is out of reach cannot satisfy the required purchase.
+          // in which every card is out of reach cannot satisfy the required Adlectio.
           cardOffers: [
             { ...activeRunOffers[0], id: 'rp', pieces: ['rook', 'pawn'], value: 6, cost: 9, cardType: 'legatine', effectTargetIndex: null },
             { ...activeRunOffers[1], id: 'rpp', pieces: ['rook', 'pawn', 'pawn'], value: 7, cost: 10, cardType: 'legatine', effectTargetIndex: null },
@@ -4252,39 +4469,39 @@ async function main() {
       revision: 0,
     }),
   );
-  if (unbuyableOpeningRun.statusCode !== 400 || JSON.parse(unbuyableOpeningRun.body).error !== 'invalid_active_run') {
-    throw new Error(`Opening Shops must keep one affordable offer: ${unbuyableOpeningRun.statusCode} ${unbuyableOpeningRun.body}`);
+  if (noAffordableAdlectioRun.statusCode !== 400 || JSON.parse(noAffordableAdlectioRun.body).error !== 'invalid_active_run') {
+    throw new Error(`Opening Sectio deals must keep one affordable offer: ${noAffordableAdlectioRun.statusCode} ${noAffordableAdlectioRun.body}`);
   }
-  const retiredShopFieldRun = await request(
+  const retiredSectioFieldRun = await request(
     'PUT', '/api/active-run',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({
       run: {
         ...activeRunDocument,
-        shop: { ...activeRunDocument.shop, retiredTransactionState: [] },
+        sectio: { ...activeRunDocument.sectio, purchasedCardOfferIds: [] },
       },
       revision: 0,
     }),
   );
-  if (retiredShopFieldRun.statusCode !== 400 || JSON.parse(retiredShopFieldRun.body).error !== 'invalid_active_run') {
-    throw new Error(`Current Run saves must reject unsupported Shop fields: ${retiredShopFieldRun.statusCode} ${retiredShopFieldRun.body}`);
+  if (retiredSectioFieldRun.statusCode !== 400 || JSON.parse(retiredSectioFieldRun.body).error !== 'invalid_active_run') {
+    throw new Error(`Current Run saves must reject retired Sectio operation fields: ${retiredSectioFieldRun.statusCode} ${retiredSectioFieldRun.body}`);
   }
-  const duplicatePurchasedCardRun = await request(
+  const duplicateAdlectedCardRun = await request(
     'PUT', '/api/active-run',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({
       run: {
         ...activeRunDocument,
-        shop: {
-          ...activeRunDocument.shop,
-          purchasedCardOfferIds: [activeRunOffers[0].offerId, activeRunOffers[0].offerId],
+        sectio: {
+          ...activeRunDocument.sectio,
+          adlectedCardOfferIds: [activeRunOffers[0].offerId, activeRunOffers[0].offerId],
         },
       },
       revision: 0,
     }),
   );
-  if (duplicatePurchasedCardRun.statusCode !== 400 || JSON.parse(duplicatePurchasedCardRun.body).error !== 'invalid_active_run') {
-    throw new Error(`Current Run saves must reject a duplicate card purchase: ${duplicatePurchasedCardRun.statusCode} ${duplicatePurchasedCardRun.body}`);
+  if (duplicateAdlectedCardRun.statusCode !== 400 || JSON.parse(duplicateAdlectedCardRun.body).error !== 'invalid_active_run') {
+    throw new Error(`Current Run saves must reject a duplicate Adlectio: ${duplicateAdlectedCardRun.statusCode} ${duplicateAdlectedCardRun.body}`);
   }
   const invalidOpeningArmy = await request(
     'PUT', '/api/active-run',
@@ -4294,14 +4511,14 @@ async function main() {
         ...activeRunDocument,
         army: [
           ...activeRunDocument.army,
-          { id: 'run-unit-1', name: 'Unexpected Pawn', type: 'pawn', number: 3, inspectionSeed: 1707, abilities: [], modifiers: [], source: 'shop' },
+          { id: 'run-unit-1', name: 'Unexpected Pawn', type: 'pawn', number: 3, inspectionSeed: 1707, abilities: [], modifiers: [], source: 'adlectio' },
         ],
       },
       revision: 0,
     }),
   );
   if (invalidOpeningArmy.statusCode !== 400 || JSON.parse(invalidOpeningArmy.body).error !== 'invalid_active_run') {
-    throw new Error(`An unpurchased opening Shop must contain only the starting army: ${invalidOpeningArmy.statusCode} ${invalidOpeningArmy.body}`);
+    throw new Error(`An opening Sectio before Adlectio must contain only the starting army: ${invalidOpeningArmy.statusCode} ${invalidOpeningArmy.body}`);
   }
   const retiredDraftRun = await request(
     'PUT', '/api/active-run',
@@ -4322,66 +4539,66 @@ async function main() {
   if (retiredDraftSourceRun.statusCode !== 400 || JSON.parse(retiredDraftSourceRun.body).error !== 'invalid_active_run') {
     throw new Error(`Current Run saves must reject retired draft unit sources: ${retiredDraftSourceRun.statusCode} ${retiredDraftSourceRun.body}`);
   }
-  const purchasedPawn = {
+  const adlectedPawn = {
     id: 'run-unit-1', name: 'Eadric Miller', type: 'pawn', number: 3,
-    inspectionSeed: 1707, abilities: [], modifiers: [], source: 'shop',
+    inspectionSeed: 1707, abilities: [], modifiers: [], source: 'adlectio',
   };
-  const purchasedKnight = {
+  const adlectedKnight = {
     id: 'run-unit-2', name: 'Richard Marshal', type: 'knight', number: 1,
-    inspectionSeed: 1708, abilities: [], modifiers: [], source: 'shop',
+    inspectionSeed: 1708, abilities: [], modifiers: [], source: 'adlectio',
   };
-  const multiPurchaseRun = {
+  const multiAdlectioRun = {
     ...activeRunDocument,
     goldTenths: 40,
-    army: [...activeRunDocument.army, purchasedPawn, purchasedKnight],
+    army: [...activeRunDocument.army, adlectedPawn, adlectedKnight],
     cards: [
       {
         id: 'run-card-1', coreId: activeRunOffers[0].id, cardType: null,
         effectSeed: activeRunOffers[0].effectSeed, effectTargetUnitId: null,
-        unitIds: [purchasedPawn.id], lostUnitIds: [], cacochymicUnitId: null,
+        unitIds: [adlectedPawn.id], lostUnitIds: [], cacochymicUnitId: null,
         acquiredAfterBattleIndex: 0,
       },
       {
         id: 'run-card-2', coreId: activeRunOffers[1].id, cardType: null,
         effectSeed: activeRunOffers[1].effectSeed, effectTargetUnitId: null,
-        unitIds: [purchasedKnight.id], lostUnitIds: [], cacochymicUnitId: null,
+        unitIds: [adlectedKnight.id], lostUnitIds: [], cacochymicUnitId: null,
         acquiredAfterBattleIndex: 0,
       },
     ],
     nextArmyUnitSequence: 3,
     nextArmyUnitNumberByType: { ...activeRunNumberState, pawn: 4, knight: 2 },
     nextCardSequence: 3,
-    shop: {
-      ...activeRunDocument.shop,
-      purchasedCardOfferIds: [activeRunOffers[0].offerId, activeRunOffers[1].offerId],
+    sectio: {
+      ...activeRunDocument.sectio,
+      adlectedCardOfferIds: [activeRunOffers[0].offerId, activeRunOffers[1].offerId],
     },
   };
   const savedRun = await request(
     'PUT', '/api/active-run',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify({ run: multiPurchaseRun, revision: 0 }),
+    JSON.stringify({ run: multiAdlectioRun, revision: 0 }),
   );
   const savedRunBody = JSON.parse(savedRun.body);
   if (
     savedRun.statusCode !== 200
     || savedRunBody.revision !== 1
     || savedRunBody.run.id !== 'run-smoke'
-    || savedRunBody.run.shop.purchasedCardOfferIds.length !== 2
+    || savedRunBody.run.sectio.adlectedCardOfferIds.length !== 2
   ) {
     throw new Error(`Active Run did not save: ${savedRun.statusCode} ${savedRun.body}`);
   }
-  const concinnousShopRun = {
+  const concinnousSectioRun = {
     ...activeRunDocument,
-    phase: 'shop',
+    phase: 'sectio',
     updatedAt: '2026-01-01T01:00:00.000Z',
-    shop: {
+    sectio: {
       kind: 'post-battle',
       afterBattleIndex: 0,
       conflictIndex: 0,
       victoryGoldTenths: 10,
       cardOffers: [{
         id: 'q',
-        offerId: 'shop-0-0-q',
+        offerId: 'sectio-0-0-q',
         pieces: ['queen'],
         value: 9,
         cost: 11,
@@ -4391,7 +4608,7 @@ async function main() {
         cacochymicPieceIndex: null,
       }, {
         id: 'q',
-        offerId: 'shop-0-1-q',
+        offerId: 'sectio-0-1-q',
         pieces: ['queen'],
         value: 9,
         cost: 12,
@@ -4403,7 +4620,7 @@ async function main() {
         // Hieratic prices Agminate exactly like Adlected and carries no seeded target,
         // because its unit is drawn when the card is acquired.
         id: 'q',
-        offerId: 'shop-0-2-q',
+        offerId: 'sectio-0-2-q',
         pieces: ['queen'],
         value: 9,
         cost: 12,
@@ -4412,10 +4629,10 @@ async function main() {
         effectTargetIndex: null,
         cacochymicPieceIndex: null,
       }],
-      purchasedCardOfferIds: [],
+      adlectedCardOfferIds: [],
       paidLipsanonOffer: null,
       paidLipsanonBought: false,
-      soldUnits: [],
+      alienatedUnits: [],
       entrySnapshot: {
         goldTenths: activeRunDocument.goldTenths,
         army: activeRunDocument.army,
@@ -4430,32 +4647,32 @@ async function main() {
       },
     },
   };
-  const savedConcinnousShopRun = await request(
+  const savedConcinnousSectioRun = await request(
     'PUT', '/api/active-run',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify({ run: concinnousShopRun, revision: 1 }),
+    JSON.stringify({ run: concinnousSectioRun, revision: 1 }),
   );
-  const savedConcinnousShopRunBody = JSON.parse(savedConcinnousShopRun.body);
+  const savedConcinnousSectioRunBody = JSON.parse(savedConcinnousSectioRun.body);
   if (
-    savedConcinnousShopRun.statusCode !== 200
-    || savedConcinnousShopRunBody.revision !== 2
-    || savedConcinnousShopRunBody.run.shop.cardOffers[0].effectTargetIndex !== 0
-    || savedConcinnousShopRunBody.run.shop.cardOffers[0].cost !== 11
-    || savedConcinnousShopRunBody.run.shop.cardOffers[1].cost !== 12
-    || savedConcinnousShopRunBody.run.shop.cardOffers[2].cardType !== 'hieratic'
-    || savedConcinnousShopRunBody.run.shop.cardOffers[2].cost !== 12
+    savedConcinnousSectioRun.statusCode !== 200
+    || savedConcinnousSectioRunBody.revision !== 2
+    || savedConcinnousSectioRunBody.run.sectio.cardOffers[0].effectTargetIndex !== 0
+    || savedConcinnousSectioRunBody.run.sectio.cardOffers[0].cost !== 11
+    || savedConcinnousSectioRunBody.run.sectio.cardOffers[1].cost !== 12
+    || savedConcinnousSectioRunBody.run.sectio.cardOffers[2].cardType !== 'hieratic'
+    || savedConcinnousSectioRunBody.run.sectio.cardOffers[2].cost !== 12
   ) {
-    throw new Error(`Concinnous shop Run did not save: ${savedConcinnousShopRun.statusCode} ${savedConcinnousShopRun.body}`);
+    throw new Error(`Concinnous Sectio Run did not save: ${savedConcinnousSectioRun.statusCode} ${savedConcinnousSectioRun.body}`);
   }
   const mispricedHieraticRun = await request(
     'PUT', '/api/active-run',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({
       run: {
-        ...concinnousShopRun,
-        shop: {
-          ...concinnousShopRun.shop,
-          cardOffers: concinnousShopRun.shop.cardOffers.map((offer) => (
+        ...concinnousSectioRun,
+        sectio: {
+          ...concinnousSectioRun.sectio,
+          cardOffers: concinnousSectioRun.sectio.cardOffers.map((offer) => (
             offer.cardType === 'hieratic' ? { ...offer, cost: 11 } : offer
           )),
         },
@@ -4494,7 +4711,7 @@ async function main() {
   const anonymousCraft = await request(
     'POST', '/api/active-run/craft',
     { 'content-type': 'application/json' },
-    JSON.stringify({ phase: 'shop' }),
+    JSON.stringify({ phase: 'sectio' }),
   );
   if (anonymousCraft.statusCode !== 401) {
     throw new Error(`Crafting a Run must require sign-in: ${anonymousCraft.statusCode} ${anonymousCraft.body}`);
@@ -4502,7 +4719,7 @@ async function main() {
   const rivalCraft = await request(
     'POST', '/api/active-run/craft',
     { cookie: '__Host-chess-tactics-access=rival', 'content-type': 'application/json' },
-    JSON.stringify({ phase: 'shop' }),
+    JSON.stringify({ phase: 'sectio' }),
   );
   if (rivalCraft.statusCode !== 403 || JSON.parse(rivalCraft.body).error !== 'admin_required') {
     throw new Error(`Crafting a Run must require an administrator: ${rivalCraft.statusCode} ${rivalCraft.body}`);
@@ -4510,7 +4727,7 @@ async function main() {
   const unknownFieldCraft = await request(
     'POST', '/api/active-run/craft',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify({ phase: 'shop', goldd: 40 }),
+    JSON.stringify({ phase: 'sectio', goldd: 40 }),
   );
   if (
     unknownFieldCraft.statusCode !== 400
@@ -4533,7 +4750,7 @@ async function main() {
   const anonymousMint = await request(
     'POST', '/api/run-craft-links',
     { 'content-type': 'application/json' },
-    JSON.stringify({ phase: 'shop' }),
+    JSON.stringify({ phase: 'sectio' }),
   );
   if (anonymousMint.statusCode !== 401 && anonymousMint.statusCode !== 403) {
     throw new Error(`Minting a craft link must require an administrator: ${anonymousMint.statusCode} ${anonymousMint.body}`);
@@ -4541,7 +4758,7 @@ async function main() {
   const mintOnce = await request(
     'POST', '/api/run-craft-links',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify({ phase: 'shop', battle: 3, gold: 25, army: 'knight,rook' }),
+    JSON.stringify({ phase: 'sectio', battle: 3, gold: 25, army: 'knight,rook' }),
   );
   if (mintOnce.statusCode !== 200) {
     throw new Error(`Minting a craft link failed: ${mintOnce.statusCode} ${mintOnce.body}`);
@@ -4554,7 +4771,7 @@ async function main() {
   const mintAgain = await request(
     'POST', '/api/run-craft-links',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify({ address: '?craft=shop&battle=3&army=knight,rook&gold=25' }),
+    JSON.stringify({ address: '?craft=sectio&battle=3&army=knight,rook&gold=25' }),
   );
   if (mintAgain.statusCode !== 200 || JSON.parse(mintAgain.body).id !== minted.id) {
     throw new Error(`The same crafted state must mint the same link: ${mintOnce.body} vs ${mintAgain.body}`);

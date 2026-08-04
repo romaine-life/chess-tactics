@@ -337,7 +337,7 @@ export interface LevelEconomy {
 
 /** War-specific metadata authored on the Level's Battle tab (ADR-0193). */
 export interface BattleSettings {
-  /** This non-final Battle's ordinary shop also deals three free lipsanon choices. */
+  /** This non-final Battle closes a Conflict whose successor opens with three lipsanon choices. */
   loot?: boolean;
 }
 

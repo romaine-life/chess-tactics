@@ -33,7 +33,7 @@ import {
   scaledRunCardContentsTuning,
 } from './RunCardPrototype';
 import { runCardFaceContent, runCardSpecimen } from './runCardFaceContent';
-import type { PurchasablePieceType } from '../run/model';
+import type { AdlectablePieceType } from '../run/model';
 
 describe('Run Card Layout review variant', () => {
   it('addresses each affected-card review state in the URL', () => {
@@ -45,7 +45,7 @@ describe('Run Card Layout review variant', () => {
     expect(runCardTacticalSpecimenFromSearch('?cardVariant=tactical')).toBe('single');
   });
 
-  it('addresses hidden and revealed purchase states without synthesized prose', () => {
+  it('addresses hidden and revealed Adlectio states without synthesized prose', () => {
     expect(runCardConcinnousTargetRevealedFromSearch('?cardVariant=concinnous')).toBe(false);
     expect(runCardConcinnousTargetRevealedFromSearch('?cardVariant=concinnous&concinnousTarget=revealed')).toBe(true);
     expect(runCardPrototypeContent('concinnous')).toMatchObject({
@@ -87,7 +87,7 @@ describe('Run Card Layout review variant', () => {
     expect(hidden).not.toHaveProperty('properties');
     // Agminate is named in the property tooltip's authored effect, which ADR-0339 keeps.
     // What is gone is any sentence printed into the card body in place of a hidden target.
-    expect(JSON.stringify(hidden)).not.toContain('Chosen on purchase');
+    expect(JSON.stringify(hidden)).not.toContain('Chosen upon Adlectio');
     expect(hidden.flavor).not.toContain('Agminate');
     expect(hidden.name).not.toContain('Agminate');
     // Acquisition reveals it the same way every other drawn target is revealed.
@@ -183,7 +183,7 @@ describe('Run Card Layout review variant', () => {
 
   // Density specimens are projected cards, not fabricated faces: a load the estimator is
   // asked about is always a load a real card could present.
-  const cardWithPieces = (...pieces: PurchasablePieceType[]): RunCardFaceContent => (
+  const cardWithPieces = (...pieces: AdlectablePieceType[]): RunCardFaceContent => (
     runCardFaceContent(runCardSpecimen({ pieces }))
   );
 

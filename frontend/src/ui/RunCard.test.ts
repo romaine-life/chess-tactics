@@ -38,12 +38,12 @@ describe('Run acquisition-target disclosure', () => {
     expect(runCardGrants(multiUnit).every((grant) => !grant.ability)).toBe(true);
   });
 
-  it('marks a multi-unit Hieratic target only once acquisition has revealed it', () => {
+  it('marks a multi-unit Hieratic target only once Adlectio has revealed it', () => {
     const offer = offerOf('pppkb', 17, 1, 8, 8, 8, 1);
 
     expect(offer.cardType).toBe('hieratic');
     expect(runCardGrants(offer).every((grant) => !grant.ability)).toBe(true);
-    const revealed = runCardGrants(offer, { purchased: true });
+    const revealed = runCardGrants(offer, { adlected: true });
     const marked = revealed.filter((grant) => grant.ability);
     expect(marked).toHaveLength(1);
     expect(marked[0].ability?.state).toBe('agminate');
@@ -62,13 +62,13 @@ describe('Run acquisition-target disclosure', () => {
 });
 
 describe('Run Concinnous card disclosure', () => {
-  it('keeps the Positioned target hidden before purchase and can name the persisted occurrence afterward', () => {
+  it('keeps the Positioned target hidden before Adlectio and can name the persisted occurrence afterward', () => {
     const offer = offerOf('pppk', 29, 0, 8, 1, 0);
 
     expect(offer.cardType).toBe('concinnous');
     expect(offer.effectTargetIndex).toBeGreaterThanOrEqual(0);
     expect(runCardGrants(offer).every((grant) => !grant.ability)).toBe(true);
-    expect(runCardGrants(offer, { purchased: true }).some((grant) => (
+    expect(runCardGrants(offer, { adlected: true }).some((grant) => (
       grant.ability?.state === 'eutactic'
     ))).toBe(true);
     expect(concinnousTargetLabel(offer)).toMatch(/^(Pawn [123]|Knight)$/);

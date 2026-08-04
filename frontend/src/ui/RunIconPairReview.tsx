@@ -265,7 +265,7 @@ function candidateConcept(version: AdminLiveMediaVersion): string {
  * The fitting specimen is a real one-unit Volunteer offer of the pair's card type,
  * projected like every other card. Its single unit forces the target, so the paired
  * property symbol and unit-state marker are both public and both seat where they will
- * in a Shop.
+ * in a Sectio.
  */
 function specimenCard(pair: PairDefinition): RunCardFaceContent {
   return runCardFaceContent(
@@ -274,7 +274,7 @@ function specimenCard(pair: PairDefinition): RunCardFaceContent {
       cardType: pair.property,
       cacochymicPieceIndex: pair.state === 'cacochymic' ? 0 : null,
     }),
-    { purchased: true },
+    { adlected: true },
   );
 }
 

@@ -1,60 +1,60 @@
-// Review-only shop wrap-art candidates mounted by RunShopArtReview. The bytes
+// Review-only Sectio wrap-art candidates mounted by RunSectioArtReview. The bytes
 // and the measured geometry both live in live media (ADR-0085) — candidate
 // pixels are never committed — so this module reads them back off the admin
 // catalog. Review mounting does not promote a candidate.
 import { liveMediaSlotsWithPrefix } from '@chess-tactics/board-render';
 import type { AdminLiveMediaCatalog, AdminLiveMediaVersion } from '../net/liveMediaAdmin';
 
-export const RUN_SHOP_WRAP_SCHEMA = 'run-shop-wrap-candidate-v1';
-export const RUN_SHOP_WRAP_SLOT_PREFIX = 'review/run-shop-wrap/';
-/** Runtime home for an installed wrap; the live Shop reads this prefix. */
-export const RUN_SHOP_WRAP_RUNTIME_PREFIX = 'ui/run/shop-wrap/';
-export const RUN_SHOP_WRAP_RUNTIME_SCHEMA = 'run-shop-wrap-runtime-v1';
+export const RUN_SECTIO_WRAP_SCHEMA = 'run-sectio-wrap-candidate-v1';
+export const RUN_SECTIO_WRAP_SLOT_PREFIX = 'review/run-sectio-wrap/';
+/** Runtime home for an installed wrap; the live Sectio reads this prefix. */
+export const RUN_SECTIO_WRAP_RUNTIME_PREFIX = 'ui/run/sectio-wrap/';
+export const RUN_SECTIO_WRAP_RUNTIME_SCHEMA = 'run-sectio-wrap-runtime-v1';
 
-export interface RunShopWrapRect {
+export interface RunSectioWrapRect {
   x: number;
   y: number;
   w: number;
   h: number;
 }
 
-export interface RunShopWrapCandidate {
+export interface RunSectioWrapCandidate {
   id: string;
   label: string;
   engine: 'pixellab' | 'codex';
   /**
    * seat = wraps each displayed card; band = wraps the whole card row;
    * slots = one structure with a painted opening per card;
-   * screen = one painted scene that fills the whole Shop screen.
+   * screen = one painted scene that fills the whole Sectio screen.
    */
   kind: 'seat' | 'band' | 'slots' | 'screen';
   src: string;
   canvas: { w: number; h: number };
   /** Where the live card (seat) or card row (band) sits inside the canvas, in pixels. */
-  window: RunShopWrapRect;
+  window: RunSectioWrapRect;
   /** Band review row: how many cards, at what width, sit inside the window. */
   bandCards?: number;
   bandCardWidth?: number;
   /** slots kind: one measured opening per card, left to right. */
-  slots?: readonly RunShopWrapRect[];
+  slots?: readonly RunSectioWrapRect[];
 }
 
 /** Fraction of the window tucked under the live card so ragged paint edges never peek out. */
-export const RUN_SHOP_WRAP_BLEED = 0.01;
+export const RUN_SECTIO_WRAP_BLEED = 0.01;
 
-/** The card width the shop grid tops out at; wrap tracks scale from it. */
+/** The card width the Sectio grid tops out at; wrap tracks scale from it. */
 const CARD_MAX_WIDTH = 236;
 
-function bledWindow({ window: raw }: RunShopWrapCandidate): RunShopWrapRect {
+function bledWindow({ window: raw }: RunSectioWrapCandidate): RunSectioWrapRect {
   return {
-    x: raw.x + RUN_SHOP_WRAP_BLEED * raw.w,
-    y: raw.y + RUN_SHOP_WRAP_BLEED * raw.h,
-    w: raw.w * (1 - 2 * RUN_SHOP_WRAP_BLEED),
-    h: raw.h * (1 - 2 * RUN_SHOP_WRAP_BLEED),
+    x: raw.x + RUN_SECTIO_WRAP_BLEED * raw.w,
+    y: raw.y + RUN_SECTIO_WRAP_BLEED * raw.h,
+    w: raw.w * (1 - 2 * RUN_SECTIO_WRAP_BLEED),
+    h: raw.h * (1 - 2 * RUN_SECTIO_WRAP_BLEED),
   };
 }
 
-export interface RunShopWrapBandMount {
+export interface RunSectioWrapBandMount {
   shell: { width: number; height: number; margin: string };
   art: { left: number; top: number; width: number; height: number };
   grid: { columns: string; gap: number };
@@ -73,7 +73,7 @@ const BAND_GAP = 16;
  * overflow between the top and bottom structure, and reserve layout space for
  * the full art overhang via margins. All in px for exactness.
  */
-export function runShopWrapBandMount(candidate: RunShopWrapCandidate): RunShopWrapBandMount {
+export function runSectioWrapBandMount(candidate: RunSectioWrapCandidate): RunSectioWrapBandMount {
   const { canvas } = candidate;
   const win = bledWindow(candidate);
   const cards = candidate.bandCards ?? 3;
@@ -103,25 +103,25 @@ export function runShopWrapBandMount(candidate: RunShopWrapCandidate): RunShopWr
   };
 }
 
-export interface RunShopWrapLiveMount {
+export interface RunSectioWrapLiveMount {
   frame: { left: number; top: number; width: number; height: number };
   cards: { left: number; top: number; width: number; gap: number };
   cardWidth: number;
 }
 
 /**
- * Live Shop mounting for a band wrap. The Shop is a single screen, never a
+ * Live Sectio mounting for a band wrap. The Sectio is a single screen, never a
  * scrolling page, so the stall is *contained* in the box it is given — width
  * and height both — and then centred in it. The card row is likewise contained
- * inside the stall's measured window, so a 3-card shop and a 4-card
- * quartermaster shop both seat cleanly instead of overflowing the awning.
+ * inside the stall's measured window, so a 3-card Sectio and a 4-card
+ * Quartermaster Sectio both seat cleanly instead of overflowing the awning.
  */
-export function runShopWrapLiveMount(
-  candidate: RunShopWrapCandidate,
+export function runSectioWrapLiveMount(
+  candidate: RunSectioWrapCandidate,
   cardCount: number,
   availableWidth: number,
   availableHeight: number,
-): RunShopWrapLiveMount {
+): RunSectioWrapLiveMount {
   const win = bledWindow(candidate);
   const { canvas } = candidate;
   // Contain: the binding dimension decides the scale.
@@ -159,7 +159,7 @@ export function runShopWrapLiveMount(
  * percentages all resolve against the element's inline size, so every side is
  * normalized by the canvas width.
  */
-export function runShopWrapSeatPadding(candidate: RunShopWrapCandidate): Record<string, string> {
+export function runSectioWrapSeatPadding(candidate: RunSectioWrapCandidate): Record<string, string> {
   const { canvas } = candidate;
   const win = bledWindow(candidate);
   const percent = (value: number): string => `${(value * 100).toFixed(3)}%`;
@@ -172,7 +172,7 @@ export function runShopWrapSeatPadding(candidate: RunShopWrapCandidate): Record<
 }
 
 /** Grid track width that shows the seat's full canvas when the card is at its widest. */
-export function runShopWrapSeatTrack(candidate: RunShopWrapCandidate): string {
+export function runSectioWrapSeatTrack(candidate: RunSectioWrapCandidate): string {
   const win = bledWindow(candidate);
   return `${(CARD_MAX_WIDTH * (candidate.canvas.w / win.w)).toFixed(1)}px`;
 }
@@ -180,7 +180,7 @@ export function runShopWrapSeatTrack(candidate: RunShopWrapCandidate): string {
 /* A screen scene is a locked background: it only paints, and nothing positions
    itself against it, so it needs no mount. Only a band wrap — which genuinely
    frames the card row — measures anything. */
-export interface RunShopWrapSlotMount {
+export interface RunSectioWrapSlotMount {
   frame: { width: number; height: number };
   cards: readonly { left: number; top: number; width: number; height: number }[];
 }
@@ -189,15 +189,15 @@ export interface RunShopWrapSlotMount {
  * Slots mounting: scale the whole painted structure so each opening reaches the
  * target card width, then seat one card in each measured opening.
  */
-export function runShopWrapSlotMount(
-  candidate: RunShopWrapCandidate,
+export function runSectioWrapSlotMount(
+  candidate: RunSectioWrapCandidate,
   targetCardWidth = 145,
-): RunShopWrapSlotMount {
+): RunSectioWrapSlotMount {
   const slots = candidate.slots ?? [];
   if (!slots.length) throw new Error(`wrap candidate ${candidate.id} has no measured slots`);
   const averageSlotWidth = slots.reduce((total, slot) => total + slot.w, 0) / slots.length;
   const s = targetCardWidth / averageSlotWidth;
-  const bleed = RUN_SHOP_WRAP_BLEED;
+  const bleed = RUN_SECTIO_WRAP_BLEED;
   return {
     frame: { width: candidate.canvas.w * s, height: candidate.canvas.h * s },
     cards: slots.map((slot) => ({
@@ -209,14 +209,14 @@ export function runShopWrapSlotMount(
   };
 }
 
-const KINDS: readonly RunShopWrapCandidate['kind'][] = ['seat', 'band', 'slots', 'screen'];
-const ENGINES: readonly RunShopWrapCandidate['engine'][] = ['pixellab', 'codex'];
+const KINDS: readonly RunSectioWrapCandidate['kind'][] = ['seat', 'band', 'slots', 'screen'];
+const ENGINES: readonly RunSectioWrapCandidate['engine'][] = ['pixellab', 'codex'];
 
 function object(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
 
-function rect(value: unknown): RunShopWrapRect | null {
+function rect(value: unknown): RunSectioWrapRect | null {
   const raw = object(value);
   if (!raw) return null;
   const { x, y, w, h } = raw;
@@ -225,10 +225,10 @@ function rect(value: unknown): RunShopWrapRect | null {
     : null;
 }
 
-function candidateFrom(version: AdminLiveMediaVersion): RunShopWrapCandidate | null {
-  if (!version.slot?.startsWith(RUN_SHOP_WRAP_SLOT_PREFIX) || !version.media) return null;
+function candidateFrom(version: AdminLiveMediaVersion): RunSectioWrapCandidate | null {
+  if (!version.slot?.startsWith(RUN_SECTIO_WRAP_SLOT_PREFIX) || !version.media) return null;
   const metadata = object(version.metadata);
-  if (metadata?.schema !== RUN_SHOP_WRAP_SCHEMA) return null;
+  if (metadata?.schema !== RUN_SECTIO_WRAP_SCHEMA) return null;
   const canvas = rect({ x: 0, y: 0, ...object(metadata.canvas) });
   const window = rect(metadata.window);
   const id = typeof metadata.id === 'string' ? metadata.id : null;
@@ -237,7 +237,7 @@ function candidateFrom(version: AdminLiveMediaVersion): RunShopWrapCandidate | n
   const engine = ENGINES.find((value) => value === metadata.engine);
   if (!id || !label || !kind || !engine || !canvas || !window) return null;
   const slots = Array.isArray(metadata.slots)
-    ? metadata.slots.map(rect).filter((value): value is RunShopWrapRect => value !== null)
+    ? metadata.slots.map(rect).filter((value): value is RunSectioWrapRect => value !== null)
     : [];
   if (kind === 'slots' && !slots.length) return null;
   return {
@@ -257,11 +257,11 @@ function candidateFrom(version: AdminLiveMediaVersion): RunShopWrapCandidate | n
 /**
  * Runtime wrap candidates awaiting the owner's install decision, read off the
  * same admin catalog. Typed runtime metadata is the geometry authority, so the
- * live Shop and this review surface measure the identical window.
+ * live Sectio and this review surface measure the identical window.
  */
-export function runShopWrapRuntimeCandidate(
+export function runSectioWrapRuntimeCandidate(
   catalog: AdminLiveMediaCatalog,
-): { candidate: RunShopWrapCandidate; version: AdminLiveMediaVersion } | null {
+): { candidate: RunSectioWrapCandidate; version: AdminLiveMediaVersion } | null {
   // A candidate older than its slot's active version is superseded: offering it
   // would only produce a compare-and-swap conflict, so never surface it.
   const activeCreatedAt = new Map(catalog.slots.flatMap((slot) => {
@@ -273,7 +273,7 @@ export function runShopWrapRuntimeCandidate(
   );
   const pending = [...catalog.versions]
     .filter((version) => (
-      version.slot?.startsWith(RUN_SHOP_WRAP_RUNTIME_PREFIX)
+      version.slot?.startsWith(RUN_SECTIO_WRAP_RUNTIME_PREFIX)
       && version.status === 'candidate'
       && version.createdAt > (activeCreatedAt.get(version.slot) ?? '')
     ))
@@ -307,18 +307,18 @@ export function runShopWrapRuntimeCandidate(
 }
 
 /**
- * The installed wrap the live Shop should render, or null when none is active.
+ * The installed wrap the live Sectio should render, or null when none is active.
  * Geometry comes from the accepted slot's typed runtime metadata, which the
  * backend validated against the uploaded raster at acceptance time.
  */
-export function installedRunShopWrap(): RunShopWrapCandidate | null {
+export function installedRunSectioWrap(): RunSectioWrapCandidate | null {
   let slots;
   try {
-    slots = liveMediaSlotsWithPrefix(RUN_SHOP_WRAP_RUNTIME_PREFIX);
+    slots = liveMediaSlotsWithPrefix(RUN_SECTIO_WRAP_RUNTIME_PREFIX);
   } catch {
     return null;
   }
-  const installed: RunShopWrapCandidate[] = [];
+  const installed: RunSectioWrapCandidate[] = [];
   for (const slot of slots) {
     const runtime = object(slot.versionMetadata?.runtime) ?? object(slot.metadata?.runtime);
     const window = rect(runtime?.window);
@@ -337,15 +337,15 @@ export function installedRunShopWrap(): RunShopWrapCandidate | null {
       window,
     });
   }
-  // A full-screen scene paints the whole Shop, so it supersedes any wrap that
+  // A full-screen scene paints the whole Sectio, so it supersedes any wrap that
   // only frames the card row. Without this, two active slots would resolve by
   // slot name — which is arbitrary, not a decision.
   return installed.find((candidate) => candidate.kind === 'screen') ?? installed[0] ?? null;
 }
 
 /** Latest wrap candidate per review slot, ordered seat → band → slots for review. */
-export function runShopWrapCandidates(catalog: AdminLiveMediaCatalog): readonly RunShopWrapCandidate[] {
-  const latestBySlot = new Map<string, RunShopWrapCandidate>();
+export function runSectioWrapCandidates(catalog: AdminLiveMediaCatalog): readonly RunSectioWrapCandidate[] {
+  const latestBySlot = new Map<string, RunSectioWrapCandidate>();
   [...catalog.versions]
     .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
     .forEach((version) => {

@@ -1,19 +1,19 @@
-import { cardContentsLabel, type RunCoreCard, type PurchasablePieceType } from './model';
+import { cardContentsLabel, type RunCoreCard, type AdlectablePieceType } from './model';
 
-const CARD_INITIAL: Readonly<Record<PurchasablePieceType, string>> = Object.freeze({
+const CARD_INITIAL: Readonly<Record<AdlectablePieceType, string>> = Object.freeze({
   pawn: 'p',
   knight: 'k',
   bishop: 'b',
   rook: 'r',
   queen: 'q',
 });
-const CARD_PIECE_ORDER: readonly PurchasablePieceType[] = Object.freeze(['pawn', 'knight', 'bishop', 'rook', 'queen']);
+const CARD_PIECE_ORDER: readonly AdlectablePieceType[] = Object.freeze(['pawn', 'knight', 'bishop', 'rook', 'queen']);
 
 /**
- * A card's identity is its piece composition, not the offer that dealt it: a shop
+ * A card's identity is its piece composition, not the offer that dealt it: a Sectio
  * offer and an Enchiridion record with the same pieces are the same card. This
  * resolves any card to the deck's canonical id (piece initials in
- * purchase order), regardless of the carrier's own id or piece ordering.
+ * Adlectio order), regardless of the carrier's own id or piece ordering.
  */
 export function canonicalCardId(card: Pick<RunCoreCard, 'pieces'>): string {
   return [...card.pieces]
@@ -24,7 +24,7 @@ export function canonicalCardId(card: Pick<RunCoreCard, 'pieces'>): string {
 
 // Every card in the generated deck carries an authored banner name, in the same
 // historical-medieval register as the lipsanon names. The id scheme is the card's
-// piece initials in purchase order (p/k/b/r/q — k is the Knight), so 'ppb' is two Pawns
+// piece initials in Adlectio order (p/k/b/r/q — k is the Knight), so 'ppb' is two Pawns
 // and a Bishop. A card outside the deck (e.g. an art-review fixture) falls back to its
 // prose label.
 export const RUN_CARD_NAME_BY_ID: Readonly<Record<string, string>> = Object.freeze({

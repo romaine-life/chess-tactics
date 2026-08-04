@@ -3,14 +3,14 @@ import { ShellWorkspace } from './shared/ChromeBox';
 
 export type RunViewportSceneView =
   | 'status'
-  | 'shop'
+  | 'sectio'
   | 'aftermath'
   | 'victory'
   | 'bona-mat'
   | 'bona-target'
   | 'army'
   | 'lipsana'
-  | 'sell'
+  | 'alienatio'
   | 'battle-preview';
 
 export interface RunViewportSceneSpec {

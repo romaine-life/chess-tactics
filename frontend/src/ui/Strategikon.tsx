@@ -147,7 +147,7 @@ export function Strategikon({
               onFiltersChange={setFilters}
               onSelectUnit={setSelectedUnitId}
               onBack={() => setSelectedUnitId(null)}
-              onSell={() => undefined}
+              onAlienate={() => undefined}
               framed={false}
             />
           ) : (
@@ -157,7 +157,7 @@ export function Strategikon({
           run ? (
             <HeldCardCodex run={run} title="The Chartulary — Held Cards" framed={false} />
           ) : (
-            <UnavailableRunReference title="The Chartulary" copy="Cards bought during a Run appear here." />
+            <UnavailableRunReference title="The Chartulary" copy="Cards adlected during a Run appear here." />
           )
         ) : run ? (
           <LipsanaCodex lipsanonIds={run.lipsana} title="The Lipsanotheca" showStatistics={false} framed={false} />

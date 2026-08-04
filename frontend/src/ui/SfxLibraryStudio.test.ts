@@ -54,8 +54,8 @@ describe('editableSfxCandidates', () => {
         version('accepted', { status: 'accepted' }),
         version('no-bytes', { media: null }),
         version('wrong-domain', {
-          domain: 'run-shop',
-          slot: 'run/shop/gold.png',
+          domain: 'run-sectio',
+          slot: 'run/sectio/gold.png',
         }),
       ],
     } satisfies AdminLiveMediaCatalog;

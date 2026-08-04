@@ -64,9 +64,9 @@ function runSceneSnapshot(
         ? Object.freeze({ view: 'army' as const, unitId })
         : requestedView === 'lipsana'
           ? Object.freeze({ view: 'lipsana' as const })
-          : requestedView === 'sell' && phase === 'shop'
-            ? Object.freeze({ view: 'sell' as const })
-            : requestedView === 'battle-preview' && phase === 'shop'
+          : requestedView === 'alienatio' && phase === 'sectio'
+            ? Object.freeze({ view: 'alienatio' as const })
+            : requestedView === 'battle-preview' && phase === 'sectio'
               ? Object.freeze({ view: 'battle-preview' as const })
               : Object.freeze({ view: 'primary' as const });
   return Object.freeze({
@@ -290,13 +290,13 @@ export type SceneOverlapScope = 'scene' | 'shell-viewport';
  * How much of an overlapping scene pair the director is allowed to fade.
  *
  * Overlapping layers still retain every instance before the first divergence, and
- * both paint it identically. When that divergence is the `run-workspace` slot — Shop
- * to Sell Units, Army, Lipsana, or opening the Strategikon — the Run shell around it
+ * both paint it identically. When that divergence is the `run-workspace` slot — Sectio
+ * to Alienatio, Army, Lipsana, or opening the Strategikon — the Run shell around it
  * is retained, including the Controls panel and lipsanon rail. Crossfading the whole
  * boundary blends that retained chrome toward the backdrop at the midpoint, which is
  * the Controls title plank dimming on every workspace switch. Report the narrower
  * scope so only the shell's replaceable viewport carries the transition. A phase
- * change (Shop to Battle) replaces the Controls contents too and keeps the
+ * change (Sectio to Battle) replaces the Controls contents too and keeps the
  * whole-scene crossfade.
  */
 export function sceneOverlapScope(

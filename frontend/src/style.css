@@ -10118,7 +10118,7 @@ body { font-size: 17px; }
 /* Same-shell overlap (a Run workspace swap): both layers paint an identical Controls
    panel, lipsanon rail, and shell fill, so fading the boundary would blend that retained
    chrome 25% toward the backdrop at the crossfade midpoint — the visible dimming of the
-   Controls title plank on every Shop/Sell Units switch. The layers still overlap so the
+   Controls title plank on every Sectio/Alienatio switch. The layers still overlap so the
    outgoing snapshot stays frozen; only the shell's replaceable viewport carries the
    fade. See sceneOverlapScope (a phase change keeps the whole-scene crossfade). */
 .scene-boundary[data-scene-overlap-scope="shell-viewport"].is-preparing [data-scene-overlap-region] {
@@ -17476,7 +17476,7 @@ button.tileset-relationship-cell {
 }
 
 /* The screen-name line reads as a route when a screen names its own position in it
-   (Run › Shop). The trailing segment is a portal the screen fills; while it is empty
+   (Run › Sectio). The trailing segment is a portal the screen fills; while it is empty
    the line is exactly the plain screen name it has always been, chevron and all
    spacing included. Orientation copy, never a control (ADR-0300). */
 .brand-lockup-screen-line {
@@ -18978,9 +18978,9 @@ button.tileset-relationship-cell {
   z-index: 0;
 }
 
-/* The primary Shop workspaces normally paint the shell's standard fill. When the
+/* The primary Sectio workspaces normally paint the shell's standard fill. When the
    retained viewport artwork is installed, that fill must yield so the shared scene
-   remains visible beneath Shop, View Battle, and Sell Units alike. */
+   remains visible beneath Sectio, View Battle, and Alienatio alike. */
 .run-screen.has-persistent-viewport-artwork .run-phase-primary > .run-workspace .shell-workspace-fill {
   visibility: hidden;
 }
@@ -19034,7 +19034,7 @@ button.tileset-relationship-cell {
   margin: 0;
 }
 
-.run-shop-workspace-content > section {
+.run-sectio-workspace-content > section {
   display: grid;
   gap: var(--ds-inline-tight);
 }
@@ -19234,12 +19234,12 @@ button.tileset-relationship-cell {
   opacity: 1;
 }
 
-.run-shop-cards-empty {
+.run-sectio-cards-empty {
   justify-self: center;
   padding: var(--ds-space-3) var(--ds-space-4);
 }
 
-/* A bought card travels above every clipped Shop and shell layer into the real
+/* An adlected card travels above every clipped Sectio and shell layer into the real
    Chartulary shortcut. Translation and scale share one functional-transfer beat:
    the centre follows a straight segment while the card minimizes into the mark. */
 .run-card-flight-shield {
@@ -19466,7 +19466,7 @@ button.tileset-relationship-cell {
 }
 
 /* The heading stands directly on the artwork with nothing behind it, so it carries its
-   own shadow the way the Shop's scene copy does. */
+   own shadow the way the Sectio's scene copy does. */
 .run-aftermath-head {
   display: grid;
   gap: var(--ds-space-3);
@@ -20391,7 +20391,7 @@ button.tileset-relationship-cell {
   color: var(--skirmish-muted);
 }
 
-/* Shop wrap-art candidate rows: generated art is review-mounted around the
+/* Sectio wrap-art candidate rows: generated art is review-mounted around the
    live card faces; the negative insets come from each candidate's measured
    card window, so the window lands exactly under the card. */
 .run-wrap-candidate {
@@ -20446,7 +20446,7 @@ button.tileset-relationship-cell {
 }
 
 /* A full-screen scene is judged at real screen proportions, cover-cropped —
-   with the card row laid out exactly as the live Shop lays it out. */
+   with the card row laid out exactly as the live Sectio lays it out. */
 .run-wrap-screen-stage {
   aspect-ratio: 16 / 10;
   display: grid;
@@ -20486,17 +20486,17 @@ button.tileset-relationship-cell {
   margin: 0;
 }
 
-/* A band wrap frames the card row, so it — and only it — needs the Shop's
+/* A band wrap frames the card row, so it — and only it — needs the Sectio's
    leftover height measured. Scoped to that case: a background scene must never
    make the page's layout depend on the artwork. */
-.run-shop-workspace-content:has(.run-shop-wrap-host) {
+.run-sectio-workspace-content:has(.run-sectio-wrap-host) {
   display: flex;
   flex-direction: column;
   gap: var(--ds-stack);
   min-block-size: 0;
 }
 
-.run-shop-workspace-content:has(.run-shop-wrap-host) > .run-shop-cards-section {
+.run-sectio-workspace-content:has(.run-sectio-wrap-host) > .run-sectio-cards-section {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
@@ -20504,21 +20504,21 @@ button.tileset-relationship-cell {
   min-block-size: 0;
 }
 
-.run-shop-cards-section > .run-shop-wrap-host {
+.run-sectio-cards-section > .run-sectio-wrap-host {
   flex: 1 1 auto;
   min-block-size: 0;
   position: relative;
 }
 
-.run-shop-wrap-host {
+.run-sectio-wrap-host {
   inline-size: 100%;
 }
 
-.run-shop-wrap-frame {
+.run-sectio-wrap-frame {
   position: absolute;
 }
 
-.run-shop-wrap-art {
+.run-sectio-wrap-art {
   inset: 0;
   block-size: 100%;
   inline-size: 100%;
@@ -20526,7 +20526,7 @@ button.tileset-relationship-cell {
   position: absolute;
 }
 
-.run-shop-wrap-cards {
+.run-sectio-wrap-cards {
   display: grid;
   position: absolute;
   z-index: 1;
@@ -20536,15 +20536,15 @@ button.tileset-relationship-cell {
    the whole workspace box — the shell padding included — instead of stopping at
    the scroller and letting the backdrop show around the art. It is a background:
    it takes no part in layout and nothing positions itself against it. */
-.run-shop-scene-artwork {
+.run-sectio-scene-artwork {
   block-size: 100%;
   inline-size: 100%;
   object-fit: cover;
 }
 
-/* Selling is a Shop activity and stands in the same scene, so its heading reads
+/* Selling is a Sectio activity and stands in the same scene, so its heading reads
    over the scene art rather than above it. */
-.run-screen.has-persistent-viewport-artwork .run-sell-workspace-content > :is(h2, p) {
+.run-screen.has-persistent-viewport-artwork .run-alienatio-workspace-content > :is(h2, p) {
   text-shadow: 0 2px 6px rgba(2, 7, 12, .85);
 }
 .run-wrap-slot-card {
@@ -21084,7 +21084,7 @@ button.tileset-relationship-cell {
   margin-block-start: auto;
 }
 
-.run-sell-workspace {
+.run-alienatio-workspace {
   position: relative;
   z-index: 35;
 }
@@ -21155,7 +21155,7 @@ button.tileset-relationship-cell {
   min-block-size: 0;
 }
 
-.run-sell-list {
+.run-alienatio-list {
   align-content: start;
   display: grid;
   gap: var(--ds-inline-tight);
@@ -21189,7 +21189,7 @@ button.tileset-relationship-cell {
 }
 
 .run-army-ledger-copy,
-.run-sell-copy {
+.run-alienatio-copy {
   align-content: center;
   display: grid;
   gap: var(--ds-space-1);
@@ -21201,7 +21201,7 @@ button.tileset-relationship-cell {
 }
 
 .run-army-ledger-copy > strong,
-.run-sell-copy > strong {
+.run-alienatio-copy > strong {
   font: var(--ds-weight-regular) var(--ds-text-lg)/1 var(--ds-font-display);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -21209,7 +21209,7 @@ button.tileset-relationship-cell {
 }
 
 .run-army-ledger-copy > small,
-.run-sell-copy > small,
+.run-alienatio-copy > small,
 .run-unit-no-traits,
 .run-unit-trait-source {
   color: var(--skirmish-muted);
@@ -21225,7 +21225,7 @@ button.tileset-relationship-cell {
 }
 
 .run-army-ledger-value,
-.run-sell-return {
+.run-alienatio-return {
   align-items: end;
   display: grid;
   gap: var(--ds-space-1);
@@ -21437,13 +21437,13 @@ button.tileset-relationship-cell {
   margin: 0;
 }
 
-.run-sell-workspace-content {
+.run-alienatio-workspace-content {
   grid-template-rows: auto auto auto minmax(0, 1fr);
   min-block-size: 0;
   overflow: hidden;
 }
 
-.run-sell-row {
+.run-alienatio-row {
   align-items: center;
   display: grid;
   gap: var(--ds-inline);
@@ -21452,23 +21452,23 @@ button.tileset-relationship-cell {
   padding: var(--ds-space-2) var(--ds-inset);
 }
 
-.run-sell-row.is-sold,
-.run-sell-row.is-retained {
+.run-alienatio-row.is-alienated,
+.run-alienatio-row.is-retained {
   opacity: .7;
 }
 
-.run-sell-board-piece {
+.run-alienatio-board-piece {
   block-size: 92px;
   inline-size: 78px;
   object-fit: contain;
 }
 
-.run-sell-row > .tooltip {
+.run-alienatio-row > .tooltip {
   inline-size: 100%;
 }
 
-.run-sell-row > .tooltip .tooltip-trigger,
-.run-sell-row > .tooltip button {
+.run-alienatio-row > .tooltip .tooltip-trigger,
+.run-alienatio-row > .tooltip button {
   inline-size: 100%;
 }
 
@@ -22387,12 +22387,12 @@ button.tileset-relationship-cell {
     max-inline-size: 360px;
   }
 
-  .run-sell-row {
+  .run-alienatio-row {
     grid-template-columns: 72px minmax(0, 1fr);
   }
 
-  .run-sell-return,
-  .run-sell-row > :is(button, .tooltip) {
+  .run-alienatio-return,
+  .run-alienatio-row > :is(button, .tooltip) {
     grid-column: 2;
     justify-self: stretch;
   }

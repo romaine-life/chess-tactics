@@ -1,15 +1,15 @@
 // Craft an active Run directly into a named state so a Run screen can be reached by URL.
 //
-// Debugging and feature work constantly need "the Shop after Battle 3 with 25 gold and a Rook on
+// Debugging and feature work constantly need "the Sectio after Battle 3 with 25 gold and a Rook on
 // offer". Playing there by hand is slow, and hand-authoring the document is worse: the server
 // validator (validateActiveRunBody) cross-checks army/card membership, Plagued targets, offer
-// pricing and the Shop entry snapshot, so a typed-out document is rejected far more often than it
+// pricing and the Sectio entry snapshot, so a typed-out document is rejected far more often than it
 // is accepted.
 //
 // So this module never authors state directly. It composes the SAME transitions the game plays —
-// createRun → buyCard → leaveShop → prepareDeployment → beginBattle → openShop — and only then
+// createRun → performAdlectio → leaveSectio → prepareDeployment → beginBattle → openSectio — and only then
 // applies the requested overrides in the phase where each one is legal (army and lipsana before a
-// Battle, offers and gold in the Shop that a real openShop() produced). What comes out is a
+// Battle, offers and gold in the Sectio that a real openSectio() produced). What comes out is a
 // document the game and the server both accept, because the game built it.
 //
 // The URL grammar lives here too, so links stay the shared contract between the owner and an agent.
@@ -28,14 +28,14 @@ import {
   acquireLipsanon,
   addArmyPieces,
   beginBattle,
-  buyCard,
-  canLeaveShop,
+  performAdlectio,
+  canLeaveSectio,
   closeBattle,
   createRun,
-  leaveShop,
+  leaveSectio,
   mixSeed,
   observeRunUnitDeath,
-  openShop,
+  openSectio,
   prepareDeployment,
   removeUnitFromArmyAndCards,
   seededPestiferousTarget,
@@ -43,7 +43,7 @@ import {
   snapshotWar,
   takeVacantiaLipsanon,
   type AtaraxiaTier,
-  type PurchasablePieceType,
+  type AdlectablePieceType,
   type RunAbility,
   type RunCardOffer,
   type RunCardType,
@@ -81,7 +81,7 @@ export const RUN_CRAFT_PARAMS: readonly string[] = Object.freeze([
 
 export const DEFAULT_CRAFT_SEED = 1337;
 
-export type RunCraftPhase = 'aftermath' | 'bona-vacantia' | 'shop' | 'deployment' | 'battle' | 'victory';
+export type RunCraftPhase = 'aftermath' | 'bona-vacantia' | 'sectio' | 'deployment' | 'battle' | 'victory';
 
 /**
  * What a crafted aftermath reports when the spec does not say. A crafted Battle is placed,
@@ -92,14 +92,14 @@ export const DEFAULT_CRAFT_AFTERMATH_TURNS = 14;
 export const DEFAULT_CRAFT_AFTERMATH_ELAPSED_MS = 277_000;
 
 export interface RunCraftCard {
-  pieces: PurchasablePieceType[];
+  pieces: AdlectablePieceType[];
   cardType: RunCardType | null;
 }
 
 /** One crafted army unit. The URL grammar can only name a piece; a JSON spec can also grant the
  * abilities a unit would otherwise have earned from a card or a lipsanon. */
 export interface RunCraftUnit {
-  type: PurchasablePieceType;
+  type: AdlectablePieceType;
   abilities: RunAbility[];
 }
 
@@ -114,7 +114,7 @@ export interface RunCraftSpec {
   army: RunCraftUnit[] | null;
   add: RunCraftUnit[] | null;
   offers: RunCraftCard[] | null;
-  /** Cards the Run already HOLDS. Bought for real in the opening Shop and carried forward, so the
+  /** Cards the Run already HOLDS. Adlected in the opening Sectio and carried forward, so the
    * army, abilities, Plagued marks and card records are the ones the game itself writes. */
   cards: RunCraftCard[] | null;
   loot: LipsanonId[] | null;
@@ -135,7 +135,7 @@ export class RunCraftError extends Error {
   }
 }
 
-const PIECE_ALIASES: Readonly<Record<string, PurchasablePieceType>> = Object.freeze({
+const PIECE_ALIASES: Readonly<Record<string, AdlectablePieceType>> = Object.freeze({
   p: 'pawn',
   pawn: 'pawn',
   k: 'knight',
@@ -168,10 +168,10 @@ const CARD_TYPES: Readonly<Record<string, RunCardType | null>> = Object.freeze({
   agminate: 'hieratic',
 });
 
-const CRAFT_PHASES: readonly RunCraftPhase[] = ['aftermath', 'bona-vacantia', 'shop', 'deployment', 'battle', 'victory'];
+const CRAFT_PHASES: readonly RunCraftPhase[] = ['aftermath', 'bona-vacantia', 'sectio', 'deployment', 'battle', 'victory'];
 
-function pieceList(raw: string, label: string): PurchasablePieceType[] {
-  const pieces: PurchasablePieceType[] = [];
+function pieceList(raw: string, label: string): AdlectablePieceType[] {
+  const pieces: AdlectablePieceType[] = [];
   for (const token of raw.split(/[,+\s]+/).filter(Boolean)) {
     const named = PIECE_ALIASES[token.toLowerCase()];
     if (named) {
@@ -185,7 +185,7 @@ function pieceList(raw: string, label: string): PurchasablePieceType[] {
         `craft ${label}: "${token}" is not a piece. Use pawn, knight, bishop, rook or queen (p/k/b/r/q).`,
       );
     }
-    pieces.push(...(letters as PurchasablePieceType[]));
+    pieces.push(...(letters as AdlectablePieceType[]));
   }
   if (!pieces.length) throw new RunCraftError(`craft ${label}: no pieces were listed.`);
   return pieces;
@@ -193,8 +193,8 @@ function pieceList(raw: string, label: string): PurchasablePieceType[] {
 
 /** The deck already holds every legal multiset worth 1-9 gold, so a crafted card is always a real
  * core card — looked up, never synthesized, so card art and names resolve like any other card. */
-export function craftCoreCardId(pieces: readonly PurchasablePieceType[]): string {
-  const order: readonly PurchasablePieceType[] = ['pawn', 'knight', 'bishop', 'rook', 'queen'];
+export function craftCoreCardId(pieces: readonly AdlectablePieceType[]): string {
+  const order: readonly AdlectablePieceType[] = ['pawn', 'knight', 'bishop', 'rook', 'queen'];
   return [...pieces]
     .sort((a, b) => order.indexOf(a) - order.indexOf(b))
     .map((piece) => piece[0])
@@ -208,7 +208,7 @@ function cardSpec(raw: string): RunCraftCard {
   const value = pieces.reduce((total, piece) => total + PIECE_VALUE[piece], 0);
   if (!RUN_CARD_BY_ID[craftCoreCardId(pieces)]) {
     throw new RunCraftError(
-      `craft offers: "${raw}" is worth ${value} gold; a Shop card must be worth 1-9 gold.`,
+      `craft offers: "${raw}" is worth ${value} gold; a Sectio card must be worth 1-9 gold.`,
     );
   }
   if (typePart === undefined) return { pieces, cardType: null };
@@ -522,7 +522,7 @@ export function runLinkForRun(runId: string, path = '/run'): string {
 }
 
 /** Pick the War a craft link names, falling back to the first Run-eligible official War so a bare
- * ?craft=shop link works with no War id in it. */
+ * ?craft=sectio link works with no War id in it. */
 export function selectCraftWar(
   spec: RunCraftSpec,
   wars: readonly War[],
@@ -596,12 +596,12 @@ function fightBattle(run: RunDocument): RunDocument {
   if (started.phase !== 'battle') throw new RunCraftError('craft: the crafted Battle could not be started.');
   // Every deployed unit survives a crafted Battle: the crafter is placing the player at a state,
   // not simulating an outcome.
-  return openShop(started, deployedUnitIds);
+  return openSectio(started, deployedUnitIds);
 }
 
 /**
  * Stop at the aftermath report of the Battle the spec names, rather than fast-forwarding
- * through it into the shop.
+ * through it into the Sectio.
  *
  * A crafted Battle is placed and not played, so it has no casualties, no turn count and no
  * clock. All three are put there through the transitions that would have written them: the
@@ -647,7 +647,7 @@ function craftAftermath(run: RunDocument, spec: RunCraftSpec): RunDocument {
 /**
  * Get past a Conflict's lipsanon screen by taking the first offer that will be accepted.
  * Fast-forwarding has to make the same mandatory choice a player would; taking a lipsanon is
- * also what opens the shop behind it, so this is how the crafter reaches any later state.
+ * also what opens the Sectio behind it, so this is how the crafter reaches any later state.
  */
 function takeVacantiaAuto(run: RunDocument): RunDocument {
   if (run.phase !== 'bona-vacantia' || !run.vacantia) return run;
@@ -659,104 +659,104 @@ function takeVacantiaAuto(run: RunDocument): RunDocument {
   throw new RunCraftError('craft: the Conflict opened with no lipsanon that could be taken.');
 }
 
-function leaveShopAuto(run: RunDocument): RunDocument {
+function leaveSectioAuto(run: RunDocument): RunDocument {
   const next = takeVacantiaAuto(run);
-  if (!canLeaveShop(next)) {
-    throw new RunCraftError(`craft: the Shop after Battle ${(next.shop?.afterBattleIndex ?? 0) + 1} could not be left.`);
+  if (!canLeaveSectio(next)) {
+    throw new RunCraftError(`craft: the Sectio after Battle ${(next.sectio?.afterBattleIndex ?? 0) + 1} could not be left.`);
   }
-  return leaveShop(next);
+  return leaveSectio(next);
 }
 
-function buyOpeningCard(run: RunDocument): RunDocument {
-  const affordable = [...(run.shop?.cardOffers ?? [])]
+function adlectOpeningCard(run: RunDocument): RunDocument {
+  const affordable = [...(run.sectio?.cardOffers ?? [])]
     .filter((offer) => offer.cost * GOLD_SCALE <= run.goldTenths)
     .sort((a, b) => a.cost - b.cost || a.offerId.localeCompare(b.offerId));
   const chosen = affordable[0];
-  if (!chosen) throw new RunCraftError('craft: the opening Shop offered nothing affordable.');
-  const bought = buyCard(run, chosen.offerId);
-  if (bought === run) throw new RunCraftError('craft: the opening Shop purchase was refused.');
-  return bought;
+  if (!chosen) throw new RunCraftError('craft: the opening Sectio offered nothing affordable.');
+  const adlected = performAdlectio(run, chosen.offerId);
+  if (adlected === run) throw new RunCraftError('craft: the opening Sectio Adlectio was refused.');
+  return adlected;
 }
 
 /**
- * Buy the cards the Run should already HOLD, in the opening Shop it is standing in.
+ * Adlect the cards the Run should already HOLD, in the opening Sectio it is standing in.
  *
- * The point of the field is the Chartulary and everything downstream of a purchase: real units
- * with real ids, the abilities and Plagued marks `buyCard` grants, and card records the server
- * validator accepts. So each card is staged as an ordinary offer and bought — never written into
+ * The point of the field is the Chartulary and everything downstream of Adlectio: real units
+ * with real ids, the abilities and Plagued marks `performAdlectio` grants, and card records the server
+ * validator accepts. So each card is staged as an ordinary offer and adlected — never written into
  * `run.cards` directly. Gold is restored afterwards, so held cards do not silently pay for
- * themselves out of what the Run has to spend, and the staged offers are withdrawn so the Shop
+ * themselves out of what the Run has to spend, and the staged offers are withdrawn so the Sectio
  * that is about to be left still reads as the one the game dealt.
  *
- * They are bought at the START of the fast-forward, which means they then live through every
+ * They are adlected at the START of the fast-forward, which means they then live through every
  * Battle before the target: units die, Pestiferous cards deteriorate, and what arrives is a card
- * with a history rather than a fresh purchase.
+ * with a history rather than a fresh Adlectio.
  */
-function buyHeldCards(run: RunDocument, cards: readonly RunCraftCard[] | null): RunDocument {
+function adlectHeldCards(run: RunDocument, cards: readonly RunCraftCard[] | null): RunDocument {
   if (!cards?.length) return run;
-  if (!run.shop) throw new RunCraftError('craft cards: there is no Shop to buy the held cards in.');
+  if (!run.sectio) throw new RunCraftError('craft cards: there is no Sectio in which to perform Adlectio.');
   const goldTenths = run.goldTenths;
   let next = run;
   cards.forEach((card, index) => {
-    const shop = next.shop!;
+    const sectio = next.sectio!;
     const offer = craftOffer(next, card, HELD_CARD_SLOT_BASE + index);
     const staged: RunDocument = {
       ...next,
       goldTenths: next.goldTenths + offer.cost * GOLD_SCALE,
-      shop: { ...shop, cardOffers: [...shop.cardOffers, offer] },
+      sectio: { ...sectio, cardOffers: [...sectio.cardOffers, offer] },
     };
-    const bought = buyCard(staged, offer.offerId);
-    if (bought === staged) {
-      throw new RunCraftError(`craft cards: "${card.pieces.join('+')}" could not be bought.`);
+    const adlected = performAdlectio(staged, offer.offerId);
+    if (adlected === staged) {
+      throw new RunCraftError(`craft cards: "${card.pieces.join('+')}" could not be adlected.`);
     }
     next = {
-      ...bought,
-      shop: {
-        ...bought.shop!,
-        cardOffers: bought.shop!.cardOffers.filter((entry) => entry.offerId !== offer.offerId),
-        purchasedCardOfferIds: bought.shop!.purchasedCardOfferIds.filter((id) => id !== offer.offerId),
+      ...adlected,
+      sectio: {
+        ...adlected.sectio!,
+        cardOffers: adlected.sectio!.cardOffers.filter((entry) => entry.offerId !== offer.offerId),
+        adlectedCardOfferIds: adlected.sectio!.adlectedCardOfferIds.filter((id) => id !== offer.offerId),
       },
     };
   });
-  // The Shop's own entry snapshot moves with them: they are cards the Run came in holding, not
-  // purchases a Discard changes should undo.
+  // The Sectio's own entry snapshot moves with them: they are cards the Run came in holding, not
+  // Adlectiones a Discard changes should undo.
   return {
     ...next,
     goldTenths,
-    shop: {
-      ...next.shop!,
-      entrySnapshot: { ...next.shop!.entrySnapshot, army: next.army, cards: next.cards, goldTenths },
+    sectio: {
+      ...next.sectio!,
+      entrySnapshot: { ...next.sectio!.entrySnapshot, army: next.army, cards: next.cards, goldTenths },
     },
   };
 }
 
-/** Far above any real Shop slot, so a staged held-card offer can never collide with a dealt one. */
+/** Far above any real Sectio slot, so a staged held-card offer can never collide with a dealt one. */
 const HELD_CARD_SLOT_BASE = 1000;
 
-/** Fast-forward from the opening Shop to the deployment of a target Battle by playing every
+/** Fast-forward from the opening Sectio to the deployment of a target Battle by playing every
  * Battle before it. */
 function advanceToDeployment(run: RunDocument, battleIndex: number, held: readonly RunCraftCard[] | null): RunDocument {
-  let next = leaveShopAuto(buyHeldCards(buyOpeningCard(takeVacantiaAuto(run)), held));
+  let next = leaveSectioAuto(adlectHeldCards(adlectOpeningCard(takeVacantiaAuto(run)), held));
   let guard = 0;
   while (next.battleIndex < battleIndex) {
     if ((guard += 1) > 200) throw new RunCraftError('craft: fast-forward made no progress.');
-    const shopped = takeVacantiaAuto(fightBattle(next));
-    if (shopped.phase !== 'shop') {
+    const inSectio = takeVacantiaAuto(fightBattle(next));
+    if (inSectio.phase !== 'sectio') {
       throw new RunCraftError(`craft: the War ended before Battle ${battleIndex + 1}.`);
     }
-    next = leaveShopAuto(shopped);
+    next = leaveSectioAuto(inSectio);
   }
   return next;
 }
 
-function craftUnits(pieces: readonly PurchasablePieceType[]): RunCraftUnit[] {
+function craftUnits(pieces: readonly AdlectablePieceType[]): RunCraftUnit[] {
   return pieces.map((type) => ({ type, abilities: [] }));
 }
 
 /** Add crafted units, then grant each one the abilities the spec asked for. Abilities are stored on
  * the unit exactly as a card or lipsanon would leave them, so the game reads them normally. */
 function addPieces(run: RunDocument, units: readonly RunCraftUnit[]): RunDocument {
-  const { addedUnits, ...update } = addArmyPieces(run, units.map((unit) => unit.type), 'shop');
+  const { addedUnits, ...update } = addArmyPieces(run, units.map((unit) => unit.type), 'adlectio');
   const granted = new Map(addedUnits.map((added, index) => [added.id, units[index].abilities]));
   return {
     ...run,
@@ -768,7 +768,7 @@ function addPieces(run: RunDocument, units: readonly RunCraftUnit[]): RunDocumen
   };
 }
 
-/** Cards are the Run's purchase history; a crafted army rewrites the roster, so cards keep only the
+/** Cards are the Run's Adlectio history; a crafted army rewrites the roster, so cards keep only the
  * units that still exist and empty leftovers are dropped rather than left as ghosts. */
 function pruneEmptyCards(run: RunDocument): RunDocument {
   const unitIds = new Set(run.army.map((unit) => unit.id));
@@ -842,26 +842,26 @@ function craftOffer(
   };
 }
 
-function applyShopOffers(run: RunDocument, spec: RunCraftSpec): RunDocument {
-  const shop = run.shop;
-  if (!shop) return run;
+function applySectioOffers(run: RunDocument, spec: RunCraftSpec): RunDocument {
+  const sectio = run.sectio;
+  if (!sectio) return run;
   const held = new Set(run.lipsana);
   for (const lipsanon of [...(spec.loot ?? []), ...(spec.paidLipsanon ? [spec.paidLipsanon] : [])]) {
     if (held.has(lipsanon)) throw new RunCraftError(`craft: "${lipsanon}" is already held, so it cannot also be offered.`);
   }
-  const cardOffers = spec.offers ? spec.offers.map((card, index) => craftOffer(run, card, index)) : shop.cardOffers;
+  const cardOffers = spec.offers ? spec.offers.map((card, index) => craftOffer(run, card, index)) : sectio.cardOffers;
   const offerIds = new Set(cardOffers.map((offer) => offer.offerId));
   if (offerIds.size !== cardOffers.length) {
-    throw new RunCraftError('craft offers: the same card was offered twice; each Shop card must be distinct.');
+    throw new RunCraftError('craft offers: the same card was offered twice; each Sectio card must be distinct.');
   }
-  const paidLipsanonOffer = spec.paidLipsanon ?? shop.paidLipsanonOffer;
+  const paidLipsanonOffer = spec.paidLipsanon ?? sectio.paidLipsanonOffer;
   return {
     ...run,
     seenLipsana: [...new Set([...run.seenLipsana, ...(paidLipsanonOffer ? [paidLipsanonOffer] : [])])],
-    shop: {
-      ...shop,
+    sectio: {
+      ...sectio,
       cardOffers,
-      purchasedCardOfferIds: [],
+      adlectedCardOfferIds: [],
       paidLipsanonOffer,
       paidLipsanonBought: false,
     },
@@ -884,19 +884,19 @@ function applyVacantiaOffers(run: RunDocument, spec: RunCraftSpec): RunDocument 
 }
 
 /** Gold is set last so lipsanon payouts and Battle rewards cannot move the number off the request.
- * Inside a Shop the entry snapshot moves with it, so Discard changes restores the crafted gold. */
+ * Inside a Sectio the entry snapshot moves with it, so Discard changes restores the crafted gold. */
 function applyGold(run: RunDocument, goldTenths: number | null): RunDocument {
   if (goldTenths === null) return run;
   return {
     ...run,
     goldTenths,
-    shop: run.shop
-      ? { ...run.shop, entrySnapshot: { ...run.shop.entrySnapshot, goldTenths } }
-      : run.shop,
+    sectio: run.sectio
+      ? { ...run.sectio, entrySnapshot: { ...run.sectio.entrySnapshot, goldTenths } }
+      : run.sectio,
   };
 }
 
-const OPENING_SHOP_OVERRIDES: readonly (keyof RunCraftSpec)[] = ['goldTenths', 'army', 'add', 'offers', 'cards', 'loot', 'paidLipsanon', 'lipsana'];
+const OPENING_SECTIO_OVERRIDES: readonly (keyof RunCraftSpec)[] = ['goldTenths', 'army', 'add', 'offers', 'cards', 'loot', 'paidLipsanon', 'lipsana'];
 
 /** Build the crafted Run. Every state is reached by the transitions the game itself plays. */
 export function craftRunDocument(spec: RunCraftSpec, war: RunWarSnapshot): RunDocument {
@@ -907,31 +907,31 @@ export function craftRunDocument(spec: RunCraftSpec, war: RunWarSnapshot): RunDo
   }
   const opening = createRun(war, spec.seed, spec.ataraxiaTier);
 
-  // The run's own first state. Bona Vacantia now sits in front of the opening Shop, so
+  // The run's own first state. Bona Vacantia now sits in front of the opening Sectio, so
   // battle=1 reaches it without playing anything.
   if (spec.phase === 'bona-vacantia' && targetIndex === 0) {
     if (opening.phase !== 'bona-vacantia') {
       throw new RunCraftError(`craft: ${war.name} has no loot Battle, so no Conflict opens with a lipsanon.`);
     }
-    // Offers last, matching the Shop path: the held-lipsanon guard can only see a lipsanon the
+    // Offers last, matching the Sectio path: the held-lipsanon guard can only see a lipsanon the
     // spec granted once applyLipsana has actually granted it.
     return applyGold(applyVacantiaOffers(applyLipsana(applyArmy(opening, spec), spec), spec), spec.goldTenths);
   }
 
-  // The opening Shop is pinned by the server contract — its offers, army and starting gold are
+  // The opening Sectio is pinned by the server contract — its offers, army and starting gold are
   // checked value by value — so it is craftable only as itself. It now sits behind the opening
   // lipsanon screen, so reaching it means taking that lipsanon first.
-  if (spec.phase === 'shop' && targetIndex === 0) {
-    const overridden = OPENING_SHOP_OVERRIDES.filter((key) => spec[key] !== null);
+  if (spec.phase === 'sectio' && targetIndex === 0) {
+    const overridden = OPENING_SECTIO_OVERRIDES.filter((key) => spec[key] !== null);
     if (overridden.length) {
       throw new RunCraftError(
-        'craft: the opening Shop is fixed by the Run contract and takes no overrides. Craft battle=2 or later for a Shop with crafted contents.',
+        'craft: the opening Sectio is fixed by the Run contract and takes no overrides. Craft battle=2 or later for a Sectio with crafted contents.',
       );
     }
     return takeVacantiaAuto(opening);
   }
 
-  const deploymentIndex = spec.phase === 'shop'
+  const deploymentIndex = spec.phase === 'sectio'
     ? targetIndex - 1
     : spec.phase === 'victory' ? battles - 1 : targetIndex;
   if (spec.phase !== 'aftermath' && (spec.turns !== null || spec.elapsedMs !== null || spec.fallen !== null)) {
@@ -944,7 +944,7 @@ export function craftRunDocument(spec: RunCraftSpec, war: RunWarSnapshot): RunDo
   }
 
   // A Conflict's lipsanon screen sits between the Battle that closed the previous Conflict and
-  // the Shop that follows it, so it is reached by fighting up to that Battle and stopping.
+  // the Sectio that follows it, so it is reached by fighting up to that Battle and stopping.
   if (spec.phase === 'bona-vacantia') {
     const closing = advanceToDeployment(opening, targetIndex - 1, spec.cards);
     const opened = fightBattle(applyLipsana(applyArmy(closing, spec), spec));
@@ -967,17 +967,17 @@ export function craftRunDocument(spec: RunCraftSpec, war: RunWarSnapshot): RunDo
     );
   }
 
-  // The Battle report stands between the Battle and the shop, so it is reached by fighting
+  // The Battle report stands between the Battle and the Sectio, so it is reached by fighting
   // the Battle the spec names and stopping on the screen that closes it.
   if (spec.phase === 'aftermath') return applyGold(craftAftermath(run, spec), spec.goldTenths);
 
-  const shopped = takeVacantiaAuto(fightBattle(run));
+  const inSectio = takeVacantiaAuto(fightBattle(run));
   if (spec.phase === 'victory') {
-    if (shopped.phase !== 'victory') throw new RunCraftError('craft: the final Battle did not end the War.');
-    return applyGold(shopped, spec.goldTenths);
+    if (inSectio.phase !== 'victory') throw new RunCraftError('craft: the final Battle did not end the War.');
+    return applyGold(inSectio, spec.goldTenths);
   }
-  if (shopped.phase !== 'shop') {
-    throw new RunCraftError(`craft: Battle ${deploymentIndex + 1} ended the War, so it has no Shop after it.`);
+  if (inSectio.phase !== 'sectio') {
+    throw new RunCraftError(`craft: Battle ${deploymentIndex + 1} ended the War, so it has no Sectio after it.`);
   }
-  return applyGold(applyShopOffers(shopped, spec), spec.goldTenths);
+  return applyGold(applySectioOffers(inSectio, spec), spec.goldTenths);
 }

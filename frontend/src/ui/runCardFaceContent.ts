@@ -5,7 +5,7 @@ import {
   hieraticAgminateAcquisitionTarget,
   runCardOfferCost,
   legatineAdlectedAcquisitionTarget,
-  type PurchasablePieceType,
+  type AdlectablePieceType,
   type RunAbility,
   type RunCardOffer,
   type RunCardType,
@@ -22,7 +22,7 @@ import {
 /**
  * A card face is projected from a Run card, never authored. The brand is declared but
  * never exported, so no other module can produce a value of this type: `runCardFaceContent`
- * below is the only constructor, and every surface that draws a card — the Shop, the
+ * below is the only constructor, and every surface that draws a card — the Sectio, the
  * Enchiridion, the Studio prototype, art and icon review, tests — must go through it.
  *
  * That is the point. Hand-authored face literals had drifted into four private copies of
@@ -37,7 +37,7 @@ declare const RUN_CARD_FACE_PROJECTION: unique symbol;
  */
 export type RunCardGrant = Readonly<{
   count: number;
-  unit: PurchasablePieceType;
+  unit: AdlectablePieceType;
   /** Occurrence indices within this cell marked Cacochymic. */
   cacochymicIndices?: readonly number[];
   /** The single occurrence in this cell whose granted state is public, if any. */
@@ -66,7 +66,7 @@ export type RunCardFaceContent = Readonly<{
 /** Every current card is a unit card, so the type strip's left side never varies (ADR-0339). */
 export const RUN_CARD_TYPE_LINE = 'Units';
 
-const CARD_PIECE_ORDER: readonly PurchasablePieceType[] = Object.freeze([
+const CARD_PIECE_ORDER: readonly AdlectablePieceType[] = Object.freeze([
   'pawn',
   'knight',
   'bishop',
@@ -92,7 +92,7 @@ export function runCardFrameSlotForType(cardType: RunCardType | null): string {
 
 /**
  * The frame a card is printed on. A card the Run HOLDS is no longer an offer but keeps
- * the property it was bought with, so its carrier supplies that property (ADR-0371).
+ * the property under which it was adlected, so its carrier supplies that property (ADR-0371).
  */
 export function runCardFrameSlot(
   card: RunCoreCard | RunCardOffer,
@@ -103,11 +103,11 @@ export function runCardFrameSlot(
 
 export type RunCardFaceOptions = Readonly<{
   /**
-   * Acquisition has happened, so a target that was drawn at purchase is now public.
+   * Adlectio has happened, so a target that was drawn at admission is now public.
    * Before that the target is hidden, and a hidden target draws nothing at all — no
    * marker and no substitute sentence (ADR-0339's Tactical rule, applied to every type).
    */
-  purchased?: boolean;
+  adlected?: boolean;
   /**
    * The property of a card the Run holds, which carries no offer of its own (ADR-0371).
    * An offer always carries its own property and ignores this.
@@ -115,7 +115,7 @@ export type RunCardFaceOptions = Readonly<{
   cardType?: RunCardType | null;
 }>;
 
-/** The property a card wears: its offer's, or the one a held card was bought with. */
+/** The property a card wears: its offer's, or the one under which a held card was adlected. */
 function runCardProperty(
   card: RunCoreCard | RunCardOffer,
   heldCardType: RunCardType | null,
@@ -131,16 +131,16 @@ type PublicAbilityTarget = Readonly<{ state: RunAbility; pieceIndex: number }>;
  */
 function publicAbilityTarget(
   card: RunCoreCard | RunCardOffer,
-  purchased: boolean,
+  adlected: boolean,
 ): PublicAbilityTarget | null {
   if (!isRunCardOffer(card) || !card.cardType) return null;
   const granted = RUN_CARD_TYPE_REFERENCE[card.cardType].grants;
   // Cacochymic is a modifier the offer already names publicly through cacochymicPieceIndex.
   if (granted === 'cacochymic') return null;
   const state: RunAbility = granted;
-  // A one-unit offer forces its target, so its state is public before purchase.
+  // A one-unit offer forces its target, so its state is public before Adlectio.
   if (card.pieces.length === 1) return { state, pieceIndex: 0 };
-  if (!purchased) return null;
+  if (!adlected) return null;
   const pieceIndex = card.cardType === 'concinnous'
     ? card.effectTargetIndex
     : card.cardType === 'legatine'
@@ -152,10 +152,10 @@ function publicAbilityTarget(
 
 export function runCardGrants(
   card: RunCoreCard | RunCardOffer,
-  { purchased = false }: RunCardFaceOptions = {},
+  { adlected = false }: RunCardFaceOptions = {},
 ): readonly RunCardGrant[] {
   const cacochymicPieceIndex = isRunCardOffer(card) ? card.cacochymicPieceIndex : null;
-  const target = publicAbilityTarget(card, purchased);
+  const target = publicAbilityTarget(card, adlected);
   return CARD_PIECE_ORDER.flatMap((unit) => {
     const pieceIndices = card.pieces.flatMap((piece, index) => piece === unit ? [index] : []);
     if (pieceIndices.length === 0) return [];
@@ -199,13 +199,13 @@ export function runCardFaceContent(
 export { runCardArtSlot };
 
 export type RunCardSpecimenSpec = Readonly<{
-  pieces: readonly PurchasablePieceType[];
+  pieces: readonly AdlectablePieceType[];
   cardType?: RunCardType | null;
   /** Overrides the composition's own gold value, for a study that pins a printed cost. */
   cost?: number;
   /** Which contained unit is Cacochymic, for a Pestiferous specimen. */
   cacochymicPieceIndex?: number | null;
-  /** Which contained unit a Concinnous specimen has drawn, revealed once purchased. */
+  /** Which contained unit a Concinnous specimen has drawn, revealed once adlected. */
   effectTargetIndex?: number | null;
   effectSeed?: number;
 }>;
@@ -214,7 +214,7 @@ export type RunCardSpecimenSpec = Readonly<{
  * A synthetic Run card for review, study and test surfaces. They declare a *card* and
  * project it like every other host, instead of hand-writing a face that answers to no
  * rule. Composition drives the name, flavor, art and contents exactly as it does in a
- * Shop, so a specimen cannot show something a real offer never could.
+ * Sectio, so a specimen cannot show something a real offer never could.
  */
 export function runCardSpecimen({
   pieces,
@@ -231,7 +231,7 @@ export function runCardSpecimen({
     pieces: [...pieces],
     value,
     offerId: `specimen-${cardType ?? 'standard'}-${pieces.join('-')}`,
-    // Priced by the Shop's own rule, so a specimen cannot print a cost no offer could.
+    // Priced by the Sectio's own rule, so a specimen cannot print a cost no offer could.
     cost: cost ?? runCardOfferCost(value, cardType, plaguedPiece),
     cardType,
     effectSeed,

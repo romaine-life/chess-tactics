@@ -19,7 +19,7 @@ import {
   LEGATINE_ADLECTED_OFFER_DENOMINATOR,
   concinnousOfferRoll,
   hieraticAgminateOfferRoll,
-  openingShopOffers,
+  openingSectioOffers,
   pestiferousOfferRoll,
   legatineAdlectedOfferRoll,
   type RunCardOffer,
@@ -128,7 +128,7 @@ const boxEdgeReadout = (value: number, total: number): string => (
   `${Math.round(value)} px · ${((value / total) * 100).toFixed(2)}%`
 );
 
-// Every specimen below is a real Run card the Shop could deal, declared by its piece
+// Every specimen below is a real Run card the Sectio could deal, declared by its piece
 // composition and projected through `runCardFaceContent` like any live offer. The
 // prototype gets no private face format of its own (ADR-0283).
 const STANDARD_PIECES = ['pawn', 'pawn', 'pawn', 'knight', 'bishop'] as const;
@@ -207,7 +207,7 @@ export function runCardPrototypeContent(
 ): RunCardFaceContent {
   return runCardFaceContent(
     runCardPrototypeSpecimen(variant, tacticalSpecimen, cost),
-    { purchased: targetRevealed },
+    { adlected: targetRevealed },
   );
 }
 
@@ -359,7 +359,7 @@ export function RunCardPrototypeViewer({
     [cardVariant, tacticalSpecimen, previewCost],
   );
   const displayedCard = useMemo(
-    () => runCardFaceContent(specimen, { purchased: concinnousTargetRevealed }),
+    () => runCardFaceContent(specimen, { adlected: concinnousTargetRevealed }),
     [specimen, concinnousTargetRevealed],
   );
   /** Only a multi-unit qualifier draws its target at acquisition, so only it can hide one. */
@@ -373,7 +373,7 @@ export function RunCardPrototypeViewer({
       return pestiferousOfferRoll(4217, Math.floor(index / 4), index % 4, card.id, pestiferousDenominator);
     }).filter(Boolean).length
   ), [pestiferousDenominator]);
-  const openingSample = useMemo(() => openingShopOffers(openingSampleSeed), [openingSampleSeed]);
+  const openingSample = useMemo(() => openingSectioOffers(openingSampleSeed), [openingSampleSeed]);
   const realizedTacticalCount = useMemo(() => (
     Array.from({ length: RUN_CARD_SAMPLE_DRAWS }, (_, index) => {
       const card = RUN_CARD_DECK[index % RUN_CARD_DECK.length];
@@ -831,13 +831,13 @@ export function RunCardPrototypeViewer({
                   className={`tileset-view-action${!concinnousTargetRevealed ? ' active' : ''}`}
                   aria-pressed={!concinnousTargetRevealed}
                   onClick={() => chooseConcinnousTargetState(false)}
-                >Before purchase · hidden</button>
+                >Before Adlectio · hidden</button>
                 <button
                   type="button"
                   className={`tileset-view-action${concinnousTargetRevealed ? ' active' : ''}`}
                   aria-pressed={concinnousTargetRevealed}
                   onClick={() => chooseConcinnousTargetState(true)}
-                >After purchase · marked</button>
+                >After Adlectio · marked</button>
               </div>
             ) : null}
             {!contentsStudy ? (
@@ -1059,8 +1059,8 @@ export function RunCardPrototypeViewer({
                 <div><dt>Card</dt><dd>{contentsStudy ? 'Contents Box density study' : `${displayedCard.typeLine} · ${displayedCard.cost} gold`}</dd></div>
                 {cardVariant === 'legatine' ? <div><dt>Discipline target</dt><dd>{tacticalSpecimen === 'single' ? 'Forced and shown by icon' : 'Chosen at acquisition'}</dd></div> : null}
                 <div><dt>Ataraxia I sample</dt><dd>{realizedPestiferousCount} / {RUN_CARD_SAMPLE_DRAWS} Pestiferous · seed 4217</dd></div>
-                <div><dt>Opening budget</dt><dd>{RUN_STARTING_GOLD} gold · buy any affordable cards</dd></div>
-                <div><dt>Opening party</dt><dd>King + 2 Pawns + purchased cards</dd></div>
+                <div><dt>Opening budget</dt><dd>{RUN_STARTING_GOLD} gold · Adlectio of any affordable cards</dd></div>
+                <div><dt>Opening party</dt><dd>King + 2 Pawns + adlected cards</dd></div>
                 <div><dt>Opening sample</dt><dd>{openingSample.map((offer) => `${runCardName(offer)} (${offer.cost}${offer.cardType ? ` · ${offer.cardType}` : ''})`).join(' · ')}</dd></div>
                 <div><dt>Opening qualifiers</dt><dd>rolled as usual at every value; a card priced over {RUN_STARTING_GOLD} gold is offered out of reach</dd></div>
                 <div><dt>Tactical sample</dt><dd>{realizedTacticalCount} / {RUN_CARD_SAMPLE_DRAWS} draws · seed 4217</dd></div>

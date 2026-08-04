@@ -24,7 +24,7 @@ const SCREEN_ART_SLOT = /^review\/run-screen-art\/([a-z][a-z0-9-]*)\/([a-z][a-z0
 
 const SCREEN_LABELS: Record<string, string> = {
   deployment: 'Deployment',
-  sell: 'Sell Units',
+  alienatio: 'Alienatio',
   army: 'Army',
   lipsana: 'Lipsana',
   victory: 'Victory — War won',

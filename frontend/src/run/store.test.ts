@@ -29,13 +29,24 @@ afterEach(() => {
 });
 
 describe('Run browser persistence', () => {
-  it('rewrites a version-16 save into the sole current storage shape on first read', async () => {
+  it('chains a version-16 Shop save into the sole current Sectio shape on first read', async () => {
     const storage = memoryStorage();
     const current = createRun(war(), 73);
-    const { runSaveVersion: _runSaveVersion, ...version16 } = current;
+    const { runSaveVersion: _runSaveVersion, sectio, ...version16 } = current;
+    const {
+      adlectedCardOfferIds,
+      alienatedUnits,
+      ...version16Shop
+    } = sectio!;
     storage.setItem('chess-tactics:active-run:v1', JSON.stringify({
       ...version16,
       formatVersion: 16,
+      phase: 'shop',
+      shop: {
+        ...version16Shop,
+        purchasedCardOfferIds: adlectedCardOfferIds,
+        soldUnits: alienatedUnits,
+      },
     }));
     vi.stubGlobal('localStorage', storage);
 
@@ -45,5 +56,7 @@ describe('Run browser persistence', () => {
     expect(useActiveRun.getState().run).toEqual(current);
     expect(persisted.runSaveVersion).toBe(CURRENT_RUN_SAVE_VERSION);
     expect(persisted).not.toHaveProperty('formatVersion');
+    expect(persisted).not.toHaveProperty('shop');
+    expect(persisted.phase).toBe('sectio');
   });
 });

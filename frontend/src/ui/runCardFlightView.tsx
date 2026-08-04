@@ -72,8 +72,8 @@ interface RunCardFlight {
 }
 
 /**
- * Sends the canonical live card face from its measured Shop seat to the measured
- * Chartulary shortcut. The portal escapes the Shop scroller and the flight commits
+ * Sends the canonical live card face from its measured Sectio seat to the measured
+ * Chartulary shortcut. The portal escapes the Sectio scroller and the flight commits
  * only on landing, so the source cannot disappear before the player sees where it went.
  */
 export function useRunCardFlight(onLanded: (offer: RunCardOffer) => void): {

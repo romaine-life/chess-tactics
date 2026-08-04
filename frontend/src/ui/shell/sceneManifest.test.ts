@@ -104,7 +104,7 @@ describe('scene manifests', () => {
       ['/run', '', { run: { hydrated: true, document: null } }],
       ['/run', '', { run: { hydrated: true, document: run } }],
       ['/run', '?view=army', { run: { hydrated: true, document: run } }],
-      ['/run', '?view=sell', { run: { hydrated: true, document: run } }],
+      ['/run', '?view=alienatio', { run: { hydrated: true, document: run } }],
       ['/run', '?view=battle-preview', { run: { hydrated: true, document: run } }],
       ['/play/select'], ['/play/select/continue'], ['/play/select/continue/campaign'],
       ['/play/select/continue/skirmish'], ['/play/select/continue/run'], ['/play/select/continue/levels'],
@@ -367,7 +367,7 @@ describe('scene manifests', () => {
     const battleScene = sceneManifest('/run', '', source(battle));
     const armyScene = sceneManifest('/run', '?view=army', source(battle));
     const hiddenBattlePreviewScene = sceneManifest('/run', '?view=battle-preview', source(battle));
-    const shopBattlePreviewScene = sceneManifest('/run', '?view=battle-preview', source(draft));
+    const sectioBattlePreviewScene = sceneManifest('/run', '?view=battle-preview', source(draft));
 
     expect(deploymentScene.snapshot).toMatchObject({
       kind: 'run',
@@ -385,9 +385,9 @@ describe('scene manifests', () => {
     expect(battleScene.id).toBe(deploymentScene.id);
     expect(sceneLayerKey(battleScene)).toBe(sceneLayerKey(deploymentScene));
     expect(armyScene.id).not.toBe(battleScene.id);
-    expect(shopBattlePreviewScene.snapshot).toMatchObject({
+    expect(sectioBattlePreviewScene.snapshot).toMatchObject({
       kind: 'run',
-      phase: 'shop',
+      phase: 'sectio',
       workspace: { view: 'battle-preview' },
     });
     expect(hiddenBattlePreviewScene.snapshot).toMatchObject({
@@ -536,7 +536,7 @@ describe('scene manifests', () => {
     // Overlapping layers both paint the retained Run shell — the Controls panel and its
     // title plank, the lipsanon rail, the shell fill. Fading the whole boundary blends that
     // retained chrome toward the backdrop at the crossfade midpoint, which is what made
-    // the Controls title bar visibly dim on every Shop/Sell Units switch.
+    // the Controls title bar visibly dim on every Sectio/Alienatio switch.
     const war = {
       id: 'war',
       name: 'War',
@@ -545,29 +545,29 @@ describe('scene manifests', () => {
     };
     const document = createRun(war, 19, '2026-08-01T00:00:00.000Z');
     const source = { run: { hydrated: true, document } };
-    const shop = sceneManifest('/run', '', source);
-    const sell = sceneManifest('/run', '?view=sell', source);
+    const sectio = sceneManifest('/run', '', source);
+    const alienatio = sceneManifest('/run', '?view=alienatio', source);
     const army = sceneManifest('/run', '?view=army', source);
     const battlePreview = sceneManifest('/run', '?view=battle-preview', source);
     const strategikon = sceneManifest('/run/strategikon/prosopography', '', source);
 
-    expect(sceneOverlapScope(shop, sell)).toBe('shell-viewport');
-    expect(sceneOverlapScope(sell, shop)).toBe('shell-viewport');
-    expect(sceneOverlapScope(shop, army)).toBe('shell-viewport');
-    expect(sceneOverlapScope(shop, battlePreview)).toBe('shell-viewport');
-    expect(sceneOverlapScope(battlePreview, shop)).toBe('shell-viewport');
-    expect(sceneOverlapScope(shop, strategikon)).toBe('shell-viewport');
-    expect(sceneOverlapScope(strategikon, shop)).toBe('shell-viewport');
+    expect(sceneOverlapScope(sectio, alienatio)).toBe('shell-viewport');
+    expect(sceneOverlapScope(alienatio, sectio)).toBe('shell-viewport');
+    expect(sceneOverlapScope(sectio, army)).toBe('shell-viewport');
+    expect(sceneOverlapScope(sectio, battlePreview)).toBe('shell-viewport');
+    expect(sceneOverlapScope(battlePreview, sectio)).toBe('shell-viewport');
+    expect(sceneOverlapScope(sectio, strategikon)).toBe('shell-viewport');
+    expect(sceneOverlapScope(strategikon, sectio)).toBe('shell-viewport');
 
     // A phase change replaces the Controls contents too, so it keeps the whole-scene
     // crossfade, and so does any pair that is not one authored slot apart.
     const battle = sceneManifest('/run', '', {
       run: { hydrated: true, document: { ...document, phase: 'battle' } },
     });
-    expect(sceneOverlapScope(shop, battle)).toBe('scene');
-    expect(sceneOverlapScope(shop, sceneManifest('/run', '', { run: { hydrated: false, document: null } })))
+    expect(sceneOverlapScope(sectio, battle)).toBe('scene');
+    expect(sceneOverlapScope(sectio, sceneManifest('/run', '', { run: { hydrated: false, document: null } })))
       .toBe('scene');
-    expect(sceneOverlapScope(shop, sceneManifest('/play/select/run'))).toBe('scene');
-    expect(sceneOverlapScope(shop, shop)).toBe('scene');
+    expect(sceneOverlapScope(sectio, sceneManifest('/play/select/run'))).toBe('scene');
+    expect(sceneOverlapScope(sectio, sectio)).toBe('scene');
   });
 });

@@ -24,7 +24,7 @@ const {
   LIPSANON_RESIZED_PRODUCTION_EXCEPTION_SCHEMA,
   RUN_CARD_COST_COIN_COMPONENT,
   RUN_RESOURCE_ICON_COMPONENT,
-  RUN_SHOP_WRAP_COMPONENT,
+  RUN_SECTIO_WRAP_COMPONENT,
   SFX_SAMPLE_COMPONENT,
   SFX_SAMPLE_PROOF_RENDERER,
   SFX_SAMPLE_PROOF_SCHEMA,
@@ -54,8 +54,8 @@ const {
   runCardCostCoinSlot,
   runResourceIconMediaIssue,
   runResourceIconSlotId,
-  runShopWrapMediaIssue,
-  runShopWrapSlotId,
+  runSectioWrapMediaIssue,
+  runSectioWrapSlotId,
   sfxSampleMediaIssue,
   sfxSampleOwnerProofIssue,
   sfxSampleSlot,
@@ -231,18 +231,18 @@ function runLipsanonIcon(overrides = {}) {
   };
 }
 
-function runShopWrap(overrides = {}, runtimeOverrides = {}) {
+function runSectioWrap(overrides = {}, runtimeOverrides = {}) {
   return {
-    slot: 'ui/run/shop-wrap/lantern-market-stall.png',
+    slot: 'ui/run/sectio-wrap/lantern-market-stall.png',
     domain: 'ui-kit',
-    role: 'shop-wrap',
+    role: 'sectio-wrap',
     media_type: 'image/png',
     width: 1471,
     height: 937,
     metadata: {
       runtime: {
-        component: RUN_SHOP_WRAP_COMPONENT,
-        nativeRole: RUN_SHOP_WRAP_COMPONENT,
+        component: RUN_SECTIO_WRAP_COMPONENT,
+        nativeRole: RUN_SECTIO_WRAP_COMPONENT,
         variant: 'lantern-market-stall',
         kind: 'band',
         canvasWidth: 1471,
@@ -256,47 +256,47 @@ function runShopWrap(overrides = {}, runtimeOverrides = {}) {
   };
 }
 
-test('Run shop wrap projection binds a card window to the exact uploaded canvas', () => {
-  const row = runShopWrap();
-  assert.equal(runShopWrapSlotId(row.slot), 'lantern-market-stall');
-  assert.equal(runShopWrapMediaIssue(row), null);
-  assert.match(runShopWrapMediaIssue(runShopWrap({ domain: 'review-media' })), /ui-kit domain/);
-  assert.match(runShopWrapMediaIssue(runShopWrap({ role: 'icon' })), /shop-wrap role/);
-  assert.match(runShopWrapMediaIssue(runShopWrap({ media_type: 'image/webp' })), /image\/png/);
+test('Run Sectio wrap projection binds a card window to the exact uploaded canvas', () => {
+  const row = runSectioWrap();
+  assert.equal(runSectioWrapSlotId(row.slot), 'lantern-market-stall');
+  assert.equal(runSectioWrapMediaIssue(row), null);
+  assert.match(runSectioWrapMediaIssue(runSectioWrap({ domain: 'review-media' })), /ui-kit domain/);
+  assert.match(runSectioWrapMediaIssue(runSectioWrap({ role: 'icon' })), /sectio-wrap role/);
+  assert.match(runSectioWrapMediaIssue(runSectioWrap({ media_type: 'image/webp' })), /image\/png/);
   // The canvas is the contract against the raster: a re-crop must not silently
   // move every measured window.
-  assert.match(runShopWrapMediaIssue(runShopWrap({ width: 1470 })), /canvas metadata must match/);
-  assert.match(runShopWrapMediaIssue(runShopWrap({}, { variant: 'other' })), /variant must match/);
-  assert.match(runShopWrapMediaIssue(runShopWrap({}, { kind: 'mural' })), /kind must be one of/);
-  assert.match(runShopWrapMediaIssue(runShopWrap({}, { altText: 'Shop stall' })), /altText must be empty/);
-  assert.match(runShopWrapMediaIssue(runShopWrap({}, { extra: 1 })), /unsupported keys: extra/);
+  assert.match(runSectioWrapMediaIssue(runSectioWrap({ width: 1470 })), /canvas metadata must match/);
+  assert.match(runSectioWrapMediaIssue(runSectioWrap({}, { variant: 'other' })), /variant must match/);
+  assert.match(runSectioWrapMediaIssue(runSectioWrap({}, { kind: 'mural' })), /kind must be one of/);
+  assert.match(runSectioWrapMediaIssue(runSectioWrap({}, { altText: 'Sectio stall' })), /altText must be empty/);
+  assert.match(runSectioWrapMediaIssue(runSectioWrap({}, { extra: 1 })), /unsupported keys: extra/);
 });
 
-test('Run shop wrap windows and slot openings must stay inside the painted canvas', () => {
+test('Run Sectio wrap windows and slot openings must stay inside the painted canvas', () => {
   const outside = { x: 147, y: 153, w: 1400, h: 544 };
-  assert.match(runShopWrapMediaIssue(runShopWrap({}, { window: outside })), /whole-pixel rect inside the canvas/);
+  assert.match(runSectioWrapMediaIssue(runSectioWrap({}, { window: outside })), /whole-pixel rect inside the canvas/);
   assert.match(
-    runShopWrapMediaIssue(runShopWrap({}, { window: { x: 1, y: 1, w: 10.5, h: 10 } })),
+    runSectioWrapMediaIssue(runSectioWrap({}, { window: { x: 1, y: 1, w: 10.5, h: 10 } })),
     /whole-pixel rect inside the canvas/,
   );
   // Slot openings only describe a multi-opening structure.
   assert.match(
-    runShopWrapMediaIssue(runShopWrap({}, { slots: [{ x: 0, y: 0, w: 10, h: 10 }] })),
+    runSectioWrapMediaIssue(runSectioWrap({}, { slots: [{ x: 0, y: 0, w: 10, h: 10 }] })),
     /only meaningful for the slots kind/,
   );
   assert.match(
-    runShopWrapMediaIssue(runShopWrap({}, { kind: 'slots', slots: [{ x: 0, y: 0, w: 10, h: 10 }] })),
+    runSectioWrapMediaIssue(runSectioWrap({}, { kind: 'slots', slots: [{ x: 0, y: 0, w: 10, h: 10 }] })),
     /at least two measured card openings/,
   );
   assert.equal(
-    runShopWrapMediaIssue(runShopWrap({}, {
+    runSectioWrapMediaIssue(runSectioWrap({}, {
       kind: 'slots',
       slots: [{ x: 0, y: 0, w: 10, h: 10 }, { x: 20, y: 0, w: 10, h: 10 }],
     })),
     null,
   );
   assert.match(
-    runShopWrapMediaIssue(runShopWrap({}, {
+    runSectioWrapMediaIssue(runSectioWrap({}, {
       kind: 'slots',
       slots: [{ x: 0, y: 0, w: 10, h: 10 }, { x: 20, y: 900, w: 10, h: 100 }],
     })),

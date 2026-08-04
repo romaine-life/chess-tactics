@@ -38,7 +38,7 @@ describe('professional loading architecture guards', () => {
     expect(read('./ui/WallCandidateReview.tsx')).toContain('onFirstFrame');
     expect(read('./ui/WallCandidateReview.tsx')).toContain('onFrameError');
     expect(read('./ui/DrawableCatalogLab.tsx').replace(/\r\n/g, '\n')).toContain("useSceneParticipant(\n    'studio'");
-    expect(read('./ui/RunShopArtReview.tsx')).toContain("useSceneParticipant('studio'");
+    expect(read('./ui/RunSectioArtReview.tsx')).toContain("useSceneParticipant('studio'");
     expect(read('./ui/LipsanonReview.tsx')).toContain("useSceneParticipant('studio'");
     expect(read('./ui/PlaguedIconReview.tsx')).toContain("useSceneParticipant('studio'");
   });

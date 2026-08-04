@@ -9,14 +9,14 @@ import {
 import type { RunCoreCard } from '../run/model';
 import { RunCard } from './RunCard';
 import {
-  runShopWrapBandMount,
-  runShopWrapCandidates,
-  runShopWrapRuntimeCandidate,
-  runShopWrapSeatPadding,
-  runShopWrapSeatTrack,
-  runShopWrapSlotMount,
-  type RunShopWrapCandidate,
-} from './runShopWrapCandidates';
+  runSectioWrapBandMount,
+  runSectioWrapCandidates,
+  runSectioWrapRuntimeCandidate,
+  runSectioWrapSeatPadding,
+  runSectioWrapSeatTrack,
+  runSectioWrapSlotMount,
+  type RunSectioWrapCandidate,
+} from './runSectioWrapCandidates';
 import { ChromeButton } from './shared/ChromeButton';
 import { OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
 import { useSceneParticipant } from './shell/SceneBoundary';
@@ -27,7 +27,7 @@ const REVIEW_CARDS: readonly RunCoreCard[] = [
   { id: 'review-four-pawns-bishop', pieces: ['pawn', 'pawn', 'pawn', 'pawn', 'bishop'], value: 7 },
 ];
 
-function WrapCandidateRow({ candidate }: { candidate: RunShopWrapCandidate }): ReactElement {
+function WrapCandidateRow({ candidate }: { candidate: RunSectioWrapCandidate }): ReactElement {
   return (
     <section className="run-wrap-candidate" aria-label={candidate.label}>
       <h3>
@@ -40,20 +40,20 @@ function WrapCandidateRow({ candidate }: { candidate: RunShopWrapCandidate }): R
         </small>
       </h3>
       {candidate.kind === 'screen' ? (
-        // Shown exactly as the Shop renders it: the scene is a cover-cropped
+        // Shown exactly as the Sectio renders it: the scene is a cover-cropped
         // background and the card row lays out normally on top of it. The
         // review must not seat cards more precisely than the real screen does.
         <div className="run-wrap-screen-stage">
           <img className="run-wrap-screen-art" src={candidate.src} alt="" draggable={false} />
           <div className="run-wrap-screen-cards">
             {REVIEW_CARDS.map((card) => (
-              <RunCard key={`${candidate.id}:${card.id}`} card={card} mode="shop" onSelect={() => undefined} />
+              <RunCard key={`${candidate.id}:${card.id}`} card={card} mode="sectio" onSelect={() => undefined} />
             ))}
           </div>
         </div>
       ) : candidate.kind === 'slots' ? (
         (() => {
-          const mount = runShopWrapSlotMount(candidate);
+          const mount = runSectioWrapSlotMount(candidate);
           const slotCards = [...REVIEW_CARDS, ...REVIEW_CARDS].slice(0, mount.cards.length);
           return (
             <div
@@ -71,7 +71,7 @@ function WrapCandidateRow({ candidate }: { candidate: RunShopWrapCandidate }): R
                     inlineSize: `${mount.cards[index].width}px`,
                   }}
                 >
-                  <RunCard card={card} mode="shop" onSelect={() => undefined} />
+                  <RunCard card={card} mode="sectio" onSelect={() => undefined} />
                 </span>
               ))}
             </div>
@@ -80,22 +80,22 @@ function WrapCandidateRow({ candidate }: { candidate: RunShopWrapCandidate }): R
       ) : candidate.kind === 'seat' ? (
         <div
           className="run-card-grid run-wrap-grid"
-          style={{ gridTemplateColumns: `repeat(auto-fit, minmax(0, ${runShopWrapSeatTrack(candidate)}))` }}
+          style={{ gridTemplateColumns: `repeat(auto-fit, minmax(0, ${runSectioWrapSeatTrack(candidate)}))` }}
         >
           {REVIEW_CARDS.map((card) => (
             <span
               className="run-wrap-seat"
               key={`${candidate.id}:${card.id}`}
-              style={runShopWrapSeatPadding(candidate) as CSSProperties}
+              style={runSectioWrapSeatPadding(candidate) as CSSProperties}
             >
               <img className="run-wrap-art run-wrap-seat-art" src={candidate.src} alt="" draggable={false} />
-              <RunCard card={card} mode="shop" onSelect={() => undefined} />
+              <RunCard card={card} mode="sectio" onSelect={() => undefined} />
             </span>
           ))}
         </div>
       ) : (
         (() => {
-          const mount = runShopWrapBandMount(candidate);
+          const mount = runSectioWrapBandMount(candidate);
           const bandCards = [...REVIEW_CARDS, ...REVIEW_CARDS].slice(0, mount.cards);
           return (
             <div
@@ -123,7 +123,7 @@ function WrapCandidateRow({ candidate }: { candidate: RunShopWrapCandidate }): R
                 style={{ gridTemplateColumns: mount.grid.columns, gap: `${mount.grid.gap}px`, justifyContent: 'center' }}
               >
                 {bandCards.map((card, index) => (
-                  <RunCard key={`${candidate.id}:${card.id}:${index}`} card={card} mode="shop" onSelect={() => undefined} />
+                  <RunCard key={`${candidate.id}:${card.id}:${index}`} card={card} mode="sectio" onSelect={() => undefined} />
                 ))}
               </div>
             </div>
@@ -148,13 +148,13 @@ function WrapInstallControl({
 }): ReactElement | null {
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
-  const pending = useMemo(() => runShopWrapRuntimeCandidate(catalog), [catalog]);
+  const pending = useMemo(() => runSectioWrapRuntimeCandidate(catalog), [catalog]);
   // Installing clears the pending candidate, so keep the outcome on screen
   // instead of letting the whole control vanish the moment it succeeds.
   if (!pending) {
     return status ? (
-      <section className="run-wrap-install" aria-label="Install wrap in the live Shop">
-        <h3>Install in the live Shop</h3>
+      <section className="run-wrap-install" aria-label="Install wrap in the live Sectio">
+        <h3>Install in the live Sectio</h3>
         <p role="status">{status}</p>
       </section>
     ) : null;
@@ -171,7 +171,7 @@ function WrapInstallControl({
       const reviewed = await reviewLiveMediaVersion({
         id: version.id,
         expectedRevision: version.rowRevision,
-        notes: `Approved run shop wrap ${candidate.id} from the mounted card-row proof.`,
+        notes: `Approved Run Sectio wrap ${candidate.id} from the mounted card-row proof.`,
         surfaceUrl,
         evidence: {
           schema: 'live-media-owner-proof-v1',
@@ -179,7 +179,7 @@ function WrapInstallControl({
           contentSha256: version.media.sha256,
           slot: version.slot,
           canonicalScale: 1,
-          surfaceKind: 'Run shop wrap mounted around live card faces',
+          surfaceKind: 'Run Sectio wrap mounted around live card faces',
         },
       });
       setStatus('Installing the approved wrap…');
@@ -189,7 +189,7 @@ function WrapInstallControl({
         expectedSlotRevision: slot?.rowRevision ?? 0,
         expectedActiveVersionId: slot?.activeVersionId ?? null,
       }]);
-      setStatus(`${candidate.label} is installed. The live Shop now wraps its card row.`);
+      setStatus(`${candidate.label} is installed. The live Sectio now wraps its card row.`);
       onInstalled();
     } catch (reason) {
       setStatus(reason instanceof Error ? `Install failed: ${reason.message}` : 'Install failed.');
@@ -199,26 +199,26 @@ function WrapInstallControl({
   };
 
   return (
-    <section className="run-wrap-install" aria-label="Install wrap in the live Shop">
-      <h3>Install in the live Shop</h3>
+    <section className="run-wrap-install" aria-label="Install wrap in the live Sectio">
+      <h3>Install in the live Sectio</h3>
       <p>
         {candidate.label} is uploaded to <code>{version.slot}</code> and waiting on your approval.
-        Installing records that decision and makes the live Shop wrap its card row with it.
+        Installing records that decision and makes the live Sectio wrap its card row with it.
       </p>
       <ChromeButton
         unit="inner-text-button"
         disabled={busy}
-        data-testid="install-run-shop-wrap"
+        data-testid="install-run-sectio-wrap"
         onClick={() => { void install(); }}
       >
-        {busy ? 'Installing…' : `Use ${candidate.label} in the Shop`}
+        {busy ? 'Installing…' : `Use ${candidate.label} in the Sectio`}
       </ChromeButton>
       {status ? <p role="status">{status}</p> : null}
     </section>
   );
 }
 
-export function RunShopArtReview(): ReactElement {
+export function RunSectioArtReview(): ReactElement {
   const [catalog, setCatalog] = useState<AdminLiveMediaCatalog | null>(null);
   const [error, setError] = useState('');
   const [reloadToken, setReloadToken] = useState(0);
@@ -229,7 +229,7 @@ export function RunShopArtReview(): ReactElement {
       .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : String(reason)); });
     return () => { active = false; };
   }, [reloadToken]);
-  const wraps = useMemo(() => catalog ? runShopWrapCandidates(catalog) : [], [catalog]);
+  const wraps = useMemo(() => catalog ? runSectioWrapCandidates(catalog) : [], [catalog]);
   const sceneError = useMemo(() => error ? new Error(error) : null, [error]);
   useSceneParticipant('studio', sceneError ? 'error' : catalog ? 'painted' : 'loading', sceneError);
 
@@ -238,7 +238,7 @@ export function RunShopArtReview(): ReactElement {
       className="run-lipsanon-review-screen skirmish-screen"
       style={{ ['--skirmish-world-bg' as string]: `url("${defaultBackgroundSet().world}")` }}
     >
-      <OuterChromeBox chromeConsumer="run-shop-art-review" titled className="run-lipsanon-review-panel">
+      <OuterChromeBox chromeConsumer="run-sectio-art-review" titled className="run-lipsanon-review-panel">
         <OuterChromeHeader title="Run Card Review" />
         <p>Accepted frame and illustration pixels mounted in the shared live card face.</p>
         <div className="run-card-grid" aria-label="Trading-card examples">
@@ -246,7 +246,7 @@ export function RunShopArtReview(): ReactElement {
             <RunCard
               key={card.id}
               card={card}
-              mode="shop"
+              mode="sectio"
               onSelect={() => undefined}
             />
           ))}

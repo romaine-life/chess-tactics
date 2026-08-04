@@ -3,9 +3,9 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { createBlankLevel } from '../core/level';
 import {
-  buyCard,
+  performAdlectio,
   createRun,
-  sellArmyUnit,
+  performAlienatio,
   type RunDocument,
   type RunWarSnapshot,
 } from '../run/model';
@@ -30,17 +30,17 @@ function war(battles = 4): RunWarSnapshot {
 
 function boughtOne(): RunDocument {
   const fresh = createRun(war(), 91);
-  const offers = fresh.shop!.cardOffers;
+  const offers = fresh.sectio!.cardOffers;
   const affordable = offers.reduce((cheapest, offer) => (offer.cost < cheapest.cost ? offer : cheapest));
-  return buyCard(fresh, affordable.offerId);
+  return performAdlectio(fresh, affordable.offerId);
 }
 
 describe('the Chartulary reads the Run rather than the deck', () => {
-  it('holds nothing before the first purchase', () => {
+  it('holds nothing before the first Adlectio', () => {
     expect(heldCards(createRun(war(), 91))).toEqual([]);
   });
 
-  it('shows a bought card as the deck card it is', () => {
+  it('shows a adlected card as the deck card it is', () => {
     const run = boughtOne();
     const [held] = heldCards(run);
     expect(held.core.id).toBe(run.cards[0].coreId);
@@ -49,11 +49,11 @@ describe('the Chartulary reads the Run rather than the deck', () => {
 
   it('keeps the card once its units leave the army', () => {
     const run = boughtOne();
-    const sold = sellArmyUnit(run, run.cards[0].unitIds[0]);
+    const alienated = performAlienatio(run, run.cards[0].unitIds[0]);
     // A held-card page that dropped the card with its last unit would lose what the
-    // gold was spent on. Selling a unit does not sell the card.
-    expect(heldCards(sold)).toHaveLength(1);
-    expect(heldCards(sold)[0].core.id).toBe(heldCards(run)[0].core.id);
+    // gold was spent on. Alienatio of a unit does not relinquish the card.
+    expect(heldCards(alienated)).toHaveLength(1);
+    expect(heldCards(alienated)[0].core.id).toBe(heldCards(run)[0].core.id);
   });
 
   it('drops a card whose core id is no longer in the deck instead of drawing a blank face', () => {
@@ -77,7 +77,7 @@ describe('the Chartulary is the reference gallery, not a lookalike (ADR-0371)', 
     expect(heldCardCodex).toContain('className="enchiridion-card-gallery-layout"');
     expect(heldCardCodex).toContain('className="enchiridion-card-gallery-grid"');
     expect(heldCardCodex).toContain('<RunCardCostCoin value={value}');
-    // The real face, carrying the property the card was BOUGHT with — an owned
+    // The real face, carrying the property the card was Adlected with — an owned
     // Pestiferous card must not fall back to the plain frame.
     expect(heldCardCodex).toContain('cardType={held.owned.cardType}');
     // A card IS its own record (ADR-0364). The gallery item is the face and nothing else:

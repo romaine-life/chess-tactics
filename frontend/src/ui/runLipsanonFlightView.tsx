@@ -8,7 +8,7 @@ import { SceneContinuityPortal, useSceneContinuityAvailable } from './shell/Scen
  * it is now kept.
  *
  * Shared because there are two surfaces that need the SAME travel: Bona Vacantia, where
- * landing hands the take to either the Shop or a target chooser, and the Studio's Lipsanon
+ * landing hands the take to either the Sectio or a target chooser, and the Studio's Lipsanon
  * Mat viewer, where landing is what the owner is judging. A second implementation for the
  * viewer would be a copy that drifts, and then the thing being tuned is not the thing that ships.
  */

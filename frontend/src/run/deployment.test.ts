@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { createBlankLevel, type Level } from '../core/level';
 import { validateWarBattlePlayability } from '../core/playability';
 import {
-  buyCard,
+  performAdlectio,
   createRun,
   hasRunAbility,
-  leaveShop,
+  leaveSectio,
   prepareDeployment,
   setDeploymentChoices,
   type RunArmyUnit,
@@ -48,8 +48,8 @@ function run(seed = 13): RunDocument {
     description: '',
     battles: [{ level, loot: false }],
   }, seed);
-  result = buyCard(result, result.shop!.cardOffers[0].offerId);
-  result = leaveShop(result);
+  result = performAdlectio(result, result.sectio!.cardOffers[0].offerId);
+  result = leaveSectio(result);
   return prepareDeployment(result);
 }
 

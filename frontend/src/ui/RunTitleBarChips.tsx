@@ -104,7 +104,7 @@ export function RunTitleBarMeasures({
       <RunMeasure
         label={`${gold} gold`}
         name="Gold"
-        detail="What this Run has to spend in the Shop."
+        detail="What this Run has to spend in the Sectio."
       >
         <RunGoldIcon src={goldIconSrc} />
         <span>{gold}</span>

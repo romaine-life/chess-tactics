@@ -128,7 +128,7 @@ export type RunSceneWorkspace =
   | Readonly<{ view: 'primary' }>
   | Readonly<{ view: 'army'; unitId: string | null }>
   | Readonly<{ view: 'lipsana' }>
-  | Readonly<{ view: 'sell' }>
+  | Readonly<{ view: 'alienatio' }>
   | Readonly<{ view: 'battle-preview' }>
   | Readonly<{ view: 'strategikon' }>
   | Readonly<{ view: 'bona-target'; lipsanonId: LipsanonId; unitId: string | null }>;

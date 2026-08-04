@@ -25,7 +25,7 @@ export interface TitleBarConfig {
   centerSlot?: boolean;
   /** Render the trailing route segment of the screen-name line, filled via
    *  <TitleBarSlot region="route">. For a screen whose position within itself is
-   *  live state rather than address — the Run's phase reads as `Run › Shop`. */
+   *  live state rather than address — the Run's phase reads as `Run › Sectio`. */
   routeSlot?: boolean;
   /** Render the bottom-centre "stud" portal slot — the decorative nailhead diamond
    *  becomes an interactive control the screen fills via <TitleBarSlot region="stud">.

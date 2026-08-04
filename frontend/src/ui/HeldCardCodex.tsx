@@ -66,7 +66,7 @@ export function HeldCardCodex({
       framed={framed}
       title={title}
     >
-      <p>Every card bought in this Run. A card is kept once bought; the units it brought are in the Martial Prosopography.</p>
+      <p>Every card admitted by Adlectio in this Run. An adlected card is retained; its units appear in the Martial Prosopography.</p>
       <div className="enchiridion-card-gallery-layout">
         <CardGalleryFilters
           goldFilter={goldFilter}
@@ -107,7 +107,7 @@ export function HeldCardCodex({
                 <p>
                   {all.length
                     ? 'No held card has both of the selected properties.'
-                    : 'Nothing has been bought yet. Cards bought in the Shop are kept here for the rest of the Run.'}
+                    : 'No Adlectio has occurred yet. Cards adlected in the Sectio remain here for the rest of the Run.'}
                 </p>
               </InnerChromeBox>
             ) : null}

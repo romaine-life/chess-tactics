@@ -24,7 +24,7 @@ import {
   RUN_LIPSANA,
   cardContentsLabel,
   type AtaraxiaTier,
-  type PurchasablePieceType,
+  type AdlectablePieceType,
   type RunCardType,
   type RunCoreCard,
   type LipsanonId,
@@ -505,7 +505,7 @@ export function LipsanaCodex({
 }
 
 export type CardGoldFilter = 'all' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9';
-export type CardUnitFilter = 'all' | PurchasablePieceType;
+export type CardUnitFilter = 'all' | AdlectablePieceType;
 
 const CARD_GOLD_FILTER_OPTIONS: readonly HouseSelectOption<CardGoldFilter>[] = Object.freeze([
   { value: 'all', label: 'All' },
@@ -639,7 +639,7 @@ export function CardCodex({
       framed={framed}
       title="Cards"
     >
-      <p>Every card the Run can deal. The opening Shop and later Shops use this one deck; a card costs its gold value.</p>
+      <p>Every card the Run can deal. The opening Sectio and later visits use this one deck; a card costs its gold value.</p>
       <div className="enchiridion-card-gallery-layout">
         <CardGalleryFilters
           goldFilter={goldFilter}
@@ -717,17 +717,17 @@ const CARD_TYPE_REFERENCES: readonly CardTypeReferenceDefinition[] = Object.free
   {
     id: 'concinnous',
     cost: 3,
-    description: `Skillfully and harmoniously arranged. One persisted contained unit becomes ${EUTACTIC_DISPLAY_NAME} on purchase; its target may remain hidden until then.`,
+    description: `Skillfully and harmoniously arranged. One persisted contained unit becomes ${EUTACTIC_DISPLAY_NAME} upon Adlectio; its target may remain hidden until then.`,
   },
   {
     id: 'legatine',
     cost: 4,
-    description: `Of a legate, a commander's deputy entrusted with a detached force. One contained unit gains ${ADLECTED_DISPLAY_NAME} when purchased. The target is hidden on multi-unit offers; this one-unit Volunteer shows the state because its target is forced.`,
+    description: `Of a legate, a commander's deputy entrusted with a detached force. One contained unit gains ${ADLECTED_DISPLAY_NAME} upon Adlectio. The target is hidden on multi-unit offers; this one-unit Volunteer shows the state because its target is forced.`,
   },
   {
     id: 'hieratic',
     cost: 4,
-    description: `Priestly, highly formal, and rigidly stylized. One contained unit gains ${AGMINATE_DISPLAY_NAME} when purchased and deploys into its role's formation seat rather than a rank. The target is hidden on multi-unit offers; this one-unit Volunteer shows the state because its target is forced.`,
+    description: `Priestly, highly formal, and rigidly stylized. One contained unit gains ${AGMINATE_DISPLAY_NAME} upon Adlectio and deploys into its role's formation seat rather than a rank. The target is hidden on multi-unit offers; this one-unit Volunteer shows the state because its target is forced.`,
   },
 ]);
 
@@ -766,7 +766,7 @@ function CardTypeRowMaterial({
 
 /**
  * The reference draws a real one-unit Volunteer offer of each type and projects it like
- * every other host, so the glossary cannot show a card the Shop could never deal. Its
+ * every other host, so the glossary cannot show a card the Sectio could never deal. Its
  * target is forced by the single unit, which is why each state is public here.
  */
 function CardTypeReference({ definition }: { definition: CardTypeReferenceDefinition }): ReactElement {
@@ -781,7 +781,7 @@ function CardTypeReference({ definition }: { definition: CardTypeReferenceDefini
   return (
     <div className="enchiridion-card-type-preview">
       <RunCardFace
-        card={runCardFaceContent(specimen, { purchased: true })}
+        card={runCardFaceContent(specimen, { adlected: true })}
         frameUrl={liveMediaForSlot(frameSlot).media.immutableUrl}
         artUrl={resolvedLiveMediaUrl(runCardArtSlot(specimen))}
         frameGeometry={runCardFrameGeometryForSlot(frameSlot)}

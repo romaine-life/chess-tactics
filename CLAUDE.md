@@ -296,7 +296,7 @@ Run to that state, and answers with both:
 
 ```
 curl -X POST <url>/api/active-run/craft -H 'content-type: application/json' -d '{
-  "phase": "shop", "battle": 4, "gold": 33.5,
+  "phase": "sectio", "battle": 4, "gold": 33.5,
   "army": [{ "type": "rook", "abilities": ["agminate"] }, "knight", "pawn"],
   "offers": [{ "pieces": ["queen"] }, { "pieces": ["pawn","pawn"], "type": "concinnous" }],
   "loot": ["fair-scales"], "lipsana": ["quartermasters-ledger"] }'
@@ -305,10 +305,10 @@ curl -X POST <url>/api/active-run/craft -H 'content-type: application/json' -d '
 Same fields as the address grammar below, plus what an address cannot carry: units as objects
 with `abilities`, offers as objects. An unknown field is refused, not ignored.
 
-`cards` is the field for a Run that has already BOUGHT things — the Chartulary, and anything
-downstream of a purchase. Each is bought for real in the opening Shop and carried through every
+`cards` is the field for a Run that has already performed Adlectio — the Chartulary, and anything
+downstream of that admission. Each is adlected in the opening Sectio and carried through every
 Battle before the target, so it arrives with a history (units lost, Pestiferous cards
-deteriorated) rather than as a fresh purchase; gold is restored afterwards. It cannot be given
+deteriorated) rather than as a fresh Adlectio; gold is restored afterwards. It cannot be given
 beside `army`, which replaces the roster those cards put there — use `add` for extra units.
 
 **The `url` it answers with — `/run/craft/<id>` — is the link to hand over, exactly as given.**
@@ -323,20 +323,20 @@ browser and it is minted into its `/run/craft/<id>` address before anything is c
 hand-authored one-off leaves a durable link behind:
 
 ```
-/run?craft=shop&battle=3&gold=25&army=knight,rook&offers=queen,pawn+pawn:concinnous,rook:legatine
+/run?craft=sectio&battle=3&gold=25&army=knight,rook&offers=queen,pawn+pawn:concinnous,rook:legatine
 /run?craft=deployment&battle=2&army=rook,rook,bishop,pawn&gold=12
 /run?craft=battle&battle=4&lipsana=fair-scales
 /run?craft=aftermath&battle=3&turns=21&seconds=402&fallen=2
 /run?craft=victory&gold=40
 ```
 
-- `craft=shop|deployment|battle|aftermath|victory` — the phase to land on.
-- `battle=N` — the Battle you are at, 1-based. For a Shop that is the Shop you leave into
-  Battle N, so `battle=1` is the opening Shop (which takes no overrides — the Run contract
+- `craft=sectio|deployment|battle|aftermath|victory` — the phase to land on.
+- `battle=N` — the Battle you are at, 1-based. For a Sectio that is the Sectio you leave into
+  Battle N, so `battle=1` is the opening Sectio (which takes no overrides — the Run contract
   pins its offers, army and 8 gold).
 - `gold=25` (decimals fine), `army=knight,rook` (the exact non-King army; `add=queen`
   appends instead), `lipsana=<id,id>`.
-- Shop only: `offers=<card>[,<card>]` where a card is its pieces joined by `+` with an
+- Sectio only: `offers=<card>[,<card>]` where a card is its pieces joined by `+` with an
   optional `:legatine|:concinnous|:pestiferous|:hieratic`; `loot=<id,id>`; `paid=<id>`. Pieces accept
   names, chess letters, or a bare deck id (`pawn,pawn,knight` = `p,p,n` = `ppk`).
 - Aftermath only: `turns=<n>`, `seconds=<n>` and `fallen=<n>` write the Battle report a
@@ -344,7 +344,7 @@ hand-authored one-off leaves a durable link behind:
   Battle just won; the FINAL Battle has no aftermath (its report is the War victory
   screen), so craft `victory` for that one.
 - `war=<id>` picks the War (default: the first Run-eligible official one), `seed=<n>` and
-  `tier=0|1` fix the roll. `view=army|lipsana|sell` still applies and survives the craft.
+  `tier=0|1` fix the roll. `view=army|lipsana|alienatio` still applies and survives the craft.
 - `cards=<card>[,<card>]` — the cards the Run already HOLDS, written exactly like `offers`.
 - Units carrying abilities cannot be written as an address — use the JSON spec above, which has
   no such limit because the link is an id either way.
@@ -374,7 +374,7 @@ do not offer to preserve it, and do not add a compatibility path whose only bene
 Run already on his account.
 
 State the consequence once, in plain terms, as part of reporting what shipped — "Run save version 12
-makes in-progress Shop runs unsupported" is useful; treating that as a cost to be weighed,
+makes in-progress Sectio runs unsupported" is useful; treating that as a cost to be weighed,
 mitigated, or apologized for is not. The migration policy in `docs/migration-policy.md` still
 governs what the *code* must do with old documents; this rule is only about whose Run it is.
 

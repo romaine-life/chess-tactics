@@ -1,5 +1,5 @@
 import type { AdminLiveMediaCatalog, AdminLiveMediaVersion } from '../net/liveMediaAdmin';
-import type { PurchasablePieceType } from './model';
+import type { AdlectablePieceType } from './model';
 
 export const RUN_CARD_ART_PROMPT_SCHEMA = 'run-card-art-prompt-v2';
 export const RUN_CARD_ART_PLAN_SCHEMA = 'run-card-art-plan-v2';
@@ -8,7 +8,7 @@ export const RUN_CARD_ART_SLOT_PREFIX = 'ui/run/card-art/';
 export interface RunCardArtPromptPlan {
   id: string;
   title: string;
-  pieces: readonly PurchasablePieceType[];
+  pieces: readonly AdlectablePieceType[];
   baseCost: number;
   historicalAnchor: string;
   sceneDirection: string;
@@ -21,7 +21,7 @@ export interface RunCardArtPromptPlan {
 
 const SHA256 = /^[0-9a-f]{64}$/;
 const CARD_ID = /^[pkbrq]+$/;
-const PIECES: readonly PurchasablePieceType[] = ['pawn', 'knight', 'bishop', 'rook', 'queen'];
+const PIECES: readonly AdlectablePieceType[] = ['pawn', 'knight', 'bishop', 'rook', 'queen'];
 
 function objectValue(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
@@ -52,7 +52,7 @@ function promptPlanFrom(version: AdminLiveMediaVersion): RunCardArtPromptPlan | 
     || !promptSha256 || !SHA256.test(promptSha256) || !pixelLabJobId
     || !Number.isSafeInteger(baseCost) || Number(baseCost) < 1 || Number(baseCost) > 9
     || !Array.isArray(rawPieces) || rawPieces.length < 1
-    || rawPieces.some((piece) => typeof piece !== 'string' || !PIECES.includes(piece as PurchasablePieceType))
+    || rawPieces.some((piece) => typeof piece !== 'string' || !PIECES.includes(piece as AdlectablePieceType))
     || metadata.generationModel !== 'pixellab-pixflux'
     || metadata.nativeWidth !== 400 || metadata.nativeHeight !== 280
     || provenance.generationModel !== 'pixellab-pixflux'
@@ -62,7 +62,7 @@ function promptPlanFrom(version: AdminLiveMediaVersion): RunCardArtPromptPlan | 
   return {
     id,
     title,
-    pieces: rawPieces as PurchasablePieceType[],
+    pieces: rawPieces as AdlectablePieceType[],
     baseCost: Number(baseCost),
     historicalAnchor,
     sceneDirection,
@@ -89,7 +89,7 @@ export function runCardArtPromptPlans(catalog: AdminLiveMediaCatalog): readonly 
 }
 
 export function runCardPromptComposition(plan: Pick<RunCardArtPromptPlan, 'pieces'>): string {
-  const counts = new Map<PurchasablePieceType, number>();
+  const counts = new Map<AdlectablePieceType, number>();
   plan.pieces.forEach((piece) => counts.set(piece, (counts.get(piece) ?? 0) + 1));
   return PIECES
     .filter((piece) => counts.has(piece))

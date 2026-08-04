@@ -25,13 +25,13 @@ import { workspaceBackgroundArtwork } from './workspaceBackgrounds';
 
 /**
  * Bona Vacantia — goods with no owner. The screen that opens a Conflict: three lipsana laid
- * out, one taken, and the shop behind it opens as a result.
+ * out, one taken, and the Sectio behind it opens as a result.
  *
  * The lipsana are shown raw on the mat, at their installed size, with no card and no effect
  * text; the name and effect arrive on hover through the shared Tooltip, the same trigger
  * the held-lipsanon strip uses. The reading is the art.
  *
- * Taking is mandatory. An ordinary lipsanon commits when it lands and opens the Shop. A
+ * Taking is mandatory. An ordinary lipsanon commits when it lands and opens the Sectio. A
  * lipsanon that needs a unit named first lands provisionally, then uses the Martial
  * Prosopography to make that choice; confirming the unit commits both facts atomically.
  */
@@ -47,7 +47,7 @@ export function RunBonaVacantia({
 }): ReactElement | null {
   const vacantia = run.vacantia;
   // Latched, not derived from the flight: the flight ends when the lipsanon lands, and the
-  // mat must not repopulate in the beat before the Shop or target chooser replaces it.
+  // mat must not repopulate in the beat before the Sectio or target chooser replaces it.
   const [departed, setDeparted] = useState<LipsanonId | null>(null);
   const mat = installedLipsanonMatUrl();
   const { launch, element } = useLipsanonFlight(
@@ -181,7 +181,7 @@ export function RunBonaVacantiaTarget({
           </InnerChromeBox>
           <p className="run-vacantia-target-instruction">
             Select a unit to inspect it, then confirm who permanently gains {ADLECTED_DISPLAY_NAME}.
-            Nothing is recorded until that confirmation reveals the Shop.
+            Nothing is recorded until that confirmation reveals the Sectio.
           </p>
           <ChromeButton
             unit="inner-text-button"
@@ -200,7 +200,7 @@ export function RunBonaVacantiaTarget({
           onFiltersChange={onFiltersChange}
           onSelectUnit={onSelectUnit}
           onBack={onBackToUnits}
-          onSell={() => undefined}
+          onAlienate={() => undefined}
           profileAction={{
             label: `Give ${ADLECTED_DISPLAY_NAME} to this unit`,
             onAction: onConfirm,

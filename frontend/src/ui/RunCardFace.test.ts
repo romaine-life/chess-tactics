@@ -77,7 +77,7 @@ describe('Run card atomic presentation', () => {
       {
         face: runCardFaceContent(
           runCardSpecimen({ pieces: ['queen'], cardType: 'legatine' }),
-          { purchased: true },
+          { adlected: true },
         ),
         state: 'unit-state:adlected',
         iconMedia: { propertyUrl: '/tactical.png', unitStateUrls: { discipline: '/discipline.png' } },
@@ -92,7 +92,7 @@ describe('Run card atomic presentation', () => {
       {
         face: runCardFaceContent(
           runCardSpecimen({ pieces: ['queen'], cardType: 'hieratic' }),
-          { purchased: true },
+          { adlected: true },
         ),
         state: 'unit-state:agminate',
         iconMedia: { propertyUrl: '/hieratic.png', unitStateUrls: { marshalled: '/marshalled.png' } },

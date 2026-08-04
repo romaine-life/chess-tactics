@@ -280,7 +280,7 @@ ability, the confirmation boundary, and the action that restores the untouched
 mat. The provisional lipsanon appears only once, in the canonical held strip;
 the decision column does not repeat its icon or the phase name. Each ledger row
 explicitly says **Select**, the unit profile supplies the grant action, and only
-that action reveals the Shop. On landing, the moving lipsanon remains carried at
+that action reveals the Sectio. On landing, the moving lipsanon remains carried at
 the strip coordinate outside both scene fades until the incoming canonical strip
 is visible beneath it; it never blinks out during the ownership handoff
 (ADR-0030, ADR-0297, ADR-0383, ADR-0384, ADR-0385).
@@ -292,12 +292,12 @@ summarizes its references, army, card, and lipsanon contents under ADR-0250. The
 four Strategikon section marks sit immediately beside that rightmost book and
 directly open the same destinations as the complete workspace rail. Title and
 rail read one shared destination inventory, and the visible Chartulary mark is
-the measured endpoint for a bought card's shrinking transfer. When that card leaves
-the Shop layout, each surviving offer glides from its measured old seat to its new
+the measured endpoint for an adlected card's shrinking transfer. When that card leaves
+the Sectio layout, each surviving offer glides from its measured old seat to its new
 centred seat with no snap, bounce, or guessed slot (ADR-0387, ADR-0388). The persistent
 title route keeps the underlying Run phase, then appends Strategikon, its section,
 and any Enchiridion reference from those same label inventories—for example
-`Shop › Strategikon › Enchiridion › Cards` (ADR-0389). Strategikon's
+`Sectio › Strategikon › Enchiridion › Cards` (ADR-0389). Strategikon's
 rails are canonical main-menu rail columns: every destination added to either
 column inherits the exact menu-tab width, stack gap, inset, and stone-continuity
 language rather than defining host-local geometry. Strategikon replaces the board
