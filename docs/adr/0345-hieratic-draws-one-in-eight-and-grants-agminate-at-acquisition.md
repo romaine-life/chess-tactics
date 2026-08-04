@@ -22,7 +22,7 @@ prevalence, price, target rule and acquisition behavior, so no Hieratic offer
 could enter a Run. Three qualifiers drew and a fourth existed only in the
 Enchiridion reference. The owner requires Hieratic in play.
 
-Agminate is already a live ability: relics grant it, and deployment seats an
+Agminate is already a live ability: lipsana grant it, and deployment seats an
 Agminate unit by role — the King to a board edge, Rooks to the back-row corners
 or beside an Agminate King, Bishops onto opposite colors — rather than by the
 rank preference Positioned expresses.
@@ -59,7 +59,7 @@ rank preference Positioned expresses.
 ## Consequences
 
 - Good: the fourth property is a real Run choice rather than a reference card,
-  and Agminate becomes reachable without a specific relic.
+  and Agminate becomes reachable without a specific lipsanon.
 - Good: no accepted rate moves. Tactical stays a literal 12.5% and Pestiferous
   keeps its Ataraxia I share; only the standard-card share falls, from 76.6% to
   67.0% at No Ataraxia.

@@ -3,7 +3,7 @@ status: accepted
 date: 2026-08-03
 deciders: owner (Nelson) + Claude
 refines:
-  - "[ADR-0256](0256-individual-relics-are-routable-from-the-main-menu-enchiridion.md)"
+  - "[ADR-0256](0256-individual-lipsana-are-routable-from-the-main-menu-enchiridion.md)"
   - "[ADR-0052](0052-game-controls-are-buttons-routes-are-addresses.md)"
 partially_supersedes:
   - "[ADR-0262](0262-bundle-cards-are-scene-vignettes-with-authored-names-and-a-codex.md)'s composition-id card address"
@@ -15,7 +15,7 @@ partially_supersedes:
 ## Context
 
 Cards became addressable records under ADR-0262, with the same routed/ephemeral split ADR-0256
-gave relics, and ADR-0364 carried the address forward as `/enchiridion/cards/<card-id>`. That id
+gave lipsana, and ADR-0364 carried the address forward as `/enchiridion/cards/<card-id>`. That id
 is the card's piece composition in initials — `ppb` is two Pawns and a Bishop — which is an
 implementation detail of how the deck is generated. The card itself prints **Country Parish**
 across its banner. Reading the address told you nothing about the card you were looking at, and

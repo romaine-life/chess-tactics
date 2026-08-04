@@ -58,7 +58,7 @@ separate draft phase and screen are retired.**
   incrementing `battleIndex`; later Shops retain **Continue to next Battle** and
   their existing increment behavior.
 - Opening Shop offers never receive Ataraxia shop effects, victory gold, Loot,
-  or paid-relic offers. It therefore shows no context row at all rather than a
+  or paid-lipsanon offers. It therefore shows no context row at all rather than a
   fake Victory reward (amended 2026-08-02; see **Amendments**).
 - `DraftPanel`, the `draft` Run phase, `DraftOffer`, `draftOffers`,
   `chosenDraftId`, `chooseDraft`, draft-mode card behavior, and their UI/test

@@ -5,8 +5,8 @@ import {
   enchiridionCardHref,
   enchiridionCardTypeFromPath,
   enchiridionCardTypeHref,
-  enchiridionRelicFromPath,
-  enchiridionRelicHref,
+  enchiridionLipsanonFromPath,
+  enchiridionLipsanonHref,
   enchiridionSectionFromPath,
   enchiridionSectionPath,
 } from './enchiridionRoute';
@@ -30,7 +30,7 @@ describe('main-menu Enchiridion addresses', () => {
     expect(enchiridionCardTypeFromPath('/enchiridion/card-types')).toBeNull();
     expect(enchiridionCardTypeFromPath('/enchiridion/card-types/nonesuch')).toBeNull();
     expect(enchiridionCardTypeFromPath('/enchiridion/card-types/hieratic/extra')).toBeNull();
-    expect(enchiridionCardTypeFromPath('/enchiridion/relics/royal-decree')).toBeNull();
+    expect(enchiridionCardTypeFromPath('/enchiridion/lipsana/royal-decree')).toBeNull();
     // Membership is an own-property test: `in` and a truthy index both walk
     // Object.prototype, so these would otherwise read as known ids.
     for (const inherited of ['constructor', 'toString', 'hasOwnProperty', '__proto__']) {
@@ -40,11 +40,11 @@ describe('main-menu Enchiridion addresses', () => {
   });
 
   it('keeps every per-item address inside the section that owns it', () => {
-    expect(enchiridionRelicFromPath(enchiridionRelicHref('royal-decree'))).toBe('royal-decree');
+    expect(enchiridionLipsanonFromPath(enchiridionLipsanonHref('royal-decree'))).toBe('royal-decree');
     expect(enchiridionCardFromPath(enchiridionCardHref('ppb'))).toBe('ppb');
     // One address never resolves as another section's item.
     expect(enchiridionCardFromPath(enchiridionCardTypeHref('hieratic'))).toBeNull();
-    expect(enchiridionRelicFromPath(enchiridionCardTypeHref('hieratic'))).toBeNull();
+    expect(enchiridionLipsanonFromPath(enchiridionCardTypeHref('hieratic'))).toBeNull();
     expect(enchiridionCardTypeFromPath(enchiridionCardHref('ppb'))).toBeNull();
     // Sections themselves stay resolvable, so adding an item address broke no rail entry.
     for (const section of ENCHIRIDION_SECTIONS) {

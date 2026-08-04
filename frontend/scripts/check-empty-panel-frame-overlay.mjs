@@ -27,7 +27,7 @@ const skirmishHud = readFileSync(join(frontend, 'src/ui/SkirmishHud.tsx'), 'utf8
 const strategikon = readFileSync(join(frontend, 'src/ui/Strategikon.tsx'), 'utf8');
 const runScreen = readFileSync(join(frontend, 'src/ui/RunScreen.tsx'), 'utf8');
 const runArmyWorkspace = readFileSync(join(frontend, 'src/ui/RunArmyWorkspace.tsx'), 'utf8');
-const runRelics = readFileSync(join(frontend, 'src/ui/RunRelics.tsx'), 'utf8');
+const runLipsana = readFileSync(join(frontend, 'src/ui/Lipsana.tsx'), 'utf8');
 const runWorkspace = readFileSync(join(frontend, 'src/ui/RunWorkspace.tsx'), 'utf8');
 const portraitEditor = readFileSync(join(frontend, 'src/ui/PortraitEditor.tsx'), 'utf8');
 const installedChromeCss = readFileSync(join(frontend, 'src/ui/useInstalledChromeCss.ts'), 'utf8');
@@ -1029,14 +1029,14 @@ if (!/export function RunWorkspace/.test(runWorkspace)
 if (!/<RunWorkspace[\s\S]*?contentClassName=\{contentClassName\}[\s\S]*?edgeAttached[\s\S]*?data-testid=\{dataTestId\}/.test(runArmyWorkspace)) {
   failures.push('framed Run Army workspaces must use the shared edge-attached content variant');
 }
-const playerRunSources = `${runScreen}\n${runArmyWorkspace}\n${runRelics}`;
+const playerRunSources = `${runScreen}\n${runArmyWorkspace}\n${runLipsana}`;
 for (const testId of [
   'run-shop-workspace',
   'run-victory-workspace',
   'run-army-ledger-workspace',
   'run-army-profile-workspace',
   'run-sell-workspace',
-  'run-relics-workspace',
+  'run-lipsana-workspace',
   'run-loading-workspace',
   'run-empty-workspace',
 ]) {
@@ -1070,10 +1070,10 @@ if (blockFor('.skirmish-screen.run-screen')) {
   failures.push('Run must inherit the shared zero-gap shell; a route-specific shell-gap override is forbidden');
 }
 if (!blockFor('.run-shell-workspace-content')
-  || !blockFor('.run-screen.has-relics .run-shell-workspace-content')
+  || !blockFor('.run-screen.has-lipsana .run-shell-workspace-content')
   || blockFor('.run-workspace--full')
-  || blockFor('.run-screen.has-relics .run-workspace')) {
-  failures.push('Run content spacing and relic reservation must stay inside the continuous shell workspace surface');
+  || blockFor('.run-screen.has-lipsana .run-workspace')) {
+  failures.push('Run content spacing and lipsanon reservation must stay inside the continuous shell workspace surface');
 }
 const runCssStart = css.indexOf('/* ===== Run =====');
 const runCssEnd = css.indexOf('/* ===== Enchiridion + Strategikon', runCssStart);
@@ -1082,15 +1082,15 @@ const rawRunSpacing = runCss.match(/(?:^|\n)\s*(?:margin(?:-[\w-]+)?|padding(?:-
 if (!runCss || rawRunSpacing.length > 0) {
   failures.push(`Run layout spacing must use ADR-0031 tokens; found ${rawRunSpacing.length} raw-px declaration(s)`);
 }
-const runRelicRules = blocksTargeting('.run-relic-strip');
-const rawRelicSpacing = runRelicRules.filter((block) => /(?:margin|padding|(?:row-|column-)?gap|top|right|bottom|left|inset(?:-[\w-]+)?)\s*:[^;]*\b\d+(?:\.\d+)?px\b/.test(block));
-if (rawRelicSpacing.length > 0) {
-  failures.push('Run relic overlay spacing must use ADR-0031 tokens at every responsive width');
+const runLipsanonRules = blocksTargeting('.run-lipsanon-strip');
+const rawLipsanonSpacing = runLipsanonRules.filter((block) => /(?:margin|padding|(?:row-|column-)?gap|top|right|bottom|left|inset(?:-[\w-]+)?)\s*:[^;]*\b\d+(?:\.\d+)?px\b/.test(block));
+if (rawLipsanonSpacing.length > 0) {
+  failures.push('Run lipsanon overlay spacing must use ADR-0031 tokens at every responsive width');
 }
-if (!/\{shellWorkspaceCoversRelics \? null : <RunRelicStrip relicIds=\{relicIds\} \/>\}/.test(skirmish)
-  || !/shellWorkspaceCoversRelics=\{strategikonOpen \|\| Boolean\(inspectionWorkspace\)\}/.test(runScreen)
-  || !/shellWorkspaceCoversRelics=\{Boolean\(runWorkspace\) \|\| strategikonOpen\}/.test(skirmish)) {
-  failures.push('Shell-covering workspaces must suppress the covered relic strip without changing shell geometry');
+if (!/\{shellWorkspaceCoversLipsana \? null : <LipsanonStrip lipsanonIds=\{lipsanonIds\} \/>\}/.test(skirmish)
+  || !/shellWorkspaceCoversLipsana=\{strategikonOpen \|\| Boolean\(inspectionWorkspace\)\}/.test(runScreen)
+  || !/shellWorkspaceCoversLipsana=\{Boolean\(runWorkspace\) \|\| strategikonOpen\}/.test(skirmish)) {
+  failures.push('Shell-covering workspaces must suppress the covered lipsanon strip without changing shell geometry');
 }
 if (!/import\s+\{\s*SkirmishHud\s*\}/.test(chromeUnitAudit)
   || !/preview\.kind === 'skirmish-hud'/.test(chromeUnitAudit)

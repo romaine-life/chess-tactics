@@ -3,18 +3,18 @@ status: accepted
 date: 2026-08-01
 deciders: owner (Nelson) + Codex
 supersedes:
-  - "[ADR-0331](0331-run-relic-replacements-use-owner-selected-material-motifs.md)"
+  - "[ADR-0331](0331-run-lipsanon-replacements-use-owner-selected-material-motifs.md)"
 partially_supersedes:
   - "[ADR-0076](0076-scaling-is-calibration-production-art-is-native-1x.md)"
-  - "[ADR-0198](0198-run-relic-icons-are-installed-live-art-and-persistently-visible.md)"
-  - "[ADR-0264](0264-run-relic-identities-carry-anti-story-residue.md)"
+  - "[ADR-0198](0198-run-lipsanon-icons-are-installed-live-art-and-persistently-visible.md)"
+  - "[ADR-0264](0264-run-lipsanon-identities-carry-anti-story-residue.md)"
 ---
 
-# ADR-0332: Eight Run relic icons ship the approved resized pixels
+# ADR-0332: Eight Run lipsanon icons ship the approved resized pixels
 
 ## Context and Problem Statement
 
-ADR-0331 recorded eight owner-approved Run relic compositions but kept their
+ADR-0331 recorded eight owner-approved Run lipsanon compositions but kept their
 64x64 transformed files in calibration status because the built-in generator
 produced 1254x1254 sources. The owner subsequently decided that resizing is the
 required production method for this specific set and approved the exact shown
@@ -28,7 +28,7 @@ production exception.**
 
 The authorized mapping is immutable:
 
-| Stable relic id | Output SHA-256 |
+| Stable lipsanon id | Output SHA-256 |
 | --- | --- |
 | `congressional-approval` | `928f9ceb7a5612ff0d2216b70422b972b04492a4c9ed277e5122721b390c52d0` |
 | `inspirational-record` | `b6d18510fcff3e374a1899421b2928fb16cd79c0108ad00179059cca539e309d` |
@@ -43,23 +43,23 @@ Each accepted version must retain its archived 1254x1254 source version and
 SHA-256, exact generation prompt, chroma-key cleanup, crop, nearest-neighbor
 64x64 fit, 52px maximum subject footprint, alpha threshold, and resulting
 output hash in live provenance. Its `nativeEvidence` uses schema
-`run-relic-resized-production-exception-v1`, names this ADR, and truthfully keeps
+`run-lipsanon-resized-production-exception-v1`, names this ADR, and truthfully keeps
 `native1x=false` plus `spatialResampling=true`.
 
 The backend admits that schema only when the semantic slot and uploaded bytes
 match the closed mapping above and the recorded transform is
-`chroma-key-crop-nearest-neighbor-fit-52-alpha-threshold-96`. Other Run relics,
+`chroma-key-crop-nearest-neighbor-fit-52-alpha-threshold-96`. Other Run lipsana,
 future replacement bytes, and every other raster family remain governed by the
 ordinary ADR-0076 native-1x gate.
 
-The existing `run-relic-icons:v1` group remains atomic. The eight replacements
+The existing `run-lipsanon-icons:v1` group remains atomic. The eight replacements
 are reviewed and accepted with byte-identical candidates for the other eight
 members of the original family. After installation, the eight
 `replacementArtworkPending` guards are removed.
 
 ### Consequences
 
-- Good: the exact art approved in the real relic seat becomes the shipped art.
+- Good: the exact art approved in the real lipsanon seat becomes the shipped art.
 - Good: provenance remains truthful about the resize instead of relabeling the
   outputs as native.
 - Good: the exception is mechanically closed to eight slots and eight hashes.

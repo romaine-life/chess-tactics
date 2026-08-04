@@ -675,11 +675,11 @@ its final visible footprint. Nearest-neighbor scaling and
 zoom, DPR-specific exports, and declared 9-slice/tiled regions are the narrow
 compositor exceptions defined by ADR-0076.
 
-ADR-0332 adds one closed production exception: eight named Run relic slots may
+ADR-0332 adds one closed production exception: eight named Run lipsanon slots may
 accept only their owner-approved 64×64 output hashes derived from archived
 1254×1254 sources by the recorded chroma-key, crop, nearest-neighbor fit, and
 alpha-threshold transform. Their evidence remains explicitly resampled. This
-does not authorize another hash, another relic icon, or another asset family.
+does not authorize another hash, another lipsanon icon, or another asset family.
 
 ## Acceptance Checks
 
@@ -688,7 +688,7 @@ Before an asset family is wired into production routes, require:
 - a declared canonical 1× frame, opaque subject footprint, anchor, and draw rect
 - native generation/render/export dimensions matching that contract
 - no spatial resampling in the accepted path and asset-local baseline scale `1`
-- or, only for the eight exact ADR-0332 Run relic slot/hash pairs, the validated
+- or, only for the eight exact ADR-0332 Run lipsanon slot/hash pairs, the validated
   resized-production exception evidence and transform
 - a family-specific machine gate for dimensions, provenance, and any permitted
   crop/pad-only pixel identity

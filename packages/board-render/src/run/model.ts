@@ -1,23 +1,26 @@
 import type { Level, War } from '../core/level';
 import type { PieceType } from '../core/types';
 import {
-  RUN_RELIC_BY_ID,
-  RUN_RELICS,
-  type RunRelicDefinition,
-  type RunRelicId,
-} from '../core/runRelics';
+  LIPSANON_BY_ID,
+  RUN_LIPSANA,
+  type LipsanonDefinition,
+  type LipsanonId,
+} from '../core/runLipsana';
 import { spawnEventsForLevel } from '../core/levelEvents';
 import { createRng } from '../core/rng';
 import { runUnitName } from './unitNames';
 
 export {
-  RUN_RELIC_BY_ID,
-  RUN_RELICS,
-  type RunRelicDefinition,
-  type RunRelicId,
+  LIPSANON_BY_ID,
+  RUN_LIPSANA,
+  type LipsanonDefinition,
+  type LipsanonId,
 };
 
-export const RUN_FORMAT_VERSION = 14;
+// Format 15 renamed the held-relic field to `lipsana` (ADR-0376). The old `relics` key is
+// not read: docs/migration-policy.md prohibits a compatibility read, so a document written
+// before the rename is unsupported rather than half-migrated.
+export const RUN_FORMAT_VERSION = 15;
 export const GOLD_SCALE = 10;
 export const RUN_STARTING_GOLD = 8;
 export const RUN_STARTING_GOLD_TENTHS = RUN_STARTING_GOLD * GOLD_SCALE;
@@ -259,12 +262,12 @@ export interface RunPestiferousLoss {
   unit: RunArmyUnit;
 }
 
-export interface RunRelicAbilityGrant {
+export interface LipsanonAbilityGrant {
   ability: Extract<RunAbility, 'eutactic' | 'agminate'>;
   unitType: RunArmyPieceType;
 }
 
-export const RUN_RELIC_ABILITY_GRANTS: Readonly<Partial<Record<RunRelicId, RunRelicAbilityGrant>>> = Object.freeze({
+export const RUN_LIPSANON_ABILITY_GRANTS: Readonly<Partial<Record<LipsanonId, LipsanonAbilityGrant>>> = Object.freeze({
   'training-linens': { ability: 'eutactic', unitType: 'pawn' },
   'royal-decree': { ability: 'eutactic', unitType: 'king' },
   'crenellated-rampart': { ability: 'eutactic', unitType: 'rook' },
@@ -286,8 +289,8 @@ export interface RunWarSnapshot {
 }
 
 /**
- * 'bona-vacantia' opens a Conflict: the player takes one relic before the shop that leads
- * into the Conflict's first Battle. It replaced the loot relic that used to be won at a
+ * 'bona-vacantia' opens a Conflict: the player takes one lipsanon before the shop that leads
+ * into the Conflict's first Battle. It replaced the loot lipsanon that used to be won at a
  * Conflict's END, inside the shop -- same three-per-run cadence, opposite end, so the
  * choice is made looking forward rather than handed out as a reward.
  */
@@ -321,8 +324,8 @@ export interface RunShopState {
   victoryGoldTenths: number;
   cardOffers: RunCardOffer[];
   purchasedCardOfferIds: string[];
-  paidRelicOffer: RunRelicId | null;
-  paidRelicBought: boolean;
+  paidLipsanonOffer: LipsanonId | null;
+  paidLipsanonBought: boolean;
   soldUnits: Array<{
     unit: RunArmyUnit;
     proceedsTenths: number;
@@ -331,8 +334,8 @@ export interface RunShopState {
 }
 
 /**
- * The relic offer that opens a Conflict. `kind` says which shop this hands off to once a
- * relic is taken: the run's pinned opening shop, or the post-battle shop that follows the
+ * The lipsanon offer that opens a Conflict. `kind` says which shop this hands off to once a
+ * lipsanon is taken: the run's pinned opening shop, or the post-battle shop that follows the
  * Battle just fought. `victoryGoldTenths` is carried through because that shop reports it
  * and the Battle's gold is banked before this screen, not after it.
  */
@@ -341,20 +344,20 @@ export interface RunVacantiaState {
   conflictIndex: number;
   afterBattleIndex: number;
   victoryGoldTenths: number;
-  offers: RunRelicId[];
+  offers: LipsanonId[];
 }
 
 export interface RunShopEntrySnapshot {
   goldTenths: number;
   army: RunArmyUnit[];
   cards: RunOwnedCard[];
-  relics: RunRelicId[];
-  seenRelics: RunRelicId[];
-  conflictPaidRelics: Record<string, { relicId: RunRelicId; bought: boolean }>;
+  lipsana: LipsanonId[];
+  seenLipsana: LipsanonId[];
+  conflictPaidLipsana: Record<string, { lipsanonId: LipsanonId; bought: boolean }>;
   nextArmyUnitSequence: number;
   nextArmyUnitNumberByType: RunArmyNumberState;
   nextCardSequence: number;
-  paidRelicBought: boolean;
+  paidLipsanonBought: boolean;
 }
 
 export interface RunDocument {
@@ -371,9 +374,9 @@ export interface RunDocument {
   army: RunArmyUnit[];
   cards: RunOwnedCard[];
   pestiferousLosses: RunPestiferousLoss[];
-  relics: RunRelicId[];
-  seenRelics: RunRelicId[];
-  conflictPaidRelics: Record<string, { relicId: RunRelicId; bought: boolean }>;
+  lipsana: LipsanonId[];
+  seenLipsana: LipsanonId[];
+  conflictPaidLipsana: Record<string, { lipsanonId: LipsanonId; bought: boolean }>;
   nextArmyUnitSequence: number;
   nextArmyUnitNumberByType: RunArmyNumberState;
   nextCardSequence: number;
@@ -733,9 +736,9 @@ export function createRun(
     army: initialArmy(seed),
     cards: [],
     pestiferousLosses: [],
-    relics: [],
-    seenRelics: [],
-    conflictPaidRelics: {},
+    lipsana: [],
+    seenLipsana: [],
+    conflictPaidLipsana: {},
     nextArmyUnitSequence: 1,
     nextArmyUnitNumberByType: {
       ...initialArmyNumberState(),
@@ -751,11 +754,11 @@ export function createRun(
   // A Conflict that ends in loot opens with Bona Vacantia; a war with no loot battles at
   // all still starts straight in the shop, exactly as it used to.
   if (conflictOpensWithVacantia(war, 0)) {
-    const reveal = revealRelics(run, 3, 'vacantia-relics', 0);
+    const reveal = revealLipsana(run, 3, 'vacantia-lipsana', 0);
     return {
       ...run,
       phase: 'bona-vacantia',
-      seenRelics: reveal.seenRelics,
+      seenLipsana: reveal.seenLipsana,
       vacantia: {
         kind: 'opening',
         conflictIndex: 0,
@@ -770,8 +773,8 @@ export function createRun(
 
 /**
  * The run's pinned opening shop. Held apart from createRun because Bona Vacantia now sits
- * in front of it: the relic is taken first, and only then is this shop built -- so its
- * entry snapshot records the army and relics the player actually walks in with.
+ * in front of it: the lipsanon is taken first, and only then is this shop built -- so its
+ * entry snapshot records the army and lipsana the player actually walks in with.
  */
 function openOpeningShop(run: RunDocument, seed: number, ataraxiaTier: AtaraxiaTier): RunDocument {
   return {
@@ -785,8 +788,8 @@ function openOpeningShop(run: RunDocument, seed: number, ataraxiaTier: AtaraxiaT
       victoryGoldTenths: 0,
       cardOffers: openingShopOffers(seed, ataraxiaTier),
       purchasedCardOfferIds: [],
-      paidRelicOffer: null,
-      paidRelicBought: false,
+      paidLipsanonOffer: null,
+      paidLipsanonBought: false,
       soldUnits: [],
       entrySnapshot: createShopEntrySnapshot(run, false),
     },
@@ -794,9 +797,9 @@ function openOpeningShop(run: RunDocument, seed: number, ataraxiaTier: AtaraxiaT
 }
 
 /**
- * Whether the Conflict beginning at `firstBattleIndex` opens with a relic. A Conflict runs
+ * Whether the Conflict beginning at `firstBattleIndex` opens with a lipsanon. A Conflict runs
  * up to and including its loot Battle, so a stretch with no loot Battle left in it is the
- * run's final approach and gets nothing -- which is what keeps the last Battle relic-free
+ * run's final approach and gets nothing -- which is what keeps the last Battle lipsanon-free
  * without hardcoding a Battle number.
  */
 function conflictOpensWithVacantia(war: RunWarSnapshot, firstBattleIndex: number): boolean {
@@ -980,26 +983,26 @@ function synchronizePlaguedModifiers(
   return changed ? synchronized : army;
 }
 
-function cloneConflictPaidRelics(
-  conflictPaidRelics: RunDocument['conflictPaidRelics'],
-): RunDocument['conflictPaidRelics'] {
+function cloneConflictPaidLipsana(
+  conflictPaidLipsana: RunDocument['conflictPaidLipsana'],
+): RunDocument['conflictPaidLipsana'] {
   return Object.fromEntries(
-    Object.entries(conflictPaidRelics).map(([key, value]) => [key, { ...value }]),
+    Object.entries(conflictPaidLipsana).map(([key, value]) => [key, { ...value }]),
   );
 }
 
-function createShopEntrySnapshot(run: RunDocument, paidRelicBought: boolean): RunShopEntrySnapshot {
+function createShopEntrySnapshot(run: RunDocument, paidLipsanonBought: boolean): RunShopEntrySnapshot {
   return {
     goldTenths: run.goldTenths,
     army: cloneArmy(run.army),
     cards: cloneCards(run.cards),
-    relics: [...run.relics],
-    seenRelics: [...run.seenRelics],
-    conflictPaidRelics: cloneConflictPaidRelics(run.conflictPaidRelics),
+    lipsana: [...run.lipsana],
+    seenLipsana: [...run.seenLipsana],
+    conflictPaidLipsana: cloneConflictPaidLipsana(run.conflictPaidLipsana),
     nextArmyUnitSequence: run.nextArmyUnitSequence,
     nextArmyUnitNumberByType: { ...run.nextArmyUnitNumberByType },
     nextCardSequence: run.nextCardSequence,
-    paidRelicBought,
+    paidLipsanonBought,
   };
 }
 
@@ -1114,10 +1117,16 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
     chosenDraftId?: unknown;
   };
   if (raw.phase === 'draft') throw new Error('The retired Run draft phase is unsupported.');
+  // Format 15 renamed `relics` to `lipsana`. Every phase of an older document carries the
+  // retired key, and reading it to fill the new one would be exactly the compatibility path
+  // docs/migration-policy.md forbids — so the document is refused, not carried forward.
+  if (Number(raw.formatVersion) < 15) {
+    throw new Error('Run documents written before the Lipsana rename are unsupported.');
+  }
   if (raw.phase === 'shop' && Number(raw.formatVersion) !== RUN_FORMAT_VERSION) {
     throw new Error('Older Run Shop documents are unsupported.');
   }
-  // Format 13 moved the Conflict relic out of the shop and into its own phase. A document
+  // Format 13 moved the Conflict lipsanon out of the shop and into its own phase. A document
   // written before that has no offer to show and a shop that still expects a loot pick, so
   // it cannot be carried forward -- it is discarded rather than half-migrated.
   if (raw.phase === 'bona-vacantia' && Number(raw.formatVersion) !== RUN_FORMAT_VERSION) {
@@ -1233,7 +1242,7 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
       || !Number.isSafeInteger(next.shop.entrySnapshot.nextCardSequence)
     )
   ) {
-    const paidRelicBought = next.shop.paidRelicBought === true;
+    const paidLipsanonBought = next.shop.paidLipsanonBought === true;
     next = {
       ...next,
       shop: {
@@ -1249,7 +1258,7 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
                 ? next.shop.entrySnapshot.nextCardSequence
                 : next.nextCardSequence,
             }
-          : createShopEntrySnapshot(next, paidRelicBought),
+          : createShopEntrySnapshot(next, paidLipsanonBought),
       },
     };
   }
@@ -1290,46 +1299,46 @@ export function addArmyPieces(
   };
 }
 
-export function hasRelic(run: RunDocument, relic: RunRelicId): boolean {
-  return run.relics.includes(relic);
+export function hasLipsanon(run: RunDocument, lipsanon: LipsanonId): boolean {
+  return run.lipsana.includes(lipsanon);
 }
 
-export function relicGrantingRunAbility(
+export function lipsanonGrantingRunAbility(
   run: RunDocument,
   unit: RunArmyUnit,
   ability: RunAbility,
-): RunRelicId | null {
-  for (const relicId of run.relics) {
-    const grant = RUN_RELIC_ABILITY_GRANTS[relicId];
-    if (grant?.ability === ability && grant.unitType === unit.type) return relicId;
+): LipsanonId | null {
+  for (const lipsanonId of run.lipsana) {
+    const grant = RUN_LIPSANON_ABILITY_GRANTS[lipsanonId];
+    if (grant?.ability === ability && grant.unitType === unit.type) return lipsanonId;
   }
   return null;
 }
 
 export function hasRunAbility(run: RunDocument, unit: RunArmyUnit, ability: RunAbility): boolean {
-  return unit.abilities.includes(ability) || relicGrantingRunAbility(run, unit, ability) !== null;
+  return unit.abilities.includes(ability) || lipsanonGrantingRunAbility(run, unit, ability) !== null;
 }
 
-function availableRelics(run: RunDocument): RunRelicId[] {
-  const held = new Set(run.relics);
-  const seen = new Set(run.seenRelics);
-  return RUN_RELICS
-    .filter((relic) => !held.has(relic.id) && !seen.has(relic.id) && (!relic.requires || held.has(relic.requires)))
-    .map((relic) => relic.id);
+function availableLipsana(run: RunDocument): LipsanonId[] {
+  const held = new Set(run.lipsana);
+  const seen = new Set(run.seenLipsana);
+  return RUN_LIPSANA
+    .filter((lipsanon) => !held.has(lipsanon.id) && !seen.has(lipsanon.id) && (!lipsanon.requires || held.has(lipsanon.requires)))
+    .map((lipsanon) => lipsanon.id);
 }
 
-function revealRelics(run: RunDocument, count: number, label: string, index: number): {
-  offers: RunRelicId[];
-  seenRelics: RunRelicId[];
+function revealLipsana(run: RunDocument, count: number, label: string, index: number): {
+  offers: LipsanonId[];
+  seenLipsana: LipsanonId[];
 } {
-  const offers = shuffled(availableRelics(run), mixSeed(run.seed, label, index)).slice(0, count);
-  return { offers, seenRelics: [...run.seenRelics, ...offers] };
+  const offers = shuffled(availableLipsana(run), mixSeed(run.seed, label, index)).slice(0, count);
+  return { offers, seenLipsana: [...run.seenLipsana, ...offers] };
 }
 
 export function prepareDeployment(run: RunDocument): RunDocument {
   if (run.phase !== 'deployment') return run;
   const seed = mixSeed(run.seed, 'deployment', run.battleIndex);
-  const temporaryAdlectedUnitId = hasRelic(run, 'inspirational-record')
+  const temporaryAdlectedUnitId = hasLipsanon(run, 'inspirational-record')
     ? createRng(mixSeed(seed, 'inspirational-record')).pick(run.army).id
     : undefined;
   return touch({
@@ -1428,7 +1437,7 @@ export function observeRunUnitDeath(run: RunDocument, unitId: string): {
     observedDeadUnitIds: [...runtime.observedDeadUnitIds, unitId],
     reinforcementSequence: runtime.reinforcementSequence + 1,
   };
-  if (!hasRelic(run, 'deployment-vehicle') || runtime.cashedOutUnitIds.includes(unitId)) {
+  if (!hasLipsanon(run, 'deployment-vehicle') || runtime.cashedOutUnitIds.includes(unitId)) {
     return { run: touch({ ...run, battleRuntime: nextRuntime }), reservistUnitId: null };
   }
   const dead = run.army.find((unit) => unit.id === unitId);
@@ -1465,26 +1474,26 @@ export function markReservistDeployed(run: RunDocument, unitId: string): RunDocu
 }
 
 /**
- * Gold a relic pays the moment it is taken. Data rather than branches because the server
+ * Gold a lipsanon pays the moment it is taken. Data rather than branches because the server
  * has to verify it independently: the opening Shop's gold is pinned value-by-value, and
- * Bona Vacantia now runs BEFORE that shop, so an opening relic can legitimately move the
+ * Bona Vacantia now runs BEFORE that shop, so an opening lipsanon can legitimately move the
  * number the contract checks. Both sides read this map, so neither can drift.
  */
-export const RUN_RELIC_IMMEDIATE_GOLD: Readonly<Partial<Record<RunRelicId, number>>> = Object.freeze({
+export const RUN_LIPSANON_IMMEDIATE_GOLD: Readonly<Partial<Record<LipsanonId, number>>> = Object.freeze({
   'congressional-approval': 5,
   'occult-dagger': 10,
 });
 
-/** The gold these relics have already paid out, in tenths. */
-export function relicImmediateGoldTenths(relics: readonly RunRelicId[]): number {
-  return relics.reduce((total, relic) => total + (RUN_RELIC_IMMEDIATE_GOLD[relic] ?? 0) * GOLD_SCALE, 0);
+/** The gold these lipsana have already paid out, in tenths. */
+export function lipsanonImmediateGoldTenths(lipsana: readonly LipsanonId[]): number {
+  return lipsana.reduce((total, lipsanon) => total + (RUN_LIPSANON_IMMEDIATE_GOLD[lipsanon] ?? 0) * GOLD_SCALE, 0);
 }
 
-function immediateRelic(run: RunDocument, relic: RunRelicId, targetUnitId?: string): RunDocument {
+function immediateLipsanon(run: RunDocument, lipsanon: LipsanonId, targetUnitId?: string): RunDocument {
   let next = run;
-  const payout = RUN_RELIC_IMMEDIATE_GOLD[relic];
+  const payout = RUN_LIPSANON_IMMEDIATE_GOLD[lipsanon];
   if (payout) next = { ...next, goldTenths: next.goldTenths + payout * GOLD_SCALE };
-  if (relic === 'conscription-notice' && targetUnitId) {
+  if (lipsanon === 'conscription-notice' && targetUnitId) {
     next = {
       ...next,
       army: next.army.map((unit) => (
@@ -1497,10 +1506,10 @@ function immediateRelic(run: RunDocument, relic: RunRelicId, targetUnitId?: stri
   return next;
 }
 
-export function acquireRelic(run: RunDocument, relic: RunRelicId, targetUnitId?: string): RunDocument {
-  if (run.relics.includes(relic)) return run;
-  if (relic === 'conscription-notice' && !run.army.some((unit) => unit.id === targetUnitId)) return run;
-  return touch(immediateRelic({ ...run, relics: [...run.relics, relic] }, relic, targetUnitId));
+export function acquireLipsanon(run: RunDocument, lipsanon: LipsanonId, targetUnitId?: string): RunDocument {
+  if (run.lipsana.includes(lipsanon)) return run;
+  if (lipsanon === 'conscription-notice' && !run.army.some((unit) => unit.id === targetUnitId)) return run;
+  return touch(immediateLipsanon({ ...run, lipsana: [...run.lipsana, lipsanon] }, lipsanon, targetUnitId));
 }
 
 /** Administrator-only caller helper. Authorization belongs to the server endpoint;
@@ -1584,7 +1593,7 @@ export function openShop(run: RunDocument, survivingUnitIds: readonly string[]):
   const finalBattle = run.battleIndex >= run.war.battles.length - 1;
 
   const survivorSet = new Set(survivingUnitIds);
-  const rifleTenths = hasRelic(run, 'mercenarys-rifle')
+  const rifleTenths = hasLipsanon(run, 'mercenarys-rifle')
     ? run.army.reduce((total, unit) => total + (survivorSet.has(unit.id) ? PIECE_VALUE[unit.type] : 0), 0)
     : 0;
   const victoryGoldTenths = battleVictoryGoldTenths(run.war.battles[run.battleIndex].level);
@@ -1599,16 +1608,16 @@ export function openShop(run: RunDocument, survivingUnitIds: readonly string[]):
     battleRuntime: null,
   };
   // A loot Battle closes a Conflict, so the next one opens here -- before the shop, so the
-  // player inherits the relic and then decides what to spend on. The Battle's gold is
+  // player inherits the lipsanon and then decides what to spend on. The Battle's gold is
   // already banked above, which is why this screen can precede the shop without the shop's
   // entry snapshot going stale.
   const closedConflict = banked.war.battles[banked.battleIndex]?.loot === true;
   if (closedConflict && conflictOpensWithVacantia(banked.war, banked.battleIndex + 1)) {
-    const reveal = revealRelics(banked, 3, 'vacantia-relics', banked.battleIndex + 1);
+    const reveal = revealLipsana(banked, 3, 'vacantia-lipsana', banked.battleIndex + 1);
     return touch({
       ...banked,
       phase: 'bona-vacantia',
-      seenRelics: reveal.seenRelics,
+      seenLipsana: reveal.seenLipsana,
       shop: null,
       vacantia: {
         kind: 'post-battle',
@@ -1624,37 +1633,37 @@ export function openShop(run: RunDocument, survivingUnitIds: readonly string[]):
 
 /**
  * The shop that follows a Battle. Split out of openShop because Bona Vacantia can land in
- * between: when a Conflict closes, the relic screen comes first and then hands off here.
+ * between: when a Conflict closes, the lipsanon screen comes first and then hands off here.
  */
 function openPostBattleShop(run: RunDocument, victoryGoldTenths: number): RunDocument {
   let next: RunDocument = { ...run, phase: 'shop', vacantia: null };
-  const cardCount = hasRelic(next, 'quartermasters-ledger') ? 4 : 3;
+  const cardCount = hasLipsanon(next, 'quartermasters-ledger') ? 4 : 3;
   const cardOffers = shuffled(RUN_CARD_DECK, mixSeed(next.seed, 'shop-cards', next.battleIndex))
     .slice(0, cardCount)
     .map((card, slotIndex) => createRunCardOffer(next, card, next.battleIndex, slotIndex));
-  let paidRelicOffer: RunRelicId | null = null;
-  let paidRelicBought = false;
-  if (hasRelic(next, 'merchants-shopkey')) {
-    const existing = next.conflictPaidRelics[String(next.conflictIndex)];
+  let paidLipsanonOffer: LipsanonId | null = null;
+  let paidLipsanonBought = false;
+  if (hasLipsanon(next, 'merchants-shopkey')) {
+    const existing = next.conflictPaidLipsana[String(next.conflictIndex)];
     if (existing) {
-      paidRelicOffer = existing.relicId;
-      paidRelicBought = existing.bought;
+      paidLipsanonOffer = existing.lipsanonId;
+      paidLipsanonBought = existing.bought;
     } else {
-      const paidReveal = revealRelics(next, 1, 'shopkey-relic', next.conflictIndex);
-      paidRelicOffer = paidReveal.offers[0] ?? null;
+      const paidReveal = revealLipsana(next, 1, 'shopkey-lipsanon', next.conflictIndex);
+      paidLipsanonOffer = paidReveal.offers[0] ?? null;
       next = {
         ...next,
-        seenRelics: paidReveal.seenRelics,
-        conflictPaidRelics: paidRelicOffer
+        seenLipsana: paidReveal.seenLipsana,
+        conflictPaidLipsana: paidLipsanonOffer
           ? {
-              ...next.conflictPaidRelics,
-              [String(next.conflictIndex)]: { relicId: paidRelicOffer, bought: false },
+              ...next.conflictPaidLipsana,
+              [String(next.conflictIndex)]: { lipsanonId: paidLipsanonOffer, bought: false },
             }
-          : next.conflictPaidRelics,
+          : next.conflictPaidLipsana,
       };
     }
   }
-  const entrySnapshot = createShopEntrySnapshot(next, paidRelicBought);
+  const entrySnapshot = createShopEntrySnapshot(next, paidLipsanonBought);
   return {
     ...next,
     shop: {
@@ -1664,8 +1673,8 @@ function openPostBattleShop(run: RunDocument, victoryGoldTenths: number): RunDoc
       victoryGoldTenths,
       cardOffers,
       purchasedCardOfferIds: [],
-      paidRelicOffer,
-      paidRelicBought,
+      paidLipsanonOffer,
+      paidLipsanonBought,
       soldUnits: [],
       entrySnapshot,
     },
@@ -1741,7 +1750,7 @@ export function sellArmyUnit(run: RunDocument, unitId: string): RunDocument {
   if (run.phase !== 'shop') return run;
   const unit = run.army.find((candidate) => candidate.id === unitId);
   if (!unit || unit.type === 'king') return run;
-  const numerator = hasRelic(run, 'fair-scales') ? 75 : 50;
+  const numerator = hasLipsanon(run, 'fair-scales') ? 75 : 50;
   const proceedsTenths = (PIECE_VALUE[unit.type] * GOLD_SCALE * numerator) / 100;
   const removal = removeUnitFromArmyAndCards(run, unitId);
   return touch({
@@ -1765,16 +1774,16 @@ export function resetShop(run: RunDocument): RunDocument {
     goldTenths: snapshot.goldTenths,
     army: cloneArmy(snapshot.army),
     cards: cloneCards(snapshot.cards),
-    relics: [...snapshot.relics],
-    seenRelics: [...snapshot.seenRelics],
-    conflictPaidRelics: cloneConflictPaidRelics(snapshot.conflictPaidRelics),
+    lipsana: [...snapshot.lipsana],
+    seenLipsana: [...snapshot.seenLipsana],
+    conflictPaidLipsana: cloneConflictPaidLipsana(snapshot.conflictPaidLipsana),
     nextArmyUnitSequence: snapshot.nextArmyUnitSequence,
     nextArmyUnitNumberByType: { ...snapshot.nextArmyUnitNumberByType },
     nextCardSequence: snapshot.nextCardSequence,
     shop: {
       ...run.shop,
       purchasedCardOfferIds: [],
-      paidRelicBought: snapshot.paidRelicBought,
+      paidLipsanonBought: snapshot.paidLipsanonBought,
       soldUnits: [],
     },
   });
@@ -1787,12 +1796,12 @@ export function shopHasChanges(run: RunDocument): boolean {
     run.goldTenths !== snapshot.goldTenths
     || run.nextArmyUnitSequence !== snapshot.nextArmyUnitSequence
     || run.shop.purchasedCardOfferIds.length > 0
-    || run.shop.paidRelicBought !== snapshot.paidRelicBought
+    || run.shop.paidLipsanonBought !== snapshot.paidLipsanonBought
     || run.shop.soldUnits.length > 0
     || JSON.stringify(run.army) !== JSON.stringify(snapshot.army)
     || JSON.stringify(run.cards) !== JSON.stringify(snapshot.cards)
-    || JSON.stringify(run.relics) !== JSON.stringify(snapshot.relics)
-    || JSON.stringify(run.conflictPaidRelics) !== JSON.stringify(snapshot.conflictPaidRelics)
+    || JSON.stringify(run.lipsana) !== JSON.stringify(snapshot.lipsana)
+    || JSON.stringify(run.conflictPaidLipsana) !== JSON.stringify(snapshot.conflictPaidLipsana)
   );
 }
 
@@ -1801,12 +1810,12 @@ export function canLeaveShop(run: RunDocument): boolean {
 }
 
 /**
- * Take the Conflict's relic. Mandatory, as the loot relic was: there is no way past this
+ * Take the Conflict's lipsanon. Mandatory, as the loot lipsanon was: there is no way past this
  * screen without one, so taking it is also what opens the shop behind it.
  */
-export function takeVacantiaRelic(run: RunDocument, relic: RunRelicId, targetUnitId?: string): RunDocument {
-  if (run.phase !== 'bona-vacantia' || !run.vacantia || !run.vacantia.offers.includes(relic)) return run;
-  const acquired = acquireRelic(run, relic, targetUnitId);
+export function takeVacantiaLipsanon(run: RunDocument, lipsanon: LipsanonId, targetUnitId?: string): RunDocument {
+  if (run.phase !== 'bona-vacantia' || !run.vacantia || !run.vacantia.offers.includes(lipsanon)) return run;
+  const acquired = acquireLipsanon(run, lipsanon, targetUnitId);
   if (acquired === run) return run;
   const vacantia = run.vacantia;
   const opened = vacantia.kind === 'opening'
@@ -1815,18 +1824,18 @@ export function takeVacantiaRelic(run: RunDocument, relic: RunRelicId, targetUni
   return touch(opened);
 }
 
-export function buyPaidRelic(run: RunDocument, targetUnitId?: string): RunDocument {
-  if (run.phase !== 'shop' || !run.shop || !run.shop.paidRelicOffer || run.shop.paidRelicBought || run.goldTenths < 10 * GOLD_SCALE) return run;
-  const acquired = acquireRelic(run, run.shop.paidRelicOffer, targetUnitId);
+export function buyPaidLipsanon(run: RunDocument, targetUnitId?: string): RunDocument {
+  if (run.phase !== 'shop' || !run.shop || !run.shop.paidLipsanonOffer || run.shop.paidLipsanonBought || run.goldTenths < 10 * GOLD_SCALE) return run;
+  const acquired = acquireLipsanon(run, run.shop.paidLipsanonOffer, targetUnitId);
   if (acquired === run) return run;
   return touch({
     ...acquired,
     goldTenths: acquired.goldTenths - 10 * GOLD_SCALE,
-    conflictPaidRelics: {
-      ...acquired.conflictPaidRelics,
-      [String(run.conflictIndex)]: { relicId: run.shop.paidRelicOffer, bought: true },
+    conflictPaidLipsana: {
+      ...acquired.conflictPaidLipsana,
+      [String(run.conflictIndex)]: { lipsanonId: run.shop.paidLipsanonOffer, bought: true },
     },
-    shop: { ...run.shop, paidRelicBought: true },
+    shop: { ...run.shop, paidLipsanonBought: true },
   });
 }
 

@@ -135,19 +135,19 @@ describe('Run deployment', () => {
     const royal = {
       ...base,
       army: base.army.filter((unit) => unit.type === 'king'),
-      relics: ['royal-sceptre', 'royal-decree'] as RunDocument['relics'],
+      lipsana: ['royal-sceptre', 'royal-decree'] as RunDocument['lipsana'],
     };
     const king = deploymentOptions(royal, level).layouts[0].placements['run-king'];
     expect(king.y).toBe(3);
     expect(king.x === 0 || king.x === 3 || king.y === 0 || king.y === 3).toBe(true);
   });
 
-  it('derives relic grants through the same abilities stored on individual units', () => {
+  it('derives lipsanon grants through the same abilities stored on individual units', () => {
     const current = run();
     const king = current.army.find((unit) => unit.type === 'king')!;
     const inherited = {
       ...current,
-      relics: ['royal-sceptre', 'royal-decree'] as RunDocument['relics'],
+      lipsana: ['royal-sceptre', 'royal-decree'] as RunDocument['lipsana'],
     };
     expect(hasRunAbility(inherited, king, 'eutactic')).toBe(true);
     expect(hasRunAbility(inherited, king, 'agminate')).toBe(true);

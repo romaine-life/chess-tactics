@@ -1,4 +1,4 @@
-// Forge RELIC MAT candidates (codex imagegen) -- the surface the Run's relic offers are
+// Forge LIPSANON MAT candidates (codex imagegen) -- the surface the Run's lipsanon offers are
 // laid out on, mounted over the chosen Spolia backdrop.
 //
 // A mat is not a backdrop and not a 9-slice frame: it is one wide object with SOFT,
@@ -7,11 +7,11 @@
 // (ADR-0013), so the mat is generated on flat chroma green and keyed out locally with
 // codex's own remove_chroma_key.py. PixelLab has native alpha and is driven separately.
 //
-// Authored wide (about 8:3) because three relic cards sit on it in a row: .run-card-grid
+// Authored wide (about 8:3) because three lipsanon cards sit on it in a row: .run-card-grid
 // tracks are minmax(196px, 236px) with one --ds-inline gap between them, so the row is
 // roughly 730-760px across and the mat needs bleed past that on every side.
 //
-//   node frontend/scripts/forge-relic-mat.mjs [--mat <id>] [--tries 2] -- <upload options>
+//   node frontend/scripts/forge-lipsanon-mat.mjs [--mat <id>] [--tries 2] -- <upload options>
 import { mkdirSync, mkdtempSync, copyFileSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -21,7 +21,7 @@ import { CODEX, runCodex, imageGenVerdict, sessionImage, removeChromaKey } from 
 import { optionValue, splitGeneratorArgs, uploadGeneratedCandidate } from './upload-generated-candidate.mjs';
 
 const SCRIPTS = dirname(fileURLToPath(import.meta.url));
-const NATIVE_DIR = join(SCRIPTS, '..', 'tmp', 'relic-mat');
+const NATIVE_DIR = join(SCRIPTS, '..', 'tmp', 'lipsanon-mat');
 
 // The mat is seen over a warm lamp-lit tabletop, so the set spreads across value and
 // temperature: pale-warm, pale-cool, mid-warm, dark-cool. A mat that matches the table
@@ -79,7 +79,7 @@ function trimToObject(input, output) {
 async function forgeMat(matId, mat, maxTries) {
   let prior = '';
   for (let attempt = 1; attempt <= maxTries; attempt += 1) {
-    const work = mkdtempSync(join(tmpdir(), `relicmat-${matId}-`));
+    const work = mkdtempSync(join(tmpdir(), `lipsanonmat-${matId}-`));
     try {
       const { out: jsonl } = await runCodex(work, prompt(mat, prior));
       const verdict = imageGenVerdict(jsonl);
@@ -108,7 +108,7 @@ async function forgeMat(matId, mat, maxTries) {
 
       const provenance = join(work, 'provenance.json');
       writeFileSync(provenance, `${JSON.stringify({
-        generator: 'forge-relic-mat', mat: matId, threadId: verdict.tid,
+        generator: 'forge-lipsanon-mat', mat: matId, threadId: verdict.tid,
         alpha: 'flat #00FF00 chroma key (ADR-0013) then trimmed to the object bounds',
       }, null, 2)}\n`);
 
@@ -119,9 +119,9 @@ async function forgeMat(matId, mat, maxTries) {
       try {
         uploadGeneratedCandidate(trimmed, [
           ...uploadArgs,
-          '--label', `Run relic mat candidate — ${mat.label} (codex)`,
+          '--label', `Run lipsanon mat candidate — ${mat.label} (codex)`,
           '--provenance-json', provenance,
-        ], `review/run-relic-mat/${matId}/codex.png`);
+        ], `review/run-lipsanon-mat/${matId}/codex.png`);
       } catch (reason) {
         const why = reason instanceof Error ? reason.message : String(reason);
         console.log(`  ${matId}: UPLOAD x — ${why}; keyed pixels kept at ${trimmed}`);
@@ -137,14 +137,14 @@ async function forgeMat(matId, mat, maxTries) {
 }
 
 const { toolArgs, uploadArgs } = splitGeneratorArgs(process.argv.slice(2));
-if (!uploadArgs.length) throw new Error('forge-relic-mat requires live-media options after --');
+if (!uploadArgs.length) throw new Error('forge-lipsanon-mat requires live-media options after --');
 const only = optionValue(toolArgs, '--mat');
 const triesIndex = toolArgs.indexOf('--tries');
 const maxTries = Math.max(1, parseInt(triesIndex >= 0 ? toolArgs[triesIndex + 1] : '2', 10));
 const mats = Object.entries(MATS).filter(([id]) => !only || id === only);
 if (!mats.length) throw new Error(`no mat '${only}'`);
 
-console.log(`forge-relic-mat: ${mats.length} mat(s)\n  codex: ${CODEX}\n`);
+console.log(`forge-lipsanon-mat: ${mats.length} mat(s)\n  codex: ${CODEX}\n`);
 const results = await Promise.all(mats.map(([id, mat]) => forgeMat(id, mat, maxTries)));
 const ok = results.filter((r) => r.pass).length;
 console.log(`\n==== ${ok}/${results.length} mats forged ====`);

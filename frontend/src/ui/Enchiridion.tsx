@@ -21,13 +21,13 @@ import {
   RUN_CARD_BY_ID,
   RUN_CARD_DECK,
   RUN_CARD_TYPE_REFERENCE,
-  RUN_RELICS,
+  RUN_LIPSANA,
   cardContentsLabel,
   type AtaraxiaTier,
   type PurchasablePieceType,
   type RunCardType,
   type RunCoreCard,
-  type RunRelicId,
+  type LipsanonId,
 } from '../run/model';
 import {
   EMPTY_RUN_PROGRESSION,
@@ -45,14 +45,14 @@ import { runCardFrameGeometryForSlot } from './runCardFrameGeometry';
 import { StaticReadOnlyBoardView } from './shared/BoardViewFraming';
 import { AlphaBoundIcon } from './shared/AlphaBoundIcon';
 import {
-  loadRunRelicStatistics,
-  RUN_RELIC_STATISTICS_EVENT,
-  type RunRelicStatistics,
-} from '../run/relicStatistics';
+  loadLipsanaStatistics,
+  LIPSANA_STATISTICS_EVENT,
+  type LipsanaStatistics,
+} from '../run/lipsanonStatistics';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { ENCHIRIDION_SECTIONS, enchiridionSectionHref, type EnchiridionSection } from './enchiridionRoute';
 import { installedUiMedia } from './installedUiMedia';
-import { RunRelicIcon } from './RunRelics';
+import { LipsanonIcon } from './Lipsana';
 import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
 import { ataraxiaNumeralArtUrl } from './ataraxiaNumeral';
 import { InnerChromeBox, OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
@@ -77,7 +77,7 @@ const SECTION_LABEL: Record<EnchiridionSection, string> = {
   terrain: 'Terrain',
   cards: 'Cards',
   'card-types': 'Card Types',
-  relics: 'Lipsana',
+  lipsana: 'Lipsana',
   abilities: 'Abilities',
   ataraxia: 'Ataraxia',
 };
@@ -98,7 +98,7 @@ const SECTION_ICON_SRC: Record<EnchiridionSection, string> = {
   terrain: installedUiMedia('ui-kit-icons-tileset-studio-png'),
   cards: installedUiMedia('ui-kit-icons-players-png'),
   'card-types': installedUiMedia('ui-kit-icons-game-power-png'),
-  relics: installedUiMedia('ui-kit-icons-info-png'),
+  lipsana: installedUiMedia('ui-kit-icons-info-png'),
   abilities: installedUiMedia('ui-kit-icons-game-defend-png'),
   ataraxia: installedUiMedia(RUN_PROGRESS_MEDIA_ROLE.ataraxia),
 };
@@ -329,14 +329,14 @@ function TerrainSection({ framed }: { framed: boolean }): ReactElement {
   );
 }
 
-function statisticFor(statistics: RunRelicStatistics, relicId: RunRelicId) {
-  return statistics[relicId] ?? { timesPicked: 0, battlesWonWhileHeld: 0 };
+function statisticFor(statistics: LipsanaStatistics, lipsanonId: LipsanonId) {
+  return statistics[lipsanonId] ?? { timesPicked: 0, battlesWonWhileHeld: 0 };
 }
 
-type RelicBrowseMode = 'rows' | 'grouped';
+type LipsanonBrowseMode = 'rows' | 'grouped';
 
 // One reference entry control in two transports (ADR-0256): a host that gives records
-// addresses (relics, cards) renders a NavButton whose route is the record's address
+// addresses (lipsana, cards) renders a NavButton whose route is the record's address
 // (ADR-0052 — the route is kept updated, never a hoverable link); a host with ephemeral
 // reference selection (the Battle-hosted Strategikon) keeps a plain selection button.
 function ReferenceTrigger({ to, onSelect, children, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -347,73 +347,73 @@ function ReferenceTrigger({ to, onSelect, children, ...props }: ButtonHTMLAttrib
   return <button type="button" onClick={onSelect} {...props}>{children}</button>;
 }
 
-export function RelicCodex({
-  relicIds = RUN_RELICS.map((relic) => relic.id),
+export function LipsanaCodex({
+  lipsanonIds = RUN_LIPSANA.map((lipsanon) => lipsanon.id),
   title = 'Lipsana',
   showStatistics = true,
   framed = true,
-  selectedRelicId = null,
-  relicHref,
+  selectedLipsanonId = null,
+  lipsanonHref,
 }: {
-  relicIds?: readonly RunRelicId[];
+  lipsanonIds?: readonly LipsanonId[];
   title?: string;
   showStatistics?: boolean;
   framed?: boolean;
-  /** The route-addressed relic; read only when relicHref makes selection navigational. */
-  selectedRelicId?: RunRelicId | null;
-  /** When present, relic selection navigates to this address instead of setting local state. */
-  relicHref?: (relicId: RunRelicId) => string;
+  /** The route-addressed lipsanon; read only when lipsanonHref makes selection navigational. */
+  selectedLipsanonId?: LipsanonId | null;
+  /** When present, lipsanon selection navigates to this address instead of setting local state. */
+  lipsanonHref?: (lipsanonId: LipsanonId) => string;
 }): ReactElement {
-  const [localSelectedId, setLocalSelectedId] = useState<RunRelicId>(relicIds[0] ?? RUN_RELICS[0].id);
+  const [localSelectedId, setLocalSelectedId] = useState<LipsanonId>(lipsanonIds[0] ?? RUN_LIPSANA[0].id);
   // Routed hosts derive the selection from the address every render; an unknown or
-  // absent relic address falls back to the first visible relic without rewriting the URL.
-  const selectedId = relicHref ? (selectedRelicId ?? relicIds[0] ?? RUN_RELICS[0].id) : localSelectedId;
-  const [browseMode, setBrowseMode] = useState<RelicBrowseMode>('rows');
-  const [statistics, setStatistics] = useState<RunRelicStatistics>({});
+  // absent lipsanon address falls back to the first visible lipsanon without rewriting the URL.
+  const selectedId = lipsanonHref ? (selectedLipsanonId ?? lipsanonIds[0] ?? RUN_LIPSANA[0].id) : localSelectedId;
+  const [browseMode, setBrowseMode] = useState<LipsanonBrowseMode>('rows');
+  const [statistics, setStatistics] = useState<LipsanaStatistics>({});
   const [statisticsStatus, setStatisticsStatus] = useState<'loading' | 'account' | 'browser'>('loading');
   const browsePanelId = useId();
-  const visibleRelics = RUN_RELICS.filter((relic) => relicIds.includes(relic.id));
-  const selected = RUN_RELICS.find((relic) => relic.id === selectedId)
-    ?? visibleRelics[0]
-    ?? RUN_RELICS[0];
+  const visibleLipsana = RUN_LIPSANA.filter((lipsanon) => lipsanonIds.includes(lipsanon.id));
+  const selected = RUN_LIPSANA.find((lipsanon) => lipsanon.id === selectedId)
+    ?? visibleLipsana[0]
+    ?? RUN_LIPSANA[0];
 
   useEffect(() => {
-    if (relicHref) return;
-    if (!relicIds.includes(localSelectedId) && relicIds[0]) setLocalSelectedId(relicIds[0]);
-  }, [relicHref, relicIds, localSelectedId]);
+    if (lipsanonHref) return;
+    if (!lipsanonIds.includes(localSelectedId) && lipsanonIds[0]) setLocalSelectedId(lipsanonIds[0]);
+  }, [lipsanonHref, lipsanonIds, localSelectedId]);
 
   useEffect(() => {
     if (!showStatistics) return undefined;
     let active = true;
     const refresh = () => {
-      void loadRunRelicStatistics().then((result) => {
+      void loadLipsanaStatistics().then((result) => {
         if (!active) return;
         setStatistics(result.statistics);
         setStatisticsStatus(result.accountBacked ? 'account' : 'browser');
       });
     };
     refresh();
-    window.addEventListener(RUN_RELIC_STATISTICS_EVENT, refresh);
+    window.addEventListener(LIPSANA_STATISTICS_EVENT, refresh);
     return () => {
       active = false;
-      window.removeEventListener(RUN_RELIC_STATISTICS_EVENT, refresh);
+      window.removeEventListener(LIPSANA_STATISTICS_EVENT, refresh);
     };
   }, [showStatistics]);
 
   const selectedStatistic = statisticFor(statistics, selected.id);
   return (
     <ReferenceSectionFrame
-      chromeConsumer="enchiridion-relics"
-      className="enchiridion-relic-panel"
+      chromeConsumer="enchiridion-lipsana"
+      className="enchiridion-lipsanon-panel"
       framed={framed}
       title={title}
     >
-      {relicIds.length ? (
-        <div className="enchiridion-relic-layout">
-          <div className="enchiridion-relic-browser">
-            <div className="le-seg enchiridion-relic-view-tabs" role="tablist" aria-label="Lipsanon browsing layout">
+      {lipsanonIds.length ? (
+        <div className="enchiridion-lipsanon-layout">
+          <div className="enchiridion-lipsanon-browser">
+            <div className="le-seg enchiridion-lipsanon-view-tabs" role="tablist" aria-label="Lipsanon browsing layout">
               <ChromeButton unit="inner-text-button"
-                data-testid="relic-view-rows"
+                data-testid="lipsanon-view-rows"
                 role="tab"
                 aria-controls={browsePanelId}
                 aria-selected={browseMode === 'rows'}
@@ -423,7 +423,7 @@ export function RelicCodex({
                 Rows
               </ChromeButton>
               <ChromeButton unit="inner-text-button"
-                data-testid="relic-view-grouped"
+                data-testid="lipsanon-view-grouped"
                 role="tab"
                 aria-controls={browsePanelId}
                 aria-selected={browseMode === 'grouped'}
@@ -435,45 +435,45 @@ export function RelicCodex({
             </div>
             <div
               id={browsePanelId}
-              className={`enchiridion-relic-browse-panel is-${browseMode}`}
+              className={`enchiridion-lipsanon-browse-panel is-${browseMode}`}
               role="tabpanel"
               aria-label={`${browseMode === 'rows' ? 'Rows' : 'Grouped'} lipsanon view`}
             >
               {browseMode === 'rows' ? (
-                <ul className="enchiridion-relic-rows" aria-label={title}>
-                  {visibleRelics.map((relic) => (
-                    <li key={relic.id}>
+                <ul className="enchiridion-lipsanon-rows" aria-label={title}>
+                  {visibleLipsana.map((lipsanon) => (
+                    <li key={lipsanon.id}>
                       <ReferenceTrigger
-                        to={relicHref?.(relic.id)}
-                        onSelect={() => setLocalSelectedId(relic.id)}
+                        to={lipsanonHref?.(lipsanon.id)}
+                        onSelect={() => setLocalSelectedId(lipsanon.id)}
                         data-chrome-unit="inner-list-row"
                         className={chromeUnitClassNames(
                           'inner-list-row',
-                          'enchiridion-relic-row',
-                          selected.id === relic.id && 'is-active',
+                          'enchiridion-lipsanon-row',
+                          selected.id === lipsanon.id && 'is-active',
                         )}
-                        aria-label={`${relic.name}. ${relic.description}`}
-                        aria-pressed={selected.id === relic.id}
+                        aria-label={`${lipsanon.name}. ${lipsanon.description}`}
+                        aria-pressed={selected.id === lipsanon.id}
                       >
-                        <RunRelicIcon relicId={relic.id} className="enchiridion-relic-row-icon" />
-                        <span className="enchiridion-relic-row-name">{relic.name}</span>
+                        <LipsanonIcon lipsanonId={lipsanon.id} className="enchiridion-lipsanon-row-icon" />
+                        <span className="enchiridion-lipsanon-row-name">{lipsanon.name}</span>
                       </ReferenceTrigger>
                     </li>
                   ))}
                 </ul>
               ) : (
-                <InnerChromeBox className="enchiridion-relic-group">
-                  <ul className="enchiridion-relic-group-grid" aria-label={title}>
-                    {visibleRelics.map((relic) => (
-                      <li key={relic.id}>
+                <InnerChromeBox className="enchiridion-lipsanon-group">
+                  <ul className="enchiridion-lipsanon-group-grid" aria-label={title}>
+                    {visibleLipsana.map((lipsanon) => (
+                      <li key={lipsanon.id}>
                         <ReferenceTrigger
-                          to={relicHref?.(relic.id)}
-                          onSelect={() => setLocalSelectedId(relic.id)}
-                          className={`enchiridion-relic-grouped-trigger${selected.id === relic.id ? ' is-active' : ''}`}
-                          aria-label={`${relic.name}. ${relic.description}`}
-                          aria-pressed={selected.id === relic.id}
+                          to={lipsanonHref?.(lipsanon.id)}
+                          onSelect={() => setLocalSelectedId(lipsanon.id)}
+                          className={`enchiridion-lipsanon-grouped-trigger${selected.id === lipsanon.id ? ' is-active' : ''}`}
+                          aria-label={`${lipsanon.name}. ${lipsanon.description}`}
+                          aria-pressed={selected.id === lipsanon.id}
                         >
-                          <RunRelicIcon relicId={relic.id} />
+                          <LipsanonIcon lipsanonId={lipsanon.id} />
                         </ReferenceTrigger>
                       </li>
                     ))}
@@ -482,8 +482,8 @@ export function RelicCodex({
               )}
             </div>
           </div>
-          <InnerChromeBox className="enchiridion-relic-detail">
-            <RunRelicIcon relicId={selected.id} />
+          <InnerChromeBox className="enchiridion-lipsanon-detail">
+            <LipsanonIcon lipsanonId={selected.id} />
             <div>
               <h3>{selected.name}</h3>
               <p>{selected.description}</p>
@@ -1063,8 +1063,8 @@ function AtaraxiaSection({ framed }: { framed: boolean }): ReactElement {
 export function EnchiridionReference({
   section,
   framed,
-  selectedRelicId,
-  relicHref,
+  selectedLipsanonId,
+  lipsanonHref,
   selectedCardId,
   cardHref,
   selectedCardTypeId,
@@ -1073,8 +1073,8 @@ export function EnchiridionReference({
 }: {
   section: EnchiridionSection;
   framed: boolean;
-  selectedRelicId: RunRelicId | null;
-  relicHref?: (relicId: RunRelicId) => string;
+  selectedLipsanonId: LipsanonId | null;
+  lipsanonHref?: (lipsanonId: LipsanonId) => string;
   selectedCardId: string | null;
   cardHref?: (cardId: string) => string;
   selectedCardTypeId: RunCardType | null;
@@ -1093,7 +1093,7 @@ export function EnchiridionReference({
       />
     );
   }
-  if (section === 'relics') return <RelicCodex framed={framed} selectedRelicId={selectedRelicId} relicHref={relicHref} />;
+  if (section === 'lipsana') return <LipsanaCodex framed={framed} selectedLipsanonId={selectedLipsanonId} lipsanonHref={lipsanonHref} />;
   if (section === 'abilities') return <AbilitiesSection framed={framed} />;
   if (section === 'ataraxia') return <AtaraxiaSection framed={framed} />;
   return <UnitsSection framed={framed} />;
@@ -1102,8 +1102,8 @@ export function EnchiridionReference({
 export function Enchiridion({
   section = 'units',
   sectionHref = enchiridionSectionHref,
-  selectedRelicId = null,
-  relicHref,
+  selectedLipsanonId = null,
+  lipsanonHref,
   selectedCardId = null,
   cardHref,
   selectedCardTypeId = null,
@@ -1115,10 +1115,10 @@ export function Enchiridion({
 }: {
   section?: EnchiridionSection;
   sectionHref?: (section: EnchiridionSection) => string;
-  /** The route-addressed relic for the relics section; see RelicCodex. */
-  selectedRelicId?: RunRelicId | null;
-  /** When present, relic selection in the relics section navigates to this address. */
-  relicHref?: (relicId: RunRelicId) => string;
+  /** The route-addressed lipsanon for the lipsana section; see LipsanaCodex. */
+  selectedLipsanonId?: LipsanonId | null;
+  /** When present, lipsanon selection in the lipsana section navigates to this address. */
+  lipsanonHref?: (lipsanonId: LipsanonId) => string;
   /** The route-addressed gallery face for the cards section; see CardCodex. */
   selectedCardId?: string | null;
   /** When present, card focus in the cards section navigates to this address. */
@@ -1143,8 +1143,8 @@ export function Enchiridion({
         <EnchiridionReference
           section={section}
           framed={framed}
-          selectedRelicId={selectedRelicId}
-          relicHref={relicHref}
+          selectedLipsanonId={selectedLipsanonId}
+          lipsanonHref={lipsanonHref}
           selectedCardId={selectedCardId}
           cardHref={cardHref}
           selectedCardTypeId={selectedCardTypeId}

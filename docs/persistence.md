@@ -18,7 +18,7 @@ Durable document and live-content tables are created by the inline migrations in
 | `campaign_workspaces` | one row per signed-in owner | `/api/campaign-workspace` | sign-in required |
 | `active_runs` | one versioned, CAS-updated active Run document per signed-in owner, including persistent named army units | `/api/active-run` | sign-in required; anonymous Runs remain browser-local until adoption |
 | `run_progression` | one monotonic highest-completed Ataraxia tier per signed-in owner | `/api/run-progression` | sign-in required; anonymous/offline unlocks remain browser-local and merge by maximum on sign-in |
-| `run_relic_stat_events` | idempotent owner-scoped relic pick and Battle-win facts | `/api/run-relic-statistics`, `/api/run-relic-stat-events` | sign-in required; anonymous and unsynced facts remain browser-local |
+| `lipsanon_stat_events` | idempotent owner-scoped lipsanon pick and Battle-win facts | `/api/run-lipsanon-statistics`, `/api/run-lipsanon-stat-events` | sign-in required; anonymous and unsynced facts remain browser-local |
 | `level_working_copies` | one durable working copy per signed-in owner + workspace + level | `/api/editor-documents` | sign-in required; official workspaces also require admin |
 | `level_working_copy_revisions` | retained checkpoints for each durable working copy | `/api/editor-documents/:id/revisions` | owner only; restore requires current CAS revision |
 | `level_working_copy_revision_reasons` | closed canonical registry for retained working-copy revision reasons | internal schema contract | backend-owned; referenced by one validated foreign key from revision history |
@@ -51,7 +51,7 @@ the permanent King plus two starting Pawns, a seeded three-card deal, and an
 8-gold budget. The opening cards have three distinct values sampled from 1–8.
 Buying stays in that same Shop transaction; its purchased state, Army and Sell
 views, Reset Shop, and explicit Continue reuse the post-Battle Shop model. The
-opening kind carries zero victory gold and no Loot or paid-relic offers. Opening
+opening kind carries zero victory gold and no Loot or paid-lipsanon offers. Opening
 offers roll Legatine, Concinnous, and — under Ataraxia I — Pestiferous through the
 same draw and affected pricing as any later Shop, at every core value, so a
 surcharge may price an opening card past the 8-gold budget. At least one opening
@@ -107,7 +107,7 @@ anonymous Run progress remains browser-local while a signed-in account owns one
 compare-and-swap protected `active_runs` document. Per
 [ADR-0230](adr/0230-run-shops-separate-buying-army-inspection-and-selling.md),
 that document also owns each unit's stable per-piece-type number and the current
-shop's entry snapshot. Shop purchases, sales, and relic choices save normally;
+shop's entry snapshot. Shop purchases, sales, and lipsanon choices save normally;
 **Reset Shop** restores the snapshot while retaining the exact offers already
 dealt for that visit. Ataraxia unlocks are separate monotonic progression because
 finishing or abandoning deletes the active Run document; the browser copy and
@@ -115,8 +115,8 @@ account `run_progression` row merge by their greatest completed tier.
 
 Per
 [ADR-0231](adr/0231-strategikon-and-enchiridion-share-one-reference-workspace-language.md),
-relic history is not derived from the one mutable active Run document. Each
-pick and each Battle victory while holding a relic is recorded as an
+lipsanon history is not derived from the one mutable active Run document. Each
+pick and each Battle victory while holding a lipsanon is recorded as an
 owner-scoped event with a deterministic event id. The composite primary key
 makes retries idempotent. Enchiridion reads server aggregates and merges only
 the browser events that have not yet been acknowledged; signed-out play keeps
@@ -638,8 +638,8 @@ unfurls — so anonymous cold-start players and link-preview crawlers work. Writ
 require sign-in, and publishing **global** game content (officials, and future
 DB-backed tweakables such as props) additionally requires admin (`requireAdmin` /
 `ADMIN_EMAILS`, per [ADR-0038](adr/0038-campaigns-are-tiered-game-content.md)).
-Exact relic-reference unfurls likewise remain public and resolve the canonical
-relic name/effect plus its installed immutable live icon (ADR-0261).
+Exact lipsanon-reference unfurls likewise remain public and resolve the canonical
+lipsanon name/effect plus its installed immutable live icon (ADR-0261).
 
 Private **per-user** documents are the exception by nature, not a contradiction:
 `levels` and `campaign_workspaces` are scoped to `owner_email`, so their reads

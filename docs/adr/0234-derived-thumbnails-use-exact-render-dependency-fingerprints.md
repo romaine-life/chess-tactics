@@ -51,7 +51,7 @@ resulting invalidation storm is itself an availability defect.
 
 ## Consequences
 
-- Accepting SFX, relic art, or other unrelated media cannot invalidate level
+- Accepting SFX, lipsanon art, or other unrelated media cannot invalidate level
   thumbnails.
 - Updating a source used by many boards still invalidates those boards, because
   their pixels genuinely changed, but repair cannot overwhelm the process.

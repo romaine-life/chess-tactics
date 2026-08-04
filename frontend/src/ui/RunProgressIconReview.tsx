@@ -254,10 +254,10 @@ export function RunProgressIconReview(): ReactElement {
 
   return (
     <main
-      className="run-relic-review-screen run-progress-icon-review-screen skirmish-screen"
+      className="run-lipsanon-review-screen run-progress-icon-review-screen skirmish-screen"
       style={{ ['--skirmish-world-bg' as string]: `url("${defaultBackgroundSet().world}")` }}
     >
-      <OuterChromeBox chromeConsumer="run-progress-icon-review" titled className="run-relic-review-panel">
+      <OuterChromeBox chromeConsumer="run-progress-icon-review" titled className="run-lipsanon-review-panel">
         <OuterChromeHeader title="Run Title-Bar Icon Review" />
         <p>
           Each option is mounted in the real title-bar measure row and at its own native

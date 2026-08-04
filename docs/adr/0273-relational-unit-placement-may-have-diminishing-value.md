@@ -6,7 +6,7 @@ extends:
   - "[ADR-0193](0193-runs-are-persistent-wars-around-unchanged-chess-battles.md)'s deployment preferences"
   - "[ADR-0265](0265-run-cards-keep-core-identities-while-units-carry-modifiers.md)'s unit-instance modifier model"
 partially_superseded_by:
-  - "[ADR-0274](0274-relics-grant-unit-owned-deployment-abilities.md)"
+  - "[ADR-0274](0274-lipsana-grant-unit-owned-deployment-abilities.md)"
   - "[ADR-0343](0343-agminate-replaces-marshalled-as-the-formation-ability-name.md)'s Agminate name"
 ---
 
@@ -24,7 +24,7 @@ value.
 
 That overlap could be eliminated by inventing an additional independent benefit
 for every modified Bishop, or by moving every relational preference back to an
-army-wide relic. Either response would make modifier value more regular, but it
+army-wide lipsanon. Either response would make modifier value more regular, but it
 would replace the deliberately simple Bishop behavior in order to protect a
 pricing abstraction.
 
@@ -41,7 +41,7 @@ pricing abstraction.
 
 - Add an independent strong-diagonal or mobility preference so every modified
   Bishop always produces a separate benefit.
-- Keep relational formation rules exclusively on relics and forbid them as
+- Keep relational formation rules exclusively on lipsana and forbid them as
   unit-instance modifiers.
 - Keep the simple unit-owned opposite-color preference and accept that its
   marginal value depends on the rest of the roster.
@@ -67,7 +67,7 @@ nonlinear value.**
   diminishing marginal value of later copies are visible roster-evaluation
   problems for the player to weigh, not defects the rules must erase.
 - The modifier's final public name, price, behaviors for other piece types,
-  exact deployment-resolution algorithm, and which relics retain or grant
+  exact deployment-resolution algorithm, and which lipsana retain or grant
   related preferences remain separate decisions.
 
 ### Consequences

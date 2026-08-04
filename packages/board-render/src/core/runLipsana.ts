@@ -1,4 +1,4 @@
-const RUN_RELIC_REGISTRY = [
+const RUN_LIPSANON_REGISTRY = [
   { id: 'conscription-notice', name: 'Conscription Notice', description: 'Choose one army unit. It permanently gains Adlected.', flavorText: 'One name was underlined. No reason was entered.' },
   { id: 'congressional-approval', name: 'Sealed Valuation', description: 'Gain 5 gold immediately.', flavorText: 'The vessels were weighed after the prayers had stopped.', immediate: true },
   { id: 'inspirational-record', name: 'Dawn Register', description: 'Before each Battle, one random persistent unit gains Adlected for that Battle.', flavorText: 'Before each departure, a different name was read.' },
@@ -11,7 +11,7 @@ const RUN_RELIC_REGISTRY = [
   { id: 'royal-tent', name: 'Royal Tent', description: 'Place up to three temporary rocks in front of the King.', flavorText: 'Three stones were set where the canvas would not hold.', requires: 'royal-decree' },
   { id: 'royal-sceptre', name: 'Royal Sceptre', description: 'Your King gains Agminate.', flavorText: 'It pointed outward after the gate was closed.' },
   { id: 'mercenarys-rifle', name: 'Returned Rifle', description: 'After victory, gain 10% of the value of surviving persistent units.', flavorText: 'Only the returned rifles were entered in the final column.' },
-  { id: 'merchants-shopkey', name: 'After-Hours Key', description: 'Each Conflict keeps one additional relic in its shops for 10 gold.', flavorText: 'The small door opened after the courtyard emptied.' },
+  { id: 'merchants-shopkey', name: 'After-Hours Key', description: 'Each Conflict keeps one additional lipsanon in its shops for 10 gold.', flavorText: 'The small door opened after the courtyard emptied.' },
   { id: 'occult-dagger', name: 'Unclaimed Dagger', description: 'Gain 10 gold. Eliminate every enemy non-King before checkmating the King.', flavorText: 'It was counted with the valuables. No hand claimed it.', immediate: true },
   { id: 'deployment-vehicle', name: 'The Waiting Cart', description: 'Deaths can call equal-or-lower-value blocked units through the Reservist pool.', flavorText: 'When one cart left, another waited at the siding.' },
   { id: 'mercenary-boat', name: 'The Paid Crossing', description: 'A promoting persistent Pawn may vanish permanently instead and grant 2 gold.', flavorText: 'The fare was counted once. The passenger was not.' },
@@ -21,19 +21,19 @@ const RUN_RELIC_REGISTRY = [
   { id: 'surveyors-compass', name: "Surveyor's Compass", description: 'Choose between two deterministic random deployment layouts.', flavorText: 'The road west grew busy after the second frost.' },
 ] as const;
 
-export type RunRelicId = typeof RUN_RELIC_REGISTRY[number]['id'];
+export type LipsanonId = typeof RUN_LIPSANON_REGISTRY[number]['id'];
 
-export interface RunRelicDefinition {
-  id: RunRelicId;
+export interface LipsanonDefinition {
+  id: LipsanonId;
   name: string;
   description: string;
   flavorText: string;
-  requires?: RunRelicId;
+  requires?: LipsanonId;
   immediate?: boolean;
 }
 
-export const RUN_RELICS: readonly RunRelicDefinition[] = Object.freeze(RUN_RELIC_REGISTRY);
+export const RUN_LIPSANA: readonly LipsanonDefinition[] = Object.freeze(RUN_LIPSANON_REGISTRY);
 
-export const RUN_RELIC_BY_ID: Readonly<Record<RunRelicId, RunRelicDefinition>> = Object.freeze(
-  Object.fromEntries(RUN_RELICS.map((relic) => [relic.id, relic])) as Record<RunRelicId, RunRelicDefinition>,
+export const LIPSANON_BY_ID: Readonly<Record<LipsanonId, LipsanonDefinition>> = Object.freeze(
+  Object.fromEntries(RUN_LIPSANA.map((lipsanon) => [lipsanon.id, lipsanon])) as Record<LipsanonId, LipsanonDefinition>,
 );

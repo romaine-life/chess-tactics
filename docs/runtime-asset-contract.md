@@ -324,14 +324,14 @@ an incomplete row is an availability failure.
   opaque to runtime semantics: neither terrain nor variant identity is inferred
   from its path. Installed identity and media membership come only from the
   drawable row and its named role assignment.
-- UI kit: state/slice geometry and native roles. Run relic icons are exact
-  64×64 PNGs with typed `run-relic-icon` metadata; installed
-  `kind='run-relic'` drawable records, not slot filenames, bind those pixels to
-  gameplay relic ids. Exact `/enchiridion/relics/<relic-id>` social unfurls use
+- UI kit: state/slice geometry and native roles. Run lipsanon icons are exact
+  64×64 PNGs with typed `run-lipsanon-icon` metadata; installed
+  `kind='run-lipsanon'` drawable records, not slot filenames, bind those pixels to
+  gameplay lipsanon ids. Exact `/enchiridion/lipsana/<lipsanon-id>` social unfurls use
   that drawable's immutable icon URL and native geometry together with the
-  canonical relic name/effect; a missing or ambiguous targeted icon never
+  canonical lipsanon name/effect; a missing or ambiguous targeted icon never
   substitutes the generic OG image (ADR-0261).
-  The eight closed slot/hash pairs in ADR-0332 are the sole Run relic exception
+  The eight closed slot/hash pairs in ADR-0332 are the sole Run lipsanon exception
   to native generation: their accepted evidence truthfully records the archived
   1254×1254 source and exact nearest-neighbor 64×64 transform. They still render
   1:1 from the accepted 64×64 output and cannot authorize different bytes.

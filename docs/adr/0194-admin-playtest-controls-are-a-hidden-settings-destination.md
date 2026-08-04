@@ -31,7 +31,7 @@ than duplicate them.
   - **Win Battle** — award the current Battle to the player, count every currently
     living player unit as a survivor, and expose the normal result/progression surface.
   - **Gain Gold** — add an administrator-entered positive amount to the active Run.
-  - **Gain Relic** — choose any registry relic not currently held, including a relic
+  - **Gain Lipsanon** — choose any registry lipsanon not currently held, including a lipsanon
     already seen by a shop, and apply its normal acquisition and immediate effects.
 - Free Move and Kill Unit return automatically to the active Battle with their one-shot
   board mode armed. Win Battle returns to the Battle and resolves there so route
@@ -40,7 +40,7 @@ than duplicate them.
   Campaign, authored test play, shared maps, and free Skirmish. They do not create a
   second chess ruleset: unrestricted movement is an explicit administrator
   intervention outside legal-move generation.
-- Restart Battle, Open Shop, advance/return progression shortcuts, Remove Relic,
+- Restart Battle, Open Shop, advance/return progression shortcuts, Remove Lipsanon,
   intervention history, and Undo are excluded. Existing product controls and lifecycle
   paths continue to own those concerns.
 

@@ -9116,7 +9116,7 @@ body.loading-bootstrap .app-startup-status {
     overflow-y: auto;
   }
 
-  .run-relic-strip {
+  .run-lipsanon-strip {
     max-inline-size: calc(100% - (2 * var(--ds-space-3)));
   }
 
@@ -10104,7 +10104,7 @@ body { font-size: 17px; }
   transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
 }
 /* Same-shell overlap (a Run workspace swap): both layers paint an identical Controls
-   panel, relic rail, and shell fill, so fading the boundary would blend that retained
+   panel, lipsanon rail, and shell fill, so fading the boundary would blend that retained
    chrome 25% toward the backdrop at the crossfade midpoint — the visible dimming of the
    Controls title plank on every Shop/Sell Units switch. The layers still overlap so the
    outgoing snapshot stays frozen; only the shell's replaceable viewport carries the
@@ -18919,7 +18919,7 @@ button.tileset-relationship-cell {
 /* ===== Run =====
    The between-Battle loop shares the installed Skirmish world and control chrome. */
 .run-screen {
-  --run-relic-strip-block-size: 64px;
+  --run-lipsanon-strip-block-size: 64px;
 }
 
 .run-scene-slot {
@@ -19076,7 +19076,7 @@ button.tileset-relationship-cell {
 }
 
 .run-shop-rules,
-.run-paid-relic-price,
+.run-paid-lipsanon-price,
 .run-victory-summary {
   align-items: center;
   display: flex;
@@ -19259,18 +19259,18 @@ button.tileset-relationship-cell {
   margin-inline-end: var(--ds-inline-tight);
 }
 
-.run-relic-card {
+.run-lipsanon-card {
   min-block-size: 174px;
 }
 
-.run-relic-card-heading {
+.run-lipsanon-card-heading {
   align-items: center;
   display: grid;
   gap: var(--ds-inline-tight);
   grid-template-columns: 64px minmax(0, 1fr);
 }
 
-.run-relic-icon {
+.run-lipsanon-icon {
   align-items: center;
   block-size: 64px;
   display: inline-flex;
@@ -19279,21 +19279,21 @@ button.tileset-relationship-cell {
   overflow: hidden;
 }
 
-.run-relic-icon img {
+.run-lipsanon-icon img {
   block-size: 64px;
   image-rendering: pixelated;
   inline-size: 64px;
   object-fit: contain;
 }
 
-.run-relic-icon.is-unavailable {
+.run-lipsanon-icon.is-unavailable {
   color: var(--skirmish-muted);
   font-size: var(--ds-text-xs);
   line-height: 1.05;
   text-align: center;
 }
 
-.run-relic-strip {
+.run-lipsanon-strip {
   inset-block-start: calc(var(--app-header-h) + var(--ds-space-2));
   inset-inline-start: var(--ds-space-3);
   max-inline-size: calc(100% - var(--skirmish-rail-w) - var(--ds-space-6) - var(--ds-space-1));
@@ -19302,7 +19302,7 @@ button.tileset-relationship-cell {
   z-index: 40;
 }
 
-.run-relic-inventory-list {
+.run-lipsanon-inventory-list {
   align-items: center;
   display: flex;
   flex-wrap: nowrap;
@@ -19312,11 +19312,11 @@ button.tileset-relationship-cell {
   scrollbar-width: none;
 }
 
-.run-relic-inventory-list::-webkit-scrollbar {
+.run-lipsanon-inventory-list::-webkit-scrollbar {
   display: none;
 }
 
-.run-relic-inventory-item {
+.run-lipsanon-inventory-item {
   block-size: 64px;
   cursor: help;
   display: inline-flex;
@@ -19324,40 +19324,40 @@ button.tileset-relationship-cell {
   inline-size: 64px;
 }
 
-.run-relic-inventory-trigger {
+.run-lipsanon-inventory-trigger {
   block-size: 64px;
   display: inline-flex;
   inline-size: 64px;
   outline: none;
 }
 
-.run-relic-inventory-trigger:focus-visible {
+.run-lipsanon-inventory-trigger:focus-visible {
   filter: drop-shadow(0 0 4px #9fe7ff);
 }
 
-.run-relic-inventory-item .run-relic-icon,
-.run-relic-inventory-item .run-relic-icon img {
+.run-lipsanon-inventory-item .run-lipsanon-icon,
+.run-lipsanon-inventory-item .run-lipsanon-icon img {
   block-size: 64px;
   inline-size: 64px;
 }
 
-.run-relic-inventory-item .run-relic-icon.is-unavailable {
+.run-lipsanon-inventory-item .run-lipsanon-icon.is-unavailable {
   font-size: var(--ds-text-xs);
 }
 
-.run-relic-inventory-item img {
+.run-lipsanon-inventory-item img {
   filter: drop-shadow(0 2px 1px rgba(0, 0, 0, .85));
 }
 
-.run-screen .run-relic-strip {
+.run-screen .run-lipsanon-strip {
   max-inline-size: calc(100% - (2 * var(--ds-space-3)));
 }
 
-.run-screen.has-relics .run-shell-workspace-content {
-  padding-block-start: calc(var(--ds-gutter) + var(--run-relic-strip-block-size) + var(--ds-space-2));
+.run-screen.has-lipsana .run-shell-workspace-content {
+  padding-block-start: calc(var(--ds-gutter) + var(--run-lipsanon-strip-block-size) + var(--ds-space-2));
 }
 
-.run-relic-review-screen {
+.run-lipsanon-review-screen {
   block-size: 100%;
   box-sizing: border-box;
   grid-template-columns: minmax(0, 1fr);
@@ -19365,7 +19365,7 @@ button.tileset-relationship-cell {
   padding: var(--ds-inset);
 }
 
-.run-relic-review-panel {
+.run-lipsanon-review-panel {
   grid-column: 1;
   grid-row: 2;
   margin-inline: auto;
@@ -19374,13 +19374,13 @@ button.tileset-relationship-cell {
   inline-size: 100%;
 }
 
-.run-relic-review-panel > .le-outer-panel-content {
+.run-lipsanon-review-panel > .le-outer-panel-content {
   display: grid;
   gap: var(--ds-inline);
 }
 
 /* Screen-art candidates are wide 640x360 plates meant to be read at 4x, so they get a
-   flowing row per screen rather than the relic grid's fixed icon columns. */
+   flowing row per screen rather than the lipsanon grid's fixed icon columns. */
 /* A backdrop plate is opaque and object-fit:cover fills the whole box, so the base
    card-image checkerboard never shows through and this rule paints nothing of its own —
    it only sets the 16:9 shape the plates are authored in. */
@@ -19411,11 +19411,11 @@ button.tileset-relationship-cell {
   block-size: auto;
 }
 
-/* Relic-mat review composite: chosen backdrop, mat over it, live relic cards on top.
+/* Lipsanon-mat review composite: chosen backdrop, mat over it, live lipsanon cards on top.
    Layout only — every visible surface in the stack is generated art or an existing
    chrome unit, so nothing here paints. The mat and the card row share one grid cell
    deliberately: a mat that fails to contain the row must show that it fails. */
-.relic-mat-stage {
+.lipsanon-mat-stage {
   aspect-ratio: 16 / 9;
   display: grid;
   inline-size: 100%;
@@ -19424,7 +19424,7 @@ button.tileset-relationship-cell {
   position: relative;
 }
 
-.relic-mat-backdrop {
+.lipsanon-mat-backdrop {
   block-size: 100%;
   image-rendering: pixelated;
   inline-size: 100%;
@@ -19433,19 +19433,19 @@ button.tileset-relationship-cell {
   position: absolute;
 }
 
-/* The CARD ROW sizes this, not the stage: the layer shrinks to the relics' own
+/* The CARD ROW sizes this, not the stage: the layer shrinks to the lipsana' own
    max-content width and the mat is drawn to that plus one bleed on each side. Sizing the
    mat as a share of the stage instead makes it grow with the viewport and swallow the
    backdrop it is supposed to be lying on. */
-/* --relic-mat-scale is the mat's width as a multiple of the relic row's. It is the one
+/* --lipsanon-mat-scale is the mat's width as a multiple of the lipsanon row's. It is the one
    number this composite is tuned by, so the Viewer drives it directly and the committed
    value below is what the Viewer's reset returns to. */
-.relic-mat-layer {
-  --relic-mat-scale: 1.74;
+.lipsanon-mat-layer {
+  --lipsanon-mat-scale: 1.74;
   display: grid;
   /* Leave the overhang room, or a narrow stage lets the row fill it and the mat's torn
      edges are the first thing clipped away -- the one part of it that has to be seen. */
-  max-inline-size: calc(100% / var(--relic-mat-scale));
+  max-inline-size: calc(100% / var(--lipsanon-mat-scale));
   place-items: center;
   position: relative;
 }
@@ -19456,21 +19456,21 @@ button.tileset-relationship-cell {
    would distort the torn silhouette and cropping to fit would cut it off. That makes the
    mat taller than the row, and grid/flex centring of an overflowing item is not reliable
    here (it resolved to top-aligned), so the block centre is pinned outright. */
-.relic-mat-art {
+.lipsanon-mat-art {
   block-size: auto;
   image-rendering: pixelated;
-  inline-size: calc(100% * var(--relic-mat-scale));
+  inline-size: calc(100% * var(--lipsanon-mat-scale));
   inset-block-start: 50%;
-  inset-inline-start: calc((100% - 100% * var(--relic-mat-scale)) / 2);
+  inset-inline-start: calc((100% - 100% * var(--lipsanon-mat-scale)) / 2);
   position: absolute;
   translate: 0 -50%;
 }
 
-/* The offers themselves: the relic icon and nothing else. No card, no name, no effect
+/* The offers themselves: the lipsanon icon and nothing else. No card, no name, no effect
    text -- the reading is the art, and the words arrive on hover through the shared
    Tooltip. This row is what gives the layer its width, so the mat ends up sized to the
-   relics rather than to a panel wrapped around them. */
-.relic-mat-cards {
+   lipsana rather than to a panel wrapped around them. */
+.lipsanon-mat-cards {
   display: flex;
   gap: var(--ds-space-7);
   position: relative;
@@ -19479,12 +19479,12 @@ button.tileset-relationship-cell {
 /* The icons are dropped straight onto painted cloth, stone or wood, so nothing separates
    their silhouette from what is behind them. A hard one-pixel stroke does that without
    touching the art or putting a frame back around it. */
-.relic-mat-offer .run-relic-icon {
+.lipsanon-mat-offer .run-lipsanon-icon {
   overflow: visible;
 }
 
 .run-vacantia-take {
-  /* The relic IS the control here -- the take target is the art, not a panel around it.
+  /* The lipsanon IS the control here -- the take target is the art, not a panel around it.
      These declarations only remove the shell's default button chrome; they paint no
      parallel surface of their own. */
   background: none;
@@ -19511,62 +19511,62 @@ button.tileset-relationship-cell {
   margin: 0;
 }
 
-.relic-mat-offer .run-relic-icon img {
-  --relic-mat-stroke: rgb(16 12 9 / 0.92);
+.lipsanon-mat-offer .run-lipsanon-icon img {
+  --lipsanon-mat-stroke: rgb(16 12 9 / 0.92);
   filter:
-    drop-shadow(1px 0 0 var(--relic-mat-stroke))
-    drop-shadow(-1px 0 0 var(--relic-mat-stroke))
-    drop-shadow(0 1px 0 var(--relic-mat-stroke))
-    drop-shadow(0 -1px 0 var(--relic-mat-stroke));
+    drop-shadow(1px 0 0 var(--lipsanon-mat-stroke))
+    drop-shadow(-1px 0 0 var(--lipsanon-mat-stroke))
+    drop-shadow(0 1px 0 var(--lipsanon-mat-stroke))
+    drop-shadow(0 -1px 0 var(--lipsanon-mat-stroke));
 }
 
 /* Catalog thumbnails carry no cards, so nothing is there to size the layer. Hold the
    same proportion the real composite lands on. */
-.relic-mat-stage[data-cards='off'] .relic-mat-layer {
+.lipsanon-mat-stage[data-cards='off'] .lipsanon-mat-layer {
   inline-size: 68%;
 }
 
-.relic-mat-stage[data-cards='off'] .relic-mat-art {
+.lipsanon-mat-stage[data-cards='off'] .lipsanon-mat-art {
   inline-size: 100%;
   inset-inline-start: 0;
 }
 
-/* The Viewer overrides --relic-mat-scale live while it is being tuned. */
-.relic-mat-stage[data-cards='on'] .relic-mat-layer {
-  --relic-mat-scale: var(--relic-mat-scale-tuned, 1.74);
+/* The Viewer overrides --lipsanon-mat-scale live while it is being tuned. */
+.lipsanon-mat-stage[data-cards='on'] .lipsanon-mat-layer {
+  --lipsanon-mat-scale: var(--lipsanon-mat-scale-tuned, 1.74);
 }
 
-.tileset-studio-card-image.relic-mat-card-image {
+.tileset-studio-card-image.lipsanon-mat-card-image {
   min-height: 0;
 }
 
 /* Beats the base .tileset-studio-card-image img rule, which sizes every catalog image to
    iso-tile dimensions -- correct for a tile thumbnail, but it shrinks a backdrop to a
    corner and detaches the mat from it, which is the one thing this card exists to show. */
-.tileset-studio-card-image.relic-mat-card-image .relic-mat-backdrop {
+.tileset-studio-card-image.lipsanon-mat-card-image .lipsanon-mat-backdrop {
   height: 100%;
   object-fit: cover;
   width: 100%;
 }
 
-.tileset-studio-card-image.relic-mat-card-image .relic-mat-art {
+.tileset-studio-card-image.lipsanon-mat-card-image .lipsanon-mat-art {
   height: auto;
   object-fit: contain;
   width: 100%;
 }
 
-.relic-mat-figure {
+.lipsanon-mat-figure {
   flex: 1 1 100%;
   min-inline-size: 0;
 }
 
-.run-relic-review-grid {
+.run-lipsanon-review-grid {
   display: grid;
   gap: var(--ds-inline-tight);
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-.run-relic-review-grid figure {
+.run-lipsanon-review-grid figure {
   align-items: center;
   display: grid;
   gap: var(--ds-inline-tight);
@@ -19576,18 +19576,18 @@ button.tileset-relationship-cell {
   padding: var(--ds-inset);
 }
 
-.run-relic-review-grid img {
+.run-lipsanon-review-grid img {
   block-size: 64px;
   image-rendering: pixelated;
   inline-size: 64px;
 }
 
-.run-relic-review-grid figcaption {
+.run-lipsanon-review-grid figcaption {
   display: grid;
   gap: var(--ds-space-1);
 }
 
-.run-relic-review-grid small {
+.run-lipsanon-review-grid small {
   color: var(--skirmish-muted);
 }
 
@@ -19804,12 +19804,12 @@ button.tileset-relationship-cell {
   z-index: 1;
 }
 
-.run-relic-reference-art {
+.run-lipsanon-reference-art {
   display: grid;
   gap: var(--ds-inline);
 }
 
-.run-relic-reference-art summary {
+.run-lipsanon-reference-art summary {
   cursor: pointer;
   font-weight: 700;
 }
@@ -20169,7 +20169,7 @@ button.tileset-relationship-cell {
 }
 
 @media (max-width: 900px) {
-  .run-relic-review-grid,
+  .run-lipsanon-review-grid,
   .plagued-icon-review-ability-grid,
   .brush-icon-review-choice-grid,
   .run-icon-pair-options {
@@ -20611,7 +20611,7 @@ button.tileset-relationship-cell {
   text-align: end;
 }
 
-.run-relics-ledger {
+.run-lipsana-ledger {
   align-content: start;
   display: grid;
   flex: 1 1 auto;
@@ -20623,7 +20623,7 @@ button.tileset-relationship-cell {
   padding-inline-end: var(--ds-space-1);
 }
 
-.run-relics-ledger-row {
+.run-lipsana-ledger-row {
   align-items: center;
   display: grid;
   gap: var(--ds-space-4);
@@ -20632,18 +20632,18 @@ button.tileset-relationship-cell {
   padding: var(--ds-space-3);
 }
 
-.run-relics-ledger-copy {
+.run-lipsana-ledger-copy {
   display: grid;
   gap: var(--ds-space-2);
   min-inline-size: 0;
 }
 
-.run-relics-ledger-copy > strong {
+.run-lipsana-ledger-copy > strong {
   color: #eafaff;
   font: var(--ds-weight-regular) var(--ds-text-lg)/1 var(--ds-font-display);
 }
 
-.run-relics-ledger-copy > span,
+.run-lipsana-ledger-copy > span,
 .run-self-inspection-empty {
   color: var(--skirmish-muted);
   font: var(--ds-weight-regular) var(--ds-text-md)/1.35 var(--ds-font-display);
@@ -20929,11 +20929,11 @@ button.tileset-relationship-cell {
   padding: var(--ds-inset);
 }
 
-.enchiridion-relic-panel > .le-outer-panel-content {
+.enchiridion-lipsanon-panel > .le-outer-panel-content {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
-.enchiridion-relic-layout {
+.enchiridion-lipsanon-layout {
   align-content: start;
   align-items: start;
   block-size: 100%;
@@ -20945,7 +20945,7 @@ button.tileset-relationship-cell {
   overflow: hidden;
 }
 
-.enchiridion-relic-browser {
+.enchiridion-lipsanon-browser {
   align-self: stretch;
   display: grid;
   gap: var(--ds-space-2);
@@ -20953,17 +20953,17 @@ button.tileset-relationship-cell {
   min-block-size: 0;
 }
 
-.enchiridion-relic-view-tabs {
+.enchiridion-lipsanon-view-tabs {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.enchiridion-relic-browse-panel {
+.enchiridion-lipsanon-browse-panel {
   min-block-size: 0;
   overflow: hidden;
 }
 
-.enchiridion-relic-rows,
-.enchiridion-relic-group-grid {
+.enchiridion-lipsanon-rows,
+.enchiridion-lipsanon-group-grid {
   align-content: start;
   display: grid;
   gap: var(--ds-space-2);
@@ -20973,18 +20973,18 @@ button.tileset-relationship-cell {
   padding: 0;
 }
 
-.enchiridion-relic-rows {
+.enchiridion-lipsanon-rows {
   block-size: 100%;
   overflow-x: hidden;
   overflow-y: auto;
   padding-inline-end: 4px;
 }
 
-.enchiridion-relic-row {
+.enchiridion-lipsanon-row {
   inline-size: 100%;
 }
 
-.enchiridion-relic-row {
+.enchiridion-lipsanon-row {
   align-items: center;
   cursor: pointer;
   display: grid;
@@ -20995,18 +20995,18 @@ button.tileset-relationship-cell {
   text-align: start;
 }
 
-.enchiridion-relic-row-icon,
-.enchiridion-relic-row-icon img {
+.enchiridion-lipsanon-row-icon,
+.enchiridion-lipsanon-row-icon img {
   block-size: 48px;
   inline-size: 48px;
 }
 
-.enchiridion-relic-row-name {
+.enchiridion-lipsanon-row-name {
   font-size: var(--ds-text-md);
   line-height: 1.2;
 }
 
-.enchiridion-relic-group {
+.enchiridion-lipsanon-group {
   block-size: auto;
   max-block-size: 100%;
   overflow-x: hidden;
@@ -21014,18 +21014,18 @@ button.tileset-relationship-cell {
   padding: var(--ds-inset);
 }
 
-.enchiridion-relic-group-grid {
+.enchiridion-lipsanon-group-grid {
   grid-template-columns: repeat(auto-fill, 64px);
   justify-content: start;
 }
 
-.enchiridion-relic-group-grid > li,
-.enchiridion-relic-grouped-trigger {
+.enchiridion-lipsanon-group-grid > li,
+.enchiridion-lipsanon-grouped-trigger {
   block-size: 64px;
   inline-size: 64px;
 }
 
-.enchiridion-relic-grouped-trigger {
+.enchiridion-lipsanon-grouped-trigger {
   appearance: none;
   background: none;
   border: 0;
@@ -21034,11 +21034,11 @@ button.tileset-relationship-cell {
   padding: 0;
 }
 
-.enchiridion-relic-grouped-trigger:is(:hover, :focus-visible, .is-active) .run-relic-icon {
+.enchiridion-lipsanon-grouped-trigger:is(:hover, :focus-visible, .is-active) .run-lipsanon-icon {
   filter: brightness(1.18) drop-shadow(0 0 3px rgba(101, 184, 255, .82));
 }
 
-.enchiridion-relic-detail {
+.enchiridion-lipsanon-detail {
   align-self: start;
   align-content: start;
   block-size: auto;
@@ -21052,31 +21052,31 @@ button.tileset-relationship-cell {
   padding: var(--ds-inset);
 }
 
-.enchiridion-relic-detail > dl,
-.enchiridion-relic-detail > small {
+.enchiridion-lipsanon-detail > dl,
+.enchiridion-lipsanon-detail > small {
   grid-column: 1 / -1;
 }
 
-.enchiridion-relic-detail > div {
+.enchiridion-lipsanon-detail > div {
   align-content: start;
   display: grid;
   gap: var(--ds-space-2);
 }
 
-.enchiridion-relic-detail dl {
+.enchiridion-lipsanon-detail dl {
   display: grid;
   gap: var(--ds-space-2);
   margin: 0;
 }
 
-.enchiridion-relic-detail dl > div {
+.enchiridion-lipsanon-detail dl > div {
   align-items: baseline;
   display: flex;
   gap: var(--ds-stack);
   justify-content: space-between;
 }
 
-.enchiridion-relic-detail dd {
+.enchiridion-lipsanon-detail dd {
   margin: 0;
 }
 
@@ -21505,27 +21505,27 @@ button.tileset-relationship-cell {
     min-block-size: 180px;
   }
 
-  .enchiridion-relic-layout {
+  .enchiridion-lipsanon-layout {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .enchiridion-relic-layout {
+  .enchiridion-lipsanon-layout {
     grid-template-rows: auto auto;
     overflow-x: hidden;
     overflow-y: auto;
     padding-inline-end: 4px;
   }
 
-  .enchiridion-relic-browser {
+  .enchiridion-lipsanon-browser {
     align-self: start;
   }
 
-  .enchiridion-relic-browse-panel {
+  .enchiridion-lipsanon-browse-panel {
     overflow: visible;
   }
 
-  .enchiridion-relic-rows,
-  .enchiridion-relic-group {
+  .enchiridion-lipsanon-rows,
+  .enchiridion-lipsanon-group {
     block-size: auto;
     overflow: visible;
   }
@@ -22552,7 +22552,7 @@ button.tileset-relationship-cell {
   gap: var(--ds-space-2);
   min-width: 0;
 }
-/* The named thing the tip is about, in the display face — the Run relic and
+/* The named thing the tip is about, in the display face — the Run lipsanon and
    ability tips set the precedent and every tip now follows it. */
 .tooltip-title {
   color: #9fe7ff;

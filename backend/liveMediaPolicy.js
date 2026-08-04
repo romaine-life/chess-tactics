@@ -7,24 +7,24 @@ const PREDRAWN_BOARD_SLOT = /^boards\/([a-z0-9][a-z0-9._-]{0,119})\/plate\.png$/
 const PREDRAWN_BOARD_COMPONENT = 'predrawn-board-plate';
 const PREDRAWN_BOARD_PROOF_SCHEMA = 'predrawn-board-canonical-level-proof-v1';
 const PREDRAWN_BOARD_PROOF_RENDERER = 'LevelEditor/PredrawnBoardLayer';
-const RUN_RELIC_ICON_COMPONENT = 'run-relic-icon';
-const RUN_RELIC_ICON_SLOT = /^ui\/run\/relics\/([a-z][a-z0-9-]{0,79})\.png$/;
-const RUN_RELIC_RESIZED_PRODUCTION_EXCEPTION_SCHEMA = 'run-relic-resized-production-exception-v1';
-const RUN_RELIC_RESIZED_PRODUCTION_EXCEPTION_SHA_BY_SLOT = Object.freeze({
-  'ui/run/relics/congressional-approval.png': '928f9ceb7a5612ff0d2216b70422b972b04492a4c9ed277e5122721b390c52d0',
-  'ui/run/relics/deployment-vehicle.png': 'd004c0f5be36094ebc137a9cdbebfe69d847636a7c8ddaff50bac8b687aac0bc',
-  'ui/run/relics/inspirational-record.png': 'b6d18510fcff3e374a1899421b2928fb16cd79c0108ad00179059cca539e309d',
-  'ui/run/relics/mercenary-boat.png': '9e5945cc9c200d1e3818e10f3f6e3494150ce83f30aa95c7e499daa4462ae1e8',
-  'ui/run/relics/mercenarys-rifle.png': 'afe1a1f718a4406a60ae85adb002af846ef4a9c6000c20b97d67a0b57c06fa60',
-  'ui/run/relics/merchants-shopkey.png': 'c8e0e45f9b863e42401c8e72cf0c42364a3c70c0c8dfb7362978b79e9b5adfa0',
-  'ui/run/relics/occult-dagger.png': 'bc7984ccbabf45e39e672957d7ed1e2716c7e82e14b671fcbed38a7f82b9208d',
-  'ui/run/relics/training-linens.png': 'e1349bd32f7bcaccbd706dbc55a6f97df8a0dd96533f309d1e2c0ea38aabf461',
+const LIPSANON_ICON_COMPONENT = 'run-lipsanon-icon';
+const LIPSANON_ICON_SLOT = /^ui\/run\/lipsana\/([a-z][a-z0-9-]{0,79})\.png$/;
+const LIPSANON_RESIZED_PRODUCTION_EXCEPTION_SCHEMA = 'run-lipsanon-resized-production-exception-v1';
+const LIPSANON_RESIZED_PRODUCTION_EXCEPTION_SHA_BY_SLOT = Object.freeze({
+  'ui/run/lipsana/congressional-approval.png': '928f9ceb7a5612ff0d2216b70422b972b04492a4c9ed277e5122721b390c52d0',
+  'ui/run/lipsana/deployment-vehicle.png': 'd004c0f5be36094ebc137a9cdbebfe69d847636a7c8ddaff50bac8b687aac0bc',
+  'ui/run/lipsana/inspirational-record.png': 'b6d18510fcff3e374a1899421b2928fb16cd79c0108ad00179059cca539e309d',
+  'ui/run/lipsana/mercenary-boat.png': '9e5945cc9c200d1e3818e10f3f6e3494150ce83f30aa95c7e499daa4462ae1e8',
+  'ui/run/lipsana/mercenarys-rifle.png': 'afe1a1f718a4406a60ae85adb002af846ef4a9c6000c20b97d67a0b57c06fa60',
+  'ui/run/lipsana/merchants-shopkey.png': 'c8e0e45f9b863e42401c8e72cf0c42364a3c70c0c8dfb7362978b79e9b5adfa0',
+  'ui/run/lipsana/occult-dagger.png': 'bc7984ccbabf45e39e672957d7ed1e2716c7e82e14b671fcbed38a7f82b9208d',
+  'ui/run/lipsana/training-linens.png': 'e1349bd32f7bcaccbd706dbc55a6f97df8a0dd96533f309d1e2c0ea38aabf461',
 });
 // ADR-0360. Two generated card frames painted their card at a different SHAPE
 // from the other three, so the same 5:7 element rendered visibly different card
 // sizes. Normalising them to the shared 1009x1402 painted box means resampling,
 // which is not native 1x — admitted only for these exact slots, bytes and
-// transform, exactly as ADR-0332 admits the resized relic icons.
+// transform, exactly as ADR-0332 admits the resized lipsanon icons.
 const RUN_CARD_FRAME_NORMALISED_EXCEPTION_SCHEMA = 'run-card-frame-normalised-production-exception-v1';
 const RUN_CARD_FRAME_NORMALISED_EXCEPTION_TRANSFORM = 'painted-card-box-normalise-lanczos-1009x1402';
 const RUN_CARD_FRAME_NORMALISED_EXCEPTION_BY_SLOT = Object.freeze({
@@ -113,9 +113,9 @@ const STRATEGIKON_BACKGROUND_SHA256 = '8084f009cae79d3eaaa64bb2c0f5df6e26fc8dfe7
 // Full-screen artwork behind one workspace. The Strategikon keeps its own stricter,
 // byte-pinned projection (ADR-0336) and is dispatched before this one; these are the
 // screens whose backdrop is chosen from generated candidates in Studio > Screen Art.
-const RUN_RELIC_MAT_COMPONENT = 'run-relic-mat';
-const RUN_RELIC_MAT_SLOT = 'ui/run/bona-vacantia/mat.png';
-const runRelicMatSlot = (slot) => String(slot || '') === RUN_RELIC_MAT_SLOT;
+const LIPSANON_MAT_COMPONENT = 'run-lipsanon-mat';
+const LIPSANON_MAT_SLOT = 'ui/run/bona-vacantia/mat.png';
+const runLipsanonMatSlot = (slot) => String(slot || '') === LIPSANON_MAT_SLOT;
 const WORKSPACE_BACKGROUND_COMPONENT = 'workspace-background';
 const WORKSPACE_BACKGROUND_SLOT = /^ui\/workspaces\/([a-z][a-z0-9-]{0,63})\/background\.png$/;
 const WORKSPACE_BACKGROUND_IDS = Object.freeze(['run-victory', 'run-bona-vacantia', 'level-editor-events']);
@@ -145,8 +145,8 @@ function predrawnBoardSlotSlug(slot) {
   return match ? match[1] : null;
 }
 
-function runRelicIconSlotId(slot) {
-  const match = RUN_RELIC_ICON_SLOT.exec(String(slot || ''));
+function runLipsanonIconSlotId(slot) {
+  const match = LIPSANON_ICON_SLOT.exec(String(slot || ''));
   return match ? match[1] : null;
 }
 
@@ -393,42 +393,42 @@ function predrawnBoardMediaIssue(row, projectedRuntime = null) {
 }
 
 /**
- * Domain-owned runtime projection for one native Run relic icon. Relic
+ * Domain-owned runtime projection for one native Run lipsanon icon. Lipsanon
  * membership remains in the drawable catalog; the semantic slot only carries
  * the exact reviewed pixels for that installed record.
  */
-function runRelicIconMediaIssue(row, projectedRuntime = null) {
-  const relicId = runRelicIconSlotId(row.slot);
-  if (!relicId) return 'Run relic icon slots must match ui/run/relics/<relic-id>.png';
-  if (row.domain !== 'ui-kit') return 'Run relic icons require the ui-kit domain';
-  if (row.role !== 'icon') return 'Run relic icons require the icon role';
-  if (row.media_type !== 'image/png') return 'Run relic icons require image/png';
+function runLipsanonIconMediaIssue(row, projectedRuntime = null) {
+  const lipsanonId = runLipsanonIconSlotId(row.slot);
+  if (!lipsanonId) return 'Run lipsanon icon slots must match ui/run/lipsana/<lipsanon-id>.png';
+  if (row.domain !== 'ui-kit') return 'Run lipsanon icons require the ui-kit domain';
+  if (row.role !== 'icon') return 'Run lipsanon icons require the icon role';
+  if (row.media_type !== 'image/png') return 'Run lipsanon icons require image/png';
   if (Number(row.width) !== 64 || Number(row.height) !== 64) {
-    return 'Run relic icons must be native 64x64 rasters';
+    return 'Run lipsanon icons must be native 64x64 rasters';
   }
 
   const metadata = mediaVersionMetadata(row);
   const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
-  if (!isObjectRecord(runtime)) return 'Run relic icons require metadata.runtime';
+  if (!isObjectRecord(runtime)) return 'Run lipsanon icons require metadata.runtime';
   const allowed = new Set([
     'component', 'variant', 'frameWidth', 'frameHeight', 'frameCount', 'altText', 'nativeRole',
   ]);
   const unsupported = Object.keys(runtime).filter((key) => !allowed.has(key));
   if (unsupported.length) {
-    return `Run relic icon runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
+    return `Run lipsanon icon runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
   }
-  if (runtime.component !== RUN_RELIC_ICON_COMPONENT) {
-    return `Run relic icon metadata.runtime.component must be ${RUN_RELIC_ICON_COMPONENT}`;
+  if (runtime.component !== LIPSANON_ICON_COMPONENT) {
+    return `Run lipsanon icon metadata.runtime.component must be ${LIPSANON_ICON_COMPONENT}`;
   }
-  if (runtime.variant !== relicId) return 'Run relic icon variant must match its semantic slot id';
+  if (runtime.variant !== lipsanonId) return 'Run lipsanon icon variant must match its semantic slot id';
   if (runtime.frameWidth !== 64 || runtime.frameHeight !== 64 || runtime.frameCount !== 1) {
-    return 'Run relic icon runtime geometry must describe one native 64x64 frame';
+    return 'Run lipsanon icon runtime geometry must describe one native 64x64 frame';
   }
-  if (runtime.nativeRole !== RUN_RELIC_ICON_COMPONENT) {
-    return `Run relic icon metadata.runtime.nativeRole must be ${RUN_RELIC_ICON_COMPONENT}`;
+  if (runtime.nativeRole !== LIPSANON_ICON_COMPONENT) {
+    return `Run lipsanon icon metadata.runtime.nativeRole must be ${LIPSANON_ICON_COMPONENT}`;
   }
   if (runtime.altText !== '') {
-    return 'Run relic icon metadata.runtime.altText must be empty because the relic label owns its accessible name';
+    return 'Run lipsanon icon metadata.runtime.altText must be empty because the lipsanon label owns its accessible name';
   }
   return null;
 }
@@ -1021,41 +1021,41 @@ function strategikonBackgroundMediaIssue(row, projectedRuntime = null) {
  * raster, which stops a re-crop from silently changing what the screen paints.
  */
 /**
- * The surface the Conflict's relic offers are laid out on (Bona Vacantia). Not a workspace
+ * The surface the Conflict's lipsanon offers are laid out on (Bona Vacantia). Not a workspace
  * background: that covers the whole screen, while this is ONE object sitting on it, sized
- * against the relic row rather than the viewport, with soft alpha edges so the backdrop
+ * against the lipsanon row rather than the viewport, with soft alpha edges so the backdrop
  * reads continuously past it. It therefore carries its own typed contract instead of
  * borrowing the full-bleed one.
  */
-function runRelicMatMediaIssue(row, projectedRuntime = null) {
-  if (!runRelicMatSlot(row.slot)) return `run relic mats must be ${RUN_RELIC_MAT_SLOT}`;
-  if (row.domain !== 'ui-kit') return 'run relic mats require the ui-kit domain';
-  if (row.role !== 'background') return 'run relic mats require the background role';
-  if (row.media_type !== 'image/png') return 'run relic mats require image/png';
+function runLipsanonMatMediaIssue(row, projectedRuntime = null) {
+  if (!runLipsanonMatSlot(row.slot)) return `run lipsanon mats must be ${LIPSANON_MAT_SLOT}`;
+  if (row.domain !== 'ui-kit') return 'run lipsanon mats require the ui-kit domain';
+  if (row.role !== 'background') return 'run lipsanon mats require the background role';
+  if (row.media_type !== 'image/png') return 'run lipsanon mats require image/png';
   const width = Number(row.width);
   const height = Number(row.height);
   if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 1 || height < 1) {
-    return 'run relic mats require decoded raster dimensions';
+    return 'run lipsanon mats require decoded raster dimensions';
   }
   const metadata = mediaVersionMetadata(row);
   const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
-  if (!isObjectRecord(runtime)) return 'run relic mats require metadata.runtime';
+  if (!isObjectRecord(runtime)) return 'run lipsanon mats require metadata.runtime';
   const allowed = new Set(['component', 'variant', 'frameWidth', 'frameHeight', 'frameCount', 'altText', 'nativeRole']);
   const unsupported = Object.keys(runtime).filter((key) => !allowed.has(key));
   if (unsupported.length) {
-    return `run relic mat runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
+    return `run lipsanon mat runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
   }
-  if (runtime.component !== RUN_RELIC_MAT_COMPONENT) {
-    return `run relic mat metadata.runtime.component must be ${RUN_RELIC_MAT_COMPONENT}`;
+  if (runtime.component !== LIPSANON_MAT_COMPONENT) {
+    return `run lipsanon mat metadata.runtime.component must be ${LIPSANON_MAT_COMPONENT}`;
   }
-  if (runtime.nativeRole !== RUN_RELIC_MAT_COMPONENT) {
-    return `run relic mat metadata.runtime.nativeRole must be ${RUN_RELIC_MAT_COMPONENT}`;
+  if (runtime.nativeRole !== LIPSANON_MAT_COMPONENT) {
+    return `run lipsanon mat metadata.runtime.nativeRole must be ${LIPSANON_MAT_COMPONENT}`;
   }
-  if (typeof runtime.variant !== 'string' || !runtime.variant) return 'run relic mat runtime variant is required';
+  if (typeof runtime.variant !== 'string' || !runtime.variant) return 'run lipsanon mat runtime variant is required';
   if (runtime.frameWidth !== width || runtime.frameHeight !== height || runtime.frameCount !== 1) {
-    return 'run relic mat runtime frame geometry must match the uploaded raster';
+    return 'run lipsanon mat runtime frame geometry must match the uploaded raster';
   }
-  if (runtime.altText !== '') return 'decorative run relic mat runtime altText must be empty';
+  if (runtime.altText !== '') return 'decorative run lipsanon mat runtime altText must be empty';
   return null;
 }
 
@@ -1275,9 +1275,9 @@ function nativeMediaEvidenceIssue(row) {
     ) return 'ADR-0337 scaled Brush evidence is incomplete';
     return null;
   }
-  if (evidence.schema === RUN_RELIC_RESIZED_PRODUCTION_EXCEPTION_SCHEMA) {
-    const expectedSha256 = RUN_RELIC_RESIZED_PRODUCTION_EXCEPTION_SHA_BY_SLOT[String(row.slot || '')];
-    if (!expectedSha256) return 'ADR-0332 resized production evidence is restricted to its eight Run relic slots';
+  if (evidence.schema === LIPSANON_RESIZED_PRODUCTION_EXCEPTION_SCHEMA) {
+    const expectedSha256 = LIPSANON_RESIZED_PRODUCTION_EXCEPTION_SHA_BY_SLOT[String(row.slot || '')];
+    if (!expectedSha256) return 'ADR-0332 resized production evidence is restricted to its eight Run lipsanon slots';
     if (normalizedSha(row.blob_sha256) !== expectedSha256 || normalizedSha(evidence.outputSha256) !== expectedSha256) {
       return 'ADR-0332 resized production evidence does not authorize these uploaded bytes';
     }
@@ -1360,8 +1360,8 @@ function liveCatalogReadinessIssue(catalog, { requireCritical = false } = {}) {
 }
 
 module.exports = {
-  runRelicMatMediaIssue,
-  runRelicMatSlot,
+  runLipsanonMatMediaIssue,
+  runLipsanonMatSlot,
   ATARAXIA_NUMERAL_COMPONENT,
   ATARAXIA_NUMERAL_PROOF_RENDERER,
   ATARAXIA_NUMERAL_PROOF_SCHEMA,
@@ -1378,8 +1378,8 @@ module.exports = {
   LEVEL_EDITOR_BRUSH_ICON_PROOF_RENDERER,
   LEVEL_EDITOR_BRUSH_ICON_PROOF_SCHEMA,
   LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_EXCEPTION_SCHEMA,
-  RUN_RELIC_ICON_COMPONENT,
-  RUN_RELIC_RESIZED_PRODUCTION_EXCEPTION_SCHEMA,
+  LIPSANON_ICON_COMPONENT,
+  LIPSANON_RESIZED_PRODUCTION_EXCEPTION_SCHEMA,
   RUN_CARD_COST_COIN_COMPONENT,
   RUN_RESOURCE_ICON_COMPONENT,
   RUN_SHOP_WRAP_COMPONENT,
@@ -1411,8 +1411,8 @@ module.exports = {
   predrawnBoardOwnerProofIssue,
   predrawnBoardSlotSlug,
   preservesNativeEvidenceForUpload,
-  runRelicIconMediaIssue,
-  runRelicIconSlotId,
+  runLipsanonIconMediaIssue,
+  runLipsanonIconSlotId,
   runCardCostCoinMediaIssue,
   runCardCostCoinSlot,
   runResourceIconMediaIssue,

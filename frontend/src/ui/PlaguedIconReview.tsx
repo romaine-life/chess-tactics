@@ -68,10 +68,10 @@ export function PlaguedIconReview(): ReactElement {
 
   return (
     <main
-      className="run-relic-review-screen plagued-icon-review-screen skirmish-screen"
+      className="run-lipsanon-review-screen plagued-icon-review-screen skirmish-screen"
       style={{ ['--skirmish-world-bg' as string]: `url("${defaultBackgroundSet().world}")` }}
     >
-      <OuterChromeBox chromeConsumer="plagued-icon-review" titled className="run-relic-review-panel plagued-icon-review-panel">
+      <OuterChromeBox chromeConsumer="plagued-icon-review" titled className="run-lipsanon-review-panel plagued-icon-review-panel">
         <OuterChromeHeader title={`${CACOCHYMIC_DISPLAY_NAME} Ability Icon Review`} />
         <p>
           {selectionsInstalled
@@ -130,7 +130,7 @@ export function PlaguedIconReview(): ReactElement {
                 </section>
                 <section className="plagued-icon-review-section" aria-labelledby="plagued-native-title">
                   <h2 id="plagued-native-title">Native pixel work</h2>
-                  <div className="run-relic-review-grid plagued-icon-review-native-grid" data-testid="plagued-icon-native-grid">
+                  <div className="run-lipsanon-review-grid plagued-icon-review-native-grid" data-testid="plagued-icon-native-grid">
                     {candidates.map((version) => (
                       <figure data-version-id={version.id} key={`native-${version.id}`}>
                         <img src={version.media!.url} width="64" height="64" alt="" draggable={false} />

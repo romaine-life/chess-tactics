@@ -4,7 +4,7 @@ date: 2026-07-10
 deciders: Nelson
 partially_superseded_by:
   - "[ADR-0158](0158-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md)"
-  - "[ADR-0332](0332-eight-run-relic-icons-ship-the-approved-resized-pixels.md)"
+  - "[ADR-0332](0332-eight-run-lipsanon-icons-ship-the-approved-resized-pixels.md)"
 ---
 
 # ADR-0076: Scaling is calibration — accepted production art is regenerated at native 1×

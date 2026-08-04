@@ -40,14 +40,14 @@ prerequisite for a legible first roster.
   not unmount or pause that Battle; a timed clock continues.
 - **Sell Units** is a separate transactional list rather than a mode of the
   detailed Army ledger. Every row exposes the exact unit identity, abilities
-  and applicable relic-derived effects, base value, exact return, and Sell
+  and applicable lipsanon-derived effects, base value, exact return, and Sell
   action. The retained King stays visible but disabled. A sold unit remains as
   a disabled **Sold this visit** row until the shop ends or resets.
 - Applicable inherited effects appear beside the unit like other abilities.
   Hovering or focusing the effect icon uses the shared tooltip and identifies
-  the granting relic, for example Positioned inherited from Training Linens.
+  the granting lipsanon, for example Positioned inherited from Training Linens.
 - Selling is immediate and has no confirmation dialog. Shop entry persists a
-  complete transaction snapshot. **Reset Shop** restores army, gold, relic
+  complete transaction snapshot. **Reset Shop** restores army, gold, lipsanon
   choices, offers, sold rows, and relevant counters to that snapshot; it never
   rerolls offers. Reset remains present across all three shop destinations and
   is disabled until the shop differs from its entry state.

@@ -151,7 +151,7 @@ export * from './core/pieces';
 export * from './core/unitSpriteRegistry';
 export * from './core/playRoutePresentation';
 export * from './core/props';
-export * from './core/runRelics';
+export * from './core/runLipsana';
 export * from './core/scenicTerrain';
 export * from './core/structureArt';
 export * from './core/macroTiles';
@@ -188,8 +188,8 @@ export * from './ui/unitCatalog';
 export * from './run/craft';
 export {
   RUN_FORMAT_VERSION,
-  RUN_RELIC_IMMEDIATE_GOLD,
-  relicImmediateGoldTenths,
+  RUN_LIPSANON_IMMEDIATE_GOLD,
+  lipsanonImmediateGoldTenths,
   snapshotWar,
   type RunDocument,
   type RunVacantiaState,

@@ -9,9 +9,9 @@ import {
   GOLD_SCALE,
   PIECE_LABEL,
   PIECE_VALUE,
-  RUN_RELIC_BY_ID,
-  hasRelic,
-  relicGrantingRunAbility,
+  LIPSANON_BY_ID,
+  hasLipsanon,
+  lipsanonGrantingRunAbility,
   runAbilityDescription,
   runAbilityDisplayName,
   type RunAbility,
@@ -74,7 +74,7 @@ export type RunUnitTraitId =
   | 'pawn-cash-out';
 
 /**
- * A paired unit state draws its own accepted icon; a relic-derived trait is not one of
+ * A paired unit state draws its own accepted icon; a lipsanon-derived trait is not one of
  * the four states and keeps a kit glyph (ADR-0339).
  */
 export type RunUnitTraitIcon =
@@ -117,9 +117,9 @@ function deploymentAbilityTrait(
       icon,
     };
   }
-  const relicId = relicGrantingRunAbility(run, unit, ability);
-  return relicId
-    ? inheritedTrait(ability, label, runAbilityDescription(ability, unit.type), RUN_RELIC_BY_ID[relicId].name, icon)
+  const lipsanonId = lipsanonGrantingRunAbility(run, unit, ability);
+  return lipsanonId
+    ? inheritedTrait(ability, label, runAbilityDescription(ability, unit.type), LIPSANON_BY_ID[lipsanonId].name, icon)
     : null;
 }
 
@@ -149,7 +149,7 @@ export function runUnitTraits(run: RunDocument, unit: RunArmyUnit): RunUnitTrait
       'adlected',
       ADLECTED_DISPLAY_NAME,
       'May be deliberately placed in the player zone for this Battle.',
-      RUN_RELIC_BY_ID['inspirational-record'].name,
+      LIPSANON_BY_ID['inspirational-record'].name,
       { state: 'adlected' },
     ));
   }
@@ -158,21 +158,21 @@ export function runUnitTraits(run: RunDocument, unit: RunArmyUnit): RunUnitTrait
   if (positioned) traits.push(positioned);
   const marshalled = deploymentAbilityTrait(run, unit, 'agminate');
   if (marshalled) traits.push(marshalled);
-  if (unit.type === 'king' && hasRelic(run, 'royal-tent')) {
+  if (unit.type === 'king' && hasLipsanon(run, 'royal-tent')) {
     traits.push(inheritedTrait(
       'royal-tent',
       'Royal Tent',
       'Places up to three temporary rocks in front of the King.',
-      RUN_RELIC_BY_ID['royal-tent'].name,
+      LIPSANON_BY_ID['royal-tent'].name,
       { glyphClass: 'skirmish-icon-shield' },
     ));
   }
-  if (unit.type === 'pawn' && hasRelic(run, 'mercenary-boat')) {
+  if (unit.type === 'pawn' && hasLipsanon(run, 'mercenary-boat')) {
     traits.push(inheritedTrait(
       'pawn-cash-out',
       'Cash Out',
       'May leave the army for two gold instead of promoting.',
-      RUN_RELIC_BY_ID['mercenary-boat'].name,
+      LIPSANON_BY_ID['mercenary-boat'].name,
       { glyphClass: 'skirmish-icon-crossed-swords' },
     ));
   }
@@ -215,7 +215,7 @@ function unitSourceLabel(unit: RunArmyUnit): string {
 }
 
 function unitSaleTenths(run: RunDocument, unit: RunArmyUnit): number {
-  return PIECE_VALUE[unit.type] * GOLD_SCALE * (hasRelic(run, 'fair-scales') ? 0.75 : 0.5);
+  return PIECE_VALUE[unit.type] * GOLD_SCALE * (hasLipsanon(run, 'fair-scales') ? 0.75 : 0.5);
 }
 
 function unitRunStatus(run: RunDocument, unit: RunArmyUnit): string {

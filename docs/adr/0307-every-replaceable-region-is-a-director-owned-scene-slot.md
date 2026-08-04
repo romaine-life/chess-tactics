@@ -83,7 +83,7 @@ Run is one persistent gameplay shell with these authored nested slots:
 ```
 run
   run-phase: hydrating | no-active | draft | deployment | battle | shop | victory
-    run-workspace: primary | army | relics | sell | strategikon
+    run-workspace: primary | army | lipsana | sell | strategikon
 ```
 
 - The active Run source supplies both phase and workspace identity. The URL may
@@ -112,7 +112,7 @@ run
 
 ### Classification
 
-- Region replacement/director-owned: Run phase changes, Run primary/Army/Relics/
+- Region replacement/director-owned: Run phase changes, Run primary/Army/Lipsana/
   Sell/Strategikon changes, Settings sections, Level Editor workspaces, and
   Studio viewer replacements.
 - Same-scene state reset: retrying the current Battle session while its board

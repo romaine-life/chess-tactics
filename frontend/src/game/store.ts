@@ -112,7 +112,7 @@ export type NetResignSink = () => void;
 /**
  * Run Battles may add an ordinarily behaving Reservist after a capture. The hook
  * transforms only the committed board between move mechanics and adjudication; it is
- * never consulted by legal move generation, so relics cannot change piece behavior.
+ * never consulted by legal move generation, so lipsana cannot change piece behavior.
  */
 export type RunBattleTransformSink = (game: GameState, events: readonly GameEvent[]) => GameState;
 

@@ -7,7 +7,7 @@ extends:
   - 0247-run-unit-profiles-use-persistent-tile-backed-board-scenes.md
   - 0231-strategikon-and-enchiridion-share-one-reference-workspace-language.md
 refines:
-  - 0256-individual-relics-are-routable-from-the-main-menu-enchiridion.md
+  - 0256-individual-lipsana-are-routable-from-the-main-menu-enchiridion.md
 partially_superseded_by:
   - 0281-unit-card-art-uses-dedicated-database-prompt-plans.md
   - 0364-enchiridion-cards-is-a-terminal-gallery-with-no-fourth-column.md
@@ -45,9 +45,9 @@ and prop catalogs, seeded ground cover (ADR-0247), and a generated 49-bundle dec
   is “Regal Serenity”), recorded per bundle id and enforced by test. Bundles
   outside the deck read as their prose contents.
 - The Enchiridion gains a Cards section: the full deck grouped by gold value, one
-  selected record described by its exact card face. Selection follows the relic
+  selected record described by its exact card face. Selection follows the lipsanon
   transport rules — the main menu addresses `/enchiridion/cards/<bundle-id>`
-  (an address-only update inside one retained scene, as ADR-0256 gave relics);
+  (an address-only update inside one retained scene, as ADR-0256 gave lipsana);
   the Battle-hosted Strategikon keeps ephemeral selection. One shared
   `ReferenceTrigger` carries both codices' entries.
 - The scene plan is the future art-generation source: an enriched restyle of the

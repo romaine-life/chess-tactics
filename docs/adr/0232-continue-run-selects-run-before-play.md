@@ -36,7 +36,7 @@ the active Run before entry.
 - Continue entries for an unresolved standalone or Campaign Battle retain
   ADR-0231's direct return behavior. This decision changes Run continuation
   only.
-- Every other Enchiridion, Strategikon, relic-history, and Continue-ordering
+- Every other Enchiridion, Strategikon, lipsanon-history, and Continue-ordering
   decision in ADR-0231 remains in force.
 
 ## Consequences

@@ -43,7 +43,7 @@ Chosen: **the deck remains the 49-card core set; a core card becomes a
 particular affected card only when it is drawn into an offer.**
 
 - Each shop shuffles the same 49 core identities and reveals the normal three
-  or relic-modified four. Modifier variants never become additional core-deck
+  or lipsanon-modified four. Modifier variants never become additional core-deck
   entries or additional chances to draw that composition.
 - Revealing a core card deterministically creates its offer instance. That
   instance rolls particular units and their stackable modifiers. Under The

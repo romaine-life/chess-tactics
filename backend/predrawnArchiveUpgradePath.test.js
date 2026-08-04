@@ -98,7 +98,7 @@ test('the exact sparse numeric legacy history upgrades through migration 50', ()
   );
   assert.ok(
     pending.includes(45),
-    'owner-scoped Run relic statistics must have their own pending migration 45',
+    'owner-scoped Run lipsanon statistics must have their own pending migration 45',
   );
   assert.ok(
     pending.includes(46),
@@ -285,12 +285,12 @@ test('the exact sparse numeric legacy history upgrades through migration 50', ()
   assert.match(
     migration45.sql,
     /CREATE TABLE IF NOT EXISTS\s+run_relic_stat_events[\s\S]*PRIMARY KEY\s*\(\s*owner_email,\s*event_id,\s*relic_id\s*\)/i,
-    'migration 45 must make repeated event delivery idempotent per owner and relic',
+    'migration 45 must make repeated event delivery idempotent per owner and lipsanon',
   );
   assert.match(
     migration45.sql,
     /CHECK\s*\(\s*event_kind IN\s*\(\s*'picked',\s*'battle-win'\s*\)\s*\)/i,
-    'migration 45 must keep the relic-stat event vocabulary closed',
+    'migration 45 must keep the lipsanon-stat event vocabulary closed',
   );
   const migration46 = inlineMigration(46);
   assert.equal(
@@ -418,7 +418,7 @@ test('the exact sparse numeric legacy history upgrades through migration 50', ()
   );
   assert.deepEqual(
     plan.pending.map((entry) => entry.version),
-    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51],
+    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52],
     'the bridge must fill the historical gap before applying every post-36 contract',
   );
   assert.throws(
@@ -488,13 +488,13 @@ test('required-schema readiness and repair enforce the migrations 37 through 50 
   );
   assert.match(
     relations,
-    /run_relic_stat_events/,
-    'Run relic-stat events must be required runtime schema once migration 45 is recorded',
+    /lipsanon_stat_events/,
+    'Run lipsanon-stat events must be required runtime schema once migration 45 is recorded',
   );
   assert.match(
     repairs,
-    /\['run_relic_stat_events',\s*45\]/,
-    'Run relic-stat relation repair must replay migration 45',
+    /\['lipsanon_stat_events',\s*\[45,\s*52\]\]/,
+    'Run lipsanon-stat relation repair must replay migration 45 and the 52 rename',
   );
   assert.match(relations, /run_progression/, 'Ataraxia progression must be required runtime schema');
   assert.match(

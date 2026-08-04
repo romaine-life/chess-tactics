@@ -3,14 +3,14 @@ import { readAdminBattleHref } from '../admin/battleRoute';
 import { type AdminBattleMode } from '../game/store';
 import { useSkirmish } from '../game/SkirmishStoreContext';
 import { authorizeAdminPlaytest } from '../net/adminPlaytest';
-import { acquireRelic, GOLD_SCALE, grantGold, PIECE_LABEL, RUN_RELIC_BY_ID, RUN_RELICS, type RunRelicId } from '../run/model';
+import { acquireLipsanon, GOLD_SCALE, grantGold, PIECE_LABEL, LIPSANON_BY_ID, RUN_LIPSANA, type LipsanonId } from '../run/model';
 import { useActiveRun } from '../run/store';
 import { navigateApp, readValidatedReturnTo } from './navigation';
 import { SettingsButton, SettingsRow, SettingsSection } from './shared/SettingsControls';
 import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
 import { InnerChromeBox } from './shared/ChromeBox';
 
-type RelicChoice = RunRelicId | '';
+type LipsanonChoice = LipsanonId | '';
 
 export function AdminControls({
   authReady,
@@ -33,7 +33,7 @@ export function AdminControls({
   const hydrateRun = useActiveRun((state) => state.hydrate);
   const replaceRun = useActiveRun((state) => state.replace);
   const [goldAmount, setGoldAmount] = useState('5');
-  const [relicId, setRelicId] = useState<RelicChoice>('');
+  const [lipsanonId, setLipsanonId] = useState<LipsanonChoice>('');
   const [targetUnitId, setTargetUnitId] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [status, setStatus] = useState('');
@@ -48,12 +48,12 @@ export function AdminControls({
     || Boolean(net)
     || Boolean(pendingPromotion)
     || (presentation === 'settings' && !battleHref);
-  const relicOptions = useMemo<HouseSelectOption<RelicChoice>[]>(() => [
+  const lipsanonOptions = useMemo<HouseSelectOption<LipsanonChoice>[]>(() => [
     { value: '', label: 'Choose a lipsanon' },
-    ...RUN_RELICS
-      .filter((relic) => !run?.relics.includes(relic.id))
-      .map((relic) => ({ value: relic.id, label: relic.name, title: relic.description })),
-  ], [run?.relics]);
+    ...RUN_LIPSANA
+      .filter((lipsanon) => !run?.lipsana.includes(lipsanon.id))
+      .map((lipsanon) => ({ value: lipsanon.id, label: lipsanon.name, title: lipsanon.description })),
+  ], [run?.lipsana]);
   const targetOptions = useMemo<HouseSelectOption<string>[]>(() => [
     { value: '', label: 'Choose a unit' },
     ...(run?.army.map((unit) => ({
@@ -61,8 +61,8 @@ export function AdminControls({
       label: `${PIECE_LABEL[unit.type]} · ${unit.id}`,
     })) ?? []),
   ], [run?.army]);
-  const selectedRelic = relicId ? RUN_RELIC_BY_ID[relicId] : null;
-  const needsRelicTarget = relicId === 'conscription-notice';
+  const selectedLipsanon = lipsanonId ? LIPSANON_BY_ID[lipsanonId] : null;
+  const needsLipsanonTarget = lipsanonId === 'conscription-notice';
 
   const armBattleAction = async (mode: AdminBattleMode): Promise<void> => {
     if (battleUnavailable || !battleHref) return;
@@ -101,21 +101,21 @@ export function AdminControls({
     }
   };
 
-  const gainRelic = async (): Promise<void> => {
-    if (!run || !relicId || (needsRelicTarget && !targetUnitId)) return;
-    setBusy('gain-relic');
+  const gainLipsanon = async (): Promise<void> => {
+    if (!run || !lipsanonId || (needsLipsanonTarget && !targetUnitId)) return;
+    setBusy('gain-lipsanon');
     setStatus('');
     try {
       await authorizeAdminPlaytest({
-        action: 'gain-relic',
-        relicId,
+        action: 'gain-lipsanon',
+        lipsanonId,
         ...(targetUnitId ? { targetUnitId } : {}),
       });
-      const granted = acquireRelic(run, relicId, targetUnitId || undefined);
+      const granted = acquireLipsanon(run, lipsanonId, targetUnitId || undefined);
       if (granted === run) throw new Error('That lipsanon could not be granted to the current Run.');
       replaceRun(granted);
-      setStatus(`Granted ${RUN_RELIC_BY_ID[relicId].name}.`);
-      setRelicId('');
+      setStatus(`Granted ${LIPSANON_BY_ID[lipsanonId].name}.`);
+      setLipsanonId('');
       setTargetUnitId('');
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'The lipsanon could not be granted.');
@@ -243,17 +243,17 @@ export function AdminControls({
             <InnerChromeBox className="skirmish-admin-action skirmish-admin-action--stack">
               <div>
                 <strong>Gain Lipsanon</strong>
-                <small>{selectedRelic?.description ?? (run ? 'Choose any lipsanon not currently held.' : 'Start a Run before granting a lipsanon.')}</small>
+                <small>{selectedLipsanon?.description ?? (run ? 'Choose any lipsanon not currently held.' : 'Start a Run before granting a lipsanon.')}</small>
               </div>
               <div className="admin-control-stack">
                 <HouseSelect
-                  value={relicId}
-                  options={relicOptions}
-                  onChange={(value) => { setRelicId(value); setTargetUnitId(''); }}
+                  value={lipsanonId}
+                  options={lipsanonOptions}
+                  onChange={(value) => { setLipsanonId(value); setTargetUnitId(''); }}
                   ariaLabel="Lipsanon to grant"
                   disabled={!run || busy !== null}
                 />
-                {needsRelicTarget ? (
+                {needsLipsanonTarget ? (
                   <HouseSelect
                     value={targetUnitId}
                     options={targetOptions}
@@ -264,9 +264,9 @@ export function AdminControls({
                 ) : null}
                 <SettingsButton
                   tone="primary"
-                  disabled={!run || !relicId || (needsRelicTarget && !targetUnitId) || busy !== null}
-                  onClick={() => void gainRelic()}
-                  data-testid="battle-admin-gain-relic"
+                  disabled={!run || !lipsanonId || (needsLipsanonTarget && !targetUnitId) || busy !== null}
+                  onClick={() => void gainLipsanon()}
+                  data-testid="battle-admin-gain-lipsanon"
                 >
                   Grant
                 </SettingsButton>
@@ -339,18 +339,18 @@ export function AdminControls({
         </SettingsRow>
         <SettingsRow
           title="Gain Lipsanon"
-          description={selectedRelic?.description ?? (run ? 'Choose any lipsanon not currently held, including one already seen this Run.' : 'Start a Run before granting a lipsanon.')}
+          description={selectedLipsanon?.description ?? (run ? 'Choose any lipsanon not currently held, including one already seen this Run.' : 'Start a Run before granting a lipsanon.')}
           tall
         >
           <div className="admin-control-stack">
             <HouseSelect
-              value={relicId}
-              options={relicOptions}
-              onChange={(value) => { setRelicId(value); setTargetUnitId(''); }}
+              value={lipsanonId}
+              options={lipsanonOptions}
+              onChange={(value) => { setLipsanonId(value); setTargetUnitId(''); }}
               ariaLabel="Lipsanon to grant"
               disabled={!run || busy !== null}
             />
-            {needsRelicTarget ? (
+            {needsLipsanonTarget ? (
               <HouseSelect
                 value={targetUnitId}
                 options={targetOptions}
@@ -361,9 +361,9 @@ export function AdminControls({
             ) : null}
             <SettingsButton
               tone="primary"
-              disabled={!run || !relicId || (needsRelicTarget && !targetUnitId) || busy !== null}
-              onClick={() => void gainRelic()}
-              data-testid="admin-gain-relic"
+              disabled={!run || !lipsanonId || (needsLipsanonTarget && !targetUnitId) || busy !== null}
+              onClick={() => void gainLipsanon()}
+              data-testid="admin-gain-lipsanon"
             >
               Grant
             </SettingsButton>

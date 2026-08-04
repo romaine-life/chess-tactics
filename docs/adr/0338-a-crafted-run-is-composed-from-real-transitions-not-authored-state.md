@@ -28,9 +28,9 @@ validator can still be a state the game itself could never produce.
   `leaveShop`, `prepareDeployment`, `beginBattle`, `openShop`. The crafter fast-forwards
   through the Battles before the target, deploying each one with the real deployment solver.
   It never assembles a Run document field by field.
-- Requested overrides are applied **in the phase where each is legal**: army and relics before
+- Requested overrides are applied **in the phase where each is legal**: army and lipsana before
   a Battle, so the Shop entry snapshot that `openShop` produces already contains them; Shop
-  offers and loot only on a Shop that a real `openShop` created; gold last, so relic payouts
+  offers and loot only on a Shop that a real `openShop` created; gold last, so lipsanon payouts
   and Battle rewards cannot move the number off the request.
 - Crafted Shop cards are **looked up in the deck**, never synthesized. The deck already holds
   every legal multiset worth 1-9 gold, so a crafted card is a real core card with real art,

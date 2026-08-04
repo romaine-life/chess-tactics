@@ -5,7 +5,7 @@ deciders: owner (Nelson) + Codex
 partially_superseded_by:
   - "[ADR-0341](0341-cacochymic-replaces-plagued-as-the-pestiferous-unit-state-name.md)'s Cacochymic Unit Ability name"
 refines:
-  - "[ADR-0198](0198-run-relics-use-live-native-ui-icons.md)"
+  - "[ADR-0198](0198-run-lipsana-use-live-native-ui-icons.md)"
   - "[ADR-0313](0313-enchiridion-filters-cards-and-previews-affected-types.md)"
   - "[ADR-0317](0317-plagued-iconography-depicts-the-condition-not-a-chess-piece.md)"
 ---

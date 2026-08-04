@@ -45,7 +45,7 @@ function runSceneSnapshot(
   const requestedView = new URLSearchParams(search).get('view');
   const requestedWorkspace: RunSceneWorkspace = isRunStrategikonPath(path)
     ? 'strategikon'
-    : requestedView === 'army' || requestedView === 'relics' || requestedView === 'sell'
+    : requestedView === 'army' || requestedView === 'lipsana' || requestedView === 'sell'
       ? requestedView
       : 'primary';
   const workspace = requestedWorkspace === 'sell' && phase !== 'shop'
@@ -260,8 +260,8 @@ export type SceneOverlapScope = 'scene' | 'shell-viewport';
  *
  * Overlapping layers still retain every instance before the first divergence, and
  * both paint it identically. When that divergence is the `run-workspace` slot — Shop
- * to Sell Units, Army, Relics, or opening the Strategikon — the Run shell around it
- * is retained, including the Controls panel and relic rail. Crossfading the whole
+ * to Sell Units, Army, Lipsana, or opening the Strategikon — the Run shell around it
+ * is retained, including the Controls panel and lipsanon rail. Crossfading the whole
  * boundary blends that retained chrome toward the backdrop at the midpoint, which is
  * the Controls title plank dimming on every workspace switch. Report the narrower
  * scope so only the shell's replaceable viewport carries the transition. A phase

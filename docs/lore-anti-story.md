@@ -150,28 +150,28 @@ larger universe is being implied, but that promise is never fulfilled into plot,
 geography, or biography. The images may suggest that some story is happening
 somewhere, while the game refuses to deliver that story.
 
-## Relics And Written Fragments
+## Lipsana And Written Fragments
 
-Run relics belong to the same anti-story world
-([ADR-0264](adr/0264-run-relic-identities-carry-anti-story-residue.md)). Their
+Run lipsana belong to the same anti-story world
+([ADR-0264](adr/0264-run-lipsanon-identities-carry-anti-story-residue.md)). Their
 names identify physical or administrative residue: an architectural form, a
 sealed record, liturgical matter, field equipment, a measure, a route, or
 something carried away. A historically specific word may imply an institution
-or an old dispute, but the relic never explains that history into plot.
+or an old dispute, but the lipsanon never explains that history into plot.
 
-Each relic pairs its name with one original flavor fragment drawn from the same
+Each lipsanon pairs its name with one original flavor fragment drawn from the same
 historical pressure source. This is not a fabricated historical quotation. It
 is a small observation that widens the absence around the object. The complete
 mechanical effect remains separate, literal, and immediately readable.
 
 Modern bureaucratic labels, generic game-system nouns, and explicit
-supernatural claims break this family. When a relic's accepted identity changes,
+supernatural claims break this family. When a lipsanon's accepted identity changes,
 art made for the old identity is no longer valid: the game says **Art not
 generated** until new pixels pass the normal review and installation path.
 
 The eight replacement directions selected and installed through the closed
 resized-pixel exception in
-[ADR-0332](adr/0332-eight-run-relic-icons-ship-the-approved-resized-pixels.md)
+[ADR-0332](adr/0332-eight-run-lipsanon-icons-ship-the-approved-resized-pixels.md)
 keep that residue concrete: Sealed Valuation uses an appraisal parchment and
 vessel weights; Dawn Register an open departure ledger; Field Linens a tied
 linen bundle; Returned Rifle an unloaded tagged rifle; After-Hours Key a worn

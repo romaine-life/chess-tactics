@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RunDocument } from './model';
-import { relicStatEventsForRunTransition } from './relicStatistics';
+import { lipsanonStatEventsForRunTransition } from './lipsanonStatistics';
 
 function run(overrides: Partial<RunDocument> = {}): RunDocument {
   return {
@@ -12,7 +12,7 @@ function run(overrides: Partial<RunDocument> = {}): RunDocument {
     phase: 'battle',
     battleIndex: 0,
     goldTenths: 0,
-    relics: [],
+    lipsana: [],
     army: [],
     shop: null,
     deployment: null,
@@ -26,44 +26,44 @@ function run(overrides: Partial<RunDocument> = {}): RunDocument {
   } as RunDocument;
 }
 
-describe('Run relic statistics', () => {
-  it('records a relic pick with a stable run-and-relic identity', () => {
-    expect(relicStatEventsForRunTransition(
+describe('Run lipsanon statistics', () => {
+  it('records a lipsanon pick with a stable run-and-lipsanon identity', () => {
+    expect(lipsanonStatEventsForRunTransition(
       run(),
-      run({ relics: ['conscription-notice'] }),
+      run({ lipsana: ['conscription-notice'] }),
     )).toEqual([{
       eventId: 'pick:run-1:conscription-notice',
-      relicId: 'conscription-notice',
+      lipsanonId: 'conscription-notice',
       kind: 'picked',
     }]);
   });
 
-  it('records one Battle win for every relic held through that Battle', () => {
-    expect(relicStatEventsForRunTransition(
-      run({ relics: ['conscription-notice', 'training-linens'] }),
-      run({ phase: 'shop', relics: ['conscription-notice', 'training-linens'] }),
+  it('records one Battle win for every lipsanon held through that Battle', () => {
+    expect(lipsanonStatEventsForRunTransition(
+      run({ lipsana: ['conscription-notice', 'training-linens'] }),
+      run({ phase: 'shop', lipsana: ['conscription-notice', 'training-linens'] }),
     )).toEqual([
       {
         eventId: 'battle-win:run-1:0',
-        relicId: 'conscription-notice',
+        lipsanonId: 'conscription-notice',
         kind: 'battle-win',
       },
       {
         eventId: 'battle-win:run-1:0',
-        relicId: 'training-linens',
+        lipsanonId: 'training-linens',
         kind: 'battle-win',
       },
     ]);
   });
 
   it('does not infer history across different Runs or ordinary same-phase updates', () => {
-    expect(relicStatEventsForRunTransition(
+    expect(lipsanonStatEventsForRunTransition(
       run(),
-      run({ id: 'run-2', relics: ['conscription-notice'] }),
+      run({ id: 'run-2', lipsana: ['conscription-notice'] }),
     )).toEqual([]);
-    expect(relicStatEventsForRunTransition(
-      run({ relics: ['conscription-notice'] }),
-      run({ goldTenths: 20, relics: ['conscription-notice'] }),
+    expect(lipsanonStatEventsForRunTransition(
+      run({ lipsana: ['conscription-notice'] }),
+      run({ goldTenths: 20, lipsana: ['conscription-notice'] }),
     )).toEqual([]);
   });
 });

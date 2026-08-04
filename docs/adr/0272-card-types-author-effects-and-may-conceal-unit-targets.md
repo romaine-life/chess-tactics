@@ -59,7 +59,7 @@ affect the same layer of a card.**
   count, and reveal timing. The initial simple form under consideration is:
   **“Tactical — One unit on this card is Positioned.”**
 - A card is not retroactively Tactical merely because a unit acquires
-  Positioned from a relic or another external source. Tactical means the card's
+  Positioned from a lipsanon or another external source. Tactical means the card's
   own rule introduced the enhancement.
 - Tactical may openly identify its affected unit or explicitly conceal that
   target until purchase. For a concealed target, the seeded target is chosen

@@ -1,28 +1,28 @@
 import { useState, type ReactElement } from 'react';
-import { RUN_RELIC_BY_ID, takeVacantiaRelic, type RunDocument, type RunRelicId } from '../run/model';
-import { RunRelicIcon } from './RunRelics';
+import { LIPSANON_BY_ID, takeVacantiaLipsanon, type RunDocument, type LipsanonId } from '../run/model';
+import { LipsanonIcon } from './Lipsana';
 import { RunWorkspace } from './RunWorkspace';
 import { HouseSelect } from './shared/HouseSelect';
 import { Tooltip } from './shared/InfoTip';
-import { installedRelicMatUrl } from './runRelicMat';
+import { installedLipsanonMatUrl } from './runLipsanonMat';
 import { runUnitRosterLabel } from './RunArmyWorkspace';
 import { workspaceBackgroundArtwork } from './workspaceBackgrounds';
 
 /**
- * Bona Vacantia — goods with no owner. The screen that opens a Conflict: three relics laid
+ * Bona Vacantia — goods with no owner. The screen that opens a Conflict: three lipsana laid
  * out, one taken, and the shop behind it opens as a result.
  *
- * The relics are shown raw on the mat, at their installed size, with no card and no effect
+ * The lipsana are shown raw on the mat, at their installed size, with no card and no effect
  * text; the name and effect arrive on hover through the shared Tooltip, the same trigger
- * the held-relic strip uses. The reading is the art.
+ * the held-lipsanon strip uses. The reading is the art.
  *
  * Taking is mandatory and there is no confirm step: choosing is the whole screen, and the
  * choice is what advances the Run.
  */
 
-/** Relics that cannot be granted blind — they need a unit named before they mean anything. */
-function relicTargetRequired(relic: RunRelicId): boolean {
-  return relic === 'conscription-notice';
+/** Lipsana that cannot be granted blind — they need a unit named before they mean anything. */
+function lipsanonTargetRequired(lipsanon: LipsanonId): boolean {
+  return lipsanon === 'conscription-notice';
 }
 
 export function RunBonaVacantia({
@@ -34,10 +34,10 @@ export function RunBonaVacantia({
 }): ReactElement | null {
   const vacantia = run.vacantia;
   const [target, setTarget] = useState('');
-  const mat = installedRelicMatUrl();
+  const mat = installedLipsanonMatUrl();
   if (!vacantia) return null;
 
-  const needsTarget = vacantia.offers.some(relicTargetRequired);
+  const needsTarget = vacantia.offers.some(lipsanonTargetRequired);
 
   return (
     <RunWorkspace
@@ -62,34 +62,34 @@ export function RunBonaVacantia({
         />
       ) : null}
 
-      <div className="relic-mat-stage" data-cards="on" data-testid="run-vacantia-mat">
-        <div className="relic-mat-layer">
-          {mat ? <img className="relic-mat-art" src={mat} alt="" draggable={false} /> : null}
-          <div className="relic-mat-cards" data-testid="run-vacantia-offers">
-            {vacantia.offers.map((relicId) => {
-              const relic = RUN_RELIC_BY_ID[relicId];
-              const blocked = relicTargetRequired(relicId) && !target;
+      <div className="lipsanon-mat-stage" data-cards="on" data-testid="run-vacantia-mat">
+        <div className="lipsanon-mat-layer">
+          {mat ? <img className="lipsanon-mat-art" src={mat} alt="" draggable={false} /> : null}
+          <div className="lipsanon-mat-cards" data-testid="run-vacantia-offers">
+            {vacantia.offers.map((lipsanonId) => {
+              const lipsanon = LIPSANON_BY_ID[lipsanonId];
+              const blocked = lipsanonTargetRequired(lipsanonId) && !target;
               return (
                 <Tooltip
-                  className="relic-mat-offer"
-                  key={relicId}
-                  label={`${relic.name}. ${relic.description}`}
+                  className="lipsanon-mat-offer"
+                  key={lipsanonId}
+                  label={`${lipsanon.name}. ${lipsanon.description}`}
                   popupMaxInlineSize={288}
-                  title={relic.name}
+                  title={lipsanon.name}
                   trigger={
                     <button
                       type="button"
                       className="run-vacantia-take"
-                      data-relic-id={relicId}
+                      data-lipsanon-id={lipsanonId}
                       disabled={blocked}
-                      aria-label={`Take ${relic.name}`}
-                      onClick={() => replace(takeVacantiaRelic(run, relicId, target || undefined))}
+                      aria-label={`Take ${lipsanon.name}`}
+                      onClick={() => replace(takeVacantiaLipsanon(run, lipsanonId, target || undefined))}
                     >
-                      <RunRelicIcon relicId={relicId} />
+                      <LipsanonIcon lipsanonId={lipsanonId} />
                     </button>
                   }
                 >
-                  <span>{relic.description}</span>
+                  <span>{lipsanon.description}</span>
                 </Tooltip>
               );
             })}

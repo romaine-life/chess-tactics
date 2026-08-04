@@ -73,7 +73,7 @@ describe('Skirmish chrome hierarchy', () => {
 
   it('registers every level-specific title-bar status box as inner chrome', () => {
     const titleStart = skirmish.indexOf('titleBarContent={runDeployment ? runDeployment.titleBarContent : playableSurfaceReady ? (');
-    const titleEnd = skirmish.indexOf('relicIds={', titleStart);
+    const titleEnd = skirmish.indexOf('lipsanonIds={', titleStart);
     const titleContent = titleStart >= 0 && titleEnd > titleStart ? skirmish.slice(titleStart, titleEnd) : '';
     expect(titleContent.match(/<TitleBarStatus\b/g)).toHaveLength(3);
     expect(titleContent).not.toMatch(/<div\b[^>]*skirmish-status-chip/);
