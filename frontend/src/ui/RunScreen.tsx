@@ -7,6 +7,7 @@ import { InnerChromeBox, ShellViewportSwap } from './shared/ChromeBox';
 import { HouseSelect } from './shared/HouseSelect';
 import { TitleBarStatus } from './shell/TitleBarControls';
 import { TitleBarSlot } from './shell/TitleBarSlot';
+import { TitleRoute, type TitleRouteSegment } from './shell/TitleRoute';
 import { RunIdentityChip, RunTitleBarMeasures } from './RunTitleBarChips';
 import { PLAY_RUN_SELECTOR_HREF } from './playHubRoute';
 import {
@@ -113,7 +114,7 @@ import {
   type RunCardFlightRect,
 } from './runCardFlightView';
 import { Strategikon } from './Strategikon';
-import { isStrategikonPath, strategikonRouteLabels } from './strategikonRoute';
+import { isStrategikonPath, strategikonRouteCrumbs } from './strategikonRoute';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 import { PredrawnMoveHighlightPaint } from '../render/PredrawnMoveHighlightPaint';
 import type { SkirmishBoardSurfaceState } from '../render/SkirmishBoard';
@@ -168,13 +169,26 @@ function runPhaseRouteName(run: RunDocument): string {
         : `${run.phase.charAt(0).toUpperCase()}${run.phase.slice(1)}`;
 }
 
-export function runTitleBarRouteName(run: RunDocument, path: string): string {
-  const segments = [runPhaseRouteName(run)];
-  if (isStrategikonPath(path)) segments.push(...strategikonRouteLabels(path));
-  return segments.join(' › ');
+export function runTitleBarRouteSegments(
+  run: RunDocument,
+  path: string,
+  search = '',
+): readonly TitleRouteSegment[] {
+  const segments: TitleRouteSegment[] = [{ label: runPhaseRouteName(run), to: `/run${search}` }];
+  if (isStrategikonPath(path)) {
+    segments.push(...strategikonRouteCrumbs(path).map((crumb) => ({
+      ...crumb,
+      to: `${crumb.to}${search}`,
+    })));
+  }
+  return segments;
 }
 
-function RunTitleBarStatus({ run, path }: { run: RunDocument; path: string }): ReactElement {
+function RunTitleBarStatus({ run, path, search }: {
+  run: RunDocument;
+  path: string;
+  search: string;
+}): ReactElement {
   const progress = runBattleProgress(run);
   const levelName = run.war.battles[run.battleIndex]?.level.name ?? 'Battle';
   return (
@@ -182,7 +196,9 @@ function RunTitleBarStatus({ run, path }: { run: RunDocument; path: string }): R
       {/* The phase is the durable Run position; an open Strategikon appends the exact
           visible workspace address — Sectio › Strategikon › Enchiridion › Cards —
           rather than leaving the covered phase as the last word in the route. */}
-      <TitleBarSlot region="route">{runTitleBarRouteName(run, path)}</TitleBarSlot>
+      <TitleBarSlot region="route">
+        <TitleRoute segments={runTitleBarRouteSegments(run, path, search)} />
+      </TitleBarSlot>
       <div className="skirmish-topbar-status run-topbar-status">
         <RunIdentityChip
           warName={run.war.name}
@@ -606,11 +622,13 @@ function useRunDeploymentPresentation({
   view,
   onNavigate,
   path,
+  search,
 }: {
   run: RunDocument;
   view: RunScreenView;
   onNavigate: (view: RunScreenView) => void;
   path: string;
+  search: string;
 }): RunDeploymentPresentation | null {
   const replace = useActiveRun((state) => state.replace);
   const level = run.war.battles[run.battleIndex].level;
@@ -650,7 +668,7 @@ function useRunDeploymentPresentation({
   if (run.phase !== 'deployment') return null;
   return {
     surfaceState: deploymentSurfaceState,
-    titleBarContent: <RunTitleBarStatus run={prepared} path={path} />,
+    titleBarContent: <RunTitleBarStatus run={prepared} path={path} search={search} />,
     lipsanonIds: prepared.lipsana,
     screenClassName: `run-screen run-deployment-screen${visibleLipsanonCount(prepared) ? ' has-lipsana' : ''}`,
     boardClassName: 'run-deployment-board',
@@ -1184,7 +1202,13 @@ function RunBattlefieldPanel({
   const replace = useActiveRun((state) => state.replace);
   const currentRun = useActiveRun((state) => state.run);
   const { abandonDialog, requestAbandon } = useRunAbandon(run);
-  const deploymentPresentation = useRunDeploymentPresentation({ run, view, onNavigate, path: routePath });
+  const deploymentPresentation = useRunDeploymentPresentation({
+    run,
+    view,
+    onNavigate,
+    path: routePath,
+    search: routeSearch,
+  });
   const baseLevel = run.war.battles[run.battleIndex].level;
   // Battle-runtime writes (including Restart) do not change deployment. Keep the
   // projected board document referentially stable across those persistence updates,
@@ -1206,8 +1230,8 @@ function RunBattlefieldPanel({
   const lipsanonIds = run.lipsana;
   const canCashOutPawn = hasLipsanon(run, 'mercenary-boat');
   const titleBarContent = useMemo(
-    () => <RunTitleBarStatus run={run} path={routePath} />,
-    [routePath, run],
+    () => <RunTitleBarStatus run={run} path={routePath} search={routeSearch} />,
+    [routePath, routeSearch, run],
   );
 
   const transformCommittedBoard = useCallback<RunBattleTransformSink>((game, _events) => {
@@ -1372,7 +1396,7 @@ export function RunScreen({
   // Deployment, Sectio, and Victory all open it from the same Controls title mark. Only an
   // absent Run has nothing to reference, so that is the sole address the screen repairs.
   useEffect(() => {
-    if (hydrated && routePath.startsWith('/run/strategikon/') && !run) {
+    if (hydrated && isStrategikonPath(routePath) && !run) {
       navigateApp(`/run${routeSearch}`, { replace: true, scroll: false });
     }
   }, [hydrated, routePath, routeSearch, run]);
@@ -1643,7 +1667,9 @@ export function RunScreen({
             || bonaTarget
           ) ? ' has-lipsana' : ''}`}
           testId="run-screen"
-          titleBarContent={shellRun ? <RunTitleBarStatus run={shellRun} path={routePath} /> : null}
+          titleBarContent={shellRun ? (
+            <RunTitleBarStatus run={shellRun} path={routePath} search={routeSearch} />
+          ) : null}
           persistentViewportArtwork={persistentSectioScene}
           lipsanonIds={shellRun
             ? bonaTarget

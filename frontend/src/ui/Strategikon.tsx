@@ -56,7 +56,7 @@ export function Strategikon({
   const { base, section, reference } = strategikonAddress(path);
   const [filters, setFilters] = useState<RunArmyFilters>({ ...DEFAULT_RUN_ARMY_FILTERS });
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
-  const href = (next: StrategikonSection, nextReference: EnchiridionSection = 'units'): string => (
+  const href = (next: StrategikonSection, nextReference: EnchiridionSection | null = null): string => (
     `${strategikonHref(base, next, nextReference)}${search}`
   );
   // The way out. The Controls title mark that opened the workspace is the only other
@@ -87,7 +87,7 @@ export function Strategikon({
               key={item.section}
               label={item.label}
               title={item.title}
-              to={href(item.section, item.section === 'enchiridion' ? reference : item.reference)}
+              to={href(item.section)}
               index={index}
               active={section === item.section}
               iconSrc={item.iconSrc}
@@ -111,7 +111,7 @@ export function Strategikon({
           testId: 'strategikon-back',
         }]}
       />
-      <StrategikonContentSceneSlot
+      {section ? <StrategikonContentSceneSlot
         className={`strategikon-pane${section === 'enchiridion' ? ' has-secondary-rail' : ''}`}
         sceneInstance={`strategikon/${section}`}
       >
@@ -121,7 +121,7 @@ export function Strategikon({
               section={reference}
               sectionHref={(next) => href('enchiridion', next)}
             />
-            <StrategikonReferenceSceneSlot
+            {reference ? <StrategikonReferenceSceneSlot
               className="strategikon-reference-pane"
               sceneInstance={`strategikon/enchiridion/${reference}`}
             >
@@ -134,7 +134,7 @@ export function Strategikon({
                 selectedCardId={null}
                 selectedCardTypeId={null}
               />
-            </StrategikonReferenceSceneSlot>
+            </StrategikonReferenceSceneSlot> : null}
           </>
         ) : section === 'prosopography' ? (
           run ? (
@@ -164,7 +164,7 @@ export function Strategikon({
         ) : (
           <UnavailableRunReference title="The Lipsanotheca" copy="Held lipsana appear here during a Run." />
         )}
-      </StrategikonContentSceneSlot>
+      </StrategikonContentSceneSlot> : null}
     </ShellWorkspace>
   );
 }

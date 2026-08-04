@@ -11,6 +11,7 @@ refined_by:
   - "[ADR-0389](0389-the-title-route-names-the-visible-strategikon-address.md)"
 partially_superseded_by:
   - "[ADR-0392](0392-sectio-is-the-run-disposal-and-acquisition-phase.md)'s `Run › Sectio` route vocabulary"
+  - "[ADR-0409](0409-the-title-route-is-a-clickable-breadcrumb.md)'s clickable breadcrumb interaction"
 ---
 
 # ADR-0366: A Run names its phase as route and its repeatable ideas as icons

@@ -45,7 +45,7 @@ describe('Run chrome hierarchy', () => {
     expect(skirmish).toContain('titleBarContent: ReactNode;');
     expect(skirmish).toContain('?? runBattle?.titleBarContent');
     expect(runScreen).toContain('titleBarContent,');
-    expect(runScreen).toContain('() => <RunTitleBarStatus run={run} path={routePath} />');
+    expect(runScreen).toContain('() => <RunTitleBarStatus run={run} path={routePath} search={routeSearch} />');
     expect(skirmish).toMatch(/function SkirmishSession\b[\s\S]*?return \(\s*<SkirmishShell/);
     expect(skirmish).toMatch(/export function Skirmish\b[\s\S]*?<SkirmishStoreProvider>/);
     expect(sharedShell).toContain('<SceneSurfaceReadiness');
@@ -180,7 +180,7 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('strategikonOpen={strategikonOpen}');
     expect(runScreen).toContain('className="strategikon-slot"');
     expect(runScreen).toContain('<Strategikon path={routePath} search={routeSearch} run={shellRun} />');
-    expect(runScreen).toContain("routePath.startsWith('/run/strategikon/') && !run");
+    expect(runScreen).toContain('isStrategikonPath(routePath) && !run');
     expect(runScreen).not.toContain("sceneSnapshot.phase !== 'battle'");
     expect(skirmishHud).toContain('<StrategikonTitleNavigation path={strategikonPath} search={strategikonSearch} />');
     expect(skirmishHud).toContain('titleActions={strategikonNavigation}');
@@ -308,13 +308,14 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('placeRevealedDeploymentUnit(prepared, level)');
     expect(runScreen).not.toContain('data-testid="begin-run-battle"');
     expect(runScreen).not.toContain('onBeginBattle');
-    // The phase is the title bar's first ROUTE segment (Run › Sectio), and an open
-    // Strategikon appends its exact section/reference address rather than hiding it.
-    expect(runScreen).toContain('<TitleBarSlot region="route">{runTitleBarRouteName(run, path)}</TitleBarSlot>');
-    expect(runScreen).toContain('if (isStrategikonPath(path)) segments.push(...strategikonRouteLabels(path));');
-    expect(runScreen).toContain('<RunTitleBarStatus run={shellRun} path={routePath} />');
-    expect(skirmish).toContain('...(strategikonOpen ? strategikonRouteLabels(routePath) : [])');
-    expect(skirmish).toContain('<TitleBarSlot region="route">{battleTitleRoute}</TitleBarSlot>');
+    // The phase is the title bar's first clickable ROUTE segment (Run › Sectio),
+    // and an open Strategikon appends its exact canonical section/reference links.
+    expect(runScreen).toContain('<TitleRoute segments={runTitleBarRouteSegments(run, path, search)} />');
+    expect(runScreen).toContain('strategikonRouteCrumbs(path).map');
+    expect(runScreen).toContain('<RunTitleBarStatus run={shellRun} path={routePath} search={routeSearch} />');
+    // Address-only Play breadcrumbs are App-owned, so they remain present even
+    // while the replaceable battlefield scene is not yet active.
+    expect(skirmish).not.toContain('<TitleBarSlot region="route">');
     expect(runScreen).toContain('levelName={isGeneratedRunBattleName(levelName) ? null : levelName}');
     expect(runScreen).not.toContain('run-deployment-workspace');
     expect(runScreen).not.toContain('<LevelPreviewColumn');
@@ -389,13 +390,19 @@ describe('Run chrome hierarchy', () => {
   });
 
   it('uses one divided Army ledger grid with readable metadata and value hierarchy', () => {
+    const ledgerBranch = runArmyWorkspace.slice(
+      runArmyWorkspace.indexOf('className="run-self-inspection-workspace run-army-workspace run-army-ledger"'),
+      runArmyWorkspace.indexOf('interface AlienatioRow'),
+    );
     expect(runArmyWorkspace).toContain('<DividedInnerChromeBox');
     expect(runArmyWorkspace).toContain('className="run-army-ledger-grid"');
     expect(runArmyWorkspace).toContain("columns={['var(--run-army-row-block-size, 158px)', 'minmax(0, 1fr)', '112px']}");
     expect(runArmyWorkspace).toContain('contentRef={ledgerRef}');
     expect(runArmyWorkspace).toContain('<ChromeDividedGridRow');
     expect(runArmyWorkspace).not.toContain('<ChromeDivider');
-    expect(runArmyWorkspace).not.toContain('<KitScroll');
+    // The ledger delegates its scrollbar to DividedInnerChromeBox. The sibling
+    // unit profile may use KitScroll directly for its own responsive body.
+    expect(ledgerBranch).not.toContain('<KitScroll');
     expect(runArmyWorkspace).not.toContain('data-chrome-unit="inner-list-row"');
     expect(runArmyWorkspace).not.toContain('data-chrome-frame-layout="overlay"');
     expect(runArmyWorkspace).not.toContain('ChromeFrameOverlay');

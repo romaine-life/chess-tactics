@@ -70,7 +70,7 @@ const DEST_HREF: Record<ShellDest, string> = {
   play: PLAY_SELECTOR_ROOT,
   editor: '/editor',
   lobbies: '/lobbies',
-  enchiridion: '/enchiridion/units',
+  enchiridion: '/enchiridion',
 };
 const DEST_LABEL: Record<ShellDest, string> = {
   settings: 'Settings',
@@ -107,6 +107,7 @@ export function MainMenu({
   // home route leaves it empty. The rail's zoom-safe placement (ADR-0062) is untouched — the
   // destination just occupies the previously-empty grid track to its right.
   const dest = shellDest(path);
+  const enchiridionSection = enchiridionSectionFromPath(path);
   // The menu is an ordinary scene now. Its body reveals on the director's final ladder
   // rung, gated by the boundary's painted contract — which already decodes every image
   // this subtree references, including the rail icons this screen used to decode itself.
@@ -163,7 +164,7 @@ export function MainMenu({
                   : dest === 'lobbies' ? <Lobbies embedded />
                   : dest === 'enchiridion' ? (
                       <Enchiridion
-                        section={enchiridionSectionFromPath(path)}
+                        section={enchiridionSection}
                         cardTypeTextureBatch={new URLSearchParams(search).get('cardTypeTextureBatch')}
                         selectedLipsanonId={enchiridionLipsanonFromPath(path)}
                         lipsanonHref={enchiridionLipsanonHref}

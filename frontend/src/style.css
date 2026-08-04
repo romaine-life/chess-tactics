@@ -7627,6 +7627,7 @@ body.loading-bootstrap .app-startup-status {
 
 @media (max-width: 560px) {
   .shell-workspace-body-content { gap: var(--ds-space-2); overflow-x: hidden; overflow-y: auto; }
+  .strategikon-workspace .shell-workspace-body-content { overflow: hidden; }
   .le-events-head { align-items: stretch; flex-direction: column; gap: var(--ds-space-2); }
   .le-events-head-actions { justify-content: stretch; }
   .le-events-tabs { flex: 1 1 auto; max-width: none; }
@@ -17475,11 +17476,16 @@ button.tileset-relationship-cell {
   text-transform: uppercase;
 }
 
-/* The screen-name line reads as a route when a screen names its own position in it
-   (Run › Sectio). The trailing segment is a portal the screen fills; while it is empty
-   the line is exactly the plain screen name it has always been, chevron and all
-   spacing included. Orientation copy, never a control (ADR-0300). */
+/* The screen-name line is the compact clickable title route (Run › Sectio). The
+   App owns its base segment and a portal accepts canonical descendant segments;
+   these are frameless game-navigation buttons, not control-lane actions (ADR-0409). */
 .brand-lockup-screen-line {
+  align-items: baseline;
+  display: flex;
+  min-width: 0;
+}
+
+.brand-lockup-route {
   align-items: baseline;
   display: flex;
   min-width: 0;
@@ -17494,6 +17500,46 @@ button.tileset-relationship-cell {
   content: "\203A";
   margin-inline: .5em .5em;
   opacity: .75;
+}
+
+.title-route-segments {
+  align-items: baseline;
+  display: flex;
+  min-width: 0;
+}
+
+.title-route-separator {
+  color: #79d3ff;
+  margin-inline: .5em;
+  opacity: .75;
+}
+
+.title-route-button {
+  appearance: none;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  color: inherit;
+  cursor: pointer;
+  display: inline;
+  font: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+  min-block-size: 0;
+  min-inline-size: 0;
+  padding: 0;
+  text-align: inherit;
+  text-shadow: inherit;
+  text-transform: inherit;
+  white-space: nowrap;
+}
+
+.title-route-button:is(:hover, :focus-visible) {
+  color: #fff;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
 }
 
 .settings-tab span,
@@ -21441,6 +21487,16 @@ button.tileset-relationship-cell {
   overflow: hidden;
 }
 
+.run-army-profile-scroll {
+  block-size: 100%;
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
+.run-army-profile-scroll > .kit-scroll-content {
+  box-sizing: border-box;
+}
+
 .run-panel-unframed {
   box-sizing: border-box;
   min-block-size: 0;
@@ -21455,7 +21511,7 @@ button.tileset-relationship-cell {
   display: grid;
   gap: var(--ds-gutter);
   grid-template-columns: minmax(260px, 36%) minmax(0, 1fr);
-  min-block-size: 0;
+  min-block-size: 100%;
   overflow: visible;
 }
 
@@ -21772,9 +21828,19 @@ button.tileset-relationship-cell {
   display: grid;
   gap: var(--ds-stack);
   min-block-size: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding-inline-end: 4px;
+}
+
+/* Every Enchiridion body scrolls through ADR-0030's one drawn scrollbar.
+   The five reference lists used to be native overflow owners, which exposed
+   platform scrollbars in both the standalone Enchiridion and the Strategikon. */
+.enchiridion-reference-scroll {
+  block-size: 100%;
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
+.enchiridion-reference-scroll > .kit-scroll-content {
+  box-sizing: border-box;
 }
 
 .enchiridion-unit-grid {
@@ -21931,8 +21997,18 @@ button.tileset-relationship-cell {
 }
 
 .enchiridion-lipsanon-browse-panel {
+  block-size: 100%;
   min-block-size: 0;
   overflow: hidden;
+}
+
+.enchiridion-lipsanon-scroll {
+  block-size: 100%;
+  min-block-size: 0;
+}
+
+.enchiridion-lipsanon-scroll > .kit-scroll-content {
+  box-sizing: border-box;
 }
 
 .enchiridion-lipsanon-rows,
@@ -21947,10 +22023,7 @@ button.tileset-relationship-cell {
 }
 
 .enchiridion-lipsanon-rows {
-  block-size: 100%;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding-inline-end: 4px;
+  overflow: visible;
 }
 
 .enchiridion-lipsanon-row {
@@ -21981,9 +22054,7 @@ button.tileset-relationship-cell {
 
 .enchiridion-lipsanon-group {
   block-size: auto;
-  max-block-size: 100%;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden;
   padding: var(--ds-inset);
 }
 
@@ -22187,15 +22258,12 @@ button.tileset-relationship-cell {
 
 .enchiridion-card-type-rows {
   align-content: start;
-  block-size: 100%;
   display: grid;
   gap: var(--ds-space-2);
   list-style: none;
   margin: 0;
   min-block-size: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding: 0 4px 0 0;
+  padding: 0;
 }
 
 .enchiridion-card-type-row {
@@ -22517,18 +22585,16 @@ button.tileset-relationship-cell {
   }
 
   .enchiridion-lipsanon-layout {
-    grid-template-rows: auto auto;
-    overflow-x: hidden;
-    overflow-y: auto;
-    padding-inline-end: 4px;
+    grid-template-rows: minmax(0, 1fr) auto;
+    overflow: hidden;
   }
 
   .enchiridion-lipsanon-browser {
-    align-self: start;
+    align-self: stretch;
   }
 
   .enchiridion-lipsanon-browse-panel {
-    overflow: visible;
+    overflow: hidden;
   }
 
   .enchiridion-lipsanon-rows,
@@ -22568,8 +22634,6 @@ button.tileset-relationship-cell {
 
   .run-army-profile-body {
     grid-template-columns: minmax(0, 1fr);
-    overflow-x: hidden;
-    overflow-y: auto;
   }
 
   .run-army-profile-scene {

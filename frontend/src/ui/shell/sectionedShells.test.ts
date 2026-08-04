@@ -53,7 +53,7 @@ const FAMILIES: ReadonlyArray<{
     sections: {
       play: address('/play/select/skirmish'),
       settings: address('/settings/general'),
-      enchiridion: address('/enchiridion/units'),
+      enchiridion: address('/enchiridion'),
       'campaign-editor': address('/editor'),
       lobbies: address('/lobbies'),
       party: address('/party'),
@@ -117,7 +117,7 @@ const FAMILIES: ReadonlyArray<{
     shell: 'strategikon',
     region: 'strategikon-shell',
     sections: {
-      enchiridion: address('/run/strategikon/enchiridion/units', '', runSource),
+      enchiridion: address('/run/strategikon/enchiridion', '', runSource),
       prosopography: address('/run/strategikon/prosopography', '', runSource),
       chartulary: address('/run/strategikon/chartulary', '', runSource),
       lipsanotheca: address('/run/strategikon/lipsanotheca', '', runSource),
@@ -230,8 +230,28 @@ describe('sectioned shells', () => {
     expect(new Set(keys).size).toBe(1);
 
     // Battle-hosted too, where the layer key is the gameplay root itself.
-    const battle = ['/play/strategikon/enchiridion/units', '/play/strategikon/prosopography', '/play']
+    const battle = ['/play/strategikon', '/play/strategikon/enchiridion', '/play/strategikon/enchiridion/units', '/play/strategikon/prosopography', '/play']
       .map((path) => sceneLayerKey(sceneManifest(path)));
     expect(new Set(battle).size).toBe(1);
+  });
+
+  it('models bare reference ancestors as retained shells with empty content slots', () => {
+    expect(sceneManifest('/enchiridion').instances.map((entry) => entry.definition.id)).toEqual([
+      'main-menu',
+      'enchiridion',
+    ]);
+    expect(sceneManifest('/run/strategikon', '', runSource).instances.map((entry) => entry.definition.id)).toEqual([
+      'run',
+      'run/phase',
+      'run/workspace',
+      'strategikon',
+    ]);
+    expect(sceneManifest('/run/strategikon/enchiridion', '', runSource).instances.map((entry) => entry.definition.id)).toEqual([
+      'run',
+      'run/phase',
+      'run/workspace',
+      'strategikon',
+      'strategikon/enchiridion',
+    ]);
   });
 });

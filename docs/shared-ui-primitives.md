@@ -36,6 +36,11 @@ search for before constructing a control or repeated surface.
 - `ui/shared/BoardViewFraming.tsx` — canonical contained read-only board framing.
   `FramedReadOnlyBoardView` owns pannable/zoomable `ViewPane` interaction and
   opening camera policy; `StaticReadOnlyBoardView` owns non-interactive stacks.
+- `ui/KitScroll.tsx` — the only application scrollbar renderer. It hides the
+  native scrollbar and owns the always-present drawn rail plus overflow-only
+  thumb required by ADR-0030. Every Enchiridion reference body and every
+  Strategikon destination that scrolls consumes this primitive; section lists
+  must not become native `overflow: auto` owners.
 
 ## Studio and workflow compositions
 
@@ -57,7 +62,13 @@ search for before constructing a control or repeated surface.
   transfer target.
 - `ui/strategikonRoute.ts` and `ui/enchiridionRoute.ts` — the canonical address
   parsers and exported section-label inventories shared by scene identity, rails,
-  title shortcuts, and the complete gameplay title route.
+  title shortcuts, and the complete standalone and gameplay title routes. Both
+  parsers preserve an explicitly empty shell root rather than manufacturing Units
+  as a default child (ADR-0411).
+- `ui/shell/TitleRoute.tsx` — the canonical frameless title breadcrumb; it renders
+  parsed destinations as `NavButton` segments inside the App-owned route line.
+  Address-derived segments come directly from `titleBarConfig`, while the route portal
+  is reserved for live document state such as the Run phase (ADR-0410).
 - `ui/LevelInfoCompact.tsx` — the canonical derived Level ledger for board
   facts, authored and setup-event forces, zones, rules, and time control.
 - `ui/RunIconPairReview.tsx` — the embedded Studio Card Icon Fitting Viewer;

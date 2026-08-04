@@ -50,6 +50,20 @@ test('surface guard permits grouped reliquary triggers to remain unframed', () =
   );
 });
 
+test('surface guard permits the shared title breadcrumb to remain unframed', () => {
+  assert.deepEqual(
+    collectCssSurfaceRules(`
+      .title-route-button {
+        background: none;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+      }
+    `),
+    [],
+  );
+});
+
 test('surface guard detects inline React surface fabrication', () => {
   assert.deepEqual(collectInlineSurfaceStyles('<div style={{ display: "grid" }} />'), []);
   const entries = collectInlineSurfaceStyles('<div style={{ backgroundColor: "#123", border: "1px solid red" }} />');

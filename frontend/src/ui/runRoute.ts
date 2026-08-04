@@ -6,15 +6,20 @@ import { isRunCraftLinkPath } from '../run/craft';
 import { normalizeRoutePath } from './navigation';
 
 export const RUN_ROOT = '/run';
+export const RUN_STRATEGIKON_ROOT = '/run/strategikon';
 export const RUN_STRATEGIKON_PREFIX = '/run/strategikon/';
 
 /** Every address that presents the Run screen: the Run itself, its Strategikon workspace, and a
  * craft link, which crafts and then lands on the Run (ADR-0354). */
 export function isRunRoutePath(pathname: string): boolean {
   const path = normalizeRoutePath(pathname);
-  return path === RUN_ROOT || path.startsWith(RUN_STRATEGIKON_PREFIX) || isRunCraftLinkPath(path);
+  return path === RUN_ROOT
+    || path === RUN_STRATEGIKON_ROOT
+    || path.startsWith(RUN_STRATEGIKON_PREFIX)
+    || isRunCraftLinkPath(path);
 }
 
 export function isRunStrategikonPath(pathname: string): boolean {
-  return normalizeRoutePath(pathname).startsWith(RUN_STRATEGIKON_PREFIX);
+  const path = normalizeRoutePath(pathname);
+  return path === RUN_STRATEGIKON_ROOT || path.startsWith(RUN_STRATEGIKON_PREFIX);
 }
