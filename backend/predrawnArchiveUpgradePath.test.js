@@ -418,7 +418,7 @@ test('the exact sparse numeric legacy history upgrades through migration 50', ()
   );
   assert.deepEqual(
     plan.pending.map((entry) => entry.version),
-    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52],
+    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53],
     'the bridge must fill the historical gap before applying every post-36 contract',
   );
   assert.throws(
@@ -952,13 +952,13 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
 
   const primaryUpgradeProof = sourceSection(
     smokeSource,
-    'async function validatePrimarySparseNumericMigrationUpgrade52()',
+    'async function validatePrimarySparseNumericMigrationUpgrade53()',
     '\nasync function validateEditorMigration16Preservation()',
   );
   assert.match(
     primaryUpgradeProof,
-    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*52\s*\}/,
-    'the production upgrade proof must require a complete 1-52 history',
+    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*53\s*\}/,
+    'the production upgrade proof must require a complete 1-53 history',
   );
   assert.match(
     primaryUpgradeProof,
@@ -972,8 +972,8 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   );
   assert.match(
     primaryUpgradeProof,
-    /length:\s*16[\s\S]*index\s*\+\s*37/,
-    'the production report must include every post-36 migration through 52',
+    /length:\s*17[\s\S]*index\s*\+\s*37/,
+    'the production report must include every post-36 migration through 53',
   );
   assert.match(
     primaryUpgradeProof,
