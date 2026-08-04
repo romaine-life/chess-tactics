@@ -2812,7 +2812,26 @@ const MIGRATIONS = [
     // Minted craft links are rewritten instead, because a link is a durable address the
     // owner holds and its spec is data this migration can canonicalize exactly.
     sql: `
-      ALTER TABLE media_versions DROP CONSTRAINT IF EXISTS media_versions_slot_fkey;
+      -- media_versions' slot FK was created inline, so its name is whatever Postgres
+      -- generated. Guessing it and passing IF EXISTS would drop nothing on a mismatch and
+      -- then fail the UPDATE against a constraint still standing, so it is looked up.
+      DO $$
+      DECLARE constraint_name text;
+      BEGIN
+        SELECT conname INTO constraint_name
+          FROM pg_constraint
+         WHERE conrelid = 'media_versions'::regclass
+           AND confrelid = 'media_slots'::regclass
+           AND contype = 'f'
+           AND conkey = ARRAY[(
+                 SELECT attnum FROM pg_attribute
+                  WHERE attrelid = 'media_versions'::regclass AND attname = 'slot'
+               )]::smallint[];
+        IF constraint_name IS NULL THEN
+          RAISE EXCEPTION 'media_versions has no single-column slot foreign key to drop';
+        END IF;
+        EXECUTE format('ALTER TABLE media_versions DROP CONSTRAINT %I', constraint_name);
+      END $$;
       ALTER TABLE media_slots DROP CONSTRAINT IF EXISTS media_slots_active_version_fk;
 
       UPDATE media_slots
