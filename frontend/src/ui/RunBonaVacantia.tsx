@@ -4,7 +4,9 @@ import { RunRelicIcon } from './RunRelics';
 import { RunWorkspace } from './RunWorkspace';
 import { HouseSelect } from './shared/HouseSelect';
 import { Tooltip } from './shared/InfoTip';
-import { installedRelicMatUrl } from './runRelicMat';
+import { installedRelicMatUrl, relicFloatClock } from './runRelicMat';
+import { relicStripLandingPoint } from './runRelicFlight';
+import { useRelicFlight } from './runRelicFlightView';
 import { runUnitRosterLabel } from './RunArmyWorkspace';
 import { workspaceBackgroundArtwork } from './workspaceBackgrounds';
 
@@ -17,7 +19,8 @@ import { workspaceBackgroundArtwork } from './workspaceBackgrounds';
  * the held-relic strip uses. The reading is the art.
  *
  * Taking is mandatory and there is no confirm step: choosing is the whole screen, and the
- * choice is what advances the Run.
+ * choice is what advances the Run. The take is committed when the relic LANDS in the
+ * held-relic strip — commit first and the workspace it is flying out of is already gone.
  */
 
 /** Relics that cannot be granted blind — they need a unit named before they mean anything. */
@@ -34,10 +37,28 @@ export function RunBonaVacantia({
 }): ReactElement | null {
   const vacantia = run.vacantia;
   const [target, setTarget] = useState('');
+  // Latched, not derived from the flight: the flight ends when the relic lands, and the mat
+  // must not un-take itself in the beat before the shop replaces it. Choosing is final.
+  const [departed, setDeparted] = useState<RunRelicId | null>(null);
   const mat = installedRelicMatUrl();
+  const { launch, element } = useRelicFlight((relicId) => {
+    replace(takeVacantiaRelic(run, relicId, target || undefined));
+  });
+
   if (!vacantia) return null;
 
   const needsTarget = vacantia.offers.some(relicTargetRequired);
+  const heldRelicCount = run.relics.filter((relicId) => Boolean(RUN_RELIC_BY_ID[relicId])).length;
+
+  function take(relicId: RunRelicId, icon: Element | null): void {
+    if (departed) return;
+    setDeparted(relicId);
+    // Nothing measurable to fly between means nothing to show — take the relic outright
+    // rather than stalling the screen on its own presentation.
+    if (!launch(relicId, icon, relicStripLandingPoint(heldRelicCount))) {
+      replace(takeVacantiaRelic(run, relicId, target || undefined));
+    }
+  }
 
   return (
     <RunWorkspace
@@ -65,17 +86,27 @@ export function RunBonaVacantia({
       <div className="relic-mat-stage" data-cards="on" data-testid="run-vacantia-mat">
         <div className="relic-mat-layer">
           {mat ? <img className="relic-mat-art" src={mat} alt="" draggable={false} /> : null}
-          <div className="relic-mat-cards" data-testid="run-vacantia-offers">
-            {vacantia.offers.map((relicId) => {
+          <div
+            className="relic-mat-cards"
+            data-testid="run-vacantia-offers"
+            data-taking={departed ? '' : undefined}
+          >
+            {vacantia.offers.map((relicId, index) => {
               const relic = RUN_RELIC_BY_ID[relicId];
               const blocked = relicTargetRequired(relicId) && !target;
+              const flying = departed === relicId;
               return (
                 <Tooltip
-                  className="relic-mat-offer"
+                  className={`relic-mat-offer${flying ? ' is-flying' : ''}`}
                   key={relicId}
                   label={`${relic.name}. ${relic.description}`}
                   popupMaxInlineSize={288}
                   title={relic.name}
+                  // The mat is emptying; a name still floating over it belongs to nothing.
+                  suppressed={Boolean(departed)}
+                  // Each relic breathes on its own clock. One shared clock makes three
+                  // objects lying loose on a table read as a single animated strip.
+                  style={relicFloatClock(index)}
                   trigger={
                     <button
                       type="button"
@@ -83,7 +114,7 @@ export function RunBonaVacantia({
                       data-relic-id={relicId}
                       disabled={blocked}
                       aria-label={`Take ${relic.name}`}
-                      onClick={() => replace(takeVacantiaRelic(run, relicId, target || undefined))}
+                      onClick={(event) => take(relicId, event.currentTarget.querySelector('.run-relic-icon'))}
                     >
                       <RunRelicIcon relicId={relicId} />
                     </button>
@@ -96,6 +127,8 @@ export function RunBonaVacantia({
           </div>
         </div>
       </div>
+
+      {element}
     </RunWorkspace>
   );
 }

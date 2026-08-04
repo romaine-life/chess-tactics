@@ -62,7 +62,9 @@ describe('tooltip chrome', () => {
     // The definitions describe the trigger too — a keyboard reader hears what a
     // sighted reader was just handed.
     expect(infoTip).toContain('const describedBy = [id, ...entries.map((entry) => `${id}-${entry.id}`)].join(\' \');');
-    expect(infoTip).toContain('aria-describedby={focusable && pos ? describedBy : undefined}');
+    // `!suppressed` belongs in the same condition: a held-closed tip renders no panes, so
+    // describing the trigger by their ids would point a screen reader at nothing.
+    expect(infoTip).toContain('aria-describedby={focusable && pos && !suppressed ? describedBy : undefined}');
   });
 
   it('stacks the tip and its definitions as one column, not as scattered popups', () => {

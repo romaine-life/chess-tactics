@@ -5,8 +5,21 @@ import { RunRelicIcon } from './RunRelics';
 import { Tooltip } from './shared/InfoTip';
 import { StudioCatalogCard } from './studio/StudioCatalogCard';
 import { StudioStepper } from './studio/StudioStepper';
-import { SliderRow } from './dressing/SliderRow';
+import { SliderRow, ctlReset } from './dressing/SliderRow';
+import { ChoiceGroup } from './shared/ChoiceGroup';
+import { Toggle } from './shared/Toggle';
+import { slotPoint, useRelicFlight } from './runRelicFlightView';
 import { ChromeButton } from './shared/ChromeButton';
+import {
+  RELIC_FLOAT_COMMITTED_PERIOD,
+  RELIC_FLOAT_COMMITTED_RISE,
+  RELIC_FLOAT_COMMITTED_TIMING,
+  RELIC_FLOAT_STEPPED_TIMING,
+  RELIC_GLOW_COMMITTED,
+  RELIC_RECEDE_COMMITTED,
+  RELIC_TRAY_STROKE_COMMITTED,
+  relicFloatClock,
+} from './runRelicMat';
 
 /**
  * Candidate MATS -- the surface the Run's relic offers are laid out on at the head of a
@@ -133,24 +146,116 @@ export function findRelicMat(items: readonly RelicMatCandidate[], id: string): R
  * `cards` is off for the catalog thumbnails, where 64px icons would be illegible anyway
  * and the only question is which mat to open.
  */
+export interface RelicMotionTuning {
+  /** How far the bob rises, in whole pixels. */
+  rise: number;
+  /** The base cycle every offer's own clock scales from, in seconds. */
+  period: number;
+  /** Interpolate the bob's stops (a smooth float) or hold each one (a pixel-art bob). */
+  stepped: boolean;
+  /** Multiplier on the emanation's radius and opacity. 0 puts the light out. */
+  glow: number;
+  /** The one-pixel stroke that seats the tray on the table, in whole pixels. */
+  trayStroke: number;
+  /** How much of the untaken relics' exit is a shrink. 0 collapses them to a point. */
+  recede: number;
+  /** Which emphases a hovered relic gets. They compose; any combination is legal. */
+  hover: RelicHoverEmphasis;
+}
+
+/**
+ * Emphasis can come from adding light to the relic being considered or from taking it away
+ * from everything else, and those read very differently — so none of these is a mode. They
+ * are independent, and the combination the owner settles on becomes the committed one.
+ */
+export interface RelicHoverEmphasis {
+  /** The emanation opens past the steady level a settled relic already holds. */
+  flare: boolean;
+  /** A contact shadow beneath, so the scale reads as picked up rather than drawn bigger. */
+  lift: boolean;
+  /** The silhouette stroke turns from near-black to warm gold. */
+  rim: boolean;
+  /** The tray and the other offers recede instead. */
+  focus: boolean;
+}
+
+export const RELIC_HOVER_EMPHASES: readonly { key: keyof RelicHoverEmphasis; label: string; note: string }[] = [
+  { key: 'flare', label: 'Flare', note: 'the light opens up past its settled level' },
+  { key: 'lift', label: 'Lift shadow', note: 'a contact shadow beneath — picked up, not just bigger' },
+  { key: 'rim', label: 'Gold rim', note: 'the silhouette stroke catches the light' },
+  { key: 'focus', label: 'Focus', note: 'the tray and the other two recede instead' },
+];
+
+export const RELIC_MOTION_COMMITTED: RelicMotionTuning = {
+  rise: RELIC_FLOAT_COMMITTED_RISE,
+  period: RELIC_FLOAT_COMMITTED_PERIOD,
+  stepped: false,
+  glow: RELIC_GLOW_COMMITTED,
+  trayStroke: RELIC_TRAY_STROKE_COMMITTED,
+  recede: RELIC_RECEDE_COMMITTED,
+  // Nothing extra ships yet: hovering settles, brightens and enlarges, and that is all until
+  // an emphasis is chosen here.
+  hover: { flare: false, lift: false, rim: false, focus: false },
+};
+
+/** The tuned motion as the custom properties style.css reads. */
+export function relicMotionStyle(motion: RelicMotionTuning): CSSProperties {
+  return {
+    '--relic-float-rise': `${motion.rise}px`,
+    '--relic-float-period': `${motion.period}s`,
+    '--relic-float-timing': motion.stepped ? RELIC_FLOAT_STEPPED_TIMING : RELIC_FLOAT_COMMITTED_TIMING,
+    '--relic-glow': `${motion.glow}`,
+    '--relic-tray-stroke-width': `${motion.trayStroke}px`,
+    '--relic-recede-scale': `${motion.recede}`,
+  } as CSSProperties;
+}
+
+/** The enabled emphases as the flags style.css keys its hover rules off. */
+export function relicHoverAttributes(hover: RelicHoverEmphasis): Record<string, string> {
+  const flags: Record<string, string> = {};
+  for (const { key } of RELIC_HOVER_EMPHASES) {
+    if (hover[key]) flags[`data-hover-${key}`] = '';
+  }
+  return flags;
+}
+
 export function RelicMatStage({
   candidate,
   backdrop,
   cards = true,
   scale,
+  motion,
+  taken,
+  flying,
+  onTake,
 }: {
   candidate: RelicMatCandidate;
   backdrop: string;
   cards?: boolean;
   scale?: number;
+  motion?: RelicMotionTuning;
+  /** Relics already sent to the corner. Absent means the stage is not interactive. */
+  taken?: readonly RunRelicId[];
+  /** The relic currently travelling, so the mat lets go of it as it leaves. */
+  flying?: RunRelicId | null;
+  onTake?: (relicId: RunRelicId, icon: Element | null, landing: Element | null) => void;
 }): ReactElement {
+  const landingSlot = useRef<HTMLSpanElement | null>(null);
+  const gone = new Set([...(taken ?? []), ...(flying ? [flying] : [])]);
+  // Sticky, like the game's: the mat does not put the other relics back once one has been
+  // chosen. Reset is what lays them out again.
+  const taking = gone.size > 0;
   return (
     <div
       className="relic-mat-stage"
       data-mat={candidate.mat}
       data-generator={candidate.generator}
       data-cards={cards ? 'on' : 'off'}
-      style={scale === undefined ? undefined : { '--relic-mat-scale-tuned': scale } as CSSProperties}
+      style={{
+        ...(scale === undefined ? null : { '--relic-mat-scale-tuned': scale } as CSSProperties),
+        ...(motion ? relicMotionStyle(motion) : null),
+      }}
+      {...(motion ? relicHoverAttributes(motion.hover) : null)}
     >
       {backdrop ? <img className="relic-mat-backdrop" src={backdrop} alt="" draggable={false} /> : null}
       <div className="relic-mat-layer">
@@ -158,17 +263,36 @@ export function RelicMatStage({
             row's intrinsic sizing, and the layer grows to the raster instead of the cards. */}
         <img className="relic-mat-art" src={candidate.version.media!.url} alt="" draggable={false} />
         {cards ? (
-          <div className="relic-mat-cards" data-testid="relic-mat-offers">
-            {REVIEW_RELICS.map((relicId) => {
+          <div className="relic-mat-cards" data-testid="relic-mat-offers" data-taking={taking ? '' : undefined}>
+            {REVIEW_RELICS.map((relicId, index) => {
               const relic = RUN_RELIC_BY_ID[relicId];
+              const flown = gone.has(relicId);
               return (
                 <Tooltip
-                  className="relic-mat-offer"
+                  className={`relic-mat-offer${flown ? ' is-flying' : ''}`}
                   key={relicId}
                   label={`${relic.name}. ${relic.description}`}
                   popupMaxInlineSize={288}
                   title={relic.name}
-                  trigger={<RunRelicIcon relicId={relicId} />}
+                  suppressed={taking}
+                  // The same per-offer clock the game lays down, so the tuner is judging
+                  // the composition the player sees and not three synchronised copies.
+                  style={relicFloatClock(index)}
+                  trigger={onTake ? (
+                    <button
+                      type="button"
+                      className="run-vacantia-take"
+                      data-relic-id={relicId}
+                      aria-label={`Send ${relic.name} to the corner`}
+                      onClick={(event) => onTake(
+                        relicId,
+                        event.currentTarget.querySelector('.run-relic-icon'),
+                        landingSlot.current,
+                      )}
+                    >
+                      <RunRelicIcon relicId={relicId} />
+                    </button>
+                  ) : <RunRelicIcon relicId={relicId} />}
                 >
                   <span>{relic.description}</span>
                 </Tooltip>
@@ -177,6 +301,33 @@ export function RelicMatStage({
           </div>
         ) : null}
       </div>
+      {/* Where a clicked relic goes. The game's destination is the held-relic strip in the
+          screen's top-left, so this stands in the same corner and keeps the travel honest.
+          The trailing empty slot is what the flight is aimed at — measuring the real box
+          beats recomputing the geometry, and it is correct the moment the row reflows. */}
+      {taken ? (
+        <div className="relic-mat-landing" data-testid="relic-mat-landing" aria-label="Relics sent to the corner">
+          {taken.map((relicId) => {
+            const relic = RUN_RELIC_BY_ID[relicId];
+            // The strip's own classes, not a lookalike: a landed relic has to behave the way
+            // a held one does, or the corner stops being a preview of where it went.
+            return (
+              <Tooltip
+                className="relic-mat-landing-slot run-relic-inventory-item"
+                key={relicId}
+                triggerClassName="run-relic-inventory-trigger"
+                popupMaxInlineSize={288}
+                label={`${relic.name}. ${relic.description}`}
+                title={relic.name}
+                trigger={<RunRelicIcon relicId={relicId} />}
+              >
+                <span>{relic.description}</span>
+              </Tooltip>
+            );
+          })}
+          <span className="relic-mat-landing-slot" ref={landingSlot} aria-hidden="true" />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -304,10 +455,12 @@ function useTunedMatMeasurement(
 function TunedScaleExport({
   candidate,
   measured,
+  motion,
   scale,
 }: {
   candidate: RelicMatCandidate | null;
   measured: TunedMatMeasurement | null;
+  motion: RelicMotionTuning;
   scale: number;
 }): ReactElement | null {
   const [copied, setCopied] = useState(false);
@@ -357,6 +510,15 @@ export function RelicMatViewer({
   const found = id ? findRelicMat(items, id) : null;
   const empty = 'No candidate selected — pick a card in the Relic Mat catalog.';
   const [scale, setScale] = useState(RELIC_MAT_COMMITTED_SCALE);
+  const [motion, setMotion] = useState<RelicMotionTuning>(RELIC_MOTION_COMMITTED);
+  // Clicking a relic plays the real take: the same travel, to the same corner of the screen
+  // the game sends it to. Reset lays them back out so it can be watched again.
+  const [taken, setTaken] = useState<RunRelicId[]>([]);
+  const { flight, launch, element: flightElement } = useRelicFlight(
+    (relicId) => setTaken((current) => (current.includes(relicId) ? current : [...current, relicId])),
+  );
+  const tune = <Key extends keyof RelicMotionTuning>(key: Key, value: RelicMotionTuning[Key]): void =>
+    setMotion((current) => ({ ...current, [key]: value }));
   const stage = useRef<HTMLElement | null>(null);
   const measured = useTunedMatMeasurement(stage, scale, id);
   return (
@@ -365,9 +527,22 @@ export function RelicMatViewer({
         {!found ? <p className="al-lab-empty">{empty}</p> : (
           <div className="al-lab-stages">
             <figure ref={stage} className="al-stage relic-mat-figure" data-testid="relic-mat-stage" data-mat={found.mat} data-generator={found.generator}>
-              <RelicMatStage candidate={found} backdrop={backdrop} scale={scale} />
+              <RelicMatStage
+                candidate={found}
+                backdrop={backdrop}
+                scale={scale}
+                motion={motion}
+                taken={taken}
+                flying={flight?.relicId ?? null}
+                onTake={(relicId, icon, landing) => {
+                  if (!launch(relicId, icon, slotPoint(landing))) {
+                    setTaken((current) => (current.includes(relicId) ? current : [...current, relicId]));
+                  }
+                }}
+              />
               <figcaption>{found.matLabel} — {found.generatorLabel}</figcaption>
             </figure>
+            {flightElement}
           </div>
         )}
       </section>
@@ -382,6 +557,31 @@ export function RelicMatViewer({
               onChange={onSelect}
               options={items.map((item) => ({ id: item.id, label: `${item.matLabel} — ${item.generatorLabel}` }))}
               value={found?.id ?? ''}
+            />
+            {/* Clicking a relic on the stage plays its travel to the corner. This lays them
+                back out so it can be replayed without leaving the screen. */}
+            <label className="tileset-catalog-zoom">
+              <span>Take animation <strong data-testid="relic-mat-taken-count">{taken.length ? 'taken' : 'ready'}</strong> — click a relic on the mat</span>
+              <div className="pages-ctl-row">
+                <ChromeButton
+                  unit="inner-text-button"
+                  data-testid="relic-mat-reset-take"
+                  disabled={taken.length === 0}
+                  onClick={() => setTaken([])}
+                >
+                  Reset relics
+                </ChromeButton>
+              </div>
+            </label>
+            <SliderRow
+              label={<>Others vanish <strong data-testid="relic-recede-value">{motion.recede.toFixed(2)}×</strong> — 0 shrinks them to a point, 1 only fades them</>}
+              value={motion.recede}
+              set={(value) => tune('recede', value)}
+              min={0}
+              max={1}
+              step={0.01}
+              nudge={0.01}
+              dflt={RELIC_MOTION_COMMITTED.recede}
             />
             <SliderRow
               label={<>Mat scale <strong data-testid="relic-mat-scale-value">{scale.toFixed(2)}×</strong> the relic row</>}
@@ -398,7 +598,94 @@ export function RelicMatViewer({
                 ? `Mat ${measured.matWidth}×${measured.matHeight} over a ${measured.rowWidth}px relic row. Committed value is ${RELIC_MAT_COMMITTED_SCALE.toFixed(2)}× — the reset returns here.`
                 : `Committed value is ${RELIC_MAT_COMMITTED_SCALE.toFixed(2)}×.`}
             </p>
-            <TunedScaleExport candidate={found} measured={measured} scale={scale} />
+
+            {/* The relics' idle life. The stage above runs the SAME rules the game runs, so
+                what is tuned here is what ships once the value is committed to style.css. */}
+            <label className="tileset-catalog-zoom">
+              <span>Float</span>
+              <div className="pages-ctl-row">
+                <ChoiceGroup
+                  ariaLabel="Float character"
+                  value={motion.stepped ? 'stepped' : 'smooth'}
+                  options={[
+                    { value: 'smooth', label: 'Smooth', title: 'Interpolate between the bob’s stops' },
+                    { value: 'stepped', label: 'Pixel-stepped', title: 'Hold each whole-pixel stop' },
+                  ]}
+                  onChange={(value) => tune('stepped', value === 'stepped')}
+                />
+                {ctlReset(() => tune('stepped', RELIC_MOTION_COMMITTED.stepped))}
+              </div>
+            </label>
+            <SliderRow
+              label={<>Float rise <strong data-testid="relic-float-rise-value">{motion.rise}px</strong></>}
+              value={motion.rise}
+              set={(value) => tune('rise', Math.round(value))}
+              min={0}
+              max={14}
+              step={1}
+              nudge={1}
+              dflt={RELIC_MOTION_COMMITTED.rise}
+            />
+            <SliderRow
+              label={<>Float period <strong data-testid="relic-float-period-value">{motion.period.toFixed(1)}s</strong></>}
+              value={motion.period}
+              set={(value) => tune('period', value)}
+              min={0.8}
+              max={9}
+              step={0.1}
+              nudge={0.1}
+              dflt={RELIC_MOTION_COMMITTED.period}
+            />
+            <SliderRow
+              label={<>Glow <strong data-testid="relic-glow-value">{motion.glow.toFixed(2)}×</strong></>}
+              value={motion.glow}
+              set={(value) => tune('glow', value)}
+              min={0}
+              max={2.5}
+              step={0.05}
+              nudge={0.05}
+              dflt={RELIC_MOTION_COMMITTED.glow}
+            />
+            <SliderRow
+              label={<>Tray stroke <strong data-testid="relic-tray-stroke-value">{motion.trayStroke}px</strong></>}
+              value={motion.trayStroke}
+              set={(value) => tune('trayStroke', Math.round(value))}
+              min={0}
+              max={4}
+              step={1}
+              nudge={1}
+              dflt={RELIC_MOTION_COMMITTED.trayStroke}
+            />
+
+            {/* Emphasis on hover. Independent on purpose: adding light to the relic and
+                taking it away from everything else are different readings, and they can be
+                combined. Hover a relic on the stage to judge each one. */}
+            <label className="tileset-catalog-zoom">
+              <span>Hover emphasis</span>
+              <div className="pages-ctl-row">
+                {ctlReset(() => tune('hover', RELIC_MOTION_COMMITTED.hover))}
+              </div>
+            </label>
+            {RELIC_HOVER_EMPHASES.map(({ key, label, note }) => (
+              <label className="tileset-catalog-zoom" key={key}>
+                <span>{label} <em>— {note}</em></span>
+                <div className="pages-ctl-row">
+                  <Toggle
+                    label={`${label} on hover`}
+                    checked={motion.hover[key]}
+                    onChange={(checked) => tune('hover', { ...motion.hover, [key]: checked })}
+                  />
+                </div>
+              </label>
+            ))}
+
+            <p className="tileset-catalog-note" data-testid="relic-motion-readout">
+              {motion.stepped
+                ? `Pixel-stepped: 12 held stops per cycle, so the bob advances about every ${Math.round(motion.period * 1000 / 12)}ms and never lands off-pixel.`
+                : 'Smooth: the bob’s whole-pixel stops are interpolated, so it moves every frame and can sit between pixels.'}
+              {` Committed is ${RELIC_MOTION_COMMITTED.stepped ? 'pixel-stepped' : 'smooth'}, ${RELIC_MOTION_COMMITTED.rise}px over ${RELIC_MOTION_COMMITTED.period.toFixed(1)}s, glow ${RELIC_MOTION_COMMITTED.glow.toFixed(2)}× — every reset returns there.`}
+            </p>
+            <TunedScaleExport candidate={found} measured={measured} motion={motion} scale={scale} />
             {found ? (
               <dl className="al-meta">
                 <div><dt>Mat</dt><dd>{found.matLabel}</dd></div>
