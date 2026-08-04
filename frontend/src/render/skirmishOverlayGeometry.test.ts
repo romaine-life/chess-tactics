@@ -64,6 +64,16 @@ describe('Skirmish tactical overlay geometry', () => {
     expect(skirmishBoard).toContain('style={visualFootprintStyle as CSSProperties | undefined}');
   });
 
+  it('keeps battlefield modals outside the camera-transformed board world', () => {
+    const boardWorldEnd = skirmishBoard.indexOf('</ViewPane>');
+    const screenOverlay = skirmishBoard.indexOf('{boardOverlay}', boardWorldEnd);
+
+    expect(boardWorldEnd).toBeGreaterThanOrEqual(0);
+    expect(screenOverlay).toBeGreaterThan(boardWorldEnd);
+    expect(skirmishBoard).toContain('{!surfaceState ? <PremoveArrowLayer arrows={premoveChain} /> : null}');
+    expect(skirmishBoard).not.toContain('{surfaceState ? boardOverlay : <PremoveArrowLayer');
+  });
+
   it('clips Level Editor cell paint without changing its hit targets or logical grid marker', () => {
     const footprintHeading = css.indexOf('One presentation-only footprint gate');
     const visualClipRule = css.slice(

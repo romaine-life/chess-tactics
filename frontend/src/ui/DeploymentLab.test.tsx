@@ -21,6 +21,7 @@ import {
   placeAdlectedDeploymentUnit,
 } from '../run/deployment';
 import { PLAYABLE_PIECE_TYPES } from '../core/pieces';
+import { runCardDefinition } from '../run/model';
 
 function config(patch: Partial<DeploymentLabConfig> = {}): DeploymentLabConfig {
   return { ...readDeploymentLabRoute(''), ...patch };
@@ -76,6 +77,19 @@ describe('Deployment Lab', () => {
     expect(generated).toEqual({ seed: 4218, units: generateDeploymentLabCrew(4218) });
     expect(collision.seed).toBe(4219);
     expect(collision.units).toEqual(generateDeploymentLabCrew(4219));
+  });
+
+  it('turns every generated group into a canonical visible card, including Knights', () => {
+    for (let seed = 0; seed < 100; seed += 1) {
+      const generated = buildDeploymentLabFlowRun(config({
+        seed,
+        units: generateDeploymentLabCrew(seed),
+      }));
+      expect(generated.cards.every((card) => runCardDefinition(card.coreId))).toBe(true);
+      expect(generated.cards.filter((card) => card.unitIds.some((unitId) => (
+        generated.army.find((unit) => unit.id === unitId)?.type === 'knight'
+      ))).every((card) => card.coreId.includes('k'))).toBe(true);
+    }
   });
 
   it('shows best-fit fallback when obstacles consume the target row', () => {
