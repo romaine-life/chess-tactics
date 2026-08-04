@@ -2960,7 +2960,7 @@ const MIGRATIONS = [
   {
     version: 55,
     name: 'Sectio, Adlectio, and Alienatio name the Run exchange phase',
-    // ADR-0390/0391: this is one vocabulary migration, not a display alias. Durable Run
+    // ADR-0392/0393: this is one vocabulary migration, not a display alias. Durable Run
     // documents, minted craft specs, and the live-media graph all move in the same
     // transaction. Seed labels are code-owned deterministic inputs and intentionally do
     // not appear here: changing them would redeal an otherwise identical Run.

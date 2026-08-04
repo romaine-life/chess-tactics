@@ -19449,6 +19449,39 @@ button.tileset-relationship-cell {
   min-width: 0;
 }
 
+/* Ataraxia accumulates one rule per rung, so its title-bar tip spends the body on
+   that ladder rather than on ADR-0370's separate mechanic-definition panes. The
+   canonical carved marks shrink into a text-row seat; typed numerals keep the
+   same geometry while the live set is unavailable (ADR-0390/0391). */
+.run-ataraxia-tooltip-list {
+  display: grid;
+  gap: var(--ds-space-2);
+}
+
+.run-ataraxia-tooltip-rule {
+  align-items: start;
+  display: grid;
+  gap: var(--ds-space-2);
+  grid-template-columns: 14px minmax(0, 1fr);
+}
+
+.run-ataraxia-tooltip-rung {
+  align-items: center;
+  block-size: 14px;
+  display: inline-flex;
+  font: var(--ds-weight-strong) var(--ds-text-2xs)/1 var(--ds-font-display);
+  inline-size: 14px;
+  justify-content: center;
+  margin-block-start: var(--ds-space-1);
+}
+
+.run-ataraxia-tooltip-rung img {
+  block-size: 100%;
+  image-rendering: pixelated;
+  inline-size: 100%;
+  object-fit: contain;
+}
+
 
 .run-victory-summary > span + span::before {
   content: "·";

@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 const infoTip = readFileSync(new URL('./InfoTip.tsx', import.meta.url), 'utf8');
 const runtime = readFileSync(new URL('../chromeFamilyRuntime.ts', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../../style.css', import.meta.url), 'utf8');
+const runTitleBar = readFileSync(new URL('../RunTitleBarChips.tsx', import.meta.url), 'utf8');
 const CONSUMERS = ['Lipsana.tsx', 'RunArmyWorkspace.tsx', 'RunCardFace.tsx'];
 
 function rule(selector: string): string {
@@ -55,9 +56,10 @@ describe('tooltip chrome', () => {
   });
 
   it('defines the mechanics a tip names instead of leaving the reader to find them', () => {
-    // ADR-0370. Every tip resolves its own body through the one glossary, so a call
-    // site never has to remember to explain a keyword it just used.
-    expect(infoTip).toContain('readTooltipGlossary(children, title)');
+    // ADR-0370. Tips resolve their own body through the one glossary by default,
+    // so a call site never has to remember to explain a keyword it just used.
+    expect(infoTip).toContain('explainMechanics = true');
+    expect(infoTip).toContain('? readTooltipGlossary(children, title)');
     expect(infoTip).toContain('readTooltipGlossary(children, null)');
     // The definitions describe the trigger too — a keyboard reader hears what a
     // sighted reader was just handed.
@@ -65,6 +67,18 @@ describe('tooltip chrome', () => {
     // `!suppressed` belongs in the same condition: a held-closed tip renders no panes, so
     // describing the trigger by their ids would point a screen reader at nothing.
     expect(infoTip).toContain('aria-describedby={focusable && pos && !suppressed ? describedBy : undefined}');
+  });
+
+  it('gives the cumulative Ataraxia list the popup budget instead of glossary panes', () => {
+    // ADR-0390. Ataraxia is the one closed exception to the automatic glossary:
+    // its tooltip grows by one model-owned, canonically marked row per active rung.
+    expect(runTitleBar).toContain('ATARAXIA_TIERS.filter((activeTier) => activeTier <= tier)');
+    expect(runTitleBar).toContain('className="run-ataraxia-tooltip-rung is-art"');
+    expect(runTitleBar).toContain('{definition.effect}');
+    expect(runTitleBar).toContain('name="Ataraxia"');
+    expect(runTitleBar).toContain('explainMechanics={false}');
+    expect(rule('.run-ataraxia-tooltip-rule')).toContain('grid-template-columns: 14px minmax(0, 1fr)');
+    expect(rule('.run-ataraxia-tooltip-rung')).toContain('block-size: 14px');
   });
 
   it('stacks the tip and its definitions as one column, not as scattered popups', () => {

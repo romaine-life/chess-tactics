@@ -6,13 +6,13 @@ partially_supersedes:
   - "[ADR-0230](0230-run-shops-separate-buying-army-inspection-and-selling.md)'s buying and selling terminology"
   - "[ADR-0387](0387-bought-cards-travel-into-a-title-reachable-chartulary.md)'s purchase terminology"
   - "[ADR-0388](0388-remaining-shop-cards-settle-into-their-new-seats.md)'s purchase terminology"
-  - "[ADR-0390](0390-sectio-is-the-run-disposal-and-acquisition-phase.md)'s deferral of the operation names"
+  - "[ADR-0392](0392-sectio-is-the-run-disposal-and-acquisition-phase.md)'s deferral of the operation names"
 extends:
   - "[ADR-0374](0374-legatine-and-eutactic-retire-the-last-plain-run-vocabulary.md)"
-  - "[ADR-0390](0390-sectio-is-the-run-disposal-and-acquisition-phase.md)"
+  - "[ADR-0392](0392-sectio-is-the-run-disposal-and-acquisition-phase.md)"
 ---
 
-# ADR-0391: Adlectio and Alienatio are the movements within Sectio
+# ADR-0393: Adlectio and Alienatio are the movements within Sectio
 
 ## Context
 
@@ -66,4 +66,4 @@ without reducing the person to a modern shop button.
 - [Game concept](../game-concept.md)
 - [Persistence](../persistence.md)
 - [Migration policy](../migration-policy.md)
-- [ADR-0390](0390-sectio-is-the-run-disposal-and-acquisition-phase.md)
+- [ADR-0392](0392-sectio-is-the-run-disposal-and-acquisition-phase.md)

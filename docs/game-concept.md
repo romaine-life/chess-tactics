@@ -177,11 +177,12 @@ these.
   rules interlock, so it carries Adlected's three-gold price. Hieratic owns the
   dedicated steel-armor frame (ADR-0339, ADR-0345).
 - Run difficulty is **Ataraxia**. The first Run uses **Ataraxia 0 — The
-  Untroubled Mind**, whose literal impact is standard Run rules and no
-  Pestiferous Sectio cards; later Runs may opt into historically named
+  Untroubled Mind**, whose displayed impact is **Standard rules.**; later Runs may opt into historically named
   conditions. Completing the highest available tier unlocks exactly the next
   one, and the ladder stacks: selecting tier N applies every condition from 1
-  through N (ADR-0266, ADR-0268, ADR-0291).
+  through N. The title-bar tooltip names **Ataraxia** once, then lists every active
+  tier as a small carved numeral beside that tier's effect and adds no glossary
+  panes of its own (ADR-0266, ADR-0268, ADR-0291, ADR-0390, ADR-0391).
 - **Ataraxia I — The Great Mortality** initially targets Pestiferous status for
   roughly one in eight otherwise eligible Sectio draws. Pestiferous status is
   rolled with the rest of that affected offer, not added as another deck copy.
@@ -497,7 +498,7 @@ opening the normal Sectio transaction and retires the separate draft phase and
 screen. ADR-0322 supplies the current two-Pawn, 8-gold opening and card-native
 transaction feedback and sound. ADR-0323 removes the inherited one-card-per-Sectio
 cap so every affordable dealt card can undergo Adlectio once. ADR-0347 removes the
-remaining mandatory opening transaction, and ADR-0391 names the optional card
+remaining mandatory opening transaction, and ADR-0393 names the optional card
 admission **Adlectio** in every Sectio.
 
 ## 14. Administrator playtesting

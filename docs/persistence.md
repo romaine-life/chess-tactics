@@ -57,8 +57,8 @@ Each account migration advances the Run's CAS revision, while the browser applie
 to its local document on first load. Saves older than version 16 remain unavailable because their
 retired gameplay state has no declared lossless transform. See
 [ADR-0380](adr/0380-run-save-versions-always-migrate.md) and
-[ADR-0390](adr/0390-sectio-is-the-run-disposal-and-acquisition-phase.md) through
-[ADR-0391](adr/0391-adlectio-and-alienatio-are-the-movements-within-sectio.md).
+[ADR-0392](adr/0392-sectio-is-the-run-disposal-and-acquisition-phase.md) through
+[ADR-0393](adr/0393-adlectio-and-alienatio-are-the-movements-within-sectio.md).
 
 Beginning with RunSaveVersion 16, every version that reaches players has an explicit forward
 migration for account and browser storage. Retired content maps to a typed tombstone or neutral

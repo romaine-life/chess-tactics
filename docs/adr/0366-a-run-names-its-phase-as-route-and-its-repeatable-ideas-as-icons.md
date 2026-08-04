@@ -10,7 +10,7 @@ refines:
 refined_by:
   - "[ADR-0389](0389-the-title-route-names-the-visible-strategikon-address.md)"
 partially_superseded_by:
-  - "[ADR-0390](0390-sectio-is-the-run-disposal-and-acquisition-phase.md)'s `Run › Sectio` route vocabulary"
+  - "[ADR-0392](0392-sectio-is-the-run-disposal-and-acquisition-phase.md)'s `Run › Sectio` route vocabulary"
 ---
 
 # ADR-0366: A Run names its phase as route and its repeatable ideas as icons

@@ -3,7 +3,7 @@ status: accepted
 date: 2026-08-04
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
-  - "[ADR-0391](0391-adlectio-and-alienatio-are-the-movements-within-sectio.md)'s naming of the phase's two operations"
+  - "[ADR-0393](0393-adlectio-and-alienatio-are-the-movements-within-sectio.md)'s naming of the phase's two operations"
 partially_supersedes:
   - "[ADR-0230](0230-run-shops-separate-buying-army-inspection-and-selling.md)'s Shop terminology"
   - "[ADR-0321](0321-run-opening-is-the-normal-shop-and-draft-is-retired.md)'s Shop terminology and stored phase name"
@@ -17,7 +17,7 @@ extends:
   - "[ADR-0380](0380-run-save-versions-always-migrate.md)"
 ---
 
-# ADR-0390: Sectio is the Run disposal and acquisition phase
+# ADR-0392: Sectio is the Run disposal and acquisition phase
 
 ## Context
 

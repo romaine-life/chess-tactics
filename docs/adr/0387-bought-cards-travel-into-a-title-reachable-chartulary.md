@@ -15,8 +15,8 @@ refined_by:
   - "[ADR-0388](0388-remaining-shop-cards-settle-into-their-new-seats.md)"
   - "[ADR-0389](0389-the-title-route-names-the-visible-strategikon-address.md)"
 partially_superseded_by:
-  - "[ADR-0390](0390-sectio-is-the-run-disposal-and-acquisition-phase.md)'s replacement of the Shop terminology with Sectio"
-  - "[ADR-0391](0391-adlectio-and-alienatio-are-the-movements-within-sectio.md)'s replacement of purchase terminology with Adlectio"
+  - "[ADR-0392](0392-sectio-is-the-run-disposal-and-acquisition-phase.md)'s replacement of the Shop terminology with Sectio"
+  - "[ADR-0393](0393-adlectio-and-alienatio-are-the-movements-within-sectio.md)'s replacement of purchase terminology with Adlectio"
 ---
 
 # ADR-0387: Bought cards travel into a title-reachable Chartulary

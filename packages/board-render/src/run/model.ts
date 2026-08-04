@@ -71,7 +71,7 @@ export const ATARAXIA_BY_TIER: Readonly<Record<AtaraxiaTier, Readonly<{
     numeral: '0',
     label: 'Ataraxia 0',
     title: 'The Untroubled Mind',
-    effect: 'Standard Run rules. Sectio cards may be Legatine, Concinnous or Hieratic but are never Pestiferous.',
+    effect: 'Standard rules.',
   }),
   1: Object.freeze({
     tier: 1,

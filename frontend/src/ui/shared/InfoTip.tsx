@@ -207,6 +207,7 @@ export function Tooltip({
   popupClassName = '',
   triggerClassName = '',
   focusable = true,
+  explainMechanics = true,
   style,
   suppressed = false,
 }: {
@@ -219,6 +220,12 @@ export function Tooltip({
   popupClassName?: string;
   triggerClassName?: string;
   focusable?: boolean;
+  /**
+   * Resolve named Run mechanics into definition panes (ADR-0370). Ataraxia's
+   * cumulative rule list is the one closed exception: its own rows need the
+   * popup's vertical budget, and the Enchiridion remains the full reference.
+   */
+  explainMechanics?: boolean;
   /** Custom properties the trigger's own treatment reads. Not for surface paint. */
   style?: CSSProperties;
   /**
@@ -239,7 +246,11 @@ export function Tooltip({
     onMouseLeave,
     portalHost,
   } = useTooltipPosition<HTMLSpanElement>();
-  const { content, entries } = useMemo(() => readTooltipGlossary(children, title), [children, title]);
+  const { content, entries } = useMemo(() => (
+    explainMechanics
+      ? readTooltipGlossary(children, title)
+      : { content: children, entries: [] }
+  ), [children, explainMechanics, title]);
   // Every pane in the stack describes the trigger, so a keyboard reader hears the
   // definitions the sighted reader was just handed.
   const describedBy = [id, ...entries.map((entry) => `${id}-${entry.id}`)].join(' ');
