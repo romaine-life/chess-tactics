@@ -52,6 +52,7 @@ function publicTargetLabel(card: RunCardDefinition | RunCardOffer, adlected: boo
 // face content — `runCardFaceContent` is the only projection there is.
 export function RunCard({
   card,
+  identityCard,
   mode,
   cardType: ownedCardType = null,
   adlected = false,
@@ -61,6 +62,8 @@ export function RunCard({
   onSelect,
 }: {
   card: RunCardDefinition | RunCardOffer;
+  /** Stable authored card behind a transient contents projection, such as Deployment discard. */
+  identityCard?: RunCardDefinition | RunCardOffer;
   mode: 'sectio' | 'reference';
   /**
    * The property of a card that is no longer an offer — a card the Run HOLDS. An owned
@@ -75,16 +78,17 @@ export function RunCard({
   disabled?: boolean;
   onSelect?: (element: HTMLButtonElement) => void;
 }): ReactElement {
+  const identity = identityCard ?? card;
   const label = cardContentsLabel(card);
-  const name = runCardName(card);
+  const name = runCardName(identity);
   const frameSlot = runCardFrameSlot(card, ownedCardType);
-  const faceContent = runCardFaceContent(card, { adlected, cardType: ownedCardType });
+  const faceContent = runCardFaceContent(card, { adlected, cardType: ownedCardType, identity });
   const targetLabel = publicTargetLabel(card, adlected);
   const face = (
     <RunCardFace
       card={faceContent}
       frameUrl={liveMediaForSlot(frameSlot).media.immutableUrl}
-      artUrl={resolvedLiveMediaUrl(runCardArtSlot(card))}
+      artUrl={resolvedLiveMediaUrl(runCardArtSlot(identity))}
       frameGeometry={runCardFrameGeometryForSlot(frameSlot)}
       ariaHidden={mode !== 'reference'}
     />

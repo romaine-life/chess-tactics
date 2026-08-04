@@ -301,6 +301,7 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).not.toContain('KlerosisOverlay');
     expect(runDeploymentCardStack).toContain("document.querySelector<HTMLElement>('[data-run-card-flight-target]')");
     expect(runDeploymentCardStack).toContain('<RunCardBack');
+    expect(runDeploymentCardStack).toContain('identityCard={activeIdentity}');
     expect(runDeploymentCardStack).toContain('data-deployment-card-stage');
     expect(runDeploymentCardStack).not.toContain('Your deployment deal');
     expect(runDeploymentCardStack).not.toContain('These cards supply this combat');
@@ -374,8 +375,9 @@ describe('Run chrome hierarchy', () => {
 
   it('draws every card through the approved shared trading-card face', () => {
     expect(runCard).not.toContain('RunCardScene');
-    expect(runCard).toContain('runCardName(card)');
-    expect(runCard).toContain('runCardArtSlot(card)');
+    expect(runCard).toContain('const identity = identityCard ?? card');
+    expect(runCard).toContain('runCardName(identity)');
+    expect(runCard).toContain('runCardArtSlot(identity)');
     // Name, flavor, contents and cost all arrive already projected, so RunCard has no
     // reason to reach for the card's authored text itself.
     expect(runCard).not.toContain('runCardFlavor(');
@@ -385,7 +387,7 @@ describe('Run chrome hierarchy', () => {
     expect(runCard).toContain("from './runCardFaceContent'");
     // A held card's property (ADR-0371) reaches the face through the projection too,
     // rather than RunCard re-deriving a frame or a face from it.
-    expect(runCard).toContain('runCardFaceContent(card, { adlected, cardType: ownedCardType })');
+    expect(runCard).toContain('runCardFaceContent(card, { adlected, cardType: ownedCardType, identity })');
     expect(runCard).toContain('runCardFrameSlot(card, ownedCardType)');
     expect(runCard).not.toContain('RUN_CARD_PESTIFEROUS_FRAME_SLOT');
     expect(runCard).not.toContain('RUN_CARD_LEGATINE_FRAME_SLOT');
