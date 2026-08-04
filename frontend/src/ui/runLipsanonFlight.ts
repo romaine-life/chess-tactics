@@ -1,12 +1,11 @@
 /**
  * Where a lipsanon the player has just taken comes to rest.
  *
- * The held-lipsanon strip is the destination, but the slot the lipsanon lands in does not exist
- * until the take is committed — and the take is what ends this screen, so it cannot be
- * committed before the flight without swapping the workspace out from under it. The
- * landing place is therefore MEASURED rather than committed to: a hidden probe built from
- * the strip's own classes is laid out where the real strip lives, and the slot after the
- * last held lipsanon is read off it.
+ * The held-lipsanon strip is the destination, but the slot the lipsanon lands in may not exist
+ * yet: ordinary takes commit only after the flight, and targeted takes remain provisional
+ * until a unit is confirmed. The landing place is therefore MEASURED rather than derived
+ * from committed state: a hidden probe built from the strip's own classes is laid out where
+ * the real strip lives, and the slot after the last held lipsanon is read off it.
  *
  * Reading the position out of a probe rather than recomputing it in JS keeps one owner for
  * the strip's geometry: style.css positions the strip, and this only asks the browser where

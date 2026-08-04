@@ -3,7 +3,7 @@ import { readAdminBattleHref } from '../admin/battleRoute';
 import { type AdminBattleMode } from '../game/store';
 import { useSkirmish } from '../game/SkirmishStoreContext';
 import { authorizeAdminPlaytest } from '../net/adminPlaytest';
-import { acquireLipsanon, GOLD_SCALE, grantGold, PIECE_LABEL, LIPSANON_BY_ID, RUN_LIPSANA, type LipsanonId } from '../run/model';
+import { acquireLipsanon, GOLD_SCALE, grantGold, lipsanonNeedsUnitTarget, PIECE_LABEL, LIPSANON_BY_ID, RUN_LIPSANA, type LipsanonId } from '../run/model';
 import { useActiveRun } from '../run/store';
 import { navigateApp, readValidatedReturnTo } from './navigation';
 import { SettingsButton, SettingsRow, SettingsSection } from './shared/SettingsControls';
@@ -62,7 +62,7 @@ export function AdminControls({
     })) ?? []),
   ], [run?.army]);
   const selectedLipsanon = lipsanonId ? LIPSANON_BY_ID[lipsanonId] : null;
-  const needsLipsanonTarget = lipsanonId === 'conscription-notice';
+  const needsLipsanonTarget = lipsanonNeedsUnitTarget(lipsanonId);
 
   const armBattleAction = async (mode: AdminBattleMode): Promise<void> => {
     if (battleUnavailable || !battleHref) return;

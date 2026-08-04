@@ -1,5 +1,5 @@
 const RUN_LIPSANON_REGISTRY = [
-  { id: 'conscription-notice', name: 'Conscription Notice', description: 'Choose one army unit. It permanently gains Adlected.', flavorText: 'One name was underlined. No reason was entered.' },
+  { id: 'conscription-notice', name: 'Conscription Notice', description: 'Choose one army unit. It permanently gains Adlected.', flavorText: 'One name was underlined. No reason was entered.', unitTarget: true },
   { id: 'congressional-approval', name: 'Sealed Valuation', description: 'Gain 5 gold immediately.', flavorText: 'The vessels were weighed after the prayers had stopped.', immediate: true },
   { id: 'inspirational-record', name: 'Dawn Register', description: 'Before each Battle, one random persistent unit gains Adlected for that Battle.', flavorText: 'Before each departure, a different name was read.' },
   { id: 'training-linens', name: 'Field Linens', description: 'Your Pawns gain Eutactic.', flavorText: 'The sheets dried before the road did.' },
@@ -30,6 +30,12 @@ export interface LipsanonDefinition {
   flavorText: string;
   requires?: LipsanonId;
   immediate?: boolean;
+  /**
+   * The lipsanon cannot be granted blind: it needs one army unit named before it
+   * means anything. This belongs to the registry because the model, Bona Vacantia,
+   * paid Shop offer, and admin grant all need the same answer.
+   */
+  unitTarget?: boolean;
 }
 
 export const RUN_LIPSANA: readonly LipsanonDefinition[] = Object.freeze(RUN_LIPSANON_REGISTRY);
@@ -37,3 +43,12 @@ export const RUN_LIPSANA: readonly LipsanonDefinition[] = Object.freeze(RUN_LIPS
 export const LIPSANON_BY_ID: Readonly<Record<LipsanonId, LipsanonDefinition>> = Object.freeze(
   Object.fromEntries(RUN_LIPSANA.map((lipsanon) => [lipsanon.id, lipsanon])) as Record<LipsanonId, LipsanonDefinition>,
 );
+
+/**
+ * Whether taking this lipsanon requires naming one army unit first. Pickers use an
+ * empty string before anything is chosen, so the shared question accepts that value
+ * directly instead of making every caller guard it independently.
+ */
+export function lipsanonNeedsUnitTarget(lipsanon: string | null | undefined): boolean {
+  return Boolean(lipsanon && LIPSANON_BY_ID[lipsanon as LipsanonId]?.unitTarget);
+}

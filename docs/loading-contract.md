@@ -141,6 +141,24 @@ selection from `window.location`; only the director-mounted path selects the chi
 Local component state is reserved for interaction inside a committed scene rather
 than navigable region identity.
 
+Enrollment is a rendering capability, not only a manifest convention. For the Run,
+`RunSceneViewport` is the sole API that emits the viewport landmark, shell frame, and
+artwork layer, and it requires a typed scene contribution. Feature code may render
+ordinary React inside the granted content slot, but may not emit a competing Run
+viewport, portal around the authority, or choose a screen-sized child from local state.
+The discriminated workspace object in the committed `ScenePath` carries selected-unit
+and provisional Bona-target identity, so ledger/profile and mat/target replacement are
+director transitions. Build checks enforce the emitter boundary; manifest and live
+transition tests enforce its identity and lifecycle (ADR-0383).
+
+A visual that physically crosses from an outgoing scene owner to an incoming one
+uses the director's inert continuity layer. `SceneContinuityPortal` is the sole
+capability for that layer; it carries no interaction, state authority, viewport,
+or navigation. The outgoing owner keeps the landed visual there until its scene is
+retired, while the incoming scene paints its real owner beneath it. The handoff then
+occurs at one coordinate with no faded, duplicated, or blank frame. Feature portals
+outside this capability remain forbidden (ADR-0385).
+
 Authored transition does not imply Loading presentation. A `transition-only`
 destination still exits, mounts hidden, acknowledges paint, enters, and remains
 cancellable, but has no Loading copy or artificial loading minimum. A `loading`

@@ -62,6 +62,17 @@ these.
   strip stays at the upper-left beneath the title bar in Battles and between-Battle
   screens, independent of the Battle Controls panel; pointing at or focusing an
   icon immediately explains its name and complete effect (ADR-0216, ADR-0217).
+- A Conflict whose authored span still contains a loot Battle opens with **Bona
+  Vacantia** before its Shop. The mat presents three lipsana and no unrelated
+  unit selector. An ordinary choice commits when it lands in the held strip; a
+  choice that needs a named unit lands provisionally and opens the exact Martial
+  Prosopography ledger/profile, with the lipsanon and ability explanation in the
+  absent tab rail's column. Confirming a unit commits both facts and reveals the
+  Shop. Until then, **Return to the three offers** restores the untouched mat,
+  with no pending acquisition in the Run document. The target ledger and each
+  unit profile are addressable authored Run scenes rather than local screen state
+  (ADR-0368, ADR-0383). The landed lipsanon remains continuously visible while
+  scene ownership passes from the flight to the held strip (ADR-0385).
 - Run cards use a familiar trading-card anatomy: a
   title at upper left, one compact gold coin with a live positive whole-number cost
   at upper right, a large pane for the card's accepted PixelLab illustration, a narrow card-
@@ -107,8 +118,9 @@ these.
   unit ledger, not generated card-name permutations; an explicitly concealed
   Concinnous target appears there as hidden until purchase (ADR-0265, ADR-0271,
   ADR-0272, ADR-0305, ADR-0309).
-- A fresh Run opens in the normal Shop with the permanent King, two free Pawns,
-  8 gold, and three seeded card offers at distinct core values from 1 through 8.
+- After the opening Bona Vacantia choice, a fresh Run enters the normal Shop with
+  the permanent King, two free Pawns, 8 gold plus any immediate lipsanon payout,
+  and three seeded card offers at distinct core values from 1 through 8.
   Each card may be bought once while the player can afford it. Every bought card
   keeps the Shop open, shows a framed **Purchased** state beneath that card, and
   uses the same gold transaction cue as selling. Only the explicit

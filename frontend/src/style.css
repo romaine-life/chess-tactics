@@ -10042,6 +10042,15 @@ body { font-size: 17px; }
 
 /* ADR-0205: one application-owned scene transition. */
 .scene-director { min-height: 100%; }
+.scene-continuity-layer {
+  inset: 0;
+  pointer-events: none;
+  position: fixed;
+  z-index: 200;
+}
+.scene-continuity-layer > * {
+  pointer-events: none !important;
+}
 .scene-boundary {
   position: fixed;
   inset: 0;
@@ -19627,12 +19636,86 @@ button.tileset-relationship-cell {
 
 .run-vacantia-content {
   display: grid;
-  gap: var(--ds-stack);
+  grid-template-rows: minmax(0, 1fr);
   justify-items: start;
+  min-block-size: 0;
+  overflow: hidden;
 }
 
-.run-vacantia-lede {
-  margin: 0;
+/* The shared review instrument is deliberately 16:9, but the runtime scene is not:
+   it owns whatever aspect ratio remains beside Controls. Letting the stage derive its
+   block size from the wide viewport made it taller than that slot on ultrawide windows
+   and exposed the shell's native overflow bar. In the Run, the stage fits its owner. */
+.run-vacantia-content > .lipsanon-mat-stage {
+  aspect-ratio: auto;
+  block-size: 100%;
+  min-block-size: 0;
+}
+
+/* A targeted lipsanon replaces the mat with the same ledger/profile instrument used by
+   Martial Prosopography. The normal tab rail is absent, so its established column becomes
+   the decision brief instead of leaving the chooser without context. */
+.run-vacantia-target-content {
+  align-content: stretch;
+  gap: 0;
+  min-block-size: 0;
+  overflow: hidden;
+}
+
+.run-vacantia-target-layout {
+  block-size: 100%;
+  display: grid;
+  gap: var(--ds-gutter);
+  grid-template-columns: var(--main-menu-tab-column-w) minmax(0, 1fr);
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
+.run-vacantia-target-brief {
+  align-content: start;
+  display: grid;
+  gap: var(--ds-stack);
+  min-block-size: 0;
+  min-inline-size: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-inline-end: var(--ds-gutter);
+}
+
+.run-vacantia-target-brief h2 {
+  color: #eafaff;
+  font: var(--ds-weight-regular) var(--ds-text-xl)/1 var(--ds-font-display);
+}
+
+.run-vacantia-target-brief > p {
+  color: #d5e4ec;
+  font: var(--ds-weight-regular) var(--ds-text-md)/1.4 var(--ds-font-display);
+}
+
+.run-vacantia-target-ability {
+  display: grid;
+  gap: var(--ds-space-2);
+  padding: var(--ds-inset);
+}
+
+.run-vacantia-target-ability > strong {
+  color: #eafaff;
+  font: var(--ds-weight-regular) var(--ds-text-lg)/1 var(--ds-font-display);
+}
+
+.run-vacantia-target-ability > span {
+  color: var(--skirmish-muted);
+  font: var(--ds-weight-regular) var(--ds-text-md)/1.35 var(--ds-font-display);
+}
+
+.run-vacantia-target-instruction {
+  color: #fff5df !important;
+}
+
+.run-vacantia-target-layout > .run-army-workspace {
+  block-size: 100%;
+  min-block-size: 0;
+  min-inline-size: 0;
 }
 
 .lipsanon-mat-offer .run-lipsanon-icon img,
@@ -20974,6 +21057,24 @@ button.tileset-relationship-cell {
   padding-inline: var(--ds-inset);
 }
 
+.run-army-ledger-select {
+  align-items: center;
+  color: #fff5df;
+  display: flex;
+  font: var(--ds-weight-medium) var(--ds-text-md)/1 var(--ds-font-display);
+  gap: var(--ds-space-2);
+  justify-content: end;
+  letter-spacing: .06em;
+  min-inline-size: 112px;
+  padding-inline: var(--ds-inset);
+  text-transform: uppercase;
+}
+
+.run-army-ledger-select > span {
+  font-size: var(--ds-text-xl);
+  line-height: 1;
+}
+
 .run-army-ledger-empty {
   margin: 0;
   padding: var(--ds-gutter);
@@ -22042,6 +22143,25 @@ button.tileset-relationship-cell {
 }
 
 @media (max-width: 960px) {
+  .run-vacantia-target-content {
+    overflow-y: auto;
+  }
+
+  .run-vacantia-target-layout {
+    block-size: auto;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(560px, 1fr);
+  }
+
+  .run-vacantia-target-brief {
+    overflow: visible;
+    padding-inline-end: var(--ds-gutter);
+  }
+
+  .run-vacantia-target-layout > .run-army-workspace {
+    min-block-size: 560px;
+  }
+
   .run-army-profile-body {
     grid-template-columns: minmax(0, 1fr);
     overflow-x: hidden;

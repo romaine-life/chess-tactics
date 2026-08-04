@@ -41,12 +41,14 @@ import {
   prefetchRoute,
 } from './routePrefetch';
 import { SceneBoundary } from './shell/SceneBoundary';
+import { SceneContinuityHost } from './shell/SceneContinuity';
 import { initialSceneState, reduceScene } from './shell/sceneDirector';
 import {
   deepestSharedSceneRegion,
   isEmptySlotDestination,
   isEmptySlotOrigin,
   overlapsStateDrivenRunScene,
+  runSceneWorkspaceIdentity,
   sceneLayerKey,
   sceneManifest,
   sceneOverlapScope,
@@ -166,7 +168,9 @@ export function App(): ReactElement {
     loadingMark(destination.id, 'scene-source-accepted', {
       source: 'active-run',
       phase: destination.snapshot.kind === 'run' ? destination.snapshot.phase : null,
-      workspace: destination.snapshot.kind === 'run' ? destination.snapshot.workspace : null,
+      workspace: destination.snapshot.kind === 'run'
+        ? runSceneWorkspaceIdentity(destination.snapshot.workspace)
+        : null,
     });
     dispatchScene({
       type: 'navigate',
@@ -625,30 +629,32 @@ export function App(): ReactElement {
             revealTitle={startupController.revealed('chrome')}
             transitionStatus={titleBarLoading ? 'Loading…' : null}
           />
-          {sceneLayers.map((layer) => (
-            <SceneBoundary
-              key={layer.key}
-              manifest={layer.manifest}
-              generation={scene.generation}
-              preparing={layer.preparing}
-              preserveHost={layer.preserveHost}
-              transitionRegion={layer.transitionRegion}
-              mountedKey={layer.scene.leaf.key}
-              revealing={scene.phase === 'entering' && layer.visualRole !== 'outgoing'}
-              deactivating={transitioning && (
-                layer.visualRole === 'outgoing'
-                || (layer.visualRole === 'single' && scene.phase === 'exiting')
-              )}
-              visualRole={layer.visualRole}
-              overlapScope={layer.overlapScope}
-              onPainted={destinationPainted}
-              onFailed={destinationFailed}
-            >
-              <RouteLoadBoundary resetKey={layer.href}>
-                <Suspense fallback={null}>{renderScene(layer.scene, layer.search)}</Suspense>
-              </RouteLoadBoundary>
-            </SceneBoundary>
-          ))}
+          <SceneContinuityHost>
+            {sceneLayers.map((layer) => (
+              <SceneBoundary
+                key={layer.key}
+                manifest={layer.manifest}
+                generation={scene.generation}
+                preparing={layer.preparing}
+                preserveHost={layer.preserveHost}
+                transitionRegion={layer.transitionRegion}
+                mountedKey={layer.scene.leaf.key}
+                revealing={scene.phase === 'entering' && layer.visualRole !== 'outgoing'}
+                deactivating={transitioning && (
+                  layer.visualRole === 'outgoing'
+                  || (layer.visualRole === 'single' && scene.phase === 'exiting')
+                )}
+                visualRole={layer.visualRole}
+                overlapScope={layer.overlapScope}
+                onPainted={destinationPainted}
+                onFailed={destinationFailed}
+              >
+                <RouteLoadBoundary resetKey={layer.href}>
+                  <Suspense fallback={null}>{renderScene(layer.scene, layer.search)}</Suspense>
+                </RouteLoadBoundary>
+              </SceneBoundary>
+            ))}
+          </SceneContinuityHost>
         </StartupSceneContext.Provider>
         {!bootstrapPresentationPresent && showLoadingPresentation ? (
           <div className="scene-loading-presentation" role={scene.phase === 'error' ? 'alert' : 'status'}>

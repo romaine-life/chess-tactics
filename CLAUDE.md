@@ -223,6 +223,20 @@ and don't tell the user screenshots are impossible. Use the helper below.
    It fails on more than one exit per navigation, a lost canonicalization
    navigation, or an uncanonicalized final address — the double-fade bug class.
 
+   Run viewport/scene-authority changes additionally run the Run scene gate on a
+   Bona Vacantia craft link containing Conscription Notice:
+   ```
+   npm run verify:run-scenes -- '<bona-vacantia-craft-url>'
+   ```
+   It drives mat → target ledger, target ledger → profile, and ordinary Army
+   ledger → profile; each must execute one director preparation/entrance with a
+   changed committed identity. (Run's overlapping layers acknowledge exit in the
+   same commit, so the observable phases begin at `loading`.) It also fails if more
+   than one Run viewport contribution
+   is visible, a contribution escapes the authored Run slot, the target repeats
+   its lipsanon icon/phase prose, or unit rows do not identify themselves as
+   Select actions (ADR-0383).
+
    Board reveal / unit-entrance changes additionally run the live entrance gate,
    which records the real transition and reads its pixels:
    ```
