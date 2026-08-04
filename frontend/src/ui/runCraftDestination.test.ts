@@ -11,6 +11,10 @@ describe('where a craft link lands', () => {
     expect(craftDestination('?to=/run/strategikon/chartulary')).toBe('/run/strategikon/chartulary');
     expect(craftDestination('?to=/run/strategikon/enchiridion/cards&view=army'))
       .toBe('/run/strategikon/enchiridion/cards?view=army');
+    expect(craftDestination('?to=%2Frun%3Fview%3Dbattle-preview'))
+      .toBe('/run?view=battle-preview');
+    expect(craftDestination('?to=%2Frun%3Fview%3Dbattle-preview&run=expected'))
+      .toBe('/run?view=battle-preview&run=expected');
   });
 
   it('ignores a destination that would leave the crafted Run', () => {

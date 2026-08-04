@@ -83,6 +83,7 @@ import {
   type RunSellFilters,
 } from './RunArmyWorkspace';
 import { RunCard } from './RunCard';
+import { RunBattlePreview } from './RunBattlePreview';
 import { Strategikon } from './Strategikon';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 import { PredrawnMoveHighlightPaint } from '../render/PredrawnMoveHighlightPaint';
@@ -243,14 +244,24 @@ function RunMetaControls({
               {primaryLabel}
             </ChromeButton>
             {shop ? (
-              <ChromeButton unit="inner-text-button"
-                data-testid="run-view-sell"
-                className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === 'sell' && 'active')}
-                aria-pressed={view === 'sell'}
-                onClick={() => onNavigate('sell')}
-              >
-                Sell Units
-              </ChromeButton>
+              <>
+                <ChromeButton unit="inner-text-button"
+                  data-testid="run-view-battle-preview"
+                  className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === 'battle-preview' && 'active')}
+                  aria-pressed={view === 'battle-preview'}
+                  onClick={() => onNavigate('battle-preview')}
+                >
+                  View Battle
+                </ChromeButton>
+                <ChromeButton unit="inner-text-button"
+                  data-testid="run-view-sell"
+                  className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === 'sell' && 'active')}
+                  aria-pressed={view === 'sell'}
+                  onClick={() => onNavigate('sell')}
+                >
+                  Sell Units
+                </ChromeButton>
+              </>
             ) : null}
           </div>
         </div>
@@ -781,20 +792,16 @@ function ShopPanel({
   const replace = useActiveRun((state) => state.replace);
   const shop = run.shop!;
   const pestiferousLosses = run.pestiferousLosses.filter((loss) => loss.battleIndex === shop.afterBattleIndex);
-  // Painted on the workspace element so it reaches the shell padding; an inner
-  // layer stops at the scroller and leaves the old backdrop showing.
-  const shopScene = useInstalledShopScene();
   return (
     <>
-      {view === 'sell' ? sellWorkspace : (
+      {view === 'sell' ? sellWorkspace : view === 'battle-preview' ? <RunBattlePreview run={run} /> : (
         // The title bar already says Run › Shop, so a heading painted into the
         // scene's corner only repeats it. The name stays for assistive tech.
         <RunWorkspace
-          className={`run-shop-workspace${shopScene ? ' has-scene' : ''}`}
+          className="run-shop-workspace"
           contentClassName="run-shop-workspace-content"
           data-testid="run-shop-workspace"
           aria-label="Shop"
-          backgroundArtwork={shopScene}
         >
         {/* What the Battle paid is reported on the Battle's own aftermath screen, which the
             player has already passed through to reach this one. */}
@@ -1218,9 +1225,12 @@ export function RunScreen({
       filters={sellFilters}
       onFiltersChange={(filters) => setSellFilterState({ scope: filterScope, filters })}
       onSell={sellUnit}
-      backgroundArtwork={shopScene}
     />
   ) : null;
+  // The Shop scene belongs to the retained shell viewport, not to whichever Shop
+  // workspace happens to be in front of it. Keeping it outside the transition region
+  // prevents Shop/View Battle/Sell swaps from fading or remounting the room.
+  const persistentShopScene = shellRun?.phase === 'shop' ? shopScene : null;
   // A craft request speaks for the whole screen while it runs: the Run it is about to replace must
   // not flash its own phase first, and a refused spec has to say why instead of silently doing
   // nothing.
@@ -1343,6 +1353,7 @@ export function RunScreen({
           className={`run-screen${shellRun && visibleLipsanonCount(shellRun) ? ' has-lipsana' : ''}`}
           testId="run-screen"
           titleBarContent={shellRun ? <RunTitleBarStatus run={shellRun} /> : null}
+          persistentViewportArtwork={persistentShopScene}
           lipsanonIds={shellRun ? shellRun.lipsana : []}
           shellWorkspaceCoversLipsana={strategikonOpen || Boolean(inspectionWorkspace)}
           controlsContent={shellRun

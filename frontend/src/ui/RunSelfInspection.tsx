@@ -1,10 +1,12 @@
 
 export type RunSelfInspectionView = 'army' | 'lipsana';
-export type RunWorkspaceView = 'primary' | 'sell' | RunSelfInspectionView;
+export type RunWorkspaceView = 'primary' | 'sell' | 'battle-preview' | RunSelfInspectionView;
 
 export function runWorkspaceViewFromSearch(search: string): RunWorkspaceView {
   const view = new URLSearchParams(search).get('view');
-  return view === 'army' || view === 'lipsana' || view === 'sell' ? view : 'primary';
+  return view === 'army' || view === 'lipsana' || view === 'sell' || view === 'battle-preview'
+    ? view
+    : 'primary';
 }
 
 export function runWorkspaceHref(currentHref: string, view: RunWorkspaceView): string {

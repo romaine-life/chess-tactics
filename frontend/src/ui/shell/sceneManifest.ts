@@ -45,10 +45,10 @@ function runSceneSnapshot(
   const requestedView = new URLSearchParams(search).get('view');
   const requestedWorkspace: RunSceneWorkspace = isRunStrategikonPath(path)
     ? 'strategikon'
-    : requestedView === 'army' || requestedView === 'lipsana' || requestedView === 'sell'
+    : requestedView === 'army' || requestedView === 'lipsana' || requestedView === 'sell' || requestedView === 'battle-preview'
       ? requestedView
       : 'primary';
-  const workspace = requestedWorkspace === 'sell' && phase !== 'shop'
+  const workspace = (requestedWorkspace === 'sell' || requestedWorkspace === 'battle-preview') && phase !== 'shop'
     ? 'primary'
     : requestedWorkspace;
   return Object.freeze({

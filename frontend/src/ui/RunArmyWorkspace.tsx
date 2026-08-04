@@ -652,15 +652,11 @@ export function RunSellWorkspace({
   filters,
   onFiltersChange,
   onSell,
-  backgroundArtwork = null,
 }: {
   run: RunDocument;
   filters: RunSellFilters;
   onFiltersChange: (filters: RunSellFilters) => void;
   onSell: (unitId: string) => void;
-  /** Selling is a Shop activity, so it stands in the Shop's own scene when one is
-   *  installed rather than dropping back to the shared tiled surface. */
-  backgroundArtwork?: ReactNode;
 }): ReactElement {
   const rows = useMemo(() => {
     const byId = new Map(sellRows(run).map((row) => [row.unit.id, row]));
@@ -671,11 +667,10 @@ export function RunSellWorkspace({
 
   return (
     <RunWorkspace
-      className={`run-sell-workspace${backgroundArtwork ? ' has-scene' : ''}`}
+      className="run-sell-workspace"
       contentClassName="run-sell-workspace-content"
       data-testid="run-sell-workspace"
       aria-labelledby="run-sell-workspace-title"
-      backgroundArtwork={backgroundArtwork}
     >
       <h2 id="run-sell-workspace-title">Sell Units</h2>
       <p>Sales apply immediately. Reset Shop restores every transaction from this visit.</p>

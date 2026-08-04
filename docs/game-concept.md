@@ -232,11 +232,16 @@ these.
 - A non-final Run victory funds its shop from the authored enemy force: each
   King is worth 1 gold and every other enemy chess piece pays 50% of its
   standard value (ADR-0220).
-- Run shops separate buying, detailed army inspection, and a compact
-  decision-complete selling list into explicit main-pane destinations. The
-  persistent Controls panel navigates those destinations, resets the complete
-  same-offer shop visit, and continues the Run; Army inspection remains
-  available in every Run phase without pausing an active Battle (ADR-0230).
+- Run shops separate buying, upcoming-Battle reconnaissance, detailed army
+  inspection, and a compact decision-complete selling list into explicit
+  main-pane destinations. **View Battle** shows the next canonical Level in a
+  pannable read-only board beside its rules, zones, time control, and forces.
+  Fixed opponents appear on the map; known setup-event rosters appear in the
+  ledger without resolving their exact squares, and the persistent Run army
+  still waits for Deployment. The persistent Controls panel navigates these
+  destinations, resets the complete same-offer shop visit, and continues the
+  Run; Army inspection remains available in every Run phase without pausing an
+  active Battle (ADR-0230, ADR-0381).
 - **Enchiridion** is the player-facing reference for unit movement, terrain
   rules, the filterable core card deck, affected card types, all lipsana, and the
   behavior of the current unit abilities: Adlected, Eutactic, Agminate,

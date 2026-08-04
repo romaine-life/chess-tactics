@@ -16,7 +16,7 @@ describe('Skirmish world background ownership', () => {
       "className={runDeployment?.screenClassName ?? (screenPredrawnBackgroundActive ? 'is-predrawn-board' : '')}",
     );
     expect(skirmishSource).toContain(
-      'className={`skirmish-screen ${className}`.trim()}',
+      "className={`skirmish-screen${persistentViewportArtwork ? ' has-persistent-viewport-artwork' : ''} ${className}`.trim()}",
     );
     expect(styleCss).toMatch(
       /\.skirmish-screen\.is-predrawn-board::before\s*\{[\s\S]*?content:\s*none;/,

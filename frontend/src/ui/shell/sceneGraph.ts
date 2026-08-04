@@ -124,7 +124,7 @@ export interface ScenePath extends SceneManifest {
 }
 
 export type RunScenePhase = 'hydrating' | 'no-active' | RunPhase;
-export type RunSceneWorkspace = 'primary' | 'army' | 'lipsana' | 'sell' | 'strategikon';
+export type RunSceneWorkspace = 'primary' | 'army' | 'lipsana' | 'sell' | 'battle-preview' | 'strategikon';
 
 export interface RunSceneSnapshot {
   kind: 'run';
