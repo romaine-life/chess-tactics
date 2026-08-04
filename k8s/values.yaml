@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:5fe766eec36e14f3e907bf0a4948c9544b1313512aaf3f0452930ca304ae5220"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:2a9e7973c109d91a2147fc95903c78a1b304d05e86dde69a9a442b6e16e6dede"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Unbox Run conflict actions"
-  prNumber: "685"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/685"
-  commit: "ca1ebfb4"
+  prTitle: "Add Agminate pawn and bishop placement affinity"
+  prNumber: "686"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/686"
+  commit: "fb9a2b05"
 
 name: chess-tactics
 namespace: chess-tactics
