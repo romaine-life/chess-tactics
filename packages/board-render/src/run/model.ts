@@ -20,7 +20,7 @@ export {
 };
 
 /** The schema version of one persisted in-progress Run. Only this exact save shape is read. */
-export const CURRENT_RUN_SAVE_VERSION = 17;
+export const CURRENT_RUN_SAVE_VERSION = 18;
 export type RunSaveVersion = typeof CURRENT_RUN_SAVE_VERSION;
 
 export class UnsupportedRunSaveError extends Error {
@@ -31,6 +31,7 @@ export class UnsupportedRunSaveError extends Error {
 }
 
 const RUN_SAVE_VERSION_FIELD_RENAME_SOURCE = 16;
+const RUN_SAVE_VERSION_EXCHANGE_VOCABULARY_SOURCE = 17;
 export const GOLD_SCALE = 10;
 export const RUN_STARTING_GOLD = 8;
 export const RUN_STARTING_GOLD_TENTHS = RUN_STARTING_GOLD * GOLD_SCALE;
@@ -77,7 +78,7 @@ export const ATARAXIA_BY_TIER: Readonly<Record<AtaraxiaTier, Readonly<{
     numeral: 'I',
     label: 'Ataraxia I',
     title: 'The Great Mortality',
-    effect: `About one in eight shop cards is Pestiferous. Its marked ${CACOCHYMIC_DISPLAY_NAME} unit is lost after each victorious Battle, then another is marked.`,
+    effect: `About one in eight Sectio cards is Pestiferous. Its marked ${CACOCHYMIC_DISPLAY_NAME} unit is lost after each victorious Battle, then another is marked.`,
   }),
 });
 
@@ -90,8 +91,8 @@ export const ATARAXIA_TIERS: readonly AtaraxiaTier[] = Object.freeze(
   Array.from({ length: INSTALLED_ATARAXIA_MAX_TIER + 1 }, (_, tier) => tier as AtaraxiaTier),
 );
 
-export type PurchasablePieceType = 'pawn' | 'knight' | 'bishop' | 'rook' | 'queen';
-export type RunArmyPieceType = PurchasablePieceType | 'king';
+export type AdlectablePieceType = 'pawn' | 'knight' | 'bishop' | 'rook' | 'queen';
+export type RunArmyPieceType = AdlectablePieceType | 'king';
 export type RunAbility = 'adlected' | 'eutactic' | 'agminate';
 
 export const AGMINATE_DISPLAY_NAME = 'Agminate';
@@ -233,14 +234,14 @@ export interface RunArmyUnit {
   inspectionSeed: number;
   abilities: RunAbility[];
   modifiers: RunUnitModifier[];
-  source: 'king' | 'starting' | 'shop';
+  source: 'king' | 'starting' | 'adlectio';
 }
 
 export type RunArmyNumberState = Record<RunArmyPieceType, number>;
 
 export interface RunCoreCard {
   id: string;
-  pieces: PurchasablePieceType[];
+  pieces: AdlectablePieceType[];
   value: number;
 }
 
@@ -250,7 +251,7 @@ export interface RunCardOffer extends RunCoreCard {
   cardType: RunCardType | null;
   effectSeed: number;
   cacochymicPieceIndex: number | null;
-  /** Stored zero-based unit occurrence selected before a Concinnous purchase. */
+  /** Stored zero-based unit occurrence selected before a Concinnous Adlectio. */
   effectTargetIndex: number | null;
 }
 
@@ -300,16 +301,16 @@ export interface RunWarSnapshot {
 }
 
 /**
- * 'bona-vacantia' opens a Conflict: the player takes one lipsanon before the shop that leads
+ * 'bona-vacantia' opens a Conflict: the player takes one lipsanon before the Sectio that leads
  * into the Conflict's first Battle. It replaced the loot lipsanon that used to be won at a
- * Conflict's END, inside the shop -- same three-per-run cadence, opposite end, so the
+ * Conflict's END, inside the Sectio -- same three-per-run cadence, opposite end, so the
  * choice is made looking forward rather than handed out as a reward.
  *
  * 'aftermath' closes a Battle: what the Battle paid and cost gets its own screen before
- * the Run moves on. The reward used to be reported by a line inside the shop, which put
+ * the Run moves on. The reward used to be reported by a line inside the Sectio, which put
  * the result of the fight in the room where the money is spent.
  */
-export type RunPhase = 'aftermath' | 'bona-vacantia' | 'deployment' | 'battle' | 'shop' | 'victory';
+export type RunPhase = 'aftermath' | 'bona-vacantia' | 'deployment' | 'battle' | 'sectio' | 'victory';
 
 export interface RunDeploymentState {
   battleIndex: number;
@@ -348,7 +349,7 @@ export interface RunAftermathFallenUnit {
  * What one Battle paid and cost, reported on its own screen before the Run moves on.
  *
  * The numbers are captured at the moment the Battle ends because nothing else keeps them:
- * the Battle's runtime is torn down when the shop opens, and the battlefield's turn count
+ * the Battle's runtime is torn down when the Sectio opens, and the battlefield's turn count
  * and clock live only in the board store, which unmounts with the board.
  */
 export interface RunAftermathState {
@@ -371,26 +372,26 @@ export interface RunBattleReport {
   turns: number;
 }
 
-export interface RunShopState {
+export interface RunSectioState {
   kind: 'opening' | 'post-battle';
   afterBattleIndex: number;
   conflictIndex: number;
   victoryGoldTenths: number;
   cardOffers: RunCardOffer[];
-  purchasedCardOfferIds: string[];
+  adlectedCardOfferIds: string[];
   paidLipsanonOffer: LipsanonId | null;
   paidLipsanonBought: boolean;
-  soldUnits: Array<{
+  alienatedUnits: Array<{
     unit: RunArmyUnit;
     proceedsTenths: number;
   }>;
-  entrySnapshot: RunShopEntrySnapshot;
+  entrySnapshot: RunSectioEntrySnapshot;
 }
 
 /**
- * The lipsanon offer that opens a Conflict. `kind` says which shop this hands off to once a
- * lipsanon is taken: the run's pinned opening shop, or the post-battle shop that follows the
- * Battle just fought. `victoryGoldTenths` is carried through because that shop reports it
+ * The lipsanon offer that opens a Conflict. `kind` says which Sectio this hands off to once a
+ * lipsanon is taken: the run's pinned opening Sectio, or the post-Battle Sectio that follows the
+ * Battle just fought. `victoryGoldTenths` is carried through because that Sectio reports it
  * and the Battle's gold is banked before this screen, not after it.
  */
 export interface RunVacantiaState {
@@ -401,7 +402,7 @@ export interface RunVacantiaState {
   offers: LipsanonId[];
 }
 
-export interface RunShopEntrySnapshot {
+export interface RunSectioEntrySnapshot {
   goldTenths: number;
   army: RunArmyUnit[];
   cards: RunOwnedCard[];
@@ -437,7 +438,7 @@ export interface RunDocument {
   deployment: RunDeploymentState | null;
   battleRuntime: RunBattleRuntime | null;
   aftermath: RunAftermathState | null;
-  shop: RunShopState | null;
+  sectio: RunSectioState | null;
   vacantia: RunVacantiaState | null;
 }
 
@@ -447,8 +448,8 @@ export function runBattleActivityId(runId: string, battleIndex: number): string 
   return `run:${encodeURIComponent(runId)}:battle:${battleIndex}`;
 }
 
-const PURCHASE_ORDER: readonly PurchasablePieceType[] = ['pawn', 'knight', 'bishop', 'rook', 'queen'];
-const ARMY_PIECE_ORDER: readonly RunArmyPieceType[] = ['king', ...PURCHASE_ORDER];
+const ADLECTIO_PIECE_ORDER: readonly AdlectablePieceType[] = ['pawn', 'knight', 'bishop', 'rook', 'queen'];
+const ARMY_PIECE_ORDER: readonly RunArmyPieceType[] = ['king', ...ADLECTIO_PIECE_ORDER];
 
 function initialArmyNumberState(): RunArmyNumberState {
   return {
@@ -461,20 +462,20 @@ function initialArmyNumberState(): RunArmyNumberState {
   };
 }
 
-function cardId(pieces: readonly PurchasablePieceType[]): string {
+function cardId(pieces: readonly AdlectablePieceType[]): string {
   return pieces.map((piece) => piece[0]).join('');
 }
 
 export function allRunCards(): RunCoreCard[] {
   const cards: RunCoreCard[] = [];
-  const visit = (typeIndex: number, remaining: number, pieces: PurchasablePieceType[]): void => {
+  const visit = (typeIndex: number, remaining: number, pieces: AdlectablePieceType[]): void => {
     if (remaining === 0) {
       const value = pieces.reduce((sum, piece) => sum + PIECE_VALUE[piece], 0);
       if (value >= 1 && value <= 9) cards.push({ id: cardId(pieces), pieces: [...pieces], value });
       return;
     }
-    if (typeIndex >= PURCHASE_ORDER.length) return;
-    const piece = PURCHASE_ORDER[typeIndex];
+    if (typeIndex >= ADLECTIO_PIECE_ORDER.length) return;
+    const piece = ADLECTIO_PIECE_ORDER[typeIndex];
     const value = PIECE_VALUE[piece];
     const max = Math.floor(remaining / value);
     for (let count = 0; count <= max; count += 1) {
@@ -511,7 +512,7 @@ export function shuffled<T>(values: readonly T[], seed: number): T[] {
   return result;
 }
 
-export const CACOCHYMIC_DISCOUNT: Readonly<Record<PurchasablePieceType, number>> = Object.freeze({
+export const CACOCHYMIC_DISCOUNT: Readonly<Record<AdlectablePieceType, number>> = Object.freeze({
   pawn: 0,
   knight: 1,
   bishop: 1,
@@ -523,12 +524,12 @@ export const CACOCHYMIC_DISCOUNT: Readonly<Record<PurchasablePieceType, number>>
  * What a card's qualifier does to its price: Pestiferous discounts by the marked piece,
  * every other property charges its state's surcharge. Offer creation, stored-offer
  * normalization and review specimens all price through here, so a card cannot cost one
- * thing in the Shop and another wherever else it is shown.
+ * thing in the Sectio and another wherever else it is shown.
  */
 export function runCardOfferCost(
   value: number,
   cardType: RunCardType | null,
-  plaguedPiece: PurchasablePieceType | null,
+  plaguedPiece: AdlectablePieceType | null,
 ): number {
   if (plaguedPiece) return value - CACOCHYMIC_DISCOUNT[plaguedPiece];
   if (cardType === 'legatine') return value + ADLECTED_COST;
@@ -652,7 +653,7 @@ export function createRunCardOffer(
   return {
     ...card,
     pieces: [...card.pieces],
-    offerId: `shop-${battleIndex}-${slotIndex}-${card.id}`,
+    offerId: `sectio-${battleIndex}-${slotIndex}-${card.id}`,
     cost,
     cardType: pestiferous
       ? 'pestiferous'
@@ -671,26 +672,26 @@ export function createRunCardOffer(
   };
 }
 
-const OPENING_SHOP_VALUES: readonly number[] = Object.freeze(
+const OPENING_SECTIO_VALUES: readonly number[] = Object.freeze(
   Array.from({ length: RUN_STARTING_GOLD }, (_, index) => index + 1),
 );
 
 /** Opening draws roll in their own index space so a core identity offered in the
- * opening and again in the Shop after Battle 1 — which is also `battleIndex` 0 —
+ * opening and again in the Sectio after Battle 1 — which is also `battleIndex` 0 —
  * rolls its qualifier independently. */
-export const OPENING_SHOP_ROLL_BATTLE_INDEX = -1;
+export const OPENING_SECTIO_ROLL_BATTLE_INDEX = -1;
 
 /** Deal three distinct uniformly sampled values, then one seeded core card at
  * each value. Sampling values first prevents dense high-value ranks in the
  * 49-card deck from crowding low-value openings out of the Run.
  *
- * Opening draws roll qualifiers exactly like every later Shop draw, at every core
+ * Opening draws roll qualifiers exactly like every later Sectio draw, at every core
  * value: a Tactical surcharge may price an opening card past the starting gold and
  * out of reach. The one repair is the degenerate deal — ADR-0323 requires a
- * purchase before Continue, so if no offer is affordable the cheapest one drops its
+ * Adlectio before Continue, so if no offer is affordable the cheapest one drops its
  * qualifier and is offered standard, which no other opening card ever does. */
-export function openingShopOffers(seed: number, ataraxiaTier: AtaraxiaTier = 0): RunCardOffer[] {
-  const values = shuffled(OPENING_SHOP_VALUES, mixSeed(seed, 'opening-shop-values'))
+export function openingSectioOffers(seed: number, ataraxiaTier: AtaraxiaTier = 0): RunCardOffer[] {
+  const values = shuffled(OPENING_SECTIO_VALUES, mixSeed(seed, 'opening-shop-values'))
     .slice(0, RUN_OPENING_OFFER_COUNT);
   const offers = values.map((value, slotIndex) => {
     const candidates = RUN_CARD_DECK.filter((card) => card.value === value);
@@ -698,11 +699,11 @@ export function openingShopOffers(seed: number, ataraxiaTier: AtaraxiaTier = 0):
       candidates,
       mixSeed(seed, `opening-shop-card:${value}`, slotIndex),
     )[0];
-    if (!card) throw new Error(`Opening Shop has no core card worth ${value} gold.`);
+    if (!card) throw new Error(`Opening Sectio has no core card worth ${value} gold.`);
     const rolled = createRunCardOffer(
       { seed, ataraxiaTier },
       card,
-      OPENING_SHOP_ROLL_BATTLE_INDEX,
+      OPENING_SECTIO_ROLL_BATTLE_INDEX,
       slotIndex,
     );
     return { ...rolled, offerId: `opening-${slotIndex}-${card.id}` };
@@ -784,7 +785,7 @@ export function createRun(
     ataraxiaTier,
     updatedAt: createdAt,
     war,
-    phase: 'shop',
+    phase: 'sectio',
     battleIndex: 0,
     conflictIndex: 0,
     goldTenths: RUN_STARTING_GOLD_TENTHS,
@@ -804,11 +805,11 @@ export function createRun(
     deployment: null,
     battleRuntime: null,
     aftermath: null,
-    shop: null,
+    sectio: null,
     vacantia: null,
   };
   // A Conflict that ends in loot opens with Bona Vacantia; a war with no loot battles at
-  // all still starts straight in the shop, exactly as it used to.
+  // all still starts straight in the Sectio, exactly as it used to.
   if (conflictOpensWithVacantia(war, 0)) {
     const reveal = revealLipsana(run, 3, 'vacantia-lipsana', 0);
     return {
@@ -824,30 +825,30 @@ export function createRun(
       },
     };
   }
-  return openOpeningShop(run, seed, ataraxiaTier);
+  return openOpeningSectio(run, seed, ataraxiaTier);
 }
 
 /**
- * The run's pinned opening shop. Held apart from createRun because Bona Vacantia now sits
- * in front of it: the lipsanon is taken first, and only then is this shop built -- so its
+ * The Run's pinned opening Sectio. Held apart from createRun because Bona Vacantia now sits
+ * in front of it: the lipsanon is taken first, and only then is this Sectio built -- so its
  * entry snapshot records the army and lipsana the player actually walks in with.
  */
-function openOpeningShop(run: RunDocument, seed: number, ataraxiaTier: AtaraxiaTier): RunDocument {
+function openOpeningSectio(run: RunDocument, seed: number, ataraxiaTier: AtaraxiaTier): RunDocument {
   return {
     ...run,
-    phase: 'shop',
+    phase: 'sectio',
     vacantia: null,
-    shop: {
+    sectio: {
       kind: 'opening',
       afterBattleIndex: 0,
       conflictIndex: 0,
       victoryGoldTenths: 0,
-      cardOffers: openingShopOffers(seed, ataraxiaTier),
-      purchasedCardOfferIds: [],
+      cardOffers: openingSectioOffers(seed, ataraxiaTier),
+      adlectedCardOfferIds: [],
       paidLipsanonOffer: null,
       paidLipsanonBought: false,
-      soldUnits: [],
-      entrySnapshot: createShopEntrySnapshot(run, false),
+      alienatedUnits: [],
+      entrySnapshot: createSectioEntrySnapshot(run, false),
     },
   };
 }
@@ -1047,7 +1048,7 @@ function cloneConflictPaidLipsana(
   );
 }
 
-function createShopEntrySnapshot(run: RunDocument, paidLipsanonBought: boolean): RunShopEntrySnapshot {
+function createSectioEntrySnapshot(run: RunDocument, paidLipsanonBought: boolean): RunSectioEntrySnapshot {
   return {
     goldTenths: run.goldTenths,
     army: cloneArmy(run.army),
@@ -1064,13 +1065,13 @@ function createShopEntrySnapshot(run: RunDocument, paidLipsanonBought: boolean):
 
 function normalizedArmyIdentity(run: RunDocument): {
   army: RunArmyUnit[];
-  shop: RunShopState | null;
+  sectio: RunSectioState | null;
   nextArmyUnitNumberByType: RunArmyNumberState;
   changed: boolean;
 } {
-  const entryArmy = run.shop?.entrySnapshot?.army ?? [];
-  const soldArmy = run.shop?.soldUnits?.map((entry) => entry.unit) ?? [];
-  const units = [...entryArmy, ...run.army, ...soldArmy];
+  const entryArmy = run.sectio?.entrySnapshot?.army ?? [];
+  const alienatedArmy = run.sectio?.alienatedUnits?.map((entry) => entry.unit) ?? [];
+  const units = [...entryArmy, ...run.army, ...alienatedArmy];
   const byId = new Map<string, RunArmyUnit>();
   for (const unit of units) {
     if (!byId.has(unit.id)) byId.set(unit.id, unit);
@@ -1121,7 +1122,7 @@ function normalizedArmyIdentity(run: RunDocument): {
     const modifiers = Array.isArray(unit.modifiers)
       ? unit.modifiers.filter((modifier): modifier is RunUnitModifier => modifier === 'cacochymic')
       : [];
-    const source = String(unit.source) === 'draft' ? 'shop' : unit.source;
+    const source = unit.source;
     if (
       unit.number === number
       && unit.name === name
@@ -1134,17 +1135,17 @@ function normalizedArmyIdentity(run: RunDocument): {
     return { ...unit, name, number, inspectionSeed, modifiers, source };
   });
   const army = rewriteArmy(run.army);
-  let shop = run.shop;
-  if (shop) {
-    const soldUnits = (shop.soldUnits ?? []).map((entry) => {
+  let sectio = run.sectio;
+  if (sectio) {
+    const alienatedUnits = (sectio.alienatedUnits ?? []).map((entry) => {
       const [unit] = rewriteArmy([entry.unit]);
       return unit === entry.unit ? entry : { ...entry, unit };
     });
-    const entrySnapshot = shop.entrySnapshot
-      ? { ...shop.entrySnapshot, army: rewriteArmy(shop.entrySnapshot.army) }
-      : shop.entrySnapshot;
-    if (soldUnits !== shop.soldUnits || entrySnapshot !== shop.entrySnapshot) {
-      shop = { ...shop, soldUnits, entrySnapshot };
+    const entrySnapshot = sectio.entrySnapshot
+      ? { ...sectio.entrySnapshot, army: rewriteArmy(sectio.entrySnapshot.army) }
+      : sectio.entrySnapshot;
+    if (alienatedUnits !== sectio.alienatedUnits || entrySnapshot !== sectio.entrySnapshot) {
+      sectio = { ...sectio, alienatedUnits, entrySnapshot };
     }
   }
 
@@ -1162,13 +1163,14 @@ function normalizedArmyIdentity(run: RunDocument): {
     || ARMY_PIECE_ORDER.some((type) => existingNumbers[type] !== nextArmyUnitNumberByType[type])
   ) changed = true;
 
-  return { army, shop, nextArmyUnitNumberByType, changed };
+  return { army, sectio, nextArmyUnitNumberByType, changed };
 }
 
 export function normalizeRunDocument(run: RunDocument): RunDocument {
   const raw = run as Omit<RunDocument, 'phase'> & {
     phase: RunPhase | 'draft';
     formatVersion?: unknown;
+    shop?: unknown;
     draftOffers?: unknown;
     chosenDraftId?: unknown;
   };
@@ -1178,8 +1180,43 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
   if (raw.phase === 'draft' || 'draftOffers' in raw || 'chosenDraftId' in raw) {
     throw new UnsupportedRunSaveError('This Run contains retired draft data. Start a new Run.');
   }
+  if ('shop' in raw) {
+    throw new UnsupportedRunSaveError('This Run contains retired Shop data. Start a new Run.');
+  }
+  const rawSectio = raw.sectio && typeof raw.sectio === 'object' && !Array.isArray(raw.sectio)
+    ? raw.sectio as unknown as Record<string, unknown>
+    : null;
+  if (rawSectio && ('purchasedCardOfferIds' in rawSectio || 'soldUnits' in rawSectio)) {
+    throw new UnsupportedRunSaveError('This Run contains retired Sectio operation data. Start a new Run.');
+  }
+  const persistedUnits: unknown[] = [
+    ...(Array.isArray(run.army) ? run.army : []),
+    ...(Array.isArray(run.pestiferousLosses)
+      ? run.pestiferousLosses.map((loss) => loss?.unit)
+      : []),
+    ...(Array.isArray(run.sectio?.alienatedUnits)
+      ? run.sectio.alienatedUnits.map((alienated) => alienated?.unit)
+      : []),
+    ...(Array.isArray(run.sectio?.entrySnapshot?.army) ? run.sectio.entrySnapshot.army : []),
+  ];
+  if (persistedUnits.some((value) => (
+    value
+    && typeof value === 'object'
+    && !Array.isArray(value)
+    && ((value as Record<string, unknown>).source === 'shop'
+      || (value as Record<string, unknown>).source === 'draft'
+      || (value as Record<string, unknown>).source === 'sectio')
+  ))) {
+    throw new UnsupportedRunSaveError('This Run contains retired unit-source data. Start a new Run.');
+  }
+  if (
+    run.sectio?.cardOffers?.some((offer) => offer.offerId.startsWith('shop-'))
+    || run.sectio?.adlectedCardOfferIds?.some((offerId) => offerId.startsWith('shop-'))
+  ) {
+    throw new UnsupportedRunSaveError('This Run contains retired Shop offer ids. Start a new Run.');
+  }
   // The aftermath phase IS its report; a document standing in it without one has nothing to
-  // show and no survivors to open the shop with.
+  // show and no survivors to open the Sectio with.
   if (raw.phase === 'aftermath' && !run.aftermath) {
     throw new Error('A Run aftermath document with no battle report is unsupported.');
   }
@@ -1191,19 +1228,19 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
     next = { ...next, aftermath: next.phase === 'aftermath' ? next.aftermath ?? null : null };
   }
   if (
-    next.phase !== 'shop'
-    || !next.shop
-    || (Number.isSafeInteger(next.shop.victoryGoldTenths) && next.shop.victoryGoldTenths >= 0)
+    next.phase !== 'sectio'
+    || !next.sectio
+    || (Number.isSafeInteger(next.sectio.victoryGoldTenths) && next.sectio.victoryGoldTenths >= 0)
   ) {
     // Current documents already carry the exact reward.
   } else {
-    const battle = next.war.battles[next.shop.afterBattleIndex];
+    const battle = next.war.battles[next.sectio.afterBattleIndex];
     if (battle) {
       const reward = battleVictoryGoldTenths(battle.level);
       next = {
         ...next,
         goldTenths: Math.max(0, next.goldTenths + reward - GOLD_SCALE),
-        shop: { ...next.shop, victoryGoldTenths: reward },
+        sectio: { ...next.sectio, victoryGoldTenths: reward },
       };
     }
   }
@@ -1225,22 +1262,22 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
   const nextCardSequence = Number.isSafeInteger(stored.nextCardSequence) && Number(stored.nextCardSequence) > 0
     ? Number(stored.nextCardSequence)
     : cards.length + 1;
-  let shop = stored.shop;
-  if (shop && shop.kind !== 'opening' && shop.kind !== 'post-battle') {
-    shop = { ...shop, kind: 'post-battle' };
+  let sectio = stored.sectio;
+  if (sectio && sectio.kind !== 'opening' && sectio.kind !== 'post-battle') {
+    sectio = { ...sectio, kind: 'post-battle' };
   }
-  if (shop && (
-    offersNeedRepair(shop.cardOffers)
-    || (shop.entrySnapshot && cardsNeedRepair(shop.entrySnapshot.cards))
+  if (sectio && (
+    offersNeedRepair(sectio.cardOffers)
+    || (sectio.entrySnapshot && cardsNeedRepair(sectio.entrySnapshot.cards))
   )) {
-    shop = {
-      ...shop,
-      cardOffers: repairRunCardOffers(shop.cardOffers),
-      ...(shop.entrySnapshot
+    sectio = {
+      ...sectio,
+      cardOffers: repairRunCardOffers(sectio.cardOffers),
+      ...(sectio.entrySnapshot
         ? {
             entrySnapshot: {
-              ...shop.entrySnapshot,
-              cards: repairRunCards(shop.entrySnapshot.cards, next.seed),
+              ...sectio.entrySnapshot,
+              cards: repairRunCards(sectio.entrySnapshot.cards, next.seed),
             },
           }
         : {}),
@@ -1251,93 +1288,170 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
     || next.cards !== cards
     || next.pestiferousLosses !== pestiferousLosses
     || next.nextCardSequence !== nextCardSequence
-    || next.shop !== shop
+    || next.sectio !== sectio
   ) {
-    next = { ...next, ataraxiaTier, cards, pestiferousLosses, nextCardSequence, shop };
+    next = { ...next, ataraxiaTier, cards, pestiferousLosses, nextCardSequence, sectio };
   }
 
   const identity = normalizedArmyIdentity(next);
   const army = synchronizePlaguedModifiers(identity.army, next.cards);
-  let identityShop = identity.shop;
-  if (identityShop?.entrySnapshot) {
+  let identitySectio = identity.sectio;
+  if (identitySectio?.entrySnapshot) {
     const entryArmy = synchronizePlaguedModifiers(
-      identityShop.entrySnapshot.army,
-      identityShop.entrySnapshot.cards,
+      identitySectio.entrySnapshot.army,
+      identitySectio.entrySnapshot.cards,
     );
-    if (entryArmy !== identityShop.entrySnapshot.army) {
-      identityShop = {
-        ...identityShop,
-        entrySnapshot: { ...identityShop.entrySnapshot, army: entryArmy },
+    if (entryArmy !== identitySectio.entrySnapshot.army) {
+      identitySectio = {
+        ...identitySectio,
+        entrySnapshot: { ...identitySectio.entrySnapshot, army: entryArmy },
       };
     }
   }
-  if (identity.changed || army !== identity.army || identityShop !== identity.shop) {
+  if (identity.changed || army !== identity.army || identitySectio !== identity.sectio) {
     next = {
       ...next,
       army,
-      shop: identityShop,
+      sectio: identitySectio,
       nextArmyUnitNumberByType: identity.nextArmyUnitNumberByType,
     };
   }
   if (
-    next.phase === 'shop'
-    && next.shop
+    next.phase === 'sectio'
+    && next.sectio
     && (
-      !next.shop.entrySnapshot
-      || !Array.isArray(next.shop.soldUnits)
-      || !Array.isArray(next.shop.entrySnapshot.cards)
-      || !Number.isSafeInteger(next.shop.entrySnapshot.nextCardSequence)
+      !next.sectio.entrySnapshot
+      || !Array.isArray(next.sectio.alienatedUnits)
+      || !Array.isArray(next.sectio.entrySnapshot.cards)
+      || !Number.isSafeInteger(next.sectio.entrySnapshot.nextCardSequence)
     )
   ) {
-    const paidLipsanonBought = next.shop.paidLipsanonBought === true;
+    const paidLipsanonBought = next.sectio.paidLipsanonBought === true;
     next = {
       ...next,
-      shop: {
-        ...next.shop,
-        soldUnits: Array.isArray(next.shop.soldUnits) ? next.shop.soldUnits : [],
-        entrySnapshot: next.shop.entrySnapshot
+      sectio: {
+        ...next.sectio,
+        alienatedUnits: Array.isArray(next.sectio.alienatedUnits) ? next.sectio.alienatedUnits : [],
+        entrySnapshot: next.sectio.entrySnapshot
           ? {
-              ...next.shop.entrySnapshot,
-              cards: Array.isArray(next.shop.entrySnapshot.cards)
-                ? cloneCards(next.shop.entrySnapshot.cards)
+              ...next.sectio.entrySnapshot,
+              cards: Array.isArray(next.sectio.entrySnapshot.cards)
+                ? cloneCards(next.sectio.entrySnapshot.cards)
                 : cloneCards(next.cards),
-              nextCardSequence: Number.isSafeInteger(next.shop.entrySnapshot.nextCardSequence)
-                ? next.shop.entrySnapshot.nextCardSequence
+              nextCardSequence: Number.isSafeInteger(next.sectio.entrySnapshot.nextCardSequence)
+                ? next.sectio.entrySnapshot.nextCardSequence
                 : next.nextCardSequence,
             }
-          : createShopEntrySnapshot(next, paidLipsanonBought),
+          : createSectioEntrySnapshot(next, paidLipsanonBought),
       },
     };
   }
   return next;
 }
 
+function migrateRunArmyUnitAdlectioVocabulary(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const unit = value as Record<string, unknown>;
+  return unit.source === 'shop' || unit.source === 'draft'
+    ? { ...unit, source: 'adlectio' }
+    : unit;
+}
+
+function migrateRunArmyAdlectioVocabulary(value: unknown): unknown {
+  return Array.isArray(value) ? value.map(migrateRunArmyUnitAdlectioVocabulary) : value;
+}
+
+function migrateRunOfferIdSectioVocabulary(value: unknown): unknown {
+  return typeof value === 'string' && value.startsWith('shop-')
+    ? `sectio-${value.slice('shop-'.length)}`
+    : value;
+}
+
+function migrateRunSectioOperationsVocabulary(value: unknown): unknown {
+  if (value === null) return null;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const sectio = value as Record<string, unknown>;
+  const cardOffers = Array.isArray(sectio.cardOffers)
+    ? sectio.cardOffers.map((value) => {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+        const offer = value as Record<string, unknown>;
+        return { ...offer, offerId: migrateRunOfferIdSectioVocabulary(offer.offerId) };
+      })
+    : sectio.cardOffers;
+  const adlectedCardOfferIds = Array.isArray(sectio.purchasedCardOfferIds)
+    ? sectio.purchasedCardOfferIds.map(migrateRunOfferIdSectioVocabulary)
+    : sectio.purchasedCardOfferIds;
+  const alienatedUnits = Array.isArray(sectio.soldUnits)
+    ? sectio.soldUnits.map((value) => {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+        const alienated = value as Record<string, unknown>;
+        return { ...alienated, unit: migrateRunArmyUnitAdlectioVocabulary(alienated.unit) };
+      })
+    : sectio.soldUnits;
+  const entrySnapshot = sectio.entrySnapshot
+    && typeof sectio.entrySnapshot === 'object'
+    && !Array.isArray(sectio.entrySnapshot)
+    ? {
+        ...(sectio.entrySnapshot as Record<string, unknown>),
+        army: migrateRunArmyAdlectioVocabulary(
+          (sectio.entrySnapshot as Record<string, unknown>).army,
+        ),
+      }
+    : sectio.entrySnapshot;
+  const {
+    purchasedCardOfferIds: _retiredPurchasedCardOfferIds,
+    soldUnits: _retiredSoldUnits,
+    ...currentSectio
+  } = sectio;
+  return { ...currentSectio, cardOffers, adlectedCardOfferIds, alienatedUnits, entrySnapshot };
+}
+
 /**
- * Moves the one losslessly migratable predecessor into the current stored shape.
- * Older Run saves remain unsupported; this is the exact formatVersion -> runSaveVersion
- * field rename, not a general compatibility reader.
+ * Advances every losslessly migratable predecessor through the declared save chain.
+ * Version 16 first receives the version-marker rename from 17, then version 17's Shop
+ * vocabulary is rewritten into version 18's Sectio, Adlectio, and Alienatio vocabulary. Older saves remain
+ * unsupported rather than being interpreted through a compatibility reader.
  */
 export function migrateRunSaveDocument(value: unknown): RunDocument {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new UnsupportedRunSaveError();
   }
-  const stored = value as Record<string, unknown>;
+  let stored = value as Record<string, unknown>;
   if (
     stored.formatVersion === RUN_SAVE_VERSION_FIELD_RENAME_SOURCE
     && !Object.hasOwn(stored, 'runSaveVersion')
   ) {
     const { formatVersion: _retiredFormatVersion, ...run } = stored;
-    return normalizeRunDocument({
+    stored = {
+      ...run,
+      runSaveVersion: RUN_SAVE_VERSION_EXCHANGE_VOCABULARY_SOURCE,
+    };
+  }
+  if (stored.runSaveVersion === RUN_SAVE_VERSION_EXCHANGE_VOCABULARY_SOURCE) {
+    if (!Object.hasOwn(stored, 'shop')) throw new UnsupportedRunSaveError();
+    const { shop, ...run } = stored;
+    const pestiferousLosses = Array.isArray(stored.pestiferousLosses)
+      ? stored.pestiferousLosses.map((value) => {
+          if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+          const loss = value as Record<string, unknown>;
+          return { ...loss, unit: migrateRunArmyUnitAdlectioVocabulary(loss.unit) };
+        })
+      : stored.pestiferousLosses;
+    stored = {
       ...run,
       runSaveVersion: CURRENT_RUN_SAVE_VERSION,
-    } as unknown as RunDocument);
+      phase: stored.phase === 'shop' ? 'sectio' : stored.phase,
+      army: migrateRunArmyAdlectioVocabulary(stored.army),
+      pestiferousLosses,
+      sectio: migrateRunSectioOperationsVocabulary(shop),
+    };
   }
-  return normalizeRunDocument(value as RunDocument);
+  return normalizeRunDocument(stored as unknown as RunDocument);
 }
 
 export function addArmyPieces(
   run: RunDocument,
-  pieces: readonly PurchasablePieceType[],
+  pieces: readonly AdlectablePieceType[],
   source: RunArmyUnit['source'],
   modifiers: readonly RunUnitModifier[] = [],
 ): Pick<RunDocument, 'army' | 'nextArmyUnitSequence' | 'nextArmyUnitNumberByType'> & {
@@ -1549,8 +1663,8 @@ export function markReservistDeployed(run: RunDocument, unitId: string): RunDocu
 
 /**
  * Gold a lipsanon pays the moment it is taken. Data rather than branches because the server
- * has to verify it independently: the opening Shop's gold is pinned value-by-value, and
- * Bona Vacantia now runs BEFORE that shop, so an opening lipsanon can legitimately move the
+ * has to verify it independently: the opening Sectio's gold is pinned value-by-value, and
+ * Bona Vacantia now runs BEFORE that Sectio, so an opening lipsanon can legitimately move the
  * number the contract checks. Both sides read this map, so neither can drift.
  */
 export const RUN_LIPSANON_IMMEDIATE_GOLD: Readonly<Partial<Record<LipsanonId, number>>> = Object.freeze({
@@ -1682,7 +1796,7 @@ function battleRewardTenths(run: RunDocument, survivingUnitIds: readonly string[
 
 /**
  * The Battle is won. Its result gets a screen of its own before the Run moves on, so the
- * shop is not opened underneath a report of the fight that paid for it.
+ * Sectio is not opened underneath a report of the fight that paid for it.
  *
  * The final Battle is the exception on both counts: it ends the War, whose own victory
  * screen is the report, and it grants no spendable reward (ADR-0220) -- so an aftermath
@@ -1690,7 +1804,7 @@ function battleRewardTenths(run: RunDocument, survivingUnitIds: readonly string[
  */
 export function closeBattle(run: RunDocument, report: RunBattleReport): RunDocument {
   if (run.phase !== 'battle') return run;
-  if (run.battleIndex >= run.war.battles.length - 1) return openShop(run, report.survivingUnitIds);
+  if (run.battleIndex >= run.war.battles.length - 1) return openSectio(run, report.survivingUnitIds);
   const { victoryGoldTenths, bonusGoldTenths } = battleRewardTenths(run, report.survivingUnitIds);
   const startedAtMs = run.battleRuntime?.startedAtMs;
   const armyById = new Map(run.army.map((unit) => [unit.id, unit]));
@@ -1717,10 +1831,10 @@ export function closeBattle(run: RunDocument, report: RunBattleReport): RunDocum
 /** Leave the aftermath report; whatever follows the Battle opens now. */
 export function leaveAftermath(run: RunDocument): RunDocument {
   if (run.phase !== 'aftermath' || !run.aftermath) return run;
-  return openShop(run, run.aftermath.survivingUnitIds);
+  return openSectio(run, run.aftermath.survivingUnitIds);
 }
 
-export function openShop(run: RunDocument, survivingUnitIds: readonly string[]): RunDocument {
+export function openSectio(run: RunDocument, survivingUnitIds: readonly string[]): RunDocument {
   // Reachable from the Battle itself (the final one, and every fast-forwarded Battle the
   // crafter plays) and from the aftermath report the other Battles stop at.
   if (run.phase !== 'battle' && run.phase !== 'aftermath') return run;
@@ -1729,7 +1843,7 @@ export function openShop(run: RunDocument, survivingUnitIds: readonly string[]):
   const { victoryGoldTenths, bonusGoldTenths: rifleTenths } = battleRewardTenths(run, survivingUnitIds);
   const deteriorated = deterioratePestiferousCards(run, run.battleIndex);
   if (finalBattle) {
-    return touch({ ...deteriorated, phase: 'victory', shop: null, deployment: null, battleRuntime: null, aftermath: null });
+    return touch({ ...deteriorated, phase: 'victory', sectio: null, deployment: null, battleRuntime: null, aftermath: null });
   }
   const banked: RunDocument = {
     ...deteriorated,
@@ -1738,9 +1852,9 @@ export function openShop(run: RunDocument, survivingUnitIds: readonly string[]):
     battleRuntime: null,
     aftermath: null,
   };
-  // A loot Battle closes a Conflict, so the next one opens here -- before the shop, so the
+  // A loot Battle closes a Conflict, so the next one opens here -- before the Sectio, so the
   // player inherits the lipsanon and then decides what to spend on. The Battle's gold is
-  // already banked above, which is why this screen can precede the shop without the shop's
+  // already banked above, which is why this screen can precede the Sectio without the Sectio's
   // entry snapshot going stale.
   const closedConflict = banked.war.battles[banked.battleIndex]?.loot === true;
   if (closedConflict && conflictOpensWithVacantia(banked.war, banked.battleIndex + 1)) {
@@ -1749,7 +1863,7 @@ export function openShop(run: RunDocument, survivingUnitIds: readonly string[]):
       ...banked,
       phase: 'bona-vacantia',
       seenLipsana: reveal.seenLipsana,
-      shop: null,
+      sectio: null,
       vacantia: {
         kind: 'post-battle',
         conflictIndex: banked.conflictIndex + 1,
@@ -1759,15 +1873,15 @@ export function openShop(run: RunDocument, survivingUnitIds: readonly string[]):
       },
     });
   }
-  return touch(openPostBattleShop(banked, victoryGoldTenths));
+  return touch(openPostBattleSectio(banked, victoryGoldTenths));
 }
 
 /**
- * The shop that follows a Battle. Split out of openShop because Bona Vacantia can land in
+ * The Sectio that follows a Battle. Split out of openSectio because Bona Vacantia can land in
  * between: when a Conflict closes, the lipsanon screen comes first and then hands off here.
  */
-function openPostBattleShop(run: RunDocument, victoryGoldTenths: number): RunDocument {
-  let next: RunDocument = { ...run, phase: 'shop', vacantia: null };
+function openPostBattleSectio(run: RunDocument, victoryGoldTenths: number): RunDocument {
+  let next: RunDocument = { ...run, phase: 'sectio', vacantia: null };
   const cardCount = hasLipsanon(next, 'quartermasters-ledger') ? 4 : 3;
   const cardOffers = shuffled(RUN_CARD_DECK, mixSeed(next.seed, 'shop-cards', next.battleIndex))
     .slice(0, cardCount)
@@ -1794,35 +1908,35 @@ function openPostBattleShop(run: RunDocument, victoryGoldTenths: number): RunDoc
       };
     }
   }
-  const entrySnapshot = createShopEntrySnapshot(next, paidLipsanonBought);
+  const entrySnapshot = createSectioEntrySnapshot(next, paidLipsanonBought);
   return {
     ...next,
-    shop: {
+    sectio: {
       kind: 'post-battle',
       afterBattleIndex: next.battleIndex,
       conflictIndex: next.conflictIndex,
       victoryGoldTenths,
       cardOffers,
-      purchasedCardOfferIds: [],
+      adlectedCardOfferIds: [],
       paidLipsanonOffer,
       paidLipsanonBought,
-      soldUnits: [],
+      alienatedUnits: [],
       entrySnapshot,
     },
   };
 }
 
-export function buyCard(run: RunDocument, offerId: string): RunDocument {
-  const offer = run.shop?.cardOffers.find((candidate) => candidate.offerId === offerId);
+export function performAdlectio(run: RunDocument, offerId: string): RunDocument {
+  const offer = run.sectio?.cardOffers.find((candidate) => candidate.offerId === offerId);
   if (
-    run.phase !== 'shop'
-    || !run.shop
-    || run.shop.purchasedCardOfferIds.includes(offerId)
+    run.phase !== 'sectio'
+    || !run.sectio
+    || run.sectio.adlectedCardOfferIds.includes(offerId)
     || !offer
   ) return run;
   const cost = offer.cost * GOLD_SCALE;
   if (run.goldTenths < cost) return run;
-  const { addedUnits, ...armyUpdate } = addArmyPieces(run, offer.pieces, 'shop');
+  const { addedUnits, ...armyUpdate } = addArmyPieces(run, offer.pieces, 'adlectio');
   const cacochymicUnitId = offer.cardType === 'pestiferous' && offer.cacochymicPieceIndex !== null
     ? addedUnits[offer.cacochymicPieceIndex]?.id ?? null
     : null;
@@ -1860,7 +1974,7 @@ export function buyCard(run: RunDocument, offerId: string): RunDocument {
     unitIds: addedUnits.map((unit) => unit.id),
     lostUnitIds: [],
     cacochymicUnitId,
-    acquiredAfterBattleIndex: run.shop.afterBattleIndex,
+    acquiredAfterBattleIndex: run.sectio.afterBattleIndex,
   };
   const cards = [...run.cards, card];
   return touch({
@@ -1870,15 +1984,15 @@ export function buyCard(run: RunDocument, offerId: string): RunDocument {
     cards,
     nextCardSequence: run.nextCardSequence + 1,
     goldTenths: run.goldTenths - cost,
-    shop: {
-      ...run.shop,
-      purchasedCardOfferIds: [...run.shop.purchasedCardOfferIds, offerId],
+    sectio: {
+      ...run.sectio,
+      adlectedCardOfferIds: [...run.sectio.adlectedCardOfferIds, offerId],
     },
   });
 }
 
-export function sellArmyUnit(run: RunDocument, unitId: string): RunDocument {
-  if (run.phase !== 'shop') return run;
+export function performAlienatio(run: RunDocument, unitId: string): RunDocument {
+  if (run.phase !== 'sectio') return run;
   const unit = run.army.find((candidate) => candidate.id === unitId);
   if (!unit || unit.type === 'king') return run;
   const numerator = hasLipsanon(run, 'fair-scales') ? 75 : 50;
@@ -1888,18 +2002,18 @@ export function sellArmyUnit(run: RunDocument, unitId: string): RunDocument {
     ...run,
     ...removal,
     goldTenths: run.goldTenths + proceedsTenths,
-    shop: run.shop
+    sectio: run.sectio
       ? {
-          ...run.shop,
-          soldUnits: [...run.shop.soldUnits, { unit: cloneArmy([unit])[0], proceedsTenths }],
+          ...run.sectio,
+          alienatedUnits: [...run.sectio.alienatedUnits, { unit: cloneArmy([unit])[0], proceedsTenths }],
         }
       : null,
   });
 }
 
-export function resetShop(run: RunDocument): RunDocument {
-  if (run.phase !== 'shop' || !run.shop?.entrySnapshot) return run;
-  const snapshot = run.shop.entrySnapshot;
+export function resetSectio(run: RunDocument): RunDocument {
+  if (run.phase !== 'sectio' || !run.sectio?.entrySnapshot) return run;
+  const snapshot = run.sectio.entrySnapshot;
   return touch({
     ...run,
     goldTenths: snapshot.goldTenths,
@@ -1911,24 +2025,24 @@ export function resetShop(run: RunDocument): RunDocument {
     nextArmyUnitSequence: snapshot.nextArmyUnitSequence,
     nextArmyUnitNumberByType: { ...snapshot.nextArmyUnitNumberByType },
     nextCardSequence: snapshot.nextCardSequence,
-    shop: {
-      ...run.shop,
-      purchasedCardOfferIds: [],
+    sectio: {
+      ...run.sectio,
+      adlectedCardOfferIds: [],
       paidLipsanonBought: snapshot.paidLipsanonBought,
-      soldUnits: [],
+      alienatedUnits: [],
     },
   });
 }
 
-export function shopHasChanges(run: RunDocument): boolean {
-  if (run.phase !== 'shop' || !run.shop?.entrySnapshot) return false;
-  const snapshot = run.shop.entrySnapshot;
+export function sectioHasChanges(run: RunDocument): boolean {
+  if (run.phase !== 'sectio' || !run.sectio?.entrySnapshot) return false;
+  const snapshot = run.sectio.entrySnapshot;
   return (
     run.goldTenths !== snapshot.goldTenths
     || run.nextArmyUnitSequence !== snapshot.nextArmyUnitSequence
-    || run.shop.purchasedCardOfferIds.length > 0
-    || run.shop.paidLipsanonBought !== snapshot.paidLipsanonBought
-    || run.shop.soldUnits.length > 0
+    || run.sectio.adlectedCardOfferIds.length > 0
+    || run.sectio.paidLipsanonBought !== snapshot.paidLipsanonBought
+    || run.sectio.alienatedUnits.length > 0
     || JSON.stringify(run.army) !== JSON.stringify(snapshot.army)
     || JSON.stringify(run.cards) !== JSON.stringify(snapshot.cards)
     || JSON.stringify(run.lipsana) !== JSON.stringify(snapshot.lipsana)
@@ -1936,13 +2050,13 @@ export function shopHasChanges(run: RunDocument): boolean {
   );
 }
 
-export function canLeaveShop(run: RunDocument): boolean {
-  return run.phase === 'shop' && Boolean(run.shop);
+export function canLeaveSectio(run: RunDocument): boolean {
+  return run.phase === 'sectio' && Boolean(run.sectio);
 }
 
 /**
  * Take the Conflict's lipsanon. Mandatory, as the loot lipsanon was: there is no way past this
- * screen without one, so taking it is also what opens the shop behind it.
+ * screen without one, so taking it is also what opens the Sectio behind it.
  */
 export function takeVacantiaLipsanon(run: RunDocument, lipsanon: LipsanonId, targetUnitId?: string): RunDocument {
   if (run.phase !== 'bona-vacantia' || !run.vacantia || !run.vacantia.offers.includes(lipsanon)) return run;
@@ -1950,30 +2064,30 @@ export function takeVacantiaLipsanon(run: RunDocument, lipsanon: LipsanonId, tar
   if (acquired === run) return run;
   const vacantia = run.vacantia;
   const opened = vacantia.kind === 'opening'
-    ? openOpeningShop(acquired, acquired.seed, acquired.ataraxiaTier)
-    : openPostBattleShop(acquired, vacantia.victoryGoldTenths);
+    ? openOpeningSectio(acquired, acquired.seed, acquired.ataraxiaTier)
+    : openPostBattleSectio(acquired, vacantia.victoryGoldTenths);
   return touch(opened);
 }
 
 export function buyPaidLipsanon(run: RunDocument, targetUnitId?: string): RunDocument {
-  if (run.phase !== 'shop' || !run.shop || !run.shop.paidLipsanonOffer || run.shop.paidLipsanonBought || run.goldTenths < 10 * GOLD_SCALE) return run;
-  const acquired = acquireLipsanon(run, run.shop.paidLipsanonOffer, targetUnitId);
+  if (run.phase !== 'sectio' || !run.sectio || !run.sectio.paidLipsanonOffer || run.sectio.paidLipsanonBought || run.goldTenths < 10 * GOLD_SCALE) return run;
+  const acquired = acquireLipsanon(run, run.sectio.paidLipsanonOffer, targetUnitId);
   if (acquired === run) return run;
   return touch({
     ...acquired,
     goldTenths: acquired.goldTenths - 10 * GOLD_SCALE,
     conflictPaidLipsana: {
       ...acquired.conflictPaidLipsana,
-      [String(run.conflictIndex)]: { lipsanonId: run.shop.paidLipsanonOffer, bought: true },
+      [String(run.conflictIndex)]: { lipsanonId: run.sectio.paidLipsanonOffer, bought: true },
     },
-    shop: { ...run.shop, paidLipsanonBought: true },
+    sectio: { ...run.sectio, paidLipsanonBought: true },
   });
 }
 
-export function leaveShop(run: RunDocument): RunDocument {
-  if (!canLeaveShop(run) || !run.shop) return run;
-  const opening = run.shop.kind === 'opening';
-  const endedConflict = run.war.battles[run.shop.afterBattleIndex]?.loot === true;
+export function leaveSectio(run: RunDocument): RunDocument {
+  if (!canLeaveSectio(run) || !run.sectio) return run;
+  const opening = run.sectio.kind === 'opening';
+  const endedConflict = run.war.battles[run.sectio.afterBattleIndex]?.loot === true;
   return touch({
     ...run,
     phase: 'deployment',
@@ -1981,7 +2095,7 @@ export function leaveShop(run: RunDocument): RunDocument {
     conflictIndex: run.conflictIndex + (!opening && endedConflict ? 1 : 0),
     deployment: null,
     battleRuntime: null,
-    shop: null,
+    sectio: null,
   });
 }
 
@@ -1991,9 +2105,9 @@ export function formatGold(goldTenths: number): string {
 }
 
 export function cardContentsLabel(card: Pick<RunCoreCard, 'pieces'>): string {
-  const counts = new Map<PurchasablePieceType, number>();
+  const counts = new Map<AdlectablePieceType, number>();
   for (const piece of card.pieces) counts.set(piece, (counts.get(piece) ?? 0) + 1);
-  return PURCHASE_ORDER
+  return ADLECTIO_PIECE_ORDER
     .filter((piece) => counts.has(piece))
     .map((piece) => `${counts.get(piece)! > 1 ? `${counts.get(piece)} ` : ''}${PIECE_LABEL[piece]}${counts.get(piece)! > 1 ? 's' : ''}`)
     .join(' + ');

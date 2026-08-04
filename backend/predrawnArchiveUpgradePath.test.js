@@ -418,7 +418,7 @@ test('the exact sparse numeric legacy history upgrades through migration 50', ()
   );
   assert.deepEqual(
     plan.pending.map((entry) => entry.version),
-    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54],
+    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55],
     'the bridge must fill the historical gap before applying every post-36 contract',
   );
   assert.throws(
@@ -450,7 +450,7 @@ test('the exact sparse numeric legacy history upgrades through migration 50', ()
   );
 });
 
-test('required-schema readiness and repair enforce the migrations 37 through 54 contracts', () => {
+test('required-schema readiness and repair enforce the migrations 37 through 55 contracts', () => {
   const relations = sourceSection(
     serverSource,
     'const REQUIRED_SCHEMA_RELATIONS = [',
@@ -599,8 +599,13 @@ test('required-schema readiness and repair enforce the migrations 37 through 54 
   );
   assert.match(
     contractReadiness,
-    /unmigrated_active_run_save_count[\s\S]*version === 54[\s\S]*repair active Run save version contract/,
+    /unmigrated_active_run_version_16_count[\s\S]*version === 54[\s\S]*repair active Run save version contract/,
     'readiness must detect and repair an unmigrated version-16 account Run',
+  );
+  assert.match(
+    contractReadiness,
+    /unmigrated_active_run_version_17_count[\s\S]*version === 55[\s\S]*repair active Run Sectio operation vocabulary contract/,
+    'readiness must detect and repair an unmigrated version-17 Shop-operation account Run',
   );
   assert.match(
     contractReadiness,
@@ -963,13 +968,13 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
 
   const primaryUpgradeProof = sourceSection(
     smokeSource,
-    'async function validatePrimarySparseNumericMigrationUpgrade54()',
+    'async function validatePrimarySparseNumericMigrationUpgrade55()',
     '\nasync function validateEditorMigration16Preservation()',
   );
   assert.match(
     primaryUpgradeProof,
-    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*54\s*\}/,
-    'the production upgrade proof must require a complete 1-54 history',
+    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*55\s*\}/,
+    'the production upgrade proof must require a complete 1-55 history',
   );
   assert.match(
     primaryUpgradeProof,
@@ -983,8 +988,8 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   );
   assert.match(
     primaryUpgradeProof,
-    /length:\s*18[\s\S]*index\s*\+\s*37/,
-    'the production report must include every post-36 migration through 54',
+    /length:\s*19[\s\S]*index\s*\+\s*37/,
+    'the production report must include every post-36 migration through 55',
   );
   assert.match(
     primaryUpgradeProof,
@@ -1011,7 +1016,7 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   const runSaveMigrationProof = sourceSection(
     smokeSource,
     'async function validateRunSaveVersionMigration54()',
-    '\nasync function waitForServer()',
+    '\nasync function validateSectioOperationsVocabularyMigration55()',
   );
   assert.match(
     runSaveMigrationProof,
@@ -1022,6 +1027,21 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
     runSaveMigrationProof,
     /runSaveVersion[\s\S]*formatVersion[\s\S]*revision/,
     'the Run save migration proof must verify the renamed marker and advanced CAS revision',
+  );
+  const sectioMigrationProof = sourceSection(
+    smokeSource,
+    'async function validateSectioOperationsVocabularyMigration55()',
+    '\nasync function waitForServer()',
+  );
+  assert.match(
+    sectioMigrationProof,
+    /inlineMigrationSql\(55\)[\s\S]*inlineMigrationSql\(55\)/,
+    'the Sectio operation vocabulary migration proof must establish idempotency',
+  );
+  assert.match(
+    sectioMigrationProof,
+    /shop-2-0-pp[\s\S]*adlectedCardOfferIds[\s\S]*alienatedUnits[\s\S]*adlectio[\s\S]*run-screen-art\/alienatio[\s\S]*run-sectio-wrap[\s\S]*mediaForeignKeys/,
+    'the Sectio migration proof must cover Adlectio, Alienatio, offer ids, live media, and restored foreign keys',
   );
   assert.match(
     migrationProof,

@@ -16,7 +16,7 @@ import {
   type RunDeploymentPresentation,
 } from './Skirmish';
 import { navigateApp } from './navigation';
-import { installedRunShopWrap, runShopWrapLiveMount } from './runShopWrapCandidates';
+import { installedRunSectioWrap, runSectioWrapLiveMount } from './runSectioWrapCandidates';
 import { runSceneWorkspaceIdentity, type RunSceneSnapshot } from './shell/sceneManifest';
 import { GameplayWorkspaceSceneSlot, RunPresentationSceneSlot } from './shell/AuthoredSceneSlot';
 import { useConfirm } from './shared/ConfirmDialog';
@@ -28,24 +28,24 @@ import {
   CACOCHYMIC_DISPLAY_NAME,
   GOLD_SCALE,
   LIPSANON_BY_ID,
-  buyCard,
+  performAdlectio,
   buyPaidLipsanon,
-  canLeaveShop,
+  canLeaveSectio,
   cashOutPawn,
   closeBattle,
   hasLipsanon,
   leaveAftermath,
-  leaveShop,
+  leaveSectio,
   lipsanonNeedsUnitTarget,
   markReservistDeployed,
   observeRunUnitDeath,
   prepareDeployment,
-  resetShop,
+  resetSectio,
   restartBattle,
   runBattleActivityId,
-  sellArmyUnit,
+  performAlienatio,
   setDeploymentChoices,
-  shopHasChanges,
+  sectioHasChanges,
   takeVacantiaLipsanon,
   type RunCardOffer,
   type RunDocument,
@@ -78,13 +78,13 @@ import {
 } from './RunSelfInspection';
 import {
   DEFAULT_RUN_ARMY_FILTERS,
-  DEFAULT_RUN_SELL_FILTERS,
+  DEFAULT_RUN_ALIENATIO_FILTERS,
   RunArmyWorkspace,
-  RunSellWorkspace,
+  RunAlienatioWorkspace,
   runUnitIdentifier,
   runUnitRosterLabel,
   type RunArmyFilters,
-  type RunSellFilters,
+  type RunAlienatioFilters,
 } from './RunArmyWorkspace';
 import { RunCard } from './RunCard';
 import { RunBattlePreview } from './RunBattlePreview';
@@ -163,7 +163,7 @@ function RunTitleBarStatus({ run, path }: { run: RunDocument; path: string }): R
   return (
     <>
       {/* The phase is the durable Run position; an open Strategikon appends the exact
-          visible workspace address — Shop › Strategikon › Enchiridion › Cards —
+          visible workspace address — Sectio › Strategikon › Enchiridion › Cards —
           rather than leaving the covered phase as the last word in the route. */}
       <TitleBarSlot region="route">{runTitleBarRouteName(run, path)}</TitleBarSlot>
       <div className="skirmish-topbar-status run-topbar-status">
@@ -208,12 +208,12 @@ function useRunAbandon(run: RunDocument): {
   return { abandonDialog: dialog, abandoning, requestAbandon };
 }
 
-/** The installed full-screen Shop scene, or null when the Shop has no scene art. */
-function useInstalledShopScene(): ReactElement | null {
+/** The installed full-screen Sectio scene, or null when the Sectio has no scene art. */
+function useInstalledSectioScene(): ReactElement | null {
   return useMemo(() => {
-    const installed = installedRunShopWrap();
+    const installed = installedRunSectioWrap();
     return installed?.kind === 'screen'
-      ? <img className="run-shop-scene-artwork" src={installed.src} alt="" draggable={false} />
+      ? <img className="run-sectio-scene-artwork" src={installed.src} alt="" draggable={false} />
       : null;
   }, []);
 }
@@ -223,20 +223,20 @@ function RunMetaControls({
   view,
   onNavigate,
   showAbandon = true,
-  purchaseInFlight = false,
+  adlectioInFlight = false,
 }: {
   run: RunDocument;
   view: RunScreenView;
   onNavigate: (view: RunScreenView) => void;
   showAbandon?: boolean;
-  purchaseInFlight?: boolean;
+  adlectioInFlight?: boolean;
 }): ReactElement {
   const replace = useActiveRun((state) => state.replace);
   const { abandonDialog, abandoning, requestAbandon } = useRunAbandon(run);
-  const shop = run.phase === 'shop' ? run.shop : null;
-  const canLeave = canLeaveShop(run);
-  // Nothing inside the shop blocks Continue any more: the Conflict's lipsanon is taken on
-  // Bona Vacantia, before the shop is even built.
+  const sectio = run.phase === 'sectio' ? run.sectio : null;
+  const canLeave = canLeaveSectio(run);
+  // Nothing inside the Sectio blocks Continue any more: the Conflict's lipsanon is taken on
+  // Bona Vacantia, before the Sectio is even built.
   const continueHint: string | null = null;
   const primaryLabel = run.phase === 'bona-vacantia'
     ? 'Bona Vacantia'
@@ -248,18 +248,18 @@ function RunMetaControls({
           ? 'Victory'
           : run.phase === 'victory'
             ? 'War Won'
-            : 'Shop';
+            : 'Sectio';
   return (
     <>
       {abandonDialog}
       <section
         className="run-meta-controls"
         aria-label="Run controls"
-        aria-busy={purchaseInFlight ? true : undefined}
-        inert={purchaseInFlight ? true : undefined}
+        aria-busy={adlectioInFlight ? true : undefined}
+        inert={adlectioInFlight ? true : undefined}
       >
         <div className="skirmish-view-group">
-          <span className="skirmish-eyebrow">{shop ? 'Shop views' : 'Run views'}</span>
+          <span className="skirmish-eyebrow">{sectio ? 'Sectio views' : 'Run views'}</span>
           <div className="run-meta-navigation">
             <ChromeButton unit="inner-text-button"
               data-testid="run-view-primary"
@@ -269,7 +269,7 @@ function RunMetaControls({
             >
               {primaryLabel}
             </ChromeButton>
-            {shop ? (
+            {sectio ? (
               <>
                 <ChromeButton unit="inner-text-button"
                   data-testid="run-view-battle-preview"
@@ -280,45 +280,45 @@ function RunMetaControls({
                   View Battle
                 </ChromeButton>
                 <ChromeButton unit="inner-text-button"
-                  data-testid="run-view-sell"
-                  className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === 'sell' && 'active')}
-                  aria-pressed={view === 'sell'}
-                  onClick={() => onNavigate('sell')}
+                  data-testid="run-view-alienatio"
+                  className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === 'alienatio' && 'active')}
+                  aria-pressed={view === 'alienatio'}
+                  onClick={() => onNavigate('alienatio')}
                 >
-                  Sell Units
+                  Alienatio
                 </ChromeButton>
               </>
             ) : null}
           </div>
         </div>
-        {shop ? (
+        {sectio ? (
           <div className="skirmish-view-group">
-            <span className="skirmish-eyebrow">Shop</span>
+            <span className="skirmish-eyebrow">Sectio</span>
             <div className="run-meta-navigation">
               <ChromeButton unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
-                disabled={!shopHasChanges(run)}
-                data-testid="reset-run-shop"
+                disabled={!sectioHasChanges(run)}
+                data-testid="reset-run-sectio"
                 onClick={() => {
-                  replace(resetShop(run));
+                  replace(resetSectio(run));
                   onNavigate('primary');
                 }}
               >
-                Reset Shop
+                Reset Sectio
               </ChromeButton>
               <ChromeButton unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
                 disabled={!canLeave}
-                data-testid="continue-run-shop"
+                data-testid="continue-run-sectio"
                 title={!canLeave && continueHint ? continueHint : undefined}
                 onClick={() => {
-                  const deployment = prepareDeployment(leaveShop(run));
+                  const deployment = prepareDeployment(leaveSectio(run));
                   const level = deployment.war.battles[deployment.battleIndex]?.level;
                   replace(level ? advanceAutomaticDeployment(deployment, level) : deployment);
                   onNavigate('primary');
                 }}
               >
-                {shop.kind === 'opening' ? 'Continue to first Battle' : 'Continue to next Battle'}
+                {sectio.kind === 'opening' ? 'Continue to first Battle' : 'Continue to next Battle'}
               </ChromeButton>
             </div>
             {!canLeave && continueHint ? <p className="skirmish-grid-hint">{continueHint}</p> : null}
@@ -742,11 +742,11 @@ function LipsanonOffer({
 }
 
 /**
- * The shop's card row. When the owner has installed a wrap, the same row is
+ * The Sectio's card row. When the owner has installed a wrap, the same row is
  * mounted inside its painted stall; otherwise it is the plain grid. The wrap is
  * decoration around the real cards — it never changes what is purchasable.
  */
-function ShopCardRow({
+function SectioCardRow({
   children,
   offerIds,
   onReflowingChange,
@@ -755,7 +755,7 @@ function ShopCardRow({
   offerIds: string[];
   onReflowingChange: (reflowing: boolean) => void;
 }): ReactElement {
-  const wrap = useMemo(() => installedRunShopWrap(), []);
+  const wrap = useMemo(() => installedRunSectioWrap(), []);
   const [box, setBox] = useState({ width: 0, height: 0 });
   const hostRef = useRef<HTMLDivElement | null>(null);
   const rowRef = useRef<HTMLDivElement | null>(null);
@@ -784,8 +784,8 @@ function ShopCardRow({
     if (!row) return undefined;
     const currentRects = new Map<string, RunCardFlightRect>();
     const elements = new Map<string, HTMLElement>();
-    row.querySelectorAll<HTMLElement>('[data-run-shop-offer-id]').forEach((element) => {
-      const id = element.dataset.runShopOfferId;
+    row.querySelectorAll<HTMLElement>('[data-run-sectio-offer-id]').forEach((element) => {
+      const id = element.dataset.runSectioOfferId;
       if (!id) return;
       const rect = element.getBoundingClientRect();
       currentRects.set(id, rect);
@@ -852,13 +852,13 @@ function ShopCardRow({
     return <div className="run-card-grid" ref={rowRef}>{children}</div>;
   }
   const mount = box.width > 0 && box.height > 0
-    ? runShopWrapLiveMount(wrap, cardCount, box.width, box.height)
+    ? runSectioWrapLiveMount(wrap, cardCount, box.width, box.height)
     : null;
   return (
-    <div className="run-shop-wrap-host" ref={hostRef} data-testid="run-shop-wrap">
+    <div className="run-sectio-wrap-host" ref={hostRef} data-testid="run-sectio-wrap">
       {mount ? (
         <div
-          className="run-shop-wrap-frame"
+          className="run-sectio-wrap-frame"
           style={{
             insetInlineStart: `${mount.frame.left}px`,
             insetBlockStart: `${mount.frame.top}px`,
@@ -866,9 +866,9 @@ function ShopCardRow({
             blockSize: `${mount.frame.height}px`,
           }}
         >
-          <img className="run-shop-wrap-art" src={wrap.src} alt="" draggable={false} />
+          <img className="run-sectio-wrap-art" src={wrap.src} alt="" draggable={false} />
           <div
-            className="run-shop-wrap-cards"
+            className="run-sectio-wrap-cards"
             ref={rowRef}
             style={{
               insetInlineStart: `${mount.cards.left}px`,
@@ -886,42 +886,42 @@ function ShopCardRow({
   );
 }
 
-function ShopPanel({
+function SectioPanel({
   run,
   view,
-  sellWorkspace,
+  alienatioWorkspace,
   departingOfferId,
-  purchaseBusy,
-  purchaseAnnouncement,
-  onBuyCard,
+  adlectioBusy,
+  adlectioAnnouncement,
+  onAdlect,
   onCardReflowingChange,
 }: {
   run: RunDocument;
   view: RunScreenView;
-  sellWorkspace: ReactElement;
+  alienatioWorkspace: ReactElement;
   departingOfferId: string | null;
-  purchaseBusy: boolean;
-  purchaseAnnouncement: string;
-  onBuyCard: (offer: RunCardOffer, source: HTMLButtonElement) => void;
+  adlectioBusy: boolean;
+  adlectioAnnouncement: string;
+  onAdlect: (offer: RunCardOffer, source: HTMLButtonElement) => void;
   onCardReflowingChange: (reflowing: boolean) => void;
 }): ReactElement {
   const replace = useActiveRun((state) => state.replace);
-  const shop = run.shop!;
-  const availableOffers = shop.cardOffers.filter((offer) => !shop.purchasedCardOfferIds.includes(offer.offerId));
-  const pestiferousLosses = run.pestiferousLosses.filter((loss) => loss.battleIndex === shop.afterBattleIndex);
+  const sectio = run.sectio!;
+  const availableOffers = sectio.cardOffers.filter((offer) => !sectio.adlectedCardOfferIds.includes(offer.offerId));
+  const pestiferousLosses = run.pestiferousLosses.filter((loss) => loss.battleIndex === sectio.afterBattleIndex);
   return (
     <>
-      {view === 'sell' ? sellWorkspace : view === 'battle-preview' ? <RunBattlePreview run={run} /> : (
-        // The title bar already says Run › Shop, so a heading painted into the
+      {view === 'alienatio' ? alienatioWorkspace : view === 'battle-preview' ? <RunBattlePreview run={run} /> : (
+        // The title bar already says Run › Sectio, so a heading painted into the
         // scene's corner only repeats it. The name stays for assistive tech.
         <RunSceneViewport
           scene={{
-            view: 'shop',
-            className: 'run-shop-workspace',
-            contentClassName: 'run-shop-workspace-content',
-            testId: 'run-shop-workspace',
-            ariaLabel: 'Shop',
-            inert: purchaseBusy,
+            view: 'sectio',
+            className: 'run-sectio-workspace',
+            contentClassName: 'run-sectio-workspace-content',
+            testId: 'run-sectio-workspace',
+            ariaLabel: 'Sectio',
+            inert: adlectioBusy,
           }}
         >
         {/* What the Battle paid is reported on the Battle's own aftermath screen, which the
@@ -945,48 +945,48 @@ function ShopPanel({
           </InnerChromeBox>
         ) : null}
         <section
-          className="run-shop-cards-section"
+          className="run-sectio-cards-section"
           aria-label="Cards"
-          aria-busy={purchaseBusy ? true : undefined}
+          aria-busy={adlectioBusy ? true : undefined}
         >
-          <span className="sr-only" role="status" aria-live="polite">{purchaseAnnouncement}</span>
-          <ShopCardRow
+          <span className="sr-only" role="status" aria-live="polite">{adlectioAnnouncement}</span>
+          <SectioCardRow
             offerIds={availableOffers.map((offer) => offer.offerId)}
             onReflowingChange={onCardReflowingChange}
           >
             {availableOffers.map((offer) => (
               <RunCard
                 card={offer}
-                mode="shop"
+                mode="sectio"
                 departing={departingOfferId === offer.offerId}
                 layoutId={offer.offerId}
                 key={offer.offerId}
-                disabled={purchaseBusy || run.goldTenths < offer.cost * GOLD_SCALE}
-                onSelect={(source) => onBuyCard(offer, source)}
+                disabled={adlectioBusy || run.goldTenths < offer.cost * GOLD_SCALE}
+                onSelect={(source) => onAdlect(offer, source)}
               />
             ))}
-          </ShopCardRow>
+          </SectioCardRow>
           {availableOffers.length === 0 ? (
-            <InnerChromeBox className="run-shop-cards-empty" role="status">
+            <InnerChromeBox className="run-sectio-cards-empty" role="status">
               All offered cards are in the Chartulary.
             </InnerChromeBox>
           ) : null}
         </section>
 
 
-        {shop.paidLipsanonOffer ? (
+        {sectio.paidLipsanonOffer ? (
           <section>
             <h3>Merchant&apos;s Shopkey</h3>
             <LipsanonOffer
               run={run}
-              lipsanonId={shop.paidLipsanonOffer}
-              actionLabel={shop.paidLipsanonBought ? 'Sold out this Conflict' : (
+              lipsanonId={sectio.paidLipsanonOffer}
+              actionLabel={sectio.paidLipsanonBought ? 'Sold out this Conflict' : (
                 <span className="run-paid-lipsanon-price">
                   <span>Buy</span>
                   <RunGoldAmount valueTenths={10 * GOLD_SCALE} className="run-gold-amount--button" />
                 </span>
               )}
-              disabled={shop.paidLipsanonBought || run.goldTenths < 10 * GOLD_SCALE}
+              disabled={sectio.paidLipsanonBought || run.goldTenths < 10 * GOLD_SCALE}
               action={(target) => replace(buyPaidLipsanon(run, target))}
             />
           </section>
@@ -1031,7 +1031,7 @@ function AftermathMeasure({
 /**
  * The screen that closes a won Battle. It is a phase of its own rather than a card over the
  * board: the fight is finished, so the board behind it is no longer the thing being looked at,
- * and the reward it reports used to be a line inside the Shop -- announcing the result of the
+ * and the reward it reports used to be a line inside the Sectio -- announcing the result of the
  * fight in the room where the money is spent.
  *
  * The gold is not banked until Continue, so what the screen says it won and what the Run then
@@ -1271,50 +1271,50 @@ export function RunScreen({
   const run = sceneSnapshot.run;
   const hydrated = sceneSnapshot.hydrated;
   const replace = useActiveRun((state) => state.replace);
-  const [purchaseAnnouncement, setPurchaseAnnouncement] = useState('');
+  const [adlectioAnnouncement, setAdlectioAnnouncement] = useState('');
   const [cardReflowing, setCardReflowing] = useState(false);
-  const [landedPurchaseOfferId, setLandedPurchaseOfferId] = useState<string | null>(null);
-  const commitCardPurchase = useCallback((offer: RunCardOffer): void => {
+  const [landedAdlectioOfferId, setLandedAdlectioOfferId] = useState<string | null>(null);
+  const commitAdlectio = useCallback((offer: RunCardOffer): void => {
     const latest = useActiveRun.getState().run;
-    if (!latest || latest.phase !== 'shop' || !latest.shop) return;
-    const purchased = buyCard(latest, offer.offerId);
-    if (purchased === latest) return;
+    if (!latest || latest.phase !== 'sectio' || !latest.sectio) return;
+    const adlected = performAdlectio(latest, offer.offerId);
+    if (adlected === latest) return;
     // Keep the source seat visually owned by the transfer until the scene snapshot
     // acknowledges its removal. Local flight state can settle one render earlier.
-    setLandedPurchaseOfferId(offer.offerId);
-    replace(purchased);
-    setPurchaseAnnouncement(`${runCardName(offer)} purchased and added to the Chartulary.`);
+    setLandedAdlectioOfferId(offer.offerId);
+    replace(adlected);
+    setAdlectioAnnouncement(`${runCardName(offer)} admitted by Adlectio and added to the Chartulary.`);
   }, [replace]);
-  const { flight: cardFlight, launch: launchCardFlight, element: cardFlightElement } = useRunCardFlight(commitCardPurchase);
-  const purchaseAcknowledged = Boolean(
-    landedPurchaseOfferId
-    && run?.phase === 'shop'
-    && run.shop?.purchasedCardOfferIds.includes(landedPurchaseOfferId),
+  const { flight: cardFlight, launch: launchCardFlight, element: cardFlightElement } = useRunCardFlight(commitAdlectio);
+  const adlectioAcknowledged = Boolean(
+    landedAdlectioOfferId
+    && run?.phase === 'sectio'
+    && run.sectio?.adlectedCardOfferIds.includes(landedAdlectioOfferId),
   );
   useEffect(() => {
-    if (purchaseAcknowledged || (landedPurchaseOfferId && run?.phase !== 'shop')) {
-      setLandedPurchaseOfferId(null);
+    if (adlectioAcknowledged || (landedAdlectioOfferId && run?.phase !== 'sectio')) {
+      setLandedAdlectioOfferId(null);
     }
-  }, [landedPurchaseOfferId, purchaseAcknowledged, run?.phase]);
-  const purchaseBusy = Boolean(cardFlight) || Boolean(landedPurchaseOfferId) || cardReflowing;
+  }, [landedAdlectioOfferId, adlectioAcknowledged, run?.phase]);
+  const adlectioBusy = Boolean(cardFlight) || Boolean(landedAdlectioOfferId) || cardReflowing;
   // A craft address sets the account's Run to the state it names before the screen reads one,
   // every time it is opened, then lands here without its craft parameters (ADR-0354).
   const craft = useRunCraft(routePath, routeSearch);
-  const filterScope = run?.phase === 'shop'
-    ? `${run.id}:shop:${run.shop?.afterBattleIndex ?? run.battleIndex}`
+  const filterScope = run?.phase === 'sectio'
+    ? `${run.id}:sectio:${run.sectio?.afterBattleIndex ?? run.battleIndex}`
     : run
-      ? `${run.id}:outside-shop`
+      ? `${run.id}:outside-sectio`
       : 'no-run';
   const [armyFilterState, setArmyFilterState] = useState<{ scope: string; filters: RunArmyFilters }>({
     scope: 'no-run',
     filters: { ...DEFAULT_RUN_ARMY_FILTERS },
   });
-  const [sellFilterState, setSellFilterState] = useState<{ scope: string; filters: RunSellFilters }>({
+  const [alienatioFilterState, setAlienatioFilterState] = useState<{ scope: string; filters: RunAlienatioFilters }>({
     scope: 'no-run',
-    filters: { ...DEFAULT_RUN_SELL_FILTERS },
+    filters: { ...DEFAULT_RUN_ALIENATIO_FILTERS },
   });
   // The Strategikon is the Run's reference workspace in EVERY phase, not just Battle —
-  // deployment, shop, and victory all open it from the same Controls title mark. Only an
+  // Deployment, Sectio, and Victory all open it from the same Controls title mark. Only an
   // absent Run has nothing to reference, so that is the sole address the screen repairs.
   useEffect(() => {
     if (hydrated && routePath.startsWith('/run/strategikon/') && !run) {
@@ -1330,15 +1330,15 @@ export function RunScreen({
     : sceneSnapshot.workspace.view === 'bona-target'
       ? 'primary'
       : sceneSnapshot.workspace.view;
-  const view = shellRun?.phase !== 'shop' && rawView === 'sell' ? 'primary' : rawView;
+  const view = shellRun?.phase !== 'sectio' && rawView === 'alienatio' ? 'primary' : rawView;
   const strategikonOpen = sceneSnapshot.workspace.view === 'strategikon';
   const bonaTarget = sceneSnapshot.workspace.view === 'bona-target'
     ? sceneSnapshot.workspace
     : null;
-  const buyShopCard = (offer: RunCardOffer, source: HTMLButtonElement): void => {
-    if (purchaseBusy) return;
+  const beginAdlectio = (offer: RunCardOffer, source: HTMLButtonElement): void => {
+    if (adlectioBusy) return;
     const target = document.querySelector('[data-run-card-flight-target]');
-    if (!launchCardFlight(offer, source, target)) commitCardPurchase(offer);
+    if (!launchCardFlight(offer, source, target)) commitAdlectio(offer);
   };
   const selectedUnitId = sceneSnapshot.workspace.view === 'army'
     || sceneSnapshot.workspace.view === 'bona-target'
@@ -1347,10 +1347,10 @@ export function RunScreen({
   const armyFilters = armyFilterState.scope === filterScope
     ? armyFilterState.filters
     : { ...DEFAULT_RUN_ARMY_FILTERS };
-  const sellFilters = sellFilterState.scope === filterScope
-    ? sellFilterState.filters
-    : { ...DEFAULT_RUN_SELL_FILTERS };
-  // Army, Lipsana, and Sell are workspaces of the Run screen itself, so they always
+  const alienatioFilters = alienatioFilterState.scope === filterScope
+    ? alienatioFilterState.filters
+    : { ...DEFAULT_RUN_ALIENATIO_FILTERS };
+  // Army, Lipsana, and Alienatio are workspaces of the Run screen itself, so they always
   // address the Run root. Dropping any open Strategikon address keeps these Controls
   // live instead of navigating to a path the reference workspace still covers.
   const navigateRunView = (nextView: RunScreenView): void => {
@@ -1369,12 +1369,12 @@ export function RunScreen({
     current.pathname = '/run';
     navigateApp(runBonaTargetHref(current.toString(), lipsanonId, unitId), { replace: true, scroll: false });
   };
-  const sellUnit = (unitId: string): void => {
+  const alienateUnit = (unitId: string): void => {
     if (!shellRun) return;
     const latest = useActiveRun.getState().run;
     if (!latest || latest.id !== shellRun.id) return;
-    const sold = sellArmyUnit(latest, unitId);
-    if (sold !== latest) replace(sold);
+    const alienated = performAlienatio(latest, unitId);
+    if (alienated !== latest) replace(alienated);
   };
   const armyWorkspace = shellRun ? (
     <RunArmyWorkspace
@@ -1384,7 +1384,7 @@ export function RunScreen({
       onFiltersChange={(filters) => setArmyFilterState({ scope: filterScope, filters })}
       onSelectUnit={(unitId) => navigateArmyUnit(unitId)}
       onBack={() => navigateArmyUnit(null)}
-      onSell={sellUnit}
+      onAlienate={alienateUnit}
     />
   ) : null;
   const lipsanaWorkspace = shellRun ? <LipsanaWorkspace lipsanonIds={shellRun.lipsana} /> : null;
@@ -1393,19 +1393,19 @@ export function RunScreen({
     : view === 'lipsana'
       ? lipsanaWorkspace
       : null;
-  const shopScene = useInstalledShopScene();
-  const sellWorkspace = shellRun ? (
-    <RunSellWorkspace
+  const sectioScene = useInstalledSectioScene();
+  const alienatioWorkspace = shellRun ? (
+    <RunAlienatioWorkspace
       run={shellRun}
-      filters={sellFilters}
-      onFiltersChange={(filters) => setSellFilterState({ scope: filterScope, filters })}
-      onSell={sellUnit}
+      filters={alienatioFilters}
+      onFiltersChange={(filters) => setAlienatioFilterState({ scope: filterScope, filters })}
+      onAlienate={alienateUnit}
     />
   ) : null;
-  // The Shop scene belongs to the retained shell viewport, not to whichever Shop
+  // The Sectio scene belongs to the retained shell viewport, not to whichever Sectio
   // workspace happens to be in front of it. Keeping it outside the transition region
-  // prevents Shop/View Battle/Sell swaps from fading or remounting the room.
-  const persistentShopScene = shellRun?.phase === 'shop' ? shopScene : null;
+  // prevents Sectio/View Battle/Alienatio swaps from fading or remounting the room.
+  const persistentSectioScene = shellRun?.phase === 'sectio' ? sectioScene : null;
   // A craft request speaks for the whole screen while it runs: the Run it is about to replace must
   // not flash its own phase first, and a refused spec has to say why instead of silently doing
   // nothing.
@@ -1521,16 +1521,16 @@ export function RunScreen({
           </ChromeNavButton>
         </RunSceneViewport>
       )
-      : shellRun.phase === 'shop' && shellRun.shop
+      : shellRun.phase === 'sectio' && shellRun.sectio
             ? (
-              <ShopPanel
+              <SectioPanel
                 run={shellRun}
                 view={view}
-                sellWorkspace={sellWorkspace!}
-                departingOfferId={cardFlight?.offer.offerId ?? landedPurchaseOfferId}
-                purchaseBusy={purchaseBusy}
-                purchaseAnnouncement={purchaseAnnouncement}
-                onBuyCard={buyShopCard}
+                alienatioWorkspace={alienatioWorkspace!}
+                departingOfferId={cardFlight?.offer.offerId ?? landedAdlectioOfferId}
+                adlectioBusy={adlectioBusy}
+                adlectioAnnouncement={adlectioAnnouncement}
+                onAdlect={beginAdlectio}
                 onCardReflowingChange={setCardReflowing}
               />
             )
@@ -1565,7 +1565,7 @@ export function RunScreen({
       sceneInstance={`${shellRun?.id ?? 'none'}:${sceneSnapshot.phase}:${runSceneWorkspaceIdentity(sceneSnapshot.workspace)}`}
     >
       {cardFlightElement}
-      {/* Shop/victory use the shared HUD without mounting a battlefield. Their replaceable
+      {/* Sectio/victory use the shared HUD without mounting a battlefield. Their replaceable
           presentation scene still owns its HUD view state explicitly; it must not borrow an
           outgoing or incoming battlefield's camera/overlay store during director overlap. */}
       <SkirmishViewStoreProvider>
@@ -1576,7 +1576,7 @@ export function RunScreen({
           ) ? ' has-lipsana' : ''}`}
           testId="run-screen"
           titleBarContent={shellRun ? <RunTitleBarStatus run={shellRun} path={routePath} /> : null}
-          persistentViewportArtwork={persistentShopScene}
+          persistentViewportArtwork={persistentSectioScene}
           lipsanonIds={shellRun
             ? bonaTarget
               ? [...shellRun.lipsana, bonaTarget.lipsanonId]
@@ -1590,7 +1590,7 @@ export function RunScreen({
                 view={view}
                 onNavigate={navigateRunView}
                 showAbandon={shellRun.phase !== 'victory'}
-                purchaseInFlight={purchaseBusy}
+                adlectioInFlight={adlectioBusy}
               />
             )
             : null}

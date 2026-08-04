@@ -1016,10 +1016,10 @@ if (!/export function SkirmishShell[\s\S]*?<SkirmishHud \{\.\.\.hudProps\} contr
   || !/export function Skirmish\b[\s\S]*?<SkirmishStoreProvider>[\s\S]*?<SkirmishSession \{\.\.\.props\} \/>[\s\S]*?<\/SkirmishStoreProvider>/.test(skirmish)) {
   failures.push('Battle must render through one instance-owned Skirmish session and the one SkirmishShell that owns SkirmishHud');
 }
-if (!/<SkirmishShell[\s\S]*?controlsContent=\{shellRun[\s\S]*?<RunMetaControls[\s\S]*?run=\{shellRun\}[\s\S]*?view=\{view\}[\s\S]*?onNavigate=\{navigateRunView\}[\s\S]*?showAbandon=\{shellRun\.phase !== 'victory'\}[\s\S]*?purchaseInFlight=\{purchaseBusy\}[\s\S]*?\/>[\s\S]*?: null\}/.test(runScreen)
-  || !/function RunMetaControls[\s\S]*?<section[\s\S]*?className="run-meta-controls"[\s\S]*?aria-label="Run controls"[\s\S]*?inert=\{purchaseInFlight \? true : undefined\}/.test(runScreen)
+if (!/<SkirmishShell[\s\S]*?controlsContent=\{shellRun[\s\S]*?<RunMetaControls[\s\S]*?run=\{shellRun\}[\s\S]*?view=\{view\}[\s\S]*?onNavigate=\{navigateRunView\}[\s\S]*?showAbandon=\{shellRun\.phase !== 'victory'\}[\s\S]*?adlectioInFlight=\{adlectioBusy\}[\s\S]*?\/>[\s\S]*?: null\}/.test(runScreen)
+  || !/function RunMetaControls[\s\S]*?<section[\s\S]*?className="run-meta-controls"[\s\S]*?aria-label="Run controls"[\s\S]*?inert=\{adlectioInFlight \? true : undefined\}/.test(runScreen)
   || /function RunShell|function RunControlsRail|chromeConsumer="run-controls"/.test(runScreen)) {
-  failures.push('Run shop must use the Battle-owned SkirmishShell and replace only SkirmishHud contents');
+  failures.push('Run Sectio must use the Battle-owned SkirmishShell and replace only SkirmishHud contents');
 }
 if (!/export function RunSceneViewport/.test(runWorkspace)
   || !/<main[\s\S]*?className=\{`run-workspace \$\{scene\.className \?\? ''\}`\.trim\(\)\}[\s\S]*?data-run-scene-view=\{scene\.view\}/.test(runWorkspace)
@@ -1031,11 +1031,11 @@ if (!/<RunSceneViewport[\s\S]*?scene=\{\{[\s\S]*?view: 'army'[\s\S]*?contentClas
 }
 const playerRunSources = `${runScreen}\n${runArmyWorkspace}\n${runLipsana}`;
 for (const testId of [
-  'run-shop-workspace',
+  'run-sectio-workspace',
   'run-victory-workspace',
   'run-army-ledger-workspace',
   'run-army-profile-workspace',
-  'run-sell-workspace',
+  'run-alienatio-workspace',
   'run-lipsana-workspace',
   'run-loading-workspace',
   'run-empty-workspace',
@@ -1055,7 +1055,7 @@ if (!/testId=\{runDeployment \? 'run-deployment' : 'skirmish'\}/.test(skirmish)
   || /run-deployment-workspace|<LevelPreviewColumn|Choose square…/.test(runBattlefieldSources)) {
   failures.push('Run Deployment must use the battlefield and phase-specific Controls instead of a RunWorkspace level manifest');
 }
-if (/<OuterChromeBox\b|<OuterChromeHeader\b|chromeConsumer="run-(?:draft|deployment|shop|victory|army-ledger|army-profile|sell-units|empty)"/.test(playerRunSources)) {
+if (/<OuterChromeBox\b|<OuterChromeHeader\b|chromeConsumer="run-(?:draft|deployment|sectio|victory|army-ledger|army-profile|alienatio|empty)"/.test(playerRunSources)) {
   failures.push('player-facing Run destinations must not restore top-level outer panels');
 }
 if (/<select\b|type="checkbox"/.test(playerRunSources)) {

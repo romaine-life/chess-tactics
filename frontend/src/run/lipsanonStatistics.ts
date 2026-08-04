@@ -186,7 +186,7 @@ export function lipsanonStatEventsForRunTransition(
     }
   }
   const wonBattle = previous.phase === 'battle'
-    && (next.phase === 'shop' || next.phase === 'victory')
+    && (next.phase === 'sectio' || next.phase === 'victory')
     && previous.battleIndex === next.battleIndex;
   if (wonBattle) {
     for (const lipsanonId of previous.lipsana) {

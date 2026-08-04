@@ -79,35 +79,35 @@ describe('run craft spec parsing', () => {
     expect(() => parseRunCraftSpec('?craft=battle&army=horse')).toThrow(/"horse" is not a piece/);
   });
 
-  it('refuses a Shop card worth more than a card can be worth', () => {
-    expect(() => parseRunCraftSpec('?craft=shop&offers=queen+queen')).toThrow(/worth 18 gold/);
+  it('refuses a Sectio card worth more than a card can be worth', () => {
+    expect(() => parseRunCraftSpec('?craft=sectio&offers=queen+queen')).toThrow(/worth 18 gold/);
   });
 
   it('reads a card type off an offer', () => {
-    expect(spec('?craft=shop&offers=rook:tactical').offers).toEqual([
+    expect(spec('?craft=sectio&offers=rook:tactical').offers).toEqual([
       { pieces: ['rook'], cardType: 'legatine' },
     ]);
   });
 
   it('rejects a lipsanon id that does not exist', () => {
-    expect(() => parseRunCraftSpec('?craft=shop&lipsana=lucky-rabbit')).toThrow(/not a lipsanon id/);
+    expect(() => parseRunCraftSpec('?craft=sectio&lipsana=lucky-rabbit')).toThrow(/not a lipsanon id/);
   });
 
   it('keeps the Run screen own parameters when the craft request is spent', () => {
-    expect(searchWithoutCraftParams('?craft=shop&battle=3&gold=25&view=sell')).toBe('?view=sell');
-    expect(searchWithoutCraftParams('?craft=shop')).toBe('');
+    expect(searchWithoutCraftParams('?craft=sectio&battle=3&gold=25&view=alienatio')).toBe('?view=alienatio');
+    expect(searchWithoutCraftParams('?craft=sectio')).toBe('');
   });
 });
 
 describe('run craft specs from a request body', () => {
   it('reads the same spec the address grammar reads', () => {
-    expect(runCraftSpecFromJson({ phase: 'shop', battle: 3, gold: 25, army: 'knight,rook' }))
-      .toEqual(spec('?craft=shop&battle=3&gold=25&army=knight,rook'));
+    expect(runCraftSpecFromJson({ phase: 'sectio', battle: 3, gold: 25, army: 'knight,rook' }))
+      .toEqual(spec('?craft=sectio&battle=3&gold=25&army=knight,rook'));
   });
 
   it('takes structured units, abilities and card objects the address cannot carry', () => {
     const parsed = runCraftSpecFromJson({
-      phase: 'shop',
+      phase: 'sectio',
       battle: 2,
       army: [{ type: 'rook', abilities: ['agminate'] }, 'pawn'],
       offers: [{ pieces: ['pawn', 'pawn'], type: 'concinnous' }],
@@ -122,17 +122,17 @@ describe('run craft specs from a request body', () => {
   });
 
   it('refuses a field it does not understand rather than crafting the wrong Run', () => {
-    expect(() => runCraftSpecFromJson({ phase: 'shop', goldd: 40 })).toThrow(/unknown field "goldd"/);
+    expect(() => runCraftSpecFromJson({ phase: 'sectio', goldd: 40 })).toThrow(/unknown field "goldd"/);
   });
 
   it('refuses an ability that is not an ability', () => {
-    expect(() => runCraftSpecFromJson({ phase: 'shop', army: [{ type: 'rook', abilities: ['flying'] }] }))
+    expect(() => runCraftSpecFromJson({ phase: 'sectio', army: [{ type: 'rook', abilities: ['flying'] }] }))
       .toThrow(/"flying" is not an ability/);
   });
 
   it('grants crafted abilities to the units it adds', () => {
     const run = craftRunDocument(
-      runCraftSpecFromJson({ phase: 'shop', battle: 2, army: [{ type: 'rook', abilities: ['agminate'] }, 'pawn'] }),
+      runCraftSpecFromJson({ phase: 'sectio', battle: 2, army: [{ type: 'rook', abilities: ['agminate'] }, 'pawn'] }),
       war(),
     );
     expect(run.army.map((unit) => `${unit.type}:${unit.abilities.join('+') || 'none'}`))
@@ -141,34 +141,34 @@ describe('run craft specs from a request body', () => {
 });
 
 describe('crafted Run documents', () => {
-  it('crafts the opening Shop as itself', () => {
-    const run = craft('?craft=shop');
-    expect(run.phase).toBe('shop');
-    expect(run.shop?.kind).toBe('opening');
+  it('crafts the opening Sectio as itself', () => {
+    const run = craft('?craft=sectio');
+    expect(run.phase).toBe('sectio');
+    expect(run.sectio?.kind).toBe('opening');
     expect(run.goldTenths).toBe(8 * GOLD_SCALE);
     expect(run.army).toHaveLength(3);
   });
 
-  it('refuses to override the opening Shop, whose contents the Run contract pins', () => {
-    expect(() => craft('?craft=shop&gold=40')).toThrow(/opening Shop is fixed/);
+  it('refuses to override the opening Sectio, whose contents the Run contract pins', () => {
+    expect(() => craft('?craft=sectio&gold=40')).toThrow(/opening Sectio is fixed/);
   });
 
-  it('crafts the Shop that precedes a later Battle', () => {
-    const run = craft('?craft=shop&battle=3');
-    expect(run.phase).toBe('shop');
-    expect(run.shop?.kind).toBe('post-battle');
-    expect(run.shop?.afterBattleIndex).toBe(1);
+  it('crafts the Sectio that precedes a later Battle', () => {
+    const run = craft('?craft=sectio&battle=3');
+    expect(run.phase).toBe('sectio');
+    expect(run.sectio?.kind).toBe('post-battle');
+    expect(run.sectio?.afterBattleIndex).toBe(1);
     expect(run.battleIndex).toBe(1);
   });
 
-  it('sets gold exactly, and moves the Shop entry snapshot with it', () => {
-    const run = craft('?craft=shop&battle=3&gold=25.5');
+  it('sets gold exactly, and moves the Sectio entry snapshot with it', () => {
+    const run = craft('?craft=sectio&battle=3&gold=25.5');
     expect(run.goldTenths).toBe(255);
-    expect(run.shop?.entrySnapshot.goldTenths).toBe(255);
+    expect(run.sectio?.entrySnapshot.goldTenths).toBe(255);
   });
 
   it('crafts an exact army beside the King', () => {
-    const run = craft('?craft=shop&battle=2&army=knight,rook,queen');
+    const run = craft('?craft=sectio&battle=2&army=knight,rook,queen');
     expect(run.army.filter((unit) => unit.type === 'king')).toHaveLength(1);
     expect(run.army.filter((unit) => unit.type !== 'king').map((unit) => unit.type))
       .toEqual(['knight', 'rook', 'queen']);
@@ -176,15 +176,15 @@ describe('crafted Run documents', () => {
   });
 
   it('adds to the army the Run already has', () => {
-    const base = craft('?craft=shop&battle=2');
-    const added = craft('?craft=shop&battle=2&add=queen');
+    const base = craft('?craft=sectio&battle=2');
+    const added = craft('?craft=sectio&battle=2&add=queen');
     expect(added.army).toHaveLength(base.army.length + 1);
     expect(added.army.at(-1)?.type).toBe('queen');
   });
 
   it('offers exactly the cards the link asks for, priced the way the game prices them', () => {
-    const run = craft('?craft=shop&battle=2&offers=rook,pawn+pawn:concinnous,knight:tactical,bishop:hieratic');
-    const offers = run.shop?.cardOffers ?? [];
+    const run = craft('?craft=sectio&battle=2&offers=rook,pawn+pawn:concinnous,knight:tactical,bishop:hieratic');
+    const offers = run.sectio?.cardOffers ?? [];
     expect(offers.map((offer) => offer.pieces)).toEqual([['rook'], ['pawn', 'pawn'], ['knight'], ['bishop']]);
     expect(offers[0].cost).toBe(PIECE_VALUE.rook);
     expect(offers[0].cardType).toBeNull();
@@ -194,38 +194,38 @@ describe('crafted Run documents', () => {
     expect(offers[3].cardType).toBe('hieratic');
     expect(offers[3].cost).toBe(PIECE_VALUE.bishop + AGMINATE_COST);
     expect(offers[3].effectTargetIndex).toBeNull();
-    expect(run.shop?.purchasedCardOfferIds).toEqual([]);
+    expect(run.sectio?.adlectedCardOfferIds).toEqual([]);
   });
 
   it('discounts a Plagued offer by its Plagued piece', () => {
-    const run = craft('?craft=shop&battle=2&offers=rook:pestiferous');
-    const offer = run.shop!.cardOffers[0];
+    const run = craft('?craft=sectio&battle=2&offers=rook:pestiferous');
+    const offer = run.sectio!.cardOffers[0];
     expect(offer.cardType).toBe('pestiferous');
     expect(offer.cacochymicPieceIndex).toBe(0);
     expect(offer.cost).toBe(PIECE_VALUE.rook - 2);
   });
 
-  it('keeps the Shop card count consistent with its entry snapshot', () => {
-    const run = craft('?craft=shop&battle=3&army=knight,knight&offers=rook');
+  it('keeps the Sectio card count consistent with its entry snapshot', () => {
+    const run = craft('?craft=sectio&battle=3&army=knight,knight&offers=rook');
     expect(run.cards.length).toBe(
-      (run.shop?.entrySnapshot.cards.length ?? 0) + (run.shop?.purchasedCardOfferIds.length ?? 0),
+      (run.sectio?.entrySnapshot.cards.length ?? 0) + (run.sectio?.adlectedCardOfferIds.length ?? 0),
     );
   });
 
-  it('crafts the cards the Run already holds by buying them for real', () => {
-    const run = craft('?craft=shop&battle=3&cards=rook,pawn+pawn:concinnous&gold=20');
-    expect(run.cards).toHaveLength(3); // the opening purchase plus the two named cards
+  it('crafts the cards the Run already holds by adlecting them for real', () => {
+    const run = craft('?craft=sectio&battle=3&cards=rook,pawn+pawn:concinnous&gold=20');
+    expect(run.cards).toHaveLength(3); // the opening Adlectio plus the two named cards
     const held = run.cards.slice(1);
     expect(held.map((card) => card.coreId)).toEqual(['r', 'pp']);
-    // Real purchases: every held unit id is an army unit, and the Concinnous target got its
-    // ability from buyCard rather than from the spec.
+    // Real adlectiones: every held unit id is an army unit, and the Concinnous target got its
+    // ability from performAdlectio rather than from the spec.
     const armyIds = new Set(run.army.map((unit) => unit.id));
     expect(held.every((card) => card.unitIds.every((id) => armyIds.has(id)))).toBe(true);
     expect(run.army.find((unit) => unit.id === held[1].effectTargetUnitId)?.abilities)
       .toContain('eutactic');
-    // The staged offers are withdrawn: the Shop reads as the one the game dealt.
-    expect(run.shop?.cardOffers.some((offer) => offer.offerId.startsWith('craft-1'))).toBe(false);
-    expect(run.shop?.purchasedCardOfferIds).toEqual([]);
+    // The staged offers are withdrawn: the Sectio reads as the one the game dealt.
+    expect(run.sectio?.cardOffers.some((offer) => offer.offerId.startsWith('craft-1'))).toBe(false);
+    expect(run.sectio?.adlectedCardOfferIds).toEqual([]);
     // And they were not paid for out of the Run's gold.
     expect(run.goldTenths).toBe(20 * GOLD_SCALE);
   });
@@ -238,11 +238,11 @@ describe('crafted Run documents', () => {
   });
 
   it('refuses held cards beside a crafted army, which would replace their units', () => {
-    expect(() => craft('?craft=shop&battle=3&cards=rook&army=knight')).toThrow(/cards and army/);
+    expect(() => craft('?craft=sectio&battle=3&cards=rook&army=knight')).toThrow(/cards and army/);
   });
 
   it('round-trips held cards through the spec fingerprint and the address', () => {
-    const parsed = spec('?craft=shop&battle=3&cards=rook,pawn+pawn:concinnous');
+    const parsed = spec('?craft=sectio&battle=3&cards=rook,pawn+pawn:concinnous');
     expect(runCraftSpecToJson(parsed).cards)
       .toEqual([{ pieces: ['rook'], type: null }, { pieces: ['pawn', 'pawn'], type: 'concinnous' }]);
     expect(runCraftAddress(parsed)).toContain('cards=rook%2Cpawn%2Bpawn%3Aconcinnous');
@@ -264,7 +264,7 @@ describe('crafted Run documents', () => {
   });
 
   it('holds the lipsana the link names', () => {
-    const run = craft('?craft=shop&battle=2&lipsana=quartermasters-ledger');
+    const run = craft('?craft=sectio&battle=2&lipsana=quartermasters-ledger');
     expect(run.lipsana).toContain('quartermasters-ledger');
   });
 
@@ -273,7 +273,7 @@ describe('crafted Run documents', () => {
     expect(run.phase).toBe('deployment');
     expect(run.battleIndex).toBe(1);
     expect(run.deployment?.battleIndex).toBe(1);
-    expect(run.shop).toBeNull();
+    expect(run.sectio).toBeNull();
   });
 
   it('crafts a Battle already under way', () => {
@@ -294,13 +294,13 @@ describe('crafted Run documents', () => {
   it('crafts the won War', () => {
     const run = craft('?craft=victory&gold=99');
     expect(run.phase).toBe('victory');
-    expect(run.shop).toBeNull();
+    expect(run.sectio).toBeNull();
     expect(run.goldTenths).toBe(990);
   });
 
   it('plays through loot Battles while fast-forwarding', () => {
-    const run = craft('?craft=shop&battle=3', war(4, [0]));
-    expect(run.phase).toBe('shop');
+    const run = craft('?craft=sectio&battle=3', war(4, [0]));
+    expect(run.phase).toBe('sectio');
     expect(run.lipsana.length).toBeGreaterThan(0);
     expect(run.conflictIndex).toBe(1);
   });
@@ -313,7 +313,7 @@ describe('crafted Run documents', () => {
     const run = craft('?craft=aftermath&battle=2');
     expect(run.phase).toBe('aftermath');
     expect(run.battleIndex).toBe(1);
-    expect(run.shop).toBeNull();
+    expect(run.sectio).toBeNull();
     // The reward is reported and not yet banked, exactly as a played Battle leaves it.
     expect(run.aftermath?.goldTenths).toBe(GOLD_SCALE);
     expect(run.aftermath?.turns).toBe(14);
@@ -335,13 +335,13 @@ describe('crafted Run documents', () => {
   it('refuses a Battle report the Run has no room for', () => {
     expect(() => craft('?craft=aftermath&battle=4')).toThrow(/ends the War/);
     expect(() => craft('?craft=aftermath&battle=2&fallen=99')).toThrow(/could fall/);
-    expect(() => craft('?craft=shop&battle=3&turns=12')).toThrow(/belong to craft=aftermath/);
+    expect(() => craft('?craft=sectio&battle=3&turns=12')).toThrow(/belong to craft=aftermath/);
   });
 
   it('crafts documents the Run loader accepts unchanged', () => {
     for (const search of [
-      '?craft=shop',
-      '?craft=shop&battle=3&gold=25&army=knight,rook&offers=queen,pawn+pawn:pestiferous',
+      '?craft=sectio',
+      '?craft=sectio&battle=3&gold=25&army=knight,rook&offers=queen,pawn+pawn:pestiferous',
       '?craft=deployment&battle=2',
       '?craft=battle&battle=2',
       '?craft=aftermath&battle=2&turns=21&seconds=402&fallen=2',
@@ -393,44 +393,44 @@ describe('links that craft the Run they open', () => {
   });
 
   it('fingerprints the same requested state to the same text, whatever order it was written in', () => {
-    const fromAddress = spec('?craft=shop&battle=3&gold=12.5&army=rook,pawn');
-    const fromJson = runCraftSpecFromJson({ army: 'rook,pawn', gold: 12.5, battle: 3, phase: 'shop' });
+    const fromAddress = spec('?craft=sectio&battle=3&gold=12.5&army=rook,pawn');
+    const fromJson = runCraftSpecFromJson({ army: 'rook,pawn', gold: 12.5, battle: 3, phase: 'sectio' });
     expect(runCraftSpecFingerprint(fromJson)).toBe(runCraftSpecFingerprint(fromAddress));
   });
 
   it('fingerprints a different state differently', () => {
-    expect(runCraftSpecFingerprint(spec('?craft=shop&battle=3&gold=12.5')))
-      .not.toBe(runCraftSpecFingerprint(spec('?craft=shop&battle=3&gold=25')));
+    expect(runCraftSpecFingerprint(spec('?craft=sectio&battle=3&gold=12.5')))
+      .not.toBe(runCraftSpecFingerprint(spec('?craft=sectio&battle=3&gold=25')));
   });
 
   it('keeps the readable grammar as a way to write a spec by hand', () => {
-    expect(runCraftAddress(spec('?craft=shop&battle=4&gold=33.5&army=rook,knight')))
-      .toBe('/run?craft=shop&battle=4&gold=33.5&army=rook%2Cknight');
+    expect(runCraftAddress(spec('?craft=sectio&battle=4&gold=33.5&army=rook,knight')))
+      .toBe('/run?craft=sectio&battle=4&gold=33.5&army=rook%2Cknight');
   });
 
   it('carries every field of the address grammar back unchanged', () => {
-    const search = '?craft=shop&battle=3&war=off-w-craft&seed=99&tier=1&gold=12.5'
+    const search = '?craft=sectio&battle=3&war=off-w-craft&seed=99&tier=1&gold=12.5'
       + '&army=rook,pawn&add=knight&offers=queen,pawn+pawn:concinnous&loot=fair-scales'
       + '&paid=quartermasters-ledger&lipsana=surveyors-compass';
     expect(roundTrip(search)).toEqual(spec(search));
   });
 
   it('refuses to write an address for a spec it would have to shorten', () => {
-    const rich = runCraftSpecFromJson({ phase: 'shop', battle: 4, army: [{ type: 'rook', abilities: ['agminate'] }] });
+    const rich = runCraftSpecFromJson({ phase: 'sectio', battle: 4, army: [{ type: 'rook', abilities: ['agminate'] }] });
     expect(() => runCraftAddress(rich)).toThrow(/cannot be written as an address/);
   });
 
   it('recognises a hand-written address as a craft request', () => {
-    expect(hasRunCraftRequest('?craft=shop&battle=2')).toBe(true);
+    expect(hasRunCraftRequest('?craft=sectio&battle=2')).toBe(true);
     expect(hasRunCraftRequest('?view=army')).toBe(false);
   });
 
   it('is spent once minted, so the Run screen keeps only its own parameters', () => {
-    expect(searchWithoutCraftParams('?craft=shop&battle=3&gold=25&view=army')).toBe('?view=army');
+    expect(searchWithoutCraftParams('?craft=sectio&battle=3&gold=25&view=army')).toBe('?view=army');
   });
 
   it('writes the same JSON the request body grammar reads, so an id always means one spec', () => {
-    const source = spec('?craft=shop&battle=3&gold=12.5&offers=pawn+pawn:pestiferous&lipsana=fair-scales');
+    const source = spec('?craft=sectio&battle=3&gold=12.5&offers=pawn+pawn:pestiferous&lipsana=fair-scales');
     expect(runCraftSpecFromJson(runCraftSpecToJson(source))).toEqual(source);
   });
 });

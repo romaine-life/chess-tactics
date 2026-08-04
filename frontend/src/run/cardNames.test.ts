@@ -51,7 +51,7 @@ describe('Run card names', () => {
     for (const card of RUN_CARD_DECK) {
       expect(canonicalCardId(card)).toBe(card.id);
     }
-    // A shop offer and an art-review fixture with deck compositions read as their card.
+    // A sectio offer and an art-review fixture with deck compositions read as their card.
     expect(runCardName({ pieces: ['knight', 'bishop'] as RunCoreCard['pieces'] })).toBe(RUN_CARD_NAME_BY_ID.kb);
     expect(runCardName({ pieces: ['pawn', 'rook'] as RunCoreCard['pieces'] })).toBe(RUN_CARD_NAME_BY_ID.pr);
   });

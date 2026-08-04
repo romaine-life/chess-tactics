@@ -4,7 +4,7 @@
 // not the pointer path — an invisible overlay shielding the board passes every unit
 // test while making the game unplayable; see the strategikon-slot regression, #552).
 //
-// Drives a FRESH anonymous profile end-to-end: start run → leave the opening Shop without buying → begin battle
+// Drives a FRESH anonymous profile end-to-end: start run → leave the opening Sectio without buying → begin battle
 // → click a unit's tile → click a legal destination → assert the move commits, the
 // enemy replies, and the open Strategikon still takes the pointer. Fails loudly at
 // the exact step where a click is swallowed.
@@ -215,13 +215,13 @@ try {
 
   await page.waitForFunction(() => [...document.querySelectorAll('button')].some((b) => (b.textContent || '').trim() === 'Start Run'));
   if (!await clickButton('Start Run')) await fail('start-run', JSON.stringify(await buttonDiagnostics('Start Run')));
-  await waitPhase('shop', 'start-run');
+  await waitPhase('sectio', 'start-run');
 
   if (deploymentOnly) {
     const prepared = await page.evaluate(async () => {
       const { useActiveRun } = await import('/src/run/store.ts');
       const run = useActiveRun.getState().run;
-      if (!run || run.phase !== 'shop' || run.army.length < 2) return null;
+      if (!run || run.phase !== 'sectio' || run.army.length < 2) return null;
       const army = run.army.map((unit, index) => ({
         ...unit,
         abilities: [
@@ -375,11 +375,11 @@ try {
   ) {
     await fail('begin-battle-transition', JSON.stringify(transition));
   }
-  console.log(`director-owned opening Shop → ${deploymentOnly ? 'Deployment' : 'Battle'} transition: OK`);
+  console.log(`director-owned opening Sectio → ${deploymentOnly ? 'Deployment' : 'Battle'} transition: OK`);
 
   await page.waitForFunction(() => document.querySelector('[data-testid="skirmish-board"]')
     ?.getAttribute('data-arriving') === 'false');
-  const transitionShot = 'tmp-shots/run-opening-shop-battle-transition.png';
+  const transitionShot = 'tmp-shots/run-opening-sectio-battle-transition.png';
   const transitionBoard = await page.$('.skirmish-war-room');
   if (!transitionBoard) await fail('transition-screenshot', 'Battle workspace unavailable after commit');
   await transitionBoard.screenshot({ path: transitionShot });
@@ -584,7 +584,7 @@ try {
     process.exit(0);
   }
   if (transitionOnly) {
-    console.log('PASS — opening Shop Continue is optional-commerce and director-owned through Battle');
+    console.log('PASS — opening Sectio Continue is optional-commerce and director-owned through Battle');
     await browser.close();
     rmSync(browserProfile, { recursive: true, force: true });
     process.exit(0);

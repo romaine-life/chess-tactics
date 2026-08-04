@@ -20,8 +20,8 @@ import {
   acquireLipsanon,
   battleVictoryGoldTenths,
   beginBattle,
-  buyCard,
-  canLeaveShop,
+  performAdlectio,
+  canLeaveSectio,
   cashOutPawn,
   closeBattle,
   createRun,
@@ -31,19 +31,19 @@ import {
   grantGold,
   hieraticAgminateAcquisitionTarget,
   leaveAftermath,
-  leaveShop,
+  leaveSectio,
   migrateRunSaveDocument,
   observeRunUnitDeath,
   normalizeRunDocument,
-  OPENING_SHOP_ROLL_BATTLE_INDEX,
-  openingShopOffers,
-  openShop,
+  OPENING_SECTIO_ROLL_BATTLE_INDEX,
+  openingSectioOffers,
+  openSectio,
   prepareDeployment,
-  resetShop,
+  resetSectio,
   runAbilityDescription,
   runAbilityDisplayName,
-  sellArmyUnit,
-  shopHasChanges,
+  performAlienatio,
+  sectioHasChanges,
   takeVacantiaLipsanon,
   legatineAdlectedAcquisitionTarget,
   type RunDocument,
@@ -64,7 +64,7 @@ function war(battles = 4, lootAt: number[] = []): RunWarSnapshot {
 }
 
 function cheapestOpeningOffer(run: RunDocument) {
-  return [...run.shop!.cardOffers].sort((left, right) => left.cost - right.cost)[0];
+  return [...run.sectio!.cardOffers].sort((left, right) => left.cost - right.cost)[0];
 }
 
 /** A Conflict that ends in loot now opens with Bona Vacantia, so a run may start there. */
@@ -77,29 +77,29 @@ function deployedRun(seed = 17, snapshot = war()): RunDocument {
   let run = pastOpeningLipsanon(createRun(snapshot, seed, '2026-01-01T00:00:00.000Z'));
   // A qualifier can price an opening offer past the starting gold, so open with the
   // cheapest card rather than whichever one landed in slot 0.
-  run = buyCard(run, cheapestOpeningOffer(run).offerId);
-  run = prepareDeployment(leaveShop(run));
+  run = performAdlectio(run, cheapestOpeningOffer(run).offerId);
+  run = prepareDeployment(leaveSectio(run));
   return beginBattle(run, run.army.map((unit) => unit.id), [], []);
 }
 
 function deployedAtaraxiaRun(seed = 17, snapshot = war()): RunDocument {
   let run = pastOpeningLipsanon(createRun(snapshot, seed, 1, '2026-01-01T00:00:00.000Z'));
-  run = buyCard(run, cheapestOpeningOffer(run).offerId);
-  run = prepareDeployment(leaveShop(run));
+  run = performAdlectio(run, cheapestOpeningOffer(run).offerId);
+  run = prepareDeployment(leaveSectio(run));
   return beginBattle(run, run.army.map((unit) => unit.id), [], []);
 }
 
-function openingShopRunWithPawn(snapshot = war()): RunDocument {
+function openingSectioRunWithPawn(snapshot = war()): RunDocument {
   for (let seed = 1; seed <= 10_000; seed += 1) {
     const run = createRun(snapshot, seed, '2026-01-01T00:00:00.000Z');
-    const offer = run.shop!.cardOffers.find((candidate) => candidate.pieces.includes('pawn'));
-    if (offer) return buyCard(run, offer.offerId);
+    const offer = run.sectio!.cardOffers.find((candidate) => candidate.pieces.includes('pawn'));
+    if (offer) return performAdlectio(run, offer.offerId);
   }
   throw new Error('Expected a seeded opening card containing a Pawn.');
 }
 
 function deployedRunWithPawn(snapshot = war()): RunDocument {
-  const run = prepareDeployment(leaveShop(openingShopRunWithPawn(snapshot)));
+  const run = prepareDeployment(leaveSectio(openingSectioRunWithPawn(snapshot)));
   return beginBattle(run, run.army.map((unit) => unit.id), [], []);
 }
 
@@ -142,17 +142,17 @@ describe('Run piece economy', () => {
     expect(run.army.map((unit) => [unit.type, unit.number])).toEqual([['king', 1], ['pawn', 1], ['pawn', 2]]);
     expect(run.nextArmyUnitNumberByType.pawn).toBe(3);
     expect(run.goldTenths).toBe(RUN_STARTING_GOLD_TENTHS);
-    expect(run.phase).toBe('shop');
-    expect(run.shop?.kind).toBe('opening');
-    expect(run.shop?.cardOffers).toHaveLength(RUN_OPENING_OFFER_COUNT);
-    expect(new Set(run.shop?.cardOffers.map((offer) => offer.offerId)).size).toBe(RUN_OPENING_OFFER_COUNT);
-    expect(new Set(run.shop?.cardOffers.map((offer) => offer.value)).size).toBe(RUN_OPENING_OFFER_COUNT);
-    expect(run.shop?.cardOffers.every((offer) => offer.value >= 1 && offer.value <= 8)).toBe(true);
-    expect(run.shop?.cardOffers.some((offer) => offer.cost <= RUN_STARTING_GOLD)).toBe(true);
-    expect(openingShopOffers(91)).toEqual(run.shop?.cardOffers);
-    expect(createRun(war(), 91).shop?.cardOffers).toEqual(run.shop?.cardOffers);
-    expect(canLeaveShop(run)).toBe(true);
-    const continued = leaveShop(run);
+    expect(run.phase).toBe('sectio');
+    expect(run.sectio?.kind).toBe('opening');
+    expect(run.sectio?.cardOffers).toHaveLength(RUN_OPENING_OFFER_COUNT);
+    expect(new Set(run.sectio?.cardOffers.map((offer) => offer.offerId)).size).toBe(RUN_OPENING_OFFER_COUNT);
+    expect(new Set(run.sectio?.cardOffers.map((offer) => offer.value)).size).toBe(RUN_OPENING_OFFER_COUNT);
+    expect(run.sectio?.cardOffers.every((offer) => offer.value >= 1 && offer.value <= 8)).toBe(true);
+    expect(run.sectio?.cardOffers.some((offer) => offer.cost <= RUN_STARTING_GOLD)).toBe(true);
+    expect(openingSectioOffers(91)).toEqual(run.sectio?.cardOffers);
+    expect(createRun(war(), 91).sectio?.cardOffers).toEqual(run.sectio?.cardOffers);
+    expect(canLeaveSectio(run)).toBe(true);
+    const continued = leaveSectio(run);
     expect(continued.phase).toBe('deployment');
     expect(continued.battleIndex).toBe(0);
     expect(continued.cards).toEqual([]);
@@ -163,34 +163,34 @@ describe('Run piece economy', () => {
   it('buys the opening card in place and waits for explicit Continue before deployment', () => {
     const fresh = createRun(war(), 91);
     const offer = cheapestOpeningOffer(fresh);
-    const bought = buyCard(fresh, offer.offerId);
-    const card = bought.cards[0];
+    const adlected = performAdlectio(fresh, offer.offerId);
+    const card = adlected.cards[0];
 
-    expect(bought.phase).toBe('shop');
-    expect(bought.shop?.kind).toBe('opening');
-    expect(bought.shop?.purchasedCardOfferIds).toEqual([offer.offerId]);
-    expect(bought.goldTenths).toBe(RUN_STARTING_GOLD_TENTHS - offer.cost * GOLD_SCALE);
+    expect(adlected.phase).toBe('sectio');
+    expect(adlected.sectio?.kind).toBe('opening');
+    expect(adlected.sectio?.adlectedCardOfferIds).toEqual([offer.offerId]);
+    expect(adlected.goldTenths).toBe(RUN_STARTING_GOLD_TENTHS - offer.cost * GOLD_SCALE);
     expect(card).toMatchObject({ coreId: offer.id, cardType: offer.cardType, acquiredAfterBattleIndex: 0 });
     expect(card.unitIds).toHaveLength(offer.pieces.length);
-    expect(bought.army.filter((unit) => card.unitIds.includes(unit.id)).map((unit) => unit.type)).toEqual(offer.pieces);
-    expect(bought.nextCardSequence).toBe(2);
-    expect(canLeaveShop(bought)).toBe(true);
-    const reset = resetShop(bought);
-    expect(reset.phase).toBe('shop');
-    expect(reset.shop?.kind).toBe('opening');
-    expect(reset.shop?.purchasedCardOfferIds).toEqual([]);
-    expect(reset.shop?.cardOffers).toEqual(fresh.shop?.cardOffers);
+    expect(adlected.army.filter((unit) => card.unitIds.includes(unit.id)).map((unit) => unit.type)).toEqual(offer.pieces);
+    expect(adlected.nextCardSequence).toBe(2);
+    expect(canLeaveSectio(adlected)).toBe(true);
+    const reset = resetSectio(adlected);
+    expect(reset.phase).toBe('sectio');
+    expect(reset.sectio?.kind).toBe('opening');
+    expect(reset.sectio?.adlectedCardOfferIds).toEqual([]);
+    expect(reset.sectio?.cardOffers).toEqual(fresh.sectio?.cardOffers);
     expect(reset.army.map((unit) => unit.type)).toEqual(['king', 'pawn', 'pawn']);
     expect(reset.cards).toEqual([]);
     expect(reset.goldTenths).toBe(RUN_STARTING_GOLD_TENTHS);
-    expect(canLeaveShop(reset)).toBe(true);
-    const continued = leaveShop(bought);
+    expect(canLeaveSectio(reset)).toBe(true);
+    const continued = leaveSectio(adlected);
     expect(continued.phase).toBe('deployment');
     expect(continued.battleIndex).toBe(0);
   });
 
   it('rolls opening qualifiers at every core value, out of reach included', () => {
-    const offers = openingShopOffers(91);
+    const offers = openingSectioOffers(91);
     expect(offers.map((offer) => offer.cardType)).toEqual(['legatine', 'concinnous', null]);
     expect(offers.map((offer) => offer.cost)).toEqual([
       offers[0].value + ADLECTED_COST,
@@ -202,8 +202,8 @@ describe('Run piece economy', () => {
     const qualifiedByValue = new Map<number, number>();
     let outOfReach = 0;
     for (let seed = 1; seed <= 5_000; seed += 1) {
-      const opening = openingShopOffers(seed);
-      // ADR-0323 requires an opening purchase, so at least one offer always stays buyable.
+      const opening = openingSectioOffers(seed);
+      // ADR-0323 requires an opening Adlectio, so at least one offer always stays adlectable.
       expect(opening.some((offer) => offer.cost <= RUN_STARTING_GOLD)).toBe(true);
       for (const offer of opening) {
         expect(offer.cost).toBe(
@@ -230,13 +230,13 @@ describe('Run piece economy', () => {
 
   it('drops the qualifier on the cheapest opening offer only when the deal has nothing affordable', () => {
     // Values 6, 7 and 8 all rolling a surcharge is the one deal the starting gold cannot
-    // buy; that opening repairs its cheapest card rather than blocking Continue.
-    const rolledOpening = (seed: number) => openingShopOffers(seed).map((offer, slotIndex) => ({
+    // adlect; that opening repairs its cheapest card rather than blocking Continue.
+    const rolledOpening = (seed: number) => openingSectioOffers(seed).map((offer, slotIndex) => ({
       emitted: offer,
       rolled: createRunCardOffer(
         { seed, ataraxiaTier: 0 },
         RUN_CARD_DECK.find((card) => card.id === offer.id)!,
-        OPENING_SHOP_ROLL_BATTLE_INDEX,
+        OPENING_SECTIO_ROLL_BATTLE_INDEX,
         slotIndex,
       ),
     }));
@@ -263,19 +263,19 @@ describe('Run piece economy', () => {
     const baseline = new Set<string | null>();
     const ataraxia = new Set<string | null>();
     for (let seed = 1; seed <= 3_000; seed += 1) {
-      for (const offer of openingShopOffers(seed)) baseline.add(offer.cardType);
-      for (const offer of openingShopOffers(seed, 1)) ataraxia.add(offer.cardType);
+      for (const offer of openingSectioOffers(seed)) baseline.add(offer.cardType);
+      for (const offer of openingSectioOffers(seed, 1)) ataraxia.add(offer.cardType);
     }
     expect(baseline.has('pestiferous')).toBe(false);
     expect(ataraxia.has('pestiferous')).toBe(true);
-    expect(createRun(war(), 91, 1).shop?.cardOffers).toEqual(openingShopOffers(91, 1));
+    expect(createRun(war(), 91, 1).sectio?.cardOffers).toEqual(openingSectioOffers(91, 1));
   });
 
-  it('rolls the opening independently of the Shop after Battle 1, which shares battleIndex 0', () => {
+  it('rolls the opening independently of the Sectio after Battle 1, which shares battleIndex 0', () => {
     // Both draws would otherwise seed from (seed, battleIndex 0, slot, coreId) and mirror
     // each other whenever the same core identity is offered twice.
     const differing = Array.from({ length: 200 }, (_, index) => index + 1).filter((seed) => (
-      openingShopOffers(seed).some((offer, slotIndex) => {
+      openingSectioOffers(seed).some((offer, slotIndex) => {
         const core = RUN_CARD_DECK.find((card) => card.id === offer.id)!;
         const postBattle = createRunCardOffer({ seed, ataraxiaTier: 0 }, core, 0, slotIndex);
         return offer.effectSeed !== postBattle.effectSeed;
@@ -287,87 +287,87 @@ describe('Run piece economy', () => {
   it('keeps every affordable core Units card reachable from seeded openings', () => {
     const observed = new Set<string>();
     for (let seed = 1; seed <= 10_000; seed += 1) {
-      for (const offer of openingShopOffers(seed)) observed.add(offer.id);
+      for (const offer of openingSectioOffers(seed)) observed.add(offer.id);
     }
     expect(observed).toEqual(new Set(RUN_CARD_DECK.filter((card) => card.value <= 8).map((card) => card.id)));
   });
 
-  it('names opening and later Shop units in the same transaction that adds them to the army', () => {
+  it('names opening and later Sectio units in the same transaction that adds them to the army', () => {
     const fresh = createRun(war(), 91);
-    const openingPurchase = buyCard(fresh, cheapestOpeningOffer(fresh).offerId);
-    expect(openingPurchase.army.filter((unit) => unit.source === 'shop').every((unit) => unit.name.length > 0)).toBe(true);
-    expect(openingPurchase.army.filter((unit) => unit.source === 'shop').every((unit) => Number.isSafeInteger(unit.inspectionSeed))).toBe(true);
+    const openingPurchase = performAdlectio(fresh, cheapestOpeningOffer(fresh).offerId);
+    expect(openingPurchase.army.filter((unit) => unit.source === 'adlectio').every((unit) => unit.name.length > 0)).toBe(true);
+    expect(openingPurchase.army.filter((unit) => unit.source === 'adlectio').every((unit) => Number.isSafeInteger(unit.inspectionSeed))).toBe(true);
 
-    const shop = openShop({ ...deployedRun(91), goldTenths: 100 * GOLD_SCALE }, []);
-    const bought = buyCard(shop, shop.shop!.cardOffers[0].offerId);
-    expect(bought.army.filter((unit) => unit.source === 'shop').every((unit) => unit.name.length > 0)).toBe(true);
-    expect(bought.army.filter((unit) => unit.source === 'shop').every((unit) => Number.isSafeInteger(unit.inspectionSeed))).toBe(true);
-    expect(new Set(bought.army.map((unit) => unit.name)).size).toBe(bought.army.length);
+    const sectio = openSectio({ ...deployedRun(91), goldTenths: 100 * GOLD_SCALE }, []);
+    const adlected = performAdlectio(sectio, sectio.sectio!.cardOffers[0].offerId);
+    expect(adlected.army.filter((unit) => unit.source === 'adlectio').every((unit) => unit.name.length > 0)).toBe(true);
+    expect(adlected.army.filter((unit) => unit.source === 'adlectio').every((unit) => Number.isSafeInteger(unit.inspectionSeed))).toBe(true);
+    expect(new Set(adlected.army.map((unit) => unit.name)).size).toBe(adlected.army.length);
   });
 
-  it('allows multiple distinct card purchases in the same shop while gold remains', () => {
-    const shop = openShop({ ...deployedRun(), goldTenths: 100 * GOLD_SCALE }, []);
-    const [first, second] = shop.shop!.cardOffers;
-    const boughtFirst = buyCard(shop, first.offerId);
-    const boughtSecond = buyCard(boughtFirst, second.offerId);
-    expect(boughtSecond.shop?.purchasedCardOfferIds).toEqual([first.offerId, second.offerId]);
-    expect(boughtSecond.cards).toHaveLength(shop.cards.length + 2);
-    expect(buyCard(boughtSecond, first.offerId)).toBe(boughtSecond);
+  it('allows multiple distinct card adlectiones in the same sectio while gold remains', () => {
+    const sectio = openSectio({ ...deployedRun(), goldTenths: 100 * GOLD_SCALE }, []);
+    const [first, second] = sectio.sectio!.cardOffers;
+    const boughtFirst = performAdlectio(sectio, first.offerId);
+    const boughtSecond = performAdlectio(boughtFirst, second.offerId);
+    expect(boughtSecond.sectio?.adlectedCardOfferIds).toEqual([first.offerId, second.offerId]);
+    expect(boughtSecond.cards).toHaveLength(sectio.cards.length + 2);
+    expect(performAdlectio(boughtSecond, first.offerId)).toBe(boughtSecond);
   });
 
-  it('leaves each unpurchased card available independently when another card is bought', () => {
+  it('leaves each unadlected card available independently when another card is adlected', () => {
     const seed = Array.from({ length: 100 }, (_, index) => index + 1).find((candidate) => {
-      const cheapest = [...openingShopOffers(candidate)]
+      const cheapest = [...openingSectioOffers(candidate)]
         .sort((left, right) => left.cost - right.cost)
         .slice(0, 2);
       return cheapest.reduce((total, offer) => total + offer.cost * GOLD_SCALE, 0) <= RUN_STARTING_GOLD_TENTHS;
     });
     expect(seed).toBeDefined();
     const opening = createRun(war(), seed!);
-    const affordable = [...opening.shop!.cardOffers]
+    const affordable = [...opening.sectio!.cardOffers]
       .sort((left, right) => left.cost - right.cost)
       .slice(0, 2);
 
-    const boughtFirst = buyCard(opening, affordable[0].offerId);
-    const boughtSecond = buyCard(boughtFirst, affordable[1].offerId);
-    expect(boughtSecond.shop?.purchasedCardOfferIds).toEqual(affordable.map((offer) => offer.offerId));
+    const boughtFirst = performAdlectio(opening, affordable[0].offerId);
+    const boughtSecond = performAdlectio(boughtFirst, affordable[1].offerId);
+    expect(boughtSecond.sectio?.adlectedCardOfferIds).toEqual(affordable.map((offer) => offer.offerId));
   });
 
   it('assigns stable per-type numbers to acquired units', () => {
-    const run = openingShopRunWithPawn();
+    const run = openingSectioRunWithPawn();
     const pawnNumbers = run.army.filter((unit) => unit.type === 'pawn').map((unit) => unit.number);
     expect(new Set(pawnNumbers).size).toBe(pawnNumbers.length);
     expect(pawnNumbers).toEqual(Array.from({ length: pawnNumbers.length }, (_, index) => index + 1));
   });
 
   it('sells every non-King and formats Fair Scales quarter-gold exactly', () => {
-    let shop = openShop(deployedRunWithPawn(), []);
-    shop = acquireLipsanon(shop, 'fair-scales');
-    const pawn = shop.army.find((unit) => unit.type === 'pawn')!;
-    const sold = sellArmyUnit(shop, pawn.id);
-    expect(sold.goldTenths - shop.goldTenths).toBe(7.5);
+    let sectio = openSectio(deployedRunWithPawn(), []);
+    sectio = acquireLipsanon(sectio, 'fair-scales');
+    const pawn = sectio.army.find((unit) => unit.type === 'pawn')!;
+    const alienated = performAlienatio(sectio, pawn.id);
+    expect(alienated.goldTenths - sectio.goldTenths).toBe(7.5);
     expect(formatGold(7.5)).toBe('0.75');
-    expect(sold.shop?.soldUnits).toEqual([{ unit: pawn, proceedsTenths: 7.5 }]);
-    expect(sellArmyUnit(sold, 'run-king')).toBe(sold);
+    expect(alienated.sectio?.alienatedUnits).toEqual([{ unit: pawn, proceedsTenths: 7.5 }]);
+    expect(performAlienatio(alienated, 'run-king')).toBe(alienated);
   });
 
-  it('resets the complete shop transaction without rerolling its offers', () => {
-    let shop = openShop({ ...deployedRun(29), goldTenths: 100 * GOLD_SCALE }, []);
-    const originalOffers = structuredClone(shop.shop!.cardOffers);
-    const originalArmy = structuredClone(shop.army);
-    const originalGold = shop.goldTenths;
-    const bought = shop.shop!.cardOffers[0].offerId;
-    shop = buyCard(shop, bought);
-    shop = sellArmyUnit(shop, shop.army.find((unit) => unit.type !== 'king')!.id);
-    expect(shopHasChanges(shop)).toBe(true);
+  it('resets the complete sectio transaction without rerolling its offers', () => {
+    let sectio = openSectio({ ...deployedRun(29), goldTenths: 100 * GOLD_SCALE }, []);
+    const originalOffers = structuredClone(sectio.sectio!.cardOffers);
+    const originalArmy = structuredClone(sectio.army);
+    const originalGold = sectio.goldTenths;
+    const adlected = sectio.sectio!.cardOffers[0].offerId;
+    sectio = performAdlectio(sectio, adlected);
+    sectio = performAlienatio(sectio, sectio.army.find((unit) => unit.type !== 'king')!.id);
+    expect(sectioHasChanges(sectio)).toBe(true);
 
-    const reset = resetShop(shop);
-    expect(reset.shop?.cardOffers).toEqual(originalOffers);
-    expect(reset.shop?.purchasedCardOfferIds).toEqual([]);
-    expect(reset.shop?.soldUnits).toEqual([]);
+    const reset = resetSectio(sectio);
+    expect(reset.sectio?.cardOffers).toEqual(originalOffers);
+    expect(reset.sectio?.adlectedCardOfferIds).toEqual([]);
+    expect(reset.sectio?.alienatedUnits).toEqual([]);
     expect(reset.army).toEqual(originalArmy);
     expect(reset.goldTenths).toBe(originalGold);
-    expect(shopHasChanges(reset)).toBe(false);
+    expect(sectioHasChanges(reset)).toBe(false);
   });
 });
 
@@ -377,17 +377,17 @@ describe('the aftermath report that closes a Battle', () => {
     const closed = closeBattle(battle, { survivingUnitIds: [], turns: 9 });
 
     expect(closed.phase).toBe('aftermath');
-    expect(closed.shop).toBeNull();
+    expect(closed.sectio).toBeNull();
     // The gold is reported here and paid on Continue, so the screen cannot promise
     // a number the Run then fails to hand over.
     expect(closed.goldTenths).toBe(battle.goldTenths);
     expect(closed.aftermath?.goldTenths).toBe(GOLD_SCALE);
 
-    const shop = leaveAftermath(closed);
-    expect(shop.phase).toBe('shop');
-    expect(shop.goldTenths).toBe(battle.goldTenths + GOLD_SCALE);
-    expect(shop.shop?.victoryGoldTenths).toBe(GOLD_SCALE);
-    expect(shop.aftermath).toBeNull();
+    const sectio = leaveAftermath(closed);
+    expect(sectio.phase).toBe('sectio');
+    expect(sectio.goldTenths).toBe(battle.goldTenths + GOLD_SCALE);
+    expect(sectio.sectio?.victoryGoldTenths).toBe(GOLD_SCALE);
+    expect(sectio.aftermath).toBeNull();
   });
 
   it('reports the turns, the clock and the units that fell', () => {
@@ -401,12 +401,12 @@ describe('the aftermath report that closes a Battle', () => {
     expect(closed.aftermath?.fallenUnits).toEqual([
       { id: fallen.id, name: fallen.name, type: fallen.type },
     ]);
-    // The runtime that knows who fell is torn down when the shop opens, so the list
+    // The runtime that knows who fell is torn down when the Sectio opens, so the list
     // has to survive on the report rather than be recomputed from it.
     expect(leaveAftermath(closed).battleRuntime).toBeNull();
   });
 
-  it('carries the survivors it was given into the shop it opens', () => {
+  it('carries the survivors it was given into the Sectio it opens', () => {
     const battle = acquireLipsanon(deployedRun(12, war(2)), 'mercenarys-rifle');
     const survivors = battle.army.map((unit) => unit.id);
     const closed = closeBattle(battle, { survivingUnitIds: survivors, turns: 4 });
@@ -419,7 +419,7 @@ describe('the aftermath report that closes a Battle', () => {
 
   it('gives the final Battle straight to the War victory screen, which is its own report', () => {
     const first = leaveAftermath(closeBattle(deployedRun(12, war(2)), { survivingUnitIds: [], turns: 3 }));
-    const finalBattle = beginBattle(prepareDeployment(leaveShop(first)), [], [], []);
+    const finalBattle = beginBattle(prepareDeployment(leaveSectio(first)), [], [], []);
 
     const won = closeBattle(finalBattle, { survivingUnitIds: [], turns: 3 });
     expect(won.phase).toBe('victory');
@@ -431,7 +431,7 @@ describe('the aftermath report that closes a Battle', () => {
     const closed = closeBattle(battle, { survivingUnitIds: [], turns: 3 });
     expect(closeBattle(closed, { survivingUnitIds: [], turns: 99 })).toBe(closed);
     expect(leaveAftermath(battle)).toBe(battle);
-    expect(leaveAftermath(leaveAftermath(closed)).phase).toBe('shop');
+    expect(leaveAftermath(leaveAftermath(closed)).phase).toBe('sectio');
   });
 });
 
@@ -443,17 +443,17 @@ describe('Run progression and lipsanon offers', () => {
     expect(grantGold(granted, 0)).toBe(granted);
   });
 
-  it('opens a shop with strength-scaled gold after non-final victories and skips the shop after the final boss', () => {
+  it('opens a Sectio with strength-scaled gold after non-final victories and skips it after the final boss', () => {
     const firstBattle = deployedRun(12, war(2));
-    const afterFirst = openShop(firstBattle, []);
-    expect(afterFirst.phase).toBe('shop');
+    const afterFirst = openSectio(firstBattle, []);
+    expect(afterFirst.phase).toBe('sectio');
     expect(afterFirst.goldTenths).toBe(firstBattle.goldTenths + GOLD_SCALE);
-    expect(afterFirst.shop?.victoryGoldTenths).toBe(GOLD_SCALE);
+    expect(afterFirst.sectio?.victoryGoldTenths).toBe(GOLD_SCALE);
 
-    const finalBattle = beginBattle(prepareDeployment(leaveShop(afterFirst)), [], [], []);
-    const won = openShop(finalBattle, []);
+    const finalBattle = beginBattle(prepareDeployment(leaveSectio(afterFirst)), [], [], []);
+    const won = openSectio(finalBattle, []);
     expect(won.phase).toBe('victory');
-    expect(won.shop).toBeNull();
+    expect(won.sectio).toBeNull();
   });
 
   it('values each enemy King at one gold and every other enemy force at half standard value', () => {
@@ -481,33 +481,33 @@ describe('Run progression and lipsanon offers', () => {
 
     expect(battleVictoryGoldTenths(level)).toBe(160);
     const battle = deployedRun(12, snapshot);
-    const shop = openShop(battle, []);
-    expect(shop.goldTenths).toBe(battle.goldTenths + 160);
-    expect(shop.shop?.victoryGoldTenths).toBe(160);
+    const sectio = openSectio(battle, []);
+    expect(sectio.goldTenths).toBe(battle.goldTenths + 160);
+    expect(sectio.sectio?.victoryGoldTenths).toBe(160);
   });
 
-  it('repairs an incomplete current Shop reward exactly once', () => {
+  it('repairs an incomplete current Sectio reward exactly once', () => {
     const snapshot = war(2);
     snapshot.battles[0].level.layers.units.push({ x: 0, y: 0, type: 'queen', side: 'enemy' });
     const currentReward = battleVictoryGoldTenths(snapshot.battles[0].level);
-    const current = openShop(deployedRun(12, snapshot), []);
+    const current = openSectio(deployedRun(12, snapshot), []);
     const incomplete = {
       ...current,
       goldTenths: GOLD_SCALE,
-      shop: { ...current.shop!, victoryGoldTenths: undefined as never },
+      sectio: { ...current.sectio!, victoryGoldTenths: undefined as never },
     };
     const repaired = normalizeRunDocument(incomplete);
 
     expect(repaired.goldTenths).toBe(currentReward);
-    expect(repaired.shop?.victoryGoldTenths).toBe(currentReward);
+    expect(repaired.sectio?.victoryGoldTenths).toBe(currentReward);
     expect(normalizeRunDocument(repaired)).toBe(repaired);
   });
 
   it('accepts only the current RunSaveVersion and rejects the retired field name', () => {
     const opening = createRun(war(), 73);
-    const current = leaveShop(buyCard(opening, cheapestOpeningOffer(opening).offerId));
+    const current = leaveSectio(performAdlectio(opening, cheapestOpeningOffer(opening).offerId));
     expect(current.runSaveVersion).toBe(CURRENT_RUN_SAVE_VERSION);
-    for (const runSaveVersion of [1, 8, 14, 15, 16]) {
+    for (const runSaveVersion of [1, 8, 14, 15, 16, 17]) {
       expect(() => normalizeRunDocument({
         ...current,
         runSaveVersion,
@@ -517,29 +517,91 @@ describe('Run progression and lipsanon offers', () => {
       ...current,
       formatVersion: 16,
     } as unknown as RunDocument)).toThrow('unsupported version');
+    expect(() => normalizeRunDocument({
+      ...current,
+      shop: null,
+    } as unknown as RunDocument)).toThrow('retired Shop data');
+    expect(() => normalizeRunDocument({
+      ...current,
+      army: current.army.map((unit, index) => index === 0 ? { ...unit, source: 'shop' } : unit),
+    } as unknown as RunDocument)).toThrow('retired unit-source data');
+    expect(() => normalizeRunDocument({
+      ...current,
+      army: current.army.map((unit, index) => index === 0 ? { ...unit, source: 'sectio' } : unit),
+    } as unknown as RunDocument)).toThrow('retired unit-source data');
+    expect(() => normalizeRunDocument({
+      ...current,
+      sectio: { ...current.sectio!, purchasedCardOfferIds: [] },
+    } as unknown as RunDocument)).toThrow('retired Sectio operation data');
   });
 
-  it('losslessly migrates the version-16 field name and no earlier save', () => {
-    const opening = createRun(war(), 73);
-    const current = leaveShop(buyCard(opening, cheapestOpeningOffer(opening).offerId));
-    const { runSaveVersion: _runSaveVersion, ...version16 } = current;
-    const migrated = migrateRunSaveDocument({ ...version16, formatVersion: 16 });
+  it('losslessly migrates version 17 Shop operations to Sectio, Adlectio, and Alienatio', () => {
+    let current = openSectio({ ...deployedRun(73, war(2)), goldTenths: 100 * GOLD_SCALE }, []);
+    current = performAdlectio(current, current.sectio!.cardOffers[0].offerId);
+    current = performAlienatio(current, current.army.find((unit) => unit.type !== 'king')!.id);
+    const acquired = current.army.find((unit) => unit.source === 'adlectio')!;
+    current = {
+      ...current,
+      pestiferousLosses: [{ battleIndex: 0, cardId: current.cards[0].id, unit: acquired }],
+    };
+    const oldUnit = (unit: RunDocument['army'][number]) => ({
+      ...unit,
+      source: unit.source === 'adlectio' ? 'shop' : unit.source,
+    });
+    const oldOfferId = (offerId: string) => offerId.replace(/^sectio-/, 'shop-');
+    const { sectio, ...version18WithoutSectio } = current;
+    const version17 = {
+      ...version18WithoutSectio,
+      runSaveVersion: 17,
+      phase: 'shop',
+      army: current.army.map(oldUnit),
+      pestiferousLosses: current.pestiferousLosses.map((loss) => ({
+        ...loss,
+        unit: oldUnit(loss.unit),
+      })),
+      shop: {
+        ...sectio!,
+        cardOffers: sectio!.cardOffers.map((offer) => ({
+          ...offer,
+          offerId: oldOfferId(offer.offerId),
+        })),
+        purchasedCardOfferIds: sectio!.adlectedCardOfferIds.map(oldOfferId),
+        soldUnits: sectio!.alienatedUnits.map((alienated) => ({ ...alienated, unit: oldUnit(alienated.unit) })),
+        entrySnapshot: {
+          ...sectio!.entrySnapshot,
+          army: sectio!.entrySnapshot.army.map(oldUnit),
+        },
+      },
+    };
 
-    expect(migrated).toEqual(current);
-    expect(migrated).not.toHaveProperty('formatVersion');
+    expect(migrateRunSaveDocument(version17)).toEqual(current);
+    const { runSaveVersion: _runSaveVersion, ...version16 } = version17;
+    const migratedFrom16 = migrateRunSaveDocument({ ...version16, formatVersion: 16 });
+    expect(migratedFrom16).toEqual(current);
+    expect(migratedFrom16).not.toHaveProperty('formatVersion');
+    expect(migratedFrom16).not.toHaveProperty('shop');
+    expect(() => normalizeRunDocument({
+      ...current,
+      sectio: {
+        ...current.sectio!,
+        cardOffers: current.sectio!.cardOffers.map((offer, index) => index === 0
+          ? { ...offer, offerId: offer.offerId.replace(/^sectio-/, 'shop-') }
+          : offer),
+      },
+    })).toThrow('retired Shop offer ids');
     expect(() => migrateRunSaveDocument({ ...version16, formatVersion: 15 }))
       .toThrow('unsupported version');
   });
 
-  it('repairs incomplete current unit identities and Shop reset state once', () => {
-    const current = openShop(deployedRun(12, war(2)), []);
+  it('repairs incomplete current unit identities and Sectio reset state once', () => {
+    const current = openSectio(deployedRun(12, war(2)), []);
     const incomplete = {
       ...current,
       army: current.army.map(({ number: _number, ...unit }) => unit),
       nextArmyUnitNumberByType: undefined,
-      shop: {
-        ...current.shop!,
-        soldUnits: undefined,
+      sectio: {
+        ...current.sectio!,
+        alienatedUnits: undefined,
         entrySnapshot: undefined,
       },
     } as unknown as RunDocument;
@@ -549,8 +611,8 @@ describe('Run progression and lipsanon offers', () => {
       const numbers = repaired.army.filter((unit) => unit.type === type).map((unit) => unit.number);
       expect(numbers).toEqual(Array.from({ length: numbers.length }, (_, index) => index + 1));
     }
-    expect(repaired.shop?.soldUnits).toEqual([]);
-    expect(repaired.shop?.entrySnapshot.army).toEqual(repaired.army);
+    expect(repaired.sectio?.alienatedUnits).toEqual([]);
+    expect(repaired.sectio?.entrySnapshot.army).toEqual(repaired.army);
     expect(normalizeRunDocument(repaired)).toBe(repaired);
   });
 
@@ -563,7 +625,7 @@ describe('Run progression and lipsanon offers', () => {
       chosenDraftId: null,
     } as unknown as RunDocument)).toThrow('retired draft data');
 
-    const committed = leaveShop(buyCard(current, cheapestOpeningOffer(current).offerId));
+    const committed = leaveSectio(performAdlectio(current, cheapestOpeningOffer(current).offerId));
     const polluted = {
       ...committed,
       draftOffers: [{ id: 'retired', draftId: 'retired', pieces: ['pawn'], value: 1 }],
@@ -574,14 +636,14 @@ describe('Run progression and lipsanon offers', () => {
 
   it('burns all three seen Conflict offers, including the two not chosen', () => {
     // Battles 0 and 1 both close a Conflict, so beating each opens Bona Vacantia.
-    const first = openShop(deployedRun(44, war(5, [0, 1, 3])), []);
+    const first = openSectio(deployedRun(44, war(5, [0, 1, 3])), []);
     expect(first.phase).toBe('bona-vacantia');
     const firstOffers = first.vacantia!.offers;
     expect(firstOffers).toHaveLength(3);
     const chosen = takeVacantiaLipsanon(first, firstOffers[0], first.army[0].id);
-    expect(chosen.phase).toBe('shop');
-    const secondBattle = beginBattle(prepareDeployment(leaveShop(chosen)), [], [], []);
-    const second = openShop(secondBattle, []);
+    expect(chosen.phase).toBe('sectio');
+    const secondBattle = beginBattle(prepareDeployment(leaveSectio(chosen)), [], [], []);
+    const second = openSectio(secondBattle, []);
     expect(second.phase).toBe('bona-vacantia');
     expect(second.vacantia!.offers).toHaveLength(3);
     expect(second.vacantia!.offers.some((lipsanon) => firstOffers.includes(lipsanon))).toBe(false);
@@ -589,13 +651,13 @@ describe('Run progression and lipsanon offers', () => {
 
   it('keeps one Shopkey offer for the whole Conflict', () => {
     const withKey = acquireLipsanon(deployedRun(57, war(4)), 'merchants-shopkey');
-    const firstShop = openShop(withKey, []);
-    expect(firstShop.shop!.paidLipsanonOffer).not.toBeNull();
-    const offer = firstShop.shop!.paidLipsanonOffer;
-    const secondBattle = beginBattle(prepareDeployment(leaveShop(firstShop)), [], [], []);
-    const secondShop = openShop(secondBattle, []);
-    expect(secondShop.conflictIndex).toBe(0);
-    expect(secondShop.shop!.paidLipsanonOffer).toBe(offer);
+    const firstSectio = openSectio(withKey, []);
+    expect(firstSectio.sectio!.paidLipsanonOffer).not.toBeNull();
+    const offer = firstSectio.sectio!.paidLipsanonOffer;
+    const secondBattle = beginBattle(prepareDeployment(leaveSectio(firstSectio)), [], [], []);
+    const secondSectio = openSectio(secondBattle, []);
+    expect(secondSectio.conflictIndex).toBe(0);
+    expect(secondSectio.sectio!.paidLipsanonOffer).toBe(offer);
   });
 
   it('permanently removes a cashed-out Pawn and grants two gold', () => {
@@ -650,23 +712,23 @@ describe('Ataraxia I — The Great Mortality', () => {
     expect(first.filter((offer) => offer.cardType === 'pestiferous').length).toBeLessThan(RUN_CARD_DECK.length / 2);
   });
 
-  it('persists complete affected offers through Reset Shop and promotes the bought instance into the deck', () => {
-    let shop: RunDocument | null = null;
-    for (let seed = 1; seed < 500 && !shop; seed += 1) {
-      const candidate = openShop({ ...deployedAtaraxiaRun(seed), goldTenths: 100 * GOLD_SCALE }, []);
-      if (candidate.shop?.cardOffers.some((offer) => offer.cardType === 'pestiferous')) shop = candidate;
+  it('persists complete affected offers through Reset Sectio and promotes the adlected instance into the deck', () => {
+    let sectio: RunDocument | null = null;
+    for (let seed = 1; seed < 500 && !sectio; seed += 1) {
+      const candidate = openSectio({ ...deployedAtaraxiaRun(seed), goldTenths: 100 * GOLD_SCALE }, []);
+      if (candidate.sectio?.cardOffers.some((offer) => offer.cardType === 'pestiferous')) sectio = candidate;
     }
-    expect(shop).not.toBeNull();
-    const pestiferous = shop!.shop!.cardOffers.find((offer) => offer.cardType === 'pestiferous')!;
-    const originalOffers = structuredClone(shop!.shop!.cardOffers);
-    const bought = buyCard(shop!, pestiferous.offerId);
-    const owned = bought.cards.find((card) => (
+    expect(sectio).not.toBeNull();
+    const pestiferous = sectio!.sectio!.cardOffers.find((offer) => offer.cardType === 'pestiferous')!;
+    const originalOffers = structuredClone(sectio!.sectio!.cardOffers);
+    const adlected = performAdlectio(sectio!, pestiferous.offerId);
+    const owned = adlected.cards.find((card) => (
       card.coreId === pestiferous.id && card.effectSeed === pestiferous.effectSeed
     ))!;
     const cacochymicPieceIndex = pestiferous.cacochymicPieceIndex!;
     const plaguedPiece = pestiferous.pieces[cacochymicPieceIndex];
     const discount = { pawn: 0, knight: 1, bishop: 1, rook: 2, queen: 3 }[plaguedPiece];
-    const acquiredUnits = bought.army.filter((unit) => owned.unitIds.includes(unit.id));
+    const acquiredUnits = adlected.army.filter((unit) => owned.unitIds.includes(unit.id));
 
     expect(cacochymicPieceIndex).toBeGreaterThanOrEqual(0);
     expect(pestiferous.cost).toBe(pestiferous.value - discount);
@@ -675,22 +737,22 @@ describe('Ataraxia I — The Great Mortality', () => {
     expect(owned.cacochymicUnitId).toBe(acquiredUnits[cacochymicPieceIndex].id);
     expect(acquiredUnits.filter((unit) => unit.modifiers.includes('cacochymic')).map((unit) => unit.id))
       .toEqual([owned.cacochymicUnitId]);
-    expect(resetShop(bought).shop?.cardOffers).toEqual(originalOffers);
-    expect(resetShop(bought).cards).toEqual(shop!.cards);
+    expect(resetSectio(adlected).sectio?.cardOffers).toEqual(originalOffers);
+    expect(resetSectio(adlected).cards).toEqual(sectio!.cards);
   });
 
   it('fills missing current-save offer targets and target-only pricing', () => {
     let current: RunDocument | null = null;
     for (let seed = 1; seed < 500 && !current; seed += 1) {
-      const candidate = openShop(deployedAtaraxiaRun(seed), []);
-      if (candidate.shop?.cardOffers.some((offer) => offer.cardType === 'pestiferous')) current = candidate;
+      const candidate = openSectio(deployedAtaraxiaRun(seed), []);
+      if (candidate.sectio?.cardOffers.some((offer) => offer.cardType === 'pestiferous')) current = candidate;
     }
     expect(current).not.toBeNull();
     const incomplete = {
       ...current!,
-      shop: {
-        ...current!.shop!,
-        cardOffers: current!.shop!.cardOffers.map(({ cacochymicPieceIndex: _target, ...offer }) => ({
+      sectio: {
+        ...current!.sectio!,
+        cardOffers: current!.sectio!.cardOffers.map(({ cacochymicPieceIndex: _target, ...offer }) => ({
           ...offer,
           cost: offer.cardType === 'pestiferous' ? 1 : offer.cost,
         })),
@@ -698,8 +760,8 @@ describe('Ataraxia I — The Great Mortality', () => {
     } as unknown as RunDocument;
     const repaired = normalizeRunDocument(incomplete);
 
-    for (const offer of repaired.shop!.cardOffers) {
-      const original = current!.shop!.cardOffers.find((candidate) => candidate.offerId === offer.offerId)!;
+    for (const offer of repaired.sectio!.cardOffers) {
+      const original = current!.sectio!.cardOffers.find((candidate) => candidate.offerId === offer.offerId)!;
       expect(offer.cacochymicPieceIndex).toBe(original.cacochymicPieceIndex);
       expect(offer.cost).toBe(original.cost);
     }
@@ -748,7 +810,7 @@ describe('Ataraxia I — The Great Mortality', () => {
     expect(empty).toBe(second);
   });
 
-  it('immediately reveals a new target when the Cacochymic unit is sold', () => {
+  it('immediately reveals a new target when the Cacochymic unit is alienated', () => {
     const base = deployedAtaraxiaRun(79, war(3));
     const units = base.army.filter((unit) => unit.type !== 'king').slice(0, 2).map((unit, index) => ({
       ...unit,
@@ -758,7 +820,7 @@ describe('Ataraxia I — The Great Mortality', () => {
     }));
     const run: RunDocument = {
       ...base,
-      phase: 'shop',
+      phase: 'sectio',
       army: [base.army.find((unit) => unit.type === 'king')!, ...units],
       cards: [{
         id: 'run-card-1',
@@ -771,14 +833,14 @@ describe('Ataraxia I — The Great Mortality', () => {
         cacochymicUnitId: units[0].id,
         acquiredAfterBattleIndex: 0,
       }],
-      shop: null,
+      sectio: null,
       nextCardSequence: 2,
     };
-    const sold = sellArmyUnit(run, units[0].id);
+    const alienated = performAlienatio(run, units[0].id);
 
-    expect(sold.cards[0].unitIds).toEqual([units[1].id]);
-    expect(sold.cards[0].cacochymicUnitId).toBe(units[1].id);
-    expect(sold.army.find((unit) => unit.id === units[1].id)?.modifiers).toEqual(['cacochymic']);
+    expect(alienated.cards[0].unitIds).toEqual([units[1].id]);
+    expect(alienated.cards[0].cacochymicUnitId).toBe(units[1].id);
+    expect(alienated.army.find((unit) => unit.id === units[1].id)?.modifiers).toEqual(['cacochymic']);
   });
 
   it('repairs a Pestiferous card that has lost its deterministic Cacochymic target', () => {
@@ -819,20 +881,20 @@ describe('Ataraxia I — The Great Mortality', () => {
 });
 
 describe('Concinnous cards', () => {
-  it('persist a concealed eligible target, charge two extra gold, and Position that exact unit on purchase', () => {
-    let shop: RunDocument | null = null;
-    for (let seed = 1; seed < 500 && !shop; seed += 1) {
-      const candidate = openShop({ ...deployedRun(seed), goldTenths: 100 * GOLD_SCALE }, []);
-      if (candidate.shop?.cardOffers.some((offer) => offer.cardType === 'concinnous')) shop = candidate;
+  it('persist a concealed eligible target, charge two extra gold, and Position that exact unit on Adlectio', () => {
+    let sectio: RunDocument | null = null;
+    for (let seed = 1; seed < 500 && !sectio; seed += 1) {
+      const candidate = openSectio({ ...deployedRun(seed), goldTenths: 100 * GOLD_SCALE }, []);
+      if (candidate.sectio?.cardOffers.some((offer) => offer.cardType === 'concinnous')) sectio = candidate;
     }
-    expect(shop).not.toBeNull();
-    const concinnous = shop!.shop!.cardOffers.find((offer) => offer.cardType === 'concinnous')!;
-    const originalOffers = structuredClone(shop!.shop!.cardOffers);
-    const bought = buyCard(shop!, concinnous.offerId);
-    const owned = bought.cards.find((card) => (
+    expect(sectio).not.toBeNull();
+    const concinnous = sectio!.sectio!.cardOffers.find((offer) => offer.cardType === 'concinnous')!;
+    const originalOffers = structuredClone(sectio!.sectio!.cardOffers);
+    const adlected = performAdlectio(sectio!, concinnous.offerId);
+    const owned = adlected.cards.find((card) => (
       card.coreId === concinnous.id && card.effectSeed === concinnous.effectSeed
     ))!;
-    const positioned = bought.army.filter((unit) => (
+    const positioned = adlected.army.filter((unit) => (
       owned.unitIds.includes(unit.id) && unit.abilities.includes('eutactic')
     ));
 
@@ -847,26 +909,26 @@ describe('Concinnous cards', () => {
     });
     expect(positioned).toHaveLength(1);
     expect(owned.unitIds[concinnous.effectTargetIndex!]).toBe(positioned[0].id);
-    expect(resetShop(bought).shop?.cardOffers).toEqual(originalOffers);
+    expect(resetSectio(adlected).sectio?.cardOffers).toEqual(originalOffers);
   });
 
   it('fills missing current-save Pestiferous fields without rerolling Concinnous targets', () => {
-    let shop: RunDocument | null = null;
-    for (let seed = 1; seed < 500 && !shop; seed += 1) {
-      const candidate = openShop({ ...deployedRun(seed), goldTenths: 100 * GOLD_SCALE }, []);
-      if (candidate.shop?.cardOffers.some((offer) => offer.cardType === 'concinnous')) shop = candidate;
+    let sectio: RunDocument | null = null;
+    for (let seed = 1; seed < 500 && !sectio; seed += 1) {
+      const candidate = openSectio({ ...deployedRun(seed), goldTenths: 100 * GOLD_SCALE }, []);
+      if (candidate.sectio?.cardOffers.some((offer) => offer.cardType === 'concinnous')) sectio = candidate;
     }
-    const concinnous = shop!.shop!.cardOffers.find((offer) => offer.cardType === 'concinnous')!;
-    const bought = buyCard(shop!, concinnous.offerId);
+    const concinnous = sectio!.sectio!.cardOffers.find((offer) => offer.cardType === 'concinnous')!;
+    const adlected = performAdlectio(sectio!, concinnous.offerId);
     const incomplete = {
-      ...bought,
-      cards: bought.cards.map(({ cacochymicUnitId: _cacochymicUnitId, ...card }) => card),
-      shop: bought.shop && {
-        ...bought.shop,
-        cardOffers: bought.shop.cardOffers.map(({ cacochymicPieceIndex: _cacochymicPieceIndex, ...offer }) => offer),
+      ...adlected,
+      cards: adlected.cards.map(({ cacochymicUnitId: _cacochymicUnitId, ...card }) => card),
+      sectio: adlected.sectio && {
+        ...adlected.sectio,
+        cardOffers: adlected.sectio.cardOffers.map(({ cacochymicPieceIndex: _cacochymicPieceIndex, ...offer }) => offer),
         entrySnapshot: {
-          ...bought.shop.entrySnapshot,
-          cards: bought.shop.entrySnapshot.cards.map(({ cacochymicUnitId: _cacochymicUnitId, ...card }) => card),
+          ...adlected.sectio.entrySnapshot,
+          cards: adlected.sectio.entrySnapshot.cards.map(({ cacochymicUnitId: _cacochymicUnitId, ...card }) => card),
         },
       },
     } as unknown as RunDocument;
@@ -874,10 +936,10 @@ describe('Concinnous cards', () => {
     const repairedCard = repaired.cards.find((card) => (
       card.coreId === concinnous.id && card.effectSeed === concinnous.effectSeed
     ))!;
-    const boughtCard = bought.cards.find((card) => (
+    const boughtCard = adlected.cards.find((card) => (
       card.coreId === concinnous.id && card.effectSeed === concinnous.effectSeed
     ))!;
-    const repairedOffer = repaired.shop!.cardOffers.find((offer) => offer.offerId === concinnous.offerId)!;
+    const repairedOffer = repaired.sectio!.cardOffers.find((offer) => offer.offerId === concinnous.offerId)!;
 
     expect(repaired.runSaveVersion).toBe(CURRENT_RUN_SAVE_VERSION);
     expect(repairedCard.effectTargetUnitId).toBe(boughtCard.effectTargetUnitId);
@@ -917,20 +979,20 @@ describe('Legatine Adlected cards', () => {
   });
 
   it('chooses and persists exactly one Adlected unit only when the card is acquired', () => {
-    let shop: RunDocument | null = null;
-    for (let seed = 1; seed < 500 && !shop; seed += 1) {
-      const candidate = openShop({ ...deployedRun(seed), goldTenths: 100 * GOLD_SCALE }, []);
-      if (candidate.shop?.cardOffers.some((offer) => offer.cardType === 'legatine')) shop = candidate;
+    let sectio: RunDocument | null = null;
+    for (let seed = 1; seed < 500 && !sectio; seed += 1) {
+      const candidate = openSectio({ ...deployedRun(seed), goldTenths: 100 * GOLD_SCALE }, []);
+      if (candidate.sectio?.cardOffers.some((offer) => offer.cardType === 'legatine')) sectio = candidate;
     }
-    expect(shop).not.toBeNull();
-    const tactical = shop!.shop!.cardOffers.find((offer) => offer.cardType === 'legatine')!;
+    expect(sectio).not.toBeNull();
+    const tactical = sectio!.sectio!.cardOffers.find((offer) => offer.cardType === 'legatine')!;
     expect(tactical.effectTargetIndex).toBeNull();
 
-    const bought = buyCard(shop!, tactical.offerId);
-    const owned = bought.cards.find((card) => (
+    const adlected = performAdlectio(sectio!, tactical.offerId);
+    const owned = adlected.cards.find((card) => (
       card.coreId === tactical.id && card.effectSeed === tactical.effectSeed
     ))!;
-    const disciplined = bought.army.filter((unit) => (
+    const disciplined = adlected.army.filter((unit) => (
       owned.unitIds.includes(unit.id) && unit.abilities.includes('adlected')
     ));
 
@@ -968,20 +1030,20 @@ describe('Hieratic Agminate cards', () => {
   });
 
   it('chooses and persists exactly one Agminate unit only when the card is acquired', () => {
-    let shop: RunDocument | null = null;
-    for (let seed = 1; seed < 500 && !shop; seed += 1) {
-      const candidate = openShop({ ...deployedRun(seed), goldTenths: 100 * GOLD_SCALE }, []);
-      if (candidate.shop?.cardOffers.some((offer) => offer.cardType === 'hieratic')) shop = candidate;
+    let sectio: RunDocument | null = null;
+    for (let seed = 1; seed < 500 && !sectio; seed += 1) {
+      const candidate = openSectio({ ...deployedRun(seed), goldTenths: 100 * GOLD_SCALE }, []);
+      if (candidate.sectio?.cardOffers.some((offer) => offer.cardType === 'hieratic')) sectio = candidate;
     }
-    expect(shop).not.toBeNull();
-    const hieratic = shop!.shop!.cardOffers.find((offer) => offer.cardType === 'hieratic')!;
+    expect(sectio).not.toBeNull();
+    const hieratic = sectio!.sectio!.cardOffers.find((offer) => offer.cardType === 'hieratic')!;
     expect(hieratic.effectTargetIndex).toBeNull();
 
-    const bought = buyCard(shop!, hieratic.offerId);
-    const owned = bought.cards.find((card) => (
+    const adlected = performAdlectio(sectio!, hieratic.offerId);
+    const owned = adlected.cards.find((card) => (
       card.coreId === hieratic.id && card.effectSeed === hieratic.effectSeed
     ))!;
-    const agminate = bought.army.filter((unit) => (
+    const agminate = adlected.army.filter((unit) => (
       owned.unitIds.includes(unit.id) && unit.abilities.includes('agminate')
     ));
 
@@ -991,26 +1053,26 @@ describe('Hieratic Agminate cards', () => {
     expect(owned.unitIds.indexOf(agminate[0].id)).toBe(
       hieraticAgminateAcquisitionTarget(hieratic.effectSeed, hieratic.pieces.length),
     );
-    expect(bought.goldTenths).toBe(shop!.goldTenths - (hieratic.value + AGMINATE_COST) * GOLD_SCALE);
+    expect(adlected.goldTenths).toBe(sectio!.goldTenths - (hieratic.value + AGMINATE_COST) * GOLD_SCALE);
     // The Agminate draw is its own; it does not mirror the Tactical one.
     expect(hieraticAgminateAcquisitionTarget(hieratic.effectSeed, 8))
       .not.toBe(legatineAdlectedAcquisitionTarget(hieratic.effectSeed, 8));
   });
 
   it('survives a document round trip with its acquisition target intact', () => {
-    let shop: RunDocument | null = null;
-    for (let seed = 1; seed < 500 && !shop; seed += 1) {
-      const candidate = openShop({ ...deployedRun(seed), goldTenths: 100 * GOLD_SCALE }, []);
-      if (candidate.shop?.cardOffers.some((offer) => offer.cardType === 'hieratic')) shop = candidate;
+    let sectio: RunDocument | null = null;
+    for (let seed = 1; seed < 500 && !sectio; seed += 1) {
+      const candidate = openSectio({ ...deployedRun(seed), goldTenths: 100 * GOLD_SCALE }, []);
+      if (candidate.sectio?.cardOffers.some((offer) => offer.cardType === 'hieratic')) sectio = candidate;
     }
-    const hieratic = shop!.shop!.cardOffers.find((offer) => offer.cardType === 'hieratic')!;
-    const bought = buyCard(shop!, hieratic.offerId);
-    const normalized = normalizeRunDocument(structuredClone(bought));
+    const hieratic = sectio!.sectio!.cardOffers.find((offer) => offer.cardType === 'hieratic')!;
+    const adlected = performAdlectio(sectio!, hieratic.offerId);
+    const normalized = normalizeRunDocument(structuredClone(adlected));
 
     expect(normalized.runSaveVersion).toBe(CURRENT_RUN_SAVE_VERSION);
-    expect(normalized.cards.map((card) => card.cardType)).toEqual(bought.cards.map((card) => card.cardType));
+    expect(normalized.cards.map((card) => card.cardType)).toEqual(adlected.cards.map((card) => card.cardType));
     expect(normalized.cards.map((card) => card.effectTargetUnitId))
-      .toEqual(bought.cards.map((card) => card.effectTargetUnitId));
-    expect(normalized.shop?.cardOffers).toEqual(bought.shop?.cardOffers);
+      .toEqual(adlected.cards.map((card) => card.effectTargetUnitId));
+    expect(normalized.sectio?.cardOffers).toEqual(adlected.sectio?.cardOffers);
   });
 });

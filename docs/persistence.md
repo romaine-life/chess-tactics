@@ -49,32 +49,42 @@ transaction (ADR-0340).
 The active Run document names its schema marker **RunSaveVersion**. Its stored field is
 `runSaveVersion`, its type is `RunSaveVersion`, and the client and server share
 `CURRENT_RUN_SAVE_VERSION`. Normalization and writes accept only that exact version. The lossless
-version-16 field rename is migrated to RunSaveVersion 17: migration 54 rewrites account rows and
-advances their CAS revisions, while the browser rewrites its local document on first load. Saves
-older than version 16 remain unavailable because their retired gameplay state has no declared
-lossless transform. See [ADR-0380](adr/0380-run-save-versions-always-migrate.md).
+chain first renames version 16's marker to RunSaveVersion 17, then rewrites version 17's Shop
+vocabulary into RunSaveVersion 18's Sectio, Adlectio, and Alienatio vocabulary. Migration 54 owns
+the marker rename; migration 55 advances the phase, state property, operation collections,
+admitted-unit provenance, and offer-id prefixes together.
+Each account migration advances the Run's CAS revision, while the browser applies the same chain
+to its local document on first load. Saves older than version 16 remain unavailable because their
+retired gameplay state has no declared lossless transform. See
+[ADR-0380](adr/0380-run-save-versions-always-migrate.md) and
+[ADR-0392](adr/0392-sectio-is-the-run-disposal-and-acquisition-phase.md) through
+[ADR-0393](adr/0393-adlectio-and-alienatio-are-the-movements-within-sectio.md).
 
 Beginning with RunSaveVersion 16, every version that reaches players has an explicit forward
 migration for account and browser storage. Retired content maps to a typed tombstone or neutral
 replacement—for example, a removed card remains in the deck as **Removed card**—rather than
 invalidating the Run.
 
-RunSaveVersion 17 begins in Bona Vacantia when the opening Conflict offers a lipsanon, otherwise
-in the normal Shop with kind `opening`. The Run carries the permanent King, two starting Pawns,
-eight gold, and three seeded card offers. Purchases remain in the same Shop transaction; Army,
-Sell, Reset Shop, and Continue reuse the post-Battle model. Continue may buy no card and enters
+RunSaveVersion 18 begins in Bona Vacantia when the opening Conflict offers a lipsanon, otherwise
+in the normal Sectio with kind `opening`. The Run carries the permanent King, two starting Pawns,
+eight gold, and three seeded card offers. Adlectio remains in the same Sectio transaction; Army,
+Alienatio, Reset Sectio, and Continue reuse the post-Battle model. Continue may perform no
+Adlectio and enters
 Deployment at Battle index 0. Deployment persists only when it owns a player choice; otherwise
 Continue commits directly to Battle. A won non-final Battle enters `aftermath`, which persists
 the reward, turns, elapsed time, survivors, and fallen units until Continue opens Bona Vacantia
-or the next Shop. See ADR-0321 through ADR-0348 and ADR-0377 for those gameplay decisions.
+or the next Sectio. See ADR-0321 through ADR-0348 and ADR-0377 for those gameplay decisions.
 
 The save stores the selected Ataraxia tier, named and numbered army units, held cards, exact card
 and offer targets, Cacochymic loss history, lipsana and their Conflict state, current deployment
-or Battle runtime, aftermath, and the complete Shop reset snapshot. The retired `draft` phase,
+or Battle runtime, aftermath, and the complete Sectio reset snapshot. The retired `draft` phase,
 `draftOffers`, and `chosenDraftId` are rejected. The generic `formatVersion` field is accepted only
 by the exact version-16 storage migration; normalization and writes never treat it as a current
-shape. `normalizeRunDocument` repairs incomplete data only inside the current RunSaveVersion; it
-contains no historical version upgrade path.
+shape. Likewise, version 17's `shop` phase/property and `shop` unit source exist only on the
+explicit migration boundary. Its `purchasedCardOfferIds` and `soldUnits` fields migrate directly
+to `adlectedCardOfferIds` and `alienatedUnits`; current admitted units use source `adlectio`.
+`normalizeRunDocument` repairs incomplete data only inside the
+current RunSaveVersion; it contains no historical version upgrade path.
 
 Per-user scoping means each user has their own `id` namespace — two users can
 both have a level `my-level` without colliding, and neither can read or
@@ -85,8 +95,8 @@ anonymous Run progress remains browser-local while a signed-in account owns one
 compare-and-swap protected `active_runs` document. Per
 [ADR-0230](adr/0230-run-shops-separate-buying-army-inspection-and-selling.md),
 that document also owns each unit's stable per-piece-type number and the current
-shop's entry snapshot. Shop purchases, sales, and lipsanon choices save normally;
-**Reset Shop** restores the snapshot while retaining the exact offers already
+Sectio's entry snapshot. Sectio Adlectio, Alienatio, and lipsanon choices save normally;
+**Reset Sectio** restores the snapshot while retaining the exact offers already
 dealt for that visit. Ataraxia unlocks are separate monotonic progression because
 finishing or abandoning deletes the active Run document; the browser copy and
 account `run_progression` row merge by their greatest completed tier.

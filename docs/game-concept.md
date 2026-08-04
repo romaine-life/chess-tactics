@@ -56,19 +56,19 @@ these.
 - A board sits somewhere on a spectrum (§5): from a **directed puzzle** to a
   **full game against an AI**, with **PvP** against a human also supported.
 - Ordinary boards remain **self-contained**. **Run** adds the deliberate continuity
-  layer: a persistent chess army, shops, and lipsana move through an authored War while
+  layer: a persistent chess army, Sectio visits, and lipsana move through an authored War while
   every Battle still obeys recognizable chess-piece behavior (ADR-0193).
 - Acquired lipsana read as persistent Run state: one frameless native-size icon
   strip stays at the upper-left beneath the title bar in Battles and between-Battle
   screens, independent of the Battle Controls panel; pointing at or focusing an
   icon immediately explains its name and complete effect (ADR-0216, ADR-0217).
 - A Conflict whose authored span still contains a loot Battle opens with **Bona
-  Vacantia** before its Shop. The mat presents three lipsana and no unrelated
+  Vacantia** before its Sectio. The mat presents three lipsana and no unrelated
   unit selector. An ordinary choice commits when it lands in the held strip; a
   choice that needs a named unit lands provisionally and opens the exact Martial
   Prosopography ledger/profile, with the lipsanon and ability explanation in the
   absent tab rail's column. Confirming a unit commits both facts and reveals the
-  Shop. Until then, **Return to the three offers** restores the untouched mat,
+  Sectio. Until then, **Return to the three offers** restores the untouched mat,
   with no pending acquisition in the Run document. The target ledger and each
   unit profile are addressable authored Run scenes rather than local screen state
   (ADR-0368, ADR-0383). The landed lipsanon remains continuously visible while
@@ -92,7 +92,7 @@ these.
   three-gold premium may produce a live 10 through 12 in the same coin.
   Cost is never decimal, fractional, or zero and never uses separate numbered
   coin art. Each actual unit in the ledger appears as the same
-  canonical player-side sprite used on the board. Card Layout, shop,
+  canonical player-side sprite used on the board. Card Layout, Sectio,
   review, and Enchiridion use the same face rather than parallel card shells
   Each frame declares title, cost, art, type, and contents rectangles in its
   native 1060×1484 coordinate system. Those measurements are bound to the exact
@@ -109,25 +109,25 @@ these.
   authored **core cards**. Each keeps one title and flavor text while its
   drawn offer may give particular units more than one modifier. The 49 cores do
   not multiply into variant deck entries: effects are rolled and persisted when
-  a shop reveals the card, promoted unchanged if purchased, and discarded if
+  a Sectio reveals the card, promoted unchanged if adlected, and discarded if
   passed so a later shuffle may affect that core differently. Adlected adds
   3 gold, Eutactic adds 2 (and can raise Concinnous cards to 10 or 11), and
   Cacochymic discounts by piece tier—Pawn 0, minor
-  1, Rook 2, Queen 3—so shop-card prices remain whole gold and a Cacochymic Pawn
+  1, Rook 2, Queen 3—so Sectio-card prices remain whole gold and a Cacochymic Pawn
   still costs 1. Exact public contents and modifier markers belong in the Contents Box
   unit ledger, not generated card-name permutations; an explicitly concealed
-  Concinnous target appears there as hidden until purchase (ADR-0265, ADR-0271,
+  Concinnous target appears there as hidden until Adlectio (ADR-0265, ADR-0271,
   ADR-0272, ADR-0305, ADR-0309).
-- After the opening Bona Vacantia choice, a fresh Run enters the normal Shop with
+- After the opening Bona Vacantia choice, a fresh Run enters the normal Sectio with
   the permanent King, two free Pawns, 8 gold plus any immediate lipsanon payout,
   and three seeded card offers at distinct core values from 1 through 8.
-  Each card may be bought once while the player can afford it. Every bought card
-  keeps the Shop open, flies from its Shop seat into the title-reachable
+  Each card may undergo Adlectio once while the player can afford it. Every adlected card
+  keeps the Sectio open, flies from its Sectio seat into the title-reachable
   Chartulary, leaves the deal once it lands, and uses the same gold transaction
-  cue as selling. The surviving offers then glide from their measured old seats into the newly centred
-  deal instead of snapping when the bought card leaves. Only the explicit
+  cue as Alienatio. The surviving offers then glide from their measured old seats into the newly centred
+  deal instead of snapping when the adlected card leaves. Only the explicit
   Continue action enters the first Battle, and it is available without requiring
-  a purchase. **Card** is the sole current gameplay noun for these deck entries
+  an Adlectio. **Card** is the sole current gameplay noun for these deck entries
   and offers (ADR-0321, ADR-0322, ADR-0323, ADR-0344, ADR-0347, ADR-0387, ADR-0388).
 - Each of those 49 Units cards owns one native 400×280 PixelLab illustration
   keyed by its canonical composition id. Human unit roles and readable
@@ -142,8 +142,8 @@ these.
   out **Pestiferous** in the type strip or **Cacochymic** beside that unit. Its
   right-side Pestiferous property icon is distinct from the Cacochymic state icon.
   **Legatine** causes exactly one unit to gain Adlected when the card is
-  acquired. Every shop-card draw has a seeded one-in-eight Legatine chance,
-  including the opening Shop, at every core value: an opening card whose
+  acquired. Every Sectio-card draw has a seeded one-in-eight Legatine chance,
+  including the opening Sectio, at every core value: an opening card whose
   surcharge passes the starting eight gold is offered out of reach rather than
   suppressed, and only a deal with nothing affordable at all repairs its cheapest
   card (ADR-0344). Legatine resolves before
@@ -156,22 +156,22 @@ these.
   **Concinnous** means skillfully and harmoniously arranged and causes exactly
   one contained unit to become Eutactic upon acquisition. The right-side
   Concinnous icon declares the property; detecting it does not automatically restate its
-  behavior as Contents Box prose. Before purchase, direct unit-property
+  behavior as Contents Box prose. Before Adlectio, direct unit-property
   presentation marks the target as hidden. The target is seeded and persisted
   with the offer, priced normally, and merely revealed—not rerolled—after
-  purchase. A card does not become Concinnous just because an external lipsanon
+  Adlectio. A card does not become Concinnous just because an external lipsanon
   later modifies one of its units. Concinnous owns its dedicated white frame
-  treatment while retaining the shared anatomy. After Legatine and Pestiferous precedence, every remaining shop
+  treatment while retaining the shared anatomy. After Legatine and Pestiferous precedence, every remaining Sectio
   offer—regardless of core value—has a seeded one-in-eight Concinnous roll. It
   costs two additional gold, may reach eleven, and cannot carry another
   qualifier. Every frame uses one shared accepted gold-coin source with its live
   price overlaid (ADR-0272, ADR-0276, ADR-0305, ADR-0309, ADR-0310, ADR-0311,
   ADR-0324, ADR-0325, ADR-0327, ADR-0328, ADR-0329, ADR-0339, ADR-0341).
   **Hieratic** is the deliberately formal fourth card-property name paired with
-  **Agminate**, and it draws in every Shop. It resolves last, after Legatine,
+  **Agminate**, and it draws in every Sectio. It resolves last, after Legatine,
   Pestiferous and Concinnous, at the same seeded one-in-eight chance on the draws
   that remain. Exactly one contained unit gains Agminate at acquisition, chosen
-  the way a Legatine target is: drawn on purchase, concealed by a multi-unit
+  the way a Legatine target is: drawn on Adlectio, concealed by a multi-unit
   offer, and shown as the forced result on a one-unit offer. Agminate seats a
   unit in its role's formation rather than a rank and its King, Rook and Bishop
   rules interlock, so it carries Adlected's three-gold price. Hieratic owns the
@@ -184,17 +184,17 @@ these.
   tier as a small carved numeral beside that tier's effect and adds no glossary
   panes of its own (ADR-0266, ADR-0268, ADR-0291, ADR-0390, ADR-0391).
 - **Ataraxia I — The Great Mortality** initially targets Pestiferous status for
-  roughly one in eight otherwise eligible shop draws. Pestiferous status is
+  roughly one in eight otherwise eligible Sectio draws. Pestiferous status is
   rolled with the rest of that affected offer, not added as another deck copy.
   A nonempty Pestiferous card publicly marks exactly one unit Cacochymic. Only that
   unit receives the piece-tier Cacochymic discount. The unit ledger identifies it
   with the dedicated Cacochymic icon rather than a written label. Every owned nonempty
   Pestiferous card loses its marked unit on each victorious-Battle advancement,
   whether or not the card was drawn or deployed, then immediately marks one
-  remaining unit for the next advancement. Selling, cashing out, or otherwise
+  remaining unit for the next advancement. Alienatio, cashing out, or otherwise
   permanently removing the marked unit retargets the card while it remains
   nonempty. The empty card remains as a possible dead draw until an explicit
-  effect removes it. Affected shop offers, their exact public target, purchases,
+  effect removes it. Affected Sectio offers, their exact public target, Adlectio state,
   card membership, and losses are persisted; the seeded draw-time roll is one in
   eight and is inspectable in Card Layout. Pestiferous cards retain the shared
   face geometry but resolve their dedicated black bubbling-crude frame slot;
@@ -231,7 +231,7 @@ these.
   reacquired or redrawn. Combat input,
   clocks, and opponent behavior open
   only after the persisted phase becomes Battle. When no meaningful player
-  choice exists, Shop Continue commits the deterministic formation directly
+  choice exists, Sectio Continue commits the deterministic formation directly
   into Battle (ADR-0346, ADR-0348, ADR-0349, ADR-0350, ADR-0351, ADR-0352).
 - Placement lipsana grant shared unit abilities rather than owning bespoke
   placement rules. Field Linens grants Eutactic to Pawns; Royal Decree to the
@@ -246,17 +246,17 @@ these.
   or regents, and kings or emperors. Names remain stable through Battles,
   retries, and cross-device resume while the chess-piece type stays visible
   beside that identity (ADR-0228).
-- A non-final Run victory funds its shop from the authored enemy force: each
+- A non-final Run victory funds its Sectio from the authored enemy force: each
   King is worth 1 gold and every other enemy chess piece pays 50% of its
   standard value (ADR-0220).
-- Run shops separate buying, upcoming-Battle reconnaissance, detailed army
-  inspection, and a compact decision-complete selling list into explicit
+- Sectio visits separate Adlectio, upcoming-Battle reconnaissance, detailed army
+  inspection, and a compact decision-complete Alienatio list into explicit
   main-pane destinations. **View Battle** shows the next canonical Level in a
   pannable read-only board beside its rules, zones, time control, and forces.
   Fixed opponents appear on the map; known setup-event rosters appear in the
   ledger without resolving their exact squares, and the persistent Run army
   still waits for Deployment. The persistent Controls panel navigates these
-  destinations, resets the complete same-offer shop visit, and continues the
+  destinations, resets the complete same-offer Sectio visit, and continues the
   Run; Army inspection remains available in every Run phase without pausing an
   active Battle (ADR-0230, ADR-0386).
 - **Enchiridion** is the player-facing reference for unit movement, terrain
@@ -276,9 +276,9 @@ these.
   the fight. Its four section marks sit beside the book and directly open the
   Enchiridion, Martial Prosopography, Chartulary, and Lipsanotheca; the same
   destinations remain in the complete workspace rail. Those Run registers expose the
-  persistent army, the cards bought so far, and held lipsana beside the same
+  persistent army, the cards adlected so far, and held lipsana beside the same
   Enchiridion. The title route retains the covered Run phase and appends the exact
-  visible address—`Shop › Strategikon › Chartulary`, or one further segment for an
+  visible address—`Sectio › Strategikon › Chartulary`, or one further segment for an
   Enchiridion subcategory (ADR-0231, ADR-0387, ADR-0389). The Chartulary is the Cards gallery itself — same
   filters, same gold groups, same faces, no annotation beside them — and the
   only difference is which cards are in it (ADR-0371).
@@ -301,7 +301,7 @@ these.
   portrait. The canonical board renderer draws that unit's real board sprite
   on a stable terrain surface with seeded optional grass. A persistent scene
   seed is assigned in the same transaction that adds the unit to the army, so
-  the scene survives Battles, shops, resets, and cross-device resume
+  the scene survives Battles, Sectio visits, resets, and cross-device resume
   (ADR-0247).
 - **Campaign** strings 5–10 boards into a curated, slowly-evolving sequence, and
   will grow richer over time.
@@ -494,12 +494,12 @@ The first prototype stays deliberately minimal (pillars §3). Resolved scope:
 **Deferred (post-v1, not precluded):** fluid royal / win conditions; mutating or
 cursed terrain and pieces; named-tactic surfacing; a competent search-based AI.
 Player armies and Run progression are governed by ADR-0193. ADR-0321 makes the
-opening the normal Shop transaction and retires the separate draft phase and
+opening the normal Sectio transaction and retires the separate draft phase and
 screen. ADR-0322 supplies the current two-Pawn, 8-gold opening and card-native
-purchase language, feedback, and sound. ADR-0323 removes the inherited
-one-card-per-Shop cap so every affordable dealt card can be purchased once.
-ADR-0347 removes the remaining mandatory opening purchase, making card commerce
-optional in every Shop.
+transaction feedback and sound. ADR-0323 removes the inherited one-card-per-Sectio
+cap so every affordable dealt card can undergo Adlectio once. ADR-0347 removes the
+remaining mandatory opening transaction, and ADR-0393 names the optional card
+admission **Adlectio** in every Sectio.
 
 ## 14. Administrator playtesting
 

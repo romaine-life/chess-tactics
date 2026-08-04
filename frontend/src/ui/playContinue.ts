@@ -32,8 +32,8 @@ function runPhase(run: RunDocument): string {
     ? `Battle ${run.battleIndex + 1} of ${run.war.battles.length}`
     : run.phase === 'aftermath'
       ? `Battle ${run.battleIndex + 1} won`
-      : run.phase === 'shop'
-      ? `Shop after Battle ${run.battleIndex + 1}`
+      : run.phase === 'sectio'
+      ? `Sectio after Battle ${run.battleIndex + 1}`
       : run.phase === 'victory'
         ? 'War won'
         : run.phase === 'deployment'

@@ -10,7 +10,7 @@ import {
 
 const cardRect = (left: number) => ({ left, top: 180, width: 236, height: 330 });
 
-describe('Run card purchase transfer', () => {
+describe('Run card Adlectio transfer', () => {
   it('moves centre to centre and minimizes inside the destination mark', () => {
     const geometry = runCardFlightGeometry(
       { left: 100, top: 200, width: 200, height: 280 },
@@ -38,36 +38,36 @@ describe('Run card purchase transfer', () => {
 
   it.each([
     {
-      purchase: 'first of three',
+      position: 'first of three',
       before: { b: 252, c: 504 },
       after: { b: 126, c: 378 },
       offsets: { b: 126, c: 126 },
     },
     {
-      purchase: 'middle of three',
+      position: 'middle of three',
       before: { a: 0, c: 504 },
       after: { a: 126, c: 378 },
       offsets: { a: -126, c: 126 },
     },
     {
-      purchase: 'last of three',
+      position: 'last of three',
       before: { a: 0, b: 252 },
       after: { a: 126, b: 378 },
       offsets: { a: -126, b: -126 },
     },
     {
-      purchase: 'first of two',
+      position: 'first of two',
       before: { b: 378 },
       after: { b: 252 },
       offsets: { b: 126 },
     },
     {
-      purchase: 'last of two',
+      position: 'last of two',
       before: { a: 126 },
       after: { a: 252 },
       offsets: { a: -126 },
     },
-  ])('inverts every survivor before settling after buying the $purchase', ({ before, after, offsets }) => {
+  ])('inverts every survivor before settling after the $position Adlectio', ({ before, after, offsets }) => {
     for (const [id, previousLeft] of Object.entries(before)) {
       expect(runCardReflowOffset(cardRect(previousLeft), cardRect(after[id]))).toEqual({
         x: offsets[id],
@@ -93,10 +93,10 @@ describe('Run card purchase transfer', () => {
     expect(screen).toContain("rowStyle.getPropertyValue('--ds-ease-standard')");
     expect(screen).toContain('return element.animate(');
     expect(screen).toContain('onReflowingChange(true);');
-    expect(screen).toContain('setLandedPurchaseOfferId(offer.offerId);');
-    expect(screen).toContain('departingOfferId={cardFlight?.offer.offerId ?? landedPurchaseOfferId}');
-    expect(screen).toContain('const purchaseBusy = Boolean(cardFlight) || Boolean(landedPurchaseOfferId) || cardReflowing;');
-    expect(screen).toContain('inert={purchaseInFlight ? true : undefined}');
-    expect(screen).not.toContain('disabled={purchaseInFlight}');
+    expect(screen).toContain('setLandedAdlectioOfferId(offer.offerId);');
+    expect(screen).toContain('departingOfferId={cardFlight?.offer.offerId ?? landedAdlectioOfferId}');
+    expect(screen).toContain('const adlectioBusy = Boolean(cardFlight) || Boolean(landedAdlectioOfferId) || cardReflowing;');
+    expect(screen).toContain('inert={adlectioInFlight ? true : undefined}');
+    expect(screen).not.toContain('disabled={adlectioInFlight}');
   });
 });

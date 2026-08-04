@@ -85,12 +85,12 @@ const {
   runCardCostCoinSlot,
   runResourceIconMediaIssue,
   runResourceIconSlotId,
-  runShopWrapMediaIssue,
+  runSectioWrapMediaIssue,
   workspaceBackgroundSlotId,
   workspaceBackgroundMediaIssue,
   runLipsanonMatSlot,
   runLipsanonMatMediaIssue,
-  runShopWrapSlotId,
+  runSectioWrapSlotId,
   sfxSampleMediaIssue,
   sfxSampleOwnerProofIssue,
   sfxSampleSlot,
@@ -2957,6 +2957,333 @@ const MIGRATIONS = [
          AND NOT (body ? 'runSaveVersion');
     `,
   },
+  {
+    version: 55,
+    name: 'Sectio, Adlectio, and Alienatio name the Run exchange phase',
+    // ADR-0392/0393: this is one vocabulary migration, not a display alias. Durable Run
+    // documents, minted craft specs, and the live-media graph all move in the same
+    // transaction. Seed labels are code-owned deterministic inputs and intentionally do
+    // not appear here: changing them would redeal an otherwise identical Run.
+    sql: `
+      CREATE OR REPLACE FUNCTION pg_temp.migrate_run_army_unit_to_adlectio(unit_value jsonb)
+      RETURNS jsonb
+      LANGUAGE sql
+      IMMUTABLE
+      STRICT
+      AS $function$
+        SELECT CASE
+          WHEN jsonb_typeof(unit_value) = 'object' AND unit_value->>'source' = 'shop'
+            THEN jsonb_set(unit_value, '{source}', '"adlectio"'::jsonb, false)
+          ELSE unit_value
+        END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.migrate_run_army_to_adlectio(army_value jsonb)
+      RETURNS jsonb
+      LANGUAGE sql
+      IMMUTABLE
+      STRICT
+      AS $function$
+        SELECT CASE
+          WHEN jsonb_typeof(army_value) = 'array' THEN COALESCE(
+            (
+              SELECT jsonb_agg(
+                pg_temp.migrate_run_army_unit_to_adlectio(entry.value)
+                ORDER BY entry.ordinality
+              )
+                FROM jsonb_array_elements(army_value) WITH ORDINALITY AS entry(value, ordinality)
+            ),
+            '[]'::jsonb
+          )
+          ELSE army_value
+        END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.migrate_run_offer_id_to_sectio(offer_id jsonb)
+      RETURNS jsonb
+      LANGUAGE sql
+      IMMUTABLE
+      STRICT
+      AS $function$
+        SELECT CASE
+          WHEN jsonb_typeof(offer_id) = 'string' AND offer_id #>> '{}' LIKE 'shop-%'
+            THEN to_jsonb('sectio-' || substring(offer_id #>> '{}' from 6))
+          ELSE offer_id
+        END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.migrate_active_run_to_sectio(run_value jsonb)
+      RETURNS jsonb
+      LANGUAGE plpgsql
+      AS $function$
+      DECLARE
+        migrated jsonb;
+        sectio_value jsonb;
+        entry_snapshot jsonb;
+      BEGIN
+        IF run_value->'runSaveVersion' <> '17'::jsonb THEN
+          RETURN run_value;
+        END IF;
+        IF NOT (run_value ? 'shop') THEN
+          RAISE EXCEPTION 'RunSaveVersion 17 document has no shop property';
+        END IF;
+
+        sectio_value := run_value->'shop';
+        IF jsonb_typeof(sectio_value) = 'object' THEN
+          IF jsonb_typeof(sectio_value->'cardOffers') = 'array' THEN
+            sectio_value := jsonb_set(
+              sectio_value,
+              '{cardOffers}',
+              COALESCE((
+                SELECT jsonb_agg(
+                  CASE
+                    WHEN jsonb_typeof(entry.value) = 'object' AND entry.value ? 'offerId'
+                      THEN jsonb_set(
+                        entry.value,
+                        '{offerId}',
+                        pg_temp.migrate_run_offer_id_to_sectio(entry.value->'offerId'),
+                        false
+                      )
+                    ELSE entry.value
+                  END
+                  ORDER BY entry.ordinality
+                )
+                  FROM jsonb_array_elements(sectio_value->'cardOffers')
+                    WITH ORDINALITY AS entry(value, ordinality)
+              ), '[]'::jsonb),
+              false
+            );
+          END IF;
+          IF sectio_value ? 'purchasedCardOfferIds' THEN
+            sectio_value := (sectio_value - 'purchasedCardOfferIds') || jsonb_build_object(
+              'adlectedCardOfferIds',
+              CASE
+                WHEN jsonb_typeof(sectio_value->'purchasedCardOfferIds') = 'array' THEN COALESCE((
+                  SELECT jsonb_agg(
+                    pg_temp.migrate_run_offer_id_to_sectio(entry.value)
+                    ORDER BY entry.ordinality
+                  )
+                    FROM jsonb_array_elements(sectio_value->'purchasedCardOfferIds')
+                      WITH ORDINALITY AS entry(value, ordinality)
+                ), '[]'::jsonb)
+                ELSE sectio_value->'purchasedCardOfferIds'
+              END
+            );
+          END IF;
+          IF sectio_value ? 'soldUnits' THEN
+            sectio_value := (sectio_value - 'soldUnits') || jsonb_build_object(
+              'alienatedUnits',
+              CASE
+                WHEN jsonb_typeof(sectio_value->'soldUnits') = 'array' THEN COALESCE((
+                  SELECT jsonb_agg(
+                    CASE
+                      WHEN jsonb_typeof(entry.value) = 'object' AND entry.value ? 'unit'
+                        THEN jsonb_set(
+                          entry.value,
+                          '{unit}',
+                          pg_temp.migrate_run_army_unit_to_adlectio(entry.value->'unit'),
+                          false
+                        )
+                      ELSE entry.value
+                    END
+                    ORDER BY entry.ordinality
+                  )
+                    FROM jsonb_array_elements(sectio_value->'soldUnits')
+                      WITH ORDINALITY AS entry(value, ordinality)
+                ), '[]'::jsonb)
+                ELSE sectio_value->'soldUnits'
+              END
+            );
+          END IF;
+          entry_snapshot := sectio_value->'entrySnapshot';
+          IF jsonb_typeof(entry_snapshot) = 'object' AND entry_snapshot ? 'army' THEN
+            sectio_value := jsonb_set(
+              sectio_value,
+              '{entrySnapshot,army}',
+              pg_temp.migrate_run_army_to_adlectio(entry_snapshot->'army'),
+              false
+            );
+          END IF;
+        END IF;
+
+        migrated := (run_value - 'shop') || jsonb_build_object(
+          'runSaveVersion', 18,
+          'sectio', sectio_value
+        );
+        IF migrated->>'phase' = 'shop' THEN
+          migrated := jsonb_set(migrated, '{phase}', '"sectio"'::jsonb, false);
+        END IF;
+        IF migrated ? 'army' THEN
+          migrated := jsonb_set(
+            migrated,
+            '{army}',
+            pg_temp.migrate_run_army_to_adlectio(migrated->'army'),
+            false
+          );
+        END IF;
+        IF jsonb_typeof(migrated->'pestiferousLosses') = 'array' THEN
+          migrated := jsonb_set(
+            migrated,
+            '{pestiferousLosses}',
+            COALESCE((
+              SELECT jsonb_agg(
+                CASE
+                  WHEN jsonb_typeof(entry.value) = 'object' AND entry.value ? 'unit'
+                    THEN jsonb_set(
+                      entry.value,
+                      '{unit}',
+                      pg_temp.migrate_run_army_unit_to_adlectio(entry.value->'unit'),
+                      false
+                    )
+                  ELSE entry.value
+                END
+                ORDER BY entry.ordinality
+              )
+                FROM jsonb_array_elements(migrated->'pestiferousLosses')
+                  WITH ORDINALITY AS entry(value, ordinality)
+            ), '[]'::jsonb),
+            false
+          );
+        END IF;
+        RETURN migrated;
+      END
+      $function$;
+
+      UPDATE active_runs
+         SET body = pg_temp.migrate_active_run_to_sectio(body),
+             revision = revision + 1,
+             updated_at = now()
+       WHERE body->'runSaveVersion' = '17'::jsonb;
+
+      UPDATE run_craft_links
+         SET spec = jsonb_set(spec, '{phase}', '"sectio"'::jsonb, false)
+       WHERE spec->>'phase' = 'shop';
+
+      -- The slot primary key has three referencing relations. Drop every edge,
+      -- move the complete graph, then restore the same restrictive topology.
+      DO $$
+      DECLARE constraint_name text;
+      BEGIN
+        SELECT conname INTO constraint_name
+          FROM pg_constraint
+         WHERE conrelid = 'media_versions'::regclass
+           AND confrelid = 'media_slots'::regclass
+           AND contype = 'f'
+           AND conkey = ARRAY[(
+                 SELECT attnum FROM pg_attribute
+                  WHERE attrelid = 'media_versions'::regclass AND attname = 'slot'
+               )]::smallint[];
+        IF constraint_name IS NULL THEN
+          RAISE EXCEPTION 'media_versions has no single-column slot foreign key to drop';
+        END IF;
+        EXECUTE format('ALTER TABLE media_versions DROP CONSTRAINT %I', constraint_name);
+
+        SELECT conname INTO constraint_name
+          FROM pg_constraint
+         WHERE conrelid = 'drawable_asset_media'::regclass
+           AND confrelid = 'media_slots'::regclass
+           AND contype = 'f'
+           AND conkey = ARRAY[(
+                 SELECT attnum FROM pg_attribute
+                  WHERE attrelid = 'drawable_asset_media'::regclass AND attname = 'slot'
+               )]::smallint[];
+        IF constraint_name IS NULL THEN
+          RAISE EXCEPTION 'drawable_asset_media has no single-column slot foreign key to drop';
+        END IF;
+        EXECUTE format('ALTER TABLE drawable_asset_media DROP CONSTRAINT %I', constraint_name);
+      END $$;
+      ALTER TABLE media_slots DROP CONSTRAINT IF EXISTS media_slots_active_version_fk;
+
+      UPDATE media_slots
+         SET slot = CASE
+           WHEN slot LIKE 'review/run-shop-wrap/%'
+             THEN 'review/run-sectio-wrap/' || substring(slot from '^review/run-shop-wrap/(.*)$')
+           WHEN slot LIKE 'review/run-screen-art/sell/%'
+             THEN 'review/run-screen-art/alienatio/' || substring(slot from '^review/run-screen-art/sell/(.*)$')
+           ELSE 'ui/run/sectio-wrap/' || substring(slot from '^ui/run/shop-wrap/(.*)$')
+         END
+       WHERE slot LIKE 'review/run-shop-wrap/%'
+          OR slot LIKE 'ui/run/shop-wrap/%'
+          OR slot LIKE 'review/run-screen-art/sell/%';
+      UPDATE media_versions
+         SET slot = CASE
+           WHEN slot LIKE 'review/run-shop-wrap/%'
+             THEN 'review/run-sectio-wrap/' || substring(slot from '^review/run-shop-wrap/(.*)$')
+           WHEN slot LIKE 'review/run-screen-art/sell/%'
+             THEN 'review/run-screen-art/alienatio/' || substring(slot from '^review/run-screen-art/sell/(.*)$')
+           ELSE 'ui/run/sectio-wrap/' || substring(slot from '^ui/run/shop-wrap/(.*)$')
+         END
+       WHERE slot LIKE 'review/run-shop-wrap/%'
+          OR slot LIKE 'ui/run/shop-wrap/%'
+          OR slot LIKE 'review/run-screen-art/sell/%';
+      UPDATE media_asset_events
+         SET slot = CASE
+           WHEN slot LIKE 'review/run-shop-wrap/%'
+             THEN 'review/run-sectio-wrap/' || substring(slot from '^review/run-shop-wrap/(.*)$')
+           WHEN slot LIKE 'review/run-screen-art/sell/%'
+             THEN 'review/run-screen-art/alienatio/' || substring(slot from '^review/run-screen-art/sell/(.*)$')
+           ELSE 'ui/run/sectio-wrap/' || substring(slot from '^ui/run/shop-wrap/(.*)$')
+         END
+       WHERE slot LIKE 'review/run-shop-wrap/%'
+          OR slot LIKE 'ui/run/shop-wrap/%'
+          OR slot LIKE 'review/run-screen-art/sell/%';
+      UPDATE drawable_asset_media
+         SET slot = CASE
+           WHEN slot LIKE 'review/run-shop-wrap/%'
+             THEN 'review/run-sectio-wrap/' || substring(slot from '^review/run-shop-wrap/(.*)$')
+           WHEN slot LIKE 'review/run-screen-art/sell/%'
+             THEN 'review/run-screen-art/alienatio/' || substring(slot from '^review/run-screen-art/sell/(.*)$')
+           ELSE 'ui/run/sectio-wrap/' || substring(slot from '^ui/run/shop-wrap/(.*)$')
+         END
+       WHERE slot LIKE 'review/run-shop-wrap/%'
+          OR slot LIKE 'ui/run/shop-wrap/%'
+          OR slot LIKE 'review/run-screen-art/sell/%';
+
+      ALTER TABLE media_versions
+        ADD CONSTRAINT media_versions_slot_fkey
+        FOREIGN KEY (slot) REFERENCES media_slots(slot) ON DELETE RESTRICT;
+      ALTER TABLE drawable_asset_media
+        ADD CONSTRAINT drawable_asset_media_slot_fkey
+        FOREIGN KEY (slot) REFERENCES media_slots(slot) ON DELETE RESTRICT;
+      ALTER TABLE media_slots
+        ADD CONSTRAINT media_slots_active_version_fk
+        FOREIGN KEY (active_version_id, slot) REFERENCES media_versions (id, slot);
+
+      UPDATE media_slots SET role = 'sectio-wrap' WHERE role = 'shop-wrap';
+      UPDATE media_versions SET role = 'sectio-wrap' WHERE role = 'shop-wrap';
+
+      UPDATE media_slots
+         SET metadata = jsonb_set(
+               jsonb_set(metadata, '{runtime,component}', '"run-sectio-wrap"'::jsonb, false),
+               '{runtime,nativeRole}', '"run-sectio-wrap"'::jsonb, false)
+       WHERE metadata->'runtime'->>'component' = 'run-shop-wrap'
+          OR metadata->'runtime'->>'nativeRole' = 'run-shop-wrap';
+      UPDATE media_versions
+         SET metadata = jsonb_set(
+               jsonb_set(metadata, '{runtime,component}', '"run-sectio-wrap"'::jsonb, false),
+               '{runtime,nativeRole}', '"run-sectio-wrap"'::jsonb, false)
+       WHERE metadata->'runtime'->>'component' = 'run-shop-wrap'
+          OR metadata->'runtime'->>'nativeRole' = 'run-shop-wrap';
+      UPDATE media_slots
+         SET metadata = jsonb_set(
+               metadata,
+               '{schema}',
+               to_jsonb(replace(metadata->>'schema', 'run-shop-wrap-', 'run-sectio-wrap-')),
+               false)
+       WHERE metadata->>'schema' LIKE 'run-shop-wrap-%';
+      UPDATE media_versions
+         SET metadata = jsonb_set(
+               metadata,
+               '{schema}',
+               to_jsonb(replace(metadata->>'schema', 'run-shop-wrap-', 'run-sectio-wrap-')),
+               false)
+       WHERE metadata->>'schema' LIKE 'run-shop-wrap-%';
+
+      UPDATE media_catalog_state
+         SET revision = revision + 1, updated_at = now()
+       WHERE singleton;
+    `,
+  },
 ];
 
 let pool = null;
@@ -3536,14 +3863,22 @@ async function schemaMigrationIdentityBoundaryRows(client) {
   });
 }
 
-async function unmigratedActiveRunSaveCount(client) {
+async function unmigratedActiveRunSaveCounts(client) {
   const { rows } = await client.query(
-    `SELECT count(*)::integer AS count
-       FROM active_runs
-      WHERE body->'formatVersion' = '16'::jsonb
-        AND NOT (body ? 'runSaveVersion')`,
+    `SELECT
+       count(*) FILTER (
+         WHERE body->'formatVersion' = '16'::jsonb
+           AND NOT (body ? 'runSaveVersion')
+       )::integer AS version_16_count,
+       count(*) FILTER (
+         WHERE body->'runSaveVersion' = '17'::jsonb
+       )::integer AS version_17_count
+       FROM active_runs`,
   );
-  return Number(rows[0]?.count) || 0;
+  return Object.freeze({
+    version_16_count: Number(rows[0]?.version_16_count) || 0,
+    version_17_count: Number(rows[0]?.version_17_count) || 0,
+  });
 }
 
 async function requiredSchemaContractIssues(client) {
@@ -3552,7 +3887,7 @@ async function requiredSchemaContractIssues(client) {
   const retryContractRows = await generationAttemptRetryContractRows(client);
   const moveHighlightContractRows = await generationAttemptMoveHighlightContractRows(client);
   const migrationIdentityRows = await schemaMigrationIdentityBoundaryRows(client);
-  const unmigratedActiveRunSaves = await unmigratedActiveRunSaveCount(client);
+  const unmigratedActiveRunSaves = await unmigratedActiveRunSaveCounts(client);
   const migrationIdentityIssues = schemaMigrationIdentityBoundaryIssues(
     migrationIdentityRows.columns,
     migrationIdentityRows.constraints,
@@ -3594,7 +3929,10 @@ async function requiredSchemaContractIssues(client) {
     unexpected_reason_foreign_keys: Object.freeze(
       unexpectedReasonForeignKeys.map((constraint) => constraint.constraint_name),
     ),
-    unmigrated_active_run_save_count: unmigratedActiveRunSaves,
+    unmigrated_active_run_save_count:
+      unmigratedActiveRunSaves.version_16_count + unmigratedActiveRunSaves.version_17_count,
+    unmigrated_active_run_version_16_count: unmigratedActiveRunSaves.version_16_count,
+    unmigrated_active_run_version_17_count: unmigratedActiveRunSaves.version_17_count,
     ...generationAttemptRetryContractIssues(
       retryContractRows.columns,
       retryContractRows.constraints,
@@ -3667,12 +4005,23 @@ async function repairRequiredSchemaContracts(
       issues = await requiredSchemaContractIssues(client);
     }
   }
-  if (issues.unmigrated_active_run_save_count > 0) {
+  if (issues.unmigrated_active_run_version_16_count > 0) {
     const migration = MIGRATIONS.find((candidate) => candidate.version === 54);
     if (!migration) throw new Error('active Run save repair migration is unavailable');
     await executeMigration(migration, 'repair active Run save version contract');
     completedSteps.push(Object.freeze({
       contract: 'active Run save version',
+      migration_version: migration.version,
+    }));
+    markInspection(`inspect required contract repairs after migration ${migration.version}`);
+    issues = await requiredSchemaContractIssues(client);
+  }
+  if (issues.unmigrated_active_run_version_17_count > 0) {
+    const migration = MIGRATIONS.find((candidate) => candidate.version === 55);
+    if (!migration) throw new Error('Sectio Run save repair migration is unavailable');
+    await executeMigration(migration, 'repair active Run Sectio operation vocabulary contract');
+    completedSteps.push(Object.freeze({
+      contract: 'active Run Sectio operation vocabulary',
       migration_version: migration.version,
     }));
     markInspection(`inspect required contract repairs after migration ${migration.version}`);
@@ -15317,10 +15666,10 @@ function runtimeMetadataProjection(row) {
   if (row.domain === 'ui-kit') {
     for (const key of ['nativeRole', 'slice']) allowed.add(key);
   }
-  // Shop wraps frame live cards, so their runtime contract is the measured card
+  // Sectio wraps frame live cards, so their runtime contract is the measured card
   // window on the painted canvas rather than a sprite frame.
-  const shopWrap = runShopWrapSlotId(row.slot) !== null;
-  if (shopWrap) {
+  const sectioWrap = runSectioWrapSlotId(row.slot) !== null;
+  if (sectioWrap) {
     for (const key of ['kind', 'canvasWidth', 'canvasHeight', 'window', 'slots']) allowed.add(key);
   }
   const unknown = Object.keys(raw).filter((key) => !allowed.has(key));
@@ -15355,7 +15704,7 @@ function runtimeMetadataProjection(row) {
     if (typeof raw.loop !== 'boolean') return { error: 'metadata.runtime.loop must be boolean' };
     value.loop = raw.loop;
   }
-  if (shopWrap) {
+  if (sectioWrap) {
     if (raw.kind !== undefined) {
       const normalized = runtimeSemanticText(raw.kind, 32);
       if (!normalized) return { error: 'metadata.runtime.kind must be a non-empty string' };
@@ -15507,8 +15856,8 @@ function mediaDomainProjectionIssue(row) {
   if (runResourceIconSlotId(row.slot)) {
     return runResourceIconMediaIssue(row, runtime.value);
   }
-  if (runShopWrapSlotId(row.slot)) {
-    return runShopWrapMediaIssue(row, runtime.value);
+  if (runSectioWrapSlotId(row.slot)) {
+    return runSectioWrapMediaIssue(row, runtime.value);
   }
   if (gameConditionIconSlot(row.slot)) {
     return gameConditionIconMediaIssue(row, runtime.value);
@@ -18561,22 +18910,23 @@ app.put('/api/run-progression', async (req, res) => {
 // --- Account-scoped active Run (ADR-0193) ---------------------------------
 // Anonymous Runs stay in browser storage. Once signed in, the client adopts that
 // document here; the server owns one CAS-updated active Run per account.
-const ACTIVE_RUN_PHASES = new Set(['aftermath', 'bona-vacantia', 'deployment', 'battle', 'shop', 'victory']);
+const ACTIVE_RUN_PHASES = new Set(['aftermath', 'bona-vacantia', 'deployment', 'battle', 'sectio', 'victory']);
 const ACTIVE_RUN_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
+const ACTIVE_RUN_UNIT_SOURCES = new Set(['king', 'starting', 'adlectio']);
 const ACTIVE_RUN_PIECE_VALUES = Object.freeze({ pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9, king: 0 });
 const ACTIVE_RUN_ABILITIES = new Set(['adlected', 'eutactic', 'agminate']);
 const ACTIVE_RUN_MODIFIERS = new Set(['cacochymic']);
 const ACTIVE_RUN_CACOCHYMIC_DISCOUNTS = Object.freeze({ pawn: 0, knight: 1, bishop: 1, rook: 2, queen: 3 });
-const ACTIVE_RUN_SHOP_FIELDS = new Set([
+const ACTIVE_RUN_SECTIO_FIELDS = new Set([
   'kind',
   'afterBattleIndex',
   'conflictIndex',
   'victoryGoldTenths',
   'cardOffers',
-  'purchasedCardOfferIds',
+  'adlectedCardOfferIds',
   'paidLipsanonOffer',
   'paidLipsanonBought',
-  'soldUnits',
+  'alienatedUnits',
   'entrySnapshot',
 ]);
 const ACTIVE_RUN_VACANTIA_FIELDS = new Set([
@@ -18601,7 +18951,7 @@ const LIPSANON_BY_ID = serverRender?.LIPSANON_BY_ID ?? {};
 const RUN_LIPSANON_IDS = new Set(RUN_LIPSANA.map((lipsanon) => lipsanon.id));
 /**
  * Gold the Run's held lipsana paid the moment they were taken. Read from the model's own
- * table (RUN_LIPSANON_IMMEDIATE_GOLD) rather than restated here, so the opening Shop's pinned
+ * table (RUN_LIPSANON_IMMEDIATE_GOLD) rather than restated here, so the opening Sectio's pinned
  * gold check stays exact when a lipsanon's payout changes.
  */
 function openingLipsanonGoldTenths(run) {
@@ -18617,6 +18967,7 @@ function validateActiveRunBody(run) {
   if (!run || typeof run !== 'object' || Array.isArray(run)) return 'run must be an object';
   if (run.runSaveVersion !== ACTIVE_RUN_SAVE_VERSION) return 'run.runSaveVersion is unsupported';
   if ('formatVersion' in run) return 'run contains the retired formatVersion field';
+  if ('shop' in run) return 'run contains retired Shop state';
   if (typeof run.id !== 'string' || !run.id || run.id.length > 160) return 'run.id is invalid';
   if (!isFiniteInteger(run.seed) || run.seed < 0 || run.seed > 0xffffffff) return 'run.seed is invalid';
   if (run.ataraxiaTier !== 0 && run.ataraxiaTier !== 1) return 'run.ataraxiaTier is invalid';
@@ -18646,7 +18997,7 @@ function validateActiveRunBody(run) {
     if (!unit || typeof unit.id !== 'string' || !unit.id || unitIds.has(unit.id) || !ACTIVE_RUN_PIECES.has(unit.type)) {
       return 'run.army contains an invalid unit';
     }
-    if (!['king', 'starting', 'shop'].includes(unit.source)) {
+    if (!ACTIVE_RUN_UNIT_SOURCES.has(unit.source)) {
       return 'run.army contains an invalid source';
     }
     unitIds.add(unit.id);
@@ -18794,6 +19145,7 @@ function validateActiveRunBody(run) {
         || !Array.isArray(unit.modifiers)
         || !unit.modifiers.includes('cacochymic')
         || unit.modifiers.some((modifier) => !ACTIVE_RUN_MODIFIERS.has(modifier))
+        || !ACTIVE_RUN_UNIT_SOURCES.has(unit.source)
         || !isFiniteInteger(unit.inspectionSeed)
         || unit.inspectionSeed < 0
         || unit.inspectionSeed > 0xffffffff
@@ -18818,9 +19170,9 @@ function validateActiveRunBody(run) {
       }
     }
   }
-  if (run.phase === 'shop' && !isObjectRecord(run.shop)) return 'run.shop is required';
-  if (run.phase !== 'shop' && run.shop !== null) return 'run.shop is invalid outside the shop phase';
-  // Bona Vacantia carries its own offers and, like the shop, exists only in its own phase.
+  if (run.phase === 'sectio' && !isObjectRecord(run.sectio)) return 'run.sectio is required';
+  if (run.phase !== 'sectio' && run.sectio !== null) return 'run.sectio is invalid outside the Sectio phase';
+  // Bona Vacantia carries its own offers and, like the Sectio, exists only in its own phase.
   {
     if (run.phase === 'bona-vacantia') {
       if (!isObjectRecord(run.vacantia)) return 'run.vacantia is required';
@@ -18846,7 +19198,7 @@ function validateActiveRunBody(run) {
     }
   }
   // The aftermath report is the aftermath phase: it exists only there, and cannot be absent
-  // there, because the shop that follows is opened from the survivors it carries.
+  // there, because the Sectio that follows is opened from the survivors it carries.
   {
     if (run.phase === 'aftermath') {
       if (!isObjectRecord(run.aftermath)) return 'run.aftermath is required';
@@ -18881,26 +19233,40 @@ function validateActiveRunBody(run) {
       return 'run.aftermath is invalid outside the aftermath phase';
     }
   }
-  if (run.shop !== null && run.shop !== undefined) {
-    if (!isObjectRecord(run.shop)) return 'run.shop is invalid';
-    if (Object.keys(run.shop).some((field) => !ACTIVE_RUN_SHOP_FIELDS.has(field))) {
-      return 'run.shop contains an unsupported field';
+  if (run.sectio !== null && run.sectio !== undefined) {
+    if (!isObjectRecord(run.sectio)) return 'run.sectio is invalid';
+    if (Object.keys(run.sectio).some((field) => !ACTIVE_RUN_SECTIO_FIELDS.has(field))) {
+      return 'run.sectio contains an unsupported field';
     }
-    if (run.shop.kind !== 'opening' && run.shop.kind !== 'post-battle') {
-      return 'run.shop.kind is invalid';
+    if (run.sectio.kind !== 'opening' && run.sectio.kind !== 'post-battle') {
+      return 'run.sectio.kind is invalid';
     }
-    if (run.shop.soldUnits !== undefined && !Array.isArray(run.shop.soldUnits)) return 'run.shop.soldUnits is invalid';
-    if (run.shop.entrySnapshot !== undefined && !isObjectRecord(run.shop.entrySnapshot)) {
-      return 'run.shop.entrySnapshot is invalid';
+    if (run.sectio.alienatedUnits !== undefined && !Array.isArray(run.sectio.alienatedUnits)) return 'run.sectio.alienatedUnits is invalid';
+    if (run.sectio.entrySnapshot !== undefined && !isObjectRecord(run.sectio.entrySnapshot)) {
+      return 'run.sectio.entrySnapshot is invalid';
     }
+    if (
+      Array.isArray(run.sectio.alienatedUnits)
+      && run.sectio.alienatedUnits.some((alienated) => (
+        !isObjectRecord(alienated)
+        || !isObjectRecord(alienated.unit)
+        || !ACTIVE_RUN_UNIT_SOURCES.has(alienated.unit.source)
+      ))
+    ) return 'run.sectio.alienatedUnits contains an invalid unit source';
+    if (
+      Array.isArray(run.sectio.entrySnapshot?.army)
+      && run.sectio.entrySnapshot.army.some((unit) => (
+        !isObjectRecord(unit) || !ACTIVE_RUN_UNIT_SOURCES.has(unit.source)
+      ))
+    ) return 'run.sectio.entrySnapshot.army contains an invalid unit source';
     {
-      if (!Array.isArray(run.shop.cardOffers) || run.shop.cardOffers.length < 1 || run.shop.cardOffers.length > 10) {
-        return 'run.shop.cardOffers is invalid';
+      if (!Array.isArray(run.sectio.cardOffers) || run.sectio.cardOffers.length < 1 || run.sectio.cardOffers.length > 10) {
+        return 'run.sectio.cardOffers is invalid';
       }
       const offerIds = new Set();
       const offerValues = new Set();
-      for (const offer of run.shop.cardOffers) {
-        if (!isObjectRecord(offer)) return 'run.shop.cardOffers contains an invalid offer';
+      for (const offer of run.sectio.cardOffers) {
+        if (!isObjectRecord(offer)) return 'run.sectio.cardOffers contains an invalid offer';
         const cardTypeValid = offer.cardType === null
           || offer.cardType === 'pestiferous'
           || offer.cardType === 'concinnous'
@@ -18917,6 +19283,7 @@ function validateActiveRunBody(run) {
         if (
           typeof offer.offerId !== 'string'
           || !offer.offerId
+          || offer.offerId.startsWith('shop-')
           || offerIds.has(offer.offerId)
           || typeof offer.id !== 'string'
           || !offer.id
@@ -18934,13 +19301,13 @@ function validateActiveRunBody(run) {
           || offer.effectSeed < 0
           || offer.effectSeed > 0xffffffff
           || offer.pieces.reduce((total, piece) => total + ACTIVE_RUN_PIECE_VALUES[piece], 0) !== offer.value
-        ) return 'run.shop.cardOffers contains an invalid offer';
+        ) return 'run.sectio.cardOffers contains an invalid offer';
         const validPlaguedTarget = offer.cardType === 'pestiferous'
           ? isFiniteInteger(offer.cacochymicPieceIndex)
             && offer.cacochymicPieceIndex >= 0
             && offer.cacochymicPieceIndex < offer.pieces.length
           : offer.cacochymicPieceIndex === null;
-        if (!validPlaguedTarget) return 'run.shop.cardOffers contains an invalid Cacochymic target';
+        if (!validPlaguedTarget) return 'run.sectio.cardOffers contains an invalid Cacochymic target';
         const plaguedPiece = offer.cacochymicPieceIndex === null ? null : offer.pieces[offer.cacochymicPieceIndex];
         const expectedCost = offer.cardType === 'pestiferous'
           ? offer.value - (plaguedPiece ? ACTIVE_RUN_CACOCHYMIC_DISCOUNTS[plaguedPiece] : 0)
@@ -18950,28 +19317,28 @@ function validateActiveRunBody(run) {
               : offer.cardType === 'concinnous' ? 2 : 0
           );
         if (offer.cost !== expectedCost) {
-          return 'run.shop.cardOffers contains invalid affected pricing';
+          return 'run.sectio.cardOffers contains invalid affected pricing';
         }
         offerIds.add(offer.offerId);
         offerValues.add(offer.value);
       }
       if (
-        !Array.isArray(run.shop.purchasedCardOfferIds)
-        || run.shop.purchasedCardOfferIds.length > run.shop.cardOffers.length
-        || new Set(run.shop.purchasedCardOfferIds).size !== run.shop.purchasedCardOfferIds.length
-        || run.shop.purchasedCardOfferIds.some((offerId) => !offerIds.has(offerId))
-      ) return 'run.shop.purchasedCardOfferIds is invalid';
+        !Array.isArray(run.sectio.adlectedCardOfferIds)
+        || run.sectio.adlectedCardOfferIds.length > run.sectio.cardOffers.length
+        || new Set(run.sectio.adlectedCardOfferIds).size !== run.sectio.adlectedCardOfferIds.length
+        || run.sectio.adlectedCardOfferIds.some((offerId) => !offerIds.has(offerId))
+      ) return 'run.sectio.adlectedCardOfferIds is invalid';
       if (
-        run.shop.entrySnapshot !== undefined
+        run.sectio.entrySnapshot !== undefined
         && (
-          !Array.isArray(run.shop.entrySnapshot.cards)
-          || !isFiniteInteger(run.shop.entrySnapshot.nextCardSequence)
-          || run.shop.entrySnapshot.nextCardSequence < 1
+          !Array.isArray(run.sectio.entrySnapshot.cards)
+          || !isFiniteInteger(run.sectio.entrySnapshot.nextCardSequence)
+          || run.sectio.entrySnapshot.nextCardSequence < 1
         )
-      ) return 'run.shop.entrySnapshot card state is invalid';
+      ) return 'run.sectio.entrySnapshot card state is invalid';
       if (
-        run.shop.entrySnapshot !== undefined
-        && run.shop.entrySnapshot.cards.some((card) => (
+        run.sectio.entrySnapshot !== undefined
+        && run.sectio.entrySnapshot.cards.some((card) => (
           !isObjectRecord(card)
           || !Array.isArray(card.unitIds)
           || (
@@ -18982,58 +19349,58 @@ function validateActiveRunBody(run) {
               : card.cacochymicUnitId !== null
           )
         ))
-      ) return 'run.shop.entrySnapshot contains an invalid Cacochymic target';
-      if (run.shop.entrySnapshot !== undefined) {
-        const purchasedCards = run.cards.slice(run.shop.entrySnapshot.cards.length);
+      ) return 'run.sectio.entrySnapshot contains an invalid Cacochymic target';
+      if (run.sectio.entrySnapshot !== undefined) {
+        const adlectedCards = run.cards.slice(run.sectio.entrySnapshot.cards.length);
         if (
-          run.cards.length !== run.shop.entrySnapshot.cards.length + run.shop.purchasedCardOfferIds.length
-          || purchasedCards.some((card, index) => {
-            const offer = run.shop.cardOffers.find(
-              (candidate) => candidate.offerId === run.shop.purchasedCardOfferIds[index],
+          run.cards.length !== run.sectio.entrySnapshot.cards.length + run.sectio.adlectedCardOfferIds.length
+          || adlectedCards.some((card, index) => {
+            const offer = run.sectio.cardOffers.find(
+              (candidate) => candidate.offerId === run.sectio.adlectedCardOfferIds[index],
             );
             return !offer
               || card.coreId !== offer.id
               || card.cardType !== offer.cardType
               || card.effectSeed !== offer.effectSeed;
           })
-        ) return 'run.shop purchased card state is invalid';
+        ) return 'run.sectio Adlectio state is invalid';
       }
-      if (run.shop.kind === 'opening') {
+      if (run.sectio.kind === 'opening') {
         if (
-          run.phase !== 'shop'
+          run.phase !== 'sectio'
           || run.battleIndex !== 0
           || run.conflictIndex !== 0
-          || run.shop.afterBattleIndex !== 0
-          || run.shop.conflictIndex !== 0
-          || run.shop.victoryGoldTenths !== 0
-          || run.shop.cardOffers.length !== 3
+          || run.sectio.afterBattleIndex !== 0
+          || run.sectio.conflictIndex !== 0
+          || run.sectio.victoryGoldTenths !== 0
+          || run.sectio.cardOffers.length !== 3
           || offerValues.size !== 3
           // Opening offers carry the same qualifiers as any other draw and are priced by the
           // shared affected-pricing rule checked above, so a qualifier may price one past the
           // starting gold. At least one of them must stay buyable with that gold, because the
           // opening cannot be left without a purchase.
-          || run.shop.cardOffers.some((offer) => offer.value > 8)
-          || !run.shop.cardOffers.some((offer) => offer.cost <= 8)
-          || run.shop.paidLipsanonOffer !== null
-          || run.shop.paidLipsanonBought !== false
-          || !isObjectRecord(run.shop.entrySnapshot)
-          // Bona Vacantia runs BEFORE the opening Shop, so a lipsanon taken there may already
+          || run.sectio.cardOffers.some((offer) => offer.value > 8)
+          || !run.sectio.cardOffers.some((offer) => offer.cost <= 8)
+          || run.sectio.paidLipsanonOffer !== null
+          || run.sectio.paidLipsanonBought !== false
+          || !isObjectRecord(run.sectio.entrySnapshot)
+          // Bona Vacantia runs BEFORE the opening Sectio, so a lipsanon taken there may already
           // have paid out. The gold is still pinned value-by-value -- to the starting gold
           // plus exactly what the lipsana held are worth on acquisition, computed from the
           // model's own payout table so the two cannot drift.
-          || run.shop.entrySnapshot.goldTenths !== 80 + openingLipsanonGoldTenths(run)
-          || !Array.isArray(run.shop.entrySnapshot.army)
-          || run.shop.entrySnapshot.army.length !== 3
-          || run.shop.entrySnapshot.army[0]?.id !== 'run-king'
-          || run.shop.entrySnapshot.army[1]?.id !== 'run-pawn-a'
-          || run.shop.entrySnapshot.army[1]?.type !== 'pawn'
-          || run.shop.entrySnapshot.army[1]?.source !== 'starting'
-          || run.shop.entrySnapshot.army[2]?.id !== 'run-pawn-b'
-          || run.shop.entrySnapshot.army[2]?.type !== 'pawn'
-          || run.shop.entrySnapshot.army[2]?.source !== 'starting'
-          || !Array.isArray(run.shop.entrySnapshot.cards)
-          || run.shop.entrySnapshot.cards.length !== 0
-        ) return 'run opening Shop is invalid';
+          || run.sectio.entrySnapshot.goldTenths !== 80 + openingLipsanonGoldTenths(run)
+          || !Array.isArray(run.sectio.entrySnapshot.army)
+          || run.sectio.entrySnapshot.army.length !== 3
+          || run.sectio.entrySnapshot.army[0]?.id !== 'run-king'
+          || run.sectio.entrySnapshot.army[1]?.id !== 'run-pawn-a'
+          || run.sectio.entrySnapshot.army[1]?.type !== 'pawn'
+          || run.sectio.entrySnapshot.army[1]?.source !== 'starting'
+          || run.sectio.entrySnapshot.army[2]?.id !== 'run-pawn-b'
+          || run.sectio.entrySnapshot.army[2]?.type !== 'pawn'
+          || run.sectio.entrySnapshot.army[2]?.source !== 'starting'
+          || !Array.isArray(run.sectio.entrySnapshot.cards)
+          || run.sectio.entrySnapshot.cards.length !== 0
+        ) return 'run opening Sectio is invalid';
         const openingUnitIds = new Set([
           'run-king',
           'run-pawn-a',
@@ -19041,7 +19408,7 @@ function validateActiveRunBody(run) {
           ...run.cards.flatMap((card) => card.unitIds),
         ]);
         if (run.army.some((unit) => !openingUnitIds.has(unit.id))) {
-          return 'run opening Shop purchase state is invalid';
+          return 'run opening Sectio purchase state is invalid';
         }
       }
     }
@@ -19247,7 +19614,7 @@ function craftedRunSummary(run) {
     battle: `${run.battleIndex + 1}/${run.war.battles.length}`,
     gold: run.goldTenths / 10,
     army: run.army.map((unit) => unit.type),
-    offers: run.shop ? run.shop.cardOffers.map((offer) => `${offer.pieces.join('+')}@${offer.cost}`) : null,
+    offers: run.sectio ? run.sectio.cardOffers.map((offer) => `${offer.pieces.join('+')}@${offer.cost}`) : null,
     lipsana: run.lipsana,
   };
 }
@@ -19335,7 +19702,7 @@ app.post('/api/active-run/craft/:id', async (req, res) => {
 
 // POST /api/active-run/craft — ADMIN: set the caller's OWN active Run to a named state (ADR-0338).
 //
-// Debugging and feature work need a Run parked at an exact Shop, deployment, Battle or victory.
+// Debugging and feature work need a Run parked at an exact Sectio, deployment, Battle or victory.
 // Writing active_runs by hand is already possible for anyone with database access and produces
 // documents this endpoint's own validator would reject; crafting composes the state out of the
 // game's real transitions instead, so what lands in the row is a Run the game could have played.

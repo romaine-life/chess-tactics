@@ -36,7 +36,7 @@ import { RunAbilityIcon, type RunUnitState } from './shared/RunAbilityIcon';
 export type RunRosterOrder = 'type' | 'value' | 'ability' | 'acquired';
 export type RunRosterTypeFilter = 'all' | RunArmyPieceType;
 export type RunRosterAbilityFilter = 'all' | RunUnitTraitId;
-export type RunSaleStateFilter = 'all' | 'available' | 'sold' | 'retained';
+export type RunAlienatioStateFilter = 'all' | 'alienable' | 'alienated' | 'retained';
 
 export interface RunArmyFilters {
   order: RunRosterOrder;
@@ -44,8 +44,8 @@ export interface RunArmyFilters {
   ability: RunRosterAbilityFilter;
 }
 
-export interface RunSellFilters extends RunArmyFilters {
-  saleState: RunSaleStateFilter;
+export interface RunAlienatioFilters extends RunArmyFilters {
+  alienatioState: RunAlienatioStateFilter;
 }
 
 export const DEFAULT_RUN_ARMY_FILTERS: RunArmyFilters = Object.freeze({
@@ -54,9 +54,9 @@ export const DEFAULT_RUN_ARMY_FILTERS: RunArmyFilters = Object.freeze({
   ability: 'all',
 });
 
-export const DEFAULT_RUN_SELL_FILTERS: RunSellFilters = Object.freeze({
+export const DEFAULT_RUN_ALIENATIO_FILTERS: RunAlienatioFilters = Object.freeze({
   ...DEFAULT_RUN_ARMY_FILTERS,
-  saleState: 'all',
+  alienatioState: 'all',
 });
 
 export interface RunArmyProfileAction {
@@ -216,10 +216,10 @@ export function runUnitRosterLabel(unit: RunArmyUnit): string {
 function unitSourceLabel(unit: RunArmyUnit): string {
   if (unit.source === 'king') return 'Run commander';
   if (unit.source === 'starting') return 'Starting army';
-  return 'Shop purchase';
+  return 'Sectio Adlectio';
 }
 
-function unitSaleTenths(run: RunDocument, unit: RunArmyUnit): number {
+function unitAlienatioTenths(run: RunDocument, unit: RunArmyUnit): number {
   return PIECE_VALUE[unit.type] * GOLD_SCALE * (hasLipsanon(run, 'fair-scales') ? 0.75 : 0.5);
 }
 
@@ -236,7 +236,7 @@ function unitRunStatus(run: RunDocument, unit: RunArmyUnit): string {
     if (run.deployment?.manualPlacements[unit.id]) return `Placed with ${ADLECTED_DISPLAY_NAME}`;
     return 'Preparing to deploy';
   }
-  if (run.phase === 'shop') return unit.type === 'king' ? 'Permanently retained' : 'Available to sell';
+  if (run.phase === 'sectio') return unit.type === 'king' ? 'Permanently retained' : 'Available for Alienatio';
   if (run.phase === 'victory') return 'War survivor';
   return 'Mustering';
 }
@@ -309,13 +309,13 @@ function RunUnitTraitList({
 function RunRosterFilters({
   filters,
   onChange,
-  saleState = null,
-  onSaleStateChange,
+  alienatioState = null,
+  onAlienatioStateChange,
 }: {
   filters: RunArmyFilters;
   onChange: (filters: RunArmyFilters) => void;
-  saleState?: RunSaleStateFilter | null;
-  onSaleStateChange?: (state: RunSaleStateFilter) => void;
+  alienatioState?: RunAlienatioStateFilter | null;
+  onAlienatioStateChange?: (state: RunAlienatioStateFilter) => void;
 }): ReactElement {
   return (
     <section className="run-roster-filters" aria-label="Army filters">
@@ -362,19 +362,19 @@ function RunRosterFilters({
           ariaLabel="Army ability"
         />
       </label>
-      {saleState !== null && onSaleStateChange ? (
+      {alienatioState !== null && onAlienatioStateChange ? (
         <label>
-          <span>Sale state</span>
+          <span>Alienatio state</span>
           <HouseSelect
-            value={saleState}
+            value={alienatioState}
             options={[
               { value: 'all', label: 'All units' },
-              { value: 'available', label: 'Available' },
-              { value: 'sold', label: 'Sold this visit' },
+              { value: 'alienable', label: 'Alienable' },
+              { value: 'alienated', label: 'Alienated this visit' },
               { value: 'retained', label: 'Retained' },
             ]}
-            onChange={onSaleStateChange}
-            ariaLabel="Unit sale state"
+            onChange={onAlienatioStateChange}
+            ariaLabel="Unit Alienatio state"
           />
         </label>
       ) : null}
@@ -387,9 +387,9 @@ function acquisitionOrder(run: RunDocument): Map<string, number> {
   const push = (unit: RunArmyUnit): void => {
     if (!ids.includes(unit.id)) ids.push(unit.id);
   };
-  run.shop?.entrySnapshot?.army.forEach(push);
+  run.sectio?.entrySnapshot?.army.forEach(push);
   run.army.forEach(push);
-  run.shop?.soldUnits.forEach(({ unit }) => push(unit));
+  run.sectio?.alienatedUnits.forEach(({ unit }) => push(unit));
   return new Map(ids.map((id, index) => [id, index]));
 }
 
@@ -424,30 +424,30 @@ function filteredAndSortedUnits(
     });
 }
 
-function ProfileSellAction({
+function ProfileAlienatioAction({
   run,
   unit,
-  onSell,
+  onAlienate,
 }: {
   run: RunDocument;
   unit: RunArmyUnit;
-  onSell: (unitId: string) => void;
+  onAlienate: (unitId: string) => void;
 }): ReactElement {
   const unavailableReason = unit.type === 'king'
-    ? 'The King is permanently retained and cannot be sold.'
-    : run.phase !== 'shop'
-      ? 'Units can only be sold while visiting a shop.'
+    ? 'The King is permanently retained and cannot undergo Alienatio.'
+    : run.phase !== 'sectio'
+      ? 'Units can undergo Alienatio only during Sectio.'
       : null;
   const button = (
     <ChromeButton unit="inner-text-button"
       data-ui-sfx={unavailableReason ? undefined : 'gold'}
       className={chromeUnitClassNames('inner-text-button', 'app-header-button', unavailableReason ? '' : 'danger')}
       disabled={Boolean(unavailableReason)}
-      onClick={() => onSell(unit.id)}
+      onClick={() => onAlienate(unit.id)}
     >
-      <span>{unit.type === 'king' ? 'Retained' : 'Sell this unit'}</span>
+      <span>{unit.type === 'king' ? 'Retained' : 'Alienatio'}</span>
       {unit.type !== 'king' ? (
-        <RunGoldAmount valueTenths={unitSaleTenths(run, unit)} className="run-gold-amount--button" />
+        <RunGoldAmount valueTenths={unitAlienatioTenths(run, unit)} className="run-gold-amount--button" />
       ) : null}
     </ChromeButton>
   );
@@ -513,7 +513,7 @@ export function RunArmyWorkspace({
   onFiltersChange,
   onSelectUnit,
   onBack,
-  onSell,
+  onAlienate,
   profileAction,
 }: {
   run: RunDocument;
@@ -525,8 +525,8 @@ export function RunArmyWorkspace({
   onFiltersChange: (filters: RunArmyFilters) => void;
   onSelectUnit: (unitId: string) => void;
   onBack: () => void;
-  onSell: (unitId: string) => void;
-  /** Replaces the ordinary sell control when the profile is choosing a unit for another workflow. */
+  onAlienate: (unitId: string) => void;
+  /** Replaces the ordinary Alienatio control when the profile is choosing a unit for another workflow. */
   profileAction?: RunArmyProfileAction;
 }): ReactElement {
   const selected = selectedUnitId ? run.army.find((unit) => unit.id === selectedUnitId) ?? null : null;
@@ -582,7 +582,7 @@ export function RunArmyWorkspace({
                 >
                   {profileAction.label}
                 </ChromeButton>
-              ) : <ProfileSellAction run={run} unit={selected} onSell={onSell} />}
+              ) : <ProfileAlienatioAction run={run} unit={selected} onAlienate={onAlienate} />}
             </section>
           </div>
       </RunArmyWorkspaceHost>
@@ -657,109 +657,109 @@ export function RunArmyWorkspace({
   );
 }
 
-interface SellRow {
+interface AlienatioRow {
   unit: RunArmyUnit;
-  status: 'available' | 'sold' | 'retained';
+  status: 'alienable' | 'alienated' | 'retained';
   proceedsTenths: number;
 }
 
-function sellRows(run: RunDocument): SellRow[] {
-  const current = run.army.map((unit): SellRow => ({
+function alienatioRows(run: RunDocument): AlienatioRow[] {
+  const current = run.army.map((unit): AlienatioRow => ({
     unit,
-    status: unit.type === 'king' ? 'retained' : 'available',
-    proceedsTenths: unitSaleTenths(run, unit),
+    status: unit.type === 'king' ? 'retained' : 'alienable',
+    proceedsTenths: unitAlienatioTenths(run, unit),
   }));
-  const sold = (run.shop?.soldUnits ?? []).map(({ unit, proceedsTenths }): SellRow => ({
+  const alienated = (run.sectio?.alienatedUnits ?? []).map(({ unit, proceedsTenths }): AlienatioRow => ({
     unit,
-    status: 'sold',
+    status: 'alienated',
     proceedsTenths,
   }));
-  return [...current, ...sold];
+  return [...current, ...alienated];
 }
 
-export function RunSellWorkspace({
+export function RunAlienatioWorkspace({
   run,
   filters,
   onFiltersChange,
-  onSell,
+  onAlienate,
 }: {
   run: RunDocument;
-  filters: RunSellFilters;
-  onFiltersChange: (filters: RunSellFilters) => void;
-  onSell: (unitId: string) => void;
+  filters: RunAlienatioFilters;
+  onFiltersChange: (filters: RunAlienatioFilters) => void;
+  onAlienate: (unitId: string) => void;
 }): ReactElement {
   const rows = useMemo(() => {
-    const byId = new Map(sellRows(run).map((row) => [row.unit.id, row]));
+    const byId = new Map(alienatioRows(run).map((row) => [row.unit.id, row]));
     return filteredAndSortedUnits(run, [...byId.values()].map((row) => row.unit), filters)
       .map((unit) => byId.get(unit.id)!)
-      .filter((row) => filters.saleState === 'all' || row.status === filters.saleState);
+      .filter((row) => filters.alienatioState === 'all' || row.status === filters.alienatioState);
   }, [filters, run]);
 
   return (
     <RunSceneViewport
       scene={{
-        view: 'sell',
-        className: 'run-sell-workspace',
-        contentClassName: 'run-sell-workspace-content',
-        testId: 'run-sell-workspace',
-        ariaLabelledBy: 'run-sell-workspace-title',
+        view: 'alienatio',
+        className: 'run-alienatio-workspace',
+        contentClassName: 'run-alienatio-workspace-content',
+        testId: 'run-alienatio-workspace',
+        ariaLabelledBy: 'run-alienatio-workspace-title',
       }}
     >
-      <h2 id="run-sell-workspace-title">Sell Units</h2>
-      <p>Sales apply immediately. Reset Shop restores every transaction from this visit.</p>
+      <h2 id="run-alienatio-workspace-title">Alienatio</h2>
+      <p>Alienatio applies immediately. Reset Sectio restores every act from this visit.</p>
       <RunRosterFilters
         filters={filters}
         onChange={(next) => onFiltersChange({ ...filters, ...next })}
-        saleState={filters.saleState}
-        onSaleStateChange={(saleState) => onFiltersChange({ ...filters, saleState })}
+        alienatioState={filters.alienatioState}
+        onAlienatioStateChange={(alienatioState) => onFiltersChange({ ...filters, alienatioState })}
       />
-      <div className="run-sell-list" aria-label="Units available to sell">
+      <div className="run-alienatio-list" aria-label="Units available for Alienatio">
         {rows.map(({ unit, status, proceedsTenths }) => {
-          const sellButton = (
+          const alienatioButton = (
             <ChromeButton unit="inner-text-button"
-              data-ui-sfx={status === 'available' ? 'gold' : undefined}
-              className={chromeUnitClassNames('inner-text-button', 'app-header-button', status === 'available' && 'danger')}
-              disabled={status !== 'available'}
-              onClick={() => onSell(unit.id)}
+              data-ui-sfx={status === 'alienable' ? 'gold' : undefined}
+              className={chromeUnitClassNames('inner-text-button', 'app-header-button', status === 'alienable' && 'danger')}
+              disabled={status !== 'alienable'}
+              onClick={() => onAlienate(unit.id)}
             >
-              {status === 'available' ? 'Sell' : status === 'sold' ? 'Sold this visit' : 'Retained'}
+              {status === 'alienable' ? 'Alienatio' : status === 'alienated' ? 'Alienated this visit' : 'Retained'}
             </ChromeButton>
           );
-          const sellAction = status === 'available' ? sellButton : (
+          const alienatioAction = status === 'alienable' ? alienatioButton : (
             <Tooltip
-              trigger={sellButton}
-              label={status === 'sold'
-                ? `${runUnitDisplayName(unit)} was sold during this shop visit. Reset Shop to restore it.`
-                : 'The King is permanently retained and cannot be sold.'}
+              trigger={alienatioButton}
+              label={status === 'alienated'
+                ? `${runUnitDisplayName(unit)} underwent Alienatio during this Sectio visit. Reset Sectio to restore it.`
+                : 'The King is permanently retained and cannot undergo Alienatio.'}
               popupMaxInlineSize={300}
             >
               <span>
-                {status === 'sold'
-                  ? 'Sold during this shop visit. Reset Shop to restore this unit.'
-                  : 'The King is permanently retained and cannot be sold.'}
+                {status === 'alienated'
+                  ? 'Alienated during this Sectio visit. Reset Sectio to restore this unit.'
+                  : 'The King is permanently retained and cannot undergo Alienatio.'}
               </span>
             </Tooltip>
           );
           return (
-            <InnerChromeBox className={`run-sell-row is-${status}`} key={unit.id}>
+            <InnerChromeBox className={`run-alienatio-row is-${status}`} key={unit.id}>
               <img
-                className="run-sell-board-piece"
+                className="run-alienatio-board-piece"
                 src={pieceSpritePath(unit.type, PLAYER_PORTRAIT_PALETTE, PLAYER_PIECE_FACING)}
                 alt=""
                 draggable={false}
               />
-              <span className="run-sell-copy">
+              <span className="run-alienatio-copy">
                 <strong>{runUnitDisplayName(unit)}</strong>
                 <small>{runUnitIdentifier(unit)} · {unitSourceLabel(unit)} · Base value {PIECE_VALUE[unit.type]}</small>
                 <RunUnitTraitList run={run} unit={unit} compact />
               </span>
-              <span className="run-sell-return">
-                <small>{status === 'sold' ? 'Received' : 'Sell return'}</small>
+              <span className="run-alienatio-return">
+                <small>{status === 'alienated' ? 'Received' : 'Alienatio return'}</small>
                 {unit.type === 'king'
                   ? <strong>Retained</strong>
                   : <RunGoldAmount valueTenths={proceedsTenths} />}
               </span>
-              {sellAction}
+              {alienatioAction}
             </InnerChromeBox>
           );
         })}

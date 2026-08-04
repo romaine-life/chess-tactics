@@ -9,6 +9,8 @@ refines:
   - "[ADR-0318](0318-plagued-and-pestiferous-use-separate-owner-selected-icons.md)"
 refined_by:
   - "[ADR-0389](0389-the-title-route-names-the-visible-strategikon-address.md)"
+partially_superseded_by:
+  - "[ADR-0392](0392-sectio-is-the-run-disposal-and-acquisition-phase.md)'s `Run › Sectio` route vocabulary"
 ---
 
 # ADR-0366: A Run names its phase as route and its repeatable ideas as icons

@@ -299,10 +299,10 @@ try {
     { timeout: TIMEOUT },
   );
   results.push(await transition(page, {
-    label: 'Ordinary Bona take -> Shop continuity',
+    label: 'Ordinary Bona take -> Sectio continuity',
     click: '.run-vacantia-take[aria-label="Take Royal Decree"]',
-    final: `${settled} && Boolean(document.querySelector('[data-testid="run-shop-workspace"]'))`,
-    expectedView: 'shop',
+    final: `${settled} && Boolean(document.querySelector('[data-testid="run-sectio-workspace"]'))`,
+    expectedView: 'sectio',
     continuityLipsanonId: 'royal-decree',
   }));
 

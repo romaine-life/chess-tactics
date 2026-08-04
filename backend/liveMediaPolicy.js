@@ -43,11 +43,11 @@ const RUN_RESOURCE_ICON_COMPONENT = 'run-resource-icon';
 const RUN_RESOURCE_ICON_SLOT = /^ui\/run\/resources\/([a-z][a-z0-9-]{0,79})\.png$/;
 const RUN_CARD_COST_COIN_COMPONENT = 'run-card-cost-coin';
 const RUN_CARD_COST_COIN_SLOT = 'ui/run/card-prototypes/cost-coin-v1.png';
-const RUN_SHOP_WRAP_COMPONENT = 'run-shop-wrap';
-const RUN_SHOP_WRAP_SLOT = /^ui\/run\/shop-wrap\/([a-z][a-z0-9-]{0,79})\.png$/;
+const RUN_SECTIO_WRAP_COMPONENT = 'run-sectio-wrap';
+const RUN_SECTIO_WRAP_SLOT = /^ui\/run\/sectio-wrap\/([a-z][a-z0-9-]{0,79})\.png$/;
 // A wrap frames live cards rather than replacing them, so the only geometry the
 // runtime needs is where the card row sits inside the painted canvas.
-const RUN_SHOP_WRAP_KINDS = Object.freeze(['seat', 'band', 'slots', 'screen']);
+const RUN_SECTIO_WRAP_KINDS = Object.freeze(['seat', 'band', 'slots', 'screen']);
 const RUN_PROGRESS_ICON_COMPONENT = 'run-progress-icon';
 // Each state and property is registered under the word the game says (ADR-0374): the slot,
 // the stored value and the name a player reads are one vocabulary.
@@ -159,8 +159,8 @@ function runCardCostCoinSlot(slot) {
   return String(slot || '') === RUN_CARD_COST_COIN_SLOT;
 }
 
-function runShopWrapSlotId(slot) {
-  const match = RUN_SHOP_WRAP_SLOT.exec(String(slot || ''));
+function runSectioWrapSlotId(slot) {
+  const match = RUN_SECTIO_WRAP_SLOT.exec(String(slot || ''));
   return match ? match[1] : null;
 }
 
@@ -434,64 +434,64 @@ function runLipsanonIconMediaIssue(row, projectedRuntime = null) {
 }
 
 /**
- * Domain-owned runtime projection for one Run shop wrap: generated art that
- * frames the live shop's card row. The wrap is decorative chrome around real
+ * Domain-owned runtime projection for one Run Sectio wrap: generated art that
+ * frames the live Sectio's card row. The wrap is decorative chrome around real
  * cards, so it never carries text and never supplies an accessible name; the
  * runtime contract is purely the card window measured on the painted canvas.
  */
-function runShopWrapMediaIssue(row, projectedRuntime = null) {
-  const wrapId = runShopWrapSlotId(row.slot);
-  if (!wrapId) return 'Run shop wrap slots must match ui/run/shop-wrap/<wrap-id>.png';
-  if (row.domain !== 'ui-kit') return 'Run shop wraps require the ui-kit domain';
-  if (row.role !== 'shop-wrap') return 'Run shop wraps require the shop-wrap role';
-  if (row.media_type !== 'image/png') return 'Run shop wraps require image/png';
+function runSectioWrapMediaIssue(row, projectedRuntime = null) {
+  const wrapId = runSectioWrapSlotId(row.slot);
+  if (!wrapId) return 'Run Sectio wrap slots must match ui/run/sectio-wrap/<wrap-id>.png';
+  if (row.domain !== 'ui-kit') return 'Run Sectio wraps require the ui-kit domain';
+  if (row.role !== 'sectio-wrap') return 'Run Sectio wraps require the sectio-wrap role';
+  if (row.media_type !== 'image/png') return 'Run Sectio wraps require image/png';
   const width = Number(row.width);
   const height = Number(row.height);
   if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 1 || height < 1) {
-    return 'Run shop wraps require decoded raster dimensions';
+    return 'Run Sectio wraps require decoded raster dimensions';
   }
 
   const metadata = mediaVersionMetadata(row);
   const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
-  if (!isObjectRecord(runtime)) return 'Run shop wraps require metadata.runtime';
+  if (!isObjectRecord(runtime)) return 'Run Sectio wraps require metadata.runtime';
   const allowed = new Set([
     'component', 'variant', 'kind', 'canvasWidth', 'canvasHeight', 'window', 'slots', 'altText', 'nativeRole',
   ]);
   const unsupported = Object.keys(runtime).filter((key) => !allowed.has(key));
   if (unsupported.length) {
-    return `Run shop wrap runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
+    return `Run Sectio wrap runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
   }
-  if (runtime.component !== RUN_SHOP_WRAP_COMPONENT) {
-    return `Run shop wrap metadata.runtime.component must be ${RUN_SHOP_WRAP_COMPONENT}`;
+  if (runtime.component !== RUN_SECTIO_WRAP_COMPONENT) {
+    return `Run Sectio wrap metadata.runtime.component must be ${RUN_SECTIO_WRAP_COMPONENT}`;
   }
-  if (runtime.nativeRole !== RUN_SHOP_WRAP_COMPONENT) {
-    return `Run shop wrap metadata.runtime.nativeRole must be ${RUN_SHOP_WRAP_COMPONENT}`;
+  if (runtime.nativeRole !== RUN_SECTIO_WRAP_COMPONENT) {
+    return `Run Sectio wrap metadata.runtime.nativeRole must be ${RUN_SECTIO_WRAP_COMPONENT}`;
   }
-  if (runtime.variant !== wrapId) return 'Run shop wrap variant must match its semantic slot id';
-  if (!RUN_SHOP_WRAP_KINDS.includes(runtime.kind)) {
-    return `Run shop wrap kind must be one of ${RUN_SHOP_WRAP_KINDS.join(', ')}`;
+  if (runtime.variant !== wrapId) return 'Run Sectio wrap variant must match its semantic slot id';
+  if (!RUN_SECTIO_WRAP_KINDS.includes(runtime.kind)) {
+    return `Run Sectio wrap kind must be one of ${RUN_SECTIO_WRAP_KINDS.join(', ')}`;
   }
   // The canvas is the acceptance-time contract against the uploaded raster, so a
   // re-crop can never silently move every measured window.
   if (runtime.canvasWidth !== width || runtime.canvasHeight !== height) {
-    return 'Run shop wrap canvas metadata must match the uploaded raster dimensions';
+    return 'Run Sectio wrap canvas metadata must match the uploaded raster dimensions';
   }
   const window = containedRect(runtime.window, width, height);
-  if (!window) return 'Run shop wrap metadata.runtime.window must be a whole-pixel rect inside the canvas';
+  if (!window) return 'Run Sectio wrap metadata.runtime.window must be a whole-pixel rect inside the canvas';
   const slots = Array.isArray(runtime.slots)
     ? runtime.slots.map((entry) => containedRect(entry, width, height))
     : [];
   if (slots.some((entry) => entry === null)) {
-    return 'Run shop wrap metadata.runtime.slots must all be whole-pixel rects inside the canvas';
+    return 'Run Sectio wrap metadata.runtime.slots must all be whole-pixel rects inside the canvas';
   }
   if (runtime.kind === 'slots' && slots.length < 2) {
-    return 'Run shop wrap slots kind requires at least two measured card openings';
+    return 'Run Sectio wrap slots kind requires at least two measured card openings';
   }
   if (runtime.kind !== 'slots' && slots.length) {
-    return 'Run shop wrap slots are only meaningful for the slots kind';
+    return 'Run Sectio wrap slots are only meaningful for the slots kind';
   }
   if (runtime.altText !== '') {
-    return 'Run shop wrap metadata.runtime.altText must be empty because the live cards own the accessible content';
+    return 'Run Sectio wrap metadata.runtime.altText must be empty because the live cards own the accessible content';
   }
   return null;
 }
@@ -1382,7 +1382,7 @@ module.exports = {
   LIPSANON_RESIZED_PRODUCTION_EXCEPTION_SCHEMA,
   RUN_CARD_COST_COIN_COMPONENT,
   RUN_RESOURCE_ICON_COMPONENT,
-  RUN_SHOP_WRAP_COMPONENT,
+  RUN_SECTIO_WRAP_COMPONENT,
   SFX_SAMPLE_COMPONENT,
   SFX_SAMPLE_PROOF_RENDERER,
   SFX_SAMPLE_PROOF_SCHEMA,
@@ -1417,11 +1417,11 @@ module.exports = {
   runCardCostCoinSlot,
   runResourceIconMediaIssue,
   runResourceIconSlotId,
-  runShopWrapMediaIssue,
+  runSectioWrapMediaIssue,
   workspaceBackgroundSlotId,
   workspaceBackgroundMediaIssue,
   WORKSPACE_BACKGROUND_IDS,
-  runShopWrapSlotId,
+  runSectioWrapSlotId,
   sfxSampleMediaIssue,
   sfxSampleOwnerProofIssue,
   sfxSampleSlot,

@@ -19,7 +19,7 @@ export function BrandLockup({
   // Render the route portal target after the screen name. A screen whose position
   // within itself is state rather than address (the Run's phase) fills it through
   // <TitleBarSlot region="route">, so the screen-name line reads as one route —
-  // Run › Shop — instead of that position taking up a status chip.
+  // Run › Sectio — instead of that position taking up a status chip.
   routeSlot?: boolean;
   transitionStatus?: string | null;
 }): ReactElement {

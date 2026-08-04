@@ -284,9 +284,9 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
                       <SettingsRow
                         title="Loot"
                         description={isFinalBattle
-                          ? 'The final Battle ends the War, so there is no following shop or Loot offer.'
-                          : 'After this Battle, the shop reveals three unseen lipsana and the player chooses one for free.'}
-                        value={<span>{!isFinalBattle && selectedLevel.battle?.loot ? 'Lipsanon choice' : 'Normal shop'}</span>}
+                          ? 'The final Battle ends the War, so there is no following Sectio or lipsanon offer.'
+                          : 'After this Battle, Bona Vacantia reveals three unseen lipsana and the player chooses one for free.'}
+                        value={<span>{!isFinalBattle && selectedLevel.battle?.loot ? 'Lipsanon choice' : 'Normal Sectio'}</span>}
                       >
                         <input
                           type="checkbox"
@@ -298,7 +298,7 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
                       </SettingsRow>
                       <SettingsRow
                         title="Battle position"
-                        description={isFinalBattle ? 'The last ordered Battle is automatically the War end.' : 'Every non-final victory opens the army shop.'}
+                        description={isFinalBattle ? 'The last ordered Battle is automatically the War end.' : 'Every non-final victory eventually opens the next Sectio.'}
                         value={<span>{selectedBattleIndex + 1} of {orderedBattles.length}</span>}
                       />
                       <SettingsRow title="Delete Battle" description="Removes this Battle level from the War workspace.">

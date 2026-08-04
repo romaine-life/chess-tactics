@@ -5,6 +5,8 @@ deciders: owner (Nelson) + Codex
 partially_superseded_by:
   - "[ADR-0240](0240-run-self-inspection-owns-the-left-shell-workspace.md)"
   - "[ADR-0386](0386-shops-offer-read-only-intelligence-on-the-upcoming-battle.md)'s addition of View Battle"
+  - "[ADR-0392](0392-sectio-is-the-run-disposal-and-acquisition-phase.md)'s replacement of the Shop terminology with Sectio"
+  - "[ADR-0393](0393-adlectio-and-alienatio-are-the-movements-within-sectio.md)'s replacement of buying and selling with Adlectio and Alienatio"
 ---
 
 # ADR-0230: Run shops separate buying, army inspection, and selling

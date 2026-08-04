@@ -64,7 +64,7 @@ describe('a projected face says only what its card actually shows', () => {
       const hidden = runCardFaceContent(multi);
       expect(hidden.grants.every((grant) => !grant.ability)).toBe(true);
 
-      const revealed = runCardFaceContent(multi, { purchased: true });
+      const revealed = runCardFaceContent(multi, { adlected: true });
       const marked = revealed.grants.filter((grant) => grant.ability);
       expect(marked).toHaveLength(1);
       expect(marked[0].ability.state).toBe(RUN_CARD_TYPE_REFERENCE[cardType].grants);
@@ -72,7 +72,7 @@ describe('a projected face says only what its card actually shows', () => {
     }
   });
 
-  it('shows a forced one-unit target before purchase, because it was never hidden', () => {
+  it('shows a forced one-unit target before Adlectio, because it was never hidden', () => {
     for (const cardType of ['legatine', 'hieratic'] as const) {
       const forced = runCardFaceContent(runCardSpecimen({ pieces: ['queen'], cardType }));
       expect(forced.grants[0].ability).toEqual({
@@ -82,16 +82,16 @@ describe('a projected face says only what its card actually shows', () => {
     }
   });
 
-  it('marks the Cacochymic unit whether or not the card has been bought', () => {
+  it('marks the Cacochymic unit whether or not the card has been adlected', () => {
     const spec = { pieces: ['pawn', 'pawn', 'bishop'] as const, cardType: 'pestiferous' as const, cacochymicPieceIndex: 2 };
-    for (const purchased of [false, true]) {
-      const face = runCardFaceContent(runCardSpecimen(spec), { purchased });
+    for (const adlected of [false, true]) {
+      const face = runCardFaceContent(runCardSpecimen(spec), { adlected });
       expect(face.grants.find((grant) => grant.unit === 'bishop').cacochymicIndices).toEqual([0]);
       expect(face.grants.every((grant) => !grant.ability)).toBe(true);
     }
   });
 
-  it('prices and frames a specimen exactly as the Shop would price and frame the same card', () => {
+  it('prices and frames a specimen exactly as the Sectio would price and frame the same card', () => {
     const offer = createRunCardOffer({ seed: 17, ataraxiaTier: 0 }, RUN_CARD_BY_ID.q, 0, 0, 8, 8, 1);
     expect(offer.cardType).toBe('legatine');
     const specimen = runCardSpecimen({ pieces: RUN_CARD_BY_ID.q.pieces, cardType: 'legatine' });

@@ -2,6 +2,8 @@
 status: accepted
 date: 2026-08-03
 deciders: owner (Nelson) + Codex
+partially_superseded_by:
+  - "[ADR-0392](0392-sectio-is-the-run-disposal-and-acquisition-phase.md)'s replacement of the Shop terminology with Sectio"
 partially_supersedes:
   - "[ADR-0230](0230-run-shops-separate-buying-army-inspection-and-selling.md)'s three-destination Shop inventory"
   - "[ADR-0346](0346-run-deployment-is-a-battlefield-state-with-conditional-input.md)'s deferral of pre-Battle opponent information"

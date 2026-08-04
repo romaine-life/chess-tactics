@@ -72,7 +72,7 @@ const PortraitEditor = lazy(() => importPortraitEditor().then((module) => ({ def
 const PredrawnReference = lazy(() => import('./PredrawnReference').then((module) => ({ default: module.PredrawnReference })));
 const DrawableCatalogLab = lazy(() => import('./DrawableCatalogLab').then((module) => ({ default: module.DrawableCatalogLab })));
 const LipsanonReview = lazy(() => import('./LipsanonReview').then((module) => ({ default: module.LipsanonReview })));
-const RunShopArtReview = lazy(() => import('./RunShopArtReview').then((module) => ({ default: module.RunShopArtReview })));
+const RunSectioArtReview = lazy(() => import('./RunSectioArtReview').then((module) => ({ default: module.RunSectioArtReview })));
 const PlaguedIconReview = lazy(() => import('./PlaguedIconReview').then((module) => ({ default: module.PlaguedIconReview })));
 const RunProgressIconReview = lazy(() => import('./RunProgressIconReview').then((module) => ({ default: module.RunProgressIconReview })));
 const BrushIconReview = lazy(() => import('./BrushIconReview').then((module) => ({ default: module.BrushIconReview })));
@@ -686,7 +686,7 @@ function renderScene(scene: ScenePath, search: string): ReactElement {
     return <RunScreen routePath={path} routeSearch={search} sceneSnapshot={scene.snapshot as RunSceneSnapshot} />;
   }
   if (path === '/predrawn-reference') return <PredrawnReference />;
-  if (path === '/studio' && new URLSearchParams(search).get('runShopReview') === '1') return <RunShopArtReview />;
+  if (path === '/studio' && new URLSearchParams(search).get('runSectioReview') === '1') return <RunSectioArtReview />;
   if (path === '/studio' && new URLSearchParams(search).get('lipsanonReview') === '1') return <LipsanonReview />;
   if (path === '/studio' && new URLSearchParams(search).get('plaguedIconReview') === '1') return <PlaguedIconReview />;
   if (path === '/studio' && new URLSearchParams(search).get('brushIconReview') === '1') return <BrushIconReview />;

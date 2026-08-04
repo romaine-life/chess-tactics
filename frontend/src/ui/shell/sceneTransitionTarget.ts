@@ -36,7 +36,7 @@ export function sceneTransitionTargetSelector(region: SceneHost): string {
  * complete layers so the outgoing snapshot stays frozen. Both layers then paint an
  * identical Controls panel, lipsanon rail, and shell fill, so fading the whole boundary
  * blends that retained chrome toward the backdrop at the crossfade midpoint — the
- * Controls title plank visibly dimmed on every Shop/Sell Units switch. Marking the
+ * Controls title plank visibly dimmed on every Sectio/Alienatio switch. Marking the
  * one region that actually changes lets the director scope the fade to it; see
  * `sceneOverlapScope` and the `data-scene-overlap-scope` rules in style.css.
  */

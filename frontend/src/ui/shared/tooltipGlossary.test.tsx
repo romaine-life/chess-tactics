@@ -38,7 +38,7 @@ describe('tooltip keyword glossary', () => {
 
   it('reaches a term nested inside the caller’s own markup', () => {
     const { entries, markup } = read(
-      <span><span>Grants Adlected on purchase.</span><small>Lipsanon source</small></span>,
+      <span><span>Grants Adlected upon Adlectio.</span><small>Lipsanon source</small></span>,
     );
     expect(entries.map((entry) => entry.id)).toEqual(['adlected']);
     expect(markup).toContain('tooltip-keyword');
@@ -63,8 +63,8 @@ describe('tooltip keyword glossary', () => {
   });
 
   it('leaves a tip that names nothing exactly as its caller wrote it', () => {
-    const { entries, markup } = read(<span>Sell this unit for half its gold value.</span>);
+    const { entries, markup } = read(<span>Alienatio returns half this unit&apos;s gold value.</span>);
     expect(entries).toEqual([]);
-    expect(markup).toBe('<span>Sell this unit for half its gold value.</span>');
+    expect(markup).toBe('<span>Alienatio returns half this unit&#x27;s gold value.</span>');
   });
 });

@@ -14,7 +14,7 @@ function run(overrides: Partial<RunDocument> = {}): RunDocument {
     goldTenths: 0,
     lipsana: [],
     army: [],
-    shop: null,
+    sectio: null,
     deployment: null,
     war: {
       id: 'war-1',
@@ -41,7 +41,7 @@ describe('Run lipsanon statistics', () => {
   it('records one Battle win for every lipsanon held through that Battle', () => {
     expect(lipsanonStatEventsForRunTransition(
       run({ lipsana: ['conscription-notice', 'training-linens'] }),
-      run({ phase: 'shop', lipsana: ['conscription-notice', 'training-linens'] }),
+      run({ phase: 'sectio', lipsana: ['conscription-notice', 'training-linens'] }),
     )).toEqual([
       {
         eventId: 'battle-win:run-1:0',

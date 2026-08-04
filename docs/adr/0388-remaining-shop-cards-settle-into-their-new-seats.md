@@ -2,6 +2,9 @@
 status: accepted
 date: 2026-08-03
 deciders: owner (Nelson) + Codex
+partially_superseded_by:
+  - "[ADR-0392](0392-sectio-is-the-run-disposal-and-acquisition-phase.md)'s replacement of the Shop terminology with Sectio"
+  - "[ADR-0393](0393-adlectio-and-alienatio-are-the-movements-within-sectio.md)'s replacement of purchase terminology with Adlectio"
 refines:
   - "[ADR-0387](0387-bought-cards-travel-into-a-title-reachable-chartulary.md)"
   - "[ADR-0043](0043-ui-motion-system.md)"

@@ -8,7 +8,7 @@ import { RunSceneViewport } from './RunWorkspace';
 import { PaintedSurfaceBoundary } from './shell/PaintedSurfaceBoundary';
 
 /**
- * Shop-only reconnaissance of the next canonical War Level. This is deliberately a read-only
+ * Sectio-only reconnaissance of the next canonical War Level. This is deliberately a read-only
  * Level projection: it neither prepares Deployment nor resolves the Run army or enemy setup
  * squares ahead of the transition that owns them.
  */
@@ -82,7 +82,7 @@ export function RunBattlePreview({ run }: { run: RunDocument }): ReactElement {
               <p>
                 Fixed pieces appear on the map. The Forces ledger also counts setup forces whose
                 exact squares are dealt when the Battle begins. Your Run army deploys after you
-                leave the Shop.
+                leave the Sectio.
               </p>
             </InnerChromeBox>
           </aside>

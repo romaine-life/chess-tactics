@@ -308,7 +308,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     // The glossary previews a real projected offer, so it neither picks its own frame
     // nor assembles its own face — both come from the single card projection.
     expect(cardTypes).toContain('runCardSpecimen({');
-    expect(cardTypes).toContain('runCardFaceContent(specimen, { purchased: true })');
+    expect(cardTypes).toContain('runCardFaceContent(specimen, { adlected: true })');
     expect(cardTypes).toContain('runCardFrameSlot(specimen)');
     expect(cardTypes).not.toContain('RUN_CARD_PESTIFEROUS_FRAME_SLOT');
     expect(cardTypes).not.toContain('RUN_CARD_LEGATINE_FRAME_SLOT');
@@ -462,9 +462,9 @@ describe('interface cues are owner-assigned, not committed (ADR-0071, ADR-0375)'
     expect(enchiridion.match(/data-ui-sfx="card"/g)).toHaveLength(2);
     expect(runCard).toContain('data-ui-sfx="gold"');
     expect(runArmy).toContain("data-ui-sfx={unavailableReason ? undefined : 'gold'}");
-    expect(runArmy).toContain("data-ui-sfx={status === 'available' ? 'gold' : undefined}");
+    expect(runArmy).toContain("data-ui-sfx={status === 'alienable' ? 'gold' : undefined}");
     for (const source of [enchiridion, runArmy, runCard]) {
-      // Sound-set keys, not the unrelated `run-card-purchased-indicator` class beside them.
+      // Sound-set keys, not an unrelated card-Adlectio indicator class beside them.
       expect(source).not.toContain('data-ui-sfx="card-purchase"');
       expect(source).not.toContain('data-ui-sfx="gold-sell"');
       expect(source).not.toContain("'gold-sell'");

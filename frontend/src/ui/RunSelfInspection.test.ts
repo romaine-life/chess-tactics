@@ -16,7 +16,9 @@ describe('Run self-inspection links', () => {
     expect(runSelfInspectionViewFromSearch('')).toBeNull();
   });
 
-  it('recognizes the shop-only upcoming Battle workspace as an addressable Run view', () => {
+  it('recognizes the Sectio-only workspaces as addressable Run views', () => {
+    expect(runWorkspaceViewFromSearch('?view=alienatio')).toBe('alienatio');
+    expect(runWorkspaceViewFromSearch('?view=sell')).toBe('primary');
     expect(runWorkspaceViewFromSearch('?view=battle-preview')).toBe('battle-preview');
     expect(runWorkspaceViewFromSearch('?view=unknown')).toBe('primary');
   });

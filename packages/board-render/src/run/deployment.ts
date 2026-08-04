@@ -364,7 +364,7 @@ function layoutsDiffer([first, second]: RunDeploymentOptions['layouts']): boolea
 
 /**
  * Resolve choices whose legal result is singular. This is idempotent: callers may run it on
- * Shop Continue and again while hydrating a persisted Deployment without creating new state.
+ * Sectio Continue and again while hydrating a persisted Deployment without creating new state.
  */
 export function resolveForcedDeploymentChoices(run: RunDocument, level: Level): RunDocument {
   if (run.phase !== 'deployment' || !run.deployment) return run;
