@@ -46,57 +46,35 @@ fitting. Like every design portfolio, it is not an accepted media pointer or
 installed runtime-configuration authority; publishing remains a separate admin
 transaction (ADR-0340).
 
-Active Run format 12 starts in the normal `shop` phase with Shop kind `opening`,
-the permanent King plus two starting Pawns, a seeded three-card deal, and an
-8-gold budget. The opening cards have three distinct values sampled from 1–8.
-Buying stays in that same Shop transaction; its purchased state, Army and Sell
-views, Reset Shop, and explicit Continue reuse the post-Battle Shop model. The
-opening kind carries zero victory gold and no Loot or paid-lipsanon offers. Opening
-offers roll Legatine, Concinnous, and — under Ataraxia I — Pestiferous through the
-same draw and affected pricing as any later Shop, at every core value, so a
-surcharge may price an opening card past the 8-gold budget. At least one opening
-offer is always affordable: a deal in which none is repairs its cheapest card to
-standard (ADR-0344). Each dealt card may be purchased once while sufficient gold remains;
-Continue permits zero card purchases and enters Deployment at Battle index 0
-(ADR-0347). Deployment remains durable when it owns a player choice; when the
-formation has no meaningful choice, Continue prepares it and commits directly
-to Battle without exposing an intermediate destination (ADR-0346). Format 12
-names the transaction `cardOffers`,
-`purchasedCardOfferIds`, and `buyCard`; current Shop documents using the former
-gameplay noun are unsupported. The retired `draft` phase, `draftOffers`, and
-`chosenDraftId` are absent and rejected on current writes. Hydrating an
-unsupported account Run retains the signed-in account and its CAS revision while
-treating that retired document as unavailable; a fresh current-format Run can
-therefore replace it without adapting or replaying the retired transaction. See
-[ADR-0321](adr/0321-run-opening-is-the-normal-shop-and-draft-is-retired.md) and
-[ADR-0322](adr/0322-run-openings-use-two-pawns-eight-gold-and-card-native-purchase-feedback.md),
-as superseded for Shop purchase cardinality by
-[ADR-0323](adr/0323-run-shops-allow-every-affordable-card-purchase.md) and for
-opening purchase optionality by
-[ADR-0347](adr/0347-opening-shop-purchases-are-optional.md). Format 12
-also stores the selected Ataraxia tier and each persisted affected Shop offer.
-Pestiferous offers store their public Cacochymic piece index under the current
-format's non-presentational `plaguedPieceIndex` storage identifier;
-Concinnous offers store their concealed Eutactic target index; Legatine and
-Hieratic offers deliberately store no target index because purchase chooses the
-unit. Owned Concinnous, Legatine and Hieratic cards store the exact affected unit
-id, while owned Pestiferous cards store the current Cacochymic unit id under
-`cacochymicUnitId` and the exact loss history. Format 12 adds the Hieratic
-qualifier and its granted Agminate ability. Format 14 makes a stored value and
-its player-facing name one word: abilities persist as `adlected`, `eutactic` and
-`agminate`, the unit modifier as `cacochymic`, and the card type as `legatine`,
-with the fields named after the retired words renamed to match. Format 14
-discards in-progress Runs rather than translating them, the server validator accepts
-only the new words, and the live-media slots and `app-ui` drawable roles were
-re-pointed in the same change, so no layer keeps the retired vocabulary (ADR-0309, ADR-0310, ADR-0311, ADR-0325, ADR-0327,
-ADR-0328, ADR-0341, ADR-0345, ADR-0374).
-Format 3 stores each army unit's role-specific historical name.
-Format-1 unnamed documents and the provisional format-2 generated-name documents
-are deterministically normalized to format 3 from the Run seed and each piece
-type's acquisition order before the next save. Once a document is format 3, a
-valid stored name is authoritative so the future name editor can change it
-without normalization undoing the player's choice. See
-[ADR-0228](adr/0228-run-unit-names-are-role-specific-historical-identities.md).
+The active Run document names its schema marker **RunSaveVersion**. Its stored field is
+`runSaveVersion`, its type is `RunSaveVersion`, and the client and server share
+`CURRENT_RUN_SAVE_VERSION`. Normalization and writes accept only that exact version. The lossless
+version-16 field rename is migrated to RunSaveVersion 17: migration 54 rewrites account rows and
+advances their CAS revisions, while the browser rewrites its local document on first load. Saves
+older than version 16 remain unavailable because their retired gameplay state has no declared
+lossless transform. See [ADR-0380](adr/0380-run-save-versions-always-migrate.md).
+
+Beginning with RunSaveVersion 16, every version that reaches players has an explicit forward
+migration for account and browser storage. Retired content maps to a typed tombstone or neutral
+replacement—for example, a removed card remains in the deck as **Removed card**—rather than
+invalidating the Run.
+
+RunSaveVersion 17 begins in Bona Vacantia when the opening Conflict offers a lipsanon, otherwise
+in the normal Shop with kind `opening`. The Run carries the permanent King, two starting Pawns,
+eight gold, and three seeded card offers. Purchases remain in the same Shop transaction; Army,
+Sell, Reset Shop, and Continue reuse the post-Battle model. Continue may buy no card and enters
+Deployment at Battle index 0. Deployment persists only when it owns a player choice; otherwise
+Continue commits directly to Battle. A won non-final Battle enters `aftermath`, which persists
+the reward, turns, elapsed time, survivors, and fallen units until Continue opens Bona Vacantia
+or the next Shop. See ADR-0321 through ADR-0348 and ADR-0377 for those gameplay decisions.
+
+The save stores the selected Ataraxia tier, named and numbered army units, held cards, exact card
+and offer targets, Cacochymic loss history, lipsana and their Conflict state, current deployment
+or Battle runtime, aftermath, and the complete Shop reset snapshot. The retired `draft` phase,
+`draftOffers`, and `chosenDraftId` are rejected. The generic `formatVersion` field is accepted only
+by the exact version-16 storage migration; normalization and writes never treat it as a current
+shape. `normalizeRunDocument` repairs incomplete data only inside the current RunSaveVersion; it
+contains no historical version upgrade path.
 
 Per-user scoping means each user has their own `id` namespace — two users can
 both have a level `my-level` without colliding, and neither can read or

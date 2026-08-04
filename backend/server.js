@@ -2806,9 +2806,9 @@ const MIGRATIONS = [
     // slot-bearing tables move together inside this transaction, and the constraints are
     // restored identically — the graph is never observable in a torn state.
     //
-    // Run documents are NOT rewritten. RUN_FORMAT_VERSION 15 refuses anything older, so an
-    // in-progress Run is discarded rather than migrated; converting them here would be the
-    // compatibility path the policy forbids, and the owner's active Run is disposable.
+    // Run documents are NOT rewritten. CURRENT_RUN_SAVE_VERSION accepts only its exact save
+    // shape, so an in-progress Run is discarded rather than migrated; converting it here
+    // would be the compatibility path the policy forbids, and the owner's active Run is disposable.
     // Minted craft links are rewritten instead, because a link is a durable address the
     // owner holds and its spec is data this migration can canonicalize exactly.
     sql: `
@@ -2941,6 +2941,22 @@ const MIGRATIONS = [
        WHERE singleton;
     `,
   },
+  {
+    version: 54,
+    name: 'active Runs name their save version',
+    // ADR-0379: RunSaveVersion 17 changes only the persisted schema marker's name.
+    // Account Runs are durable user data, so this exact transform advances the CAS revision
+    // and leaves every gameplay field byte-for-byte equivalent instead of discarding the Run.
+    sql: `
+      UPDATE active_runs
+         SET body = (body - 'formatVersion')
+                    || jsonb_build_object('runSaveVersion', 17),
+             revision = revision + 1,
+             updated_at = now()
+       WHERE body->'formatVersion' = '16'::jsonb
+         AND NOT (body ? 'runSaveVersion');
+    `,
+  },
 ];
 
 let pool = null;
@@ -2977,6 +2993,7 @@ const REQUIRED_SCHEMA_RELATIONS = [
   'predrawn_generation_attempt_events',
   'lipsanon_stat_events',
   'run_progression',
+  'active_runs',
   // run_craft_links (migration 50) is deliberately absent. This list drives auto-repair of
   // relations the app cannot serve a single route without; craft links are a debugging
   // instrument, so a database missing that one table fails craft links alone with a message
@@ -2999,6 +3016,7 @@ const REQUIRED_SCHEMA_REPAIR_MIGRATIONS = new Map([
   // repair must replay both — replaying 45 alone would rebuild the retired spelling.
   ['lipsanon_stat_events', [45, 52]],
   ['run_progression', 49],
+  ['active_runs', 44],
 ]);
 
 function buildPool() {
@@ -3518,12 +3536,23 @@ async function schemaMigrationIdentityBoundaryRows(client) {
   });
 }
 
+async function unmigratedActiveRunSaveCount(client) {
+  const { rows } = await client.query(
+    `SELECT count(*)::integer AS count
+       FROM active_runs
+      WHERE body->'formatVersion' = '16'::jsonb
+        AND NOT (body ? 'runSaveVersion')`,
+  );
+  return Number(rows[0]?.count) || 0;
+}
+
 async function requiredSchemaContractIssues(client) {
   const missingReasons = await missingRequiredSchemaRevisionReasons(client);
   const constraints = await workingCopyRevisionReasonConstraintRows(client);
   const retryContractRows = await generationAttemptRetryContractRows(client);
   const moveHighlightContractRows = await generationAttemptMoveHighlightContractRows(client);
   const migrationIdentityRows = await schemaMigrationIdentityBoundaryRows(client);
+  const unmigratedActiveRunSaves = await unmigratedActiveRunSaveCount(client);
   const migrationIdentityIssues = schemaMigrationIdentityBoundaryIssues(
     migrationIdentityRows.columns,
     migrationIdentityRows.constraints,
@@ -3565,6 +3594,7 @@ async function requiredSchemaContractIssues(client) {
     unexpected_reason_foreign_keys: Object.freeze(
       unexpectedReasonForeignKeys.map((constraint) => constraint.constraint_name),
     ),
+    unmigrated_active_run_save_count: unmigratedActiveRunSaves,
     ...generationAttemptRetryContractIssues(
       retryContractRows.columns,
       retryContractRows.constraints,
@@ -3592,6 +3622,7 @@ function schemaContractIssuesPresent(issues) {
     || generationAttemptRetryContractIssuesPresent(issues)
     || generationAttemptMoveHighlightContractIssuesPresent(issues)
     || schemaMigrationIdentityBoundaryIssuesPresent(issues)
+    || issues.unmigrated_active_run_save_count > 0
   );
 }
 
@@ -3635,6 +3666,17 @@ async function repairRequiredSchemaContracts(
       markInspection(`inspect required contract repairs after migration ${migration.version}`);
       issues = await requiredSchemaContractIssues(client);
     }
+  }
+  if (issues.unmigrated_active_run_save_count > 0) {
+    const migration = MIGRATIONS.find((candidate) => candidate.version === 54);
+    if (!migration) throw new Error('active Run save repair migration is unavailable');
+    await executeMigration(migration, 'repair active Run save version contract');
+    completedSteps.push(Object.freeze({
+      contract: 'active Run save version',
+      migration_version: migration.version,
+    }));
+    markInspection(`inspect required contract repairs after migration ${migration.version}`);
+    issues = await requiredSchemaContractIssues(client);
   }
   const identityRepair = schemaMigrationIdentityRepair(issues);
   if (identityRepair) {
@@ -18553,6 +18595,7 @@ const ACTIVE_RUN_AFTERMATH_FIELDS = new Set([
   'survivingUnitIds',
   'fallenUnits',
 ]);
+const ACTIVE_RUN_SAVE_VERSION = serverRender?.CURRENT_RUN_SAVE_VERSION;
 const RUN_LIPSANA = Array.isArray(serverRender?.RUN_LIPSANA) ? serverRender.RUN_LIPSANA : [];
 const LIPSANON_BY_ID = serverRender?.LIPSANON_BY_ID ?? {};
 const RUN_LIPSANON_IDS = new Set(RUN_LIPSANA.map((lipsanon) => lipsanon.id));
@@ -18572,13 +18615,14 @@ function openingLipsanonGoldTenths(run) {
 
 function validateActiveRunBody(run) {
   if (!run || typeof run !== 'object' || Array.isArray(run)) return 'run must be an object';
-  if (run.formatVersion !== 16) return 'run.formatVersion is unsupported';
+  if (run.runSaveVersion !== ACTIVE_RUN_SAVE_VERSION) return 'run.runSaveVersion is unsupported';
+  if ('formatVersion' in run) return 'run contains the retired formatVersion field';
   if (typeof run.id !== 'string' || !run.id || run.id.length > 160) return 'run.id is invalid';
   if (!isFiniteInteger(run.seed) || run.seed < 0 || run.seed > 0xffffffff) return 'run.seed is invalid';
-  if (run.formatVersion >= 5 && run.ataraxiaTier !== 0 && run.ataraxiaTier !== 1) return 'run.ataraxiaTier is invalid';
+  if (run.ataraxiaTier !== 0 && run.ataraxiaTier !== 1) return 'run.ataraxiaTier is invalid';
   if (typeof run.updatedAt !== 'string' || !run.updatedAt) return 'run.updatedAt is required';
   if (!ACTIVE_RUN_PHASES.has(run.phase)) return 'run.phase is invalid';
-  if (run.formatVersion >= 8 && ('draftOffers' in run || 'chosenDraftId' in run)) return 'run contains retired draft state';
+  if ('draftOffers' in run || 'chosenDraftId' in run) return 'run contains retired draft state';
   if (!isFiniteInteger(run.battleIndex) || run.battleIndex < 0) return 'run.battleIndex is invalid';
   if (!isFiniteInteger(run.conflictIndex) || run.conflictIndex < 0) return 'run.conflictIndex is invalid';
   if (typeof run.goldTenths !== 'number' || !Number.isFinite(run.goldTenths) || run.goldTenths < 0) return 'run.goldTenths is invalid';
@@ -18602,36 +18646,29 @@ function validateActiveRunBody(run) {
     if (!unit || typeof unit.id !== 'string' || !unit.id || unitIds.has(unit.id) || !ACTIVE_RUN_PIECES.has(unit.type)) {
       return 'run.army contains an invalid unit';
     }
-    if (run.formatVersion >= 8 && !['king', 'starting', 'shop'].includes(unit.source)) {
+    if (!['king', 'starting', 'shop'].includes(unit.source)) {
       return 'run.army contains an invalid source';
     }
     unitIds.add(unit.id);
     const validName = typeof unit.name === 'string' && unit.name.trim().length > 0 && unit.name.length <= 80;
-    if ((run.formatVersion >= 2 && !validName) || (unit.name !== undefined && !validName)) {
+    if (!validName) {
       return 'run.army contains an invalid unit name';
     }
     if (!Array.isArray(unit.abilities) || unit.abilities.some((ability) => !ACTIVE_RUN_ABILITIES.has(ability))) {
       return 'run.army contains invalid abilities';
     }
-    if (
-      run.formatVersion >= 5
-      && (!Array.isArray(unit.modifiers) || unit.modifiers.some((modifier) => !ACTIVE_RUN_MODIFIERS.has(modifier)))
-    ) return 'run.army contains invalid modifiers';
+    if (!Array.isArray(unit.modifiers) || unit.modifiers.some((modifier) => !ACTIVE_RUN_MODIFIERS.has(modifier))) {
+      return 'run.army contains invalid modifiers';
+    }
     if (unit.number !== undefined && (!isFiniteInteger(unit.number) || unit.number < 1)) {
       return 'run.army contains an invalid unit number';
     }
-    if (
-      (run.formatVersion >= 4 && unit.inspectionSeed === undefined)
-      || (
-        unit.inspectionSeed !== undefined
-        && (!isFiniteInteger(unit.inspectionSeed) || unit.inspectionSeed < 0 || unit.inspectionSeed > 0xffffffff)
-      )
-    ) {
+    if (!isFiniteInteger(unit.inspectionSeed) || unit.inspectionSeed < 0 || unit.inspectionSeed > 0xffffffff) {
       return 'run.army contains an invalid inspection seed';
     }
   }
   if (!run.army.some((unit) => unit.id === 'run-king' && unit.type === 'king')) return 'run.army must retain its King';
-  if (run.formatVersion >= 5) {
+  {
     if (!Array.isArray(run.cards) || run.cards.length > 200) return 'run.cards is invalid';
     const cardIds = new Set();
     const cardUnitIds = new Set();
@@ -18641,12 +18678,11 @@ function validateActiveRunBody(run) {
       if (!isObjectRecord(card)) return 'run.cards contains an invalid card';
       const cardTypeValid = card.cardType === null
         || card.cardType === 'pestiferous'
-        || (run.formatVersion >= 6 && card.cardType === 'concinnous')
-        || (run.formatVersion >= 8 && card.cardType === 'legatine')
-        || (run.formatVersion >= 12 && card.cardType === 'hieratic');
+        || card.cardType === 'concinnous'
+        || card.cardType === 'legatine'
+        || card.cardType === 'hieratic';
       const directEffectTarget = card.effectTargetUnitId;
-      const legacyEffectTarget = isObjectRecord(card.effect) ? card.effect.targetUnitId : null;
-      const effectTarget = typeof directEffectTarget === 'string' ? directEffectTarget : legacyEffectTarget;
+      const effectTarget = directEffectTarget;
       const affectedCard = card.cardType === 'concinnous'
         || card.cardType === 'legatine'
         || card.cardType === 'hieratic';
@@ -18656,7 +18692,7 @@ function validateActiveRunBody(run) {
         : card.cardType === 'hieratic'
           ? 'agminate'
           : 'eutactic';
-      const effectTargetValid = run.formatVersion < 6 || (
+      const effectTargetValid = (
         affectedCard
           ? typeof effectTarget === 'string'
             && effectTarget.length > 0
@@ -18685,17 +18721,11 @@ function validateActiveRunBody(run) {
         || card.acquiredAfterBattleIndex < 0
         || card.acquiredAfterBattleIndex >= run.war.battles.length
       ) return 'run.cards contains an invalid card';
-      if (run.formatVersion === 8 && affectedCard) {
-        if (
-          isObjectRecord(card.effect)
-          && (card.effect.kind !== 'grant-ability' || card.effect.ability !== expectedGrantedAbility)
-        ) return 'run.cards contains an invalid legacy card effect';
-      }
       if (affectedCard) {
         const targetUnit = run.army.find((unit) => unit.id === effectTarget);
         if (!targetUnit?.abilities.includes(expectedGrantedAbility)) return 'run.cards contains an invalid ability target';
       }
-      if (run.formatVersion >= 7) {
+      {
         const validPlaguedTarget = card.cardType === 'pestiferous'
           ? card.unitIds.length > 0
             ? typeof card.cacochymicUnitId === 'string' && card.unitIds.includes(card.cacochymicUnitId)
@@ -18728,11 +18758,9 @@ function validateActiveRunBody(run) {
         lostCardUnitIds.add(unitId);
       }
     }
-    if (run.formatVersion >= 7) {
-      for (const unit of run.army) {
-        if (unit.modifiers.includes('cacochymic') !== cacochymicTargetUnitIds.has(unit.id)) {
-          return 'run.army Cacochymic modifiers do not match card targets';
-        }
+    for (const unit of run.army) {
+      if (unit.modifiers.includes('cacochymic') !== cacochymicTargetUnitIds.has(unit.id)) {
+        return 'run.army Cacochymic modifiers do not match card targets';
       }
     }
     if (!Array.isArray(run.pestiferousLosses) || run.pestiferousLosses.length > 20000) {
@@ -18790,10 +18818,10 @@ function validateActiveRunBody(run) {
       }
     }
   }
-  if (run.formatVersion >= 8 && run.phase === 'shop' && !isObjectRecord(run.shop)) return 'run.shop is required';
-  if (run.formatVersion >= 8 && run.phase !== 'shop' && run.shop !== null) return 'run.shop is invalid outside the shop phase';
+  if (run.phase === 'shop' && !isObjectRecord(run.shop)) return 'run.shop is required';
+  if (run.phase !== 'shop' && run.shop !== null) return 'run.shop is invalid outside the shop phase';
   // Bona Vacantia carries its own offers and, like the shop, exists only in its own phase.
-  if (run.formatVersion >= 13) {
+  {
     if (run.phase === 'bona-vacantia') {
       if (!isObjectRecord(run.vacantia)) return 'run.vacantia is required';
       const vacantia = run.vacantia;
@@ -18819,7 +18847,7 @@ function validateActiveRunBody(run) {
   }
   // The aftermath report is the aftermath phase: it exists only there, and cannot be absent
   // there, because the shop that follows is opened from the survivors it carries.
-  if (run.formatVersion >= 16) {
+  {
     if (run.phase === 'aftermath') {
       if (!isObjectRecord(run.aftermath)) return 'run.aftermath is required';
       const aftermath = run.aftermath;
@@ -18858,14 +18886,14 @@ function validateActiveRunBody(run) {
     if (Object.keys(run.shop).some((field) => !ACTIVE_RUN_SHOP_FIELDS.has(field))) {
       return 'run.shop contains an unsupported field';
     }
-    if (run.formatVersion >= 8 && run.shop.kind !== 'opening' && run.shop.kind !== 'post-battle') {
+    if (run.shop.kind !== 'opening' && run.shop.kind !== 'post-battle') {
       return 'run.shop.kind is invalid';
     }
     if (run.shop.soldUnits !== undefined && !Array.isArray(run.shop.soldUnits)) return 'run.shop.soldUnits is invalid';
     if (run.shop.entrySnapshot !== undefined && !isObjectRecord(run.shop.entrySnapshot)) {
       return 'run.shop.entrySnapshot is invalid';
     }
-    if (run.formatVersion >= 5) {
+    {
       if (!Array.isArray(run.shop.cardOffers) || run.shop.cardOffers.length < 1 || run.shop.cardOffers.length > 10) {
         return 'run.shop.cardOffers is invalid';
       }
@@ -18970,7 +18998,7 @@ function validateActiveRunBody(run) {
           })
         ) return 'run.shop purchased card state is invalid';
       }
-      if (run.formatVersion >= 8 && run.shop.kind === 'opening') {
+      if (run.shop.kind === 'opening') {
         if (
           run.phase !== 'shop'
           || run.battleIndex !== 0

@@ -2,7 +2,12 @@ import { create } from 'zustand';
 import { reportAuthSessionFailure, startAuthSession } from '../net/authSession';
 import { deleteActiveRun, loadActiveRun, saveActiveRun } from '../net/activeRun';
 import { HttpError } from '../net/http';
-import { RUN_FORMAT_VERSION, normalizeRunDocument, type RunDocument } from './model';
+import {
+  UnsupportedRunSaveError,
+  migrateRunSaveDocument,
+  normalizeRunDocument,
+  type RunDocument,
+} from './model';
 import { recordAtaraxiaCompletion } from './progression';
 import { recordLipsanonStatEvents, lipsanonStatEventsForRunTransition } from './lipsanonStatistics';
 
@@ -10,11 +15,11 @@ const LOCAL_RUN_KEY = 'chess-tactics:active-run:v1';
 
 function readLocalRun(): RunDocument | null {
   try {
-    const parsed = JSON.parse(localStorage.getItem(LOCAL_RUN_KEY) ?? 'null') as RunDocument | null;
-    const formatVersion = Number(parsed?.formatVersion);
-    return parsed && Number.isSafeInteger(formatVersion) && formatVersion >= 1 && formatVersion <= RUN_FORMAT_VERSION
-      ? normalizeRunDocument(parsed)
-      : null;
+    const parsed = JSON.parse(localStorage.getItem(LOCAL_RUN_KEY) ?? 'null') as unknown;
+    if (!parsed) return null;
+    const run = migrateRunSaveDocument(parsed);
+    localStorage.setItem(LOCAL_RUN_KEY, JSON.stringify(run));
+    return run;
   } catch {
     return null;
   }
@@ -59,10 +64,7 @@ export interface ActiveRunState {
 let saveChain: Promise<void> = Promise.resolve();
 
 function isUnsupportedRunDocument(error: unknown): boolean {
-  return error instanceof Error && (
-    error.message === 'Older Run Shop documents are unsupported.'
-    || error.message === 'The retired Run draft phase is unsupported.'
-  );
+  return error instanceof UnsupportedRunSaveError;
 }
 
 function queueRemoteSave(run: RunDocument): void {
@@ -143,7 +145,7 @@ export const useActiveRun = create<ActiveRunState>((set, get) => ({
           adoptionConflict: null,
           persistenceError: browserRun
             ? 'Replacing the account’s retired Run with this current Run.'
-            : 'The account’s previous Run used a retired format. Start a new Run to replace it.',
+            : 'The account’s previous Run used an unsupported save version. Start a new Run to replace it.',
         });
         writeLocalRun(browserRun);
         if (browserRun) queueRemoteSave(browserRun);

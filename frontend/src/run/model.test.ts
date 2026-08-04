@@ -12,7 +12,7 @@ import {
   RUN_CARD_DECK,
   PIECE_VALUE,
   EUTACTIC_COST,
-  RUN_FORMAT_VERSION,
+  CURRENT_RUN_SAVE_VERSION,
   RUN_OPENING_OFFER_COUNT,
   RUN_STARTING_GOLD,
   RUN_STARTING_GOLD_TENTHS,
@@ -32,6 +32,7 @@ import {
   hieraticAgminateAcquisitionTarget,
   leaveAftermath,
   leaveShop,
+  migrateRunSaveDocument,
   observeRunUnitDeath,
   normalizeRunDocument,
   OPENING_SHOP_ROLL_BATTLE_INDEX,
@@ -479,43 +480,54 @@ describe('Run progression and lipsanon offers', () => {
     expect(shop.shop?.victoryGoldTenths).toBe(160);
   });
 
-  it('upgrades an already-open fixed-reward shop exactly once', () => {
+  it('repairs an incomplete current Shop reward exactly once', () => {
     const snapshot = war(2);
     snapshot.battles[0].level.layers.units.push({ x: 0, y: 0, type: 'queen', side: 'enemy' });
     const currentReward = battleVictoryGoldTenths(snapshot.battles[0].level);
     const current = openShop(deployedRun(12, snapshot), []);
-    const legacy = {
+    const incomplete = {
       ...current,
       goldTenths: GOLD_SCALE,
       shop: { ...current.shop!, victoryGoldTenths: undefined as never },
     };
-    const upgraded = normalizeRunDocument(legacy);
+    const repaired = normalizeRunDocument(incomplete);
 
-    expect(upgraded.goldTenths).toBe(currentReward);
-    expect(upgraded.shop?.victoryGoldTenths).toBe(currentReward);
-    expect(normalizeRunDocument(upgraded)).toBe(upgraded);
+    expect(repaired.goldTenths).toBe(currentReward);
+    expect(repaired.shop?.victoryGoldTenths).toBe(currentReward);
+    expect(normalizeRunDocument(repaired)).toBe(repaired);
   });
 
-  // Format 15 renamed the held-lipsanon field to `lipsana`. Every document below it carries the
-  // retired key and no new one, and reading the old key to fill the new one is the
-  // compatibility path docs/migration-policy.md prohibits — so the floor refuses them all
-  // rather than upgrading some. The per-format upgrade tests this replaces (format 1 names,
-  // 2 identities, 3 inspection seeds, 5 Cacochymic state) asserted behaviour no stored
-  // document can reach any more.
-  it('refuses every document written before the Lipsana rename rather than half-migrating it', () => {
+  it('accepts only the current RunSaveVersion and rejects the retired field name', () => {
     const opening = createRun(war(), 73);
     const current = leaveShop(buyCard(opening, cheapestOpeningOffer(opening).offerId));
-    for (const formatVersion of [1, 2, 3, 5, 7, 9, 13, 14]) {
+    expect(current.runSaveVersion).toBe(CURRENT_RUN_SAVE_VERSION);
+    for (const runSaveVersion of [1, 8, 14, 15, 16]) {
       expect(() => normalizeRunDocument({
         ...current,
-        formatVersion,
-      } as unknown as RunDocument)).toThrow('written before the Lipsana rename');
+        runSaveVersion,
+      } as unknown as RunDocument)).toThrow('unsupported version');
     }
+    expect(() => normalizeRunDocument({
+      ...current,
+      formatVersion: 16,
+    } as unknown as RunDocument)).toThrow('unsupported version');
   });
 
-  it('normalizes legacy unit identities and shop reset state once', () => {
+  it('losslessly migrates the version-16 field name and no earlier save', () => {
+    const opening = createRun(war(), 73);
+    const current = leaveShop(buyCard(opening, cheapestOpeningOffer(opening).offerId));
+    const { runSaveVersion: _runSaveVersion, ...version16 } = current;
+    const migrated = migrateRunSaveDocument({ ...version16, formatVersion: 16 });
+
+    expect(migrated).toEqual(current);
+    expect(migrated).not.toHaveProperty('formatVersion');
+    expect(() => migrateRunSaveDocument({ ...version16, formatVersion: 15 }))
+      .toThrow('unsupported version');
+  });
+
+  it('repairs incomplete current unit identities and Shop reset state once', () => {
     const current = openShop(deployedRun(12, war(2)), []);
-    const legacy = {
+    const incomplete = {
       ...current,
       army: current.army.map(({ number: _number, ...unit }) => unit),
       nextArmyUnitNumberByType: undefined,
@@ -525,38 +537,33 @@ describe('Run progression and lipsanon offers', () => {
         entrySnapshot: undefined,
       },
     } as unknown as RunDocument;
-    const upgraded = normalizeRunDocument(legacy);
+    const repaired = normalizeRunDocument(incomplete);
 
-    for (const type of new Set(upgraded.army.map((unit) => unit.type))) {
-      const numbers = upgraded.army.filter((unit) => unit.type === type).map((unit) => unit.number);
+    for (const type of new Set(repaired.army.map((unit) => unit.type))) {
+      const numbers = repaired.army.filter((unit) => unit.type === type).map((unit) => unit.number);
       expect(numbers).toEqual(Array.from({ length: numbers.length }, (_, index) => index + 1));
     }
-    expect(upgraded.shop?.soldUnits).toEqual([]);
-    expect(upgraded.shop?.entrySnapshot.army).toEqual(upgraded.army);
-    expect(normalizeRunDocument(upgraded)).toBe(upgraded);
+    expect(repaired.shop?.soldUnits).toEqual([]);
+    expect(repaired.shop?.entrySnapshot.army).toEqual(repaired.army);
+    expect(normalizeRunDocument(repaired)).toBe(repaired);
   });
 
-  it('rejects the retired draft phase and removes its fields from committed Runs', () => {
+  it('rejects the retired draft phase and fields', () => {
     const current = createRun(war(), 73);
     expect(() => normalizeRunDocument({
       ...current,
       phase: 'draft',
       draftOffers: [],
       chosenDraftId: null,
-    } as unknown as RunDocument)).toThrow('retired Run draft phase');
+    } as unknown as RunDocument)).toThrow('retired draft data');
 
-    // A current-format document still sheds the retired draft fields; only the draft phase
-    // itself throws. The old format-7 variant of this case is covered by the version floor.
     const committed = leaveShop(buyCard(current, cheapestOpeningOffer(current).offerId));
     const polluted = {
       ...committed,
       draftOffers: [{ id: 'retired', draftId: 'retired', pieces: ['pawn'], value: 1 }],
       chosenDraftId: 'retired',
     } as unknown as RunDocument;
-    const normalized = normalizeRunDocument(polluted);
-    expect(normalized.formatVersion).toBe(RUN_FORMAT_VERSION);
-    expect('draftOffers' in normalized).toBe(false);
-    expect('chosenDraftId' in normalized).toBe(false);
+    expect(() => normalizeRunDocument(polluted)).toThrow('retired draft data');
   });
 
   it('burns all three seen Conflict offers, including the two not chosen', () => {
@@ -666,14 +673,14 @@ describe('Ataraxia I — The Great Mortality', () => {
     expect(resetShop(bought).cards).toEqual(shop!.cards);
   });
 
-  it('fills missing current-format offer targets and target-only pricing', () => {
+  it('fills missing current-save offer targets and target-only pricing', () => {
     let current: RunDocument | null = null;
     for (let seed = 1; seed < 500 && !current; seed += 1) {
       const candidate = openShop(deployedAtaraxiaRun(seed), []);
       if (candidate.shop?.cardOffers.some((offer) => offer.cardType === 'pestiferous')) current = candidate;
     }
     expect(current).not.toBeNull();
-    const legacy = {
+    const incomplete = {
       ...current!,
       shop: {
         ...current!.shop!,
@@ -683,14 +690,14 @@ describe('Ataraxia I — The Great Mortality', () => {
         })),
       },
     } as unknown as RunDocument;
-    const upgraded = normalizeRunDocument(legacy);
+    const repaired = normalizeRunDocument(incomplete);
 
-    for (const offer of upgraded.shop!.cardOffers) {
+    for (const offer of repaired.shop!.cardOffers) {
       const original = current!.shop!.cardOffers.find((candidate) => candidate.offerId === offer.offerId)!;
       expect(offer.cacochymicPieceIndex).toBe(original.cacochymicPieceIndex);
       expect(offer.cost).toBe(original.cost);
     }
-    expect(normalizeRunDocument(upgraded)).toBe(upgraded);
+    expect(normalizeRunDocument(repaired)).toBe(repaired);
   });
 
   it('removes the revealed target, reveals one successor, and retains empty Pestiferous cards', () => {
@@ -768,16 +775,13 @@ describe('Ataraxia I — The Great Mortality', () => {
     expect(sold.army.find((unit) => unit.id === units[1].id)?.modifiers).toEqual(['cacochymic']);
   });
 
-  // The format-5 half of this case (all-unit Cacochymic state upgrading to one target) is
-  // unreachable under the format-15 floor. What survives is the live repair: a current
-  // document whose Pestiferous card has lost its target gets a deterministic one back.
   it('repairs a Pestiferous card that has lost its deterministic Cacochymic target', () => {
     const base = deployedAtaraxiaRun(81, war(3));
     const units = base.army.filter((unit) => unit.type !== 'king').slice(0, 2).map((unit) => ({
       ...unit,
       modifiers: ['cacochymic'] as RunDocument['army'][number]['modifiers'],
     }));
-    const upgraded = normalizeRunDocument({
+    const repaired = normalizeRunDocument({
       ...base,
       army: [base.army.find((unit) => unit.type === 'king')!, ...units],
       cards: [{
@@ -792,19 +796,19 @@ describe('Ataraxia I — The Great Mortality', () => {
       nextCardSequence: 2,
     } as unknown as RunDocument);
 
-    expect(upgraded.formatVersion).toBe(RUN_FORMAT_VERSION);
-    expect(upgraded.cards[0].cacochymicUnitId).not.toBeNull();
-    expect(upgraded.army.filter((unit) => unit.modifiers.includes('cacochymic')).map((unit) => unit.id))
-      .toEqual([upgraded.cards[0].cacochymicUnitId]);
-
-    const missingCurrentTarget = {
-      ...upgraded,
-      cards: upgraded.cards.map((card) => ({ ...card, cacochymicUnitId: null })),
-    };
-    const repaired = normalizeRunDocument(missingCurrentTarget);
+    expect(repaired.runSaveVersion).toBe(CURRENT_RUN_SAVE_VERSION);
     expect(repaired.cards[0].cacochymicUnitId).not.toBeNull();
     expect(repaired.army.filter((unit) => unit.modifiers.includes('cacochymic')).map((unit) => unit.id))
       .toEqual([repaired.cards[0].cacochymicUnitId]);
+
+    const missingCurrentTarget = {
+      ...repaired,
+      cards: repaired.cards.map((card) => ({ ...card, cacochymicUnitId: null })),
+    };
+    const repairedAgain = normalizeRunDocument(missingCurrentTarget);
+    expect(repairedAgain.cards[0].cacochymicUnitId).not.toBeNull();
+    expect(repairedAgain.army.filter((unit) => unit.modifiers.includes('cacochymic')).map((unit) => unit.id))
+      .toEqual([repairedAgain.cards[0].cacochymicUnitId]);
   });
 });
 
@@ -840,7 +844,7 @@ describe('Concinnous cards', () => {
     expect(resetShop(bought).shop?.cardOffers).toEqual(originalOffers);
   });
 
-  it('fills missing current-format Pestiferous fields without rerolling Concinnous targets', () => {
+  it('fills missing current-save Pestiferous fields without rerolling Concinnous targets', () => {
     let shop: RunDocument | null = null;
     for (let seed = 1; seed < 500 && !shop; seed += 1) {
       const candidate = openShop({ ...deployedRun(seed), goldTenths: 100 * GOLD_SCALE }, []);
@@ -848,7 +852,7 @@ describe('Concinnous cards', () => {
     }
     const concinnous = shop!.shop!.cardOffers.find((offer) => offer.cardType === 'concinnous')!;
     const bought = buyCard(shop!, concinnous.offerId);
-    const legacy = {
+    const incomplete = {
       ...bought,
       cards: bought.cards.map(({ cacochymicUnitId: _cacochymicUnitId, ...card }) => card),
       shop: bought.shop && {
@@ -860,21 +864,21 @@ describe('Concinnous cards', () => {
         },
       },
     } as unknown as RunDocument;
-    const upgraded = normalizeRunDocument(legacy);
-    const upgradedCard = upgraded.cards.find((card) => (
+    const repaired = normalizeRunDocument(incomplete);
+    const repairedCard = repaired.cards.find((card) => (
       card.coreId === concinnous.id && card.effectSeed === concinnous.effectSeed
     ))!;
     const boughtCard = bought.cards.find((card) => (
       card.coreId === concinnous.id && card.effectSeed === concinnous.effectSeed
     ))!;
-    const upgradedOffer = upgraded.shop!.cardOffers.find((offer) => offer.offerId === concinnous.offerId)!;
+    const repairedOffer = repaired.shop!.cardOffers.find((offer) => offer.offerId === concinnous.offerId)!;
 
-    expect(upgraded.formatVersion).toBe(RUN_FORMAT_VERSION);
-    expect(upgradedCard.effectTargetUnitId).toBe(boughtCard.effectTargetUnitId);
-    expect(upgradedCard.cacochymicUnitId).toBeNull();
-    expect(upgradedOffer.effectTargetIndex).toBe(concinnous.effectTargetIndex);
-    expect(upgradedOffer.cacochymicPieceIndex).toBeNull();
-    expect(normalizeRunDocument(upgraded)).toBe(upgraded);
+    expect(repaired.runSaveVersion).toBe(CURRENT_RUN_SAVE_VERSION);
+    expect(repairedCard.effectTargetUnitId).toBe(boughtCard.effectTargetUnitId);
+    expect(repairedCard.cacochymicUnitId).toBeNull();
+    expect(repairedOffer.effectTargetIndex).toBe(concinnous.effectTargetIndex);
+    expect(repairedOffer.cacochymicPieceIndex).toBeNull();
+    expect(normalizeRunDocument(repaired)).toBe(repaired);
   });
 
   it('qualifies cards whose Eutactic premium produces a two-digit cost', () => {
@@ -997,7 +1001,7 @@ describe('Hieratic Agminate cards', () => {
     const bought = buyCard(shop!, hieratic.offerId);
     const normalized = normalizeRunDocument(structuredClone(bought));
 
-    expect(normalized.formatVersion).toBe(RUN_FORMAT_VERSION);
+    expect(normalized.runSaveVersion).toBe(CURRENT_RUN_SAVE_VERSION);
     expect(normalized.cards.map((card) => card.cardType)).toEqual(bought.cards.map((card) => card.cardType));
     expect(normalized.cards.map((card) => card.effectTargetUnitId))
       .toEqual(bought.cards.map((card) => card.effectTargetUnitId));

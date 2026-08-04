@@ -418,7 +418,7 @@ test('the exact sparse numeric legacy history upgrades through migration 50', ()
   );
   assert.deepEqual(
     plan.pending.map((entry) => entry.version),
-    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53],
+    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54],
     'the bridge must fill the historical gap before applying every post-36 contract',
   );
   assert.throws(
@@ -450,7 +450,7 @@ test('the exact sparse numeric legacy history upgrades through migration 50', ()
   );
 });
 
-test('required-schema readiness and repair enforce the migrations 37 through 50 contracts', () => {
+test('required-schema readiness and repair enforce the migrations 37 through 54 contracts', () => {
   const relations = sourceSection(
     serverSource,
     'const REQUIRED_SCHEMA_RELATIONS = [',
@@ -501,6 +501,12 @@ test('required-schema readiness and repair enforce the migrations 37 through 50 
     repairs,
     /\['run_progression',\s*49\]/,
     'Ataraxia progression relation repair must replay migration 49',
+  );
+  assert.match(relations, /active_runs/, 'account Run documents must be required runtime schema');
+  assert.match(
+    repairs,
+    /\['active_runs',\s*44\]/,
+    'active Run relation repair must replay its canonical creation migration',
   );
   // Craft links (migration 50) are a debugging instrument, not schema the app needs to serve a
   // route. Requiring the relation would take every route down on a database missing only that
@@ -590,6 +596,11 @@ test('required-schema readiness and repair enforce the migrations 37 through 50 
     contractReadiness,
     /occlusionDiscardReason[\s\S]*version === 42[\s\S]*repair occlusion-discard revision reason contract/,
     'auto repair must restore the migration-42 occlusion-discard revision reason',
+  );
+  assert.match(
+    contractReadiness,
+    /unmigrated_active_run_save_count[\s\S]*version === 54[\s\S]*repair active Run save version contract/,
+    'readiness must detect and repair an unmigrated version-16 account Run',
   );
   assert.match(
     contractReadiness,
@@ -952,13 +963,13 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
 
   const primaryUpgradeProof = sourceSection(
     smokeSource,
-    'async function validatePrimarySparseNumericMigrationUpgrade53()',
+    'async function validatePrimarySparseNumericMigrationUpgrade54()',
     '\nasync function validateEditorMigration16Preservation()',
   );
   assert.match(
     primaryUpgradeProof,
-    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*53\s*\}/,
-    'the production upgrade proof must require a complete 1-53 history',
+    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*54\s*\}/,
+    'the production upgrade proof must require a complete 1-54 history',
   );
   assert.match(
     primaryUpgradeProof,
@@ -972,8 +983,8 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   );
   assert.match(
     primaryUpgradeProof,
-    /length:\s*17[\s\S]*index\s*\+\s*37/,
-    'the production report must include every post-36 migration through 53',
+    /length:\s*18[\s\S]*index\s*\+\s*37/,
+    'the production report must include every post-36 migration through 54',
   );
   assert.match(
     primaryUpgradeProof,
@@ -989,12 +1000,28 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   const migrationProof = sourceSection(
     smokeSource,
     'async function validateEditorRevisionReasonMigration37()',
-    '\nasync function waitForServer()',
+    '\nasync function validateRunSaveVersionMigration54()',
   );
   assert.match(
     migrationProof,
     /INSERT INTO\s+schema_migrations[\s\S]*\b36\b/i,
     'the migration proof must begin with migration 36 already recorded',
+  );
+
+  const runSaveMigrationProof = sourceSection(
+    smokeSource,
+    'async function validateRunSaveVersionMigration54()',
+    '\nasync function waitForServer()',
+  );
+  assert.match(
+    runSaveMigrationProof,
+    /inlineMigrationSql\(54\)[\s\S]*inlineMigrationSql\(54\)/,
+    'the Run save migration proof must establish idempotency',
+  );
+  assert.match(
+    runSaveMigrationProof,
+    /runSaveVersion[\s\S]*formatVersion[\s\S]*revision/,
+    'the Run save migration proof must verify the renamed marker and advanced CAS revision',
   );
   assert.match(
     migrationProof,

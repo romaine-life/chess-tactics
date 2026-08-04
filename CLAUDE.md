@@ -348,13 +348,18 @@ the account's active Run** — there is one per account. Overwrite it freely; se
 Nelson is **building** this game, not playing it. His active Run is disposable test state, and
 it is worth exactly nothing next to shipping the change correctly.
 
-So: craft over it, overwrite it, invalidate it, discard it. Bump the active-Run format the
+That does not make other accounts' active Runs disposable data. Every RunSaveVersion that reaches
+players requires the canonical database migration and browser-storage migration to its successor.
+Retired content becomes a typed tombstone or neutral replacement (for example, **Removed card**),
+not a reason to erase the containing Run (ADR-0380).
+
+So: craft over it, overwrite it, invalidate it, discard it. Bump RunSaveVersion the
 moment a document change warrants one, and never soften a design or a migration to keep an
 in-progress Run alive. Do not ask permission to overwrite it, do not schedule work around it,
 do not offer to preserve it, and do not add a compatibility path whose only beneficiary is a
 Run already on his account.
 
-State the consequence once, in plain terms, as part of reporting what shipped — "format 12
+State the consequence once, in plain terms, as part of reporting what shipped — "Run save version 12
 makes in-progress Shop runs unsupported" is useful; treating that as a cost to be weighed,
 mitigated, or apologized for is not. The migration policy in `docs/migration-policy.md` still
 governs what the *code* must do with old documents; this rule is only about whose Run it is.
